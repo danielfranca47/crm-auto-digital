@@ -1,0 +1,63 @@
+# backend/app.py
+import os
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+from dotenv import load_dotenv
+
+from database import init_db
+from routes import leads, search, assistente_ia, uploads, prospeccao, whatsapp, profile, dashboard
+from automations.whatsapp.qr_manager import qr_manager  # para fechar o driver no shutdown
+
+app = FastAPI(title="CRM API", version="1.0.0")
+
+# Carrega env antes de tocar no DB
+load_dotenv()
+init_db()
+
+# ---------- CORS ----------
+# Configure em .env: FRONTEND_ORIGINS="http://localhost:5173,https://seu-front.app"
+origins_env = os.getenv("FRONTEND_ORIGINS", "*")
+allow_credentials_env = os.getenv("CORS_ALLOW_CREDENTIALS", "false").lower() == "true"
+
+origins = [o.strip() for o in origins_env.split(",") if o.strip()]
+# Se credentials=True, evite '*' por exigência do navegador
+if allow_credentials_env and origins == ["*"]:
+    # fallback seguro: não usar wildcard quando credenciais são necessárias
+    allow_credentials_env = False  # ou defina FRONTEND_ORIGINS explicitamente
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=origins,
+    allow_credentials=allow_credentials_env,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# ---------- Routers ----------
+# Atenção: alguns routers já têm prefixo no próprio arquivo.
+# Abaixo mantive seus mounts como estavam, e montei os demais sem duplicar prefixos.
+app.include_router(leads.router, prefix="/api/leads", tags=["Leads"])
+app.include_router(search.router, prefix="/api/pesquisa", tags=["Pesquisa"])
+app.include_router(assistente_ia.router, prefix="/api/assistente-ia", tags=["Assistente IA"])
+app.include_router(uploads.router, prefix="/api", tags=["Uploads"])
+app.include_router(prospeccao.router)   # já define prefix="/api/prospeccao"
+app.include_router(whatsapp.router)     # já define prefix="/api/whatsapp"
+app.include_router(profile.router) 
+#app.include_router(dashboard.router)    # se esse router já traz prefixo próprio, ok; caso contrário, ajuste aqui
+
+# (Removido) router separado de worker para evitar conflito:
+# from routes.whatsapp_worker import router as whatsapp_worker_router
+# app.include_router(whatsapp_worker_router)
+
+# ---------- Lifecycle ----------
+@app.on_event("shutdown")
+def _on_shutdown():
+    # Fecha a sessão do Chrome/Selenium de forma graciosa
+    try:
+        qr_manager.stop()
+    except Exception:
+        pass
+
+@app.get("/")
+def root():
+    return {"status": "API CRM rodando 🎯"}

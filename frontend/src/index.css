@@ -1,0 +1,222 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Definition of the design system. All colors, gradients, fonts, etc should be defined here. 
+All colors MUST be HSL.
+*/
+
+@layer base {
+  :root {
+    /* CRM Dark Theme - Sophisticated Colors */
+    --background: 220 13% 9%;
+    --foreground: 210 20% 92%;
+
+    --card: 220 13% 11%;
+    --card-foreground: 210 20% 92%;
+
+    --popover: 220 13% 11%;
+    --popover-foreground: 210 20% 92%;
+
+    --primary: 217 91% 60%;
+    --primary-foreground: 220 13% 9%;
+
+    --secondary: 220 13% 15%;
+    --secondary-foreground: 210 20% 92%;
+
+    --muted: 220 13% 15%;
+    --muted-foreground: 215 20% 65%;
+
+    --accent: 142 71% 45%;
+    --accent-foreground: 220 13% 9%;
+
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 210 40% 98%;
+
+    --border: 220 13% 20%;
+    --input: 220 13% 15%;
+    --ring: 217 91% 60%;
+
+    --radius: 0.75rem;
+
+    /* CRM Specific Colors */
+    --crm-header: 220 13% 8%;
+    --crm-header-foreground: 210 20% 95%;
+    
+    --kanban-column: 220 13% 12%;
+    --kanban-column-header: 220 13% 16%;
+    
+    --lead-card: 220 13% 14%;
+    --lead-card-hover: 220 13% 16%;
+    --lead-card-border: 220 13% 22%;
+    
+    --success: 142 71% 45%;
+    --success-foreground: 220 13% 9%;
+    
+    --warning: 48 96% 53%;
+    --warning-foreground: 220 13% 9%;
+    
+    --info: 199 89% 48%;
+    --info-foreground: 220 13% 9%;
+
+    /* Gradients */
+    --gradient-primary: linear-gradient(135deg, hsl(217 91% 60%) 0%, hsl(199 89% 48%) 100%);
+    --gradient-success: linear-gradient(135deg, hsl(142 71% 45%) 0%, hsl(120 60% 50%) 100%);
+    --gradient-card: linear-gradient(135deg, hsl(220 13% 14%) 0%, hsl(220 13% 16%) 100%);
+
+    /* Shadows */
+    --shadow-card: 0 4px 12px -4px hsl(220 13% 5% / 0.4);
+    --shadow-elevated: 0 8px 25px -8px hsl(220 13% 5% / 0.6);
+    --shadow-glow: 0 0 20px hsl(217 91% 60% / 0.3);
+
+    /* Transitions */
+    --transition-all: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    --transition-smooth: all 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+  }
+
+  /* Light theme styles */
+  .light {
+    --background: 0 0% 100%;
+    --foreground: 222.2 84% 4.9%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 222.2 84% 4.9%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 222.2 84% 4.9%;
+
+    --primary: 217 91% 60%;
+    --primary-foreground: 210 40% 98%;
+
+    --secondary: 210 40% 96.1%;
+    --secondary-foreground: 222.2 47.4% 11.2%;
+
+    --muted: 210 40% 96.1%;
+    --muted-foreground: 215.4 16.3% 46.9%;
+
+    --accent: 210 40% 96.1%;
+    --accent-foreground: 222.2 47.4% 11.2%;
+
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 210 40% 98%;
+
+    --border: 214.3 31.8% 91.4%;
+    --input: 214.3 31.8% 91.4%;
+    --ring: 222.2 84% 4.9%;
+
+    /* CRM Light Theme Specific Colors */
+    --crm-header: 0 0% 98%;
+    --crm-header-foreground: 222.2 84% 4.9%;
+    
+    --kanban-column: 0 0% 98%;
+    --kanban-column-header: 210 40% 96.1%;
+    
+    --lead-card: 0 0% 100%;
+    --lead-card-hover: 210 40% 98%;
+    --lead-card-border: 214.3 31.8% 91.4%;
+    
+    --success: 142 71% 45%;
+    --success-foreground: 0 0% 100%;
+    
+    --warning: 48 96% 53%;
+    --warning-foreground: 0 0% 0%;
+    
+    --info: 199 89% 48%;
+    --info-foreground: 0 0% 100%;
+
+    /* Light gradients */
+    --gradient-primary: linear-gradient(135deg, hsl(217 91% 60%) 0%, hsl(199 89% 48%) 100%);
+    --gradient-success: linear-gradient(135deg, hsl(142 71% 45%) 0%, hsl(120 60% 50%) 100%);
+    --gradient-card: linear-gradient(135deg, hsl(0 0% 100%) 0%, hsl(210 40% 98%) 100%);
+
+    /* Light shadows */
+    --shadow-card: 0 4px 12px -4px hsl(0 0% 0% / 0.1);
+    --shadow-elevated: 0 8px 25px -8px hsl(0 0% 0% / 0.15);
+    --shadow-glow: 0 0 20px hsl(217 91% 60% / 0.3);
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground font-sans antialiased;
+    min-height: 100vh;
+  }
+
+  html {
+    scroll-behavior: smooth;
+  }
+}
+
+@layer components {
+  /* CRM Custom Components */
+  .crm-header {
+    @apply bg-[hsl(var(--crm-header))] text-[hsl(var(--crm-header-foreground))];
+    border-bottom: 1px solid hsl(var(--border));
+    backdrop-filter: blur(8px);
+  }
+
+  .kanban-column {
+    @apply bg-[hsl(var(--kanban-column))] rounded-lg border border-[hsl(var(--border))];
+    box-shadow: var(--shadow-card);
+  }
+
+  .kanban-column-header {
+    @apply bg-[hsl(var(--kanban-column-header))] rounded-t-lg border-b border-[hsl(var(--border))];
+  }
+
+  .lead-card {
+    @apply bg-[hsl(var(--lead-card))] rounded-lg border border-[hsl(var(--lead-card-border))];
+    transition: var(--transition-all);
+    box-shadow: var(--shadow-card);
+  }
+
+  .lead-card:hover {
+    @apply bg-[hsl(var(--lead-card-hover))];
+    box-shadow: var(--shadow-elevated);
+    transform: translateY(-2px);
+  }
+
+  .gradient-primary {
+    background: var(--gradient-primary);
+  }
+
+  .gradient-success {
+    background: var(--gradient-success);
+  }
+
+  .gradient-card {
+    background: var(--gradient-card);
+  }
+
+  .shadow-glow {
+    box-shadow: var(--shadow-glow);
+  }
+
+  .transition-smooth {
+    transition: var(--transition-smooth);
+  }
+
+  /* Custom scrollbar for dark theme */
+  .custom-scrollbar::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+
+  .custom-scrollbar::-webkit-scrollbar-track {
+    background: hsl(var(--muted));
+    border-radius: 3px;
+  }
+
+  .custom-scrollbar::-webkit-scrollbar-thumb {
+    background: hsl(var(--muted-foreground) / 0.3);
+    border-radius: 3px;
+  }
+
+  .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+    background: hsl(var(--muted-foreground) / 0.5);
+  }
+}

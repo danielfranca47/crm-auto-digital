@@ -1,0 +1,18 @@
+# Python
+__pycache__/
+*.pyc
+
+# Ambiente virtual
+venv/
+
+# Banco local
+database/*.db
+
+# Arquivos sensíveis
+.env
+
+# Saídas temporárias
+output/
+uploads/
+snapshots/
+whatsapp_profile/
