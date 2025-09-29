@@ -1,5 +1,5 @@
-import { Lead, LeadStatus } from "../types/crm";
-import { Calendar, Building2, User, Phone, Mail, MessageSquare, Clock, Tag, FileText, Plus } from "lucide-react";
+import { Lead, LeadStatus, Appointment } from "../types/crm";
+import { Calendar, Building2, User, Phone, Mail, MessageSquare, Clock, Tag, Plus, RefreshCw } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -12,7 +12,11 @@ import { Textarea } from "./ui/textarea";
 import { Input } from "./ui/input";
 import { Label } from "./ui/label";
 import { Separator } from "./ui/separator";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
+import { ScheduleAppointmentDialog } from "./ScheduleAppointmentDialog";
+import { useAppointments, useCancelAppointment } from "@/hooks/useAppointments";
+import { useToast } from "@/hooks/use-toast";
+import { useLeads } from "@/contexts/LeadsContext";
 
 interface LeadCardDialogProps {
   lead: Lead | null;
@@ -47,9 +51,64 @@ const statusLabels: Record<LeadStatus, string> = {
   'client-list': 'Lista de Clientes',
 };
 
+const appointmentTypeLabels = {
+  meeting: 'Reunião',
+  call: 'Ligação',
+  'follow-up': 'Follow-up',
+  presentation: 'Apresentação',
+} as const;
+
+const appointmentTypeClasses = {
+  meeting: 'bg-primary/10 text-primary border border-primary/20',
+  call: 'bg-success/10 text-success border border-success/20',
+  'follow-up': 'bg-warning/10 text-warning border border-warning/20',
+  presentation: 'bg-info/10 text-info border border-info/20',
+} as const;
+
+const appointmentStatusLabels = {
+  scheduled: 'Agendado',
+  completed: 'Concluído',
+  canceled: 'Cancelado',
+} as const;
+
+const appointmentStatusClasses = {
+  scheduled: 'bg-primary/10 text-primary border border-primary/20',
+  completed: 'bg-success/10 text-success border border-success/20',
+  canceled: 'bg-destructive/10 text-destructive border border-destructive/20',
+} as const;
+
 export function LeadCardDialog({ lead, isOpen, onClose, onUpdateLead }: LeadCardDialogProps) {
   const [isEditing, setIsEditing] = useState(false);
   const [editedLead, setEditedLead] = useState<Lead | null>(null);
+  const { toast } = useToast();
+  const { setLeadNextAction } = useLeads();
+  const cancelAppointment = useCancelAppointment();
+  const [isScheduleDialogOpen, setIsScheduleDialogOpen] = useState(false);
+  const [appointmentToEdit, setAppointmentToEdit] = useState<Appointment | null>(null);
+
+  const {
+    data: appointments = [],
+    isLoading: isLoadingAppointments,
+    isError: appointmentsError,
+    refetch: refetchAppointments,
+  } = useAppointments(lead ? { leadId: lead.id } : undefined);
+
+  const upcomingAppointments = useMemo(() => {
+    const now = new Date();
+    return appointments
+      .filter((appointment) => {
+        if (appointment.status !== 'scheduled') return false;
+        const start = new Date(appointment.startTime);
+        return start >= now;
+      })
+      .sort((a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime());
+  }, [appointments]);
+
+  const pastAppointments = useMemo(() => {
+    return appointments
+      .filter((appointment) => appointment.status !== 'scheduled')
+      .sort((a, b) => new Date(b.startTime).getTime() - new Date(a.startTime).getTime());
+  }, [appointments]);
 
   useEffect(() => {
     if (lead) {
@@ -69,14 +128,6 @@ export function LeadCardDialog({ lead, isOpen, onClose, onUpdateLead }: LeadCard
     }).format(date);
   };
 
-  const formatDateOnly = (date: Date) => {
-    return new Intl.DateTimeFormat('pt-PT', {
-      day: '2-digit',
-      month: '2-digit',
-      year: 'numeric'
-    }).format(date);
-  };
-
   const handleSave = () => {
     if (editedLead && onUpdateLead) {
       onUpdateLead(lead.id, editedLead);
@@ -89,7 +140,50 @@ export function LeadCardDialog({ lead, isOpen, onClose, onUpdateLead }: LeadCard
     setIsEditing(false);
   };
 
+  const openScheduleDialog = (appointment?: Appointment | null) => {
+    setAppointmentToEdit(appointment ?? null);
+    setIsScheduleDialogOpen(true);
+  };
+
+  const handleCancelAppointmentAction = async (appointment: Appointment) => {
+    try {
+      await cancelAppointment.mutateAsync(appointment.id);
+      setLeadNextAction(lead.id, undefined);
+      setEditedLead((prev) => (prev ? { ...prev, nextScheduledAction: undefined } : prev));
+      onUpdateLead?.(lead.id, { nextScheduledAction: undefined } as Partial<Lead>);
+      toast({ title: "Compromisso cancelado" });
+      refetchAppointments();
+    } catch (error: any) {
+      toast({
+        title: "Erro ao cancelar compromisso",
+        description: error?.message ?? "Não foi possível cancelar o compromisso.",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleAppointmentSuccess = (appointment: Appointment) => {
+    const nextAction = {
+      id: appointment.id,
+      date: new Date(appointment.startTime),
+      description: appointment.title,
+      type: appointment.type,
+    };
+
+    setLeadNextAction(lead.id, nextAction);
+    setEditedLead((prev) => (prev ? { ...prev, nextScheduledAction: nextAction } : prev));
+    onUpdateLead?.(lead.id, { nextScheduledAction: nextAction } as Partial<Lead>);
+    setIsScheduleDialogOpen(false);
+    setAppointmentToEdit(null);
+    refetchAppointments();
+  };
+
   const currentLead = isEditing ? editedLead! : lead;
+  const nextScheduledAppointment = useMemo(() => {
+    const appointmentId = currentLead.nextScheduledAction?.id;
+    if (!appointmentId) return null;
+    return appointments.find((appointment) => appointment.id === appointmentId) ?? null;
+  }, [appointments, currentLead.nextScheduledAction?.id]);
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
@@ -311,60 +405,185 @@ export function LeadCardDialog({ lead, isOpen, onClose, onUpdateLead }: LeadCard
 
             <div className="space-y-2">
               <Label className="text-sm font-medium">Próxima Ação Agendada</Label>
-              {isEditing ? (
-                <div className="space-y-2">
-                  <Input
-                    type="datetime-local"
-                    value={editedLead?.nextScheduledAction?.date ? 
-                      new Date(editedLead.nextScheduledAction.date.getTime() - editedLead.nextScheduledAction.date.getTimezoneOffset() * 60000).toISOString().slice(0, 16) : ''
-                    }
-                    onChange={(e) => {
-                      const date = e.target.value ? new Date(e.target.value) : null;
-                      setEditedLead(prev => prev ? { 
-                        ...prev, 
-                        nextScheduledAction: date ? {
-                          date,
-                          description: prev.nextScheduledAction?.description || ''
-                        } : undefined
-                      } : null);
-                    }}
-                  />
-                  <Input
-                    placeholder="Descrição da ação..."
-                    value={editedLead?.nextScheduledAction?.description || ''}
-                    onChange={(e) => setEditedLead(prev => prev ? { 
-                      ...prev, 
-                      nextScheduledAction: prev.nextScheduledAction ? {
-                        ...prev.nextScheduledAction,
-                        description: e.target.value
-                      } : { date: new Date(), description: e.target.value }
-                    } : null)}
-                  />
-                </div>
-              ) : (
-                <div className="bg-muted p-3 rounded-md">
-                  {currentLead.nextScheduledAction ? (
-                    <div className="space-y-1">
-                      <div className="flex items-center gap-2 text-sm font-medium text-foreground">
-                        <Calendar className="h-4 w-4" />
-                        {formatDate(currentLead.nextScheduledAction.date)}
-                      </div>
-                      <p className="text-sm text-muted-foreground">
-                        {currentLead.nextScheduledAction.description}
-                      </p>
+              <div className="bg-muted p-3 rounded-md space-y-2">
+                {currentLead.nextScheduledAction ? (
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-2 text-sm font-medium text-foreground">
+                      <Calendar className="h-4 w-4" />
+                      {formatDate(currentLead.nextScheduledAction.date)}
                     </div>
-                  ) : (
-                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                      <Plus className="h-4 w-4" />
-                      Nenhuma ação agendada
-                    </div>
+                    <p className="text-sm text-muted-foreground">
+                      {currentLead.nextScheduledAction.description}
+                    </p>
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                    <Plus className="h-4 w-4" />
+                    Nenhuma ação agendada
+                  </div>
+                )}
+                <div className="flex flex-wrap gap-2">
+                  <Button variant="outline" size="sm" onClick={() => openScheduleDialog()}>
+                    <Plus className="h-3 w-3 mr-2" />
+                    Agendar follow-up
+                  </Button>
+                  {currentLead.nextScheduledAction && (
+                    <>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => openScheduleDialog(nextScheduledAppointment ?? null)}
+                      >
+                        Reagendar
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="text-destructive hover:text-destructive"
+                        onClick={() => {
+                          if (nextScheduledAppointment) {
+                            handleCancelAppointmentAction(nextScheduledAppointment);
+                          } else {
+                            toast({ title: 'Compromisso não encontrado', variant: 'destructive' });
+                          }
+                        }}
+                      >
+                        Cancelar
+                      </Button>
+                    </>
                   )}
                 </div>
-              )}
+              </div>
             </div>
+          </div>
+
+          <Separator />
+
+          <div className="space-y-4">
+            <div className="flex items-center justify-between">
+              <h3 className="text-lg font-medium text-foreground flex items-center gap-2">
+                <Calendar className="h-5 w-5" />
+                Compromissos
+              </h3>
+              <div className="flex items-center gap-2">
+                {appointmentsError && (
+                  <Button variant="outline" size="sm" onClick={() => refetchAppointments()}>
+                    <RefreshCw className="h-4 w-4 mr-1" />
+                    Recarregar
+                  </Button>
+                )}
+                <Button variant="outline" size="sm" onClick={() => openScheduleDialog()}>
+                  <Plus className="h-4 w-4 mr-2" />
+                  Novo
+                </Button>
+              </div>
+            </div>
+
+            {isLoadingAppointments ? (
+              <p className="text-sm text-muted-foreground">Carregando compromissos...</p>
+            ) : appointmentsError ? (
+              <p className="text-sm text-destructive">Não foi possível carregar os compromissos.</p>
+            ) : (
+              <>
+                {upcomingAppointments.length > 0 && (
+                  <div className="space-y-2">
+                    <h4 className="text-sm font-semibold text-foreground">Próximos</h4>
+                    <div className="space-y-2">
+                      {upcomingAppointments.map((appointment) => {
+                        const start = new Date(appointment.startTime);
+                        return (
+                          <div
+                            key={appointment.id}
+                            className="border border-border rounded-md p-3 space-y-2 bg-background/80"
+                          >
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center gap-2">
+                                <Badge className={appointmentTypeClasses[appointment.type]}>
+                                  {appointmentTypeLabels[appointment.type]}
+                                </Badge>
+                                <Badge className={appointmentStatusClasses[appointment.status]}>
+                                  {appointmentStatusLabels[appointment.status]}
+                                </Badge>
+                              </div>
+                              <span className="text-xs text-muted-foreground">
+                                {formatDate(start)}
+                              </span>
+                            </div>
+                            <div className="space-y-1">
+                              <p className="text-sm font-medium text-foreground">{appointment.title}</p>
+                              {appointment.description && (
+                                <p className="text-xs text-muted-foreground">{appointment.description}</p>
+                              )}
+                            </div>
+                            <div className="flex flex-wrap gap-2">
+                              <Button size="sm" variant="outline" onClick={() => openScheduleDialog(appointment)}>
+                                Reagendar
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                className="text-destructive hover:text-destructive"
+                                onClick={() => handleCancelAppointmentAction(appointment)}
+                              >
+                                Cancelar
+                              </Button>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+
+                {pastAppointments.length > 0 && (
+                  <div className="space-y-2">
+                    <h4 className="text-sm font-semibold text-foreground">Histórico</h4>
+                    <div className="space-y-2">
+                      {pastAppointments.map((appointment) => {
+                        const start = new Date(appointment.startTime);
+                        return (
+                          <div
+                            key={appointment.id}
+                            className="border border-border rounded-md p-3 space-y-1 bg-muted/40"
+                          >
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center gap-2">
+                                <Badge className={appointmentTypeClasses[appointment.type]}>
+                                  {appointmentTypeLabels[appointment.type]}
+                                </Badge>
+                                <Badge className={appointmentStatusClasses[appointment.status]}>
+                                  {appointmentStatusLabels[appointment.status]}
+                                </Badge>
+                              </div>
+                              <span className="text-xs text-muted-foreground">{formatDate(start)}</span>
+                            </div>
+                            <p className="text-sm text-foreground font-medium">{appointment.title}</p>
+                            {appointment.description && (
+                              <p className="text-xs text-muted-foreground">{appointment.description}</p>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+
+                {upcomingAppointments.length === 0 && pastAppointments.length === 0 && (
+                  <p className="text-sm text-muted-foreground">Nenhum compromisso registrado.</p>
+                )}
+              </>
+            )}
           </div>
         </div>
       </DialogContent>
+      <ScheduleAppointmentDialog
+        open={isScheduleDialogOpen}
+        onOpenChange={setIsScheduleDialogOpen}
+        initialLeadId={lead.id}
+        appointmentToEdit={appointmentToEdit}
+        initialDate={appointmentToEdit ? new Date(appointmentToEdit.startTime) : undefined}
+        onSuccess={handleAppointmentSuccess}
+      />
     </Dialog>
   );
 }

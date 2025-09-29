@@ -13,6 +13,7 @@ interface LeadsContextType {
   moveLead: (leadId: string, newCategory: LeadStatus) => void;
   archiveLead: (leadId: string, archiveCategory: LeadStatus) => void;
   addLead: (leadData: NewLeadForm) => void;
+  setLeadNextAction: (leadId: string, nextAction?: Lead['nextScheduledAction']) => void;
 
   moveProspectionLead: (leadId: string, newStatus: 'to-prospect' | 'in-progress' | 'prospected') => void;
   bulkProspection: (leadIds: string[], methods: ProspectionMethod[]) => void;
@@ -36,6 +37,20 @@ interface LeadsProviderProps {
 
 // ---------- helpers ----------
 function mapRawLead(raw: any): Lead {
+  let nextScheduledAction: Lead["nextScheduledAction"] | undefined = undefined;
+  if (raw?.nextScheduledAction?.date) {
+    try {
+      nextScheduledAction = {
+        id: String(raw.nextScheduledAction.id ?? raw.nextScheduledAction.appointmentId ?? ""),
+        date: new Date(raw.nextScheduledAction.date),
+        description: raw.nextScheduledAction.description ?? "",
+        type: raw.nextScheduledAction.type,
+      };
+    } catch (error) {
+      console.warn("Não foi possível interpretar próxima ação agendada", error);
+    }
+  }
+
   return {
     id: String(raw.id),
     companyName: raw.companyName || 'Empresa sem nome',
@@ -48,6 +63,7 @@ function mapRawLead(raw: any): Lead {
     observations: raw.observations || '',
     createdAt: raw.createdAt ? new Date(raw.createdAt) : new Date(),
     lastMovement: raw.lastMovement ? new Date(raw.lastMovement) : new Date(),
+    nextScheduledAction,
   };
 }
 
@@ -247,6 +263,7 @@ export function LeadsProvider({ children }: LeadsProviderProps) {
         observations: leadData.observations,
         lastMovement: new Date(),
         createdAt: new Date(),
+        nextScheduledAction: undefined,
       };
 
       setColumns((prev) =>
@@ -260,6 +277,35 @@ export function LeadsProvider({ children }: LeadsProviderProps) {
     } catch (error) {
       console.error('Erro ao criar lead:', error);
     }
+  };
+
+  const setLeadNextAction = (leadId: string, nextAction?: Lead['nextScheduledAction']) => {
+    setColumns((prev) =>
+      prev.map((column) => ({
+        ...column,
+        leads: column.leads.map((lead) =>
+          lead.id === leadId ? { ...lead, nextScheduledAction: nextAction } : lead
+        ),
+      }))
+    );
+
+    setArchivedColumns((prev) =>
+      prev.map((column) => ({
+        ...column,
+        leads: column.leads.map((lead) =>
+          lead.id === leadId ? { ...lead, nextScheduledAction: nextAction } : lead
+        ),
+      }))
+    );
+
+    setProspectionColumns((prev) =>
+      prev.map((column) => ({
+        ...column,
+        leads: column.leads.map((lead) =>
+          lead.id === leadId ? { ...lead, nextScheduledAction: nextAction } : lead
+        ),
+      }))
+    );
   };
 
   // --------- prospecção (UI + persistência) ----------
@@ -347,6 +393,7 @@ export function LeadsProvider({ children }: LeadsProviderProps) {
     moveLead,
     archiveLead,
     addLead,
+    setLeadNextAction,
     moveProspectionLead,
     bulkProspection,
     updateProspectionLead,

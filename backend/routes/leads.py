@@ -3,6 +3,7 @@ from models import Lead
 from database import get_connection
 import datetime
 from models import LeadUpdate
+from datetime import datetime as dt
 
 router = APIRouter()
 
@@ -12,8 +13,57 @@ def listar_leads():
     cursor = conn.cursor()
     cursor.execute("SELECT * FROM leads ORDER BY createdAt DESC")
     leads = cursor.fetchall()
+
+    lead_dicts = [dict(lead) for lead in leads]
+    lead_ids = [lead["id"] for lead in leads]
+
+    upcoming: dict[int, dict] = {}
+    if lead_ids:
+        placeholders = ",".join(["?"] * len(lead_ids))
+        cursor.execute(
+            f"""
+            SELECT id, lead_id, title, type, start_time
+            FROM appointments
+            WHERE lead_id IN ({placeholders}) AND status = 'scheduled'
+            ORDER BY start_time ASC
+            """,
+            lead_ids,
+        )
+        rows = cursor.fetchall()
+        now = dt.utcnow()
+        for row in rows:
+            start_raw = row["start_time"]
+            try:
+                start_dt = dt.fromisoformat(start_raw)
+            except (TypeError, ValueError):
+                # Se não conseguir converter, ignora este registro
+                continue
+
+            if start_dt < now:
+                continue
+
+            lead_id = row["lead_id"]
+            existing = upcoming.get(lead_id)
+            if not existing or start_dt < existing["date"]:
+                upcoming[lead_id] = {
+                    "id": row["id"],
+                    "date": start_dt,
+                    "description": row["title"],
+                    "type": row["type"],
+                }
+
+    for lead in lead_dicts:
+        next_action = upcoming.get(lead["id"])
+        if next_action:
+            lead["nextScheduledAction"] = {
+                "id": next_action["id"],
+                "date": next_action["date"].isoformat(),
+                "description": next_action["description"],
+                "type": next_action["type"],
+            }
+
     conn.close()
-    return [dict(lead) for lead in leads]
+    return lead_dicts
 
 @router.post("/")
 def criar_lead(lead: Lead):

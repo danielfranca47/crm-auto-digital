@@ -22,17 +22,21 @@ interface LeadActionsMenuProps {
   onMoveLead: (leadId: string, newCategory: string) => void;
   onArchiveLead: (leadId: string, archiveCategory: string) => void;
   onScheduleMeeting: (leadId: string) => void;
+  onRescheduleMeeting: (lead: Lead) => void;
+  onCancelMeeting: (lead: Lead) => void;
   onOpenCard: (leadId: string) => void;
 }
 
-export function LeadActionsMenu({ 
-  lead, 
-  columns, 
-  archivedColumns, 
-  onMoveLead, 
-  onArchiveLead, 
-  onScheduleMeeting, 
-  onOpenCard 
+export function LeadActionsMenu({
+  lead,
+  columns,
+  archivedColumns,
+  onMoveLead,
+  onArchiveLead,
+  onScheduleMeeting,
+  onRescheduleMeeting,
+  onCancelMeeting,
+  onOpenCard
 }: LeadActionsMenuProps) {
   const [showMoveSelect, setShowMoveSelect] = useState(false);
   const [showArchiveSelect, setShowArchiveSelect] = useState(false);
@@ -101,7 +105,36 @@ export function LeadActionsMenu({
                 <Calendar className="h-4 w-4 mr-2" />
                 Agendar Reunião
               </Button>
-              
+
+              {lead.nextScheduledAction && (
+                <>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="w-full justify-start"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onRescheduleMeeting(lead);
+                    }}
+                  >
+                    <Calendar className="h-4 w-4 mr-2" />
+                    Reagendar compromisso
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="w-full justify-start text-destructive"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onCancelMeeting(lead);
+                    }}
+                  >
+                    <Calendar className="h-4 w-4 mr-2" />
+                    Cancelar compromisso
+                  </Button>
+                </>
+              )}
+
               <Button
                 variant="ghost"
                 size="sm"

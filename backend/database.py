@@ -144,6 +144,28 @@ def init_db():
         );
         """)
 
+        # Tabela compromissos / agenda
+        cursor.execute("""
+        CREATE TABLE IF NOT EXISTS appointments (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            lead_id INTEGER,
+            title TEXT NOT NULL,
+            description TEXT,
+            type TEXT NOT NULL,
+            status TEXT NOT NULL DEFAULT 'scheduled',
+            start_time DATETIME NOT NULL,
+            end_time DATETIME,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (lead_id) REFERENCES leads (id) ON DELETE SET NULL
+        );
+        """)
+
+        cursor.execute("""
+        CREATE INDEX IF NOT EXISTS idx_appointments_lead_time
+            ON appointments(lead_id, start_time);
+        """)
+
         # Tabela métricas
         cursor.execute("""
         CREATE TABLE IF NOT EXISTS metricas (

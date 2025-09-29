@@ -1,74 +1,60 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { Calendar } from "./ui/calendar";
 import { Card, CardContent, CardHeader, CardTitle } from "./ui/card";
 import { Button } from "./ui/button";
-import { CalendarDays, List, Plus } from "lucide-react";
+import { CalendarDays, List, Plus, RefreshCw } from "lucide-react";
 import { Badge } from "./ui/badge";
 import { format, isSameDay } from "date-fns";
 import { ptBR } from "date-fns/locale";
+import { useAppointments } from "@/hooks/useAppointments";
+import { Appointment } from "@/types/crm";
+import { Skeleton } from "./ui/skeleton";
+import { ScheduleAppointmentDialog } from "./ScheduleAppointmentDialog";
 
-interface ScheduleEvent {
-  id: string;
-  title: string;
-  date: Date;
-  time: string;
-  type: 'meeting' | 'call' | 'follow-up' | 'presentation';
-  leadName: string;
-}
-
-// Mock data para demonstração
-const mockEvents: ScheduleEvent[] = [
-  {
-    id: '1',
-    title: 'Reunião de apresentação',
-    date: new Date(),
-    time: '14:00',
-    type: 'meeting',
-    leadName: 'João Silva'
-  },
-  {
-    id: '2',
-    title: 'Follow-up ligação',
-    date: new Date(Date.now() + 86400000), // Amanhã
-    time: '10:30',
-    type: 'follow-up',
-    leadName: 'Maria Santos'
-  },
-  {
-    id: '3',
-    title: 'Ligação comercial',
-    date: new Date(Date.now() + 172800000), // Depois de amanhã
-    time: '16:00',
-    type: 'call',
-    leadName: 'Pedro Costa'
-  }
-];
-
-const eventTypeColors = {
-  meeting: 'bg-primary text-primary-foreground',
-  call: 'bg-success text-success-foreground',
-  'follow-up': 'bg-warning text-warning-foreground',
-  presentation: 'bg-info text-info-foreground'
+const eventTypeColors: Record<Appointment["type"], string> = {
+  meeting: "bg-primary text-primary-foreground",
+  call: "bg-success text-success-foreground",
+  "follow-up": "bg-warning text-warning-foreground",
+  presentation: "bg-info text-info-foreground",
 };
 
-const eventTypeLabels = {
-  meeting: 'Reunião',
-  call: 'Ligação',
-  'follow-up': 'Follow-up',
-  presentation: 'Apresentação'
+const eventTypeLabels: Record<Appointment["type"], string> = {
+  meeting: "Reunião",
+  call: "Ligação",
+  "follow-up": "Follow-up",
+  presentation: "Apresentação",
 };
 
 export function ScheduleView() {
-  const [viewMode, setViewMode] = useState<'calendar' | 'list'>('calendar');
+  const [viewMode, setViewMode] = useState<"calendar" | "list">("calendar");
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
-  const [events] = useState<ScheduleEvent[]>(mockEvents);
+  const [isDialogOpen, setIsDialogOpen] = useState(false);
 
-  const filteredEvents = viewMode === 'calendar' 
-    ? events.filter(event => isSameDay(event.date, selectedDate))
-    : events.sort((a, b) => a.date.getTime() - b.date.getTime());
+  const { data: appointments = [], isLoading, isError, refetch } = useAppointments();
+
+  const normalized = useMemo(() => {
+    return appointments.map((appointment) => {
+      const date = new Date(appointment.startTime);
+      return {
+        ...appointment,
+        date,
+        time: format(date, "HH:mm"),
+        label: appointment.title || eventTypeLabels[appointment.type],
+        leadName:
+          appointment.leadName || appointment.leadCompany || "Lead sem nome",
+      };
+    });
+  }, [appointments]);
+
+  const filteredEvents = useMemo(() => {
+    if (viewMode === "calendar") {
+      return normalized.filter((event) => isSameDay(event.date, selectedDate));
+    }
+    return [...normalized].sort((a, b) => a.date.getTime() - b.date.getTime());
+  }, [normalized, viewMode, selectedDate]);
 
   const hasEventsOnDate = (date: Date) => {
-    return events.some(event => isSameDay(event.date, date));
+    return normalized.some((event) => isSameDay(event.date, date));
   };
 
   return (
@@ -77,6 +63,17 @@ export function ScheduleView() {
         <div className="flex items-center justify-between">
           <CardTitle className="text-foreground">Agenda</CardTitle>
           <div className="flex items-center gap-2">
+            {isError && (
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-8"
+                onClick={() => refetch()}
+              >
+                <RefreshCw className="w-4 h-4 mr-2" />
+                Tentar novamente
+              </Button>
+            )}
             <Button
               variant={viewMode === 'calendar' ? 'default' : 'outline'}
               size="sm"
@@ -93,7 +90,7 @@ export function ScheduleView() {
             >
               <List className="w-4 h-4" />
             </Button>
-            <Button size="sm" className="h-8">
+            <Button size="sm" className="h-8" onClick={() => setIsDialogOpen(true)}>
               <Plus className="w-4 h-4 mr-1" />
               Novo
             </Button>
@@ -101,7 +98,16 @@ export function ScheduleView() {
         </div>
       </CardHeader>
       <CardContent>
-        {viewMode === 'calendar' ? (
+        {isLoading ? (
+          <div className="space-y-4">
+            <Skeleton className="h-72 w-full" />
+            <Skeleton className="h-24 w-full" />
+          </div>
+        ) : isError ? (
+          <p className="text-sm text-destructive text-center py-4">
+            Não foi possível carregar os compromissos.
+          </p>
+        ) : viewMode === 'calendar' ? (
           <div className="space-y-4">
             <Calendar
               mode="single"
@@ -140,7 +146,7 @@ export function ScheduleView() {
                             </span>
                           </div>
                           <p className="text-sm text-foreground font-medium">
-                            {event.title}
+                            {event.label}
                           </p>
                           <p className="text-xs text-muted-foreground">
                             Lead: {event.leadName}
@@ -175,7 +181,7 @@ export function ScheduleView() {
                       </span>
                     </div>
                     <p className="text-sm text-foreground font-medium">
-                      {event.title}
+                      {event.label}
                     </p>
                     <p className="text-xs text-muted-foreground">
                       Lead: {event.leadName}
@@ -192,6 +198,14 @@ export function ScheduleView() {
           </div>
         )}
       </CardContent>
+      <ScheduleAppointmentDialog
+        open={isDialogOpen}
+        onOpenChange={setIsDialogOpen}
+        initialDate={selectedDate}
+        onSuccess={(appointment) => {
+          setSelectedDate(new Date(appointment.startTime));
+        }}
+      />
     </Card>
   );
 }

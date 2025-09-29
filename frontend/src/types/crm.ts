@@ -1,3 +1,34 @@
+export type AppointmentType = 'meeting' | 'call' | 'follow-up' | 'presentation';
+
+export type AppointmentStatus = 'scheduled' | 'completed' | 'canceled';
+
+export interface Appointment {
+  id: string;
+  leadId: string | null;
+  title: string;
+  description?: string;
+  type: AppointmentType;
+  status: AppointmentStatus;
+  startTime: string;
+  endTime?: string | null;
+  leadName?: string | null;
+  leadCompany?: string | null;
+}
+
+export interface CreateAppointmentPayload {
+  leadId?: string | null;
+  title: string;
+  description?: string;
+  type: AppointmentType;
+  status?: AppointmentStatus;
+  startTime: string;
+  endTime?: string | null;
+}
+
+export type UpdateAppointmentPayload = Partial<CreateAppointmentPayload> & {
+  status?: AppointmentStatus;
+};
+
 export interface Lead {
   id: string;
   companyName: string;
@@ -11,8 +42,10 @@ export interface Lead {
   lastMovement: Date;
   createdAt: Date;
   nextScheduledAction?: {
+    id: string;
     date: Date;
     description: string;
+    type?: AppointmentType;
   };
 }
 

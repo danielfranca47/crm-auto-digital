@@ -6,6 +6,7 @@ from dotenv import load_dotenv
 
 from database import init_db
 from routes import leads, search, assistente_ia, uploads, prospeccao, whatsapp, profile, dashboard
+from routes import appointments
 from automations.whatsapp.qr_manager import qr_manager  # para fechar o driver no shutdown
 
 app = FastAPI(title="CRM API", version="1.0.0")
@@ -42,7 +43,8 @@ app.include_router(assistente_ia.router, prefix="/api/assistente-ia", tags=["Ass
 app.include_router(uploads.router, prefix="/api", tags=["Uploads"])
 app.include_router(prospeccao.router)   # já define prefix="/api/prospeccao"
 app.include_router(whatsapp.router)     # já define prefix="/api/whatsapp"
-app.include_router(profile.router) 
+app.include_router(profile.router)
+app.include_router(appointments.router)
 #app.include_router(dashboard.router)    # se esse router já traz prefixo próprio, ok; caso contrário, ajuste aqui
 
 # (Removido) router separado de worker para evitar conflito:
