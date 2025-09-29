@@ -93,11 +93,39 @@ export type WhatsEnqueueResp = {
 };
 // ================================================
 
+const normalizeNextScheduledAction = (raw: any) => {
+  if (!raw) return null;
+  const dateValue = raw.date ?? raw.start_at ?? raw.startAt;
+  if (!dateValue) return null;
+
+  return {
+    date: new Date(dateValue),
+    description: raw.description ?? '',
+  };
+};
+
+const mapAppointment = (raw: any) => ({
+  id: String(raw.id),
+  leadId: String(
+    raw.lead_id ?? raw.leadId ?? raw.leadID ?? raw.lead?.id ?? raw.lead ?? ''
+  ),
+  description: raw.description ?? '',
+  startAt: raw.start_at ? new Date(raw.start_at) : new Date(),
+  endAt: raw.end_at ? new Date(raw.end_at) : raw.end_at ?? null,
+  createdAt: raw.created_at ? new Date(raw.created_at) : raw.created_at ?? null,
+  updatedAt: raw.updated_at ? new Date(raw.updated_at) : raw.updated_at ?? null,
+});
+
 export const api = {
   // -------- LEADS --------
   getLeads: async () => {
     const res = await fetch(`${API}/leads`);
-    return handle(res);
+    const data = await handle(res);
+    if (!Array.isArray(data)) return data;
+    return data.map((lead) => ({
+      ...lead,
+      nextScheduledAction: normalizeNextScheduledAction(lead.nextScheduledAction),
+    }));
   },
 
   createLead: async (leadData: any) => {
@@ -121,6 +149,54 @@ export const api = {
 
   deleteLead: async (id: number | string) => {
     const res = await fetch(`${API}/leads/${id}`, { method: "DELETE" });
+    return handle(res);
+  },
+
+  getAppointments: async (leadId: number | string) => {
+    const res = await fetch(`${API}/leads/${leadId}/appointments`);
+    const data = await handle(res);
+    return Array.isArray(data) ? data.map(mapAppointment) : data;
+  },
+
+  createAppointment: async (
+    leadId: number | string,
+    payload: { description: string; startAt: Date; endAt?: Date | null }
+  ) => {
+    const res = await fetch(`${API}/leads/${leadId}/appointments`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        description: payload.description,
+        start_at: payload.startAt.toISOString(),
+        end_at: payload.endAt ? payload.endAt.toISOString() : undefined,
+      }),
+    });
+    const data = await handle(res);
+    return mapAppointment(data);
+  },
+
+  updateAppointment: async (
+    leadId: number | string,
+    appointmentId: number | string,
+    payload: { description?: string; startAt?: Date; endAt?: Date | null }
+  ) => {
+    const res = await fetch(`${API}/leads/${leadId}/appointments/${appointmentId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        description: payload.description,
+        start_at: payload.startAt ? payload.startAt.toISOString() : undefined,
+        end_at: payload.endAt ? payload.endAt.toISOString() : payload.endAt === null ? null : undefined,
+      }),
+    });
+    const data = await handle(res);
+    return mapAppointment(data);
+  },
+
+  deleteAppointment: async (leadId: number | string, appointmentId: number | string) => {
+    const res = await fetch(`${API}/leads/${leadId}/appointments/${appointmentId}`, {
+      method: "DELETE",
+    });
     return handle(res);
   },
 

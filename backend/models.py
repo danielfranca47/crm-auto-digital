@@ -29,6 +29,23 @@ class LeadUpdate(BaseModel):
     customMessage: Optional[str] = None
     observations: Optional[str] = None
     priority: Optional[int] = None
+    lastMovement: Optional[datetime] = None
+
+
+class AppointmentBase(BaseModel):
+    description: str
+    start_at: datetime
+    end_at: Optional[datetime] = None
+
+
+class AppointmentCreate(AppointmentBase):
+    pass
+
+
+class AppointmentUpdate(BaseModel):
+    description: Optional[str] = None
+    start_at: Optional[datetime] = None
+    end_at: Optional[datetime] = None
 
 # -----------------------------
 # Canais de copy
