@@ -131,6 +131,19 @@ def init_db():
         );
         """)
 
+        cursor.execute("""
+        CREATE TABLE IF NOT EXISTS appointments (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            lead_id INTEGER NOT NULL,
+            description TEXT,
+            start_at DATETIME NOT NULL,
+            end_at DATETIME,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (lead_id) REFERENCES leads (id) ON DELETE CASCADE
+        );
+        """)
+
         # Tabela atividades
         cursor.execute("""
         CREATE TABLE IF NOT EXISTS atividades (
