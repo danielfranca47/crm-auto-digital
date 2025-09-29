@@ -1,7 +1,127 @@
 import sqlite3
 import os
-from contextlib import contextmanager
 from datetime import datetime
+
+
+# =========================
+# APPOINTMENTS HELPERS
+# =========================
+def ensure_appointments_table(conn: sqlite3.Connection) -> None:
+    """Garante a existência da tabela de compromissos."""
+    cur = conn.cursor()
+    cur.execute(
+        """
+        CREATE TABLE IF NOT EXISTS appointments (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            lead_id INTEGER NOT NULL,
+            title TEXT NOT NULL,
+            description TEXT,
+            type TEXT,
+            start_at DATETIME NOT NULL,
+            end_at DATETIME NOT NULL,
+            status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending','completed','canceled')),
+            location TEXT,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (lead_id) REFERENCES leads (id) ON DELETE CASCADE
+        );
+        """
+    )
+    # Índices úteis para filtros por lead/range
+    cur.execute("CREATE INDEX IF NOT EXISTS idx_appointments_lead ON appointments(lead_id);")
+    cur.execute(
+        "CREATE INDEX IF NOT EXISTS idx_appointments_time ON appointments(lead_id, start_at, end_at);"
+    )
+
+
+def migrate_atividades_to_appointments(conn: sqlite3.Connection) -> None:
+    """Migra dados antigos da tabela atividades para appointments, caso necessário."""
+    cur = conn.cursor()
+    cur.execute(
+        "SELECT name FROM sqlite_master WHERE type='table' AND name='atividades'"
+    )
+    if not cur.fetchone():
+        return
+
+    cur.execute("SELECT COUNT(*) FROM appointments")
+    already_has_data = cur.fetchone()[0]
+    if already_has_data:
+        return
+
+    cur.execute(
+        "SELECT id, lead_id, tipo, descricao, status, data_atividade FROM atividades"
+    )
+    rows = cur.fetchall()
+    if not rows:
+        return
+
+    now_iso = datetime.utcnow().isoformat()
+    to_insert = []
+    status_map = {
+        "concluido": "completed",
+        "concluído": "completed",
+        "cancelado": "canceled",
+        "pendente": "pending",
+    }
+
+    for row in rows:
+        if isinstance(row, sqlite3.Row):
+            row = {k: row[k] for k in row.keys()}
+        start = row.get("data_atividade") or now_iso
+        title = row.get("tipo") or "Atividade"
+        raw_status = (row.get("status") or "").lower()
+        status = status_map.get(raw_status, raw_status if raw_status in status_map.values() else "pending")
+        description = row.get("descricao")
+        created_at = start or now_iso
+        to_insert.append(
+            (
+                row.get("lead_id"),
+                title,
+                description,
+                row.get("tipo"),
+                start,
+                start,
+                status,
+                None,
+                created_at,
+                created_at,
+            )
+        )
+
+    cur.executemany(
+        """
+        INSERT INTO appointments (
+            lead_id, title, description, type, start_at, end_at, status, location, created_at, updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """,
+        to_insert,
+    )
+
+
+def backfill_appointment_dates(conn: sqlite3.Connection) -> None:
+    """Garante que start_at e end_at estejam preenchidos em registros existentes."""
+    cur = conn.cursor()
+    now_iso = datetime.utcnow().isoformat()
+    cur.execute(
+        """
+        UPDATE appointments
+        SET start_at = COALESCE(start_at, created_at, ?)
+        WHERE start_at IS NULL
+        """,
+        (now_iso,),
+    )
+    cur.execute(
+        """
+        UPDATE appointments
+        SET end_at = CASE
+            WHEN end_at IS NULL THEN COALESCE(start_at, created_at, ?)
+            WHEN end_at < start_at THEN start_at
+            ELSE end_at
+        END
+        WHERE end_at IS NULL OR end_at < start_at
+        """,
+        (now_iso,),
+    )
 
 # Caminho do banco: <raiz>/database/crm.db
 BASE_DIR = os.path.dirname(__file__)
@@ -131,7 +251,7 @@ def init_db():
         );
         """)
 
-        # Tabela atividades
+        # Tabela atividades (legado)
         cursor.execute("""
         CREATE TABLE IF NOT EXISTS atividades (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -143,6 +263,9 @@ def init_db():
             FOREIGN KEY (lead_id) REFERENCES leads (id)
         );
         """)
+
+        # Nova tabela de compromissos
+        ensure_appointments_table(conn)
 
         # Tabela métricas
         cursor.execute("""
@@ -225,6 +348,10 @@ def init_db():
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_messages_lead_channel ON messages(lead_id, channel, createdAt);")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_leads_phone ON leads(phone);")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_leads_email ON leads(email);")
+
+        # Migração de dados antigos de atividades -> appointments
+        migrate_atividades_to_appointments(conn)
+        backfill_appointment_dates(conn)
 
         # >>>>> MIGRAÇÃO DE USER PROFILE <<<<<
         migrate_user_profile(conn)
