@@ -1,25 +1,7 @@
-from typing import Optional, List
-from datetime import datetime, timezone
-
 from fastapi import APIRouter, HTTPException
-
-from database import get_connection, normalize_datetime_value
-from models import AppointmentCreate, AppointmentUpdate, Lead, LeadUpdate
-
-router = APIRouter()
-
-
-# ---------------------------
-# Helpers de normalização
-# ---------------------------
-def _normalize_or_400(value, field_name):
-    try:
-        return normalize_datetime_value(value)
-    except ValueError as exc:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Formato de data/hora inválido para {field_name}"
-        ) from exc
+from database import get_connection
+import datetime
+from models import Lead, LeadUpdate, AppointmentCreate, AppointmentUpdate
 
 
 def _map_lead_row(row):
@@ -49,55 +31,9 @@ def _map_appointment_row(row):
     Normaliza todos os timestamps para ISO com 'T'.
     """
     appointment = dict(row)
-    for key in ("start_at", "end_at", "created_at", "updated_at"):
-        appointment[key] = normalize_datetime_value(appointment.get(key))
     return appointment
 
-
-def _check_conflict(
-    conn,
-    lead_id: int,
-    start_at,
-    end_at,
-    *,
-    ignore_appointment_id: Optional[int] = None,
-):
-    """
-    Valida conflitos de horário usando comparação no SQLite (datetime()).
-    Trabalha apenas com ISO strings normalizadas.
-    """
-    normalized_start = _normalize_or_400(start_at, "start_at")
-    if normalized_start is None:
-        raise HTTPException(status_code=400, detail="start_at é obrigatório")
-
-    normalized_end = None
-    if end_at is not None:
-        normalized_end = _normalize_or_400(end_at, "end_at")
-
-    end_for_overlap = normalized_end or normalized_start
-
-    cursor = conn.cursor()
-    query = (
-        "SELECT id FROM appointments "
-        "WHERE lead_id = ? "
-        "AND datetime(start_at) < datetime(?) "
-        "AND datetime(COALESCE(end_at, start_at)) > datetime(?)"
-    )
-    params = [lead_id, end_for_overlap, normalized_start]
-
-    if ignore_appointment_id is not None:
-        query += " AND id != ?"
-        params.append(ignore_appointment_id)
-
-    cursor.execute(query, params)
-    if cursor.fetchone():
-        raise HTTPException(
-            status_code=409,
-            detail="Já existe um compromisso conflitante para este período."
-        )
-
-    return normalized_start, normalized_end
-
+router = APIRouter()
 
 # ---------------------------
 # Endpoints
@@ -244,7 +180,7 @@ def listar_compromissos(lead_id: int):
             SELECT *
             FROM appointments
             WHERE lead_id = ?
-            ORDER BY datetime(start_at) ASC
+            ORDER BY start_at ASC
             """,
             (lead_id,),
         )
@@ -267,21 +203,6 @@ def criar_compromisso(lead_id: int, payload: AppointmentCreate):
         if cursor.fetchone() is None:
             raise HTTPException(status_code=404, detail="Lead não encontrado")
 
-        normalized_start, normalized_end = _check_conflict(
-            conn,
-            lead_id,
-            payload.start_at,
-            payload.end_at,
-        )
-
-        # Defaults para campos obrigatórios da tabela
-        title = getattr(payload, "title", None) or getattr(payload, "description", None) or "Compromisso"
-        type_ = getattr(payload, "type", None) or "lead"
-        status = getattr(payload, "status", None) or "pending"
-        location = getattr(payload, "location", None)
-
-        end_for_insert = normalized_end or normalized_start  # schema exige end_at NOT NULL
-
         cursor.execute(
             """
             INSERT INTO appointments (
@@ -292,11 +213,8 @@ def criar_compromisso(lead_id: int, payload: AppointmentCreate):
                 lead_id,
                 title,
                 payload.description,
-                type_,
-                normalized_start,
-                end_for_insert,
-                status,
-                location,
+                payload.start_at.isoformat(),
+                payload.end_at.isoformat() if payload.end_at else None,
             ),
         )
         conn.commit()
@@ -322,52 +240,18 @@ def atualizar_compromisso(lead_id: int, appointment_id: int, payload: Appointmen
     conn = get_connection()
     cursor = conn.cursor()
     try:
-        cursor.execute(
-            "SELECT * FROM appointments WHERE id = ? AND lead_id = ?",
-            (appointment_id, lead_id),
-        )
-        atual = cursor.fetchone()
-        if atual is None:
-            raise HTTPException(status_code=404, detail="Compromisso não encontrado")
-
         dados = payload.dict(exclude_unset=True)
         if not dados:
             raise HTTPException(status_code=400, detail="Nenhum dado enviado para atualização")
 
-        # Normaliza datas e checa conflito quando start/end forem alterados
-        if "start_at" in dados or "end_at" in dados:
-            start_val = dados.get("start_at", atual["start_at"])
-            end_val = dados.get("end_at", atual["end_at"])
-            normalized_start, normalized_end = _check_conflict(
-                conn,
-                lead_id,
-                start_val,
-                end_val,
-                ignore_appointment_id=appointment_id,
-            )
-        else:
-            normalized_start = None
-            normalized_end = None
-
         campos = []
         valores = []
 
-        mapping = {
-            "title": dados.get("title"),
-            "description": dados.get("description"),
-            "type": dados.get("type"),
-            "status": dados.get("status"),
-            "location": dados.get("location"),
-            "start_at": normalized_start if "start_at" in dados else None,
-            "end_at": normalized_end if "end_at" in dados else None,
-        }
-
-        for campo, valor in mapping.items():
-            if valor is not None:
-                if isinstance(valor, datetime):
-                    valor = valor.isoformat()
-                campos.append(f"{campo} = ?")
-                valores.append(valor)
+        for campo, valor in dados.items():
+            if campo in ("start_at", "end_at") and valor is not None:
+                valor = valor.isoformat()
+            campos.append(f"{campo} = ?")
+            valores.append(valor)
 
         if not valores:
             # nada para atualizar
@@ -382,6 +266,9 @@ def atualizar_compromisso(lead_id: int, appointment_id: int, payload: Appointmen
 
         cursor.execute(sql, valores)
         conn.commit()
+
+        if cursor.rowcount == 0:
+            raise HTTPException(status_code=404, detail="Compromisso não encontrado")
 
         cursor.execute("SELECT * FROM appointments WHERE id = ?", (appointment_id,))
         row = cursor.fetchone()

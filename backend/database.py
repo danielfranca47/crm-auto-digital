@@ -1,121 +1,14 @@
 import sqlite3
 import os
 from datetime import datetime
-from typing import Any, Optional
-
-
-# =========================
-# APPOINTMENTS HELPERS
-# =========================
-def ensure_appointments_table(conn: sqlite3.Connection) -> None:
-    """Garante a existência da tabela de compromissos."""
-    cur = conn.cursor()
-    cur.execute(
-        """
-        CREATE TABLE IF NOT EXISTS appointments (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            lead_id INTEGER NOT NULL,
-            title TEXT NOT NULL,
-            description TEXT,
-            type TEXT,
-            start_at DATETIME NOT NULL,
-            end_at DATETIME NOT NULL,
-            status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending','completed','canceled')),
-            location TEXT,
-            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-            updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-            FOREIGN KEY (lead_id) REFERENCES leads (id) ON DELETE CASCADE
-        );
-        """
-    )
-    # Índices úteis para filtros por lead/range
-    cur.execute("CREATE INDEX IF NOT EXISTS idx_appointments_lead ON appointments(lead_id);")
-    cur.execute(
-        "CREATE INDEX IF NOT EXISTS idx_appointments_time ON appointments(lead_id, start_at, end_at);"
-    )
-
-
-def normalize_datetime_value(value: Optional[Any]) -> Optional[str]:
-    """Converte valores aceitos (datetime ou string) para ISO 8601 com 'T'."""
-    if value is None:
-        return None
-
-    if isinstance(value, datetime):
-        dt = value
-    else:
-        value_str = str(value).strip()
-        if not value_str:
-            return None
-
-        candidate = value_str.replace(" ", "T")
-        if candidate.endswith("Z"):
-            candidate = candidate[:-1] + "+00:00"
-
-        try:
-            dt = datetime.fromisoformat(candidate)
-        except ValueError as exc:
-            raise ValueError(f"Formato de data/hora inválido: {value_str}") from exc
-
-    return dt.isoformat()
-
-
-def normalize_appointment_timestamps(conn: sqlite3.Connection) -> None:
-    """Garante que start_at/end_at usem sempre o separador 'T' (ISO)."""
-    cursor = conn.cursor()
-    cursor.execute(
-        """
-        UPDATE appointments
-        SET
-            start_at = REPLACE(start_at, ' ', 'T'),
-            end_at = CASE
-                WHEN end_at IS NOT NULL THEN REPLACE(end_at, ' ', 'T')
-                ELSE NULL
-            END
-        WHERE
-            (start_at IS NOT NULL AND INSTR(start_at, ' ') > 0)
-            OR (end_at IS NOT NULL AND INSTR(end_at, ' ') > 0)
-        """
-    )
-
-
-def backfill_appointment_dates(conn: sqlite3.Connection) -> None:
-    """Garante que start_at e end_at estejam preenchidos em registros existentes."""
-    cur = conn.cursor()
-    now_iso = datetime.utcnow().isoformat()
-
-    cur.execute(
-        """
-        UPDATE appointments
-        SET start_at = COALESCE(start_at, created_at, ?)
-        WHERE start_at IS NULL
-        """,
-        (now_iso,),
-    )
-
-    cur.execute(
-        """
-        UPDATE appointments
-        SET end_at = CASE
-            WHEN end_at IS NULL THEN COALESCE(start_at, created_at, ?)
-            WHEN end_at < start_at THEN start_at
-            ELSE end_at
-        END
-        WHERE end_at IS NULL OR end_at < start_at
-        """,
-        (now_iso,),
-    )
-
-
 # Caminho do banco: <raiz>/database/crm.db
 BASE_DIR = os.path.dirname(__file__)
 DB_DIR = os.path.join(BASE_DIR, "database")
 DB_PATH = os.path.join(DB_DIR, "crm.db")
 
-
 def ensure_db_dir():
     # Garante que a pasta exista (útil p/ onboard em outra máquina)
     os.makedirs(DB_DIR, exist_ok=True)
-
 
 def get_connection():
     ensure_db_dir()
@@ -127,89 +20,6 @@ def get_connection():
     # Opcional: melhor para concorrência leitura/escrita no dev
     # conn.execute("PRAGMA journal_mode = WAL")
     return conn
-
-
-def migrate_atividades_to_appointments(conn: sqlite3.Connection) -> None:
-    """
-    Migra dados antigos da tabela 'atividades' para 'appointments' de forma idempotente,
-    normalizando os carimbos de data/hora e evitando duplicatas evidentes.
-    """
-    cur = conn.cursor()
-
-    # Se não existe tabela de atividades, nada a fazer
-    cur.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='atividades'")
-    if not cur.fetchone():
-        return
-
-    # Busca registros candidatos
-    cur.execute(
-        """
-        SELECT id, lead_id, tipo, descricao, status, data_atividade
-        FROM atividades
-        WHERE lead_id IS NOT NULL
-        """
-    )
-    rows = cur.fetchall()
-    if not rows:
-        return
-
-    now_iso = datetime.utcnow().isoformat()
-    status_map = {
-        "concluido": "completed",
-        "concluído": "completed",
-        "cancelado": "canceled",
-        "pendente": "pending",
-    }
-
-    to_insert = []
-    for row in rows:
-        row_dict = {k: row[k] for k in row.keys()} if isinstance(row, sqlite3.Row) else row
-
-        start_iso = normalize_datetime_value(row_dict.get("data_atividade") or now_iso)
-        title = row_dict.get("tipo") or "Atividade"
-        raw_status = (row_dict.get("status") or "").lower()
-        status = status_map.get(raw_status, raw_status if raw_status in status_map.values() else "pending")
-        description = row_dict.get("descricao")
-        created_at = start_iso
-
-        # Evita inserir duplicata óbvia (mesmo lead, mesma descrição e mesmo start)
-        cur.execute(
-            """
-            SELECT 1 FROM appointments
-            WHERE lead_id = ?
-              AND COALESCE(description,'') = COALESCE(?, '')
-              AND datetime(start_at) = datetime(?)
-            LIMIT 1
-            """,
-            (row_dict.get("lead_id"), description, start_iso),
-        )
-        if cur.fetchone():
-            continue
-
-        to_insert.append(
-            (
-                row_dict.get("lead_id"),
-                title,
-                description,
-                row_dict.get("tipo"),
-                start_iso,
-                start_iso,
-                status,
-                None,
-                created_at,
-                created_at,
-            )
-        )
-
-    if to_insert:
-        cur.executemany(
-            """
-            INSERT INTO appointments (
-                lead_id, title, description, type, start_at, end_at, status, location, created_at, updated_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """,
-            to_insert,
-        )
 
 
 # =========================
@@ -407,11 +217,11 @@ def init_db():
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_leads_phone ON leads(phone);")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_leads_email ON leads(email);")
 
-        # >>>>> MIGRAÇÕES <<<<<
+        # >>>>> MIGRAÇÃO DE USER PROFILE <<<<<
         migrate_user_profile(conn)
-        migrate_atividades_to_appointments(conn)   # popula appointments a partir do legado (normalizado)
-        backfill_appointment_dates(conn)           # garante start/end
-        normalize_appointment_timestamps(conn)     # normaliza qualquer sobra ' ' -> 'T'
+        migrate_atividades_to_appointments(conn)
+        backfill_appointment_dates(conn) 
+        normalize_appointment_timestamps(conn)
 
         conn.commit()
         print("✅ init_db concluído com sucesso.")
