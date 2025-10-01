@@ -24,6 +24,46 @@ def _map_appointment_row(row):
     appointment = dict(row)
     return appointment
 
+
+def _parse_db_datetime(value):
+    if value is None:
+        return None
+    if isinstance(value, datetime.datetime):
+        return value
+    return datetime.datetime.fromisoformat(value.replace(' ', 'T'))
+
+
+def _check_conflict(cursor, lead_id, start_at, end_at, ignore_appointment_id=None):
+    if start_at is None:
+        raise HTTPException(status_code=400, detail="start_at é obrigatório")
+
+    compare_end = end_at or start_at
+    params = [lead_id]
+    query = [
+        "SELECT 1",
+        "FROM appointments",
+        "WHERE lead_id = ?",
+    ]
+
+    if ignore_appointment_id is not None:
+        query.append("AND id != ?")
+        params.append(ignore_appointment_id)
+
+    query.extend(
+        [
+            "AND datetime(start_at) <= datetime(?)",
+            "AND datetime(COALESCE(end_at, start_at)) >= datetime(?)",
+            "LIMIT 1",
+        ]
+    )
+
+    params.extend([compare_end.isoformat(), start_at.isoformat()])
+
+    cursor.execute('\n'.join(query), tuple(params))
+    if cursor.fetchone():
+        raise HTTPException(status_code=409, detail="Já existe um compromisso nesse intervalo")
+
+
 router = APIRouter()
 
 @router.get("/")
@@ -173,6 +213,8 @@ def criar_compromisso(lead_id: int, payload: AppointmentCreate):
         if cursor.fetchone() is None:
             raise HTTPException(status_code=404, detail="Lead não encontrado")
 
+        _check_conflict(cursor, lead_id, payload.start_at, payload.end_at)
+
         cursor.execute(
             """
             INSERT INTO appointments (lead_id, description, start_at, end_at, created_at, updated_at)
@@ -206,6 +248,10 @@ def atualizar_compromisso(lead_id: int, appointment_id: int, payload: Appointmen
     cursor = conn.cursor()
 
     try:
+        current = cursor.execute("SELECT * FROM appointments WHERE id = ? AND lead_id = ?", (appointment_id, lead_id)).fetchone()
+        if current is None:
+            raise HTTPException(status_code=404, detail="Compromisso não encontrado")
+
         dados = payload.dict(exclude_unset=True)
         if not dados:
             raise HTTPException(status_code=400, detail="Nenhum dado enviado para atualização")
@@ -213,11 +259,31 @@ def atualizar_compromisso(lead_id: int, appointment_id: int, payload: Appointmen
         campos = []
         valores = []
 
-        for campo, valor in dados.items():
-            if campo in ("start_at", "end_at") and valor is not None:
-                valor = valor.isoformat()
-            campos.append(f"{campo} = ?")
-            valores.append(valor)
+        final_start = _parse_db_datetime(current["start_at"])
+        final_end = _parse_db_datetime(current["end_at"])
+
+        if "description" in dados:
+            campos.append("description = ?")
+            valores.append(dados["description"])
+
+        if "start_at" in dados:
+            novo_inicio = dados["start_at"]
+            if novo_inicio is None:
+                raise HTTPException(status_code=400, detail="start_at não pode ser nulo")
+            final_start = novo_inicio
+            campos.append("start_at = ?")
+            valores.append(novo_inicio.isoformat())
+
+        if "end_at" in dados:
+            novo_fim = dados["end_at"]
+            final_end = novo_fim
+            campos.append("end_at = ?")
+            valores.append(novo_fim.isoformat() if novo_fim else None)
+
+        if not campos:
+            raise HTTPException(status_code=400, detail="Nenhum dado enviado para atualização")
+
+        _check_conflict(cursor, lead_id, final_start, final_end, ignore_appointment_id=appointment_id)
 
         campos.append("updated_at = CURRENT_TIMESTAMP")
 
@@ -226,9 +292,6 @@ def atualizar_compromisso(lead_id: int, appointment_id: int, payload: Appointmen
 
         cursor.execute(sql, valores)
         conn.commit()
-
-        if cursor.rowcount == 0:
-            raise HTTPException(status_code=404, detail="Compromisso não encontrado")
 
         cursor.execute("SELECT * FROM appointments WHERE id = ?", (appointment_id,))
         row = cursor.fetchone()

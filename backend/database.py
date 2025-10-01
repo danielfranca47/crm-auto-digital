@@ -107,6 +107,22 @@ def upsert_user_profile(conn: sqlite3.Connection, data: dict) -> dict:
     return get_user_profile(conn)
 
 
+def normalize_appointment_timestamps(conn: sqlite3.Connection) -> None:
+    """Substitui espaços por 'T' em timestamps de compromissos legados."""
+    cursor = conn.cursor()
+    cursor.execute(
+        """
+        UPDATE appointments
+        SET start_at = REPLACE(start_at, ' ', 'T'),
+            end_at = CASE
+                WHEN end_at IS NOT NULL THEN REPLACE(end_at, ' ', 'T')
+                ELSE NULL
+            END
+        WHERE instr(start_at, ' ') > 0 OR instr(end_at, ' ') > 0
+        """
+    )
+
+
 def init_db():
     conn = get_connection()
     try:
@@ -241,6 +257,9 @@ def init_db():
 
         # >>>>> MIGRAÇÃO DE USER PROFILE <<<<<
         migrate_user_profile(conn)
+
+        # Normaliza timestamps de compromissos importados/legados
+        normalize_appointment_timestamps(conn)
 
         conn.commit()
         print("✅ init_db concluído com sucesso.")
