@@ -1,6 +1,7 @@
 import sqlite3
 import os
 from datetime import datetime
+from typing import Any, Optional
 
 
 # =========================
@@ -34,67 +35,46 @@ def ensure_appointments_table(conn: sqlite3.Connection) -> None:
     )
 
 
-def migrate_atividades_to_appointments(conn: sqlite3.Connection) -> None:
-    """Migra dados antigos da tabela atividades para appointments, caso necessário."""
-    cur = conn.cursor()
-    cur.execute(
-        "SELECT name FROM sqlite_master WHERE type='table' AND name='atividades'"
-    )
-    if not cur.fetchone():
-        return
+def normalize_datetime_value(value: Optional[Any]) -> Optional[str]:
+    """Converte valores aceitos (datetime ou string) para ISO 8601 com 'T'."""
+    if value is None:
+        return None
 
-    cur.execute("SELECT COUNT(*) FROM appointments")
-    already_has_data = cur.fetchone()[0]
-    if already_has_data:
-        return
+    if isinstance(value, datetime):
+        dt = value
+    else:
+        value_str = str(value).strip()
+        if not value_str:
+            return None
 
-    cur.execute(
-        "SELECT id, lead_id, tipo, descricao, status, data_atividade FROM atividades"
-    )
-    rows = cur.fetchall()
-    if not rows:
-        return
+        candidate = value_str.replace(" ", "T")
+        if candidate.endswith("Z"):
+            candidate = candidate[:-1] + "+00:00"
 
-    now_iso = datetime.utcnow().isoformat()
-    to_insert = []
-    status_map = {
-        "concluido": "completed",
-        "concluído": "completed",
-        "cancelado": "canceled",
-        "pendente": "pending",
-    }
+        try:
+            dt = datetime.fromisoformat(candidate)
+        except ValueError as exc:
+            raise ValueError(f"Formato de data/hora inválido: {value_str}") from exc
 
-    for row in rows:
-        if isinstance(row, sqlite3.Row):
-            row = {k: row[k] for k in row.keys()}
-        start = row.get("data_atividade") or now_iso
-        title = row.get("tipo") or "Atividade"
-        raw_status = (row.get("status") or "").lower()
-        status = status_map.get(raw_status, raw_status if raw_status in status_map.values() else "pending")
-        description = row.get("descricao")
-        created_at = start or now_iso
-        to_insert.append(
-            (
-                row.get("lead_id"),
-                title,
-                description,
-                row.get("tipo"),
-                start,
-                start,
-                status,
-                None,
-                created_at,
-                created_at,
-            )
-        )
+    return dt.isoformat()
 
-    cur.executemany(
+
+def normalize_appointment_timestamps(conn: sqlite3.Connection) -> None:
+    """Garante que start_at/end_at usem sempre o separador 'T' (ISO)."""
+    cursor = conn.cursor()
+    cursor.execute(
         """
-        INSERT INTO appointments (
-            lead_id, title, description, type, start_at, end_at, status, location, created_at, updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        """,
-        to_insert,
+        UPDATE appointments
+        SET
+            start_at = REPLACE(start_at, ' ', 'T'),
+            end_at = CASE
+                WHEN end_at IS NOT NULL THEN REPLACE(end_at, ' ', 'T')
+                ELSE NULL
+            END
+        WHERE
+            (start_at IS NOT NULL AND INSTR(start_at, ' ') > 0)
+            OR (end_at IS NOT NULL AND INSTR(end_at, ' ') > 0)
+        """
     )
 
 
@@ -102,6 +82,7 @@ def backfill_appointment_dates(conn: sqlite3.Connection) -> None:
     """Garante que start_at e end_at estejam preenchidos em registros existentes."""
     cur = conn.cursor()
     now_iso = datetime.utcnow().isoformat()
+
     cur.execute(
         """
         UPDATE appointments
@@ -110,6 +91,7 @@ def backfill_appointment_dates(conn: sqlite3.Connection) -> None:
         """,
         (now_iso,),
     )
+
     cur.execute(
         """
         UPDATE appointments
@@ -122,6 +104,7 @@ def backfill_appointment_dates(conn: sqlite3.Connection) -> None:
         """,
         (now_iso,),
     )
+
 
 # Caminho do banco: <raiz>/database/crm.db
 BASE_DIR = os.path.dirname(__file__)
@@ -142,6 +125,89 @@ def get_connection():
     # Opcional: melhor para concorrência leitura/escrita no dev
     # conn.execute("PRAGMA journal_mode = WAL")
     return conn
+
+
+def migrate_atividades_to_appointments(conn: sqlite3.Connection) -> None:
+    """
+    Migra dados antigos da tabela 'atividades' para 'appointments' de forma idempotente,
+    normalizando os carimbos de data/hora e evitando duplicatas evidentes.
+    """
+    cur = conn.cursor()
+
+    # Se não existe tabela de atividades, nada a fazer
+    cur.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='atividades'")
+    if not cur.fetchone():
+        return
+
+    # Busca registros candidatos
+    cur.execute(
+        """
+        SELECT id, lead_id, tipo, descricao, status, data_atividade
+        FROM atividades
+        WHERE lead_id IS NOT NULL
+        """
+    )
+    rows = cur.fetchall()
+    if not rows:
+        return
+
+    now_iso = datetime.utcnow().isoformat()
+    status_map = {
+        "concluido": "completed",
+        "concluído": "completed",
+        "cancelado": "canceled",
+        "pendente": "pending",
+    }
+
+    to_insert = []
+    for row in rows:
+        row_dict = {k: row[k] for k in row.keys()} if isinstance(row, sqlite3.Row) else row
+
+        start_iso = normalize_datetime_value(row_dict.get("data_atividade") or now_iso)
+        title = row_dict.get("tipo") or "Atividade"
+        raw_status = (row_dict.get("status") or "").lower()
+        status = status_map.get(raw_status, raw_status if raw_status in status_map.values() else "pending")
+        description = row_dict.get("descricao")
+        created_at = start_iso
+
+        # Evita inserir duplicata óbvia (mesmo lead, mesma descrição e mesmo start)
+        cur.execute(
+            """
+            SELECT 1 FROM appointments
+            WHERE lead_id = ?
+              AND COALESCE(description,'') = COALESCE(?, '')
+              AND datetime(start_at) = datetime(?)
+            LIMIT 1
+            """,
+            (row_dict.get("lead_id"), description, start_iso),
+        )
+        if cur.fetchone():
+            continue
+
+        to_insert.append(
+            (
+                row_dict.get("lead_id"),
+                title,
+                description,
+                row_dict.get("tipo"),
+                start_iso,
+                start_iso,
+                status,
+                None,
+                created_at,
+                created_at,
+            )
+        )
+
+    if to_insert:
+        cur.executemany(
+            """
+            INSERT INTO appointments (
+                lead_id, title, description, type, start_at, end_at, status, location, created_at, updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            to_insert,
+        )
 
 
 # =========================
@@ -264,11 +330,11 @@ def init_db():
         );
         """)
 
-        # Nova tabela de compromissos
+        # Nova tabela de compromissos (via helper único)
         ensure_appointments_table(conn)
 
-        # Tabela métricas
-        cursor.execute("""
+        # TABELAS AUXILIARES / ÍNDICES
+        cursor.executescript("""
         CREATE TABLE IF NOT EXISTS metricas (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             data_referencia DATE,
@@ -280,10 +346,7 @@ def init_db():
             meta_reunioes INTEGER DEFAULT 5,
             meta_vendas INTEGER DEFAULT 3
         );
-        """)
 
-        # messages (copys por canal)
-        cursor.execute("""
         CREATE TABLE IF NOT EXISTS messages (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             lead_id INTEGER NOT NULL,
@@ -294,16 +357,13 @@ def init_db():
             createdAt DATETIME DEFAULT CURRENT_TIMESTAMP,
             FOREIGN KEY (lead_id) REFERENCES leads (id) ON DELETE CASCADE
         );
-        """)
 
-        # --- PROSPECÇÃO: tabelas auxiliares (idempotentes) ---
-        cursor.executescript("""
         CREATE TABLE IF NOT EXISTS prospection_logs (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             lead_id INTEGER NOT NULL,
-            channel TEXT NULL,               -- 'email'|'whatsapp'|'instagram'|'call'|NULL
+            channel TEXT NULL,
             message_id INTEGER NULL,
-            action TEXT NOT NULL,            -- 'copied'|'wa_opened'|'mail_opened'|'sent'|'replied'|'moved_stage'|'scheduled_followup'
+            action TEXT NOT NULL,
             notes TEXT,
             createdAt DATETIME DEFAULT CURRENT_TIMESTAMP,
             FOREIGN KEY (lead_id) REFERENCES leads(id) ON DELETE CASCADE,
@@ -313,17 +373,14 @@ def init_db():
         CREATE TABLE IF NOT EXISTS message_selections (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             lead_id INTEGER NOT NULL,
-            channel TEXT NOT NULL,           -- 'email'|'whatsapp'|'instagram'|'call'
+            channel TEXT NOT NULL,
             message_id INTEGER NOT NULL,
             selectedAt DATETIME DEFAULT CURRENT_TIMESTAMP,
             UNIQUE (lead_id, channel),
             FOREIGN KEY (lead_id) REFERENCES leads(id) ON DELETE CASCADE,
             FOREIGN KEY (message_id) REFERENCES messages(id) ON DELETE CASCADE
         );
-        """)
 
-        # --- Fila de envios WhatsApp (idempotente) ---
-        cursor.executescript("""
         CREATE TABLE IF NOT EXISTS prospection_whatsapp_queue (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             lead_id INTEGER NOT NULL,
@@ -343,18 +400,16 @@ def init_db():
         CREATE INDEX IF NOT EXISTS idx_wq_lead ON prospection_whatsapp_queue(lead_id);
         """)
 
-        # Índices úteis
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_messages_lead_id ON messages(lead_id);")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_messages_lead_channel ON messages(lead_id, channel, createdAt);")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_leads_phone ON leads(phone);")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_leads_email ON leads(email);")
 
-        # Migração de dados antigos de atividades -> appointments
-        migrate_atividades_to_appointments(conn)
-        backfill_appointment_dates(conn)
-
-        # >>>>> MIGRAÇÃO DE USER PROFILE <<<<<
+        # >>>>> MIGRAÇÕES <<<<<
         migrate_user_profile(conn)
+        migrate_atividades_to_appointments(conn)   # popula appointments a partir do legado (normalizado)
+        backfill_appointment_dates(conn)           # garante start/end
+        normalize_appointment_timestamps(conn)     # normaliza qualquer sobra ' ' -> 'T'
 
         conn.commit()
         print("✅ init_db concluído com sucesso.")

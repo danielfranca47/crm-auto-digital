@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { Lead, KanbanColumn, NewLeadForm, LeadStatus } from '@/types/crm';
+import { Lead, KanbanColumn, NewLeadForm, LeadStatus, LeadAppointment } from '@/types/crm';
 import { ProspectionLead, ProspectionColumn, ProspectionMethod } from '@/types/prospection';
 import { KANBAN_COLUMNS, ARCHIVED_COLUMNS } from '@/data/mockData';
 import { api } from '../services/api';
@@ -8,11 +8,20 @@ interface LeadsContextType {
   columns: KanbanColumn[];
   archivedColumns: KanbanColumn[];
   prospectionColumns: ProspectionColumn[];
+  appointmentsByLead: Record<string, LeadAppointment[]>;
 
   updateLead: (leadId: string, updates: Partial<Lead>) => void;
   moveLead: (leadId: string, newCategory: LeadStatus) => void;
   archiveLead: (leadId: string, archiveCategory: LeadStatus) => void;
   addLead: (leadData: NewLeadForm) => void;
+  loadAppointments: (leadId: string) => Promise<LeadAppointment[]>;
+  createAppointment: (leadId: string, payload: { description: string; startAt: Date; endAt?: Date | null }) => Promise<LeadAppointment>;
+  updateAppointment: (
+    leadId: string,
+    appointmentId: string,
+    payload: { description?: string; startAt?: Date; endAt?: Date | null }
+  ) => Promise<LeadAppointment>;
+  deleteAppointment: (leadId: string, appointmentId: string) => Promise<void>;
 
   moveProspectionLead: (leadId: string, newStatus: 'to-prospect' | 'in-progress' | 'prospected') => void;
   bulkProspection: (leadIds: string[], methods: ProspectionMethod[]) => void;
@@ -36,6 +45,14 @@ interface LeadsProviderProps {
 
 // ---------- helpers ----------
 function mapRawLead(raw: any): Lead {
+  const nextRaw = raw.nextScheduledAction;
+  const nextScheduledAction = nextRaw && nextRaw.date
+    ? {
+        date: nextRaw.date instanceof Date ? nextRaw.date : new Date(nextRaw.date),
+        description: nextRaw.description ?? '',
+      }
+    : undefined;
+
   return {
     id: String(raw.id),
     companyName: raw.companyName || 'Empresa sem nome',
@@ -48,6 +65,45 @@ function mapRawLead(raw: any): Lead {
     observations: raw.observations || '',
     createdAt: raw.createdAt ? new Date(raw.createdAt) : new Date(),
     lastMovement: raw.lastMovement ? new Date(raw.lastMovement) : new Date(),
+    nextScheduledAction,
+  };
+}
+
+function mapRawAppointment(raw: any): LeadAppointment {
+  return {
+    id: String(raw.id),
+    leadId: String(
+      raw.lead_id ?? raw.leadId ?? raw.leadID ?? raw.lead?.id ?? raw.lead ?? ''
+    ),
+    description: raw.description ?? '',
+    startAt: raw.start_at
+      ? new Date(raw.start_at)
+      : raw.startAt instanceof Date
+        ? raw.startAt
+        : raw.startAt
+          ? new Date(raw.startAt)
+          : new Date(),
+    endAt: raw.end_at
+      ? new Date(raw.end_at)
+      : raw.endAt instanceof Date
+        ? raw.endAt
+        : raw.endAt
+          ? new Date(raw.endAt)
+          : raw.end_at ?? raw.endAt ?? null,
+    createdAt: raw.created_at
+      ? new Date(raw.created_at)
+      : raw.createdAt instanceof Date
+        ? raw.createdAt
+        : raw.createdAt
+          ? new Date(raw.createdAt)
+          : raw.created_at ?? raw.createdAt ?? null,
+    updatedAt: raw.updated_at
+      ? new Date(raw.updated_at)
+      : raw.updatedAt instanceof Date
+        ? raw.updatedAt
+        : raw.updatedAt
+          ? new Date(raw.updatedAt)
+          : raw.updated_at ?? raw.updatedAt ?? null,
   };
 }
 
@@ -72,10 +128,14 @@ export function LeadsProvider({ children }: LeadsProviderProps) {
     { id: 'in-progress', title: 'Em Andamento', leads: [], color: '#f59e0b' },
     { id: 'prospected', title: 'Prospectados', leads: [], color: '#22c55e' },
   ]);
+  const [appointmentsByLead, setAppointmentsByLead] = useState<Record<string, LeadAppointment[]>>({});
 
   // --------- persistência de cópia no lead e atualização visual do card ----------
   const updateProspectionLead = async (leadId: string, patch: Partial<Lead>) => {
-    await api.updateLead(leadId, patch);
+    const { nextScheduledAction: _ignore, ...payload } = patch as Partial<Lead> & {
+      nextScheduledAction?: Lead['nextScheduledAction'];
+    };
+    await api.updateLead(leadId, payload);
     setProspectionColumns((cols) =>
       cols.map((col) => ({
         ...col,
@@ -141,7 +201,10 @@ export function LeadsProvider({ children }: LeadsProviderProps) {
 
     // Atualiza no back
     try {
-      await api.updateLead(leadId, updates);
+      const { nextScheduledAction: _ignore, ...payload } = updates as Partial<Lead> & {
+        nextScheduledAction?: Lead['nextScheduledAction'];
+      };
+      await api.updateLead(leadId, payload);
     } catch (error) {
       console.error('Erro ao atualizar lead no backend:', error);
     }
@@ -262,6 +325,55 @@ export function LeadsProvider({ children }: LeadsProviderProps) {
     }
   };
 
+  const loadAppointments = async (leadId: string): Promise<LeadAppointment[]> => {
+    const data = await api.getAppointments(leadId);
+    const appointments = (Array.isArray(data) ? data : [])
+      .map(mapRawAppointment)
+      .sort((a, b) => a.startAt.getTime() - b.startAt.getTime());
+    setAppointmentsByLead((prev) => ({ ...prev, [leadId]: appointments }));
+    return appointments;
+  };
+
+  const createAppointment = async (
+    leadId: string,
+    payload: { description: string; startAt: Date; endAt?: Date | null }
+  ): Promise<LeadAppointment> => {
+    const appointment = await api.createAppointment(leadId, payload);
+    const mapped = mapRawAppointment(appointment);
+    setAppointmentsByLead((prev) => ({
+      ...prev,
+      [leadId]: [...(prev[leadId] ?? []), mapped].sort((a, b) => a.startAt.getTime() - b.startAt.getTime()),
+    }));
+    await reloadAllLeads();
+    return mapped;
+  };
+
+  const updateAppointment = async (
+    leadId: string,
+    appointmentId: string,
+    payload: { description?: string; startAt?: Date; endAt?: Date | null }
+  ): Promise<LeadAppointment> => {
+    const appointment = await api.updateAppointment(leadId, appointmentId, payload);
+    const mapped = mapRawAppointment(appointment);
+    setAppointmentsByLead((prev) => ({
+      ...prev,
+      [leadId]: (prev[leadId] ?? [])
+        .map((item) => (item.id === mapped.id ? mapped : item))
+        .sort((a, b) => a.startAt.getTime() - b.startAt.getTime()),
+    }));
+    await reloadAllLeads();
+    return mapped;
+  };
+
+  const deleteAppointment = async (leadId: string, appointmentId: string): Promise<void> => {
+    await api.deleteAppointment(leadId, appointmentId);
+    setAppointmentsByLead((prev) => ({
+      ...prev,
+      [leadId]: (prev[leadId] ?? []).filter((item) => item.id !== appointmentId),
+    }));
+    await reloadAllLeads();
+  };
+
   // --------- prospecção (UI + persistência) ----------
   const moveProspectionLead = (leadId: string, newStatus: 'to-prospect' | 'in-progress' | 'prospected') => {
     // 1) Atualiza quadro de prospecção (UI)
@@ -343,10 +455,15 @@ export function LeadsProvider({ children }: LeadsProviderProps) {
     columns,
     archivedColumns,
     prospectionColumns,
+    appointmentsByLead,
     updateLead,
     moveLead,
     archiveLead,
     addLead,
+    loadAppointments,
+    createAppointment,
+    updateAppointment,
+    deleteAppointment,
     moveProspectionLead,
     bulkProspection,
     updateProspectionLead,
