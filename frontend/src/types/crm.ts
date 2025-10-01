@@ -49,6 +49,16 @@ export interface Lead {
   };
 }
 
+export interface LeadAppointment {
+  id: string;
+  leadId: string;
+  description: string;
+  startAt: Date;
+  endAt?: Date | null;
+  createdAt?: Date | null;
+  updatedAt?: Date | null;
+}
+
 export type LeadStatus = 
   | 'to-prospect'
   | 'in-progress'        

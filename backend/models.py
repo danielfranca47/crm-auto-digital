@@ -29,6 +29,23 @@ class LeadUpdate(BaseModel):
     customMessage: Optional[str] = None
     observations: Optional[str] = None
     priority: Optional[int] = None
+    lastMovement: Optional[datetime] = None
+
+
+class AppointmentBase(BaseModel):
+    description: str
+    start_at: datetime
+    end_at: Optional[datetime] = None
+
+
+class AppointmentCreate(AppointmentBase):
+    pass
+
+
+class AppointmentUpdate(BaseModel):
+    description: Optional[str] = None
+    start_at: Optional[datetime] = None
+    end_at: Optional[datetime] = None
 
 # -----------------------------
 # Canais de copy
@@ -100,3 +117,43 @@ class AssistantOptions(BaseModel):
     language: str = "pt-BR"
     tone: str = "profissional"
     proposal: Literal["site"] = "site"
+
+
+# -----------------------------
+# Appointments
+# -----------------------------
+AppointmentStatus = Literal["pending", "completed", "canceled"]
+
+
+class AppointmentBase(BaseModel):
+    lead_id: int
+    title: str
+    description: Optional[str] = None
+    type: Optional[str] = None
+    start_at: datetime
+    end_at: datetime
+    status: AppointmentStatus = "pending"
+    location: Optional[str] = None
+
+
+class AppointmentCreate(AppointmentBase):
+    pass
+
+
+class AppointmentUpdate(BaseModel):
+    lead_id: Optional[int] = None
+    title: Optional[str] = None
+    description: Optional[str] = None
+    type: Optional[str] = None
+    start_at: Optional[datetime] = None
+    end_at: Optional[datetime] = None
+    status: Optional[AppointmentStatus] = None
+    location: Optional[str] = None
+
+
+class AppointmentOut(AppointmentBase):
+    id: int
+    created_at: datetime
+    updated_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
