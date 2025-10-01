@@ -128,6 +128,90 @@ export const api = {
     }));
   },
 
+  appointments: {
+    list: async (params?: {
+      start?: string;
+      end?: string;
+      status?: string;
+      leadId?: string | number | null;
+    }) => {
+      const search = new URLSearchParams();
+      if (params?.start) search.set("start", params.start);
+      if (params?.end) search.set("end", params.end);
+      if (params?.status) search.set("status", params.status);
+      if (params?.leadId) search.set("lead_id", String(params.leadId));
+
+      const qs = search.toString();
+      const url = qs ? `${API}/appointments?${qs}` : `${API}/appointments`;
+      const res = await fetch(url);
+      return handle(res);
+    },
+
+    create: async (payload: {
+      leadId?: string | number | null;
+      title: string;
+      description?: string;
+      type: string;
+      status?: string;
+      startTime: string;
+      endTime?: string | null;
+    }) => {
+      const res = await fetch(`${API}/appointments`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          lead_id: payload.leadId ? Number(payload.leadId) : null,
+          title: payload.title,
+          description: payload.description,
+          type: payload.type,
+          status: payload.status ?? "scheduled",
+          start_time: payload.startTime,
+          end_time: payload.endTime ?? null,
+        }),
+      });
+      return handle(res);
+    },
+
+    update: async (
+      id: string | number,
+      payload: Partial<{
+        leadId?: string | number | null;
+        title: string;
+        description?: string;
+        type: string;
+        status?: string;
+        startTime: string;
+        endTime?: string | null;
+      }>
+    ) => {
+      const res = await fetch(`${API}/appointments/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          ...(payload.leadId !== undefined
+            ? { lead_id: payload.leadId === null ? null : Number(payload.leadId) }
+            : {}),
+          ...(payload.title !== undefined ? { title: payload.title } : {}),
+          ...(payload.description !== undefined ? { description: payload.description } : {}),
+          ...(payload.type !== undefined ? { type: payload.type } : {}),
+          ...(payload.status !== undefined ? { status: payload.status } : {}),
+          ...(payload.startTime !== undefined ? { start_time: payload.startTime } : {}),
+          ...(payload.endTime !== undefined ? { end_time: payload.endTime } : {}),
+        }),
+      });
+      return handle(res);
+    },
+
+    cancel: async (id: string | number) => {
+      return api.appointments.update(id, { status: "canceled" });
+    },
+
+    remove: async (id: string | number) => {
+      const res = await fetch(`${API}/appointments/${id}`, { method: "DELETE" });
+      return handle(res);
+    },
+  },
+
   createLead: async (leadData: any) => {
     console.log("📦 JSON enviado para o backend:", leadData);
     const res = await fetch(`${API}/leads/`, {

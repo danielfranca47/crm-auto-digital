@@ -45,21 +45,17 @@ app.add_middleware(
 
 # ---------- Routers ----------
 # Atenção: alguns routers já têm prefixo no próprio arquivo.
-# Abaixo mantive seus mounts como estavam, e montei os demais sem duplicar prefixos.
 app.include_router(leads.router, prefix="/api/leads", tags=["Leads"])
 app.include_router(search.router, prefix="/api/pesquisa", tags=["Pesquisa"])
 app.include_router(assistente_ia.router, prefix="/api/assistente-ia", tags=["Assistente IA"])
 app.include_router(uploads.router, prefix="/api", tags=["Uploads"])
 app.include_router(prospeccao.router)   # já define prefix="/api/prospeccao"
 app.include_router(whatsapp.router)     # já define prefix="/api/whatsapp"
-app.include_router(profile.router)
-# agenda / compromissos
-app.include_router(appointments.router)
-#app.include_router(dashboard.router)    # se esse router já traz prefixo próprio, ok; caso contrário, ajuste aqui
+app.include_router(profile.router)      # use o prefixo definido no arquivo
+app.include_router(appointments.router) # já define prefix="/api/appointments"
 
-# (Removido) router separado de worker para evitar conflito:
-# from routes.whatsapp_worker import router as whatsapp_worker_router
-# app.include_router(whatsapp_worker_router)
+# Se o dashboard tiver prefixo próprio no arquivo, você pode habilitar:
+# app.include_router(dashboard.router)
 
 # ---------- Lifecycle ----------
 @app.on_event("shutdown")

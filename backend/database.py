@@ -111,9 +111,11 @@ BASE_DIR = os.path.dirname(__file__)
 DB_DIR = os.path.join(BASE_DIR, "database")
 DB_PATH = os.path.join(DB_DIR, "crm.db")
 
+
 def ensure_db_dir():
     # Garante que a pasta exista (útil p/ onboard em outra máquina)
     os.makedirs(DB_DIR, exist_ok=True)
+
 
 def get_connection():
     ensure_db_dir()

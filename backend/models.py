@@ -69,6 +69,43 @@ class MessageOut(MessageBase):
     lead_id: int
     createdAt: datetime
 
+
+# -----------------------------
+# Compromissos / Agenda
+# -----------------------------
+AppointmentType = Literal["meeting", "call", "follow-up", "presentation"]
+AppointmentStatus = Literal["scheduled", "completed", "canceled"]
+
+
+class AppointmentBase(BaseModel):
+    lead_id: Optional[int] = None
+    title: str
+    description: Optional[str] = None
+    type: AppointmentType
+    status: AppointmentStatus = "scheduled"
+    start_time: datetime
+    end_time: Optional[datetime] = None
+
+
+class AppointmentCreate(AppointmentBase):
+    pass
+
+
+class AppointmentUpdate(BaseModel):
+    lead_id: Optional[int] = None
+    title: Optional[str] = None
+    description: Optional[str] = None
+    type: Optional[AppointmentType] = None
+    status: Optional[AppointmentStatus] = None
+    start_time: Optional[datetime] = None
+    end_time: Optional[datetime] = None
+
+
+class AppointmentOut(AppointmentBase):
+    id: int
+    created_at: datetime
+    updated_at: datetime
+
 # -----------------------------
 # Opções do Assistente IA
 # -----------------------------

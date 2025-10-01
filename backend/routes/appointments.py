@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import List, Optional
 
 from fastapi import APIRouter, HTTPException, Query
@@ -117,7 +117,7 @@ def create_appointment(payload: AppointmentCreate) -> AppointmentOut:
         _check_conflict(conn, payload.lead_id, payload.start_at, payload.end_at)
 
         cur = conn.cursor()
-        now_iso = datetime.utcnow().isoformat()
+        now_iso = datetime.now(timezone.utc).isoformat()  # tz-aware
         cur.execute(
             """
             INSERT INTO appointments (
@@ -189,7 +189,7 @@ def update_appointment(appointment_id: int, payload: AppointmentUpdate) -> Appoi
         if not fields:
             return _serialize(row)
 
-        values.append(datetime.utcnow().isoformat())
+        values.append(datetime.now(timezone.utc).isoformat())  # tz-aware
         fields.append("updated_at = ?")
 
         values.append(appointment_id)
@@ -223,7 +223,7 @@ def _update_status(appointment_id: int, status: AppointmentStatus) -> Appointmen
         cur = conn.cursor()
         cur.execute(
             "UPDATE appointments SET status = ?, updated_at = ? WHERE id = ?",
-            (status, datetime.utcnow().isoformat(), appointment_id),
+            (status, datetime.now(timezone.utc).isoformat(), appointment_id),  # tz-aware
         )
         conn.commit()
         cur.execute("SELECT * FROM appointments WHERE id = ?", (appointment_id,))

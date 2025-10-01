@@ -10,17 +10,21 @@ interface KanbanColumnProps {
   onMoveLead: (leadId: string, newCategory: string) => void;
   onArchiveLead: (leadId: string, archiveCategory: string) => void;
   onScheduleMeeting: (leadId: string) => void;
+  onRescheduleMeeting: (lead: Lead) => void;
+  onCancelMeeting: (lead: Lead) => void;
   onOpenCard: (leadId: string) => void;
 }
 
-export function KanbanColumn({ 
-  column, 
-  columns, 
-  archivedColumns, 
-  onMoveLead, 
-  onArchiveLead, 
-  onScheduleMeeting, 
-  onOpenCard 
+export function KanbanColumn({
+  column,
+  columns,
+  archivedColumns,
+  onMoveLead,
+  onArchiveLead,
+  onScheduleMeeting,
+  onRescheduleMeeting,
+  onCancelMeeting,
+  onOpenCard
 }: KanbanColumnProps) {
   const { setNodeRef } = useDroppable({
     id: column.id,
@@ -47,14 +51,16 @@ export function KanbanColumn({
       >
         <SortableContext items={column.leads.map(lead => lead.id)} strategy={verticalListSortingStrategy}>
           {column.leads.map((lead) => (
-            <LeadCard 
-              key={lead.id} 
+            <LeadCard
+              key={lead.id}
               lead={lead}
               columns={columns}
               archivedColumns={archivedColumns}
               onMoveLead={onMoveLead}
               onArchiveLead={onArchiveLead}
               onScheduleMeeting={onScheduleMeeting}
+              onRescheduleMeeting={onRescheduleMeeting}
+              onCancelMeeting={onCancelMeeting}
               onOpenCard={onOpenCard}
             />
           ))}

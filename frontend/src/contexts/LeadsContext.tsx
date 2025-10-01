@@ -14,6 +14,7 @@ interface LeadsContextType {
   moveLead: (leadId: string, newCategory: LeadStatus) => void;
   archiveLead: (leadId: string, archiveCategory: LeadStatus) => void;
   addLead: (leadData: NewLeadForm) => void;
+
   loadAppointments: (leadId: string) => Promise<LeadAppointment[]>;
   createAppointment: (leadId: string, payload: { description: string; startAt: Date; endAt?: Date | null }) => Promise<LeadAppointment>;
   updateAppointment: (
@@ -45,7 +46,7 @@ interface LeadsProviderProps {
 
 // ---------- helpers ----------
 function mapRawLead(raw: any): Lead {
-  const nextRaw = raw.nextScheduledAction;
+  const nextRaw = raw?.nextScheduledAction;
   const nextScheduledAction = nextRaw && nextRaw.date
     ? {
         date: nextRaw.date instanceof Date ? nextRaw.date : new Date(nextRaw.date),
@@ -310,6 +311,7 @@ export function LeadsProvider({ children }: LeadsProviderProps) {
         observations: leadData.observations,
         lastMovement: new Date(),
         createdAt: new Date(),
+        nextScheduledAction: undefined,
       };
 
       setColumns((prev) =>
@@ -325,6 +327,7 @@ export function LeadsProvider({ children }: LeadsProviderProps) {
     }
   };
 
+  // --------- Appointments (CRUD) ----------
   const loadAppointments = async (leadId: string): Promise<LeadAppointment[]> => {
     const data = await api.getAppointments(leadId);
     const appointments = (Array.isArray(data) ? data : [])

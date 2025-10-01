@@ -11,17 +11,21 @@ interface LeadCardProps {
   onMoveLead: (leadId: string, newCategory: string) => void;
   onArchiveLead: (leadId: string, archiveCategory: string) => void;
   onScheduleMeeting: (leadId: string) => void;
+  onRescheduleMeeting: (lead: Lead) => void;
+  onCancelMeeting: (lead: Lead) => void;
   onOpenCard: (leadId: string) => void;
 }
 
-export function LeadCard({ 
-  lead, 
-  columns, 
-  archivedColumns, 
-  onMoveLead, 
-  onArchiveLead, 
-  onScheduleMeeting, 
-  onOpenCard 
+export function LeadCard({
+  lead,
+  columns,
+  archivedColumns,
+  onMoveLead,
+  onArchiveLead,
+  onScheduleMeeting,
+  onRescheduleMeeting,
+  onCancelMeeting,
+  onOpenCard
 }: LeadCardProps) {
   const {
     attributes,
@@ -82,6 +86,8 @@ export function LeadCard({
             onMoveLead={onMoveLead}
             onArchiveLead={onArchiveLead}
             onScheduleMeeting={onScheduleMeeting}
+            onRescheduleMeeting={onRescheduleMeeting}
+            onCancelMeeting={onCancelMeeting}
             onOpenCard={onOpenCard}
           />
         </div>

@@ -1,5 +1,5 @@
 // src/components/prospection/ProspectionCardDialog.tsx
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useRef, useState, useMemo } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -25,12 +25,17 @@ import {
   User,
   CheckCircle2,
   XCircle,
-  RefreshCcw
+  RefreshCcw,
+  Plus
 } from "lucide-react";
 import { format, formatDistanceToNow } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { cn } from "@/lib/utils";
 import { api, type LeadMessage } from "@/services/api";
+import { ScheduleAppointmentDialog } from "@/components/ScheduleAppointmentDialog";
+import { useAppointments, useCancelAppointment } from "@/hooks/useAppointments";
+import { Appointment } from "@/types/crm";
+import { useToast } from "@/hooks/use-toast";
 
 interface ProspectionCardDialogProps {
   lead: ProspectionLead | null;
@@ -65,6 +70,32 @@ const statusLabels = {
   "in-negotiation": "Em Negociação",
   "closed-sale": "Venda Fechada",
   "client-list": "Lista de Clientes",
+} as const;
+
+const appointmentTypeLabels = {
+  meeting: "Reunião",
+  call: "Ligação",
+  "follow-up": "Follow-up",
+  presentation: "Apresentação",
+} as const;
+
+const appointmentTypeClasses = {
+  meeting: "bg-primary/10 text-primary border border-primary/20",
+  call: "bg-success/10 text-success border border-success/20",
+  "follow-up": "bg-warning/10 text-warning border border-warning/20",
+  presentation: "bg-info/10 text-info border border-info/20",
+} as const;
+
+const appointmentStatusLabels = {
+  scheduled: "Agendado",
+  completed: "Concluído",
+  canceled: "Cancelado",
+} as const;
+
+const appointmentStatusClasses = {
+  scheduled: "bg-primary/10 text-primary border border-primary/20",
+  completed: "bg-success/10 text-success border border-success/20",
+  canceled: "bg-destructive/10 text-destructive border border-destructive/20",
 } as const;
 
 // helper: separa Subject e Body de um texto de e-mail no formato "Assunto\n\nCorpo"
@@ -124,7 +155,30 @@ export function ProspectionCardDialog({
   const [lastWa, setLastWa] = useState<LastWaRow | null>(null);
   const [loadingLast, setLoadingLast] = useState(false);
 
-  const { updateProspectionLead } = useLeads();
+  const { updateProspectionLead, setLeadNextAction } = useLeads();
+  const cancelAppointment = useCancelAppointment();
+  const { toast } = useToast();
+  const [isScheduleDialogOpen, setIsScheduleDialogOpen] = useState(false);
+  const [appointmentToEdit, setAppointmentToEdit] = useState<Appointment | null>(null);
+  const {
+    data: appointments = [],
+    isLoading: isLoadingAppointments,
+    isError: appointmentsError,
+    refetch: refetchAppointments,
+  } = useAppointments(lead ? { leadId: lead.id } : undefined);
+
+  const upcomingAppointments = useMemo(() => {
+    const now = new Date();
+    return appointments
+      .filter((appointment) => appointment.status === 'scheduled' && new Date(appointment.startTime) >= now)
+      .sort((a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime());
+  }, [appointments]);
+
+  const pastAppointments = useMemo(() => {
+    return appointments
+      .filter((appointment) => appointment.status !== 'scheduled')
+      .sort((a, b) => new Date(b.startTime).getTime() - new Date(a.startTime).getTime());
+  }, [appointments]);
   const saveLead =
     onUpdateLead ??
     (async (id: string, patch: Partial<ProspectionLead>) => {
@@ -234,6 +288,48 @@ export function ProspectionCardDialog({
       if (mountedRef.current) setLoadingLast(false);
     }
   }
+
+  const openScheduleDialog = (appointment?: Appointment | null) => {
+    setAppointmentToEdit(appointment ?? null);
+    setIsScheduleDialogOpen(true);
+  };
+
+  const handleCancelAppointmentAction = async (appointment: Appointment) => {
+    if (!lead) return;
+    try {
+      await cancelAppointment.mutateAsync(appointment.id);
+      setLeadNextAction(lead.id, undefined);
+      setEditedLead((prev) => (prev ? { ...prev, nextScheduledAction: undefined } : prev));
+      setFollowUpDate(undefined);
+      onUpdateLead?.(lead.id, { nextScheduledAction: undefined } as Partial<ProspectionLead>);
+      toast({ title: "Compromisso cancelado" });
+      refetchAppointments();
+    } catch (error: any) {
+      toast({
+        title: "Erro ao cancelar compromisso",
+        description: error?.message ?? "Não foi possível cancelar o compromisso.",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleAppointmentSuccess = (appointment: Appointment) => {
+    if (!lead) return;
+    const nextAction = {
+      id: appointment.id,
+      date: new Date(appointment.startTime),
+      description: appointment.title,
+      type: appointment.type,
+    };
+
+    setLeadNextAction(lead.id, nextAction);
+    setEditedLead((prev) => (prev ? { ...prev, nextScheduledAction: nextAction } : prev));
+    setFollowUpDate(nextAction.date);
+    onUpdateLead?.(lead.id, { nextScheduledAction: nextAction } as Partial<ProspectionLead>);
+    setIsScheduleDialogOpen(false);
+    setAppointmentToEdit(null);
+    refetchAppointments();
+  };
 
   if (!lead || !editedLead) return null;
 
@@ -603,6 +699,126 @@ export function ProspectionCardDialog({
             </div>
           </div>
 
+          <Separator />
+
+          <div className="space-y-4">
+            <div className="flex items-center justify-between">
+              <h3 className="text-lg font-semibold flex items-center gap-2">
+                <CalendarIcon className="h-5 w-5" />
+                Compromissos
+              </h3>
+              <div className="flex items-center gap-2">
+                {appointmentsError && (
+                  <Button variant="outline" size="sm" onClick={() => refetchAppointments()}>
+                    <RefreshCcw className="h-4 w-4 mr-1" />
+                    Recarregar
+                  </Button>
+                )}
+                <Button variant="outline" size="sm" onClick={() => openScheduleDialog()}>
+                  <Plus className="h-4 w-4 mr-2" />
+                  Novo
+                </Button>
+              </div>
+            </div>
+
+            {isLoadingAppointments ? (
+              <p className="text-sm text-muted-foreground">Carregando compromissos...</p>
+            ) : appointmentsError ? (
+              <p className="text-sm text-destructive">Não foi possível carregar os compromissos.</p>
+            ) : (
+              <>
+                {upcomingAppointments.length > 0 && (
+                  <div className="space-y-2">
+                    <h4 className="text-sm font-semibold text-foreground">Próximos</h4>
+                    <div className="space-y-2">
+                      {upcomingAppointments.map((appointment) => {
+                        const start = new Date(appointment.startTime);
+                        return (
+                          <div
+                            key={appointment.id}
+                            className="border border-border rounded-md p-3 space-y-2 bg-background/80"
+                          >
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center gap-2">
+                                <Badge className={appointmentTypeClasses[appointment.type]}>
+                                  {appointmentTypeLabels[appointment.type]}
+                                </Badge>
+                                <Badge className={appointmentStatusClasses[appointment.status]}>
+                                  {appointmentStatusLabels[appointment.status]}
+                                </Badge>
+                              </div>
+                              <span className="text-xs text-muted-foreground">
+                                {format(start, "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}
+                              </span>
+                            </div>
+                            <div className="space-y-1">
+                              <p className="text-sm font-medium text-foreground">{appointment.title}</p>
+                              {appointment.description && (
+                                <p className="text-xs text-muted-foreground">{appointment.description}</p>
+                              )}
+                            </div>
+                            <div className="flex flex-wrap gap-2">
+                              <Button size="sm" variant="outline" onClick={() => openScheduleDialog(appointment)}>
+                                Reagendar
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                className="text-destructive hover:text-destructive"
+                                onClick={() => handleCancelAppointmentAction(appointment)}
+                              >
+                                Cancelar
+                              </Button>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+
+                {pastAppointments.length > 0 && (
+                  <div className="space-y-2">
+                    <h4 className="text-sm font-semibold text-foreground">Histórico</h4>
+                    <div className="space-y-2">
+                      {pastAppointments.map((appointment) => {
+                        const start = new Date(appointment.startTime);
+                        return (
+                          <div
+                            key={appointment.id}
+                            className="border border-border rounded-md p-3 space-y-1 bg-muted/40"
+                          >
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center gap-2">
+                                <Badge className={appointmentTypeClasses[appointment.type]}>
+                                  {appointmentTypeLabels[appointment.type]}
+                                </Badge>
+                                <Badge className={appointmentStatusClasses[appointment.status]}>
+                                  {appointmentStatusLabels[appointment.status]}
+                                </Badge>
+                              </div>
+                              <span className="text-xs text-muted-foreground">
+                                {format(start, "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}
+                              </span>
+                            </div>
+                            <p className="text-sm text-foreground font-medium">{appointment.title}</p>
+                            {appointment.description && (
+                              <p className="text-xs text-muted-foreground">{appointment.description}</p>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+
+                {upcomingAppointments.length === 0 && pastAppointments.length === 0 && (
+                  <p className="text-sm text-muted-foreground">Nenhum compromisso registrado.</p>
+                )}
+              </>
+            )}
+          </div>
+
           {/* Tarefas de Prospecção */}
           {editedLead.prospectionTasks && editedLead.prospectionTasks.length > 0 && (
             <>
@@ -639,7 +855,15 @@ export function ProspectionCardDialog({
             </>
           )}
         </div>
-      </DialogContent>
-    </Dialog>
+      <ScheduleAppointmentDialog
+        open={isScheduleDialogOpen}
+        onOpenChange={setIsScheduleDialogOpen}
+        initialLeadId={lead?.id ?? null}
+        appointmentToEdit={appointmentToEdit}
+        initialDate={appointmentToEdit ? new Date(appointmentToEdit.startTime) : undefined}
+        onSuccess={handleAppointmentSuccess}
+      />
+    </DialogContent>
+  </Dialog>
   );
 }

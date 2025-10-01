@@ -1,18 +1,18 @@
-import { useState, useCallback } from "react";
-import { 
-  DndContext, 
-  DragEndEvent, 
-  DragOverEvent, 
-  closestCorners, 
+import { useCallback, useMemo, useState } from "react";
+import {
+  DndContext,
+  DragEndEvent,
+  DragOverEvent,
   DragStartEvent,
+  KeyboardSensor,
   MouseSensor,
   TouchSensor,
-  KeyboardSensor,
+  closestCorners,
   useSensor,
-  useSensors
+  useSensors,
 } from "@dnd-kit/core";
-import { arrayMove, sortableKeyboardCoordinates } from "@dnd-kit/sortable";
-import { KanbanColumn as KanbanColumnType, Lead, NewLeadForm } from "../types/crm";
+import { sortableKeyboardCoordinates } from "@dnd-kit/sortable";
+import { Lead, NewLeadForm, Appointment } from "../types/crm";
 import { KanbanColumn } from "./KanbanColumn";
 import { CrmHeader } from "./CrmHeader";
 import { NewLeadModal } from "./NewLeadModal";
@@ -20,15 +20,28 @@ import { LeadCardDialog } from "./LeadCardDialog";
 import { useLeads } from "@/contexts/LeadsContext";
 import { Button } from "./ui/button";
 import { Archive } from "lucide-react";
+import { ScheduleAppointmentDialog } from "./ScheduleAppointmentDialog";
+import { useAppointments, useCancelAppointment } from "@/hooks/useAppointments";
+import { useToast } from "@/hooks/use-toast";
 
 interface KanbanBoardProps {
   onDashboard: () => void;
 }
 
 export function KanbanBoard({ onDashboard }: KanbanBoardProps) {
+  const {
+    columns,
+    archivedColumns,
+    updateLead,
+    moveLead,
+    archiveLead,
+    addLead,
+    setLeadNextAction,
+  } = useLeads();
+  const { data: appointments = [] } = useAppointments();
+  const cancelAppointment = useCancelAppointment();
+  const { toast } = useToast();
 
-  const { columns, archivedColumns, updateLead, moveLead, archiveLead, addLead } = useLeads();
-  
   const sensors = useSensors(
     useSensor(MouseSensor, {
       activationConstraint: {
@@ -52,44 +65,52 @@ export function KanbanBoard({ onDashboard }: KanbanBoardProps) {
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedLead, setSelectedLead] = useState<Lead | null>(null);
   const [isLeadDialogOpen, setIsLeadDialogOpen] = useState(false);
+  const [isAppointmentDialogOpen, setIsAppointmentDialogOpen] = useState(false);
+  const [appointmentDialogLeadId, setAppointmentDialogLeadId] = useState<string | null>(null);
+  const [appointmentToEdit, setAppointmentToEdit] = useState<Appointment | null>(null);
 
-  const allColumns = [...columns, ...archivedColumns];
+  const allColumns = useMemo(() => [...columns, ...archivedColumns], [columns, archivedColumns]);
 
-  // Filter leads based on search term
-  const filterLeads = (leads: Lead[]) => {
-    if (!searchTerm.trim()) return leads;
-    
-    const term = searchTerm.toLowerCase();
-    return leads.filter(lead => 
-      lead.contactName.toLowerCase().includes(term) ||
-      lead.companyName.toLowerCase().includes(term) ||
-      lead.phone.toLowerCase().includes(term) ||
-      lead.origin.toLowerCase().includes(term) ||
-      (lead.observations && lead.observations.toLowerCase().includes(term))
-    );
-  };
+  const filterLeads = useCallback(
+    (leads: Lead[]) => {
+      if (!searchTerm.trim()) return leads;
+      const term = searchTerm.toLowerCase();
+      return leads.filter((lead) =>
+        lead.contactName.toLowerCase().includes(term) ||
+        lead.companyName.toLowerCase().includes(term) ||
+        lead.phone.toLowerCase().includes(term) ||
+        lead.origin.toLowerCase().includes(term) ||
+        (!!lead.observations && lead.observations.toLowerCase().includes(term))
+      );
+    },
+    [searchTerm]
+  );
 
-  const filteredColumns = columns.map(col => ({
-    ...col,
-    leads: filterLeads(col.leads)
-  }));
+  const filteredColumns = useMemo(
+    () => columns.map((col) => ({ ...col, leads: filterLeads(col.leads) })),
+    [columns, filterLeads]
+  );
 
-  const filteredArchivedColumns = archivedColumns.map(col => ({
-    ...col,
-    leads: filterLeads(col.leads)
-  }));
+  const filteredArchivedColumns = useMemo(
+    () => archivedColumns.map((col) => ({ ...col, leads: filterLeads(col.leads) })),
+    [archivedColumns, filterLeads]
+  );
 
-  const findColumn = useCallback((leadId: string) => {
-    return allColumns.find(col => col.leads.some(lead => lead.id === leadId));
-  }, [allColumns]);
+  const findColumn = useCallback(
+    (leadId: string) => allColumns.find((col) => col.leads.some((lead) => lead.id === leadId)),
+    [allColumns]
+  );
 
-  const findLead = useCallback((leadId: string) => {
-    for (const column of allColumns) {
-      const lead = column.leads.find(l => l.id === leadId);
-      if (lead) return lead;
-    }
-    return null;
-  }, [allColumns]);
+  const findLead = useCallback(
+    (leadId: string) => {
+      for (const column of allColumns) {
+        const lead = column.leads.find((l) => l.id === leadId);
+        if (lead) return lead;
+      }
+      return null;
+    },
+    [allColumns]
+  );
 
   const handleDragStart = (event: DragStartEvent) => {
     setActiveId(event.active.id as string);
@@ -97,18 +118,15 @@ export function KanbanBoard({ onDashboard }: KanbanBoardProps) {
 
   const handleDragOver = (event: DragOverEvent) => {
     const { active, over } = event;
-    
     if (!over) return;
-    
+
     const activeId = active.id as string;
     const overId = over.id as string;
-    
-    const activeColumn = findColumn(activeId);
-    const overColumn = allColumns.find(col => col.id === overId) || findColumn(overId);
-    
-    if (!activeColumn || !overColumn || activeColumn === overColumn) return;
 
-    // Use context function to move lead
+    const activeColumn = findColumn(activeId);
+    const overColumn = allColumns.find((col) => col.id === overId) || findColumn(overId);
+
+    if (!activeColumn || !overColumn || activeColumn === overColumn) return;
     moveLead(activeId, overColumn.id as any);
   };
 
@@ -116,7 +134,6 @@ export function KanbanBoard({ onDashboard }: KanbanBoardProps) {
     setActiveId(null);
 
     const { active, over } = event;
-
     if (!over) return;
 
     const activeId = active.id as string;
@@ -130,24 +147,22 @@ export function KanbanBoard({ onDashboard }: KanbanBoardProps) {
     const lead = findLead(activeId);
     if (!lead) return;
 
-    // Se o lead foi movido para outra coluna (categoria), atualiza a categoria
     if (activeColumn.id !== overColumn.id) {
       updateLead(activeId, {
-        category: overColumn.id, // nova categoria com base na coluna de destino
-        lastMovement: new Date()
+        category: overColumn.id,
+        lastMovement: new Date(),
       });
     } else {
-      const activeIndex = activeColumn.leads.findIndex(lead => lead.id === activeId);
-      const overIndex = overColumn.leads.findIndex(lead => lead.id === overId);
+      const activeIndex = activeColumn.leads.findIndex((item) => item.id === activeId);
+      const overIndex = overColumn.leads.findIndex((item) => item.id === overId);
 
       if (activeIndex !== overIndex) {
         updateLead(activeId, {
-          lastMovement: new Date()
+          lastMovement: new Date(),
         });
       }
     }
   };
-
 
   const handleMoveLead = (leadId: string, newCategory: string) => {
     moveLead(leadId, newCategory as any);
@@ -157,14 +172,71 @@ export function KanbanBoard({ onDashboard }: KanbanBoardProps) {
     archiveLead(leadId, archiveCategory as any);
   };
 
+  const findAppointmentById = useCallback(
+    (appointmentId?: string | null) => {
+      if (!appointmentId) return null;
+      const match = appointments.find((item) => item.id === appointmentId);
+      return match ?? null;
+    },
+    [appointments]
+  );
+
   const handleScheduleMeeting = (leadId: string) => {
-    // Implementar funcionalidade de agendamento
-    console.log('Agendar reunião para lead:', leadId);
+    setAppointmentDialogLeadId(leadId);
+    setAppointmentToEdit(null);
+    setIsAppointmentDialogOpen(true);
+  };
+
+  const handleRescheduleMeeting = (lead: Lead) => {
+    const nextAction = lead.nextScheduledAction;
+    if (!nextAction?.id) {
+      toast({ title: "Nenhum compromisso para reagendar", variant: "destructive" });
+      return;
+    }
+
+    const appointment =
+      findAppointmentById(nextAction.id) ||
+      ({
+        id: nextAction.id,
+        leadId: lead.id,
+        title: nextAction.description,
+        description: nextAction.description,
+        type: nextAction.type ?? "meeting",
+        status: "scheduled",
+        startTime: nextAction.date.toISOString(),
+        endTime: undefined,
+        leadName: lead.contactName,
+        leadCompany: lead.companyName,
+      } as Appointment);
+
+    setAppointmentDialogLeadId(lead.id);
+    setAppointmentToEdit(appointment);
+    setIsAppointmentDialogOpen(true);
+  };
+
+  const handleCancelMeeting = async (lead: Lead) => {
+    const appointmentId = lead.nextScheduledAction?.id;
+    if (!appointmentId) {
+      toast({ title: "Nenhum compromisso para cancelar", variant: "destructive" });
+      return;
+    }
+
+    try {
+      await cancelAppointment.mutateAsync(appointmentId);
+      setLeadNextAction(lead.id, undefined);
+      setSelectedLead((prev) => (prev?.id === lead.id ? { ...prev, nextScheduledAction: undefined } : prev));
+      toast({ title: "Compromisso cancelado" });
+    } catch (error: any) {
+      toast({
+        title: "Erro ao cancelar compromisso",
+        description: error?.message ?? "Não foi possível cancelar o compromisso.",
+        variant: "destructive",
+      });
+    }
   };
 
   const handleOpenCard = (leadId: string) => {
-    const allLeads = [...columns, ...archivedColumns].flatMap(col => col.leads);
-    const lead = allLeads.find(l => l.id === leadId);
+    const lead = findLead(leadId);
     if (lead) {
       setSelectedLead(lead);
       setIsLeadDialogOpen(true);
@@ -173,8 +245,6 @@ export function KanbanBoard({ onDashboard }: KanbanBoardProps) {
 
   const handleUpdateLead = (leadId: string, updates: Partial<Lead>) => {
     updateLead(leadId, updates);
-    
-    // Update selected lead if it's the one being updated
     if (selectedLead?.id === leadId) {
       setSelectedLead({ ...selectedLead, ...updates });
     }
@@ -186,7 +256,7 @@ export function KanbanBoard({ onDashboard }: KanbanBoardProps) {
 
   return (
     <div className="min-h-screen bg-background relative">
-      <CrmHeader 
+      <CrmHeader
         onNewLead={() => setIsNewLeadModalOpen(true)}
         onDashboard={onDashboard}
         searchTerm={searchTerm}
@@ -194,7 +264,7 @@ export function KanbanBoard({ onDashboard }: KanbanBoardProps) {
         allColumns={allColumns}
         onLeadSelect={handleOpenCard}
       />
-      
+
       <main className="p-6">
         <DndContext
           sensors={sensors}
@@ -203,70 +273,58 @@ export function KanbanBoard({ onDashboard }: KanbanBoardProps) {
           onDragOver={handleDragOver}
           onDragEnd={handleDragEnd}
         >
-          <div className="flex gap-4 overflow-x-auto custom-scrollbar pb-4">
-            {showArchived 
-              ? filteredArchivedColumns.map((column) => (
-                  <KanbanColumn 
-                    key={column.id} 
-                    column={column}
-                    columns={columns}
-                    archivedColumns={archivedColumns}
-                    onMoveLead={handleMoveLead}
-                    onArchiveLead={handleArchiveLead}
-                    onScheduleMeeting={handleScheduleMeeting}
-                    onOpenCard={handleOpenCard}
-                  />
-                ))
-              : filteredColumns.map((column) => (
-                  <KanbanColumn 
-                    key={column.id} 
-                    column={column}
-                    columns={columns}
-                    archivedColumns={archivedColumns}
-                    onMoveLead={handleMoveLead}
-                    onArchiveLead={handleArchiveLead}
-                    onScheduleMeeting={handleScheduleMeeting}
-                    onOpenCard={handleOpenCard}
-                  />
-                ))
-            }
+          <div className="flex justify-between items-center mb-4">
+            <h1 className="text-xl font-semibold text-foreground">Quadro Kanban</h1>
+            <div className="flex items-center gap-2">
+              <Button variant="outline" size="sm" onClick={() => setShowArchived((prev) => !prev)}>
+                <Archive className="w-4 h-4 mr-2" />
+                {showArchived ? "Ocultar Arquivados" : "Ver Arquivados"}
+              </Button>
+              <Button size="sm" onClick={() => setIsNewLeadModalOpen(true)}>
+                Novo Lead
+              </Button>
+            </div>
+          </div>
+
+          <div className="flex gap-4 overflow-x-auto pb-6">
+            {filteredColumns.map((column) => (
+              <KanbanColumn
+                key={column.id}
+                column={column}
+                columns={columns}
+                archivedColumns={archivedColumns}
+                onMoveLead={handleMoveLead}
+                onArchiveLead={handleArchiveLead}
+                onScheduleMeeting={handleScheduleMeeting}
+                onRescheduleMeeting={handleRescheduleMeeting}
+                onCancelMeeting={handleCancelMeeting}
+                onOpenCard={handleOpenCard}
+              />
+            ))}
+
+            {showArchived &&
+              filteredArchivedColumns.map((column) => (
+                <KanbanColumn
+                  key={column.id}
+                  column={column}
+                  columns={columns}
+                  archivedColumns={archivedColumns}
+                  onMoveLead={handleMoveLead}
+                  onArchiveLead={handleArchiveLead}
+                  onScheduleMeeting={handleScheduleMeeting}
+                  onRescheduleMeeting={handleRescheduleMeeting}
+                  onCancelMeeting={handleCancelMeeting}
+                  onOpenCard={handleOpenCard}
+                />
+              ))}
           </div>
         </DndContext>
       </main>
 
-      {/* Archive buttons in bottom right corner */}
-      <div className="fixed bottom-6 right-6 space-y-2">
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => setShowArchived(!showArchived)}
-          className="flex items-center gap-2 bg-background/80 backdrop-blur-sm border-border hover:bg-muted"
-        >
-          <Archive className="h-4 w-4" />
-          {showArchived ? 'Voltar' : 'Arquivo'}
-        </Button>
-        
-        {showArchived && (
-          <div className="space-y-1">
-            {archivedColumns.map((column) => (
-              <Button
-                key={column.id}
-                variant="ghost"
-                size="sm"
-                className="w-full justify-start text-xs bg-background/80 backdrop-blur-sm"
-                style={{ color: column.color }}
-              >
-                {column.title} ({column.leads.length})
-              </Button>
-            ))}
-          </div>
-        )}
-      </div>
-
       <NewLeadModal
         isOpen={isNewLeadModalOpen}
         onClose={() => setIsNewLeadModalOpen(false)}
-        onSave={addLead}
+        onSubmit={handleNewLead}
       />
 
       <LeadCardDialog
@@ -274,6 +332,45 @@ export function KanbanBoard({ onDashboard }: KanbanBoardProps) {
         isOpen={isLeadDialogOpen}
         onClose={() => setIsLeadDialogOpen(false)}
         onUpdateLead={handleUpdateLead}
+      />
+
+      <ScheduleAppointmentDialog
+        open={isAppointmentDialogOpen}
+        onOpenChange={(open) => {
+          setIsAppointmentDialogOpen(open);
+          if (!open) {
+            setAppointmentDialogLeadId(null);
+            setAppointmentToEdit(null);
+          }
+        }}
+        initialLeadId={appointmentDialogLeadId}
+        appointmentToEdit={appointmentToEdit}
+        initialDate={appointmentToEdit ? new Date(appointmentToEdit.startTime) : undefined}
+        onSuccess={(appointment) => {
+          setAppointmentDialogLeadId(null);
+          setAppointmentToEdit(null);
+          if (appointment.leadId) {
+            setLeadNextAction(appointment.leadId, {
+              id: appointment.id,
+              date: new Date(appointment.startTime),
+              description: appointment.title,
+              type: appointment.type,
+            });
+            setSelectedLead((prev) =>
+              prev?.id === appointment.leadId
+                ? {
+                    ...prev,
+                    nextScheduledAction: {
+                      id: appointment.id,
+                      date: new Date(appointment.startTime),
+                      description: appointment.title,
+                      type: appointment.type,
+                    },
+                  }
+                : prev
+            );
+          }
+        }}
       />
     </div>
   );
