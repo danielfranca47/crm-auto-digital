@@ -2,6 +2,7 @@ import sqlite3
 import os
 from contextlib import contextmanager
 from datetime import datetime
+from typing import Any, Optional
 
 # Caminho do banco: <raiz>/database/crm.db
 BASE_DIR = os.path.dirname(__file__)
@@ -22,6 +23,88 @@ def get_connection():
     # Opcional: melhor para concorrência leitura/escrita no dev
     # conn.execute("PRAGMA journal_mode = WAL")
     return conn
+
+
+def normalize_datetime_value(value: Optional[Any]) -> Optional[str]:
+    """Converte valores aceitos (datetime ou string) para ISO 8601 com 'T'."""
+    if value is None:
+        return None
+
+    if isinstance(value, datetime):
+        dt = value
+    else:
+        value_str = str(value).strip()
+        if not value_str:
+            return None
+
+        candidate = value_str.replace(" ", "T")
+        if candidate.endswith("Z"):
+            candidate = candidate[:-1] + "+00:00"
+
+        try:
+            dt = datetime.fromisoformat(candidate)
+        except ValueError as exc:
+            raise ValueError(f"Formato de data/hora inválido: {value_str}") from exc
+
+    return dt.isoformat()
+
+
+def migrate_atividades_to_appointments(conn: sqlite3.Connection) -> None:
+    """Migra registros da tabela atividades para appointments (idempotente)."""
+    cursor = conn.cursor()
+
+    cursor.execute(
+        """
+        SELECT a.id, a.lead_id, a.descricao, a.data_atividade
+        FROM atividades a
+        WHERE a.lead_id IS NOT NULL
+          AND NOT EXISTS (
+              SELECT 1
+              FROM appointments ap
+              WHERE ap.lead_id = a.lead_id
+                AND datetime(ap.start_at) = datetime(a.data_atividade)
+                AND COALESCE(ap.description, '') = COALESCE(a.descricao, '')
+          )
+        """
+    )
+
+    rows = cursor.fetchall()
+    for row in rows:
+        start_iso = normalize_datetime_value(row["data_atividade"])
+        if start_iso is None:
+            start_iso = datetime.utcnow().isoformat()
+        cursor.execute(
+            """
+            INSERT INTO appointments (lead_id, description, start_at, end_at, created_at, updated_at)
+            VALUES (?, ?, ?, NULL, ?, ?)
+            """,
+            (
+                row["lead_id"],
+                row["descricao"],
+                start_iso,
+                start_iso,
+                start_iso,
+            ),
+        )
+
+
+def normalize_appointment_timestamps(conn: sqlite3.Connection) -> None:
+    """Garante que start_at/end_at usem sempre o separador 'T' (ISO)."""
+    cursor = conn.cursor()
+    cursor.execute(
+        """
+        UPDATE appointments
+        SET
+            start_at = REPLACE(start_at, ' ', 'T'),
+            end_at = CASE
+                WHEN end_at IS NOT NULL THEN REPLACE(end_at, ' ', 'T')
+                ELSE NULL
+            END
+        WHERE
+            (start_at IS NOT NULL AND INSTR(start_at, ' ') > 0)
+            OR (end_at IS NOT NULL AND INSTR(end_at, ' ') > 0)
+        """
+    )
 
 
 # =========================
@@ -239,8 +322,10 @@ def init_db():
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_leads_phone ON leads(phone);")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_leads_email ON leads(email);")
 
-        # >>>>> MIGRAÇÃO DE USER PROFILE <<<<<
+        # >>>>> MIGRAÇÕES <<<<<
         migrate_user_profile(conn)
+        migrate_atividades_to_appointments(conn)
+        normalize_appointment_timestamps(conn)
 
         conn.commit()
         print("✅ init_db concluído com sucesso.")
