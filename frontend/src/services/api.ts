@@ -104,17 +104,33 @@ const normalizeNextScheduledAction = (raw: any) => {
   };
 };
 
-const mapAppointment = (raw: any) => ({
-  id: String(raw.id),
-  leadId: String(
-    raw.lead_id ?? raw.leadId ?? raw.leadID ?? raw.lead?.id ?? raw.lead ?? ''
-  ),
-  description: raw.description ?? '',
-  startAt: raw.start_at ? new Date(raw.start_at) : new Date(),
-  endAt: raw.end_at ? new Date(raw.end_at) : raw.end_at ?? null,
-  createdAt: raw.created_at ? new Date(raw.created_at) : raw.created_at ?? null,
-  updatedAt: raw.updated_at ? new Date(raw.updated_at) : raw.updated_at ?? null,
-});
+function mapAppointment(raw: any) {
+  const start = raw?.start_at ?? raw?.start_time ?? raw?.startAt ?? raw?.start ?? null;
+  const end   = raw?.end_at   ?? raw?.end_time   ?? raw?.endAt   ?? raw?.end   ?? null;
+
+  return {
+    id: String(raw?.id ?? ""),
+    leadId:
+      raw?.lead_id != null ? String(raw.lead_id)
+      : raw?.leadId  != null ? String(raw.leadId)
+      : null,
+
+    title: raw?.title ?? "Compromisso",
+    description: raw?.description ?? undefined,
+    type: raw?.type ?? "meeting",
+
+    // preserva exatamente o que veio do backend
+    status: raw?.status ?? "pending",
+
+    startTime: typeof start === "string" ? start : (start ? new Date(start).toISOString() : ""),
+    endTime:
+      end == null ? undefined
+      : (typeof end === "string" ? end : new Date(end).toISOString()),
+
+    leadName: raw?.lead_contact ?? raw?.leadName ?? null,
+    leadCompany: raw?.lead_company ?? raw?.leadCompany ?? null,
+  };
+}
 
 export const api = {
   // -------- LEADS --------
@@ -153,8 +169,8 @@ export const api = {
       description?: string;
       type: string;
       status?: string;
-      startTime: string;
-      endTime?: string | null;
+      startTime: string;      // ISO
+      endTime?: string | null; // ISO | null
     }) => {
       const res = await fetch(`${API}/appointments`, {
         method: "POST",
@@ -164,9 +180,9 @@ export const api = {
           title: payload.title,
           description: payload.description,
           type: payload.type,
-          status: payload.status ?? "scheduled",
-          start_time: payload.startTime,
-          end_time: payload.endTime ?? null,
+          status: payload.status ?? "pending",
+          start_at: payload.startTime,
+          end_at: payload.endTime ?? null,
         }),
       });
       return handle(res);
@@ -180,12 +196,12 @@ export const api = {
         description?: string;
         type: string;
         status?: string;
-        startTime: string;
-        endTime?: string | null;
+        startTime: string;        // ISO
+        endTime?: string | null;  // ISO | null
       }>
     ) => {
       const res = await fetch(`${API}/appointments/${id}`, {
-        method: "PATCH",
+        method: "PATCH", // 
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           ...(payload.leadId !== undefined
@@ -195,64 +211,81 @@ export const api = {
           ...(payload.description !== undefined ? { description: payload.description } : {}),
           ...(payload.type !== undefined ? { type: payload.type } : {}),
           ...(payload.status !== undefined ? { status: payload.status } : {}),
-          ...(payload.startTime !== undefined ? { start_time: payload.startTime } : {}),
-          ...(payload.endTime !== undefined ? { end_time: payload.endTime } : {}),
+          ...(payload.startTime !== undefined ? { start_at: payload.startTime } : {}),
+          ...(payload.endTime !== undefined ? { end_at: payload.endTime } : {}),
         }),
       });
       return handle(res);
     },
 
-    cancel: async (id: string | number) => {
-      return api.appointments.update(id, { status: "canceled" });
-    },
+    cancel: async (
+        arg:
+          | string
+          | number
+          | { id: string | number; leadId: string | number }
+      ) => {
+        // forma nova { id, leadId }
+        if (typeof arg === "object" && arg !== null && "id" in arg && "leadId" in arg) {
+          const { id, leadId } = arg as { id: string | number; leadId: string | number };
+          // usa a rota por lead (PATCH status=canceled)
+          return api.updateAppointment(String(leadId), String(id), { status: "canceled" });
+        }
 
-    remove: async (id: string | number) => {
-      const res = await fetch(`${API}/appointments/${id}`, { method: "DELETE" });
+        // forma antiga (só id) — mantém compat
+        return api.appointments.update(arg as string | number, { status: "canceled" });
+      },
+
+      /**
+       * (opcional) Remoção tolerante: aceita { id, leadId } e usa a rota por lead
+       */
+    remove: async (
+      arg:
+        | string
+        | number
+        | { id: string | number; leadId: string | number }
+    ) => {
+      if (typeof arg === "object" && arg !== null && "id" in arg && "leadId" in arg) {
+        const { id, leadId } = arg as { id: string | number; leadId: string | number };
+        const res = await fetch(`${API}/leads/${leadId}/appointments/${id}`, { method: "DELETE" });
+        return handle(res);
+      }
+      const res = await fetch(`${API}/appointments/${arg}`, { method: "DELETE" });
       return handle(res);
     },
   },
 
-  createLead: async (leadData: any) => {
-    console.log("📦 JSON enviado para o backend:", leadData);
-    const res = await fetch(`${API}/leads/`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(leadData),
-    });
-    return handle(res);
-  },
-
-  updateLead: async (id: number | string, data: any) => {
-    const res = await fetch(`${API}/leads/${id}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(data),
-    });
-    return handle(res);
-  },
-
-  deleteLead: async (id: number | string) => {
-    const res = await fetch(`${API}/leads/${id}`, { method: "DELETE" });
-    return handle(res);
-  },
 
   getAppointments: async (leadId: number | string) => {
     const res = await fetch(`${API}/leads/${leadId}/appointments`);
-    const data = await handle(res);
-    return Array.isArray(data) ? data.map(mapAppointment) : data;
+    // devolve JSON bruto; o hook faz a normalização correta
+    return handle(res);
   },
 
   createAppointment: async (
     leadId: number | string,
-    payload: { description: string; startAt: Date; endAt?: Date | null }
+    payload: {
+      title?: string;
+      description?: string;
+      type?: string;
+      status?: string;
+      location?: string;
+      startAt: Date;
+      endAt?: Date | null;
+    }
   ) => {
     const res = await fetch(`${API}/leads/${leadId}/appointments`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        description: payload.description,
+        ...(payload.title !== undefined ? { title: payload.title } : {}),
+        ...(payload.description !== undefined ? { description: payload.description } : {}),
+        ...(payload.type !== undefined ? { type: payload.type } : {}),
+        status: payload.status ?? "pending",
+        ...(payload.location !== undefined ? { location: payload.location } : {}),
         start_at: payload.startAt.toISOString(),
-        end_at: payload.endAt ? payload.endAt.toISOString() : undefined,
+        ...(payload.endAt !== undefined
+          ? { end_at: payload.endAt === null ? null : payload.endAt.toISOString() }
+          : {}),
       }),
     });
     const data = await handle(res);
@@ -262,19 +295,32 @@ export const api = {
   updateAppointment: async (
     leadId: number | string,
     appointmentId: number | string,
-    payload: { description?: string; startAt?: Date; endAt?: Date | null }
+    payload: {
+      title?: string;
+      description?: string;
+      type?: string;
+      status?: string;
+      location?: string;
+      startAt?: Date;
+      endAt?: Date | null;
+    }
   ) => {
     const res = await fetch(`${API}/leads/${leadId}/appointments/${appointmentId}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        description: payload.description,
-        start_at: payload.startAt ? payload.startAt.toISOString() : undefined,
-        end_at: payload.endAt ? payload.endAt.toISOString() : payload.endAt === null ? null : undefined,
+        ...(payload.title       !== undefined ? { title: payload.title } : {}),
+        ...(payload.description !== undefined ? { description: payload.description } : {}),
+        ...(payload.type        !== undefined ? { type: payload.type } : {}),
+        ...(payload.status      !== undefined ? { status: payload.status } : {}),
+        ...(payload.location    !== undefined ? { location: payload.location } : {}),
+        ...(payload.startAt     !== undefined ? { start_at: payload.startAt.toISOString() } : {}),
+        ...(payload.endAt       !== undefined
+          ? { end_at: payload.endAt === null ? null : payload.endAt.toISOString() }
+          : {}),
       }),
     });
-    const data = await handle(res);
-    return mapAppointment(data);
+    return handle(res); // <- sem mapAppointment
   },
 
   deleteAppointment: async (leadId: number | string, appointmentId: number | string) => {
@@ -283,6 +329,7 @@ export const api = {
     });
     return handle(res);
   },
+
 
   // -------- PESQUISA (automação) --------
   pesquisa: {

@@ -41,6 +41,8 @@ interface ScheduleAppointmentDialogProps {
   initialDate?: Date;
   appointmentToEdit?: Appointment | null;
   onSuccess?: (appointment: Appointment) => void;
+  /** Quando informado, trava o dialog nesse lead (modo Card do Lead) */
+  fixedLeadId?: string;
 }
 
 export function ScheduleAppointmentDialog({
@@ -50,9 +52,16 @@ export function ScheduleAppointmentDialog({
   initialDate,
   appointmentToEdit = null,
   onSuccess,
+  fixedLeadId,
 }: ScheduleAppointmentDialogProps) {
   const { toast } = useToast();
-  const { columns, archivedColumns, setLeadNextAction } = useLeads();
+
+  // Contexto de leads (com fallback seguro para setLeadNextAction)
+  const leadsCtx = useLeads();
+  const setLeadNextAction =
+    ((leadsCtx as any)?.setLeadNextAction as ((leadId: string, next?: any) => void) | undefined) ??
+    (() => {});
+
   const [selectedLeadId, setSelectedLeadId] = useState<string | null>(initialLeadId);
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
@@ -65,12 +74,67 @@ export function ScheduleAppointmentDialog({
   const createMutation = useCreateAppointment();
   const updateMutation = useUpdateAppointment();
 
+  // -------- Lista de leads (colunas ativas + arquivadas + fallback do edit) --------
+  const allLeads = useMemo(() => {
+    const map = new Map<string, { id: string; name: string }>();
+    const ingest = (items: any[]) => {
+      for (const lead of items ?? []) {
+        if (!map.has(lead.id)) {
+          map.set(lead.id, {
+            id: lead.id,
+            name: lead.companyName || lead.contactName || `Lead #${lead.id}`,
+          });
+        }
+      }
+    };
+
+    const columns = (leadsCtx as any)?.columns ?? [];
+    const archivedColumns = (leadsCtx as any)?.archivedColumns ?? [];
+
+    columns.forEach((c: any) => ingest(c?.leads));
+    archivedColumns.forEach((c: any) => ingest(c?.leads));
+
+    const fallbackId = appointmentToEdit?.leadId ?? initialLeadId ?? null;
+    if (fallbackId && !map.has(fallbackId)) {
+      map.set(fallbackId, {
+        id: fallbackId,
+        name:
+          (appointmentToEdit as any)?.leadName ||
+          (appointmentToEdit as any)?.leadCompany ||
+          `Lead #${fallbackId}`,
+      });
+    }
+
+    return Array.from(map.values()).sort((a, b) => a.name.localeCompare(b.name));
+  }, [leadsCtx, appointmentToEdit, initialLeadId]);
+
+  // Id efetivo usado na API (fixedLeadId tem prioridade)
+  const effectiveLeadId = fixedLeadId ?? selectedLeadId ?? null;
+
+  // Nome amigável do lead quando está travado
+  const fixedLeadName = useMemo(() => {
+    if (!effectiveLeadId) return null;
+    const found = allLeads.find((l) => l.id === effectiveLeadId);
+    return (
+      found?.name ??
+      appointmentToEdit?.leadName ??
+      appointmentToEdit?.leadCompany ??
+      (effectiveLeadId ? `Lead #${effectiveLeadId}` : null)
+    );
+  }, [allLeads, effectiveLeadId, appointmentToEdit]);
+
+  // Montagem / reabrir: hidrata o formulário
   useEffect(() => {
     if (!open) return;
 
-    setSelectedLeadId(appointmentToEdit?.leadId ?? initialLeadId ?? null);
+    const resolvedLeadId =
+      fixedLeadId ??
+      appointmentToEdit?.leadId ??
+      initialLeadId ??
+      null;
+
+    setSelectedLeadId(resolvedLeadId);
     setDate(appointmentToEdit ? new Date(appointmentToEdit.startTime) : initialDate ?? new Date());
-    setTime("09:00");
     setTitle(appointmentToEdit?.title ?? "");
     setDescription(appointmentToEdit?.description ?? "");
     setType(appointmentToEdit?.type ?? "meeting");
@@ -80,45 +144,36 @@ export function ScheduleAppointmentDialog({
       const hours = String(start.getHours()).padStart(2, "0");
       const minutes = String(start.getMinutes()).padStart(2, "0");
       setTime(`${hours}:${minutes}`);
+    } else {
+      setTime("09:00");
     }
-  }, [open, initialLeadId, initialDate, appointmentToEdit]);
+  }, [open, initialLeadId, initialDate, appointmentToEdit, fixedLeadId]);
 
-  const allLeads = useMemo(() => {
-    const map = new Map<string, { id: string; name: string }>();
-    const ingest = (items: typeof columns[number]["leads"]) => {
-      for (const lead of items) {
-        if (!map.has(lead.id)) {
-          map.set(lead.id, {
-            id: lead.id,
-            name: lead.companyName || lead.contactName || `Lead #${lead.id}`,
-          });
-        }
-      }
-    };
-    columns.forEach((column) => ingest(column.leads));
-    archivedColumns.forEach((column) => ingest(column.leads));
-    const fallbackId = appointmentToEdit?.leadId ?? initialLeadId ?? null;
-    if (fallbackId && !map.has(fallbackId)) {
-      map.set(fallbackId, {
-        id: fallbackId,
-        name:
-          appointmentToEdit?.leadName ||
-          appointmentToEdit?.leadCompany ||
-          `Lead #${fallbackId}`,
-      });
-    }
-    return Array.from(map.values()).sort((a, b) => a.name.localeCompare(b.name));
-  }, [columns, archivedColumns, appointmentToEdit, initialLeadId]);
-
+  // Ao fechar, limpa o estado
   useEffect(() => {
-    if (!selectedLeadId && allLeads.length > 0) {
+    if (open) return;
+    setSelectedLeadId(initialLeadId ?? null);
+    setTitle("");
+    setDescription("");
+    setType("meeting");
+    setDate(initialDate ?? new Date());
+    setTime("09:00");
+    setIsDateOpen(false);
+  }, [open, initialLeadId, initialDate]);
+
+  // Se nada selecionado e tem leads, escolhe o primeiro (apenas quando não está travado)
+  useEffect(() => {
+    if (!fixedLeadId && !selectedLeadId && allLeads.length > 0) {
       setSelectedLeadId(allLeads[0].id);
     }
-  }, [selectedLeadId, allLeads]);
+  }, [fixedLeadId, selectedLeadId, allLeads]);
+
+  const isSubmitting = createMutation.isPending || updateMutation.isPending;
 
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
-    if (!selectedLeadId) {
+
+    if (!effectiveLeadId) {
       toast({
         title: "Selecione um lead",
         description: "Escolha o lead para associar o compromisso.",
@@ -142,7 +197,7 @@ export function ScheduleAppointmentDialog({
     startAt.setHours(hours, minutes, 0, 0);
 
     const payload = {
-      leadId: selectedLeadId,
+      leadId: effectiveLeadId,
       title: title || appointmentTypeLabels[type],
       description: description || undefined,
       type,
@@ -155,6 +210,7 @@ export function ScheduleAppointmentDialog({
         const response = await updateMutation.mutateAsync({
           id: appointmentToEdit.id,
           data: payload,
+          leadId: effectiveLeadId as string,
         });
         result = response;
         toast({ title: "Compromisso atualizado" });
@@ -184,8 +240,6 @@ export function ScheduleAppointmentDialog({
     }
   };
 
-  const isSubmitting = createMutation.isPending || updateMutation.isPending;
-
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-lg">
@@ -197,36 +251,54 @@ export function ScheduleAppointmentDialog({
             Preencha os detalhes para registrar o compromisso na agenda.
           </DialogDescription>
         </DialogHeader>
+
         <form onSubmit={handleSubmit} className="space-y-6">
+          {/* Lead */}
           <div className="space-y-2">
             <Label htmlFor="lead">Lead</Label>
-            <ScrollArea className="h-24 rounded-md border border-border">
-              <div className="p-2 space-y-1">
-                {allLeads.map((lead) => (
-                  <button
-                    key={lead.id}
-                    type="button"
-                    onClick={() => setSelectedLeadId(lead.id)}
-                    className={cn(
-                      "w-full text-left text-sm px-3 py-2 rounded-md border transition-smooth",
-                      selectedLeadId === lead.id
-                        ? "bg-primary text-primary-foreground border-primary"
-                        : "bg-background hover:bg-muted border-border"
-                    )}
-                    disabled={isSubmitting}
-                  >
-                    {lead.name}
-                  </button>
-                ))}
-                {allLeads.length === 0 && (
-                  <p className="text-xs text-muted-foreground px-3 py-2">
-                    Nenhum lead disponível. Cadastre um lead antes de agendar.
-                  </p>
-                )}
+
+            {fixedLeadId ? (
+              // Modo CARD: lead travado (sem lista)
+              <div className="rounded-md border border-border bg-muted/50 px-3 py-2 text-sm">
+                <span className="font-medium">Selecionado:</span>{" "}
+                <span className="inline-flex items-center gap-2">
+                  <span className="rounded-full px-2 py-0.5 bg-primary/10 text-primary border border-primary/20">
+                    #{fixedLeadId}
+                  </span>
+                  <span className="text-foreground">{fixedLeadName}</span>
+                </span>
               </div>
-            </ScrollArea>
+            ) : (
+              // Modo DASHBOARD: lista de leads
+              <ScrollArea className="h-24 rounded-md border border-border">
+                <div className="p-2 space-y-1">
+                  {allLeads.map((lead) => (
+                    <button
+                      key={lead.id}
+                      type="button"
+                      onClick={() => setSelectedLeadId(lead.id)}
+                      className={cn(
+                        "w-full text-left text-sm px-3 py-2 rounded-md border transition-smooth",
+                        selectedLeadId === lead.id
+                          ? "bg-primary text-primary-foreground border-primary"
+                          : "bg-background hover:bg-muted border-border"
+                      )}
+                      disabled={isSubmitting}
+                    >
+                      {lead.name}
+                    </button>
+                  ))}
+                  {allLeads.length === 0 && (
+                    <p className="text-xs text-muted-foreground px-3 py-2">
+                      Nenhum lead disponível. Cadastre um lead antes de agendar.
+                    </p>
+                  )}
+                </div>
+              </ScrollArea>
+            )}
           </div>
 
+          {/* Tipo e Hora */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label htmlFor="type">Tipo</Label>
@@ -262,6 +334,7 @@ export function ScheduleAppointmentDialog({
             </div>
           </div>
 
+          {/* Data */}
           <div className="space-y-2">
             <Label>Data</Label>
             <Popover open={isDateOpen} onOpenChange={setIsDateOpen}>
@@ -295,6 +368,7 @@ export function ScheduleAppointmentDialog({
             </Popover>
           </div>
 
+          {/* Título */}
           <div className="space-y-2">
             <Label htmlFor="title">Título</Label>
             <Input
@@ -306,6 +380,7 @@ export function ScheduleAppointmentDialog({
             />
           </div>
 
+          {/* Descrição */}
           <div className="space-y-2">
             <Label htmlFor="description">Descrição</Label>
             <Textarea
@@ -318,10 +393,15 @@ export function ScheduleAppointmentDialog({
           </div>
 
           <DialogFooter>
-            <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={isSubmitting}>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => onOpenChange(false)}
+              disabled={isSubmitting}
+            >
               Cancelar
             </Button>
-            <Button type="submit" disabled={isSubmitting || allLeads.length === 0}>
+            <Button type="submit" disabled={isSubmitting || (!fixedLeadId && allLeads.length === 0)}>
               {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
               {appointmentToEdit ? "Salvar alterações" : "Agendar"}
             </Button>
