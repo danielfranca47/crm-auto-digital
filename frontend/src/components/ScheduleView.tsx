@@ -25,12 +25,25 @@ const eventTypeLabels: Record<Appointment["type"], string> = {
   presentation: "Apresentação",
 };
 
+function monthRange(date: Date) {
+  const start = new Date(date.getFullYear(), date.getMonth(), 1, 0, 0, 0, 0);
+  const end = new Date(date.getFullYear(), date.getMonth() + 1, 0, 23, 59, 59, 999);
+  return { start: start.toISOString(), end: end.toISOString() };
+}
+
 export function ScheduleView() {
   const [viewMode, setViewMode] = useState<"calendar" | "list">("calendar");
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
   const [isDialogOpen, setIsDialogOpen] = useState(false);
 
-  const { data: appointments = [], isLoading, isError, refetch } = useAppointments();
+  // 🔧 Passa SEMPRE um intervalo (o mês do dia selecionado)
+  const { start, end } = monthRange(selectedDate);
+  const {
+    data: appointments = [],
+    isLoading,
+    isError,
+    refetch,
+  } = useAppointments({ start, end });
 
   const normalized = useMemo(() => {
     return appointments.map((appointment) => {
@@ -75,17 +88,17 @@ export function ScheduleView() {
               </Button>
             )}
             <Button
-              variant={viewMode === 'calendar' ? 'default' : 'outline'}
+              variant={viewMode === "calendar" ? "default" : "outline"}
               size="sm"
-              onClick={() => setViewMode('calendar')}
+              onClick={() => setViewMode("calendar")}
               className="h-8"
             >
               <CalendarDays className="w-4 h-4" />
             </Button>
             <Button
-              variant={viewMode === 'list' ? 'default' : 'outline'}
+              variant={viewMode === "list" ? "default" : "outline"}
               size="sm"
-              onClick={() => setViewMode('list')}
+              onClick={() => setViewMode("list")}
               className="h-8"
             >
               <List className="w-4 h-4" />
@@ -107,7 +120,7 @@ export function ScheduleView() {
           <p className="text-sm text-destructive text-center py-4">
             Não foi possível carregar os compromissos.
           </p>
-        ) : viewMode === 'calendar' ? (
+        ) : viewMode === "calendar" ? (
           <div className="space-y-4">
             <Calendar
               mode="single"
@@ -115,13 +128,13 @@ export function ScheduleView() {
               onSelect={(date) => date && setSelectedDate(date)}
               className="rounded-md border border-border pointer-events-auto"
               modifiers={{
-                hasEvents: (date) => hasEventsOnDate(date)
+                hasEvents: (date) => hasEventsOnDate(date),
               }}
               modifiersStyles={{
                 hasEvents: {
-                  fontWeight: 'bold',
-                  backgroundColor: 'hsl(var(--primary) / 0.1)',
-                }
+                  fontWeight: "bold",
+                  backgroundColor: "hsl(var(--primary) / 0.1)",
+                },
               }}
             />
             <div className="space-y-2">
