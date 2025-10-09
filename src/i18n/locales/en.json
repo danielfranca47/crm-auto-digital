@@ -1,0 +1,983 @@
+{
+  "meta": {
+    "title": "DigitalPro - Digital Solutions to Transform Your Business",
+    "description": "Portfolio of systems, websites and automations created to generate results. Professional websites, CRM, WhatsApp automation, AI chat and much more."
+  },
+  "navigation": {
+    "home": "Home",
+    "projects": "Projects",
+    "about": "About",
+    "benefits": "Benefits",
+    "contact": "Contact",
+    "requestQuote": "Request Quote"
+  },
+  "languageSwitcher": {
+    "ariaLabel": "Change language",
+    "changeTo": "Switch to {{language}}",
+    "languages": [
+      { "code": "en", "name": "English", "flag": "🇺🇸" },
+      { "code": "pt", "name": "Português", "flag": "🇧🇷" },
+      { "code": "es", "name": "Español", "flag": "🇪🇸" }
+    ]
+  },
+  "header": {
+    "logo": "DigitalPro",
+    "mobileMenuToggle": "Toggle menu"
+  },
+  "aiWhatsappAutomation": {
+    "meta": {
+      "title": "AI WhatsApp Automation - Chatbots for Business",
+      "description": "Automate your WhatsApp customer service with intelligent AI chatbots. Schedule appointments, provide quotes, and handle inquiries 24/7 for service companies, healthcare, and e-commerce."
+    },
+    "hero": {
+      "badge": "🤖 AI WhatsApp Automation",
+      "title": "AI Chatbots That Revolutionize Your WhatsApp Customer Service",
+      "subtitle": "Automate conversations, increase sales and provide 24/7 support with our AI specialized for different business types",
+      "ctaPrimary": "Test AI for Free",
+      "ctaSecondary": "See Live Demo",
+      "stats": {
+        "timeReduction": "Time Reduction",
+        "salesIncrease": "Sales Increase",
+        "availability": "Availability",
+        "accuracy": "AI Accuracy"
+      }
+    },
+    "segments": {
+      "badge": "💼 Business Solutions",
+      "title": "AI Solutions for Every Business Type",
+      "subtitle": "Discover how our intelligent chatbots can transform your customer service across different industries",
+      "keyBenefits": "Key Benefits",
+      "detailedFeatures": "Detailed Features",
+      "useCase": "Real Use Case",
+      "viewDemo": "View Demo",
+      "serviceCompanies": {
+        "title": "Service Companies",
+        "description": "Schedule appointments, provide quotes, and answer frequently asked questions",
+        "useCase": "A plumbing company receives 200+ WhatsApp messages daily. Our AI handles 80% automatically, scheduling appointments and providing instant quotes based on problem descriptions.",
+        "benefits": {
+          "scheduling": {
+            "title": "Automatic scheduling",
+            "description": "AI schedules appointments based on availability and service type"
+          },
+          "quotes": {
+            "title": "Instant quotes",
+            "description": "Provides accurate price estimates based on service descriptions"
+          },
+          "info": {
+            "title": "Service information",
+            "description": "Answers questions about services, coverage areas, and pricing"
+          },
+          "support": {
+            "title": "Customer support",
+            "description": "24/7 intelligent support for emergencies and inquiries"
+          }
+        }
+      },
+      "healthcare": {
+        "title": "Healthcare & Clinics",
+        "description": "Schedule consultations, send reminders, and provide health information",
+        "useCase": "A medical clinic uses AI to manage 300+ daily appointment requests, send automatic reminders, and provide basic health information, reducing no-shows by 60%.",
+        "benefits": {
+          "appointments": {
+            "title": "Appointment scheduling",
+            "description": "Intelligent scheduling considering doctor availability and specialties"
+          },
+          "reminders": {
+            "title": "Automatic reminders",
+            "description": "Sends appointment reminders and preparation instructions"
+          },
+          "healthInfo": {
+            "title": "Health information",
+            "description": "Provides basic health information and preparation guidelines"
+          },
+          "insurance": {
+            "title": "Insurance verification",
+            "description": "Verifies insurance coverage and explains procedures"
+          }
+        }
+      },
+      "ecommerce": {
+        "title": "E-commerce Stores",
+        "description": "Automate product inquiries, process orders, and provide order status updates",
+        "useCase": "An online store processes 500+ daily inquiries about products, orders, and deliveries. AI handles 85% of questions instantly, increasing customer satisfaction and sales.",
+        "benefits": {
+          "catalog": {
+            "title": "Product catalog automation",
+            "description": "AI searches and recommends products based on customer queries"
+          },
+          "tracking": {
+            "title": "Order tracking",
+            "description": "Provides real-time order status and delivery information"
+          },
+          "payment": {
+            "title": "Payment assistance",
+            "description": "Helps with payment processes and resolves transaction issues"
+          },
+          "recovery": {
+            "title": "Abandoned cart recovery",
+            "description": "Automatically follows up on abandoned carts with personalized offers"
+          }
+        }
+      },
+      "cta": {
+        "title": "Ready to Transform Your Customer Service?",
+        "description": "Choose your business type and see how AI can revolutionize your WhatsApp interactions",
+        "primary": "Start Free Trial",
+        "secondary": "Schedule Demo"
+      }
+    },
+    "demo": {
+      "badge": "🎯 Interactive Demo",
+      "title": "Experience AI in Action",
+      "subtitle": "Try our AI chatbot with different business scenarios and see instant results",
+      "tryMessage": "Try these messages:",
+      "defaultResponse": "I understand your request. Let me help you with that right away!",
+      "quickMessages": {
+        "schedule": "I need to schedule an appointment",
+        "price": "How much does it cost?",
+        "info": "Tell me more about your services"
+      },
+      "scenarios": {
+        "service": {
+          "name": "Service Company",
+          "description": "Plumbing & repair services",
+          "welcome": "Hi! I'm your AI assistant. How can I help you today? I can schedule appointments, provide quotes, or answer questions about our services.",
+          "responses": {
+            "schedule": "Perfect! I can help you schedule an appointment. What type of service do you need? We have availability for:\n\n• Emergency repairs (24h)\n• Plumbing installations (next week)\n• Maintenance (flexible)\n\nWhat works best for you?",
+            "quote": "I'd be happy to provide a quote! For an accurate estimate, could you tell me:\n\n• What's the issue?\n• Property type (house/apartment)?\n• Urgency level?\n\nMost common repairs range from $80-$200.",
+            "price": "Our pricing depends on the service:\n\n💧 Basic plumbing: $80-$150\n🔧 Emergency repairs: $120-$300\n🏠 Installations: Quote required\n\nWould you like a specific quote for your needs?"
+          }
+        },
+        "healthcare": {
+          "name": "Medical Clinic",
+          "description": "Health consultations & appointments",
+          "welcome": "Hello! I'm the clinic's AI assistant. I can help you schedule appointments, provide health information, or answer questions about our services.",
+          "responses": {
+            "appointment": "I can help you schedule an appointment! We have availability for:\n\n👩‍⚕️ General consultation: This week\n🔬 Specialist consultation: Next week\n💉 Routine exams: Flexible scheduling\n\nDo you have a preferred doctor or specialty?",
+            "exam": "I can provide information about our exams:\n\n🩺 General checkup: $120 (covered by most insurance)\n🩸 Blood work: $80-$150\n📋 Specialist consultation: $200-$350\n\nWould you like to schedule or need more details?"
+          }
+        },
+        "ecommerce": {
+          "name": "Online Store",
+          "description": "Products & order support",
+          "welcome": "Welcome to our store! I'm your AI shopping assistant. I can help you find products, track orders, or answer any questions about your purchase.",
+          "responses": {
+            "product": "I can help you find the perfect product! What are you looking for?\n\n📱 Electronics: Latest deals available\n👕 Fashion: New collection just arrived\n🏠 Home & Garden: Free shipping on orders $50+\n\nWhat category interests you?",
+            "order": "I can help you track your order! Please provide:\n\n• Order number\n• Email used for purchase\n\nOr I can look it up with your phone number. Most orders ship within 24-48 hours!",
+            "delivery": "Here's our delivery information:\n\n🚚 Standard shipping: 3-5 business days\n⚡ Express shipping: 1-2 business days\n🆓 Free shipping: Orders over $50\n\nNeed to track a specific order?"
+          }
+        }
+      },
+      "metrics": {
+        "title": "Live AI Metrics",
+        "responseTime": "Response Time",
+        "satisfaction": "Customer Satisfaction",
+        "resolved": "Issues Resolved"
+      },
+      "capabilities": {
+        "title": "AI Capabilities",
+        "nlp": "Natural language processing",
+        "context": "Context-aware responses",
+        "multilang": "Multi-language support",
+        "learning": "Continuous learning"
+      }
+    },
+    "features": {
+      "badge": "⚡ Advanced Technology",
+      "title": "Cutting-Edge AI Technology",
+      "subtitle": "Discover the advanced features that make our AI chatbots the most intelligent solution for WhatsApp automation",
+      "nlp": {
+        "title": "Natural Language Processing",
+        "description": "Advanced AI that understands context, intent, and emotions in conversations",
+        "details": {
+          "intent": "Intent recognition with 95% accuracy",
+          "sentiment": "Real-time sentiment analysis",
+          "context": "Multi-turn conversation memory"
+        }
+      },
+      "whatsapp": {
+        "title": "WhatsApp Business Integration",
+        "description": "Native integration with WhatsApp Business API for seamless communication",
+        "details": {
+          "api": "Official WhatsApp Business API",
+          "multimedia": "Support for images, documents, and audio",
+          "templates": "Pre-approved message templates"
+        }
+      },
+      "catalog": {
+        "title": "Smart Catalog Integration",
+        "description": "Automatically sync and manage your product/service catalogs",
+        "details": {
+          "sync": "Real-time catalog synchronization",
+          "search": "Intelligent product search and recommendations",
+          "recommendations": "AI-powered cross-selling suggestions"
+        }
+      },
+      "automation": {
+        "title": "Intelligent Automation",
+        "description": "Smart workflows that adapt to your business processes",
+        "details": {
+          "workflows": "Custom automation workflows",
+          "triggers": "Event-based trigger system",
+          "actions": "Automated actions and responses"
+        }
+      },
+      "analytics": {
+        "title": "Advanced Analytics",
+        "description": "Detailed insights and performance metrics for continuous improvement",
+        "details": {
+          "metrics": "Real-time performance metrics",
+          "insights": "AI-powered customer insights",
+          "reports": "Automated reporting and dashboards"
+        }
+      },
+      "scalability": {
+        "title": "Enterprise Scalability",
+        "description": "Handles thousands of simultaneous conversations without performance loss",
+        "details": {
+          "infrastructure": "Cloud-native scalable infrastructure",
+          "performance": "Sub-second response times",
+          "reliability": "99.9% uptime guarantee"
+        }
+      },
+      "techSpecs": {
+        "title": "Technical Specifications"
+      },
+      "tech": {
+        "processing": {
+          "title": "Processing Speed",
+          "value": "< 1 second"
+        },
+        "languages": {
+          "title": "Languages Supported",
+          "value": "50+ languages"
+        },
+        "security": {
+          "title": "Security Standard",
+          "value": "Enterprise-grade"
+        },
+        "integration": {
+          "title": "API Integration",
+          "value": "RESTful APIs"
+        }
+      },
+      "comparison": {
+        "title": "AI vs Traditional Chatbots",
+        "responseTime": "Response Time",
+        "availability": "Availability",
+        "accuracy": "Response Accuracy",
+        "scalability": "Scalability",
+        "traditional": {
+          "responseTime": "5-30 seconds",
+          "availability": "Business hours only",
+          "accuracy": "60-70%",
+          "scalability": "Limited concurrent users"
+        },
+        "ai": {
+          "responseTime": "< 1 second",
+          "availability": "24/7 availability",
+          "accuracy": "95-98%",
+          "scalability": "Unlimited scaling"
+        }
+      },
+      "integration": {
+        "title": "Seamless Integration with Your Tools",
+        "description": "Connect with all your existing business tools and platforms for a unified experience"
+      }
+    },
+    "roiCalculator": {
+      "badge": "📊 ROI Calculator",
+      "title": "Calculate Your ROI",
+      "subtitle": "See how much time and money you can save with AI WhatsApp automation",
+      "inputsTitle": "Your Business Information",
+      "resultsTitle": "Your Potential Savings",
+      "calculateButton": "Calculate ROI",
+      "businessTypes": {
+        "service": "Service Companies",
+        "healthcare": "Healthcare & Clinics",
+        "ecommerce": "E-commerce Stores"
+      },
+      "inputs": {
+        "businessType": "Business Type",
+        "selectBusiness": "Select your business type",
+        "messagesPerDay": "Messages/Day",
+        "avgResponseTime": "Avg Response Time (min)",
+        "hourlyRate": "Hourly Rate ($)",
+        "employees": "Support Employees"
+      },
+      "results": {
+        "timeSaved": {
+          "title": "Time Saved",
+          "description": "Hours saved per month"
+        },
+        "moneySaved": {
+          "title": "Money Saved",
+          "description": "Monthly cost reduction"
+        },
+        "capacityIncrease": {
+          "title": "Capacity Increase",
+          "description": "Additional capacity gained"
+        },
+        "roi": {
+          "title": "ROI",
+          "description": "Return on investment"
+        },
+        "messagesHandled": {
+          "title": "Messages Handled",
+          "description": "Monthly message capacity"
+        },
+        "satisfaction": {
+          "title": "Satisfaction Boost",
+          "description": "Customer satisfaction improvement"
+        }
+      },
+      "placeholder": {
+        "title": "Ready to Calculate Your ROI?",
+        "description": "Fill in your business details to see potential savings and improvements"
+      },
+      "summary": {
+        "title": "Your AI Investment Summary",
+        "description": "You could save ${monthlySavings}/month and achieve {yearlyROI}% annual ROI with our AI solution",
+        "cta": "Start Your Free Trial"
+      }
+    },
+    "successStories": {
+      "title": "Success Stories",
+      "subtitle": "Real results from businesses using our AI WhatsApp automation",
+      "serviceCompany": {
+        "company": "ProFix Services",
+        "industry": "Plumbing & Electrical",
+        "testimonial": "AI automation reduced our response time by 80% and increased booking rates by 40%. We can now handle 3x more inquiries with the same team.",
+        "metric1Value": "80%",
+        "metric1Label": "Response Time Reduction",
+        "metric2Value": "40%",
+        "metric2Label": "Booking Increase"
+      },
+      "healthcare": {
+        "company": "MedCenter Clinic",
+        "industry": "Healthcare",
+        "testimonial": "The AI schedules 90% of our appointments automatically and sends perfect reminders. No-shows dropped from 30% to 8%.",
+        "metric1Value": "90%",
+        "metric1Label": "Auto Scheduling",
+        "metric2Value": "73%",
+        "metric2Label": "No-show Reduction"
+      },
+      "ecommerce": {
+        "company": "StyleHub Store",
+        "industry": "Fashion E-commerce",
+        "testimonial": "Our AI handles 500+ daily inquiries, provides instant product recommendations, and recovered 25% of abandoned carts automatically.",
+        "metric1Value": "500+",
+        "metric1Label": "Daily Inquiries",
+        "metric2Value": "25%",
+        "metric2Label": "Cart Recovery"
+      }
+    },
+    "finalCta": {
+      "title": "Ready to Implement AI WhatsApp in 24 Hours?",
+      "subtitle": "Join hundreds of businesses already using AI to transform their customer service and increase sales",
+      "primaryButton": "Start Free Trial",
+      "secondaryButton": "Schedule Demo",
+      "guarantees": {
+        "setup": "24h Implementation",
+        "support": "Dedicated Support",
+        "trial": "7-Day Free Trial"
+      }
+    }
+  },
+  "schedulingDemo": {
+    "meta": {
+      "title": "Smart Scheduling System - Interactive Demo",
+      "description": "Experience our complete scheduling system. Simulate bookings, see automatic WhatsApp notifications and track real-time metrics."
+    },
+    "hero": {
+      "badge": "📅 System Demo",
+      "title": "Scheduling System That Revolutionizes Your Business",
+      "subtitle": "Automate bookings, reduce no-shows and increase your revenue with our complete online scheduling solution",
+      "ctaPrimary": "Try Interactive Demo",
+      "ctaSecondary": "Talk to Specialist"
+    },
+    "benefits": {
+      "title": "Proven Benefits",
+      "subtitle": "Discover how our solution can transform your business management",
+      "availability": {
+        "title": "24/7 Availability",
+        "description": "Customers can book anytime, even outside business hours"
+      },
+      "reminders": {
+        "title": "Automatic Reminders",
+        "description": "Reduce no-shows with reminders via WhatsApp, SMS and email"
+      },
+      "analytics": {
+        "title": "Detailed Reports",
+        "description": "Track metrics, revenue and performance in real time"
+      },
+      "management": {
+        "title": "Simplified Management",
+        "description": "Complete admin panel to manage everything in one place"
+      }
+    },
+    "demo": {
+      "title": "Try Our Solution",
+      "subtitle": "See how it works in practice: customer booking and administrator receiving everything in real time"
+    },
+    "features": {
+      "title": "Included Features",
+      "subtitle": "Everything you need to automate your bookings",
+      "calendar": "Smart calendar with automatic conflicts",
+      "whatsapp": "Native integration with WhatsApp Business",
+      "reminders": "Customizable automatic reminders",
+      "analytics": "Dashboard with metrics and reports",
+      "mobile": "Mobile app for management anywhere",
+      "integration": "Integration with Google Calendar and other tools"
+    },
+    "testimonials": {
+      "title": "Real Success Stories",
+      "subtitle": "See the results our customers achieved",
+      "barber": {
+        "name": "Carlos Mendes",
+        "business": "Modern Barbershop",
+        "text": "I reduced 80% of no-shows and increased my revenue by 45% in just 3 months. The system is fantastic!"
+      },
+      "dentist": {
+        "name": "Dr. Marina Silva",
+        "business": "Dental Clinic",
+        "text": "I save 4 hours per day that I used to spend on manual scheduling. Now I focus on what really matters: my patients."
+      },
+      "spa": {
+        "name": "Ana Paula Costa",
+        "business": "Relaxing Spa",
+        "text": "My clients love the ease of booking through WhatsApp. Satisfaction has increased a lot!"
+      }
+    },
+    "cta": {
+      "title": "Ready to Automate Your Bookings?",
+      "subtitle": "Join hundreds of companies that have already transformed their management with our solution",
+      "button": "Implement Now",
+      "backButton": "Back to Home"
+    },
+    "form": {
+      "title": "Book Service",
+      "subtitle": "Choose your service and preferred time",
+      "service": "Service",
+      "selectService": "Select a service",
+      "professional": "Professional",
+      "selectProfessional": "Choose professional",
+      "date": "Date",
+      "selectDate": "Choose date",
+      "time": "Time",
+      "customerInfo": "Contact Information",
+      "name": "Full Name",
+      "namePlaceholder": "Enter your name",
+      "phone": "WhatsApp",
+      "phonePlaceholder": "(11) 99999-9999",
+      "scheduleButton": "Confirm Booking",
+      "scheduling": "Booking...",
+      "tryAgain": "Make New Booking"
+    },
+    "services": {
+      "haircut": "Haircut",
+      "beard": "Beard",
+      "combo": "Haircut + Beard",
+      "facial": "Facial"
+    },
+    "professionals": {
+      "senior": "Senior Professional",
+      "specialist": "Specialist",
+      "expert": "Expert"
+    },
+    "whatsapp": {
+      "waiting": {
+        "title": "Waiting for Booking",
+        "description": "Complete the form on the side to see automatic WhatsApp confirmation"
+      },
+      "confirmation": "Hello {{name}}! ✅ Your booking has been confirmed:\n\n📅 Service: {{service}}\n🗓️ Date: {{date}}\n🕐 Time: {{time}}\n👨‍💼 Professional: {{professional}}\n\nThank you for your preference!",
+      "address": "📍 Address: 123 Flowers Street - Downtown\n🅿️ We have free parking",
+      "reminder": "⏰ Remember: arrive 10 minutes before scheduled time",
+      "customerReply": "Perfect! Thank you 😊",
+      "thanks": "You're welcome! We'll be waiting for you on the scheduled day and time! 🎉",
+      "typeMessage": "Type a message...",
+      "demoMode": "🎯 DEMO MODE"
+    },
+    "admin": {
+      "title": "Admin Panel",
+      "subtitle": "See how you would receive information in real time",
+      "newBooking": "New Booking Received!",
+      "dashboard": {
+        "title": "Main Dashboard",
+        "todayBookings": "Today's Bookings",
+        "weekRevenue": "Week Revenue",
+        "satisfaction": "Average Satisfaction",
+        "noShows": "No-Show Rate"
+      },
+      "calendar": {
+        "title": "Calendar",
+        "today": "Today",
+        "thisWeek": "This Week",
+        "nextWeek": "Next Week"
+      },
+      "recentBookings": {
+        "title": "Recent Bookings",
+        "customer": "Customer",
+        "service": "Service",
+        "date": "Date",
+        "status": "Status",
+        "confirmed": "Confirmed",
+        "pending": "Pending",
+        "completed": "Completed"
+      },
+      "notifications": {
+        "title": "Notifications",
+        "newBooking": "New booking from {{name}}",
+        "reminder": "Reminder sent to {{name}}",
+        "noShow": "Customer {{name}} didn't show up"
+      }
+    },
+    "roi": {
+      "title": "Calculate Your Return",
+      "subtitle": "See how much you can save and profit with our system",
+      "inputs": {
+        "employees": "Number of employees",
+        "dailyBookings": "Bookings per day",
+        "timePerBooking": "Time spent per booking (minutes)",
+        "hourlyRate": "Hourly rate $"
+      },
+      "results": {
+        "timesSaved": "Time saved per month",
+        "moneySaved": "Monthly savings",
+        "increaseCapacity": "Capacity increase",
+        "noShowReduction": "No-show reduction"
+      },
+      "calculate": "Calculate ROI"
+    },
+    "comparison": {
+      "title": "Manual vs Automated",
+      "subtitle": "See the difference in practice",
+      "manual": "Manual Process",
+      "automated": "With Our Solution",
+
+      "process": "Process",
+      "labels": {
+        "process": "Process",
+        "booking": "Scheduling",
+        "scheduling": "Scheduling",
+        "confirmation": "Confirmation",
+        "reminders": "Reminders",
+        "calendar": "Calendar",
+        "reports": "Reports",
+        "timeSpent": "Time Spent"
+      },
+
+      "booking": {
+        "manual": "Customer calls and schedules by phone",
+        "automated": "Customer books alone 24/7"
+      },
+      "confirmation": {
+        "manual": "Manual confirmation by phone",
+        "automated": "Automatic confirmation via WhatsApp"
+      },
+      "reminders": {
+        "manual": "No reminders or manual ones",
+        "automated": "Personalized automatic reminders"
+      },
+      "calendar": {
+        "manual": "Paper agenda or spreadsheet",
+        "automated": "Synchronized digital calendar"
+      },
+      "reports": {
+        "manual": "Occasional manual reports",
+        "automated": "Automatic metrics and reports"
+      },
+
+      "timeSpent": {
+        "title": "Time Spent",
+        "manualValue": "4–6h/day",
+        "manualNote": "Time dedicated to scheduling",
+        "automatedValue": "30min/day",
+        "automatedNote": "Only supervision needed"
+      },
+
+      "timeSpentValues": {
+        "manual": "4–6h/day",
+        "auto": "30min/day",
+        "manualNote": "Time dedicated to scheduling",
+        "autoNote": "Only supervision needed"
+      },
+
+      "bottomStats": {
+        "kpi1Value": "85%",
+        "kpi1Desc": "Reduction in time spent with scheduling",
+        "timeSaved": "Reduction in time spent on scheduling",
+        "kpi2Value": "60%",
+        "kpi2Desc": "Fewer no-shows with automatic reminders",
+        "noShows": "Fewer no-shows with automatic reminders",
+        "kpi3Value": "24/7",
+        "kpi3Desc": "Scheduling available anytime",
+        "availability": "Scheduling available 24/7"
+      }
+    }
+  },
+  "hero": {
+    "badge": "💡 Digital Innovation",
+    "title": "Transform Your Business with Solutions That Generate Real Results",
+    "subtitle": "We create professional websites, management systems, and automations that increase your sales and optimize your processes. Discover how technology can revolutionize your business.",
+    "ctaPrimary": "Schedule Free Demo",
+    "ctaSecondary": "View Success Cases",
+    "stats": {
+      "projects": "Projects Delivered",
+      "satisfaction": "Client Satisfaction",
+      "experience": "Years of Experience",
+      "support": "24/7 Support"
+    }
+  },
+  "about": {
+    "badge": "💡 Our Mission",
+    "title": "About Our Solutions Portfolio",
+    "description1": "We offer custom digital solutions for businesses of all sizes. Explore the projects and systems below that can revolutionize your management, customer service, and business sales.",
+    "description2": "With over 5 years of market experience, we have already transformed hundreds of companies through technology. Our focus is creating solutions that truly generate results, increase operational efficiency, and drive our clients' growth."
+  },
+
+  "services": {
+    "title": "Our Specialties",
+    "subtitle": "What we build for clients",
+    "items": [
+      {
+        "key": "scheduling",
+        "title": "Scheduling Systems",
+        "desc": "Allow your customers to schedule services with ease and receive automatic reminders. Reduces no-shows and optimizes your schedule.",
+        "cta": "View demo"
+      },
+      {
+        "key": "autoContent",
+        "title": "Automatic Content Creation",
+        "desc": "AI tool to generate professional posts and images for social media. Keep your digital presence always active.",
+        "cta": "Generate free post"
+      },
+      {
+        "key": "digitalAutoCrm",
+        "title": "Digital Auto CRM",
+        "desc": "Complete sales and leads control with sales funnels and personalized automations. Significantly increase your conversions.",
+        "cta": "Explore CRM"
+      }
+    ]
+  },
+
+  "projects": {
+    "badge": "🚀 Our Specialties",
+    "title": "Project Categories",
+    "description": "We offer custom digital solutions for businesses of all sizes. Explore the projects and systems below that can revolutionize your management, customer service, and business sales.",
+    "items": [
+      {
+        "key": "professionalWebsites",
+        "title": "Professional Websites",
+        "description": "Modern and optimized websites for barbershops, dentists, auto parts stores, real estate agencies, spas and much more. Responsive design and high performance.",
+        "button": "View examples",
+        "link": "/professional-websites"
+      },
+      {
+        "key": "schedulingSystems",
+        "title": "Scheduling Systems",
+        "description": "Allow your customers to schedule services with ease and receive automatic reminders. Reduces no-shows and optimizes your schedule.",
+        "button": "View demo",
+        "link": "/scheduling-demo"
+      },
+      {
+        "key": "aiWhatsappAutomation",
+        "title": "AI WhatsApp Automation",
+        "description": "Intelligent WhatsApp chatbots that respond to customers 24/7, automate conversations and increase sales through personalized interactions.",
+        "button": "Test now"
+      },
+      {
+        "key": "digitalAutoCrm",
+        "title": "Digital Auto CRM",
+        "description": "Complete sales and leads control with sales funnels and personalized automations. Significantly increase your conversions.",
+        "button": "Explore CRM"
+      },
+      {
+        "key": "automaticContentCreation",
+        "title": "Automatic Content Creation",
+        "description": "AI tool to generate professional posts and images for social media. Keep your digital presence always active.",
+        "button": "Generate free post"
+      },
+      {
+        "key": "personalizedAutomations",
+        "title": "Personalized Automations",
+        "description": "Custom automation solutions for your business processes. Email marketing, workflow automation, and personalized customer journeys.",
+        "button": "View use cases"
+      }
+    ],
+    "bottomNote": "Didn't find exactly what you're looking for? We create custom solutions.",
+    "bottomButton": "Request Custom Project"
+  },
+  "benefits": {
+    "badge": "💎 Differentials",
+    "title": "Why choose our solutions?",
+    "subtitle": "Over 5 years transforming companies through technology. Discover the main benefits that our clients experience.",
+    "items": [
+      {
+        "key": "automation",
+        "title": "Automate processes and save time",
+        "description": "Reduce manual tasks by up to 80% with our intelligent automations and focus on what really matters: growing your business."
+      },
+      {
+        "key": "service",
+        "title": "Professional and personalized service",
+        "description": "Dedicated support throughout the project and post-delivery. We are always available to ensure the success of your digital solution."
+      },
+      {
+        "key": "scalability",
+        "title": "Scalable systems for any company",
+        "description": "Our solutions grow with your business. From small business to multinational, we have the right technology for each stage."
+      },
+      {
+        "key": "security",
+        "title": "Guaranteed security and reliability",
+        "description": "Banking-level security protocols, automatic backups and 24h monitoring for complete peace of mind."
+      }
+    ],
+    "stats": {
+      "title": "Results that speak for themselves",
+      "subtitle": "Real impact numbers from companies that trusted our solutions",
+      "items": [
+        { "value": "87%", "label": "Reduction in service time" },
+        { "value": "3x", "label": "Increase in conversion" },
+        { "value": "150%", "label": "Average sales growth" },
+        { "value": "24/7", "label": "System availability" }
+      ]
+    }
+  },
+  "testimonials": {
+    "badge": "⭐ Testimonials",
+    "title": "What our clients say",
+    "subtitle": "Real results from companies that transformed their businesses with our digital solutions.",
+    "items": [
+      {
+        "name": "Carlos Mendes",
+        "role": "Owner - Elite Barbershop",
+        "content": "The scheduling system revolutionized my barbershop. It reduced no-shows by 80% and my customers love the convenience. The investment paid for itself in less than 2 months.",
+        "rating": 5,
+        "avatar": "CM"
+      },
+      {
+        "name": "Ana Paula Silva",
+        "role": "Sales Director - TopReal Estate",
+        "content": "The automated CRM increased our sales by 150%. Now we can track every lead and our team is much more productive. Excellent technical support!",
+        "rating": 5,
+        "avatar": "AP"
+      },
+      {
+        "name": "Roberto Santos",
+        "role": "CEO - AutoCenter Millennium",
+        "content": "The AI chat on our website converted 40% more leads into customers. It works 24h and responds better than some salespeople. Investment that's really worth it!",
+        "rating": 5,
+        "avatar": "RS"
+      }
+    ],
+    "stats": [
+      { "value": "4.9/5", "label": "Average rating" },
+      { "value": "200+", "label": "Satisfied clients" },
+      { "value": "98%", "label": "Success rate" }
+    ]
+  },
+  "cta": {
+    "badge": "🚀 Let's Get Started",
+    "title": "Ready to take your business to the next level?",
+    "subtitle": "Transform your business with digital solutions that really work. Contact us now and receive a personalized proposal.",
+    "form": {
+      "title": "Request Free Quote",
+      "fields": {
+        "name": {
+          "label": "Full name",
+          "placeholder": "Your full name"
+        },
+        "email": {
+          "label": "Email",
+          "placeholder": "your@email.com"
+        },
+        "phone": {
+          "label": "Phone/WhatsApp",
+          "placeholder": "(11) 99999-9999"
+        },
+        "message": {
+          "label": "Tell us about your project",
+          "placeholder": "Describe your business and what solution you need..."
+        }
+      },
+      "button": "Request Free Quote"
+    },
+    "quickActions": {
+      "title": "Prefer to talk directly?",
+      "items": [
+        { "key": "meeting", "icon": "calendar", "label": "Schedule Online Meeting" },
+        { "key": "whatsapp", "icon": "messageCircle", "label": "WhatsApp: (11) 99999-9999" },
+        { "key": "phone", "icon": "phone", "label": "Phone: (11) 3333-3333" },
+        { "key": "email", "icon": "mail", "label": "contact@digitalpro.com" }
+      ]
+    },
+    "guarantee": {
+      "title": "✨ Satisfaction Guarantee",
+      "description": "We offer 30 days guarantee on all projects. If you're not satisfied, we make the necessary adjustments at no additional cost. Your satisfaction is our priority."
+    },
+    "responseTime": {
+      "title": "⚡ Quick Response",
+      "description": "We respond to all contacts within 2 hours during business hours. For emergencies, we have 24h support via WhatsApp."
+    }
+  },
+  "professionalWebsites": {
+    "meta": {
+      "title": "Professional Websites - Custom Web Development",
+      "description": "Modern, responsive and optimized professional websites to boost your business. Custom design, SEO, and high performance."
+    },
+    "hero": {
+      "badge": "Professional Web Development",
+      "title": "Professional Websites That Convert Visitors Into Customers",
+      "subtitle": "We create modern, fast and optimized websites that generate real results for your business",
+      "ctaPrimary": "Request Free Quote",
+      "ctaSecondary": "View Examples"
+    },
+    "examples": {
+      "title": "Portfolio of Successful Projects",
+      "subtitle": "Our portfolio is constantly expanding. Check the available model and stay tuned for new sector templates every week.",
+      "comingSoon": "Coming Soon",
+      "accounting": {
+        "title": "CPA Accounting Firm",
+        "category": "Financial Services",
+        "description": "Complete institutional website for accounting offices with professional service presentation and client engagement tools.",
+        "features": ["Professional services presentation", "Integrated contact forms", "Tax and finance articles blog", "Interactive office location map", "Client portal access"]
+      },
+      "spa": {
+        "title": "Wellness Spa & Massage",
+        "category": "Wellness",
+        "description": "Relaxing website with comprehensive service catalog and integrated booking system.",
+        "features": ["Complete service catalog", "Online booking system", "Wellness photo gallery", "Health and wellness blog"]
+      },
+      "barbershop": {
+        "title": "Premium Barbershop",
+        "category": "Personal Services",
+        "description": "Modern website showcasing styles and services with integrated booking platform.",
+        "features": ["Hair styles gallery", "Online appointment booking", "Professional barber profiles", "Customer loyalty program"]
+      },
+      "architecture": {
+        "title": "Architecture Studio",
+        "category": "Design & Construction",
+        "description": "Elegant portfolio website with project showcase and professional service presentation.",
+        "features": ["Interactive project gallery", "Team member presentation", "Online budget requests", "Architecture insights blog"]
+      },
+      "ecommerce": {
+        "title": "Fashion Store",
+        "category": "E-commerce",
+        "description": "Complete online store with product catalog, shopping cart and secure payment",
+        "features": ["Product catalog", "Shopping cart", "Payment gateway", "Order tracking"]
+      }
+    },
+    "features": {
+      "title": "Features That Make a Difference",
+      "subtitle": "Every website is developed with the best technologies and practices",
+      "responsive": {
+        "title": "100% Responsive",
+        "description": "Perfect on any device: desktop, tablet or smartphone"
+      },
+      "seo": {
+        "title": "SEO Optimized",
+        "description": "Prepared to rank well on Google and attract organic traffic"
+      },
+      "performance": {
+        "title": "Ultra Fast",
+        "description": "Optimized loading for the best user experience"
+      },
+      "security": {
+        "title": "Secure & Reliable",
+        "description": "SSL certificate and protection against cyber attacks"
+      },
+      "analytics": {
+        "title": "Analytics Integrated",
+        "description": "Monitor visits, conversions and user behavior"
+      },
+      "multilingual": {
+        "title": "Multi-language Support",
+        "description": "Reach global audiences with content in multiple languages"
+      }
+    },
+    "process": {
+      "title": "Our Development Process",
+      "subtitle": "From conception to launch, we follow a proven methodology",
+      "briefing": {
+        "title": "Briefing & Planning",
+        "description": "We understand your needs and define project strategy"
+      },
+      "design": {
+        "title": "Custom Design",
+        "description": "We create unique layouts aligned with your brand"
+      },
+      "development": {
+        "title": "Development",
+        "description": "We code with the best technologies and practices"
+      },
+      "launch": {
+        "title": "Launch & Support",
+        "description": "We put your site online and provide ongoing support"
+      }
+    },
+    "cta": {
+      "title": "Ready to Have a Professional Website?",
+      "subtitle": "Get in touch and let's transform your online presence",
+      "button": "Start My Project",
+      "backButton": "Back to Home"
+    }
+  },
+  "footer": {
+    "brand": {
+      "name": "DigitalPro",
+      "description": "We transform companies through innovative digital solutions. Over 5 years creating systems that truly generate results."
+    },
+    "services": {
+      "title": "Services",
+      "items": [
+        { "label": "Professional Websites", "href": "#" },
+        { "label": "Scheduling Systems", "href": "#" },
+        { "label": "AI Chat", "href": "#" },
+        { "label": "Digital CRM", "href": "#" },
+        { "label": "WhatsApp Automation", "href": "#" },
+        { "label": "Content Creation", "href": "#" }
+      ]
+    },
+    "company": {
+      "title": "Company",
+      "items": [
+        { "label": "Home", "href": "#home" },
+        { "label": "About Us", "href": "#about" },
+        { "label": "Projects", "href": "#projects" },
+        { "label": "Benefits", "href": "#benefits" },
+        { "label": "Blog", "href": "#" },
+        { "label": "Contact", "href": "#contact" }
+      ]
+    },
+    "contact": {
+      "items": [
+        { "key": "phone", "icon": "phone", "value": "(11) 3333-3333" },
+        { "key": "mail", "icon": "mail", "value": "contact@digitalpro.com" },
+        { "key": "map", "icon": "mapPin", "value": "São Paulo, SP - Brazil" },
+        { "key": "hours", "icon": "clock", "value": "Mon-Fri: 9am to 6pm" }
+      ]
+    },
+    "social": {
+      "label": "Follow us:",
+      "items": [
+        { "key": "facebook", "icon": "facebook", "aria": "Facebook", "href": "#" },
+        { "key": "instagram", "icon": "instagram", "aria": "Instagram", "href": "#" },
+        { "key": "linkedin", "icon": "linkedin", "aria": "LinkedIn", "href": "#" },
+        { "key": "twitter", "icon": "twitter", "aria": "Twitter", "href": "#" }
+      ]
+    },
+    "newsletter": {
+      "label": "Newsletter:",
+      "placeholder": "Your email",
+      "button": "Subscribe"
+    },
+    "legal": {
+      "privacy": "Privacy Policy",
+      "terms": "Terms of Use",
+      "backToTop": "Back to top"
+    },
+    "copyright": "© 2024 DigitalPro. All rights reserved. EIN: XX.XXX.XXX/0001-XX"
+  }
+}
