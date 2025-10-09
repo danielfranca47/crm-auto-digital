@@ -1,0 +1,933 @@
+{
+  "meta": {
+    "title": "DigitalPro - Soluciones Digitales para Transformar Tu Empresa",
+    "description": "Portafolio de sistemas, sitios web y automatizaciones creados para generar resultados. Sitios web profesionales, CRM, automatización WhatsApp, chat IA y mucho más."
+  },
+  "navigation": {
+    "home": "Inicio",
+    "projects": "Proyectos",
+    "about": "Acerca de",
+    "benefits": "Beneficios",
+    "contact": "Contacto",
+    "requestQuote": "Solicitar Presupuesto"
+  },
+  "languageSwitcher": {
+    "ariaLabel": "Cambiar idioma",
+    "changeTo": "Cambiar a {{language}}",
+    "languages": [
+      { "code": "en", "name": "English", "flag": "🇺🇸" },
+      { "code": "pt", "name": "Português", "flag": "🇧🇷" },
+      { "code": "es", "name": "Español", "flag": "🇪🇸" }
+    ]
+  },
+  "header": {
+    "logo": "DigitalPro",
+    "mobileMenuToggle": "Alternar menú"
+  },
+  "aiWhatsappAutomation": {
+    "meta": {
+      "title": "Automatización IA WhatsApp - Chatbots para Empresas",
+      "description": "Automatiza la atención WhatsApp con chatbots IA inteligentes. Programa citas, proporciona presupuestos y atiende consultas 24/7 para empresas de servicios, salud y e-commerce."
+    },
+    "hero": {
+      "badge": "🤖 Automatización IA WhatsApp",
+      "title": "Chatbots IA que Revolucionan tu Atención en WhatsApp",
+      "subtitle": "Automatiza conversaciones, aumenta ventas y ofrece soporte 24/7 con nuestra IA especializada para diferentes tipos de negocio",
+      "ctaPrimary": "Probar IA Gratis",
+      "ctaSecondary": "Ver Demo en Vivo",
+      "stats": {
+        "timeReduction": "Reducción de Tiempo",
+        "salesIncrease": "Aumento de Ventas",
+        "availability": "Disponibilidad",
+        "accuracy": "Precisión IA"
+      }
+    },
+    "segments": {
+      "badge": "💼 Soluciones Empresariales",
+      "title": "Soluciones IA para Cada Tipo de Negocio",
+      "subtitle": "Descubre cómo nuestros chatbots inteligentes pueden transformar tu atención en diferentes segmentos",
+      "keyBenefits": "Beneficios Principales",
+      "detailedFeatures": "Características Detalladas",
+      "useCase": "Caso de Uso Real",
+      "viewDemo": "Ver Demo",
+      "serviceCompanies": {
+        "title": "Empresas de Servicios",
+        "description": "Programa servicios, proporciona presupuestos y responde preguntas frecuentes",
+        "useCase": "Una empresa de fontanería recibe 200+ mensajes WhatsApp diarios. Nuestra IA resuelve 80% automáticamente, programando servicios y proporcionando presupuestos instantáneos basados en descripciones de problemas.",
+        "benefits": {
+          "scheduling": {
+            "title": "Programación automática",
+            "description": "IA programa servicios basado en disponibilidad y tipo de servicio"
+          },
+          "quotes": {
+            "title": "Presupuestos instantáneos",
+            "description": "Proporciona estimaciones precisas basadas en descripciones de servicios"
+          },
+          "info": {
+            "title": "Información de servicios",
+            "description": "Responde dudas sobre servicios, áreas de cobertura y precios"
+          },
+          "support": {
+            "title": "Soporte al cliente",
+            "description": "Soporte inteligente 24/7 para emergencias y consultas"
+          }
+        }
+      },
+      "healthcare": {
+        "title": "Salud y Clínicas",
+        "description": "Programa consultas, envía recordatorios y proporciona información de salud",
+        "useCase": "Una clínica médica usa IA para gestionar 300+ solicitudes diarias de consultas, enviar recordatorios automáticos y proporcionar información básica de salud, reduciendo ausencias en 60%.",
+        "benefits": {
+          "appointments": {
+            "title": "Programación de citas",
+            "description": "Programación inteligente considerando disponibilidad médica y especialidades"
+          },
+          "reminders": {
+            "title": "Recordatorios automáticos",
+            "description": "Envía recordatorios de citas e instrucciones de preparación"
+          },
+          "healthInfo": {
+            "title": "Información de salud",
+            "description": "Proporciona información básica de salud y orientaciones de preparación"
+          },
+          "insurance": {
+            "title": "Verificación de seguro",
+            "description": "Verifica cobertura del seguro y explica procedimientos"
+          }
+        }
+      },
+      "ecommerce": {
+        "title": "Tiendas E-commerce",
+        "description": "Automatiza consultas de productos, procesa pedidos y proporciona estado de entrega",
+        "useCase": "Una tienda online procesa 500+ consultas diarias sobre productos, pedidos y entregas. La IA resuelve 85% de las cuestiones instantáneamente, aumentando satisfacción y ventas.",
+        "benefits": {
+          "catalog": {
+            "title": "Automatización de catálogo",
+            "description": "IA busca y recomienda productos basado en consultas de clientes"
+          },
+          "tracking": {
+            "title": "Seguimiento de pedidos",
+            "description": "Proporciona estado de pedidos e información de entrega en tiempo real"
+          },
+          "payment": {
+            "title": "Asistencia de pago",
+            "description": "Ayuda con procesos de pago y resuelve problemas de transacción"
+          },
+          "recovery": {
+            "title": "Recuperación de carrito",
+            "description": "Sigue automáticamente carritos abandonados con ofertas personalizadas"
+          }
+        }
+      },
+      "cta": {
+        "title": "¿Listo para Transformar tu Atención?",
+        "description": "Elige tu tipo de negocio y ve cómo la IA puede revolucionar tus interacciones en WhatsApp",
+        "primary": "Iniciar Prueba Gratis",
+        "secondary": "Programar Demo"
+      }
+    },
+    "demo": {
+      "badge": "🎯 Demo Interactiva",
+      "title": "Experimenta la IA en Acción",
+      "subtitle": "Prueba nuestro chatbot IA con diferentes escenarios empresariales y ve resultados instantáneos",
+      "tryMessage": "Prueba estos mensajes:",
+      "defaultResponse": "¡Entiendo tu solicitud. Déjame ayudarte con eso ahora mismo!",
+      "quickMessages": {
+        "schedule": "Necesito programar una cita",
+        "price": "¿Cuánto cuesta?",
+        "info": "Cuéntame más sobre tus servicios"
+      },
+      "scenarios": {
+        "service": {
+          "name": "Empresa de Servicios",
+          "description": "Fontanería y servicios de reparación",
+          "welcome": "¡Hola! Soy tu asistente IA. ¿Cómo puedo ayudarte hoy? Puedo programar servicios, proporcionar presupuestos o responder dudas sobre nuestros servicios.",
+          "responses": {
+            "schedule": "¡Perfecto! Puedo ayudarte a programar un servicio. ¿Qué tipo de servicio necesitas? Tenemos disponibilidad para:\n\n• Reparaciones de emergencia (24h)\n• Instalaciones de fontanería (próxima semana)\n• Mantenimiento (flexible)\n\n¿Qué funciona mejor para ti?",
+            "quote": "¡Estaré encantado de proporcionar un presupuesto! Para una estimación precisa, ¿podrías decirme:\n\n• ¿Cuál es el problema?\n• ¿Tipo de propiedad (casa/apartamento)?\n• ¿Nivel de urgencia?\n\nLa mayoría de reparaciones van de €80-€200.",
+            "price": "Nuestros precios dependen del servicio:\n\n💧 Fontanería básica: €80-€150\n🔧 Reparaciones de emergencia: €120-€300\n🏠 Instalaciones: Presupuesto requerido\n\n¿Te gustaría un presupuesto específico para tus necesidades?"
+          }
+        },
+        "healthcare": {
+          "name": "Clínica Médica",
+          "description": "Consultas y citas de salud",
+          "welcome": "¡Hola! Soy el asistente IA de la clínica. Puedo ayudarte a programar citas, proporcionar información de salud o responder dudas sobre nuestros servicios.",
+          "responses": {
+            "appointment": "¡Puedo ayudarte a programar una cita! Tenemos disponibilidad para:\n\n👩‍⚕️ Consulta general: Esta semana\n🔬 Consulta especialista: Próxima semana\n💉 Exámenes de rutina: Programación flexible\n\n¿Tienes preferencia por algún médico o especialidad?",
+            "exam": "Puedo proporcionar información sobre nuestros exámenes:\n\n🩺 Chequeo general: €120 (cubierto por la mayoría de seguros)\n🩸 Análisis de sangre: €80-€150\n📋 Consulta especialista: €200-€350\n\n¿Te gustaría programar o necesitas más detalles?"
+          }
+        },
+        "ecommerce": {
+          "name": "Tienda Online",
+          "description": "Productos y soporte de pedidos",
+          "welcome": "¡Bienvenido a nuestra tienda! Soy tu asistente IA de compras. Puedo ayudarte a encontrar productos, rastrear pedidos o responder cualquier duda sobre tu compra.",
+          "responses": {
+            "product": "¡Puedo ayudarte a encontrar el producto perfecto! ¿Qué estás buscando?\n\n📱 Electrónicos: Ofertas de la semana disponibles\n👕 Moda: Nueva colección recién llegada\n🏠 Hogar y Jardín: Envío gratis en pedidos €50+\n\n¿Qué categoría te interesa?",
+            "order": "¡Puedo ayudarte a rastrear tu pedido! Por favor, proporciona:\n\n• Número de pedido\n• Email usado para la compra\n\nO puedo buscarlo con tu teléfono. ¡La mayoría de pedidos se envían en 24-48 horas!",
+            "delivery": "Aquí tienes nuestra información de entrega:\n\n🚚 Envío estándar: 3-5 días laborables\n⚡ Envío express: 1-2 días laborables\n🆓 Envío gratis: Pedidos superiores a €50\n\n¿Necesitas rastrear un pedido específico?"
+          }
+        }
+      },
+      "metrics": {
+        "title": "Métricas IA en Vivo",
+        "responseTime": "Tiempo de Respuesta",
+        "satisfaction": "Satisfacción del Cliente",
+        "resolved": "Problemas Resueltos"
+      },
+      "capabilities": {
+        "title": "Capacidades de la IA",
+        "nlp": "Procesamiento de lenguaje natural",
+        "context": "Respuestas conscientes del contexto",
+        "multilang": "Soporte multi-idiomas",
+        "learning": "Aprendizaje continuo"
+      }
+    },
+    "features": {
+      "badge": "⚡ Tecnología Avanzada",
+      "title": "Tecnología IA de Vanguardia",
+      "subtitle": "Descubre las características avanzadas que hacen de nuestros chatbots IA la solución más inteligente para automatización WhatsApp",
+      "nlp": {
+        "title": "Procesamiento de Lenguaje Natural",
+        "description": "IA avanzada que entiende contexto, intención y emociones en conversaciones",
+        "details": {
+          "intent": "Reconocimiento de intención con 95% de precisión",
+          "sentiment": "Análisis de sentimiento en tiempo real",
+          "context": "Memoria de conversaciones multi-turno"
+        }
+      },
+      "whatsapp": {
+        "title": "Integración WhatsApp Business",
+        "description": "Integración nativa con API de WhatsApp Business para comunicación perfecta",
+        "details": {
+          "api": "API oficial WhatsApp Business",
+          "multimedia": "Soporte para imágenes, documentos y audio",
+          "templates": "Plantillas de mensaje pre-aprobadas"
+        }
+      },
+      "catalog": {
+        "title": "Integración de Catálogo Inteligente",
+        "description": "Sincroniza y gestiona automáticamente tus catálogos de productos/servicios",
+        "details": {
+          "sync": "Sincronización de catálogo en tiempo real",
+          "search": "Búsqueda inteligente de productos y recomendaciones",
+          "recommendations": "Sugerencias de venta cruzada basadas en IA"
+        }
+      },
+      "automation": {
+        "title": "Automatización Inteligente",
+        "description": "Flujos de trabajo inteligentes que se adaptan a tus procesos empresariales",
+        "details": {
+          "workflows": "Flujos de automatización personalizados",
+          "triggers": "Sistema de disparadores basado en eventos",
+          "actions": "Acciones y respuestas automatizadas"
+        }
+      },
+      "analytics": {
+        "title": "Analytics Avanzado",
+        "description": "Insights detallados y métricas de rendimiento para mejora continua",
+        "details": {
+          "metrics": "Métricas de rendimiento en tiempo real",
+          "insights": "Insights de clientes basados en IA",
+          "reports": "Informes automatizados y dashboards"
+        }
+      },
+      "scalability": {
+        "title": "Escalabilidad Empresarial",
+        "description": "Maneja miles de conversaciones simultáneas sin pérdida de rendimiento",
+        "details": {
+          "infrastructure": "Infraestructura escalable nativa en la nube",
+          "performance": "Tiempos de respuesta sub-segundo",
+          "reliability": "Garantía de 99.9% de uptime"
+        }
+      },
+      "techSpecs": {
+        "title": "Especificaciones Técnicas"
+      },
+      "tech": {
+        "processing": {
+          "title": "Velocidad de Procesamiento",
+          "value": "< 1 segundo"
+        },
+        "languages": {
+          "title": "Idiomas Soportados",
+          "value": "50+ idiomas"
+        },
+        "security": {
+          "title": "Estándar de Seguridad",
+          "value": "Nivel empresarial"
+        },
+        "integration": {
+          "title": "Integración API",
+          "value": "APIs RESTful"
+        }
+      },
+      "comparison": {
+        "title": "IA vs Chatbots Tradicionales",
+        "responseTime": "Tiempo de Respuesta",
+        "availability": "Disponibilidad",
+        "accuracy": "Precisión de Respuestas",
+        "scalability": "Escalabilidad",
+        "traditional": {
+          "responseTime": "5-30 segundos",
+          "availability": "Solo horario comercial",
+          "accuracy": "60-70%",
+          "scalability": "Usuarios simultáneos limitados"
+        },
+        "ai": {
+          "responseTime": "< 1 segundo",
+          "availability": "Disponibilidad 24/7",
+          "accuracy": "95-98%",
+          "scalability": "Escalado ilimitado"
+        }
+      },
+      "integration": {
+        "title": "Integración Perfecta con tus Herramientas",
+        "description": "Conecta con todas tus herramientas empresariales existentes para una experiencia unificada"
+      }
+    },
+    "roiCalculator": {
+      "badge": "📊 Calculadora ROI",
+      "title": "Calcula tu ROI",
+      "subtitle": "Ve cuánto tiempo y dinero puedes ahorrar con automatización IA WhatsApp",
+      "inputsTitle": "Información de tu Negocio",
+      "resultsTitle": "tus Ahorros Potenciales",
+      "calculateButton": "Calcular ROI",
+      "businessTypes": {
+        "service": "Empresas de Servicios",
+        "healthcare": "Salud y Clínicas",
+        "ecommerce": "Tiendas E-commerce"
+      },
+      "inputs": {
+        "businessType": "Tipo de Negocio",
+        "selectBusiness": "Selecciona tu tipo de negocio",
+        "messagesPerDay": "Mensajes/Día",
+        "avgResponseTime": "Tiempo Medio Respuesta (min)",
+        "hourlyRate": "Tarifa Horaria (€)",
+        "employees": "Empleados Soporte"
+      },
+      "results": {
+        "timeSaved": {
+          "title": "Tiempo Ahorrado",
+          "description": "Horas ahorradas por mes"
+        },
+        "moneySaved": {
+          "title": "Dinero Ahorrado",
+          "description": "Reducción de costos mensual"
+        },
+        "capacityIncrease": {
+          "title": "Aumento de Capacidad",
+          "description": "Capacidad adicional obtenida"
+        },
+        "roi": {
+          "title": "ROI",
+          "description": "Retorno sobre inversión"
+        },
+        "messagesHandled": {
+          "title": "Mensajes Atendidos",
+          "description": "Capacidad mensual de mensajes"
+        },
+        "satisfaction": {
+          "title": "Mejora Satisfacción",
+          "description": "Mejora en satisfacción del cliente"
+        }
+      },
+      "placeholder": {
+        "title": "¿Listo para Calcular tu ROI?",
+        "description": "Completa los detalles de tu negocio para ver ahorros y mejoras potenciales"
+      },
+      "summary": {
+        "title": "Resumen de tu Inversión IA",
+        "description": "Podrías ahorrar €{monthlySavings}/mes y alcanzar {yearlyROI}% ROI anual con nuestra solución IA",
+        "cta": "Iniciar tu Prueba Gratis"
+      }
+    },
+    "successStories": {
+      "title": "Casos de Éxito",
+      "subtitle": "Resultados reales de empresas usando nuestra automatización IA WhatsApp",
+      "serviceCompany": {
+        "company": "ProFix Servicios",
+        "industry": "Fontanería y Eléctrica",
+        "testimonial": "La automatización IA redujo nuestro tiempo de respuesta en 80% y aumentó tasa de citas en 40%. Ahora podemos atender 3x más consultas con el mismo equipo.",
+        "metric1Value": "80%",
+        "metric1Label": "Reducción Tiempo Respuesta",
+        "metric2Value": "40%",
+        "metric2Label": "Aumento Citas"
+      },
+      "healthcare": {
+        "company": "Clínica MedCenter",
+        "industry": "Salud",
+        "testimonial": "La IA programa 90% de nuestras citas automáticamente y envía recordatorios perfectos. Las ausencias cayeron de 30% a 8%.",
+        "metric1Value": "90%",
+        "metric1Label": "Programación Automática",
+        "metric2Value": "73%",
+        "metric2Label": "Reducción de Ausencias"
+      },
+      "ecommerce": {
+        "company": "StyleHub Tienda",
+        "industry": "E-commerce Moda",
+        "testimonial": "Nuestra IA atiende 500+ consultas diarias, proporciona recomendaciones instantáneas y recuperó 25% de carritos abandonados automáticamente.",
+        "metric1Value": "500+",
+        "metric1Label": "Consultas Diarias",
+        "metric2Value": "25%",
+        "metric2Label": "Recuperación Carrito"
+      }
+    },
+    "finalCta": {
+      "title": "¿Listo para Implementar IA WhatsApp en 24 Horas?",
+      "subtitle": "Únete a cientos de empresas ya usando IA para transformar atención y aumentar ventas",
+      "primaryButton": "Iniciar Prueba Gratis",
+      "secondaryButton": "Programar Demo",
+      "guarantees": {
+        "setup": "Implementación 24h",
+        "support": "Soporte Dedicado",
+        "trial": "Prueba Gratis 7 Días"
+      }
+    }
+  },
+  "schedulingDemo": {
+    "meta": {
+      "title": "Sistema de Reservas Inteligente - Demo Interactiva",
+      "description": "Experimenta nuestro sistema completo de reservas. Simula reservas, ve notificaciones automáticas por WhatsApp y rastrea métricas en tiempo real."
+    },
+    "hero": {
+      "badge": "📅 Demo del Sistema",
+      "title": "Sistema de Reservas que Revoluciona Tu Negocio",
+      "subtitle": "Automatiza reservas, reduce ausencias y aumenta tus ingresos con nuestra solución completa de reservas online",
+      "ctaPrimary": "Probar Demo Interactiva",
+      "ctaSecondary": "Hablar con Especialista"
+    },
+    "benefits": {
+      "title": "Beneficios Comprobados",
+      "subtitle": "Descubre cómo nuestra solución puede transformar la gestión de tu negocio",
+      "availability": {
+        "title": "Disponibilidad 24/7",
+        "description": "Los clientes pueden reservar en cualquier momento, incluso fuera del horario comercial"
+      },
+      "reminders": {
+        "title": "Recordatorios Automáticos",
+        "description": "Reduce ausencias con recordatorios vía WhatsApp, SMS y email"
+      },
+      "analytics": {
+        "title": "Informes Detallados",
+        "description": "Rastrea métricas, ingresos y rendimiento en tiempo real"
+      },
+      "management": {
+        "title": "Gestión Simplificada",
+        "description": "Panel administrativo completo para gestionar todo en un lugar"
+      }
+    },
+    "demo": {
+      "title": "Prueba Nuestra Solución",
+      "subtitle": "Ve cómo funciona en la práctica: cliente reservando y administrador recibiendo todo en tiempo real"
+    },
+    "features": {
+      "title": "Características Incluidas",
+      "subtitle": "Todo lo que necesitas para automatizar tus reservas",
+      "calendar": "Calendario inteligente con conflictos automáticos",
+      "whatsapp": "Integración nativa con WhatsApp Business",
+      "reminders": "Recordatorios automáticos personalizables",
+      "analytics": "Dashboard con métricas e informes",
+      "mobile": "App móvil para gestión en cualquier lugar",
+      "integration": "Integración con Google Calendar y otras herramientas"
+    },
+    "testimonials": {
+      "title": "Casos de Éxito Reales",
+      "subtitle": "Ve los resultados que obtuvieron nuestros clientes",
+      "barber": {
+        "name": "Carlos Mendes",
+        "business": "Barbería Moderna",
+        "text": "¡Reduje el 80% de las ausencias y aumenté mis ingresos en un 45% en solo 3 meses. El sistema es fantástico!"
+      },
+      "dentist": {
+        "name": "Dra. Marina Silva",
+        "business": "Clínica Dental",
+        "text": "Ahorro 4 horas por día que gastaba en reservas manuales. Ahora me enfoco en lo que realmente importa: mis pacientes."
+      },
+      "spa": {
+        "name": "Ana Paula Costa",
+        "business": "Spa Relajante",
+        "text": "¡A mis clientes les encanta la facilidad de reservar por WhatsApp. La satisfacción ha aumentado mucho!"
+      }
+    },
+    "cta": {
+      "title": "¿Listo para Automatizar tus Reservas?",
+      "subtitle": "Únete a cientos de empresas que ya han transformado su gestión con nuestra solución",
+      "button": "Implementar Ahora",
+      "backButton": "Volver al Inicio"
+    },
+    "form": {
+      "title": "Reservar Servicio",
+      "subtitle": "Elige tu servicio y horario preferido",
+      "service": "Servicio",
+      "selectService": "Selecciona un servicio",
+      "professional": "Profesional",
+      "selectProfessional": "Elige profesional",
+      "date": "Fecha",
+      "selectDate": "Elige fecha",
+      "time": "Hora",
+      "customerInfo": "Información de Contacto",
+      "name": "Nombre Completo",
+      "namePlaceholder": "Ingresa tu nombre",
+      "phone": "WhatsApp",
+      "phonePlaceholder": "(11) 99999-9999",
+      "scheduleButton": "Confirmar Reserva",
+      "scheduling": "Reservando...",
+      "tryAgain": "Hacer Nueva Reserva"
+    },
+    "services": {
+      "haircut": "Corte de Cabello",
+      "beard": "Barba",
+      "combo": "Corte + Barba",
+      "facial": "Limpieza Facial"
+    },
+    "professionals": {
+      "senior": "Profesional Senior",
+      "specialist": "Especialista",
+      "expert": "Experto"
+    },
+    "whatsapp": {
+      "waiting": {
+        "title": "Esperando Reserva",
+        "description": "Completa el formulario al lado para ver la confirmación automática de WhatsApp"
+      },
+      "confirmation": "¡Hola {{name}}! ✅ Tu reserva ha sido confirmada:\n\n📅 Servicio: {{service}}\n🗓️ Fecha: {{date}}\n🕐 Hora: {{time}}\n👨‍💼 Profesional: {{professional}}\n\n¡Gracias por tu preferencia!",
+      "address": "📍 Dirección: Calle de las Flores 123 - Centro\n🅿️ Tenemos estacionamiento gratuito",
+      "reminder": "⏰ Recuerda: llega 10 minutos antes de la hora programada",
+      "customerReply": "¡Perfecto! Gracias 😊",
+      "thanks": "¡De nada! ¡Te esperamos en el día y hora programados! 🎉",
+      "typeMessage": "Escribe un mensaje...",
+      "demoMode": "🎯 MODO DEMOSTRACIÓN"
+    },
+    "admin": {
+      "title": "Panel Administrativo",
+      "subtitle": "Ve cómo recibirías la información en tiempo real",
+      "newBooking": "¡Nueva Reserva Recibida!",
+      "dashboard": {
+        "title": "Dashboard Principal",
+        "todayBookings": "Reservas de Hoy",
+        "weekRevenue": "Ingresos de la Semana",
+        "satisfaction": "Satisfacción Promedio",
+        "noShows": "Tasa de Ausencias"
+      },
+      "recentBookings": {
+        "title": "Reservas Recientes",
+        "confirmed": "Confirmado",
+        "pending": "Pendiente",
+        "completed": "Completado"
+      },
+      "notifications": {
+        "newBooking": "Nueva reserva de {{name}}"
+      }
+    },
+    "roi": {
+      "title": "Calcula tu Retorno",
+      "subtitle": "Ve cuánto puedes ahorrar y ganar con nuestro sistema",
+      "inputs": {
+        "employees": "Número de empleados",
+        "dailyBookings": "Reservas por día",
+        "timePerBooking": "Tiempo por reserva (minutos)",
+        "hourlyRate": "Tarifa por hora $"
+      },
+      "results": {
+        "timesSaved": "Tiempo ahorrado por mes",
+        "moneySaved": "Ahorro mensual",
+        "increaseCapacity": "Aumento de capacidad",
+        "noShowReduction": "Reducción de ausencias"
+      },
+      "calculate": "Calcular ROI"
+    },
+    "comparison": {
+      "title": "Manual vs Automatizado",
+      "subtitle": "Ve la diferencia en la práctica",
+      "manual": "Proceso Manual",
+      "automated": "Con Nuestra Solución",
+      "process": "Proceso",
+      "labels": {
+        "process": "Proceso",
+        "booking": "Programación",
+        "scheduling": "Programación",
+        "confirmation": "Confirmación",
+        "reminders": "Recordatorios",
+        "calendar": "Calendario",
+        "reports": "Informes",
+        "timeSpent": "Tiempo Dedicado"
+      },
+      "booking": {
+        "manual": "Cliente llama y programa por teléfono",
+        "automated": "Cliente reserva solo 24/7"
+      },
+      "confirmation": {
+        "manual": "Confirmación manual por teléfono",
+        "automated": "Confirmación automática vía WhatsApp"
+      },
+      "reminders": {
+        "manual": "Sin recordatorios o manuales",
+        "automated": "Recordatorios automáticos personalizados"
+      },
+      "calendar": {
+        "manual": "Agenda de papel o hoja de cálculo",
+        "automated": "Calendario digital sincronizado"
+      },
+      "reports": {
+        "manual": "Informes manuales ocasionales",
+        "automated": "Métricas e informes automáticos"
+      },
+      "timeSpent": {
+        "title": "Tiempo Dedicado",
+        "manualValue": "4–6h/día",
+        "manualNote": "Tiempo dedicado a la programación",
+        "automatedValue": "30min/día",
+        "automatedNote": "Solo supervisión necesaria"
+      },
+      "timeSpentValues": {
+        "manual": "4–6h/día",
+        "auto": "30min/día",
+        "manualNote": "Tiempo dedicado a la programación",
+        "autoNote": "Solo supervisión necesaria"
+      },
+      "bottomStats": {
+        "kpi1Value": "85%",
+        "kpi1Desc": "Reducción del tiempo dedicado a la programación",
+        "timeSaved": "Reducción del tiempo dedicado a la programación",
+        "kpi2Value": "60%",
+        "kpi2Desc": "Menos ausencias con recordatorios automáticos",
+        "noShows": "Menos ausencias con recordatorios automáticos",
+        "kpi3Value": "24/7",
+        "kpi3Desc": "Programación disponible en cualquier momento",
+        "availability": "Programación disponible 24/7"
+      }
+    }
+  },
+  "hero": {
+    "badge": "💡 Innovación Digital",
+    "title": "Transforma Tu Negocio con Soluciones que Generan Resultados Reales",
+    "subtitle": "Creamos sitios web profesionales, sistemas de gestión y automatizaciones que aumentan tus ventas y optimizan tus procesos. Descubre cómo la tecnología puede revolucionar tu empresa.",
+    "ctaPrimary": "Agendar Demo Gratuita",
+    "ctaSecondary": "Ver Casos de Éxito",
+    "stats": {
+      "projects": "Proyectos Entregados",
+      "satisfaction": "Satisfacción del Cliente",
+      "experience": "Años de Experiencia",
+      "support": "Soporte 24/7"
+    }
+  },
+  "about": {
+    "badge": "💡 Nuestra Misión",
+    "title": "Acerca de Nuestro Portafolio de Soluciones",
+    "description1": "Ofrecemos soluciones digitales personalizadas para empresas de todos los tamaños. Explora los proyectos y sistemas a continuación que pueden revolucionar tu gestión, atención al cliente y ventas de tu negocio.",
+    "description2": "Con más de 5 años de experiencia en el mercado, ya hemos transformado cientos de empresas a través de la tecnología. Nuestro enfoque es crear soluciones que realmente generen resultados, aumenten la eficiencia operacional e impulsen el crecimiento de nuestros clientes."
+  },
+  "projects": {
+    "badge": "🚀 Nuestras Especialidades",
+    "title": "Categorías de Proyectos",
+    "description": "Ofrecemos soluciones digitales a medida para empresas de todos los tamaños. Explora los proyectos y sistemas que pueden revolucionar tu gestión, atención y ventas.",
+    "items": [
+      {
+        "key": "professionalWebsites",
+        "title": "Sitios Web Profesionales",
+        "description": "Sitios modernos y optimizados para barberías, dentistas, tiendas de autopartes, inmobiliarias, spas y más. Diseño responsivo y alto rendimiento.",
+        "button": "Ver ejemplos",
+        "link": "/professional-websites"
+      },
+      {
+        "key": "schedulingSystems",
+        "title": "Sistemas de Agendamiento",
+        "description": "Permite que tus clientes reserven servicios con facilidad y reciban recordatorios automáticos. Reduce ausencias y optimiza la agenda.",
+        "button": "Ver demo",
+        "link": "/scheduling-demo"
+      },
+      {
+        "key": "aiWhatsappAutomation",
+        "title": "Automatización WhatsApp IA",
+        "description": "Chatbots inteligentes en WhatsApp que responden 24/7, automatizan conversaciones y aumentan ventas con interacciones personalizadas.",
+        "button": "Probar ahora"
+      },
+      {
+        "key": "digitalAutoCrm",
+        "title": "Digital Auto CRM",
+        "description": "Control total de ventas y leads con embudos y automatizaciones personalizadas. Incrementa tus conversiones significativamente.",
+        "button": "Explorar CRM"
+      },
+      {
+        "key": "automaticContentCreation",
+        "title": "Creación Automática de Contenido",
+        "description": "Herramienta de IA para generar publicaciones e imágenes profesionales para redes sociales. Mantén activa tu presencia digital.",
+        "button": "Generar post gratis"
+      },
+      {
+        "key": "personalizedAutomations",
+        "title": "Automatizaciones Personalizadas",
+        "description": "Soluciones de automatización a medida para los procesos de tu negocio. Email marketing, automatización de flujos y jornadas personalizadas.",
+        "button": "Ver casos"
+      }
+    ],
+    "bottomNote": "¿No encontraste exactamente lo que buscas? Creamos soluciones a medida.",
+    "bottomButton": "Solicitar proyecto personalizado"
+  },
+  "benefits": {
+    "badge": "💎 Diferenciales",
+    "title": "¿Por qué elegir nuestras soluciones?",
+    "subtitle": "Más de 5 años transformando empresas con tecnología. Descubre los principales beneficios que experimentan nuestros clientes.",
+    "items": [
+      {
+        "key": "automation",
+        "title": "Automatiza procesos y ahorra tiempo",
+        "description": "Reduce tareas manuales hasta en un 80% con nuestras automatizaciones inteligentes y céntrate en hacer crecer tu negocio."
+      },
+      {
+        "key": "service",
+        "title": "Atención profesional y personalizada",
+        "description": "Acompañamiento dedicado durante el proyecto y después de la entrega. Siempre disponibles para garantizar el éxito de tu solución digital."
+      },
+      {
+        "key": "scalability",
+        "title": "Sistemas escalables para cualquier empresa",
+        "description": "Nuestras soluciones crecen junto con tu negocio. Desde pequeños emprendimientos hasta multinacionales, tenemos la tecnología ideal para cada etapa."
+      },
+      {
+        "key": "security",
+        "title": "Seguridad y confiabilidad garantizadas",
+        "description": "Protocolos de seguridad de nivel bancario, copias de seguridad automáticas y monitoreo 24h para total tranquilidad."
+      }
+    ],
+    "stats": {
+      "title": "Resultados que hablan por sí mismos",
+      "subtitle": "Números reales de impacto de empresas que confiaron en nuestras soluciones",
+      "items": [
+        { "value": "87%", "label": "Reducción en tiempo de atención" },
+        { "value": "3x", "label": "Incremento en conversión" },
+        { "value": "150%", "label": "Crecimiento promedio en ventas" },
+        { "value": "24/7", "label": "Disponibilidad del sistema" }
+      ]
+    }
+  },
+  "testimonials": {
+    "badge": "⭐ Testimonios",
+    "title": "Lo que dicen nuestros clientes",
+    "subtitle": "Resultados reales de empresas que transformaron sus negocios con nuestras soluciones digitales.",
+    "items": [
+      {
+        "name": "Carlos Mendes",
+        "role": "Propietario - Barbería Elite",
+        "content": "El sistema de agendamiento revolucionó mi barbería. Redujo las ausencias en 80% y a mis clientes les encanta la practicidad. ¡La inversión se pagó en menos de 2 meses!",
+        "rating": 5,
+        "avatar": "CM"
+      },
+      {
+        "name": "Ana Paula Silva",
+        "role": "Directora Comercial - TopReal Inmuebles",
+        "content": "El CRM automatizado aumentó nuestras ventas en 150%. Ahora seguimos cada lead y nuestro equipo es mucho más productivo. ¡Soporte técnico excelente!",
+        "rating": 5,
+        "avatar": "AP"
+      },
+      {
+        "name": "Roberto Santos",
+        "role": "CEO - AutoCenter Millennium",
+        "content": "El chat de IA en nuestro sitio convirtió 40% más leads en clientes. Funciona 24h y responde mejor que algunos vendedores. ¡Una inversión que realmente vale la pena!",
+        "rating": 5,
+        "avatar": "RS"
+      }
+    ],
+    "stats": [
+      { "value": "4,9/5", "label": "Calificación promedio" },
+      { "value": "200+", "label": "Clientes satisfechos" },
+      { "value": "98%", "label": "Tasa de éxito" }
+    ]
+  },
+  "cta": {
+    "badge": "🚀 Comencemos",
+    "title": "¿Listo para llevar tu negocio al siguiente nivel?",
+    "subtitle": "Transforma tu negocio con soluciones digitales que realmente funcionan. Contáctanos ahora y recibe una propuesta personalizada.",
+    "form": {
+      "title": "Solicita Presupuesto Gratis",
+      "fields": {
+        "name": {
+          "label": "Nombre completo",
+          "placeholder": "Tu nombre completo"
+        },
+        "email": {
+          "label": "Email",
+          "placeholder": "tu@email.com"
+        },
+        "phone": {
+          "label": "Teléfono/WhatsApp",
+          "placeholder": "(11) 99999-9999"
+        },
+        "message": {
+          "label": "Cuéntanos sobre tu proyecto",
+          "placeholder": "Describe tu negocio y la solución que necesitas..."
+        }
+      },
+      "button": "Solicitar Presupuesto Gratis"
+    },
+    "quickActions": {
+      "title": "¿Prefieres hablar directamente?",
+      "items": [
+        { "key": "meeting", "icon": "calendar", "label": "Agendar reunión online" },
+        { "key": "whatsapp", "icon": "messageCircle", "label": "WhatsApp: (11) 99999-9999" },
+        { "key": "phone", "icon": "phone", "label": "Teléfono: (11) 3333-3333" },
+        { "key": "email", "icon": "mail", "label": "contact@digitalpro.com" }
+      ]
+    },
+    "guarantee": {
+      "title": "✨ Garantía de Satisfacción",
+      "description": "Ofrecemos 30 días de garantía en todos los proyectos. Si no quedas satisfecho, realizamos los ajustes necesarios sin costo adicional. Tu satisfacción es nuestra prioridad."
+    },
+    "responseTime": {
+      "title": "⚡ Respuesta Rápida",
+      "description": "Respondemos todos los contactos en hasta 2 horas en horario laboral. Para emergencias, contamos con soporte 24h vía WhatsApp."
+    }
+  },
+  "professionalWebsites": {
+    "meta": {
+      "title": "Sitios Web Profesionales - Desarrollo Web Personalizado",
+      "description": "Sitios web profesionales modernos, responsivos y optimizados para impulsar tu negocio. Diseño personalizado, SEO y alto rendimiento."
+    },
+    "hero": {
+      "badge": "Desarrollo Web Profesional",
+      "title": "Sitios Web Profesionales Que Convierten Visitantes en Clientes",
+      "subtitle": "Creamos sitios modernos, rápidos y optimizados que generan resultados reales para tu negocio",
+      "ctaPrimary": "Solicitar Presupuesto Gratis",
+      "ctaSecondary": "Ver Ejemplos"
+    },
+    "examples": {
+      "title": "Portafolio de Proyectos Exitosos",
+      "subtitle": "Nuestro portafolio está en constante expansión. Revisa el modelo disponible y mantente atento a las nuevas plantillas sectoriales cada semana.",
+      "comingSoon": "Próximamente",
+      "accounting": {
+        "title": "Firma Contable CPA",
+        "category": "Servicios Financieros",
+        "description": "Sitio web institucional completo para oficinas contables con presentación profesional de servicios y herramientas de engagement.",
+        "features": ["Presentación de servicios profesionales", "Formularios de contacto integrados", "Blog de artículos fiscales y tributarios", "Mapa interactivo de ubicación", "Portal de acceso para clientes"]
+      },
+      "spa": {
+        "title": "Spa & Masajes",
+        "category": "Bienestar",
+        "description": "Sitio web relajante con catálogo completo de servicios y sistema de reservas integrado.",
+        "features": ["Catálogo completo de servicios", "Sistema de reservas online", "Galería de fotos wellness", "Blog de salud y bienestar"]
+      },
+      "barbershop": {
+        "title": "Barbería Premium",
+        "category": "Servicios Personales",
+        "description": "Sitio moderno con showcase de estilos y servicios con plataforma de reservas integrada.",
+        "features": ["Galería de estilos de cabello", "Reservas online de citas", "Perfiles profesionales de barberos", "Programa de lealtad para clientes"]
+      },
+      "architecture": {
+        "title": "Estudio de Arquitectura",
+        "category": "Diseño y Construcción",
+        "description": "Sitio web elegante de portafolio con showcase de proyectos y presentación de servicios profesionales.",
+        "features": ["Galería interactiva de proyectos", "Presentación del equipo", "Solicitudes de presupuesto online", "Blog de insights arquitectónicos"]
+      }
+    },
+    "features": {
+      "title": "Características Que Marcan la Diferencia",
+      "subtitle": "Cada sitio web se desarrolla con las mejores tecnologías y prácticas",
+      "responsive": {
+        "title": "100% Responsivo",
+        "description": "Perfecto en cualquier dispositivo: escritorio, tablet o smartphone"
+      },
+      "seo": {
+        "title": "Optimizado para SEO",
+        "description": "Preparado para posicionarse bien en Google y atraer tráfico orgánico"
+      },
+      "performance": {
+        "title": "Ultra Rápido",
+        "description": "Carga optimizada para la mejor experiencia del usuario"
+      },
+      "security": {
+        "title": "Seguro y Confiable",
+        "description": "Certificado SSL y protección contra ataques cibernéticos"
+      },
+      "analytics": {
+        "title": "Analytics Integrado",
+        "description": "Monitorea visitas, conversiones y comportamiento de usuarios"
+      },
+      "multilingual": {
+        "title": "Soporte Multi-idioma",
+        "description": "Alcanza audiencias globales con contenido en múltiples idiomas"
+      }
+    },
+    "process": {
+      "title": "Nuestro Proceso de Desarrollo",
+      "subtitle": "Desde la concepción hasta el lanzamiento, seguimos una metodología comprobada",
+      "briefing": {
+        "title": "Briefing y Planificación",
+        "description": "Entendemos tus necesidades y definimos la estrategia del proyecto"
+      },
+      "design": {
+        "title": "Diseño Personalizado",
+        "description": "Creamos diseños únicos alineados con tu marca"
+      },
+      "development": {
+        "title": "Desarrollo",
+        "description": "Codificamos con las mejores tecnologías y prácticas"
+      },
+      "launch": {
+        "title": "Lanzamiento y Soporte",
+        "description": "Ponemos tu sitio en línea y ofrecemos soporte continuo"
+      }
+    },
+    "cta": {
+      "title": "¿Listo para Tener un Sitio Web Profesional?",
+      "subtitle": "Contáctanos y transformemos tu presencia en línea",
+      "button": "Iniciar Mi Proyecto",
+      "backButton": "Volver al Inicio"
+    }
+  },
+  "footer": {
+    "brand": {
+      "name": "DigitalPro",
+      "description": "Transformamos empresas con soluciones digitales innovadoras. Más de 5 años creando sistemas que realmente generan resultados."
+    },
+    "services": {
+      "title": "Servicios",
+      "items": [
+        { "label": "Sitios Profesionales", "href": "#" },
+        { "label": "Sistemas de Agendamiento", "href": "#" },
+        { "label": "Chat IA", "href": "#" },
+        { "label": "CRM Digital", "href": "#" },
+        { "label": "Automatización WhatsApp", "href": "#" },
+        { "label": "Creación de Contenido", "href": "#" }
+      ]
+    },
+    "company": {
+      "title": "Empresa",
+      "items": [
+        { "label": "Inicio", "href": "#home" },
+        { "label": "Sobre Nosotros", "href": "#about" },
+        { "label": "Proyectos", "href": "#projects" },
+        { "label": "Beneficios", "href": "#benefits" },
+        { "label": "Blog", "href": "#" },
+        { "label": "Contacto", "href": "#contact" }
+      ]
+    },
+    "contact": {
+      "items": [
+        { "key": "phone", "icon": "phone", "value": "(11) 3333-3333" },
+        { "key": "mail", "icon": "mail", "value": "contact@digitalpro.com" },
+        { "key": "map", "icon": "mapPin", "value": "São Paulo, SP - Brasil" },
+        { "key": "hours", "icon": "clock", "value": "Lun-Vie: 9h a 18h" }
+      ]
+    },
+    "newsletter": {
+      "label": "Newsletter:",
+      "placeholder": "Tu correo",
+      "button": "Suscribirse"
+    },
+    "social": {
+      "label": "Síguenos:",
+      "items": [
+        { "key": "facebook", "icon": "facebook", "aria": "Facebook", "href": "#" },
+        { "key": "instagram", "icon": "instagram", "aria": "Instagram", "href": "#" },
+        { "key": "linkedin", "icon": "linkedin", "aria": "LinkedIn", "href": "#" },
+        { "key": "twitter", "icon": "twitter", "aria": "Twitter", "href": "#" }
+      ]
+    },
+    "legal": {
+      "privacy": "Política de Privacidad",
+      "terms": "Términos de Uso",
+      "backToTop": "Volver al inicio"
+    },
+    "copyright": "© 2024 DigitalPro. Todos los derechos reservados. CIF: XX.XXX.XXX/0001-XX"
+  }
+}
