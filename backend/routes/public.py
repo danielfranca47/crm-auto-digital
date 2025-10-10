@@ -4,10 +4,11 @@ from __future__ import annotations
 import json
 import os
 import smtplib
+import ssl
 from email.message import EmailMessage
 from typing import Dict, Optional
 
-from fastapi import APIRouter, Header, HTTPException, status
+from fastapi import APIRouter, Header, HTTPException, status, BackgroundTasks
 from pydantic import BaseModel, EmailStr, Field
 
 from database import get_connection
@@ -71,25 +72,90 @@ def _build_email(subject: str, body: str, *, sender: str, to: str) -> EmailMessa
     msg.set_content(body)
     return msg
 
+def _notify_admin_and_autoreply(payload: PublicLeadPayload, lead_id: int, settings: EmailSettings, admin_recipient: str) -> None:
+    # monta os corpos
+    admin_body_lines = [
+        "Nova lead criada pelo formulário do site:",
+        f"Nome: {payload.fullName}",
+        f"Email: {payload.email}",
+        f"Telefone: {payload.phone or '-'}",
+        f"Mensagem: {payload.message or '-'}",
+        f"Lead ID: {lead_id}",
+    ]
+    utm_payload = {
+        "utm_source": payload.utm_source,
+        "utm_medium": payload.utm_medium,
+        "utm_campaign": payload.utm_campaign,
+        "utm_term": payload.utm_term,
+        "utm_content": payload.utm_content,
+    }
+    utm_clean = {k: v for k, v in utm_payload.items() if v}
+    if utm_clean:
+        admin_body_lines.append(f"UTMs: {json.dumps(utm_clean, ensure_ascii=False)}")
+
+    admin_msg = _build_email(
+        subject="Nova lead capturada pelo site",
+        body="\n".join(admin_body_lines),
+        sender=settings.sender,
+        to=admin_recipient,
+    )
+
+    lead_msg = _build_email(
+        subject="Obrigado pelo seu contacto | Thank you for your message",
+        body=(
+            f"Olá {payload.fullName},\n\n"
+            "Agradeço pelo seu contacto.\n"
+            "Recebi a sua mensagem e entrarei em breve em contacto para entender melhor o seu projeto.\n\n"
+            "------------------------------\n"
+            "Hello,\n"
+            "Thank you for getting in touch!\n"
+            "I received your message and will be in touch soon to better understand your project.\n\n"
+            "Best regards,\n"
+            "Daniel França\n"
+            "Digital PRO"
+        ),
+        sender=settings.sender,
+        to=payload.email,
+    )
+
+    # envia com try/except individuais e LOGA erro
+    try:
+        _send_email(admin_msg, settings)
+        print("INFO: e-mail admin enviado para", admin_recipient)
+    except Exception as e:
+        print("ERRO admin:", repr(e))
+
+    try:
+        _send_email(lead_msg, settings)
+        print("INFO: auto-reply enviado para", payload.email)
+    except Exception as e:
+        print("ERRO auto-reply:", repr(e))
+
 
 def _send_email(msg: EmailMessage, settings: EmailSettings) -> None:
-    try:
-        with smtplib.SMTP(settings.host, settings.port, timeout=30) as server:
-            try:
-                server.starttls()
-            except smtplib.SMTPException:
-                # Alguns servidores podem não suportar STARTTLS no porto configurado.
-                pass
+    host, port = settings.host, settings.port
+    user, password = settings.user, settings.password
 
-            if settings.user and settings.password:
-                server.login(settings.user, settings.password)
-
+    if port == 465:
+        # SSL direto
+        with smtplib.SMTP_SSL(host, port, context=ssl.create_default_context()) as server:
+            if user and password:
+                server.login(user, password)
             server.send_message(msg)
-    except Exception as exc:  # pragma: no cover - apenas log/propagação
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Não foi possível enviar os e-mails de notificação.",
-        ) from exc
+    else:
+        # STARTTLS (587 por padrão)
+        with smtplib.SMTP(host, port, timeout=30) as server:
+            server.ehlo()
+            try:
+                server.starttls(context=ssl.create_default_context())
+                server.ehlo()
+            except smtplib.SMTPException:
+                # Alguns servidores podem não oferecer STARTTLS — segue sem TLS (raro)
+                pass
+            if user and password:
+                server.login(user, password)
+            server.send_message(msg)
+
 
 
 def _prepare_custom_message(utm_data: Dict[str, Optional[str]]) -> Optional[str]:
@@ -103,6 +169,7 @@ def _prepare_custom_message(utm_data: Dict[str, Optional[str]]) -> Optional[str]
 def create_public_lead(
     payload: PublicLeadPayload,
     x_form_token: str = Header(alias="x-form-token"),
+    bg: BackgroundTasks = None,  # ← novo
 ):
     expected_token = _get_form_token()
     if x_form_token != expected_token:
@@ -123,15 +190,7 @@ def create_public_lead(
         cursor.execute(
             """
             INSERT INTO leads (
-                companyName,
-                contactName,
-                phone,
-                email,
-                origin,
-                category,
-                customMessage,
-                observations,
-                priority
+                companyName, contactName, phone, email, origin, category, customMessage, observations, priority
             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
@@ -146,48 +205,24 @@ def create_public_lead(
                 1,
             ),
         )
-
         lead_id = cursor.lastrowid
+        conn.commit()  # ← COMMIT antes dos e-mails
 
+        # prepara e agenda envio em background (não bloqueia a resposta)
         email_settings = _load_email_settings()
         admin_recipient = os.getenv("EMAIL_TO")
         if not admin_recipient:
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail="EMAIL_TO não configurado.",
-            )
+            print("WARN: EMAIL_TO não configurado — notificações por e-mail desabilitadas.")
+        else:
+            try:
+                if bg is not None:
+                    bg.add_task(_notify_admin_and_autoreply, payload, lead_id, email_settings, admin_recipient)
+                else:
+                    # fallback (em casos de teste sem BackgroundTasks)
+                    _notify_admin_and_autoreply(payload, lead_id, email_settings, admin_recipient)
+            except Exception as e:
+                print("WARN: falha ao agendar envio de e-mails:", repr(e))
 
-        admin_body_lines = [
-            "Nova lead criada pelo formulário do site:",
-            f"Nome: {payload.fullName}",
-            f"Email: {payload.email}",
-            f"Telefone: {payload.phone or '-'}",
-            f"Mensagem: {payload.message or '-'}",
-        ]
-        if custom_message:
-            admin_body_lines.append(f"UTMs: {custom_message}")
-
-        admin_msg = _build_email(
-            subject="Nova lead capturada pelo site",
-            body="\n".join(admin_body_lines),
-            sender=email_settings.sender,
-            to=admin_recipient,
-        )
-
-        lead_msg = _build_email(
-            subject="Recebemos sua mensagem",
-            body=(
-                "Olá, {name}!\n\nRecebemos o seu contato e entraremos em contato em breve.\n"
-                "Se precisar falar conosco com urgência, responda a este e-mail.\n\nAbraços,\nDaniel França"
-            ).format(name=payload.fullName),
-            sender=email_settings.sender,
-            to=payload.email,
-        )
-
-        _send_email(admin_msg, email_settings)
-        _send_email(lead_msg, email_settings)
-
-        conn.commit()
     except HTTPException:
         conn.rollback()
         raise
