@@ -27,6 +27,12 @@ const CtaSection = () => {
     phone: '',
     message: ''
   });
+  const [formStatus, setFormStatus] = useState<{
+    type: 'idle' | 'success' | 'error';
+    message?: string;
+  }>({ type: 'idle' });
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [honeypot, setHoneypot] = useState('');
   const { t, i18n } = useTranslation();
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
@@ -37,12 +43,73 @@ const CtaSection = () => {
     }));
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    // Handle form submission here
-    console.log('Form submitted:', formData);
-    // Reset form
-    setFormData({ name: '', email: '', phone: '', message: '' });
+    if (honeypot.trim().length > 0) {
+      return;
+    }
+
+    setIsSubmitting(true);
+    setFormStatus({ type: 'idle' });
+
+    const apiBaseUrl = import.meta.env.VITE_API_BASE_URL;
+    const formToken = import.meta.env.VITE_FORM_TOKEN;
+
+    if (!apiBaseUrl || !formToken) {
+      console.error('Missing API configuration for lead submission');
+      setFormStatus({
+        type: 'error',
+        message: t('cta.form.errorMessage', 'Ocorreu um erro ao enviar o formulário. Tente novamente mais tarde.')
+      });
+      setIsSubmitting(false);
+      return;
+    }
+
+    try {
+      await new Promise((resolve) => setTimeout(resolve, 400));
+
+      const utmParams = new URLSearchParams(window.location.search);
+      const utmPayload: Record<string, string | undefined> = {
+        utm_source: utmParams.get('utm_source') || undefined,
+        utm_medium: utmParams.get('utm_medium') || undefined,
+        utm_campaign: utmParams.get('utm_campaign') || undefined,
+        utm_term: utmParams.get('utm_term') || undefined,
+        utm_content: utmParams.get('utm_content') || undefined
+      };
+
+      const response = await fetch(`${apiBaseUrl}/public/leads`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-form-token': formToken
+        },
+        body: JSON.stringify({
+          fullName: formData.name,
+          email: formData.email,
+          phone: formData.phone,
+          message: formData.message,
+          ...utmPayload
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to submit form');
+      }
+
+      setFormStatus({
+        type: 'success',
+        message: t('cta.form.successMessage', 'Obrigado! Recebemos o seu contato e retornaremos em breve.')
+      });
+      setFormData({ name: '', email: '', phone: '', message: '' });
+    } catch (error) {
+      console.error('Error submitting lead form', error);
+      setFormStatus({
+        type: 'error',
+        message: t('cta.form.errorMessage', 'Ocorreu um erro ao enviar o formulário. Tente novamente mais tarde.')
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const quickActions = useMemo(
@@ -80,6 +147,18 @@ const CtaSection = () => {
               </h3>
 
               <form onSubmit={handleSubmit} className="space-y-6">
+                <div className="hidden" aria-hidden>
+                  <label htmlFor="company">Company</label>
+                  <input
+                    id="company"
+                    name="company"
+                    type="text"
+                    tabIndex={-1}
+                    autoComplete="off"
+                    value={honeypot}
+                    onChange={(event) => setHoneypot(event.target.value)}
+                  />
+                </div>
                 <div>
                   <label htmlFor="name" className="block text-sm font-medium text-foreground mb-2">
                     {t('cta.form.fields.name.label')}
@@ -143,9 +222,21 @@ const CtaSection = () => {
                   />
                 </div>
 
-                <button type="submit" className="btn-hero w-full">
+                {formStatus.type !== 'idle' && formStatus.message && (
+                  <p
+                    className={
+                      formStatus.type === 'success'
+                        ? 'text-sm font-medium text-green-600'
+                        : 'text-sm font-medium text-red-500'
+                    }
+                  >
+                    {formStatus.message}
+                  </p>
+                )}
+
+                <button type="submit" className="btn-hero w-full" disabled={isSubmitting}>
                   <span className="flex items-center justify-center">
-                    {t('cta.form.button')}
+                    {isSubmitting ? t('cta.form.sending', 'Enviando...') : t('cta.form.button')}
                     <ArrowRight className="ml-2 w-5 h-5" />
                   </span>
                 </button>

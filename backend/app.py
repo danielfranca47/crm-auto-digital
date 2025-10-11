@@ -16,6 +16,7 @@ from routes import (
     dashboard,
     appointments,
 )
+from routes import public  # noqa: E402
 from automations.whatsapp.qr_manager import qr_manager  # para fechar o driver no shutdown
 
 app = FastAPI(title="CRM API", version="1.0.0")
@@ -26,7 +27,10 @@ init_db()
 
 # ---------- CORS ----------
 # Configure em .env: FRONTEND_ORIGINS="http://localhost:5173,https://seu-front.app"
-origins_env = os.getenv("FRONTEND_ORIGINS", "*")
+origins_env = os.getenv(
+    "FRONTEND_ORIGINS",
+    "https://danielfranca.pt,http://localhost:5175",
+)
 allow_credentials_env = os.getenv("CORS_ALLOW_CREDENTIALS", "false").lower() == "true"
 
 origins = [o.strip() for o in origins_env.split(",") if o.strip()]
@@ -53,6 +57,7 @@ app.include_router(prospeccao.router)   # já define prefix="/api/prospeccao"
 app.include_router(whatsapp.router)     # já define prefix="/api/whatsapp"
 app.include_router(profile.router)      # use o prefixo definido no arquivo
 app.include_router(appointments.router) # já define prefix="/api/appointments"
+app.include_router(public.router)       # prefix="/public"
 
 # Se o dashboard tiver prefixo próprio no arquivo, você pode habilitar:
 # app.include_router(dashboard.router)

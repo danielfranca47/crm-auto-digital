@@ -71,3 +71,21 @@ Yes, you can!
 To connect a domain, navigate to Project > Settings > Domains and click Connect Domain.
 
 Read more here: [Setting up a custom domain](https://docs.lovable.dev/tips-tricks/custom-domain#step-by-step-guide)
+
+## Testar o endpoint público de leads
+
+Utilize o comando abaixo para validar o endpoint `POST /public/leads` depois de configurar o backend:
+
+```bash
+curl -X POST "$VITE_API_BASE_URL/public/leads" \
+  -H "Content-Type: application/json" \
+  -H "x-form-token: $VITE_FORM_TOKEN" \
+  -d '{
+    "fullName": "Nome Exemplo",
+    "email": "lead@example.com",
+    "phone": "+351912345678",
+    "message": "Gostaria de saber mais sobre os serviços."
+  }'
+```
+
+Um resultado `201` com `{ "id": <id>, "status": "created" }` indica que o lead foi registado com sucesso.
