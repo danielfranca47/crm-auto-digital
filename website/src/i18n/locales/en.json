@@ -691,7 +691,8 @@
         "key": "aiWhatsappAutomation",
         "title": "AI WhatsApp Automation",
         "description": "Intelligent WhatsApp chatbots that respond to customers 24/7, automate conversations and increase sales through personalized interactions.",
-        "button": "Test now"
+        "button": "Test now",
+        "link": "/ai-whatsapp-automation"
       },
       {
         "key": "digitalAutoCrm",

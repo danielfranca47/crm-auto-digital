@@ -433,7 +433,8 @@
         "key": "aiWhatsappAutomation",
         "title": "Automação WhatsApp IA",
         "description": "Chatbots inteligentes no WhatsApp que respondem clientes 24/7, automatizam conversas e aumentam vendas com interações personalizadas.",
-        "button": "Testar agora"
+        "button": "Testar agora",
+        "link": "/ai-whatsapp-automation"
       },
       {
         "key": "digitalAutoCrm",
