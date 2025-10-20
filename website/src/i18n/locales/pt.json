@@ -24,6 +24,13 @@
     "logo": "DigitalPro",
     "mobileMenuToggle": "Alternar menu"
   },
+  "comingSoon": {
+    "badge": "🚧 Em desenvolvimento",
+    "title": "Novidades chegando em breve",
+    "description": "Estamos preparando uma experiência completa para você. Em breve será possível conhecer todos os detalhes desta solução e como ela pode impulsionar seus resultados.",
+    "ctaPrimary": "Voltar para o início",
+    "ctaSecondary": "Falar com nossa equipe"
+  },
   "aiWhatsappAutomation": {
     "meta": {
       "title": "Automação IA WhatsApp - Chatbots para Empresas",
@@ -432,19 +439,22 @@
         "key": "digitalAutoCrm",
         "title": "Digital Auto CRM",
         "description": "Controle completo de vendas e leads com funis e automações personalizadas. Aumente suas conversões significativamente.",
-        "button": "Explorar CRM"
+        "button": "Explorar CRM",
+        "link": "/coming-soon"
       },
       {
         "key": "automaticContentCreation",
         "title": "Criação Automática de Conteúdo",
         "description": "Ferramenta de IA para gerar posts e imagens profissionais para redes sociais. Mantenha sua presença digital sempre ativa.",
-        "button": "Gerar post grátis"
+        "button": "Gerar post grátis",
+        "link": "/coming-soon"
       },
       {
         "key": "personalizedAutomations",
         "title": "Automações Personalizadas",
         "description": "Soluções de automação sob medida para os processos do seu negócio. Email marketing, automação de fluxos e jornadas personalizadas.",
-        "button": "Ver cases"
+        "button": "Ver cases",
+        "link": "/coming-soon"
       }
     ],
     "bottomNote": "Não encontrou exatamente o que procura? Criamos soluções sob medida.",
@@ -895,12 +905,12 @@
     "services": {
       "title": "Serviços",
       "items": [
-        { "label": "Sites Profissionais", "href": "#" },
-        { "label": "Sistemas de Agendamento", "href": "#" },
-        { "label": "Chat IA", "href": "#" },
-        { "label": "CRM Digital", "href": "#" },
-        { "label": "Automação WhatsApp", "href": "#" },
-        { "label": "Criação de Conteúdo", "href": "#" }
+        { "label": "Sites Profissionais", "href": "/coming-soon" },
+        { "label": "Sistemas de Agendamento", "href": "/coming-soon" },
+        { "label": "Chat IA", "href": "/coming-soon" },
+        { "label": "CRM Digital", "href": "/coming-soon" },
+        { "label": "Automação WhatsApp", "href": "/coming-soon" },
+        { "label": "Criação de Conteúdo", "href": "/coming-soon" }
       ]
     },
     "company": {

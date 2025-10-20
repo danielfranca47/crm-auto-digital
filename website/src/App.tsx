@@ -10,6 +10,7 @@ import NotFound from "./pages/NotFound";
 import ProfessionalWebsites from "./pages/ProfessionalWebsites";
 import SchedulingDemo from "./pages/SchedulingDemo";
 import AIWhatsAppAutomation from "./pages/AIWhatsAppAutomation";
+import ComingSoon from "./pages/ComingSoon";
 import SEOHead from "./components/SEOHead";
 
 const queryClient = new QueryClient();
@@ -68,6 +69,12 @@ const App = () => (
           <Route path="/:lang/ai-whatsapp-automation" element={
             <LanguageRoute>
               <AIWhatsAppAutomation />
+            </LanguageRoute>
+          } />
+
+          <Route path="/:lang/coming-soon" element={
+            <LanguageRoute>
+              <ComingSoon />
             </LanguageRoute>
           } />
           
