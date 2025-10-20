@@ -24,6 +24,13 @@
     "logo": "DigitalPro",
     "mobileMenuToggle": "Alternar menú"
   },
+  "comingSoon": {
+    "badge": "🚧 En desarrollo",
+    "title": "Nuevas experiencias llegando pronto",
+    "description": "Estamos construyendo algo especial aquí. Muy pronto podrás explorar todos los detalles de esta solución y cómo puede acelerar tus resultados.",
+    "ctaPrimary": "Volver al inicio",
+    "ctaSecondary": "Hablar con nuestro equipo"
+  },
   "aiWhatsappAutomation": {
     "meta": {
       "title": "Automatización IA WhatsApp - Chatbots para Empresas",
@@ -640,25 +647,29 @@
         "key": "aiWhatsappAutomation",
         "title": "Automatización WhatsApp IA",
         "description": "Chatbots inteligentes en WhatsApp que responden 24/7, automatizan conversaciones y aumentan ventas con interacciones personalizadas.",
-        "button": "Probar ahora"
+        "button": "Probar ahora",
+        "link": "/ai-whatsapp-automation"
       },
       {
         "key": "digitalAutoCrm",
         "title": "Digital Auto CRM",
         "description": "Control total de ventas y leads con embudos y automatizaciones personalizadas. Incrementa tus conversiones significativamente.",
-        "button": "Explorar CRM"
+        "button": "Explorar CRM",
+        "link": "/coming-soon"
       },
       {
         "key": "automaticContentCreation",
         "title": "Creación Automática de Contenido",
         "description": "Herramienta de IA para generar publicaciones e imágenes profesionales para redes sociales. Mantén activa tu presencia digital.",
-        "button": "Generar post gratis"
+        "button": "Generar post gratis",
+        "link": "/coming-soon"
       },
       {
         "key": "personalizedAutomations",
         "title": "Automatizaciones Personalizadas",
         "description": "Soluciones de automatización a medida para los procesos de tu negocio. Email marketing, automatización de flujos y jornadas personalizadas.",
-        "button": "Ver casos"
+        "button": "Ver casos",
+        "link": "/coming-soon"
       }
     ],
     "bottomNote": "¿No encontraste exactamente lo que buscas? Creamos soluciones a medida.",
@@ -882,12 +893,12 @@
     "services": {
       "title": "Servicios",
       "items": [
-        { "label": "Sitios Profesionales", "href": "#" },
-        { "label": "Sistemas de Agendamiento", "href": "#" },
-        { "label": "Chat IA", "href": "#" },
-        { "label": "CRM Digital", "href": "#" },
-        { "label": "Automatización WhatsApp", "href": "#" },
-        { "label": "Creación de Contenido", "href": "#" }
+        { "label": "Sitios Profesionales", "href": "/coming-soon" },
+        { "label": "Sistemas de Agendamiento", "href": "/coming-soon" },
+        { "label": "Chat IA", "href": "/coming-soon" },
+        { "label": "CRM Digital", "href": "/coming-soon" },
+        { "label": "Automatización WhatsApp", "href": "/coming-soon" },
+        { "label": "Creación de Contenido", "href": "/coming-soon" }
       ]
     },
     "company": {

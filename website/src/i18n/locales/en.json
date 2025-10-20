@@ -24,6 +24,13 @@
     "logo": "DigitalPro",
     "mobileMenuToggle": "Toggle menu"
   },
+  "comingSoon": {
+    "badge": "🚧 Under development",
+    "title": "New experiences arriving soon",
+    "description": "We're building something special here. Soon you'll be able to explore all the details of this solution and how it can accelerate your results.",
+    "ctaPrimary": "Back to home",
+    "ctaSecondary": "Talk to our team"
+  },
   "aiWhatsappAutomation": {
     "meta": {
       "title": "AI WhatsApp Automation - Chatbots for Business",
@@ -684,25 +691,29 @@
         "key": "aiWhatsappAutomation",
         "title": "AI WhatsApp Automation",
         "description": "Intelligent WhatsApp chatbots that respond to customers 24/7, automate conversations and increase sales through personalized interactions.",
-        "button": "Test now"
+        "button": "Test now",
+        "link": "/ai-whatsapp-automation"
       },
       {
         "key": "digitalAutoCrm",
         "title": "Digital Auto CRM",
         "description": "Complete sales and leads control with sales funnels and personalized automations. Significantly increase your conversions.",
-        "button": "Explore CRM"
+        "button": "Explore CRM",
+        "link": "/coming-soon"
       },
       {
         "key": "automaticContentCreation",
         "title": "Automatic Content Creation",
         "description": "AI tool to generate professional posts and images for social media. Keep your digital presence always active.",
-        "button": "Generate free post"
+        "button": "Generate free post",
+        "link": "/coming-soon"
       },
       {
         "key": "personalizedAutomations",
         "title": "Personalized Automations",
         "description": "Custom automation solutions for your business processes. Email marketing, workflow automation, and personalized customer journeys.",
-        "button": "View use cases"
+        "button": "View use cases",
+        "link": "/coming-soon"
       }
     ],
     "bottomNote": "Didn't find exactly what you're looking for? We create custom solutions.",
@@ -932,12 +943,12 @@
     "services": {
       "title": "Services",
       "items": [
-        { "label": "Professional Websites", "href": "#" },
-        { "label": "Scheduling Systems", "href": "#" },
-        { "label": "AI Chat", "href": "#" },
-        { "label": "Digital CRM", "href": "#" },
-        { "label": "WhatsApp Automation", "href": "#" },
-        { "label": "Content Creation", "href": "#" }
+        { "label": "Professional Websites", "href": "/coming-soon" },
+        { "label": "Scheduling Systems", "href": "/coming-soon" },
+        { "label": "AI Chat", "href": "/coming-soon" },
+        { "label": "Digital CRM", "href": "/coming-soon" },
+        { "label": "WhatsApp Automation", "href": "/coming-soon" },
+        { "label": "Content Creation", "href": "/coming-soon" }
       ]
     },
     "company": {
