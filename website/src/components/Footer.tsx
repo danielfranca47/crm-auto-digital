@@ -51,15 +51,23 @@ const Footer = () => {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
-  const services = useMemo(
-    () => t('footer.services.items', { returnObjects: true }) as NavItem[],
-    [i18n.language, t]
-  );
+  const services = useMemo(() => {
+    const items = t('footer.services.items', { returnObjects: true }) as NavItem[];
 
-  const companyLinks = useMemo(
-    () => t('footer.company.items', { returnObjects: true }) as NavItem[],
-    [i18n.language, t]
-  );
+    return items.map((item) => ({
+      ...item,
+      href: item.href.startsWith('/') ? `/${i18n.language}${item.href}` : item.href
+    }));
+  }, [i18n.language, t]);
+
+  const companyLinks = useMemo(() => {
+    const items = t('footer.company.items', { returnObjects: true }) as NavItem[];
+
+    return items.map((item) => ({
+      ...item,
+      href: item.href.startsWith('/') ? `/${i18n.language}${item.href}` : item.href
+    }));
+  }, [i18n.language, t]);
 
   const contactItems = useMemo(
     () => t('footer.contact.items', { returnObjects: true }) as ContactItem[],
