@@ -1,5 +1,7 @@
-import { BarChart3, Users, Search, Menu, FileSearch, Bot } from "lucide-react"
-import { NavLink, useLocation } from "react-router-dom"
+import { BarChart3, Users, Search, FileSearch, Bot, LogOut } from "lucide-react";
+import { NavLink, useLocation, useNavigate } from "react-router-dom";
+import { useState } from "react";
+import { api } from "@/services/api";
 
 import {
   Sidebar,
@@ -10,8 +12,7 @@ import {
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
-  useSidebar,
-} from "@/components/ui/sidebar"
+} from "@/components/ui/sidebar";
 
 const items = [
   { title: "Dashboard", url: "/dashboard", icon: BarChart3 },
@@ -19,24 +20,34 @@ const items = [
   { title: "Prospecção", url: "/prospeccao", icon: Search },
   { title: "Assistente IA", url: "/assistente-ia", icon: Bot },
   { title: "Pesquisa", url: "/pesquisa", icon: FileSearch },
-]
+];
 
 export function AppSidebar() {
-  const { state } = useSidebar()
-  const location = useLocation()
-  const currentPath = location.pathname
+  const location = useLocation();
+  const navigate = useNavigate();
+  const [loggingOut, setLoggingOut] = useState(false);
 
-  const isActive = (path: string) => currentPath === path
-  
   const getNavCls = ({ isActive }: { isActive: boolean }) =>
-    isActive ? "bg-muted text-primary font-medium" : "hover:bg-muted/50"
+    isActive ? "bg-muted text-primary font-medium" : "hover:bg-muted/50";
+
+  async function onLogout() {
+    if (loggingOut) return;
+    setLoggingOut(true);
+    try {
+      await api.auth.logout();
+    } catch {
+      // mesmo se falhar, seguimos para tela de login
+    } finally {
+      navigate("/login", { replace: true });
+      setLoggingOut(false);
+    }
+  }
 
   return (
     <Sidebar collapsible="icon">
       <SidebarContent>
         <SidebarGroup>
           <SidebarGroupLabel>Navegação</SidebarGroupLabel>
-
           <SidebarGroupContent>
             <SidebarMenu>
               {items.map((item) => (
@@ -52,7 +63,21 @@ export function AppSidebar() {
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
+
+        <SidebarGroup>
+          <SidebarGroupLabel>Conta</SidebarGroupLabel>
+          <SidebarGroupContent>
+            <SidebarMenu>
+              <SidebarMenuItem>
+                <SidebarMenuButton onClick={onLogout} disabled={loggingOut}>
+                  <LogOut className="mr-2 h-4 w-4" />
+                  <span>{loggingOut ? "Saindo..." : "Sair"}</span>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+            </SidebarMenu>
+          </SidebarGroupContent>
+        </SidebarGroup>
       </SidebarContent>
     </Sidebar>
-  )
+  );
 }

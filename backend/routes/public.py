@@ -13,7 +13,7 @@ from pydantic import BaseModel, EmailStr, Field
 
 from database import get_connection
 
-router = APIRouter(prefix="/public", tags=["Public"])
+router = APIRouter(tags=["Public"])
 
 
 class PublicLeadPayload(BaseModel):

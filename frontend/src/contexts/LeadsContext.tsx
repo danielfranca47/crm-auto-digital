@@ -287,45 +287,36 @@ export function LeadsProvider({ children }: LeadsProviderProps) {
 
   const addLead = async (leadData: NewLeadForm) => {
     try {
-      const response = await api.createLead({
+      const created = await api.createLead({
         companyName: leadData.companyName,
-        contactName: leadData.contactName,
-        phone: leadData.phone,
-        email: leadData.email || '',
-        origin: leadData.origin,
+        contactName: leadData.contactName ?? null,
+        phone: leadData.phone ?? null,
+        email: leadData.email ?? null,
+        origin: leadData.origin ?? "Manual",
         category: leadData.category,
-        customMessage: leadData.customMessage || '',
-        observations: leadData.observations,
-        prioridade: 'Média',
+        customMessage: leadData.customMessage ?? null,
+        observations: leadData.observations ?? null,
+        priority: 1, // backend espera "priority" (int)
       });
 
-      const newLead: Lead = {
-        id: response.id.toString(),
-        companyName: leadData.companyName,
-        contactName: leadData.contactName,
-        phone: leadData.phone,
-        email: leadData.email || '',
-        origin: leadData.origin,
-        category: leadData.category,
-        customMessage: leadData.customMessage || '',
-        observations: leadData.observations,
-        lastMovement: new Date(),
-        createdAt: new Date(),
-        nextScheduledAction: undefined,
-      };
+      // Use o que o backend devolveu (id, datas etc.)
+      const newLead = mapRawLead(created);
 
       setColumns((prev) =>
-        prev.map((column) => {
-          if (column.id === newLead.category) {
-            return { ...column, leads: [...column.leads, newLead] };
-          }
-          return column;
-        })
+        prev.map((column) =>
+          column.id === newLead.category
+            ? { ...column, leads: [...column.leads, newLead] }
+            : column
+        )
       );
+
+      // mantém a visão de prospecção coerente, se necessário
+      syncProspectionStatus(newLead.id, newLead.category as LeadStatus);
     } catch (error) {
       console.error('Erro ao criar lead:', error);
     }
   };
+
 
   // --------- Appointments (CRUD) ----------
   const loadAppointments = async (leadId: string): Promise<LeadAppointment[]> => {
