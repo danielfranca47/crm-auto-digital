@@ -476,7 +476,7 @@
       "name": "Nombre Completo",
       "namePlaceholder": "Ingresa tu nombre",
       "phone": "WhatsApp",
-      "phonePlaceholder": "(11) 99999-9999",
+      "phonePlaceholder": "Seu Fone",
       "scheduleButton": "Confirmar Reserva",
       "scheduling": "Reservando...",
       "tryAgain": "Hacer Nueva Reserva"
@@ -775,9 +775,9 @@
       "title": "¿Prefieres hablar directamente?",
       "items": [
         { "key": "meeting", "icon": "calendar", "label": "Agendar reunión online" },
-        { "key": "whatsapp", "icon": "messageCircle", "label": "WhatsApp: (11) 99999-9999" },
-        { "key": "phone", "icon": "phone", "label": "Teléfono: (11) 3333-3333" },
-        { "key": "email", "icon": "mail", "label": "contact@digitalpro.com" }
+        { "key": "whatsapp", "icon": "messageCircle", "label": "WhatsApp: +351 961 649 355" },
+        { "key": "phone", "icon": "phone", "label": "Teléfono: +351 961 649 355" },
+        { "key": "email", "icon": "mail", "label": "contacto@danielfranca.pt" }
       ]
     },
     "guarantee": {
@@ -893,11 +893,11 @@
     "services": {
       "title": "Servicios",
       "items": [
-        { "label": "Sitios Profesionales", "href": "/coming-soon" },
-        { "label": "Sistemas de Agendamiento", "href": "/coming-soon" },
-        { "label": "Chat IA", "href": "/coming-soon" },
+        { "label": "Sitios Profesionales", "href": "/professional-websites" },
+        { "label": "Sistemas de Agendamiento", "href": "/scheduling-demo" },
+        { "label": "Chat IA", "href": "/ai-whatsapp-automation" },
         { "label": "CRM Digital", "href": "/coming-soon" },
-        { "label": "Automatización WhatsApp", "href": "/coming-soon" },
+        { "label": "Automatización WhatsApp", "href": "/ai-whatsapp-automation" },
         { "label": "Creación de Contenido", "href": "/coming-soon" }
       ]
     },
@@ -908,15 +908,15 @@
         { "label": "Sobre Nosotros", "href": "#about" },
         { "label": "Proyectos", "href": "#projects" },
         { "label": "Beneficios", "href": "#benefits" },
-        { "label": "Blog", "href": "#" },
+        { "label": "Blog", "href": "/coming-soon" },
         { "label": "Contacto", "href": "#contact" }
       ]
     },
     "contact": {
       "items": [
-        { "key": "phone", "icon": "phone", "value": "(11) 3333-3333" },
-        { "key": "mail", "icon": "mail", "value": "contact@digitalpro.com" },
-        { "key": "map", "icon": "mapPin", "value": "São Paulo, SP - Brasil" },
+        { "key": "phone", "icon": "phone", "value": "+351 961 649 355" },
+        { "key": "mail", "icon": "mail", "value": "contacto@danielfranca.pt" },
+        { "key": "map", "icon": "mapPin", "value": "Lisboa-PT" },
         { "key": "hours", "icon": "clock", "value": "Lun-Vie: 9h a 18h" }
       ]
     },
@@ -939,6 +939,6 @@
       "terms": "Términos de Uso",
       "backToTop": "Volver al inicio"
     },
-    "copyright": "© 2024 DigitalPro. Todos los derechos reservados. CIF: XX.XXX.XXX/0001-XX"
+    "copyright": "© 2024 DigitalPro. Todos los derechos reservados."
   }
 }

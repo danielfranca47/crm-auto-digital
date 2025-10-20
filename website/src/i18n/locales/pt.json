@@ -561,9 +561,9 @@
       "title": "Prefere falar diretamente?",
       "items": [
         { "key": "meeting", "icon": "calendar", "label": "Agendar reunião online" },
-        { "key": "whatsapp", "icon": "messageCircle", "label": "WhatsApp: (11) 99999-9999" },
-        { "key": "phone", "icon": "phone", "label": "Telefone: (11) 3333-3333" },
-        { "key": "email", "icon": "mail", "label": "contact@digitalpro.com" }
+        { "key": "whatsapp", "icon": "messageCircle", "label": "WhatsApp: +351 961 649 355" },
+        { "key": "phone", "icon": "phone", "label": "Telefone: +351 961 649 355" },
+        { "key": "email", "icon": "mail", "label": "contacto@danielfranca.pt" }
       ]
     },
     "guarantee": {
@@ -906,11 +906,11 @@
     "services": {
       "title": "Serviços",
       "items": [
-        { "label": "Sites Profissionais", "href": "/coming-soon" },
-        { "label": "Sistemas de Agendamento", "href": "/coming-soon" },
-        { "label": "Chat IA", "href": "/coming-soon" },
+        { "label": "Sites Profissionais", "href": "/professional-websites" },
+        { "label": "Sistemas de Agendamento", "href": "/scheduling-demo" },
+        { "label": "Chat IA", "href": "/ai-whatsapp-automation" },
         { "label": "CRM Digital", "href": "/coming-soon" },
-        { "label": "Automação WhatsApp", "href": "/coming-soon" },
+        { "label": "Automação WhatsApp", "href": "/ai-whatsapp-automation" },
         { "label": "Criação de Conteúdo", "href": "/coming-soon" }
       ]
     },
@@ -921,15 +921,15 @@
         { "label": "Sobre Nós", "href": "#about" },
         { "label": "Projetos", "href": "#projects" },
         { "label": "Benefícios", "href": "#benefits" },
-        { "label": "Blog", "href": "#" },
+        { "label": "Blog", "href": "/coming-soon" },
         { "label": "Contato", "href": "#contact" }
       ]
     },
     "contact": {
       "items": [
-        { "key": "phone", "icon": "phone", "value": "(11) 3333-3333" },
-        { "key": "mail", "icon": "mail", "value": "contact@digitalpro.com" },
-        { "key": "map", "icon": "mapPin", "value": "São Paulo, SP - Brasil" },
+        { "key": "phone", "icon": "phone", "value": "+351 961 649 355" },
+        { "key": "mail", "icon": "mail", "value": "contacto@danielfranca.pt" },
+        { "key": "map", "icon": "mapPin", "value": "Lisboa-PT" },
         { "key": "hours", "icon": "clock", "value": "Seg-Sex: 9h às 18h" }
       ]
     },
