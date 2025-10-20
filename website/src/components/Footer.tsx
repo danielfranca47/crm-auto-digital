@@ -9,8 +9,9 @@ import {
   Clock,
   ArrowUp
 } from 'lucide-react';
-import { useMemo } from 'react';
+import { useMemo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useLocation } from 'react-router-dom';
 
 type NavItem = {
   label: string;
@@ -46,28 +47,52 @@ const socialIconMap = {
 
 const Footer = () => {
   const { t, i18n } = useTranslation();
+  const location = useLocation();
 
   const scrollToTop = () => {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
+
+  const basePath = `/${i18n.language}`;
+  const normalizedPathname = location.pathname.replace(/\/$/, '');
+  const isHomePage = normalizedPathname === basePath;
+
+  const getLocalizedHref = useCallback(
+    (href: string) => {
+      if (href === '#') {
+        return href;
+      }
+
+      if (href.startsWith('#')) {
+        return isHomePage ? href : `${basePath}${href}`;
+      }
+
+      if (href.startsWith('/')) {
+        return `/${i18n.language}${href}`;
+      }
+
+      return href;
+    },
+    [basePath, i18n.language, isHomePage]
+  );
 
   const services = useMemo(() => {
     const items = t('footer.services.items', { returnObjects: true }) as NavItem[];
 
     return items.map((item) => ({
       ...item,
-      href: item.href.startsWith('/') ? `/${i18n.language}${item.href}` : item.href
+      href: getLocalizedHref(item.href)
     }));
-  }, [i18n.language, t]);
+  }, [getLocalizedHref, t]);
 
   const companyLinks = useMemo(() => {
     const items = t('footer.company.items', { returnObjects: true }) as NavItem[];
 
     return items.map((item) => ({
       ...item,
-      href: item.href.startsWith('/') ? `/${i18n.language}${item.href}` : item.href
+      href: getLocalizedHref(item.href)
     }));
-  }, [i18n.language, t]);
+  }, [getLocalizedHref, t]);
 
   const contactItems = useMemo(
     () => t('footer.contact.items', { returnObjects: true }) as ContactItem[],
