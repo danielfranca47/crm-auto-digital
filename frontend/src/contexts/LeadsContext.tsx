@@ -24,7 +24,7 @@ interface LeadsContextType {
   ) => Promise<LeadAppointment>;
   deleteAppointment: (leadId: string, appointmentId: string) => Promise<void>;
 
-  moveProspectionLead: (leadId: string, newStatus: 'to-prospect' | 'in-progress' | 'prospected') => void;
+  moveProspectionLead: (leadId: string, newStatus: 'to-prospect' | 'in-progress' | 'qualification') => void;
   bulkProspection: (leadIds: string[], methods: ProspectionMethod[]) => void;
   updateProspectionLead: (leadId: string, patch: Partial<Lead>) => Promise<void>;
   reloadAllLeads: () => Promise<void>;
@@ -109,9 +109,9 @@ function mapRawAppointment(raw: any): LeadAppointment {
 }
 
 function toProspectionLead(l: Lead): ProspectionLead {
-  const prospectionStatus: 'to-prospect' | 'in-progress' | 'prospected' =
+  const prospectionStatus: 'to-prospect' | 'in-progress' | 'qualification' =
     l.category === 'in-progress' ? 'in-progress'
-    : l.category === 'prospected' ? 'prospected'
+    : l.category === 'qualification' ? 'qualification'
     : 'to-prospect';
 
   return {
@@ -127,7 +127,7 @@ export function LeadsProvider({ children }: LeadsProviderProps) {
   const [prospectionColumns, setProspectionColumns] = useState<ProspectionColumn[]>([
     { id: 'to-prospect', title: 'À Prospectar', leads: [], color: '#6366f1' },
     { id: 'in-progress', title: 'Em Andamento', leads: [], color: '#f59e0b' },
-    { id: 'prospected', title: 'Prospectados', leads: [], color: '#22c55e' },
+    { id: 'qualification', title: 'Qualificação', leads: [], color: '#22c55e' },
   ]);
   const [appointmentsByLead, setAppointmentsByLead] = useState<Record<string, LeadAppointment[]>>({});
 
@@ -169,13 +169,13 @@ export function LeadsProvider({ children }: LeadsProviderProps) {
       // Prospecção: derivado do status do CRM (inclui 'in-progress')
       const toProspectLeads = allLeads.filter((l) => l.category === 'to-prospect').map(toProspectionLead);
       const inProgressLeads = allLeads.filter((l) => l.category === 'in-progress').map(toProspectionLead);
-      const prospectedLeads = allLeads.filter((l) => l.category === 'prospected').map(toProspectionLead);
+      const qualificationLeads = allLeads.filter((l) => l.category === 'qualification').map(toProspectionLead);
 
       setProspectionColumns((prev) =>
         prev.map((col) => {
           if (col.id === 'to-prospect') return { ...col, leads: toProspectLeads };
           if (col.id === 'in-progress') return { ...col, leads: inProgressLeads };
-          if (col.id === 'prospected') return { ...col, leads: prospectedLeads };
+          if (col.id === 'qualification') return { ...col, leads: qualificationLeads };
           return col;
         })
       );
@@ -369,7 +369,7 @@ export function LeadsProvider({ children }: LeadsProviderProps) {
   };
 
   // --------- prospecção (UI + persistência) ----------
-  const moveProspectionLead = (leadId: string, newStatus: 'to-prospect' | 'in-progress' | 'prospected') => {
+  const moveProspectionLead = (leadId: string, newStatus: 'to-prospect' | 'in-progress' | 'qualification') => {
     // 1) Atualiza quadro de prospecção (UI)
     setProspectionColumns((prev) => {
       const allLeads = prev.flatMap((col) => col.leads);
@@ -409,9 +409,9 @@ export function LeadsProvider({ children }: LeadsProviderProps) {
     if (
       crmCategory === 'to-prospect' ||
       crmCategory === 'in-progress' ||
-      crmCategory === 'prospected'
+      crmCategory === 'qualification'
     ) {
-      const prospectionStatus = crmCategory as 'to-prospect' | 'in-progress' | 'prospected';
+      const prospectionStatus = crmCategory as 'to-prospect' | 'in-progress' | 'qualification';
 
       setProspectionColumns((prev) => {
         const allLeads = prev.flatMap((col) => col.leads);

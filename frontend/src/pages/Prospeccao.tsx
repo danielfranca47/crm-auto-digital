@@ -38,9 +38,9 @@ const Prospeccao: React.FC = () => {
     const lead = allLeads.find((l) => l.id === leadId);
     if (!lead) return;
 
-    let nextStatus: "to-prospect" | "in-progress" | "prospected";
+    let nextStatus: "to-prospect" | "in-progress" | "qualification";
     if (lead.prospectionStatus === "to-prospect") nextStatus = "in-progress";
-    else if (lead.prospectionStatus === "in-progress") nextStatus = "prospected";
+    else if (lead.prospectionStatus === "in-progress") nextStatus = "qualification";
     else return;
 
     moveProspectionLead(leadId, nextStatus);
