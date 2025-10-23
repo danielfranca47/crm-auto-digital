@@ -1,9 +1,17 @@
 // services/api.ts
-const RAW_BASE =
-  (import.meta as any)?.env?.VITE_API_BASE_URL ?? "http://localhost:8000";
+const fromEnv = (import.meta as any)?.env?.VITE_API_BASE_URL;
+
+// fallback esperto: se estiver em *.danielfranca.pt, usa a API pública
+const smartFallback =
+  typeof location !== "undefined" &&
+  /\.danielfranca\.pt$/i.test(location.hostname)
+    ? "https://api.danielfranca.pt"
+    : "http://localhost:8000";
+
+const RAW_BASE = fromEnv || smartFallback;
 
 const API = `${RAW_BASE.replace(/\/$/, "")}/api`;
-const AUTH = `${RAW_BASE.replace(/\/$/, "")}/auth`; // /auth não usa o prefixo /api
+const AUTH = `${RAW_BASE.replace(/\/$/, "")}/auth`;
 
 // helper fetch com cookies (reutiliza o mesmo handle)
 async function handleWithCreds(res: Response) {
