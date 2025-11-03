@@ -32,3 +32,6 @@ build/
 
 # Arquivos sensíveis
 .env
+backend/.env.local-backup
+frontend/.env.local-backup
+website/.env.local-backup
