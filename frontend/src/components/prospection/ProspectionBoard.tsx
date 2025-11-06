@@ -301,7 +301,7 @@ export function ProspectionBoard({
             onStopWorker={stopWorker}
           />
 
-          <div className="flex gap-6 overflow-x-auto pb-4">
+          <div className="flex gap-6 overflow-x-auto pb-4 justify-center">
             {filteredColumns.map((column) => (
               <ProspectionColumn
                 key={column.id}
