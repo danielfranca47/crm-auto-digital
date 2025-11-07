@@ -47,7 +47,7 @@ interface ProspectionCardDialogProps {
 const statusColors = {
   "to-prospect": "bg-blue-100 text-blue-800 border-blue-300",
   "in-progress": "bg-yellow-100 text-yellow-800 border-yellow-300",
-  prospected: "bg-green-100 text-green-800 border-green-300",
+  qualification: "bg-green-100 text-green-800 border-green-300",
   "prospect-refused": "bg-red-100 text-red-800 border-red-300",
   disqualified: "bg-gray-100 text-gray-800 border-gray-300",
   "follow-up": "bg-purple-100 text-purple-800 border-purple-300",
@@ -61,7 +61,7 @@ const statusColors = {
 const statusLabels = {
   "to-prospect": "À Prospectar",
   "in-progress": "Em Andamento",
-  prospected: "Prospectado",
+  qualification: "Qualificação",
   "prospect-refused": "Prospecto Recusado",
   disqualified: "Desqualificado",
   "follow-up": "Follow-up",
@@ -155,7 +155,13 @@ export function ProspectionCardDialog({
   const [lastWa, setLastWa] = useState<LastWaRow | null>(null);
   const [loadingLast, setLoadingLast] = useState(false);
 
-  const { updateProspectionLead, setLeadNextAction } = useLeads();
+  const leadsCtx = useLeads();
+  const { updateProspectionLead } = leadsCtx;
+  const setLeadNextAction =
+    ((leadsCtx as any)?.setLeadNextAction as
+      | ((leadId: string, next?: any) => void)
+      | undefined) ??
+    (() => {});
   const cancelAppointment = useCancelAppointment();
   const { toast } = useToast();
   const [isScheduleDialogOpen, setIsScheduleDialogOpen] = useState(false);
@@ -297,7 +303,7 @@ export function ProspectionCardDialog({
   const handleCancelAppointmentAction = async (appointment: Appointment) => {
     if (!lead) return;
     try {
-      await cancelAppointment.mutateAsync(appointment.id);
+      await cancelAppointment.mutateAsync({ id: appointment.id, leadId: lead.id })
       setLeadNextAction(lead.id, undefined);
       setEditedLead((prev) => (prev ? { ...prev, nextScheduledAction: undefined } : prev));
       setFollowUpDate(undefined);

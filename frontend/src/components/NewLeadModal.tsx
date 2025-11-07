@@ -17,15 +17,14 @@ interface NewLeadModalProps {
 
 const LEAD_CATEGORIES: { value: LeadStatus; label: string }[] = [
   { value: 'to-prospect', label: 'À Prospectar' },
-  { value: 'prospected', label: 'Prospectados' },
+  { value: 'in-progress', label: 'Em Andamento' },
+  { value: 'qualification', label: 'Qualificação' },
+  { value: 'apresentation', label: 'Apresentação' },
+  { value: 'follow-up', label: 'Follow-up' },
+  { value: 'closing', label: 'Fechamento' },
+  { value: 'client-list', label: 'Lista de Clientes' },
   { value: 'prospect-refused', label: 'Prospecção Recusada' },
   { value: 'disqualified', label: 'Desqualificados' },
-  { value: 'follow-up', label: 'Follow-up' },
-  { value: 'meeting-scheduled', label: 'Reunião Agendada' },
-  { value: 'no-show', label: 'Não Compareceu' },
-  { value: 'in-negotiation', label: 'Em Negociação' },
-  { value: 'closed-sale', label: 'Fechou a Venda' },
-  { value: 'client-list', label: 'Lista de Clientes' },
 ];
 
 export function NewLeadModal({ isOpen, onClose, onSave }: NewLeadModalProps) {

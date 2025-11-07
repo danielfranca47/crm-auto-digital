@@ -13,7 +13,7 @@ import { ptBR } from 'date-fns/locale';
 
 interface ProspectionCardProps {
   lead: ProspectionLead;
-  columnId: 'to-prospect' | 'in-progress' | 'prospected';
+  columnId: 'to-prospect' | 'in-progress' | 'qualification';
   onUpdateLead: (leadId: string, updates: Partial<ProspectionLead>) => void;
   onMoveToNext: (leadId: string) => void;
   isSelected?: boolean;
@@ -60,7 +60,7 @@ export function ProspectionCard({
     
     onUpdateLead(lead.id, {
       prospectionTasks: updatedTasks,
-      prospectionStatus: allCompleted ? 'prospected' : 'in-progress',
+      prospectionStatus: allCompleted ? 'qualification' : 'in-progress',
       prospectionCompletedAt: allCompleted ? new Date() : undefined
     });
 
@@ -131,7 +131,7 @@ export function ProspectionCard({
             />
           )}
 
-          {columnId === 'prospected' && (
+          {columnId === 'qualification' && (
             <div className="text-center py-2">
               <Badge variant="default" className="bg-green-500">
                 ✓ Prospecção Concluída
