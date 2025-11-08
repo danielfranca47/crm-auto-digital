@@ -29,6 +29,67 @@ def get_connection() -> sqlite3.Connection:
 
 
 # =========================
+# JOBS / AGENTES
+# =========================
+def ensure_agents_jobs_tables(conn: sqlite3.Connection) -> None:
+    """Cria as tabelas de agentes e jobs para o agente local."""
+
+    cur = conn.cursor()
+    cur.executescript(
+        """
+        CREATE TABLE IF NOT EXISTS agents (
+            id TEXT PRIMARY KEY,
+            name TEXT NOT NULL,
+            token TEXT NOT NULL,
+            last_seen DATETIME,
+            status TEXT DEFAULT 'inactive' CHECK (status IN ('active','inactive')),
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        );
+
+        CREATE TABLE IF NOT EXISTS jobs (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            type TEXT NOT NULL,
+            payload TEXT NOT NULL,
+            status TEXT NOT NULL DEFAULT 'pending'
+                CHECK (status IN ('pending','in_progress','completed','failed')),
+            priority INTEGER DEFAULT 0,
+            result TEXT,
+            error TEXT,
+            agent_id TEXT,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            started_at DATETIME,
+            finished_at DATETIME,
+            FOREIGN KEY (agent_id) REFERENCES agents(id)
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_jobs_status_created
+            ON jobs(status, created_at);
+
+        CREATE INDEX IF NOT EXISTS idx_jobs_agent_status
+            ON jobs(agent_id, status);
+        """
+    )
+
+    # Ajuste simples para JSON inválido legado (garante texto JSON válido).
+    # Mantém compatibilidade mesmo se payload/result vazios forem inseridos manualmente.
+    cur.execute(
+        """
+        UPDATE jobs
+           SET payload = '{}'
+         WHERE (payload IS NULL OR trim(payload) = '')
+        """
+    )
+    cur.execute(
+        """
+        UPDATE jobs
+           SET result = NULL
+         WHERE result = ''
+        """
+    )
+
+
+# =========================
 # APPOINTMENTS HELPERS
 # =========================
 def ensure_appointments_table(conn: sqlite3.Connection) -> None:
@@ -305,6 +366,9 @@ def init_db() -> None:
     conn = get_connection()
     try:
         cur = conn.cursor()
+
+        # Tabelas necessárias para o Agente Local / fila de jobs
+        ensure_agents_jobs_tables(conn)
 
         # Tabela leads
         cur.execute(

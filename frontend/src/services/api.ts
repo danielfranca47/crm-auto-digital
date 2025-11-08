@@ -88,8 +88,25 @@ export type SaveMessageResponse = {
 
 export type WhatsEnqueueResp = {
   ok: boolean;
-  queued: { lead_id: number; message_id: number }[];
+  queued: { lead_id: number; message_id: number; job_id?: number }[];
   skipped: { lead_id: number; reason: string }[];
+};
+
+export type AgentsOverview = {
+  jobs: {
+    pending: number;
+    in_progress: number;
+    completed_recent: number;
+    failed_recent: number;
+  };
+  agents: {
+    id: string;
+    name: string;
+    status: string;
+    last_seen?: string | null;
+    updated_at?: string | null;
+  }[];
+  generated_at: string;
 };
 // ================================================
 
@@ -482,14 +499,26 @@ export const api = {
       },
 
       worker: {
+        /**
+         * @deprecated Worker remoto substituído pelo Agente Local.
+         * Mantido apenas para compatibilidade de chamadas legadas.
+         */
         start: async () => {
+          console.warn("[api.whatsapp.worker.start] Worker remoto desativado. Utilize o Agente Local.");
           const res = await fetch(`${API}/whatsapp/worker/start`, { method: "POST" });
           return handle(res);
         },
+        /**
+         * @deprecated Worker remoto substituído pelo Agente Local.
+         */
         stop: async () => {
+          console.warn("[api.whatsapp.worker.stop] Worker remoto desativado. Utilize o Agente Local.");
           const res = await fetch(`${API}/whatsapp/worker/stop`, { method: "POST" });
           return handle(res);
         },
+        /**
+         * @deprecated Worker remoto substituído pelo Agente Local.
+         */
         status: async () => {
           const res = await fetch(`${API}/whatsapp/worker/status`);
           return handle(res);
@@ -519,13 +548,15 @@ export const api = {
       return handle(res);
     },
 
-    // >>> Endpoints do worker (adicionados)
+    // >>> Endpoints do worker (legado - mantidos para compatibilidade com chamadas antigas)
     worker: {
       start: async () => {
+        console.warn("[api.whatsapp.worker.start] Worker remoto desativado. Utilize o Agente Local.");
         const res = await fetch(`${API}/whatsapp/worker/start`, { method: "POST" });
         return handle(res);
       },
       stop: async () => {
+        console.warn("[api.whatsapp.worker.stop] Worker remoto desativado. Utilize o Agente Local.");
         const res = await fetch(`${API}/whatsapp/worker/stop`, { method: "POST" });
         return handle(res);
       },
@@ -533,6 +564,21 @@ export const api = {
         const res = await fetch(`${API}/whatsapp/worker/status`);
         return handle(res);
       },
+    },
+  },
+
+  agents: {
+    overview: async (hours = 24): Promise<AgentsOverview> => {
+      const res = await fetch(`${API}/agents/overview?hours=${hours}`);
+      return handle(res);
+    },
+    enqueueTestJob: async (payload: { type?: string; payload?: Record<string, any>; priority?: number }) => {
+      const res = await fetch(`${API}/agents/test-job`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload ?? {}),
+      });
+      return handle(res);
     },
   },
 };
