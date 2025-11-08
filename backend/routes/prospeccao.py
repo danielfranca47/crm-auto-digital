@@ -4,6 +4,7 @@ from pydantic import BaseModel
 from typing import Optional, Dict, List
 from datetime import datetime
 from database import get_connection
+from services import jobs_service
 import re
 
 router = APIRouter(prefix="/api/prospeccao", tags=["Prospecção"])
@@ -229,8 +230,20 @@ def whatsapp_enqueue(req: WhatsEnqueueRequest):
                 """,
                 (lead_id, msg_id, phone, body),
             )
+            queue_id = int(cur.lastrowid)
             _log(conn, lead_id, "queued", "whatsapp", msg_id, f"phone={phone}")
-            queued.append({"lead_id": lead_id, "message_id": msg_id})
+
+            # Enfileira job para o Agente Local executar via Selenium
+            job_payload = {
+                "queue_id": queue_id,
+                "lead_id": lead_id,
+                "message_id": msg_id,
+                "phone": phone,
+                "body": body,
+            }
+            job_id = jobs_service.enqueue_job("whatsapp_send", job_payload)
+
+            queued.append({"lead_id": lead_id, "message_id": msg_id, "job_id": job_id})
 
         conn.commit()
 

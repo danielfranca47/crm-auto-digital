@@ -15,6 +15,7 @@ from routes import (
     profile,
     dashboard,
     appointments,
+    agents,
 )
 from routes import public  # noqa: E402
 from automations.whatsapp.qr_manager import qr_manager  # para fechar o driver no shutdown
@@ -57,6 +58,7 @@ app.include_router(prospeccao.router)   # já define prefix="/api/prospeccao"
 app.include_router(whatsapp.router)     # já define prefix="/api/whatsapp"
 app.include_router(profile.router)      # use o prefixo definido no arquivo
 app.include_router(appointments.router) # já define prefix="/api/appointments"
+app.include_router(agents.router)       # comunicação com agentes locais
 app.include_router(public.router)       # prefix="/public"
 
 # Se o dashboard tiver prefixo próprio no arquivo, você pode habilitar:

@@ -1,11 +1,8 @@
 # backend/routes/whatsapp.py
 from fastapi import APIRouter
-from typing import Optional
-import threading, time, urllib.parse
 
-from database import get_connection
 from automations.whatsapp.qr_manager import qr_manager
-from automations.whatsapp.whatsapp_worker import worker  # usa o singleton real do worker
+from services import jobs_service
 
 router = APIRouter(prefix="/api/whatsapp", tags=["WhatsApp"])
 
@@ -32,33 +29,44 @@ def stop():
 # ---------- ENDPOINTS: WORKER ----------
 @router.post("/worker/start")
 def worker_start():
-    started = worker.start()  # False se já estava rodando
+    """Mantido para compatibilidade — o processamento agora ocorre via Agente Local."""
+    overview = jobs_service.overview()
     return {
-        "ok": True,
-        "started": bool(started),
-        "running": worker.is_running(),
+        "ok": False,
+        "running": overview["jobs"]["in_progress"] > 0,
+        "message": "Worker remoto desativado. Inicie o Agente Local para processar a fila.",
     }
+
 
 @router.post("/worker/stop")
 def worker_stop():
-    worker.stop()
+    overview = jobs_service.overview()
     return {
-        "ok": True,
-        "running": worker.is_running(),
+        "ok": False,
+        "running": overview["jobs"]["in_progress"] > 0,
+        "message": "Worker remoto desativado. Finalize o Agente Local localmente se necessário.",
     }
+
 
 @router.get("/worker/state")
 def worker_state():
-    s = worker.state
+    overview = jobs_service.overview()
+    jobs = overview["jobs"]
     return {
-        "running": worker.is_running(),
-        "last_error": s.last_error,
-        "processed_ok": s.processed_ok,
-        "processed_fail": s.processed_fail,
-        "last_item": s.last_item,
+        "running": jobs["in_progress"] > 0,
+        "processed_ok": jobs["completed_recent"],
+        "processed_fail": jobs["failed_recent"],
+        "last_error": None,
+        "last_item": None,
+        "message": "Worker remoto substituído pelo Agente Local",
     }
+
 
 # Alias opcional para compatibilidade com o front atual
 @router.get("/worker/status")
 def worker_status():
-    return {"running": worker.is_running()}
+    jobs = jobs_service.overview()["jobs"]
+    return {
+        "running": jobs["in_progress"] > 0,
+        "message": "Worker remoto desativado; utilize o Agente Local",
+    }

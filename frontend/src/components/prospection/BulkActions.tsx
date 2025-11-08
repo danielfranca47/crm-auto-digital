@@ -18,11 +18,11 @@ interface BulkActionsProps {
   onBulkProspection: (methods: ProspectionMethod[]) => void;
   onClearSelection: () => void;
 
-  // novos
-  workerRunning?: boolean;
-  waLogged?: boolean | null;
+  // Automação baseada em jobs + agente local
+  workerRunning?: boolean; // indica se há jobs em andamento
+  agentOnline?: boolean | null; // status do agente local
   pendingCount?: number;
-  onStopWorker?: () => void;
+  onStopWorker?: () => void; // reaproveitado como "atualizar status"
 }
 
 export function BulkActions({
@@ -30,7 +30,7 @@ export function BulkActions({
   onBulkProspection,
   onClearSelection,
   workerRunning = false,
-  waLogged = null,
+  agentOnline = null,
   pendingCount = 0,
   onStopWorker
 }: BulkActionsProps) {
@@ -57,25 +57,29 @@ export function BulkActions({
   // Mantém o retângulo visível se o worker estiver rodando
   if (selectedCount === 0 && !workerRunning) return null;
 
-  const WaChip = () => (
+  const AgentChip = () => (
     <span
       className={
         'px-2 py-1 rounded-full text-xs ' +
-        (waLogged === true
+        (agentOnline === true
           ? 'bg-emerald-100 text-emerald-700'
-          : waLogged === false
+          : agentOnline === false
           ? 'bg-rose-100 text-rose-700'
           : 'bg-slate-100 text-slate-600')
       }
       title={
-        waLogged === true
-          ? 'WhatsApp conectado'
-          : waLogged === false
-          ? 'WhatsApp desconectado'
-          : 'Status indisponível'
+        agentOnline === true
+          ? 'Agente Local ativo'
+          : agentOnline === false
+          ? 'Agente Local desconectado'
+          : 'Status do agente indisponível'
       }
     >
-      {waLogged === true ? 'WA Conectado' : waLogged === false ? 'WA Desconectado' : 'WA —'}
+      {agentOnline === true
+        ? 'Agente Online'
+        : agentOnline === false
+        ? 'Agente Offline'
+        : 'Agente —'}
     </span>
   );
 
@@ -85,9 +89,9 @@ export function BulkActions({
         'px-2 py-1 rounded-full text-xs ' +
         (workerRunning ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-700')
       }
-      title={workerRunning ? 'Worker em execução' : 'Worker parado'}
+      title={workerRunning ? 'Jobs em processamento pelo agente' : 'Nenhum job em execução'}
     >
-      {workerRunning ? 'Worker Rodando' : 'Worker Parado'}
+      {workerRunning ? 'Jobs em andamento' : 'Sem jobs em andamento'}
     </span>
   );
 
@@ -117,7 +121,7 @@ export function BulkActions({
 
         {/* chips de status */}
         <div className="flex items-center gap-2">
-          <WaChip />
+          <AgentChip />
           <WorkerChip />
           <PendingChip />
           {!workerRunning && (
@@ -175,14 +179,14 @@ export function BulkActions({
             </div>
 
             {/* dicas contextuais */}
-            {selectedMethods.includes('whatsapp') && waLogged === false && (
+            {selectedMethods.includes('whatsapp') && agentOnline === false && (
               <p className="text-xs text-amber-600">
-                WhatsApp desconectado: é possível enfileirar mesmo assim; o envio começará quando você conectar.
+                Agente Local offline: enfileire normalmente e inicie o agente em seu computador para processar os envios.
               </p>
             )}
-            {selectedMethods.includes('whatsapp') && waLogged === null && (
+            {selectedMethods.includes('whatsapp') && agentOnline === null && (
               <p className="text-xs text-slate-500">
-                Status do WhatsApp indisponível no momento. Você ainda pode enfileirar; o envio inicia ao conectar.
+                Status do Agente Local indisponível. Os envios serão realizados assim que o agente conectar.
               </p>
             )}
           </div>
@@ -192,14 +196,14 @@ export function BulkActions({
       {workerRunning && (
         <div className="flex items-center gap-2">
           <Button
-            variant="destructive"
+            variant="outline"
             size="sm"
             onClick={onStopWorker}
             className="flex items-center gap-2"
             aria-disabled={!onStopWorker}
           >
             <PauseCircle className="h-4 w-4" />
-            Parar envio
+            Atualizar status da fila
           </Button>
         </div>
       )}

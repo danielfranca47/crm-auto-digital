@@ -5,45 +5,46 @@ type Props = {
   onRunningChange?: (running: boolean) => void;
 };
 
-const POLL_MS = 8000;
+const POLL_MS = 10_000;
 
 export default function WhatsWorkerControls({ onRunningChange }: Props) {
-  const [running, setRunning] = useState<boolean>(false);
+  const [agentOnline, setAgentOnline] = useState<boolean | null>(null);
   const [pending, setPending] = useState<number>(0);
+  const [inProgress, setInProgress] = useState<number>(0);
   const [busy, setBusy] = useState<boolean>(false);
   const timerRef = useRef<number | null>(null);
 
   const refresh = async () => {
     try {
-      const st = await api.whatsapp.worker.status();
-      const isRunning = !!st?.running;
-      setRunning(isRunning);
-      onRunningChange?.(isRunning);
+      const overview = await api.agents.overview();
+      const jobs = overview?.jobs ?? { pending: 0, in_progress: 0 };
+      const running = (jobs.in_progress ?? 0) > 0;
+      setInProgress(jobs.in_progress ?? 0);
+      setPending(jobs.pending ?? 0);
+      onRunningChange?.(running);
 
-      // pega até 50 pendentes (suficiente p/ um “mini monitor”)
-      const q = await api.prospeccao.whatsapp.queue(50);
-      setPending(Array.isArray(q) ? q.length : 0);
-    } catch {
-      /* silencioso no UI */
+      const now = Date.now();
+      const agents = overview?.agents ?? [];
+      const anyOnline = agents.some((agent) => {
+        if (agent?.status === "active") return true;
+        if (!agent?.last_seen) return false;
+        const last = new Date(agent.last_seen).getTime();
+        return now - last < 2 * 60 * 1000;
+      });
+      setAgentOnline(anyOnline ? true : agents.length ? false : null);
+    } catch (error) {
+      console.warn("Não foi possível obter status do agente local", error);
+      setAgentOnline(null);
+      setPending(0);
+      setInProgress(0);
+      onRunningChange?.(false);
     }
   };
 
-  const start = async () => {
+  const manualRefresh = async () => {
     if (busy) return;
     setBusy(true);
     try {
-      await api.whatsapp.worker.start();
-      await refresh();
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const stop = async () => {
-    if (busy) return;
-    setBusy(true);
-    try {
-      await api.whatsapp.worker.stop();
       await refresh();
     } finally {
       setBusy(false);
@@ -62,36 +63,47 @@ export default function WhatsWorkerControls({ onRunningChange }: Props) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  const agentBadgeClass = agentOnline === true
+    ? "bg-emerald-100 text-emerald-700"
+    : agentOnline === false
+    ? "bg-rose-100 text-rose-700"
+    : "bg-slate-100 text-slate-600";
+
   return (
-    <div className="flex items-center gap-2">
+    <div className="flex flex-wrap items-center gap-2">
       <span
-        className={
-          "px-2 py-1 rounded-full text-xs " +
-          (running ? "bg-emerald-100 text-emerald-700" : "bg-slate-100 text-slate-600")
+        className={`px-2 py-1 rounded-full text-xs ${agentBadgeClass}`}
+        title={
+          agentOnline === true
+            ? "Agente Local conectado"
+            : agentOnline === false
+            ? "Nenhum agente local comunicando recentemente"
+            : "Status do agente local indisponível"
         }
-        title={running ? "Robô de envio está rodando" : "Robô parado"}
       >
-        Worker {running ? "Rodando" : "Parado"}
+        {agentOnline === true ? "Agente Local: Online" : agentOnline === false ? "Agente Local: Offline" : "Agente Local"}
       </span>
 
-      <span className="px-2 py-1 rounded-full text-xs bg-indigo-100 text-indigo-700" title="Itens pendentes na fila">
+      <span
+        className="px-2 py-1 rounded-full text-xs bg-indigo-100 text-indigo-700"
+        title="Jobs pendentes no backend aguardando execução"
+      >
         Pendentes: {pending}
       </span>
 
-      <button
-        onClick={start}
-        disabled={busy || running}
-        className="inline-flex items-center gap-2 px-3 py-2 rounded-lg bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-50"
+      <span
+        className="px-2 py-1 rounded-full text-xs bg-emerald-50 text-emerald-700"
+        title="Jobs sendo processados pelo agente"
       >
-        Iniciar envio
-      </button>
+        Em execução: {inProgress}
+      </span>
 
       <button
-        onClick={stop}
-        disabled={busy || !running}
-        className="inline-flex items-center gap-2 px-3 py-2 rounded-lg bg-rose-600 text-white hover:bg-rose-700 disabled:opacity-50"
+        onClick={manualRefresh}
+        disabled={busy}
+        className="inline-flex items-center gap-2 px-3 py-2 rounded-lg bg-slate-900 text-white hover:bg-slate-700 disabled:opacity-50"
       >
-        Parar envio
+        Atualizar status
       </button>
     </div>
   );
