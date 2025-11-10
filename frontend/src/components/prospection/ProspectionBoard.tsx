@@ -32,8 +32,8 @@ export function ProspectionBoard({
   const { reloadAllLeads } = useLeads();
 
   // ---- estados de automação ----
-  const [waLogged, setWaLogged] = useState<boolean | null>(null);
-  const [workerRunning, setWorkerRunning] = useState(false);
+  const [agentOnline, setAgentOnline] = useState<boolean | null>(null);
+  const [workerRunning, setWorkerRunning] = useState(false); // indica se há jobs em andamento
   const [pendingCount, setPendingCount] = useState(0);
   const [seenQueueIds, setSeenQueueIds] = useState<Set<number>>(new Set());
   const prevWorkerRunning = useRef<boolean>(false);
@@ -101,18 +101,8 @@ export function ProspectionBoard({
           // aqui você pode disparar um toast/snackbar se quiser
         }
 
-        // auto-start do worker se houver itens e WA estiver logado
-        if (waLogged && queuedIdsStr.length > 0) {
-          try {
-            await api.whatsapp.worker.start();
-            setWorkerRunning(true);
-          } catch (e) {
-            console.error("Falha ao iniciar worker:", e);
-          }
-        }
-
-        // ajusta contagem de pendentes local (não é obrigatório, mas ajuda)
-        setPendingCount(prev => prev + queuedIdsStr.length);
+        // atualiza visão geral da fila baseada em jobs
+        await refreshOverview();
 
       } catch (e) {
         console.error('Falha ao enfileirar WhatsApp:', e);
@@ -144,30 +134,27 @@ export function ProspectionBoard({
   };
 
   // ---- status WA e Worker ----
-  const refreshLogin = async () => {
+  const refreshOverview = async () => {
     try {
-      const r = await api.whatsapp.verificarLogin();
-      setWaLogged(!!r?.logado);
-    } catch {
-      setWaLogged(null);
-    }
-  };
+      const overview = await api.agents.overview();
+      const jobs = overview?.jobs ?? { pending: 0, in_progress: 0 };
+      setPendingCount(jobs.pending ?? 0);
+      setWorkerRunning((jobs.in_progress ?? 0) > 0);
 
-  const refreshWorker = async () => {
-    try {
-      const st = await api.whatsapp.worker.status();
-      setWorkerRunning(!!st?.running);
-    } catch {
-      setWorkerRunning(false);
-    }
-  };
-
-  const refreshQueue = async () => {
-    try {
-      const items = await api.prospeccao.whatsapp.queue(25);
-      setPendingCount(Array.isArray(items) ? items.length : 0);
-    } catch {
+      const now = Date.now();
+      const agentList = overview?.agents ?? [];
+      const anyOnline = agentList.some((agent) => {
+        if (agent?.status === 'active') return true;
+        if (!agent?.last_seen) return false;
+        const last = new Date(agent.last_seen).getTime();
+        return now - last < 2 * 60 * 1000; // 2 minutos de tolerância
+      });
+      setAgentOnline(anyOnline ? true : agentList.length ? false : null);
+    } catch (err) {
+      console.warn('Não foi possível obter overview dos agentes', err);
+      setAgentOnline(null);
       setPendingCount(0);
+      setWorkerRunning(false);
     }
   };
 
@@ -214,9 +201,7 @@ export function ProspectionBoard({
 
   // boot: pega um snapshot de status
   useEffect(() => {
-    refreshLogin();
-    refreshWorker();
-    refreshQueue();
+    refreshOverview();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -225,10 +210,9 @@ export function ProspectionBoard({
     let t: number | null = null;
 
     const tick = async () => {
-      await refreshWorker();
-      await refreshQueue();
+      await refreshOverview();
       await refreshResults();
-      // worker ligado => polling rápido; desligado => lento
+      // jobs em andamento => polling rápido; caso contrário, mais lento
       const next = workerRunning ? 1500 : 6000;
       t = window.setTimeout(tick, next);
     };
@@ -249,13 +233,9 @@ export function ProspectionBoard({
   }, [workerRunning, reloadAllLeads]);
 
   const stopWorker = async () => {
-    try {
-      await api.whatsapp.worker.stop();
-    } finally {
-      setWorkerRunning(false);
-      await reloadAllLeads(); // sincroniza também no stop manual
-      refreshQueue();
-    }
+    // No novo fluxo não é possível parar o agente remotamente; apenas atualizamos o snapshot.
+    await refreshOverview();
+    await reloadAllLeads();
   };
 
   return (
@@ -296,7 +276,7 @@ export function ProspectionBoard({
             onBulkProspection={handleBulkFromBanner}
             onClearSelection={handleClearSelection}
             workerRunning={workerRunning}
-            waLogged={waLogged}
+            agentOnline={agentOnline}
             pendingCount={pendingCount}
             onStopWorker={stopWorker}
           />
