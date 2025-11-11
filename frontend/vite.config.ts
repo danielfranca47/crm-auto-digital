@@ -5,15 +5,12 @@ import { componentTagger } from "lovable-tagger";
 
 export default defineConfig(({ mode }) => ({
   server: {
-    host: true,                 // aceita conexões externas (equivale a 0.0.0.0 / ::)
+    host: true,          // aceita conexões externas
     port: 8080,
-    allowedHosts: ["crmapp.danielfranca.pt"],   // <— libera o domínio do túnel
-    hmr: {
-      host: "crmapp.danielfranca.pt",           // WebSocket do HMR via domínio público
-      protocol: "wss",                          // porque a página é https
-      clientPort: 443
-    },
-    strictPort: true
+    // Se não for mais usar túnel, deixe a linha abaixo comentada ou remova:
+    // allowedHosts: ["crmapp.danielfranca.pt"],
+    hmr: { host: "localhost", protocol: "ws", clientPort: 8080 },
+    strictPort: true,
   },
   plugins: [
     react(),

@@ -42,7 +42,7 @@ export interface Lead {
   lastMovement: Date;
   createdAt: Date;
   nextScheduledAction?: {
-    id: string;
+    id?: string;
     date: Date;
     description: string;
     type?: AppointmentType;
@@ -59,18 +59,16 @@ export interface LeadAppointment {
   updatedAt?: Date | null;
 }
 
-export type LeadStatus = 
-  | 'to-prospect'
-  | 'in-progress'        
-  | 'prospected' 
-  | 'prospect-refused'
-  | 'disqualified'
-  | 'follow-up'
-  | 'meeting-scheduled'
-  | 'no-show'
-  | 'in-negotiation'
-  | 'closed-sale'
-  | 'client-list';
+export type LeadStatus =
+  | 'to-prospect'       // Prospecção
+  | 'in-progress'       // (apenas na página de Prospecção)
+  | 'qualification'     // Qualificação (substitui "prospected")
+  | 'apresentation'     // Apresentação
+  | 'follow-up'         // Acompanhamento
+  | 'closing'           // Fechamento
+  | 'client-list'       // lista de cliente
+  | 'prospect-refused'  // Recusada (arquivados)
+  | 'disqualified';     // Desqualificado (arquivados)
 
 export interface KanbanColumn {
   id: LeadStatus;

@@ -31,34 +31,37 @@ interface LeadCardDialogProps {
   onUpdateLead?: (leadId: string, updates: Partial<Lead>) => void;
 }
 
-/** Cores/labels de status (inclui 'in-progress') */
+//TODO Estava dando erros aqui, com nomes de colunas antigas. Ajustei conforme as atuais.
+/** Cores/labels de status (alinhado com mockData.ts) */
+//Ela era basicamente a “tabela de tradução” dos status do lead – o dicionário que dizia: qual nome amigável mostrar na telaqual cor usar em cada statusE isso era usado dentro do componente LeadCardDialog para montar aquele selo colorido (badge/pílula) que aparece no card do lead.
 const statusColors: Record<LeadStatus, string> = {
-  "to-prospect": "bg-gray-500",
-  "in-progress": "bg-sky-500",
-  prospected: "bg-blue-500",
-  "prospect-refused": "bg-red-500",
-  disqualified: "bg-red-600",
-  "follow-up": "bg-yellow-500",
-  "meeting-scheduled": "bg-purple-500",
-  "no-show": "bg-orange-500",
-  "in-negotiation": "bg-indigo-500",
-  "closed-sale": "bg-green-500",
-  "client-list": "bg-emerald-600",
+  "to-prospect": "bg-gray-500",        // À Prospectar
+  "qualification": "bg-sky-500",       // Qualificação
+  "apresentation": "bg-blue-500",      // Apresentação
+  "follow-up": "bg-yellow-500",        // Follow-up
+  "closing": "bg-purple-500",          // Fechamento
+  "client-list": "bg-emerald-600",     // Lista de clientes
+
+  // Secundários (prospecção / arquivados)
+  "in-progress": "bg-indigo-500",      // Em andamento
+  "prospect-refused": "bg-red-500",    // Prospecção recusada
+  "disqualified": "bg-red-600",        // Desqualificado
 };
 
+
 const statusLabels: Record<LeadStatus, string> = {
-  "to-prospect": "A Prospectar",
-  "in-progress": "Em Progresso",
-  prospected: "Prospectado",
-  "prospect-refused": "Recusou Prospecção",
-  disqualified: "Desqualificado",
+  "to-prospect": "À Prospectar",
+  "qualification": "Qualificação",
+  "apresentation": "Apresentação",
   "follow-up": "Follow-up",
-  "meeting-scheduled": "Reunião Agendada",
-  "no-show": "Não Compareceu",
-  "in-negotiation": "Em Negociação",
-  "closed-sale": "Venda Fechada",
+  "closing": "Fechamento",
   "client-list": "Lista de Clientes",
+
+  "in-progress": "Em Andamento",
+  "prospect-refused": "Prospecção Recusada",
+  "disqualified": "Desqualificado",
 };
+//
 
 const appointmentTypeLabels = {
   meeting: "Reunião",

@@ -24,7 +24,7 @@ interface LeadsContextType {
   ) => Promise<LeadAppointment>;
   deleteAppointment: (leadId: string, appointmentId: string) => Promise<void>;
 
-  moveProspectionLead: (leadId: string, newStatus: 'to-prospect' | 'in-progress' | 'prospected') => void;
+  moveProspectionLead: (leadId: string, newStatus: 'to-prospect' | 'in-progress' | 'qualification') => void;
   bulkProspection: (leadIds: string[], methods: ProspectionMethod[]) => void;
   updateProspectionLead: (leadId: string, patch: Partial<Lead>) => Promise<void>;
   reloadAllLeads: () => Promise<void>;
@@ -109,9 +109,9 @@ function mapRawAppointment(raw: any): LeadAppointment {
 }
 
 function toProspectionLead(l: Lead): ProspectionLead {
-  const prospectionStatus: 'to-prospect' | 'in-progress' | 'prospected' =
+  const prospectionStatus: 'to-prospect' | 'in-progress' | 'qualification' =
     l.category === 'in-progress' ? 'in-progress'
-    : l.category === 'prospected' ? 'prospected'
+    : l.category === 'qualification' ? 'qualification'
     : 'to-prospect';
 
   return {
@@ -127,7 +127,7 @@ export function LeadsProvider({ children }: LeadsProviderProps) {
   const [prospectionColumns, setProspectionColumns] = useState<ProspectionColumn[]>([
     { id: 'to-prospect', title: 'À Prospectar', leads: [], color: '#6366f1' },
     { id: 'in-progress', title: 'Em Andamento', leads: [], color: '#f59e0b' },
-    { id: 'prospected', title: 'Prospectados', leads: [], color: '#22c55e' },
+    { id: 'qualification', title: 'Qualificação', leads: [], color: '#22c55e' },
   ]);
   const [appointmentsByLead, setAppointmentsByLead] = useState<Record<string, LeadAppointment[]>>({});
 
@@ -169,13 +169,13 @@ export function LeadsProvider({ children }: LeadsProviderProps) {
       // Prospecção: derivado do status do CRM (inclui 'in-progress')
       const toProspectLeads = allLeads.filter((l) => l.category === 'to-prospect').map(toProspectionLead);
       const inProgressLeads = allLeads.filter((l) => l.category === 'in-progress').map(toProspectionLead);
-      const prospectedLeads = allLeads.filter((l) => l.category === 'prospected').map(toProspectionLead);
+      const qualificationLeads = allLeads.filter((l) => l.category === 'qualification').map(toProspectionLead);
 
       setProspectionColumns((prev) =>
         prev.map((col) => {
           if (col.id === 'to-prospect') return { ...col, leads: toProspectLeads };
           if (col.id === 'in-progress') return { ...col, leads: inProgressLeads };
-          if (col.id === 'prospected') return { ...col, leads: prospectedLeads };
+          if (col.id === 'qualification') return { ...col, leads: qualificationLeads };
           return col;
         })
       );
@@ -287,45 +287,36 @@ export function LeadsProvider({ children }: LeadsProviderProps) {
 
   const addLead = async (leadData: NewLeadForm) => {
     try {
-      const response = await api.createLead({
+      const created = await api.createLead({
         companyName: leadData.companyName,
-        contactName: leadData.contactName,
-        phone: leadData.phone,
-        email: leadData.email || '',
-        origin: leadData.origin,
+        contactName: leadData.contactName ?? null,
+        phone: leadData.phone ?? null,
+        email: leadData.email ?? null,
+        origin: leadData.origin ?? "Manual",
         category: leadData.category,
-        customMessage: leadData.customMessage || '',
-        observations: leadData.observations,
-        prioridade: 'Média',
+        customMessage: leadData.customMessage ?? null,
+        observations: leadData.observations ?? null,
+        priority: 1, // backend espera "priority" (int)
       });
 
-      const newLead: Lead = {
-        id: response.id.toString(),
-        companyName: leadData.companyName,
-        contactName: leadData.contactName,
-        phone: leadData.phone,
-        email: leadData.email || '',
-        origin: leadData.origin,
-        category: leadData.category,
-        customMessage: leadData.customMessage || '',
-        observations: leadData.observations,
-        lastMovement: new Date(),
-        createdAt: new Date(),
-        nextScheduledAction: undefined,
-      };
+      // Use o que o backend devolveu (id, datas etc.)
+      const newLead = mapRawLead(created);
 
       setColumns((prev) =>
-        prev.map((column) => {
-          if (column.id === newLead.category) {
-            return { ...column, leads: [...column.leads, newLead] };
-          }
-          return column;
-        })
+        prev.map((column) =>
+          column.id === newLead.category
+            ? { ...column, leads: [...column.leads, newLead] }
+            : column
+        )
       );
+
+      // mantém a visão de prospecção coerente, se necessário
+      syncProspectionStatus(newLead.id, newLead.category as LeadStatus);
     } catch (error) {
       console.error('Erro ao criar lead:', error);
     }
   };
+
 
   // --------- Appointments (CRUD) ----------
   const loadAppointments = async (leadId: string): Promise<LeadAppointment[]> => {
@@ -378,7 +369,7 @@ export function LeadsProvider({ children }: LeadsProviderProps) {
   };
 
   // --------- prospecção (UI + persistência) ----------
-  const moveProspectionLead = (leadId: string, newStatus: 'to-prospect' | 'in-progress' | 'prospected') => {
+  const moveProspectionLead = (leadId: string, newStatus: 'to-prospect' | 'in-progress' | 'qualification') => {
     // 1) Atualiza quadro de prospecção (UI)
     setProspectionColumns((prev) => {
       const allLeads = prev.flatMap((col) => col.leads);
@@ -418,9 +409,9 @@ export function LeadsProvider({ children }: LeadsProviderProps) {
     if (
       crmCategory === 'to-prospect' ||
       crmCategory === 'in-progress' ||
-      crmCategory === 'prospected'
+      crmCategory === 'qualification'
     ) {
-      const prospectionStatus = crmCategory as 'to-prospect' | 'in-progress' | 'prospected';
+      const prospectionStatus = crmCategory as 'to-prospect' | 'in-progress' | 'qualification';
 
       setProspectionColumns((prev) => {
         const allLeads = prev.flatMap((col) => col.leads);

@@ -104,7 +104,7 @@ export function ProspectionBoard({
         // auto-start do worker se houver itens e WA estiver logado
         if (waLogged && queuedIdsStr.length > 0) {
           try {
-            await api.whatsapp.worker.start();
+            await api.prospeccao.whatsapp.worker.start();
             setWorkerRunning(true);
           } catch (e) {
             console.error("Falha ao iniciar worker:", e);
@@ -155,7 +155,7 @@ export function ProspectionBoard({
 
   const refreshWorker = async () => {
     try {
-      const st = await api.whatsapp.worker.status();
+      const st = await api.prospeccao.whatsapp.worker.status();
       setWorkerRunning(!!st?.running);
     } catch {
       setWorkerRunning(false);
@@ -197,7 +197,7 @@ export function ProspectionBoard({
 
           const leadIdStr = String(r.lead_id);
           if (r.status === 'sent') {
-            onUpdateLead(leadIdStr, { category: 'prospected' } as any);
+            onUpdateLead(leadIdStr, { category: 'qualification' } as any);
           } else if (r.status === 'failed') {
             onUpdateLead(leadIdStr, { category: 'to-prospect' } as any);
           }
@@ -250,7 +250,7 @@ export function ProspectionBoard({
 
   const stopWorker = async () => {
     try {
-      await api.whatsapp.worker.stop();
+      await api.prospeccao.whatsapp.worker.stop();
     } finally {
       setWorkerRunning(false);
       await reloadAllLeads(); // sincroniza também no stop manual
@@ -301,7 +301,7 @@ export function ProspectionBoard({
             onStopWorker={stopWorker}
           />
 
-          <div className="flex gap-6 overflow-x-auto pb-4">
+          <div className="flex gap-6 overflow-x-auto pb-4 justify-center">
             {filteredColumns.map((column) => (
               <ProspectionColumn
                 key={column.id}

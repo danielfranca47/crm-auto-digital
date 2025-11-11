@@ -250,8 +250,8 @@ export function KanbanBoard({ onDashboard }: KanbanBoardProps) {
     }
   };
 
-  const handleNewLead = (leadData: NewLeadForm) => {
-    addLead(leadData);
+  const handleNewLead = async (leadData: NewLeadForm) => {
+    await addLead(leadData); // addLead do LeadsContext deve fazer o optimistic update
   };
 
   return (
@@ -324,7 +324,7 @@ export function KanbanBoard({ onDashboard }: KanbanBoardProps) {
       <NewLeadModal
         isOpen={isNewLeadModalOpen}
         onClose={() => setIsNewLeadModalOpen(false)}
-        onSubmit={handleNewLead}
+        onSave={handleNewLead}
       />
 
       <LeadCardDialog

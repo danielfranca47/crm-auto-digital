@@ -391,8 +391,8 @@ class WhatsWorker:
 
                 if ok:
                     self._mark(item["id"], item["lead_id"], item["message_id"], ok=True, notes="")
-                    # sucesso → marcar como prospectado
-                    self._update_lead_category(item["lead_id"], "prospected", "envio_ok")
+                     # sucesso → avançar lead para qualificação
+                    self._update_lead_category(item["lead_id"], "qualification", "envio_ok")
                     self.state.processed_ok += 1
                 else:
                     self._mark(item["id"], item["lead_id"], item["message_id"], ok=False, notes=reason or "timeout")

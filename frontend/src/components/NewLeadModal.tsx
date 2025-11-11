@@ -7,86 +7,105 @@ import { Textarea } from "./ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetClose } from "./ui/sheet";
 import { X } from "lucide-react";
+import { api } from "@/services/api"; // ✅ ajuste o caminho conforme seu projeto
 
 interface NewLeadModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSave: (lead: NewLeadForm) => void;
+  onSave?: (lead: NewLeadForm) => void | Promise<void>; // ✅ opcional
 }
 
 const LEAD_CATEGORIES: { value: LeadStatus; label: string }[] = [
   { value: 'to-prospect', label: 'À Prospectar' },
-  { value: 'prospected', label: 'Prospectados' },
+  { value: 'in-progress', label: 'Em Andamento' },
+  { value: 'qualification', label: 'Qualificação' },
+  { value: 'apresentation', label: 'Apresentação' },
+  { value: 'follow-up', label: 'Follow-up' },
+  { value: 'closing', label: 'Fechamento' },
+  { value: 'client-list', label: 'Lista de Clientes' },
   { value: 'prospect-refused', label: 'Prospecção Recusada' },
   { value: 'disqualified', label: 'Desqualificados' },
-  { value: 'follow-up', label: 'Follow-up' },
-  { value: 'meeting-scheduled', label: 'Reunião Agendada' },
-  { value: 'no-show', label: 'Não Compareceu' },
-  { value: 'in-negotiation', label: 'Em Negociação' },
-  { value: 'closed-sale', label: 'Fechou a Venda' },
-  { value: 'client-list', label: 'Lista de Clientes' },
 ];
 
 export function NewLeadModal({ isOpen, onClose, onSave }: NewLeadModalProps) {
   const [formData, setFormData] = useState<NewLeadForm>({
     contactName: '',
-    companyName:'',
+    companyName: '',
     phone: '',
-    origin: '',
+    origin: 'Manual',          // ✅ default ajuda o backend
     category: 'to-prospect',
     observations: '',
   });
+  const [loading, setLoading] = useState(false);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (formData.contactName && formData.phone) {
-      onSave(formData);
+
+    // ✅ inclua companyName para evitar 422 no backend
+    if (!formData.contactName || !formData.phone || !formData.companyName) return;
+
+    try {
+      setLoading(true);
+
+      if (typeof onSave === "function") {
+        // pai controla a chamada à API
+        await onSave(formData);
+      } else {
+        // ✅ fallback: chama a API direto daqui
+        await api.createLead({
+          companyName: formData.companyName,
+          contactName: formData.contactName || null,
+          phone: formData.phone || null,
+          email: null,
+          origin: formData.origin || "Manual",
+          category: formData.category,
+          customMessage: null,
+          observations: formData.observations || null,
+          priority: 1,
+        });
+      }
+
+      // reset e fechar
       setFormData({
-        companyName:'',
+        companyName: '',
         contactName: '',
         phone: '',
-        origin: '',
+        origin: 'Manual',
         category: 'to-prospect',
         observations: ''
       });
       onClose();
+    } catch (err) {
+      console.error("Erro ao salvar lead:", err);
+    } finally {
+      setLoading(false);
     }
   };
 
-  // ---- NOVO: normaliza apenas quando sai do campo ----
   const normalizePhoneOnBlur = (raw: string) => {
     const trimmed = (raw ?? "").trim();
     const digits = trimmed.replace(/\D/g, "");
-
-    // Se já digitou com "+" (qualquer DDI), só limpamos espaços extras
     if (trimmed.startsWith("+")) {
-      // Ex.: "+351912345678" -> mantém + e dígitos
       const pretty = `+${digits}`;
-      // Se for PT (+351 + 9 dígitos), aplicamos espaçamento amigável
       if (digits.startsWith("351") && digits.length >= 12) {
         const local = digits.slice(3, 12);
         return `+351 ${local.slice(0,3)} ${local.slice(3,6)} ${local.slice(6,9)}`.trim();
       }
       return pretty;
     }
-
-    // Sem "+": se informou 9 dígitos, assume PT e aplica +351
     if (digits.length === 9) {
       return `+351 ${digits.slice(0,3)} ${digits.slice(3,6)} ${digits.slice(6,9)}`.trim();
     }
-
-    // Se informou "351" + 9 (12 dígitos) sem "+", também formata
     if (digits.length >= 12 && digits.startsWith("351")) {
       const local = digits.slice(3, 12);
       return `+351 ${local.slice(0,3)} ${local.slice(3,6)} ${local.slice(6,9)}`.trim();
     }
-
-    // Caso geral: mantém só os dígitos (evita bagunça)
     return digits ? digits : "";
   };
 
   return (
-    <Sheet open={isOpen} onOpenChange={onClose}>
+    // ✅ fecha apenas quando o usuário fechar (não ao abrir)
+    <Sheet open={isOpen} onOpenChange={(open) => { if (!open) onClose(); }}>
       <SheetContent side="right" className="w-[400px] sm:w-[500px] bg-card border-border">
         <SheetHeader className="pb-6">
           <div className="flex items-center justify-between">
@@ -116,15 +135,20 @@ export function NewLeadModal({ isOpen, onClose, onSave }: NewLeadModalProps) {
             />
           </div>
 
-          <div className="space-y-2" />
-          <Input
-            id="Company"
-            value={formData.companyName}
-            onChange={(e) => setFormData(prev => ({ ...prev, companyName: e.target.value }))}
-            placeholder="Nome da Empresa"
-            required
-            className="bg-input border-border"
-          />
+          {/* ✅ bloco correto da empresa (remove o <div /> solto) */}
+          <div className="space-y-2">
+            <Label htmlFor="company" className="text-sm font-medium">
+              Empresa *
+            </Label>
+            <Input
+              id="company"
+              value={formData.companyName}
+              onChange={(e) => setFormData(prev => ({ ...prev, companyName: e.target.value }))}
+              placeholder="Nome da Empresa"
+              required
+              className="bg-input border-border"
+            />
+          </div>
 
           <div className="space-y-2">
             <Label htmlFor="phone" className="text-sm font-medium">
@@ -133,8 +157,8 @@ export function NewLeadModal({ isOpen, onClose, onSave }: NewLeadModalProps) {
             <Input
               id="phone"
               value={formData.phone}
-              onChange={(e) => setFormData(prev => ({ ...prev, phone: e.target.value }))}  // << livre durante digitação
-              onBlur={(e) => setFormData(prev => ({ ...prev, phone: normalizePhoneOnBlur(e.target.value) }))} // << normaliza ao sair
+              onChange={(e) => setFormData(prev => ({ ...prev, phone: e.target.value }))}
+              onBlur={(e) => setFormData(prev => ({ ...prev, phone: normalizePhoneOnBlur(e.target.value) }))}
               placeholder="+351 912 345 678"
               required
               className="bg-input border-border font-mono"
@@ -163,7 +187,7 @@ export function NewLeadModal({ isOpen, onClose, onSave }: NewLeadModalProps) {
               onValueChange={(value: LeadStatus) => setFormData(prev => ({ ...prev, category: value }))}
             >
               <SelectTrigger className="bg-input border-border">
-                <SelectValue />
+                <SelectValue placeholder="Selecione..." />
               </SelectTrigger>
               <SelectContent className="bg-popover border-border">
                 {LEAD_CATEGORIES.map((category) => (
@@ -190,16 +214,16 @@ export function NewLeadModal({ isOpen, onClose, onSave }: NewLeadModalProps) {
           </div>
 
           <div className="flex gap-3 pt-4">
-            <Button 
-              type="submit" 
+            <Button
+              type="submit"
               className="gradient-primary text-white flex-1 hover:shadow-glow transition-smooth"
-              disabled={!formData.contactName || !formData.phone}
+              disabled={loading || !formData.contactName || !formData.phone || !formData.companyName}
             >
-              Salvar Lead
+              {loading ? "Salvando..." : "Salvar Lead"}
             </Button>
-            <Button 
-              type="button" 
-              variant="outline" 
+            <Button
+              type="button"
+              variant="outline"
               onClick={onClose}
               className="border-border hover:bg-muted"
             >

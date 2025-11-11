@@ -32,3 +32,4 @@ build/
 
 # Arquivos sensíveis
 .env
+.env.local-backup
