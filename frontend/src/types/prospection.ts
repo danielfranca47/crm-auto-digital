@@ -12,13 +12,13 @@ export interface ProspectionTask {
 
 export interface ProspectionLead extends Lead {
   prospectionTasks: ProspectionTask[];
-  prospectionStatus: 'to-prospect' | 'in-progress' | 'prospected';
+  prospectionStatus: 'to-prospect' | 'in-progress' | 'qualification';
   prospectionStartedAt?: Date;
   prospectionCompletedAt?: Date;
 }
 
 export interface ProspectionColumn {
-  id: 'to-prospect' | 'in-progress' | 'prospected';
+  id: 'to-prospect' | 'in-progress' | 'qualification';
   title: string;
   leads: ProspectionLead[];
   color: string;

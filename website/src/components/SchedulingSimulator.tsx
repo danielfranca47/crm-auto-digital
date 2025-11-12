@@ -3,7 +3,7 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { useTranslation } from 'react-i18next';
-import { Calendar } from '@/components/ui/calendar';
+import { Calendar as ShadCalendar } from '@/components/ui/calendar';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
@@ -25,7 +25,6 @@ const bookingSchema = z.object({
   phone: z.string().trim().min(10, { message: "Please enter a valid phone number" }).max(15, { message: "Phone number is too long" }),
 });
 
-// Export this type so other components can use it
 export type BookingFormData = z.infer<typeof bookingSchema>;
 
 const SchedulingSimulator = () => {
@@ -58,10 +57,7 @@ const SchedulingSimulator = () => {
 
   const onSubmit = async (data: BookingFormData) => {
     setIsSubmitting(true);
-    
-    // Simulate API call
     await new Promise(resolve => setTimeout(resolve, 1500));
-    
     setBookingData(data);
     setShowMessage(true);
     setIsSubmitting(false);
@@ -92,7 +88,7 @@ const SchedulingSimulator = () => {
         <Card className="p-8">
           <div className="flex items-center mb-6">
             <div className="w-12 h-12 rounded-xl accent-gradient flex items-center justify-center mr-4">
-              <Calendar className="w-6 h-6 text-accent-foreground" />
+              <CalendarIcon className="w-6 h-6 text-accent-foreground" />
             </div>
             <div>
               <h3 className="text-2xl font-bold text-foreground">
@@ -203,7 +199,7 @@ const SchedulingSimulator = () => {
                         </FormControl>
                       </PopoverTrigger>
                       <PopoverContent className="w-auto p-0" align="start">
-                        <Calendar
+                        <ShadCalendar
                           mode="single"
                           selected={field.value}
                           onSelect={field.onChange}

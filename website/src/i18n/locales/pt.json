@@ -24,6 +24,13 @@
     "logo": "DigitalPro",
     "mobileMenuToggle": "Alternar menu"
   },
+  "comingSoon": {
+    "badge": "🚧 Em desenvolvimento",
+    "title": "Novidades chegando em breve",
+    "description": "Estamos preparando uma experiência completa para você. Em breve será possível conhecer todos os detalhes desta solução e como ela pode impulsionar seus resultados.",
+    "ctaPrimary": "Voltar para o início",
+    "ctaSecondary": "Falar com nossa equipe"
+  },
   "aiWhatsappAutomation": {
     "meta": {
       "title": "Automação IA WhatsApp - Chatbots para Empresas",
@@ -426,25 +433,29 @@
         "key": "aiWhatsappAutomation",
         "title": "Automação WhatsApp IA",
         "description": "Chatbots inteligentes no WhatsApp que respondem clientes 24/7, automatizam conversas e aumentam vendas com interações personalizadas.",
-        "button": "Testar agora"
+        "button": "Testar agora",
+        "link": "/ai-whatsapp-automation"
       },
       {
         "key": "digitalAutoCrm",
         "title": "Digital Auto CRM",
         "description": "Controle completo de vendas e leads com funis e automações personalizadas. Aumente suas conversões significativamente.",
-        "button": "Explorar CRM"
+        "button": "Explorar CRM",
+        "link": "/coming-soon"
       },
       {
         "key": "automaticContentCreation",
         "title": "Criação Automática de Conteúdo",
         "description": "Ferramenta de IA para gerar posts e imagens profissionais para redes sociais. Mantenha sua presença digital sempre ativa.",
-        "button": "Gerar post grátis"
+        "button": "Gerar post grátis",
+        "link": "/coming-soon"
       },
       {
         "key": "personalizedAutomations",
         "title": "Automações Personalizadas",
         "description": "Soluções de automação sob medida para os processos do seu negócio. Email marketing, automação de fluxos e jornadas personalizadas.",
-        "button": "Ver cases"
+        "button": "Ver cases",
+        "link": "/coming-soon"
       }
     ],
     "bottomNote": "Não encontrou exatamente o que procura? Criamos soluções sob medida.",
@@ -550,9 +561,9 @@
       "title": "Prefere falar diretamente?",
       "items": [
         { "key": "meeting", "icon": "calendar", "label": "Agendar reunião online" },
-        { "key": "whatsapp", "icon": "messageCircle", "label": "WhatsApp: (11) 99999-9999" },
-        { "key": "phone", "icon": "phone", "label": "Telefone: (11) 3333-3333" },
-        { "key": "email", "icon": "mail", "label": "contact@digitalpro.com" }
+        { "key": "whatsapp", "icon": "messageCircle", "label": "WhatsApp: +351 961 649 355" },
+        { "key": "phone", "icon": "phone", "label": "Telefone: +351 961 649 355" },
+        { "key": "email", "icon": "mail", "label": "contacto@danielfranca.pt" }
       ]
     },
     "guarantee": {
@@ -895,12 +906,12 @@
     "services": {
       "title": "Serviços",
       "items": [
-        { "label": "Sites Profissionais", "href": "#" },
-        { "label": "Sistemas de Agendamento", "href": "#" },
-        { "label": "Chat IA", "href": "#" },
-        { "label": "CRM Digital", "href": "#" },
-        { "label": "Automação WhatsApp", "href": "#" },
-        { "label": "Criação de Conteúdo", "href": "#" }
+        { "label": "Sites Profissionais", "href": "/professional-websites" },
+        { "label": "Sistemas de Agendamento", "href": "/scheduling-demo" },
+        { "label": "Chat IA", "href": "/ai-whatsapp-automation" },
+        { "label": "CRM Digital", "href": "/coming-soon" },
+        { "label": "Automação WhatsApp", "href": "/ai-whatsapp-automation" },
+        { "label": "Criação de Conteúdo", "href": "/coming-soon" }
       ]
     },
     "company": {
@@ -910,15 +921,15 @@
         { "label": "Sobre Nós", "href": "#about" },
         { "label": "Projetos", "href": "#projects" },
         { "label": "Benefícios", "href": "#benefits" },
-        { "label": "Blog", "href": "#" },
+        { "label": "Blog", "href": "/coming-soon" },
         { "label": "Contato", "href": "#contact" }
       ]
     },
     "contact": {
       "items": [
-        { "key": "phone", "icon": "phone", "value": "(11) 3333-3333" },
-        { "key": "mail", "icon": "mail", "value": "contact@digitalpro.com" },
-        { "key": "map", "icon": "mapPin", "value": "São Paulo, SP - Brasil" },
+        { "key": "phone", "icon": "phone", "value": "+351 961 649 355" },
+        { "key": "mail", "icon": "mail", "value": "contacto@danielfranca.pt" },
+        { "key": "map", "icon": "mapPin", "value": "Lisboa-PT" },
         { "key": "hours", "icon": "clock", "value": "Seg-Sex: 9h às 18h" }
       ]
     },

@@ -1,7 +1,22 @@
 // services/api.ts
-const RAW_BASE =
-  (import.meta as any)?.env?.VITE_API_BASE_URL ?? "http://localhost:8000";
+const fromEnv = (import.meta as any)?.env?.VITE_API_BASE_URL;
+
+// fallback esperto: se estiver em *.danielfranca.pt, usa a API pública
+const smartFallback =
+  typeof location !== "undefined" &&
+  /\.danielfranca\.pt$/i.test(location.hostname)
+    ? "https://api.danielfranca.pt"
+    : "http://localhost:8000";
+
+const RAW_BASE = fromEnv || smartFallback;
+
 const API = `${RAW_BASE.replace(/\/$/, "")}/api`;
+const AUTH = `${RAW_BASE.replace(/\/$/, "")}/auth`;
+
+// helper fetch com cookies (reutiliza o mesmo handle)
+async function handleWithCreds(res: Response) {
+  return handle(res);
+}
 
 async function handle(res: Response) {
   const isJson = res.headers.get("content-type")?.includes("application/json");
@@ -74,16 +89,16 @@ export type WhatsQueueItem = {
 
 export type SaveMessagePayload = {
   lead_id: number;
-  channel: Channel;          // "email" | "whatsapp" | "instagram" | "call"
+  channel: Channel; // "email" | "whatsapp" | "instagram" | "call"
   body: string;
   subject?: string;
-  select?: boolean;          // se true, faz upsert em message_selections
+  select?: boolean; // se true, faz upsert em message_selections
 };
 
 export type SaveMessageResponse = {
   ok: boolean;
-  id: number;                // id da linha criada em messages
-  selected?: boolean;        // true se fez a seleção
+  id: number; // id da linha criada em messages
+  selected?: boolean; // true se fez a seleção
 };
 
 export type WhatsEnqueueResp = {
@@ -117,20 +132,23 @@ const normalizeNextScheduledAction = (raw: any) => {
 
   return {
     date: new Date(dateValue),
-    description: raw.description ?? '',
+    description: raw.description ?? "",
   };
 };
 
 function mapAppointment(raw: any) {
-  const start = raw?.start_at ?? raw?.start_time ?? raw?.startAt ?? raw?.start ?? null;
-  const end   = raw?.end_at   ?? raw?.end_time   ?? raw?.endAt   ?? raw?.end   ?? null;
+  const start =
+    raw?.start_at ?? raw?.start_time ?? raw?.startAt ?? raw?.start ?? null;
+  const end = raw?.end_at ?? raw?.end_time ?? raw?.endAt ?? raw?.end ?? null;
 
   return {
     id: String(raw?.id ?? ""),
     leadId:
-      raw?.lead_id != null ? String(raw.lead_id)
-      : raw?.leadId  != null ? String(raw.leadId)
-      : null,
+      raw?.lead_id != null
+        ? String(raw.lead_id)
+        : raw?.leadId != null
+        ? String(raw.leadId)
+        : null,
 
     title: raw?.title ?? "Compromisso",
     description: raw?.description ?? undefined,
@@ -139,10 +157,18 @@ function mapAppointment(raw: any) {
     // preserva exatamente o que veio do backend
     status: raw?.status ?? "pending",
 
-    startTime: typeof start === "string" ? start : (start ? new Date(start).toISOString() : ""),
+    startTime:
+      typeof start === "string"
+        ? start
+        : start
+        ? new Date(start).toISOString()
+        : "",
     endTime:
-      end == null ? undefined
-      : (typeof end === "string" ? end : new Date(end).toISOString()),
+      end == null
+        ? undefined
+        : typeof end === "string"
+        ? end
+        : new Date(end).toISOString(),
 
     leadName: raw?.lead_contact ?? raw?.leadName ?? null,
     leadCompany: raw?.lead_company ?? raw?.leadCompany ?? null,
@@ -157,9 +183,78 @@ export const api = {
     if (!Array.isArray(data)) return data;
     return data.map((lead) => ({
       ...lead,
-      nextScheduledAction: normalizeNextScheduledAction(lead.nextScheduledAction),
+      nextScheduledAction: normalizeNextScheduledAction(
+        lead.nextScheduledAction
+      ),
     }));
   },
+  // --- LEADS (CRUD) ---
+createLead: async (payload: {
+  companyName: string;
+  contactName?: string | null;
+  phone?: string | null;
+  email?: string | null;
+  origin?: string | null;
+  category: string;               // ex.: "to-prospect"
+  customMessage?: string | null;
+  observations?: string | null;
+  priority?: number;              // default no back = 1
+}) => {
+  const res = await fetch(`${API}/leads`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      companyName: payload.companyName,
+      contactName: payload.contactName ?? null,
+      phone: payload.phone ?? null,
+      email: payload.email ?? null,
+      origin: payload.origin ?? "Manual",
+      category: payload.category,
+      customMessage: payload.customMessage ?? null,
+      observations: payload.observations ?? null,
+      priority: payload.priority ?? 1,    // <- **priority** (int), não "prioridade"
+    }),
+  });
+  return handle(res); // retorna o lead criado
+},
+
+updateLead: async (id: string | number, patch: Partial<{
+  companyName: string;
+  contactName: string | null;
+  phone: string | null;
+  email: string | null;
+  origin: string | null;
+  category: string;
+  customMessage: string | null;
+  observations: string | null;
+  priority: number;
+  lastMovement: string | Date;
+}>) => {
+  const res = await fetch(`${API}/leads/${id}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      ...(patch.companyName !== undefined ? { companyName: patch.companyName } : {}),
+      ...(patch.contactName !== undefined ? { contactName: patch.contactName } : {}),
+      ...(patch.phone !== undefined ? { phone: patch.phone } : {}),
+      ...(patch.email !== undefined ? { email: patch.email } : {}),
+      ...(patch.origin !== undefined ? { origin: patch.origin } : {}),
+      ...(patch.category !== undefined ? { category: patch.category } : {}),
+      ...(patch.customMessage !== undefined ? { customMessage: patch.customMessage } : {}),
+      ...(patch.observations !== undefined ? { observations: patch.observations } : {}),
+      ...(patch.priority !== undefined ? { priority: patch.priority } : {}),
+      ...(patch.lastMovement !== undefined
+        ? { lastMovement: patch.lastMovement instanceof Date ? patch.lastMovement.toISOString() : patch.lastMovement }
+        : {}),
+    }),
+  });
+  return handle(res);
+},
+
+deleteLead: async (id: string | number) => {
+  const res = await fetch(`${API}/leads/${id}`, { method: "DELETE" });
+  return handle(res);
+},
 
   appointments: {
     list: async (params?: {
@@ -186,7 +281,7 @@ export const api = {
       description?: string;
       type: string;
       status?: string;
-      startTime: string;      // ISO
+      startTime: string; // ISO
       endTime?: string | null; // ISO | null
     }) => {
       const res = await fetch(`${API}/appointments`, {
@@ -213,22 +308,29 @@ export const api = {
         description?: string;
         type: string;
         status?: string;
-        startTime: string;        // ISO
-        endTime?: string | null;  // ISO | null
+        startTime: string; // ISO
+        endTime?: string | null; // ISO | null
       }>
     ) => {
       const res = await fetch(`${API}/appointments/${id}`, {
-        method: "PATCH", // 
+        method: "PATCH", //
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           ...(payload.leadId !== undefined
-            ? { lead_id: payload.leadId === null ? null : Number(payload.leadId) }
+            ? {
+                lead_id:
+                  payload.leadId === null ? null : Number(payload.leadId),
+              }
             : {}),
           ...(payload.title !== undefined ? { title: payload.title } : {}),
-          ...(payload.description !== undefined ? { description: payload.description } : {}),
+          ...(payload.description !== undefined
+            ? { description: payload.description }
+            : {}),
           ...(payload.type !== undefined ? { type: payload.type } : {}),
           ...(payload.status !== undefined ? { status: payload.status } : {}),
-          ...(payload.startTime !== undefined ? { start_at: payload.startTime } : {}),
+          ...(payload.startTime !== undefined
+            ? { start_at: payload.startTime }
+            : {}),
           ...(payload.endTime !== undefined ? { end_at: payload.endTime } : {}),
         }),
       });
@@ -236,25 +338,26 @@ export const api = {
     },
 
     cancel: async (
-        arg:
-          | string
-          | number
-          | { id: string | number; leadId: string | number }
-      ) => {
-        // forma nova { id, leadId }
-        if (typeof arg === "object" && arg !== null && "id" in arg && "leadId" in arg) {
-          const { id, leadId } = arg as { id: string | number; leadId: string | number };
-          // usa a rota por lead (PATCH status=canceled)
-          return api.updateAppointment(String(leadId), String(id), { status: "canceled" });
-        }
+      arg: string | number | { id: string | number; leadId: string | number }
+    ) => {
+      // forma nova { id, leadId }
+      if (typeof arg === "object" && arg !== null && "id" in arg && "leadId" in arg) {
+        const { id, leadId } = arg as { id: string | number; leadId: string | number };
+        // usa a rota por lead (PATCH status=canceled)
+        return api.updateAppointment(String(leadId), String(id), {
+          status: "canceled",
+        });
+      }
 
-        // forma antiga (só id) — mantém compat
-        return api.appointments.update(arg as string | number, { status: "canceled" });
-      },
+      // forma antiga (só id) — mantém compat
+      return api.appointments.update(arg as string | number, {
+        status: "canceled",
+      });
+    },
 
-      /**
-       * (opcional) Remoção tolerante: aceita { id, leadId } e usa a rota por lead
-       */
+    /**
+     * (opcional) Remoção tolerante: aceita { id, leadId } e usa a rota por lead
+     */
     remove: async (
       arg:
         | string
@@ -263,14 +366,16 @@ export const api = {
     ) => {
       if (typeof arg === "object" && arg !== null && "id" in arg && "leadId" in arg) {
         const { id, leadId } = arg as { id: string | number; leadId: string | number };
-        const res = await fetch(`${API}/leads/${leadId}/appointments/${id}`, { method: "DELETE" });
+        const res = await fetch(
+          `${API}/leads/${leadId}/appointments/${id}`,
+          { method: "DELETE" }
+        );
         return handle(res);
       }
       const res = await fetch(`${API}/appointments/${arg}`, { method: "DELETE" });
       return handle(res);
     },
   },
-
 
   getAppointments: async (leadId: number | string) => {
     const res = await fetch(`${API}/leads/${leadId}/appointments`);
@@ -295,13 +400,18 @@ export const api = {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         ...(payload.title !== undefined ? { title: payload.title } : {}),
-        ...(payload.description !== undefined ? { description: payload.description } : {}),
+        ...(payload.description !== undefined
+          ? { description: payload.description }
+          : {}),
         ...(payload.type !== undefined ? { type: payload.type } : {}),
         status: payload.status ?? "pending",
         ...(payload.location !== undefined ? { location: payload.location } : {}),
         start_at: payload.startAt.toISOString(),
         ...(payload.endAt !== undefined
-          ? { end_at: payload.endAt === null ? null : payload.endAt.toISOString() }
+          ? {
+              end_at:
+                payload.endAt === null ? null : payload.endAt.toISOString(),
+            }
           : {}),
       }),
     });
@@ -322,31 +432,44 @@ export const api = {
       endAt?: Date | null;
     }
   ) => {
-    const res = await fetch(`${API}/leads/${leadId}/appointments/${appointmentId}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        ...(payload.title       !== undefined ? { title: payload.title } : {}),
-        ...(payload.description !== undefined ? { description: payload.description } : {}),
-        ...(payload.type        !== undefined ? { type: payload.type } : {}),
-        ...(payload.status      !== undefined ? { status: payload.status } : {}),
-        ...(payload.location    !== undefined ? { location: payload.location } : {}),
-        ...(payload.startAt     !== undefined ? { start_at: payload.startAt.toISOString() } : {}),
-        ...(payload.endAt       !== undefined
-          ? { end_at: payload.endAt === null ? null : payload.endAt.toISOString() }
-          : {}),
-      }),
-    });
+    const res = await fetch(
+      `${API}/leads/${leadId}/appointments/${appointmentId}`,
+      {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          ...(payload.title !== undefined ? { title: payload.title } : {}),
+          ...(payload.description !== undefined
+            ? { description: payload.description }
+            : {}),
+          ...(payload.type !== undefined ? { type: payload.type } : {}),
+          ...(payload.status !== undefined ? { status: payload.status } : {}),
+          ...(payload.location !== undefined ? { location: payload.location } : {}),
+          ...(payload.startAt !== undefined
+            ? { start_at: payload.startAt.toISOString() }
+            : {}),
+          ...(payload.endAt !== undefined
+            ? {
+                end_at:
+                  payload.endAt === null ? null : payload.endAt.toISOString(),
+              }
+            : {}),
+        }),
+      }
+    );
     return handle(res); // <- sem mapAppointment
   },
 
-  deleteAppointment: async (leadId: number | string, appointmentId: number | string) => {
-    const res = await fetch(`${API}/leads/${leadId}/appointments/${appointmentId}`, {
-      method: "DELETE",
-    });
+  deleteAppointment: async (
+    leadId: number | string,
+    appointmentId: number | string
+  ) => {
+    const res = await fetch(
+      `${API}/leads/${leadId}/appointments/${appointmentId}`,
+      { method: "DELETE" }
+    );
     return handle(res);
   },
-
 
   // -------- PESQUISA (automação) --------
   pesquisa: {
@@ -438,7 +561,9 @@ export const api = {
     },
 
     // Normaliza a resposta do backend (message_id -> id)
-    saveMessage: async (payload: SaveMessagePayload): Promise<SaveMessageResponse> => {
+    saveMessage: async (
+      payload: SaveMessagePayload
+    ): Promise<SaveMessageResponse> => {
       const res = await fetch(`${API}/prospeccao/save-message`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -454,8 +579,9 @@ export const api = {
     },
 
     // alias compatível
-    salvarMensagem: async (payload: SaveMessagePayload): Promise<SaveMessageResponse> =>
-      api.prospeccao.saveMessage(payload),
+    salvarMensagem: async (
+      payload: SaveMessagePayload
+    ): Promise<SaveMessageResponse> => api.prospeccao.saveMessage(payload),
 
     // ===== WhatsApp (envio automático via fila) =====
     whatsapp: {
@@ -490,7 +616,9 @@ export const api = {
       },
 
       recent: async (sinceSecs = 300) => {
-        const res = await fetch(`${API}/prospeccao/whatsapp/recent?since_secs=${sinceSecs}`);
+        const res = await fetch(
+          `${API}/prospeccao/whatsapp/recent?since_secs=${sinceSecs}`
+        );
         return handle(res);
       },
       summary: async () => {
@@ -504,22 +632,21 @@ export const api = {
          * Mantido apenas para compatibilidade de chamadas legadas.
          */
         start: async () => {
-          console.warn("[api.whatsapp.worker.start] Worker remoto desativado. Utilize o Agente Local.");
-          const res = await fetch(`${API}/whatsapp/worker/start`, { method: "POST" });
+          const res = await fetch(`${API}/whatsapp/worker/start`, {
+            method: "POST",
+          });
           return handle(res);
         },
         /**
          * @deprecated Worker remoto substituído pelo Agente Local.
          */
         stop: async () => {
-          console.warn("[api.whatsapp.worker.stop] Worker remoto desativado. Utilize o Agente Local.");
-          const res = await fetch(`${API}/whatsapp/worker/stop`, { method: "POST" });
+          const res = await fetch(`${API}/whatsapp/worker/stop`, {
+            method: "POST",
+          });
           return handle(res);
         },
-        /**
-         * @deprecated Worker remoto substituído pelo Agente Local.
-         */
-        status: async () => {
+        status: async (): Promise<{ running: boolean }> => {
           const res = await fetch(`${API}/whatsapp/worker/status`);
           return handle(res);
         },
@@ -547,23 +674,33 @@ export const api = {
       const res = await fetch(`${API}/whatsapp/stop`, { method: "POST" });
       return handle(res);
     },
+  },
 
-    // >>> Endpoints do worker (legado - mantidos para compatibilidade com chamadas antigas)
-    worker: {
-      start: async () => {
-        console.warn("[api.whatsapp.worker.start] Worker remoto desativado. Utilize o Agente Local.");
-        const res = await fetch(`${API}/whatsapp/worker/start`, { method: "POST" });
-        return handle(res);
-      },
-      stop: async () => {
-        console.warn("[api.whatsapp.worker.stop] Worker remoto desativado. Utilize o Agente Local.");
-        const res = await fetch(`${API}/whatsapp/worker/stop`, { method: "POST" });
-        return handle(res);
-      },
-      status: async (): Promise<{ running: boolean }> => {
-        const res = await fetch(`${API}/whatsapp/worker/status`);
-        return handle(res);
-      },
+  // -------- AUTH (MVP) --------
+  auth: {
+    login: async (email: string, password: string) => {
+      const res = await fetch(`${AUTH}/login`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include", // cookie httpOnly
+        body: JSON.stringify({ email, password }),
+      });
+      return handleWithCreds(res); // { email, role }
+    },
+
+    me: async () => {
+      const res = await fetch(`${AUTH}/me`, {
+        credentials: "include", // envia cookie
+      });
+      return handleWithCreds(res); // { email, role }
+    },
+
+    logout: async () => {
+      const res = await fetch(`${AUTH}/logout`, {
+        method: "POST",
+        credentials: "include",
+      });
+      return handleWithCreds(res); // { ok: true }
     },
   },
 

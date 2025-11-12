@@ -101,8 +101,18 @@ export function ProspectionBoard({
           // aqui você pode disparar um toast/snackbar se quiser
         }
 
-        // atualiza visão geral da fila baseada em jobs
-        await refreshOverview();
+        // auto-start do worker se houver itens e WA estiver logado
+        if (waLogged && queuedIdsStr.length > 0) {
+          try {
+            await api.prospeccao.whatsapp.worker.start();
+            setWorkerRunning(true);
+          } catch (e) {
+            console.error("Falha ao iniciar worker:", e);
+          }
+        }
+
+        // ajusta contagem de pendentes local (não é obrigatório, mas ajuda)
+        setPendingCount(prev => prev + queuedIdsStr.length);
 
       } catch (e) {
         console.error('Falha ao enfileirar WhatsApp:', e);
@@ -136,23 +146,27 @@ export function ProspectionBoard({
   // ---- status WA e Worker ----
   const refreshOverview = async () => {
     try {
-      const overview = await api.agents.overview();
-      const jobs = overview?.jobs ?? { pending: 0, in_progress: 0 };
-      setPendingCount(jobs.pending ?? 0);
-      setWorkerRunning((jobs.in_progress ?? 0) > 0);
+      const r = await api.whatsapp.verificarLogin();
+      setWaLogged(!!r?.logado);
+    } catch {
+      setWaLogged(null);
+    }
+  };
 
-      const now = Date.now();
-      const agentList = overview?.agents ?? [];
-      const anyOnline = agentList.some((agent) => {
-        if (agent?.status === 'active') return true;
-        if (!agent?.last_seen) return false;
-        const last = new Date(agent.last_seen).getTime();
-        return now - last < 2 * 60 * 1000; // 2 minutos de tolerância
-      });
-      setAgentOnline(anyOnline ? true : agentList.length ? false : null);
-    } catch (err) {
-      console.warn('Não foi possível obter overview dos agentes', err);
-      setAgentOnline(null);
+  const refreshWorker = async () => {
+    try {
+      const st = await api.prospeccao.whatsapp.worker.status();
+      setWorkerRunning(!!st?.running);
+    } catch {
+      setWorkerRunning(false);
+    }
+  };
+
+  const refreshQueue = async () => {
+    try {
+      const items = await api.prospeccao.whatsapp.queue(25);
+      setPendingCount(Array.isArray(items) ? items.length : 0);
+    } catch {
       setPendingCount(0);
       setWorkerRunning(false);
     }
@@ -184,7 +198,7 @@ export function ProspectionBoard({
 
           const leadIdStr = String(r.lead_id);
           if (r.status === 'sent') {
-            onUpdateLead(leadIdStr, { category: 'prospected' } as any);
+            onUpdateLead(leadIdStr, { category: 'qualification' } as any);
           } else if (r.status === 'failed') {
             onUpdateLead(leadIdStr, { category: 'to-prospect' } as any);
           }
@@ -233,9 +247,13 @@ export function ProspectionBoard({
   }, [workerRunning, reloadAllLeads]);
 
   const stopWorker = async () => {
-    // No novo fluxo não é possível parar o agente remotamente; apenas atualizamos o snapshot.
-    await refreshOverview();
-    await reloadAllLeads();
+    try {
+      await api.prospeccao.whatsapp.worker.stop();
+    } finally {
+      setWorkerRunning(false);
+      await reloadAllLeads(); // sincroniza também no stop manual
+      refreshQueue();
+    }
   };
 
   return (
@@ -281,7 +299,7 @@ export function ProspectionBoard({
             onStopWorker={stopWorker}
           />
 
-          <div className="flex gap-6 overflow-x-auto pb-4">
+          <div className="flex gap-6 overflow-x-auto pb-4 justify-center">
             {filteredColumns.map((column) => (
               <ProspectionColumn
                 key={column.id}
