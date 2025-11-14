@@ -1,26 +1,31 @@
 # backend/routes/whatsapp_worker.py
 from fastapi import APIRouter
-from automations.whatsapp.whatsapp_worker import worker
 
 router = APIRouter(prefix="/api/whatsapp/worker", tags=["WhatsApp Worker"])
 
 @router.post("/start")
 def start_worker():
-    started = worker.start()
-    return {"ok": True, "started": started}
+    return {
+        "ok": False,
+        "started": False,
+        "message": "Worker desativado. Utilize o Agente Local para processar os envios.",
+    }
 
 @router.post("/stop")
 def stop_worker():
-    worker.stop()
-    return {"ok": True, "stopped": True}
+    return {
+        "ok": False,
+        "stopped": False,
+        "message": "Worker desativado. Utilize o Agente Local para processar os envios.",
+    }
 
 @router.get("/status")
 def status_worker():
-    st = worker.state
     return {
-        "running": worker.is_running(),
-        "processed_ok": st.processed_ok,
-        "processed_fail": st.processed_fail,
-        "last_error": st.last_error,
-        "last_item": st.last_item,
+        "running": False,
+        "processed_ok": 0,
+        "processed_fail": 0,
+        "last_error": None,
+        "last_item": None,
+        "message": "Worker desativado. Utilize o Agente Local para processar os envios.",
     }
