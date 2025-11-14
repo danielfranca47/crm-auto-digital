@@ -608,25 +608,6 @@ deleteLead: async (id: string | number) => {
         const res = await fetch(`${API}/prospeccao/whatsapp/summary`);
         return handle(res);
       },
-
-      worker: {
-        start: async () => {
-          const res = await fetch(`${API}/whatsapp/worker/start`, {
-            method: "POST",
-          });
-          return handle(res);
-        },
-        stop: async () => {
-          const res = await fetch(`${API}/whatsapp/worker/stop`, {
-            method: "POST",
-          });
-          return handle(res);
-        },
-        status: async (): Promise<{ running: boolean }> => {
-          const res = await fetch(`${API}/whatsapp/worker/status`);
-          return handle(res);
-        },
-      },
     },
   },
 
@@ -677,6 +658,17 @@ deleteLead: async (id: string | number) => {
         credentials: "include",
       });
       return handleWithCreds(res); // { ok: true }
+    },
+  },
+
+  agents: {
+    overview: async (seconds = 120) => {
+      const res = await fetch(`${API}/agents/overview?seconds=${seconds}`);
+      return handle(res);
+    },
+    summary: async () => {
+      const res = await fetch(`${API}/agents/jobs/summary`);
+      return handle(res);
     },
   },
 };
