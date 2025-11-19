@@ -20,7 +20,7 @@ pip install -r requirements.txt
 
 ## Variáveis de ambiente
 
-O agente lê as configurações de um arquivo `.env` (opcional) ou das variáveis do sistema. Principais chaves:
+O agente lê as configurações automaticamente a partir de um arquivo `.env` no diretório `agent-local/` (recomendado) ou, caso não exista, diretamente das variáveis de ambiente do sistema operacional. Principais chaves:
 
 | Variável | Descrição | Padrão |
 |----------|-----------|--------|
