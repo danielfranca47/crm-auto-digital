@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { ProspectionColumn } from './ProspectionColumn';
 import { BulkActions } from './BulkActions';
 import {
@@ -10,8 +10,7 @@ import { CrmHeader } from '@/components/CrmHeader';
 import { Button } from '@/components/ui/button';
 import { useNavigate } from 'react-router-dom';
 import { CheckSquare, Square } from 'lucide-react';
-import { api } from '@/services/api';
-import { useLeads } from '@/contexts/LeadsContext';
+import { api, type WhatsEnqueuePayload } from '@/services/api';
 
 interface ProspectionBoardProps {
   columns: ProspectionColumnType[];
@@ -29,14 +28,12 @@ export function ProspectionBoard({
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedLeads, setSelectedLeads] = useState<Set<string>>(new Set());
   const [showSelection, setShowSelection] = useState(false);
-  const { reloadAllLeads } = useLeads();
 
   // ---- estados de automação ----
   const [waLogged, setWaLogged] = useState<boolean | null>(null);
-  const [workerRunning, setWorkerRunning] = useState(false);
+  const [agentOnline, setAgentOnline] = useState(false);
   const [pendingCount, setPendingCount] = useState(0);
   const [seenQueueIds, setSeenQueueIds] = useState<Set<number>>(new Set());
-  const prevWorkerRunning = useRef<boolean>(false);
   const [lastResultsAt, setLastResultsAt] = useState<number>(0);
   
 
@@ -54,6 +51,16 @@ export function ProspectionBoard({
       )
     }));
   }, [columns, searchTerm]);
+
+  const leadIndex = useMemo(() => {
+    const map = new Map<string, ProspectionLead>();
+    columns.forEach((column) => {
+      column.leads.forEach((lead) => {
+        map.set(lead.id, lead);
+      });
+    });
+    return map;
+  }, [columns]);
 
   // ---- seleção de cards ----
   const handleSelectLead = (leadId: string, selected: boolean) => {
@@ -90,7 +97,39 @@ export function ProspectionBoard({
     if (methods.includes('whatsapp') && leadIds.length > 0) {
       try {
         const idsNum = leadIds.map(id => parseInt(id, 10)).filter(n => !Number.isNaN(n));
-        const resp = await api.prospeccao.whatsapp.enqueue(idsNum);
+        const leadMessages: Record<number, string> = {};
+        const missingMsg: number[] = [];
+
+        idsNum.forEach((idNum, idx) => {
+          const lead = leadIndex.get(String(leadIds[idx]));
+          const msg = (lead?.customMessage || '').trim();
+          if (msg) leadMessages[idNum] = msg;
+          else missingMsg.push(idNum);
+        });
+
+        if (idsNum.length === 0) return;
+
+        if (missingMsg.length === idsNum.length) {
+          alert('Nenhuma mensagem de WhatsApp configurada para os leads selecionados. Edite o card e salve a mensagem antes de enfileirar.');
+          return;
+        }
+
+        const leadIdsWithMessage = idsNum.filter((id) => !!leadMessages[id]);
+        const payload: WhatsEnqueuePayload = { lead_ids: leadIdsWithMessage };
+
+        const uniqueMessages = Array.from(new Set(Object.values(leadMessages)));
+        if (uniqueMessages.length === 1 && leadIdsWithMessage.length === idsNum.length) {
+          payload.message = uniqueMessages[0];
+        }
+        if (Object.keys(leadMessages).length > 0) {
+          payload.lead_messages = leadMessages;
+        }
+
+        if (missingMsg.length > 0) {
+          alert(`Alguns leads estão sem mensagem e não serão enfileirados: ${missingMsg.join(', ')}`);
+        }
+
+        const resp = await api.prospeccao.whatsapp.enqueue(payload);
         // resp: { ok, queued: [{lead_id, message_id}], skipped: [{lead_id, reason}] }
 
         queuedIdsStr = (resp?.queued || []).map((q: any) => String(q.lead_id));
@@ -101,18 +140,9 @@ export function ProspectionBoard({
           // aqui você pode disparar um toast/snackbar se quiser
         }
 
-        // auto-start do worker se houver itens e WA estiver logado
-        if (waLogged && queuedIdsStr.length > 0) {
-          try {
-            await api.prospeccao.whatsapp.worker.start();
-            setWorkerRunning(true);
-          } catch (e) {
-            console.error("Falha ao iniciar worker:", e);
-          }
-        }
-
         // ajusta contagem de pendentes local (não é obrigatório, mas ajuda)
         setPendingCount(prev => prev + queuedIdsStr.length);
+        refreshAgentOverview();
 
       } catch (e) {
         console.error('Falha ao enfileirar WhatsApp:', e);
@@ -127,18 +157,19 @@ export function ProspectionBoard({
 
     // 3) Limpa seleção; mantém o retângulo aberto se o worker ficou ligado
     setSelectedLeads(new Set());
-    if (!workerRunning) setShowSelection(false);
+    if (!agentOnline) setShowSelection(false);
   };
 
   const handleClearSelection = () => setSelectedLeads(new Set());
 
-  // Enquanto o worker estiver rodando, manter o banner visível e travar o toggle
+  // Mantém o painel visível quando há agente online para acompanhar fila
   useEffect(() => {
-    if (workerRunning) setShowSelection(true);
-  }, [workerRunning]);
+    if (agentOnline && selectedLeads.size === 0) {
+      setShowSelection(true);
+    }
+  }, [agentOnline, selectedLeads.size]);
 
   const toggleSelectionMode = () => {
-    if (workerRunning) return; // evita fechar enquanto roda
     setShowSelection(prev => !prev);
     if (showSelection) setSelectedLeads(new Set());
   };
@@ -153,12 +184,17 @@ export function ProspectionBoard({
     }
   };
 
-  const refreshWorker = async () => {
+  const refreshAgentOverview = async () => {
     try {
-      const st = await api.prospeccao.whatsapp.worker.status();
-      setWorkerRunning(!!st?.running);
+      const overview = await api.agents.overview();
+      const agents = Array.isArray(overview?.agents) ? overview.agents : [];
+      const anyOnline = agents.some((agent: any) => agent?.online);
+      setAgentOnline(anyOnline);
+      if (overview?.summary?.pending !== undefined) {
+        setPendingCount(Number(overview.summary.pending) || 0);
+      }
     } catch {
-      setWorkerRunning(false);
+      setAgentOnline(false);
     }
   };
 
@@ -176,11 +212,11 @@ export function ProspectionBoard({
     // Só consulta /recent se fizer sentido:
     // - worker rodando, OU
     // - ainda há pendências na fila.
-    if (!workerRunning && pendingCount === 0) return;
+    if (!agentOnline && pendingCount === 0) return;
 
     // Quando o worker está PARADO, limite a chamada a cada 15s
     const now = Date.now();
-    if (!workerRunning && now - lastResultsAt < 15_000) return;
+    if (!agentOnline && now - lastResultsAt < 15_000) return;
 
     try {
       const rows: any[] = await api.prospeccao.whatsapp.recent(180); // últimos 3 min
@@ -215,48 +251,29 @@ export function ProspectionBoard({
   // boot: pega um snapshot de status
   useEffect(() => {
     refreshLogin();
-    refreshWorker();
+    refreshAgentOverview();
     refreshQueue();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // polling leve: fila, worker e resultados
+  // polling leve: fila, agente e resultados
   useEffect(() => {
     let t: number | null = null;
 
     const tick = async () => {
-      await refreshWorker();
+      await refreshAgentOverview();
       await refreshQueue();
       await refreshResults();
-      // worker ligado => polling rápido; desligado => lento
-      const next = workerRunning ? 1500 : 6000;
+      const next = agentOnline ? 2000 : 7000;
       t = window.setTimeout(tick, next);
     };
 
-    t = window.setTimeout(tick, workerRunning ? 1000 : 3000);
+    t = window.setTimeout(tick, agentOnline ? 1500 : 4000);
     return () => {
       if (t) window.clearTimeout(t);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [workerRunning]);
-
-  // quando o worker parar (true -> false), sincroniza tudo do backend
-  useEffect(() => {
-    if (prevWorkerRunning.current && !workerRunning) {
-      reloadAllLeads(); // sincroniza colunas/cards com DB depois do auto-stop
-    }
-    prevWorkerRunning.current = workerRunning;
-  }, [workerRunning, reloadAllLeads]);
-
-  const stopWorker = async () => {
-    try {
-      await api.prospeccao.whatsapp.worker.stop();
-    } finally {
-      setWorkerRunning(false);
-      await reloadAllLeads(); // sincroniza também no stop manual
-      refreshQueue();
-    }
-  };
+  }, [agentOnline]);
 
   return (
     <div className="min-h-screen bg-background">
@@ -283,7 +300,6 @@ export function ProspectionBoard({
               variant={showSelection ? "default" : "outline"}
               onClick={toggleSelectionMode}
               className="flex items-center gap-2"
-              disabled={workerRunning} // evita fechar/abrir enquanto envia
             >
               {showSelection ? <CheckSquare className="h-4 w-4" /> : <Square className="h-4 w-4" />}
               {showSelection ? 'Cancelar Seleção' : 'Seleção em Massa'}
@@ -295,10 +311,9 @@ export function ProspectionBoard({
             selectedCount={selectedLeads.size}
             onBulkProspection={handleBulkFromBanner}
             onClearSelection={handleClearSelection}
-            workerRunning={workerRunning}
+            agentOnline={agentOnline}
             waLogged={waLogged}
             pendingCount={pendingCount}
-            onStopWorker={stopWorker}
           />
 
           <div className="flex gap-6 overflow-x-auto pb-4 justify-center">
