@@ -2,7 +2,6 @@ import React, { useEffect, useState } from "react";
 import { ProspectionBoard } from "@/components/prospection/ProspectionBoard";
 import { useLeads } from "@/contexts/LeadsContext";
 import WhatsAppLogin from "@/components/whatsapp/WhatsAppLogin";
-import WhatsWorkerControls from "@/components/whatsapp/WhatsWorkerControls";
 import { api } from "@/services/api";
 
 const Prospeccao: React.FC = () => {
