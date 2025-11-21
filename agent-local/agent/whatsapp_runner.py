@@ -98,23 +98,38 @@ class WhatsAppRunner:
             driver.get("https://web.whatsapp.com")
             handles = driver.window_handles
 
-        main = self._main_handle or handles[0]
-        if main not in handles:
-            main = handles[0]
-            self._main_handle = main
-
-        # Fecha abas extras para manter apenas a principal do WhatsApp
+        # Preferir a aba que já está no WhatsApp; caso contrário, manter a principal conhecida
+        chosen_handle = None
         for handle in list(handles):
-            if handle == main:
+            try:
+                driver.switch_to.window(handle)
+                url = driver.current_url
+                if "web.whatsapp.com" in (url or ""):
+                    chosen_handle = handle
+                    break
+            except Exception:
+                continue
+
+        if not chosen_handle:
+            main = self._main_handle or handles[0]
+            if main not in handles:
+                main = handles[0]
+            chosen_handle = main
+
+        self._main_handle = chosen_handle
+
+        # Fecha abas temporárias (incluindo a de verificação) e mantém apenas a principal
+        for handle in list(handles):
+            if handle == chosen_handle:
                 continue
             try:
                 driver.switch_to.window(handle)
                 driver.close()
-                logger.info("Aba extra fechada para reutilizar sessão única do WhatsApp")
+                logger.info("Aba temporária fechada após verificação/login do WhatsApp")
             except Exception:
-                continue
+                logger.debug("Não foi possível fechar aba temporária: %s", handle)
 
-        driver.switch_to.window(main)
+        driver.switch_to.window(chosen_handle)
         return driver
 
     def close(self) -> None:
