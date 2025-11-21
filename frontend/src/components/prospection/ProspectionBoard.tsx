@@ -10,7 +10,7 @@ import { CrmHeader } from '@/components/CrmHeader';
 import { Button } from '@/components/ui/button';
 import { useNavigate } from 'react-router-dom';
 import { CheckSquare, Square } from 'lucide-react';
-import { api } from '@/services/api';
+import { api, type WhatsEnqueuePayload } from '@/services/api';
 
 interface ProspectionBoardProps {
   columns: ProspectionColumnType[];
@@ -52,6 +52,16 @@ export function ProspectionBoard({
     }));
   }, [columns, searchTerm]);
 
+  const leadIndex = useMemo(() => {
+    const map = new Map<string, ProspectionLead>();
+    columns.forEach((column) => {
+      column.leads.forEach((lead) => {
+        map.set(lead.id, lead);
+      });
+    });
+    return map;
+  }, [columns]);
+
   // ---- seleção de cards ----
   const handleSelectLead = (leadId: string, selected: boolean) => {
     setSelectedLeads(prev => {
@@ -87,7 +97,39 @@ export function ProspectionBoard({
     if (methods.includes('whatsapp') && leadIds.length > 0) {
       try {
         const idsNum = leadIds.map(id => parseInt(id, 10)).filter(n => !Number.isNaN(n));
-        const resp = await api.prospeccao.whatsapp.enqueue(idsNum);
+        const leadMessages: Record<number, string> = {};
+        const missingMsg: number[] = [];
+
+        idsNum.forEach((idNum, idx) => {
+          const lead = leadIndex.get(String(leadIds[idx]));
+          const msg = (lead?.customMessage || '').trim();
+          if (msg) leadMessages[idNum] = msg;
+          else missingMsg.push(idNum);
+        });
+
+        if (idsNum.length === 0) return;
+
+        if (missingMsg.length === idsNum.length) {
+          alert('Nenhuma mensagem de WhatsApp configurada para os leads selecionados. Edite o card e salve a mensagem antes de enfileirar.');
+          return;
+        }
+
+        const leadIdsWithMessage = idsNum.filter((id) => !!leadMessages[id]);
+        const payload: WhatsEnqueuePayload = { lead_ids: leadIdsWithMessage };
+
+        const uniqueMessages = Array.from(new Set(Object.values(leadMessages)));
+        if (uniqueMessages.length === 1 && leadIdsWithMessage.length === idsNum.length) {
+          payload.message = uniqueMessages[0];
+        }
+        if (Object.keys(leadMessages).length > 0) {
+          payload.lead_messages = leadMessages;
+        }
+
+        if (missingMsg.length > 0) {
+          alert(`Alguns leads estão sem mensagem e não serão enfileirados: ${missingMsg.join(', ')}`);
+        }
+
+        const resp = await api.prospeccao.whatsapp.enqueue(payload);
         // resp: { ok, queued: [{lead_id, message_id}], skipped: [{lead_id, reason}] }
 
         queuedIdsStr = (resp?.queued || []).map((q: any) => String(q.lead_id));

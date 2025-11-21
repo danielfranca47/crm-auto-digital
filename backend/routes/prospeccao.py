@@ -34,6 +34,12 @@ class SaveMessageReq(BaseModel):
 # WhatsApp queue
 class WhatsEnqueueRequest(BaseModel):
     lead_ids: List[int]
+    # Mensagem opcional enviada pelo front; se presente, vira a mensagem principal
+    # (ou override) usada para todos os leads, com fallback para selection/customMessage.
+    message: Optional[str] = None
+    # Overrides específicos por lead (lead_id -> mensagem). Se existir, tem prioridade
+    # sobre `message` e sobre o que estiver salvo no lead.
+    lead_messages: Optional[Dict[int, str]] = None
 
 class WhatsMarkRequest(BaseModel):
     lead_id: int
@@ -132,13 +138,26 @@ def save_message(req: SaveMessageReq):
 # ------------------ WHATSAPP QUEUE ------------------
 @router.post("/whatsapp/enqueue")
 def whatsapp_enqueue(req: WhatsEnqueueRequest):
-    logger.info("/whatsapp/enqueue payload lead_ids=%s", req.lead_ids)
-    result = jobs_service.enqueue_whatsapp_jobs(req.lead_ids)
-    job_ids = [item.get("job_id") for item in result.get("queued", [])]
     logger.info(
-        "/whatsapp/enqueue created jobs ids=%s skipped=%s", job_ids, result.get("skipped")
+        "/whatsapp/enqueue payload lead_ids=%s message_present=%s lead_messages=%s",
+        req.lead_ids,
+        bool((req.message or "").strip()),
+        list((req.lead_messages or {}).keys()),
     )
-    return {"ok": True, **result}
+    try:
+        result = jobs_service.enqueue_whatsapp_jobs(
+            req.lead_ids,
+            message=(req.message or "").strip() or None,
+            lead_messages=req.lead_messages,
+        )
+        job_ids = [item.get("job_id") for item in result.get("queued", [])]
+        logger.info(
+            "/whatsapp/enqueue created jobs ids=%s skipped=%s", job_ids, result.get("skipped")
+        )
+        return {"ok": True, **result}
+    except Exception:
+        logger.exception("/whatsapp/enqueue failed")
+        raise HTTPException(status_code=500, detail="Erro ao enfileirar WhatsApp")
 
 @router.get("/whatsapp/queue")
 def whatsapp_queue(limit: int = Query(5, ge=1, le=50)):

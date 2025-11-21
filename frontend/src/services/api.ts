@@ -106,6 +106,12 @@ export type WhatsEnqueueResp = {
   queued: { lead_id: number; message_id: number }[];
   skipped: { lead_id: number; reason: string }[];
 };
+
+export type WhatsEnqueuePayload = {
+  lead_ids: number[];
+  message?: string;
+  lead_messages?: Record<number, string>;
+};
 // ================================================
 
 const normalizeNextScheduledAction = (raw: any) => {
@@ -568,11 +574,13 @@ deleteLead: async (id: string | number) => {
 
     // ===== WhatsApp (envio automático via fila) =====
     whatsapp: {
-      enqueue: async (leadIds: number[]): Promise<WhatsEnqueueResp> => {
+      enqueue: async (
+        payload: WhatsEnqueuePayload
+      ): Promise<WhatsEnqueueResp> => {
         const res = await fetch(`${API}/prospeccao/whatsapp/enqueue`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ lead_ids: leadIds }),
+          body: JSON.stringify(payload),
         });
         return handle(res);
       },
