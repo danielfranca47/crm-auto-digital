@@ -243,6 +243,20 @@ class WhatsAppQRManager:
 
         ok = self._detect_logged(driver, timeout=5 if passive else 8)
         self.state.logged = ok
+        if ok:
+            try:
+                handles = driver.window_handles
+                primary = handles[0] if handles else None
+                # Fecha quaisquer abas extras abertas durante a verificação
+                if len(handles) > 1:
+                    for h in handles[1:]:
+                        driver.switch_to.window(h)
+                        driver.close()
+                    if primary:
+                        driver.switch_to.window(primary)
+            except Exception:
+                # A verificação de login não deve falhar por causa do fechamento de abas
+                pass
         return {"status": "logado" if ok else "aguardando", "logado": ok}
 
 
