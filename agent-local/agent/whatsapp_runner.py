@@ -54,6 +54,7 @@ class WhatsAppRunner:
     def __init__(self, config: AgentConfig) -> None:
         self.config = config
         self._driver: Optional[Chrome] = None
+        self._main_handle: Optional[str] = None
 
     # ---------- driver helpers ----------
 
@@ -74,12 +75,47 @@ class WhatsAppRunner:
         driver = Chrome(service=service, options=options)
         driver.set_page_load_timeout(60)
         logger.info("Driver do Chrome inicializado com perfil %s", self.config.user_data_dir)
+        self._main_handle = driver.current_window_handle
         return driver
 
     def _ensure_driver(self) -> Chrome:
         if self._driver is None:
             self._driver = self._build_driver()
         return self._driver
+
+    def _ensure_whatsapp_tab(self) -> Chrome:
+        driver = self._ensure_driver()
+
+        try:
+            handles = driver.window_handles
+        except Exception as exc:  # pragma: no cover - proteção operacional
+            logger.warning("Sessão do driver perdida (%s). Recriando instância.", exc)
+            self.close()
+            driver = self._ensure_driver()
+            handles = driver.window_handles
+
+        if not handles:
+            driver.get("https://web.whatsapp.com")
+            handles = driver.window_handles
+
+        main = self._main_handle or handles[0]
+        if main not in handles:
+            main = handles[0]
+            self._main_handle = main
+
+        # Fecha abas extras para manter apenas a principal do WhatsApp
+        for handle in list(handles):
+            if handle == main:
+                continue
+            try:
+                driver.switch_to.window(handle)
+                driver.close()
+                logger.info("Aba extra fechada para reutilizar sessão única do WhatsApp")
+            except Exception:
+                continue
+
+        driver.switch_to.window(main)
+        return driver
 
     def close(self) -> None:
         if self._driver is not None:
@@ -92,7 +128,7 @@ class WhatsAppRunner:
     # ---------- fluxo principal ----------
 
     def send_whatsapp(self, *, phone: str, message: str) -> Dict[str, str]:
-        driver = self._ensure_driver()
+        driver = self._ensure_whatsapp_tab()
 
         ok_open, reason = self._open_chat(driver, phone_digits=phone, text=message)
         if not ok_open:
