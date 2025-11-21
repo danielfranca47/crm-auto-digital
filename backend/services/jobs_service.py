@@ -412,7 +412,7 @@ def enqueue_whatsapp_jobs(lead_ids: Sequence[int]) -> Dict[str, Any]:
 
         for lead_id in lead_ids:
             lead = cur.execute(
-                "SELECT id, phone FROM leads WHERE id=?",
+                "SELECT id, phone, customMessage FROM leads WHERE id=?",
                 (lead_id,),
             ).fetchone()
             if not lead:
@@ -451,10 +451,36 @@ def enqueue_whatsapp_jobs(lead_ids: Sequence[int]) -> Dict[str, Any]:
                     (lead_id,),
             ).fetchone()
             if not msg_row:
-                reason = "sem_mensagem"
-                skipped.append({"lead_id": lead_id, "reason": reason})
-                logger.info("enqueue_whatsapp_jobs skip lead_id=%s reason=%s", lead_id, reason)
-                continue
+                custom_msg = (lead["customMessage"] or "").strip()
+                if custom_msg:
+                    cur.execute(
+                        """
+                        INSERT INTO messages (lead_id, channel, subject, body, model)
+                        VALUES (?, 'whatsapp', NULL, ?, 'manual')
+                        """,
+                        (lead_id, custom_msg),
+                    )
+                    message_id = int(cur.lastrowid)
+                    cur.execute(
+                        """
+                        INSERT INTO message_selections (lead_id, channel, message_id)
+                        VALUES (?, 'whatsapp', ?)
+                        ON CONFLICT(lead_id, channel)
+                        DO UPDATE SET message_id=excluded.message_id, selectedAt=CURRENT_TIMESTAMP
+                        """,
+                        (lead_id, message_id),
+                    )
+                    msg_row = {"id": message_id, "body": custom_msg}
+                    logger.info(
+                        "enqueue_whatsapp_jobs created message from customMessage lead_id=%s message_id=%s",
+                        lead_id,
+                        message_id,
+                    )
+                else:
+                    reason = "sem_mensagem"
+                    skipped.append({"lead_id": lead_id, "reason": reason})
+                    logger.info("enqueue_whatsapp_jobs skip lead_id=%s reason=%s", lead_id, reason)
+                    continue
 
             message_id = int(msg_row["id"])
             body = msg_row["body"]
