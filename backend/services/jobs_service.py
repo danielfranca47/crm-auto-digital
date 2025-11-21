@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import re
 from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional, Sequence
@@ -10,6 +11,8 @@ from typing import Any, Dict, List, Optional, Sequence
 from fastapi import HTTPException
 
 from database import get_connection
+
+logger = logging.getLogger(__name__)
 
 JOB_STATUS_PENDING = "pending"
 JOB_STATUS_IN_PROGRESS = "in_progress"
@@ -197,6 +200,13 @@ def create_job(
     job = dict(row)
     job["payload"] = payload
     job["result"] = _json_loads(job.get("result"))
+    logger.info(
+        "create_job id=%s type=%s lead_id=%s message_id=%s",
+        job_id,
+        job_type,
+        payload.get("lead_id"),
+        payload.get("message_id"),
+    )
     return job
 
 
@@ -381,6 +391,8 @@ def enqueue_whatsapp_jobs(lead_ids: Sequence[int]) -> Dict[str, Any]:
     queued: List[Dict[str, Any]] = []
     skipped: List[Dict[str, Any]] = []
 
+    logger.info("enqueue_whatsapp_jobs lead_ids=%s", list(lead_ids))
+
     with get_connection() as conn:
         cur = conn.cursor()
         pending_rows = cur.execute(
@@ -404,12 +416,16 @@ def enqueue_whatsapp_jobs(lead_ids: Sequence[int]) -> Dict[str, Any]:
                 (lead_id,),
             ).fetchone()
             if not lead:
-                skipped.append({"lead_id": lead_id, "reason": "lead_nao_encontrado"})
+                reason = "lead_nao_encontrado"
+                skipped.append({"lead_id": lead_id, "reason": reason})
+                logger.info("enqueue_whatsapp_jobs skip lead_id=%s reason=%s", lead_id, reason)
                 continue
 
             phone = _sanitize_phone(lead["phone"])
             if not phone:
-                skipped.append({"lead_id": lead_id, "reason": "telefone_invalido"})
+                reason = "telefone_invalido"
+                skipped.append({"lead_id": lead_id, "reason": reason})
+                logger.info("enqueue_whatsapp_jobs skip lead_id=%s reason=%s", lead_id, reason)
                 continue
 
             msg_row = cur.execute(
@@ -433,9 +449,11 @@ def enqueue_whatsapp_jobs(lead_ids: Sequence[int]) -> Dict[str, Any]:
                      LIMIT 1
                     """,
                     (lead_id,),
-                ).fetchone()
+            ).fetchone()
             if not msg_row:
-                skipped.append({"lead_id": lead_id, "reason": "sem_mensagem"})
+                reason = "sem_mensagem"
+                skipped.append({"lead_id": lead_id, "reason": reason})
+                logger.info("enqueue_whatsapp_jobs skip lead_id=%s reason=%s", lead_id, reason)
                 continue
 
             message_id = int(msg_row["id"])
@@ -443,7 +461,14 @@ def enqueue_whatsapp_jobs(lead_ids: Sequence[int]) -> Dict[str, Any]:
 
             already = next((row_id for row_id, lid, mid in existing if lid == lead_id and mid == message_id), None)
             if already:
-                skipped.append({"lead_id": lead_id, "reason": "ja_pendente", "job_id": already})
+                reason = "ja_pendente"
+                skipped.append({"lead_id": lead_id, "reason": reason, "job_id": already})
+                logger.info(
+                    "enqueue_whatsapp_jobs skip lead_id=%s reason=%s job_id=%s",
+                    lead_id,
+                    reason,
+                    already,
+                )
                 continue
 
             job = create_job(
@@ -466,6 +491,12 @@ def enqueue_whatsapp_jobs(lead_ids: Sequence[int]) -> Dict[str, Any]:
             )
 
             queued.append({"lead_id": lead_id, "message_id": message_id, "job_id": job["id"]})
+            logger.info(
+                "enqueue_whatsapp_jobs queued lead_id=%s message_id=%s job_id=%s",
+                lead_id,
+                message_id,
+                job["id"],
+            )
 
         conn.commit()
 

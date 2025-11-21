@@ -1,4 +1,5 @@
 # backend/routes/prospeccao.py
+import logging
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel
 from typing import Optional, Dict, List
@@ -7,6 +8,7 @@ from database import get_connection
 from services import jobs_service
 
 router = APIRouter(prefix="/api/prospeccao", tags=["Prospecção"])
+logger = logging.getLogger(__name__)
 
 # ------------------ MODELOS ------------------
 class MessageSelectionUpsert(BaseModel):
@@ -130,7 +132,12 @@ def save_message(req: SaveMessageReq):
 # ------------------ WHATSAPP QUEUE ------------------
 @router.post("/whatsapp/enqueue")
 def whatsapp_enqueue(req: WhatsEnqueueRequest):
+    logger.info("/whatsapp/enqueue payload lead_ids=%s", req.lead_ids)
     result = jobs_service.enqueue_whatsapp_jobs(req.lead_ids)
+    job_ids = [item.get("job_id") for item in result.get("queued", [])]
+    logger.info(
+        "/whatsapp/enqueue created jobs ids=%s skipped=%s", job_ids, result.get("skipped")
+    )
     return {"ok": True, **result}
 
 @router.get("/whatsapp/queue")
