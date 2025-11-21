@@ -106,6 +106,12 @@ export type WhatsEnqueueResp = {
   queued: { lead_id: number; message_id: number }[];
   skipped: { lead_id: number; reason: string }[];
 };
+
+export type WhatsEnqueuePayload = {
+  lead_ids: number[];
+  message?: string;
+  lead_messages?: Record<number, string>;
+};
 // ================================================
 
 const normalizeNextScheduledAction = (raw: any) => {
@@ -568,11 +574,13 @@ deleteLead: async (id: string | number) => {
 
     // ===== WhatsApp (envio automático via fila) =====
     whatsapp: {
-      enqueue: async (leadIds: number[]): Promise<WhatsEnqueueResp> => {
+      enqueue: async (
+        payload: WhatsEnqueuePayload
+      ): Promise<WhatsEnqueueResp> => {
         const res = await fetch(`${API}/prospeccao/whatsapp/enqueue`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ lead_ids: leadIds }),
+          body: JSON.stringify(payload),
         });
         return handle(res);
       },
@@ -607,25 +615,6 @@ deleteLead: async (id: string | number) => {
       summary: async () => {
         const res = await fetch(`${API}/prospeccao/whatsapp/summary`);
         return handle(res);
-      },
-
-      worker: {
-        start: async () => {
-          const res = await fetch(`${API}/whatsapp/worker/start`, {
-            method: "POST",
-          });
-          return handle(res);
-        },
-        stop: async () => {
-          const res = await fetch(`${API}/whatsapp/worker/stop`, {
-            method: "POST",
-          });
-          return handle(res);
-        },
-        status: async (): Promise<{ running: boolean }> => {
-          const res = await fetch(`${API}/whatsapp/worker/status`);
-          return handle(res);
-        },
       },
     },
   },
@@ -677,6 +666,17 @@ deleteLead: async (id: string | number) => {
         credentials: "include",
       });
       return handleWithCreds(res); // { ok: true }
+    },
+  },
+
+  agents: {
+    overview: async (seconds = 120) => {
+      const res = await fetch(`${API}/agents/overview?seconds=${seconds}`);
+      return handle(res);
+    },
+    summary: async () => {
+      const res = await fetch(`${API}/agents/jobs/summary`);
+      return handle(res);
     },
   },
 };

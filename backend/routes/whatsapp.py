@@ -5,7 +5,6 @@ import threading, time, urllib.parse
 
 from database import get_connection
 from automations.whatsapp.qr_manager import qr_manager
-from automations.whatsapp.whatsapp_worker import worker  # usa o singleton real do worker
 
 router = APIRouter(prefix="/api/whatsapp", tags=["WhatsApp"])
 
@@ -32,33 +31,32 @@ def stop():
 # ---------- ENDPOINTS: WORKER ----------
 @router.post("/worker/start")
 def worker_start():
-    started = worker.start()  # False se já estava rodando
     return {
-        "ok": True,
-        "started": bool(started),
-        "running": worker.is_running(),
+        "ok": False,
+        "running": False,
+        "message": "Worker desativado. Utilize o Agente Local para processar os envios.",
     }
 
 @router.post("/worker/stop")
 def worker_stop():
-    worker.stop()
     return {
-        "ok": True,
-        "running": worker.is_running(),
+        "ok": False,
+        "running": False,
+        "message": "Worker desativado. Utilize o Agente Local para processar os envios.",
     }
 
 @router.get("/worker/state")
 def worker_state():
-    s = worker.state
     return {
-        "running": worker.is_running(),
-        "last_error": s.last_error,
-        "processed_ok": s.processed_ok,
-        "processed_fail": s.processed_fail,
-        "last_item": s.last_item,
+        "running": False,
+        "last_error": None,
+        "processed_ok": 0,
+        "processed_fail": 0,
+        "last_item": None,
+        "message": "Worker desativado. Utilize o Agente Local para processar os envios.",
     }
 
 # Alias opcional para compatibilidade com o front atual
 @router.get("/worker/status")
 def worker_status():
-    return {"running": worker.is_running()}
+    return {"running": False, "message": "Worker desativado. Utilize o Agente Local."}

@@ -23,6 +23,7 @@ from routes import (
     profile,
     dashboard,
     appointments,
+    agents,
 )
 from routes import public
 from automations.whatsapp.qr_manager import qr_manager
@@ -73,6 +74,7 @@ app.include_router(prospeccao.router)                               # já define
 app.include_router(whatsapp.router)                                 # já define prefix="/api/whatsapp"
 app.include_router(profile.router)                                  # prefixo definido no arquivo
 app.include_router(appointments.router)                             # já define prefix="/api/appointments"
+app.include_router(agents.router)                                   # /api/agents
 # app.include_router(dashboard.router)
 
 # -----------------------------------------------------------------------------
