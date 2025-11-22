@@ -220,17 +220,16 @@ class WhatsAppQRManager:
     # backend/automations/whatsapp/qr_manager.py
 
     def verificar_login(self, passive: bool = False):
-        """
-        Se passive=True, NÃO navega/atualiza a página: apenas lê o DOM atual.
-        Isso evita invalidar o QR enquanto o usuário está tentando escanear.
-        """
         driver = self._ensure_driver()
         print(f"[WA]Verificar_login(passive={passive})")
+
+        # Abas que já existiam ANTES desta verificação
+        existing_handles = list(driver.window_handles)
+        had_tabs_before = len(existing_handles) > 0
 
         self._goto_wa(driver, mode=("passive" if passive else "active"))
 
         if not passive:
-            # modo antigo (ativo): pode navegar e dar refresh para estabilizar DOM
             try:
                 WebDriverWait(driver, 15).until(
                     lambda d: (
@@ -243,22 +242,25 @@ class WhatsAppQRManager:
 
         ok = self._detect_logged(driver, timeout=5 if passive else 8)
         self.state.logged = ok
+
         if ok:
             try:
-                handles = driver.window_handles
-                primary = handles[0] if handles else None
-                # Fecha quaisquer abas extras abertas durante a verificação
-                if len(handles) > 1:
-                    for h in handles[1:]:
-                        driver.switch_to.window(h)
-                        driver.close()
-                    if primary:
-                        driver.switch_to.window(primary)
-            except Exception:
-                # A verificação de login não deve falhar por causa do fechamento de abas
-                pass
-        return {"status": "logado" if ok else "aguardando", "logado": ok}
+                # Fecha SEMPRE a aba usada para verificação
+                driver.close()
 
+                # Se existirem outras abas, volta para a primeira
+                remaining = driver.window_handles
+                if remaining:
+                    driver.switch_to.window(remaining[0])
+                else:
+                    # Se não houver mais abas, limpar o driver
+                    driver.quit()
+                    self.driver = None
+
+            except Exception:
+                pass
+
+        return {"status": "logado" if ok else "aguardando", "logado": ok}
 
     def stop(self):
         with self.state.lock:
