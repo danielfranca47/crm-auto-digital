@@ -1,0 +1,34 @@
+# Backend Core (Accounts & Subscriptions)
+
+Serviço FastAPI para autenticação básica de usuários do CRM AutoDigital e gestão de catálogo, planos e assinaturas.
+
+## Como rodar
+1. Crie um `.env` na pasta `backend-core/` (ou copie o `.env.example`).
+2. Instale dependências: `pip install -r backend-core/requirements.txt`.
+3. Rode o servidor: `uvicorn app.main:app --reload --app-dir backend-core` (execute a partir da raiz do repositório).
+
+O banco SQLite será criado automaticamente (arquivo `core.db`) na raiz de `backend-core`.
+
+> Nota: o hash de senha usa `pbkdf2_sha256` via `passlib`, evitando dependências de SO específicas como o `bcrypt`.
+
+Ao iniciar, o serviço também faz seed dos produtos, planos e limites padrão descritos abaixo.
+
+## Rotas disponíveis
+- `POST /auth/register`: cria usuário com `email` e `password`.
+- `POST /auth/login`: valida credenciais e retorna `access_token` (Bearer).
+- `GET /users/me`: requer header `Authorization: Bearer <token>` e retorna dados do usuário autenticado.
+- `GET /products`: lista produtos ativos.
+- `GET /plans?product_code=`: lista planos ativos (opcionalmente filtrando por produto).
+- `GET /subscriptions/me`: lista assinaturas do usuário autenticado.
+- `POST /subscriptions`: cria uma assinatura para o usuário autenticado informando `product_code` e `plan_code`.
+- `GET /me/limits`: retorna limites consolidados do usuário (planos ativos + addons).
+
+## Testando o fluxo
+1. **Registrar**: `curl -X POST http://localhost:8000/auth/register -H "Content-Type: application/json" -d '{"email":"teste@example.com","password":"senha123"}'`
+2. **Login**: `curl -X POST http://localhost:8000/auth/login -H "Content-Type: application/json" -d '{"email":"teste@example.com","password":"senha123"}'`
+   - Guarde o `access_token` retornado.
+3. **/users/me**: `curl http://localhost:8000/users/me -H "Authorization: Bearer <access_token>"`
+4. **Criar assinatura**: `curl -X POST http://localhost:8000/subscriptions -H "Content-Type: application/json" -H "Authorization: Bearer <access_token>" -d '{"product_code":"crm","plan_code":"crm_basic"}'`
+5. **Checar limites**: `curl http://localhost:8000/me/limits -H "Authorization: Bearer <access_token>"`
+
+Substitua `localhost:8000` conforme a porta utilizada pelo Uvicorn.
