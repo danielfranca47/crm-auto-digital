@@ -2,8 +2,9 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.api import api_router
-from app.db import Base, engine
+from app.db import Base, engine, SessionLocal
 import app.models  # noqa: F401
+from app.seed import seed_initial_data
 
 app = FastAPI(title="CRM AutoDigital Core")
 
@@ -24,6 +25,11 @@ app.add_middleware(
 @app.on_event("startup")
 def on_startup() -> None:
     Base.metadata.create_all(bind=engine)
+    db = SessionLocal()
+    try:
+        seed_initial_data(db)
+    finally:
+        db.close()
 
 
 app.include_router(api_router)
