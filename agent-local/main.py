@@ -9,6 +9,7 @@ from typing import Any, Dict
 
 from agent.config import AgentConfig
 from agent.jobs_client import JobsClient
+from agent.maps_research_runner import MapsResearchRunner
 from agent.whatsapp_runner import WhatsAppRunner
 
 AGENT_VERSION = "0.1.0"
@@ -30,7 +31,9 @@ def setup_logging(config: AgentConfig) -> None:
     )
 
 
-def process_job(job: Dict[str, Any], runner: WhatsAppRunner) -> Dict[str, Any]:
+def process_job(
+    job: Dict[str, Any], whatsapp_runner: WhatsAppRunner, maps_runner: MapsResearchRunner
+) -> Dict[str, Any]:
     job_type = job.get("type")
     payload = job.get("payload") or {}
 
@@ -39,7 +42,13 @@ def process_job(job: Dict[str, Any], runner: WhatsAppRunner) -> Dict[str, Any]:
         message = payload.get("body")
         if not phone or not message:
             raise ValueError("payload de whatsapp_send inválido: phone/body ausentes")
-        return runner.send_whatsapp(phone=phone, message=message)
+        return whatsapp_runner.send_whatsapp(phone=phone, message=message)
+
+    if job_type == "maps_search_fallback":
+        return maps_runner.run_search_fallback(payload)
+
+    if job_type == "maps_enrich_fallback":
+        return maps_runner.run_enrich_fallback(payload)
 
     raise ValueError(f"Tipo de job não suportado: {job_type}")
 
@@ -52,7 +61,8 @@ def main() -> None:
     logger.info("Iniciando agente local — backend=%s", config.backend_url)
 
     client = JobsClient(config)
-    runner = WhatsAppRunner(config)
+    whatsapp_runner = WhatsAppRunner(config)
+    maps_runner = MapsResearchRunner(config)
 
     try:
         client.register_agent(capabilities=config.job_types, version=AGENT_VERSION)
@@ -74,7 +84,7 @@ def main() -> None:
             job_id = job.get("id")
             logger.info("Job recebido: id=%s tipo=%s", job_id, job.get("type"))
             try:
-                result = process_job(job, runner)
+                result = process_job(job, whatsapp_runner, maps_runner)
                 client.report_job(job_id=job_id, status="completed", result=result)
                 logger.info("Job %s concluído com sucesso", job_id)
                 consecutive_errors = 0
@@ -96,7 +106,8 @@ def main() -> None:
             sleep_time = min(60, config.idle_interval * (1 + consecutive_errors))
             time.sleep(sleep_time)
 
-    runner.close()
+    whatsapp_runner.close()
+    maps_runner.close()
 
 
 if __name__ == "__main__":

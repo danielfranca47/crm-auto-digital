@@ -207,6 +207,19 @@ def _insert_job(
     return job
 
 
+def get_job(job_id: int) -> Optional[Dict[str, Any]]:
+    with get_connection() as conn:
+        cur = conn.cursor()
+        row = cur.execute("SELECT * FROM jobs WHERE id=?", (job_id,)).fetchone()
+        if not row:
+            return None
+
+    job = dict(row)
+    job["payload"] = _json_loads(job.get("payload"))
+    job["result"] = _json_loads(job.get("result"))
+    return job
+
+
 def create_job(
     *,
     job_type: str,
@@ -693,6 +706,7 @@ __all__ = [
     "register_agent",
     "fetch_next_job",
     "report_job",
+    "get_job",
     "create_job",
     "enqueue_whatsapp_jobs",
     "get_whatsapp_queue",
