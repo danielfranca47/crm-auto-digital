@@ -9,6 +9,8 @@ Serviço FastAPI para autenticação básica de usuários do CRM AutoDigital.
 
 O banco SQLite será criado automaticamente (arquivo `core.db`) na raiz de `backend-core`.
 
+> Nota: o hash de senha usa `pbkdf2_sha256` via `passlib`, evitando dependências de SO específicas como o `bcrypt`.
+
 ## Rotas disponíveis
 - `POST /auth/register`: cria usuário com `email` e `password`.
 - `POST /auth/login`: valida credenciais e retorna `access_token` (Bearer).
