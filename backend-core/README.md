@@ -22,6 +22,10 @@ Ao iniciar, o serviço também faz seed dos produtos, planos e limites padrão d
 - `GET /subscriptions/me`: lista assinaturas do usuário autenticado.
 - `POST /subscriptions`: cria uma assinatura para o usuário autenticado informando `product_code` e `plan_code`.
 - `GET /me/limits`: retorna limites consolidados do usuário (planos ativos + addons).
+- `GET /ai-templates`: lista templates de agente IA disponíveis (estático por enquanto).
+- `GET /ai-profiles/me`: retorna o perfil de IA do usuário autenticado (404 se não existir).
+- `POST /ai-profiles`: cria ou sobrescreve o perfil de IA do usuário autenticado.
+- `PUT /ai-profiles/me`: atualiza parcialmente (ou cria, se informar todos os campos) o perfil de IA do usuário autenticado.
 
 ## Testando o fluxo
 1. **Registrar**: `curl -X POST http://localhost:8000/auth/register -H "Content-Type: application/json" -d '{"email":"teste@example.com","password":"senha123"}'`
@@ -30,5 +34,23 @@ Ao iniciar, o serviço também faz seed dos produtos, planos e limites padrão d
 3. **/users/me**: `curl http://localhost:8000/users/me -H "Authorization: Bearer <access_token>"`
 4. **Criar assinatura**: `curl -X POST http://localhost:8000/subscriptions -H "Content-Type: application/json" -H "Authorization: Bearer <access_token>" -d '{"product_code":"crm","plan_code":"crm_basic"}'`
 5. **Checar limites**: `curl http://localhost:8000/me/limits -H "Authorization: Bearer <access_token>"`
+6. **Criar/atualizar perfil IA (exemplo completo)**:
+   ```bash
+   curl -X POST http://localhost:8000/ai-profiles \
+     -H "Content-Type: application/json" \
+     -H "Authorization: Bearer <access_token>" \
+     -d '{
+       "template_key": "sdr_padrao",
+       "name": "Agente Comercial da Agência XYZ",
+       "brand_name": "Agência XYZ",
+       "tone_of_voice": "profissional e amigável",
+       "niche": "agência de tráfego para clínicas",
+       "target_audience": "clínicas de estética e saúde",
+       "offer_description": "serviço de gestão de tráfego e CRM",
+       "goals": "qualificar leads e agendar reuniões",
+       "custom_instructions": "reforce sempre os cases de clínicas"
+     }'
+   ```
+7. **Consultar perfil IA**: `curl http://localhost:8000/ai-profiles/me -H "Authorization: Bearer <access_token>"`
 
 Substitua `localhost:8000` conforme a porta utilizada pelo Uvicorn.

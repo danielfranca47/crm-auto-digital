@@ -18,3 +18,6 @@ class User(Base):
     subscriptions = relationship("Subscription", back_populates="user", cascade="all, delete-orphan")
     addons = relationship("UserAddon", back_populates="user", cascade="all, delete-orphan")
     usage_counters = relationship("UsageCounter", back_populates="user", cascade="all, delete-orphan")
+    ai_profile = relationship(
+        "AIProfile", back_populates="user", cascade="all, delete-orphan", uselist=False, single_parent=True
+    )
