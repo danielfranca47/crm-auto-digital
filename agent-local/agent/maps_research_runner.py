@@ -34,6 +34,8 @@ class MapsResearchRunner:
         options.add_argument("--no-sandbox")
         options.add_argument("--window-size=1280,1800")
         options.add_argument("--lang=pt-BR")
+        # novo: joga a janela bem pra fora da área visível
+        options.add_argument("--window-position=-32000,-32000")
         if self.config.headless:
             options.add_argument("--headless=new")
         if self.config.chrome_binary:
@@ -258,7 +260,14 @@ class MapsResearchRunner:
 
             return {"items": businesses}
         finally:
-            self._cleanup_tab(driver, tab)
+            # fecha a aba de trabalho (se ainda existir) e depois o driver inteiro
+            try:
+                self._cleanup_tab(driver, tab)
+            except Exception:
+                logger.debug("Falha ao limpar aba temporária de pesquisa", exc_info=True)
+
+            # garante que nenhuma janela de Chrome usada para Maps fique aberta
+            self.close()
 
     # ---------- enrichment ----------
     def _get_text(self, driver: Chrome, wait: WebDriverWait, selectors) -> str:
@@ -382,4 +391,9 @@ class MapsResearchRunner:
                     logger.warning("Falha ao enriquecer %s: %s", maps_url, exc)
             return {"items": items}
         finally:
-            self._cleanup_tab(driver, tab)
+            try:
+                self._cleanup_tab(driver, tab)
+            except Exception:
+                logger.debug("Falha ao limpar aba temporária de enriquecimento", exc_info=True)
+
+            self.close()
