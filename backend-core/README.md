@@ -2,6 +2,10 @@
 
 Serviço FastAPI para autenticação básica de usuários do CRM AutoDigital e gestão de catálogo, planos e assinaturas.
 
+Preparação Local
+pip install email-validator
+rodar na porta 8001
+
 ## Como rodar
 1. Crie um `.env` na pasta `backend-core/` (ou copie o `.env.example`).
 2. Instale dependências: `pip install -r backend-core/requirements.txt`.

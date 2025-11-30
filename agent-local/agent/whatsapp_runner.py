@@ -1,7 +1,6 @@
 """Runner responsável por executar automações do WhatsApp Web."""
 
 from __future__ import annotations
-
 import logging
 import time
 from pathlib import Path
