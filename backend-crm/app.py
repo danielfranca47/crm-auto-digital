@@ -26,7 +26,6 @@ from routes import (
     agents,
 )
 from routes import public
-from automations.whatsapp.qr_manager import qr_manager
 
 
 def _parse_origins(csv: str | None) -> list[str]:
@@ -109,12 +108,6 @@ app.mount("/public", public_app)
 # -----------------------------------------------------------------------------
 # Lifecycle / Raiz
 # -----------------------------------------------------------------------------
-@app.on_event("shutdown")
-def _on_shutdown():
-    try:
-        qr_manager.stop()
-    except Exception:
-        pass
 
 @app.get("/")
 def root():
