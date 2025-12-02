@@ -7,6 +7,7 @@ venv/
 
 # Banco local
 database/*.db
+*.db
 
 # Arquivos sensíveis
 .env
