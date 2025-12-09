@@ -9,10 +9,10 @@ DEFAULT_TIMEOUT = 120
 POLL_INTERVAL = 2
 
 
-def _poll_job_result(job_id: int, timeout: int = DEFAULT_TIMEOUT) -> Dict[str, Any]:
+def _poll_job_result(job_id: int, timeout: int = DEFAULT_TIMEOUT, *, user_id: int | None = None) -> Dict[str, Any]:
     deadline = time.time() + timeout
     while time.time() < deadline:
-        job = jobs_service.get_job(job_id)
+        job = jobs_service.get_job(job_id, user_id=user_id)
         if not job:
             raise HTTPException(status_code=500, detail=f"Job {job_id} não encontrado")
 
@@ -28,9 +28,9 @@ def _poll_job_result(job_id: int, timeout: int = DEFAULT_TIMEOUT) -> Dict[str, A
     raise HTTPException(status_code=500, detail=f"Job {job_id} expirou aguardando conclusão")
 
 
-def run_maps_search_fallback_via_agent(query: str, limit: int, *, timeout: int = DEFAULT_TIMEOUT) -> List[Dict[str, Any]]:
-    job = jobs_service.create_job(job_type="maps_search_fallback", payload={"query": query, "limit": limit})
-    result = _poll_job_result(job_id=job["id"], timeout=timeout)
+def run_maps_search_fallback_via_agent(query: str, limit: int, *, timeout: int = DEFAULT_TIMEOUT, user_id: int | None = None) -> List[Dict[str, Any]]:
+    job = jobs_service.create_job(job_type="maps_search_fallback", payload={"query": query, "limit": limit}, user_id=user_id)
+    result = _poll_job_result(job_id=job["id"], timeout=timeout, user_id=user_id)
 
     items = []
     for raw in (result.get("items") or []):
@@ -47,9 +47,9 @@ def run_maps_search_fallback_via_agent(query: str, limit: int, *, timeout: int =
     return items
 
 
-def run_maps_enrich_fallback_via_agent(maps_urls: List[str], *, timeout: int = DEFAULT_TIMEOUT) -> List[Dict[str, Any]]:
-    job = jobs_service.create_job(job_type="maps_enrich_fallback", payload={"maps_urls": maps_urls})
-    result = _poll_job_result(job_id=job["id"], timeout=timeout)
+def run_maps_enrich_fallback_via_agent(maps_urls: List[str], *, timeout: int = DEFAULT_TIMEOUT, user_id: int | None = None) -> List[Dict[str, Any]]:
+    job = jobs_service.create_job(job_type="maps_enrich_fallback", payload={"maps_urls": maps_urls}, user_id=user_id)
+    result = _poll_job_result(job_id=job["id"], timeout=timeout, user_id=user_id)
 
     enriched: List[Dict[str, Any]] = []
     for raw in (result.get("items") or []):

@@ -44,41 +44,62 @@ Novas tabelas criadas no SQLite:
 
 ## Endpoints REST
 
-### Registro e ciclo de vida do agente
+### Provisionamento e ciclo de vida do agente
 
 | Método | Caminho completo | Descrição |
 |--------|------------------|-----------|
-| `POST` | `/api/agents/register` | Registro/heartbeat do agente local. Corpo sugerido abaixo. |
-| `GET` | `/api/agents/next-job` | Busca do próximo job. Use query `agent_id`, `token` e `types=whatsapp_send`. |
-| `POST` | `/api/agents/report` | Reporte de conclusão/erro de um job. |
-| `GET` | `/api/agents/overview` | Lista agentes, status online/offline e contadores gerais. |
-| `GET` | `/api/agents/jobs/summary` | Contadores específicos de jobs (pendentes, concluídos/erro no dia). |
+| `POST` | `/api/agents/provision` | (Requer bearer token do core) Gera um par `(agent_id, agent_token)` vinculado ao usuário autenticado. |
+| `POST` | `/api/agents/register` | Registro/heartbeat de um agente previamente provisionado. Atualiza status, capabilities e version. |
+| `GET` | `/api/agents/next-job` | Busca do próximo job. Usa query `agent_id`, `token` e `types=whatsapp_send`. Retorna jobs apenas do mesmo `user_id` do agente. |
+| `POST` | `/api/agents/report` | Reporte de conclusão/erro de um job. Valida `agent_id`+`token` e mantém o `user_id` do agente. |
+| `GET` | `/api/agents/overview` | Lista agentes do usuário autenticado (token não é retornado) e contadores gerais. |
+| `GET` | `/api/agents/jobs/summary` | Contadores específicos de jobs (pendentes, concluídos/erro no dia) filtrados por `user_id`. |
+
+`POST /api/agents/provision`
+```json
+{
+  "name": "Agente do Comercial"
+}
+```
+Resposta (exemplo):
+```json
+{
+  "agent_id": "2f3d...",
+  "agent_token": "p5b...",
+  "user_id": 123,
+  "status": "offline"
+}
+```
+
+Use `agent_id` e `agent_token` no `.env` do projeto `agent-local/` e siga com o registro:
 
 `POST /api/agents/register`
 ```json
 {
-  "agent_id": "notebook-01",
-  "token": "segredo",
+  "agent_id": "2f3d...",
+  "token": "p5b...",
   "name": "Notebook Comercial",
   "capabilities": ["whatsapp_send"],
   "version": "0.1.0"
 }
 ```
 
-`GET /api/agents/next-job?agent_id=notebook-01&token=segredo&types=whatsapp_send`
+`GET /api/agents/next-job?agent_id=2f3d...&token=p5b...&types=whatsapp_send`
 
 - Retorna `{ "job": { ... } }` quando há pendências ou `{ "job": null }` se a fila estiver vazia.
 
 `POST /api/agents/report`
 ```json
 {
-  "agent_id": "notebook-01",
-  "token": "segredo",
+  "agent_id": "2f3d...",
+  "token": "p5b...",
   "job_id": 42,
   "status": "completed",
   "result": { "status": "sent", "notes": "ok" }
 }
 ```
+
+> Importante: o `agent_token` só é retornado no momento do provisionamento. Listagens como `/api/agents/overview` escondem o token para evitar vazamentos.
 
 ### Fluxo de prospecção (frontend)
 

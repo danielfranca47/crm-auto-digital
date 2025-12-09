@@ -12,7 +12,6 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from database import init_db
-from auth_mvp import router as auth_router
 from routes import (
     leads,
     search,
@@ -63,7 +62,6 @@ app.add_middleware(
 )
 
 # ---------- Routers Privados ----------
-app.include_router(auth_router)                                   # /auth/*
 app.include_router(leads.router,         prefix="/api/leads",        tags=["Leads"])
 app.include_router(search.router,        prefix="/api/pesquisa",     tags=["Pesquisa"])
 app.include_router(assistente_ia.router, prefix="/api/assistente-ia",tags=["Assistente IA"])

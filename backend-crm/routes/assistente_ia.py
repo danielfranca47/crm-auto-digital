@@ -1,5 +1,5 @@
 # routes/assistente_ia.py
-from fastapi import APIRouter, HTTPException, Body
+from fastapi import APIRouter, HTTPException, Body, Depends
 from pydantic import BaseModel, field_validator
 from typing import List, Literal, Optional, Dict
 from pathlib import Path
@@ -7,10 +7,21 @@ from automations.assistente_ia.processor import AssistIAProcessor
 from database import get_connection
 import pandas as pd
 from datetime import datetime
+from security_core import CurrentUser, get_current_user
 
 router = APIRouter()
 
 ALLOWED_CHANNELS = {"email", "whatsapp", "instagram", "call"}
+
+
+def _require_lead_for_user(conn, lead_id: int, user_id: int) -> None:
+    cur = conn.cursor()
+    cur.execute(
+        "SELECT id FROM leads WHERE id = ? AND (user_id = ? OR user_id IS NULL)",
+        (lead_id, user_id),
+    )
+    if cur.fetchone() is None:
+        raise HTTPException(status_code=404, detail="Lead não encontrado")
 
 # ===================== MODELOS =====================
 
@@ -55,7 +66,7 @@ class MessageUpsert(BaseModel):
 # ===================== ROTAS (processar/health/messages) =====================
 
 @router.post("/processar")
-def processar(req: AssistIAProcessRequest):
+def processar(req: AssistIAProcessRequest, current_user: CurrentUser = Depends(get_current_user)):
     base_dir = Path("data/uploads/ai")
     base_dir.mkdir(parents=True, exist_ok=True)
 
@@ -105,9 +116,10 @@ def health():
     }
 
 @router.get("/messages/{lead_id}")
-def get_messages(lead_id: int, latest: bool = True):
+def get_messages(lead_id: int, latest: bool = True, current_user: CurrentUser = Depends(get_current_user)):
     try:
         with get_connection() as conn:
+            _require_lead_for_user(conn, lead_id, current_user.id)
             cur = conn.cursor()
             cur.execute("""
                 SELECT id, channel, subject, body, model, createdAt
@@ -132,10 +144,11 @@ def get_messages(lead_id: int, latest: bool = True):
 
 # >>> NOVO: upsert de mensagem manual <<<
 @router.post("/messages/upsert")
-def upsert_message(req: MessageUpsert):
+def upsert_message(req: MessageUpsert, current_user: CurrentUser = Depends(get_current_user)):
     try:
         with get_connection() as conn:
             cur = conn.cursor()
+            _require_lead_for_user(conn, req.lead_id, current_user.id)
             message_id = req.message_id
 
             if message_id:
@@ -175,7 +188,10 @@ def upsert_message(req: MessageUpsert):
                 )
 
             # Marca movimento do lead
-            cur.execute("UPDATE leads SET lastMovement = CURRENT_TIMESTAMP WHERE id = ?", (req.lead_id,))
+            cur.execute(
+                "UPDATE leads SET lastMovement = CURRENT_TIMESTAMP WHERE id = ? AND (user_id = ? OR user_id IS NULL)",
+                (req.lead_id, current_user.id),
+            )
 
             conn.commit()
 

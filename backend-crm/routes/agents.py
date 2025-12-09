@@ -1,11 +1,21 @@
 from typing import List, Optional
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 
 from services import jobs_service
+from security_core import CurrentUser, get_current_user
 
 router = APIRouter(prefix="/api/agents", tags=["Agents"])
+
+
+class ReportJobRequest(BaseModel):
+    agent_id: str
+    token: str
+    job_id: int
+    status: str
+    result: Optional[dict] = None
+    error: Optional[str] = None
 
 
 class RegisterAgentRequest(BaseModel):
@@ -21,13 +31,16 @@ class RegisterAgentResponse(BaseModel):
     agent: dict
 
 
-class ReportJobRequest(BaseModel):
+class ProvisionAgentRequest(BaseModel):
+    name: Optional[str] = Field(None, description="Nome amigável do agente")
+
+
+class ProvisionAgentResponse(BaseModel):
     agent_id: str
-    token: str
-    job_id: int
+    agent_token: str
+    name: Optional[str]
+    user_id: int
     status: str
-    result: Optional[dict] = None
-    error: Optional[str] = None
 
 
 class ManualWhatsappJobRequest(BaseModel):
@@ -35,6 +48,11 @@ class ManualWhatsappJobRequest(BaseModel):
     message: str = Field(..., description="Mensagem a ser enviada")
     lead_id: Optional[int] = Field(None, description="Lead relacionado (opcional)")
     message_id: Optional[int] = Field(None, description="Mensagem salva relacionada (opcional)")
+
+
+@router.post("/provision", response_model=ProvisionAgentResponse)
+def provision_agent(payload: ProvisionAgentRequest, current_user: CurrentUser = Depends(get_current_user)):
+    return jobs_service.provision_agent(user_id=current_user.id, name=payload.name)
 
 
 @router.post("/register", response_model=RegisterAgentResponse)
@@ -56,7 +74,11 @@ def next_job(
     types: Optional[str] = Query(None, description="Lista separada por vírgula de tipos aceitos"),
 ):
     accepted_types = [t.strip() for t in types.split(",") if t.strip()] if types else None
-    job = jobs_service.fetch_next_job(agent_id=agent_id, token=token, accepted_types=accepted_types)
+    job = jobs_service.fetch_next_job(
+        agent_id=agent_id,
+        token=token,
+        accepted_types=accepted_types,
+    )
     return {"job": job}
 
 
@@ -73,17 +95,17 @@ def report_job(payload: ReportJobRequest):
 
 
 @router.get("/overview")
-def overview(seconds: int = Query(120, ge=10, le=600, description="Janela para considerar agente online")):
-    return jobs_service.get_jobs_overview(seconds=seconds)
+def overview(seconds: int = Query(120, ge=10, le=600, description="Janela para considerar agente online"), current_user: CurrentUser = Depends(get_current_user)):
+    return jobs_service.get_jobs_overview(seconds=seconds, user_id=current_user.id)
 
 
 @router.get("/jobs/summary")
-def job_summary():
-    return jobs_service.get_whatsapp_summary()
+def job_summary(current_user: CurrentUser = Depends(get_current_user)):
+    return jobs_service.get_whatsapp_summary(user_id=current_user.id)
 
 
 @router.post("/jobs/manual-whatsapp")
-def manual_whatsapp_job(payload: ManualWhatsappJobRequest):
+def manual_whatsapp_job(payload: ManualWhatsappJobRequest, current_user: CurrentUser = Depends(get_current_user)):
     if not payload.phone or not payload.message:
         raise HTTPException(status_code=400, detail="phone e message são obrigatórios")
 
@@ -96,5 +118,6 @@ def manual_whatsapp_job(payload: ManualWhatsappJobRequest):
             "body": payload.message,
             "source": "manual",
         },
+        user_id=current_user.id,
     )
     return {"ok": True, "job": job}
