@@ -25,8 +25,8 @@ O agente lê as configurações automaticamente a partir de um arquivo `.env` no
 | Variável | Descrição | Padrão |
 |----------|-----------|--------|
 | `BACKEND_URL` | URL base do backend FastAPI | `http://localhost:8000` |
-| `AGENT_ID` | Identificador único do agente | `local-agent` |
-| `AGENT_TOKEN` | Token simples usado para autenticação do agente | `change-me` |
+| `AGENT_ID` | Identificador único do agente (copiado do provisionamento no CRM) | `local-agent` |
+| `AGENT_TOKEN` | Token simples usado para autenticação do agente (copiado do provisionamento no CRM) | `change-me` |
 | `JOB_TYPES` | Lista (separada por vírgula) de tipos de job aceitos | `whatsapp_send` |
 | `POLL_INTERVAL` | Intervalo em segundos entre buscas consecutivas quando há jobs disponíveis | `5` |
 | `IDLE_INTERVAL` | Intervalo em segundos quando a fila está vazia ou em caso de erro | `15` |
@@ -35,7 +35,7 @@ O agente lê as configurações automaticamente a partir de um arquivo `.env` no
 | `CHROME_HEADLESS` | Define `1`/`true` para executar em modo headless | `0` |
 | `AGENT_LOG` | Caminho do arquivo de log (apêndice) | `./agent.log` |
 
-Exemplo de `.env`:
+Exemplo de `.env` (preencha `AGENT_ID`/`AGENT_TOKEN` com o par retornado pelo endpoint `/api/agents/provision` do backend-CRM):
 
 ```env
 BACKEND_URL=http://localhost:8000

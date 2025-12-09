@@ -34,7 +34,7 @@ def _build_query(sector: str, country: str, state: str, city: str, neighborhood:
         parts.append(f"em {loc}")
     return " ".join(parts)
 
-def run_site_search(payload: Dict[str, Any]) -> Dict[str, Any]:
+def run_site_search(payload: Dict[str, Any], *, user_id: int | None = None) -> Dict[str, Any]:
     """
     payload esperado:
     {
@@ -64,7 +64,7 @@ def run_site_search(payload: Dict[str, Any]) -> Dict[str, Any]:
     out_dir.mkdir(parents=True, exist_ok=True)
 
     # 1) Busca inicial
-    ms = MapsSearcher()
+    ms = MapsSearcher(user_id=user_id)
     raw = ms.search_businesses(query, limit=quantity)
 
     # 2) Enriquecimento inicial (Maps detail)

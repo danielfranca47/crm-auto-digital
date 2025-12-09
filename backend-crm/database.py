@@ -28,6 +28,15 @@ def get_connection() -> sqlite3.Connection:
     return conn
 
 
+def ensure_column(conn: sqlite3.Connection, table: str, column: str, definition: str) -> None:
+    """Adiciona coluna se ela não existir (idempotente)."""
+    cur = conn.cursor()
+    cur.execute(f"PRAGMA table_info({table})")
+    existing = {row[1] for row in cur.fetchall()}
+    if column not in existing:
+        cur.execute(f"ALTER TABLE {table} ADD COLUMN {definition}")
+
+
 def ensure_jobs_tables(conn: sqlite3.Connection) -> None:
     """Cria as tabelas de agentes e jobs (idempotente)."""
     cur = conn.cursor()
@@ -35,6 +44,7 @@ def ensure_jobs_tables(conn: sqlite3.Connection) -> None:
         """
         CREATE TABLE IF NOT EXISTS agents (
             id TEXT PRIMARY KEY,
+            user_id INTEGER,
             name TEXT,
             token TEXT,
             status TEXT NOT NULL DEFAULT 'offline' CHECK (status IN ('offline','online','disabled')),
@@ -47,6 +57,7 @@ def ensure_jobs_tables(conn: sqlite3.Connection) -> None:
 
         CREATE TABLE IF NOT EXISTS jobs (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER,
             type TEXT NOT NULL,
             payload TEXT,
             status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending','in_progress','completed','failed')),
@@ -68,6 +79,10 @@ def ensure_jobs_tables(conn: sqlite3.Connection) -> None:
         CREATE INDEX IF NOT EXISTS idx_jobs_created ON jobs(created_at);
         """
     )
+
+    ensure_column(conn, "agents", "user_id", "INTEGER")
+    ensure_column(conn, "jobs", "user_id", "INTEGER")
+    cur.execute("CREATE INDEX IF NOT EXISTS idx_jobs_user ON jobs(user_id, status);")
 
 
 # =========================
@@ -353,6 +368,7 @@ def init_db() -> None:
             """
             CREATE TABLE IF NOT EXISTS leads (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER,
                 companyName TEXT NOT NULL,
                 contactName TEXT,
                 phone TEXT,
@@ -415,6 +431,7 @@ def init_db() -> None:
 
             CREATE TABLE IF NOT EXISTS prospection_logs (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER,
                 lead_id INTEGER NOT NULL,
                 channel TEXT NULL,
                 message_id INTEGER NULL,
@@ -454,6 +471,14 @@ def init_db() -> None:
             CREATE INDEX IF NOT EXISTS idx_wq_status ON prospection_whatsapp_queue(status, enqueuedAt);
             CREATE INDEX IF NOT EXISTS idx_wq_lead ON prospection_whatsapp_queue(lead_id);
             """
+        )
+
+        ensure_column(conn, "leads", "user_id", "INTEGER")
+        ensure_column(conn, "prospection_logs", "user_id", "INTEGER")
+
+        cur.execute("CREATE INDEX IF NOT EXISTS idx_leads_user ON leads(user_id, createdAt);")
+        cur.execute(
+            "CREATE INDEX IF NOT EXISTS idx_prospection_logs_user ON prospection_logs(user_id, createdAt);"
         )
 
         cur.execute("CREATE INDEX IF NOT EXISTS idx_messages_lead_id ON messages(lead_id);")
