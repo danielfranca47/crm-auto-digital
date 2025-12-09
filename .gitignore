@@ -19,3 +19,11 @@ output/
 uploads/
 snapshots/
 whatsapp_profile/
+
+
+#arquivos que gerei localmente teste
+chrome_profiles/
+collected_posts.pkl
+
+test.py
+rascunho.py

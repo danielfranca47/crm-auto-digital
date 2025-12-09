@@ -19,7 +19,6 @@ from routes import (
     assistente_ia,
     uploads,
     prospeccao,
-    whatsapp,
     profile,
     dashboard,
     appointments,
@@ -70,7 +69,6 @@ app.include_router(search.router,        prefix="/api/pesquisa",     tags=["Pesq
 app.include_router(assistente_ia.router, prefix="/api/assistente-ia",tags=["Assistente IA"])
 app.include_router(uploads.router,       prefix="/api",              tags=["Uploads"])
 app.include_router(prospeccao.router)                               # já define prefix="/api/prospeccao"
-app.include_router(whatsapp.router)                                 # já define prefix="/api/whatsapp"
 app.include_router(profile.router)                                  # prefixo definido no arquivo
 app.include_router(appointments.router)                             # já define prefix="/api/appointments"
 app.include_router(agents.router)                                   # /api/agents
