@@ -5,12 +5,15 @@ from urllib.parse import urlparse, parse_qs
 
 import googlemaps
 from . import config
+from fastapi import HTTPException
+
 from .agent_jobs import run_maps_enrich_fallback_via_agent
 
 
 class ProfileExtractor:
-    def __init__(self):
+    def __init__(self, *, user_id: int | None = None):
         self.gmaps_client = None
+        self.user_id = user_id
         api_key = getattr(config, "GOOGLE_MAPS_API_KEY", "")
         if api_key:
             self.gmaps_client = googlemaps.Client(key=api_key)
@@ -61,7 +64,10 @@ class ProfileExtractor:
         """Delegação da coleta Selenium para o agente local via jobs."""
         if not maps_url:
             return {}
-        enriched = run_maps_enrich_fallback_via_agent([maps_url])
+        if self.user_id is None:
+            raise HTTPException(status_code=401, detail="User context required for enrichment job")
+
+        enriched = run_maps_enrich_fallback_via_agent([maps_url], user_id=self.user_id)
         return enriched[0] if enriched else {}
 
     # ---------- Orquestração ----------

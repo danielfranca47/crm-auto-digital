@@ -5,8 +5,9 @@ from __future__ import annotations
 import json
 import logging
 import re
+import sqlite3
 from datetime import datetime, timedelta
-from typing import Any, Dict, List, Optional, Sequence
+from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 from fastapi import HTTPException
 
@@ -53,41 +54,52 @@ def _capabilities_to_text(capabilities: Optional[Sequence[str]]) -> Optional[str
     return _json_dumps(list(capabilities))
 
 
-def _update_agent_touch(agent_id: str) -> None:
+def _sanitize_agent(row: sqlite3.Row | Dict[str, Any]) -> Dict[str, Any]:
+    data = dict(row)
+    data.pop("token", None)
+    data["capabilities"] = _json_loads(data.get("capabilities"))
+    last_seen = data.get("last_seen")
+    if last_seen:
+        data["last_seen"] = str(last_seen).replace(" ", "T")
+    return data
+
+
+def _get_agent_by_credentials(agent_id: str, token: str) -> Tuple[Dict[str, Any], sqlite3.Connection]:
+    conn = get_connection()
+    cur = conn.cursor()
+    row = cur.execute("SELECT * FROM agents WHERE id=?", (agent_id,)).fetchone()
+    if not row:
+        conn.close()
+        raise HTTPException(status_code=401, detail="Agent not registered")
+    if not row["token"] or row["token"] != token:
+        conn.close()
+        raise HTTPException(status_code=401, detail="Invalid agent token")
+    data = dict(row)
+    if data.get("user_id") is None:
+        conn.close()
+        raise HTTPException(status_code=403, detail="Agent has no owner assigned")
+    return data, conn
+
+
+def _update_agent_touch(agent_id: str, *, user_id: Optional[int] = None) -> None:
     with get_connection() as conn:
+        params: List[Any] = [AGENT_STATUS_ONLINE, agent_id]
+        where_clause = "WHERE id=?"
+        if user_id is not None:
+            where_clause += " AND user_id = ?"
+            params.append(user_id)
+
         conn.execute(
-            """
+            f"""
             UPDATE agents
                SET last_seen=CURRENT_TIMESTAMP,
                    status=?,
                    updated_at=CURRENT_TIMESTAMP
-             WHERE id=?
+             {where_clause}
             """,
-            (AGENT_STATUS_ONLINE, agent_id),
+            params,
         )
         conn.commit()
-
-
-def _ensure_agent(agent_id: str, token: str) -> Dict[str, Any]:
-    with get_connection() as conn:
-        cur = conn.cursor()
-        row = cur.execute("SELECT * FROM agents WHERE id=?", (agent_id,)).fetchone()
-        if not row:
-            raise HTTPException(status_code=401, detail="Agent not registered")
-        if row["token"] and row["token"] != token:
-            raise HTTPException(status_code=401, detail="Invalid agent token")
-        cur.execute(
-            """
-            UPDATE agents
-               SET last_seen=CURRENT_TIMESTAMP,
-                   status=?,
-                   updated_at=CURRENT_TIMESTAMP
-             WHERE id=?
-            """,
-            (AGENT_STATUS_ONLINE, agent_id),
-        )
-        conn.commit()
-        return dict(row)
 
 
 # ---------------------------------------------------------------------------
@@ -107,60 +119,75 @@ def register_agent(
 
     caps_txt = _capabilities_to_text(capabilities)
 
-    with get_connection() as conn:
+    _, conn = _get_agent_by_credentials(agent_id, token)
+    try:
         cur = conn.cursor()
-        row = cur.execute("SELECT token FROM agents WHERE id=?", (agent_id,)).fetchone()
-        if row:
-            existing_token = row["token"]
-            if existing_token and existing_token != token:
-                raise HTTPException(status_code=401, detail="Token inválido para o agente")
-            cur.execute(
-                """
-                UPDATE agents
-                   SET name=?,
-                       token=?,
-                       capabilities=?,
-                       version=?,
-                       status=?,
-                       last_seen=CURRENT_TIMESTAMP,
-                       updated_at=CURRENT_TIMESTAMP
-                 WHERE id=?
-                """,
-                (name, token, caps_txt, version, AGENT_STATUS_ONLINE, agent_id),
-            )
-        else:
-            cur.execute(
-                """
-                INSERT INTO agents (id, name, token, capabilities, version, status, last_seen)
-                VALUES (?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
-                """,
-                (agent_id, name, token, caps_txt, version, AGENT_STATUS_ONLINE),
-            )
+        cur.execute(
+            """
+            UPDATE agents
+               SET name=COALESCE(?, name),
+                   capabilities=?,
+                   version=?,
+                   status=?,
+                   last_seen=CURRENT_TIMESTAMP,
+                   updated_at=CURRENT_TIMESTAMP
+             WHERE id=? AND token=?
+            """,
+            (name, caps_txt, version, AGENT_STATUS_ONLINE, agent_id, token),
+        )
         conn.commit()
         row = cur.execute("SELECT * FROM agents WHERE id=?", (agent_id,)).fetchone()
+    finally:
+        conn.close()
 
-    data = dict(row)
-    data["capabilities"] = _json_loads(data.get("capabilities"))
-    data["last_seen"] = (
-        str(data.get("last_seen")).replace(" ", "T") if data.get("last_seen") else None
-    )
-    return data
+    return _sanitize_agent(row)
 
 
-def list_agents(max_age_seconds: int = 120) -> List[Dict[str, Any]]:
+def provision_agent(*, user_id: int, name: Optional[str] = None) -> Dict[str, Any]:
+    import secrets
+    from uuid import uuid4
+
+    agent_id = uuid4().hex
+    agent_token = secrets.token_urlsafe(32)
+    with get_connection() as conn:
+        cur = conn.cursor()
+        cur.execute(
+            """
+            INSERT INTO agents (id, user_id, name, token, capabilities, version, status, last_seen)
+            VALUES (?, ?, ?, ?, NULL, NULL, ?, NULL)
+            """,
+            (agent_id, user_id, name, agent_token, AGENT_STATUS_OFFLINE),
+        )
+        conn.commit()
+
+    return {
+        "agent_id": agent_id,
+        "agent_token": agent_token,
+        "name": name,
+        "user_id": user_id,
+        "status": AGENT_STATUS_OFFLINE,
+    }
+
+
+def list_agents(max_age_seconds: int = 120, *, user_id: Optional[int] = None) -> List[Dict[str, Any]]:
     threshold_dt = datetime.utcnow() - timedelta(seconds=max_age_seconds)
     agents: List[Dict[str, Any]] = []
     with get_connection() as conn:
         cur = conn.cursor()
-        for row in cur.execute("SELECT * FROM agents ORDER BY name ASC, id ASC"):
-            data = dict(row)
-            data["capabilities"] = _json_loads(data.get("capabilities"))
+        params: List[Any] = []
+        where_clause = ""
+        if user_id is not None:
+            where_clause = "WHERE user_id = ?"
+            params.append(user_id)
+        for row in cur.execute(
+            f"SELECT * FROM agents {where_clause} ORDER BY name ASC, id ASC",
+            params,
+        ):
+            data = _sanitize_agent(row)
             last_seen = data.get("last_seen")
             if last_seen:
-                last_seen_iso = str(last_seen).replace(" ", "T")
-                data["last_seen"] = last_seen_iso
                 try:
-                    last_seen_dt = datetime.fromisoformat(last_seen_iso)
+                    last_seen_dt = datetime.fromisoformat(str(last_seen))
                 except ValueError:
                     last_seen_dt = None
                 data["online"] = last_seen_dt is not None and last_seen_dt >= threshold_dt
@@ -181,16 +208,17 @@ def _insert_job(
     payload: Dict[str, Any],
     priority: int = 0,
     scheduled_at: Optional[datetime] = None,
+    user_id: Optional[int] = None,
 ):
     scheduled_value = scheduled_at.isoformat() if scheduled_at else None
     payload_txt = _json_dumps(payload)
 
     cur.execute(
         """
-        INSERT INTO jobs (type, payload, priority, scheduled_at, status, result, error, assigned_agent_id, attempts, created_at, updated_at)
-        VALUES (?, ?, ?, COALESCE(?, CURRENT_TIMESTAMP), 'pending', NULL, NULL, NULL, 0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+        INSERT INTO jobs (type, payload, priority, scheduled_at, status, result, error, assigned_agent_id, attempts, created_at, updated_at, user_id)
+        VALUES (?, ?, ?, COALESCE(?, CURRENT_TIMESTAMP), 'pending', NULL, NULL, NULL, 0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, ?)
         """,
-        (job_type, payload_txt, priority, scheduled_value),
+        (job_type, payload_txt, priority, scheduled_value, user_id),
     )
     job_id = cur.lastrowid
     row = cur.execute("SELECT * FROM jobs WHERE id=?", (job_id,)).fetchone()
@@ -207,10 +235,15 @@ def _insert_job(
     return job
 
 
-def get_job(job_id: int) -> Optional[Dict[str, Any]]:
+def get_job(job_id: int, *, user_id: Optional[int] = None) -> Optional[Dict[str, Any]]:
     with get_connection() as conn:
         cur = conn.cursor()
-        row = cur.execute("SELECT * FROM jobs WHERE id=?", (job_id,)).fetchone()
+        params: List[Any] = [job_id]
+        where_clause = "WHERE id=?"
+        if user_id is not None:
+            where_clause += " AND user_id = ?"
+            params.append(user_id)
+        row = cur.execute(f"SELECT * FROM jobs {where_clause}", params).fetchone()
         if not row:
             return None
 
@@ -226,7 +259,12 @@ def create_job(
     payload: Dict[str, Any],
     priority: int = 0,
     scheduled_at: Optional[datetime] = None,
+    user_id: Optional[int] = None,
 ) -> Dict[str, Any]:
+    agent_local_job_types = {"maps_search_fallback", "maps_enrich_fallback"}
+    if job_type in agent_local_job_types and user_id is None:
+        raise HTTPException(status_code=400, detail="user_id é obrigatório para jobs do agente local")
+
     with get_connection() as conn:
         cur = conn.cursor()
         job = _insert_job(
@@ -235,6 +273,7 @@ def create_job(
             payload=payload,
             priority=priority,
             scheduled_at=scheduled_at,
+            user_id=user_id,
         )
         conn.commit()
     return job
@@ -246,8 +285,12 @@ def fetch_next_job(
     token: str,
     accepted_types: Optional[Sequence[str]] = None,
 ) -> Optional[Dict[str, Any]]:
-    _ensure_agent(agent_id, token)
+    agent, conn = _get_agent_by_credentials(agent_id, token)
+    user_id = agent.get("user_id")
+    conn.close()
+    # Escopa jobs ao dono do agente; impede que um agente visualize jobs de outro usuário.
     params: List[Any] = [JOB_STATUS_PENDING]
+    params.append(user_id)
     type_filter = ""
     if accepted_types:
         placeholders = ",".join(["?"] * len(accepted_types))
@@ -261,6 +304,7 @@ def fetch_next_job(
             f"""
             SELECT * FROM jobs
              WHERE status=?
+               AND user_id = ?
                {type_filter}
              ORDER BY priority DESC, scheduled_at ASC, created_at ASC, id ASC
              LIMIT 1
@@ -289,7 +333,7 @@ def fetch_next_job(
             return None
         conn.commit()
 
-    _update_agent_touch(agent_id)
+    _update_agent_touch(agent_id, user_id=user_id)
 
     job = dict(row)
     job["payload"] = _json_loads(job.get("payload"))
@@ -309,11 +353,17 @@ def report_job(
     if status not in _VALID_JOB_STATUSES:
         raise HTTPException(status_code=400, detail="Status inválido")
 
-    _ensure_agent(agent_id, token)
+    agent, conn = _get_agent_by_credentials(agent_id, token)
+    user_id = agent.get("user_id")
+    conn.close()
 
     with get_connection() as conn:
         cur = conn.cursor()
-        row = cur.execute("SELECT * FROM jobs WHERE id=?", (job_id,)).fetchone()
+        params: List[Any] = [job_id]
+        where_clause = "WHERE id=?"
+        where_clause += " AND user_id = ?"
+        params.append(user_id)
+        row = cur.execute(f"SELECT * FROM jobs {where_clause}", params).fetchone()
         if not row:
             raise HTTPException(status_code=404, detail="Job não encontrado")
         if row["assigned_agent_id"] and row["assigned_agent_id"] != agent_id:
@@ -339,11 +389,11 @@ def report_job(
         job_type = row["type"]
         payload = _json_loads(row["payload"])
         if job_type == "whatsapp_send":
-            _handle_whatsapp_report(conn, payload, status, result, error_txt)
+            _handle_whatsapp_report(conn, payload, status, result, error_txt, user_id=user_id)
 
         conn.commit()
 
-    _update_agent_touch(agent_id)
+    _update_agent_touch(agent_id, user_id=user_id)
     return {"ok": True, "status": status}
 
 
@@ -363,17 +413,18 @@ def _log_prospection(
     channel: str = "whatsapp",
     message_id: Optional[int] = None,
     notes: Optional[str] = None,
+    user_id: Optional[int] = None,
 ) -> None:
     conn.execute(
         """
-        INSERT INTO prospection_logs (lead_id, channel, message_id, action, notes)
-        VALUES (?, ?, ?, ?, ?)
+        INSERT INTO prospection_logs (lead_id, channel, message_id, action, notes, user_id)
+        VALUES (?, ?, ?, ?, ?, ?)
         """,
-        (lead_id, channel, message_id, action, notes),
+        (lead_id, channel, message_id, action, notes, user_id),
     )
 
 
-def _handle_whatsapp_report(conn, payload, status, result, error_txt):
+def _handle_whatsapp_report(conn, payload, status, result, error_txt, *, user_id: Optional[int] = None):
     lead_id = (payload or {}).get("lead_id")
     message_id = (payload or {}).get("message_id")
     if not lead_id:
@@ -390,27 +441,33 @@ def _handle_whatsapp_report(conn, payload, status, result, error_txt):
             "UPDATE leads SET category='qualification', lastMovement=CURRENT_TIMESTAMP WHERE id=?",
             (lead_id,),
         )
-        conn.execute(
-            """
-            INSERT INTO prospection_logs (lead_id, channel, message_id, action, notes)
-            VALUES (?, 'whatsapp', ?, 'sent', ?)
-            """,
-            (lead_id, message_id, notes),
+        _log_prospection(
+            conn,
+            lead_id=lead_id,
+            channel="whatsapp",
+            message_id=message_id,
+            action="sent",
+            notes=notes,
+            user_id=user_id,
         )
-        conn.execute(
-            """
-            INSERT INTO prospection_logs (lead_id, channel, message_id, action, notes)
-            VALUES (?, 'whatsapp', NULL, 'moved_stage', 'auto:qualification')
-            """,
-            (lead_id,),
+        _log_prospection(
+            conn,
+            lead_id=lead_id,
+            channel="whatsapp",
+            message_id=None,
+            action="moved_stage",
+            notes="auto:qualification",
+            user_id=user_id,
         )
     elif status == JOB_STATUS_FAILED:
-        conn.execute(
-            """
-            INSERT INTO prospection_logs (lead_id, channel, message_id, action, notes)
-            VALUES (?, 'whatsapp', ?, 'failed', ?)
-            """,
-            (lead_id, message_id, notes or "erro"),
+        _log_prospection(
+            conn,
+            lead_id=lead_id,
+            channel="whatsapp",
+            message_id=message_id,
+            action="failed",
+            notes=notes or "erro",
+            user_id=user_id,
         )
 
 
@@ -440,7 +497,7 @@ def _persist_whatsapp_message(cur, lead_id: int, body: str) -> Dict[str, Any]:
 
 
 def enqueue_whatsapp_jobs(
-    lead_ids: Sequence[int], *, message: Optional[str] = None, lead_messages: Optional[Dict[int, str]] = None
+    lead_ids: Sequence[int], *, message: Optional[str] = None, lead_messages: Optional[Dict[int, str]] = None, user_id: Optional[int] = None
 ) -> Dict[str, Any]:
     if not lead_ids:
         return {"queued": [], "skipped": []}
@@ -457,14 +514,20 @@ def enqueue_whatsapp_jobs(
 
     with get_connection() as conn:
         cur = conn.cursor()
+        params_jobs: List[Any] = [JOB_STATUS_PENDING, JOB_STATUS_IN_PROGRESS]
+        user_filter = ""
+        if user_id is not None:
+            user_filter = "AND user_id = ?"
+            params_jobs.append(user_id)
         pending_rows = cur.execute(
-            """
+            f"""
             SELECT id, payload
               FROM jobs
              WHERE type='whatsapp_send'
                AND status IN (?, ?)
+               {user_filter}
             """,
-            (JOB_STATUS_PENDING, JOB_STATUS_IN_PROGRESS),
+            params_jobs,
         ).fetchall()
         existing = []
         for row in pending_rows:
@@ -474,9 +537,14 @@ def enqueue_whatsapp_jobs(
 
         for lead_id in lead_ids:
             try:
+                lead_params: List[Any] = [lead_id]
+                lead_clause = "WHERE id=?"
+                if user_id is not None:
+                    lead_clause += " AND user_id = ?"
+                    lead_params.append(user_id)
                 lead = cur.execute(
-                    "SELECT id, phone, customMessage FROM leads WHERE id=?",
-                    (lead_id,),
+                    f"SELECT id, phone, customMessage FROM leads {lead_clause}",
+                    lead_params,
                 ).fetchone()
                 if not lead:
                     reason = "lead_nao_encontrado"
@@ -569,6 +637,7 @@ def enqueue_whatsapp_jobs(
                         "phone": phone,
                         "body": body,
                     },
+                    user_id=user_id,
                 )
 
                 _log_prospection(
@@ -578,6 +647,7 @@ def enqueue_whatsapp_jobs(
                     message_id=message_id,
                     action="queued",
                     notes=f"phone={phone}",
+                    user_id=user_id,
                 )
 
                 queued.append({"lead_id": lead_id, "message_id": message_id, "job_id": job["id"]})
@@ -597,18 +667,23 @@ def enqueue_whatsapp_jobs(
     return {"queued": queued, "skipped": skipped}
 
 
-def get_whatsapp_queue(limit: int = 5) -> List[Dict[str, Any]]:
+def get_whatsapp_queue(limit: int = 5, *, user_id: Optional[int] = None) -> List[Dict[str, Any]]:
     with get_connection() as conn:
         cur = conn.cursor()
+        params: List[Any] = [JOB_STATUS_PENDING, limit]
+        user_filter = ""
+        if user_id is not None:
+            user_filter = "AND user_id = ?"
+            params.insert(1, user_id)
         rows = cur.execute(
-            """
+            f"""
             SELECT id, payload, created_at, scheduled_at
               FROM jobs
-             WHERE type='whatsapp_send' AND status=?
+             WHERE type='whatsapp_send' AND status=? {user_filter}
              ORDER BY scheduled_at ASC, created_at ASC, id ASC
              LIMIT ?
             """,
-            (JOB_STATUS_PENDING, limit),
+            params,
         ).fetchall()
     queue: List[Dict[str, Any]] = []
     for row in rows:
@@ -626,22 +701,28 @@ def get_whatsapp_queue(limit: int = 5) -> List[Dict[str, Any]]:
     return queue
 
 
-def get_whatsapp_recent(seconds: int = 300) -> List[Dict[str, Any]]:
+def get_whatsapp_recent(seconds: int = 300, *, user_id: Optional[int] = None) -> List[Dict[str, Any]]:
     seconds = max(30, min(int(seconds), 3600))
     with get_connection() as conn:
         cur = conn.cursor()
+        params: List[Any] = [JOB_STATUS_COMPLETED, JOB_STATUS_FAILED, f"-{seconds} seconds"]
+        user_filter = ""
+        if user_id is not None:
+            user_filter = "AND user_id = ?"
+            params.append(user_id)
         rows = cur.execute(
-            """
+            f"""
             SELECT id, payload, status, result, error, completed_at
               FROM jobs
              WHERE type='whatsapp_send'
                AND status IN (?, ?)
                AND completed_at IS NOT NULL
                AND completed_at >= datetime('now', ?)
+               {user_filter}
              ORDER BY completed_at DESC
              LIMIT 200
             """,
-            (JOB_STATUS_COMPLETED, JOB_STATUS_FAILED, f"-{seconds} seconds"),
+            params,
         ).fetchall()
     items: List[Dict[str, Any]] = []
     for row in rows:
@@ -661,32 +742,43 @@ def get_whatsapp_recent(seconds: int = 300) -> List[Dict[str, Any]]:
     return items
 
 
-def get_whatsapp_summary() -> Dict[str, Any]:
+def get_whatsapp_summary(*, user_id: Optional[int] = None) -> Dict[str, Any]:
     with get_connection() as conn:
         cur = conn.cursor()
+        params_pending: List[Any] = [JOB_STATUS_PENDING]
+        params_completed: List[Any] = [JOB_STATUS_COMPLETED]
+        params_failed: List[Any] = [JOB_STATUS_FAILED]
+        user_filter = ""
+        if user_id is not None:
+            user_filter = "AND user_id = ?"
+            params_pending.append(user_id)
+            params_completed.append(user_id)
+            params_failed.append(user_id)
         pending = cur.execute(
-            "SELECT COUNT(*) AS c FROM jobs WHERE type='whatsapp_send' AND status=?",
-            (JOB_STATUS_PENDING,),
+            f"SELECT COUNT(*) AS c FROM jobs WHERE type='whatsapp_send' AND status=? {user_filter}",
+            params_pending,
         ).fetchone()["c"]
         sent_today = cur.execute(
-            """
+            f"""
             SELECT COUNT(*) AS c
               FROM jobs
              WHERE type='whatsapp_send'
                AND status=?
                AND date(completed_at) = date('now')
+               {user_filter}
             """,
-            (JOB_STATUS_COMPLETED,),
+            params_completed,
         ).fetchone()["c"]
         failed_today = cur.execute(
-            """
+            f"""
             SELECT COUNT(*) AS c
               FROM jobs
              WHERE type='whatsapp_send'
                AND status=?
                AND date(completed_at) = date('now')
+               {user_filter}
             """,
-            (JOB_STATUS_FAILED,),
+            params_failed,
         ).fetchone()["c"]
     return {
         "pending": int(pending or 0),
@@ -695,14 +787,15 @@ def get_whatsapp_summary() -> Dict[str, Any]:
     }
 
 
-def get_jobs_overview(seconds: int = 120) -> Dict[str, Any]:
+def get_jobs_overview(seconds: int = 120, *, user_id: Optional[int] = None) -> Dict[str, Any]:
     return {
-        "agents": list_agents(max_age_seconds=seconds),
-        "summary": get_whatsapp_summary(),
+        "agents": list_agents(max_age_seconds=seconds, user_id=user_id),
+        "summary": get_whatsapp_summary(user_id=user_id),
     }
 
 
 __all__ = [
+    "provision_agent",
     "register_agent",
     "fetch_next_job",
     "report_job",

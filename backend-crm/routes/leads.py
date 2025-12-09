@@ -1,10 +1,11 @@
 # backend/routes/leads.py
 from typing import Optional
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Depends
 from datetime import datetime, timezone
 
 from database import get_connection, normalize_datetime_value
 from models import Lead, LeadUpdate, AppointmentCreate, AppointmentUpdate
+from security_core import CurrentUser, get_current_user
 
 router = APIRouter()
 
@@ -49,6 +50,16 @@ def _map_appointment_row(row):
         if k in d:
             d[k] = normalize_datetime_value(d[k])
     return d
+
+
+def _require_lead_for_user(conn, lead_id: int, user_id: int) -> None:
+    cur = conn.cursor()
+    cur.execute(
+        "SELECT id FROM leads WHERE id = ? AND (user_id = ? OR user_id IS NULL)",
+        (lead_id, user_id),
+    )
+    if cur.fetchone() is None:
+        raise HTTPException(status_code=404, detail="Lead não encontrado")
 
 
 def _normalize_or_400(value, field_name: str) -> Optional[str]:
@@ -110,7 +121,7 @@ def _check_conflict(
 # ---------------------------
 
 @router.get("/")
-def listar_leads():
+def listar_leads(current_user: CurrentUser = Depends(get_current_user)):
     """
     Lista leads e injeta a próxima ação agendada por lead (compromisso futuro mais próximo).
     Evita comparação naive/aware no Python — usamos datetime() do SQLite.
@@ -140,8 +151,11 @@ def listar_leads():
                 WHERE rn = 1
             ) AS next_app
             ON next_app.lead_id = l.id
+            WHERE l.user_id = ? OR l.user_id IS NULL
             ORDER BY l.createdAt DESC
             """
+            ,
+            (current_user.id,),
         )
         leads = cursor.fetchall()
         return [_map_lead_row(lead) for lead in leads]
@@ -150,7 +164,7 @@ def listar_leads():
 
 
 @router.post("/")
-def criar_lead(lead: Lead):
+def criar_lead(lead: Lead, current_user: CurrentUser = Depends(get_current_user)):
     conn = get_connection()
     cursor = conn.cursor()
     try:
@@ -160,11 +174,12 @@ def criar_lead(lead: Lead):
         cursor.execute(
             """
             INSERT INTO leads (
-                companyName, contactName, phone, email, origin, category,
+                user_id, companyName, contactName, phone, email, origin, category,
                 customMessage, observations, priority, createdAt, lastMovement
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
             """,
             (
+                current_user.id,
                 lead.companyName,
                 lead.contactName,
                 lead.phone,
@@ -216,10 +231,11 @@ def criar_lead(lead: Lead):
 
 
 @router.patch("/{id}")
-def atualizar_lead_parcial(id: int, lead: LeadUpdate):
+def atualizar_lead_parcial(id: int, lead: LeadUpdate, current_user: CurrentUser = Depends(get_current_user)):
     conn = get_connection()
     cursor = conn.cursor()
     try:
+        _require_lead_for_user(conn, id, current_user.id)
         campos = []
         valores = []
 
@@ -238,8 +254,8 @@ def atualizar_lead_parcial(id: int, lead: LeadUpdate):
 
         campos.append("lastMovement = CURRENT_TIMESTAMP")
 
-        sql = f"UPDATE leads SET {', '.join(campos)} WHERE id = ?"
-        valores.append(id)
+        sql = f"UPDATE leads SET {', '.join(campos)} WHERE id = ? AND (user_id = ? OR user_id IS NULL)"
+        valores.extend([id, current_user.id])
 
         cursor.execute(sql, valores)
         conn.commit()
@@ -255,13 +271,11 @@ def atualizar_lead_parcial(id: int, lead: LeadUpdate):
 
 
 @router.get("/{lead_id}/appointments")
-def listar_compromissos(lead_id: int):
+def listar_compromissos(lead_id: int, current_user: CurrentUser = Depends(get_current_user)):
     conn = get_connection()
     cursor = conn.cursor()
     try:
-        cursor.execute("SELECT id FROM leads WHERE id = ?", (lead_id,))
-        if cursor.fetchone() is None:
-            raise HTTPException(status_code=404, detail="Lead não encontrado")
+        _require_lead_for_user(conn, lead_id, current_user.id)
 
         cursor.execute(
             """
@@ -279,15 +293,12 @@ def listar_compromissos(lead_id: int):
 
 
 @router.post("/{lead_id}/appointments")
-def criar_compromisso(lead_id: int, payload: AppointmentCreate):
+def criar_compromisso(lead_id: int, payload: AppointmentCreate, current_user: CurrentUser = Depends(get_current_user)):
     conn = get_connection()
     cursor = conn.cursor()
 
     try:
-        # Garante que o lead existe
-        cursor.execute("SELECT id FROM leads WHERE id = ?", (lead_id,))
-        if cursor.fetchone() is None:
-            raise HTTPException(status_code=404, detail="Lead não encontrado")
+        _require_lead_for_user(conn, lead_id, current_user.id)
 
         # Título/Status padrão se não vierem no payload
         title = payload.title or "Compromisso"
@@ -345,13 +356,14 @@ def criar_compromisso(lead_id: int, payload: AppointmentCreate):
 
 
 @router.patch("/{lead_id}/appointments/{appointment_id}")
-def atualizar_compromisso(lead_id: int, appointment_id: int, payload: AppointmentUpdate):
+def atualizar_compromisso(lead_id: int, appointment_id: int, payload: AppointmentUpdate, current_user: CurrentUser = Depends(get_current_user)):
     """
     Atualiza compromisso garantindo normalização de datas e checagem de conflito.
     """
     conn = get_connection()
     cursor = conn.cursor()
     try:
+        _require_lead_for_user(conn, lead_id, current_user.id)
         # Verifica se existe
         cursor.execute(
             "SELECT * FROM appointments WHERE id = ? AND lead_id = ?",
@@ -411,10 +423,11 @@ def atualizar_compromisso(lead_id: int, appointment_id: int, payload: Appointmen
 
 
 @router.delete("/{lead_id}/appointments/{appointment_id}")
-def remover_compromisso(lead_id: int, appointment_id: int):
+def remover_compromisso(lead_id: int, appointment_id: int, current_user: CurrentUser = Depends(get_current_user)):
     conn = get_connection()
     cursor = conn.cursor()
     try:
+        _require_lead_for_user(conn, lead_id, current_user.id)
         cursor.execute(
             "DELETE FROM appointments WHERE id = ? AND lead_id = ?",
             (appointment_id, lead_id),
