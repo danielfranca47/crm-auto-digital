@@ -68,7 +68,7 @@ def run_site_search(payload: Dict[str, Any], *, user_id: int | None = None) -> D
     raw = ms.search_businesses(query, limit=quantity)
 
     # 2) Enriquecimento inicial (Maps detail)
-    pe = ProfileExtractor()
+    pe = ProfileExtractor(user_id=user_id)
     enriched = pe.enrich(raw)
 
     # 3) Classificação de website (próprio x social etc.)

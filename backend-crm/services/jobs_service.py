@@ -261,6 +261,10 @@ def create_job(
     scheduled_at: Optional[datetime] = None,
     user_id: Optional[int] = None,
 ) -> Dict[str, Any]:
+    agent_local_job_types = {"maps_search_fallback", "maps_enrich_fallback"}
+    if job_type in agent_local_job_types and user_id is None:
+        raise HTTPException(status_code=400, detail="user_id é obrigatório para jobs do agente local")
+
     with get_connection() as conn:
         cur = conn.cursor()
         job = _insert_job(
@@ -284,6 +288,7 @@ def fetch_next_job(
     agent, conn = _get_agent_by_credentials(agent_id, token)
     user_id = agent.get("user_id")
     conn.close()
+    # Escopa jobs ao dono do agente; impede que um agente visualize jobs de outro usuário.
     params: List[Any] = [JOB_STATUS_PENDING]
     params.append(user_id)
     type_filter = ""

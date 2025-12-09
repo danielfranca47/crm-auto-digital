@@ -43,7 +43,7 @@ def _build_query(params: Dict[str, Any]) -> str:
         return f"{setor} em {' '.join(loc_parts)}"
     return " ".join([p for p in [setor] + loc_parts if p])
 
-def run(params: Dict[str, Any]) -> Dict[str, Any]:
+def run(params: Dict[str, Any], *, user_id: int | None = None) -> Dict[str, Any]:
     """
     Orquestra a automação 'site'.
 
@@ -75,10 +75,10 @@ def run(params: Dict[str, Any]) -> Dict[str, Any]:
     _ensure_dir(base_out)
 
     # 2) pipeline
-    ms = MapsSearcher()
+    ms = MapsSearcher(user_id=user_id)
     raw = ms.search_businesses(query, limit=qtd)
 
-    pe = ProfileExtractor()
+    pe = ProfileExtractor(user_id=user_id)
     enriched = pe.enrich(raw)
 
     wc = WebsiteClassifier()
