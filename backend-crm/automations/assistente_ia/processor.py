@@ -120,36 +120,38 @@ def map_row_to_lead(row: pd.Series) -> Dict:
     return lead
 
 # ----------------- Dedup & CRUD no banco -----------------
-def find_existing_lead(conn, companyName: str, email: Optional[str], phone: Optional[str]) -> Optional[int]:
+def find_existing_lead(conn, companyName: str, email: Optional[str], phone: Optional[str], *, user_id: int) -> Optional[int]:
     cur = conn.cursor()
     if phone:
-        cur.execute("SELECT id FROM leads WHERE phone = ? LIMIT 1", (phone,))
+        cur.execute("SELECT id FROM leads WHERE phone = ? AND user_id = ? LIMIT 1", (phone, user_id))
         r = cur.fetchone()
         if r: return r["id"] if isinstance(r, dict) else r[0]
     if email:
-        cur.execute("SELECT id FROM leads WHERE email = ? LIMIT 1", (email,))
+        cur.execute("SELECT id FROM leads WHERE email = ? AND user_id = ? LIMIT 1", (email, user_id))
         r = cur.fetchone()
         if r: return r["id"] if isinstance(r, dict) else r[0]
     if companyName and companyName != "Sem nome":
-        cur.execute("SELECT id FROM leads WHERE companyName = ? LIMIT 1", (companyName,))
+        cur.execute("SELECT id FROM leads WHERE companyName = ? AND user_id = ? LIMIT 1", (companyName, user_id))
         r = cur.fetchone()
         if r: return r["id"] if isinstance(r, dict) else r[0]
     return None
 
-def create_lead(conn, data: Dict) -> int:
-    cols = ",".join(data.keys())
-    qs = ",".join(["?"] * len(data))
+def create_lead(conn, data: Dict, *, user_id: int) -> int:
+    payload = {"user_id": user_id, **data}
+    cols = ",".join(payload.keys())
+    qs = ",".join(["?"] * len(payload))
     cur = conn.cursor()
-    cur.execute(f"INSERT INTO leads ({cols}) VALUES ({qs})", tuple(data.values()))
+    cur.execute(f"INSERT INTO leads ({cols}) VALUES ({qs})", tuple(payload.values()))
     return cur.lastrowid
 
-def update_lead_light(conn, lead_id: int, new_data: Dict):
+def update_lead_light(conn, lead_id: int, new_data: Dict, *, user_id: int):
     cur = conn.cursor()
+    new_data = {k: v for k, v in new_data.items() if k != "user_id"}
     cur.execute("""
         SELECT companyName, contactName, email, phone, origin, category,
                customMessage, observations, priority
-        FROM leads WHERE id = ?
-    """, (lead_id,))
+        FROM leads WHERE id = ? AND user_id = ?
+    """, (lead_id, user_id))
     row = cur.fetchone()
     if not row:
         return
@@ -160,7 +162,7 @@ def update_lead_light(conn, lead_id: int, new_data: Dict):
         if v and (not current.get(k)):
             merged[k] = v
     sets = ", ".join([f"{k} = ?" for k in merged.keys()])
-    cur.execute(f"UPDATE leads SET {sets} WHERE id = ?", (*merged.values(), lead_id))
+    cur.execute(f"UPDATE leads SET {sets} WHERE id = ? AND user_id = ?", (*merged.values(), lead_id, user_id))
 
 def insert_message(conn, lead_id: int, channel: str, subject: Optional[str], body: str, model: Optional[str]):
     cur = conn.cursor()
@@ -203,6 +205,7 @@ class AssistIAProcessor:
         limit: Optional[int],
         tone: Optional[str],
         language: Optional[str],
+        user_id: int,
     ) -> Dict:
         if not file_path.exists():
             raise AssistIAProcessadorErro("Arquivo de upload não encontrado.")
@@ -236,12 +239,12 @@ class AssistIAProcessor:
                 try:
                     lead_data = map_row_to_lead(row)
                     existing_id = find_existing_lead(
-                        conn, lead_data["companyName"], lead_data["email"], lead_data["phone"]
+                        conn, lead_data["companyName"], lead_data["email"], lead_data["phone"], user_id=user_id
                     )
 
                     # criar/atualizar/duplicar
                     if existing_id is None:
-                        new_id = create_lead(conn, lead_data)
+                        new_id = create_lead(conn, lead_data, user_id=user_id)
                         stats["created"] += 1
                         created_ids.append(new_id)
                         lead_id = new_id
@@ -250,11 +253,11 @@ class AssistIAProcessor:
                             stats["skipped"] += 1
                             lead_id = existing_id
                         elif overwrite == "update":
-                            update_lead_light(conn, existing_id, lead_data)
+                            update_lead_light(conn, existing_id, lead_data, user_id=user_id)
                             stats["updated"] += 1
                             lead_id = existing_id
                         else:
-                            new_id = create_lead(conn, lead_data)
+                            new_id = create_lead(conn, lead_data, user_id=user_id)
                             stats["created"] += 1
                             created_ids.append(new_id)
                             lead_id = new_id

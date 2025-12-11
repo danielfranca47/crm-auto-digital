@@ -6,6 +6,7 @@ Principais mudanças:
 - Dependência de autenticação via `get_current_user` consultando o `/users/me` do core.
 - Coluna `user_id` adicionada às tabelas principais (leads, jobs, prospection_logs, agents) para isolar dados por usuário.
 - Todas as rotas privadas de leads, prospecção, agentes e pesquisa exigem bearer token e filtram dados por `user_id`.
+- Leads e fluxos de prospecção agora são multiusuário, sempre gravando e consultando dados com `user_id` derivado do backend-core.
 
 ## Provisionamento do agente local (multiusuário)
 
