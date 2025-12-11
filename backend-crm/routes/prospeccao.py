@@ -55,7 +55,7 @@ _ALLOWED_CHANNELS = {"email", "whatsapp", "instagram", "call"}
 def _require_lead_for_user(conn, lead_id: int, user_id: int) -> None:
     cur = conn.cursor()
     cur.execute(
-        "SELECT id FROM leads WHERE id = ? AND (user_id = ? OR user_id IS NULL)",
+        "SELECT id FROM leads WHERE id = ? AND user_id = ?",
         (lead_id, user_id),
     )
     if cur.fetchone() is None:
@@ -142,7 +142,7 @@ def save_message(req: SaveMessageReq, current_user: CurrentUser = Depends(get_cu
         # Sincroniza também no lead (apenas para WhatsApp — útil para exibição rápida)
         if req.channel == "whatsapp":
             cur.execute(
-                "UPDATE leads SET customMessage=? WHERE id=? AND (user_id = ? OR user_id IS NULL)",
+                "UPDATE leads SET customMessage=? WHERE id=? AND user_id = ?",
                 (body, req.lead_id, current_user.id),
             )
 

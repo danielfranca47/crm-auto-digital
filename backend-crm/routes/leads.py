@@ -55,7 +55,7 @@ def _map_appointment_row(row):
 def _require_lead_for_user(conn, lead_id: int, user_id: int) -> None:
     cur = conn.cursor()
     cur.execute(
-        "SELECT id FROM leads WHERE id = ? AND (user_id = ? OR user_id IS NULL)",
+        "SELECT id FROM leads WHERE id = ? AND user_id = ?",
         (lead_id, user_id),
     )
     if cur.fetchone() is None:
@@ -151,7 +151,7 @@ def listar_leads(current_user: CurrentUser = Depends(get_current_user)):
                 WHERE rn = 1
             ) AS next_app
             ON next_app.lead_id = l.id
-            WHERE l.user_id = ? OR l.user_id IS NULL
+            WHERE l.user_id = ?
             ORDER BY l.createdAt DESC
             """
             ,
@@ -254,7 +254,7 @@ def atualizar_lead_parcial(id: int, lead: LeadUpdate, current_user: CurrentUser 
 
         campos.append("lastMovement = CURRENT_TIMESTAMP")
 
-        sql = f"UPDATE leads SET {', '.join(campos)} WHERE id = ? AND (user_id = ? OR user_id IS NULL)"
+        sql = f"UPDATE leads SET {', '.join(campos)} WHERE id = ? AND user_id = ?"
         valores.extend([id, current_user.id])
 
         cursor.execute(sql, valores)
