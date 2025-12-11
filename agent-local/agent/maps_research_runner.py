@@ -11,6 +11,7 @@ from selenium.common.exceptions import TimeoutException
 from selenium.webdriver import Chrome, ChromeOptions
 from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.common.by import By
+from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.ui import WebDriverWait
 from webdriver_manager.chrome import ChromeDriverManager
@@ -83,7 +84,19 @@ class MapsResearchRunner:
 
     # ---------- helpers ----------
     def _handle_google_consent(self, driver: Chrome) -> None:
-        wait = WebDriverWait(driver, 20)
+        """
+        Fecha diferentes variantes do banner/iframe de consentimento do Google.
+
+        O consentimento aparece em diferentes formatos (iframe, modal ou full-page)
+        e com textos traduzidos. Mantemos uma lista de seletores resilientes e
+        tentamos cada um em sequência. Essa rotina é defensiva para evitar que o
+        banner esconda o campo/botão de pesquisa e cause timeouts.
+        """
+
+        wait = WebDriverWait(driver, 25)
+
+        # Alguns flows usam iframe de consentimento; tentamos entrar nele, mas
+        # sempre voltamos para o contexto principal depois dos cliques.
         try:
             iframes = driver.find_elements(By.CSS_SELECTOR, "iframe[src*='consent']")
             if iframes:
@@ -94,9 +107,11 @@ class MapsResearchRunner:
         candidates = [
             (By.XPATH, "//input[@type='submit' and (contains(@value,'Accept') or contains(@aria-label,'Accept'))]"),
             (By.XPATH, "//input[@type='submit' and (contains(@value,'Aceitar') or contains(@aria-label,'Aceitar'))]"),
-            (By.XPATH, "//button[@id='L2AGLb']"),
+            (By.XPATH, "//button[@id='L2AGLb' or @id='W0wltc']"),
             (By.XPATH, "//button[normalize-space()='Accept all' or .//span[normalize-space()='Accept all']]"),
             (By.XPATH, "//button[normalize-space()='Aceitar tudo' or .//span[normalize-space()='Aceitar tudo']]"),
+            (By.XPATH, "//button[normalize-space()='Aceitar' or .//span[normalize-space()='Aceitar']]"),
+            (By.CSS_SELECTOR, "button[aria-label*='Aceitar'], button[aria-label*='Accept']"),
         ]
 
         for by, sel in candidates:
@@ -113,9 +128,26 @@ class MapsResearchRunner:
                 continue
 
         try:
-            WebDriverWait(driver, 5).until(lambda d: "consent.google" not in d.current_url.lower())
+            WebDriverWait(driver, 6).until(lambda d: "consent.google" not in d.current_url.lower())
         except TimeoutException:
             pass
+
+    def _wait_for_first(self, wait: WebDriverWait, locators, *, clickable: bool = False):
+        """Tenta múltiplos seletores e devolve o primeiro que aparecer.
+
+        Usamos para lidar com variações de UI do Maps (ids que mudam, aria-label
+        traduzido etc.). Se nenhum seletor aparecer, propagamos TimeoutException
+        para que o caller trate a falha de maneira visível.
+        """
+
+        for by, sel in locators:
+            try:
+                if clickable:
+                    return wait.until(EC.element_to_be_clickable((by, sel)))
+                return wait.until(EC.presence_of_element_located((by, sel)))
+            except Exception:
+                continue
+        raise TimeoutException("Elemento não encontrado para os seletores fornecidos")
 
     def _split_query_term_location(self, query: str):
         q_low = query.lower()
@@ -136,13 +168,41 @@ class MapsResearchRunner:
                 driver.get("https://www.google.com/maps?hl=pt-BR&gl=BR")
                 time.sleep(0.8)
 
-        search_input = wait.until(EC.presence_of_element_located((By.ID, "searchboxinput")))
-        search_btn = wait.until(EC.element_to_be_clickable((By.ID, "searchbox-searchbutton")))
+        search_input = self._wait_for_first(
+            wait,
+            [
+                (By.ID, "searchboxinput"),
+                (By.CSS_SELECTOR, "input#searchboxinput"),
+                (By.CSS_SELECTOR, "input[aria-label*='Pesquisar no Google Maps']"),
+                (By.CSS_SELECTOR, "input[aria-label*='Search Google Maps']"),
+            ],
+        )
+
+        try:
+            search_btn = self._wait_for_first(
+                wait,
+                [
+                    (By.ID, "searchbox-searchbutton"),
+                    (By.CSS_SELECTOR, "button#searchbox-searchbutton"),
+                    (By.CSS_SELECTOR, "button[aria-label*='Pesquisar'], button[aria-label*='Search']"),
+                    (By.CSS_SELECTOR, "button[jsaction*='search']"),
+                ],
+                clickable=True,
+            )
+        except TimeoutException:
+            # UI pode ocultar o botão (p. ex., em telas estreitas); Enter no input
+            # ainda dispara a busca.
+            search_btn = None
 
         def do_search(text: str):
             search_input.clear()
+            search_input.click()
             search_input.send_keys(text)
-            search_btn.click()
+
+            if search_btn:
+                search_btn.click()
+            else:
+                search_input.send_keys(Keys.ENTER)
             try:
                 wait.until(
                     lambda d: len(d.find_elements(By.CSS_SELECTOR, "div[role='article']")) >= 1
