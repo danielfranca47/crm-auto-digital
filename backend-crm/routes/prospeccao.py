@@ -6,7 +6,7 @@ from typing import Optional, Dict, List
 from datetime import datetime
 from database import get_connection
 from services import jobs_service
-from security_core import CurrentUser, get_current_user
+from security_core import CurrentUser, require_crm_access
 
 router = APIRouter(prefix="/api/prospeccao", tags=["Prospecção"])
 logger = logging.getLogger(__name__)
@@ -73,7 +73,7 @@ def _log(conn, lead_id: int, action: str, channel: Optional[str], message_id: Op
 
 # ------------------ ROTAS EXISTENTES ------------------
 @router.post("/select-message")
-def select_message(payload: MessageSelectionUpsert, current_user: CurrentUser = Depends(get_current_user)):
+def select_message(payload: MessageSelectionUpsert, current_user: CurrentUser = Depends(require_crm_access)):
     if payload.channel not in _ALLOWED_CHANNELS:
         raise HTTPException(status_code=400, detail="Canal inválido")
 
@@ -92,7 +92,7 @@ def select_message(payload: MessageSelectionUpsert, current_user: CurrentUser = 
     return {"ok": True}
 
 @router.get("/selection/{lead_id}")
-def get_selection_by_lead(lead_id: int, current_user: CurrentUser = Depends(get_current_user)):
+def get_selection_by_lead(lead_id: int, current_user: CurrentUser = Depends(require_crm_access)):
     with get_connection() as conn:
         _require_lead_for_user(conn, lead_id, current_user.id)
         rows = conn.execute(
@@ -103,7 +103,7 @@ def get_selection_by_lead(lead_id: int, current_user: CurrentUser = Depends(get_
     return {"ok": True, "selections": data, "updatedAt": datetime.utcnow().isoformat()}
 
 @router.post("/log")
-def create_log(payload: ProspectionLogCreate, current_user: CurrentUser = Depends(get_current_user)):
+def create_log(payload: ProspectionLogCreate, current_user: CurrentUser = Depends(require_crm_access)):
     with get_connection() as conn:
         _require_lead_for_user(conn, payload.lead_id, current_user.id)
         conn.execute(
@@ -118,7 +118,7 @@ def create_log(payload: ProspectionLogCreate, current_user: CurrentUser = Depend
 
 # ------------------ NOVA ROTA: salvar mensagem ------------------
 @router.post("/save-message")
-def save_message(req: SaveMessageReq, current_user: CurrentUser = Depends(get_current_user)):
+def save_message(req: SaveMessageReq, current_user: CurrentUser = Depends(require_crm_access)):
     if req.channel not in _ALLOWED_CHANNELS:
         raise HTTPException(status_code=400, detail="Canal inválido")
     body = (req.body or "").strip()
@@ -165,7 +165,7 @@ def save_message(req: SaveMessageReq, current_user: CurrentUser = Depends(get_cu
 
 # ------------------ WHATSAPP QUEUE ------------------
 @router.post("/whatsapp/enqueue")
-def whatsapp_enqueue(req: WhatsEnqueueRequest, current_user: CurrentUser = Depends(get_current_user)):
+def whatsapp_enqueue(req: WhatsEnqueueRequest, current_user: CurrentUser = Depends(require_crm_access)):
     logger.info(
         "/whatsapp/enqueue payload lead_ids=%s message_present=%s lead_messages=%s",
         req.lead_ids,
@@ -189,7 +189,7 @@ def whatsapp_enqueue(req: WhatsEnqueueRequest, current_user: CurrentUser = Depen
         raise HTTPException(status_code=500, detail="Erro ao enfileirar WhatsApp")
 
 @router.get("/whatsapp/queue")
-def whatsapp_queue(limit: int = Query(5, ge=1, le=50), current_user: CurrentUser = Depends(get_current_user)):
+def whatsapp_queue(limit: int = Query(5, ge=1, le=50), current_user: CurrentUser = Depends(require_crm_access)):
     return jobs_service.get_whatsapp_queue(limit, user_id=current_user.id)
 
 @router.post("/whatsapp/mark")
@@ -199,7 +199,7 @@ def whatsapp_mark(req: WhatsMarkRequest):
 # ======== WHATSAPP: resultados recentes e resumo (somente leitura) ========
 
 @router.get("/whatsapp/recent")
-def whatsapp_recent(since_secs: int = 300, current_user: CurrentUser = Depends(get_current_user)):
+def whatsapp_recent(since_secs: int = 300, current_user: CurrentUser = Depends(require_crm_access)):
     """
     Retorna itens processados (sent/failed) nos últimos N segundos.
     Usado pelo front para mover cards automaticamente.
@@ -208,7 +208,7 @@ def whatsapp_recent(since_secs: int = 300, current_user: CurrentUser = Depends(g
 
 
 @router.get("/whatsapp/summary")
-def whatsapp_summary(current_user: CurrentUser = Depends(get_current_user)):
+def whatsapp_summary(current_user: CurrentUser = Depends(require_crm_access)):
     """
     Contadores rápidos para o banner do front.
     """

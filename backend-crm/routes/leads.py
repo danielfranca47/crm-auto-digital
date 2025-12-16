@@ -5,7 +5,7 @@ from datetime import datetime, timezone
 
 from database import get_connection, normalize_datetime_value
 from models import Lead, LeadUpdate, AppointmentCreate, AppointmentUpdate
-from security_core import CurrentUser, get_current_user
+from security_core import CurrentUser, require_crm_access
 
 router = APIRouter()
 
@@ -121,7 +121,7 @@ def _check_conflict(
 # ---------------------------
 
 @router.get("/")
-def listar_leads(current_user: CurrentUser = Depends(get_current_user)):
+def listar_leads(current_user: CurrentUser = Depends(require_crm_access)):
     """
     Lista leads e injeta a próxima ação agendada por lead (compromisso futuro mais próximo).
     Evita comparação naive/aware no Python — usamos datetime() do SQLite.
@@ -164,7 +164,7 @@ def listar_leads(current_user: CurrentUser = Depends(get_current_user)):
 
 
 @router.post("/")
-def criar_lead(lead: Lead, current_user: CurrentUser = Depends(get_current_user)):
+def criar_lead(lead: Lead, current_user: CurrentUser = Depends(require_crm_access)):
     conn = get_connection()
     cursor = conn.cursor()
     try:
@@ -231,7 +231,7 @@ def criar_lead(lead: Lead, current_user: CurrentUser = Depends(get_current_user)
 
 
 @router.patch("/{id}")
-def atualizar_lead_parcial(id: int, lead: LeadUpdate, current_user: CurrentUser = Depends(get_current_user)):
+def atualizar_lead_parcial(id: int, lead: LeadUpdate, current_user: CurrentUser = Depends(require_crm_access)):
     conn = get_connection()
     cursor = conn.cursor()
     try:
@@ -271,7 +271,7 @@ def atualizar_lead_parcial(id: int, lead: LeadUpdate, current_user: CurrentUser 
 
 
 @router.get("/{lead_id}/appointments")
-def listar_compromissos(lead_id: int, current_user: CurrentUser = Depends(get_current_user)):
+def listar_compromissos(lead_id: int, current_user: CurrentUser = Depends(require_crm_access)):
     conn = get_connection()
     cursor = conn.cursor()
     try:
@@ -293,7 +293,7 @@ def listar_compromissos(lead_id: int, current_user: CurrentUser = Depends(get_cu
 
 
 @router.post("/{lead_id}/appointments")
-def criar_compromisso(lead_id: int, payload: AppointmentCreate, current_user: CurrentUser = Depends(get_current_user)):
+def criar_compromisso(lead_id: int, payload: AppointmentCreate, current_user: CurrentUser = Depends(require_crm_access)):
     conn = get_connection()
     cursor = conn.cursor()
 
@@ -356,7 +356,7 @@ def criar_compromisso(lead_id: int, payload: AppointmentCreate, current_user: Cu
 
 
 @router.patch("/{lead_id}/appointments/{appointment_id}")
-def atualizar_compromisso(lead_id: int, appointment_id: int, payload: AppointmentUpdate, current_user: CurrentUser = Depends(get_current_user)):
+def atualizar_compromisso(lead_id: int, appointment_id: int, payload: AppointmentUpdate, current_user: CurrentUser = Depends(require_crm_access)):
     """
     Atualiza compromisso garantindo normalização de datas e checagem de conflito.
     """
@@ -423,7 +423,7 @@ def atualizar_compromisso(lead_id: int, appointment_id: int, payload: Appointmen
 
 
 @router.delete("/{lead_id}/appointments/{appointment_id}")
-def remover_compromisso(lead_id: int, appointment_id: int, current_user: CurrentUser = Depends(get_current_user)):
+def remover_compromisso(lead_id: int, appointment_id: int, current_user: CurrentUser = Depends(require_crm_access)):
     conn = get_connection()
     cursor = conn.cursor()
     try:

@@ -7,7 +7,7 @@ from automations.assistente_ia.processor import AssistIAProcessor
 from database import get_connection
 import pandas as pd
 from datetime import datetime
-from security_core import CurrentUser, get_current_user
+from security_core import CurrentUser, require_crm_access
 
 router = APIRouter()
 
@@ -66,7 +66,7 @@ class MessageUpsert(BaseModel):
 # ===================== ROTAS (processar/health/messages) =====================
 
 @router.post("/processar")
-def processar(req: AssistIAProcessRequest, current_user: CurrentUser = Depends(get_current_user)):
+def processar(req: AssistIAProcessRequest, current_user: CurrentUser = Depends(require_crm_access)):
     base_dir = Path("data/uploads/ai")
     base_dir.mkdir(parents=True, exist_ok=True)
 
@@ -117,7 +117,7 @@ def health():
     }
 
 @router.get("/messages/{lead_id}")
-def get_messages(lead_id: int, latest: bool = True, current_user: CurrentUser = Depends(get_current_user)):
+def get_messages(lead_id: int, latest: bool = True, current_user: CurrentUser = Depends(require_crm_access)):
     try:
         with get_connection() as conn:
             _require_lead_for_user(conn, lead_id, current_user.id)
@@ -145,7 +145,7 @@ def get_messages(lead_id: int, latest: bool = True, current_user: CurrentUser = 
 
 # >>> NOVO: upsert de mensagem manual <<<
 @router.post("/messages/upsert")
-def upsert_message(req: MessageUpsert, current_user: CurrentUser = Depends(get_current_user)):
+def upsert_message(req: MessageUpsert, current_user: CurrentUser = Depends(require_crm_access)):
     try:
         with get_connection() as conn:
             cur = conn.cursor()
@@ -215,7 +215,7 @@ def _read_preview_table(file_path: Path, limit: int = 200) -> pd.DataFrame:
     return df.head(limit)
 
 @router.post("/preview")
-def preview(req: dict = Body(...), current_user: CurrentUser = Depends(get_current_user)):
+def preview(req: dict = Body(...), current_user: CurrentUser = Depends(require_crm_access)):
     upload_id = req.get("upload_id")
     overwrite = req.get("overwrite", "update")
     if not upload_id:

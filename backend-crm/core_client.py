@@ -39,3 +39,32 @@ def fetch_core_user(token: str) -> Dict[str, Any]:
         raise HTTPException(status_code=401, detail="Resposta inesperada do backend-core")
 
     return data
+
+
+def fetch_core_entitlements(token: str) -> Dict[str, Any]:
+    """
+    Consulta o backend-core em /me/entitlements para recuperar status de assinatura,
+    produtos e limites consolidados.
+    """
+
+    if not token:
+        raise HTTPException(status_code=401, detail="Token ausente")
+
+    base = _get_core_base()
+    url = f"{base}/me/entitlements"
+    headers = {"Authorization": f"Bearer {token}"}
+
+    try:
+        with httpx.Client(timeout=10) as client:
+            resp = client.get(url, headers=headers)
+    except httpx.RequestError as exc:
+        raise HTTPException(status_code=401, detail=f"Falha ao contatar backend-core: {exc}") from exc
+
+    if resp.status_code != 200:
+        raise HTTPException(status_code=401, detail="Falha ao validar assinatura no backend-core")
+
+    data = resp.json()
+    if not isinstance(data, dict) or "products" not in data:
+        raise HTTPException(status_code=401, detail="Resposta inesperada do backend-core")
+
+    return data
