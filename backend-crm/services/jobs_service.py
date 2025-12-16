@@ -437,9 +437,14 @@ def _handle_whatsapp_report(conn, payload, status, result, error_txt, *, user_id
         notes = error_txt
 
     if status == JOB_STATUS_COMPLETED:
+        lead_params: List[Any] = [lead_id]
+        user_clause = ""
+        if user_id is not None:
+            user_clause = " AND user_id = ?"
+            lead_params.append(user_id)
         conn.execute(
-            "UPDATE leads SET category='qualification', lastMovement=CURRENT_TIMESTAMP WHERE id=?",
-            (lead_id,),
+            f"UPDATE leads SET category='qualification', lastMovement=CURRENT_TIMESTAMP WHERE id=?{user_clause}",
+            lead_params,
         )
         _log_prospection(
             conn,

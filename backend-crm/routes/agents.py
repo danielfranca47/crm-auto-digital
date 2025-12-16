@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 
 from services import jobs_service
-from security_core import CurrentUser, get_current_user
+from security_core import CurrentUser, require_crm_access
 
 router = APIRouter(prefix="/api/agents", tags=["Agents"])
 
@@ -51,7 +51,7 @@ class ManualWhatsappJobRequest(BaseModel):
 
 
 @router.post("/provision", response_model=ProvisionAgentResponse)
-def provision_agent(payload: ProvisionAgentRequest, current_user: CurrentUser = Depends(get_current_user)):
+def provision_agent(payload: ProvisionAgentRequest, current_user: CurrentUser = Depends(require_crm_access)):
     return jobs_service.provision_agent(user_id=current_user.id, name=payload.name)
 
 
@@ -95,17 +95,17 @@ def report_job(payload: ReportJobRequest):
 
 
 @router.get("/overview")
-def overview(seconds: int = Query(120, ge=10, le=600, description="Janela para considerar agente online"), current_user: CurrentUser = Depends(get_current_user)):
+def overview(seconds: int = Query(120, ge=10, le=600, description="Janela para considerar agente online"), current_user: CurrentUser = Depends(require_crm_access)):
     return jobs_service.get_jobs_overview(seconds=seconds, user_id=current_user.id)
 
 
 @router.get("/jobs/summary")
-def job_summary(current_user: CurrentUser = Depends(get_current_user)):
+def job_summary(current_user: CurrentUser = Depends(require_crm_access)):
     return jobs_service.get_whatsapp_summary(user_id=current_user.id)
 
 
 @router.post("/jobs/manual-whatsapp")
-def manual_whatsapp_job(payload: ManualWhatsappJobRequest, current_user: CurrentUser = Depends(get_current_user)):
+def manual_whatsapp_job(payload: ManualWhatsappJobRequest, current_user: CurrentUser = Depends(require_crm_access)):
     if not payload.phone or not payload.message:
         raise HTTPException(status_code=400, detail="phone e message são obrigatórios")
 
