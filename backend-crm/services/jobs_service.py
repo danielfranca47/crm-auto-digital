@@ -58,9 +58,12 @@ def _sanitize_agent(row: sqlite3.Row | Dict[str, Any]) -> Dict[str, Any]:
     data = dict(row)
     data.pop("token", None)
     data["capabilities"] = _json_loads(data.get("capabilities"))
-    last_seen = data.get("last_seen")
-    if last_seen:
-        data["last_seen"] = str(last_seen).replace(" ", "T")
+
+    for key in ("last_seen", "last_seen_at", "revoked_at", "created_at", "updated_at"):
+        if data.get(key):
+            data[key] = str(data[key]).replace(" ", "T")
+
+    data["revoked"] = data.get("revoked_at") is not None
     return data
 
 
@@ -74,6 +77,9 @@ def _get_agent_by_credentials(agent_id: str, token: str) -> Tuple[Dict[str, Any]
     if not row["token"] or row["token"] != token:
         conn.close()
         raise HTTPException(status_code=401, detail="Invalid agent token")
+    if row["revoked_at"] or row["status"] == "disabled":
+        conn.close()
+        raise HTTPException(status_code=403, detail="Agent revoked")
     data = dict(row)
     if data.get("user_id") is None:
         conn.close()
@@ -93,6 +99,7 @@ def _update_agent_touch(agent_id: str, *, user_id: Optional[int] = None) -> None
             f"""
             UPDATE agents
                SET last_seen=CURRENT_TIMESTAMP,
+                   last_seen_at=CURRENT_TIMESTAMP,
                    status=?,
                    updated_at=CURRENT_TIMESTAMP
              {where_clause}
@@ -130,6 +137,7 @@ def register_agent(
                    version=?,
                    status=?,
                    last_seen=CURRENT_TIMESTAMP,
+                   last_seen_at=CURRENT_TIMESTAMP,
                    updated_at=CURRENT_TIMESTAMP
              WHERE id=? AND token=?
             """,
@@ -153,8 +161,8 @@ def provision_agent(*, user_id: int, name: Optional[str] = None) -> Dict[str, An
         cur = conn.cursor()
         cur.execute(
             """
-            INSERT INTO agents (id, user_id, name, token, capabilities, version, status, last_seen)
-            VALUES (?, ?, ?, ?, NULL, NULL, ?, NULL)
+            INSERT INTO agents (id, user_id, name, token, capabilities, version, status, last_seen, last_seen_at, revoked_at)
+            VALUES (?, ?, ?, ?, NULL, NULL, ?, NULL, NULL, NULL)
             """,
             (agent_id, user_id, name, agent_token, AGENT_STATUS_OFFLINE),
         )
@@ -184,7 +192,7 @@ def list_agents(max_age_seconds: int = 120, *, user_id: Optional[int] = None) ->
             params,
         ):
             data = _sanitize_agent(row)
-            last_seen = data.get("last_seen")
+            last_seen = data.get("last_seen_at") or data.get("last_seen")
             if last_seen:
                 try:
                     last_seen_dt = datetime.fromisoformat(str(last_seen))
@@ -193,8 +201,73 @@ def list_agents(max_age_seconds: int = 120, *, user_id: Optional[int] = None) ->
                 data["online"] = last_seen_dt is not None and last_seen_dt >= threshold_dt
             else:
                 data["online"] = False
+            if data.get("revoked_at"):
+                data["status"] = "disabled"
             agents.append(data)
     return agents
+
+
+def revoke_agent(*, agent_id: str, user_id: int) -> Dict[str, Any]:
+    with get_connection() as conn:
+        cur = conn.cursor()
+        row = cur.execute(
+            "SELECT * FROM agents WHERE id=? AND user_id=?",
+            (agent_id, user_id),
+        ).fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="Agente não encontrado")
+
+        cur.execute(
+            """
+            UPDATE agents
+               SET revoked_at=CURRENT_TIMESTAMP,
+                   status='disabled',
+                   updated_at=CURRENT_TIMESTAMP
+             WHERE id=? AND user_id=?
+            """,
+            (agent_id, user_id),
+        )
+        conn.commit()
+        refreshed = cur.execute(
+            "SELECT * FROM agents WHERE id=? AND user_id=?",
+            (agent_id, user_id),
+        ).fetchone()
+    return _sanitize_agent(refreshed)
+
+
+def reprovision_agent(*, agent_id: str, user_id: int) -> Dict[str, Any]:
+    import secrets
+
+    new_token = secrets.token_urlsafe(32)
+    with get_connection() as conn:
+        cur = conn.cursor()
+        row = cur.execute(
+            "SELECT * FROM agents WHERE id=? AND user_id=?",
+            (agent_id, user_id),
+        ).fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="Agente não encontrado")
+
+        cur.execute(
+            """
+            UPDATE agents
+               SET token=?,
+                   revoked_at=NULL,
+                   status='offline',
+                   updated_at=CURRENT_TIMESTAMP
+             WHERE id=? AND user_id=?
+            """,
+            (new_token, agent_id, user_id),
+        )
+        conn.commit()
+        refreshed = cur.execute(
+            "SELECT * FROM agents WHERE id=? AND user_id=?",
+            (agent_id, user_id),
+        ).fetchone()
+
+    agent_data = _sanitize_agent(refreshed)
+    agent_data["agent_token"] = new_token
+    return agent_data
 
 
 # ---------------------------------------------------------------------------
@@ -437,9 +510,14 @@ def _handle_whatsapp_report(conn, payload, status, result, error_txt, *, user_id
         notes = error_txt
 
     if status == JOB_STATUS_COMPLETED:
+        lead_params: List[Any] = [lead_id]
+        user_clause = ""
+        if user_id is not None:
+            user_clause = " AND user_id = ?"
+            lead_params.append(user_id)
         conn.execute(
-            "UPDATE leads SET category='qualification', lastMovement=CURRENT_TIMESTAMP WHERE id=?",
-            (lead_id,),
+            f"UPDATE leads SET category='qualification', lastMovement=CURRENT_TIMESTAMP WHERE id=?{user_clause}",
+            lead_params,
         )
         _log_prospection(
             conn,
