@@ -24,10 +24,10 @@ O agente lê as configurações automaticamente a partir de um arquivo `.env` no
 
 | Variável | Descrição | Padrão |
 |----------|-----------|--------|
-| `BACKEND_URL` | URL base do backend FastAPI | `http://localhost:8000` |
+| `BACKEND_URL` | URL base do backend FastAPI (CRM) | `http://localhost:8010` |
 | `AGENT_ID` | Identificador único do agente (copiado do provisionamento no CRM) | `local-agent` |
 | `AGENT_TOKEN` | Token simples usado para autenticação do agente (copiado do provisionamento no CRM) | `change-me` |
-| `JOB_TYPES` | Lista (separada por vírgula) de tipos de job aceitos | `whatsapp_send` |
+| `JOB_TYPES` | Lista (separada por vírgula) de tipos de job aceitos | `whatsapp.send.local,maps.search.local,maps.enrich.local` |
 | `POLL_INTERVAL` | Intervalo em segundos entre buscas consecutivas quando há jobs disponíveis | `5` |
 | `IDLE_INTERVAL` | Intervalo em segundos quando a fila está vazia ou em caso de erro | `15` |
 | `CHROME_USER_DATA` | Caminho do diretório de perfil reutilizado pelo Chrome (mantém login do WhatsApp) | `%USERPROFILE%\.agent-local\chrome-profile` |
@@ -38,10 +38,10 @@ O agente lê as configurações automaticamente a partir de um arquivo `.env` no
 Exemplo de `.env` (preencha `AGENT_ID`/`AGENT_TOKEN` com o par retornado pelo endpoint `/api/agents/provision` do backend-CRM):
 
 ```env
-BACKEND_URL=http://localhost:8000
+BACKEND_URL=http://localhost:8010
 AGENT_ID=workstation-01
 AGENT_TOKEN=super-secreto
-JOB_TYPES=whatsapp_send
+JOB_TYPES=whatsapp.send.local,maps.search.local,maps.enrich.local
 POLL_INTERVAL=4
 IDLE_INTERVAL=12
 CHROME_USER_DATA=C:\\Users\\user\\AppData\\Local\\AgentLocal\\profile
@@ -56,6 +56,8 @@ python main.py
 ```
 
 O agente registra-se no backend (`/api/agents/register`), busca jobs (`/api/agents/next-job`), executa as automações e reporta o resultado (`/api/agents/report`). Logs ficam disponíveis tanto no console quanto no arquivo definido em `AGENT_LOG`.
+
+> Convenção de tipos: usamos o formato `<canal>.<ação>.<executor>`. Os canônicos atuais são `whatsapp.send.local`, `maps.search.local`, `maps.enrich.local`. Aliases legados (`whatsapp_send`, `maps_search_fallback`, `maps_enrich_fallback`) ainda são aceitos para compatibilidade, mas o backend responde com o tipo canônico.
 
 ### Empacotamento (PyInstaller)
 

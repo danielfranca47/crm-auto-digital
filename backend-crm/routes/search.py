@@ -8,7 +8,7 @@ import json
 
 from automations.search.proposals.site.runner import run_site_search
 from automations.search.proposals.site import config  # OUTPUT_DIR
-from security_core import CurrentUser, get_current_user
+from security_core import CurrentUser, require_crm_access
 
 router = APIRouter()
 
@@ -45,7 +45,7 @@ def _validated_path_from_manifest(man: Dict[str, Any]) -> Path:
 
 # ---------- endpoints ----------
 @router.post("/executar")
-def executar_pesquisa(req: SearchRequest, current_user: CurrentUser = Depends(get_current_user)) -> Dict[str, Any]:
+def executar_pesquisa(req: SearchRequest, current_user: CurrentUser = Depends(require_crm_access)) -> Dict[str, Any]:
     """
     Dispara a automação e retorna o manifest + link do validado.
     """
@@ -60,7 +60,7 @@ def executar_pesquisa(req: SearchRequest, current_user: CurrentUser = Depends(ge
         raise HTTPException(status_code=500, detail=f"Erro ao executar: {e}")
 
 @router.get("/baixar/{run_id}")
-def baixar_validado(run_id: str, current_user: CurrentUser = Depends(get_current_user)):
+def baixar_validado(run_id: str, current_user: CurrentUser = Depends(require_crm_access)):
     """
     Atalho: sempre baixa o XLSX validado desta execução.
     """
@@ -74,7 +74,7 @@ def baixar_validado(run_id: str, current_user: CurrentUser = Depends(get_current
 
 # (opcional) manter compatibilidade com a rota antiga
 @router.get("/baixar/{run_id}/{kind}")
-def baixar_arquivo(run_id: str, kind: Literal["csv", "xlsx", "xlsx_validado"], current_user: CurrentUser = Depends(get_current_user)):
+def baixar_arquivo(run_id: str, kind: Literal["csv", "xlsx", "xlsx_validado"], current_user: CurrentUser = Depends(require_crm_access)):
     man = _load_manifest(run_id)
     fpath = man.get("files", {}).get(kind)
     if not fpath:
@@ -90,7 +90,7 @@ def baixar_arquivo(run_id: str, kind: Literal["csv", "xlsx", "xlsx_validado"], c
     return FileResponse(path=str(p), filename=p.name, media_type=media)
 
 @router.get("/runs")
-def listar_runs(current_user: CurrentUser = Depends(get_current_user)) -> List[Dict[str, Any]]:
+def listar_runs(current_user: CurrentUser = Depends(require_crm_access)) -> List[Dict[str, Any]]:
     """
     Lista execuções focando no link do validado (para o frontend).
     """
@@ -121,7 +121,7 @@ def listar_runs(current_user: CurrentUser = Depends(get_current_user)) -> List[D
     return out
 
 @router.get("/status/{run_id}")
-def status(run_id: str, current_user: CurrentUser = Depends(get_current_user)) -> Dict[str, Any]:
+def status(run_id: str, current_user: CurrentUser = Depends(require_crm_access)) -> Dict[str, Any]:
     """
     Retorna se a execução existe e se o validado está pronto.
     """

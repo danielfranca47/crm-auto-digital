@@ -23,7 +23,9 @@ Novas tabelas criadas no SQLite:
 | `status` | TEXT | `offline` \| `online` \| `disabled` |
 | `capabilities` | TEXT (JSON) | Lista de tipos de job suportados |
 | `version` | TEXT | Versão do agente informada no registro |
-| `last_seen` | DATETIME | Último heartbeat do agente |
+| `last_seen` | DATETIME | Último heartbeat do agente (legado) |
+| `last_seen_at` | DATETIME | Heartbeat recente usado para status online/offline |
+| `revoked_at` | DATETIME | Preenchido quando o agente é revogado; token deixa de funcionar |
 | `created_at`/`updated_at` | DATETIME | Auditoria |
 
 ### `jobs`
@@ -31,7 +33,7 @@ Novas tabelas criadas no SQLite:
 | Coluna | Tipo | Descrição |
 | ------ | ---- | --------- |
 | `id` | INTEGER (PK) | Identificador do job |
-| `type` | TEXT | Tipo do job (ex.: `whatsapp_send`) |
+| `type` | TEXT | Tipo do job (ex.: `whatsapp.send.local`; aliases legados continuam aceitos) |
 | `payload` | TEXT (JSON) | Dados necessários para execução (lead, mensagem, etc.) |
 | `status` | TEXT | `pending` \| `in_progress` \| `completed` \| `failed` |
 | `priority` | INTEGER | Prioridade (maior primeiro) |
@@ -49,11 +51,21 @@ Novas tabelas criadas no SQLite:
 | Método | Caminho completo | Descrição |
 |--------|------------------|-----------|
 | `POST` | `/api/agents/provision` | (Requer bearer token do core) Gera um par `(agent_id, agent_token)` vinculado ao usuário autenticado. |
-| `POST` | `/api/agents/register` | Registro/heartbeat de um agente previamente provisionado. Atualiza status, capabilities e version. |
-| `GET` | `/api/agents/next-job` | Busca do próximo job. Usa query `agent_id`, `token` e `types=whatsapp_send`. Retorna jobs apenas do mesmo `user_id` do agente. |
+| `GET` | `/api/agents` | (Requer bearer) Lista apenas agentes do usuário autenticado, sem expor token. Inclui `online` derivado de `last_seen_at`. |
+| `POST` | `/api/agents/register` | Registro/heartbeat de um agente previamente provisionado. Atualiza status, capabilities, version e `last_seen_at`. Falha com `403 Agent revoked` se o token foi revogado. |
+| `GET` | `/api/agents/next-job` | Busca do próximo job. Usa query `agent_id`, `token` e `types=whatsapp.send.local` (aliases como `whatsapp_send` continuam funcionando). Retorna jobs apenas do mesmo `user_id` do agente. |
 | `POST` | `/api/agents/report` | Reporte de conclusão/erro de um job. Valida `agent_id`+`token` e mantém o `user_id` do agente. |
 | `GET` | `/api/agents/overview` | Lista agentes do usuário autenticado (token não é retornado) e contadores gerais. |
 | `GET` | `/api/agents/jobs/summary` | Contadores específicos de jobs (pendentes, concluídos/erro no dia) filtrados por `user_id`. |
+| `POST` | `/api/agents/{agent_id}/revoke` | Revoga o agente (marca `revoked_at` e `status=disabled`). Calls de `register/next-job/report` com token antigo passam a falhar. |
+| `POST` | `/api/agents/{agent_id}/reprovision` | Gera novo `agent_token` para o mesmo `agent_id` (token antigo é invalidado). Resposta inclui instrução curta para atualizar `.env` do agent-local. |
+
+### Convenção de job types (com aliases legados)
+
+- Formato: `<canal>.<ação>.<executor>`.
+- Canônicos atuais (executor local): `whatsapp.send.local`, `maps.search.local`, `maps.enrich.local`.
+- Aliases aceitos automaticamente: `whatsapp_send`, `maps_search_fallback`, `maps_enrich_fallback`.
+- Configure `JOB_TYPES` no agent-local preferencialmente com os canônicos; aliases permanecem para não quebrar jobs antigos gravados no banco.
 
 `POST /api/agents/provision`
 ```json
@@ -79,12 +91,12 @@ Use `agent_id` e `agent_token` no `.env` do projeto `agent-local/` e siga com o 
   "agent_id": "2f3d...",
   "token": "p5b...",
   "name": "Notebook Comercial",
-  "capabilities": ["whatsapp_send"],
+  "capabilities": ["whatsapp.send.local", "maps.search.local", "maps.enrich.local"],
   "version": "0.1.0"
 }
 ```
 
-`GET /api/agents/next-job?agent_id=2f3d...&token=p5b...&types=whatsapp_send`
+`GET /api/agents/next-job?agent_id=2f3d...&token=p5b...&types=whatsapp.send.local`
 
 - Retorna `{ "job": { ... } }` quando há pendências ou `{ "job": null }` se a fila estiver vazia.
 
@@ -100,11 +112,12 @@ Use `agent_id` e `agent_token` no `.env` do projeto `agent-local/` e siga com o 
 ```
 
 > Importante: o `agent_token` só é retornado no momento do provisionamento. Listagens como `/api/agents/overview` escondem o token para evitar vazamentos.
+> Rotas de listagem (`/api/agents`) também ocultam o token; use reprovisionamento para gerar uma nova credencial quando necessário.
 
 ### Fluxo de prospecção (frontend)
 
 - `POST /api/prospeccao/whatsapp/enqueue`
-  Recebe `{ "lead_ids": [1,2,3] }` e cria jobs `whatsapp_send`.
+  Recebe `{ "lead_ids": [1,2,3] }` e cria jobs `whatsapp.send.local` (aliases legados continuam aceitos).
 - `GET /api/prospeccao/whatsapp/queue?limit=25`
   Lista pendências diretamente da tabela `jobs`.
 - `GET /api/prospeccao/whatsapp/recent?since_secs=180`
@@ -115,20 +128,20 @@ Use `agent_id` e `agent_token` no `.env` do projeto `agent-local/` e siga com o 
 ### Endpoint rápido para testes manuais
 
 - `POST /api/agents/jobs/manual-whatsapp`
-  - **Payload mínimo:**
-    ```json
-    {
-      "phone": "+5511999999999",
-      "message": "Mensagem de teste enviada pelo agente local"
-    }
-    ```
+- **Payload mínimo:**
+  ```json
+  {
+    "phone": "+5511999999999",
+    "message": "Mensagem de teste enviada pelo agente local"
+  }
+  ```
   - Campos opcionais `lead_id` e `message_id` podem ser enviados para relacionar o job a um lead ou template salvo.
-  - O backend responde com `{ "ok": true, "job": { ... } }`; o job fica imediatamente disponível para agentes autorizados a processar `whatsapp_send`.
+  - O backend responde com `{ "ok": true, "job": { ... } }`; o job fica imediatamente disponível para agentes autorizados a processar `whatsapp.send.local` (ou aliases legados).
 
 ## Fluxo end-to-end
 
 1. Usuário seleciona leads no CRM e aciona `POST /api/prospeccao/whatsapp/enqueue`.
-2. O backend cria registros em `jobs` com `type=whatsapp_send` e armazena o payload necessário (telefone, mensagem, etc.).
+2. O backend cria registros em `jobs` com `type=whatsapp.send.local` (normalizando aliases legados) e armazena o payload necessário (telefone, mensagem, etc.).
 3. O Agente Local chama `/api/agents/next-job`, recebe o job pendente e executa a automação no Chrome local via Selenium.
 4. Ao concluir, o agente reporta o resultado em `/api/agents/report` (`completed` ou `failed`).
 5. O backend atualiza o status do job, registra logs em `prospection_logs` e move o lead de estágio quando apropriado.
@@ -148,7 +161,8 @@ Use `agent_id` e `agent_token` no `.env` do projeto `agent-local/` e siga com o 
 - requests, selenium, webdriver-manager, python-dotenv
 
 ### Variáveis de ambiente
-BACKEND_URL=http://localhost:8000
+Defina `BACKEND_URL` apontando para o backend-CRM (ex.: `http://localhost:8010`).
+BACKEND_URL=http://localhost:8010
 AGENT_ID=notebook-01
 AGENT_TOKEN=seu-token
 JOB_TYPES=whatsapp_send
