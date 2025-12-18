@@ -14,6 +14,20 @@ from agent.whatsapp_runner import WhatsAppRunner
 
 AGENT_VERSION = "0.1.0"
 
+TYPE_ALIASES = {
+    "whatsapp.send.local": ["whatsapp_send"],
+    "maps.search.local": ["maps_search_fallback"],
+    "maps.enrich.local": ["maps_enrich_fallback"],
+}
+
+
+def normalize_job_type(job_type: str) -> str:
+    jt = (job_type or "").strip()
+    for canonical, aliases in TYPE_ALIASES.items():
+        if jt == canonical or jt in aliases:
+            return canonical
+    return jt
+
 
 def setup_logging(config: AgentConfig) -> None:
     log_path = config.log_path
@@ -34,20 +48,20 @@ def setup_logging(config: AgentConfig) -> None:
 def process_job(
     job: Dict[str, Any], whatsapp_runner: WhatsAppRunner, maps_runner: MapsResearchRunner
 ) -> Dict[str, Any]:
-    job_type = job.get("type")
+    job_type = normalize_job_type(job.get("type"))
     payload = job.get("payload") or {}
 
-    if job_type == "whatsapp_send":
+    if job_type == "whatsapp.send.local":
         phone = payload.get("phone")
         message = payload.get("body")
         if not phone or not message:
             raise ValueError("payload de whatsapp_send inválido: phone/body ausentes")
         return whatsapp_runner.send_whatsapp(phone=phone, message=message)
 
-    if job_type == "maps_search_fallback":
+    if job_type == "maps.search.local":
         return maps_runner.run_search_fallback(payload)
 
-    if job_type == "maps_enrich_fallback":
+    if job_type == "maps.enrich.local":
         return maps_runner.run_enrich_fallback(payload)
 
     raise ValueError(f"Tipo de job não suportado: {job_type}")
@@ -55,6 +69,7 @@ def process_job(
 
 def main() -> None:
     config = AgentConfig.load()
+    job_types = [normalize_job_type(t) for t in (config.job_types or [])]
     setup_logging(config)
 
     logger = logging.getLogger("agent")
@@ -65,7 +80,7 @@ def main() -> None:
     maps_runner = MapsResearchRunner(config)
 
     try:
-        client.register_agent(capabilities=config.job_types, version=AGENT_VERSION)
+        client.register_agent(capabilities=job_types, version=AGENT_VERSION)
         logger.info("Agente registrado com ID '%s'", config.agent_id)
     except Exception as exc:
         logger.error("Falha ao registrar agente: %s", exc, exc_info=True)
@@ -75,7 +90,7 @@ def main() -> None:
 
     while True:
         try:
-            job = client.fetch_next_job(config.job_types)
+            job = client.fetch_next_job(job_types)
             if not job:
                 time.sleep(config.idle_interval)
                 consecutive_errors = 0
