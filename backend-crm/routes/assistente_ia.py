@@ -7,7 +7,7 @@ from automations.assistente_ia.processor import AssistIAProcessor
 from database import get_connection
 import pandas as pd
 from datetime import datetime
-from security_core import CurrentUser, get_current_user
+from security_core import CurrentUser, require_crm_access
 
 router = APIRouter()
 
@@ -17,7 +17,7 @@ ALLOWED_CHANNELS = {"email", "whatsapp", "instagram", "call"}
 def _require_lead_for_user(conn, lead_id: int, user_id: int) -> None:
     cur = conn.cursor()
     cur.execute(
-        "SELECT id FROM leads WHERE id = ? AND (user_id = ? OR user_id IS NULL)",
+        "SELECT id FROM leads WHERE id = ? AND user_id = ?",
         (lead_id, user_id),
     )
     if cur.fetchone() is None:
@@ -66,7 +66,7 @@ class MessageUpsert(BaseModel):
 # ===================== ROTAS (processar/health/messages) =====================
 
 @router.post("/processar")
-def processar(req: AssistIAProcessRequest, current_user: CurrentUser = Depends(get_current_user)):
+def processar(req: AssistIAProcessRequest, current_user: CurrentUser = Depends(require_crm_access)):
     base_dir = Path("data/uploads/ai")
     base_dir.mkdir(parents=True, exist_ok=True)
 
@@ -89,6 +89,7 @@ def processar(req: AssistIAProcessRequest, current_user: CurrentUser = Depends(g
             limit=req.limit,
             tone=req.tone,
             language=req.language,
+            user_id=current_user.id,
         )
         return {"ok": True, **result}
     except Exception as e:
@@ -116,7 +117,7 @@ def health():
     }
 
 @router.get("/messages/{lead_id}")
-def get_messages(lead_id: int, latest: bool = True, current_user: CurrentUser = Depends(get_current_user)):
+def get_messages(lead_id: int, latest: bool = True, current_user: CurrentUser = Depends(require_crm_access)):
     try:
         with get_connection() as conn:
             _require_lead_for_user(conn, lead_id, current_user.id)
@@ -144,7 +145,7 @@ def get_messages(lead_id: int, latest: bool = True, current_user: CurrentUser = 
 
 # >>> NOVO: upsert de mensagem manual <<<
 @router.post("/messages/upsert")
-def upsert_message(req: MessageUpsert, current_user: CurrentUser = Depends(get_current_user)):
+def upsert_message(req: MessageUpsert, current_user: CurrentUser = Depends(require_crm_access)):
     try:
         with get_connection() as conn:
             cur = conn.cursor()
@@ -189,7 +190,7 @@ def upsert_message(req: MessageUpsert, current_user: CurrentUser = Depends(get_c
 
             # Marca movimento do lead
             cur.execute(
-                "UPDATE leads SET lastMovement = CURRENT_TIMESTAMP WHERE id = ? AND (user_id = ? OR user_id IS NULL)",
+                "UPDATE leads SET lastMovement = CURRENT_TIMESTAMP WHERE id = ? AND user_id = ?",
                 (req.lead_id, current_user.id),
             )
 
@@ -214,7 +215,7 @@ def _read_preview_table(file_path: Path, limit: int = 200) -> pd.DataFrame:
     return df.head(limit)
 
 @router.post("/preview")
-def preview(req: dict = Body(...)):
+def preview(req: dict = Body(...), current_user: CurrentUser = Depends(require_crm_access)):
     upload_id = req.get("upload_id")
     overwrite = req.get("overwrite", "update")
     if not upload_id:
@@ -241,18 +242,27 @@ def preview(req: dict = Body(...)):
         cur = conn.cursor()
         dup_phone = set()
         if phones:
-            q = f"SELECT phone FROM leads WHERE phone IN ({','.join(['?']*len(phones))})"
-            for (p,) in cur.execute(q, tuple(phones)).fetchall():
+            q = (
+                f"SELECT phone FROM leads WHERE phone IN ({','.join(['?']*len(phones))}) "
+                "AND user_id = ?"
+            )
+            for (p,) in cur.execute(q, (*phones, current_user.id)).fetchall():
                 dup_phone.add(str(p))
         dup_email = set()
         if emails:
-            q = f"SELECT email FROM leads WHERE email IN ({','.join(['?']*len(emails))})"
-            for (e,) in cur.execute(q, tuple(emails)).fetchall():
+            q = (
+                f"SELECT email FROM leads WHERE email IN ({','.join(['?']*len(emails))}) "
+                "AND user_id = ?"
+            )
+            for (e,) in cur.execute(q, (*emails, current_user.id)).fetchall():
                 dup_email.add(str(e))
         dup_name = set()
         if names:
-            q = f"SELECT companyName FROM leads WHERE companyName IN ({','.join(['?']*len(names))})"
-            for (n,) in cur.execute(q, tuple(names)).fetchall():
+            q = (
+                f"SELECT companyName FROM leads WHERE companyName IN ({','.join(['?']*len(names))}) "
+                "AND user_id = ?"
+            )
+            for (n,) in cur.execute(q, (*names, current_user.id)).fetchall():
                 dup_name.add(str(n))
 
     rows = []

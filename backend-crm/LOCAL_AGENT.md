@@ -23,7 +23,9 @@ Novas tabelas criadas no SQLite:
 | `status` | TEXT | `offline` \| `online` \| `disabled` |
 | `capabilities` | TEXT (JSON) | Lista de tipos de job suportados |
 | `version` | TEXT | Versão do agente informada no registro |
-| `last_seen` | DATETIME | Último heartbeat do agente |
+| `last_seen` | DATETIME | Último heartbeat do agente (legado) |
+| `last_seen_at` | DATETIME | Heartbeat recente usado para status online/offline |
+| `revoked_at` | DATETIME | Preenchido quando o agente é revogado; token deixa de funcionar |
 | `created_at`/`updated_at` | DATETIME | Auditoria |
 
 ### `jobs`
@@ -49,11 +51,14 @@ Novas tabelas criadas no SQLite:
 | Método | Caminho completo | Descrição |
 |--------|------------------|-----------|
 | `POST` | `/api/agents/provision` | (Requer bearer token do core) Gera um par `(agent_id, agent_token)` vinculado ao usuário autenticado. |
-| `POST` | `/api/agents/register` | Registro/heartbeat de um agente previamente provisionado. Atualiza status, capabilities e version. |
+| `GET` | `/api/agents` | (Requer bearer) Lista apenas agentes do usuário autenticado, sem expor token. Inclui `online` derivado de `last_seen_at`. |
+| `POST` | `/api/agents/register` | Registro/heartbeat de um agente previamente provisionado. Atualiza status, capabilities, version e `last_seen_at`. Falha com `403 Agent revoked` se o token foi revogado. |
 | `GET` | `/api/agents/next-job` | Busca do próximo job. Usa query `agent_id`, `token` e `types=whatsapp_send`. Retorna jobs apenas do mesmo `user_id` do agente. |
 | `POST` | `/api/agents/report` | Reporte de conclusão/erro de um job. Valida `agent_id`+`token` e mantém o `user_id` do agente. |
 | `GET` | `/api/agents/overview` | Lista agentes do usuário autenticado (token não é retornado) e contadores gerais. |
 | `GET` | `/api/agents/jobs/summary` | Contadores específicos de jobs (pendentes, concluídos/erro no dia) filtrados por `user_id`. |
+| `POST` | `/api/agents/{agent_id}/revoke` | Revoga o agente (marca `revoked_at` e `status=disabled`). Calls de `register/next-job/report` com token antigo passam a falhar. |
+| `POST` | `/api/agents/{agent_id}/reprovision` | Gera novo `agent_token` para o mesmo `agent_id` (token antigo é invalidado). Resposta inclui instrução curta para atualizar `.env` do agent-local. |
 
 `POST /api/agents/provision`
 ```json
@@ -100,6 +105,7 @@ Use `agent_id` e `agent_token` no `.env` do projeto `agent-local/` e siga com o 
 ```
 
 > Importante: o `agent_token` só é retornado no momento do provisionamento. Listagens como `/api/agents/overview` escondem o token para evitar vazamentos.
+> Rotas de listagem (`/api/agents`) também ocultam o token; use reprovisionamento para gerar uma nova credencial quando necessário.
 
 ### Fluxo de prospecção (frontend)
 
@@ -148,7 +154,8 @@ Use `agent_id` e `agent_token` no `.env` do projeto `agent-local/` e siga com o 
 - requests, selenium, webdriver-manager, python-dotenv
 
 ### Variáveis de ambiente
-BACKEND_URL=http://localhost:8000
+Defina `BACKEND_URL` apontando para o backend-CRM (ex.: `http://localhost:8010`).
+BACKEND_URL=http://localhost:8010
 AGENT_ID=notebook-01
 AGENT_TOKEN=seu-token
 JOB_TYPES=whatsapp_send

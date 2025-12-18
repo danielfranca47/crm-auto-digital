@@ -51,6 +51,8 @@ def ensure_jobs_tables(conn: sqlite3.Connection) -> None:
             capabilities TEXT,
             version TEXT,
             last_seen DATETIME,
+            last_seen_at DATETIME,
+            revoked_at DATETIME,
             created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
             updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
         );
@@ -81,6 +83,8 @@ def ensure_jobs_tables(conn: sqlite3.Connection) -> None:
     )
 
     ensure_column(conn, "agents", "user_id", "INTEGER")
+    ensure_column(conn, "agents", "last_seen_at", "DATETIME")
+    ensure_column(conn, "agents", "revoked_at", "DATETIME")
     ensure_column(conn, "jobs", "user_id", "INTEGER")
     cur.execute("CREATE INDEX IF NOT EXISTS idx_jobs_user ON jobs(user_id, status);")
 
