@@ -56,6 +56,22 @@ curl http://localhost:8010/api/leads \
    - `POST /api/agents/{agent_id}/revoke` — marca `revoked_at` e passa a recusar `register/next-job/report` com o token antigo.
    - `POST /api/agents/{agent_id}/reprovision` — gera um novo `agent_token` (o antigo deixa de funcionar) e retorna instruções para atualizar o `.env` do agent-local.
 
+### Convenção de job types (multi-canal + executor)
+
+- Formato canônico: `<canal>.<ação>.<executor>`, onde `executor ∈ {local, n8n}`.
+- Tipos canônicos atuais (agent-local):
+  - `whatsapp.send.local`
+  - `maps.search.local`
+  - `maps.enrich.local`
+- Aliases legados aceitos por normalização (para não quebrar jobs já gravados):
+  - `whatsapp_send` → `whatsapp.send.local`
+  - `maps_search_fallback` → `maps.search.local`
+  - `maps_enrich_fallback` → `maps.enrich.local`
+- Exemplos de query param `types` no `/api/agents/next-job`:
+  - `types=whatsapp.send.local`
+  - `types=whatsapp.send.local,maps.search.local,maps.enrich.local`
+  - Aliases continuam válidos, mas o backend sempre responde com o tipo canônico.
+
 ### Checklist de testes manuais (agente local)
 
 Sequência completa sugerida (via curl ou Swagger) para validar provisionamento, heartbeat, fila, revogação e reprovisionamento:
@@ -73,12 +89,12 @@ Sequência completa sugerida (via curl ou Swagger) para validar provisionamento,
    ```bash
    curl -X POST http://localhost:8010/api/agents/register \
      -H "Content-Type: application/json" \
-     -d '{"agent_id":"<AGENT_ID>","token":"<AGENT_TOKEN>","capabilities":["whatsapp_send"],"version":"qa"}'
+     -d '{"agent_id":"<AGENT_ID>","token":"<AGENT_TOKEN>","capabilities":["whatsapp.send.local","maps.search.local","maps.enrich.local"],"version":"qa"}'
    ```
 
 3. **next-job com fila vazia**
    ```bash
-   curl "http://localhost:8010/api/agents/next-job?agent_id=<AGENT_ID>&token=<AGENT_TOKEN>&types=whatsapp_send"
+   curl "http://localhost:8010/api/agents/next-job?agent_id=<AGENT_ID>&token=<AGENT_TOKEN>&types=whatsapp.send.local"
    ```
    Deve retornar `{ "job": null }` quando não há pendências.
 
@@ -92,9 +108,9 @@ Sequência completa sugerida (via curl ou Swagger) para validar provisionamento,
 
 5. **next-job com job pendente**
    ```bash
-   curl "http://localhost:8010/api/agents/next-job?agent_id=<AGENT_ID>&token=<AGENT_TOKEN>&types=whatsapp_send"
+   curl "http://localhost:8010/api/agents/next-job?agent_id=<AGENT_ID>&token=<AGENT_TOKEN>&types=whatsapp.send.local"
    ```
-   Deve retornar o job criado no passo anterior. Confirme que o payload inclui `assigned_agent_id` igual a `<AGENT_ID>` (o mesmo valor salvo no banco ao fazer o claim).
+   Deve retornar o job criado no passo anterior. Confirme que o payload inclui `assigned_agent_id` igual a `<AGENT_ID>` e `type=whatsapp.send.local` (o mesmo valor salvo no banco ao fazer o claim; aliases são normalizados).
 
 6. **report (completed)**
    ```bash
@@ -102,6 +118,7 @@ Sequência completa sugerida (via curl ou Swagger) para validar provisionamento,
      -H "Content-Type: application/json" \
      -d '{"agent_id":"<AGENT_ID>","token":"<AGENT_TOKEN>","job_id":<JOB_ID>,"status":"completed","result":{"ok":true}}'
    ```
+   A resposta deve incluir `status":"completed"` e um objeto `job` com `status=completed` e `completed_at` preenchido. Se o job já tiver sido atualizado ou não pertencer ao agente/usuário, o endpoint retornará erro.
 
 7. **Listar agentes e checar online/offline**
    ```bash
@@ -183,7 +200,7 @@ Sequência completa sugerida (via curl ou Swagger) para validar provisionamento,
            "message": "Olá! Tudo bem?"
          }'
    ```
-   - Cria (ou reutiliza) uma mensagem e um job `whatsapp_send` na tabela `jobs`, ambos com `user_id` do A.
+   - Cria (ou reutiliza) uma mensagem e um job `whatsapp.send.local` na tabela `jobs`, ambos com `user_id` do A. Aliases legados (`whatsapp_send`) continuam aceitos via normalização.
    - Também grava log `queued` em `prospection_logs` com o mesmo `user_id`.
 
 4. **Validar escopo multiusuário**
@@ -211,7 +228,7 @@ Sequência completa sugerida (via curl ou Swagger) para validar provisionamento,
    - Inicie o agente (ex.: `python main.py` no diretório `agent-local/`).
 
 3. **Consumir jobs e reportar status**
-   - O agente chama `GET /api/agents/next-job?agent_id=...&token=...&types=whatsapp_send` e receberá apenas jobs do seu `user_id`.
+   - O agente chama `GET /api/agents/next-job?agent_id=...&token=...&types=whatsapp.send.local` (aliases como `whatsapp_send` continuam válidos) e receberá apenas jobs do seu `user_id`.
    - Após processar, o agente chama `POST /api/agents/report` com `status=completed` ou `failed`; o CRM atualiza `jobs` e grava logs em `prospection_logs` com o mesmo `user_id`.
    - Monitore `GET /api/prospeccao/whatsapp/recent` ou `GET /api/agents/jobs/summary` com `token_A` para ver o resultado.
 
@@ -266,5 +283,5 @@ Sequência completa sugerida (via curl ou Swagger) para validar provisionamento,
 ### 4) Observações e Troubleshooting
 
 - **Se retornar 401**: verifique se está enviando `Authorization: Bearer <token>` e se `CORE_API_BASE` do CRM aponta para o core correto.
-- **Se jobs ficarem pending**: confirme que o `agent-local` está rodando com `AGENT_ID/AGENT_TOKEN` do usuário certo e que ele aceita `whatsapp_send` em `types`.
+- **Se jobs ficarem pending**: confirme que o `agent-local` está rodando com `AGENT_ID/AGENT_TOKEN` do usuário certo e que ele aceita `whatsapp.send.local` (aliases legados ainda funcionam) em `types`.
 - **Se uma rota de prospecção responder 404**: normalmente o `lead_id` pertence a outro usuário ou não existe; revise o token usado.

@@ -146,7 +146,7 @@ def manual_whatsapp_job(payload: ManualWhatsappJobRequest, current_user: Current
         raise HTTPException(status_code=400, detail="phone e message são obrigatórios")
 
     job = jobs_service.create_job(
-        job_type="whatsapp_send",
+        job_type=jobs_service.TYPE_WHATSAPP_SEND,
         payload={
             "lead_id": payload.lead_id,
             "message_id": payload.message_id,

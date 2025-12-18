@@ -29,7 +29,7 @@ def _poll_job_result(job_id: int, timeout: int = DEFAULT_TIMEOUT, *, user_id: in
 
 
 def run_maps_search_fallback_via_agent(query: str, limit: int, *, timeout: int = DEFAULT_TIMEOUT, user_id: int | None = None) -> List[Dict[str, Any]]:
-    job = jobs_service.create_job(job_type="maps_search_fallback", payload={"query": query, "limit": limit}, user_id=user_id)
+    job = jobs_service.create_job(job_type=jobs_service.TYPE_MAPS_SEARCH, payload={"query": query, "limit": limit}, user_id=user_id)
     result = _poll_job_result(job_id=job["id"], timeout=timeout, user_id=user_id)
 
     items = []
@@ -48,7 +48,7 @@ def run_maps_search_fallback_via_agent(query: str, limit: int, *, timeout: int =
 
 
 def run_maps_enrich_fallback_via_agent(maps_urls: List[str], *, timeout: int = DEFAULT_TIMEOUT, user_id: int | None = None) -> List[Dict[str, Any]]:
-    job = jobs_service.create_job(job_type="maps_enrich_fallback", payload={"maps_urls": maps_urls}, user_id=user_id)
+    job = jobs_service.create_job(job_type=jobs_service.TYPE_MAPS_ENRICH, payload={"maps_urls": maps_urls}, user_id=user_id)
     result = _poll_job_result(job_id=job["id"], timeout=timeout, user_id=user_id)
 
     enriched: List[Dict[str, Any]] = []
