@@ -43,6 +43,18 @@ class ProvisionAgentResponse(BaseModel):
     status: str
 
 
+class AgentOut(BaseModel):
+    agent_id: str = Field(alias="id")
+    name: Optional[str]
+    capabilities: Optional[List[str]] = None
+    status: Optional[str] = None
+    last_seen_at: Optional[str] = None
+    revoked: bool = False
+    online: bool = False
+
+    model_config = {"populate_by_name": True}
+
+
 class ManualWhatsappJobRequest(BaseModel):
     phone: str = Field(..., description="Número completo com DDI, apenas dígitos")
     message: str = Field(..., description="Mensagem a ser enviada")
@@ -53,6 +65,30 @@ class ManualWhatsappJobRequest(BaseModel):
 @router.post("/provision", response_model=ProvisionAgentResponse)
 def provision_agent(payload: ProvisionAgentRequest, current_user: CurrentUser = Depends(require_crm_access)):
     return jobs_service.provision_agent(user_id=current_user.id, name=payload.name)
+
+
+@router.get("", response_model=List[AgentOut])
+def list_agents(
+    seconds: int = Query(90, ge=30, le=600, description="Janela para considerar agente online"),
+    current_user: CurrentUser = Depends(require_crm_access),
+):
+    return jobs_service.list_agents(max_age_seconds=seconds, user_id=current_user.id)
+
+
+@router.post("/{agent_id}/revoke", response_model=AgentOut)
+def revoke_agent(agent_id: str, current_user: CurrentUser = Depends(require_crm_access)):
+    return jobs_service.revoke_agent(agent_id=agent_id, user_id=current_user.id)
+
+
+@router.post("/{agent_id}/reprovision")
+def reprovision_agent(agent_id: str, current_user: CurrentUser = Depends(require_crm_access)):
+    agent = jobs_service.reprovision_agent(agent_id=agent_id, user_id=current_user.id)
+    return {
+        "agent_id": agent.get("id"),
+        "agent_token": agent.get("agent_token"),
+        "status": agent.get("status"),
+        "instructions": "Atualize AGENT_ID e AGENT_TOKEN no .env do agent-local e reinicie o processo.",
+    }
 
 
 @router.post("/register", response_model=RegisterAgentResponse)

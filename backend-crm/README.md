@@ -51,6 +51,86 @@ curl http://localhost:8010/api/leads \
 2. Chame `POST /api/agents/provision` no backend-CRM com `Authorization: Bearer <token_do_core>` para gerar um par `(agent_id, agent_token)` vinculado ao seu usuário.
 3. Configure o `.env` do projeto `agent-local/` com os valores retornados (`AGENT_ID`, `AGENT_TOKEN`).
 4. O agente local continuará usando `/api/agents/register`, `/api/agents/next-job` e `/api/agents/report`, mas agora o CRM valida o par `(agent_id, agent_token)` e entrega jobs apenas do respectivo `user_id`.
+5. Para gestão operacional, use as rotas autenticadas do CRM (todas exigem assinatura ativa do produto `crm`):
+   - `GET /api/agents` — lista apenas os agentes do usuário, com `online` calculado a partir de `last_seen_at`.
+   - `POST /api/agents/{agent_id}/revoke` — marca `revoked_at` e passa a recusar `register/next-job/report` com o token antigo.
+   - `POST /api/agents/{agent_id}/reprovision` — gera um novo `agent_token` (o antigo deixa de funcionar) e retorna instruções para atualizar o `.env` do agent-local.
+
+### Checklist de testes manuais (agente local)
+
+Sequência completa sugerida (via curl ou Swagger) para validar provisionamento, heartbeat, fila, revogação e reprovisionamento:
+
+1. **Provisionar**
+   ```bash
+   curl -X POST http://localhost:8010/api/agents/provision \
+     -H "Authorization: Bearer $TOKEN" \
+     -H "Content-Type: application/json" \
+     -d '{"name":"Agent QA"}'
+   ```
+   Guarde `agent_id` e `agent_token`.
+
+2. **Registrar (heartbeat inicial)**
+   ```bash
+   curl -X POST http://localhost:8010/api/agents/register \
+     -H "Content-Type: application/json" \
+     -d '{"agent_id":"<AGENT_ID>","token":"<AGENT_TOKEN>","capabilities":["whatsapp_send"],"version":"qa"}'
+   ```
+
+3. **next-job com fila vazia**
+   ```bash
+   curl "http://localhost:8010/api/agents/next-job?agent_id=<AGENT_ID>&token=<AGENT_TOKEN>&types=whatsapp_send"
+   ```
+   Deve retornar `{ "job": null }` quando não há pendências.
+
+4. **Criar job manual**
+   ```bash
+   curl -X POST http://localhost:8010/api/agents/jobs/manual-whatsapp \
+     -H "Authorization: Bearer $TOKEN" \
+     -H "Content-Type: application/json" \
+     -d '{"phone":"+5511999999999","message":"Mensagem de teste"}'
+   ```
+
+5. **next-job com job pendente**
+   ```bash
+   curl "http://localhost:8010/api/agents/next-job?agent_id=<AGENT_ID>&token=<AGENT_TOKEN>&types=whatsapp_send"
+   ```
+   Deve retornar o job criado no passo anterior. Confirme que o payload inclui `assigned_agent_id` igual a `<AGENT_ID>` (o mesmo valor salvo no banco ao fazer o claim).
+
+6. **report (completed)**
+   ```bash
+   curl -X POST http://localhost:8010/api/agents/report \
+     -H "Content-Type: application/json" \
+     -d '{"agent_id":"<AGENT_ID>","token":"<AGENT_TOKEN>","job_id":<JOB_ID>,"status":"completed","result":{"ok":true}}'
+   ```
+
+7. **Listar agentes e checar online/offline**
+   ```bash
+   curl http://localhost:8010/api/agents?seconds=90 \
+     -H "Authorization: Bearer $TOKEN"
+   ```
+   O campo `online` reflete `last_seen_at`; nenhum token é retornado.
+
+8. **Revogar agente**
+   ```bash
+   curl -X POST http://localhost:8010/api/agents/<AGENT_ID>/revoke \
+     -H "Authorization: Bearer $TOKEN"
+   ```
+
+9. **Falha esperada após revogação**
+   ```bash
+   curl -i "http://localhost:8010/api/agents/next-job?agent_id=<AGENT_ID>&token=<AGENT_TOKEN>"
+   ```
+   Deve responder `403 Agent revoked` (mesma validação vale para `register` e `report`).
+
+10. **Reprovisionar (rotacionar token)**
+    ```bash
+    curl -X POST http://localhost:8010/api/agents/<AGENT_ID>/reprovision \
+      -H "Authorization: Bearer $TOKEN"
+    ```
+    Atualize o `.env` do agent-local com o novo `agent_token` retornado (mantendo o `AGENT_ID`).
+
+11. **Registrar/next-job novamente (sucesso esperado)**
+    Repita os passos 2 e 3 com o novo token; o agente volta a consumir jobs normalmente.
 
 ## Manual Testing Guide — Multiusuário (Leads, Prospecção, Assistente IA)
 
@@ -137,6 +217,18 @@ curl http://localhost:8010/api/leads \
 
 4. **Isolamento entre usuários**
    - Repetir o fluxo com `token_B` gera um novo `agent_id`/`agent_token` e o agente só consumirá jobs do B.
+
+5. **Listar status / heartbeat**
+   - `GET /api/agents?seconds=90` com `token_A` retorna apenas agentes do usuário, sem expor token. O campo `online` fica `true` se `last_seen_at` estiver dentro da janela informada.
+   - O `last_seen_at` é atualizado em `register`, `next-job` e `report`.
+
+6. **Revogar credencial**
+   - `curl -X POST http://localhost:8010/api/agents/{agent_id}/revoke -H "Authorization: Bearer $token_A"`
+   - O agente local existente passará a falhar no próximo `register/next-job/report` com erro `403 Agent revoked`.
+
+7. **Reprovisionar (rotacionar token)**
+   - `curl -X POST http://localhost:8010/api/agents/{agent_id}/reprovision -H "Authorization: Bearer $token_A"`
+   - A resposta traz apenas uma vez o novo `agent_token` e um texto curto de instrução. Atualize `AGENT_TOKEN` (mantendo o mesmo `AGENT_ID`) no `.env` do agent-local e reinicie o processo; o agente volta a consumir jobs normalmente.
 
 ### 3) Testes do Assistente IA (Etapa 4.3 — preview/import dedup)
 
