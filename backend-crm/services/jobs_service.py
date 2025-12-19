@@ -130,6 +130,13 @@ def normalize_job_type(job_type: str) -> str:
     return cleaned
 
 
+def _extract_channel(job_type: str) -> str:
+    canonical = normalize_job_type(job_type or "")
+    if not canonical:
+        return ""
+    return canonical.split(".")[0]
+
+
 def _type_variants_for_query(types: Sequence[str]) -> List[str]:
     """Expande uma lista de tipos para incluir aliases legados (para filtros SQL)."""
     variants: List[str] = []
@@ -414,22 +421,45 @@ def fetch_next_job(
     with get_connection() as conn:
         cur = conn.cursor()
         cur.execute("BEGIN IMMEDIATE")
-        row = cur.execute(
+        blocked_channels: set[str] = set()
+        for locked in cur.execute(
+            "SELECT type FROM jobs WHERE user_id=? AND status=?",
+            (user_id, JOB_STATUS_IN_PROGRESS),
+        ):
+            ch = _extract_channel(locked["type"])
+            if ch:
+                blocked_channels.add(ch)
+
+        candidates = cur.execute(
             f"""
             SELECT * FROM jobs
              WHERE status=?
                AND user_id = ?
                {type_filter}
              ORDER BY priority DESC, scheduled_at ASC, created_at ASC, id ASC
-             LIMIT 1
+             LIMIT ?
             """,
-            [JOB_STATUS_PENDING, *params],
-        ).fetchone()
-        if not row:
+            [JOB_STATUS_PENDING, *params, 25],
+        ).fetchall()
+        selected = None
+        for candidate in candidates:
+            ch = _extract_channel(candidate["type"])
+            if ch and ch in blocked_channels:
+                logger.debug(
+                    "jobs.fetch_next_job skip job_id=%s channel=%s blocked_for_user=%s",
+                    candidate["id"],
+                    ch,
+                    user_id,
+                )
+                continue
+            selected = candidate
+            break
+
+        if not selected:
             conn.commit()
             return None
 
-        job_id = row["id"]
+        job_id = selected["id"]
         updated = cur.execute(
             """
             UPDATE jobs
