@@ -11,7 +11,7 @@ from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 from fastapi import HTTPException
 
-from database import get_connection
+from database import DB_PATH, get_connection
 
 logger = logging.getLogger(__name__)
 
@@ -22,6 +22,16 @@ JOB_STATUS_FAILED = "failed"
 
 AGENT_STATUS_ONLINE = "online"
 AGENT_STATUS_OFFLINE = "offline"
+
+TYPE_WHATSAPP_SEND = "whatsapp.send.local"
+TYPE_MAPS_SEARCH = "maps.search.local"
+TYPE_MAPS_ENRICH = "maps.enrich.local"
+
+_TYPE_ALIASES: Dict[str, List[str]] = {
+    TYPE_WHATSAPP_SEND: ["whatsapp_send"],
+    TYPE_MAPS_SEARCH: ["maps_search_fallback"],
+    TYPE_MAPS_ENRICH: ["maps_enrich_fallback"],
+}
 
 _VALID_JOB_STATUSES = {
     JOB_STATUS_PENDING,
@@ -58,9 +68,12 @@ def _sanitize_agent(row: sqlite3.Row | Dict[str, Any]) -> Dict[str, Any]:
     data = dict(row)
     data.pop("token", None)
     data["capabilities"] = _json_loads(data.get("capabilities"))
-    last_seen = data.get("last_seen")
-    if last_seen:
-        data["last_seen"] = str(last_seen).replace(" ", "T")
+
+    for key in ("last_seen", "last_seen_at", "revoked_at", "created_at", "updated_at"):
+        if data.get(key):
+            data[key] = str(data[key]).replace(" ", "T")
+
+    data["revoked"] = data.get("revoked_at") is not None
     return data
 
 
@@ -74,6 +87,9 @@ def _get_agent_by_credentials(agent_id: str, token: str) -> Tuple[Dict[str, Any]
     if not row["token"] or row["token"] != token:
         conn.close()
         raise HTTPException(status_code=401, detail="Invalid agent token")
+    if row["revoked_at"] or row["status"] == "disabled":
+        conn.close()
+        raise HTTPException(status_code=403, detail="Agent revoked")
     data = dict(row)
     if data.get("user_id") is None:
         conn.close()
@@ -93,6 +109,7 @@ def _update_agent_touch(agent_id: str, *, user_id: Optional[int] = None) -> None
             f"""
             UPDATE agents
                SET last_seen=CURRENT_TIMESTAMP,
+                   last_seen_at=CURRENT_TIMESTAMP,
                    status=?,
                    updated_at=CURRENT_TIMESTAMP
              {where_clause}
@@ -100,6 +117,41 @@ def _update_agent_touch(agent_id: str, *, user_id: Optional[int] = None) -> None
             params,
         )
         conn.commit()
+
+
+def normalize_job_type(job_type: str) -> str:
+    """Converte aliases legados para o tipo canônico <canal>.<ação>.<executor>."""
+    if not job_type:
+        return job_type
+    cleaned = job_type.strip()
+    for canonical, aliases in _TYPE_ALIASES.items():
+        if cleaned == canonical or cleaned in aliases:
+            return canonical
+    return cleaned
+
+
+def _extract_channel(job_type: str) -> str:
+    canonical = normalize_job_type(job_type or "")
+    if not canonical:
+        return ""
+    return canonical.split(".")[0]
+
+
+def _type_variants_for_query(types: Sequence[str]) -> List[str]:
+    """Expande uma lista de tipos para incluir aliases legados (para filtros SQL)."""
+    variants: List[str] = []
+    seen = set()
+    for raw in types:
+        canonical = normalize_job_type(raw)
+        for t in [canonical, *(_TYPE_ALIASES.get(canonical, []))]:
+            if t and t not in seen:
+                seen.add(t)
+                variants.append(t)
+    return variants
+
+
+def _variants_for_canonical(canonical: str) -> List[str]:
+    return _type_variants_for_query([canonical])
 
 
 # ---------------------------------------------------------------------------
@@ -130,6 +182,7 @@ def register_agent(
                    version=?,
                    status=?,
                    last_seen=CURRENT_TIMESTAMP,
+                   last_seen_at=CURRENT_TIMESTAMP,
                    updated_at=CURRENT_TIMESTAMP
              WHERE id=? AND token=?
             """,
@@ -153,8 +206,8 @@ def provision_agent(*, user_id: int, name: Optional[str] = None) -> Dict[str, An
         cur = conn.cursor()
         cur.execute(
             """
-            INSERT INTO agents (id, user_id, name, token, capabilities, version, status, last_seen)
-            VALUES (?, ?, ?, ?, NULL, NULL, ?, NULL)
+            INSERT INTO agents (id, user_id, name, token, capabilities, version, status, last_seen, last_seen_at, revoked_at)
+            VALUES (?, ?, ?, ?, NULL, NULL, ?, NULL, NULL, NULL)
             """,
             (agent_id, user_id, name, agent_token, AGENT_STATUS_OFFLINE),
         )
@@ -184,7 +237,7 @@ def list_agents(max_age_seconds: int = 120, *, user_id: Optional[int] = None) ->
             params,
         ):
             data = _sanitize_agent(row)
-            last_seen = data.get("last_seen")
+            last_seen = data.get("last_seen_at") or data.get("last_seen")
             if last_seen:
                 try:
                     last_seen_dt = datetime.fromisoformat(str(last_seen))
@@ -193,8 +246,73 @@ def list_agents(max_age_seconds: int = 120, *, user_id: Optional[int] = None) ->
                 data["online"] = last_seen_dt is not None and last_seen_dt >= threshold_dt
             else:
                 data["online"] = False
+            if data.get("revoked_at"):
+                data["status"] = "disabled"
             agents.append(data)
     return agents
+
+
+def revoke_agent(*, agent_id: str, user_id: int) -> Dict[str, Any]:
+    with get_connection() as conn:
+        cur = conn.cursor()
+        row = cur.execute(
+            "SELECT * FROM agents WHERE id=? AND user_id=?",
+            (agent_id, user_id),
+        ).fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="Agente não encontrado")
+
+        cur.execute(
+            """
+            UPDATE agents
+               SET revoked_at=CURRENT_TIMESTAMP,
+                   status='disabled',
+                   updated_at=CURRENT_TIMESTAMP
+             WHERE id=? AND user_id=?
+            """,
+            (agent_id, user_id),
+        )
+        conn.commit()
+        refreshed = cur.execute(
+            "SELECT * FROM agents WHERE id=? AND user_id=?",
+            (agent_id, user_id),
+        ).fetchone()
+    return _sanitize_agent(refreshed)
+
+
+def reprovision_agent(*, agent_id: str, user_id: int) -> Dict[str, Any]:
+    import secrets
+
+    new_token = secrets.token_urlsafe(32)
+    with get_connection() as conn:
+        cur = conn.cursor()
+        row = cur.execute(
+            "SELECT * FROM agents WHERE id=? AND user_id=?",
+            (agent_id, user_id),
+        ).fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="Agente não encontrado")
+
+        cur.execute(
+            """
+            UPDATE agents
+               SET token=?,
+                   revoked_at=NULL,
+                   status='offline',
+                   updated_at=CURRENT_TIMESTAMP
+             WHERE id=? AND user_id=?
+            """,
+            (new_token, agent_id, user_id),
+        )
+        conn.commit()
+        refreshed = cur.execute(
+            "SELECT * FROM agents WHERE id=? AND user_id=?",
+            (agent_id, user_id),
+        ).fetchone()
+
+    agent_data = _sanitize_agent(refreshed)
+    agent_data["agent_token"] = new_token
+    return agent_data
 
 
 # ---------------------------------------------------------------------------
@@ -261,15 +379,16 @@ def create_job(
     scheduled_at: Optional[datetime] = None,
     user_id: Optional[int] = None,
 ) -> Dict[str, Any]:
-    agent_local_job_types = {"maps_search_fallback", "maps_enrich_fallback"}
-    if job_type in agent_local_job_types and user_id is None:
+    agent_local_job_types = {TYPE_MAPS_SEARCH, TYPE_MAPS_ENRICH}
+    normalized_type = normalize_job_type(job_type)
+    if normalized_type in agent_local_job_types and user_id is None:
         raise HTTPException(status_code=400, detail="user_id é obrigatório para jobs do agente local")
 
     with get_connection() as conn:
         cur = conn.cursor()
         job = _insert_job(
             cur,
-            job_type=job_type,
+            job_type=normalized_type,
             payload=payload,
             priority=priority,
             scheduled_at=scheduled_at,
@@ -289,33 +408,58 @@ def fetch_next_job(
     user_id = agent.get("user_id")
     conn.close()
     # Escopa jobs ao dono do agente; impede que um agente visualize jobs de outro usuário.
-    params: List[Any] = [JOB_STATUS_PENDING]
-    params.append(user_id)
+    params: List[Any] = [user_id]
     type_filter = ""
     if accepted_types:
-        placeholders = ",".join(["?"] * len(accepted_types))
+        expanded_types = _type_variants_for_query(accepted_types)
+        if not expanded_types:
+            return None
+        placeholders = ",".join(["?"] * len(expanded_types))
         type_filter = f"AND type IN ({placeholders})"
-        params.extend(accepted_types)
+        params.extend(expanded_types)
 
     with get_connection() as conn:
         cur = conn.cursor()
         cur.execute("BEGIN IMMEDIATE")
-        row = cur.execute(
+        blocked_channels: set[str] = set()
+        for locked in cur.execute(
+            "SELECT type FROM jobs WHERE user_id=? AND status=?",
+            (user_id, JOB_STATUS_IN_PROGRESS),
+        ):
+            ch = _extract_channel(locked["type"])
+            if ch:
+                blocked_channels.add(ch)
+
+        candidates = cur.execute(
             f"""
             SELECT * FROM jobs
              WHERE status=?
                AND user_id = ?
                {type_filter}
              ORDER BY priority DESC, scheduled_at ASC, created_at ASC, id ASC
-             LIMIT 1
+             LIMIT ?
             """,
-            params,
-        ).fetchone()
-        if not row:
+            [JOB_STATUS_PENDING, *params, 25],
+        ).fetchall()
+        selected = None
+        for candidate in candidates:
+            ch = _extract_channel(candidate["type"])
+            if ch and ch in blocked_channels:
+                logger.debug(
+                    "jobs.fetch_next_job skip job_id=%s channel=%s blocked_for_user=%s",
+                    candidate["id"],
+                    ch,
+                    user_id,
+                )
+                continue
+            selected = candidate
+            break
+
+        if not selected:
             conn.commit()
             return None
 
-        job_id = row["id"]
+        job_id = selected["id"]
         updated = cur.execute(
             """
             UPDATE jobs
@@ -331,11 +475,22 @@ def fetch_next_job(
         if updated.rowcount == 0:
             conn.rollback()
             return None
+        refreshed = cur.execute("SELECT * FROM jobs WHERE id=?", (job_id,)).fetchone()
         conn.commit()
 
     _update_agent_touch(agent_id, user_id=user_id)
+    logger.info(
+        "jobs.fetch_next_job db=%s agent_id=%s job_id=%s status=%s rowcount=%s",
+        DB_PATH,
+        agent_id,
+        job_id,
+        JOB_STATUS_IN_PROGRESS,
+        updated.rowcount,
+    )
 
-    job = dict(row)
+    job_row = refreshed or row
+    job = dict(job_row)
+    job["type"] = normalize_job_type(job.get("type") or "")
     job["payload"] = _json_loads(job.get("payload"))
     job["result"] = _json_loads(job.get("result"))
     return job
@@ -361,8 +516,9 @@ def report_job(
         cur = conn.cursor()
         params: List[Any] = [job_id]
         where_clause = "WHERE id=?"
-        where_clause += " AND user_id = ?"
-        params.append(user_id)
+        if user_id is not None:
+            where_clause += " AND user_id = ?"
+            params.append(user_id)
         row = cur.execute(f"SELECT * FROM jobs {where_clause}", params).fetchone()
         if not row:
             raise HTTPException(status_code=404, detail="Job não encontrado")
@@ -373,7 +529,12 @@ def report_job(
         error_txt = str(error) if error else None
         completed_at_expr = "CURRENT_TIMESTAMP" if status in {JOB_STATUS_COMPLETED, JOB_STATUS_FAILED} else "completed_at"
 
-        cur.execute(
+        update_params: List[Any] = [status, result_txt, error_txt, job_id]
+        update_where = "id=?"
+        if user_id is not None:
+            update_where = "id=? AND user_id=?"
+            update_params.append(user_id)
+        updated = cur.execute(
             f"""
             UPDATE jobs
                SET status=?,
@@ -381,20 +542,36 @@ def report_job(
                    error=?,
                    updated_at=CURRENT_TIMESTAMP,
                    completed_at={completed_at_expr}
-             WHERE id=?
+             WHERE {update_where}
             """,
-            (status, result_txt, error_txt, job_id),
+            update_params,
         )
+        if updated.rowcount == 0:
+            conn.rollback()
+            raise HTTPException(status_code=409, detail="Job não atualizado (possível corrida ou ownership)")
 
-        job_type = row["type"]
+        job_type = normalize_job_type(row["type"])
         payload = _json_loads(row["payload"])
-        if job_type == "whatsapp_send":
+        if job_type == TYPE_WHATSAPP_SEND:
             _handle_whatsapp_report(conn, payload, status, result, error_txt, user_id=user_id)
 
         conn.commit()
 
     _update_agent_touch(agent_id, user_id=user_id)
-    return {"ok": True, "status": status}
+    refreshed = get_job(job_id, user_id=user_id)
+    logger.info(
+        "jobs.report_job db=%s agent_id=%s job_id=%s status_prev=%s status_new=%s rowcount=%s",
+        DB_PATH,
+        agent_id,
+        job_id,
+        row["status"],
+        status,
+        updated.rowcount,
+    )
+    if not refreshed:
+        raise HTTPException(status_code=404, detail="Job não encontrado após atualização")
+    refreshed["type"] = normalize_job_type(refreshed.get("type") or "")
+    return {"ok": True, "status": status, "job": refreshed}
 
 
 # ---------------------------------------------------------------------------
@@ -437,9 +614,14 @@ def _handle_whatsapp_report(conn, payload, status, result, error_txt, *, user_id
         notes = error_txt
 
     if status == JOB_STATUS_COMPLETED:
+        lead_params: List[Any] = [lead_id]
+        user_clause = ""
+        if user_id is not None:
+            user_clause = " AND user_id = ?"
+            lead_params.append(user_id)
         conn.execute(
-            "UPDATE leads SET category='qualification', lastMovement=CURRENT_TIMESTAMP WHERE id=?",
-            (lead_id,),
+            f"UPDATE leads SET category='qualification', lastMovement=CURRENT_TIMESTAMP WHERE id=?{user_clause}",
+            lead_params,
         )
         _log_prospection(
             conn,
@@ -514,7 +696,9 @@ def enqueue_whatsapp_jobs(
 
     with get_connection() as conn:
         cur = conn.cursor()
-        params_jobs: List[Any] = [JOB_STATUS_PENDING, JOB_STATUS_IN_PROGRESS]
+        whatsapp_types = _variants_for_canonical(TYPE_WHATSAPP_SEND)
+        type_placeholders = ",".join(["?"] * len(whatsapp_types))
+        params_jobs: List[Any] = [*whatsapp_types, JOB_STATUS_PENDING, JOB_STATUS_IN_PROGRESS]
         user_filter = ""
         if user_id is not None:
             user_filter = "AND user_id = ?"
@@ -523,7 +707,7 @@ def enqueue_whatsapp_jobs(
             f"""
             SELECT id, payload
               FROM jobs
-             WHERE type='whatsapp_send'
+             WHERE type IN ({type_placeholders})
                AND status IN (?, ?)
                {user_filter}
             """,
@@ -630,7 +814,7 @@ def enqueue_whatsapp_jobs(
 
                 job = _insert_job(
                     cur,
-                    job_type="whatsapp_send",
+                    job_type=TYPE_WHATSAPP_SEND,
                     payload={
                         "lead_id": lead_id,
                         "message_id": message_id,
@@ -668,18 +852,20 @@ def enqueue_whatsapp_jobs(
 
 
 def get_whatsapp_queue(limit: int = 5, *, user_id: Optional[int] = None) -> List[Dict[str, Any]]:
+    whatsapp_types = _variants_for_canonical(TYPE_WHATSAPP_SEND)
+    type_placeholders = ",".join(["?"] * len(whatsapp_types))
     with get_connection() as conn:
         cur = conn.cursor()
-        params: List[Any] = [JOB_STATUS_PENDING, limit]
+        params: List[Any] = [*whatsapp_types, JOB_STATUS_PENDING, limit]
         user_filter = ""
         if user_id is not None:
             user_filter = "AND user_id = ?"
-            params.insert(1, user_id)
+            params.insert(len(whatsapp_types) + 1, user_id)
         rows = cur.execute(
             f"""
             SELECT id, payload, created_at, scheduled_at
               FROM jobs
-             WHERE type='whatsapp_send' AND status=? {user_filter}
+             WHERE type IN ({type_placeholders}) AND status=? {user_filter}
              ORDER BY scheduled_at ASC, created_at ASC, id ASC
              LIMIT ?
             """,
@@ -703,9 +889,11 @@ def get_whatsapp_queue(limit: int = 5, *, user_id: Optional[int] = None) -> List
 
 def get_whatsapp_recent(seconds: int = 300, *, user_id: Optional[int] = None) -> List[Dict[str, Any]]:
     seconds = max(30, min(int(seconds), 3600))
+    whatsapp_types = _variants_for_canonical(TYPE_WHATSAPP_SEND)
+    type_placeholders = ",".join(["?"] * len(whatsapp_types))
     with get_connection() as conn:
         cur = conn.cursor()
-        params: List[Any] = [JOB_STATUS_COMPLETED, JOB_STATUS_FAILED, f"-{seconds} seconds"]
+        params: List[Any] = [*whatsapp_types, JOB_STATUS_COMPLETED, JOB_STATUS_FAILED, f"-{seconds} seconds"]
         user_filter = ""
         if user_id is not None:
             user_filter = "AND user_id = ?"
@@ -714,7 +902,7 @@ def get_whatsapp_recent(seconds: int = 300, *, user_id: Optional[int] = None) ->
             f"""
             SELECT id, payload, status, result, error, completed_at
               FROM jobs
-             WHERE type='whatsapp_send'
+             WHERE type IN ({type_placeholders})
                AND status IN (?, ?)
                AND completed_at IS NOT NULL
                AND completed_at >= datetime('now', ?)
@@ -743,11 +931,13 @@ def get_whatsapp_recent(seconds: int = 300, *, user_id: Optional[int] = None) ->
 
 
 def get_whatsapp_summary(*, user_id: Optional[int] = None) -> Dict[str, Any]:
+    whatsapp_types = _variants_for_canonical(TYPE_WHATSAPP_SEND)
+    type_placeholders = ",".join(["?"] * len(whatsapp_types))
     with get_connection() as conn:
         cur = conn.cursor()
-        params_pending: List[Any] = [JOB_STATUS_PENDING]
-        params_completed: List[Any] = [JOB_STATUS_COMPLETED]
-        params_failed: List[Any] = [JOB_STATUS_FAILED]
+        params_pending: List[Any] = [*whatsapp_types, JOB_STATUS_PENDING]
+        params_completed: List[Any] = [*whatsapp_types, JOB_STATUS_COMPLETED]
+        params_failed: List[Any] = [*whatsapp_types, JOB_STATUS_FAILED]
         user_filter = ""
         if user_id is not None:
             user_filter = "AND user_id = ?"
@@ -755,14 +945,14 @@ def get_whatsapp_summary(*, user_id: Optional[int] = None) -> Dict[str, Any]:
             params_completed.append(user_id)
             params_failed.append(user_id)
         pending = cur.execute(
-            f"SELECT COUNT(*) AS c FROM jobs WHERE type='whatsapp_send' AND status=? {user_filter}",
+            f"SELECT COUNT(*) AS c FROM jobs WHERE type IN ({type_placeholders}) AND status=? {user_filter}",
             params_pending,
         ).fetchone()["c"]
         sent_today = cur.execute(
             f"""
             SELECT COUNT(*) AS c
               FROM jobs
-             WHERE type='whatsapp_send'
+             WHERE type IN ({type_placeholders})
                AND status=?
                AND date(completed_at) = date('now')
                {user_filter}
@@ -773,7 +963,7 @@ def get_whatsapp_summary(*, user_id: Optional[int] = None) -> Dict[str, Any]:
             f"""
             SELECT COUNT(*) AS c
               FROM jobs
-             WHERE type='whatsapp_send'
+             WHERE type IN ({type_placeholders})
                AND status=?
                AND date(completed_at) = date('now')
                {user_filter}
