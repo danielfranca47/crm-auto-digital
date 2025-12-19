@@ -72,6 +72,22 @@ curl http://localhost:8010/api/leads \
   - `types=whatsapp.send.local,maps.search.local,maps.enrich.local`
   - Aliases continuam válidos, mas o backend sempre responde com o tipo canônico.
 
+### Convenção de job types (multi-canal + executor)
+
+- Formato canônico: `<canal>.<ação>.<executor>`, onde `executor ∈ {local, n8n}`.
+- Tipos canônicos atuais (agent-local):
+  - `whatsapp.send.local`
+  - `maps.search.local`
+  - `maps.enrich.local`
+- Aliases legados aceitos por normalização (para não quebrar jobs já gravados):
+  - `whatsapp_send` → `whatsapp.send.local`
+  - `maps_search_fallback` → `maps.search.local`
+  - `maps_enrich_fallback` → `maps.enrich.local`
+- Exemplos de query param `types` no `/api/agents/next-job`:
+  - `types=whatsapp.send.local`
+  - `types=whatsapp.send.local,maps.search.local,maps.enrich.local`
+  - Aliases continuam válidos, mas o backend sempre responde com o tipo canônico.
+
 ### Checklist de testes manuais (agente local)
 
 Sequência completa sugerida (via curl ou Swagger) para validar provisionamento, heartbeat, fila, revogação e reprovisionamento:
@@ -95,6 +111,7 @@ Sequência completa sugerida (via curl ou Swagger) para validar provisionamento,
 3. **next-job com fila vazia**
    ```bash
    curl "http://localhost:8010/api/agents/next-job?agent_id=<AGENT_ID>&token=<AGENT_TOKEN>&types=whatsapp.send.local"
+   curl "http://localhost:8010/api/agents/next-job?agent_id=<AGENT_ID>&token=<AGENT_TOKEN>&types=whatsapp.send.local"
    ```
    Deve retornar `{ "job": null }` quando não há pendências.
 
@@ -109,8 +126,17 @@ Sequência completa sugerida (via curl ou Swagger) para validar provisionamento,
 5. **next-job com job pendente**
    ```bash
    curl "http://localhost:8010/api/agents/next-job?agent_id=<AGENT_ID>&token=<AGENT_TOKEN>&types=whatsapp.send.local"
+   curl "http://localhost:8010/api/agents/next-job?agent_id=<AGENT_ID>&token=<AGENT_TOKEN>&types=whatsapp.send.local"
    ```
    Deve retornar o job criado no passo anterior. Confirme que o payload inclui `assigned_agent_id` igual a `<AGENT_ID>` e `type=whatsapp.send.local` (o mesmo valor salvo no banco ao fazer o claim; aliases são normalizados).
+
+5.1 **Concorrência por canal (apenas 1 in_progress por canal/user)**
+   - Crie um **segundo** job manual de WhatsApp para o mesmo usuário (repita o passo 4).
+   - Em dois terminais (ou dois agentes registrados com o mesmo `agent_id/token`), chame `/api/agents/next-job`:
+     - O primeiro claimará o job WhatsApp e ficará `in_progress`.
+     - O segundo deve receber `{ "job": null }` enquanto houver outro job WhatsApp `in_progress` para o mesmo usuário.
+   - Se você criar um job de Maps (`maps.search.local`) e outro de WhatsApp, dois agentes podem receber ambos simultaneamente (canais diferentes).
+   - Após o job WhatsApp ser reportado como `completed`/`failed`, o próximo `/next-job` deve entregar o próximo WhatsApp pendente.
 
 6. **report (completed)**
    ```bash
@@ -118,6 +144,7 @@ Sequência completa sugerida (via curl ou Swagger) para validar provisionamento,
      -H "Content-Type: application/json" \
      -d '{"agent_id":"<AGENT_ID>","token":"<AGENT_TOKEN>","job_id":<JOB_ID>,"status":"completed","result":{"ok":true}}'
    ```
+   A resposta deve incluir `status":"completed"` e um objeto `job` com `status=completed` e `completed_at` preenchido. Se o job já tiver sido atualizado ou não pertencer ao agente/usuário, o endpoint retornará erro.
 
 7. **Listar agentes e checar online/offline**
    ```bash

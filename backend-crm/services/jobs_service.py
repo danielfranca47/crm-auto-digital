@@ -11,7 +11,7 @@ from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 from fastapi import HTTPException
 
-from database import get_connection
+from database import DB_PATH, get_connection
 
 logger = logging.getLogger(__name__)
 
@@ -128,6 +128,13 @@ def normalize_job_type(job_type: str) -> str:
         if cleaned == canonical or cleaned in aliases:
             return canonical
     return cleaned
+
+
+def _extract_channel(job_type: str) -> str:
+    canonical = normalize_job_type(job_type or "")
+    if not canonical:
+        return ""
+    return canonical.split(".")[0]
 
 
 def _type_variants_for_query(types: Sequence[str]) -> List[str]:
@@ -414,22 +421,45 @@ def fetch_next_job(
     with get_connection() as conn:
         cur = conn.cursor()
         cur.execute("BEGIN IMMEDIATE")
-        row = cur.execute(
+        blocked_channels: set[str] = set()
+        for locked in cur.execute(
+            "SELECT type FROM jobs WHERE user_id=? AND status=?",
+            (user_id, JOB_STATUS_IN_PROGRESS),
+        ):
+            ch = _extract_channel(locked["type"])
+            if ch:
+                blocked_channels.add(ch)
+
+        candidates = cur.execute(
             f"""
             SELECT * FROM jobs
              WHERE status=?
                AND user_id = ?
                {type_filter}
              ORDER BY priority DESC, scheduled_at ASC, created_at ASC, id ASC
-             LIMIT 1
+             LIMIT ?
             """,
-            [JOB_STATUS_PENDING, *params],
-        ).fetchone()
-        if not row:
+            [JOB_STATUS_PENDING, *params, 25],
+        ).fetchall()
+        selected = None
+        for candidate in candidates:
+            ch = _extract_channel(candidate["type"])
+            if ch and ch in blocked_channels:
+                logger.debug(
+                    "jobs.fetch_next_job skip job_id=%s channel=%s blocked_for_user=%s",
+                    candidate["id"],
+                    ch,
+                    user_id,
+                )
+                continue
+            selected = candidate
+            break
+
+        if not selected:
             conn.commit()
             return None
 
-        job_id = row["id"]
+        job_id = selected["id"]
         updated = cur.execute(
             """
             UPDATE jobs
@@ -449,6 +479,14 @@ def fetch_next_job(
         conn.commit()
 
     _update_agent_touch(agent_id, user_id=user_id)
+    logger.info(
+        "jobs.fetch_next_job db=%s agent_id=%s job_id=%s status=%s rowcount=%s",
+        DB_PATH,
+        agent_id,
+        job_id,
+        JOB_STATUS_IN_PROGRESS,
+        updated.rowcount,
+    )
 
     job_row = refreshed or row
     job = dict(job_row)
@@ -478,8 +516,9 @@ def report_job(
         cur = conn.cursor()
         params: List[Any] = [job_id]
         where_clause = "WHERE id=?"
-        where_clause += " AND user_id = ?"
-        params.append(user_id)
+        if user_id is not None:
+            where_clause += " AND user_id = ?"
+            params.append(user_id)
         row = cur.execute(f"SELECT * FROM jobs {where_clause}", params).fetchone()
         if not row:
             raise HTTPException(status_code=404, detail="Job não encontrado")
@@ -490,7 +529,12 @@ def report_job(
         error_txt = str(error) if error else None
         completed_at_expr = "CURRENT_TIMESTAMP" if status in {JOB_STATUS_COMPLETED, JOB_STATUS_FAILED} else "completed_at"
 
-        cur.execute(
+        update_params: List[Any] = [status, result_txt, error_txt, job_id]
+        update_where = "id=?"
+        if user_id is not None:
+            update_where = "id=? AND user_id=?"
+            update_params.append(user_id)
+        updated = cur.execute(
             f"""
             UPDATE jobs
                SET status=?,
@@ -498,10 +542,13 @@ def report_job(
                    error=?,
                    updated_at=CURRENT_TIMESTAMP,
                    completed_at={completed_at_expr}
-         WHERE id=?
+             WHERE {update_where}
             """,
-            (status, result_txt, error_txt, job_id),
+            update_params,
         )
+        if updated.rowcount == 0:
+            conn.rollback()
+            raise HTTPException(status_code=409, detail="Job não atualizado (possível corrida ou ownership)")
 
         job_type = normalize_job_type(row["type"])
         payload = _json_loads(row["payload"])
@@ -511,7 +558,20 @@ def report_job(
         conn.commit()
 
     _update_agent_touch(agent_id, user_id=user_id)
-    return {"ok": True, "status": status}
+    refreshed = get_job(job_id, user_id=user_id)
+    logger.info(
+        "jobs.report_job db=%s agent_id=%s job_id=%s status_prev=%s status_new=%s rowcount=%s",
+        DB_PATH,
+        agent_id,
+        job_id,
+        row["status"],
+        status,
+        updated.rowcount,
+    )
+    if not refreshed:
+        raise HTTPException(status_code=404, detail="Job não encontrado após atualização")
+    refreshed["type"] = normalize_job_type(refreshed.get("type") or "")
+    return {"ok": True, "status": status, "job": refreshed}
 
 
 # ---------------------------------------------------------------------------
