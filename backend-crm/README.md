@@ -175,6 +175,28 @@ Sequência completa sugerida (via curl ou Swagger) para validar provisionamento,
 11. **Registrar/next-job novamente (sucesso esperado)**
     Repita os passos 2 e 3 com o novo token; o agente volta a consumir jobs normalmente.
 
+### Fila resiliente (scheduled_at, TTL e backoff)
+
+- TTL de lease: **10 minutos**. Jobs `in_progress` com `started_at` mais antigo voltam para `pending` (limpando `assigned_agent_id`/`started_at`) ou viram `failed` definitivo se `attempts >= 3`.
+- `scheduled_at` é respeitado em `/api/agents/next-job`: jobs futuros não são entregues antes da hora.
+- Backoff de falhas: tentativa 1 → +60s, tentativa 2 → +180s, tentativa 3 → `failed` definitivo. O job volta para `pending` com `scheduled_at` ajustado.
+- Reports atrasados são rejeitados se o job já foi reentregue (status diferente de `in_progress` ou `assigned_agent_id` divergente).
+
+Checklist rápido (use a porta em que o CRM estiver rodando, ex.: `http://localhost:<PORT>`):
+
+1. **scheduled_at futuro bloqueado**
+   - Criar job com `scheduled_at` no futuro.
+   - Chamar `/api/agents/next-job` com o agente autorizado → deve retornar `{"job": null}` até o horário chegar.
+2. **TTL requeue**
+   - Claimar um job e editar `started_at` no banco para `agora - 11 minutos`.
+   - Nova chamada a `/api/agents/next-job` deve reentregar o job (status volta para `pending`).
+3. **Report atrasado rejeitado**
+   - Após o passo anterior, deixe outro agente claimar o mesmo job.
+   - O agente antigo ao tentar `report` deve receber `409` informando requeue/ownership divergente.
+4. **Backoff e max attempts**
+   - Reportar `failed` duas vezes: o job volta para `pending` com `scheduled_at` futuro (+60s, depois +180s).
+   - Na terceira falha, o status permanece `failed` definitivo e o job deixa de ser reentregue.
+
 ## Manual Testing Guide — Multiusuário (Leads, Prospecção, Assistente IA)
 
 ### 0) Pré-requisitos
