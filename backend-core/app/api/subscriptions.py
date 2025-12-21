@@ -38,6 +38,9 @@ class UserLimits(BaseModel):
     max_prospec_monthly: Optional[int]
     max_copy_generation_monthly: Optional[int]
     max_ia_conversas_monthly: Optional[int]
+    max_whatsapp_send_daily: Optional[int]
+    max_maps_search_daily: Optional[int]
+    max_maps_enrich_daily: Optional[int]
     require_agent_local_activation_fee: bool
     ia_memory_advanced: bool
 
@@ -81,6 +84,9 @@ def _calculate_limits(current_user: models.User, db: Session) -> UserLimits:
         "max_prospec_monthly": 0,
         "max_copy_generation_monthly": 0,
         "max_ia_conversas_monthly": 0,
+        "max_whatsapp_send_daily": 0,
+        "max_maps_search_daily": 0,
+        "max_maps_enrich_daily": 0,
     }
     require_agent_local_activation_fee = False
     ia_memory_advanced = False

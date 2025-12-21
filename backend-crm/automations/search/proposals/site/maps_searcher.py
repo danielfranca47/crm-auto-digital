@@ -1,16 +1,19 @@
 # modules/maps_searcher.py
 import time
 
+from typing import Any, Dict, List
+
 import googlemaps
 from . import config
 from .agent_jobs import run_maps_search_fallback_via_agent
 
 
 class MapsSearcher:
-    def __init__(self, *, user_id: int | None = None):
+    def __init__(self, *, user_id: int | None = None, entitlements: Dict[str, Any] | None = None):
         self.gmaps_client = None
         self.api_quota_available = True
         self.user_id = user_id
+        self.entitlements = entitlements
         api_key = getattr(config, "GOOGLE_MAPS_API_KEY", "")
         if api_key:
             self.gmaps_client = googlemaps.Client(key=api_key)
@@ -58,4 +61,4 @@ class MapsSearcher:
         Retorna itens equivalentes ao fluxo antigo.
         """
         print("[MapsSearcher] Usando fallback via agente local...")
-        return run_maps_search_fallback_via_agent(query, limit, user_id=self.user_id)
+        return run_maps_search_fallback_via_agent(query, limit, user_id=self.user_id, entitlements=self.entitlements)

@@ -1,6 +1,6 @@
 # modules/profile_extractor.py
 import re
-from typing import List, Dict
+from typing import Any, Dict, List
 from urllib.parse import urlparse, parse_qs
 
 import googlemaps
@@ -11,9 +11,10 @@ from .agent_jobs import run_maps_enrich_fallback_via_agent
 
 
 class ProfileExtractor:
-    def __init__(self, *, user_id: int | None = None):
+    def __init__(self, *, user_id: int | None = None, entitlements: Dict[str, Any] | None = None):
         self.gmaps_client = None
         self.user_id = user_id
+        self.entitlements = entitlements
         api_key = getattr(config, "GOOGLE_MAPS_API_KEY", "")
         if api_key:
             self.gmaps_client = googlemaps.Client(key=api_key)
@@ -67,7 +68,9 @@ class ProfileExtractor:
         if self.user_id is None:
             raise HTTPException(status_code=401, detail="User context required for enrichment job")
 
-        enriched = run_maps_enrich_fallback_via_agent([maps_url], user_id=self.user_id)
+        enriched = run_maps_enrich_fallback_via_agent(
+            [maps_url], user_id=self.user_id, entitlements=self.entitlements
+        )
         return enriched[0] if enriched else {}
 
     # ---------- Orquestração ----------

@@ -14,6 +14,41 @@ Principais mudanças:
 - A dependência `require_crm_access` chama o endpoint autenticado do core `GET /me/entitlements` e verifica se existe uma assinatura **ativa** para o produto `crm`.
 - Se não houver assinatura ativa para `crm`, o CRM retorna `403 Assinatura do produto CRM ausente ou inativa` antes de executar qualquer rota privada.
 
+## Rate limits por plano (janela diária UTC)
+
+- Fonte da verdade: `GET /me/entitlements` do backend-core (campo `limits`).
+- Chaves usadas neste MVP:
+  - `max_whatsapp_send_daily` → `whatsapp.send.local` (inclui aliases `whatsapp_send`).
+  - `max_maps_search_daily` → `maps.search.local` (inclui alias `maps_search_fallback`).
+  - `max_maps_enrich_daily` → `maps.enrich.local` (inclui alias `maps_enrich_fallback`).
+- Contagem: todos os jobs do dia (UTC) para o `user_id` e tipo canônico, independentemente do status (`pending`, `in_progress`, `completed`, `failed`).
+- Limite ausente/`null` = ilimitado (para não travar ambientes de dev). Limite 0 bloqueia qualquer nova criação.
+- Mensagem de bloqueio: `429 Limite diário atingido para <tipo>. Atualize seu plano.`
+- Seeds atuais do backend-core:
+  - `crm_free`: `max_whatsapp_send_daily=50`, `max_maps_search_daily=10`, `max_maps_enrich_daily=20`.
+  - `crm_basic`: `max_whatsapp_send_daily=500`, `max_maps_search_daily=null`, `max_maps_enrich_daily=200`.
+  - `crm_pro`: limites de WhatsApp/Maps ilimitados (`null`).
+
+### Checklist rápido (Swagger/curl na porta 8000)
+
+1. Gere um token no core e confirme os limites: `curl -H "Authorization: Bearer $TOKEN" http://localhost:8000/me/entitlements`.
+2. Enfileire WhatsApp até atingir o limite diário (ex.: `crm_free` → 50 jobs):
+   ```bash
+   curl -X POST http://localhost:8000/api/prospeccao/whatsapp/enqueue \
+     -H "Authorization: Bearer $TOKEN" \
+     -H "Content-Type: application/json" \
+     -d '{"lead_ids":[1],"message":"Teste"}'
+   ```
+   Repita até a resposta ser `429` com `"Limite diário atingido para whatsapp.send.local. Atualize seu plano."` e sem novo `job_id`.
+3. Manual WhatsApp (também conta para o limite):
+   ```bash
+   curl -X POST http://localhost:8000/api/agents/jobs/manual-whatsapp \
+     -H "Authorization: Bearer $TOKEN" \
+     -H "Content-Type: application/json" \
+     -d '{"phone":"+5511999999999","message":"Ping"}'
+   ```
+4. Maps: qualquer criação de `maps.search.local`/`maps.enrich.local` via automações/agent_jobs utiliza o mesmo contador diário; ao exceder, espere `429` com o tipo correspondente.
+
 Fluxo mínimo de teste (usando o core):
 
 ```bash

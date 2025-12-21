@@ -17,6 +17,9 @@ class PlanLimits(Base):
     max_prospec_monthly = Column(Integer, nullable=True)
     max_copy_generation_monthly = Column(Integer, nullable=True)
     max_ia_conversas_monthly = Column(Integer, nullable=True)
+    max_whatsapp_send_daily = Column(Integer, nullable=True)
+    max_maps_search_daily = Column(Integer, nullable=True)
+    max_maps_enrich_daily = Column(Integer, nullable=True)
     require_agent_local_activation_fee = Column(Boolean, default=False, nullable=False)
     ia_memory_advanced = Column(Boolean, default=False, nullable=False)
     created_at = Column(DateTime, server_default=func.now(), nullable=False, default=datetime.utcnow)
@@ -32,6 +35,9 @@ class PlanLimits(Base):
             "max_prospec_monthly": self.max_prospec_monthly,
             "max_copy_generation_monthly": self.max_copy_generation_monthly,
             "max_ia_conversas_monthly": self.max_ia_conversas_monthly,
+            "max_whatsapp_send_daily": self.max_whatsapp_send_daily,
+            "max_maps_search_daily": self.max_maps_search_daily,
+            "max_maps_enrich_daily": self.max_maps_enrich_daily,
             "require_agent_local_activation_fee": self.require_agent_local_activation_fee,
             "ia_memory_advanced": self.ia_memory_advanced,
         }
