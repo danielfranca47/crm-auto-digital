@@ -125,6 +125,13 @@ Use `agent_id` e `agent_token` no `.env` do projeto `agent-local/` e siga com o 
 - `GET /api/prospeccao/whatsapp/summary`
   Wrapper para os contadores da fila (`jobs_service.get_whatsapp_summary`).
 
+### Fila resiliente e regras de entrega
+
+- `scheduled_at` é respeitado no `/api/agents/next-job`; jobs com data futura não são entregues antes da hora.
+- Lease/TTL: jobs `in_progress` há mais de **10 minutos** são reabertos para `pending` (limpando `assigned_agent_id`/`started_at`) ou viram `failed` definitivo quando `attempts >= 3`.
+- Backoff em falha reportada: tentativa 1 → +60s; tentativa 2 → +180s; tentativa 3 → `failed` definitivo.
+- `report` falha com `409` se o job não estiver mais `in_progress` ou se `assigned_agent_id` não corresponder (protege contra report atrasado após requeue).
+
 ### Endpoint rápido para testes manuais
 
 - `POST /api/agents/jobs/manual-whatsapp`

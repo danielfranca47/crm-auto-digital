@@ -20,6 +20,10 @@ JOB_STATUS_IN_PROGRESS = "in_progress"
 JOB_STATUS_COMPLETED = "completed"
 JOB_STATUS_FAILED = "failed"
 
+JOB_LEASE_SECONDS = 600  # 10 minutos
+JOB_MAX_ATTEMPTS = 3
+JOB_BACKOFF_SECONDS = {1: 60, 2: 180}
+
 AGENT_STATUS_ONLINE = "online"
 AGENT_STATUS_OFFLINE = "offline"
 
@@ -62,6 +66,10 @@ def _capabilities_to_text(capabilities: Optional[Sequence[str]]) -> Optional[str
     if not capabilities:
         return None
     return _json_dumps(list(capabilities))
+
+
+def _compute_backoff_seconds(attempts: int) -> int:
+    return JOB_BACKOFF_SECONDS.get(attempts, 0)
 
 
 def _sanitize_agent(row: sqlite3.Row | Dict[str, Any]) -> Dict[str, Any]:
@@ -353,6 +361,79 @@ def _insert_job(
     return job
 
 
+def _unlock_expired_jobs(
+    cur: sqlite3.Cursor,
+    *,
+    user_id: Optional[int],
+    lease_seconds: int = JOB_LEASE_SECONDS,
+) -> Dict[str, int]:
+    """Libera jobs in_progress que excederam o TTL.
+
+    - Jobs com attempts >= JOB_MAX_ATTEMPTS são marcados como failed definitivo.
+    - Demais jobs voltam para pending com assigned_agent_id e started_at limpos.
+    """
+
+    threshold_delta = f"-{lease_seconds} seconds"
+    params: List[Any] = []
+    user_clause = ""
+    if user_id is not None:
+        user_clause = " AND user_id = ?"
+        params.append(user_id)
+
+    failed_params = [
+        JOB_STATUS_FAILED,
+        JOB_STATUS_IN_PROGRESS,
+        threshold_delta,
+        JOB_MAX_ATTEMPTS,
+        *params,
+    ]
+    failed_sql = f"""
+        UPDATE jobs
+           SET status=?,
+               completed_at=CURRENT_TIMESTAMP,
+               updated_at=CURRENT_TIMESTAMP
+         WHERE status=?
+           AND started_at IS NOT NULL
+           AND started_at < datetime('now', ?)
+           AND attempts >= ?
+           {user_clause}
+    """
+    failed_rowcount = cur.execute(failed_sql, failed_params).rowcount
+
+    pending_params = [
+        JOB_STATUS_PENDING,
+        JOB_STATUS_IN_PROGRESS,
+        threshold_delta,
+        JOB_MAX_ATTEMPTS,
+        *params,
+    ]
+    pending_sql = f"""
+        UPDATE jobs
+           SET status=?,
+               assigned_agent_id=NULL,
+               started_at=NULL,
+               scheduled_at=CURRENT_TIMESTAMP,
+               updated_at=CURRENT_TIMESTAMP
+         WHERE status=?
+           AND started_at IS NOT NULL
+           AND started_at < datetime('now', ?)
+           AND attempts < ?
+           {user_clause}
+    """
+    pending_rowcount = cur.execute(pending_sql, pending_params).rowcount
+
+    if failed_rowcount or pending_rowcount:
+        logger.info(
+            "jobs.unlock_expired lease=%ss user_id=%s failed=%s requeued=%s",
+            lease_seconds,
+            user_id,
+            failed_rowcount,
+            pending_rowcount,
+        )
+
+    return {"failed": failed_rowcount, "requeued": pending_rowcount}
+
+
 def get_job(job_id: int, *, user_id: Optional[int] = None) -> Optional[Dict[str, Any]]:
     with get_connection() as conn:
         cur = conn.cursor()
@@ -421,6 +502,7 @@ def fetch_next_job(
     with get_connection() as conn:
         cur = conn.cursor()
         cur.execute("BEGIN IMMEDIATE")
+        _unlock_expired_jobs(cur, user_id=user_id)
         blocked_channels: set[str] = set()
         for locked in cur.execute(
             "SELECT type FROM jobs WHERE user_id=? AND status=?",
@@ -436,10 +518,12 @@ def fetch_next_job(
              WHERE status=?
                AND user_id = ?
                {type_filter}
+               AND COALESCE(scheduled_at, CURRENT_TIMESTAMP) <= CURRENT_TIMESTAMP
+               AND attempts < ?
              ORDER BY priority DESC, scheduled_at ASC, created_at ASC, id ASC
              LIMIT ?
             """,
-            [JOB_STATUS_PENDING, *params, 25],
+            [JOB_STATUS_PENDING, *params, JOB_MAX_ATTEMPTS, 25],
         ).fetchall()
         selected = None
         for candidate in candidates:
@@ -488,7 +572,7 @@ def fetch_next_job(
         updated.rowcount,
     )
 
-    job_row = refreshed or row
+    job_row = refreshed or selected
     job = dict(job_row)
     job["type"] = normalize_job_type(job.get("type") or "")
     job["payload"] = _json_loads(job.get("payload"))
@@ -505,8 +589,8 @@ def report_job(
     result: Optional[Dict[str, Any]] = None,
     error: Optional[str] = None,
 ) -> Dict[str, Any]:
-    if status not in _VALID_JOB_STATUSES:
-        raise HTTPException(status_code=400, detail="Status inválido")
+    if status not in {JOB_STATUS_COMPLETED, JOB_STATUS_FAILED}:
+        raise HTTPException(status_code=400, detail="Status inválido; use completed ou failed")
 
     agent, conn = _get_agent_by_credentials(agent_id, token)
     user_id = agent.get("user_id")
@@ -514,6 +598,7 @@ def report_job(
 
     with get_connection() as conn:
         cur = conn.cursor()
+        cur.execute("BEGIN IMMEDIATE")
         params: List[Any] = [job_id]
         where_clause = "WHERE id=?"
         if user_id is not None:
@@ -522,30 +607,65 @@ def report_job(
         row = cur.execute(f"SELECT * FROM jobs {where_clause}", params).fetchone()
         if not row:
             raise HTTPException(status_code=404, detail="Job não encontrado")
+        if row["status"] != JOB_STATUS_IN_PROGRESS:
+            conn.rollback()
+            raise HTTPException(status_code=409, detail="Job não está mais em andamento (possível requeue ou timeout)")
         if row["assigned_agent_id"] and row["assigned_agent_id"] != agent_id:
-            raise HTTPException(status_code=403, detail="Job atribuído a outro agente")
+            conn.rollback()
+            raise HTTPException(status_code=409, detail="Job atribuído a outro agente")
 
         result_txt = _json_dumps(result) if result is not None else None
         error_txt = str(error) if error else None
-        completed_at_expr = "CURRENT_TIMESTAMP" if status in {JOB_STATUS_COMPLETED, JOB_STATUS_FAILED} else "completed_at"
-
-        update_params: List[Any] = [status, result_txt, error_txt, job_id]
-        update_where = "id=?"
+        attempts = int(row["attempts"] or 0)
+        update_where = "id=? AND status=? AND assigned_agent_id=?"
+        update_params: List[Any] = [job_id, JOB_STATUS_IN_PROGRESS, agent_id]
         if user_id is not None:
-            update_where = "id=? AND user_id=?"
+            update_where += " AND user_id=?"
             update_params.append(user_id)
-        updated = cur.execute(
-            f"""
-            UPDATE jobs
-               SET status=?,
-                   result=?,
-                   error=?,
-                   updated_at=CURRENT_TIMESTAMP,
-                   completed_at={completed_at_expr}
-             WHERE {update_where}
-            """,
-            update_params,
-        )
+
+        updated = None
+        if status == JOB_STATUS_FAILED and attempts < JOB_MAX_ATTEMPTS:
+            backoff_seconds = _compute_backoff_seconds(attempts)
+            schedule_expr = "CURRENT_TIMESTAMP"
+            schedule_params: List[Any] = []
+            if backoff_seconds > 0:
+                schedule_expr = "datetime('now', ?)"
+                schedule_params.append(f"+{backoff_seconds} seconds")
+            updated = cur.execute(
+                f"""
+                UPDATE jobs
+                   SET status=?,
+                       result=?,
+                       error=?,
+                       assigned_agent_id=NULL,
+                       started_at=NULL,
+                       scheduled_at={schedule_expr},
+                       completed_at=NULL,
+                       updated_at=CURRENT_TIMESTAMP
+                 WHERE {update_where}
+                """,
+                [
+                    JOB_STATUS_PENDING,
+                    result_txt,
+                    error_txt,
+                    *schedule_params,
+                    *update_params,
+                ],
+            )
+        else:
+            completed_at_expr = "CURRENT_TIMESTAMP"
+            updated = cur.execute(
+                f"""
+                UPDATE jobs
+                   SET status=?,
+                       result=?,
+                       error=?,
+                       completed_at={completed_at_expr},
+                       updated_at=CURRENT_TIMESTAMP
+                 WHERE {update_where}
+                """,
+                [status, result_txt, error_txt, *update_params],
+            )
         if updated.rowcount == 0:
             conn.rollback()
             raise HTTPException(status_code=409, detail="Job não atualizado (possível corrida ou ownership)")
