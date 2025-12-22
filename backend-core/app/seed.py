@@ -1,5 +1,6 @@
 from typing import Dict, List
 
+from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from app import models
@@ -52,6 +53,15 @@ def ensure_plan_limits(db: Session, plan: models.Plan, limits_data: Dict) -> mod
 
 
 def seed_initial_data(db: Session) -> None:
+    # Garantir coluna nova (SQLite não cria em create_all se tabela já existir)
+    try:
+        existing_cols = db.execute(text("PRAGMA table_info(plan_limits)")).fetchall()
+        if existing_cols is not None and "max_prospects_daily" not in {row[1] for row in existing_cols}:
+            db.execute(text("ALTER TABLE plan_limits ADD COLUMN max_prospects_daily INTEGER"))
+            db.commit()
+    except Exception:
+        pass
+
     products_seed = [
         {"code": "crm", "name": "CRM AutoDigital", "description": ""},
         {"code": "agent_ia", "name": "Agente IA WhatsApp", "description": ""},
@@ -74,6 +84,10 @@ def seed_initial_data(db: Session) -> None:
             "max_prospec_monthly": 0,
             "max_copy_generation_monthly": 25,
             "max_ia_conversas_monthly": 0,
+            "max_whatsapp_send_daily": 15,
+            "max_prospects_daily": 15,
+            "max_maps_search_daily": 10,
+            "max_maps_enrich_daily": 20,
             "require_agent_local_activation_fee": True,
             "ia_memory_advanced": False,
         },
@@ -85,6 +99,10 @@ def seed_initial_data(db: Session) -> None:
             "max_prospec_monthly": 200,
             "max_copy_generation_monthly": 500,
             "max_ia_conversas_monthly": 20,
+            "max_whatsapp_send_daily": 30,
+            "max_prospects_daily": 30,
+            "max_maps_search_daily": None,
+            "max_maps_enrich_daily": 200,
             "require_agent_local_activation_fee": False,
             "ia_memory_advanced": False,
         },
@@ -96,6 +114,10 @@ def seed_initial_data(db: Session) -> None:
             "max_prospec_monthly": None,
             "max_copy_generation_monthly": 3000,
             "max_ia_conversas_monthly": 200,
+            "max_whatsapp_send_daily": 100,
+            "max_prospects_daily": 100,
+            "max_maps_search_daily": None,
+            "max_maps_enrich_daily": None,
             "require_agent_local_activation_fee": False,
             "ia_memory_advanced": False,
         },
@@ -107,6 +129,10 @@ def seed_initial_data(db: Session) -> None:
             "max_prospec_monthly": None,
             "max_copy_generation_monthly": None,
             "max_ia_conversas_monthly": 100,
+            "max_whatsapp_send_daily": None,
+            "max_prospects_daily": None,
+            "max_maps_search_daily": None,
+            "max_maps_enrich_daily": None,
             "require_agent_local_activation_fee": False,
             "ia_memory_advanced": False,
         },
@@ -118,6 +144,10 @@ def seed_initial_data(db: Session) -> None:
             "max_prospec_monthly": None,
             "max_copy_generation_monthly": None,
             "max_ia_conversas_monthly": 100,
+            "max_whatsapp_send_daily": None,
+            "max_prospects_daily": None,
+            "max_maps_search_daily": None,
+            "max_maps_enrich_daily": None,
             "require_agent_local_activation_fee": False,
             "ia_memory_advanced": True,
         },

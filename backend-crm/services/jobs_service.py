@@ -162,6 +162,13 @@ def _variants_for_canonical(canonical: str) -> List[str]:
     return _type_variants_for_query([canonical])
 
 
+def expand_type_variants(job_type: str) -> List[str]:
+    """Retorna o tipo normalizado + aliases para consultas SQL (uso em rate limits)."""
+
+    canonical = normalize_job_type(job_type)
+    return _variants_for_canonical(canonical)
+
+
 # ---------------------------------------------------------------------------
 # Agent management
 # ---------------------------------------------------------------------------
@@ -799,7 +806,7 @@ def _persist_whatsapp_message(cur, lead_id: int, body: str) -> Dict[str, Any]:
 
 
 def enqueue_whatsapp_jobs(
-    lead_ids: Sequence[int], *, message: Optional[str] = None, lead_messages: Optional[Dict[int, str]] = None, user_id: Optional[int] = None
+    lead_ids: Sequence[int], *, message: Optional[str] = None, lead_messages: Optional[Dict[int, str]] = None, user_id: Optional[int] = None, entitlements: Optional[Dict[str, Any]] = None
 ) -> Dict[str, Any]:
     if not lead_ids:
         return {"queued": [], "skipped": []}
@@ -814,159 +821,172 @@ def enqueue_whatsapp_jobs(
         list((lead_messages or {}).keys()),
     )
 
+    from services import rate_limit_service
+
     with get_connection() as conn:
-        cur = conn.cursor()
-        whatsapp_types = _variants_for_canonical(TYPE_WHATSAPP_SEND)
-        type_placeholders = ",".join(["?"] * len(whatsapp_types))
-        params_jobs: List[Any] = [*whatsapp_types, JOB_STATUS_PENDING, JOB_STATUS_IN_PROGRESS]
-        user_filter = ""
-        if user_id is not None:
-            user_filter = "AND user_id = ?"
-            params_jobs.append(user_id)
-        pending_rows = cur.execute(
-            f"""
-            SELECT id, payload
-              FROM jobs
-             WHERE type IN ({type_placeholders})
-               AND status IN (?, ?)
-               {user_filter}
-            """,
-            params_jobs,
-        ).fetchall()
-        existing = []
-        for row in pending_rows:
-            payload = _json_loads(row["payload"])
-            if isinstance(payload, dict):
-                existing.append((row["id"], payload.get("lead_id"), payload.get("message_id")))
+        rate_limit_state = rate_limit_service.build_rate_limit_state(
+            job_type=TYPE_WHATSAPP_SEND,
+            user_id=user_id,
+            entitlements=entitlements,
+            conn=conn,
+        )
+        try:
+            cur = conn.cursor()
+            whatsapp_types = _variants_for_canonical(TYPE_WHATSAPP_SEND)
+            type_placeholders = ",".join(["?"] * len(whatsapp_types))
+            params_jobs: List[Any] = [*whatsapp_types, JOB_STATUS_PENDING, JOB_STATUS_IN_PROGRESS]
+            user_filter = ""
+            if user_id is not None:
+                user_filter = "AND user_id = ?"
+                params_jobs.append(user_id)
+            pending_rows = cur.execute(
+                f"""
+                SELECT id, payload
+                  FROM jobs
+                 WHERE type IN ({type_placeholders})
+                   AND status IN (?, ?)
+                   {user_filter}
+                """,
+                params_jobs,
+            ).fetchall()
+            existing = []
+            for row in pending_rows:
+                payload = _json_loads(row["payload"])
+                if isinstance(payload, dict):
+                    existing.append((row["id"], payload.get("lead_id"), payload.get("message_id")))
 
-        for lead_id in lead_ids:
-            try:
-                lead_params: List[Any] = [lead_id]
-                lead_clause = "WHERE id=?"
-                if user_id is not None:
-                    lead_clause += " AND user_id = ?"
-                    lead_params.append(user_id)
-                lead = cur.execute(
-                    f"SELECT id, phone, customMessage FROM leads {lead_clause}",
-                    lead_params,
-                ).fetchone()
-                if not lead:
-                    reason = "lead_nao_encontrado"
-                    skipped.append({"lead_id": lead_id, "reason": reason})
-                    logger.info("enqueue_whatsapp_jobs skip lead_id=%s reason=%s", lead_id, reason)
-                    continue
-
-                phone = _sanitize_phone(lead["phone"])
-                if not phone:
-                    reason = "telefone_invalido"
-                    skipped.append({"lead_id": lead_id, "reason": reason})
-                    logger.info("enqueue_whatsapp_jobs skip lead_id=%s reason=%s", lead_id, reason)
-                    continue
-
-                override_msg = None
-                if lead_messages and lead_id in lead_messages:
-                    override_msg = (lead_messages[lead_id] or "").strip() or None
-                if not override_msg and message:
-                    override_msg = message
-
-                msg_row = None
-                if override_msg:
-                    msg_row = _persist_whatsapp_message(cur, lead_id, override_msg)
-                    logger.info(
-                        "enqueue_whatsapp_jobs persisted override message lead_id=%s message_id=%s",
-                        lead_id,
-                        msg_row["id"],
-                    )
-                else:
-                    msg_row = cur.execute(
-                        """
-                        SELECT m.id, m.body
-                          FROM message_selections s
-                          JOIN messages m ON m.id = s.message_id
-                         WHERE s.lead_id=? AND s.channel='whatsapp'
-                         ORDER BY s.selectedAt DESC
-                         LIMIT 1
-                        """,
-                        (lead_id,),
+            for lead_id in lead_ids:
+                try:
+                    lead_params: List[Any] = [lead_id]
+                    lead_clause = "WHERE id=?"
+                    if user_id is not None:
+                        lead_clause += " AND user_id = ?"
+                        lead_params.append(user_id)
+                    lead = cur.execute(
+                        f"SELECT id, phone, customMessage FROM leads {lead_clause}",
+                        lead_params,
                     ).fetchone()
-                    if not msg_row:
+                    if not lead:
+                        reason = "lead_nao_encontrado"
+                        skipped.append({"lead_id": lead_id, "reason": reason})
+                        logger.info("enqueue_whatsapp_jobs skip lead_id=%s reason=%s", lead_id, reason)
+                        continue
+
+                    phone = _sanitize_phone(lead["phone"])
+                    if not phone:
+                        reason = "telefone_invalido"
+                        skipped.append({"lead_id": lead_id, "reason": reason})
+                        logger.info("enqueue_whatsapp_jobs skip lead_id=%s reason=%s", lead_id, reason)
+                        continue
+
+                    override_msg = None
+                    if lead_messages and lead_id in lead_messages:
+                        override_msg = (lead_messages[lead_id] or "").strip() or None
+                    if not override_msg and message:
+                        override_msg = message
+
+                    msg_row = None
+                    if override_msg:
+                        msg_row = _persist_whatsapp_message(cur, lead_id, override_msg)
+                        logger.info(
+                            "enqueue_whatsapp_jobs persisted override message lead_id=%s message_id=%s",
+                            lead_id,
+                            msg_row["id"],
+                        )
+                    else:
                         msg_row = cur.execute(
                             """
-                            SELECT id, body
-                              FROM messages
-                             WHERE lead_id=? AND channel='whatsapp'
-                             ORDER BY createdAt DESC
+                            SELECT m.id, m.body
+                              FROM message_selections s
+                              JOIN messages m ON m.id = s.message_id
+                             WHERE s.lead_id=? AND s.channel='whatsapp'
+                             ORDER BY s.selectedAt DESC
                              LIMIT 1
                             """,
                             (lead_id,),
                         ).fetchone()
-                    if not msg_row:
-                        custom_msg = (lead["customMessage"] or "").strip()
-                        if custom_msg:
-                            msg_row = _persist_whatsapp_message(cur, lead_id, custom_msg)
-                            logger.info(
-                                "enqueue_whatsapp_jobs created message from customMessage lead_id=%s message_id=%s",
-                                lead_id,
-                                msg_row["id"],
-                            )
-                        else:
-                            reason = "sem_mensagem"
-                            skipped.append({"lead_id": lead_id, "reason": reason})
-                            logger.info("enqueue_whatsapp_jobs skip lead_id=%s reason=%s", lead_id, reason)
-                            continue
+                        if not msg_row:
+                            msg_row = cur.execute(
+                                """
+                                SELECT id, body
+                                  FROM messages
+                                 WHERE lead_id=? AND channel='whatsapp'
+                                 ORDER BY createdAt DESC
+                                 LIMIT 1
+                                """,
+                                (lead_id,),
+                            ).fetchone()
+                        if not msg_row:
+                            custom_msg = (lead["customMessage"] or "").strip()
+                            if custom_msg:
+                                msg_row = _persist_whatsapp_message(cur, lead_id, custom_msg)
+                                logger.info(
+                                    "enqueue_whatsapp_jobs created message from customMessage lead_id=%s message_id=%s",
+                                    lead_id,
+                                    msg_row["id"],
+                                )
+                            else:
+                                reason = "sem_mensagem"
+                                skipped.append({"lead_id": lead_id, "reason": reason})
+                                logger.info("enqueue_whatsapp_jobs skip lead_id=%s reason=%s", lead_id, reason)
+                                continue
 
-                message_id = int(msg_row["id"])
-                body = msg_row["body"]
+                    message_id = int(msg_row["id"])
+                    body = msg_row["body"]
 
-                already = next(
-                    (row_id for row_id, lid, mid in existing if lid == lead_id and mid == message_id), None
-                )
-                if already:
-                    reason = "ja_pendente"
-                    skipped.append({"lead_id": lead_id, "reason": reason, "job_id": already})
-                    logger.info(
-                        "enqueue_whatsapp_jobs skip lead_id=%s reason=%s job_id=%s",
-                        lead_id,
-                        reason,
-                        already,
+                    already = next(
+                        (row_id for row_id, lid, mid in existing if lid == lead_id and mid == message_id), None
                     )
+                    if already:
+                        reason = "ja_pendente"
+                        skipped.append({"lead_id": lead_id, "reason": reason, "job_id": already})
+                        logger.info(
+                            "enqueue_whatsapp_jobs skip lead_id=%s reason=%s job_id=%s",
+                            lead_id,
+                            reason,
+                            already,
+                        )
+                        continue
+
+                    rate_limit_state.ensure_can_consume()
+
+                    job = _insert_job(
+                        cur,
+                        job_type=TYPE_WHATSAPP_SEND,
+                        payload={
+                            "lead_id": lead_id,
+                            "message_id": message_id,
+                            "phone": phone,
+                            "body": body,
+                        },
+                        user_id=user_id,
+                    )
+
+                    _log_prospection(
+                        conn,
+                        lead_id=lead_id,
+                        channel="whatsapp",
+                        message_id=message_id,
+                        action="queued",
+                        notes=f"phone={phone}",
+                        user_id=user_id,
+                    )
+
+                    queued.append({"lead_id": lead_id, "message_id": message_id, "job_id": job["id"]})
+                    logger.info(
+                        "enqueue_whatsapp_jobs queued lead_id=%s message_id=%s job_id=%s",
+                        lead_id,
+                        message_id,
+                        job["id"],
+                    )
+                except Exception:
+                    logger.exception("enqueue_whatsapp_jobs unexpected error lead_id=%s", lead_id)
+                    skipped.append({"lead_id": lead_id, "reason": "erro_interno"})
                     continue
 
-                job = _insert_job(
-                    cur,
-                    job_type=TYPE_WHATSAPP_SEND,
-                    payload={
-                        "lead_id": lead_id,
-                        "message_id": message_id,
-                        "phone": phone,
-                        "body": body,
-                    },
-                    user_id=user_id,
-                )
-
-                _log_prospection(
-                    conn,
-                    lead_id=lead_id,
-                    channel="whatsapp",
-                    message_id=message_id,
-                    action="queued",
-                    notes=f"phone={phone}",
-                    user_id=user_id,
-                )
-
-                queued.append({"lead_id": lead_id, "message_id": message_id, "job_id": job["id"]})
-                logger.info(
-                    "enqueue_whatsapp_jobs queued lead_id=%s message_id=%s job_id=%s",
-                    lead_id,
-                    message_id,
-                    job["id"],
-                )
-            except Exception:
-                logger.exception("enqueue_whatsapp_jobs unexpected error lead_id=%s", lead_id)
-                skipped.append({"lead_id": lead_id, "reason": "erro_interno"})
-                continue
-
-        conn.commit()
+            conn.commit()
+        finally:
+            rate_limit_state.close()
 
     return {"queued": queued, "skipped": skipped}
 

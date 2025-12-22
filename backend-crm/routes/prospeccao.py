@@ -5,7 +5,7 @@ from pydantic import BaseModel
 from typing import Optional, Dict, List
 from datetime import datetime
 from database import get_connection
-from services import jobs_service
+from services import jobs_service, rate_limit_service
 from security_core import CurrentUser, require_crm_access
 
 router = APIRouter(prefix="/api/prospeccao", tags=["Prospecção"])
@@ -178,6 +178,7 @@ def whatsapp_enqueue(req: WhatsEnqueueRequest, current_user: CurrentUser = Depen
             message=(req.message or "").strip() or None,
             lead_messages=req.lead_messages,
             user_id=current_user.id,
+            entitlements=current_user.entitlements,
         )
         job_ids = [item.get("job_id") for item in result.get("queued", [])]
         logger.info(
