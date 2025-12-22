@@ -3,7 +3,7 @@ from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 
-from services import jobs_service
+from services import jobs_service, rate_limit_service
 from security_core import CurrentUser, require_crm_access
 
 router = APIRouter(prefix="/api/agents", tags=["Agents"])
@@ -144,6 +144,12 @@ def job_summary(current_user: CurrentUser = Depends(require_crm_access)):
 def manual_whatsapp_job(payload: ManualWhatsappJobRequest, current_user: CurrentUser = Depends(require_crm_access)):
     if not payload.phone or not payload.message:
         raise HTTPException(status_code=400, detail="phone e message são obrigatórios")
+
+    rate_limit_service.ensure_daily_limit(
+        job_type=jobs_service.TYPE_WHATSAPP_SEND,
+        user_id=current_user.id,
+        entitlements=current_user.entitlements,
+    )
 
     job = jobs_service.create_job(
         job_type=jobs_service.TYPE_WHATSAPP_SEND,

@@ -14,6 +14,50 @@ Principais mudanças:
 - A dependência `require_crm_access` chama o endpoint autenticado do core `GET /me/entitlements` e verifica se existe uma assinatura **ativa** para o produto `crm`.
 - Se não houver assinatura ativa para `crm`, o CRM retorna `403 Assinatura do produto CRM ausente ou inativa` antes de executar qualquer rota privada.
 
+## Rate limits por plano (janela diária UTC)
+
+- Fonte da verdade: `GET /me/entitlements` do backend-core (campo `limits`).
+- Chaves usadas neste MVP:
+  - `max_prospects_daily` → consumo por prospect encontrado/enriquecido na automação de pesquisa (`/api/pesquisa/executar`), contando o número de itens retornados (API ou fallback via agent-local), mesmo sem criação de jobs.
+  - `max_whatsapp_send_daily` → `whatsapp.send.local` (inclui aliases `whatsapp_send`).
+  - `max_maps_search_daily` → `maps.search.local` (inclui alias `maps_search_fallback`).
+  - `max_maps_enrich_daily` → `maps.enrich.local` (inclui alias `maps_enrich_fallback`).
+- Contagem: diário (UTC) por `user_id`. Para WhatsApp/Maps jobs, conta todos os jobs do tipo canônico, independentemente do status. Para prospecção, consome **1 unidade por prospect** retornado na pesquisa (API ou fallback), mesmo quando não há job.
+- Limite ausente/`null` = ilimitado (para não travar ambientes de dev). Limite 0 bloqueia qualquer nova criação/execução.
+- Mensagem de bloqueio: `429 Limite diário atingido para <tipo>. Atualize seu plano.`
+- Seeds atuais do backend-core:
+  - `crm_free`: `max_whatsapp_send_daily=15`, `max_prospects_daily=15`, `max_maps_search_daily=10`, `max_maps_enrich_daily=20`.
+  - `crm_basic`: `max_whatsapp_send_daily=30`, `max_prospects_daily=30`, `max_maps_search_daily=null`, `max_maps_enrich_daily=200`.
+  - `crm_pro`: `max_whatsapp_send_daily=100`, `max_prospects_daily=100`, limites de Maps ilimitados (`null`).
+
+### Checklist rápido (Swagger/curl na porta 8000)
+
+1. Gere um token no core e confirme os limites: `curl -H "Authorization: Bearer $TOKEN" http://localhost:8000/me/entitlements`.
+2. Valide prospecção (plano `crm_free` com `max_prospects_daily=15`):
+   ```bash
+   curl -X POST http://localhost:8000/api/pesquisa/executar \
+     -H "Authorization: Bearer $TOKEN" \
+     -H "Content-Type: application/json" \
+     -d '{"country":"Brasil","state":"SP","city":"São Paulo","sector":"padaria","quantity":16}'
+   ```
+   Deve retornar `429` com `"Limite diário atingido para prospecção. Atualize seu plano."` quando a pesquisa retornar 16 itens. Com quantity menor/igual ao saldo, a pesquisa completa normalmente, consumindo 1 unidade por prospect retornado (via API ou fallback agent-local).
+3. Enfileire WhatsApp até atingir o limite diário (ex.: `crm_free` → 15 jobs):
+   ```bash
+   curl -X POST http://localhost:8000/api/prospeccao/whatsapp/enqueue \
+     -H "Authorization: Bearer $TOKEN" \
+     -H "Content-Type: application/json" \
+     -d '{"lead_ids":[1],"message":"Teste"}'
+   ```
+   Repita até a resposta ser `429` com `"Limite diário atingido para whatsapp.send.local. Atualize seu plano."` e sem novo `job_id`.
+4. Manual WhatsApp (também conta para o limite):
+   ```bash
+   curl -X POST http://localhost:8000/api/agents/jobs/manual-whatsapp \
+     -H "Authorization: Bearer $TOKEN" \
+     -H "Content-Type: application/json" \
+     -d '{"phone":"+5511999999999","message":"Ping"}'
+   ```
+5. Maps: qualquer criação de `maps.search.local`/`maps.enrich.local` via automações/agent_jobs utiliza o contador diário de jobs; ao exceder, espere `429` com o tipo correspondente. O limite de prospecção (`max_prospects_daily`) continua sendo consumido 1× por prospect retornado na pesquisa, mesmo quando o fluxo usa API sem jobs.
+
 Fluxo mínimo de teste (usando o core):
 
 ```bash
