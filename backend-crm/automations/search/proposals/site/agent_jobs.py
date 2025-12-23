@@ -5,7 +5,7 @@ from fastapi import HTTPException
 
 from services import jobs_service, rate_limit_service
 
-DEFAULT_TIMEOUT = 120
+DEFAULT_TIMEOUT = 480
 POLL_INTERVAL = 2
 
 
