@@ -50,7 +50,9 @@ def executar_pesquisa(req: SearchRequest, current_user: CurrentUser = Depends(re
     Dispara a automação e retorna o manifest + link do validado.
     """
     try:
-        manifest = run_site_search(req.dict(), user_id=current_user.id)
+        manifest = run_site_search(
+            req.dict(), user_id=current_user.id, entitlements=current_user.entitlements
+        )
         run_id = manifest.get("run_id")
         download_url = f"/api/pesquisa/baixar/{run_id}"  # sempre o validado
         return {"ok": True, "run_id": run_id, "download_url": download_url, "manifest": manifest}

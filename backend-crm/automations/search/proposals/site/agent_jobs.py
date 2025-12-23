@@ -3,9 +3,9 @@ from typing import Any, Dict, List
 
 from fastapi import HTTPException
 
-from services import jobs_service
+from services import jobs_service, rate_limit_service
 
-DEFAULT_TIMEOUT = 120
+DEFAULT_TIMEOUT = 480
 POLL_INTERVAL = 2
 
 
@@ -28,8 +28,23 @@ def _poll_job_result(job_id: int, timeout: int = DEFAULT_TIMEOUT, *, user_id: in
     raise HTTPException(status_code=500, detail=f"Job {job_id} expirou aguardando conclusão")
 
 
-def run_maps_search_fallback_via_agent(query: str, limit: int, *, timeout: int = DEFAULT_TIMEOUT, user_id: int | None = None) -> List[Dict[str, Any]]:
-    job = jobs_service.create_job(job_type=jobs_service.TYPE_MAPS_SEARCH, payload={"query": query, "limit": limit}, user_id=user_id)
+def run_maps_search_fallback_via_agent(
+    query: str,
+    limit: int,
+    *,
+    timeout: int = DEFAULT_TIMEOUT,
+    user_id: int | None = None,
+    entitlements: Dict[str, Any] | None = None,
+) -> List[Dict[str, Any]]:
+    rate_limit_service.ensure_daily_limit(
+        job_type=jobs_service.TYPE_MAPS_SEARCH,
+        user_id=user_id,
+        entitlements=entitlements,
+    )
+
+    job = jobs_service.create_job(
+        job_type=jobs_service.TYPE_MAPS_SEARCH, payload={"query": query, "limit": limit}, user_id=user_id
+    )
     result = _poll_job_result(job_id=job["id"], timeout=timeout, user_id=user_id)
 
     items = []
@@ -47,8 +62,22 @@ def run_maps_search_fallback_via_agent(query: str, limit: int, *, timeout: int =
     return items
 
 
-def run_maps_enrich_fallback_via_agent(maps_urls: List[str], *, timeout: int = DEFAULT_TIMEOUT, user_id: int | None = None) -> List[Dict[str, Any]]:
-    job = jobs_service.create_job(job_type=jobs_service.TYPE_MAPS_ENRICH, payload={"maps_urls": maps_urls}, user_id=user_id)
+def run_maps_enrich_fallback_via_agent(
+    maps_urls: List[str],
+    *,
+    timeout: int = DEFAULT_TIMEOUT,
+    user_id: int | None = None,
+    entitlements: Dict[str, Any] | None = None,
+) -> List[Dict[str, Any]]:
+    rate_limit_service.ensure_daily_limit(
+        job_type=jobs_service.TYPE_MAPS_ENRICH,
+        user_id=user_id,
+        entitlements=entitlements,
+    )
+
+    job = jobs_service.create_job(
+        job_type=jobs_service.TYPE_MAPS_ENRICH, payload={"maps_urls": maps_urls}, user_id=user_id
+    )
     result = _poll_job_result(job_id=job["id"], timeout=timeout, user_id=user_id)
 
     enriched: List[Dict[str, Any]] = []

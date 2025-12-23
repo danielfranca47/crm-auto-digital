@@ -7,6 +7,7 @@ import re
 from typing import Dict, Any  # (List não estava sendo usado)
 
 from . import config
+from services import rate_limit_service
 from .maps_searcher import MapsSearcher
 from .profile_extractor import ProfileExtractor
 from .website_classifier import WebsiteClassifier
@@ -34,7 +35,9 @@ def _build_query(sector: str, country: str, state: str, city: str, neighborhood:
         parts.append(f"em {loc}")
     return " ".join(parts)
 
-def run_site_search(payload: Dict[str, Any], *, user_id: int | None = None) -> Dict[str, Any]:
+def run_site_search(
+    payload: Dict[str, Any], *, user_id: int | None = None, entitlements: Dict[str, Any] | None = None
+) -> Dict[str, Any]:
     """
     payload esperado:
     {
@@ -64,11 +67,57 @@ def run_site_search(payload: Dict[str, Any], *, user_id: int | None = None) -> D
     out_dir.mkdir(parents=True, exist_ok=True)
 
     # 1) Busca inicial
-    ms = MapsSearcher(user_id=user_id)
-    raw = ms.search_businesses(query, limit=quantity)
+    ms = MapsSearcher(user_id=user_id, entitlements=entitlements)
+
+    reserved = rate_limit_service.reserve_daily_units(
+        limit_key="max_prospects_daily",
+        amount=quantity,
+        user_id=user_id,
+        entitlements=entitlements,
+        label="prospecção",
+    )
+
+    try:
+        raw = ms.search_businesses(query, limit=quantity)
+    except Exception:
+        if reserved:
+            rate_limit_service.refund_daily_units(
+                limit_key="max_prospects_daily",
+                amount=reserved,
+                user_id=user_id,
+                entitlements=entitlements,
+            )
+        raise
+
+    actual_found = len(raw)
+
+    if reserved:
+        if actual_found < reserved:
+            rate_limit_service.refund_daily_units(
+                limit_key="max_prospects_daily",
+                amount=reserved - actual_found,
+                user_id=user_id,
+                entitlements=entitlements,
+            )
+        elif actual_found > reserved:
+            rate_limit_service.consume_daily_units(
+                limit_key="max_prospects_daily",
+                amount=actual_found - reserved,
+                user_id=user_id,
+                entitlements=entitlements,
+                label="prospecção",
+            )
+    else:
+        rate_limit_service.consume_daily_units(
+            limit_key="max_prospects_daily",
+            amount=actual_found,
+            user_id=user_id,
+            entitlements=entitlements,
+            label="prospecção",
+        )
 
     # 2) Enriquecimento inicial (Maps detail)
-    pe = ProfileExtractor(user_id=user_id)
+    pe = ProfileExtractor(user_id=user_id, entitlements=entitlements)
     enriched = pe.enrich(raw)
 
     # 3) Classificação de website (próprio x social etc.)
