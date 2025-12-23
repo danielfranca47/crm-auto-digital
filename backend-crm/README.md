@@ -384,6 +384,46 @@ Checklist rápido (use a porta em que o CRM estiver rodando, ex.: `http://localh
 3. **Validar isolamento**
    - Troque para `token_B` e repita os dois passos. O preview não deve mostrar leads do A e o import cria registros separados.
 
+#### Limite mensal de geração de copys (POST /api/assistente-ia/processar)
+
+- Chave de entitlement: `limits.max_copy_generation_monthly` (None = ilimitado, `0` = sempre bloqueia). Contagem mensal UTC em `limit_usage_monthly.month_utc` (formato `YYYY-MM`). Unidade = 1 mensagem gerada automaticamente por lead × canal; o endpoint manual `/api/assistente-ia/messages/upsert` **não** consome quota.
+- Comportamentos esperados no processar:
+  - Se `generate_copys=false` ou `channels=[]`: não consome quota.
+  - Se o saldo mensal é 0 antes de iniciar: HTTP 429 com `"Limite mensal atingido para geração de copys. Atualize seu plano."`.
+  - Se o saldo acaba no meio do lote: responde 200 com geração parcial, `quota_exceeded=true`, `stopped_reason="copy_quota_exceeded"` e `remaining_copy_quota` com o saldo final. Leads continuam sendo criados/atualizados sem chamar o LLM para novos textos.
+- PowerShell para testar localmente (ajuste `upload_id` e token):
+  ```powershell
+  # 1) Upload do arquivo
+  Invoke-RestMethod -Method Post -Uri http://localhost:8010/api/uploads `
+    -Headers @{ Authorization = "Bearer $token_A" } `
+    -Form @{ file = Get-Item '.\\leads.xlsx' }
+
+  # 2) Processar pedindo 2 canais (consumo = leads * 2)
+  Invoke-RestMethod -Method Post -Uri http://localhost:8010/api/assistente-ia/processar `
+    -Headers @{ Authorization = "Bearer $token_A" } `
+    -ContentType 'application/json' `
+    -Body (@{
+      upload_id     = "meu_arquivo"
+      create_cards  = $true
+      generate_copys = $true
+      channels      = @("email","whatsapp")
+      overwrite     = "update"
+    } | ConvertTo-Json)
+
+  # 3) Consultar saldo usado no mês (python embutido, sem depender do sqlite3 CLI)
+  python - <<'PY'
+import sqlite3
+conn = sqlite3.connect('backend-crm/database/crm.db')
+conn.row_factory = sqlite3.Row
+rows = conn.execute("SELECT user_id, limit_key, month_utc, used FROM limit_usage_monthly").fetchall()
+for r in rows:
+    print(dict(r))
+PY
+  ```
+- Para simular um limite baixo (ex.: 3/mês), use um usuário/plano com `max_copy_generation_monthly=3`, processe 2 leads com 2 canais (4 unidades) e valide:
+  - Primeira chamada gera até esgotar o saldo (resposta 200 com `quota_exceeded=true`).
+  - Nova chamada com saldo 0 retorna 429 com a mensagem de limite.
+
 ### 4) Observações e Troubleshooting
 
 - **Se retornar 401**: verifique se está enviando `Authorization: Bearer <token>` e se `CORE_API_BASE` do CRM aponta para o core correto.
