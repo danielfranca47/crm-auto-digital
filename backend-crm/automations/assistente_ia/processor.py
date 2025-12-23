@@ -6,12 +6,15 @@ from typing import Dict, List, Optional
 
 import pandas as pd
 
+from fastapi import HTTPException
+
 from database import get_connection, get_user_profile  # 👈 novo import
 from automations.assistente_ia.llm import LLMClient
 from automations.assistente_ia.i18n import normalize_language          # 👈 novo
 from automations.assistente_ia.text_renderer import (                  # 👈 novo
     interpolate, format_email, format_whatsapp_or_dm
 )
+from services.rate_limit_service import consume_monthly_units, get_monthly_remaining
 
 # ----------------- Normalizadores & helpers -----------------
 def normalize_phone(phone: Optional[str]) -> Optional[str]:
@@ -206,6 +209,7 @@ class AssistIAProcessor:
         tone: Optional[str],
         language: Optional[str],
         user_id: int,
+        entitlements: Optional[Dict] = None,
     ) -> Dict:
         if not file_path.exists():
             raise AssistIAProcessadorErro("Arquivo de upload não encontrado.")
@@ -214,6 +218,12 @@ class AssistIAProcessor:
         stats = {"created": 0, "updated": 0, "skipped": 0, "messages": 0}
         errors: List[str] = []
         created_ids: List[int] = []
+
+        can_generate_messages = bool(generate_copys and channels)
+        copy_limit_key = "max_copy_generation_monthly"
+        remaining_copy_quota: Optional[int] = None
+        quota_exceeded = False
+        stopped_reason: Optional[str] = None
 
         with get_connection() as conn:
             # 👇 carrega perfil do remetente
@@ -232,6 +242,19 @@ class AssistIAProcessor:
 
             # resolve tom (UI > default perfil > fallback)
             tone_resolved = tone or profile.get("default_tone") or "profissional e próximo"
+
+            if can_generate_messages:
+                remaining_copy_quota = get_monthly_remaining(
+                    limit_key=copy_limit_key,
+                    user_id=user_id,
+                    entitlements=entitlements,
+                    conn=conn,
+                )
+                if remaining_copy_quota is not None and remaining_copy_quota <= 0:
+                    raise HTTPException(
+                        status_code=429,
+                        detail="Limite mensal atingido para geração de copys. Atualize seu plano.",
+                    )
 
             llm = LLMClient()
 
@@ -284,7 +307,14 @@ class AssistIAProcessor:
                     }
 
                     # --- GERAÇÃO OPCIONAL ---
-                    if generate_copys and channels:
+                    if can_generate_messages:
+                        cost = len(channels)
+                        if remaining_copy_quota is not None and remaining_copy_quota < cost:
+                            quota_exceeded = True
+                            stopped_reason = "copy_quota_exceeded"
+                            can_generate_messages = False
+                            continue
+
                         lead_view = {
                             "id": lead_id,
                             "companyName": lead_data["companyName"],
@@ -320,9 +350,28 @@ class AssistIAProcessor:
                             insert_message(
                                 conn, lead_id, ch, subj, body, payload.get("model")
                             )
+                            consume_monthly_units(
+                                limit_key=copy_limit_key,
+                                amount=1,
+                                user_id=user_id,
+                                entitlements=entitlements,
+                                label="geração de copys",
+                                conn=conn,
+                            )
+                            if remaining_copy_quota is not None:
+                                remaining_copy_quota = max(0, remaining_copy_quota - 1)
                             stats["messages"] += 1
 
                 except Exception as e:
                     errors.append(f"linha {idx+1}: {e}")
 
-        return {"stats": stats, "errors": errors, "lead_ids": created_ids}
+        result = {"stats": stats, "errors": errors, "lead_ids": created_ids}
+        if generate_copys and channels:
+            result.update(
+                {
+                    "quota_exceeded": quota_exceeded,
+                    "remaining_copy_quota": remaining_copy_quota,
+                    "stopped_reason": stopped_reason,
+                }
+            )
+        return result

@@ -29,6 +29,19 @@ CREATE TABLE IF NOT EXISTS limit_usage (
 );
 """
 
+USAGE_MONTHLY_TABLE_SQL = """
+CREATE TABLE IF NOT EXISTS limit_usage_monthly (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL,
+    limit_key TEXT NOT NULL,
+    month_utc TEXT NOT NULL,
+    used INTEGER NOT NULL DEFAULT 0,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(user_id, limit_key, month_utc)
+);
+"""
+
 
 @dataclass
 class RateLimitState:
@@ -78,6 +91,13 @@ def _ensure_usage_table(conn: sqlite3.Connection) -> None:
     )
 
 
+def _ensure_usage_monthly_table(conn: sqlite3.Connection) -> None:
+    conn.executescript(USAGE_MONTHLY_TABLE_SQL)
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_limit_usage_monthly_user_month ON limit_usage_monthly(user_id, limit_key, month_utc)"
+    )
+
+
 def _get_daily_usage(*, conn: sqlite3.Connection, user_id: int, limit_key: str) -> int:
     row = conn.execute(
         """
@@ -113,6 +133,32 @@ def _adjust_daily_usage(
         VALUES (?, ?, DATE('now','utc'), ?)
         ON CONFLICT(user_id, limit_key, day_utc)
         DO UPDATE SET used = max(0, limit_usage.used + excluded.used), updated_at = CURRENT_TIMESTAMP
+        """,
+        (user_id, limit_key, delta),
+    )
+    conn.commit()
+
+
+def _get_monthly_usage(*, conn: sqlite3.Connection, user_id: int, limit_key: str) -> int:
+    row = conn.execute(
+        """
+        SELECT used FROM limit_usage_monthly
+         WHERE user_id = ? AND limit_key = ? AND month_utc = strftime('%Y-%m','now','utc')
+        """,
+        (user_id, limit_key),
+    ).fetchone()
+    return int(row["used"]) if row else 0
+
+
+def _adjust_monthly_usage(*, conn: sqlite3.Connection, user_id: int, limit_key: str, delta: int) -> None:
+    """Adjusts the monthly usage by ``delta`` (can be negative). Ensures non-negative usage."""
+
+    conn.execute(
+        """
+        INSERT INTO limit_usage_monthly (user_id, limit_key, month_utc, used)
+        VALUES (?, ?, strftime('%Y-%m','now','utc'), ?)
+        ON CONFLICT(user_id, limit_key, month_utc)
+        DO UPDATE SET used = max(0, limit_usage_monthly.used + excluded.used), updated_at = CURRENT_TIMESTAMP
         """,
         (user_id, limit_key, delta),
     )
@@ -351,6 +397,76 @@ def refund_daily_units(
     try:
         _ensure_usage_table(db_conn)
         _adjust_daily_usage(conn=db_conn, user_id=user_id, limit_key=limit_key, delta=-amount)
+    finally:
+        if owns_conn and db_conn:
+            db_conn.close()
+
+
+def get_monthly_remaining(
+    *,
+    limit_key: str,
+    user_id: Optional[int],
+    entitlements: Optional[Dict[str, Any]],
+    conn: Optional[sqlite3.Connection] = None,
+) -> Optional[int]:
+    """
+    Returns remaining units for the current UTC month (or None if unlimited/no user).
+    """
+
+    limit_value = _extract_limit_value(entitlements, limit_key)
+    if user_id is None or limit_value is None:
+        return None
+
+    owns_conn = False
+    db_conn = conn
+    if db_conn is None:
+        db_conn = get_connection()
+        owns_conn = True
+
+    try:
+        _ensure_usage_monthly_table(db_conn)
+        usage = _get_monthly_usage(conn=db_conn, user_id=user_id, limit_key=limit_key)
+        return max(0, limit_value - usage)
+    finally:
+        if owns_conn and db_conn:
+            db_conn.close()
+
+
+def consume_monthly_units(
+    *,
+    limit_key: str,
+    amount: int,
+    user_id: Optional[int],
+    entitlements: Optional[Dict[str, Any]],
+    label: Optional[str] = None,
+    conn: Optional[sqlite3.Connection] = None,
+) -> None:
+    """Consumes monthly units after validating the entitlement."""
+
+    if amount <= 0:
+        return
+
+    limit_value = _extract_limit_value(entitlements, limit_key)
+    if user_id is None or limit_value is None:
+        return
+
+    owns_conn = False
+    db_conn = conn
+    if db_conn is None:
+        db_conn = get_connection()
+        owns_conn = True
+
+    try:
+        _ensure_usage_monthly_table(db_conn)
+        usage = _get_monthly_usage(conn=db_conn, user_id=user_id, limit_key=limit_key)
+        if usage + amount > limit_value:
+            detail_label = label or limit_key
+            raise HTTPException(
+                status_code=429,
+                detail=f"Limite mensal atingido para {detail_label}. Atualize seu plano.",
+            )
+
+        _adjust_monthly_usage(conn=db_conn, user_id=user_id, limit_key=limit_key, delta=amount)
     finally:
         if owns_conn and db_conn:
             db_conn.close()
