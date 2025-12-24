@@ -90,8 +90,11 @@ def processar(req: AssistIAProcessRequest, current_user: CurrentUser = Depends(r
             tone=req.tone,
             language=req.language,
             user_id=current_user.id,
+            entitlements=current_user.entitlements,
         )
         return {"ok": True, **result}
+    except HTTPException as e:
+        raise e
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Falha ao processar: {e}")
 

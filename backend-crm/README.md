@@ -89,6 +89,85 @@ curl http://localhost:8010/api/leads \
   -H "Authorization: Bearer $TOKEN"
 ```
 
+## Limites MVP (max_leads e max_agents_local)
+
+- Fonte: `limits.max_leads` e `limits.max_agents_local` retornados pelo backend-core em `/me/entitlements`.
+- Janela: total absoluto por usuário (não é diário). Valor `null` = ilimitado; valor `0` bloqueia novas criações.
+- Respostas de bloqueio: `429`
+  - Leads: `"Limite atingido de leads armazenados. Atualize seu plano."`
+  - Agentes: `"Limite atingido de agentes locais. Atualize seu plano."`
+
+### Onde bloqueia
+
+- `POST /api/leads` (criação manual de lead) – aplica `max_leads` antes do INSERT.
+- `POST /api/assistente-ia/processar` com `create_cards=true` – cada linha que criaria um lead novo respeita `max_leads`; quando não houver slots, a linha é pulada e adiciona erro `"Limite de leads atingido"` (updates continuam funcionando).
+- `POST /api/agents/provision` – aplica `max_agents_local` antes de criar um novo agente.
+- `POST /api/assistente-ia/messages/upsert` **não consome** max_copy_generation_monthly e também não conta para max_leads (apenas edita mensagens existentes).
+
+### Como testar (PowerShell)
+
+1) **Preparar token e plano**
+   - Use um usuário com plano free (ex.: `max_leads=3`, `max_agents_local=1`, `max_copy_generation_monthly=3`).
+   - Exemplo para ler entitlements: `Invoke-RestMethod -Headers @{Authorization="Bearer $TOKEN"} -Uri http://localhost:8000/me/entitlements`.
+
+2) **Forçar limite de leads via API manual**
+   ```powershell
+   1..3 | ForEach-Object {
+     Invoke-RestMethod -Method Post -Uri http://localhost:8010/api/leads -Headers @{Authorization="Bearer $TOKEN"} -ContentType 'application/json' -Body (@{companyName="Lead $_"; contactName="Pessoa $_"} | ConvertTo-Json)
+   }
+   # 4º lead deve falhar com 429
+   Invoke-RestMethod -Method Post -Uri http://localhost:8010/api/leads -Headers @{Authorization="Bearer $TOKEN"} -ContentType 'application/json' -Body (@{companyName="Lead 4"; contactName="Pessoa 4"} | ConvertTo-Json)
+   ```
+
+3) **Validar contagem no SQLite (sem sqlite3 CLI)**
+   ```powershell
+   python - <<'PY'
+import os
+import sqlite3
+
+conn = sqlite3.connect('crm.db')
+conn.row_factory = sqlite3.Row
+uid_env = os.environ.get('USER_ID')
+uid = int(uid_env) if uid_env else None
+for table in ['leads','agents']:
+    row = conn.execute(f"SELECT COUNT(*) AS total FROM {table} WHERE user_id = ?", (uid,)).fetchone()
+    print(table, row['total'])
+conn.close()
+PY
+   ```
+   (Defina `$env:USER_ID` com o id do usuário retornado pelo CRM/core.)
+
+4) **Assistente IA batendo no teto de leads e copiando**
+   - Configure planilha com 5 linhas e `channels` = `['email','whatsapp']`.
+   - Com `max_leads=3` e apenas 1 lead existente, a quarta linha em diante será pulada com erro de limite; `stats.created` para em 2 novos leads e as demais permanecem em `errors`.
+   - Quando `generate_copys=true`, respeita também `max_copy_generation_monthly` (saldo calculado antes e consumido por mensagem gerada). Se o saldo zerar no meio do lote, a resposta vem `quota_exceeded=true`, `stopped_reason="copy_quota_exceeded"` e `remaining_copy_quota` informado.
+
+5) **Limite de agentes locais**
+   ```powershell
+   # 1º provisionamento (ok)
+   Invoke-RestMethod -Method Post -Uri http://localhost:8010/api/agents/provision -Headers @{Authorization="Bearer $TOKEN"} -ContentType 'application/json' -Body (@{name='Agent 1'} | ConvertTo-Json)
+   # 2º deve falhar com 429
+   Invoke-RestMethod -Method Post -Uri http://localhost:8010/api/agents/provision -Headers @{Authorization="Bearer $TOKEN"} -ContentType 'application/json' -Body (@{name='Agent 2'} | ConvertTo-Json)
+   ```
+
+### Script rápido de regressão (Python)
+
+Execute para validar helpers de contagem sem subir a API (assume DB local com tabelas padrão e um usuário `uid` existente):
+
+```bash
+python - <<'PY'
+from services import rate_limit_service
+uid = 1
+print('leads:', rate_limit_service.get_total_leads(user_id=uid))
+print('agents:', rate_limit_service.get_total_agents(user_id=uid))
+print('remaining leads:', rate_limit_service.get_remaining_lead_slots(user_id=uid, entitlements={'limits': {'max_leads': 5}}))
+try:
+    rate_limit_service.ensure_max_leads(user_id=uid, entitlements={'limits': {'max_leads': 0}})
+except Exception as exc:
+    print('expected block for max_leads=0 ->', exc)
+PY
+```
+
 ## Provisionamento do agente local (multiusuário)
 
 1. Autentique-se no backend-core e obtenha um `access_token`.
@@ -383,6 +462,46 @@ Checklist rápido (use a porta em que o CRM estiver rodando, ex.: `http://localh
 
 3. **Validar isolamento**
    - Troque para `token_B` e repita os dois passos. O preview não deve mostrar leads do A e o import cria registros separados.
+
+#### Limite mensal de geração de copys (POST /api/assistente-ia/processar)
+
+- Chave de entitlement: `limits.max_copy_generation_monthly` (None = ilimitado, `0` = sempre bloqueia). Contagem mensal UTC em `limit_usage_monthly.month_utc` (formato `YYYY-MM`). Unidade = 1 mensagem gerada automaticamente por lead × canal; o endpoint manual `/api/assistente-ia/messages/upsert` **não** consome quota.
+- Comportamentos esperados no processar:
+  - Se `generate_copys=false` ou `channels=[]`: não consome quota.
+  - Se o saldo mensal é 0 antes de iniciar: HTTP 429 com `"Limite mensal atingido para geração de copys. Atualize seu plano."`.
+  - Se o saldo acaba no meio do lote: responde 200 com geração parcial, `quota_exceeded=true`, `stopped_reason="copy_quota_exceeded"` e `remaining_copy_quota` com o saldo final. Leads continuam sendo criados/atualizados sem chamar o LLM para novos textos.
+- PowerShell para testar localmente (ajuste `upload_id` e token):
+  ```powershell
+  # 1) Upload do arquivo
+  Invoke-RestMethod -Method Post -Uri http://localhost:8010/api/uploads `
+    -Headers @{ Authorization = "Bearer $token_A" } `
+    -Form @{ file = Get-Item '.\\leads.xlsx' }
+
+  # 2) Processar pedindo 2 canais (consumo = leads * 2)
+  Invoke-RestMethod -Method Post -Uri http://localhost:8010/api/assistente-ia/processar `
+    -Headers @{ Authorization = "Bearer $token_A" } `
+    -ContentType 'application/json' `
+    -Body (@{
+      upload_id     = "meu_arquivo"
+      create_cards  = $true
+      generate_copys = $true
+      channels      = @("email","whatsapp")
+      overwrite     = "update"
+    } | ConvertTo-Json)
+
+  # 3) Consultar saldo usado no mês (python embutido, sem depender do sqlite3 CLI)
+  python - <<'PY'
+import sqlite3
+conn = sqlite3.connect('backend-crm/database/crm.db')
+conn.row_factory = sqlite3.Row
+rows = conn.execute("SELECT user_id, limit_key, month_utc, used FROM limit_usage_monthly").fetchall()
+for r in rows:
+    print(dict(r))
+PY
+  ```
+- Para simular um limite baixo (ex.: 3/mês), use um usuário/plano com `max_copy_generation_monthly=3`, processe 2 leads com 2 canais (4 unidades) e valide:
+  - Primeira chamada gera até esgotar o saldo (resposta 200 com `quota_exceeded=true`).
+  - Nova chamada com saldo 0 retorna 429 com a mensagem de limite.
 
 ### 4) Observações e Troubleshooting
 

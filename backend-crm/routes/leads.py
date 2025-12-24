@@ -6,6 +6,7 @@ from datetime import datetime, timezone
 from database import get_connection, normalize_datetime_value
 from models import Lead, LeadUpdate, AppointmentCreate, AppointmentUpdate
 from security_core import CurrentUser, require_crm_access
+from services import rate_limit_service
 
 router = APIRouter()
 
@@ -168,6 +169,12 @@ def criar_lead(lead: Lead, current_user: CurrentUser = Depends(require_crm_acces
     conn = get_connection()
     cursor = conn.cursor()
     try:
+        rate_limit_service.ensure_max_leads(
+            user_id=current_user.id,
+            entitlements=current_user.entitlements,
+            amount_to_add=1,
+            conn=conn,
+        )
         # usa 1 como default se priority vier None
         priority = lead.priority or 1
 

@@ -6,11 +6,19 @@ from typing import Dict, List, Optional
 
 import pandas as pd
 
+from fastapi import HTTPException
+
 from database import get_connection, get_user_profile  # 👈 novo import
 from automations.assistente_ia.llm import LLMClient
 from automations.assistente_ia.i18n import normalize_language          # 👈 novo
 from automations.assistente_ia.text_renderer import (                  # 👈 novo
     interpolate, format_email, format_whatsapp_or_dm
+)
+from services.rate_limit_service import (
+    consume_monthly_units,
+    ensure_max_leads,
+    get_monthly_remaining,
+    get_remaining_lead_slots,
 )
 
 # ----------------- Normalizadores & helpers -----------------
@@ -206,6 +214,7 @@ class AssistIAProcessor:
         tone: Optional[str],
         language: Optional[str],
         user_id: int,
+        entitlements: Optional[Dict] = None,
     ) -> Dict:
         if not file_path.exists():
             raise AssistIAProcessadorErro("Arquivo de upload não encontrado.")
@@ -214,6 +223,13 @@ class AssistIAProcessor:
         stats = {"created": 0, "updated": 0, "skipped": 0, "messages": 0}
         errors: List[str] = []
         created_ids: List[int] = []
+
+        can_generate_messages = bool(generate_copys and channels)
+        copy_limit_key = "max_copy_generation_monthly"
+        remaining_copy_quota: Optional[int] = None
+        quota_exceeded = False
+        stopped_reason: Optional[str] = None
+        remaining_lead_slots: Optional[int] = None
 
         with get_connection() as conn:
             # 👇 carrega perfil do remetente
@@ -233,6 +249,24 @@ class AssistIAProcessor:
             # resolve tom (UI > default perfil > fallback)
             tone_resolved = tone or profile.get("default_tone") or "profissional e próximo"
 
+            if create_cards:
+                remaining_lead_slots = get_remaining_lead_slots(
+                    user_id=user_id, entitlements=entitlements, conn=conn
+                )
+
+            if can_generate_messages:
+                remaining_copy_quota = get_monthly_remaining(
+                    limit_key=copy_limit_key,
+                    user_id=user_id,
+                    entitlements=entitlements,
+                    conn=conn,
+                )
+                if remaining_copy_quota is not None and remaining_copy_quota <= 0:
+                    raise HTTPException(
+                        status_code=429,
+                        detail="Limite mensal atingido para geração de copys. Atualize seu plano.",
+                    )
+
             llm = LLMClient()
 
             for idx, row in df.iterrows():
@@ -244,6 +278,18 @@ class AssistIAProcessor:
 
                     # criar/atualizar/duplicar
                     if existing_id is None:
+                        if create_cards:
+                            if remaining_lead_slots is not None and remaining_lead_slots <= 0:
+                                errors.append(
+                                    f"linha {idx+1}: Limite atingido de leads armazenados. Atualize seu plano."
+                                )
+                                continue
+                            remaining_lead_slots = ensure_max_leads(
+                                user_id=user_id,
+                                entitlements=entitlements,
+                                amount_to_add=1,
+                                conn=conn,
+                            )
                         new_id = create_lead(conn, lead_data, user_id=user_id)
                         stats["created"] += 1
                         created_ids.append(new_id)
@@ -257,6 +303,18 @@ class AssistIAProcessor:
                             stats["updated"] += 1
                             lead_id = existing_id
                         else:
+                            if create_cards:
+                                if remaining_lead_slots is not None and remaining_lead_slots <= 0:
+                                    errors.append(
+                                        f"linha {idx+1}: Limite atingido de leads armazenados. Atualize seu plano."
+                                    )
+                                    continue
+                                remaining_lead_slots = ensure_max_leads(
+                                    user_id=user_id,
+                                    entitlements=entitlements,
+                                    amount_to_add=1,
+                                    conn=conn,
+                                )
                             new_id = create_lead(conn, lead_data, user_id=user_id)
                             stats["created"] += 1
                             created_ids.append(new_id)
@@ -284,7 +342,14 @@ class AssistIAProcessor:
                     }
 
                     # --- GERAÇÃO OPCIONAL ---
-                    if generate_copys and channels:
+                    if can_generate_messages:
+                        cost = len(channels)
+                        if remaining_copy_quota is not None and remaining_copy_quota < cost:
+                            quota_exceeded = True
+                            stopped_reason = "copy_quota_exceeded"
+                            can_generate_messages = False
+                            continue
+
                         lead_view = {
                             "id": lead_id,
                             "companyName": lead_data["companyName"],
@@ -320,9 +385,28 @@ class AssistIAProcessor:
                             insert_message(
                                 conn, lead_id, ch, subj, body, payload.get("model")
                             )
+                            consume_monthly_units(
+                                limit_key=copy_limit_key,
+                                amount=1,
+                                user_id=user_id,
+                                entitlements=entitlements,
+                                label="geração de copys",
+                                conn=conn,
+                            )
+                            if remaining_copy_quota is not None:
+                                remaining_copy_quota = max(0, remaining_copy_quota - 1)
                             stats["messages"] += 1
 
                 except Exception as e:
                     errors.append(f"linha {idx+1}: {e}")
 
-        return {"stats": stats, "errors": errors, "lead_ids": created_ids}
+        result = {"stats": stats, "errors": errors, "lead_ids": created_ids}
+        if generate_copys and channels:
+            result.update(
+                {
+                    "quota_exceeded": quota_exceeded,
+                    "remaining_copy_quota": remaining_copy_quota,
+                    "stopped_reason": stopped_reason,
+                }
+            )
+        return result
