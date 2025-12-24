@@ -89,6 +89,85 @@ curl http://localhost:8010/api/leads \
   -H "Authorization: Bearer $TOKEN"
 ```
 
+## Limites MVP (max_leads e max_agents_local)
+
+- Fonte: `limits.max_leads` e `limits.max_agents_local` retornados pelo backend-core em `/me/entitlements`.
+- Janela: total absoluto por usuário (não é diário). Valor `null` = ilimitado; valor `0` bloqueia novas criações.
+- Respostas de bloqueio: `429`
+  - Leads: `"Limite atingido de leads armazenados. Atualize seu plano."`
+  - Agentes: `"Limite atingido de agentes locais. Atualize seu plano."`
+
+### Onde bloqueia
+
+- `POST /api/leads` (criação manual de lead) – aplica `max_leads` antes do INSERT.
+- `POST /api/assistente-ia/processar` com `create_cards=true` – cada linha que criaria um lead novo respeita `max_leads`; quando não houver slots, a linha é pulada e adiciona erro `"Limite de leads atingido"` (updates continuam funcionando).
+- `POST /api/agents/provision` – aplica `max_agents_local` antes de criar um novo agente.
+- `POST /api/assistente-ia/messages/upsert` **não consome** max_copy_generation_monthly e também não conta para max_leads (apenas edita mensagens existentes).
+
+### Como testar (PowerShell)
+
+1) **Preparar token e plano**
+   - Use um usuário com plano free (ex.: `max_leads=3`, `max_agents_local=1`, `max_copy_generation_monthly=3`).
+   - Exemplo para ler entitlements: `Invoke-RestMethod -Headers @{Authorization="Bearer $TOKEN"} -Uri http://localhost:8000/me/entitlements`.
+
+2) **Forçar limite de leads via API manual**
+   ```powershell
+   1..3 | ForEach-Object {
+     Invoke-RestMethod -Method Post -Uri http://localhost:8010/api/leads -Headers @{Authorization="Bearer $TOKEN"} -ContentType 'application/json' -Body (@{companyName="Lead $_"; contactName="Pessoa $_"} | ConvertTo-Json)
+   }
+   # 4º lead deve falhar com 429
+   Invoke-RestMethod -Method Post -Uri http://localhost:8010/api/leads -Headers @{Authorization="Bearer $TOKEN"} -ContentType 'application/json' -Body (@{companyName="Lead 4"; contactName="Pessoa 4"} | ConvertTo-Json)
+   ```
+
+3) **Validar contagem no SQLite (sem sqlite3 CLI)**
+   ```powershell
+   python - <<'PY'
+import os
+import sqlite3
+
+conn = sqlite3.connect('crm.db')
+conn.row_factory = sqlite3.Row
+uid_env = os.environ.get('USER_ID')
+uid = int(uid_env) if uid_env else None
+for table in ['leads','agents']:
+    row = conn.execute(f"SELECT COUNT(*) AS total FROM {table} WHERE user_id = ?", (uid,)).fetchone()
+    print(table, row['total'])
+conn.close()
+PY
+   ```
+   (Defina `$env:USER_ID` com o id do usuário retornado pelo CRM/core.)
+
+4) **Assistente IA batendo no teto de leads e copiando**
+   - Configure planilha com 5 linhas e `channels` = `['email','whatsapp']`.
+   - Com `max_leads=3` e apenas 1 lead existente, a quarta linha em diante será pulada com erro de limite; `stats.created` para em 2 novos leads e as demais permanecem em `errors`.
+   - Quando `generate_copys=true`, respeita também `max_copy_generation_monthly` (saldo calculado antes e consumido por mensagem gerada). Se o saldo zerar no meio do lote, a resposta vem `quota_exceeded=true`, `stopped_reason="copy_quota_exceeded"` e `remaining_copy_quota` informado.
+
+5) **Limite de agentes locais**
+   ```powershell
+   # 1º provisionamento (ok)
+   Invoke-RestMethod -Method Post -Uri http://localhost:8010/api/agents/provision -Headers @{Authorization="Bearer $TOKEN"} -ContentType 'application/json' -Body (@{name='Agent 1'} | ConvertTo-Json)
+   # 2º deve falhar com 429
+   Invoke-RestMethod -Method Post -Uri http://localhost:8010/api/agents/provision -Headers @{Authorization="Bearer $TOKEN"} -ContentType 'application/json' -Body (@{name='Agent 2'} | ConvertTo-Json)
+   ```
+
+### Script rápido de regressão (Python)
+
+Execute para validar helpers de contagem sem subir a API (assume DB local com tabelas padrão e um usuário `uid` existente):
+
+```bash
+python - <<'PY'
+from services import rate_limit_service
+uid = 1
+print('leads:', rate_limit_service.get_total_leads(user_id=uid))
+print('agents:', rate_limit_service.get_total_agents(user_id=uid))
+print('remaining leads:', rate_limit_service.get_remaining_lead_slots(user_id=uid, entitlements={'limits': {'max_leads': 5}}))
+try:
+    rate_limit_service.ensure_max_leads(user_id=uid, entitlements={'limits': {'max_leads': 0}})
+except Exception as exc:
+    print('expected block for max_leads=0 ->', exc)
+PY
+```
+
 ## Provisionamento do agente local (multiusuário)
 
 1. Autentique-se no backend-core e obtenha um `access_token`.

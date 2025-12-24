@@ -14,7 +14,12 @@ from automations.assistente_ia.i18n import normalize_language          # 👈 no
 from automations.assistente_ia.text_renderer import (                  # 👈 novo
     interpolate, format_email, format_whatsapp_or_dm
 )
-from services.rate_limit_service import consume_monthly_units, get_monthly_remaining
+from services.rate_limit_service import (
+    consume_monthly_units,
+    ensure_max_leads,
+    get_monthly_remaining,
+    get_remaining_lead_slots,
+)
 
 # ----------------- Normalizadores & helpers -----------------
 def normalize_phone(phone: Optional[str]) -> Optional[str]:
@@ -224,6 +229,7 @@ class AssistIAProcessor:
         remaining_copy_quota: Optional[int] = None
         quota_exceeded = False
         stopped_reason: Optional[str] = None
+        remaining_lead_slots: Optional[int] = None
 
         with get_connection() as conn:
             # 👇 carrega perfil do remetente
@@ -242,6 +248,11 @@ class AssistIAProcessor:
 
             # resolve tom (UI > default perfil > fallback)
             tone_resolved = tone or profile.get("default_tone") or "profissional e próximo"
+
+            if create_cards:
+                remaining_lead_slots = get_remaining_lead_slots(
+                    user_id=user_id, entitlements=entitlements, conn=conn
+                )
 
             if can_generate_messages:
                 remaining_copy_quota = get_monthly_remaining(
@@ -267,6 +278,18 @@ class AssistIAProcessor:
 
                     # criar/atualizar/duplicar
                     if existing_id is None:
+                        if create_cards:
+                            if remaining_lead_slots is not None and remaining_lead_slots <= 0:
+                                errors.append(
+                                    f"linha {idx+1}: Limite atingido de leads armazenados. Atualize seu plano."
+                                )
+                                continue
+                            remaining_lead_slots = ensure_max_leads(
+                                user_id=user_id,
+                                entitlements=entitlements,
+                                amount_to_add=1,
+                                conn=conn,
+                            )
                         new_id = create_lead(conn, lead_data, user_id=user_id)
                         stats["created"] += 1
                         created_ids.append(new_id)
@@ -280,6 +303,18 @@ class AssistIAProcessor:
                             stats["updated"] += 1
                             lead_id = existing_id
                         else:
+                            if create_cards:
+                                if remaining_lead_slots is not None and remaining_lead_slots <= 0:
+                                    errors.append(
+                                        f"linha {idx+1}: Limite atingido de leads armazenados. Atualize seu plano."
+                                    )
+                                    continue
+                                remaining_lead_slots = ensure_max_leads(
+                                    user_id=user_id,
+                                    entitlements=entitlements,
+                                    amount_to_add=1,
+                                    conn=conn,
+                                )
                             new_id = create_lead(conn, lead_data, user_id=user_id)
                             stats["created"] += 1
                             created_ids.append(new_id)

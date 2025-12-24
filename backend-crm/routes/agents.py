@@ -64,6 +64,11 @@ class ManualWhatsappJobRequest(BaseModel):
 
 @router.post("/provision", response_model=ProvisionAgentResponse)
 def provision_agent(payload: ProvisionAgentRequest, current_user: CurrentUser = Depends(require_crm_access)):
+    rate_limit_service.ensure_max_agents_local(
+        user_id=current_user.id,
+        entitlements=current_user.entitlements,
+        amount_to_add=1,
+    )
     return jobs_service.provision_agent(user_id=current_user.id, name=payload.name)
 
 
