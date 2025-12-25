@@ -22,6 +22,7 @@ from routes import (
     dashboard,
     appointments,
     agents,
+    usage,
 )
 from routes import public
 
@@ -70,6 +71,7 @@ app.include_router(prospeccao.router)                               # já define
 app.include_router(profile.router)                                  # prefixo definido no arquivo
 app.include_router(appointments.router)                             # já define prefix="/api/appointments"
 app.include_router(agents.router)                                   # /api/agents
+app.include_router(usage.router)                                    # /api/usage
 # app.include_router(dashboard.router)
 
 # -----------------------------------------------------------------------------
