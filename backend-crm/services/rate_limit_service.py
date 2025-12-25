@@ -547,6 +547,7 @@ def _ensure_max_counter(
     current_total: Optional[int] = None,
     detail: str,
     table: str,
+    count_func=None,
 ) -> int:
     """
     Validates that ``current_total + amount_to_add`` would not exceed the configured limit.
@@ -570,9 +571,11 @@ def _ensure_max_counter(
         db_conn = get_connection()
         owns_conn = True
 
+    count_func = count_func or (lambda conn, user_id, table: _count_table(conn=conn, table=table, user_id=user_id))
+
     try:
-        total = current_total if current_total is not None else _count_table(
-            conn=db_conn, table=table, user_id=user_id
+        total = current_total if current_total is not None else count_func(
+            db_conn, user_id, table
         )
         if total + amount_to_add > limit_value:
             raise HTTPException(status_code=429, detail=detail)
@@ -584,6 +587,20 @@ def _ensure_max_counter(
 
 def _count_table(*, conn: sqlite3.Connection, table: str, user_id: int) -> int:
     row = conn.execute(f"SELECT COUNT(*) AS total FROM {table} WHERE user_id = ?", (user_id,)).fetchone()
+    return int(row["total"]) if row else 0
+
+
+def _count_active_agents(conn: sqlite3.Connection, user_id: int, _: str) -> int:
+    row = conn.execute(
+        """
+        SELECT COUNT(*) AS total
+          FROM agents
+         WHERE user_id = ?
+           AND revoked_at IS NULL
+           AND COALESCE(status, '') != 'disabled'
+        """,
+        (user_id,),
+    ).fetchone()
     return int(row["total"]) if row else 0
 
 
@@ -624,5 +641,6 @@ def ensure_max_agents_local(
         conn=conn,
         detail="Limite atingido de agentes locais. Atualize seu plano.",
         table="agents",
+        count_func=_count_active_agents,
     )
 
