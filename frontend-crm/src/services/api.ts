@@ -1,32 +1,8 @@
 // services/api.ts
-const fromEnv = (import.meta as any)?.env?.VITE_API_BASE_URL;
+import { apiClient, API_BASE } from "../lib/api-client";
+import { clearAuthToken, persistAuthToken } from "../lib/auth-token";
 
-// fallback esperto: se estiver em *.danielfranca.pt, usa a API pública
-const smartFallback =
-  typeof location !== "undefined" &&
-  /\.danielfranca\.pt$/i.test(location.hostname)
-    ? "https://api.danielfranca.pt"
-    : "http://localhost:8000";
-
-const RAW_BASE = fromEnv || smartFallback;
-
-const API = `${RAW_BASE.replace(/\/$/, "")}/api`;
-const AUTH = `${RAW_BASE.replace(/\/$/, "")}/auth`;
-
-// helper fetch com cookies (reutiliza o mesmo handle)
-async function handleWithCreds(res: Response) {
-  return handle(res);
-}
-
-async function handle(res: Response) {
-  const isJson = res.headers.get("content-type")?.includes("application/json");
-  const data = isJson ? await res.json() : await res.text();
-  if (!res.ok) {
-    const detail = isJson ? (data as any)?.detail ?? JSON.stringify(data) : data;
-    throw new Error(detail || `HTTP ${res.status}`);
-  }
-  return data;
-}
+const AUTH_BASE = `${API_BASE.replace(/\/api$/, "")}/auth`;
 
 // ---- Tipos da Pesquisa (site) ----
 export type SearchPayload = {
@@ -167,32 +143,28 @@ function mapAppointment(raw: any) {
 export const api = {
   // -------- LEADS --------
   getLeads: async () => {
-    const res = await fetch(`${API}/leads`);
-    const data = await handle(res);
+    const data = await apiClient.get<any[]>("/leads");
     if (!Array.isArray(data)) return data;
     return data.map((lead) => ({
       ...lead,
       nextScheduledAction: normalizeNextScheduledAction(
-        lead.nextScheduledAction
+        (lead as any).nextScheduledAction
       ),
     }));
   },
   // --- LEADS (CRUD) ---
-createLead: async (payload: {
-  companyName: string;
-  contactName?: string | null;
-  phone?: string | null;
-  email?: string | null;
-  origin?: string | null;
-  category: string;               // ex.: "to-prospect"
-  customMessage?: string | null;
-  observations?: string | null;
-  priority?: number;              // default no back = 1
-}) => {
-  const res = await fetch(`${API}/leads`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
+  createLead: async (payload: {
+    companyName: string;
+    contactName?: string | null;
+    phone?: string | null;
+    email?: string | null;
+    origin?: string | null;
+    category: string; // ex.: "to-prospect"
+    customMessage?: string | null;
+    observations?: string | null;
+    priority?: number; // default no back = 1
+  }) => {
+    return apiClient.post("/leads", {
       companyName: payload.companyName,
       contactName: payload.contactName ?? null,
       phone: payload.phone ?? null,
@@ -201,28 +173,26 @@ createLead: async (payload: {
       category: payload.category,
       customMessage: payload.customMessage ?? null,
       observations: payload.observations ?? null,
-      priority: payload.priority ?? 1,    // <- **priority** (int), não "prioridade"
-    }),
-  });
-  return handle(res); // retorna o lead criado
-},
+      priority: payload.priority ?? 1, // <- **priority** (int), não "prioridade"
+    });
+  },
 
-updateLead: async (id: string | number, patch: Partial<{
-  companyName: string;
-  contactName: string | null;
-  phone: string | null;
-  email: string | null;
-  origin: string | null;
-  category: string;
-  customMessage: string | null;
-  observations: string | null;
-  priority: number;
-  lastMovement: string | Date;
-}>) => {
-  const res = await fetch(`${API}/leads/${id}`, {
-    method: "PATCH",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
+  updateLead: async (
+    id: string | number,
+    patch: Partial<{
+      companyName: string;
+      contactName: string | null;
+      phone: string | null;
+      email: string | null;
+      origin: string | null;
+      category: string;
+      customMessage: string | null;
+      observations: string | null;
+      priority: number;
+      lastMovement: string | Date;
+    }>
+  ) => {
+    return apiClient.patch(`/leads/${id}`, {
       ...(patch.companyName !== undefined ? { companyName: patch.companyName } : {}),
       ...(patch.contactName !== undefined ? { contactName: patch.contactName } : {}),
       ...(patch.phone !== undefined ? { phone: patch.phone } : {}),
@@ -233,17 +203,19 @@ updateLead: async (id: string | number, patch: Partial<{
       ...(patch.observations !== undefined ? { observations: patch.observations } : {}),
       ...(patch.priority !== undefined ? { priority: patch.priority } : {}),
       ...(patch.lastMovement !== undefined
-        ? { lastMovement: patch.lastMovement instanceof Date ? patch.lastMovement.toISOString() : patch.lastMovement }
+        ? {
+            lastMovement:
+              patch.lastMovement instanceof Date
+                ? patch.lastMovement.toISOString()
+                : patch.lastMovement,
+          }
         : {}),
-    }),
-  });
-  return handle(res);
-},
+    });
+  },
 
-deleteLead: async (id: string | number) => {
-  const res = await fetch(`${API}/leads/${id}`, { method: "DELETE" });
-  return handle(res);
-},
+  deleteLead: async (id: string | number) => {
+    return apiClient.delete(`/leads/${id}`);
+  },
 
   appointments: {
     list: async (params?: {
@@ -259,9 +231,8 @@ deleteLead: async (id: string | number) => {
       if (params?.leadId) search.set("lead_id", String(params.leadId));
 
       const qs = search.toString();
-      const url = qs ? `${API}/appointments?${qs}` : `${API}/appointments`;
-      const res = await fetch(url);
-      return handle(res);
+      const url = qs ? `/appointments?${qs}` : `/appointments`;
+      return apiClient.get(url);
     },
 
     create: async (payload: {
@@ -273,20 +244,15 @@ deleteLead: async (id: string | number) => {
       startTime: string; // ISO
       endTime?: string | null; // ISO | null
     }) => {
-      const res = await fetch(`${API}/appointments`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          lead_id: payload.leadId ? Number(payload.leadId) : null,
-          title: payload.title,
-          description: payload.description,
-          type: payload.type,
-          status: payload.status ?? "pending",
-          start_at: payload.startTime,
-          end_at: payload.endTime ?? null,
-        }),
+      return apiClient.post(`/appointments`, {
+        lead_id: payload.leadId ? Number(payload.leadId) : null,
+        title: payload.title,
+        description: payload.description,
+        type: payload.type,
+        status: payload.status ?? "pending",
+        start_at: payload.startTime,
+        end_at: payload.endTime ?? null,
       });
-      return handle(res);
     },
 
     update: async (
@@ -301,44 +267,40 @@ deleteLead: async (id: string | number) => {
         endTime?: string | null; // ISO | null
       }>
     ) => {
-      const res = await fetch(`${API}/appointments/${id}`, {
-        method: "PATCH", //
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          ...(payload.leadId !== undefined
-            ? {
-                lead_id:
-                  payload.leadId === null ? null : Number(payload.leadId),
-              }
-            : {}),
-          ...(payload.title !== undefined ? { title: payload.title } : {}),
-          ...(payload.description !== undefined
-            ? { description: payload.description }
-            : {}),
-          ...(payload.type !== undefined ? { type: payload.type } : {}),
-          ...(payload.status !== undefined ? { status: payload.status } : {}),
-          ...(payload.startTime !== undefined
-            ? { start_at: payload.startTime }
-            : {}),
-          ...(payload.endTime !== undefined ? { end_at: payload.endTime } : {}),
-        }),
+      return apiClient.patch(`/appointments/${id}`, {
+        ...(payload.leadId !== undefined
+          ? {
+              lead_id: payload.leadId === null ? null : Number(payload.leadId),
+            }
+          : {}),
+        ...(payload.title !== undefined ? { title: payload.title } : {}),
+        ...(payload.description !== undefined
+          ? { description: payload.description }
+          : {}),
+        ...(payload.type !== undefined ? { type: payload.type } : {}),
+        ...(payload.status !== undefined ? { status: payload.status } : {}),
+        ...(payload.startTime !== undefined
+          ? { start_at: payload.startTime }
+          : {}),
+        ...(payload.endTime !== undefined ? { end_at: payload.endTime } : {}),
       });
-      return handle(res);
     },
 
     cancel: async (
       arg: string | number | { id: string | number; leadId: string | number }
     ) => {
-      // forma nova { id, leadId }
-      if (typeof arg === "object" && arg !== null && "id" in arg && "leadId" in arg) {
+      if (
+        typeof arg === "object" &&
+        arg !== null &&
+        "id" in arg &&
+        "leadId" in arg
+      ) {
         const { id, leadId } = arg as { id: string | number; leadId: string | number };
-        // usa a rota por lead (PATCH status=canceled)
         return api.updateAppointment(String(leadId), String(id), {
           status: "canceled",
         });
       }
 
-      // forma antiga (só id) — mantém compat
       return api.appointments.update(arg as string | number, {
         status: "canceled",
       });
@@ -348,28 +310,23 @@ deleteLead: async (id: string | number) => {
      * (opcional) Remoção tolerante: aceita { id, leadId } e usa a rota por lead
      */
     remove: async (
-      arg:
-        | string
-        | number
-        | { id: string | number; leadId: string | number }
+      arg: string | number | { id: string | number; leadId: string | number }
     ) => {
-      if (typeof arg === "object" && arg !== null && "id" in arg && "leadId" in arg) {
+      if (
+        typeof arg === "object" &&
+        arg !== null &&
+        "id" in arg &&
+        "leadId" in arg
+      ) {
         const { id, leadId } = arg as { id: string | number; leadId: string | number };
-        const res = await fetch(
-          `${API}/leads/${leadId}/appointments/${id}`,
-          { method: "DELETE" }
-        );
-        return handle(res);
+        return apiClient.delete(`/leads/${leadId}/appointments/${id}`);
       }
-      const res = await fetch(`${API}/appointments/${arg}`, { method: "DELETE" });
-      return handle(res);
+      return apiClient.delete(`/appointments/${arg}`);
     },
   },
 
   getAppointments: async (leadId: number | string) => {
-    const res = await fetch(`${API}/leads/${leadId}/appointments`);
-    // devolve JSON bruto; o hook faz a normalização correta
-    return handle(res);
+    return apiClient.get(`/leads/${leadId}/appointments`);
   },
 
   createAppointment: async (
@@ -384,27 +341,21 @@ deleteLead: async (id: string | number) => {
       endAt?: Date | null;
     }
   ) => {
-    const res = await fetch(`${API}/leads/${leadId}/appointments`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        ...(payload.title !== undefined ? { title: payload.title } : {}),
-        ...(payload.description !== undefined
-          ? { description: payload.description }
-          : {}),
-        ...(payload.type !== undefined ? { type: payload.type } : {}),
-        status: payload.status ?? "pending",
-        ...(payload.location !== undefined ? { location: payload.location } : {}),
-        start_at: payload.startAt.toISOString(),
-        ...(payload.endAt !== undefined
-          ? {
-              end_at:
-                payload.endAt === null ? null : payload.endAt.toISOString(),
-            }
-          : {}),
-      }),
+    const data = await apiClient.post(`/leads/${leadId}/appointments`, {
+      ...(payload.title !== undefined ? { title: payload.title } : {}),
+      ...(payload.description !== undefined
+        ? { description: payload.description }
+        : {}),
+      ...(payload.type !== undefined ? { type: payload.type } : {}),
+      status: payload.status ?? "pending",
+      ...(payload.location !== undefined ? { location: payload.location } : {}),
+      start_at: payload.startAt.toISOString(),
+      ...(payload.endAt !== undefined
+        ? {
+            end_at: payload.endAt === null ? null : payload.endAt.toISOString(),
+          }
+        : {}),
     });
-    const data = await handle(res);
     return mapAppointment(data);
   },
 
@@ -421,58 +372,40 @@ deleteLead: async (id: string | number) => {
       endAt?: Date | null;
     }
   ) => {
-    const res = await fetch(
-      `${API}/leads/${leadId}/appointments/${appointmentId}`,
-      {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          ...(payload.title !== undefined ? { title: payload.title } : {}),
-          ...(payload.description !== undefined
-            ? { description: payload.description }
-            : {}),
-          ...(payload.type !== undefined ? { type: payload.type } : {}),
-          ...(payload.status !== undefined ? { status: payload.status } : {}),
-          ...(payload.location !== undefined ? { location: payload.location } : {}),
-          ...(payload.startAt !== undefined
-            ? { start_at: payload.startAt.toISOString() }
-            : {}),
-          ...(payload.endAt !== undefined
-            ? {
-                end_at:
-                  payload.endAt === null ? null : payload.endAt.toISOString(),
-              }
-            : {}),
-        }),
-      }
-    );
-    return handle(res); // <- sem mapAppointment
+    return apiClient.patch(`/leads/${leadId}/appointments/${appointmentId}`, {
+      ...(payload.title !== undefined ? { title: payload.title } : {}),
+      ...(payload.description !== undefined
+        ? { description: payload.description }
+        : {}),
+      ...(payload.type !== undefined ? { type: payload.type } : {}),
+      ...(payload.status !== undefined ? { status: payload.status } : {}),
+      ...(payload.location !== undefined ? { location: payload.location } : {}),
+      ...(payload.startAt !== undefined
+        ? { start_at: payload.startAt.toISOString() }
+        : {}),
+      ...(payload.endAt !== undefined
+        ? {
+            end_at: payload.endAt === null ? null : payload.endAt.toISOString(),
+          }
+        : {}),
+    });
   },
 
   deleteAppointment: async (
     leadId: number | string,
     appointmentId: number | string
   ) => {
-    const res = await fetch(
-      `${API}/leads/${leadId}/appointments/${appointmentId}`,
-      { method: "DELETE" }
-    );
-    return handle(res);
+    return apiClient.delete(`/leads/${leadId}/appointments/${appointmentId}`);
   },
 
   // -------- PESQUISA (automação) --------
   pesquisa: {
     executar: async (payload: SearchPayload): Promise<ManifestResponse> => {
-      const res = await fetch(`${API}/pesquisa/executar`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
-      return handle(res);
+      return apiClient.post(`/pesquisa/executar`, payload);
     },
 
     downloadUrl: (runId: string, kind: "xlsx_validado" | "xlsx" | "csv") =>
-      `${API}/pesquisa/baixar/${encodeURIComponent(runId)}/${kind}`,
+      `${API_BASE}/pesquisa/baixar/${encodeURIComponent(runId)}/${kind}`,
   },
 
   // -------- UPLOADS da página Assistente IA --------
@@ -480,42 +413,30 @@ deleteLead: async (id: string | number) => {
     enviar: async (file: File) => {
       const fd = new FormData();
       fd.append("file", file);
-      const res = await fetch(`${API}/uploads`, { method: "POST", body: fd });
-      return handle(res);
+      return apiClient.post(`/uploads`, fd);
     },
   },
 
   // -------- ASSISTENTE IA --------
   assistenteIA: {
     processar: async (payload: any) => {
-      const res = await fetch(`${API}/assistente-ia/processar`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
-      return handle(res);
+      return apiClient.post(`/assistente-ia/processar`, payload);
     },
 
     mensagens: async (
       leadId: number | string,
       latest = true
     ): Promise<{ ok: boolean; messages: LeadMessage[] }> => {
-      const res = await fetch(
-        `${API}/assistente-ia/messages/${leadId}?latest=${latest}`
+      return apiClient.get(
+        `/assistente-ia/messages/${leadId}?latest=${latest}`
       );
-      return handle(res);
     },
 
     preview: async (payload: {
       upload_id: string;
       overwrite: "skip" | "update" | "duplicate";
     }) => {
-      const res = await fetch(`${API}/assistente-ia/preview`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
-      return handle(res);
+      return apiClient.post(`/assistente-ia/preview`, payload);
     },
   },
 
@@ -526,44 +447,31 @@ deleteLead: async (id: string | number) => {
       channel: Channel,
       messageId: number
     ) => {
-      const res = await fetch(`${API}/prospeccao/select-message`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ lead_id: leadId, channel, message_id: messageId }),
+      return apiClient.post(`/prospeccao/select-message`, {
+        lead_id: leadId,
+        channel,
+        message_id: messageId,
       });
-      return handle(res);
     },
 
     selecoesDoLead: async (leadId: number): Promise<Record<string, number>> => {
-      const res = await fetch(`${API}/prospeccao/selection/${leadId}`);
-      const data = await handle(res);
-      return (data?.selections as Record<string, number>) ?? {};
+      const data = await apiClient.get(`/prospeccao/selection/${leadId}`);
+      return (data as any)?.selections ?? {};
     },
 
     registrarLog: async (payload: ProspectionLogPayload) => {
-      const res = await fetch(`${API}/prospeccao/log`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
-      return handle(res);
+      return apiClient.post(`/prospeccao/log`, payload);
     },
 
     // Normaliza a resposta do backend (message_id -> id)
     saveMessage: async (
       payload: SaveMessagePayload
     ): Promise<SaveMessageResponse> => {
-      const res = await fetch(`${API}/prospeccao/save-message`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
-      const data = await handle(res);
-      // mantém compatibilidade com o tipo atual
+      const data = await apiClient.post(`/prospeccao/save-message`, payload);
       return {
-        ok: !!data?.ok,
-        id: Number(data?.message_id ?? data?.id),
-        selected: data?.selected ?? undefined,
+        ok: !!(data as any)?.ok,
+        id: Number((data as any)?.message_id ?? (data as any)?.id),
+        selected: (data as any)?.selected ?? undefined,
       };
     },
 
@@ -577,19 +485,13 @@ deleteLead: async (id: string | number) => {
       enqueue: async (
         payload: WhatsEnqueuePayload
       ): Promise<WhatsEnqueueResp> => {
-        const res = await fetch(`${API}/prospeccao/whatsapp/enqueue`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(payload),
-        });
-        return handle(res);
+        return apiClient.post(`/prospeccao/whatsapp/enqueue`, payload);
       },
 
       queue: async (limit = 5): Promise<WhatsQueueItem[]> => {
-        const res = await fetch(
-          `${API}/prospeccao/whatsapp/queue?limit=${limit}`
+        return apiClient.get(
+          `/prospeccao/whatsapp/queue?limit=${limit}`
         );
-        return handle(res);
       },
 
       mark: async (payload: {
@@ -598,23 +500,16 @@ deleteLead: async (id: string | number) => {
         ok: boolean;
         notes?: string;
       }) => {
-        const res = await fetch(`${API}/prospeccao/whatsapp/mark`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(payload),
-        });
-        return handle(res);
+        return apiClient.post(`/prospeccao/whatsapp/mark`, payload);
       },
 
       recent: async (sinceSecs = 300) => {
-        const res = await fetch(
-          `${API}/prospeccao/whatsapp/recent?since_secs=${sinceSecs}`
+        return apiClient.get(
+          `/prospeccao/whatsapp/recent?since_secs=${sinceSecs}`
         );
-        return handle(res);
       },
       summary: async () => {
-        const res = await fetch(`${API}/prospeccao/whatsapp/summary`);
-        return handle(res);
+        return apiClient.get(`/prospeccao/whatsapp/summary`);
       },
     },
   },
@@ -622,61 +517,53 @@ deleteLead: async (id: string | number) => {
   // -------- WHATSAPP (QR via Selenium) --------
   whatsapp: {
     iniciarQR: async () => {
-      const res = await fetch(`${API}/whatsapp/iniciar-qr`, { method: "POST" });
-      return handle(res);
+      return apiClient.post(`/whatsapp/iniciar-qr`);
     },
     verificarLogin: async (opts?: { passive?: boolean }) => {
       const passive = opts?.passive !== false;
       const qs = passive ? "?passive=1" : "";
-      const res = await fetch(`${API}/whatsapp/verificar-login${qs}`);
-      return handle(res);
+      return apiClient.get(`/whatsapp/verificar-login${qs}`);
     },
     novoQR: async () => {
-      const res = await fetch(`${API}/whatsapp/novo-qr`);
-      return handle(res);
+      return apiClient.get(`/whatsapp/novo-qr`);
     },
     stop: async () => {
-      const res = await fetch(`${API}/whatsapp/stop`, { method: "POST" });
-      return handle(res);
+      return apiClient.post(`/whatsapp/stop`);
     },
   },
 
   // -------- AUTH (MVP) --------
   auth: {
     login: async (email: string, password: string) => {
-      const res = await fetch(`${AUTH}/login`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include", // cookie httpOnly
-        body: JSON.stringify({ email, password }),
-      });
-      return handleWithCreds(res); // { email, role }
+      const data = await apiClient.post(`${AUTH_BASE}/login`, { email, password });
+
+      const accessToken =
+        (data as any)?.access_token ?? (data as any)?.token ?? (data as any)?.accessToken;
+
+      if (accessToken) {
+        persistAuthToken(accessToken);
+      }
+
+      return data;
     },
 
     me: async () => {
-      const res = await fetch(`${AUTH}/me`, {
-        credentials: "include", // envia cookie
-      });
-      return handleWithCreds(res); // { email, role }
+      return apiClient.get(`${AUTH_BASE}/me`);
     },
 
     logout: async () => {
-      const res = await fetch(`${AUTH}/logout`, {
-        method: "POST",
-        credentials: "include",
-      });
-      return handleWithCreds(res); // { ok: true }
+      const data = await apiClient.post(`${AUTH_BASE}/logout`);
+      clearAuthToken();
+      return data;
     },
   },
 
   agents: {
     overview: async (seconds = 120) => {
-      const res = await fetch(`${API}/agents/overview?seconds=${seconds}`);
-      return handle(res);
+      return apiClient.get(`/agents/overview?seconds=${seconds}`);
     },
     summary: async () => {
-      const res = await fetch(`${API}/agents/jobs/summary`);
-      return handle(res);
+      return apiClient.get(`/agents/jobs/summary`);
     },
   },
 };
