@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
-import { apiClient, ApiError } from "@/lib/api-client";
+import { apiClient } from "@/lib/api-client";
+import { useApiErrorHandler } from "./useApiErrorHandler";
 
 type UsageResponse = {
   entitlements?: {
@@ -13,6 +14,7 @@ export function useUsage() {
   const [data, setData] = useState<UsageResponse | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const { handleError } = useApiErrorHandler();
 
   const fetchUsage = useCallback(async () => {
     setLoading(true);
@@ -21,13 +23,15 @@ export function useUsage() {
       const response = await apiClient.get<UsageResponse>("/usage");
       setData(response);
     } catch (err) {
-      const isApiError = err instanceof ApiError;
-      const expired = isApiError && (err.status === 401 || err.status === 403);
-      setError(expired ? "Sessão expirada" : (err as Error)?.message ?? "Erro ao carregar");
+      const result = handleError(err, {
+        silent: true,
+        fallbackMessage: "Erro ao carregar informações do plano.",
+      });
+      setError(result.message);
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [handleError]);
 
   useEffect(() => {
     fetchUsage();

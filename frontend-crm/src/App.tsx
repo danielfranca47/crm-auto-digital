@@ -15,17 +15,20 @@ import Assinatura from "./pages/Assinatura";
 import UsoDoPlano from "./pages/UsoDoPlano";
 import { ThemeProvider } from "./contexts/ThemeContext";
 import { LeadsProvider } from "./contexts/LeadsContext";
+import { RateLimitModalProvider } from "./contexts/RateLimitModalContext";
 import { AppSidebar } from "./components/AppSidebar";
 import TestContext from "./tests/TestContext";
 import Login from "./pages/Login"; // tem que estar exatamente assim
 import { useEffect, useState } from "react";
 import { api } from "./services/api";
+import { useApiErrorHandler } from "./hooks/useApiErrorHandler";
 
 const queryClient = new QueryClient();
 
 /** Wrapper que valida a sessão e redireciona para /login caso não autenticado */
 function Protected({ children }: { children: React.ReactNode }) {
   const [ok, setOk] = useState<null | boolean>(null);
+  const { handleError } = useApiErrorHandler();
 
   useEffect(() => {
     let alive = true;
@@ -33,14 +36,15 @@ function Protected({ children }: { children: React.ReactNode }) {
       try {
         await api.auth.me();
         if (alive) setOk(true);
-      } catch {
-        if (alive) window.location.href = "/login";
+      } catch (err) {
+        handleError(err, { fallbackMessage: "Sessão expirada" });
+        if (alive) setOk(false);
       }
     })();
     return () => {
       alive = false;
     };
-  }, []);
+  }, [handleError]);
 
   if (ok === null) {
     return <div style={{ padding: 24 }}>Carregando…</div>;
@@ -71,43 +75,45 @@ function AppShell() {
 
 const App = () => (
   <QueryClientProvider client={queryClient}>
-    <LeadsProvider>
-      <ThemeProvider>
-        <TooltipProvider>
-          <Toaster />
-          <Sonner />
+    <BrowserRouter>
+      <RateLimitModalProvider>
+        <LeadsProvider>
+          <ThemeProvider>
+            <TooltipProvider>
+              <Toaster />
+              <Sonner />
 
-          <BrowserRouter>
-            <Routes>
-              {/* Rota pública */}
-              <Route path="/login" element={<Login />} />
+              <Routes>
+                {/* Rota pública */}
+                <Route path="/login" element={<Login />} />
 
-              {/* Rotas privadas com layout do app */}
-              <Route
-                element={
-                  <Protected>
-                    <AppShell />
-                  </Protected>
-                }
-              >
-                <Route path="/test" element={<TestContext />} />
-                <Route path="/" element={<Index />} />
-                <Route path="/dashboard" element={<Dashboard />} />
-                <Route path="/prospeccao" element={<Prospeccao />} />
-                <Route path="/assistente-ia" element={<AssistenteIA />} />
-                <Route path="/pesquisa" element={<Pesquisa />} />
-                <Route path="/minha-conta" element={<MinhaConta />} />
-                <Route path="/assinatura" element={<Assinatura />} />
-                <Route path="/uso-do-plano" element={<UsoDoPlano />} />
-              </Route>
+                {/* Rotas privadas com layout do app */}
+                <Route
+                  element={
+                    <Protected>
+                      <AppShell />
+                    </Protected>
+                  }
+                >
+                  <Route path="/test" element={<TestContext />} />
+                  <Route path="/" element={<Index />} />
+                  <Route path="/dashboard" element={<Dashboard />} />
+                  <Route path="/prospeccao" element={<Prospeccao />} />
+                  <Route path="/assistente-ia" element={<AssistenteIA />} />
+                  <Route path="/pesquisa" element={<Pesquisa />} />
+                  <Route path="/minha-conta" element={<MinhaConta />} />
+                  <Route path="/assinatura" element={<Assinatura />} />
+                  <Route path="/uso-do-plano" element={<UsoDoPlano />} />
+                </Route>
 
-              {/* catch-all */}
-              <Route path="*" element={<NotFound />} />
-            </Routes>
-          </BrowserRouter>
-        </TooltipProvider>
-      </ThemeProvider>
-    </LeadsProvider>
+                {/* catch-all */}
+                <Route path="*" element={<NotFound />} />
+              </Routes>
+            </TooltipProvider>
+          </ThemeProvider>
+        </LeadsProvider>
+      </RateLimitModalProvider>
+    </BrowserRouter>
   </QueryClientProvider>
 );
 

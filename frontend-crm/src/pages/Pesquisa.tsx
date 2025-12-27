@@ -9,6 +9,7 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Search } from "lucide-react"
 import { toast } from "@/hooks/use-toast"
+import { useApiErrorHandler } from "@/hooks/useApiErrorHandler"
 
 // 👉 usa o wrapper da API
 import { api, type SearchPayload, type Manifest } from "@/services/api"
@@ -42,6 +43,7 @@ function propostaToKey(p?: string): "site" | null {
 export default function Pesquisa() {
   const [isLoading, setIsLoading] = useState(false)
   const [manifest, setManifest] = useState<Manifest | null>(null)
+  const { handleError } = useApiErrorHandler()
 
   const form = useForm<PesquisaFormData>({
     resolver: zodResolver(pesquisaSchema),
@@ -85,11 +87,7 @@ export default function Pesquisa() {
         description: "Sua automação foi iniciada e já gerou o run_id. Você pode baixar a planilha.",
       })
     } catch (error: any) {
-      toast({
-        title: "Erro",
-        description: error?.message || "Ocorreu um erro ao processar sua solicitação.",
-        variant: "destructive",
-      })
+      handleError(error, { fallbackMessage: "Não foi possível executar a pesquisa." })
     } finally {
       setIsLoading(false)
     }
