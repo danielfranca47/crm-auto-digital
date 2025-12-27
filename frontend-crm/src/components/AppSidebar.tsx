@@ -1,4 +1,13 @@
-import { BarChart3, Users, Search, FileSearch, Bot, LogOut } from "lucide-react";
+import {
+  BarChart3,
+  Users,
+  Search,
+  FileSearch,
+  Bot,
+  LogOut,
+  UserCircle,
+  CreditCard,
+} from "lucide-react";
 import { NavLink, useLocation, useNavigate } from "react-router-dom";
 import { useState } from "react";
 import { api } from "@/services/api";
@@ -20,6 +29,11 @@ const items = [
   { title: "Prospecção", url: "/prospeccao", icon: Search },
   { title: "Assistente IA", url: "/assistente-ia", icon: Bot },
   { title: "Pesquisa", url: "/pesquisa", icon: FileSearch },
+];
+
+const accountItems = [
+  { title: "Minha conta", url: "/minha-conta", icon: UserCircle },
+  { title: "Assinatura", url: "/assinatura", icon: CreditCard },
 ];
 
 export function AppSidebar() {
@@ -68,6 +82,16 @@ export function AppSidebar() {
           <SidebarGroupLabel>Conta</SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
+              {accountItems.map((item) => (
+                <SidebarMenuItem key={item.title}>
+                  <SidebarMenuButton asChild>
+                    <NavLink to={item.url} end className={getNavCls}>
+                      <item.icon className="mr-2 h-4 w-4" />
+                      <span>{item.title}</span>
+                    </NavLink>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              ))}
               <SidebarMenuItem>
                 <SidebarMenuButton onClick={onLogout} disabled={loggingOut}>
                   <LogOut className="mr-2 h-4 w-4" />

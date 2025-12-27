@@ -10,6 +10,8 @@ import Prospeccao from "./pages/Prospeccao";
 import AssistenteIA from "./pages/AssistenteIA";
 import Pesquisa from "./pages/Pesquisa";
 import NotFound from "./pages/NotFound";
+import MinhaConta from "./pages/MinhaConta";
+import Assinatura from "./pages/Assinatura";
 import { ThemeProvider } from "./contexts/ThemeContext";
 import { LeadsProvider } from "./contexts/LeadsContext";
 import { AppSidebar } from "./components/AppSidebar";
@@ -93,6 +95,8 @@ const App = () => (
                 <Route path="/prospeccao" element={<Prospeccao />} />
                 <Route path="/assistente-ia" element={<AssistenteIA />} />
                 <Route path="/pesquisa" element={<Pesquisa />} />
+                <Route path="/minha-conta" element={<MinhaConta />} />
+                <Route path="/assinatura" element={<Assinatura />} />
               </Route>
 
               {/* catch-all */}
