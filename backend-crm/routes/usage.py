@@ -39,6 +39,10 @@ def build_usage_payload(
     agents_total_active = rate_limit_service._count_active_agents(conn, user_id, "")
 
     copy_limit = _get_limit_value(limits, "max_copy_generation_monthly")
+    rate_limit_service._ensure_usage_monthly_table(conn)
+    copy_used = rate_limit_service._get_monthly_usage(
+        conn=conn, user_id=user_id, limit_key="max_copy_generation_monthly"
+    )
     copy_remaining = rate_limit_service.get_monthly_remaining(
         limit_key="max_copy_generation_monthly",
         user_id=user_id,
@@ -78,6 +82,7 @@ def build_usage_payload(
         },
         "copy_monthly": {
             "limit": copy_limit,
+            "used": copy_used,
             "remaining": copy_remaining,
         },
         "daily": daily_usage,

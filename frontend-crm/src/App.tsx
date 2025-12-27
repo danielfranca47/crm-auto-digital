@@ -12,6 +12,7 @@ import Pesquisa from "./pages/Pesquisa";
 import NotFound from "./pages/NotFound";
 import MinhaConta from "./pages/MinhaConta";
 import Assinatura from "./pages/Assinatura";
+import UsoDoPlano from "./pages/UsoDoPlano";
 import { ThemeProvider } from "./contexts/ThemeContext";
 import { LeadsProvider } from "./contexts/LeadsContext";
 import { AppSidebar } from "./components/AppSidebar";
@@ -97,6 +98,7 @@ const App = () => (
                 <Route path="/pesquisa" element={<Pesquisa />} />
                 <Route path="/minha-conta" element={<MinhaConta />} />
                 <Route path="/assinatura" element={<Assinatura />} />
+                <Route path="/uso-do-plano" element={<UsoDoPlano />} />
               </Route>
 
               {/* catch-all */}
