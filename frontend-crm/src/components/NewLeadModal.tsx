@@ -8,6 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from ".
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetClose } from "./ui/sheet";
 import { X } from "lucide-react";
 import { api } from "@/services/api"; // ✅ ajuste o caminho conforme seu projeto
+import { useApiErrorHandler } from "@/hooks/useApiErrorHandler";
 
 interface NewLeadModalProps {
   isOpen: boolean;
@@ -37,6 +38,7 @@ export function NewLeadModal({ isOpen, onClose, onSave }: NewLeadModalProps) {
     observations: '',
   });
   const [loading, setLoading] = useState(false);
+  const { handleError } = useApiErrorHandler();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -76,7 +78,7 @@ export function NewLeadModal({ isOpen, onClose, onSave }: NewLeadModalProps) {
       });
       onClose();
     } catch (err) {
-      console.error("Erro ao salvar lead:", err);
+      handleError(err, { fallbackMessage: 'Não foi possível criar o lead.' });
     } finally {
       setLoading(false);
     }

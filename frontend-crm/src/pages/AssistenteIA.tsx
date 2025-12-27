@@ -9,6 +9,7 @@ import { Upload, FileText, Bot, Download, X, Sparkles, ArrowRight } from 'lucide
 import { CrmHeader } from '@/components/CrmHeader';
 import { useNavigate } from 'react-router-dom';
 import { api } from '@/services/api';
+import { useApiErrorHandler } from '@/hooks/useApiErrorHandler';
 
 const AssistenteIA = () => {
   // ======= estados existentes =======
@@ -23,6 +24,7 @@ const AssistenteIA = () => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
   const navigate = useNavigate();
+  const { handleError } = useApiErrorHandler();
 
   // ======= estados novos (upload/preview/options/result) =======
   const [uploadId, setUploadId] = useState<string | null>(null);
@@ -193,11 +195,7 @@ const AssistenteIA = () => {
       });
     } catch (error: any) {
       console.error(error);
-      toast({
-        title: "Erro no processamento",
-        description: error?.message || "Ocorreu um erro ao processar com a IA.",
-        variant: "destructive",
-      });
+      handleError(error, { fallbackMessage: "Ocorreu um erro ao processar com a IA." });
     } finally {
       setIsProcessing(false);
     }

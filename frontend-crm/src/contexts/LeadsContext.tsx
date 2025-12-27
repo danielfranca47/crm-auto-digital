@@ -3,12 +3,14 @@ import { Lead, KanbanColumn, NewLeadForm, LeadStatus, LeadAppointment } from '@/
 import { ProspectionLead, ProspectionColumn, ProspectionMethod } from '@/types/prospection';
 import { KANBAN_COLUMNS, ARCHIVED_COLUMNS } from '@/data/mockData';
 import { api } from '../services/api';
+import { useApiErrorHandler } from '@/hooks/useApiErrorHandler';
 
 interface LeadsContextType {
   columns: KanbanColumn[];
   archivedColumns: KanbanColumn[];
   prospectionColumns: ProspectionColumn[];
   appointmentsByLead: Record<string, LeadAppointment[]>;
+  leadsError: string | null;
 
   updateLead: (leadId: string, updates: Partial<Lead>) => void;
   moveLead: (leadId: string, newCategory: LeadStatus) => void;
@@ -122,6 +124,7 @@ function toProspectionLead(l: Lead): ProspectionLead {
 }
 
 export function LeadsProvider({ children }: LeadsProviderProps) {
+  const { handleError } = useApiErrorHandler();
   const [columns, setColumns] = useState<KanbanColumn[]>([]);
   const [archivedColumns, setArchivedColumns] = useState<KanbanColumn[]>([]);
   const [prospectionColumns, setProspectionColumns] = useState<ProspectionColumn[]>([
@@ -130,23 +133,29 @@ export function LeadsProvider({ children }: LeadsProviderProps) {
     { id: 'qualification', title: 'Qualificação', leads: [], color: '#22c55e' },
   ]);
   const [appointmentsByLead, setAppointmentsByLead] = useState<Record<string, LeadAppointment[]>>({});
+  const [leadsError, setLeadsError] = useState<string | null>(null);
 
   // --------- persistência de cópia no lead e atualização visual do card ----------
   const updateProspectionLead = async (leadId: string, patch: Partial<Lead>) => {
     const { nextScheduledAction: _ignore, ...payload } = patch as Partial<Lead> & {
       nextScheduledAction?: Lead['nextScheduledAction'];
     };
-    await api.updateLead(leadId, payload);
-    setProspectionColumns((cols) =>
-      cols.map((col) => ({
-        ...col,
-        leads: col.leads.map((l) => (l.id === leadId ? { ...l, ...patch } : l)),
-      }))
-    );
+    try {
+      await api.updateLead(leadId, payload);
+      setProspectionColumns((cols) =>
+        cols.map((col) => ({
+          ...col,
+          leads: col.leads.map((l) => (l.id === leadId ? { ...l, ...patch } : l)),
+        }))
+      );
+    } catch (error) {
+      handleError(error, { fallbackMessage: 'Não foi possível atualizar o lead.' });
+    }
   };
 
   // --------- recarregar tudo do backend e reconstruir quadros ----------
   const reloadAllLeads = async (): Promise<void> => {
+    setLeadsError(null);
     try {
       const response = await api.getLeads();
       const rawLeads = response?.data ?? response;
@@ -180,7 +189,11 @@ export function LeadsProvider({ children }: LeadsProviderProps) {
         })
       );
     } catch (error) {
-      console.error('Erro ao recarregar leads:', error);
+      const result = handleError(error, {
+        silent: true,
+        fallbackMessage: 'Não foi possível carregar os leads.',
+      });
+      setLeadsError(result.message);
     }
   };
 
@@ -207,7 +220,7 @@ export function LeadsProvider({ children }: LeadsProviderProps) {
       };
       await api.updateLead(leadId, payload);
     } catch (error) {
-      console.error('Erro ao atualizar lead no backend:', error);
+      handleError(error, { fallbackMessage: 'Não foi possível atualizar o lead.' });
     }
 
     // Sincroniza quadro de prospecção quando category mudar
@@ -244,7 +257,7 @@ export function LeadsProvider({ children }: LeadsProviderProps) {
     try {
       await api.updateLead(leadId, { category: newCategory, lastMovement });
     } catch (error) {
-      console.error('Erro ao mover lead no backend:', error);
+      handleError(error, { fallbackMessage: 'Não foi possível mover o lead.' });
     }
 
     // Sincroniza prospecção
@@ -278,7 +291,7 @@ export function LeadsProvider({ children }: LeadsProviderProps) {
     try {
       await api.updateLead(leadId, { category: archiveCategory, lastMovement });
     } catch (error) {
-      console.error('Erro ao arquivar lead no backend:', error);
+      handleError(error, { fallbackMessage: 'Não foi possível arquivar o lead.' });
     }
 
     // Sincroniza prospecção
@@ -313,7 +326,7 @@ export function LeadsProvider({ children }: LeadsProviderProps) {
       // mantém a visão de prospecção coerente, se necessário
       syncProspectionStatus(newLead.id, newLead.category as LeadStatus);
     } catch (error) {
-      console.error('Erro ao criar lead:', error);
+      handleError(error, { fallbackMessage: 'Não foi possível criar o lead.' });
     }
   };
 
@@ -450,6 +463,7 @@ export function LeadsProvider({ children }: LeadsProviderProps) {
     archivedColumns,
     prospectionColumns,
     appointmentsByLead,
+    leadsError,
     updateLead,
     moveLead,
     archiveLead,

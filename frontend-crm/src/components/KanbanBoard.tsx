@@ -19,10 +19,11 @@ import { NewLeadModal } from "./NewLeadModal";
 import { LeadCardDialog } from "./LeadCardDialog";
 import { useLeads } from "@/contexts/LeadsContext";
 import { Button } from "./ui/button";
-import { Archive } from "lucide-react";
+import { Archive, AlertCircle, RefreshCw } from "lucide-react";
 import { ScheduleAppointmentDialog } from "./ScheduleAppointmentDialog";
 import { useAppointments, useCancelAppointment } from "@/hooks/useAppointments";
 import { useToast } from "@/hooks/use-toast";
+import { Alert, AlertDescription, AlertTitle } from "./ui/alert";
 
 interface KanbanBoardProps {
   onDashboard: () => void;
@@ -36,6 +37,8 @@ export function KanbanBoard({ onDashboard }: KanbanBoardProps) {
     moveLead,
     archiveLead,
     addLead,
+    leadsError,
+    reloadAllLeads,
     setLeadNextAction,
   } = useLeads();
   const { data: appointments = [] } = useAppointments();
@@ -266,6 +269,24 @@ export function KanbanBoard({ onDashboard }: KanbanBoardProps) {
       />
 
       <main className="p-6">
+        {leadsError && (
+          <Alert variant="destructive" className="mb-4">
+            <AlertCircle className="h-4 w-4" />
+            <AlertTitle>Não foi possível carregar os leads</AlertTitle>
+            <AlertDescription className="flex items-center justify-between gap-4">
+              <span>{leadsError}</span>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={reloadAllLeads}
+                className="shrink-0"
+              >
+                <RefreshCw className="mr-2 h-4 w-4" /> Tentar novamente
+              </Button>
+            </AlertDescription>
+          </Alert>
+        )}
+
         <DndContext
           sensors={sensors}
           collisionDetection={closestCorners}

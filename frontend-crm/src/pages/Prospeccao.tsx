@@ -3,6 +3,9 @@ import { ProspectionBoard } from "@/components/prospection/ProspectionBoard";
 import { useLeads } from "@/contexts/LeadsContext";
 import WhatsAppLogin from "@/components/whatsapp/WhatsAppLogin";
 import { api } from "@/services/api";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { AlertCircle, RefreshCw } from "lucide-react";
+import { Button } from "@/components/ui/button";
 
 const Prospeccao: React.FC = () => {
   const {
@@ -10,6 +13,8 @@ const Prospeccao: React.FC = () => {
     updateProspectionLead,
     moveProspectionLead,
     bulkProspection,
+    leadsError,
+    reloadAllLeads,
   } = useLeads();
 
   // --- WhatsApp session UI state ---
@@ -74,6 +79,19 @@ const Prospeccao: React.FC = () => {
 
   return (
     <div className="space-y-4">
+      {leadsError && (
+        <Alert variant="destructive">
+          <AlertCircle className="h-4 w-4" />
+          <AlertTitle>Não foi possível carregar os leads</AlertTitle>
+          <AlertDescription className="flex items-center justify-between gap-4">
+            <span>{leadsError}</span>
+            <Button size="sm" variant="outline" onClick={reloadAllLeads} className="shrink-0">
+              <RefreshCw className="mr-2 h-4 w-4" /> Tentar novamente
+            </Button>
+          </AlertDescription>
+        </Alert>
+      )}
+
       {/* Barra superior da página (alinha com o título/toolbar existentes) */}
       <div className="flex items-center justify-end gap-3">
         {waBadge}
