@@ -15,7 +15,8 @@ const CORE_RAW_BASE = env?.VITE_CORE_BASE_URL || "http://localhost:8001";
 
 const API_BASE = `${trimTrailingSlash(CRM_RAW_BASE)}/api`;
 const CRM_API_BASE = API_BASE;
-const CORE_AUTH_BASE = `${trimTrailingSlash(CORE_RAW_BASE)}/auth`;
+const CORE_BASE = trimTrailingSlash(CORE_RAW_BASE);
+const CORE_AUTH_BASE = `${CORE_BASE}/auth`;
 
 export class ApiError extends Error {
   status?: number;
@@ -58,6 +59,12 @@ function buildUrl(path: string) {
   if (/^https?:\/\//i.test(path)) return path;
   const cleanPath = path.startsWith("/") ? path.slice(1) : path;
   return `${API_BASE}/${cleanPath}`;
+}
+
+function buildCoreUrl(path: string) {
+  if (/^https?:\/\//i.test(path)) return path;
+  const cleanPath = path.startsWith("/") ? path.slice(1) : path;
+  return `${CORE_BASE}/${cleanPath}`;
 }
 
 type ResponseType = "json" | "text" | "blob";
@@ -124,6 +131,19 @@ async function request<T>(path: string, init?: RequestOptions) {
   return handleResponse<T>(response, init?.responseType);
 }
 
+async function coreRequest<T>(path: string, init?: RequestOptions) {
+  const preparedBody = prepareBody(init?.body);
+  const headers = buildHeaders(init?.headers, preparedBody ?? undefined);
+  const response = await fetch(buildCoreUrl(path), {
+    credentials: "include",
+    ...init,
+    headers,
+    body: preparedBody,
+  });
+
+  return handleResponse<T>(response, init?.responseType);
+}
+
 export const apiClient = {
   get: <T = unknown>(path: string, init?: RequestInit) =>
     request<T>(path, { ...init, method: "GET" }),
@@ -153,4 +173,15 @@ export const apiClient = {
     request<T>(path, { ...init, method: "DELETE" }),
 };
 
-export { API_BASE, CRM_API_BASE, CORE_AUTH_BASE };
+export const coreClient = {
+  get: <T = unknown>(path: string, init?: RequestInit) =>
+    coreRequest<T>(path, { ...init, method: "GET" }),
+  post: <T = unknown>(path: string, body?: unknown, init?: RequestInit) =>
+    coreRequest<T>(path, {
+      ...init,
+      method: "POST",
+      body,
+    }),
+};
+
+export { API_BASE, CRM_API_BASE, CORE_AUTH_BASE, CORE_BASE };
