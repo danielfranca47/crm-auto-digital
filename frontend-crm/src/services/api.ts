@@ -1,6 +1,31 @@
 // services/api.ts
-import { apiClient, API_BASE, CORE_AUTH_BASE } from "../lib/api-client";
+import { apiClient, API_BASE, CORE_AUTH_BASE, coreClient } from "../lib/api-client";
 import { clearAuthToken, persistAuthToken } from "../lib/auth-token";
+
+export type CorePlan = {
+  code: string;
+  name?: string;
+  billing_period?: string | null;
+  product_code?: string;
+  active?: boolean;
+};
+
+export type CoreProduct = {
+  code: string;
+  name?: string;
+};
+
+export type CoreUser = {
+  id?: number;
+  email?: string | null;
+  status?: string;
+  created_at?: string;
+};
+
+export type EntitlementsResponse = {
+  products?: Array<{ product_code?: string; plan_code?: string; status?: string }>;
+  limits?: Record<string, number | null>;
+};
 
 const AUTH_BASE = CORE_AUTH_BASE;
 const CORE_BASE = CORE_AUTH_BASE.replace(/\/auth$/, "");
@@ -549,13 +574,23 @@ export const api = {
     },
 
     me: async () => {
-      return apiClient.get(`${CORE_BASE}/users/me`);
+      return apiClient.get<CoreUser>(`${CORE_BASE}/users/me`);
     },
 
     logout: async () => {
       clearAuthToken();
       return { ok: true };
     },
+  },
+
+  core: {
+    getPlans: async (productCode?: string) => {
+      const qs = productCode ? `?product_code=${encodeURIComponent(productCode)}` : "";
+      return coreClient.get<CorePlan[]>(`/plans${qs}`);
+    },
+    getProducts: async () => coreClient.get<CoreProduct[]>("/products"),
+    getEntitlements: async () =>
+      coreClient.get<EntitlementsResponse>("/me/entitlements"),
   },
 
   agents: {
