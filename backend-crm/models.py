@@ -121,3 +121,29 @@ class AssistantOptions(BaseModel):
     language: str = "pt-BR"
     tone: str = "profissional"
     proposal: Literal["site"] = "site"
+
+
+# -----------------------------
+# Knowledge Base
+# -----------------------------
+class KnowledgeCreate(BaseModel):
+    title: str = Field(min_length=3)
+    content_text: str = Field(min_length=20)
+
+
+class KnowledgeUpdate(BaseModel):
+    title: Optional[str] = Field(default=None, min_length=3)
+    content_text: Optional[str] = Field(default=None, min_length=20)
+
+
+class KnowledgeItemOut(BaseModel):
+    id: int
+    user_id: int
+    title: str
+    source_type: Literal["manual", "file"]
+    content_text: str
+    file_path: Optional[str] = None
+    created_at: datetime
+    updated_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)

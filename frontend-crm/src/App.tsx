@@ -13,6 +13,7 @@ import NotFound from "./pages/NotFound";
 import MinhaConta from "./pages/MinhaConta";
 import Assinatura from "./pages/Assinatura";
 import UsoDoPlano from "./pages/UsoDoPlano";
+import AiProfile from "./pages/AiProfile";
 import { ThemeProvider } from "./contexts/ThemeContext";
 import { LeadsProvider } from "./contexts/LeadsContext";
 import { RateLimitModalProvider } from "./contexts/RateLimitModalContext";
@@ -101,6 +102,7 @@ const App = () => (
                   <Route path="/prospeccao" element={<Prospeccao />} />
                   <Route path="/assistente-ia" element={<AssistenteIA />} />
                   <Route path="/pesquisa" element={<Pesquisa />} />
+                  <Route path="/ai-profile" element={<AiProfile />} />
                   <Route path="/minha-conta" element={<MinhaConta />} />
                   <Route path="/assinatura" element={<Assinatura />} />
                   <Route path="/uso-do-plano" element={<UsoDoPlano />} />
