@@ -8,6 +8,7 @@ import {
   UserCircle,
   CreditCard,
   Gauge,
+  Sparkles,
 } from "lucide-react";
 import { NavLink, useLocation, useNavigate } from "react-router-dom";
 import { useState } from "react";
@@ -33,6 +34,7 @@ const items = [
 ];
 
 const accountItems = [
+  { title: "Identidade do Agente", url: "/ai-profile", icon: Sparkles },
   { title: "Minha conta", url: "/minha-conta", icon: UserCircle },
   { title: "Uso do plano", url: "/uso-do-plano", icon: Gauge },
   { title: "Assinatura", url: "/assinatura", icon: CreditCard },

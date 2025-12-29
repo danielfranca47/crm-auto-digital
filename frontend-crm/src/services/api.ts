@@ -27,6 +27,42 @@ export type EntitlementsResponse = {
   limits?: Record<string, number | null>;
 };
 
+export type AiTemplate = {
+  key: string;
+  name: string;
+  description?: string;
+};
+
+export type AiProfilePayload = {
+  template_key: string;
+  name: string;
+  brand_name: string;
+  tone_of_voice: string;
+  niche: string;
+  target_audience: string;
+  offer_description: string;
+  goals: string;
+  custom_instructions?: string | null;
+};
+
+export type AiProfile = AiProfilePayload & {
+  id?: number;
+  user_id?: number;
+  created_at?: string;
+  updated_at?: string;
+};
+
+export type KnowledgeItem = {
+  id: number;
+  user_id: number;
+  title: string;
+  source_type: "manual" | "file";
+  content_text: string;
+  file_path?: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
 const AUTH_BASE = CORE_AUTH_BASE;
 const CORE_BASE = CORE_AUTH_BASE.replace(/\/auth$/, "");
 
@@ -591,6 +627,28 @@ export const api = {
     getProducts: async () => coreClient.get<CoreProduct[]>("/products"),
     getEntitlements: async () =>
       coreClient.get<EntitlementsResponse>("/me/entitlements"),
+    getAiTemplates: async () => coreClient.get<AiTemplate[]>("/ai-templates"),
+    getAiProfileMe: async () => coreClient.get<AiProfile>("/ai-profiles/me"),
+    createAiProfile: async (payload: AiProfilePayload) =>
+      coreClient.post<AiProfile>(`/ai-profiles`, payload),
+    updateAiProfileMe: async (payload: Partial<AiProfilePayload>) =>
+      coreClient.put<AiProfile>(`/ai-profiles/me`, payload),
+  },
+
+  crm: {
+    getKnowledgeList: async () => apiClient.get<KnowledgeItem[]>(`/knowledge`),
+    createKnowledgeManual: async (payload: { title: string; content_text: string }) =>
+      apiClient.post<KnowledgeItem>(`/knowledge`, payload),
+    updateKnowledge: async (
+      id: number,
+      payload: Partial<{ title: string; content_text: string }>
+    ) => apiClient.put<KnowledgeItem>(`/knowledge/${id}`, payload),
+    deleteKnowledge: async (id: number) => apiClient.delete(`/knowledge/${id}`),
+    uploadKnowledgeFile: async (file: File) => {
+      const formData = new FormData();
+      formData.append("file", file);
+      return apiClient.post<KnowledgeItem>(`/knowledge/upload`, formData);
+    },
   },
 
   agents: {

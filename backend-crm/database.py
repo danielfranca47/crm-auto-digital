@@ -89,6 +89,28 @@ def ensure_jobs_tables(conn: sqlite3.Connection) -> None:
     cur.execute("CREATE INDEX IF NOT EXISTS idx_jobs_user ON jobs(user_id, status);")
 
 
+def ensure_knowledge_table(conn: sqlite3.Connection) -> None:
+    """Cria tabela de knowledge base por usuário (idempotente)."""
+    cur = conn.cursor()
+    cur.executescript(
+        """
+        CREATE TABLE IF NOT EXISTS knowledge_items (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL,
+            title TEXT NOT NULL,
+            source_type TEXT NOT NULL CHECK(source_type IN ('manual','file')),
+            content_text TEXT NOT NULL,
+            file_path TEXT NULL,
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_knowledge_user ON knowledge_items(user_id);
+        CREATE INDEX IF NOT EXISTS idx_knowledge_user_created ON knowledge_items(user_id, created_at);
+        """
+    )
+
+
 # =========================
 # APPOINTMENTS HELPERS
 # =========================
@@ -494,6 +516,9 @@ def init_db() -> None:
 
         # Novas tabelas de automação distribuída (agents/jobs)
         ensure_jobs_tables(conn)
+
+        # Base de conhecimento por usuário
+        ensure_knowledge_table(conn)
 
         # Migrações
         migrate_user_profile(conn)

@@ -23,6 +23,7 @@ from routes import (
     appointments,
     agents,
     usage,
+    knowledge,
 )
 from routes import public
 
@@ -72,6 +73,7 @@ app.include_router(profile.router)                                  # prefixo de
 app.include_router(appointments.router)                             # já define prefix="/api/appointments"
 app.include_router(agents.router)                                   # /api/agents
 app.include_router(usage.router)                                    # /api/usage
+app.include_router(knowledge.router)                                # /api/knowledge
 # app.include_router(dashboard.router)
 
 # -----------------------------------------------------------------------------
