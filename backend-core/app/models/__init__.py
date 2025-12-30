@@ -6,6 +6,7 @@ from .subscription import Subscription
 from .user_addon import UserAddon
 from .usage_counter import UsageCounter
 from .ai_profile import AIProfile
+from .whatsapp_connection import WhatsappConnection
 
 __all__ = [
     "User",
@@ -16,4 +17,5 @@ __all__ = [
     "UserAddon",
     "UsageCounter",
     "AIProfile",
+    "WhatsappConnection",
 ]

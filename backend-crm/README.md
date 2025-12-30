@@ -8,6 +8,13 @@ Principais mudanças:
 - Todas as rotas privadas de leads, prospecção, agentes e pesquisa exigem bearer token, validam assinatura CRM ativa e filtram dados por `user_id`.
 - Leads e fluxos de prospecção agora são multiusuário, sempre gravando e consultando dados com `user_id` derivado do backend-core.
 
+## Webhook WhatsApp inbound (ORION)
+
+- Endpoint: `POST /webhooks/whatsapp/inbound`
+- Segurança: header `X-Webhook-Secret` deve casar com `CRM_WEBHOOK_SECRET`; o CRM resolve o dono via core usando `CORE_SERVICE_TOKEN`.
+- Idempotência: `inbound_events` evita duplicar por `(provider, instance_id, external_event_id)`.
+- Efeitos: cria/acha lead por telefone, registra mensagem (model=`inbound`) e cria job `whatsapp.inbound.n8n`.
+
 ## Validação de assinatura do produto CRM
 
 - O backend-CRM usa `CORE_API_BASE` (ex.: `http://localhost:8000`) para consultar o backend-core com o mesmo Bearer token da requisição recebida.

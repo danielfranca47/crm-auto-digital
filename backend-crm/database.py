@@ -89,6 +89,28 @@ def ensure_jobs_tables(conn: sqlite3.Connection) -> None:
     cur.execute("CREATE INDEX IF NOT EXISTS idx_jobs_user ON jobs(user_id, status);")
 
 
+def ensure_inbound_events_table(conn: sqlite3.Connection) -> None:
+    """Cria tabela de eventos inbound (idempotente) para idempotência de webhooks."""
+
+    cur = conn.cursor()
+    cur.executescript(
+        """
+        CREATE TABLE IF NOT EXISTS inbound_events (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            provider TEXT NOT NULL,
+            instance_id TEXT NOT NULL,
+            external_event_id TEXT NOT NULL,
+            user_id INTEGER NOT NULL,
+            received_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE(provider, instance_id, external_event_id)
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_inbound_events_user ON inbound_events(user_id);
+        CREATE INDEX IF NOT EXISTS idx_inbound_events_instance ON inbound_events(instance_id);
+        """
+    )
+
+
 def ensure_knowledge_table(conn: sqlite3.Connection) -> None:
     """Cria tabela de knowledge base por usuário (idempotente)."""
     cur = conn.cursor()
@@ -516,6 +538,9 @@ def init_db() -> None:
 
         # Novas tabelas de automação distribuída (agents/jobs)
         ensure_jobs_tables(conn)
+
+        # Idempotência de webhooks inbound
+        ensure_inbound_events_table(conn)
 
         # Base de conhecimento por usuário
         ensure_knowledge_table(conn)
