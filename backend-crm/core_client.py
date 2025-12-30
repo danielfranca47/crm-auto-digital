@@ -68,3 +68,35 @@ def fetch_core_entitlements(token: str) -> Dict[str, Any]:
         raise HTTPException(status_code=401, detail="Resposta inesperada do backend-core")
 
     return data
+
+
+def fetch_core_ai_profile(token: str) -> Dict[str, Any] | None:
+    """
+    Consulta o backend-core em /ai-profiles/me para recuperar o perfil de IA do usuário.
+    Retorna None em caso de 404 (perfil não configurado).
+    """
+
+    if not token:
+        raise HTTPException(status_code=401, detail="Token ausente")
+
+    base = _get_core_base()
+    url = f"{base}/ai-profiles/me"
+    headers = {"Authorization": f"Bearer {token}"}
+
+    try:
+        with httpx.Client(timeout=10) as client:
+            resp = client.get(url, headers=headers)
+    except httpx.RequestError as exc:
+        raise HTTPException(status_code=401, detail=f"Falha ao contatar backend-core: {exc}") from exc
+
+    if resp.status_code == 404:
+        return None
+
+    if resp.status_code != 200:
+        raise HTTPException(status_code=401, detail="Falha ao consultar AI Profile no backend-core")
+
+    data = resp.json()
+    if not isinstance(data, dict):
+        raise HTTPException(status_code=401, detail="Resposta inesperada do backend-core")
+
+    return data
