@@ -8,6 +8,34 @@ Principais mudanças:
 - Todas as rotas privadas de leads, prospecção, agentes e pesquisa exigem bearer token, validam assinatura CRM ativa e filtram dados por `user_id`.
 - Leads e fluxos de prospecção agora são multiusuário, sempre gravando e consultando dados com `user_id` derivado do backend-core.
 
+## Webhook WhatsApp inbound (ORION)
+
+- Endpoint: `POST /webhooks/whatsapp/inbound`
+- Segurança: header `X-Webhook-Secret` deve casar com `CRM_WEBHOOK_SECRET`; o CRM resolve o dono via core usando `CORE_SERVICE_TOKEN`.
+- Idempotência: `inbound_events` evita duplicar por `(provider, instance_id, external_event_id)`.
+- Conversas Orion (1 telefone único por mês): tabela `orion_conversations` controla o consumo mensal por `user_id`, usando `max_ia_conversas_monthly` retornado pelo core `/whatsapp-connections/resolve`.
+- Efeitos: cria/acha lead por telefone (E.164 iniciando com `+`), registra mensagem (model=`inbound`) e cria job `whatsapp.inbound.n8n`.
+- Convenção de mensagens: inbound salva `model="inbound"`; mensagens enviadas pelo CRM/automação devem usar `model="outbound"`. O orquestrador considera histórico outbound apenas quando `model` é exatamente `"outbound"`.
+
+### ETAPA 4 – testes rápidos
+1. **Accepted gera decisão**: envie um webhook válido; espere `inbound_received` + `ai_decided` no `prospection_logs` para o `lead_id` retornado.
+2. **Idempotência**: repita o mesmo `message_id` → resposta `duplicate` e **nenhum** novo `ai_decided` deve aparecer.
+3. **Handoff por keyword**: envie `message_text` contendo “humano” e verifique `ai_decided` com `next_action=handoff`.
+4. **Qualificação inicial**: com histórico curto (<=1 mensagem outbound) e playbook com `qualification_questions`, a primeira mensagem do mês deve registrar `next_action=ask_qualification`.
+
+## Endpoints internos para executor (ETAPA 5 – pré-requisitos)
+
+- Autorização: `X-Service-Token: <CRM_SERVICE_TOKEN>` (ou `CORE_SERVICE_TOKEN` como fallback).
+- `GET /api/jobs/{job_id}`: retorna `job` com `type`, `payload`, `status`, `result`, `created_at`.
+- `GET /api/whatsapp/execution-context?job_id=`: monta contexto completo usando `build_context_bundle_from_inbound` (AIProfile via service token, playbook, histórico de até 20 mensagens, lead) e inclui a decisão `ai_decided` mais recente (`prospection_logs.action='ai_decided'`).
+- `POST /api/whatsapp/outbound`: body `{job_id, lead_id, user_id, phone, body, provider_message_id?, in_reply_to_message_id?}`. Insere mensagem com `model="outbound"`, log `action="outbound_sent"` e registra idempotência em `outbound_events` (UNIQUE por `job_id`/`in_reply_to_message_id`) retornando `status="already_sent"` quando reprocessado.
+
+### ETAPA 5 – testes sugeridos
+1. `GET /api/jobs/{job_id}` com `X-Service-Token` válido → retorna job; `job_id` inexistente → 404.
+2. `GET /api/whatsapp/execution-context?job_id=` → resposta contém `lead`, `history`, `ai_profile`, `playbook`, `decision` (último `ai_decided`).
+3. `POST /api/whatsapp/outbound` (primeira vez) → `status="sent"`, cria mensagem `model=outbound` e log `outbound_sent`.
+4. Repetir o mesmo `job_id` ou `in_reply_to_message_id` → `status="already_sent"` sem novo insert.
+
 ## Validação de assinatura do produto CRM
 
 - O backend-CRM usa `CORE_API_BASE` (ex.: `http://localhost:8000`) para consultar o backend-core com o mesmo Bearer token da requisição recebida.

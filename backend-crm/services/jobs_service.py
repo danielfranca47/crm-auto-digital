@@ -28,11 +28,13 @@ AGENT_STATUS_ONLINE = "online"
 AGENT_STATUS_OFFLINE = "offline"
 
 TYPE_WHATSAPP_SEND = "whatsapp.send.local"
+TYPE_WHATSAPP_INBOUND_N8N = "whatsapp.inbound.n8n"
 TYPE_MAPS_SEARCH = "maps.search.local"
 TYPE_MAPS_ENRICH = "maps.enrich.local"
 
 _TYPE_ALIASES: Dict[str, List[str]] = {
     TYPE_WHATSAPP_SEND: ["whatsapp_send"],
+    TYPE_WHATSAPP_INBOUND_N8N: [],
     TYPE_MAPS_SEARCH: ["maps_search_fallback"],
     TYPE_MAPS_ENRICH: ["maps_enrich_fallback"],
 }
