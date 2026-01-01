@@ -8,6 +8,21 @@ Principais mudanças:
 - Todas as rotas privadas de leads, prospecção, agentes e pesquisa exigem bearer token, validam assinatura CRM ativa e filtram dados por `user_id`.
 - Leads e fluxos de prospecção agora são multiusuário, sempre gravando e consultando dados com `user_id` derivado do backend-core.
 
+## Webhook WhatsApp inbound (ORION)
+
+- Endpoint: `POST /webhooks/whatsapp/inbound`
+- Segurança: header `X-Webhook-Secret` deve casar com `CRM_WEBHOOK_SECRET`; o CRM resolve o dono via core usando `CORE_SERVICE_TOKEN`.
+- Idempotência: `inbound_events` evita duplicar por `(provider, instance_id, external_event_id)`.
+- Conversas Orion (1 telefone único por mês): tabela `orion_conversations` controla o consumo mensal por `user_id`, usando `max_ia_conversas_monthly` retornado pelo core `/whatsapp-connections/resolve`.
+- Efeitos: cria/acha lead por telefone (E.164 iniciando com `+`), registra mensagem (model=`inbound`) e cria job `whatsapp.inbound.n8n`.
+- Convenção de mensagens: inbound salva `model="inbound"`; mensagens enviadas pelo CRM/automação devem usar `model="outbound"`. O orquestrador considera histórico outbound apenas quando `model` é exatamente `"outbound"`.
+
+### ETAPA 4 – testes rápidos
+1. **Accepted gera decisão**: envie um webhook válido; espere `inbound_received` + `ai_decided` no `prospection_logs` para o `lead_id` retornado.
+2. **Idempotência**: repita o mesmo `message_id` → resposta `duplicate` e **nenhum** novo `ai_decided` deve aparecer.
+3. **Handoff por keyword**: envie `message_text` contendo “humano” e verifique `ai_decided` com `next_action=handoff`.
+4. **Qualificação inicial**: com histórico curto (<=1 mensagem outbound) e playbook com `qualification_questions`, a primeira mensagem do mês deve registrar `next_action=ask_qualification`.
+
 ## Validação de assinatura do produto CRM
 
 - O backend-CRM usa `CORE_API_BASE` (ex.: `http://localhost:8000`) para consultar o backend-core com o mesmo Bearer token da requisição recebida.

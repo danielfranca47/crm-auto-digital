@@ -31,6 +31,16 @@ Ao iniciar, o serviço também faz seed dos produtos, planos e limites padrão d
 - `GET /ai-profiles/me`: retorna o perfil de IA do usuário autenticado (404 se não existir).
 - `POST /ai-profiles`: cria ou sobrescreve o perfil de IA do usuário autenticado.
 - `PUT /ai-profiles/me`: atualiza parcialmente (ou cria, se informar todos os campos) o perfil de IA do usuário autenticado.
+- `GET /ai-profiles/resolve?user_id=`: endpoint interno protegido por `X-Service-Token` que retorna o AIProfile de um usuário sem exigir bearer token.
+- `GET /whatsapp-connections/me`: retorna a conexão WhatsApp (provider/tags) do usuário autenticado, com token mascarado.
+- `POST /whatsapp-connections/me`: cria ou atualiza a conexão WhatsApp do usuário autenticado, armazenando o token criptografado.
+- `GET /whatsapp-connections/resolve?instance_id=`: endpoint interno protegido por `X-Service-Token` para resolver dono/status da instância e expor `allow_orion` + `max_ia_conversas_monthly`.
+
+> `allow_orion` é calculado apenas com base em `max_ia_conversas_monthly`: se for `None` (ilimitado) ou maior que zero, o uso do produto Orion é permitido, mesmo que `max_whatsapp_send_daily` seja zero.
+
+## Variáveis de ambiente adicionais
+- `WHATSAPP_TOKEN_ENC_KEY`: chave Fernet (base64) usada para criptografar o `instance_token` antes de persistir.
+- `CORE_SERVICE_TOKEN`: token de serviço necessário para acessar `/whatsapp-connections/resolve` e `/ai-profiles/resolve`.
 
 ## Testando o fluxo
 1. **Registrar**: `curl -X POST http://localhost:8000/auth/register -H "Content-Type: application/json" -d '{"email":"teste@example.com","password":"senha123"}'`

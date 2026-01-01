@@ -89,6 +89,51 @@ def ensure_jobs_tables(conn: sqlite3.Connection) -> None:
     cur.execute("CREATE INDEX IF NOT EXISTS idx_jobs_user ON jobs(user_id, status);")
 
 
+def ensure_inbound_events_table(conn: sqlite3.Connection) -> None:
+    """Cria tabela de eventos inbound (idempotente) para idempotência de webhooks."""
+
+    cur = conn.cursor()
+    cur.executescript(
+        """
+        CREATE TABLE IF NOT EXISTS inbound_events (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            provider TEXT NOT NULL,
+            instance_id TEXT NOT NULL,
+            external_event_id TEXT NOT NULL,
+            user_id INTEGER NOT NULL,
+            received_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE(provider, instance_id, external_event_id)
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_inbound_events_user ON inbound_events(user_id);
+        CREATE INDEX IF NOT EXISTS idx_inbound_events_instance ON inbound_events(instance_id);
+        """
+    )
+
+
+def ensure_orion_conversations_table(conn: sqlite3.Connection) -> None:
+    """Cria tabela de conversas Orion (idempotente) para contagem mensal por telefone."""
+
+    cur = conn.cursor()
+    cur.executescript(
+        """
+        CREATE TABLE IF NOT EXISTS orion_conversations (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL,
+            phone_e164 TEXT NOT NULL,
+            month_key TEXT NOT NULL,
+            lead_id INTEGER NULL,
+            first_seen_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            last_seen_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE(user_id, phone_e164, month_key)
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_orion_conv_user_month ON orion_conversations(user_id, month_key);
+        CREATE INDEX IF NOT EXISTS idx_orion_conv_user_phone ON orion_conversations(user_id, phone_e164);
+        """
+    )
+
+
 def ensure_knowledge_table(conn: sqlite3.Connection) -> None:
     """Cria tabela de knowledge base por usuário (idempotente)."""
     cur = conn.cursor()
@@ -516,6 +561,12 @@ def init_db() -> None:
 
         # Novas tabelas de automação distribuída (agents/jobs)
         ensure_jobs_tables(conn)
+
+        # Idempotência de webhooks inbound
+        ensure_inbound_events_table(conn)
+
+        # Contagem de conversas Orion por telefone/mês
+        ensure_orion_conversations_table(conn)
 
         # Base de conhecimento por usuário
         ensure_knowledge_table(conn)

@@ -1,11 +1,12 @@
 from datetime import datetime
 from typing import List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, Header, HTTPException, status
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from app import models
+from app.config import settings
 from app.db import get_db
 from .auth import get_current_user
 
@@ -80,6 +81,13 @@ def _validate_template_key(template_key: Optional[str]) -> None:
     allowed_keys = {tpl["key"] for tpl in AI_TEMPLATES}
     if template_key not in allowed_keys:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid template_key")
+
+
+async def _require_service_token(x_service_token: str = Header(None)) -> str:
+    expected = settings.CORE_SERVICE_TOKEN
+    if not expected or x_service_token != expected:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid service token")
+    return x_service_token
 
 
 def _upsert_ai_profile(
@@ -172,4 +180,16 @@ async def update_my_ai_profile(
         data=update_data,
         require_all_fields_for_create=True,
     )
+    return profile
+
+
+@router.get("/ai-profiles/resolve", response_model=AIProfileOut)
+async def resolve_ai_profile(
+    user_id: int,
+    db: Session = Depends(get_db),
+    _: str = Depends(_require_service_token),
+):
+    profile = db.query(models.AIProfile).filter(models.AIProfile.user_id == user_id).first()
+    if not profile:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="AI profile not found")
     return profile
