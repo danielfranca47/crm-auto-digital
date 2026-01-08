@@ -24,6 +24,8 @@ from routes import (
     agents,
     usage,
     knowledge,
+    webhooks,
+    executor,
 )
 from routes import public
 
@@ -74,6 +76,8 @@ app.include_router(appointments.router)                             # já define
 app.include_router(agents.router)                                   # /api/agents
 app.include_router(usage.router)                                    # /api/usage
 app.include_router(knowledge.router)                                # /api/knowledge
+app.include_router(webhooks.router)                                 # /webhooks/whatsapp/inbound
+app.include_router(executor.router)                                 # /api/jobs, /api/whatsapp/* internal
 # app.include_router(dashboard.router)
 
 # -----------------------------------------------------------------------------
