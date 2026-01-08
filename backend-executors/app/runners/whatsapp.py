@@ -47,46 +47,61 @@ def main() -> int:
         return 2
 
     ctx_logger = log_ctx(logger, job_id=args.job_id)
+    lease_owner = "executors:local"
 
     try:
-        job = crm_client.get_job(args.job_id)
-        context = crm_client.get_whatsapp_execution_context(args.job_id)
+        crm_client.claim_job(args.job_id, lease_owner=lease_owner, ttl_seconds=300)
+    except crm_client.CRMClientConflictError as exc:
+        ctx_logger.error("job already locked: %s", exc)
+        return 1
     except crm_client.CRMClientError as exc:
         ctx_logger.error(str(exc))
         return 1
 
-    lead = context.get("lead") or {}
-    history = context.get("history") or []
-    ai_profile = context.get("ai_profile") or {}
-    playbook = context.get("playbook") or {}
-    metadata = context.get("metadata") or {}
+    try:
+        job = crm_client.get_job(args.job_id)
+        context = crm_client.get_whatsapp_execution_context(args.job_id)
 
-    lead_id = _safe_get(lead, "id")
-    lead_name = _safe_get(lead, "contactName", "companyName", "name")
-    lead_phone = _safe_get(lead, "phone", "phone_e164")
+        lead = context.get("lead") or {}
+        history = context.get("history") or []
+        ai_profile = context.get("ai_profile") or {}
+        playbook = context.get("playbook") or {}
+        metadata = context.get("metadata") or {}
 
-    ctx_logger.info("job loaded type=%s status=%s", job.get("type"), job.get("status"))
-    ctx_logger.info("lead id=%s name=%s phone=%s", lead_id, lead_name, lead_phone)
-    ctx_logger.info("history total=%s last=%s", len(history), _format_history(history))
-    ctx_logger.info(
-        "ai_profile id=%s name=%s template_key=%s",
-        _safe_get(ai_profile, "id"),
-        _safe_get(ai_profile, "name"),
-        _safe_get(ai_profile, "template_key"),
-    )
-    ctx_logger.info(
-        "playbook template_key=%s",
-        _safe_get(playbook, "template_key", "name"),
-    )
-    ctx_logger.info(
-        "metadata provider=%s instance_id=%s message_id=%s received_at=%s phone=%s",
-        metadata.get("provider"),
-        metadata.get("instance_id"),
-        metadata.get("message_id"),
-        metadata.get("received_at"),
-        metadata.get("phone"),
-    )
-    return 0
+        lead_id = _safe_get(lead, "id")
+        lead_name = _safe_get(lead, "contactName", "companyName", "name")
+        lead_phone = _safe_get(lead, "phone", "phone_e164")
+
+        ctx_logger.info("job loaded type=%s status=%s", job.get("type"), job.get("status"))
+        ctx_logger.info("lead id=%s name=%s phone=%s", lead_id, lead_name, lead_phone)
+        ctx_logger.info("history total=%s last=%s", len(history), _format_history(history))
+        ctx_logger.info(
+            "ai_profile id=%s name=%s template_key=%s",
+            _safe_get(ai_profile, "id"),
+            _safe_get(ai_profile, "name"),
+            _safe_get(ai_profile, "template_key"),
+        )
+        ctx_logger.info(
+            "playbook template_key=%s",
+            _safe_get(playbook, "template_key", "name"),
+        )
+        ctx_logger.info(
+            "metadata provider=%s instance_id=%s message_id=%s received_at=%s phone=%s",
+            metadata.get("provider"),
+            metadata.get("instance_id"),
+            metadata.get("message_id"),
+            metadata.get("received_at"),
+            metadata.get("phone"),
+        )
+        crm_client.complete_job(args.job_id, result={"context_fetched": True})
+        return 0
+    except Exception as exc:
+        ctx_logger.error("whatsapp runner error: %s", exc)
+        try:
+            crm_client.fail_job(args.job_id, error=str(exc))
+        except crm_client.CRMClientError:
+            ctx_logger.error("failed to mark job as failed in CRM")
+        return 1
 
 
 if __name__ == "__main__":

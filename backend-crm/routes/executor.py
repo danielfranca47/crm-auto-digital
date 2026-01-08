@@ -3,20 +3,24 @@ from __future__ import annotations
 import json
 import os
 import sqlite3
-import json
-import os
-import sqlite3
+from datetime import datetime
 from typing import Any, Dict, Optional
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from database import get_connection
 from services.ai_orchestrator import (
     InboundEvent,
     build_context_bundle_from_inbound,
 )
-from services.jobs_service import get_job
+from services.jobs_service import (
+    JOB_STATUS_COMPLETED,
+    JOB_STATUS_FAILED,
+    JOB_STATUS_IN_PROGRESS,
+    JOB_STATUS_PENDING,
+    get_job,
+)
 
 router = APIRouter(prefix="/api", tags=["WhatsApp Executor"])
 
@@ -26,6 +30,53 @@ def _require_service_token(x_service_token: str | None = Header(None, alias="X-S
     if not expected or x_service_token != expected:
         raise HTTPException(status_code=401, detail="Invalid service token")
     return x_service_token
+
+
+def _json_dumps(data: Any) -> str:
+    return json.dumps(data, ensure_ascii=False)
+
+
+def _json_loads(data: Optional[str]) -> Any:
+    if not data:
+        return None
+    try:
+        return json.loads(data)
+    except json.JSONDecodeError:
+        return None
+
+
+def _normalize_job(
+    job: Dict[str, Any],
+    *,
+    status_override: Optional[str] = None,
+    lease_owner_override: Optional[str] = None,
+) -> Dict[str, Any]:
+    status_map = {
+        JOB_STATUS_PENDING: "queued",
+        JOB_STATUS_IN_PROGRESS: "running",
+        JOB_STATUS_COMPLETED: "succeeded",
+        JOB_STATUS_FAILED: "failed",
+    }
+    raw_status = status_override or job.get("status")
+    return {
+        "status": status_map.get(raw_status, raw_status),
+        "attempts": job.get("attempts"),
+        "locked_at": job.get("started_at"),
+        "lease_owner": lease_owner_override or job.get("assigned_agent_id"),
+        "last_error": job.get("error"),
+    }
+
+
+def _parse_db_datetime(value: Optional[Any]) -> Optional[datetime]:
+    if not value:
+        return None
+    if isinstance(value, datetime):
+        return value
+    text = str(value).replace(" ", "T")
+    try:
+        return datetime.fromisoformat(text)
+    except ValueError:
+        return None
 
 
 @router.get("/jobs/{job_id}")
@@ -109,6 +160,176 @@ class OutboundMessage(BaseModel):
     body: str
     provider_message_id: str | None = None
     in_reply_to_message_id: str | None = None
+
+
+class ClaimJobRequest(BaseModel):
+    lease_owner: str = Field(..., description="Identificador do executor/worker")
+    lease_ttl_seconds: int = Field(300, ge=1, description="Tempo de lease em segundos")
+
+
+class CompleteJobRequest(BaseModel):
+    result: Dict[str, Any] = Field(default_factory=dict)
+
+
+class FailJobRequest(BaseModel):
+    error: str = Field(..., description="Mensagem de erro")
+    details: Optional[Dict[str, Any]] = Field(default=None)
+
+
+@router.post("/internal/jobs/{job_id}/claim")
+def claim_job_internal(
+    job_id: int,
+    payload: ClaimJobRequest,
+    _: str = Depends(_require_service_token),
+):
+    with get_connection() as conn:
+        cur = conn.cursor()
+        cur.execute("BEGIN IMMEDIATE")
+        row = cur.execute("SELECT * FROM jobs WHERE id=?", (job_id,)).fetchone()
+        if not row:
+            conn.rollback()
+            raise HTTPException(status_code=404, detail="Job não encontrado")
+
+        current_status = row["status"]
+        if current_status in {JOB_STATUS_COMPLETED, JOB_STATUS_FAILED}:
+            conn.rollback()
+            raise HTTPException(status_code=409, detail="Job já finalizado")
+
+        if current_status == JOB_STATUS_IN_PROGRESS:
+            started_at = _parse_db_datetime(row["started_at"])
+            if started_at:
+                now = datetime.utcnow()
+                if (now - started_at).total_seconds() < payload.lease_ttl_seconds:
+                    conn.rollback()
+                    raise HTTPException(status_code=409, detail="Job já está em execução")
+
+        threshold_delta = f"-{payload.lease_ttl_seconds} seconds"
+        updated = cur.execute(
+            """
+            UPDATE jobs
+               SET status=?,
+                   started_at=CURRENT_TIMESTAMP,
+                   attempts=attempts + 1,
+                   updated_at=CURRENT_TIMESTAMP
+             WHERE id=?
+               AND status IN (?, ?)
+               AND (
+                    status != ?
+                    OR started_at IS NULL
+                    OR started_at < datetime('now', ?)
+               )
+            """,
+            (
+                JOB_STATUS_IN_PROGRESS,
+                job_id,
+                JOB_STATUS_PENDING,
+                JOB_STATUS_IN_PROGRESS,
+                JOB_STATUS_IN_PROGRESS,
+                threshold_delta,
+            ),
+        )
+        if updated.rowcount == 0:
+            conn.rollback()
+            raise HTTPException(status_code=409, detail="Job já está em execução")
+
+        refreshed = cur.execute("SELECT * FROM jobs WHERE id=?", (job_id,)).fetchone()
+        conn.commit()
+
+    job = dict(refreshed)
+    job["payload"] = _json_loads(job.get("payload"))
+    job["result"] = _json_loads(job.get("result"))
+    return {
+        "job": job,
+        "normalized": _normalize_job(
+            job,
+            status_override=JOB_STATUS_IN_PROGRESS,
+            lease_owner_override=payload.lease_owner,
+        ),
+    }
+
+
+@router.post("/internal/jobs/{job_id}/complete")
+def complete_job_internal(
+    job_id: int,
+    payload: CompleteJobRequest,
+    _: str = Depends(_require_service_token),
+):
+    result_txt = _json_dumps(payload.result)
+    with get_connection() as conn:
+        cur = conn.cursor()
+        cur.execute("BEGIN IMMEDIATE")
+        row = cur.execute("SELECT * FROM jobs WHERE id=?", (job_id,)).fetchone()
+        if not row:
+            conn.rollback()
+            raise HTTPException(status_code=404, detail="Job não encontrado")
+        if row["status"] in {JOB_STATUS_COMPLETED, JOB_STATUS_FAILED}:
+            conn.rollback()
+            raise HTTPException(status_code=409, detail="Job já finalizado")
+
+        cur.execute(
+            """
+            UPDATE jobs
+               SET status=?,
+                   completed_at=CURRENT_TIMESTAMP,
+                   result=?,
+                   error=NULL,
+                   started_at=NULL,
+                   updated_at=CURRENT_TIMESTAMP
+             WHERE id=?
+            """,
+            (JOB_STATUS_COMPLETED, result_txt, job_id),
+        )
+        refreshed = cur.execute("SELECT * FROM jobs WHERE id=?", (job_id,)).fetchone()
+        conn.commit()
+
+    job = dict(refreshed)
+    job["payload"] = _json_loads(job.get("payload"))
+    job["result"] = _json_loads(job.get("result"))
+    return {"job": job, "normalized": _normalize_job(job, status_override=JOB_STATUS_COMPLETED)}
+
+
+@router.post("/internal/jobs/{job_id}/fail")
+def fail_job_internal(
+    job_id: int,
+    payload: FailJobRequest,
+    _: str = Depends(_require_service_token),
+):
+    if payload.details is not None:
+        error_txt = _json_dumps({"error": payload.error, "details": payload.details})
+    else:
+        error_txt = str(payload.error)
+
+    with get_connection() as conn:
+        cur = conn.cursor()
+        cur.execute("BEGIN IMMEDIATE")
+        row = cur.execute("SELECT * FROM jobs WHERE id=?", (job_id,)).fetchone()
+        if not row:
+            conn.rollback()
+            raise HTTPException(status_code=404, detail="Job não encontrado")
+        if row["status"] in {JOB_STATUS_COMPLETED, JOB_STATUS_FAILED}:
+            conn.rollback()
+            raise HTTPException(status_code=409, detail="Job já finalizado")
+
+        cur.execute(
+            """
+            UPDATE jobs
+               SET status=?,
+                   completed_at=CURRENT_TIMESTAMP,
+                   error=?,
+                   result=NULL,
+                   started_at=NULL,
+                   updated_at=CURRENT_TIMESTAMP
+             WHERE id=?
+            """,
+            (JOB_STATUS_FAILED, error_txt, job_id),
+        )
+        refreshed = cur.execute("SELECT * FROM jobs WHERE id=?", (job_id,)).fetchone()
+        conn.commit()
+
+    job = dict(refreshed)
+    job["payload"] = _json_loads(job.get("payload"))
+    job["result"] = _json_loads(job.get("result"))
+    return {"job": job, "normalized": _normalize_job(job, status_override=JOB_STATUS_FAILED)}
 
 
 @router.post("/whatsapp/outbound")
