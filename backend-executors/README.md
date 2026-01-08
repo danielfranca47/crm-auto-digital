@@ -42,3 +42,5 @@ python -m app.runners.whatsapp --job-id 123
 ```
 
 Se `--job-id` não for informado, o comando falha com uma mensagem amigável.
+
+> Para usar o runner contra o CRM, defina `CRM_SERVICE_TOKEN` no `.env` (ou variáveis de ambiente) para autenticar os endpoints internos.
