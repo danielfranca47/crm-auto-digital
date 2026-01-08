@@ -9,6 +9,10 @@ class CRMClientError(RuntimeError):
     pass
 
 
+class CRMClientConflictError(CRMClientError):
+    pass
+
+
 def _require_token() -> str:
     token = settings.crm_service_token
     if not token:
@@ -50,3 +54,34 @@ def get_whatsapp_execution_context(job_id: str) -> Dict[str, Any]:
     with httpx.Client(timeout=15.0) as client:
         response = client.get(url, headers=_headers(), params={"job_id": job_id})
     return _handle_response(response, job_id, for_context=True)
+
+
+def claim_job(job_id: str, lease_owner: str, ttl_seconds: int) -> Dict[str, Any]:
+    base_url = settings.crm_api_base.rstrip("/")
+    url = f"{base_url}/api/internal/jobs/{job_id}/claim"
+    payload = {"lease_owner": lease_owner, "lease_ttl_seconds": ttl_seconds}
+    with httpx.Client(timeout=15.0) as client:
+        response = client.post(url, headers=_headers(), json=payload)
+    if response.status_code == 409:
+        raise CRMClientConflictError("Job já está em execução")
+    return _handle_response(response, job_id, for_context=False)
+
+
+def complete_job(job_id: str, result: Dict[str, Any]) -> Dict[str, Any]:
+    base_url = settings.crm_api_base.rstrip("/")
+    url = f"{base_url}/api/internal/jobs/{job_id}/complete"
+    payload = {"result": result}
+    with httpx.Client(timeout=15.0) as client:
+        response = client.post(url, headers=_headers(), json=payload)
+    return _handle_response(response, job_id, for_context=False)
+
+
+def fail_job(job_id: str, error: str, details: Dict[str, Any] | None = None) -> Dict[str, Any]:
+    base_url = settings.crm_api_base.rstrip("/")
+    url = f"{base_url}/api/internal/jobs/{job_id}/fail"
+    payload: Dict[str, Any] = {"error": error}
+    if details is not None:
+        payload["details"] = details
+    with httpx.Client(timeout=15.0) as client:
+        response = client.post(url, headers=_headers(), json=payload)
+    return _handle_response(response, job_id, for_context=False)
