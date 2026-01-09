@@ -44,3 +44,17 @@ python -m app.runners.whatsapp --job-id 123
 Se `--job-id` não for informado, o comando falha com uma mensagem amigável.
 
 > Para usar o runner contra o CRM, defina `CRM_SERVICE_TOKEN` no `.env` (ou variáveis de ambiente) para autenticar os endpoints internos.
+
+## Variáveis de ambiente LLM
+
+Para a decisão via IA, o executor usa:
+
+- `LLM_API_BASE`: base URL do provedor (ex.: `https://api.openai.com/v1/responses`).
+- `LLM_API_KEY`: token de autenticação. Se vazio, usa stub local.
+- `LLM_MODEL`: identificador do modelo (ex.: `gpt-4o-mini`).
+- `LLM_TIMEOUT_SECONDS`: timeout em segundos (default 20).
+
+### Modo stub (sem key)
+
+Se `LLM_API_KEY` não estiver configurado, o serviço retorna uma resposta JSON fixa e válida
+para permitir testes end-to-end do pipeline.
