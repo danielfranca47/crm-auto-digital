@@ -58,3 +58,29 @@ Para a decisão via IA, o executor usa:
 
 Se `LLM_API_KEY` não estiver configurado, o serviço retorna uma resposta JSON fixa e válida
 para permitir testes end-to-end do pipeline.
+
+## Onde configurar
+backend-executors/.env
+
+## Variáveis mínimas obrigatórias
+Para OpenAI (exemplo mais comum hoje):
+LLM_API_BASE=https://api.openai.com/v1/responses
+LLM_API_KEY=sk-xxxxxxxxxxxxxxxx
+LLM_MODEL=gpt-4o-mini
+LLM_TIMEOUT_SECONDS=20
+
+
+## O que cada uma faz (em linguagem leiga):
+
+LLM_API_BASE
+→ endereço do “servidor da IA”
+
+LLM_API_KEY
+→ sua chave secreta (se ficar vazia, o sistema entra em stub mode)
+
+LLM_MODEL
+→ qual “cérebro” a IA vai usar
+(gpt-4o-mini é perfeito para esse caso: barato, rápido, bom em JSON)
+
+LLM_TIMEOUT_SECONDS
+→ quanto tempo o executor espera antes de desistir e cair no fallback
