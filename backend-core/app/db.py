@@ -63,3 +63,69 @@ def ensure_whatsapp_connections_table() -> None:
         conn.execute(text(table_sql))
         for statement in index_sql:
             conn.execute(text(statement))
+
+
+def ensure_ai_profile_columns() -> None:
+    columns = {
+        "identity_mode": "human_agent",
+        "handoff_policy": "keep_active_notify",
+        "handoff_custom_text": None,
+    }
+
+    with engine.begin() as conn:
+        if engine.dialect.name == "sqlite":
+            result = conn.execute(text("PRAGMA table_info(ai_profiles)"))
+            existing = {row[1] for row in result.fetchall()}
+            for name, default in columns.items():
+                if name in existing:
+                    continue
+                if default is None:
+                    conn.execute(text(f"ALTER TABLE ai_profiles ADD COLUMN {name} TEXT"))
+                else:
+                    conn.execute(
+                        text(
+                            f"ALTER TABLE ai_profiles ADD COLUMN {name} TEXT DEFAULT :default"
+                        ),
+                        {"default": default},
+                    )
+            for name, default in columns.items():
+                if default is None:
+                    continue
+                conn.execute(
+                    text(
+                        f"UPDATE ai_profiles SET {name} = :default WHERE {name} IS NULL"
+                    ),
+                    {"default": default},
+                )
+        else:
+            result = conn.execute(
+                text(
+                    """
+                    SELECT column_name
+                    FROM information_schema.columns
+                    WHERE table_name = 'ai_profiles'
+                    """
+                )
+            )
+            existing = {row[0] for row in result.fetchall()}
+            for name, default in columns.items():
+                if name in existing:
+                    continue
+                if default is None:
+                    conn.execute(text(f"ALTER TABLE ai_profiles ADD COLUMN {name} VARCHAR"))
+                else:
+                    conn.execute(
+                        text(
+                            f"ALTER TABLE ai_profiles ADD COLUMN {name} VARCHAR DEFAULT :default"
+                        ),
+                        {"default": default},
+                    )
+            for name, default in columns.items():
+                if default is None:
+                    continue
+                conn.execute(
+                    text(
+                        f"UPDATE ai_profiles SET {name} = :default WHERE {name} IS NULL"
+                    ),
+                    {"default": default},
+                )

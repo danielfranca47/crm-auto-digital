@@ -21,6 +21,9 @@ class AIProfile(Base):
     offer_description = Column(String, nullable=False)
     goals = Column(String, nullable=False)
     custom_instructions = Column(String, nullable=True)
+    identity_mode = Column(String, nullable=True, server_default="human_agent")
+    handoff_policy = Column(String, nullable=True, server_default="keep_active_notify")
+    handoff_custom_text = Column(String, nullable=True)
     created_at = Column(DateTime, server_default=func.now(), nullable=False, default=datetime.utcnow)
     updated_at = Column(
         DateTime, server_default=func.now(), onupdate=func.now(), nullable=False, default=datetime.utcnow
