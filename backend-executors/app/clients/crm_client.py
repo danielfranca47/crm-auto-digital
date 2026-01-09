@@ -85,3 +85,44 @@ def fail_job(job_id: str, error: str, details: Dict[str, Any] | None = None) -> 
     with httpx.Client(timeout=15.0) as client:
         response = client.post(url, headers=_headers(), json=payload)
     return _handle_response(response, job_id, for_context=False)
+
+
+def set_lead_bot_disabled(
+    lead_id: int,
+    disabled: bool,
+    reason: str | None = None,
+) -> Dict[str, Any]:
+    base_url = settings.crm_api_base.rstrip("/")
+    url = f"{base_url}/api/internal/leads/{lead_id}/bot-disabled"
+    payload: Dict[str, Any] = {"disabled": disabled}
+    if reason:
+        payload["reason"] = reason
+    with httpx.Client(timeout=15.0) as client:
+        response = client.post(url, headers=_headers(), json=payload)
+    return _handle_response(response, str(lead_id), for_context=False)
+
+
+def log_handoff_requested(
+    *,
+    user_id: int,
+    lead_id: int,
+    job_id: int,
+    message_id: str | None,
+    reason: str | None,
+    policy: str,
+    identity_mode: str,
+) -> Dict[str, Any]:
+    base_url = settings.crm_api_base.rstrip("/")
+    url = f"{base_url}/api/internal/logs/handoff-requested"
+    payload: Dict[str, Any] = {
+        "user_id": user_id,
+        "lead_id": lead_id,
+        "job_id": job_id,
+        "message_id": message_id,
+        "reason": reason,
+        "policy": policy,
+        "identity_mode": identity_mode,
+    }
+    with httpx.Client(timeout=15.0) as client:
+        response = client.post(url, headers=_headers(), json=payload)
+    return _handle_response(response, str(job_id), for_context=False)

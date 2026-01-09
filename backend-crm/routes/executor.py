@@ -141,6 +141,9 @@ def whatsapp_execution_context(
     bundle = build_context_bundle_from_inbound(event)
     decision = _fetch_latest_ai_decision(lead_id=event.lead_id)
 
+    if bundle.lead.get("bot_disabled"):
+        bundle.metadata["bot_disabled"] = True
+
     return {
         "job": job,
         "lead": bundle.lead,
@@ -174,6 +177,21 @@ class CompleteJobRequest(BaseModel):
 class FailJobRequest(BaseModel):
     error: str = Field(..., description="Mensagem de erro")
     details: Optional[Dict[str, Any]] = Field(default=None)
+
+
+class BotDisabledRequest(BaseModel):
+    disabled: bool
+    reason: Optional[str] = None
+
+
+class HandoffRequestedLog(BaseModel):
+    user_id: int
+    lead_id: int
+    job_id: int
+    message_id: Optional[str] = None
+    reason: Optional[str] = None
+    policy: str
+    identity_mode: str
 
 
 @router.post("/internal/jobs/{job_id}/claim")
@@ -330,6 +348,61 @@ def fail_job_internal(
     job["payload"] = _json_loads(job.get("payload"))
     job["result"] = _json_loads(job.get("result"))
     return {"job": job, "normalized": _normalize_job(job, status_override=JOB_STATUS_FAILED)}
+
+
+@router.post("/internal/leads/{lead_id}/bot-disabled")
+def set_lead_bot_disabled(
+    lead_id: int,
+    payload: BotDisabledRequest,
+    _: str = Depends(_require_service_token),
+):
+    with get_connection() as conn:
+        cur = conn.cursor()
+        row = cur.execute("SELECT id, user_id FROM leads WHERE id = ?", (lead_id,)).fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="Lead não encontrado")
+
+        cur.execute(
+            """
+            UPDATE leads
+               SET bot_disabled = ?,
+                   lastMovement = CURRENT_TIMESTAMP
+             WHERE id = ?
+            """,
+            (1 if payload.disabled else 0, lead_id),
+        )
+
+        notes = {"disabled": payload.disabled}
+        if payload.reason:
+            notes["reason"] = payload.reason
+        cur.execute(
+            """
+            INSERT INTO prospection_logs (lead_id, channel, message_id, action, notes, user_id)
+            VALUES (?, NULL, NULL, 'bot_disabled_changed', ?, ?)
+            """,
+            (lead_id, _json_dumps(notes), row["user_id"]),
+        )
+        conn.commit()
+        return {"status": "ok", "lead_id": lead_id, "bot_disabled": payload.disabled}
+
+
+@router.post("/internal/logs/handoff-requested")
+def log_handoff_requested(
+    payload: HandoffRequestedLog,
+    _: str = Depends(_require_service_token),
+):
+    with get_connection() as conn:
+        cur = conn.cursor()
+        notes = payload.dict()
+        cur.execute(
+            """
+            INSERT INTO prospection_logs (lead_id, channel, message_id, action, notes, user_id)
+            VALUES (?, NULL, NULL, 'handoff_requested', ?, ?)
+            """,
+            (payload.lead_id, _json_dumps(notes), payload.user_id),
+        )
+        conn.commit()
+        return {"status": "ok"}
 
 
 @router.post("/whatsapp/outbound")
