@@ -12,6 +12,10 @@ class Settings(BaseSettings):
     core_api_base: str = "http://localhost:8001"
     crm_service_token: Optional[str] = None
     core_service_token: Optional[str] = None
+    llm_api_base: str = "http://localhost:8002"
+    llm_api_key: Optional[str] = None
+    llm_model: str = "gpt-4o-mini"
+    llm_timeout_seconds: int = 20
     model_config = SettingsConfigDict(
         env_file=str(BASE_DIR / ".env"),
         env_file_encoding="utf-8",
@@ -21,4 +25,3 @@ class Settings(BaseSettings):
 
 
 settings = Settings()
-
