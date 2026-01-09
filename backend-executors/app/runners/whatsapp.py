@@ -6,6 +6,7 @@ from typing import Any, Dict, List, Optional
 from app.clients import crm_client
 from app.core.config import settings
 from app.core.logging import log_ctx, setup_logging
+from app.services import decision_engine
 
 
 def _truncate(text: str, limit: int = 120) -> str:
@@ -93,7 +94,16 @@ def main() -> int:
             metadata.get("received_at"),
             metadata.get("phone"),
         )
-        crm_client.complete_job(args.job_id, result={"context_fetched": True})
+        decision = decision_engine.decide(context, logger=ctx_logger)
+        ctx_logger.info(
+            "decision recorded next_action=%s reason=%s",
+            decision.next_action,
+            decision.reason,
+        )
+        crm_client.complete_job(
+            args.job_id,
+            result={"context_fetched": True, "decision": decision.model_dump()},
+        )
         return 0
     except Exception as exc:
         ctx_logger.error("whatsapp runner error: %s", exc)
