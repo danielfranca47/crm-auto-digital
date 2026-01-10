@@ -43,6 +43,9 @@ export type AiProfilePayload = {
   offer_description: string;
   goals: string;
   custom_instructions?: string | null;
+  identity_mode?: "virtual_assistant" | "human_agent" | "user_clone";
+  handoff_policy?: "disable_bot" | "keep_active_notify" | "ignore";
+  handoff_custom_text?: string | null;
 };
 
 export type AiProfile = AiProfilePayload & {
