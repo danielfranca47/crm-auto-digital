@@ -72,6 +72,9 @@ const initialProfileState: AiProfilePayload = {
   offer_description: "",
   goals: "",
   custom_instructions: "",
+  identity_mode: "human_agent",
+  handoff_policy: "keep_active_notify",
+  handoff_custom_text: "",
 };
 
 const goalSuggestions = [
@@ -262,6 +265,7 @@ export default function AiProfilePage() {
       const payload: AiProfilePayload = {
         ...profile,
         custom_instructions: profile.custom_instructions?.trim() || null,
+        handoff_custom_text: profile.handoff_custom_text?.trim() || null,
       };
       const fn = profileExists ? api.core.updateAiProfileMe : api.core.createAiProfile;
       const saved = await fn(payload);
@@ -588,6 +592,77 @@ export default function AiProfilePage() {
                   onChange={(e) => setProfile((p) => ({ ...p, tone_of_voice: e.target.value }))}
                   placeholder="Ou personalize o tom"
                 />
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle>Atendimento humano (Handoff)</CardTitle>
+                <CardDescription>Defina como o agente se identifica e quando aciona um humano.</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="space-y-2">
+                  <Label>Modo de identidade</Label>
+                  <Select
+                    value={profile.identity_mode}
+                    onValueChange={(value) =>
+                      setProfile((p) => ({ ...p, identity_mode: value as AiProfilePayload["identity_mode"] }))
+                    }
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Selecione o modo" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="virtual_assistant">Assistente virtual</SelectItem>
+                      <SelectItem value="human_agent">Humano do time</SelectItem>
+                      <SelectItem value="user_clone">Clone do usuário</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <p className="text-xs text-muted-foreground">
+                    Define como o agente se apresenta no início das conversas.
+                  </p>
+                </div>
+                <div className="space-y-2">
+                  <Label>Política quando o lead pedir humano</Label>
+                  <Select
+                    value={profile.handoff_policy}
+                    onValueChange={(value) =>
+                      setProfile((p) => ({ ...p, handoff_policy: value as AiProfilePayload["handoff_policy"] }))
+                    }
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Selecione a política" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="keep_active_notify">Manter bot e notificar</SelectItem>
+                      <SelectItem value="disable_bot">Desativar bot para este lead</SelectItem>
+                      <SelectItem value="ignore">Ignorar pedido e continuar conversa</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <p className="text-xs text-muted-foreground">
+                    Controla se o bot continua ativo ou entrega para o time humano.
+                  </p>
+                  {profile.handoff_policy === "ignore" && (
+                    <p className="text-xs text-amber-600 dark:text-amber-400">
+                      Aviso: &ldquo;ignore&rdquo; impede handoff e o bot continuará respondendo
+                      mesmo se o lead pedir humano.
+                    </p>
+                  )}
+                </div>
+                <div className="space-y-2">
+                  <Label>Texto personalizado de handoff</Label>
+                  <Textarea
+                    value={profile.handoff_custom_text ?? ""}
+                    placeholder="Ex: Vou te conectar com alguém do time agora. Só um instante."
+                    onChange={(e) =>
+                      setProfile((p) => ({ ...p, handoff_custom_text: e.target.value }))
+                    }
+                    rows={3}
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Se preenchido, substitui a mensagem padrão do handoff.
+                  </p>
+                </div>
               </CardContent>
             </Card>
 
