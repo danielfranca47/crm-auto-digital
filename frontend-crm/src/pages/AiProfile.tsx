@@ -145,7 +145,7 @@ export default function AiProfilePage() {
   const limits = entitlements?.limits ?? {};
   const maxIa = limits?.max_ia_conversas_monthly;
   const iaProductActive = entitlements?.products?.some(
-    (p) => p?.product_code === "agent_ia" && (p.status ?? "") === "active"
+    (p) => p?.product_code === "conversational_ai" && (p.status ?? "") === "active"
   );
   const iaUnavailable = !iaProductActive || maxIa === 0 || maxIa === null;
 
@@ -389,10 +389,13 @@ export default function AiProfilePage() {
           {iaUnavailable && (
             <Alert className="mt-3 border-orange-400/60 bg-orange-50/40 dark:bg-orange-950/20">
               <AlertCircle className="h-4 w-4" />
-              <AlertTitle>IA conversacional indisponível</AlertTitle>
+              <AlertTitle>Conversational AI indisponível</AlertTitle>
               <AlertDescription>
                 Seu plano atual não inclui o agente conversacional. Ainda assim, você pode
-                configurar o perfil e o conhecimento. <a className="underline" href="/assinatura">Ver planos</a>.
+                configurar o perfil e o conhecimento.{" "}
+                <a className="underline" href="/assinatura">
+                  Ver planos
+                </a>.
               </AlertDescription>
             </Alert>
           )}
