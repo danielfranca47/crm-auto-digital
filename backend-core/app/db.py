@@ -74,11 +74,23 @@ def ensure_ai_profile_columns() -> None:
 
     with engine.begin() as conn:
         if engine.dialect.name == "sqlite":
+            # ✅ NEW: don't crash on empty DB where ai_profiles doesn't exist yet
+            table_row = conn.execute(
+                text(
+                    "SELECT name FROM sqlite_master WHERE type='table' AND name='ai_profiles'"
+                )
+            ).fetchone()
+            if not table_row:
+                print("ℹ️ ai_profiles table not found; skipping ensure_ai_profile_columns()")
+                return
+
             result = conn.execute(text("PRAGMA table_info(ai_profiles)"))
             existing = {row[1] for row in result.fetchall()}
+
             for name, default in columns.items():
                 if name in existing:
                     continue
+
                 if default is None:
                     conn.execute(text(f"ALTER TABLE ai_profiles ADD COLUMN {name} TEXT"))
                 else:
@@ -88,18 +100,35 @@ def ensure_ai_profile_columns() -> None:
                             f"ALTER TABLE ai_profiles ADD COLUMN {name} TEXT DEFAULT '{safe_default}'"
                         )
                     )
+
                 print(f"✅ coluna adicionada em ai_profiles: {name}")
+
             for name, default in columns.items():
                 if default is None:
                     continue
                 conn.execute(
-                    text(
-                        f"UPDATE ai_profiles SET {name} = :default WHERE {name} IS NULL"
-                    ),
+                    text(f"UPDATE ai_profiles SET {name} = :default WHERE {name} IS NULL"),
                     {"default": default},
                 )
                 print(f"✅ backfill ai_profiles.{name} com default")
+
         else:
+            # ✅ NEW: don't crash if ai_profiles doesn't exist yet
+            exists = conn.execute(
+                text(
+                    """
+                    SELECT EXISTS (
+                        SELECT 1
+                        FROM information_schema.tables
+                        WHERE table_name = 'ai_profiles'
+                    )
+                    """
+                )
+            ).scalar()
+            if not exists:
+                print("ℹ️ ai_profiles table not found; skipping ensure_ai_profile_columns()")
+                return
+
             result = conn.execute(
                 text(
                     """
@@ -110,24 +139,24 @@ def ensure_ai_profile_columns() -> None:
                 )
             )
             existing = {row[0] for row in result.fetchall()}
+
             for name, default in columns.items():
                 if name in existing:
                     continue
+
                 if default is None:
                     conn.execute(text(f"ALTER TABLE ai_profiles ADD COLUMN {name} VARCHAR"))
                 else:
                     conn.execute(
-                        text(
-                            f"ALTER TABLE ai_profiles ADD COLUMN {name} VARCHAR DEFAULT :default"
-                        ),
+                        text(f"ALTER TABLE ai_profiles ADD COLUMN {name} VARCHAR DEFAULT :default"),
                         {"default": default},
                     )
+
             for name, default in columns.items():
                 if default is None:
                     continue
                 conn.execute(
-                    text(
-                        f"UPDATE ai_profiles SET {name} = :default WHERE {name} IS NULL"
-                    ),
+                    text(f"UPDATE ai_profiles SET {name} = :default WHERE {name} IS NULL"),
                     {"default": default},
                 )
+
