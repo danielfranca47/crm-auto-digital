@@ -105,7 +105,7 @@ def _calculate_basic_limits(db: Session, user_id: int) -> Dict[str, Optional[int
 
     user_addons = db.query(models.UserAddon).filter(models.UserAddon.user_id == user_id).all()
     for addon in user_addons:
-        if addon.addon_type == "extra_ia_conversations":
+        if addon.addon_type == "extra_conversational_ai_conversations":
             totals["max_ia_conversas_monthly"] = _add_limit(
                 totals["max_ia_conversas_monthly"], addon.quantity
             )
