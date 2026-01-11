@@ -119,7 +119,7 @@ function KnowledgeLevel({ count }: { count: number }) {
 export default function AiProfilePage() {
   const { toast } = useToast();
   const { handleError } = useApiErrorHandler();
-  const { data: usageData } = useUsage();
+  const { data: usageData, loading: usageLoading } = useUsage();
 
   const [templates, setTemplates] = useState<AiTemplate[]>([]);
   const [loadingTemplates, setLoadingTemplates] = useState(false);
@@ -144,10 +144,14 @@ export default function AiProfilePage() {
   const entitlements = usageData?.entitlements;
   const limits = entitlements?.limits ?? {};
   const maxIa = limits?.max_ia_conversas_monthly;
-  const iaProductActive = entitlements?.products?.some(
-    (p) => p?.product_code === "agent_ia" && (p.status ?? "") === "active"
+  const crmSub = entitlements?.products?.find(
+    (p) => p?.product_code === "crm" && (p.status ?? "") === "active"
   );
-  const iaUnavailable = !iaProductActive || maxIa === 0 || maxIa === null;
+  const isCrmFree = crmSub?.plan_code === "crm_free";
+  const isUnlimited = maxIa === null;
+  const isUnknown = maxIa === undefined;
+  const iaAvailable = isUnlimited || (typeof maxIa === "number" && maxIa > 0);
+  const showIaUnavailableBanner = !usageLoading && !!usageData && !isUnknown && !iaAvailable;
 
   const status = useMemo(() => summarizeProfile(profile), [profile]);
   const previewText = useMemo(() => {
@@ -386,14 +390,31 @@ export default function AiProfilePage() {
           <p className="text-muted-foreground">
             Configure o comportamento do agente e organize o conhecimento do negócio.
           </p>
-          {iaUnavailable && (
+          {showIaUnavailableBanner && (
             <Alert className="mt-3 border-orange-400/60 bg-orange-50/40 dark:bg-orange-950/20">
               <AlertCircle className="h-4 w-4" />
-              <AlertTitle>IA conversacional indisponível</AlertTitle>
-              <AlertDescription>
-                Seu plano atual não inclui o agente conversacional. Ainda assim, você pode
-                configurar o perfil e o conhecimento. <a className="underline" href="/assinatura">Ver planos</a>.
-              </AlertDescription>
+              {isCrmFree ? (
+                <>
+                  <AlertTitle>Conversational AI indisponível</AlertTitle>
+                  <AlertDescription>
+                    Seu plano atual não inclui o agente conversacional. Ainda assim, você pode
+                    configurar o perfil e o conhecimento.{" "}
+                    <a className="underline" href="/assinatura">
+                      Ver planos
+                    </a>.
+                  </AlertDescription>
+                </>
+              ) : (
+                <>
+                  <AlertTitle>Créditos de Conversational AI esgotados</AlertTitle>
+                  <AlertDescription>
+                    Seus créditos de conversas mensais foram esgotados.{" "}
+                    <a className="underline" href="/assinatura">
+                      Comprar créditos
+                    </a>.
+                  </AlertDescription>
+                </>
+              )}
             </Alert>
           )}
         </div>

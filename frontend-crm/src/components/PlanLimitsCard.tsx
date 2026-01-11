@@ -31,7 +31,7 @@ const LABELS: Record<string, string> = {
   max_copy_generation_monthly: "Copys do mês",
   max_prospec_monthly: "Prospecções do mês",
   max_pesquisa_turbo_monthly: "Pesquisas turbo do mês",
-  max_ia_conversas_monthly: "Conversas IA do mês",
+  max_ia_conversas_monthly: "Conversas Conversational AI do mês",
   require_agent_local_activation_fee: "Taxa de ativação de agente local",
   ia_memory_advanced: "Memória avançada de IA",
 };
