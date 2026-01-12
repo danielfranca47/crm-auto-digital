@@ -28,12 +28,14 @@ Principais mudanças:
 - Autorização: `X-Service-Token: <CRM_SERVICE_TOKEN>` (ou `CORE_SERVICE_TOKEN` como fallback).
 - `GET /api/jobs/{job_id}`: retorna `job` com `type`, `payload`, `status`, `result`, `created_at`.
 - `GET /api/whatsapp/execution-context?job_id=`: monta contexto completo usando `build_context_bundle_from_inbound` (AIProfile via service token, playbook, histórico de até 20 mensagens, lead) e inclui a decisão `ai_decided` mais recente (`prospection_logs.action='ai_decided'`).
-- `POST /api/whatsapp/outbound`: body `{job_id, lead_id, user_id, phone, body, provider_message_id?, in_reply_to_message_id?}`. Insere mensagem com `model="outbound"`, log `action="outbound_sent"` e registra idempotência em `outbound_events` (UNIQUE por `job_id`/`in_reply_to_message_id`) retornando `status="already_sent"` quando reprocessado.
+- `POST /api/whatsapp/outbound`: body `{job_id, lead_id, user_id, phone, body, provider_message_id?, in_reply_to_message_id?}`. Reserva envio (status `reserved`), cria mensagem `model="outbound"`, loga `action="outbound_reserved"` e registra idempotência em `outbound_events` (UNIQUE por `job_id`/`in_reply_to_message_id`). Retorna `status="reserved"`, `status="reserved_exists"` ou `status="already_sent"` (quando já confirmado).
+- `POST /api/whatsapp/outbound/{outbound_event_id}/mark-sent`: body `{provider_message_id, provider?}`. Marca o outbound como `sent` e cria log `action="outbound_sent"` (idempotente).
 
 ### ETAPA 5 – testes sugeridos
 1. `GET /api/jobs/{job_id}` com `X-Service-Token` válido → retorna job; `job_id` inexistente → 404.
 2. `GET /api/whatsapp/execution-context?job_id=` → resposta contém `lead`, `history`, `ai_profile`, `playbook`, `decision` (último `ai_decided`).
-3. `POST /api/whatsapp/outbound` (primeira vez) → `status="sent"`, cria mensagem `model=outbound` e log `outbound_sent`.
+3. `POST /api/whatsapp/outbound` (primeira vez) → `status="reserved"`, cria mensagem `model=outbound` e log `outbound_reserved`.
+4. `POST /api/whatsapp/outbound/{outbound_event_id}/mark-sent` → `status="sent"`, cria log `outbound_sent`.
 4. Repetir o mesmo `job_id` ou `in_reply_to_message_id` → `status="already_sent"` sem novo insert.
 
 ## Validação de assinatura do produto CRM

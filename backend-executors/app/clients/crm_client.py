@@ -24,11 +24,17 @@ def _headers() -> Dict[str, str]:
     return {"X-Service-Token": _require_token()}
 
 
-def _handle_response(response: httpx.Response, job_id: str, for_context: bool) -> Dict[str, Any]:
+def _handle_response(
+    response: httpx.Response,
+    job_id: str,
+    for_context: bool,
+    *,
+    not_found_message: str = "Job não encontrado",
+) -> Dict[str, Any]:
     if response.status_code in {401, 403}:
         raise CRMClientError("CRM service token inválido ou sem permissão")
     if response.status_code == 404:
-        raise CRMClientError("Job não encontrado")
+        raise CRMClientError(not_found_message)
     if response.status_code == 400 and for_context:
         raise CRMClientError("Payload do job incompleto para montar contexto")
     if response.is_success:
@@ -126,3 +132,29 @@ def log_handoff_requested(
     with httpx.Client(timeout=15.0) as client:
         response = client.post(url, headers=_headers(), json=payload)
     return _handle_response(response, str(job_id), for_context=False)
+
+
+def register_whatsapp_outbound(payload: Dict[str, Any]) -> Dict[str, Any]:
+    base_url = settings.crm_api_base.rstrip("/")
+    url = f"{base_url}/api/whatsapp/outbound"
+    with httpx.Client(timeout=15.0) as client:
+        response = client.post(url, headers=_headers(), json=payload)
+    return _handle_response(
+        response,
+        str(payload.get("job_id", "")),
+        for_context=False,
+        not_found_message="Outbound endpoint não encontrado",
+    )
+
+
+def mark_whatsapp_outbound_sent(outbound_event_id: int, payload: Dict[str, Any]) -> Dict[str, Any]:
+    base_url = settings.crm_api_base.rstrip("/")
+    url = f"{base_url}/api/whatsapp/outbound/{outbound_event_id}/mark-sent"
+    with httpx.Client(timeout=15.0) as client:
+        response = client.post(url, headers=_headers(), json=payload)
+    return _handle_response(
+        response,
+        str(outbound_event_id),
+        for_context=False,
+        not_found_message="Outbound event não encontrado",
+    )
