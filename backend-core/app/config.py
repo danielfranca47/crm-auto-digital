@@ -11,6 +11,7 @@ class Settings(BaseSettings):
     DATABASE_URL: str = "sqlite:///./core.db"
     WHATSAPP_TOKEN_ENC_KEY: Optional[str] = None
     CORE_SERVICE_TOKEN: Optional[str] = None
+    UAZAPI_BASE_URL: Optional[str] = None
 
     class Config:
         env_file = ".env"

@@ -26,6 +26,11 @@ class WhatsappConnectionCreate(WhatsappConnectionBase):
     provider: Optional[str] = "uazapi"
 
 
+class WhatsappConnectionUpdate(WhatsappConnectionBase):
+    instance_token: Optional[str] = None
+    provider: Optional[str] = "uazapi"
+
+
 class WhatsappConnectionOut(BaseModel):
     id: int
     user_id: int
@@ -112,6 +117,39 @@ async def upsert_my_whatsapp_connection(
         status=payload.status,
         provider=payload.provider or "uazapi",
     )
+    return _format_connection_response(connection)
+
+
+@router.put("/whatsapp-connections/me", response_model=WhatsappConnectionOut, status_code=status.HTTP_200_OK)
+async def update_my_whatsapp_connection(
+    payload: WhatsappConnectionUpdate,
+    current_user: models.User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    existing_other = service.get_connection_by_instance(db, payload.instance_id)
+    if existing_other and existing_other.user_id != current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Instance already linked to another user",
+        )
+
+    try:
+        connection = service.upsert_connection_optional_token(
+            db=db,
+            user_id=current_user.id,
+            instance_id=payload.instance_id,
+            instance_token=payload.instance_token,
+            phone_e164=payload.phone_e164,
+            status=payload.status,
+            provider=payload.provider or "uazapi",
+        )
+    except ValueError as exc:
+        if str(exc) == "instance_token_required":
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="instance_token_required",
+            )
+        raise
     return _format_connection_response(connection)
 
 

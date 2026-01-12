@@ -34,6 +34,7 @@ Ao iniciar, o serviço também faz seed dos produtos, planos e limites padrão d
 - `GET /ai-profiles/resolve?user_id=`: endpoint interno protegido por `X-Service-Token` que retorna o AIProfile de um usuário sem exigir bearer token.
 - `GET /whatsapp-connections/me`: retorna a conexão WhatsApp (provider/tags) do usuário autenticado, com token mascarado.
 - `POST /whatsapp-connections/me`: cria ou atualiza a conexão WhatsApp do usuário autenticado, armazenando o token criptografado.
+- `PUT /whatsapp-connections/me`: atualiza a conexão WhatsApp do usuário autenticado (token opcional), mantendo criptografia.
 - `GET /whatsapp-connections/resolve?instance_id=`: endpoint interno protegido por `X-Service-Token` para resolver dono/status da instância e expor `allow_orion` + `max_ia_conversas_monthly`.
 - `GET /whatsapp-connections/resolve-token?instance_id=`: endpoint interno protegido por `X-Service-Token` que retorna o token descriptografado da instância junto com metadados (não requer bearer token).
 
@@ -42,6 +43,7 @@ Ao iniciar, o serviço também faz seed dos produtos, planos e limites padrão d
 ## Variáveis de ambiente adicionais
 - `WHATSAPP_TOKEN_ENC_KEY`: chave Fernet (base64) usada para criptografar o `instance_token` antes de persistir.
 - `CORE_SERVICE_TOKEN`: token de serviço necessário para acessar `/whatsapp-connections/resolve`, `/whatsapp-connections/resolve-token` e `/ai-profiles/resolve`.
+- `UAZAPI_BASE_URL`: base URL global do provider Uazapi (ex.: `https://free.uazapi.com`).
 
 ## Testando o fluxo
 1. **Registrar**: `curl -X POST http://localhost:8000/auth/register -H "Content-Type: application/json" -d '{"email":"teste@example.com","password":"senha123"}'`

@@ -70,6 +70,50 @@ def upsert_connection(
     return connection
 
 
+def upsert_connection_optional_token(
+    *,
+    db: Session,
+    user_id: int,
+    instance_id: str,
+    instance_token: Optional[str] = None,
+    phone_e164: Optional[str] = None,
+    status: Optional[str] = None,
+    provider: str = "uazapi",
+) -> models.WhatsappConnection:
+    existing = get_connection_for_user(db, user_id)
+    encrypted_token = encrypt_secret(instance_token) if instance_token else None
+
+    if existing:
+        existing.instance_id = instance_id
+        if encrypted_token:
+            existing.instance_token_encrypted = encrypted_token
+        existing.phone_e164 = phone_e164
+        if status:
+            existing.status = status
+        existing.provider = provider or existing.provider
+        existing.updated_at = datetime.utcnow()
+        db.add(existing)
+        db.commit()
+        db.refresh(existing)
+        return existing
+
+    if not instance_token:
+        raise ValueError("instance_token_required")
+
+    connection = models.WhatsappConnection(
+        user_id=user_id,
+        provider=provider,
+        instance_id=instance_id,
+        phone_e164=phone_e164,
+        instance_token_encrypted=encrypted_token,
+        status=status or "active",
+    )
+    db.add(connection)
+    db.commit()
+    db.refresh(connection)
+    return connection
+
+
 def _add_limit(current: Optional[int], value: Optional[int]) -> Optional[int]:
     if current is None or value is None:
         return None
