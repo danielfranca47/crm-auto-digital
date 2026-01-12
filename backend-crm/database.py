@@ -151,8 +151,7 @@ def ensure_outbound_events_table(conn: sqlite3.Connection) -> None:
             message_id INTEGER NULL,
             status TEXT NOT NULL DEFAULT 'reserved' CHECK (status IN ('reserved','sent','failed')),
             created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-            UNIQUE(job_id),
-            UNIQUE(in_reply_to_message_id)
+            UNIQUE(job_id, in_reply_to_message_id)
         );
 
         CREATE INDEX IF NOT EXISTS idx_outbound_job ON outbound_events(job_id);

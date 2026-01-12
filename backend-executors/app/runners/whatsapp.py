@@ -101,6 +101,9 @@ def main() -> int:
         lead_phone = _safe_get(lead, "phone", "phone_e164")
         user_id = _resolve_user_id(context, job)
         in_reply_to_message_id = metadata.get("message_id")
+        if not in_reply_to_message_id:
+            raise ValueError("missing in_reply_to_message_id in execution context")
+
         instance_id = metadata.get("instance_id")
         provider = metadata.get("provider") or "uazapi"
         phone = metadata.get("phone") or lead_phone
@@ -193,8 +196,14 @@ def main() -> int:
                 int(outbound_event_id),
                 {"provider_message_id": provider_message_id, "provider": provider},
             )
-            result_payload["outbound_mark_sent_status"] = mark_sent_response.get("status")
-            result_payload["outbound_status"] = mark_sent_response.get("status")
+            
+            final_status = mark_sent_response.get("status")
+            if final_status not in {"sent", "already_sent"}:
+                raise ValueError(f"unexpected outbound final status: {final_status}")
+
+            result_payload["outbound_mark_sent_status"] = final_status
+            result_payload["outbound_status"] = final_status
+
             crm_client.complete_job(args.job_id, result=result_payload)
             return 0
 

@@ -415,6 +415,12 @@ def register_outbound(
     payload: OutboundMessage,
     _: str = Depends(_require_service_token),
 ):
+    if not payload.in_reply_to_message_id:
+        raise HTTPException(
+            status_code=400,
+            detail="in_reply_to_message_id é obrigatório para outbound WhatsApp",
+        )
+
     job = get_job(payload.job_id)
     if not job:
         raise HTTPException(status_code=404, detail="Job não encontrado")
@@ -423,10 +429,13 @@ def register_outbound(
 
     with get_connection() as conn:
         cur = conn.cursor()
+
         try:
             cur.execute(
                 """
-                INSERT INTO outbound_events (job_id, lead_id, user_id, phone, provider_message_id, in_reply_to_message_id, status)
+                INSERT INTO outbound_events (
+                    job_id, lead_id, user_id, phone, provider_message_id, in_reply_to_message_id, status
+                )
                 VALUES (?, ?, ?, ?, ?, ?, 'reserved')
                 """,
                 (
@@ -446,12 +455,19 @@ def register_outbound(
                     """
                     SELECT id, provider_message_id, in_reply_to_message_id, status, message_id
                       FROM outbound_events
-                     WHERE job_id = ? OR (in_reply_to_message_id IS NOT NULL AND in_reply_to_message_id = ?)
+                     WHERE job_id = ? AND in_reply_to_message_id = ?
                      LIMIT 1
                     """,
                     (payload.job_id, payload.in_reply_to_message_id),
                 ).fetchone()
-                if existing and existing["status"] == "sent":
+
+                if not existing:
+                    raise HTTPException(
+                        status_code=500,
+                        detail="IntegrityError sem registro existente encontrado (inconsistência de idempotência)",
+                    )
+
+                if existing["status"] == "sent":
                     return {
                         "status": "already_sent",
                         "outbound_event_id": existing["id"],
@@ -459,15 +475,17 @@ def register_outbound(
                         "in_reply_to_message_id": existing["in_reply_to_message_id"],
                         "message_id": existing["message_id"],
                     }
+
                 return {
                     "status": "reserved_exists",
-                    "outbound_event_id": existing["id"] if existing else None,
-                    "provider_message_id": existing["provider_message_id"] if existing else None,
-                    "in_reply_to_message_id": existing["in_reply_to_message_id"] if existing else None,
-                    "message_id": existing["message_id"] if existing else None,
+                    "outbound_event_id": existing["id"],
+                    "provider_message_id": existing["provider_message_id"],
+                    "in_reply_to_message_id": existing["in_reply_to_message_id"],
+                    "message_id": existing["message_id"],
                 }
             raise
 
+        # Create message and link
         cur.execute(
             """
             INSERT INTO messages (lead_id, channel, subject, body, model)
@@ -476,6 +494,7 @@ def register_outbound(
             (payload.lead_id, payload.body),
         )
         message_id = int(cur.lastrowid)
+
         cur.execute(
             """
             UPDATE outbound_events
@@ -502,6 +521,7 @@ def register_outbound(
                 payload.user_id,
             ),
         )
+
         conn.commit()
 
     return {
@@ -509,6 +529,7 @@ def register_outbound(
         "message_id": message_id,
         "outbound_event_id": outbound_event_id,
     }
+
 
 
 @router.post("/whatsapp/outbound/{outbound_event_id}/mark-sent")
