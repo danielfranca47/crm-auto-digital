@@ -148,15 +148,23 @@ def ensure_outbound_events_table(conn: sqlite3.Connection) -> None:
             phone TEXT NOT NULL,
             provider_message_id TEXT NULL,
             in_reply_to_message_id TEXT NULL,
+            message_id INTEGER NULL,
+            status TEXT NOT NULL DEFAULT 'reserved' CHECK (status IN ('reserved','sent','failed')),
             created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-            UNIQUE(job_id),
-            UNIQUE(in_reply_to_message_id)
+            UNIQUE(job_id, in_reply_to_message_id)
         );
 
         CREATE INDEX IF NOT EXISTS idx_outbound_job ON outbound_events(job_id);
         CREATE INDEX IF NOT EXISTS idx_outbound_reply ON outbound_events(in_reply_to_message_id);
         CREATE INDEX IF NOT EXISTS idx_outbound_user ON outbound_events(user_id);
         """
+    )
+    ensure_column(conn, "outbound_events", "message_id", "message_id INTEGER NULL")
+    ensure_column(
+        conn,
+        "outbound_events",
+        "status",
+        "status TEXT NOT NULL DEFAULT 'reserved' CHECK (status IN ('reserved','sent','failed'))",
     )
 
 

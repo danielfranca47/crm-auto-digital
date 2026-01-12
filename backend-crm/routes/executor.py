@@ -194,6 +194,11 @@ class HandoffRequestedLog(BaseModel):
     identity_mode: str
 
 
+class MarkOutboundSentRequest(BaseModel):
+    provider_message_id: str
+    provider: Optional[str] = None
+
+
 @router.post("/internal/jobs/{job_id}/claim")
 def claim_job_internal(
     job_id: int,
@@ -410,6 +415,12 @@ def register_outbound(
     payload: OutboundMessage,
     _: str = Depends(_require_service_token),
 ):
+    if not payload.in_reply_to_message_id:
+        raise HTTPException(
+            status_code=400,
+            detail="in_reply_to_message_id é obrigatório para outbound WhatsApp",
+        )
+
     job = get_job(payload.job_id)
     if not job:
         raise HTTPException(status_code=404, detail="Job não encontrado")
@@ -418,11 +429,14 @@ def register_outbound(
 
     with get_connection() as conn:
         cur = conn.cursor()
+
         try:
             cur.execute(
                 """
-                INSERT INTO outbound_events (job_id, lead_id, user_id, phone, provider_message_id, in_reply_to_message_id)
-                VALUES (?, ?, ?, ?, ?, ?)
+                INSERT INTO outbound_events (
+                    job_id, lead_id, user_id, phone, provider_message_id, in_reply_to_message_id, status
+                )
+                VALUES (?, ?, ?, ?, ?, ?, 'reserved')
                 """,
                 (
                     payload.job_id,
@@ -439,21 +453,39 @@ def register_outbound(
                 conn.rollback()
                 existing = cur.execute(
                     """
-                    SELECT id, provider_message_id, in_reply_to_message_id
+                    SELECT id, provider_message_id, in_reply_to_message_id, status, message_id
                       FROM outbound_events
-                     WHERE job_id = ? OR (in_reply_to_message_id IS NOT NULL AND in_reply_to_message_id = ?)
+                     WHERE job_id = ? AND in_reply_to_message_id = ?
                      LIMIT 1
                     """,
                     (payload.job_id, payload.in_reply_to_message_id),
                 ).fetchone()
+
+                if not existing:
+                    raise HTTPException(
+                        status_code=500,
+                        detail="IntegrityError sem registro existente encontrado (inconsistência de idempotência)",
+                    )
+
+                if existing["status"] == "sent":
+                    return {
+                        "status": "already_sent",
+                        "outbound_event_id": existing["id"],
+                        "provider_message_id": existing["provider_message_id"],
+                        "in_reply_to_message_id": existing["in_reply_to_message_id"],
+                        "message_id": existing["message_id"],
+                    }
+
                 return {
-                    "status": "already_sent",
-                    "outbound_event_id": existing["id"] if existing else None,
-                    "provider_message_id": existing["provider_message_id"] if existing else None,
-                    "in_reply_to_message_id": existing["in_reply_to_message_id"] if existing else None,
+                    "status": "reserved_exists",
+                    "outbound_event_id": existing["id"],
+                    "provider_message_id": existing["provider_message_id"],
+                    "in_reply_to_message_id": existing["in_reply_to_message_id"],
+                    "message_id": existing["message_id"],
                 }
             raise
 
+        # Create message and link
         cur.execute(
             """
             INSERT INTO messages (lead_id, channel, subject, body, model)
@@ -463,6 +495,15 @@ def register_outbound(
         )
         message_id = int(cur.lastrowid)
 
+        cur.execute(
+            """
+            UPDATE outbound_events
+               SET message_id = ?
+             WHERE id = ?
+            """,
+            (message_id, outbound_event_id),
+        )
+
         notes = {
             "job_id": payload.job_id,
             "provider_message_id": payload.provider_message_id,
@@ -471,7 +512,7 @@ def register_outbound(
         cur.execute(
             """
             INSERT INTO prospection_logs (lead_id, channel, message_id, action, notes, user_id)
-            VALUES (?, 'whatsapp', ?, 'outbound_sent', ?, ?)
+            VALUES (?, 'whatsapp', ?, 'outbound_reserved', ?, ?)
             """,
             (
                 payload.lead_id,
@@ -480,6 +521,88 @@ def register_outbound(
                 payload.user_id,
             ),
         )
+
         conn.commit()
 
-    return {"status": "sent", "message_id": message_id, "outbound_event_id": outbound_event_id}
+    return {
+        "status": "reserved",
+        "message_id": message_id,
+        "outbound_event_id": outbound_event_id,
+    }
+
+
+
+@router.post("/whatsapp/outbound/{outbound_event_id}/mark-sent")
+def mark_outbound_sent(
+    outbound_event_id: int,
+    payload: MarkOutboundSentRequest,
+    _: str = Depends(_require_service_token),
+):
+    with get_connection() as conn:
+        cur = conn.cursor()
+        cur.execute("BEGIN IMMEDIATE")
+        row = cur.execute(
+            "SELECT * FROM outbound_events WHERE id = ?",
+            (outbound_event_id,),
+        ).fetchone()
+        if not row:
+            conn.rollback()
+            raise HTTPException(status_code=404, detail="Outbound event não encontrado")
+
+        if row["status"] == "sent":
+            conn.rollback()
+            return {
+                "status": "already_sent",
+                "outbound_event_id": outbound_event_id,
+                "provider_message_id": row["provider_message_id"],
+            }
+
+        cur.execute(
+            """
+            UPDATE outbound_events
+               SET status = 'sent',
+                   provider_message_id = COALESCE(?, provider_message_id)
+             WHERE id = ?
+            """,
+            (payload.provider_message_id, outbound_event_id),
+        )
+
+        message_id = row["message_id"]
+        existing_log = None
+        if message_id:
+            existing_log = cur.execute(
+                """
+                SELECT id FROM prospection_logs
+                 WHERE lead_id = ? AND action = 'outbound_sent' AND message_id = ?
+                 LIMIT 1
+                """,
+                (row["lead_id"], message_id),
+            ).fetchone()
+
+        if not existing_log:
+            notes = {
+                "job_id": row["job_id"],
+                "provider_message_id": payload.provider_message_id,
+                "in_reply_to_message_id": row["in_reply_to_message_id"],
+                "provider": payload.provider,
+            }
+            cur.execute(
+                """
+                INSERT INTO prospection_logs (lead_id, channel, message_id, action, notes, user_id)
+                VALUES (?, 'whatsapp', ?, 'outbound_sent', ?, ?)
+                """,
+                (
+                    row["lead_id"],
+                    message_id,
+                    json.dumps(notes, ensure_ascii=False),
+                    row["user_id"],
+                ),
+            )
+
+        conn.commit()
+
+    return {
+        "status": "sent",
+        "outbound_event_id": outbound_event_id,
+        "provider_message_id": payload.provider_message_id,
+    }
