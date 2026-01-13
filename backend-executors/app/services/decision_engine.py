@@ -82,11 +82,12 @@ def _build_prompt(context: Dict[str, Any], message_text: str) -> str:
     return (
         "Você é um motor de decisão para um CRM. Retorne SOMENTE JSON válido com o formato:\n"
         '{ "next_action":"reply|ask_qualification|handoff|ignore",'
-        ' "message_text":"string ou vazio", "questions":["..."], "reason":"curto" }\n'
+        ' "message_text":"string (obrigatório para reply/ask_qualification)", "questions":["..."], "reason":"curto" }\n'
         "Regras:\n"
         "- next_action é obrigatório\n"
         "- questions só faz sentido se next_action == ask_qualification\n"
-        "- message_text pode ser vazio em handoff ou ignore\n"
+        "- message_text é obrigatório quando next_action == ask_qualification e deve conter a(s) pergunta(s) já formatada(s) para envio no WhatsApp\n"
+        "- message_text pode ser vazio apenas em handoff ou ignore\n"
         "- reason deve ser curta\n"
         "Contexto:\n"
         f"- lead: {json.dumps(lead_summary, ensure_ascii=False)}\n"
