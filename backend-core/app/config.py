@@ -1,8 +1,7 @@
 from pathlib import Path
 from typing import Optional
 
-from pydantic import BaseSettings
-
+from pydantic import BaseSettings, Field
 
 class Settings(BaseSettings):
     SECRET_KEY: str = "changeme"
@@ -11,7 +10,7 @@ class Settings(BaseSettings):
     DATABASE_URL: str = "sqlite:///./core.db"
     WHATSAPP_TOKEN_ENC_KEY: Optional[str] = None
     CORE_SERVICE_TOKEN: Optional[str] = None
-    core_whatsapp_stub: bool = False
+    core_whatsapp_stub: bool = Field(False, env="CORE_WHATSAPP_STUB")
     UAZAPI_BASE_URL: Optional[str] = None
 
     class Config:
