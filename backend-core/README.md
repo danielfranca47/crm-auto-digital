@@ -43,7 +43,37 @@ Ao iniciar, o serviço também faz seed dos produtos, planos e limites padrão d
 ## Variáveis de ambiente adicionais
 - `WHATSAPP_TOKEN_ENC_KEY`: chave Fernet (base64) usada para criptografar o `instance_token` antes de persistir.
 - `CORE_SERVICE_TOKEN`: token de serviço necessário para acessar `/whatsapp-connections/resolve`, `/whatsapp-connections/resolve-token` e `/ai-profiles/resolve`.
+- `CORE_WHATSAPP_STUB`: ativa o modo stub do endpoint `/whatsapp/send` (use apenas em dev/test).
 - `UAZAPI_BASE_URL`: base URL global do provider Uazapi (ex.: `https://free.uazapi.com`).
+
+## Modo stub do WhatsApp send (dev/test)
+Para rodar testes end-to-end sem chamar o provider real, ative:
+
+```bash
+CORE_WHATSAPP_STUB=true
+```
+
+Quando ativo, o endpoint `POST /whatsapp/send` retorna 200 sem chamar a Uazapi.
+Exemplo de resposta:
+
+```json
+{
+  "provider": "uazapi",
+  "provider_message_id": "stub-2024-01-01T12:00:00+00:00-abc123",
+  "raw": {
+    "stub": true,
+    "status": "ok",
+    "echo": {
+      "provider": "uazapi",
+      "instance_id": "inst_123",
+      "number": "5511999999999",
+      "text": "Olá!"
+    }
+  }
+}
+```
+
+> Aviso: use apenas em ambientes de desenvolvimento/teste.
 
 ## Testando o fluxo
 1. **Registrar**: `curl -X POST http://localhost:8000/auth/register -H "Content-Type: application/json" -d '{"email":"teste@example.com","password":"senha123"}'`

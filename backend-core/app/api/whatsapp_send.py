@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import logging
 import re
+import secrets
+from datetime import datetime, timezone
 from typing import Any, Dict, Optional
 
 from fastapi import APIRouter, Depends, Header, HTTPException, status
@@ -51,13 +53,19 @@ def _mask_number(value: str) -> str:
     return f"***{suffix}"
 
 
+def _build_stub_message_id() -> str:
+    timestamp = datetime.now(timezone.utc).isoformat()
+    token = secrets.token_hex(3)
+    return f"stub-{timestamp}-{token}"
+
+
 @router.post("/whatsapp/send", response_model=WhatsAppSendResponse)
 async def send_whatsapp(
     payload: WhatsAppSendRequest,
     db: Session = Depends(get_db),
     _: str = Depends(_require_service_token),
 ):
-    provider = (payload.provider or "").lower()
+    provider = (payload.provider or "uazapi").lower()
     if provider != "uazapi":
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="provider_not_supported")
 
@@ -66,6 +74,19 @@ async def send_whatsapp(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Connection not found")
     if connection.status != "active":
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Connection inactive")
+
+    if settings.core_whatsapp_stub:
+        logger.info(
+            "whatsapp stub enabled provider=%s instance_id=%s number=%s",
+            provider,
+            payload.instance_id,
+            _mask_number(_sanitize_number(payload.number)),
+        )
+        return WhatsAppSendResponse(
+            provider=provider,
+            provider_message_id=_build_stub_message_id(),
+            raw={"stub": True, "status": "ok", "echo": payload.dict()},
+        )
 
     try:
         token_plain = decrypt_secret(connection.instance_token_encrypted)
