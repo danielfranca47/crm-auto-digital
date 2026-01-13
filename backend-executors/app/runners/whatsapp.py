@@ -62,6 +62,13 @@ def _build_outbound_body(decision: decision_engine.DecisionOutput) -> Optional[s
     return None
 
 
+def _format_questions(questions: List[str]) -> str:
+    normalized = [str(item).strip() for item in questions if str(item).strip()]
+    if not normalized:
+        return ""
+    return "\n".join(normalized)
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="WhatsApp executor runner (stub)")
     parser.add_argument("--job-id", dest="job_id", help="Job ID to execute")
@@ -141,6 +148,10 @@ def main() -> int:
             decision.reason,
         )
         outbound_body = _build_outbound_body(decision)
+        if decision.next_action == "ask_qualification" and not outbound_body:
+            fallback_text = _format_questions(decision.questions or [])
+            if fallback_text:
+                outbound_body = fallback_text
         result_payload: Dict[str, Any] = {
             "context_fetched": True,
             "decision": decision.model_dump(),
