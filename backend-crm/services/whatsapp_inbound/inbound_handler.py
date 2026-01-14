@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import os
 import sqlite3
 from datetime import datetime
 from typing import Any, Dict, Optional
@@ -28,6 +29,33 @@ from services.whatsapp_inbound.phone import normalize_phone
 
 
 logger = logging.getLogger(__name__)
+
+
+def _env_flag(value: Optional[str]) -> bool:
+    return str(value or "").strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _resolve_stub_user_id(phone_norm: str) -> int:
+    stub_user = os.getenv("CRM_STUB_USER_ID")
+    if stub_user:
+        try:
+            return int(stub_user)
+        except ValueError as exc:
+            raise HTTPException(status_code=500, detail="CRM_STUB_USER_ID inválido") from exc
+
+    with get_connection() as conn:
+        cur = conn.cursor()
+        row = cur.execute(
+            "SELECT user_id FROM leads WHERE phone = ? LIMIT 1",
+            (phone_norm,),
+        ).fetchone()
+    if row and row["user_id"] is not None:
+        return int(row["user_id"])
+
+    raise HTTPException(
+        status_code=400,
+        detail="CRM_STUB_USER_ID não configurado e nenhum lead encontrado para o telefone",
+    )
 
 
 class InboundWebhookPayload(BaseModel):
@@ -176,16 +204,30 @@ def handle_inbound(payload: Dict[str, Any]) -> Dict[str, Any]:
     if not phone_norm:
         raise HTTPException(status_code=400, detail="Telefone inválido")
 
-    connection = fetch_core_whatsapp_connection_resolve(parsed.instance_id)
-    status = (connection.get("connection_status") or "").lower()
-    if status and status != "active":
-        raise HTTPException(status_code=403, detail="Conexão inativa")
+    stub_enabled = _env_flag(os.getenv("CRM_WHATSAPP_STUB"))
+    logger.info("whatsapp inbound stub=%s", stub_enabled)
 
-    if connection.get("allow_orion") is False:
-        raise HTTPException(status_code=403, detail="Plano não habilitado para Orion")
+    if stub_enabled:
+        user_id = _resolve_stub_user_id(phone_norm)
+        provider = parsed.provider or "uazapi"
+        connection = {
+            "user_id": user_id,
+            "provider": provider,
+            "connection_status": "active",
+            "allow_orion": True,
+            "max_ia_conversas_monthly": None,
+        }
+    else:
+        connection = fetch_core_whatsapp_connection_resolve(parsed.instance_id)
+        status = (connection.get("connection_status") or "").lower()
+        if status and status != "active":
+            raise HTTPException(status_code=403, detail="Conexão inativa")
 
-    provider = connection.get("provider") or parsed.provider or "uazapi"
-    user_id = int(connection["user_id"])
+        if connection.get("allow_orion") is False:
+            raise HTTPException(status_code=403, detail="Plano não habilitado para Orion")
+
+        provider = connection.get("provider") or parsed.provider or "uazapi"
+        user_id = int(connection["user_id"])
 
     received_at = parsed.timestamp or datetime.utcnow().isoformat()
     received_iso = str(received_at).replace(" ", "T")
