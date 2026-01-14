@@ -11,7 +11,7 @@ class Settings(BaseSettings):
     DATABASE_URL: str = "sqlite:///./core.db"
     WHATSAPP_TOKEN_ENC_KEY: Optional[str] = None
     CORE_SERVICE_TOKEN: Optional[str] = None
-    core_whatsapp_stub: bool = Field(default=False, env="CORE_WHATSAPP_STUB")
+    core_whatsapp_stub: bool = Field(False, env="CORE_WHATSAPP_STUB")
     UAZAPI_BASE_URL: Optional[str] = None
 
     class Config:
