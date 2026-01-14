@@ -17,6 +17,33 @@ Principais mudanças:
 - Efeitos: cria/acha lead por telefone (E.164 iniciando com `+`), registra mensagem (model=`inbound`) e cria job `whatsapp.inbound.n8n`.
 - Convenção de mensagens: inbound salva `model="inbound"`; mensagens enviadas pelo CRM/automação devem usar `model="outbound"`. O orquestrador considera histórico outbound apenas quando `model` é exatamente `"outbound"`.
 
+### Modo stub (playground, sem Core/instância real)
+Para testes locais sem instância válida no Core:
+
+- `CRM_WHATSAPP_STUB=true` para aceitar `instance_id` arbitrário e pular o resolve do Core.
+- `CRM_STUB_USER_ID=1` (opcional) para forçar o `user_id` usado ao criar/associar lead.
+  - Se `CRM_STUB_USER_ID` não estiver configurado, o CRM tenta reutilizar o `user_id` de um lead existente com o mesmo telefone.
+
+#### Como testar em 30 segundos (Swagger + executor)
+1. Configure as env vars no CRM:
+   - `CRM_WEBHOOK_SECRET=seu_segredo`
+   - `CRM_WHATSAPP_STUB=true`
+   - `CRM_STUB_USER_ID=1` (recomendado para evitar erro se não houver lead)
+2. No Swagger do CRM, chame `POST /webhooks/whatsapp/inbound` com header `X-Webhook-Secret` e o payload abaixo.
+3. Rode o executor com `python -m app.runners.whatsapp --job-id <job_id>`.
+
+Payload mínimo (Swagger):
+```json
+{
+  "instance_id": "stub-instance",
+  "from": "+5511999999999",
+  "message_text": "Olá, quero saber mais",
+  "message_id": "msg-stub-001",
+  "timestamp": "2026-01-13T12:00:00Z",
+  "provider": "uazapi"
+}
+```
+
 ### ETAPA 4 – testes rápidos
 1. **Accepted gera decisão**: envie um webhook válido; espere `inbound_received` + `ai_decided` no `prospection_logs` para o `lead_id` retornado.
 2. **Idempotência**: repita o mesmo `message_id` → resposta `duplicate` e **nenhum** novo `ai_decided` deve aparecer.
