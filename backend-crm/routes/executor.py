@@ -6,7 +6,7 @@ import sqlite3
 from datetime import datetime
 from typing import Any, Dict, Optional
 
-from fastapi import APIRouter, Depends, Header, HTTPException, Query
+from fastapi import APIRouter, Depends, Header, HTTPException, Query, Response
 from pydantic import BaseModel, Field
 
 from database import get_connection
@@ -15,11 +15,15 @@ from services.ai_orchestrator import (
     build_context_bundle_from_inbound,
 )
 from services.jobs_service import (
+    JOB_BACKOFF_SECONDS,
     JOB_STATUS_COMPLETED,
     JOB_STATUS_FAILED,
     JOB_STATUS_IN_PROGRESS,
     JOB_STATUS_PENDING,
+    JOB_MAX_ATTEMPTS,
+    expand_type_variants,
     get_job,
+    normalize_job_type,
 )
 
 router = APIRouter(prefix="/api", tags=["WhatsApp Executor"])
@@ -79,11 +83,82 @@ def _parse_db_datetime(value: Optional[Any]) -> Optional[datetime]:
         return None
 
 
+def _compute_backoff_seconds(attempts: int) -> int:
+    return JOB_BACKOFF_SECONDS.get(attempts, 0)
+
+
+def _is_retryable(details: Optional[Dict[str, Any]]) -> bool:
+    if not details:
+        return False
+    if "retryable" in details:
+        return bool(details.get("retryable"))
+    http_status = details.get("http_status")
+    if isinstance(http_status, int):
+        if http_status == 429:
+            return True
+        if 500 <= http_status <= 599:
+            return True
+    error_type = details.get("error_type")
+    if isinstance(error_type, str) and error_type in {"timeout", "network"}:
+        return True
+    return False
+
+
 @router.get("/jobs/{job_id}")
 def get_job_by_id(job_id: int, _: str = Depends(_require_service_token)):
     job = get_job(job_id)
     if not job:
         raise HTTPException(status_code=404, detail="Job não encontrado")
+    return {"job": job}
+
+
+@router.get("/internal/jobs/next")
+def get_next_job_internal(
+    types: Optional[str] = Query(None, description="Comma-separated job types"),
+    limit: int = Query(1, ge=1, le=10),
+    _: str = Depends(_require_service_token),
+):
+    requested_types = []
+    if types:
+        for raw in types.split(","):
+            cleaned = raw.strip()
+            if cleaned:
+                requested_types.append(normalize_job_type(cleaned))
+    if not requested_types:
+        raise HTTPException(status_code=400, detail="types é obrigatório")
+
+    expanded_types: list[str] = []
+    for job_type in requested_types:
+        expanded_types.extend(expand_type_variants(job_type))
+    if not expanded_types:
+        raise HTTPException(status_code=400, detail="types inválido")
+
+    placeholders = ",".join(["?"] * len(expanded_types))
+    params: list[Any] = [
+        JOB_STATUS_PENDING,
+        *expanded_types,
+        JOB_MAX_ATTEMPTS,
+        limit,
+    ]
+    with get_connection() as conn:
+        cur = conn.cursor()
+        row = cur.execute(
+            f"""
+            SELECT * FROM jobs
+             WHERE status=?
+               AND type IN ({placeholders})
+               AND COALESCE(scheduled_at, CURRENT_TIMESTAMP) <= CURRENT_TIMESTAMP
+               AND attempts < ?
+             ORDER BY priority DESC, scheduled_at ASC, created_at ASC, id ASC
+             LIMIT ?
+            """,
+            params,
+        ).fetchone()
+    if not row:
+        return Response(status_code=204)
+    job = dict(row)
+    job["payload"] = _json_loads(job.get("payload"))
+    job["result"] = _json_loads(job.get("result"))
     return {"job": job}
 
 
@@ -199,12 +274,35 @@ class MarkOutboundSentRequest(BaseModel):
     provider: Optional[str] = None
 
 
+class AttachProviderRequest(BaseModel):
+    provider_message_id: str
+    provider: Optional[str] = None
+
+
+@router.get("/internal/outbound-events/{outbound_event_id}")
+def get_outbound_event_internal(
+    outbound_event_id: int,
+    _: str = Depends(_require_service_token),
+):
+    with get_connection() as conn:
+        cur = conn.cursor()
+        row = cur.execute(
+            "SELECT * FROM outbound_events WHERE id = ?",
+            (outbound_event_id,),
+        ).fetchone()
+    if not row:
+        raise HTTPException(status_code=404, detail="Outbound event não encontrado")
+    event = dict(row)
+    return {"outbound_event": event}
+
+
 @router.post("/internal/jobs/{job_id}/claim")
 def claim_job_internal(
     job_id: int,
     payload: ClaimJobRequest,
     _: str = Depends(_require_service_token),
 ):
+    final_status = JOB_STATUS_FAILED
     with get_connection() as conn:
         cur = conn.cursor()
         cur.execute("BEGIN IMMEDIATE")
@@ -317,11 +415,13 @@ def fail_job_internal(
     payload: FailJobRequest,
     _: str = Depends(_require_service_token),
 ):
+    details = payload.details or {}
     if payload.details is not None:
         error_txt = _json_dumps({"error": payload.error, "details": payload.details})
     else:
         error_txt = str(payload.error)
 
+    final_status = JOB_STATUS_FAILED
     with get_connection() as conn:
         cur = conn.cursor()
         cur.execute("BEGIN IMMEDIATE")
@@ -333,26 +433,52 @@ def fail_job_internal(
             conn.rollback()
             raise HTTPException(status_code=409, detail="Job já finalizado")
 
-        cur.execute(
+        attempts = int(row["attempts"] or 0)
+        retryable = _is_retryable(details)
+        update_stmt = None
+        update_params: list[Any] = []
+        if retryable and attempts < JOB_MAX_ATTEMPTS:
+            final_status = JOB_STATUS_PENDING
+            backoff_seconds = _compute_backoff_seconds(attempts)
+            schedule_expr = "CURRENT_TIMESTAMP"
+            schedule_params: list[Any] = []
+            if backoff_seconds > 0:
+                schedule_expr = "datetime('now', ?)"
+                schedule_params.append(f"+{backoff_seconds} seconds")
+            update_stmt = f"""
+                UPDATE jobs
+                   SET status=?,
+                       error=?,
+                       result=NULL,
+                       started_at=NULL,
+                       assigned_agent_id=NULL,
+                       scheduled_at={schedule_expr},
+                       completed_at=NULL,
+                       updated_at=CURRENT_TIMESTAMP
+                 WHERE id=?
             """
-            UPDATE jobs
-               SET status=?,
-                   completed_at=CURRENT_TIMESTAMP,
-                   error=?,
-                   result=NULL,
-                   started_at=NULL,
-                   updated_at=CURRENT_TIMESTAMP
-             WHERE id=?
-            """,
-            (JOB_STATUS_FAILED, error_txt, job_id),
-        )
+            update_params = [JOB_STATUS_PENDING, error_txt, *schedule_params, job_id]
+        else:
+            update_stmt = """
+                UPDATE jobs
+                   SET status=?,
+                       completed_at=CURRENT_TIMESTAMP,
+                       error=?,
+                       result=NULL,
+                       started_at=NULL,
+                       assigned_agent_id=NULL,
+                       updated_at=CURRENT_TIMESTAMP
+                 WHERE id=?
+            """
+            update_params = [JOB_STATUS_FAILED, error_txt, job_id]
+        cur.execute(update_stmt, update_params)
         refreshed = cur.execute("SELECT * FROM jobs WHERE id=?", (job_id,)).fetchone()
         conn.commit()
 
     job = dict(refreshed)
     job["payload"] = _json_loads(job.get("payload"))
     job["result"] = _json_loads(job.get("result"))
-    return {"job": job, "normalized": _normalize_job(job, status_override=JOB_STATUS_FAILED)}
+    return {"job": job, "normalized": _normalize_job(job, status_override=final_status)}
 
 
 @router.post("/internal/leads/{lead_id}/bot-disabled")
@@ -474,6 +600,7 @@ def register_outbound(
                         "provider_message_id": existing["provider_message_id"],
                         "in_reply_to_message_id": existing["in_reply_to_message_id"],
                         "message_id": existing["message_id"],
+                        "outbound_event_status": existing["status"],
                     }
 
                 return {
@@ -482,6 +609,7 @@ def register_outbound(
                     "provider_message_id": existing["provider_message_id"],
                     "in_reply_to_message_id": existing["in_reply_to_message_id"],
                     "message_id": existing["message_id"],
+                    "outbound_event_status": existing["status"],
                 }
             raise
 
@@ -605,4 +733,83 @@ def mark_outbound_sent(
         "status": "sent",
         "outbound_event_id": outbound_event_id,
         "provider_message_id": payload.provider_message_id,
+    }
+
+
+@router.post("/whatsapp/outbound/{outbound_event_id}/attach-provider")
+def attach_outbound_provider(
+    outbound_event_id: int,
+    payload: AttachProviderRequest,
+    _: str = Depends(_require_service_token),
+):
+    if not payload.provider_message_id:
+        raise HTTPException(status_code=400, detail="provider_message_id é obrigatório")
+
+    with get_connection() as conn:
+        cur = conn.cursor()
+        cur.execute("BEGIN IMMEDIATE")
+        row = cur.execute(
+            "SELECT id, provider_message_id, status FROM outbound_events WHERE id = ?",
+            (outbound_event_id,),
+        ).fetchone()
+        if not row:
+            conn.rollback()
+            raise HTTPException(status_code=404, detail="Outbound event não encontrado")
+
+        existing = row["provider_message_id"]
+        if existing:
+            if existing != payload.provider_message_id:
+                conn.rollback()
+                raise HTTPException(
+                    status_code=409,
+                    detail="provider_message_id já definido com valor diferente",
+                )
+            conn.rollback()
+            return {
+                "status": "ok",
+                "outbound_event_id": outbound_event_id,
+                "provider_message_id": existing,
+                "outbound_event_status": row["status"],
+            }
+
+        if row["status"] == "sent":
+            if not existing:
+                cur.execute(
+                    """
+                    UPDATE outbound_events
+                       SET provider_message_id = ?
+                     WHERE id = ?
+                    """,
+                    (payload.provider_message_id, outbound_event_id),
+                )
+                conn.commit()
+                return {
+                    "status": "ok",
+                    "outbound_event_id": outbound_event_id,
+                    "provider_message_id": payload.provider_message_id,
+                    "outbound_event_status": row["status"],
+                }
+            conn.rollback()
+            return {
+                "status": "ok",
+                "outbound_event_id": outbound_event_id,
+                "provider_message_id": existing,
+                "outbound_event_status": row["status"],
+            }
+
+        cur.execute(
+            """
+            UPDATE outbound_events
+               SET provider_message_id = ?
+             WHERE id = ?
+            """,
+            (payload.provider_message_id, outbound_event_id),
+        )
+        conn.commit()
+
+    return {
+        "status": "ok",
+        "outbound_event_id": outbound_event_id,
+        "provider_message_id": payload.provider_message_id,
+        "outbound_event_status": row["status"],
     }
