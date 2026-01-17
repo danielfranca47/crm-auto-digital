@@ -45,6 +45,85 @@ Se `--job-id` não for informado, o comando falha com uma mensagem amigável.
 
 > Para usar o runner contra o CRM, defina `CRM_SERVICE_TOKEN` no `.env` (ou variáveis de ambiente) para autenticar os endpoints internos.
 
+## Worker de polling (5B.5.6)
+
+Para rodar o worker contínuo (polling) que consome jobs WhatsApp automaticamente:
+
+```bash
+python -m app.workers.whatsapp_worker
+```
+
+### Variáveis de ambiente úteis
+
+- `WHATSAPP_WORKER_TYPES` (default: `whatsapp.inbound.n8n`)
+  - Lista separada por vírgula de tipos de job.
+- `WHATSAPP_WORKER_MAX_JOBS` (opcional)
+  - Finaliza após processar N jobs (útil para testes).
+- `WHATSAPP_WORKER_MAX_RUNTIME_SECONDS` (opcional)
+  - Finaliza após N segundos (útil para testes/caos).
+
+### Observabilidade (logs)
+
+Os logs incluem contexto mínimo por job: `job_id`, `lead_id`, `user_id`, `instance_id`, `provider`, `attempt`, `phase`.
+Eventos principais: `job_found`, `job_claimed`, `decision_made`, `outbound_reserved`, `core_send_success`,
+`mark_sent_success`, `job_retry_scheduled`, `job_failed_final`, `job_completed`.
+
+### Simulação de falhas (exemplos)
+
+- **Core fora do ar**: aponte `CORE_API_BASE` para uma porta inválida.
+- **Token inválido**: defina `CORE_SERVICE_TOKEN` ou `CRM_SERVICE_TOKEN` incorreto.
+- **Limitar execução**: use `WHATSAPP_WORKER_MAX_JOBS=1` para rodar só um job.
+
+### Runner de validação (test_5b56_chaos.py)
+
+O script `backend-executors/scripts/test_5b56_chaos.py` executa cenários de validação
+com logs ao vivo do worker e resumo final em checklist.
+
+Exemplos:
+
+```bash
+# Core indisponível (retry + backoff + failed)
+CHAOS_SCENARIO=core_down MAX_RUNTIME_SECONDS=600 MAX_ATTEMPTS_WAIT=3 \
+CRM_WEBHOOK_SECRET=... CRM_SERVICE_TOKEN=... CORE_SERVICE_TOKEN=... \
+python backend-executors/scripts/test_5b56_chaos.py
+```
+
+```bash
+# Token inválido no Core (falha definitiva)
+CHAOS_SCENARIO=core_token_invalid CRM_WEBHOOK_SECRET=... CRM_SERVICE_TOKEN=... \
+CORE_SERVICE_TOKEN=invalid python backend-executors/scripts/test_5b56_chaos.py
+```
+
+```bash
+# Token inválido no CRM
+CHAOS_SCENARIO=crm_token_invalid CRM_WEBHOOK_SECRET=... CRM_SERVICE_TOKEN=invalid \
+python backend-executors/scripts/test_5b56_chaos.py
+```
+
+```bash
+# Cenário crítico: mark-sent falha e depois recupera (sem reenvio ao Core)
+CHAOS_SCENARIO=mark_sent_fail_then_recover MAX_RUNTIME_SECONDS=900 \
+CRM_WEBHOOK_SECRET=... CRM_SERVICE_TOKEN=... CORE_SERVICE_TOKEN=... \
+python backend-executors/scripts/test_5b56_chaos.py
+```
+
+### Validação manual via curl.exe (Windows)
+
+Após criar um job, você pode inspecionar o estado com:
+
+```powershell
+curl.exe -H "X-Service-Token: $env:CRM_SERVICE_TOKEN" `
+  http://localhost:8000/api/jobs/<JOB_ID>
+```
+
+Campos esperados:
+- `status`: `pending` (requeue) ou `failed` (após max attempts)
+- `attempts`: incrementa a cada claim
+- `scheduled_at`: futuro em requeue (backoff 60s/180s)
+- `started_at`: deve ficar `null` após requeue/fail
+- `completed_at`: preenchido quando `status=failed`
+- `error`: contém detalhes (`phase`, `service`, `http_status`, `retryable`)
+
 ## Variáveis de ambiente LLM
 
 Para a decisão via IA, o executor usa:
