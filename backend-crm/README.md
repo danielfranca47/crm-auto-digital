@@ -44,6 +44,57 @@ Payload mínimo (Swagger):
 }
 ```
 
+## Webhook Uazapi (adapter)
+
+- Endpoint: `POST /webhooks/whatsapp/uazapi`
+- Segurança: header `X-Webhook-Secret` deve casar com `CRM_WEBHOOK_SECRET`.
+- Alternativa (Uazapi sem headers customizados): use `?secret=<CRM_WEBHOOK_SECRET>` na querystring.
+- Função: recebe o envelope UazapiGO v2 (`event`, `instance`, `data`) ou o formato alternativo com `EventType`, `instanceName` e `message`, adaptando para o `handle_inbound`.
+- Filtros: ignora eventos que não sejam `messages`, mensagens enviadas pelo próprio bot (`fromMe=true`) e mensagens sem texto.
+
+Exemplo de envelope:
+```json
+{
+  "event": "messages",
+  "instance": "i91011ijkL",
+  "data": {
+    "id": "ABCD123",
+    "messageId": "ABCD123",
+    "sender": "5511999999999@c.us",
+    "text": "Olá",
+    "fromMe": false,
+    "isGroup": false,
+    "messageTimestamp": 1716239123456
+  }
+}
+```
+
+Exemplo alternativo (EventType/message):
+```json
+{
+  "EventType": "messages",
+  "instanceName": "daniel-3",
+  "message": {
+    "messageid": "AC51727046BA57754D3D8169C4F64400",
+    "sender_pn": "554792163692@s.whatsapp.net",
+    "text": "Olá",
+    "fromMe": false,
+    "type": "text"
+  }
+}
+```
+
+Exemplo de URL com querystring:
+```
+https://crm.exemplo.com/webhooks/whatsapp/uazapi?secret=SEU_SEGREDO
+```
+
+Mapeamento aplicado:
+- `instance_id` ← `payload.instance`
+- `from` ← `payload.data.sender`
+- `message_text` ← `payload.data.text` (somente quando `messageType == "text"` ou ausente)
+- `message_id` ← `payload.data.messageId` (fallback `payload.data.id`)
+
 ### ETAPA 4 – testes rápidos
 1. **Accepted gera decisão**: envie um webhook válido; espere `inbound_received` + `ai_decided` no `prospection_logs` para o `lead_id` retornado.
 2. **Idempotência**: repita o mesmo `message_id` → resposta `duplicate` e **nenhum** novo `ai_decided` deve aparecer.

@@ -37,6 +37,10 @@ Ao iniciar, o serviço também faz seed dos produtos, planos e limites padrão d
 - `PUT /whatsapp-connections/me`: atualiza a conexão WhatsApp do usuário autenticado (token opcional), mantendo criptografia.
 - `GET /whatsapp-connections/resolve?instance_id=`: endpoint interno protegido por `X-Service-Token` para resolver dono/status da instância e expor `allow_orion` + `max_ia_conversas_monthly`.
 - `GET /whatsapp-connections/resolve-token?instance_id=`: endpoint interno protegido por `X-Service-Token` que retorna o token descriptografado da instância junto com metadados (não requer bearer token).
+- `POST /whatsapp-instances/init`: endpoint interno protegido por `X-Service-Token` para inicializar instâncias Uazapi via `admintoken`.
+- `POST /whatsapp-instances/connect`: endpoint interno protegido por `X-Service-Token` para iniciar conexão e obter QR/paircode via Uazapi (usa token da instância armazenado).
+- `GET /whatsapp-instances/status?instance_id=`: endpoint interno protegido por `X-Service-Token` para consultar status na Uazapi (usa token da instância armazenado).
+- `POST /whatsapp-instances/webhook`: endpoint interno protegido por `X-Service-Token` para configurar webhooks globais ou por instância na Uazapi.
 
 > `allow_orion` é calculado apenas com base em `max_ia_conversas_monthly`: se for `None` (ilimitado) ou maior que zero, o uso do produto Orion é permitido, mesmo que `max_whatsapp_send_daily` seja zero.
 
@@ -45,6 +49,7 @@ Ao iniciar, o serviço também faz seed dos produtos, planos e limites padrão d
 - `CORE_SERVICE_TOKEN`: token de serviço necessário para acessar `/whatsapp-connections/resolve`, `/whatsapp-connections/resolve-token` e `/ai-profiles/resolve`.
 - `CORE_WHATSAPP_STUB`: ativa o modo stub do endpoint `/whatsapp/send` (use apenas em dev/test).
 - `UAZAPI_BASE_URL`: base URL global do provider Uazapi (ex.: `https://free.uazapi.com`).
+- `UAZAPI_ADMIN_TOKEN`: token de administração Uazapi usado nos endpoints administrativos.
 
 ## Modo stub do WhatsApp send (dev/test)
 Para rodar testes end-to-end sem chamar o provider real, ative:
@@ -74,6 +79,78 @@ Exemplo de resposta:
 ```
 
 > Aviso: use apenas em ambientes de desenvolvimento/teste.
+
+## Endpoints internos Uazapi (admin)
+
+Todos os endpoints abaixo exigem `X-Service-Token: <CORE_SERVICE_TOKEN>`.
+
+### `POST /whatsapp-instances/init`
+
+Headers adicionais usados pelo Core ao chamar a Uazapi: `admintoken: <UAZAPI_ADMIN_TOKEN>`.
+
+Body mínimo:
+
+```json
+{
+  "user_id": 123,
+  "instance_id": "minha-instancia"
+}
+```
+
+O `instance_id` é normalizado para slug (sem espaços). O Core envia `{"name": "<instance_id>"}` para a Uazapi. Campos extras no body são repassados (ex.: `systemName`, `fingerprintProfile`).
+
+### `POST /whatsapp-instances/connect`
+
+Headers adicionais usados pelo Core ao chamar a Uazapi: `token: <INSTANCE_TOKEN>`.
+
+Body mínimo:
+
+```json
+{
+  "user_id": 123,
+  "instance_id": "minha-instancia"
+}
+```
+
+Resposta da Uazapi pode conter `qrcode`/`paircode`. O Core retorna o `raw` sem alterações.
+
+### `GET /whatsapp-instances/status?instance_id=...`
+
+Headers adicionais usados pelo Core ao chamar a Uazapi: `token: <INSTANCE_TOKEN>`.
+
+Retorna o status informado pela Uazapi (`status`/`instanceStatus`).
+
+### `POST /whatsapp-instances/webhook`
+
+Para **webhook global**, o Core usa `admintoken` e chama `/globalWebhook` na Uazapi.
+Para **webhook por instância**, o Core usa `token: <INSTANCE_TOKEN>`; se `instance_token` não for enviado no payload, o Core busca o token no banco pela `instance_id`.
+
+Body mínimo (global):
+
+```json
+{
+  "url": "https://crm.exemplo.com/webhooks/uazapi",
+  "globalWebhook": true
+}
+```
+
+Body mínimo (por instância):
+
+```json
+{
+  "url": "https://crm.exemplo.com/webhooks/uazapi",
+  "instance_id": "minha-instancia"
+}
+```
+
+Recomendado incluir:
+
+```json
+{
+  "events": ["messages", "messages_update", "connection"],
+  "excludeMessages": ["wasSentByApi"]
+}
+```
 
 ## Testando o fluxo
 1. **Registrar**: `curl -X POST http://localhost:8000/auth/register -H "Content-Type: application/json" -d '{"email":"teste@example.com","password":"senha123"}'`
