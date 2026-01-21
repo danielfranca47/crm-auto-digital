@@ -164,11 +164,12 @@ async def resolve_connection(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Connection not found")
 
     orion_limits = service.get_orion_limits(db, connection.user_id)
+    connection_status = service.normalize_connection_status_for_crm(connection.status)
 
     return ResolveResponse(
         user_id=connection.user_id,
         provider=connection.provider,
-        connection_status=connection.status,
+        connection_status=connection_status,
         phone_e164=connection.phone_e164,
         allow_orion=orion_limits.get("allow_orion"),
         max_ia_conversas_monthly=orion_limits.get("max_ia_conversas_monthly"),
