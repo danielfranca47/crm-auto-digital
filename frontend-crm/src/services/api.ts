@@ -66,6 +66,24 @@ export type KnowledgeItem = {
   updated_at: string;
 };
 
+export type WhatsappQrPayload = {
+  kind: "base64" | "text" | "url" | null;
+  value: string | null;
+};
+
+export type WhatsappConnectResponse = {
+  instance_id: string;
+  status?: string | null;
+  qr: WhatsappQrPayload;
+};
+
+export type WhatsappStatusResponse = {
+  instance_id: string;
+  status?: string | null;
+  phone_e164?: string | null;
+  last_updated?: string | null;
+};
+
 const AUTH_BASE = CORE_AUTH_BASE;
 const CORE_BASE = CORE_AUTH_BASE.replace(/\/auth$/, "");
 
@@ -652,6 +670,10 @@ export const api = {
       formData.append("file", file);
       return apiClient.post<KnowledgeItem>(`/knowledge/upload`, formData);
     },
+    whatsappConnect: async () => apiClient.post<WhatsappConnectResponse>(`/whatsapp/connect`),
+    whatsappStatus: async () => apiClient.get<WhatsappStatusResponse>(`/whatsapp/status`),
+    whatsappRefreshQr: async () =>
+      apiClient.post<WhatsappConnectResponse>(`/whatsapp/qr/refresh`),
   },
 
   agents: {
