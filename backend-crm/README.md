@@ -88,6 +88,16 @@ Exemplo alternativo (EventType/message):
 Exemplo de URL com querystring:
 ```
 https://crm.exemplo.com/webhooks/whatsapp/uazapi?secret=SEU_SEGREDO
+
+## UI de conexão WhatsApp (AI Profile)
+Para habilitar os novos endpoints proxy usados pela UI, configure:
+- `CORE_API_BASE`: base do backend-core (ex.: `http://localhost:8001`).
+- `CORE_SERVICE_TOKEN`: token de serviço para chamadas internas ao Core.
+- `CRM_PUBLIC_BASE_URL`: base pública do CRM (ex.: `https://crm.seudominio.com`).
+- `CRM_WEBHOOK_SECRET`: segredo do webhook usado no endpoint `/webhooks/whatsapp/uazapi`.
+
+Ao conectar o WhatsApp via UI, o CRM registra automaticamente o webhook no Core
+para garantir o inbound do Uazapi no endpoint `/webhooks/whatsapp/uazapi`.
 ```
 
 Mapeamento aplicado:
