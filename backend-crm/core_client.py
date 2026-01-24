@@ -134,8 +134,112 @@ def fetch_core_ai_profile_resolve(user_id: int) -> Dict[str, Any] | None:
 def _service_headers() -> Dict[str, str]:
     token = os.getenv("CORE_SERVICE_TOKEN")
     if not token:
-        raise HTTPException(status_code=401, detail="CORE_SERVICE_TOKEN não configurado")
+        raise HTTPException(status_code=500, detail="CORE_SERVICE_TOKEN não configurado")
     return {"X-Service-Token": token}
+
+
+def fetch_core_whatsapp_connection_me(token: str) -> Dict[str, Any] | None:
+    """
+    Consulta o backend-core em /whatsapp-connections/me para recuperar a conexão do usuário.
+    Retorna None em caso de 404 (sem conexão).
+    """
+
+    if not token:
+        raise HTTPException(status_code=401, detail="Token ausente")
+
+    base = _get_core_base()
+    url = f"{base}/whatsapp-connections/me"
+    headers = {"Authorization": f"Bearer {token}"}
+
+    try:
+        with httpx.Client(timeout=10) as client:
+            resp = client.get(url, headers=headers)
+    except httpx.RequestError as exc:
+        raise HTTPException(status_code=401, detail=f"Falha ao contatar backend-core: {exc}") from exc
+
+    if resp.status_code == 404:
+        return None
+
+    if resp.status_code != 200:
+        raise HTTPException(status_code=401, detail="Falha ao consultar WhatsApp no backend-core")
+
+    data = resp.json()
+    if not isinstance(data, dict):
+        raise HTTPException(status_code=401, detail="Resposta inesperada do backend-core")
+
+    return data
+
+
+def init_core_whatsapp_instance(user_id: int, instance_id: str) -> Dict[str, Any]:
+    base = _get_core_base()
+    url = f"{base}/whatsapp-instances/init"
+    headers = _service_headers()
+    payload = {"user_id": user_id, "instance_id": instance_id}
+
+    try:
+        with httpx.Client(timeout=20) as client:
+            resp = client.post(url, headers=headers, json=payload)
+    except httpx.RequestError as exc:
+        raise HTTPException(status_code=502, detail=f"Falha ao contatar backend-core: {exc}") from exc
+
+    if resp.status_code == 401:
+        raise HTTPException(status_code=502, detail="Token de serviço inválido para init WhatsApp")
+    if resp.status_code >= 400:
+        raise HTTPException(status_code=502, detail="Falha ao iniciar instância WhatsApp no core")
+
+    data = resp.json()
+    if not isinstance(data, dict):
+        raise HTTPException(status_code=502, detail="Resposta inesperada do backend-core")
+    return data
+
+
+def connect_core_whatsapp_instance(user_id: int, instance_id: str) -> Dict[str, Any]:
+    base = _get_core_base()
+    url = f"{base}/whatsapp-instances/connect"
+    headers = _service_headers()
+    payload = {"user_id": user_id, "instance_id": instance_id}
+
+    try:
+        with httpx.Client(timeout=20) as client:
+            resp = client.post(url, headers=headers, json=payload)
+    except httpx.RequestError as exc:
+        raise HTTPException(status_code=502, detail=f"Falha ao contatar backend-core: {exc}") from exc
+
+    if resp.status_code == 401:
+        raise HTTPException(status_code=502, detail="Token de serviço inválido para connect WhatsApp")
+    if resp.status_code >= 400:
+        raise HTTPException(status_code=502, detail="Falha ao conectar instância WhatsApp no core")
+
+    data = resp.json()
+    if not isinstance(data, dict):
+        raise HTTPException(status_code=502, detail="Resposta inesperada do backend-core")
+    return data
+
+
+def status_core_whatsapp_instance(instance_id: str) -> Dict[str, Any]:
+    if not instance_id:
+        raise HTTPException(status_code=400, detail="instance_id obrigatório")
+
+    base = _get_core_base()
+    url = f"{base}/whatsapp-instances/status"
+    headers = _service_headers()
+    params = {"instance_id": instance_id}
+
+    try:
+        with httpx.Client(timeout=20) as client:
+            resp = client.get(url, headers=headers, params=params)
+    except httpx.RequestError as exc:
+        raise HTTPException(status_code=502, detail=f"Falha ao contatar backend-core: {exc}") from exc
+
+    if resp.status_code == 401:
+        raise HTTPException(status_code=502, detail="Token de serviço inválido para status WhatsApp")
+    if resp.status_code >= 400:
+        raise HTTPException(status_code=502, detail="Falha ao consultar status WhatsApp no core")
+
+    data = resp.json()
+    if not isinstance(data, dict):
+        raise HTTPException(status_code=502, detail="Resposta inesperada do backend-core")
+    return data
 
 
 def fetch_core_whatsapp_connection_resolve(instance_id: str) -> Dict[str, Any]:
