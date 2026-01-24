@@ -7,6 +7,15 @@ from app import models
 from app.utils.crypto import decrypt_secret, encrypt_secret, SecretEncryptionError
 
 
+def normalize_connection_status_for_crm(status: Optional[str]) -> str:
+    if not status:
+        return "inactive"
+    normalized = status.strip().lower()
+    if normalized in {"connected", "active", "loggedin", "logged_in"}:
+        return "active"
+    return "inactive"
+
+
 def get_connection_for_user(db: Session, user_id: int) -> Optional[models.WhatsappConnection]:
     return db.query(models.WhatsappConnection).filter(models.WhatsappConnection.user_id == user_id).first()
 
