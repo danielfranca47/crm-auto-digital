@@ -26,6 +26,7 @@ from routes import (
     knowledge,
     webhooks,
     executor,
+    whatsapp_connect,
 )
 from routes import public
 
@@ -78,6 +79,7 @@ app.include_router(usage.router)                                    # /api/usage
 app.include_router(knowledge.router)                                # /api/knowledge
 app.include_router(webhooks.router)                                 # /webhooks/whatsapp/inbound
 app.include_router(executor.router)                                 # /api/jobs, /api/whatsapp/* internal
+app.include_router(whatsapp_connect.router)                         # /api/whatsapp/connect, /api/whatsapp/status
 # app.include_router(dashboard.router)
 
 # -----------------------------------------------------------------------------
