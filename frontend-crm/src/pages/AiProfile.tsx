@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Alert,
   AlertDescription,
@@ -34,7 +34,15 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { useApiErrorHandler } from "@/hooks/useApiErrorHandler";
 import { useToast } from "@/hooks/use-toast";
-import { api, AiProfilePayload, AiTemplate, KnowledgeItem } from "@/services/api";
+import {
+  api,
+  AiProfilePayload,
+  AiTemplate,
+  KnowledgeItem,
+  WhatsappConnectResponse,
+  WhatsappQrPayload,
+  WhatsappStatusResponse,
+} from "@/services/api";
 import { useUsage } from "@/hooks/useUsage";
 import { AlertCircle, Brain, FileEdit, FilePlus, RefreshCw, Sparkles, Upload, Wand2 } from "lucide-react";
 
@@ -141,6 +149,18 @@ export default function AiProfilePage() {
   const [editContent, setEditContent] = useState("");
   const [viewItem, setViewItem] = useState<KnowledgeItem | null>(null);
 
+  const [whatsappQr, setWhatsappQr] = useState<WhatsappQrPayload | null>(null);
+  const [whatsappStatus, setWhatsappStatus] = useState<WhatsappStatusResponse | null>(null);
+  const [whatsappPhase, setWhatsappPhase] = useState<"idle" | "connecting" | "connected" | "error">(
+    "idle"
+  );
+  const [whatsappError, setWhatsappError] = useState<string | null>(null);
+  const [whatsappLoading, setWhatsappLoading] = useState(false);
+  const pollingRef = useRef<number | null>(null);
+  const refreshTimeoutRef = useRef<number | null>(null);
+  const refreshCountRef = useRef(0);
+  const phaseRef = useRef(whatsappPhase);
+
   const entitlements = usageData?.entitlements;
   const limits = entitlements?.limits ?? {};
   const maxIa = limits?.max_ia_conversas_monthly;
@@ -186,6 +206,68 @@ export default function AiProfilePage() {
       description: tpl.description ?? fallbackTemplates[tpl.key]?.description,
     }));
   }, [templates]);
+
+  const normalizedWhatsStatus = (whatsappStatus?.status || "").toLowerCase();
+  const isWhatsappConnected = normalizedWhatsStatus === "connected";
+
+  const whatsappStatusLabel = (() => {
+    if (whatsappPhase === "error") return "Erro";
+    if (isWhatsappConnected) return "Conectado";
+    if (whatsappPhase === "connecting") return "Conectando";
+    if (whatsappStatus?.status) return whatsappStatus.status;
+    return "Não conectado";
+  })();
+
+  const whatsappBadgeVariant = isWhatsappConnected
+    ? "default"
+    : whatsappPhase === "error"
+    ? "destructive"
+    : "secondary";
+
+  const clearPolling = () => {
+    if (pollingRef.current) {
+      window.clearInterval(pollingRef.current);
+      pollingRef.current = null;
+    }
+  };
+
+  const clearRefreshTimeout = () => {
+    if (refreshTimeoutRef.current) {
+      window.clearTimeout(refreshTimeoutRef.current);
+      refreshTimeoutRef.current = null;
+    }
+  };
+
+  const startPolling = () => {
+    clearPolling();
+    pollingRef.current = window.setInterval(async () => {
+      await handleWhatsappStatus(true);
+    }, 2000);
+  };
+
+  const scheduleAutoRefresh = () => {
+    clearRefreshTimeout();
+    refreshTimeoutRef.current = window.setTimeout(async () => {
+      if (phaseRef.current !== "connecting") return;
+      if (refreshCountRef.current >= 3) return;
+      refreshCountRef.current += 1;
+      if (import.meta.env.DEV) {
+        console.log("WhatsApp auto-refresh QR", { attempt: refreshCountRef.current });
+      }
+      await handleWhatsappRefreshQr({ auto: true });
+    }, 20000);
+  };
+
+  const startConnectingFlow = () => {
+    setWhatsappPhase("connecting");
+    startPolling();
+    scheduleAutoRefresh();
+  };
+
+  const stopConnectingFlow = () => {
+    clearPolling();
+    clearRefreshTimeout();
+  };
 
   async function loadTemplates() {
     setLoadingTemplates(true);
@@ -238,8 +320,24 @@ export default function AiProfilePage() {
     loadTemplates();
     loadProfile();
     loadKnowledge();
+    handleWhatsappStatus(true);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  useEffect(() => {
+    return () => {
+      clearPolling();
+      clearRefreshTimeout();
+    };
+  }, []);
+
+  useEffect(() => {
+    phaseRef.current = whatsappPhase;
+    if (isWhatsappConnected) {
+      setWhatsappPhase("connected");
+      stopConnectingFlow();
+    }
+  }, [isWhatsappConnected]);
 
   const handleTemplateSelect = (tpl: AiTemplate) => {
     const preset = fallbackTemplates[tpl.key] || fallbackTemplates.sdr_padrao;
@@ -280,6 +378,93 @@ export default function AiProfilePage() {
       handleError(err, { fallbackMessage: "Falha ao salvar perfil." });
     } finally {
       setSaving(false);
+    }
+  }
+
+  const normalizeConnectResponse = (data: WhatsappConnectResponse) => {
+    setWhatsappStatus((prev) => ({
+      ...prev,
+      instance_id: data.instance_id,
+      status: data.status ?? prev?.status,
+    }));
+    if (data.qr) {
+      setWhatsappQr(data.qr);
+    }
+    if (import.meta.env.DEV) {
+      console.log("WhatsApp connect response", { status: data.status, qrKind: data.qr?.kind });
+    }
+    if (data.status && data.status.toLowerCase() === "connected") {
+      setWhatsappPhase("connected");
+      stopConnectingFlow();
+    } else {
+      startConnectingFlow();
+    }
+  };
+
+  async function handleWhatsappConnect() {
+    if (whatsappLoading) return;
+    setWhatsappLoading(true);
+    setWhatsappError(null);
+    try {
+      refreshCountRef.current = 0;
+      const data = await api.crm.whatsappConnect();
+      normalizeConnectResponse(data);
+    } catch (err: any) {
+      setWhatsappPhase("error");
+      setWhatsappError(err?.message || "Falha ao conectar WhatsApp.");
+      handleError(err, { fallbackMessage: "Falha ao conectar WhatsApp." });
+    } finally {
+      setWhatsappLoading(false);
+    }
+  }
+
+  async function handleWhatsappStatus(silent = false) {
+    try {
+      const data = await api.crm.whatsappStatus();
+      if (import.meta.env.DEV) {
+        console.log("WhatsApp status poll", { status: data.status });
+      }
+      setWhatsappStatus(data);
+      if (data.status && data.status.toLowerCase() === "connected") {
+        setWhatsappPhase("connected");
+        stopConnectingFlow();
+      } else if (whatsappPhase !== "connecting") {
+        setWhatsappPhase("idle");
+      }
+    } catch (err: any) {
+      if (err?.status === 404) {
+        setWhatsappStatus(null);
+        setWhatsappPhase("idle");
+        setWhatsappQr(null);
+        return;
+      }
+      if (!silent) {
+        setWhatsappPhase("error");
+        setWhatsappError(err?.message || "Falha ao consultar status.");
+        handleError(err, { fallbackMessage: "Falha ao consultar status." });
+      }
+    }
+  }
+
+  async function handleWhatsappRefreshQr(opts?: { auto?: boolean }) {
+    if (whatsappLoading) return;
+    setWhatsappLoading(true);
+    setWhatsappError(null);
+    try {
+      const data = await api.crm.whatsappRefreshQr();
+      if (import.meta.env.DEV) {
+        console.log("WhatsApp QR refresh", { status: data.status, qrKind: data.qr?.kind });
+      }
+      if (!opts?.auto) {
+        refreshCountRef.current = 0;
+      }
+      normalizeConnectResponse(data);
+    } catch (err: any) {
+      setWhatsappPhase("error");
+      setWhatsappError(err?.message || "Falha ao gerar novo QR.");
+      handleError(err, { fallbackMessage: "Falha ao gerar novo QR." });
+    } finally {
+      setWhatsappLoading(false);
     }
   }
 
@@ -378,6 +563,9 @@ export default function AiProfilePage() {
   }
 
   const knowledgeStatus = <KnowledgeLevel count={knowledgeItems.length} />;
+  const qrIsImage =
+    !!whatsappQr?.value &&
+    (whatsappQr.kind === "url" || whatsappQr.value.startsWith("data:image/"));
 
   return (
     <div className="p-6 space-y-6">
@@ -444,6 +632,89 @@ export default function AiProfilePage() {
         </TabsList>
 
         <TabsContent value="profile" className="space-y-4">
+          <Card>
+            <CardHeader>
+              <CardTitle>WhatsApp</CardTitle>
+              <CardDescription>Conecte seu número via QR Code para o agente usar.</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="flex flex-wrap items-center gap-3">
+                <Badge variant={whatsappBadgeVariant}>{whatsappStatusLabel}</Badge>
+                {whatsappStatus?.phone_e164 && (
+                  <span className="text-sm text-muted-foreground">
+                    Telefone: <strong>{whatsappStatus.phone_e164}</strong>
+                  </span>
+                )}
+                {whatsappStatus?.last_updated && (
+                  <span className="text-xs text-muted-foreground">
+                    Última atualização: {formatDate(whatsappStatus.last_updated)}
+                  </span>
+                )}
+              </div>
+
+              {whatsappError && (
+                <Alert variant="destructive">
+                  <AlertTitle>Falha na conexão</AlertTitle>
+                  <AlertDescription>{whatsappError}</AlertDescription>
+                </Alert>
+              )}
+
+              {!isWhatsappConnected && whatsappQr?.value && (
+                <div className="rounded-md border p-4 space-y-3">
+                  <div className="text-sm text-muted-foreground">
+                    {whatsappPhase === "connecting" ? "Aguardando scan..." : "Escaneie o QR com o WhatsApp."}
+                  </div>
+                  {qrIsImage && (
+                    <img
+                      src={
+                        whatsappQr.value.startsWith("data:image/")
+                          ? whatsappQr.value
+                          : whatsappQr.kind === "url"
+                          ? whatsappQr.value
+                          : `data:image/png;base64,${whatsappQr.value}`
+                      }
+                      alt="QR Code do WhatsApp"
+                      className="h-56 w-56"
+                    />
+                  )}
+                  {!qrIsImage && (
+                    <pre className="whitespace-pre-wrap rounded-md bg-muted p-3 text-xs">
+                      {whatsappQr.value}
+                    </pre>
+                  )}
+                </div>
+              )}
+
+              {isWhatsappConnected && (
+                <div className="rounded-md border border-emerald-200 bg-emerald-50/60 p-3 text-sm text-emerald-700 dark:border-emerald-500/30 dark:bg-emerald-500/10 dark:text-emerald-200">
+                  Conectado ✅
+                </div>
+              )}
+
+              <div className="flex flex-wrap gap-2">
+                <Button onClick={handleWhatsappConnect} disabled={whatsappLoading}>
+                  {whatsappLoading ? "Conectando..." : "Criar/Conectar WhatsApp"}
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={() => handleWhatsappStatus(false)}
+                  disabled={whatsappLoading}
+                >
+                  Atualizar status
+                </Button>
+                {!isWhatsappConnected && whatsappQr?.value && (
+                  <Button
+                    variant="secondary"
+                    onClick={() => handleWhatsappRefreshQr()}
+                    disabled={whatsappLoading}
+                  >
+                    Gerar novo QR
+                  </Button>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
