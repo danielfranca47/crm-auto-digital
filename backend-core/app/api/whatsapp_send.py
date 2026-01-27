@@ -85,7 +85,13 @@ async def send_whatsapp(
     connection = connections_service.get_connection_by_instance(db, payload.instance_id)
     if not connection:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Connection not found")
-    if connection.status != "active":
+    normalized_status = connections_service.normalize_connection_status_for_crm(connection.status)
+    if normalized_status != "active":
+        logger.info(
+            "whatsapp send blocked connection_status=%s normalized_status=%s",
+            connection.status,
+            normalized_status,
+        )
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Connection inactive")
 
     try:

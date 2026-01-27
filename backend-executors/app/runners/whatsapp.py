@@ -465,12 +465,30 @@ def execute_job(job_id: str, logger: logging.Logger) -> int:
                 }
             )
         except core_client.CoreClientError as exc:
+            detail = exc.response_body or ""
+            ctx_logger.info(
+                "event=core_send_error status=%s detail=%s",
+                exc.status_code,
+                detail,
+                extra={"phase": "core_send"},
+            )
+            message = str(exc)
+            retryable = _is_retryable_error(exc.status_code, exc.error_type)
+            if exc.status_code == 401:
+                message = "Core service token inválido ou ausente"
+                retryable = False
+            elif exc.status_code == 403:
+                if "connection inactive" in detail.lower():
+                    message = "WhatsApp connection inactive (instância não está ativa)"
+                else:
+                    message = "Acesso negado pelo Core"
+                retryable = False
             exec_error = ExecutionError(
-                str(exc),
+                message,
                 phase="core_send",
                 service="core",
                 http_status=exc.status_code,
-                retryable=_is_retryable_error(exc.status_code, exc.error_type),
+                retryable=retryable,
                 error_type=exc.error_type,
             )
             return _fail_job(job_id, ctx_logger, exec_error, attempt)
