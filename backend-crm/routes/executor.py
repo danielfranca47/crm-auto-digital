@@ -21,6 +21,9 @@ from services.jobs_service import (
     JOB_STATUS_IN_PROGRESS,
     JOB_STATUS_PENDING,
     JOB_MAX_ATTEMPTS,
+    TYPE_WHATSAPP_INBOUND_N8N,
+    apply_suggested_category,
+    extract_suggested_category,
     expand_type_variants,
     get_job,
     normalize_job_type,
@@ -387,6 +390,9 @@ def complete_job_internal(
             conn.rollback()
             raise HTTPException(status_code=409, detail="Job já finalizado")
 
+        job_payload = _json_loads(row["payload"]) or {}
+        job_type = normalize_job_type(row["type"])
+
         cur.execute(
             """
             UPDATE jobs
@@ -400,6 +406,20 @@ def complete_job_internal(
             """,
             (JOB_STATUS_COMPLETED, result_txt, job_id),
         )
+
+        if job_type == TYPE_WHATSAPP_INBOUND_N8N:
+            lead_id = job_payload.get("lead_id")
+            if lead_id is not None:
+                suggested_category, category_reason = extract_suggested_category(payload.result)
+                apply_suggested_category(
+                    conn,
+                    lead_id=int(lead_id),
+                    user_id=row["user_id"],
+                    suggested_category=suggested_category,
+                    reason=category_reason,
+                    inbound_message_text=job_payload.get("message_text"),
+                )
+
         refreshed = cur.execute("SELECT * FROM jobs WHERE id=?", (job_id,)).fetchone()
         conn.commit()
 

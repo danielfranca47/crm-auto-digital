@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Literal
+from typing import Literal, Optional
 
 from pydantic import BaseModel, Field, field_validator
 
@@ -10,6 +10,8 @@ class DecisionOutput(BaseModel):
     message_text: str = ""
     questions: list[str] = Field(default_factory=list)
     reason: str
+    suggested_category: Optional[str] = None
+    category_reason: Optional[str] = None
 
     @field_validator("questions", mode="after")
     @classmethod

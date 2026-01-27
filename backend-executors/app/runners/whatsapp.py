@@ -297,6 +297,8 @@ def execute_job(job_id: str, logger: logging.Logger) -> int:
         "lead_id": lead_id,
         "user_id": user_id,
         "phone": phone,
+        "suggested_category": decision.suggested_category,
+        "category_reason": decision.category_reason,
     }
 
     if decision.next_action == "ignore":

@@ -46,6 +46,28 @@ _VALID_JOB_STATUSES = {
     JOB_STATUS_FAILED,
 }
 
+LEAD_CATEGORIES = {
+    "to-prospect",
+    "in-progress",
+    "qualification",
+    "apresentation",
+    "follow-up",
+    "closing",
+    "client-list",
+    "prospect-refused",
+    "disqualified",
+}
+
+_STRONG_SIGNAL_KEYWORDS = (
+    "quero",
+    "comprar",
+    "agendar",
+    "reunião",
+    "preço",
+    "contratar",
+    "fechar",
+)
+
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -730,6 +752,122 @@ def _log_prospection(
     )
 
 
+def _normalize_category(value: Optional[str]) -> Optional[str]:
+    if value is None:
+        return None
+    normalized = str(value).strip().lower()
+    return normalized or None
+
+
+def extract_suggested_category(result: Any) -> Tuple[Optional[str], Optional[str]]:
+    if not isinstance(result, dict):
+        return None, None
+    suggested = result.get("suggested_category")
+    reason = result.get("category_reason")
+    if suggested is None:
+        decision = result.get("decision")
+        if isinstance(decision, dict):
+            suggested = decision.get("suggested_category")
+            reason = reason or decision.get("category_reason")
+    return suggested, reason
+
+
+def _check_inbound_signal(message_text: Optional[str]) -> Tuple[bool, bool]:
+    normalized = (message_text or "").strip()
+    if not normalized:
+        return False, False
+    lowered = normalized.lower()
+    keyword_hit = any(keyword in lowered for keyword in _STRONG_SIGNAL_KEYWORDS)
+    return True, keyword_hit
+
+
+def apply_suggested_category(
+    conn: sqlite3.Connection,
+    *,
+    lead_id: int,
+    user_id: Optional[int],
+    suggested_category: Optional[str],
+    reason: Optional[str],
+    inbound_message_text: Optional[str],
+    source: str = "ai",
+) -> bool:
+    normalized = _normalize_category(suggested_category)
+    if not normalized:
+        logger.info("lead_category_skip lead_id=%s reason=missing_suggested", lead_id)
+        return False
+    if normalized not in LEAD_CATEGORIES:
+        logger.info(
+            "lead_category_skip lead_id=%s reason=invalid_category suggested=%s",
+            lead_id,
+            normalized,
+        )
+        return False
+
+    has_signal, keyword_hit = _check_inbound_signal(inbound_message_text)
+    if not has_signal:
+        logger.info(
+            "lead_category_skip lead_id=%s reason=no_signal suggested=%s",
+            lead_id,
+            normalized,
+        )
+        return False
+
+    cur = conn.cursor()
+    params: List[Any] = [lead_id]
+    where_clause = "WHERE id=?"
+    if user_id is not None:
+        where_clause += " AND user_id = ?"
+        params.append(user_id)
+    row = cur.execute(f"SELECT category FROM leads {where_clause}", params).fetchone()
+    if not row:
+        logger.info("lead_category_skip lead_id=%s reason=lead_not_found", lead_id)
+        return False
+    current_category = (row["category"] or "").strip().lower()
+    if current_category == normalized:
+        logger.info(
+            "lead_category_skip lead_id=%s reason=already_set category=%s",
+            lead_id,
+            normalized,
+        )
+        return False
+
+    update_params: List[Any] = [normalized, lead_id]
+    update_clause = "WHERE id=?"
+    if user_id is not None:
+        update_clause += " AND user_id = ?"
+        update_params.append(user_id)
+    cur.execute(
+        f"""
+        UPDATE leads
+           SET category=?,
+               lastMovement=CURRENT_TIMESTAMP
+         {update_clause}
+        """,
+        update_params,
+    )
+
+    notes_reason = (reason or "").strip()
+    notes = f"{source}:{current_category}->{normalized}|{notes_reason}"
+    _log_prospection(
+        conn,
+        lead_id=lead_id,
+        channel="whatsapp",
+        message_id=None,
+        action="moved_stage",
+        notes=notes,
+        user_id=user_id,
+    )
+    logger.info(
+        "lead_category_updated lead_id=%s user_id=%s from=%s to=%s keyword=%s",
+        lead_id,
+        user_id,
+        current_category,
+        normalized,
+        keyword_hit,
+    )
+    return True
+
+
 def _handle_whatsapp_report(conn, payload, status, result, error_txt, *, user_id: Optional[int] = None):
     lead_id = (payload or {}).get("lead_id")
     message_id = (payload or {}).get("message_id")
@@ -743,15 +881,6 @@ def _handle_whatsapp_report(conn, payload, status, result, error_txt, *, user_id
         notes = error_txt
 
     if status == JOB_STATUS_COMPLETED:
-        lead_params: List[Any] = [lead_id]
-        user_clause = ""
-        if user_id is not None:
-            user_clause = " AND user_id = ?"
-            lead_params.append(user_id)
-        conn.execute(
-            f"UPDATE leads SET category='qualification', lastMovement=CURRENT_TIMESTAMP WHERE id=?{user_clause}",
-            lead_params,
-        )
         _log_prospection(
             conn,
             lead_id=lead_id,
@@ -761,14 +890,15 @@ def _handle_whatsapp_report(conn, payload, status, result, error_txt, *, user_id
             notes=notes,
             user_id=user_id,
         )
-        _log_prospection(
+        suggested_category, category_reason = extract_suggested_category(result)
+        inbound_message_text = (payload or {}).get("message_text")
+        apply_suggested_category(
             conn,
             lead_id=lead_id,
-            channel="whatsapp",
-            message_id=None,
-            action="moved_stage",
-            notes="auto:qualification",
             user_id=user_id,
+            suggested_category=suggested_category,
+            reason=category_reason,
+            inbound_message_text=inbound_message_text,
         )
     elif status == JOB_STATUS_FAILED:
         _log_prospection(
