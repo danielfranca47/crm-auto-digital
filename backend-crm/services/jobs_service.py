@@ -46,6 +46,18 @@ _VALID_JOB_STATUSES = {
     JOB_STATUS_FAILED,
 }
 
+LEAD_CATEGORIES = {
+    "to-prospect",
+    "in-progress",
+    "qualification",
+    "apresentation",
+    "follow-up",
+    "closing",
+    "client-list",
+    "prospect-refused",
+    "disqualified",
+}
+
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -730,6 +742,87 @@ def _log_prospection(
     )
 
 
+def _extract_category_payload(result: Optional[Dict[str, Any]]) -> Tuple[Optional[str], Optional[str]]:
+    if not isinstance(result, dict):
+        return None, None
+    decision = result.get("decision")
+    if isinstance(decision, dict):
+        suggested = decision.get("suggested_category")
+        reason = decision.get("category_reason") or result.get("category_reason")
+        return suggested, reason
+    return result.get("suggested_category"), result.get("category_reason")
+
+
+def _apply_suggested_category(
+    conn: sqlite3.Connection,
+    *,
+    lead_id: int,
+    user_id: Optional[int],
+    suggested_category: Optional[str],
+    reason: Optional[str],
+    source: str = "ai",
+) -> bool:
+    if not suggested_category:
+        logger.info("category suggestion skipped lead_id=%s reason=missing", lead_id)
+        return False
+    if suggested_category not in LEAD_CATEGORIES:
+        logger.info(
+            "category suggestion skipped lead_id=%s reason=invalid_category suggested=%s",
+            lead_id,
+            suggested_category,
+        )
+        return False
+
+    cur = conn.cursor()
+    params: List[Any] = [lead_id]
+    where_clause = "WHERE id = ?"
+    if user_id is not None:
+        where_clause += " AND user_id = ?"
+        params.append(user_id)
+
+    row = cur.execute(f"SELECT category FROM leads {where_clause}", params).fetchone()
+    if not row:
+        logger.info("category suggestion skipped lead_id=%s reason=lead_not_found", lead_id)
+        return False
+
+    current_category = row["category"]
+    if current_category == suggested_category:
+        logger.info(
+            "category suggestion skipped lead_id=%s reason=same_category category=%s",
+            lead_id,
+            current_category,
+        )
+        return False
+
+    reason_text = (reason or "").strip() or "unspecified"
+    cur.execute(
+        f"""
+        UPDATE leads
+           SET category = ?, lastMovement = CURRENT_TIMESTAMP
+         {where_clause}
+        """,
+        [suggested_category, *params],
+    )
+    _log_prospection(
+        conn,
+        lead_id=lead_id,
+        channel="whatsapp",
+        message_id=None,
+        action="moved_stage",
+        notes=f"{source}:{current_category}->{suggested_category}|{reason_text}",
+        user_id=user_id,
+    )
+    logger.info(
+        "category suggestion applied lead_id=%s user_id=%s from=%s to=%s reason=%s",
+        lead_id,
+        user_id,
+        current_category,
+        suggested_category,
+        reason_text,
+    )
+    return True
+
+
 def _handle_whatsapp_report(conn, payload, status, result, error_txt, *, user_id: Optional[int] = None):
     lead_id = (payload or {}).get("lead_id")
     message_id = (payload or {}).get("message_id")
@@ -743,15 +836,6 @@ def _handle_whatsapp_report(conn, payload, status, result, error_txt, *, user_id
         notes = error_txt
 
     if status == JOB_STATUS_COMPLETED:
-        lead_params: List[Any] = [lead_id]
-        user_clause = ""
-        if user_id is not None:
-            user_clause = " AND user_id = ?"
-            lead_params.append(user_id)
-        conn.execute(
-            f"UPDATE leads SET category='qualification', lastMovement=CURRENT_TIMESTAMP WHERE id=?{user_clause}",
-            lead_params,
-        )
         _log_prospection(
             conn,
             lead_id=lead_id,
@@ -761,14 +845,14 @@ def _handle_whatsapp_report(conn, payload, status, result, error_txt, *, user_id
             notes=notes,
             user_id=user_id,
         )
-        _log_prospection(
+        suggested_category, category_reason = _extract_category_payload(result)
+        _apply_suggested_category(
             conn,
             lead_id=lead_id,
-            channel="whatsapp",
-            message_id=None,
-            action="moved_stage",
-            notes="auto:qualification",
             user_id=user_id,
+            suggested_category=suggested_category,
+            reason=category_reason,
+            source="ai",
         )
     elif status == JOB_STATUS_FAILED:
         _log_prospection(
@@ -780,6 +864,12 @@ def _handle_whatsapp_report(conn, payload, status, result, error_txt, *, user_id
             notes=notes or "erro",
             user_id=user_id,
         )
+
+    # Manual tests (Etapa 5B.8 - Parte 1):
+    # 1) report_job completed com result.decision.suggested_category="closing"
+    #    -> lead.category muda para closing + prospection_logs action="moved_stage".
+    # 2) report_job completed sem suggested_category
+    #    -> lead.category permanece inalterada (sem auto-move para qualification).
 
 
 def _persist_whatsapp_message(cur, lead_id: int, body: str) -> Dict[str, Any]:

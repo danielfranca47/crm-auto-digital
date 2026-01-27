@@ -65,6 +65,7 @@ def _build_prompt(context: Dict[str, Any], message_text: str) -> str:
         "phone": _safe_get(lead, "phone", "phone_e164"),
         "segment": lead.get("segment"),
         "status": lead.get("status"),
+        "category": lead.get("category"),
     }
     ai_summary = {
         "id": ai_profile.get("id"),
@@ -82,13 +83,17 @@ def _build_prompt(context: Dict[str, Any], message_text: str) -> str:
     return (
         "Você é um motor de decisão para um CRM. Retorne SOMENTE JSON válido com o formato:\n"
         '{ "next_action":"reply|ask_qualification|handoff|ignore",'
-        ' "message_text":"string (obrigatório para reply/ask_qualification)", "questions":["..."], "reason":"curto" }\n'
+        ' "message_text":"string (obrigatório para reply/ask_qualification)", "questions":["..."], "reason":"curto",'
+        ' "suggested_category":"string (opcional, LeadStatus)", "category_reason":"curto (opcional)" }\n'
         "Regras:\n"
         "- next_action é obrigatório\n"
         "- questions só faz sentido se next_action == ask_qualification\n"
         "- message_text é obrigatório quando next_action == ask_qualification e deve conter a(s) pergunta(s) já formatada(s) para envio no WhatsApp\n"
         "- message_text pode ser vazio apenas em handoff ou ignore\n"
         "- reason deve ser curta\n"
+        "- suggested_category só deve ser preenchido quando houver sinal no inbound_message_text (não vazio)\n"
+        "- Exceção explícita: se o texto contiver palavras-chave fortes (quero, comprar, agendar, reunião, preço, contratar, fechar)\n"
+        "- Se suggested_category for preenchido, category_reason deve ser curto\n"
         "Contexto:\n"
         f"- lead: {json.dumps(lead_summary, ensure_ascii=False)}\n"
         f"- ai_profile: {json.dumps(ai_summary, ensure_ascii=False)}\n"
