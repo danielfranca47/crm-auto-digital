@@ -52,6 +52,49 @@ def _format_history(history: list[Dict[str, Any]], limit: int = 10) -> str:
     return "\n".join(lines)
 
 
+_SHORT_REPLIES = {
+    "sim",
+    "nao",
+    "não",
+    "ok",
+    "blz",
+    "beleza",
+    "pode",
+    "claro",
+    "👍",
+    "😂",
+    "kk",
+    "kkk",
+    "rs",
+    "rss",
+}
+
+
+def _normalize_short_reply(text: str) -> str:
+    return " ".join(text.strip().lower().split())
+
+
+def _is_short_reply(text: str) -> bool:
+    normalized = _normalize_short_reply(text)
+    if not normalized:
+        return False
+    if normalized in _SHORT_REPLIES:
+        return True
+    if " " in normalized:
+        return False
+    return len(normalized) <= 12
+
+
+def _find_last_outbound_message(history: list[Dict[str, Any]]) -> Optional[str]:
+    for item in reversed(history):
+        model = (item.get("model") or "").lower()
+        if model == "outbound":
+            body = str(item.get("body") or "").strip()
+            if body:
+                return body
+    return None
+
+
 def _build_prompt(context: Dict[str, Any], message_text: str) -> str:
     lead = context.get("lead") or {}
     ai_profile = context.get("ai_profile") or {}
@@ -65,6 +108,7 @@ def _build_prompt(context: Dict[str, Any], message_text: str) -> str:
         "phone": _safe_get(lead, "phone", "phone_e164"),
         "segment": lead.get("segment"),
         "status": lead.get("status"),
+        "category": lead.get("category"),
     }
     ai_summary = {
         "id": ai_profile.get("id"),
@@ -78,23 +122,38 @@ def _build_prompt(context: Dict[str, Any], message_text: str) -> str:
     }
 
     history_text = _format_history(history)
+    last_bot_message = None
+    short_reply_hint = None
+    if _is_short_reply(message_text):
+        last_bot_message = _find_last_outbound_message(history)
+        if last_bot_message:
+            short_reply_hint = (
+                "message_text é resposta direta ao last_bot_message; não iniciar um novo assunto"
+            )
 
     return (
         "Você é um motor de decisão para um CRM. Retorne SOMENTE JSON válido com o formato:\n"
         '{ "next_action":"reply|ask_qualification|handoff|ignore",'
-        ' "message_text":"string (obrigatório para reply/ask_qualification)", "questions":["..."], "reason":"curto" }\n'
+        ' "message_text":"string (obrigatório para reply/ask_qualification)",'
+        ' "questions":["..."], "reason":"curto",'
+        ' "suggested_category":"opcional (LeadStatus canônico)",'
+        ' "category_reason":"opcional (curto)" }\n'
         "Regras:\n"
         "- next_action é obrigatório\n"
         "- questions só faz sentido se next_action == ask_qualification\n"
         "- message_text é obrigatório quando next_action == ask_qualification e deve conter a(s) pergunta(s) já formatada(s) para envio no WhatsApp\n"
         "- message_text pode ser vazio apenas em handoff ou ignore\n"
         "- reason deve ser curta\n"
+        "- suggested_category só deve ser enviado quando houver sinal do lead no inbound_message_text (texto não vazio)\n"
+        "- Exceção explícita: se o texto contiver palavras fortes como quero, comprar, agendar, reunião, preço, contratar, fechar\n"
         "Contexto:\n"
         f"- lead: {json.dumps(lead_summary, ensure_ascii=False)}\n"
         f"- ai_profile: {json.dumps(ai_summary, ensure_ascii=False)}\n"
         f"- playbook: {json.dumps(playbook_summary, ensure_ascii=False)}\n"
         f"- metadata: {json.dumps(metadata_summary, ensure_ascii=False)}\n"
         f"- history: {history_text}\n"
+        f"- last_bot_message: {last_bot_message or ''}\n"
+        f"- short_reply_hint: {short_reply_hint or ''}\n"
         f"- message_text: {message_text}\n"
     )
 
