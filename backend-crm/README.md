@@ -549,6 +549,35 @@ Checklist rápido (use a porta em que o CRM estiver rodando, ex.: `http://localh
    - `curl -X POST http://localhost:8010/api/agents/{agent_id}/reprovision -H "Authorization: Bearer $token_A"`
    - A resposta traz apenas uma vez o novo `agent_token` e um texto curto de instrução. Atualize `AGENT_TOKEN` (mantendo o mesmo `AGENT_ID`) no `.env` do agent-local e reinicie o processo; o agente volta a consumir jobs normalmente.
 
+### 2.1) Testes manuais de categoria sugerida (Etapa 5B.8)
+
+> Nota: o frontend usa o literal `apresentation` (sem o segundo "r"). Isso parece um typo de "apresentação", mas no MVP o backend segue exatamente esse valor para manter compatibilidade. Avaliar correção futura no frontend + migração de dados.
+
+1. **Mover category via result do executor (suggested_category presente)**
+   - Pegue um job `whatsapp.inbound.n8n` válido (ex.: o mesmo criado pelo webhook inbound) e seu `job_id`.
+   - Execute o complete interno com `suggested_category`:
+   ```bash
+   curl -X POST http://localhost:8010/api/internal/jobs/{job_id}/complete \
+     -H "X-Service-Token: $CRM_SERVICE_TOKEN" \
+     -H "Content-Type: application/json" \
+     -d '{
+           "result": {
+             "suggested_category": "closing",
+             "category_reason": "lead pediu proposta"
+           }
+         }'
+   ```
+   - Resultado esperado: `leads.category` muda para `closing` e `prospection_logs` registra `action="moved_stage"` com notes `ai:<from>->closing|lead pediu proposta`.
+
+2. **Não mover category quando não há suggested_category**
+   ```bash
+   curl -X POST http://localhost:8010/api/internal/jobs/{job_id}/complete \
+     -H "X-Service-Token: $CRM_SERVICE_TOKEN" \
+     -H "Content-Type: application/json" \
+     -d '{ "result": { "notes": "sem sugestão" } }'
+   ```
+   - Resultado esperado: `leads.category` permanece a mesma (não força `qualification`).
+
 ### 3) Testes do Assistente IA (Etapa 4.3 — preview/import dedup)
 
 1. **Gerar preview de um upload**
