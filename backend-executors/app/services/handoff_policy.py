@@ -13,8 +13,6 @@ HANDOFF_TEMPLATES = {
     "user_clone": "Perfeito. Já vou chamar alguém aqui e te retorno em instantes.",
 }
 
-IGNORE_REPLY = "Certo! Me diga como posso ajudar 🙂"
-
 
 def _safe_get(data: Dict[str, Any], *keys: str) -> Optional[Any]:
     for key in keys:
@@ -122,9 +120,16 @@ def apply(
             message_id,
             identity_mode,
         )
+    if handoff_custom_text:
+        return DecisionOutput(
+            next_action="reply",
+            message_text=str(handoff_custom_text).strip(),
+            questions=[],
+            reason="policy_ignore_override",
+        )
     return DecisionOutput(
-        next_action="reply",
-        message_text=IGNORE_REPLY,
+        next_action="ignore",
+        message_text="",
         questions=[],
         reason="policy_ignore_override",
     )
