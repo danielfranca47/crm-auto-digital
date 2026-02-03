@@ -35,7 +35,9 @@ def _install_fake_app_modules() -> None:
 
     class MotherDecision:
         def __init__(self, **kwargs) -> None:
-            self.__dict__.update(kwargs)
+            self.route_to = kwargs.get("route_to")
+            self.confidence = kwargs.get("confidence")
+            self.reason = kwargs.get("reason")
 
         @classmethod
         def model_validate(cls, payload):
@@ -43,7 +45,13 @@ def _install_fake_app_modules() -> None:
 
     class ChildResult:
         def __init__(self, **kwargs) -> None:
-            self.__dict__.update(kwargs)
+            self.message_text = kwargs.get("message_text")
+            self.did_complete_phase = kwargs.get("did_complete_phase", False)
+            self.recommended_next_category = kwargs.get("recommended_next_category")
+            self.outcome = kwargs.get("outcome")
+            self.kanban_highlight = kwargs.get("kanban_highlight")
+            self.signals = kwargs.get("signals", [])
+            self.confidence = kwargs.get("confidence", 0.0)
 
         @classmethod
         def model_validate(cls, payload):
@@ -76,29 +84,46 @@ def _load_decision_engine():
 def main() -> None:
     _install_fake_app_modules()
     decision_engine = _load_decision_engine()
-    context = {
-        "lead": {"id": 123, "contactName": "Teste", "phone": "+5511999999999"},
-        "ai_profile": {"id": "profile-1", "name": "Demo", "template_key": "sdr_padrao"},
-        "playbook": {"template_key": "sdr_padrao"},
-        "metadata": {"provider": "uazapi", "instance_id": "inst-1"},
-        "history": [
-            {"model": "inbound", "body": "Olá"},
-            {"model": "outbound", "body": "Quer agendar uma reunião?"},
-        ],
-    }
-    prompt = decision_engine._build_prompt(context, "sim")
-    assert "last_bot_message: Quer agendar uma reunião?" in prompt
-    assert "short_reply_hint: message_text é resposta direta ao last_bot_message" in prompt
 
-    prompt_new_intent = decision_engine._build_prompt(context, "qual o preço?")
-    assert "last_bot_message: " in prompt_new_intent
-    assert "last_bot_message: Quer agendar uma reunião?" not in prompt_new_intent
-    assert "short_reply_hint: " in prompt_new_intent
-    assert (
-        "short_reply_hint: message_text é resposta direta ao last_bot_message"
-        not in prompt_new_intent
+    mother = decision_engine.MotherDecision(route_to="qualification", confidence=0.8, reason="context")
+    child = decision_engine.ChildResult(
+        message_text="Pergunta?",
+        did_complete_phase=False,
+        recommended_next_category="apresentation",
+        outcome=None,
+        kanban_highlight=None,
+        signals=[],
+        confidence=0.7,
     )
-    print("OK: short reply prompt includes last_bot_message and short_reply_hint")
+    suggested, _, _, _ = decision_engine.apply_funnel_guardrails("qualification", mother, child)
+    assert suggested == "apresentation"
+
+    child.recommended_next_category = "qualification"
+    child.confidence = 0.9
+    suggested, _, _, _ = decision_engine.apply_funnel_guardrails("apresentation", mother, child)
+    assert suggested is None
+
+    child.recommended_next_category = "closing"
+    child.confidence = 0.6
+    child.did_complete_phase = False
+    suggested, _, _, _ = decision_engine.apply_funnel_guardrails("apresentation", mother, child)
+    assert suggested is None
+
+    child.did_complete_phase = True
+    suggested, _, _, _ = decision_engine.apply_funnel_guardrails("apresentation", mother, child)
+    assert suggested == "closing"
+
+    decision = decision_engine.compose_decision_output(
+        context={"lead": {"category": "qualification"}},
+        mother_decision=mother,
+        child_result=child,
+    )
+    assert decision.outcome is None
+    assert decision.kanban_highlight is None
+    assert decision.signals == []
+    assert decision.confidence == child.confidence
+
+    print("OK: guardrails and decision composition")
 
 
 if __name__ == "__main__":

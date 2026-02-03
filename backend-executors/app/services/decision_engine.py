@@ -6,6 +6,7 @@ from typing import Any, Dict, Optional
 
 from app.schemas.decision import DecisionOutput
 from app.services import fast_path, handoff_policy, llm_service
+from app.services.orchestrator_models import ChildResult, MotherDecision
 
 logger = logging.getLogger(__name__)
 
@@ -251,6 +252,116 @@ def _build_prompt(context: Dict[str, Any], message_text: str) -> str:
     )
 
 
+def _build_mother_prompt(context: Dict[str, Any], message_text: str) -> str:
+    lead = context.get("lead") or {}
+    ai_profile = context.get("ai_profile") or {}
+    playbook = context.get("playbook") or {}
+    metadata = context.get("metadata") or {}
+    history = context.get("history") or []
+
+    lead_summary = {
+        "id": lead.get("id"),
+        "name": _safe_get(lead, "contactName", "companyName", "name"),
+        "segment": lead.get("segment"),
+        "status": lead.get("status"),
+        "category": lead.get("category"),
+    }
+    ai_summary = {
+        "id": ai_profile.get("id"),
+        "name": ai_profile.get("name"),
+        "template_key": ai_profile.get("template_key"),
+        "tone_of_voice": ai_profile.get("tone_of_voice"),
+        "niche": ai_profile.get("niche"),
+        "target_audience": ai_profile.get("target_audience"),
+    }
+    playbook_summary = {"template_key": playbook.get("template_key") or playbook.get("name")}
+    metadata_summary = {
+        "provider": metadata.get("provider"),
+        "instance_id": metadata.get("instance_id"),
+    }
+
+    history_text = _format_history(history)
+    return (
+        "Você é um roteador MÃE de um CRM (WhatsApp). Retorne SOMENTE JSON válido:\n"
+        "{\n"
+        '  "route_to": "qualification|apresentation|follow-up|closing",\n'
+        '  "confidence": 0.0,\n'
+        '  "reason": "curto"\n'
+        "}\n"
+        "Regras:\n"
+        "- route_to é obrigatório e indica a próxima fase a focar.\n"
+        "- confidence entre 0 e 1.\n"
+        "- reason curto.\n"
+        "\n"
+        "CONTEXTO:\n"
+        f"- lead: {json.dumps(lead_summary, ensure_ascii=False)}\n"
+        f"- ai_profile: {json.dumps(ai_summary, ensure_ascii=False)}\n"
+        f"- playbook: {json.dumps(playbook_summary, ensure_ascii=False)}\n"
+        f"- metadata: {json.dumps(metadata_summary, ensure_ascii=False)}\n"
+        f"- history: {history_text}\n"
+        f"- inbound_message_text: {message_text}\n"
+    )
+
+
+def _build_child_prompt(
+    context: Dict[str, Any],
+    message_text: str,
+    mother_decision: MotherDecision,
+) -> str:
+    lead = context.get("lead") or {}
+    ai_profile = context.get("ai_profile") or {}
+    playbook = context.get("playbook") or {}
+    metadata = context.get("metadata") or {}
+    history = context.get("history") or []
+
+    lead_summary = {
+        "id": lead.get("id"),
+        "name": _safe_get(lead, "contactName", "companyName", "name"),
+        "category": lead.get("category"),
+        "segment": lead.get("segment"),
+    }
+    ai_summary = {
+        "id": ai_profile.get("id"),
+        "name": ai_profile.get("name"),
+        "template_key": ai_profile.get("template_key"),
+        "tone_of_voice": ai_profile.get("tone_of_voice"),
+    }
+    playbook_summary = {"template_key": playbook.get("template_key") or playbook.get("name")}
+    metadata_summary = {
+        "provider": metadata.get("provider"),
+        "instance_id": metadata.get("instance_id"),
+    }
+
+    history_text = _format_history(history)
+    return (
+        "Você é uma LLM FILHA e deve responder SOMENTE JSON válido:\n"
+        "{\n"
+        '  "message_text": "string",\n'
+        '  "did_complete_phase": false,\n'
+        '  "recommended_next_category": "qualification|apresentation|follow-up|closing|null",\n'
+        '  "outcome": "won|lost|null",\n'
+        '  "kanban_highlight": "green|orange|null",\n'
+        '  "signals": ["..."],\n'
+        '  "confidence": 0.0\n'
+        "}\n"
+        "Regras:\n"
+        "- confidence entre 0 e 1.\n"
+        "- recommended_next_category deve ser um estágio do funil ou null.\n"
+        "- message_text é a resposta para o WhatsApp.\n"
+        "\n"
+        f"ROTA MÃE: {mother_decision.route_to} (confidence={mother_decision.confidence})\n"
+        f"Motivo MÃE: {mother_decision.reason}\n"
+        "\n"
+        "CONTEXTO:\n"
+        f"- lead: {json.dumps(lead_summary, ensure_ascii=False)}\n"
+        f"- ai_profile: {json.dumps(ai_summary, ensure_ascii=False)}\n"
+        f"- playbook: {json.dumps(playbook_summary, ensure_ascii=False)}\n"
+        f"- metadata: {json.dumps(metadata_summary, ensure_ascii=False)}\n"
+        f"- history: {history_text}\n"
+        f"- inbound_message_text: {message_text}\n"
+    )
+
+
 def _extract_json_payload(text: str) -> Optional[Dict[str, Any]]:
     text = text.strip()
     if not text:
@@ -269,6 +380,78 @@ def _extract_json_payload(text: str) -> Optional[Dict[str, Any]]:
         return json.loads(snippet)
     except json.JSONDecodeError:
         return None
+
+
+def _normalize_category(value: Optional[str]) -> Optional[str]:
+    if not value:
+        return None
+    normalized = str(value).strip().lower().replace("_", "-")
+    return normalized or None
+
+
+_ALLOWED_ADVANCE = {
+    "qualification": {"apresentation"},
+    "apresentation": {"closing", "follow-up"},
+    "follow-up": {"closing"},
+}
+
+
+def apply_funnel_guardrails(
+    current_category: Optional[str],
+    mother_decision: MotherDecision,
+    child_result: ChildResult,
+) -> tuple[Optional[str], Optional[str], Optional[str], Optional[str]]:
+    normalized_current = _normalize_category(current_category)
+    outcome = child_result.outcome
+    highlight = child_result.kanban_highlight
+    if not normalized_current:
+        return None, None, outcome, highlight
+    if normalized_current == "closing":
+        return None, None, outcome, highlight
+
+    recommended = _normalize_category(child_result.recommended_next_category)
+    if not recommended:
+        return None, None, outcome, highlight
+
+    allowed_next = _ALLOWED_ADVANCE.get(normalized_current, set())
+    if recommended not in allowed_next:
+        return None, None, outcome, highlight
+
+    can_advance = child_result.confidence >= 0.70 or child_result.did_complete_phase
+    if not can_advance:
+        return None, None, outcome, highlight
+
+    category_reason = f"route:{mother_decision.route_to}|confidence:{child_result.confidence:.2f}"
+    return recommended, category_reason, outcome, highlight
+
+
+def compose_decision_output(
+    *,
+    context: Dict[str, Any],
+    mother_decision: MotherDecision,
+    child_result: ChildResult,
+) -> DecisionOutput:
+    lead = context.get("lead") or {}
+    current_category = lead.get("category")
+    suggested_category, category_reason, outcome, highlight = apply_funnel_guardrails(
+        current_category,
+        mother_decision,
+        child_result,
+    )
+    next_action = "ask_qualification" if mother_decision.route_to == "qualification" else "reply"
+    reason = f"route:{mother_decision.route_to}|{mother_decision.reason}"
+    return DecisionOutput(
+        next_action=next_action,
+        message_text=child_result.message_text or "",
+        questions=[],
+        reason=reason,
+        suggested_category=suggested_category,
+        category_reason=category_reason,
+        outcome=outcome,
+        kanban_highlight=highlight,
+        signals=child_result.signals,
+        confidence=child_result.confidence,
+    )
 
 
 def decide(context: Dict[str, Any], logger: Optional[logging.Logger] = None) -> DecisionOutput:
@@ -294,13 +477,26 @@ def decide(context: Dict[str, Any], logger: Optional[logging.Logger] = None) -> 
         fast_decision = _sanitize_category_decision(fast_decision, context, logger_instance=logger)
         return handoff_policy.apply(context, fast_decision, logger=logger)
 
-    prompt = _build_prompt(context, message_text)
     try:
-        llm_text = llm_service.generate_decision_text(prompt)
-        payload = _extract_json_payload(llm_text)
-        if payload is None:
-            raise ValueError("llm returned invalid json")
-        decision = DecisionOutput.model_validate(payload)
+        mother_prompt = _build_mother_prompt(context, message_text)
+        mother_text = llm_service.generate_mother_route(mother_prompt)
+        mother_payload = _extract_json_payload(mother_text)
+        if mother_payload is None:
+            raise ValueError("llm returned invalid mother json")
+        mother_decision = MotherDecision.model_validate(mother_payload)
+
+        child_prompt = _build_child_prompt(context, message_text, mother_decision)
+        child_text = llm_service.generate_child_result(mother_decision.route_to, child_prompt)
+        child_payload = _extract_json_payload(child_text)
+        if child_payload is None:
+            raise ValueError("llm returned invalid child json")
+        child_result = ChildResult.model_validate(child_payload)
+
+        decision = compose_decision_output(
+            context=context,
+            mother_decision=mother_decision,
+            child_result=child_result,
+        )
         decision = _sanitize_category_decision(decision, context, logger_instance=logger)
         if logger:
             logger.info(
