@@ -33,6 +33,7 @@ def _install_fake_app_modules() -> None:
     _install_fake_module("app")
     _install_fake_module("app.schemas")
     _install_fake_module("app.services")
+    _install_fake_module("app.services.orchestrator_models")
 
     decision_module = _install_fake_module("app.schemas.decision")
 
@@ -51,6 +52,10 @@ def _install_fake_app_modules() -> None:
             self.reason = kwargs.get("reason")
             self.suggested_category = kwargs.get("suggested_category")
             self.category_reason = kwargs.get("category_reason")
+            self.outcome = kwargs.get("outcome")
+            self.kanban_highlight = kwargs.get("kanban_highlight")
+            self.signals = kwargs.get("signals", [])
+            self.confidence = kwargs.get("confidence")
 
             # mantém quaisquer extras
             for k, v in kwargs.items():
@@ -67,6 +72,39 @@ def _install_fake_app_modules() -> None:
 
     decision_module.DecisionOutput = DecisionOutput
 
+    orchestrator_module = sys.modules["app.services.orchestrator_models"]
+
+    class MotherDecision:
+        def __init__(self, **kwargs) -> None:
+            self.route_to = kwargs.get("route_to")
+            self.confidence = kwargs.get("confidence")
+            self.reason = kwargs.get("reason")
+
+        @classmethod
+        def model_validate(cls, payload):
+            if not isinstance(payload, dict):
+                raise TypeError("MotherDecision.model_validate espera dict")
+            return cls(**payload)
+
+    class ChildResult:
+        def __init__(self, **kwargs) -> None:
+            self.message_text = kwargs.get("message_text")
+            self.did_complete_phase = kwargs.get("did_complete_phase", False)
+            self.recommended_next_category = kwargs.get("recommended_next_category")
+            self.outcome = kwargs.get("outcome")
+            self.kanban_highlight = kwargs.get("kanban_highlight")
+            self.signals = kwargs.get("signals", [])
+            self.confidence = kwargs.get("confidence", 0.0)
+
+        @classmethod
+        def model_validate(cls, payload):
+            if not isinstance(payload, dict):
+                raise TypeError("ChildResult.model_validate espera dict")
+            return cls(**payload)
+
+    orchestrator_module.MotherDecision = MotherDecision
+    orchestrator_module.ChildResult = ChildResult
+
     fast_path = _install_fake_module("app.services.fast_path")
     fast_path.try_fast_handoff = lambda _text: None
 
@@ -74,7 +112,8 @@ def _install_fake_app_modules() -> None:
     handoff_policy.apply = lambda _context, decision, logger=None: decision
 
     llm_service = _install_fake_module("app.services.llm_service")
-    llm_service.generate_decision_text = lambda _prompt: "{}"
+    llm_service.generate_mother_route = lambda _prompt: "{}"
+    llm_service.generate_child_result = lambda _route, _prompt: "{}"
 
 
 def _load_module_from_path(module_name: str, module_path: str):
@@ -127,14 +166,14 @@ def _load_jobs_service():
     return _load_module_from_path("jobs_service", module_path)
 
 
-def _make_context(inbound_message_text: str, lead_id: int) -> Dict[str, Any]:
+def _make_context(inbound_message_text: str, lead_id: int, lead_category: str = "qualification") -> Dict[str, Any]:
     """
     Context mínimo, mas incluindo um payload de job para aumentar a chance
     do _extract_message_text() do decision_engine achar o texto corretamente.
     """
     return {
         "metadata": {"allowed_lead_categories": list(ALLOWED_CATEGORIES)},
-        "lead": {"id": lead_id, "user_id": 7},
+        "lead": {"id": lead_id, "user_id": 7, "category": lead_category},
         "ai_profile": {},
         "playbook": {},
         "history": [],
@@ -160,13 +199,22 @@ def _scenario1(decision_engine):
     """
     context = _make_context("oi", lead_id=1)
 
-    def fake_llm(_prompt: str) -> str:
+    def fake_mother(_prompt: str) -> str:
+        return '{"route_to":"qualification","confidence":0.8,"reason":"precisa de contexto"}'
+
+    def fake_child(_route: str, _prompt: str) -> str:
         return (
-            '{"next_action":"ask_qualification","message_text":"Qual é o seu objetivo agora?",'
-            '"questions":[],"reason":"precisa de contexto","suggested_category":"closing","category_reason":"x"}'
+            '{"message_text":"Qual é o seu objetivo agora?",'
+            '"did_complete_phase":false,'
+            '"recommended_next_category":"apresentation",'
+            '"outcome":null,'
+            '"kanban_highlight":null,'
+            '"signals":[],'
+            '"confidence":0.9}'
         )
 
-    decision_engine.llm_service.generate_decision_text = fake_llm
+    decision_engine.llm_service.generate_mother_route = fake_mother
+    decision_engine.llm_service.generate_child_result = fake_child
     decision = decision_engine.decide(context)
 
     assert decision.next_action == "ask_qualification"
@@ -180,15 +228,24 @@ def _scenario2(decision_engine):
     inbound com intenção forte, mas categoria inválida ("Marketing"):
     sanitize do executor deve zerar suggested_category e category_reason.
     """
-    context = _make_context("quero fechar", lead_id=2)
+    context = _make_context("quero fechar", lead_id=2, lead_category="apresentation")
 
-    def fake_llm(_prompt: str) -> str:
+    def fake_mother(_prompt: str) -> str:
+        return '{"route_to":"apresentation","confidence":0.8,"reason":"intenção forte"}'
+
+    def fake_child(_route: str, _prompt: str) -> str:
         return (
-            '{"next_action":"reply","message_text":"Perfeito, vamos seguir.",'
-            '"questions":[],"reason":"intenção forte","suggested_category":"Marketing","category_reason":"x"}'
+            '{"message_text":"Perfeito, vamos seguir.",'
+            '"did_complete_phase":true,'
+            '"recommended_next_category":"Marketing",'
+            '"outcome":null,'
+            '"kanban_highlight":null,'
+            '"signals":[],'
+            '"confidence":0.9}'
         )
 
-    decision_engine.llm_service.generate_decision_text = fake_llm
+    decision_engine.llm_service.generate_mother_route = fake_mother
+    decision_engine.llm_service.generate_child_result = fake_child
     decision = decision_engine.decide(context)
 
     assert decision.next_action == "reply"

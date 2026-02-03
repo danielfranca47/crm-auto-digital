@@ -23,7 +23,9 @@ from services.jobs_service import (
     JOB_MAX_ATTEMPTS,
     LEAD_CATEGORIES,
     TYPE_WHATSAPP_INBOUND_N8N,
+    apply_outcome_highlight,
     apply_suggested_category,
+    extract_outcome_payload,
     extract_suggested_category,
     expand_type_variants,
     get_job,
@@ -421,6 +423,18 @@ def complete_job_internal(
                     suggested_category=suggested_category,
                     reason=category_reason,
                     inbound_message_text=job_payload.get("message_text"),
+                )
+                # outcome / kanban_highlight MUST be persisted only for inbound jobs.
+                # Never persist these signals for outbound (whatsapp.send.local).
+                outcome, highlight, outcome_reason, source_job_id = extract_outcome_payload(payload.result)
+                apply_outcome_highlight(
+                    conn,
+                    lead_id=int(lead_id),
+                    user_id=row["user_id"],
+                    outcome=outcome,
+                    highlight=highlight,
+                    reason=outcome_reason,
+                    source_job_id=source_job_id,
                 )
 
         refreshed = cur.execute("SELECT * FROM jobs WHERE id=?", (job_id,)).fetchone()
