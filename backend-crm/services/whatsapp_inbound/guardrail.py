@@ -72,9 +72,9 @@ def maybe_promote_lead_on_inbound(
     except (TypeError, KeyError, IndexError):
         category_value = row[0] if row else None
     current_category = (category_value or "").strip().lower()
-    if current_category != "to-prospect":
+    if current_category not in {"to-prospect", "in-progress"}:
         logger.info(
-            "inbound_guardrail_skip lead_id=%s user_id=%s current_category=%s reason=not_to_prospect",
+            "inbound_guardrail_skip lead_id=%s user_id=%s current_category=%s reason=not_eligible",
             lead_id,
             user_id,
             current_category,
@@ -87,7 +87,7 @@ def maybe_promote_lead_on_inbound(
            SET category = ?,
                lastMovement = CURRENT_TIMESTAMP
          WHERE id = ? AND user_id = ?
-           AND lower(trim(coalesce(category, ''))) = 'to-prospect'
+           AND lower(trim(coalesce(category, ''))) IN ('to-prospect', 'in-progress')
         """,
         (INBOUND_DEFAULT_CATEGORY, lead_id, user_id),
     )
@@ -100,7 +100,7 @@ def maybe_promote_lead_on_inbound(
         )
         return False
 
-    notes = f"system:to-prospect->qualification|{reason}"
+    notes = f"system:{current_category}->{INBOUND_DEFAULT_CATEGORY}|{reason}"
     cur.execute(
         """
         INSERT INTO prospection_logs (lead_id, channel, message_id, action, notes, user_id)
@@ -109,10 +109,11 @@ def maybe_promote_lead_on_inbound(
         (lead_id, notes, user_id),
     )
     logger.info(
-        "inbound_guardrail_applied lead_id=%s user_id=%s from=%s to=qualification reason=%s",
+        "inbound_guardrail_promoted lead_id=%s user_id=%s from=%s to=%s reason=%s",
         lead_id,
         user_id,
         current_category,
+        INBOUND_DEFAULT_CATEGORY,
         reason,
     )
     return True

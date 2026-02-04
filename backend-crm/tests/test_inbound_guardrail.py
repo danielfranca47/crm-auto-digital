@@ -129,6 +129,48 @@ class InboundGuardrailTest(unittest.TestCase):
         ).fetchone()
         self.assertEqual(row["category"], "follow-up")
 
+    def test_existing_in_progress_is_promoted(self):
+        cur = self.conn.cursor()
+        cur.execute(
+            """
+            INSERT INTO leads (user_id, companyName, contactName, phone, origin, category)
+            VALUES (?, ?, ?, ?, 'whatsapp_inbound', 'in-progress')
+            """,
+            (self.user_id, "ACME", "Ana", "5511666666666"),
+        )
+        lead_id = int(cur.lastrowid)
+        self.conn.commit()
+
+        moved = maybe_promote_lead_on_inbound(self.conn, lead_id=lead_id, user_id=self.user_id)
+        self.assertTrue(moved)
+
+        row = self.conn.execute(
+            "SELECT category FROM leads WHERE id = ? AND user_id = ?",
+            (lead_id, self.user_id),
+        ).fetchone()
+        self.assertEqual(row["category"], INBOUND_DEFAULT_CATEGORY)
+
+    def test_existing_qualification_is_unchanged(self):
+        cur = self.conn.cursor()
+        cur.execute(
+            """
+            INSERT INTO leads (user_id, companyName, contactName, phone, origin, category)
+            VALUES (?, ?, ?, ?, 'whatsapp_inbound', 'qualification')
+            """,
+            (self.user_id, "ACME", "Ana", "5511555555555"),
+        )
+        lead_id = int(cur.lastrowid)
+        self.conn.commit()
+
+        moved = maybe_promote_lead_on_inbound(self.conn, lead_id=lead_id, user_id=self.user_id)
+        self.assertFalse(moved)
+
+        row = self.conn.execute(
+            "SELECT category FROM leads WHERE id = ? AND user_id = ?",
+            (lead_id, self.user_id),
+        ).fetchone()
+        self.assertEqual(row["category"], "qualification")
+
         log_row = self.conn.execute(
             "SELECT id FROM prospection_logs WHERE lead_id = ? AND user_id = ?",
             (lead_id, self.user_id),

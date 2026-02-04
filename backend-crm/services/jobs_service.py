@@ -774,6 +774,19 @@ def extract_suggested_category(result: Any) -> Tuple[Optional[str], Optional[str
     return suggested, reason
 
 
+def extract_outcome_payload(result: Any) -> Tuple[Optional[str], Optional[str], Optional[str], Optional[int]]:
+    if not isinstance(result, dict):
+        return None, None, None, None
+    outcome = result.get("outcome")
+    highlight = result.get("kanban_highlight")
+    source_job_id = result.get("source_job_id")
+    reason = result.get("reason")
+    decision = result.get("decision")
+    if isinstance(decision, dict):
+        reason = reason or decision.get("reason")
+    return outcome, highlight, reason, source_job_id
+
+
 def _check_inbound_signal(message_text: Optional[str]) -> Tuple[bool, bool]:
     normalized = (message_text or "").strip()
     if not normalized:
@@ -867,6 +880,46 @@ def apply_suggested_category(
         normalized,
         keyword_hit,
     )
+    return True
+
+
+def apply_outcome_highlight(
+    conn: sqlite3.Connection,
+    *,
+    lead_id: int,
+    user_id: Optional[int],
+    outcome: Optional[str],
+    highlight: Optional[str],
+    reason: Optional[str],
+    source_job_id: Optional[int],
+) -> bool:
+    if not outcome and not highlight:
+        return False
+
+    conn.execute(
+        """
+        INSERT INTO lead_outcomes (lead_id, user_id, outcome, highlight, reason, source_job_id)
+        VALUES (?, ?, ?, ?, ?, ?)
+        """,
+        (lead_id, user_id, outcome, highlight, reason, source_job_id),
+    )
+
+    if highlight:
+        params: List[Any] = [highlight, lead_id]
+        where_clause = "WHERE id=?"
+        if user_id is not None:
+            where_clause += " AND user_id = ?"
+            params.append(user_id)
+        conn.execute(
+            f"""
+            UPDATE leads
+               SET kanban_highlight=?,
+                   kanban_highlight_at=CURRENT_TIMESTAMP
+             {where_clause}
+            """,
+            params,
+        )
+
     return True
 
 

@@ -483,6 +483,8 @@ def init_db() -> None:
                 customMessage TEXT,
                 observations TEXT,
                 potentialValue REAL DEFAULT 0,
+                kanban_highlight TEXT,
+                kanban_highlight_at DATETIME,
                 createdAt DATETIME DEFAULT CURRENT_TIMESTAMP,
                 lastMovement DATETIME DEFAULT CURRENT_TIMESTAMP,
                 priority INTEGER DEFAULT 1
@@ -545,6 +547,18 @@ def init_db() -> None:
                 createdAt DATETIME DEFAULT CURRENT_TIMESTAMP,
                 FOREIGN KEY (lead_id) REFERENCES leads(id) ON DELETE CASCADE,
                 FOREIGN KEY (message_id) REFERENCES messages(id) ON DELETE SET NULL
+            );
+
+            CREATE TABLE IF NOT EXISTS lead_outcomes (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                lead_id INTEGER NOT NULL,
+                user_id INTEGER,
+                outcome TEXT,
+                highlight TEXT,
+                reason TEXT,
+                source_job_id INTEGER,
+                createdAt DATETIME DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (lead_id) REFERENCES leads(id) ON DELETE CASCADE
             );
 
             CREATE TABLE IF NOT EXISTS message_selections (
