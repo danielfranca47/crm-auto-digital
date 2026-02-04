@@ -14,6 +14,7 @@ def _install_fake_app_modules() -> None:
     _install_fake_module("app")
     _install_fake_module("app.schemas")
     _install_fake_module("app.services")
+    _install_fake_module("app.services.orchestrator_models")
 
     decision_module = _install_fake_module("app.schemas.decision")
 
@@ -30,6 +31,27 @@ def _install_fake_app_modules() -> None:
 
     decision_module.DecisionOutput = DecisionOutput
 
+    orchestrator_module = sys.modules["app.services.orchestrator_models"]
+
+    class MotherDecision:
+        def __init__(self, **kwargs) -> None:
+            self.__dict__.update(kwargs)
+
+        @classmethod
+        def model_validate(cls, payload):
+            return cls(**payload)
+
+    class ChildResult:
+        def __init__(self, **kwargs) -> None:
+            self.__dict__.update(kwargs)
+
+        @classmethod
+        def model_validate(cls, payload):
+            return cls(**payload)
+
+    orchestrator_module.MotherDecision = MotherDecision
+    orchestrator_module.ChildResult = ChildResult
+
     fast_path = _install_fake_module("app.services.fast_path")
     fast_path.try_fast_handoff = lambda _: None
 
@@ -37,7 +59,8 @@ def _install_fake_app_modules() -> None:
     handoff_policy.apply = lambda _context, decision, logger=None: decision
 
     llm_service = _install_fake_module("app.services.llm_service")
-    llm_service.generate_decision_text = lambda _prompt: "{}"
+    llm_service.generate_mother_route = lambda _prompt: "{}"
+    llm_service.generate_child_result = lambda _route, _prompt: "{}"
 
 
 def _load_decision_engine():
