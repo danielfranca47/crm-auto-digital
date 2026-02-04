@@ -94,6 +94,30 @@ def _format_questions(questions: List[str]) -> str:
     )
 
 
+def _build_result_payload(
+    decision: decision_engine.DecisionOutput,
+    *,
+    lead_id: Optional[int],
+    user_id: Optional[int],
+    phone: Optional[str],
+    source_job_id: Optional[int],
+) -> Dict[str, Any]:
+    return {
+        "context_fetched": True,
+        "decision": decision.model_dump(),
+        "lead_id": lead_id,
+        "user_id": user_id,
+        "phone": phone,
+        "suggested_category": decision.suggested_category,
+        "category_reason": decision.category_reason,
+        "outcome": decision.outcome,
+        "kanban_highlight": decision.kanban_highlight,
+        "signals": decision.signals,
+        "confidence": decision.confidence,
+        "source_job_id": source_job_id,
+    }
+
+
 def _is_retryable_status(status_code: Optional[int]) -> bool:
     if status_code is None:
         return False
@@ -291,15 +315,13 @@ def execute_job(job_id: str, logger: logging.Logger) -> int:
         fallback_text = _format_questions(decision.questions or [])
         if fallback_text:
             outbound_body = fallback_text
-    result_payload: Dict[str, Any] = {
-        "context_fetched": True,
-        "decision": decision.model_dump(),
-        "lead_id": lead_id,
-        "user_id": user_id,
-        "phone": phone,
-        "suggested_category": decision.suggested_category,
-        "category_reason": decision.category_reason,
-    }
+    result_payload = _build_result_payload(
+        decision,
+        lead_id=lead_id,
+        user_id=user_id,
+        phone=phone,
+        source_job_id=int(job_id),
+    )
 
     if decision.next_action == "ignore":
         result_payload["outbound_status"] = "skipped_ignore"

@@ -12,6 +12,10 @@ class DecisionOutput(BaseModel):
     reason: str
     suggested_category: Optional[str] = None
     category_reason: Optional[str] = None
+    outcome: Optional[Literal["won", "lost"]] = None
+    kanban_highlight: Optional[Literal["green", "orange"]] = None
+    signals: list[str] = Field(default_factory=list)
+    confidence: Optional[float] = None
 
     @field_validator("questions", mode="after")
     @classmethod
