@@ -26,6 +26,10 @@ from services.whatsapp_inbound.conversations import (
     try_register_conversation,
 )
 from services.whatsapp_inbound.phone import normalize_phone
+from services.whatsapp_inbound.guardrail import (
+    find_or_create_lead_by_phone,
+    maybe_promote_lead_on_inbound,
+)
 
 
 logger = logging.getLogger(__name__)
@@ -112,33 +116,6 @@ def insert_inbound_event(
             conn.rollback()
             return False
         raise
-
-
-def find_or_create_lead_by_phone(
-    conn: sqlite3.Connection,
-    *,
-    user_id: int,
-    phone_norm: str,
-    payload: Dict[str, Any],
-) -> int:
-    cur = conn.cursor()
-    existing = cur.execute(
-        "SELECT id FROM leads WHERE user_id = ? AND phone = ? LIMIT 1",
-        (user_id, phone_norm),
-    ).fetchone()
-    if existing:
-        return int(existing["id"])
-
-    contact_name = payload.get("contact_name") or payload.get("sender_name") or payload.get("name")
-    company = payload.get("company") or "WhatsApp inbound"
-    cur.execute(
-        """
-        INSERT INTO leads (user_id, companyName, contactName, phone, origin, category)
-        VALUES (?, ?, ?, ?, 'whatsapp_inbound', 'to-prospect')
-        """,
-        (user_id, company, contact_name, phone_norm),
-    )
-    return int(cur.lastrowid)
 
 
 def save_inbound_message(
@@ -264,12 +241,14 @@ def handle_inbound(payload: Dict[str, Any]) -> Dict[str, Any]:
                         status_code=403, detail="Limite de conversas Orion excedido"
                     )
 
-        lead_id = find_or_create_lead_by_phone(
+        lead_id, created = find_or_create_lead_by_phone(
             conn,
             user_id=user_id,
             phone_norm=phone_norm,
             payload=payload,
         )
+        if not created:
+            maybe_promote_lead_on_inbound(conn, lead_id=lead_id, user_id=user_id)
 
         conn.execute(
             """

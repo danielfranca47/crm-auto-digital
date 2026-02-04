@@ -21,6 +21,28 @@ def _stub_response() -> str:
     return json.dumps(payload, ensure_ascii=False)
 
 
+def _stub_mother_response() -> str:
+    payload = {
+        "route_to": "qualification",
+        "confidence": 0.5,
+        "reason": "stub_no_key",
+    }
+    return json.dumps(payload, ensure_ascii=False)
+
+
+def _stub_child_response() -> str:
+    payload = {
+        "message_text": "Olá! Como posso ajudar?",
+        "did_complete_phase": False,
+        "recommended_next_category": None,
+        "outcome": None,
+        "kanban_highlight": None,
+        "signals": [],
+        "confidence": 0.5,
+    }
+    return json.dumps(payload, ensure_ascii=False)
+
+
 def _extract_output_text(payload: Dict[str, Any]) -> str:
     output_text = payload.get("output_text")
     if isinstance(output_text, str) and output_text:
@@ -60,6 +82,53 @@ def generate_decision_text(prompt: str) -> str:
         "model": settings.llm_model,
         "input": prompt,
         "text": {"format": {"type": "json_object"}},
+    }
+    timeout = httpx.Timeout(settings.llm_timeout_seconds)
+    with httpx.Client(timeout=timeout) as client:
+        response = client.post(settings.llm_api_base, headers=headers, json=payload)
+    if response.status_code != 200:
+        truncated = response.text[:1000]
+        logger.warning("LLM response error status=%s body=%s", response.status_code, truncated)
+    response.raise_for_status()
+    return _extract_output_text(response.json())
+
+
+def generate_mother_route(prompt: str) -> str:
+    if not settings.llm_api_key:
+        return _stub_mother_response()
+
+    headers = {
+        "Authorization": f"Bearer {settings.llm_api_key}",
+        "Content-Type": "application/json",
+    }
+    payload: Dict[str, Any] = {
+        "model": settings.llm_model,
+        "input": prompt,
+        "text": {"format": {"type": "json_object"}},
+    }
+    timeout = httpx.Timeout(settings.llm_timeout_seconds)
+    with httpx.Client(timeout=timeout) as client:
+        response = client.post(settings.llm_api_base, headers=headers, json=payload)
+    if response.status_code != 200:
+        truncated = response.text[:1000]
+        logger.warning("LLM response error status=%s body=%s", response.status_code, truncated)
+    response.raise_for_status()
+    return _extract_output_text(response.json())
+
+
+def generate_child_result(route: str, prompt: str) -> str:
+    if not settings.llm_api_key:
+        return _stub_child_response()
+
+    headers = {
+        "Authorization": f"Bearer {settings.llm_api_key}",
+        "Content-Type": "application/json",
+    }
+    payload: Dict[str, Any] = {
+        "model": settings.llm_model,
+        "input": prompt,
+        "text": {"format": {"type": "json_object"}},
+        "metadata": {"route": route},
     }
     timeout = httpx.Timeout(settings.llm_timeout_seconds)
     with httpx.Client(timeout=timeout) as client:
