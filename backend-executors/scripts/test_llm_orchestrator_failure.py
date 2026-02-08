@@ -37,6 +37,7 @@ def _install_fake_app_modules() -> None:
     class MotherDecision:
         def __init__(self, **kwargs) -> None:
             self.route_to = kwargs.get("route_to")
+            self.perceived_category = kwargs.get("perceived_category")
             self.confidence = kwargs.get("confidence")
             self.reason = kwargs.get("reason")
 
@@ -135,7 +136,9 @@ def main() -> None:
     _assert_stage(handler.records, "mother_parse")
 
     def ok_mother(_prompt: str) -> str:
-        return '{"route_to":"qualification","confidence":0.8,"reason":"test"}'
+        return (
+            '{"route_to":"qualification","perceived_category":"qualification","confidence":0.8,"reason":"test"}'
+        )
 
     def bad_child(_route: str, _prompt: str) -> str:
         return "invalid-child-json"

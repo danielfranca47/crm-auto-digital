@@ -7,6 +7,7 @@ from pydantic import BaseModel, Field
 
 class MotherDecision(BaseModel):
     route_to: Literal["qualification", "apresentation", "follow-up", "closing"]
+    perceived_category: Optional[Literal["qualification", "apresentation", "follow-up", "closing"]] = None
     confidence: float = Field(ge=0.0, le=1.0)
     reason: str
 

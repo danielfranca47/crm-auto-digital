@@ -114,6 +114,7 @@ def _build_result_payload(
         "kanban_highlight": decision.kanban_highlight,
         "signals": decision.signals,
         "confidence": decision.confidence,
+        "decision_trace": decision.decision_trace,
         "source_job_id": source_job_id,
     }
 

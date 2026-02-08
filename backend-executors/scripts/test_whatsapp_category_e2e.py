@@ -77,6 +77,7 @@ def _install_fake_app_modules() -> None:
     class MotherDecision:
         def __init__(self, **kwargs) -> None:
             self.route_to = kwargs.get("route_to")
+            self.perceived_category = kwargs.get("perceived_category")
             self.confidence = kwargs.get("confidence")
             self.reason = kwargs.get("reason")
 
@@ -200,7 +201,10 @@ def _scenario1(decision_engine):
     context = _make_context("oi", lead_id=1)
 
     def fake_mother(_prompt: str) -> str:
-        return '{"route_to":"qualification","confidence":0.8,"reason":"precisa de contexto"}'
+        return (
+            '{"route_to":"qualification","perceived_category":"qualification","confidence":0.8,'
+            '"reason":"precisa de contexto"}'
+        )
 
     def fake_child(_route: str, _prompt: str) -> str:
         return (
@@ -225,13 +229,16 @@ def _scenario1(decision_engine):
 
 def _scenario2(decision_engine):
     """
-    inbound com intenção forte, mas categoria inválida ("Marketing"):
-    sanitize do executor deve zerar suggested_category e category_reason.
+    inbound com intenção forte, mas mãe percebe estágio atual sem avanço:
+    guardrail deve manter suggested_category nulo.
     """
     context = _make_context("quero fechar", lead_id=2, lead_category="apresentation")
 
     def fake_mother(_prompt: str) -> str:
-        return '{"route_to":"apresentation","confidence":0.8,"reason":"intenção forte"}'
+        return (
+            '{"route_to":"apresentation","perceived_category":"apresentation","confidence":0.8,'
+            '"reason":"intenção forte"}'
+        )
 
     def fake_child(_route: str, _prompt: str) -> str:
         return (
@@ -251,7 +258,75 @@ def _scenario2(decision_engine):
     assert decision.next_action == "reply"
     assert decision.suggested_category is None
     assert decision.category_reason is None
-    print("OK: scenario2 invalid category is sanitized by executor")
+    print("OK: scenario2 guardrail keeps category unchanged")
+
+
+def _scenario4(decision_engine):
+    """
+    inbound confirma reunião: mãe percebe apresentation e guardrail promove qualification -> apresentation.
+    """
+    context = _make_context("Amanhã às 17h está confirmado", lead_id=4, lead_category="qualification")
+
+    def fake_mother(_prompt: str) -> str:
+        return (
+            '{"route_to":"apresentation","perceived_category":"apresentation","confidence":0.8,'
+            '"reason":"confirmou reunião"}'
+        )
+
+    def fake_child(_route: str, _prompt: str) -> str:
+        return (
+            '{"message_text":"Perfeito, até lá!",'
+            '"did_complete_phase":false,'
+            '"recommended_next_category":null,'
+            '"outcome":null,'
+            '"kanban_highlight":null,'
+            '"signals":[],'
+            '"confidence":0.9}'
+        )
+
+    decision_engine.llm_service.generate_mother_route = fake_mother
+    decision_engine.llm_service.generate_child_result = fake_child
+    decision = decision_engine.decide(context)
+
+    assert decision.next_action == "reply"
+    assert decision.suggested_category == "apresentation"
+    assert decision.category_reason is not None
+    assert decision.decision_trace["guardrail_reason"] == "ok"
+    print("OK: scenario4 meeting confirmation promotes to apresentation")
+
+
+def _scenario5(decision_engine):
+    """
+    inbound reagendar: mãe percebe apresentation e guardrail promove qualification -> apresentation.
+    """
+    context = _make_context("Pode reagendar pra sexta?", lead_id=5, lead_category="qualification")
+
+    def fake_mother(_prompt: str) -> str:
+        return (
+            '{"route_to":"apresentation","perceived_category":"apresentation","confidence":0.8,'
+            '"reason":"reagendar reunião"}'
+        )
+
+    def fake_child(_route: str, _prompt: str) -> str:
+        return (
+            '{"message_text":"Claro, posso reagendar.",'
+            '"did_complete_phase":false,'
+            '"recommended_next_category":null,'
+            '"outcome":null,'
+            '"kanban_highlight":null,'
+            '"signals":[],'
+            '"confidence":0.9}'
+        )
+
+    decision_engine.llm_service.generate_mother_route = fake_mother
+    decision_engine.llm_service.generate_child_result = fake_child
+    decision = decision_engine.decide(context)
+
+    assert decision.next_action == "reply"
+    assert decision.suggested_category == "apresentation"
+    assert decision.category_reason is not None
+    assert decision.decision_trace["guardrail_reason"] == "ok"
+    print("OK: scenario5 reschedule promotes to apresentation")
 
 
 def _setup_minimal_crm_schema(conn: sqlite3.Connection) -> None:
@@ -336,6 +411,8 @@ def main() -> None:
     decision_engine = _load_decision_engine()
     _scenario1(decision_engine)
     _scenario2(decision_engine)
+    _scenario4(decision_engine)
+    _scenario5(decision_engine)
 
     jobs_service = _load_jobs_service()
     _scenario3(jobs_service)

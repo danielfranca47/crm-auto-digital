@@ -36,6 +36,7 @@ def _install_fake_app_modules() -> None:
     class MotherDecision:
         def __init__(self, **kwargs) -> None:
             self.route_to = kwargs.get("route_to")
+            self.perceived_category = kwargs.get("perceived_category")
             self.confidence = kwargs.get("confidence")
             self.reason = kwargs.get("reason")
 
@@ -85,7 +86,12 @@ def main() -> None:
     _install_fake_app_modules()
     decision_engine = _load_decision_engine()
 
-    mother = decision_engine.MotherDecision(route_to="qualification", confidence=0.8, reason="context")
+    mother = decision_engine.MotherDecision(
+        route_to="qualification",
+        perceived_category="apresentation",
+        confidence=0.8,
+        reason="context",
+    )
     child = decision_engine.ChildResult(
         message_text="Pergunta?",
         did_complete_phase=False,
@@ -97,30 +103,60 @@ def main() -> None:
     )
     child.kanban_highlight = "orange"
     child.outcome = "lost"
-    suggested, _, _, _ = decision_engine.apply_funnel_guardrails("qualification", mother, child)
+    suggested, _, guardrail_reason = decision_engine.apply_mother_category_guardrails(
+        "qualification",
+        mother,
+    )
     assert suggested == "apresentation"
-    _, _, outcome, highlight = decision_engine.apply_funnel_guardrails("qualification", mother, child)
+    assert guardrail_reason == "ok"
+    outcome, highlight = decision_engine.apply_outcome_guardrails("qualification", child)
     assert outcome is None
     assert highlight is None
 
-    child.recommended_next_category = "qualification"
-    child.confidence = 0.9
-    suggested, _, _, _ = decision_engine.apply_funnel_guardrails("apresentation", mother, child)
+    mother.perceived_category = "qualification"
+    suggested, _, guardrail_reason = decision_engine.apply_mother_category_guardrails(
+        "apresentation",
+        mother,
+    )
     assert suggested is None
+    assert guardrail_reason == "backwards_block"
 
-    child.recommended_next_category = "closing"
-    child.confidence = 0.6
-    child.did_complete_phase = False
-    suggested, _, _, _ = decision_engine.apply_funnel_guardrails("apresentation", mother, child)
+    mother.perceived_category = "closing"
+    mother.confidence = 0.6
+    suggested, _, guardrail_reason = decision_engine.apply_mother_category_guardrails(
+        "qualification",
+        mother,
+    )
     assert suggested is None
+    assert guardrail_reason == "jump_blocked_low_conf"
 
-    child.did_complete_phase = True
-    suggested, _, _, _ = decision_engine.apply_funnel_guardrails("apresentation", mother, child)
-    assert suggested == "closing"
+    mother.confidence = 0.8
+    suggested, _, guardrail_reason = decision_engine.apply_mother_category_guardrails(
+        "qualification",
+        mother,
+    )
+    assert suggested == "apresentation"
+    assert guardrail_reason == "jump_clamped"
+
+    mother.perceived_category = None
+    suggested, _, guardrail_reason = decision_engine.apply_mother_category_guardrails(
+        "qualification",
+        mother,
+    )
+    assert suggested is None
+    assert guardrail_reason == "missing_perceived"
+
+    mother.perceived_category = "marketing"
+    suggested, _, guardrail_reason = decision_engine.apply_mother_category_guardrails(
+        "qualification",
+        mother,
+    )
+    assert suggested is None
+    assert guardrail_reason == "invalid"
 
     child.outcome = "won"
     child.kanban_highlight = "green"
-    _, _, outcome, highlight = decision_engine.apply_funnel_guardrails("closing", mother, child)
+    outcome, highlight = decision_engine.apply_outcome_guardrails("closing", child)
     assert outcome == "won"
     assert highlight == "green"
 
