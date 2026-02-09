@@ -167,6 +167,7 @@ def _build_prompt(context: Dict[str, Any], message_text: str) -> str:
         "id": ai_profile.get("id"),
         "name": ai_profile.get("name"),
         "template_key": ai_profile.get("template_key"),
+        "agent_mode": ai_profile.get("agent_mode"),
         "brand_name": ai_profile.get("brand_name"),
         "tone_of_voice": ai_profile.get("tone_of_voice"),
         "niche": ai_profile.get("niche"),
@@ -273,6 +274,7 @@ def _build_mother_prompt(context: Dict[str, Any], message_text: str) -> str:
         "tone_of_voice": ai_profile.get("tone_of_voice"),
         "niche": ai_profile.get("niche"),
         "target_audience": ai_profile.get("target_audience"),
+        "agent_mode": ai_profile.get("agent_mode"),
     }
     playbook_summary = {"template_key": playbook.get("template_key") or playbook.get("name")}
     metadata_summary = {
@@ -292,7 +294,8 @@ def _build_mother_prompt(context: Dict[str, Any], message_text: str) -> str:
         "Regras:\n"
         "- route_to é obrigatório e indica a próxima fase a focar.\n"
         "- perceived_category indica o estágio atual do lead (sua percepção).\n"
-        "- Se estiver em dúvida, use null ou mantenha o estágio igual ao lead.category atual.\n"
+        "- Se estiver em dúvida e lead.category existir, mantenha perceived_category = lead.category (evite null).\n"
+        "- Use perceived_category=null somente se lead.category estiver vazio E não houver sinal claro no inbound.\n"
         "- confidence entre 0 e 1.\n"
         "- reason curto.\n"
         "\n"
@@ -303,15 +306,49 @@ def _build_mother_prompt(context: Dict[str, Any], message_text: str) -> str:
         "- FOLLOW-UP é SOMENTE após a apresentação quando o lead não fechou, com sinais de nutrição,\n"
         '  ex.: "vou pensar", "me chama mês que vem", "manda material", "preciso falar com sócio",\n'
         '  "agora não", "sem budget", "vamos ver depois".\n'
-        "- Se dúvida, perceived_category pode ser null OU manter lead.category atual.\n"
+        "- REGRA FORTE FOLLOW-UP: só use follow-up se houver evidência de apresentação realizada,\n"
+        "  seja por history (ex.: \"na call de ontem\", \"como falamos na apresentação\")\n"
+        "  OU se lead.category atual já for follow-up/closing. Se for apenas apresentation e não houver\n"
+        "  evidência textual de que a call aconteceu, prefira apresentation.\n"
+        "  Se não houver evidência, mantenha qualification ou apresentation conforme o contexto.\n"
+        "- Qualification: dúvidas iniciais (preço/como funciona/serve pra mim) sem combinação de horário/link.\n"
+        "- Apresentation: qualquer ação de agendar/confirmar/reagendar/pedir link/confirmar presença.\n"
+        "\n"
+        # ETAPA 4 (roadmap): o marcador "meeting_scheduled" em reason é provisório.
+        # Nesta etapa usamos sinal textual simples para orientar o executor, mas a Etapa 4
+        # deve migrar isso para um sinal estruturado (ex.: fields JSON/signals) e o CRM
+        # será responsável por criar appointment e setar bot_disabled.
+        "POLÍTICA POR MODO (agent_mode):\n"
+        "- sdr_scheduler: foco em qualificar e agendar reunião.\n"
+        "  - Se agendar/confirmar/reagendar/pedir link, route_to=apresentation e perceived_category=apresentation.\n"
+        "  - Se confirmação de horário/link fechado (ex.: \"Fechou amanhã 17h\", \"pode confirmar\", \"manda o link\"),\n"
+        '    inclua a substring "meeting_scheduled" no reason.\n'
+        "- closer: foco em avançar até fechamento.\n"
+        "  - Agendamento NÃO é objetivo final; não inclua meeting_scheduled apenas por agendar.\n"
+        "  - Se inbound for claramente de fechamento (\"posso assinar\", \"manda contrato\", \"quero fechar\"),\n"
+        "    route_to=closing e perceived_category=closing.\n"
         "\n"
         "EXEMPLOS (ultracurtos):\n"
         '1) inbound_message_text: "Amanhã 17h tá confirmado"\n'
-        '   -> {"route_to":"apresentation","perceived_category":"apresentation","confidence":0.8,"reason":"confirmou reunião"}\n'
+        '   -> {"route_to":"apresentation","perceived_category":"apresentation","confidence":0.8,"reason":"meeting_scheduled|confirmou horário"}\n'
         '2) inbound_message_text: "Pode reagendar pra sexta?"\n'
-        '   -> {"route_to":"apresentation","perceived_category":"apresentation","confidence":0.8,"reason":"reagendar reunião"}\n'
+        '   -> {"route_to":"apresentation","perceived_category":"apresentation","confidence":0.8,"reason":"meeting_scheduled|reagendar"}\n'
         '3) inbound_message_text: "Vou pensar, me chama mês que vem" (apresentação já ocorreu)\n'
         '   -> {"route_to":"follow-up","perceived_category":"follow-up","confidence":0.7,"reason":"nutrição pós-apresentação"}\n'
+        '4) NEGATIVO: inbound_message_text: "Vou pensar" (sem evidência de apresentação)\n'
+        '   -> NÃO use follow-up; mantenha qualification ou apresentation conforme contexto.\n'
+        '5) NEGATIVO: inbound_message_text: "Qual o preço?"\n'
+        '   -> NÃO use closing; prefira qualification.\n'
+        "6) SDR: inbound_message_text: \"Fechou amanhã 17h, manda o link\"\n"
+        '   -> {"route_to":"apresentation","perceived_category":"apresentation","confidence":0.85,"reason":"meeting_scheduled|confirmou horário"}\n'
+        "7) SDR: inbound_message_text: \"Pode confirmar a reunião?\"\n"
+        '   -> {"route_to":"apresentation","perceived_category":"apresentation","confidence":0.8,"reason":"meeting_scheduled|confirmou reunião"}\n'
+        "8) CLOSER: inbound_message_text: \"Posso assinar hoje?\"\n"
+        '   -> {"route_to":"closing","perceived_category":"closing","confidence":0.9,"reason":"intenção de fechamento"}\n'
+        "9) CLOSER: inbound_message_text: \"Manda contrato\"\n"
+        '   -> {"route_to":"closing","perceived_category":"closing","confidence":0.85,"reason":"pedido de contrato"}\n'
+        "10) CLOSER (negativo): inbound_message_text: \"Fechou amanhã 17h\"\n"
+        '   -> {"route_to":"apresentation","perceived_category":"apresentation","confidence":0.8,"reason":"confirmou horário (no closer, sem meeting_scheduled)"}\n'
         "\n"
         "CONTEXTO:\n"
         f"- lead: {json.dumps(lead_summary, ensure_ascii=False)}\n"
@@ -345,6 +382,7 @@ def _build_child_prompt(
         "name": ai_profile.get("name"),
         "template_key": ai_profile.get("template_key"),
         "tone_of_voice": ai_profile.get("tone_of_voice"),
+        "agent_mode": ai_profile.get("agent_mode"),
     }
     playbook_summary = {"template_key": playbook.get("template_key") or playbook.get("name")}
     metadata_summary = {
@@ -520,6 +558,7 @@ def compose_decision_output(
     child_result: ChildResult,
 ) -> DecisionOutput:
     lead = context.get("lead") or {}
+    ai_profile = context.get("ai_profile") or {}
     current_category = lead.get("category")
     suggested_category, category_reason, guardrail_reason = apply_mother_category_guardrails(
         current_category,
@@ -528,6 +567,8 @@ def compose_decision_output(
     outcome, highlight = apply_outcome_guardrails(current_category, child_result)
     next_action = "ask_qualification" if mother_decision.route_to == "qualification" else "reply"
     reason = f"route:{mother_decision.route_to}|{mother_decision.reason}"
+    # NOTE (ETAPA 4): decision_trace é observabilidade apenas; não dispara efeitos colaterais.
+    # A Etapa 4 deverá consumir sinais estruturados para automações no CRM (appointment/bot_disabled).
     return DecisionOutput(
         next_action=next_action,
         message_text=child_result.message_text or "",
@@ -545,6 +586,7 @@ def compose_decision_output(
             "mother_confidence": mother_decision.confidence,
             "lead_current_category": current_category,
             "guardrail_reason": guardrail_reason,
+            "agent_mode": ai_profile.get("agent_mode"),
         },
     )
 

@@ -21,6 +21,7 @@ class AIProfile(Base):
     offer_description = Column(String, nullable=False)
     goals = Column(String, nullable=False)
     custom_instructions = Column(String, nullable=True)
+    agent_mode = Column(String, nullable=True, server_default="sdr_scheduler")
     identity_mode = Column(String, nullable=True, server_default="human_agent")
     handoff_policy = Column(String, nullable=True, server_default="keep_active_notify")
     handoff_custom_text = Column(String, nullable=True)

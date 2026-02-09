@@ -80,6 +80,7 @@ const initialProfileState: AiProfilePayload = {
   offer_description: "",
   goals: "",
   custom_instructions: "",
+  agent_mode: "sdr_scheduler",
   identity_mode: "human_agent",
   handoff_policy: "keep_active_notify",
   handoff_custom_text: "",
@@ -339,6 +340,15 @@ export default function AiProfilePage() {
     }
   }, [isWhatsappConnected]);
 
+  useEffect(() => {
+    setProfile((prev) => {
+      if (prev.agent_mode) return prev;
+      const inferred =
+        prev.template_key && prev.template_key.startsWith("closer") ? "closer" : "sdr_scheduler";
+      return { ...prev, agent_mode: inferred };
+    });
+  }, [profile.template_key]);
+
   const handleTemplateSelect = (tpl: AiTemplate) => {
     const preset = fallbackTemplates[tpl.key] || fallbackTemplates.sdr_padrao;
     setProfile((prev) => ({
@@ -346,6 +356,9 @@ export default function AiProfilePage() {
       template_key: tpl.key,
       tone_of_voice: prev.tone_of_voice || preset.tone,
       goals: prev.goals || toBulletList(preset.goals),
+      agent_mode: tpl.key.startsWith("closer")
+        ? "closer"
+        : prev.agent_mode || "sdr_scheduler",
     }));
   };
 
@@ -715,17 +728,17 @@ export default function AiProfilePage() {
             </CardContent>
           </Card>
 
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Wand2 className="h-5 w-5 text-primary" /> Template / Estilo do agente
-              </CardTitle>
-              <CardDescription>Selecione um template e adapte o tom.</CardDescription>
-            </CardHeader>
-            <CardContent className="grid gap-3 md:grid-cols-3">
-              {loadingTemplates && <p>Carregando templates...</p>}
-              {!loadingTemplates &&
-                mappedTemplates.map((tpl) => (
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Wand2 className="h-5 w-5 text-primary" /> Template / Estilo do agente
+                </CardTitle>
+                <CardDescription>Selecione um template e adapte o tom.</CardDescription>
+              </CardHeader>
+              <CardContent className="grid gap-3 md:grid-cols-3">
+                {loadingTemplates && <p>Carregando templates...</p>}
+                {!loadingTemplates &&
+                  mappedTemplates.map((tpl) => (
                   <button
                     key={tpl.key}
                     className={`rounded-lg border p-4 text-left transition hover:border-primary/60 hover:shadow-sm ${
@@ -745,8 +758,28 @@ export default function AiProfilePage() {
                     </p>
                   </button>
                 ))}
-            </CardContent>
-          </Card>
+                <div className="md:col-span-3 space-y-2">
+                  <Label>Agent Profile Mode</Label>
+                  <Select
+                    value={profile.agent_mode || "sdr_scheduler"}
+                    onValueChange={(value) =>
+                      setProfile((p) => ({ ...p, agent_mode: value as AiProfilePayload["agent_mode"] }))
+                    }
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Selecione o modo do agente" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="sdr_scheduler">SDR Scheduler</SelectItem>
+                      <SelectItem value="closer">Closer</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <p className="text-xs text-muted-foreground">
+                    SDR Scheduler foca em qualificar e agendar. Closer prioriza avançar até o fechamento.
+                  </p>
+                </div>
+              </CardContent>
+            </Card>
 
           <div className="grid gap-4 md:grid-cols-2">
             <Card>

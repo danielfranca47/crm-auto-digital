@@ -43,6 +43,7 @@ export type AiProfilePayload = {
   offer_description: string;
   goals: string;
   custom_instructions?: string | null;
+  agent_mode?: "sdr_scheduler" | "closer" | null;
   identity_mode?: "virtual_assistant" | "human_agent" | "user_clone";
   handoff_policy?: "disable_bot" | "keep_active_notify" | "ignore";
   handoff_custom_text?: string | null;
