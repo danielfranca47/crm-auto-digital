@@ -301,6 +301,13 @@ export const api = {
     return apiClient.delete(`/leads/${id}`);
   },
 
+  setLeadBotDisabled: async (
+    leadId: string | number,
+    payload: { disabled: boolean; reason?: string }
+  ) => {
+    return apiClient.post(`/leads/${leadId}/bot-disabled`, payload);
+  },
+
   appointments: {
     list: async (params?: {
       start?: string;

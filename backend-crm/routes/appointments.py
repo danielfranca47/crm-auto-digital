@@ -62,10 +62,12 @@ def _check_conflict(
 def list_appointments(
     start: Optional[datetime] = Query(None, description="Início do intervalo"),
     end: Optional[datetime] = Query(None, description="Fim do intervalo"),
+    lead_id: Optional[int] = Query(None, description="ID do lead"),
+    status: Optional[AppointmentStatus] = Query(None, description="Status do compromisso"),
 ) -> List[AppointmentOut]:
     if start and end:
         _validate_interval(start, end)
-    elif not start and not end:
+    elif not start and not end and lead_id is None:
         raise HTTPException(status_code=400, detail="Informe ao menos start ou end para filtrar o intervalo.")
 
     conn = get_connection()
@@ -79,6 +81,12 @@ def list_appointments(
         if end:
             clauses.append("start_at <= ?")
             params.append(end.isoformat())
+        if lead_id is not None:
+            clauses.append("lead_id = ?")
+            params.append(lead_id)
+        if status is not None:
+            clauses.append("status = ?")
+            params.append(status)
         where = " AND ".join(clauses)
         query = "SELECT * FROM appointments"
         if where:

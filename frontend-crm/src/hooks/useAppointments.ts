@@ -24,6 +24,8 @@ function normalizeAppointment(raw: any): Appointment {
     raw?.start_at ?? raw?.start_time ?? raw?.startAt ?? raw?.start ?? "";
   const end =
     raw?.end_at ?? raw?.end_time ?? raw?.endAt ?? raw?.end ?? start ?? null;
+  const rawStatus = String(raw?.status ?? "pending");
+  const normalizedStatus = rawStatus === "scheduled" ? "pending" : rawStatus;
 
   return {
     id: String(raw?.id ?? ""),
@@ -36,7 +38,7 @@ function normalizeAppointment(raw: any): Appointment {
     title: raw?.title ?? "Compromisso",
     description: raw?.description ?? undefined,
     type: raw?.type ?? "meeting",
-    status: (raw?.status ?? "pending") as any,
+    status: normalizedStatus as any,
     startTime:
       typeof start === "string" ? start : new Date(start).toISOString(),
     endTime:

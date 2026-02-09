@@ -23,6 +23,7 @@ import { ScheduleAppointmentDialog } from "./ScheduleAppointmentDialog";
 import { useLeadAppointments, useCancelAppointment } from "@/hooks/useAppointments";
 import { useToast } from "@/hooks/use-toast";
 import { useLeads } from "@/contexts/LeadsContext";
+import { api } from "@/services/api";
 
 interface LeadCardDialogProps {
   lead: Lead | null;
@@ -78,13 +79,13 @@ const appointmentTypeClasses = {
 } as const;
 
 const appointmentStatusLabels = {
-  scheduled: "Agendado",
+  pending: "Agendado",
   completed: "Concluído",
   canceled: "Cancelado",
 } as const;
 
 const appointmentStatusClasses = {
-  scheduled: "bg-primary/10 text-primary border border-primary/20",
+  pending: "bg-primary/10 text-primary border border-primary/20",
   completed: "bg-success/10 text-success border border-success/20",
   canceled: "bg-destructive/10 text-destructive border border-destructive/20",
 } as const;
@@ -108,6 +109,7 @@ function LeadCardDialogBody({
   const [isEditing, setIsEditing] = useState(false);
   const [editedLead, setEditedLead] = useState<Lead | null>(null);
   const { toast } = useToast();
+  const [isTogglingBot, setIsTogglingBot] = useState(false);
 
   // Contexto + fallback no-op
   const leadsCtx = useLeads();
@@ -136,7 +138,7 @@ function LeadCardDialogBody({
 
   const asDate = (iso: string) => new Date(iso);
   const isActiveStatus = (s?: string | null) =>
-    ["scheduled", "pending"].includes(String(s));
+    ["pending"].includes(String(s));
 
   // Itens futuros **não cancelados**
   const upcomingAppointments = useMemo(() => {
@@ -145,7 +147,7 @@ function LeadCardDialogBody({
     return appointments
       .filter((a) => {
         if (a.status === "canceled") return false;
-        if (!isActiveStatus(a.status)) return false; // só "scheduled" | "pending"
+        if (!isActiveStatus(a.status)) return false; // só "pending"
         const ts = new Date(a.startTime).getTime();
         return Number.isFinite(ts) && ts >= nowTs;
       })
@@ -238,6 +240,28 @@ function LeadCardDialogBody({
     return appt && appt.status !== "canceled" ? appt : null;
   }, [appointments, currentLead.nextScheduledAction?.id]);
 
+  const handleReactivateBot = async () => {
+    if (!currentLead.bot_disabled) return;
+    setIsTogglingBot(true);
+    try {
+      await api.setLeadBotDisabled(currentLead.id, {
+        disabled: false,
+        reason: "manual_reactivate",
+      });
+      setEditedLead((prev) => (prev ? { ...prev, bot_disabled: false } : prev));
+      onUpdateLead?.(currentLead.id, { bot_disabled: false } as Partial<Lead>);
+      toast({ title: "Agente reativado" });
+    } catch (error: any) {
+      toast({
+        title: "Erro ao reativar agente",
+        description: error?.message ?? "Não foi possível reativar o agente.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsTogglingBot(false);
+    }
+  };
+
 
   return (
     <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
@@ -251,10 +275,23 @@ function LeadCardDialogBody({
               <Badge className={`${statusColors[currentLead.category]} text-white`}>
                 {statusLabels[currentLead.category]}
               </Badge>
+              {currentLead.bot_disabled && (
+                <Badge variant="secondary">Agente desativado</Badge>
+              )}
               <span className="text-xs text-muted-foreground">ID: {currentLead.id}</span>
             </div>
           </div>
           <div className="flex gap-2">
+            {currentLead.bot_disabled && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleReactivateBot}
+                disabled={isTogglingBot}
+              >
+                {isTogglingBot ? "Reativando..." : "Reativar agente"}
+              </Button>
+            )}
             {!isEditing ? (
               <Button variant="outline" size="sm" onClick={() => setIsEditing(true)}>
                 Editar
@@ -629,10 +666,10 @@ function LeadCardDialogBody({
                       const start = new Date(appointment.startTime);
 
                       // normaliza status para as chaves aceitas nos mapas de UI
-                      type UiStatus = keyof typeof appointmentStatusClasses; // "scheduled" | "completed" | "canceled"
+                      type UiStatus = keyof typeof appointmentStatusClasses; // "pending" | "completed" | "canceled"
                       const statusStr = String(appointment.status);
                       const normalized: UiStatus =
-                        (statusStr === "pending" ? "scheduled" : statusStr) as UiStatus;
+                        (statusStr === "scheduled" ? "pending" : statusStr) as UiStatus;
 
                       return (
                         <div

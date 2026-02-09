@@ -1,6 +1,6 @@
 export type AppointmentType = 'meeting' | 'call' | 'follow-up' | 'presentation';
 
-export type AppointmentStatus = 'scheduled' | 'completed' | 'canceled';
+export type AppointmentStatus = 'pending' | 'completed' | 'canceled';
 
 export interface Appointment {
   id: string;
@@ -39,6 +39,7 @@ export interface Lead {
   category: LeadStatus;
   customMessage: string;
   observations: string;
+  bot_disabled?: boolean;
   lastMovement: Date;
   createdAt: Date;
   nextScheduledAction?: {

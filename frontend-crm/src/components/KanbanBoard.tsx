@@ -205,7 +205,7 @@ export function KanbanBoard({ onDashboard }: KanbanBoardProps) {
         title: nextAction.description,
         description: nextAction.description,
         type: nextAction.type ?? "meeting",
-        status: "scheduled",
+        status: "pending",
         startTime: nextAction.date.toISOString(),
         endTime: undefined,
         leadName: lead.contactName,

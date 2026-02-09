@@ -741,6 +741,7 @@ def compose_decision_output(
     reason = f"route:{mother_decision.route_to}|{mother_decision.reason}"
     # NOTE (ETAPA 4): decision_trace é observabilidade apenas; não dispara efeitos colaterais.
     # A Etapa 4 deverá consumir sinais estruturados para automações no CRM (appointment/bot_disabled).
+    meeting_scheduled = "meeting_scheduled" in (mother_decision.reason or "")
     return DecisionOutput(
         next_action=next_action,
         message_text=child_result.message_text or "",
@@ -759,6 +760,7 @@ def compose_decision_output(
             "lead_current_category": current_category,
             "guardrail_reason": guardrail_reason,
             "agent_mode": ai_profile.get("agent_mode"),
+            "meeting_scheduled": meeting_scheduled,
         },
     )
 

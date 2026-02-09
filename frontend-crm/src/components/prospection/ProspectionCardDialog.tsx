@@ -87,13 +87,13 @@ const appointmentTypeClasses = {
 } as const;
 
 const appointmentStatusLabels = {
-  scheduled: "Agendado",
+  pending: "Agendado",
   completed: "Concluído",
   canceled: "Cancelado",
 } as const;
 
 const appointmentStatusClasses = {
-  scheduled: "bg-primary/10 text-primary border border-primary/20",
+  pending: "bg-primary/10 text-primary border border-primary/20",
   completed: "bg-success/10 text-success border border-success/20",
   canceled: "bg-destructive/10 text-destructive border border-destructive/20",
 } as const;
@@ -176,13 +176,13 @@ export function ProspectionCardDialog({
   const upcomingAppointments = useMemo(() => {
     const now = new Date();
     return appointments
-      .filter((appointment) => appointment.status === 'scheduled' && new Date(appointment.startTime) >= now)
+      .filter((appointment) => appointment.status === 'pending' && new Date(appointment.startTime) >= now)
       .sort((a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime());
   }, [appointments]);
 
   const pastAppointments = useMemo(() => {
     return appointments
-      .filter((appointment) => appointment.status !== 'scheduled')
+      .filter((appointment) => appointment.status !== 'pending')
       .sort((a, b) => new Date(b.startTime).getTime() - new Date(a.startTime).getTime());
   }, [appointments]);
   const saveLead =

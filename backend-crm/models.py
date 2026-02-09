@@ -33,6 +33,11 @@ class LeadUpdate(BaseModel):
     lastMovement: Optional[datetime] = None
 
 
+class BotDisabledUpdate(BaseModel):
+    disabled: bool
+    reason: Optional[str] = None
+
+
 # -----------------------------
 # Mensagens (messages)
 # -----------------------------
