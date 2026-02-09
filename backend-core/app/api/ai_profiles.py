@@ -26,6 +26,11 @@ class HandoffPolicy(str, Enum):
     ignore = "ignore"
 
 
+class AgentMode(str, Enum):
+    sdr_scheduler = "sdr_scheduler"
+    closer = "closer"
+
+
 AI_TEMPLATES = [
     {
         "key": "sdr_padrao",
@@ -55,6 +60,7 @@ class AIProfileBase(BaseModel):
     offer_description: str
     goals: str
     custom_instructions: Optional[str] = None
+    agent_mode: AgentMode = AgentMode.sdr_scheduler
     identity_mode: IdentityMode = IdentityMode.human_agent
     handoff_policy: HandoffPolicy = HandoffPolicy.keep_active_notify
     handoff_custom_text: Optional[str] = None
@@ -74,6 +80,7 @@ class AIProfileUpdate(BaseModel):
     offer_description: Optional[str] = None
     goals: Optional[str] = None
     custom_instructions: Optional[str] = None
+    agent_mode: Optional[AgentMode] = None
     identity_mode: Optional[IdentityMode] = None
     handoff_policy: Optional[HandoffPolicy] = None
     handoff_custom_text: Optional[str] = None
@@ -117,6 +124,12 @@ def _upsert_ai_profile(
     data: dict,
     require_all_fields_for_create: bool = True,
 ) -> models.AIProfile:
+    if data.get("agent_mode") is None:
+        template_key = data.get("template_key") or ""
+        if str(template_key).startswith("closer"):
+            data["agent_mode"] = AgentMode.closer
+        else:
+            data["agent_mode"] = AgentMode.sdr_scheduler
     profile = db.query(models.AIProfile).filter(models.AIProfile.user_id == user_id).first()
 
     if profile:
