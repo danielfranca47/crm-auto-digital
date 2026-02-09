@@ -39,6 +39,13 @@ def _env_flag(value: Optional[str]) -> bool:
     return str(value or "").strip().lower() in {"1", "true", "yes", "on"}
 
 
+def _disable_local_orchestrator() -> bool:
+    raw = os.getenv("CRM_DISABLE_LOCAL_ORCHESTRATOR")
+    if raw is None:
+        return True
+    return _env_flag(raw)
+
+
 def _resolve_stub_user_id(phone_norm: str) -> int:
     stub_user = os.getenv("CRM_STUB_USER_ID")
     if stub_user:
@@ -274,26 +281,34 @@ def handle_inbound(payload: Dict[str, Any]) -> Dict[str, Any]:
             provider=provider,
         )
         bundle = build_context_bundle_from_inbound(event)
-        decision = decide_next_action(bundle)
-        ai_profile_status = bundle.metadata.get("ai_profile_status", "ok")
-        if ai_profile_status != "ok":
-            decision = {
-                **decision,
-                "reason": f"{decision.get('reason')}|ai_profile_{ai_profile_status}_fallback",
-            }
-        template_key = (
-            bundle.ai_profile.get("template_key")
-            if bundle.ai_profile
-            else bundle.playbook.get("template_key")
-        ) or "sdr_padrao"
-        log_ai_decision(
-            lead_id=lead_id,
-            user_id=user_id,
-            decision=decision,
-            template_key=template_key,
-            received_at=received_iso,
-            message_id=external_event_id,
-        )
+        if _disable_local_orchestrator():
+            logger.info(
+                "crm_inbound delegated_to_executor lead_id=%s user_id=%s message_id=%s",
+                lead_id,
+                user_id,
+                external_event_id,
+            )
+        else:
+            decision = decide_next_action(bundle)
+            ai_profile_status = bundle.metadata.get("ai_profile_status", "ok")
+            if ai_profile_status != "ok":
+                decision = {
+                    **decision,
+                    "reason": f"{decision.get('reason')}|ai_profile_{ai_profile_status}_fallback",
+                }
+            template_key = (
+                bundle.ai_profile.get("template_key")
+                if bundle.ai_profile
+                else bundle.playbook.get("template_key")
+            ) or "sdr_padrao"
+            log_ai_decision(
+                lead_id=lead_id,
+                user_id=user_id,
+                decision=decision,
+                template_key=template_key,
+                received_at=received_iso,
+                message_id=external_event_id,
+            )
     except HTTPException:
         raise
     except Exception as exc:  # fail-safe: não bloquear webhook
