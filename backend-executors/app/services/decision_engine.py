@@ -167,6 +167,7 @@ def _build_prompt(context: Dict[str, Any], message_text: str) -> str:
         "id": ai_profile.get("id"),
         "name": ai_profile.get("name"),
         "template_key": ai_profile.get("template_key"),
+        "agent_mode": ai_profile.get("agent_mode"),
         "brand_name": ai_profile.get("brand_name"),
         "tone_of_voice": ai_profile.get("tone_of_voice"),
         "niche": ai_profile.get("niche"),
@@ -273,6 +274,7 @@ def _build_mother_prompt(context: Dict[str, Any], message_text: str) -> str:
         "tone_of_voice": ai_profile.get("tone_of_voice"),
         "niche": ai_profile.get("niche"),
         "target_audience": ai_profile.get("target_audience"),
+        "agent_mode": ai_profile.get("agent_mode"),
     }
     playbook_summary = {"template_key": playbook.get("template_key") or playbook.get("name")}
     metadata_summary = {
@@ -304,6 +306,15 @@ def _build_mother_prompt(context: Dict[str, Any], message_text: str) -> str:
         '  ex.: "vou pensar", "me chama mês que vem", "manda material", "preciso falar com sócio",\n'
         '  "agora não", "sem budget", "vamos ver depois".\n'
         "- Se dúvida, perceived_category pode ser null OU manter lead.category atual.\n"
+        "\n"
+        # ETAPA 4 (roadmap): o marcador "meeting_scheduled" em reason é provisório.
+        # Nesta etapa usamos sinal textual simples para orientar o executor, mas a Etapa 4
+        # deve migrar isso para um sinal estruturado (ex.: fields JSON/signals) e o CRM
+        # será responsável por criar appointment e setar bot_disabled.
+        "POLÍTICA POR MODO (agent_mode):\n"
+        "- sdr_scheduler: foco em qualificar e agendar reunião. Ao detectar reunião marcada, inclua\n"
+        '  "meeting_scheduled" no campo reason.\n'
+        "- closer: foco em avançar até fechamento (não sinalize meeting_scheduled somente por agendar).\n"
         "\n"
         "EXEMPLOS (ultracurtos):\n"
         '1) inbound_message_text: "Amanhã 17h tá confirmado"\n'
@@ -345,6 +356,7 @@ def _build_child_prompt(
         "name": ai_profile.get("name"),
         "template_key": ai_profile.get("template_key"),
         "tone_of_voice": ai_profile.get("tone_of_voice"),
+        "agent_mode": ai_profile.get("agent_mode"),
     }
     playbook_summary = {"template_key": playbook.get("template_key") or playbook.get("name")}
     metadata_summary = {
@@ -520,6 +532,7 @@ def compose_decision_output(
     child_result: ChildResult,
 ) -> DecisionOutput:
     lead = context.get("lead") or {}
+    ai_profile = context.get("ai_profile") or {}
     current_category = lead.get("category")
     suggested_category, category_reason, guardrail_reason = apply_mother_category_guardrails(
         current_category,
@@ -528,6 +541,8 @@ def compose_decision_output(
     outcome, highlight = apply_outcome_guardrails(current_category, child_result)
     next_action = "ask_qualification" if mother_decision.route_to == "qualification" else "reply"
     reason = f"route:{mother_decision.route_to}|{mother_decision.reason}"
+    # NOTE (ETAPA 4): decision_trace é observabilidade apenas; não dispara efeitos colaterais.
+    # A Etapa 4 deverá consumir sinais estruturados para automações no CRM (appointment/bot_disabled).
     return DecisionOutput(
         next_action=next_action,
         message_text=child_result.message_text or "",
@@ -545,6 +560,7 @@ def compose_decision_output(
             "mother_confidence": mother_decision.confidence,
             "lead_current_category": current_category,
             "guardrail_reason": guardrail_reason,
+            "agent_mode": ai_profile.get("agent_mode"),
         },
     )
 
