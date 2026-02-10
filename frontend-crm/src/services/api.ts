@@ -301,6 +301,13 @@ export const api = {
     return apiClient.delete(`/leads/${id}`);
   },
 
+  setLeadBotDisabled: async (
+    leadId: string | number,
+    payload: { disabled: boolean; reason?: string }
+  ) => {
+    return apiClient.post(`/leads/${leadId}/bot-disabled`, payload);
+  },
+
   appointments: {
     list: async (params?: {
       start?: string;
@@ -388,6 +395,20 @@ export const api = {
       return api.appointments.update(arg as string | number, {
         status: "canceled",
       });
+    },
+
+    setOutcome: async (
+      appointmentId: string | number,
+      payload: {
+        outcome: "completed" | "no_show" | "rescheduled";
+        note?: string;
+        reschedule_start_at?: string;
+        reschedule_end_at?: string | null;
+        reactivate_bot?: boolean;
+        move_lead_to?: string | null;
+      }
+    ) => {
+      return apiClient.post(`/appointments/${appointmentId}/outcome`, payload);
     },
 
     /**
