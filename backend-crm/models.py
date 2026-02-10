@@ -33,6 +33,11 @@ class LeadUpdate(BaseModel):
     lastMovement: Optional[datetime] = None
 
 
+class BotDisabledUpdate(BaseModel):
+    disabled: bool
+    reason: Optional[str] = None
+
+
 # -----------------------------
 # Mensagens (messages)
 # -----------------------------
@@ -60,6 +65,7 @@ class MessageOut(MessageBase):
 # Compromissos / Agenda
 # -----------------------------
 AppointmentStatus = Literal["pending", "completed", "canceled"]
+AppointmentOutcome = Literal["completed", "no_show", "rescheduled"]
 
 
 class AppointmentCreate(BaseModel):
@@ -101,12 +107,24 @@ class AppointmentOut(BaseModel):
     start_at: datetime
     end_at: Optional[datetime] = None
     status: AppointmentStatus
+    outcome: Optional[AppointmentOutcome] = None
+    outcome_note: Optional[str] = None
+    outcome_at: Optional[datetime] = None
     location: Optional[str] = None
     created_at: datetime
     updated_at: datetime
 
     # Permite instanciar a partir de objetos/rows (ex.: sqlite3.Row)
     model_config = ConfigDict(from_attributes=True)
+
+
+class AppointmentOutcomeUpdate(BaseModel):
+    outcome: AppointmentOutcome
+    note: Optional[str] = None
+    reschedule_start_at: Optional[datetime] = None
+    reschedule_end_at: Optional[datetime] = None
+    reactivate_bot: bool = True
+    move_lead_to: Optional[str] = None
 
 
 # -----------------------------

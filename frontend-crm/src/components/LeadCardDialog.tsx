@@ -23,6 +23,7 @@ import { ScheduleAppointmentDialog } from "./ScheduleAppointmentDialog";
 import { useLeadAppointments, useCancelAppointment } from "@/hooks/useAppointments";
 import { useToast } from "@/hooks/use-toast";
 import { useLeads } from "@/contexts/LeadsContext";
+import { api } from "@/services/api";
 
 interface LeadCardDialogProps {
   lead: Lead | null;
@@ -78,15 +79,27 @@ const appointmentTypeClasses = {
 } as const;
 
 const appointmentStatusLabels = {
-  scheduled: "Agendado",
+  pending: "Agendado",
   completed: "Concluído",
   canceled: "Cancelado",
 } as const;
 
 const appointmentStatusClasses = {
-  scheduled: "bg-primary/10 text-primary border border-primary/20",
+  pending: "bg-primary/10 text-primary border border-primary/20",
   completed: "bg-success/10 text-success border border-success/20",
   canceled: "bg-destructive/10 text-destructive border border-destructive/20",
+} as const;
+
+const appointmentOutcomeLabels = {
+  completed: "Concluída",
+  no_show: "No-show",
+  rescheduled: "Reagendada",
+} as const;
+
+const appointmentOutcomeClasses = {
+  completed: "bg-success/10 text-success border border-success/20",
+  no_show: "bg-destructive/10 text-destructive border border-destructive/20",
+  rescheduled: "bg-primary/10 text-primary border border-primary/20",
 } as const;
 
 /** Wrapper sem hooks — evita o erro de Hooks. */
@@ -108,6 +121,7 @@ function LeadCardDialogBody({
   const [isEditing, setIsEditing] = useState(false);
   const [editedLead, setEditedLead] = useState<Lead | null>(null);
   const { toast } = useToast();
+  const [isTogglingBot, setIsTogglingBot] = useState(false);
 
   // Contexto + fallback no-op
   const leadsCtx = useLeads();
@@ -118,6 +132,7 @@ function LeadCardDialogBody({
   const cancelAppointment = useCancelAppointment();
   const [isScheduleDialogOpen, setIsScheduleDialogOpen] = useState(false);
   const [appointmentToEdit, setAppointmentToEdit] = useState<Appointment | null>(null);
+  const [rescheduleOutcomeId, setRescheduleOutcomeId] = useState<string | null>(null);
 
   // Carrega compromissos do lead (rota: GET /leads/{id}/appointments)
   const leadId = lead?.id;
@@ -136,7 +151,7 @@ function LeadCardDialogBody({
 
   const asDate = (iso: string) => new Date(iso);
   const isActiveStatus = (s?: string | null) =>
-    ["scheduled", "pending"].includes(String(s));
+    ["pending"].includes(String(s));
 
   // Itens futuros **não cancelados**
   const upcomingAppointments = useMemo(() => {
@@ -145,7 +160,7 @@ function LeadCardDialogBody({
     return appointments
       .filter((a) => {
         if (a.status === "canceled") return false;
-        if (!isActiveStatus(a.status)) return false; // só "scheduled" | "pending"
+        if (!isActiveStatus(a.status)) return false; // só "pending"
         const ts = new Date(a.startTime).getTime();
         return Number.isFinite(ts) && ts >= nowTs;
       })
@@ -195,6 +210,11 @@ function LeadCardDialogBody({
     setIsScheduleDialogOpen(true);
   };
 
+  const handleRescheduleOutcome = (appointment: Appointment) => {
+    setRescheduleOutcomeId(appointment.id);
+    openScheduleDialog(appointment);
+  };
+
   const handleCancelAppointmentAction = async (appointment: Appointment) => {
     try {
       await cancelAppointment.mutateAsync({ id: appointment.id, leadId: lead.id });
@@ -226,6 +246,32 @@ function LeadCardDialogBody({
     setIsScheduleDialogOpen(false);
     setAppointmentToEdit(null);
     refetchAppointments();
+
+    if (rescheduleOutcomeId && appointment.id === rescheduleOutcomeId) {
+      api.appointments
+        .setOutcome(appointment.id, {
+          outcome: "rescheduled",
+          reschedule_start_at: appointment.startTime,
+          reschedule_end_at: appointment.endTime ?? null,
+          reactivate_bot: true,
+        })
+        .then(() => {
+          setEditedLead((prev) => (prev ? { ...prev, bot_disabled: false } : prev));
+          onUpdateLead?.(lead.id, { bot_disabled: false } as Partial<Lead>);
+          toast({ title: "Compromisso reagendado" });
+          refetchAppointments();
+        })
+        .catch((error: any) => {
+          toast({
+            title: "Erro ao reagendar compromisso",
+            description: error?.message ?? "Não foi possível reagendar o compromisso.",
+            variant: "destructive",
+          });
+        })
+        .finally(() => {
+          setRescheduleOutcomeId(null);
+        });
+    }
   };
 
   const currentLead = isEditing ? editedLead! : lead;
@@ -237,6 +283,52 @@ function LeadCardDialogBody({
     // se o compromisso foi cancelado, não consideramos como “próxima ação”
     return appt && appt.status !== "canceled" ? appt : null;
   }, [appointments, currentLead.nextScheduledAction?.id]);
+
+  const handleReactivateBot = async () => {
+    if (!currentLead.bot_disabled) return;
+    setIsTogglingBot(true);
+    try {
+      await api.setLeadBotDisabled(currentLead.id, {
+        disabled: false,
+        reason: "manual_reactivate",
+      });
+      setEditedLead((prev) => (prev ? { ...prev, bot_disabled: false } : prev));
+      onUpdateLead?.(currentLead.id, { bot_disabled: false } as Partial<Lead>);
+      toast({ title: "Agente reativado" });
+    } catch (error: any) {
+      toast({
+        title: "Erro ao reativar agente",
+        description: error?.message ?? "Não foi possível reativar o agente.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsTogglingBot(false);
+    }
+  };
+
+  const handleSetOutcome = async (
+    appointment: Appointment,
+    outcome: "completed" | "no_show"
+  ) => {
+    const note = window.prompt("Observação (opcional):") ?? undefined;
+    try {
+      await api.appointments.setOutcome(appointment.id, {
+        outcome,
+        note,
+        reactivate_bot: true,
+      });
+      setEditedLead((prev) => (prev ? { ...prev, bot_disabled: false } : prev));
+      onUpdateLead?.(lead.id, { bot_disabled: false } as Partial<Lead>);
+      toast({ title: "Resultado registrado" });
+      refetchAppointments();
+    } catch (error: any) {
+      toast({
+        title: "Erro ao registrar resultado",
+        description: error?.message ?? "Não foi possível registrar o resultado.",
+        variant: "destructive",
+      });
+    }
+  };
 
 
   return (
@@ -251,10 +343,23 @@ function LeadCardDialogBody({
               <Badge className={`${statusColors[currentLead.category]} text-white`}>
                 {statusLabels[currentLead.category]}
               </Badge>
+              {currentLead.bot_disabled && (
+                <Badge variant="secondary">Agente desativado</Badge>
+              )}
               <span className="text-xs text-muted-foreground">ID: {currentLead.id}</span>
             </div>
           </div>
           <div className="flex gap-2">
+            {currentLead.bot_disabled && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleReactivateBot}
+                disabled={isTogglingBot}
+              >
+                {isTogglingBot ? "Reativando..." : "Reativar agente"}
+              </Button>
+            )}
             {!isEditing ? (
               <Button variant="outline" size="sm" onClick={() => setIsEditing(true)}>
                 Editar
@@ -501,7 +606,7 @@ function LeadCardDialogBody({
                     <Button
                       variant="outline"
                       size="sm"
-                      onClick={() => openScheduleDialog(nextScheduledAppointment)}
+                      onClick={() => handleRescheduleOutcome(nextScheduledAppointment)}
                     >
                       Reagendar
                     </Button>
@@ -580,6 +685,11 @@ function LeadCardDialogBody({
                                 <Badge className={appointmentStatusClasses[appointment.status]}>
                                   {appointmentStatusLabels[appointment.status]}
                                 </Badge>
+                                {appointment.outcome && (
+                                  <Badge className={appointmentOutcomeClasses[appointment.outcome]}>
+                                    {appointmentOutcomeLabels[appointment.outcome]}
+                                  </Badge>
+                                )}
                               </div>
                               <span className="text-xs text-muted-foreground">
                                 {formatDate(start)}
@@ -599,9 +709,23 @@ function LeadCardDialogBody({
                               <Button
                                 size="sm"
                                 variant="outline"
-                                onClick={() => openScheduleDialog(appointment)}
+                                onClick={() => handleRescheduleOutcome(appointment)}
                               >
                                 Reagendar
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => handleSetOutcome(appointment, "completed")}
+                              >
+                                Concluir
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => handleSetOutcome(appointment, "no_show")}
+                              >
+                                No-show
                               </Button>
                               <Button
                                 size="sm"
@@ -629,10 +753,10 @@ function LeadCardDialogBody({
                       const start = new Date(appointment.startTime);
 
                       // normaliza status para as chaves aceitas nos mapas de UI
-                      type UiStatus = keyof typeof appointmentStatusClasses; // "scheduled" | "completed" | "canceled"
+                      type UiStatus = keyof typeof appointmentStatusClasses; // "pending" | "completed" | "canceled"
                       const statusStr = String(appointment.status);
                       const normalized: UiStatus =
-                        (statusStr === "pending" ? "scheduled" : statusStr) as UiStatus;
+                        (statusStr === "scheduled" ? "pending" : statusStr) as UiStatus;
 
                       return (
                         <div
@@ -647,6 +771,11 @@ function LeadCardDialogBody({
                               <Badge className={appointmentStatusClasses[normalized]}>
                                 {appointmentStatusLabels[normalized]}
                               </Badge>
+                              {appointment.outcome && (
+                                <Badge className={appointmentOutcomeClasses[appointment.outcome]}>
+                                  {appointmentOutcomeLabels[appointment.outcome]}
+                                </Badge>
+                              )}
                             </div>
                             <span className="text-xs text-muted-foreground">
                               {formatDate(start)}
@@ -659,6 +788,31 @@ function LeadCardDialogBody({
                             <p className="text-xs text-muted-foreground">
                               {appointment.description}
                             </p>
+                          )}
+                          {!appointment.outcome && (
+                            <div className="flex flex-wrap items-center gap-2">
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => handleSetOutcome(appointment, "completed")}
+                              >
+                                Concluir
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => handleSetOutcome(appointment, "no_show")}
+                              >
+                                No-show
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => handleRescheduleOutcome(appointment)}
+                              >
+                                Reagendar
+                              </Button>
+                            </div>
                           )}
                         </div>
                       );

@@ -50,6 +50,15 @@ export function LeadCard({
     }).format(date);
   };
 
+  const formatDateTime = (date: Date) => {
+    return new Intl.DateTimeFormat('pt-PT', {
+      day: '2-digit',
+      month: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+    }).format(date);
+  };
+
   const handleWhatsAppClick = (e: React.MouseEvent) => {
     e.stopPropagation();
     const phoneNumber = lead.phone.replace(/\D/g, '');
@@ -107,6 +116,15 @@ export function LeadCard({
           <div className="text-muted-foreground">
             <span className="text-xs font-medium">Obs:</span> 
             <p className="text-xs mt-1 line-clamp-2">{lead.observations}</p>
+          </div>
+        )}
+
+        {lead.nextScheduledAction?.date && (
+          <div className="flex items-center text-muted-foreground">
+            <Calendar className="w-3 h-3 mr-2" />
+            <span className="text-xs">
+              Próximo compromisso: {formatDateTime(lead.nextScheduledAction.date)}
+            </span>
           </div>
         )}
 
