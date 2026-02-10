@@ -16,6 +16,7 @@ class DecisionOutput(BaseModel):
     kanban_highlight: Optional[Literal["green", "orange"]] = None
     signals: list[str] = Field(default_factory=list)
     confidence: Optional[float] = None
+    decision_trace: Optional[dict] = None
 
     @field_validator("questions", mode="after")
     @classmethod

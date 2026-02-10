@@ -277,6 +277,13 @@ class HandoffRequestedLog(BaseModel):
     identity_mode: str
 
 
+class MeetingScheduledLog(BaseModel):
+    lead_id: int
+    user_id: Optional[int] = None
+    job_id: Optional[int] = None
+    reason: str
+
+
 class MarkOutboundSentRequest(BaseModel):
     provider_message_id: str
     provider: Optional[str] = None
@@ -568,6 +575,30 @@ def log_handoff_requested(
             VALUES (?, NULL, NULL, 'handoff_requested', ?, ?)
             """,
             (payload.lead_id, _json_dumps(notes), payload.user_id),
+        )
+        conn.commit()
+        return {"status": "ok"}
+
+
+@router.post("/internal/logs/meeting-scheduled")
+def log_meeting_scheduled(
+    payload: MeetingScheduledLog,
+    _: str = Depends(_require_service_token),
+):
+    with get_connection() as conn:
+        cur = conn.cursor()
+        notes = payload.dict()
+        user_id = payload.user_id
+        if user_id is None:
+            row = cur.execute("SELECT user_id FROM leads WHERE id = ?", (payload.lead_id,)).fetchone()
+            if row:
+                user_id = row["user_id"]
+        cur.execute(
+            """
+            INSERT INTO prospection_logs (lead_id, channel, message_id, action, notes, user_id)
+            VALUES (?, NULL, NULL, 'meeting_scheduled', ?, ?)
+            """,
+            (payload.lead_id, _json_dumps(notes), user_id),
         )
         conn.commit()
         return {"status": "ok"}

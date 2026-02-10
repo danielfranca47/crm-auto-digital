@@ -7,6 +7,7 @@ from app.clients import core_client, crm_client
 from app.core.config import settings
 from app.core.logging import log_ctx, setup_logging
 from app.services import decision_engine
+from app.services import meeting_scheduler
 
 JOB_MAX_ATTEMPTS = 3
 
@@ -114,6 +115,7 @@ def _build_result_payload(
         "kanban_highlight": decision.kanban_highlight,
         "signals": decision.signals,
         "confidence": decision.confidence,
+        "decision_trace": decision.decision_trace,
         "source_job_id": source_job_id,
     }
 
@@ -310,6 +312,7 @@ def execute_job(job_id: str, logger: logging.Logger) -> int:
         decision.reason,
         extra={"phase": "decision"},
     )
+    meeting_scheduler.handle_meeting_scheduled(context, decision, logger=ctx_logger)
     outbound_body = _build_outbound_body(decision)
     if decision.next_action == "ask_qualification" and not outbound_body:
         fallback_text = _format_questions(decision.questions or [])
