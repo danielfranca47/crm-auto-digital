@@ -43,6 +43,7 @@ export type AiProfilePayload = {
   offer_description: string;
   goals: string;
   custom_instructions?: string | null;
+  agent_mode?: "sdr_scheduler" | "closer" | null;
   identity_mode?: "virtual_assistant" | "human_agent" | "user_clone";
   handoff_policy?: "disable_bot" | "keep_active_notify" | "ignore";
   handoff_custom_text?: string | null;
@@ -300,6 +301,13 @@ export const api = {
     return apiClient.delete(`/leads/${id}`);
   },
 
+  setLeadBotDisabled: async (
+    leadId: string | number,
+    payload: { disabled: boolean; reason?: string }
+  ) => {
+    return apiClient.post(`/leads/${leadId}/bot-disabled`, payload);
+  },
+
   appointments: {
     list: async (params?: {
       start?: string;
@@ -387,6 +395,20 @@ export const api = {
       return api.appointments.update(arg as string | number, {
         status: "canceled",
       });
+    },
+
+    setOutcome: async (
+      appointmentId: string | number,
+      payload: {
+        outcome: "completed" | "no_show" | "rescheduled";
+        note?: string;
+        reschedule_start_at?: string;
+        reschedule_end_at?: string | null;
+        reactivate_bot?: boolean;
+        move_lead_to?: string | null;
+      }
+    ) => {
+      return apiClient.post(`/appointments/${appointmentId}/outcome`, payload);
     },
 
     /**

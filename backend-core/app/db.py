@@ -67,6 +67,7 @@ def ensure_whatsapp_connections_table() -> None:
 
 def ensure_ai_profile_columns() -> None:
     columns = {
+        "agent_mode": "sdr_scheduler",
         "identity_mode": "human_agent",
         "handoff_policy": "keep_active_notify",
         "handoff_custom_text": None,
@@ -159,4 +160,3 @@ def ensure_ai_profile_columns() -> None:
                     text(f"UPDATE ai_profiles SET {name} = :default WHERE {name} IS NULL"),
                     {"default": default},
                 )
-

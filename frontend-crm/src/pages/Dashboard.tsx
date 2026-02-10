@@ -10,7 +10,14 @@ import { ScheduleAppointmentDialog } from "@/components/ScheduleAppointmentDialo
 const Dashboard = () => {
   const navigate = useNavigate();
   const { columns, archivedColumns } = useLeads();
-  const { data: appointments = [], isLoading, isError, error, refetch } = useAppointments();
+  const todayRange = useMemo(() => {
+    const start = new Date();
+    start.setHours(0, 0, 0, 0);
+    const end = new Date();
+    end.setHours(23, 59, 59, 999);
+    return { start: start.toISOString(), end: end.toISOString() };
+  }, []);
+  const { data: appointments = [], isLoading, isError, error, refetch } = useAppointments(todayRange);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
 
   const leadIds = useMemo(() => {

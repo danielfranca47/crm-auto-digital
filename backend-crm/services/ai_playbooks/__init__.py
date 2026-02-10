@@ -20,7 +20,7 @@ PLAYBOOKS: Dict[str, Dict[str, Any]] = {
             "Qual é o público-alvo principal?",
         ],
     },
-    "closer_agressivo_controlado": {
+    "closer_agressivo": {
         "max_chars": 350,
         "response_style": "direct",
         "default_next_action": "reply",
@@ -35,6 +35,8 @@ PLAYBOOKS: Dict[str, Dict[str, Any]] = {
 def get_playbook(template_key: str | None) -> Dict[str, Any]:
     """Return a playbook matching the template_key or fallback to the default SDR playbook."""
     key = template_key or "sdr_padrao"
+    if key == "closer_agressivo_controlado":
+        key = "closer_agressivo"
     playbook = PLAYBOOKS.get(key)
     if playbook is None:
         return dict(PLAYBOOKS["sdr_padrao"])

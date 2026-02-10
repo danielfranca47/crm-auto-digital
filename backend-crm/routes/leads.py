@@ -1,10 +1,11 @@
 # backend/routes/leads.py
 from typing import Optional
+import json
 from fastapi import APIRouter, HTTPException, Depends
 from datetime import datetime, timezone
 
 from database import get_connection, normalize_datetime_value
-from models import Lead, LeadUpdate, AppointmentCreate, AppointmentUpdate
+from models import Lead, LeadUpdate, AppointmentCreate, AppointmentUpdate, BotDisabledUpdate
 from security_core import CurrentUser, require_crm_access
 from services import rate_limit_service
 
@@ -272,6 +273,44 @@ def atualizar_lead_parcial(id: int, lead: LeadUpdate, current_user: CurrentUser 
 
         return {"message": "Lead atualizado com sucesso"}
     except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        conn.close()
+
+
+@router.post("/{lead_id}/bot-disabled")
+def update_lead_bot_disabled(
+    lead_id: int,
+    payload: BotDisabledUpdate,
+    current_user: CurrentUser = Depends(require_crm_access),
+):
+    conn = get_connection()
+    cursor = conn.cursor()
+    try:
+        _require_lead_for_user(conn, lead_id, current_user.id)
+        cursor.execute(
+            """
+            UPDATE leads
+               SET bot_disabled = ?,
+                   lastMovement = CURRENT_TIMESTAMP
+             WHERE id = ? AND user_id = ?
+            """,
+            (1 if payload.disabled else 0, lead_id, current_user.id),
+        )
+        notes = {"disabled": payload.disabled}
+        if payload.reason:
+            notes["reason"] = payload.reason
+        cursor.execute(
+            """
+            INSERT INTO prospection_logs (lead_id, channel, message_id, action, notes, user_id)
+            VALUES (?, NULL, NULL, 'bot_disabled_changed', ?, ?)
+            """,
+            (lead_id, json.dumps(notes, ensure_ascii=False), current_user.id),
+        )
+        conn.commit()
+        return {"status": "ok", "lead_id": lead_id, "bot_disabled": payload.disabled}
+    except Exception as e:
+        conn.rollback()
         raise HTTPException(status_code=500, detail=str(e))
     finally:
         conn.close()

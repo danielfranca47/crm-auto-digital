@@ -66,6 +66,7 @@ function mapRawLead(raw: any): Lead {
     category: raw.category || 'to-prospect',
     customMessage: raw.customMessage || '',
     observations: raw.observations || '',
+    bot_disabled: Boolean(raw.bot_disabled ?? raw.botDisabled),
     createdAt: raw.createdAt ? new Date(raw.createdAt) : new Date(),
     lastMovement: raw.lastMovement ? new Date(raw.lastMovement) : new Date(),
     nextScheduledAction,

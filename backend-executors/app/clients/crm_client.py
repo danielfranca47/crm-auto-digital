@@ -170,6 +170,72 @@ def set_lead_bot_disabled(
     return _handle_response(response, str(lead_id), for_context=False)
 
 
+def list_appointments(
+    *,
+    start: str,
+    end: str,
+    lead_id: int | None = None,
+    status: str | None = None,
+) -> list[Dict[str, Any]]:
+    base_url = settings.crm_api_base.rstrip("/")
+    url = f"{base_url}/api/appointments"
+    params: Dict[str, Any] = {"start": start, "end": end}
+    if lead_id is not None:
+        params["lead_id"] = lead_id
+    if status:
+        params["status"] = status
+    response = _send_request("GET", url, params=params)
+    payload = _handle_response(response, "appointments", for_context=False)
+    if isinstance(payload, list):
+        return payload
+    return payload.get("appointments", []) if isinstance(payload, dict) else []
+
+
+def create_lead_appointment(
+    *,
+    lead_id: int,
+    title: str,
+    description: str | None,
+    appointment_type: str,
+    start_at: str,
+    end_at: str | None = None,
+) -> Dict[str, Any]:
+    base_url = settings.crm_api_base.rstrip("/")
+    url = f"{base_url}/api/appointments"
+    payload: Dict[str, Any] = {
+        "lead_id": lead_id,
+        "title": title,
+        "description": description,
+        "type": appointment_type,
+        "status": "pending",
+        "start_at": start_at,
+        "end_at": end_at or start_at,
+    }
+    response = _send_request("POST", url, json=payload)
+    return _handle_response(response, str(lead_id), for_context=False)
+
+
+def log_meeting_scheduled(
+    *,
+    lead_id: int,
+    user_id: int | None,
+    job_id: int | None,
+    reason: str,
+) -> Dict[str, Any]:
+    base_url = settings.crm_api_base.rstrip("/")
+    url = f"{base_url}/api/internal/logs/meeting-scheduled"
+    payload: Dict[str, Any] = {
+        "lead_id": lead_id,
+        "reason": reason,
+    }
+    if user_id is not None:
+        payload["user_id"] = user_id
+    if job_id is not None:
+        payload["job_id"] = job_id
+    response = _send_request("POST", url, json=payload)
+    return _handle_response(response, str(lead_id), for_context=False)
+
+
 def log_handoff_requested(
     *,
     user_id: int,

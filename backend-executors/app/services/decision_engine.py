@@ -125,6 +125,8 @@ def _sanitize_category_decision(
 ) -> DecisionOutput:
     allowed = _get_allowed_lead_categories(context)
     if decision.next_action == "ask_qualification":
+        if decision.category_reason and "child_recommended" in decision.category_reason:
+            return decision
         decision.suggested_category = None
         decision.category_reason = None
         return decision
@@ -167,6 +169,7 @@ def _build_prompt(context: Dict[str, Any], message_text: str) -> str:
         "id": ai_profile.get("id"),
         "name": ai_profile.get("name"),
         "template_key": ai_profile.get("template_key"),
+        "agent_mode": ai_profile.get("agent_mode"),
         "brand_name": ai_profile.get("brand_name"),
         "tone_of_voice": ai_profile.get("tone_of_voice"),
         "niche": ai_profile.get("niche"),
@@ -273,6 +276,7 @@ def _build_mother_prompt(context: Dict[str, Any], message_text: str) -> str:
         "tone_of_voice": ai_profile.get("tone_of_voice"),
         "niche": ai_profile.get("niche"),
         "target_audience": ai_profile.get("target_audience"),
+        "agent_mode": ai_profile.get("agent_mode"),
     }
     playbook_summary = {"template_key": playbook.get("template_key") or playbook.get("name")}
     metadata_summary = {
@@ -292,7 +296,8 @@ def _build_mother_prompt(context: Dict[str, Any], message_text: str) -> str:
         "Regras:\n"
         "- route_to é obrigatório e indica a próxima fase a focar.\n"
         "- perceived_category indica o estágio atual do lead (sua percepção).\n"
-        "- Se estiver em dúvida, use null ou mantenha o estágio igual ao lead.category atual.\n"
+        "- Se estiver em dúvida e lead.category existir, mantenha perceived_category = lead.category (evite null).\n"
+        "- Use perceived_category=null somente se lead.category estiver vazio E não houver sinal claro no inbound.\n"
         "- confidence entre 0 e 1.\n"
         "- reason curto.\n"
         "\n"
@@ -303,15 +308,49 @@ def _build_mother_prompt(context: Dict[str, Any], message_text: str) -> str:
         "- FOLLOW-UP é SOMENTE após a apresentação quando o lead não fechou, com sinais de nutrição,\n"
         '  ex.: "vou pensar", "me chama mês que vem", "manda material", "preciso falar com sócio",\n'
         '  "agora não", "sem budget", "vamos ver depois".\n'
-        "- Se dúvida, perceived_category pode ser null OU manter lead.category atual.\n"
+        "- REGRA FORTE FOLLOW-UP: só use follow-up se houver evidência de apresentação realizada,\n"
+        "  seja por history (ex.: \"na call de ontem\", \"como falamos na apresentação\")\n"
+        "  OU se lead.category atual já for follow-up/closing. Se for apenas apresentation e não houver\n"
+        "  evidência textual de que a call aconteceu, prefira apresentation.\n"
+        "  Se não houver evidência, mantenha qualification ou apresentation conforme o contexto.\n"
+        "- Qualification: dúvidas iniciais (preço/como funciona/serve pra mim) sem combinação de horário/link.\n"
+        "- Apresentation: qualquer ação de agendar/confirmar/reagendar/pedir link/confirmar presença.\n"
+        "\n"
+        # ETAPA 4 (roadmap): o marcador "meeting_scheduled" em reason é provisório.
+        # Nesta etapa usamos sinal textual simples para orientar o executor, mas a Etapa 4
+        # deve migrar isso para um sinal estruturado (ex.: fields JSON/signals) e o CRM
+        # será responsável por criar appointment e setar bot_disabled.
+        "POLÍTICA POR MODO (agent_mode):\n"
+        "- sdr_scheduler: foco em qualificar e agendar reunião.\n"
+        "  - Se agendar/confirmar/reagendar/pedir link, route_to=apresentation e perceived_category=apresentation.\n"
+        "  - Se confirmação de horário/link fechado (ex.: \"Fechou amanhã 17h\", \"pode confirmar\", \"manda o link\"),\n"
+        '    inclua a substring "meeting_scheduled" no reason.\n'
+        "- closer: foco em avançar até fechamento.\n"
+        "  - Agendamento NÃO é objetivo final; não inclua meeting_scheduled apenas por agendar.\n"
+        "  - Se inbound for claramente de fechamento (\"posso assinar\", \"manda contrato\", \"quero fechar\"),\n"
+        "    route_to=closing e perceived_category=closing.\n"
         "\n"
         "EXEMPLOS (ultracurtos):\n"
         '1) inbound_message_text: "Amanhã 17h tá confirmado"\n'
-        '   -> {"route_to":"apresentation","perceived_category":"apresentation","confidence":0.8,"reason":"confirmou reunião"}\n'
+        '   -> {"route_to":"apresentation","perceived_category":"apresentation","confidence":0.8,"reason":"meeting_scheduled|confirmou horário"}\n'
         '2) inbound_message_text: "Pode reagendar pra sexta?"\n'
-        '   -> {"route_to":"apresentation","perceived_category":"apresentation","confidence":0.8,"reason":"reagendar reunião"}\n'
+        '   -> {"route_to":"apresentation","perceived_category":"apresentation","confidence":0.8,"reason":"meeting_scheduled|reagendar"}\n'
         '3) inbound_message_text: "Vou pensar, me chama mês que vem" (apresentação já ocorreu)\n'
         '   -> {"route_to":"follow-up","perceived_category":"follow-up","confidence":0.7,"reason":"nutrição pós-apresentação"}\n'
+        '4) NEGATIVO: inbound_message_text: "Vou pensar" (sem evidência de apresentação)\n'
+        '   -> NÃO use follow-up; mantenha qualification ou apresentation conforme contexto.\n'
+        '5) NEGATIVO: inbound_message_text: "Qual o preço?"\n'
+        '   -> NÃO use closing; prefira qualification.\n'
+        "6) SDR: inbound_message_text: \"Fechou amanhã 17h, manda o link\"\n"
+        '   -> {"route_to":"apresentation","perceived_category":"apresentation","confidence":0.85,"reason":"meeting_scheduled|confirmou horário"}\n'
+        "7) SDR: inbound_message_text: \"Pode confirmar a reunião?\"\n"
+        '   -> {"route_to":"apresentation","perceived_category":"apresentation","confidence":0.8,"reason":"meeting_scheduled|confirmou reunião"}\n'
+        "8) CLOSER: inbound_message_text: \"Posso assinar hoje?\"\n"
+        '   -> {"route_to":"closing","perceived_category":"closing","confidence":0.9,"reason":"intenção de fechamento"}\n'
+        "9) CLOSER: inbound_message_text: \"Manda contrato\"\n"
+        '   -> {"route_to":"closing","perceived_category":"closing","confidence":0.85,"reason":"pedido de contrato"}\n'
+        "10) CLOSER (negativo): inbound_message_text: \"Fechou amanhã 17h\"\n"
+        '   -> {"route_to":"apresentation","perceived_category":"apresentation","confidence":0.8,"reason":"confirmou horário (no closer, sem meeting_scheduled)"}\n'
         "\n"
         "CONTEXTO:\n"
         f"- lead: {json.dumps(lead_summary, ensure_ascii=False)}\n"
@@ -345,6 +384,7 @@ def _build_child_prompt(
         "name": ai_profile.get("name"),
         "template_key": ai_profile.get("template_key"),
         "tone_of_voice": ai_profile.get("tone_of_voice"),
+        "agent_mode": ai_profile.get("agent_mode"),
     }
     playbook_summary = {"template_key": playbook.get("template_key") or playbook.get("name")}
     metadata_summary = {
@@ -368,6 +408,142 @@ def _build_child_prompt(
         "- confidence entre 0 e 1.\n"
         "- recommended_next_category deve ser um estágio do funil ou null.\n"
         "- message_text é a resposta para o WhatsApp.\n"
+        "\n"
+        f"ROTA MÃE: {mother_decision.route_to} (confidence={mother_decision.confidence})\n"
+        f"Motivo MÃE: {mother_decision.reason}\n"
+        "\n"
+        "CONTEXTO:\n"
+        f"- lead: {json.dumps(lead_summary, ensure_ascii=False)}\n"
+        f"- ai_profile: {json.dumps(ai_summary, ensure_ascii=False)}\n"
+        f"- playbook: {json.dumps(playbook_summary, ensure_ascii=False)}\n"
+        f"- metadata: {json.dumps(metadata_summary, ensure_ascii=False)}\n"
+        f"- history: {history_text}\n"
+        f"- inbound_message_text: {message_text}\n"
+    )
+
+
+def _build_child_prompt_qualification(
+    context: Dict[str, Any],
+    message_text: str,
+    mother_decision: MotherDecision,
+) -> str:
+    lead = context.get("lead") or {}
+    ai_profile = context.get("ai_profile") or {}
+    playbook = context.get("playbook") or {}
+    metadata = context.get("metadata") or {}
+    history = context.get("history") or []
+
+    lead_summary = {
+        "id": lead.get("id"),
+        "name": _safe_get(lead, "contactName", "companyName", "name"),
+        "category": lead.get("category"),
+        "segment": lead.get("segment"),
+    }
+    ai_summary = {
+        "id": ai_profile.get("id"),
+        "name": ai_profile.get("name"),
+        "brand_name": ai_profile.get("brand_name"),
+        "tone_of_voice": ai_profile.get("tone_of_voice"),
+        "niche": ai_profile.get("niche"),
+        "agent_mode": ai_profile.get("agent_mode"),
+    }
+    playbook_summary = {
+        "template_key": playbook.get("template_key") or playbook.get("name"),
+        "max_chars": playbook.get("max_chars"),
+    }
+    metadata_summary = {
+        "provider": metadata.get("provider"),
+        "instance_id": metadata.get("instance_id"),
+    }
+
+    history_text = _format_history(history)
+    return (
+        "Você é a FILHA QUALIFICATION e deve responder SOMENTE JSON válido:\n"
+        "{\n"
+        '  "message_text": "string",\n'
+        '  "did_complete_phase": false,\n'
+        '  "recommended_next_category": "apresentation|null",\n'
+        '  "outcome": null,\n'
+        '  "kanban_highlight": null,\n'
+        '  "signals": ["..."],\n'
+        '  "confidence": 0.0\n'
+        "}\n"
+        "Regras:\n"
+        "- message_text é obrigatório e deve conter 1–2 perguntas objetivas de qualificação.\n"
+        "- NÃO agendar reunião aqui (só agendar na rota apresentation, salvo pedido explícito do inbound).\n"
+        "- Use tone_of_voice, brand_name e niche quando disponíveis.\n"
+        "- Respeite playbook.max_chars se existir (senão, resposta curta).\n"
+        "- recommended_next_category pode ser null ou 'apresentation' (micro-ajuste de avanço).\n"
+        "- outcome e kanban_highlight devem ser null.\n"
+        "\n"
+        f"ROTA MÃE: {mother_decision.route_to} (confidence={mother_decision.confidence})\n"
+        f"Motivo MÃE: {mother_decision.reason}\n"
+        "\n"
+        "CONTEXTO:\n"
+        f"- lead: {json.dumps(lead_summary, ensure_ascii=False)}\n"
+        f"- ai_profile: {json.dumps(ai_summary, ensure_ascii=False)}\n"
+        f"- playbook: {json.dumps(playbook_summary, ensure_ascii=False)}\n"
+        f"- metadata: {json.dumps(metadata_summary, ensure_ascii=False)}\n"
+        f"- history: {history_text}\n"
+        f"- inbound_message_text: {message_text}\n"
+    )
+
+
+def _build_child_prompt_apresentation(
+    context: Dict[str, Any],
+    message_text: str,
+    mother_decision: MotherDecision,
+) -> str:
+    lead = context.get("lead") or {}
+    ai_profile = context.get("ai_profile") or {}
+    playbook = context.get("playbook") or {}
+    metadata = context.get("metadata") or {}
+    history = context.get("history") or []
+
+    lead_summary = {
+        "id": lead.get("id"),
+        "name": _safe_get(lead, "contactName", "companyName", "name"),
+        "category": lead.get("category"),
+        "segment": lead.get("segment"),
+    }
+    ai_summary = {
+        "id": ai_profile.get("id"),
+        "name": ai_profile.get("name"),
+        "brand_name": ai_profile.get("brand_name"),
+        "tone_of_voice": ai_profile.get("tone_of_voice"),
+        "niche": ai_profile.get("niche"),
+        "agent_mode": ai_profile.get("agent_mode"),
+    }
+    playbook_summary = {
+        "template_key": playbook.get("template_key") or playbook.get("name"),
+        "max_chars": playbook.get("max_chars"),
+    }
+    metadata_summary = {
+        "provider": metadata.get("provider"),
+        "instance_id": metadata.get("instance_id"),
+    }
+
+    history_text = _format_history(history)
+    return (
+        "Você é a FILHA APRESENTATION e deve responder SOMENTE JSON válido:\n"
+        "{\n"
+        '  "message_text": "string",\n'
+        '  "did_complete_phase": false,\n'
+        '  "recommended_next_category": null,\n'
+        '  "outcome": null,\n'
+        '  "kanban_highlight": null,\n'
+        '  "signals": ["..."],\n'
+        '  "confidence": 0.0\n'
+        "}\n"
+        "Regras:\n"
+        "- message_text é obrigatório e deve lidar com agenda: pedir dia/horário, confirmar, reagendar, enviar link.\n"
+        "- Se agent_mode for sdr_scheduler e mother_decision.reason contiver meeting_scheduled, confirme horário\n"
+        "  e indique que enviará/confirmará o link (sem criar appointment).\n"
+        "- Se agent_mode for closer, mantenha postura de avanço comercial, mas ainda trate o agendamento.\n"
+        "- Use tone_of_voice, brand_name e niche quando disponíveis.\n"
+        "- Respeite playbook.max_chars se existir (senão, resposta curta).\n"
+        "- recommended_next_category deve ser null.\n"
+        "- outcome e kanban_highlight devem ser null.\n"
         "\n"
         f"ROTA MÃE: {mother_decision.route_to} (confidence={mother_decision.confidence})\n"
         f"Motivo MÃE: {mother_decision.reason}\n"
@@ -513,6 +689,34 @@ def apply_mother_category_guardrails(
     return None, None, "jump_blocked_low_conf"
 
 
+def _apply_child_micro_adjustment(
+    *,
+    base_category: Optional[str],
+    child_result: ChildResult,
+    category_reason: Optional[str],
+    mother_route_to: str,
+) -> tuple[Optional[str], Optional[str]]:
+    if mother_route_to != "qualification":
+        return base_category, category_reason
+    recommended = _normalize_category(child_result.recommended_next_category)
+    if not recommended:
+        return base_category, category_reason
+    if not child_result.did_complete_phase:
+        return base_category, category_reason
+    normalized_base = _normalize_category(base_category)
+    if not normalized_base:
+        return base_category, category_reason
+    allowed_next = _ALLOWED_ADVANCE.get(normalized_base, set())
+    if recommended not in allowed_next:
+        return base_category, category_reason
+    reason = category_reason or ""
+    if reason:
+        reason = f"{reason}|child_recommended:{recommended}"
+    else:
+        reason = f"child_recommended:{recommended}"
+    return recommended, reason
+
+
 def compose_decision_output(
     *,
     context: Dict[str, Any],
@@ -520,14 +724,24 @@ def compose_decision_output(
     child_result: ChildResult,
 ) -> DecisionOutput:
     lead = context.get("lead") or {}
+    ai_profile = context.get("ai_profile") or {}
     current_category = lead.get("category")
     suggested_category, category_reason, guardrail_reason = apply_mother_category_guardrails(
         current_category,
         mother_decision,
     )
+    suggested_category, category_reason = _apply_child_micro_adjustment(
+        base_category=suggested_category or current_category,
+        child_result=child_result,
+        category_reason=category_reason,
+        mother_route_to=mother_decision.route_to,
+    )
     outcome, highlight = apply_outcome_guardrails(current_category, child_result)
     next_action = "ask_qualification" if mother_decision.route_to == "qualification" else "reply"
     reason = f"route:{mother_decision.route_to}|{mother_decision.reason}"
+    # NOTE (ETAPA 4): decision_trace é observabilidade apenas; não dispara efeitos colaterais.
+    # A Etapa 4 deverá consumir sinais estruturados para automações no CRM (appointment/bot_disabled).
+    meeting_scheduled = "meeting_scheduled" in (mother_decision.reason or "")
     return DecisionOutput(
         next_action=next_action,
         message_text=child_result.message_text or "",
@@ -545,6 +759,8 @@ def compose_decision_output(
             "mother_confidence": mother_decision.confidence,
             "lead_current_category": current_category,
             "guardrail_reason": guardrail_reason,
+            "agent_mode": ai_profile.get("agent_mode"),
+            "meeting_scheduled": meeting_scheduled,
         },
     )
 
@@ -587,7 +803,12 @@ def decide(context: Dict[str, Any], logger: Optional[logging.Logger] = None) -> 
         stage = "mother_validate"
         mother_decision = MotherDecision.model_validate(mother_payload)
 
-        child_prompt = _build_child_prompt(context, message_text, mother_decision)
+        if mother_decision.route_to == "qualification":
+            child_prompt = _build_child_prompt_qualification(context, message_text, mother_decision)
+        elif mother_decision.route_to == "apresentation":
+            child_prompt = _build_child_prompt_apresentation(context, message_text, mother_decision)
+        else:
+            child_prompt = _build_child_prompt(context, message_text, mother_decision)
         stage = "child_call"
         child_text = llm_service.generate_child_result(mother_decision.route_to, child_prompt)
         stage = "child_parse"
