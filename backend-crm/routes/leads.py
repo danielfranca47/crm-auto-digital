@@ -272,6 +272,8 @@ def atualizar_lead_parcial(id: int, lead: LeadUpdate, current_user: CurrentUser 
             raise HTTPException(status_code=404, detail="Lead não encontrado")
 
         return {"message": "Lead atualizado com sucesso"}
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
     finally:
@@ -424,15 +426,28 @@ def atualizar_compromisso(lead_id: int, appointment_id: int, payload: Appointmen
             # nada para atualizar; devolve estado atual mapeado
             return _map_appointment_row(row)
 
-        # Se start/end forem alterados, validamos e checamos conflito
+        # Se start/end forem alterados, normalizamos valores finais para manter coerência.
+        # Regra mínima de hardening: end_at ausente ou menor que start_at -> end_at = start_at.
         new_start = dados.get("start_at", None)
         new_end = dados.get("end_at", None)
         if new_start is not None or new_end is not None:
+            start_final_iso = normalize_datetime_value(new_start if new_start is not None else row["start_at"])
+            end_candidate = new_end if new_end is not None else row["end_at"]
+            end_final_iso = normalize_datetime_value(end_candidate) if end_candidate is not None else None
+
+            if not end_final_iso:
+                end_final_iso = start_final_iso
+            elif datetime.fromisoformat(end_final_iso) < datetime.fromisoformat(start_final_iso):
+                end_final_iso = start_final_iso
+
+            dados["start_at"] = start_final_iso
+            dados["end_at"] = end_final_iso
+
             _check_conflict(
                 conn,
                 lead_id,
-                new_start if new_start is not None else row["start_at"],
-                new_end if new_end is not None else row["end_at"],
+                start_final_iso,
+                end_final_iso,
                 ignore_appointment_id=appointment_id,
             )
 
