@@ -10,6 +10,7 @@ import {
   Tag,
   Plus,
   RefreshCw,
+  AlertTriangle,
 } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "./ui/dialog";
 import { Badge } from "./ui/badge";
@@ -121,7 +122,6 @@ function LeadCardDialogBody({
   const [isEditing, setIsEditing] = useState(false);
   const [editedLead, setEditedLead] = useState<Lead | null>(null);
   const { toast } = useToast();
-  const [isTogglingBot, setIsTogglingBot] = useState(false);
 
   // Contexto + fallback no-op
   const leadsCtx = useLeads();
@@ -165,6 +165,20 @@ function LeadCardDialogBody({
         return Number.isFinite(ts) && ts >= nowTs;
       })
       .sort((a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime());
+  }, [appointments]);
+
+  const nextMeetingAppointment = useMemo(() => {
+    const nowTs = Date.now();
+    return (
+      appointments
+        .filter((appointment) => {
+          const isMeetingType = ["meeting", "presentation"].includes(String(appointment.type));
+          const normalizedStatus = String(appointment.status) === "scheduled" ? "pending" : String(appointment.status);
+          const startsAt = new Date(appointment.startTime).getTime();
+          return isMeetingType && normalizedStatus === "pending" && Number.isFinite(startsAt) && startsAt >= nowTs;
+        })
+        .sort((a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime())[0] ?? null
+    );
   }, [appointments]);
 
   // Itens passados **não cancelados**
@@ -275,6 +289,12 @@ function LeadCardDialogBody({
   };
 
   const currentLead = isEditing ? editedLead! : lead;
+  const botPauseReason = useMemo(() => {
+    if (!currentLead?.bot_disabled) return null;
+    if (nextMeetingAppointment) return "Reunião agendada";
+    return "Motivo indisponível";
+  }, [currentLead?.bot_disabled, nextMeetingAppointment]);
+
   const nextScheduledAppointment = useMemo(() => {
     const appointmentId = currentLead.nextScheduledAction?.id;
     if (!appointmentId) return null;
@@ -283,28 +303,6 @@ function LeadCardDialogBody({
     // se o compromisso foi cancelado, não consideramos como “próxima ação”
     return appt && appt.status !== "canceled" ? appt : null;
   }, [appointments, currentLead.nextScheduledAction?.id]);
-
-  const handleReactivateBot = async () => {
-    if (!currentLead.bot_disabled) return;
-    setIsTogglingBot(true);
-    try {
-      await api.setLeadBotDisabled(currentLead.id, {
-        disabled: false,
-        reason: "manual_reactivate",
-      });
-      setEditedLead((prev) => (prev ? { ...prev, bot_disabled: false } : prev));
-      onUpdateLead?.(currentLead.id, { bot_disabled: false } as Partial<Lead>);
-      toast({ title: "Agente reativado" });
-    } catch (error: any) {
-      toast({
-        title: "Erro ao reativar agente",
-        description: error?.message ?? "Não foi possível reativar o agente.",
-        variant: "destructive",
-      });
-    } finally {
-      setIsTogglingBot(false);
-    }
-  };
 
   const handleSetOutcome = async (
     appointment: Appointment,
@@ -350,16 +348,6 @@ function LeadCardDialogBody({
             </div>
           </div>
           <div className="flex gap-2">
-            {currentLead.bot_disabled && (
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={handleReactivateBot}
-                disabled={isTogglingBot}
-              >
-                {isTogglingBot ? "Reativando..." : "Reativar agente"}
-              </Button>
-            )}
             {!isEditing ? (
               <Button variant="outline" size="sm" onClick={() => setIsEditing(true)}>
                 Editar
@@ -379,6 +367,23 @@ function LeadCardDialogBody({
       </DialogHeader>
 
       <div className="space-y-6">
+        {currentLead.bot_disabled && (
+          <div className="rounded-md border border-warning/30 bg-warning/10 p-4 space-y-2">
+            <div className="flex items-center gap-2 text-warning font-medium">
+              <AlertTriangle className="h-4 w-4" />
+              ⚠️ Bot pausado
+            </div>
+            <p className="text-sm text-foreground">
+              <span className="font-medium">Motivo:</span> {botPauseReason}
+            </p>
+            {nextMeetingAppointment && (
+              <p className="text-sm text-foreground">
+                <span className="font-medium">Data:</span> {formatDate(new Date(nextMeetingAppointment.startTime))}
+              </p>
+            )}
+          </div>
+        )}
+
         {/* Informações Básicas */}
         <div className="space-y-4">
           <h3 className="text-lg font-medium text-foreground flex items-center gap-2">

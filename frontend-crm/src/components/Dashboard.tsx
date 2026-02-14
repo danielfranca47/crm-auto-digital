@@ -1,4 +1,4 @@
-import { DashboardMetrics, Appointment } from "../types/crm";
+import { DashboardMetrics, Appointment, Lead } from "../types/crm";
 import { Card, CardContent, CardHeader, CardTitle } from "./ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select";
 import { Button } from "./ui/button";
@@ -6,7 +6,6 @@ import { Calendar } from "./ui/calendar";
 import { useTheme } from "../contexts/ThemeContext";
 import {
   ArrowLeft,
-  TrendingUp,
   Target,
   DollarSign,
   Sun,
@@ -16,8 +15,10 @@ import {
   Plus,
   RefreshCw,
 } from "lucide-react";
-import { format } from "date-fns";
+import { format, differenceInCalendarDays } from "date-fns";
 import { ptBR } from "date-fns/locale";
+import { useMemo } from "react";
+import { useLeads } from "@/contexts/LeadsContext";
 import { Badge } from "./ui/badge";
 import { Skeleton } from "./ui/skeleton";
 
@@ -58,6 +59,69 @@ export function Dashboard({
   const totalLeads = metrics?.totalLeads ?? 0;
   const conversionRate = metrics?.conversionRate ?? 0;
   const salesClosed = metrics?.salesClosed ?? 0;
+  const { columns, archivedColumns } = useLeads();
+
+  const allLeads = useMemo<Lead[]>(() => {
+    const leadMap = new Map<string, Lead>();
+    [...columns, ...archivedColumns].forEach((column) => {
+      column.leads.forEach((lead) => {
+        leadMap.set(lead.id, lead);
+      });
+    });
+    return Array.from(leadMap.values());
+  }, [columns, archivedColumns]);
+
+  const confirmedTodayCount = useMemo(() => {
+    return todayAppointments.filter((appointment) => {
+      const normalizedStatus = String(appointment.status) === "scheduled" ? "pending" : String(appointment.status);
+      const isMeetingType = appointment.type === "meeting" || appointment.type === "presentation";
+      return normalizedStatus === "pending" && isMeetingType;
+    }).length;
+  }, [todayAppointments]);
+
+  const criticalFollowUpsCount = useMemo(() => {
+    const today = new Date();
+    return allLeads.filter((lead) => {
+      const movement = lead.lastMovement ? new Date(lead.lastMovement) : null;
+      if (!movement || Number.isNaN(movement.getTime())) return false;
+      return differenceInCalendarDays(today, movement) > 5;
+    }).length;
+  }, [allLeads]);
+
+  const pausedBotsCount = useMemo(() => {
+    return allLeads.filter((lead) => Boolean(lead.bot_disabled)).length;
+  }, [allLeads]);
+
+  const warningItems = useMemo(() => {
+    const items: Array<{ key: string; icon: "clock" | "alert" | "bot"; text: string; className?: string }> = [];
+
+    if (confirmedTodayCount > 0) {
+      items.push({
+        key: "confirmed-today",
+        icon: "clock",
+        text: `⏰ ${confirmedTodayCount} reunião${confirmedTodayCount > 1 ? "ões" : ""} confirmada${confirmedTodayCount > 1 ? "s" : ""} hoje`,
+      });
+    }
+
+    if (criticalFollowUpsCount > 0) {
+      items.push({
+        key: "critical-followup",
+        icon: "alert",
+        text: `📞 ${criticalFollowUpsCount} follow-up${criticalFollowUpsCount > 1 ? "s" : ""} crítico${criticalFollowUpsCount > 1 ? "s" : ""} (> 5 dias sem movimentação)`,
+      });
+    }
+
+    if (pausedBotsCount > 0) {
+      items.push({
+        key: "paused-bots",
+        icon: "bot",
+        text: `⚠️ ${pausedBotsCount} lead${pausedBotsCount > 1 ? "s" : ""} com bot pausado`,
+        className: "bg-warning/10 border border-warning/20",
+      });
+    }
+
+    return items;
+  }, [confirmedTodayCount, criticalFollowUpsCount, pausedBotsCount]);
 
   return (
     <div className="min-h-screen bg-background">
@@ -154,22 +218,30 @@ export function Dashboard({
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div className="flex items-center space-x-3 p-3 bg-muted/50 rounded-lg">
-                <Clock className="w-4 h-4 text-info" />
-                <span>⏰ 2 reuniões confirmadas (14h, 16h)</span>
-              </div>
-              <div className="flex items-center space-x-3 p-3 bg-muted/50 rounded-lg">
-                <AlertTriangle className="w-4 h-4 text-warning" />
-                <span>📞 4 follow-ups críticos (&gt; 5 dias sem contato)</span>
-              </div>
-              <div className="flex items-center space-x-3 p-3 bg-muted/50 rounded-lg">
-                <TrendingUp className="w-4 h-4 text-primary" />
-                <span>🎯 Faltam 6 prospecções para meta diária (20/dia)</span>
-              </div>
-              <div className="flex items-center space-x-3 p-3 bg-success/10 rounded-lg border border-success/20">
-                <DollarSign className="w-4 h-4 text-success" />
-                <span>💡 João Silva (site 500€) - pronto para fechar!</span>
-              </div>
+              {warningItems.length === 0 ? (
+                <p className="text-sm text-muted-foreground">Sem avisos no momento.</p>
+              ) : (
+                warningItems.map((item) => {
+                  const icon =
+                    item.icon === "clock" ? (
+                      <Clock className="w-4 h-4 text-info" />
+                    ) : item.icon === "alert" ? (
+                      <AlertTriangle className="w-4 h-4 text-warning" />
+                    ) : (
+                      <AlertTriangle className="w-4 h-4 text-warning" />
+                    );
+
+                  return (
+                    <div
+                      key={item.key}
+                      className={`flex items-center space-x-3 p-3 rounded-lg bg-muted/50 ${item.className ?? ""}`.trim()}
+                    >
+                      {icon}
+                      <span>{item.text}</span>
+                    </div>
+                  );
+                })
+              )}
             </CardContent>
           </Card>
 
