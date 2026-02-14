@@ -67,7 +67,7 @@ def _send_request(
 
 def _handle_response(
     response: httpx.Response,
-    job_id: str,
+    request_ref: str,
     for_context: bool,
     *,
     not_found_message: str = "Job não encontrado",
@@ -90,7 +90,7 @@ def _handle_response(
         return response.json()
     body = response.text
     raise CRMClientError(
-        f"Erro do CRM (status={response.status_code}) job_id={job_id} body={body}",
+        f"Erro do CRM (status={response.status_code}) ref={request_ref} body={body}",
         status_code=response.status_code,
         response_body=body,
     )

@@ -324,11 +324,14 @@ def handle_meeting_scheduled(
         return
 
     start_iso = signal.start_at.astimezone(timezone.utc).isoformat().replace("+00:00", "Z")
+    end_dt = signal.start_at + timedelta(minutes=30)
+    end_iso = end_dt.astimezone(timezone.utc).isoformat().replace("+00:00", "Z")
     client.create_lead_appointment(
         lead_id=signal.lead_id,
         title="Reunião agendada",
         description="Reunião confirmada pelo SDR Scheduler.",
         appointment_type="meeting",
         start_at=start_iso,
+        end_at=end_iso,
     )
     client.set_lead_bot_disabled(signal.lead_id, True, reason="meeting_scheduled")

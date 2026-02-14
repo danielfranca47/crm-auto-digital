@@ -32,6 +32,10 @@ from app.schemas.decision import DecisionOutput
 from app.services import meeting_scheduler
 
 
+def _parse_iso(value: str) -> datetime:
+    return datetime.fromisoformat(value.replace("Z", "+00:00"))
+
+
 class FakeCRMClient:
     def __init__(self, appointments=None):
         self.appointments = appointments or []
@@ -103,6 +107,8 @@ def test_handle_meeting_scheduled_creates_appointment():
     assert client.bot_disabled_calls == [(99, True, "meeting_scheduled")]
     assert len(client.created) == 1
     assert client.created[0]["start_at"].endswith("Z")
+    assert client.created[0]["end_at"] and client.created[0]["end_at"].endswith("Z")
+    assert _parse_iso(client.created[0]["end_at"]) > _parse_iso(client.created[0]["start_at"])
     assert client.logged == []
 
 
@@ -144,6 +150,8 @@ def test_handle_meeting_scheduled_human_datetime_with_timezone():
 
     assert len(client.created) == 1
     assert client.created[0]["start_at"].endswith("Z")
+    assert client.created[0]["end_at"] and client.created[0]["end_at"].endswith("Z")
+    assert _parse_iso(client.created[0]["end_at"]) > _parse_iso(client.created[0]["start_at"])
     assert client.bot_disabled_calls == [(99, True, "meeting_scheduled")]
 
 
