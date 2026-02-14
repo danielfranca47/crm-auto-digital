@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import os
 import sys
 import types
@@ -30,6 +30,10 @@ _install_fake_decision_output()
 
 from app.schemas.decision import DecisionOutput
 from app.services import meeting_scheduler
+
+
+def _parse_iso(value: str) -> datetime:
+    return datetime.fromisoformat(value.replace("Z", "+00:00"))
 
 
 class FakeCRMClient:
@@ -77,7 +81,7 @@ def _build_context(message_text="2024-11-10 15:30"):
     return {
         "lead": {"id": 99, "user_id": 10},
         "job": {"id": 123, "payload": {"lead_id": 99, "user_id": 10}},
-        "ai_profile": {"agent_mode": "sdr_scheduler"},
+        "ai_profile": {"agent_mode": "sdr_scheduler", "timezone": "UTC"},
         "metadata": {"inbound_message_text": message_text},
         "history": [],
     }
@@ -102,6 +106,9 @@ def test_handle_meeting_scheduled_creates_appointment():
     )
     assert client.bot_disabled_calls == [(99, True, "meeting_scheduled")]
     assert len(client.created) == 1
+    assert client.created[0]["start_at"].endswith("Z")
+    assert client.created[0]["end_at"] and client.created[0]["end_at"].endswith("Z")
+    assert _parse_iso(client.created[0]["end_at"]) > _parse_iso(client.created[0]["start_at"])
     assert client.logged == []
 
 
@@ -126,3 +133,41 @@ def test_has_future_meeting_window():
         {"start_at": (now + timedelta(days=10)).isoformat(), "type": "meeting", "status": "pending"},
     ]
     assert meeting_scheduler.has_future_meeting(appointments, now=now, window_days=7) is True
+
+
+def test_handle_meeting_scheduled_human_datetime_with_timezone():
+    client = FakeCRMClient()
+    context = _build_context("amanhã 17h")
+    context["ai_profile"]["timezone"] = "Europe/Lisbon"
+    now = datetime(2025, 2, 10, 12, 0, tzinfo=timezone.utc)
+
+    meeting_scheduler.handle_meeting_scheduled(
+        context,
+        _build_decision(),
+        client=client,
+        now_utc=now,
+    )
+
+    assert len(client.created) == 1
+    assert client.created[0]["start_at"].endswith("Z")
+    assert client.created[0]["end_at"] and client.created[0]["end_at"].endswith("Z")
+    assert _parse_iso(client.created[0]["end_at"]) > _parse_iso(client.created[0]["start_at"])
+    assert client.bot_disabled_calls == [(99, True, "meeting_scheduled")]
+
+
+def test_handle_meeting_scheduled_rejects_no_hour_expression():
+    client = FakeCRMClient()
+    context = _build_context("amanhã")
+    context["ai_profile"]["timezone"] = "Europe/Lisbon"
+    now = datetime(2025, 2, 10, 12, 0, tzinfo=timezone.utc)
+
+    meeting_scheduler.handle_meeting_scheduled(
+        context,
+        _build_decision(),
+        client=client,
+        now_utc=now,
+    )
+
+    assert client.created == []
+    assert client.bot_disabled_calls == []
+    assert client.logged == [(99, 10, 123, "missing_start_at")]

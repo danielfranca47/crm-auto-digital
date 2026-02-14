@@ -38,6 +38,7 @@ export type AiProfilePayload = {
   name: string;
   brand_name: string;
   tone_of_voice: string;
+  timezone?: string | null;
   niche: string;
   target_audience: string;
   offer_description: string;

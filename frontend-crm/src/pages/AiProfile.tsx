@@ -75,6 +75,7 @@ const initialProfileState: AiProfilePayload = {
   name: "",
   brand_name: "",
   tone_of_voice: "",
+  timezone: "UTC",
   niche: "",
   target_audience: "",
   offer_description: "",
@@ -379,6 +380,7 @@ export default function AiProfilePage() {
     try {
       const payload: AiProfilePayload = {
         ...profile,
+        timezone: profile.timezone?.trim() ? profile.timezone : "UTC",
         custom_instructions: profile.custom_instructions?.trim() || null,
         handoff_custom_text: profile.handoff_custom_text?.trim() || null,
       };
@@ -813,6 +815,25 @@ export default function AiProfilePage() {
                 <CardDescription>Quem você atende.</CardDescription>
               </CardHeader>
               <CardContent className="space-y-3">
+                <div className="space-y-2">
+                  <Label>Fuso horário (timezone)</Label>
+                  <Select
+                    value={profile.timezone || "UTC"}
+                    onValueChange={(value) => setProfile((p) => ({ ...p, timezone: value }))}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Selecione o fuso horário" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="UTC">UTC</SelectItem>
+                      <SelectItem value="Europe/Lisbon">Europe/Lisbon</SelectItem>
+                      <SelectItem value="America/Sao_Paulo">America/Sao_Paulo</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <p className="text-xs text-muted-foreground">
+                    Use o formato IANA (ex.: Europe/Lisbon).
+                  </p>
+                </div>
                 <div className="space-y-2">
                   <Label>Nicho</Label>
                   <Input

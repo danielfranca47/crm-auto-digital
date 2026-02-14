@@ -71,6 +71,7 @@ def ensure_ai_profile_columns() -> None:
         "identity_mode": "human_agent",
         "handoff_policy": "keep_active_notify",
         "handoff_custom_text": None,
+        "timezone": "UTC",
     }
 
     with engine.begin() as conn:

@@ -141,6 +141,15 @@ export function LeadsProvider({ children }: LeadsProviderProps) {
     const { nextScheduledAction: _ignore, ...payload } = patch as Partial<Lead> & {
       nextScheduledAction?: Lead['nextScheduledAction'];
     };
+    if (Object.keys(payload).length === 0) {
+      setProspectionColumns((cols) =>
+        cols.map((col) => ({
+          ...col,
+          leads: col.leads.map((l) => (l.id === leadId ? { ...l, ...patch } : l)),
+        }))
+      );
+      return;
+    }
     try {
       await api.updateLead(leadId, payload);
       setProspectionColumns((cols) =>
@@ -219,6 +228,9 @@ export function LeadsProvider({ children }: LeadsProviderProps) {
       const { nextScheduledAction: _ignore, ...payload } = updates as Partial<Lead> & {
         nextScheduledAction?: Lead['nextScheduledAction'];
       };
+      if (Object.keys(payload).length === 0) {
+        return;
+      }
       await api.updateLead(leadId, payload);
     } catch (error) {
       handleError(error, { fallbackMessage: 'Não foi possível atualizar o lead.' });

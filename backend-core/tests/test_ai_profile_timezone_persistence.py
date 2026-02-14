@@ -18,13 +18,13 @@ from app.db import Base, ensure_ai_profile_columns
 import app.db as core_db
 
 
-class AIProfileAgentModeTests(unittest.TestCase):
+class AIProfileTimezonePersistenceTests(unittest.TestCase):
     def setUp(self):
         engine = create_engine("sqlite:///:memory:", connect_args={"check_same_thread": False})
         Base.metadata.create_all(bind=engine)
         self.SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
         self.db = self.SessionLocal()
-        self.user = models.User(email="agent-mode@example.com", password_hash="secret")
+        self.user = models.User(email="timezone-tests@example.com", password_hash="secret")
         self.db.add(self.user)
         self.db.commit()
         self.db.refresh(self.user)
@@ -32,60 +32,41 @@ class AIProfileAgentModeTests(unittest.TestCase):
     def tearDown(self):
         self.db.close()
 
-    def test_create_update_profile_persists_agent_mode(self):
-        payload = AIProfileCreate(
-            template_key="sdr_padrao",
-            name="Agent",
-            brand_name="Auto Digital",
-            tone_of_voice="profissional",
-            timezone="Europe/Lisbon",
-            niche="CRM",
-            target_audience="PMEs",
-            offer_description="Automação de vendas",
-            goals="Agendar reuniões",
-            custom_instructions=None,
-            agent_mode="closer",
-        )
+    def test_create_update_get_persists_timezone(self):
         created = asyncio.run(
-            create_or_replace_ai_profile(payload, current_user=self.user, db=self.db)
-        )
-        self.assertEqual(created.agent_mode, "closer")
-        self.assertEqual(created.timezone, "Europe/Lisbon")
-
-        updated = asyncio.run(
-            update_my_ai_profile(
-                AIProfileUpdate(agent_mode="sdr_scheduler", timezone="America/Sao_Paulo"),
+            create_or_replace_ai_profile(
+                AIProfileCreate(
+                    template_key="sdr_padrao",
+                    name="Agent",
+                    brand_name="Auto Digital",
+                    tone_of_voice="profissional",
+                    timezone="Europe/Lisbon",
+                    niche="CRM",
+                    target_audience="PMEs",
+                    offer_description="Automação de vendas",
+                    goals="Agendar reuniões",
+                    custom_instructions=None,
+                    agent_mode="sdr_scheduler",
+                ),
                 current_user=self.user,
                 db=self.db,
             )
         )
-        self.assertEqual(updated.agent_mode, "sdr_scheduler")
+        self.assertEqual(created.timezone, "Europe/Lisbon")
+
+        updated = asyncio.run(
+            update_my_ai_profile(
+                AIProfileUpdate(timezone="America/Sao_Paulo"),
+                current_user=self.user,
+                db=self.db,
+            )
+        )
         self.assertEqual(updated.timezone, "America/Sao_Paulo")
 
         fetched = asyncio.run(get_my_ai_profile(current_user=self.user, db=self.db))
-        self.assertEqual(fetched.agent_mode, "sdr_scheduler")
         self.assertEqual(fetched.timezone, "America/Sao_Paulo")
 
-    def test_closer_template_defaults_agent_mode(self):
-        payload = AIProfileCreate(
-            template_key="closer_agressivo",
-            name="Closer",
-            brand_name="Auto Digital",
-            tone_of_voice="direto",
-            timezone="UTC",
-            niche="CRM",
-            target_audience="PMEs",
-            offer_description="Automação de vendas",
-            goals="Fechar vendas",
-            custom_instructions=None,
-            agent_mode=None,
-        )
-        created = asyncio.run(
-            create_or_replace_ai_profile(payload, current_user=self.user, db=self.db)
-        )
-        self.assertEqual(created.agent_mode, "closer")
-
-    def test_ensure_ai_profile_columns_adds_timezone_without_reset(self):
+    def test_legacy_sqlite_without_timezone_gets_column_and_backfill(self):
         fd, db_path = tempfile.mkstemp(suffix=".db")
         os.close(fd)
         try:
@@ -134,10 +115,14 @@ class AIProfileAgentModeTests(unittest.TestCase):
                 core_db.engine = old_engine
 
             inspector = inspect(legacy_engine)
-            col_names = {col["name"] for col in inspector.get_columns("ai_profiles")}
-            self.assertIn("timezone", col_names)
+            column_names = {col["name"] for col in inspector.get_columns("ai_profiles")}
+            self.assertIn("timezone", column_names)
 
             with legacy_engine.begin() as conn:
+                pragma_rows = conn.execute(text("PRAGMA table_info(ai_profiles)")).fetchall()
+                pragma_column_names = {row[1] for row in pragma_rows}
+                self.assertIn("timezone", pragma_column_names)
+
                 row = conn.execute(text("SELECT timezone FROM ai_profiles WHERE id = 1")).fetchone()
             self.assertIsNotNone(row)
             self.assertEqual(row[0], "UTC")

@@ -55,6 +55,7 @@ class AIProfileBase(BaseModel):
     name: str
     brand_name: str
     tone_of_voice: str
+    timezone: Optional[str] = "UTC"
     niche: str
     target_audience: str
     offer_description: str
@@ -75,6 +76,7 @@ class AIProfileUpdate(BaseModel):
     name: Optional[str] = None
     brand_name: Optional[str] = None
     tone_of_voice: Optional[str] = None
+    timezone: Optional[str] = None
     niche: Optional[str] = None
     target_audience: Optional[str] = None
     offer_description: Optional[str] = None
