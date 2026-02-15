@@ -14,6 +14,7 @@ interface LeadCardProps {
   onRescheduleMeeting: (lead: Lead) => void;
   onCancelMeeting: (lead: Lead) => void;
   onOpenCard: (leadId: string) => void;
+  onDeleteLead: (leadId: string) => Promise<void>;
 }
 
 export function LeadCard({
@@ -25,7 +26,8 @@ export function LeadCard({
   onScheduleMeeting,
   onRescheduleMeeting,
   onCancelMeeting,
-  onOpenCard
+  onOpenCard,
+  onDeleteLead,
 }: LeadCardProps) {
   const {
     attributes,
@@ -98,6 +100,7 @@ export function LeadCard({
             onRescheduleMeeting={onRescheduleMeeting}
             onCancelMeeting={onCancelMeeting}
             onOpenCard={onOpenCard}
+            onDeleteLead={onDeleteLead}
           />
         </div>
       </div>

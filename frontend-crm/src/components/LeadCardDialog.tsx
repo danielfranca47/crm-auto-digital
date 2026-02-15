@@ -31,6 +31,7 @@ interface LeadCardDialogProps {
   isOpen: boolean;
   onClose: () => void;
   onUpdateLead?: (leadId: string, updates: Partial<Lead>) => void;
+  onDeleteLead?: (leadId: string) => Promise<void>;
 }
 
 //TODO Estava dando erros aqui, com nomes de colunas antigas. Ajustei conforme as atuais.
@@ -104,11 +105,17 @@ const appointmentOutcomeClasses = {
 } as const;
 
 /** Wrapper sem hooks — evita o erro de Hooks. */
-export function LeadCardDialog({ lead, isOpen, onClose, onUpdateLead }: LeadCardDialogProps) {
+export function LeadCardDialog({ lead, isOpen, onClose, onUpdateLead, onDeleteLead }: LeadCardDialogProps) {
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
       {isOpen && lead ? (
-        <LeadCardDialogBody lead={lead} isOpen={isOpen} onClose={onClose} onUpdateLead={onUpdateLead} />
+        <LeadCardDialogBody
+          lead={lead}
+          isOpen={isOpen}
+          onClose={onClose}
+          onUpdateLead={onUpdateLead}
+          onDeleteLead={onDeleteLead}
+        />
       ) : null}
     </Dialog>
   );
@@ -118,6 +125,7 @@ export function LeadCardDialog({ lead, isOpen, onClose, onUpdateLead }: LeadCard
 function LeadCardDialogBody({
   lead,
   onUpdateLead,
+  onDeleteLead,
 }: LeadCardDialogProps & { lead: Lead }) {
   const [isEditing, setIsEditing] = useState(false);
   const [editedLead, setEditedLead] = useState<Lead | null>(null);
@@ -212,6 +220,16 @@ function LeadCardDialogBody({
       onUpdateLead(lead.id, editedLead);
       setIsEditing(false);
     }
+  };
+
+  const handleDeleteLead = async () => {
+    if (!onDeleteLead) return;
+    const confirmed = window.confirm(
+      "Tem certeza? Isso apagará histórico e compromissos deste lead."
+    );
+    if (!confirmed) return;
+    await onDeleteLead(lead.id);
+    onClose();
   };
 
   const handleCancel = () => {
@@ -348,6 +366,9 @@ function LeadCardDialogBody({
             </div>
           </div>
           <div className="flex gap-2">
+            <Button variant="destructive" size="sm" onClick={() => void handleDeleteLead()}>
+              Excluir
+            </Button>
             {!isEditing ? (
               <Button variant="outline" size="sm" onClick={() => setIsEditing(true)}>
                 Editar

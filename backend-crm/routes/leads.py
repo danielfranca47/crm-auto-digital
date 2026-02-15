@@ -1,6 +1,7 @@
 # backend/routes/leads.py
 from typing import Optional
 import json
+import logging
 from fastapi import APIRouter, HTTPException, Depends
 from datetime import datetime, timezone
 
@@ -10,6 +11,7 @@ from security_core import CurrentUser, require_crm_access
 from services import rate_limit_service
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
 # ---------------------------
 # Helpers
@@ -72,6 +74,46 @@ def _normalize_or_400(value, field_name: str) -> Optional[str]:
         return normalize_datetime_value(value)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=f"Formato de data/hora inválido para {field_name}") from exc
+
+
+def _list_tables_with_lead_id(conn) -> list[str]:
+    """Retorna todas as tabelas do schema atual que possuem coluna `lead_id`."""
+    cur = conn.cursor()
+    rows = cur.execute(
+        """
+        SELECT name
+          FROM sqlite_master
+         WHERE type = 'table'
+           AND name NOT LIKE 'sqlite_%'
+        """
+    ).fetchall()
+
+    tables_with_lead_id: list[str] = []
+    for row in rows:
+        table_name = row[0]
+        columns = cur.execute(f"PRAGMA table_info({table_name})").fetchall()
+        if any(str(col[1]).lower() == "lead_id" for col in columns):
+            tables_with_lead_id.append(table_name)
+
+    return tables_with_lead_id
+
+
+def _delete_lead_related_rows(conn, lead_id: int) -> dict[str, int]:
+    """Apaga registros por lead_id em todas as tabelas que possuem essa coluna."""
+    cur = conn.cursor()
+    deleted_by_table: dict[str, int] = {}
+
+    table_names = _list_tables_with_lead_id(conn)
+    ordered_tables = [table for table in table_names if table != "leads"]
+
+    for table in ordered_tables:
+        cur.execute(f"DELETE FROM {table} WHERE lead_id = ?", (lead_id,))
+        deleted_by_table[table] = cur.rowcount if cur.rowcount is not None else 0
+
+    cur.execute("DELETE FROM leads WHERE id = ?", (lead_id,))
+    deleted_by_table["leads"] = cur.rowcount if cur.rowcount is not None else 0
+
+    return deleted_by_table
 
 
 def _check_conflict(
@@ -275,6 +317,34 @@ def atualizar_lead_parcial(id: int, lead: LeadUpdate, current_user: CurrentUser 
     except HTTPException:
         raise
     except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        conn.close()
+
+
+@router.delete("/{id}")
+def excluir_lead(id: int, current_user: CurrentUser = Depends(require_crm_access)):
+    conn = get_connection()
+    cursor = conn.cursor()
+    try:
+        cursor.execute("SELECT id FROM leads WHERE id = ? AND user_id = ?", (id, current_user.id))
+        row = cursor.fetchone()
+        if row is None:
+            raise HTTPException(status_code=404, detail="Lead não encontrado")
+
+        deleted_by_table = _delete_lead_related_rows(conn, id)
+        if deleted_by_table.get("leads", 0) == 0:
+            raise HTTPException(status_code=404, detail="Lead não encontrado")
+
+        conn.commit()
+        logger.info("lead_deleted lead_id=%s deleted_by_table=%s", id, deleted_by_table)
+        return {"status": "ok", "deleted_lead_id": id}
+
+    except HTTPException:
+        conn.rollback()
+        raise
+    except Exception as e:
+        conn.rollback()
         raise HTTPException(status_code=500, detail=str(e))
     finally:
         conn.close()

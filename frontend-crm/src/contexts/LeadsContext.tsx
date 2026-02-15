@@ -16,6 +16,7 @@ interface LeadsContextType {
   moveLead: (leadId: string, newCategory: LeadStatus) => void;
   archiveLead: (leadId: string, archiveCategory: LeadStatus) => void;
   addLead: (leadData: NewLeadForm) => void;
+  deleteLead: (leadId: string) => Promise<void>;
 
   loadAppointments: (leadId: string) => Promise<LeadAppointment[]>;
   createAppointment: (leadId: string, payload: { description: string; startAt: Date; endAt?: Date | null }) => Promise<LeadAppointment>;
@@ -343,6 +344,36 @@ export function LeadsProvider({ children }: LeadsProviderProps) {
     }
   };
 
+  const deleteLead = async (leadId: string): Promise<void> => {
+    await api.deleteLead(leadId);
+
+    setColumns((prev) =>
+      prev.map((column) => ({
+        ...column,
+        leads: column.leads.filter((lead) => lead.id !== leadId),
+      }))
+    );
+
+    setArchivedColumns((prev) =>
+      prev.map((column) => ({
+        ...column,
+        leads: column.leads.filter((lead) => lead.id !== leadId),
+      }))
+    );
+
+    setProspectionColumns((prev) =>
+      prev.map((column) => ({
+        ...column,
+        leads: column.leads.filter((lead) => lead.id !== leadId),
+      }))
+    );
+
+    setAppointmentsByLead((prev) => {
+      const { [leadId]: _removed, ...rest } = prev;
+      return rest;
+    });
+  };
+
 
   // --------- Appointments (CRUD) ----------
   const loadAppointments = async (leadId: string): Promise<LeadAppointment[]> => {
@@ -481,6 +512,7 @@ export function LeadsProvider({ children }: LeadsProviderProps) {
     moveLead,
     archiveLead,
     addLead,
+    deleteLead,
     loadAppointments,
     createAppointment,
     updateAppointment,

@@ -25,6 +25,7 @@ interface LeadActionsMenuProps {
   onRescheduleMeeting: (lead: Lead) => void;
   onCancelMeeting: (lead: Lead) => void;
   onOpenCard: (leadId: string) => void;
+  onDeleteLead: (leadId: string) => Promise<void>;
 }
 
 export function LeadActionsMenu({
@@ -36,7 +37,8 @@ export function LeadActionsMenu({
   onScheduleMeeting,
   onRescheduleMeeting,
   onCancelMeeting,
-  onOpenCard
+  onOpenCard,
+  onDeleteLead,
 }: LeadActionsMenuProps) {
   const [showMoveSelect, setShowMoveSelect] = useState(false);
   const [showArchiveSelect, setShowArchiveSelect] = useState(false);
@@ -61,6 +63,16 @@ export function LeadActionsMenu({
 
   const handleOpenCard = () => {
     onOpenCard(lead.id);
+    setIsOpen(false);
+  };
+
+  const handleDeleteLead = async () => {
+    const confirmed = window.confirm(
+      "Tem certeza? Isso apagará histórico e compromissos deste lead."
+    );
+    if (!confirmed) return;
+
+    await onDeleteLead(lead.id);
     setIsOpen(false);
   };
 
@@ -180,7 +192,7 @@ export function LeadActionsMenu({
                 className="w-full justify-start"
                 onClick={(e) => {
                   e.stopPropagation();
-                  // Funcionalidade será adicionada depois
+                  void handleDeleteLead();
                 }}
               >
                 <Trash2 className="h-4 w-4 mr-2" />

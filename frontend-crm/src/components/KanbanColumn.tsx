@@ -13,6 +13,7 @@ interface KanbanColumnProps {
   onRescheduleMeeting: (lead: Lead) => void;
   onCancelMeeting: (lead: Lead) => void;
   onOpenCard: (leadId: string) => void;
+  onDeleteLead: (leadId: string) => Promise<void>;
 }
 
 export function KanbanColumn({
@@ -24,7 +25,8 @@ export function KanbanColumn({
   onScheduleMeeting,
   onRescheduleMeeting,
   onCancelMeeting,
-  onOpenCard
+  onOpenCard,
+  onDeleteLead,
 }: KanbanColumnProps) {
   const { setNodeRef } = useDroppable({
     id: column.id,
@@ -62,6 +64,7 @@ export function KanbanColumn({
               onRescheduleMeeting={onRescheduleMeeting}
               onCancelMeeting={onCancelMeeting}
               onOpenCard={onOpenCard}
+              onDeleteLead={onDeleteLead}
             />
           ))}
         </SortableContext>

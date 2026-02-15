@@ -10,6 +10,16 @@ Principais mudanças:
 
 ## Webhook WhatsApp inbound (ORION)
 
+## Exclusão real de lead (hard delete)
+
+- Endpoint autenticado: `DELETE /api/leads/{id}`
+- Segurança: exige `Authorization: Bearer <token>` + assinatura CRM ativa (via `require_crm_access`).
+- Escopo: remove o lead e seus dados relacionados por `lead_id` em transação única.
+- Preserva tabela `jobs` (auditoria/troubleshooting), mesmo que o payload tenha `lead_id`.
+- Respostas:
+  - `200 { "status": "ok", "deleted_lead_id": <id> }`
+  - `404 Lead não encontrado` (inclui caso de lead de outro usuário)
+
 - Endpoint: `POST /webhooks/whatsapp/inbound`
 - Segurança: header `X-Webhook-Secret` deve casar com `CRM_WEBHOOK_SECRET`; o CRM resolve o dono via core usando `CORE_SERVICE_TOKEN`.
 - Idempotência: `inbound_events` evita duplicar por `(provider, instance_id, external_event_id)`.
