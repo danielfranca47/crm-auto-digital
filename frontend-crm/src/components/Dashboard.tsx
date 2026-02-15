@@ -1,4 +1,4 @@
-import { DashboardMetrics, Appointment } from "../types/crm";
+import { DashboardMetrics, Appointment, Lead } from "../types/crm";
 import { Card, CardContent, CardHeader, CardTitle } from "./ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select";
 import { Button } from "./ui/button";
@@ -6,7 +6,6 @@ import { Calendar } from "./ui/calendar";
 import { useTheme } from "../contexts/ThemeContext";
 import {
   ArrowLeft,
-  TrendingUp,
   Target,
   DollarSign,
   Sun,
@@ -15,9 +14,12 @@ import {
   AlertTriangle,
   Plus,
   RefreshCw,
+  Bot,
 } from "lucide-react";
-import { format } from "date-fns";
+import { format, differenceInCalendarDays } from "date-fns";
 import { ptBR } from "date-fns/locale";
+import { useMemo } from "react";
+import { useLeads } from "@/contexts/LeadsContext";
 import { Badge } from "./ui/badge";
 import { Skeleton } from "./ui/skeleton";
 
@@ -58,6 +60,121 @@ export function Dashboard({
   const totalLeads = metrics?.totalLeads ?? 0;
   const conversionRate = metrics?.conversionRate ?? 0;
   const salesClosed = metrics?.salesClosed ?? 0;
+  const { columns } = useLeads();
+
+  const allLeads = useMemo<Lead[]>(() => {
+    const leadMap = new Map<string, Lead>();
+    columns.forEach((column) => {
+      column.leads.forEach((lead) => {
+        leadMap.set(lead.id, lead);
+      });
+    });
+    return Array.from(leadMap.values());
+  }, [columns]);
+
+  const hasFutureScheduledAction = (lead: Lead): boolean => {
+    const nextDate = lead.nextScheduledAction?.date;
+    if (!nextDate) return false;
+    const parsed = nextDate instanceof Date ? nextDate : new Date(nextDate);
+    if (Number.isNaN(parsed.getTime())) return false;
+    return parsed.getTime() >= Date.now();
+  };
+
+  const confirmedTodayCount = useMemo(() => {
+    return todayAppointments.filter((appointment) => {
+      const normalizedStatus = String(appointment.status) === "scheduled" ? "pending" : String(appointment.status);
+      const isMeetingType = appointment.type === "meeting" || appointment.type === "presentation";
+      return normalizedStatus === "pending" && isMeetingType;
+    }).length;
+  }, [todayAppointments]);
+
+  const staleQualificationCount = useMemo(() => {
+    const today = new Date();
+    return allLeads.filter((lead) => {
+      if (lead.category !== "qualification") return false;
+      const movement = lead.lastMovement ? new Date(lead.lastMovement) : null;
+      if (!movement || Number.isNaN(movement.getTime())) return false;
+      return differenceInCalendarDays(today, movement) > 5;
+    }).length;
+  }, [allLeads]);
+
+  const stalePresentationCount = useMemo(() => {
+    const today = new Date();
+    return allLeads.filter((lead) => {
+      if (lead.category !== "apresentation") return false;
+      if (hasFutureScheduledAction(lead)) return false;
+      const movement = lead.lastMovement ? new Date(lead.lastMovement) : null;
+      if (!movement || Number.isNaN(movement.getTime())) return false;
+      return differenceInCalendarDays(today, movement) > 2;
+    }).length;
+  }, [allLeads]);
+
+  const staleClosingCount = useMemo(() => {
+    const today = new Date();
+    return allLeads.filter((lead) => {
+      if (lead.category !== "closing") return false;
+      const movement = lead.lastMovement ? new Date(lead.lastMovement) : null;
+      if (!movement || Number.isNaN(movement.getTime())) return false;
+      return differenceInCalendarDays(today, movement) > 1;
+    }).length;
+  }, [allLeads]);
+
+  const pausedBotsCount = useMemo(() => {
+    return allLeads.filter((lead) => Boolean(lead.bot_disabled)).length;
+  }, [allLeads]);
+
+  const warningItems = useMemo(() => {
+    const items: Array<{ key: string; icon: "clock" | "stage" | "bot"; text: string; className?: string }> = [];
+
+    if (confirmedTodayCount > 0) {
+      items.push({
+        key: "confirmed-today",
+        icon: "clock",
+        text: `⏰ ${confirmedTodayCount} reunião${confirmedTodayCount > 1 ? "ões" : ""} confirmada${confirmedTodayCount > 1 ? "s" : ""} hoje`,
+      });
+    }
+
+    if (staleQualificationCount > 0) {
+      items.push({
+        key: "stale-qualification",
+        icon: "stage",
+        text: `🧊 Qualificação sem movimento: ${staleQualificationCount} lead${staleQualificationCount > 1 ? "s" : ""} ( >5 dias )`,
+      });
+    }
+
+    if (stalePresentationCount > 0) {
+      items.push({
+        key: "stale-presentation",
+        icon: "stage",
+        text: `🧊 Apresentação sem movimento: ${stalePresentationCount} lead${stalePresentationCount > 1 ? "s" : ""} ( >2 dias, sem reunião marcada )`,
+      });
+    }
+
+    if (staleClosingCount > 0) {
+      items.push({
+        key: "stale-closing",
+        icon: "stage",
+        text: `🧊 Fechamento sem movimento: ${staleClosingCount} lead${staleClosingCount > 1 ? "s" : ""} ( >1 dia )`,
+      });
+    }
+
+    if (pausedBotsCount > 0) {
+      items.push({
+        key: "paused-bots",
+        icon: "bot",
+        text: `⚠️ ${pausedBotsCount} lead${pausedBotsCount > 1 ? "s" : ""} com bot pausado`,
+        className: "bg-warning/10 border border-warning/20",
+      });
+    }
+
+    return items;
+  }, [
+    confirmedTodayCount,
+    staleQualificationCount,
+    stalePresentationCount,
+    staleClosingCount,
+    pausedBotsCount,
+  ]);
 
   return (
     <div className="min-h-screen bg-background">
@@ -154,22 +271,30 @@ export function Dashboard({
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div className="flex items-center space-x-3 p-3 bg-muted/50 rounded-lg">
-                <Clock className="w-4 h-4 text-info" />
-                <span>⏰ 2 reuniões confirmadas (14h, 16h)</span>
-              </div>
-              <div className="flex items-center space-x-3 p-3 bg-muted/50 rounded-lg">
-                <AlertTriangle className="w-4 h-4 text-warning" />
-                <span>📞 4 follow-ups críticos (&gt; 5 dias sem contato)</span>
-              </div>
-              <div className="flex items-center space-x-3 p-3 bg-muted/50 rounded-lg">
-                <TrendingUp className="w-4 h-4 text-primary" />
-                <span>🎯 Faltam 6 prospecções para meta diária (20/dia)</span>
-              </div>
-              <div className="flex items-center space-x-3 p-3 bg-success/10 rounded-lg border border-success/20">
-                <DollarSign className="w-4 h-4 text-success" />
-                <span>💡 João Silva (site 500€) - pronto para fechar!</span>
-              </div>
+              {warningItems.length === 0 ? (
+                <p className="text-sm text-muted-foreground">Sem avisos no momento.</p>
+              ) : (
+                warningItems.map((item) => {
+                  const icon =
+                    item.icon === "clock" ? (
+                      <Clock className="w-4 h-4 text-info" />
+                    ) : item.icon === "bot" ? (
+                      <Bot className="w-4 h-4 text-warning" />
+                    ) : (
+                      <AlertTriangle className="w-4 h-4 text-warning" />
+                    );
+
+                  return (
+                    <div
+                      key={item.key}
+                      className={`flex items-center space-x-3 p-3 rounded-lg bg-muted/50 ${item.className ?? ""}`.trim()}
+                    >
+                      {icon}
+                      <span>{item.text}</span>
+                    </div>
+                  );
+                })
+              )}
             </CardContent>
           </Card>
 
