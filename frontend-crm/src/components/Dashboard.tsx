@@ -14,6 +14,7 @@ import {
   AlertTriangle,
   Plus,
   RefreshCw,
+  Bot,
 } from "lucide-react";
 import { format, differenceInCalendarDays } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -59,17 +60,25 @@ export function Dashboard({
   const totalLeads = metrics?.totalLeads ?? 0;
   const conversionRate = metrics?.conversionRate ?? 0;
   const salesClosed = metrics?.salesClosed ?? 0;
-  const { columns, archivedColumns } = useLeads();
+  const { columns } = useLeads();
 
   const allLeads = useMemo<Lead[]>(() => {
     const leadMap = new Map<string, Lead>();
-    [...columns, ...archivedColumns].forEach((column) => {
+    columns.forEach((column) => {
       column.leads.forEach((lead) => {
         leadMap.set(lead.id, lead);
       });
     });
     return Array.from(leadMap.values());
-  }, [columns, archivedColumns]);
+  }, [columns]);
+
+  const hasFutureScheduledAction = (lead: Lead): boolean => {
+    const nextDate = lead.nextScheduledAction?.date;
+    if (!nextDate) return false;
+    const parsed = nextDate instanceof Date ? nextDate : new Date(nextDate);
+    if (Number.isNaN(parsed.getTime())) return false;
+    return parsed.getTime() >= Date.now();
+  };
 
   const confirmedTodayCount = useMemo(() => {
     return todayAppointments.filter((appointment) => {
@@ -79,12 +88,34 @@ export function Dashboard({
     }).length;
   }, [todayAppointments]);
 
-  const criticalFollowUpsCount = useMemo(() => {
+  const staleQualificationCount = useMemo(() => {
     const today = new Date();
     return allLeads.filter((lead) => {
+      if (lead.category !== "qualification") return false;
       const movement = lead.lastMovement ? new Date(lead.lastMovement) : null;
       if (!movement || Number.isNaN(movement.getTime())) return false;
       return differenceInCalendarDays(today, movement) > 5;
+    }).length;
+  }, [allLeads]);
+
+  const stalePresentationCount = useMemo(() => {
+    const today = new Date();
+    return allLeads.filter((lead) => {
+      if (lead.category !== "apresentation") return false;
+      if (hasFutureScheduledAction(lead)) return false;
+      const movement = lead.lastMovement ? new Date(lead.lastMovement) : null;
+      if (!movement || Number.isNaN(movement.getTime())) return false;
+      return differenceInCalendarDays(today, movement) > 2;
+    }).length;
+  }, [allLeads]);
+
+  const staleClosingCount = useMemo(() => {
+    const today = new Date();
+    return allLeads.filter((lead) => {
+      if (lead.category !== "closing") return false;
+      const movement = lead.lastMovement ? new Date(lead.lastMovement) : null;
+      if (!movement || Number.isNaN(movement.getTime())) return false;
+      return differenceInCalendarDays(today, movement) > 1;
     }).length;
   }, [allLeads]);
 
@@ -93,7 +124,7 @@ export function Dashboard({
   }, [allLeads]);
 
   const warningItems = useMemo(() => {
-    const items: Array<{ key: string; icon: "clock" | "alert" | "bot"; text: string; className?: string }> = [];
+    const items: Array<{ key: string; icon: "clock" | "stage" | "bot"; text: string; className?: string }> = [];
 
     if (confirmedTodayCount > 0) {
       items.push({
@@ -103,11 +134,27 @@ export function Dashboard({
       });
     }
 
-    if (criticalFollowUpsCount > 0) {
+    if (staleQualificationCount > 0) {
       items.push({
-        key: "critical-followup",
-        icon: "alert",
-        text: `📞 ${criticalFollowUpsCount} follow-up${criticalFollowUpsCount > 1 ? "s" : ""} crítico${criticalFollowUpsCount > 1 ? "s" : ""} (> 5 dias sem movimentação)`,
+        key: "stale-qualification",
+        icon: "stage",
+        text: `🧊 Qualificação sem movimento: ${staleQualificationCount} lead${staleQualificationCount > 1 ? "s" : ""} ( >5 dias )`,
+      });
+    }
+
+    if (stalePresentationCount > 0) {
+      items.push({
+        key: "stale-presentation",
+        icon: "stage",
+        text: `🧊 Apresentação sem movimento: ${stalePresentationCount} lead${stalePresentationCount > 1 ? "s" : ""} ( >2 dias, sem reunião marcada )`,
+      });
+    }
+
+    if (staleClosingCount > 0) {
+      items.push({
+        key: "stale-closing",
+        icon: "stage",
+        text: `🧊 Fechamento sem movimento: ${staleClosingCount} lead${staleClosingCount > 1 ? "s" : ""} ( >1 dia )`,
       });
     }
 
@@ -121,7 +168,13 @@ export function Dashboard({
     }
 
     return items;
-  }, [confirmedTodayCount, criticalFollowUpsCount, pausedBotsCount]);
+  }, [
+    confirmedTodayCount,
+    staleQualificationCount,
+    stalePresentationCount,
+    staleClosingCount,
+    pausedBotsCount,
+  ]);
 
   return (
     <div className="min-h-screen bg-background">
@@ -225,8 +278,8 @@ export function Dashboard({
                   const icon =
                     item.icon === "clock" ? (
                       <Clock className="w-4 h-4 text-info" />
-                    ) : item.icon === "alert" ? (
-                      <AlertTriangle className="w-4 h-4 text-warning" />
+                    ) : item.icon === "bot" ? (
+                      <Bot className="w-4 h-4 text-warning" />
                     ) : (
                       <AlertTriangle className="w-4 h-4 text-warning" />
                     );
