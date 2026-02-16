@@ -1,28 +1,31 @@
-"""Normalização leve de telefones para fluxo de webhooks WhatsApp."""
+"""Normalização de telefones para fluxo de webhooks WhatsApp."""
+
+from __future__ import annotations
 
 import re
+
+from services.phone_normalizer import PhoneNormalizationError, normalize_to_e164
 
 
 def normalize_phone(raw: str | None) -> str:
     """
-    Remove espaços e símbolos, preservando dígitos e sinal '+' inicial quando presente.
-    Se vier com prefixo internacional começando em '00', converte para '+'.
+    Normaliza para E.164.
+
+    Compatibilidade inbound:
+    - tenta normalização direta (esperando '+' ou '00')
+    - se vier sem '+', tenta interpretar como número internacional cru (prefixa '+')
     """
 
     if not raw:
         return ""
 
-    text = str(raw).strip()
-    if not text:
-        return ""
-
-    cleaned = re.sub(r"[\s\-()]+", "", text)
-    cleaned = re.sub(r"[^0-9+]+", "", cleaned)
-
-    if cleaned.startswith("00") and not cleaned.startswith("+"):
-        cleaned = "+" + cleaned[2:]
-
-    if not cleaned.startswith("+"):
-        return ""
-
-    return cleaned
+    try:
+        return normalize_to_e164(raw)
+    except PhoneNormalizationError:
+        digits = re.sub(r"\D+", "", str(raw or ""))
+        if not digits:
+            return ""
+        try:
+            return normalize_to_e164(f"+{digits}")
+        except PhoneNormalizationError:
+            return ""

@@ -106,6 +106,7 @@ export interface NewLeadForm {
   companyName: string;
   contactName: string;
   phone: string;
+  country_code?: string;
   email?: string;
   origin: string;
   category: LeadStatus;
