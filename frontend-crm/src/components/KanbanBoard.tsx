@@ -37,6 +37,7 @@ export function KanbanBoard({ onDashboard }: KanbanBoardProps) {
     moveLead,
     archiveLead,
     addLead,
+    deleteLead,
     leadsError,
     reloadAllLeads,
     setLeadNextAction,
@@ -257,6 +258,23 @@ export function KanbanBoard({ onDashboard }: KanbanBoardProps) {
     await addLead(leadData); // addLead do LeadsContext deve fazer o optimistic update
   };
 
+  const handleDeleteLead = async (leadId: string) => {
+    try {
+      await deleteLead(leadId);
+      if (selectedLead?.id === leadId) {
+        setIsLeadDialogOpen(false);
+        setSelectedLead(null);
+      }
+      toast({ title: "Lead excluído" });
+    } catch (error: any) {
+      toast({
+        title: "Erro ao excluir lead",
+        description: error?.message ?? "Não foi possível excluir o lead.",
+        variant: "destructive",
+      });
+    }
+  };
+
   return (
     <div className="min-h-screen bg-background relative">
       <CrmHeader
@@ -320,6 +338,7 @@ export function KanbanBoard({ onDashboard }: KanbanBoardProps) {
                 onRescheduleMeeting={handleRescheduleMeeting}
                 onCancelMeeting={handleCancelMeeting}
                 onOpenCard={handleOpenCard}
+                onDeleteLead={handleDeleteLead}
               />
             ))}
 
@@ -336,6 +355,7 @@ export function KanbanBoard({ onDashboard }: KanbanBoardProps) {
                   onRescheduleMeeting={handleRescheduleMeeting}
                   onCancelMeeting={handleCancelMeeting}
                   onOpenCard={handleOpenCard}
+                  onDeleteLead={handleDeleteLead}
                 />
               ))}
           </div>
@@ -353,6 +373,7 @@ export function KanbanBoard({ onDashboard }: KanbanBoardProps) {
         isOpen={isLeadDialogOpen}
         onClose={() => setIsLeadDialogOpen(false)}
         onUpdateLead={handleUpdateLead}
+        onDeleteLead={handleDeleteLead}
       />
 
       <ScheduleAppointmentDialog
