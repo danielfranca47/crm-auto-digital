@@ -318,6 +318,7 @@ export function LeadsProvider({ children }: LeadsProviderProps) {
         companyName: leadData.companyName,
         contactName: leadData.contactName ?? null,
         phone: leadData.phone ?? null,
+        country_code: (leadData.country_code || "BR").toUpperCase(),
         email: leadData.email ?? null,
         origin: leadData.origin ?? "Manual",
         category: leadData.category,

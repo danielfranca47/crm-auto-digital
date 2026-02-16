@@ -41,6 +41,7 @@ const COUNTRY_OPTIONS = [
   { code: "IE", label: "🇮🇪 Irlanda (+353)" },
 ];
 
+const DEFAULT_COUNTRY_CODE = "BR";
 const sanitizeLocalPhone = (raw: string) => (raw ?? "").replace(/[^\d\s]/g, "").trim();
 
 export function NewLeadModal({ isOpen, onClose, onSave }: NewLeadModalProps) {
@@ -48,7 +49,7 @@ export function NewLeadModal({ isOpen, onClose, onSave }: NewLeadModalProps) {
     contactName: "",
     companyName: "",
     phone: "",
-    country_code: "BR",
+    country_code: DEFAULT_COUNTRY_CODE,
     origin: "Manual",
     category: "to-prospect",
     observations: "",
@@ -67,6 +68,7 @@ export function NewLeadModal({ isOpen, onClose, onSave }: NewLeadModalProps) {
       const payload = {
         ...formData,
         phone: sanitizeLocalPhone(formData.phone),
+        country_code: (formData.country_code || DEFAULT_COUNTRY_CODE).toUpperCase(),
       };
 
       if (typeof onSave === "function") {
@@ -90,7 +92,7 @@ export function NewLeadModal({ isOpen, onClose, onSave }: NewLeadModalProps) {
         companyName: "",
         contactName: "",
         phone: "",
-        country_code: "BR",
+        country_code: DEFAULT_COUNTRY_CODE,
         origin: "Manual",
         category: "to-prospect",
         observations: "",
@@ -156,7 +158,7 @@ export function NewLeadModal({ isOpen, onClose, onSave }: NewLeadModalProps) {
               País *
             </Label>
             <Select
-              value={formData.country_code || "BR"}
+              value={formData.country_code || DEFAULT_COUNTRY_CODE}
               onValueChange={(value) => setFormData((prev) => ({ ...prev, country_code: value }))}
             >
               <SelectTrigger id="country" className="bg-input border-border">
