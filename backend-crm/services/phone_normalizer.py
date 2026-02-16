@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import re
-from typing import Optional
 
 _CALLING_CODES = {
     "BR": "55",
@@ -24,6 +23,33 @@ class PhoneNormalizationError(ValueError):
     """Erro de normalização/validação de telefone."""
 
 
+def _apply_br_mobile_legacy_rule(candidate: str) -> str:
+    """
+    Regra BR para reduzir duplicidade celular legado (sem 9º dígito).
+
+    - E.164 começando com +55 e 10 dígitos nacionais (DDD 2 + assinante 8)
+    - Se assinante começar com 6..9, insere 9 após DDD
+    - Se começar com 2..5, mantém como fixo
+    """
+
+    if not candidate.startswith("+55"):
+        return candidate
+
+    national = candidate[3:]
+    if len(national) != 10:
+        return candidate
+
+    ddd = national[:2]
+    subscriber = national[2:]
+    if not subscriber:
+        return candidate
+
+    first = subscriber[0]
+    if first in {"6", "7", "8", "9"}:
+        return f"+55{ddd}9{subscriber}"
+    return candidate
+
+
 def normalize_to_e164(raw_phone: str | None, country_code: str | None = None) -> str:
     """
     Retorna telefone em E.164 (ex: +5511999999999).
@@ -35,6 +61,7 @@ def normalize_to_e164(raw_phone: str | None, country_code: str | None = None) ->
     - sem + exige country_code conhecido
     - valida somente '+' seguido de dígitos
     - valida comprimento de dígitos (8..15)
+    - aplica canônico BR para celular legado sem 9
     """
 
     if raw_phone is None:
@@ -65,6 +92,8 @@ def normalize_to_e164(raw_phone: str | None, country_code: str | None = None) ->
             raise PhoneNormalizationError("country_code inválido")
 
         candidate = f"+{calling_code}{digits}"
+
+    candidate = _apply_br_mobile_legacy_rule(candidate)
 
     if not re.fullmatch(r"\+[0-9]+", candidate):
         raise PhoneNormalizationError("Telefone inválido")

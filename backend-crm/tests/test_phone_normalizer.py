@@ -32,6 +32,18 @@ class PhoneNormalizerTest(unittest.TestCase):
         with self.assertRaises(PhoneNormalizationError):
             normalize_to_e164("123456789", "ZZ")
 
+    def test_br_legacy_mobile_adds_nine_digit(self):
+        self.assertEqual(normalize_to_e164("4792163692", "BR"), "+5547992163692")
+
+    def test_br_mobile_already_nine_digit_stays_same(self):
+        self.assertEqual(normalize_to_e164("47992163692", "BR"), "+5547992163692")
+
+    def test_br_fixed_line_keeps_eight_digit_subscriber(self):
+        self.assertEqual(normalize_to_e164("1123456789", "BR"), "+551123456789")
+
+    def test_inbound_style_plus55_legacy_mobile_is_canonicalized(self):
+        self.assertEqual(normalize_to_e164("+554792163692"), "+5547992163692")
+
 
 if __name__ == "__main__":
     unittest.main()
