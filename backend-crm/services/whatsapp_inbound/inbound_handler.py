@@ -175,6 +175,9 @@ def build_job_payload(
 
 
 def handle_inbound(payload: Dict[str, Any]) -> Dict[str, Any]:
+    if payload.get("is_group", False):
+        return {"status": "ignored", "reason": "group_message"}
+
     parsed = InboundWebhookPayload(**payload)
     message_text = parsed.resolved_message_text()
     if not message_text:
