@@ -621,6 +621,15 @@ _STAGE_ORDER = ["qualification", "apresentation", "follow-up", "closing"]
 _STAGE_INDEX = {stage: index for index, stage in enumerate(_STAGE_ORDER)}
 
 
+def _is_sdr_escalate_closing(context: Dict[str, Any], mother_decision: MotherDecision) -> bool:
+    ai_profile = context.get("ai_profile") or {}
+    if ai_profile.get("agent_mode") != "sdr_scheduler":
+        return False
+    route = _normalize_category(mother_decision.route_to)
+    perceived = _normalize_category(mother_decision.perceived_category)
+    return route == "closing" or perceived == "closing"
+
+
 def apply_outcome_guardrails(
     current_category: Optional[str],
     child_result: ChildResult,
@@ -803,6 +812,28 @@ def decide(context: Dict[str, Any], logger: Optional[logging.Logger] = None) -> 
         stage = "mother_validate"
         mother_decision = MotherDecision.model_validate(mother_payload)
 
+        if _is_sdr_escalate_closing(context, mother_decision):
+            reason = f"guardrail_sdr_escalate_closing|{mother_decision.reason}"
+            return DecisionOutput(
+                next_action="ignore",
+                message_text="",
+                questions=[],
+                reason=reason,
+                suggested_category="closing",
+                category_reason="guardrail_sdr_escalate_closing",
+                outcome=None,
+                kanban_highlight=None,
+                signals=[],
+                confidence=mother_decision.confidence,
+                decision_trace={
+                    "mother_route_to": mother_decision.route_to,
+                    "mother_perceived_category": mother_decision.perceived_category,
+                    "mother_confidence": mother_decision.confidence,
+                    "agent_mode": (context.get("ai_profile") or {}).get("agent_mode"),
+                    "guardrail_sdr_escalate_closing": True,
+                    "suppressed_reply": True,
+                },
+            )
         if mother_decision.route_to == "qualification":
             child_prompt = _build_child_prompt_qualification(context, message_text, mother_decision)
         elif mother_decision.route_to == "apresentation":

@@ -12,6 +12,7 @@ from typing import Any, Dict, List, Optional, Sequence, Tuple
 from fastapi import HTTPException
 
 from database import DB_PATH, get_connection
+from services.lead_category_policy import apply_closing_bot_disable_side_effect
 
 logger = logging.getLogger(__name__)
 
@@ -871,6 +872,13 @@ def apply_suggested_category(
         action="moved_stage",
         notes=notes,
         user_id=user_id,
+    )
+    apply_closing_bot_disable_side_effect(
+        conn,
+        lead_id=lead_id,
+        user_id=user_id,
+        old_category=current_category,
+        new_category=normalized,
     )
     logger.info(
         "lead_category_updated lead_id=%s user_id=%s from=%s to=%s keyword=%s",

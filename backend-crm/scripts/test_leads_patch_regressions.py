@@ -139,7 +139,8 @@ def _mk_conn() -> sqlite3.Connection:
             priority INTEGER,
             lastMovement TEXT,
             createdAt TEXT,
-            bot_disabled INTEGER DEFAULT 0
+            bot_disabled INTEGER DEFAULT 0,
+            bot_disabled_reason TEXT
         );
 
         CREATE TABLE appointments (

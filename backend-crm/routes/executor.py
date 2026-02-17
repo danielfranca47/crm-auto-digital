@@ -541,10 +541,15 @@ def set_lead_bot_disabled(
             """
             UPDATE leads
                SET bot_disabled = ?,
+                   bot_disabled_reason = ?,
                    lastMovement = CURRENT_TIMESTAMP
              WHERE id = ?
             """,
-            (1 if payload.disabled else 0, lead_id),
+            (
+                1 if payload.disabled else 0,
+                (payload.reason or None) if payload.disabled else None,
+                lead_id,
+            ),
         )
 
         notes = {"disabled": payload.disabled}

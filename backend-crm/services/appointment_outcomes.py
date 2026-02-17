@@ -94,6 +94,7 @@ def apply_outcome(
             """
             UPDATE leads
                SET bot_disabled = 0,
+                   bot_disabled_reason = NULL,
                    lastMovement = CURRENT_TIMESTAMP
              WHERE id = ?
             """,

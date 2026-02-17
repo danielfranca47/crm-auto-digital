@@ -306,12 +306,44 @@ function LeadCardDialogBody({
     }
   };
 
+  const handleReactivateBot = async () => {
+    try {
+      await api.setLeadBotDisabled(lead.id, {
+        disabled: false,
+        reason: "manual_reactivate",
+      });
+      setEditedLead((prev) =>
+        prev ? { ...prev, bot_disabled: false, bot_disabled_reason: null } : prev
+      );
+      onUpdateLead?.(lead.id, {
+        bot_disabled: false,
+        bot_disabled_reason: null,
+      } as Partial<Lead>);
+      toast({ title: "Bot reativado" });
+    } catch (error: any) {
+      toast({
+        title: "Erro ao reativar bot",
+        description: error?.message ?? "Não foi possível reativar o bot.",
+        variant: "destructive",
+      });
+    }
+  };
+
   const currentLead = isEditing ? editedLead! : lead;
   const botPauseReason = useMemo(() => {
     if (!currentLead?.bot_disabled) return null;
     if (nextMeetingAppointment) return "Reunião agendada";
+    const rawReason = (currentLead.bot_disabled_reason || "").trim();
+    if (rawReason === "category_closing") return "Closing (humano assume)";
+    if (rawReason) return rawReason;
+    if (currentLead.category === "closing") return "Closing (humano assume)";
     return "Motivo indisponível";
-  }, [currentLead?.bot_disabled, nextMeetingAppointment]);
+  }, [
+    currentLead?.bot_disabled,
+    currentLead?.bot_disabled_reason,
+    currentLead?.category,
+    nextMeetingAppointment,
+  ]);
 
   const nextScheduledAppointment = useMemo(() => {
     const appointmentId = currentLead.nextScheduledAction?.id;
@@ -402,6 +434,9 @@ function LeadCardDialogBody({
                 <span className="font-medium">Data:</span> {formatDate(new Date(nextMeetingAppointment.startTime))}
               </p>
             )}
+            <Button size="sm" variant="outline" onClick={() => void handleReactivateBot()}>
+              Reativar bot
+            </Button>
           </div>
         )}
 
