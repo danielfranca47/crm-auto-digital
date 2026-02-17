@@ -10,6 +10,7 @@ from models import Lead, LeadUpdate, AppointmentCreate, AppointmentUpdate, BotDi
 from security_core import CurrentUser, require_crm_access
 from services import rate_limit_service
 from services.phone_normalizer import PhoneNormalizationError, normalize_to_e164
+from services.lead_category_policy import apply_closing_bot_disable_side_effect
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -310,6 +311,12 @@ def atualizar_lead_parcial(id: int, lead: LeadUpdate, current_user: CurrentUser 
     cursor = conn.cursor()
     try:
         _require_lead_for_user(conn, id, current_user.id)
+        row = cursor.execute(
+            "SELECT category FROM leads WHERE id = ? AND user_id = ?",
+            (id, current_user.id),
+        ).fetchone()
+        old_category = (row["category"] if row else None)
+
         campos = []
         valores = []
 
@@ -351,10 +358,19 @@ def atualizar_lead_parcial(id: int, lead: LeadUpdate, current_user: CurrentUser 
         valores.extend([id, current_user.id])
 
         cursor.execute(sql, valores)
-        conn.commit()
 
         if cursor.rowcount == 0:
             raise HTTPException(status_code=404, detail="Lead não encontrado")
+
+        new_category = dados.get("category", old_category)
+        apply_closing_bot_disable_side_effect(
+            conn,
+            lead_id=id,
+            user_id=current_user.id,
+            old_category=old_category,
+            new_category=new_category,
+        )
+        conn.commit()
 
         return {"message": "Lead atualizado com sucesso"}
     except HTTPException:
@@ -407,10 +423,16 @@ def update_lead_bot_disabled(
             """
             UPDATE leads
                SET bot_disabled = ?,
+                   bot_disabled_reason = ?,
                    lastMovement = CURRENT_TIMESTAMP
              WHERE id = ? AND user_id = ?
             """,
-            (1 if payload.disabled else 0, lead_id, current_user.id),
+            (
+                1 if payload.disabled else 0,
+                (payload.reason or None) if payload.disabled else None,
+                lead_id,
+                current_user.id,
+            ),
         )
         notes = {"disabled": payload.disabled}
         if payload.reason:

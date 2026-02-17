@@ -594,6 +594,7 @@ def init_db() -> None:
 
         ensure_column(conn, "leads", "user_id", "INTEGER")
         ensure_column(conn, "leads", "bot_disabled", "bot_disabled INTEGER NOT NULL DEFAULT 0")
+        ensure_column(conn, "leads", "bot_disabled_reason", "bot_disabled_reason TEXT")
         ensure_column(conn, "prospection_logs", "user_id", "INTEGER")
         ensure_column(conn, "appointments", "outcome", "outcome TEXT")
         ensure_column(conn, "appointments", "outcome_note", "outcome_note TEXT")

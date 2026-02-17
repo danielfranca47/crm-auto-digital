@@ -43,6 +43,7 @@ export interface Lead {
   customMessage: string;
   observations: string;
   bot_disabled?: boolean;
+  bot_disabled_reason?: string | null;
   lastMovement: Date;
   createdAt: Date;
   nextScheduledAction?: {
