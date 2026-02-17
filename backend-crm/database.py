@@ -610,6 +610,10 @@ def init_db() -> None:
         )
         cur.execute("CREATE INDEX IF NOT EXISTS idx_leads_phone ON leads(phone);")
         cur.execute("CREATE INDEX IF NOT EXISTS idx_leads_email ON leads(email);")
+        try:
+            cur.execute("CREATE UNIQUE INDEX IF NOT EXISTS ux_leads_user_phone ON leads(user_id, phone);")
+        except sqlite3.IntegrityError:
+            print("⚠️ não foi possível criar ux_leads_user_phone: dados duplicados existentes")
 
         # Novas tabelas de automação distribuída (agents/jobs)
         ensure_jobs_tables(conn)

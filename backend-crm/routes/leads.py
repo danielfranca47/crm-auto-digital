@@ -9,6 +9,7 @@ from database import get_connection, normalize_datetime_value
 from models import Lead, LeadUpdate, AppointmentCreate, AppointmentUpdate, BotDisabledUpdate
 from security_core import CurrentUser, require_crm_access
 from services import rate_limit_service
+from services.phone_normalizer import PhoneNormalizationError, normalize_to_e164
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -221,6 +222,27 @@ def criar_lead(lead: Lead, current_user: CurrentUser = Depends(require_crm_acces
         # usa 1 como default se priority vier None
         priority = lead.priority or 1
 
+        phone_e164 = ""
+        if lead.phone:
+            try:
+                phone_e164 = normalize_to_e164(lead.phone, lead.country_code)
+            except PhoneNormalizationError as exc:
+                raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+            existing = cursor.execute(
+                "SELECT * FROM leads WHERE user_id = ? AND phone = ? LIMIT 1",
+                (current_user.id, phone_e164),
+            ).fetchone()
+            if existing:
+                out = {k: existing[k] for k in existing.keys()}
+                for k in ("createdAt", "lastMovement"):
+                    if out.get(k):
+                        out[k] = str(out[k]).replace(" ", "T")
+                out["nextScheduledAction"] = None
+                out["status"] = "exists"
+                out["lead_id"] = out.get("id")
+                return out
+
         cursor.execute(
             """
             INSERT INTO leads (
@@ -232,7 +254,7 @@ def criar_lead(lead: Lead, current_user: CurrentUser = Depends(require_crm_acces
                 current_user.id,
                 lead.companyName,
                 lead.contactName,
-                lead.phone,
+                phone_e164 or None,
                 lead.email,
                 lead.origin,
                 lead.category,
@@ -262,7 +284,7 @@ def criar_lead(lead: Lead, current_user: CurrentUser = Depends(require_crm_acces
             "id": lead_id,
             "companyName": lead.companyName,
             "contactName": lead.contactName,
-            "phone": lead.phone,
+            "phone": phone_e164 or None,
             "email": lead.email,
             "origin": lead.origin,
             "category": lead.category,
@@ -274,6 +296,8 @@ def criar_lead(lead: Lead, current_user: CurrentUser = Depends(require_crm_acces
             "nextScheduledAction": None,
         }
 
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
     finally:
@@ -292,6 +316,25 @@ def atualizar_lead_parcial(id: int, lead: LeadUpdate, current_user: CurrentUser 
         dados = lead.dict(exclude_unset=True)
         # UI manda nextScheduledAction junto; não é campo da tabela leads:
         dados.pop("nextScheduledAction", None)
+
+        if "phone" in dados:
+            raw_phone = dados.get("phone")
+            if raw_phone:
+                try:
+                    normalized_phone = normalize_to_e164(raw_phone, dados.get("country_code"))
+                except PhoneNormalizationError as exc:
+                    raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+                conflict = cursor.execute(
+                    "SELECT id FROM leads WHERE user_id = ? AND phone = ? AND id != ? LIMIT 1",
+                    (current_user.id, normalized_phone, id),
+                ).fetchone()
+                if conflict:
+                    raise HTTPException(status_code=409, detail="Telefone já cadastrado para outro lead")
+                dados["phone"] = normalized_phone
+            else:
+                dados["phone"] = None
+        dados.pop("country_code", None)
 
         for campo, valor in dados.items():
             if isinstance(valor, datetime):

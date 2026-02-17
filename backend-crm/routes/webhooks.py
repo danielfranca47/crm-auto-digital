@@ -9,6 +9,7 @@ from typing import Any, Dict
 
 from fastapi import APIRouter, Header, HTTPException, Query
 
+from services.phone_normalizer import PhoneNormalizationError, normalize_to_e164
 from services.whatsapp_inbound.inbound_handler import InboundWebhookPayload, handle_inbound
 
 router = APIRouter(prefix="/webhooks", tags=["Webhooks"])
@@ -44,16 +45,16 @@ def whatsapp_uazapi_webhook(
     def _normalize_e164(value: str | None) -> str:
         if not value:
             return ""
-        cleaned = re.sub(r"[\s\-()]+", "", str(value).strip())
-        cleaned = re.sub(r"[^0-9+]+", "", cleaned)
-        if cleaned.startswith("00") and not cleaned.startswith("+"):
-            cleaned = "+" + cleaned[2:]
-        if cleaned.startswith("+"):
-            return cleaned
-        digits = re.sub(r"[^0-9]+", "", cleaned)
-        if not digits:
-            return ""
-        return f"+{digits}"
+        try:
+            return normalize_to_e164(value)
+        except PhoneNormalizationError:
+            digits = re.sub(r"\D+", "", str(value))
+            if not digits:
+                return ""
+            try:
+                return normalize_to_e164(f"+{digits}")
+            except PhoneNormalizationError:
+                return ""
 
     event = payload.get("event") or payload.get("EventType") or payload.get("type")
     instance_id = payload.get("instance") or payload.get("instanceName")

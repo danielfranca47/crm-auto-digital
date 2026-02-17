@@ -242,6 +242,7 @@ export const api = {
     companyName: string;
     contactName?: string | null;
     phone?: string | null;
+    country_code?: string | null;
     email?: string | null;
     origin?: string | null;
     category: string; // ex.: "to-prospect"
@@ -253,6 +254,7 @@ export const api = {
       companyName: payload.companyName,
       contactName: payload.contactName ?? null,
       phone: payload.phone ?? null,
+      country_code: payload.country_code ?? null,
       email: payload.email ?? null,
       origin: payload.origin ?? "Manual",
       category: payload.category,

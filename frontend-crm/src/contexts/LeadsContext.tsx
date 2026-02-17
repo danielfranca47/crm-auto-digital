@@ -5,6 +5,11 @@ import { KANBAN_COLUMNS, ARCHIVED_COLUMNS } from '@/data/mockData';
 import { api } from '../services/api';
 import { useApiErrorHandler } from '@/hooks/useApiErrorHandler';
 
+export type AddLeadResult =
+  | { kind: 'created'; leadId: string }
+  | { kind: 'exists'; existingLeadId: string; existingLead?: Lead }
+  | { kind: 'error' };
+
 interface LeadsContextType {
   columns: KanbanColumn[];
   archivedColumns: KanbanColumn[];
@@ -15,7 +20,7 @@ interface LeadsContextType {
   updateLead: (leadId: string, updates: Partial<Lead>) => void;
   moveLead: (leadId: string, newCategory: LeadStatus) => void;
   archiveLead: (leadId: string, archiveCategory: LeadStatus) => void;
-  addLead: (leadData: NewLeadForm) => void;
+  addLead: (leadData: NewLeadForm) => Promise<AddLeadResult>;
   deleteLead: (leadId: string) => Promise<void>;
 
   loadAppointments: (leadId: string) => Promise<LeadAppointment[]>;
@@ -312,12 +317,13 @@ export function LeadsProvider({ children }: LeadsProviderProps) {
     syncProspectionStatus(leadId, archiveCategory);
   };
 
-  const addLead = async (leadData: NewLeadForm) => {
+  const addLead = async (leadData: NewLeadForm): Promise<AddLeadResult> => {
     try {
       const created = await api.createLead({
         companyName: leadData.companyName,
         contactName: leadData.contactName ?? null,
         phone: leadData.phone ?? null,
+        country_code: (leadData.country_code || "BR").toUpperCase(),
         email: leadData.email ?? null,
         origin: leadData.origin ?? "Manual",
         category: leadData.category,
@@ -325,6 +331,16 @@ export function LeadsProvider({ children }: LeadsProviderProps) {
         observations: leadData.observations ?? null,
         priority: 1, // backend espera "priority" (int)
       });
+
+      if (created?.status === 'exists' && (created?.lead_id || created?.id)) {
+        const existingLead = mapRawLead(created);
+        await reloadAllLeads();
+        return {
+          kind: 'exists',
+          existingLeadId: String(created.lead_id ?? created.id),
+          existingLead,
+        };
+      }
 
       // Use o que o backend devolveu (id, datas etc.)
       const newLead = mapRawLead(created);
@@ -339,8 +355,10 @@ export function LeadsProvider({ children }: LeadsProviderProps) {
 
       // mantém a visão de prospecção coerente, se necessário
       syncProspectionStatus(newLead.id, newLead.category as LeadStatus);
+      return { kind: 'created', leadId: newLead.id };
     } catch (error) {
       handleError(error, { fallbackMessage: 'Não foi possível criar o lead.' });
+      return { kind: 'error' };
     }
   };
 

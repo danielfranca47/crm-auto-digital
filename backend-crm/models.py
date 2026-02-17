@@ -9,6 +9,7 @@ class Lead(BaseModel):
     companyName: str
     contactName: Optional[str] = None
     phone: Optional[str] = None
+    country_code: Optional[str] = None
     email: Optional[str] = None
     origin: Optional[str] = "Manual"
     category: str
@@ -24,6 +25,7 @@ class LeadUpdate(BaseModel):
     companyName: Optional[str] = None
     contactName: Optional[str] = None
     phone: Optional[str] = None
+    country_code: Optional[str] = None
     email: Optional[str] = None
     origin: Optional[str] = None
     category: Optional[str] = None
