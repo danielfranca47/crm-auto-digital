@@ -173,7 +173,14 @@ def _set_whatsapp_webhook(*, user_id: int, instance_id: str, request_id: str) ->
         request_id,
         masked,
     )
-    set_core_whatsapp_webhook(instance_id, webhook_url, ["messages"], False, True)
+    set_core_whatsapp_webhook(
+        instance_id,
+        webhook_url,
+        ["messages", "connection"],
+        False,
+        True,
+        ["wasSentByApi", "isGroupYes"],
+    )
     logger.info(
         "whatsapp webhook success user_id=%s instance_id=%s request_id=%s",
         user_id,

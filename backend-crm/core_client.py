@@ -272,6 +272,8 @@ def set_core_whatsapp_webhook(
     events: list[str] | None = None,
     globalWebhook: bool = False,
     enabled: bool = True,
+    exclude_messages: list[str] | None = None,
+    include_messages: list[str] | None = None,
 ) -> Dict[str, Any]:
     if not instance_id:
         raise HTTPException(status_code=400, detail="instance_id obrigatório")
@@ -285,6 +287,10 @@ def set_core_whatsapp_webhook(
         "globalWebhook": globalWebhook,
         "enabled": enabled,
     }
+    if exclude_messages is not None:
+        payload["excludeMessages"] = exclude_messages
+    if include_messages is not None:
+        payload["includeMessages"] = include_messages
 
     base = _get_core_base()
     url_path = f"{base}/whatsapp-instances/webhook"
