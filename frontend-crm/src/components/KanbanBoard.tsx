@@ -17,7 +17,7 @@ import { KanbanColumn } from "./KanbanColumn";
 import { CrmHeader } from "./CrmHeader";
 import { NewLeadModal } from "./NewLeadModal";
 import { LeadCardDialog } from "./LeadCardDialog";
-import { useLeads } from "@/contexts/LeadsContext";
+import { AddLeadResult, useLeads } from "@/contexts/LeadsContext";
 import { Button } from "./ui/button";
 import { Archive, AlertCircle, RefreshCw } from "lucide-react";
 import { ScheduleAppointmentDialog } from "./ScheduleAppointmentDialog";
@@ -255,7 +255,20 @@ export function KanbanBoard({ onDashboard }: KanbanBoardProps) {
   };
 
   const handleNewLead = async (leadData: NewLeadForm) => {
-    await addLead(leadData); // addLead do LeadsContext deve fazer o optimistic update
+    const result: AddLeadResult = await addLead(leadData);
+    if (result.kind === "exists") {
+      toast({
+        title: "Lead já existe",
+        description: "Abrimos o cadastro existente.",
+      });
+
+      const leadFromState = findLead(result.existingLeadId);
+      const leadToOpen = leadFromState || result.existingLead || null;
+      if (leadToOpen) {
+        setSelectedLead(leadToOpen);
+        setIsLeadDialogOpen(true);
+      }
+    }
   };
 
   const handleDeleteLead = async (leadId: string) => {
