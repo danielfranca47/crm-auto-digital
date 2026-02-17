@@ -16,51 +16,6 @@ router = APIRouter(prefix="/webhooks", tags=["Webhooks"])
 logger = logging.getLogger(__name__)
 
 
-_GROUP_JID_SUFFIX = "@g.us"
-
-
-def _is_group_marker(value: Any) -> bool:
-    return isinstance(value, str) and value.strip().lower().endswith(_GROUP_JID_SUFFIX)
-
-
-def _has_group_jid(payload: Any) -> bool:
-    if isinstance(payload, dict):
-        for key, value in payload.items():
-            key_norm = str(key).strip().lower()
-            if key_norm in {"remotejid", "chatid", "id"} and _is_group_marker(value):
-                return True
-            if _has_group_jid(value):
-                return True
-    elif isinstance(payload, list):
-        for item in payload:
-            if _has_group_jid(item):
-                return True
-    elif _is_group_marker(payload):
-        return True
-    return False
-
-
-def is_group_message_payload(payload: Dict[str, Any]) -> bool:
-    chat = payload.get("chat") if isinstance(payload.get("chat"), dict) else {}
-    data = payload.get("data") if isinstance(payload.get("data"), dict) else {}
-    message = payload.get("message") if isinstance(payload.get("message"), dict) else {}
-
-    if chat.get("isGroup") is True:
-        return True
-    if data.get("isGroup") is True or bool(data.get("groupId")):
-        return True
-    if message.get("isGroup") is True or bool(message.get("groupId")):
-        return True
-
-    if _has_group_jid(payload):
-        return True
-
-    if chat and message and chat.get("type") == "group":
-        return True
-
-    return False
-
-
 @router.post("/whatsapp/inbound")
 def whatsapp_inbound_webhook(
     payload: InboundWebhookPayload,
@@ -140,16 +95,6 @@ def whatsapp_uazapi_webhook(
             detail = "Payload Uazapi incompleto (sender inválido)"
         raise HTTPException(status_code=400, detail=detail)
 
-    is_group = is_group_message_payload(payload)
-    if is_group:
-        logger.info(
-            "uazapi webhook ignored group_message instance=%s sender=%s message_id=%s",
-            instance_id,
-            sender,
-            message_id,
-        )
-        return {"status": "ignored", "reason": "group_message"}
-
     inbound_payload = {
         "instance_id": instance_id,
         "from": sender,
@@ -157,7 +102,6 @@ def whatsapp_uazapi_webhook(
         "message_id": message_id,
         "timestamp": message.get("messageTimestamp") or data.get("messageTimestamp"),
         "provider": "uazapi",
-        "is_group": is_group,
     }
 
     return handle_inbound(inbound_payload)
