@@ -46,10 +46,13 @@ def build_context_bundle(
     ai_profile = fetch_core_ai_profile(current_user.token)
     template_key = ai_profile.get("template_key") if ai_profile else None
     if ai_profile is not None and not ai_profile.get("agent_mode"):
-        if str(template_key or "").startswith("closer"):
-            ai_profile["agent_mode"] = "closer"
+        template_norm = str(template_key or "")
+        if template_norm.startswith("closer"):
+            ai_profile["agent_mode"] = "direto"
+        elif template_norm.startswith("consult"):
+            ai_profile["agent_mode"] = "consultivo"
         else:
-            ai_profile["agent_mode"] = "sdr_scheduler"
+            ai_profile["agent_mode"] = "agenda"
     playbook = get_playbook(template_key)
     playbook["template_key"] = template_key or "sdr_padrao"
 
@@ -109,10 +112,13 @@ def build_context_bundle_from_inbound(event: InboundEvent) -> ContextBundle:
 
     template_key = ai_profile.get("template_key") if ai_profile else None
     if ai_profile is not None and not ai_profile.get("agent_mode"):
-        if str(template_key or "").startswith("closer"):
-            ai_profile["agent_mode"] = "closer"
+        template_norm = str(template_key or "")
+        if template_norm.startswith("closer"):
+            ai_profile["agent_mode"] = "direto"
+        elif template_norm.startswith("consult"):
+            ai_profile["agent_mode"] = "consultivo"
         else:
-            ai_profile["agent_mode"] = "sdr_scheduler"
+            ai_profile["agent_mode"] = "agenda"
     playbook = get_playbook(template_key)
     playbook["template_key"] = template_key or "sdr_padrao"
 

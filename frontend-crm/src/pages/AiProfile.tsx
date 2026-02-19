@@ -354,15 +354,23 @@ export default function AiProfilePage() {
 
   const handleTemplateSelect = (tpl: AiTemplate) => {
     const preset = fallbackTemplates[tpl.key] || fallbackTemplates.sdr_padrao;
-    setProfile((prev) => ({
-      ...prev,
-      template_key: tpl.key,
-      tone_of_voice: prev.tone_of_voice || preset.tone,
-      goals: prev.goals || toBulletList(preset.goals),
-      agent_mode: tpl.key.startsWith("closer")
+    setProfile((prev) => {
+      const currentMode = prev.agent_mode;
+      const shouldSuggestMode = !currentMode || currentMode === "sdr_scheduler" || currentMode === "closer";
+      const suggestedMode = tpl.key.startsWith("closer")
         ? "direto"
-        : prev.agent_mode || "agenda",
-    }));
+        : tpl.key.startsWith("consult")
+        ? "consultivo"
+        : "agenda";
+
+      return {
+        ...prev,
+        template_key: tpl.key,
+        tone_of_voice: prev.tone_of_voice || preset.tone,
+        goals: prev.goals || toBulletList(preset.goals),
+        agent_mode: shouldSuggestMode ? suggestedMode : currentMode,
+      };
+    });
   };
 
   async function handleSave() {
