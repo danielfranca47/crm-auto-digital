@@ -90,10 +90,11 @@ const initialProfileState: AiProfilePayload = {
 };
 
 const goalSuggestions = [
-  "Agendar demos qualificadas",
-  "Reduzir churn nos primeiros 90 dias",
-  "Aumentar taxa de resposta em campanhas frias",
-  "Priorizar leads com maior fit",
+  "Confirmar preço/local antes de sugerir horários",
+  "Perguntar 3 informações obrigatórias antes de avançar",
+  "Lidar com objeções comuns sem alongar conversa",
+  "Encerrar educadamente quando não houver intenção",
+  "Não agendar sem confirmação do lead",
 ];
 
 const allowedExtensions = [".txt", ".csv", ".xlsx"];
@@ -389,23 +390,12 @@ export default function AiProfilePage() {
 
   const handleTemplateSelect = (tpl: AiTemplate) => {
     const preset = fallbackTemplates[tpl.key] || fallbackTemplates.sdr_padrao;
-    setProfile((prev) => {
-      const currentMode = prev.agent_mode;
-      const shouldSuggestMode = !currentMode || currentMode === "sdr_scheduler" || currentMode === "closer";
-      const suggestedMode = tpl.key.startsWith("closer")
-        ? "direto"
-        : tpl.key.startsWith("consult")
-        ? "consultivo"
-        : "agenda";
-
-      return {
-        ...prev,
-        template_key: tpl.key,
-        tone_of_voice: prev.tone_of_voice || preset.tone,
-        goals: prev.goals || toBulletList(preset.goals),
-        agent_mode: shouldSuggestMode ? suggestedMode : currentMode,
-      };
-    });
+    setProfile((prev) => ({
+      ...prev,
+      template_key: tpl.key,
+      tone_of_voice: prev.tone_of_voice || preset.tone,
+      goals: prev.goals || toBulletList(preset.goals),
+    }));
   };
 
   async function handleSave() {
@@ -694,207 +684,130 @@ export default function AiProfilePage() {
         <TabsContent value="profile" className="space-y-4">
           <Card>
             <CardHeader>
-              <CardTitle>WhatsApp</CardTitle>
-              <CardDescription>Conecte seu número via QR Code para o agente usar.</CardDescription>
+              <CardTitle>Modelo do Agente</CardTitle>
+              <CardDescription>Escolha o formato de atendimento principal.</CardDescription>
             </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="flex flex-wrap items-center gap-3">
-                <Badge variant={whatsappBadgeVariant}>{whatsappStatusLabel}</Badge>
-                {whatsappStatus?.phone_e164 && (
-                  <span className="text-sm text-muted-foreground">
-                    Telefone: <strong>{whatsappStatus.phone_e164}</strong>
-                  </span>
-                )}
-                {whatsappStatus?.last_updated && (
-                  <span className="text-xs text-muted-foreground">
-                    Última atualização: {formatDate(whatsappStatus.last_updated)}
-                  </span>
-                )}
-              </div>
-
-              {whatsappError && (
-                <Alert variant="destructive">
-                  <AlertTitle>Falha na conexão</AlertTitle>
-                  <AlertDescription>{whatsappError}</AlertDescription>
-                </Alert>
-              )}
-
-              {!isWhatsappConnected && whatsappQr?.value && (
-                <div className="rounded-md border p-4 space-y-3">
-                  <div className="text-sm text-muted-foreground">
-                    {whatsappPhase === "connecting" ? "Aguardando scan..." : "Escaneie o QR com o WhatsApp."}
-                  </div>
-                  {qrIsImage && (
-                    <img
-                      src={
-                        whatsappQr.value.startsWith("data:image/")
-                          ? whatsappQr.value
-                          : whatsappQr.kind === "url"
-                          ? whatsappQr.value
-                          : `data:image/png;base64,${whatsappQr.value}`
-                      }
-                      alt="QR Code do WhatsApp"
-                      className="h-56 w-56"
-                    />
-                  )}
-                  {!qrIsImage && (
-                    <pre className="whitespace-pre-wrap rounded-md bg-muted p-3 text-xs">
-                      {whatsappQr.value}
-                    </pre>
-                  )}
-                </div>
-              )}
-
-              {isWhatsappConnected && (
-                <div className="rounded-md border border-emerald-200 bg-emerald-50/60 p-3 text-sm text-emerald-700 dark:border-emerald-500/30 dark:bg-emerald-500/10 dark:text-emerald-200">
-                  Conectado ✅
-                </div>
-              )}
-
-              <div className="flex flex-wrap gap-2">
-                <Button onClick={handleWhatsappConnect} disabled={whatsappLoading}>
-                  {whatsappLoading ? "Conectando..." : "Criar/Conectar WhatsApp"}
-                </Button>
-                <Button
-                  variant="outline"
-                  onClick={() => handleWhatsappStatus(false)}
-                  disabled={whatsappLoading}
+            <CardContent className="space-y-3">
+              <div className="grid gap-2 md:grid-cols-3">
+                <button
+                  type="button"
+                  className={`rounded-md border p-3 text-left ${agentModelUi === "agendador_com_humano" ? "border-primary bg-primary/5" : ""}`}
+                  onClick={() => setProfile((p) => applyAgentModelUi(p, "agendador_com_humano"))}
                 >
-                  Atualizar status
-                </Button>
-                {!isWhatsappConnected && whatsappQr?.value && (
-                  <Button
-                    variant="secondary"
-                    onClick={() => handleWhatsappRefreshQr()}
-                    disabled={whatsappLoading}
-                  >
-                    Gerar novo QR
-                  </Button>
-                )}
+                  <div className="font-medium">Agendador com humano</div>
+                  <p className="text-xs text-muted-foreground">Qualifica e agenda com handoff humano.</p>
+                </button>
+                <button
+                  type="button"
+                  className={`rounded-md border p-3 text-left ${agentModelUi === "direto_autonomo" ? "border-primary bg-primary/5" : ""}`}
+                  onClick={() => setProfile((p) => applyAgentModelUi(p, "direto_autonomo"))}
+                >
+                  <div className="font-medium">Direto autônomo</div>
+                  <p className="text-xs text-muted-foreground">Foco em fechamento sem handoff.</p>
+                </button>
+                <button
+                  type="button"
+                  className={`rounded-md border p-3 text-left ${agentModelUi === "hibrido_agendador" ? "border-primary bg-primary/5" : ""}`}
+                  onClick={() => setProfile((p) => applyAgentModelUi(p, "hibrido_agendador"))}
+                >
+                  <div className="font-medium">Híbrido agendador</div>
+                  <p className="text-xs text-muted-foreground">Agenda com autonomia operacional.</p>
+                </button>
               </div>
+
+              <details className="rounded-md border p-3">
+                <summary className="cursor-pointer text-sm font-medium">Configurações avançadas (técnico)</summary>
+                <div className="mt-3 space-y-4">
+                  <div className="space-y-2">
+                    <div className="flex items-center gap-2 text-sm font-medium">
+                      <Wand2 className="h-4 w-4 text-primary" /> Template / Estilo do agente
+                    </div>
+                    <div className="grid gap-3 md:grid-cols-3">
+                      {loadingTemplates && <p>Carregando templates...</p>}
+                      {!loadingTemplates &&
+                        mappedTemplates.map((tpl) => (
+                          <button
+                            key={tpl.key}
+                            className={`rounded-lg border p-4 text-left transition hover:border-primary/60 hover:shadow-sm ${
+                              profile.template_key === tpl.key ? "border-primary bg-primary/5" : ""
+                            }`}
+                            onClick={() => handleTemplateSelect(tpl)}
+                            type="button"
+                          >
+                            <div className="flex items-center justify-between">
+                              <div className="font-semibold">{tpl.name || tpl.key}</div>
+                              {profile.template_key === tpl.key && (
+                                <Badge variant="default" className="text-xs">Selecionado</Badge>
+                              )}
+                            </div>
+                            <p className="mt-2 text-sm text-muted-foreground line-clamp-3">
+                              {tpl.description || fallbackTemplates[tpl.key]?.description}
+                            </p>
+                          </button>
+                        ))}
+                    </div>
+                  </div>
+
+                  <div className="grid gap-3 md:grid-cols-3">
+                    <div className="space-y-2">
+                      <Label>Agent Profile Mode</Label>
+                      <Select
+                        value={profile.agent_mode || "agenda"}
+                        onValueChange={(value) =>
+                          setProfile((p) => ({ ...p, agent_mode: value as AiProfilePayload["agent_mode"] }))
+                        }
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="Selecione o modo do agente" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="consultivo">Consultivo</SelectItem>
+                          <SelectItem value="agenda">Agenda</SelectItem>
+                          <SelectItem value="direto">Direto</SelectItem>
+                          <SelectItem value="sdr_scheduler">SDR Scheduler (legado)</SelectItem>
+                          <SelectItem value="closer">Closer (legado)</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Requer handoff humano</Label>
+                      <Select
+                        value={String(!!profile.requires_handoff)}
+                        onValueChange={(value) =>
+                          setProfile((p) => ({ ...p, requires_handoff: value === "true" }))
+                        }
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="Selecione" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="false">Não</SelectItem>
+                          <SelectItem value="true">Sim</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Human in loop</Label>
+                      <Select
+                        value={String(!!profile.human_in_loop)}
+                        onValueChange={(value) =>
+                          setProfile((p) => ({ ...p, human_in_loop: value === "true" }))
+                        }
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="Selecione" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="false">Não</SelectItem>
+                          <SelectItem value="true">Sim</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+                </div>
+              </details>
             </CardContent>
           </Card>
-
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Wand2 className="h-5 w-5 text-primary" /> Template / Estilo do agente
-                </CardTitle>
-                <CardDescription>Selecione um template e adapte o tom.</CardDescription>
-              </CardHeader>
-              <CardContent className="grid gap-3 md:grid-cols-3">
-                {loadingTemplates && <p>Carregando templates...</p>}
-                {!loadingTemplates &&
-                  mappedTemplates.map((tpl) => (
-                  <button
-                    key={tpl.key}
-                    className={`rounded-lg border p-4 text-left transition hover:border-primary/60 hover:shadow-sm ${
-                      profile.template_key === tpl.key ? "border-primary bg-primary/5" : ""
-                    }`}
-                    onClick={() => handleTemplateSelect(tpl)}
-                    type="button"
-                  >
-                    <div className="flex items-center justify-between">
-                      <div className="font-semibold">{tpl.name || tpl.key}</div>
-                      {profile.template_key === tpl.key && (
-                        <Badge variant="default" className="text-xs">Selecionado</Badge>
-                      )}
-                    </div>
-                    <p className="mt-2 text-sm text-muted-foreground line-clamp-3">
-                      {tpl.description || fallbackTemplates[tpl.key]?.description}
-                    </p>
-                  </button>
-                ))}
-                <div className="md:col-span-3 space-y-3">
-                  <Label>Modelo do Agente</Label>
-                  <div className="grid gap-2 md:grid-cols-3">
-                    <button
-                      type="button"
-                      className={`rounded-md border p-3 text-left ${agentModelUi === "agendador_com_humano" ? "border-primary bg-primary/5" : ""}`}
-                      onClick={() => setProfile((p) => applyAgentModelUi(p, "agendador_com_humano"))}
-                    >
-                      <div className="font-medium">Agendador com humano</div>
-                      <p className="text-xs text-muted-foreground">Qualifica e agenda com handoff humano.</p>
-                    </button>
-                    <button
-                      type="button"
-                      className={`rounded-md border p-3 text-left ${agentModelUi === "direto_autonomo" ? "border-primary bg-primary/5" : ""}`}
-                      onClick={() => setProfile((p) => applyAgentModelUi(p, "direto_autonomo"))}
-                    >
-                      <div className="font-medium">Direto autônomo</div>
-                      <p className="text-xs text-muted-foreground">Foco em fechamento sem handoff.</p>
-                    </button>
-                    <button
-                      type="button"
-                      className={`rounded-md border p-3 text-left ${agentModelUi === "hibrido_agendador" ? "border-primary bg-primary/5" : ""}`}
-                      onClick={() => setProfile((p) => applyAgentModelUi(p, "hibrido_agendador"))}
-                    >
-                      <div className="font-medium">Híbrido agendador</div>
-                      <p className="text-xs text-muted-foreground">Agenda com autonomia operacional.</p>
-                    </button>
-                  </div>
-                  <details className="rounded-md border p-3">
-                    <summary className="cursor-pointer text-sm font-medium">Configurações avançadas (técnico)</summary>
-                    <div className="mt-3 grid gap-3 md:grid-cols-3">
-                      <div className="space-y-2">
-                        <Label>Agent Profile Mode</Label>
-                        <Select
-                          value={profile.agent_mode || "agenda"}
-                          onValueChange={(value) =>
-                            setProfile((p) => ({ ...p, agent_mode: value as AiProfilePayload["agent_mode"] }))
-                          }
-                        >
-                          <SelectTrigger>
-                            <SelectValue placeholder="Selecione o modo do agente" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="consultivo">Consultivo</SelectItem>
-                            <SelectItem value="agenda">Agenda</SelectItem>
-                            <SelectItem value="direto">Direto</SelectItem>
-                            <SelectItem value="sdr_scheduler">SDR Scheduler (legado)</SelectItem>
-                            <SelectItem value="closer">Closer (legado)</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </div>
-                      <div className="space-y-2">
-                        <Label>Requer handoff humano</Label>
-                        <Select
-                          value={String(!!profile.requires_handoff)}
-                          onValueChange={(value) =>
-                            setProfile((p) => ({ ...p, requires_handoff: value === "true" }))
-                          }
-                        >
-                          <SelectTrigger>
-                            <SelectValue placeholder="Selecione" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="false">Não</SelectItem>
-                            <SelectItem value="true">Sim</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </div>
-                      <div className="space-y-2">
-                        <Label>Human in loop</Label>
-                        <Select
-                          value={String(!!profile.human_in_loop)}
-                          onValueChange={(value) =>
-                            setProfile((p) => ({ ...p, human_in_loop: value === "true" }))
-                          }
-                        >
-                          <SelectTrigger>
-                            <SelectValue placeholder="Selecione" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="false">Não</SelectItem>
-                            <SelectItem value="true">Sim</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </div>
-                    </div>
-                  </details>
-                </div>
-              </CardContent>
-            </Card>
 
           <div className="grid gap-4 md:grid-cols-2">
             <Card>
@@ -990,43 +903,6 @@ export default function AiProfilePage() {
 
             <Card>
               <CardHeader>
-                <CardTitle>Objetivos</CardTitle>
-                <CardDescription>Selecione objetivos e personalize.</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                <Textarea
-                  value={profile.goals}
-                  placeholder="Use bullets. Ex.:\n- Agendar 10 demos/semana\n- Reduzir ciclo de vendas"
-                  onChange={(e) => setProfile((p) => ({ ...p, goals: e.target.value }))}
-                  rows={4}
-                />
-                <div className="flex flex-wrap gap-2">
-                  {goalSuggestions.map((goal) => (
-                    <Button
-                      key={goal}
-                      variant="secondary"
-                      size="sm"
-                      type="button"
-                      onClick={() =>
-                        setProfile((p) => ({
-                          ...p,
-                          goals: p.goals.includes(goal)
-                            ? p.goals
-                            : `${p.goals ? `${p.goals}\n` : ""}${`- ${goal}`}`,
-                        }))
-                      }
-                    >
-                      {goal}
-                    </Button>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
-          </div>
-
-          <div className="grid gap-4 md:grid-cols-2">
-            <Card>
-              <CardHeader>
                 <CardTitle>Tom de voz</CardTitle>
                 <CardDescription>Como o agente fala.</CardDescription>
               </CardHeader>
@@ -1053,7 +929,9 @@ export default function AiProfilePage() {
                 />
               </CardContent>
             </Card>
+          </div>
 
+          {(profile.requires_handoff || profile.human_in_loop) && (
             <Card>
               <CardHeader>
                 <CardTitle>Atendimento humano (Handoff)</CardTitle>
@@ -1124,27 +1002,148 @@ export default function AiProfilePage() {
                 </div>
               </CardContent>
             </Card>
+          )}
 
-            <Card>
-              <CardHeader>
-                <CardTitle>Instruções extras</CardTitle>
-                <CardDescription>Diretrizes adicionais para o agente.</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-2">
-                <Textarea
-                  value={profile.custom_instructions || ""}
-                  placeholder="Ex.: Sempre responder em português do Brasil e sugerir próximos passos claros."
-                  onChange={(e) =>
-                    setProfile((p) => ({ ...p, custom_instructions: e.target.value }))
-                  }
-                  rows={4}
-                />
-                <div className="text-xs text-muted-foreground text-right">
-                  {(profile.custom_instructions || "").length} caracteres
+          <Card>
+            <CardHeader>
+              <CardTitle>Prioridades do atendimento</CardTitle>
+              <CardDescription>Defina prioridades operacionais em formato de bullets.</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <Textarea
+                value={profile.goals}
+                placeholder="Use bullets. Ex.:
+- Confirmar orçamento antes de sugerir horário
+- Coletar os 3 dados obrigatórios"
+                onChange={(e) => setProfile((p) => ({ ...p, goals: e.target.value }))}
+                rows={4}
+              />
+              <div className="flex flex-wrap gap-2">
+                {goalSuggestions.map((goal) => (
+                  <Button
+                    key={goal}
+                    variant="secondary"
+                    size="sm"
+                    type="button"
+                    onClick={() =>
+                      setProfile((p) => ({
+                        ...p,
+                        goals: p.goals.includes(goal)
+                          ? p.goals
+                          : `${p.goals ? `${p.goals}
+` : ""}${`- ${goal}`}`,
+                      }))
+                    }
+                  >
+                    {goal}
+                  </Button>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>Instruções extras</CardTitle>
+              <CardDescription>Diretrizes adicionais para o agente.</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-2">
+              <Textarea
+                value={profile.custom_instructions || ""}
+                placeholder="Ex.: Sempre responder em português do Brasil e sugerir próximos passos claros."
+                onChange={(e) =>
+                  setProfile((p) => ({ ...p, custom_instructions: e.target.value }))
+                }
+                rows={4}
+              />
+              <div className="text-xs text-muted-foreground text-right">
+                {(profile.custom_instructions || "").length} caracteres
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>WhatsApp</CardTitle>
+              <CardDescription>Conecte seu número via QR Code para o agente usar.</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="flex flex-wrap items-center gap-3">
+                <Badge variant={whatsappBadgeVariant}>{whatsappStatusLabel}</Badge>
+                {whatsappStatus?.phone_e164 && (
+                  <span className="text-sm text-muted-foreground">
+                    Telefone: <strong>{whatsappStatus.phone_e164}</strong>
+                  </span>
+                )}
+                {whatsappStatus?.last_updated && (
+                  <span className="text-xs text-muted-foreground">
+                    Última atualização: {formatDate(whatsappStatus.last_updated)}
+                  </span>
+                )}
+              </div>
+
+              {whatsappError && (
+                <Alert variant="destructive">
+                  <AlertTitle>Falha na conexão</AlertTitle>
+                  <AlertDescription>{whatsappError}</AlertDescription>
+                </Alert>
+              )}
+
+              {!isWhatsappConnected && whatsappQr?.value && (
+                <div className="rounded-md border p-4 space-y-3">
+                  <div className="text-sm text-muted-foreground">
+                    {whatsappPhase === "connecting" ? "Aguardando scan..." : "Escaneie o QR com o WhatsApp."}
+                  </div>
+                  {qrIsImage && (
+                    <img
+                      src={
+                        whatsappQr.value.startsWith("data:image/")
+                          ? whatsappQr.value
+                          : whatsappQr.kind === "url"
+                          ? whatsappQr.value
+                          : `data:image/png;base64,${whatsappQr.value}`
+                      }
+                      alt="QR Code do WhatsApp"
+                      className="h-56 w-56"
+                    />
+                  )}
+                  {!qrIsImage && (
+                    <pre className="whitespace-pre-wrap rounded-md bg-muted p-3 text-xs">
+                      {whatsappQr.value}
+                    </pre>
+                  )}
                 </div>
-              </CardContent>
-            </Card>
-          </div>
+              )}
+
+              {isWhatsappConnected && (
+                <div className="rounded-md border border-emerald-200 bg-emerald-50/60 p-3 text-sm text-emerald-700 dark:border-emerald-500/30 dark:bg-emerald-500/10 dark:text-emerald-200">
+                  Conectado ✅
+                </div>
+              )}
+
+              <div className="flex flex-wrap gap-2">
+                <Button onClick={handleWhatsappConnect} disabled={whatsappLoading}>
+                  {whatsappLoading ? "Conectando..." : "Criar/Conectar WhatsApp"}
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={() => handleWhatsappStatus(false)}
+                  disabled={whatsappLoading}
+                >
+                  Atualizar status
+                </Button>
+                {!isWhatsappConnected && whatsappQr?.value && (
+                  <Button
+                    variant="secondary"
+                    onClick={() => handleWhatsappRefreshQr()}
+                    disabled={whatsappLoading}
+                  >
+                    Gerar novo QR
+                  </Button>
+                )}
+              </div>
+            </CardContent>
+          </Card>
 
           <Card>
             <CardHeader>
