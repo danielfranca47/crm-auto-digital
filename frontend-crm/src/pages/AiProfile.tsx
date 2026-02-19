@@ -242,6 +242,7 @@ export default function AiProfilePage() {
 
   const normalizedWhatsStatus = (whatsappStatus?.status || "").toLowerCase();
   const isWhatsappConnected = normalizedWhatsStatus === "connected";
+  const showAdvancedTechnical = import.meta.env.DEV;
 
   const whatsappStatusLabel = (() => {
     if (whatsappPhase === "error") return "Erro";
@@ -322,8 +323,10 @@ export default function AiProfilePage() {
         ...initialProfileState,
         ...data,
       };
-      setProfile(loadedProfile);
-      setAgentModelUi(profileToAgentModelUi(loadedProfile));
+      const inferredModel = profileToAgentModelUi(loadedProfile);
+      const normalizedLoadedProfile = applyAgentModelUi(loadedProfile, inferredModel);
+      setProfile(normalizedLoadedProfile);
+      setAgentModelUi(inferredModel);
       setProfileExists(true);
     } catch (err: any) {
       handleError(err, {
@@ -413,15 +416,20 @@ export default function AiProfilePage() {
     }
     setSaving(true);
     try {
+      const inferredModel = profileToAgentModelUi(profile);
+      const normalizedProfile = applyAgentModelUi(profile, inferredModel);
       const payload: AiProfilePayload = {
-        ...profile,
-        timezone: profile.timezone?.trim() ? profile.timezone : "UTC",
-        custom_instructions: profile.custom_instructions?.trim() || null,
-        handoff_custom_text: profile.handoff_custom_text?.trim() || null,
+        ...normalizedProfile,
+        timezone: normalizedProfile.timezone?.trim() ? normalizedProfile.timezone : "UTC",
+        custom_instructions: normalizedProfile.custom_instructions?.trim() || null,
+        handoff_custom_text: normalizedProfile.handoff_custom_text?.trim() || null,
       };
       const fn = profileExists ? api.core.updateAiProfileMe : api.core.createAiProfile;
       const saved = await fn(payload);
-      setProfile({ ...initialProfileState, ...saved });
+      const savedProfile = { ...initialProfileState, ...saved };
+      const savedModel = profileToAgentModelUi(savedProfile);
+      setProfile(applyAgentModelUi(savedProfile, savedModel));
+      setAgentModelUi(savedModel);
       setProfileExists(true);
       toast({ title: "Perfil salvo", description: "Identidade do agente atualizada." });
     } catch (err) {
@@ -715,9 +723,10 @@ export default function AiProfilePage() {
                 </button>
               </div>
 
-              <details className="rounded-md border p-3">
-                <summary className="cursor-pointer text-sm font-medium">Configurações avançadas (técnico)</summary>
-                <div className="mt-3 space-y-4">
+              {showAdvancedTechnical && (
+                <details className="rounded-md border p-3">
+                  <summary className="cursor-pointer text-sm font-medium">Configurações avançadas (técnico)</summary>
+                  <div className="mt-3 space-y-4">
                   <div className="space-y-2">
                     <div className="flex items-center gap-2 text-sm font-medium">
                       <Wand2 className="h-4 w-4 text-primary" /> Template / Estilo do agente
@@ -804,8 +813,9 @@ export default function AiProfilePage() {
                       </Select>
                     </div>
                   </div>
-                </div>
-              </details>
+                  </div>
+                </details>
+              )}
             </CardContent>
           </Card>
 

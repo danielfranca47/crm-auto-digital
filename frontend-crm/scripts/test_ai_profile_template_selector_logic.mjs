@@ -8,6 +8,11 @@ function applyAgentModel(profile, model) {
   return { ...profile, agent_mode: "agenda", requires_handoff: false, human_in_loop: false };
 }
 
+function normalizeForSave(profile) {
+  const model = profileToAgentModelUi(profile);
+  return applyAgentModel(profile, model);
+}
+
 function profileToAgentModelUi(profile) {
   const mode = String(profile.agent_mode || "").toLowerCase();
   const requires = Boolean(profile.requires_handoff);
@@ -60,6 +65,17 @@ function main() {
   assert(profileToAgentModelUi({ agent_mode: "sdr_scheduler" }) === "agendador_com_humano", "Legado sdr_scheduler mapeamento inválido");
   assert(profileToAgentModelUi({ agent_mode: "closer" }) === "direto_autonomo", "Legado closer mapeamento inválido");
   console.log("OK: legado -> mapeamento para agent_model_ui correto");
+
+  // Normalização obrigatória no save
+  const normalized = normalizeForSave({
+    agent_mode: "closer",
+    requires_handoff: false,
+    human_in_loop: false,
+  });
+  assert(normalized.agent_mode === "direto", "Normalização falhou: closer deve virar direto");
+  assert(normalized.requires_handoff === false, "Normalização falhou: direto deve manter handoff false");
+  assert(normalized.human_in_loop === false, "Normalização falhou: direto deve manter human_in_loop false");
+  console.log("OK: save normaliza agent_mode legado para consultivo|agenda|direto");
 }
 
 main();
