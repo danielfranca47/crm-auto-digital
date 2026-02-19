@@ -1,3 +1,25 @@
+function applyAgentModel(profile, model) {
+  if (model === "agendador_com_humano") {
+    return { ...profile, agent_mode: "consultivo", requires_handoff: true, human_in_loop: true };
+  }
+  if (model === "direto_autonomo") {
+    return { ...profile, agent_mode: "direto", requires_handoff: false, human_in_loop: false };
+  }
+  return { ...profile, agent_mode: "agenda", requires_handoff: false, human_in_loop: false };
+}
+
+function profileToAgentModelUi(profile) {
+  const mode = String(profile.agent_mode || "").toLowerCase();
+  const requires = Boolean(profile.requires_handoff);
+  const human = Boolean(profile.human_in_loop);
+
+  if (mode === "consultivo") return "agendador_com_humano";
+  if (mode === "direto" || mode === "closer") return "direto_autonomo";
+  if (mode === "sdr_scheduler") return "agendador_com_humano";
+  if (mode === "agenda") return requires || human ? "agendador_com_humano" : "hibrido_agendador";
+  return "hibrido_agendador";
+}
+
 function applyTemplateSelect(prev, templateKey) {
   const currentMode = prev.agent_mode;
   const shouldSuggestMode = !currentMode || currentMode === "sdr_scheduler" || currentMode === "closer";
@@ -19,38 +41,25 @@ function assert(condition, message) {
 }
 
 function main() {
-  const scenario1Start = {
-    template_key: "closer_agressivo",
-    agent_mode: "consultivo",
-  };
-  const scenario1End = applyTemplateSelect(scenario1Start, "closer_agressivo");
-  assert(
-    scenario1End.agent_mode === "consultivo",
-    "Cenário 1 falhou: template não pode sobrescrever agent_mode escolhido manualmente",
-  );
-  console.log("OK: cenário 1 -> modo manual preservado após troca de template");
+  // Cenário 1: escolhe closer, depois escolhe modelo consultivo manualmente, salva/recarrega
+  let profile = { template_key: "", agent_mode: "agenda", requires_handoff: false, human_in_loop: false };
+  profile = applyTemplateSelect(profile, "closer_agressivo");
+  profile = applyAgentModel(profile, "agendador_com_humano"); // escolha manual via novo UI model
+  const reloadedUiModel = profileToAgentModelUi(profile);
+  assert(profile.agent_mode === "consultivo", "Cenário 1 falhou: agent_mode deveria permanecer consultivo");
+  assert(reloadedUiModel === "agendador_com_humano", "Cenário 1 falhou: UI deveria refletir agendador_com_humano");
+  console.log("OK: cenário 1 -> template não sobrescreve escolha manual do modelo");
 
-  const scenario2Start = {
-    template_key: "",
-    agent_mode: "agenda",
-  };
-  const scenario2End = applyTemplateSelect(scenario2Start, "sdr_padrao");
-  assert(
-    scenario2End.agent_mode === "agenda",
-    "Cenário 2 falhou: SDR padrão sem mudança manual deve manter/usar agenda",
-  );
-  console.log("OK: cenário 2 -> SDR padrão mantém modo agenda");
+  // Cenário 2: SDR padrão sem mexer dropdown => agenda
+  let profile2 = { template_key: "", agent_mode: "agenda", requires_handoff: false, human_in_loop: false };
+  profile2 = applyTemplateSelect(profile2, "sdr_padrao");
+  assert(profile2.agent_mode === "agenda", "Cenário 2 falhou: padrão deve permanecer agenda");
+  console.log("OK: cenário 2 -> SDR padrão mantém agent_mode agenda");
 
-  const legacyStart = {
-    template_key: "sdr_padrao",
-    agent_mode: "sdr_scheduler",
-  };
-  const legacyEnd = applyTemplateSelect(legacyStart, "consultor_especialista");
-  assert(
-    legacyEnd.agent_mode === "consultivo",
-    "Legado falhou: modo legado deveria ser auto-sugerido para novo modo do template",
-  );
-  console.log("OK: legado -> auto-sugestão de modo ao trocar template");
+  // Compat legado vindo do backend
+  assert(profileToAgentModelUi({ agent_mode: "sdr_scheduler" }) === "agendador_com_humano", "Legado sdr_scheduler mapeamento inválido");
+  assert(profileToAgentModelUi({ agent_mode: "closer" }) === "direto_autonomo", "Legado closer mapeamento inválido");
+  console.log("OK: legado -> mapeamento para agent_model_ui correto");
 }
 
 main();

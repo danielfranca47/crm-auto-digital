@@ -121,6 +121,33 @@ function formatDate(value?: string | null) {
   }
 }
 
+type AgentModelUi = "agendador_com_humano" | "direto_autonomo" | "hibrido_agendador";
+
+function profileToAgentModelUi(profile: Partial<AiProfilePayload>): AgentModelUi {
+  const mode = String(profile.agent_mode || "").toLowerCase();
+  const requires = Boolean(profile.requires_handoff);
+  const human = Boolean(profile.human_in_loop);
+
+  if (mode === "agendador_com_humano") return "agendador_com_humano";
+  if (mode === "direto_autonomo") return "direto_autonomo";
+  if (mode === "hibrido_agendador") return "hibrido_agendador";
+  if (mode === "consultivo") return "agendador_com_humano";
+  if (mode === "direto" || mode === "closer") return "direto_autonomo";
+  if (mode === "sdr_scheduler") return "agendador_com_humano";
+  if (mode === "agenda") return requires || human ? "agendador_com_humano" : "hibrido_agendador";
+  return "hibrido_agendador";
+}
+
+function applyAgentModelUi(profile: AiProfilePayload, model: AgentModelUi): AiProfilePayload {
+  if (model === "agendador_com_humano") {
+    return { ...profile, agent_mode: "consultivo", requires_handoff: true, human_in_loop: true };
+  }
+  if (model === "direto_autonomo") {
+    return { ...profile, agent_mode: "direto", requires_handoff: false, human_in_loop: false };
+  }
+  return { ...profile, agent_mode: "agenda", requires_handoff: false, human_in_loop: false };
+}
+
 function KnowledgeLevel({ count }: { count: number }) {
   const label = count === 0 ? "Vazio" : count <= 3 ? "Básico" : "Enriquecido";
   const variant: "secondary" | "outline" | "default" =
@@ -136,6 +163,7 @@ export default function AiProfilePage() {
   const [templates, setTemplates] = useState<AiTemplate[]>([]);
   const [loadingTemplates, setLoadingTemplates] = useState(false);
   const [profile, setProfile] = useState<AiProfilePayload>(initialProfileState);
+  const [agentModelUi, setAgentModelUi] = useState<AgentModelUi>("hibrido_agendador");
   const [profileExists, setProfileExists] = useState(false);
   const [loadingProfile, setLoadingProfile] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -289,10 +317,12 @@ export default function AiProfilePage() {
     setLoadingProfile(true);
     try {
       const data = await api.core.getAiProfileMe();
-      setProfile({
+      const loadedProfile = {
         ...initialProfileState,
         ...data,
-      });
+      };
+      setProfile(loadedProfile);
+      setAgentModelUi(profileToAgentModelUi(loadedProfile));
       setProfileExists(true);
     } catch (err: any) {
       handleError(err, {
@@ -301,6 +331,7 @@ export default function AiProfilePage() {
       });
       if ((err as any)?.status === 404) {
         setProfile(initialProfileState);
+        setAgentModelUi(profileToAgentModelUi(initialProfileState));
         setProfileExists(false);
       }
     } finally {
@@ -351,6 +382,10 @@ export default function AiProfilePage() {
       return { ...prev, agent_mode: inferred };
     });
   }, [profile.template_key]);
+
+  useEffect(() => {
+    setAgentModelUi(profileToAgentModelUi(profile));
+  }, [profile.agent_mode, profile.requires_handoff, profile.human_in_loop]);
 
   const handleTemplateSelect = (tpl: AiTemplate) => {
     const preset = fallbackTemplates[tpl.key] || fallbackTemplates.sdr_padrao;
@@ -770,64 +805,93 @@ export default function AiProfilePage() {
                     </p>
                   </button>
                 ))}
-                <div className="md:col-span-3 space-y-2">
-                  <Label>Agent Profile Mode</Label>
-                  <Select
-                    value={profile.agent_mode || "agenda"}
-                    onValueChange={(value) =>
-                      setProfile((p) => ({ ...p, agent_mode: value as AiProfilePayload["agent_mode"] }))
-                    }
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Selecione o modo do agente" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="consultivo">Consultivo</SelectItem>
-                      <SelectItem value="agenda">Agenda</SelectItem>
-                      <SelectItem value="direto">Direto</SelectItem>
-                      <SelectItem value="sdr_scheduler">SDR Scheduler (legado)</SelectItem>
-                      <SelectItem value="closer">Closer (legado)</SelectItem>
-                    </SelectContent>
-                  </Select>
-                  <p className="text-xs text-muted-foreground">
-                    Consultivo: qualifica e prepara handoff. Agenda: foco em agendamento/operação. Direto: foco em fechamento.
-                  </p>
-                </div>
-
-                <div className="space-y-2">
-                  <Label>Requer handoff humano</Label>
-                  <Select
-                    value={String(!!profile.requires_handoff)}
-                    onValueChange={(value) =>
-                      setProfile((p) => ({ ...p, requires_handoff: value === "true" }))
-                    }
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Selecione" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="false">Não</SelectItem>
-                      <SelectItem value="true">Sim</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                <div className="space-y-2">
-                  <Label>Human in loop</Label>
-                  <Select
-                    value={String(!!profile.human_in_loop)}
-                    onValueChange={(value) =>
-                      setProfile((p) => ({ ...p, human_in_loop: value === "true" }))
-                    }
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Selecione" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="false">Não</SelectItem>
-                      <SelectItem value="true">Sim</SelectItem>
-                    </SelectContent>
-                  </Select>
+                <div className="md:col-span-3 space-y-3">
+                  <Label>Modelo do Agente</Label>
+                  <div className="grid gap-2 md:grid-cols-3">
+                    <button
+                      type="button"
+                      className={`rounded-md border p-3 text-left ${agentModelUi === "agendador_com_humano" ? "border-primary bg-primary/5" : ""}`}
+                      onClick={() => setProfile((p) => applyAgentModelUi(p, "agendador_com_humano"))}
+                    >
+                      <div className="font-medium">Agendador com humano</div>
+                      <p className="text-xs text-muted-foreground">Qualifica e agenda com handoff humano.</p>
+                    </button>
+                    <button
+                      type="button"
+                      className={`rounded-md border p-3 text-left ${agentModelUi === "direto_autonomo" ? "border-primary bg-primary/5" : ""}`}
+                      onClick={() => setProfile((p) => applyAgentModelUi(p, "direto_autonomo"))}
+                    >
+                      <div className="font-medium">Direto autônomo</div>
+                      <p className="text-xs text-muted-foreground">Foco em fechamento sem handoff.</p>
+                    </button>
+                    <button
+                      type="button"
+                      className={`rounded-md border p-3 text-left ${agentModelUi === "hibrido_agendador" ? "border-primary bg-primary/5" : ""}`}
+                      onClick={() => setProfile((p) => applyAgentModelUi(p, "hibrido_agendador"))}
+                    >
+                      <div className="font-medium">Híbrido agendador</div>
+                      <p className="text-xs text-muted-foreground">Agenda com autonomia operacional.</p>
+                    </button>
+                  </div>
+                  <details className="rounded-md border p-3">
+                    <summary className="cursor-pointer text-sm font-medium">Configurações avançadas (técnico)</summary>
+                    <div className="mt-3 grid gap-3 md:grid-cols-3">
+                      <div className="space-y-2">
+                        <Label>Agent Profile Mode</Label>
+                        <Select
+                          value={profile.agent_mode || "agenda"}
+                          onValueChange={(value) =>
+                            setProfile((p) => ({ ...p, agent_mode: value as AiProfilePayload["agent_mode"] }))
+                          }
+                        >
+                          <SelectTrigger>
+                            <SelectValue placeholder="Selecione o modo do agente" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="consultivo">Consultivo</SelectItem>
+                            <SelectItem value="agenda">Agenda</SelectItem>
+                            <SelectItem value="direto">Direto</SelectItem>
+                            <SelectItem value="sdr_scheduler">SDR Scheduler (legado)</SelectItem>
+                            <SelectItem value="closer">Closer (legado)</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="space-y-2">
+                        <Label>Requer handoff humano</Label>
+                        <Select
+                          value={String(!!profile.requires_handoff)}
+                          onValueChange={(value) =>
+                            setProfile((p) => ({ ...p, requires_handoff: value === "true" }))
+                          }
+                        >
+                          <SelectTrigger>
+                            <SelectValue placeholder="Selecione" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="false">Não</SelectItem>
+                            <SelectItem value="true">Sim</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="space-y-2">
+                        <Label>Human in loop</Label>
+                        <Select
+                          value={String(!!profile.human_in_loop)}
+                          onValueChange={(value) =>
+                            setProfile((p) => ({ ...p, human_in_loop: value === "true" }))
+                          }
+                        >
+                          <SelectTrigger>
+                            <SelectValue placeholder="Selecione" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="false">Não</SelectItem>
+                            <SelectItem value="true">Sim</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </div>
+                  </details>
                 </div>
               </CardContent>
             </Card>
