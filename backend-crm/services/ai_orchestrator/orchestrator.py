@@ -19,6 +19,49 @@ from services.ai_orchestrator.inbound_event import InboundEvent
 logger = logging.getLogger(__name__)
 
 
+
+
+def _normalize_agent_mode_for_bundle(ai_profile: Dict[str, Any] | None, template_key: str | None) -> str:
+    profile = ai_profile or {}
+    mode = str(profile.get("agent_mode") or "").strip().lower()
+    if mode in {"consultivo", "agenda", "direto"}:
+        return mode
+    if mode == "closer":
+        return "direto"
+    if mode in {"sdr_scheduler", "sdr"}:
+        return "agenda"
+    template_norm = str(template_key or "")
+    if template_norm.startswith("closer"):
+        return "direto"
+    if template_norm.startswith("consult"):
+        return "consultivo"
+    return "agenda"
+
+
+def apply_mode_overrides(playbook: Dict[str, Any], agent_mode_normalized: str) -> Dict[str, Any]:
+    merged = dict(playbook or {})
+    if agent_mode_normalized == "consultivo":
+        merged.update({
+            "max_chars": 700,
+            "qualification_depth": "high",
+            "max_questions_per_turn": 1,
+            "must_handoff_on_high_intent": True,
+        })
+    elif agent_mode_normalized == "agenda":
+        merged.update({
+            "max_chars": 350,
+            "qualification_depth": "medium",
+            "must_collect": ["service_interest", "availability_window", "location_preference", "price_acceptance"],
+        })
+    elif agent_mode_normalized == "direto":
+        merged.update({
+            "max_chars": 300,
+            "qualification_depth": "low",
+            "cta_every_turn": True,
+        })
+    return merged
+
+
 class ContextBundle(BaseModel):
     user_id: int
     entitlements: Dict[str, Any] = Field(default_factory=dict)
@@ -45,16 +88,12 @@ def build_context_bundle(
     entitlements = current_user.entitlements or {}
     ai_profile = fetch_core_ai_profile(current_user.token)
     template_key = ai_profile.get("template_key") if ai_profile else None
-    if ai_profile is not None and not ai_profile.get("agent_mode"):
-        template_norm = str(template_key or "")
-        if template_norm.startswith("closer"):
-            ai_profile["agent_mode"] = "direto"
-        elif template_norm.startswith("consult"):
-            ai_profile["agent_mode"] = "consultivo"
-        else:
-            ai_profile["agent_mode"] = "agenda"
+    normalized_mode = _normalize_agent_mode_for_bundle(ai_profile, template_key)
+    if ai_profile is not None:
+        ai_profile["agent_mode"] = normalized_mode
     playbook = get_playbook(template_key)
     playbook["template_key"] = template_key or "sdr_padrao"
+    playbook = apply_mode_overrides(playbook, normalized_mode)
 
     with get_connection() as conn:
         cur = conn.cursor()
@@ -111,16 +150,12 @@ def build_context_bundle_from_inbound(event: InboundEvent) -> ContextBundle:
             ai_profile_status = "not_found"
 
     template_key = ai_profile.get("template_key") if ai_profile else None
-    if ai_profile is not None and not ai_profile.get("agent_mode"):
-        template_norm = str(template_key or "")
-        if template_norm.startswith("closer"):
-            ai_profile["agent_mode"] = "direto"
-        elif template_norm.startswith("consult"):
-            ai_profile["agent_mode"] = "consultivo"
-        else:
-            ai_profile["agent_mode"] = "agenda"
+    normalized_mode = _normalize_agent_mode_for_bundle(ai_profile, template_key)
+    if ai_profile is not None:
+        ai_profile["agent_mode"] = normalized_mode
     playbook = get_playbook(template_key)
     playbook["template_key"] = template_key or "sdr_padrao"
+    playbook = apply_mode_overrides(playbook, normalized_mode)
 
     lead_data = _load_lead(user_id=event.user_id, lead_id=event.lead_id)
     history = get_recent_history(event.lead_id)

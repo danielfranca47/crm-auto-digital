@@ -23,4 +23,5 @@ class ChildResult(BaseModel):
     outcome: Optional[Literal["won", "lost"]] = None
     kanban_highlight: Optional[Literal["green", "orange"]] = None
     signals: list[str] = Field(default_factory=list)
+    signals_structured: Optional[dict] = None
     confidence: float = Field(ge=0.0, le=1.0)

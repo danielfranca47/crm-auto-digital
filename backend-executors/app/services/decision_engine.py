@@ -4,6 +4,13 @@ import json
 import logging
 from typing import Any, Dict, Optional
 
+from app.contracts.qualification_contract import (
+    SIGNALS_SCHEMA,
+    compute_missing_fields,
+    infer_extracted_fields,
+    required_fields_for_mode,
+)
+
 from app.schemas.decision import DecisionOutput
 from app.services import fast_path, handoff_policy, llm_service
 from app.services.orchestrator_models import ChildResult, MotherDecision
@@ -189,6 +196,68 @@ def _has_handoff_indicators(context: Dict[str, Any]) -> bool:
     ]
     return any(bool(item) for item in indicators)
 
+def _sanitize_signals_structured(signals: Optional[dict]) -> dict:
+    if not isinstance(signals, dict):
+        return {}
+    return {k: v for k, v in signals.items() if k in SIGNALS_SCHEMA}
+
+
+def _build_mode_contract_context(context: Dict[str, Any], mother_decision: Optional[MotherDecision] = None) -> Dict[str, Any]:
+    mode = _normalize_agent_mode(context, mother_decision)
+    extracted = infer_extracted_fields(context)
+    missing_fields = compute_missing_fields(mode, extracted)
+    required_fields = required_fields_for_mode(mode)
+    return {
+        "agent_mode_normalized": mode,
+        "required_fields": required_fields,
+        "missing_fields": missing_fields,
+        "extracted_fields": extracted,
+    }
+
+
+def _apply_mode_guardrails(
+    decision: DecisionOutput,
+    context: Dict[str, Any],
+    mother_decision: MotherDecision,
+    child_result: ChildResult,
+) -> DecisionOutput:
+    mode_ctx = _build_mode_contract_context(context, mother_decision)
+    mode = mode_ctx["agent_mode_normalized"]
+    missing_fields = set(mode_ctx["missing_fields"])
+
+    if mode == "consultivo" and decision.outcome == "won":
+        decision.outcome = None
+
+    if mode == "consultivo" and mother_decision.route_to == "closing":
+        decision.reason = f"{decision.reason}|consultivo_handoff"
+        if decision.decision_trace is None:
+            decision.decision_trace = {}
+        decision.decision_trace["next_action_hint"] = "handoff"
+        if child_result.message_text and "humano" not in child_result.message_text.lower():
+            decision.message_text = "Perfeito — vou te encaminhar para um especialista humano finalizar com você."
+
+    if mode == "agenda" and ("availability_window" in missing_fields or "location_preference" in missing_fields):
+        if mother_decision.route_to == "closing" or decision.suggested_category == "closing":
+            decision.suggested_category = "qualification"
+            decision.reason = f"{decision.reason}|guardrail_agenda_missing_booking"
+            if decision.decision_trace is None:
+                decision.decision_trace = {}
+            decision.decision_trace["guardrail_agenda_missing_booking"] = True
+
+    if mode == "direto":
+        signals = _sanitize_signals_structured(mother_decision.signals)
+        price_ok = signals.get("price_acceptance") == "yes"
+        intent_ok = signals.get("intent_level") in {"medium", "high"}
+        if not (price_ok and intent_ok) and (mother_decision.route_to == "closing" or decision.suggested_category == "closing"):
+            decision.suggested_category = "qualification"
+            decision.reason = f"{decision.reason}|guardrail_direto_pullback"
+            if decision.decision_trace is None:
+                decision.decision_trace = {}
+            decision.decision_trace["guardrail_direto_pullback"] = True
+
+    return decision
+
+
 def _sanitize_category_decision(
     decision: DecisionOutput,
     context: Dict[str, Any],
@@ -269,6 +338,8 @@ def _build_prompt(context: Dict[str, Any], message_text: str) -> str:
             )
 
     allowed_categories = _get_allowed_lead_categories(context)
+    mode_contract = _build_mode_contract_context(context)
+    agent_mode_normalized = mode_contract["agent_mode_normalized"]
 
     return (
         "Você é um motor de decisão de um CRM (WhatsApp). Você deve retornar SOMENTE um JSON VÁLIDO (sem texto extra) no formato:\n"
@@ -323,6 +394,8 @@ def _build_prompt(context: Dict[str, Any], message_text: str) -> str:
         f"- last_bot_message: {last_bot_message or ''}\n"
         f"- short_reply_hint: {short_reply_hint or ''}\n"
         f"- agent_mode_normalized: {agent_mode_normalized}\n"
+        f"- required_fields: {json.dumps(mode_contract['required_fields'], ensure_ascii=False)}\n"
+        f"- missing_fields: {json.dumps(mode_contract['missing_fields'], ensure_ascii=False)}\n"
         f"- inbound_message_text: {message_text}\n"
     )
 
@@ -357,7 +430,8 @@ def _build_mother_prompt(context: Dict[str, Any], message_text: str) -> str:
     }
 
     history_text = _format_history(history)
-    agent_mode_normalized = _normalize_agent_mode(context)
+    mode_contract = _build_mode_contract_context(context)
+    agent_mode_normalized = mode_contract["agent_mode_normalized"]
     return (
         "Você é um roteador MÃE de um CRM (WhatsApp). Retorne SOMENTE JSON válido:\n"
         "{\n"
@@ -377,6 +451,8 @@ def _build_mother_prompt(context: Dict[str, Any], message_text: str) -> str:
         "- Use perceived_category=null somente se lead.category estiver vazio E não houver sinal claro no inbound.\n"
         "- confidence entre 0 e 1.\n"
         "- reason curto.\n"
+        "- Preencha signals seguindo schema padronizado quando possível (intent_level, urgency_level, price_acceptance, meeting_scheduled, handoff_requested, missing_fields, stop_reason).\n"
+        "- Use missing_fields para decidir: enquanto faltarem campos mínimos do modo, prefira route_to=qualification.\n"
         "\n"
         "DEFINIÇÃO DO FUNIL (IMPORTANTE):\n"
         "- APRESENTATION inclui: agendar reunião, confirmar horário, marcar call, lembrar da reunião,\n"
@@ -439,6 +515,8 @@ def _build_mother_prompt(context: Dict[str, Any], message_text: str) -> str:
         f"- metadata: {json.dumps(metadata_summary, ensure_ascii=False)}\n"
         f"- history: {history_text}\n"
         f"- agent_mode_normalized: {agent_mode_normalized}\n"
+        f"- required_fields: {json.dumps(mode_contract['required_fields'], ensure_ascii=False)}\n"
+        f"- missing_fields: {json.dumps(mode_contract['missing_fields'], ensure_ascii=False)}\n"
         f"- inbound_message_text: {message_text}\n"
     )
 
@@ -474,7 +552,8 @@ def _build_child_prompt(
     }
 
     history_text = _format_history(history)
-    agent_mode_normalized = _normalize_agent_mode(context, mother_decision)
+    mode_contract = _build_mode_contract_context(context, mother_decision)
+    agent_mode_normalized = mode_contract["agent_mode_normalized"]
     return (
         "Você é uma LLM FILHA e deve responder SOMENTE JSON válido:\n"
         "{\n"
@@ -484,6 +563,7 @@ def _build_child_prompt(
         '  "outcome": "won|lost|null",\n'
         '  "kanban_highlight": "green|orange|null",\n'
         '  "signals": ["..."],\n'
+        '  "signals_structured": {"missing_fields": ["..."], "handoff_requested": false} (opcional),\n'
         '  "confidence": 0.0\n'
         "}\n"
         "Regras:\n"
@@ -501,6 +581,8 @@ def _build_child_prompt(
         f"- metadata: {json.dumps(metadata_summary, ensure_ascii=False)}\n"
         f"- history: {history_text}\n"
         f"- agent_mode_normalized: {agent_mode_normalized}\n"
+        f"- required_fields: {json.dumps(mode_contract['required_fields'], ensure_ascii=False)}\n"
+        f"- missing_fields: {json.dumps(mode_contract['missing_fields'], ensure_ascii=False)}\n"
         f"- inbound_message_text: {message_text}\n"
     )
 
@@ -540,7 +622,8 @@ def _build_child_prompt_qualification(
     }
 
     history_text = _format_history(history)
-    agent_mode_normalized = _normalize_agent_mode(context, mother_decision)
+    mode_contract = _build_mode_contract_context(context, mother_decision)
+    agent_mode_normalized = mode_contract["agent_mode_normalized"]
     return (
         "Você é a FILHA QUALIFICATION e deve responder SOMENTE JSON válido:\n"
         "{\n"
@@ -550,14 +633,15 @@ def _build_child_prompt_qualification(
         '  "outcome": null,\n'
         '  "kanban_highlight": null,\n'
         '  "signals": ["..."],\n'
+        '  "signals_structured": {"missing_fields": ["..."], "handoff_requested": false} (opcional),\n'
         '  "confidence": 0.0\n'
         "}\n"
         "Regras:\n"
-        "- message_text é obrigatório e deve conter 1–2 perguntas objetivas de qualificação.\n"
+        "- message_text é obrigatório e deve conter no máximo 1 pergunta objetiva por turno.\n"
         "- NÃO agendar reunião aqui (só agendar na rota apresentation, salvo pedido explícito do inbound).\n"
         "- Use tone_of_voice, brand_name e niche quando disponíveis.\n"
         "- Respeite playbook.max_chars se existir (senão, resposta curta).\n"
-        "- recommended_next_category pode ser null ou 'apresentation' (micro-ajuste de avanço).\n"
+        "- recommended_next_category pode ser null ou 'apresentation' (micro-ajuste de avanço).\n- Priorize perguntar o próximo item de missing_fields (1 por vez).\n"
         "- outcome e kanban_highlight devem ser null.\n"
         "\n"
         f"ROTA MÃE: {mother_decision.route_to} (confidence={mother_decision.confidence})\n"
@@ -570,6 +654,8 @@ def _build_child_prompt_qualification(
         f"- metadata: {json.dumps(metadata_summary, ensure_ascii=False)}\n"
         f"- history: {history_text}\n"
         f"- agent_mode_normalized: {agent_mode_normalized}\n"
+        f"- required_fields: {json.dumps(mode_contract['required_fields'], ensure_ascii=False)}\n"
+        f"- missing_fields: {json.dumps(mode_contract['missing_fields'], ensure_ascii=False)}\n"
         f"- inbound_message_text: {message_text}\n"
     )
 
@@ -609,7 +695,8 @@ def _build_child_prompt_apresentation(
     }
 
     history_text = _format_history(history)
-    agent_mode_normalized = _normalize_agent_mode(context, mother_decision)
+    mode_contract = _build_mode_contract_context(context, mother_decision)
+    agent_mode_normalized = mode_contract["agent_mode_normalized"]
     return (
         "Você é a FILHA APRESENTATION e deve responder SOMENTE JSON válido:\n"
         "{\n"
@@ -619,6 +706,7 @@ def _build_child_prompt_apresentation(
         '  "outcome": null,\n'
         '  "kanban_highlight": null,\n'
         '  "signals": ["..."],\n'
+        '  "signals_structured": {"missing_fields": ["..."], "handoff_requested": false} (opcional),\n'
         '  "confidence": 0.0\n'
         "}\n"
         "Regras:\n"
@@ -641,6 +729,8 @@ def _build_child_prompt_apresentation(
         f"- metadata: {json.dumps(metadata_summary, ensure_ascii=False)}\n"
         f"- history: {history_text}\n"
         f"- agent_mode_normalized: {agent_mode_normalized}\n"
+        f"- required_fields: {json.dumps(mode_contract['required_fields'], ensure_ascii=False)}\n"
+        f"- missing_fields: {json.dumps(mode_contract['missing_fields'], ensure_ascii=False)}\n"
         f"- inbound_message_text: {message_text}\n"
     )
 
@@ -681,7 +771,8 @@ def _build_child_prompt_follow_up(
     }
 
     history_text = _format_history(history)
-    agent_mode_normalized = _normalize_agent_mode(context, mother_decision)
+    mode_contract = _build_mode_contract_context(context, mother_decision)
+    agent_mode_normalized = mode_contract["agent_mode_normalized"]
     return (
         "Você é a FILHA FOLLOW-UP e deve responder SOMENTE JSON válido:\n"
         "{\n"
@@ -691,6 +782,7 @@ def _build_child_prompt_follow_up(
         '  "outcome": null,\n'
         '  "kanban_highlight": null,\n'
         '  "signals": ["..."],\n'
+        '  "signals_structured": {"missing_fields": ["..."], "handoff_requested": false} (opcional),\n'
         '  "confidence": 0.0\n'
         "}\n"
         "Regras por modo:\n"
@@ -699,13 +791,15 @@ def _build_child_prompt_follow_up(
         "- direto: tratar objeções e conduzir CTA para pagamento de forma objetiva.\n"
         "- Use tone_of_voice, brand_name e niche quando disponíveis.\n"
         "- Respeite playbook.max_chars se existir (senão, resposta curta).\n"
-        "- recommended_next_category pode ser follow-up, closing ou null.\n"
+        "- recommended_next_category pode ser follow-up, closing ou null.\n- Faça no máximo 1 pergunta por mensagem e priorize o próximo missing_field.\n"
         "- outcome e kanban_highlight devem ser null.\n"
         "\n"
         f"ROTA MÃE: {mother_decision.route_to} (confidence={mother_decision.confidence})\n"
         f"Motivo MÃE: {mother_decision.reason}\n"
         f"Objetivo MÃE: {mother_decision.objective or ''}\n"
         f"Modo normalizado: {agent_mode_normalized}\n"
+        f"Required fields: {json.dumps(mode_contract['required_fields'], ensure_ascii=False)}\n"
+        f"Missing fields: {json.dumps(mode_contract['missing_fields'], ensure_ascii=False)}\n"
         "\n"
         "CONTEXTO:\n"
         f"- lead: {json.dumps(lead_summary, ensure_ascii=False)}\n"
@@ -752,7 +846,8 @@ def _build_child_prompt_closing(
     }
 
     history_text = _format_history(history)
-    agent_mode_normalized = _normalize_agent_mode(context, mother_decision)
+    mode_contract = _build_mode_contract_context(context, mother_decision)
+    agent_mode_normalized = mode_contract["agent_mode_normalized"]
     return (
         "Você é a FILHA CLOSING e deve responder SOMENTE JSON válido:\n"
         "{\n"
@@ -762,6 +857,7 @@ def _build_child_prompt_closing(
         '  "outcome": "won|lost|null",\n'
         '  "kanban_highlight": "green|orange|null",\n'
         '  "signals": ["..."],\n'
+        '  "signals_structured": {"missing_fields": ["..."], "handoff_requested": false} (opcional),\n'
         '  "confidence": 0.0\n'
         "}\n"
         "Regras por modo:\n"
@@ -770,11 +866,14 @@ def _build_child_prompt_closing(
         "- direto: conduzir fechamento e confirmação de pagamento com objetividade.\n"
         "- Use tone_of_voice, brand_name e niche quando disponíveis.\n"
         "- Respeite playbook.max_chars se existir (senão, resposta curta).\n"
+        "- Faça no máximo 1 pergunta por mensagem e priorize o próximo missing_field.\n"
         "\n"
         f"ROTA MÃE: {mother_decision.route_to} (confidence={mother_decision.confidence})\n"
         f"Motivo MÃE: {mother_decision.reason}\n"
         f"Objetivo MÃE: {mother_decision.objective or ''}\n"
         f"Modo normalizado: {agent_mode_normalized}\n"
+        f"Required fields: {json.dumps(mode_contract['required_fields'], ensure_ascii=False)}\n"
+        f"Missing fields: {json.dumps(mode_contract['missing_fields'], ensure_ascii=False)}\n"
         "\n"
         "CONTEXTO:\n"
         f"- lead: {json.dumps(lead_summary, ensure_ascii=False)}\n"
@@ -969,7 +1068,8 @@ def compose_decision_output(
     lead = context.get("lead") or {}
     ai_profile = context.get("ai_profile") or {}
     current_category = lead.get("category")
-    agent_mode_normalized = _normalize_agent_mode(context, mother_decision)
+    mode_contract = _build_mode_contract_context(context, mother_decision)
+    agent_mode_normalized = mode_contract["agent_mode_normalized"]
     suggested_category, category_reason, guardrail_reason = apply_mother_category_guardrails(
         current_category,
         mother_decision,
@@ -986,7 +1086,7 @@ def compose_decision_output(
     # NOTE (ETAPA 4): decision_trace é observabilidade apenas; não dispara efeitos colaterais.
     # A Etapa 4 deverá consumir sinais estruturados para automações no CRM (appointment/bot_disabled).
     meeting_scheduled = _extract_meeting_scheduled_signal(mother_decision)
-    return DecisionOutput(
+    decision = DecisionOutput(
         next_action=next_action,
         message_text=child_result.message_text or "",
         questions=[],
@@ -1008,14 +1108,21 @@ def compose_decision_output(
             "meeting_scheduled": meeting_scheduled,
             "mother_objective": mother_decision.objective,
             "next_action_hint": mother_decision.next_action_hint,
+            "required_fields": mode_contract['required_fields'],
+            "missing_fields": mode_contract['missing_fields'],
+            "child_signals_structured": child_result.signals_structured if isinstance(child_result.signals_structured, dict) else None,
             "mother_signals": {
                 "meeting_scheduled": meeting_scheduled,
                 "intent_level": ((mother_decision.signals or {}).get("intent_level") if isinstance(mother_decision.signals, dict) else None),
                 "urgency_level": ((mother_decision.signals or {}).get("urgency_level") if isinstance(mother_decision.signals, dict) else None),
                 "price_acceptance": ((mother_decision.signals or {}).get("price_acceptance") if isinstance(mother_decision.signals, dict) else None),
+                "handoff_requested": ((mother_decision.signals or {}).get("handoff_requested") if isinstance(mother_decision.signals, dict) else None),
+                "stop_reason": ((mother_decision.signals or {}).get("stop_reason") if isinstance(mother_decision.signals, dict) else None),
             },
         },
     )
+    decision = _apply_mode_guardrails(decision, context, mother_decision, child_result)
+    return decision
 
 
 def decide(context: Dict[str, Any], logger: Optional[logging.Logger] = None) -> DecisionOutput:
