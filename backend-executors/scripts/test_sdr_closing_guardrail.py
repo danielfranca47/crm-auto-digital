@@ -34,6 +34,10 @@ def _install_fake_app_modules() -> None:
             self.perceived_category = kwargs.get("perceived_category")
             self.confidence = kwargs.get("confidence")
             self.reason = kwargs.get("reason")
+            self.agent_mode = kwargs.get("agent_mode")
+            self.signals = kwargs.get("signals")
+            self.objective = kwargs.get("objective")
+            self.next_action_hint = kwargs.get("next_action_hint")
 
         @classmethod
         def model_validate(cls, payload):
@@ -131,7 +135,58 @@ def test_closer_keeps_closing() -> None:
     assert routes["called"] == "closing"
 
 
+def test_agenda_with_handoff_indicator_blocks_closing() -> None:
+    mod = _load_decision_engine()
+    routes = {"called": None}
+    mod.llm_service.generate_mother_route = lambda _prompt: (
+        '{"route_to":"closing","perceived_category":"closing","confidence":0.9,"reason":"intenção"}'
+    )
+
+    def fake_child(route: str, _prompt: str) -> str:
+        routes["called"] = route
+        return '{"message_text":"ok","did_complete_phase":false,"recommended_next_category":null,"outcome":null,"kanban_highlight":null,"signals":[],"confidence":0.8}'
+
+    mod.llm_service.generate_child_result = fake_child
+
+    ctx = {
+        "lead": {"id": 1, "category": "apresentation"},
+        "ai_profile": {"agent_mode": "agenda"},
+        "playbook": {"requires_handoff": True},
+        "metadata": {"inbound_message_text": "vamos falar depois"},
+        "history": [],
+    }
+    decision = mod.decide(ctx)
+    assert routes["called"] is None
+    assert decision.next_action == "ignore"
+    assert "guardrail_sdr_escalate_closing" in (decision.reason or "")
+
+
+def test_agenda_without_indicators_allows_closing() -> None:
+    mod = _load_decision_engine()
+    routes = {"called": None}
+    mod.llm_service.generate_mother_route = lambda _prompt: (
+        '{"route_to":"closing","perceived_category":"closing","confidence":0.9,"reason":"intenção"}'
+    )
+
+    def fake_child(route: str, _prompt: str) -> str:
+        routes["called"] = route
+        return '{"message_text":"ok","did_complete_phase":false,"recommended_next_category":null,"outcome":null,"kanban_highlight":null,"signals":[],"confidence":0.8}'
+
+    mod.llm_service.generate_child_result = fake_child
+
+    ctx = {
+        "lead": {"id": 1, "category": "apresentation"},
+        "ai_profile": {"agent_mode": "agenda"},
+        "metadata": {"inbound_message_text": "quero fechar"},
+        "history": [],
+    }
+    mod.decide(ctx)
+    assert routes["called"] == "closing"
+
+
 if __name__ == "__main__":
     test_sdr_closing_escalates_and_suppresses_reply()
+    test_agenda_with_handoff_indicator_blocks_closing()
+    test_agenda_without_indicators_allows_closing()
     test_closer_keeps_closing()
     print("OK: sdr closing guardrail")

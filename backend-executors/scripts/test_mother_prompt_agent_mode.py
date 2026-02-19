@@ -20,7 +20,17 @@ def _install_fake_app_modules() -> None:
 
     class DecisionOutput:
         def __init__(self, **kwargs) -> None:
-            self.__dict__.update(kwargs)
+            self.next_action = kwargs.get("next_action")
+            self.message_text = kwargs.get("message_text", "")
+            self.questions = kwargs.get("questions", [])
+            self.reason = kwargs.get("reason", "")
+            self.suggested_category = kwargs.get("suggested_category")
+            self.category_reason = kwargs.get("category_reason")
+            self.outcome = kwargs.get("outcome")
+            self.kanban_highlight = kwargs.get("kanban_highlight")
+            self.signals = kwargs.get("signals", [])
+            self.confidence = kwargs.get("confidence")
+            self.decision_trace = kwargs.get("decision_trace")
 
         @classmethod
         def model_validate(cls, payload):
@@ -35,7 +45,14 @@ def _install_fake_app_modules() -> None:
 
     class MotherDecision:
         def __init__(self, **kwargs) -> None:
-            self.__dict__.update(kwargs)
+            self.route_to = kwargs.get("route_to")
+            self.perceived_category = kwargs.get("perceived_category")
+            self.confidence = kwargs.get("confidence", 0.0)
+            self.reason = kwargs.get("reason", "")
+            self.agent_mode = kwargs.get("agent_mode")
+            self.signals = kwargs.get("signals")
+            self.objective = kwargs.get("objective")
+            self.next_action_hint = kwargs.get("next_action_hint")
 
         @classmethod
         def model_validate(cls, payload):
@@ -43,7 +60,13 @@ def _install_fake_app_modules() -> None:
 
     class ChildResult:
         def __init__(self, **kwargs) -> None:
-            self.__dict__.update(kwargs)
+            self.message_text = kwargs.get("message_text", "")
+            self.did_complete_phase = kwargs.get("did_complete_phase", False)
+            self.recommended_next_category = kwargs.get("recommended_next_category")
+            self.outcome = kwargs.get("outcome")
+            self.kanban_highlight = kwargs.get("kanban_highlight")
+            self.signals = kwargs.get("signals", [])
+            self.confidence = kwargs.get("confidence", 0.0)
 
         @classmethod
         def model_validate(cls, payload):
@@ -92,10 +115,12 @@ def main() -> None:
     prompt = decision_engine._build_mother_prompt(context, "Quero marcar uma reunião")
     lowered = prompt.lower()
 
-    assert '"agent_mode": "closer"' in lowered
+    assert '"agent_mode": "consultivo|agenda|direto|null (opcional)"' in lowered
     assert "política por modo" in lowered
     assert "meeting_scheduled" in lowered
-    print("OK: mother prompt includes agent_mode context and policy section")
+    assert "next_action_hint" in lowered
+    assert "agent_mode_normalized" in lowered
+    print("OK: mother prompt includes structured optional fields and normalized mode context")
 
 
 if __name__ == "__main__":

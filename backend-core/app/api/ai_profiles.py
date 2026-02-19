@@ -29,6 +29,9 @@ class HandoffPolicy(str, Enum):
 class AgentMode(str, Enum):
     sdr_scheduler = "sdr_scheduler"
     closer = "closer"
+    consultivo = "consultivo"
+    agenda = "agenda"
+    direto = "direto"
 
 
 AI_TEMPLATES = [
@@ -65,6 +68,8 @@ class AIProfileBase(BaseModel):
     identity_mode: IdentityMode = IdentityMode.human_agent
     handoff_policy: HandoffPolicy = HandoffPolicy.keep_active_notify
     handoff_custom_text: Optional[str] = None
+    requires_handoff: bool = False
+    human_in_loop: bool = False
 
 
 class AIProfileCreate(AIProfileBase):
@@ -86,6 +91,8 @@ class AIProfileUpdate(BaseModel):
     identity_mode: Optional[IdentityMode] = None
     handoff_policy: Optional[HandoffPolicy] = None
     handoff_custom_text: Optional[str] = None
+    requires_handoff: Optional[bool] = None
+    human_in_loop: Optional[bool] = None
 
 
 class AIProfileOut(AIProfileBase):
@@ -127,11 +134,13 @@ def _upsert_ai_profile(
     require_all_fields_for_create: bool = True,
 ) -> models.AIProfile:
     if data.get("agent_mode") is None:
-        template_key = data.get("template_key") or ""
-        if str(template_key).startswith("closer"):
-            data["agent_mode"] = AgentMode.closer
+        template_key = str(data.get("template_key") or "")
+        if template_key.startswith("closer"):
+            data["agent_mode"] = AgentMode.direto
+        elif template_key.startswith("consult"):
+            data["agent_mode"] = AgentMode.consultivo
         else:
-            data["agent_mode"] = AgentMode.sdr_scheduler
+            data["agent_mode"] = AgentMode.agenda
     profile = db.query(models.AIProfile).filter(models.AIProfile.user_id == user_id).first()
 
     if profile:

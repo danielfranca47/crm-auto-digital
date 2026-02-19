@@ -103,61 +103,39 @@ def _fake_child_payload():
     )
 
 
-def main() -> None:
-    _install_fake_app_modules()
-    decision_engine = _load_decision_engine()
-
-    captured = {"prompt": None}
-
-    def fake_mother(payload):
-        return payload
-
-    def fake_child(_route, prompt):
-        captured["prompt"] = prompt
-        return _fake_child_payload()
-
-    decision_engine.llm_service.generate_child_result = fake_child
-
-    base_context = {
-        "lead": {"id": 1, "category": "qualification"},
-        "ai_profile": {"id": "profile-1", "name": "Demo", "template_key": "sdr_padrao"},
+def _base_context():
+    return {
+        "lead": {"id": 1, "category": "apresentation"},
+        "ai_profile": {"id": "profile-1", "name": "Demo", "template_key": "sdr_padrao", "agent_mode": "sdr_scheduler"},
         "playbook": {"template_key": "sdr_padrao"},
         "metadata": {"provider": "uazapi", "instance_id": "inst-1"},
         "history": [],
     }
 
-    decision_engine.llm_service.generate_mother_route = lambda _prompt: fake_mother(
-        '{"route_to":"qualification","perceived_category":"qualification","confidence":0.8,"reason":"ok"}'
-    )
-    decision_engine.decide(dict(base_context))
-    assert "FILHA QUALIFICATION" in (captured["prompt"] or "")
 
-    decision_engine.llm_service.generate_mother_route = lambda _prompt: fake_mother(
-        '{"route_to":"apresentation","perceived_category":"apresentation","confidence":0.8,"reason":"ok"}'
-    )
-    decision_engine.decide(dict(base_context))
-    assert "FILHA APRESENTATION" in (captured["prompt"] or "")
+def main() -> None:
+    _install_fake_app_modules()
+    decision_engine = _load_decision_engine()
+    decision_engine.llm_service.generate_child_result = lambda _route, _prompt: _fake_child_payload()
 
-    decision_engine.llm_service.generate_mother_route = lambda _prompt: fake_mother(
-        '{"route_to":"follow-up","perceived_category":"follow-up","confidence":0.8,"reason":"ok"}'
+    decision_engine.llm_service.generate_mother_route = lambda _prompt: (
+        '{"route_to":"apresentation","perceived_category":"apresentation","confidence":0.9,'
+        '"reason":"ok","signals":{"meeting_scheduled":true}}'
     )
-    decision_engine.decide(dict(base_context))
-    assert "FILHA FOLLOW-UP" in (captured["prompt"] or "")
+    decision = decision_engine.decide(_base_context())
+    trace = decision.decision_trace or {}
+    assert trace.get("meeting_scheduled") is True
+    assert trace.get("agent_mode_normalized") == "agenda"
 
-    closing_context = dict(base_context)
-    closing_context["ai_profile"] = {
-        "id": "profile-1",
-        "name": "Demo",
-        "template_key": "closer_agressivo",
-        "agent_mode": "closer",
-    }
-    decision_engine.llm_service.generate_mother_route = lambda _prompt: fake_mother(
-        '{"route_to":"closing","perceived_category":"closing","confidence":0.8,"reason":"ok"}'
+    decision_engine.llm_service.generate_mother_route = lambda _prompt: (
+        '{"route_to":"apresentation","perceived_category":"apresentation","confidence":0.8,'
+        '"reason":"meeting_scheduled|legacy"}'
     )
-    decision_engine.decide(closing_context)
-    assert "FILHA CLOSING" in (captured["prompt"] or "")
+    decision_legacy = decision_engine.decide(_base_context())
+    trace_legacy = decision_legacy.decision_trace or {}
+    assert trace_legacy.get("meeting_scheduled") is True
 
-    print("OK: child prompt selection by route")
+    print("OK: structured meeting_scheduled preferred with legacy fallback")
 
 
 if __name__ == "__main__":

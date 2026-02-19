@@ -118,6 +118,77 @@ def _get_allowed_lead_categories(context: Dict[str, Any]) -> list[str]:
     return DEFAULT_ALLOWED_LEAD_CATEGORIES
 
 
+
+
+def _normalize_agent_mode(context: Dict[str, Any], mother_decision: Optional[MotherDecision] = None) -> str:
+    ai_profile = context.get("ai_profile") or {}
+    playbook = context.get("playbook") or {}
+    metadata = context.get("metadata") or {}
+
+    raw_mode = None
+    if mother_decision is not None:
+        raw_mode = mother_decision.agent_mode
+    if raw_mode is None:
+        raw_mode = ai_profile.get("agent_mode")
+
+    normalized = str(raw_mode or "").strip().lower().replace("_", "-")
+    if normalized in {"consultivo", "agenda", "direto"}:
+        return normalized
+    if normalized == "closer":
+        return "direto"
+    if normalized in {"sdr-scheduler", "sdr"}:
+        indicators = [
+            ai_profile.get("human_in_loop"),
+            ai_profile.get("requires_handoff"),
+            playbook.get("human_in_loop"),
+            playbook.get("requires_handoff"),
+            metadata.get("human_in_loop"),
+            metadata.get("requires_handoff"),
+        ]
+        if any(bool(item) for item in indicators):
+            return "consultivo"
+        return "agenda"
+    template_key = str(ai_profile.get("template_key") or playbook.get("template_key") or "").lower()
+    if "closer" in template_key:
+        return "direto"
+    if "consult" in template_key:
+        return "consultivo"
+    if "scheduler" in template_key or "sdr" in template_key:
+        indicators = [
+            ai_profile.get("human_in_loop"),
+            ai_profile.get("requires_handoff"),
+            playbook.get("human_in_loop"),
+            playbook.get("requires_handoff"),
+            metadata.get("human_in_loop"),
+            metadata.get("requires_handoff"),
+        ]
+        if any(bool(item) for item in indicators):
+            return "consultivo"
+        return "agenda"
+    return "agenda"
+
+
+def _extract_meeting_scheduled_signal(mother_decision: MotherDecision) -> bool:
+    signals = mother_decision.signals
+    if isinstance(signals, dict) and isinstance(signals.get("meeting_scheduled"), bool):
+        return bool(signals.get("meeting_scheduled"))
+    return "meeting_scheduled" in (mother_decision.reason or "")
+
+
+def _has_handoff_indicators(context: Dict[str, Any]) -> bool:
+    ai_profile = context.get("ai_profile") or {}
+    playbook = context.get("playbook") or {}
+    metadata = context.get("metadata") or {}
+    indicators = [
+        ai_profile.get("human_in_loop"),
+        ai_profile.get("requires_handoff"),
+        playbook.get("human_in_loop"),
+        playbook.get("requires_handoff"),
+        metadata.get("human_in_loop"),
+        metadata.get("requires_handoff"),
+    ]
+    return any(bool(item) for item in indicators)
+
 def _sanitize_category_decision(
     decision: DecisionOutput,
     context: Dict[str, Any],
@@ -251,6 +322,7 @@ def _build_prompt(context: Dict[str, Any], message_text: str) -> str:
         f"- history: {history_text}\n"
         f"- last_bot_message: {last_bot_message or ''}\n"
         f"- short_reply_hint: {short_reply_hint or ''}\n"
+        f"- agent_mode_normalized: {agent_mode_normalized}\n"
         f"- inbound_message_text: {message_text}\n"
     )
 
@@ -285,13 +357,18 @@ def _build_mother_prompt(context: Dict[str, Any], message_text: str) -> str:
     }
 
     history_text = _format_history(history)
+    agent_mode_normalized = _normalize_agent_mode(context)
     return (
         "Você é um roteador MÃE de um CRM (WhatsApp). Retorne SOMENTE JSON válido:\n"
         "{\n"
         '  "route_to": "qualification|apresentation|follow-up|closing",\n'
         '  "perceived_category": "qualification|apresentation|follow-up|closing|null",\n'
         '  "confidence": 0.0,\n'
-        '  "reason": "curto"\n'
+        '  "reason": "curto",\n'
+        '  "agent_mode": "consultivo|agenda|direto|null (opcional)",\n'
+        '  "signals": {"meeting_scheduled": true|false, "intent_level": "low|medium|high", "urgency_level": "low|medium|high", "price_acceptance": "no|unsure|yes"} (opcional),\n'
+        '  "objective": "string curta opcional",\n'
+        '  "next_action_hint": "reply|ask_qualification|handoff|ignore|null (opcional)"\n'
         "}\n"
         "Regras:\n"
         "- route_to é obrigatório e indica a próxima fase a focar.\n"
@@ -321,12 +398,15 @@ def _build_mother_prompt(context: Dict[str, Any], message_text: str) -> str:
         # deve migrar isso para um sinal estruturado (ex.: fields JSON/signals) e o CRM
         # será responsável por criar appointment e setar bot_disabled.
         "POLÍTICA POR MODO (agent_mode):\n"
-        "- sdr_scheduler: foco em qualificar e agendar reunião.\n"
+        "- consultivo: não fechar sozinho; qualificar, preparar handoff e agendar quando aplicável.\n"
+        "- agenda: foco em vender até booking e confirmar presença.\n"
+        "- direto: foco em fechamento objetivo e comercial.\n"
+        "- sdr_scheduler: compatível com agenda/consultivo (normalização no executor).\n"
         "  - Se agendar/confirmar/reagendar/pedir link, route_to=apresentation e perceived_category=apresentation.\n"
         "  - Se confirmação de horário/link fechado (ex.: \"Fechou amanhã 17h\", \"pode confirmar\", \"manda o link\"),\n"
-        '    inclua a substring "meeting_scheduled" no reason.\n'
+        '    prefira signals.meeting_scheduled=true e mantenha substring "meeting_scheduled" no reason por compatibilidade.\n'
         "- closer: foco em avançar até fechamento.\n"
-        "  - Agendamento NÃO é objetivo final; não inclua meeting_scheduled apenas por agendar.\n"
+        "  - Agendamento NÃO é objetivo final; meeting_scheduled deve ficar false, salvo agendamento real com necessidade operacional.\n"
         "  - Se inbound for claramente de fechamento (\"posso assinar\", \"manda contrato\", \"quero fechar\"),\n"
         "    route_to=closing e perceived_category=closing.\n"
         "\n"
@@ -358,6 +438,7 @@ def _build_mother_prompt(context: Dict[str, Any], message_text: str) -> str:
         f"- playbook: {json.dumps(playbook_summary, ensure_ascii=False)}\n"
         f"- metadata: {json.dumps(metadata_summary, ensure_ascii=False)}\n"
         f"- history: {history_text}\n"
+        f"- agent_mode_normalized: {agent_mode_normalized}\n"
         f"- inbound_message_text: {message_text}\n"
     )
 
@@ -393,6 +474,7 @@ def _build_child_prompt(
     }
 
     history_text = _format_history(history)
+    agent_mode_normalized = _normalize_agent_mode(context, mother_decision)
     return (
         "Você é uma LLM FILHA e deve responder SOMENTE JSON válido:\n"
         "{\n"
@@ -418,6 +500,7 @@ def _build_child_prompt(
         f"- playbook: {json.dumps(playbook_summary, ensure_ascii=False)}\n"
         f"- metadata: {json.dumps(metadata_summary, ensure_ascii=False)}\n"
         f"- history: {history_text}\n"
+        f"- agent_mode_normalized: {agent_mode_normalized}\n"
         f"- inbound_message_text: {message_text}\n"
     )
 
@@ -457,6 +540,7 @@ def _build_child_prompt_qualification(
     }
 
     history_text = _format_history(history)
+    agent_mode_normalized = _normalize_agent_mode(context, mother_decision)
     return (
         "Você é a FILHA QUALIFICATION e deve responder SOMENTE JSON válido:\n"
         "{\n"
@@ -485,6 +569,7 @@ def _build_child_prompt_qualification(
         f"- playbook: {json.dumps(playbook_summary, ensure_ascii=False)}\n"
         f"- metadata: {json.dumps(metadata_summary, ensure_ascii=False)}\n"
         f"- history: {history_text}\n"
+        f"- agent_mode_normalized: {agent_mode_normalized}\n"
         f"- inbound_message_text: {message_text}\n"
     )
 
@@ -524,6 +609,7 @@ def _build_child_prompt_apresentation(
     }
 
     history_text = _format_history(history)
+    agent_mode_normalized = _normalize_agent_mode(context, mother_decision)
     return (
         "Você é a FILHA APRESENTATION e deve responder SOMENTE JSON válido:\n"
         "{\n"
@@ -554,9 +640,150 @@ def _build_child_prompt_apresentation(
         f"- playbook: {json.dumps(playbook_summary, ensure_ascii=False)}\n"
         f"- metadata: {json.dumps(metadata_summary, ensure_ascii=False)}\n"
         f"- history: {history_text}\n"
+        f"- agent_mode_normalized: {agent_mode_normalized}\n"
         f"- inbound_message_text: {message_text}\n"
     )
 
+
+
+def _build_child_prompt_follow_up(
+    context: Dict[str, Any],
+    message_text: str,
+    mother_decision: MotherDecision,
+) -> str:
+    lead = context.get("lead") or {}
+    ai_profile = context.get("ai_profile") or {}
+    playbook = context.get("playbook") or {}
+    metadata = context.get("metadata") or {}
+    history = context.get("history") or []
+
+    lead_summary = {
+        "id": lead.get("id"),
+        "name": _safe_get(lead, "contactName", "companyName", "name"),
+        "category": lead.get("category"),
+        "segment": lead.get("segment"),
+    }
+    ai_summary = {
+        "id": ai_profile.get("id"),
+        "name": ai_profile.get("name"),
+        "brand_name": ai_profile.get("brand_name"),
+        "tone_of_voice": ai_profile.get("tone_of_voice"),
+        "niche": ai_profile.get("niche"),
+        "agent_mode": ai_profile.get("agent_mode"),
+    }
+    playbook_summary = {
+        "template_key": playbook.get("template_key") or playbook.get("name"),
+        "max_chars": playbook.get("max_chars"),
+    }
+    metadata_summary = {
+        "provider": metadata.get("provider"),
+        "instance_id": metadata.get("instance_id"),
+    }
+
+    history_text = _format_history(history)
+    agent_mode_normalized = _normalize_agent_mode(context, mother_decision)
+    return (
+        "Você é a FILHA FOLLOW-UP e deve responder SOMENTE JSON válido:\n"
+        "{\n"
+        '  "message_text": "string",\n'
+        '  "did_complete_phase": false,\n'
+        '  "recommended_next_category": "follow-up|closing|null",\n'
+        '  "outcome": null,\n'
+        '  "kanban_highlight": null,\n'
+        '  "signals": ["..."],\n'
+        '  "confidence": 0.0\n'
+        "}\n"
+        "Regras por modo:\n"
+        "- consultivo: fazer nutrição/retomada/reagendar e preparar handoff quando pedido de proposta/fechamento.\n"
+        "- agenda: foco em no-show/reagendar/confirmar presença e reforçar próximos passos.\n"
+        "- direto: tratar objeções e conduzir CTA para pagamento de forma objetiva.\n"
+        "- Use tone_of_voice, brand_name e niche quando disponíveis.\n"
+        "- Respeite playbook.max_chars se existir (senão, resposta curta).\n"
+        "- recommended_next_category pode ser follow-up, closing ou null.\n"
+        "- outcome e kanban_highlight devem ser null.\n"
+        "\n"
+        f"ROTA MÃE: {mother_decision.route_to} (confidence={mother_decision.confidence})\n"
+        f"Motivo MÃE: {mother_decision.reason}\n"
+        f"Objetivo MÃE: {mother_decision.objective or ''}\n"
+        f"Modo normalizado: {agent_mode_normalized}\n"
+        "\n"
+        "CONTEXTO:\n"
+        f"- lead: {json.dumps(lead_summary, ensure_ascii=False)}\n"
+        f"- ai_profile: {json.dumps(ai_summary, ensure_ascii=False)}\n"
+        f"- playbook: {json.dumps(playbook_summary, ensure_ascii=False)}\n"
+        f"- metadata: {json.dumps(metadata_summary, ensure_ascii=False)}\n"
+        f"- history: {history_text}\n"
+        f"- inbound_message_text: {message_text}\n"
+    )
+
+
+def _build_child_prompt_closing(
+    context: Dict[str, Any],
+    message_text: str,
+    mother_decision: MotherDecision,
+) -> str:
+    lead = context.get("lead") or {}
+    ai_profile = context.get("ai_profile") or {}
+    playbook = context.get("playbook") or {}
+    metadata = context.get("metadata") or {}
+    history = context.get("history") or []
+
+    lead_summary = {
+        "id": lead.get("id"),
+        "name": _safe_get(lead, "contactName", "companyName", "name"),
+        "category": lead.get("category"),
+        "segment": lead.get("segment"),
+    }
+    ai_summary = {
+        "id": ai_profile.get("id"),
+        "name": ai_profile.get("name"),
+        "brand_name": ai_profile.get("brand_name"),
+        "tone_of_voice": ai_profile.get("tone_of_voice"),
+        "niche": ai_profile.get("niche"),
+        "agent_mode": ai_profile.get("agent_mode"),
+    }
+    playbook_summary = {
+        "template_key": playbook.get("template_key") or playbook.get("name"),
+        "max_chars": playbook.get("max_chars"),
+    }
+    metadata_summary = {
+        "provider": metadata.get("provider"),
+        "instance_id": metadata.get("instance_id"),
+    }
+
+    history_text = _format_history(history)
+    agent_mode_normalized = _normalize_agent_mode(context, mother_decision)
+    return (
+        "Você é a FILHA CLOSING e deve responder SOMENTE JSON válido:\n"
+        "{\n"
+        '  "message_text": "string",\n'
+        '  "did_complete_phase": false,\n'
+        '  "recommended_next_category": "closing|null",\n'
+        '  "outcome": "won|lost|null",\n'
+        '  "kanban_highlight": "green|orange|null",\n'
+        '  "signals": ["..."],\n'
+        '  "confidence": 0.0\n'
+        "}\n"
+        "Regras por modo:\n"
+        "- consultivo: não fechar sozinho; responder curto e sugerir encaminhamento para humano.\n"
+        "- agenda: fechamento operacional (confirmar horário, políticas e pagamento quando aplicável).\n"
+        "- direto: conduzir fechamento e confirmação de pagamento com objetividade.\n"
+        "- Use tone_of_voice, brand_name e niche quando disponíveis.\n"
+        "- Respeite playbook.max_chars se existir (senão, resposta curta).\n"
+        "\n"
+        f"ROTA MÃE: {mother_decision.route_to} (confidence={mother_decision.confidence})\n"
+        f"Motivo MÃE: {mother_decision.reason}\n"
+        f"Objetivo MÃE: {mother_decision.objective or ''}\n"
+        f"Modo normalizado: {agent_mode_normalized}\n"
+        "\n"
+        "CONTEXTO:\n"
+        f"- lead: {json.dumps(lead_summary, ensure_ascii=False)}\n"
+        f"- ai_profile: {json.dumps(ai_summary, ensure_ascii=False)}\n"
+        f"- playbook: {json.dumps(playbook_summary, ensure_ascii=False)}\n"
+        f"- metadata: {json.dumps(metadata_summary, ensure_ascii=False)}\n"
+        f"- history: {history_text}\n"
+        f"- inbound_message_text: {message_text}\n"
+    )
 
 def _extract_json_payload(text: str) -> Optional[Dict[str, Any]]:
     text = text.strip()
@@ -622,9 +849,16 @@ _STAGE_INDEX = {stage: index for index, stage in enumerate(_STAGE_ORDER)}
 
 
 def _is_sdr_escalate_closing(context: Dict[str, Any], mother_decision: MotherDecision) -> bool:
-    ai_profile = context.get("ai_profile") or {}
-    if ai_profile.get("agent_mode") != "sdr_scheduler":
+    normalized_mode = _normalize_agent_mode(context, mother_decision)
+    if normalized_mode != "agenda":
         return False
+
+    ai_profile = context.get("ai_profile") or {}
+    raw_mode = str(ai_profile.get("agent_mode") or "").strip().lower()
+    should_block = raw_mode in {"sdr_scheduler", "sdr"} or _has_handoff_indicators(context)
+    if not should_block:
+        return False
+
     route = _normalize_category(mother_decision.route_to)
     perceived = _normalize_category(mother_decision.perceived_category)
     return route == "closing" or perceived == "closing"
@@ -735,6 +969,7 @@ def compose_decision_output(
     lead = context.get("lead") or {}
     ai_profile = context.get("ai_profile") or {}
     current_category = lead.get("category")
+    agent_mode_normalized = _normalize_agent_mode(context, mother_decision)
     suggested_category, category_reason, guardrail_reason = apply_mother_category_guardrails(
         current_category,
         mother_decision,
@@ -750,7 +985,7 @@ def compose_decision_output(
     reason = f"route:{mother_decision.route_to}|{mother_decision.reason}"
     # NOTE (ETAPA 4): decision_trace é observabilidade apenas; não dispara efeitos colaterais.
     # A Etapa 4 deverá consumir sinais estruturados para automações no CRM (appointment/bot_disabled).
-    meeting_scheduled = "meeting_scheduled" in (mother_decision.reason or "")
+    meeting_scheduled = _extract_meeting_scheduled_signal(mother_decision)
     return DecisionOutput(
         next_action=next_action,
         message_text=child_result.message_text or "",
@@ -769,7 +1004,16 @@ def compose_decision_output(
             "lead_current_category": current_category,
             "guardrail_reason": guardrail_reason,
             "agent_mode": ai_profile.get("agent_mode"),
+            "agent_mode_normalized": agent_mode_normalized,
             "meeting_scheduled": meeting_scheduled,
+            "mother_objective": mother_decision.objective,
+            "next_action_hint": mother_decision.next_action_hint,
+            "mother_signals": {
+                "meeting_scheduled": meeting_scheduled,
+                "intent_level": ((mother_decision.signals or {}).get("intent_level") if isinstance(mother_decision.signals, dict) else None),
+                "urgency_level": ((mother_decision.signals or {}).get("urgency_level") if isinstance(mother_decision.signals, dict) else None),
+                "price_acceptance": ((mother_decision.signals or {}).get("price_acceptance") if isinstance(mother_decision.signals, dict) else None),
+            },
         },
     )
 
@@ -830,6 +1074,7 @@ def decide(context: Dict[str, Any], logger: Optional[logging.Logger] = None) -> 
                     "mother_perceived_category": mother_decision.perceived_category,
                     "mother_confidence": mother_decision.confidence,
                     "agent_mode": (context.get("ai_profile") or {}).get("agent_mode"),
+                    "agent_mode_normalized": _normalize_agent_mode(context, mother_decision),
                     "guardrail_sdr_escalate_closing": True,
                     "suppressed_reply": True,
                 },
@@ -838,6 +1083,16 @@ def decide(context: Dict[str, Any], logger: Optional[logging.Logger] = None) -> 
             child_prompt = _build_child_prompt_qualification(context, message_text, mother_decision)
         elif mother_decision.route_to == "apresentation":
             child_prompt = _build_child_prompt_apresentation(context, message_text, mother_decision)
+        elif mother_decision.route_to == "follow-up":
+            try:
+                child_prompt = _build_child_prompt_follow_up(context, message_text, mother_decision)
+            except Exception:
+                child_prompt = _build_child_prompt(context, message_text, mother_decision)
+        elif mother_decision.route_to == "closing":
+            try:
+                child_prompt = _build_child_prompt_closing(context, message_text, mother_decision)
+            except Exception:
+                child_prompt = _build_child_prompt(context, message_text, mother_decision)
         else:
             child_prompt = _build_child_prompt(context, message_text, mother_decision)
         stage = "child_call"

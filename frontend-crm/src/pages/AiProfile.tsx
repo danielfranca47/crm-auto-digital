@@ -81,10 +81,12 @@ const initialProfileState: AiProfilePayload = {
   offer_description: "",
   goals: "",
   custom_instructions: "",
-  agent_mode: "sdr_scheduler",
+  agent_mode: "agenda",
   identity_mode: "human_agent",
   handoff_policy: "keep_active_notify",
   handoff_custom_text: "",
+  requires_handoff: false,
+  human_in_loop: false,
 };
 
 const goalSuggestions = [
@@ -345,7 +347,7 @@ export default function AiProfilePage() {
     setProfile((prev) => {
       if (prev.agent_mode) return prev;
       const inferred =
-        prev.template_key && prev.template_key.startsWith("closer") ? "closer" : "sdr_scheduler";
+        prev.template_key && prev.template_key.startsWith("closer") ? "direto" : "agenda";
       return { ...prev, agent_mode: inferred };
     });
   }, [profile.template_key]);
@@ -358,8 +360,8 @@ export default function AiProfilePage() {
       tone_of_voice: prev.tone_of_voice || preset.tone,
       goals: prev.goals || toBulletList(preset.goals),
       agent_mode: tpl.key.startsWith("closer")
-        ? "closer"
-        : prev.agent_mode || "sdr_scheduler",
+        ? "direto"
+        : prev.agent_mode || "agenda",
     }));
   };
 
@@ -763,7 +765,7 @@ export default function AiProfilePage() {
                 <div className="md:col-span-3 space-y-2">
                   <Label>Agent Profile Mode</Label>
                   <Select
-                    value={profile.agent_mode || "sdr_scheduler"}
+                    value={profile.agent_mode || "agenda"}
                     onValueChange={(value) =>
                       setProfile((p) => ({ ...p, agent_mode: value as AiProfilePayload["agent_mode"] }))
                     }
@@ -772,13 +774,52 @@ export default function AiProfilePage() {
                       <SelectValue placeholder="Selecione o modo do agente" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="sdr_scheduler">SDR Scheduler</SelectItem>
-                      <SelectItem value="closer">Closer</SelectItem>
+                      <SelectItem value="consultivo">Consultivo</SelectItem>
+                      <SelectItem value="agenda">Agenda</SelectItem>
+                      <SelectItem value="direto">Direto</SelectItem>
+                      <SelectItem value="sdr_scheduler">SDR Scheduler (legado)</SelectItem>
+                      <SelectItem value="closer">Closer (legado)</SelectItem>
                     </SelectContent>
                   </Select>
                   <p className="text-xs text-muted-foreground">
-                    SDR Scheduler foca em qualificar e agendar. Closer prioriza avançar até o fechamento.
+                    Consultivo: qualifica e prepara handoff. Agenda: foco em agendamento/operação. Direto: foco em fechamento.
                   </p>
+                </div>
+
+                <div className="space-y-2">
+                  <Label>Requer handoff humano</Label>
+                  <Select
+                    value={String(!!profile.requires_handoff)}
+                    onValueChange={(value) =>
+                      setProfile((p) => ({ ...p, requires_handoff: value === "true" }))
+                    }
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Selecione" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="false">Não</SelectItem>
+                      <SelectItem value="true">Sim</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="space-y-2">
+                  <Label>Human in loop</Label>
+                  <Select
+                    value={String(!!profile.human_in_loop)}
+                    onValueChange={(value) =>
+                      setProfile((p) => ({ ...p, human_in_loop: value === "true" }))
+                    }
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Selecione" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="false">Não</SelectItem>
+                      <SelectItem value="true">Sim</SelectItem>
+                    </SelectContent>
+                  </Select>
                 </div>
               </CardContent>
             </Card>
