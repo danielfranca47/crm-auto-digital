@@ -9,9 +9,23 @@ def test_compute_missing_fields_consultivo_next_step_satisfies_availability():
         "decision_role": True,
         "constraints": True,
         "next_step": True,
+        "next_step_with_time": True,
         "budget_or_price_acceptance": True,
     }
     assert compute_missing_fields("consultivo", extracted) == []
+
+
+def test_compute_missing_fields_consultivo_next_step_without_time_still_requires_availability():
+    extracted = {
+        "service_interest": True,
+        "urgency": True,
+        "decision_role": True,
+        "constraints": True,
+        "next_step": True,
+        "budget_or_price_acceptance": True,
+    }
+    missing = compute_missing_fields("consultivo", extracted)
+    assert "availability_window" in missing
 
 
 def test_compute_missing_fields_agenda_requires_booking_fields():

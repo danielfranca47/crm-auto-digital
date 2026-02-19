@@ -79,8 +79,17 @@ def infer_extracted_fields(context: Dict[str, Any]) -> Dict[str, Any]:
     if any(k in text for k in ["bairro", "cidade", "presencial", "online", "endereço", "endereco", "local"]):
         extracted["location_preference"] = True
 
-    if any(k in text for k in ["preço", "preco", "valor", "custa", "caro", "barato", "aceito", "ok o preço", "ok o preco"]):
-        extracted["price_acceptance"] = True
+    price_yes_terms = ["aceito", "ok o preço", "ok o preco", "fechado no preço", "pode ser esse valor"]
+    price_no_terms = ["caro", "muito caro", "fora do orçamento", "fora do orcamento", "não consigo pagar", "nao consigo pagar"]
+    price_any_terms = ["preço", "preco", "valor", "custa"]
+    if any(k in text for k in price_yes_terms):
+        extracted["price_acceptance"] = "yes"
+        extracted["budget_or_price_acceptance"] = True
+    elif any(k in text for k in price_no_terms):
+        extracted["price_acceptance"] = "no"
+        extracted["budget_or_price_acceptance"] = True
+    elif any(k in text for k in price_any_terms):
+        extracted["price_acceptance"] = "unsure"
         extracted["budget_or_price_acceptance"] = True
 
     if any(k in text for k in ["eu decido", "decisor", "falar com", "meu sócio", "minha sócia", "aprovação", "aprovacao"]):
@@ -94,6 +103,8 @@ def infer_extracted_fields(context: Dict[str, Any]) -> Dict[str, Any]:
 
     if any(k in text for k in ["me chama", "próximo passo", "proximo passo", "pode me ligar", "vamos seguir"]):
         extracted["next_step"] = True
+        if _DAY_OR_TIME_RE.search(text):
+            extracted["next_step_with_time"] = True
 
     return extracted
 
@@ -101,10 +112,10 @@ def infer_extracted_fields(context: Dict[str, Any]) -> Dict[str, Any]:
 def compute_missing_fields(agent_mode_normalized: str, extracted: Dict[str, Any]) -> List[str]:
     required = MIN_REQUIRED_FIELDS.get(agent_mode_normalized, MIN_REQUIRED_FIELDS["agenda"])
     missing: List[str] = []
-    has_next_step = bool(extracted.get("next_step"))
+    has_next_step_with_time = bool(extracted.get("next_step_with_time"))
 
     for field in required:
-        if field == "availability_window" and agent_mode_normalized == "consultivo" and has_next_step:
+        if field == "availability_window" and agent_mode_normalized == "consultivo" and has_next_step_with_time:
             continue
         if extracted.get(field):
             continue

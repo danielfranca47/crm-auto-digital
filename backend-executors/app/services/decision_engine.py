@@ -246,7 +246,7 @@ def _apply_mode_guardrails(
 
     if mode == "direto":
         signals = _sanitize_signals_structured(mother_decision.signals)
-        price_ok = signals.get("price_acceptance") == "yes"
+        price_ok = signals.get("price_acceptance") in {"yes", True}
         intent_ok = signals.get("intent_level") in {"medium", "high"}
         if not (price_ok and intent_ok) and (mother_decision.route_to == "closing" or decision.suggested_category == "closing"):
             decision.suggested_category = "qualification"
@@ -452,6 +452,8 @@ def _build_mother_prompt(context: Dict[str, Any], message_text: str) -> str:
         "- confidence entre 0 e 1.\n"
         "- reason curto.\n"
         "- Preencha signals seguindo schema padronizado quando possível (intent_level, urgency_level, price_acceptance, meeting_scheduled, handoff_requested, missing_fields, stop_reason).\n"
+        "- Em price_acceptance use SEMPRE string: no|unsure|yes (não use boolean).\n"
+        "- Se o lead aceitar o preço/valor, use price_acceptance='yes'.\n"
         "- Use missing_fields para decidir: enquanto faltarem campos mínimos do modo, prefira route_to=qualification.\n"
         "\n"
         "DEFINIÇÃO DO FUNIL (IMPORTANTE):\n"
