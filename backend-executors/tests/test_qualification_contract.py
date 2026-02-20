@@ -56,3 +56,12 @@ def test_closer_legacy_normalizes_to_direto_and_required_fields_follow_mode():
     assert _normalize_agent_mode(context) == "direto"
     mode_ctx = _build_mode_contract_context(context)
     assert mode_ctx["required_fields"] == required_fields_for_mode("direto")
+
+
+def test_template_fallback_consult_maps_to_consultivo_when_mode_is_empty():
+    context = {
+        "ai_profile": {"agent_mode": "", "template_key": "consultor_especialista"},
+        "playbook": {},
+        "metadata": {},
+    }
+    assert _normalize_agent_mode(context) == "consultivo"

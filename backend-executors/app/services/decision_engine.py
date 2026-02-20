@@ -127,22 +127,17 @@ def _get_allowed_lead_categories(context: Dict[str, Any]) -> list[str]:
 
 
 
-def _normalize_agent_mode(context: Dict[str, Any], mother_decision: Optional[MotherDecision] = None) -> str:
+def _compute_system_agent_mode(context: Dict[str, Any]) -> tuple[str, str]:
     ai_profile = context.get("ai_profile") or {}
     playbook = context.get("playbook") or {}
     metadata = context.get("metadata") or {}
 
-    raw_mode = None
-    if mother_decision is not None:
-        raw_mode = mother_decision.agent_mode
-    if raw_mode is None:
-        raw_mode = ai_profile.get("agent_mode")
-
+    raw_mode = ai_profile.get("agent_mode")
     normalized = str(raw_mode or "").strip().lower().replace("_", "-")
     if normalized in {"consultivo", "agenda", "direto"}:
-        return normalized
+        return normalized, "ai_profile"
     if normalized == "closer":
-        return "direto"
+        return "direto", "legacy"
     if normalized in {"sdr-scheduler", "sdr"}:
         indicators = [
             ai_profile.get("human_in_loop"),
@@ -153,13 +148,13 @@ def _normalize_agent_mode(context: Dict[str, Any], mother_decision: Optional[Mot
             metadata.get("requires_handoff"),
         ]
         if any(bool(item) for item in indicators):
-            return "consultivo"
-        return "agenda"
+            return "consultivo", "legacy"
+        return "agenda", "legacy"
     template_key = str(ai_profile.get("template_key") or playbook.get("template_key") or "").lower()
     if "closer" in template_key:
-        return "direto"
+        return "direto", "template_fallback"
     if "consult" in template_key:
-        return "consultivo"
+        return "consultivo", "template_fallback"
     if "scheduler" in template_key or "sdr" in template_key:
         indicators = [
             ai_profile.get("human_in_loop"),
@@ -170,9 +165,27 @@ def _normalize_agent_mode(context: Dict[str, Any], mother_decision: Optional[Mot
             metadata.get("requires_handoff"),
         ]
         if any(bool(item) for item in indicators):
-            return "consultivo"
-        return "agenda"
-    return "agenda"
+            return "consultivo", "template_fallback"
+        return "agenda", "template_fallback"
+    return "agenda", "unknown"
+
+
+def _normalize_agent_mode(context: Dict[str, Any], mother_decision: Optional[MotherDecision] = None) -> str:
+    system_mode, _ = _compute_system_agent_mode(context)
+    return system_mode
+
+
+def _get_mother_mode_conflict(context: Dict[str, Any], mother_decision: Optional[MotherDecision]) -> tuple[Optional[str], bool]:
+    if mother_decision is None:
+        return None, False
+    raw = mother_decision.agent_mode
+    if raw is None:
+        return None, False
+    mother_mode = str(raw).strip().lower().replace("_", "-")
+    if not mother_mode:
+        return None, False
+    system_mode, _ = _compute_system_agent_mode(context)
+    return mother_mode, mother_mode != system_mode
 
 
 def _extract_meeting_scheduled_signal(mother_decision: MotherDecision) -> bool:
@@ -439,7 +452,7 @@ def _build_mother_prompt(context: Dict[str, Any], message_text: str) -> str:
         '  "perceived_category": "qualification|apresentation|follow-up|closing|null",\n'
         '  "confidence": 0.0,\n'
         '  "reason": "curto",\n'
-        '  "agent_mode": "consultivo|agenda|direto|null (opcional)",\n'
+        '  "agent_mode": null (opcional; deixe null, o modo vem do perfil/sistema),\n'
         '  "signals": {"meeting_scheduled": true|false, "intent_level": "low|medium|high", "urgency_level": "low|medium|high", "price_acceptance": "no|unsure|yes"} (opcional),\n'
         '  "objective": "string curta opcional",\n'
         '  "next_action_hint": "reply|ask_qualification|handoff|ignore|null (opcional)"\n'
@@ -451,6 +464,7 @@ def _build_mother_prompt(context: Dict[str, Any], message_text: str) -> str:
         "- Use perceived_category=null somente se lead.category estiver vazio E não houver sinal claro no inbound.\n"
         "- confidence entre 0 e 1.\n"
         "- reason curto.\n"
+        "- NÃO preencha agent_mode; deixe null. O modo é definido pelo perfil/sistema.\n"
         "- Preencha signals seguindo schema padronizado quando possível (intent_level, urgency_level, price_acceptance, meeting_scheduled, handoff_requested, missing_fields, stop_reason).\n"
         "- Em price_acceptance use SEMPRE string: no|unsure|yes (não use boolean).\n"
         "- Se o lead aceitar o preço/valor, use price_acceptance='yes'.\n"
@@ -1072,6 +1086,8 @@ def compose_decision_output(
     current_category = lead.get("category")
     mode_contract = _build_mode_contract_context(context, mother_decision)
     agent_mode_normalized = mode_contract["agent_mode_normalized"]
+    _, system_agent_mode_source = _compute_system_agent_mode(context)
+    mother_agent_mode_raw, mother_agent_mode_conflict = _get_mother_mode_conflict(context, mother_decision)
     suggested_category, category_reason, guardrail_reason = apply_mother_category_guardrails(
         current_category,
         mother_decision,
@@ -1107,6 +1123,9 @@ def compose_decision_output(
             "guardrail_reason": guardrail_reason,
             "agent_mode": ai_profile.get("agent_mode"),
             "agent_mode_normalized": agent_mode_normalized,
+            "system_agent_mode_source": system_agent_mode_source,
+            "mother_agent_mode_raw": mother_agent_mode_raw,
+            "mother_agent_mode_conflict": mother_agent_mode_conflict,
             "meeting_scheduled": meeting_scheduled,
             "mother_objective": mother_decision.objective,
             "next_action_hint": mother_decision.next_action_hint,
