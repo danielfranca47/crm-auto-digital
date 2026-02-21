@@ -16,6 +16,7 @@ class Settings(BaseSettings):
     llm_api_key: Optional[str] = None
     llm_model: str = "gpt-4o-mini"
     llm_timeout_seconds: int = 20
+    qualification_heuristic_fallback: int = 1
     model_config = SettingsConfigDict(
         env_file=str(BASE_DIR / ".env"),
         env_file_encoding="utf-8",

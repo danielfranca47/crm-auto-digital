@@ -12,6 +12,7 @@ from app.contracts.qualification_contract import (
 )
 
 from app.clients import crm_client
+from app.core.config import settings
 from app.schemas.decision import DecisionOutput
 from app.services import fast_path, field_extractor, handoff_policy, llm_service
 from app.services.orchestrator_models import ChildResult, MotherDecision
@@ -243,6 +244,15 @@ def _qualification_state_from_context(context: Dict[str, Any]) -> dict:
     return state
 
 
+def _get_heuristic_reason(context: Dict[str, Any]) -> str:
+    state = context.get("qualification_state")
+    if not isinstance(state, dict):
+        return "crm_no_state"
+    if state.get("exists") is False:
+        return "exists_false"
+    return "state_absent"
+
+
 def _build_mode_contract_context(context: Dict[str, Any], mother_decision: Optional[MotherDecision] = None) -> Dict[str, Any]:
     mode = _normalize_agent_mode(context, mother_decision)
     required_fields = required_fields_for_mode(mode)
@@ -261,6 +271,18 @@ def _build_mode_contract_context(context: Dict[str, Any], mother_decision: Optio
             "missing_fields_source": "state",
             "last_questioned_field": qualification_state.get("last_questioned_field"),
             "attempts_json": qualification_state.get("attempts_json") or {},
+        }
+
+    if int(getattr(settings, "qualification_heuristic_fallback", 1) or 0) == 0:
+        return {
+            "agent_mode_normalized": mode,
+            "required_fields": required_fields,
+            "missing_fields": list(required_fields),
+            "extracted_fields": {},
+            "filled_fields": [],
+            "missing_fields_source": "state_unavailable",
+            "last_questioned_field": None,
+            "attempts_json": {},
         }
 
     extracted = infer_extracted_fields(context)
@@ -1264,9 +1286,18 @@ def decide(context: Dict[str, Any], logger: Optional[logging.Logger] = None) -> 
             )
 
         if mother_decision.route_to == "qualification":
-            mode_ctx = _build_mode_contract_context(context, mother_decision)
-            mode = mode_ctx.get("agent_mode_normalized")
-            required_fields = list(mode_ctx.get("required_fields") or [])
+            mode_ctx_pre = _build_mode_contract_context(context, mother_decision)
+            mode = mode_ctx_pre.get("agent_mode_normalized")
+            required_fields = list(mode_ctx_pre.get("required_fields") or [])
+            if mode_ctx_pre.get("missing_fields_source") == "heuristic" and logger:
+                logger.info(
+                    "event=qualification_heuristic_fallback_used reason=%s",
+                    _get_heuristic_reason(context),
+                )
+            if mode_ctx_pre.get("missing_fields_source") == "state_unavailable" and logger:
+                logger.info(
+                    "event=qualification_heuristic_fallback_disabled reason=state_unavailable",
+                )
             playbook = context.get("playbook") or {}
             must_collect = playbook.get("must_collect") if isinstance(playbook.get("must_collect"), list) else []
             for item in must_collect:
@@ -1275,10 +1306,15 @@ def decide(context: Dict[str, Any], logger: Optional[logging.Logger] = None) -> 
 
             fields_schema = {field: "string|number|object|null" for field in required_fields}
             extraction = {"extracted": {}, "confidence": {}, "evidence": {}, "raw": ""}
+            extraction_failed = False
+            persist_failed = False
             try:
                 extraction = field_extractor.extract_fields_llm(context, fields_schema)
             except Exception:
                 extraction = {"extracted": {}, "confidence": {}, "evidence": {}, "raw": ""}
+                extraction_failed = True
+                if logger:
+                    logger.info("event=qualification_extractor_fallback reason=extractor_failed")
 
             extracted = extraction.get("extracted") if isinstance(extraction.get("extracted"), dict) else {}
             new_extracted = {k: v for k, v in extracted.items() if k in required_fields and _is_filled_value(v)}
@@ -1304,9 +1340,15 @@ def decide(context: Dict[str, Any], logger: Optional[logging.Logger] = None) -> 
                     )
                     context["qualification_state"] = updated_state
                 except Exception:
+                    persist_failed = True
+                    if logger:
+                        logger.info("event=qualification_state_persist_fallback reason=persist_failed")
                     pass
 
             mode_ctx = _build_mode_contract_context(context, mother_decision)
+            if mode_ctx.get("missing_fields_source") == "heuristic" and logger and (extraction_failed or persist_failed):
+                reason = "persist_failed" if persist_failed else "extractor_failed"
+                logger.info("event=qualification_heuristic_fallback_used reason=%s", reason)
             missing = list(mode_ctx.get("missing_fields") or [])
             current_field = missing[0] if missing else None
             last_field = mode_ctx.get("last_questioned_field")
