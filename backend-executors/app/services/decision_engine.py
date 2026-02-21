@@ -1170,9 +1170,27 @@ def compose_decision_output(
         category_reason=category_reason,
         mother_route_to=mother_decision.route_to,
     )
+
+    qualification_auto_promoted = False
+    effective_route_to = mother_decision.route_to
+    missing_fields = list(mode_contract.get("missing_fields") or [])
+    normalized_current_category = _normalize_category(current_category)
+    if (
+        mother_decision.route_to == "qualification"
+        and not missing_fields
+        and normalized_current_category == "qualification"
+    ):
+        qualification_auto_promoted = True
+        effective_route_to = "apresentation"
+        suggested_category = "apresentation"
+        auto_promote_reason = "qualification_complete_auto_promote:apresentation"
+        category_reason = (
+            f"{category_reason}|{auto_promote_reason}" if category_reason else auto_promote_reason
+        )
+
     outcome, highlight = apply_outcome_guardrails(current_category, child_result)
-    next_action = "ask_qualification" if mother_decision.route_to == "qualification" else "reply"
-    reason = f"route:{mother_decision.route_to}|{mother_decision.reason}"
+    next_action = "ask_qualification" if effective_route_to == "qualification" else "reply"
+    reason = f"route:{mother_decision.route_to}|effective_route:{effective_route_to}|{mother_decision.reason}"
     # NOTE (ETAPA 4): decision_trace é observabilidade apenas; não dispara efeitos colaterais.
     # A Etapa 4 deverá consumir sinais estruturados para automações no CRM (appointment/bot_disabled).
     meeting_scheduled = _extract_meeting_scheduled_signal(mother_decision)
@@ -1189,10 +1207,12 @@ def compose_decision_output(
         confidence=child_result.confidence,
         decision_trace={
             "mother_route_to": mother_decision.route_to,
+            "effective_route_to": effective_route_to,
             "mother_perceived_category": mother_decision.perceived_category,
             "mother_confidence": mother_decision.confidence,
             "lead_current_category": current_category,
             "guardrail_reason": guardrail_reason,
+            "qualification_auto_promoted": qualification_auto_promoted,
             "agent_mode": ai_profile.get("agent_mode"),
             "agent_mode_normalized": agent_mode_normalized,
             "system_agent_mode_source": system_agent_mode_source,

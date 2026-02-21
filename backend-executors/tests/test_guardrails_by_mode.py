@@ -97,3 +97,49 @@ def test_mother_agent_mode_conflict_does_not_override_system_agenda():
     assert trace.get("agent_mode_normalized") == "agenda"
     assert trace.get("mother_agent_mode_raw") == "consultivo"
     assert trace.get("mother_agent_mode_conflict") is True
+
+
+def test_qualification_complete_auto_promotes_to_apresentation():
+    context = {
+        "lead": {"category": "qualification"},
+        "ai_profile": {"agent_mode": "consultivo"},
+        "playbook": {},
+        "metadata": {"inbound_message_text": "tenho interesse"},
+        "history": [],
+        "qualification_state": {
+            "exists": True,
+            "data_json": {
+                "service_interest": "botox",
+                "urgency_level": "alta",
+                "decision_role": "owner",
+                "main_constraint": "tempo",
+                "availability_window": "terça",
+                "budget_range": "R$ 1.000",
+            },
+            "attempts_json": {},
+            "last_questioned_field": "budget_range",
+        },
+    }
+    mother = MotherDecision(
+        route_to="qualification",
+        perceived_category="qualification",
+        confidence=0.9,
+        reason="faltam dados",
+    )
+    child = ChildResult(
+        message_text="Perfeito! Quer agendar uma avaliação?",
+        did_complete_phase=False,
+        recommended_next_category=None,
+        outcome=None,
+        kanban_highlight=None,
+        signals=[],
+        confidence=0.8,
+    )
+
+    decision = compose_decision_output(context=context, mother_decision=mother, child_result=child)
+    trace = decision.decision_trace or {}
+    assert decision.next_action == "reply"
+    assert decision.suggested_category == "apresentation"
+    assert trace.get("qualification_auto_promoted") is True
+    assert trace.get("effective_route_to") == "apresentation"
+    assert "qualification_complete_auto_promote:apresentation" in (decision.category_reason or "")
