@@ -11,8 +11,9 @@ from app.contracts.qualification_contract import (
     required_fields_for_mode,
 )
 
+from app.clients import crm_client
 from app.schemas.decision import DecisionOutput
-from app.services import fast_path, handoff_policy, llm_service
+from app.services import fast_path, field_extractor, handoff_policy, llm_service
 from app.services.orchestrator_models import ChildResult, MotherDecision
 
 logger = logging.getLogger(__name__)
@@ -215,16 +216,65 @@ def _sanitize_signals_structured(signals: Optional[dict]) -> dict:
     return {k: v for k, v in signals.items() if k in SIGNALS_SCHEMA}
 
 
+def _is_filled_value(value: Any) -> bool:
+    if value is None:
+        return False
+    if isinstance(value, str):
+        return bool(value.strip())
+    if isinstance(value, (list, dict)):
+        return bool(value)
+    return True
+
+
+def _qualification_state_from_context(context: Dict[str, Any]) -> dict:
+    state = context.get("qualification_state")
+    if not isinstance(state, dict):
+        return {}
+    if state.get("exists") is False:
+        return {}
+    data = state.get("data_json")
+    if not isinstance(data, dict):
+        data = {}
+    state["data_json"] = data
+    attempts = state.get("attempts_json")
+    if not isinstance(attempts, dict):
+        attempts = {}
+    state["attempts_json"] = attempts
+    return state
+
+
 def _build_mode_contract_context(context: Dict[str, Any], mother_decision: Optional[MotherDecision] = None) -> Dict[str, Any]:
     mode = _normalize_agent_mode(context, mother_decision)
+    required_fields = required_fields_for_mode(mode)
+    qualification_state = _qualification_state_from_context(context)
+
+    state_data = qualification_state.get("data_json") if qualification_state else None
+    if isinstance(state_data, dict) and qualification_state:
+        filled_fields = [field for field, value in state_data.items() if _is_filled_value(value)]
+        missing_fields = [field for field in required_fields if field not in filled_fields]
+        return {
+            "agent_mode_normalized": mode,
+            "required_fields": required_fields,
+            "missing_fields": missing_fields,
+            "extracted_fields": state_data,
+            "filled_fields": filled_fields,
+            "missing_fields_source": "state",
+            "last_questioned_field": qualification_state.get("last_questioned_field"),
+            "attempts_json": qualification_state.get("attempts_json") or {},
+        }
+
     extracted = infer_extracted_fields(context)
     missing_fields = compute_missing_fields(mode, extracted)
-    required_fields = required_fields_for_mode(mode)
+    filled_fields = [field for field in required_fields if _is_filled_value(extracted.get(field))]
     return {
         "agent_mode_normalized": mode,
         "required_fields": required_fields,
         "missing_fields": missing_fields,
         "extracted_fields": extracted,
+        "filled_fields": filled_fields,
+        "missing_fields_source": "heuristic",
+        "last_questioned_field": None,
+        "attempts_json": {},
     }
 
 
@@ -1131,6 +1181,11 @@ def compose_decision_output(
             "next_action_hint": mother_decision.next_action_hint,
             "required_fields": mode_contract['required_fields'],
             "missing_fields": mode_contract['missing_fields'],
+            "qualification_state_present": bool(_qualification_state_from_context(context)),
+            "qualification_filled_fields": mode_contract.get("filled_fields") or [],
+            "qualification_missing_fields_source": mode_contract.get("missing_fields_source") or "heuristic",
+            "last_questioned_field": mode_contract.get("last_questioned_field"),
+            "attempts": mode_contract.get("attempts_json") or {},
             "child_signals_structured": child_result.signals_structured if isinstance(child_result.signals_structured, dict) else None,
             "mother_signals": {
                 "meeting_scheduled": meeting_scheduled,
@@ -1207,6 +1262,98 @@ def decide(context: Dict[str, Any], logger: Optional[logging.Logger] = None) -> 
                     "suppressed_reply": True,
                 },
             )
+
+        if mother_decision.route_to == "qualification":
+            mode_ctx = _build_mode_contract_context(context, mother_decision)
+            mode = mode_ctx.get("agent_mode_normalized")
+            required_fields = list(mode_ctx.get("required_fields") or [])
+            playbook = context.get("playbook") or {}
+            must_collect = playbook.get("must_collect") if isinstance(playbook.get("must_collect"), list) else []
+            for item in must_collect:
+                if isinstance(item, str) and item not in required_fields:
+                    required_fields.append(item)
+
+            fields_schema = {field: "string|number|object|null" for field in required_fields}
+            extraction = {"extracted": {}, "confidence": {}, "evidence": {}, "raw": ""}
+            try:
+                extraction = field_extractor.extract_fields_llm(context, fields_schema)
+            except Exception:
+                extraction = {"extracted": {}, "confidence": {}, "evidence": {}, "raw": ""}
+
+            extracted = extraction.get("extracted") if isinstance(extraction.get("extracted"), dict) else {}
+            new_extracted = {k: v for k, v in extracted.items() if k in required_fields and _is_filled_value(v)}
+
+            lead = context.get("lead") or {}
+            metadata = context.get("metadata") or {}
+            user_id = lead.get("user_id") or (context.get("job") or {}).get("payload", {}).get("user_id")
+            lead_id = lead.get("id") or (context.get("job") or {}).get("payload", {}).get("lead_id")
+
+            if lead_id and user_id and new_extracted:
+                try:
+                    updated_state = crm_client.upsert_lead_qualification_state(
+                        lead_id=int(lead_id),
+                        user_id=int(user_id),
+                        patch={
+                            "stage": "qualification",
+                            "agent_mode_normalized": mode,
+                            "playbook_key": playbook.get("template_key") or playbook.get("name"),
+                            "playbook_version": "v1",
+                            "data_json": new_extracted,
+                            "confidence_json": extraction.get("confidence") if isinstance(extraction.get("confidence"), dict) else {},
+                        },
+                    )
+                    context["qualification_state"] = updated_state
+                except Exception:
+                    pass
+
+            mode_ctx = _build_mode_contract_context(context, mother_decision)
+            missing = list(mode_ctx.get("missing_fields") or [])
+            current_field = missing[0] if missing else None
+            last_field = mode_ctx.get("last_questioned_field")
+            attempts_map = mode_ctx.get("attempts_json") if isinstance(mode_ctx.get("attempts_json"), dict) else {}
+            has_progress = bool(new_extracted)
+
+            if lead_id and user_id and current_field:
+                try:
+                    if current_field == last_field and not has_progress:
+                        updated_state = crm_client.increment_lead_qualification_attempt(
+                            lead_id=int(lead_id),
+                            user_id=int(user_id),
+                            field=current_field,
+                        )
+                        context["qualification_state"] = updated_state
+                        attempts = int((updated_state.get("attempts_json") or {}).get(current_field) or 0)
+                        if mode == "consultivo" and attempts >= 2:
+                            return DecisionOutput(
+                                next_action="handoff",
+                                message_text="Perfeito — para avançar com precisão, vou te encaminhar para um especialista humano.",
+                                questions=[],
+                                reason="qualification_loop_handoff",
+                                suggested_category="qualification",
+                                category_reason="qualification_loop_handoff",
+                                outcome=None,
+                                kanban_highlight=None,
+                                signals=["qualification_loop"],
+                                confidence=mother_decision.confidence,
+                                decision_trace={
+                                    "agent_mode_normalized": mode,
+                                    "qualification_state_present": True,
+                                    "last_questioned_field": current_field,
+                                    "attempts": updated_state.get("attempts_json") or {},
+                                    "qualification_missing_fields_source": mode_ctx.get("missing_fields_source") or "state",
+                                    "loop_handoff": True,
+                                },
+                            )
+                        metadata["qualification_rephrase"] = True
+                    else:
+                        updated_state = crm_client.upsert_lead_qualification_state(
+                            lead_id=int(lead_id),
+                            user_id=int(user_id),
+                            patch={"last_questioned_field": current_field},
+                        )
+                        context["qualification_state"] = updated_state
+                except Exception:
+                    pass
         if mother_decision.route_to == "qualification":
             child_prompt = _build_child_prompt_qualification(context, message_text, mother_decision)
         elif mother_decision.route_to == "apresentation":

@@ -587,8 +587,24 @@ def init_db() -> None:
                 FOREIGN KEY (message_id) REFERENCES messages(id) ON DELETE CASCADE
             );
 
+            CREATE TABLE IF NOT EXISTS lead_qualification_state (
+                lead_id INTEGER PRIMARY KEY,
+                user_id INTEGER NOT NULL,
+                stage TEXT DEFAULT 'qualification',
+                agent_mode_normalized TEXT,
+                playbook_key TEXT,
+                playbook_version TEXT,
+                data_json TEXT DEFAULT '{}',
+                confidence_json TEXT DEFAULT '{}',
+                last_questioned_field TEXT,
+                attempts_json TEXT DEFAULT '{}',
+                updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (lead_id) REFERENCES leads(id) ON DELETE CASCADE
+            );
+
             CREATE INDEX IF NOT EXISTS idx_wq_status ON prospection_whatsapp_queue(status, enqueuedAt);
             CREATE INDEX IF NOT EXISTS idx_wq_lead ON prospection_whatsapp_queue(lead_id);
+            CREATE INDEX IF NOT EXISTS idx_lqs_user_lead ON lead_qualification_state(user_id, lead_id);
             """
         )
 
