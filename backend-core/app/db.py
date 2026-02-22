@@ -67,11 +67,13 @@ def ensure_whatsapp_connections_table() -> None:
 
 def ensure_ai_profile_columns() -> None:
     columns = {
-        "agent_mode": "sdr_scheduler",
-        "identity_mode": "human_agent",
-        "handoff_policy": "keep_active_notify",
-        "handoff_custom_text": None,
-        "timezone": "UTC",
+        "agent_mode": {"default": "sdr_scheduler", "sqlite_type": "TEXT", "pg_type": "VARCHAR"},
+        "identity_mode": {"default": "human_agent", "sqlite_type": "TEXT", "pg_type": "VARCHAR"},
+        "handoff_policy": {"default": "keep_active_notify", "sqlite_type": "TEXT", "pg_type": "VARCHAR"},
+        "handoff_custom_text": {"default": None, "sqlite_type": "TEXT", "pg_type": "VARCHAR"},
+        "timezone": {"default": "UTC", "sqlite_type": "TEXT", "pg_type": "VARCHAR"},
+        "requires_handoff": {"default": False, "sqlite_type": "INTEGER", "pg_type": "BOOLEAN"},
+        "human_in_loop": {"default": False, "sqlite_type": "INTEGER", "pg_type": "BOOLEAN"},
     }
 
     with engine.begin() as conn:
@@ -89,23 +91,29 @@ def ensure_ai_profile_columns() -> None:
             result = conn.execute(text("PRAGMA table_info(ai_profiles)"))
             existing = {row[1] for row in result.fetchall()}
 
-            for name, default in columns.items():
+            for name, config in columns.items():
                 if name in existing:
                     continue
 
+                default = config.get("default")
+                sqlite_type = config.get("sqlite_type", "TEXT")
                 if default is None:
-                    conn.execute(text(f"ALTER TABLE ai_profiles ADD COLUMN {name} TEXT"))
+                    conn.execute(text(f"ALTER TABLE ai_profiles ADD COLUMN {name} {sqlite_type}"))
                 else:
-                    safe_default = str(default).replace("'", "''")
+                    if isinstance(default, bool):
+                        sql_default = "1" if default else "0"
+                    else:
+                        sql_default = "'" + str(default).replace("'", "''") + "'"
                     conn.execute(
                         text(
-                            f"ALTER TABLE ai_profiles ADD COLUMN {name} TEXT DEFAULT '{safe_default}'"
+                            f"ALTER TABLE ai_profiles ADD COLUMN {name} {sqlite_type} DEFAULT {sql_default}"
                         )
                     )
 
                 print(f"✅ coluna adicionada em ai_profiles: {name}")
 
-            for name, default in columns.items():
+            for name, config in columns.items():
+                default = config.get("default")
                 if default is None:
                     continue
                 conn.execute(
@@ -142,19 +150,22 @@ def ensure_ai_profile_columns() -> None:
             )
             existing = {row[0] for row in result.fetchall()}
 
-            for name, default in columns.items():
+            for name, config in columns.items():
                 if name in existing:
                     continue
 
+                default = config.get("default")
+                pg_type = config.get("pg_type", "VARCHAR")
                 if default is None:
-                    conn.execute(text(f"ALTER TABLE ai_profiles ADD COLUMN {name} VARCHAR"))
+                    conn.execute(text(f"ALTER TABLE ai_profiles ADD COLUMN {name} {pg_type}"))
                 else:
                     conn.execute(
-                        text(f"ALTER TABLE ai_profiles ADD COLUMN {name} VARCHAR DEFAULT :default"),
+                        text(f"ALTER TABLE ai_profiles ADD COLUMN {name} {pg_type} DEFAULT :default"),
                         {"default": default},
                     )
 
-            for name, default in columns.items():
+            for name, config in columns.items():
+                default = config.get("default")
                 if default is None:
                     continue
                 conn.execute(

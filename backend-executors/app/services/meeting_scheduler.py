@@ -29,6 +29,18 @@ class MeetingSignal:
     start_at: Optional[datetime]
 
 
+
+
+def _normalize_agent_mode(raw_mode: Optional[str]) -> str:
+    normalized = str(raw_mode or "").strip().lower().replace("_", "-")
+    if normalized in {"consultivo", "agenda", "direto"}:
+        return normalized
+    if normalized == "closer":
+        return "direto"
+    if normalized in {"sdr-scheduler", "sdr"}:
+        return "agenda"
+    return "agenda"
+
 def _safe_get(data: Dict[str, Any], *keys: str) -> Optional[Any]:
     for key in keys:
         value = data.get(key)
@@ -47,7 +59,7 @@ def _extract_meeting_signal(context: Dict[str, Any], decision: DecisionOutput) -
     lead_id = _safe_get(lead, "id") or _safe_get(payload, "lead_id")
     user_id = _safe_get(lead, "user_id") or _safe_get(payload, "user_id")
     job_id = _safe_get(job, "id") or _safe_get(payload, "job_id")
-    agent_mode = ai_profile.get("agent_mode")
+    agent_mode = _normalize_agent_mode(ai_profile.get("agent_mode"))
 
     meeting_scheduled = False
     decision_trace = decision.decision_trace or {}
@@ -286,7 +298,7 @@ def handle_meeting_scheduled(
         client = crm_client
     now_utc = _ensure_aware(now_utc or datetime.now(timezone.utc), "UTC")
     signal = _extract_meeting_signal(context, decision)
-    if signal.agent_mode != "sdr_scheduler" or not signal.meeting_scheduled:
+    if signal.agent_mode != "agenda" or not signal.meeting_scheduled:
         return
     if signal.lead_id is None:
         return

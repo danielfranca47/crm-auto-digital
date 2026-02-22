@@ -295,3 +295,27 @@ def attach_whatsapp_outbound_provider(outbound_event_id: int, payload: Dict[str,
         for_context=False,
         not_found_message="Outbound event não encontrado",
     )
+
+
+def get_lead_qualification_state(lead_id: int) -> Dict[str, Any]:
+    base_url = settings.crm_api_base.rstrip("/")
+    url = f"{base_url}/api/internal/leads/{lead_id}/qualification-state"
+    response = _send_request("GET", url)
+    payload = _handle_response(response, str(lead_id), for_context=False)
+    return payload.get("qualification_state", {}) if isinstance(payload, dict) else {}
+
+
+def upsert_lead_qualification_state(lead_id: int, user_id: int, patch: Dict[str, Any]) -> Dict[str, Any]:
+    base_url = settings.crm_api_base.rstrip("/")
+    url = f"{base_url}/api/internal/leads/{lead_id}/qualification-state"
+    response = _send_request("POST", url, json={"user_id": user_id, "patch": patch})
+    payload = _handle_response(response, str(lead_id), for_context=False)
+    return payload.get("qualification_state", {}) if isinstance(payload, dict) else {}
+
+
+def increment_lead_qualification_attempt(lead_id: int, user_id: int, field: str) -> Dict[str, Any]:
+    base_url = settings.crm_api_base.rstrip("/")
+    url = f"{base_url}/api/internal/leads/{lead_id}/qualification-state/increment-attempt"
+    response = _send_request("POST", url, json={"user_id": user_id, "field": field})
+    payload = _handle_response(response, str(lead_id), for_context=False)
+    return payload.get("qualification_state", {}) if isinstance(payload, dict) else {}

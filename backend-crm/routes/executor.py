@@ -14,6 +14,11 @@ from services.ai_orchestrator import (
     InboundEvent,
     build_context_bundle_from_inbound,
 )
+from services.qualification_state import (
+    get_qualification_state,
+    increment_attempt,
+    upsert_qualification_state,
+)
 from services.jobs_service import (
     JOB_BACKOFF_SECONDS,
     JOB_STATUS_COMPLETED,
@@ -221,6 +226,7 @@ def whatsapp_execution_context(
 
     bundle = build_context_bundle_from_inbound(event)
     decision = _fetch_latest_ai_decision(lead_id=event.lead_id)
+    qualification_state = get_qualification_state(event.lead_id)
 
     if bundle.lead.get("bot_disabled"):
         bundle.metadata["bot_disabled"] = True
@@ -234,8 +240,47 @@ def whatsapp_execution_context(
         "ai_profile": bundle.ai_profile,
         "playbook": bundle.playbook,
         "decision": decision,
+        "qualification_state": qualification_state,
         "metadata": bundle.metadata,
     }
+
+
+class QualificationStateUpsertRequest(BaseModel):
+    user_id: int
+    patch: Dict[str, Any] = Field(default_factory=dict)
+
+
+class QualificationStateAttemptRequest(BaseModel):
+    user_id: int
+    field: str
+
+
+@router.get("/internal/leads/{lead_id}/qualification-state")
+def get_lead_qualification_state(
+    lead_id: int,
+    _: str = Depends(_require_service_token),
+):
+    return {"qualification_state": get_qualification_state(lead_id)}
+
+
+@router.post("/internal/leads/{lead_id}/qualification-state")
+def upsert_lead_qualification_state(
+    lead_id: int,
+    payload: QualificationStateUpsertRequest,
+    _: str = Depends(_require_service_token),
+):
+    state = upsert_qualification_state(lead_id=lead_id, user_id=payload.user_id, patch=payload.patch or {})
+    return {"qualification_state": state}
+
+
+@router.post("/internal/leads/{lead_id}/qualification-state/increment-attempt")
+def increment_lead_qualification_attempt(
+    lead_id: int,
+    payload: QualificationStateAttemptRequest,
+    _: str = Depends(_require_service_token),
+):
+    state = increment_attempt(lead_id=lead_id, user_id=payload.user_id, field=payload.field)
+    return {"qualification_state": state}
 
 
 class OutboundMessage(BaseModel):
