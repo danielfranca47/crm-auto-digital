@@ -1152,6 +1152,8 @@ def compose_decision_output(
     context: Dict[str, Any],
     mother_decision: MotherDecision,
     child_result: ChildResult,
+    effective_route_override: Optional[str] = None,
+    anti_loop_rule3_applied: bool = False,
 ) -> DecisionOutput:
     lead = context.get("lead") or {}
     ai_profile = context.get("ai_profile") or {}
@@ -1172,15 +1174,15 @@ def compose_decision_output(
     )
 
     qualification_auto_promoted = False
-    effective_route_to = mother_decision.route_to
+    anti_loop_rule1_applied = False
+    effective_route_to = effective_route_override or mother_decision.route_to
     missing_fields = list(mode_contract.get("missing_fields") or [])
-    normalized_current_category = _normalize_category(current_category)
     if (
         mother_decision.route_to == "qualification"
         and not missing_fields
-        and normalized_current_category == "qualification"
     ):
         qualification_auto_promoted = True
+        anti_loop_rule1_applied = True
         effective_route_to = "apresentation"
         suggested_category = "apresentation"
         auto_promote_reason = "qualification_complete_auto_promote:apresentation"
@@ -1223,11 +1225,15 @@ def compose_decision_output(
             "next_action_hint": mother_decision.next_action_hint,
             "required_fields": mode_contract['required_fields'],
             "missing_fields": mode_contract['missing_fields'],
+            "filled_fields": mode_contract.get("filled_fields") or [],
+            "current_field": missing_fields[0] if missing_fields else None,
             "qualification_state_present": bool(_qualification_state_from_context(context)),
             "qualification_filled_fields": mode_contract.get("filled_fields") or [],
             "qualification_missing_fields_source": mode_contract.get("missing_fields_source") or "heuristic",
             "last_questioned_field": mode_contract.get("last_questioned_field"),
             "attempts": mode_contract.get("attempts_json") or {},
+            "anti_loop_rule1_applied": anti_loop_rule1_applied,
+            "anti_loop_rule3_applied": anti_loop_rule3_applied,
             "child_signals_structured": child_result.signals_structured if isinstance(child_result.signals_structured, dict) else None,
             "mother_signals": {
                 "meeting_scheduled": meeting_scheduled,
@@ -1280,6 +1286,31 @@ def decide(context: Dict[str, Any], logger: Optional[logging.Logger] = None) -> 
         mother_payload = _normalize_null_strings(mother_payload)
         stage = "mother_validate"
         mother_decision = MotherDecision.model_validate(mother_payload)
+        lead = context.get("lead") or {}
+        route_for_child = mother_decision.route_to
+        anti_loop_rule3_applied = False
+        mode_ctx_pre: Optional[dict] = None
+
+        if mother_decision.route_to == "qualification":
+            mode_ctx_pre = _build_mode_contract_context(context, mother_decision)
+            missing_pre = list(mode_ctx_pre.get("missing_fields") or [])
+            normalized_current_category = _normalize_category(lead.get("category"))
+            is_upper_stage = normalized_current_category in {"apresentation", "follow-up", "closing"}
+            if is_upper_stage or not missing_pre:
+                route_for_child = "apresentation"
+                anti_loop_rule3_applied = True
+                if logger:
+                    job = context.get("job") or {}
+                    payload = job.get("payload") or {}
+                    logger.info(
+                        "event=qualification_anti_loop_rule3 route_override=%s mother_route_to=%s lead_category=%s "
+                        "job_id=%s lead_id=%s",
+                        route_for_child,
+                        mother_decision.route_to,
+                        lead.get("category"),
+                        job.get("id") or payload.get("job_id"),
+                        lead.get("id") or payload.get("lead_id"),
+                    )
 
         if _is_sdr_escalate_closing(context, mother_decision):
             reason = f"guardrail_sdr_escalate_closing|{mother_decision.reason}"
@@ -1305,8 +1336,8 @@ def decide(context: Dict[str, Any], logger: Optional[logging.Logger] = None) -> 
                 },
             )
 
-        if mother_decision.route_to == "qualification":
-            mode_ctx_pre = _build_mode_contract_context(context, mother_decision)
+        if mother_decision.route_to == "qualification" and not anti_loop_rule3_applied:
+            mode_ctx_pre = mode_ctx_pre or _build_mode_contract_context(context, mother_decision)
             mode = mode_ctx_pre.get("agent_mode_normalized")
             required_fields = list(mode_ctx_pre.get("required_fields") or [])
             if mode_ctx_pre.get("missing_fields_source") == "heuristic" and logger:
@@ -1416,16 +1447,16 @@ def decide(context: Dict[str, Any], logger: Optional[logging.Logger] = None) -> 
                         context["qualification_state"] = updated_state
                 except Exception:
                     pass
-        if mother_decision.route_to == "qualification":
+        if route_for_child == "qualification":
             child_prompt = _build_child_prompt_qualification(context, message_text, mother_decision)
-        elif mother_decision.route_to == "apresentation":
+        elif route_for_child == "apresentation":
             child_prompt = _build_child_prompt_apresentation(context, message_text, mother_decision)
-        elif mother_decision.route_to == "follow-up":
+        elif route_for_child == "follow-up":
             try:
                 child_prompt = _build_child_prompt_follow_up(context, message_text, mother_decision)
             except Exception:
                 child_prompt = _build_child_prompt(context, message_text, mother_decision)
-        elif mother_decision.route_to == "closing":
+        elif route_for_child == "closing":
             try:
                 child_prompt = _build_child_prompt_closing(context, message_text, mother_decision)
             except Exception:
@@ -1433,7 +1464,7 @@ def decide(context: Dict[str, Any], logger: Optional[logging.Logger] = None) -> 
         else:
             child_prompt = _build_child_prompt(context, message_text, mother_decision)
         stage = "child_call"
-        child_text = llm_service.generate_child_result(mother_decision.route_to, child_prompt)
+        child_text = llm_service.generate_child_result(route_for_child, child_prompt)
         stage = "child_parse"
         child_payload = _extract_json_payload(child_text)
         if child_payload is None:
@@ -1447,6 +1478,8 @@ def decide(context: Dict[str, Any], logger: Optional[logging.Logger] = None) -> 
             context=context,
             mother_decision=mother_decision,
             child_result=child_result,
+            effective_route_override=route_for_child,
+            anti_loop_rule3_applied=anti_loop_rule3_applied,
         )
         decision = _sanitize_category_decision(decision, context, logger_instance=logger)
         if decision.decision_trace and isinstance(decision.decision_trace, dict):
@@ -1478,6 +1511,21 @@ def decide(context: Dict[str, Any], logger: Optional[logging.Logger] = None) -> 
                 "decision llm next_action=%s reason=%s",
                 decision.next_action,
                 decision.reason,
+            )
+            logger.info(
+                "decision_qualification_anti_loop job_id=%s lead_id=%s missing_fields=%s filled_fields=%s "
+                "current_field=%s effective_route_to=%s qualification_auto_promoted=%s "
+                "anti_loop_rule1_applied=%s anti_loop_rule3_applied=%s next_action=%s",
+                log_context["job_id"],
+                log_context["lead_id"],
+                trace.get("missing_fields"),
+                trace.get("filled_fields"),
+                trace.get("current_field"),
+                trace.get("effective_route_to"),
+                trace.get("qualification_auto_promoted"),
+                trace.get("anti_loop_rule1_applied"),
+                trace.get("anti_loop_rule3_applied"),
+                decision.next_action,
             )
         return handoff_policy.apply(context, decision, logger=logger)
     except Exception as exc:
