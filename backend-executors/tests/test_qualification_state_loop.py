@@ -516,3 +516,53 @@ def test_fallback_safe_when_repair_fails_twice(monkeypatch):
     assert decision.next_action == "ask_qualification"
     assert trace.get("qualification_validation_status") == "fallback"
     assert decision.message_text.startswith("Pode me confirmar:")
+
+
+
+def test_auto_promote_never_uses_qualification_fallback_message(monkeypatch):
+    context = {
+        "lead": {"id": 10, "user_id": 99, "category": "qualification"},
+        "ai_profile": {"agent_mode": "consultivo"},
+        "playbook": {},
+        "metadata": {"inbound_message_text": "300 reais"},
+        "history": [],
+        "job": {"id": 200, "payload": {"lead_id": 10, "user_id": 99}},
+        "qualification_state": {
+            "exists": True,
+            "data_json": {
+                "service_interest": "botox",
+                "urgency": "alta",
+                "decision_role": "owner",
+                "constraints": "sem restrição",
+                "availability_window": "amanhã 10h",
+                "budget_or_price_acceptance": "300 reais",
+            },
+            "attempts_json": {},
+            "last_questioned_field": "budget_or_price_acceptance",
+            "asked_questions_json": [],
+            "last_question_text": "",
+        },
+    }
+
+    monkeypatch.setattr(
+        decision_engine.llm_service,
+        "generate_mother_route",
+        lambda _prompt: '{"route_to":"qualification","perceived_category":"qualification","confidence":0.9,"reason":"teste"}',
+    )
+
+    seen = {"route": None}
+
+    def _child(route, _prompt):
+        seen["route"] = route
+        return '{"message_text":"Perfeito, vamos para a próxima etapa da apresentação.","did_complete_phase":false,"recommended_next_category":null,"outcome":null,"kanban_highlight":null,"signals":[],"confidence":0.8}'
+
+    monkeypatch.setattr(decision_engine.llm_service, "generate_child_result", _child)
+
+    decision = decision_engine.decide(context)
+    trace = decision.decision_trace or {}
+
+    assert seen["route"] == "apresentation"
+    assert trace.get("effective_route_to") == "apresentation"
+    assert decision.next_action == "reply"
+    assert not decision.message_text.startswith("Pode me confirmar:")
+    assert ("qualification_validation_status" not in trace) or (trace.get("qualification_validation_status") == "n/a")

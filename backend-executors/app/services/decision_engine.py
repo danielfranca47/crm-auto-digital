@@ -1509,6 +1509,19 @@ def decide(context: Dict[str, Any], logger: Optional[logging.Logger] = None) -> 
             filled_fields = list(mode_ctx.get("filled_fields") or [])
             current_field = _select_current_field(missing, filled_fields)
             qualification_current_field = current_field
+            if not current_field:
+                route_for_child = "apresentation"
+                qualification_validation_status = "n/a"
+                if logger:
+                    job = context.get("job") or {}
+                    payload = job.get("payload") or {}
+                    logger.info(
+                        "event=qualification_auto_promote_runtime route_override=%s mother_route_to=%s job_id=%s lead_id=%s",
+                        route_for_child,
+                        mother_decision.route_to,
+                        job.get("id") or payload.get("job_id"),
+                        lead.get("id") or payload.get("lead_id"),
+                    )
             last_field = mode_ctx.get("last_questioned_field")
             attempts_map = mode_ctx.get("attempts_json") if isinstance(mode_ctx.get("attempts_json"), dict) else {}
             has_progress = bool(new_extracted)
@@ -1634,7 +1647,11 @@ def decide(context: Dict[str, Any], logger: Optional[logging.Logger] = None) -> 
         if child_result is None:
             raise ValueError("llm returned invalid child payload")
 
-        if route_for_child == "qualification" and qualification_validation_status != "accepted":
+        if (
+            route_for_child == "qualification"
+            and qualification_validation_status != "accepted"
+            and qualification_current_field is not None
+        ):
             fallback_field = qualification_current_field
             child_result.field = fallback_field
             child_result.question_text = _fallback_question_for_field(fallback_field)
@@ -1680,9 +1697,19 @@ def decide(context: Dict[str, Any], logger: Optional[logging.Logger] = None) -> 
         decision = _sanitize_category_decision(decision, context, logger_instance=logger)
         if decision.decision_trace and isinstance(decision.decision_trace, dict):
             decision.decision_trace["suggested_category_final"] = decision.suggested_category
-            decision.decision_trace["qualification_validation_status"] = qualification_validation_status
-            decision.decision_trace["qualification_retry_count"] = qualification_retry_count
-            decision.decision_trace["qualification_repeated_similarity"] = qualification_repeated_similarity
+            is_qualification_ask = (
+                decision.decision_trace.get("effective_route_to") == "qualification"
+                and decision.next_action == "ask_qualification"
+                and route_for_child == "qualification"
+            )
+            if is_qualification_ask:
+                decision.decision_trace["qualification_validation_status"] = qualification_validation_status
+                decision.decision_trace["qualification_retry_count"] = qualification_retry_count
+                decision.decision_trace["qualification_repeated_similarity"] = qualification_repeated_similarity
+            else:
+                decision.decision_trace.pop("qualification_validation_status", None)
+                decision.decision_trace.pop("qualification_retry_count", None)
+                decision.decision_trace.pop("qualification_repeated_similarity", None)
         if logger:
             job = context.get("job") or {}
             payload = job.get("payload") or {}
@@ -1711,19 +1738,24 @@ def decide(context: Dict[str, Any], logger: Optional[logging.Logger] = None) -> 
                 decision.next_action,
                 decision.reason,
             )
-            logger.info(
-                "event=qualification_question job_id=%s lead_id=%s current_field=%s child_field=%s "
-                "validation_status=%s retry_count=%s repeated_similarity_score=%.2f last_questioned_field=%s missing_fields=%s",
-                log_context["job_id"],
-                log_context["lead_id"],
-                trace.get("current_field"),
-                trace.get("question_field_used"),
-                trace.get("qualification_validation_status"),
-                trace.get("qualification_retry_count"),
-                float(trace.get("qualification_repeated_similarity") or 0.0),
-                trace.get("last_questioned_field"),
-                trace.get("missing_fields"),
-            )
+            if (
+                trace.get("effective_route_to") == "qualification"
+                and decision.next_action == "ask_qualification"
+                and route_for_child == "qualification"
+            ):
+                logger.info(
+                    "event=qualification_question job_id=%s lead_id=%s current_field=%s child_field=%s "
+                    "validation_status=%s retry_count=%s repeated_similarity_score=%.2f last_questioned_field=%s missing_fields=%s",
+                    log_context["job_id"],
+                    log_context["lead_id"],
+                    trace.get("current_field"),
+                    trace.get("question_field_used"),
+                    trace.get("qualification_validation_status"),
+                    trace.get("qualification_retry_count"),
+                    float(trace.get("qualification_repeated_similarity") or 0.0),
+                    trace.get("last_questioned_field"),
+                    trace.get("missing_fields"),
+                )
             logger.info(
                 "decision_qualification_anti_loop job_id=%s lead_id=%s missing_fields=%s filled_fields=%s "
                 "current_field=%s question_field_used=%s effective_route_to=%s qualification_auto_promoted=%s "
