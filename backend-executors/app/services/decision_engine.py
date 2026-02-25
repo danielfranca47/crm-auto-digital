@@ -94,6 +94,37 @@ DEFAULT_ALLOWED_LEAD_CATEGORIES = [
 ]
 
 
+
+
+QUALIFICATION_FIELD_QUESTION_TEMPLATES = {
+    "service_interest": "Perfeito! Qual serviço/procedimento você tem interesse agora?",
+    "urgency": "Pra eu priorizar certinho: qual seu nível de urgência para começar?",
+    "decision_role": "Você é quem decide isso ou tem mais alguém envolvido na decisão?",
+    "constraints": "Tem alguma restrição importante que eu deva considerar (horário, orçamento ou preferência)?",
+    "availability_window": "Qual período/horário costuma ser melhor pra você?",
+    "budget_or_price_acceptance": "Pra eu te orientar com precisão: qual faixa de investimento faz sentido pra você?",
+    "location_preference": "Você prefere atendimento presencial, online ou sem preferência?",
+    "price_acceptance": "Com o valor informado, faz sentido avançarmos?",
+}
+
+
+def _select_current_field(missing_fields: list[str], filled_fields: list[str]) -> Optional[str]:
+    if not missing_fields:
+        return None
+    filled = set(filled_fields or [])
+    for field in missing_fields:
+        if field not in filled:
+            return field
+    return None
+
+
+def _qualification_question_for_field(field: Optional[str]) -> str:
+    if not field:
+        return ""
+    return QUALIFICATION_FIELD_QUESTION_TEMPLATES.get(
+        field,
+        "Perfeito — para seguir, você pode me confirmar esse ponto?",
+    )
 def _normalize_short_reply(text: str) -> str:
     return " ".join(text.strip().lower().split())
 
@@ -1177,9 +1208,11 @@ def compose_decision_output(
     anti_loop_rule1_applied = False
     effective_route_to = effective_route_override or mother_decision.route_to
     missing_fields = list(mode_contract.get("missing_fields") or [])
+    filled_fields = list(mode_contract.get("filled_fields") or [])
+    current_field = _select_current_field(missing_fields, filled_fields)
     if (
         mother_decision.route_to == "qualification"
-        and not missing_fields
+        and not current_field
     ):
         qualification_auto_promoted = True
         anti_loop_rule1_applied = True
@@ -1192,13 +1225,24 @@ def compose_decision_output(
 
     outcome, highlight = apply_outcome_guardrails(current_category, child_result)
     next_action = "ask_qualification" if effective_route_to == "qualification" else "reply"
+    message_text = child_result.message_text or ""
+    message_field_used: Optional[str] = None
+    if next_action == "ask_qualification":
+        if not current_field:
+            next_action = "reply"
+            effective_route_to = "apresentation"
+            qualification_auto_promoted = True
+            anti_loop_rule1_applied = True
+        else:
+            message_field_used = current_field
+            message_text = _qualification_question_for_field(current_field)
     reason = f"route:{mother_decision.route_to}|effective_route:{effective_route_to}|{mother_decision.reason}"
     # NOTE (ETAPA 4): decision_trace é observabilidade apenas; não dispara efeitos colaterais.
     # A Etapa 4 deverá consumir sinais estruturados para automações no CRM (appointment/bot_disabled).
     meeting_scheduled = _extract_meeting_scheduled_signal(mother_decision)
     decision = DecisionOutput(
         next_action=next_action,
-        message_text=child_result.message_text or "",
+        message_text=message_text,
         questions=[],
         reason=reason,
         suggested_category=suggested_category,
@@ -1225,8 +1269,9 @@ def compose_decision_output(
             "next_action_hint": mother_decision.next_action_hint,
             "required_fields": mode_contract['required_fields'],
             "missing_fields": mode_contract['missing_fields'],
-            "filled_fields": mode_contract.get("filled_fields") or [],
-            "current_field": missing_fields[0] if missing_fields else None,
+            "filled_fields": filled_fields,
+            "current_field": current_field,
+            "message_field_used": message_field_used,
             "qualification_state_present": bool(_qualification_state_from_context(context)),
             "qualification_filled_fields": mode_contract.get("filled_fields") or [],
             "qualification_missing_fields_source": mode_contract.get("missing_fields_source") or "heuristic",
@@ -1401,7 +1446,8 @@ def decide(context: Dict[str, Any], logger: Optional[logging.Logger] = None) -> 
                 reason = "persist_failed" if persist_failed else "extractor_failed"
                 logger.info("event=qualification_heuristic_fallback_used reason=%s", reason)
             missing = list(mode_ctx.get("missing_fields") or [])
-            current_field = missing[0] if missing else None
+            filled_fields = list(mode_ctx.get("filled_fields") or [])
+            current_field = _select_current_field(missing, filled_fields)
             last_field = mode_ctx.get("last_questioned_field")
             attempts_map = mode_ctx.get("attempts_json") if isinstance(mode_ctx.get("attempts_json"), dict) else {}
             has_progress = bool(new_extracted)
@@ -1514,13 +1560,14 @@ def decide(context: Dict[str, Any], logger: Optional[logging.Logger] = None) -> 
             )
             logger.info(
                 "decision_qualification_anti_loop job_id=%s lead_id=%s missing_fields=%s filled_fields=%s "
-                "current_field=%s effective_route_to=%s qualification_auto_promoted=%s "
+                "current_field=%s message_field_used=%s effective_route_to=%s qualification_auto_promoted=%s "
                 "anti_loop_rule1_applied=%s anti_loop_rule3_applied=%s next_action=%s",
                 log_context["job_id"],
                 log_context["lead_id"],
                 trace.get("missing_fields"),
                 trace.get("filled_fields"),
                 trace.get("current_field"),
+                trace.get("message_field_used"),
                 trace.get("effective_route_to"),
                 trace.get("qualification_auto_promoted"),
                 trace.get("anti_loop_rule1_applied"),
