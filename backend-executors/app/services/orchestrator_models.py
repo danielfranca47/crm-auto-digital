@@ -17,7 +17,10 @@ class MotherDecision(BaseModel):
 
 
 class ChildResult(BaseModel):
-    message_text: str
+    message_text: str = ""
+    question_text: Optional[str] = None
+    field: Optional[str] = None
+    should_ask: Optional[bool] = None
     did_complete_phase: bool = False
     recommended_next_category: Optional[str] = None
     outcome: Optional[Literal["won", "lost"]] = None
