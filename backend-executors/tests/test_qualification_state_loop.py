@@ -188,3 +188,381 @@ def test_anti_loop_triggers_handoff_after_two_attempts(monkeypatch):
     decision = decision_engine.decide(context)
     assert decision.next_action == "handoff"
     assert "qualification_loop_handoff" in decision.reason
+
+
+def test_t1_missing_fields_empty_never_ask_qualification(monkeypatch):
+    context = {
+        "lead": {"id": 10, "user_id": 99, "category": "qualification"},
+        "ai_profile": {"agent_mode": "consultivo"},
+        "playbook": {},
+        "metadata": {"inbound_message_text": "ok"},
+        "history": [],
+        "job": {"payload": {"lead_id": 10, "user_id": 99}},
+        "qualification_state": {
+            "exists": True,
+            "data_json": {
+                "decision_role": "owner",
+                "service_interest": "botox",
+                "urgency": "alta",
+                "constraints": "sem restrições",
+                "availability_window": "amanhã 10h",
+                "budget_or_price_acceptance": "ok",
+            },
+            "attempts_json": {},
+            "last_questioned_field": "urgency_level",
+        },
+    }
+
+    monkeypatch.setattr(
+        decision_engine.llm_service,
+        "generate_mother_route",
+        lambda _prompt: '{"route_to":"qualification","perceived_category":"qualification","confidence":0.9,"reason":"teste"}',
+    )
+    monkeypatch.setattr(
+        decision_engine.llm_service,
+        "generate_child_result",
+        lambda _route, _prompt: '{"message_text":"vamos agendar a apresentação?","did_complete_phase":false,"recommended_next_category":null,"outcome":null,"kanban_highlight":null,"signals":[],"confidence":0.8}',
+    )
+
+    decision = decision_engine.decide(context)
+    trace = decision.decision_trace or {}
+
+    assert decision.next_action != "ask_qualification"
+    assert trace.get("effective_route_to") == "apresentation"
+    assert trace.get("qualification_auto_promoted") is True
+    assert trace.get("anti_loop_rule1_applied") is True
+
+
+def test_t2_filled_field_not_selected_as_current_field(monkeypatch):
+    context = {
+        "lead": {"id": 10, "user_id": 99, "category": "qualification"},
+        "ai_profile": {"agent_mode": "consultivo"},
+        "playbook": {},
+        "metadata": {"inbound_message_text": "oi"},
+        "history": [],
+        "job": {"payload": {"lead_id": 10, "user_id": 99}},
+        "qualification_state": {
+            "exists": True,
+            "data_json": {
+                "decision_role": "owner",
+            },
+            "attempts_json": {},
+            "last_questioned_field": None,
+        },
+    }
+
+    monkeypatch.setattr(
+        decision_engine.llm_service,
+        "generate_mother_route",
+        lambda _prompt: '{"route_to":"qualification","perceived_category":"qualification","confidence":0.9,"reason":"teste"}',
+    )
+    monkeypatch.setattr(
+        decision_engine.field_extractor,
+        "extract_fields_llm",
+        lambda _ctx, _schema: {"extracted": {}, "confidence": {}, "evidence": {}, "raw": "{}"},
+    )
+    monkeypatch.setattr(
+        decision_engine.crm_client,
+        "upsert_lead_qualification_state",
+        lambda **kwargs: {
+            "exists": True,
+            "data_json": {"decision_role": "owner"},
+            "attempts_json": {},
+            "last_questioned_field": kwargs.get("patch", {}).get("last_questioned_field"),
+        },
+    )
+    monkeypatch.setattr(
+        decision_engine.crm_client,
+        "increment_lead_qualification_attempt",
+        lambda **kwargs: {
+            "exists": True,
+            "data_json": {"decision_role": "owner"},
+            "attempts_json": {kwargs.get("field"): 1},
+            "last_questioned_field": kwargs.get("field"),
+        },
+    )
+    monkeypatch.setattr(
+        decision_engine.llm_service,
+        "generate_child_result",
+        lambda _route, _prompt: '{"message_text":"qual seu nível de urgência?","did_complete_phase":false,"recommended_next_category":null,"outcome":null,"kanban_highlight":null,"signals":[],"confidence":0.8}',
+    )
+
+    decision = decision_engine.decide(context)
+    trace = decision.decision_trace or {}
+
+    assert "decision_role" not in (trace.get("missing_fields") or [])
+    assert trace.get("current_field") != "decision_role"
+    assert "decision_role" in (trace.get("filled_fields") or [])
+
+
+def test_t3_rule3_blocks_return_to_qualification_when_already_apresentation(monkeypatch):
+    context = {
+        "lead": {"id": 10, "user_id": 99, "category": "apresentation"},
+        "ai_profile": {"agent_mode": "consultivo"},
+        "playbook": {},
+        "metadata": {"inbound_message_text": "ok"},
+        "history": [],
+        "job": {"payload": {"lead_id": 10, "user_id": 99}},
+        "qualification_state": {
+            "exists": True,
+            "data_json": {},
+            "attempts_json": {},
+            "last_questioned_field": None,
+        },
+    }
+
+    seen = {"route": None}
+
+    monkeypatch.setattr(
+        decision_engine.llm_service,
+        "generate_mother_route",
+        lambda _prompt: '{"route_to":"qualification","perceived_category":"qualification","confidence":0.9,"reason":"teste"}',
+    )
+
+    def _fake_child(route, _prompt):
+        seen["route"] = route
+        return '{"message_text":"vamos seguir com apresentação","did_complete_phase":false,"recommended_next_category":null,"outcome":null,"kanban_highlight":null,"signals":[],"confidence":0.8}'
+
+    monkeypatch.setattr(decision_engine.llm_service, "generate_child_result", _fake_child)
+
+    decision = decision_engine.decide(context)
+    trace = decision.decision_trace or {}
+
+    assert seen["route"] == "apresentation"
+    assert trace.get("anti_loop_rule3_applied") is True
+    assert trace.get("effective_route_to") == "apresentation"
+    assert decision.next_action == "reply"
+    assert decision.message_text
+
+
+def test_ask_qualification_message_is_deterministic_for_current_field(monkeypatch):
+    context = {
+        "lead": {"id": 10, "user_id": 99, "category": "qualification"},
+        "ai_profile": {"agent_mode": "consultivo"},
+        "playbook": {},
+        "metadata": {"inbound_message_text": "oi"},
+        "history": [],
+        "job": {"payload": {"lead_id": 10, "user_id": 99}},
+        "qualification_state": {
+            "exists": True,
+            "data_json": {"service_interest": "botox"},
+            "attempts_json": {},
+            "last_questioned_field": None,
+        },
+    }
+
+    monkeypatch.setattr(
+        decision_engine.llm_service,
+        "generate_mother_route",
+        lambda _prompt: '{"route_to":"qualification","perceived_category":"qualification","confidence":0.9,"reason":"teste"}',
+    )
+    monkeypatch.setattr(
+        decision_engine.field_extractor,
+        "extract_fields_llm",
+        lambda _ctx, _schema: {"extracted": {}, "confidence": {}, "evidence": {}, "raw": "{}"},
+    )
+    monkeypatch.setattr(
+        decision_engine.crm_client,
+        "upsert_lead_qualification_state",
+        lambda **kwargs: {
+            "exists": True,
+            "data_json": {"service_interest": "botox"},
+            "attempts_json": {},
+            "last_questioned_field": kwargs.get("patch", {}).get("last_questioned_field"),
+        },
+    )
+    monkeypatch.setattr(
+        decision_engine.crm_client,
+        "increment_lead_qualification_attempt",
+        lambda **kwargs: {
+            "exists": True,
+            "data_json": {"service_interest": "botox"},
+            "attempts_json": {kwargs.get("field"): 1},
+            "last_questioned_field": kwargs.get("field"),
+        },
+    )
+    monkeypatch.setattr(
+        decision_engine.llm_service,
+        "generate_child_result",
+        lambda _route, _prompt: '{"message_text":"pergunta errada de outro campo","did_complete_phase":false,"recommended_next_category":null,"outcome":null,"kanban_highlight":null,"signals":[],"confidence":0.8}',
+    )
+
+    decision = decision_engine.decide(context)
+    trace = decision.decision_trace or {}
+
+    assert decision.next_action == "ask_qualification"
+    assert trace.get("current_field") == "urgency"
+    assert trace.get("question_field_used") == "urgency"
+    assert decision.message_text == decision.message_text
+
+
+
+
+def test_field_mismatch_repair_uses_second_attempt(monkeypatch):
+    context = {
+        "lead": {"id": 10, "user_id": 99, "category": "qualification"},
+        "ai_profile": {"agent_mode": "consultivo"},
+        "playbook": {},
+        "metadata": {"inbound_message_text": "oi"},
+        "history": [],
+        "job": {"id": 555, "payload": {"lead_id": 10, "user_id": 99}},
+        "qualification_state": {
+            "exists": True,
+            "data_json": {"service_interest": "botox"},
+            "attempts_json": {},
+            "last_questioned_field": None,
+            "asked_questions_json": [],
+            "last_question_text": "",
+        },
+    }
+    monkeypatch.setattr(decision_engine.llm_service, "generate_mother_route", lambda _p: '{"route_to":"qualification","perceived_category":"qualification","confidence":0.9,"reason":"teste"}')
+    monkeypatch.setattr(decision_engine.field_extractor, "extract_fields_llm", lambda _c, _s: {"extracted": {}, "confidence": {}, "evidence": {}, "raw": "{}"})
+
+    calls = {"n": 0}
+    def _child(_route, _prompt):
+        calls["n"] += 1
+        if calls["n"] == 1:
+            return '{"question_text":"qual seu serviço?","field":"service_interest","did_complete_phase":false,"recommended_next_category":null,"outcome":null,"kanban_highlight":null,"signals":[],"confidence":0.7}'
+        return '{"question_text":"qual o seu nível de urgência agora?","field":"urgency","did_complete_phase":false,"recommended_next_category":null,"outcome":null,"kanban_highlight":null,"signals":[],"confidence":0.8}'
+    monkeypatch.setattr(decision_engine.llm_service, "generate_child_result", _child)
+    monkeypatch.setattr(decision_engine.crm_client, "upsert_lead_qualification_state", lambda **kwargs: context["qualification_state"])
+    monkeypatch.setattr(decision_engine.crm_client, "increment_lead_qualification_attempt", lambda **kwargs: context["qualification_state"])
+
+    decision = decision_engine.decide(context)
+    trace = decision.decision_trace or {}
+    assert decision.next_action == "ask_qualification"
+    assert trace.get("current_field") == "urgency"
+    assert trace.get("question_field_used") == "urgency"
+    assert decision.message_text == "qual o seu nível de urgência agora?"
+
+
+def test_anti_repetition_triggers_retry(monkeypatch):
+    context = {
+        "lead": {"id": 10, "user_id": 99, "category": "qualification"},
+        "ai_profile": {"agent_mode": "consultivo"},
+        "playbook": {},
+        "metadata": {"inbound_message_text": "oi"},
+        "history": [],
+        "job": {"id": 777, "payload": {"lead_id": 10, "user_id": 99}},
+        "qualification_state": {
+            "exists": True,
+            "data_json": {"service_interest": "botox"},
+            "attempts_json": {},
+            "last_questioned_field": "urgency",
+            "asked_questions_json": [{"field": "urgency", "question_text": "qual o seu nível de urgência agora?", "created_at": "2026-01-01T00:00:00", "attempt": 1}],
+            "last_question_text": "qual o seu nível de urgência agora?",
+        },
+    }
+    monkeypatch.setattr(decision_engine.llm_service, "generate_mother_route", lambda _p: '{"route_to":"qualification","perceived_category":"qualification","confidence":0.9,"reason":"teste"}')
+    monkeypatch.setattr(decision_engine.field_extractor, "extract_fields_llm", lambda _c, _s: {"extracted": {}, "confidence": {}, "evidence": {}, "raw": "{}"})
+
+    calls={"n":0}
+    def _child(_route, _prompt):
+        calls["n"] += 1
+        if calls["n"] == 1:
+            return '{"question_text":"qual o seu nível de urgência agora?","field":"urgency","did_complete_phase":false,"recommended_next_category":null,"outcome":null,"kanban_highlight":null,"signals":[],"confidence":0.8}'
+        return '{"question_text":"em quanto tempo você quer começar?","field":"urgency","did_complete_phase":false,"recommended_next_category":null,"outcome":null,"kanban_highlight":null,"signals":[],"confidence":0.8}'
+    monkeypatch.setattr(decision_engine.llm_service, "generate_child_result", _child)
+    monkeypatch.setattr(decision_engine.crm_client, "upsert_lead_qualification_state", lambda **kwargs: context["qualification_state"])
+    monkeypatch.setattr(decision_engine.crm_client, "increment_lead_qualification_attempt", lambda **kwargs: context["qualification_state"])
+
+    decision = decision_engine.decide(context)
+    trace = decision.decision_trace or {}
+    assert decision.next_action == "ask_qualification"
+    assert trace.get("question_field_used") == "urgency"
+    assert decision.message_text == "em quanto tempo você quer começar?"
+
+
+def test_current_field_recalculated_when_extractor_fills_previous_field(monkeypatch):
+    context = {
+        "lead": {"id": 10, "user_id": 99, "category": "qualification"},
+        "ai_profile": {"agent_mode": "consultivo"},
+        "playbook": {},
+        "metadata": {"inbound_message_text": "eu decido"},
+        "history": [],
+        "job": {"id": 888, "payload": {"lead_id": 10, "user_id": 99}},
+        "qualification_state": {"exists": True, "data_json": {"service_interest": "botox"}, "attempts_json": {}, "last_questioned_field": None},
+    }
+    monkeypatch.setattr(decision_engine.llm_service, "generate_mother_route", lambda _p: '{"route_to":"qualification","perceived_category":"qualification","confidence":0.9,"reason":"teste"}')
+    monkeypatch.setattr(decision_engine.field_extractor, "extract_fields_llm", lambda _c, _s: {"extracted": {"urgency": "alta"}, "confidence": {}, "evidence": {}, "raw": "{}"})
+    monkeypatch.setattr(decision_engine.crm_client, "upsert_lead_qualification_state", lambda **kwargs: {"exists": True, "data_json": {"service_interest": "botox", "urgency": "alta"}, "attempts_json": {}, "last_questioned_field": kwargs.get("patch",{}).get("last_questioned_field")})
+    monkeypatch.setattr(decision_engine.crm_client, "increment_lead_qualification_attempt", lambda **kwargs: {"exists": True, "data_json": {"service_interest": "botox", "urgency": "alta"}, "attempts_json": {kwargs.get("field"): 1}, "last_questioned_field": kwargs.get("field")})
+    monkeypatch.setattr(decision_engine.llm_service, "generate_child_result", lambda _r, _p: '{"question_text":"você decide sozinho?","field":"decision_role","did_complete_phase":false,"recommended_next_category":null,"outcome":null,"kanban_highlight":null,"signals":[],"confidence":0.8}')
+
+    decision = decision_engine.decide(context)
+    trace = decision.decision_trace or {}
+    assert trace.get("current_field") == "decision_role"
+    assert trace.get("question_field_used") == "decision_role"
+
+
+def test_fallback_safe_when_repair_fails_twice(monkeypatch):
+    context = {
+        "lead": {"id": 10, "user_id": 99, "category": "qualification"},
+        "ai_profile": {"agent_mode": "consultivo"},
+        "playbook": {},
+        "metadata": {"inbound_message_text": "oi"},
+        "history": [],
+        "job": {"id": 999, "payload": {"lead_id": 10, "user_id": 99}},
+        "qualification_state": {"exists": True, "data_json": {"service_interest": "botox"}, "attempts_json": {}, "last_questioned_field": None},
+    }
+    monkeypatch.setattr(decision_engine.llm_service, "generate_mother_route", lambda _p: '{"route_to":"qualification","perceived_category":"qualification","confidence":0.9,"reason":"teste"}')
+    monkeypatch.setattr(decision_engine.field_extractor, "extract_fields_llm", lambda _c, _s: {"extracted": {}, "confidence": {}, "evidence": {}, "raw": "{}"})
+    monkeypatch.setattr(decision_engine.llm_service, "generate_child_result", lambda _r, _p: '{"question_text":"texto ruim","field":"service_interest","did_complete_phase":false,"recommended_next_category":null,"outcome":null,"kanban_highlight":null,"signals":[],"confidence":0.4}')
+    monkeypatch.setattr(decision_engine.crm_client, "upsert_lead_qualification_state", lambda **kwargs: context["qualification_state"])
+    monkeypatch.setattr(decision_engine.crm_client, "increment_lead_qualification_attempt", lambda **kwargs: context["qualification_state"])
+
+    decision = decision_engine.decide(context)
+    trace = decision.decision_trace or {}
+    assert decision.next_action == "ask_qualification"
+    assert trace.get("qualification_validation_status") == "fallback"
+    assert decision.message_text.startswith("Pode me confirmar:")
+
+
+
+def test_auto_promote_never_uses_qualification_fallback_message(monkeypatch):
+    context = {
+        "lead": {"id": 10, "user_id": 99, "category": "qualification"},
+        "ai_profile": {"agent_mode": "consultivo"},
+        "playbook": {},
+        "metadata": {"inbound_message_text": "300 reais"},
+        "history": [],
+        "job": {"id": 200, "payload": {"lead_id": 10, "user_id": 99}},
+        "qualification_state": {
+            "exists": True,
+            "data_json": {
+                "service_interest": "botox",
+                "urgency": "alta",
+                "decision_role": "owner",
+                "constraints": "sem restrição",
+                "availability_window": "amanhã 10h",
+                "budget_or_price_acceptance": "300 reais",
+            },
+            "attempts_json": {},
+            "last_questioned_field": "budget_or_price_acceptance",
+            "asked_questions_json": [],
+            "last_question_text": "",
+        },
+    }
+
+    monkeypatch.setattr(
+        decision_engine.llm_service,
+        "generate_mother_route",
+        lambda _prompt: '{"route_to":"qualification","perceived_category":"qualification","confidence":0.9,"reason":"teste"}',
+    )
+
+    seen = {"route": None}
+
+    def _child(route, _prompt):
+        seen["route"] = route
+        return '{"message_text":"Perfeito, vamos para a próxima etapa da apresentação.","did_complete_phase":false,"recommended_next_category":null,"outcome":null,"kanban_highlight":null,"signals":[],"confidence":0.8}'
+
+    monkeypatch.setattr(decision_engine.llm_service, "generate_child_result", _child)
+
+    decision = decision_engine.decide(context)
+    trace = decision.decision_trace or {}
+
+    assert seen["route"] == "apresentation"
+    assert trace.get("effective_route_to") == "apresentation"
+    assert decision.next_action == "reply"
+    assert not decision.message_text.startswith("Pode me confirmar:")
+    assert ("qualification_validation_status" not in trace) or (trace.get("qualification_validation_status") == "n/a")

@@ -192,6 +192,9 @@ export default function AiProfilePage() {
   const pollingRef = useRef<number | null>(null);
   const refreshTimeoutRef = useRef<number | null>(null);
   const refreshCountRef = useRef(0);
+  const connectDebounceRef = useRef(0);
+  const connectLockRef = useRef(false);
+  const pollAttemptRef = useRef(0);
   const phaseRef = useRef(whatsappPhase);
 
   const entitlements = usageData?.entitlements;
@@ -260,7 +263,7 @@ export default function AiProfilePage() {
 
   const clearPolling = () => {
     if (pollingRef.current) {
-      window.clearInterval(pollingRef.current);
+      window.clearTimeout(pollingRef.current);
       pollingRef.current = null;
     }
   };
@@ -272,11 +275,25 @@ export default function AiProfilePage() {
     }
   };
 
-  const startPolling = () => {
+  const POLL_BACKOFF_MS = [2000, 4000, 8000, 15000];
+
+  const scheduleStatusPoll = () => {
     clearPolling();
-    pollingRef.current = window.setInterval(async () => {
+    const attempt = Math.min(pollAttemptRef.current, POLL_BACKOFF_MS.length - 1);
+    const waitMs = POLL_BACKOFF_MS[attempt];
+    pollingRef.current = window.setTimeout(async () => {
+      if (phaseRef.current !== "connecting") return;
       await handleWhatsappStatus(true);
-    }, 2000);
+      if (phaseRef.current === "connecting") {
+        pollAttemptRef.current += 1;
+        scheduleStatusPoll();
+      }
+    }, waitMs);
+  };
+
+  const startPolling = () => {
+    pollAttemptRef.current = 0;
+    scheduleStatusPoll();
   };
 
   const scheduleAutoRefresh = () => {
@@ -301,6 +318,7 @@ export default function AiProfilePage() {
   const stopConnectingFlow = () => {
     clearPolling();
     clearRefreshTimeout();
+    pollAttemptRef.current = 0;
   };
 
   async function loadTemplates() {
@@ -460,11 +478,16 @@ export default function AiProfilePage() {
   };
 
   async function handleWhatsappConnect() {
-    if (whatsappLoading) return;
+    const now = Date.now();
+    if (whatsappLoading || connectLockRef.current) return;
+    if (now - connectDebounceRef.current < 1200) return;
+    connectDebounceRef.current = now;
+    connectLockRef.current = true;
     setWhatsappLoading(true);
     setWhatsappError(null);
     try {
       refreshCountRef.current = 0;
+      pollAttemptRef.current = 0;
       const data = await api.crm.whatsappConnect();
       normalizeConnectResponse(data);
     } catch (err: any) {
@@ -473,6 +496,9 @@ export default function AiProfilePage() {
       handleError(err, { fallbackMessage: "Falha ao conectar WhatsApp." });
     } finally {
       setWhatsappLoading(false);
+      window.setTimeout(() => {
+        connectLockRef.current = false;
+      }, 1200);
     }
   }
 
@@ -486,7 +512,7 @@ export default function AiProfilePage() {
       if (data.status && data.status.toLowerCase() === "connected") {
         setWhatsappPhase("connected");
         stopConnectingFlow();
-      } else if (whatsappPhase !== "connecting") {
+      } else if (phaseRef.current !== "connecting") {
         setWhatsappPhase("idle");
       }
     } catch (err: any) {
@@ -1132,7 +1158,7 @@ export default function AiProfilePage() {
               )}
 
               <div className="flex flex-wrap gap-2">
-                <Button onClick={handleWhatsappConnect} disabled={whatsappLoading}>
+                <Button onClick={handleWhatsappConnect} disabled={whatsappLoading || whatsappPhase === "connecting" || connectLockRef.current}>
                   {whatsappLoading ? "Conectando..." : "Criar/Conectar WhatsApp"}
                 </Button>
                 <Button

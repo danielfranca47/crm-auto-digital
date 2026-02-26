@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import json
 import logging
+from datetime import datetime
+from difflib import SequenceMatcher
 from typing import Any, Dict, Optional
 
 from app.contracts.qualification_contract import (
@@ -94,6 +96,45 @@ DEFAULT_ALLOWED_LEAD_CATEGORIES = [
 ]
 
 
+
+
+QUALIFICATION_FIELD_FALLBACK_LABELS = {
+    "service_interest": "qual serviço/procedimento você busca",
+    "urgency": "seu nível de urgência",
+    "decision_role": "quem decide essa contratação",
+    "constraints": "suas restrições principais",
+    "availability_window": "melhor período/horário",
+    "budget_or_price_acceptance": "faixa de investimento",
+    "location_preference": "preferência de local (online/presencial)",
+    "price_acceptance": "aceite do valor",
+}
+
+
+def _select_current_field(missing_fields: list[str], filled_fields: list[str]) -> Optional[str]:
+    if not missing_fields:
+        return None
+    filled = set(filled_fields or [])
+    for field in missing_fields:
+        if field not in filled:
+            return field
+    return None
+
+
+def _fallback_question_for_field(field: Optional[str]) -> str:
+    label = QUALIFICATION_FIELD_FALLBACK_LABELS.get(field or "", "esse ponto")
+    return f"Pode me confirmar: {label}?"
+
+
+def _normalize_question_text(text: str) -> str:
+    return " ".join((text or "").strip().lower().split())
+
+
+def _question_similarity(a: str, b: str) -> float:
+    na = _normalize_question_text(a)
+    nb = _normalize_question_text(b)
+    if not na or not nb:
+        return 0.0
+    return SequenceMatcher(None, na, nb).ratio()
 def _normalize_short_reply(text: str) -> str:
     return " ".join(text.strip().lower().split())
 
@@ -241,6 +282,14 @@ def _qualification_state_from_context(context: Dict[str, Any]) -> dict:
     if not isinstance(attempts, dict):
         attempts = {}
     state["attempts_json"] = attempts
+    asked = state.get("asked_questions_json")
+    if not isinstance(asked, list):
+        asked = []
+    state["asked_questions_json"] = [item for item in asked if isinstance(item, dict)]
+    last_question_text = state.get("last_question_text")
+    if not isinstance(last_question_text, str):
+        last_question_text = ""
+    state["last_question_text"] = last_question_text
     return state
 
 
@@ -271,6 +320,8 @@ def _build_mode_contract_context(context: Dict[str, Any], mother_decision: Optio
             "missing_fields_source": "state",
             "last_questioned_field": qualification_state.get("last_questioned_field"),
             "attempts_json": qualification_state.get("attempts_json") or {},
+            "asked_questions_json": qualification_state.get("asked_questions_json") or [],
+            "last_question_text": qualification_state.get("last_question_text") or "",
         }
 
     if int(getattr(settings, "qualification_heuristic_fallback", 1) or 0) == 0:
@@ -283,6 +334,8 @@ def _build_mode_contract_context(context: Dict[str, Any], mother_decision: Optio
             "missing_fields_source": "state_unavailable",
             "last_questioned_field": None,
             "attempts_json": {},
+            "asked_questions_json": [],
+            "last_question_text": "",
         }
 
     extracted = infer_extracted_fields(context)
@@ -297,6 +350,8 @@ def _build_mode_contract_context(context: Dict[str, Any], mother_decision: Optio
         "missing_fields_source": "heuristic",
         "last_questioned_field": None,
         "attempts_json": {},
+        "asked_questions_json": [],
+        "last_question_text": "",
     }
 
 
@@ -481,6 +536,9 @@ def _build_prompt(context: Dict[str, Any], message_text: str) -> str:
         f"- agent_mode_normalized: {agent_mode_normalized}\n"
         f"- required_fields: {json.dumps(mode_contract['required_fields'], ensure_ascii=False)}\n"
         f"- missing_fields: {json.dumps(mode_contract['missing_fields'], ensure_ascii=False)}\n"
+        f"- current_field: {json.dumps(_select_current_field(mode_contract['missing_fields'], mode_contract.get('filled_fields') or []), ensure_ascii=False)}\n"
+        f"- asked_questions_for_current_field: {json.dumps([q.get('question_text') for q in (mode_contract.get('asked_questions_json') or []) if isinstance(q, dict) and q.get('field') == _select_current_field(mode_contract['missing_fields'], mode_contract.get('filled_fields') or [])][-2:], ensure_ascii=False)}\n"
+        f"- last_question_text: {json.dumps(mode_contract.get('last_question_text') or '', ensure_ascii=False)}\n"
         f"- inbound_message_text: {message_text}\n"
     )
 
@@ -712,42 +770,57 @@ def _build_child_prompt_qualification(
     history_text = _format_history(history)
     mode_contract = _build_mode_contract_context(context, mother_decision)
     agent_mode_normalized = mode_contract["agent_mode_normalized"]
-    return (
-        "Você é a FILHA QUALIFICATION e deve responder SOMENTE JSON válido:\n"
-        "{\n"
-        '  "message_text": "string",\n'
-        '  "did_complete_phase": false,\n'
-        '  "recommended_next_category": "apresentation|null",\n'
-        '  "outcome": null,\n'
-        '  "kanban_highlight": null,\n'
-        '  "signals": ["..."],\n'
-        '  "signals_structured": {"missing_fields": ["..."], "handoff_requested": false} (opcional),\n'
-        '  "confidence": 0.0\n'
-        "}\n"
-        "Regras:\n"
-        "- message_text é obrigatório e deve conter no máximo 1 pergunta objetiva por turno.\n"
-        "- NÃO agendar reunião aqui (só agendar na rota apresentation, salvo pedido explícito do inbound).\n"
-        "- Use tone_of_voice, brand_name e niche quando disponíveis.\n"
-        "- Respeite playbook.max_chars se existir (senão, resposta curta).\n"
-        "- recommended_next_category pode ser null ou 'apresentation' (micro-ajuste de avanço).\n- Priorize perguntar o próximo item de missing_fields (1 por vez).\n"
-        "- outcome e kanban_highlight devem ser null.\n"
-        "\n"
-        f"ROTA MÃE: {mother_decision.route_to} (confidence={mother_decision.confidence})\n"
-        f"Motivo MÃE: {mother_decision.reason}\n"
-        "\n"
-        "CONTEXTO:\n"
-        f"- lead: {json.dumps(lead_summary, ensure_ascii=False)}\n"
-        f"- ai_profile: {json.dumps(ai_summary, ensure_ascii=False)}\n"
-        f"- playbook: {json.dumps(playbook_summary, ensure_ascii=False)}\n"
-        f"- metadata: {json.dumps(metadata_summary, ensure_ascii=False)}\n"
-        f"- history: {history_text}\n"
-        f"- agent_mode_normalized: {agent_mode_normalized}\n"
-        f"- required_fields: {json.dumps(mode_contract['required_fields'], ensure_ascii=False)}\n"
-        f"- missing_fields: {json.dumps(mode_contract['missing_fields'], ensure_ascii=False)}\n"
-        f"- inbound_message_text: {message_text}\n"
+    current_field = _select_current_field(
+        list(mode_contract.get("missing_fields") or []),
+        list(mode_contract.get("filled_fields") or []),
     )
+    asked_for_current = [
+        str(item.get("question_text") or "")
+        for item in (mode_contract.get("asked_questions_json") or [])
+        if isinstance(item, dict) and item.get("field") == current_field
+    ][-2:]
 
+    return f"""Você é a FILHA QUALIFICATION e deve responder SOMENTE JSON válido:
+{{
+  "question_text": "string",
+  "field": "service_interest|urgency|decision_role|constraints|availability_window|budget_or_price_acceptance|location_preference|price_acceptance|null",
+  "should_ask": true,
+  "message_text": "string (retrocompat opcional)",
+  "did_complete_phase": false,
+  "recommended_next_category": "apresentation|null",
+  "outcome": null,
+  "kanban_highlight": null,
+  "signals": ["..."],
+  "signals_structured": {{"missing_fields": ["..."], "handoff_requested": false}} (opcional),
+  "confidence": 0.0
+}}
+Regras:
+- Só pode perguntar 1 coisa por turno.
+- Quando should_ask=true, field deve ser EXATAMENTE o current_field.
+- Quando should_ask=true, question_text não pode ser vazio.
+- Evite repetir frases de asked_questions_for_current_field; reformule.
+- Se current_field já tiver sido preenchido, retorne should_ask=false, field=null, question_text="".
+- NÃO agendar reunião aqui (só na rota apresentation, salvo pedido explícito do inbound).
+- recommended_next_category pode ser null ou 'apresentation'.
+- outcome e kanban_highlight devem ser null.
 
+ROTA MÃE: {mother_decision.route_to} (confidence={mother_decision.confidence})
+Motivo MÃE: {mother_decision.reason}
+
+CONTEXTO:
+- lead: {json.dumps(lead_summary, ensure_ascii=False)}
+- ai_profile: {json.dumps(ai_summary, ensure_ascii=False)}
+- playbook: {json.dumps(playbook_summary, ensure_ascii=False)}
+- metadata: {json.dumps(metadata_summary, ensure_ascii=False)}
+- history: {history_text}
+- agent_mode_normalized: {agent_mode_normalized}
+- required_fields: {json.dumps(mode_contract['required_fields'], ensure_ascii=False)}
+- missing_fields: {json.dumps(mode_contract['missing_fields'], ensure_ascii=False)}
+- current_field: {json.dumps(current_field, ensure_ascii=False)}
+- asked_questions_for_current_field: {json.dumps(asked_for_current, ensure_ascii=False)}
+- last_question_text: {json.dumps(mode_contract.get('last_question_text') or '', ensure_ascii=False)}
+- inbound_message_text: {message_text}
+"""
 def _build_child_prompt_apresentation(
     context: Dict[str, Any],
     message_text: str,
@@ -1152,6 +1225,8 @@ def compose_decision_output(
     context: Dict[str, Any],
     mother_decision: MotherDecision,
     child_result: ChildResult,
+    effective_route_override: Optional[str] = None,
+    anti_loop_rule3_applied: bool = False,
 ) -> DecisionOutput:
     lead = context.get("lead") or {}
     ai_profile = context.get("ai_profile") or {}
@@ -1172,15 +1247,17 @@ def compose_decision_output(
     )
 
     qualification_auto_promoted = False
-    effective_route_to = mother_decision.route_to
+    anti_loop_rule1_applied = False
+    effective_route_to = effective_route_override or mother_decision.route_to
     missing_fields = list(mode_contract.get("missing_fields") or [])
-    normalized_current_category = _normalize_category(current_category)
+    filled_fields = list(mode_contract.get("filled_fields") or [])
+    current_field = _select_current_field(missing_fields, filled_fields)
     if (
         mother_decision.route_to == "qualification"
-        and not missing_fields
-        and normalized_current_category == "qualification"
+        and not current_field
     ):
         qualification_auto_promoted = True
+        anti_loop_rule1_applied = True
         effective_route_to = "apresentation"
         suggested_category = "apresentation"
         auto_promote_reason = "qualification_complete_auto_promote:apresentation"
@@ -1190,13 +1267,26 @@ def compose_decision_output(
 
     outcome, highlight = apply_outcome_guardrails(current_category, child_result)
     next_action = "ask_qualification" if effective_route_to == "qualification" else "reply"
+    question_text = str(child_result.question_text or child_result.message_text or "").strip()
+    message_text = question_text
+    message_field_used: Optional[str] = None
+    if next_action == "ask_qualification":
+        if not current_field:
+            next_action = "reply"
+            effective_route_to = "apresentation"
+            qualification_auto_promoted = True
+            anti_loop_rule1_applied = True
+        else:
+            message_field_used = current_field
+            if not message_text:
+                message_text = _fallback_question_for_field(current_field)
     reason = f"route:{mother_decision.route_to}|effective_route:{effective_route_to}|{mother_decision.reason}"
     # NOTE (ETAPA 4): decision_trace é observabilidade apenas; não dispara efeitos colaterais.
     # A Etapa 4 deverá consumir sinais estruturados para automações no CRM (appointment/bot_disabled).
     meeting_scheduled = _extract_meeting_scheduled_signal(mother_decision)
     decision = DecisionOutput(
         next_action=next_action,
-        message_text=child_result.message_text or "",
+        message_text=message_text,
         questions=[],
         reason=reason,
         suggested_category=suggested_category,
@@ -1223,11 +1313,16 @@ def compose_decision_output(
             "next_action_hint": mother_decision.next_action_hint,
             "required_fields": mode_contract['required_fields'],
             "missing_fields": mode_contract['missing_fields'],
+            "filled_fields": filled_fields,
+            "current_field": current_field,
+            "question_field_used": message_field_used,
             "qualification_state_present": bool(_qualification_state_from_context(context)),
             "qualification_filled_fields": mode_contract.get("filled_fields") or [],
             "qualification_missing_fields_source": mode_contract.get("missing_fields_source") or "heuristic",
             "last_questioned_field": mode_contract.get("last_questioned_field"),
             "attempts": mode_contract.get("attempts_json") or {},
+            "anti_loop_rule1_applied": anti_loop_rule1_applied,
+            "anti_loop_rule3_applied": anti_loop_rule3_applied,
             "child_signals_structured": child_result.signals_structured if isinstance(child_result.signals_structured, dict) else None,
             "mother_signals": {
                 "meeting_scheduled": meeting_scheduled,
@@ -1269,6 +1364,10 @@ def decide(context: Dict[str, Any], logger: Optional[logging.Logger] = None) -> 
     stage = "start"
     mother_text: Optional[str] = None
     child_text: Optional[str] = None
+    qualification_current_field: Optional[str] = None
+    qualification_retry_count = 0
+    qualification_validation_status = "n/a"
+    qualification_repeated_similarity = 0.0
     try:
         mother_prompt = _build_mother_prompt(context, message_text)
         stage = "mother_call"
@@ -1280,6 +1379,31 @@ def decide(context: Dict[str, Any], logger: Optional[logging.Logger] = None) -> 
         mother_payload = _normalize_null_strings(mother_payload)
         stage = "mother_validate"
         mother_decision = MotherDecision.model_validate(mother_payload)
+        lead = context.get("lead") or {}
+        route_for_child = mother_decision.route_to
+        anti_loop_rule3_applied = False
+        mode_ctx_pre: Optional[dict] = None
+
+        if mother_decision.route_to == "qualification":
+            mode_ctx_pre = _build_mode_contract_context(context, mother_decision)
+            missing_pre = list(mode_ctx_pre.get("missing_fields") or [])
+            normalized_current_category = _normalize_category(lead.get("category"))
+            is_upper_stage = normalized_current_category in {"apresentation", "follow-up", "closing"}
+            if is_upper_stage or not missing_pre:
+                route_for_child = "apresentation"
+                anti_loop_rule3_applied = True
+                if logger:
+                    job = context.get("job") or {}
+                    payload = job.get("payload") or {}
+                    logger.info(
+                        "event=qualification_anti_loop_rule3 route_override=%s mother_route_to=%s lead_category=%s "
+                        "job_id=%s lead_id=%s",
+                        route_for_child,
+                        mother_decision.route_to,
+                        lead.get("category"),
+                        job.get("id") or payload.get("job_id"),
+                        lead.get("id") or payload.get("lead_id"),
+                    )
 
         if _is_sdr_escalate_closing(context, mother_decision):
             reason = f"guardrail_sdr_escalate_closing|{mother_decision.reason}"
@@ -1305,8 +1429,8 @@ def decide(context: Dict[str, Any], logger: Optional[logging.Logger] = None) -> 
                 },
             )
 
-        if mother_decision.route_to == "qualification":
-            mode_ctx_pre = _build_mode_contract_context(context, mother_decision)
+        if mother_decision.route_to == "qualification" and not anti_loop_rule3_applied:
+            mode_ctx_pre = mode_ctx_pre or _build_mode_contract_context(context, mother_decision)
             mode = mode_ctx_pre.get("agent_mode_normalized")
             required_fields = list(mode_ctx_pre.get("required_fields") or [])
             if mode_ctx_pre.get("missing_fields_source") == "heuristic" and logger:
@@ -1338,6 +1462,18 @@ def decide(context: Dict[str, Any], logger: Optional[logging.Logger] = None) -> 
 
             extracted = extraction.get("extracted") if isinstance(extraction.get("extracted"), dict) else {}
             new_extracted = {k: v for k, v in extracted.items() if k in required_fields and _is_filled_value(v)}
+            if "price_acceptance" in required_fields and "budget_or_price_acceptance" in extracted and "price_acceptance" not in new_extracted:
+                value = extracted.get("budget_or_price_acceptance")
+                if _is_filled_value(value):
+                    new_extracted["price_acceptance"] = value
+                    if logger:
+                        logger.info("event=qualification_price_field_mapped from=budget_or_price_acceptance to=price_acceptance")
+            if "budget_or_price_acceptance" in required_fields and "price_acceptance" in extracted and "budget_or_price_acceptance" not in new_extracted:
+                value = extracted.get("price_acceptance")
+                if _is_filled_value(value):
+                    new_extracted["budget_or_price_acceptance"] = value
+                    if logger:
+                        logger.info("event=qualification_price_field_mapped from=price_acceptance to=budget_or_price_acceptance")
 
             lead = context.get("lead") or {}
             metadata = context.get("metadata") or {}
@@ -1370,7 +1506,22 @@ def decide(context: Dict[str, Any], logger: Optional[logging.Logger] = None) -> 
                 reason = "persist_failed" if persist_failed else "extractor_failed"
                 logger.info("event=qualification_heuristic_fallback_used reason=%s", reason)
             missing = list(mode_ctx.get("missing_fields") or [])
-            current_field = missing[0] if missing else None
+            filled_fields = list(mode_ctx.get("filled_fields") or [])
+            current_field = _select_current_field(missing, filled_fields)
+            qualification_current_field = current_field
+            if not current_field:
+                route_for_child = "apresentation"
+                qualification_validation_status = "n/a"
+                if logger:
+                    job = context.get("job") or {}
+                    payload = job.get("payload") or {}
+                    logger.info(
+                        "event=qualification_auto_promote_runtime route_override=%s mother_route_to=%s job_id=%s lead_id=%s",
+                        route_for_child,
+                        mother_decision.route_to,
+                        job.get("id") or payload.get("job_id"),
+                        lead.get("id") or payload.get("lead_id"),
+                    )
             last_field = mode_ctx.get("last_questioned_field")
             attempts_map = mode_ctx.get("attempts_json") if isinstance(mode_ctx.get("attempts_json"), dict) else {}
             has_progress = bool(new_extracted)
@@ -1416,16 +1567,16 @@ def decide(context: Dict[str, Any], logger: Optional[logging.Logger] = None) -> 
                         context["qualification_state"] = updated_state
                 except Exception:
                     pass
-        if mother_decision.route_to == "qualification":
+        if route_for_child == "qualification":
             child_prompt = _build_child_prompt_qualification(context, message_text, mother_decision)
-        elif mother_decision.route_to == "apresentation":
+        elif route_for_child == "apresentation":
             child_prompt = _build_child_prompt_apresentation(context, message_text, mother_decision)
-        elif mother_decision.route_to == "follow-up":
+        elif route_for_child == "follow-up":
             try:
                 child_prompt = _build_child_prompt_follow_up(context, message_text, mother_decision)
             except Exception:
                 child_prompt = _build_child_prompt(context, message_text, mother_decision)
-        elif mother_decision.route_to == "closing":
+        elif route_for_child == "closing":
             try:
                 child_prompt = _build_child_prompt_closing(context, message_text, mother_decision)
             except Exception:
@@ -1433,24 +1584,132 @@ def decide(context: Dict[str, Any], logger: Optional[logging.Logger] = None) -> 
         else:
             child_prompt = _build_child_prompt(context, message_text, mother_decision)
         stage = "child_call"
-        child_text = llm_service.generate_child_result(mother_decision.route_to, child_prompt)
-        stage = "child_parse"
-        child_payload = _extract_json_payload(child_text)
-        if child_payload is None:
-            raise ValueError("llm returned invalid child json")
-        child_payload = _normalize_null_strings(child_payload)
-        stage = "child_validate"
-        child_result = ChildResult.model_validate(child_payload)
+        child_result: Optional[ChildResult] = None
+        validation_errors: list[str] = []
+        attempts = 2 if route_for_child == "qualification" else 1
+        for attempt_index in range(attempts):
+            qualification_retry_count = attempt_index
+            prompt_to_use = child_prompt
+            if validation_errors and route_for_child == "qualification":
+                prompt_to_use = (
+                    f"{child_prompt}\n\nVALIDATION_ERRORS: {json.dumps(validation_errors, ensure_ascii=False)}\n"
+                    "Corrija o JSON para field=current_field e reformule a pergunta sem repetir texto anterior."
+                )
+            child_text = llm_service.generate_child_result(route_for_child, prompt_to_use)
+            stage = "child_parse"
+            child_payload = _extract_json_payload(child_text)
+            if child_payload is None:
+                validation_errors = ["invalid_json"]
+                qualification_validation_status = "invalid_json"
+                continue
+            child_payload = _normalize_null_strings(child_payload)
+            if "question_text" not in child_payload and "message_text" in child_payload:
+                child_payload["question_text"] = child_payload.get("message_text")
+            stage = "child_validate"
+            child_result = ChildResult.model_validate(child_payload)
+            if route_for_child != "qualification":
+                break
+
+            mode_ctx_now = _build_mode_contract_context(context, mother_decision)
+            missing_now = list(mode_ctx_now.get("missing_fields") or [])
+            filled_now = list(mode_ctx_now.get("filled_fields") or [])
+            current_field_now = _select_current_field(missing_now, filled_now)
+            qualification_current_field = current_field_now
+            asked_all = mode_ctx_now.get("asked_questions_json") if isinstance(mode_ctx_now.get("asked_questions_json"), list) else []
+            asked_for_field = [
+                str(item.get("question_text") or "")
+                for item in asked_all
+                if isinstance(item, dict) and item.get("field") == current_field_now
+            ]
+            candidate_question = str(child_result.question_text or child_result.message_text or "").strip()
+            child_field = str(child_result.field or "").strip() or None
+            if not current_field_now:
+                qualification_validation_status = "no_current_field"
+                break
+            if child_field != current_field_now:
+                validation_errors = [f"field_mismatch expected={current_field_now} got={child_field}"]
+                qualification_validation_status = "field_mismatch"
+                continue
+            if not candidate_question:
+                validation_errors = ["empty_question_text"]
+                qualification_validation_status = "empty_question_text"
+                continue
+            last_same = asked_for_field[-1] if asked_for_field else ""
+            sim = _question_similarity(candidate_question, last_same)
+            qualification_repeated_similarity = sim
+            if last_same and sim >= 0.92:
+                validation_errors = [f"repeated_question similarity={sim:.2f}"]
+                qualification_validation_status = "repeated_question"
+                continue
+            qualification_validation_status = "accepted"
+            break
+
+        if child_result is None:
+            raise ValueError("llm returned invalid child payload")
+
+        if (
+            route_for_child == "qualification"
+            and qualification_validation_status != "accepted"
+            and qualification_current_field is not None
+        ):
+            fallback_field = qualification_current_field
+            child_result.field = fallback_field
+            child_result.question_text = _fallback_question_for_field(fallback_field)
+            child_result.message_text = child_result.question_text
+            qualification_validation_status = "fallback"
 
         stage = "compose"
         decision = compose_decision_output(
             context=context,
             mother_decision=mother_decision,
             child_result=child_result,
+            effective_route_override=route_for_child,
+            anti_loop_rule3_applied=anti_loop_rule3_applied,
         )
+        if decision.next_action == "ask_qualification":
+            trace_local = decision.decision_trace if isinstance(decision.decision_trace, dict) else {}
+            field_used = trace_local.get("question_field_used")
+            question_text = decision.message_text
+            lead = context.get("lead") or {}
+            user_id = lead.get("user_id") or (context.get("job") or {}).get("payload", {}).get("user_id")
+            lead_id = lead.get("id") or (context.get("job") or {}).get("payload", {}).get("lead_id")
+            job = context.get("job") or {}
+            payload = job.get("payload") or {}
+            job_ref = job.get("id") or payload.get("job_id")
+            if lead_id and user_id and field_used and question_text:
+                try:
+                    crm_client.upsert_lead_qualification_state(
+                        lead_id=int(lead_id),
+                        user_id=int(user_id),
+                        patch={
+                            "last_questioned_field": field_used,
+                            "last_question_text": question_text,
+                            "asked_questions_json": [{
+                                "field": field_used,
+                                "question_text": question_text,
+                                "created_at": datetime.utcnow().isoformat(),
+                                "job_id": job_ref,
+                            }],
+                        },
+                    )
+                except Exception:
+                    pass
         decision = _sanitize_category_decision(decision, context, logger_instance=logger)
         if decision.decision_trace and isinstance(decision.decision_trace, dict):
             decision.decision_trace["suggested_category_final"] = decision.suggested_category
+            is_qualification_ask = (
+                decision.decision_trace.get("effective_route_to") == "qualification"
+                and decision.next_action == "ask_qualification"
+                and route_for_child == "qualification"
+            )
+            if is_qualification_ask:
+                decision.decision_trace["qualification_validation_status"] = qualification_validation_status
+                decision.decision_trace["qualification_retry_count"] = qualification_retry_count
+                decision.decision_trace["qualification_repeated_similarity"] = qualification_repeated_similarity
+            else:
+                decision.decision_trace.pop("qualification_validation_status", None)
+                decision.decision_trace.pop("qualification_retry_count", None)
+                decision.decision_trace.pop("qualification_repeated_similarity", None)
         if logger:
             job = context.get("job") or {}
             payload = job.get("payload") or {}
@@ -1478,6 +1737,40 @@ def decide(context: Dict[str, Any], logger: Optional[logging.Logger] = None) -> 
                 "decision llm next_action=%s reason=%s",
                 decision.next_action,
                 decision.reason,
+            )
+            if (
+                trace.get("effective_route_to") == "qualification"
+                and decision.next_action == "ask_qualification"
+                and route_for_child == "qualification"
+            ):
+                logger.info(
+                    "event=qualification_question job_id=%s lead_id=%s current_field=%s child_field=%s "
+                    "validation_status=%s retry_count=%s repeated_similarity_score=%.2f last_questioned_field=%s missing_fields=%s",
+                    log_context["job_id"],
+                    log_context["lead_id"],
+                    trace.get("current_field"),
+                    trace.get("question_field_used"),
+                    trace.get("qualification_validation_status"),
+                    trace.get("qualification_retry_count"),
+                    float(trace.get("qualification_repeated_similarity") or 0.0),
+                    trace.get("last_questioned_field"),
+                    trace.get("missing_fields"),
+                )
+            logger.info(
+                "decision_qualification_anti_loop job_id=%s lead_id=%s missing_fields=%s filled_fields=%s "
+                "current_field=%s question_field_used=%s effective_route_to=%s qualification_auto_promoted=%s "
+                "anti_loop_rule1_applied=%s anti_loop_rule3_applied=%s next_action=%s",
+                log_context["job_id"],
+                log_context["lead_id"],
+                trace.get("missing_fields"),
+                trace.get("filled_fields"),
+                trace.get("current_field"),
+                trace.get("question_field_used"),
+                trace.get("effective_route_to"),
+                trace.get("qualification_auto_promoted"),
+                trace.get("anti_loop_rule1_applied"),
+                trace.get("anti_loop_rule3_applied"),
+                decision.next_action,
             )
         return handoff_policy.apply(context, decision, logger=logger)
     except Exception as exc:

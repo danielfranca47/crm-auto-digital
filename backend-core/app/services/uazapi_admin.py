@@ -10,10 +10,11 @@ logger = logging.getLogger(__name__)
 
 
 class UazapiAdminError(RuntimeError):
-    def __init__(self, message: str, *, status_code: int | None = None, body: str | None = None):
+    def __init__(self, message: str, *, status_code: int | None = None, body: str | None = None, retry_after: str | None = None):
         super().__init__(message)
         self.status_code = status_code
         self.body = body
+        self.retry_after = retry_after
 
 
 class UazapiAdminTimeoutError(UazapiAdminError):
@@ -167,15 +168,18 @@ async def _request(
     if response.is_error:
         body = response.text
         masked_body = _mask_token_in_text(body, token)
+        retry_after = response.headers.get("Retry-After") or response.headers.get("retry-after")
         logger.info(
-            "Uazapi admin error status=%s body=%s",
+            "Uazapi admin error status=%s retry_after=%s body=%s",
             response.status_code,
+            retry_after,
             masked_body,
         )
         raise UazapiAdminError(
             f"Uazapi admin error status={response.status_code}",
             status_code=response.status_code,
             body=body,
+            retry_after=retry_after,
         )
 
     try:

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 import re
+import time
 from typing import Any, Dict, Optional
 
 from fastapi import APIRouter, Depends, Header, HTTPException, status
@@ -116,6 +117,25 @@ def _resolve_instance_token(db: Session, instance_id: str) -> str:
         ) from exc
 
 
+
+
+def _raise_uazapi_http_error(exc: uazapi_admin.UazapiAdminError) -> None:
+    if exc.status_code == 429:
+        headers = {}
+        if exc.retry_after:
+            headers["Retry-After"] = exc.retry_after
+        raise HTTPException(status_code=429, detail=str(exc), headers=headers or None) from exc
+    raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=str(exc)) from exc
+
+
+def _log_connect_attempt(*, endpoint: str, instance_id: str, status_code: int, elapsed_ms: float) -> None:
+    logger.info(
+        "event=whatsapp_connect_attempt endpoint=%s instance_id=%s status=%s elapsed_ms=%.1f",
+        endpoint,
+        instance_id,
+        status_code,
+        elapsed_ms,
+    )
 @router.post("/whatsapp-instances/init")
 async def init_instance(
     payload: InstanceInitPayload,
@@ -128,6 +148,7 @@ async def init_instance(
     payload_data = payload.dict(exclude={"user_id", "instance_id"}, exclude_unset=True)
     extra_payload = _format_admin_payload({k: v for k, v in payload_data.items() if k != "instance_id"})
 
+    started = time.perf_counter()
     try:
         raw = await uazapi_admin.init_instance(
             base_url=base_url,
@@ -136,7 +157,12 @@ async def init_instance(
             payload=extra_payload,
         )
     except uazapi_admin.UazapiAdminError as exc:
-        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=str(exc)) from exc
+        elapsed_ms = (time.perf_counter() - started) * 1000
+        _log_connect_attempt(endpoint="init", instance_id=normalized_instance_id, status_code=exc.status_code or 502, elapsed_ms=elapsed_ms)
+        _raise_uazapi_http_error(exc)
+
+    elapsed_ms = (time.perf_counter() - started) * 1000
+    _log_connect_attempt(endpoint="init", instance_id=normalized_instance_id, status_code=200, elapsed_ms=elapsed_ms)
 
     instance_id, instance_token, phone_e164 = _parse_instance_payload(
         raw, fallback_instance_id=normalized_instance_id
@@ -184,6 +210,7 @@ async def connect_instance(
     payload_data = payload.dict(exclude={"user_id", "instance_id"}, exclude_unset=True)
     extra_payload = _format_admin_payload({k: v for k, v in payload_data.items() if k != "instance_id"})
 
+    started = time.perf_counter()
     try:
         raw = await uazapi_admin.connect_instance(
             base_url=base_url,
@@ -192,7 +219,12 @@ async def connect_instance(
             payload=extra_payload,
         )
     except uazapi_admin.UazapiAdminError as exc:
-        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=str(exc)) from exc
+        elapsed_ms = (time.perf_counter() - started) * 1000
+        _log_connect_attempt(endpoint="connect", instance_id=normalized_instance_id, status_code=exc.status_code or 502, elapsed_ms=elapsed_ms)
+        _raise_uazapi_http_error(exc)
+
+    elapsed_ms = (time.perf_counter() - started) * 1000
+    _log_connect_attempt(endpoint="connect", instance_id=normalized_instance_id, status_code=200, elapsed_ms=elapsed_ms)
 
     instance_id, instance_token, phone_e164 = _parse_instance_payload(
         raw, fallback_instance_id=normalized_instance_id
@@ -238,6 +270,7 @@ async def status_instance(
     normalized_instance_id = _normalize_instance_id(instance_id)
     instance_token = _resolve_instance_token(db, normalized_instance_id)
 
+    started = time.perf_counter()
     try:
         raw = await uazapi_admin.get_status(
             base_url=base_url,
@@ -245,7 +278,12 @@ async def status_instance(
             instance_id=normalized_instance_id,
         )
     except uazapi_admin.UazapiAdminError as exc:
-        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=str(exc)) from exc
+        elapsed_ms = (time.perf_counter() - started) * 1000
+        _log_connect_attempt(endpoint="status", instance_id=normalized_instance_id, status_code=exc.status_code or 502, elapsed_ms=elapsed_ms)
+        _raise_uazapi_http_error(exc)
+
+    elapsed_ms = (time.perf_counter() - started) * 1000
+    _log_connect_attempt(endpoint="status", instance_id=normalized_instance_id, status_code=200, elapsed_ms=elapsed_ms)
 
     status_value, _, _ = uazapi_admin.extract_connection_meta(raw)
 

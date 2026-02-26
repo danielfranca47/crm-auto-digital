@@ -188,6 +188,22 @@ def fetch_core_whatsapp_connection_me(token: str) -> Dict[str, Any] | None:
     return data
 
 
+
+
+def _raise_whatsapp_core_error(resp: httpx.Response, action: str) -> None:
+    detail = _extract_core_error(resp)
+    if resp.status_code == 429:
+        retry_after = resp.headers.get("Retry-After") or resp.headers.get("retry-after")
+        headers = {"Retry-After": retry_after} if retry_after else None
+        raise HTTPException(
+            status_code=429,
+            detail=f"Core WhatsApp {action} falhou (status=429): {detail}",
+            headers=headers,
+        )
+    raise HTTPException(
+        status_code=502,
+        detail=f"Core WhatsApp {action} falhou (status={resp.status_code}): {detail}",
+    )
 def init_core_whatsapp_instance(user_id: int, instance_id: str) -> Dict[str, Any]:
     base = _get_core_base()
     url = f"{base}/whatsapp-instances/init"
@@ -201,11 +217,7 @@ def init_core_whatsapp_instance(user_id: int, instance_id: str) -> Dict[str, Any
         raise HTTPException(status_code=502, detail=f"Falha ao contatar backend-core: {exc}") from exc
 
     if resp.status_code >= 400:
-        detail = _extract_core_error(resp)
-        raise HTTPException(
-            status_code=502,
-            detail=f"Core WhatsApp init falhou (status={resp.status_code}): {detail}",
-        )
+        _raise_whatsapp_core_error(resp, "init")
 
     data = resp.json()
     if not isinstance(data, dict):
@@ -226,11 +238,7 @@ def connect_core_whatsapp_instance(user_id: int, instance_id: str) -> Dict[str, 
         raise HTTPException(status_code=502, detail=f"Falha ao contatar backend-core: {exc}") from exc
 
     if resp.status_code >= 400:
-        detail = _extract_core_error(resp)
-        raise HTTPException(
-            status_code=502,
-            detail=f"Core WhatsApp connect falhou (status={resp.status_code}): {detail}",
-        )
+        _raise_whatsapp_core_error(resp, "connect")
 
     data = resp.json()
     if not isinstance(data, dict):
@@ -254,11 +262,7 @@ def status_core_whatsapp_instance(instance_id: str) -> Dict[str, Any]:
         raise HTTPException(status_code=502, detail=f"Falha ao contatar backend-core: {exc}") from exc
 
     if resp.status_code >= 400:
-        detail = _extract_core_error(resp)
-        raise HTTPException(
-            status_code=502,
-            detail=f"Core WhatsApp status falhou (status={resp.status_code}): {detail}",
-        )
+        _raise_whatsapp_core_error(resp, "status")
 
     data = resp.json()
     if not isinstance(data, dict):
