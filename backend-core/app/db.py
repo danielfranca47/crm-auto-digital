@@ -68,6 +68,9 @@ def ensure_whatsapp_connections_table() -> None:
 def ensure_ai_profile_columns() -> None:
     columns = {
         "agent_mode": {"default": "sdr_scheduler", "sqlite_type": "TEXT", "pg_type": "VARCHAR"},
+        "presentation_variant": {"default": None, "sqlite_type": "TEXT", "pg_type": "VARCHAR"},
+        "hybrid_flow_style": {"default": None, "sqlite_type": "TEXT", "pg_type": "VARCHAR"},
+        "offer_pack": {"default": None, "sqlite_type": "TEXT", "pg_type": "JSON"},
         "identity_mode": {"default": "human_agent", "sqlite_type": "TEXT", "pg_type": "VARCHAR"},
         "handoff_policy": {"default": "keep_active_notify", "sqlite_type": "TEXT", "pg_type": "VARCHAR"},
         "handoff_custom_text": {"default": None, "sqlite_type": "TEXT", "pg_type": "VARCHAR"},

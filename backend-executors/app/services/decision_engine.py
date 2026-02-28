@@ -252,6 +252,92 @@ def _has_handoff_indicators(context: Dict[str, Any]) -> bool:
     ]
     return any(bool(item) for item in indicators)
 
+def _resolve_presentation_variant(context: Dict[str, Any], mode_normalized: Optional[str] = None) -> tuple[str, str]:
+    ai_profile = context.get("ai_profile") or {}
+    metadata = context.get("metadata") or {}
+
+    raw_metadata = str(metadata.get("presentation_variant") or "").strip().lower()
+    if raw_metadata in {"sales", "scheduler"}:
+        return raw_metadata, "bundle_metadata"
+
+    raw_profile = str(ai_profile.get("presentation_variant") or "").strip().lower()
+    if raw_profile in {"sales", "scheduler"}:
+        return raw_profile, "ai_profile"
+
+    mode = mode_normalized or _normalize_agent_mode(context)
+    if mode == "direto":
+        return "sales", "agent_mode_default"
+    if mode in {"agenda", "consultivo"}:
+        return "scheduler", "agent_mode_default"
+    return "scheduler", "fallback"
+
+
+def _resolve_hybrid_flow_style(context: Dict[str, Any]) -> Optional[str]:
+    ai_profile = context.get("ai_profile") or {}
+    metadata = context.get("metadata") or {}
+
+    raw_metadata = str(metadata.get("hybrid_flow_style") or "").strip().lower()
+    if raw_metadata in {"offer_then_schedule", "schedule_then_offer"}:
+        return raw_metadata
+
+    raw_profile = str(ai_profile.get("hybrid_flow_style") or "").strip().lower()
+    if raw_profile in {"offer_then_schedule", "schedule_then_offer"}:
+        return raw_profile
+    return None
+
+
+def _build_offer_pack_summary(context: Dict[str, Any]) -> dict:
+    ai_profile = context.get("ai_profile") or {}
+    playbook = context.get("playbook") or {}
+
+    offer_pack = ai_profile.get("offer_pack")
+    if offer_pack is None:
+        offer_pack = playbook.get("offer_pack")
+    if isinstance(offer_pack, str):
+        try:
+            parsed = json.loads(offer_pack)
+            offer_pack = parsed if isinstance(parsed, dict) else None
+        except json.JSONDecodeError:
+            offer_pack = None
+    elif not isinstance(offer_pack, dict):
+        offer_pack = None
+
+    if not offer_pack:
+        fallback_description = str(ai_profile.get("offer_description") or "").strip()
+        if not fallback_description:
+            return {"available": False, "source": "none", "items": [], "cta_text": None, "disclaimers": []}
+        return {
+            "available": False,
+            "source": "offer_description_fallback",
+            "items": [{"name": "Oferta principal", "description": fallback_description, "checkout_link": None}],
+            "cta_text": None,
+            "disclaimers": [],
+        }
+
+    items = offer_pack.get("items") if isinstance(offer_pack.get("items"), list) else []
+    normalized_items = []
+    for item in items[:3]:
+        if not isinstance(item, dict):
+            continue
+        normalized_items.append({
+            "name": item.get("name"),
+            "price": item.get("price"),
+            "description": item.get("description"),
+            "bullets": item.get("bullets") if isinstance(item.get("bullets"), list) else [],
+            "proof": item.get("proof") if isinstance(item.get("proof"), list) else [],
+            "faq": item.get("faq") if isinstance(item.get("faq"), list) else [],
+            "checkout_link": item.get("checkout_link"),
+        })
+
+    return {
+        "available": bool(normalized_items),
+        "source": "offer_pack",
+        "items": normalized_items,
+        "cta_text": offer_pack.get("cta_text"),
+        "disclaimers": offer_pack.get("disclaimers") if isinstance(offer_pack.get("disclaimers"), list) else [],
+    }
+
+
 def _sanitize_signals_structured(signals: Optional[dict]) -> dict:
     if not isinstance(signals, dict):
         return {}
@@ -700,6 +786,9 @@ def _build_child_prompt(
     history_text = _format_history(history)
     mode_contract = _build_mode_contract_context(context, mother_decision)
     agent_mode_normalized = mode_contract["agent_mode_normalized"]
+    presentation_variant, presentation_variant_source = _resolve_presentation_variant(context, agent_mode_normalized)
+    hybrid_flow_style = _resolve_hybrid_flow_style(context)
+    offer_pack_summary = _build_offer_pack_summary(context)
     return (
         "Você é uma LLM FILHA e deve responder SOMENTE JSON válido:\n"
         "{\n"
@@ -770,6 +859,8 @@ def _build_child_prompt_qualification(
     history_text = _format_history(history)
     mode_contract = _build_mode_contract_context(context, mother_decision)
     agent_mode_normalized = mode_contract["agent_mode_normalized"]
+    presentation_variant, presentation_variant_source = _resolve_presentation_variant(context, agent_mode_normalized)
+    hybrid_flow_style = _resolve_hybrid_flow_style(context)
     current_field = _select_current_field(
         list(mode_contract.get("missing_fields") or []),
         list(mode_contract.get("filled_fields") or []),
@@ -858,6 +949,9 @@ def _build_child_prompt_apresentation(
     history_text = _format_history(history)
     mode_contract = _build_mode_contract_context(context, mother_decision)
     agent_mode_normalized = mode_contract["agent_mode_normalized"]
+    presentation_variant, presentation_variant_source = _resolve_presentation_variant(context, agent_mode_normalized)
+    hybrid_flow_style = _resolve_hybrid_flow_style(context)
+    offer_pack_summary = _build_offer_pack_summary(context)
     return (
         "Você é a FILHA APRESENTATION e deve responder SOMENTE JSON válido:\n"
         "{\n"
@@ -871,14 +965,15 @@ def _build_child_prompt_apresentation(
         '  "confidence": 0.0\n'
         "}\n"
         "Regras:\n"
-        "- message_text é obrigatório e deve lidar com agenda: pedir dia/horário, confirmar, reagendar, enviar link.\n"
-        "- Se agent_mode for sdr_scheduler e mother_decision.reason contiver meeting_scheduled, confirme horário\n"
-        "  e indique que enviará/confirmará o link (sem criar appointment).\n"
-        "- Se agent_mode for closer, mantenha postura de avanço comercial, mas ainda trate o agendamento.\n"
+        "- Respeite presentation_variant para conduzir a apresentação (sem heurística por keyword).\n"
+        "- Se presentation_variant=sales: apresente oferta objetiva (offer_pack quando disponível) e CTA para fechamento/checkout.\n"
+        "- Se presentation_variant=scheduler: conduza agendamento (pedir dia/horário, confirmar, reagendar, enviar link).\n"
+        "- Se hybrid_flow_style estiver definido, combine oferta+agenda na ordem indicada.\n"
         "- Use tone_of_voice, brand_name e niche quando disponíveis.\n"
         "- Respeite playbook.max_chars se existir (senão, resposta curta).\n"
-        "- recommended_next_category deve ser null.\n"
+        "- recommended_next_category é informativo nesta rota; não é aplicado automaticamente na mudança de estágio.\n"
         "- outcome e kanban_highlight devem ser null.\n"
+        "- signals_structured deve incluir: offer_presented, checkout_sent, presentation_variant e offer_item_name.\n"
         "\n"
         f"ROTA MÃE: {mother_decision.route_to} (confidence={mother_decision.confidence})\n"
         f"Motivo MÃE: {mother_decision.reason}\n"
@@ -892,6 +987,9 @@ def _build_child_prompt_apresentation(
         f"- agent_mode_normalized: {agent_mode_normalized}\n"
         f"- required_fields: {json.dumps(mode_contract['required_fields'], ensure_ascii=False)}\n"
         f"- missing_fields: {json.dumps(mode_contract['missing_fields'], ensure_ascii=False)}\n"
+        f"- presentation_variant: {presentation_variant} (source={presentation_variant_source})\n"
+        f"- hybrid_flow_style: {hybrid_flow_style or ''}\n"
+        f"- offer_pack_summary: {json.dumps(offer_pack_summary, ensure_ascii=False)}\n"
         f"- inbound_message_text: {message_text}\n"
     )
 
@@ -934,6 +1032,8 @@ def _build_child_prompt_follow_up(
     history_text = _format_history(history)
     mode_contract = _build_mode_contract_context(context, mother_decision)
     agent_mode_normalized = mode_contract["agent_mode_normalized"]
+    presentation_variant, presentation_variant_source = _resolve_presentation_variant(context, agent_mode_normalized)
+    hybrid_flow_style = _resolve_hybrid_flow_style(context)
     return (
         "Você é a FILHA FOLLOW-UP e deve responder SOMENTE JSON válido:\n"
         "{\n"
@@ -1009,6 +1109,8 @@ def _build_child_prompt_closing(
     history_text = _format_history(history)
     mode_contract = _build_mode_contract_context(context, mother_decision)
     agent_mode_normalized = mode_contract["agent_mode_normalized"]
+    presentation_variant, presentation_variant_source = _resolve_presentation_variant(context, agent_mode_normalized)
+    hybrid_flow_style = _resolve_hybrid_flow_style(context)
     return (
         "Você é a FILHA CLOSING e deve responder SOMENTE JSON válido:\n"
         "{\n"
@@ -1233,6 +1335,8 @@ def compose_decision_output(
     current_category = lead.get("category")
     mode_contract = _build_mode_contract_context(context, mother_decision)
     agent_mode_normalized = mode_contract["agent_mode_normalized"]
+    presentation_variant, presentation_variant_source = _resolve_presentation_variant(context, agent_mode_normalized)
+    hybrid_flow_style = _resolve_hybrid_flow_style(context)
     _, system_agent_mode_source = _compute_system_agent_mode(context)
     mother_agent_mode_raw, mother_agent_mode_conflict = _get_mother_mode_conflict(context, mother_decision)
     suggested_category, category_reason, guardrail_reason = apply_mother_category_guardrails(
@@ -1311,6 +1415,9 @@ def compose_decision_output(
             "meeting_scheduled": meeting_scheduled,
             "mother_objective": mother_decision.objective,
             "next_action_hint": mother_decision.next_action_hint,
+            "presentation_variant": presentation_variant,
+            "presentation_variant_source": presentation_variant_source,
+            "hybrid_flow_style": hybrid_flow_style,
             "required_fields": mode_contract['required_fields'],
             "missing_fields": mode_contract['missing_fields'],
             "filled_fields": filled_fields,
@@ -1324,6 +1431,7 @@ def compose_decision_output(
             "anti_loop_rule1_applied": anti_loop_rule1_applied,
             "anti_loop_rule3_applied": anti_loop_rule3_applied,
             "child_signals_structured": child_result.signals_structured if isinstance(child_result.signals_structured, dict) else None,
+            "child_recommended_next_category": child_result.recommended_next_category,
             "mother_signals": {
                 "meeting_scheduled": meeting_scheduled,
                 "intent_level": ((mother_decision.signals or {}).get("intent_level") if isinstance(mother_decision.signals, dict) else None),
@@ -1331,6 +1439,10 @@ def compose_decision_output(
                 "price_acceptance": ((mother_decision.signals or {}).get("price_acceptance") if isinstance(mother_decision.signals, dict) else None),
                 "handoff_requested": ((mother_decision.signals or {}).get("handoff_requested") if isinstance(mother_decision.signals, dict) else None),
                 "stop_reason": ((mother_decision.signals or {}).get("stop_reason") if isinstance(mother_decision.signals, dict) else None),
+                "presentation_variant": ((mother_decision.signals or {}).get("presentation_variant") if isinstance(mother_decision.signals, dict) else None),
+                "offer_presented": ((mother_decision.signals or {}).get("offer_presented") if isinstance(mother_decision.signals, dict) else None),
+                "checkout_sent": ((mother_decision.signals or {}).get("checkout_sent") if isinstance(mother_decision.signals, dict) else None),
+                "offer_item_name": ((mother_decision.signals or {}).get("offer_item_name") if isinstance(mother_decision.signals, dict) else None),
             },
         },
     )

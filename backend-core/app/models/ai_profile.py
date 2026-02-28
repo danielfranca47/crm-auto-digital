@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Integer, String, UniqueConstraint, func
+from sqlalchemy import JSON, Boolean, Column, DateTime, ForeignKey, Integer, String, UniqueConstraint, func
 from sqlalchemy.orm import relationship
 
 from app.db import Base
@@ -23,6 +23,9 @@ class AIProfile(Base):
     goals = Column(String, nullable=False)
     custom_instructions = Column(String, nullable=True)
     agent_mode = Column(String, nullable=True, server_default="sdr_scheduler")
+    presentation_variant = Column(String, nullable=True)
+    hybrid_flow_style = Column(String, nullable=True)
+    offer_pack = Column(JSON, nullable=True)
     identity_mode = Column(String, nullable=True, server_default="human_agent")
     handoff_policy = Column(String, nullable=True, server_default="keep_active_notify")
     handoff_custom_text = Column(String, nullable=True)

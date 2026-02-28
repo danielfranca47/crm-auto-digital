@@ -19,7 +19,51 @@ from services.ai_orchestrator.inbound_event import InboundEvent
 logger = logging.getLogger(__name__)
 
 
+def _resolve_presentation_contract(
+    *,
+    ai_profile: Dict[str, Any] | None,
+    agent_mode_normalized: str,
+) -> Dict[str, Any]:
+    profile = ai_profile or {}
+    raw_variant = str(profile.get("presentation_variant") or "").strip().lower()
+    raw_hybrid = str(profile.get("hybrid_flow_style") or "").strip().lower()
 
+    valid_variants = {"sales", "scheduler"}
+    valid_hybrid_styles = {"offer_then_schedule", "schedule_then_offer"}
+
+    if raw_variant in valid_variants:
+        variant = raw_variant
+        source = "ai_profile"
+    elif agent_mode_normalized == "direto":
+        variant = "sales"
+        source = "agent_mode_default"
+    elif agent_mode_normalized in {"agenda", "consultivo"}:
+        variant = "scheduler"
+        source = "agent_mode_default"
+    else:
+        variant = "scheduler"
+        source = "fallback"
+
+    hybrid_style = raw_hybrid if raw_hybrid in valid_hybrid_styles else None
+    if hybrid_style and source != "ai_profile":
+        source = f"{source}+hybrid"
+
+    offer_pack = profile.get("offer_pack")
+    if isinstance(offer_pack, str):
+        try:
+            parsed = json.loads(offer_pack)
+            offer_pack = parsed if isinstance(parsed, dict) else None
+        except json.JSONDecodeError:
+            offer_pack = None
+    elif not isinstance(offer_pack, dict):
+        offer_pack = None
+
+    return {
+        "presentation_variant": variant,
+        "presentation_variant_source": source,
+        "hybrid_flow_style": hybrid_style,
+        "offer_pack": offer_pack,
+    }
 
 def _normalize_agent_mode_for_bundle(ai_profile: Dict[str, Any] | None, template_key: str | None) -> str:
     profile = ai_profile or {}
@@ -91,9 +135,17 @@ def build_context_bundle(
     normalized_mode = _normalize_agent_mode_for_bundle(ai_profile, template_key)
     if ai_profile is not None:
         ai_profile["agent_mode"] = normalized_mode
+    presentation_contract = _resolve_presentation_contract(ai_profile=ai_profile, agent_mode_normalized=normalized_mode)
+    if ai_profile is not None:
+        ai_profile["presentation_variant"] = presentation_contract["presentation_variant"]
+        ai_profile["hybrid_flow_style"] = presentation_contract["hybrid_flow_style"]
+        ai_profile["offer_pack"] = presentation_contract["offer_pack"]
     playbook = get_playbook(template_key)
     playbook["template_key"] = template_key or "sdr_padrao"
     playbook = apply_mode_overrides(playbook, normalized_mode)
+    playbook["presentation_variant"] = presentation_contract["presentation_variant"]
+    playbook["hybrid_flow_style"] = presentation_contract["hybrid_flow_style"]
+    playbook["offer_pack"] = presentation_contract["offer_pack"]
 
     with get_connection() as conn:
         cur = conn.cursor()
@@ -109,6 +161,9 @@ def build_context_bundle(
         "channel": channel,
         "inbound_message_text": inbound_message_text,
         "received_at": datetime.utcnow().isoformat(),
+        "presentation_variant": presentation_contract["presentation_variant"],
+        "presentation_variant_source": presentation_contract["presentation_variant_source"],
+        "hybrid_flow_style": presentation_contract["hybrid_flow_style"],
     }
 
     history: List[Dict[str, Any]] = []
@@ -153,9 +208,17 @@ def build_context_bundle_from_inbound(event: InboundEvent) -> ContextBundle:
     normalized_mode = _normalize_agent_mode_for_bundle(ai_profile, template_key)
     if ai_profile is not None:
         ai_profile["agent_mode"] = normalized_mode
+    presentation_contract = _resolve_presentation_contract(ai_profile=ai_profile, agent_mode_normalized=normalized_mode)
+    if ai_profile is not None:
+        ai_profile["presentation_variant"] = presentation_contract["presentation_variant"]
+        ai_profile["hybrid_flow_style"] = presentation_contract["hybrid_flow_style"]
+        ai_profile["offer_pack"] = presentation_contract["offer_pack"]
     playbook = get_playbook(template_key)
     playbook["template_key"] = template_key or "sdr_padrao"
     playbook = apply_mode_overrides(playbook, normalized_mode)
+    playbook["presentation_variant"] = presentation_contract["presentation_variant"]
+    playbook["hybrid_flow_style"] = presentation_contract["hybrid_flow_style"]
+    playbook["offer_pack"] = presentation_contract["offer_pack"]
 
     lead_data = _load_lead(user_id=event.user_id, lead_id=event.lead_id)
     history = get_recent_history(event.lead_id)
@@ -170,6 +233,9 @@ def build_context_bundle_from_inbound(event: InboundEvent) -> ContextBundle:
         "provider": event.provider,
         "phone": event.phone,
         "ai_profile_status": ai_profile_status if ai_profile is None else "ok",
+        "presentation_variant": presentation_contract["presentation_variant"],
+        "presentation_variant_source": presentation_contract["presentation_variant_source"],
+        "hybrid_flow_style": presentation_contract["hybrid_flow_style"],
     }
 
     return ContextBundle(
