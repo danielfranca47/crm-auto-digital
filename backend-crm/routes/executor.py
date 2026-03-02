@@ -467,6 +467,9 @@ def complete_job_internal(
         if job_type == TYPE_WHATSAPP_INBOUND_N8N:
             lead_id = job_payload.get("lead_id")
             if lead_id is not None:
+                result_obj = payload.result if isinstance(payload.result, dict) else {}
+                decision_trace = result_obj.get("decision_trace") if isinstance(result_obj.get("decision_trace"), dict) else None
+                outcome = result_obj.get("outcome")
                 suggested_category, category_reason = extract_suggested_category(payload.result)
                 apply_suggested_category(
                     conn,
@@ -475,6 +478,8 @@ def complete_job_internal(
                     suggested_category=suggested_category,
                     reason=category_reason,
                     inbound_message_text=job_payload.get("message_text"),
+                    decision_trace=decision_trace,
+                    outcome=outcome,
                 )
                 # outcome / kanban_highlight MUST be persisted only for inbound jobs.
                 # Never persist these signals for outbound (whatsapp.send.local).

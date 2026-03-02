@@ -1,5 +1,6 @@
 import argparse
 import logging
+import re
 import sys
 from typing import Any, Dict, List, Optional
 
@@ -84,6 +85,53 @@ def _build_outbound_body(decision: decision_engine.DecisionOutput) -> Optional[s
     if decision.next_action == "handoff":
         return decision.message_text or ""
     return None
+
+
+_URL_RE = re.compile(r"https?://\S+", re.IGNORECASE)
+
+
+def _extract_checkout_link_from_offer_pack(context: Dict[str, Any]) -> Optional[str]:
+    ai_profile = context.get("ai_profile") or {}
+    playbook = context.get("playbook") or {}
+    offer_pack = ai_profile.get("offer_pack")
+    if not isinstance(offer_pack, dict):
+        offer_pack = playbook.get("offer_pack") if isinstance(playbook.get("offer_pack"), dict) else None
+    if not isinstance(offer_pack, dict):
+        return None
+    items = offer_pack.get("items") if isinstance(offer_pack.get("items"), list) else []
+    for item in items:
+        if not isinstance(item, dict):
+            continue
+        link = str(item.get("checkout_link") or "").strip()
+        if link:
+            return link
+    return None
+
+
+def _enforce_checkout_link_guardrail(
+    *,
+    decision: decision_engine.DecisionOutput,
+    context: Dict[str, Any],
+) -> None:
+    trace = decision.decision_trace if isinstance(decision.decision_trace, dict) else {}
+    child_structured = trace.get("child_signals_structured") if isinstance(trace.get("child_signals_structured"), dict) else None
+    if not isinstance(child_structured, dict):
+        return
+    if child_structured.get("checkout_sent") is not True:
+        return
+
+    checkout_link = _extract_checkout_link_from_offer_pack(context)
+    if not checkout_link:
+        return
+
+    message_text = str(decision.message_text or "")
+    if checkout_link in message_text:
+        return
+    if _URL_RE.search(message_text):
+        return
+
+    separator = "\n\n" if message_text.strip() else ""
+    decision.message_text = f"{message_text}{separator}{checkout_link}"
 
 
 def _format_questions(questions: List[str]) -> str:
@@ -313,6 +361,7 @@ def execute_job(job_id: str, logger: logging.Logger) -> int:
         extra={"phase": "decision"},
     )
     meeting_scheduler.handle_meeting_scheduled(context, decision, logger=ctx_logger)
+    _enforce_checkout_link_guardrail(decision=decision, context=context)
     outbound_body = _build_outbound_body(decision)
     if decision.next_action == "ask_qualification" and not outbound_body:
         fallback_text = _format_questions(decision.questions or [])

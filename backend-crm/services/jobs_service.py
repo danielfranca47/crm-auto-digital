@@ -805,6 +805,8 @@ def apply_suggested_category(
     suggested_category: Optional[str],
     reason: Optional[str],
     inbound_message_text: Optional[str],
+    decision_trace: Optional[Dict[str, Any]] = None,
+    outcome: Optional[str] = None,
     source: str = "ai",
 ) -> bool:
     normalized = _normalize_category(suggested_category)
@@ -879,6 +881,10 @@ def apply_suggested_category(
         user_id=user_id,
         old_category=current_category,
         new_category=normalized,
+        agent_mode_normalized=(decision_trace or {}).get("agent_mode_normalized"),
+        presentation_variant=(decision_trace or {}).get("presentation_variant"),
+        meeting_scheduled=(decision_trace or {}).get("meeting_scheduled"),
+        outcome=outcome,
     )
     logger.info(
         "lead_category_updated lead_id=%s user_id=%s from=%s to=%s keyword=%s",
@@ -944,6 +950,9 @@ def _handle_whatsapp_report(conn, payload, status, result, error_txt, *, user_id
         notes = error_txt
 
     if status == JOB_STATUS_COMPLETED:
+        result_obj = result if isinstance(result, dict) else {}
+        decision_trace = result_obj.get("decision_trace") if isinstance(result_obj.get("decision_trace"), dict) else None
+        outcome = result_obj.get("outcome")
         _log_prospection(
             conn,
             lead_id=lead_id,
@@ -962,6 +971,8 @@ def _handle_whatsapp_report(conn, payload, status, result, error_txt, *, user_id
             suggested_category=suggested_category,
             reason=category_reason,
             inbound_message_text=inbound_message_text,
+            decision_trace=decision_trace,
+            outcome=outcome,
         )
     elif status == JOB_STATUS_FAILED:
         _log_prospection(

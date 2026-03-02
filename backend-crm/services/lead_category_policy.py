@@ -12,6 +12,10 @@ def apply_closing_bot_disable_side_effect(
     user_id: Optional[int],
     old_category: Optional[str],
     new_category: Optional[str],
+    agent_mode_normalized: Optional[str] = None,
+    presentation_variant: Optional[str] = None,
+    meeting_scheduled: Optional[bool] = None,
+    outcome: Optional[str] = None,
 ) -> bool:
     """Aplica side-effect de negócio: ao entrar em closing, desabilita bot.
 
@@ -21,6 +25,24 @@ def apply_closing_bot_disable_side_effect(
     new_norm = (new_category or "").strip().lower()
     if new_norm != "closing" or old_norm == "closing":
         return False
+
+    mode_norm = (agent_mode_normalized or "").strip().lower()
+    variant_norm = (presentation_variant or "").strip().lower()
+    outcome_norm = (outcome or "").strip().lower()
+    has_runtime_context = any(
+        value is not None
+        for value in (agent_mode_normalized, presentation_variant, meeting_scheduled, outcome)
+    )
+
+    # Backward compatibility: sem contexto adicional, mantém regra histórica
+    # (entrar em closing desativa bot).
+    should_disable = True
+    if has_runtime_context:
+        should_disable = bool(meeting_scheduled) or mode_norm == "agenda" or outcome_norm == "won"
+        if not should_disable and (variant_norm == "sales" or mode_norm == "direto"):
+            return False
+        if not should_disable:
+            return False
 
     cur = conn.cursor()
     row = cur.execute("SELECT bot_disabled FROM leads WHERE id = ?", (lead_id,)).fetchone()
@@ -48,4 +70,3 @@ def apply_closing_bot_disable_side_effect(
         (lead_id, json.dumps(notes, ensure_ascii=False), user_id),
     )
     return True
-
