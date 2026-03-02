@@ -145,17 +145,16 @@ def _enforce_checkout_link_guardrail(
     suggested_category = str(decision.suggested_category or "").strip().lower()
     outcome = str(decision.outcome or "").strip().lower()
     child_structured = trace.get("child_signals_structured") if isinstance(trace.get("child_signals_structured"), dict) else {}
-    offer_presented = child_structured.get("offer_presented") is True
+    checkout_sent = child_structured.get("checkout_sent") is True
 
     message_text = str(decision.message_text or "")
     has_placeholder_link = bool(_LINK_PLACEHOLDER_RE.search(message_text))
     has_any_url = bool(_URL_RE.search(message_text))
-    is_sales_context = presentation_variant == "sales"
     is_closing_context = suggested_category == "closing"
     is_won_context = outcome == "won"
 
-    if not (is_sales_context or is_closing_context or is_won_context or offer_presented):
-        trace["checkout_guardrail_reason"] = "not_sales_or_closing_context"
+    if not (checkout_sent or is_closing_context or is_won_context):
+        trace["checkout_guardrail_reason"] = "not_checkout_sent_or_closing_or_won"
         return
     if checkout_link in message_text:
         trace["checkout_guardrail_reason"] = "already_contains_real_checkout_link"
