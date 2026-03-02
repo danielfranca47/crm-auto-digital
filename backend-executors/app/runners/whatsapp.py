@@ -92,7 +92,7 @@ _URL_RE = re.compile(r"https?://\S+", re.IGNORECASE)
 _LINK_PLACEHOLDER_RE = re.compile(r"\[[^\]]*link[^\]]*\]", re.IGNORECASE)
 
 
-def _extract_checkout_link_from_offer_pack(context: Dict[str, Any]) -> Optional[str]:
+def _extract_checkout_link_from_offer_pack(context: Dict[str, Any]) -> tuple[Optional[str], str]:
     ai_profile = context.get("ai_profile") or {}
     playbook = context.get("playbook") or {}
     source = "none"
@@ -120,14 +120,6 @@ def _extract_checkout_link_from_offer_pack(context: Dict[str, Any]) -> Optional[
     return None, source
 
 
-def _message_mentions_link_intent(message_text: str) -> bool:
-    lowered = (message_text or "").lower()
-    if _LINK_PLACEHOLDER_RE.search(lowered):
-        return True
-    tokens = ["link", "checkout", "pagamento", "assinar", "contrato"]
-    return any(token in lowered for token in tokens)
-
-
 def _enforce_checkout_link_guardrail(
     *,
     decision: decision_engine.DecisionOutput,
@@ -152,28 +144,41 @@ def _enforce_checkout_link_guardrail(
     ).strip().lower()
     suggested_category = str(decision.suggested_category or "").strip().lower()
     outcome = str(decision.outcome or "").strip().lower()
+    child_structured = trace.get("child_signals_structured") if isinstance(trace.get("child_signals_structured"), dict) else {}
+    offer_presented = child_structured.get("offer_presented") is True
 
     message_text = str(decision.message_text or "")
-    has_link_intent = _message_mentions_link_intent(message_text)
+    has_placeholder_link = bool(_LINK_PLACEHOLDER_RE.search(message_text))
+    has_any_url = bool(_URL_RE.search(message_text))
     is_sales_context = presentation_variant == "sales"
-    is_closing_context = suggested_category == "closing" and outcome != "lost"
+    is_closing_context = suggested_category == "closing"
+    is_won_context = outcome == "won"
 
-    if not (is_sales_context or is_closing_context):
+    if not (is_sales_context or is_closing_context or is_won_context or offer_presented):
+        trace["checkout_guardrail_reason"] = "not_sales_or_closing_context"
         return
-    if not has_link_intent:
-        return
-
     if checkout_link in message_text:
         trace["checkout_guardrail_reason"] = "already_contains_real_checkout_link"
         return
-    if _URL_RE.search(message_text):
-        trace["checkout_guardrail_reason"] = "message_already_contains_other_url"
+
+    if has_any_url and not has_placeholder_link:
+        trace["checkout_guardrail_reason"] = "already_has_url"
+        return
+
+    if has_placeholder_link:
+        decision.message_text = _LINK_PLACEHOLDER_RE.sub(checkout_link, message_text)
+        trace["checkout_guardrail_applied"] = True
+        trace["checkout_guardrail_reason"] = "replaced_placeholder"
+        return
+
+    if has_any_url:
+        trace["checkout_guardrail_reason"] = "already_has_url"
         return
 
     separator = "\n\n" if message_text.strip() else ""
     decision.message_text = f"{message_text}{separator}{checkout_link}"
     trace["checkout_guardrail_applied"] = True
-    trace["checkout_guardrail_reason"] = "appended_real_checkout_link"
+    trace["checkout_guardrail_reason"] = "appended_missing_link"
 
 
 def _enforce_checkout_link_guardrail_legacy(
