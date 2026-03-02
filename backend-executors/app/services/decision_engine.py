@@ -256,13 +256,18 @@ def _resolve_presentation_variant(context: Dict[str, Any], mode_normalized: Opti
     ai_profile = context.get("ai_profile") or {}
     metadata = context.get("metadata") or {}
 
+    force_metadata_variant = bool(metadata.get("force_presentation_variant"))
     raw_metadata = str(metadata.get("presentation_variant") or "").strip().lower()
-    if raw_metadata in {"sales", "scheduler"}:
-        return raw_metadata, "bundle_metadata"
+    if force_metadata_variant and raw_metadata in {"sales", "scheduler"}:
+        return raw_metadata, "bundle_metadata_forced"
 
     raw_profile = str(ai_profile.get("presentation_variant") or "").strip().lower()
     if raw_profile in {"sales", "scheduler"}:
         return raw_profile, "ai_profile"
+
+    # Metadata can fill only when profile is unavailable (no AI profile context).
+    if not ai_profile and raw_metadata in {"sales", "scheduler"}:
+        return raw_metadata, "bundle_metadata_fallback"
 
     mode = mode_normalized or _normalize_agent_mode(context)
     if mode == "direto":

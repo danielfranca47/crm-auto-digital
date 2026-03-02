@@ -176,9 +176,12 @@ def _upsert_ai_profile(
     data: dict,
     require_all_fields_for_create: bool = True,
 ) -> models.AIProfile:
+    profile = db.query(models.AIProfile).filter(models.AIProfile.user_id == user_id).first()
     if "offer_pack" in data:
         data["offer_pack"] = _normalize_offer_pack(data.get("offer_pack"))
-    if data.get("agent_mode") is None:
+    # Default mode inference should happen only on create.
+    # On update, omitted/null agent_mode must not rewrite existing mode.
+    if not profile and data.get("agent_mode") is None:
         template_key = str(data.get("template_key") or "")
         if template_key.startswith("closer"):
             data["agent_mode"] = AgentMode.direto
@@ -186,11 +189,11 @@ def _upsert_ai_profile(
             data["agent_mode"] = AgentMode.consultivo
         else:
             data["agent_mode"] = AgentMode.agenda
-    profile = db.query(models.AIProfile).filter(models.AIProfile.user_id == user_id).first()
 
     if profile:
         for key, value in data.items():
-            if value is not None:
+            # PUT semantics for AIProfileUpdate: explicit null clears the field.
+            if key in data:
                 setattr(profile, key, value)
         profile.updated_at = datetime.utcnow()
     else:
