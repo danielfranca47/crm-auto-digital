@@ -1370,6 +1370,12 @@ def compose_decision_output(
         mother_route_to=mother_decision.route_to,
     )
 
+    template_key = str(ai_profile.get("template_key") or "").strip().lower()
+    if template_key == "hybrid_scheduler" and suggested_category == "closing":
+        suggested_category = "apresentation"
+        reason_add = "guardrail_hybrid_scheduler_no_closing"
+        category_reason = f"{category_reason}|{reason_add}" if category_reason else reason_add
+
     qualification_auto_promoted = False
     anti_loop_rule1_applied = False
     effective_route_to = effective_route_override or mother_decision.route_to
@@ -1390,6 +1396,9 @@ def compose_decision_output(
         )
 
     outcome, highlight = apply_outcome_guardrails(current_category, child_result)
+    if template_key == "hybrid_scheduler":
+        outcome = None
+        highlight = None
     next_action = "ask_qualification" if effective_route_to == "qualification" else "reply"
     question_text = str(child_result.question_text or child_result.message_text or "").strip()
     message_text = question_text

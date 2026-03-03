@@ -125,6 +125,11 @@ function formatDate(value?: string | null) {
 type AgentModelUi = "agendador_com_humano" | "direto_autonomo" | "hibrido_agendador";
 
 function profileToAgentModelUi(profile: Partial<AiProfilePayload>): AgentModelUi {
+  const template = String(profile.template_key || "").toLowerCase();
+  if (template === "hybrid_scheduler") return "hibrido_agendador";
+  if (template === "closer_agressivo") return "direto_autonomo";
+  if (template === "sdr_padrao" || template === "consultor_especialista") return "agendador_com_humano";
+
   const mode = String(profile.agent_mode || "").toLowerCase();
   const requires = Boolean(profile.requires_handoff);
   const human = Boolean(profile.human_in_loop);
@@ -141,12 +146,30 @@ function profileToAgentModelUi(profile: Partial<AiProfilePayload>): AgentModelUi
 
 function applyAgentModelUi(profile: AiProfilePayload, model: AgentModelUi): AiProfilePayload {
   if (model === "agendador_com_humano") {
-    return { ...profile, agent_mode: "consultivo", requires_handoff: true, human_in_loop: true };
+    return {
+      ...profile,
+      template_key: profile.template_key || "sdr_padrao",
+      agent_mode: "consultivo",
+      requires_handoff: true,
+      human_in_loop: true,
+    };
   }
   if (model === "direto_autonomo") {
-    return { ...profile, agent_mode: "direto", requires_handoff: false, human_in_loop: false };
+    return {
+      ...profile,
+      template_key: "closer_agressivo",
+      agent_mode: "direto",
+      requires_handoff: false,
+      human_in_loop: false,
+    };
   }
-  return { ...profile, agent_mode: "agenda", requires_handoff: false, human_in_loop: false };
+  return {
+    ...profile,
+    template_key: "hybrid_scheduler",
+    agent_mode: "agenda",
+    requires_handoff: false,
+    human_in_loop: false,
+  };
 }
 
 function KnowledgeLevel({ count }: { count: number }) {

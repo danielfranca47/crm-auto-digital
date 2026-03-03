@@ -128,6 +128,13 @@ def _enforce_checkout_link_guardrail(
     if not isinstance(decision.decision_trace, dict):
         decision.decision_trace = {}
     trace = decision.decision_trace
+    template_key = str(((context.get("ai_profile") or {}).get("template_key") or "")).strip().lower()
+    if template_key == "hybrid_scheduler":
+        trace["checkout_link_present"] = False
+        trace["checkout_link_source"] = "disabled_for_hybrid_scheduler"
+        trace["checkout_guardrail_applied"] = False
+        trace["checkout_guardrail_reason"] = "hybrid_scheduler_no_checkout"
+        return
 
     checkout_link, checkout_link_source = _extract_checkout_link_from_offer_pack(context)
     trace["checkout_link_present"] = bool(checkout_link)
@@ -186,6 +193,9 @@ def _enforce_checkout_link_guardrail_legacy(
     context: Dict[str, Any],
 ) -> None:
     """Compat shim: preserve old behavior when checkout_sent=true even sem intenção textual."""
+    template_key = str(((context.get("ai_profile") or {}).get("template_key") or "")).strip().lower()
+    if template_key == "hybrid_scheduler":
+        return
     trace = decision.decision_trace if isinstance(decision.decision_trace, dict) else {}
     child_structured = trace.get("child_signals_structured") if isinstance(trace.get("child_signals_structured"), dict) else None
     if not isinstance(child_structured, dict):

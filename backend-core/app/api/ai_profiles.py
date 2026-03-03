@@ -87,6 +87,11 @@ AI_TEMPLATES = [
         "name": "Closer Agressivo Controlado",
         "description": "Mais direto e orientado a fechamento, ainda respeitando limites profissionais.",
     },
+    {
+        "key": "hybrid_scheduler",
+        "name": "Híbrido Agendador",
+        "description": "Agenda com autonomia operacional (sem checkout).",
+    },
 ]
 
 

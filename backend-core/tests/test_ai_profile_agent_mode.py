@@ -184,6 +184,27 @@ class AIProfileAgentModeTests(unittest.TestCase):
             if os.path.exists(db_path):
                 os.remove(db_path)
 
+    def test_hybrid_scheduler_template_is_valid(self):
+        created = asyncio.run(
+            create_or_replace_ai_profile(
+                AIProfileCreate(
+                    template_key="hybrid_scheduler",
+                    name="Hybrid",
+                    brand_name="Auto Digital",
+                    tone_of_voice="objetivo",
+                    timezone="UTC",
+                    niche="CRM",
+                    target_audience="PMEs",
+                    offer_description="Agendamento operacional",
+                    goals="Agendar reuniões",
+                    agent_mode="agenda",
+                ),
+                current_user=self.user,
+                db=self.db,
+            )
+        )
+        self.assertEqual(created.template_key, "hybrid_scheduler")
+
 
 if __name__ == "__main__":
     unittest.main()
