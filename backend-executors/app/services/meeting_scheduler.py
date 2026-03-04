@@ -68,11 +68,29 @@ def _extract_meeting_signal(context: Dict[str, Any], decision: DecisionOutput) -
     elif "meeting_scheduled" in (decision.reason or ""):
         meeting_scheduled = True
 
-    start_at = extract_start_at(
-        metadata,
-        context.get("history") or [],
-        tz_name=ai_profile.get("timezone"),
-    )
+    now_utc = _ensure_aware(datetime.now(timezone.utc), "UTC")
+    tz_name = ai_profile.get("timezone")
+    structured_signals = decision_trace.get("child_signals_structured") or {}
+    candidate_str = structured_signals.get("meeting_datetime_candidate")
+    start_at = parse_meeting_candidate(candidate_str, tz_name=tz_name, now_utc=now_utc)
+    if start_at is not None:
+        logging.getLogger(__name__).info(
+            "event=meeting_datetime_source source=structured_candidate tz_used=%s",
+            _resolve_timezone_name(tz_name),
+        )
+    else:
+        if candidate_str:
+            logging.getLogger(__name__).warning(
+                "event=meeting_datetime_candidate_invalid reason=parse_or_past tz_used=%s",
+                _resolve_timezone_name(tz_name),
+            )
+        logging.getLogger(__name__).info("event=meeting_datetime_source source=fallback_extract_start_at")
+        start_at = extract_start_at(
+            metadata,
+            context.get("history") or [],
+            tz_name=tz_name,
+            now_utc=now_utc,
+        )
     return MeetingSignal(
         lead_id=int(lead_id) if lead_id is not None else None,
         user_id=int(user_id) if user_id is not None else None,
@@ -90,6 +108,47 @@ def _resolve_timezone(tz_name: Optional[str]) -> timezone | ZoneInfo:
         return ZoneInfo(str(tz_name))
     except Exception:
         return timezone.utc
+
+
+def _resolve_timezone_name(tz_name: Optional[str]) -> str:
+    resolved = _resolve_timezone(tz_name)
+    if isinstance(resolved, ZoneInfo):
+        return str(resolved)
+    if tz_name:
+        logging.getLogger(__name__).warning(
+            "event=meeting_datetime_candidate_invalid reason=invalid_timezone tz_requested=%s tz_fallback=UTC",
+            tz_name,
+        )
+    return "UTC"
+
+
+def parse_meeting_candidate(
+    candidate_str: Optional[str],
+    *,
+    tz_name: Optional[str],
+    now_utc: datetime,
+) -> Optional[datetime]:
+    if not candidate_str:
+        return None
+
+    normalized = str(candidate_str).strip()
+    if not normalized:
+        return None
+    if normalized.endswith("Z"):
+        normalized = normalized[:-1] + "+00:00"
+
+    try:
+        parsed = datetime.fromisoformat(normalized)
+    except ValueError:
+        return None
+
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=_resolve_timezone(tz_name))
+
+    parsed_utc = parsed.astimezone(timezone.utc)
+    if parsed_utc <= _ensure_aware(now_utc, "UTC").astimezone(timezone.utc):
+        return None
+    return parsed_utc
 
 
 def _has_explicit_time_hint(text: str) -> bool:

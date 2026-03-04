@@ -349,6 +349,46 @@ def _sanitize_signals_structured(signals: Optional[dict]) -> dict:
     return {k: v for k, v in signals.items() if k in SIGNALS_SCHEMA}
 
 
+def _normalize_scheduler_child_signals(
+    context: Dict[str, Any],
+    mother_decision: MotherDecision,
+    child_result: ChildResult,
+    *,
+    effective_route_to: str,
+    presentation_variant: str,
+) -> Optional[dict]:
+    raw = child_result.signals_structured if isinstance(child_result.signals_structured, dict) else None
+
+    template_key = str((context.get("ai_profile") or {}).get("template_key") or "").strip().lower()
+    agent_mode = _normalize_agent_mode(context, mother_decision)
+    is_scheduler_context = (
+        effective_route_to == "apresentation"
+        and presentation_variant == "scheduler"
+        and (agent_mode == "agenda" or template_key == "hybrid_scheduler")
+    )
+    if not is_scheduler_context:
+        return raw
+
+    normalized = dict(raw or {})
+    meeting_candidate = normalized.get("meeting_datetime_candidate")
+    if isinstance(meeting_candidate, str):
+        meeting_candidate = meeting_candidate.strip() or None
+    elif meeting_candidate is not None:
+        meeting_candidate = str(meeting_candidate).strip() or None
+
+    meeting_proposed = normalized.get("meeting_proposed")
+    if not isinstance(meeting_proposed, bool):
+        meeting_proposed = False
+    if meeting_candidate is not None:
+        meeting_proposed = True
+    if meeting_proposed is False:
+        meeting_candidate = None
+
+    normalized["meeting_proposed"] = meeting_proposed
+    normalized["meeting_datetime_candidate"] = meeting_candidate
+    return normalized
+
+
 def _is_filled_value(value: Any) -> bool:
     if value is None:
         return False
@@ -941,6 +981,7 @@ def _build_child_prompt_apresentation(
         "tone_of_voice": ai_profile.get("tone_of_voice"),
         "niche": ai_profile.get("niche"),
         "agent_mode": ai_profile.get("agent_mode"),
+        "timezone": ai_profile.get("timezone"),
     }
     playbook_summary = {
         "template_key": playbook.get("template_key") or playbook.get("name"),
@@ -966,13 +1007,20 @@ def _build_child_prompt_apresentation(
         '  "outcome": null,\n'
         '  "kanban_highlight": null,\n'
         '  "signals": ["..."],\n'
-        '  "signals_structured": {"missing_fields": ["..."], "handoff_requested": false} (opcional),\n'
+        '  "signals_structured": {"missing_fields": ["..."], "handoff_requested": false, "meeting_proposed": false, "meeting_datetime_candidate": null} (opcional),\n'
         '  "confidence": 0.0\n'
         "}\n"
         "Regras:\n"
         "- Respeite presentation_variant para conduzir a apresentação (sem heurística por keyword).\n"
         "- Se presentation_variant=sales: apresente oferta objetiva (offer_pack quando disponível) e CTA para fechamento/checkout.\n"
         "- Se presentation_variant=scheduler: conduza agendamento (pedir dia/horário, confirmar, reagendar, enviar link).\n"
+        "- Em presentation_variant=scheduler (modo agenda/hybrid), SEMPRE preencha signals_structured.meeting_proposed (bool) e signals_structured.meeting_datetime_candidate (ISO string ou null).\n"
+        "  * Se houver proposta/confirmação com horário definido: meeting_proposed=true e meeting_datetime_candidate preenchido.\n"
+        "  * Se estiver pedindo disponibilidade sem horário definido: meeting_proposed=true e meeting_datetime_candidate=null.\n"
+        "  * Se não for contexto de agendamento: meeting_proposed=false e meeting_datetime_candidate=null.\n"
+        "  * Preferência: ISO naive no horário local de ai_profile.timezone (ex: 2026-03-05T17:00:00); também aceito offset/Z.\n"
+        "  * Nunca assumir timezone fixa; sempre respeitar ai_profile.timezone.\n"
+        "  * Em confirmação final do agendamento, inclua 'meeting_scheduled' em signals para compatibilidade.\n"
         "- Em presentation_variant=sales, UM TURNO = UMA AÇÃO: ou CONFIRMAR (sem link) ou ENVIAR LINK (com link).\n"
         "- Formato CONFIRMAR (sem link): descreva oferta e peça confirmação (ex.: 'quer seguir?').\n"
         "  * Proibido URL real e proibido placeholder de link (ex.: [link_do_checkout]).\n"
@@ -1417,6 +1465,13 @@ def compose_decision_output(
     # NOTE (ETAPA 4): decision_trace é observabilidade apenas; não dispara efeitos colaterais.
     # A Etapa 4 deverá consumir sinais estruturados para automações no CRM (appointment/bot_disabled).
     meeting_scheduled = _extract_meeting_scheduled_signal(mother_decision)
+    child_signals_structured = _normalize_scheduler_child_signals(
+        context,
+        mother_decision,
+        child_result,
+        effective_route_to=effective_route_to,
+        presentation_variant=presentation_variant,
+    )
     decision = DecisionOutput(
         next_action=next_action,
         message_text=message_text,
@@ -1459,7 +1514,7 @@ def compose_decision_output(
             "attempts": mode_contract.get("attempts_json") or {},
             "anti_loop_rule1_applied": anti_loop_rule1_applied,
             "anti_loop_rule3_applied": anti_loop_rule3_applied,
-            "child_signals_structured": child_result.signals_structured if isinstance(child_result.signals_structured, dict) else None,
+            "child_signals_structured": child_signals_structured,
             "child_recommended_next_category": child_result.recommended_next_category,
             "mother_signals": {
                 "meeting_scheduled": meeting_scheduled,
