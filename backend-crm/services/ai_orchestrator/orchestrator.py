@@ -75,6 +75,8 @@ def _normalize_agent_mode_for_bundle(ai_profile: Dict[str, Any] | None, template
     if mode in {"sdr_scheduler", "sdr"}:
         return "agenda"
     template_norm = str(template_key or "")
+    if template_norm.startswith("hybrid_scheduler"):
+        return "agenda"
     if template_norm.startswith("closer"):
         return "direto"
     if template_norm.startswith("consult"):

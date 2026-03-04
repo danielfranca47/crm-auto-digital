@@ -85,6 +85,45 @@ class AIProfileAgentModeTests(unittest.TestCase):
         )
         self.assertEqual(created.agent_mode, "closer")
 
+    def test_update_profile_allows_explicit_null_clear(self):
+        created = asyncio.run(
+            create_or_replace_ai_profile(
+                AIProfileCreate(
+                    template_key="sdr_padrao",
+                    name="Agent",
+                    brand_name="Auto Digital",
+                    tone_of_voice="profissional",
+                    timezone="UTC",
+                    niche="CRM",
+                    target_audience="PMEs",
+                    offer_description="Automação de vendas",
+                    goals="Agendar reuniões",
+                    agent_mode="agenda",
+                    presentation_variant="sales",
+                    offer_pack={"items": [{"name": "Plano", "checkout_link": "https://exemplo.com/x"}]},
+                ),
+                current_user=self.user,
+                db=self.db,
+            )
+        )
+        self.assertEqual(created.presentation_variant, "sales")
+        self.assertIsInstance(created.offer_pack, dict)
+
+        updated = asyncio.run(
+            update_my_ai_profile(
+                AIProfileUpdate(
+                    agent_mode="agenda",
+                    presentation_variant=None,
+                    offer_pack=None,
+                ),
+                current_user=self.user,
+                db=self.db,
+            )
+        )
+        self.assertEqual(updated.agent_mode, "agenda")
+        self.assertIsNone(updated.presentation_variant)
+        self.assertIsNone(updated.offer_pack)
+
     def test_ensure_ai_profile_columns_adds_timezone_without_reset(self):
         fd, db_path = tempfile.mkstemp(suffix=".db")
         os.close(fd)
@@ -144,6 +183,27 @@ class AIProfileAgentModeTests(unittest.TestCase):
         finally:
             if os.path.exists(db_path):
                 os.remove(db_path)
+
+    def test_hybrid_scheduler_template_is_valid(self):
+        created = asyncio.run(
+            create_or_replace_ai_profile(
+                AIProfileCreate(
+                    template_key="hybrid_scheduler",
+                    name="Hybrid",
+                    brand_name="Auto Digital",
+                    tone_of_voice="objetivo",
+                    timezone="UTC",
+                    niche="CRM",
+                    target_audience="PMEs",
+                    offer_description="Agendamento operacional",
+                    goals="Agendar reuniões",
+                    agent_mode="agenda",
+                ),
+                current_user=self.user,
+                db=self.db,
+            )
+        )
+        self.assertEqual(created.template_key, "hybrid_scheduler")
 
 
 if __name__ == "__main__":

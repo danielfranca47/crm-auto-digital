@@ -1,5 +1,7 @@
 import argparse
+import json
 import logging
+import re
 import sys
 from typing import Any, Dict, List, Optional
 
@@ -84,6 +86,135 @@ def _build_outbound_body(decision: decision_engine.DecisionOutput) -> Optional[s
     if decision.next_action == "handoff":
         return decision.message_text or ""
     return None
+
+
+_URL_RE = re.compile(r"https?://\S+", re.IGNORECASE)
+_LINK_PLACEHOLDER_RE = re.compile(r"\[[^\]]*link[^\]]*\]", re.IGNORECASE)
+
+
+def _extract_checkout_link_from_offer_pack(context: Dict[str, Any]) -> tuple[Optional[str], str]:
+    ai_profile = context.get("ai_profile") or {}
+    playbook = context.get("playbook") or {}
+    source = "none"
+    offer_pack = ai_profile.get("offer_pack")
+    if isinstance(offer_pack, str):
+        try:
+            parsed = json.loads(offer_pack)
+            offer_pack = parsed if isinstance(parsed, dict) else None
+        except json.JSONDecodeError:
+            offer_pack = None
+    if not isinstance(offer_pack, dict):
+        source = "playbook"
+        offer_pack = playbook.get("offer_pack") if isinstance(playbook.get("offer_pack"), dict) else None
+    else:
+        source = "ai_profile"
+    if not isinstance(offer_pack, dict):
+        return None, "none"
+    items = offer_pack.get("items") if isinstance(offer_pack.get("items"), list) else []
+    for item in items:
+        if not isinstance(item, dict):
+            continue
+        link = str(item.get("checkout_link") or "").strip()
+        if link:
+            return link, source
+    return None, source
+
+
+def _enforce_checkout_link_guardrail(
+    *,
+    decision: decision_engine.DecisionOutput,
+    context: Dict[str, Any],
+) -> None:
+    if not isinstance(decision.decision_trace, dict):
+        decision.decision_trace = {}
+    trace = decision.decision_trace
+    template_key = str(((context.get("ai_profile") or {}).get("template_key") or "")).strip().lower()
+    if template_key == "hybrid_scheduler":
+        trace["checkout_link_present"] = False
+        trace["checkout_link_source"] = "disabled_for_hybrid_scheduler"
+        trace["checkout_guardrail_applied"] = False
+        trace["checkout_guardrail_reason"] = "hybrid_scheduler_no_checkout"
+        return
+
+    checkout_link, checkout_link_source = _extract_checkout_link_from_offer_pack(context)
+    trace["checkout_link_present"] = bool(checkout_link)
+    trace["checkout_link_source"] = checkout_link_source
+    trace["checkout_guardrail_applied"] = False
+
+    if not checkout_link:
+        return
+
+    presentation_variant = str(
+        trace.get("presentation_variant")
+        or (context.get("metadata") or {}).get("presentation_variant")
+        or ""
+    ).strip().lower()
+    suggested_category = str(decision.suggested_category or "").strip().lower()
+    outcome = str(decision.outcome or "").strip().lower()
+    child_structured = trace.get("child_signals_structured") if isinstance(trace.get("child_signals_structured"), dict) else {}
+    checkout_sent = child_structured.get("checkout_sent") is True
+
+    message_text = str(decision.message_text or "")
+    has_placeholder_link = bool(_LINK_PLACEHOLDER_RE.search(message_text))
+    has_any_url = bool(_URL_RE.search(message_text))
+    is_closing_context = suggested_category == "closing"
+    is_won_context = outcome == "won"
+
+    if not (checkout_sent or is_closing_context or is_won_context):
+        trace["checkout_guardrail_reason"] = "not_checkout_sent_or_closing_or_won"
+        return
+    if checkout_link in message_text:
+        trace["checkout_guardrail_reason"] = "already_contains_real_checkout_link"
+        return
+
+    if has_any_url and not has_placeholder_link:
+        trace["checkout_guardrail_reason"] = "already_has_url"
+        return
+
+    if has_placeholder_link:
+        decision.message_text = _LINK_PLACEHOLDER_RE.sub(checkout_link, message_text)
+        trace["checkout_guardrail_applied"] = True
+        trace["checkout_guardrail_reason"] = "replaced_placeholder"
+        return
+
+    if has_any_url:
+        trace["checkout_guardrail_reason"] = "already_has_url"
+        return
+
+    separator = "\n\n" if message_text.strip() else ""
+    decision.message_text = f"{message_text}{separator}{checkout_link}"
+    trace["checkout_guardrail_applied"] = True
+    trace["checkout_guardrail_reason"] = "appended_missing_link"
+
+
+def _enforce_checkout_link_guardrail_legacy(
+    *,
+    decision: decision_engine.DecisionOutput,
+    context: Dict[str, Any],
+) -> None:
+    """Compat shim: preserve old behavior when checkout_sent=true even sem intenção textual."""
+    template_key = str(((context.get("ai_profile") or {}).get("template_key") or "")).strip().lower()
+    if template_key == "hybrid_scheduler":
+        return
+    trace = decision.decision_trace if isinstance(decision.decision_trace, dict) else {}
+    child_structured = trace.get("child_signals_structured") if isinstance(trace.get("child_signals_structured"), dict) else None
+    if not isinstance(child_structured, dict):
+        return
+    if child_structured.get("checkout_sent") is not True:
+        return
+
+    checkout_link, _ = _extract_checkout_link_from_offer_pack(context)
+    if not checkout_link:
+        return
+
+    message_text = str(decision.message_text or "")
+    if checkout_link in message_text:
+        return
+    if _URL_RE.search(message_text):
+        return
+
+    separator = "\n\n" if message_text.strip() else ""
+    decision.message_text = f"{message_text}{separator}{checkout_link}"
 
 
 def _format_questions(questions: List[str]) -> str:
@@ -313,6 +444,8 @@ def execute_job(job_id: str, logger: logging.Logger) -> int:
         extra={"phase": "decision"},
     )
     meeting_scheduler.handle_meeting_scheduled(context, decision, logger=ctx_logger)
+    _enforce_checkout_link_guardrail(decision=decision, context=context)
+    _enforce_checkout_link_guardrail_legacy(decision=decision, context=context)
     outbound_body = _build_outbound_body(decision)
     if decision.next_action == "ask_qualification" and not outbound_body:
         fallback_text = _format_questions(decision.questions or [])
