@@ -46,10 +46,10 @@ export function KanbanColumn({
         </div>
       </div>
 
-      <div 
+      <div
         ref={setNodeRef}
-        className="p-4 pt-0 custom-scrollbar"
-        style={{ maxHeight: 'calc(100vh - 200px)', overflowY: 'auto' }}
+        className="p-4 pt-0 custom-scrollbar overflow-y-auto overflow-x-hidden min-w-0"
+        style={{ maxHeight: 'calc(100vh - 200px)' }}
       >
         <SortableContext items={column.leads.map(lead => lead.id)} strategy={verticalListSortingStrategy}>
           {column.leads.map((lead) => (
