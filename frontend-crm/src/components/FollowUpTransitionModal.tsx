@@ -109,10 +109,10 @@ export function FollowUpTransitionModal({ open, onOpenChange, lead, onSuccess }:
             <Select value={outcome} onValueChange={setOutcome}>
               <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
               <SelectContent>
-                <SelectItem value="hot">hot</SelectItem>
-                <SelectItem value="warm">warm</SelectItem>
-                <SelectItem value="cold">cold</SelectItem>
-                <SelectItem value="lost">lost</SelectItem>
+                <SelectItem value="hot">Quente</SelectItem>
+                <SelectItem value="warm">Morno</SelectItem>
+                <SelectItem value="cold">Frio</SelectItem>
+                <SelectItem value="lost">Perdido</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -121,8 +121,8 @@ export function FollowUpTransitionModal({ open, onOpenChange, lead, onSuccess }:
             <Select value={proposalSent} onValueChange={(v) => setProposalSent(v as any)}>
               <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
               <SelectContent>
-                <SelectItem value="yes">yes</SelectItem>
-                <SelectItem value="no">no</SelectItem>
+                <SelectItem value="yes">Sim</SelectItem>
+                <SelectItem value="no">Não</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -131,10 +131,10 @@ export function FollowUpTransitionModal({ open, onOpenChange, lead, onSuccess }:
             <Select value={followupGoal} onValueChange={setFollowupGoal}>
               <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
               <SelectContent>
-                <SelectItem value="advance_closing">advance_closing</SelectItem>
-                <SelectItem value="nurture">nurture</SelectItem>
-                <SelectItem value="reschedule_conversation">reschedule_conversation</SelectItem>
-                <SelectItem value="register_only">register_only</SelectItem>
+                <SelectItem value="advance_closing">Avançar para fechamento</SelectItem>
+                <SelectItem value="nurture">Nutrir relacionamento</SelectItem>
+                <SelectItem value="reschedule_conversation">Reagendar conversa</SelectItem>
+                <SelectItem value="register_only">Apenas registrar</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -148,9 +148,9 @@ export function FollowUpTransitionModal({ open, onOpenChange, lead, onSuccess }:
         <Select value={followupGoal} onValueChange={setFollowupGoal}>
           <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
           <SelectContent>
-            <SelectItem value="recover_and_reschedule">recover_and_reschedule</SelectItem>
-            <SelectItem value="reengage">reengage</SelectItem>
-            <SelectItem value="register_only">register_only</SelectItem>
+            <SelectItem value="recover_and_reschedule">Recuperar e reagendar</SelectItem>
+            <SelectItem value="reengage">Reengajar</SelectItem>
+            <SelectItem value="register_only">Apenas registrar</SelectItem>
           </SelectContent>
         </Select>
       </div>
@@ -166,10 +166,10 @@ export function FollowUpTransitionModal({ open, onOpenChange, lead, onSuccess }:
             <Select value={outcome} onValueChange={(v) => { setOutcome(v); setFollowupGoal(""); setProposalSent(""); }}>
               <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
               <SelectContent>
-                <SelectItem value="interested_not_closed">interested_not_closed</SelectItem>
-                <SelectItem value="reschedule_needed">reschedule_needed</SelectItem>
-                <SelectItem value="lost">lost</SelectItem>
-                <SelectItem value="converted">converted</SelectItem>
+                <SelectItem value="interested_not_closed">Interessado, mas ainda não fechou</SelectItem>
+                <SelectItem value="reschedule_needed">Precisa reagendar</SelectItem>
+                <SelectItem value="lost">Perdido</SelectItem>
+                <SelectItem value="converted">Convertido</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -180,9 +180,9 @@ export function FollowUpTransitionModal({ open, onOpenChange, lead, onSuccess }:
               <Select value={followupGoal} onValueChange={setFollowupGoal}>
                 <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="nurture_interest">nurture_interest</SelectItem>
-                  <SelectItem value="prompt_reply">prompt_reply</SelectItem>
-                  <SelectItem value="prepare_next_conversation">prepare_next_conversation</SelectItem>
+                  <SelectItem value="nurture_interest">Nutrir interesse</SelectItem>
+                  <SelectItem value="prompt_reply">Incentivar resposta</SelectItem>
+                  <SelectItem value="prepare_next_conversation">Preparar próxima conversa</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -194,8 +194,8 @@ export function FollowUpTransitionModal({ open, onOpenChange, lead, onSuccess }:
               <Select value={proposalSent} onValueChange={(v) => setProposalSent(v as any)}>
                 <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="yes">yes</SelectItem>
-                  <SelectItem value="no">no</SelectItem>
+                  <SelectItem value="yes">Sim</SelectItem>
+                  <SelectItem value="no">Não</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -210,9 +210,9 @@ export function FollowUpTransitionModal({ open, onOpenChange, lead, onSuccess }:
         <Select value={followupGoal} onValueChange={setFollowupGoal}>
           <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
           <SelectContent>
-            <SelectItem value="recover_and_reschedule">recover_and_reschedule</SelectItem>
-            <SelectItem value="reengage_conversation">reengage_conversation</SelectItem>
-            <SelectItem value="register_only">register_only</SelectItem>
+            <SelectItem value="recover_and_reschedule">Recuperar e reagendar</SelectItem>
+            <SelectItem value="reengage_conversation">Reengajar conversa</SelectItem>
+            <SelectItem value="register_only">Apenas registrar</SelectItem>
           </SelectContent>
         </Select>
       </div>
@@ -235,10 +235,10 @@ export function FollowUpTransitionModal({ open, onOpenChange, lead, onSuccess }:
             <Select value={meetingHappened} onValueChange={(v) => { setMeetingHappened(v as MeetingHappened); setOutcome(""); setFollowupGoal(""); setProposalSent(""); }}>
               <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
               <SelectContent>
-                <SelectItem value="yes">yes</SelectItem>
-                <SelectItem value="no_show">no_show</SelectItem>
-                <SelectItem value="canceled">canceled</SelectItem>
-                <SelectItem value="needs_reschedule">needs_reschedule</SelectItem>
+                <SelectItem value="yes">Sim</SelectItem>
+                <SelectItem value="no_show">Não compareceu</SelectItem>
+                <SelectItem value="canceled">Cancelada</SelectItem>
+                <SelectItem value="needs_reschedule">Precisa reagendar</SelectItem>
               </SelectContent>
             </Select>
           </div>
