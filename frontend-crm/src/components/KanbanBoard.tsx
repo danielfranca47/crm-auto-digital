@@ -160,7 +160,7 @@ export function KanbanBoard({ onDashboard }: KanbanBoardProps) {
     const overId = over.id as string;
 
     const activeColumn = findColumn(activeId);
-    const overColumn = findColumn(overId);
+    const overColumn = allColumns.find((col) => col.id === overId) || findColumn(overId);
 
     if (!activeColumn || !overColumn) return;
 
