@@ -24,6 +24,7 @@ import { ScheduleAppointmentDialog } from "./ScheduleAppointmentDialog";
 import { useAppointments, useCancelAppointment } from "@/hooks/useAppointments";
 import { useToast } from "@/hooks/use-toast";
 import { Alert, AlertDescription, AlertTitle } from "./ui/alert";
+import { FollowUpTransitionModal } from "./FollowUpTransitionModal";
 
 interface KanbanBoardProps {
   onDashboard: () => void;
@@ -72,6 +73,8 @@ export function KanbanBoard({ onDashboard }: KanbanBoardProps) {
   const [isAppointmentDialogOpen, setIsAppointmentDialogOpen] = useState(false);
   const [appointmentDialogLeadId, setAppointmentDialogLeadId] = useState<string | null>(null);
   const [appointmentToEdit, setAppointmentToEdit] = useState<Appointment | null>(null);
+  const [followupModalOpen, setFollowupModalOpen] = useState(false);
+  const [followupLead, setFollowupLead] = useState<Lead | null>(null);
 
   const allColumns = useMemo(() => [...columns, ...archivedColumns], [columns, archivedColumns]);
 
@@ -131,8 +134,21 @@ export function KanbanBoard({ onDashboard }: KanbanBoardProps) {
     const overColumn = allColumns.find((col) => col.id === overId) || findColumn(overId);
 
     if (!activeColumn || !overColumn || activeColumn === overColumn) return;
-    moveLead(activeId, overColumn.id as any);
   };
+
+  const requiresFollowupTransition = useCallback((lead: Lead, targetCategory: string) => {
+    if (lead.category !== "apresentation" || targetCategory !== "follow-up") return false;
+    return lead.agent_type === "agent_1" || lead.agent_type === "agent_3";
+  }, []);
+
+  const handleMoveWithRules = useCallback((lead: Lead, targetCategory: string) => {
+    if (requiresFollowupTransition(lead, targetCategory)) {
+      setFollowupLead(lead);
+      setFollowupModalOpen(true);
+      return;
+    }
+    moveLead(lead.id, targetCategory as any);
+  }, [moveLead, requiresFollowupTransition]);
 
   const handleDragEnd = (event: DragEndEvent) => {
     setActiveId(null);
@@ -152,10 +168,7 @@ export function KanbanBoard({ onDashboard }: KanbanBoardProps) {
     if (!lead) return;
 
     if (activeColumn.id !== overColumn.id) {
-      updateLead(activeId, {
-        category: overColumn.id,
-        lastMovement: new Date(),
-      });
+      handleMoveWithRules(lead, overColumn.id);
     } else {
       const activeIndex = activeColumn.leads.findIndex((item) => item.id === activeId);
       const overIndex = overColumn.leads.findIndex((item) => item.id === overId);
@@ -169,7 +182,9 @@ export function KanbanBoard({ onDashboard }: KanbanBoardProps) {
   };
 
   const handleMoveLead = (leadId: string, newCategory: string) => {
-    moveLead(leadId, newCategory as any);
+    const lead = findLead(leadId);
+    if (!lead) return;
+    handleMoveWithRules(lead, newCategory);
   };
 
   const handleArchiveLead = (leadId: string, archiveCategory: string) => {
@@ -425,6 +440,18 @@ export function KanbanBoard({ onDashboard }: KanbanBoardProps) {
                 : prev
             );
           }
+        }}
+      />
+
+      <FollowUpTransitionModal
+        open={followupModalOpen}
+        onOpenChange={setFollowupModalOpen}
+        lead={followupLead}
+        onSuccess={async () => {
+          if (followupLead) {
+            moveLead(followupLead.id, "follow-up" as any);
+          }
+          setFollowupLead(null);
         }}
       />
     </div>

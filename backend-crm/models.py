@@ -15,6 +15,7 @@ class Lead(BaseModel):
     category: str
     customMessage: Optional[str] = None
     observations: Optional[str] = None
+    agent_type: Optional[str] = None
     priority: Optional[int] = 1
 
     # Pydantic v2
@@ -31,8 +32,19 @@ class LeadUpdate(BaseModel):
     category: Optional[str] = None
     customMessage: Optional[str] = None
     observations: Optional[str] = None
+    agent_type: Optional[str] = None
     priority: Optional[int] = None
     lastMovement: Optional[datetime] = None
+
+
+class StartFollowupPayload(BaseModel):
+    lead_id: int
+    agent_type: Literal["agent_1", "agent_3"]
+    meeting_or_session_happened: Literal["yes", "no_show", "canceled", "needs_reschedule"]
+    outcome: Optional[str] = None
+    followup_goal: Optional[str] = None
+    proposal_sent: Optional[bool] = None
+    operator_note: Optional[str] = None
 
 
 class BotDisabledUpdate(BaseModel):

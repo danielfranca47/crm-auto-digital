@@ -6,7 +6,7 @@ from fastapi import APIRouter, HTTPException, Depends
 from datetime import datetime, timezone
 
 from database import get_connection, normalize_datetime_value
-from models import Lead, LeadUpdate, AppointmentCreate, AppointmentUpdate, BotDisabledUpdate
+from models import Lead, LeadUpdate, AppointmentCreate, AppointmentUpdate, BotDisabledUpdate, StartFollowupPayload
 from security_core import CurrentUser, require_crm_access
 from services import rate_limit_service
 from services.phone_normalizer import PhoneNormalizationError, normalize_to_e164
@@ -248,8 +248,8 @@ def criar_lead(lead: Lead, current_user: CurrentUser = Depends(require_crm_acces
             """
             INSERT INTO leads (
                 user_id, companyName, contactName, phone, email, origin, category,
-                customMessage, observations, priority, createdAt, lastMovement
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+                customMessage, observations, agent_type, priority, createdAt, lastMovement
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
             """,
             (
                 current_user.id,
@@ -261,6 +261,7 @@ def criar_lead(lead: Lead, current_user: CurrentUser = Depends(require_crm_acces
                 lead.category,
                 lead.customMessage,
                 lead.observations,
+                lead.agent_type,
                 priority,
             ),
         )
@@ -291,6 +292,7 @@ def criar_lead(lead: Lead, current_user: CurrentUser = Depends(require_crm_acces
             "category": lead.category,
             "customMessage": lead.customMessage,
             "observations": lead.observations,
+            "agent_type": lead.agent_type,
             "priority": priority,
             "createdAt": now_iso,
             "lastMovement": now_iso,
@@ -300,6 +302,95 @@ def criar_lead(lead: Lead, current_user: CurrentUser = Depends(require_crm_acces
     except HTTPException:
         raise
     except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        conn.close()
+
+
+@router.post("/start-followup")
+def start_followup_transition(
+    payload: StartFollowupPayload,
+    current_user: CurrentUser = Depends(require_crm_access),
+):
+    conn = get_connection()
+    cursor = conn.cursor()
+    try:
+        row = cursor.execute(
+            "SELECT id, user_id, category, agent_type FROM leads WHERE id = ? AND user_id = ?",
+            (payload.lead_id, current_user.id),
+        ).fetchone()
+        if row is None:
+            raise HTTPException(status_code=404, detail="Lead não encontrado")
+
+        current_category = str(row["category"] or "").strip().lower()
+        if current_category != "apresentation":
+            raise HTTPException(status_code=400, detail="Transição assistida só é permitida de apresentation para follow-up")
+
+        db_agent_type = str(row["agent_type"] or "").strip().lower()
+        if db_agent_type and db_agent_type != payload.agent_type:
+            raise HTTPException(status_code=400, detail="agent_type enviado difere do lead")
+
+        if payload.agent_type not in {"agent_1", "agent_3"}:
+            raise HTTPException(status_code=400, detail="Transição assistida disponível apenas para agent_1 e agent_3")
+
+        followup_variant = "sdr_scheduler" if payload.agent_type == "agent_1" else "hybrid_scheduler"
+        meeting_happened = payload.meeting_or_session_happened == "yes"
+        contract = {
+            "phase": "follow-up",
+            "followup_variant": followup_variant,
+            "trigger": "manual_crm_transition",
+            "meeting_happened": meeting_happened,
+            "meeting_or_session_happened": payload.meeting_or_session_happened,
+            "outcome": payload.outcome,
+            "temperature": payload.outcome,
+            "proposal_sent": payload.proposal_sent,
+            "followup_goal": payload.followup_goal,
+            "operator_note": (payload.operator_note or "").strip() or None,
+            "created_at": datetime.now(timezone.utc).isoformat(),
+        }
+
+        cursor.execute(
+            """
+            UPDATE leads
+               SET category = 'follow-up',
+                   bot_disabled = 0,
+                   bot_disabled_reason = NULL,
+                   followup_contract = ?,
+                   agent_type = COALESCE(NULLIF(agent_type, ''), ?),
+                   lastMovement = CURRENT_TIMESTAMP
+             WHERE id = ? AND user_id = ?
+            """,
+            (
+                json.dumps(contract, ensure_ascii=False),
+                payload.agent_type,
+                payload.lead_id,
+                current_user.id,
+            ),
+        )
+        cursor.execute(
+            """
+            INSERT INTO prospection_logs (lead_id, channel, message_id, action, notes, user_id)
+            VALUES (?, NULL, NULL, 'followup_started_manual', ?, ?)
+            """,
+            (
+                payload.lead_id,
+                json.dumps(contract, ensure_ascii=False),
+                current_user.id,
+            ),
+        )
+        conn.commit()
+        return {
+            "status": "ok",
+            "lead_id": payload.lead_id,
+            "category": "follow-up",
+            "bot_disabled": False,
+            "followup_contract": contract,
+        }
+    except HTTPException:
+        conn.rollback()
+        raise
+    except Exception as e:
+        conn.rollback()
         raise HTTPException(status_code=500, detail=str(e))
     finally:
         conn.close()
