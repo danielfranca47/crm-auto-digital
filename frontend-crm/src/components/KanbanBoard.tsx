@@ -1,6 +1,7 @@
 import { useCallback, useMemo, useState } from "react";
 import {
   DndContext,
+  DragOverlay,
   DragEndEvent,
   DragOverEvent,
   DragStartEvent,
@@ -118,6 +119,11 @@ export function KanbanBoard({ onDashboard }: KanbanBoardProps) {
     },
     [allColumns]
   );
+
+  const activeLead = useMemo(() => {
+    if (!activeId) return null;
+    return findLead(activeId);
+  }, [activeId, findLead]);
 
   const handleDragStart = (event: DragStartEvent) => {
     setActiveId(event.active.id as string);
@@ -340,6 +346,20 @@ export function KanbanBoard({ onDashboard }: KanbanBoardProps) {
           onDragOver={handleDragOver}
           onDragEnd={handleDragEnd}
         >
+          <DragOverlay>
+            {activeLead ? (
+              <div className="lead-card p-4 w-72 rotate-1 shadow-2xl cursor-grabbing">
+                <div className="flex justify-between items-start mb-2">
+                  <h4 className="font-semibold text-foreground text-sm">
+                    {activeLead.companyName} - {activeLead.contactName}
+                  </h4>
+                </div>
+                <div className="text-xs text-muted-foreground truncate">{activeLead.phone}</div>
+                <div className="text-xs text-muted-foreground truncate mt-1">{activeLead.origin}</div>
+              </div>
+            ) : null}
+          </DragOverlay>
+
           <div className="flex justify-between items-center mb-4">
             <h1 className="text-xl font-semibold text-foreground">Quadro Kanban</h1>
             <div className="flex items-center gap-2">
