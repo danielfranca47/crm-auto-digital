@@ -181,15 +181,62 @@ export function KanbanBoard({ onDashboard }: KanbanBoardProps) {
     [profileAgentType]
   );
 
+  const resolveAgentTypeForLead = useCallback(
+    async (lead: Lead): Promise<"agent_1" | "agent_2" | "agent_3" | null> => {
+      const current = getEffectiveAgentType(lead);
+      if (current) return current;
+
+      try {
+        const profile = await api.core.getAiProfileMe();
+        const templateKey = String(profile?.template_key || "").trim().toLowerCase();
+        const inferred: "agent_1" | "agent_2" | "agent_3" =
+          templateKey === "hybrid_scheduler"
+            ? "agent_3"
+            : templateKey.startsWith("closer")
+            ? "agent_2"
+            : "agent_1";
+        setProfileAgentType(inferred);
+        return inferred;
+      } catch {
+        return null;
+      }
+    },
+    [getEffectiveAgentType]
+  );
+
   const requiresFollowupTransition = useCallback((lead: Lead, targetCategory: string) => {
     if (lead.category !== "apresentation" || targetCategory !== "follow-up") return false;
     const effectiveAgentType = getEffectiveAgentType(lead);
     return effectiveAgentType === "agent_1" || effectiveAgentType === "agent_3";
   }, [getEffectiveAgentType]);
 
-  const handleMoveWithRules = useCallback((lead: Lead, targetCategory: string) => {
+  const handleMoveWithRules = useCallback(async (lead: Lead, targetCategory: string) => {
+    const isFollowupTransition = lead.category === "apresentation" && targetCategory === "follow-up";
+
+    if (isFollowupTransition) {
+      const effectiveAgentType = await resolveAgentTypeForLead(lead);
+      if (!effectiveAgentType) {
+        toast({
+          title: "Não foi possível iniciar a transição",
+          description: "Não conseguimos resolver o tipo de agente para esta transição. Tente novamente.",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      if (effectiveAgentType === "agent_1" || effectiveAgentType === "agent_3") {
+        setFollowupLead(
+          lead.agent_type !== effectiveAgentType
+            ? { ...lead, agent_type: effectiveAgentType }
+            : lead
+        );
+        setFollowupModalOpen(true);
+        return;
+      }
+    }
+
     if (requiresFollowupTransition(lead, targetCategory)) {
-      const effectiveAgentType = getEffectiveAgentType(lead);
+      const effectiveAgentType = await resolveAgentTypeForLead(lead);
       setFollowupLead(
         effectiveAgentType && lead.agent_type !== effectiveAgentType
           ? { ...lead, agent_type: effectiveAgentType }
@@ -198,8 +245,9 @@ export function KanbanBoard({ onDashboard }: KanbanBoardProps) {
       setFollowupModalOpen(true);
       return;
     }
+
     moveLead(lead.id, targetCategory as any);
-  }, [getEffectiveAgentType, moveLead, requiresFollowupTransition]);
+  }, [moveLead, requiresFollowupTransition, resolveAgentTypeForLead, toast]);
 
   const handleDragEnd = (event: DragEndEvent) => {
     setActiveId(null);
