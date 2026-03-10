@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   DndContext,
   DragOverlay,
@@ -76,6 +76,34 @@ export function KanbanBoard({ onDashboard }: KanbanBoardProps) {
   const [appointmentToEdit, setAppointmentToEdit] = useState<Appointment | null>(null);
   const [followupModalOpen, setFollowupModalOpen] = useState(false);
   const [followupLead, setFollowupLead] = useState<Lead | null>(null);
+  const [profileAgentType, setProfileAgentType] = useState<"agent_1" | "agent_2" | "agent_3" | null>(null);
+
+  useEffect(() => {
+    let mounted = true;
+    const inferAgentTypeFromProfile = async () => {
+      try {
+        const profile = await api.core.getAiProfileMe();
+        const templateKey = String(profile?.template_key || "").trim().toLowerCase();
+        const inferred: "agent_1" | "agent_2" | "agent_3" =
+          templateKey === "hybrid_scheduler"
+            ? "agent_3"
+            : templateKey.startsWith("closer")
+            ? "agent_2"
+            : "agent_1";
+        if (mounted) {
+          setProfileAgentType(inferred);
+        }
+      } catch {
+        if (mounted) {
+          setProfileAgentType(null);
+        }
+      }
+    };
+    inferAgentTypeFromProfile();
+    return () => {
+      mounted = false;
+    };
+  }, []);
 
   const allColumns = useMemo(() => [...columns, ...archivedColumns], [columns, archivedColumns]);
 
@@ -142,19 +170,36 @@ export function KanbanBoard({ onDashboard }: KanbanBoardProps) {
     if (!activeColumn || !overColumn || activeColumn === overColumn) return;
   };
 
+  const getEffectiveAgentType = useCallback(
+    (lead: Lead): "agent_1" | "agent_2" | "agent_3" | null => {
+      const raw = String(lead.agent_type || "").trim().toLowerCase();
+      if (raw === "agent_1" || raw === "agent_2" || raw === "agent_3") {
+        return raw;
+      }
+      return profileAgentType;
+    },
+    [profileAgentType]
+  );
+
   const requiresFollowupTransition = useCallback((lead: Lead, targetCategory: string) => {
     if (lead.category !== "apresentation" || targetCategory !== "follow-up") return false;
-    return lead.agent_type === "agent_1" || lead.agent_type === "agent_3";
-  }, []);
+    const effectiveAgentType = getEffectiveAgentType(lead);
+    return effectiveAgentType === "agent_1" || effectiveAgentType === "agent_3";
+  }, [getEffectiveAgentType]);
 
   const handleMoveWithRules = useCallback((lead: Lead, targetCategory: string) => {
     if (requiresFollowupTransition(lead, targetCategory)) {
-      setFollowupLead(lead);
+      const effectiveAgentType = getEffectiveAgentType(lead);
+      setFollowupLead(
+        effectiveAgentType && lead.agent_type !== effectiveAgentType
+          ? { ...lead, agent_type: effectiveAgentType }
+          : lead
+      );
       setFollowupModalOpen(true);
       return;
     }
     moveLead(lead.id, targetCategory as any);
-  }, [moveLead, requiresFollowupTransition]);
+  }, [getEffectiveAgentType, moveLead, requiresFollowupTransition]);
 
   const handleDragEnd = (event: DragEndEvent) => {
     setActiveId(null);
