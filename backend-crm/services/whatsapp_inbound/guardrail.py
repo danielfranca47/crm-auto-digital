@@ -26,13 +26,30 @@ def find_or_create_lead_by_phone(
 
     contact_name = payload.get("contact_name") or payload.get("sender_name") or payload.get("name")
     company = payload.get("company") or "WhatsApp inbound"
-    cur.execute(
-        """
-        INSERT INTO leads (user_id, companyName, contactName, phone, origin, category)
-        VALUES (?, ?, ?, ?, 'whatsapp_inbound', ?)
-        """,
-        (user_id, company, contact_name, phone_norm, INBOUND_DEFAULT_CATEGORY),
-    )
+    try:
+        from services.agent_type import resolve_agent_type_for_user
+
+        agent_type = resolve_agent_type_for_user(user_id=user_id)
+    except Exception:
+        agent_type = "agent_1"
+
+    try:
+        cur.execute(
+            """
+            INSERT INTO leads (user_id, companyName, contactName, phone, origin, category, agent_type)
+            VALUES (?, ?, ?, ?, 'whatsapp_inbound', ?, ?)
+            """,
+            (user_id, company, contact_name, phone_norm, INBOUND_DEFAULT_CATEGORY, agent_type),
+        )
+    except sqlite3.OperationalError:
+        # Compat com schemas antigos usados em testes isolados (sem coluna agent_type).
+        cur.execute(
+            """
+            INSERT INTO leads (user_id, companyName, contactName, phone, origin, category)
+            VALUES (?, ?, ?, ?, 'whatsapp_inbound', ?)
+            """,
+            (user_id, company, contact_name, phone_norm, INBOUND_DEFAULT_CATEGORY),
+        )
     lead_id = int(cur.lastrowid)
     logger.info(
         "inbound_guardrail_created lead_id=%s user_id=%s category=%s",

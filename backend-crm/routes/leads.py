@@ -9,6 +9,7 @@ from database import get_connection, normalize_datetime_value
 from models import Lead, LeadUpdate, AppointmentCreate, AppointmentUpdate, BotDisabledUpdate, StartFollowupPayload
 from security_core import CurrentUser, require_crm_access
 from services import rate_limit_service
+from services.agent_type import resolve_agent_type_for_user
 from services.phone_normalizer import PhoneNormalizationError, normalize_to_e164
 from services.lead_category_policy import apply_closing_bot_disable_side_effect
 
@@ -244,6 +245,11 @@ def criar_lead(lead: Lead, current_user: CurrentUser = Depends(require_crm_acces
                 out["lead_id"] = out.get("id")
                 return out
 
+        resolved_agent_type = lead.agent_type or resolve_agent_type_for_user(
+            user_id=current_user.id,
+            token=current_user.token,
+        )
+
         cursor.execute(
             """
             INSERT INTO leads (
@@ -261,7 +267,7 @@ def criar_lead(lead: Lead, current_user: CurrentUser = Depends(require_crm_acces
                 lead.category,
                 lead.customMessage,
                 lead.observations,
-                lead.agent_type,
+                resolved_agent_type,
                 priority,
             ),
         )
@@ -292,7 +298,7 @@ def criar_lead(lead: Lead, current_user: CurrentUser = Depends(require_crm_acces
             "category": lead.category,
             "customMessage": lead.customMessage,
             "observations": lead.observations,
-            "agent_type": lead.agent_type,
+            "agent_type": resolved_agent_type,
             "priority": priority,
             "createdAt": now_iso,
             "lastMovement": now_iso,
