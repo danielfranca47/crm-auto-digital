@@ -1,9 +1,9 @@
 # backend/routes/leads.py
-from typing import Optional
+from typing import Any, Optional
 import json
 import logging
 from fastapi import APIRouter, HTTPException, Depends
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 from database import get_connection, normalize_datetime_value
 from models import Lead, LeadUpdate, AppointmentCreate, AppointmentUpdate, BotDisabledUpdate, StartFollowupPayload
@@ -15,6 +15,29 @@ from services.lead_category_policy import apply_closing_bot_disable_side_effect
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
+
+
+FOLLOWUP_CONTRACT_VERSION = 1
+_FOLLOWUP_VARIANT_BY_AGENT_TYPE = {
+    "agent_1": "sdr_scheduler",
+    "agent_3": "hybrid_scheduler",
+}
+_MAX_ATTEMPTS_BY_VARIANT = {
+    "sdr_scheduler": 4,
+    "hybrid_scheduler": 3,
+}
+_FIRST_FOLLOWUP_OFFSET_MINUTES = {
+    "sdr_scheduler": {
+        "default": 30,
+    },
+    "hybrid_scheduler": {
+        "yes": 120,
+        "no_show": 30,
+        "canceled": 30,
+        "needs_reschedule": 30,
+        "default": 30,
+    },
+}
 
 # ---------------------------
 # Helpers
@@ -45,7 +68,62 @@ def _map_lead_row(row):
         if lead_dict.get(k):
             lead_dict[k] = str(lead_dict[k]).replace(" ", "T")
 
+    lead_dict["followup_contract"] = _normalize_followup_contract(
+        lead_dict.get("followup_contract"),
+        agent_type=lead_dict.get("agent_type"),
+    )
+
     return lead_dict
+
+
+def _resolve_followup_variant(agent_type: str) -> Optional[str]:
+    return _FOLLOWUP_VARIANT_BY_AGENT_TYPE.get(str(agent_type or "").strip().lower())
+
+
+def _resolve_max_attempts(followup_variant: Optional[str]) -> int:
+    return int(_MAX_ATTEMPTS_BY_VARIANT.get(str(followup_variant or "").strip().lower(), 3))
+
+
+def _resolve_first_followup_offset_minutes(
+    *,
+    followup_variant: Optional[str],
+    meeting_or_session_happened: Optional[str],
+) -> int:
+    variant_key = str(followup_variant or "").strip().lower()
+    scenario_key = str(meeting_or_session_happened or "").strip().lower()
+    rules = _FIRST_FOLLOWUP_OFFSET_MINUTES.get(variant_key) or {"default": 30}
+    return int(rules.get(scenario_key, rules.get("default", 30)))
+
+
+def _normalize_followup_contract(raw_contract: Any, *, agent_type: Optional[str] = None) -> Optional[dict[str, Any]]:
+    if not raw_contract:
+        return None
+
+    contract_data: Any = raw_contract
+    if isinstance(raw_contract, str):
+        try:
+            contract_data = json.loads(raw_contract)
+        except json.JSONDecodeError:
+            return None
+
+    if not isinstance(contract_data, dict):
+        return None
+
+    normalized = dict(contract_data)
+
+    followup_variant = str(normalized.get("followup_variant") or "").strip().lower() or _resolve_followup_variant(agent_type or "")
+    if followup_variant:
+        normalized["followup_variant"] = followup_variant
+
+    normalized.setdefault("version", FOLLOWUP_CONTRACT_VERSION)
+    normalized.setdefault("status", "active")
+    normalized.setdefault("attempts", 0)
+    normalized.setdefault("max_attempts", _resolve_max_attempts(followup_variant))
+    normalized.setdefault("next_followup_at", None)
+    normalized.setdefault("last_followup_at", None)
+    normalized.setdefault("stop_reason", None)
+
+    return normalized
 
 
 def _map_appointment_row(row):
@@ -339,12 +417,29 @@ def start_followup_transition(
         if payload.agent_type not in {"agent_1", "agent_3"}:
             raise HTTPException(status_code=400, detail="Transição assistida disponível apenas para agent_1 e agent_3")
 
-        followup_variant = "sdr_scheduler" if payload.agent_type == "agent_1" else "hybrid_scheduler"
+        followup_variant = _resolve_followup_variant(payload.agent_type)
+        if not followup_variant:
+            raise HTTPException(status_code=400, detail="Não foi possível resolver a variante de follow-up")
+
+        now_utc = datetime.now(timezone.utc)
+        max_attempts = _resolve_max_attempts(followup_variant)
+        first_offset_minutes = _resolve_first_followup_offset_minutes(
+            followup_variant=followup_variant,
+            meeting_or_session_happened=payload.meeting_or_session_happened,
+        )
+        next_followup_at = (now_utc + timedelta(minutes=first_offset_minutes)).isoformat()
         meeting_happened = payload.meeting_or_session_happened == "yes"
         contract = {
             "phase": "follow-up",
+            "version": FOLLOWUP_CONTRACT_VERSION,
             "followup_variant": followup_variant,
             "trigger": "manual_crm_transition",
+            "status": "active",
+            "attempts": 0,
+            "max_attempts": max_attempts,
+            "next_followup_at": next_followup_at,
+            "last_followup_at": None,
+            "stop_reason": None,
             "meeting_happened": meeting_happened,
             "meeting_or_session_happened": payload.meeting_or_session_happened,
             "outcome": payload.outcome,
@@ -352,7 +447,7 @@ def start_followup_transition(
             "proposal_sent": payload.proposal_sent,
             "followup_goal": payload.followup_goal,
             "operator_note": (payload.operator_note or "").strip() or None,
-            "created_at": datetime.now(timezone.utc).isoformat(),
+            "created_at": now_utc.isoformat(),
         }
 
         cursor.execute(
