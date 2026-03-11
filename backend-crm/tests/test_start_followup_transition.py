@@ -27,6 +27,36 @@ def _create_schema(conn: sqlite3.Connection) -> None:
             bot_disabled_reason TEXT,
             agent_type TEXT,
             followup_contract TEXT,
+            followup_status TEXT,
+            next_followup_at DATETIME,
+            lastMovement DATETIME DEFAULT CURRENT_TIMESTAMP
+        );
+
+        CREATE TABLE prospection_logs (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            lead_id INTEGER NOT NULL,
+            channel TEXT,
+            message_id INTEGER,
+            action TEXT,
+            notes TEXT,
+            user_id INTEGER
+        );
+        """
+    )
+    conn.commit()
+
+
+def _create_legacy_schema_without_followup_mirror_columns(conn: sqlite3.Connection) -> None:
+    conn.executescript(
+        """
+        CREATE TABLE leads (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER,
+            category TEXT,
+            bot_disabled INTEGER DEFAULT 1,
+            bot_disabled_reason TEXT,
+            agent_type TEXT,
+            followup_contract TEXT,
             lastMovement DATETIME DEFAULT CURRENT_TIMESTAMP
         );
 
@@ -89,7 +119,7 @@ class StartFollowupTransitionTest(unittest.TestCase):
         check_conn = sqlite3.connect(self.db_path)
         check_conn.row_factory = sqlite3.Row
         row = check_conn.execute(
-            "SELECT category, bot_disabled, bot_disabled_reason, followup_contract FROM leads WHERE id = ?",
+            "SELECT category, bot_disabled, bot_disabled_reason, followup_contract, followup_status, next_followup_at FROM leads WHERE id = ?",
             (lead_id,),
         ).fetchone()
         self.assertEqual(row["category"], "follow-up")
@@ -108,6 +138,8 @@ class StartFollowupTransitionTest(unittest.TestCase):
         next_followup_at = datetime.fromisoformat(contract["next_followup_at"])
         self.assertEqual(int((next_followup_at - created_at).total_seconds()), 30 * 60)
         self.assertEqual(contract["followup_goal"], "nurture")
+        self.assertEqual(row["followup_status"], "active")
+        self.assertEqual(row["next_followup_at"], contract["next_followup_at"])
         check_conn.close()
 
     def test_start_followup_for_agent_3_no_show_uses_hybrid_defaults(self):
@@ -202,6 +234,40 @@ class StartFollowupTransitionTest(unittest.TestCase):
         self.assertEqual(contract["max_attempts"], 4)
         self.assertIn("next_followup_at", contract)
         self.assertIsNone(contract["next_followup_at"])
+        self.assertEqual(mapped["followup_status"], "active")
+        self.assertIsNone(mapped["next_followup_at"])
+
+    def test_start_followup_works_with_legacy_schema_without_mirror_columns(self):
+        fd, legacy_db_path = tempfile.mkstemp(suffix="_followup_transition_legacy.db")
+        os.close(fd)
+        legacy_conn = sqlite3.connect(legacy_db_path)
+        legacy_conn.row_factory = sqlite3.Row
+        _create_legacy_schema_without_followup_mirror_columns(legacy_conn)
+        try:
+            cur = legacy_conn.cursor()
+            cur.execute(
+                "INSERT INTO leads (user_id, category, bot_disabled, bot_disabled_reason, agent_type) VALUES (?, ?, 1, 'meeting_scheduled', ?)",
+                (11, "apresentation", "agent_1"),
+            )
+            lead_id = int(cur.lastrowid)
+            legacy_conn.commit()
+
+            payload = StartFollowupPayload(
+                lead_id=lead_id,
+                agent_type="agent_1",
+                meeting_or_session_happened="yes",
+            )
+
+            with patch("routes.leads.get_connection", return_value=legacy_conn):
+                result = start_followup_transition(
+                    payload,
+                    current_user=CurrentUser(id=11, email="x@example.com", token="t"),
+                )
+            self.assertEqual(result["status"], "ok")
+        finally:
+            legacy_conn.close()
+            if os.path.exists(legacy_db_path):
+                os.remove(legacy_db_path)
 
 
 if __name__ == "__main__":

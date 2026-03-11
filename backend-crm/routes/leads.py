@@ -68,10 +68,17 @@ def _map_lead_row(row):
         if lead_dict.get(k):
             lead_dict[k] = str(lead_dict[k]).replace(" ", "T")
 
-    lead_dict["followup_contract"] = _normalize_followup_contract(
+    normalized_contract = _normalize_followup_contract(
         lead_dict.get("followup_contract"),
         agent_type=lead_dict.get("agent_type"),
     )
+    lead_dict["followup_contract"] = normalized_contract
+
+    if normalized_contract:
+        if lead_dict.get("followup_status") is None:
+            lead_dict["followup_status"] = normalized_contract.get("status")
+        if lead_dict.get("next_followup_at") is None:
+            lead_dict["next_followup_at"] = normalized_contract.get("next_followup_at")
 
     return lead_dict
 
@@ -124,6 +131,12 @@ def _normalize_followup_contract(raw_contract: Any, *, agent_type: Optional[str]
     normalized.setdefault("stop_reason", None)
 
     return normalized
+
+
+def _table_columns(conn, table_name: str) -> set[str]:
+    cur = conn.cursor()
+    rows = cur.execute(f"PRAGMA table_info({table_name})").fetchall()
+    return {str(row[1]) for row in rows}
 
 
 def _map_appointment_row(row):
@@ -450,23 +463,39 @@ def start_followup_transition(
             "created_at": now_utc.isoformat(),
         }
 
+        mirror_status = str(contract.get("status") or "active")
+        mirror_next_followup_at = contract.get("next_followup_at")
+        lead_columns = _table_columns(conn, "leads")
+        has_followup_status = "followup_status" in lead_columns
+        has_next_followup_at = "next_followup_at" in lead_columns
+
+        update_set_parts = [
+            "category = 'follow-up'",
+            "bot_disabled = 0",
+            "bot_disabled_reason = NULL",
+            "followup_contract = ?",
+            "agent_type = COALESCE(NULLIF(agent_type, ''), ?)",
+            "lastMovement = CURRENT_TIMESTAMP",
+        ]
+        update_params = [
+            json.dumps(contract, ensure_ascii=False),
+            payload.agent_type,
+        ]
+        if has_followup_status:
+            update_set_parts.append("followup_status = ?")
+            update_params.append(mirror_status)
+        if has_next_followup_at:
+            update_set_parts.append("next_followup_at = ?")
+            update_params.append(mirror_next_followup_at)
+
+        update_params.extend([payload.lead_id, current_user.id])
         cursor.execute(
-            """
+            f"""
             UPDATE leads
-               SET category = 'follow-up',
-                   bot_disabled = 0,
-                   bot_disabled_reason = NULL,
-                   followup_contract = ?,
-                   agent_type = COALESCE(NULLIF(agent_type, ''), ?),
-                   lastMovement = CURRENT_TIMESTAMP
+               SET {', '.join(update_set_parts)}
              WHERE id = ? AND user_id = ?
             """,
-            (
-                json.dumps(contract, ensure_ascii=False),
-                payload.agent_type,
-                payload.lead_id,
-                current_user.id,
-            ),
+            update_params,
         )
         cursor.execute(
             """

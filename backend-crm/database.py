@@ -639,6 +639,8 @@ def init_db() -> None:
         ensure_column(conn, "leads", "bot_disabled_reason", "bot_disabled_reason TEXT")
         ensure_column(conn, "leads", "agent_type", "agent_type TEXT")
         ensure_column(conn, "leads", "followup_contract", "followup_contract TEXT")
+        ensure_column(conn, "leads", "followup_status", "followup_status TEXT")
+        ensure_column(conn, "leads", "next_followup_at", "next_followup_at DATETIME")
         ensure_column(conn, "prospection_logs", "user_id", "INTEGER")
         ensure_column(conn, "appointments", "outcome", "outcome TEXT")
         ensure_column(conn, "appointments", "outcome_note", "outcome_note TEXT")
@@ -657,6 +659,10 @@ def init_db() -> None:
         )
         cur.execute("CREATE INDEX IF NOT EXISTS idx_leads_phone ON leads(phone);")
         cur.execute("CREATE INDEX IF NOT EXISTS idx_leads_email ON leads(email);")
+        cur.execute(
+            "CREATE INDEX IF NOT EXISTS idx_leads_followup_due "
+            "ON leads(followup_status, next_followup_at, bot_disabled, user_id);"
+        )
         try:
             cur.execute("CREATE UNIQUE INDEX IF NOT EXISTS ux_leads_user_phone ON leads(user_id, phone);")
         except sqlite3.IntegrityError:
