@@ -1073,6 +1073,7 @@ def _build_child_prompt_follow_up(
     playbook = context.get("playbook") or {}
     metadata = context.get("metadata") or {}
     history = context.get("history") or []
+    followup_ctx = metadata.get("followup_context") if isinstance(metadata.get("followup_context"), dict) else {}
 
     lead_summary = {
         "id": lead.get("id"),
@@ -1095,7 +1096,34 @@ def _build_child_prompt_follow_up(
     metadata_summary = {
         "provider": metadata.get("provider"),
         "instance_id": metadata.get("instance_id"),
+        "followup_context": followup_ctx,
     }
+
+    followup_summary = {
+        "followup_goal": followup_ctx.get("followup_goal") or lead.get("followup_goal"),
+        "outcome": followup_ctx.get("followup_outcome") or lead.get("outcome"),
+        "followup_variant": followup_ctx.get("followup_variant"),
+        "attempts": followup_ctx.get("followup_attempts"),
+        "max_attempts": followup_ctx.get("followup_max_attempts"),
+        "meeting_happened": followup_ctx.get("followup_meeting_happened"),
+        "meeting_or_session_happened": followup_ctx.get("followup_meeting_or_session_happened"),
+        "proposal_sent": followup_ctx.get("followup_proposal_sent"),
+        "operator_note": followup_ctx.get("followup_operator_note"),
+        "status": followup_ctx.get("followup_status"),
+        "next_followup_at": followup_ctx.get("followup_next_followup_at"),
+    }
+    followup_variant = str(followup_summary.get("followup_variant") or "").strip().lower()
+    variant_rule = ""
+    if followup_variant == "sdr_scheduler":
+        variant_rule = (
+            "- Variante sdr_scheduler: follow-up consultivo pós-reunião; "
+            "reforçar valor, síntese do contexto e próximo passo comercial.\n"
+        )
+    elif followup_variant == "hybrid_scheduler":
+        variant_rule = (
+            "- Variante hybrid_scheduler: follow-up de agenda/comparecimento/remarcação; "
+            "priorizar recuperação de no-show, confirmação de presença e reengajamento.\n"
+        )
 
     history_text = _format_history(history)
     mode_contract = _build_mode_contract_context(context, mother_decision)
@@ -1118,6 +1146,7 @@ def _build_child_prompt_follow_up(
         "- consultivo: fazer nutrição/retomada/reagendar e preparar handoff quando pedido de proposta/fechamento.\n"
         "- agenda: foco em no-show/reagendar/confirmar presença e reforçar próximos passos.\n"
         "- direto: tratar objeções e conduzir CTA para pagamento de forma objetiva.\n"
+        f"{variant_rule}"
         "- Use tone_of_voice, brand_name e niche quando disponíveis.\n"
         "- Respeite playbook.max_chars se existir (senão, resposta curta).\n"
         "- recommended_next_category pode ser follow-up, closing ou null.\n- Faça no máximo 1 pergunta por mensagem e priorize o próximo missing_field.\n"
@@ -1135,6 +1164,7 @@ def _build_child_prompt_follow_up(
         f"- ai_profile: {json.dumps(ai_summary, ensure_ascii=False)}\n"
         f"- playbook: {json.dumps(playbook_summary, ensure_ascii=False)}\n"
         f"- metadata: {json.dumps(metadata_summary, ensure_ascii=False)}\n"
+        f"- followup_contract_signals: {json.dumps(followup_summary, ensure_ascii=False)}\n"
         f"- history: {history_text}\n"
         f"- inbound_message_text: {message_text}\n"
     )

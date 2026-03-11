@@ -2,10 +2,66 @@ from __future__ import annotations
 
 import os
 import sys
+import types
 from dataclasses import dataclass, field
 from typing import Any, Dict, List
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+
+if "httpx" not in sys.modules:
+    httpx_stub = types.ModuleType("httpx")
+
+    class RequestError(Exception):
+        pass
+
+    class _Resp:
+        status_code = 500
+        text = ""
+
+        def __init__(self, status_code: int = 500, text: str = "", json_data=None):
+            self.status_code = status_code
+            self.text = text
+            self._json_data = json_data or {}
+
+        @property
+        def is_success(self) -> bool:
+            return 200 <= self.status_code < 300
+
+        def json(self):
+            return self._json_data
+
+    class Client:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, tb):
+            return False
+
+        def request(self, *args, **kwargs):
+            return _Resp()
+
+    httpx_stub.RequestError = RequestError
+    httpx_stub.Client = Client
+    httpx_stub.Response = _Resp
+    sys.modules["httpx"] = httpx_stub
+
+if "pydantic_settings" not in sys.modules:
+    pydantic_settings_stub = types.ModuleType("pydantic_settings")
+
+    class BaseSettings:
+        def __init__(self, **kwargs):
+            for key, value in kwargs.items():
+                setattr(self, key, value)
+
+    def SettingsConfigDict(**kwargs):
+        return dict(**kwargs)
+
+    pydantic_settings_stub.BaseSettings = BaseSettings
+    pydantic_settings_stub.SettingsConfigDict = SettingsConfigDict
+    sys.modules["pydantic_settings"] = pydantic_settings_stub
 
 from app.clients import crm_client
 from app.runners import whatsapp as runner
@@ -59,7 +115,25 @@ def test_followup_tick_job_uses_synthetic_in_reply_and_completes(monkeypatch):
     def _get_ctx(job_id: str):
         return {
             "job": {"id": int(job_id), "payload": {"lead_id": 10, "user_id": 99}},
-            "lead": {"id": 10, "user_id": 99, "phone": "+5511999999999", "contactName": "Maria"},
+            "lead": {
+                "id": 10,
+                "user_id": 99,
+                "phone": "+5511999999999",
+                "contactName": "Maria",
+                "followup_contract": {
+                    "followup_goal": "nurture_interest",
+                    "outcome": "warm",
+                    "followup_variant": "sdr_scheduler",
+                    "attempts": 0,
+                    "max_attempts": 4,
+                    "meeting_happened": True,
+                    "meeting_or_session_happened": "yes",
+                    "proposal_sent": True,
+                    "operator_note": "quer validar com sócio",
+                    "status": "active",
+                    "next_followup_at": "2026-01-01T10:00:00Z",
+                },
+            },
             "history": [],
             "ai_profile": {},
             "playbook": {},
@@ -79,7 +153,11 @@ def test_followup_tick_job_uses_synthetic_in_reply_and_completes(monkeypatch):
     monkeypatch.setattr(runner.crm_client, "claim_job", _claim_job)
     monkeypatch.setattr(runner.crm_client, "get_job", _get_job)
     monkeypatch.setattr(runner.crm_client, "get_whatsapp_execution_context", _get_ctx)
-    monkeypatch.setattr(runner.decision_engine, "decide", lambda context, logger=None: _DummyDecision())
+    def _decide(context, logger=None):
+        calls["decision_context"] = context
+        return _DummyDecision()
+
+    monkeypatch.setattr(runner.decision_engine, "decide", _decide)
     monkeypatch.setattr(runner.meeting_scheduler, "handle_meeting_scheduled", lambda context, decision, logger=None: None)
     monkeypatch.setattr(runner.crm_client, "register_whatsapp_outbound", _register_outbound)
     monkeypatch.setattr(runner.crm_client, "complete_job", lambda job_id, result: {"ok": True})
@@ -87,6 +165,10 @@ def test_followup_tick_job_uses_synthetic_in_reply_and_completes(monkeypatch):
     rc = runner.execute_job("123", runner.logging.getLogger("test"))
     assert rc == 0
     assert calls["outbound_payload"]["in_reply_to_message_id"] == "followup:123:2026-01-01T10:00:00Z"
+    followup_ctx = (calls["decision_context"].get("metadata") or {}).get("followup_context") or {}
+    assert followup_ctx.get("followup_goal") == "nurture_interest"
+    assert followup_ctx.get("followup_variant") == "sdr_scheduler"
+    assert (calls["decision_context"].get("metadata") or {}).get("inbound_message_text") == "followup_tick_auto_trigger"
 
 
 def test_followup_tick_job_fail_reports_retryable(monkeypatch):

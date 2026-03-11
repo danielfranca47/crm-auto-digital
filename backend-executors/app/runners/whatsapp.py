@@ -81,6 +81,51 @@ def _resolve_user_id(context: Dict[str, Any], job: Dict[str, Any]) -> Optional[i
     )
 
 
+def _parse_followup_contract(raw: Any) -> Dict[str, Any]:
+    if isinstance(raw, dict):
+        return raw
+    if isinstance(raw, str) and raw.strip():
+        try:
+            parsed = json.loads(raw)
+        except json.JSONDecodeError:
+            return {}
+        return parsed if isinstance(parsed, dict) else {}
+    return {}
+
+
+def _inject_followup_contract_context(context: Dict[str, Any], job: Dict[str, Any]) -> None:
+    if not _is_followup_tick_job(job):
+        return
+
+    lead = context.get("lead") or {}
+    metadata = context.get("metadata") or {}
+    contract = _parse_followup_contract(lead.get("followup_contract"))
+    if not contract:
+        context["metadata"] = metadata
+        return
+
+    followup_signals = {
+        "followup_goal": contract.get("followup_goal"),
+        "followup_outcome": contract.get("outcome"),
+        "followup_variant": contract.get("followup_variant"),
+        "followup_attempts": contract.get("attempts"),
+        "followup_max_attempts": contract.get("max_attempts"),
+        "followup_meeting_happened": contract.get("meeting_happened"),
+        "followup_meeting_or_session_happened": contract.get("meeting_or_session_happened"),
+        "followup_proposal_sent": contract.get("proposal_sent"),
+        "followup_operator_note": contract.get("operator_note"),
+        "followup_status": contract.get("status"),
+        "followup_next_followup_at": contract.get("next_followup_at"),
+    }
+
+    # entrada sintética para orientar geração proativa quando não há inbound real
+    if not metadata.get("inbound_message_text"):
+        metadata["inbound_message_text"] = "followup_tick_auto_trigger"
+
+    metadata["followup_context"] = followup_signals
+    context["metadata"] = metadata
+
+
 def _is_followup_tick_job(job: Dict[str, Any]) -> bool:
     return str(job.get("type") or "").strip().lower() == TYPE_WHATSAPP_FOLLOWUP_TICK
 
@@ -395,6 +440,9 @@ def execute_job(job_id: str, logger: logging.Logger) -> int:
     history = context.get("history") or []
     ai_profile = context.get("ai_profile") or {}
     playbook = context.get("playbook") or {}
+    metadata = context.get("metadata") or {}
+
+    _inject_followup_contract_context(context, job)
     metadata = context.get("metadata") or {}
 
     lead_id = _safe_get(lead, "id")
