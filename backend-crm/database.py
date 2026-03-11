@@ -194,6 +194,31 @@ def ensure_outbound_events_table(conn: sqlite3.Connection) -> None:
     )
 
 
+def ensure_followup_reconcile_guard_table(conn: sqlite3.Connection) -> None:
+    """Cria tabela de guarda idempotente para enqueue de follow-up vencido."""
+
+    cur = conn.cursor()
+    cur.executescript(
+        """
+        CREATE TABLE IF NOT EXISTS followup_reconcile_guard (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            lead_id INTEGER NOT NULL,
+            due_at DATETIME NOT NULL,
+            job_id INTEGER,
+            status TEXT NOT NULL DEFAULT 'enqueued',
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE (lead_id, due_at),
+            FOREIGN KEY (lead_id) REFERENCES leads(id) ON DELETE CASCADE,
+            FOREIGN KEY (job_id) REFERENCES jobs(id) ON DELETE SET NULL
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_followup_guard_due ON followup_reconcile_guard(due_at, lead_id);
+        CREATE INDEX IF NOT EXISTS idx_followup_guard_job ON followup_reconcile_guard(job_id);
+        """
+    )
+
+
 def ensure_knowledge_table(conn: sqlite3.Connection) -> None:
     """Cria tabela de knowledge base por usuário (idempotente)."""
     cur = conn.cursor()
@@ -679,6 +704,9 @@ def init_db() -> None:
 
         # Controle de envios outbound para evitar duplicação pelo executor
         ensure_outbound_events_table(conn)
+
+        # Guarda idempotente para evitar enqueue duplicado do reconciliador de follow-up
+        ensure_followup_reconcile_guard_table(conn)
 
         # Base de conhecimento por usuário
         ensure_knowledge_table(conn)

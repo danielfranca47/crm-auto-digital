@@ -36,6 +36,7 @@ from services.jobs_service import (
     get_job,
     normalize_job_type,
 )
+from services.followup_reconciler import reconcile_due_followups
 
 router = APIRouter(prefix="/api", tags=["WhatsApp Executor"])
 
@@ -253,6 +254,20 @@ class QualificationStateUpsertRequest(BaseModel):
 class QualificationStateAttemptRequest(BaseModel):
     user_id: int
     field: str
+
+
+class FollowupReconcileRequest(BaseModel):
+    limit: int = Field(default=100, ge=1, le=500)
+    dry_run: bool = False
+
+
+@router.post("/internal/followup/reconcile")
+def reconcile_followup_internal(
+    payload: FollowupReconcileRequest,
+    _: str = Depends(_require_service_token),
+):
+    result = reconcile_due_followups(limit=payload.limit, dry_run=payload.dry_run)
+    return {"status": "ok", **result}
 
 
 @router.get("/internal/leads/{lead_id}/qualification-state")
