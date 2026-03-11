@@ -12,6 +12,7 @@ from app.services import decision_engine
 from app.services import meeting_scheduler
 
 JOB_MAX_ATTEMPTS = 3
+TYPE_WHATSAPP_FOLLOWUP_TICK = "whatsapp.followup.tick"
 
 
 class ExecutionError(Exception):
@@ -77,6 +78,33 @@ def _resolve_user_id(context: Dict[str, Any], job: Dict[str, Any]) -> Optional[i
         or job.get("user_id")
         or job_ctx.get("user_id")
         or payload.get("user_id")
+    )
+
+
+def _is_followup_tick_job(job: Dict[str, Any]) -> bool:
+    return str(job.get("type") or "").strip().lower() == TYPE_WHATSAPP_FOLLOWUP_TICK
+
+
+def _resolve_in_reply_to_message_id(*, job_id: str, job: Dict[str, Any], metadata: Dict[str, Any]) -> Optional[str]:
+    explicit = metadata.get("message_id")
+    if explicit:
+        return str(explicit)
+
+    if _is_followup_tick_job(job):
+        payload = job.get("payload") or {}
+        due_at = str(payload.get("due_at") or "na").replace(" ", "T")
+        return f"followup:{job_id}:{due_at}"
+
+    return None
+
+
+def _build_followup_fallback_outbound_body(context: Dict[str, Any]) -> str:
+    lead = context.get("lead") or {}
+    contact_name = str(lead.get("contactName") or "").strip()
+    greeting = f"Olá, {contact_name}." if contact_name else "Olá!"
+    return (
+        f"{greeting} Passando para dar continuidade ao seu follow-up. "
+        "Se fizer sentido, posso te ajudar com os próximos passos por aqui."
     )
 
 
@@ -373,7 +401,7 @@ def execute_job(job_id: str, logger: logging.Logger) -> int:
     lead_name = _safe_get(lead, "contactName", "companyName", "name")
     lead_phone = _safe_get(lead, "phone", "phone_e164")
     user_id = _resolve_user_id(context, job)
-    in_reply_to_message_id = metadata.get("message_id")
+    in_reply_to_message_id = _resolve_in_reply_to_message_id(job_id=job_id, job=job, metadata=metadata)
     if not in_reply_to_message_id:
         exec_error = ExecutionError(
             "missing in_reply_to_message_id in execution context",
@@ -451,6 +479,8 @@ def execute_job(job_id: str, logger: logging.Logger) -> int:
         fallback_text = _format_questions(decision.questions or [])
         if fallback_text:
             outbound_body = fallback_text
+    if _is_followup_tick_job(job) and not outbound_body:
+        outbound_body = _build_followup_fallback_outbound_body(context)
     result_payload = _build_result_payload(
         decision,
         lead_id=lead_id,
