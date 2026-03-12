@@ -27,6 +27,7 @@ from services.jobs_service import (
     JOB_STATUS_PENDING,
     JOB_MAX_ATTEMPTS,
     LEAD_CATEGORIES,
+    TYPE_WHATSAPP_FOLLOWUP_TICK,
     TYPE_WHATSAPP_INBOUND_N8N,
     apply_outcome_highlight,
     apply_suggested_category,
@@ -37,6 +38,7 @@ from services.jobs_service import (
     normalize_job_type,
 )
 from services.followup_reconciler import reconcile_due_followups
+from services.followup_channel_context import resolve_followup_tick_channel_context
 from services.followup_state import progress_followup_after_auto_send, stop_followup_on_handoff
 
 router = APIRouter(prefix="/api", tags=["WhatsApp Executor"])
@@ -214,11 +216,23 @@ def whatsapp_execution_context(
     if not lead_id or not user_id:
         raise HTTPException(status_code=400, detail="Payload do job incompleto para montar contexto")
 
+    job_type = normalize_job_type(job.get("type") or "")
+    if job_type == TYPE_WHATSAPP_FOLLOWUP_TICK:
+        with get_connection() as conn:
+            channel_ctx = resolve_followup_tick_channel_context(conn, lead_id=int(lead_id), user_id=int(user_id))
+        payload = {
+            **payload,
+            "message_text": str(message_text or "followup_tick_auto_trigger"),
+            "instance_id": channel_ctx.get("instance_id"),
+            "provider": channel_ctx.get("provider"),
+            "phone": channel_ctx.get("phone") or payload.get("phone"),
+        }
+
     event = InboundEvent(
         user_id=int(user_id),
         lead_id=int(lead_id),
         channel="whatsapp",
-        message_text=str(message_text or ""),
+        message_text=str(payload.get("message_text") or ""),
         received_at=str(payload.get("received_at") or ""),
         phone=payload.get("phone"),
         message_id=payload.get("message_id"),

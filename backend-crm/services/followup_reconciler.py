@@ -73,6 +73,29 @@ def reconcile_due_followups(*, limit: int = 100, dry_run: bool = False) -> Dict[
                 due_at,
             )
 
+            existing_guard = cur.execute(
+                """
+                SELECT g.id AS guard_id, g.job_id, j.status AS job_status
+                  FROM followup_reconcile_guard g
+             LEFT JOIN jobs j ON j.id = g.job_id
+                 WHERE g.lead_id = ?
+                   AND g.due_at = ?
+                 LIMIT 1
+                """,
+                (lead_id, due_at),
+            ).fetchone()
+
+            # Se o job anterior deste vencimento falhou, liberamos nova tentativa.
+            if existing_guard and str(existing_guard["job_status"] or "").lower() == "failed":
+                cur.execute("DELETE FROM followup_reconcile_guard WHERE id = ?", (existing_guard["guard_id"],))
+                logger.info(
+                    "followup.reconcile_release_failed_guard lead_id=%s user_id=%s due_at=%s failed_job_id=%s",
+                    lead_id,
+                    user_id,
+                    due_at,
+                    existing_guard["job_id"],
+                )
+
             guard_insert = cur.execute(
                 """
                 INSERT OR IGNORE INTO followup_reconcile_guard (

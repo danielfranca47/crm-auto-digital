@@ -141,6 +141,43 @@ class FollowupReconcilerTest(unittest.TestCase):
         jobs_count = self.conn.execute("SELECT COUNT(1) AS c FROM jobs").fetchone()["c"]
         self.assertEqual(jobs_count, 1)
 
+    def test_reconcile_releases_guard_when_previous_job_failed(self):
+        cur = self.conn.cursor()
+        cur.execute(
+            """
+            INSERT INTO leads (user_id, category, bot_disabled, followup_status, next_followup_at, followup_contract)
+            VALUES (33, 'follow-up', 0, 'active', datetime('now', '-2 minute'), '{}')
+            """
+        )
+        lead_id = int(cur.lastrowid)
+        due_at = cur.execute("SELECT next_followup_at FROM leads WHERE id = ?", (lead_id,)).fetchone()["next_followup_at"]
+
+        cur.execute(
+            """
+            INSERT INTO jobs (user_id, type, payload, status)
+            VALUES (33, 'whatsapp.followup.tick', '{"lead_id": 1}', 'failed')
+            """
+        )
+        failed_job_id = int(cur.lastrowid)
+        cur.execute(
+            """
+            INSERT INTO followup_reconcile_guard (lead_id, due_at, job_id, status)
+            VALUES (?, ?, ?, 'enqueued')
+            """,
+            (lead_id, due_at, failed_job_id),
+        )
+        self.conn.commit()
+
+        with patch("services.followup_reconciler.get_connection", return_value=self.conn):
+            result = reconcile_due_followups(limit=10)
+
+        self.assertEqual(result["enqueued"], 1)
+        latest_job = self.conn.execute(
+            "SELECT id, status FROM jobs WHERE type = 'whatsapp.followup.tick' ORDER BY id DESC LIMIT 1"
+        ).fetchone()
+        self.assertEqual(latest_job["status"], "pending")
+        self.assertNotEqual(int(latest_job["id"]), failed_job_id)
+
 
 if __name__ == "__main__":
     unittest.main()
