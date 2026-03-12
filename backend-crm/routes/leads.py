@@ -12,6 +12,7 @@ from services import rate_limit_service
 from services.agent_type import resolve_agent_type_for_user
 from services.phone_normalizer import PhoneNormalizationError, normalize_to_e164
 from services.lead_category_policy import apply_closing_bot_disable_side_effect
+from services.followup_state import stop_followup_for_lead_category, stop_followup_on_handoff
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -591,6 +592,12 @@ def atualizar_lead_parcial(id: int, lead: LeadUpdate, current_user: CurrentUser 
             old_category=old_category,
             new_category=new_category,
         )
+        stop_followup_for_lead_category(
+            conn,
+            lead_id=id,
+            user_id=current_user.id,
+            new_category=new_category,
+        )
         conn.commit()
 
         return {"message": "Lead atualizado com sucesso"}
@@ -665,6 +672,13 @@ def update_lead_bot_disabled(
             """,
             (lead_id, json.dumps(notes, ensure_ascii=False), current_user.id),
         )
+        if payload.disabled:
+            stop_followup_on_handoff(
+                conn,
+                lead_id=lead_id,
+                user_id=current_user.id,
+                reason=payload.reason,
+            )
         conn.commit()
         return {"status": "ok", "lead_id": lead_id, "bot_disabled": payload.disabled}
     except Exception as e:

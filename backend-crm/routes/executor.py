@@ -37,6 +37,7 @@ from services.jobs_service import (
     normalize_job_type,
 )
 from services.followup_reconciler import reconcile_due_followups
+from services.followup_state import progress_followup_after_auto_send, stop_followup_on_handoff
 
 router = APIRouter(prefix="/api", tags=["WhatsApp Executor"])
 
@@ -627,6 +628,13 @@ def set_lead_bot_disabled(
             """,
             (lead_id, _json_dumps(notes), row["user_id"]),
         )
+        if payload.disabled:
+            stop_followup_on_handoff(
+                conn,
+                lead_id=lead_id,
+                user_id=int(row["user_id"]),
+                reason=payload.reason,
+            )
         conn.commit()
         return {"status": "ok", "lead_id": lead_id, "bot_disabled": payload.disabled}
 
@@ -863,6 +871,19 @@ def mark_outbound_sent(
                     json.dumps(notes, ensure_ascii=False),
                     row["user_id"],
                 ),
+            )
+
+        job_row = cur.execute(
+            "SELECT id, type FROM jobs WHERE id = ?",
+            (row["job_id"],),
+        ).fetchone()
+        job_type = normalize_job_type(job_row["type"]) if job_row else None
+        if job_type == "whatsapp.followup.tick":
+            progress_followup_after_auto_send(
+                conn,
+                lead_id=int(row["lead_id"]),
+                user_id=int(row["user_id"]),
+                source_job_id=int(row["job_id"]),
             )
 
         conn.commit()
