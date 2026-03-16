@@ -21,6 +21,38 @@ def _parse_payload(raw_payload: Any) -> Dict[str, Any]:
 
 
 def resolve_followup_tick_channel_context(conn, *, lead_id: int, user_id: int) -> Dict[str, Any]:
+    from core_client import fetch_core_whatsapp_connection_by_user
+
+    try:
+        connection = fetch_core_whatsapp_connection_by_user(int(user_id))
+    except HTTPException as exc:
+        if exc.status_code not in {404, 400}:
+            # Falha operacional ao contatar o core/token inválido: falhar cedo.
+            raise
+    else:
+        connection_status = str(connection.get("connection_status") or "").strip().lower()
+        if connection_status != "active":
+            raise HTTPException(
+                status_code=400,
+                detail="Conexão WhatsApp atual do usuário está inativa para follow-up automático",
+            )
+
+        instance_id = connection.get("instance_id")
+        provider = connection.get("provider")
+        if not instance_id or not provider:
+            raise HTTPException(
+                status_code=400,
+                detail="Conexão WhatsApp atual do usuário está incompleta (instance_id/provider)",
+            )
+
+        return {
+            "instance_id": instance_id,
+            "provider": provider,
+            "phone": connection.get("phone_e164"),
+        }
+
+    # Fallback auxiliar: histórico inbound por lead em cenários legados onde o core ainda
+    # não disponibiliza/retorna a conexão atual por user_id.
     cur = conn.cursor()
     inbound_type_variants = expand_type_variants(TYPE_WHATSAPP_INBOUND_N8N)
     placeholders = ",".join(["?"] * len(inbound_type_variants))
