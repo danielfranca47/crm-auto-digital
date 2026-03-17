@@ -97,6 +97,9 @@ def test_followup_prompt_includes_contract_signals_and_variant_rule():
     assert "agenda/comparecimento/remarcação" in prompt
     assert "CONTEXTO PRIORITÁRIO (follow-up tick)" in prompt
     assert "não reabra qualificação antiga por padrão" in prompt
+    assert "histórico é memória contextual; ele NÃO é backlog" in prompt
+    assert "pergunta antiga sem resposta" in prompt
+    assert "não repita por padrão" in prompt
     assert "SOMENTE memória auxiliar (read-only)" in prompt
     assert "proibido usar missing_fields de qualification como alvo de coleta/pergunta" in prompt
     assert "qualification_context_read_only" in prompt
