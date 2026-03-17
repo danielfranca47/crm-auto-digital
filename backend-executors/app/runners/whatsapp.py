@@ -502,13 +502,17 @@ def execute_job(job_id: str, logger: logging.Logger) -> int:
         _safe_get(playbook, "template_key", "name"),
         extra={"phase": "context"},
     )
+    followup_ctx = metadata.get("followup_context") if isinstance(metadata.get("followup_context"), dict) else {}
     ctx_logger.info(
-        "event=metadata_loaded provider=%s instance_id=%s message_id=%s received_at=%s phone=%s",
+        "event=metadata_loaded provider=%s instance_id=%s message_id=%s received_at=%s phone=%s followup_variant=%s followup_goal=%s followup_meeting_or_session=%s",
         metadata.get("provider"),
         metadata.get("instance_id"),
         metadata.get("message_id"),
         metadata.get("received_at"),
         metadata.get("phone"),
+        followup_ctx.get("followup_variant"),
+        followup_ctx.get("followup_goal"),
+        followup_ctx.get("followup_meeting_or_session_happened"),
         extra={"phase": "context"},
     )
 

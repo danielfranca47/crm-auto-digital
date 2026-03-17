@@ -95,3 +95,26 @@ def test_followup_prompt_includes_contract_signals_and_variant_rule():
     assert "hybrid_scheduler" in prompt
     assert "no-show" in prompt or "no_show" in prompt
     assert "agenda/comparecimento/remarcação" in prompt
+    assert "CONTEXTO PRIORITÁRIO (follow-up tick)" in prompt
+    assert "não reabra qualificação antiga por padrão" in prompt
+    assert "priorize o próximo missing_field" not in prompt
+
+
+def test_followup_prompt_keeps_missing_field_guidance_outside_tick_context():
+    context = {
+        "lead": {"id": 7, "category": "follow-up", "contactName": "Maria"},
+        "ai_profile": {"agent_mode": "agenda"},
+        "playbook": {"template_key": "hybrid_scheduler", "max_chars": 280},
+        "metadata": {
+            "provider": "uazapi",
+            "instance_id": "inst-1",
+            "followup_context": {},
+        },
+        "history": [{"model": "outbound", "body": "Oi"}],
+    }
+    mother = MotherDecision(route_to="follow-up", perceived_category="follow-up", confidence=0.9, reason="ok")
+
+    prompt = _build_child_prompt_follow_up(context, "mensagem inbound real", mother)
+
+    assert "priorize o próximo missing_field" in prompt
+    assert "CONTEXTO PRIORITÁRIO (follow-up tick)" not in prompt

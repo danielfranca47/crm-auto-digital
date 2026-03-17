@@ -1139,6 +1139,17 @@ def _build_child_prompt_follow_up(
     agent_mode_normalized = mode_contract["agent_mode_normalized"]
     presentation_variant, presentation_variant_source = _resolve_presentation_variant(context, agent_mode_normalized)
     hybrid_flow_style = _resolve_hybrid_flow_style(context)
+    is_followup_tick = _is_followup_tick_context(context)
+    followup_priority_rule = (
+        "- CONTEXTO PRIORITÁRIO (follow-up tick): use followup_contract_signals como fonte principal da resposta. "
+        "Priorize meeting_or_session_happened, followup_goal, operator_note, outcome e followup_variant.\n"
+        "- Se houver no-show/remarcação no contrato, conduza retomada e proposta de novo horário; "
+        "não reabra qualificação antiga por padrão.\n"
+        "- Campos de qualification (required/missing) são secundários neste tick e só podem aparecer "
+        "se estiverem explicitamente alinhados ao follow-up atual.\n"
+        if is_followup_tick
+        else "- Faça no máximo 1 pergunta por mensagem e priorize o próximo missing_field.\n"
+    )
     return (
         "Você é a FILHA FOLLOW-UP e deve responder SOMENTE JSON válido:\n"
         "{\n"
@@ -1158,7 +1169,8 @@ def _build_child_prompt_follow_up(
         f"{variant_rule}"
         "- Use tone_of_voice, brand_name e niche quando disponíveis.\n"
         "- Respeite playbook.max_chars se existir (senão, resposta curta).\n"
-        "- recommended_next_category pode ser follow-up, closing ou null.\n- Faça no máximo 1 pergunta por mensagem e priorize o próximo missing_field.\n"
+        "- recommended_next_category pode ser follow-up, closing ou null.\n"
+        f"{followup_priority_rule}"
         "- outcome e kanban_highlight devem ser null.\n"
         "\n"
         f"ROTA MÃE: {mother_decision.route_to} (confidence={mother_decision.confidence})\n"
@@ -1167,6 +1179,7 @@ def _build_child_prompt_follow_up(
         f"Modo normalizado: {agent_mode_normalized}\n"
         f"Required fields: {json.dumps(mode_contract['required_fields'], ensure_ascii=False)}\n"
         f"Missing fields: {json.dumps(mode_contract['missing_fields'], ensure_ascii=False)}\n"
+        f"is_followup_tick: {json.dumps(is_followup_tick, ensure_ascii=False)}\n"
         "\n"
         "CONTEXTO:\n"
         f"- lead: {json.dumps(lead_summary, ensure_ascii=False)}\n"
