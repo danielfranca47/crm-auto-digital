@@ -56,6 +56,15 @@ def _extract_message_text(context: Dict[str, Any]) -> str:
     )
 
 
+def _is_followup_tick_context(context: Dict[str, Any]) -> bool:
+    job = context.get("job") or {}
+    job_type = str(job.get("type") or "").strip().lower()
+    if job_type == "whatsapp.followup.tick":
+        return True
+    metadata = context.get("metadata") or {}
+    return isinstance(metadata.get("followup_context"), dict) and bool(metadata.get("followup_context"))
+
+
 def _format_history(history: list[Dict[str, Any]], limit: int = 10) -> str:
     last_messages = history[-limit:]
     lines = []
@@ -1606,11 +1615,24 @@ def decide(context: Dict[str, Any], logger: Optional[logging.Logger] = None) -> 
         stage = "mother_validate"
         mother_decision = MotherDecision.model_validate(mother_payload)
         lead = context.get("lead") or {}
-        route_for_child = mother_decision.route_to
+        force_followup_route = _is_followup_tick_context(context)
+        route_for_child = "follow-up" if force_followup_route else mother_decision.route_to
         anti_loop_rule3_applied = False
         mode_ctx_pre: Optional[dict] = None
 
-        if mother_decision.route_to == "qualification":
+        if force_followup_route and logger:
+            job = context.get("job") or {}
+            payload = job.get("payload") or {}
+            logger.info(
+                "event=followup_tick_route_priority route_override=%s mother_route_to=%s lead_category=%s job_id=%s lead_id=%s",
+                route_for_child,
+                mother_decision.route_to,
+                lead.get("category"),
+                job.get("id") or payload.get("job_id"),
+                lead.get("id") or payload.get("lead_id"),
+            )
+
+        if mother_decision.route_to == "qualification" and not force_followup_route:
             mode_ctx_pre = _build_mode_contract_context(context, mother_decision)
             missing_pre = list(mode_ctx_pre.get("missing_fields") or [])
             normalized_current_category = _normalize_category(lead.get("category"))
@@ -1655,7 +1677,7 @@ def decide(context: Dict[str, Any], logger: Optional[logging.Logger] = None) -> 
                 },
             )
 
-        if mother_decision.route_to == "qualification" and not anti_loop_rule3_applied:
+        if mother_decision.route_to == "qualification" and not anti_loop_rule3_applied and not force_followup_route:
             mode_ctx_pre = mode_ctx_pre or _build_mode_contract_context(context, mother_decision)
             mode = mode_ctx_pre.get("agent_mode_normalized")
             required_fields = list(mode_ctx_pre.get("required_fields") or [])
