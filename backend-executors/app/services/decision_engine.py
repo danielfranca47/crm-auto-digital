@@ -1145,10 +1145,20 @@ def _build_child_prompt_follow_up(
         "Priorize meeting_or_session_happened, followup_goal, operator_note, outcome e followup_variant.\n"
         "- Se houver no-show/remarcação no contrato, conduza retomada e proposta de novo horário; "
         "não reabra qualificação antiga por padrão.\n"
-        "- Campos de qualification (required/missing) são secundários neste tick e só podem aparecer "
-        "se estiverem explicitamente alinhados ao follow-up atual.\n"
+        "- qualification_state e missing_fields são SOMENTE memória auxiliar (read-only) neste tick.\n"
+        "- É proibido usar missing_fields de qualification como alvo de coleta/pergunta.\n"
+        "- Só faça pergunta nova quando ela estiver diretamente ligada ao objetivo do follow-up atual "
+        "(ex.: remarcação, confirmação de presença, próximo passo do follow-up).\n"
         if is_followup_tick
         else "- Faça no máximo 1 pergunta por mensagem e priorize o próximo missing_field.\n"
+    )
+    qualification_context_block = (
+        f"qualification_context_read_only: {json.dumps({'required_fields': mode_contract['required_fields'], 'missing_fields': mode_contract['missing_fields']}, ensure_ascii=False)}\n"
+        if is_followup_tick
+        else (
+            f"Required fields: {json.dumps(mode_contract['required_fields'], ensure_ascii=False)}\n"
+            f"Missing fields: {json.dumps(mode_contract['missing_fields'], ensure_ascii=False)}\n"
+        )
     )
     return (
         "Você é a FILHA FOLLOW-UP e deve responder SOMENTE JSON válido:\n"
@@ -1177,8 +1187,7 @@ def _build_child_prompt_follow_up(
         f"Motivo MÃE: {mother_decision.reason}\n"
         f"Objetivo MÃE: {mother_decision.objective or ''}\n"
         f"Modo normalizado: {agent_mode_normalized}\n"
-        f"Required fields: {json.dumps(mode_contract['required_fields'], ensure_ascii=False)}\n"
-        f"Missing fields: {json.dumps(mode_contract['missing_fields'], ensure_ascii=False)}\n"
+        f"{qualification_context_block}"
         f"is_followup_tick: {json.dumps(is_followup_tick, ensure_ascii=False)}\n"
         "\n"
         "CONTEXTO:\n"

@@ -97,6 +97,11 @@ def test_followup_prompt_includes_contract_signals_and_variant_rule():
     assert "agenda/comparecimento/remarcação" in prompt
     assert "CONTEXTO PRIORITÁRIO (follow-up tick)" in prompt
     assert "não reabra qualificação antiga por padrão" in prompt
+    assert "SOMENTE memória auxiliar (read-only)" in prompt
+    assert "proibido usar missing_fields de qualification como alvo de coleta/pergunta" in prompt
+    assert "qualification_context_read_only" in prompt
+    assert "Required fields:" not in prompt
+    assert "Missing fields:" not in prompt
     assert "priorize o próximo missing_field" not in prompt
 
 
@@ -118,3 +123,5 @@ def test_followup_prompt_keeps_missing_field_guidance_outside_tick_context():
 
     assert "priorize o próximo missing_field" in prompt
     assert "CONTEXTO PRIORITÁRIO (follow-up tick)" not in prompt
+    assert "Required fields:" in prompt
+    assert "Missing fields:" in prompt
