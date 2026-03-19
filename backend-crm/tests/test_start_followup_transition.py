@@ -41,6 +41,22 @@ def _create_schema(conn: sqlite3.Connection) -> None:
             notes TEXT,
             user_id INTEGER
         );
+
+        CREATE TABLE lead_qualification_state (
+            lead_id INTEGER PRIMARY KEY,
+            user_id INTEGER NOT NULL,
+            stage TEXT,
+            agent_mode_normalized TEXT,
+            playbook_key TEXT,
+            playbook_version TEXT,
+            data_json TEXT,
+            confidence_json TEXT,
+            last_questioned_field TEXT,
+            attempts_json TEXT,
+            asked_questions_json TEXT,
+            last_question_text TEXT,
+            updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        );
         """
     )
     conn.commit()
@@ -69,7 +85,51 @@ def _create_legacy_schema_without_followup_mirror_columns(conn: sqlite3.Connecti
             notes TEXT,
             user_id INTEGER
         );
+
+        CREATE TABLE lead_qualification_state (
+            lead_id INTEGER PRIMARY KEY,
+            user_id INTEGER NOT NULL,
+            stage TEXT,
+            agent_mode_normalized TEXT,
+            playbook_key TEXT,
+            playbook_version TEXT,
+            data_json TEXT,
+            confidence_json TEXT,
+            last_questioned_field TEXT,
+            attempts_json TEXT,
+            asked_questions_json TEXT,
+            last_question_text TEXT,
+            updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        );
         """
+    )
+    conn.commit()
+
+
+def _insert_complete_qualification_state(conn: sqlite3.Connection, *, lead_id: int, user_id: int, mode: str = "agenda") -> None:
+    if mode == "consultivo":
+        data_json = {
+            "service_interest": "botox",
+            "urgency": "alta",
+            "decision_role": "owner",
+            "constraints": "nenhuma",
+            "availability_window": "amanhã 10h",
+            "budget_or_price_acceptance": "ok",
+        }
+    else:
+        data_json = {
+            "service_interest": "botox",
+            "availability_window": "amanhã 10h",
+            "location_preference": "presencial",
+            "price_acceptance": "yes",
+        }
+    conn.execute(
+        """
+        INSERT INTO lead_qualification_state (
+            lead_id, user_id, stage, agent_mode_normalized, data_json, confidence_json, attempts_json, asked_questions_json
+        ) VALUES (?, ?, 'qualification', ?, ?, '{}', '{}', '[]')
+        """,
+        (lead_id, user_id, mode, json.dumps(data_json, ensure_ascii=False)),
     )
     conn.commit()
 
@@ -98,6 +158,7 @@ class StartFollowupTransitionTest(unittest.TestCase):
         )
         lead_id = int(cur.lastrowid)
         self.conn.commit()
+        _insert_complete_qualification_state(self.conn, lead_id=lead_id, user_id=11, mode="agenda")
 
         payload = StartFollowupPayload(
             lead_id=lead_id,
@@ -150,6 +211,7 @@ class StartFollowupTransitionTest(unittest.TestCase):
         )
         lead_id = int(cur.lastrowid)
         self.conn.commit()
+        _insert_complete_qualification_state(self.conn, lead_id=lead_id, user_id=11, mode="consultivo")
 
         payload = StartFollowupPayload(
             lead_id=lead_id,
@@ -206,6 +268,39 @@ class StartFollowupTransitionTest(unittest.TestCase):
 
         self.assertEqual(exc_ctx.exception.status_code, 400)
 
+    def test_start_followup_blocks_when_qualification_incomplete(self):
+        cur = self.conn.cursor()
+        cur.execute(
+            "INSERT INTO leads (user_id, category, agent_type) VALUES (?, ?, ?)",
+            (11, "apresentation", "agent_1"),
+        )
+        lead_id = int(cur.lastrowid)
+        self.conn.execute(
+            """
+            INSERT INTO lead_qualification_state (lead_id, user_id, stage, agent_mode_normalized, data_json)
+            VALUES (?, ?, 'qualification', 'agenda', ?)
+            """,
+            (lead_id, 11, json.dumps({"service_interest": "botox"}, ensure_ascii=False)),
+        )
+        self.conn.commit()
+
+        payload = StartFollowupPayload(
+            lead_id=lead_id,
+            agent_type="agent_1",
+            meeting_or_session_happened="yes",
+        )
+
+        with patch("routes.leads.get_connection", return_value=self.conn):
+            with self.assertRaises(HTTPException) as exc_ctx:
+                start_followup_transition(
+                    payload,
+                    current_user=CurrentUser(id=11, email="x@example.com", token="t"),
+                )
+
+        self.assertEqual(exc_ctx.exception.status_code, 400)
+        self.assertEqual(exc_ctx.exception.detail.get("error"), "qualification_incomplete")
+        self.assertIn("missing_fields", exc_ctx.exception.detail)
+
     def test_map_lead_row_keeps_legacy_followup_contract_compatible(self):
         row = {
             "id": 1,
@@ -251,6 +346,7 @@ class StartFollowupTransitionTest(unittest.TestCase):
             )
             lead_id = int(cur.lastrowid)
             legacy_conn.commit()
+            _insert_complete_qualification_state(legacy_conn, lead_id=lead_id, user_id=11, mode="agenda")
 
             payload = StartFollowupPayload(
                 lead_id=lead_id,

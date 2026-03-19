@@ -13,6 +13,7 @@ from fastapi import HTTPException
 
 from database import DB_PATH, get_connection
 from services.lead_category_policy import apply_closing_bot_disable_side_effect
+from services.qualification_guardrails import can_advance_from_qualification
 
 logger = logging.getLogger(__name__)
 
@@ -838,7 +839,7 @@ def apply_suggested_category(
     if user_id is not None:
         where_clause += " AND user_id = ?"
         params.append(user_id)
-    row = cur.execute(f"SELECT category FROM leads {where_clause}", params).fetchone()
+    row = cur.execute(f"SELECT category, user_id FROM leads {where_clause}", params).fetchone()
     if not row:
         logger.info("lead_category_skip lead_id=%s reason=lead_not_found", lead_id)
         return False
@@ -850,6 +851,16 @@ def apply_suggested_category(
             normalized,
         )
         return False
+    if current_category == "qualification" and normalized in {"apresentation", "follow-up", "closing"}:
+        effective_user_id = int(user_id) if user_id is not None else int(row["user_id"])
+        can_advance, missing_fields = can_advance_from_qualification(conn, lead_id=lead_id, user_id=effective_user_id)
+        if not can_advance:
+            logger.info(
+                "lead_category_blocked_incomplete_qualification lead_id=%s missing=%s origin=executor",
+                lead_id,
+                missing_fields,
+            )
+            return False
 
     update_params: List[Any] = [normalized, lead_id]
     update_clause = "WHERE id=?"

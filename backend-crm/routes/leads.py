@@ -13,6 +13,7 @@ from services.agent_type import resolve_agent_type_for_user
 from services.phone_normalizer import PhoneNormalizationError, normalize_to_e164
 from services.lead_category_policy import apply_closing_bot_disable_side_effect
 from services.followup_state import stop_followup_for_lead_category, stop_followup_on_handoff
+from services.qualification_guardrails import can_advance_from_qualification
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -431,6 +432,22 @@ def start_followup_transition(
         if payload.agent_type not in {"agent_1", "agent_3"}:
             raise HTTPException(status_code=400, detail="Transição assistida disponível apenas para agent_1 e agent_3")
 
+        can_advance, missing_fields = can_advance_from_qualification(conn, payload.lead_id, current_user.id)
+        if not can_advance:
+            logger.info(
+                "lead_category_blocked_incomplete_qualification lead_id=%s missing=%s origin=followup",
+                payload.lead_id,
+                missing_fields,
+            )
+            raise HTTPException(
+                status_code=400,
+                detail={
+                    "error": "qualification_incomplete",
+                    "missing_fields": missing_fields,
+                    "message": "Não é possível iniciar follow-up: qualification incompleta",
+                },
+            )
+
         followup_variant = _resolve_followup_variant(payload.agent_type)
         if not followup_variant:
             raise HTTPException(status_code=400, detail="Não foi possível resolver a variante de follow-up")
@@ -545,6 +562,26 @@ def atualizar_lead_parcial(id: int, lead: LeadUpdate, current_user: CurrentUser 
         dados = lead.dict(exclude_unset=True)
         # UI manda nextScheduledAction junto; não é campo da tabela leads:
         dados.pop("nextScheduledAction", None)
+
+        if "category" in dados:
+            normalized_old = str(old_category or "").strip().lower()
+            normalized_new = str(dados.get("category") or "").strip().lower()
+            if normalized_old == "qualification" and normalized_new in {"apresentation", "follow-up", "closing"}:
+                can_advance, missing_fields = can_advance_from_qualification(conn, id, current_user.id)
+                if not can_advance:
+                    logger.info(
+                        "lead_category_blocked_incomplete_qualification lead_id=%s missing=%s origin=patch",
+                        id,
+                        missing_fields,
+                    )
+                    raise HTTPException(
+                        status_code=400,
+                        detail={
+                            "error": "qualification_incomplete",
+                            "missing_fields": missing_fields,
+                            "message": "Não é possível avançar o lead: qualification incompleta",
+                        },
+                    )
 
         if "phone" in dados:
             raw_phone = dados.get("phone")
