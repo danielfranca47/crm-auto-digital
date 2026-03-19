@@ -1,3 +1,5 @@
+> **Atualização (19/03/2026):** para a proposta mínima do modal de transição sem implementação, ver `backend-crm/docs/mvp_followup_transition_context_contract.md`.
+
 # Plano em etapas — motor de follow-up MVP (núcleo + UX + evolução)
 
 ## 1) Premissas e direção arquitetural (estado atual preservado)
