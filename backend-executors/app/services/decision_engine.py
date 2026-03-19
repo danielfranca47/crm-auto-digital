@@ -738,7 +738,9 @@ def _build_mother_prompt(context: Dict[str, Any], message_text: str) -> str:
         "- Preencha signals seguindo schema padronizado quando possível (intent_level, urgency_level, price_acceptance, meeting_scheduled, handoff_requested, missing_fields, stop_reason).\n"
         "- Em price_acceptance use SEMPRE string: no|unsure|yes (não use boolean).\n"
         "- Se o lead aceitar o preço/valor, use price_acceptance='yes'.\n"
-        "- Use missing_fields para decidir: enquanto faltarem campos mínimos do modo, prefira route_to=qualification.\n"
+        "- REGRA OBRIGATÓRIA DE QUALIFICAÇÃO: se missing_fields não estiver vazio, route_to DEVE ser \"qualification\".\n"
+        "- Enquanto houver missing_fields, NÃO sugerir avanço para apresentation, follow-up ou closing.\n"
+        "- perceived_category pode refletir o estágio atual do lead, mas route_to deve permanecer qualification até completar o contrato.\n"
         "\n"
         "DEFINIÇÃO DO FUNIL (IMPORTANTE):\n"
         "- APRESENTATION inclui: agendar reunião, confirmar horário, marcar call, lembrar da reunião,\n"
@@ -1332,6 +1334,22 @@ def _normalize_category(value: Optional[str]) -> Optional[str]:
     return normalized or None
 
 
+def _enforce_qualification_route_when_missing(
+    mother_decision: MotherDecision,
+    mode_contract: Dict[str, Any],
+) -> MotherDecision:
+    missing_fields = list(mode_contract.get("missing_fields") or [])
+    if not missing_fields:
+        return mother_decision
+    if mother_decision.route_to == "qualification":
+        return mother_decision
+    mother_decision.route_to = "qualification"
+    reason = str(mother_decision.reason or "").strip()
+    forced_reason = "qualification_incomplete_forced_route"
+    mother_decision.reason = f"{reason}|{forced_reason}" if reason else forced_reason
+    return mother_decision
+
+
 _ALLOWED_ADVANCE = {
     "qualification": {"apresentation"},
     "apresentation": {"closing", "follow-up"},
@@ -1639,6 +1657,11 @@ def decide(context: Dict[str, Any], logger: Optional[logging.Logger] = None) -> 
         mother_payload = _normalize_null_strings(mother_payload)
         stage = "mother_validate"
         mother_decision = MotherDecision.model_validate(mother_payload)
+        mode_ctx_forced_route = _build_mode_contract_context(context, mother_decision)
+        mother_decision = _enforce_qualification_route_when_missing(
+            mother_decision,
+            mode_ctx_forced_route,
+        )
         lead = context.get("lead") or {}
         force_followup_route = _is_followup_tick_context(context)
         route_for_child = "follow-up" if force_followup_route else mother_decision.route_to
