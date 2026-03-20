@@ -1,9 +1,9 @@
 # backend/routes/leads.py
-from typing import Optional
+from typing import Any, Optional
 import json
 import logging
 from fastapi import APIRouter, HTTPException, Depends
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 from database import get_connection, normalize_datetime_value
 from models import Lead, LeadUpdate, AppointmentCreate, AppointmentUpdate, BotDisabledUpdate, StartFollowupPayload
@@ -12,9 +12,34 @@ from services import rate_limit_service
 from services.agent_type import resolve_agent_type_for_user
 from services.phone_normalizer import PhoneNormalizationError, normalize_to_e164
 from services.lead_category_policy import apply_closing_bot_disable_side_effect
+from services.followup_state import stop_followup_for_lead_category, stop_followup_on_handoff
+from services.qualification_guardrails import can_advance_from_qualification
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
+
+
+FOLLOWUP_CONTRACT_VERSION = 1
+_FOLLOWUP_VARIANT_BY_AGENT_TYPE = {
+    "agent_1": "sdr_scheduler",
+    "agent_3": "hybrid_scheduler",
+}
+_MAX_ATTEMPTS_BY_VARIANT = {
+    "sdr_scheduler": 4,
+    "hybrid_scheduler": 3,
+}
+_FIRST_FOLLOWUP_OFFSET_MINUTES = {
+    "sdr_scheduler": {
+        "default": 30,
+    },
+    "hybrid_scheduler": {
+        "yes": 120,
+        "no_show": 30,
+        "canceled": 30,
+        "needs_reschedule": 30,
+        "default": 30,
+    },
+}
 
 # ---------------------------
 # Helpers
@@ -45,7 +70,75 @@ def _map_lead_row(row):
         if lead_dict.get(k):
             lead_dict[k] = str(lead_dict[k]).replace(" ", "T")
 
+    normalized_contract = _normalize_followup_contract(
+        lead_dict.get("followup_contract"),
+        agent_type=lead_dict.get("agent_type"),
+    )
+    lead_dict["followup_contract"] = normalized_contract
+
+    if normalized_contract:
+        if lead_dict.get("followup_status") is None:
+            lead_dict["followup_status"] = normalized_contract.get("status")
+        if lead_dict.get("next_followup_at") is None:
+            lead_dict["next_followup_at"] = normalized_contract.get("next_followup_at")
+
     return lead_dict
+
+
+def _resolve_followup_variant(agent_type: str) -> Optional[str]:
+    return _FOLLOWUP_VARIANT_BY_AGENT_TYPE.get(str(agent_type or "").strip().lower())
+
+
+def _resolve_max_attempts(followup_variant: Optional[str]) -> int:
+    return int(_MAX_ATTEMPTS_BY_VARIANT.get(str(followup_variant or "").strip().lower(), 3))
+
+
+def _resolve_first_followup_offset_minutes(
+    *,
+    followup_variant: Optional[str],
+    meeting_or_session_happened: Optional[str],
+) -> int:
+    variant_key = str(followup_variant or "").strip().lower()
+    scenario_key = str(meeting_or_session_happened or "").strip().lower()
+    rules = _FIRST_FOLLOWUP_OFFSET_MINUTES.get(variant_key) or {"default": 30}
+    return int(rules.get(scenario_key, rules.get("default", 30)))
+
+
+def _normalize_followup_contract(raw_contract: Any, *, agent_type: Optional[str] = None) -> Optional[dict[str, Any]]:
+    if not raw_contract:
+        return None
+
+    contract_data: Any = raw_contract
+    if isinstance(raw_contract, str):
+        try:
+            contract_data = json.loads(raw_contract)
+        except json.JSONDecodeError:
+            return None
+
+    if not isinstance(contract_data, dict):
+        return None
+
+    normalized = dict(contract_data)
+
+    followup_variant = str(normalized.get("followup_variant") or "").strip().lower() or _resolve_followup_variant(agent_type or "")
+    if followup_variant:
+        normalized["followup_variant"] = followup_variant
+
+    normalized.setdefault("version", FOLLOWUP_CONTRACT_VERSION)
+    normalized.setdefault("status", "active")
+    normalized.setdefault("attempts", 0)
+    normalized.setdefault("max_attempts", _resolve_max_attempts(followup_variant))
+    normalized.setdefault("next_followup_at", None)
+    normalized.setdefault("last_followup_at", None)
+    normalized.setdefault("stop_reason", None)
+
+    return normalized
+
+
+def _table_columns(conn, table_name: str) -> set[str]:
+    cur = conn.cursor()
+    rows = cur.execute(f"PRAGMA table_info({table_name})").fetchall()
+    return {str(row[1]) for row in rows}
 
 
 def _map_appointment_row(row):
@@ -339,12 +432,45 @@ def start_followup_transition(
         if payload.agent_type not in {"agent_1", "agent_3"}:
             raise HTTPException(status_code=400, detail="Transição assistida disponível apenas para agent_1 e agent_3")
 
-        followup_variant = "sdr_scheduler" if payload.agent_type == "agent_1" else "hybrid_scheduler"
+        can_advance, missing_fields = can_advance_from_qualification(conn, payload.lead_id, current_user.id)
+        if not can_advance:
+            logger.info(
+                "lead_category_blocked_incomplete_qualification lead_id=%s missing=%s origin=followup",
+                payload.lead_id,
+                missing_fields,
+            )
+            raise HTTPException(
+                status_code=400,
+                detail={
+                    "error": "qualification_incomplete",
+                    "missing_fields": missing_fields,
+                    "message": "Não é possível iniciar follow-up: qualification incompleta",
+                },
+            )
+
+        followup_variant = _resolve_followup_variant(payload.agent_type)
+        if not followup_variant:
+            raise HTTPException(status_code=400, detail="Não foi possível resolver a variante de follow-up")
+
+        now_utc = datetime.now(timezone.utc)
+        max_attempts = _resolve_max_attempts(followup_variant)
+        first_offset_minutes = _resolve_first_followup_offset_minutes(
+            followup_variant=followup_variant,
+            meeting_or_session_happened=payload.meeting_or_session_happened,
+        )
+        next_followup_at = (now_utc + timedelta(minutes=first_offset_minutes)).isoformat()
         meeting_happened = payload.meeting_or_session_happened == "yes"
         contract = {
             "phase": "follow-up",
+            "version": FOLLOWUP_CONTRACT_VERSION,
             "followup_variant": followup_variant,
             "trigger": "manual_crm_transition",
+            "status": "active",
+            "attempts": 0,
+            "max_attempts": max_attempts,
+            "next_followup_at": next_followup_at,
+            "last_followup_at": None,
+            "stop_reason": None,
             "meeting_happened": meeting_happened,
             "meeting_or_session_happened": payload.meeting_or_session_happened,
             "outcome": payload.outcome,
@@ -352,26 +478,42 @@ def start_followup_transition(
             "proposal_sent": payload.proposal_sent,
             "followup_goal": payload.followup_goal,
             "operator_note": (payload.operator_note or "").strip() or None,
-            "created_at": datetime.now(timezone.utc).isoformat(),
+            "created_at": now_utc.isoformat(),
         }
 
+        mirror_status = str(contract.get("status") or "active")
+        mirror_next_followup_at = contract.get("next_followup_at")
+        lead_columns = _table_columns(conn, "leads")
+        has_followup_status = "followup_status" in lead_columns
+        has_next_followup_at = "next_followup_at" in lead_columns
+
+        update_set_parts = [
+            "category = 'follow-up'",
+            "bot_disabled = 0",
+            "bot_disabled_reason = NULL",
+            "followup_contract = ?",
+            "agent_type = COALESCE(NULLIF(agent_type, ''), ?)",
+            "lastMovement = CURRENT_TIMESTAMP",
+        ]
+        update_params = [
+            json.dumps(contract, ensure_ascii=False),
+            payload.agent_type,
+        ]
+        if has_followup_status:
+            update_set_parts.append("followup_status = ?")
+            update_params.append(mirror_status)
+        if has_next_followup_at:
+            update_set_parts.append("next_followup_at = ?")
+            update_params.append(mirror_next_followup_at)
+
+        update_params.extend([payload.lead_id, current_user.id])
         cursor.execute(
-            """
+            f"""
             UPDATE leads
-               SET category = 'follow-up',
-                   bot_disabled = 0,
-                   bot_disabled_reason = NULL,
-                   followup_contract = ?,
-                   agent_type = COALESCE(NULLIF(agent_type, ''), ?),
-                   lastMovement = CURRENT_TIMESTAMP
+               SET {', '.join(update_set_parts)}
              WHERE id = ? AND user_id = ?
             """,
-            (
-                json.dumps(contract, ensure_ascii=False),
-                payload.agent_type,
-                payload.lead_id,
-                current_user.id,
-            ),
+            update_params,
         )
         cursor.execute(
             """
@@ -421,6 +563,26 @@ def atualizar_lead_parcial(id: int, lead: LeadUpdate, current_user: CurrentUser 
         # UI manda nextScheduledAction junto; não é campo da tabela leads:
         dados.pop("nextScheduledAction", None)
 
+        if "category" in dados:
+            normalized_old = str(old_category or "").strip().lower()
+            normalized_new = str(dados.get("category") or "").strip().lower()
+            if normalized_old == "qualification" and normalized_new in {"apresentation", "follow-up", "closing"}:
+                can_advance, missing_fields = can_advance_from_qualification(conn, id, current_user.id)
+                if not can_advance:
+                    logger.info(
+                        "lead_category_blocked_incomplete_qualification lead_id=%s missing=%s origin=patch",
+                        id,
+                        missing_fields,
+                    )
+                    raise HTTPException(
+                        status_code=400,
+                        detail={
+                            "error": "qualification_incomplete",
+                            "missing_fields": missing_fields,
+                            "message": "Não é possível avançar o lead: qualification incompleta",
+                        },
+                    )
+
         if "phone" in dados:
             raw_phone = dados.get("phone")
             if raw_phone:
@@ -465,6 +627,12 @@ def atualizar_lead_parcial(id: int, lead: LeadUpdate, current_user: CurrentUser 
             lead_id=id,
             user_id=current_user.id,
             old_category=old_category,
+            new_category=new_category,
+        )
+        stop_followup_for_lead_category(
+            conn,
+            lead_id=id,
+            user_id=current_user.id,
             new_category=new_category,
         )
         conn.commit()
@@ -541,6 +709,13 @@ def update_lead_bot_disabled(
             """,
             (lead_id, json.dumps(notes, ensure_ascii=False), current_user.id),
         )
+        if payload.disabled:
+            stop_followup_on_handoff(
+                conn,
+                lead_id=lead_id,
+                user_id=current_user.id,
+                reason=payload.reason,
+            )
         conn.commit()
         return {"status": "ok", "lead_id": lead_id, "bot_disabled": payload.disabled}
     except Exception as e:

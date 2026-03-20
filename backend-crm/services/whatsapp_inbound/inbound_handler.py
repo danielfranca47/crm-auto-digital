@@ -30,6 +30,7 @@ from services.whatsapp_inbound.guardrail import (
     find_or_create_lead_by_phone,
     maybe_promote_lead_on_inbound,
 )
+from services.followup_state import stop_followup_on_inbound_reply
 
 
 logger = logging.getLogger(__name__)
@@ -269,6 +270,12 @@ def handle_inbound(payload: Dict[str, Any]) -> Dict[str, Any]:
             (lead_id, user_id, phone_norm, month_key),
         )
         save_inbound_message(conn, lead_id=lead_id, body=message_text, user_id=user_id)
+        stop_followup_on_inbound_reply(
+            conn,
+            lead_id=lead_id,
+            user_id=user_id,
+            inbound_message_id=external_event_id,
+        )
         conn.commit()
 
     try:

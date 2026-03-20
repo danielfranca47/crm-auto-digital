@@ -12,6 +12,7 @@ from app.services import decision_engine
 from app.services import meeting_scheduler
 
 JOB_MAX_ATTEMPTS = 3
+TYPE_WHATSAPP_FOLLOWUP_TICK = "whatsapp.followup.tick"
 
 
 class ExecutionError(Exception):
@@ -77,6 +78,78 @@ def _resolve_user_id(context: Dict[str, Any], job: Dict[str, Any]) -> Optional[i
         or job.get("user_id")
         or job_ctx.get("user_id")
         or payload.get("user_id")
+    )
+
+
+def _parse_followup_contract(raw: Any) -> Dict[str, Any]:
+    if isinstance(raw, dict):
+        return raw
+    if isinstance(raw, str) and raw.strip():
+        try:
+            parsed = json.loads(raw)
+        except json.JSONDecodeError:
+            return {}
+        return parsed if isinstance(parsed, dict) else {}
+    return {}
+
+
+def _inject_followup_contract_context(context: Dict[str, Any], job: Dict[str, Any]) -> None:
+    if not _is_followup_tick_job(job):
+        return
+
+    lead = context.get("lead") or {}
+    metadata = context.get("metadata") or {}
+    contract = _parse_followup_contract(lead.get("followup_contract"))
+    if not contract:
+        context["metadata"] = metadata
+        return
+
+    followup_signals = {
+        "followup_goal": contract.get("followup_goal"),
+        "followup_outcome": contract.get("outcome"),
+        "followup_variant": contract.get("followup_variant"),
+        "followup_attempts": contract.get("attempts"),
+        "followup_max_attempts": contract.get("max_attempts"),
+        "followup_meeting_happened": contract.get("meeting_happened"),
+        "followup_meeting_or_session_happened": contract.get("meeting_or_session_happened"),
+        "followup_proposal_sent": contract.get("proposal_sent"),
+        "followup_operator_note": contract.get("operator_note"),
+        "followup_status": contract.get("status"),
+        "followup_next_followup_at": contract.get("next_followup_at"),
+    }
+
+    # entrada sintética para orientar geração proativa quando não há inbound real
+    if not metadata.get("inbound_message_text"):
+        metadata["inbound_message_text"] = "followup_tick_auto_trigger"
+
+    metadata["followup_context"] = followup_signals
+    context["metadata"] = metadata
+
+
+def _is_followup_tick_job(job: Dict[str, Any]) -> bool:
+    return str(job.get("type") or "").strip().lower() == TYPE_WHATSAPP_FOLLOWUP_TICK
+
+
+def _resolve_in_reply_to_message_id(*, job_id: str, job: Dict[str, Any], metadata: Dict[str, Any]) -> Optional[str]:
+    explicit = metadata.get("message_id")
+    if explicit:
+        return str(explicit)
+
+    if _is_followup_tick_job(job):
+        payload = job.get("payload") or {}
+        due_at = str(payload.get("due_at") or "na").replace(" ", "T")
+        return f"followup:{job_id}:{due_at}"
+
+    return None
+
+
+def _build_followup_fallback_outbound_body(context: Dict[str, Any]) -> str:
+    lead = context.get("lead") or {}
+    contact_name = str(lead.get("contactName") or "").strip()
+    greeting = f"Olá, {contact_name}." if contact_name else "Olá!"
+    return (
+        f"{greeting} Passando para dar continuidade ao seu follow-up. "
+        "Se fizer sentido, posso te ajudar com os próximos passos por aqui."
     )
 
 
@@ -369,11 +442,14 @@ def execute_job(job_id: str, logger: logging.Logger) -> int:
     playbook = context.get("playbook") or {}
     metadata = context.get("metadata") or {}
 
+    _inject_followup_contract_context(context, job)
+    metadata = context.get("metadata") or {}
+
     lead_id = _safe_get(lead, "id")
     lead_name = _safe_get(lead, "contactName", "companyName", "name")
     lead_phone = _safe_get(lead, "phone", "phone_e164")
     user_id = _resolve_user_id(context, job)
-    in_reply_to_message_id = metadata.get("message_id")
+    in_reply_to_message_id = _resolve_in_reply_to_message_id(job_id=job_id, job=job, metadata=metadata)
     if not in_reply_to_message_id:
         exec_error = ExecutionError(
             "missing in_reply_to_message_id in execution context",
@@ -426,13 +502,17 @@ def execute_job(job_id: str, logger: logging.Logger) -> int:
         _safe_get(playbook, "template_key", "name"),
         extra={"phase": "context"},
     )
+    followup_ctx = metadata.get("followup_context") if isinstance(metadata.get("followup_context"), dict) else {}
     ctx_logger.info(
-        "event=metadata_loaded provider=%s instance_id=%s message_id=%s received_at=%s phone=%s",
+        "event=metadata_loaded provider=%s instance_id=%s message_id=%s received_at=%s phone=%s followup_variant=%s followup_goal=%s followup_meeting_or_session=%s",
         metadata.get("provider"),
         metadata.get("instance_id"),
         metadata.get("message_id"),
         metadata.get("received_at"),
         metadata.get("phone"),
+        followup_ctx.get("followup_variant"),
+        followup_ctx.get("followup_goal"),
+        followup_ctx.get("followup_meeting_or_session_happened"),
         extra={"phase": "context"},
     )
 
@@ -451,6 +531,8 @@ def execute_job(job_id: str, logger: logging.Logger) -> int:
         fallback_text = _format_questions(decision.questions or [])
         if fallback_text:
             outbound_body = fallback_text
+    if _is_followup_tick_job(job) and not outbound_body:
+        outbound_body = _build_followup_fallback_outbound_body(context)
     result_payload = _build_result_payload(
         decision,
         lead_id=lead_id,

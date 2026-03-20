@@ -56,6 +56,15 @@ def _extract_message_text(context: Dict[str, Any]) -> str:
     )
 
 
+def _is_followup_tick_context(context: Dict[str, Any]) -> bool:
+    job = context.get("job") or {}
+    job_type = str(job.get("type") or "").strip().lower()
+    if job_type == "whatsapp.followup.tick":
+        return True
+    metadata = context.get("metadata") or {}
+    return isinstance(metadata.get("followup_context"), dict) and bool(metadata.get("followup_context"))
+
+
 def _format_history(history: list[Dict[str, Any]], limit: int = 10) -> str:
     last_messages = history[-limit:]
     lines = []
@@ -729,7 +738,9 @@ def _build_mother_prompt(context: Dict[str, Any], message_text: str) -> str:
         "- Preencha signals seguindo schema padronizado quando possível (intent_level, urgency_level, price_acceptance, meeting_scheduled, handoff_requested, missing_fields, stop_reason).\n"
         "- Em price_acceptance use SEMPRE string: no|unsure|yes (não use boolean).\n"
         "- Se o lead aceitar o preço/valor, use price_acceptance='yes'.\n"
-        "- Use missing_fields para decidir: enquanto faltarem campos mínimos do modo, prefira route_to=qualification.\n"
+        "- REGRA OBRIGATÓRIA DE QUALIFICAÇÃO: se missing_fields não estiver vazio, route_to DEVE ser \"qualification\".\n"
+        "- Enquanto houver missing_fields, NÃO sugerir avanço para apresentation, follow-up ou closing.\n"
+        "- perceived_category pode refletir o estágio atual do lead, mas route_to deve permanecer qualification até completar o contrato.\n"
         "\n"
         "DEFINIÇÃO DO FUNIL (IMPORTANTE):\n"
         "- APRESENTATION inclui: agendar reunião, confirmar horário, marcar call, lembrar da reunião,\n"
@@ -1073,6 +1084,7 @@ def _build_child_prompt_follow_up(
     playbook = context.get("playbook") or {}
     metadata = context.get("metadata") or {}
     history = context.get("history") or []
+    followup_ctx = metadata.get("followup_context") if isinstance(metadata.get("followup_context"), dict) else {}
 
     lead_summary = {
         "id": lead.get("id"),
@@ -1095,13 +1107,64 @@ def _build_child_prompt_follow_up(
     metadata_summary = {
         "provider": metadata.get("provider"),
         "instance_id": metadata.get("instance_id"),
+        "followup_context": followup_ctx,
     }
+
+    followup_summary = {
+        "followup_goal": followup_ctx.get("followup_goal") or lead.get("followup_goal"),
+        "outcome": followup_ctx.get("followup_outcome") or lead.get("outcome"),
+        "followup_variant": followup_ctx.get("followup_variant"),
+        "attempts": followup_ctx.get("followup_attempts"),
+        "max_attempts": followup_ctx.get("followup_max_attempts"),
+        "meeting_happened": followup_ctx.get("followup_meeting_happened"),
+        "meeting_or_session_happened": followup_ctx.get("followup_meeting_or_session_happened"),
+        "proposal_sent": followup_ctx.get("followup_proposal_sent"),
+        "operator_note": followup_ctx.get("followup_operator_note"),
+        "status": followup_ctx.get("followup_status"),
+        "next_followup_at": followup_ctx.get("followup_next_followup_at"),
+    }
+    followup_variant = str(followup_summary.get("followup_variant") or "").strip().lower()
+    variant_rule = ""
+    if followup_variant == "sdr_scheduler":
+        variant_rule = (
+            "- Variante sdr_scheduler: follow-up consultivo pós-reunião; "
+            "reforçar valor, síntese do contexto e próximo passo comercial.\n"
+        )
+    elif followup_variant == "hybrid_scheduler":
+        variant_rule = (
+            "- Variante hybrid_scheduler: follow-up de agenda/comparecimento/remarcação; "
+            "priorizar recuperação de no-show, confirmação de presença e reengajamento.\n"
+        )
 
     history_text = _format_history(history)
     mode_contract = _build_mode_contract_context(context, mother_decision)
     agent_mode_normalized = mode_contract["agent_mode_normalized"]
     presentation_variant, presentation_variant_source = _resolve_presentation_variant(context, agent_mode_normalized)
     hybrid_flow_style = _resolve_hybrid_flow_style(context)
+    is_followup_tick = _is_followup_tick_context(context)
+    followup_priority_rule = (
+        "- CONTEXTO PRIORITÁRIO (follow-up tick): use followup_contract_signals como fonte principal da resposta. "
+        "Priorize meeting_or_session_happened, followup_goal, operator_note, outcome e followup_variant.\n"
+        "- Se houver no-show/remarcação no contrato, conduza retomada e proposta de novo horário; "
+        "não reabra qualificação antiga por padrão.\n"
+        "- O histórico é memória contextual; ele NÃO é backlog de perguntas pendentes no follow-up automático.\n"
+        "- Mesmo que o histórico tenha pergunta antiga sem resposta (ex.: localização/orçamento), não repita por padrão.\n"
+        "- Só retome algo do histórico se estiver diretamente necessário para o objetivo do follow-up atual.\n"
+        "- qualification_state e missing_fields são SOMENTE memória auxiliar (read-only) neste tick.\n"
+        "- É proibido usar missing_fields de qualification como alvo de coleta/pergunta.\n"
+        "- Só faça pergunta nova quando ela estiver diretamente ligada ao objetivo do follow-up atual "
+        "(ex.: remarcação, confirmação de presença, próximo passo do follow-up).\n"
+        if is_followup_tick
+        else "- Faça no máximo 1 pergunta por mensagem e priorize o próximo missing_field.\n"
+    )
+    qualification_context_block = (
+        f"qualification_context_read_only: {json.dumps({'required_fields': mode_contract['required_fields'], 'missing_fields': mode_contract['missing_fields']}, ensure_ascii=False)}\n"
+        if is_followup_tick
+        else (
+            f"Required fields: {json.dumps(mode_contract['required_fields'], ensure_ascii=False)}\n"
+            f"Missing fields: {json.dumps(mode_contract['missing_fields'], ensure_ascii=False)}\n"
+        )
+    )
     return (
         "Você é a FILHA FOLLOW-UP e deve responder SOMENTE JSON válido:\n"
         "{\n"
@@ -1118,23 +1181,26 @@ def _build_child_prompt_follow_up(
         "- consultivo: fazer nutrição/retomada/reagendar e preparar handoff quando pedido de proposta/fechamento.\n"
         "- agenda: foco em no-show/reagendar/confirmar presença e reforçar próximos passos.\n"
         "- direto: tratar objeções e conduzir CTA para pagamento de forma objetiva.\n"
+        f"{variant_rule}"
         "- Use tone_of_voice, brand_name e niche quando disponíveis.\n"
         "- Respeite playbook.max_chars se existir (senão, resposta curta).\n"
-        "- recommended_next_category pode ser follow-up, closing ou null.\n- Faça no máximo 1 pergunta por mensagem e priorize o próximo missing_field.\n"
+        "- recommended_next_category pode ser follow-up, closing ou null.\n"
+        f"{followup_priority_rule}"
         "- outcome e kanban_highlight devem ser null.\n"
         "\n"
         f"ROTA MÃE: {mother_decision.route_to} (confidence={mother_decision.confidence})\n"
         f"Motivo MÃE: {mother_decision.reason}\n"
         f"Objetivo MÃE: {mother_decision.objective or ''}\n"
         f"Modo normalizado: {agent_mode_normalized}\n"
-        f"Required fields: {json.dumps(mode_contract['required_fields'], ensure_ascii=False)}\n"
-        f"Missing fields: {json.dumps(mode_contract['missing_fields'], ensure_ascii=False)}\n"
+        f"{qualification_context_block}"
+        f"is_followup_tick: {json.dumps(is_followup_tick, ensure_ascii=False)}\n"
         "\n"
         "CONTEXTO:\n"
         f"- lead: {json.dumps(lead_summary, ensure_ascii=False)}\n"
         f"- ai_profile: {json.dumps(ai_summary, ensure_ascii=False)}\n"
         f"- playbook: {json.dumps(playbook_summary, ensure_ascii=False)}\n"
         f"- metadata: {json.dumps(metadata_summary, ensure_ascii=False)}\n"
+        f"- followup_contract_signals: {json.dumps(followup_summary, ensure_ascii=False)}\n"
         f"- history: {history_text}\n"
         f"- inbound_message_text: {message_text}\n"
     )
@@ -1266,6 +1332,22 @@ def _normalize_category(value: Optional[str]) -> Optional[str]:
         return None
     normalized = str(value).strip().lower().replace("_", "-")
     return normalized or None
+
+
+def _enforce_qualification_route_when_missing(
+    mother_decision: MotherDecision,
+    mode_contract: Dict[str, Any],
+) -> MotherDecision:
+    missing_fields = list(mode_contract.get("missing_fields") or [])
+    if not missing_fields:
+        return mother_decision
+    if mother_decision.route_to == "qualification":
+        return mother_decision
+    mother_decision.route_to = "qualification"
+    reason = str(mother_decision.reason or "").strip()
+    forced_reason = "qualification_incomplete_forced_route"
+    mother_decision.reason = f"{reason}|{forced_reason}" if reason else forced_reason
+    return mother_decision
 
 
 _ALLOWED_ADVANCE = {
@@ -1575,12 +1657,30 @@ def decide(context: Dict[str, Any], logger: Optional[logging.Logger] = None) -> 
         mother_payload = _normalize_null_strings(mother_payload)
         stage = "mother_validate"
         mother_decision = MotherDecision.model_validate(mother_payload)
+        mode_ctx_forced_route = _build_mode_contract_context(context, mother_decision)
+        mother_decision = _enforce_qualification_route_when_missing(
+            mother_decision,
+            mode_ctx_forced_route,
+        )
         lead = context.get("lead") or {}
-        route_for_child = mother_decision.route_to
+        force_followup_route = _is_followup_tick_context(context)
+        route_for_child = "follow-up" if force_followup_route else mother_decision.route_to
         anti_loop_rule3_applied = False
         mode_ctx_pre: Optional[dict] = None
 
-        if mother_decision.route_to == "qualification":
+        if force_followup_route and logger:
+            job = context.get("job") or {}
+            payload = job.get("payload") or {}
+            logger.info(
+                "event=followup_tick_route_priority route_override=%s mother_route_to=%s lead_category=%s job_id=%s lead_id=%s",
+                route_for_child,
+                mother_decision.route_to,
+                lead.get("category"),
+                job.get("id") or payload.get("job_id"),
+                lead.get("id") or payload.get("lead_id"),
+            )
+
+        if mother_decision.route_to == "qualification" and not force_followup_route:
             mode_ctx_pre = _build_mode_contract_context(context, mother_decision)
             missing_pre = list(mode_ctx_pre.get("missing_fields") or [])
             normalized_current_category = _normalize_category(lead.get("category"))
@@ -1625,7 +1725,7 @@ def decide(context: Dict[str, Any], logger: Optional[logging.Logger] = None) -> 
                 },
             )
 
-        if mother_decision.route_to == "qualification" and not anti_loop_rule3_applied:
+        if mother_decision.route_to == "qualification" and not anti_loop_rule3_applied and not force_followup_route:
             mode_ctx_pre = mode_ctx_pre or _build_mode_contract_context(context, mother_decision)
             mode = mode_ctx_pre.get("agent_mode_normalized")
             required_fields = list(mode_ctx_pre.get("required_fields") or [])

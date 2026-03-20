@@ -27,6 +27,7 @@ from services.jobs_service import (
     JOB_STATUS_PENDING,
     JOB_MAX_ATTEMPTS,
     LEAD_CATEGORIES,
+    TYPE_WHATSAPP_FOLLOWUP_TICK,
     TYPE_WHATSAPP_INBOUND_N8N,
     apply_outcome_highlight,
     apply_suggested_category,
@@ -36,6 +37,9 @@ from services.jobs_service import (
     get_job,
     normalize_job_type,
 )
+from services.followup_reconciler import reconcile_due_followups
+from services.followup_channel_context import resolve_followup_tick_channel_context
+from services.followup_state import progress_followup_after_auto_send, stop_followup_on_handoff
 
 router = APIRouter(prefix="/api", tags=["WhatsApp Executor"])
 
@@ -212,11 +216,23 @@ def whatsapp_execution_context(
     if not lead_id or not user_id:
         raise HTTPException(status_code=400, detail="Payload do job incompleto para montar contexto")
 
+    job_type = normalize_job_type(job.get("type") or "")
+    if job_type == TYPE_WHATSAPP_FOLLOWUP_TICK:
+        with get_connection() as conn:
+            channel_ctx = resolve_followup_tick_channel_context(conn, lead_id=int(lead_id), user_id=int(user_id))
+        payload = {
+            **payload,
+            "message_text": str(message_text or "followup_tick_auto_trigger"),
+            "instance_id": channel_ctx.get("instance_id"),
+            "provider": channel_ctx.get("provider"),
+            "phone": channel_ctx.get("phone") or payload.get("phone"),
+        }
+
     event = InboundEvent(
         user_id=int(user_id),
         lead_id=int(lead_id),
         channel="whatsapp",
-        message_text=str(message_text or ""),
+        message_text=str(payload.get("message_text") or ""),
         received_at=str(payload.get("received_at") or ""),
         phone=payload.get("phone"),
         message_id=payload.get("message_id"),
@@ -253,6 +269,20 @@ class QualificationStateUpsertRequest(BaseModel):
 class QualificationStateAttemptRequest(BaseModel):
     user_id: int
     field: str
+
+
+class FollowupReconcileRequest(BaseModel):
+    limit: int = Field(default=100, ge=1, le=500)
+    dry_run: bool = False
+
+
+@router.post("/internal/followup/reconcile")
+def reconcile_followup_internal(
+    payload: FollowupReconcileRequest,
+    _: str = Depends(_require_service_token),
+):
+    result = reconcile_due_followups(limit=payload.limit, dry_run=payload.dry_run)
+    return {"status": "ok", **result}
 
 
 @router.get("/internal/leads/{lead_id}/qualification-state")
@@ -612,6 +642,13 @@ def set_lead_bot_disabled(
             """,
             (lead_id, _json_dumps(notes), row["user_id"]),
         )
+        if payload.disabled:
+            stop_followup_on_handoff(
+                conn,
+                lead_id=lead_id,
+                user_id=int(row["user_id"]),
+                reason=payload.reason,
+            )
         conn.commit()
         return {"status": "ok", "lead_id": lead_id, "bot_disabled": payload.disabled}
 
@@ -848,6 +885,19 @@ def mark_outbound_sent(
                     json.dumps(notes, ensure_ascii=False),
                     row["user_id"],
                 ),
+            )
+
+        job_row = cur.execute(
+            "SELECT id, type FROM jobs WHERE id = ?",
+            (row["job_id"],),
+        ).fetchone()
+        job_type = normalize_job_type(job_row["type"]) if job_row else None
+        if job_type == "whatsapp.followup.tick":
+            progress_followup_after_auto_send(
+                conn,
+                lead_id=int(row["lead_id"]),
+                user_id=int(row["user_id"]),
+                source_job_id=int(row["job_id"]),
             )
 
         conn.commit()
