@@ -37,6 +37,32 @@ def ensure_column(conn: sqlite3.Connection, table: str, column: str, definition:
         cur.execute(f"ALTER TABLE {table} ADD COLUMN {definition}")
 
 
+def backfill_leads_agent_type(conn: sqlite3.Connection) -> int:
+    """Preenche leads.agent_type nulo com snapshot atual do AI Profile do usuário."""
+    from services.agent_type import resolve_agent_type_for_user
+
+    cur = conn.cursor()
+    rows = cur.execute(
+        """
+        SELECT id, user_id
+          FROM leads
+         WHERE agent_type IS NULL OR trim(coalesce(agent_type, '')) = ''
+        """
+    ).fetchall()
+
+    updated = 0
+    for row in rows:
+        lead_id = int(row["id"])
+        user_id = row["user_id"]
+        agent_type = resolve_agent_type_for_user(user_id=int(user_id)) if user_id else "agent_1"
+        cur.execute(
+            "UPDATE leads SET agent_type = ? WHERE id = ?",
+            (agent_type, lead_id),
+        )
+        updated += 1
+    return updated
+
+
 def ensure_jobs_tables(conn: sqlite3.Connection) -> None:
     """Cria as tabelas de agentes e jobs (idempotente)."""
     cur = conn.cursor()
@@ -165,6 +191,31 @@ def ensure_outbound_events_table(conn: sqlite3.Connection) -> None:
         "outbound_events",
         "status",
         "status TEXT NOT NULL DEFAULT 'reserved' CHECK (status IN ('reserved','sent','failed'))",
+    )
+
+
+def ensure_followup_reconcile_guard_table(conn: sqlite3.Connection) -> None:
+    """Cria tabela de guarda idempotente para enqueue de follow-up vencido."""
+
+    cur = conn.cursor()
+    cur.executescript(
+        """
+        CREATE TABLE IF NOT EXISTS followup_reconcile_guard (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            lead_id INTEGER NOT NULL,
+            due_at DATETIME NOT NULL,
+            job_id INTEGER,
+            status TEXT NOT NULL DEFAULT 'enqueued',
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE (lead_id, due_at),
+            FOREIGN KEY (lead_id) REFERENCES leads(id) ON DELETE CASCADE,
+            FOREIGN KEY (job_id) REFERENCES jobs(id) ON DELETE SET NULL
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_followup_guard_due ON followup_reconcile_guard(due_at, lead_id);
+        CREATE INDEX IF NOT EXISTS idx_followup_guard_job ON followup_reconcile_guard(job_id);
+        """
     )
 
 
@@ -611,6 +662,10 @@ def init_db() -> None:
         ensure_column(conn, "leads", "user_id", "INTEGER")
         ensure_column(conn, "leads", "bot_disabled", "bot_disabled INTEGER NOT NULL DEFAULT 0")
         ensure_column(conn, "leads", "bot_disabled_reason", "bot_disabled_reason TEXT")
+        ensure_column(conn, "leads", "agent_type", "agent_type TEXT")
+        ensure_column(conn, "leads", "followup_contract", "followup_contract TEXT")
+        ensure_column(conn, "leads", "followup_status", "followup_status TEXT")
+        ensure_column(conn, "leads", "next_followup_at", "next_followup_at DATETIME")
         ensure_column(conn, "prospection_logs", "user_id", "INTEGER")
         ensure_column(conn, "appointments", "outcome", "outcome TEXT")
         ensure_column(conn, "appointments", "outcome_note", "outcome_note TEXT")
@@ -629,6 +684,10 @@ def init_db() -> None:
         )
         cur.execute("CREATE INDEX IF NOT EXISTS idx_leads_phone ON leads(phone);")
         cur.execute("CREATE INDEX IF NOT EXISTS idx_leads_email ON leads(email);")
+        cur.execute(
+            "CREATE INDEX IF NOT EXISTS idx_leads_followup_due "
+            "ON leads(followup_status, next_followup_at, bot_disabled, user_id);"
+        )
         try:
             cur.execute("CREATE UNIQUE INDEX IF NOT EXISTS ux_leads_user_phone ON leads(user_id, phone);")
         except sqlite3.IntegrityError:
@@ -646,6 +705,9 @@ def init_db() -> None:
         # Controle de envios outbound para evitar duplicação pelo executor
         ensure_outbound_events_table(conn)
 
+        # Guarda idempotente para evitar enqueue duplicado do reconciliador de follow-up
+        ensure_followup_reconcile_guard_table(conn)
+
         # Base de conhecimento por usuário
         ensure_knowledge_table(conn)
 
@@ -654,6 +716,9 @@ def init_db() -> None:
         migrate_atividades_to_appointments(conn)  # popula appointments a partir do legado (normalizado)
         backfill_appointment_dates(conn)          # garante start/end
         normalize_appointment_timestamps(conn)    # normaliza ' ' -> 'T'
+        updated_agent_type_rows = backfill_leads_agent_type(conn)
+        if updated_agent_type_rows:
+            print(f"✅ backfill agent_type concluído: {updated_agent_type_rows} lead(s) atualizados")
 
         conn.commit()
         print("✅ init_db concluído com sucesso.")

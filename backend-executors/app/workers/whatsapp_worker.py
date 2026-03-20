@@ -14,7 +14,7 @@ SHORT_SLEEP_SECONDS = 0.5
 
 
 def _parse_types() -> list[str]:
-    raw = os.getenv("WHATSAPP_WORKER_TYPES", "whatsapp.inbound.n8n")
+    raw = os.getenv("WHATSAPP_WORKER_TYPES", "whatsapp.inbound.n8n,whatsapp.followup.tick")
     return [item.strip() for item in raw.split(",") if item.strip()]
 
 

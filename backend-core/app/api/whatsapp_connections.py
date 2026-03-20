@@ -55,6 +55,10 @@ class ResolveResponse(BaseModel):
     max_ia_conversas_monthly: Optional[int] = None
 
 
+class ResolveByUserResponse(ResolveResponse):
+    instance_id: str
+
+
 class ResolveTokenResponse(BaseModel):
     instance_id: str
     provider: str
@@ -169,6 +173,33 @@ async def resolve_connection(
     return ResolveResponse(
         user_id=connection.user_id,
         provider=connection.provider,
+        connection_status=connection_status,
+        phone_e164=connection.phone_e164,
+        allow_orion=orion_limits.get("allow_orion"),
+        max_ia_conversas_monthly=orion_limits.get("max_ia_conversas_monthly"),
+    )
+
+
+@router.get("/whatsapp-connections/resolve-by-user", response_model=ResolveByUserResponse)
+async def resolve_connection_by_user(
+    user_id: int,
+    db: Session = Depends(get_db),
+    _: str = Depends(_require_service_token),
+):
+    if not user_id:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="user_id obrigatório")
+
+    connection = service.get_connection_for_user(db, user_id)
+    if not connection:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Connection not found")
+
+    orion_limits = service.get_orion_limits(db, connection.user_id)
+    connection_status = service.normalize_connection_status_for_crm(connection.status)
+
+    return ResolveByUserResponse(
+        user_id=connection.user_id,
+        provider=connection.provider,
+        instance_id=connection.instance_id,
         connection_status=connection_status,
         phone_e164=connection.phone_e164,
         allow_orion=orion_limits.get("allow_orion"),

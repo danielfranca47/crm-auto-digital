@@ -1,5 +1,7 @@
 import argparse
+import json
 import logging
+import re
 import sys
 from typing import Any, Dict, List, Optional
 
@@ -10,6 +12,7 @@ from app.services import decision_engine
 from app.services import meeting_scheduler
 
 JOB_MAX_ATTEMPTS = 3
+TYPE_WHATSAPP_FOLLOWUP_TICK = "whatsapp.followup.tick"
 
 
 class ExecutionError(Exception):
@@ -78,12 +81,213 @@ def _resolve_user_id(context: Dict[str, Any], job: Dict[str, Any]) -> Optional[i
     )
 
 
+def _parse_followup_contract(raw: Any) -> Dict[str, Any]:
+    if isinstance(raw, dict):
+        return raw
+    if isinstance(raw, str) and raw.strip():
+        try:
+            parsed = json.loads(raw)
+        except json.JSONDecodeError:
+            return {}
+        return parsed if isinstance(parsed, dict) else {}
+    return {}
+
+
+def _inject_followup_contract_context(context: Dict[str, Any], job: Dict[str, Any]) -> None:
+    if not _is_followup_tick_job(job):
+        return
+
+    lead = context.get("lead") or {}
+    metadata = context.get("metadata") or {}
+    contract = _parse_followup_contract(lead.get("followup_contract"))
+    if not contract:
+        context["metadata"] = metadata
+        return
+
+    followup_signals = {
+        "followup_goal": contract.get("followup_goal"),
+        "followup_outcome": contract.get("outcome"),
+        "followup_variant": contract.get("followup_variant"),
+        "followup_attempts": contract.get("attempts"),
+        "followup_max_attempts": contract.get("max_attempts"),
+        "followup_meeting_happened": contract.get("meeting_happened"),
+        "followup_meeting_or_session_happened": contract.get("meeting_or_session_happened"),
+        "followup_proposal_sent": contract.get("proposal_sent"),
+        "followup_operator_note": contract.get("operator_note"),
+        "followup_status": contract.get("status"),
+        "followup_next_followup_at": contract.get("next_followup_at"),
+    }
+
+    # entrada sintética para orientar geração proativa quando não há inbound real
+    if not metadata.get("inbound_message_text"):
+        metadata["inbound_message_text"] = "followup_tick_auto_trigger"
+
+    metadata["followup_context"] = followup_signals
+    context["metadata"] = metadata
+
+
+def _is_followup_tick_job(job: Dict[str, Any]) -> bool:
+    return str(job.get("type") or "").strip().lower() == TYPE_WHATSAPP_FOLLOWUP_TICK
+
+
+def _resolve_in_reply_to_message_id(*, job_id: str, job: Dict[str, Any], metadata: Dict[str, Any]) -> Optional[str]:
+    explicit = metadata.get("message_id")
+    if explicit:
+        return str(explicit)
+
+    if _is_followup_tick_job(job):
+        payload = job.get("payload") or {}
+        due_at = str(payload.get("due_at") or "na").replace(" ", "T")
+        return f"followup:{job_id}:{due_at}"
+
+    return None
+
+
+def _build_followup_fallback_outbound_body(context: Dict[str, Any]) -> str:
+    lead = context.get("lead") or {}
+    contact_name = str(lead.get("contactName") or "").strip()
+    greeting = f"Olá, {contact_name}." if contact_name else "Olá!"
+    return (
+        f"{greeting} Passando para dar continuidade ao seu follow-up. "
+        "Se fizer sentido, posso te ajudar com os próximos passos por aqui."
+    )
+
+
 def _build_outbound_body(decision: decision_engine.DecisionOutput) -> Optional[str]:
     if decision.next_action in {"reply", "ask_qualification"}:
         return decision.message_text or ""
     if decision.next_action == "handoff":
         return decision.message_text or ""
     return None
+
+
+_URL_RE = re.compile(r"https?://\S+", re.IGNORECASE)
+_LINK_PLACEHOLDER_RE = re.compile(r"\[[^\]]*link[^\]]*\]", re.IGNORECASE)
+
+
+def _extract_checkout_link_from_offer_pack(context: Dict[str, Any]) -> tuple[Optional[str], str]:
+    ai_profile = context.get("ai_profile") or {}
+    playbook = context.get("playbook") or {}
+    source = "none"
+    offer_pack = ai_profile.get("offer_pack")
+    if isinstance(offer_pack, str):
+        try:
+            parsed = json.loads(offer_pack)
+            offer_pack = parsed if isinstance(parsed, dict) else None
+        except json.JSONDecodeError:
+            offer_pack = None
+    if not isinstance(offer_pack, dict):
+        source = "playbook"
+        offer_pack = playbook.get("offer_pack") if isinstance(playbook.get("offer_pack"), dict) else None
+    else:
+        source = "ai_profile"
+    if not isinstance(offer_pack, dict):
+        return None, "none"
+    items = offer_pack.get("items") if isinstance(offer_pack.get("items"), list) else []
+    for item in items:
+        if not isinstance(item, dict):
+            continue
+        link = str(item.get("checkout_link") or "").strip()
+        if link:
+            return link, source
+    return None, source
+
+
+def _enforce_checkout_link_guardrail(
+    *,
+    decision: decision_engine.DecisionOutput,
+    context: Dict[str, Any],
+) -> None:
+    if not isinstance(decision.decision_trace, dict):
+        decision.decision_trace = {}
+    trace = decision.decision_trace
+    template_key = str(((context.get("ai_profile") or {}).get("template_key") or "")).strip().lower()
+    if template_key == "hybrid_scheduler":
+        trace["checkout_link_present"] = False
+        trace["checkout_link_source"] = "disabled_for_hybrid_scheduler"
+        trace["checkout_guardrail_applied"] = False
+        trace["checkout_guardrail_reason"] = "hybrid_scheduler_no_checkout"
+        return
+
+    checkout_link, checkout_link_source = _extract_checkout_link_from_offer_pack(context)
+    trace["checkout_link_present"] = bool(checkout_link)
+    trace["checkout_link_source"] = checkout_link_source
+    trace["checkout_guardrail_applied"] = False
+
+    if not checkout_link:
+        return
+
+    presentation_variant = str(
+        trace.get("presentation_variant")
+        or (context.get("metadata") or {}).get("presentation_variant")
+        or ""
+    ).strip().lower()
+    suggested_category = str(decision.suggested_category or "").strip().lower()
+    outcome = str(decision.outcome or "").strip().lower()
+    child_structured = trace.get("child_signals_structured") if isinstance(trace.get("child_signals_structured"), dict) else {}
+    checkout_sent = child_structured.get("checkout_sent") is True
+
+    message_text = str(decision.message_text or "")
+    has_placeholder_link = bool(_LINK_PLACEHOLDER_RE.search(message_text))
+    has_any_url = bool(_URL_RE.search(message_text))
+    is_closing_context = suggested_category == "closing"
+    is_won_context = outcome == "won"
+
+    if not (checkout_sent or is_closing_context or is_won_context):
+        trace["checkout_guardrail_reason"] = "not_checkout_sent_or_closing_or_won"
+        return
+    if checkout_link in message_text:
+        trace["checkout_guardrail_reason"] = "already_contains_real_checkout_link"
+        return
+
+    if has_any_url and not has_placeholder_link:
+        trace["checkout_guardrail_reason"] = "already_has_url"
+        return
+
+    if has_placeholder_link:
+        decision.message_text = _LINK_PLACEHOLDER_RE.sub(checkout_link, message_text)
+        trace["checkout_guardrail_applied"] = True
+        trace["checkout_guardrail_reason"] = "replaced_placeholder"
+        return
+
+    if has_any_url:
+        trace["checkout_guardrail_reason"] = "already_has_url"
+        return
+
+    separator = "\n\n" if message_text.strip() else ""
+    decision.message_text = f"{message_text}{separator}{checkout_link}"
+    trace["checkout_guardrail_applied"] = True
+    trace["checkout_guardrail_reason"] = "appended_missing_link"
+
+
+def _enforce_checkout_link_guardrail_legacy(
+    *,
+    decision: decision_engine.DecisionOutput,
+    context: Dict[str, Any],
+) -> None:
+    """Compat shim: preserve old behavior when checkout_sent=true even sem intenção textual."""
+    template_key = str(((context.get("ai_profile") or {}).get("template_key") or "")).strip().lower()
+    if template_key == "hybrid_scheduler":
+        return
+    trace = decision.decision_trace if isinstance(decision.decision_trace, dict) else {}
+    child_structured = trace.get("child_signals_structured") if isinstance(trace.get("child_signals_structured"), dict) else None
+    if not isinstance(child_structured, dict):
+        return
+    if child_structured.get("checkout_sent") is not True:
+        return
+
+    checkout_link, _ = _extract_checkout_link_from_offer_pack(context)
+    if not checkout_link:
+        return
+
+    message_text = str(decision.message_text or "")
+    if checkout_link in message_text:
+        return
+    if _URL_RE.search(message_text):
+        return
+
+    separator = "\n\n" if message_text.strip() else ""
+    decision.message_text = f"{message_text}{separator}{checkout_link}"
 
 
 def _format_questions(questions: List[str]) -> str:
@@ -238,11 +442,14 @@ def execute_job(job_id: str, logger: logging.Logger) -> int:
     playbook = context.get("playbook") or {}
     metadata = context.get("metadata") or {}
 
+    _inject_followup_contract_context(context, job)
+    metadata = context.get("metadata") or {}
+
     lead_id = _safe_get(lead, "id")
     lead_name = _safe_get(lead, "contactName", "companyName", "name")
     lead_phone = _safe_get(lead, "phone", "phone_e164")
     user_id = _resolve_user_id(context, job)
-    in_reply_to_message_id = metadata.get("message_id")
+    in_reply_to_message_id = _resolve_in_reply_to_message_id(job_id=job_id, job=job, metadata=metadata)
     if not in_reply_to_message_id:
         exec_error = ExecutionError(
             "missing in_reply_to_message_id in execution context",
@@ -295,13 +502,17 @@ def execute_job(job_id: str, logger: logging.Logger) -> int:
         _safe_get(playbook, "template_key", "name"),
         extra={"phase": "context"},
     )
+    followup_ctx = metadata.get("followup_context") if isinstance(metadata.get("followup_context"), dict) else {}
     ctx_logger.info(
-        "event=metadata_loaded provider=%s instance_id=%s message_id=%s received_at=%s phone=%s",
+        "event=metadata_loaded provider=%s instance_id=%s message_id=%s received_at=%s phone=%s followup_variant=%s followup_goal=%s followup_meeting_or_session=%s",
         metadata.get("provider"),
         metadata.get("instance_id"),
         metadata.get("message_id"),
         metadata.get("received_at"),
         metadata.get("phone"),
+        followup_ctx.get("followup_variant"),
+        followup_ctx.get("followup_goal"),
+        followup_ctx.get("followup_meeting_or_session_happened"),
         extra={"phase": "context"},
     )
 
@@ -313,11 +524,15 @@ def execute_job(job_id: str, logger: logging.Logger) -> int:
         extra={"phase": "decision"},
     )
     meeting_scheduler.handle_meeting_scheduled(context, decision, logger=ctx_logger)
+    _enforce_checkout_link_guardrail(decision=decision, context=context)
+    _enforce_checkout_link_guardrail_legacy(decision=decision, context=context)
     outbound_body = _build_outbound_body(decision)
     if decision.next_action == "ask_qualification" and not outbound_body:
         fallback_text = _format_questions(decision.questions or [])
         if fallback_text:
             outbound_body = fallback_text
+    if _is_followup_tick_job(job) and not outbound_body:
+        outbound_body = _build_followup_fallback_outbound_body(context)
     result_payload = _build_result_payload(
         decision,
         lead_id=lead_id,

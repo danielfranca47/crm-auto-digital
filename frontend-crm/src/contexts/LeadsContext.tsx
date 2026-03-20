@@ -62,6 +62,19 @@ function mapRawLead(raw: any): Lead {
       }
     : undefined;
 
+  let followupContract: Record<string, any> | null = null;
+  const rawContract = raw?.followup_contract ?? raw?.followupContract;
+  if (rawContract && typeof rawContract === 'object') {
+    followupContract = rawContract as Record<string, any>;
+  } else if (typeof rawContract === 'string') {
+    try {
+      const parsed = JSON.parse(rawContract);
+      followupContract = parsed && typeof parsed === 'object' ? parsed : null;
+    } catch {
+      followupContract = null;
+    }
+  }
+
   return {
     id: String(raw.id),
     companyName: raw.companyName || 'Empresa sem nome',
@@ -72,6 +85,8 @@ function mapRawLead(raw: any): Lead {
     category: raw.category || 'to-prospect',
     customMessage: raw.customMessage || '',
     observations: raw.observations || '',
+    agent_type: raw.agent_type ?? null,
+    followup_contract: followupContract,
     bot_disabled: Boolean(raw.bot_disabled ?? raw.botDisabled),
     bot_disabled_reason: raw.bot_disabled_reason ?? raw.botDisabledReason ?? null,
     createdAt: raw.createdAt ? new Date(raw.createdAt) : new Date(),

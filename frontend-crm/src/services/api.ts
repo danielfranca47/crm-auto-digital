@@ -313,6 +313,18 @@ export const api = {
     return apiClient.post(`/leads/${leadId}/bot-disabled`, payload);
   },
 
+  startFollowup: async (payload: {
+    lead_id: string | number;
+    agent_type: "agent_1" | "agent_3";
+    meeting_or_session_happened: "yes" | "no_show" | "canceled" | "needs_reschedule";
+    outcome?: string | null;
+    followup_goal?: string | null;
+    proposal_sent?: boolean | null;
+    operator_note?: string | null;
+  }) => {
+    return apiClient.post(`/leads/start-followup`, payload);
+  },
+
   appointments: {
     list: async (params?: {
       start?: string;

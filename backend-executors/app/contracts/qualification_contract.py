@@ -22,6 +22,10 @@ SIGNALS_SCHEMA = {
     "handoff_requested",
     "missing_fields",
     "stop_reason",
+    "offer_presented",
+    "checkout_sent",
+    "presentation_variant",
+    "offer_item_name",
 }
 
 MIN_REQUIRED_FIELDS = {

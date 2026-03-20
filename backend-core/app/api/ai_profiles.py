@@ -1,3 +1,4 @@
+import json
 from datetime import datetime
 from enum import Enum
 from typing import List, Optional
@@ -13,6 +14,32 @@ from .auth import get_current_user
 
 router = APIRouter(prefix="", tags=["ai_profiles"])
 
+
+
+
+def _normalize_offer_pack(value):
+    if value is None:
+        return None
+    if isinstance(value, dict):
+        return value
+    if isinstance(value, str):
+        raw = value.strip()
+        if not raw:
+            return None
+        try:
+            parsed = json.loads(raw)
+        except json.JSONDecodeError:
+            return None
+        return parsed if isinstance(parsed, dict) else None
+    return None
+
+
+def _normalize_profile_offer_pack(profile: models.AIProfile) -> models.AIProfile:
+    try:
+        profile.offer_pack = _normalize_offer_pack(getattr(profile, "offer_pack", None))
+    except Exception:
+        pass
+    return profile
 
 class IdentityMode(str, Enum):
     virtual_assistant = "virtual_assistant"
@@ -34,6 +61,16 @@ class AgentMode(str, Enum):
     direto = "direto"
 
 
+class PresentationVariant(str, Enum):
+    sales = "sales"
+    scheduler = "scheduler"
+
+
+class HybridFlowStyle(str, Enum):
+    offer_then_schedule = "offer_then_schedule"
+    schedule_then_offer = "schedule_then_offer"
+
+
 AI_TEMPLATES = [
     {
         "key": "sdr_padrao",
@@ -50,6 +87,11 @@ AI_TEMPLATES = [
         "name": "Closer Agressivo Controlado",
         "description": "Mais direto e orientado a fechamento, ainda respeitando limites profissionais.",
     },
+    {
+        "key": "hybrid_scheduler",
+        "name": "Híbrido Agendador",
+        "description": "Agenda com autonomia operacional (sem checkout).",
+    },
 ]
 
 
@@ -65,6 +107,9 @@ class AIProfileBase(BaseModel):
     goals: str
     custom_instructions: Optional[str] = None
     agent_mode: AgentMode = AgentMode.sdr_scheduler
+    presentation_variant: Optional[PresentationVariant] = None
+    hybrid_flow_style: Optional[HybridFlowStyle] = None
+    offer_pack: Optional[dict] = None
     identity_mode: IdentityMode = IdentityMode.human_agent
     handoff_policy: HandoffPolicy = HandoffPolicy.keep_active_notify
     handoff_custom_text: Optional[str] = None
@@ -88,6 +133,9 @@ class AIProfileUpdate(BaseModel):
     goals: Optional[str] = None
     custom_instructions: Optional[str] = None
     agent_mode: Optional[AgentMode] = None
+    presentation_variant: Optional[PresentationVariant] = None
+    hybrid_flow_style: Optional[HybridFlowStyle] = None
+    offer_pack: Optional[dict] = None
     identity_mode: Optional[IdentityMode] = None
     handoff_policy: Optional[HandoffPolicy] = None
     handoff_custom_text: Optional[str] = None
@@ -133,7 +181,12 @@ def _upsert_ai_profile(
     data: dict,
     require_all_fields_for_create: bool = True,
 ) -> models.AIProfile:
-    if data.get("agent_mode") is None:
+    profile = db.query(models.AIProfile).filter(models.AIProfile.user_id == user_id).first()
+    if "offer_pack" in data:
+        data["offer_pack"] = _normalize_offer_pack(data.get("offer_pack"))
+    # Default mode inference should happen only on create.
+    # On update, omitted/null agent_mode must not rewrite existing mode.
+    if not profile and data.get("agent_mode") is None:
         template_key = str(data.get("template_key") or "")
         if template_key.startswith("closer"):
             data["agent_mode"] = AgentMode.direto
@@ -141,11 +194,11 @@ def _upsert_ai_profile(
             data["agent_mode"] = AgentMode.consultivo
         else:
             data["agent_mode"] = AgentMode.agenda
-    profile = db.query(models.AIProfile).filter(models.AIProfile.user_id == user_id).first()
 
     if profile:
         for key, value in data.items():
-            if value is not None:
+            # PUT semantics for AIProfileUpdate: explicit null clears the field.
+            if key in data:
                 setattr(profile, key, value)
         profile.updated_at = datetime.utcnow()
     else:
@@ -171,7 +224,7 @@ def _upsert_ai_profile(
 
     db.commit()
     db.refresh(profile)
-    return profile
+    return _normalize_profile_offer_pack(profile)
 
 
 @router.get("/ai-templates", response_model=List[AITemplate])
@@ -186,7 +239,7 @@ async def get_my_ai_profile(
     profile = db.query(models.AIProfile).filter(models.AIProfile.user_id == current_user.id).first()
     if not profile:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="AI profile not found")
-    return profile
+    return _normalize_profile_offer_pack(profile)
 
 
 @router.post("/ai-profiles", response_model=AIProfileOut, status_code=status.HTTP_201_CREATED)
@@ -197,7 +250,7 @@ async def create_or_replace_ai_profile(
 ):
     _validate_template_key(payload.template_key)
     profile = _upsert_ai_profile(db=db, user_id=current_user.id, data=payload.dict())
-    return profile
+    return _normalize_profile_offer_pack(profile)
 
 
 @router.put("/ai-profiles/me", response_model=AIProfileOut)
@@ -224,7 +277,7 @@ async def update_my_ai_profile(
         data=update_data,
         require_all_fields_for_create=True,
     )
-    return profile
+    return _normalize_profile_offer_pack(profile)
 
 
 @router.get("/ai-profiles/resolve", response_model=AIProfileOut)
@@ -236,4 +289,4 @@ async def resolve_ai_profile(
     profile = db.query(models.AIProfile).filter(models.AIProfile.user_id == user_id).first()
     if not profile:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="AI profile not found")
-    return profile
+    return _normalize_profile_offer_pack(profile)

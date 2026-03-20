@@ -1,6 +1,7 @@
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   DndContext,
+  DragOverlay,
   DragEndEvent,
   DragOverEvent,
   DragStartEvent,
@@ -24,6 +25,7 @@ import { ScheduleAppointmentDialog } from "./ScheduleAppointmentDialog";
 import { useAppointments, useCancelAppointment } from "@/hooks/useAppointments";
 import { useToast } from "@/hooks/use-toast";
 import { Alert, AlertDescription, AlertTitle } from "./ui/alert";
+import { FollowUpTransitionModal } from "./FollowUpTransitionModal";
 
 interface KanbanBoardProps {
   onDashboard: () => void;
@@ -72,6 +74,36 @@ export function KanbanBoard({ onDashboard }: KanbanBoardProps) {
   const [isAppointmentDialogOpen, setIsAppointmentDialogOpen] = useState(false);
   const [appointmentDialogLeadId, setAppointmentDialogLeadId] = useState<string | null>(null);
   const [appointmentToEdit, setAppointmentToEdit] = useState<Appointment | null>(null);
+  const [followupModalOpen, setFollowupModalOpen] = useState(false);
+  const [followupLead, setFollowupLead] = useState<Lead | null>(null);
+  const [profileAgentType, setProfileAgentType] = useState<"agent_1" | "agent_2" | "agent_3" | null>(null);
+
+  useEffect(() => {
+    let mounted = true;
+    const inferAgentTypeFromProfile = async () => {
+      try {
+        const profile = await api.core.getAiProfileMe();
+        const templateKey = String(profile?.template_key || "").trim().toLowerCase();
+        const inferred: "agent_1" | "agent_2" | "agent_3" =
+          templateKey === "hybrid_scheduler"
+            ? "agent_3"
+            : templateKey.startsWith("closer")
+            ? "agent_2"
+            : "agent_1";
+        if (mounted) {
+          setProfileAgentType(inferred);
+        }
+      } catch {
+        if (mounted) {
+          setProfileAgentType(null);
+        }
+      }
+    };
+    inferAgentTypeFromProfile();
+    return () => {
+      mounted = false;
+    };
+  }, []);
 
   const allColumns = useMemo(() => [...columns, ...archivedColumns], [columns, archivedColumns]);
 
@@ -116,6 +148,11 @@ export function KanbanBoard({ onDashboard }: KanbanBoardProps) {
     [allColumns]
   );
 
+  const activeLead = useMemo(() => {
+    if (!activeId) return null;
+    return findLead(activeId);
+  }, [activeId, findLead]);
+
   const handleDragStart = (event: DragStartEvent) => {
     setActiveId(event.active.id as string);
   };
@@ -131,8 +168,86 @@ export function KanbanBoard({ onDashboard }: KanbanBoardProps) {
     const overColumn = allColumns.find((col) => col.id === overId) || findColumn(overId);
 
     if (!activeColumn || !overColumn || activeColumn === overColumn) return;
-    moveLead(activeId, overColumn.id as any);
   };
+
+  const getEffectiveAgentType = useCallback(
+    (lead: Lead): "agent_1" | "agent_2" | "agent_3" | null => {
+      const raw = String(lead.agent_type || "").trim().toLowerCase();
+      if (raw === "agent_1" || raw === "agent_2" || raw === "agent_3") {
+        return raw;
+      }
+      return profileAgentType;
+    },
+    [profileAgentType]
+  );
+
+  const resolveAgentTypeForLead = useCallback(
+    async (lead: Lead): Promise<"agent_1" | "agent_2" | "agent_3" | null> => {
+      const current = getEffectiveAgentType(lead);
+      if (current) return current;
+
+      try {
+        const profile = await api.core.getAiProfileMe();
+        const templateKey = String(profile?.template_key || "").trim().toLowerCase();
+        const inferred: "agent_1" | "agent_2" | "agent_3" =
+          templateKey === "hybrid_scheduler"
+            ? "agent_3"
+            : templateKey.startsWith("closer")
+            ? "agent_2"
+            : "agent_1";
+        setProfileAgentType(inferred);
+        return inferred;
+      } catch {
+        return null;
+      }
+    },
+    [getEffectiveAgentType]
+  );
+
+  const requiresFollowupTransition = useCallback((lead: Lead, targetCategory: string) => {
+    if (lead.category !== "apresentation" || targetCategory !== "follow-up") return false;
+    const effectiveAgentType = getEffectiveAgentType(lead);
+    return effectiveAgentType === "agent_1" || effectiveAgentType === "agent_3";
+  }, [getEffectiveAgentType]);
+
+  const handleMoveWithRules = useCallback(async (lead: Lead, targetCategory: string) => {
+    const isFollowupTransition = lead.category === "apresentation" && targetCategory === "follow-up";
+
+    if (isFollowupTransition) {
+      const effectiveAgentType = await resolveAgentTypeForLead(lead);
+      if (!effectiveAgentType) {
+        toast({
+          title: "Não foi possível iniciar a transição",
+          description: "Não conseguimos resolver o tipo de agente para esta transição. Tente novamente.",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      if (effectiveAgentType === "agent_1" || effectiveAgentType === "agent_3") {
+        setFollowupLead(
+          lead.agent_type !== effectiveAgentType
+            ? { ...lead, agent_type: effectiveAgentType }
+            : lead
+        );
+        setFollowupModalOpen(true);
+        return;
+      }
+    }
+
+    if (requiresFollowupTransition(lead, targetCategory)) {
+      const effectiveAgentType = await resolveAgentTypeForLead(lead);
+      setFollowupLead(
+        effectiveAgentType && lead.agent_type !== effectiveAgentType
+          ? { ...lead, agent_type: effectiveAgentType }
+          : lead
+      );
+      setFollowupModalOpen(true);
+      return;
+    }
+
+    moveLead(lead.id, targetCategory as any);
+  }, [moveLead, requiresFollowupTransition, resolveAgentTypeForLead, toast]);
 
   const handleDragEnd = (event: DragEndEvent) => {
     setActiveId(null);
@@ -144,7 +259,7 @@ export function KanbanBoard({ onDashboard }: KanbanBoardProps) {
     const overId = over.id as string;
 
     const activeColumn = findColumn(activeId);
-    const overColumn = findColumn(overId);
+    const overColumn = allColumns.find((col) => col.id === overId) || findColumn(overId);
 
     if (!activeColumn || !overColumn) return;
 
@@ -152,10 +267,7 @@ export function KanbanBoard({ onDashboard }: KanbanBoardProps) {
     if (!lead) return;
 
     if (activeColumn.id !== overColumn.id) {
-      updateLead(activeId, {
-        category: overColumn.id,
-        lastMovement: new Date(),
-      });
+      handleMoveWithRules(lead, overColumn.id);
     } else {
       const activeIndex = activeColumn.leads.findIndex((item) => item.id === activeId);
       const overIndex = overColumn.leads.findIndex((item) => item.id === overId);
@@ -169,7 +281,9 @@ export function KanbanBoard({ onDashboard }: KanbanBoardProps) {
   };
 
   const handleMoveLead = (leadId: string, newCategory: string) => {
-    moveLead(leadId, newCategory as any);
+    const lead = findLead(leadId);
+    if (!lead) return;
+    handleMoveWithRules(lead, newCategory);
   };
 
   const handleArchiveLead = (leadId: string, archiveCategory: string) => {
@@ -325,6 +439,20 @@ export function KanbanBoard({ onDashboard }: KanbanBoardProps) {
           onDragOver={handleDragOver}
           onDragEnd={handleDragEnd}
         >
+          <DragOverlay>
+            {activeLead ? (
+              <div className="lead-card p-4 w-72 rotate-1 shadow-2xl cursor-grabbing">
+                <div className="flex justify-between items-start mb-2">
+                  <h4 className="font-semibold text-foreground text-sm">
+                    {activeLead.companyName} - {activeLead.contactName}
+                  </h4>
+                </div>
+                <div className="text-xs text-muted-foreground truncate">{activeLead.phone}</div>
+                <div className="text-xs text-muted-foreground truncate mt-1">{activeLead.origin}</div>
+              </div>
+            ) : null}
+          </DragOverlay>
+
           <div className="flex justify-between items-center mb-4">
             <h1 className="text-xl font-semibold text-foreground">Quadro Kanban</h1>
             <div className="flex items-center gap-2">
@@ -425,6 +553,18 @@ export function KanbanBoard({ onDashboard }: KanbanBoardProps) {
                 : prev
             );
           }
+        }}
+      />
+
+      <FollowUpTransitionModal
+        open={followupModalOpen}
+        onOpenChange={setFollowupModalOpen}
+        lead={followupLead}
+        onSuccess={async () => {
+          if (followupLead) {
+            moveLead(followupLead.id, "follow-up" as any);
+          }
+          setFollowupLead(null);
         }}
       />
     </div>

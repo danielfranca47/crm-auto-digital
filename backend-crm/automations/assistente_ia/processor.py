@@ -20,6 +20,7 @@ from services.rate_limit_service import (
     get_monthly_remaining,
     get_remaining_lead_slots,
 )
+from services.agent_type import resolve_agent_type_for_user
 
 # ----------------- Normalizadores & helpers -----------------
 def normalize_phone(phone: Optional[str]) -> Optional[str]:
@@ -146,6 +147,8 @@ def find_existing_lead(conn, companyName: str, email: Optional[str], phone: Opti
 
 def create_lead(conn, data: Dict, *, user_id: int) -> int:
     payload = {"user_id": user_id, **data}
+    if not payload.get("agent_type"):
+        payload["agent_type"] = resolve_agent_type_for_user(user_id=user_id)
     cols = ",".join(payload.keys())
     qs = ",".join(["?"] * len(payload))
     cur = conn.cursor()
