@@ -245,3 +245,38 @@ cd website && npm install && npm run dev
 ```
 
 > O backend-crm depende do backend-core estar rodando primeiro.
+
+---
+
+## Git workflow
+
+**Regra obrigatória:** após cada implementação concluída (nova funcionalidade ou correção), o Claude **deve** criar um commit na branch atual antes de encerrar a resposta.
+
+### Convenção de mensagem (Conventional Commits)
+
+```
+feat: <descrição curta do que foi adicionado>
+fix: <descrição curta do que foi corrigido>
+```
+
+### Corpo do commit
+
+Incluir no corpo:
+- Arquivos alterados e o que mudou em cada um
+- Motivação da mudança (contexto mínimo)
+
+Exemplo:
+```
+feat: adicionar rota de exportação de leads
+
+- backend-crm/routes/leads.py: nova rota GET /api/leads/export
+- backend-crm/services/export_service.py: lógica de geração CSV
+```
+
+### Regras
+
+- Sempre commitar na **branch atual** (nunca trocar de branch)
+- **Nunca** usar `--amend` em commits já publicados no remote
+- **Nunca** fazer push automático — somente commit local
+- Usar `git add` nos arquivos específicos alterados (evitar `git add -A` com arquivos sensíveis)
+- Se não houver alteração de código (apenas leitura/análise), **não criar commit**
