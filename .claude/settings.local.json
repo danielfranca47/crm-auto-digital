@@ -4,7 +4,8 @@
       "Bash(sqlite3 c:/crm-auto-digital/backend-crm/database/crm.db \".tables\")",
       "Bash(python3 -c \":*)",
       "Bash(python -c \":*)",
-      "Bash(find /c/crm-auto-digital/backend-crm -type f -name \"*.py\" -exec grep -l \"system.*role\\\\|system.*message\\\\|system_prompt\" {})"
+      "Bash(find /c/crm-auto-digital/backend-crm -type f -name \"*.py\" -exec grep -l \"system.*role\\\\|system.*message\\\\|system_prompt\" {})",
+      "Bash(grep -r \"reconcile_due_followups\\\\|/internal/followup/reconcile\" /c/crm-auto-digital --include=*.py --exclude-dir=.venv)"
     ]
   }
 }
