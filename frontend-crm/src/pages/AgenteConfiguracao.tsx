@@ -369,6 +369,7 @@ export default function AgenteConfiguracao() {
           <span style={{ color: 'var(--o-text)' }}>{config.name || '—'}</span>
         </div>
         <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 12 }}>
+          <Link to="/agentes-info" className="o-btn" style={{ fontSize: 8 }}>? Entenda os tipos de agentes</Link>
           <Link to="/" className="o-btn" style={{ fontSize: 8 }}>← CRM</Link>
         </div>
       </header>

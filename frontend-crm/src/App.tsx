@@ -14,6 +14,7 @@ import MinhaConta from "./pages/MinhaConta";
 import Assinatura from "./pages/Assinatura";
 import UsoDoPlano from "./pages/UsoDoPlano";
 import AgenteConfiguracao from "./pages/AgenteConfiguracao";
+import TiposAgentes from "./pages/TiposAgentes";
 import { ThemeProvider } from "./contexts/ThemeContext";
 import { LeadsProvider } from "./contexts/LeadsContext";
 import { RateLimitModalProvider } from "./contexts/RateLimitModalContext";
@@ -116,6 +117,7 @@ const App = () => (
                   }
                 >
                   <Route path="/ai-profile" element={<AgenteConfiguracao />} />
+                  <Route path="/agentes-info" element={<TiposAgentes />} />
                 </Route>
 
                 {/* catch-all */}
