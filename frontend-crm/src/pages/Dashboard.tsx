@@ -7,14 +7,17 @@ import { useLeads } from "@/contexts/LeadsContext";
 import { ScheduleAppointmentDialog } from "@/components/ScheduleAppointmentDialog";
 import { api } from "@/services/api";
 import type { AiProfile } from "@/services/api";
+import type { AgentConfig } from "@/types/agente";
 
 const Dashboard = () => {
   const navigate = useNavigate();
   const { columns, archivedColumns } = useLeads();
   const [profile, setProfile] = useState<AiProfile | null>(null);
+  const [agentConfig, setAgentConfig] = useState<AgentConfig | null>(null);
 
   useEffect(() => {
     api.core.getAiProfileMe().then(setProfile).catch(() => {});
+    api.agente.getConfig().then(setAgentConfig).catch(() => {});
   }, []);
 
   const todayRange = useMemo(() => {
@@ -46,15 +49,12 @@ const Dashboard = () => {
     });
   }, [appointments, leadIds]);
 
-  const handleBack = () => {
-    navigate("/");
-  };
-
   return (
     <>
       <DashboardComponent
         profile={profile}
-        onBack={handleBack}
+        agentConfig={agentConfig}
+        onBack={() => navigate("/")}
         todayAppointments={todayAppointments}
         appointmentsLoading={isLoading}
         appointmentsError={isError ? (error instanceof Error ? error.message : "Erro ao carregar") : null}
