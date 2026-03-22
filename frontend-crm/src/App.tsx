@@ -13,7 +13,6 @@ import NotFound from "./pages/NotFound";
 import MinhaConta from "./pages/MinhaConta";
 import Assinatura from "./pages/Assinatura";
 import UsoDoPlano from "./pages/UsoDoPlano";
-import AgenteDashboard from "./pages/AgenteDashboard";
 import AgenteConfiguracao from "./pages/AgenteConfiguracao";
 import { ThemeProvider } from "./contexts/ThemeContext";
 import { LeadsProvider } from "./contexts/LeadsContext";
@@ -116,8 +115,7 @@ const App = () => (
                     </Protected>
                   }
                 >
-                  <Route path="/ai-profile" element={<AgenteDashboard />} />
-                  <Route path="/ai-profile/configuracao" element={<AgenteConfiguracao />} />
+                  <Route path="/ai-profile" element={<AgenteConfiguracao />} />
                 </Route>
 
                 {/* catch-all */}

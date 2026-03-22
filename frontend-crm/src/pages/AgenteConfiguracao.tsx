@@ -4,13 +4,14 @@ import { OrionShell } from '@/components/agente/OrionShell';
 import { CamadaIdentidade } from '@/components/agente/CamadaIdentidade';
 import { CamadaQualificacao } from '@/components/agente/CamadaQualificacao';
 import { CamadaPipeline } from '@/components/agente/CamadaPipeline';
+import { ConexaoNumero } from '@/components/agente/ConexaoNumero';
 import { api } from '@/services/api';
 import { DEFAULT_AGENT_CONFIG } from '@/types/agente';
 import type { AgentConfig } from '@/types/agente';
 import { AGENT_MODE_LABELS, IDENTITY_MODE_LABELS, LGPD_LABELS, REATIVACAO_LABELS, MEDIA_FALLBACK_LABELS } from '@/types/agente';
 
 // ─── Tipos de painel ─────────────────────────────────────────
-type PanelId = 'overview' | 'c1' | 'c2' | 'c3';
+type PanelId = 'overview' | 'c1' | 'c2' | 'c3' | 'c4';
 
 // ─── Painel: Resumo ──────────────────────────────────────────
 function PainelResumo({
@@ -282,6 +283,7 @@ export default function AgenteConfiguracao() {
       id: 'c3', label: '③ Pipeline',
       badge: [!config.opt_out_keywords.length, !config.lgpd_mode, !config.reactivation_mode].filter(Boolean).length || undefined,
     },
+    { id: 'c4', label: 'Conexão' },
   ];
 
   useEffect(() => {
@@ -362,14 +364,11 @@ export default function AgenteConfiguracao() {
           Orion CRM
         </div>
         <div className="font-mono-orion" style={{ fontSize: 10, letterSpacing: '1.5px', color: 'var(--o-dim)', display: 'flex', alignItems: 'center', gap: 8 }}>
-          <span>Agentes</span>
+          <span>Identidade do Agente</span>
           <span>›</span>
           <span style={{ color: 'var(--o-text)' }}>{config.name || '—'}</span>
-          <span>›</span>
-          <span style={{ color: 'var(--o-purple)' }}>Configuração</span>
         </div>
         <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 12 }}>
-          <Link to="/ai-profile" className="o-btn">← Ver dashboard</Link>
           <Link to="/" className="o-btn" style={{ fontSize: 8 }}>← CRM</Link>
         </div>
       </header>
@@ -433,6 +432,18 @@ export default function AgenteConfiguracao() {
             dirty={isDirty}
             phoneNumber={phoneNumber}
           />
+        )}
+        {activePanel === 'c4' && (
+          <div className="o-panel o-fade-in">
+            <div className="font-mono-orion" style={{ fontSize: 9, letterSpacing: 3, textTransform: 'uppercase', marginBottom: 8, color: 'var(--o-active)' }}>
+              Conexão do número
+            </div>
+            <div className="font-display" style={{ fontSize: 28, fontWeight: 400, marginBottom: 6, color: 'var(--o-text)' }}>WhatsApp</div>
+            <div style={{ fontSize: 12.5, color: 'var(--o-sub)', fontWeight: 300, marginBottom: 24 }}>
+              Gerencie a conexão do número de WhatsApp vinculado a este agente.
+            </div>
+            <ConexaoNumero />
+          </div>
         )}
       </div>
     </OrionShell>
