@@ -1,15 +1,22 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { isSameDay } from "date-fns";
 import { Dashboard as DashboardComponent } from "../components/Dashboard";
-import { MOCK_DASHBOARD_METRICS } from "../data/mockData";
 import { useAppointments } from "@/hooks/useAppointments";
 import { useLeads } from "@/contexts/LeadsContext";
 import { ScheduleAppointmentDialog } from "@/components/ScheduleAppointmentDialog";
+import { api } from "@/services/api";
+import type { AiProfile } from "@/services/api";
 
 const Dashboard = () => {
   const navigate = useNavigate();
   const { columns, archivedColumns } = useLeads();
+  const [profile, setProfile] = useState<AiProfile | null>(null);
+
+  useEffect(() => {
+    api.core.getAiProfileMe().then(setProfile).catch(() => {});
+  }, []);
+
   const todayRange = useMemo(() => {
     const start = new Date();
     start.setHours(0, 0, 0, 0);
@@ -46,7 +53,7 @@ const Dashboard = () => {
   return (
     <>
       <DashboardComponent
-        metrics={MOCK_DASHBOARD_METRICS}
+        profile={profile}
         onBack={handleBack}
         todayAppointments={todayAppointments}
         appointmentsLoading={isLoading}
