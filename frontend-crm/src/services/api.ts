@@ -722,5 +722,121 @@ export const api = {
     summary: async () => {
       return apiClient.get(`/agents/jobs/summary`);
     },
+    /** Lista todos os agentes locais (runners) do usuário autenticado */
+    list: async (): Promise<import('../types/agente').AgenteRunner[]> => {
+      const data = await apiClient.get<any[]>(`/agents/`);
+      if (!Array.isArray(data)) return [];
+      return data as import('../types/agente').AgenteRunner[];
+    },
+  },
+
+  /** Métodos específicos do módulo de configuração do agente */
+  agente: {
+    /**
+     * Carrega o perfil de IA + offer_pack e monta um AgentConfig completo.
+     * Lê de GET /ai-profiles/me (backend-core).
+     */
+    getConfig: async (): Promise<import('../types/agente').AgentConfig> => {
+      const profile = await coreClient.get<AiProfile>('/ai-profiles/me');
+      const pack = (profile as any)?.offer_pack ?? {};
+      const { DEFAULT_AGENT_CONFIG } = await import('../types/agente');
+
+      return {
+        // Camada 1
+        name:              (profile as any)?.name              ?? DEFAULT_AGENT_CONFIG.name,
+        brand_name:        (profile as any)?.brand_name        ?? DEFAULT_AGENT_CONFIG.brand_name,
+        tone_of_voice:     (profile as any)?.tone_of_voice     ?? DEFAULT_AGENT_CONFIG.tone_of_voice,
+        agent_mode:        (profile as any)?.agent_mode        ?? DEFAULT_AGENT_CONFIG.agent_mode,
+        identity_mode:     (profile as any)?.identity_mode     ?? DEFAULT_AGENT_CONFIG.identity_mode,
+        template_key:      (profile as any)?.template_key      ?? DEFAULT_AGENT_CONFIG.template_key,
+        handoff_policy:    (profile as any)?.handoff_policy    ?? DEFAULT_AGENT_CONFIG.handoff_policy,
+        requires_handoff:  (profile as any)?.requires_handoff  ?? DEFAULT_AGENT_CONFIG.requires_handoff,
+        human_in_loop:     (profile as any)?.human_in_loop     ?? DEFAULT_AGENT_CONFIG.human_in_loop,
+        timezone:          (profile as any)?.timezone          ?? DEFAULT_AGENT_CONFIG.timezone,
+        custom_instructions: (profile as any)?.custom_instructions ?? DEFAULT_AGENT_CONFIG.custom_instructions,
+
+        // Camada 2
+        niche:            (profile as any)?.niche            ?? DEFAULT_AGENT_CONFIG.niche,
+        target_audience:  (profile as any)?.target_audience  ?? DEFAULT_AGENT_CONFIG.target_audience,
+        offer_description:(profile as any)?.offer_description ?? DEFAULT_AGENT_CONFIG.offer_description,
+        goals:            (profile as any)?.goals            ?? DEFAULT_AGENT_CONFIG.goals,
+        ticket_range:     pack.ticket_range   ?? DEFAULT_AGENT_CONFIG.ticket_range,
+        main_pain:        pack.main_pain      ?? DEFAULT_AGENT_CONFIG.main_pain,
+        main_objection:   pack.main_objection ?? DEFAULT_AGENT_CONFIG.main_objection,
+        f1_questions:     pack.f1_questions   ?? DEFAULT_AGENT_CONFIG.f1_questions,
+        f2_questions:     pack.f2_questions   ?? DEFAULT_AGENT_CONFIG.f2_questions,
+        f3_questions:     pack.f3_questions   ?? DEFAULT_AGENT_CONFIG.f3_questions,
+
+        // Camada 3
+        media_fallback:     pack.media_fallback     ?? DEFAULT_AGENT_CONFIG.media_fallback,
+        media_fallback_msg: pack.media_fallback_msg ?? DEFAULT_AGENT_CONFIG.media_fallback_msg,
+        opt_out_keywords:   pack.opt_out_keywords   ?? DEFAULT_AGENT_CONFIG.opt_out_keywords,
+        opt_out_disable:    pack.opt_out_disable     ?? DEFAULT_AGENT_CONFIG.opt_out_disable,
+        opt_out_notify:     pack.opt_out_notify      ?? DEFAULT_AGENT_CONFIG.opt_out_notify,
+        opt_out_confirm:    pack.opt_out_confirm     ?? DEFAULT_AGENT_CONFIG.opt_out_confirm,
+        opt_out_confirm_msg:pack.opt_out_confirm_msg ?? DEFAULT_AGENT_CONFIG.opt_out_confirm_msg,
+        lgpd_mode:          pack.lgpd_mode           ?? DEFAULT_AGENT_CONFIG.lgpd_mode,
+        lgpd_msg:           pack.lgpd_msg            ?? DEFAULT_AGENT_CONFIG.lgpd_msg,
+        reactivation_mode:  pack.reactivation_mode   ?? DEFAULT_AGENT_CONFIG.reactivation_mode,
+        reactivation_msg:   pack.reactivation_msg    ?? DEFAULT_AGENT_CONFIG.reactivation_msg,
+        followup_h1:        pack.followup_h1         ?? DEFAULT_AGENT_CONFIG.followup_h1,
+        followup_h2:        pack.followup_h2         ?? DEFAULT_AGENT_CONFIG.followup_h2,
+        followup_h3:        pack.followup_h3         ?? DEFAULT_AGENT_CONFIG.followup_h3,
+        daily_limit:        pack.daily_limit         ?? DEFAULT_AGENT_CONFIG.daily_limit,
+        interval_min:       pack.interval_min        ?? DEFAULT_AGENT_CONFIG.interval_min,
+        interval_max:       pack.interval_max        ?? DEFAULT_AGENT_CONFIG.interval_max,
+      };
+    },
+
+    /**
+     * Salva configuração: campos de ai_profile via PUT /ai-profiles/me,
+     * campos extras via offer_pack no mesmo payload.
+     */
+    saveConfig: async (config: import('../types/agente').AgentConfig): Promise<void> => {
+      const offer_pack = {
+        ticket_range:        config.ticket_range,
+        main_pain:           config.main_pain,
+        main_objection:      config.main_objection,
+        f1_questions:        config.f1_questions,
+        f2_questions:        config.f2_questions,
+        f3_questions:        config.f3_questions,
+        media_fallback:      config.media_fallback,
+        media_fallback_msg:  config.media_fallback_msg,
+        opt_out_keywords:    config.opt_out_keywords,
+        opt_out_disable:     config.opt_out_disable,
+        opt_out_notify:      config.opt_out_notify,
+        opt_out_confirm:     config.opt_out_confirm,
+        opt_out_confirm_msg: config.opt_out_confirm_msg,
+        lgpd_mode:           config.lgpd_mode,
+        lgpd_msg:            config.lgpd_msg,
+        reactivation_mode:   config.reactivation_mode,
+        reactivation_msg:    config.reactivation_msg,
+        followup_h1:         config.followup_h1,
+        followup_h2:         config.followup_h2,
+        followup_h3:         config.followup_h3,
+        daily_limit:         config.daily_limit,
+        interval_min:        config.interval_min,
+        interval_max:        config.interval_max,
+      };
+
+      await coreClient.put('/ai-profiles/me', {
+        name:                config.name,
+        brand_name:          config.brand_name,
+        tone_of_voice:       config.tone_of_voice,
+        agent_mode:          config.agent_mode,
+        identity_mode:       config.identity_mode,
+        template_key:        config.template_key,
+        handoff_policy:      config.handoff_policy,
+        requires_handoff:    config.requires_handoff,
+        human_in_loop:       config.human_in_loop,
+        timezone:            config.timezone,
+        custom_instructions: config.custom_instructions,
+        niche:               config.niche,
+        target_audience:     config.target_audience,
+        offer_description:   config.offer_description,
+        goals:               config.goals,
+        offer_pack,
+      });
+    },
   },
 };

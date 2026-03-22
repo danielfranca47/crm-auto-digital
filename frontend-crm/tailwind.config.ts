@@ -52,7 +52,20 @@ export default {
 					DEFAULT: 'hsl(var(--card))',
 					foreground: 'hsl(var(--card-foreground))'
 				},
-				// CRM Specific Colors
+				// Orion Design System tokens
+			'orion-bg':     'var(--o-bg)',
+			'orion-s1':     'var(--o-s1)',
+			'orion-s2':     'var(--o-s2)',
+			'orion-s3':     'var(--o-s3)',
+			'orion-text':   'var(--o-text)',
+			'orion-sub':    'var(--o-sub)',
+			'orion-dim':    'var(--o-dim)',
+			'orion-active': 'var(--o-active)',
+			'orion-warn':   'var(--o-warn)',
+			'orion-hot':    'var(--o-hot)',
+			'orion-cold':   'var(--o-cold)',
+			'orion-purple': 'var(--o-purple)',
+			// CRM Specific Colors
 				'crm-header': 'hsl(var(--crm-header))',
 				'crm-header-foreground': 'hsl(var(--crm-header-foreground))',
 				'kanban-column': 'hsl(var(--kanban-column))',
@@ -72,6 +85,11 @@ export default {
 					DEFAULT: 'hsl(var(--info))',
 					foreground: 'hsl(var(--info-foreground))'
 				}
+			},
+			fontFamily: {
+				'orion-display': ['"Playfair Display"', 'Georgia', 'serif'],
+				'orion-mono':    ['"DM Mono"', 'monospace'],
+				'orion-serif':   ['Literata', 'Georgia', 'serif'],
 			},
 			borderRadius: {
 				lg: 'var(--radius)',

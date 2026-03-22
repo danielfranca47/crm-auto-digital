@@ -3,7 +3,7 @@ import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route, Outlet } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Outlet, useNavigate } from "react-router-dom";
 import Index from "./pages/Index";
 import Dashboard from "./pages/Dashboard";
 import Prospeccao from "./pages/Prospeccao";
@@ -14,6 +14,8 @@ import MinhaConta from "./pages/MinhaConta";
 import Assinatura from "./pages/Assinatura";
 import UsoDoPlano from "./pages/UsoDoPlano";
 import AiProfile from "./pages/AiProfile";
+import AgenteDashboard from "./pages/AgenteDashboard";
+import AgenteConfiguracao from "./pages/AgenteConfiguracao";
 import { ThemeProvider } from "./contexts/ThemeContext";
 import { LeadsProvider } from "./contexts/LeadsContext";
 import { RateLimitModalProvider } from "./contexts/RateLimitModalContext";
@@ -51,6 +53,32 @@ function Protected({ children }: { children: React.ReactNode }) {
     return <div style={{ padding: 24 }}>Carregando…</div>;
   }
   return <>{children}</>;
+}
+
+/** Resolve /agentes/dashboard → /agentes/:agentId/dashboard */
+function AgenteResolver() {
+  const navigate = useNavigate();
+  const { handleError } = useApiErrorHandler();
+
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      try {
+        const agents = await api.agents.list();
+        if (!alive) return;
+        if (agents.length === 0) {
+          navigate('/agentes/sem-agente', { replace: true });
+        } else {
+          navigate(`/agentes/${agents[0].agent_id}/dashboard`, { replace: true });
+        }
+      } catch (err) {
+        handleError(err, { fallbackMessage: 'Erro ao carregar agente' });
+      }
+    })();
+    return () => { alive = false; };
+  }, [navigate, handleError]);
+
+  return <div style={{ padding: 24 }}>Carregando agente…</div>;
 }
 
 /** Layout do app autenticado (Sidebar + Header + Outlet) */
@@ -106,6 +134,19 @@ const App = () => (
                   <Route path="/minha-conta" element={<MinhaConta />} />
                   <Route path="/assinatura" element={<Assinatura />} />
                   <Route path="/uso-do-plano" element={<UsoDoPlano />} />
+                </Route>
+
+                {/* Rotas do Agente Orion (sem AppShell — layout próprio) */}
+                <Route
+                  element={
+                    <Protected>
+                      <Outlet />
+                    </Protected>
+                  }
+                >
+                  <Route path="/agentes/dashboard" element={<AgenteResolver />} />
+                  <Route path="/agentes/:agentId/dashboard" element={<AgenteDashboard />} />
+                  <Route path="/agentes/:agentId/configuracao" element={<AgenteConfiguracao />} />
                 </Route>
 
                 {/* catch-all */}

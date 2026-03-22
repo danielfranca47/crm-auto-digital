@@ -9,6 +9,7 @@ import {
   CreditCard,
   Gauge,
   Sparkles,
+  Cpu,
 } from "lucide-react";
 import { NavLink, useLocation, useNavigate } from "react-router-dom";
 import { useState } from "react";
@@ -31,6 +32,7 @@ const items = [
   { title: "Prospecção", url: "/prospeccao", icon: Search },
   { title: "Assistente IA", url: "/assistente-ia", icon: Bot },
   { title: "Pesquisa", url: "/pesquisa", icon: FileSearch },
+  { title: "Agentes", url: "/agentes/dashboard", icon: Cpu },
 ];
 
 const accountItems = [
