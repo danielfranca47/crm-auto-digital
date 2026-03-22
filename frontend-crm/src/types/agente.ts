@@ -2,9 +2,11 @@
 // Tipos do módulo de Agente (dashboard + configuração)
 // ─────────────────────────────────────────────────────────────
 
-/** Resposta de GET /api/agents/ (agente local / runner) */
+/** Resposta de GET /api/agents/ (agente local / runner)
+ *  A API serializa com alias: o campo JSON é "id", não "agent_id"
+ */
 export interface AgenteRunner {
-  agent_id: string;
+  id: string;
   name: string | null;
   capabilities: string[] | null;
   status: 'online' | 'offline' | 'disabled' | null;

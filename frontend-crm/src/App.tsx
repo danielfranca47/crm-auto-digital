@@ -69,7 +69,7 @@ function AgenteResolver() {
         if (agents.length === 0) {
           navigate('/agentes/sem-agente', { replace: true });
         } else {
-          navigate(`/agentes/${agents[0].agent_id}/dashboard`, { replace: true });
+          navigate(`/agentes/${agents[0].id}/dashboard`, { replace: true });
         }
       } catch (err) {
         handleError(err, { fallbackMessage: 'Erro ao carregar agente' });
@@ -79,6 +79,28 @@ function AgenteResolver() {
   }, [navigate, handleError]);
 
   return <div style={{ padding: 24 }}>Carregando agente…</div>;
+}
+
+/** Tela exibida quando o usuário não tem nenhum runner provisionado */
+function AgenteSemRunner() {
+  const navigate = useNavigate();
+  return (
+    <div style={{ minHeight: '100vh', background: '#0d0f14', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'system-ui, sans-serif' }}>
+      <div style={{ maxWidth: 480, padding: 40, textAlign: 'center' }}>
+        <div style={{ fontSize: 40, marginBottom: 16 }}>🤖</div>
+        <div style={{ fontSize: 22, fontWeight: 500, color: '#e8e4d9', marginBottom: 8 }}>Nenhum agente provisionado</div>
+        <div style={{ fontSize: 14, color: '#8a8070', marginBottom: 32, lineHeight: 1.6 }}>
+          Você ainda não tem um agente local registrado. Provisione um agente para começar a usar o painel Orion.
+        </div>
+        <button
+          onClick={() => navigate('/')}
+          style={{ padding: '10px 24px', background: '#c9a84c', color: '#0d0f14', border: 'none', borderRadius: 4, fontSize: 13, fontWeight: 600, cursor: 'pointer' }}
+        >
+          Voltar ao CRM
+        </button>
+      </div>
+    </div>
+  );
 }
 
 /** Layout do app autenticado (Sidebar + Header + Outlet) */
@@ -145,6 +167,7 @@ const App = () => (
                   }
                 >
                   <Route path="/agentes/dashboard" element={<AgenteResolver />} />
+                  <Route path="/agentes/sem-agente" element={<AgenteSemRunner />} />
                   <Route path="/agentes/:agentId/dashboard" element={<AgenteDashboard />} />
                   <Route path="/agentes/:agentId/configuracao" element={<AgenteConfiguracao />} />
                 </Route>
