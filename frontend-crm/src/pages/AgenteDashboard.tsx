@@ -1,5 +1,5 @@
 import { useEffect, useState, useMemo } from 'react';
-import { useParams, useNavigate, Link } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import { OrionShell } from '@/components/agente/OrionShell';
 import { FunilAgente } from '@/components/agente/FunilAgente';
 import { LeadsQuentes } from '@/components/agente/LeadsQuentes';
@@ -71,9 +71,9 @@ function computeLeadsQuentes(leads: any[]): LeadQuente[] {
 // ─── Painéis internos ─────────────────────────────────────────
 
 function PainelOverview({
-  profile, leads, agentId, onTabChange,
+  profile, leads, onTabChange,
 }: {
-  profile: AiProfile | null; leads: any[]; agentId: string; onTabChange: (t: Tab) => void;
+  profile: AiProfile | null; leads: any[]; onTabChange: (t: Tab) => void;
 }) {
   const funil         = useMemo(() => computeFunil(leads), [leads]);
   const leadsQuentes  = useMemo(() => computeLeadsQuentes(leads), [leads]);
@@ -96,7 +96,7 @@ function PainelOverview({
             <span>
               <strong>{criticalCount} itens críticos</strong> na Camada 3 sem configuração.
             </span>
-            <Link to={`/agentes/${agentId}/configuracao`} className="o-btn o-btn-danger" style={{ marginLeft: 'auto', fontSize: 8 }}>
+            <Link to={`/ai-profile/configuracao`} className="o-btn o-btn-danger" style={{ marginLeft: 'auto', fontSize: 8 }}>
               Resolver →
             </Link>
           </div>
@@ -120,7 +120,7 @@ function PainelOverview({
           </div>
         </div>
         <div style={{ display: 'flex', gap: 8, alignItems: 'flex-start' }}>
-          <Link to={`/agentes/${agentId}/configuracao`} className="o-btn">Editar agente</Link>
+          <Link to={`/ai-profile/configuracao`} className="o-btn">Editar agente</Link>
         </div>
       </div>
 
@@ -153,7 +153,7 @@ function PainelOverview({
           progress={profile?.name && profile?.brand_name ? 100 : 50}
           statusText={profile?.name ? 'Completa' : 'Incompleta'}
           colorClass="o-layer-l1"
-          link={`/agentes/${agentId}/configuracao`}
+          link={`/ai-profile/configuracao`}
         />
         <LayerCard
           num="Camada 2" title="Qualificação"
@@ -161,7 +161,7 @@ function PainelOverview({
           progress={70}
           statusText="Verificar perguntas"
           colorClass="o-layer-l2"
-          link={`/agentes/${agentId}/configuracao`}
+          link={`/ai-profile/configuracao`}
         />
         <LayerCard
           num="Camada 3" title="Pipeline e comportamento"
@@ -169,7 +169,7 @@ function PainelOverview({
           progress={30}
           statusText="Incompleta"
           colorClass="o-layer-l3"
-          link={`/agentes/${agentId}/configuracao`}
+          link={`/ai-profile/configuracao`}
         />
       </div>
 
@@ -315,8 +315,6 @@ function PainelPipeline({ leads }: { leads: any[] }) {
 // ─────────────────────────────────────────────────────────────
 
 export default function AgenteDashboard() {
-  const { agentId } = useParams<{ agentId: string }>();
-  const navigate    = useNavigate();
 
   const [tab, setTab]       = useState<Tab>('overview');
   const [profile, setProfile] = useState<AiProfile | null>(null);
@@ -380,7 +378,7 @@ export default function AgenteDashboard() {
             <div style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--o-active)', animation: 'o-pulse 2s ease-in-out infinite' }} />
             Agente ativo
           </div>
-          <Link to={`/agentes/${agentId}/configuracao`} className="o-btn">← Configurar agente</Link>
+          <Link to={`/ai-profile/configuracao`} className="o-btn">← Configurar agente</Link>
           <Link to="/" className="o-btn" style={{ fontSize: 8 }}>← CRM</Link>
         </div>
       </header>
@@ -400,7 +398,7 @@ export default function AgenteDashboard() {
 
       {/* Conteúdo */}
       <div className="o-content">
-        {tab === 'overview'      && <PainelOverview profile={profile} leads={leads} agentId={agentId!} onTabChange={setTab} />}
+        {tab === 'overview'      && <PainelOverview profile={profile} leads={leads} onTabChange={setTab} />}
         {tab === 'conversations' && <PainelConversas leads={leads} />}
         {tab === 'pipeline'      && <PainelPipeline leads={leads} />}
         {tab === 'conexao'       && (

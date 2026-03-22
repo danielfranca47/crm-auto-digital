@@ -1,12 +1,12 @@
 import { useEffect, useState, useCallback } from 'react';
-import { useParams, Link } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import { OrionShell } from '@/components/agente/OrionShell';
 import { CamadaIdentidade } from '@/components/agente/CamadaIdentidade';
 import { CamadaQualificacao } from '@/components/agente/CamadaQualificacao';
 import { CamadaPipeline } from '@/components/agente/CamadaPipeline';
 import { api } from '@/services/api';
 import { DEFAULT_AGENT_CONFIG } from '@/types/agente';
-import type { AgentConfig, AgenteRunner } from '@/types/agente';
+import type { AgentConfig } from '@/types/agente';
 import { AGENT_MODE_LABELS, IDENTITY_MODE_LABELS, LGPD_LABELS, REATIVACAO_LABELS, MEDIA_FALLBACK_LABELS } from '@/types/agente';
 
 // ─── Tipos de painel ─────────────────────────────────────────
@@ -14,9 +14,9 @@ type PanelId = 'overview' | 'c1' | 'c2' | 'c3';
 
 // ─── Painel: Resumo ──────────────────────────────────────────
 function PainelResumo({
-  config, agentId, runner, onNavigate, onSave, onDiscard, saving, dirty,
+  config, onNavigate, onSave, onDiscard, saving, dirty,
 }: {
-  config: AgentConfig; agentId: string; runner: AgenteRunner | null;
+  config: AgentConfig;
   onNavigate: (p: PanelId) => void; onUpdate: (partial: Partial<AgentConfig>) => void;
   onSave: () => void; onDiscard: () => void; saving: boolean; dirty: boolean;
 }) {
@@ -266,12 +266,9 @@ function PainelCamada3({ config, onUpdate, onBack, onSave, saving, dirty, phoneN
 // ─────────────────────────────────────────────────────────────
 
 export default function AgenteConfiguracao() {
-  const { agentId } = useParams<{ agentId: string }>();
-
   const [activePanel, setActivePanel] = useState<PanelId>('overview');
   const [config, setConfig]           = useState<AgentConfig>(DEFAULT_AGENT_CONFIG);
   const [savedConfig, setSavedConfig] = useState<AgentConfig>(DEFAULT_AGENT_CONFIG);
-  const [runner, setRunner]           = useState<AgenteRunner | null>(null);
   const [loading, setLoading]         = useState(true);
   const [saving, setSaving]           = useState(false);
   const [error, setError]             = useState<string | null>(null);
@@ -291,14 +288,10 @@ export default function AgenteConfiguracao() {
     let alive = true;
     (async () => {
       try {
-        const [loaded, runners] = await Promise.all([
-          api.agente.getConfig(),
-          api.agents.list(),
-        ]);
+        const loaded = await api.agente.getConfig();
         if (alive) {
           setConfig(loaded);
           setSavedConfig(loaded);
-          setRunner(runners[0] ?? null);
         }
       } catch {
         if (alive) setError('Não foi possível carregar a configuração do agente.');
@@ -336,7 +329,7 @@ export default function AgenteConfiguracao() {
     window.scrollTo(0, 0);
   }
 
-  const phoneNumber = runner?.status === 'online' ? '(número conectado)' : null;
+  const phoneNumber = null;
 
   if (loading) {
     return (
@@ -376,7 +369,7 @@ export default function AgenteConfiguracao() {
           <span style={{ color: 'var(--o-purple)' }}>Configuração</span>
         </div>
         <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 12 }}>
-          <Link to={`/agentes/${agentId}/dashboard`} className="o-btn">← Ver dashboard</Link>
+          <Link to="/ai-profile" className="o-btn">← Ver dashboard</Link>
           <Link to="/" className="o-btn" style={{ fontSize: 8 }}>← CRM</Link>
         </div>
       </header>
@@ -402,8 +395,6 @@ export default function AgenteConfiguracao() {
         {activePanel === 'overview' && (
           <PainelResumo
             config={config}
-            agentId={agentId!}
-            runner={runner}
             onNavigate={navigate}
             onUpdate={updateConfig}
             onSave={handleSave}
