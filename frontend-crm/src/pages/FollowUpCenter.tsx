@@ -275,7 +275,7 @@ function LeadDrawer({
   if (!lead) return null;
   const contract = lead.followup_contract;
   const status = lead.followup_status ?? "";
-  const tempKey = (contract?.temperature ?? "cold") as TempKey;
+  const tempKey = (contract?.outcome ?? "cold") as TempKey;
   const tempCfg = getTempCfg(tempKey);
   const agentCfg = getAgentCfg(lead.agent_type);
   const timeline = contract ? buildTimeline(contract) : [];
@@ -483,7 +483,7 @@ function FollowUpRow({
 }) {
   const contract = lead.followup_contract;
   const status = lead.followup_status ?? "";
-  const tempKey = (contract?.temperature ?? "cold") as TempKey;
+  const tempKey = (contract?.outcome ?? "cold") as TempKey;
   const tempCfg = getTempCfg(tempKey);
   const agentCfg = getAgentCfg(lead.agent_type);
   const nextSend = formatNextSend(lead.next_followup_at, status);
@@ -685,7 +685,7 @@ export default function FollowUpCenter() {
     return leads.filter((lead) => {
       const status = lead.followup_status ?? "";
       const contract = lead.followup_contract;
-      const temp = (contract?.temperature ?? "").toLowerCase();
+      const temp = (contract?.outcome ?? "").toLowerCase();
       const agent = lead.agent_type ?? "";
       const name = (lead.companyName + " " + (lead.contactName ?? "")).toLowerCase();
 
