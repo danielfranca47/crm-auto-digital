@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 from datetime import datetime, timedelta, timezone
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 
 
 STOP_INBOUND_REPLY = "inbound_reply"
@@ -49,7 +49,18 @@ def _now_utc() -> datetime:
     return datetime.now(timezone.utc)
 
 
-def _resolve_next_followup_at(*, variant: str, attempts_after_send: int, sent_at: datetime) -> Optional[str]:
+def _resolve_next_followup_at(
+    *,
+    variant: str,
+    attempts_after_send: int,
+    sent_at: datetime,
+    cadence_override: Optional[List[int]] = None,
+) -> Optional[str]:
+    if cadence_override:
+        idx = attempts_after_send - 1  # 0-based: after 1st send → cadence[0]
+        if idx < len(cadence_override):
+            return (sent_at + timedelta(minutes=int(cadence_override[idx]))).isoformat()
+        return None
     rules = _FOLLOWUP_SEND_NEXT_SCHEDULE.get((variant or "").strip().lower(), {})
     delta = rules.get(attempts_after_send)
     if not delta:
@@ -198,6 +209,7 @@ def progress_followup_after_auto_send(
     lead_id: int,
     user_id: int,
     source_job_id: Optional[int] = None,
+    ai_profile: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
     row = _load_lead_followup_row(conn, lead_id=lead_id)
     if not row:
@@ -248,10 +260,17 @@ def progress_followup_after_auto_send(
         )
         return {"updated": True, "reason": "max_attempts_reached", "attempts": attempts_after}
 
+    cadence_override: Optional[List[int]] = None
+    if ai_profile:
+        raw_cadence = ai_profile.get("followup_cadence")
+        if isinstance(raw_cadence, list) and raw_cadence:
+            cadence_override = [int(x) for x in raw_cadence]
+
     next_followup_at = _resolve_next_followup_at(
         variant=variant,
         attempts_after_send=attempts_after,
         sent_at=sent_at,
+        cadence_override=cadence_override,
     )
     contract["next_followup_at"] = next_followup_at
     contract["stop_reason"] = None

@@ -44,6 +44,7 @@ from services.followup_state import (
     stop_followup_on_handoff,
     start_cart_recovery_followup,
 )
+from core_client import fetch_core_ai_profile_resolve
 
 router = APIRouter(prefix="/api", tags=["WhatsApp Executor"])
 
@@ -830,6 +831,19 @@ def mark_outbound_sent(
     payload: MarkOutboundSentRequest,
     _: str = Depends(_require_service_token),
 ):
+    # Pré-leitura do user_id fora do lock exclusivo, para buscar AI Profile
+    _ai_profile: Optional[Dict[str, Any]] = None
+    with get_connection() as _pre_conn:
+        _pre_row = _pre_conn.execute(
+            "SELECT user_id FROM outbound_events WHERE id = ?",
+            (outbound_event_id,),
+        ).fetchone()
+    if _pre_row:
+        try:
+            _ai_profile = fetch_core_ai_profile_resolve(int(_pre_row["user_id"])) or {}
+        except Exception:
+            pass
+
     with get_connection() as conn:
         cur = conn.cursor()
         cur.execute("BEGIN IMMEDIATE")
@@ -902,6 +916,7 @@ def mark_outbound_sent(
                 lead_id=int(row["lead_id"]),
                 user_id=int(row["user_id"]),
                 source_job_id=int(row["job_id"]),
+                ai_profile=_ai_profile,
             )
         else:
             # Cart recovery: detecta envio de link de pagamento pelo bot para agent_2

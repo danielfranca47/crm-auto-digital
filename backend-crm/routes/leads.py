@@ -10,6 +10,7 @@ from models import Lead, LeadUpdate, AppointmentCreate, AppointmentUpdate, BotDi
 from security_core import CurrentUser, require_crm_access
 from services import rate_limit_service
 from services.agent_type import resolve_agent_type_for_user
+from core_client import fetch_core_ai_profile
 from services.phone_normalizer import PhoneNormalizationError, normalize_to_e164
 from services.lead_category_policy import apply_closing_bot_disable_side_effect
 from services.followup_state import stop_followup_for_lead_category, stop_followup_on_handoff
@@ -452,12 +453,23 @@ def start_followup_transition(
         if not followup_variant:
             raise HTTPException(status_code=400, detail="Não foi possível resolver a variante de follow-up")
 
+        ai_profile: dict = {}
+        try:
+            ai_profile = fetch_core_ai_profile(current_user.token) or {}
+        except Exception:
+            pass
+
         now_utc = datetime.now(timezone.utc)
-        max_attempts = _resolve_max_attempts(followup_variant)
-        first_offset_minutes = _resolve_first_followup_offset_minutes(
-            followup_variant=followup_variant,
-            meeting_or_session_happened=payload.meeting_or_session_happened,
-        )
+        profile_max = ai_profile.get("followup_max_attempts")
+        max_attempts = int(profile_max) if profile_max is not None else _resolve_max_attempts(followup_variant)
+        profile_offset = ai_profile.get("followup_first_offset")
+        if profile_offset is not None:
+            first_offset_minutes = int(profile_offset)
+        else:
+            first_offset_minutes = _resolve_first_followup_offset_minutes(
+                followup_variant=followup_variant,
+                meeting_or_session_happened=payload.meeting_or_session_happened,
+            )
         next_followup_at = (now_utc + timedelta(minutes=first_offset_minutes)).isoformat()
         meeting_happened = payload.meeting_or_session_happened == "yes"
         contract = {

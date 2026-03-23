@@ -115,6 +115,10 @@ class AIProfileBase(BaseModel):
     handoff_custom_text: Optional[str] = None
     requires_handoff: bool = False
     human_in_loop: bool = False
+    followup_cadence: Optional[List[int]] = None
+    followup_max_attempts: Optional[int] = None
+    followup_first_offset: Optional[int] = None
+    followup_allowed_hours: Optional[str] = None
 
 
 class AIProfileCreate(AIProfileBase):
@@ -141,6 +145,10 @@ class AIProfileUpdate(BaseModel):
     handoff_custom_text: Optional[str] = None
     requires_handoff: Optional[bool] = None
     human_in_loop: Optional[bool] = None
+    followup_cadence: Optional[List[int]] = None
+    followup_max_attempts: Optional[int] = None
+    followup_first_offset: Optional[int] = None
+    followup_allowed_hours: Optional[str] = None
 
 
 class AIProfileOut(AIProfileBase):

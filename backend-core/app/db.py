@@ -77,6 +77,10 @@ def ensure_ai_profile_columns() -> None:
         "timezone": {"default": "UTC", "sqlite_type": "TEXT", "pg_type": "VARCHAR"},
         "requires_handoff": {"default": False, "sqlite_type": "INTEGER", "pg_type": "BOOLEAN"},
         "human_in_loop": {"default": False, "sqlite_type": "INTEGER", "pg_type": "BOOLEAN"},
+        "followup_cadence": {"default": None, "sqlite_type": "TEXT", "pg_type": "JSON"},
+        "followup_max_attempts": {"default": None, "sqlite_type": "INTEGER", "pg_type": "INTEGER"},
+        "followup_first_offset": {"default": None, "sqlite_type": "INTEGER", "pg_type": "INTEGER"},
+        "followup_allowed_hours": {"default": None, "sqlite_type": "TEXT", "pg_type": "VARCHAR"},
     }
 
     with engine.begin() as conn:

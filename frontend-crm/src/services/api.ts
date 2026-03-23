@@ -50,6 +50,10 @@ export type AiProfilePayload = {
   handoff_custom_text?: string | null;
   requires_handoff?: boolean | null;
   human_in_loop?: boolean | null;
+  followup_cadence?: number[] | null;
+  followup_max_attempts?: number | null;
+  followup_first_offset?: number | null;
+  followup_allowed_hours?: string | null;
 };
 
 export type AiProfile = AiProfilePayload & {

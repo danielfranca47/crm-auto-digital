@@ -44,7 +44,7 @@ import {
   WhatsappStatusResponse,
 } from "@/services/api";
 import { useUsage } from "@/hooks/useUsage";
-import { AlertCircle, Brain, FileEdit, FilePlus, RefreshCw, Sparkles, Upload, Wand2 } from "lucide-react";
+import { AlertCircle, Brain, Clock, FileEdit, FilePlus, RefreshCw, Sparkles, Upload, Wand2 } from "lucide-react";
 
 const fallbackTemplates: Record<
   string,
@@ -204,6 +204,9 @@ export default function AiProfilePage() {
   const [editTitle, setEditTitle] = useState("");
   const [editContent, setEditContent] = useState("");
   const [viewItem, setViewItem] = useState<KnowledgeItem | null>(null);
+
+  const [cadenceStr, setCadenceStr] = useState("");
+  const [cadenceError, setCadenceError] = useState<string | null>(null);
 
   const [whatsappQr, setWhatsappQr] = useState<WhatsappQrPayload | null>(null);
   const [whatsappStatus, setWhatsappStatus] = useState<WhatsappStatusResponse | null>(null);
@@ -367,6 +370,7 @@ export default function AiProfilePage() {
       const inferredModel = profileToAgentModelUi(loadedProfile);
       const normalizedLoadedProfile = applyAgentModelUi(loadedProfile, inferredModel);
       setProfile(normalizedLoadedProfile);
+      setCadenceStr(Array.isArray(data.followup_cadence) ? data.followup_cadence.join(", ") : "");
       setAgentModelUi(inferredModel);
       setProfileExists(true);
     } catch (err: any) {
@@ -455,6 +459,24 @@ export default function AiProfilePage() {
         return;
       }
     }
+    // Validar e parsear cadência
+    let parsedCadence: number[] | null = null;
+    if (cadenceStr.trim()) {
+      const parts = cadenceStr.split(",").map((s) => s.trim()).filter(Boolean);
+      const nums = parts.map(Number);
+      if (nums.some(isNaN) || nums.some((n) => n <= 0)) {
+        setCadenceError("Cadência inválida: use números positivos separados por vírgula (ex: 30, 1440, 4320).");
+        return;
+      }
+      const maxAttempts = profile.followup_max_attempts ?? 0;
+      if (maxAttempts > 0 && nums.length !== maxAttempts - 1) {
+        setCadenceError(`A cadência deve ter exatamente ${maxAttempts - 1} elemento(s) para ${maxAttempts} tentativas.`);
+        return;
+      }
+      parsedCadence = nums;
+    }
+    setCadenceError(null);
+
     setSaving(true);
     try {
       const inferredModel = profileToAgentModelUi(profile);
@@ -464,6 +486,8 @@ export default function AiProfilePage() {
         timezone: normalizedProfile.timezone?.trim() ? normalizedProfile.timezone : "UTC",
         custom_instructions: normalizedProfile.custom_instructions?.trim() || null,
         handoff_custom_text: normalizedProfile.handoff_custom_text?.trim() || null,
+        followup_cadence: parsedCadence,
+        followup_allowed_hours: normalizedProfile.followup_allowed_hours?.trim() || null,
       };
       const fn = profileExists ? api.core.updateAiProfileMe : api.core.createAiProfile;
       const saved = await fn(payload);
@@ -736,6 +760,7 @@ export default function AiProfilePage() {
         <TabsList>
           <TabsTrigger value="profile">Identidade do agente</TabsTrigger>
           <TabsTrigger value="knowledge">Conhecimento do negócio</TabsTrigger>
+          <TabsTrigger value="followup">Follow-up</TabsTrigger>
         </TabsList>
 
         <TabsContent value="profile" className="space-y-4">
@@ -1303,6 +1328,108 @@ export default function AiProfilePage() {
                   </Table>
                 </div>
               )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="followup" className="space-y-4">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Clock className="h-5 w-5 text-primary" />
+                Cadência de Follow-up
+              </CardTitle>
+              <CardDescription>
+                Configure os intervalos e horários de envio automático de follow-up.
+                Deixe em branco para usar os valores padrão do plano.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              <div className="grid gap-5 md:grid-cols-2">
+                <div className="space-y-2">
+                  <Label htmlFor="followup_max_attempts">Máx. tentativas</Label>
+                  <Input
+                    id="followup_max_attempts"
+                    type="number"
+                    min={1}
+                    max={10}
+                    placeholder="Ex: 4"
+                    value={profile.followup_max_attempts ?? ""}
+                    onChange={(e) =>
+                      setProfile((p) => ({
+                        ...p,
+                        followup_max_attempts: e.target.value ? Number(e.target.value) : null,
+                      }))
+                    }
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Número total de mensagens enviadas antes de encerrar o follow-up.
+                    Padrão: 4 (SDR) / 3 (híbrido).
+                  </p>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="followup_first_offset">Primeiro offset (minutos)</Label>
+                  <Input
+                    id="followup_first_offset"
+                    type="number"
+                    min={1}
+                    placeholder="Ex: 30"
+                    value={profile.followup_first_offset ?? ""}
+                    onChange={(e) =>
+                      setProfile((p) => ({
+                        ...p,
+                        followup_first_offset: e.target.value ? Number(e.target.value) : null,
+                      }))
+                    }
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Minutos após a transição manual até o 1.º envio automático.
+                    Padrão: 30 min (SDR) / 120 min (híbrido).
+                  </p>
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="followup_cadence">
+                  Cadência (minutos entre envios, separados por vírgula)
+                </Label>
+                <Input
+                  id="followup_cadence"
+                  placeholder="Ex: 1440, 4320, 10080"
+                  value={cadenceStr}
+                  onChange={(e) => {
+                    setCadenceStr(e.target.value);
+                    setCadenceError(null);
+                  }}
+                />
+                {cadenceError && (
+                  <p className="text-xs text-destructive">{cadenceError}</p>
+                )}
+                <p className="text-xs text-muted-foreground">
+                  Intervalo entre cada tentativa em minutos. Deve ter{" "}
+                  <strong>máx. tentativas − 1</strong> elemento(s).
+                  Sugestões: SDR — 1440, 4320, 10080 | Híbrido — 1440, 2880 | Carrinho — 120, 1440.
+                </p>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="followup_allowed_hours" className="flex items-center gap-1">
+                  <Clock className="h-3.5 w-3.5" /> Horário permitido (UTC)
+                </Label>
+                <Input
+                  id="followup_allowed_hours"
+                  placeholder="Ex: 09:00-18:00"
+                  value={profile.followup_allowed_hours ?? ""}
+                  onChange={(e) =>
+                    setProfile((p) => ({ ...p, followup_allowed_hours: e.target.value }))
+                  }
+                />
+                <p className="text-xs text-muted-foreground">
+                  Formato <strong>HH:MM-HH:MM</strong> em UTC. Fora desta janela o follow-up é
+                  adiado para o início do próximo período. Deixe vazio para enviar a qualquer hora.
+                </p>
+              </div>
             </CardContent>
           </Card>
         </TabsContent>

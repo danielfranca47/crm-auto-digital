@@ -31,6 +31,10 @@ class AIProfile(Base):
     handoff_custom_text = Column(String, nullable=True)
     requires_handoff = Column(Boolean, nullable=True, default=False)
     human_in_loop = Column(Boolean, nullable=True, default=False)
+    followup_cadence = Column(JSON, nullable=True)
+    followup_max_attempts = Column(Integer, nullable=True)
+    followup_first_offset = Column(Integer, nullable=True)
+    followup_allowed_hours = Column(String, nullable=True)
     created_at = Column(DateTime, server_default=func.now(), nullable=False, default=datetime.utcnow)
     updated_at = Column(
         DateTime, server_default=func.now(), onupdate=func.now(), nullable=False, default=datetime.utcnow
