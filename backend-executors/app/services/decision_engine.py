@@ -1131,9 +1131,30 @@ def _build_child_prompt_follow_up(
             "reforçar valor, síntese do contexto e próximo passo comercial.\n"
         )
     elif followup_variant == "hybrid_scheduler":
+        outcome = str(followup_summary.get("outcome") or "").strip().lower()
+        if outcome == "interested_not_closed":
+            outcome_instruction = (
+                "Tom de continuidade: retome o contexto da sessão anterior, "
+                "remova a objeção específica que foi levantada e ofereça nova data concreta para avançar."
+            )
+        elif outcome == "reschedule_needed":
+            outcome_instruction = (
+                "Tom leve e sem pressão: o lead não compareceu ou pediu remarcação. "
+                "Ofereça 2-3 horários diretamente e encerre com uma pergunta fechada."
+            )
+        elif outcome == "converted":
+            outcome_instruction = (
+                "Tom de onboarding e boas-vindas: parabenize, confirme o próximo passo, "
+                "envie link de pagamento ou instrução de acesso. Não reabra vendas."
+            )
+        else:
+            outcome_instruction = (
+                "Priorizar recuperação de no-show, confirmação de presença e reengajamento."
+            )
         variant_rule = (
-            "- Variante hybrid_scheduler: follow-up de agenda/comparecimento/remarcação; "
-            "priorizar recuperação de no-show, confirmação de presença e reengajamento.\n"
+            "- Variante hybrid_scheduler (coaches/terapeutas/consultores solo): "
+            "tom pessoal e próximo, como assistente do próprio profissional — nunca SDR agressivo.\n"
+            f"- Regra por outcome ({outcome or 'indefinido'}): {outcome_instruction}\n"
         )
 
     history_text = _format_history(history)

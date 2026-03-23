@@ -10,6 +10,12 @@ logger = logging.getLogger(__name__)
 
 AgentType = str
 
+# Mapeamento de template_key para playbook de follow-up dedicado.
+# Usado pelo decision_engine para selecionar instruções específicas por agente.
+FOLLOWUP_PLAYBOOK_MAP: dict[str, str] = {
+    "hybrid_scheduler": "hybrid_scheduler_followup",
+}
+
 
 def map_template_key_to_agent_type(template_key: Optional[str]) -> AgentType:
     template = str(template_key or "").strip().lower()
