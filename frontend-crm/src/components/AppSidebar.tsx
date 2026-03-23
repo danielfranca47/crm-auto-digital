@@ -9,6 +9,7 @@ import {
   CreditCard,
   Gauge,
   Sparkles,
+  MessageSquareDot,
 } from "lucide-react";
 import { NavLink, useLocation, useNavigate } from "react-router-dom";
 import { useState } from "react";
@@ -28,6 +29,7 @@ import {
 const items = [
   { title: "Dashboard", url: "/dashboard", icon: BarChart3 },
   { title: "CRM Comercial", url: "/", icon: Users },
+  { title: "Follow-ups", url: "/follow-ups", icon: MessageSquareDot },
   { title: "Prospecção", url: "/prospeccao", icon: Search },
   { title: "Assistente IA", url: "/assistente-ia", icon: Bot },
   { title: "Pesquisa", url: "/pesquisa", icon: FileSearch },

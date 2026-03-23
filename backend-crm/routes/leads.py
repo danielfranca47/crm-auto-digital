@@ -562,6 +562,104 @@ def start_followup_transition(
         conn.close()
 
 
+@router.get("/followups/active")
+def list_active_followups(current_user: CurrentUser = Depends(require_crm_access)):
+    """Lista leads em follow-up não encerrado, ordenados por próximo envio."""
+    with get_connection() as conn:
+        rows = conn.execute(
+            """
+            SELECT id, user_id, companyName, contactName, phone, category,
+                   followup_status, next_followup_at, followup_contract,
+                   agent_type, lastMovement, createdAt, bot_disabled
+              FROM leads
+             WHERE user_id = ?
+               AND category = 'follow-up'
+               AND COALESCE(followup_status, '') != 'closed'
+             ORDER BY
+               CASE COALESCE(followup_status,'')
+                    WHEN 'active' THEN 0
+                    WHEN 'scheduled' THEN 1
+                    WHEN 'manually_paused' THEN 2
+                    WHEN 'paused' THEN 3
+                    ELSE 4 END,
+               datetime(COALESCE(next_followup_at, '9999-12-31')) ASC
+            """,
+            (current_user.id,),
+        ).fetchall()
+
+    result = []
+    for row in rows:
+        d = dict(row)
+        d["followup_contract"] = _normalize_followup_contract(
+            d.get("followup_contract"),
+            agent_type=d.get("agent_type"),
+        )
+        for k in ("createdAt", "lastMovement"):
+            if d.get(k):
+                d[k] = str(d[k]).replace(" ", "T")
+        result.append(d)
+    return result
+
+
+@router.get("/followups/stats")
+def followup_stats(current_user: CurrentUser = Depends(require_crm_access)):
+    """Retorna métricas do stats bar da Central de Follow-ups."""
+    now_utc = datetime.now(timezone.utc)
+    two_hours_later = now_utc + timedelta(hours=2)
+    today_date = now_utc.date()
+
+    with get_connection() as conn:
+        rows = conn.execute(
+            """
+            SELECT followup_status, next_followup_at, followup_contract, lastMovement
+              FROM leads
+             WHERE user_id = ?
+               AND category = 'follow-up'
+               AND COALESCE(followup_status, '') != 'closed'
+            """,
+            (current_user.id,),
+        ).fetchall()
+
+    total_active = len(rows)
+    hot_active = 0
+    urgent_count = 0
+    replied_today = 0
+
+    for row in rows:
+        contract = _normalize_followup_contract(row["followup_contract"])
+        temp = str((contract or {}).get("temperature") or "").lower()
+        if temp == "hot":
+            hot_active += 1
+
+        status = str(row["followup_status"] or "").lower()
+        if status in ("active", "scheduled") and row["next_followup_at"]:
+            try:
+                next_dt = datetime.fromisoformat(str(row["next_followup_at"]).replace("Z", "+00:00"))
+                if next_dt.tzinfo is None:
+                    next_dt = next_dt.replace(tzinfo=timezone.utc)
+                if now_utc < next_dt <= two_hours_later:
+                    urgent_count += 1
+            except Exception:
+                pass
+
+        if status in ("paused", "manually_paused") and row["lastMovement"]:
+            try:
+                last_dt = datetime.fromisoformat(str(row["lastMovement"]).replace(" ", "T"))
+                if last_dt.tzinfo is None:
+                    last_dt = last_dt.replace(tzinfo=timezone.utc)
+                if last_dt.date() == today_date:
+                    replied_today += 1
+            except Exception:
+                pass
+
+    return {
+        "total_active": total_active,
+        "hot_active": hot_active,
+        "urgent_count": urgent_count,
+        "replied_today": replied_today,
+    }
+
+
 @router.patch("/{id}")
 def atualizar_lead_parcial(id: int, lead: LeadUpdate, current_user: CurrentUser = Depends(require_crm_access)):
     conn = get_connection()

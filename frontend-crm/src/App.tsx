@@ -15,6 +15,7 @@ import Assinatura from "./pages/Assinatura";
 import UsoDoPlano from "./pages/UsoDoPlano";
 import AgenteConfiguracao from "./pages/AgenteConfiguracao";
 import TiposAgentes from "./pages/TiposAgentes";
+import FollowUpCenter from "./pages/FollowUpCenter";
 import { ThemeProvider } from "./contexts/ThemeContext";
 import { LeadsProvider } from "./contexts/LeadsContext";
 import { RateLimitModalProvider } from "./contexts/RateLimitModalContext";
@@ -106,6 +107,7 @@ const App = () => (
                   <Route path="/minha-conta" element={<MinhaConta />} />
                   <Route path="/assinatura" element={<Assinatura />} />
                   <Route path="/uso-do-plano" element={<UsoDoPlano />} />
+                  <Route path="/follow-ups" element={<FollowUpCenter />} />
                 </Route>
 
                 {/* Rotas do Agente Orion — layout próprio (sem sidebar) */}

@@ -63,6 +63,43 @@ export type AiProfile = AiProfilePayload & {
   updated_at?: string;
 };
 
+export type FollowUpContract = {
+  status: string;
+  attempts: number;
+  max_attempts: number;
+  followup_variant?: string | null;
+  temperature?: string | null;
+  next_followup_at: string | null;
+  last_followup_at?: string | null;
+  stop_reason?: string | null;
+  manually_paused_at?: string | null;
+  followup_goal?: string | null;
+  meeting_or_session_happened?: string | null;
+  outcome?: string | null;
+  operator_note?: string | null;
+};
+
+export type FollowUpLead = {
+  id: number;
+  companyName: string;
+  contactName: string | null;
+  phone: string | null;
+  agent_type: string | null;
+  followup_status: string | null;
+  next_followup_at: string | null;
+  followup_contract: FollowUpContract | null;
+  lastMovement: string | null;
+  createdAt: string | null;
+  bot_disabled: number;
+};
+
+export type FollowUpStats = {
+  total_active: number;
+  hot_active: number;
+  urgent_count: number;
+  replied_today: number;
+};
+
 export type KnowledgeItem = {
   id: number;
   user_id: number;
@@ -842,5 +879,13 @@ export const api = {
         offer_pack,
       });
     },
+  },
+
+  followUps: {
+    listActive: () => apiClient.get<FollowUpLead[]>("/leads/followups/active"),
+    getStats: () => apiClient.get<FollowUpStats>("/leads/followups/stats"),
+    pause: (id: number) => apiClient.post(`/leads/${id}/followup/pause`),
+    resume: (id: number) => apiClient.post(`/leads/${id}/followup/resume`),
+    cancel: (id: number) => apiClient.post(`/leads/${id}/followup/cancel`),
   },
 };
