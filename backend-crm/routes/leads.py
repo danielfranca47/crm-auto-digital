@@ -6,7 +6,11 @@ from fastapi import APIRouter, HTTPException, Depends
 from datetime import datetime, timedelta, timezone
 
 from database import get_connection, normalize_datetime_value
-from models import Lead, LeadUpdate, AppointmentCreate, AppointmentUpdate, BotDisabledUpdate, StartFollowupPayload
+import os
+import uuid
+from fastapi import UploadFile, File
+from pathlib import Path
+from models import Lead, LeadUpdate, AppointmentCreate, AppointmentUpdate, BotDisabledUpdate, StartFollowupPayload, ScheduledMessagePayload, SendNowPayload
 from security_core import CurrentUser, require_crm_access
 from services import rate_limit_service
 from services.agent_type import resolve_agent_type_for_user
@@ -19,7 +23,9 @@ from services.followup_state import (
     pause_followup_manually,
     resume_followup_manually,
     cancel_followup_manually,
+    progress_followup_after_auto_send,
 )
+from services.jobs_service import TYPE_WHATSAPP_SEND
 from services.qualification_guardrails import can_advance_from_qualification
 
 router = APIRouter()
@@ -1128,3 +1134,244 @@ def cancel_followup(id: int, current_user: CurrentUser = Depends(require_crm_acc
         raise HTTPException(status_code=500, detail=str(e))
     finally:
         conn.close()
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Edição Pré-Disparo (Tarefa 7)
+# ──────────────────────────────────────────────────────────────────────────────
+
+_FOLLOWUP_MEDIA_DIR = Path("data/uploads/followup-media")
+_FOLLOWUP_MEDIA_DIR.mkdir(parents=True, exist_ok=True)
+
+_ALLOWED_MEDIA_EXTS = {".jpg", ".jpeg", ".png", ".gif", ".pdf", ".doc", ".docx", ".mp3", ".ogg", ".m4a", ".mp4", ".mov"}
+_MEDIA_MAX_BYTES = 100 * 1024 * 1024  # 100 MB
+
+
+@router.get("/{lead_id}/followup/scheduled-message")
+def get_scheduled_message(lead_id: int, current_user: CurrentUser = Depends(require_crm_access)):
+    """Retorna a mensagem agendada para a próxima tentativa de follow-up."""
+    with get_connection() as conn:
+        _require_lead_for_user(conn, lead_id, current_user.id)
+        row = conn.execute(
+            """
+            SELECT followup_contract, followup_status, next_followup_at,
+                   companyName, contactName, phone, agent_type
+              FROM leads
+             WHERE id = ? AND user_id = ?
+            """,
+            (lead_id, current_user.id),
+        ).fetchone()
+
+    if not row:
+        raise HTTPException(status_code=404, detail="Lead não encontrado")
+
+    contract = _normalize_followup_contract(row["followup_contract"], agent_type=row["agent_type"])
+    scheduled_msg = (contract or {}).get("scheduled_message") or {}
+
+    return {
+        "lead_id": lead_id,
+        "companyName": row["companyName"],
+        "contactName": row["contactName"],
+        "phone": row["phone"],
+        "agent_type": row["agent_type"],
+        "followup_status": row["followup_status"],
+        "next_followup_at": row["next_followup_at"],
+        "scheduled_message": scheduled_msg,
+        "contract": contract,
+    }
+
+
+@router.put("/{lead_id}/followup/scheduled-message")
+def update_scheduled_message(
+    lead_id: int,
+    payload: ScheduledMessagePayload,
+    current_user: CurrentUser = Depends(require_crm_access),
+):
+    """Salva edição manual da mensagem agendada em followup_contract.scheduled_message."""
+    conn = get_connection()
+    try:
+        _require_lead_for_user(conn, lead_id, current_user.id)
+        row = conn.execute(
+            "SELECT followup_contract, agent_type FROM leads WHERE id = ? AND user_id = ?",
+            (lead_id, current_user.id),
+        ).fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="Lead não encontrado")
+
+        contract = _normalize_followup_contract(row["followup_contract"], agent_type=row["agent_type"]) or {}
+        contract["scheduled_message"] = {
+            "content": payload.content,
+            "media_url": payload.media_url,
+            "media_type": payload.media_type,
+            "edited_by_user": True,
+            "saved_at": datetime.now(timezone.utc).isoformat(),
+        }
+
+        conn.execute(
+            "UPDATE leads SET followup_contract = ?, lastMovement = CURRENT_TIMESTAMP WHERE id = ? AND user_id = ?",
+            (json.dumps(contract, ensure_ascii=False), lead_id, current_user.id),
+        )
+        conn.commit()
+        return {"status": "ok", "scheduled_message": contract["scheduled_message"]}
+    except HTTPException:
+        conn.rollback()
+        raise
+    except Exception as e:
+        conn.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        conn.close()
+
+
+@router.post("/{lead_id}/followup/regenerate")
+def regenerate_followup_message(lead_id: int, current_user: CurrentUser = Depends(require_crm_access)):
+    """Gera nova versão da mensagem sem sobrescrever o rascunho atual."""
+    with get_connection() as conn:
+        _require_lead_for_user(conn, lead_id, current_user.id)
+        row = conn.execute(
+            "SELECT followup_contract, agent_type, companyName, contactName FROM leads WHERE id = ? AND user_id = ?",
+            (lead_id, current_user.id),
+        ).fetchone()
+
+    if not row:
+        raise HTTPException(status_code=404, detail="Lead não encontrado")
+
+    contract = _normalize_followup_contract(row["followup_contract"], agent_type=row["agent_type"]) or {}
+    attempts = int(contract.get("attempts") or 0)
+    max_attempts = int(contract.get("max_attempts") or 4)
+    temperature = str(contract.get("temperature") or "warm").lower()
+    goal = str(contract.get("followup_goal") or "avançar o processo de vendas")
+    operator_note = str(contract.get("operator_note") or "")
+    contact = str(row["contactName"] or row["companyName"] or "")
+    first_name = contact.split()[0] if contact else "você"
+
+    temp_context = {
+        "hot":  "o lead demonstrou alto interesse e está próximo de fechar",
+        "warm": "o lead tem interesse moderado e precisa de um acompanhamento",
+        "cold": "o lead está distante e precisa ser reengajado com cuidado",
+    }.get(temperature, "o lead está em acompanhamento")
+
+    note_fragment = f"\n\nContexto: {operator_note}" if operator_note else ""
+
+    content = (
+        f"Oi {first_name}! Tudo bem por aí?\n\n"
+        f"Passando para dar continuidade à nossa conversa — esta é a tentativa {attempts + 1} de {max_attempts}. "
+        f"Sei que {temp_context}, e quero garantir que você tenha tudo que precisa para seguir em frente.\n\n"
+        f"Objetivo: {goal}.{note_fragment}\n\n"
+        f"Pode contar comigo para qualquer dúvida! 💬"
+    )
+
+    return {"content": content, "generated": True, "attempts": attempts, "max_attempts": max_attempts}
+
+
+@router.post("/{lead_id}/followup/send-now")
+def send_followup_now(
+    lead_id: int,
+    payload: SendNowPayload,
+    current_user: CurrentUser = Depends(require_crm_access),
+):
+    """Envia a mensagem de follow-up imediatamente via job e avança a tentativa."""
+    ai_profile: dict = {}
+    try:
+        ai_profile = fetch_core_ai_profile(current_user.token) or {}
+    except Exception:
+        pass
+
+    conn = get_connection()
+    try:
+        _require_lead_for_user(conn, lead_id, current_user.id)
+        row = conn.execute(
+            "SELECT followup_contract, agent_type, phone, followup_status FROM leads WHERE id = ? AND user_id = ?",
+            (lead_id, current_user.id),
+        ).fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="Lead não encontrado")
+
+        phone = row["phone"]
+        if not phone:
+            raise HTTPException(status_code=400, detail="Lead sem telefone cadastrado")
+
+        if str(row["followup_status"] or "").lower() == "closed":
+            raise HTTPException(status_code=409, detail="Follow-up já está encerrado")
+
+        job_payload = json.dumps({
+            "lead_id": lead_id,
+            "user_id": current_user.id,
+            "phone": phone,
+            "body": payload.content,
+            "media_url": payload.media_url,
+            "media_type": payload.media_type,
+            "source": "followup_send_now",
+        }, ensure_ascii=False)
+
+        conn.execute(
+            """
+            INSERT INTO jobs (user_id, type, payload, status, priority, attempts,
+                              assigned_agent_id, created_at, updated_at, scheduled_at)
+            VALUES (?, ?, ?, 'pending', 1, 0, NULL, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+            """,
+            (current_user.id, TYPE_WHATSAPP_SEND, job_payload),
+        )
+        job_id = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
+
+        progress = progress_followup_after_auto_send(
+            conn,
+            lead_id=lead_id,
+            user_id=current_user.id,
+            source_job_id=job_id,
+            ai_profile=ai_profile,
+        )
+
+        conn.execute(
+            """
+            INSERT INTO prospection_logs (lead_id, channel, message_id, action, notes, user_id)
+            VALUES (?, 'whatsapp', NULL, 'followup_sent_now_manual', ?, ?)
+            """,
+            (lead_id, json.dumps({"job_id": job_id, "progress": progress}, ensure_ascii=False), current_user.id),
+        )
+        conn.commit()
+        return {"status": "ok", "job_id": job_id, "progress": progress}
+    except HTTPException:
+        conn.rollback()
+        raise
+    except Exception as e:
+        conn.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        conn.close()
+
+
+@router.post("/{lead_id}/followup/upload-media")
+async def upload_followup_media(
+    lead_id: int,
+    file: UploadFile = File(...),
+    current_user: CurrentUser = Depends(require_crm_access),
+):
+    """Upload de mídia para ser enviada junto com o follow-up."""
+    with get_connection() as conn:
+        _require_lead_for_user(conn, lead_id, current_user.id)
+
+    ext = os.path.splitext(file.filename or "")[1].lower()
+    if ext not in _ALLOWED_MEDIA_EXTS:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Extensão não permitida. Use: {', '.join(sorted(_ALLOWED_MEDIA_EXTS))}",
+        )
+
+    content = await file.read()
+    if len(content) > _MEDIA_MAX_BYTES:
+        raise HTTPException(status_code=400, detail="Arquivo muito grande (máx 100 MB)")
+
+    uid = str(uuid.uuid4())
+    filename = f"{uid}{ext}"
+    dest = _FOLLOWUP_MEDIA_DIR / filename
+    try:
+        with open(dest, "wb") as fh:
+            fh.write(content)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Falha ao salvar arquivo: {e}")
+
+    public_base = os.getenv("CRM_PUBLIC_BASE_URL", "").rstrip("/")
+    media_url = f"{public_base}/api/followup-media/{filename}" if public_base else f"/api/followup-media/{filename}"
+
+    return {"ok": True, "filename": filename, "original_name": file.filename, "ext": ext, "media_url": media_url}

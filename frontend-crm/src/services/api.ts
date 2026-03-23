@@ -77,6 +77,27 @@ export type FollowUpContract = {
   meeting_or_session_happened?: string | null;
   outcome?: string | null;
   operator_note?: string | null;
+  scheduled_message?: ScheduledMessage | null;
+};
+
+export type ScheduledMessage = {
+  content: string;
+  media_url?: string | null;
+  media_type?: string | null;
+  edited_by_user?: boolean;
+  saved_at?: string | null;
+};
+
+export type FollowUpEditData = {
+  lead_id: number;
+  companyName: string;
+  contactName: string | null;
+  phone: string | null;
+  agent_type: string | null;
+  followup_status: string | null;
+  next_followup_at: string | null;
+  scheduled_message: ScheduledMessage | Record<string, never>;
+  contract: FollowUpContract | null;
 };
 
 export type FollowUpLead = {
@@ -887,5 +908,27 @@ export const api = {
     pause: (id: number) => apiClient.post(`/leads/${id}/followup/pause`),
     resume: (id: number) => apiClient.post(`/leads/${id}/followup/resume`),
     cancel: (id: number) => apiClient.post(`/leads/${id}/followup/cancel`),
+    getScheduledMessage: (id: number) =>
+      apiClient.get<FollowUpEditData>(`/leads/${id}/followup/scheduled-message`),
+    saveScheduledMessage: (
+      id: number,
+      payload: { content: string; media_url?: string | null; media_type?: string | null }
+    ) => apiClient.put(`/leads/${id}/followup/scheduled-message`, payload),
+    regenerate: (id: number) =>
+      apiClient.post<{ content: string; generated: boolean; attempts: number; max_attempts: number }>(
+        `/leads/${id}/followup/regenerate`
+      ),
+    sendNow: (
+      id: number,
+      payload: { content: string; media_url?: string | null; media_type?: string | null }
+    ) => apiClient.post(`/leads/${id}/followup/send-now`, payload),
+    uploadMedia: async (id: number, file: File) => {
+      const fd = new FormData();
+      fd.append("file", file);
+      return apiClient.post<{ ok: boolean; filename: string; media_url: string; ext: string }>(
+        `/leads/${id}/followup/upload-media`,
+        fd
+      );
+    },
   },
 };

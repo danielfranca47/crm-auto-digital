@@ -1,4 +1,5 @@
 import { useState, useMemo } from "react";
+import { useNavigate } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { format, parseISO, differenceInMinutes, isToday, isTomorrow } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -25,7 +26,7 @@ import {
 import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
-import { Pause, Play, X, Search, AlertCircle } from "lucide-react";
+import { Pause, Play, X, Search, AlertCircle, Pencil } from "lucide-react";
 
 // ─── Temperatura ──────────────────────────────────────────────────────────────
 
@@ -270,6 +271,7 @@ function LeadDrawer({
   onAction: (action: DrawerAction, lead: FollowUpLead) => void;
   actionLoading: boolean;
 }) {
+  const navigate = useNavigate();
   if (!lead) return null;
   const contract = lead.followup_contract;
   const status = lead.followup_status ?? "";
@@ -348,6 +350,15 @@ function LeadDrawer({
 
         {/* Actions */}
         <div className="px-5 py-4 flex flex-col gap-2 border-t mt-auto">
+          {status === "scheduled" && (
+            <Button
+              className="justify-start gap-2 w-full bg-violet-600 hover:bg-violet-700 text-white"
+              onClick={() => { onClose(); navigate(`/follow-ups/${lead.id}/edit`); }}
+            >
+              <Pencil className="w-4 h-4" />
+              Editar mensagem agendada
+            </Button>
+          )}
           {(status === "active" || status === "scheduled") && (
             <Button
               variant="outline"

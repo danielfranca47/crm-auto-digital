@@ -156,6 +156,22 @@ class AssistantOptions(BaseModel):
 
 
 # -----------------------------
+# Follow-up Edição Pré-Disparo
+# -----------------------------
+
+class ScheduledMessagePayload(BaseModel):
+    content: str
+    media_url: Optional[str] = None
+    media_type: Optional[str] = None  # "image" | "doc" | "audio" | "video"
+
+
+class SendNowPayload(BaseModel):
+    content: str
+    media_url: Optional[str] = None
+    media_type: Optional[str] = None
+
+
+# -----------------------------
 # Knowledge Base
 # -----------------------------
 class KnowledgeCreate(BaseModel):

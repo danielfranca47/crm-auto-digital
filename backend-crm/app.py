@@ -13,6 +13,7 @@ load_dotenv(BASE_DIR / ".env.local", override=True)
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 
 from database import init_db
 from routes import (
@@ -129,6 +130,11 @@ app.include_router(webhooks.router)                                 # /webhooks/
 app.include_router(executor.router)                                 # /api/jobs, /api/whatsapp/* internal
 app.include_router(whatsapp_connect.router)                         # /api/whatsapp/connect, /api/whatsapp/status
 # app.include_router(dashboard.router)
+
+# Static: mídia de follow-up
+_followup_media_dir = Path("data/uploads/followup-media")
+_followup_media_dir.mkdir(parents=True, exist_ok=True)
+app.mount("/api/followup-media", StaticFiles(directory=str(_followup_media_dir)), name="followup-media")
 
 # -----------------------------------------------------------------------------
 # SUB-APP PÚBLICO (Website / Form) -> montado em /public
