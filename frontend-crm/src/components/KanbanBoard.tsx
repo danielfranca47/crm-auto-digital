@@ -26,6 +26,7 @@ import { useAppointments, useCancelAppointment } from "@/hooks/useAppointments";
 import { useToast } from "@/hooks/use-toast";
 import { Alert, AlertDescription, AlertTitle } from "./ui/alert";
 import { FollowUpTransitionModal } from "./FollowUpTransitionModal";
+import { useNotifications } from "@/hooks/useNotifications";
 
 interface KanbanBoardProps {
   onDashboard: () => void;
@@ -77,6 +78,7 @@ export function KanbanBoard({ onDashboard }: KanbanBoardProps) {
   const [followupModalOpen, setFollowupModalOpen] = useState(false);
   const [followupLead, setFollowupLead] = useState<Lead | null>(null);
   const [profileAgentType, setProfileAgentType] = useState<"agent_1" | "agent_2" | "agent_3" | null>(null);
+  const { notifiedLeadIds } = useNotifications();
 
   useEffect(() => {
     let mounted = true;
@@ -475,6 +477,7 @@ export function KanbanBoard({ onDashboard }: KanbanBoardProps) {
                 onCancelMeeting={handleCancelMeeting}
                 onOpenCard={handleOpenCard}
                 onDeleteLead={handleDeleteLead}
+                notifiedLeadIds={notifiedLeadIds}
               />
             ))}
 
@@ -492,6 +495,7 @@ export function KanbanBoard({ onDashboard }: KanbanBoardProps) {
                   onCancelMeeting={handleCancelMeeting}
                   onOpenCard={handleOpenCard}
                   onDeleteLead={handleDeleteLead}
+                  notifiedLeadIds={notifiedLeadIds}
                 />
               ))}
           </div>

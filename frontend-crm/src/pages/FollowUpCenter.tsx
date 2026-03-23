@@ -1,5 +1,5 @@
-import { useState, useMemo } from "react";
-import { useNavigate } from "react-router-dom";
+import { useState, useMemo, useEffect } from "react";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { format, parseISO, differenceInMinutes, isToday, isTomorrow } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -593,6 +593,7 @@ type TempFilter   = "all" | "hot" | "warm" | "cold" | "cart_recovery";
 
 export default function FollowUpCenter() {
   const queryClient = useQueryClient();
+  const [searchParams] = useSearchParams();
 
   // ── Filters ─────────────────────────────────────────────────────────────────
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
@@ -611,6 +612,14 @@ export default function FollowUpCenter() {
     queryFn: () => api.followUps.listActive(),
     refetchInterval: 30_000,
   });
+
+  // Auto-open drawer when navigated from a badge click (?leadId=)
+  useEffect(() => {
+    const paramLeadId = searchParams.get("leadId");
+    if (!paramLeadId || leads.length === 0) return;
+    const target = leads.find((l) => String(l.id) === paramLeadId);
+    if (target) setDrawerLead(target);
+  }, [searchParams, leads]);
 
   const { data: stats, isLoading: statsLoading } = useQuery({
     queryKey: ["followups-stats"],

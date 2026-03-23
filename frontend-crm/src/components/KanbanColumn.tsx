@@ -14,6 +14,7 @@ interface KanbanColumnProps {
   onCancelMeeting: (lead: Lead) => void;
   onOpenCard: (leadId: string) => void;
   onDeleteLead: (leadId: string) => Promise<void>;
+  notifiedLeadIds?: Set<string>;
 }
 
 export function KanbanColumn({
@@ -27,6 +28,7 @@ export function KanbanColumn({
   onCancelMeeting,
   onOpenCard,
   onDeleteLead,
+  notifiedLeadIds,
 }: KanbanColumnProps) {
   const { setNodeRef } = useDroppable({
     id: column.id,
@@ -65,6 +67,7 @@ export function KanbanColumn({
               onCancelMeeting={onCancelMeeting}
               onOpenCard={onOpenCard}
               onDeleteLead={onDeleteLead}
+              hasReplyNotification={notifiedLeadIds?.has(lead.id) ?? false}
             />
           ))}
         </SortableContext>

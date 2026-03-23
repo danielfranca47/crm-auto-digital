@@ -1,8 +1,9 @@
 import { Lead, KanbanColumn } from "../types/crm";
-import { MessageCircle, Calendar, Phone } from "lucide-react";
+import { MessageCircle, Calendar, Phone, Zap } from "lucide-react";
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { LeadActionsMenu } from "./LeadActionsMenu";
+import { useNavigate } from "react-router-dom";
 
 const FOLLOWUP_VARIANT_CONFIG: Record<string, { label: string; color: string }> = {
   cart_recovery:    { label: "Carrinho",  color: "#52C4A0" },
@@ -51,6 +52,7 @@ interface LeadCardProps {
   onCancelMeeting: (lead: Lead) => void;
   onOpenCard: (leadId: string) => void;
   onDeleteLead: (leadId: string) => Promise<void>;
+  hasReplyNotification?: boolean;
 }
 
 export function LeadCard({
@@ -64,7 +66,9 @@ export function LeadCard({
   onCancelMeeting,
   onOpenCard,
   onDeleteLead,
+  hasReplyNotification = false,
 }: LeadCardProps) {
+  const navigate = useNavigate();
   const {
     attributes,
     listeners,
@@ -114,7 +118,24 @@ export function LeadCard({
       className="lead-card p-4 mb-3 cursor-grab active:cursor-grabbing"
     >
       <div className="flex justify-between items-start mb-3">
-        <h4 className="font-semibold text-foreground text-sm">{lead.companyName} - {lead.contactName}</h4>
+        <div className="flex items-center gap-1.5 min-w-0">
+          <h4 className="font-semibold text-foreground text-sm truncate">{lead.companyName} - {lead.contactName}</h4>
+          {hasReplyNotification && (
+            <button
+              title="Lead respondeu ao follow-up — ver na Central de Follow-ups"
+              onClick={(e) => {
+                e.stopPropagation();
+                navigate(`/follow-ups?leadId=${lead.id}`);
+              }}
+              onPointerDown={(e) => e.stopPropagation()}
+              onMouseDown={(e) => e.stopPropagation()}
+              onTouchStart={(e) => e.stopPropagation()}
+              className="shrink-0 flex items-center justify-center w-5 h-5 rounded-full bg-amber-400/20 border border-amber-400/50 hover:bg-amber-400/40 transition-colors"
+            >
+              <Zap className="w-3 h-3 text-amber-400" />
+            </button>
+          )}
+        </div>
         <div className="flex items-center gap-1">
           <button
             onClick={handleWhatsAppClick}

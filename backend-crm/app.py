@@ -31,6 +31,7 @@ from routes import (
     webhooks,
     executor,
     whatsapp_connect,
+    notifications,
 )
 from routes import public
 from services.followup_reconciler import reconcile_due_followups
@@ -129,6 +130,7 @@ app.include_router(knowledge.router)                                # /api/knowl
 app.include_router(webhooks.router)                                 # /webhooks/whatsapp/inbound
 app.include_router(executor.router)                                 # /api/jobs, /api/whatsapp/* internal
 app.include_router(whatsapp_connect.router)                         # /api/whatsapp/connect, /api/whatsapp/status
+app.include_router(notifications.router)                            # /api/notifications
 # app.include_router(dashboard.router)
 
 # Static: mídia de follow-up

@@ -150,6 +150,15 @@ export type WhatsappStatusResponse = {
   last_updated?: string | null;
 };
 
+export type AppNotification = {
+  id: number;
+  lead_id: number | null;
+  type: string;
+  created_at: string;
+  companyName?: string | null;
+  contactName?: string | null;
+};
+
 const AUTH_BASE = CORE_AUTH_BASE;
 const CORE_BASE = CORE_AUTH_BASE.replace(/\/auth$/, "");
 
@@ -900,6 +909,12 @@ export const api = {
         offer_pack,
       });
     },
+  },
+
+  notifications: {
+    getUnread: () => apiClient.get<AppNotification[]>("/notifications/unread"),
+    markRead: (id: number) => apiClient.post(`/notifications/${id}/read`, {}),
+    markAllRead: () => apiClient.post("/notifications/read-all", {}),
   },
 
   followUps: {

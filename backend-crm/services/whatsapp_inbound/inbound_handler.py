@@ -270,12 +270,17 @@ def handle_inbound(payload: Dict[str, Any]) -> Dict[str, Any]:
             (lead_id, user_id, phone_norm, month_key),
         )
         save_inbound_message(conn, lead_id=lead_id, body=message_text, user_id=user_id)
-        stop_followup_on_inbound_reply(
+        followup_stopped = stop_followup_on_inbound_reply(
             conn,
             lead_id=lead_id,
             user_id=user_id,
             inbound_message_id=external_event_id,
         )
+        if followup_stopped:
+            conn.execute(
+                "INSERT INTO notifications (user_id, lead_id, type) VALUES (?, ?, ?)",
+                (user_id, lead_id, "followup_paused_by_reply"),
+            )
         conn.commit()
 
     try:

@@ -219,6 +219,27 @@ def ensure_followup_reconcile_guard_table(conn: sqlite3.Connection) -> None:
     )
 
 
+def ensure_notifications_table(conn: sqlite3.Connection) -> None:
+    """Cria tabela de notificações in-app por usuário (idempotente)."""
+    cur = conn.cursor()
+    cur.executescript(
+        """
+        CREATE TABLE IF NOT EXISTS notifications (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL,
+            lead_id INTEGER,
+            type TEXT NOT NULL,
+            read INTEGER NOT NULL DEFAULT 0,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (lead_id) REFERENCES leads(id) ON DELETE CASCADE
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_notifications_user ON notifications(user_id, read, created_at);
+        CREATE INDEX IF NOT EXISTS idx_notifications_lead ON notifications(lead_id);
+        """
+    )
+
+
 def ensure_knowledge_table(conn: sqlite3.Connection) -> None:
     """Cria tabela de knowledge base por usuário (idempotente)."""
     cur = conn.cursor()
@@ -707,6 +728,9 @@ def init_db() -> None:
 
         # Guarda idempotente para evitar enqueue duplicado do reconciliador de follow-up
         ensure_followup_reconcile_guard_table(conn)
+
+        # Notificações in-app
+        ensure_notifications_table(conn)
 
         # Base de conhecimento por usuário
         ensure_knowledge_table(conn)
