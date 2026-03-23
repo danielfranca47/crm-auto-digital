@@ -13,7 +13,13 @@ from services.agent_type import resolve_agent_type_for_user
 from core_client import fetch_core_ai_profile
 from services.phone_normalizer import PhoneNormalizationError, normalize_to_e164
 from services.lead_category_policy import apply_closing_bot_disable_side_effect
-from services.followup_state import stop_followup_for_lead_category, stop_followup_on_handoff
+from services.followup_state import (
+    stop_followup_for_lead_category,
+    stop_followup_on_handoff,
+    pause_followup_manually,
+    resume_followup_manually,
+    cancel_followup_manually,
+)
 from services.qualification_guardrails import can_advance_from_qualification
 
 router = APIRouter()
@@ -919,6 +925,105 @@ def remover_compromisso(lead_id: int, appointment_id: int, current_user: Current
 
         return {"message": "Compromisso removido com sucesso"}
     except HTTPException:
+        raise
+    except Exception as e:
+        conn.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        conn.close()
+
+
+# ---------------------------
+# Follow-up pause / resume / cancel
+# ---------------------------
+
+@router.post("/{id}/followup/pause")
+def pause_followup(id: int, current_user: CurrentUser = Depends(require_crm_access)):
+    conn = get_connection()
+    try:
+        _require_lead_for_user(conn, id, current_user.id)
+        result = pause_followup_manually(conn, lead_id=id, user_id=current_user.id)
+        if not result.get("updated"):
+            reason = result.get("reason", "unknown")
+            if reason == "lead_not_found":
+                raise HTTPException(status_code=404, detail="Lead não encontrado")
+            if reason == "contract_missing":
+                raise HTTPException(status_code=400, detail="Lead não tem contrato de follow-up")
+            if reason == "invalid_status":
+                raise HTTPException(
+                    status_code=409,
+                    detail=f"Não é possível pausar: status atual é '{result.get('current_status')}'",
+                )
+            raise HTTPException(status_code=400, detail=reason)
+        conn.commit()
+        return result
+    except HTTPException:
+        conn.rollback()
+        raise
+    except Exception as e:
+        conn.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        conn.close()
+
+
+@router.post("/{id}/followup/resume")
+def resume_followup(id: int, current_user: CurrentUser = Depends(require_crm_access)):
+    ai_profile: dict = {}
+    try:
+        ai_profile = fetch_core_ai_profile(current_user.token) or {}
+    except Exception:
+        pass
+
+    conn = get_connection()
+    try:
+        _require_lead_for_user(conn, id, current_user.id)
+        result = resume_followup_manually(conn, lead_id=id, user_id=current_user.id, ai_profile=ai_profile)
+        if not result.get("updated"):
+            reason = result.get("reason", "unknown")
+            if reason == "lead_not_found":
+                raise HTTPException(status_code=404, detail="Lead não encontrado")
+            if reason == "contract_missing":
+                raise HTTPException(status_code=400, detail="Lead não tem contrato de follow-up")
+            if reason == "not_manually_paused":
+                raise HTTPException(
+                    status_code=409,
+                    detail=f"Não é possível retomar: status atual é '{result.get('current_status')}'",
+                )
+            if reason == "max_attempts_reached":
+                raise HTTPException(status_code=409, detail="Número máximo de tentativas já atingido")
+            raise HTTPException(status_code=400, detail=reason)
+        conn.commit()
+        return result
+    except HTTPException:
+        conn.rollback()
+        raise
+    except Exception as e:
+        conn.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        conn.close()
+
+
+@router.post("/{id}/followup/cancel")
+def cancel_followup(id: int, current_user: CurrentUser = Depends(require_crm_access)):
+    conn = get_connection()
+    try:
+        _require_lead_for_user(conn, id, current_user.id)
+        result = cancel_followup_manually(conn, lead_id=id, user_id=current_user.id)
+        if not result.get("updated"):
+            reason = result.get("reason", "unknown")
+            if reason == "lead_not_found":
+                raise HTTPException(status_code=404, detail="Lead não encontrado")
+            if reason == "contract_missing":
+                raise HTTPException(status_code=400, detail="Lead não tem contrato de follow-up")
+            if reason == "already_closed":
+                raise HTTPException(status_code=409, detail="Follow-up já está encerrado")
+            raise HTTPException(status_code=400, detail=reason)
+        conn.commit()
+        return result
+    except HTTPException:
+        conn.rollback()
         raise
     except Exception as e:
         conn.rollback()

@@ -10,6 +10,7 @@ STOP_DEAL_CLOSED = "deal_closed"
 STOP_EXPLICIT_REJECTION = "explicit_rejection"
 STOP_HANDOFF_HUMAN = "handoff_human"
 STOP_MAX_ATTEMPTS_REACHED = "max_attempts_reached"
+STOP_MANUAL_CANCEL = "manual_cancel"
 
 _FOLLOWUP_SEND_NEXT_SCHEDULE = {
     "sdr_scheduler": {
@@ -362,3 +363,167 @@ def start_cart_recovery_followup(
         ),
     )
     return {"started": True, "next_followup_at": first_followup_at}
+
+
+def _cancel_pending_jobs_for_lead(conn, *, lead_id: int) -> int:
+    """Cancela jobs pendentes de follow-up para o lead via guard table. Retorna count."""
+    rows = conn.execute(
+        """
+        SELECT g.id AS guard_id, g.job_id
+          FROM followup_reconcile_guard g
+          JOIN jobs j ON j.id = g.job_id
+         WHERE g.lead_id = ?
+           AND j.status = 'pending'
+        """,
+        (lead_id,),
+    ).fetchall()
+
+    cancelled = 0
+    for r in rows:
+        conn.execute(
+            "UPDATE jobs SET status = 'cancelled', updated_at = CURRENT_TIMESTAMP WHERE id = ? AND status = 'pending'",
+            (r["job_id"],),
+        )
+        conn.execute(
+            "DELETE FROM followup_reconcile_guard WHERE id = ?",
+            (r["guard_id"],),
+        )
+        cancelled += 1
+
+    return cancelled
+
+
+def pause_followup_manually(
+    conn,
+    *,
+    lead_id: int,
+    user_id: int,
+) -> Dict[str, Any]:
+    """Pausa manualmente o follow-up. Só permitido se status=active ou scheduled."""
+    row = _load_lead_followup_row(conn, lead_id=lead_id)
+    if not row:
+        return {"updated": False, "reason": "lead_not_found"}
+
+    contract = _parse_contract(row["followup_contract"])
+    if not contract:
+        return {"updated": False, "reason": "contract_missing"}
+
+    current_status = str(contract.get("status") or "").lower()
+    if current_status not in {"active", "scheduled"}:
+        return {"updated": False, "reason": "invalid_status", "current_status": current_status}
+
+    _cancel_pending_jobs_for_lead(conn, lead_id=lead_id)
+
+    now = _now_utc()
+    contract["status"] = "manually_paused"
+    contract["manually_paused_at"] = now.isoformat()
+    contract["next_followup_at"] = None
+
+    _write_followup(conn, lead_id=lead_id, contract=contract, status="manually_paused", next_followup_at=None)
+    conn.execute(
+        """
+        INSERT INTO prospection_logs (lead_id, channel, message_id, action, notes, user_id)
+        VALUES (?, NULL, NULL, 'followup_manually_paused', ?, ?)
+        """,
+        (lead_id, _json_dumps({"paused_at": now.isoformat()}), user_id),
+    )
+    return {"updated": True, "reason": "paused"}
+
+
+def resume_followup_manually(
+    conn,
+    *,
+    lead_id: int,
+    user_id: int,
+    ai_profile: Optional[Dict[str, Any]] = None,
+) -> Dict[str, Any]:
+    """Retoma follow-up manualmente pausado. Recalcula next_followup_at = now + cadence[attempts]."""
+    row = _load_lead_followup_row(conn, lead_id=lead_id)
+    if not row:
+        return {"updated": False, "reason": "lead_not_found"}
+
+    contract = _parse_contract(row["followup_contract"])
+    if not contract:
+        return {"updated": False, "reason": "contract_missing"}
+
+    current_status = str(contract.get("status") or "").lower()
+    if current_status != "manually_paused":
+        return {"updated": False, "reason": "not_manually_paused", "current_status": current_status}
+
+    attempts = int(contract.get("attempts") or 0)
+    max_attempts = int(contract.get("max_attempts") or 0)
+    variant = str(contract.get("followup_variant") or "").strip().lower()
+
+    if max_attempts > 0 and attempts >= max_attempts:
+        return {"updated": False, "reason": "max_attempts_reached"}
+
+    cadence_override: Optional[List[int]] = None
+    if ai_profile:
+        raw_cadence = ai_profile.get("followup_cadence")
+        if isinstance(raw_cadence, list) and raw_cadence:
+            cadence_override = [int(x) for x in raw_cadence]
+
+    now = _now_utc()
+    # next_followup_at = now + cadence[attempts] (0-based)
+    # _resolve_next_followup_at(attempts_after_send=attempts+1) → idx = attempts
+    next_followup_at = _resolve_next_followup_at(
+        variant=variant,
+        attempts_after_send=attempts + 1,
+        sent_at=now,
+        cadence_override=cadence_override,
+    )
+
+    contract["status"] = "active"
+    contract["next_followup_at"] = next_followup_at
+    contract["manually_paused_at"] = None
+    contract["stop_reason"] = None
+
+    _write_followup(conn, lead_id=lead_id, contract=contract, status="active", next_followup_at=next_followup_at)
+    conn.execute(
+        """
+        INSERT INTO prospection_logs (lead_id, channel, message_id, action, notes, user_id)
+        VALUES (?, NULL, NULL, 'followup_manually_resumed', ?, ?)
+        """,
+        (
+            lead_id,
+            _json_dumps({"attempts": attempts, "next_followup_at": next_followup_at}),
+            user_id,
+        ),
+    )
+    return {"updated": True, "reason": "resumed", "next_followup_at": next_followup_at}
+
+
+def cancel_followup_manually(
+    conn,
+    *,
+    lead_id: int,
+    user_id: int,
+) -> Dict[str, Any]:
+    """Cancela manualmente o follow-up. Permitido em qualquer status exceto closed."""
+    row = _load_lead_followup_row(conn, lead_id=lead_id)
+    if not row:
+        return {"updated": False, "reason": "lead_not_found"}
+
+    contract = _parse_contract(row["followup_contract"])
+    if not contract:
+        return {"updated": False, "reason": "contract_missing"}
+
+    current_status = str(contract.get("status") or "").lower()
+    if current_status == "closed":
+        return {"updated": False, "reason": "already_closed"}
+
+    _cancel_pending_jobs_for_lead(conn, lead_id=lead_id)
+
+    contract["status"] = "closed"
+    contract["stop_reason"] = STOP_MANUAL_CANCEL
+    contract["next_followup_at"] = None
+
+    _write_followup(conn, lead_id=lead_id, contract=contract, status="closed", next_followup_at=None)
+    conn.execute(
+        """
+        INSERT INTO prospection_logs (lead_id, channel, message_id, action, notes, user_id)
+        VALUES (?, NULL, NULL, 'followup_manually_cancelled', ?, ?)
+        """,
+        (lead_id, _json_dumps({"stop_reason": STOP_MANUAL_CANCEL}), user_id),
+    )
+    return {"updated": True, "reason": "cancelled"}
