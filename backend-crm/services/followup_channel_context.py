@@ -5,7 +5,7 @@ from typing import Any, Dict
 
 from fastapi import HTTPException
 
-from services.jobs_service import TYPE_WHATSAPP_INBOUND_N8N, expand_type_variants
+from services.jobs_service import TYPE_WHATSAPP_INBOUND, expand_type_variants
 
 
 def _parse_payload(raw_payload: Any) -> Dict[str, Any]:
@@ -54,7 +54,7 @@ def resolve_followup_tick_channel_context(conn, *, lead_id: int, user_id: int) -
     # Fallback auxiliar: histórico inbound por lead em cenários legados onde o core ainda
     # não disponibiliza/retorna a conexão atual por user_id.
     cur = conn.cursor()
-    inbound_type_variants = expand_type_variants(TYPE_WHATSAPP_INBOUND_N8N)
+    inbound_type_variants = expand_type_variants(TYPE_WHATSAPP_INBOUND)
     placeholders = ",".join(["?"] * len(inbound_type_variants))
     rows = cur.execute(
         f"""

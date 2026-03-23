@@ -68,7 +68,6 @@ export type FollowUpContract = {
   attempts: number;
   max_attempts: number;
   followup_variant?: string | null;
-  temperature?: string | null;
   next_followup_at: string | null;
   last_followup_at?: string | null;
   stop_reason?: string | null;

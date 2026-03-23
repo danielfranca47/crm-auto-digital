@@ -13,7 +13,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from core_client import fetch_core_whatsapp_connection_resolve
 from database import get_connection
-from services.jobs_service import TYPE_WHATSAPP_INBOUND_N8N, create_job
+from services.jobs_service import TYPE_WHATSAPP_INBOUND, create_job
 from services.ai_orchestrator import (
     InboundEvent,
     build_context_bundle_from_inbound,
@@ -339,5 +339,5 @@ def handle_inbound(payload: Dict[str, Any]) -> Dict[str, Any]:
         external_event_id=external_event_id,
         received_at=received_iso,
     )
-    job = create_job(job_type=TYPE_WHATSAPP_INBOUND_N8N, payload=job_payload, user_id=user_id)
+    job = create_job(job_type=TYPE_WHATSAPP_INBOUND, payload=job_payload, user_id=user_id)
     return {"status": "accepted", "lead_id": lead_id, "job_id": job.get("id")}

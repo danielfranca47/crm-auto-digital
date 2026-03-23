@@ -483,7 +483,6 @@ def start_followup_transition(
                 meeting_or_session_happened=payload.meeting_or_session_happened,
             )
         next_followup_at = (now_utc + timedelta(minutes=first_offset_minutes)).isoformat()
-        meeting_happened = payload.meeting_or_session_happened == "yes"
         contract = {
             "phase": "follow-up",
             "version": FOLLOWUP_CONTRACT_VERSION,
@@ -495,10 +494,8 @@ def start_followup_transition(
             "next_followup_at": next_followup_at,
             "last_followup_at": None,
             "stop_reason": None,
-            "meeting_happened": meeting_happened,
             "meeting_or_session_happened": payload.meeting_or_session_happened,
             "outcome": payload.outcome,
-            "temperature": payload.outcome,
             "proposal_sent": payload.proposal_sent,
             "followup_goal": payload.followup_goal,
             "operator_note": (payload.operator_note or "").strip() or None,
@@ -633,7 +630,7 @@ def followup_stats(current_user: CurrentUser = Depends(require_crm_access)):
 
     for row in rows:
         contract = _normalize_followup_contract(row["followup_contract"])
-        temp = str((contract or {}).get("temperature") or "").lower()
+        temp = str((contract or {}).get("outcome") or "").lower()
         if temp == "hot":
             hot_active += 1
 
@@ -1239,7 +1236,7 @@ def regenerate_followup_message(lead_id: int, current_user: CurrentUser = Depend
     contract = _normalize_followup_contract(row["followup_contract"], agent_type=row["agent_type"]) or {}
     attempts = int(contract.get("attempts") or 0)
     max_attempts = int(contract.get("max_attempts") or 4)
-    temperature = str(contract.get("temperature") or "warm").lower()
+    temperature = str(contract.get("outcome") or "warm").lower()
     goal = str(contract.get("followup_goal") or "avançar o processo de vendas")
     operator_note = str(contract.get("operator_note") or "")
     contact = str(row["contactName"] or row["companyName"] or "")

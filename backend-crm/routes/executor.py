@@ -28,7 +28,7 @@ from services.jobs_service import (
     JOB_MAX_ATTEMPTS,
     LEAD_CATEGORIES,
     TYPE_WHATSAPP_FOLLOWUP_TICK,
-    TYPE_WHATSAPP_INBOUND_N8N,
+    TYPE_WHATSAPP_INBOUND,
     apply_outcome_highlight,
     apply_suggested_category,
     extract_outcome_payload,
@@ -499,7 +499,7 @@ def complete_job_internal(
             (JOB_STATUS_COMPLETED, result_txt, job_id),
         )
 
-        if job_type == TYPE_WHATSAPP_INBOUND_N8N:
+        if job_type == TYPE_WHATSAPP_INBOUND:
             lead_id = job_payload.get("lead_id")
             if lead_id is not None:
                 result_obj = payload.result if isinstance(payload.result, dict) else {}
