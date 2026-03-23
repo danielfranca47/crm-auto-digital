@@ -11,6 +11,8 @@ import {
   Plus,
   RefreshCw,
   AlertTriangle,
+  Zap,
+  ExternalLink,
 } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "./ui/dialog";
 import { Badge } from "./ui/badge";
@@ -20,11 +22,13 @@ import { Input } from "./ui/input";
 import { Label } from "./ui/label";
 import { Separator } from "./ui/separator";
 import { useState, useEffect, useMemo } from "react";
+import { useNavigate } from "react-router-dom";
+import { useQuery } from "@tanstack/react-query";
 import { ScheduleAppointmentDialog } from "./ScheduleAppointmentDialog";
 import { useLeadAppointments, useCancelAppointment } from "@/hooks/useAppointments";
 import { useToast } from "@/hooks/use-toast";
 import { useLeads } from "@/contexts/LeadsContext";
-import { api } from "@/services/api";
+import { api, FollowUpContract } from "@/services/api";
 
 interface LeadCardDialogProps {
   lead: Lead | null;
@@ -104,6 +108,110 @@ const appointmentOutcomeClasses = {
   rescheduled: "bg-primary/10 text-primary border border-primary/20",
 } as const;
 
+const FOLLOWUP_STATUS_CONFIG: Record<string, { label: string; color: string }> = {
+  active:    { label: "Ativo",      color: "#52C4A0" },
+  paused:    { label: "Pausado",    color: "#F59E0B" },
+  done:      { label: "Concluído",  color: "#60A5FA" },
+  cancelled: { label: "Cancelado",  color: "#94A3B8" },
+};
+
+const FOLLOWUP_VARIANT_CONFIG: Record<string, { label: string; color: string }> = {
+  cart_recovery:    { label: "Carrinho",  color: "#52C4A0" },
+  hybrid_scheduler: { label: "Híbrido",   color: "#A78BFA" },
+  sdr_scheduler:    { label: "SDR",       color: "#60A5FA" },
+};
+
+const STOP_REASON_LABELS: Record<string, string> = {
+  inbound_reply:        "Lead respondeu",
+  max_attempts_reached: "Limite de tentativas atingido",
+  manual_cancel:        "Cancelado manualmente",
+  deal_closed:          "Negócio fechado",
+  explicit_rejection:   "Rejeição explícita",
+  handoff_human:        "Passado para humano",
+};
+
+function FollowUpContractSummary({ contract }: { contract: FollowUpContract }) {
+  const statusCfg = FOLLOWUP_STATUS_CONFIG[contract.status] ?? { label: contract.status, color: "#94A3B8" };
+  const variantCfg = contract.followup_variant ? FOLLOWUP_VARIANT_CONFIG[contract.followup_variant] : null;
+
+  const fmt = (iso: string | null | undefined) =>
+    iso
+      ? new Intl.DateTimeFormat("pt-PT", {
+          day: "2-digit",
+          month: "2-digit",
+          year: "numeric",
+          hour: "2-digit",
+          minute: "2-digit",
+        }).format(new Date(iso))
+      : null;
+
+  return (
+    <div className="rounded-md border border-border bg-muted/30 p-3 space-y-2.5 text-sm">
+      {/* Status + variant + attempts */}
+      <div className="flex flex-wrap items-center gap-2">
+        <span
+          className="text-[11px] font-medium px-2 py-0.5 rounded-full border"
+          style={{ background: statusCfg.color + "22", color: statusCfg.color, borderColor: statusCfg.color + "55" }}
+        >
+          {statusCfg.label}
+        </span>
+        {variantCfg && (
+          <span
+            className="text-[11px] font-medium px-2 py-0.5 rounded-full border"
+            style={{ background: variantCfg.color + "22", color: variantCfg.color, borderColor: variantCfg.color + "55" }}
+          >
+            {variantCfg.label}
+          </span>
+        )}
+        <div className="flex items-center gap-1.5 ml-auto text-muted-foreground text-xs">
+          <span>{contract.attempts}/{contract.max_attempts} envios</span>
+          <div className="flex gap-1">
+            {Array.from({ length: contract.max_attempts }).map((_, i) => (
+              <span
+                key={i}
+                className="inline-block rounded-full"
+                style={{
+                  width: 7,
+                  height: 7,
+                  background: i < contract.attempts ? statusCfg.color : statusCfg.color + "33",
+                }}
+              />
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {/* Datas */}
+      <div className="space-y-1 text-xs text-muted-foreground">
+        {contract.last_followup_at && (
+          <div className="flex items-center gap-1.5">
+            <Clock className="w-3 h-3 shrink-0" />
+            <span>Último envio: <span className="text-foreground/80">{fmt(contract.last_followup_at)}</span></span>
+          </div>
+        )}
+        {contract.next_followup_at && contract.status === "active" && (
+          <div className="flex items-center gap-1.5">
+            <Calendar className="w-3 h-3 shrink-0" />
+            <span>Próximo envio: <span className="text-foreground/80">{fmt(contract.next_followup_at)}</span></span>
+          </div>
+        )}
+        {contract.stop_reason && (
+          <div className="flex items-center gap-1.5">
+            <Tag className="w-3 h-3 shrink-0" />
+            <span>Motivo: <span className="text-foreground/80">{STOP_REASON_LABELS[contract.stop_reason] ?? contract.stop_reason}</span></span>
+          </div>
+        )}
+        {contract.operator_note && (
+          <div className="flex items-center gap-1.5 pt-0.5 border-t border-border">
+            <MessageSquare className="w-3 h-3 shrink-0" />
+            <span className="italic">{contract.operator_note}</span>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 /** Wrapper sem hooks — evita o erro de Hooks. */
 export function LeadCardDialog({ lead, isOpen, onClose, onUpdateLead, onDeleteLead }: LeadCardDialogProps) {
   return (
@@ -127,6 +235,7 @@ function LeadCardDialogBody({
   onUpdateLead,
   onDeleteLead,
 }: LeadCardDialogProps & { lead: Lead }) {
+  const navigate = useNavigate();
   const [isEditing, setIsEditing] = useState(false);
   const [editedLead, setEditedLead] = useState<Lead | null>(null);
   const { toast } = useToast();
@@ -156,6 +265,14 @@ function LeadCardDialogBody({
   useEffect(() => {
     refetchAppointments();
   }, [refetchAppointments]);
+
+  // Mensagens WhatsApp para histórico de follow-up
+  const { data: messagesData } = useQuery({
+    queryKey: ["lead-messages", leadId],
+    queryFn: () => api.assistenteIA.mensagens(leadId!, false),
+    enabled: !!leadId && !!lead.followup_contract,
+    staleTime: 60_000,
+  });
 
   const asDate = (iso: string) => new Date(iso);
   const isActiveStatus = (s?: string | null) =>
@@ -892,11 +1009,67 @@ function LeadCardDialogBody({
         </div>
       </div>
 
+      {/* ---- Histórico de Follow-up ---- */}
+      {currentLead.followup_contract && (
+        <div className="space-y-3 pt-2">
+          <Separator />
+          <div className="flex items-center justify-between">
+            <h3 className="font-semibold text-foreground flex items-center gap-2 text-sm">
+              <Zap className="w-4 h-4 text-amber-400" />
+              Histórico de Follow-up
+            </h3>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-7 text-xs gap-1 text-muted-foreground hover:text-foreground"
+              onClick={() => navigate(`/follow-ups?leadId=${currentLead.id}`)}
+            >
+              Ver na Central
+              <ExternalLink className="w-3 h-3" />
+            </Button>
+          </div>
+
+          {/* Resumo do contrato */}
+          <FollowUpContractSummary contract={currentLead.followup_contract} />
+
+          {/* Linha do tempo de mensagens */}
+          {messagesData?.messages && messagesData.messages.length > 0 && (
+            <div className="space-y-1.5">
+              <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                Mensagens recentes
+              </p>
+              <div className="space-y-1.5 max-h-48 overflow-y-auto custom-scrollbar pr-1">
+                {messagesData.messages.slice(-5).reverse().map((msg) => (
+                  <div
+                    key={msg.id}
+                    className="text-xs rounded-md bg-muted/40 border border-border px-3 py-2 space-y-0.5"
+                  >
+                    <div className="flex items-center gap-2 text-muted-foreground">
+                      <span className="capitalize font-medium">{msg.channel}</span>
+                      <span>·</span>
+                      <span>
+                        {new Intl.DateTimeFormat("pt-PT", {
+                          day: "2-digit",
+                          month: "2-digit",
+                          hour: "2-digit",
+                          minute: "2-digit",
+                        }).format(new Date(msg.createdAt))}
+                      </span>
+                    </div>
+                    <p className="text-foreground/80 line-clamp-2">{msg.body}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
       {isScheduleDialogOpen && (
         <ScheduleAppointmentDialog
         open={isScheduleDialogOpen}
         onOpenChange={setIsScheduleDialogOpen}
-        fixedLeadId={lead.id}                
+        fixedLeadId={lead.id}
         appointmentToEdit={appointmentToEdit}
         initialDate={appointmentToEdit ? new Date(appointmentToEdit.startTime) : undefined}
         onSuccess={handleAppointmentSuccess}
