@@ -29,6 +29,38 @@ PLAYBOOKS: Dict[str, Dict[str, Any]] = {
             "Quem decide a compra na sua empresa?",
         ],
     },
+    # Playbook para Agent 2 (closer) — recuperação de carrinho abandonado.
+    # 3 mensagens escalonadas por tentativa: lembrete neutro → benefício+objeção → urgência.
+    "closer_agressivo_cart_recovery": {
+        "max_chars": 280,
+        "response_style": "direct",
+        "default_next_action": "reply",
+        "qualification_questions": [],
+        "tone_rule": "objetivo e direto, sem ser agressivo — recuperar pagamento pendente após link enviado",
+        "followup_attempts": {
+            1: {
+                "tone": "neutral_reminder",
+                "instruction": (
+                    "Lembrete neutro: o pedido está reservado e o link ainda está disponível. "
+                    "Sem pressão — apenas informa e pergunta se há alguma dúvida que impeça o pagamento."
+                ),
+            },
+            2: {
+                "tone": "benefit_objection",
+                "instruction": (
+                    "Reforce o benefício principal do produto/serviço e antecipe a objeção mais comum do nicho. "
+                    "Tom amigável, resolva a dúvida que está impedindo o pagamento."
+                ),
+            },
+            3: {
+                "tone": "urgency",
+                "instruction": (
+                    "Urgência máxima: a oferta expira hoje. "
+                    "CTA direto para o link de pagamento. Não reabra qualificação."
+                ),
+            },
+        },
+    },
     # Playbook para Agent 3 (hybrid_scheduler) — coaches, terapeutas e consultores solo.
     # Tom: pessoal e próximo, como assistente do próprio profissional — nunca SDR agressivo.
     # As 3 ramificações de outcome são usadas pelo decision_engine para personalizar o prompt.

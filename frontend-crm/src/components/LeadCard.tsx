@@ -4,6 +4,42 @@ import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { LeadActionsMenu } from "./LeadActionsMenu";
 
+const FOLLOWUP_VARIANT_CONFIG: Record<string, { label: string; color: string }> = {
+  cart_recovery:    { label: "Carrinho",  color: "#52C4A0" },
+  hybrid_scheduler: { label: "Híbrido",   color: "#A78BFA" },
+  sdr_scheduler:    { label: "SDR",       color: "#60A5FA" },
+};
+
+function FollowUpStatusBar({ contract }: { contract: Record<string, any> }) {
+  const variant = contract?.followup_variant as string | undefined;
+  const attempts = Number(contract?.attempts ?? 0);
+  const maxAttempts = Number(contract?.max_attempts ?? 3);
+  const cfg = (variant && FOLLOWUP_VARIANT_CONFIG[variant]) ?? { label: "Follow-up", color: "#94A3B8" };
+  return (
+    <div className="flex items-center gap-2 pt-1">
+      <span
+        className="text-[10px] font-medium px-1.5 py-0.5 rounded"
+        style={{ background: cfg.color + "22", color: cfg.color, border: `1px solid ${cfg.color}55` }}
+      >
+        {cfg.label}
+      </span>
+      <div className="flex gap-1">
+        {Array.from({ length: maxAttempts }).map((_, i) => (
+          <span
+            key={i}
+            className="inline-block rounded-full"
+            style={{
+              width: 6,
+              height: 6,
+              background: i < attempts ? cfg.color : cfg.color + "33",
+            }}
+          />
+        ))}
+      </div>
+    </div>
+  );
+}
+
 interface LeadCardProps {
   lead: Lead;
   columns: KanbanColumn[];
@@ -129,6 +165,10 @@ export function LeadCard({
               Próximo compromisso: {formatDateTime(lead.nextScheduledAction.date)}
             </span>
           </div>
+        )}
+
+        {lead.category === "follow-up" && lead.followup_contract && (
+          <FollowUpStatusBar contract={lead.followup_contract} />
         )}
 
         <div className="flex items-center text-muted-foreground pt-2 border-t border-border">

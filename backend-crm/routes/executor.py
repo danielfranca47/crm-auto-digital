@@ -39,7 +39,11 @@ from services.jobs_service import (
 )
 from services.followup_reconciler import reconcile_due_followups
 from services.followup_channel_context import resolve_followup_tick_channel_context
-from services.followup_state import progress_followup_after_auto_send, stop_followup_on_handoff
+from services.followup_state import (
+    progress_followup_after_auto_send,
+    stop_followup_on_handoff,
+    start_cart_recovery_followup,
+)
 
 router = APIRouter(prefix="/api", tags=["WhatsApp Executor"])
 
@@ -899,6 +903,29 @@ def mark_outbound_sent(
                 user_id=int(row["user_id"]),
                 source_job_id=int(row["job_id"]),
             )
+        else:
+            # Cart recovery: detecta envio de link de pagamento pelo bot para agent_2
+            if message_id:
+                msg_row = cur.execute(
+                    "SELECT body FROM messages WHERE id = ?",
+                    (message_id,),
+                ).fetchone()
+                message_body = (msg_row["body"] if msg_row else "") or ""
+                if "http" in message_body.lower():
+                    lead_row = cur.execute(
+                        "SELECT agent_type, followup_status FROM leads WHERE id = ?",
+                        (row["lead_id"],),
+                    ).fetchone()
+                    if (
+                        lead_row
+                        and lead_row["agent_type"] == "agent_2"
+                        and str(lead_row["followup_status"] or "").lower() != "active"
+                    ):
+                        start_cart_recovery_followup(
+                            conn,
+                            lead_id=int(row["lead_id"]),
+                            user_id=int(row["user_id"]),
+                        )
 
         conn.commit()
 

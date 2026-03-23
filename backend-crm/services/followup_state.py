@@ -21,6 +21,11 @@ _FOLLOWUP_SEND_NEXT_SCHEDULE = {
         1: timedelta(hours=24),
         2: timedelta(hours=48),
     },
+    # cart_recovery: após 1ª send → próxima em 24h; após 2ª send → próxima em 48h
+    "cart_recovery": {
+        1: timedelta(minutes=1440),
+        2: timedelta(minutes=2880),
+    },
 }
 
 
@@ -272,3 +277,69 @@ def progress_followup_after_auto_send(
         ),
     )
     return {"updated": True, "reason": "progressed", "attempts": attempts_after, "next_followup_at": next_followup_at}
+
+
+def start_cart_recovery_followup(
+    conn,
+    *,
+    lead_id: int,
+    user_id: int,
+) -> Dict[str, Any]:
+    """Inicia follow-up automático de carrinho abandonado para Agent 2 (closer).
+
+    Chamado quando o bot envia mensagem contendo link de pagamento (offer_pack).
+    Cadência: 2h (1ª), 24h (2ª), 48h (3ª) — max_attempts=3.
+    Não inicia se já existe contrato ativo.
+    """
+    row = _load_lead_followup_row(conn, lead_id=lead_id)
+    if not row:
+        return {"started": False, "reason": "lead_not_found"}
+
+    existing = _parse_contract(row["followup_contract"])
+    if existing and str(existing.get("status") or "").lower() == "active":
+        return {"started": False, "reason": "contract_already_active"}
+
+    now = _now_utc()
+    first_followup_at = (now + timedelta(minutes=120)).isoformat()
+
+    contract: Dict[str, Any] = {
+        "followup_variant": "cart_recovery",
+        "status": "active",
+        "attempts": 0,
+        "max_attempts": 3,
+        "next_followup_at": first_followup_at,
+        "followup_goal": "cart_recovery",
+        "outcome": None,
+        "proposal_sent": True,
+        "operator_note": None,
+        "meeting_or_session_happened": None,
+    }
+
+    conn.execute(
+        """
+        UPDATE leads
+           SET followup_contract = ?,
+               followup_status = 'active',
+               next_followup_at = ?,
+               bot_disabled = 0,
+               lastMovement = CURRENT_TIMESTAMP
+         WHERE id = ?
+        """,
+        (
+            _json_dumps(contract),
+            first_followup_at,
+            lead_id,
+        ),
+    )
+    conn.execute(
+        """
+        INSERT INTO prospection_logs (lead_id, channel, message_id, action, notes, user_id)
+        VALUES (?, NULL, NULL, 'cart_recovery_started', ?, ?)
+        """,
+        (
+            lead_id,
+            _json_dumps({"max_attempts": 3, "first_followup_at": first_followup_at}),
+            user_id,
+        ),
+    )
+    return {"started": True, "next_followup_at": first_followup_at}

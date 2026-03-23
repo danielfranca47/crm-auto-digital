@@ -1130,6 +1130,29 @@ def _build_child_prompt_follow_up(
             "- Variante sdr_scheduler: follow-up consultivo pós-reunião; "
             "reforçar valor, síntese do contexto e próximo passo comercial.\n"
         )
+    elif followup_variant == "cart_recovery":
+        attempts_done = int(followup_summary.get("attempts") or 0)
+        next_attempt = attempts_done + 1
+        if next_attempt <= 1:
+            attempt_instruction = (
+                "Tentativa 1 — lembrete neutro: o pedido está reservado e o link ainda está disponível. "
+                "Sem pressão — apenas informa e pergunta se há dúvida que impeça o pagamento."
+            )
+        elif next_attempt == 2:
+            attempt_instruction = (
+                "Tentativa 2 — benefício + objeção: reforce o principal benefício e antecipe a objeção "
+                "mais comum do nicho. Tom amigável, resolva a dúvida que está impedindo o pagamento."
+            )
+        else:
+            attempt_instruction = (
+                "Tentativa 3 — urgência máxima: a oferta expira hoje. "
+                "CTA direto para o link de pagamento. Não reabra qualificação."
+            )
+        variant_rule = (
+            "- Variante cart_recovery (carrinho abandonado, Agent 2): "
+            "recuperar pagamento pendente após link enviado. Mensagens curtas (máx 280 chars).\n"
+            f"- Instrução para tentativa {next_attempt}/3: {attempt_instruction}\n"
+        )
     elif followup_variant == "hybrid_scheduler":
         outcome = str(followup_summary.get("outcome") or "").strip().lower()
         if outcome == "interested_not_closed":

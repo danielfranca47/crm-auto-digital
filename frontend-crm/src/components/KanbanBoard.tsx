@@ -215,14 +215,6 @@ export function KanbanBoard({ onDashboard }: KanbanBoardProps) {
 
     if (isFollowupTransition) {
       const effectiveAgentType = await resolveAgentTypeForLead(lead);
-      if (!effectiveAgentType) {
-        toast({
-          title: "Não foi possível iniciar a transição",
-          description: "Não conseguimos resolver o tipo de agente para esta transição. Tente novamente.",
-          variant: "destructive",
-        });
-        return;
-      }
 
       if (effectiveAgentType === "agent_1" || effectiveAgentType === "agent_3") {
         setFollowupLead(
@@ -233,6 +225,9 @@ export function KanbanBoard({ onDashboard }: KanbanBoardProps) {
         setFollowupModalOpen(true);
         return;
       }
+
+      // agent_2 (closer): sem popup — carrinho abandonado é ativado automaticamente
+      // quando o bot envia o link de pagamento. Prossegue com movimentação direta.
     }
 
     if (requiresFollowupTransition(lead, targetCategory)) {
