@@ -124,6 +124,14 @@ def get_whatsapp_execution_context(job_id: str) -> Dict[str, Any]:
     return _handle_response(response, job_id, for_context=True)
 
 
+def save_pregenerated_message(lead_id: int, user_id: int, content: str) -> None:
+    base_url = settings.crm_api_base.rstrip("/")
+    url = f"{base_url}/api/whatsapp/followup/scheduled-message"
+    body = {"lead_id": lead_id, "user_id": user_id, "content": content}
+    response = _send_request("PUT", url, json=body)
+    _handle_response(response, str(lead_id), for_context=False)
+
+
 def claim_job(job_id: str, lease_owner: str, ttl_seconds: int) -> Dict[str, Any]:
     base_url = settings.crm_api_base.rstrip("/")
     url = f"{base_url}/api/internal/jobs/{job_id}/claim"

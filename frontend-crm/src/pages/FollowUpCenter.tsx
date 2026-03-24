@@ -230,7 +230,7 @@ type DrawerAction = "pause" | "resume" | "cancel" | null;
 
 function buildTimeline(contract: FollowUpContract) {
   const { attempts, max_attempts, last_followup_at, next_followup_at } = contract;
-  const items: Array<{ label: string; title: string; status: "sent" | "pending" | "future" }> = [];
+  const items: Array<{ label: string; title: string; status: "sent" | "pending" | "future"; preview?: string }> = [];
   for (let i = 0; i < max_attempts; i++) {
     if (i < attempts) {
       const label = last_followup_at && i === attempts - 1
@@ -242,6 +242,7 @@ function buildTimeline(contract: FollowUpContract) {
         label: `Programada · ${tryFormat(next_followup_at)}`,
         title: `Tentativa ${i + 1}`,
         status: "pending",
+        preview: contract.scheduled_message?.content ?? undefined,
       });
     } else {
       items.push({ label: `Prevista`, title: `Tentativa ${i + 1}`, status: "future" });
@@ -340,6 +341,11 @@ function LeadDrawer({
                     <div className="flex-1 pb-4">
                       <p className="text-[9px] font-mono text-muted-foreground mb-0.5">{item.label}</p>
                       <p className="text-xs font-medium">{item.title}</p>
+                      {item.preview && (
+                        <p className="text-[11px] text-muted-foreground leading-snug mt-1 line-clamp-3 italic">
+                          {item.preview}
+                        </p>
+                      )}
                     </div>
                   </div>
                 );
@@ -350,7 +356,7 @@ function LeadDrawer({
 
         {/* Actions */}
         <div className="px-5 py-4 flex flex-col gap-2 border-t mt-auto">
-          {status === "scheduled" && (
+          {(status === "active" || status === "scheduled") && !!contract?.next_followup_at && (
             <Button
               className="justify-start gap-2 w-full bg-violet-600 hover:bg-violet-700 text-white"
               onClick={() => { onClose(); navigate(`/follow-ups/${lead.id}/edit`); }}

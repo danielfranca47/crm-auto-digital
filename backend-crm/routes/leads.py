@@ -25,7 +25,7 @@ from services.followup_state import (
     cancel_followup_manually,
     progress_followup_after_auto_send,
 )
-from services.jobs_service import TYPE_WHATSAPP_SEND
+from services.jobs_service import TYPE_WHATSAPP_SEND, TYPE_WHATSAPP_FOLLOWUP_PREGENERATE, create_job
 from services.qualification_guardrails import can_advance_from_qualification
 
 router = APIRouter()
@@ -548,6 +548,11 @@ def start_followup_transition(
             ),
         )
         conn.commit()
+        create_job(
+            job_type=TYPE_WHATSAPP_FOLLOWUP_PREGENERATE,
+            payload={"lead_id": payload.lead_id, "user_id": current_user.id},
+            user_id=current_user.id,
+        )
         return {
             "status": "ok",
             "lead_id": payload.lead_id,

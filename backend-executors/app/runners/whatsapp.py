@@ -13,6 +13,7 @@ from app.services import meeting_scheduler
 
 JOB_MAX_ATTEMPTS = 3
 TYPE_WHATSAPP_FOLLOWUP_TICK = "whatsapp.followup.tick"
+TYPE_WHATSAPP_FOLLOWUP_PREGENERATE = "whatsapp.followup.pregenerate"
 
 
 class ExecutionError(Exception):
@@ -128,6 +129,10 @@ def _inject_followup_contract_context(context: Dict[str, Any], job: Dict[str, An
 
 def _is_followup_tick_job(job: Dict[str, Any]) -> bool:
     return str(job.get("type") or "").strip().lower() == TYPE_WHATSAPP_FOLLOWUP_TICK
+
+
+def _is_pregenerate_job(job: Dict[str, Any]) -> bool:
+    return str(job.get("type") or "").strip().lower() == TYPE_WHATSAPP_FOLLOWUP_PREGENERATE
 
 
 def _resolve_in_reply_to_message_id(*, job_id: str, job: Dict[str, Any], metadata: Dict[str, Any]) -> Optional[str]:
@@ -392,6 +397,44 @@ def _fail_job(job_id: str, logger: logging.LoggerAdapter, exc: ExecutionError, a
     return 1
 
 
+def _execute_pregenerate_pipeline(
+    job_id: str,
+    job: Dict[str, Any],
+    context: Dict[str, Any],
+    ctx_logger: logging.Logger,
+    attempt: Optional[int],
+) -> int:
+    """Roda pipeline LLM para pré-gerar mensagem de follow-up sem enviar."""
+    try:
+        decision = decision_engine.decide(context, logger=ctx_logger)
+        _enforce_checkout_link_guardrail(decision=decision, context=context)
+        _enforce_checkout_link_guardrail_legacy(decision=decision, context=context)
+
+        message_text = decision.message_text or _build_followup_fallback_outbound_body(context)
+        if not message_text:
+            crm_client.complete_job(job_id, {"status": "skipped", "reason": "empty_message"})
+            ctx_logger.info("event=pregenerate_skipped reason=empty_message", extra={"phase": "pregenerate"})
+            return 0
+
+        payload = job.get("payload") or {}
+        lead_id = payload.get("lead_id")
+        user_id = payload.get("user_id")
+
+        crm_client.save_pregenerated_message(lead_id=lead_id, user_id=user_id, content=message_text)
+        crm_client.complete_job(job_id, {"status": "pregenerated", "lead_id": lead_id})
+        ctx_logger.info(
+            "event=pregenerate_done lead_id=%s chars=%s",
+            lead_id,
+            len(message_text),
+            extra={"phase": "pregenerate"},
+        )
+        return 0
+    except Exception as exc:
+        ctx_logger.exception("event=pregenerate_error error=%s", exc, extra={"phase": "pregenerate"})
+        exec_error = ExecutionError(str(exc), phase="pregenerate", service="executor", retryable=True)
+        return _fail_job(job_id, ctx_logger, exec_error, attempt)
+
+
 def execute_job(job_id: str, logger: logging.Logger) -> int:
     ctx_logger = log_ctx(logger, job_id=job_id)
     lease_owner = "executors:local"
@@ -444,6 +487,9 @@ def execute_job(job_id: str, logger: logging.Logger) -> int:
 
     _inject_followup_contract_context(context, job)
     metadata = context.get("metadata") or {}
+
+    if _is_pregenerate_job(job):
+        return _execute_pregenerate_pipeline(job_id, job, context, ctx_logger, attempt)
 
     lead_id = _safe_get(lead, "id")
     lead_name = _safe_get(lead, "contactName", "companyName", "name")
@@ -531,8 +577,13 @@ def execute_job(job_id: str, logger: logging.Logger) -> int:
         fallback_text = _format_questions(decision.questions or [])
         if fallback_text:
             outbound_body = fallback_text
-    if _is_followup_tick_job(job) and not outbound_body:
-        outbound_body = _build_followup_fallback_outbound_body(context)
+    if _is_followup_tick_job(job):
+        contract = _parse_followup_contract((context.get("lead") or {}).get("followup_contract"))
+        saved_content = (contract.get("scheduled_message") or {}).get("content")
+        if saved_content:
+            outbound_body = saved_content
+        elif not outbound_body:
+            outbound_body = _build_followup_fallback_outbound_body(context)
     result_payload = _build_result_payload(
         decision,
         lead_id=lead_id,

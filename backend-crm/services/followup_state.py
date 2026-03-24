@@ -4,6 +4,8 @@ import json
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional
 
+from services.jobs_service import TYPE_WHATSAPP_FOLLOWUP_PREGENERATE, create_job
+
 
 STOP_INBOUND_REPLY = "inbound_reply"
 STOP_DEAL_CLOSED = "deal_closed"
@@ -276,6 +278,7 @@ def progress_followup_after_auto_send(
     contract["next_followup_at"] = next_followup_at
     contract["stop_reason"] = None
     contract["status"] = "active"
+    contract.pop("scheduled_message", None)  # limpar mensagem da tentativa anterior
 
     _write_followup(conn, lead_id=lead_id, contract=contract, status="active", next_followup_at=next_followup_at)
     conn.execute(
@@ -295,6 +298,11 @@ def progress_followup_after_auto_send(
             ),
             user_id,
         ),
+    )
+    create_job(
+        job_type=TYPE_WHATSAPP_FOLLOWUP_PREGENERATE,
+        payload={"lead_id": lead_id, "user_id": user_id},
+        user_id=user_id,
     )
     return {"updated": True, "reason": "progressed", "attempts": attempts_after, "next_followup_at": next_followup_at}
 

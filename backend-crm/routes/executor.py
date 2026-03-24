@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 import os
 import sqlite3
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Dict, Optional
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, Response
@@ -28,6 +28,7 @@ from services.jobs_service import (
     JOB_MAX_ATTEMPTS,
     LEAD_CATEGORIES,
     TYPE_WHATSAPP_FOLLOWUP_TICK,
+    TYPE_WHATSAPP_FOLLOWUP_PREGENERATE,
     TYPE_WHATSAPP_INBOUND,
     apply_outcome_highlight,
     apply_suggested_category,
@@ -222,7 +223,7 @@ def whatsapp_execution_context(
         raise HTTPException(status_code=400, detail="Payload do job incompleto para montar contexto")
 
     job_type = normalize_job_type(job.get("type") or "")
-    if job_type == TYPE_WHATSAPP_FOLLOWUP_TICK:
+    if job_type in (TYPE_WHATSAPP_FOLLOWUP_TICK, TYPE_WHATSAPP_FOLLOWUP_PREGENERATE):
         with get_connection() as conn:
             channel_ctx = resolve_followup_tick_channel_context(conn, lead_id=int(lead_id), user_id=int(user_id))
         payload = {
@@ -264,6 +265,56 @@ def whatsapp_execution_context(
         "qualification_state": qualification_state,
         "metadata": bundle.metadata,
     }
+
+
+class PregenerateResultPayload(BaseModel):
+    lead_id: int
+    user_id: int
+    content: str
+
+
+@router.put("/whatsapp/followup/scheduled-message")
+def save_pregenerated_message(
+    payload: PregenerateResultPayload,
+    _: str = Depends(_require_service_token),
+):
+    """Salva mensagem pré-gerada pelo executor em followup_contract.scheduled_message."""
+    with get_connection() as conn:
+        row = conn.execute(
+            "SELECT followup_contract FROM leads WHERE id = ? AND user_id = ?",
+            (payload.lead_id, payload.user_id),
+        ).fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="Lead não encontrado")
+
+        raw = row["followup_contract"]
+        if isinstance(raw, str) and raw.strip():
+            try:
+                contract = json.loads(raw)
+            except json.JSONDecodeError:
+                contract = {}
+        elif isinstance(raw, dict):
+            contract = raw
+        else:
+            contract = {}
+
+        existing = contract.get("scheduled_message") or {}
+        if existing.get("edited_by_user"):
+            return {"status": "skipped", "reason": "user_already_edited"}
+
+        contract["scheduled_message"] = {
+            "content": payload.content,
+            "media_url": None,
+            "media_type": None,
+            "edited_by_user": False,
+            "saved_at": datetime.now(timezone.utc).isoformat(),
+        }
+        conn.execute(
+            "UPDATE leads SET followup_contract = ?, lastMovement = CURRENT_TIMESTAMP WHERE id = ? AND user_id = ?",
+            (json.dumps(contract, ensure_ascii=False), payload.lead_id, payload.user_id),
+        )
+        conn.commit()
+    return {"status": "ok"}
 
 
 class QualificationStateUpsertRequest(BaseModel):
