@@ -9,11 +9,14 @@ class Lead(BaseModel):
     companyName: str
     contactName: Optional[str] = None
     phone: Optional[str] = None
+    country_code: Optional[str] = None
     email: Optional[str] = None
+    # Valores aceitos: 'Manual', 'Planilha', 'WhatsApp', 'inbound', 'outbound'
     origin: Optional[str] = "Manual"
     category: str
     customMessage: Optional[str] = None
     observations: Optional[str] = None
+    agent_type: Optional[str] = None
     priority: Optional[int] = 1
 
     # Pydantic v2
@@ -24,13 +27,30 @@ class LeadUpdate(BaseModel):
     companyName: Optional[str] = None
     contactName: Optional[str] = None
     phone: Optional[str] = None
+    country_code: Optional[str] = None
     email: Optional[str] = None
     origin: Optional[str] = None
     category: Optional[str] = None
     customMessage: Optional[str] = None
     observations: Optional[str] = None
+    agent_type: Optional[str] = None
     priority: Optional[int] = None
     lastMovement: Optional[datetime] = None
+
+
+class StartFollowupPayload(BaseModel):
+    lead_id: int
+    agent_type: Literal["agent_1", "agent_3"]
+    meeting_or_session_happened: Literal["yes", "no_show", "canceled", "needs_reschedule"]
+    outcome: Optional[str] = None
+    followup_goal: Optional[str] = None
+    proposal_sent: Optional[bool] = None
+    operator_note: Optional[str] = None
+
+
+class BotDisabledUpdate(BaseModel):
+    disabled: bool
+    reason: Optional[str] = None
 
 
 # -----------------------------
@@ -60,6 +80,7 @@ class MessageOut(MessageBase):
 # Compromissos / Agenda
 # -----------------------------
 AppointmentStatus = Literal["pending", "completed", "canceled"]
+AppointmentOutcome = Literal["completed", "no_show", "rescheduled"]
 
 
 class AppointmentCreate(BaseModel):
@@ -101,12 +122,24 @@ class AppointmentOut(BaseModel):
     start_at: datetime
     end_at: Optional[datetime] = None
     status: AppointmentStatus
+    outcome: Optional[AppointmentOutcome] = None
+    outcome_note: Optional[str] = None
+    outcome_at: Optional[datetime] = None
     location: Optional[str] = None
     created_at: datetime
     updated_at: datetime
 
     # Permite instanciar a partir de objetos/rows (ex.: sqlite3.Row)
     model_config = ConfigDict(from_attributes=True)
+
+
+class AppointmentOutcomeUpdate(BaseModel):
+    outcome: AppointmentOutcome
+    note: Optional[str] = None
+    reschedule_start_at: Optional[datetime] = None
+    reschedule_end_at: Optional[datetime] = None
+    reactivate_bot: bool = True
+    move_lead_to: Optional[str] = None
 
 
 # -----------------------------
@@ -121,6 +154,22 @@ class AssistantOptions(BaseModel):
     language: str = "pt-BR"
     tone: str = "profissional"
     proposal: Literal["site"] = "site"
+
+
+# -----------------------------
+# Follow-up Edição Pré-Disparo
+# -----------------------------
+
+class ScheduledMessagePayload(BaseModel):
+    content: str
+    media_url: Optional[str] = None
+    media_type: Optional[str] = None  # "image" | "doc" | "audio" | "video"
+
+
+class SendNowPayload(BaseModel):
+    content: str
+    media_url: Optional[str] = None
+    media_type: Optional[str] = None
 
 
 # -----------------------------

@@ -1,6 +1,7 @@
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   DndContext,
+  DragOverlay,
   DragEndEvent,
   DragOverEvent,
   DragStartEvent,
@@ -17,13 +18,15 @@ import { KanbanColumn } from "./KanbanColumn";
 import { CrmHeader } from "./CrmHeader";
 import { NewLeadModal } from "./NewLeadModal";
 import { LeadCardDialog } from "./LeadCardDialog";
-import { useLeads } from "@/contexts/LeadsContext";
+import { AddLeadResult, useLeads } from "@/contexts/LeadsContext";
 import { Button } from "./ui/button";
 import { Archive, AlertCircle, RefreshCw } from "lucide-react";
 import { ScheduleAppointmentDialog } from "./ScheduleAppointmentDialog";
 import { useAppointments, useCancelAppointment } from "@/hooks/useAppointments";
 import { useToast } from "@/hooks/use-toast";
 import { Alert, AlertDescription, AlertTitle } from "./ui/alert";
+import { FollowUpTransitionModal } from "./FollowUpTransitionModal";
+import { useNotifications } from "@/hooks/useNotifications";
 
 interface KanbanBoardProps {
   onDashboard: () => void;
@@ -37,6 +40,7 @@ export function KanbanBoard({ onDashboard }: KanbanBoardProps) {
     moveLead,
     archiveLead,
     addLead,
+    deleteLead,
     leadsError,
     reloadAllLeads,
     setLeadNextAction,
@@ -71,6 +75,37 @@ export function KanbanBoard({ onDashboard }: KanbanBoardProps) {
   const [isAppointmentDialogOpen, setIsAppointmentDialogOpen] = useState(false);
   const [appointmentDialogLeadId, setAppointmentDialogLeadId] = useState<string | null>(null);
   const [appointmentToEdit, setAppointmentToEdit] = useState<Appointment | null>(null);
+  const [followupModalOpen, setFollowupModalOpen] = useState(false);
+  const [followupLead, setFollowupLead] = useState<Lead | null>(null);
+  const [profileAgentType, setProfileAgentType] = useState<"agent_1" | "agent_2" | "agent_3" | null>(null);
+  const { notifiedLeadIds } = useNotifications();
+
+  useEffect(() => {
+    let mounted = true;
+    const inferAgentTypeFromProfile = async () => {
+      try {
+        const profile = await api.core.getAiProfileMe();
+        const templateKey = String(profile?.template_key || "").trim().toLowerCase();
+        const inferred: "agent_1" | "agent_2" | "agent_3" =
+          templateKey === "hybrid_scheduler"
+            ? "agent_3"
+            : templateKey.startsWith("closer")
+            ? "agent_2"
+            : "agent_1";
+        if (mounted) {
+          setProfileAgentType(inferred);
+        }
+      } catch {
+        if (mounted) {
+          setProfileAgentType(null);
+        }
+      }
+    };
+    inferAgentTypeFromProfile();
+    return () => {
+      mounted = false;
+    };
+  }, []);
 
   const allColumns = useMemo(() => [...columns, ...archivedColumns], [columns, archivedColumns]);
 
@@ -115,6 +150,11 @@ export function KanbanBoard({ onDashboard }: KanbanBoardProps) {
     [allColumns]
   );
 
+  const activeLead = useMemo(() => {
+    if (!activeId) return null;
+    return findLead(activeId);
+  }, [activeId, findLead]);
+
   const handleDragStart = (event: DragStartEvent) => {
     setActiveId(event.active.id as string);
   };
@@ -130,8 +170,81 @@ export function KanbanBoard({ onDashboard }: KanbanBoardProps) {
     const overColumn = allColumns.find((col) => col.id === overId) || findColumn(overId);
 
     if (!activeColumn || !overColumn || activeColumn === overColumn) return;
-    moveLead(activeId, overColumn.id as any);
   };
+
+  const getEffectiveAgentType = useCallback(
+    (lead: Lead): "agent_1" | "agent_2" | "agent_3" | null => {
+      const raw = String(lead.agent_type || "").trim().toLowerCase();
+      if (raw === "agent_1" || raw === "agent_2" || raw === "agent_3") {
+        return raw;
+      }
+      return profileAgentType;
+    },
+    [profileAgentType]
+  );
+
+  const resolveAgentTypeForLead = useCallback(
+    async (lead: Lead): Promise<"agent_1" | "agent_2" | "agent_3" | null> => {
+      const current = getEffectiveAgentType(lead);
+      if (current) return current;
+
+      try {
+        const profile = await api.core.getAiProfileMe();
+        const templateKey = String(profile?.template_key || "").trim().toLowerCase();
+        const inferred: "agent_1" | "agent_2" | "agent_3" =
+          templateKey === "hybrid_scheduler"
+            ? "agent_3"
+            : templateKey.startsWith("closer")
+            ? "agent_2"
+            : "agent_1";
+        setProfileAgentType(inferred);
+        return inferred;
+      } catch {
+        return null;
+      }
+    },
+    [getEffectiveAgentType]
+  );
+
+  const requiresFollowupTransition = useCallback((lead: Lead, targetCategory: string) => {
+    if (lead.category !== "apresentation" || targetCategory !== "follow-up") return false;
+    const effectiveAgentType = getEffectiveAgentType(lead);
+    return effectiveAgentType === "agent_1" || effectiveAgentType === "agent_3";
+  }, [getEffectiveAgentType]);
+
+  const handleMoveWithRules = useCallback(async (lead: Lead, targetCategory: string) => {
+    const isFollowupTransition = lead.category === "apresentation" && targetCategory === "follow-up";
+
+    if (isFollowupTransition) {
+      const effectiveAgentType = await resolveAgentTypeForLead(lead);
+
+      if (effectiveAgentType === "agent_1" || effectiveAgentType === "agent_3") {
+        setFollowupLead(
+          lead.agent_type !== effectiveAgentType
+            ? { ...lead, agent_type: effectiveAgentType }
+            : lead
+        );
+        setFollowupModalOpen(true);
+        return;
+      }
+
+      // agent_2 (closer): sem popup — carrinho abandonado é ativado automaticamente
+      // quando o bot envia o link de pagamento. Prossegue com movimentação direta.
+    }
+
+    if (requiresFollowupTransition(lead, targetCategory)) {
+      const effectiveAgentType = await resolveAgentTypeForLead(lead);
+      setFollowupLead(
+        effectiveAgentType && lead.agent_type !== effectiveAgentType
+          ? { ...lead, agent_type: effectiveAgentType }
+          : lead
+      );
+      setFollowupModalOpen(true);
+      return;
+    }
+
+    moveLead(lead.id, targetCategory as any);
+  }, [moveLead, requiresFollowupTransition, resolveAgentTypeForLead, toast]);
 
   const handleDragEnd = (event: DragEndEvent) => {
     setActiveId(null);
@@ -143,7 +256,7 @@ export function KanbanBoard({ onDashboard }: KanbanBoardProps) {
     const overId = over.id as string;
 
     const activeColumn = findColumn(activeId);
-    const overColumn = findColumn(overId);
+    const overColumn = allColumns.find((col) => col.id === overId) || findColumn(overId);
 
     if (!activeColumn || !overColumn) return;
 
@@ -151,10 +264,7 @@ export function KanbanBoard({ onDashboard }: KanbanBoardProps) {
     if (!lead) return;
 
     if (activeColumn.id !== overColumn.id) {
-      updateLead(activeId, {
-        category: overColumn.id,
-        lastMovement: new Date(),
-      });
+      handleMoveWithRules(lead, overColumn.id);
     } else {
       const activeIndex = activeColumn.leads.findIndex((item) => item.id === activeId);
       const overIndex = overColumn.leads.findIndex((item) => item.id === overId);
@@ -168,7 +278,9 @@ export function KanbanBoard({ onDashboard }: KanbanBoardProps) {
   };
 
   const handleMoveLead = (leadId: string, newCategory: string) => {
-    moveLead(leadId, newCategory as any);
+    const lead = findLead(leadId);
+    if (!lead) return;
+    handleMoveWithRules(lead, newCategory);
   };
 
   const handleArchiveLead = (leadId: string, archiveCategory: string) => {
@@ -205,7 +317,7 @@ export function KanbanBoard({ onDashboard }: KanbanBoardProps) {
         title: nextAction.description,
         description: nextAction.description,
         type: nextAction.type ?? "meeting",
-        status: "scheduled",
+        status: "pending",
         startTime: nextAction.date.toISOString(),
         endTime: undefined,
         leadName: lead.contactName,
@@ -254,7 +366,37 @@ export function KanbanBoard({ onDashboard }: KanbanBoardProps) {
   };
 
   const handleNewLead = async (leadData: NewLeadForm) => {
-    await addLead(leadData); // addLead do LeadsContext deve fazer o optimistic update
+    const result: AddLeadResult = await addLead(leadData);
+    if (result.kind === "exists") {
+      toast({
+        title: "Lead já existe",
+        description: "Abrimos o cadastro existente.",
+      });
+
+      const leadFromState = findLead(result.existingLeadId);
+      const leadToOpen = leadFromState || result.existingLead || null;
+      if (leadToOpen) {
+        setSelectedLead(leadToOpen);
+        setIsLeadDialogOpen(true);
+      }
+    }
+  };
+
+  const handleDeleteLead = async (leadId: string) => {
+    try {
+      await deleteLead(leadId);
+      if (selectedLead?.id === leadId) {
+        setIsLeadDialogOpen(false);
+        setSelectedLead(null);
+      }
+      toast({ title: "Lead excluído" });
+    } catch (error: any) {
+      toast({
+        title: "Erro ao excluir lead",
+        description: error?.message ?? "Não foi possível excluir o lead.",
+        variant: "destructive",
+      });
+    }
   };
 
   return (
@@ -294,6 +436,20 @@ export function KanbanBoard({ onDashboard }: KanbanBoardProps) {
           onDragOver={handleDragOver}
           onDragEnd={handleDragEnd}
         >
+          <DragOverlay>
+            {activeLead ? (
+              <div className="lead-card p-4 w-72 rotate-1 shadow-2xl cursor-grabbing">
+                <div className="flex justify-between items-start mb-2">
+                  <h4 className="font-semibold text-foreground text-sm">
+                    {activeLead.companyName} - {activeLead.contactName}
+                  </h4>
+                </div>
+                <div className="text-xs text-muted-foreground truncate">{activeLead.phone}</div>
+                <div className="text-xs text-muted-foreground truncate mt-1">{activeLead.origin}</div>
+              </div>
+            ) : null}
+          </DragOverlay>
+
           <div className="flex justify-between items-center mb-4">
             <h1 className="text-xl font-semibold text-foreground">Quadro Kanban</h1>
             <div className="flex items-center gap-2">
@@ -320,6 +476,8 @@ export function KanbanBoard({ onDashboard }: KanbanBoardProps) {
                 onRescheduleMeeting={handleRescheduleMeeting}
                 onCancelMeeting={handleCancelMeeting}
                 onOpenCard={handleOpenCard}
+                onDeleteLead={handleDeleteLead}
+                notifiedLeadIds={notifiedLeadIds}
               />
             ))}
 
@@ -336,6 +494,8 @@ export function KanbanBoard({ onDashboard }: KanbanBoardProps) {
                   onRescheduleMeeting={handleRescheduleMeeting}
                   onCancelMeeting={handleCancelMeeting}
                   onOpenCard={handleOpenCard}
+                  onDeleteLead={handleDeleteLead}
+                  notifiedLeadIds={notifiedLeadIds}
                 />
               ))}
           </div>
@@ -353,6 +513,7 @@ export function KanbanBoard({ onDashboard }: KanbanBoardProps) {
         isOpen={isLeadDialogOpen}
         onClose={() => setIsLeadDialogOpen(false)}
         onUpdateLead={handleUpdateLead}
+        onDeleteLead={handleDeleteLead}
       />
 
       <ScheduleAppointmentDialog
@@ -391,6 +552,18 @@ export function KanbanBoard({ onDashboard }: KanbanBoardProps) {
                 : prev
             );
           }
+        }}
+      />
+
+      <FollowUpTransitionModal
+        open={followupModalOpen}
+        onOpenChange={setFollowupModalOpen}
+        lead={followupLead}
+        onSuccess={async () => {
+          if (followupLead) {
+            moveLead(followupLead.id, "follow-up" as any);
+          }
+          setFollowupLead(null);
         }}
       />
     </div>

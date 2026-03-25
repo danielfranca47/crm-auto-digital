@@ -1,10 +1,12 @@
 from datetime import datetime, timezone
 from typing import List, Optional
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Query, Depends
 
 from database import get_connection
-from models import AppointmentCreate, AppointmentOut, AppointmentUpdate, AppointmentStatus
+from models import AppointmentCreate, AppointmentOut, AppointmentUpdate, AppointmentStatus, AppointmentOutcomeUpdate
+from security_core import CurrentUser, require_crm_access
+from services.appointment_outcomes import apply_outcome
 
 router = APIRouter(prefix="/api/appointments", tags=["Appointments"])
 
@@ -62,10 +64,12 @@ def _check_conflict(
 def list_appointments(
     start: Optional[datetime] = Query(None, description="Início do intervalo"),
     end: Optional[datetime] = Query(None, description="Fim do intervalo"),
+    lead_id: Optional[int] = Query(None, description="ID do lead"),
+    status: Optional[AppointmentStatus] = Query(None, description="Status do compromisso"),
 ) -> List[AppointmentOut]:
     if start and end:
         _validate_interval(start, end)
-    elif not start and not end:
+    elif not start and not end and lead_id is None:
         raise HTTPException(status_code=400, detail="Informe ao menos start ou end para filtrar o intervalo.")
 
     conn = get_connection()
@@ -79,6 +83,12 @@ def list_appointments(
         if end:
             clauses.append("start_at <= ?")
             params.append(end.isoformat())
+        if lead_id is not None:
+            clauses.append("lead_id = ?")
+            params.append(lead_id)
+        if status is not None:
+            clauses.append("status = ?")
+            params.append(status)
         where = " AND ".join(clauses)
         query = "SELECT * FROM appointments"
         if where:
@@ -241,3 +251,31 @@ def mark_completed(appointment_id: int) -> AppointmentOut:
 @router.post("/{appointment_id}/cancel", response_model=AppointmentOut)
 def mark_canceled(appointment_id: int) -> AppointmentOut:
     return _update_status(appointment_id, "canceled")
+
+
+@router.post("/{appointment_id}/outcome", response_model=AppointmentOut)
+def set_outcome(
+    appointment_id: int,
+    payload: AppointmentOutcomeUpdate,
+    current_user: CurrentUser = Depends(require_crm_access),
+) -> AppointmentOut:
+    conn = get_connection()
+    try:
+        updated = apply_outcome(
+            conn,
+            appointment_id=appointment_id,
+            user_id=current_user.id,
+            payload=payload,
+        )
+        conn.commit()
+        return _serialize(updated)
+    except ValueError as exc:
+        if str(exc) == "appointment_not_found":
+            raise HTTPException(status_code=404, detail="Compromisso não encontrado")
+        if str(exc) == "missing_reschedule_start":
+            raise HTTPException(status_code=400, detail="reschedule_start_at é obrigatório para rescheduled")
+        if str(exc) == "appointment_conflict":
+            raise HTTPException(status_code=409, detail="Já existe um compromisso conflitante para este período.")
+        raise HTTPException(status_code=400, detail="Erro ao registrar outcome")
+    finally:
+        conn.close()

@@ -107,7 +107,7 @@ def _calculate_limits(current_user: models.User, db: Session) -> UserLimits:
     for addon in user_addons:
         if addon.addon_type == "extra_leads":
             totals["max_leads"] = add_limit(totals["max_leads"], addon.quantity)
-        elif addon.addon_type == "extra_ia_conversations":
+        elif addon.addon_type == "extra_conversational_ai_conversations":
             totals["max_ia_conversas_monthly"] = add_limit(
                 totals["max_ia_conversas_monthly"], addon.quantity
             )

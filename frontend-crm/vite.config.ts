@@ -6,10 +6,10 @@ import { componentTagger } from "lovable-tagger";
 export default defineConfig(({ mode }) => ({
   server: {
     host: true,          // aceita conexões externas
-    port: 8080,
+    port: 5173,
     // Se não for mais usar túnel, deixe a linha abaixo comentada ou remova:
     // allowedHosts: ["crmapp.danielfranca.pt"],
-    hmr: { host: "localhost", protocol: "ws", clientPort: 8080 },
+    hmr: { host: "localhost", protocol: "ws", clientPort: 5173 },
     strictPort: true,
   },
   plugins: [

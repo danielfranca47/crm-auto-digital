@@ -1,0 +1,361 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Mockup — Identidade do Agente (AI Profile)</title>
+<style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#f8f9fa;color:#111;font-size:14px}
+  .page{max-width:900px;margin:0 auto;padding:24px}
+  h1{font-size:22px;font-weight:700;display:flex;align-items:center;gap:8px}
+  h1 .icon{font-size:18px}
+  .subtitle{color:#6b7280;font-size:13px;margin-top:4px}
+  .topbar{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:20px;gap:12px}
+  .topbar-actions{display:flex;align-items:center;gap:8px;flex-shrink:0}
+  .badge{display:inline-flex;align-items:center;padding:2px 10px;border-radius:9999px;font-size:12px;font-weight:500}
+  .badge-muted{background:#e5e7eb;color:#374151}
+  .badge-ok{background:#dcfce7;color:#166534}
+  .badge-red{background:#fee2e2;color:#991b1b}
+  .btn{padding:7px 14px;border-radius:6px;font-size:13px;font-weight:500;cursor:pointer;border:1px solid transparent}
+  .btn-primary{background:#111;color:#fff}
+  .btn-outline{background:#fff;color:#111;border-color:#d1d5db}
+  .tabs{display:flex;gap:2px;background:#f3f4f6;padding:4px;border-radius:8px;margin-bottom:20px;width:fit-content}
+  .tab{padding:6px 16px;border-radius:6px;font-size:13px;cursor:pointer;border:none;background:transparent;color:#6b7280}
+  .tab.active{background:#fff;color:#111;font-weight:600;box-shadow:0 1px 3px rgba(0,0,0,.1)}
+  .card{background:#fff;border:1px solid #e5e7eb;border-radius:10px;margin-bottom:16px}
+  .card-header{padding:16px 20px 0}
+  .card-title{font-size:15px;font-weight:600}
+  .card-desc{font-size:12px;color:#6b7280;margin-top:2px}
+  .card-body{padding:16px 20px}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+  .grid3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px}
+  .field{margin-bottom:14px}
+  .field:last-child{margin-bottom:0}
+  label{display:block;font-size:12px;font-weight:500;margin-bottom:5px;color:#374151}
+  input,select,textarea{width:100%;border:1px solid #d1d5db;border-radius:6px;padding:7px 10px;font-size:13px;background:#fff;color:#111;outline:none}
+  textarea{resize:vertical}
+  .hint{font-size:11px;color:#9ca3af;margin-top:4px}
+  .model-card{border:1px solid #e5e7eb;border-radius:8px;padding:12px;cursor:pointer;text-align:left;background:#fff}
+  .model-card.selected{border-color:#111;background:#f9fafb}
+  .model-card .title{font-weight:600;font-size:13px}
+  .model-card .desc{font-size:11px;color:#6b7280;margin-top:3px}
+  .advanced-block{border:1px solid #e5e7eb;border-radius:8px;padding:12px;margin-top:12px}
+  .advanced-summary{font-size:12px;font-weight:500;cursor:pointer;color:#6b7280}
+  .whatsapp-section{display:flex;flex-direction:column;gap:12px}
+  .wh-status-row{display:flex;align-items:center;gap:10px}
+  .badge-wh{background:#fef9c3;color:#92400e;padding:2px 10px;border-radius:9999px;font-size:12px}
+  .qr-placeholder{width:128px;height:128px;background:#f3f4f6;border:1px dashed #d1d5db;border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:11px;color:#9ca3af}
+  .wh-actions{display:flex;gap:8px;flex-wrap:wrap}
+  .preview-box{background:#f9fafb;border:1px solid #e5e7eb;border-radius:8px;padding:14px}
+  .preview-label{font-size:11px;font-weight:600;color:#9ca3af;margin-bottom:6px;text-transform:uppercase;letter-spacing:.04em}
+  .preview-text{font-size:13px;color:#374151;line-height:1.5}
+  .suggestions{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+  .suggestion-btn{padding:4px 10px;border-radius:6px;background:#f3f4f6;border:1px solid #e5e7eb;font-size:11px;cursor:pointer;color:#374151}
+  .dev-label{font-size:10px;background:#fef3c7;color:#92400e;padding:1px 6px;border-radius:4px;margin-left:6px}
+  .sep{height:1px;background:#f3f4f6;margin:16px 0}
+  .tag-new{font-size:10px;background:#dbeafe;color:#1e40af;padding:1px 6px;border-radius:4px;margin-left:6px;font-weight:600}
+  .tag-backonly{font-size:10px;background:#fce7f3;color:#9d174d;padding:1px 6px;border-radius:4px;margin-left:6px}
+</style>
+</head>
+<body>
+<div class="page">
+
+  <!-- TOPBAR -->
+  <div class="topbar">
+    <div>
+      <h1><span class="icon">✨</span> Identidade do Agente</h1>
+      <p class="subtitle">Configure o comportamento do agente e organize o conhecimento do negócio.</p>
+    </div>
+    <div class="topbar-actions">
+      <span class="badge badge-muted">Perfil incompleto</span>
+      <button class="btn btn-outline">↺ Restaurar</button>
+      <button class="btn btn-primary">Salvar</button>
+    </div>
+  </div>
+
+  <!-- TABS -->
+  <div class="tabs">
+    <button class="tab active">Identidade do agente</button>
+    <button class="tab">Conhecimento do negócio</button>
+    <button class="tab">Follow-up</button>
+  </div>
+
+  <!-- ========================= TAB: PERFIL ========================= -->
+
+  <!-- Modelo do agente -->
+  <div class="card">
+    <div class="card-header">
+      <div class="card-title">Modelo do Agente</div>
+      <div class="card-desc">Escolha o formato de atendimento principal.</div>
+    </div>
+    <div class="card-body">
+      <div class="grid3">
+        <button class="model-card selected">
+          <div class="title">Agendador com humano</div>
+          <div class="desc">Qualifica e agenda com handoff humano.</div>
+        </button>
+        <button class="model-card">
+          <div class="title">Direto autônomo</div>
+          <div class="desc">Foco em fechamento sem handoff.</div>
+        </button>
+        <button class="model-card">
+          <div class="title">Híbrido agendador</div>
+          <div class="desc">Agenda com autonomia operacional.</div>
+        </button>
+      </div>
+
+      <!-- Advanced (DEV only) -->
+      <div class="advanced-block">
+        <details>
+          <summary class="advanced-summary">Configurações avançadas (técnico) <span class="dev-label">DEV only</span></summary>
+          <div style="margin-top:12px">
+            <div class="grid3">
+              <div class="field">
+                <label>Template / Estilo do agente</label>
+                <select>
+                  <option>SDR Padrão</option>
+                  <option>Consultor Especialista</option>
+                  <option>Closer Agressivo</option>
+                  <option>Híbrido Agendador</option>
+                </select>
+              </div>
+              <div class="field">
+                <label>Agent Profile Mode</label>
+                <select>
+                  <option>Consultivo</option>
+                  <option selected>Agenda</option>
+                  <option>Direto</option>
+                  <option>SDR Scheduler (legado)</option>
+                  <option>Closer (legado)</option>
+                </select>
+              </div>
+              <div class="field">
+                <label>Requer handoff humano</label>
+                <select>
+                  <option selected>Sim</option>
+                  <option>Não</option>
+                </select>
+              </div>
+            </div>
+          </div>
+        </details>
+      </div>
+    </div>
+  </div>
+
+  <!-- Identidade e marca + Nicho/público -->
+  <div class="grid2">
+    <div class="card">
+      <div class="card-header">
+        <div class="card-title">Identidade e marca</div>
+        <div class="card-desc">Como o agente se apresenta.</div>
+      </div>
+      <div class="card-body">
+        <div class="field">
+          <label>Nome do agente</label>
+          <input type="text" placeholder="Ex.: Ana, seu copilot de vendas"/>
+        </div>
+        <div class="field">
+          <label>Marca</label>
+          <input type="text" placeholder="Ex.: Auto Digital"/>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-header">
+        <div class="card-title">Nicho e público</div>
+        <div class="card-desc">Quem você atende.</div>
+      </div>
+      <div class="card-body">
+        <div class="field">
+          <label>Fuso horário (timezone)</label>
+          <select>
+            <option>UTC</option>
+            <option>Europe/Lisbon</option>
+            <option>America/Sao_Paulo</option>
+          </select>
+          <div class="hint">Use o formato IANA (ex.: Europe/Lisbon).</div>
+        </div>
+        <div class="field">
+          <label>Nicho</label>
+          <input type="text" placeholder="Ex.: Software B2B para marketing"/>
+        </div>
+        <div class="field">
+          <label>Público-alvo</label>
+          <input type="text" placeholder="Ex.: PMEs de e-commerce"/>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Oferta + Tom de voz -->
+  <div class="grid2">
+    <div class="card">
+      <div class="card-header">
+        <div class="card-title">Oferta</div>
+        <div class="card-desc">Explique o que você vende.</div>
+      </div>
+      <div class="card-body">
+        <textarea rows="4" placeholder="Ex.: Implementação completa do CRM com onboarding em 14 dias."></textarea>
+        <div class="hint" style="text-align:right">0 caracteres</div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-header">
+        <div class="card-title">Tom de voz</div>
+        <div class="card-desc">Como o agente fala.</div>
+      </div>
+      <div class="card-body">
+        <div class="field">
+          <select>
+            <option value="">Selecione um tom</option>
+            <option>Consultivo</option>
+            <option>Direto</option>
+            <option>Acolhedor</option>
+            <option>Entusiasmado</option>
+            <option>Profissional e próximo</option>
+          </select>
+        </div>
+        <div class="field">
+          <input type="text" placeholder="Ou personalize o tom"/>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Handoff (visível apenas quando requires_handoff ou human_in_loop = true) -->
+  <div class="card">
+    <div class="card-header">
+      <div class="card-title">Atendimento humano (Handoff) <span class="badge-muted" style="font-size:11px;padding:1px 8px;border-radius:9999px;background:#f3f4f6;margin-left:6px">visível quando requires_handoff = true</span></div>
+      <div class="card-desc">Defina como o agente se identifica e quando aciona um humano.</div>
+    </div>
+    <div class="card-body">
+      <div class="grid3">
+        <div class="field">
+          <label>Modo de identidade</label>
+          <select>
+            <option>Assistente virtual</option>
+            <option selected>Humano do time</option>
+            <option>Clone do usuário</option>
+          </select>
+          <div class="hint">Define como o agente se apresenta no início das conversas.</div>
+        </div>
+        <div class="field">
+          <label>Política quando o lead pedir humano</label>
+          <select>
+            <option selected>Manter bot e notificar</option>
+            <option>Desativar bot para este lead</option>
+            <option>Ignorar pedido e continuar conversa</option>
+          </select>
+          <div class="hint">Controla se o bot continua ativo ou entrega para o time humano.</div>
+        </div>
+        <div class="field">
+          <label>Texto personalizado de handoff</label>
+          <textarea rows="2" placeholder="Ex: Vou te conectar com alguém do time agora."></textarea>
+          <div class="hint">Se preenchido, substitui a mensagem padrão do handoff.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Prioridades + Instruções extras -->
+  <div class="card">
+    <div class="card-header">
+      <div class="card-title">Prioridades do atendimento</div>
+      <div class="card-desc">Defina prioridades operacionais em formato de bullets.</div>
+    </div>
+    <div class="card-body">
+      <textarea rows="4" placeholder="Use bullets. Ex.:&#10;- Confirmar orçamento antes de sugerir horário&#10;- Coletar os 3 dados obrigatórios"></textarea>
+      <div class="suggestions">
+        <button class="suggestion-btn">Confirmar preço/local antes de sugerir horários</button>
+        <button class="suggestion-btn">Perguntar 3 informações obrigatórias antes de avançar</button>
+        <button class="suggestion-btn">Lidar com objeções comuns sem alongar conversa</button>
+        <button class="suggestion-btn">Encerrar educadamente quando não houver intenção</button>
+        <button class="suggestion-btn">Não agendar sem confirmação do lead</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-header">
+      <div class="card-title">Instruções extras</div>
+      <div class="card-desc">Diretrizes adicionais para o agente.</div>
+    </div>
+    <div class="card-body">
+      <textarea rows="4" placeholder="Ex.: Sempre responder em português do Brasil e sugerir próximos passos claros."></textarea>
+      <div class="hint" style="text-align:right">0 caracteres</div>
+    </div>
+  </div>
+
+  <!-- WhatsApp -->
+  <div class="card">
+    <div class="card-header">
+      <div class="card-title">WhatsApp</div>
+      <div class="card-desc">Conecte seu número via QR Code para o agente usar.</div>
+    </div>
+    <div class="card-body whatsapp-section">
+      <div class="wh-status-row">
+        <span class="badge badge-wh">Não conectado</span>
+      </div>
+      <div class="qr-placeholder">QR aparece aqui</div>
+      <div class="wh-actions">
+        <button class="btn btn-primary">Criar/Conectar WhatsApp</button>
+        <button class="btn btn-outline">Atualizar status</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Preview -->
+  <div class="card">
+    <div class="card-header">
+      <div class="card-title">Preview</div>
+      <div class="card-desc">Simulação local de apresentação e resposta.</div>
+    </div>
+    <div class="card-body grid2">
+      <div class="preview-box">
+        <div class="preview-label">Apresentação</div>
+        <div class="preview-text">Preencha os campos para ver o preview.</div>
+      </div>
+      <div class="preview-box">
+        <div class="preview-label">Resposta exemplo</div>
+        <div class="preview-text">Defina o tom de voz para gerar uma resposta exemplo.</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- CAMPOS NÃO EXPOSTOS NA UI (informativo) -->
+  <div class="card" style="border-style:dashed;border-color:#d1d5db">
+    <div class="card-header">
+      <div class="card-title">Campos backend-only <span class="tag-backonly">Não na UI</span></div>
+      <div class="card-desc">Existem no model mas não têm campo de edição na página atual.</div>
+    </div>
+    <div class="card-body">
+      <div class="grid3">
+        <div class="field">
+          <label>presentation_variant <span class="tag-backonly">backend-only</span></label>
+          <input disabled value="(inferido do agent_mode)" style="background:#f9fafb;color:#9ca3af"/>
+          <div class="hint">sales | scheduler — inferido automaticamente</div>
+        </div>
+        <div class="field">
+          <label>hybrid_flow_style <span class="tag-backonly">backend-only</span></label>
+          <input disabled value="(não configurado)" style="background:#f9fafb;color:#9ca3af"/>
+          <div class="hint">offer_then_schedule | schedule_then_offer</div>
+        </div>
+        <div class="field">
+          <label>offer_pack <span class="tag-backonly">backend-only</span></label>
+          <input disabled value="(JSON — sem UI)" style="background:#f9fafb;color:#9ca3af"/>
+          <div class="hint">items[], cta_text, disclaimers, checkout_link</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <p style="font-size:11px;color:#9ca3af;text-align:center;margin-top:8px">
+    Mockup gerado em março 2026 — reflete AiProfile.tsx atual (branch feature/etapa-8-n8n-orion)
+  </p>
+</div>
+</body>
+</html>

@@ -12,6 +12,7 @@ from fastapi import APIRouter, Header, HTTPException, status, BackgroundTasks
 from pydantic import BaseModel, EmailStr, Field
 
 from database import get_connection
+from services.agent_type import resolve_agent_type_for_user
 
 router = APIRouter(tags=["Public"])
 
@@ -190,8 +191,8 @@ def create_public_lead(
         cursor.execute(
             """
             INSERT INTO leads (
-                companyName, contactName, phone, email, origin, category, customMessage, observations, priority
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                companyName, contactName, phone, email, origin, category, customMessage, observations, agent_type, priority
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 payload.fullName,
@@ -202,6 +203,7 @@ def create_public_lead(
                 "to-prospect",
                 custom_message,
                 payload.message,
+                resolve_agent_type_for_user(),
                 1,
             ),
         )

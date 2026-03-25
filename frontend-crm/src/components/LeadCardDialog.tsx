@@ -10,6 +10,9 @@ import {
   Tag,
   Plus,
   RefreshCw,
+  AlertTriangle,
+  Zap,
+  ExternalLink,
 } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "./ui/dialog";
 import { Badge } from "./ui/badge";
@@ -19,16 +22,20 @@ import { Input } from "./ui/input";
 import { Label } from "./ui/label";
 import { Separator } from "./ui/separator";
 import { useState, useEffect, useMemo } from "react";
+import { useNavigate } from "react-router-dom";
+import { useQuery } from "@tanstack/react-query";
 import { ScheduleAppointmentDialog } from "./ScheduleAppointmentDialog";
 import { useLeadAppointments, useCancelAppointment } from "@/hooks/useAppointments";
 import { useToast } from "@/hooks/use-toast";
 import { useLeads } from "@/contexts/LeadsContext";
+import { api, FollowUpContract } from "@/services/api";
 
 interface LeadCardDialogProps {
   lead: Lead | null;
   isOpen: boolean;
   onClose: () => void;
   onUpdateLead?: (leadId: string, updates: Partial<Lead>) => void;
+  onDeleteLead?: (leadId: string) => Promise<void>;
 }
 
 //TODO Estava dando erros aqui, com nomes de colunas antigas. Ajustei conforme as atuais.
@@ -78,23 +85,145 @@ const appointmentTypeClasses = {
 } as const;
 
 const appointmentStatusLabels = {
-  scheduled: "Agendado",
+  pending: "Agendado",
   completed: "Concluído",
   canceled: "Cancelado",
 } as const;
 
 const appointmentStatusClasses = {
-  scheduled: "bg-primary/10 text-primary border border-primary/20",
+  pending: "bg-primary/10 text-primary border border-primary/20",
   completed: "bg-success/10 text-success border border-success/20",
   canceled: "bg-destructive/10 text-destructive border border-destructive/20",
 } as const;
 
+const appointmentOutcomeLabels = {
+  completed: "Concluída",
+  no_show: "No-show",
+  rescheduled: "Reagendada",
+} as const;
+
+const appointmentOutcomeClasses = {
+  completed: "bg-success/10 text-success border border-success/20",
+  no_show: "bg-destructive/10 text-destructive border border-destructive/20",
+  rescheduled: "bg-primary/10 text-primary border border-primary/20",
+} as const;
+
+const FOLLOWUP_STATUS_CONFIG: Record<string, { label: string; color: string }> = {
+  active:    { label: "Ativo",      color: "#52C4A0" },
+  paused:    { label: "Pausado",    color: "#F59E0B" },
+  done:      { label: "Concluído",  color: "#60A5FA" },
+  cancelled: { label: "Cancelado",  color: "#94A3B8" },
+};
+
+const FOLLOWUP_VARIANT_CONFIG: Record<string, { label: string; color: string }> = {
+  cart_recovery:    { label: "Carrinho",  color: "#52C4A0" },
+  hybrid_scheduler: { label: "Híbrido",   color: "#A78BFA" },
+  sdr_scheduler:    { label: "SDR",       color: "#60A5FA" },
+};
+
+const STOP_REASON_LABELS: Record<string, string> = {
+  inbound_reply:        "Lead respondeu",
+  max_attempts_reached: "Limite de tentativas atingido",
+  manual_cancel:        "Cancelado manualmente",
+  deal_closed:          "Negócio fechado",
+  explicit_rejection:   "Rejeição explícita",
+  handoff_human:        "Passado para humano",
+};
+
+function FollowUpContractSummary({ contract }: { contract: FollowUpContract }) {
+  const statusCfg = FOLLOWUP_STATUS_CONFIG[contract.status] ?? { label: contract.status, color: "#94A3B8" };
+  const variantCfg = contract.followup_variant ? FOLLOWUP_VARIANT_CONFIG[contract.followup_variant] : null;
+
+  const fmt = (iso: string | null | undefined) =>
+    iso
+      ? new Intl.DateTimeFormat("pt-PT", {
+          day: "2-digit",
+          month: "2-digit",
+          year: "numeric",
+          hour: "2-digit",
+          minute: "2-digit",
+        }).format(new Date(iso))
+      : null;
+
+  return (
+    <div className="rounded-md border border-border bg-muted/30 p-3 space-y-2.5 text-sm">
+      {/* Status + variant + attempts */}
+      <div className="flex flex-wrap items-center gap-2">
+        <span
+          className="text-[11px] font-medium px-2 py-0.5 rounded-full border"
+          style={{ background: statusCfg.color + "22", color: statusCfg.color, borderColor: statusCfg.color + "55" }}
+        >
+          {statusCfg.label}
+        </span>
+        {variantCfg && (
+          <span
+            className="text-[11px] font-medium px-2 py-0.5 rounded-full border"
+            style={{ background: variantCfg.color + "22", color: variantCfg.color, borderColor: variantCfg.color + "55" }}
+          >
+            {variantCfg.label}
+          </span>
+        )}
+        <div className="flex items-center gap-1.5 ml-auto text-muted-foreground text-xs">
+          <span>{contract.attempts}/{contract.max_attempts} envios</span>
+          <div className="flex gap-1">
+            {Array.from({ length: contract.max_attempts }).map((_, i) => (
+              <span
+                key={i}
+                className="inline-block rounded-full"
+                style={{
+                  width: 7,
+                  height: 7,
+                  background: i < contract.attempts ? statusCfg.color : statusCfg.color + "33",
+                }}
+              />
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {/* Datas */}
+      <div className="space-y-1 text-xs text-muted-foreground">
+        {contract.last_followup_at && (
+          <div className="flex items-center gap-1.5">
+            <Clock className="w-3 h-3 shrink-0" />
+            <span>Último envio: <span className="text-foreground/80">{fmt(contract.last_followup_at)}</span></span>
+          </div>
+        )}
+        {contract.next_followup_at && contract.status === "active" && (
+          <div className="flex items-center gap-1.5">
+            <Calendar className="w-3 h-3 shrink-0" />
+            <span>Próximo envio: <span className="text-foreground/80">{fmt(contract.next_followup_at)}</span></span>
+          </div>
+        )}
+        {contract.stop_reason && (
+          <div className="flex items-center gap-1.5">
+            <Tag className="w-3 h-3 shrink-0" />
+            <span>Motivo: <span className="text-foreground/80">{STOP_REASON_LABELS[contract.stop_reason] ?? contract.stop_reason}</span></span>
+          </div>
+        )}
+        {contract.operator_note && (
+          <div className="flex items-center gap-1.5 pt-0.5 border-t border-border">
+            <MessageSquare className="w-3 h-3 shrink-0" />
+            <span className="italic">{contract.operator_note}</span>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 /** Wrapper sem hooks — evita o erro de Hooks. */
-export function LeadCardDialog({ lead, isOpen, onClose, onUpdateLead }: LeadCardDialogProps) {
+export function LeadCardDialog({ lead, isOpen, onClose, onUpdateLead, onDeleteLead }: LeadCardDialogProps) {
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
       {isOpen && lead ? (
-        <LeadCardDialogBody lead={lead} isOpen={isOpen} onClose={onClose} onUpdateLead={onUpdateLead} />
+        <LeadCardDialogBody
+          lead={lead}
+          isOpen={isOpen}
+          onClose={onClose}
+          onUpdateLead={onUpdateLead}
+          onDeleteLead={onDeleteLead}
+        />
       ) : null}
     </Dialog>
   );
@@ -104,7 +233,9 @@ export function LeadCardDialog({ lead, isOpen, onClose, onUpdateLead }: LeadCard
 function LeadCardDialogBody({
   lead,
   onUpdateLead,
+  onDeleteLead,
 }: LeadCardDialogProps & { lead: Lead }) {
+  const navigate = useNavigate();
   const [isEditing, setIsEditing] = useState(false);
   const [editedLead, setEditedLead] = useState<Lead | null>(null);
   const { toast } = useToast();
@@ -118,6 +249,7 @@ function LeadCardDialogBody({
   const cancelAppointment = useCancelAppointment();
   const [isScheduleDialogOpen, setIsScheduleDialogOpen] = useState(false);
   const [appointmentToEdit, setAppointmentToEdit] = useState<Appointment | null>(null);
+  const [rescheduleOutcomeId, setRescheduleOutcomeId] = useState<string | null>(null);
 
   // Carrega compromissos do lead (rota: GET /leads/{id}/appointments)
   const leadId = lead?.id;
@@ -134,9 +266,17 @@ function LeadCardDialogBody({
     refetchAppointments();
   }, [refetchAppointments]);
 
+  // Mensagens WhatsApp para histórico de follow-up
+  const { data: messagesData } = useQuery({
+    queryKey: ["lead-messages", leadId],
+    queryFn: () => api.assistenteIA.mensagens(leadId!, false),
+    enabled: !!leadId && !!lead.followup_contract,
+    staleTime: 60_000,
+  });
+
   const asDate = (iso: string) => new Date(iso);
   const isActiveStatus = (s?: string | null) =>
-    ["scheduled", "pending"].includes(String(s));
+    ["pending"].includes(String(s));
 
   // Itens futuros **não cancelados**
   const upcomingAppointments = useMemo(() => {
@@ -145,11 +285,25 @@ function LeadCardDialogBody({
     return appointments
       .filter((a) => {
         if (a.status === "canceled") return false;
-        if (!isActiveStatus(a.status)) return false; // só "scheduled" | "pending"
+        if (!isActiveStatus(a.status)) return false; // só "pending"
         const ts = new Date(a.startTime).getTime();
         return Number.isFinite(ts) && ts >= nowTs;
       })
       .sort((a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime());
+  }, [appointments]);
+
+  const nextMeetingAppointment = useMemo(() => {
+    const nowTs = Date.now();
+    return (
+      appointments
+        .filter((appointment) => {
+          const isMeetingType = ["meeting", "presentation"].includes(String(appointment.type));
+          const normalizedStatus = String(appointment.status) === "scheduled" ? "pending" : String(appointment.status);
+          const startsAt = new Date(appointment.startTime).getTime();
+          return isMeetingType && normalizedStatus === "pending" && Number.isFinite(startsAt) && startsAt >= nowTs;
+        })
+        .sort((a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime())[0] ?? null
+    );
   }, [appointments]);
 
   // Itens passados **não cancelados**
@@ -185,6 +339,16 @@ function LeadCardDialogBody({
     }
   };
 
+  const handleDeleteLead = async () => {
+    if (!onDeleteLead) return;
+    const confirmed = window.confirm(
+      "Tem certeza? Isso apagará histórico e compromissos deste lead."
+    );
+    if (!confirmed) return;
+    await onDeleteLead(lead.id);
+    onClose();
+  };
+
   const handleCancel = () => {
     setEditedLead({ ...lead });
     setIsEditing(false);
@@ -193,6 +357,11 @@ function LeadCardDialogBody({
   const openScheduleDialog = (appointment?: Appointment | null) => {
     setAppointmentToEdit(appointment ?? null);
     setIsScheduleDialogOpen(true);
+  };
+
+  const handleRescheduleOutcome = (appointment: Appointment) => {
+    setRescheduleOutcomeId(appointment.id);
+    openScheduleDialog(appointment);
   };
 
   const handleCancelAppointmentAction = async (appointment: Appointment) => {
@@ -226,9 +395,73 @@ function LeadCardDialogBody({
     setIsScheduleDialogOpen(false);
     setAppointmentToEdit(null);
     refetchAppointments();
+
+    if (rescheduleOutcomeId && appointment.id === rescheduleOutcomeId) {
+      api.appointments
+        .setOutcome(appointment.id, {
+          outcome: "rescheduled",
+          reschedule_start_at: appointment.startTime,
+          reschedule_end_at: appointment.endTime ?? null,
+          reactivate_bot: true,
+        })
+        .then(() => {
+          setEditedLead((prev) => (prev ? { ...prev, bot_disabled: false } : prev));
+          onUpdateLead?.(lead.id, { bot_disabled: false } as Partial<Lead>);
+          toast({ title: "Compromisso reagendado" });
+          refetchAppointments();
+        })
+        .catch((error: any) => {
+          toast({
+            title: "Erro ao reagendar compromisso",
+            description: error?.message ?? "Não foi possível reagendar o compromisso.",
+            variant: "destructive",
+          });
+        })
+        .finally(() => {
+          setRescheduleOutcomeId(null);
+        });
+    }
+  };
+
+  const handleReactivateBot = async () => {
+    try {
+      await api.setLeadBotDisabled(lead.id, {
+        disabled: false,
+        reason: "manual_reactivate",
+      });
+      setEditedLead((prev) =>
+        prev ? { ...prev, bot_disabled: false, bot_disabled_reason: null } : prev
+      );
+      onUpdateLead?.(lead.id, {
+        bot_disabled: false,
+        bot_disabled_reason: null,
+      } as Partial<Lead>);
+      toast({ title: "Bot reativado" });
+    } catch (error: any) {
+      toast({
+        title: "Erro ao reativar bot",
+        description: error?.message ?? "Não foi possível reativar o bot.",
+        variant: "destructive",
+      });
+    }
   };
 
   const currentLead = isEditing ? editedLead! : lead;
+  const botPauseReason = useMemo(() => {
+    if (!currentLead?.bot_disabled) return null;
+    if (nextMeetingAppointment) return "Reunião agendada";
+    const rawReason = (currentLead.bot_disabled_reason || "").trim();
+    if (rawReason === "category_closing") return "Closing (humano assume)";
+    if (rawReason) return rawReason;
+    if (currentLead.category === "closing") return "Closing (humano assume)";
+    return "Motivo indisponível";
+  }, [
+    currentLead?.bot_disabled,
+    currentLead?.bot_disabled_reason,
+    currentLead?.category,
+    nextMeetingAppointment,
+  ]);
+
   const nextScheduledAppointment = useMemo(() => {
     const appointmentId = currentLead.nextScheduledAction?.id;
     if (!appointmentId) return null;
@@ -237,6 +470,30 @@ function LeadCardDialogBody({
     // se o compromisso foi cancelado, não consideramos como “próxima ação”
     return appt && appt.status !== "canceled" ? appt : null;
   }, [appointments, currentLead.nextScheduledAction?.id]);
+
+  const handleSetOutcome = async (
+    appointment: Appointment,
+    outcome: "completed" | "no_show"
+  ) => {
+    const note = window.prompt("Observação (opcional):") ?? undefined;
+    try {
+      await api.appointments.setOutcome(appointment.id, {
+        outcome,
+        note,
+        reactivate_bot: true,
+      });
+      setEditedLead((prev) => (prev ? { ...prev, bot_disabled: false } : prev));
+      onUpdateLead?.(lead.id, { bot_disabled: false } as Partial<Lead>);
+      toast({ title: "Resultado registrado" });
+      refetchAppointments();
+    } catch (error: any) {
+      toast({
+        title: "Erro ao registrar resultado",
+        description: error?.message ?? "Não foi possível registrar o resultado.",
+        variant: "destructive",
+      });
+    }
+  };
 
 
   return (
@@ -251,10 +508,16 @@ function LeadCardDialogBody({
               <Badge className={`${statusColors[currentLead.category]} text-white`}>
                 {statusLabels[currentLead.category]}
               </Badge>
+              {currentLead.bot_disabled && (
+                <Badge variant="secondary">Agente desativado</Badge>
+              )}
               <span className="text-xs text-muted-foreground">ID: {currentLead.id}</span>
             </div>
           </div>
           <div className="flex gap-2">
+            <Button variant="destructive" size="sm" onClick={() => void handleDeleteLead()}>
+              Excluir
+            </Button>
             {!isEditing ? (
               <Button variant="outline" size="sm" onClick={() => setIsEditing(true)}>
                 Editar
@@ -274,6 +537,26 @@ function LeadCardDialogBody({
       </DialogHeader>
 
       <div className="space-y-6">
+        {currentLead.bot_disabled && (
+          <div className="rounded-md border border-warning/30 bg-warning/10 p-4 space-y-2">
+            <div className="flex items-center gap-2 text-warning font-medium">
+              <AlertTriangle className="h-4 w-4" />
+              ⚠️ Bot pausado
+            </div>
+            <p className="text-sm text-foreground">
+              <span className="font-medium">Motivo:</span> {botPauseReason}
+            </p>
+            {nextMeetingAppointment && (
+              <p className="text-sm text-foreground">
+                <span className="font-medium">Data:</span> {formatDate(new Date(nextMeetingAppointment.startTime))}
+              </p>
+            )}
+            <Button size="sm" variant="outline" onClick={() => void handleReactivateBot()}>
+              Reativar bot
+            </Button>
+          </div>
+        )}
+
         {/* Informações Básicas */}
         <div className="space-y-4">
           <h3 className="text-lg font-medium text-foreground flex items-center gap-2">
@@ -501,7 +784,7 @@ function LeadCardDialogBody({
                     <Button
                       variant="outline"
                       size="sm"
-                      onClick={() => openScheduleDialog(nextScheduledAppointment)}
+                      onClick={() => handleRescheduleOutcome(nextScheduledAppointment)}
                     >
                       Reagendar
                     </Button>
@@ -580,6 +863,11 @@ function LeadCardDialogBody({
                                 <Badge className={appointmentStatusClasses[appointment.status]}>
                                   {appointmentStatusLabels[appointment.status]}
                                 </Badge>
+                                {appointment.outcome && (
+                                  <Badge className={appointmentOutcomeClasses[appointment.outcome]}>
+                                    {appointmentOutcomeLabels[appointment.outcome]}
+                                  </Badge>
+                                )}
                               </div>
                               <span className="text-xs text-muted-foreground">
                                 {formatDate(start)}
@@ -599,9 +887,23 @@ function LeadCardDialogBody({
                               <Button
                                 size="sm"
                                 variant="outline"
-                                onClick={() => openScheduleDialog(appointment)}
+                                onClick={() => handleRescheduleOutcome(appointment)}
                               >
                                 Reagendar
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => handleSetOutcome(appointment, "completed")}
+                              >
+                                Concluir
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => handleSetOutcome(appointment, "no_show")}
+                              >
+                                No-show
                               </Button>
                               <Button
                                 size="sm"
@@ -629,10 +931,10 @@ function LeadCardDialogBody({
                       const start = new Date(appointment.startTime);
 
                       // normaliza status para as chaves aceitas nos mapas de UI
-                      type UiStatus = keyof typeof appointmentStatusClasses; // "scheduled" | "completed" | "canceled"
+                      type UiStatus = keyof typeof appointmentStatusClasses; // "pending" | "completed" | "canceled"
                       const statusStr = String(appointment.status);
                       const normalized: UiStatus =
-                        (statusStr === "pending" ? "scheduled" : statusStr) as UiStatus;
+                        (statusStr === "scheduled" ? "pending" : statusStr) as UiStatus;
 
                       return (
                         <div
@@ -647,6 +949,11 @@ function LeadCardDialogBody({
                               <Badge className={appointmentStatusClasses[normalized]}>
                                 {appointmentStatusLabels[normalized]}
                               </Badge>
+                              {appointment.outcome && (
+                                <Badge className={appointmentOutcomeClasses[appointment.outcome]}>
+                                  {appointmentOutcomeLabels[appointment.outcome]}
+                                </Badge>
+                              )}
                             </div>
                             <span className="text-xs text-muted-foreground">
                               {formatDate(start)}
@@ -659,6 +966,31 @@ function LeadCardDialogBody({
                             <p className="text-xs text-muted-foreground">
                               {appointment.description}
                             </p>
+                          )}
+                          {!appointment.outcome && (
+                            <div className="flex flex-wrap items-center gap-2">
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => handleSetOutcome(appointment, "completed")}
+                              >
+                                Concluir
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => handleSetOutcome(appointment, "no_show")}
+                              >
+                                No-show
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => handleRescheduleOutcome(appointment)}
+                              >
+                                Reagendar
+                              </Button>
+                            </div>
                           )}
                         </div>
                       );
@@ -677,11 +1009,67 @@ function LeadCardDialogBody({
         </div>
       </div>
 
+      {/* ---- Histórico de Follow-up ---- */}
+      {currentLead.followup_contract && (
+        <div className="space-y-3 pt-2">
+          <Separator />
+          <div className="flex items-center justify-between">
+            <h3 className="font-semibold text-foreground flex items-center gap-2 text-sm">
+              <Zap className="w-4 h-4 text-amber-400" />
+              Histórico de Follow-up
+            </h3>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-7 text-xs gap-1 text-muted-foreground hover:text-foreground"
+              onClick={() => navigate(`/follow-ups?leadId=${currentLead.id}`)}
+            >
+              Ver na Central
+              <ExternalLink className="w-3 h-3" />
+            </Button>
+          </div>
+
+          {/* Resumo do contrato */}
+          <FollowUpContractSummary contract={currentLead.followup_contract} />
+
+          {/* Linha do tempo de mensagens */}
+          {messagesData?.messages && messagesData.messages.length > 0 && (
+            <div className="space-y-1.5">
+              <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                Mensagens recentes
+              </p>
+              <div className="space-y-1.5 max-h-48 overflow-y-auto custom-scrollbar pr-1">
+                {messagesData.messages.slice(-5).reverse().map((msg) => (
+                  <div
+                    key={msg.id}
+                    className="text-xs rounded-md bg-muted/40 border border-border px-3 py-2 space-y-0.5"
+                  >
+                    <div className="flex items-center gap-2 text-muted-foreground">
+                      <span className="capitalize font-medium">{msg.channel}</span>
+                      <span>·</span>
+                      <span>
+                        {new Intl.DateTimeFormat("pt-PT", {
+                          day: "2-digit",
+                          month: "2-digit",
+                          hour: "2-digit",
+                          minute: "2-digit",
+                        }).format(new Date(msg.createdAt))}
+                      </span>
+                    </div>
+                    <p className="text-foreground/80 line-clamp-2">{msg.body}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
       {isScheduleDialogOpen && (
         <ScheduleAppointmentDialog
         open={isScheduleDialogOpen}
         onOpenChange={setIsScheduleDialogOpen}
-        fixedLeadId={lead.id}                
+        fixedLeadId={lead.id}
         appointmentToEdit={appointmentToEdit}
         initialDate={appointmentToEdit ? new Date(appointmentToEdit.startTime) : undefined}
         onSuccess={handleAppointmentSuccess}

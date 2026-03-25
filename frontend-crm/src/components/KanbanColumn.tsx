@@ -13,6 +13,8 @@ interface KanbanColumnProps {
   onRescheduleMeeting: (lead: Lead) => void;
   onCancelMeeting: (lead: Lead) => void;
   onOpenCard: (leadId: string) => void;
+  onDeleteLead: (leadId: string) => Promise<void>;
+  notifiedLeadIds?: Set<string>;
 }
 
 export function KanbanColumn({
@@ -24,7 +26,9 @@ export function KanbanColumn({
   onScheduleMeeting,
   onRescheduleMeeting,
   onCancelMeeting,
-  onOpenCard
+  onOpenCard,
+  onDeleteLead,
+  notifiedLeadIds,
 }: KanbanColumnProps) {
   const { setNodeRef } = useDroppable({
     id: column.id,
@@ -44,10 +48,10 @@ export function KanbanColumn({
         </div>
       </div>
 
-      <div 
+      <div
         ref={setNodeRef}
-        className="p-4 pt-0 custom-scrollbar"
-        style={{ maxHeight: 'calc(100vh - 200px)', overflowY: 'auto' }}
+        className="p-4 pt-0 custom-scrollbar overflow-y-auto overflow-x-hidden min-w-0"
+        style={{ maxHeight: 'calc(100vh - 200px)' }}
       >
         <SortableContext items={column.leads.map(lead => lead.id)} strategy={verticalListSortingStrategy}>
           {column.leads.map((lead) => (
@@ -62,6 +66,8 @@ export function KanbanColumn({
               onRescheduleMeeting={onRescheduleMeeting}
               onCancelMeeting={onCancelMeeting}
               onOpenCard={onOpenCard}
+              onDeleteLead={onDeleteLead}
+              hasReplyNotification={notifiedLeadIds?.has(lead.id) ?? false}
             />
           ))}
         </SortableContext>

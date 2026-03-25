@@ -1,8 +1,45 @@
 import { Lead, KanbanColumn } from "../types/crm";
-import { MessageCircle, Calendar, Phone } from "lucide-react";
+import { MessageCircle, Calendar, Phone, Zap } from "lucide-react";
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { LeadActionsMenu } from "./LeadActionsMenu";
+import { useNavigate } from "react-router-dom";
+
+const FOLLOWUP_VARIANT_CONFIG: Record<string, { label: string; color: string }> = {
+  cart_recovery:    { label: "Carrinho",  color: "#52C4A0" },
+  hybrid_scheduler: { label: "Híbrido",   color: "#A78BFA" },
+  sdr_scheduler:    { label: "SDR",       color: "#60A5FA" },
+};
+
+function FollowUpStatusBar({ contract }: { contract: Record<string, any> }) {
+  const variant = contract?.followup_variant as string | undefined;
+  const attempts = Number(contract?.attempts ?? 0);
+  const maxAttempts = Number(contract?.max_attempts ?? 3);
+  const cfg = (variant && FOLLOWUP_VARIANT_CONFIG[variant]) ?? { label: "Follow-up", color: "#94A3B8" };
+  return (
+    <div className="flex items-center gap-2 pt-1">
+      <span
+        className="text-[10px] font-medium px-1.5 py-0.5 rounded"
+        style={{ background: cfg.color + "22", color: cfg.color, border: `1px solid ${cfg.color}55` }}
+      >
+        {cfg.label}
+      </span>
+      <div className="flex gap-1">
+        {Array.from({ length: maxAttempts }).map((_, i) => (
+          <span
+            key={i}
+            className="inline-block rounded-full"
+            style={{
+              width: 6,
+              height: 6,
+              background: i < attempts ? cfg.color : cfg.color + "33",
+            }}
+          />
+        ))}
+      </div>
+    </div>
+  );
+}
 
 interface LeadCardProps {
   lead: Lead;
@@ -14,6 +51,8 @@ interface LeadCardProps {
   onRescheduleMeeting: (lead: Lead) => void;
   onCancelMeeting: (lead: Lead) => void;
   onOpenCard: (leadId: string) => void;
+  onDeleteLead: (leadId: string) => Promise<void>;
+  hasReplyNotification?: boolean;
 }
 
 export function LeadCard({
@@ -25,8 +64,11 @@ export function LeadCard({
   onScheduleMeeting,
   onRescheduleMeeting,
   onCancelMeeting,
-  onOpenCard
+  onOpenCard,
+  onDeleteLead,
+  hasReplyNotification = false,
 }: LeadCardProps) {
+  const navigate = useNavigate();
   const {
     attributes,
     listeners,
@@ -39,7 +81,7 @@ export function LeadCard({
   const style = {
     transform: CSS.Transform.toString(transform),
     transition,
-    opacity: isDragging ? 0.7 : 1,
+    opacity: isDragging ? 0 : 1,
   };
 
   const formatDate = (date: Date) => {
@@ -47,6 +89,15 @@ export function LeadCard({
       day: '2-digit',
       month: '2-digit',
       year: 'numeric'
+    }).format(date);
+  };
+
+  const formatDateTime = (date: Date) => {
+    return new Intl.DateTimeFormat('pt-PT', {
+      day: '2-digit',
+      month: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
     }).format(date);
   };
 
@@ -67,7 +118,24 @@ export function LeadCard({
       className="lead-card p-4 mb-3 cursor-grab active:cursor-grabbing"
     >
       <div className="flex justify-between items-start mb-3">
-        <h4 className="font-semibold text-foreground text-sm">{lead.companyName} - {lead.contactName}</h4>
+        <div className="flex items-center gap-1.5 min-w-0">
+          <h4 className="font-semibold text-foreground text-sm truncate">{lead.companyName} - {lead.contactName}</h4>
+          {hasReplyNotification && (
+            <button
+              title="Lead respondeu ao follow-up — ver na Central de Follow-ups"
+              onClick={(e) => {
+                e.stopPropagation();
+                navigate(`/follow-ups?leadId=${lead.id}`);
+              }}
+              onPointerDown={(e) => e.stopPropagation()}
+              onMouseDown={(e) => e.stopPropagation()}
+              onTouchStart={(e) => e.stopPropagation()}
+              className="shrink-0 flex items-center justify-center w-5 h-5 rounded-full bg-amber-400/20 border border-amber-400/50 hover:bg-amber-400/40 transition-colors"
+            >
+              <Zap className="w-3 h-3 text-amber-400" />
+            </button>
+          )}
+        </div>
         <div className="flex items-center gap-1">
           <button
             onClick={handleWhatsAppClick}
@@ -89,6 +157,7 @@ export function LeadCard({
             onRescheduleMeeting={onRescheduleMeeting}
             onCancelMeeting={onCancelMeeting}
             onOpenCard={onOpenCard}
+            onDeleteLead={onDeleteLead}
           />
         </div>
       </div>
@@ -108,6 +177,19 @@ export function LeadCard({
             <span className="text-xs font-medium">Obs:</span> 
             <p className="text-xs mt-1 line-clamp-2">{lead.observations}</p>
           </div>
+        )}
+
+        {lead.nextScheduledAction?.date && (
+          <div className="flex items-center text-muted-foreground">
+            <Calendar className="w-3 h-3 mr-2" />
+            <span className="text-xs">
+              Próximo compromisso: {formatDateTime(lead.nextScheduledAction.date)}
+            </span>
+          </div>
+        )}
+
+        {lead.category === "follow-up" && lead.followup_contract && (
+          <FollowUpStatusBar contract={lead.followup_contract} />
         )}
 
         <div className="flex items-center text-muted-foreground pt-2 border-t border-border">

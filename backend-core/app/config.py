@@ -1,5 +1,7 @@
 from pathlib import Path
-from pydantic import BaseSettings
+from typing import Optional
+
+from pydantic import BaseSettings, Field
 
 
 class Settings(BaseSettings):
@@ -7,6 +9,11 @@ class Settings(BaseSettings):
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24
     DATABASE_URL: str = "sqlite:///./core.db"
+    WHATSAPP_TOKEN_ENC_KEY: Optional[str] = None
+    CORE_SERVICE_TOKEN: Optional[str] = None
+    core_whatsapp_stub: bool = Field(False, env="CORE_WHATSAPP_STUB")
+    UAZAPI_BASE_URL: Optional[str] = None
+    UAZAPI_ADMIN_TOKEN: Optional[str] = None
 
     class Config:
         env_file = ".env"

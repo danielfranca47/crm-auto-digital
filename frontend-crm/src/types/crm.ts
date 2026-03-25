@@ -1,6 +1,6 @@
 export type AppointmentType = 'meeting' | 'call' | 'follow-up' | 'presentation';
 
-export type AppointmentStatus = 'scheduled' | 'completed' | 'canceled';
+export type AppointmentStatus = 'pending' | 'completed' | 'canceled';
 
 export interface Appointment {
   id: string;
@@ -9,6 +9,9 @@ export interface Appointment {
   description?: string;
   type: AppointmentType;
   status: AppointmentStatus;
+  outcome?: 'completed' | 'no_show' | 'rescheduled';
+  outcome_note?: string | null;
+  outcome_at?: string | null;
   startTime: string;
   endTime?: string | null;
   leadName?: string | null;
@@ -39,6 +42,10 @@ export interface Lead {
   category: LeadStatus;
   customMessage: string;
   observations: string;
+  agent_type?: 'agent_1' | 'agent_2' | 'agent_3' | null;
+  followup_contract?: Record<string, any> | null;
+  bot_disabled?: boolean;
+  bot_disabled_reason?: string | null;
   lastMovement: Date;
   createdAt: Date;
   nextScheduledAction?: {
@@ -102,6 +109,7 @@ export interface NewLeadForm {
   companyName: string;
   contactName: string;
   phone: string;
+  country_code: string;
   email?: string;
   origin: string;
   category: LeadStatus;

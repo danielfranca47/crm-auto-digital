@@ -1,5 +1,8 @@
 # backend/app.py
+import asyncio
+import logging
 import os
+from contextlib import asynccontextmanager
 from pathlib import Path
 from dotenv import load_dotenv
 
@@ -10,6 +13,7 @@ load_dotenv(BASE_DIR / ".env.local", override=True)
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 
 from database import init_db
 from routes import (
@@ -24,8 +28,57 @@ from routes import (
     agents,
     usage,
     knowledge,
+    webhooks,
+    executor,
+    whatsapp_connect,
+    notifications,
 )
 from routes import public
+from services.followup_reconciler import reconcile_due_followups
+
+logger = logging.getLogger(__name__)
+
+_RECONCILER_INTERVAL = int(os.getenv("FOLLOWUP_RECONCILER_INTERVAL_SECONDS", "60"))
+_RECONCILER_STARTUP_DELAY = 5  # segundos de grace period antes da 1ª execução
+
+
+async def _reconciler_loop() -> None:
+    logger.info(
+        "[reconciler] scheduler iniciado — intervalo=%ds startup_delay=%ds",
+        _RECONCILER_INTERVAL,
+        _RECONCILER_STARTUP_DELAY,
+    )
+    await asyncio.sleep(_RECONCILER_STARTUP_DELAY)
+    while True:
+        try:
+            result = await asyncio.to_thread(reconcile_due_followups)
+            if result["eligible"] > 0 or result["enqueued"] > 0:
+                logger.info(
+                    "[reconciler] scanned=%d eligible=%d enqueued=%d skipped_duplicate=%d",
+                    result["scanned"],
+                    result["eligible"],
+                    result["enqueued"],
+                    result["skipped_duplicate"],
+                )
+            else:
+                logger.debug("[reconciler] nenhum follow-up vencido — scanned=%d", result["scanned"])
+        except Exception as exc:
+            logger.error("[reconciler] erro inesperado: %s", exc, exc_info=True)
+        await asyncio.sleep(_RECONCILER_INTERVAL)
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    task = asyncio.create_task(_reconciler_loop())
+    try:
+        yield
+    finally:
+        task.cancel()
+        try:
+            await task
+        except asyncio.CancelledError:
+            pass
+        logger.info("[reconciler] scheduler encerrado")
 
 
 def _parse_origins(csv: str | None) -> list[str]:
@@ -38,7 +91,7 @@ def _parse_origins(csv: str | None) -> list[str]:
 # -----------------------------------------------------------------------------
 # APP PRIVADO (CRM)  -> /api, /auth, etc.
 # -----------------------------------------------------------------------------
-app = FastAPI(title="CRM API", version="1.0.0")
+app = FastAPI(title="CRM API", version="1.0.0", lifespan=lifespan)
 
 # Inicializa DB
 init_db()
@@ -74,7 +127,16 @@ app.include_router(appointments.router)                             # já define
 app.include_router(agents.router)                                   # /api/agents
 app.include_router(usage.router)                                    # /api/usage
 app.include_router(knowledge.router)                                # /api/knowledge
+app.include_router(webhooks.router)                                 # /webhooks/whatsapp/inbound
+app.include_router(executor.router)                                 # /api/jobs, /api/whatsapp/* internal
+app.include_router(whatsapp_connect.router)                         # /api/whatsapp/connect, /api/whatsapp/status
+app.include_router(notifications.router)                            # /api/notifications
 # app.include_router(dashboard.router)
+
+# Static: mídia de follow-up
+_followup_media_dir = Path("data/uploads/followup-media")
+_followup_media_dir.mkdir(parents=True, exist_ok=True)
+app.mount("/api/followup-media", StaticFiles(directory=str(_followup_media_dir)), name="followup-media")
 
 # -----------------------------------------------------------------------------
 # SUB-APP PÚBLICO (Website / Form) -> montado em /public

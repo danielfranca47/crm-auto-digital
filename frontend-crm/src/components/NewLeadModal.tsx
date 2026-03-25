@@ -7,35 +7,52 @@ import { Textarea } from "./ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetClose } from "./ui/sheet";
 import { X } from "lucide-react";
-import { api } from "@/services/api"; // ✅ ajuste o caminho conforme seu projeto
+import { api } from "@/services/api";
 import { useApiErrorHandler } from "@/hooks/useApiErrorHandler";
 
 interface NewLeadModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSave?: (lead: NewLeadForm) => void | Promise<void>; // ✅ opcional
+  onSave?: (lead: NewLeadForm) => void | Promise<void>;
 }
 
 const LEAD_CATEGORIES: { value: LeadStatus; label: string }[] = [
-  { value: 'to-prospect', label: 'À Prospectar' },
-  { value: 'in-progress', label: 'Em Andamento' },
-  { value: 'qualification', label: 'Qualificação' },
-  { value: 'apresentation', label: 'Apresentação' },
-  { value: 'follow-up', label: 'Follow-up' },
-  { value: 'closing', label: 'Fechamento' },
-  { value: 'client-list', label: 'Lista de Clientes' },
-  { value: 'prospect-refused', label: 'Prospecção Recusada' },
-  { value: 'disqualified', label: 'Desqualificados' },
+  { value: "to-prospect", label: "À Prospectar" },
+  { value: "in-progress", label: "Em Andamento" },
+  { value: "qualification", label: "Qualificação" },
+  { value: "apresentation", label: "Apresentação" },
+  { value: "follow-up", label: "Follow-up" },
+  { value: "closing", label: "Fechamento" },
+  { value: "client-list", label: "Lista de Clientes" },
+  { value: "prospect-refused", label: "Prospecção Recusada" },
+  { value: "disqualified", label: "Desqualificados" },
 ];
+
+const COUNTRY_OPTIONS = [
+  { code: "BR", label: "🇧🇷 Brasil (+55)" },
+  { code: "PT", label: "🇵🇹 Portugal (+351)" },
+  { code: "US", label: "🇺🇸 Estados Unidos (+1)" },
+  { code: "ES", label: "🇪🇸 Espanha (+34)" },
+  { code: "FR", label: "🇫🇷 França (+33)" },
+  { code: "IT", label: "🇮🇹 Itália (+39)" },
+  { code: "DE", label: "🇩🇪 Alemanha (+49)" },
+  { code: "GB", label: "🇬🇧 Reino Unido (+44)" },
+  { code: "NL", label: "🇳🇱 Holanda (+31)" },
+  { code: "IE", label: "🇮🇪 Irlanda (+353)" },
+];
+
+const DEFAULT_COUNTRY_CODE = "BR";
+const sanitizeLocalPhone = (raw: string) => (raw ?? "").replace(/[^\d\s]/g, "").trim();
 
 export function NewLeadModal({ isOpen, onClose, onSave }: NewLeadModalProps) {
   const [formData, setFormData] = useState<NewLeadForm>({
-    contactName: '',
-    companyName: '',
-    phone: '',
-    origin: 'Manual',          // ✅ default ajuda o backend
-    category: 'to-prospect',
-    observations: '',
+    contactName: "",
+    companyName: "",
+    phone: "",
+    country_code: DEFAULT_COUNTRY_CODE,
+    origin: "Manual",
+    category: "to-prospect",
+    observations: "",
   });
   const [loading, setLoading] = useState(false);
   const { handleError } = useApiErrorHandler();
@@ -43,77 +60,62 @@ export function NewLeadModal({ isOpen, onClose, onSave }: NewLeadModalProps) {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    // ✅ inclua companyName para evitar 422 no backend
     if (!formData.contactName || !formData.phone || !formData.companyName) return;
 
     try {
       setLoading(true);
 
+      const payload = {
+        ...formData,
+        phone: sanitizeLocalPhone(formData.phone),
+        country_code: (formData.country_code || DEFAULT_COUNTRY_CODE).toUpperCase(),
+      };
+
       if (typeof onSave === "function") {
-        // pai controla a chamada à API
-        await onSave(formData);
+        await onSave(payload);
       } else {
-        // ✅ fallback: chama a API direto daqui
         await api.createLead({
-          companyName: formData.companyName,
-          contactName: formData.contactName || null,
-          phone: formData.phone || null,
+          companyName: payload.companyName,
+          contactName: payload.contactName || null,
+          phone: payload.phone || null,
+          country_code: payload.country_code,
           email: null,
-          origin: formData.origin || "Manual",
-          category: formData.category,
+          origin: payload.origin || "Manual",
+          category: payload.category,
           customMessage: null,
-          observations: formData.observations || null,
+          observations: payload.observations || null,
           priority: 1,
         });
       }
 
-      // reset e fechar
       setFormData({
-        companyName: '',
-        contactName: '',
-        phone: '',
-        origin: 'Manual',
-        category: 'to-prospect',
-        observations: ''
+        companyName: "",
+        contactName: "",
+        phone: "",
+        country_code: DEFAULT_COUNTRY_CODE,
+        origin: "Manual",
+        category: "to-prospect",
+        observations: "",
       });
       onClose();
     } catch (err) {
-      handleError(err, { fallbackMessage: 'Não foi possível criar o lead.' });
+      handleError(err, { fallbackMessage: "Não foi possível criar o lead." });
     } finally {
       setLoading(false);
     }
   };
 
-  const normalizePhoneOnBlur = (raw: string) => {
-    const trimmed = (raw ?? "").trim();
-    const digits = trimmed.replace(/\D/g, "");
-    if (trimmed.startsWith("+")) {
-      const pretty = `+${digits}`;
-      if (digits.startsWith("351") && digits.length >= 12) {
-        const local = digits.slice(3, 12);
-        return `+351 ${local.slice(0,3)} ${local.slice(3,6)} ${local.slice(6,9)}`.trim();
-      }
-      return pretty;
-    }
-    if (digits.length === 9) {
-      return `+351 ${digits.slice(0,3)} ${digits.slice(3,6)} ${digits.slice(6,9)}`.trim();
-    }
-    if (digits.length >= 12 && digits.startsWith("351")) {
-      const local = digits.slice(3, 12);
-      return `+351 ${local.slice(0,3)} ${local.slice(3,6)} ${local.slice(6,9)}`.trim();
-    }
-    return digits ? digits : "";
-  };
-
   return (
-    // ✅ fecha apenas quando o usuário fechar (não ao abrir)
-    <Sheet open={isOpen} onOpenChange={(open) => { if (!open) onClose(); }}>
+    <Sheet
+      open={isOpen}
+      onOpenChange={(open) => {
+        if (!open) onClose();
+      }}
+    >
       <SheetContent side="right" className="w-[400px] sm:w-[500px] bg-card border-border">
         <SheetHeader className="pb-6">
           <div className="flex items-center justify-between">
-            <SheetTitle className="text-xl font-bold text-foreground">
-              Novo Lead
-            </SheetTitle>
+            <SheetTitle className="text-xl font-bold text-foreground">Novo Lead</SheetTitle>
             <SheetClose asChild>
               <Button variant="ghost" size="sm" onClick={onClose}>
                 <X className="w-4 h-4" />
@@ -130,14 +132,13 @@ export function NewLeadModal({ isOpen, onClose, onSave }: NewLeadModalProps) {
             <Input
               id="name"
               value={formData.contactName}
-              onChange={(e) => setFormData(prev => ({ ...prev, contactName: e.target.value }))}
+              onChange={(e) => setFormData((prev) => ({ ...prev, contactName: e.target.value }))}
               placeholder="Nome do contato"
               required
               className="bg-input border-border"
             />
           </div>
 
-          {/* ✅ bloco correto da empresa (remove o <div /> solto) */}
           <div className="space-y-2">
             <Label htmlFor="company" className="text-sm font-medium">
               Empresa *
@@ -145,7 +146,7 @@ export function NewLeadModal({ isOpen, onClose, onSave }: NewLeadModalProps) {
             <Input
               id="company"
               value={formData.companyName}
-              onChange={(e) => setFormData(prev => ({ ...prev, companyName: e.target.value }))}
+              onChange={(e) => setFormData((prev) => ({ ...prev, companyName: e.target.value }))}
               placeholder="Nome da Empresa"
               required
               className="bg-input border-border"
@@ -153,15 +154,40 @@ export function NewLeadModal({ isOpen, onClose, onSave }: NewLeadModalProps) {
           </div>
 
           <div className="space-y-2">
+            <Label htmlFor="country" className="text-sm font-medium">
+              País *
+            </Label>
+            <Select
+              value={formData.country_code || DEFAULT_COUNTRY_CODE}
+              onValueChange={(value) => setFormData((prev) => ({ ...prev, country_code: value }))}
+            >
+              <SelectTrigger id="country" className="bg-input border-border">
+                <SelectValue placeholder="Selecione o país" />
+              </SelectTrigger>
+              <SelectContent className="bg-popover border-border">
+                {COUNTRY_OPTIONS.map((country) => (
+                  <SelectItem key={country.code} value={country.code}>
+                    {country.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="space-y-2">
             <Label htmlFor="phone" className="text-sm font-medium">
-              Telefone *
+              Número local *
             </Label>
             <Input
               id="phone"
               value={formData.phone}
-              onChange={(e) => setFormData(prev => ({ ...prev, phone: e.target.value }))}
-              onBlur={(e) => setFormData(prev => ({ ...prev, phone: normalizePhoneOnBlur(e.target.value) }))}
-              placeholder="+351 912 345 678"
+              onChange={(e) =>
+                setFormData((prev) => ({
+                  ...prev,
+                  phone: sanitizeLocalPhone(e.target.value),
+                }))
+              }
+              placeholder="11999999999"
               required
               className="bg-input border-border font-mono"
             />
@@ -174,7 +200,7 @@ export function NewLeadModal({ isOpen, onClose, onSave }: NewLeadModalProps) {
             <Input
               id="origin"
               value={formData.origin}
-              onChange={(e) => setFormData(prev => ({ ...prev, origin: e.target.value }))}
+              onChange={(e) => setFormData((prev) => ({ ...prev, origin: e.target.value }))}
               placeholder="Website, LinkedIn, Indicação..."
               className="bg-input border-border"
             />
@@ -186,7 +212,7 @@ export function NewLeadModal({ isOpen, onClose, onSave }: NewLeadModalProps) {
             </Label>
             <Select
               value={formData.category}
-              onValueChange={(value: LeadStatus) => setFormData(prev => ({ ...prev, category: value }))}
+              onValueChange={(value: LeadStatus) => setFormData((prev) => ({ ...prev, category: value }))}
             >
               <SelectTrigger className="bg-input border-border">
                 <SelectValue placeholder="Selecione..." />
@@ -208,7 +234,7 @@ export function NewLeadModal({ isOpen, onClose, onSave }: NewLeadModalProps) {
             <Textarea
               id="observations"
               value={formData.observations}
-              onChange={(e) => setFormData(prev => ({ ...prev, observations: e.target.value }))}
+              onChange={(e) => setFormData((prev) => ({ ...prev, observations: e.target.value }))}
               placeholder="Informações adicionais sobre o lead..."
               rows={4}
               className="bg-input border-border resize-none"

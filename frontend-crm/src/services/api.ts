@@ -38,11 +38,22 @@ export type AiProfilePayload = {
   name: string;
   brand_name: string;
   tone_of_voice: string;
+  timezone?: string | null;
   niche: string;
   target_audience: string;
   offer_description: string;
   goals: string;
   custom_instructions?: string | null;
+  agent_mode?: "consultivo" | "agenda" | "direto" | "sdr_scheduler" | "closer" | null;
+  identity_mode?: "virtual_assistant" | "human_agent" | "user_clone";
+  handoff_policy?: "disable_bot" | "keep_active_notify" | "ignore";
+  handoff_custom_text?: string | null;
+  requires_handoff?: boolean | null;
+  human_in_loop?: boolean | null;
+  followup_cadence?: number[] | null;
+  followup_max_attempts?: number | null;
+  followup_first_offset?: number | null;
+  followup_allowed_hours?: string | null;
 };
 
 export type AiProfile = AiProfilePayload & {
@@ -50,6 +61,63 @@ export type AiProfile = AiProfilePayload & {
   user_id?: number;
   created_at?: string;
   updated_at?: string;
+};
+
+export type FollowUpContract = {
+  status: string;
+  attempts: number;
+  max_attempts: number;
+  followup_variant?: string | null;
+  next_followup_at: string | null;
+  last_followup_at?: string | null;
+  stop_reason?: string | null;
+  manually_paused_at?: string | null;
+  followup_goal?: string | null;
+  meeting_or_session_happened?: string | null;
+  outcome?: string | null;
+  operator_note?: string | null;
+  scheduled_message?: ScheduledMessage | null;
+};
+
+export type ScheduledMessage = {
+  content: string;
+  media_url?: string | null;
+  media_type?: string | null;
+  edited_by_user?: boolean;
+  saved_at?: string | null;
+};
+
+export type FollowUpEditData = {
+  lead_id: number;
+  companyName: string;
+  contactName: string | null;
+  phone: string | null;
+  agent_type: string | null;
+  followup_status: string | null;
+  next_followup_at: string | null;
+  scheduled_message: ScheduledMessage | Record<string, never>;
+  contract: FollowUpContract | null;
+};
+
+export type FollowUpLead = {
+  id: number;
+  companyName: string;
+  contactName: string | null;
+  phone: string | null;
+  agent_type: string | null;
+  followup_status: string | null;
+  next_followup_at: string | null;
+  followup_contract: FollowUpContract | null;
+  lastMovement: string | null;
+  createdAt: string | null;
+  bot_disabled: number;
+};
+
+export type FollowUpStats = {
+  total_active: number;
+  hot_active: number;
+  urgent_count: number;
+  replied_today: number;
 };
 
 export type KnowledgeItem = {
@@ -61,6 +129,33 @@ export type KnowledgeItem = {
   file_path?: string | null;
   created_at: string;
   updated_at: string;
+};
+
+export type WhatsappQrPayload = {
+  kind: "base64" | "text" | "url" | null;
+  value: string | null;
+};
+
+export type WhatsappConnectResponse = {
+  instance_id: string;
+  status?: string | null;
+  qr: WhatsappQrPayload;
+};
+
+export type WhatsappStatusResponse = {
+  instance_id: string;
+  status?: string | null;
+  phone_e164?: string | null;
+  last_updated?: string | null;
+};
+
+export type AppNotification = {
+  id: number;
+  lead_id: number | null;
+  type: string;
+  created_at: string;
+  companyName?: string | null;
+  contactName?: string | null;
 };
 
 const AUTH_BASE = CORE_AUTH_BASE;
@@ -219,6 +314,7 @@ export const api = {
     companyName: string;
     contactName?: string | null;
     phone?: string | null;
+    country_code?: string | null;
     email?: string | null;
     origin?: string | null;
     category: string; // ex.: "to-prospect"
@@ -230,6 +326,7 @@ export const api = {
       companyName: payload.companyName,
       contactName: payload.contactName ?? null,
       phone: payload.phone ?? null,
+      country_code: payload.country_code ?? null,
       email: payload.email ?? null,
       origin: payload.origin ?? "Manual",
       category: payload.category,
@@ -277,6 +374,25 @@ export const api = {
 
   deleteLead: async (id: string | number) => {
     return apiClient.delete(`/leads/${id}`);
+  },
+
+  setLeadBotDisabled: async (
+    leadId: string | number,
+    payload: { disabled: boolean; reason?: string }
+  ) => {
+    return apiClient.post(`/leads/${leadId}/bot-disabled`, payload);
+  },
+
+  startFollowup: async (payload: {
+    lead_id: string | number;
+    agent_type: "agent_1" | "agent_3";
+    meeting_or_session_happened: "yes" | "no_show" | "canceled" | "needs_reschedule";
+    outcome?: string | null;
+    followup_goal?: string | null;
+    proposal_sent?: boolean | null;
+    operator_note?: string | null;
+  }) => {
+    return apiClient.post(`/leads/start-followup`, payload);
   },
 
   appointments: {
@@ -366,6 +482,20 @@ export const api = {
       return api.appointments.update(arg as string | number, {
         status: "canceled",
       });
+    },
+
+    setOutcome: async (
+      appointmentId: string | number,
+      payload: {
+        outcome: "completed" | "no_show" | "rescheduled";
+        note?: string;
+        reschedule_start_at?: string;
+        reschedule_end_at?: string | null;
+        reactivate_bot?: boolean;
+        move_lead_to?: string | null;
+      }
+    ) => {
+      return apiClient.post(`/appointments/${appointmentId}/outcome`, payload);
     },
 
     /**
@@ -649,6 +779,10 @@ export const api = {
       formData.append("file", file);
       return apiClient.post<KnowledgeItem>(`/knowledge/upload`, formData);
     },
+    whatsappConnect: async () => apiClient.post<WhatsappConnectResponse>(`/whatsapp/connect`),
+    whatsappStatus: async () => apiClient.get<WhatsappStatusResponse>(`/whatsapp/status`),
+    whatsappRefreshQr: async () =>
+      apiClient.post<WhatsappConnectResponse>(`/whatsapp/qr/refresh`),
   },
 
   agents: {
@@ -657,6 +791,158 @@ export const api = {
     },
     summary: async () => {
       return apiClient.get(`/agents/jobs/summary`);
+    },
+    /** Lista todos os agentes locais (runners) do usuário autenticado */
+    list: async (): Promise<import('../types/agente').AgenteRunner[]> => {
+      const data = await apiClient.get<any[]>(`/agents/`);
+      if (!Array.isArray(data)) return [];
+      return data as import('../types/agente').AgenteRunner[];
+    },
+  },
+
+  /** Métodos específicos do módulo de configuração do agente */
+  agente: {
+    /**
+     * Carrega o perfil de IA + offer_pack e monta um AgentConfig completo.
+     * Lê de GET /ai-profiles/me (backend-core).
+     */
+    getConfig: async (): Promise<import('../types/agente').AgentConfig> => {
+      const profile = await coreClient.get<AiProfile>('/ai-profiles/me');
+      const pack = (profile as any)?.offer_pack ?? {};
+      const { DEFAULT_AGENT_CONFIG } = await import('../types/agente');
+
+      return {
+        // Camada 1
+        name:              (profile as any)?.name              ?? DEFAULT_AGENT_CONFIG.name,
+        brand_name:        (profile as any)?.brand_name        ?? DEFAULT_AGENT_CONFIG.brand_name,
+        tone_of_voice:     (profile as any)?.tone_of_voice     ?? DEFAULT_AGENT_CONFIG.tone_of_voice,
+        agent_mode:        (profile as any)?.agent_mode        ?? DEFAULT_AGENT_CONFIG.agent_mode,
+        identity_mode:     (profile as any)?.identity_mode     ?? DEFAULT_AGENT_CONFIG.identity_mode,
+        template_key:      (profile as any)?.template_key      ?? DEFAULT_AGENT_CONFIG.template_key,
+        handoff_policy:    (profile as any)?.handoff_policy    ?? DEFAULT_AGENT_CONFIG.handoff_policy,
+        requires_handoff:  (profile as any)?.requires_handoff  ?? DEFAULT_AGENT_CONFIG.requires_handoff,
+        human_in_loop:     (profile as any)?.human_in_loop     ?? DEFAULT_AGENT_CONFIG.human_in_loop,
+        timezone:          (profile as any)?.timezone          ?? DEFAULT_AGENT_CONFIG.timezone,
+        custom_instructions: (profile as any)?.custom_instructions ?? DEFAULT_AGENT_CONFIG.custom_instructions,
+
+        // Camada 2
+        niche:            (profile as any)?.niche            ?? DEFAULT_AGENT_CONFIG.niche,
+        target_audience:  (profile as any)?.target_audience  ?? DEFAULT_AGENT_CONFIG.target_audience,
+        offer_description:(profile as any)?.offer_description ?? DEFAULT_AGENT_CONFIG.offer_description,
+        goals:            (profile as any)?.goals            ?? DEFAULT_AGENT_CONFIG.goals,
+        ticket_range:     pack.ticket_range   ?? DEFAULT_AGENT_CONFIG.ticket_range,
+        main_pain:        pack.main_pain      ?? DEFAULT_AGENT_CONFIG.main_pain,
+        main_objection:   pack.main_objection ?? DEFAULT_AGENT_CONFIG.main_objection,
+        f1_questions:     pack.f1_questions   ?? DEFAULT_AGENT_CONFIG.f1_questions,
+        f2_questions:     pack.f2_questions   ?? DEFAULT_AGENT_CONFIG.f2_questions,
+        f3_questions:     pack.f3_questions   ?? DEFAULT_AGENT_CONFIG.f3_questions,
+
+        // Camada 3
+        media_fallback:     pack.media_fallback     ?? DEFAULT_AGENT_CONFIG.media_fallback,
+        media_fallback_msg: pack.media_fallback_msg ?? DEFAULT_AGENT_CONFIG.media_fallback_msg,
+        opt_out_keywords:   pack.opt_out_keywords   ?? DEFAULT_AGENT_CONFIG.opt_out_keywords,
+        opt_out_disable:    pack.opt_out_disable     ?? DEFAULT_AGENT_CONFIG.opt_out_disable,
+        opt_out_notify:     pack.opt_out_notify      ?? DEFAULT_AGENT_CONFIG.opt_out_notify,
+        opt_out_confirm:    pack.opt_out_confirm     ?? DEFAULT_AGENT_CONFIG.opt_out_confirm,
+        opt_out_confirm_msg:pack.opt_out_confirm_msg ?? DEFAULT_AGENT_CONFIG.opt_out_confirm_msg,
+        lgpd_mode:          pack.lgpd_mode           ?? DEFAULT_AGENT_CONFIG.lgpd_mode,
+        lgpd_msg:           pack.lgpd_msg            ?? DEFAULT_AGENT_CONFIG.lgpd_msg,
+        reactivation_mode:  pack.reactivation_mode   ?? DEFAULT_AGENT_CONFIG.reactivation_mode,
+        reactivation_msg:   pack.reactivation_msg    ?? DEFAULT_AGENT_CONFIG.reactivation_msg,
+        followup_h1:        pack.followup_h1         ?? DEFAULT_AGENT_CONFIG.followup_h1,
+        followup_h2:        pack.followup_h2         ?? DEFAULT_AGENT_CONFIG.followup_h2,
+        followup_h3:        pack.followup_h3         ?? DEFAULT_AGENT_CONFIG.followup_h3,
+        daily_limit:        pack.daily_limit         ?? DEFAULT_AGENT_CONFIG.daily_limit,
+        interval_min:       pack.interval_min        ?? DEFAULT_AGENT_CONFIG.interval_min,
+        interval_max:       pack.interval_max        ?? DEFAULT_AGENT_CONFIG.interval_max,
+      };
+    },
+
+    /**
+     * Salva configuração: campos de ai_profile via PUT /ai-profiles/me,
+     * campos extras via offer_pack no mesmo payload.
+     */
+    saveConfig: async (config: import('../types/agente').AgentConfig): Promise<void> => {
+      const offer_pack = {
+        ticket_range:        config.ticket_range,
+        main_pain:           config.main_pain,
+        main_objection:      config.main_objection,
+        f1_questions:        config.f1_questions,
+        f2_questions:        config.f2_questions,
+        f3_questions:        config.f3_questions,
+        media_fallback:      config.media_fallback,
+        media_fallback_msg:  config.media_fallback_msg,
+        opt_out_keywords:    config.opt_out_keywords,
+        opt_out_disable:     config.opt_out_disable,
+        opt_out_notify:      config.opt_out_notify,
+        opt_out_confirm:     config.opt_out_confirm,
+        opt_out_confirm_msg: config.opt_out_confirm_msg,
+        lgpd_mode:           config.lgpd_mode,
+        lgpd_msg:            config.lgpd_msg,
+        reactivation_mode:   config.reactivation_mode,
+        reactivation_msg:    config.reactivation_msg,
+        followup_h1:         config.followup_h1,
+        followup_h2:         config.followup_h2,
+        followup_h3:         config.followup_h3,
+        daily_limit:         config.daily_limit,
+        interval_min:        config.interval_min,
+        interval_max:        config.interval_max,
+      };
+
+      await coreClient.put('/ai-profiles/me', {
+        name:                config.name,
+        brand_name:          config.brand_name,
+        tone_of_voice:       config.tone_of_voice,
+        agent_mode:          config.agent_mode,
+        identity_mode:       config.identity_mode,
+        template_key:        config.template_key,
+        handoff_policy:      config.handoff_policy,
+        requires_handoff:    config.requires_handoff,
+        human_in_loop:       config.human_in_loop,
+        timezone:            config.timezone,
+        custom_instructions: config.custom_instructions,
+        niche:               config.niche,
+        target_audience:     config.target_audience,
+        offer_description:   config.offer_description,
+        goals:               config.goals,
+        offer_pack,
+      });
+    },
+  },
+
+  notifications: {
+    getUnread: () => apiClient.get<AppNotification[]>("/notifications/unread"),
+    markRead: (id: number) => apiClient.post(`/notifications/${id}/read`, {}),
+    markAllRead: () => apiClient.post("/notifications/read-all", {}),
+  },
+
+  followUps: {
+    listActive: () => apiClient.get<FollowUpLead[]>("/leads/followups/active"),
+    getStats: () => apiClient.get<FollowUpStats>("/leads/followups/stats"),
+    pause: (id: number) => apiClient.post(`/leads/${id}/followup/pause`),
+    resume: (id: number) => apiClient.post(`/leads/${id}/followup/resume`),
+    cancel: (id: number) => apiClient.post(`/leads/${id}/followup/cancel`),
+    getScheduledMessage: (id: number) =>
+      apiClient.get<FollowUpEditData>(`/leads/${id}/followup/scheduled-message`),
+    saveScheduledMessage: (
+      id: number,
+      payload: { content: string; media_url?: string | null; media_type?: string | null }
+    ) => apiClient.put(`/leads/${id}/followup/scheduled-message`, payload),
+    regenerate: (id: number) =>
+      apiClient.post<{ content: string; generated: boolean; attempts: number; max_attempts: number }>(
+        `/leads/${id}/followup/regenerate`
+      ),
+    sendNow: (
+      id: number,
+      payload: { content: string; media_url?: string | null; media_type?: string | null }
+    ) => apiClient.post(`/leads/${id}/followup/send-now`, payload),
+    uploadMedia: async (id: number, file: File) => {
+      const fd = new FormData();
+      fd.append("file", file);
+      return apiClient.post<{ ok: boolean; filename: string; media_url: string; ext: string }>(
+        `/leads/${id}/followup/upload-media`,
+        fd
+      );
     },
   },
 };

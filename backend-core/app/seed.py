@@ -64,15 +64,15 @@ def seed_initial_data(db: Session) -> None:
 
     products_seed = [
         {"code": "crm", "name": "CRM AutoDigital", "description": ""},
-        {"code": "agent_ia", "name": "Agente IA WhatsApp", "description": ""},
+        {"code": "conversational_ai", "name": "Conversational AI", "description": ""},
     ]
 
     plans_seed: List[Dict] = [
         {"product_code": "crm", "code": "crm_free", "name": "CRM Free"},
         {"product_code": "crm", "code": "crm_basic", "name": "CRM Basic"},
         {"product_code": "crm", "code": "crm_pro", "name": "CRM Pro"},
-        {"product_code": "agent_ia", "code": "ia_basic", "name": "IA Basic"},
-        {"product_code": "agent_ia", "code": "ia_pro", "name": "IA Pro"},
+        {"product_code": "conversational_ai", "code": "conversational_ai_basic", "name": "Conversational AI Basic"},
+        {"product_code": "conversational_ai", "code": "conversational_ai_pro", "name": "Conversational AI Pro"},
     ]
 
     limits_seed: Dict[str, Dict] = {
@@ -121,7 +121,7 @@ def seed_initial_data(db: Session) -> None:
             "require_agent_local_activation_fee": False,
             "ia_memory_advanced": False,
         },
-        "ia_basic": {
+        "conversational_ai_basic": {
             "max_leads": None,
             "max_agents_local": None,
             "max_pesquisa_selenium_daily": None,
@@ -136,7 +136,7 @@ def seed_initial_data(db: Session) -> None:
             "require_agent_local_activation_fee": False,
             "ia_memory_advanced": False,
         },
-        "ia_pro": {
+        "conversational_ai_pro": {
             "max_leads": None,
             "max_agents_local": None,
             "max_pesquisa_selenium_daily": None,

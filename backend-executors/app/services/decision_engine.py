@@ -1,0 +1,2155 @@
+from __future__ import annotations
+
+import json
+import logging
+from datetime import datetime
+from difflib import SequenceMatcher
+from typing import Any, Dict, Optional
+
+from app.contracts.qualification_contract import (
+    SIGNALS_SCHEMA,
+    compute_missing_fields,
+    infer_extracted_fields,
+    required_fields_for_mode,
+)
+
+from app.clients import crm_client
+from app.core.config import settings
+from app.schemas.decision import DecisionOutput
+from app.services import fast_path, field_extractor, handoff_policy, llm_service
+from app.services.orchestrator_models import ChildResult, MotherDecision
+
+logger = logging.getLogger(__name__)
+
+FALLBACK_DECISION = DecisionOutput(
+    next_action="handoff",
+    message_text="",
+    questions=[],
+    reason="llm_failure",
+)
+
+BOT_DISABLED_DECISION = DecisionOutput(
+    next_action="ignore",
+    message_text="",
+    questions=[],
+    reason="bot_disabled",
+)
+
+
+def _safe_get(data: Dict[str, Any], *keys: str) -> Optional[Any]:
+    for key in keys:
+        value = data.get(key)
+        if value is not None:
+            return value
+    return None
+
+
+def _extract_message_text(context: Dict[str, Any]) -> str:
+    metadata = context.get("metadata") or {}
+    job = context.get("job") or {}
+    payload = job.get("payload") or {}
+    return (
+        _safe_get(metadata, "inbound_message_text")
+        or _safe_get(metadata, "message_text", "text", "body")
+        or _safe_get(payload, "message_text", "text", "body")
+        or ""
+    )
+
+
+def _is_followup_tick_context(context: Dict[str, Any]) -> bool:
+    job = context.get("job") or {}
+    job_type = str(job.get("type") or "").strip().lower()
+    if job_type == "whatsapp.followup.tick":
+        return True
+    metadata = context.get("metadata") or {}
+    return isinstance(metadata.get("followup_context"), dict) and bool(metadata.get("followup_context"))
+
+
+def _format_history(history: list[Dict[str, Any]], limit: int = 10) -> str:
+    last_messages = history[-limit:]
+    lines = []
+    for item in last_messages:
+        role = item.get("model") or "unknown"
+        body = item.get("body") or ""
+        lines.append(f"{role}: {body}")
+    return "\n".join(lines)
+
+
+_SHORT_REPLIES = {
+    "sim",
+    "nao",
+    "não",
+    "ok",
+    "blz",
+    "beleza",
+    "pode",
+    "claro",
+    "👍",
+    "😂",
+    "kk",
+    "kkk",
+    "rs",
+    "rss",
+}
+
+DEFAULT_ALLOWED_LEAD_CATEGORIES = [
+    "to-prospect",
+    "in-progress",
+    "qualification",
+    "apresentation",
+    "follow-up",
+    "closing",
+    "client-list",
+    "prospect-refused",
+    "disqualified",
+]
+
+
+
+
+QUALIFICATION_FIELD_FALLBACK_LABELS = {
+    "service_interest": "qual serviço/procedimento você busca",
+    "urgency": "seu nível de urgência",
+    "decision_role": "quem decide essa contratação",
+    "constraints": "suas restrições principais",
+    "availability_window": "melhor período/horário",
+    "budget_or_price_acceptance": "faixa de investimento",
+    "location_preference": "preferência de local (online/presencial)",
+    "price_acceptance": "aceite do valor",
+}
+
+
+def _select_current_field(missing_fields: list[str], filled_fields: list[str]) -> Optional[str]:
+    if not missing_fields:
+        return None
+    filled = set(filled_fields or [])
+    for field in missing_fields:
+        if field not in filled:
+            return field
+    return None
+
+
+def _fallback_question_for_field(field: Optional[str]) -> str:
+    label = QUALIFICATION_FIELD_FALLBACK_LABELS.get(field or "", "esse ponto")
+    return f"Pode me confirmar: {label}?"
+
+
+def _normalize_question_text(text: str) -> str:
+    return " ".join((text or "").strip().lower().split())
+
+
+def _question_similarity(a: str, b: str) -> float:
+    na = _normalize_question_text(a)
+    nb = _normalize_question_text(b)
+    if not na or not nb:
+        return 0.0
+    return SequenceMatcher(None, na, nb).ratio()
+def _normalize_short_reply(text: str) -> str:
+    return " ".join(text.strip().lower().split())
+
+
+def _is_short_reply(text: str) -> bool:
+    normalized = _normalize_short_reply(text)
+    if not normalized:
+        return False
+    if normalized in _SHORT_REPLIES:
+        return True
+    if " " in normalized:
+        return False
+    return len(normalized) <= 12
+
+
+def _find_last_outbound_message(history: list[Dict[str, Any]]) -> Optional[str]:
+    for item in reversed(history):
+        model = (item.get("model") or "").lower()
+        if model == "outbound":
+            body = str(item.get("body") or "").strip()
+            if body:
+                return body
+    return None
+
+
+def _get_allowed_lead_categories(context: Dict[str, Any]) -> list[str]:
+    metadata = context.get("metadata") or {}
+    allowed = metadata.get("allowed_lead_categories")
+    if isinstance(allowed, list) and all(isinstance(item, str) for item in allowed):
+        return allowed
+    return DEFAULT_ALLOWED_LEAD_CATEGORIES
+
+
+
+
+def _compute_system_agent_mode(context: Dict[str, Any]) -> tuple[str, str]:
+    ai_profile = context.get("ai_profile") or {}
+    playbook = context.get("playbook") or {}
+    metadata = context.get("metadata") or {}
+
+    raw_mode = ai_profile.get("agent_mode")
+    normalized = str(raw_mode or "").strip().lower().replace("_", "-")
+    if normalized in {"consultivo", "agenda", "direto"}:
+        return normalized, "ai_profile"
+    if normalized == "closer":
+        return "direto", "legacy"
+    if normalized in {"sdr-scheduler", "sdr"}:
+        indicators = [
+            ai_profile.get("human_in_loop"),
+            ai_profile.get("requires_handoff"),
+            playbook.get("human_in_loop"),
+            playbook.get("requires_handoff"),
+            metadata.get("human_in_loop"),
+            metadata.get("requires_handoff"),
+        ]
+        if any(bool(item) for item in indicators):
+            return "consultivo", "legacy"
+        return "agenda", "legacy"
+    template_key = str(ai_profile.get("template_key") or playbook.get("template_key") or "").lower()
+    if "closer" in template_key:
+        return "direto", "template_fallback"
+    if "consult" in template_key:
+        return "consultivo", "template_fallback"
+    if "scheduler" in template_key or "sdr" in template_key:
+        indicators = [
+            ai_profile.get("human_in_loop"),
+            ai_profile.get("requires_handoff"),
+            playbook.get("human_in_loop"),
+            playbook.get("requires_handoff"),
+            metadata.get("human_in_loop"),
+            metadata.get("requires_handoff"),
+        ]
+        if any(bool(item) for item in indicators):
+            return "consultivo", "template_fallback"
+        return "agenda", "template_fallback"
+    return "agenda", "unknown"
+
+
+def _normalize_agent_mode(context: Dict[str, Any], mother_decision: Optional[MotherDecision] = None) -> str:
+    system_mode, _ = _compute_system_agent_mode(context)
+    return system_mode
+
+
+def _get_mother_mode_conflict(context: Dict[str, Any], mother_decision: Optional[MotherDecision]) -> tuple[Optional[str], bool]:
+    if mother_decision is None:
+        return None, False
+    raw = mother_decision.agent_mode
+    if raw is None:
+        return None, False
+    mother_mode = str(raw).strip().lower().replace("_", "-")
+    if not mother_mode:
+        return None, False
+    system_mode, _ = _compute_system_agent_mode(context)
+    return mother_mode, mother_mode != system_mode
+
+
+def _extract_meeting_scheduled_signal(mother_decision: MotherDecision) -> bool:
+    signals = mother_decision.signals
+    if isinstance(signals, dict) and isinstance(signals.get("meeting_scheduled"), bool):
+        return bool(signals.get("meeting_scheduled"))
+    return "meeting_scheduled" in (mother_decision.reason or "")
+
+
+def _has_handoff_indicators(context: Dict[str, Any]) -> bool:
+    ai_profile = context.get("ai_profile") or {}
+    playbook = context.get("playbook") or {}
+    metadata = context.get("metadata") or {}
+    indicators = [
+        ai_profile.get("human_in_loop"),
+        ai_profile.get("requires_handoff"),
+        playbook.get("human_in_loop"),
+        playbook.get("requires_handoff"),
+        metadata.get("human_in_loop"),
+        metadata.get("requires_handoff"),
+    ]
+    return any(bool(item) for item in indicators)
+
+def _resolve_presentation_variant(context: Dict[str, Any], mode_normalized: Optional[str] = None) -> tuple[str, str]:
+    ai_profile = context.get("ai_profile") or {}
+    metadata = context.get("metadata") or {}
+
+    force_metadata_variant = bool(metadata.get("force_presentation_variant"))
+    raw_metadata = str(metadata.get("presentation_variant") or "").strip().lower()
+    if force_metadata_variant and raw_metadata in {"sales", "scheduler"}:
+        return raw_metadata, "bundle_metadata_forced"
+
+    raw_profile = str(ai_profile.get("presentation_variant") or "").strip().lower()
+    if raw_profile in {"sales", "scheduler"}:
+        return raw_profile, "ai_profile"
+
+    # Metadata can fill only when profile is unavailable (no AI profile context).
+    if not ai_profile and raw_metadata in {"sales", "scheduler"}:
+        return raw_metadata, "bundle_metadata_fallback"
+
+    mode = mode_normalized or _normalize_agent_mode(context)
+    if mode == "direto":
+        return "sales", "agent_mode_default"
+    if mode in {"agenda", "consultivo"}:
+        return "scheduler", "agent_mode_default"
+    return "scheduler", "fallback"
+
+
+def _resolve_hybrid_flow_style(context: Dict[str, Any]) -> Optional[str]:
+    ai_profile = context.get("ai_profile") or {}
+    metadata = context.get("metadata") or {}
+
+    raw_metadata = str(metadata.get("hybrid_flow_style") or "").strip().lower()
+    if raw_metadata in {"offer_then_schedule", "schedule_then_offer"}:
+        return raw_metadata
+
+    raw_profile = str(ai_profile.get("hybrid_flow_style") or "").strip().lower()
+    if raw_profile in {"offer_then_schedule", "schedule_then_offer"}:
+        return raw_profile
+    return None
+
+
+def _build_offer_pack_summary(context: Dict[str, Any]) -> dict:
+    ai_profile = context.get("ai_profile") or {}
+    playbook = context.get("playbook") or {}
+
+    offer_pack = ai_profile.get("offer_pack")
+    if offer_pack is None:
+        offer_pack = playbook.get("offer_pack")
+    if isinstance(offer_pack, str):
+        try:
+            parsed = json.loads(offer_pack)
+            offer_pack = parsed if isinstance(parsed, dict) else None
+        except json.JSONDecodeError:
+            offer_pack = None
+    elif not isinstance(offer_pack, dict):
+        offer_pack = None
+
+    if not offer_pack:
+        fallback_description = str(ai_profile.get("offer_description") or "").strip()
+        if not fallback_description:
+            return {"available": False, "source": "none", "items": [], "cta_text": None, "disclaimers": []}
+        return {
+            "available": False,
+            "source": "offer_description_fallback",
+            "items": [{"name": "Oferta principal", "description": fallback_description, "checkout_link": None}],
+            "cta_text": None,
+            "disclaimers": [],
+        }
+
+    items = offer_pack.get("items") if isinstance(offer_pack.get("items"), list) else []
+    normalized_items = []
+    for item in items[:3]:
+        if not isinstance(item, dict):
+            continue
+        normalized_items.append({
+            "name": item.get("name"),
+            "price": item.get("price"),
+            "description": item.get("description"),
+            "bullets": item.get("bullets") if isinstance(item.get("bullets"), list) else [],
+            "proof": item.get("proof") if isinstance(item.get("proof"), list) else [],
+            "faq": item.get("faq") if isinstance(item.get("faq"), list) else [],
+            "checkout_link": item.get("checkout_link"),
+        })
+
+    return {
+        "available": bool(normalized_items),
+        "source": "offer_pack",
+        "items": normalized_items,
+        "cta_text": offer_pack.get("cta_text"),
+        "disclaimers": offer_pack.get("disclaimers") if isinstance(offer_pack.get("disclaimers"), list) else [],
+    }
+
+
+def _sanitize_signals_structured(signals: Optional[dict]) -> dict:
+    if not isinstance(signals, dict):
+        return {}
+    return {k: v for k, v in signals.items() if k in SIGNALS_SCHEMA}
+
+
+def _normalize_scheduler_child_signals(
+    context: Dict[str, Any],
+    mother_decision: MotherDecision,
+    child_result: ChildResult,
+    *,
+    effective_route_to: str,
+    presentation_variant: str,
+) -> Optional[dict]:
+    raw = child_result.signals_structured if isinstance(child_result.signals_structured, dict) else None
+
+    template_key = str((context.get("ai_profile") or {}).get("template_key") or "").strip().lower()
+    agent_mode = _normalize_agent_mode(context, mother_decision)
+    is_scheduler_context = (
+        effective_route_to == "apresentation"
+        and presentation_variant == "scheduler"
+        and (agent_mode == "agenda" or template_key == "hybrid_scheduler")
+    )
+    if not is_scheduler_context:
+        return raw
+
+    normalized = dict(raw or {})
+    meeting_candidate = normalized.get("meeting_datetime_candidate")
+    if isinstance(meeting_candidate, str):
+        meeting_candidate = meeting_candidate.strip() or None
+    elif meeting_candidate is not None:
+        meeting_candidate = str(meeting_candidate).strip() or None
+
+    meeting_proposed = normalized.get("meeting_proposed")
+    if not isinstance(meeting_proposed, bool):
+        meeting_proposed = False
+    if meeting_candidate is not None:
+        meeting_proposed = True
+    if meeting_proposed is False:
+        meeting_candidate = None
+
+    normalized["meeting_proposed"] = meeting_proposed
+    normalized["meeting_datetime_candidate"] = meeting_candidate
+    return normalized
+
+
+def _is_filled_value(value: Any) -> bool:
+    if value is None:
+        return False
+    if isinstance(value, str):
+        return bool(value.strip())
+    if isinstance(value, (list, dict)):
+        return bool(value)
+    return True
+
+
+def _qualification_state_from_context(context: Dict[str, Any]) -> dict:
+    state = context.get("qualification_state")
+    if not isinstance(state, dict):
+        return {}
+    if state.get("exists") is False:
+        return {}
+    data = state.get("data_json")
+    if not isinstance(data, dict):
+        data = {}
+    state["data_json"] = data
+    attempts = state.get("attempts_json")
+    if not isinstance(attempts, dict):
+        attempts = {}
+    state["attempts_json"] = attempts
+    asked = state.get("asked_questions_json")
+    if not isinstance(asked, list):
+        asked = []
+    state["asked_questions_json"] = [item for item in asked if isinstance(item, dict)]
+    last_question_text = state.get("last_question_text")
+    if not isinstance(last_question_text, str):
+        last_question_text = ""
+    state["last_question_text"] = last_question_text
+    return state
+
+
+def _get_heuristic_reason(context: Dict[str, Any]) -> str:
+    state = context.get("qualification_state")
+    if not isinstance(state, dict):
+        return "crm_no_state"
+    if state.get("exists") is False:
+        return "exists_false"
+    return "state_absent"
+
+
+def _build_mode_contract_context(context: Dict[str, Any], mother_decision: Optional[MotherDecision] = None) -> Dict[str, Any]:
+    mode = _normalize_agent_mode(context, mother_decision)
+    required_fields = required_fields_for_mode(mode)
+    qualification_state = _qualification_state_from_context(context)
+
+    state_data = qualification_state.get("data_json") if qualification_state else None
+    if isinstance(state_data, dict) and qualification_state:
+        filled_fields = [field for field, value in state_data.items() if _is_filled_value(value)]
+        missing_fields = [field for field in required_fields if field not in filled_fields]
+        return {
+            "agent_mode_normalized": mode,
+            "required_fields": required_fields,
+            "missing_fields": missing_fields,
+            "extracted_fields": state_data,
+            "filled_fields": filled_fields,
+            "missing_fields_source": "state",
+            "last_questioned_field": qualification_state.get("last_questioned_field"),
+            "attempts_json": qualification_state.get("attempts_json") or {},
+            "asked_questions_json": qualification_state.get("asked_questions_json") or [],
+            "last_question_text": qualification_state.get("last_question_text") or "",
+        }
+
+    if int(getattr(settings, "qualification_heuristic_fallback", 1) or 0) == 0:
+        return {
+            "agent_mode_normalized": mode,
+            "required_fields": required_fields,
+            "missing_fields": list(required_fields),
+            "extracted_fields": {},
+            "filled_fields": [],
+            "missing_fields_source": "state_unavailable",
+            "last_questioned_field": None,
+            "attempts_json": {},
+            "asked_questions_json": [],
+            "last_question_text": "",
+        }
+
+    extracted = infer_extracted_fields(context)
+    missing_fields = compute_missing_fields(mode, extracted)
+    filled_fields = [field for field in required_fields if _is_filled_value(extracted.get(field))]
+    return {
+        "agent_mode_normalized": mode,
+        "required_fields": required_fields,
+        "missing_fields": missing_fields,
+        "extracted_fields": extracted,
+        "filled_fields": filled_fields,
+        "missing_fields_source": "heuristic",
+        "last_questioned_field": None,
+        "attempts_json": {},
+        "asked_questions_json": [],
+        "last_question_text": "",
+    }
+
+
+def _apply_mode_guardrails(
+    decision: DecisionOutput,
+    context: Dict[str, Any],
+    mother_decision: MotherDecision,
+    child_result: ChildResult,
+) -> DecisionOutput:
+    mode_ctx = _build_mode_contract_context(context, mother_decision)
+    mode = mode_ctx["agent_mode_normalized"]
+    missing_fields = set(mode_ctx["missing_fields"])
+
+    if mode == "consultivo" and decision.outcome == "won":
+        decision.outcome = None
+
+    if mode == "consultivo" and mother_decision.route_to == "closing":
+        decision.reason = f"{decision.reason}|consultivo_handoff"
+        if decision.decision_trace is None:
+            decision.decision_trace = {}
+        decision.decision_trace["next_action_hint"] = "handoff"
+        if child_result.message_text and "humano" not in child_result.message_text.lower():
+            decision.message_text = "Perfeito — vou te encaminhar para um especialista humano finalizar com você."
+
+    if mode == "agenda" and ("availability_window" in missing_fields or "location_preference" in missing_fields):
+        if mother_decision.route_to == "closing" or decision.suggested_category == "closing":
+            decision.suggested_category = "qualification"
+            decision.reason = f"{decision.reason}|guardrail_agenda_missing_booking"
+            if decision.decision_trace is None:
+                decision.decision_trace = {}
+            decision.decision_trace["guardrail_agenda_missing_booking"] = True
+
+    if mode == "direto":
+        signals = _sanitize_signals_structured(mother_decision.signals)
+        price_ok = signals.get("price_acceptance") in {"yes", True}
+        intent_ok = signals.get("intent_level") in {"medium", "high"}
+        if not (price_ok and intent_ok) and (mother_decision.route_to == "closing" or decision.suggested_category == "closing"):
+            decision.suggested_category = "qualification"
+            decision.reason = f"{decision.reason}|guardrail_direto_pullback"
+            if decision.decision_trace is None:
+                decision.decision_trace = {}
+            decision.decision_trace["guardrail_direto_pullback"] = True
+
+    return decision
+
+
+def _sanitize_category_decision(
+    decision: DecisionOutput,
+    context: Dict[str, Any],
+    logger_instance: Optional[logging.Logger] = None,
+) -> DecisionOutput:
+    allowed = _get_allowed_lead_categories(context)
+    if decision.next_action == "ask_qualification":
+        if decision.category_reason and "child_recommended" in decision.category_reason:
+            return decision
+        decision.suggested_category = None
+        decision.category_reason = None
+        return decision
+    suggested = decision.suggested_category
+    if suggested is None:
+        return decision
+    if suggested not in allowed:
+        job = context.get("job") or {}
+        payload = job.get("payload") or {}
+        lead = context.get("lead") or {}
+        log = logger_instance or logger
+        log.info(
+            "event=invalid_category_from_llm suggested_category=%s job_id=%s lead_id=%s user_id=%s",
+            suggested,
+            job.get("id") or payload.get("job_id"),
+            lead.get("id") or payload.get("lead_id"),
+            lead.get("user_id") or payload.get("user_id"),
+        )
+        decision.suggested_category = None
+        decision.category_reason = None
+    return decision
+
+
+def _build_prompt(context: Dict[str, Any], message_text: str) -> str:
+    lead = context.get("lead") or {}
+    ai_profile = context.get("ai_profile") or {}
+    playbook = context.get("playbook") or {}
+    metadata = context.get("metadata") or {}
+    history = context.get("history") or []
+
+    lead_summary = {
+        "id": lead.get("id"),
+        "name": _safe_get(lead, "contactName", "companyName", "name"),
+        "phone": _safe_get(lead, "phone", "phone_e164"),
+        "segment": lead.get("segment"),
+        "status": lead.get("status"),
+        "category": lead.get("category"),
+    }
+    ai_summary = {
+        "id": ai_profile.get("id"),
+        "name": ai_profile.get("name"),
+        "template_key": ai_profile.get("template_key"),
+        "agent_mode": ai_profile.get("agent_mode"),
+        "brand_name": ai_profile.get("brand_name"),
+        "tone_of_voice": ai_profile.get("tone_of_voice"),
+        "niche": ai_profile.get("niche"),
+        "target_audience": ai_profile.get("target_audience"),
+        "offer_description": ai_profile.get("offer_description"),
+        "goals": ai_profile.get("goals"),
+        "custom_instructions": ai_profile.get("custom_instructions"),
+        "identity_mode": ai_profile.get("identity_mode"),
+        "handoff_policy": ai_profile.get("handoff_policy"),
+        "handoff_custom_text": ai_profile.get("handoff_custom_text"),
+    }
+    playbook_summary = {"template_key": playbook.get("template_key") or playbook.get("name")}
+    metadata_summary = {
+        "provider": metadata.get("provider"),
+        "instance_id": metadata.get("instance_id"),
+    }
+
+    lead_origin_label = metadata.get("lead_origin_label") or "INBOUND (lead veio te procurar)"
+    _is_outbound_lead = (metadata.get("lead_origin") or "inbound") == "outbound"
+    origin_opener = (
+        ai_profile.get("origin_outbound_opener") if _is_outbound_lead else ai_profile.get("origin_inbound_opener")
+    ) or ""
+
+    history_text = _format_history(history)
+    last_bot_message = None
+    short_reply_hint = None
+    if _is_short_reply(message_text):
+        last_bot_message = _find_last_outbound_message(history)
+        if last_bot_message:
+            short_reply_hint = (
+                "message_text é resposta direta ao last_bot_message; não iniciar um novo assunto"
+            )
+
+    allowed_categories = _get_allowed_lead_categories(context)
+    mode_contract = _build_mode_contract_context(context)
+    agent_mode_normalized = mode_contract["agent_mode_normalized"]
+
+    return (
+        "Você é um motor de decisão de um CRM (WhatsApp). Você deve retornar SOMENTE um JSON VÁLIDO (sem texto extra) no formato:\n"
+        "\n"
+        "{\n"
+        '  "next_action": "reply|ask_qualification|handoff|ignore",\n'
+        '  "message_text": "string (obrigatório quando next_action=reply ou ask_qualification; pode ser vazio em handoff/ignore)",\n'
+        '  "questions": ["..."], \n'
+        '  "reason": "curto",\n'
+        '  "suggested_category": "opcional (um dos valores de ALLOWED_LEAD_CATEGORIES) ou null",\n'
+        '  "category_reason": "opcional (curto) ou null"\n'
+        "}\n"
+        "\n"
+        "REGRAS IMPORTANTES:\n"
+        "1) Responda SOMENTE com JSON. Não use markdown. Não use texto antes/depois do JSON.\n"
+        "2) next_action é obrigatório.\n"
+        "3) questions:\n"
+        '   - Só faz sentido quando next_action == "ask_qualification".\n'
+        '   - Se next_action != "ask_qualification", retorne questions: [].\n'
+        "4) message_text:\n"
+        '   - É obrigatório quando next_action == "reply" OU "ask_qualification".\n'
+        '   - Se next_action == "ask_qualification", message_text deve conter a pergunta pronta para WhatsApp (1 pergunta curta e objetiva).\n'
+        "5) suggested_category e category_reason:\n"
+        '   - suggested_category significa ESTÁGIO DO FUNIL (LeadStatus do CRM). NÃO é nicho/tema (ex.: "Marketing" é inválido).\n'
+        "   - suggested_category só pode ser UM dos valores em ALLOWED_LEAD_CATEGORIES ou null.\n"
+        '   - Se next_action == "ask_qualification", então:\n'
+        "     - suggested_category DEVE ser null\n"
+        "     - category_reason DEVE ser null\n"
+        '     (mesmo se houver palavras fortes como "quero", "comprar", "preço", etc.)\n'
+        '   - Se next_action != "ask_qualification", suggested_category só deve ser enviado quando houver sinal claro no inbound (texto não vazio e intenção explícita).\n'
+        "   - Se você NÃO tiver certeza do suggested_category, retorne suggested_category=null e category_reason=null.\n"
+        "   - Nunca invente categorias fora de ALLOWED_LEAD_CATEGORIES.\n"
+        "   - Se o inbound for genérico/curto e não houver sinal explícito, suggested_category deve ser null.\n"
+        "6) Handoff:\n"
+        '   - Use next_action="handoff" apenas se o usuário explicitamente pedir humano/suporte/atendente, ou equivalente muito claro.\n'
+        "   - Caso contrário, prefira reply ou ask_qualification.\n"
+        "7) Short reply:\n"
+        "   - Se short_reply_hint estiver presente, trate message_text como resposta direta ao last_bot_message e NÃO inicie novo assunto.\n"
+        "\n"
+        "TESTES MENTAIS (não copie texto literal; apenas use como guia):\n"
+        "- Se o usuário só disser 'oi' ou algo genérico, você provavelmente deve perguntar UMA coisa (ask_qualification) e NÃO sugerir categoria.\n"
+        "- Se o usuário pedir preço/contratar/fechar, responda objetivamente e só sugira categoria se estiver MUITO claro que é estágio do funil.\n"
+        "- Se houver dúvida sobre o estágio, retorne suggested_category=null.\n"
+        "\n"
+        "CONTEXTO DO CRM (use para decidir):\n"
+        f"- lead: {json.dumps(lead_summary, ensure_ascii=False)}\n"
+        f"- ai_profile: {json.dumps(ai_summary, ensure_ascii=False)}\n"
+        f"- playbook: {json.dumps(playbook_summary, ensure_ascii=False)}\n"
+        f"- metadata: {json.dumps(metadata_summary, ensure_ascii=False)}\n"
+        f"- ALLOWED_LEAD_CATEGORIES: {json.dumps(allowed_categories, ensure_ascii=False)}\n"
+        f"- history: {history_text}\n"
+        f"- last_bot_message: {last_bot_message or ''}\n"
+        f"- short_reply_hint: {short_reply_hint or ''}\n"
+        f"- agent_mode_normalized: {agent_mode_normalized}\n"
+        f"- required_fields: {json.dumps(mode_contract['required_fields'], ensure_ascii=False)}\n"
+        f"- missing_fields: {json.dumps(mode_contract['missing_fields'], ensure_ascii=False)}\n"
+        f"- current_field: {json.dumps(_select_current_field(mode_contract['missing_fields'], mode_contract.get('filled_fields') or []), ensure_ascii=False)}\n"
+        f"- asked_questions_for_current_field: {json.dumps([q.get('question_text') for q in (mode_contract.get('asked_questions_json') or []) if isinstance(q, dict) and q.get('field') == _select_current_field(mode_contract['missing_fields'], mode_contract.get('filled_fields') or [])][-2:], ensure_ascii=False)}\n"
+        f"- last_question_text: {json.dumps(mode_contract.get('last_question_text') or '', ensure_ascii=False)}\n"
+        f"- lead_origin: {lead_origin_label}\n"
+        f"- origin_opener: {origin_opener}\n"
+        f"- inbound_message_text: {message_text}\n"
+    )
+
+
+def _build_mother_prompt(context: Dict[str, Any], message_text: str) -> str:
+    lead = context.get("lead") or {}
+    ai_profile = context.get("ai_profile") or {}
+    playbook = context.get("playbook") or {}
+    metadata = context.get("metadata") or {}
+    history = context.get("history") or []
+
+    lead_summary = {
+        "id": lead.get("id"),
+        "name": _safe_get(lead, "contactName", "companyName", "name"),
+        "segment": lead.get("segment"),
+        "status": lead.get("status"),
+        "category": lead.get("category"),
+    }
+    ai_summary = {
+        "id": ai_profile.get("id"),
+        "name": ai_profile.get("name"),
+        "template_key": ai_profile.get("template_key"),
+        "tone_of_voice": ai_profile.get("tone_of_voice"),
+        "niche": ai_profile.get("niche"),
+        "target_audience": ai_profile.get("target_audience"),
+        "agent_mode": ai_profile.get("agent_mode"),
+    }
+    playbook_summary = {"template_key": playbook.get("template_key") or playbook.get("name")}
+    metadata_summary = {
+        "provider": metadata.get("provider"),
+        "instance_id": metadata.get("instance_id"),
+    }
+
+    lead_origin_label = metadata.get("lead_origin_label") or "INBOUND (lead veio te procurar)"
+    _is_outbound_lead = (metadata.get("lead_origin") or "inbound") == "outbound"
+    origin_opener = (
+        ai_profile.get("origin_outbound_opener") if _is_outbound_lead else ai_profile.get("origin_inbound_opener")
+    ) or ""
+
+    history_text = _format_history(history)
+    mode_contract = _build_mode_contract_context(context)
+    agent_mode_normalized = mode_contract["agent_mode_normalized"]
+    return (
+        "Você é um roteador MÃE de um CRM (WhatsApp). Retorne SOMENTE JSON válido:\n"
+        "{\n"
+        '  "route_to": "qualification|apresentation|follow-up|closing",\n'
+        '  "perceived_category": "qualification|apresentation|follow-up|closing|null",\n'
+        '  "confidence": 0.0,\n'
+        '  "reason": "curto",\n'
+        '  "agent_mode": null (opcional; deixe null, o modo vem do perfil/sistema),\n'
+        '  "signals": {"meeting_scheduled": true|false, "intent_level": "low|medium|high", "urgency_level": "low|medium|high", "price_acceptance": "no|unsure|yes"} (opcional),\n'
+        '  "objective": "string curta opcional",\n'
+        '  "next_action_hint": "reply|ask_qualification|handoff|ignore|null (opcional)"\n'
+        "}\n"
+        "Regras:\n"
+        "- route_to é obrigatório e indica a próxima fase a focar.\n"
+        "- perceived_category indica o estágio atual do lead (sua percepção).\n"
+        "- Se estiver em dúvida e lead.category existir, mantenha perceived_category = lead.category (evite null).\n"
+        "- Use perceived_category=null somente se lead.category estiver vazio E não houver sinal claro no inbound.\n"
+        "- confidence entre 0 e 1.\n"
+        "- reason curto.\n"
+        "- NÃO preencha agent_mode; deixe null. O modo é definido pelo perfil/sistema.\n"
+        "- Preencha signals seguindo schema padronizado quando possível (intent_level, urgency_level, price_acceptance, meeting_scheduled, handoff_requested, missing_fields, stop_reason).\n"
+        "- Em price_acceptance use SEMPRE string: no|unsure|yes (não use boolean).\n"
+        "- Se o lead aceitar o preço/valor, use price_acceptance='yes'.\n"
+        "- REGRA OBRIGATÓRIA DE QUALIFICAÇÃO: se missing_fields não estiver vazio, route_to DEVE ser \"qualification\".\n"
+        "- Enquanto houver missing_fields, NÃO sugerir avanço para apresentation, follow-up ou closing.\n"
+        "- perceived_category pode refletir o estágio atual do lead, mas route_to deve permanecer qualification até completar o contrato.\n"
+        "\n"
+        "DEFINIÇÃO DO FUNIL (IMPORTANTE):\n"
+        "- APRESENTATION inclui: agendar reunião, confirmar horário, marcar call, lembrar da reunião,\n"
+        "  reagendar, enviar link da call, confirmar presença.\n"
+        '  => route_to="apresentation" e perceived_category="apresentation".\n'
+        "- FOLLOW-UP é SOMENTE após a apresentação quando o lead não fechou, com sinais de nutrição,\n"
+        '  ex.: "vou pensar", "me chama mês que vem", "manda material", "preciso falar com sócio",\n'
+        '  "agora não", "sem budget", "vamos ver depois".\n'
+        "- REGRA FORTE FOLLOW-UP: só use follow-up se houver evidência de apresentação realizada,\n"
+        "  seja por history (ex.: \"na call de ontem\", \"como falamos na apresentação\")\n"
+        "  OU se lead.category atual já for follow-up/closing. Se for apenas apresentation e não houver\n"
+        "  evidência textual de que a call aconteceu, prefira apresentation.\n"
+        "  Se não houver evidência, mantenha qualification ou apresentation conforme o contexto.\n"
+        "- Qualification: dúvidas iniciais (preço/como funciona/serve pra mim) sem combinação de horário/link.\n"
+        "- Apresentation: qualquer ação de agendar/confirmar/reagendar/pedir link/confirmar presença.\n"
+        "\n"
+        # ETAPA 4 (roadmap): o marcador "meeting_scheduled" em reason é provisório.
+        # Nesta etapa usamos sinal textual simples para orientar o executor, mas a Etapa 4
+        # deve migrar isso para um sinal estruturado (ex.: fields JSON/signals) e o CRM
+        # será responsável por criar appointment e setar bot_disabled.
+        "POLÍTICA POR MODO (agent_mode):\n"
+        "- consultivo: não fechar sozinho; qualificar, preparar handoff e agendar quando aplicável.\n"
+        "- agenda: foco em vender até booking e confirmar presença.\n"
+        "- direto: foco em fechamento objetivo e comercial.\n"
+        "- sdr_scheduler: compatível com agenda/consultivo (normalização no executor).\n"
+        "  - Se agendar/confirmar/reagendar/pedir link, route_to=apresentation e perceived_category=apresentation.\n"
+        "  - Se confirmação de horário/link fechado (ex.: \"Fechou amanhã 17h\", \"pode confirmar\", \"manda o link\"),\n"
+        '    prefira signals.meeting_scheduled=true e mantenha substring "meeting_scheduled" no reason por compatibilidade.\n'
+        "- closer: foco em avançar até fechamento.\n"
+        "  - Agendamento NÃO é objetivo final; meeting_scheduled deve ficar false, salvo agendamento real com necessidade operacional.\n"
+        "  - Se inbound for claramente de fechamento (\"posso assinar\", \"manda contrato\", \"quero fechar\"),\n"
+        "    route_to=closing e perceived_category=closing.\n"
+        "\n"
+        "EXEMPLOS (ultracurtos):\n"
+        '1) inbound_message_text: "Amanhã 17h tá confirmado"\n'
+        '   -> {"route_to":"apresentation","perceived_category":"apresentation","confidence":0.8,"reason":"meeting_scheduled|confirmou horário"}\n'
+        '2) inbound_message_text: "Pode reagendar pra sexta?"\n'
+        '   -> {"route_to":"apresentation","perceived_category":"apresentation","confidence":0.8,"reason":"meeting_scheduled|reagendar"}\n'
+        '3) inbound_message_text: "Vou pensar, me chama mês que vem" (apresentação já ocorreu)\n'
+        '   -> {"route_to":"follow-up","perceived_category":"follow-up","confidence":0.7,"reason":"nutrição pós-apresentação"}\n'
+        '4) NEGATIVO: inbound_message_text: "Vou pensar" (sem evidência de apresentação)\n'
+        '   -> NÃO use follow-up; mantenha qualification ou apresentation conforme contexto.\n'
+        '5) NEGATIVO: inbound_message_text: "Qual o preço?"\n'
+        '   -> NÃO use closing; prefira qualification.\n'
+        "6) SDR: inbound_message_text: \"Fechou amanhã 17h, manda o link\"\n"
+        '   -> {"route_to":"apresentation","perceived_category":"apresentation","confidence":0.85,"reason":"meeting_scheduled|confirmou horário"}\n'
+        "7) SDR: inbound_message_text: \"Pode confirmar a reunião?\"\n"
+        '   -> {"route_to":"apresentation","perceived_category":"apresentation","confidence":0.8,"reason":"meeting_scheduled|confirmou reunião"}\n'
+        "8) CLOSER: inbound_message_text: \"Posso assinar hoje?\"\n"
+        '   -> {"route_to":"closing","perceived_category":"closing","confidence":0.9,"reason":"intenção de fechamento"}\n'
+        "9) CLOSER: inbound_message_text: \"Manda contrato\"\n"
+        '   -> {"route_to":"closing","perceived_category":"closing","confidence":0.85,"reason":"pedido de contrato"}\n'
+        "10) CLOSER (negativo): inbound_message_text: \"Fechou amanhã 17h\"\n"
+        '   -> {"route_to":"apresentation","perceived_category":"apresentation","confidence":0.8,"reason":"confirmou horário (no closer, sem meeting_scheduled)"}\n'
+        "\n"
+        "CONTEXTO:\n"
+        f"- lead: {json.dumps(lead_summary, ensure_ascii=False)}\n"
+        f"- ai_profile: {json.dumps(ai_summary, ensure_ascii=False)}\n"
+        f"- playbook: {json.dumps(playbook_summary, ensure_ascii=False)}\n"
+        f"- metadata: {json.dumps(metadata_summary, ensure_ascii=False)}\n"
+        f"- history: {history_text}\n"
+        f"- agent_mode_normalized: {agent_mode_normalized}\n"
+        f"- required_fields: {json.dumps(mode_contract['required_fields'], ensure_ascii=False)}\n"
+        f"- missing_fields: {json.dumps(mode_contract['missing_fields'], ensure_ascii=False)}\n"
+        f"- lead_origin: {lead_origin_label}\n"
+        f"- origin_opener: {origin_opener}\n"
+        f"- inbound_message_text: {message_text}\n"
+    )
+
+
+def _build_child_prompt(
+    context: Dict[str, Any],
+    message_text: str,
+    mother_decision: MotherDecision,
+) -> str:
+    lead = context.get("lead") or {}
+    ai_profile = context.get("ai_profile") or {}
+    playbook = context.get("playbook") or {}
+    metadata = context.get("metadata") or {}
+    history = context.get("history") or []
+
+    lead_summary = {
+        "id": lead.get("id"),
+        "name": _safe_get(lead, "contactName", "companyName", "name"),
+        "category": lead.get("category"),
+        "segment": lead.get("segment"),
+    }
+    ai_summary = {
+        "id": ai_profile.get("id"),
+        "name": ai_profile.get("name"),
+        "template_key": ai_profile.get("template_key"),
+        "tone_of_voice": ai_profile.get("tone_of_voice"),
+        "agent_mode": ai_profile.get("agent_mode"),
+    }
+    playbook_summary = {"template_key": playbook.get("template_key") or playbook.get("name")}
+    metadata_summary = {
+        "provider": metadata.get("provider"),
+        "instance_id": metadata.get("instance_id"),
+    }
+
+    history_text = _format_history(history)
+    mode_contract = _build_mode_contract_context(context, mother_decision)
+    agent_mode_normalized = mode_contract["agent_mode_normalized"]
+    presentation_variant, presentation_variant_source = _resolve_presentation_variant(context, agent_mode_normalized)
+    hybrid_flow_style = _resolve_hybrid_flow_style(context)
+    offer_pack_summary = _build_offer_pack_summary(context)
+    return (
+        "Você é uma LLM FILHA e deve responder SOMENTE JSON válido:\n"
+        "{\n"
+        '  "message_text": "string",\n'
+        '  "did_complete_phase": false,\n'
+        '  "recommended_next_category": "qualification|apresentation|follow-up|closing|null",\n'
+        '  "outcome": "won|lost|null",\n'
+        '  "kanban_highlight": "green|orange|null",\n'
+        '  "signals": ["..."],\n'
+        '  "signals_structured": {"missing_fields": ["..."], "handoff_requested": false} (opcional),\n'
+        '  "confidence": 0.0\n'
+        "}\n"
+        "Regras:\n"
+        "- confidence entre 0 e 1.\n"
+        "- recommended_next_category deve ser um estágio do funil ou null.\n"
+        "- message_text é a resposta para o WhatsApp.\n"
+        "\n"
+        f"ROTA MÃE: {mother_decision.route_to} (confidence={mother_decision.confidence})\n"
+        f"Motivo MÃE: {mother_decision.reason}\n"
+        "\n"
+        "CONTEXTO:\n"
+        f"- lead: {json.dumps(lead_summary, ensure_ascii=False)}\n"
+        f"- ai_profile: {json.dumps(ai_summary, ensure_ascii=False)}\n"
+        f"- playbook: {json.dumps(playbook_summary, ensure_ascii=False)}\n"
+        f"- metadata: {json.dumps(metadata_summary, ensure_ascii=False)}\n"
+        f"- history: {history_text}\n"
+        f"- agent_mode_normalized: {agent_mode_normalized}\n"
+        f"- required_fields: {json.dumps(mode_contract['required_fields'], ensure_ascii=False)}\n"
+        f"- missing_fields: {json.dumps(mode_contract['missing_fields'], ensure_ascii=False)}\n"
+        f"- inbound_message_text: {message_text}\n"
+    )
+
+
+def _build_child_prompt_qualification(
+    context: Dict[str, Any],
+    message_text: str,
+    mother_decision: MotherDecision,
+) -> str:
+    lead = context.get("lead") or {}
+    ai_profile = context.get("ai_profile") or {}
+    playbook = context.get("playbook") or {}
+    metadata = context.get("metadata") or {}
+    history = context.get("history") or []
+
+    lead_summary = {
+        "id": lead.get("id"),
+        "name": _safe_get(lead, "contactName", "companyName", "name"),
+        "category": lead.get("category"),
+        "segment": lead.get("segment"),
+    }
+    ai_summary = {
+        "id": ai_profile.get("id"),
+        "name": ai_profile.get("name"),
+        "brand_name": ai_profile.get("brand_name"),
+        "tone_of_voice": ai_profile.get("tone_of_voice"),
+        "niche": ai_profile.get("niche"),
+        "agent_mode": ai_profile.get("agent_mode"),
+    }
+    playbook_summary = {
+        "template_key": playbook.get("template_key") or playbook.get("name"),
+        "max_chars": playbook.get("max_chars"),
+    }
+    metadata_summary = {
+        "provider": metadata.get("provider"),
+        "instance_id": metadata.get("instance_id"),
+    }
+
+    lead_origin_label = metadata.get("lead_origin_label") or "INBOUND (lead veio te procurar)"
+    _is_outbound_lead = (metadata.get("lead_origin") or "inbound") == "outbound"
+    origin_opener = (
+        ai_profile.get("origin_outbound_opener") if _is_outbound_lead else ai_profile.get("origin_inbound_opener")
+    ) or ""
+
+    history_text = _format_history(history)
+    mode_contract = _build_mode_contract_context(context, mother_decision)
+    agent_mode_normalized = mode_contract["agent_mode_normalized"]
+    presentation_variant, presentation_variant_source = _resolve_presentation_variant(context, agent_mode_normalized)
+    hybrid_flow_style = _resolve_hybrid_flow_style(context)
+    current_field = _select_current_field(
+        list(mode_contract.get("missing_fields") or []),
+        list(mode_contract.get("filled_fields") or []),
+    )
+    asked_for_current = [
+        str(item.get("question_text") or "")
+        for item in (mode_contract.get("asked_questions_json") or [])
+        if isinstance(item, dict) and item.get("field") == current_field
+    ][-2:]
+
+    return f"""Você é a FILHA QUALIFICATION e deve responder SOMENTE JSON válido:
+{{
+  "question_text": "string",
+  "field": "service_interest|urgency|decision_role|constraints|availability_window|budget_or_price_acceptance|location_preference|price_acceptance|null",
+  "should_ask": true,
+  "message_text": "string (retrocompat opcional)",
+  "did_complete_phase": false,
+  "recommended_next_category": "apresentation|null",
+  "outcome": null,
+  "kanban_highlight": null,
+  "signals": ["..."],
+  "signals_structured": {{"missing_fields": ["..."], "handoff_requested": false}} (opcional),
+  "confidence": 0.0
+}}
+Regras:
+- Só pode perguntar 1 coisa por turno.
+- Quando should_ask=true, field deve ser EXATAMENTE o current_field.
+- Quando should_ask=true, question_text não pode ser vazio.
+- Evite repetir frases de asked_questions_for_current_field; reformule.
+- Se current_field já tiver sido preenchido, retorne should_ask=false, field=null, question_text="".
+- NÃO agendar reunião aqui (só na rota apresentation, salvo pedido explícito do inbound).
+- recommended_next_category pode ser null ou 'apresentation'.
+- outcome e kanban_highlight devem ser null.
+
+ROTA MÃE: {mother_decision.route_to} (confidence={mother_decision.confidence})
+Motivo MÃE: {mother_decision.reason}
+
+CONTEXTO:
+- lead: {json.dumps(lead_summary, ensure_ascii=False)}
+- ai_profile: {json.dumps(ai_summary, ensure_ascii=False)}
+- playbook: {json.dumps(playbook_summary, ensure_ascii=False)}
+- metadata: {json.dumps(metadata_summary, ensure_ascii=False)}
+- history: {history_text}
+- agent_mode_normalized: {agent_mode_normalized}
+- required_fields: {json.dumps(mode_contract['required_fields'], ensure_ascii=False)}
+- missing_fields: {json.dumps(mode_contract['missing_fields'], ensure_ascii=False)}
+- current_field: {json.dumps(current_field, ensure_ascii=False)}
+- asked_questions_for_current_field: {json.dumps(asked_for_current, ensure_ascii=False)}
+- last_question_text: {json.dumps(mode_contract.get('last_question_text') or '', ensure_ascii=False)}
+- lead_origin: {lead_origin_label}
+- origin_opener: {origin_opener}
+- inbound_message_text: {message_text}
+"""
+def _build_child_prompt_apresentation(
+    context: Dict[str, Any],
+    message_text: str,
+    mother_decision: MotherDecision,
+) -> str:
+    lead = context.get("lead") or {}
+    ai_profile = context.get("ai_profile") or {}
+    playbook = context.get("playbook") or {}
+    metadata = context.get("metadata") or {}
+    history = context.get("history") or []
+
+    lead_summary = {
+        "id": lead.get("id"),
+        "name": _safe_get(lead, "contactName", "companyName", "name"),
+        "category": lead.get("category"),
+        "segment": lead.get("segment"),
+    }
+    ai_summary = {
+        "id": ai_profile.get("id"),
+        "name": ai_profile.get("name"),
+        "brand_name": ai_profile.get("brand_name"),
+        "tone_of_voice": ai_profile.get("tone_of_voice"),
+        "niche": ai_profile.get("niche"),
+        "agent_mode": ai_profile.get("agent_mode"),
+        "timezone": ai_profile.get("timezone"),
+    }
+    playbook_summary = {
+        "template_key": playbook.get("template_key") or playbook.get("name"),
+        "max_chars": playbook.get("max_chars"),
+    }
+    metadata_summary = {
+        "provider": metadata.get("provider"),
+        "instance_id": metadata.get("instance_id"),
+    }
+
+    history_text = _format_history(history)
+    mode_contract = _build_mode_contract_context(context, mother_decision)
+    agent_mode_normalized = mode_contract["agent_mode_normalized"]
+    presentation_variant, presentation_variant_source = _resolve_presentation_variant(context, agent_mode_normalized)
+    hybrid_flow_style = _resolve_hybrid_flow_style(context)
+    offer_pack_summary = _build_offer_pack_summary(context)
+    return (
+        "Você é a FILHA APRESENTATION e deve responder SOMENTE JSON válido:\n"
+        "{\n"
+        '  "message_text": "string",\n'
+        '  "did_complete_phase": false,\n'
+        '  "recommended_next_category": null,\n'
+        '  "outcome": null,\n'
+        '  "kanban_highlight": null,\n'
+        '  "signals": ["..."],\n'
+        '  "signals_structured": {"missing_fields": ["..."], "handoff_requested": false, "meeting_proposed": false, "meeting_datetime_candidate": null} (opcional),\n'
+        '  "confidence": 0.0\n'
+        "}\n"
+        "Regras:\n"
+        "- Respeite presentation_variant para conduzir a apresentação (sem heurística por keyword).\n"
+        "- Se presentation_variant=sales: apresente oferta objetiva (offer_pack quando disponível) e CTA para fechamento/checkout.\n"
+        "- Se presentation_variant=scheduler: conduza agendamento (pedir dia/horário, confirmar, reagendar, enviar link).\n"
+        "- Em presentation_variant=scheduler (modo agenda/hybrid), SEMPRE preencha signals_structured.meeting_proposed (bool) e signals_structured.meeting_datetime_candidate (ISO string ou null).\n"
+        "  * Se houver proposta/confirmação com horário definido: meeting_proposed=true e meeting_datetime_candidate preenchido.\n"
+        "  * Se estiver pedindo disponibilidade sem horário definido: meeting_proposed=true e meeting_datetime_candidate=null.\n"
+        "  * Se não for contexto de agendamento: meeting_proposed=false e meeting_datetime_candidate=null.\n"
+        "  * Preferência: ISO naive no horário local de ai_profile.timezone (ex: 2026-03-05T17:00:00); também aceito offset/Z.\n"
+        "  * Nunca assumir timezone fixa; sempre respeitar ai_profile.timezone.\n"
+        "  * Em confirmação final do agendamento, inclua 'meeting_scheduled' em signals para compatibilidade.\n"
+        "- Em presentation_variant=sales, UM TURNO = UMA AÇÃO: ou CONFIRMAR (sem link) ou ENVIAR LINK (com link).\n"
+        "- Formato CONFIRMAR (sem link): descreva oferta e peça confirmação (ex.: 'quer seguir?').\n"
+        "  * Proibido URL real e proibido placeholder de link (ex.: [link_do_checkout]).\n"
+        "  * Quando CONFIRMAR: signals_structured.checkout_sent=false.\n"
+        "- Formato ENVIAR LINK (com link): oferta curta + link + próximo passo ('conclua e me confirme').\n"
+        "  * Quando ENVIAR LINK: signals_structured.checkout_sent=true.\n"
+        "  * Não pedir permissão para enviar link no mesmo turno (não usar 'posso enviar o link?' se checkout_sent=true).\n"
+        "- Regra de consistência obrigatória:\n"
+        "  * Se houver pergunta de confirmação (quer seguir?/posso enviar?/você confirma?), NÃO incluir link e checkout_sent=false.\n"
+        "  * Se checkout_sent=true, incluir link (real ou placeholder) e NÃO pedir permissão para enviar link.\n"
+        "- Se hybrid_flow_style estiver definido, combine oferta+agenda na ordem indicada.\n"
+        "- Use tone_of_voice, brand_name e niche quando disponíveis.\n"
+        "- Respeite playbook.max_chars se existir (senão, resposta curta).\n"
+        "- recommended_next_category é informativo nesta rota; não é aplicado automaticamente na mudança de estágio.\n"
+        "- outcome e kanban_highlight devem ser null.\n"
+        "- signals_structured deve incluir: offer_presented, checkout_sent, presentation_variant e offer_item_name.\n"
+        "Exemplos rápidos (sales):\n"
+        "- EXEMPLO CONFIRMAR: message_text='Plano Starter por R$X com suporte Y. Quer seguir com a contratação?'\n"
+        "  signals_structured={offer_presented:true, checkout_sent:false, presentation_variant:'sales', offer_item_name:'Plano Starter'}\n"
+        "- EXEMPLO ENVIAR LINK: message_text='Perfeito! Aqui está seu link: https://exemplo.com/checkout-starter\\nConclua e me confirme por aqui.'\n"
+        "  signals_structured={offer_presented:true, checkout_sent:true, presentation_variant:'sales', offer_item_name:'Plano Starter'}\n"
+        "\n"
+        f"ROTA MÃE: {mother_decision.route_to} (confidence={mother_decision.confidence})\n"
+        f"Motivo MÃE: {mother_decision.reason}\n"
+        "\n"
+        "CONTEXTO:\n"
+        f"- lead: {json.dumps(lead_summary, ensure_ascii=False)}\n"
+        f"- ai_profile: {json.dumps(ai_summary, ensure_ascii=False)}\n"
+        f"- playbook: {json.dumps(playbook_summary, ensure_ascii=False)}\n"
+        f"- metadata: {json.dumps(metadata_summary, ensure_ascii=False)}\n"
+        f"- history: {history_text}\n"
+        f"- agent_mode_normalized: {agent_mode_normalized}\n"
+        f"- required_fields: {json.dumps(mode_contract['required_fields'], ensure_ascii=False)}\n"
+        f"- missing_fields: {json.dumps(mode_contract['missing_fields'], ensure_ascii=False)}\n"
+        f"- presentation_variant: {presentation_variant} (source={presentation_variant_source})\n"
+        f"- hybrid_flow_style: {hybrid_flow_style or ''}\n"
+        f"- offer_pack_summary: {json.dumps(offer_pack_summary, ensure_ascii=False)}\n"
+        f"- inbound_message_text: {message_text}\n"
+    )
+
+
+
+def _build_child_prompt_follow_up(
+    context: Dict[str, Any],
+    message_text: str,
+    mother_decision: MotherDecision,
+) -> str:
+    lead = context.get("lead") or {}
+    ai_profile = context.get("ai_profile") or {}
+    playbook = context.get("playbook") or {}
+    metadata = context.get("metadata") or {}
+    history = context.get("history") or []
+    followup_ctx = metadata.get("followup_context") if isinstance(metadata.get("followup_context"), dict) else {}
+
+    lead_summary = {
+        "id": lead.get("id"),
+        "name": _safe_get(lead, "contactName", "companyName", "name"),
+        "category": lead.get("category"),
+        "segment": lead.get("segment"),
+    }
+    ai_summary = {
+        "id": ai_profile.get("id"),
+        "name": ai_profile.get("name"),
+        "brand_name": ai_profile.get("brand_name"),
+        "tone_of_voice": ai_profile.get("tone_of_voice"),
+        "niche": ai_profile.get("niche"),
+        "agent_mode": ai_profile.get("agent_mode"),
+    }
+    playbook_summary = {
+        "template_key": playbook.get("template_key") or playbook.get("name"),
+        "max_chars": playbook.get("max_chars"),
+    }
+    metadata_summary = {
+        "provider": metadata.get("provider"),
+        "instance_id": metadata.get("instance_id"),
+        "followup_context": followup_ctx,
+    }
+
+    followup_summary = {
+        "followup_goal": followup_ctx.get("followup_goal") or lead.get("followup_goal"),
+        "outcome": followup_ctx.get("followup_outcome") or lead.get("outcome"),
+        "followup_variant": followup_ctx.get("followup_variant"),
+        "attempts": followup_ctx.get("followup_attempts"),
+        "max_attempts": followup_ctx.get("followup_max_attempts"),
+        "meeting_happened": followup_ctx.get("followup_meeting_happened"),
+        "meeting_or_session_happened": followup_ctx.get("followup_meeting_or_session_happened"),
+        "proposal_sent": followup_ctx.get("followup_proposal_sent"),
+        "operator_note": followup_ctx.get("followup_operator_note"),
+        "status": followup_ctx.get("followup_status"),
+        "next_followup_at": followup_ctx.get("followup_next_followup_at"),
+    }
+    followup_variant = str(followup_summary.get("followup_variant") or "").strip().lower()
+    variant_rule = ""
+    if followup_variant == "sdr_scheduler":
+        variant_rule = (
+            "- Variante sdr_scheduler: follow-up consultivo pós-reunião; "
+            "reforçar valor, síntese do contexto e próximo passo comercial.\n"
+        )
+    elif followup_variant == "cart_recovery":
+        attempts_done = int(followup_summary.get("attempts") or 0)
+        next_attempt = attempts_done + 1
+        if next_attempt <= 1:
+            attempt_instruction = (
+                "Tentativa 1 — lembrete neutro: o pedido está reservado e o link ainda está disponível. "
+                "Sem pressão — apenas informa e pergunta se há dúvida que impeça o pagamento."
+            )
+        elif next_attempt == 2:
+            attempt_instruction = (
+                "Tentativa 2 — benefício + objeção: reforce o principal benefício e antecipe a objeção "
+                "mais comum do nicho. Tom amigável, resolva a dúvida que está impedindo o pagamento."
+            )
+        else:
+            attempt_instruction = (
+                "Tentativa 3 — urgência máxima: a oferta expira hoje. "
+                "CTA direto para o link de pagamento. Não reabra qualificação."
+            )
+        variant_rule = (
+            "- Variante cart_recovery (carrinho abandonado, Agent 2): "
+            "recuperar pagamento pendente após link enviado. Mensagens curtas (máx 280 chars).\n"
+            f"- Instrução para tentativa {next_attempt}/3: {attempt_instruction}\n"
+        )
+    elif followup_variant == "hybrid_scheduler":
+        outcome = str(followup_summary.get("outcome") or "").strip().lower()
+        if outcome == "interested_not_closed":
+            outcome_instruction = (
+                "Tom de continuidade: retome o contexto da sessão anterior, "
+                "remova a objeção específica que foi levantada e ofereça nova data concreta para avançar."
+            )
+        elif outcome == "reschedule_needed":
+            outcome_instruction = (
+                "Tom leve e sem pressão: o lead não compareceu ou pediu remarcação. "
+                "Ofereça 2-3 horários diretamente e encerre com uma pergunta fechada."
+            )
+        elif outcome == "converted":
+            outcome_instruction = (
+                "Tom de onboarding e boas-vindas: parabenize, confirme o próximo passo, "
+                "envie link de pagamento ou instrução de acesso. Não reabra vendas."
+            )
+        else:
+            outcome_instruction = (
+                "Priorizar recuperação de no-show, confirmação de presença e reengajamento."
+            )
+        variant_rule = (
+            "- Variante hybrid_scheduler (coaches/terapeutas/consultores solo): "
+            "tom pessoal e próximo, como assistente do próprio profissional — nunca SDR agressivo.\n"
+            f"- Regra por outcome ({outcome or 'indefinido'}): {outcome_instruction}\n"
+        )
+
+    history_text = _format_history(history)
+    mode_contract = _build_mode_contract_context(context, mother_decision)
+    agent_mode_normalized = mode_contract["agent_mode_normalized"]
+    presentation_variant, presentation_variant_source = _resolve_presentation_variant(context, agent_mode_normalized)
+    hybrid_flow_style = _resolve_hybrid_flow_style(context)
+    is_followup_tick = _is_followup_tick_context(context)
+    followup_priority_rule = (
+        "- CONTEXTO PRIORITÁRIO (follow-up tick): use followup_contract_signals como fonte principal da resposta. "
+        "Priorize meeting_or_session_happened, followup_goal, operator_note, outcome e followup_variant.\n"
+        "- Se houver no-show/remarcação no contrato, conduza retomada e proposta de novo horário; "
+        "não reabra qualificação antiga por padrão.\n"
+        "- O histórico é memória contextual; ele NÃO é backlog de perguntas pendentes no follow-up automático.\n"
+        "- Mesmo que o histórico tenha pergunta antiga sem resposta (ex.: localização/orçamento), não repita por padrão.\n"
+        "- Só retome algo do histórico se estiver diretamente necessário para o objetivo do follow-up atual.\n"
+        "- qualification_state e missing_fields são SOMENTE memória auxiliar (read-only) neste tick.\n"
+        "- É proibido usar missing_fields de qualification como alvo de coleta/pergunta.\n"
+        "- Só faça pergunta nova quando ela estiver diretamente ligada ao objetivo do follow-up atual "
+        "(ex.: remarcação, confirmação de presença, próximo passo do follow-up).\n"
+        if is_followup_tick
+        else "- Faça no máximo 1 pergunta por mensagem e priorize o próximo missing_field.\n"
+    )
+    qualification_context_block = (
+        f"qualification_context_read_only: {json.dumps({'required_fields': mode_contract['required_fields'], 'missing_fields': mode_contract['missing_fields']}, ensure_ascii=False)}\n"
+        if is_followup_tick
+        else (
+            f"Required fields: {json.dumps(mode_contract['required_fields'], ensure_ascii=False)}\n"
+            f"Missing fields: {json.dumps(mode_contract['missing_fields'], ensure_ascii=False)}\n"
+        )
+    )
+    return (
+        "Você é a FILHA FOLLOW-UP e deve responder SOMENTE JSON válido:\n"
+        "{\n"
+        '  "message_text": "string",\n'
+        '  "did_complete_phase": false,\n'
+        '  "recommended_next_category": "follow-up|closing|null",\n'
+        '  "outcome": null,\n'
+        '  "kanban_highlight": null,\n'
+        '  "signals": ["..."],\n'
+        '  "signals_structured": {"missing_fields": ["..."], "handoff_requested": false} (opcional),\n'
+        '  "confidence": 0.0\n'
+        "}\n"
+        "Regras por modo:\n"
+        "- consultivo: fazer nutrição/retomada/reagendar e preparar handoff quando pedido de proposta/fechamento.\n"
+        "- agenda: foco em no-show/reagendar/confirmar presença e reforçar próximos passos.\n"
+        "- direto: tratar objeções e conduzir CTA para pagamento de forma objetiva.\n"
+        f"{variant_rule}"
+        "- Use tone_of_voice, brand_name e niche quando disponíveis.\n"
+        "- Respeite playbook.max_chars se existir (senão, resposta curta).\n"
+        "- recommended_next_category pode ser follow-up, closing ou null.\n"
+        f"{followup_priority_rule}"
+        "- outcome e kanban_highlight devem ser null.\n"
+        "\n"
+        f"ROTA MÃE: {mother_decision.route_to} (confidence={mother_decision.confidence})\n"
+        f"Motivo MÃE: {mother_decision.reason}\n"
+        f"Objetivo MÃE: {mother_decision.objective or ''}\n"
+        f"Modo normalizado: {agent_mode_normalized}\n"
+        f"{qualification_context_block}"
+        f"is_followup_tick: {json.dumps(is_followup_tick, ensure_ascii=False)}\n"
+        "\n"
+        "CONTEXTO:\n"
+        f"- lead: {json.dumps(lead_summary, ensure_ascii=False)}\n"
+        f"- ai_profile: {json.dumps(ai_summary, ensure_ascii=False)}\n"
+        f"- playbook: {json.dumps(playbook_summary, ensure_ascii=False)}\n"
+        f"- metadata: {json.dumps(metadata_summary, ensure_ascii=False)}\n"
+        f"- followup_contract_signals: {json.dumps(followup_summary, ensure_ascii=False)}\n"
+        f"- history: {history_text}\n"
+        f"- inbound_message_text: {message_text}\n"
+    )
+
+
+def _build_child_prompt_closing(
+    context: Dict[str, Any],
+    message_text: str,
+    mother_decision: MotherDecision,
+) -> str:
+    lead = context.get("lead") or {}
+    ai_profile = context.get("ai_profile") or {}
+    playbook = context.get("playbook") or {}
+    metadata = context.get("metadata") or {}
+    history = context.get("history") or []
+
+    lead_summary = {
+        "id": lead.get("id"),
+        "name": _safe_get(lead, "contactName", "companyName", "name"),
+        "category": lead.get("category"),
+        "segment": lead.get("segment"),
+    }
+    ai_summary = {
+        "id": ai_profile.get("id"),
+        "name": ai_profile.get("name"),
+        "brand_name": ai_profile.get("brand_name"),
+        "tone_of_voice": ai_profile.get("tone_of_voice"),
+        "niche": ai_profile.get("niche"),
+        "agent_mode": ai_profile.get("agent_mode"),
+    }
+    playbook_summary = {
+        "template_key": playbook.get("template_key") or playbook.get("name"),
+        "max_chars": playbook.get("max_chars"),
+    }
+    metadata_summary = {
+        "provider": metadata.get("provider"),
+        "instance_id": metadata.get("instance_id"),
+    }
+
+    history_text = _format_history(history)
+    mode_contract = _build_mode_contract_context(context, mother_decision)
+    agent_mode_normalized = mode_contract["agent_mode_normalized"]
+    presentation_variant, presentation_variant_source = _resolve_presentation_variant(context, agent_mode_normalized)
+    hybrid_flow_style = _resolve_hybrid_flow_style(context)
+    return (
+        "Você é a FILHA CLOSING e deve responder SOMENTE JSON válido:\n"
+        "{\n"
+        '  "message_text": "string",\n'
+        '  "did_complete_phase": false,\n'
+        '  "recommended_next_category": "closing|null",\n'
+        '  "outcome": "won|lost|null",\n'
+        '  "kanban_highlight": "green|orange|null",\n'
+        '  "signals": ["..."],\n'
+        '  "signals_structured": {"missing_fields": ["..."], "handoff_requested": false} (opcional),\n'
+        '  "confidence": 0.0\n'
+        "}\n"
+        "Regras por modo:\n"
+        "- consultivo: não fechar sozinho; responder curto e sugerir encaminhamento para humano.\n"
+        "- agenda: fechamento operacional (confirmar horário, políticas e pagamento quando aplicável).\n"
+        "- direto: conduzir fechamento e confirmação de pagamento com objetividade.\n"
+        "- Use tone_of_voice, brand_name e niche quando disponíveis.\n"
+        "- Respeite playbook.max_chars se existir (senão, resposta curta).\n"
+        "- Faça no máximo 1 pergunta por mensagem e priorize o próximo missing_field.\n"
+        "\n"
+        f"ROTA MÃE: {mother_decision.route_to} (confidence={mother_decision.confidence})\n"
+        f"Motivo MÃE: {mother_decision.reason}\n"
+        f"Objetivo MÃE: {mother_decision.objective or ''}\n"
+        f"Modo normalizado: {agent_mode_normalized}\n"
+        f"Required fields: {json.dumps(mode_contract['required_fields'], ensure_ascii=False)}\n"
+        f"Missing fields: {json.dumps(mode_contract['missing_fields'], ensure_ascii=False)}\n"
+        "\n"
+        "CONTEXTO:\n"
+        f"- lead: {json.dumps(lead_summary, ensure_ascii=False)}\n"
+        f"- ai_profile: {json.dumps(ai_summary, ensure_ascii=False)}\n"
+        f"- playbook: {json.dumps(playbook_summary, ensure_ascii=False)}\n"
+        f"- metadata: {json.dumps(metadata_summary, ensure_ascii=False)}\n"
+        f"- history: {history_text}\n"
+        f"- inbound_message_text: {message_text}\n"
+    )
+
+def _extract_json_payload(text: str) -> Optional[Dict[str, Any]]:
+    text = text.strip()
+    if not text:
+        return None
+    try:
+        return json.loads(text)
+    except json.JSONDecodeError:
+        pass
+
+    start = text.find("{")
+    end = text.rfind("}")
+    if start == -1 or end == -1 or end <= start:
+        return None
+    snippet = text[start : end + 1]
+    try:
+        return json.loads(snippet)
+    except json.JSONDecodeError:
+        return None
+
+
+def _truncate_snip(text: Optional[str], limit: int = 300) -> str:
+    if not text:
+        return ""
+    if len(text) <= limit:
+        return text
+    return f"{text[:limit]}..."
+
+
+def _normalize_null_strings(payload: Optional[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
+    if payload is None:
+        return None
+    targets = {"outcome", "kanban_highlight", "recommended_next_category", "perceived_category"}
+    normalized = dict(payload)
+    for key in targets:
+        if key not in normalized:
+            continue
+        value = normalized.get(key)
+        if value is None:
+            continue
+        if isinstance(value, str):
+            lowered = value.strip().lower()
+            if lowered in {"null", "none", ""}:
+                normalized[key] = None
+    return normalized
+
+
+def _normalize_category(value: Optional[str]) -> Optional[str]:
+    if not value:
+        return None
+    normalized = str(value).strip().lower().replace("_", "-")
+    return normalized or None
+
+
+def _enforce_qualification_route_when_missing(
+    mother_decision: MotherDecision,
+    mode_contract: Dict[str, Any],
+) -> MotherDecision:
+    missing_fields = list(mode_contract.get("missing_fields") or [])
+    if not missing_fields:
+        return mother_decision
+    if mother_decision.route_to == "qualification":
+        return mother_decision
+    mother_decision.route_to = "qualification"
+    reason = str(mother_decision.reason or "").strip()
+    forced_reason = "qualification_incomplete_forced_route"
+    mother_decision.reason = f"{reason}|{forced_reason}" if reason else forced_reason
+    return mother_decision
+
+
+_ALLOWED_ADVANCE = {
+    "qualification": {"apresentation"},
+    "apresentation": {"closing", "follow-up"},
+    "follow-up": {"closing"},
+}
+
+_STAGE_ORDER = ["qualification", "apresentation", "follow-up", "closing"]
+_STAGE_INDEX = {stage: index for index, stage in enumerate(_STAGE_ORDER)}
+
+
+def _is_sdr_escalate_closing(context: Dict[str, Any], mother_decision: MotherDecision) -> bool:
+    normalized_mode = _normalize_agent_mode(context, mother_decision)
+    if normalized_mode != "agenda":
+        return False
+
+    ai_profile = context.get("ai_profile") or {}
+    raw_mode = str(ai_profile.get("agent_mode") or "").strip().lower()
+    should_block = raw_mode in {"sdr_scheduler", "sdr"} or _has_handoff_indicators(context)
+    if not should_block:
+        return False
+
+    route = _normalize_category(mother_decision.route_to)
+    perceived = _normalize_category(mother_decision.perceived_category)
+    return route == "closing" or perceived == "closing"
+
+
+def apply_outcome_guardrails(
+    current_category: Optional[str],
+    child_result: ChildResult,
+) -> tuple[Optional[str], Optional[str]]:
+    normalized_current = _normalize_category(current_category)
+    # Guardrail UX: kanban_highlight/outcome são sinais visuais
+    # e só podem ser emitidos quando o lead estiver em 'closing'.
+    # Nunca permitir highlight fora dessa fase, mesmo que a LLM retorne.
+    outcome = child_result.outcome
+    highlight = child_result.kanban_highlight
+    if not normalized_current:
+        return outcome, highlight
+    if normalized_current != "closing":
+        return None, None
+    return outcome, highlight
+
+
+def apply_mother_category_guardrails(
+    current_category: Optional[str],
+    mother_decision: MotherDecision,
+) -> tuple[Optional[str], Optional[str], str]:
+    normalized_current = _normalize_category(current_category)
+    perceived = _normalize_category(mother_decision.perceived_category)
+    if not perceived:
+        return None, None, "missing_perceived"
+    if perceived not in _STAGE_INDEX:
+        return None, None, "invalid"
+    if normalized_current and normalized_current not in _STAGE_INDEX:
+        normalized_current = None
+
+    if not normalized_current:
+        category_reason = (
+            f"mother_perceived:{perceived}|confidence:{mother_decision.confidence:.2f}|"
+            f"reason:{mother_decision.reason}"
+        )
+        return perceived, category_reason, "no_current_accept"
+
+    if normalized_current == perceived:
+        return None, None, "same_stage"
+
+    current_index = _STAGE_INDEX.get(normalized_current)
+    perceived_index = _STAGE_INDEX.get(perceived)
+    if current_index is None or perceived_index is None:
+        return None, None, "invalid"
+
+    if perceived_index < current_index:
+        return None, None, "backwards_block"
+
+    allowed_next = _ALLOWED_ADVANCE.get(normalized_current, set())
+    if perceived in allowed_next:
+        category_reason = (
+            f"mother_perceived:{perceived}|confidence:{mother_decision.confidence:.2f}|"
+            f"reason:{mother_decision.reason}"
+        )
+        return perceived, category_reason, "ok"
+
+    if len(allowed_next) != 1:
+        return None, None, "jump_blocked"
+    next_allowed = next(iter(allowed_next))
+    if mother_decision.confidence >= 0.70:
+        category_reason = (
+            f"mother_perceived:{perceived}|confidence:{mother_decision.confidence:.2f}|"
+            f"reason:{mother_decision.reason}"
+        )
+        return next_allowed, category_reason, "jump_clamped"
+    return None, None, "jump_blocked_low_conf"
+
+
+def _apply_child_micro_adjustment(
+    *,
+    base_category: Optional[str],
+    child_result: ChildResult,
+    category_reason: Optional[str],
+    mother_route_to: str,
+) -> tuple[Optional[str], Optional[str]]:
+    if mother_route_to != "qualification":
+        return base_category, category_reason
+    recommended = _normalize_category(child_result.recommended_next_category)
+    if not recommended:
+        return base_category, category_reason
+    if not child_result.did_complete_phase:
+        return base_category, category_reason
+    normalized_base = _normalize_category(base_category)
+    if not normalized_base:
+        return base_category, category_reason
+    allowed_next = _ALLOWED_ADVANCE.get(normalized_base, set())
+    if recommended not in allowed_next:
+        return base_category, category_reason
+    reason = category_reason or ""
+    if reason:
+        reason = f"{reason}|child_recommended:{recommended}"
+    else:
+        reason = f"child_recommended:{recommended}"
+    return recommended, reason
+
+
+def compose_decision_output(
+    *,
+    context: Dict[str, Any],
+    mother_decision: MotherDecision,
+    child_result: ChildResult,
+    effective_route_override: Optional[str] = None,
+    anti_loop_rule3_applied: bool = False,
+) -> DecisionOutput:
+    lead = context.get("lead") or {}
+    ai_profile = context.get("ai_profile") or {}
+    current_category = lead.get("category")
+    mode_contract = _build_mode_contract_context(context, mother_decision)
+    agent_mode_normalized = mode_contract["agent_mode_normalized"]
+    presentation_variant, presentation_variant_source = _resolve_presentation_variant(context, agent_mode_normalized)
+    hybrid_flow_style = _resolve_hybrid_flow_style(context)
+    _, system_agent_mode_source = _compute_system_agent_mode(context)
+    mother_agent_mode_raw, mother_agent_mode_conflict = _get_mother_mode_conflict(context, mother_decision)
+    suggested_category, category_reason, guardrail_reason = apply_mother_category_guardrails(
+        current_category,
+        mother_decision,
+    )
+    suggested_category, category_reason = _apply_child_micro_adjustment(
+        base_category=suggested_category or current_category,
+        child_result=child_result,
+        category_reason=category_reason,
+        mother_route_to=mother_decision.route_to,
+    )
+
+    template_key = str(ai_profile.get("template_key") or "").strip().lower()
+    if template_key == "hybrid_scheduler" and suggested_category == "closing":
+        suggested_category = "apresentation"
+        reason_add = "guardrail_hybrid_scheduler_no_closing"
+        category_reason = f"{category_reason}|{reason_add}" if category_reason else reason_add
+
+    qualification_auto_promoted = False
+    anti_loop_rule1_applied = False
+    effective_route_to = effective_route_override or mother_decision.route_to
+    missing_fields = list(mode_contract.get("missing_fields") or [])
+    filled_fields = list(mode_contract.get("filled_fields") or [])
+    current_field = _select_current_field(missing_fields, filled_fields)
+    if (
+        mother_decision.route_to == "qualification"
+        and not current_field
+    ):
+        qualification_auto_promoted = True
+        anti_loop_rule1_applied = True
+        effective_route_to = "apresentation"
+        suggested_category = "apresentation"
+        auto_promote_reason = "qualification_complete_auto_promote:apresentation"
+        category_reason = (
+            f"{category_reason}|{auto_promote_reason}" if category_reason else auto_promote_reason
+        )
+
+    outcome, highlight = apply_outcome_guardrails(current_category, child_result)
+    if template_key == "hybrid_scheduler":
+        outcome = None
+        highlight = None
+    next_action = "ask_qualification" if effective_route_to == "qualification" else "reply"
+    question_text = str(child_result.question_text or child_result.message_text or "").strip()
+    message_text = question_text
+    message_field_used: Optional[str] = None
+    if next_action == "ask_qualification":
+        if not current_field:
+            next_action = "reply"
+            effective_route_to = "apresentation"
+            qualification_auto_promoted = True
+            anti_loop_rule1_applied = True
+        else:
+            message_field_used = current_field
+            if not message_text:
+                message_text = _fallback_question_for_field(current_field)
+    reason = f"route:{mother_decision.route_to}|effective_route:{effective_route_to}|{mother_decision.reason}"
+    # NOTE (ETAPA 4): decision_trace é observabilidade apenas; não dispara efeitos colaterais.
+    # A Etapa 4 deverá consumir sinais estruturados para automações no CRM (appointment/bot_disabled).
+    meeting_scheduled = _extract_meeting_scheduled_signal(mother_decision)
+    child_signals_structured = _normalize_scheduler_child_signals(
+        context,
+        mother_decision,
+        child_result,
+        effective_route_to=effective_route_to,
+        presentation_variant=presentation_variant,
+    )
+    decision = DecisionOutput(
+        next_action=next_action,
+        message_text=message_text,
+        questions=[],
+        reason=reason,
+        suggested_category=suggested_category,
+        category_reason=category_reason,
+        outcome=outcome,
+        kanban_highlight=highlight,
+        signals=child_result.signals,
+        confidence=child_result.confidence,
+        decision_trace={
+            "mother_route_to": mother_decision.route_to,
+            "effective_route_to": effective_route_to,
+            "mother_perceived_category": mother_decision.perceived_category,
+            "mother_confidence": mother_decision.confidence,
+            "lead_current_category": current_category,
+            "guardrail_reason": guardrail_reason,
+            "qualification_auto_promoted": qualification_auto_promoted,
+            "agent_mode": ai_profile.get("agent_mode"),
+            "agent_mode_normalized": agent_mode_normalized,
+            "system_agent_mode_source": system_agent_mode_source,
+            "mother_agent_mode_raw": mother_agent_mode_raw,
+            "mother_agent_mode_conflict": mother_agent_mode_conflict,
+            "meeting_scheduled": meeting_scheduled,
+            "mother_objective": mother_decision.objective,
+            "next_action_hint": mother_decision.next_action_hint,
+            "presentation_variant": presentation_variant,
+            "presentation_variant_source": presentation_variant_source,
+            "hybrid_flow_style": hybrid_flow_style,
+            "required_fields": mode_contract['required_fields'],
+            "missing_fields": mode_contract['missing_fields'],
+            "filled_fields": filled_fields,
+            "current_field": current_field,
+            "question_field_used": message_field_used,
+            "qualification_state_present": bool(_qualification_state_from_context(context)),
+            "qualification_filled_fields": mode_contract.get("filled_fields") or [],
+            "qualification_missing_fields_source": mode_contract.get("missing_fields_source") or "heuristic",
+            "last_questioned_field": mode_contract.get("last_questioned_field"),
+            "attempts": mode_contract.get("attempts_json") or {},
+            "anti_loop_rule1_applied": anti_loop_rule1_applied,
+            "anti_loop_rule3_applied": anti_loop_rule3_applied,
+            "child_signals_structured": child_signals_structured,
+            "child_recommended_next_category": child_result.recommended_next_category,
+            "mother_signals": {
+                "meeting_scheduled": meeting_scheduled,
+                "intent_level": ((mother_decision.signals or {}).get("intent_level") if isinstance(mother_decision.signals, dict) else None),
+                "urgency_level": ((mother_decision.signals or {}).get("urgency_level") if isinstance(mother_decision.signals, dict) else None),
+                "price_acceptance": ((mother_decision.signals or {}).get("price_acceptance") if isinstance(mother_decision.signals, dict) else None),
+                "handoff_requested": ((mother_decision.signals or {}).get("handoff_requested") if isinstance(mother_decision.signals, dict) else None),
+                "stop_reason": ((mother_decision.signals or {}).get("stop_reason") if isinstance(mother_decision.signals, dict) else None),
+                "presentation_variant": ((mother_decision.signals or {}).get("presentation_variant") if isinstance(mother_decision.signals, dict) else None),
+                "offer_presented": ((mother_decision.signals or {}).get("offer_presented") if isinstance(mother_decision.signals, dict) else None),
+                "checkout_sent": ((mother_decision.signals or {}).get("checkout_sent") if isinstance(mother_decision.signals, dict) else None),
+                "offer_item_name": ((mother_decision.signals or {}).get("offer_item_name") if isinstance(mother_decision.signals, dict) else None),
+            },
+        },
+    )
+    decision = _apply_mode_guardrails(decision, context, mother_decision, child_result)
+    return decision
+
+
+def decide(context: Dict[str, Any], logger: Optional[logging.Logger] = None) -> DecisionOutput:
+    metadata = context.get("metadata") or {}
+    if metadata.get("bot_disabled"):
+        if logger:
+            logger.info(
+                "decision bot_disabled next_action=%s reason=%s",
+                BOT_DISABLED_DECISION.next_action,
+                BOT_DISABLED_DECISION.reason,
+            )
+        return BOT_DISABLED_DECISION
+
+    message_text = _extract_message_text(context)
+    fast_decision = fast_path.try_fast_handoff(message_text)
+    if fast_decision:
+        if logger:
+            logger.info(
+                "decision fast_path next_action=%s reason=%s",
+                fast_decision.next_action,
+                fast_decision.reason,
+            )
+        fast_decision = _sanitize_category_decision(fast_decision, context, logger_instance=logger)
+        return handoff_policy.apply(context, fast_decision, logger=logger)
+
+    stage = "start"
+    mother_text: Optional[str] = None
+    child_text: Optional[str] = None
+    qualification_current_field: Optional[str] = None
+    qualification_retry_count = 0
+    qualification_validation_status = "n/a"
+    qualification_repeated_similarity = 0.0
+    try:
+        mother_prompt = _build_mother_prompt(context, message_text)
+        stage = "mother_call"
+        mother_text = llm_service.generate_mother_route(mother_prompt)
+        stage = "mother_parse"
+        mother_payload = _extract_json_payload(mother_text)
+        if mother_payload is None:
+            raise ValueError("llm returned invalid mother json")
+        mother_payload = _normalize_null_strings(mother_payload)
+        stage = "mother_validate"
+        mother_decision = MotherDecision.model_validate(mother_payload)
+        mode_ctx_forced_route = _build_mode_contract_context(context, mother_decision)
+        mother_decision = _enforce_qualification_route_when_missing(
+            mother_decision,
+            mode_ctx_forced_route,
+        )
+        lead = context.get("lead") or {}
+        force_followup_route = _is_followup_tick_context(context)
+        route_for_child = "follow-up" if force_followup_route else mother_decision.route_to
+        anti_loop_rule3_applied = False
+        mode_ctx_pre: Optional[dict] = None
+
+        if force_followup_route and logger:
+            job = context.get("job") or {}
+            payload = job.get("payload") or {}
+            logger.info(
+                "event=followup_tick_route_priority route_override=%s mother_route_to=%s lead_category=%s job_id=%s lead_id=%s",
+                route_for_child,
+                mother_decision.route_to,
+                lead.get("category"),
+                job.get("id") or payload.get("job_id"),
+                lead.get("id") or payload.get("lead_id"),
+            )
+
+        if mother_decision.route_to == "qualification" and not force_followup_route:
+            mode_ctx_pre = _build_mode_contract_context(context, mother_decision)
+            missing_pre = list(mode_ctx_pre.get("missing_fields") or [])
+            normalized_current_category = _normalize_category(lead.get("category"))
+            is_upper_stage = normalized_current_category in {"apresentation", "follow-up", "closing"}
+            if is_upper_stage or not missing_pre:
+                route_for_child = "apresentation"
+                anti_loop_rule3_applied = True
+                if logger:
+                    job = context.get("job") or {}
+                    payload = job.get("payload") or {}
+                    logger.info(
+                        "event=qualification_anti_loop_rule3 route_override=%s mother_route_to=%s lead_category=%s "
+                        "job_id=%s lead_id=%s",
+                        route_for_child,
+                        mother_decision.route_to,
+                        lead.get("category"),
+                        job.get("id") or payload.get("job_id"),
+                        lead.get("id") or payload.get("lead_id"),
+                    )
+
+        if _is_sdr_escalate_closing(context, mother_decision):
+            reason = f"guardrail_sdr_escalate_closing|{mother_decision.reason}"
+            return DecisionOutput(
+                next_action="ignore",
+                message_text="",
+                questions=[],
+                reason=reason,
+                suggested_category="closing",
+                category_reason="guardrail_sdr_escalate_closing",
+                outcome=None,
+                kanban_highlight=None,
+                signals=[],
+                confidence=mother_decision.confidence,
+                decision_trace={
+                    "mother_route_to": mother_decision.route_to,
+                    "mother_perceived_category": mother_decision.perceived_category,
+                    "mother_confidence": mother_decision.confidence,
+                    "agent_mode": (context.get("ai_profile") or {}).get("agent_mode"),
+                    "agent_mode_normalized": _normalize_agent_mode(context, mother_decision),
+                    "guardrail_sdr_escalate_closing": True,
+                    "suppressed_reply": True,
+                },
+            )
+
+        if mother_decision.route_to == "qualification" and not anti_loop_rule3_applied and not force_followup_route:
+            mode_ctx_pre = mode_ctx_pre or _build_mode_contract_context(context, mother_decision)
+            mode = mode_ctx_pre.get("agent_mode_normalized")
+            required_fields = list(mode_ctx_pre.get("required_fields") or [])
+            if mode_ctx_pre.get("missing_fields_source") == "heuristic" and logger:
+                logger.info(
+                    "event=qualification_heuristic_fallback_used reason=%s",
+                    _get_heuristic_reason(context),
+                )
+            if mode_ctx_pre.get("missing_fields_source") == "state_unavailable" and logger:
+                logger.info(
+                    "event=qualification_heuristic_fallback_disabled reason=state_unavailable",
+                )
+            playbook = context.get("playbook") or {}
+            must_collect = playbook.get("must_collect") if isinstance(playbook.get("must_collect"), list) else []
+            for item in must_collect:
+                if isinstance(item, str) and item not in required_fields:
+                    required_fields.append(item)
+
+            fields_schema = {field: "string|number|object|null" for field in required_fields}
+            extraction = {"extracted": {}, "confidence": {}, "evidence": {}, "raw": ""}
+            extraction_failed = False
+            persist_failed = False
+            try:
+                extraction = field_extractor.extract_fields_llm(context, fields_schema)
+            except Exception:
+                extraction = {"extracted": {}, "confidence": {}, "evidence": {}, "raw": ""}
+                extraction_failed = True
+                if logger:
+                    logger.info("event=qualification_extractor_fallback reason=extractor_failed")
+
+            extracted = extraction.get("extracted") if isinstance(extraction.get("extracted"), dict) else {}
+            new_extracted = {k: v for k, v in extracted.items() if k in required_fields and _is_filled_value(v)}
+            if "price_acceptance" in required_fields and "budget_or_price_acceptance" in extracted and "price_acceptance" not in new_extracted:
+                value = extracted.get("budget_or_price_acceptance")
+                if _is_filled_value(value):
+                    new_extracted["price_acceptance"] = value
+                    if logger:
+                        logger.info("event=qualification_price_field_mapped from=budget_or_price_acceptance to=price_acceptance")
+            if "budget_or_price_acceptance" in required_fields and "price_acceptance" in extracted and "budget_or_price_acceptance" not in new_extracted:
+                value = extracted.get("price_acceptance")
+                if _is_filled_value(value):
+                    new_extracted["budget_or_price_acceptance"] = value
+                    if logger:
+                        logger.info("event=qualification_price_field_mapped from=price_acceptance to=budget_or_price_acceptance")
+
+            lead = context.get("lead") or {}
+            metadata = context.get("metadata") or {}
+            user_id = lead.get("user_id") or (context.get("job") or {}).get("payload", {}).get("user_id")
+            lead_id = lead.get("id") or (context.get("job") or {}).get("payload", {}).get("lead_id")
+
+            if lead_id and user_id and new_extracted:
+                try:
+                    updated_state = crm_client.upsert_lead_qualification_state(
+                        lead_id=int(lead_id),
+                        user_id=int(user_id),
+                        patch={
+                            "stage": "qualification",
+                            "agent_mode_normalized": mode,
+                            "playbook_key": playbook.get("template_key") or playbook.get("name"),
+                            "playbook_version": "v1",
+                            "data_json": new_extracted,
+                            "confidence_json": extraction.get("confidence") if isinstance(extraction.get("confidence"), dict) else {},
+                        },
+                    )
+                    context["qualification_state"] = updated_state
+                except Exception:
+                    persist_failed = True
+                    if logger:
+                        logger.info("event=qualification_state_persist_fallback reason=persist_failed")
+                    pass
+
+            mode_ctx = _build_mode_contract_context(context, mother_decision)
+            if mode_ctx.get("missing_fields_source") == "heuristic" and logger and (extraction_failed or persist_failed):
+                reason = "persist_failed" if persist_failed else "extractor_failed"
+                logger.info("event=qualification_heuristic_fallback_used reason=%s", reason)
+            missing = list(mode_ctx.get("missing_fields") or [])
+            filled_fields = list(mode_ctx.get("filled_fields") or [])
+            current_field = _select_current_field(missing, filled_fields)
+            qualification_current_field = current_field
+            if not current_field:
+                route_for_child = "apresentation"
+                qualification_validation_status = "n/a"
+                if logger:
+                    job = context.get("job") or {}
+                    payload = job.get("payload") or {}
+                    logger.info(
+                        "event=qualification_auto_promote_runtime route_override=%s mother_route_to=%s job_id=%s lead_id=%s",
+                        route_for_child,
+                        mother_decision.route_to,
+                        job.get("id") or payload.get("job_id"),
+                        lead.get("id") or payload.get("lead_id"),
+                    )
+            last_field = mode_ctx.get("last_questioned_field")
+            attempts_map = mode_ctx.get("attempts_json") if isinstance(mode_ctx.get("attempts_json"), dict) else {}
+            has_progress = bool(new_extracted)
+
+            if lead_id and user_id and current_field:
+                try:
+                    if current_field == last_field and not has_progress:
+                        updated_state = crm_client.increment_lead_qualification_attempt(
+                            lead_id=int(lead_id),
+                            user_id=int(user_id),
+                            field=current_field,
+                        )
+                        context["qualification_state"] = updated_state
+                        attempts = int((updated_state.get("attempts_json") or {}).get(current_field) or 0)
+                        if mode == "consultivo" and attempts >= 2:
+                            return DecisionOutput(
+                                next_action="handoff",
+                                message_text="Perfeito — para avançar com precisão, vou te encaminhar para um especialista humano.",
+                                questions=[],
+                                reason="qualification_loop_handoff",
+                                suggested_category="qualification",
+                                category_reason="qualification_loop_handoff",
+                                outcome=None,
+                                kanban_highlight=None,
+                                signals=["qualification_loop"],
+                                confidence=mother_decision.confidence,
+                                decision_trace={
+                                    "agent_mode_normalized": mode,
+                                    "qualification_state_present": True,
+                                    "last_questioned_field": current_field,
+                                    "attempts": updated_state.get("attempts_json") or {},
+                                    "qualification_missing_fields_source": mode_ctx.get("missing_fields_source") or "state",
+                                    "loop_handoff": True,
+                                },
+                            )
+                        metadata["qualification_rephrase"] = True
+                    else:
+                        updated_state = crm_client.upsert_lead_qualification_state(
+                            lead_id=int(lead_id),
+                            user_id=int(user_id),
+                            patch={"last_questioned_field": current_field},
+                        )
+                        context["qualification_state"] = updated_state
+                except Exception:
+                    pass
+        if route_for_child == "qualification":
+            child_prompt = _build_child_prompt_qualification(context, message_text, mother_decision)
+        elif route_for_child == "apresentation":
+            child_prompt = _build_child_prompt_apresentation(context, message_text, mother_decision)
+        elif route_for_child == "follow-up":
+            try:
+                child_prompt = _build_child_prompt_follow_up(context, message_text, mother_decision)
+            except Exception:
+                child_prompt = _build_child_prompt(context, message_text, mother_decision)
+        elif route_for_child == "closing":
+            try:
+                child_prompt = _build_child_prompt_closing(context, message_text, mother_decision)
+            except Exception:
+                child_prompt = _build_child_prompt(context, message_text, mother_decision)
+        else:
+            child_prompt = _build_child_prompt(context, message_text, mother_decision)
+        stage = "child_call"
+        child_result: Optional[ChildResult] = None
+        validation_errors: list[str] = []
+        attempts = 2 if route_for_child == "qualification" else 1
+        for attempt_index in range(attempts):
+            qualification_retry_count = attempt_index
+            prompt_to_use = child_prompt
+            if validation_errors and route_for_child == "qualification":
+                prompt_to_use = (
+                    f"{child_prompt}\n\nVALIDATION_ERRORS: {json.dumps(validation_errors, ensure_ascii=False)}\n"
+                    "Corrija o JSON para field=current_field e reformule a pergunta sem repetir texto anterior."
+                )
+            child_text = llm_service.generate_child_result(route_for_child, prompt_to_use)
+            stage = "child_parse"
+            child_payload = _extract_json_payload(child_text)
+            if child_payload is None:
+                validation_errors = ["invalid_json"]
+                qualification_validation_status = "invalid_json"
+                continue
+            child_payload = _normalize_null_strings(child_payload)
+            if "question_text" not in child_payload and "message_text" in child_payload:
+                child_payload["question_text"] = child_payload.get("message_text")
+            stage = "child_validate"
+            child_result = ChildResult.model_validate(child_payload)
+            if route_for_child != "qualification":
+                break
+
+            mode_ctx_now = _build_mode_contract_context(context, mother_decision)
+            missing_now = list(mode_ctx_now.get("missing_fields") or [])
+            filled_now = list(mode_ctx_now.get("filled_fields") or [])
+            current_field_now = _select_current_field(missing_now, filled_now)
+            qualification_current_field = current_field_now
+            asked_all = mode_ctx_now.get("asked_questions_json") if isinstance(mode_ctx_now.get("asked_questions_json"), list) else []
+            asked_for_field = [
+                str(item.get("question_text") or "")
+                for item in asked_all
+                if isinstance(item, dict) and item.get("field") == current_field_now
+            ]
+            candidate_question = str(child_result.question_text or child_result.message_text or "").strip()
+            child_field = str(child_result.field or "").strip() or None
+            if not current_field_now:
+                qualification_validation_status = "no_current_field"
+                break
+            if child_field != current_field_now:
+                validation_errors = [f"field_mismatch expected={current_field_now} got={child_field}"]
+                qualification_validation_status = "field_mismatch"
+                continue
+            if not candidate_question:
+                validation_errors = ["empty_question_text"]
+                qualification_validation_status = "empty_question_text"
+                continue
+            last_same = asked_for_field[-1] if asked_for_field else ""
+            sim = _question_similarity(candidate_question, last_same)
+            qualification_repeated_similarity = sim
+            if last_same and sim >= 0.92:
+                validation_errors = [f"repeated_question similarity={sim:.2f}"]
+                qualification_validation_status = "repeated_question"
+                continue
+            qualification_validation_status = "accepted"
+            break
+
+        if child_result is None:
+            raise ValueError("llm returned invalid child payload")
+
+        if (
+            route_for_child == "qualification"
+            and qualification_validation_status != "accepted"
+            and qualification_current_field is not None
+        ):
+            fallback_field = qualification_current_field
+            child_result.field = fallback_field
+            child_result.question_text = _fallback_question_for_field(fallback_field)
+            child_result.message_text = child_result.question_text
+            qualification_validation_status = "fallback"
+
+        stage = "compose"
+        decision = compose_decision_output(
+            context=context,
+            mother_decision=mother_decision,
+            child_result=child_result,
+            effective_route_override=route_for_child,
+            anti_loop_rule3_applied=anti_loop_rule3_applied,
+        )
+        if decision.next_action == "ask_qualification":
+            trace_local = decision.decision_trace if isinstance(decision.decision_trace, dict) else {}
+            field_used = trace_local.get("question_field_used")
+            question_text = decision.message_text
+            lead = context.get("lead") or {}
+            user_id = lead.get("user_id") or (context.get("job") or {}).get("payload", {}).get("user_id")
+            lead_id = lead.get("id") or (context.get("job") or {}).get("payload", {}).get("lead_id")
+            job = context.get("job") or {}
+            payload = job.get("payload") or {}
+            job_ref = job.get("id") or payload.get("job_id")
+            if lead_id and user_id and field_used and question_text:
+                try:
+                    crm_client.upsert_lead_qualification_state(
+                        lead_id=int(lead_id),
+                        user_id=int(user_id),
+                        patch={
+                            "last_questioned_field": field_used,
+                            "last_question_text": question_text,
+                            "asked_questions_json": [{
+                                "field": field_used,
+                                "question_text": question_text,
+                                "created_at": datetime.utcnow().isoformat(),
+                                "job_id": job_ref,
+                            }],
+                        },
+                    )
+                except Exception:
+                    pass
+        decision = _sanitize_category_decision(decision, context, logger_instance=logger)
+        if decision.decision_trace and isinstance(decision.decision_trace, dict):
+            decision.decision_trace["suggested_category_final"] = decision.suggested_category
+            is_qualification_ask = (
+                decision.decision_trace.get("effective_route_to") == "qualification"
+                and decision.next_action == "ask_qualification"
+                and route_for_child == "qualification"
+            )
+            if is_qualification_ask:
+                decision.decision_trace["qualification_validation_status"] = qualification_validation_status
+                decision.decision_trace["qualification_retry_count"] = qualification_retry_count
+                decision.decision_trace["qualification_repeated_similarity"] = qualification_repeated_similarity
+            else:
+                decision.decision_trace.pop("qualification_validation_status", None)
+                decision.decision_trace.pop("qualification_retry_count", None)
+                decision.decision_trace.pop("qualification_repeated_similarity", None)
+        if logger:
+            job = context.get("job") or {}
+            payload = job.get("payload") or {}
+            lead = context.get("lead") or {}
+            log_context = {
+                "job_id": job.get("id") or payload.get("job_id"),
+                "lead_id": lead.get("id") or payload.get("lead_id"),
+                "user_id": lead.get("user_id") or payload.get("user_id"),
+            }
+            trace = decision.decision_trace if isinstance(decision.decision_trace, dict) else {}
+            logger.info(
+                "decision_mother_category route_to=%s perceived=%s mother_conf=%.2f lead_current=%s "
+                "suggested=%s guardrail=%s job_id=%s lead_id=%s user_id=%s",
+                trace.get("mother_route_to"),
+                trace.get("mother_perceived_category"),
+                trace.get("mother_confidence") or 0.0,
+                trace.get("lead_current_category"),
+                decision.suggested_category,
+                trace.get("guardrail_reason"),
+                log_context["job_id"],
+                log_context["lead_id"],
+                log_context["user_id"],
+            )
+            logger.info(
+                "decision llm next_action=%s reason=%s",
+                decision.next_action,
+                decision.reason,
+            )
+            if (
+                trace.get("effective_route_to") == "qualification"
+                and decision.next_action == "ask_qualification"
+                and route_for_child == "qualification"
+            ):
+                logger.info(
+                    "event=qualification_question job_id=%s lead_id=%s current_field=%s child_field=%s "
+                    "validation_status=%s retry_count=%s repeated_similarity_score=%.2f last_questioned_field=%s missing_fields=%s",
+                    log_context["job_id"],
+                    log_context["lead_id"],
+                    trace.get("current_field"),
+                    trace.get("question_field_used"),
+                    trace.get("qualification_validation_status"),
+                    trace.get("qualification_retry_count"),
+                    float(trace.get("qualification_repeated_similarity") or 0.0),
+                    trace.get("last_questioned_field"),
+                    trace.get("missing_fields"),
+                )
+            logger.info(
+                "decision_qualification_anti_loop job_id=%s lead_id=%s missing_fields=%s filled_fields=%s "
+                "current_field=%s question_field_used=%s effective_route_to=%s qualification_auto_promoted=%s "
+                "anti_loop_rule1_applied=%s anti_loop_rule3_applied=%s next_action=%s",
+                log_context["job_id"],
+                log_context["lead_id"],
+                trace.get("missing_fields"),
+                trace.get("filled_fields"),
+                trace.get("current_field"),
+                trace.get("question_field_used"),
+                trace.get("effective_route_to"),
+                trace.get("qualification_auto_promoted"),
+                trace.get("anti_loop_rule1_applied"),
+                trace.get("anti_loop_rule3_applied"),
+                decision.next_action,
+            )
+        return handoff_policy.apply(context, decision, logger=logger)
+    except Exception as exc:
+        if logger:
+            logger.warning(
+                "event=llm_orchestrator_error stage=%s exc_type=%s exc=%s mother_text_snip=%s child_text_snip=%s",
+                stage,
+                type(exc).__name__,
+                exc,
+                _truncate_snip(mother_text),
+                _truncate_snip(child_text),
+            )
+            logger.warning(
+                "decision fallback next_action=%s reason=%s",
+                FALLBACK_DECISION.next_action,
+                FALLBACK_DECISION.reason,
+            )
+        return handoff_policy.apply(context, FALLBACK_DECISION, logger=logger)

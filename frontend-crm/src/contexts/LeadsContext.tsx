@@ -5,6 +5,11 @@ import { KANBAN_COLUMNS, ARCHIVED_COLUMNS } from '@/data/mockData';
 import { api } from '../services/api';
 import { useApiErrorHandler } from '@/hooks/useApiErrorHandler';
 
+export type AddLeadResult =
+  | { kind: 'created'; leadId: string }
+  | { kind: 'exists'; existingLeadId: string; existingLead?: Lead }
+  | { kind: 'error' };
+
 interface LeadsContextType {
   columns: KanbanColumn[];
   archivedColumns: KanbanColumn[];
@@ -15,7 +20,8 @@ interface LeadsContextType {
   updateLead: (leadId: string, updates: Partial<Lead>) => void;
   moveLead: (leadId: string, newCategory: LeadStatus) => void;
   archiveLead: (leadId: string, archiveCategory: LeadStatus) => void;
-  addLead: (leadData: NewLeadForm) => void;
+  addLead: (leadData: NewLeadForm) => Promise<AddLeadResult>;
+  deleteLead: (leadId: string) => Promise<void>;
 
   loadAppointments: (leadId: string) => Promise<LeadAppointment[]>;
   createAppointment: (leadId: string, payload: { description: string; startAt: Date; endAt?: Date | null }) => Promise<LeadAppointment>;
@@ -56,6 +62,19 @@ function mapRawLead(raw: any): Lead {
       }
     : undefined;
 
+  let followupContract: Record<string, any> | null = null;
+  const rawContract = raw?.followup_contract ?? raw?.followupContract;
+  if (rawContract && typeof rawContract === 'object') {
+    followupContract = rawContract as Record<string, any>;
+  } else if (typeof rawContract === 'string') {
+    try {
+      const parsed = JSON.parse(rawContract);
+      followupContract = parsed && typeof parsed === 'object' ? parsed : null;
+    } catch {
+      followupContract = null;
+    }
+  }
+
   return {
     id: String(raw.id),
     companyName: raw.companyName || 'Empresa sem nome',
@@ -66,6 +85,10 @@ function mapRawLead(raw: any): Lead {
     category: raw.category || 'to-prospect',
     customMessage: raw.customMessage || '',
     observations: raw.observations || '',
+    agent_type: raw.agent_type ?? null,
+    followup_contract: followupContract,
+    bot_disabled: Boolean(raw.bot_disabled ?? raw.botDisabled),
+    bot_disabled_reason: raw.bot_disabled_reason ?? raw.botDisabledReason ?? null,
     createdAt: raw.createdAt ? new Date(raw.createdAt) : new Date(),
     lastMovement: raw.lastMovement ? new Date(raw.lastMovement) : new Date(),
     nextScheduledAction,
@@ -140,6 +163,15 @@ export function LeadsProvider({ children }: LeadsProviderProps) {
     const { nextScheduledAction: _ignore, ...payload } = patch as Partial<Lead> & {
       nextScheduledAction?: Lead['nextScheduledAction'];
     };
+    if (Object.keys(payload).length === 0) {
+      setProspectionColumns((cols) =>
+        cols.map((col) => ({
+          ...col,
+          leads: col.leads.map((l) => (l.id === leadId ? { ...l, ...patch } : l)),
+        }))
+      );
+      return;
+    }
     try {
       await api.updateLead(leadId, payload);
       setProspectionColumns((cols) =>
@@ -218,6 +250,9 @@ export function LeadsProvider({ children }: LeadsProviderProps) {
       const { nextScheduledAction: _ignore, ...payload } = updates as Partial<Lead> & {
         nextScheduledAction?: Lead['nextScheduledAction'];
       };
+      if (Object.keys(payload).length === 0) {
+        return;
+      }
       await api.updateLead(leadId, payload);
     } catch (error) {
       handleError(error, { fallbackMessage: 'Não foi possível atualizar o lead.' });
@@ -298,12 +333,13 @@ export function LeadsProvider({ children }: LeadsProviderProps) {
     syncProspectionStatus(leadId, archiveCategory);
   };
 
-  const addLead = async (leadData: NewLeadForm) => {
+  const addLead = async (leadData: NewLeadForm): Promise<AddLeadResult> => {
     try {
       const created = await api.createLead({
         companyName: leadData.companyName,
         contactName: leadData.contactName ?? null,
         phone: leadData.phone ?? null,
+        country_code: (leadData.country_code || "BR").toUpperCase(),
         email: leadData.email ?? null,
         origin: leadData.origin ?? "Manual",
         category: leadData.category,
@@ -311,6 +347,16 @@ export function LeadsProvider({ children }: LeadsProviderProps) {
         observations: leadData.observations ?? null,
         priority: 1, // backend espera "priority" (int)
       });
+
+      if (created?.status === 'exists' && (created?.lead_id || created?.id)) {
+        const existingLead = mapRawLead(created);
+        await reloadAllLeads();
+        return {
+          kind: 'exists',
+          existingLeadId: String(created.lead_id ?? created.id),
+          existingLead,
+        };
+      }
 
       // Use o que o backend devolveu (id, datas etc.)
       const newLead = mapRawLead(created);
@@ -325,9 +371,41 @@ export function LeadsProvider({ children }: LeadsProviderProps) {
 
       // mantém a visão de prospecção coerente, se necessário
       syncProspectionStatus(newLead.id, newLead.category as LeadStatus);
+      return { kind: 'created', leadId: newLead.id };
     } catch (error) {
       handleError(error, { fallbackMessage: 'Não foi possível criar o lead.' });
+      return { kind: 'error' };
     }
+  };
+
+  const deleteLead = async (leadId: string): Promise<void> => {
+    await api.deleteLead(leadId);
+
+    setColumns((prev) =>
+      prev.map((column) => ({
+        ...column,
+        leads: column.leads.filter((lead) => lead.id !== leadId),
+      }))
+    );
+
+    setArchivedColumns((prev) =>
+      prev.map((column) => ({
+        ...column,
+        leads: column.leads.filter((lead) => lead.id !== leadId),
+      }))
+    );
+
+    setProspectionColumns((prev) =>
+      prev.map((column) => ({
+        ...column,
+        leads: column.leads.filter((lead) => lead.id !== leadId),
+      }))
+    );
+
+    setAppointmentsByLead((prev) => {
+      const { [leadId]: _removed, ...rest } = prev;
+      return rest;
+    });
   };
 
 
@@ -468,6 +546,7 @@ export function LeadsProvider({ children }: LeadsProviderProps) {
     moveLead,
     archiveLead,
     addLead,
+    deleteLead,
     loadAppointments,
     createAppointment,
     updateAppointment,

@@ -13,7 +13,10 @@ import NotFound from "./pages/NotFound";
 import MinhaConta from "./pages/MinhaConta";
 import Assinatura from "./pages/Assinatura";
 import UsoDoPlano from "./pages/UsoDoPlano";
-import AiProfile from "./pages/AiProfile";
+import AgenteConfiguracao from "./pages/AgenteConfiguracao";
+import TiposAgentes from "./pages/TiposAgentes";
+import FollowUpCenter from "./pages/FollowUpCenter";
+import FollowUpEdit from "./pages/FollowUpEdit";
 import { ThemeProvider } from "./contexts/ThemeContext";
 import { LeadsProvider } from "./contexts/LeadsContext";
 import { RateLimitModalProvider } from "./contexts/RateLimitModalContext";
@@ -88,7 +91,7 @@ const App = () => (
                 {/* Rota pública */}
                 <Route path="/login" element={<Login />} />
 
-                {/* Rotas privadas com layout do app */}
+                {/* Rotas privadas com layout do app (sidebar) */}
                 <Route
                   element={
                     <Protected>
@@ -102,10 +105,23 @@ const App = () => (
                   <Route path="/prospeccao" element={<Prospeccao />} />
                   <Route path="/assistente-ia" element={<AssistenteIA />} />
                   <Route path="/pesquisa" element={<Pesquisa />} />
-                  <Route path="/ai-profile" element={<AiProfile />} />
                   <Route path="/minha-conta" element={<MinhaConta />} />
                   <Route path="/assinatura" element={<Assinatura />} />
                   <Route path="/uso-do-plano" element={<UsoDoPlano />} />
+                  <Route path="/follow-ups" element={<FollowUpCenter />} />
+                </Route>
+
+                {/* Rotas do Agente Orion — layout próprio (sem sidebar) */}
+                <Route
+                  element={
+                    <Protected>
+                      <Outlet />
+                    </Protected>
+                  }
+                >
+                  <Route path="/ai-profile" element={<AgenteConfiguracao />} />
+                  <Route path="/agentes-info" element={<TiposAgentes />} />
+                  <Route path="/follow-ups/:leadId/edit" element={<FollowUpEdit />} />
                 </Route>
 
                 {/* catch-all */}

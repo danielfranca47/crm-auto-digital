@@ -8,6 +8,135 @@ Principais mudanças:
 - Todas as rotas privadas de leads, prospecção, agentes e pesquisa exigem bearer token, validam assinatura CRM ativa e filtram dados por `user_id`.
 - Leads e fluxos de prospecção agora são multiusuário, sempre gravando e consultando dados com `user_id` derivado do backend-core.
 
+## Webhook WhatsApp inbound (ORION)
+
+## Exclusão real de lead (hard delete)
+
+- Endpoint autenticado: `DELETE /api/leads/{id}`
+- Segurança: exige `Authorization: Bearer <token>` + assinatura CRM ativa (via `require_crm_access`).
+- Escopo: remove o lead e seus dados relacionados por `lead_id` em transação única.
+- Preserva tabela `jobs` (auditoria/troubleshooting), mesmo que o payload tenha `lead_id`.
+- Respostas:
+  - `200 { "status": "ok", "deleted_lead_id": <id> }`
+  - `404 Lead não encontrado` (inclui caso de lead de outro usuário)
+
+- Endpoint: `POST /webhooks/whatsapp/inbound`
+- Segurança: header `X-Webhook-Secret` deve casar com `CRM_WEBHOOK_SECRET`; o CRM resolve o dono via core usando `CORE_SERVICE_TOKEN`.
+- Idempotência: `inbound_events` evita duplicar por `(provider, instance_id, external_event_id)`.
+- Conversas Orion (1 telefone único por mês): tabela `orion_conversations` controla o consumo mensal por `user_id`, usando `max_ia_conversas_monthly` retornado pelo core `/whatsapp-connections/resolve`.
+- Efeitos: cria/acha lead por telefone (E.164 iniciando com `+`), registra mensagem (model=`inbound`) e cria job `whatsapp.inbound.n8n`.
+- Convenção de mensagens: inbound salva `model="inbound"`; mensagens enviadas pelo CRM/automação devem usar `model="outbound"`. O orquestrador considera histórico outbound apenas quando `model` é exatamente `"outbound"`.
+
+### Modo stub (playground, sem Core/instância real)
+Para testes locais sem instância válida no Core:
+
+- `CRM_WHATSAPP_STUB=true` para aceitar `instance_id` arbitrário e pular o resolve do Core.
+- `CRM_STUB_USER_ID=1` (opcional) para forçar o `user_id` usado ao criar/associar lead.
+  - Se `CRM_STUB_USER_ID` não estiver configurado, o CRM tenta reutilizar o `user_id` de um lead existente com o mesmo telefone.
+
+#### Como testar em 30 segundos (Swagger + executor)
+1. Configure as env vars no CRM:
+   - `CRM_WEBHOOK_SECRET=seu_segredo`
+   - `CRM_WHATSAPP_STUB=true`
+   - `CRM_STUB_USER_ID=1` (recomendado para evitar erro se não houver lead)
+2. No Swagger do CRM, chame `POST /webhooks/whatsapp/inbound` com header `X-Webhook-Secret` e o payload abaixo.
+3. Rode o executor com `python -m app.runners.whatsapp --job-id <job_id>`.
+
+Payload mínimo (Swagger):
+```json
+{
+  "instance_id": "stub-instance",
+  "from": "+5511999999999",
+  "message_text": "Olá, quero saber mais",
+  "message_id": "msg-stub-001",
+  "timestamp": "2026-01-13T12:00:00Z",
+  "provider": "uazapi"
+}
+```
+
+## Webhook Uazapi (adapter)
+
+- Endpoint: `POST /webhooks/whatsapp/uazapi`
+- Segurança: header `X-Webhook-Secret` deve casar com `CRM_WEBHOOK_SECRET`.
+- Alternativa (Uazapi sem headers customizados): use `?secret=<CRM_WEBHOOK_SECRET>` na querystring.
+- Função: recebe o envelope UazapiGO v2 (`event`, `instance`, `data`) ou o formato alternativo com `EventType`, `instanceName` e `message`, adaptando para o `handle_inbound`.
+- Filtros: ignora eventos que não sejam `messages`, mensagens enviadas pelo próprio bot (`fromMe=true`) e mensagens sem texto.
+- Resolução do remetente (E.164): `chat.phone` (se existir) → `message.sender_pn`/`data.sender` (sanitizado, removendo sufixos e prefixando `+`).
+
+Exemplo de envelope:
+```json
+{
+  "event": "messages",
+  "instance": "i91011ijkL",
+  "data": {
+    "id": "ABCD123",
+    "messageId": "ABCD123",
+    "sender": "5511999999999@c.us",
+    "text": "Olá",
+    "fromMe": false,
+    "isGroup": false,
+    "messageTimestamp": 1716239123456
+  }
+}
+```
+
+Exemplo alternativo (EventType/message):
+```json
+{
+  "EventType": "messages",
+  "instanceName": "daniel-3",
+  "message": {
+    "messageid": "AC51727046BA57754D3D8169C4F64400",
+    "sender_pn": "554792163692@s.whatsapp.net",
+    "text": "Olá",
+    "fromMe": false,
+    "type": "text"
+  }
+}
+```
+
+Exemplo de URL com querystring:
+```
+https://crm.exemplo.com/webhooks/whatsapp/uazapi?secret=SEU_SEGREDO
+
+## UI de conexão WhatsApp (AI Profile)
+Para habilitar os novos endpoints proxy usados pela UI, configure:
+- `CORE_API_BASE`: base do backend-core (ex.: `http://localhost:8001`).
+- `CORE_SERVICE_TOKEN`: token de serviço para chamadas internas ao Core.
+- `CRM_PUBLIC_BASE_URL`: base pública do CRM (ex.: `https://crm.seudominio.com`).
+- `CRM_WEBHOOK_SECRET`: segredo do webhook usado no endpoint `/webhooks/whatsapp/uazapi`.
+
+Ao conectar o WhatsApp via UI, o CRM registra automaticamente o webhook no Core
+para garantir o inbound do Uazapi no endpoint `/webhooks/whatsapp/uazapi`.
+```
+
+Mapeamento aplicado:
+- `instance_id` ← `payload.instance`
+- `from` ← `payload.data.sender`
+- `message_text` ← `payload.data.text` (somente quando `messageType == "text"` ou ausente)
+- `message_id` ← `payload.data.messageId` (fallback `payload.data.id`)
+
+### ETAPA 4 – testes rápidos
+1. **Accepted gera decisão**: envie um webhook válido; espere `inbound_received` + `ai_decided` no `prospection_logs` para o `lead_id` retornado.
+2. **Idempotência**: repita o mesmo `message_id` → resposta `duplicate` e **nenhum** novo `ai_decided` deve aparecer.
+3. **Handoff por keyword**: envie `message_text` contendo “humano” e verifique `ai_decided` com `next_action=handoff`.
+4. **Qualificação inicial**: com histórico curto (<=1 mensagem outbound) e playbook com `qualification_questions`, a primeira mensagem do mês deve registrar `next_action=ask_qualification`.
+
+## Endpoints internos para executor (ETAPA 5 – pré-requisitos)
+
+- Autorização: `X-Service-Token: <CRM_SERVICE_TOKEN>` (ou `CORE_SERVICE_TOKEN` como fallback).
+- `GET /api/jobs/{job_id}`: retorna `job` com `type`, `payload`, `status`, `result`, `created_at`.
+- `GET /api/whatsapp/execution-context?job_id=`: monta contexto completo usando `build_context_bundle_from_inbound` (AIProfile via service token, playbook, histórico de até 20 mensagens, lead) e inclui a decisão `ai_decided` mais recente (`prospection_logs.action='ai_decided'`).
+- `POST /api/whatsapp/outbound`: body `{job_id, lead_id, user_id, phone, body, provider_message_id?, in_reply_to_message_id?}`. Reserva envio (status `reserved`), cria mensagem `model="outbound"`, loga `action="outbound_reserved"` e registra idempotência em `outbound_events` (UNIQUE por `job_id`/`in_reply_to_message_id`). Retorna `status="reserved"`, `status="reserved_exists"` ou `status="already_sent"` (quando já confirmado).
+- `POST /api/whatsapp/outbound/{outbound_event_id}/mark-sent`: body `{provider_message_id, provider?}`. Marca o outbound como `sent` e cria log `action="outbound_sent"` (idempotente).
+
+### ETAPA 5 – testes sugeridos
+1. `GET /api/jobs/{job_id}` com `X-Service-Token` válido → retorna job; `job_id` inexistente → 404.
+2. `GET /api/whatsapp/execution-context?job_id=` → resposta contém `lead`, `history`, `ai_profile`, `playbook`, `decision` (último `ai_decided`).
+3. `POST /api/whatsapp/outbound` (primeira vez) → `status="reserved"`, cria mensagem `model=outbound` e log `outbound_reserved`.
+4. `POST /api/whatsapp/outbound/{outbound_event_id}/mark-sent` → `status="sent"`, cria log `outbound_sent`.
+4. Repetir o mesmo `job_id` ou `in_reply_to_message_id` → `status="already_sent"` sem novo insert.
+
 ## Validação de assinatura do produto CRM
 
 - O backend-CRM usa `CORE_API_BASE` (ex.: `http://localhost:8000`) para consultar o backend-core com o mesmo Bearer token da requisição recebida.
@@ -429,6 +558,35 @@ Checklist rápido (use a porta em que o CRM estiver rodando, ex.: `http://localh
 7. **Reprovisionar (rotacionar token)**
    - `curl -X POST http://localhost:8010/api/agents/{agent_id}/reprovision -H "Authorization: Bearer $token_A"`
    - A resposta traz apenas uma vez o novo `agent_token` e um texto curto de instrução. Atualize `AGENT_TOKEN` (mantendo o mesmo `AGENT_ID`) no `.env` do agent-local e reinicie o processo; o agente volta a consumir jobs normalmente.
+
+### 2.1) Testes manuais de categoria sugerida (Etapa 5B.8)
+
+> Nota: o frontend usa o literal `apresentation` (sem o segundo "r"). Isso parece um typo de "apresentação", mas no MVP o backend segue exatamente esse valor para manter compatibilidade. Avaliar correção futura no frontend + migração de dados.
+
+1. **Mover category via result do executor (suggested_category presente)**
+   - Pegue um job `whatsapp.inbound.n8n` válido (ex.: o mesmo criado pelo webhook inbound) e seu `job_id`.
+   - Execute o complete interno com `suggested_category`:
+   ```bash
+   curl -X POST http://localhost:8010/api/internal/jobs/{job_id}/complete \
+     -H "X-Service-Token: $CRM_SERVICE_TOKEN" \
+     -H "Content-Type: application/json" \
+     -d '{
+           "result": {
+             "suggested_category": "closing",
+             "category_reason": "lead pediu proposta"
+           }
+         }'
+   ```
+   - Resultado esperado: `leads.category` muda para `closing` e `prospection_logs` registra `action="moved_stage"` com notes `ai:<from>->closing|lead pediu proposta`.
+
+2. **Não mover category quando não há suggested_category**
+   ```bash
+   curl -X POST http://localhost:8010/api/internal/jobs/{job_id}/complete \
+     -H "X-Service-Token: $CRM_SERVICE_TOKEN" \
+     -H "Content-Type: application/json" \
+     -d '{ "result": { "notes": "sem sugestão" } }'
+   ```
+   - Resultado esperado: `leads.category` permanece a mesma (não força `qualification`).
 
 ### 3) Testes do Assistente IA (Etapa 4.3 — preview/import dedup)
 

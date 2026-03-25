@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Alert,
   AlertDescription,
@@ -34,9 +34,17 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { useApiErrorHandler } from "@/hooks/useApiErrorHandler";
 import { useToast } from "@/hooks/use-toast";
-import { api, AiProfilePayload, AiTemplate, KnowledgeItem } from "@/services/api";
+import {
+  api,
+  AiProfilePayload,
+  AiTemplate,
+  KnowledgeItem,
+  WhatsappConnectResponse,
+  WhatsappQrPayload,
+  WhatsappStatusResponse,
+} from "@/services/api";
 import { useUsage } from "@/hooks/useUsage";
-import { AlertCircle, Brain, FileEdit, FilePlus, RefreshCw, Sparkles, Upload, Wand2 } from "lucide-react";
+import { AlertCircle, Brain, Clock, FileEdit, FilePlus, RefreshCw, Sparkles, Upload, Wand2 } from "lucide-react";
 
 const fallbackTemplates: Record<
   string,
@@ -67,18 +75,26 @@ const initialProfileState: AiProfilePayload = {
   name: "",
   brand_name: "",
   tone_of_voice: "",
+  timezone: "UTC",
   niche: "",
   target_audience: "",
   offer_description: "",
   goals: "",
   custom_instructions: "",
+  agent_mode: "agenda",
+  identity_mode: "human_agent",
+  handoff_policy: "keep_active_notify",
+  handoff_custom_text: "",
+  requires_handoff: false,
+  human_in_loop: false,
 };
 
 const goalSuggestions = [
-  "Agendar demos qualificadas",
-  "Reduzir churn nos primeiros 90 dias",
-  "Aumentar taxa de resposta em campanhas frias",
-  "Priorizar leads com maior fit",
+  "Confirmar preço/local antes de sugerir horários",
+  "Perguntar 3 informações obrigatórias antes de avançar",
+  "Lidar com objeções comuns sem alongar conversa",
+  "Encerrar educadamente quando não houver intenção",
+  "Não agendar sem confirmação do lead",
 ];
 
 const allowedExtensions = [".txt", ".csv", ".xlsx"];
@@ -106,6 +122,56 @@ function formatDate(value?: string | null) {
   }
 }
 
+type AgentModelUi = "agendador_com_humano" | "direto_autonomo" | "hibrido_agendador";
+
+function profileToAgentModelUi(profile: Partial<AiProfilePayload>): AgentModelUi {
+  const template = String(profile.template_key || "").toLowerCase();
+  if (template === "hybrid_scheduler") return "hibrido_agendador";
+  if (template === "closer_agressivo") return "direto_autonomo";
+  if (template === "sdr_padrao" || template === "consultor_especialista") return "agendador_com_humano";
+
+  const mode = String(profile.agent_mode || "").toLowerCase();
+  const requires = Boolean(profile.requires_handoff);
+  const human = Boolean(profile.human_in_loop);
+
+  if (mode === "agendador_com_humano") return "agendador_com_humano";
+  if (mode === "direto_autonomo") return "direto_autonomo";
+  if (mode === "hibrido_agendador") return "hibrido_agendador";
+  if (mode === "consultivo") return "agendador_com_humano";
+  if (mode === "direto" || mode === "closer") return "direto_autonomo";
+  if (mode === "sdr_scheduler") return "agendador_com_humano";
+  if (mode === "agenda") return requires || human ? "agendador_com_humano" : "hibrido_agendador";
+  return "hibrido_agendador";
+}
+
+function applyAgentModelUi(profile: AiProfilePayload, model: AgentModelUi): AiProfilePayload {
+  if (model === "agendador_com_humano") {
+    return {
+      ...profile,
+      template_key: profile.template_key || "sdr_padrao",
+      agent_mode: "consultivo",
+      requires_handoff: true,
+      human_in_loop: true,
+    };
+  }
+  if (model === "direto_autonomo") {
+    return {
+      ...profile,
+      template_key: "closer_agressivo",
+      agent_mode: "direto",
+      requires_handoff: false,
+      human_in_loop: false,
+    };
+  }
+  return {
+    ...profile,
+    template_key: "hybrid_scheduler",
+    agent_mode: "agenda",
+    requires_handoff: false,
+    human_in_loop: false,
+  };
+}
+
 function KnowledgeLevel({ count }: { count: number }) {
   const label = count === 0 ? "Vazio" : count <= 3 ? "Básico" : "Enriquecido";
   const variant: "secondary" | "outline" | "default" =
@@ -116,11 +182,12 @@ function KnowledgeLevel({ count }: { count: number }) {
 export default function AiProfilePage() {
   const { toast } = useToast();
   const { handleError } = useApiErrorHandler();
-  const { data: usageData } = useUsage();
+  const { data: usageData, loading: usageLoading } = useUsage();
 
   const [templates, setTemplates] = useState<AiTemplate[]>([]);
   const [loadingTemplates, setLoadingTemplates] = useState(false);
   const [profile, setProfile] = useState<AiProfilePayload>(initialProfileState);
+  const [agentModelUi, setAgentModelUi] = useState<AgentModelUi>("hibrido_agendador");
   const [profileExists, setProfileExists] = useState(false);
   const [loadingProfile, setLoadingProfile] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -138,13 +205,35 @@ export default function AiProfilePage() {
   const [editContent, setEditContent] = useState("");
   const [viewItem, setViewItem] = useState<KnowledgeItem | null>(null);
 
+  const [cadenceStr, setCadenceStr] = useState("");
+  const [cadenceError, setCadenceError] = useState<string | null>(null);
+
+  const [whatsappQr, setWhatsappQr] = useState<WhatsappQrPayload | null>(null);
+  const [whatsappStatus, setWhatsappStatus] = useState<WhatsappStatusResponse | null>(null);
+  const [whatsappPhase, setWhatsappPhase] = useState<"idle" | "connecting" | "connected" | "error">(
+    "idle"
+  );
+  const [whatsappError, setWhatsappError] = useState<string | null>(null);
+  const [whatsappLoading, setWhatsappLoading] = useState(false);
+  const pollingRef = useRef<number | null>(null);
+  const refreshTimeoutRef = useRef<number | null>(null);
+  const refreshCountRef = useRef(0);
+  const connectDebounceRef = useRef(0);
+  const connectLockRef = useRef(false);
+  const pollAttemptRef = useRef(0);
+  const phaseRef = useRef(whatsappPhase);
+
   const entitlements = usageData?.entitlements;
   const limits = entitlements?.limits ?? {};
   const maxIa = limits?.max_ia_conversas_monthly;
-  const iaProductActive = entitlements?.products?.some(
-    (p) => p?.product_code === "agent_ia" && (p.status ?? "") === "active"
+  const crmSub = entitlements?.products?.find(
+    (p) => p?.product_code === "crm" && (p.status ?? "") === "active"
   );
-  const iaUnavailable = !iaProductActive || maxIa === 0 || maxIa === null;
+  const isCrmFree = crmSub?.plan_code === "crm_free";
+  const isUnlimited = maxIa === null;
+  const isUnknown = maxIa === undefined;
+  const iaAvailable = isUnlimited || (typeof maxIa === "number" && maxIa > 0);
+  const showIaUnavailableBanner = !usageLoading && !!usageData && !isUnknown && !iaAvailable;
 
   const status = useMemo(() => summarizeProfile(profile), [profile]);
   const previewText = useMemo(() => {
@@ -180,6 +269,84 @@ export default function AiProfilePage() {
     }));
   }, [templates]);
 
+  const normalizedWhatsStatus = (whatsappStatus?.status || "").toLowerCase();
+  const isWhatsappConnected = normalizedWhatsStatus === "connected";
+  const showAdvancedTechnical = import.meta.env.DEV;
+
+  const whatsappStatusLabel = (() => {
+    if (whatsappPhase === "error") return "Erro";
+    if (isWhatsappConnected) return "Conectado";
+    if (whatsappPhase === "connecting") return "Conectando";
+    if (whatsappStatus?.status) return whatsappStatus.status;
+    return "Não conectado";
+  })();
+
+  const whatsappBadgeVariant = isWhatsappConnected
+    ? "default"
+    : whatsappPhase === "error"
+    ? "destructive"
+    : "secondary";
+
+  const clearPolling = () => {
+    if (pollingRef.current) {
+      window.clearTimeout(pollingRef.current);
+      pollingRef.current = null;
+    }
+  };
+
+  const clearRefreshTimeout = () => {
+    if (refreshTimeoutRef.current) {
+      window.clearTimeout(refreshTimeoutRef.current);
+      refreshTimeoutRef.current = null;
+    }
+  };
+
+  const POLL_BACKOFF_MS = [2000, 4000, 8000, 15000];
+
+  const scheduleStatusPoll = () => {
+    clearPolling();
+    const attempt = Math.min(pollAttemptRef.current, POLL_BACKOFF_MS.length - 1);
+    const waitMs = POLL_BACKOFF_MS[attempt];
+    pollingRef.current = window.setTimeout(async () => {
+      if (phaseRef.current !== "connecting") return;
+      await handleWhatsappStatus(true);
+      if (phaseRef.current === "connecting") {
+        pollAttemptRef.current += 1;
+        scheduleStatusPoll();
+      }
+    }, waitMs);
+  };
+
+  const startPolling = () => {
+    pollAttemptRef.current = 0;
+    scheduleStatusPoll();
+  };
+
+  const scheduleAutoRefresh = () => {
+    clearRefreshTimeout();
+    refreshTimeoutRef.current = window.setTimeout(async () => {
+      if (phaseRef.current !== "connecting") return;
+      if (refreshCountRef.current >= 3) return;
+      refreshCountRef.current += 1;
+      if (import.meta.env.DEV) {
+        console.log("WhatsApp auto-refresh QR", { attempt: refreshCountRef.current });
+      }
+      await handleWhatsappRefreshQr({ auto: true });
+    }, 20000);
+  };
+
+  const startConnectingFlow = () => {
+    setWhatsappPhase("connecting");
+    startPolling();
+    scheduleAutoRefresh();
+  };
+
+  const stopConnectingFlow = () => {
+    clearPolling();
+    clearRefreshTimeout();
+    pollAttemptRef.current = 0;
+  };
+
   async function loadTemplates() {
     setLoadingTemplates(true);
     try {
@@ -196,10 +363,15 @@ export default function AiProfilePage() {
     setLoadingProfile(true);
     try {
       const data = await api.core.getAiProfileMe();
-      setProfile({
+      const loadedProfile = {
         ...initialProfileState,
         ...data,
-      });
+      };
+      const inferredModel = profileToAgentModelUi(loadedProfile);
+      const normalizedLoadedProfile = applyAgentModelUi(loadedProfile, inferredModel);
+      setProfile(normalizedLoadedProfile);
+      setCadenceStr(Array.isArray(data.followup_cadence) ? data.followup_cadence.join(", ") : "");
+      setAgentModelUi(inferredModel);
       setProfileExists(true);
     } catch (err: any) {
       handleError(err, {
@@ -208,6 +380,7 @@ export default function AiProfilePage() {
       });
       if ((err as any)?.status === 404) {
         setProfile(initialProfileState);
+        setAgentModelUi(profileToAgentModelUi(initialProfileState));
         setProfileExists(false);
       }
     } finally {
@@ -231,8 +404,37 @@ export default function AiProfilePage() {
     loadTemplates();
     loadProfile();
     loadKnowledge();
+    handleWhatsappStatus(true);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  useEffect(() => {
+    return () => {
+      clearPolling();
+      clearRefreshTimeout();
+    };
+  }, []);
+
+  useEffect(() => {
+    phaseRef.current = whatsappPhase;
+    if (isWhatsappConnected) {
+      setWhatsappPhase("connected");
+      stopConnectingFlow();
+    }
+  }, [isWhatsappConnected]);
+
+  useEffect(() => {
+    setProfile((prev) => {
+      if (prev.agent_mode) return prev;
+      const inferred =
+        prev.template_key && prev.template_key.startsWith("closer") ? "direto" : "agenda";
+      return { ...prev, agent_mode: inferred };
+    });
+  }, [profile.template_key]);
+
+  useEffect(() => {
+    setAgentModelUi(profileToAgentModelUi(profile));
+  }, [profile.agent_mode, profile.requires_handoff, profile.human_in_loop]);
 
   const handleTemplateSelect = (tpl: AiTemplate) => {
     const preset = fallbackTemplates[tpl.key] || fallbackTemplates.sdr_padrao;
@@ -257,21 +459,143 @@ export default function AiProfilePage() {
         return;
       }
     }
+    // Validar e parsear cadência
+    let parsedCadence: number[] | null = null;
+    if (cadenceStr.trim()) {
+      const parts = cadenceStr.split(",").map((s) => s.trim()).filter(Boolean);
+      const nums = parts.map(Number);
+      if (nums.some(isNaN) || nums.some((n) => n <= 0)) {
+        setCadenceError("Cadência inválida: use números positivos separados por vírgula (ex: 30, 1440, 4320).");
+        return;
+      }
+      const maxAttempts = profile.followup_max_attempts ?? 0;
+      if (maxAttempts > 0 && nums.length !== maxAttempts - 1) {
+        setCadenceError(`A cadência deve ter exatamente ${maxAttempts - 1} elemento(s) para ${maxAttempts} tentativas.`);
+        return;
+      }
+      parsedCadence = nums;
+    }
+    setCadenceError(null);
+
     setSaving(true);
     try {
+      const inferredModel = profileToAgentModelUi(profile);
+      const normalizedProfile = applyAgentModelUi(profile, inferredModel);
       const payload: AiProfilePayload = {
-        ...profile,
-        custom_instructions: profile.custom_instructions?.trim() || null,
+        ...normalizedProfile,
+        timezone: normalizedProfile.timezone?.trim() ? normalizedProfile.timezone : "UTC",
+        custom_instructions: normalizedProfile.custom_instructions?.trim() || null,
+        handoff_custom_text: normalizedProfile.handoff_custom_text?.trim() || null,
+        followup_cadence: parsedCadence,
+        followup_allowed_hours: normalizedProfile.followup_allowed_hours?.trim() || null,
       };
       const fn = profileExists ? api.core.updateAiProfileMe : api.core.createAiProfile;
       const saved = await fn(payload);
-      setProfile({ ...initialProfileState, ...saved });
+      const savedProfile = { ...initialProfileState, ...saved };
+      const savedModel = profileToAgentModelUi(savedProfile);
+      setProfile(applyAgentModelUi(savedProfile, savedModel));
+      setAgentModelUi(savedModel);
       setProfileExists(true);
       toast({ title: "Perfil salvo", description: "Identidade do agente atualizada." });
     } catch (err) {
       handleError(err, { fallbackMessage: "Falha ao salvar perfil." });
     } finally {
       setSaving(false);
+    }
+  }
+
+  const normalizeConnectResponse = (data: WhatsappConnectResponse) => {
+    setWhatsappStatus((prev) => ({
+      ...prev,
+      instance_id: data.instance_id,
+      status: data.status ?? prev?.status,
+    }));
+    if (data.qr) {
+      setWhatsappQr(data.qr);
+    }
+    if (import.meta.env.DEV) {
+      console.log("WhatsApp connect response", { status: data.status, qrKind: data.qr?.kind });
+    }
+    if (data.status && data.status.toLowerCase() === "connected") {
+      setWhatsappPhase("connected");
+      stopConnectingFlow();
+    } else {
+      startConnectingFlow();
+    }
+  };
+
+  async function handleWhatsappConnect() {
+    const now = Date.now();
+    if (whatsappLoading || connectLockRef.current) return;
+    if (now - connectDebounceRef.current < 1200) return;
+    connectDebounceRef.current = now;
+    connectLockRef.current = true;
+    setWhatsappLoading(true);
+    setWhatsappError(null);
+    try {
+      refreshCountRef.current = 0;
+      pollAttemptRef.current = 0;
+      const data = await api.crm.whatsappConnect();
+      normalizeConnectResponse(data);
+    } catch (err: any) {
+      setWhatsappPhase("error");
+      setWhatsappError(err?.message || "Falha ao conectar WhatsApp.");
+      handleError(err, { fallbackMessage: "Falha ao conectar WhatsApp." });
+    } finally {
+      setWhatsappLoading(false);
+      window.setTimeout(() => {
+        connectLockRef.current = false;
+      }, 1200);
+    }
+  }
+
+  async function handleWhatsappStatus(silent = false) {
+    try {
+      const data = await api.crm.whatsappStatus();
+      if (import.meta.env.DEV) {
+        console.log("WhatsApp status poll", { status: data.status });
+      }
+      setWhatsappStatus(data);
+      if (data.status && data.status.toLowerCase() === "connected") {
+        setWhatsappPhase("connected");
+        stopConnectingFlow();
+      } else if (phaseRef.current !== "connecting") {
+        setWhatsappPhase("idle");
+      }
+    } catch (err: any) {
+      if (err?.status === 404) {
+        setWhatsappStatus(null);
+        setWhatsappPhase("idle");
+        setWhatsappQr(null);
+        return;
+      }
+      if (!silent) {
+        setWhatsappPhase("error");
+        setWhatsappError(err?.message || "Falha ao consultar status.");
+        handleError(err, { fallbackMessage: "Falha ao consultar status." });
+      }
+    }
+  }
+
+  async function handleWhatsappRefreshQr(opts?: { auto?: boolean }) {
+    if (whatsappLoading) return;
+    setWhatsappLoading(true);
+    setWhatsappError(null);
+    try {
+      const data = await api.crm.whatsappRefreshQr();
+      if (import.meta.env.DEV) {
+        console.log("WhatsApp QR refresh", { status: data.status, qrKind: data.qr?.kind });
+      }
+      if (!opts?.auto) {
+        refreshCountRef.current = 0;
+      }
+      normalizeConnectResponse(data);
+    } catch (err: any) {
+      setWhatsappPhase("error");
+      setWhatsappError(err?.message || "Falha ao gerar novo QR.");
+      handleError(err, { fallbackMessage: "Falha ao gerar novo QR." });
+    } finally {
+      setWhatsappLoading(false);
     }
   }
 
@@ -370,6 +694,9 @@ export default function AiProfilePage() {
   }
 
   const knowledgeStatus = <KnowledgeLevel count={knowledgeItems.length} />;
+  const qrIsImage =
+    !!whatsappQr?.value &&
+    (whatsappQr.kind === "url" || whatsappQr.value.startsWith("data:image/"));
 
   return (
     <div className="p-6 space-y-6">
@@ -382,14 +709,31 @@ export default function AiProfilePage() {
           <p className="text-muted-foreground">
             Configure o comportamento do agente e organize o conhecimento do negócio.
           </p>
-          {iaUnavailable && (
+          {showIaUnavailableBanner && (
             <Alert className="mt-3 border-orange-400/60 bg-orange-50/40 dark:bg-orange-950/20">
               <AlertCircle className="h-4 w-4" />
-              <AlertTitle>IA conversacional indisponível</AlertTitle>
-              <AlertDescription>
-                Seu plano atual não inclui o agente conversacional. Ainda assim, você pode
-                configurar o perfil e o conhecimento. <a className="underline" href="/assinatura">Ver planos</a>.
-              </AlertDescription>
+              {isCrmFree ? (
+                <>
+                  <AlertTitle>Conversational AI indisponível</AlertTitle>
+                  <AlertDescription>
+                    Seu plano atual não inclui o agente conversacional. Ainda assim, você pode
+                    configurar o perfil e o conhecimento.{" "}
+                    <a className="underline" href="/assinatura">
+                      Ver planos
+                    </a>.
+                  </AlertDescription>
+                </>
+              ) : (
+                <>
+                  <AlertTitle>Créditos de Conversational AI esgotados</AlertTitle>
+                  <AlertDescription>
+                    Seus créditos de conversas mensais foram esgotados.{" "}
+                    <a className="underline" href="/assinatura">
+                      Comprar créditos
+                    </a>.
+                  </AlertDescription>
+                </>
+              )}
             </Alert>
           )}
         </div>
@@ -416,39 +760,136 @@ export default function AiProfilePage() {
         <TabsList>
           <TabsTrigger value="profile">Identidade do agente</TabsTrigger>
           <TabsTrigger value="knowledge">Conhecimento do negócio</TabsTrigger>
+          <TabsTrigger value="followup">Follow-up</TabsTrigger>
         </TabsList>
 
         <TabsContent value="profile" className="space-y-4">
           <Card>
             <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Wand2 className="h-5 w-5 text-primary" /> Template / Estilo do agente
-              </CardTitle>
-              <CardDescription>Selecione um template e adapte o tom.</CardDescription>
+              <CardTitle>Modelo do Agente</CardTitle>
+              <CardDescription>Escolha o formato de atendimento principal.</CardDescription>
             </CardHeader>
-            <CardContent className="grid gap-3 md:grid-cols-3">
-              {loadingTemplates && <p>Carregando templates...</p>}
-              {!loadingTemplates &&
-                mappedTemplates.map((tpl) => (
-                  <button
-                    key={tpl.key}
-                    className={`rounded-lg border p-4 text-left transition hover:border-primary/60 hover:shadow-sm ${
-                      profile.template_key === tpl.key ? "border-primary bg-primary/5" : ""
-                    }`}
-                    onClick={() => handleTemplateSelect(tpl)}
-                    type="button"
-                  >
-                    <div className="flex items-center justify-between">
-                      <div className="font-semibold">{tpl.name || tpl.key}</div>
-                      {profile.template_key === tpl.key && (
-                        <Badge variant="default" className="text-xs">Selecionado</Badge>
-                      )}
+            <CardContent className="space-y-3">
+              <div className="grid gap-2 md:grid-cols-3">
+                <button
+                  type="button"
+                  className={`rounded-md border p-3 text-left ${agentModelUi === "agendador_com_humano" ? "border-primary bg-primary/5" : ""}`}
+                  onClick={() => setProfile((p) => applyAgentModelUi(p, "agendador_com_humano"))}
+                >
+                  <div className="font-medium">Agendador com humano</div>
+                  <p className="text-xs text-muted-foreground">Qualifica e agenda com handoff humano.</p>
+                </button>
+                <button
+                  type="button"
+                  className={`rounded-md border p-3 text-left ${agentModelUi === "direto_autonomo" ? "border-primary bg-primary/5" : ""}`}
+                  onClick={() => setProfile((p) => applyAgentModelUi(p, "direto_autonomo"))}
+                >
+                  <div className="font-medium">Direto autônomo</div>
+                  <p className="text-xs text-muted-foreground">Foco em fechamento sem handoff.</p>
+                </button>
+                <button
+                  type="button"
+                  className={`rounded-md border p-3 text-left ${agentModelUi === "hibrido_agendador" ? "border-primary bg-primary/5" : ""}`}
+                  onClick={() => setProfile((p) => applyAgentModelUi(p, "hibrido_agendador"))}
+                >
+                  <div className="font-medium">Híbrido agendador</div>
+                  <p className="text-xs text-muted-foreground">Agenda com autonomia operacional.</p>
+                </button>
+              </div>
+
+              {showAdvancedTechnical && (
+                <details className="rounded-md border p-3">
+                  <summary className="cursor-pointer text-sm font-medium">Configurações avançadas (técnico)</summary>
+                  <div className="mt-3 space-y-4">
+                  <div className="space-y-2">
+                    <div className="flex items-center gap-2 text-sm font-medium">
+                      <Wand2 className="h-4 w-4 text-primary" /> Template / Estilo do agente
                     </div>
-                    <p className="mt-2 text-sm text-muted-foreground line-clamp-3">
-                      {tpl.description || fallbackTemplates[tpl.key]?.description}
-                    </p>
-                  </button>
-                ))}
+                    <div className="grid gap-3 md:grid-cols-3">
+                      {loadingTemplates && <p>Carregando templates...</p>}
+                      {!loadingTemplates &&
+                        mappedTemplates.map((tpl) => (
+                          <button
+                            key={tpl.key}
+                            className={`rounded-lg border p-4 text-left transition hover:border-primary/60 hover:shadow-sm ${
+                              profile.template_key === tpl.key ? "border-primary bg-primary/5" : ""
+                            }`}
+                            onClick={() => handleTemplateSelect(tpl)}
+                            type="button"
+                          >
+                            <div className="flex items-center justify-between">
+                              <div className="font-semibold">{tpl.name || tpl.key}</div>
+                              {profile.template_key === tpl.key && (
+                                <Badge variant="default" className="text-xs">Selecionado</Badge>
+                              )}
+                            </div>
+                            <p className="mt-2 text-sm text-muted-foreground line-clamp-3">
+                              {tpl.description || fallbackTemplates[tpl.key]?.description}
+                            </p>
+                          </button>
+                        ))}
+                    </div>
+                  </div>
+
+                  <div className="grid gap-3 md:grid-cols-3">
+                    <div className="space-y-2">
+                      <Label>Agent Profile Mode</Label>
+                      <Select
+                        value={profile.agent_mode || "agenda"}
+                        onValueChange={(value) =>
+                          setProfile((p) => ({ ...p, agent_mode: value as AiProfilePayload["agent_mode"] }))
+                        }
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="Selecione o modo do agente" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="consultivo">Consultivo</SelectItem>
+                          <SelectItem value="agenda">Agenda</SelectItem>
+                          <SelectItem value="direto">Direto</SelectItem>
+                          <SelectItem value="sdr_scheduler">SDR Scheduler (legado)</SelectItem>
+                          <SelectItem value="closer">Closer (legado)</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Requer handoff humano</Label>
+                      <Select
+                        value={String(!!profile.requires_handoff)}
+                        onValueChange={(value) =>
+                          setProfile((p) => ({ ...p, requires_handoff: value === "true" }))
+                        }
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="Selecione" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="false">Não</SelectItem>
+                          <SelectItem value="true">Sim</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Human in loop</Label>
+                      <Select
+                        value={String(!!profile.human_in_loop)}
+                        onValueChange={(value) =>
+                          setProfile((p) => ({ ...p, human_in_loop: value === "true" }))
+                        }
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="Selecione" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="false">Não</SelectItem>
+                          <SelectItem value="true">Sim</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+                  </div>
+                </details>
+              )}
             </CardContent>
           </Card>
 
@@ -484,6 +925,25 @@ export default function AiProfilePage() {
                 <CardDescription>Quem você atende.</CardDescription>
               </CardHeader>
               <CardContent className="space-y-3">
+                <div className="space-y-2">
+                  <Label>Fuso horário (timezone)</Label>
+                  <Select
+                    value={profile.timezone || "UTC"}
+                    onValueChange={(value) => setProfile((p) => ({ ...p, timezone: value }))}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Selecione o fuso horário" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="UTC">UTC</SelectItem>
+                      <SelectItem value="Europe/Lisbon">Europe/Lisbon</SelectItem>
+                      <SelectItem value="America/Sao_Paulo">America/Sao_Paulo</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <p className="text-xs text-muted-foreground">
+                    Use o formato IANA (ex.: Europe/Lisbon).
+                  </p>
+                </div>
                 <div className="space-y-2">
                   <Label>Nicho</Label>
                   <Input
@@ -527,43 +987,6 @@ export default function AiProfilePage() {
 
             <Card>
               <CardHeader>
-                <CardTitle>Objetivos</CardTitle>
-                <CardDescription>Selecione objetivos e personalize.</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                <Textarea
-                  value={profile.goals}
-                  placeholder="Use bullets. Ex.:\n- Agendar 10 demos/semana\n- Reduzir ciclo de vendas"
-                  onChange={(e) => setProfile((p) => ({ ...p, goals: e.target.value }))}
-                  rows={4}
-                />
-                <div className="flex flex-wrap gap-2">
-                  {goalSuggestions.map((goal) => (
-                    <Button
-                      key={goal}
-                      variant="secondary"
-                      size="sm"
-                      type="button"
-                      onClick={() =>
-                        setProfile((p) => ({
-                          ...p,
-                          goals: p.goals.includes(goal)
-                            ? p.goals
-                            : `${p.goals ? `${p.goals}\n` : ""}${`- ${goal}`}`,
-                        }))
-                      }
-                    >
-                      {goal}
-                    </Button>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
-          </div>
-
-          <div className="grid gap-4 md:grid-cols-2">
-            <Card>
-              <CardHeader>
                 <CardTitle>Tom de voz</CardTitle>
                 <CardDescription>Como o agente fala.</CardDescription>
               </CardHeader>
@@ -590,27 +1013,221 @@ export default function AiProfilePage() {
                 />
               </CardContent>
             </Card>
+          </div>
 
+          {(profile.requires_handoff || profile.human_in_loop) && (
             <Card>
               <CardHeader>
-                <CardTitle>Instruções extras</CardTitle>
-                <CardDescription>Diretrizes adicionais para o agente.</CardDescription>
+                <CardTitle>Atendimento humano (Handoff)</CardTitle>
+                <CardDescription>Defina como o agente se identifica e quando aciona um humano.</CardDescription>
               </CardHeader>
-              <CardContent className="space-y-2">
-                <Textarea
-                  value={profile.custom_instructions || ""}
-                  placeholder="Ex.: Sempre responder em português do Brasil e sugerir próximos passos claros."
-                  onChange={(e) =>
-                    setProfile((p) => ({ ...p, custom_instructions: e.target.value }))
-                  }
-                  rows={4}
-                />
-                <div className="text-xs text-muted-foreground text-right">
-                  {(profile.custom_instructions || "").length} caracteres
+              <CardContent className="space-y-4">
+                <div className="space-y-2">
+                  <Label>Modo de identidade</Label>
+                  <Select
+                    value={profile.identity_mode}
+                    onValueChange={(value) =>
+                      setProfile((p) => ({ ...p, identity_mode: value as AiProfilePayload["identity_mode"] }))
+                    }
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Selecione o modo" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="virtual_assistant">Assistente virtual</SelectItem>
+                      <SelectItem value="human_agent">Humano do time</SelectItem>
+                      <SelectItem value="user_clone">Clone do usuário</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <p className="text-xs text-muted-foreground">
+                    Define como o agente se apresenta no início das conversas.
+                  </p>
+                </div>
+                <div className="space-y-2">
+                  <Label>Política quando o lead pedir humano</Label>
+                  <Select
+                    value={profile.handoff_policy}
+                    onValueChange={(value) =>
+                      setProfile((p) => ({ ...p, handoff_policy: value as AiProfilePayload["handoff_policy"] }))
+                    }
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Selecione a política" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="keep_active_notify">Manter bot e notificar</SelectItem>
+                      <SelectItem value="disable_bot">Desativar bot para este lead</SelectItem>
+                      <SelectItem value="ignore">Ignorar pedido e continuar conversa</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <p className="text-xs text-muted-foreground">
+                    Controla se o bot continua ativo ou entrega para o time humano.
+                  </p>
+                  {profile.handoff_policy === "ignore" && (
+                    <p className="text-xs text-amber-600 dark:text-amber-400">
+                      Aviso: &ldquo;ignore&rdquo; impede handoff e o bot continuará respondendo
+                      mesmo se o lead pedir humano.
+                    </p>
+                  )}
+                </div>
+                <div className="space-y-2">
+                  <Label>Texto personalizado de handoff</Label>
+                  <Textarea
+                    value={profile.handoff_custom_text ?? ""}
+                    placeholder="Ex: Vou te conectar com alguém do time agora. Só um instante."
+                    onChange={(e) =>
+                      setProfile((p) => ({ ...p, handoff_custom_text: e.target.value }))
+                    }
+                    rows={3}
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Se preenchido, substitui a mensagem padrão do handoff.
+                  </p>
                 </div>
               </CardContent>
             </Card>
-          </div>
+          )}
+
+          <Card>
+            <CardHeader>
+              <CardTitle>Prioridades do atendimento</CardTitle>
+              <CardDescription>Defina prioridades operacionais em formato de bullets.</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <Textarea
+                value={profile.goals}
+                placeholder="Use bullets. Ex.:
+- Confirmar orçamento antes de sugerir horário
+- Coletar os 3 dados obrigatórios"
+                onChange={(e) => setProfile((p) => ({ ...p, goals: e.target.value }))}
+                rows={4}
+              />
+              <div className="flex flex-wrap gap-2">
+                {goalSuggestions.map((goal) => (
+                  <Button
+                    key={goal}
+                    variant="secondary"
+                    size="sm"
+                    type="button"
+                    onClick={() =>
+                      setProfile((p) => ({
+                        ...p,
+                        goals: p.goals.includes(goal)
+                          ? p.goals
+                          : `${p.goals ? `${p.goals}
+` : ""}${`- ${goal}`}`,
+                      }))
+                    }
+                  >
+                    {goal}
+                  </Button>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>Instruções extras</CardTitle>
+              <CardDescription>Diretrizes adicionais para o agente.</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-2">
+              <Textarea
+                value={profile.custom_instructions || ""}
+                placeholder="Ex.: Sempre responder em português do Brasil e sugerir próximos passos claros."
+                onChange={(e) =>
+                  setProfile((p) => ({ ...p, custom_instructions: e.target.value }))
+                }
+                rows={4}
+              />
+              <div className="text-xs text-muted-foreground text-right">
+                {(profile.custom_instructions || "").length} caracteres
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>WhatsApp</CardTitle>
+              <CardDescription>Conecte seu número via QR Code para o agente usar.</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="flex flex-wrap items-center gap-3">
+                <Badge variant={whatsappBadgeVariant}>{whatsappStatusLabel}</Badge>
+                {whatsappStatus?.phone_e164 && (
+                  <span className="text-sm text-muted-foreground">
+                    Telefone: <strong>{whatsappStatus.phone_e164}</strong>
+                  </span>
+                )}
+                {whatsappStatus?.last_updated && (
+                  <span className="text-xs text-muted-foreground">
+                    Última atualização: {formatDate(whatsappStatus.last_updated)}
+                  </span>
+                )}
+              </div>
+
+              {whatsappError && (
+                <Alert variant="destructive">
+                  <AlertTitle>Falha na conexão</AlertTitle>
+                  <AlertDescription>{whatsappError}</AlertDescription>
+                </Alert>
+              )}
+
+              {!isWhatsappConnected && whatsappQr?.value && (
+                <div className="rounded-md border p-4 space-y-3">
+                  <div className="text-sm text-muted-foreground">
+                    {whatsappPhase === "connecting" ? "Aguardando scan..." : "Escaneie o QR com o WhatsApp."}
+                  </div>
+                  {qrIsImage && (
+                    <img
+                      src={
+                        whatsappQr.value.startsWith("data:image/")
+                          ? whatsappQr.value
+                          : whatsappQr.kind === "url"
+                          ? whatsappQr.value
+                          : `data:image/png;base64,${whatsappQr.value}`
+                      }
+                      alt="QR Code do WhatsApp"
+                      className="h-56 w-56"
+                    />
+                  )}
+                  {!qrIsImage && (
+                    <pre className="whitespace-pre-wrap rounded-md bg-muted p-3 text-xs">
+                      {whatsappQr.value}
+                    </pre>
+                  )}
+                </div>
+              )}
+
+              {isWhatsappConnected && (
+                <div className="rounded-md border border-emerald-200 bg-emerald-50/60 p-3 text-sm text-emerald-700 dark:border-emerald-500/30 dark:bg-emerald-500/10 dark:text-emerald-200">
+                  Conectado ✅
+                </div>
+              )}
+
+              <div className="flex flex-wrap gap-2">
+                <Button onClick={handleWhatsappConnect} disabled={whatsappLoading || whatsappPhase === "connecting" || connectLockRef.current}>
+                  {whatsappLoading ? "Conectando..." : "Criar/Conectar WhatsApp"}
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={() => handleWhatsappStatus(false)}
+                  disabled={whatsappLoading}
+                >
+                  Atualizar status
+                </Button>
+                {!isWhatsappConnected && whatsappQr?.value && (
+                  <Button
+                    variant="secondary"
+                    onClick={() => handleWhatsappRefreshQr()}
+                    disabled={whatsappLoading}
+                  >
+                    Gerar novo QR
+                  </Button>
+                )}
+              </div>
+            </CardContent>
+          </Card>
 
           <Card>
             <CardHeader>
@@ -711,6 +1328,108 @@ export default function AiProfilePage() {
                   </Table>
                 </div>
               )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="followup" className="space-y-4">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Clock className="h-5 w-5 text-primary" />
+                Cadência de Follow-up
+              </CardTitle>
+              <CardDescription>
+                Configure os intervalos e horários de envio automático de follow-up.
+                Deixe em branco para usar os valores padrão do plano.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              <div className="grid gap-5 md:grid-cols-2">
+                <div className="space-y-2">
+                  <Label htmlFor="followup_max_attempts">Máx. tentativas</Label>
+                  <Input
+                    id="followup_max_attempts"
+                    type="number"
+                    min={1}
+                    max={10}
+                    placeholder="Ex: 4"
+                    value={profile.followup_max_attempts ?? ""}
+                    onChange={(e) =>
+                      setProfile((p) => ({
+                        ...p,
+                        followup_max_attempts: e.target.value ? Number(e.target.value) : null,
+                      }))
+                    }
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Número total de mensagens enviadas antes de encerrar o follow-up.
+                    Padrão: 4 (SDR) / 3 (híbrido).
+                  </p>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="followup_first_offset">Primeiro offset (minutos)</Label>
+                  <Input
+                    id="followup_first_offset"
+                    type="number"
+                    min={1}
+                    placeholder="Ex: 30"
+                    value={profile.followup_first_offset ?? ""}
+                    onChange={(e) =>
+                      setProfile((p) => ({
+                        ...p,
+                        followup_first_offset: e.target.value ? Number(e.target.value) : null,
+                      }))
+                    }
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Minutos após a transição manual até o 1.º envio automático.
+                    Padrão: 30 min (SDR) / 120 min (híbrido).
+                  </p>
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="followup_cadence">
+                  Cadência (minutos entre envios, separados por vírgula)
+                </Label>
+                <Input
+                  id="followup_cadence"
+                  placeholder="Ex: 1440, 4320, 10080"
+                  value={cadenceStr}
+                  onChange={(e) => {
+                    setCadenceStr(e.target.value);
+                    setCadenceError(null);
+                  }}
+                />
+                {cadenceError && (
+                  <p className="text-xs text-destructive">{cadenceError}</p>
+                )}
+                <p className="text-xs text-muted-foreground">
+                  Intervalo entre cada tentativa em minutos. Deve ter{" "}
+                  <strong>máx. tentativas − 1</strong> elemento(s).
+                  Sugestões: SDR — 1440, 4320, 10080 | Híbrido — 1440, 2880 | Carrinho — 120, 1440.
+                </p>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="followup_allowed_hours" className="flex items-center gap-1">
+                  <Clock className="h-3.5 w-3.5" /> Horário permitido (UTC)
+                </Label>
+                <Input
+                  id="followup_allowed_hours"
+                  placeholder="Ex: 09:00-18:00"
+                  value={profile.followup_allowed_hours ?? ""}
+                  onChange={(e) =>
+                    setProfile((p) => ({ ...p, followup_allowed_hours: e.target.value }))
+                  }
+                />
+                <p className="text-xs text-muted-foreground">
+                  Formato <strong>HH:MM-HH:MM</strong> em UTC. Fora desta janela o follow-up é
+                  adiado para o início do próximo período. Deixe vazio para enviar a qualquer hora.
+                </p>
+              </div>
             </CardContent>
           </Card>
         </TabsContent>
