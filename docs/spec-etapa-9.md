@@ -1,69 +1,3 @@
-Especificação Técnica — Etapa 9
-Pipeline Completo: Qualification, Presentation & Closing
-Branch: feature/etapa-9-pipeline-completo  ·  25 mar 2026
-
-
-Todas as decisões de produto, arquitetura de informação do AI Profile
-e prompts de implementação para o Claude Code estão consolidados.
-1. Princípio central — AI Profile como fonte da verdade
-Os templates de agente (sdr_scheduler, closer_agressivo, hybrid_scheduler) definem o comportamento padrão de cada tipo de negócio. São o ponto de partida, não um engessamento. Cada usuário deve poder customizar, retirar e adicionar preferências através do AI Profile — e o sistema usa esses valores com prioridade sobre qualquer default de código.
-
-Este princípio, validado na Etapa 8 com os campos de cadência de follow-up, se estende agora para todas as fases do pipeline: qualificação, apresentação e closing.
-
-REGRA DE OURO — IMPLEMENTADA EM TODA A ETAPA 9
-Para cada comportamento configurável: (1) Lê o valor do AI Profile do usuário. (2) Se não configurado, usa o default do template do agente. (3) Nunca usa valor hardcoded sem fallback legível no AI Profile. O usuário precisa ver e poder alterar o que o sistema vai fazer.
-
-
-2. Estado atual e arquitetura de expansão do AI Profile
-O AI Profile está organizado em 4 abas (Resumo, Identidade, Qualificação, Pipeline + Conexão) com um padrão de card estabelecido: label em monospace + valor em destaque + badge de status (Configurado / Crítico / Não configurado) + seta de edição. Todos os novos campos da Etapa 9 seguem este padrão.
-
-2.1 Onde cada campo novo se encaixa
-Campo novo
-Onde entra no AI Profile
-origin_inbound_opener
-Camada 2 — Qualificação → Contexto do negócio (nova linha)
-origin_outbound_opener
-Camada 2 — Qualificação → Contexto do negócio (nova linha)
-objection_common
-Camada 2 — Qualificação → Contexto do negócio (nova linha)
-qualification_score_threshold
-Camada 2 — Qualificação → Filtros (abaixo dos 3 filtros)
-nurture_vs_discard_rule
-Camada 2 — Qualificação → Filtros (abaixo do score)
-appointment_reminder_offsets
-Camada 3 — Pipeline → Seção 4 NOVA (A1 + A3 apenas)
-briefing_enabled / channel / lead_time
-Camada 3 — Pipeline → Seção 4 NOVA (A1 + A3 apenas)
-calendar_integration
-Camada 3 — Pipeline → Seção 4 NOVA (A1 + A3 apenas)
-buying_signal_keywords
-Camada 3 — Pipeline → Seção 4 NOVA (A1 apenas)
-payment_gateway / webhook_url
-Camada 3 — Pipeline → Seção 5 NOVA (A2 apenas)
-offer_media_url / offer_media_type
-Camada 3 — Pipeline → Seção 5 NOVA (A2 apenas)
-upsell_message
-Camada 3 — Pipeline → Seção 5 NOVA (A2 apenas)
-
-
-CAMPOS CONDICIONAIS POR TIPO DE AGENTE
-Seção 4 (Apresentação e agendamento) aparece APENAS para Agent 1 e Agent 3. Seção 5 (Oferta e pagamento) aparece APENAS para Agent 2. Para agentes que não se aplicam, exibir seção com label 'Não aplicável ao seu tipo de agente' — mantém rastreabilidade sem poluir a interface.
-
-
-2.2 Novos alertas críticos no Resumo
-Condição
-Alerta no Resumo
-Agent 2 sem payment_gateway
-Crítico — fechamento automático impossível sem gateway configurado
-Agent 2 sem payment_webhook_url
-Crítico — webhook de confirmação de pagamento ausente
-Agent 1/3 sem appointment_reminder_offsets
-Aviso — lembretes de reunião não configurados, risco de no-show elevado
-Qualquer agente sem origin_inbound_opener
-Aviso — bot usa abertura genérica para leads inbound
-Qualquer agente sem origin_outbound_opener
-Aviso — bot usa abertura genérica para leads outbound
-
 3. Tarefas de implementação — Backend
 Tarefa 3.1 — Origem inbound/outbound no LLM [P0 — ~0,5 dia]
 IMPACTO IMEDIATO EM TODOS OS AGENTES
@@ -370,68 +304,6 @@ Aviso — lembretes de reunião com defaults do sistema (24h e 1h). Configure se
 Qualquer agente sem origin_inbound_opener
 Aviso — usando abertura genérica para leads inbound. Personalize para seu nicho.
 
-
-5. Sequência de implementação e estimativas
-Ordenado por prioridade (P0 bloqueiam produto / P1 completam promessa) e dependência técnica.
-
-Tarefa
-Prioridade
-Est. dias
-Dependência
-3.1 — Origem inbound/outbound no LLM
-P0
-0,5
-Nenhuma — começar aqui
-3.2 — Score dos 4Ps (Agent 1)
-P0
-1,5
-Nenhuma — paralela à 3.1
-3.3 — Lembretes de appointment
-P0
-1
-Nenhuma — paralela
-3.5 — Webhook de pagamento (Agent 2)
-P0
-2
-Nenhuma — paralela
-3.4 — Dossiê/briefing pré-reunião
-P0
-1
-Depende de 3.3 (usa appointment)
-4.1 — AI Profile: Qualificação
-P0
-1
-Depende de 3.1 e 3.2
-4.2 — AI Profile: Seção 4 Apresentação
-P0
-1,5
-Depende de 3.3 e 3.4
-4.3 — AI Profile: Seção 5 Oferta
-P0
-1,5
-Depende de 3.5
-4.4 — AI Profile: Alertas críticos
-P0
-0,5
-Depende de 4.1–4.3
-3.6 — Mídia rica no pitch (Agent 2)
-P1
-1
-Depende de 4.3
-3.7 — Detecção sinal de compra (Agent 1)
-P1
-1
-Depende de 3.1
-3.8 — Passo de aquecimento (Agent 3)
-P1
-1
-Depende de 3.1
-
-
-Estimativa total: ~13 dias de desenvolvimento focado.
-MVP P0 completo (Tarefas 3.1 + 3.2 + 3.3 + 3.5 + 4.1 + 4.2 + 4.3 + 4.4): ~9 dias — produto passa a cumprir as promessas críticas dos 3 agentes com configuração pelo usuário.
-V1 completa incluindo P1: ~13 dias.
-
 6. Prompts para o Claude Code — por tarefa
 Copiar cada bloco diretamente no Claude Code. Cada prompt referencia os arquivos relevantes e o comportamento esperado.
 
@@ -453,8 +325,4 @@ Crie backend-crm/routes/webhooks.py com endpoint POST /webhooks/payment/{gateway
 
 TAREFAS 3.4, 3.6, 3.7, 3.8 + TAREFAS 4.X — INSTRUÇÃO GERAL
 Para as tarefas 3.4 (dossiê), 3.6 (mídia rica), 3.7 (sinal de compra) e 3.8 (aquecimento Agent 3), consulte as seções 3.4–3.8 deste documento para a especificação completa. Para as tarefas de frontend 4.1–4.4, implemente os campos novos seguindo o padrão de card existente em AiProfile.tsx: label em monospace + valor em destaque + badge de status. Todos os campos novos devem ter fallback para default do template quando não configurados pelo usuário. Campos condicionais: Seção 4 apenas para Agent 1/3, Seção 5 apenas para Agent 2.
-
-
-
-
 
