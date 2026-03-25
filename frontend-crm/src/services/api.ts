@@ -33,6 +33,25 @@ export type AiTemplate = {
   description?: string;
 };
 
+export type OfferPack = {
+  items?: Array<{
+    name?: string;
+    price?: string;
+    description?: string;
+    checkout_link?: string;
+    bullets?: string[];
+  }> | null;
+  checkout_link?: string | null;
+  cta_text?: string | null;
+  disclaimers?: string[] | null;
+  // Mídia rica — Tarefa 3.6
+  media_url?: string | null;
+  media_type?: "image" | "video" | "audio" | null;
+  anchor_price?: string | null;
+  guarantee_text?: string | null;
+  upsell_message?: string | null;
+};
+
 export type AiProfilePayload = {
   template_key: string;
   name: string;
@@ -54,6 +73,8 @@ export type AiProfilePayload = {
   followup_max_attempts?: number | null;
   followup_first_offset?: number | null;
   followup_allowed_hours?: string | null;
+  offer_pack?: OfferPack | null;
+  payment_gateway?: "hotmart" | "kiwify" | "stripe" | "generico" | null;
 };
 
 export type AiProfile = AiProfilePayload & {
@@ -61,6 +82,8 @@ export type AiProfile = AiProfilePayload & {
   user_id?: number;
   created_at?: string;
   updated_at?: string;
+  payment_webhook_secret?: string | null;
+  payment_webhook_url?: string | null;
 };
 
 export type FollowUpContract = {

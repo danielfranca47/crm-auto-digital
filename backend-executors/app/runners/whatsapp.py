@@ -830,6 +830,33 @@ def execute_job(job_id: str, logger: logging.Logger) -> int:
             ctx_logger.info("event=job_completed status=%s", final_status, extra={"phase": "complete"})
             return 0
 
+        # Mídia rica no pitch — Agent 2 (Tarefa 3.6)
+        # Envia a mídia antes do texto; falha de mídia não aborta o envio de texto.
+        if decision.pre_send_media:
+            media_url = decision.pre_send_media.get("media_url")
+            media_type = decision.pre_send_media.get("media_type", "image")
+            if media_url:
+                ctx_logger.info(
+                    "event=pre_send_media_request media_type=%s", media_type, extra={"phase": "core_send"}
+                )
+                try:
+                    core_client.send_whatsapp_media(
+                        {
+                            "provider": provider,
+                            "instance_id": instance_id,
+                            "number": phone,
+                            "media_url": media_url,
+                            "media_type": media_type,
+                        }
+                    )
+                    ctx_logger.info("event=pre_send_media_success", extra={"phase": "core_send"})
+                except core_client.CoreClientError as media_exc:
+                    ctx_logger.warning(
+                        "event=pre_send_media_error error=%s — continuando com envio de texto",
+                        media_exc,
+                        extra={"phase": "core_send"},
+                    )
+
         ctx_logger.info("event=core_send_request url=/whatsapp/send", extra={"phase": "core_send"})
         try:
             core_response = core_client.send_whatsapp_message(

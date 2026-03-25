@@ -17,6 +17,8 @@ class DecisionOutput(BaseModel):
     signals: list[str] = Field(default_factory=list)
     confidence: Optional[float] = None
     decision_trace: Optional[dict] = None
+    # Mídia rica (Tarefa 3.6): enviada antes do texto do pitch para Agent 2
+    pre_send_media: Optional[dict] = None
 
     @field_validator("questions", mode="after")
     @classmethod

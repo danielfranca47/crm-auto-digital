@@ -349,6 +349,11 @@ def _build_offer_pack_summary(context: Dict[str, Any]) -> dict:
         "items": normalized_items,
         "cta_text": offer_pack.get("cta_text"),
         "disclaimers": offer_pack.get("disclaimers") if isinstance(offer_pack.get("disclaimers"), list) else [],
+        "media_url": offer_pack.get("media_url"),
+        "media_type": offer_pack.get("media_type"),
+        "anchor_price": offer_pack.get("anchor_price"),
+        "guarantee_text": offer_pack.get("guarantee_text"),
+        "upsell_message": offer_pack.get("upsell_message"),
     }
 
 
@@ -1072,6 +1077,9 @@ def _build_child_prompt_apresentation(
         "- recommended_next_category é informativo nesta rota; não é aplicado automaticamente na mudança de estágio.\n"
         "- outcome e kanban_highlight devem ser null.\n"
         "- signals_structured deve incluir: offer_presented, checkout_sent, presentation_variant e offer_item_name.\n"
+        "- Mídia rica: se offer_pack_summary.media_url estiver preenchido, a mídia já será enviada automaticamente antes deste texto. NÃO mencione 'veja a imagem/vídeo' — assuma que o lead já recebeu e escreva o texto do pitch como sequência natural.\n"
+        "- Se offer_pack_summary.anchor_price estiver preenchido, use o preço âncora no pitch (ex: 'De R$997 por apenas R$X').\n"
+        "- Se offer_pack_summary.guarantee_text estiver preenchido, inclua a garantia na mensagem (ex: 'Com 7 dias de garantia').\n"
         "Exemplos rápidos (sales):\n"
         "- EXEMPLO CONFIRMAR: message_text='Plano Starter por R$X com suporte Y. Quer seguir com a contratação?'\n"
         "  signals_structured={offer_presented:true, checkout_sent:false, presentation_variant:'sales', offer_item_name:'Plano Starter'}\n"
@@ -1681,6 +1689,25 @@ def compose_decision_output(
         },
     )
     decision = _apply_mode_guardrails(decision, context, mother_decision, child_result)
+
+    # Mídia rica no pitch — Agent 2 (Tarefa 3.6)
+    # Se estamos em rota de apresentation para agent closer e offer_pack tem media_url,
+    # sinaliza o runner para enviar a mídia antes do texto do pitch.
+    if effective_route_to == "apresentation" and agent_mode_normalized in ("closer", "direto", "direto_autonomo"):
+        raw_op = ai_profile.get("offer_pack")
+        if isinstance(raw_op, str):
+            try:
+                raw_op = json.loads(raw_op)
+            except Exception:
+                raw_op = None
+        if isinstance(raw_op, dict):
+            media_url = raw_op.get("media_url")
+            if media_url and str(media_url).strip():
+                decision.pre_send_media = {
+                    "media_url": str(media_url).strip(),
+                    "media_type": str(raw_op.get("media_type") or "image").strip(),
+                }
+
     return decision
 
 

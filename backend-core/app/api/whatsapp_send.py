@@ -29,6 +29,15 @@ class WhatsAppSendRequest(BaseModel):
     in_reply_to_message_id: Optional[str] = None
 
 
+class WhatsAppSendMediaRequest(BaseModel):
+    provider: str = Field(default="uazapi")
+    instance_id: str
+    number: str
+    media_url: str
+    media_type: str = Field(default="image")  # image | video | audio | document
+    caption: Optional[str] = None
+
+
 class WhatsAppSendResponse(BaseModel):
     provider: str
     provider_message_id: Optional[str]
@@ -123,6 +132,88 @@ async def send_whatsapp(
             token=token_plain,
             number=sanitized_number,
             text=payload.text,
+        )
+    except uazapi_client.UazapiTimeoutError:
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail="provider_timeout")
+    except uazapi_client.UazapiClientError as exc:
+        if exc.status_code in {401, 403}:
+            raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail="provider_auth_failed")
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail="provider_request_failed")
+
+    provider_message_id = None
+    if isinstance(raw, dict):
+        provider_message_id = raw.get("messageid") or raw.get("id")
+
+    return WhatsAppSendResponse(
+        provider=provider,
+        provider_message_id=provider_message_id,
+        raw=raw,
+    )
+
+
+@router.post("/whatsapp/send-media", response_model=WhatsAppSendResponse)
+async def send_whatsapp_media(
+    payload: WhatsAppSendMediaRequest,
+    db: Session = Depends(get_db),
+    _: str = Depends(_require_service_token),
+):
+    provider = (payload.provider or "uazapi").lower()
+    if provider != "uazapi":
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="provider_not_supported")
+
+    if settings.core_whatsapp_stub:
+        logger.info(
+            "whatsapp media stub enabled provider=%s instance_id=%s number=%s media_type=%s",
+            provider,
+            payload.instance_id,
+            _mask_number(_sanitize_number(payload.number)),
+            payload.media_type,
+        )
+        return WhatsAppSendResponse(
+            provider=provider,
+            provider_message_id=_build_stub_message_id(),
+            raw={"stub": True, "status": "ok", "echo": payload.dict()},
+        )
+
+    connection = connections_service.get_connection_by_instance(db, payload.instance_id)
+    if not connection:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Connection not found")
+    normalized_status = connections_service.normalize_connection_status_for_crm(connection.status)
+    if normalized_status != "active":
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Connection inactive")
+
+    try:
+        token_plain = decrypt_secret(connection.instance_token_encrypted)
+    except SecretEncryptionError:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Unable to decrypt instance token",
+        )
+
+    base_url = settings.UAZAPI_BASE_URL or ""
+    if not base_url:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="UAZAPI_BASE_URL not configured",
+        )
+
+    sanitized_number = _sanitize_number(payload.number)
+    logger.info(
+        "whatsapp send-media provider=%s instance_id=%s number=%s media_type=%s",
+        provider,
+        payload.instance_id,
+        _mask_number(sanitized_number),
+        payload.media_type,
+    )
+
+    try:
+        raw = await uazapi_client.send_media(
+            base_url=base_url,
+            token=token_plain,
+            number=sanitized_number,
+            media_url=payload.media_url,
+            media_type=payload.media_type,
+            caption=payload.caption or "",
         )
     except uazapi_client.UazapiTimeoutError:
         raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail="provider_timeout")

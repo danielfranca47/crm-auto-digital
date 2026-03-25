@@ -87,6 +87,8 @@ const initialProfileState: AiProfilePayload = {
   handoff_custom_text: "",
   requires_handoff: false,
   human_in_loop: false,
+  offer_pack: null,
+  payment_gateway: null,
 };
 
 const goalSuggestions = [
@@ -761,6 +763,7 @@ export default function AiProfilePage() {
           <TabsTrigger value="profile">Identidade do agente</TabsTrigger>
           <TabsTrigger value="knowledge">Conhecimento do negócio</TabsTrigger>
           <TabsTrigger value="followup">Follow-up</TabsTrigger>
+          <TabsTrigger value="oferta">Oferta e Pagamento</TabsTrigger>
         </TabsList>
 
         <TabsContent value="profile" className="space-y-4">
@@ -1432,6 +1435,185 @@ export default function AiProfilePage() {
               </div>
             </CardContent>
           </Card>
+        </TabsContent>
+
+        {/* Seção 5 — Oferta e Pagamento (Tarefa 3.6 / 4.3) */}
+        <TabsContent value="oferta" className="space-y-4">
+          {agentModelUi !== "direto_autonomo" ? (
+            <Card className="opacity-60">
+              <CardContent className="pt-6">
+                <p className="text-sm text-muted-foreground text-center">
+                  Não aplicável ao seu tipo de agente. Esta seção é exclusiva do Agent 2 (Closer Autônomo).
+                </p>
+              </CardContent>
+            </Card>
+          ) : (
+            <>
+              <Card>
+                <CardHeader>
+                  <CardTitle>Mídia do Pitch</CardTitle>
+                  <CardDescription>
+                    Imagem, vídeo ou áudio enviado automaticamente antes do texto do pitch.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="offer_media_url">
+                      URL da mídia
+                      {profile.offer_pack?.media_url ? (
+                        <Badge className="ml-2" variant="default">Configurado</Badge>
+                      ) : (
+                        <Badge className="ml-2" variant="secondary">Não configurado</Badge>
+                      )}
+                    </Label>
+                    <Input
+                      id="offer_media_url"
+                      type="url"
+                      placeholder="https://exemplo.com/imagem-produto.jpg"
+                      value={profile.offer_pack?.media_url ?? ""}
+                      onChange={(e) =>
+                        setProfile((p) => ({
+                          ...p,
+                          offer_pack: { ...(p.offer_pack || {}), media_url: e.target.value || null },
+                        }))
+                      }
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      URL pública acessível. Suporta imagem (JPG, PNG), vídeo (MP4, até 16 MB) e áudio (MP3, OGG).
+                    </p>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="offer_media_type">Tipo de mídia</Label>
+                    <Select
+                      value={profile.offer_pack?.media_type ?? "image"}
+                      onValueChange={(v) =>
+                        setProfile((p) => ({
+                          ...p,
+                          offer_pack: {
+                            ...(p.offer_pack || {}),
+                            media_type: v as "image" | "video" | "audio",
+                          },
+                        }))
+                      }
+                    >
+                      <SelectTrigger id="offer_media_type">
+                        <SelectValue placeholder="Selecione o tipo" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="image">Imagem</SelectItem>
+                        <SelectItem value="video">Vídeo</SelectItem>
+                        <SelectItem value="audio">Áudio</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader>
+                  <CardTitle>Detalhes da Oferta</CardTitle>
+                  <CardDescription>
+                    Preço âncora e garantia exibidos no pitch do Agent 2.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="anchor_price">Preço âncora (valor cheio)</Label>
+                    <Input
+                      id="anchor_price"
+                      placeholder="R$ 997"
+                      value={profile.offer_pack?.anchor_price ?? ""}
+                      onChange={(e) =>
+                        setProfile((p) => ({
+                          ...p,
+                          offer_pack: { ...(p.offer_pack || {}), anchor_price: e.target.value || null },
+                        }))
+                      }
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      Usado no pitch como "De R$997 por apenas R$X". Deixe vazio para não usar preço âncora.
+                    </p>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="guarantee_text">Texto da garantia</Label>
+                    <Textarea
+                      id="guarantee_text"
+                      placeholder="7 dias de garantia incondicional"
+                      rows={2}
+                      value={profile.offer_pack?.guarantee_text ?? ""}
+                      onChange={(e) =>
+                        setProfile((p) => ({
+                          ...p,
+                          offer_pack: { ...(p.offer_pack || {}), guarantee_text: e.target.value || null },
+                        }))
+                      }
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="upsell_message">Mensagem de upsell pós-compra</Label>
+                    <Textarea
+                      id="upsell_message"
+                      placeholder="Parabéns pela sua decisão! Tenho uma oferta especial para complementar..."
+                      rows={3}
+                      value={profile.offer_pack?.upsell_message ?? ""}
+                      onChange={(e) =>
+                        setProfile((p) => ({
+                          ...p,
+                          offer_pack: { ...(p.offer_pack || {}), upsell_message: e.target.value || null },
+                        }))
+                      }
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      Enviada automaticamente após confirmação do pagamento pelo webhook.
+                    </p>
+                  </div>
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader>
+                  <CardTitle>Gateway de Pagamento</CardTitle>
+                  <CardDescription>
+                    Configure o gateway para receber notificações de pagamento confirmado.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="payment_gateway">
+                      Gateway
+                      {profile.payment_gateway ? (
+                        <Badge className="ml-2" variant="default">Configurado</Badge>
+                      ) : (
+                        <Badge className="ml-2" variant="destructive">Crítico — não configurado</Badge>
+                      )}
+                    </Label>
+                    <Select
+                      value={profile.payment_gateway ?? ""}
+                      onValueChange={(v) =>
+                        setProfile((p) => ({
+                          ...p,
+                          payment_gateway: v as AiProfilePayload["payment_gateway"] || null,
+                        }))
+                      }
+                    >
+                      <SelectTrigger id="payment_gateway">
+                        <SelectValue placeholder="Selecione o gateway" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="hotmart">Hotmart</SelectItem>
+                        <SelectItem value="kiwify">Kiwify</SelectItem>
+                        <SelectItem value="stripe">Stripe</SelectItem>
+                        <SelectItem value="generico">Genérico</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <p className="text-xs text-muted-foreground">
+                      Sem gateway configurado, o fechamento automático não funciona.
+                    </p>
+                  </div>
+                </CardContent>
+              </Card>
+            </>
+          )}
         </TabsContent>
       </Tabs>
 

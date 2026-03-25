@@ -60,3 +60,18 @@ def send_whatsapp_message(payload: Dict[str, Any]) -> Dict[str, Any]:
                 error_type="network",
             ) from exc
     return _handle_response(response)
+
+
+def send_whatsapp_media(payload: Dict[str, Any]) -> Dict[str, Any]:
+    """Envia mídia (imagem, vídeo, áudio) via WhatsApp antes do texto do pitch."""
+    base_url = settings.core_api_base.rstrip("/")
+    url = f"{base_url}/whatsapp/send-media"
+    with httpx.Client(timeout=20.0) as client:
+        try:
+            response = client.post(url, headers=_headers(), json=payload)
+        except httpx.RequestError as exc:
+            raise CoreClientError(
+                f"Erro de rede do Core (media): {exc}",
+                error_type="network",
+            ) from exc
+    return _handle_response(response)
