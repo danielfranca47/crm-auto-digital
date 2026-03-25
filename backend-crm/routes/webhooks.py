@@ -1,14 +1,20 @@
-"""Routers de webhooks externos (WhatsApp inbound)."""
+"""Routers de webhooks externos (WhatsApp inbound + pagamento)."""
 
 from __future__ import annotations
 
+import json
 import logging
 import os
 import re
-from typing import Any, Dict
+from datetime import datetime, timedelta
+from typing import Any, Dict, Optional
 
 from fastapi import APIRouter, Header, HTTPException, Query
 
+from core_client import fetch_core_ai_profile_by_webhook_secret
+from database import get_connection
+from services.followup_state import stop_followup_for_lead_category
+from services.jobs_service import TYPE_WHATSAPP_SEND, create_job
 from services.phone_normalizer import PhoneNormalizationError, normalize_to_e164
 from services.whatsapp_inbound.inbound_handler import InboundWebhookPayload, handle_inbound
 
@@ -161,3 +167,265 @@ def whatsapp_uazapi_webhook(
     }
 
     return handle_inbound(inbound_payload)
+
+
+# ---------------------------------------------------------------------------
+# Normalização de payloads de pagamento por gateway
+# ---------------------------------------------------------------------------
+
+def _normalize_payment_payload(gateway: str, raw: Dict[str, Any]) -> Dict[str, Any]:
+    """Extrai campos canônicos de pagamento conforme o gateway."""
+    g = gateway.lower()
+
+    if g == "hotmart":
+        data = raw.get("data") or {}
+        buyer = data.get("buyer") or {}
+        purchase = data.get("purchase") or {}
+        return {
+            "checkout_token": purchase.get("src") or raw.get("src"),
+            "email": buyer.get("email"),
+            "phone": buyer.get("phone"),
+            "document": buyer.get("document"),
+            "status": (purchase.get("status") or "").upper(),
+        }
+
+    if g == "kiwify":
+        customer = raw.get("Customer") or {}
+        return {
+            "checkout_token": raw.get("tracking_source"),
+            "email": customer.get("email"),
+            "phone": customer.get("mobile"),
+            "document": None,
+            "status": (raw.get("order_status") or raw.get("status") or "").upper(),
+        }
+
+    if g == "stripe":
+        obj = raw.get("data", {}).get("object") or raw
+        metadata = obj.get("metadata") or {}
+        return {
+            "checkout_token": metadata.get("lead_id"),
+            "email": obj.get("customer_email") or obj.get("receipt_email"),
+            "phone": None,
+            "document": None,
+            "status": (raw.get("type") or "").replace("payment_intent.", "").upper(),
+        }
+
+    # Genérico
+    return {
+        "checkout_token": raw.get("src") or raw.get("ref"),
+        "email": raw.get("email"),
+        "phone": raw.get("phone"),
+        "document": raw.get("document"),
+        "status": (raw.get("status") or "").upper(),
+    }
+
+
+def _is_payment_confirmed(status: str) -> bool:
+    confirmed = {"APPROVED", "COMPLETE", "COMPLETED", "SUCCEEDED", "PAID", "CONFIRMED"}
+    return any(status.startswith(s) or s in status for s in confirmed)
+
+
+# ---------------------------------------------------------------------------
+# Busca do lead por camadas
+# ---------------------------------------------------------------------------
+
+def _find_lead_by_checkout_token(conn, token: str, user_id: int) -> Optional[Dict]:
+    if not token:
+        return None
+    row = conn.execute(
+        "SELECT * FROM leads WHERE checkout_token = ? AND user_id = ? LIMIT 1",
+        (str(token), user_id),
+    ).fetchone()
+    return dict(row) if row else None
+
+
+def _find_lead_by_phone(conn, phone: str, user_id: int) -> Optional[Dict]:
+    if not phone:
+        return None
+    try:
+        normalized = normalize_to_e164(phone)
+    except PhoneNormalizationError:
+        digits = re.sub(r"\D+", "", phone)
+        if not digits:
+            return None
+        try:
+            normalized = normalize_to_e164(f"+{digits}")
+        except PhoneNormalizationError:
+            return None
+    row = conn.execute(
+        "SELECT * FROM leads WHERE phone = ? AND user_id = ? LIMIT 1",
+        (normalized, user_id),
+    ).fetchone()
+    return dict(row) if row else None
+
+
+def _find_lead_by_email(conn, email: str, user_id: int) -> Optional[Dict]:
+    if not email:
+        return None
+    row = conn.execute(
+        "SELECT * FROM leads WHERE lower(email) = lower(?) AND user_id = ? LIMIT 1",
+        (email, user_id),
+    ).fetchone()
+    return dict(row) if row else None
+
+
+def _find_lead_by_document(conn, document: str, user_id: int) -> Optional[Dict]:
+    if not document:
+        return None
+    row = conn.execute(
+        "SELECT * FROM leads WHERE observations LIKE ? AND user_id = ? LIMIT 1",
+        (f"%{document}%", user_id),
+    ).fetchone()
+    return dict(row) if row else None
+
+
+# ---------------------------------------------------------------------------
+# Ações pós-pagamento
+# ---------------------------------------------------------------------------
+
+def _move_lead_to_client_list(conn, lead_id: int, user_id: int) -> None:
+    conn.execute(
+        "UPDATE leads SET category = 'client-list', lastMovement = CURRENT_TIMESTAMP WHERE id = ? AND user_id = ?",
+        (lead_id, user_id),
+    )
+    stop_followup_for_lead_category(conn, lead_id=lead_id, user_id=user_id, new_category="client-list")
+
+
+def _create_notification(conn, user_id: int, lead_id: Optional[int], ntype: str, body: str) -> None:
+    try:
+        conn.execute(
+            "INSERT INTO notifications (user_id, lead_id, type, body) VALUES (?, ?, ?, ?)",
+            (user_id, lead_id, ntype, body),
+        )
+    except Exception:
+        pass
+
+
+def _save_unmatched_event(conn, gateway: str, raw: Dict, normalized: Dict) -> None:
+    conn.execute(
+        """INSERT INTO unmatched_payment_events
+           (gateway, raw_payload, buyer_email, buyer_phone, buyer_document, checkout_token)
+           VALUES (?, ?, ?, ?, ?, ?)""",
+        (
+            gateway,
+            json.dumps(raw, ensure_ascii=False),
+            normalized.get("email"),
+            normalized.get("phone"),
+            normalized.get("document"),
+            str(normalized.get("checkout_token") or ""),
+        ),
+    )
+
+
+def _schedule_post_purchase_jobs(lead_id: int, user_id: int) -> None:
+    """Cria job de onboarding (imediato), upsell (+30min) e NPS (+7 dias)."""
+    now = datetime.utcnow()
+
+    create_job(
+        job_type="whatsapp.onboarding",
+        payload={"lead_id": lead_id, "user_id": user_id, "trigger": "payment_confirmed"},
+        user_id=user_id,
+    )
+    create_job(
+        job_type="whatsapp.upsell",
+        payload={"lead_id": lead_id, "user_id": user_id},
+        user_id=user_id,
+        scheduled_at=now + timedelta(minutes=30),
+    )
+    create_job(
+        job_type="whatsapp.nps",
+        payload={"lead_id": lead_id, "user_id": user_id},
+        user_id=user_id,
+        scheduled_at=now + timedelta(days=7),
+    )
+
+
+# ---------------------------------------------------------------------------
+# Endpoint
+# ---------------------------------------------------------------------------
+
+@router.post("/payment/{gateway}")
+def payment_webhook(
+    gateway: str,
+    raw_payload: Dict[str, Any],
+    x_webhook_secret: Optional[str] = Header(default=None, alias="X-Webhook-Secret"),
+    token: Optional[str] = Query(default=None),
+):
+    """
+    Webhook de confirmação de pagamento.
+    Autenticado pelo payment_webhook_secret do AI Profile (via header X-Webhook-Secret ou query ?token=).
+    """
+    secret = x_webhook_secret or token
+    if not secret:
+        raise HTTPException(status_code=401, detail="Webhook secret ausente")
+
+    ai_profile = fetch_core_ai_profile_by_webhook_secret(secret)
+    if not ai_profile:
+        raise HTTPException(status_code=401, detail="Webhook secret inválido")
+
+    user_id: int = int(ai_profile["user_id"])
+    normalized = _normalize_payment_payload(gateway, raw_payload)
+
+    logger.info(
+        "payment_webhook gateway=%s user_id=%s status=%s checkout_token=%s email=%s",
+        gateway,
+        user_id,
+        normalized.get("status"),
+        normalized.get("checkout_token"),
+        normalized.get("email"),
+    )
+
+    if not _is_payment_confirmed(normalized.get("status") or ""):
+        return {"status": "ignored", "reason": "payment_not_confirmed", "payment_status": normalized.get("status")}
+
+    with get_connection() as conn:
+        # 1. Token do link (mais confiável)
+        lead = _find_lead_by_checkout_token(conn, normalized.get("checkout_token") or "", user_id)
+        # 2. Telefone normalizado
+        if not lead:
+            lead = _find_lead_by_phone(conn, normalized.get("phone") or "", user_id)
+        # 3. E-mail
+        if not lead:
+            lead = _find_lead_by_email(conn, normalized.get("email") or "", user_id)
+        # 4. Documento (CPF / CNPJ)
+        if not lead:
+            lead = _find_lead_by_document(conn, normalized.get("document") or "", user_id)
+
+        if not lead:
+            _save_unmatched_event(conn, gateway, raw_payload, normalized)
+            _create_notification(
+                conn,
+                user_id=user_id,
+                lead_id=None,
+                ntype="payment_unmatched",
+                body=(
+                    f"Pagamento confirmado sem lead vinculado — revisão necessária. "
+                    f"Gateway: {gateway} | Email: {normalized.get('email')} | "
+                    f"Telefone: {normalized.get('phone')}"
+                ),
+            )
+            conn.commit()
+            logger.warning(
+                "payment_webhook unmatched gateway=%s email=%s phone=%s",
+                gateway,
+                normalized.get("email"),
+                normalized.get("phone"),
+            )
+            # Sempre 200 — gateway não deve retentar
+            return {"status": "unmatched", "message": "Pagamento registrado para revisão manual"}
+
+        lead_id = int(lead["id"])
+        _move_lead_to_client_list(conn, lead_id=lead_id, user_id=user_id)
+        _create_notification(
+            conn,
+            user_id=user_id,
+            lead_id=lead_id,
+            ntype="payment_confirmed",
+            body=f"Pagamento confirmado — lead movido para client-list. Gateway: {gateway}",
+        )
+        conn.commit()
+
+    _schedule_post_purchase_jobs(lead_id=lead_id, user_id=user_id)
+
+    logger.info("payment_webhook matched lead_id=%s user_id=%s gateway=%s", lead_id, user_id, gateway)
+    return {"status": "ok", "lead_id": lead_id}
