@@ -9,6 +9,7 @@ from database import get_connection
 from models import AppointmentCreate, AppointmentOut, AppointmentUpdate, AppointmentStatus, AppointmentOutcomeUpdate
 from security_core import CurrentUser, require_crm_access
 from services.appointment_outcomes import apply_outcome
+from services.briefing_service import schedule_briefing_job
 from services.jobs_service import TYPE_WHATSAPP_APPOINTMENT_REMINDER, create_job
 
 logger = logging.getLogger(__name__)
@@ -168,11 +169,18 @@ def create_appointment(payload: AppointmentCreate) -> AppointmentOut:
             "SELECT user_id FROM leads WHERE id = ?", (payload.lead_id,)
         ).fetchone()
         if lead_row:
+            user_id = lead_row["user_id"]
             _schedule_reminder_jobs(
                 lead_id=payload.lead_id,
-                user_id=lead_row["user_id"],
+                user_id=user_id,
                 appointment_id=appointment_id,
                 appointment_title=payload.title,
+                appointment_start_at=payload.start_at,
+            )
+            _schedule_briefing_job(
+                lead_id=payload.lead_id,
+                user_id=user_id,
+                appointment_id=appointment_id,
                 appointment_start_at=payload.start_at,
             )
 
@@ -236,6 +244,32 @@ def _schedule_reminder_jobs(
                 appointment_id,
                 exc,
             )
+
+
+def _schedule_briefing_job(
+    *,
+    lead_id: int,
+    user_id: int,
+    appointment_id: int,
+    appointment_start_at: datetime,
+) -> None:
+    try:
+        ai_profile = fetch_core_ai_profile_resolve(user_id) or {}
+    except Exception:
+        ai_profile = {}
+
+    briefing_enabled = ai_profile.get("briefing_enabled")
+    if briefing_enabled is False:
+        return
+
+    lead_time = ai_profile.get("briefing_lead_time") or 120
+    schedule_briefing_job(
+        lead_id=lead_id,
+        user_id=user_id,
+        appointment_id=appointment_id,
+        appointment_start_at=appointment_start_at,
+        lead_time_minutes=int(lead_time),
+    )
 
 
 @router.put("/{appointment_id}", response_model=AppointmentOut)

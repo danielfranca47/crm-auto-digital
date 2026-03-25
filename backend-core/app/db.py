@@ -86,6 +86,10 @@ def ensure_ai_profile_columns() -> None:
         "qualification_score_threshold": {"default": 6, "sqlite_type": "INTEGER", "pg_type": "INTEGER"},
         "nurture_vs_discard_rule": {"default": "discard", "sqlite_type": "TEXT", "pg_type": "VARCHAR"},
         "appointment_reminder_offsets": {"default": None, "sqlite_type": "TEXT", "pg_type": "JSON"},
+        "briefing_enabled": {"default": True, "sqlite_type": "INTEGER", "pg_type": "BOOLEAN"},
+        "briefing_channel": {"default": "whatsapp", "sqlite_type": "TEXT", "pg_type": "VARCHAR"},
+        "briefing_lead_time": {"default": 120, "sqlite_type": "INTEGER", "pg_type": "INTEGER"},
+        "operator_whatsapp": {"default": None, "sqlite_type": "TEXT", "pg_type": "VARCHAR"},
     }
 
     with engine.begin() as conn:

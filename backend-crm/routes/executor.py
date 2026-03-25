@@ -30,6 +30,7 @@ from services.jobs_service import (
     TYPE_WHATSAPP_FOLLOWUP_TICK,
     TYPE_WHATSAPP_FOLLOWUP_PREGENERATE,
     TYPE_WHATSAPP_APPOINTMENT_REMINDER,
+    TYPE_WHATSAPP_APPOINTMENT_BRIEFING,
     TYPE_WHATSAPP_INBOUND,
     apply_outcome_highlight,
     apply_suggested_category,
@@ -39,6 +40,7 @@ from services.jobs_service import (
     get_job,
     normalize_job_type,
 )
+from services.briefing_service import generate_and_send_briefing
 from services.followup_reconciler import reconcile_due_followups
 from services.followup_channel_context import resolve_followup_tick_channel_context
 from services.followup_state import (
@@ -341,6 +343,39 @@ class QualificationStateAttemptRequest(BaseModel):
 class FollowupReconcileRequest(BaseModel):
     limit: int = Field(default=100, ge=1, le=500)
     dry_run: bool = False
+
+
+class ExecuteBriefingRequest(BaseModel):
+    job_id: int
+    lead_id: int
+    user_id: int
+    appointment_id: Optional[int] = None
+
+
+@router.post("/internal/appointments/briefing/execute")
+def execute_appointment_briefing(
+    payload: ExecuteBriefingRequest,
+    _: str = Depends(_require_service_token),
+):
+    """Executa o job de briefing pré-reunião: gera e envia o dossiê para o operador."""
+    job = get_job(payload.job_id)
+    if not job:
+        raise HTTPException(status_code=404, detail="Job não encontrado")
+
+    job_type = normalize_job_type(job.get("type") or "")
+    if job_type != TYPE_WHATSAPP_APPOINTMENT_BRIEFING:
+        raise HTTPException(status_code=400, detail="Tipo de job inválido para briefing")
+
+    try:
+        generate_and_send_briefing(
+            lead_id=payload.lead_id,
+            user_id=payload.user_id,
+            appointment_id=payload.appointment_id,
+        )
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Erro ao gerar briefing: {exc}")
+
+    return {"status": "ok", "job_id": payload.job_id}
 
 
 @router.post("/internal/followup/reconcile")

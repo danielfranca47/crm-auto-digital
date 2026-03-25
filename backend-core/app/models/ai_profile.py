@@ -40,6 +40,10 @@ class AIProfile(Base):
     qualification_score_threshold = Column(Integer, nullable=True, server_default="6")
     nurture_vs_discard_rule = Column(String, nullable=True, server_default="discard")
     appointment_reminder_offsets = Column(JSON, nullable=True)
+    briefing_enabled = Column(Boolean, nullable=True, default=True)
+    briefing_channel = Column(String, nullable=True, server_default="whatsapp")
+    briefing_lead_time = Column(Integer, nullable=True, server_default="120")
+    operator_whatsapp = Column(String, nullable=True)
     created_at = Column(DateTime, server_default=func.now(), nullable=False, default=datetime.utcnow)
     updated_at = Column(
         DateTime, server_default=func.now(), onupdate=func.now(), nullable=False, default=datetime.utcnow
