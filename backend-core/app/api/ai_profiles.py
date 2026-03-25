@@ -141,6 +141,7 @@ class AIProfileBase(BaseModel):
     followup_allowed_hours: Optional[str] = None
     origin_inbound_opener: Optional[str] = None
     origin_outbound_opener: Optional[str] = None
+    appointment_reminder_offsets: Optional[List[int]] = None
 
 
 class AIProfileCreate(AIProfileBase):
@@ -173,6 +174,7 @@ class AIProfileUpdate(BaseModel):
     followup_allowed_hours: Optional[str] = None
     origin_inbound_opener: Optional[str] = None
     origin_outbound_opener: Optional[str] = None
+    appointment_reminder_offsets: Optional[List[int]] = None
 
 
 class AIProfileOut(AIProfileBase):

@@ -29,6 +29,7 @@ from services.jobs_service import (
     LEAD_CATEGORIES,
     TYPE_WHATSAPP_FOLLOWUP_TICK,
     TYPE_WHATSAPP_FOLLOWUP_PREGENERATE,
+    TYPE_WHATSAPP_APPOINTMENT_REMINDER,
     TYPE_WHATSAPP_INBOUND,
     apply_outcome_highlight,
     apply_suggested_category,
@@ -229,6 +230,16 @@ def whatsapp_execution_context(
         payload = {
             **payload,
             "message_text": str(message_text or "followup_tick_auto_trigger"),
+            "instance_id": channel_ctx.get("instance_id"),
+            "provider": channel_ctx.get("provider"),
+            "phone": channel_ctx.get("phone") or payload.get("phone"),
+        }
+    elif job_type == TYPE_WHATSAPP_APPOINTMENT_REMINDER:
+        with get_connection() as conn:
+            channel_ctx = resolve_followup_tick_channel_context(conn, lead_id=int(lead_id), user_id=int(user_id))
+        payload = {
+            **payload,
+            "message_text": str(message_text or "appointment_reminder_trigger"),
             "instance_id": channel_ctx.get("instance_id"),
             "provider": channel_ctx.get("provider"),
             "phone": channel_ctx.get("phone") or payload.get("phone"),

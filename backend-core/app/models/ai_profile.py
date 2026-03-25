@@ -39,6 +39,7 @@ class AIProfile(Base):
     origin_outbound_opener = Column(String, nullable=True)
     qualification_score_threshold = Column(Integer, nullable=True, server_default="6")
     nurture_vs_discard_rule = Column(String, nullable=True, server_default="discard")
+    appointment_reminder_offsets = Column(JSON, nullable=True)
     created_at = Column(DateTime, server_default=func.now(), nullable=False, default=datetime.utcnow)
     updated_at = Column(
         DateTime, server_default=func.now(), onupdate=func.now(), nullable=False, default=datetime.utcnow

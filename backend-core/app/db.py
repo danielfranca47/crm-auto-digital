@@ -85,6 +85,7 @@ def ensure_ai_profile_columns() -> None:
         "origin_outbound_opener": {"default": None, "sqlite_type": "TEXT", "pg_type": "TEXT"},
         "qualification_score_threshold": {"default": 6, "sqlite_type": "INTEGER", "pg_type": "INTEGER"},
         "nurture_vs_discard_rule": {"default": "discard", "sqlite_type": "TEXT", "pg_type": "VARCHAR"},
+        "appointment_reminder_offsets": {"default": None, "sqlite_type": "TEXT", "pg_type": "JSON"},
     }
 
     with engine.begin() as conn:

@@ -14,6 +14,7 @@ from app.services import meeting_scheduler
 JOB_MAX_ATTEMPTS = 3
 TYPE_WHATSAPP_FOLLOWUP_TICK = "whatsapp.followup.tick"
 TYPE_WHATSAPP_FOLLOWUP_PREGENERATE = "whatsapp.followup.pregenerate"
+TYPE_WHATSAPP_APPOINTMENT_REMINDER = "whatsapp.appointment.reminder"
 
 
 class ExecutionError(Exception):
@@ -133,6 +134,10 @@ def _is_followup_tick_job(job: Dict[str, Any]) -> bool:
 
 def _is_pregenerate_job(job: Dict[str, Any]) -> bool:
     return str(job.get("type") or "").strip().lower() == TYPE_WHATSAPP_FOLLOWUP_PREGENERATE
+
+
+def _is_appointment_reminder_job(job: Dict[str, Any]) -> bool:
+    return str(job.get("type") or "").strip().lower() == TYPE_WHATSAPP_APPOINTMENT_REMINDER
 
 
 def _resolve_in_reply_to_message_id(*, job_id: str, job: Dict[str, Any], metadata: Dict[str, Any]) -> Optional[str]:
@@ -397,6 +402,81 @@ def _fail_job(job_id: str, logger: logging.LoggerAdapter, exc: ExecutionError, a
     return 1
 
 
+def _execute_appointment_reminder_pipeline(
+    job_id: str,
+    job: Dict[str, Any],
+    context: Dict[str, Any],
+    ctx_logger: logging.Logger,
+    attempt: Optional[int],
+) -> int:
+    """Envia lembrete de appointment via WhatsApp usando template fixo, sem LLM."""
+    try:
+        lead = context.get("lead") or {}
+        metadata = context.get("metadata") or {}
+        payload = job.get("payload") or {}
+
+        lead_id = lead.get("id") or payload.get("lead_id")
+        user_id = lead.get("user_id") or payload.get("user_id")
+        phone = metadata.get("phone") or lead.get("phone") or payload.get("phone")
+        instance_id = metadata.get("instance_id") or payload.get("instance_id")
+        provider = metadata.get("provider") or payload.get("provider") or "uazapi"
+        appointment_id = payload.get("appointment_id")
+        title = payload.get("appointment_title") or "reunião"
+        start_at_iso = payload.get("appointment_start_at") or ""
+
+        if not phone:
+            exec_error = ExecutionError(
+                "phone ausente no contexto do lembrete",
+                phase="context",
+                service="executor",
+                retryable=False,
+            )
+            return _fail_job(job_id, ctx_logger, exec_error, attempt)
+
+        lead_name = str(lead.get("contactName") or lead.get("name") or "").strip()
+        greeting = f"Olá{', ' + lead_name if lead_name else ''}!"
+
+        try:
+            from datetime import datetime as _dt
+            start_dt = _dt.fromisoformat(start_at_iso)
+            time_str = start_dt.strftime("%d/%m às %H:%M")
+        except Exception:
+            time_str = "em breve"
+
+        reminder_text = (
+            f"{greeting} Lembrando da sua {title} agendada para {time_str}. "
+            "Qualquer dúvida, estou por aqui. Até lá! 😊"
+        )
+
+        in_reply_to_message_id = f"reminder:{job_id}:{appointment_id}"
+        outbound_payload: Dict[str, Any] = {
+            "job_id": int(job_id),
+            "lead_id": lead_id,
+            "user_id": user_id,
+            "phone": phone,
+            "body": reminder_text,
+            "provider": provider,
+            "in_reply_to_message_id": in_reply_to_message_id,
+        }
+        if instance_id:
+            outbound_payload["instance_id"] = instance_id
+
+        ctx_logger.info(
+            "event=appointment_reminder_send lead_id=%s appointment_id=%s",
+            lead_id,
+            appointment_id,
+            extra={"phase": "reminder"},
+        )
+        crm_client.register_whatsapp_outbound(outbound_payload)
+        crm_client.complete_job(job_id, {"status": "sent", "lead_id": lead_id, "appointment_id": appointment_id})
+        ctx_logger.info("event=appointment_reminder_done lead_id=%s", lead_id, extra={"phase": "reminder"})
+        return 0
+    except Exception as exc:
+        ctx_logger.exception("event=appointment_reminder_error error=%s", exc, extra={"phase": "reminder"})
+        exec_error = ExecutionError(str(exc), phase="reminder", service="executor", retryable=True)
+        return _fail_job(job_id, ctx_logger, exec_error, attempt)
+
+
 def _execute_pregenerate_pipeline(
     job_id: str,
     job: Dict[str, Any],
@@ -490,6 +570,9 @@ def execute_job(job_id: str, logger: logging.Logger) -> int:
 
     if _is_pregenerate_job(job):
         return _execute_pregenerate_pipeline(job_id, job, context, ctx_logger, attempt)
+
+    if _is_appointment_reminder_job(job):
+        return _execute_appointment_reminder_pipeline(job_id, job, context, ctx_logger, attempt)
 
     lead_id = _safe_get(lead, "id")
     lead_name = _safe_get(lead, "contactName", "companyName", "name")
