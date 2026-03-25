@@ -1,5 +1,25 @@
 # AI Profile — Documentação de Campos
 
+> Atualizado em: 2026-03-25
+
+---
+
+## Contagem de campos
+
+| Grupo | Campos | UI? |
+|-------|--------|-----|
+| Identidade/comportamento (pré-Etapa 8) | 19 | 16 com UI · 3 backend-only |
+| Follow-up (Etapa 8) | 4 | 4 com UI |
+| **Total** | **23** | **20 com UI · 3 sem UI** |
+
+**Os 3 sem UI** (existem no modelo mas não no formulário):
+`presentation_variant`, `hybrid_flow_style`, `offer_pack`
+
+**Os 2 omitidos no diagnóstico** que existem no modelo e na UI:
+`name` (nome do agente) e `timezone` (fuso horário)
+
+---
+
 > Gerado em: 2026-03-21
 > Referência: `frontend-crm/src/pages/AiProfile.tsx`, `backend-core/app/models/ai_profile.py`, `backend-crm/services/ai_orchestrator/orchestrator.py`
 
