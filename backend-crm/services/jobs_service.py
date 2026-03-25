@@ -62,6 +62,7 @@ LEAD_CATEGORIES = [
     "client-list",
     "prospect-refused",
     "disqualified",
+    "nurture",
 ]
 
 LEAD_CATEGORIES_SET = set(LEAD_CATEGORIES)

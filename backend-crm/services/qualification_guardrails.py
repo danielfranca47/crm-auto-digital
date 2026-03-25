@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+import logging
 import sqlite3
 from typing import Any, Dict, List, Tuple
 
+logger = logging.getLogger(__name__)
 
 # NOTE: manter em sincronia com backend-executors/app/contracts/qualification_contract.py
 _MIN_REQUIRED_FIELDS = {
@@ -61,6 +63,22 @@ def _agent_type_to_mode(agent_type: str | None) -> str:
     return "agenda"
 
 
+def _fetch_ai_profile_threshold(user_id: int) -> Tuple[int, str]:
+    """Retorna (qualification_score_threshold, nurture_vs_discard_rule) do ai_profile do usuário.
+
+    Usa fetch_core_ai_profile_resolve via service token. Em caso de erro, retorna defaults.
+    """
+    try:
+        from core_client import fetch_core_ai_profile_resolve
+        profile = fetch_core_ai_profile_resolve(user_id) or {}
+        threshold = profile.get("qualification_score_threshold")
+        rule = profile.get("nurture_vs_discard_rule") or "discard"
+        return (int(threshold) if threshold is not None else 6, str(rule))
+    except Exception as exc:
+        logger.warning("can_advance_from_qualification: falha ao buscar ai_profile user_id=%s: %s", user_id, exc)
+        return (6, "discard")
+
+
 def can_advance_from_qualification(conn, lead_id: int, user_id: int) -> Tuple[bool, List[str]]:
     conn.row_factory = sqlite3.Row
     cur = conn.cursor()
@@ -73,7 +91,8 @@ def can_advance_from_qualification(conn, lead_id: int, user_id: int) -> Tuple[bo
 
     state_row = cur.execute(
         """
-        SELECT agent_mode_normalized, data_json
+        SELECT agent_mode_normalized, data_json,
+               qualification_total_score
           FROM lead_qualification_state
          WHERE lead_id = ?
         """,
@@ -82,6 +101,7 @@ def can_advance_from_qualification(conn, lead_id: int, user_id: int) -> Tuple[bo
 
     mode = _agent_type_to_mode(lead_row["agent_type"])
     extracted: Dict[str, Any] = {}
+    total_score = 0
     if state_row:
         mode = str(state_row["agent_mode_normalized"] or "").strip().lower() or mode
         raw_data = state_row["data_json"]
@@ -96,6 +116,16 @@ def can_advance_from_qualification(conn, lead_id: int, user_id: int) -> Tuple[bo
                     extracted = parsed
             except Exception:
                 extracted = {}
+        total_score = int(state_row["qualification_total_score"] or 0)
 
+    # Verificação 1: campos obrigatórios completos
     missing_fields = compute_missing_fields(mode, extracted)
-    return (len(missing_fields) == 0, missing_fields)
+    if missing_fields:
+        return False, missing_fields
+
+    # Verificação 2: score mínimo dos 4Ps
+    threshold, _ = _fetch_ai_profile_threshold(user_id)
+    if total_score < threshold:
+        return False, [f"score_{total_score}_of_12_below_threshold_{threshold}"]
+
+    return True, []

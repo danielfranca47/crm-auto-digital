@@ -58,6 +58,68 @@ def _normalize_row(row: sqlite3.Row | None) -> Dict[str, Any]:
     return payload
 
 
+def _score_field(value: Any, positive_keywords: tuple, negative_keywords: tuple = ()) -> int:
+    """Retorna score 0-3 para um campo com base em keywords.
+
+    3 = sinal positivo forte
+    2 = campo preenchido, sinal neutro
+    1 = sinal negativo/fraco
+    0 = campo ausente ou vazio
+    """
+    if value is None:
+        return 0
+    text = str(value).strip().lower()
+    if not text:
+        return 0
+    if any(k in text for k in positive_keywords):
+        return 3
+    if any(k in text for k in negative_keywords):
+        return 1
+    return 2
+
+
+def compute_4p_scores(data: Dict[str, Any]) -> Dict[str, int]:
+    """Extrai scores 0-3 dos 4Ps (Power, Priority, Price, Timing) a partir dos campos de qualificação."""
+    d = data or {}
+
+    # Power: quem decide (decision_role)
+    power_score = _score_field(
+        d.get("decision_role"),
+        positive_keywords=("eu decido", "sou eu", "decisor", "eu mesmo", "posso decidir", "só eu", "sou o", "sim"),
+        negative_keywords=("consultar", "perguntar", "marido", "esposa", "sócio", "chefe", "não decido", "preciso ver", "meu pai", "minha mãe"),
+    )
+
+    # Priority: urgência do problema (urgency)
+    priority_score = _score_field(
+        d.get("urgency"),
+        positive_keywords=("urgente", "agora", "hoje", "imediato", "quanto antes", "semana", "essa semana", "nessa semana", "o mais rápido"),
+        negative_keywords=("sem urgência", "no futuro", "talvez", "futuramente", "algum dia", "não sei quando", "não tenho pressa"),
+    )
+
+    # Price: verba disponível (budget_or_price_acceptance)
+    price_score = _score_field(
+        d.get("budget_or_price_acceptance"),
+        positive_keywords=("sim", "ok", "aceito", "concordo", "tá bem", "beleza", "ótimo", "tenho", "cabe", "consigo", "tranquilo", "dentro do orçamento"),
+        negative_keywords=("caro", "não tenho", "sem verba", "muito caro", "não posso", "acima", "fora do orçamento", "não cabe", "apertado"),
+    )
+
+    # Timing: prazo definido (availability_window)
+    timing_score = _score_field(
+        d.get("availability_window"),
+        positive_keywords=("segunda", "terça", "quarta", "quinta", "sexta", "sábado", "manhã", "tarde", "noite", "às ", "horas", "amanhã", "semana que vem"),
+        negative_keywords=("qualquer hora", "tanto faz", "não sei", "qualquer dia", "sem preferência"),
+    )
+
+    total = power_score + priority_score + price_score + timing_score
+    return {
+        "power_score": power_score,
+        "priority_score": priority_score,
+        "price_score": price_score,
+        "timing_score": timing_score,
+        "qualification_total_score": total,
+    }
+
+
 def get_qualification_state(lead_id: int) -> Dict[str, Any]:
     with get_connection() as conn:
         conn.row_factory = sqlite3.Row
@@ -146,14 +208,18 @@ def upsert_qualification_state(lead_id: int, user_id: int, patch: Dict[str, Any]
     if last_question_text is None:
         last_question_text = existing.get("last_question_text") or ""
 
+    scores = compute_4p_scores(merged_data)
+
     with get_connection() as conn:
         cur = conn.cursor()
         cur.execute(
             """
             INSERT INTO lead_qualification_state (
                 lead_id, user_id, stage, agent_mode_normalized, playbook_key, playbook_version,
-                data_json, confidence_json, last_questioned_field, attempts_json, asked_questions_json, last_question_text, updated_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+                data_json, confidence_json, last_questioned_field, attempts_json, asked_questions_json, last_question_text,
+                power_score, priority_score, price_score, timing_score, qualification_total_score,
+                updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
             ON CONFLICT(lead_id) DO UPDATE SET
                 user_id=excluded.user_id,
                 stage=excluded.stage,
@@ -166,6 +232,11 @@ def upsert_qualification_state(lead_id: int, user_id: int, patch: Dict[str, Any]
                 attempts_json=excluded.attempts_json,
                 asked_questions_json=excluded.asked_questions_json,
                 last_question_text=excluded.last_question_text,
+                power_score=excluded.power_score,
+                priority_score=excluded.priority_score,
+                price_score=excluded.price_score,
+                timing_score=excluded.timing_score,
+                qualification_total_score=excluded.qualification_total_score,
                 updated_at=CURRENT_TIMESTAMP
             """,
             (
@@ -181,6 +252,11 @@ def upsert_qualification_state(lead_id: int, user_id: int, patch: Dict[str, Any]
                 json.dumps(merged_attempts, ensure_ascii=False),
                 json.dumps(merged_asked_questions, ensure_ascii=False),
                 str(last_question_text or ""),
+                scores["power_score"],
+                scores["priority_score"],
+                scores["price_score"],
+                scores["timing_score"],
+                scores["qualification_total_score"],
             ),
         )
         conn.commit()

@@ -693,6 +693,11 @@ def init_db() -> None:
         ensure_column(conn, "appointments", "outcome_at", "outcome_at DATETIME")
         ensure_column(conn, "lead_qualification_state", "asked_questions_json", "asked_questions_json TEXT DEFAULT '[]'")
         ensure_column(conn, "lead_qualification_state", "last_question_text", "last_question_text TEXT")
+        ensure_column(conn, "lead_qualification_state", "power_score", "power_score INTEGER NOT NULL DEFAULT 0")
+        ensure_column(conn, "lead_qualification_state", "priority_score", "priority_score INTEGER NOT NULL DEFAULT 0")
+        ensure_column(conn, "lead_qualification_state", "price_score", "price_score INTEGER NOT NULL DEFAULT 0")
+        ensure_column(conn, "lead_qualification_state", "timing_score", "timing_score INTEGER NOT NULL DEFAULT 0")
+        ensure_column(conn, "lead_qualification_state", "qualification_total_score", "qualification_total_score INTEGER NOT NULL DEFAULT 0")
 
         cur.execute("CREATE INDEX IF NOT EXISTS idx_leads_user ON leads(user_id, createdAt);")
         cur.execute(
