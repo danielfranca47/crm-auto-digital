@@ -120,6 +120,35 @@ def fetch_core_ai_profile(token: str) -> Dict[str, Any] | None:
     return data
 
 
+def fetch_core_ai_profile_by_webhook_secret(secret: str) -> Dict[str, Any] | None:
+    """Resolve o AI profile pelo payment_webhook_secret. Retorna None se não encontrado."""
+
+    if not secret:
+        return None
+
+    base = _get_core_base()
+    url = f"{base}/ai-profiles/resolve-by-secret"
+    headers = _service_headers()
+
+    try:
+        with httpx.Client(timeout=10) as client:
+            resp = client.get(url, params={"token": secret}, headers=headers)
+    except httpx.RequestError as exc:
+        logger.warning("fetch_core_ai_profile_by_webhook_secret network_error=%s", exc)
+        return None
+
+    if resp.status_code == 404:
+        return None
+    if resp.status_code != 200:
+        logger.warning("fetch_core_ai_profile_by_webhook_secret status=%s", resp.status_code)
+        return None
+
+    data = resp.json()
+    if not isinstance(data, dict) or "user_id" not in data:
+        return None
+    return data
+
+
 def fetch_core_ai_profile_resolve(user_id: int) -> Dict[str, Any] | None:
     """Consulta o backend-core via service token para resolver o AIProfile de um usuário."""
 

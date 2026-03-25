@@ -238,6 +238,28 @@ def ensure_notifications_table(conn: sqlite3.Connection) -> None:
         CREATE INDEX IF NOT EXISTS idx_notifications_lead ON notifications(lead_id);
         """
     )
+    ensure_column(conn, "notifications", "body", "body TEXT")
+
+
+def ensure_unmatched_payment_events_table(conn: sqlite3.Connection) -> None:
+    """Cria tabela para eventos de pagamento sem lead vinculado (idempotente)."""
+    cur = conn.cursor()
+    cur.executescript(
+        """
+        CREATE TABLE IF NOT EXISTS unmatched_payment_events (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            gateway TEXT NOT NULL,
+            raw_payload TEXT NOT NULL,
+            buyer_email TEXT,
+            buyer_phone TEXT,
+            buyer_document TEXT,
+            checkout_token TEXT,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_unmatched_payment_created ON unmatched_payment_events(created_at);
+        """
+    )
 
 
 def ensure_knowledge_table(conn: sqlite3.Connection) -> None:
@@ -698,6 +720,7 @@ def init_db() -> None:
         ensure_column(conn, "lead_qualification_state", "price_score", "price_score INTEGER NOT NULL DEFAULT 0")
         ensure_column(conn, "lead_qualification_state", "timing_score", "timing_score INTEGER NOT NULL DEFAULT 0")
         ensure_column(conn, "lead_qualification_state", "qualification_total_score", "qualification_total_score INTEGER NOT NULL DEFAULT 0")
+        ensure_column(conn, "leads", "checkout_token", "checkout_token TEXT")
 
         cur.execute("CREATE INDEX IF NOT EXISTS idx_leads_user ON leads(user_id, createdAt);")
         cur.execute(
@@ -736,6 +759,9 @@ def init_db() -> None:
 
         # Notificações in-app
         ensure_notifications_table(conn)
+
+        # Eventos de pagamento sem lead vinculado (Agent 2)
+        ensure_unmatched_payment_events_table(conn)
 
         # Base de conhecimento por usuário
         ensure_knowledge_table(conn)

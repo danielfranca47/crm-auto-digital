@@ -90,6 +90,8 @@ def ensure_ai_profile_columns() -> None:
         "briefing_channel": {"default": "whatsapp", "sqlite_type": "TEXT", "pg_type": "VARCHAR"},
         "briefing_lead_time": {"default": 120, "sqlite_type": "INTEGER", "pg_type": "INTEGER"},
         "operator_whatsapp": {"default": None, "sqlite_type": "TEXT", "pg_type": "VARCHAR"},
+        "payment_gateway": {"default": None, "sqlite_type": "TEXT", "pg_type": "VARCHAR"},
+        "payment_webhook_secret": {"default": None, "sqlite_type": "TEXT", "pg_type": "VARCHAR"},
     }
 
     with engine.begin() as conn:

@@ -1,4 +1,5 @@
 import json
+import secrets as secrets_module
 from datetime import datetime
 from enum import Enum
 from typing import List, Optional
@@ -142,6 +143,7 @@ class AIProfileBase(BaseModel):
     origin_inbound_opener: Optional[str] = None
     origin_outbound_opener: Optional[str] = None
     appointment_reminder_offsets: Optional[List[int]] = None
+    payment_gateway: Optional[str] = None
 
 
 class AIProfileCreate(AIProfileBase):
@@ -175,6 +177,7 @@ class AIProfileUpdate(BaseModel):
     origin_inbound_opener: Optional[str] = None
     origin_outbound_opener: Optional[str] = None
     appointment_reminder_offsets: Optional[List[int]] = None
+    payment_gateway: Optional[str] = None
 
 
 class AIProfileOut(AIProfileBase):
@@ -182,6 +185,8 @@ class AIProfileOut(AIProfileBase):
     user_id: int
     created_at: datetime
     updated_at: datetime
+    payment_webhook_secret: Optional[str] = None
+    payment_webhook_url: Optional[str] = None
 
     class Config:
         orm_mode = True
@@ -243,6 +248,9 @@ def _upsert_ai_profile(
             data["origin_inbound_opener"] = openers.get("inbound")
         if data.get("origin_outbound_opener") is None:
             data["origin_outbound_opener"] = openers.get("outbound")
+        # Auto-gerar payment_webhook_secret único ao criar perfil
+        if not data.get("payment_webhook_secret"):
+            data["payment_webhook_secret"] = secrets_module.token_urlsafe(32)
         required_fields = {
             "template_key",
             "name",
@@ -331,3 +339,40 @@ async def resolve_ai_profile(
     if not profile:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="AI profile not found")
     return _normalize_profile_offer_pack(profile)
+
+
+@router.get("/ai-profiles/resolve-by-secret", response_model=AIProfileOut)
+async def resolve_ai_profile_by_secret(
+    token: str,
+    db: Session = Depends(get_db),
+    _: str = Depends(_require_service_token),
+):
+    """Resolve o AI profile pelo payment_webhook_secret. Usado pelo backend-crm para autenticar webhooks de pagamento."""
+    profile = (
+        db.query(models.AIProfile)
+        .filter(models.AIProfile.payment_webhook_secret == token)
+        .first()
+    )
+    if not profile:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Webhook secret não encontrado")
+    return _normalize_profile_offer_pack(profile)
+
+
+@router.post("/ai-profiles/me/regenerate-webhook-secret")
+async def regenerate_webhook_secret(
+    current_user: models.User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Regenera o payment_webhook_secret do usuário. Retorna o novo secret e a URL gerada."""
+    profile = db.query(models.AIProfile).filter(models.AIProfile.user_id == current_user.id).first()
+    if not profile:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="AI profile not found")
+    new_secret = secrets_module.token_urlsafe(32)
+    profile.payment_webhook_secret = new_secret
+    profile.updated_at = datetime.utcnow()
+    db.commit()
+    db.refresh(profile)
+    return {
+        "payment_webhook_secret": new_secret,
+        "payment_webhook_url": profile.payment_webhook_url,
+    }

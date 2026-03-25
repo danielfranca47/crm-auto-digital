@@ -1,3 +1,4 @@
+import os
 from datetime import datetime
 
 from sqlalchemy import JSON, Boolean, Column, DateTime, ForeignKey, Integer, String, UniqueConstraint, func
@@ -44,9 +45,18 @@ class AIProfile(Base):
     briefing_channel = Column(String, nullable=True, server_default="whatsapp")
     briefing_lead_time = Column(Integer, nullable=True, server_default="120")
     operator_whatsapp = Column(String, nullable=True)
+    payment_gateway = Column(String, nullable=True)
+    payment_webhook_secret = Column(String, nullable=True)
     created_at = Column(DateTime, server_default=func.now(), nullable=False, default=datetime.utcnow)
     updated_at = Column(
         DateTime, server_default=func.now(), onupdate=func.now(), nullable=False, default=datetime.utcnow
     )
 
     user = relationship("User", back_populates="ai_profile")
+
+    @property
+    def payment_webhook_url(self) -> str | None:
+        if not self.payment_gateway or not self.payment_webhook_secret:
+            return None
+        base = os.getenv("CRM_PUBLIC_BASE_URL", "").rstrip("/")
+        return f"{base}/webhooks/payment/{self.payment_gateway}?token={self.payment_webhook_secret}"
