@@ -607,6 +607,12 @@ def _build_prompt(context: Dict[str, Any], message_text: str) -> str:
         "instance_id": metadata.get("instance_id"),
     }
 
+    lead_origin_label = metadata.get("lead_origin_label") or "INBOUND (lead veio te procurar)"
+    _is_outbound_lead = (metadata.get("lead_origin") or "inbound") == "outbound"
+    origin_opener = (
+        ai_profile.get("origin_outbound_opener") if _is_outbound_lead else ai_profile.get("origin_inbound_opener")
+    ) or ""
+
     history_text = _format_history(history)
     last_bot_message = None
     short_reply_hint = None
@@ -679,6 +685,8 @@ def _build_prompt(context: Dict[str, Any], message_text: str) -> str:
         f"- current_field: {json.dumps(_select_current_field(mode_contract['missing_fields'], mode_contract.get('filled_fields') or []), ensure_ascii=False)}\n"
         f"- asked_questions_for_current_field: {json.dumps([q.get('question_text') for q in (mode_contract.get('asked_questions_json') or []) if isinstance(q, dict) and q.get('field') == _select_current_field(mode_contract['missing_fields'], mode_contract.get('filled_fields') or [])][-2:], ensure_ascii=False)}\n"
         f"- last_question_text: {json.dumps(mode_contract.get('last_question_text') or '', ensure_ascii=False)}\n"
+        f"- lead_origin: {lead_origin_label}\n"
+        f"- origin_opener: {origin_opener}\n"
         f"- inbound_message_text: {message_text}\n"
     )
 
@@ -711,6 +719,12 @@ def _build_mother_prompt(context: Dict[str, Any], message_text: str) -> str:
         "provider": metadata.get("provider"),
         "instance_id": metadata.get("instance_id"),
     }
+
+    lead_origin_label = metadata.get("lead_origin_label") or "INBOUND (lead veio te procurar)"
+    _is_outbound_lead = (metadata.get("lead_origin") or "inbound") == "outbound"
+    origin_opener = (
+        ai_profile.get("origin_outbound_opener") if _is_outbound_lead else ai_profile.get("origin_inbound_opener")
+    ) or ""
 
     history_text = _format_history(history)
     mode_contract = _build_mode_contract_context(context)
@@ -805,6 +819,8 @@ def _build_mother_prompt(context: Dict[str, Any], message_text: str) -> str:
         f"- agent_mode_normalized: {agent_mode_normalized}\n"
         f"- required_fields: {json.dumps(mode_contract['required_fields'], ensure_ascii=False)}\n"
         f"- missing_fields: {json.dumps(mode_contract['missing_fields'], ensure_ascii=False)}\n"
+        f"- lead_origin: {lead_origin_label}\n"
+        f"- origin_opener: {origin_opener}\n"
         f"- inbound_message_text: {message_text}\n"
     )
 
@@ -912,6 +928,12 @@ def _build_child_prompt_qualification(
         "instance_id": metadata.get("instance_id"),
     }
 
+    lead_origin_label = metadata.get("lead_origin_label") or "INBOUND (lead veio te procurar)"
+    _is_outbound_lead = (metadata.get("lead_origin") or "inbound") == "outbound"
+    origin_opener = (
+        ai_profile.get("origin_outbound_opener") if _is_outbound_lead else ai_profile.get("origin_inbound_opener")
+    ) or ""
+
     history_text = _format_history(history)
     mode_contract = _build_mode_contract_context(context, mother_decision)
     agent_mode_normalized = mode_contract["agent_mode_normalized"]
@@ -966,6 +988,8 @@ CONTEXTO:
 - current_field: {json.dumps(current_field, ensure_ascii=False)}
 - asked_questions_for_current_field: {json.dumps(asked_for_current, ensure_ascii=False)}
 - last_question_text: {json.dumps(mode_contract.get('last_question_text') or '', ensure_ascii=False)}
+- lead_origin: {lead_origin_label}
+- origin_opener: {origin_opener}
 - inbound_message_text: {message_text}
 """
 def _build_child_prompt_apresentation(

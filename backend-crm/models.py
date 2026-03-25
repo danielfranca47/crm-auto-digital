@@ -11,6 +11,7 @@ class Lead(BaseModel):
     phone: Optional[str] = None
     country_code: Optional[str] = None
     email: Optional[str] = None
+    # Valores aceitos: 'Manual', 'Planilha', 'WhatsApp', 'inbound', 'outbound'
     origin: Optional[str] = "Manual"
     category: str
     customMessage: Optional[str] = None

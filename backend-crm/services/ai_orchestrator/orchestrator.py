@@ -159,6 +159,8 @@ def build_context_bundle(
 
     lead_data = {key: row[key] for key in row.keys()}
 
+    _lead_origin_raw = lead_data.get("origin") or ""
+    _is_outbound = _lead_origin_raw.lower() not in ("whatsapp", "inbound", "manual", "planilha", "")
     metadata = {
         "channel": channel,
         "inbound_message_text": inbound_message_text,
@@ -166,6 +168,12 @@ def build_context_bundle(
         "presentation_variant": presentation_contract["presentation_variant"],
         "presentation_variant_source": presentation_contract["presentation_variant_source"],
         "hybrid_flow_style": presentation_contract["hybrid_flow_style"],
+        "lead_origin": "outbound" if _is_outbound else "inbound",
+        "lead_origin_label": (
+            "OUTBOUND (lead foi abordado — não te conhecia)"
+            if _is_outbound
+            else "INBOUND (lead veio te procurar)"
+        ),
     }
 
     history: List[Dict[str, Any]] = []
@@ -226,6 +234,8 @@ def build_context_bundle_from_inbound(event: InboundEvent) -> ContextBundle:
     history = get_recent_history(event.lead_id)
     conversation_goal = "qualify" if len(history) <= 1 else "advance"
 
+    _lead_origin_raw = lead_data.get("origin") or ""
+    _is_outbound = _lead_origin_raw.lower() not in ("whatsapp", "inbound", "manual", "planilha", "")
     metadata = {
         "channel": event.channel,
         "inbound_message_text": event.message_text,
@@ -238,6 +248,12 @@ def build_context_bundle_from_inbound(event: InboundEvent) -> ContextBundle:
         "presentation_variant": presentation_contract["presentation_variant"],
         "presentation_variant_source": presentation_contract["presentation_variant_source"],
         "hybrid_flow_style": presentation_contract["hybrid_flow_style"],
+        "lead_origin": "outbound" if _is_outbound else "inbound",
+        "lead_origin_label": (
+            "OUTBOUND (lead foi abordado — não te conhecia)"
+            if _is_outbound
+            else "INBOUND (lead veio te procurar)"
+        ),
     }
 
     return ContextBundle(

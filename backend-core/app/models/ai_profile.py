@@ -35,6 +35,8 @@ class AIProfile(Base):
     followup_max_attempts = Column(Integer, nullable=True)
     followup_first_offset = Column(Integer, nullable=True)
     followup_allowed_hours = Column(String, nullable=True)
+    origin_inbound_opener = Column(String, nullable=True)
+    origin_outbound_opener = Column(String, nullable=True)
     created_at = Column(DateTime, server_default=func.now(), nullable=False, default=datetime.utcnow)
     updated_at = Column(
         DateTime, server_default=func.now(), onupdate=func.now(), nullable=False, default=datetime.utcnow

@@ -71,6 +71,26 @@ class HybridFlowStyle(str, Enum):
     schedule_then_offer = "schedule_then_offer"
 
 
+_TEMPLATE_OPENERS: dict = {
+    "sdr_padrao": {
+        "inbound": "Olá! Obrigado por entrar em contato. Me conta o que você está buscando.",
+        "outbound": "Oi! Estou entrando em contato porque acredito que posso ajudar com [benefício da solução]. Tem um momento?",
+    },
+    "consultor_especialista": {
+        "inbound": "Olá! Fico feliz com seu contato. Para te orientar melhor, me conta um pouco sobre sua situação atual.",
+        "outbound": "Olá! Pesquisei sobre você e acredito que temos algo que pode ser muito valioso. Posso te falar em 2 minutos?",
+    },
+    "closer_agressivo": {
+        "inbound": "Oi! Que bom que entrou em contato. Vamos direto ao ponto — o que você precisa?",
+        "outbound": "Oi! Estou entrando em contato com uma solução específica para o seu perfil. Quando podemos conversar?",
+    },
+    "hybrid_scheduler": {
+        "inbound": "Olá! Obrigado por entrar em contato. Me fala mais para eu entender como posso te ajudar.",
+        "outbound": "Oi! Entrei em contato porque acredito que posso te ajudar. Quando tem 15 minutos para conversarmos?",
+    },
+}
+
+
 AI_TEMPLATES = [
     {
         "key": "sdr_padrao",
@@ -119,6 +139,8 @@ class AIProfileBase(BaseModel):
     followup_max_attempts: Optional[int] = None
     followup_first_offset: Optional[int] = None
     followup_allowed_hours: Optional[str] = None
+    origin_inbound_opener: Optional[str] = None
+    origin_outbound_opener: Optional[str] = None
 
 
 class AIProfileCreate(AIProfileBase):
@@ -149,6 +171,8 @@ class AIProfileUpdate(BaseModel):
     followup_max_attempts: Optional[int] = None
     followup_first_offset: Optional[int] = None
     followup_allowed_hours: Optional[str] = None
+    origin_inbound_opener: Optional[str] = None
+    origin_outbound_opener: Optional[str] = None
 
 
 class AIProfileOut(AIProfileBase):
@@ -210,6 +234,13 @@ def _upsert_ai_profile(
                 setattr(profile, key, value)
         profile.updated_at = datetime.utcnow()
     else:
+        # Apply opener defaults from template if not explicitly provided
+        template_key = str(data.get("template_key") or "")
+        openers = _TEMPLATE_OPENERS.get(template_key, _TEMPLATE_OPENERS.get("sdr_padrao", {}))
+        if data.get("origin_inbound_opener") is None:
+            data["origin_inbound_opener"] = openers.get("inbound")
+        if data.get("origin_outbound_opener") is None:
+            data["origin_outbound_opener"] = openers.get("outbound")
         required_fields = {
             "template_key",
             "name",

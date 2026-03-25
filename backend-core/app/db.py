@@ -81,6 +81,8 @@ def ensure_ai_profile_columns() -> None:
         "followup_max_attempts": {"default": None, "sqlite_type": "INTEGER", "pg_type": "INTEGER"},
         "followup_first_offset": {"default": None, "sqlite_type": "INTEGER", "pg_type": "INTEGER"},
         "followup_allowed_hours": {"default": None, "sqlite_type": "TEXT", "pg_type": "VARCHAR"},
+        "origin_inbound_opener": {"default": None, "sqlite_type": "TEXT", "pg_type": "TEXT"},
+        "origin_outbound_opener": {"default": None, "sqlite_type": "TEXT", "pg_type": "TEXT"},
     }
 
     with engine.begin() as conn:
