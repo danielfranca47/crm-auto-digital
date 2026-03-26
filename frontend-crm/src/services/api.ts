@@ -828,7 +828,7 @@ export const api = {
 
   agents: {
     overview: async (seconds = 120) => {
-      return apiClient.get(`/agents/overview?seconds=${seconds}`);
+      return apiClient.get<{ agents: any[] }>(`/agents/overview?seconds=${seconds}`);
     },
     summary: async () => {
       return apiClient.get(`/agents/jobs/summary`);
