@@ -103,6 +103,13 @@ const initialProfileState: AiProfilePayload = {
   warming_social_proof: "",
   warming_session_preview: "",
   offer_pack: null,
+  appointment_reminder_offsets: null,
+  briefing_enabled: true,
+  briefing_channel: "whatsapp",
+  briefing_lead_time: 2,
+  operator_whatsapp: "",
+  buying_signal_keywords: null,
+  calendar_integration: "none",
   payment_gateway: null,
 };
 
@@ -224,6 +231,9 @@ export default function AiProfilePage() {
 
   const [cadenceStr, setCadenceStr] = useState("");
   const [cadenceError, setCadenceError] = useState<string | null>(null);
+  const [reminderHour1, setReminderHour1] = useState<string>("24");
+  const [reminderHour2, setReminderHour2] = useState<string>("1");
+  const [buyingSignalStr, setBuyingSignalStr] = useState("");
 
   const [whatsappQr, setWhatsappQr] = useState<WhatsappQrPayload | null>(null);
   const [whatsappStatus, setWhatsappStatus] = useState<WhatsappStatusResponse | null>(null);
@@ -383,11 +393,23 @@ export default function AiProfilePage() {
       const loadedProfile = {
         ...initialProfileState,
         ...data,
+        briefing_lead_time: typeof data.briefing_lead_time === "number"
+          ? Math.round(data.briefing_lead_time / 60)
+          : initialProfileState.briefing_lead_time,
       };
       const inferredModel = profileToAgentModelUi(loadedProfile);
       const normalizedLoadedProfile = applyAgentModelUi(loadedProfile, inferredModel);
       setProfile(normalizedLoadedProfile);
       setCadenceStr(Array.isArray(data.followup_cadence) ? data.followup_cadence.join(", ") : "");
+      if (Array.isArray(data.appointment_reminder_offsets) && data.appointment_reminder_offsets.length >= 2) {
+        setReminderHour1(String(Math.abs(data.appointment_reminder_offsets[0]) / 60));
+        setReminderHour2(String(Math.abs(data.appointment_reminder_offsets[1]) / 60));
+      } else {
+        const isA3 = (data.template_key || "").toLowerCase() === "hybrid_scheduler";
+        setReminderHour1("24");
+        setReminderHour2(isA3 ? "2" : "1");
+      }
+      setBuyingSignalStr(Array.isArray(data.buying_signal_keywords) ? data.buying_signal_keywords.join("\n") : "");
       setAgentModelUi(inferredModel);
       setProfileExists(true);
     } catch (err: any) {
@@ -498,6 +520,14 @@ export default function AiProfilePage() {
     try {
       const inferredModel = profileToAgentModelUi(profile);
       const normalizedProfile = applyAgentModelUi(profile, inferredModel);
+      const h1 = parseInt(reminderHour1, 10);
+      const h2 = parseInt(reminderHour2, 10);
+      const parsedReminderOffsets = (!isNaN(h1) && h1 > 0 && !isNaN(h2) && h2 > 0)
+        ? [-(h1 * 60), -(h2 * 60)]
+        : null;
+      const parsedBuyingSignals = buyingSignalStr.trim()
+        ? buyingSignalStr.split("\n").map((s) => s.trim()).filter(Boolean)
+        : null;
       const payload: AiProfilePayload = {
         ...normalizedProfile,
         timezone: normalizedProfile.timezone?.trim() ? normalizedProfile.timezone : "UTC",
@@ -505,6 +535,12 @@ export default function AiProfilePage() {
         handoff_custom_text: normalizedProfile.handoff_custom_text?.trim() || null,
         followup_cadence: parsedCadence,
         followup_allowed_hours: normalizedProfile.followup_allowed_hours?.trim() || null,
+        appointment_reminder_offsets: parsedReminderOffsets,
+        briefing_lead_time: normalizedProfile.briefing_lead_time
+          ? normalizedProfile.briefing_lead_time * 60
+          : null,
+        operator_whatsapp: normalizedProfile.operator_whatsapp?.trim() || null,
+        buying_signal_keywords: parsedBuyingSignals,
       };
       const fn = profileExists ? api.core.updateAiProfileMe : api.core.createAiProfile;
       const saved = await fn(payload);
@@ -778,6 +814,7 @@ export default function AiProfilePage() {
           <TabsTrigger value="profile">Identidade do agente</TabsTrigger>
           <TabsTrigger value="knowledge">Conhecimento do negócio</TabsTrigger>
           <TabsTrigger value="followup">Follow-up</TabsTrigger>
+          <TabsTrigger value="apresentacao">Apresentação e agendamento</TabsTrigger>
           <TabsTrigger value="oferta">Oferta e Pagamento</TabsTrigger>
         </TabsList>
 
@@ -1607,6 +1644,271 @@ export default function AiProfilePage() {
               </div>
             </CardContent>
           </Card>
+        </TabsContent>
+
+        {/* Seção 4 — Apresentação e agendamento (Tarefa 4.2) */}
+        <TabsContent value="apresentacao" className="space-y-4">
+          {agentModelUi === "direto_autonomo" ? (
+            <Card className="opacity-60">
+              <CardContent className="pt-6">
+                <p className="text-sm text-muted-foreground text-center">
+                  Não aplicável — Agent 2 não realiza agendamentos.
+                </p>
+              </CardContent>
+            </Card>
+          ) : (
+            <>
+              {/* Lembretes de reunião */}
+              <Card>
+                <CardHeader>
+                  <CardTitle>Lembretes de reunião</CardTitle>
+                  <CardDescription>
+                    Mensagens automáticas enviadas antes do horário agendado.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="space-y-2">
+                    <div className="flex items-center gap-2">
+                      <Label>
+                        <code className="text-xs">appointment_reminder_offsets</code>
+                      </Label>
+                      <Badge variant="secondary">
+                        -{reminderHour1}h · -{reminderHour2}h
+                      </Badge>
+                    </div>
+                    <div className="grid gap-4 md:grid-cols-2">
+                      <div className="space-y-1">
+                        <Label htmlFor="reminder_hour_1">1.º lembrete — horas antes</Label>
+                        <Input
+                          id="reminder_hour_1"
+                          type="number"
+                          min={1}
+                          placeholder="24"
+                          value={reminderHour1}
+                          onChange={(e) => setReminderHour1(e.target.value)}
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <Label htmlFor="reminder_hour_2">2.º lembrete — horas antes</Label>
+                        <Input
+                          id="reminder_hour_2"
+                          type="number"
+                          min={1}
+                          placeholder={agentModelUi === "hibrido_agendador" ? "2" : "1"}
+                          value={reminderHour2}
+                          onChange={(e) => setReminderHour2(e.target.value)}
+                        />
+                      </div>
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      Default Agent 1: 24h e 1h · Agent 3: 24h e 2h.
+                    </p>
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Dossiê pré-reunião */}
+              <Card>
+                <CardHeader>
+                  <CardTitle>Dossiê pré-reunião</CardTitle>
+                  <CardDescription>
+                    Briefing automático enviado ao operador antes da reunião.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="flex items-center justify-between">
+                    <div className="space-y-1">
+                      <Label>
+                        <code className="text-xs">briefing_enabled</code>
+                      </Label>
+                      <p className="text-xs text-muted-foreground">
+                        Ativar envio automático do dossiê antes da reunião.
+                      </p>
+                    </div>
+                    <Switch
+                      checked={profile.briefing_enabled ?? true}
+                      onCheckedChange={(v) => setProfile((p) => ({ ...p, briefing_enabled: v }))}
+                    />
+                  </div>
+
+                  {profile.briefing_enabled && (
+                    <>
+                      <div className="space-y-2">
+                        <Label htmlFor="briefing_channel">
+                          <code className="text-xs">briefing_channel</code>
+                        </Label>
+                        <Select
+                          value={profile.briefing_channel ?? "whatsapp"}
+                          onValueChange={(v) =>
+                            setProfile((p) => ({ ...p, briefing_channel: v as "whatsapp" | "internal" }))
+                          }
+                        >
+                          <SelectTrigger id="briefing_channel">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="whatsapp">WhatsApp</SelectItem>
+                            <SelectItem value="internal">Notificação interna</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+
+                      <div className="space-y-2">
+                        <Label htmlFor="briefing_lead_time">
+                          <code className="text-xs">briefing_lead_time</code> — horas antes da reunião
+                        </Label>
+                        <Input
+                          id="briefing_lead_time"
+                          type="number"
+                          min={1}
+                          placeholder="2"
+                          value={profile.briefing_lead_time ?? ""}
+                          onChange={(e) =>
+                            setProfile((p) => ({
+                              ...p,
+                              briefing_lead_time: e.target.value ? Number(e.target.value) : null,
+                            }))
+                          }
+                        />
+                      </div>
+
+                      {(profile.briefing_channel ?? "whatsapp") === "whatsapp" && (
+                        <div className="space-y-2">
+                          <Label htmlFor="operator_whatsapp">
+                            <code className="text-xs">operator_whatsapp</code>
+                            {profile.briefing_enabled && !(profile.operator_whatsapp?.trim()) ? (
+                              <Badge className="ml-2" variant="destructive">Crítico — número não configurado</Badge>
+                            ) : profile.operator_whatsapp?.trim() ? (
+                              <Badge className="ml-2" variant="default">Configurado</Badge>
+                            ) : null}
+                          </Label>
+                          <Input
+                            id="operator_whatsapp"
+                            type="tel"
+                            placeholder="+55 11 99999-9999"
+                            value={profile.operator_whatsapp ?? ""}
+                            onChange={(e) =>
+                              setProfile((p) => ({ ...p, operator_whatsapp: e.target.value }))
+                            }
+                          />
+                          <p className="text-xs text-muted-foreground">
+                            Número do operador que receberá o dossiê pelo WhatsApp.
+                          </p>
+                        </div>
+                      )}
+                    </>
+                  )}
+                </CardContent>
+              </Card>
+
+              {/* Integração de calendário */}
+              <Card>
+                <CardHeader>
+                  <CardTitle>Integração de calendário</CardTitle>
+                  <CardDescription>
+                    Sincronize reuniões agendadas com seu calendário.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="calendar_integration">
+                      <code className="text-xs">calendar_integration</code>
+                      {profile.calendar_integration && profile.calendar_integration !== "none" ? (
+                        <Badge className="ml-2" variant="default">Integrado</Badge>
+                      ) : (
+                        <Badge className="ml-2" variant="secondary">Não configurado</Badge>
+                      )}
+                    </Label>
+                    <div className="flex gap-2">
+                      <Select
+                        value={profile.calendar_integration ?? "none"}
+                        onValueChange={(v) =>
+                          setProfile((p) => ({
+                            ...p,
+                            calendar_integration: v as "none" | "google_calendar" | "calendly",
+                          }))
+                        }
+                      >
+                        <SelectTrigger id="calendar_integration" className="flex-1">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="none">Nenhum</SelectItem>
+                          <SelectItem value="google_calendar">Google Calendar</SelectItem>
+                          <SelectItem value="calendly">Calendly</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      {profile.calendar_integration && profile.calendar_integration !== "none" && (
+                        <Button variant="outline" type="button" disabled>
+                          Conectar
+                        </Button>
+                      )}
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      Integração OAuth — em breve.
+                    </p>
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Sinais de compra — apenas Agent 1 */}
+              {agentModelUi === "agendador_com_humano" && (
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Sinais de compra</CardTitle>
+                    <CardDescription>
+                      Palavras-chave que indicam intenção de contratar. O bot inclui o link de checkout automaticamente ao detectar.
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-3">
+                    <div className="flex items-center gap-2">
+                      <Label htmlFor="buying_signal_keywords">
+                        <code className="text-xs">buying_signal_keywords</code>
+                      </Label>
+                      <Badge variant={buyingSignalStr.trim() ? "default" : "secondary"}>
+                        {buyingSignalStr.trim()
+                          ? `${buyingSignalStr.split("\n").filter((l) => l.trim()).length} palavras`
+                          : "Usando defaults do template"}
+                      </Badge>
+                    </div>
+                    <Textarea
+                      id="buying_signal_keywords"
+                      placeholder={"quanto custa\nqual o valor\ncomo assino\naceita cartão"}
+                      rows={6}
+                      value={buyingSignalStr}
+                      onChange={(e) => setBuyingSignalStr(e.target.value)}
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      Uma keyword por linha. Deixe em branco para usar os defaults do template.
+                    </p>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      type="button"
+                      onClick={() =>
+                        setBuyingSignalStr(
+                          [
+                            "quanto custa",
+                            "qual o valor",
+                            "como assino",
+                            "qual o contrato",
+                            "como faço para contratar",
+                            "aceita cartão",
+                            "tem parcelamento",
+                            "quando começa",
+                            "qual o prazo",
+                            "me manda a proposta",
+                          ].join("\n")
+                        )
+                      }
+                    >
+                      Usar defaults do template
+                    </Button>
+                  </CardContent>
+                </Card>
+              )}
+            </>
+          )}
         </TabsContent>
 
         {/* Seção 5 — Oferta e Pagamento (Tarefa 3.6 / 4.3) */}

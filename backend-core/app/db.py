@@ -94,6 +94,7 @@ def ensure_ai_profile_columns() -> None:
         "payment_gateway": {"default": None, "sqlite_type": "TEXT", "pg_type": "VARCHAR"},
         "payment_webhook_secret": {"default": None, "sqlite_type": "TEXT", "pg_type": "VARCHAR"},
         "buying_signal_keywords": {"default": None, "sqlite_type": "TEXT", "pg_type": "JSON"},
+        "calendar_integration": {"default": "none", "sqlite_type": "TEXT", "pg_type": "VARCHAR"},
         "warming_social_proof": {"default": None, "sqlite_type": "TEXT", "pg_type": "TEXT"},
         "warming_session_preview": {"default": None, "sqlite_type": "TEXT", "pg_type": "TEXT"},
     }

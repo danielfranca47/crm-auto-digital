@@ -49,6 +49,7 @@ class AIProfile(Base):
     payment_gateway = Column(String, nullable=True)
     payment_webhook_secret = Column(String, nullable=True)
     buying_signal_keywords = Column(JSON, nullable=True)
+    calendar_integration = Column(String, nullable=True, server_default="none")
     warming_social_proof = Column(String, nullable=True)
     warming_session_preview = Column(String, nullable=True)
     created_at = Column(DateTime, server_default=func.now(), nullable=False, default=datetime.utcnow)

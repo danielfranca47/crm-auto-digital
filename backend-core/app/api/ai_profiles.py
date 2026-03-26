@@ -146,6 +146,12 @@ class AIProfileBase(BaseModel):
     qualification_score_threshold: Optional[int] = None
     nurture_vs_discard_rule: Optional[str] = None
     appointment_reminder_offsets: Optional[List[int]] = None
+    briefing_enabled: Optional[bool] = True
+    briefing_channel: Optional[str] = "whatsapp"
+    briefing_lead_time: Optional[int] = 120
+    operator_whatsapp: Optional[str] = None
+    buying_signal_keywords: Optional[List[str]] = None
+    calendar_integration: Optional[str] = "none"
     payment_gateway: Optional[str] = None
     warming_social_proof: Optional[str] = None
     warming_session_preview: Optional[str] = None
@@ -185,6 +191,12 @@ class AIProfileUpdate(BaseModel):
     qualification_score_threshold: Optional[int] = None
     nurture_vs_discard_rule: Optional[str] = None
     appointment_reminder_offsets: Optional[List[int]] = None
+    briefing_enabled: Optional[bool] = None
+    briefing_channel: Optional[str] = None
+    briefing_lead_time: Optional[int] = None
+    operator_whatsapp: Optional[str] = None
+    buying_signal_keywords: Optional[List[str]] = None
+    calendar_integration: Optional[str] = None
     payment_gateway: Optional[str] = None
     warming_social_proof: Optional[str] = None
     warming_session_preview: Optional[str] = None

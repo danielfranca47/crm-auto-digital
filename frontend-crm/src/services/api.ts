@@ -81,6 +81,13 @@ export type AiProfilePayload = {
   warming_social_proof?: string | null;
   warming_session_preview?: string | null;
   offer_pack?: OfferPack | null;
+  appointment_reminder_offsets?: number[] | null;
+  briefing_enabled?: boolean | null;
+  briefing_channel?: "whatsapp" | "internal" | null;
+  briefing_lead_time?: number | null;
+  operator_whatsapp?: string | null;
+  buying_signal_keywords?: string[] | null;
+  calendar_integration?: "none" | "google_calendar" | "calendly" | null;
   payment_gateway?: "hotmart" | "kiwify" | "stripe" | "generico" | null;
 };
 
