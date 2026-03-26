@@ -38,6 +38,7 @@ class AIProfile(Base):
     followup_allowed_hours = Column(String, nullable=True)
     origin_inbound_opener = Column(String, nullable=True)
     origin_outbound_opener = Column(String, nullable=True)
+    objection_common = Column(String, nullable=True)
     qualification_score_threshold = Column(Integer, nullable=True, server_default="6")
     nurture_vs_discard_rule = Column(String, nullable=True, server_default="discard")
     appointment_reminder_offsets = Column(JSON, nullable=True)

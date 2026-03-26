@@ -45,6 +45,14 @@ import {
 } from "@/services/api";
 import { useUsage } from "@/hooks/useUsage";
 import { AlertCircle, Brain, Clock, FileEdit, FilePlus, RefreshCw, Sparkles, Upload, Wand2 } from "lucide-react";
+import { Slider } from "@/components/ui/slider";
+import { Switch } from "@/components/ui/switch";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 
 const fallbackTemplates: Record<
   string,
@@ -87,6 +95,13 @@ const initialProfileState: AiProfilePayload = {
   handoff_custom_text: "",
   requires_handoff: false,
   human_in_loop: false,
+  origin_inbound_opener: "",
+  origin_outbound_opener: "",
+  objection_common: "",
+  qualification_score_threshold: 6,
+  nurture_vs_discard_rule: "discard",
+  warming_social_proof: "",
+  warming_session_preview: "",
   offer_pack: null,
   payment_gateway: null,
 };
@@ -1017,6 +1032,163 @@ export default function AiProfilePage() {
               </CardContent>
             </Card>
           </div>
+
+          {/* ── Contexto do Negócio — Qualificação ── */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Contexto do Negócio</CardTitle>
+              <CardDescription>Mensagens de abertura por origem e objeção mais comum.</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <Label htmlFor="origin_inbound_opener">
+                    <code className="text-xs">origin_inbound_opener</code>
+                  </Label>
+                  <Badge variant={profile.origin_inbound_opener?.trim() ? "default" : "secondary"}>
+                    {profile.origin_inbound_opener?.trim() ? "Configurado" : "Usando default do template"}
+                  </Badge>
+                </div>
+                <Textarea
+                  id="origin_inbound_opener"
+                  value={profile.origin_inbound_opener ?? ""}
+                  placeholder="Oi! Vi que você veio pelo anúncio de X..."
+                  onChange={(e) => setProfile((p) => ({ ...p, origin_inbound_opener: e.target.value }))}
+                  rows={3}
+                />
+              </div>
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <Label htmlFor="origin_outbound_opener">
+                    <code className="text-xs">origin_outbound_opener</code>
+                  </Label>
+                  <Badge variant={profile.origin_outbound_opener?.trim() ? "default" : "secondary"}>
+                    {profile.origin_outbound_opener?.trim() ? "Configurado" : "Usando default do template"}
+                  </Badge>
+                </div>
+                <Textarea
+                  id="origin_outbound_opener"
+                  value={profile.origin_outbound_opener ?? ""}
+                  placeholder="Oi [Nome], sou assistente da [Empresa]..."
+                  onChange={(e) => setProfile((p) => ({ ...p, origin_outbound_opener: e.target.value }))}
+                  rows={3}
+                />
+              </div>
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <Label htmlFor="objection_common">
+                    <code className="text-xs">objection_common</code>
+                  </Label>
+                  <Badge variant={profile.objection_common?.trim() ? "default" : "secondary"}>
+                    {profile.objection_common?.trim() ? "Configurado" : "Não configurado"}
+                  </Badge>
+                </div>
+                <Input
+                  id="objection_common"
+                  value={profile.objection_common ?? ""}
+                  placeholder="Preciso pensar mais"
+                  onChange={(e) => setProfile((p) => ({ ...p, objection_common: e.target.value }))}
+                />
+              </div>
+
+              {/* Aquecimento — warming (Tarefa 3.8) */}
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <Label htmlFor="warming_social_proof">
+                    <code className="text-xs">warming_social_proof</code>
+                  </Label>
+                  <Badge variant={profile.warming_social_proof?.trim() ? "default" : "secondary"}>
+                    {profile.warming_social_proof?.trim() ? "Configurado" : "Não configurado"}
+                  </Badge>
+                </div>
+                <Textarea
+                  id="warming_social_proof"
+                  value={profile.warming_social_proof ?? ""}
+                  placeholder="A Ana, personal trainer como você, dobrou sua agenda em 2 meses"
+                  onChange={(e) => setProfile((p) => ({ ...p, warming_social_proof: e.target.value }))}
+                  rows={2}
+                />
+              </div>
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <Label htmlFor="warming_session_preview">
+                    <code className="text-xs">warming_session_preview</code>
+                  </Label>
+                  <Badge variant={profile.warming_session_preview?.trim() ? "default" : "secondary"}>
+                    {profile.warming_session_preview?.trim() ? "Configurado" : "Não configurado"}
+                  </Badge>
+                </div>
+                <Textarea
+                  id="warming_session_preview"
+                  value={profile.warming_session_preview ?? ""}
+                  placeholder="Na sessão de 1h vamos mapear seus objetivos e montar seu plano"
+                  onChange={(e) => setProfile((p) => ({ ...p, warming_session_preview: e.target.value }))}
+                  rows={2}
+                />
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* ── Filtros de qualificação ── */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Filtros de qualificação</CardTitle>
+              <CardDescription>Defina o score mínimo e o destino de leads não qualificados.</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <Label>
+                    <code className="text-xs">qualification_score_threshold</code>
+                    <span className="ml-2 text-muted-foreground text-xs">Score mínimo para avançar ao agendamento</span>
+                  </Label>
+                  <Badge variant="outline">
+                    {profile.qualification_score_threshold ?? 6}/12 pontos
+                  </Badge>
+                </div>
+                <Slider
+                  min={0}
+                  max={12}
+                  step={1}
+                  value={[profile.qualification_score_threshold ?? 6]}
+                  onValueChange={([val]) => setProfile((p) => ({ ...p, qualification_score_threshold: val }))}
+                />
+                <div className="flex justify-between text-xs text-muted-foreground">
+                  <span>0</span>
+                  <span>12</span>
+                </div>
+              </div>
+              <div className="flex items-center justify-between gap-4">
+                <div className="space-y-1">
+                  <Label>
+                    <code className="text-xs">nurture_vs_discard_rule</code>
+                  </Label>
+                  <TooltipProvider>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <p className="text-xs text-muted-foreground cursor-help underline decoration-dotted">
+                          {profile.nurture_vs_discard_rule === "nurture" ? "Nurture passivo" : "Descarte"}
+                        </p>
+                      </TooltipTrigger>
+                      <TooltipContent className="max-w-xs">
+                        Nurture: lead vai para lista de reaquecimento futuro. Descarte: arquivado permanentemente.
+                      </TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-sm text-muted-foreground">Descarte</span>
+                  <Switch
+                    checked={profile.nurture_vs_discard_rule === "nurture"}
+                    onCheckedChange={(checked) =>
+                      setProfile((p) => ({ ...p, nurture_vs_discard_rule: checked ? "nurture" : "discard" }))
+                    }
+                  />
+                  <span className="text-sm">Nurture passivo</span>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
 
           {(profile.requires_handoff || profile.human_in_loop) && (
             <Card>

@@ -73,6 +73,13 @@ export type AiProfilePayload = {
   followup_max_attempts?: number | null;
   followup_first_offset?: number | null;
   followup_allowed_hours?: string | null;
+  origin_inbound_opener?: string | null;
+  origin_outbound_opener?: string | null;
+  objection_common?: string | null;
+  qualification_score_threshold?: number | null;
+  nurture_vs_discard_rule?: "nurture" | "discard" | null;
+  warming_social_proof?: string | null;
+  warming_session_preview?: string | null;
   offer_pack?: OfferPack | null;
   payment_gateway?: "hotmart" | "kiwify" | "stripe" | "generico" | null;
 };

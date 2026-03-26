@@ -142,6 +142,9 @@ class AIProfileBase(BaseModel):
     followup_allowed_hours: Optional[str] = None
     origin_inbound_opener: Optional[str] = None
     origin_outbound_opener: Optional[str] = None
+    objection_common: Optional[str] = None
+    qualification_score_threshold: Optional[int] = None
+    nurture_vs_discard_rule: Optional[str] = None
     appointment_reminder_offsets: Optional[List[int]] = None
     payment_gateway: Optional[str] = None
     warming_social_proof: Optional[str] = None
@@ -178,6 +181,9 @@ class AIProfileUpdate(BaseModel):
     followup_allowed_hours: Optional[str] = None
     origin_inbound_opener: Optional[str] = None
     origin_outbound_opener: Optional[str] = None
+    objection_common: Optional[str] = None
+    qualification_score_threshold: Optional[int] = None
+    nurture_vs_discard_rule: Optional[str] = None
     appointment_reminder_offsets: Optional[List[int]] = None
     payment_gateway: Optional[str] = None
     warming_social_proof: Optional[str] = None
