@@ -1070,6 +1070,36 @@ def _build_child_prompt_apresentation(
     presentation_variant, presentation_variant_source = _resolve_presentation_variant(context, agent_mode_normalized)
     hybrid_flow_style = _resolve_hybrid_flow_style(context)
     offer_pack_summary = _build_offer_pack_summary(context)
+
+    # Estágio de aquecimento (Tarefa 3.8) — Agent 3 (hybrid_scheduler) pós-qualificação.
+    # Trigger: mother_decision.route_to == "qualification" e missing_fields vazio
+    # (qualificação recém-aprovada/auto-promovida para apresentation).
+    _DEFAULT_SOCIAL_PROOF = (
+        "Um profissional com o seu perfil já utilizou essa abordagem e conseguiu resultados expressivos. "
+        "Posso te contar mais detalhes na nossa conversa."
+    )
+    _DEFAULT_SESSION_PREVIEW = (
+        "Na sessão de aproximadamente 1h, vamos mapear sua situação atual, identificar os principais pontos de melhoria "
+        "e sair com um plano de ação claro para você."
+    )
+    template_key_for_warming = str(ai_profile.get("template_key") or "").strip().lower()
+    warming_injection = ""
+    if (
+        template_key_for_warming == "hybrid_scheduler"
+        and mother_decision.route_to == "qualification"
+        and not mode_contract.get("missing_fields")
+    ):
+        social_proof = str(ai_profile.get("warming_social_proof") or "").strip() or _DEFAULT_SOCIAL_PROOF
+        session_preview = str(ai_profile.get("warming_session_preview") or "").strip() or _DEFAULT_SESSION_PREVIEW
+        warming_injection = (
+            "\n- ESTÁGIO WARMING (pós-qualificação aprovada para hybrid_scheduler): "
+            "O lead acabou de concluir a qualificação. Antes de propor o agendamento, execute os 2 passos de aquecimento em UMA mensagem natural:\n"
+            f"  1. PROVA SOCIAL: {social_proof}\n"
+            f"  2. PRÉVIA DA SESSÃO: {session_preview}\n"
+            "  Combine os 2 passos de forma fluida e, ao final, proponha o agendamento da sessão.\n"
+            "  Não mencione os termos 'prova social' ou 'prévia da sessão' explicitamente — use linguagem natural.\n"
+        )
+
     return (
         "Você é a FILHA APRESENTATION e deve responder SOMENTE JSON válido:\n"
         "{\n"
@@ -1112,6 +1142,7 @@ def _build_child_prompt_apresentation(
         "- Mídia rica: se offer_pack_summary.media_url estiver preenchido, a mídia já será enviada automaticamente antes deste texto. NÃO mencione 'veja a imagem/vídeo' — assuma que o lead já recebeu e escreva o texto do pitch como sequência natural.\n"
         "- Se offer_pack_summary.anchor_price estiver preenchido, use o preço âncora no pitch (ex: 'De R$997 por apenas R$X').\n"
         "- Se offer_pack_summary.guarantee_text estiver preenchido, inclua a garantia na mensagem (ex: 'Com 7 dias de garantia').\n"
+        f"{warming_injection}"
         "Exemplos rápidos (sales):\n"
         "- EXEMPLO CONFIRMAR: message_text='Plano Starter por R$X com suporte Y. Quer seguir com a contratação?'\n"
         "  signals_structured={offer_presented:true, checkout_sent:false, presentation_variant:'sales', offer_item_name:'Plano Starter'}\n"
@@ -1133,6 +1164,7 @@ def _build_child_prompt_apresentation(
         f"- presentation_variant: {presentation_variant} (source={presentation_variant_source})\n"
         f"- hybrid_flow_style: {hybrid_flow_style or ''}\n"
         f"- offer_pack_summary: {json.dumps(offer_pack_summary, ensure_ascii=False)}\n"
+        f"- warming_stage_active: {bool(warming_injection)}\n"
         f"- inbound_message_text: {message_text}\n"
     )
 
