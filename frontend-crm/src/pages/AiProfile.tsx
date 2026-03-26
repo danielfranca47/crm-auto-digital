@@ -44,7 +44,7 @@ import {
   WhatsappStatusResponse,
 } from "@/services/api";
 import { useUsage } from "@/hooks/useUsage";
-import { AlertCircle, Brain, Clock, Copy, Eye, EyeOff, FileEdit, FilePlus, RefreshCw, Sparkles, Upload, Wand2 } from "lucide-react";
+import { AlertCircle, AlertTriangle, Brain, Clock, Copy, Eye, EyeOff, FileEdit, FilePlus, RefreshCw, Sparkles, Upload, Wand2 } from "lucide-react";
 import { Slider } from "@/components/ui/slider";
 import { Switch } from "@/components/ui/switch";
 import {
@@ -268,6 +268,43 @@ export default function AiProfilePage() {
   const showIaUnavailableBanner = !usageLoading && !!usageData && !isUnknown && !iaAvailable;
 
   const status = useMemo(() => summarizeProfile(profile), [profile]);
+
+  const resumoAlerts = useMemo(() => {
+    const isAgent2 = agentModelUi === "direto_autonomo";
+    const isAgent13 = !isAgent2;
+    const alerts: { level: "critico" | "aviso"; text: string }[] = [];
+
+    if (isAgent2 && !profile.payment_gateway) {
+      alerts.push({
+        level: "critico",
+        text: "Crítico — sem gateway de pagamento, o closing nunca fecha automaticamente",
+      });
+    }
+
+    if (isAgent2 && profile.briefing_enabled !== false && !profile.operator_whatsapp?.trim()) {
+      alerts.push({
+        level: "critico",
+        text: "Crítico — briefing ativo mas sem número do operador configurado",
+      });
+    }
+
+    if (isAgent13 && (!profile.appointment_reminder_offsets || profile.appointment_reminder_offsets.length === 0)) {
+      alerts.push({
+        level: "aviso",
+        text: "Aviso — lembretes de reunião com defaults do sistema (24h e 1h). Configure se precisar de prazos diferentes.",
+      });
+    }
+
+    if (!profile.origin_inbound_opener?.trim()) {
+      alerts.push({
+        level: "aviso",
+        text: "Aviso — usando abertura genérica para leads inbound. Personalize para seu nicho.",
+      });
+    }
+
+    return alerts;
+  }, [agentModelUi, profile]);
+
   const previewText = useMemo(() => {
     if (!profile.name && !profile.brand_name) return "Preencha os campos para ver o preview.";
     const intro = `Olá! Eu sou ${profile.name || "seu agente"} da ${profile.brand_name || "sua marca"}.`;
@@ -840,6 +877,14 @@ export default function AiProfilePage() {
           <TabsTrigger value="followup">Follow-up</TabsTrigger>
           <TabsTrigger value="apresentacao">Apresentação e agendamento</TabsTrigger>
           <TabsTrigger value="oferta">Oferta e Pagamento</TabsTrigger>
+          <TabsTrigger value="resumo" className="relative">
+            Resumo
+            {resumoAlerts.length > 0 && (
+              <span className="ml-1.5 inline-flex h-4 min-w-[1rem] items-center justify-center rounded-full bg-destructive px-1 text-[10px] font-bold text-destructive-foreground">
+                {resumoAlerts.length}
+              </span>
+            )}
+          </TabsTrigger>
         </TabsList>
 
         <TabsContent value="profile" className="space-y-4">
@@ -2195,6 +2240,44 @@ export default function AiProfilePage() {
               </Card>
             </>
           )}
+        </TabsContent>
+
+        <TabsContent value="resumo" className="space-y-4">
+          <Card>
+            <CardHeader>
+              <CardTitle>Resumo de alertas</CardTitle>
+              <CardDescription>
+                Configurações críticas ou ausentes que podem impactar o funcionamento do agente.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              {resumoAlerts.length === 0 ? (
+                <Alert className="border-green-400/60 bg-green-50/40 dark:bg-green-950/20">
+                  <AlertCircle className="h-4 w-4 text-green-600" />
+                  <AlertTitle className="text-green-700 dark:text-green-400">Tudo configurado</AlertTitle>
+                  <AlertDescription className="text-green-600 dark:text-green-500">
+                    Nenhum alerta encontrado. O perfil está completo para o tipo de agente selecionado.
+                  </AlertDescription>
+                </Alert>
+              ) : (
+                resumoAlerts.map((alert, i) =>
+                  alert.level === "critico" ? (
+                    <Alert key={i} className="border-destructive/60 bg-destructive/5">
+                      <AlertCircle className="h-4 w-4 text-destructive" />
+                      <AlertTitle className="text-destructive">Crítico</AlertTitle>
+                      <AlertDescription>{alert.text.replace(/^Crítico — /, "")}</AlertDescription>
+                    </Alert>
+                  ) : (
+                    <Alert key={i} className="border-yellow-400/60 bg-yellow-50/40 dark:bg-yellow-950/20">
+                      <AlertTriangle className="h-4 w-4 text-yellow-600" />
+                      <AlertTitle className="text-yellow-700 dark:text-yellow-400">Aviso</AlertTitle>
+                      <AlertDescription>{alert.text.replace(/^Aviso — /, "")}</AlertDescription>
+                    </Alert>
+                  )
+                )
+              )}
+            </CardContent>
+          </Card>
         </TabsContent>
       </Tabs>
 
