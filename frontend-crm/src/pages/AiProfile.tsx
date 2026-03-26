@@ -810,7 +810,7 @@ export default function AiProfilePage() {
       </div>
 
       <Tabs defaultValue="profile">
-        <TabsList>
+        <TabsList className="w-full overflow-x-auto flex-nowrap justify-start">
           <TabsTrigger value="profile">Identidade do agente</TabsTrigger>
           <TabsTrigger value="knowledge">Conhecimento do negócio</TabsTrigger>
           <TabsTrigger value="followup">Follow-up</TabsTrigger>
