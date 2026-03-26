@@ -92,6 +92,7 @@ def ensure_ai_profile_columns() -> None:
         "operator_whatsapp": {"default": None, "sqlite_type": "TEXT", "pg_type": "VARCHAR"},
         "payment_gateway": {"default": None, "sqlite_type": "TEXT", "pg_type": "VARCHAR"},
         "payment_webhook_secret": {"default": None, "sqlite_type": "TEXT", "pg_type": "VARCHAR"},
+        "buying_signal_keywords": {"default": None, "sqlite_type": "TEXT", "pg_type": "JSON"},
     }
 
     with engine.begin() as conn:

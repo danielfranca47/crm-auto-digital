@@ -755,6 +755,29 @@ def set_lead_bot_disabled(
         return {"status": "ok", "lead_id": lead_id, "bot_disabled": payload.disabled}
 
 
+@router.post("/internal/leads/{lead_id}/buying-signal")
+def create_buying_signal_notification(
+    lead_id: int,
+    _: str = Depends(_require_service_token),
+):
+    """Cria notificação buying_signal_detected para o operador."""
+    with get_connection() as conn:
+        cur = conn.cursor()
+        row = cur.execute("SELECT id, user_id FROM leads WHERE id = ?", (lead_id,)).fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="Lead não encontrado")
+        user_id = row["user_id"]
+        cur.execute(
+            """
+            INSERT INTO notifications (user_id, lead_id, type, read, created_at)
+            VALUES (?, ?, 'buying_signal_detected', 0, CURRENT_TIMESTAMP)
+            """,
+            (user_id, lead_id),
+        )
+        conn.commit()
+    return {"status": "ok", "lead_id": lead_id}
+
+
 @router.post("/internal/logs/handoff-requested")
 def log_handoff_requested(
     payload: HandoffRequestedLog,

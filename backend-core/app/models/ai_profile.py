@@ -47,6 +47,7 @@ class AIProfile(Base):
     operator_whatsapp = Column(String, nullable=True)
     payment_gateway = Column(String, nullable=True)
     payment_webhook_secret = Column(String, nullable=True)
+    buying_signal_keywords = Column(JSON, nullable=True)
     created_at = Column(DateTime, server_default=func.now(), nullable=False, default=datetime.utcnow)
     updated_at = Column(
         DateTime, server_default=func.now(), onupdate=func.now(), nullable=False, default=datetime.utcnow

@@ -2,9 +2,10 @@ from __future__ import annotations
 
 import json
 import logging
+import unicodedata
 from datetime import datetime
 from difflib import SequenceMatcher
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 
 from app.contracts.qualification_contract import (
     SIGNALS_SCHEMA,
@@ -34,6 +35,37 @@ BOT_DISABLED_DECISION = DecisionOutput(
     questions=[],
     reason="bot_disabled",
 )
+
+
+BUYING_SIGNAL_DEFAULTS: List[str] = [
+    "quanto custa",
+    "qual o valor",
+    "como assino",
+    "qual o contrato",
+    "como faço para contratar",
+    "aceita cartão",
+    "tem parcelamento",
+    "quando começa",
+    "qual o prazo",
+    "me manda a proposta",
+]
+
+_AGENT1_MODES = {"consultivo", "agenda"}
+
+
+def _normalize_str(text: str) -> str:
+    nfkd = unicodedata.normalize("NFKD", text.lower())
+    return "".join(c for c in nfkd if not unicodedata.combining(c))
+
+
+def _detect_buying_signals(message_text: str, keywords_list: Optional[List[str]]) -> bool:
+    """Retorna True se message_text contém alguma keyword de compra (Agent 1)."""
+    keywords = keywords_list if keywords_list else BUYING_SIGNAL_DEFAULTS
+    normalized_msg = _normalize_str(message_text or "")
+    for kw in keywords:
+        if _normalize_str(kw) in normalized_msg:
+            return True
+    return False
 
 
 def _safe_get(data: Dict[str, Any], *keys: str) -> Optional[Any]:
@@ -2163,6 +2195,51 @@ def decide(context: Dict[str, Any], logger: Optional[logging.Logger] = None) -> 
                 trace.get("anti_loop_rule3_applied"),
                 decision.next_action,
             )
+        # Detecção de sinal de compra — Agent 1 (Tarefa 3.7)
+        # Só aplicável a modos consultivo/agenda; Agent 2 (direto) tem fluxo próprio.
+        _ai_profile_for_signal = context.get("ai_profile") or {}
+        _agent_mode_for_signal = _normalize_agent_mode(context, mother_decision)
+        if _agent_mode_for_signal in _AGENT1_MODES and decision.next_action in ("reply", "ask_qualification"):
+            _raw_keywords = _ai_profile_for_signal.get("buying_signal_keywords")
+            if isinstance(_raw_keywords, str):
+                try:
+                    _raw_keywords = json.loads(_raw_keywords)
+                except Exception:
+                    _raw_keywords = None
+            _keywords_list: Optional[List[str]] = (
+                [str(k) for k in _raw_keywords if k]
+                if isinstance(_raw_keywords, list)
+                else None
+            )
+            if _detect_buying_signals(message_text, _keywords_list):
+                _lead_for_signal = context.get("lead") or {}
+                _lead_id_signal = _lead_for_signal.get("id") or (context.get("job") or {}).get("payload", {}).get("lead_id")
+                if _lead_id_signal:
+                    try:
+                        crm_client.create_buying_signal_notification(int(_lead_id_signal))
+                    except Exception:
+                        pass
+                # Se offer_pack tem checkout_link, incluir na mensagem automaticamente
+                _offer_pack_raw = _ai_profile_for_signal.get("offer_pack")
+                if isinstance(_offer_pack_raw, str):
+                    try:
+                        _offer_pack_raw = json.loads(_offer_pack_raw)
+                    except Exception:
+                        _offer_pack_raw = None
+                _checkout_link: Optional[str] = None
+                if isinstance(_offer_pack_raw, dict):
+                    _checkout_link = str(_offer_pack_raw.get("checkout_link") or "").strip() or None
+                    # Também verifica no primeiro item de items
+                    if not _checkout_link:
+                        _items = _offer_pack_raw.get("items")
+                        if isinstance(_items, list) and _items and isinstance(_items[0], dict):
+                            _checkout_link = str(_items[0].get("checkout_link") or "").strip() or None
+                if _checkout_link and decision.message_text and _checkout_link not in decision.message_text:
+                    decision.message_text = f"{decision.message_text}\n\n{_checkout_link}"
+                if decision.decision_trace is None:
+                    decision.decision_trace = {}
+                decision.decision_trace["buying_signal_detected"] = True
+                decision.decision_trace["checkout_link_injected"] = bool(_checkout_link)
         return handoff_policy.apply(context, decision, logger=logger)
     except Exception as exc:
         if logger:
