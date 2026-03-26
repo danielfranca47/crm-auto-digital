@@ -44,7 +44,7 @@ import {
   WhatsappStatusResponse,
 } from "@/services/api";
 import { useUsage } from "@/hooks/useUsage";
-import { AlertCircle, Brain, Clock, FileEdit, FilePlus, RefreshCw, Sparkles, Upload, Wand2 } from "lucide-react";
+import { AlertCircle, Brain, Clock, Copy, Eye, EyeOff, FileEdit, FilePlus, RefreshCw, Sparkles, Upload, Wand2 } from "lucide-react";
 import { Slider } from "@/components/ui/slider";
 import { Switch } from "@/components/ui/switch";
 import {
@@ -235,6 +235,11 @@ export default function AiProfilePage() {
   const [reminderHour2, setReminderHour2] = useState<string>("1");
   const [buyingSignalStr, setBuyingSignalStr] = useState("");
 
+  const [paymentWebhookUrl, setPaymentWebhookUrl] = useState<string | null>(null);
+  const [paymentWebhookSecret, setPaymentWebhookSecret] = useState<string | null>(null);
+  const [secretRevealed, setSecretRevealed] = useState(false);
+  const [regeneratingSecret, setRegeneratingSecret] = useState(false);
+
   const [whatsappQr, setWhatsappQr] = useState<WhatsappQrPayload | null>(null);
   const [whatsappStatus, setWhatsappStatus] = useState<WhatsappStatusResponse | null>(null);
   const [whatsappPhase, setWhatsappPhase] = useState<"idle" | "connecting" | "connected" | "error">(
@@ -410,6 +415,8 @@ export default function AiProfilePage() {
         setReminderHour2(isA3 ? "2" : "1");
       }
       setBuyingSignalStr(Array.isArray(data.buying_signal_keywords) ? data.buying_signal_keywords.join("\n") : "");
+      setPaymentWebhookUrl(data.payment_webhook_url ?? null);
+      setPaymentWebhookSecret(data.payment_webhook_secret ?? null);
       setAgentModelUi(inferredModel);
       setProfileExists(true);
     } catch (err: any) {
@@ -549,11 +556,28 @@ export default function AiProfilePage() {
       setProfile(applyAgentModelUi(savedProfile, savedModel));
       setAgentModelUi(savedModel);
       setProfileExists(true);
+      setPaymentWebhookUrl(saved.payment_webhook_url ?? null);
+      setPaymentWebhookSecret(saved.payment_webhook_secret ?? null);
       toast({ title: "Perfil salvo", description: "Identidade do agente atualizada." });
     } catch (err) {
       handleError(err, { fallbackMessage: "Falha ao salvar perfil." });
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function handleRegenerateSecret() {
+    setRegeneratingSecret(true);
+    try {
+      const result = await api.core.regenerateWebhookSecret();
+      setPaymentWebhookSecret(result.payment_webhook_secret);
+      setPaymentWebhookUrl(result.payment_webhook_url ?? null);
+      setSecretRevealed(true);
+      toast({ title: "Token regenerado", description: "Novo token gerado. Atualize a URL no seu gateway." });
+    } catch (err) {
+      handleError(err, { fallbackMessage: "Falha ao regenerar token." });
+    } finally {
+      setRegeneratingSecret(false);
     }
   }
 
@@ -2084,6 +2108,89 @@ export default function AiProfilePage() {
                       Sem gateway configurado, o fechamento automático não funciona.
                     </p>
                   </div>
+
+                  {profile.payment_gateway && (
+                    <>
+                      <div className="space-y-2">
+                        <Label htmlFor="payment_webhook_url">
+                          URL do webhook
+                          {paymentWebhookUrl ? (
+                            <Badge className="ml-2" variant="default">Ativo</Badge>
+                          ) : (
+                            <Badge className="ml-2" variant="secondary">Aguardando gateway</Badge>
+                          )}
+                        </Label>
+                        <div className="flex gap-2">
+                          <Input
+                            id="payment_webhook_url"
+                            readOnly
+                            value={paymentWebhookUrl ?? "Salve o perfil para gerar a URL"}
+                            className="font-mono text-xs bg-muted"
+                          />
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="icon"
+                            disabled={!paymentWebhookUrl}
+                            onClick={() => {
+                              if (paymentWebhookUrl) {
+                                navigator.clipboard.writeText(paymentWebhookUrl);
+                                toast({ title: "Copiado", description: "URL copiada para a área de transferência." });
+                              }
+                            }}
+                          >
+                            <Copy className="h-4 w-4" />
+                          </Button>
+                        </div>
+                        <p className="text-xs text-muted-foreground">
+                          Cadastre esta URL no painel do gateway para receber notificações de pagamento.
+                        </p>
+                      </div>
+
+                      <div className="space-y-2">
+                        <Label htmlFor="payment_webhook_secret">
+                          Token do webhook
+                          {paymentWebhookSecret ? (
+                            <Badge className="ml-2" variant="default">Ativo</Badge>
+                          ) : (
+                            <Badge className="ml-2" variant="secondary">Não gerado</Badge>
+                          )}
+                        </Label>
+                        <div className="flex gap-2">
+                          <Input
+                            id="payment_webhook_secret"
+                            readOnly
+                            type={secretRevealed ? "text" : "password"}
+                            value={paymentWebhookSecret ?? ""}
+                            className="font-mono text-xs bg-muted"
+                            placeholder="Salve o perfil para gerar o token"
+                          />
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="icon"
+                            disabled={!paymentWebhookSecret}
+                            onClick={() => setSecretRevealed((v) => !v)}
+                          >
+                            {secretRevealed ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="icon"
+                            disabled={!profileExists || regeneratingSecret}
+                            onClick={handleRegenerateSecret}
+                            title="Regenerar token"
+                          >
+                            <RefreshCw className={`h-4 w-4 ${regeneratingSecret ? "animate-spin" : ""}`} />
+                          </Button>
+                        </div>
+                        <p className="text-xs text-muted-foreground">
+                          Ao regenerar o token, a URL anterior para de funcionar. Atualize no gateway.
+                        </p>
+                      </div>
+                    </>
+                  )}
                 </CardContent>
               </Card>
             </>

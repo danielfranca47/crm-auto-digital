@@ -800,6 +800,10 @@ export const api = {
       coreClient.post<AiProfile>(`/ai-profiles`, payload),
     updateAiProfileMe: async (payload: Partial<AiProfilePayload>) =>
       coreClient.put<AiProfile>(`/ai-profiles/me`, payload),
+    regenerateWebhookSecret: async () =>
+      coreClient.post<{ payment_webhook_secret: string; payment_webhook_url: string | null }>(
+        `/ai-profiles/me/regenerate-webhook-secret`
+      ),
   },
 
   crm: {
