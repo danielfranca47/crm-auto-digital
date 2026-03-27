@@ -1,22 +1,28 @@
 import { useState, useEffect, useRef } from 'react';
 import { api } from '@/services/api';
+import {
+  KNOWLEDGE_CATEGORIES_BY_TEMPLATE,
+  KNOWLEDGE_IMPORTANCE_LABELS,
+  type KnowledgeCategory,
+} from '@/types/agente';
 
 interface KnowledgeItem {
   id: number;
   title: string;
   content_text: string;
   source_type: string;
+  category: string | null;
   created_at: string;
   updated_at: string;
 }
 
 // ─── Modal base (shared) ──────────────────────────────────────
-function ModalBase({ title, sub, onClose, onSave, children, saveLabel = 'Salvar alterações' }: {
+function ModalBase({ title, sub, onClose, onSave, children, saveLabel = 'Salvar' }: {
   title: string; sub: string; onClose: () => void; onSave?: () => void; children: React.ReactNode; saveLabel?: string;
 }) {
   return (
     <div className="o-modal-overlay open" onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
-      <div className="o-modal" style={{ maxWidth: 600 }}>
+      <div className="o-modal" style={{ maxWidth: 620 }}>
         <div className="o-modal-header">
           <div>
             <div className="font-display" style={{ fontSize: 22, fontWeight: 400, color: 'var(--o-text)' }}>{title}</div>
@@ -34,14 +40,103 @@ function ModalBase({ title, sub, onClose, onSave, children, saveLabel = 'Salvar 
   );
 }
 
-// ─── Modal: Adicionar conhecimento ───────────────────────────
-function ModalAdd({ onClose, onAdded }: { onClose: () => void; onAdded: () => void }) {
-  const [tab, setTab]     = useState<'text' | 'file'>('text');
-  const [title, setTitle] = useState('');
+// ─── Modal: Preencher seção guiada ───────────────────────────
+function ModalGuided({
+  category, existingItem, onClose, onSaved,
+}: {
+  category: KnowledgeCategory;
+  existingItem: KnowledgeItem | null;
+  onClose: () => void;
+  onSaved: () => void;
+}) {
+  const [title, setTitle]     = useState(existingItem?.title ?? category.label);
+  const [content, setContent] = useState(existingItem?.content_text ?? '');
+  const [saving, setSaving]   = useState(false);
+  const [error, setError]     = useState<string | null>(null);
+
+  async function handleSave() {
+    if (!content.trim() || content.trim().length < 20) {
+      setError('O conteúdo deve ter pelo menos 20 caracteres.');
+      return;
+    }
+    setSaving(true);
+    try {
+      if (existingItem) {
+        await api.crm.updateKnowledge(existingItem.id, {
+          title: title.trim(),
+          content_text: content.trim(),
+          category: category.key,
+        });
+      } else {
+        await api.crm.createKnowledgeManual({
+          title: title.trim(),
+          content_text: content.trim(),
+          category: category.key,
+        });
+      }
+      onSaved();
+    } catch {
+      setError('Erro ao salvar. Tente novamente.');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <ModalBase
+      title={existingItem ? `Editar: ${category.label}` : category.label}
+      sub={category.description}
+      onClose={onClose}
+      onSave={handleSave}
+      saveLabel={saving ? 'Salvando…' : existingItem ? 'Salvar alterações' : 'Adicionar'}
+    >
+      {/* Hint */}
+      <div style={{
+        background: 'var(--o-b0)', border: '1px solid var(--o-b1)', borderRadius: 4,
+        padding: '10px 14px', marginBottom: 16, fontSize: 12.5, color: 'var(--o-sub)',
+        lineHeight: 1.6,
+      }}>
+        <span className="font-mono-orion" style={{ fontSize: 8, letterSpacing: 2, textTransform: 'uppercase', color: 'var(--o-dim)', display: 'block', marginBottom: 4 }}>
+          O que preencher
+        </span>
+        {category.hint}
+      </div>
+
+      <div className="o-field">
+        <label className="o-field-label">Título</label>
+        <input
+          className="o-input"
+          value={title}
+          onChange={e => setTitle(e.target.value)}
+          maxLength={120}
+        />
+        <div className="o-char-count">{title.length}/120</div>
+      </div>
+
+      <div className="o-field">
+        <label className="o-field-label">Conteúdo</label>
+        <textarea
+          className="o-textarea"
+          style={{ minHeight: 220 }}
+          value={content}
+          onChange={e => setContent(e.target.value)}
+          placeholder={category.placeholder}
+        />
+      </div>
+
+      {error && <div style={{ fontSize: 12, color: 'var(--o-hot)', marginTop: 4 }}>{error}</div>}
+    </ModalBase>
+  );
+}
+
+// ─── Modal: Adicionar conteúdo extra (livre / upload) ────────
+function ModalAddExtra({ onClose, onAdded }: { onClose: () => void; onAdded: () => void }) {
+  const [tab, setTab]         = useState<'text' | 'file'>('text');
+  const [title, setTitle]     = useState('');
   const [content, setContent] = useState('');
-  const [file, setFile]   = useState<File | null>(null);
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [file, setFile]       = useState<File | null>(null);
+  const [saving, setSaving]   = useState(false);
+  const [error, setError]     = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
 
   async function handleSave() {
@@ -67,8 +162,13 @@ function ModalAdd({ onClose, onAdded }: { onClose: () => void; onAdded: () => vo
   }
 
   return (
-    <ModalBase title="Adicionar conhecimento" sub="Adicione texto livre ou faça upload de um arquivo" onClose={onClose} onSave={handleSave} saveLabel={saving ? 'Salvando…' : 'Adicionar'}>
-      {/* Tabs */}
+    <ModalBase
+      title="Adicionar conteúdo extra"
+      sub="Texto livre ou upload de arquivo para complementar a base de conhecimento"
+      onClose={onClose}
+      onSave={handleSave}
+      saveLabel={saving ? 'Salvando…' : 'Adicionar'}
+    >
       <div style={{ display: 'flex', gap: 0, marginBottom: 16, borderBottom: '1px solid var(--o-b1)' }}>
         {(['text', 'file'] as const).map(t => (
           <button
@@ -86,12 +186,15 @@ function ModalAdd({ onClose, onAdded }: { onClose: () => void; onAdded: () => vo
         <>
           <div className="o-field">
             <label className="o-field-label">Título</label>
-            <input className="o-input" value={title} onChange={e => setTitle(e.target.value)} maxLength={120} placeholder="Ex: Política de preços, FAQ, Script de vendas…" />
+            <input className="o-input" value={title} onChange={e => setTitle(e.target.value)} maxLength={120}
+              placeholder="Ex: Política de preços, FAQ, Script de vendas…" />
             <div className="o-char-count">{title.length}/120</div>
           </div>
           <div className="o-field">
             <label className="o-field-label">Conteúdo</label>
-            <textarea className="o-textarea" style={{ minHeight: 200 }} value={content} onChange={e => setContent(e.target.value)} placeholder="Cole ou escreva o conteúdo que o agente deve saber…" />
+            <textarea className="o-textarea" style={{ minHeight: 180 }} value={content}
+              onChange={e => setContent(e.target.value)}
+              placeholder="Cole ou escreva o conteúdo que o agente deve saber…" />
           </div>
         </>
       )}
@@ -119,8 +222,23 @@ function ModalAdd({ onClose, onAdded }: { onClose: () => void; onAdded: () => vo
   );
 }
 
-// ─── Modal: Editar conhecimento ───────────────────────────────
-function ModalEdit({ item, onClose, onSaved }: { item: KnowledgeItem; onClose: () => void; onSaved: () => void }) {
+// ─── Modal: Ver conteúdo ──────────────────────────────────────
+function ModalView({ item, onClose }: { item: KnowledgeItem; onClose: () => void }) {
+  return (
+    <ModalBase
+      title={item.title}
+      sub={`Tipo: ${item.source_type === 'manual' ? 'Texto' : 'Arquivo'} · Atualizado: ${new Date(item.updated_at).toLocaleDateString('pt-BR')}`}
+      onClose={onClose}
+    >
+      <div style={{ whiteSpace: 'pre-wrap', fontSize: 13, color: 'var(--o-text)', lineHeight: 1.6, maxHeight: 400, overflowY: 'auto', padding: '0 4px' }}>
+        {item.content_text || 'Sem conteúdo.'}
+      </div>
+    </ModalBase>
+  );
+}
+
+// ─── Modal: Editar item extra (sem categoria guiada) ──────────
+function ModalEditExtra({ item, onClose, onSaved }: { item: KnowledgeItem; onClose: () => void; onSaved: () => void }) {
   const [title, setTitle]     = useState(item.title);
   const [content, setContent] = useState(item.content_text);
   const [saving, setSaving]   = useState(false);
@@ -138,7 +256,8 @@ function ModalEdit({ item, onClose, onSaved }: { item: KnowledgeItem; onClose: (
   }
 
   return (
-    <ModalBase title="Editar conhecimento" sub={`Editando: ${item.title}`} onClose={onClose} onSave={handleSave} saveLabel={saving ? 'Salvando…' : 'Salvar'}>
+    <ModalBase title="Editar conteúdo" sub={`Editando: ${item.title}`} onClose={onClose} onSave={handleSave}
+      saveLabel={saving ? 'Salvando…' : 'Salvar'}>
       <div className="o-field">
         <label className="o-field-label">Título</label>
         <input className="o-input" value={title} onChange={e => setTitle(e.target.value)} maxLength={120} />
@@ -153,14 +272,91 @@ function ModalEdit({ item, onClose, onSaved }: { item: KnowledgeItem; onClose: (
   );
 }
 
-// ─── Modal: Ver conhecimento ──────────────────────────────────
-function ModalView({ item, onClose }: { item: KnowledgeItem; onClose: () => void }) {
+// ─── Card de seção guiada ─────────────────────────────────────
+function GuidedSectionCard({
+  category,
+  item,
+  onFill,
+  onView,
+  onDelete,
+  deleting,
+}: {
+  category: KnowledgeCategory;
+  item: KnowledgeItem | null;
+  onFill: () => void;
+  onView: () => void;
+  onDelete: () => void;
+  deleting: boolean;
+}) {
+  const filled = !!item;
+  const isCritical = category.importance === 'critical';
+  const importanceColor = isCritical
+    ? (filled ? 'var(--o-active)' : 'var(--o-hot)')
+    : 'var(--o-dim)';
+  const importanceBorder = isCritical
+    ? (filled ? 'var(--o-active-b)' : 'var(--o-hot-b)')
+    : 'var(--o-b1)';
+
   return (
-    <ModalBase title={item.title} sub={`Tipo: ${item.source_type} · Atualizado: ${new Date(item.updated_at).toLocaleDateString('pt-BR')}`} onClose={onClose}>
-      <div style={{ whiteSpace: 'pre-wrap', fontSize: 13, color: 'var(--o-text)', lineHeight: 1.6, maxHeight: 400, overflowY: 'auto', padding: '0 4px' }}>
-        {item.content_text || 'Sem conteúdo.'}
+    <div style={{
+      display: 'grid',
+      gridTemplateColumns: '1fr auto',
+      gap: 12,
+      padding: '12px 14px',
+      background: 'var(--o-b0)',
+      borderRadius: 4,
+      border: `1px solid ${filled ? 'var(--o-b1)' : (isCritical ? 'var(--o-hot-b)' : 'var(--o-b1)')}`,
+      alignItems: 'center',
+    }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12, minWidth: 0 }}>
+        {/* Status dot */}
+        <div style={{
+          width: 8, height: 8, borderRadius: '50%', flexShrink: 0,
+          background: filled ? 'var(--o-active)' : (isCritical ? 'var(--o-hot)' : 'var(--o-b2)'),
+        }} />
+        <div style={{ minWidth: 0 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 2 }}>
+            <span style={{ fontSize: 13, color: 'var(--o-text)', fontWeight: 500 }}>{category.label}</span>
+            <span
+              className="font-mono-orion"
+              style={{
+                fontSize: 7, letterSpacing: 1.5, textTransform: 'uppercase', padding: '1px 5px',
+                borderRadius: 2, border: `1px solid ${importanceBorder}`, color: importanceColor, flexShrink: 0,
+              }}
+            >
+              {KNOWLEDGE_IMPORTANCE_LABELS[category.importance]}
+            </span>
+          </div>
+          <div style={{ fontSize: 11.5, color: 'var(--o-sub)', fontWeight: 300, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            {filled
+              ? item!.content_text.slice(0, 80) + (item!.content_text.length > 80 ? '…' : '')
+              : category.description}
+          </div>
+        </div>
       </div>
-    </ModalBase>
+
+      {/* Ações */}
+      <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
+        {filled ? (
+          <>
+            <button className="o-btn" style={{ fontSize: 11, padding: '3px 8px' }} onClick={onView}>Ver</button>
+            <button className="o-btn" style={{ fontSize: 11, padding: '3px 8px' }} onClick={onFill}>Editar</button>
+            <button
+              className="o-btn"
+              style={{ fontSize: 11, padding: '3px 8px', color: 'var(--o-hot)' }}
+              onClick={onDelete}
+              disabled={deleting}
+            >
+              {deleting ? '…' : '✕'}
+            </button>
+          </>
+        ) : (
+          <button className="o-btn o-btn-primary" style={{ fontSize: 11, padding: '3px 10px' }} onClick={onFill}>
+            Preencher →
+          </button>
+        )}
+      </div>
+    </div>
   );
 }
 
@@ -168,14 +364,36 @@ function ModalView({ item, onClose }: { item: KnowledgeItem; onClose: () => void
 // Componente principal
 // ─────────────────────────────────────────────────────────────
 
-export function CamadaConhecimento() {
-  const [items, setItems]         = useState<KnowledgeItem[]>([]);
-  const [loading, setLoading]     = useState(true);
-  const [error, setError]         = useState<string | null>(null);
-  const [modalAdd, setModalAdd]   = useState(false);
-  const [editItem, setEditItem]   = useState<KnowledgeItem | null>(null);
-  const [viewItem, setViewItem]   = useState<KnowledgeItem | null>(null);
-  const [deleting, setDeleting]   = useState<number | null>(null);
+export function CamadaConhecimento({ templateKey }: { templateKey?: string }) {
+  const [items, setItems]             = useState<KnowledgeItem[]>([]);
+  const [loading, setLoading]         = useState(true);
+  const [error, setError]             = useState<string | null>(null);
+  const [deleting, setDeleting]       = useState<number | null>(null);
+
+  // Modais
+  const [guidedModal, setGuidedModal] = useState<KnowledgeCategory | null>(null);
+  const [modalAddExtra, setModalAddExtra] = useState(false);
+  const [viewItem, setViewItem]       = useState<KnowledgeItem | null>(null);
+  const [editExtra, setEditExtra]     = useState<KnowledgeItem | null>(null);
+
+  // Categorias guiadas baseadas no template do agente
+  const guidedCategories: KnowledgeCategory[] =
+    (templateKey && KNOWLEDGE_CATEGORIES_BY_TEMPLATE[templateKey]) || [];
+
+  // Mapa de category → item existente
+  const itemByCategory = new Map<string, KnowledgeItem>();
+  for (const item of items) {
+    if (item.category) itemByCategory.set(item.category, item);
+  }
+
+  // Itens "extras" — sem categoria guiada (ou com categoria desconhecida)
+  const guidedCategoryKeys = new Set(guidedCategories.map(c => c.key));
+  const extraItems = items.filter(i => !i.category || !guidedCategoryKeys.has(i.category));
+
+  // Completude: críticos preenchidos
+  const criticalCategories = guidedCategories.filter(c => c.importance === 'critical');
+  const criticalFilled     = criticalCategories.filter(c => itemByCategory.has(c.key)).length;
+  const criticalMissing    = criticalCategories.length - criticalFilled;
 
   async function load() {
     setLoading(true);
@@ -205,63 +423,102 @@ export function CamadaConhecimento() {
     }
   }
 
+  if (loading) {
+    return (
+      <div style={{ padding: 32, textAlign: 'center' }}>
+        <span className="font-mono-orion" style={{ fontSize: 10, color: 'var(--o-dim)' }}>Carregando…</span>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="o-alert o-alert-danger">
+        <span>⚠</span>
+        <span>{error}</span>
+      </div>
+    );
+  }
+
   return (
     <>
-      {/* Header da seção */}
-      <div className="o-section-hdr" style={{ marginBottom: 16 }}>
+      {/* ── Seções guiadas ───────────────────────────────────── */}
+      {guidedCategories.length > 0 && (
+        <>
+          {/* Alerta de críticos pendentes */}
+          {criticalMissing > 0 && (
+            <div className="o-alert o-alert-danger" style={{ marginBottom: 16 }}>
+              <span style={{ flexShrink: 0 }}>⚠</span>
+              <span>
+                <strong>{criticalMissing} seção{criticalMissing > 1 ? 'ões' : ''} crítica{criticalMissing > 1 ? 's' : ''}</strong> sem preenchimento.
+                O agente não terá as informações essenciais para performar bem.
+              </span>
+            </div>
+          )}
+
+          <div className="o-section-hdr" style={{ marginBottom: 12 }}>
+            <span className="font-mono-orion" style={{ fontSize: 9, letterSpacing: '2.5px', textTransform: 'uppercase', color: 'var(--o-sub)' }}>
+              Seções sugeridas para este agente
+            </span>
+            <span className="font-mono-orion" style={{
+              fontSize: 8, padding: '1px 6px', borderRadius: 2,
+              border: `1px solid ${criticalMissing > 0 ? 'var(--o-hot-b)' : 'var(--o-b1)'}`,
+              color: criticalMissing > 0 ? 'var(--o-hot)' : 'var(--o-dim)',
+            }}>
+              {criticalFilled} / {criticalCategories.length} críticas preenchidas
+            </span>
+          </div>
+
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 32 }}>
+            {guidedCategories.map(cat => (
+              <GuidedSectionCard
+                key={cat.key}
+                category={cat}
+                item={itemByCategory.get(cat.key) ?? null}
+                onFill={() => setGuidedModal(cat)}
+                onView={() => setViewItem(itemByCategory.get(cat.key) ?? null)}
+                onDelete={() => {
+                  const it = itemByCategory.get(cat.key);
+                  if (it) handleDelete(it.id);
+                }}
+                deleting={deleting === (itemByCategory.get(cat.key)?.id ?? -1)}
+              />
+            ))}
+          </div>
+        </>
+      )}
+
+      {/* ── Conteúdo adicional ───────────────────────────────── */}
+      <div className="o-section-hdr" style={{ marginBottom: 12 }}>
         <span className="font-mono-orion" style={{ fontSize: 9, letterSpacing: '2.5px', textTransform: 'uppercase', color: 'var(--o-sub)' }}>
-          Base de conhecimento
+          Conteúdo adicional
         </span>
         <span className="font-mono-orion" style={{ fontSize: 8, color: 'var(--o-dim)', border: '1px solid var(--o-b1)', padding: '1px 6px', borderRadius: 2 }}>
-          {items.length} item(s)
+          {extraItems.length} item(s)
         </span>
       </div>
 
-      <div style={{ fontSize: 12.5, color: 'var(--o-sub)', marginBottom: 16, fontWeight: 300 }}>
-        Documentos e textos que o agente pode consultar durante as conversas — FAQs, scripts, políticas, catálogos.
+      <div style={{ fontSize: 12.5, color: 'var(--o-sub)', marginBottom: 14, fontWeight: 300 }}>
+        FAQs, scripts, políticas ou catálogos adicionais que o agente pode consultar.
       </div>
 
-      <button className="o-btn o-btn-primary" style={{ marginBottom: 20 }} onClick={() => setModalAdd(true)}>
-        + Adicionar conhecimento
+      <button className="o-btn o-btn-primary" style={{ marginBottom: 16 }} onClick={() => setModalAddExtra(true)}>
+        + Adicionar conteúdo extra
       </button>
 
-      {loading && (
-        <div style={{ padding: 32, textAlign: 'center' }}>
-          <span className="font-mono-orion" style={{ fontSize: 10, color: 'var(--o-dim)' }}>Carregando…</span>
-        </div>
-      )}
-
-      {error && (
-        <div className="o-alert o-alert-danger">
-          <span>⚠</span>
-          <span>{error}</span>
-        </div>
-      )}
-
-      {!loading && !error && items.length === 0 && (
-        <div style={{ padding: 32, textAlign: 'center', border: '1px dashed var(--o-b1)', borderRadius: 4 }}>
-          <div className="font-mono-orion" style={{ fontSize: 9, color: 'var(--o-dim)', marginBottom: 8 }}>NENHUM ITEM</div>
-          <div style={{ fontSize: 12.5, color: 'var(--o-sub)', fontWeight: 300 }}>
-            Adicione textos, scripts ou FAQs para que o agente possa consultá-los.
-          </div>
-        </div>
-      )}
-
-      {!loading && items.length > 0 && (
+      {extraItems.length > 0 && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-          {/* Header da tabela */}
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 100px 120px 110px', gap: 12, padding: '4px 12px' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 100px 120px 130px', gap: 12, padding: '4px 12px' }}>
             <span className="font-mono-orion" style={{ fontSize: 8, letterSpacing: 2, textTransform: 'uppercase', color: 'var(--o-dim)' }}>Título</span>
             <span className="font-mono-orion" style={{ fontSize: 8, letterSpacing: 2, textTransform: 'uppercase', color: 'var(--o-dim)' }}>Tipo</span>
             <span className="font-mono-orion" style={{ fontSize: 8, letterSpacing: 2, textTransform: 'uppercase', color: 'var(--o-dim)' }}>Atualizado</span>
             <span className="font-mono-orion" style={{ fontSize: 8, letterSpacing: 2, textTransform: 'uppercase', color: 'var(--o-dim)' }}>Ações</span>
           </div>
-
-          {items.map(item => (
+          {extraItems.map(item => (
             <div
               key={item.id}
               style={{
-                display: 'grid', gridTemplateColumns: '1fr 100px 120px 110px', gap: 12,
+                display: 'grid', gridTemplateColumns: '1fr 100px 120px 130px', gap: 12,
                 padding: '10px 12px', background: 'var(--o-b0)', borderRadius: 4,
                 border: '1px solid var(--o-b1)', alignItems: 'center',
               }}
@@ -277,7 +534,7 @@ export function CamadaConhecimento() {
               </span>
               <div style={{ display: 'flex', gap: 6 }}>
                 <button className="o-btn" style={{ fontSize: 11, padding: '3px 8px' }} onClick={() => setViewItem(item)}>Ver</button>
-                <button className="o-btn" style={{ fontSize: 11, padding: '3px 8px' }} onClick={() => setEditItem(item)}>Editar</button>
+                <button className="o-btn" style={{ fontSize: 11, padding: '3px 8px' }} onClick={() => setEditExtra(item)}>Editar</button>
                 <button
                   className="o-btn"
                   style={{ fontSize: 11, padding: '3px 8px', color: 'var(--o-hot)' }}
@@ -292,24 +549,29 @@ export function CamadaConhecimento() {
         </div>
       )}
 
-      {/* Modais */}
-      {modalAdd && (
-        <ModalAdd
-          onClose={() => setModalAdd(false)}
-          onAdded={() => { setModalAdd(false); load(); }}
+      {/* ── Modais ───────────────────────────────────────────── */}
+      {guidedModal && (
+        <ModalGuided
+          category={guidedModal}
+          existingItem={itemByCategory.get(guidedModal.key) ?? null}
+          onClose={() => setGuidedModal(null)}
+          onSaved={() => { setGuidedModal(null); load(); }}
         />
       )}
-      {editItem && (
-        <ModalEdit
-          item={editItem}
-          onClose={() => setEditItem(null)}
-          onSaved={() => { setEditItem(null); load(); }}
+      {modalAddExtra && (
+        <ModalAddExtra
+          onClose={() => setModalAddExtra(false)}
+          onAdded={() => { setModalAddExtra(false); load(); }}
         />
       )}
       {viewItem && (
-        <ModalView
-          item={viewItem}
-          onClose={() => setViewItem(null)}
+        <ModalView item={viewItem} onClose={() => setViewItem(null)} />
+      )}
+      {editExtra && (
+        <ModalEditExtra
+          item={editExtra}
+          onClose={() => setEditExtra(null)}
+          onSaved={() => { setEditExtra(null); load(); }}
         />
       )}
     </>

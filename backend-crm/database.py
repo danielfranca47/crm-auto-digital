@@ -282,6 +282,7 @@ def ensure_knowledge_table(conn: sqlite3.Connection) -> None:
         CREATE INDEX IF NOT EXISTS idx_knowledge_user_created ON knowledge_items(user_id, created_at);
         """
     )
+    ensure_column(conn, "knowledge_items", "category", "TEXT NULL")
 
 
 # =========================

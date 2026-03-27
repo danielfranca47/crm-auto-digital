@@ -92,10 +92,10 @@ async def create_manual_item(
         now_iso = datetime.utcnow().isoformat()
         cur.execute(
             """
-            INSERT INTO knowledge_items (user_id, title, source_type, content_text, file_path, created_at, updated_at)
-            VALUES (?, ?, 'manual', ?, NULL, ?, ?)
+            INSERT INTO knowledge_items (user_id, title, source_type, content_text, file_path, category, created_at, updated_at)
+            VALUES (?, ?, 'manual', ?, NULL, ?, ?, ?)
             """,
-            (current_user.id, payload.title, payload.content_text, now_iso, now_iso),
+            (current_user.id, payload.title, payload.content_text, payload.category, now_iso, now_iso),
         )
         conn.commit()
 
@@ -133,6 +133,9 @@ async def update_item(
         if payload.content_text is not None:
             fields.append("content_text = ?")
             values.append(payload.content_text)
+        if payload.category is not None:
+            fields.append("category = ?")
+            values.append(payload.category)
 
         if not fields:
             raise HTTPException(status_code=400, detail="Nenhum campo para atualizar")

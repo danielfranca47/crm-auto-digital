@@ -178,11 +178,13 @@ class SendNowPayload(BaseModel):
 class KnowledgeCreate(BaseModel):
     title: str = Field(min_length=3)
     content_text: str = Field(min_length=20)
+    category: Optional[str] = None
 
 
 class KnowledgeUpdate(BaseModel):
     title: Optional[str] = Field(default=None, min_length=3)
     content_text: Optional[str] = Field(default=None, min_length=20)
+    category: Optional[str] = None
 
 
 class KnowledgeItemOut(BaseModel):
@@ -192,6 +194,7 @@ class KnowledgeItemOut(BaseModel):
     source_type: Literal["manual", "file"]
     content_text: str
     file_path: Optional[str] = None
+    category: Optional[str] = None
     created_at: datetime
     updated_at: datetime
 

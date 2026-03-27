@@ -164,6 +164,7 @@ export type KnowledgeItem = {
   source_type: "manual" | "file";
   content_text: string;
   file_path?: string | null;
+  category?: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -808,11 +809,11 @@ export const api = {
 
   crm: {
     getKnowledgeList: async () => apiClient.get<KnowledgeItem[]>(`/knowledge`),
-    createKnowledgeManual: async (payload: { title: string; content_text: string }) =>
+    createKnowledgeManual: async (payload: { title: string; content_text: string; category?: string | null }) =>
       apiClient.post<KnowledgeItem>(`/knowledge`, payload),
     updateKnowledge: async (
       id: number,
-      payload: Partial<{ title: string; content_text: string }>
+      payload: Partial<{ title: string; content_text: string; category: string | null }>
     ) => apiClient.put<KnowledgeItem>(`/knowledge/${id}`, payload),
     deleteKnowledge: async (id: number) => apiClient.delete(`/knowledge/${id}`),
     uploadKnowledgeFile: async (file: File) => {

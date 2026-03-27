@@ -9,20 +9,23 @@ import { CamadaApresentacao } from '@/components/agente/CamadaApresentacao';
 import { CamadaOferta } from '@/components/agente/CamadaOferta';
 import { ConexaoNumero } from '@/components/agente/ConexaoNumero';
 import { api } from '@/services/api';
-import { DEFAULT_AGENT_CONFIG } from '@/types/agente';
+import { DEFAULT_AGENT_CONFIG, KNOWLEDGE_CATEGORIES_BY_TEMPLATE } from '@/types/agente';
 import type { AgentConfig } from '@/types/agente';
 import { AGENT_MODE_LABELS, IDENTITY_MODE_LABELS, LGPD_LABELS, REATIVACAO_LABELS, MEDIA_FALLBACK_LABELS } from '@/types/agente';
+
+interface KnowledgeSummary { criticalFilled: number; criticalTotal: number; }
 
 // ─── Tipos de painel ─────────────────────────────────────────
 type PanelId = 'overview' | 'c1' | 'c2' | 'c3' | 'c4' | 'c5' | 'c6' | 'conexao';
 
 // ─── Painel: Resumo ──────────────────────────────────────────
 function PainelResumo({
-  config, onNavigate, onSave, onDiscard, saving, dirty,
+  config, onNavigate, onSave, onDiscard, saving, dirty, knowledgeSummary,
 }: {
   config: AgentConfig;
   onNavigate: (p: PanelId) => void; onUpdate: (partial: Partial<AgentConfig>) => void;
   onSave: () => void; onDiscard: () => void; saving: boolean; dirty: boolean;
+  knowledgeSummary: KnowledgeSummary | null;
 }) {
   const optoutOk = config.opt_out_keywords.length > 0;
   const lgpdOk   = !!config.lgpd_mode;
@@ -123,6 +126,34 @@ function PainelResumo({
         <SummaryCard label="Cadência follow-up" value={`${config.followup_h1}h · ${Math.round(config.followup_h2/24)}d · ${Math.round(config.followup_h3/24)}d`} status="ok" onClick={() => onNavigate('c3')} />
         <SummaryCard label="Mídia inválida"  value={MEDIA_FALLBACK_LABELS[config.media_fallback] || '—'}                         status="ok"                       onClick={() => onNavigate('c3')} />
       </div>
+
+      {/* Camada 4 */}
+      {knowledgeSummary !== null && (
+        <>
+          <div className="o-section-hdr" style={{ marginTop: 24 }}>
+            <span className="font-mono-orion" style={{ fontSize: 9, letterSpacing: '2.5px', textTransform: 'uppercase', color: 'var(--o-sub)' }}>
+              Camada 4 — Base de conhecimento
+            </span>
+            <span className="font-mono-orion" style={{
+              fontSize: 8, padding: '1px 6px', borderRadius: 2,
+              border: `1px solid ${knowledgeSummary.criticalFilled < knowledgeSummary.criticalTotal ? 'var(--o-hot-b)' : 'var(--o-b1)'}`,
+              color: knowledgeSummary.criticalFilled < knowledgeSummary.criticalTotal ? 'var(--o-hot)' : 'var(--o-dim)',
+            }}>
+              {knowledgeSummary.criticalFilled} / {knowledgeSummary.criticalTotal} críticas preenchidas
+            </span>
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 14, marginTop: 8 }}>
+            <SummaryCard
+              label="Conhecimento crítico"
+              value={knowledgeSummary.criticalFilled === knowledgeSummary.criticalTotal
+                ? 'Completo'
+                : `${knowledgeSummary.criticalTotal - knowledgeSummary.criticalFilled} seção(ões) pendente(s)`}
+              status={knowledgeSummary.criticalFilled === knowledgeSummary.criticalTotal ? 'ok' : 'miss'}
+              onClick={() => onNavigate('c4')}
+            />
+          </div>
+        </>
+      )}
 
       <div style={{ marginTop: 24, display: 'flex', gap: 10 }}>
         {dirty && (
@@ -270,12 +301,13 @@ function PainelCamada3({ config, onUpdate, onBack, onSave, saving, dirty, phoneN
 // ─────────────────────────────────────────────────────────────
 
 export default function AgenteConfiguracao() {
-  const [activePanel, setActivePanel] = useState<PanelId>('overview');
-  const [config, setConfig]           = useState<AgentConfig>(DEFAULT_AGENT_CONFIG);
-  const [savedConfig, setSavedConfig] = useState<AgentConfig>(DEFAULT_AGENT_CONFIG);
-  const [loading, setLoading]         = useState(true);
-  const [saving, setSaving]           = useState(false);
-  const [error, setError]             = useState<string | null>(null);
+  const [activePanel, setActivePanel]     = useState<PanelId>('overview');
+  const [config, setConfig]               = useState<AgentConfig>(DEFAULT_AGENT_CONFIG);
+  const [savedConfig, setSavedConfig]     = useState<AgentConfig>(DEFAULT_AGENT_CONFIG);
+  const [loading, setLoading]             = useState(true);
+  const [saving, setSaving]               = useState(false);
+  const [error, setError]                 = useState<string | null>(null);
+  const [knowledgeSummary, setKnowledgeSummary] = useState<KnowledgeSummary | null>(null);
 
   // Computed flags
   const isDirectMode   = config.agent_mode === 'direto' || config.agent_mode === 'closer';
@@ -290,7 +322,12 @@ export default function AgenteConfiguracao() {
       id: 'c3', label: '③ Pipeline',
       badge: [!config.opt_out_keywords.length, !config.lgpd_mode, !config.reactivation_mode].filter(Boolean).length || undefined,
     },
-    { id: 'c4',       label: '④ Conhecimento' },
+    {
+      id: 'c4', label: '④ Conhecimento',
+      badge: knowledgeSummary && knowledgeSummary.criticalFilled < knowledgeSummary.criticalTotal
+        ? knowledgeSummary.criticalTotal - knowledgeSummary.criticalFilled
+        : undefined,
+    },
     ...(isScheduleMode ? [{ id: 'c5' as PanelId, label: '⑤ Apresentação' }] : []),
     ...(isDirectMode   ? [{ id: 'c6' as PanelId, label: '⑥ Oferta' }]      : []),
     { id: 'conexao',  label: 'Conexão' },
@@ -300,10 +337,20 @@ export default function AgenteConfiguracao() {
     let alive = true;
     (async () => {
       try {
-        const loaded = await api.agente.getConfig();
+        const [loaded, knowledgeItems] = await Promise.all([
+          api.agente.getConfig(),
+          api.crm.getKnowledgeList().catch(() => [] as Awaited<ReturnType<typeof api.crm.getKnowledgeList>>),
+        ]);
         if (alive) {
           setConfig(loaded);
           setSavedConfig(loaded);
+          const categories = KNOWLEDGE_CATEGORIES_BY_TEMPLATE[loaded.template_key] ?? [];
+          const criticalCats = categories.filter(c => c.importance === 'critical');
+          const filledKeys = new Set(knowledgeItems.map(i => i.category).filter(Boolean));
+          setKnowledgeSummary({
+            criticalTotal: criticalCats.length,
+            criticalFilled: criticalCats.filter(c => filledKeys.has(c.key)).length,
+          });
         }
       } catch {
         if (alive) setError('Não foi possível carregar a configuração do agente.');
@@ -411,6 +458,7 @@ export default function AgenteConfiguracao() {
             onDiscard={handleDiscard}
             saving={saving}
             dirty={isDirty}
+            knowledgeSummary={knowledgeSummary}
           />
         )}
         {activePanel === 'c1' && (
@@ -453,7 +501,7 @@ export default function AgenteConfiguracao() {
             <div style={{ fontSize: 12.5, color: 'var(--o-sub)', fontWeight: 300, marginBottom: 24 }}>
               Documentos e textos que o agente consulta durante as conversas.
             </div>
-            <CamadaConhecimento />
+            <CamadaConhecimento templateKey={config.template_key} />
             <div style={{ marginTop: 24 }}>
               <button className="o-btn" onClick={() => navigate('overview')}>← Voltar</button>
             </div>
