@@ -878,6 +878,13 @@ export const api = {
         f2_questions:     pack.f2_questions   ?? DEFAULT_AGENT_CONFIG.f2_questions,
         f3_questions:     pack.f3_questions   ?? DEFAULT_AGENT_CONFIG.f3_questions,
 
+        // Camada 1 — Contexto de abertura
+        handoff_custom_text:    pack.handoff_custom_text    ?? DEFAULT_AGENT_CONFIG.handoff_custom_text,
+        origin_inbound_opener:  pack.origin_inbound_opener  ?? DEFAULT_AGENT_CONFIG.origin_inbound_opener,
+        origin_outbound_opener: pack.origin_outbound_opener ?? DEFAULT_AGENT_CONFIG.origin_outbound_opener,
+        warming_social_proof:   pack.warming_social_proof   ?? DEFAULT_AGENT_CONFIG.warming_social_proof,
+        warming_session_preview:pack.warming_session_preview?? DEFAULT_AGENT_CONFIG.warming_session_preview,
+
         // Camada 3
         media_fallback:     pack.media_fallback     ?? DEFAULT_AGENT_CONFIG.media_fallback,
         media_fallback_msg: pack.media_fallback_msg ?? DEFAULT_AGENT_CONFIG.media_fallback_msg,
@@ -896,6 +903,36 @@ export const api = {
         daily_limit:        pack.daily_limit         ?? DEFAULT_AGENT_CONFIG.daily_limit,
         interval_min:       pack.interval_min        ?? DEFAULT_AGENT_CONFIG.interval_min,
         interval_max:       pack.interval_max        ?? DEFAULT_AGENT_CONFIG.interval_max,
+
+        // Camada 2 — Qualificação avançada
+        qualification_score_threshold: pack.qualification_score_threshold ?? DEFAULT_AGENT_CONFIG.qualification_score_threshold,
+        nurture_vs_discard_rule:        pack.nurture_vs_discard_rule        ?? DEFAULT_AGENT_CONFIG.nurture_vs_discard_rule,
+        buying_signal_keywords:         pack.buying_signal_keywords         ?? DEFAULT_AGENT_CONFIG.buying_signal_keywords,
+
+        // Camada 3 — Follow-up avançado
+        followup_max_attempts:  pack.followup_max_attempts  ?? DEFAULT_AGENT_CONFIG.followup_max_attempts,
+        followup_first_offset:  pack.followup_first_offset  ?? DEFAULT_AGENT_CONFIG.followup_first_offset,
+        followup_cadence:       pack.followup_cadence       ?? DEFAULT_AGENT_CONFIG.followup_cadence,
+        followup_allowed_hours: pack.followup_allowed_hours ?? DEFAULT_AGENT_CONFIG.followup_allowed_hours,
+
+        // Apresentação e agendamento
+        appointment_reminder_h1: pack.appointment_reminder_h1 ?? DEFAULT_AGENT_CONFIG.appointment_reminder_h1,
+        appointment_reminder_h2: pack.appointment_reminder_h2 ?? DEFAULT_AGENT_CONFIG.appointment_reminder_h2,
+        briefing_enabled:        pack.briefing_enabled        ?? DEFAULT_AGENT_CONFIG.briefing_enabled,
+        briefing_channel:        pack.briefing_channel        ?? DEFAULT_AGENT_CONFIG.briefing_channel,
+        briefing_lead_time:      pack.briefing_lead_time      ?? DEFAULT_AGENT_CONFIG.briefing_lead_time,
+        operator_whatsapp:       pack.operator_whatsapp       ?? DEFAULT_AGENT_CONFIG.operator_whatsapp,
+        calendar_integration:    pack.calendar_integration    ?? DEFAULT_AGENT_CONFIG.calendar_integration,
+
+        // Oferta e pagamento
+        offer_media_url:      pack.media_url      ?? DEFAULT_AGENT_CONFIG.offer_media_url,
+        offer_media_type:     pack.media_type     ?? DEFAULT_AGENT_CONFIG.offer_media_type,
+        offer_anchor_price:   pack.anchor_price   ?? DEFAULT_AGENT_CONFIG.offer_anchor_price,
+        offer_guarantee_text: pack.guarantee_text ?? DEFAULT_AGENT_CONFIG.offer_guarantee_text,
+        offer_upsell_message: pack.upsell_message ?? DEFAULT_AGENT_CONFIG.offer_upsell_message,
+        payment_gateway:      (profile as any)?.payment_gateway      ?? DEFAULT_AGENT_CONFIG.payment_gateway,
+        payment_webhook_url:  (profile as any)?.payment_webhook_url  ?? DEFAULT_AGENT_CONFIG.payment_webhook_url,
+        payment_webhook_secret:(profile as any)?.payment_webhook_secret ?? DEFAULT_AGENT_CONFIG.payment_webhook_secret,
       };
     },
 
@@ -905,12 +942,27 @@ export const api = {
      */
     saveConfig: async (config: import('../types/agente').AgentConfig): Promise<void> => {
       const offer_pack = {
+        // Camada 1 — Contexto de abertura
+        handoff_custom_text:     config.handoff_custom_text,
+        origin_inbound_opener:   config.origin_inbound_opener,
+        origin_outbound_opener:  config.origin_outbound_opener,
+        warming_social_proof:    config.warming_social_proof,
+        warming_session_preview: config.warming_session_preview,
+
+        // Camada 2
         ticket_range:        config.ticket_range,
         main_pain:           config.main_pain,
         main_objection:      config.main_objection,
         f1_questions:        config.f1_questions,
         f2_questions:        config.f2_questions,
         f3_questions:        config.f3_questions,
+
+        // Camada 2 — Qualificação avançada
+        qualification_score_threshold: config.qualification_score_threshold,
+        nurture_vs_discard_rule:        config.nurture_vs_discard_rule,
+        buying_signal_keywords:         config.buying_signal_keywords,
+
+        // Camada 3
         media_fallback:      config.media_fallback,
         media_fallback_msg:  config.media_fallback_msg,
         opt_out_keywords:    config.opt_out_keywords,
@@ -928,6 +980,28 @@ export const api = {
         daily_limit:         config.daily_limit,
         interval_min:        config.interval_min,
         interval_max:        config.interval_max,
+
+        // Camada 3 — Follow-up avançado
+        followup_max_attempts:  config.followup_max_attempts,
+        followup_first_offset:  config.followup_first_offset,
+        followup_cadence:       config.followup_cadence,
+        followup_allowed_hours: config.followup_allowed_hours,
+
+        // Apresentação e agendamento
+        appointment_reminder_h1: config.appointment_reminder_h1,
+        appointment_reminder_h2: config.appointment_reminder_h2,
+        briefing_enabled:        config.briefing_enabled,
+        briefing_channel:        config.briefing_channel,
+        briefing_lead_time:      config.briefing_lead_time,
+        operator_whatsapp:       config.operator_whatsapp,
+        calendar_integration:    config.calendar_integration,
+
+        // Oferta e pagamento
+        media_url:      config.offer_media_url,
+        media_type:     config.offer_media_type,
+        anchor_price:   config.offer_anchor_price,
+        guarantee_text: config.offer_guarantee_text,
+        upsell_message: config.offer_upsell_message,
       };
 
       await coreClient.put('/ai-profiles/me', {
@@ -946,6 +1020,7 @@ export const api = {
         target_audience:     config.target_audience,
         offer_description:   config.offer_description,
         goals:               config.goals,
+        payment_gateway:     config.payment_gateway,
         offer_pack,
       });
     },

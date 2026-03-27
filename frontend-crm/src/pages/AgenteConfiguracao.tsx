@@ -4,6 +4,9 @@ import { OrionShell } from '@/components/agente/OrionShell';
 import { CamadaIdentidade } from '@/components/agente/CamadaIdentidade';
 import { CamadaQualificacao } from '@/components/agente/CamadaQualificacao';
 import { CamadaPipeline } from '@/components/agente/CamadaPipeline';
+import { CamadaConhecimento } from '@/components/agente/CamadaConhecimento';
+import { CamadaApresentacao } from '@/components/agente/CamadaApresentacao';
+import { CamadaOferta } from '@/components/agente/CamadaOferta';
 import { ConexaoNumero } from '@/components/agente/ConexaoNumero';
 import { api } from '@/services/api';
 import { DEFAULT_AGENT_CONFIG } from '@/types/agente';
@@ -11,7 +14,7 @@ import type { AgentConfig } from '@/types/agente';
 import { AGENT_MODE_LABELS, IDENTITY_MODE_LABELS, LGPD_LABELS, REATIVACAO_LABELS, MEDIA_FALLBACK_LABELS } from '@/types/agente';
 
 // ─── Tipos de painel ─────────────────────────────────────────
-type PanelId = 'overview' | 'c1' | 'c2' | 'c3' | 'c4';
+type PanelId = 'overview' | 'c1' | 'c2' | 'c3' | 'c4' | 'c5' | 'c6' | 'conexao';
 
 // ─── Painel: Resumo ──────────────────────────────────────────
 function PainelResumo({
@@ -274,6 +277,10 @@ export default function AgenteConfiguracao() {
   const [saving, setSaving]           = useState(false);
   const [error, setError]             = useState<string | null>(null);
 
+  // Computed flags
+  const isDirectMode   = config.agent_mode === 'direto' || config.agent_mode === 'closer';
+  const isScheduleMode = !isDirectMode;
+
   // Subnav config
   const navItems: { id: PanelId; label: string; badge?: number }[] = [
     { id: 'overview', label: 'Resumo' },
@@ -283,7 +290,10 @@ export default function AgenteConfiguracao() {
       id: 'c3', label: '③ Pipeline',
       badge: [!config.opt_out_keywords.length, !config.lgpd_mode, !config.reactivation_mode].filter(Boolean).length || undefined,
     },
-    { id: 'c4', label: 'Conexão' },
+    { id: 'c4',       label: '④ Conhecimento' },
+    ...(isScheduleMode ? [{ id: 'c5' as PanelId, label: '⑤ Apresentação' }] : []),
+    ...(isDirectMode   ? [{ id: 'c6' as PanelId, label: '⑥ Oferta' }]      : []),
+    { id: 'conexao',  label: 'Conexão' },
   ];
 
   useEffect(() => {
@@ -435,6 +445,81 @@ export default function AgenteConfiguracao() {
           />
         )}
         {activePanel === 'c4' && (
+          <div className="o-panel o-fade-in">
+            <div className="font-mono-orion" style={{ fontSize: 9, letterSpacing: 3, textTransform: 'uppercase', marginBottom: 8, color: 'var(--o-purple)' }}>
+              Camada 4 · Conhecimento
+            </div>
+            <div className="font-display" style={{ fontSize: 28, fontWeight: 400, marginBottom: 6, color: 'var(--o-text)' }}>Base de conhecimento</div>
+            <div style={{ fontSize: 12.5, color: 'var(--o-sub)', fontWeight: 300, marginBottom: 24 }}>
+              Documentos e textos que o agente consulta durante as conversas.
+            </div>
+            <CamadaConhecimento />
+            <div style={{ marginTop: 24 }}>
+              <button className="o-btn" onClick={() => navigate('overview')}>← Voltar</button>
+            </div>
+          </div>
+        )}
+        {activePanel === 'c5' && isScheduleMode && (
+          <div className="o-panel o-fade-in">
+            {isDirty && (
+              <div className="o-draft-banner">
+                <span>●</span>
+                <span><strong>Editando Apresentação.</strong> Alterações aplicadas apenas em novas conversas.</span>
+                <button className="o-btn o-btn-primary" style={{ marginLeft: 'auto' }} onClick={handleSave} disabled={saving}>
+                  {saving ? 'Salvando…' : 'Salvar'}
+                </button>
+                <button className="o-btn" onClick={() => navigate('overview')}>Cancelar</button>
+              </div>
+            )}
+            <div className="font-mono-orion" style={{ fontSize: 9, letterSpacing: 3, textTransform: 'uppercase', marginBottom: 8, color: 'var(--o-warn)' }}>
+              Camada 5 · Apresentação e agendamento
+            </div>
+            <div className="font-display" style={{ fontSize: 28, fontWeight: 400, marginBottom: 6, color: 'var(--o-text)' }}>Apresentação e agendamento</div>
+            <div style={{ fontSize: 12.5, color: 'var(--o-sub)', fontWeight: 300, marginBottom: 24 }}>
+              Lembretes de reunião, dossiê pré-reunião e integração de calendário.
+            </div>
+            <CamadaApresentacao config={config} onUpdate={updateConfig} />
+            <div style={{ display: 'flex', gap: 10, marginTop: 24 }}>
+              {isDirty && (
+                <button className="o-btn o-btn-primary" onClick={handleSave} disabled={saving}>
+                  {saving ? 'Salvando…' : 'Salvar Apresentação'}
+                </button>
+              )}
+              <button className="o-btn" onClick={() => navigate('overview')}>← Voltar</button>
+            </div>
+          </div>
+        )}
+        {activePanel === 'c6' && isDirectMode && (
+          <div className="o-panel o-fade-in">
+            {isDirty && (
+              <div className="o-draft-banner">
+                <span>●</span>
+                <span><strong>Editando Oferta.</strong> Alterações aplicadas apenas em novas conversas.</span>
+                <button className="o-btn o-btn-primary" style={{ marginLeft: 'auto' }} onClick={handleSave} disabled={saving}>
+                  {saving ? 'Salvando…' : 'Salvar'}
+                </button>
+                <button className="o-btn" onClick={() => navigate('overview')}>Cancelar</button>
+              </div>
+            )}
+            <div className="font-mono-orion" style={{ fontSize: 9, letterSpacing: 3, textTransform: 'uppercase', marginBottom: 8, color: 'var(--o-active)' }}>
+              Camada 6 · Oferta e pagamento
+            </div>
+            <div className="font-display" style={{ fontSize: 28, fontWeight: 400, marginBottom: 6, color: 'var(--o-text)' }}>Oferta e pagamento</div>
+            <div style={{ fontSize: 12.5, color: 'var(--o-sub)', fontWeight: 300, marginBottom: 24 }}>
+              Mídia do pitch, detalhes da oferta e integração com gateway de pagamento.
+            </div>
+            <CamadaOferta config={config} onUpdate={updateConfig} />
+            <div style={{ display: 'flex', gap: 10, marginTop: 24 }}>
+              {isDirty && (
+                <button className="o-btn o-btn-primary" onClick={handleSave} disabled={saving}>
+                  {saving ? 'Salvando…' : 'Salvar Oferta'}
+                </button>
+              )}
+              <button className="o-btn" onClick={() => navigate('overview')}>← Voltar</button>
+            </div>
+          </div>
+        )}
+        {activePanel === 'conexao' && (
           <div className="o-panel o-fade-in">
             <div className="font-mono-orion" style={{ fontSize: 9, letterSpacing: 3, textTransform: 'uppercase', marginBottom: 8, color: 'var(--o-active)' }}>
               Conexão do número

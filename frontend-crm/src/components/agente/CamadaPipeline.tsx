@@ -198,7 +198,57 @@ function ModalReativacao({ config, onSave, onClose }: {
 // Componente principal
 // ─────────────────────────────────────────────────────────────
 
-type DrawerKey = 'followup' | 'limite' | 'intervalo' | 'midia' | null;
+// ─── Drawer: Follow-up avançado ───────────────────────────────
+function DrawerFollowupAvancado({ config, onSave, onClose }: {
+  config: AgentConfig; onSave: (v: Partial<AgentConfig>) => void; onClose: () => void;
+}) {
+  const [maxAttempts, setMaxAttempts] = useState(config.followup_max_attempts);
+  const [firstOffset, setFirstOffset] = useState(config.followup_first_offset);
+  const [cadence, setCadence]         = useState(config.followup_cadence);
+  const [allowedHours, setAllowedHours] = useState(config.followup_allowed_hours);
+  const [cadenceError, setCadenceError] = useState<string | null>(null);
+
+  function validateCadence(v: string) {
+    setCadence(v);
+    const parts = v.split(',').map(s => s.trim());
+    if (parts.some(p => isNaN(Number(p)) || Number(p) <= 0)) {
+      setCadenceError('Formato inválido — use números separados por vírgula. Ex: 60,1440,4320');
+    } else {
+      setCadenceError(null);
+    }
+  }
+
+  return (
+    <DrawerBase title="Follow-up avançado" sub="Parâmetros detalhados de cadência e horário de envio" onClose={onClose}
+      onSave={() => onSave({ followup_max_attempts: maxAttempts, followup_first_offset: firstOffset, followup_cadence: cadence, followup_allowed_hours: allowedHours })}>
+      <SliderField label="Máx. tentativas de follow-up" value={maxAttempts} min={1} max={10} step={1} format={v => String(v)} onChange={setMaxAttempts} />
+      <SliderField label="Primeiro offset (minutos após silêncio)" value={firstOffset} min={5} max={1440} step={5} format={v => v < 60 ? `${v}min` : `${Math.round(v/60)}h`} onChange={setFirstOffset} />
+      <div className="o-field">
+        <label className="o-field-label">Cadência completa (minutos, separados por vírgula)</label>
+        <div className="o-field-hint">Ex: 60,1440,4320 → 1h depois, 1 dia depois, 3 dias depois</div>
+        <input
+          className={`o-input${cadenceError ? ' o-input-error' : ''}`}
+          value={cadence}
+          onChange={e => validateCadence(e.target.value)}
+          placeholder="60,1440,4320"
+        />
+        {cadenceError && <div style={{ fontSize: 11, color: 'var(--o-hot)', marginTop: 4 }}>{cadenceError}</div>}
+      </div>
+      <div className="o-field">
+        <label className="o-field-label">Horário permitido (UTC)</label>
+        <div className="o-field-hint">Formato: HH:MM-HH:MM. Ex: 08:00-20:00 (fuso configurado na Camada 1)</div>
+        <input
+          className="o-input"
+          value={allowedHours}
+          onChange={e => setAllowedHours(e.target.value)}
+          placeholder="08:00-20:00"
+        />
+      </div>
+    </DrawerBase>
+  );
+}
+
+type DrawerKey = 'followup' | 'followup_avancado' | 'limite' | 'intervalo' | 'midia' | null;
 type ModalKey  = 'optout' | 'lgpd' | 'reativacao' | null;
 
 export function CamadaPipeline({ config, onUpdate, phoneNumber }: CamadaPipelineProps) {
@@ -273,6 +323,12 @@ export function CamadaPipeline({ config, onUpdate, phoneNumber }: CamadaPipeline
           value={fu1Label}
           onClick={() => setDrawer('followup')} status={followupConfigured ? 'ok' : 'warn'}
         />
+        <EditCard
+          label="Follow-up avançado"
+          sub={`Máx. ${config.followup_max_attempts} tentativas · ${config.followup_allowed_hours}`}
+          value={`Cadência: ${config.followup_cadence || 'não configurada'}`}
+          onClick={() => setDrawer('followup_avancado')} status="ok"
+        />
       </div>
 
       {/* Seção 3: Reativação */}
@@ -296,10 +352,11 @@ export function CamadaPipeline({ config, onUpdate, phoneNumber }: CamadaPipeline
       </div>
 
       {/* Drawers */}
-      {drawer === 'followup'  && <DrawerFollowup  config={config} onClose={() => setDrawer(null)} onSave={v => { onUpdate(v); setDrawer(null); }} />}
-      {drawer === 'limite'    && <DrawerLimite    value={config.daily_limit} onClose={() => setDrawer(null)} onSave={v => { onUpdate({ daily_limit: v }); setDrawer(null); }} />}
-      {drawer === 'intervalo' && <DrawerIntervalo config={config} onClose={() => setDrawer(null)} onSave={v => { onUpdate(v); setDrawer(null); }} />}
-      {drawer === 'midia'     && <DrawerMidia     config={config} onClose={() => setDrawer(null)} onSave={v => { onUpdate(v); setDrawer(null); }} />}
+      {drawer === 'followup'          && <DrawerFollowup          config={config} onClose={() => setDrawer(null)} onSave={v => { onUpdate(v); setDrawer(null); }} />}
+      {drawer === 'followup_avancado' && <DrawerFollowupAvancado  config={config} onClose={() => setDrawer(null)} onSave={v => { onUpdate(v); setDrawer(null); }} />}
+      {drawer === 'limite'            && <DrawerLimite    value={config.daily_limit} onClose={() => setDrawer(null)} onSave={v => { onUpdate({ daily_limit: v }); setDrawer(null); }} />}
+      {drawer === 'intervalo'         && <DrawerIntervalo config={config} onClose={() => setDrawer(null)} onSave={v => { onUpdate(v); setDrawer(null); }} />}
+      {drawer === 'midia'             && <DrawerMidia     config={config} onClose={() => setDrawer(null)} onSave={v => { onUpdate(v); setDrawer(null); }} />}
 
       {/* Modais */}
       {modal === 'optout'    && <ModalOptOut    config={config} onClose={() => setModal(null)} onSave={v => { onUpdate(v); setModal(null); }} />}

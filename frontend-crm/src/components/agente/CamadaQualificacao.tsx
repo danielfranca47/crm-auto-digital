@@ -85,14 +85,85 @@ function ModalFiltro({ title, sub, questions, onSave, onClose }: {
 // Componente principal
 // ─────────────────────────────────────────────────────────────
 
-type DrawerKey = 'produto' | 'ticket' | 'publico' | 'dor' | 'objecao' | null;
-type ModalKey  = 'f1' | 'f2' | 'f3' | null;
+// ─── Drawer: Score threshold ──────────────────────────────────
+function DrawerScore({ value, onSave, onClose }: { value: number; onSave: (v: number) => void; onClose: () => void }) {
+  const [local, setLocal] = useState(value);
+  return (
+    <DrawerBase title="Score mínimo de qualificação" sub="Lead precisa atingir esta pontuação para avançar no pipeline" onClose={onClose} onSave={() => onSave(local)}>
+      <div className="o-field">
+        <label className="o-field-label">Score mínimo (0–12)</label>
+        <div className="o-field-hint">Leads abaixo desta pontuação são descartados ou encaminhados para nurture. Cada campo qualificado vale 1 ponto.</div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 8 }}>
+          <input
+            type="range" className="o-slider"
+            min={0} max={12} step={1} value={local}
+            onChange={e => setLocal(Number(e.target.value))}
+          />
+          <span className="font-mono-orion" style={{ fontSize: 14, color: 'var(--o-text)', minWidth: 28, textAlign: 'right' }}>{local}</span>
+        </div>
+        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10, color: 'var(--o-dim)', marginTop: 4 }}>
+          <span>0 (sem filtro)</span>
+          <span>6 (padrão)</span>
+          <span>12 (máximo)</span>
+        </div>
+      </div>
+    </DrawerBase>
+  );
+}
+
+// ─── Modal: Sinais de compra ──────────────────────────────────
+function ModalBuyingSignals({ keywords, onSave, onClose }: {
+  keywords: string[]; onSave: (v: string[]) => void; onClose: () => void;
+}) {
+  const [local, setLocal] = useState<string[]>([...keywords]);
+  const [input, setInput] = useState('');
+
+  function addKw() {
+    const v = input.trim();
+    if (v && !local.includes(v)) setLocal(prev => [...prev, v]);
+    setInput('');
+  }
+  function rmKw(kw: string) { setLocal(prev => prev.filter(k => k !== kw)); }
+  function handleKeyDown(e: React.KeyboardEvent) {
+    if (e.key === 'Enter' || e.key === ',') { e.preventDefault(); addKw(); }
+  }
+
+  return (
+    <ModalBase title="Sinais de compra" sub="Palavras-chave que indicam intenção de compra do lead" onClose={onClose} onSave={() => onSave(local)}>
+      <div className="o-field">
+        <label className="o-field-label">Palavras ou frases de interesse</label>
+        <div className="o-field-hint">Ex: "quero comprar", "quanto custa", "quero agendar". Pressione Enter para adicionar.</div>
+        <div className="o-tag-wrap" onClick={() => document.getElementById('bs-input')?.focus()}>
+          {local.map(kw => (
+            <span key={kw} className="o-kw-tag">
+              {kw}
+              <button onClick={() => rmKw(kw)}>×</button>
+            </span>
+          ))}
+          <input
+            id="bs-input"
+            className="o-tag-input"
+            placeholder="Adicionar sinal…"
+            value={input}
+            onChange={e => setInput(e.target.value)}
+            onKeyDown={handleKeyDown}
+            onBlur={addKw}
+          />
+        </div>
+      </div>
+    </ModalBase>
+  );
+}
+
+type DrawerKey = 'produto' | 'ticket' | 'publico' | 'dor' | 'objecao' | 'score' | null;
+type ModalKey  = 'f1' | 'f2' | 'f3' | 'buying_signals' | null;
 
 export function CamadaQualificacao({ config, onUpdate }: CamadaQualificacaoProps) {
   const [drawer, setDrawer] = useState<DrawerKey>(null);
   const [modal, setModal]   = useState<ModalKey>(null);
 
   const totalPerguntas = config.f1_questions.length + config.f2_questions.length + config.f3_questions.length;
+  const showBuyingSignals = config.agent_mode === 'sdr_scheduler' || config.agent_mode === 'agenda' || config.template_key === 'sdr_padrao' || config.template_key === 'hybrid_scheduler';
 
   return (
     <>
@@ -140,6 +211,38 @@ export function CamadaQualificacao({ config, onUpdate }: CamadaQualificacaoProps
         />
       </div>
 
+      {/* Qualificação avançada */}
+      <div className="o-section-hdr">
+        <span className="font-mono-orion" style={{ fontSize: 9, letterSpacing: '2.5px', textTransform: 'uppercase', color: 'var(--o-sub)' }}>
+          Parâmetros avançados
+        </span>
+      </div>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 14, marginBottom: 24 }}>
+        <EditCard
+          label="Score mínimo"
+          value={`${config.qualification_score_threshold} / 12`}
+          sub="Pontuação para avançar no pipeline"
+          onClick={() => setDrawer('score')}
+        />
+        <div className="o-edit-card" onClick={() => onUpdate({ nurture_vs_discard_rule: !config.nurture_vs_discard_rule })}>
+          <div className="font-mono-orion" style={{ fontSize: 8, letterSpacing: 2, textTransform: 'uppercase', color: 'var(--o-dim)', marginBottom: 6 }}>Nurture vs Descarte</div>
+          <div style={{ fontSize: 13, color: 'var(--o-text)', marginBottom: 4 }}>{config.nurture_vs_discard_rule ? 'Nurture passivo' : 'Descarte imediato'}</div>
+          <div style={{ fontSize: 11, color: 'var(--o-sub)', fontWeight: 300, marginBottom: 8 }}>Lead abaixo do score</div>
+          <span className={`o-badge ${config.nurture_vs_discard_rule ? 'o-badge-ok' : 'o-badge-warn'}`}>
+            {config.nurture_vs_discard_rule ? 'Nurture ativo' : 'Descarte'}
+          </span>
+          <span className="o-edit-arrow">›</span>
+        </div>
+        {showBuyingSignals && (
+          <EditCard
+            label="Sinais de compra"
+            value={config.buying_signal_keywords.length > 0 ? `${config.buying_signal_keywords.length} sinal(is)` : 'Não configurado'}
+            sub="Palavras que indicam intenção de compra"
+            onClick={() => setModal('buying_signals')}
+          />
+        )}
+      </div>
+
       {/* Drawers */}
       {drawer === 'produto' && (
         <DrawerTexto title="Produto ou serviço" sub="Descreva em 1–2 frases o que você vende" value={config.offer_description}
@@ -159,6 +262,9 @@ export function CamadaQualificacao({ config, onUpdate }: CamadaQualificacaoProps
       {drawer === 'objecao' && (
         <DrawerTexto title="Objeção mais comum" sub="O que o lead fala quando não compra imediatamente" value={config.main_objection}
           placeholder='Ex: "está caro", "vou pensar"…' maxLen={200} onClose={() => setDrawer(null)} onSave={v => { onUpdate({ main_objection: v }); setDrawer(null); }} />
+      )}
+      {drawer === 'score' && (
+        <DrawerScore value={config.qualification_score_threshold} onClose={() => setDrawer(null)} onSave={v => { onUpdate({ qualification_score_threshold: v }); setDrawer(null); }} />
       )}
 
       {/* Modais de perguntas */}
@@ -187,6 +293,13 @@ export function CamadaQualificacao({ config, onUpdate }: CamadaQualificacaoProps
           questions={config.f3_questions}
           onClose={() => setModal(null)}
           onSave={qs => { onUpdate({ f3_questions: qs }); setModal(null); }}
+        />
+      )}
+      {modal === 'buying_signals' && (
+        <ModalBuyingSignals
+          keywords={config.buying_signal_keywords}
+          onClose={() => setModal(null)}
+          onSave={v => { onUpdate({ buying_signal_keywords: v }); setModal(null); }}
         />
       )}
     </>

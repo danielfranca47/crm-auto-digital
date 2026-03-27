@@ -4,6 +4,7 @@ import {
   AGENT_MODE_LABELS,
   IDENTITY_MODE_LABELS,
   TEMPLATE_KEY_LABELS,
+  HANDOFF_LABELS,
 } from '@/types/agente';
 
 interface CamadaIdentidadeProps {
@@ -37,6 +38,147 @@ function DrawerEmpresa({ value, onSave, onClose }: { value: string; onSave: (v: 
         <label className="o-field-label">Empresa</label>
         <input className="o-input" value={local} maxLength={60} onChange={e => setLocal(e.target.value)} />
         <div className="o-char-count">{local.length}/60</div>
+      </div>
+    </DrawerBase>
+  );
+}
+
+// ─── Drawer: Nicho ────────────────────────────────────────────
+function DrawerNicho({ value, onSave, onClose }: { value: string; onSave: (v: string) => void; onClose: () => void }) {
+  const [local, setLocal] = useState(value);
+  return (
+    <DrawerBase title="Nicho de mercado" sub="Segmento em que o agente atua" onClose={onClose} onSave={() => onSave(local)}>
+      <div className="o-field">
+        <label className="o-field-label">Nicho</label>
+        <input className="o-input" value={local} maxLength={80} onChange={e => setLocal(e.target.value)} placeholder="Ex: Estética corporal, Imóveis, Coaching…" />
+        <div className="o-char-count">{local.length}/80</div>
+      </div>
+    </DrawerBase>
+  );
+}
+
+// ─── Drawer: Fuso horário ─────────────────────────────────────
+function DrawerTimezone({ value, onSave, onClose }: { value: string; onSave: (v: string) => void; onClose: () => void }) {
+  const [local, setLocal] = useState(value);
+  const opts = [
+    { v: 'America/Sao_Paulo', label: 'América/São Paulo (BRT, UTC−3)' },
+    { v: 'America/Manaus',    label: 'América/Manaus (AMT, UTC−4)' },
+    { v: 'America/Fortaleza', label: 'América/Fortaleza (BRT, UTC−3)' },
+    { v: 'America/Belem',     label: 'América/Belém (BRT, UTC−3)' },
+    { v: 'America/Noronha',   label: 'América/Noronha (FNT, UTC−2)' },
+    { v: 'Europe/Lisbon',     label: 'Europa/Lisboa (WET/WEST)' },
+    { v: 'Europe/London',     label: 'Europa/Londres (GMT/BST)' },
+    { v: 'UTC',               label: 'UTC (Tempo Universal)' },
+  ];
+  return (
+    <DrawerBase title="Fuso horário" sub="Usado para agendar follow-ups e lembretes no horário correto" onClose={onClose} onSave={() => onSave(local)}>
+      <div className="o-field">
+        <label className="o-field-label">Fuso horário</label>
+        <select className="o-select" value={local} onChange={e => setLocal(e.target.value)}>
+          {opts.map(o => <option key={o.v} value={o.v}>{o.label}</option>)}
+        </select>
+      </div>
+    </DrawerBase>
+  );
+}
+
+// ─── Drawer: Goals ────────────────────────────────────────────
+function DrawerGoals({ value, onSave, onClose }: { value: string; onSave: (v: string) => void; onClose: () => void }) {
+  const [local, setLocal] = useState(value);
+  return (
+    <DrawerBase title="Prioridades do atendimento" sub="Objetivos que o agente deve ter em toda conversa" onClose={onClose} onSave={() => onSave(local)}>
+      <div className="o-field">
+        <label className="o-field-label">Prioridades (uma por linha)</label>
+        <div className="o-field-hint">Ex: "1. Qualificar em até 5 mensagens" · "2. Sempre perguntar sobre urgência"</div>
+        <textarea className="o-textarea" style={{ minHeight: 140 }} value={local} maxLength={600} onChange={e => setLocal(e.target.value)} placeholder="1. Identificar a dor principal&#10;2. Apresentar a solução de forma consultiva&#10;3. Conduzir para o agendamento" />
+        <div className="o-char-count">{local.length}/600</div>
+      </div>
+    </DrawerBase>
+  );
+}
+
+// ─── Drawer: Handoff ─────────────────────────────────────────
+function DrawerHandoff({ policy, text, onSave, onClose }: {
+  policy: string; text: string;
+  onSave: (policy: string, text: string) => void; onClose: () => void;
+}) {
+  const [localPolicy, setLocalPolicy] = useState(policy);
+  const [localText, setLocalText] = useState(text);
+  return (
+    <DrawerBase title="Política de handoff" sub="O que acontece quando um humano precisa assumir a conversa" onClose={onClose} onSave={() => onSave(localPolicy, localText)}>
+      <div className="o-field">
+        <label className="o-field-label">Comportamento ao fazer handoff</label>
+        <select className="o-select" value={localPolicy} onChange={e => setLocalPolicy(e.target.value)}>
+          <option value="keep_active_notify">Manter bot ativo e notificar operador</option>
+          <option value="disable_bot">Desabilitar bot imediatamente</option>
+          <option value="ignore">Ignorar — sem ação automática</option>
+        </select>
+      </div>
+      <div className="o-field">
+        <label className="o-field-label">Mensagem personalizada de handoff</label>
+        <div className="o-field-hint">Enviada ao lead quando o bot encaminha para humano. Deixe em branco para usar o padrão do sistema.</div>
+        <textarea className="o-textarea" value={localText} maxLength={400} onChange={e => setLocalText(e.target.value)} placeholder="Ex: Oi! Vou passar sua conversa para um especialista que vai te ajudar melhor. Aguarde um momento 🙂" />
+        <div className="o-char-count">{localText.length}/400</div>
+      </div>
+    </DrawerBase>
+  );
+}
+
+// ─── Drawer: Opener inbound ───────────────────────────────────
+function DrawerOpenerInbound({ value, onSave, onClose }: { value: string; onSave: (v: string) => void; onClose: () => void }) {
+  const [local, setLocal] = useState(value);
+  return (
+    <DrawerBase title="Mensagem de abertura · Inbound" sub="Primeira mensagem quando o lead entra em contato" onClose={onClose} onSave={() => onSave(local)}>
+      <div className="o-field">
+        <label className="o-field-label">Texto de abertura</label>
+        <div className="o-field-hint">Personalize com o nome do agente ({'{nome}'}) e da empresa ({'{empresa}'}).</div>
+        <textarea className="o-textarea" style={{ minHeight: 120 }} value={local} maxLength={500} onChange={e => setLocal(e.target.value)} placeholder="Oi! Sou a {nome} da {empresa} 😊 Vi que você entrou em contato. Como posso te ajudar hoje?" />
+        <div className="o-char-count">{local.length}/500</div>
+      </div>
+    </DrawerBase>
+  );
+}
+
+// ─── Drawer: Opener outbound ──────────────────────────────────
+function DrawerOpenerOutbound({ value, onSave, onClose }: { value: string; onSave: (v: string) => void; onClose: () => void }) {
+  const [local, setLocal] = useState(value);
+  return (
+    <DrawerBase title="Mensagem de abertura · Outbound" sub="Primeira mensagem quando o bot inicia o contato" onClose={onClose} onSave={() => onSave(local)}>
+      <div className="o-field">
+        <label className="o-field-label">Texto de abertura</label>
+        <div className="o-field-hint">Personalize com o nome do lead ({'{nome}'}), agente ({'{agente}'}) e empresa ({'{empresa}'}).</div>
+        <textarea className="o-textarea" style={{ minHeight: 120 }} value={local} maxLength={500} onChange={e => setLocal(e.target.value)} placeholder="Olá {nome}! Sou a {agente} da {empresa}. Tudo bem? Entrei em contato pois tenho algo que pode te interessar…" />
+        <div className="o-char-count">{local.length}/500</div>
+      </div>
+    </DrawerBase>
+  );
+}
+
+// ─── Drawer: Social proof ─────────────────────────────────────
+function DrawerSocialProof({ value, onSave, onClose }: { value: string; onSave: (v: string) => void; onClose: () => void }) {
+  const [local, setLocal] = useState(value);
+  return (
+    <DrawerBase title="Social proof para aquecimento" sub="Prova social usada para gerar confiança no início da conversa" onClose={onClose} onSave={() => onSave(local)}>
+      <div className="o-field">
+        <label className="o-field-label">Texto de social proof</label>
+        <div className="o-field-hint">Ex: depoimentos, números de clientes, resultados alcançados.</div>
+        <textarea className="o-textarea" style={{ minHeight: 120 }} value={local} maxLength={500} onChange={e => setLocal(e.target.value)} placeholder="Ex: Já ajudamos mais de 500 clientes a atingir [resultado]. Nossa taxa de satisfação é de 98%." />
+        <div className="o-char-count">{local.length}/500</div>
+      </div>
+    </DrawerBase>
+  );
+}
+
+// ─── Drawer: Session preview ──────────────────────────────────
+function DrawerSessionPreview({ value, onSave, onClose }: { value: string; onSave: (v: string) => void; onClose: () => void }) {
+  const [local, setLocal] = useState(value);
+  return (
+    <DrawerBase title="Preview da sessão/serviço" sub="O que o lead pode esperar ao começar com você" onClose={onClose} onSave={() => onSave(local)}>
+      <div className="o-field">
+        <label className="o-field-label">Descrição do que acontece ao contratar</label>
+        <div className="o-field-hint">Use na fase de aquecimento para preparar o lead mentalmente para a compra.</div>
+        <textarea className="o-textarea" style={{ minHeight: 120 }} value={local} maxLength={500} onChange={e => setLocal(e.target.value)} placeholder="Ex: Na nossa primeira sessão, vamos [descrever o processo]. É rápido, indolor e você já sai com [resultado inicial]." />
+        <div className="o-char-count">{local.length}/500</div>
       </div>
     </DrawerBase>
   );
@@ -148,7 +290,7 @@ function ModalPerfil({ value, name, brand, agentMode, tone, onSave, onClose }: {
 // Componente principal
 // ─────────────────────────────────────────────────────────────
 
-type DrawerKey = 'nome' | 'empresa' | 'tom' | null;
+type DrawerKey = 'nome' | 'empresa' | 'nicho' | 'timezone' | 'tom' | 'goals' | 'handoff' | 'inbound_opener' | 'outbound_opener' | 'social_proof' | 'session_preview' | null;
 type ModalKey  = 'tipo' | 'identidade' | 'venda' | 'perfil' | null;
 
 export function CamadaIdentidade({ config, onUpdate, resumo }: CamadaIdentidadeProps) {
@@ -159,88 +301,126 @@ export function CamadaIdentidade({ config, onUpdate, resumo }: CamadaIdentidadeP
     ? config.custom_instructions.slice(0, 60) + '…'
     : 'Ainda não configurado';
 
-  const cards = [
-    {
-      key: 'nome',
-      label: 'Nome do agente',
-      value: config.name || '—',
-      sub: 'Como se apresenta ao lead',
-      onClick: () => setDrawer('nome'),
-    },
-    {
-      key: 'empresa',
-      label: 'Empresa',
-      value: config.brand_name || '—',
-      sub: `Nicho: ${config.niche || 'não definido'}`,
-      onClick: () => setDrawer('empresa'),
-    },
-    {
-      key: 'tipo',
-      label: 'Tipo de agente',
-      value: TEMPLATE_KEY_LABELS[config.template_key] || config.template_key || '—',
-      sub: 'Define complexidade do pipeline',
-      onClick: () => setModal('tipo'),
-    },
-    {
-      key: 'identidade',
-      label: 'Modo de identidade',
-      value: IDENTITY_MODE_LABELS[config.identity_mode] || config.identity_mode || '—',
-      sub: 'Como se apresenta ao lead',
-      onClick: () => setModal('identidade'),
-    },
-    {
-      key: 'venda',
-      label: 'Forma de vender',
-      value: AGENT_MODE_LABELS[config.agent_mode] || config.agent_mode || '—',
-      sub: 'Estilo de abordagem comercial',
-      onClick: () => setModal('venda'),
-    },
-    {
-      key: 'perfil',
-      label: 'Perfil gerado',
-      value: profilePreview,
-      sub: 'Texto de instruções personalizadas',
-      onClick: () => setModal('perfil'),
-      italic: true,
-    },
-  ];
-
-  const displayCards = resumo ? cards : cards;
+  const showHandoff = config.identity_mode !== 'virtual_assistant';
 
   return (
     <>
-      {/* Tom de comunicação card extra (só no modo full) */}
+      {/* Seção: Identidade */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 14, marginBottom: 24 }}>
+        <EditCard label="Nome do agente"    value={config.name || '—'}       sub="Como se apresenta ao lead"       onClick={() => setDrawer('nome')} />
+        <EditCard label="Empresa"           value={config.brand_name || '—'} sub="Marca ou empresa representada"   onClick={() => setDrawer('empresa')} />
+        <EditCard label="Nicho de mercado"  value={config.niche || '—'}      sub="Segmento de atuação"             onClick={() => setDrawer('nicho')} />
+        <EditCard label="Fuso horário"      value={config.timezone || '—'}   sub="Para follow-ups e lembretes"     onClick={() => setDrawer('timezone')} />
+        <EditCard
+          label="Tipo de agente"
+          value={TEMPLATE_KEY_LABELS[config.template_key] || config.template_key || '—'}
+          sub="Complexidade do pipeline"
+          onClick={() => setModal('tipo')}
+        />
+        <EditCard
+          label="Modo de identidade"
+          value={IDENTITY_MODE_LABELS[config.identity_mode] || config.identity_mode || '—'}
+          sub="Como se apresenta ao lead"
+          onClick={() => setModal('identidade')}
+        />
+        <EditCard
+          label="Forma de vender"
+          value={AGENT_MODE_LABELS[config.agent_mode] || config.agent_mode || '—'}
+          sub="Estilo de abordagem comercial"
+          onClick={() => setModal('venda')}
+        />
+        <EditCard
+          label="Perfil gerado"
+          value={profilePreview}
+          sub="Instruções personalizadas do system prompt"
+          onClick={() => setModal('perfil')}
+          italic
+        />
+      </div>
+
+      {/* Seção: Comunicação */}
       {!resumo && (
-        <div style={{ marginBottom: 14 }}>
+        <>
           <div className="o-section-hdr">
             <span className="font-mono-orion" style={{ fontSize: 9, letterSpacing: '2.5px', textTransform: 'uppercase', color: 'var(--o-sub)' }}>
-              Comunicação
+              Comunicação e prioridades
             </span>
           </div>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 14, marginBottom: 14 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 14, marginBottom: 24 }}>
+            <EditCard label="Tom de comunicação" value={config.tone_of_voice || '—'} sub="Estilo de linguagem" onClick={() => setDrawer('tom')} />
             <EditCard
-              label="Tom de comunicação"
-              value={config.tone_of_voice || '—'}
-              sub="Estilo de linguagem"
-              onClick={() => setDrawer('tom')}
+              label="Prioridades do atendimento"
+              value={config.goals ? config.goals.slice(0, 50) + '…' : 'Não configurado'}
+              sub="Objetivos de cada conversa"
+              onClick={() => setDrawer('goals')}
+              italic
             />
           </div>
-        </div>
-      )}
 
-      {/* Cards principais */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 14 }}>
-        {displayCards.map(card => (
-          <EditCard
-            key={card.key}
-            label={card.label}
-            value={card.value}
-            sub={card.sub}
-            onClick={card.onClick}
-            italic={card.italic}
-          />
-        ))}
-      </div>
+          {/* Seção: Contexto de abertura */}
+          <div className="o-section-hdr">
+            <span className="font-mono-orion" style={{ fontSize: 9, letterSpacing: '2.5px', textTransform: 'uppercase', color: 'var(--o-sub)' }}>
+              Contexto de abertura
+            </span>
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 14, marginBottom: 24 }}>
+            <EditCard
+              label="Abertura · Inbound"
+              value={config.origin_inbound_opener ? config.origin_inbound_opener.slice(0, 50) + '…' : 'Não configurado'}
+              sub="Lead entra em contato primeiro"
+              onClick={() => setDrawer('inbound_opener')}
+              italic
+            />
+            <EditCard
+              label="Abertura · Outbound"
+              value={config.origin_outbound_opener ? config.origin_outbound_opener.slice(0, 50) + '…' : 'Não configurado'}
+              sub="Bot inicia o contato"
+              onClick={() => setDrawer('outbound_opener')}
+              italic
+            />
+            <EditCard
+              label="Social proof"
+              value={config.warming_social_proof ? config.warming_social_proof.slice(0, 50) + '…' : 'Não configurado'}
+              sub="Prova social para aquecimento"
+              onClick={() => setDrawer('social_proof')}
+              italic
+            />
+            <EditCard
+              label="Preview da sessão"
+              value={config.warming_session_preview ? config.warming_session_preview.slice(0, 50) + '…' : 'Não configurado'}
+              sub="O que o lead pode esperar"
+              onClick={() => setDrawer('session_preview')}
+              italic
+            />
+          </div>
+
+          {/* Seção: Handoff (condicional) */}
+          {showHandoff && (
+            <>
+              <div className="o-section-hdr">
+                <span className="font-mono-orion" style={{ fontSize: 9, letterSpacing: '2.5px', textTransform: 'uppercase', color: 'var(--o-sub)' }}>
+                  Atendimento humano (handoff)
+                </span>
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 14, marginBottom: 24 }}>
+                <EditCard
+                  label="Política de handoff"
+                  value={HANDOFF_LABELS[config.handoff_policy] || config.handoff_policy || '—'}
+                  sub="Ação ao transferir para humano"
+                  onClick={() => setDrawer('handoff')}
+                />
+                <EditCard
+                  label="Mensagem de handoff"
+                  value={config.handoff_custom_text ? config.handoff_custom_text.slice(0, 50) + '…' : 'Usar mensagem padrão'}
+                  sub="Texto enviado ao transferir"
+                  onClick={() => setDrawer('handoff')}
+                  italic
+                />
+              </div>
+            </>
+          )}
+        </>
+      )}
 
       {/* Drawers */}
       {drawer === 'nome' && (
@@ -249,8 +429,37 @@ export function CamadaIdentidade({ config, onUpdate, resumo }: CamadaIdentidadeP
       {drawer === 'empresa' && (
         <DrawerEmpresa value={config.brand_name} onClose={() => setDrawer(null)} onSave={v => { onUpdate({ brand_name: v }); setDrawer(null); }} />
       )}
+      {drawer === 'nicho' && (
+        <DrawerNicho value={config.niche} onClose={() => setDrawer(null)} onSave={v => { onUpdate({ niche: v }); setDrawer(null); }} />
+      )}
+      {drawer === 'timezone' && (
+        <DrawerTimezone value={config.timezone} onClose={() => setDrawer(null)} onSave={v => { onUpdate({ timezone: v }); setDrawer(null); }} />
+      )}
       {drawer === 'tom' && (
         <DrawerTom value={config.tone_of_voice} onClose={() => setDrawer(null)} onSave={v => { onUpdate({ tone_of_voice: v }); setDrawer(null); }} />
+      )}
+      {drawer === 'goals' && (
+        <DrawerGoals value={config.goals} onClose={() => setDrawer(null)} onSave={v => { onUpdate({ goals: v }); setDrawer(null); }} />
+      )}
+      {drawer === 'handoff' && (
+        <DrawerHandoff
+          policy={config.handoff_policy}
+          text={config.handoff_custom_text}
+          onClose={() => setDrawer(null)}
+          onSave={(policy, text) => { onUpdate({ handoff_policy: policy as AgentConfig['handoff_policy'], handoff_custom_text: text }); setDrawer(null); }}
+        />
+      )}
+      {drawer === 'inbound_opener' && (
+        <DrawerOpenerInbound value={config.origin_inbound_opener} onClose={() => setDrawer(null)} onSave={v => { onUpdate({ origin_inbound_opener: v }); setDrawer(null); }} />
+      )}
+      {drawer === 'outbound_opener' && (
+        <DrawerOpenerOutbound value={config.origin_outbound_opener} onClose={() => setDrawer(null)} onSave={v => { onUpdate({ origin_outbound_opener: v }); setDrawer(null); }} />
+      )}
+      {drawer === 'social_proof' && (
+        <DrawerSocialProof value={config.warming_social_proof} onClose={() => setDrawer(null)} onSave={v => { onUpdate({ warming_social_proof: v }); setDrawer(null); }} />
+      )}
+      {drawer === 'session_preview' && (
+        <DrawerSessionPreview value={config.warming_session_preview} onClose={() => setDrawer(null)} onSave={v => { onUpdate({ warming_session_preview: v }); setDrawer(null); }} />
       )}
 
       {/* Modais */}

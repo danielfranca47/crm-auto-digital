@@ -59,10 +59,17 @@ export interface AgentConfig {
   identity_mode: 'human_agent' | 'virtual_assistant' | 'user_clone';
   template_key: string;
   handoff_policy: 'disable_bot' | 'keep_active_notify' | 'ignore';
+  handoff_custom_text: string;
   requires_handoff: boolean;
   human_in_loop: boolean;
   timezone: string;
   custom_instructions: string;
+
+  // ── Camada 1 — Contexto de abertura ──────────────────────
+  origin_inbound_opener: string;
+  origin_outbound_opener: string;
+  warming_social_proof: string;
+  warming_session_preview: string;
 
   // ── Camada 2 — Qualificação ──────────────────────────────
   niche: string;
@@ -75,6 +82,11 @@ export interface AgentConfig {
   f1_questions: string[];
   f2_questions: string[];
   f3_questions: string[];
+
+  // ── Camada 2 — Qualificação avançada ─────────────────────
+  qualification_score_threshold: number;
+  nurture_vs_discard_rule: boolean;
+  buying_signal_keywords: string[];
 
   // ── Camada 3 — Pipeline ──────────────────────────────────
   media_fallback: string;
@@ -94,6 +106,31 @@ export interface AgentConfig {
   daily_limit: number;
   interval_min: number;
   interval_max: number;
+
+  // ── Camada 3 — Follow-up avançado ────────────────────────
+  followup_max_attempts: number;
+  followup_first_offset: number;
+  followup_cadence: string;
+  followup_allowed_hours: string;
+
+  // ── Apresentação e agendamento ───────────────────────────
+  appointment_reminder_h1: number;
+  appointment_reminder_h2: number;
+  briefing_enabled: boolean;
+  briefing_channel: string;
+  briefing_lead_time: number;
+  operator_whatsapp: string;
+  calendar_integration: string;
+
+  // ── Oferta e pagamento ───────────────────────────────────
+  offer_media_url: string;
+  offer_media_type: string;
+  offer_anchor_price: string;
+  offer_guarantee_text: string;
+  offer_upsell_message: string;
+  payment_gateway: string;
+  payment_webhook_url: string;
+  payment_webhook_secret: string;
 }
 
 /** Valores padrão para o estado inicial (antes de carregar da API) */
@@ -105,10 +142,16 @@ export const DEFAULT_AGENT_CONFIG: AgentConfig = {
   identity_mode: 'human_agent',
   template_key: 'sdr_padrao',
   handoff_policy: 'keep_active_notify',
+  handoff_custom_text: '',
   requires_handoff: false,
   human_in_loop: false,
   timezone: 'America/Sao_Paulo',
   custom_instructions: '',
+
+  origin_inbound_opener: '',
+  origin_outbound_opener: '',
+  warming_social_proof: '',
+  warming_session_preview: '',
 
   niche: '',
   target_audience: '',
@@ -120,6 +163,10 @@ export const DEFAULT_AGENT_CONFIG: AgentConfig = {
   f1_questions: [],
   f2_questions: [],
   f3_questions: [],
+
+  qualification_score_threshold: 6,
+  nurture_vs_discard_rule: false,
+  buying_signal_keywords: [],
 
   media_fallback: 'continuar',
   media_fallback_msg: 'Oi! Não consegui abrir o que você enviou. Pode me responder em texto? Assim consigo te ajudar melhor 😊',
@@ -138,6 +185,28 @@ export const DEFAULT_AGENT_CONFIG: AgentConfig = {
   daily_limit: 200,
   interval_min: 3,
   interval_max: 8,
+
+  followup_max_attempts: 3,
+  followup_first_offset: 60,
+  followup_cadence: '60,1440,4320',
+  followup_allowed_hours: '08:00-20:00',
+
+  appointment_reminder_h1: 24,
+  appointment_reminder_h2: 2,
+  briefing_enabled: false,
+  briefing_channel: 'whatsapp',
+  briefing_lead_time: 1,
+  operator_whatsapp: '',
+  calendar_integration: 'none',
+
+  offer_media_url: '',
+  offer_media_type: 'image',
+  offer_anchor_price: '',
+  offer_guarantee_text: '',
+  offer_upsell_message: '',
+  payment_gateway: '',
+  payment_webhook_url: '',
+  payment_webhook_secret: '',
 };
 
 // ─── Dashboard ────────────────────────────────────────────────
@@ -223,4 +292,28 @@ export const MEDIA_FALLBACK_LABELS: Record<string, string> = {
   continuar: 'Responder e continuar',
   pausar:    'Responder e pausar',
   ignorar:   'Ignorar silenciosamente',
+};
+
+export const CALENDAR_INTEGRATION_LABELS: Record<string, string> = {
+  none:            'Sem integração',
+  google_calendar: 'Google Calendar',
+  calendly:        'Calendly',
+};
+
+export const PAYMENT_GATEWAY_LABELS: Record<string, string> = {
+  hotmart:  'Hotmart',
+  kiwify:   'Kiwify',
+  stripe:   'Stripe',
+  generico: 'Link genérico',
+};
+
+export const OFFER_MEDIA_TYPE_LABELS: Record<string, string> = {
+  image: 'Imagem',
+  video: 'Vídeo',
+  audio: 'Áudio',
+};
+
+export const BRIEFING_CHANNEL_LABELS: Record<string, string> = {
+  whatsapp: 'WhatsApp',
+  internal: 'Interno (CRM)',
 };
