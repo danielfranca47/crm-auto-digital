@@ -6,6 +6,7 @@ import {
   type KnowledgeCategory,
   type AgentConfig,
 } from '@/types/agente';
+import { CamadaConhecimentoWizard } from './CamadaConhecimentoWizard';
 
 // ─── Modal base (shared) ──────────────────────────────────────
 function ModalBase({ title, sub, onClose, onSave, children, saveLabel = 'Salvar' }: {
@@ -450,6 +451,7 @@ export function CamadaConhecimento({
   const [loading, setLoading]         = useState(true);
   const [error, setError]             = useState<string | null>(null);
   const [deleting, setDeleting]       = useState<number | null>(null);
+  const [wizardDismissed, setWizardDismissed] = useState(false);
 
   // Modais
   const [guidedModal, setGuidedModal] = useState<KnowledgeCategory | null>(null);
@@ -457,10 +459,13 @@ export function CamadaConhecimento({
   const [viewItem, setViewItem]       = useState<KnowledgeItem | null>(null);
   const [editExtra, setEditExtra]     = useState<KnowledgeItem | null>(null);
 
+  // Categorias brutas (sem personalização) — usadas pelo wizard
+  const rawGuidedCategories: KnowledgeCategory[] =
+    (templateKey && KNOWLEDGE_CATEGORIES_BY_TEMPLATE[templateKey]) || [];
+
   // Categorias guiadas baseadas no template do agente, com hints/placeholders personalizados
-  const guidedCategories: KnowledgeCategory[] = (
-    (templateKey && KNOWLEDGE_CATEGORIES_BY_TEMPLATE[templateKey]) || []
-  ).map(cat => getPersonalizedCategory(cat, agentConfig ?? {}));
+  const guidedCategories: KnowledgeCategory[] = rawGuidedCategories
+    .map(cat => getPersonalizedCategory(cat, agentConfig ?? {}));
 
   // Mapa de category → item existente
   const itemByCategory = new Map<string, KnowledgeItem>();
@@ -518,6 +523,18 @@ export function CamadaConhecimento({
         <span>⚠</span>
         <span>{error}</span>
       </div>
+    );
+  }
+
+  // Wizard de onboarding — exibido na primeira vez (base vazia)
+  const isFirstTime = items.length === 0 && rawGuidedCategories.length > 0 && !wizardDismissed;
+  if (isFirstTime) {
+    return (
+      <CamadaConhecimentoWizard
+        rawCategories={rawGuidedCategories}
+        agentConfig={agentConfig ?? {}}
+        onComplete={() => { setWizardDismissed(true); load(); }}
+      />
     );
   }
 
