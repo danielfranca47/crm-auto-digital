@@ -79,29 +79,74 @@ Categorias 1–7 já estão em `KNOWLEDGE_CATEGORIES_BY_TEMPLATE.closer_agressiv
 
 ### 2.3 Agente 03 — Assistente Comercial Híbrido (`hybrid_scheduler`)
 
-**Missão:** Recepcionista comercial inteligente. Qualifica, aquece emocionalmente, agenda e entrega o lead preparado ao profissional. Não vende — cria o ambiente certo para o profissional vender.
+**Missão:** Assistente comercial que responde dúvidas de forma natural e persuasiva para gerar agendamentos. Pode apresentar planos e preços durante a conversa, mas o pagamento **sempre ocorre presencialmente** na marcação — nunca via link de pagamento digital. O agente agenda; o dinheiro passa na mão.
 
 **Cenários cobertos:**
-- Inbound: lead demonstrou interesse ativo (mensagem, formulário)
+- Inbound: lead demonstrou interesse ativo (mensagem, formulário, link de agendamento)
 - Outbound: prospecção com tom pessoal ("o [Profissional] me pediu para entrar em contato")
 
-#### Categorias de conhecimento necessárias
+**Exemplo de nicho:** massagista que atende por sessão avulsa ou pacotes mensais. O agente responde sobre tipos de massagem, duração, preços, disponibilidade — e fecha o agendamento com ou sem compromisso de pacote.
+
+#### Dois sub-modos de operação
+
+O Agente 3 opera em dois sub-modos distintos conforme a configuração do usuário. As categorias de conhecimento necessárias diferem entre eles.
+
+| Sub-modo | Objetivo do agendamento | O agente apresenta preço? | Pagamento |
+|---|---|---|---|
+| **Compromisso comercial** | Lead agenda já comprometido com um plano/pacote/serviço | Sim — apresenta tabela e fecha escolha antes de agendar | Presencial na marcação |
+| **Sem compromisso** | Lead agenda uma sessão de diagnóstico/exploração sem pressão de compra | Não obrigatório — responde se perguntado, mas não conduz | Presencial (se houver) |
+
+---
+
+#### Categorias de conhecimento — Base comum (ambos os sub-modos)
+
+Estas categorias são necessárias independentemente do sub-modo:
 
 | # | Categoria | Chave | Importância | Por que é necessária |
 |---|---|---|---|---|
-| 1 | **Bio do Profissional** | `professional_bio` | Crítico | Primeira coisa que o lead quer saber: quem é o profissional? Por que confiar? Sem isso o bot faz uma apresentação vaga. |
-| 2 | **Histórias de Transformação** | `social_proof` | Crítico | O estágio de "Aquecimento" (AQ) no fluxo A3 depende diretamente disso. Clientes coaches/terapeutas compram resultado + identificação com casos parecidos. |
-| 3 | **Preview da Sessão** | `session_preview` | Crítico | Reduz ansiedade pré-agendamento. Leads que sabem o que vai acontecer têm 2–3x maior taxa de comparecimento. É argumento central para aceitar agendar. |
-| 4 | **Roteiro de Perguntas de Dor** | `pain_questions` | Recomendado | As perguntas abertas que o bot faz antes do agendamento viram o **briefing enviado ao profissional**. Sem roteiro, o briefing é raso ou genérico. |
-| 5 | **Política de Agendamento** | `scheduling_policy` | Recomendado | Regras de cancelamento, reagendamento e no-show. O lead pergunta antes de confirmar. Sem isso o bot dá respostas inconsistentes. |
-| 6 | **FAQ do Serviço** | `service_faq` | Recomendado | Perguntas sobre preço, formato, frequência — respondidas antes do agendamento. Reduz o atrito de "posso me comprometer com isso?". |
-| 7 | **Material Pré-Sessão** | `pre_session_material` | Opcional | Formulário ou tarefa enviada 24h antes. Aumenta engajamento e torna a sessão mais produtiva. |
-| 8 | **Script de Aquecimento** *(novo)* | `warming_script` | Recomendado | O texto exato que o bot usa no estágio AQ para conectar a dor do lead com o que o profissional resolve. Sem isso, o bot usa linguagem genérica sem personalização. |
-| 9 | **Follow-up Pós-Sessão** *(novo)* | `post_session_followup` | Opcional | Mensagens para leads que tiveram sessão mas não fecharam: reconectar, propor nova conversa, citar resultado que ficou pendente. |
-| 10 | **Script de Indicação** *(novo)* | `referral_script` | Opcional | Para clientes que já fizeram sessão e tiveram resultado positivo. Pedido de indicação personalizado com argumento de valor. |
+| 1 | **Bio do Profissional** | `professional_bio` | Crítico | Primeira coisa que o lead quer saber: quem é? Por que confiar? O agente usa para se apresentar em nome do profissional. |
+| 2 | **Histórias de Transformação** | `social_proof` | Crítico | Usada no aquecimento (AQ). O lead se identifica com um caso parecido — aumenta confiança e motivação para agendar. |
+| 3 | **Preview da Sessão / Serviço** | `session_preview` | Crítico | Descreve o que acontece na marcação: duração, formato, o que o lead pode esperar. Reduz ansiedade e aumenta comparecimento. |
+| 4 | **Política de Agendamento** | `scheduling_policy` | Recomendado | Regras de cancelamento, reagendamento e no-show. O lead pergunta antes de confirmar — sem resposta clara, desiste. |
+| 5 | **Script de Aquecimento** | `warming_script` | Recomendado | Texto que conecta a dor ou necessidade do lead com o que o profissional resolve. Usado antes de propor o agendamento. |
+| 6 | **Follow-up Pós-Sessão** | `post_session_followup` | Opcional | Mensagens para quem veio mas não retornou: reconectar, propor nova marcação, citar resultado que ficou pendente. |
+| 7 | **Script de Indicação** | `referral_script` | Opcional | Pedido de indicação para clientes satisfeitos. Momento ideal: após confirmar que a sessão foi bem. |
+
+---
+
+#### Categorias de conhecimento — Compromisso comercial
+
+Adicionadas ao base comum quando o objetivo é fechar um plano ou pacote antes de agendar:
+
+| # | Categoria | Chave | Importância | Por que é necessária |
+|---|---|---|---|---|
+| 8 | **Tabela de Serviços e Preços** *(novo)* | `service_pricing_table` | Crítico | O agente precisa apresentar planos, pacotes e valores com precisão. Ex.: "Massagem relaxante 60 min — R$ 120 / Pacote 4 sessões — R$ 420". Sem isso improvisa preços ou diz "não sei informar". |
+| 9 | **Objeções Comerciais** *(novo)* | `commercial_objections` | Crítico | Objeções típicas antes de fechar um pacote: "está caro", "vou pensar", "deixa eu ver minha agenda". O agente precisa de respostas persuasivas prontas — sem elas perde o compromisso antes de agendar. |
+| 10 | **Diferenciais do Serviço** *(novo)* | `service_differentials` | Recomendado | Por que escolher este profissional vs. outro? Técnica, formação, ambiente, localização, materiais usados. Usado quando o lead compara com alternativas. |
+| 11 | **Condição Especial Vigente** *(novo)* | `active_promotion` | Recomendado | Desconto, bônus ou condição limitada atual. Mantido separado da tabela de preços porque muda com frequência. O agente cita apenas se for verdade — não inventa urgência. |
+| 12 | **Política de Pagamento Presencial** *(novo)* | `payment_policy` | Recomendado | Formas aceitas na hora: Pix, dinheiro, cartão. Valor de entrada ou sinal para reservar vaga (se houver). Sem isso o lead chega sem saber como pagar. |
+| 13 | **FAQ Pré-Compromisso** *(novo)* | `pre_commitment_faq` | Recomendado | Perguntas frequentes antes de fechar o pacote: "posso pausar?", "as sessões vencem?", "consigo transferir para outra pessoa?". Reduz dúvidas que travam o sim. |
+
+---
+
+#### Categorias de conhecimento — Sem compromisso
+
+Adicionadas ao base comum quando o objetivo é apenas gerar uma marcação exploratória:
+
+| # | Categoria | Chave | Importância | Por que é necessária |
+|---|---|---|---|---|
+| 8 | **Roteiro de Perguntas de Contexto** | `pain_questions` | Recomendado | Perguntas abertas para entender o que o lead busca. As respostas viram o briefing enviado ao profissional antes da sessão — ele chega preparado. |
+| 9 | **FAQ do Serviço (sem preço obrigatório)** | `service_faq` | Recomendado | Dúvidas gerais sobre o serviço: duração, formato, localização. O agente responde se perguntado sobre preço, mas não conduz a conversa para lá. |
+| 10 | **Material Pré-Sessão** | `pre_session_material` | Opcional | Instrução ou formulário enviado 24h antes para o lead chegar preparado. |
+
+---
+
+#### Implicação para a UX da Camada 4
+
+O sub-modo deve ser determinado por um campo de configuração na Camada 1 ou Camada 3 (ainda não existente): algo como `appointment_mode: 'commercial' | 'exploratory'`. Com base nesse valor, a Camada 4 exibe conjuntos de categorias diferentes — a base comum sempre aparece; o bloco comercial ou o bloco exploratório aparece condicionalmente.
 
 **Lacuna atual vs. já implementado:**
-Categorias 1–7 já estão em `KNOWLEDGE_CATEGORIES_BY_TEMPLATE.hybrid_scheduler`. As categorias 8, 9 e 10 são novas propostas.
+O `hybrid_scheduler` em `KNOWLEDGE_CATEGORIES_BY_TEMPLATE` cobre parcialmente o sub-modo "sem compromisso" (categorias 1–3 do base + `pain_questions`, `scheduling_policy`, `service_faq`, `pre_session_material`). O sub-modo "compromisso comercial" (categorias 8–13) não existe ainda — são novas propostas. O campo `appointment_mode` também não existe.
 
 ---
 
