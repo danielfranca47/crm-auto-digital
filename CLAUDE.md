@@ -250,7 +250,7 @@ cd website && npm install && npm run dev
 
 ## Git workflow
 
-**Regra obrigatória:** após cada implementação concluída (nova funcionalidade ou correção), o Claude **deve** criar um commit na branch atual antes de encerrar a resposta.
+**Regra obrigatória:** após cada implementação concluída (nova funcionalidade ou correção), o Claude **deve** criar um commit na branch atual com a descrição da tarefa antes de encerrar a resposta.
 
 ### Convenção de mensagem (Conventional Commits)
 
