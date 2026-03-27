@@ -275,6 +275,47 @@ export const HANDOFF_LABELS: Record<string, string> = {
   ignore:             'Ignorar',
 };
 
+// ─── Presets de agente (mapeiam os 3 arquétipos de /agentes-info) ──
+export const AGENT_PRESETS = [
+  {
+    key: 'a1',
+    chip: 'Agente 01 · Robusto',
+    title: 'SDR de Alto Ticket',
+    subtitle: '+ Follow-up Pós-Apresentação',
+    desc: 'Qualifica profundamente antes de acionar o humano. Ideal para ciclos longos e alto ticket.',
+    useCases: ['Imóveis · Advocacia', 'Clínicas estéticas', 'Consultorias B2B', 'Alto ticket'],
+    template_key: 'sdr_padrao',
+    agent_mode: 'sdr_scheduler' as const,
+  },
+  {
+    key: 'a2',
+    chip: 'Agente 02 · Direto',
+    title: 'Vendedor Autônomo',
+    subtitle: 'Low Ticket',
+    desc: '100% automatizado — qualifica, apresenta e fecha sem intervenção humana.',
+    useCases: ['Infoprodutos', 'E-commerce', 'Cursos · Assinaturas'],
+    template_key: 'closer_agressivo',
+    agent_mode: 'direto' as const,
+  },
+  {
+    key: 'a3',
+    chip: 'Agente 03 · Híbrido',
+    title: 'Assistente Comercial',
+    subtitle: 'com Agendamento Inteligente',
+    desc: 'Qualifica, agenda e entrega o lead preparado para o profissional. Não fecha — mas faz tudo antes.',
+    useCases: ['Coaches · Terapeutas', 'Personal Trainers', 'Consultores solo'],
+    template_key: 'hybrid_scheduler',
+    agent_mode: 'agenda' as const,
+  },
+] as const;
+
+/** Retorna o preset ativo com base nos valores atuais, ou null se for combinação customizada */
+export function getActivePreset(template_key: string, agent_mode: string) {
+  return AGENT_PRESETS.find(
+    p => p.template_key === template_key && p.agent_mode === agent_mode,
+  ) ?? null;
+}
+
 export const LGPD_LABELS: Record<string, string> = {
   inbound:  'Inbound implícito',
   explicit: 'Confirmação explícita',

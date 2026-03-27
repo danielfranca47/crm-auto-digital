@@ -3,8 +3,9 @@ import type { AgentConfig } from '@/types/agente';
 import {
   AGENT_MODE_LABELS,
   IDENTITY_MODE_LABELS,
-  TEMPLATE_KEY_LABELS,
   HANDOFF_LABELS,
+  AGENT_PRESETS,
+  getActivePreset,
 } from '@/types/agente';
 
 interface CamadaIdentidadeProps {
@@ -198,24 +199,6 @@ function DrawerTom({ value, onSave, onClose }: { value: string; onSave: (v: stri
   );
 }
 
-// ─── Modal: Tipo de agente (template_key) ────────────────────
-function ModalTipoAgente({ value, onSave, onClose }: { value: string; onSave: (v: string) => void; onClose: () => void }) {
-  const [local, setLocal] = useState(value);
-  const options = [
-    { v: 'sdr_padrao',             label: 'SDR Padrão',                desc: 'Pipeline completo com qualificação e handoff. Ideal para alto ticket.', sub: 'Imóveis · Advocacia · Consultoria' },
-    { v: 'consultor_especialista', label: 'Consultor Especialista',     desc: 'Processos longos, diagnóstico e educação antes da venda.', sub: 'Saúde · Educação · B2B complexo' },
-    { v: 'closer_agressivo',       label: 'Closer Agressivo',           desc: 'Foco em fechamento direto. Pipeline curto, alta conversão.', sub: 'Infoprodutos · Cursos · E-commerce' },
-    { v: 'hybrid_scheduler',       label: 'Híbrido Agendador',          desc: 'Qualifica e agenda. Entrega o lead preparado para o profissional.', sub: 'Coaches · Terapeutas · Consultores' },
-  ];
-  return (
-    <ModalBase title="Tipo de agente" sub="Define a complexidade do pipeline e o nível de autonomia" onClose={onClose} onSave={() => onSave(local)}>
-      {options.map(o => (
-        <OptCard key={o.v} selected={local === o.v} onClick={() => setLocal(o.v)} label={o.label} desc={o.desc} sub={o.sub} />
-      ))}
-    </ModalBase>
-  );
-}
-
 // ─── Modal: Modo de identidade ───────────────────────────────
 function ModalIdentidade({ value, onSave, onClose }: { value: string; onSave: (v: string) => void; onClose: () => void }) {
   const [local, setLocal] = useState(value);
@@ -226,25 +209,6 @@ function ModalIdentidade({ value, onSave, onClose }: { value: string; onSave: (v
   ];
   return (
     <ModalBase title="Modo de identidade" sub="Como o agente se apresentará para o lead" onClose={onClose} onSave={() => onSave(local)}>
-      {options.map(o => (
-        <OptCard key={o.v} selected={local === o.v} onClick={() => setLocal(o.v)} label={o.label} desc={o.desc} />
-      ))}
-    </ModalBase>
-  );
-}
-
-// ─── Modal: Forma de vender (agent_mode) ─────────────────────
-function ModalVenda({ value, onSave, onClose }: { value: string; onSave: (v: string) => void; onClose: () => void }) {
-  const [local, setLocal] = useState(value);
-  const options = [
-    { v: 'sdr_scheduler', label: 'SDR · Agendamento',   desc: 'Qualifica e foca em agendar reunião ou sessão.' },
-    { v: 'consultivo',    label: 'Consultivo',           desc: 'Usa perguntas estratégicas para diagnosticar e apresentar a solução.' },
-    { v: 'closer',        label: 'Closer · Direto',      desc: 'Aborda proativamente e fecha de forma mais direta.' },
-    { v: 'agenda',        label: 'Foco em Agenda',       desc: '4 campos de qualificação obrigatórios, objetivo é o agendamento.' },
-    { v: 'direto',        label: 'Vendedor Direto',      desc: '3 campos de qualificação, fechamento rápido.' },
-  ];
-  return (
-    <ModalBase title="Forma de vender" sub="Define a abordagem comercial e estilo de argumentação" onClose={onClose} onSave={() => onSave(local)}>
       {options.map(o => (
         <OptCard key={o.v} selected={local === o.v} onClick={() => setLocal(o.v)} label={o.label} desc={o.desc} />
       ))}
@@ -291,7 +255,7 @@ function ModalPerfil({ value, name, brand, agentMode, tone, onSave, onClose }: {
 // ─────────────────────────────────────────────────────────────
 
 type DrawerKey = 'nome' | 'empresa' | 'nicho' | 'timezone' | 'tom' | 'goals' | 'handoff' | 'inbound_opener' | 'outbound_opener' | 'social_proof' | 'session_preview' | null;
-type ModalKey  = 'tipo' | 'identidade' | 'venda' | 'perfil' | null;
+type ModalKey  = 'identidade' | 'perfil' | null;
 
 export function CamadaIdentidade({ config, onUpdate, resumo }: CamadaIdentidadeProps) {
   const [drawer, setDrawer] = useState<DrawerKey>(null);
@@ -302,9 +266,62 @@ export function CamadaIdentidade({ config, onUpdate, resumo }: CamadaIdentidadeP
     : 'Ainda não configurado';
 
   const showHandoff = config.identity_mode !== 'virtual_assistant';
+  const activePreset = getActivePreset(config.template_key, config.agent_mode);
 
   return (
     <>
+      {/* Seletor de tipo de agente */}
+      <div style={{ marginBottom: 24 }}>
+        <div className="font-mono-orion" style={{ fontSize: 9, letterSpacing: '2.5px', textTransform: 'uppercase', color: 'var(--o-sub)', marginBottom: 12 }}>
+          Tipo de agente
+        </div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+          {AGENT_PRESETS.map(preset => {
+            const selected = activePreset?.key === preset.key;
+            return (
+              <button
+                key={preset.key}
+                onClick={() => onUpdate({ template_key: preset.template_key, agent_mode: preset.agent_mode })}
+                style={{
+                  width: '100%',
+                  textAlign: 'left',
+                  background: selected ? 'var(--o-active-bg, rgba(var(--o-active-rgb,99,102,241),0.08))' : 'var(--o-card)',
+                  border: `1.5px solid ${selected ? 'var(--o-active)' : 'var(--o-b1)'}`,
+                  borderRadius: 12,
+                  padding: '14px 16px',
+                  cursor: 'pointer',
+                  transition: 'border-color 0.15s, background 0.15s',
+                  display: 'flex',
+                  alignItems: 'flex-start',
+                  justifyContent: 'space-between',
+                  gap: 12,
+                }}
+              >
+                <div>
+                  <div style={{ fontSize: 10, color: 'var(--o-sub)', marginBottom: 2, letterSpacing: 0.5 }}>{preset.chip}</div>
+                  <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--o-text)', marginBottom: 1 }}>{preset.title}</div>
+                  <div style={{ fontSize: 11, color: 'var(--o-sub)', marginBottom: 6, fontWeight: 300 }}>{preset.subtitle}</div>
+                  <div style={{ fontSize: 12, color: 'var(--o-text)', lineHeight: 1.5, marginBottom: 8 }}>{preset.desc}</div>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+                    {preset.useCases.map(uc => (
+                      <span key={uc} style={{ fontSize: 10, background: 'var(--o-muted)', borderRadius: 6, padding: '2px 8px', color: 'var(--o-sub)' }}>{uc}</span>
+                    ))}
+                  </div>
+                </div>
+                <div style={{
+                  width: 18, height: 18, borderRadius: '50%', flexShrink: 0, marginTop: 2,
+                  border: `2px solid ${selected ? 'var(--o-active)' : 'var(--o-b1)'}`,
+                  background: selected ? 'var(--o-active)' : 'transparent',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                }}>
+                  {selected && <div style={{ width: 6, height: 6, borderRadius: '50%', background: '#fff' }} />}
+                </div>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
       {/* Seção: Identidade */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 14, marginBottom: 24 }}>
         <EditCard label="Nome do agente"    value={config.name || '—'}       sub="Como se apresenta ao lead"       onClick={() => setDrawer('nome')} />
@@ -312,22 +329,10 @@ export function CamadaIdentidade({ config, onUpdate, resumo }: CamadaIdentidadeP
         <EditCard label="Nicho de mercado"  value={config.niche || '—'}      sub="Segmento de atuação"             onClick={() => setDrawer('nicho')} />
         <EditCard label="Fuso horário"      value={config.timezone || '—'}   sub="Para follow-ups e lembretes"     onClick={() => setDrawer('timezone')} />
         <EditCard
-          label="Tipo de agente"
-          value={TEMPLATE_KEY_LABELS[config.template_key] || config.template_key || '—'}
-          sub="Complexidade do pipeline"
-          onClick={() => setModal('tipo')}
-        />
-        <EditCard
           label="Modo de identidade"
           value={IDENTITY_MODE_LABELS[config.identity_mode] || config.identity_mode || '—'}
           sub="Como se apresenta ao lead"
           onClick={() => setModal('identidade')}
-        />
-        <EditCard
-          label="Forma de vender"
-          value={AGENT_MODE_LABELS[config.agent_mode] || config.agent_mode || '—'}
-          sub="Estilo de abordagem comercial"
-          onClick={() => setModal('venda')}
         />
         <EditCard
           label="Perfil gerado"
@@ -463,14 +468,8 @@ export function CamadaIdentidade({ config, onUpdate, resumo }: CamadaIdentidadeP
       )}
 
       {/* Modais */}
-      {modal === 'tipo' && (
-        <ModalTipoAgente value={config.template_key} onClose={() => setModal(null)} onSave={v => { onUpdate({ template_key: v }); setModal(null); }} />
-      )}
       {modal === 'identidade' && (
         <ModalIdentidade value={config.identity_mode} onClose={() => setModal(null)} onSave={v => { onUpdate({ identity_mode: v as AgentConfig['identity_mode'] }); setModal(null); }} />
-      )}
-      {modal === 'venda' && (
-        <ModalVenda value={config.agent_mode} onClose={() => setModal(null)} onSave={v => { onUpdate({ agent_mode: v as AgentConfig['agent_mode'] }); setModal(null); }} />
       )}
       {modal === 'perfil' && (
         <ModalPerfil
