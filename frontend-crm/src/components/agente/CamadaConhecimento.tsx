@@ -1,20 +1,10 @@
 import { useState, useEffect, useRef } from 'react';
-import { api } from '@/services/api';
+import { api, type KnowledgeItem } from '@/services/api';
 import {
   KNOWLEDGE_CATEGORIES_BY_TEMPLATE,
   KNOWLEDGE_IMPORTANCE_LABELS,
   type KnowledgeCategory,
 } from '@/types/agente';
-
-interface KnowledgeItem {
-  id: number;
-  title: string;
-  content_text: string;
-  source_type: string;
-  category: string | null;
-  created_at: string;
-  updated_at: string;
-}
 
 // ─── Modal base (shared) ──────────────────────────────────────
 function ModalBase({ title, sub, onClose, onSave, children, saveLabel = 'Salvar' }: {
@@ -272,6 +262,55 @@ function ModalEditExtra({ item, onClose, onSaved }: { item: KnowledgeItem; onClo
   );
 }
 
+// ─── Funções utilitárias ──────────────────────────────────────
+
+const STALE_KEYS = new Set(['urgency_offer', 'cart_recovery_scripts']);
+
+function isStale(item: KnowledgeItem, days = 30): boolean {
+  const updated = new Date(item.updated_at);
+  const now = new Date();
+  return (now.getTime() - updated.getTime()) / (1000 * 60 * 60 * 24) > days;
+}
+
+function getReadinessLevel(
+  guidedCategories: KnowledgeCategory[],
+  itemByCategory: Map<string, KnowledgeItem>,
+): 'none' | 'basic' | 'optimized' {
+  const critical = guidedCategories.filter(c => c.importance === 'critical');
+  const recommended = guidedCategories.filter(c => c.importance === 'recommended');
+  const criticalFilled = critical.filter(c => itemByCategory.has(c.key)).length;
+  const recommendedFilled = recommended.filter(c => itemByCategory.has(c.key)).length;
+
+  if (criticalFilled < 2) return 'none';
+  if (criticalFilled < critical.length) return 'basic';
+  if (recommendedFilled >= 2) return 'optimized';
+  return 'basic';
+}
+
+const READINESS_CONFIG = {
+  none: {
+    color: 'var(--o-hot)',
+    borderColor: 'var(--o-hot-b)',
+    dot: 'var(--o-hot)',
+    label: 'Não funcional',
+    message: 'O agente não tem informações suficientes para responder bem.',
+  },
+  basic: {
+    color: '#d97706',
+    borderColor: '#92400e44',
+    dot: '#d97706',
+    label: 'Funcional básico',
+    message: 'O agente consegue operar, mas sem diferenciação.',
+  },
+  optimized: {
+    color: 'var(--o-active)',
+    borderColor: 'var(--o-active-b)',
+    dot: 'var(--o-active)',
+    label: 'Otimizado',
+    message: 'O agente está pronto para operar com alta performance.',
+  },
+} as const;
+
 // ─── Card de seção guiada ─────────────────────────────────────
 function GuidedSectionCard({
   category,
@@ -296,6 +335,8 @@ function GuidedSectionCard({
   const importanceBorder = isCritical
     ? (filled ? 'var(--o-active-b)' : 'var(--o-hot-b)')
     : 'var(--o-b1)';
+
+  const showStaleBadge = filled && item && STALE_KEYS.has(category.key) && isStale(item);
 
   return (
     <div style={{
@@ -326,6 +367,19 @@ function GuidedSectionCard({
             >
               {KNOWLEDGE_IMPORTANCE_LABELS[category.importance]}
             </span>
+            {showStaleBadge && (
+              <span
+                className="font-mono-orion"
+                style={{
+                  fontSize: 7, letterSpacing: 1.5, textTransform: 'uppercase', padding: '1px 5px',
+                  borderRadius: 2, border: '1px solid var(--o-hot-b)', color: 'var(--o-hot)',
+                  flexShrink: 0,
+                }}
+                title="Este conteúdo tem mais de 30 dias sem atualização"
+              >
+                Atualizar
+              </span>
+            )}
           </div>
           <div style={{ fontSize: 11.5, color: 'var(--o-sub)', fontWeight: 300, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
             {filled
@@ -390,10 +444,9 @@ export function CamadaConhecimento({ templateKey }: { templateKey?: string }) {
   const guidedCategoryKeys = new Set(guidedCategories.map(c => c.key));
   const extraItems = items.filter(i => !i.category || !guidedCategoryKeys.has(i.category));
 
-  // Completude: críticos preenchidos
-  const criticalCategories = guidedCategories.filter(c => c.importance === 'critical');
-  const criticalFilled     = criticalCategories.filter(c => itemByCategory.has(c.key)).length;
-  const criticalMissing    = criticalCategories.length - criticalFilled;
+  // Score de prontidão
+  const readinessLevel = getReadinessLevel(guidedCategories, itemByCategory);
+  const readiness = READINESS_CONFIG[readinessLevel];
 
   async function load() {
     setLoading(true);
@@ -445,27 +498,27 @@ export function CamadaConhecimento({ templateKey }: { templateKey?: string }) {
       {/* ── Seções guiadas ───────────────────────────────────── */}
       {guidedCategories.length > 0 && (
         <>
-          {/* Alerta de críticos pendentes */}
-          {criticalMissing > 0 && (
-            <div className="o-alert o-alert-danger" style={{ marginBottom: 16 }}>
-              <span style={{ flexShrink: 0 }}>⚠</span>
-              <span>
-                <strong>{criticalMissing} seção{criticalMissing > 1 ? 'ões' : ''} crítica{criticalMissing > 1 ? 's' : ''}</strong> sem preenchimento.
-                O agente não terá as informações essenciais para performar bem.
+          {/* Score de prontidão */}
+          <div style={{
+            display: 'flex', alignItems: 'center', gap: 10,
+            padding: '10px 14px', marginBottom: 16,
+            background: 'var(--o-b0)', borderRadius: 4,
+            border: `1px solid ${readiness.borderColor}`,
+          }}>
+            <div style={{ width: 8, height: 8, borderRadius: '50%', flexShrink: 0, background: readiness.dot }} />
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <span className="font-mono-orion" style={{ fontSize: 8, letterSpacing: 1.5, textTransform: 'uppercase', color: readiness.color }}>
+                {readiness.label}
               </span>
+              <div style={{ fontSize: 11.5, color: 'var(--o-sub)', fontWeight: 300, marginTop: 2 }}>
+                {readiness.message}
+              </div>
             </div>
-          )}
+          </div>
 
           <div className="o-section-hdr" style={{ marginBottom: 12 }}>
             <span className="font-mono-orion" style={{ fontSize: 9, letterSpacing: '2.5px', textTransform: 'uppercase', color: 'var(--o-sub)' }}>
               Seções sugeridas para este agente
-            </span>
-            <span className="font-mono-orion" style={{
-              fontSize: 8, padding: '1px 6px', borderRadius: 2,
-              border: `1px solid ${criticalMissing > 0 ? 'var(--o-hot-b)' : 'var(--o-b1)'}`,
-              color: criticalMissing > 0 ? 'var(--o-hot)' : 'var(--o-dim)',
-            }}>
-              {criticalFilled} / {criticalCategories.length} críticas preenchidas
             </span>
           </div>
 

@@ -469,6 +469,33 @@ const CAT_UPSELL: KnowledgeCategory = {
   importance: 'optional',
 };
 
+const CAT_CART_RECOVERY: KnowledgeCategory = {
+  key: 'cart_recovery_scripts',
+  label: 'Script de Recuperação de Carrinho',
+  description: 'As mensagens de follow-up para leads que não finalizaram a compra.',
+  hint: 'Escreva 3 mensagens com ângulos diferentes para os intervalos de 2h, 24h e 48h após o abandono. Cada mensagem deve ter um gancho diferente: urgência, benefício ou prova social.',
+  placeholder: 'Mensagem 1 (2h depois):\n"Oi [nome]! Vi que você ficou de olho no [produto]. Ainda dá tempo de garantir com [condição especial]. Posso te ajudar com alguma dúvida?"\n\nMensagem 2 (24h depois):\n"[Nome], uma coisa que os nossos clientes mais elogiam é [benefício principal]. Você ainda tem a chance de garantir o seu com [desconto/bônus]. Válido até [data]."\n\nMensagem 3 (48h depois):\n"Última chance! A condição de R$ X termina hoje à meia-noite. [Prova social rápida]. Quer garantir antes que acabe?"',
+  importance: 'recommended',
+};
+
+const CAT_FIT_QUESTIONS: KnowledgeCategory = {
+  key: 'fit_questions',
+  label: 'Perguntas de Fit',
+  description: 'As 1–2 perguntas de qualificação mínima que o bot faz antes de iniciar o pitch.',
+  hint: 'Defina as perguntas que filtram quem tem ou não tem a dor que o produto resolve. O objetivo é confirmar o fit antes de investir no pitch completo — não é uma qualificação profunda.',
+  placeholder: 'Pergunta 1: "[Pergunta que confirma a dor principal]"\nEx: "Você já tentou [solução alternativa] antes?"\n\nPergunta 2 (opcional): "[Pergunta que confirma o perfil]"\nEx: "Você está buscando resultado em quanto tempo?"',
+  importance: 'recommended',
+};
+
+const CAT_POST_PURCHASE_ONBOARDING: KnowledgeCategory = {
+  key: 'post_purchase_onboarding',
+  label: 'Onboarding Pós-Compra',
+  description: 'Mensagem de boas-vindas e próximos passos enviados automaticamente após pagamento confirmado.',
+  hint: 'Escreva a mensagem que o bot envia imediatamente após a compra ser confirmada. Deve passar: boas-vindas, como acessar o produto, o que fazer primeiro e onde pedir ajuda.',
+  placeholder: 'Bem-vindo ao [produto], [nome]! 🎉\n\nSeu acesso foi liberado. Veja o que fazer agora:\n1️⃣ Acesse em: [LINK]\n2️⃣ Comece por: [módulo/etapa inicial]\n3️⃣ Dúvidas? Escreva aqui mesmo ou entre no grupo: [LINK DO GRUPO]\n\nQualquer coisa, é só chamar. Vamos juntos!',
+  importance: 'optional',
+};
+
 const CAT_PROFESSIONAL_BIO: KnowledgeCategory = {
   key: 'professional_bio',
   label: 'Bio do Profissional',
@@ -532,6 +559,60 @@ const CAT_PRE_SESSION_MATERIAL: KnowledgeCategory = {
   importance: 'optional',
 };
 
+const CAT_HANDOFF_BRIEFING: KnowledgeCategory = {
+  key: 'handoff_briefing_template',
+  label: 'Script de Dossiê',
+  description: 'Modelo do resumo que o bot envia ao vendedor antes da reunião com o lead.',
+  hint: 'Defina quais campos devem constar no dossiê entregue ao vendedor. O agente preenche automaticamente com as respostas coletadas durante a qualificação.',
+  placeholder: 'DOSSIÊ DO LEAD — [Nome]\n\nPerfil:\n- Empresa: [resposta]\n- Setor: [resposta]\n- Porte / Faturamento: [resposta]\n- Cargo do decisor: [resposta]\n\nDor principal: [resposta F1]\nMomento: [urgência declarada]\nBudget confirmado: [sim/não + valor]\n\nObjeções levantadas: [se houver]\nNível de urgência (1–10): [resposta]\n\nLink da agenda: [se agendado via bot]',
+  importance: 'recommended',
+};
+
+const CAT_COMPETITIVE_DIFFERENTIALS: KnowledgeCategory = {
+  key: 'competitive_differentials',
+  label: 'Diferenciação Competitiva',
+  description: 'Respostas para quando o lead menciona que já usa ou está avaliando um concorrente.',
+  hint: 'Liste os concorrentes mais comuns e o argumento de diferenciação para cada um. O agente usa quando o lead diz "já uso X" ou "estou avaliando Y também".',
+  placeholder: 'Concorrente A: "[Nome]"\nDiferencial: "[O que nos torna melhor ou diferente nesse caso específico]"\n\nConcorrente B: "[Nome]"\nDiferencial: "[O que nos torna melhor ou diferente nesse caso específico]"\n\nResposta padrão (concorrente não listado):\n"Conheço [nome]. O que costumamos ouvir de quem migrou para nós é que [diferencial principal]. Mas cada caso é diferente — por isso a reunião existe."',
+  importance: 'optional',
+};
+
+const CAT_NURTURE_CONTENT: KnowledgeCategory = {
+  key: 'nurture_content',
+  label: 'Mensagens de Nurture',
+  description: 'Conteúdo para leads que não qualificaram agora mas têm potencial futuro.',
+  hint: 'Escreva 2–3 mensagens para manter contato com leads fora do timing ideal. O objetivo não é vender — é manter a relação quente para uma conversa futura.',
+  placeholder: 'Mensagem 1 (imediata — após descarte suave):\n"Entendo que não é o momento certo agora. Quando fizer sentido revisitar, é só me chamar — vou estar aqui."\n\nMensagem 2 (30 dias depois):\n"Oi [nome], passando para dizer que [novidade relevante / insight do setor]. Acho que pode ser útil para o momento que você está. Qualquer coisa, é só falar."\n\nMensagem 3 (90 dias depois):\n"[Nome], faz um tempo! Como estão as coisas em [área]? Nosso [produto] teve algumas melhorias recentes que podem mudar o cálculo do que conversamos."',
+  importance: 'optional',
+};
+
+const CAT_WARMING_SCRIPT: KnowledgeCategory = {
+  key: 'warming_script',
+  label: 'Script de Aquecimento',
+  description: 'Texto que conecta a dor do lead com o que o profissional resolve, usado antes de propor o agendamento.',
+  hint: 'Escreva o texto (ou roteiro) que o agente usa para criar conexão emocional e gerar desejo pelo agendamento. Deve soar natural, não como pitch. Use a dor do lead como ponto de partida.',
+  placeholder: 'Roteiro de aquecimento:\n\n"[Nome], muitas pessoas que chegam até [profissional] estão passando exatamente pelo que você descreveu — [eco da dor]. O que elas costumam descobrir nas primeiras sessões é que [insight transformador].\n\n[História de transformação resumida — 2 linhas].\n\nA [Nome do profissional] tem uma abordagem diferente para isso: [diferencial do método]. Não é mais do mesmo — é [o que é único].\n\nVocê teria interesse em uma conversa rápida para ver se faz sentido para o seu caso?"',
+  importance: 'recommended',
+};
+
+const CAT_POST_SESSION_FOLLOWUP: KnowledgeCategory = {
+  key: 'post_session_followup',
+  label: 'Follow-up Pós-Sessão',
+  description: 'Mensagens para clientes que vieram à sessão mas não retornaram para marcar novamente.',
+  hint: 'Escreva 2–3 mensagens para reconectar com clientes que participaram da sessão mas sumiram. O objetivo é propor uma nova marcação sem soar insistente.',
+  placeholder: 'Mensagem 1 (3 dias após sessão sem retorno):\n"Oi [nome]! Esperamos que a sessão tenha sido boa. Como você está se sentindo desde então? Se quiser marcar o próximo encontro, é só me falar."\n\nMensagem 2 (10 dias após):\n"[Nome], [Nome do profissional] estava pensando em você. Tem alguma questão específica que ficou em aberto da nossa última sessão? Às vezes um ajuste pequeno faz toda a diferença."\n\nMensagem 3 (30 dias após):\n"Faz um tempo! Quando estiver pronto para continuar, a agenda de [Nome do profissional] está disponível. Qualquer dia é um bom dia para retomar."',
+  importance: 'optional',
+};
+
+const CAT_REFERRAL_SCRIPT: KnowledgeCategory = {
+  key: 'referral_script',
+  label: 'Script de Indicação',
+  description: 'Pedido de indicação enviado a clientes satisfeitos após uma sessão bem avaliada.',
+  hint: 'Escreva a mensagem que o agente envia para pedir indicação. O momento ideal é logo após o cliente confirmar que a sessão foi boa. Deve soar natural, não como solicitação comercial.',
+  placeholder: '"[Nome], fico feliz que a sessão tenha sido proveitosa! Uma coisa que ajuda muito [Nome do profissional] a ajudar mais pessoas é a indicação de quem já viveu a experiência.\n\nSe você conhece alguém que está passando por [dor / situação similar], eu adoraria bater um papo com essa pessoa. Pode ser uma mensagem simples apresentando a [Nome do profissional].\n\nE se quiser, posso preparar uma mensagem pronta para você encaminhar — leva 30 segundos. O que acha?"',
+  importance: 'optional',
+};
+
 export const KNOWLEDGE_CATEGORIES_BY_TEMPLATE: Record<string, KnowledgeCategory[]> = {
   sdr_padrao: [
     CAT_COMPANY_PROFILE,
@@ -540,6 +621,9 @@ export const KNOWLEDGE_CATEGORIES_BY_TEMPLATE: Record<string, KnowledgeCategory[
     CAT_QUALIFICATION_CRITERIA,
     CAT_PRE_MEETING_FAQ,
     CAT_PRICE_POLICY,
+    CAT_HANDOFF_BRIEFING,
+    CAT_COMPETITIVE_DIFFERENTIALS,
+    CAT_NURTURE_CONTENT,
   ],
   consultor_especialista: [
     CAT_COMPANY_PROFILE,
@@ -548,6 +632,9 @@ export const KNOWLEDGE_CATEGORIES_BY_TEMPLATE: Record<string, KnowledgeCategory[
     CAT_QUALIFICATION_CRITERIA,
     CAT_PRE_MEETING_FAQ,
     CAT_PRICE_POLICY,
+    CAT_HANDOFF_BRIEFING,
+    CAT_COMPETITIVE_DIFFERENTIALS,
+    CAT_NURTURE_CONTENT,
   ],
   closer_agressivo: [
     CAT_PITCH_SCRIPT,
@@ -556,16 +643,22 @@ export const KNOWLEDGE_CATEGORIES_BY_TEMPLATE: Record<string, KnowledgeCategory[
     CAT_PRODUCT_DETAILS,
     CAT_GUARANTEE,
     CAT_URGENCY_OFFER,
+    CAT_FIT_QUESTIONS,
+    CAT_CART_RECOVERY,
     CAT_UPSELL,
+    CAT_POST_PURCHASE_ONBOARDING,
   ],
   hybrid_scheduler: [
     CAT_PROFESSIONAL_BIO,
     CAT_SOCIAL_PROOF_HYBRID,
     CAT_SESSION_PREVIEW,
+    CAT_WARMING_SCRIPT,
     CAT_PAIN_QUESTIONS,
     CAT_SCHEDULING_POLICY,
     CAT_SERVICE_FAQ,
+    CAT_POST_SESSION_FOLLOWUP,
     CAT_PRE_SESSION_MATERIAL,
+    CAT_REFERRAL_SCRIPT,
   ],
 };
 
