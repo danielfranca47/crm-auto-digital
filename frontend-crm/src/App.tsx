@@ -13,7 +13,7 @@ import NotFound from "./pages/NotFound";
 import MinhaConta from "./pages/MinhaConta";
 import Assinatura from "./pages/Assinatura";
 import UsoDoPlano from "./pages/UsoDoPlano";
-import AiProfile from "./pages/AiProfile";
+import AgenteConfiguracao from "./pages/AgenteConfiguracao";
 import TiposAgentes from "./pages/TiposAgentes";
 import FollowUpCenter from "./pages/FollowUpCenter";
 import FollowUpEdit from "./pages/FollowUpEdit";
@@ -119,7 +119,7 @@ const App = () => (
                     </Protected>
                   }
                 >
-                  <Route path="/ai-profile" element={<AiProfile />} />
+                  <Route path="/ai-profile" element={<AgenteConfiguracao />} />
                   <Route path="/agentes-info" element={<TiposAgentes />} />
                   <Route path="/follow-ups/:leadId/edit" element={<FollowUpEdit />} />
                 </Route>
