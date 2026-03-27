@@ -356,8 +356,8 @@ const CAT_SOCIAL_PROOF_SDR: KnowledgeCategory = {
   key: 'social_proof',
   label: 'Prova Social',
   description: 'Casos de sucesso com resultados concretos para usar no F3 e no aquecimento.',
-  hint: 'Escreva 2–4 casos reais: nome do cliente (ou perfil), problema que tinha, resultado obtido em números. Ex: "Empresa de logística com 80 colaboradores — reduziu custo de aquisição em 35% em 3 meses."',
-  placeholder: 'Cliente 1: [setor/perfil] — Problema: [...] — Resultado: [...]\nCliente 2: [setor/perfil] — Problema: [...] — Resultado: [...]',
+  hint: 'Escreva 2–4 casos reais de [PÚBLICO] em [NICHO]: perfil do cliente, problema que tinha, resultado obtido em números. Ex: "[Perfil do cliente] — reduziu [métrica] em X% em Y meses."',
+  placeholder: 'Cliente 1: [PÚBLICO] — Problema: [...] — Resultado: [...]\nCliente 2: [perfil similar] — Problema: [...] — Resultado: [...]',
   importance: 'critical',
 };
 
@@ -374,8 +374,8 @@ const CAT_COMPANY_PROFILE: KnowledgeCategory = {
   key: 'company_profile',
   label: 'Perfil da Empresa',
   description: 'Quem é a empresa, o que oferece, diferenciais e mercado de atuação.',
-  hint: 'Descreva: nome oficial, segmento, o que entrega, para quem, e o principal diferencial competitivo. O agente usa isso para responder "quem vocês são?" durante a qualificação.',
-  placeholder: 'Nome: [Empresa]\nSegmento: [Ex: Software B2B para gestão financeira]\nO que entrega: [Ex: Plataforma de automação de contas a pagar com conciliação bancária]\nPara quem: [Ex: Empresas de médio porte com faturamento acima de R$ 5M/ano]\nDiferencial: [Ex: Implementação em 2 semanas, sem migração de dados manual]',
+  hint: 'Descreva quem é a empresa em [NICHO]: nome oficial, segmento, o que entrega para [PÚBLICO], e o principal diferencial competitivo. O agente usa isso para responder "quem vocês são?" durante a qualificação.',
+  placeholder: 'Nome: [Empresa]\nSegmento: [NICHO]\nO que entrega: [Descreva a solução principal]\nPara quem: [PÚBLICO]\nDiferencial: [O que torna vocês únicos nesse mercado]',
   importance: 'critical',
 };
 
@@ -383,7 +383,7 @@ const CAT_QUALIFICATION_CRITERIA: KnowledgeCategory = {
   key: 'qualification_criteria',
   label: 'Critérios de Qualificação',
   description: 'O que define um lead qualificado: setor, porte, budget mínimo, cargo do decisor.',
-  hint: 'Defina os critérios de aprovação para F1 e F3. O agente usa isso para decidir se avança ou encerra a conversa.',
+  hint: 'Defina os critérios que aprovam ou descartam um lead de [PÚBLICO] em [NICHO] para F1 e F3. O agente usa isso para decidir se avança ou encerra a conversa.',
   placeholder: 'Aprovado se:\n- Faturamento acima de R$ 2M/ano\n- Setor: [indústria, logística, varejo B2B]\n- Decisor: sócio, CEO, CFO ou diretor\n- Budget: mínimo R$ 3.000/mês\n- Timing: necessidade nos próximos 90 dias\n\nDesqualificado se:\n- Empresa com menos de 10 funcionários\n- Apenas operacional tomando a decisão',
   importance: 'recommended',
 };
@@ -410,8 +410,8 @@ const CAT_PITCH_SCRIPT: KnowledgeCategory = {
   key: 'pitch_script',
   label: 'Script de Pitch',
   description: 'A apresentação completa do produto que o agente usa para fechar a venda.',
-  hint: 'Escreva o script seguindo a estrutura: 1) Dor (eco da dor do lead), 2) Solução (o que é o produto), 3) Benefícios (3 resultados concretos), 4) Prova social (1 caso de sucesso rápido), 5) Oferta (preço, o que inclui), 6) Urgência (por que agir agora).',
-  placeholder: '🔴 Dor: "Você me disse que [dor]. Isso é exatamente o que nosso produto resolve."\n\n✅ Solução: [Nome do produto] é [descrição em 1 frase].\n\n📈 Benefícios:\n1. [Resultado concreto 1]\n2. [Resultado concreto 2]\n3. [Resultado concreto 3]\n\n⭐ Prova social: "[Nome ou perfil de cliente] conseguiu [resultado] em [tempo]."\n\n💰 Oferta: [Preço] por [período]. Inclui: [lista rápida].\n\n⏰ Urgência: [Ex: "Essa condição é válida até [data] / Restam X vagas com esse preço."]',
+  hint: 'Escreva o pitch de [OFERTA] para [PÚBLICO] seguindo a estrutura: 1) Dor (eco da dor do lead), 2) Solução (o que é o produto), 3) Benefícios (3 resultados concretos), 4) Prova social (1 caso de sucesso rápido), 5) Oferta (preço, o que inclui), 6) Urgência (por que agir agora).',
+  placeholder: '🔴 Dor: "Você me disse que [dor]. Isso é exatamente o que [OFERTA] resolve."\n\n✅ Solução: [OFERTA] é [descrição em 1 frase].\n\n📈 Benefícios:\n1. [Resultado concreto 1]\n2. [Resultado concreto 2]\n3. [Resultado concreto 3]\n\n⭐ Prova social: "[Perfil de [PÚBLICO]] conseguiu [resultado] em [tempo]."\n\n💰 Oferta: [Preço] por [período]. Inclui: [lista rápida].\n\n⏰ Urgência: [Ex: "Essa condição é válida até [data] / Restam X vagas com esse preço."]',
   importance: 'critical',
 };
 
@@ -482,8 +482,8 @@ const CAT_FIT_QUESTIONS: KnowledgeCategory = {
   key: 'fit_questions',
   label: 'Perguntas de Fit',
   description: 'As 1–2 perguntas de qualificação mínima que o bot faz antes de iniciar o pitch.',
-  hint: 'Defina as perguntas que filtram quem tem ou não tem a dor que o produto resolve. O objetivo é confirmar o fit antes de investir no pitch completo — não é uma qualificação profunda.',
-  placeholder: 'Pergunta 1: "[Pergunta que confirma a dor principal]"\nEx: "Você já tentou [solução alternativa] antes?"\n\nPergunta 2 (opcional): "[Pergunta que confirma o perfil]"\nEx: "Você está buscando resultado em quanto tempo?"',
+  hint: 'Defina as 1–2 perguntas que filtram quem de [PÚBLICO] tem ou não tem a dor que [OFERTA] resolve. O objetivo é confirmar o fit antes do pitch — não é uma qualificação profunda.',
+  placeholder: 'Pergunta 1: "[Pergunta que confirma a dor principal de [PÚBLICO]]"\nEx: "Você já tentou [solução alternativa] antes?"\n\nPergunta 2 (opcional): "[Pergunta que confirma o perfil]"\nEx: "Você está buscando resultado em quanto tempo?"',
   importance: 'recommended',
 };
 
@@ -500,8 +500,8 @@ const CAT_PROFESSIONAL_BIO: KnowledgeCategory = {
   key: 'professional_bio',
   label: 'Bio do Profissional',
   description: 'Quem é o profissional, formação, especialidade e o que o torna único.',
-  hint: 'Escreva como o agente deve se apresentar em nome do profissional. Inclua: nome, especialidade, formação relevante, anos de experiência, tipo de cliente atendido, diferencial.',
-  placeholder: '[Nome] é [especialidade] com [X anos] de experiência em [área]. Formado em [formação] e especializado em [nicho específico]. Atende [perfil de cliente] que querem [resultado]. Seu diferencial é [o que o torna único — método, abordagem, resultado recorrente].',
+  hint: 'Escreva como o agente deve se apresentar em nome do profissional que atua em [NICHO]. Inclua: nome, especialidade, formação relevante, anos de experiência, tipo de cliente atendido ([PÚBLICO]), diferencial.',
+  placeholder: '[Nome] é [especialidade] com [X anos] de experiência em [NICHO]. Formado em [formação] e especializado em [área específica]. Atende [PÚBLICO] que querem [resultado]. Seu diferencial é [o que o torna único — método, abordagem, resultado recorrente].',
   importance: 'critical',
 };
 
@@ -509,8 +509,8 @@ const CAT_SOCIAL_PROOF_HYBRID: KnowledgeCategory = {
   key: 'social_proof',
   label: 'Histórias de Transformação',
   description: 'Casos de clientes com perfil similar ao lead, usados no aquecimento antes do agendamento.',
-  hint: 'Escreva 2–3 histórias de transformação com: perfil do cliente (sem nome completo), situação inicial, o que mudou após trabalhar com o profissional, e o resultado em detalhes. O agente as cita naturalmente para aquecer o lead antes de propor o agendamento.',
-  placeholder: 'História 1: [Perfil] — Chegou com [situação inicial]. Depois de [período] trabalhando com [Nome do profissional], [resultado concreto]. Hoje [situação atual].\n\nHistória 2: [Perfil] — [Situação inicial]. O principal avanço foi [resultado específico].',
+  hint: 'Escreva 2–3 histórias de transformação de [PÚBLICO] em [NICHO]: perfil (sem nome completo), situação inicial, o que mudou após trabalhar com o profissional, e o resultado em detalhes. O agente as cita para aquecer o lead antes de propor o agendamento.',
+  placeholder: 'História 1: [PÚBLICO] — Chegou com [situação inicial em [NICHO]]. Depois de [período] trabalhando com [Nome do profissional], [resultado concreto]. Hoje [situação atual].\n\nHistória 2: [perfil similar] — [Situação inicial]. O principal avanço foi [resultado específico].',
   importance: 'critical',
 };
 
@@ -518,8 +518,8 @@ const CAT_SESSION_PREVIEW: KnowledgeCategory = {
   key: 'session_preview',
   label: 'Preview da Sessão',
   description: 'Como funciona a 1ª sessão: duração, formato e o que o lead pode esperar.',
-  hint: 'Descreva a sessão do ponto de vista do lead. O agente usa isso para reduzir ansiedade antes do agendamento e aumentar o comparecimento.',
-  placeholder: 'A sessão dura [X minutos] e acontece [online via Google Meet / presencialmente em X].\nNo encontro, [Nome] vai: 1) Entender sua situação atual, 2) Identificar os principais bloqueios, 3) Mostrar o caminho mais direto para [resultado].\nNão é uma consulta de vendas — é um diagnóstico real. Você sai com [entregável: um plano / clareza sobre os próximos passos / X insight].',
+  hint: 'Descreva a sessão do ponto de vista do lead de [PÚBLICO] em [NICHO]. O agente usa isso para reduzir ansiedade antes do agendamento e aumentar o comparecimento.',
+  placeholder: 'A sessão dura [X minutos] e acontece [online via Google Meet / presencialmente em X].\nNo encontro, [Nome] vai: 1) Entender sua situação em [NICHO], 2) Identificar os principais bloqueios, 3) Mostrar o caminho mais direto para [resultado esperado por [PÚBLICO]].\nNão é uma consulta de vendas — é um diagnóstico real. Você sai com [entregável concreto].',
   importance: 'critical',
 };
 
@@ -527,8 +527,8 @@ const CAT_PAIN_QUESTIONS: KnowledgeCategory = {
   key: 'pain_questions',
   label: 'Roteiro de Perguntas de Dor',
   description: 'Perguntas abertas que o agente usa para aprofundar o problema e compor o briefing ao profissional.',
-  hint: 'Escreva as perguntas que o agente deve fazer para entender o problema do lead. As respostas viram o briefing enviado ao profissional antes da sessão. Foque em perguntas abertas, não binárias.',
-  placeholder: '"Qual é o seu principal desafio em relação a [área] no momento?"\n"Como isso impacta o seu [dia a dia / resultados / bem-estar]?"\n"O que você já tentou fazer para resolver isso?"\n"O que mudaria na sua vida se você resolvesse isso nos próximos 3 meses?"',
+  hint: 'Escreva as perguntas que o agente deve fazer para entender o problema do lead de [PÚBLICO]. As respostas viram o briefing enviado ao profissional antes da sessão. Foque em perguntas abertas, não binárias.',
+  placeholder: '"Qual é o seu principal desafio em relação a [NICHO] no momento?"\n"Como isso impacta o seu [dia a dia / resultados / bem-estar]?"\n"O que você já tentou fazer para resolver isso?"\n"O que mudaria na sua vida se você resolvesse isso nos próximos 3 meses?"',
   importance: 'recommended',
 };
 
@@ -590,7 +590,7 @@ const CAT_WARMING_SCRIPT: KnowledgeCategory = {
   key: 'warming_script',
   label: 'Script de Aquecimento',
   description: 'Texto que conecta a dor do lead com o que o profissional resolve, usado antes de propor o agendamento.',
-  hint: 'Escreva o texto (ou roteiro) que o agente usa para criar conexão emocional e gerar desejo pelo agendamento. Deve soar natural, não como pitch. Use a dor do lead como ponto de partida.',
+  hint: 'Escreva o texto que o agente usa para criar conexão emocional com [PÚBLICO] em [NICHO] e gerar desejo pelo agendamento. Deve soar natural, não como pitch. Use a dor do lead como ponto de partida.',
   placeholder: 'Roteiro de aquecimento:\n\n"[Nome], muitas pessoas que chegam até [profissional] estão passando exatamente pelo que você descreveu — [eco da dor]. O que elas costumam descobrir nas primeiras sessões é que [insight transformador].\n\n[História de transformação resumida — 2 linhas].\n\nA [Nome do profissional] tem uma abordagem diferente para isso: [diferencial do método]. Não é mais do mesmo — é [o que é único].\n\nVocê teria interesse em uma conversa rápida para ver se faz sentido para o seu caso?"',
   importance: 'recommended',
 };

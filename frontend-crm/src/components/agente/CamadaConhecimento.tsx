@@ -4,6 +4,7 @@ import {
   KNOWLEDGE_CATEGORIES_BY_TEMPLATE,
   KNOWLEDGE_IMPORTANCE_LABELS,
   type KnowledgeCategory,
+  type AgentConfig,
 } from '@/types/agente';
 
 // ─── Modal base (shared) ──────────────────────────────────────
@@ -264,6 +265,26 @@ function ModalEditExtra({ item, onClose, onSaved }: { item: KnowledgeItem; onClo
 
 // ─── Funções utilitárias ──────────────────────────────────────
 
+function getPersonalizedCategory(
+  cat: KnowledgeCategory,
+  config: Partial<AgentConfig>,
+): KnowledgeCategory {
+  const niche    = config.niche            || '[nicho do negócio]';
+  const audience = config.target_audience  || '[público-alvo]';
+  const offer    = config.offer_description || '[descrição da oferta]';
+  return {
+    ...cat,
+    hint: cat.hint
+      .replace(/\[NICHO\]/g, niche)
+      .replace(/\[PÚBLICO\]/g, audience)
+      .replace(/\[OFERTA\]/g, offer),
+    placeholder: cat.placeholder
+      .replace(/\[NICHO\]/g, niche)
+      .replace(/\[PÚBLICO\]/g, audience)
+      .replace(/\[OFERTA\]/g, offer),
+  };
+}
+
 const STALE_KEYS = new Set(['urgency_offer', 'cart_recovery_scripts']);
 
 function isStale(item: KnowledgeItem, days = 30): boolean {
@@ -418,7 +439,13 @@ function GuidedSectionCard({
 // Componente principal
 // ─────────────────────────────────────────────────────────────
 
-export function CamadaConhecimento({ templateKey }: { templateKey?: string }) {
+export function CamadaConhecimento({
+  templateKey,
+  agentConfig,
+}: {
+  templateKey?: string;
+  agentConfig?: Partial<AgentConfig>;
+}) {
   const [items, setItems]             = useState<KnowledgeItem[]>([]);
   const [loading, setLoading]         = useState(true);
   const [error, setError]             = useState<string | null>(null);
@@ -430,9 +457,10 @@ export function CamadaConhecimento({ templateKey }: { templateKey?: string }) {
   const [viewItem, setViewItem]       = useState<KnowledgeItem | null>(null);
   const [editExtra, setEditExtra]     = useState<KnowledgeItem | null>(null);
 
-  // Categorias guiadas baseadas no template do agente
-  const guidedCategories: KnowledgeCategory[] =
-    (templateKey && KNOWLEDGE_CATEGORIES_BY_TEMPLATE[templateKey]) || [];
+  // Categorias guiadas baseadas no template do agente, com hints/placeholders personalizados
+  const guidedCategories: KnowledgeCategory[] = (
+    (templateKey && KNOWLEDGE_CATEGORIES_BY_TEMPLATE[templateKey]) || []
+  ).map(cat => getPersonalizedCategory(cat, agentConfig ?? {}));
 
   // Mapa de category → item existente
   const itemByCategory = new Map<string, KnowledgeItem>();
