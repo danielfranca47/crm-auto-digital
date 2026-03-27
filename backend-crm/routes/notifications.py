@@ -21,7 +21,7 @@ def get_unread_notifications(user: CurrentUser = Depends(require_crm_access)):
           ORDER BY n.created_at DESC
              LIMIT 50
             """,
-            (user.user_id,),
+            (user.id,),
         ).fetchall()
     return [dict(r) for r in rows]
 
@@ -35,7 +35,7 @@ def mark_notification_read(
     with get_connection() as conn:
         result = conn.execute(
             "UPDATE notifications SET read = 1 WHERE id = ? AND user_id = ?",
-            (notification_id, user.user_id),
+            (notification_id, user.id),
         )
         conn.commit()
         if result.rowcount == 0:
@@ -49,7 +49,7 @@ def mark_all_read(user: CurrentUser = Depends(require_crm_access)):
     with get_connection() as conn:
         conn.execute(
             "UPDATE notifications SET read = 1 WHERE user_id = ? AND read = 0",
-            (user.user_id,),
+            (user.id,),
         )
         conn.commit()
     return {"ok": True}
