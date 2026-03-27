@@ -501,7 +501,7 @@ export default function AgenteConfiguracao() {
             <div style={{ fontSize: 12.5, color: 'var(--o-sub)', fontWeight: 300, marginBottom: 24 }}>
               Documentos e textos que o agente consulta durante as conversas.
             </div>
-            <CamadaConhecimento templateKey={config.template_key} />
+            <CamadaConhecimento templateKey={config.template_key} agentConfig={config} />
             <div style={{ marginTop: 24 }}>
               <button className="o-btn" onClick={() => navigate('overview')}>← Voltar</button>
             </div>
