@@ -108,15 +108,6 @@ def _format_history(history: list[Dict[str, Any]], limit: int = 10) -> str:
 
 
 _SHORT_REPLIES = {
-    "sim",
-    "nao",
-    "não",
-    "ok",
-    "blz",
-    "beleza",
-    "pode",
-    "claro",
-    "👍",
     "😂",
     "kk",
     "kkk",
