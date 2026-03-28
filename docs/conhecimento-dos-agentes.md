@@ -1,6 +1,6 @@
 # Conhecimento dos Agentes — Referência Oficial
 
-> **Atualizado em:** 2026-03-28
+> **Atualizado em:** 2026-03-28 (sub-modo comercial Agente 03 implementado)
 > **Escopo:** Camada 4 (Conhecimento) do `AgenteConfiguracao.tsx`
 > **Status:** Estrutura implementada e em produção
 
@@ -203,13 +203,56 @@ O wizard também exibe o score de prontidão ao final, com atalho para adicionar
 
 ---
 
-## 7. Sub-modo comercial do Agente 03 (não implementado)
+## 7. Sub-modo comercial do Agente 03
 
-O documento de análise original identificou um segundo sub-modo para o `hybrid_scheduler`: **compromisso comercial**, onde o agente apresenta tabela de preços e fecha escolha de plano/pacote antes de agendar.
+O `hybrid_scheduler` suporta dois modos de operação, selecionável na **Camada 5 (Apresentação)**:
 
-As categorias propostas para esse sub-modo (`service_pricing_table`, `commercial_objections`, `service_differentials`, `active_promotion`, `payment_policy`, `pre_commitment_faq`) e o campo de configuração `appointment_mode` **não foram implementados**. O `hybrid_scheduler` atual opera exclusivamente no modo "sem compromisso" — responde sobre preços se perguntado, mas não conduz a conversa para fechamento de pacote.
+| Modo | Chave | Comportamento |
+|---|---|---|
+| **Agendamento Exploratório** | `exploratory` (padrão) | Aquece com prova social e preview da sessão → propõe agendamento sem compromisso de compra |
+| **Compromisso Comercial** | `commercial` | Apresenta serviços e preços → trata objeções → fecha escolha de pacote → ENTÃO agenda. Pagamento sempre presencial. |
 
-Caso esse sub-modo seja implementado no futuro, o ponto de entrada é adicionar `appointment_mode: 'commercial' | 'exploratory'` na Camada 1 ou 3 e condicionar a exibição das categorias extras na Camada 4.
+### Campo de configuração
+
+O campo `appointment_mode: 'commercial' | 'exploratory'` fica em `AgentConfig` (Camada 1) e é persistido em `ai_profiles.appointment_mode` no backend-core.
+
+### Categorias de conhecimento exclusivas do modo comercial
+
+Quando `appointment_mode === 'commercial'`, a Camada 4 exibe 6 categorias adicionais com divisor visual:
+
+| # | Categoria | Chave | Importância | Por que é necessária |
+|---|---|---|---|---|
+| 1 | **Tabela de Serviços e Preços** | `service_pricing_table` | Crítico | O agente apresenta os serviços disponíveis e valores. Sem isso, pergunta o interesse antes de citar valores. |
+| 2 | **Objeções Comerciais e Respostas** | `commercial_objections` | Crítico | Respostas configuradas para "está caro", "vou pensar", "não preciso agora". Sem isso, o agente usa empatia genérica. |
+| 3 | **Diferenciais do Serviço** | `service_differentials` | Recomendado | Argumentos de diferenciação frente à concorrência ou ao "fazer por conta própria". |
+| 4 | **Condição Especial Vigente** | `active_promotion` | Recomendado | Promoção, bônus ou desconto ativo — cria urgência real. Deve ser atualizado quando a condição mudar. |
+| 5 | **Política de Pagamento Presencial** | `payment_policy` | Recomendado | Formas aceitas, parcelamento, política de entrada. O agente nunca envia link de checkout. |
+| 6 | **FAQ Pré-Compromisso** | `pre_commitment_faq` | Recomendado | Dúvidas frequentes antes de confirmar o pacote: cancelamento, validade, reagendamento. |
+
+### Fluxo executado pelo agente (modo comercial)
+
+```
+1. Qualificação concluída pelo lead
+2. Aquecimento com prova social (campo social_proof ou warming_social_proof)
+3. Apresentação dos serviços/pacotes com preços
+4. Tratamento de objeções conforme respostas configuradas
+5. Confirmação verbal/escrita da escolha de serviço
+6. Proposta de agendamento
+7. Pagamento ocorre presencialmente — nenhum link de checkout é enviado
+```
+
+### Injeção no prompt (backend)
+
+O `decision_engine` detecta `appointment_mode == 'commercial'` e injeta o bloco `MODO COMERCIAL` no prompt de apresentação. Os `knowledge_items` são lidos de `backend-crm` via `executor.py` e incluídos no contexto de execução antes de chegar ao `decision_engine`.
+
+**Arquivos relevantes:**
+- [backend-core/app/db.py](../backend-core/app/db.py) — migração da coluna `appointment_mode`
+- [backend-core/app/api/ai_profiles.py](../backend-core/app/api/ai_profiles.py) — schemas Pydantic
+- [backend-crm/routes/executor.py](../backend-crm/routes/executor.py) — injeção de `knowledge_items` no contexto
+- [backend-executors/app/services/decision_engine.py](../backend-executors/app/services/decision_engine.py) — lógica de `commercial_injection`
+- [frontend-crm/src/types/agente.ts](../frontend-crm/src/types/agente.ts) — `KNOWLEDGE_CATEGORIES_HYBRID_COMMERCIAL`
+- [frontend-crm/src/components/agente/CamadaApresentacao.tsx](../frontend-crm/src/components/agente/CamadaApresentacao.tsx) — seletor `ModalAppointmentMode`
+- [frontend-crm/src/components/agente/CamadaConhecimento.tsx](../frontend-crm/src/components/agente/CamadaConhecimento.tsx) — seção comercial condicional
 
 ---
 
@@ -223,3 +266,6 @@ Caso esse sub-modo seja implementado no futuro, o ponto de entrada é adicionar 
 | [frontend-crm/src/pages/AgenteConfiguracao.tsx](../frontend-crm/src/pages/AgenteConfiguracao.tsx) | Orquestrador — passa `templateKey` e `agentConfig` para `CamadaConhecimento` |
 | [frontend-crm/src/pages/TiposAgentes.tsx](../frontend-crm/src/pages/TiposAgentes.tsx) | Definição dos arquétipos de agente (`AGENTS` array) |
 | [backend-crm/routes/knowledge.py](../backend-crm/routes/knowledge.py) | API CRUD de itens de conhecimento |
+| [backend-crm/routes/executor.py](../backend-crm/routes/executor.py) | Inclui `knowledge_items` no contexto de execução enviado ao `decision_engine` |
+| [backend-executors/app/services/decision_engine.py](../backend-executors/app/services/decision_engine.py) | `_build_child_prompt_apresentation()` — lógica de `commercial_injection` vs `warming_injection` |
+| [frontend-crm/src/components/agente/CamadaApresentacao.tsx](../frontend-crm/src/components/agente/CamadaApresentacao.tsx) | Seletor `ModalAppointmentMode` (exploratory / commercial) |
