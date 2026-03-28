@@ -1045,6 +1045,7 @@ def _build_child_prompt_apresentation(
         "niche": ai_profile.get("niche"),
         "agent_mode": ai_profile.get("agent_mode"),
         "timezone": ai_profile.get("timezone"),
+        "appointment_mode": ai_profile.get("appointment_mode"),
     }
     playbook_summary = {
         "template_key": playbook.get("template_key") or playbook.get("name"),
@@ -1074,22 +1075,59 @@ def _build_child_prompt_apresentation(
         "e sair com um plano de ação claro para você."
     )
     template_key_for_warming = str(ai_profile.get("template_key") or "").strip().lower()
+    appointment_mode = str(ai_profile.get("appointment_mode") or "exploratory").strip().lower()
+    knowledge_items = context.get("knowledge_items") or {}
     warming_injection = ""
+    commercial_injection = ""
     if (
         template_key_for_warming == "hybrid_scheduler"
         and mother_decision.route_to == "qualification"
         and not mode_contract.get("missing_fields")
     ):
-        social_proof = str(ai_profile.get("warming_social_proof") or "").strip() or _DEFAULT_SOCIAL_PROOF
-        session_preview = str(ai_profile.get("warming_session_preview") or "").strip() or _DEFAULT_SESSION_PREVIEW
-        warming_injection = (
-            "\n- ESTÁGIO WARMING (pós-qualificação aprovada para hybrid_scheduler): "
-            "O lead acabou de concluir a qualificação. Antes de propor o agendamento, execute os 2 passos de aquecimento em UMA mensagem natural:\n"
-            f"  1. PROVA SOCIAL: {social_proof}\n"
-            f"  2. PRÉVIA DA SESSÃO: {session_preview}\n"
-            "  Combine os 2 passos de forma fluida e, ao final, proponha o agendamento da sessão.\n"
-            "  Não mencione os termos 'prova social' ou 'prévia da sessão' explicitamente — use linguagem natural.\n"
-        )
+        if appointment_mode == "commercial":
+            # Modo comercial: apresentar serviços/preços, tratar objeções, fechar compromisso, DEPOIS agendar.
+            # Pagamento sempre presencial — nunca enviar link de checkout.
+            social = (
+                knowledge_items.get("social_proof")
+                or str(ai_profile.get("warming_social_proof") or "").strip()
+            )
+            pricing       = knowledge_items.get("service_pricing_table", "")
+            objections    = knowledge_items.get("commercial_objections", "")
+            differentials = knowledge_items.get("service_differentials", "")
+            promotion     = knowledge_items.get("active_promotion", "")
+            payment       = knowledge_items.get("payment_policy", "")
+            faq_commit    = knowledge_items.get("pre_commitment_faq", "")
+            commercial_injection = (
+                "\n- MODO COMERCIAL (hybrid_scheduler — compromisso antes do agendamento):\n"
+                "  O lead concluiu a qualificação. Seu objetivo neste turno e nos seguintes é:\n"
+                "  1. Aquecer com prova social (se disponível)\n"
+                "  2. Apresentar os serviços/pacotes disponíveis com clareza\n"
+                "  3. Tratar objeções conforme as respostas configuradas\n"
+                "  4. Obter o compromisso verbal/escrito do lead com um serviço ou pacote específico\n"
+                "  5. SÓ ENTÃO propor o agendamento\n"
+                "  REGRA CRÍTICA: o pagamento é SEMPRE presencial na marcação — NUNCA envie link de checkout.\n"
+                "  Não mencione modalidade 'exploratória' ou 'diagnóstico gratuito' — a sessão já tem valor definido.\n"
+                f"  PROVA SOCIAL: {social or '(não configurada — use tom acolhedor e destaque o diferencial do profissional)'}\n"
+                f"  TABELA DE SERVIÇOS/PREÇOS: {pricing or '(não configurada — pergunte o interesse antes de citar valores)'}\n"
+                f"  OBJEÇÕES E RESPOSTAS: {objections or '(não configurada — use empatia e reformule o valor entregue)'}\n"
+                + (f"  DIFERENCIAIS DO SERVIÇO: {differentials}\n" if differentials else "")
+                + (f"  CONDIÇÃO ESPECIAL VIGENTE: {promotion}\n" if promotion else "")
+                + (f"  POLÍTICA DE PAGAMENTO PRESENCIAL: {payment}\n" if payment else "")
+                + (f"  FAQ PRÉ-COMPROMISSO: {faq_commit}\n" if faq_commit else "")
+                + "  Após o lead confirmar a escolha de serviço/pacote, proponha o agendamento normalmente.\n"
+            )
+        else:
+            # Modo exploratório (padrão): aquecer e propor sessão sem compromisso de compra.
+            social_proof = str(ai_profile.get("warming_social_proof") or "").strip() or _DEFAULT_SOCIAL_PROOF
+            session_preview = str(ai_profile.get("warming_session_preview") or "").strip() or _DEFAULT_SESSION_PREVIEW
+            warming_injection = (
+                "\n- ESTÁGIO WARMING (pós-qualificação aprovada para hybrid_scheduler): "
+                "O lead acabou de concluir a qualificação. Antes de propor o agendamento, execute os 2 passos de aquecimento em UMA mensagem natural:\n"
+                f"  1. PROVA SOCIAL: {social_proof}\n"
+                f"  2. PRÉVIA DA SESSÃO: {session_preview}\n"
+                "  Combine os 2 passos de forma fluida e, ao final, proponha o agendamento da sessão.\n"
+                "  Não mencione os termos 'prova social' ou 'prévia da sessão' explicitamente — use linguagem natural.\n"
+            )
 
     return (
         "Você é a FILHA APRESENTATION e deve responder SOMENTE JSON válido:\n"
@@ -1133,7 +1171,7 @@ def _build_child_prompt_apresentation(
         "- Mídia rica: se offer_pack_summary.media_url estiver preenchido, a mídia já será enviada automaticamente antes deste texto. NÃO mencione 'veja a imagem/vídeo' — assuma que o lead já recebeu e escreva o texto do pitch como sequência natural.\n"
         "- Se offer_pack_summary.anchor_price estiver preenchido, use o preço âncora no pitch (ex: 'De R$997 por apenas R$X').\n"
         "- Se offer_pack_summary.guarantee_text estiver preenchido, inclua a garantia na mensagem (ex: 'Com 7 dias de garantia').\n"
-        f"{warming_injection}"
+        f"{commercial_injection if commercial_injection else warming_injection}"
         "Exemplos rápidos (sales):\n"
         "- EXEMPLO CONFIRMAR: message_text='Plano Starter por R$X com suporte Y. Quer seguir com a contratação?'\n"
         "  signals_structured={offer_presented:true, checkout_sent:false, presentation_variant:'sales', offer_item_name:'Plano Starter'}\n"
@@ -1156,6 +1194,7 @@ def _build_child_prompt_apresentation(
         f"- hybrid_flow_style: {hybrid_flow_style or ''}\n"
         f"- offer_pack_summary: {json.dumps(offer_pack_summary, ensure_ascii=False)}\n"
         f"- warming_stage_active: {bool(warming_injection)}\n"
+        f"- commercial_mode_active: {bool(commercial_injection)}\n"
         f"- inbound_message_text: {message_text}\n"
     )
 

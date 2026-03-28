@@ -52,6 +52,7 @@ class AIProfile(Base):
     calendar_integration = Column(String, nullable=True, server_default="none")
     warming_social_proof = Column(String, nullable=True)
     warming_session_preview = Column(String, nullable=True)
+    appointment_mode = Column(String, nullable=True, server_default="exploratory")
     created_at = Column(DateTime, server_default=func.now(), nullable=False, default=datetime.utcnow)
     updated_at = Column(
         DateTime, server_default=func.now(), onupdate=func.now(), nullable=False, default=datetime.utcnow

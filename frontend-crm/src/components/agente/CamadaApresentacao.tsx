@@ -77,6 +77,30 @@ function DrawerBriefing({ config, onSave, onClose }: {
   );
 }
 
+// ─── Modal: Modo de operação do agendamento ──────────────────
+function ModalAppointmentMode({ value, onSave, onClose }: { value: string; onSave: (v: string) => void; onClose: () => void }) {
+  const [local, setLocal] = useState(value);
+  const opts = [
+    {
+      v: 'exploratory',
+      label: 'Agendamento Exploratório',
+      desc: 'O lead agenda uma sessão de diagnóstico ou consulta sem compromisso de compra. O pagamento (se houver) acontece presencialmente na marcação após a sessão.',
+    },
+    {
+      v: 'commercial',
+      label: 'Compromisso Comercial',
+      desc: 'O agente apresenta serviços e preços, trata objeções e fecha a escolha de um pacote antes de agendar. O pagamento é sempre presencial na marcação — nenhum link de checkout é enviado.',
+    },
+  ];
+  return (
+    <ModalBase title="Modo de operação" sub="Como o agente conduz o lead após a qualificação" onClose={onClose} onSave={() => onSave(local)}>
+      {opts.map(o => (
+        <OptCard key={o.v} selected={local === o.v} onClick={() => setLocal(o.v)} label={o.label} desc={o.desc} />
+      ))}
+    </ModalBase>
+  );
+}
+
 // ─── Modal: Integração de calendário ─────────────────────────
 function ModalCalendario({ value, onSave, onClose }: { value: string; onSave: (v: string) => void; onClose: () => void }) {
   const [local, setLocal] = useState(value);
@@ -104,13 +128,19 @@ function ModalCalendario({ value, onSave, onClose }: { value: string; onSave: (v
 // ─────────────────────────────────────────────────────────────
 
 type DrawerKey = 'lembretes' | 'briefing' | null;
-type ModalKey  = 'calendario' | null;
+type ModalKey  = 'calendario' | 'modoOperacao' | null;
+
+const APPOINTMENT_MODE_LABELS: Record<string, string> = {
+  exploratory: 'Agendamento Exploratório',
+  commercial:  'Compromisso Comercial',
+};
 
 export function CamadaApresentacao({ config, onUpdate }: CamadaApresentacaoProps) {
   const [drawer, setDrawer] = useState<DrawerKey>(null);
   const [modal, setModal]   = useState<ModalKey>(null);
 
   const lembretes = `${config.appointment_reminder_h1}h e ${config.appointment_reminder_h2}h antes`;
+  const apptModeLabel = APPOINTMENT_MODE_LABELS[config.appointment_mode] || 'Agendamento Exploratório';
   const briefingLabel = config.briefing_enabled
     ? `${BRIEFING_CHANNEL_LABELS[config.briefing_channel] || config.briefing_channel} · ${config.briefing_lead_time}h antes`
     : 'Desativado';
@@ -118,6 +148,22 @@ export function CamadaApresentacao({ config, onUpdate }: CamadaApresentacaoProps
 
   return (
     <>
+      {/* Seção: Modo de operação */}
+      <div className="o-section-hdr">
+        <span className="font-mono-orion" style={{ fontSize: 9, letterSpacing: '2.5px', textTransform: 'uppercase', color: 'var(--o-sub)' }}>
+          Modo de operação
+        </span>
+      </div>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 14, marginBottom: 24 }}>
+        <EditCard
+          label="Objetivo do agendamento"
+          value={apptModeLabel}
+          sub="Como o agente conduz o lead após qualificar"
+          onClick={() => setModal('modoOperacao')}
+          status="ok"
+        />
+      </div>
+
       {/* Seção: Lembretes */}
       <div className="o-section-hdr">
         <span className="font-mono-orion" style={{ fontSize: 9, letterSpacing: '2.5px', textTransform: 'uppercase', color: 'var(--o-sub)' }}>
@@ -189,6 +235,13 @@ export function CamadaApresentacao({ config, onUpdate }: CamadaApresentacaoProps
       )}
 
       {/* Modais */}
+      {modal === 'modoOperacao' && (
+        <ModalAppointmentMode
+          value={config.appointment_mode || 'exploratory'}
+          onClose={() => setModal(null)}
+          onSave={v => { onUpdate({ appointment_mode: v as 'commercial' | 'exploratory' }); setModal(null); }}
+        />
+      )}
       {modal === 'calendario' && (
         <ModalCalendario
           value={config.calendar_integration}

@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { api, type KnowledgeItem } from '@/services/api';
 import {
   KNOWLEDGE_CATEGORIES_BY_TEMPLATE,
+  KNOWLEDGE_CATEGORIES_HYBRID_COMMERCIAL,
   KNOWLEDGE_IMPORTANCE_LABELS,
   type KnowledgeCategory,
   type AgentConfig,
@@ -460,11 +461,23 @@ export function CamadaConhecimento({
   const [editExtra, setEditExtra]     = useState<KnowledgeItem | null>(null);
 
   // Categorias brutas (sem personalização) — usadas pelo wizard
-  const rawGuidedCategories: KnowledgeCategory[] =
+  const rawBaseCategories: KnowledgeCategory[] =
     (templateKey && KNOWLEDGE_CATEGORIES_BY_TEMPLATE[templateKey]) || [];
 
+  // Categorias comerciais extras (somente para hybrid_scheduler em modo commercial)
+  const commercialCategories: KnowledgeCategory[] =
+    templateKey === 'hybrid_scheduler' && agentConfig?.appointment_mode === 'commercial'
+      ? KNOWLEDGE_CATEGORIES_HYBRID_COMMERCIAL
+      : [];
+
+  // Todas as categorias brutas (base + comercial, se aplicável) — usadas pelo wizard
+  const rawGuidedCategories: KnowledgeCategory[] = [...rawBaseCategories, ...commercialCategories];
+
   // Categorias guiadas baseadas no template do agente, com hints/placeholders personalizados
-  const guidedCategories: KnowledgeCategory[] = rawGuidedCategories
+  const guidedCategories: KnowledgeCategory[] = rawBaseCategories
+    .map(cat => getPersonalizedCategory(cat, agentConfig ?? {}));
+
+  const guidedCommercialCategories: KnowledgeCategory[] = commercialCategories
     .map(cat => getPersonalizedCategory(cat, agentConfig ?? {}));
 
   // Mapa de category → item existente
@@ -474,11 +487,16 @@ export function CamadaConhecimento({
   }
 
   // Itens "extras" — sem categoria guiada (ou com categoria desconhecida)
-  const guidedCategoryKeys = new Set(guidedCategories.map(c => c.key));
+  const allGuidedKeys = new Set([
+    ...guidedCategories.map(c => c.key),
+    ...guidedCommercialCategories.map(c => c.key),
+  ]);
+  const guidedCategoryKeys = allGuidedKeys;
   const extraItems = items.filter(i => !i.category || !guidedCategoryKeys.has(i.category));
 
-  // Score de prontidão
-  const readinessLevel = getReadinessLevel(guidedCategories, itemByCategory);
+  // Score de prontidão (considera todas as categorias guiadas incluindo as comerciais)
+  const allGuidedForReadiness = [...guidedCategories, ...guidedCommercialCategories];
+  const readinessLevel = getReadinessLevel(allGuidedForReadiness, itemByCategory);
   const readiness = READINESS_CONFIG[readinessLevel];
 
   async function load() {
@@ -567,7 +585,7 @@ export function CamadaConhecimento({
             </span>
           </div>
 
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 32 }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: guidedCommercialCategories.length > 0 ? 16 : 32 }}>
             {guidedCategories.map(cat => (
               <GuidedSectionCard
                 key={cat.key}
@@ -583,6 +601,36 @@ export function CamadaConhecimento({
               />
             ))}
           </div>
+
+          {/* Seção comercial — somente para hybrid_scheduler em modo commercial */}
+          {guidedCommercialCategories.length > 0 && (
+            <>
+              <div className="o-section-hdr" style={{ marginBottom: 12 }}>
+                <span className="font-mono-orion" style={{ fontSize: 9, letterSpacing: '2.5px', textTransform: 'uppercase', color: 'var(--o-sub)' }}>
+                  Compromisso comercial
+                </span>
+                <span style={{ fontSize: 11, color: 'var(--o-dim)', fontWeight: 300, marginLeft: 8 }}>
+                  — preenchimento necessário para o modo comercial
+                </span>
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 32 }}>
+                {guidedCommercialCategories.map(cat => (
+                  <GuidedSectionCard
+                    key={cat.key}
+                    category={cat}
+                    item={itemByCategory.get(cat.key) ?? null}
+                    onFill={() => setGuidedModal(cat)}
+                    onView={() => setViewItem(itemByCategory.get(cat.key) ?? null)}
+                    onDelete={() => {
+                      const it = itemByCategory.get(cat.key);
+                      if (it) handleDelete(it.id);
+                    }}
+                    deleting={deleting === (itemByCategory.get(cat.key)?.id ?? -1)}
+                  />
+                ))}
+              </div>
+            </>
+          )}
         </>
       )}
 

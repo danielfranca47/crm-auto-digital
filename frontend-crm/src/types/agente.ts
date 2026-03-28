@@ -114,6 +114,7 @@ export interface AgentConfig {
   followup_allowed_hours: string;
 
   // ── Apresentação e agendamento ───────────────────────────
+  appointment_mode: 'commercial' | 'exploratory';
   appointment_reminder_h1: number;
   appointment_reminder_h2: number;
   briefing_enabled: boolean;
@@ -191,6 +192,7 @@ export const DEFAULT_AGENT_CONFIG: AgentConfig = {
   followup_cadence: '60,1440,4320',
   followup_allowed_hours: '08:00-20:00',
 
+  appointment_mode: 'exploratory',
   appointment_reminder_h1: 24,
   appointment_reminder_h2: 2,
   briefing_enabled: false,
@@ -612,6 +614,71 @@ const CAT_REFERRAL_SCRIPT: KnowledgeCategory = {
   placeholder: '"[Nome], fico feliz que a sessão tenha sido proveitosa! Uma coisa que ajuda muito [Nome do profissional] a ajudar mais pessoas é a indicação de quem já viveu a experiência.\n\nSe você conhece alguém que está passando por [dor / situação similar], eu adoraria bater um papo com essa pessoa. Pode ser uma mensagem simples apresentando a [Nome do profissional].\n\nE se quiser, posso preparar uma mensagem pronta para você encaminhar — leva 30 segundos. O que acha?"',
   importance: 'optional',
 };
+
+// ─── Categorias comerciais do hybrid_scheduler (sub-modo 'commercial') ───────
+
+const CAT_SERVICE_PRICING_TABLE: KnowledgeCategory = {
+  key: 'service_pricing_table',
+  label: 'Tabela de Serviços e Preços',
+  description: 'Lista de serviços, pacotes e valores que o agente pode apresentar ao lead.',
+  hint: 'Liste todos os serviços e pacotes disponíveis com seus respectivos valores. O agente usará essas informações para apresentar opções ao lead de [PÚBLICO] em [NICHO] e conduzir a escolha de um serviço antes de agendar.',
+  placeholder: 'Sessão avulsa — [duração]: R$ [valor]\nPacote [X] sessões: R$ [valor] (economia de [%])\nPacote [Y] sessões: R$ [valor]\n\nSe houver diferença entre modalidades (ex: presencial vs. online), especifique aqui também.',
+  importance: 'critical',
+};
+
+const CAT_COMMERCIAL_OBJECTIONS: KnowledgeCategory = {
+  key: 'commercial_objections',
+  label: 'Objeções Comerciais e Respostas',
+  description: 'Respostas prontas para objeções de preço e comprometimento que surgem antes de fechar o pacote.',
+  hint: 'Liste as objeções mais comuns de [PÚBLICO] antes de fechar um pacote em [NICHO] e a resposta ideal para cada uma. O agente usa isso para tratar objeções e manter o lead avançando rumo ao compromisso.',
+  placeholder: '"Está caro" → [Resposta que reformula o valor entregue e compara com o custo do problema não resolvido]\n"Vou pensar" → [Resposta que cria urgência real ou remove o risco da decisão]\n"Deixa eu ver minha agenda" → [Resposta que acelera o comprometimento propondo uma data imediatamente]\n"Não tenho certeza se vai funcionar pra mim" → [Resposta com prova social de perfil similar]',
+  importance: 'critical',
+};
+
+const CAT_SERVICE_DIFFERENTIALS: KnowledgeCategory = {
+  key: 'service_differentials',
+  label: 'Diferenciais do Serviço',
+  description: 'Por que escolher este profissional vs. alternativas. Usado quando o lead compara ou questiona.',
+  hint: 'Descreva o que torna este serviço em [NICHO] único: técnica, formação, ambiente, resultados comprovados, abordagem. O agente usa isso quando o lead menciona comparar com outro profissional ou questionar o diferencial.',
+  placeholder: 'Técnica: [método ou abordagem exclusiva]\nFormação: [certificações, especializações relevantes para [PÚBLICO]]\nAmbiente: [localização, estrutura, comodidades]\nResultados: [métricas ou histórico comprovável]\nDiferencial central: [o que nenhum concorrente entrega da mesma forma]',
+  importance: 'recommended',
+};
+
+const CAT_ACTIVE_PROMOTION: KnowledgeCategory = {
+  key: 'active_promotion',
+  label: 'Condição Especial Vigente',
+  description: 'Desconto, bônus ou condição limitada atual. Atualizar sempre que a promoção mudar.',
+  hint: 'Descreva a condição especial ativa no momento (se houver). O agente só cita se for real — não inventa urgência. Mantenha atualizado: quando a promoção terminar, remova ou edite este conteúdo.',
+  placeholder: 'Condição vigente até [data]: [descrição da promoção — ex: "pacote de 4 sessões por R$X (antes R$Y)" ou "bônus de sessão extra para quem fechar até sexta"]\n\nRegra de comunicação: mencionar apenas se o lead estiver em dúvida entre fechar ou esperar.',
+  importance: 'recommended',
+};
+
+const CAT_PAYMENT_POLICY: KnowledgeCategory = {
+  key: 'payment_policy',
+  label: 'Política de Pagamento Presencial',
+  description: 'Formas de pagamento aceitas na marcação e regras de sinal ou entrada.',
+  hint: 'Informe como o pagamento funciona na prática. O agente comunica isso ao lead após fechar o compromisso, para que ele chegue preparado.',
+  placeholder: 'Formas aceitas: [Pix / Dinheiro / Cartão de débito ou crédito — especificar quais]\nSinal para reservar vaga: [valor ou percentual, se aplicável]\nPagamento integral: na chegada, antes da sessão.\n\nObs: nenhum link de pagamento digital é enviado — tudo presencialmente.',
+  importance: 'recommended',
+};
+
+const CAT_PRE_COMMITMENT_FAQ: KnowledgeCategory = {
+  key: 'pre_commitment_faq',
+  label: 'FAQ Pré-Compromisso',
+  description: 'Perguntas frequentes antes de fechar o pacote: vigência, pausa, transferência.',
+  hint: 'Antecipe as dúvidas que travam o "sim" final de [PÚBLICO]. O agente responde com essas informações durante a negociação.',
+  placeholder: '"As sessões do pacote vencem?" → [Resposta]\n"Posso pausar ou trancar o pacote?" → [Resposta]\n"Consigo transferir para outra pessoa?" → [Resposta]\n"E se eu não gostar da primeira sessão?" → [Política de reembolso ou garantia]\n"Posso parcelar no cartão?" → [Resposta]',
+  importance: 'recommended',
+};
+
+export const KNOWLEDGE_CATEGORIES_HYBRID_COMMERCIAL: KnowledgeCategory[] = [
+  CAT_SERVICE_PRICING_TABLE,
+  CAT_COMMERCIAL_OBJECTIONS,
+  CAT_SERVICE_DIFFERENTIALS,
+  CAT_ACTIVE_PROMOTION,
+  CAT_PAYMENT_POLICY,
+  CAT_PRE_COMMITMENT_FAQ,
+];
 
 export const KNOWLEDGE_CATEGORIES_BY_TEMPLATE: Record<string, KnowledgeCategory[]> = {
   sdr_padrao: [

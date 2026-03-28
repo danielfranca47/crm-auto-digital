@@ -155,6 +155,7 @@ class AIProfileBase(BaseModel):
     payment_gateway: Optional[str] = None
     warming_social_proof: Optional[str] = None
     warming_session_preview: Optional[str] = None
+    appointment_mode: Optional[str] = None
 
 
 class AIProfileCreate(AIProfileBase):
@@ -200,6 +201,7 @@ class AIProfileUpdate(BaseModel):
     payment_gateway: Optional[str] = None
     warming_social_proof: Optional[str] = None
     warming_session_preview: Optional[str] = None
+    appointment_mode: Optional[str] = None
 
 
 class AIProfileOut(AIProfileBase):
