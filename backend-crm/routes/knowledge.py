@@ -1,14 +1,45 @@
 # routes/knowledge.py
+import logging
+import os
 import uuid
 from datetime import datetime
 from pathlib import Path
 
+import httpx
 import pandas as pd
-from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
+from fastapi import APIRouter, BackgroundTasks, Depends, File, HTTPException, UploadFile
 
+from core_client import fetch_core_ai_profile_resolve
 from database import get_connection
 from models import KnowledgeCreate, KnowledgeItemOut, KnowledgeUpdate
 from security_core import CurrentUser, require_crm_access
+
+logger = logging.getLogger(__name__)
+
+
+def _trigger_meta_prompter_for_knowledge(user_id: int) -> None:
+    """Fire-and-forget: regenera os blocos de prompt após edição de objections_faq."""
+    base = os.getenv("EXECUTORS_BASE_URL", "").rstrip("/")
+    token = os.getenv("CORE_SERVICE_TOKEN")
+    if not base or not token:
+        logger.debug("meta_prompter knowledge trigger ignorado: EXECUTORS_BASE_URL ou CORE_SERVICE_TOKEN ausente")
+        return
+    try:
+        ai_profile = fetch_core_ai_profile_resolve(user_id)
+    except Exception as exc:
+        logger.warning("meta_prompter knowledge trigger: falha ao resolver ai_profile user_id=%s: %s", user_id, exc)
+        return
+    if not ai_profile:
+        return
+    url = f"{base}/api/meta-prompter/generate/{user_id}"
+    headers = {"X-Service-Token": token, "Content-Type": "application/json"}
+    try:
+        with httpx.Client(timeout=5.0) as client:
+            resp = client.post(url, headers=headers, json={"ai_profile": ai_profile})
+        if not resp.is_success:
+            logger.warning("meta_prompter knowledge trigger falhou user_id=%s status=%s", user_id, resp.status_code)
+    except Exception as exc:
+        logger.warning("meta_prompter knowledge trigger erro user_id=%s: %s", user_id, exc)
 
 router = APIRouter(prefix="/api/knowledge", tags=["Knowledge"])
 
@@ -113,6 +144,7 @@ async def create_manual_item(
 async def update_item(
     item_id: int,
     payload: KnowledgeUpdate,
+    background_tasks: BackgroundTasks,
     current_user: CurrentUser = Depends(require_crm_access),
 ):
     conn = get_connection()
@@ -155,9 +187,16 @@ async def update_item(
             (item_id, current_user.id),
         )
         row = cur.fetchone()
-        return _row_to_item(row)
+        result = _row_to_item(row)
     finally:
         conn.close()
+
+    # Trigger 3: edição de objections_faq → regenerar blocos de prompt
+    effective_category = payload.category if payload.category is not None else (existing["category"] if hasattr(existing, "__getitem__") else None)
+    if effective_category == "objections_faq" and payload.content_text is not None:
+        background_tasks.add_task(_trigger_meta_prompter_for_knowledge, current_user.id)
+
+    return result
 
 
 @router.delete("/{item_id}")

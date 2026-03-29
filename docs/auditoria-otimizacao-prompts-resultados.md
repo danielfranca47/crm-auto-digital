@@ -28,7 +28,7 @@
 | 3 | 3.1 — Tabela de prioridade de sinais na Mãe | ✅ Implementado |
 | 3 | 3.2 — Chain-of-thought implícito na Mãe | ✅ Implementado |
 | 3 | 3.3 — Validação semântica de output | ✅ Implementado |
-| 4 | 4.1 — Backend: Serviço Meta-Prompter | ⚠️ Parcialmente implementado |
+| 4 | 4.1 — Backend: Serviço Meta-Prompter + Triggers | ✅ Implementado |
 | 4 | 4.2 — Injeção dos blocos no decision_engine | ✅ Implementado |
 | 4 | 4.3 — Cenários dinâmicos de outreach (llm.py) | ✅ Implementado |
 
@@ -115,23 +115,38 @@ O `standard_knowledge_block` é injectado no prompt entre a secção `ROTA MÃE`
 
 ---
 
-### 🟠 BUG 3 — Triggers de regeneração do meta-prompter não implementados
+### ✅ BUG 3 — Triggers de regeneração do meta-prompter (corrigido em 2026-03-29)
 
-**Arquivos afetados:** `backend-core/app/api/ai_profiles.py`, `backend-core` (rotas de onboarding)
+**Arquivos afetados:** `backend-core/app/api/ai_profiles.py`, `backend-core/app/config.py`, `backend-crm/routes/knowledge.py`
 
-**Problema:**
-A spec define 3 triggers automáticos para regenerar `generated_prompt_parts`:
+**Problema (corrigido):**
+A spec define 3 triggers automáticos para regenerar `generated_prompt_parts`. Nenhum estava implementado:
 
 | Trigger | Implementado? |
 |---|---|
-| Onboarding finalizado (wizard completo) | ❌ |
-| Edição de `niche`, `target_audience`, `tone_of_voice` ou `offer_description` | ❌ |
-| Edição de `objections_faq` no knowledge base | ❌ |
-| Botão manual no frontend | ❌ (endpoint existe mas sem integração frontend) |
+| Onboarding finalizado (wizard completo) | ✅ |
+| Edição de `niche`, `target_audience`, `tone_of_voice` ou `offer_description` | ✅ |
+| Edição de `objections_faq` no knowledge base | ✅ |
+| Botão manual no frontend | ❌ (endpoint existe mas sem integração frontend — fora de escopo) |
 
-O endpoint `POST /api/meta-prompter/generate/{user_id}` existe no `backend-executors`, e o backend-core tem o `PATCH /ai-profiles/{user_id}/generated-prompt-parts` para persistir. Mas **nenhum trigger automático** chama o endpoint quando os campos relevantes mudam. O campo `generated_prompt_parts` permanecerá `null` para todos os utilizadores existentes e futuros até ser integrado nos fluxos de onboarding e edição do ai_profile.
+**Correção aplicada:**
 
-**Impacto:** A Fase 4 completa (meta-prompter dinâmico) está operacional em código, mas **inativa em produção** pois `generated_prompt_parts` nunca é preenchido automaticamente. As filhas do decision_engine têm o `_inject_generated_parts()` funcional, mas sem dados para injetar, o comportamento é idêntico ao pré-Fase 4.
+**1. `backend-core/app/config.py`** — nova variável `EXECUTORS_BASE_URL: Optional[str] = None` para apontar ao backend-executors.
+
+**2. `backend-core/app/api/ai_profiles.py`** — adicionados:
+- Constante `_META_PROMPTER_FIELDS = {"niche", "target_audience", "tone_of_voice", "offer_description"}`.
+- Helper `_profile_to_meta_dict(profile)` — serializa os campos relevantes do ORM para dict (sem depender de `orm_mode` completo).
+- Helper `_trigger_meta_prompter_bg(user_id, ai_profile_data)` — fire-and-forget via `httpx` para `POST /api/meta-prompter/generate/{user_id}` no backend-executors (usando `EXECUTORS_BASE_URL` + `CORE_SERVICE_TOKEN`). Erros são logados como warning, nunca propagados.
+- **Trigger 1 (onboarding):** `POST /ai-profiles` aceita agora `BackgroundTasks` e agenda `_trigger_meta_prompter_bg` após criação do perfil.
+- **Trigger 2 (edição de campos):** `PUT /ai-profiles/me` aceita agora `BackgroundTasks` e agenda `_trigger_meta_prompter_bg` se a intersecção entre os campos do payload e `_META_PROMPTER_FIELDS` não for vazia.
+
+**3. `backend-crm/routes/knowledge.py`** — adicionados:
+- Helper `_trigger_meta_prompter_for_knowledge(user_id)` — resolve o `ai_profile` do utilizador via `fetch_core_ai_profile_resolve` (service-to-service) e chama `POST /api/meta-prompter/generate/{user_id}` no backend-executors. Usa env vars `EXECUTORS_BASE_URL` + `CORE_SERVICE_TOKEN`.
+- **Trigger 3 (objections_faq):** `PUT /{item_id}` aceita agora `BackgroundTasks` e agenda `_trigger_meta_prompter_for_knowledge` quando `category == "objections_faq"` (efectiva, i.e. a do item existente ou a nova passada no payload) **e** `content_text` foi incluído no payload.
+
+**Padrão de execução:** todos os triggers são `background_tasks.add_task(...)` — não bloqueiam a resposta ao utilizador. O meta-prompter corre assincronamente e persiste `generated_prompt_parts` no core via `PATCH /ai-profiles/{user_id}/generated-prompt-parts`.
+
+**Resultado:** `generated_prompt_parts` passa a ser preenchido automaticamente nos 3 fluxos críticos. A Fase 4 do meta-prompter dinâmico está agora completamente operacional end-to-end em produção.
 
 ---
 
@@ -210,8 +225,8 @@ A fonte de verdade desses campos está em `backend-executors/app/contracts/quali
 - **3.2**: Chain-of-thought implícito com 4 perguntas antes do schema de output (linhas 881–885).
 - **3.3**: `_build_validation_block()` centralizado (linhas 128–137), aplicado em todas as filhas: qualification (1169), apresentation (1401), follow-up (1644), closing (1742).
 
-### FASE 4 ✅/⚠️
+### FASE 4 ✅
 
-- **4.1**: `meta_prompter.py` com `generate_prompt_parts()`, `save_prompt_parts_to_core()`, `generate_and_save()`. Schema de DB migrado (3 novas colunas em `ai_profiles`). Endpoint `POST /api/meta-prompter/generate/{user_id}` criado. Faltam apenas os triggers automáticos (ver Bug 3).
+- **4.1**: `meta_prompter.py` com `generate_prompt_parts()`, `save_prompt_parts_to_core()`, `generate_and_save()`. Schema de DB migrado (3 novas colunas em `ai_profiles`). Endpoint `POST /api/meta-prompter/generate/{user_id}` criado. Triggers automáticos implementados (ver Bug 3 corrigido): onboarding via `POST /ai-profiles`, edição de campos críticos via `PUT /ai-profiles/me`, edição de `objections_faq` via `PUT /api/knowledge/{item_id}`.
 - **4.2**: `_inject_generated_parts()` implementado (linhas 139–193). Chamado correctamente nas 4 filhas específicas. `generated_prompt_parts` propagado via `executor.py` → `decision_engine`.
 - **4.3**: `llm.py` usa `outreach_scenarios` dinâmicos quando disponíveis, com fallback correcto para cenários legados `no_site/weak_site/decent_site` (linhas 76–84).

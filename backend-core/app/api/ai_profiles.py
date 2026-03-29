@@ -1,12 +1,16 @@
 import json
+import logging
 import secrets as secrets_module
 from datetime import datetime
 from enum import Enum
-from typing import List, Optional
+from typing import Any, Dict, List, Optional
 
-from fastapi import APIRouter, Depends, Header, HTTPException, status
+import httpx
+from fastapi import APIRouter, BackgroundTasks, Depends, Header, HTTPException, status
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
+
+logger = logging.getLogger(__name__)
 
 from app import models
 from app.config import settings
@@ -233,6 +237,41 @@ def _validate_template_key(template_key: Optional[str]) -> None:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid template_key")
 
 
+# Campos cujas alterações disparam regeneração do meta-prompter
+_META_PROMPTER_FIELDS = {"niche", "target_audience", "tone_of_voice", "offer_description"}
+
+
+def _profile_to_meta_dict(profile: models.AIProfile) -> dict:
+    """Extrai os campos relevantes para o meta-prompter do perfil ORM."""
+    return {
+        "niche": profile.niche,
+        "target_audience": profile.target_audience,
+        "tone_of_voice": profile.tone_of_voice,
+        "offer_description": profile.offer_description,
+        "template_key": profile.template_key,
+        "agent_mode": str(profile.agent_mode.value) if profile.agent_mode else None,
+        "objection_common": getattr(profile, "objection_common", None),
+    }
+
+
+def _trigger_meta_prompter_bg(user_id: int, ai_profile_data: dict) -> None:
+    """Fire-and-forget: chama o backend-executors para regenerar os blocos de prompt."""
+    base = (settings.EXECUTORS_BASE_URL or "").rstrip("/")
+    token = settings.CORE_SERVICE_TOKEN
+    if not base or not token:
+        logger.debug("meta_prompter trigger ignorado: EXECUTORS_BASE_URL ou CORE_SERVICE_TOKEN ausente")
+        return
+    url = f"{base}/api/meta-prompter/generate/{user_id}"
+    headers = {"X-Service-Token": token, "Content-Type": "application/json"}
+    try:
+        with httpx.Client(timeout=5.0) as client:
+            resp = client.post(url, headers=headers, json={"ai_profile": ai_profile_data})
+        if not resp.is_success:
+            logger.warning("meta_prompter trigger falhou user_id=%s status=%s", user_id, resp.status_code)
+    except Exception as exc:
+        logger.warning("meta_prompter trigger erro user_id=%s: %s", user_id, exc)
+
+
 async def _require_service_token(x_service_token: str = Header(None)) -> str:
     expected = settings.CORE_SERVICE_TOKEN
     if not expected or x_service_token != expected:
@@ -321,17 +360,21 @@ async def get_my_ai_profile(
 @router.post("/ai-profiles", response_model=AIProfileOut, status_code=status.HTTP_201_CREATED)
 async def create_or_replace_ai_profile(
     payload: AIProfileCreate,
+    background_tasks: BackgroundTasks,
     current_user: models.User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
     _validate_template_key(payload.template_key)
     profile = _upsert_ai_profile(db=db, user_id=current_user.id, data=payload.dict())
+    # Trigger 1: onboarding wizard finalizado → gerar blocos de prompt
+    background_tasks.add_task(_trigger_meta_prompter_bg, current_user.id, _profile_to_meta_dict(profile))
     return _normalize_profile_offer_pack(profile)
 
 
 @router.put("/ai-profiles/me", response_model=AIProfileOut)
 async def update_my_ai_profile(
     payload: AIProfileUpdate,
+    background_tasks: BackgroundTasks,
     current_user: models.User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
@@ -353,6 +396,9 @@ async def update_my_ai_profile(
         data=update_data,
         require_all_fields_for_create=True,
     )
+    # Trigger 2: edição de campos relevantes → regenerar blocos de prompt
+    if _META_PROMPTER_FIELDS & set(update_data.keys()):
+        background_tasks.add_task(_trigger_meta_prompter_bg, current_user.id, _profile_to_meta_dict(profile))
     return _normalize_profile_offer_pack(profile)
 
 
