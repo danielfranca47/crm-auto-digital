@@ -21,7 +21,7 @@
 |---|---|---|
 | 1 | 1.1 — System prompts 5 camadas | ✅ Implementado |
 | 1 | 1.2 — Regras de recusa em todas as filhas | ✅ Implementado |
-| 1 | 1.3 — Directivas de uso no knowledge injetado | ⚠️ Parcialmente implementado |
+| 1 | 1.3 — Directivas de uso no knowledge injetado | ✅ Implementado |
 | 2 | 2.1 — Bloco de tom WhatsApp operacional | ✅ Implementado |
 | 2 | 2.2 — Enriquecer contexto do field extractor | ✅ Implementado |
 | 2 | 2.3 — Escape hatch para alucinações | ✅ Implementado |
@@ -67,14 +67,20 @@ _: str = Depends(_require_service_token)
 _: str = Depends(_require_service_token),
 ```
 
+Feito. Duas linhas alteradas em meta_prompter.py:
+
+Depends adicionado ao import (linha 14)
+_: str = _require_service_token → _: str = Depends(_require_service_token) (linha 44)
+O FastAPI agora executa a função como dependency injetada, validando o X-Service-Token em todas as requests ao endpoint POST /api/meta-prompter/generate/{user_id}.
+
 ---
 
-### 🟠 BUG 2 — Tarefa 1.3 incompleta: knowledge sem directivas na apresentação standard
+### ✅ BUG 2 — Tarefa 1.3 incompleta: knowledge sem directivas na apresentação standard
 
 **Arquivo:** `backend-executors/app/services/decision_engine.py` — `_build_child_prompt_apresentation`
 
-**Problema:**
-A Tarefa 1.3 especifica que todos os `knowledge_items` injetados nas filhas de **apresentação e follow-up** devem ter directivas de uso (`INSTRUÇÃO: quando usar, como usar`). O follow-up recebe correctamente os blocos com directivas (linhas 1546–1577). Contudo, a filha de apresentação **só injeta knowledge com directivas no caminho `hybrid_scheduler`** (commercial_injection / warming_injection). Para os templates `sdr_padrao` e `closer_agressivo` com variante `sales`, **nenhum** dos seguintes knowledge_items é injectado com directivas:
+**Problema (corrigido em 2026-03-29):**
+A Tarefa 1.3 especifica que todos os `knowledge_items` injetados nas filhas de **apresentação e follow-up** devem ter directivas de uso (`INSTRUÇÃO: quando usar, como usar`). O follow-up recebia correctamente os blocos com directivas (linhas 1546–1577). Contudo, a filha de apresentação **só injectava knowledge com directivas no caminho `hybrid_scheduler`** (commercial_injection / warming_injection). Para os templates `sdr_padrao` e `closer_agressivo` com variante `sales`, nenhum dos seguintes knowledge_items era injectado com directivas:
 
 - `social_proof`
 - `pitch_script`
@@ -83,17 +89,29 @@ A Tarefa 1.3 especifica que todos os `knowledge_items` injetados nas filhas de *
 - `service_faq`
 - `guarantee_policy`
 
-Nesses templates, o `offer_pack_summary` é apenas despejado como JSON no bloco `CONTEXTO` (linha 1424), sem qualquer instrução de uso para a LLM.
+**Correção aplicada:**
+Adicionado bloco `standard_knowledge_block` em `_build_child_prompt_apresentation`. O bloco é construído quando `commercial_injection` está vazio (i.e., qualquer path que não seja `hybrid_scheduler` em modo comercial), cobrindo `sdr_padrao`, `closer_agressivo` e o path `warming_injection`. Cada knowledge_item é injectado condicionalmente com directiva de uso:
 
-**Impacto:** A LLM Filha APRESENTATION em `sdr_padrao` / `closer_agressivo` não recebe guidance sobre quando e como usar prova social, objeções configuradas e FAQ — precisamente os conteúdos que mais influenciam a qualidade do pitch de vendas.
-
-**Exemplo de correção esperada (análogo ao follow-up):**
 ```python
-knowledge_items = context.get("knowledge_items") or {}
-_social_proof_ki = knowledge_items.get("social_proof") or ""
-_objections_faq_ki = knowledge_items.get("objections_faq") or ""
-# ... etc., com os blocos de INSTRUÇÃO como feito no follow-up
+# Tarefa 1.3 — knowledge_items com directivas de uso para sdr_padrao / closer_agressivo
+_apres_knowledge_parts: list[str] = []
+if not commercial_injection:
+    _social_proof_apres     = knowledge_items.get("social_proof") or ""
+    _pitch_script_apres     = knowledge_items.get("pitch_script") or ""
+    _product_details_apres  = knowledge_items.get("product_details") or ""
+    _objections_faq_apres   = knowledge_items.get("objections_faq") or ""
+    _service_faq_apres      = knowledge_items.get("service_faq") or ""
+    _guarantee_policy_apres = knowledge_items.get("guarantee_policy") or ""
+    # ... cada campo condicional com bloco INSTRUÇÃO de uso
+standard_knowledge_block = (
+    "\nKNOWLEDGE BASE (usar conforme as instruções de cada bloco):\n"
+    + "\n".join(_apres_knowledge_parts)
+) if _apres_knowledge_parts else ""
 ```
+
+O `standard_knowledge_block` é injectado no prompt entre a secção `ROTA MÃE` e `CONTEXTO`.
+
+**Resultado:** A LLM Filha APRESENTATION em `sdr_padrao` / `closer_agressivo` passa a receber guidance explícita sobre quando e como usar prova social, script de pitch, detalhes do produto, objeções configuradas, FAQ e política de garantia — tal como já acontecia no follow-up e no path commercial do hybrid_scheduler. Tarefa 1.3 agora está completamente implementada em todas as filhas.
 
 ---
 
@@ -178,7 +196,7 @@ A fonte de verdade desses campos está em `backend-executors/app/contracts/quali
 
 - **1.1**: Todas as 5 filhas (Qualification, Apresentation, Follow-up, Closing) e a Mãe têm prompts com 5 camadas (PAPEL / ESCOPO / TOM / FRAMEWORK / RECUSAS). Ver linhas 1128–1134, 1341–1346, 1604–1610, 1707–1713, 875–879.
 - **1.2**: Bloco `PROIBIÇÕES` com 7 itens base + proibições específicas para `apresentation` (itens 8–10: mídia, checkout+permissão, preço correcto) e `follow_up` (itens 8–9: qualificação em ticks, max_chars). Ver linhas 1160–1169, 1389–1399, 1633–1642.
-- **1.3 (parcial)**: Follow-up com blocos `PROVA SOCIAL`, `OBJEÇÕES E RESPOSTAS`, `FAQ DO SERVIÇO` com directivas (linhas 1546–1577). Apresentation comercial (hybrid_scheduler/commercial) com directivas nos blocos de knowledge (linhas 1278–1323).
+- **1.3**: Follow-up com blocos `PROVA SOCIAL`, `OBJEÇÕES E RESPOSTAS`, `FAQ DO SERVIÇO` com directivas (linhas 1546–1577). Apresentation comercial (hybrid_scheduler/commercial) com directivas nos blocos de knowledge (linhas 1278–1323). Apresentation standard (`sdr_padrao`/`closer_agressivo`) com `standard_knowledge_block` cobrindo `social_proof`, `pitch_script`, `product_details`, `objections_faq`, `service_faq`, `guarantee_policy` — cada um com directiva de uso (corrigido 2026-03-29).
 
 ### FASE 2 ✅
 

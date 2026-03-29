@@ -1337,6 +1337,63 @@ def _build_child_prompt_apresentation(
 
     tone_block_apresentation = _build_tone_block(ai_profile, playbook)
 
+    # Tarefa 1.3 — knowledge_items com directivas de uso para sdr_padrao / closer_agressivo
+    # (e qualquer path que não use commercial_injection, onde knowledge não é injectado inline)
+    _apres_knowledge_parts: list[str] = []
+    if not commercial_injection:
+        _social_proof_apres = knowledge_items.get("social_proof") or ""
+        _pitch_script_apres = knowledge_items.get("pitch_script") or ""
+        _product_details_apres = knowledge_items.get("product_details") or ""
+        _objections_faq_apres = knowledge_items.get("objections_faq") or ""
+        _service_faq_apres = knowledge_items.get("service_faq") or ""
+        _guarantee_policy_apres = knowledge_items.get("guarantee_policy") or ""
+        if _social_proof_apres:
+            _apres_knowledge_parts.append(
+                f"PROVA SOCIAL (usar na fase de aquecimento ou quando o lead demonstrar hesitação):\n"
+                f"{_social_proof_apres}\n"
+                f"INSTRUÇÃO: Integre naturalmente na conversa. Nunca diga 'temos uma prova social'. "
+                f"Adapte ao perfil do lead se possível.\n"
+            )
+        if _pitch_script_apres:
+            _apres_knowledge_parts.append(
+                f"SCRIPT DE PITCH (usar como guia estrutural da apresentação, não copiar literalmente):\n"
+                f"{_pitch_script_apres}\n"
+                f"INSTRUÇÃO: Adapte ao contexto da conversa e ao tom de voz configurado. "
+                f"Nunca copie o script palavra por palavra.\n"
+            )
+        if _product_details_apres:
+            _apres_knowledge_parts.append(
+                f"DETALHES DO PRODUTO/SERVIÇO (usar para enriquecer o pitch com informações precisas):\n"
+                f"{_product_details_apres}\n"
+                f"INSTRUÇÃO: Use apenas os dados presentes neste bloco. Nunca invente features ou condições não listadas.\n"
+            )
+        if _objections_faq_apres:
+            _apres_knowledge_parts.append(
+                f"OBJEÇÕES E RESPOSTAS (usar APENAS quando o lead levantar uma objeção):\n"
+                f"{_objections_faq_apres}\n"
+                f"INSTRUÇÃO: Se o lead levantar uma objeção listada, use a resposta configurada como base. "
+                f"Adapte ao tom de voz e ao contexto. Nunca copie literalmente. "
+                f"Se a objeção NÃO estiver listada, use empatia + reformulação de valor.\n"
+            )
+        if _service_faq_apres:
+            _apres_knowledge_parts.append(
+                f"FAQ DO SERVIÇO (usar APENAS quando o lead fizer uma pergunta diretamente coberta):\n"
+                f"{_service_faq_apres}\n"
+                f"INSTRUÇÃO: Responda com base no FAQ. Se a pergunta não estiver coberta, "
+                f"diga que vai confirmar com a equipa.\n"
+            )
+        if _guarantee_policy_apres:
+            _apres_knowledge_parts.append(
+                f"POLÍTICA DE GARANTIA (mencionar para reforçar confiança quando relevante):\n"
+                f"{_guarantee_policy_apres}\n"
+                f"INSTRUÇÃO: Cite apenas quando o lead demonstrar hesitação sobre risco. "
+                f"Nunca invente garantias não configuradas.\n"
+            )
+    standard_knowledge_block = (
+        "\nKNOWLEDGE BASE (usar conforme as instruções de cada bloco):\n"
+        + "\n".join(_apres_knowledge_parts)
+    ) if _apres_knowledge_parts else ""
+
     _apres_prompt = (
         f"Você é a FILHA APRESENTATION de um CRM de vendas WhatsApp.\n\n"
         f"PAPEL: Conduzir a fase de apresentação — agendamento (scheduler) ou oferta+fechamento (sales).\n"
@@ -1409,7 +1466,8 @@ def _build_child_prompt_apresentation(
         "\n"
         f"ROTA MÃE: {mother_decision.route_to} (confidence={mother_decision.confidence})\n"
         f"Motivo MÃE: {mother_decision.reason}\n"
-        "\n"
+        + standard_knowledge_block
+        + "\n"
         "CONTEXTO:\n"
         f"- lead: {json.dumps(lead_summary, ensure_ascii=False)}\n"
         f"- ai_profile: {json.dumps(ai_summary, ensure_ascii=False)}\n"
