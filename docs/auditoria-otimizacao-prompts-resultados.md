@@ -213,23 +213,38 @@ return _closing_prompt
 
 ---
 
-### 🟡 BUG 6 — Campo `required_fields` duplicado/desalinhado no meta-prompter
+### ✅ BUG 6 — Campo `required_fields` duplicado/desalinhado no meta-prompter *(corrigido 2026-03-29)*
 
 **Arquivo:** `backend-executors/app/services/meta_prompter.py` — linhas 54–59
 
 **Problema:**
-O meta-prompter define internamente os `required_fields` por `agent_mode`:
+O meta-prompter definia internamente os `required_fields` por `agent_mode` com uma cópia literal desalinhada da fonte de verdade:
 ```python
 _required_by_mode = {
     "consultivo": ["service_interest", "urgency", "decision_role", "constraints", "availability_window", "budget_or_price_acceptance"],
-    "agenda": ["service_interest", "urgency", "decision_role", "availability_window"],
-    "direto": ["service_interest", "urgency", "decision_role"],
+    "agenda": ["service_interest", "urgency", "decision_role", "availability_window"],      # ← desalinhado
+    "direto": ["service_interest", "urgency", "decision_role"],                              # ← desalinhado
 }
 ```
 
-A fonte de verdade desses campos está em `backend-executors/app/contracts/qualification_contract.py` (função `required_fields_for_mode`). Se a lista de campos for alterada no contrato no futuro (ex.: adição de `location_preference` para o modo `agenda`), o meta-prompter gerará exemplos few-shot com campos desactualizados, sem nenhum aviso de erro.
+A fonte de verdade está em `backend-executors/app/contracts/qualification_contract.py` (`MIN_REQUIRED_FIELDS` / `required_fields_for_mode`), e já divergiu:
+- `agenda` no contrato: `["service_interest", "availability_window", "location_preference", "price_acceptance"]`
+- `direto` no contrato: `["service_interest", "availability_window", "price_acceptance"]`
 
-**Impacto:** Baixo agora, mas acumulará drift ao longo do tempo. O correcto seria importar `required_fields_for_mode` de `qualification_contract.py` directamente.
+Os exemplos few-shot gerados pelo meta-prompter para `agenda` e `direto` mencionavam campos que o guardrail real (`qualification_guardrails.py`) nunca exige, e omitiam `location_preference` e `price_acceptance` que o guardrail exige. Resultado: exemplos few-shot incoerentes com o comportamento real do agente.
+
+**Correção aplicada:**
+
+**`backend-executors/app/services/meta_prompter.py`:**
+- Adicionado import: `from app.contracts.qualification_contract import required_fields_for_mode`
+- Removido o dict `_required_by_mode` local
+- Substituída a lookup manual por:
+```python
+# Campos obrigatórios derivados do agent_mode — fonte de verdade: qualification_contract.py
+required_fields = required_fields_for_mode(agent_mode)
+```
+
+**Resultado:** O meta-prompter lê agora os `required_fields` directamente da mesma fonte de verdade usada pelo guardrail de qualificação. Qualquer alteração futura em `qualification_contract.py` propaga-se automaticamente para os exemplos few-shot gerados, sem risco de drift silencioso.
 
 ---
 

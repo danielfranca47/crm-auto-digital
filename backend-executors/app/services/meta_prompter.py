@@ -14,6 +14,7 @@ from typing import Any, Dict, Optional
 
 import httpx
 
+from app.contracts.qualification_contract import required_fields_for_mode
 from app.core.config import settings
 
 logger = logging.getLogger(__name__)
@@ -50,13 +51,8 @@ def _build_meta_prompt(ai_profile: Dict[str, Any]) -> str:
     language = ai_profile.get("language") or "pt-BR"
     max_chars = 320
 
-    # Campos obrigatórios derivados do agent_mode
-    _required_by_mode: Dict[str, list] = {
-        "consultivo": ["service_interest", "urgency", "decision_role", "constraints", "availability_window", "budget_or_price_acceptance"],
-        "agenda": ["service_interest", "urgency", "decision_role", "availability_window"],
-        "direto": ["service_interest", "urgency", "decision_role"],
-    }
-    required_fields = _required_by_mode.get(agent_mode, ["service_interest", "urgency", "decision_role"])
+    # Campos obrigatórios derivados do agent_mode — fonte de verdade: qualification_contract.py
+    required_fields = required_fields_for_mode(agent_mode)
 
     template_description = {
         "sdr_padrao": "qualificar + agendar reunião",
