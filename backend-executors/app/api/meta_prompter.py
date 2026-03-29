@@ -11,7 +11,7 @@ from __future__ import annotations
 import os
 from typing import Any, Dict, Optional
 
-from fastapi import APIRouter, Header, HTTPException, Path
+from fastapi import APIRouter, Depends, Header, HTTPException, Path
 from pydantic import BaseModel
 
 from app.services import meta_prompter as meta_prompter_svc
@@ -41,7 +41,7 @@ class GenerateResponse(BaseModel):
 def generate_prompt_parts_for_user(
     user_id: int = Path(..., description="ID do usuário no backend-core"),
     body: GenerateRequest = ...,
-    _: str = _require_service_token,
+    _: str = Depends(_require_service_token),
 ) -> GenerateResponse:
     """
     Gera os blocos de prompt personalizados para o nicho do usuário e salva no backend-core.
