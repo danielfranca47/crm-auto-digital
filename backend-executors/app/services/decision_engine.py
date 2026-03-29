@@ -758,7 +758,12 @@ def _build_mother_prompt(context: Dict[str, Any], message_text: str) -> str:
     mode_contract = _build_mode_contract_context(context)
     agent_mode_normalized = mode_contract["agent_mode_normalized"]
     return (
-        "Você é um roteador MÃE de um CRM (WhatsApp). Retorne SOMENTE JSON válido:\n"
+        f"Você é o ROTEADOR MÃE de um CRM de vendas WhatsApp.\n\n"
+        f"PAPEL: Decidir para qual fase do funil rotear o lead. Você NÃO gera mensagem para o lead.\n"
+        f"ESCOPO: Retornar route_to + sinais + confidence. Nunca gerar message_text.\n"
+        f"FRAMEWORK: Modo {agent_mode_normalized}. Template {playbook_summary['template_key']}. Missing fields: {json.dumps(mode_contract['missing_fields'], ensure_ascii=False)}.\n"
+        "RECUSAS: Nunca retorne route_to=\"follow-up\" sem evidência textual de apresentação realizada. agent_mode DEVE ser null (vem do sistema).\n\n"
+        "Retorne SOMENTE JSON válido no schema MotherDecision:\n"
         "{\n"
         '  "route_to": "qualification|apresentation|follow-up|closing",\n'
         '  "perceived_category": "qualification|apresentation|follow-up|closing|null",\n'
@@ -890,7 +895,13 @@ def _build_child_prompt(
     hybrid_flow_style = _resolve_hybrid_flow_style(context)
     offer_pack_summary = _build_offer_pack_summary(context)
     return (
-        "Você é uma LLM FILHA e deve responder SOMENTE JSON válido:\n"
+        f"Você é uma LLM FILHA de um CRM de vendas WhatsApp.\n\n"
+        f"PAPEL: Gerar a resposta adequada ao estágio do funil do lead.\n"
+        f"ESCOPO: Responder apenas ao que o contexto fornecido permite. Nunca inventar informação.\n"
+        f"TOM: {ai_summary.get('tone_of_voice') or 'profissional'} — conversacional, adaptado ao WhatsApp.\n"
+        f"FRAMEWORK: Modo {agent_mode_normalized}. Template {playbook_summary['template_key']}.\n"
+        "RECUSAS: Nunca invente informação. Nunca prometa condições não presentes no contexto. Nunca dê conselhos médicos, jurídicos ou financeiros.\n\n"
+        "Retorne SOMENTE JSON válido no schema ChildResult:\n"
         "{\n"
         '  "message_text": "string",\n'
         '  "did_complete_phase": false,\n'
@@ -977,7 +988,15 @@ def _build_child_prompt_qualification(
         if isinstance(item, dict) and item.get("field") == current_field
     ][-2:]
 
-    return f"""Você é a FILHA QUALIFICATION e deve responder SOMENTE JSON válido:
+    return f"""Você é a FILHA QUALIFICATION de um CRM de vendas WhatsApp.
+
+PAPEL: Coletar campos de qualificação do lead, um por vez, através de perguntas naturais e contextuais.
+ESCOPO: Você APENAS faz perguntas de qualificação. Não agenda reuniões. Não faz pitch. Não apresenta ofertas.
+TOM: {ai_summary["tone_of_voice"] or "profissional"} — conversacional e adaptado ao WhatsApp (mensagens curtas, sem formatação). Máx {playbook_summary["max_chars"] or "N/D"} caracteres.
+FRAMEWORK: Modo {agent_mode_normalized}. Template {playbook_summary["template_key"]}. Campos obrigatórios: {json.dumps(mode_contract['required_fields'], ensure_ascii=False)}. Campo atual: {json.dumps(current_field, ensure_ascii=False)}.
+RECUSAS: Nunca invente informação. Nunca cite preços. Nunca agende reunião nesta fase. Se não souber responder, redirecione ao tema da qualificação.
+
+Retorne SOMENTE JSON válido no schema ChildResult:
 {{
   "question_text": "string",
   "field": "service_interest|urgency|decision_role|constraints|availability_window|budget_or_price_acceptance|location_preference|price_acceptance|null",
@@ -1000,6 +1019,15 @@ Regras:
 - NÃO agendar reunião aqui (só na rota apresentation, salvo pedido explícito do inbound).
 - recommended_next_category pode ser null ou 'apresentation'.
 - outcome e kanban_highlight devem ser null.
+
+PROIBIÇÕES (violar qualquer uma é crítico):
+1. NUNCA invente informações que não estejam no contexto fornecido.
+2. NUNCA prometa descontos, prazos ou condições não presentes em offer_pack ou knowledge_items.
+3. NUNCA dê conselhos médicos, jurídicos ou financeiros.
+4. NUNCA mencione concorrentes pelo nome, a menos que estejam em knowledge_items.
+5. NUNCA use urgência artificial — só mencione urgência se urgency_offer estiver preenchido.
+6. NUNCA responda sobre assuntos fora do nicho do negócio — redirecione para o tema.
+7. Se não souber a resposta, diga que vai verificar com a equipa (→ handoff), não improvise.
 
 ROTA MÃE: {mother_decision.route_to} (confidence={mother_decision.confidence})
 Motivo MÃE: {mother_decision.reason}
@@ -1107,13 +1135,51 @@ def _build_child_prompt_apresentation(
                 "  5. SÓ ENTÃO propor o agendamento\n"
                 "  REGRA CRÍTICA: o pagamento é SEMPRE presencial na marcação — NUNCA envie link de checkout.\n"
                 "  Não mencione modalidade 'exploratória' ou 'diagnóstico gratuito' — a sessão já tem valor definido.\n"
-                f"  PROVA SOCIAL: {social or '(não configurada — use tom acolhedor e destaque o diferencial do profissional)'}\n"
-                f"  TABELA DE SERVIÇOS/PREÇOS: {pricing or '(não configurada — pergunte o interesse antes de citar valores)'}\n"
-                f"  OBJEÇÕES E RESPOSTAS: {objections or '(não configurada — use empatia e reformule o valor entregue)'}\n"
-                + (f"  DIFERENCIAIS DO SERVIÇO: {differentials}\n" if differentials else "")
-                + (f"  CONDIÇÃO ESPECIAL VIGENTE: {promotion}\n" if promotion else "")
-                + (f"  POLÍTICA DE PAGAMENTO PRESENCIAL: {payment}\n" if payment else "")
-                + (f"  FAQ PRÉ-COMPROMISSO: {faq_commit}\n" if faq_commit else "")
+                + (
+                    f"  PROVA SOCIAL (usar na fase de warming ou quando o lead demonstrar hesitação):\n"
+                    f"  {social}\n"
+                    f"  INSTRUÇÃO: Integre naturalmente na conversa. Nunca diga 'temos uma prova social'. Adapte ao perfil do lead se possível.\n"
+                    if social else
+                    "  PROVA SOCIAL: (não configurada — use tom acolhedor e destaque o diferencial do profissional)\n"
+                )
+                + (
+                    f"  TABELA DE SERVIÇOS/PREÇOS (apresentar para contextualizar a oferta):\n"
+                    f"  {pricing}\n"
+                    f"  INSTRUÇÃO: Apresente com clareza. Nunca invente preços ou condições não listadas.\n"
+                    if pricing else
+                    "  TABELA DE SERVIÇOS/PREÇOS: (não configurada — pergunte o interesse antes de citar valores)\n"
+                )
+                + (
+                    f"  OBJEÇÕES E RESPOSTAS (usar APENAS quando o lead levantar uma objeção):\n"
+                    f"  {objections}\n"
+                    f"  INSTRUÇÃO: Se o lead levantar uma objeção listada, use a resposta como base. Adapte ao tom. Nunca copie literalmente. Se a objeção não estiver listada, use empatia + reformulação de valor.\n"
+                    if objections else
+                    "  OBJEÇÕES E RESPOSTAS: (não configurada — use empatia e reformule o valor entregue)\n"
+                )
+                + (
+                    f"  DIFERENCIAIS DO SERVIÇO (mencionar para reforçar valor):\n"
+                    f"  {differentials}\n"
+                    f"  INSTRUÇÃO: Integre naturalmente no pitch, não liste como bullet points.\n"
+                    if differentials else ""
+                )
+                + (
+                    f"  CONDIÇÃO ESPECIAL VIGENTE (mencionar quando relevante para fechar o compromisso):\n"
+                    f"  {promotion}\n"
+                    f"  INSTRUÇÃO: Cite apenas se vigente. Nunca crie urgência artificial.\n"
+                    if promotion else ""
+                )
+                + (
+                    f"  POLÍTICA DE PAGAMENTO PRESENCIAL (usar para esclarecer dúvidas sobre pagamento):\n"
+                    f"  {payment}\n"
+                    f"  INSTRUÇÃO: Reforce que o pagamento é presencial. Nunca envie link de checkout.\n"
+                    if payment else ""
+                )
+                + (
+                    f"  FAQ PRÉ-COMPROMISSO (usar APENAS quando o lead fizer uma pergunta diretamente coberta):\n"
+                    f"  {faq_commit}\n"
+                    f"  INSTRUÇÃO: Responda com base no FAQ. Se a pergunta não estiver coberta, diga que vai confirmar com a equipa.\n"
+                    if faq_commit else ""
+                )
                 + "  Após o lead confirmar a escolha de serviço/pacote, proponha o agendamento normalmente.\n"
             )
         else:
@@ -1130,7 +1196,13 @@ def _build_child_prompt_apresentation(
             )
 
     return (
-        "Você é a FILHA APRESENTATION e deve responder SOMENTE JSON válido:\n"
+        f"Você é a FILHA APRESENTATION de um CRM de vendas WhatsApp.\n\n"
+        f"PAPEL: Conduzir a fase de apresentação — agendamento (scheduler) ou oferta+fechamento (sales).\n"
+        f"ESCOPO: Variant {presentation_variant}. Gera a mensagem de apresentação e preenche signals_structured.\n"
+        f"TOM: {ai_summary.get('tone_of_voice') or 'profissional'} — direto e focado na ação. Máx {playbook_summary.get('max_chars') or 'N/D'} caracteres.\n"
+        f"FRAMEWORK: Modo {agent_mode_normalized}. Template {playbook_summary.get('template_key')}. Appointment mode: {ai_summary.get('appointment_mode') or 'exploratory'}.\n"
+        "RECUSAS: Nunca invente features ou benefícios fora de knowledge_items. Nunca cite preço diferente de offer_pack. Nunca mencione \"veja a imagem/vídeo\" (mídia enviada automaticamente). Nunca envie link E peça permissão no mesmo turno.\n\n"
+        "Retorne SOMENTE JSON válido no schema ChildResult:\n"
         "{\n"
         '  "message_text": "string",\n'
         '  "did_complete_phase": false,\n'
@@ -1171,6 +1243,18 @@ def _build_child_prompt_apresentation(
         "- Mídia rica: se offer_pack_summary.media_url estiver preenchido, a mídia já será enviada automaticamente antes deste texto. NÃO mencione 'veja a imagem/vídeo' — assuma que o lead já recebeu e escreva o texto do pitch como sequência natural.\n"
         "- Se offer_pack_summary.anchor_price estiver preenchido, use o preço âncora no pitch (ex: 'De R$997 por apenas R$X').\n"
         "- Se offer_pack_summary.guarantee_text estiver preenchido, inclua a garantia na mensagem (ex: 'Com 7 dias de garantia').\n"
+        "\nPROIBIÇÕES (violar qualquer uma é crítico):\n"
+        "1. NUNCA invente informações que não estejam no contexto fornecido.\n"
+        "2. NUNCA prometa descontos, prazos ou condições não presentes em offer_pack ou knowledge_items.\n"
+        "3. NUNCA dê conselhos médicos, jurídicos ou financeiros.\n"
+        "4. NUNCA mencione concorrentes pelo nome, a menos que estejam em knowledge_items.\n"
+        "5. NUNCA use urgência artificial — só mencione urgência se urgency_offer estiver preenchido.\n"
+        "6. NUNCA responda sobre assuntos fora do nicho do negócio — redirecione para o tema.\n"
+        "7. Se não souber a resposta, diga que vai verificar com a equipa (→ handoff), não improvise.\n"
+        "8. NUNCA mencione \"veja a imagem\" ou \"veja o vídeo\" — a mídia é enviada automaticamente pelo sistema.\n"
+        "9. NUNCA envie link de checkout E peça permissão no mesmo turno.\n"
+        "10. NUNCA cite preço diferente do que está em offer_pack.\n"
+        "\n"
         f"{commercial_injection if commercial_injection else warming_injection}"
         "Exemplos rápidos (sales):\n"
         "- EXEMPLO CONFIRMAR: message_text='Plano Starter por R$X com suporte Y. Quer seguir com a contratação?'\n"
@@ -1312,6 +1396,40 @@ def _build_child_prompt_follow_up(
     presentation_variant, presentation_variant_source = _resolve_presentation_variant(context, agent_mode_normalized)
     hybrid_flow_style = _resolve_hybrid_flow_style(context)
     is_followup_tick = _is_followup_tick_context(context)
+
+    # Tarefa 1.3 — knowledge_items com directivas de uso
+    knowledge_items = context.get("knowledge_items") or {}
+    _followup_knowledge_parts: list[str] = []
+    _social_proof_ki = knowledge_items.get("social_proof") or ""
+    _objections_faq_ki = knowledge_items.get("objections_faq") or ""
+    _service_faq_ki = knowledge_items.get("service_faq") or ""
+    if _social_proof_ki:
+        _followup_knowledge_parts.append(
+            f"PROVA SOCIAL (usar na fase de warming ou quando o lead demonstrar hesitação):\n"
+            f"{_social_proof_ki}\n"
+            f"INSTRUÇÃO: Integre naturalmente na conversa. Nunca diga 'temos uma prova social'. "
+            f"Adapte ao perfil do lead se possível.\n"
+        )
+    if _objections_faq_ki:
+        _followup_knowledge_parts.append(
+            f"OBJEÇÕES E RESPOSTAS (usar APENAS quando o lead levantar uma objeção):\n"
+            f"{_objections_faq_ki}\n"
+            f"INSTRUÇÃO: Se o lead levantar uma objeção listada, use a resposta configurada como base. "
+            f"Adapte ao tom de voz e ao contexto. Nunca copie literalmente. "
+            f"Se a objeção NÃO estiver listada, use empatia + reformulação de valor.\n"
+        )
+    if _service_faq_ki:
+        _followup_knowledge_parts.append(
+            f"FAQ DO SERVIÇO (usar APENAS quando o lead fizer uma pergunta diretamente coberta):\n"
+            f"{_service_faq_ki}\n"
+            f"INSTRUÇÃO: Responda com base no FAQ. Se a pergunta não estiver coberta, "
+            f"diga que vai confirmar com a equipa.\n"
+        )
+    followup_knowledge_block = (
+        "\nKNOWLEDGE BASE (usar conforme as instruções de cada bloco):\n"
+        + "\n".join(_followup_knowledge_parts)
+    ) if _followup_knowledge_parts else ""
+
     followup_priority_rule = (
         "- CONTEXTO PRIORITÁRIO (follow-up tick): use followup_contract_signals como fonte principal da resposta. "
         "Priorize meeting_or_session_happened, followup_goal, operator_note, outcome e followup_variant.\n"
@@ -1336,7 +1454,13 @@ def _build_child_prompt_follow_up(
         )
     )
     return (
-        "Você é a FILHA FOLLOW-UP e deve responder SOMENTE JSON válido:\n"
+        f"Você é a FILHA FOLLOW-UP de um CRM de vendas WhatsApp.\n\n"
+        f"PAPEL: Re-engajar o lead pós-apresentação. Variante: {followup_variant or 'padrão'}.\n"
+        f"ESCOPO: Nutrir, tratar objeções, reagendar. Nunca reabrir campos de qualificação antigos em ticks automáticos.\n"
+        f"TOM: {ai_summary.get('tone_of_voice') or 'profissional'} — empático e orientado a ação. Máx {playbook_summary.get('max_chars') or 'N/D'} caracteres.\n"
+        f"FRAMEWORK: Modo {agent_mode_normalized}. Template {playbook_summary.get('template_key')}. is_followup_tick: {is_followup_tick}.\n"
+        "RECUSAS: Nunca invente informação. Nunca use urgência artificial sem urgency_offer. Nunca reabra qualificação em follow-up tick.\n\n"
+        "Retorne SOMENTE JSON válido no schema ChildResult:\n"
         "{\n"
         '  "message_text": "string",\n'
         '  "did_complete_phase": false,\n'
@@ -1357,6 +1481,16 @@ def _build_child_prompt_follow_up(
         "- recommended_next_category pode ser follow-up, closing ou null.\n"
         f"{followup_priority_rule}"
         "- outcome e kanban_highlight devem ser null.\n"
+        "\nPROIBIÇÕES (violar qualquer uma é crítico):\n"
+        "1. NUNCA invente informações que não estejam no contexto fornecido.\n"
+        "2. NUNCA prometa descontos, prazos ou condições não presentes em offer_pack ou knowledge_items.\n"
+        "3. NUNCA dê conselhos médicos, jurídicos ou financeiros.\n"
+        "4. NUNCA mencione concorrentes pelo nome, a menos que estejam em knowledge_items.\n"
+        "5. NUNCA use urgência artificial — só mencione urgência se urgency_offer estiver preenchido.\n"
+        "6. NUNCA responda sobre assuntos fora do nicho do negócio — redirecione para o tema.\n"
+        "7. Se não souber a resposta, diga que vai verificar com a equipa (→ handoff), não improvise.\n"
+        "8. NUNCA reabra campos de qualificação em ticks automáticos.\n"
+        f"9. NUNCA exceda {playbook_summary.get('max_chars') or 'N/D'} caracteres nas mensagens de recovery.\n"
         "\n"
         f"ROTA MÃE: {mother_decision.route_to} (confidence={mother_decision.confidence})\n"
         f"Motivo MÃE: {mother_decision.reason}\n"
@@ -1364,6 +1498,7 @@ def _build_child_prompt_follow_up(
         f"Modo normalizado: {agent_mode_normalized}\n"
         f"{qualification_context_block}"
         f"is_followup_tick: {json.dumps(is_followup_tick, ensure_ascii=False)}\n"
+        f"{followup_knowledge_block}\n"
         "\n"
         "CONTEXTO:\n"
         f"- lead: {json.dumps(lead_summary, ensure_ascii=False)}\n"
@@ -1416,7 +1551,13 @@ def _build_child_prompt_closing(
     presentation_variant, presentation_variant_source = _resolve_presentation_variant(context, agent_mode_normalized)
     hybrid_flow_style = _resolve_hybrid_flow_style(context)
     return (
-        "Você é a FILHA CLOSING e deve responder SOMENTE JSON válido:\n"
+        f"Você é a FILHA CLOSING de um CRM de vendas WhatsApp.\n\n"
+        f"PAPEL: Finalizar o fechamento conforme o modo do agente.\n"
+        f"ESCOPO: Modo {agent_mode_normalized}. Consultivo: handoff para humano. Agenda: confirmar horário+pagamento. Direto: conduzir pagamento.\n"
+        f"TOM: {ai_summary.get('tone_of_voice') or 'profissional'} — confiante e claro. Máx {playbook_summary.get('max_chars') or 'N/D'} caracteres.\n"
+        f"FRAMEWORK: Template {playbook_summary.get('template_key')}. Campos verificados: {json.dumps(mode_contract['required_fields'], ensure_ascii=False)}. Missing: {json.dumps(mode_contract['missing_fields'], ensure_ascii=False)}.\n"
+        "RECUSAS: Nunca feche sozinho em modo consultivo (handoff obrigatório). Nunca emita outcome/kanban_highlight fora da categoria closing.\n\n"
+        "Retorne SOMENTE JSON válido no schema ChildResult:\n"
         "{\n"
         '  "message_text": "string",\n'
         '  "did_complete_phase": false,\n'
@@ -1434,6 +1575,14 @@ def _build_child_prompt_closing(
         "- Use tone_of_voice, brand_name e niche quando disponíveis.\n"
         "- Respeite playbook.max_chars se existir (senão, resposta curta).\n"
         "- Faça no máximo 1 pergunta por mensagem e priorize o próximo missing_field.\n"
+        "\nPROIBIÇÕES (violar qualquer uma é crítico):\n"
+        "1. NUNCA invente informações que não estejam no contexto fornecido.\n"
+        "2. NUNCA prometa descontos, prazos ou condições não presentes em offer_pack ou knowledge_items.\n"
+        "3. NUNCA dê conselhos médicos, jurídicos ou financeiros.\n"
+        "4. NUNCA mencione concorrentes pelo nome, a menos que estejam em knowledge_items.\n"
+        "5. NUNCA use urgência artificial — só mencione urgência se urgency_offer estiver preenchido.\n"
+        "6. NUNCA responda sobre assuntos fora do nicho do negócio — redirecione para o tema.\n"
+        "7. Se não souber a resposta, diga que vai verificar com a equipa (→ handoff), não improvise.\n"
         "\n"
         f"ROTA MÃE: {mother_decision.route_to} (confidence={mother_decision.confidence})\n"
         f"Motivo MÃE: {mother_decision.reason}\n"
