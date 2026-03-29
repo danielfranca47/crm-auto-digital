@@ -1,3 +1,6 @@
+#Página antiga e descontinuada. 
+#A página que agora é responsável por fazer a configuração de ai profile é a C:\crm-auto-digital\frontend-crm\src\pages\AgenteConfiguracao.tsx
+
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Alert,
