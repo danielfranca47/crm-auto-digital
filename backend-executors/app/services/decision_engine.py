@@ -124,6 +124,18 @@ _ESCAPE_HATCH_BLOCK = (
     "  E retorne signals_structured.handoff_requested = true\n"
 )
 
+
+def _build_validation_block(max_chars: Optional[int]) -> str:
+    max_chars_label = str(max_chars) if max_chars else "N/D"
+    return (
+        "\nVALIDAÇÃO — VERIFICAR ANTES DE RETORNAR:\n"
+        "- Se should_ask=true → field DEVE estar preenchido com o current_field\n"
+        "- Se checkout_sent=true → message_text DEVE conter uma URL real (não placeholder)\n"
+        "- Se did_complete_phase=true → recommended_next_category DEVE estar preenchido\n"
+        "- confidence DEVE refletir a certeza real (não usar 0.85 como padrão)\n"
+        f"- message_text NÃO deve exceder {max_chars_label} caracteres\n"
+    )
+
 DEFAULT_ALLOWED_LEAD_CATEGORIES = [
     "to-prospect",
     "in-progress",
@@ -808,6 +820,12 @@ def _build_mother_prompt(context: Dict[str, Any], message_text: str) -> str:
         f"ESCOPO: Retornar route_to + sinais + confidence. Nunca gerar message_text.\n"
         f"FRAMEWORK: Modo {agent_mode_normalized}. Template {playbook_summary['template_key']}. Missing fields: {json.dumps(mode_contract['missing_fields'], ensure_ascii=False)}.\n"
         "RECUSAS: Nunca retorne route_to=\"follow-up\" sem evidência textual de apresentação realizada. agent_mode DEVE ser null (vem do sistema).\n\n"
+        "Antes de decidir o route_to, raciocine internamente:\n"
+        "1. O lead tem missing_fields? Se sim → qualification (obrigatório)\n"
+        "2. Há evidência de apresentação/sessão já realizada? Se sim, qual foi o resultado?\n"
+        "3. O lead demonstrou intenção de compra/agendamento? Qual o nível?\n"
+        "4. A mensagem é uma resposta a algo que o bot perguntou, ou é espontânea?\n\n"
+        "Use o campo \"reason\" para documentar o raciocínio em 1-2 frases curtas.\n\n"
         "Retorne SOMENTE JSON válido no schema MotherDecision:\n"
         "{\n"
         '  "route_to": "qualification|apresentation|follow-up|closing",\n'
@@ -866,6 +884,21 @@ def _build_mother_prompt(context: Dict[str, Any], message_text: str) -> str:
         "  - Se inbound for claramente de fechamento (\"posso assinar\", \"manda contrato\", \"quero fechar\"),\n"
         "    route_to=closing e perceived_category=closing.\n"
         "\n"
+        "REGRAS DE ROUTING — AVALIAR NESTA ORDEM (a primeira que coincidir vence):\n\n"
+        "PRIORIDADE 1 (obrigatória — sistema sobrescreve mesmo se você retornar outra):\n"
+        "- missing_fields NÃO vazio → route_to = \"qualification\"\n\n"
+        "PRIORIDADE 2 (sinais fortes):\n"
+        "- Lead confirmou horário/data específica → route_to = \"apresentation\"\n"
+        "- Lead disse \"quero comprar/assinar/fechar\" com intent_level=high → route_to = \"closing\"\n"
+        "- Lead mencionou reunião/sessão passada + dúvida/objeção/feedback → route_to = \"follow-up\"\n\n"
+        "PRIORIDADE 3 (sinais médios — usar confidence para desambiguar):\n"
+        "- Lead mostrou interesse mas sem confirmação → route_to = \"apresentation\", confidence < 0.7\n"
+        "- Lead pediu \"para pensar\" sem evidência de apresentação prévia → MANTER rota atual, não avançar\n\n"
+        "PRIORIDADE 4 (sinais fracos — contexto decide):\n"
+        "- Mensagem genérica (\"oi\", \"tudo bem\") → manter rota anterior, confidence baixa\n"
+        "- Mensagem fora de contexto → route_to = rota atual, next_action_hint = \"reply\"\n\n"
+        "SE EM DÚVIDA: mantenha a rota atual com confidence < 0.6.\n"
+        "NUNCA retorne route_to=\"follow-up\" se não houver evidência textual de apresentação/sessão realizada.\n\n"
         "EXEMPLOS (ultracurtos):\n"
         '1) inbound_message_text: "Amanhã 17h tá confirmado"\n'
         '   -> {"route_to":"apresentation","perceived_category":"apresentation","confidence":0.8,"reason":"meeting_scheduled|confirmou horário"}\n'
@@ -1076,6 +1109,7 @@ PROIBIÇÕES (violar qualquer uma é crítico):
 6. NUNCA responda sobre assuntos fora do nicho do negócio — redirecione para o tema.
 7. Se não souber a resposta, diga que vai verificar com a equipa (→ handoff), não improvise.
 {_ESCAPE_HATCH_BLOCK}
+{_build_validation_block(playbook_summary["max_chars"])}
 ROTA MÃE: {mother_decision.route_to} (confidence={mother_decision.confidence})
 Motivo MÃE: {mother_decision.reason}
 
@@ -1305,6 +1339,7 @@ def _build_child_prompt_apresentation(
         "9. NUNCA envie link de checkout E peça permissão no mesmo turno.\n"
         "10. NUNCA cite preço diferente do que está em offer_pack.\n"
         + _ESCAPE_HATCH_BLOCK
+        + _build_validation_block(playbook_summary.get("max_chars"))
         + "\n"
         + f"{commercial_injection if commercial_injection else warming_injection}"
         "Exemplos rápidos (sales):\n"
@@ -1546,6 +1581,7 @@ def _build_child_prompt_follow_up(
         "8. NUNCA reabra campos de qualificação em ticks automáticos.\n"
         f"9. NUNCA exceda {playbook_summary.get('max_chars') or 'N/D'} caracteres nas mensagens de recovery.\n"
         + _ESCAPE_HATCH_BLOCK
+        + _build_validation_block(playbook_summary.get("max_chars"))
         + "\n"
         f"ROTA MÃE: {mother_decision.route_to} (confidence={mother_decision.confidence})\n"
         f"Motivo MÃE: {mother_decision.reason}\n"
@@ -1642,6 +1678,7 @@ def _build_child_prompt_closing(
         "6. NUNCA responda sobre assuntos fora do nicho do negócio — redirecione para o tema.\n"
         "7. Se não souber a resposta, diga que vai verificar com a equipa (→ handoff), não improvise.\n"
         + _ESCAPE_HATCH_BLOCK
+        + _build_validation_block(playbook_summary.get("max_chars"))
         + "\n"
         f"ROTA MÃE: {mother_decision.route_to} (confidence={mother_decision.confidence})\n"
         f"Motivo MÃE: {mother_decision.reason}\n"
