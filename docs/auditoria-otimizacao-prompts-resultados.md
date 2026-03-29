@@ -189,20 +189,27 @@ Todos os perfis existentes recebem `"pt-BR"` como backfill automático no startu
 
 ---
 
-### 🟡 BUG 5 — `_inject_generated_parts` chamado para fase "closing" sem blocos gerados
+### ✅ BUG 5 — `_inject_generated_parts` chamado para fase "closing" sem blocos gerados *(corrigido 2026-03-29)*
 
-**Arquivo:** `backend-executors/app/services/decision_engine.py` — linha 1759
+**Arquivo:** `backend-executors/app/services/decision_engine.py`
 
 **Problema:**
 ```python
 return _inject_generated_parts(_closing_prompt, context, "closing")
 ```
 
-O meta-prompter não gera `few_shot_closing` nem `objection_rewrites` para "closing" (conforme spec). A injeção de "closing" resultará apenas em `tone_rules` adicionados — mas `tone_rules` já é injetado via `_build_tone_block()` no corpo do prompt, causando **duplicação de regras de tom** quando `generated_prompt_parts` estiver preenchido.
+O meta-prompter não gera `few_shot_closing` nem `objection_rewrites` para "closing" (conforme spec). A injeção de "closing" resultava apenas em `tone_rules` adicionados — mas `tone_rules` já é injectado via `_build_tone_block()` no corpo do prompt, causando **duplicação de regras de tom** quando `generated_prompt_parts` estiver preenchido.
 
-Adicionalmente, a spec indica que `objection_rewrites` deve ser injetado para `"apresentation"` e `"follow-up"` apenas (`if phase in ("apresentation", "followup")`), o que está correcto no código. Mas a injeção de `tone_rules` para "closing" é redundante.
+**Correcção aplicada:**
+Substituída a chamada `_inject_generated_parts(_closing_prompt, context, "closing")` por retorno directo do `_closing_prompt`, com comentário explicativo:
+```python
+# Fase "closing" não tem few_shot_closing nem objection_rewrites gerados pelo meta-prompter.
+# tone_rules já está injectado via _build_tone_block() acima — chamar _inject_generated_parts
+# aqui causaria duplicação de regras de tom. Retorna o prompt directamente.
+return _closing_prompt
+```
 
-**Impacto:** Baixo (não causa erro, apenas polui o prompt com regras duplicadas quando o meta-prompter estiver activo).
+**Resultado:** Prompt de closing inalterado face ao estado anterior (meta-prompter inactivo), e correcto quando meta-prompter estiver activo — sem duplicação de `tone_rules`.
 
 ---
 

@@ -1814,7 +1814,10 @@ def _build_child_prompt_closing(
         f"- history: {history_text}\n"
         f"- inbound_message_text: {message_text}\n"
     )
-    return _inject_generated_parts(_closing_prompt, context, "closing")
+    # Fase "closing" não tem few_shot_closing nem objection_rewrites gerados pelo meta-prompter.
+    # tone_rules já está injectado via _build_tone_block() acima — chamar _inject_generated_parts
+    # aqui causaria duplicação de regras de tom. Retorna o prompt directamente.
+    return _closing_prompt
 
 def _extract_json_payload(text: str) -> Optional[Dict[str, Any]]:
     text = text.strip()
