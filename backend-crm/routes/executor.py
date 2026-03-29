@@ -292,6 +292,7 @@ def whatsapp_execution_context(
         "qualification_state": qualification_state,
         "metadata": bundle.metadata,
         "knowledge_items": knowledge_by_category,
+        "generated_prompt_parts": (bundle.ai_profile or {}).get("generated_prompt_parts") or {},
     }
 
 

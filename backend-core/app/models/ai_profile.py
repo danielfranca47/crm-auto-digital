@@ -53,6 +53,9 @@ class AIProfile(Base):
     warming_social_proof = Column(String, nullable=True)
     warming_session_preview = Column(String, nullable=True)
     appointment_mode = Column(String, nullable=True, server_default="exploratory")
+    generated_prompt_parts = Column(JSON, nullable=True)
+    prompt_parts_generated_at = Column(DateTime, nullable=True)
+    prompt_parts_version = Column(Integer, nullable=True, server_default="0")
     created_at = Column(DateTime, server_default=func.now(), nullable=False, default=datetime.utcnow)
     updated_at = Column(
         DateTime, server_default=func.now(), onupdate=func.now(), nullable=False, default=datetime.utcnow

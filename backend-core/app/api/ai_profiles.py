@@ -211,6 +211,9 @@ class AIProfileOut(AIProfileBase):
     updated_at: datetime
     payment_webhook_secret: Optional[str] = None
     payment_webhook_url: Optional[str] = None
+    generated_prompt_parts: Optional[dict] = None
+    prompt_parts_generated_at: Optional[datetime] = None
+    prompt_parts_version: Optional[int] = None
 
     class Config:
         orm_mode = True
@@ -380,6 +383,26 @@ async def resolve_ai_profile_by_secret(
     if not profile:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Webhook secret não encontrado")
     return _normalize_profile_offer_pack(profile)
+
+
+@router.patch("/ai-profiles/{user_id}/generated-prompt-parts")
+async def save_generated_prompt_parts(
+    user_id: int,
+    payload: dict,
+    db: Session = Depends(get_db),
+    _: str = Depends(_require_service_token),
+):
+    """Salva os blocos gerados pelo meta-prompter no ai_profile. Chamado pelo backend-executors."""
+    profile = db.query(models.AIProfile).filter(models.AIProfile.user_id == user_id).first()
+    if not profile:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="AI profile not found")
+    profile.generated_prompt_parts = payload.get("generated_prompt_parts")
+    profile.prompt_parts_generated_at = datetime.utcnow()
+    profile.prompt_parts_version = (profile.prompt_parts_version or 0) + 1
+    profile.updated_at = datetime.utcnow()
+    db.commit()
+    db.refresh(profile)
+    return {"ok": True, "prompt_parts_version": profile.prompt_parts_version}
 
 
 @router.post("/ai-profiles/me/regenerate-webhook-secret")

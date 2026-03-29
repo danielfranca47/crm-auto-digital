@@ -26,6 +26,23 @@ class LLMClient:
             return "weak_site"
         return "decent_site"
 
+    def _format_outreach_scenarios(self, scenarios: list) -> str:
+        """Formata os cenários dinâmicos do meta-prompter para injeção no prompt."""
+        if not scenarios:
+            return ""
+        lines = ["Cenários de prospecção para este nicho:"]
+        for sc in scenarios:
+            lines.append(
+                f"- [{sc.get('scenario_key', '')}] {sc.get('description', '')}"
+                f" | WhatsApp: {sc.get('whatsapp_angle', '')}"
+                f" | CTA: {sc.get('cta', '')}"
+            )
+        return "\n".join(lines)
+
+    def _format_legacy_scenario(self, scenario: str, ctx_summary: str) -> str:
+        """Formata o cenário legado (no_site / weak_site / decent_site)."""
+        return f"Cenário: {scenario}\nContexto: {ctx_summary}"
+
     def _ctx_summary(self, ctx: Dict) -> str:
         parts = []
         if ctx.get("website_kind"): parts.append(f"tipo_site={ctx['website_kind']}")
@@ -48,12 +65,23 @@ class LLMClient:
         tone: Optional[str],
         language: Optional[str],
         context: Optional[Dict] = None,
-        sender: Optional[Dict] = None  # 👈 novo: dados do remetente (profile)
+        sender: Optional[Dict] = None,  # dados do remetente (profile)
+        ai_profile: Optional[Dict] = None,  # ai_profile com generated_prompt_parts (Tarefa 4.3)
     ) -> Dict[str, Dict]:
         ctx = context or {}
-        scenario = self._choose_scenario(ctx)
         ctx_summary = self._ctx_summary(ctx)
         out: Dict[str, Dict] = {}
+
+        # Tarefa 4.3 — usar cenários dinâmicos do nicho quando disponíveis
+        prompt_parts = (ai_profile or {}).get("generated_prompt_parts") or {}
+        outreach_scenarios = prompt_parts.get("outreach_scenarios")
+        if outreach_scenarios:
+            scenario_context = self._format_outreach_scenarios(outreach_scenarios)
+            scenario = None  # não usado quando cenários dinâmicos estão ativos
+        else:
+            # Fallback para cenários fixos existentes (legado)
+            scenario = self._choose_scenario(ctx)
+            scenario_context = self._format_legacy_scenario(scenario, ctx_summary)
 
         sender = sender or {}
         s_name = sender.get("name") or ""
@@ -70,7 +98,7 @@ class LLMClient:
                         "subject": f"Ideias rápidas para {lead['companyName']}",
                         "body": (
                             f"Olá, {{prospect.company}}, tudo bem?\n\n"
-                            f"Cenário: {scenario}. {ctx_summary}\n"
+                            f"{scenario_context}\n"
                             f"Posso enviar 2 ideias com valores?\n\n"
                             f"{{sender.signature}}"
                         ),
@@ -79,7 +107,7 @@ class LLMClient:
                 elif ch == "whatsapp":
                     out[ch] = {"body": (
                         f"Olá, {{prospect.company}}!\n"
-                        f"Notei uma oportunidade ({scenario}). {ctx_summary}\n"
+                        f"{scenario_context}\n"
                         f"Posso enviar 2 ideias e valores?\n\n"
                         f"— {{sender.name}}, {{sender.company}}"
                     ), "model": "mock"}
@@ -98,8 +126,7 @@ class LLMClient:
         # Contexto comum a todos os canais
         common = (
             f"Empresa do prospect: {lead['companyName']}\n"
-            f"Cenário: {scenario}\n"
-            f"Contexto: {ctx_summary}\n"
+            f"{scenario_context}\n"
             f"Remetente: Nome={s_name}; Empresa={s_company}; Email={s_email}; Telefone={s_phone}\n"
             "NUNCA use placeholders como [Seu Nome] ou [Sua Empresa]; use os dados do Remetente fornecidos.\n"
             "Se contactName estiver vazio, cumprimente pela empresa (ex.: 'Olá, A Casa do Porco Bar').\n"
@@ -112,10 +139,14 @@ class LLMClient:
                     + f"Escreva um e-mail em {language or 'pt-PT'} com tom {tone or 'profissional'}.\n"
                       "Regras: assunto <= 60 caracteres; corpo com 120–180 palavras; sem links; "
                       "parágrafos separados por uma linha em branco; CTA final: 'Posso enviar 2 ideias e valores?'.\n"
-                      "Se cenário='no_site': proponha site próprio com CTA/WhatsApp.\n"
-                      "Se cenário='weak_site': 2–3 melhorias rápidas (mobile/HTTPS/SEO) + convite para call de 15 min.\n"
-                      "Se cenário='decent_site': foque em automações de captação (form->WhatsApp, agendador, chat) e teste-piloto.\n"
-                      "Retorne como JSON: {\"subject\":\"...\",\"body\":\"...\"}\n"
+                    + (
+                        "Use os cenários de prospecção do nicho fornecidos acima para escolher o ângulo mais relevante.\n"
+                        if outreach_scenarios else
+                        "Se cenário='no_site': proponha site próprio com CTA/WhatsApp.\n"
+                        "Se cenário='weak_site': 2–3 melhorias rápidas (mobile/HTTPS/SEO) + convite para call de 15 min.\n"
+                        "Se cenário='decent_site': foque em automações de captação (form->WhatsApp, agendador, chat) e teste-piloto.\n"
+                    )
+                    + "Retorne como JSON: {\"subject\":\"...\",\"body\":\"...\"}\n"
                       "Use as variáveis literais {{prospect.company}} e {{sender.signature}} nos locais apropriados (serão interpoladas depois)."
                 )
                 data = self._chat_json(prompt, temperature=0.5)

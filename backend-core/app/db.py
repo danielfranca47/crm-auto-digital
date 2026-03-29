@@ -98,6 +98,9 @@ def ensure_ai_profile_columns() -> None:
         "warming_social_proof": {"default": None, "sqlite_type": "TEXT", "pg_type": "TEXT"},
         "warming_session_preview": {"default": None, "sqlite_type": "TEXT", "pg_type": "TEXT"},
         "appointment_mode": {"default": "exploratory", "sqlite_type": "TEXT", "pg_type": "VARCHAR"},
+        "generated_prompt_parts": {"default": None, "sqlite_type": "TEXT", "pg_type": "JSON"},
+        "prompt_parts_generated_at": {"default": None, "sqlite_type": "TEXT", "pg_type": "TIMESTAMP"},
+        "prompt_parts_version": {"default": 0, "sqlite_type": "INTEGER", "pg_type": "INTEGER"},
     }
 
     with engine.begin() as conn:

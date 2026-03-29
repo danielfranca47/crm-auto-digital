@@ -136,6 +136,63 @@ def _build_validation_block(max_chars: Optional[int]) -> str:
         f"- message_text NÃO deve exceder {max_chars_label} caracteres\n"
     )
 
+def _inject_generated_parts(prompt: str, context: Dict[str, Any], phase: str) -> str:
+    """Injeta blocos gerados pelo meta-prompter no prompt da filha (Fase 4 — Tarefa 4.2).
+
+    Fase 4 é aditiva: se generated_prompt_parts for null/vazio, o prompt volta inalterado.
+    """
+    parts = context.get("generated_prompt_parts") or {}
+    if not parts:
+        return prompt
+
+    # --- Few-shot examples ---
+    few_shot_key = f"few_shot_{phase}"  # qualification, apresentation, followup
+    examples = parts.get(few_shot_key)
+    if examples:
+        prompt += "\n\nEXEMPLOS DE REFERÊNCIA PARA ESTE NICHO (adapte ao contexto atual, não copie):\n"
+        for ex in examples:
+            prompt += f"\nCenário: {ex.get('scenario', '')}\n"
+            prompt += f"Lead: \"{ex.get('inbound', '')}\"\n"
+            prompt += f"Resposta esperada: {json.dumps(ex.get('expected_output', {}), ensure_ascii=False)}\n"
+
+    # --- Tone rules ---
+    tone_rules = parts.get("tone_rules")
+    if tone_rules:
+        prompt += "\n\nREGRAS DE TOM PARA ESTE NICHO:\n"
+        for rule in tone_rules:
+            prompt += f"- {rule}\n"
+
+    # --- Qualification phrasing (apenas para filha qualification) ---
+    if phase == "qualification":
+        phrasing = parts.get("qualification_phrasing") or {}
+        current_field = context.get("current_field")
+        if not current_field:
+            # Tentar derivar do contexto de qualificação
+            qual_state = context.get("qualification_state") or {}
+            current_field = qual_state.get("current_field")
+        if current_field and current_field in phrasing:
+            prompt += f"\n\nFORMAS NATURAIS DE PERGUNTAR '{current_field}' NESTE NICHO:\n"
+            for p in phrasing[current_field]:
+                prompt += f"- {p}\n"
+
+    # --- Objection rewrites (para apresentation e follow-up) ---
+    if phase in ("apresentation", "followup"):
+        rewrites = parts.get("objection_rewrites")
+        if rewrites:
+            prompt += "\n\nOBJEÇÕES REFORMULADAS (formato LAER — usar quando o lead levantar objeção):\n"
+            for obj in rewrites:
+                prompt += (
+                    f"\nObjeção: \"{obj.get('objection', '')}\"\n"
+                    f"  Causa real: {obj.get('real_concern', '')}\n"
+                    f"  Reconhecer: {obj.get('acknowledge', '')}\n"
+                    f"  Explorar: {obj.get('explore', '')}\n"
+                    f"  Responder: {obj.get('respond', '')}\n"
+                    f"  Próximo passo: {obj.get('next_step', '')}\n"
+                )
+
+    return prompt
+
+
 DEFAULT_ALLOWED_LEAD_CATEGORIES = [
     "to-prospect",
     "in-progress",
@@ -1068,7 +1125,7 @@ def _build_child_prompt_qualification(
 
     tone_block = _build_tone_block(ai_profile, playbook)
 
-    return f"""Você é a FILHA QUALIFICATION de um CRM de vendas WhatsApp.
+    _qual_prompt = f"""Você é a FILHA QUALIFICATION de um CRM de vendas WhatsApp.
 
 PAPEL: Coletar campos de qualificação do lead, um por vez, através de perguntas naturais e contextuais.
 ESCOPO: Você APENAS faz perguntas de qualificação. Não agenda reuniões. Não faz pitch. Não apresenta ofertas.
@@ -1129,6 +1186,8 @@ CONTEXTO:
 - origin_opener: {origin_opener}
 - inbound_message_text: {message_text}
 """
+    return _inject_generated_parts(_qual_prompt, context, "qualification")
+
 def _build_child_prompt_apresentation(
     context: Dict[str, Any],
     message_text: str,
@@ -1278,7 +1337,7 @@ def _build_child_prompt_apresentation(
 
     tone_block_apresentation = _build_tone_block(ai_profile, playbook)
 
-    return (
+    _apres_prompt = (
         f"Você é a FILHA APRESENTATION de um CRM de vendas WhatsApp.\n\n"
         f"PAPEL: Conduzir a fase de apresentação — agendamento (scheduler) ou oferta+fechamento (sales).\n"
         f"ESCOPO: Variant {presentation_variant}. Gera a mensagem de apresentação e preenche signals_structured.\n"
@@ -1367,6 +1426,7 @@ def _build_child_prompt_apresentation(
         f"- commercial_mode_active: {bool(commercial_injection)}\n"
         f"- inbound_message_text: {message_text}\n"
     )
+    return _inject_generated_parts(_apres_prompt, context, "apresentation")
 
 
 
@@ -1541,7 +1601,7 @@ def _build_child_prompt_follow_up(
     )
     tone_block_followup = _build_tone_block(ai_profile, playbook)
 
-    return (
+    _followup_prompt = (
         f"Você é a FILHA FOLLOW-UP de um CRM de vendas WhatsApp.\n\n"
         f"PAPEL: Re-engajar o lead pós-apresentação. Variante: {followup_variant or 'padrão'}.\n"
         f"ESCOPO: Nutrir, tratar objeções, reagendar. Nunca reabrir campos de qualificação antigos em ticks automáticos.\n"
@@ -1600,6 +1660,7 @@ def _build_child_prompt_follow_up(
         f"- history: {history_text}\n"
         f"- inbound_message_text: {message_text}\n"
     )
+    return _inject_generated_parts(_followup_prompt, context, "followup")
 
 
 def _build_child_prompt_closing(
@@ -1643,7 +1704,7 @@ def _build_child_prompt_closing(
     hybrid_flow_style = _resolve_hybrid_flow_style(context)
     tone_block_closing = _build_tone_block(ai_profile, playbook)
 
-    return (
+    _closing_prompt = (
         f"Você é a FILHA CLOSING de um CRM de vendas WhatsApp.\n\n"
         f"PAPEL: Finalizar o fechamento conforme o modo do agente.\n"
         f"ESCOPO: Modo {agent_mode_normalized}. Consultivo: handoff para humano. Agenda: confirmar horário+pagamento. Direto: conduzir pagamento.\n"
@@ -1695,6 +1756,7 @@ def _build_child_prompt_closing(
         f"- history: {history_text}\n"
         f"- inbound_message_text: {message_text}\n"
     )
+    return _inject_generated_parts(_closing_prompt, context, "closing")
 
 def _extract_json_payload(text: str) -> Optional[Dict[str, Any]]:
     text = text.strip()
