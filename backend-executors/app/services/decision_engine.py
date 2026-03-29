@@ -115,6 +115,15 @@ _SHORT_REPLIES = {
     "rss",
 }
 
+_ESCAPE_HATCH_BLOCK = (
+    "\nQUANDO NÃO SOUBER RESPONDER:\n"
+    "- Se não tem informação suficiente para responder com confiança → retorne confidence < 0.5\n"
+    "- Em message_text, faça uma pergunta de esclarecimento em vez de inventar\n"
+    "- Se o lead fez uma pergunta técnica fora do knowledge fornecido, use:\n"
+    "  'Vou confirmar essa informação com a equipa e já te respondo.'\n"
+    "  E retorne signals_structured.handoff_requested = true\n"
+)
+
 DEFAULT_ALLOWED_LEAD_CATEGORIES = [
     "to-prospect",
     "in-progress",
@@ -140,6 +149,42 @@ QUALIFICATION_FIELD_FALLBACK_LABELS = {
     "location_preference": "preferência de local (online/presencial)",
     "price_acceptance": "aceite do valor",
 }
+
+
+def _build_tone_block(ai_profile: Dict[str, Any], playbook: Dict[str, Any]) -> str:
+    """Gera o bloco de regras de tom WhatsApp operacional (Tarefa 2.1)."""
+    tone_of_voice = str(ai_profile.get("tone_of_voice") or "profissional")
+    max_chars = playbook.get("max_chars") or "N/D"
+    template_key = str(
+        ai_profile.get("template_key") or playbook.get("template_key") or ""
+    ).strip().lower()
+    brand_name = str(ai_profile.get("brand_name") or "").strip()
+
+    block = (
+        f"\nTOM DE VOZ — REGRAS WHATSAPP:\n"
+        f"- Tom configurado: {tone_of_voice}\n"
+        f"- Comprimento máximo: {max_chars} caracteres\n"
+        f"- Formato: 1 parágrafo curto ou 2–3 linhas. Sem bullet points. Sem formatação markdown.\n"
+        f"- Linguagem: conversacional, como se escrevesse a um colega. Sem jargão corporativo.\n"
+        f"- Abertura: nunca comece com 'Olá, tudo bem?' genérico se já houve conversa anterior. "
+        f"Use o contexto: referir algo que o lead disse antes, ou o campo recém-coletado.\n"
+        f"- Encerramento: sempre feche com UMA pergunta ou UM próximo passo claro. Nunca dois.\n"
+        f"- PROIBIDO: emojis excessivos (máx 1 por mensagem), CAPS LOCK, exclamações consecutivas (!!), "
+        f"linguagem de vendas agressiva ('IMPERDÍVEL', 'CORRA', 'NÃO PERCA').\n"
+    )
+    if template_key == "hybrid_scheduler":
+        if brand_name:
+            block += (
+                f"- Persona: fale como se fosse o assistente pessoal do {brand_name}, não como vendedor.\n"
+                f"- Referência ao profissional: use 'o/a {brand_name}' na terceira pessoa. "
+                f"Ex: 'A Dra. Maria tem horário disponível terça e quinta.'\n"
+            )
+        else:
+            block += (
+                "- Persona: fale como se fosse o assistente pessoal do profissional, não como vendedor.\n"
+                "- Referência ao profissional: use o nome do profissional na terceira pessoa.\n"
+            )
+    return block
 
 
 def _select_current_field(missing_fields: list[str], filled_fields: list[str]) -> Optional[str]:
@@ -988,6 +1033,8 @@ def _build_child_prompt_qualification(
         if isinstance(item, dict) and item.get("field") == current_field
     ][-2:]
 
+    tone_block = _build_tone_block(ai_profile, playbook)
+
     return f"""Você é a FILHA QUALIFICATION de um CRM de vendas WhatsApp.
 
 PAPEL: Coletar campos de qualificação do lead, um por vez, através de perguntas naturais e contextuais.
@@ -995,7 +1042,7 @@ ESCOPO: Você APENAS faz perguntas de qualificação. Não agenda reuniões. Nã
 TOM: {ai_summary["tone_of_voice"] or "profissional"} — conversacional e adaptado ao WhatsApp (mensagens curtas, sem formatação). Máx {playbook_summary["max_chars"] or "N/D"} caracteres.
 FRAMEWORK: Modo {agent_mode_normalized}. Template {playbook_summary["template_key"]}. Campos obrigatórios: {json.dumps(mode_contract['required_fields'], ensure_ascii=False)}. Campo atual: {json.dumps(current_field, ensure_ascii=False)}.
 RECUSAS: Nunca invente informação. Nunca cite preços. Nunca agende reunião nesta fase. Se não souber responder, redirecione ao tema da qualificação.
-
+{tone_block}
 Retorne SOMENTE JSON válido no schema ChildResult:
 {{
   "question_text": "string",
@@ -1028,7 +1075,7 @@ PROIBIÇÕES (violar qualquer uma é crítico):
 5. NUNCA use urgência artificial — só mencione urgência se urgency_offer estiver preenchido.
 6. NUNCA responda sobre assuntos fora do nicho do negócio — redirecione para o tema.
 7. Se não souber a resposta, diga que vai verificar com a equipa (→ handoff), não improvise.
-
+{_ESCAPE_HATCH_BLOCK}
 ROTA MÃE: {mother_decision.route_to} (confidence={mother_decision.confidence})
 Motivo MÃE: {mother_decision.reason}
 
@@ -1195,14 +1242,17 @@ def _build_child_prompt_apresentation(
                 "  Não mencione os termos 'prova social' ou 'prévia da sessão' explicitamente — use linguagem natural.\n"
             )
 
+    tone_block_apresentation = _build_tone_block(ai_profile, playbook)
+
     return (
         f"Você é a FILHA APRESENTATION de um CRM de vendas WhatsApp.\n\n"
         f"PAPEL: Conduzir a fase de apresentação — agendamento (scheduler) ou oferta+fechamento (sales).\n"
         f"ESCOPO: Variant {presentation_variant}. Gera a mensagem de apresentação e preenche signals_structured.\n"
         f"TOM: {ai_summary.get('tone_of_voice') or 'profissional'} — direto e focado na ação. Máx {playbook_summary.get('max_chars') or 'N/D'} caracteres.\n"
         f"FRAMEWORK: Modo {agent_mode_normalized}. Template {playbook_summary.get('template_key')}. Appointment mode: {ai_summary.get('appointment_mode') or 'exploratory'}.\n"
-        "RECUSAS: Nunca invente features ou benefícios fora de knowledge_items. Nunca cite preço diferente de offer_pack. Nunca mencione \"veja a imagem/vídeo\" (mídia enviada automaticamente). Nunca envie link E peça permissão no mesmo turno.\n\n"
-        "Retorne SOMENTE JSON válido no schema ChildResult:\n"
+        "RECUSAS: Nunca invente features ou benefícios fora de knowledge_items. Nunca cite preço diferente de offer_pack. Nunca mencione \"veja a imagem/vídeo\" (mídia enviada automaticamente). Nunca envie link E peça permissão no mesmo turno.\n"
+        + tone_block_apresentation
+        + "\nRetorne SOMENTE JSON válido no schema ChildResult:\n"
         "{\n"
         '  "message_text": "string",\n'
         '  "did_complete_phase": false,\n'
@@ -1254,8 +1304,9 @@ def _build_child_prompt_apresentation(
         "8. NUNCA mencione \"veja a imagem\" ou \"veja o vídeo\" — a mídia é enviada automaticamente pelo sistema.\n"
         "9. NUNCA envie link de checkout E peça permissão no mesmo turno.\n"
         "10. NUNCA cite preço diferente do que está em offer_pack.\n"
-        "\n"
-        f"{commercial_injection if commercial_injection else warming_injection}"
+        + _ESCAPE_HATCH_BLOCK
+        + "\n"
+        + f"{commercial_injection if commercial_injection else warming_injection}"
         "Exemplos rápidos (sales):\n"
         "- EXEMPLO CONFIRMAR: message_text='Plano Starter por R$X com suporte Y. Quer seguir com a contratação?'\n"
         "  signals_structured={offer_presented:true, checkout_sent:false, presentation_variant:'sales', offer_item_name:'Plano Starter'}\n"
@@ -1453,14 +1504,17 @@ def _build_child_prompt_follow_up(
             f"Missing fields: {json.dumps(mode_contract['missing_fields'], ensure_ascii=False)}\n"
         )
     )
+    tone_block_followup = _build_tone_block(ai_profile, playbook)
+
     return (
         f"Você é a FILHA FOLLOW-UP de um CRM de vendas WhatsApp.\n\n"
         f"PAPEL: Re-engajar o lead pós-apresentação. Variante: {followup_variant or 'padrão'}.\n"
         f"ESCOPO: Nutrir, tratar objeções, reagendar. Nunca reabrir campos de qualificação antigos em ticks automáticos.\n"
         f"TOM: {ai_summary.get('tone_of_voice') or 'profissional'} — empático e orientado a ação. Máx {playbook_summary.get('max_chars') or 'N/D'} caracteres.\n"
         f"FRAMEWORK: Modo {agent_mode_normalized}. Template {playbook_summary.get('template_key')}. is_followup_tick: {is_followup_tick}.\n"
-        "RECUSAS: Nunca invente informação. Nunca use urgência artificial sem urgency_offer. Nunca reabra qualificação em follow-up tick.\n\n"
-        "Retorne SOMENTE JSON válido no schema ChildResult:\n"
+        "RECUSAS: Nunca invente informação. Nunca use urgência artificial sem urgency_offer. Nunca reabra qualificação em follow-up tick.\n"
+        + tone_block_followup
+        + "\nRetorne SOMENTE JSON válido no schema ChildResult:\n"
         "{\n"
         '  "message_text": "string",\n'
         '  "did_complete_phase": false,\n'
@@ -1491,7 +1545,8 @@ def _build_child_prompt_follow_up(
         "7. Se não souber a resposta, diga que vai verificar com a equipa (→ handoff), não improvise.\n"
         "8. NUNCA reabra campos de qualificação em ticks automáticos.\n"
         f"9. NUNCA exceda {playbook_summary.get('max_chars') or 'N/D'} caracteres nas mensagens de recovery.\n"
-        "\n"
+        + _ESCAPE_HATCH_BLOCK
+        + "\n"
         f"ROTA MÃE: {mother_decision.route_to} (confidence={mother_decision.confidence})\n"
         f"Motivo MÃE: {mother_decision.reason}\n"
         f"Objetivo MÃE: {mother_decision.objective or ''}\n"
@@ -1550,14 +1605,17 @@ def _build_child_prompt_closing(
     agent_mode_normalized = mode_contract["agent_mode_normalized"]
     presentation_variant, presentation_variant_source = _resolve_presentation_variant(context, agent_mode_normalized)
     hybrid_flow_style = _resolve_hybrid_flow_style(context)
+    tone_block_closing = _build_tone_block(ai_profile, playbook)
+
     return (
         f"Você é a FILHA CLOSING de um CRM de vendas WhatsApp.\n\n"
         f"PAPEL: Finalizar o fechamento conforme o modo do agente.\n"
         f"ESCOPO: Modo {agent_mode_normalized}. Consultivo: handoff para humano. Agenda: confirmar horário+pagamento. Direto: conduzir pagamento.\n"
         f"TOM: {ai_summary.get('tone_of_voice') or 'profissional'} — confiante e claro. Máx {playbook_summary.get('max_chars') or 'N/D'} caracteres.\n"
         f"FRAMEWORK: Template {playbook_summary.get('template_key')}. Campos verificados: {json.dumps(mode_contract['required_fields'], ensure_ascii=False)}. Missing: {json.dumps(mode_contract['missing_fields'], ensure_ascii=False)}.\n"
-        "RECUSAS: Nunca feche sozinho em modo consultivo (handoff obrigatório). Nunca emita outcome/kanban_highlight fora da categoria closing.\n\n"
-        "Retorne SOMENTE JSON válido no schema ChildResult:\n"
+        "RECUSAS: Nunca feche sozinho em modo consultivo (handoff obrigatório). Nunca emita outcome/kanban_highlight fora da categoria closing.\n"
+        + tone_block_closing
+        + "\nRetorne SOMENTE JSON válido no schema ChildResult:\n"
         "{\n"
         '  "message_text": "string",\n'
         '  "did_complete_phase": false,\n'
@@ -1583,7 +1641,8 @@ def _build_child_prompt_closing(
         "5. NUNCA use urgência artificial — só mencione urgência se urgency_offer estiver preenchido.\n"
         "6. NUNCA responda sobre assuntos fora do nicho do negócio — redirecione para o tema.\n"
         "7. Se não souber a resposta, diga que vai verificar com a equipa (→ handoff), não improvise.\n"
-        "\n"
+        + _ESCAPE_HATCH_BLOCK
+        + "\n"
         f"ROTA MÃE: {mother_decision.route_to} (confidence={mother_decision.confidence})\n"
         f"Motivo MÃE: {mother_decision.reason}\n"
         f"Objetivo MÃE: {mother_decision.objective or ''}\n"
