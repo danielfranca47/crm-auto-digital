@@ -150,21 +150,42 @@ A spec define 3 triggers automáticos para regenerar `generated_prompt_parts`. N
 
 ---
 
-### 🟡 BUG 4 — Idioma hardcoded no meta-prompter
+### ✅ BUG 4 — Idioma hardcoded no meta-prompter (corrigido em 2026-03-29)
 
-**Arquivo:** `backend-executors/app/services/meta_prompter.py` — linha 51
+**Arquivo:** `backend-executors/app/services/meta_prompter.py` — linha 50
 
-**Problema:**
+**Problema (corrigido):**
 ```python
 language = "pt-BR"  # hardcoded
 ```
 
-A spec define `"Idioma: {language}"` como variável do perfil. O sistema serve multi-nichos e potencialmente multi-idioma (o `website` já suporta `en`, `pt`, `es`). Utilizadores com `ai_profile` configurado para outro idioma receberão exemplos few-shot e tone_rules em pt-BR.
+A spec define `"Idioma: {language}"` como variável do perfil. O sistema serve multi-nichos e potencialmente multi-idioma (o `website` já suporta `en`, `pt`, `es`). Utilizadores com `ai_profile` configurado para outro idioma receberiam exemplos few-shot e tone_rules sempre em pt-BR.
 
-**Correção sugerida:**
+**Correção aplicada:**
+
+**1. `backend-executors/app/services/meta_prompter.py`** — linha 50:
 ```python
 language = ai_profile.get("language") or "pt-BR"
 ```
+O meta-prompter lê agora o idioma do perfil do utilizador, com fallback para `"pt-BR"` caso o campo esteja vazio ou ausente.
+
+**2. `backend-core/app/models/ai_profile.py`** — nova coluna ORM:
+```python
+language = Column(String, nullable=True, server_default="pt-BR")
+```
+
+**3. `backend-core/app/db.py`** — migração idempotente via `ensure_ai_profile_columns`:
+```python
+"language": {"default": "pt-BR", "sqlite_type": "TEXT", "pg_type": "VARCHAR"},
+```
+Todos os perfis existentes recebem `"pt-BR"` como backfill automático no startup.
+
+**4. `backend-core/app/api/ai_profiles.py`** — schemas Pydantic actualizados:
+- `AIProfileBase`: `language: Optional[str] = "pt-BR"` (exposto em criação e leitura via `AIProfileCreate` e `AIProfileOut`)
+- `AIProfileUpdate`: `language: Optional[str] = None` (editável via `PUT /ai-profiles/me`)
+- `_profile_to_meta_dict`: adicionado `"language": getattr(profile, "language", None) or "pt-BR"` para que os triggers automáticos (onboarding, edição de campos) enviem o idioma correcto ao backend-executors.
+
+**Resultado:** O meta-prompter gera agora os blocos `few_shot_*`, `tone_rules`, `objection_rewrites` e `outreach_scenarios` no idioma configurado pelo utilizador. O campo `language` é opcional com default `"pt-BR"`, sem quebrar perfis existentes.
 
 ---
 

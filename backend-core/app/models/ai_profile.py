@@ -18,6 +18,7 @@ class AIProfile(Base):
     brand_name = Column(String, nullable=False)
     tone_of_voice = Column(String, nullable=False)
     timezone = Column(String, nullable=True, server_default="UTC")
+    language = Column(String, nullable=True, server_default="pt-BR")
     niche = Column(String, nullable=False)
     target_audience = Column(String, nullable=False)
     offer_description = Column(String, nullable=False)

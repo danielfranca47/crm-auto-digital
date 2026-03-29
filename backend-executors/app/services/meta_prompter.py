@@ -47,7 +47,7 @@ def _build_meta_prompt(ai_profile: Dict[str, Any]) -> str:
     template_key = ai_profile.get("template_key") or "sdr_padrao"
     agent_mode = ai_profile.get("agent_mode") or "agenda"
     objections_faq = ai_profile.get("objection_common") or ""
-    language = "pt-BR"
+    language = ai_profile.get("language") or "pt-BR"
     max_chars = 320
 
     # Campos obrigatórios derivados do agent_mode

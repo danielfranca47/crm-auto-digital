@@ -126,6 +126,7 @@ class AIProfileBase(BaseModel):
     brand_name: str
     tone_of_voice: str
     timezone: Optional[str] = "UTC"
+    language: Optional[str] = "pt-BR"
     niche: str
     target_audience: str
     offer_description: str
@@ -172,6 +173,7 @@ class AIProfileUpdate(BaseModel):
     brand_name: Optional[str] = None
     tone_of_voice: Optional[str] = None
     timezone: Optional[str] = None
+    language: Optional[str] = None
     niche: Optional[str] = None
     target_audience: Optional[str] = None
     offer_description: Optional[str] = None
@@ -251,6 +253,7 @@ def _profile_to_meta_dict(profile: models.AIProfile) -> dict:
         "template_key": profile.template_key,
         "agent_mode": str(profile.agent_mode.value) if profile.agent_mode else None,
         "objection_common": getattr(profile, "objection_common", None),
+        "language": getattr(profile, "language", None) or "pt-BR",
     }
 
 
