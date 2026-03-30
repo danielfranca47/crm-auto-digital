@@ -305,6 +305,7 @@ def listar_leads(current_user: CurrentUser = Depends(require_crm_access)):
             ) AS next_app
             ON next_app.lead_id = l.id
             WHERE l.user_id = ?
+              AND (l.is_playground IS NULL OR l.is_playground = 0)
             ORDER BY l.createdAt DESC
             """
             ,
@@ -583,6 +584,7 @@ def list_active_followups(current_user: CurrentUser = Depends(require_crm_access
              WHERE user_id = ?
                AND category = 'follow-up'
                AND COALESCE(followup_status, '') != 'closed'
+               AND (is_playground IS NULL OR is_playground = 0)
              ORDER BY
                CASE COALESCE(followup_status,'')
                     WHEN 'active' THEN 0
@@ -624,6 +626,7 @@ def followup_stats(current_user: CurrentUser = Depends(require_crm_access)):
              WHERE user_id = ?
                AND category = 'follow-up'
                AND COALESCE(followup_status, '') != 'closed'
+               AND (is_playground IS NULL OR is_playground = 0)
             """,
             (current_user.id,),
         ).fetchall()
