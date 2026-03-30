@@ -722,7 +722,7 @@ def init_db() -> None:
         ensure_column(conn, "lead_qualification_state", "timing_score", "timing_score INTEGER NOT NULL DEFAULT 0")
         ensure_column(conn, "lead_qualification_state", "qualification_total_score", "qualification_total_score INTEGER NOT NULL DEFAULT 0")
         ensure_column(conn, "leads", "checkout_token", "checkout_token TEXT")
-        ensure_column(conn, "leads", "is_playground", "INTEGER NOT NULL DEFAULT 0")
+        ensure_column(conn, "leads", "is_playground", "is_playground INTEGER NOT NULL DEFAULT 0")
 
         cur.execute("CREATE INDEX IF NOT EXISTS idx_leads_user ON leads(user_id, createdAt);")
         cur.execute(

@@ -17,6 +17,7 @@ from typing import Any, Dict
 from fastapi import APIRouter, Depends, Header, HTTPException
 from pydantic import BaseModel
 
+from app.core.config import settings
 from app.schemas.decision import DecisionOutput
 from app.services import decision_engine
 
@@ -26,8 +27,15 @@ router = APIRouter(prefix="/api/internal/playground", tags=["playground-internal
 def _require_service_token(
     x_service_token: str = Header(None, alias="X-Service-Token"),
 ) -> str:
-    expected = os.getenv("CRM_SERVICE_TOKEN") or os.getenv("CORE_SERVICE_TOKEN")
-    if not expected or x_service_token != expected:
+    valid_tokens = {
+        t for t in [
+            settings.crm_service_token,
+            settings.core_service_token,
+            os.getenv("CRM_SERVICE_TOKEN"),
+            os.getenv("CORE_SERVICE_TOKEN"),
+        ] if t
+    }
+    if not valid_tokens or x_service_token not in valid_tokens:
         raise HTTPException(status_code=401, detail="Invalid service token")
     return x_service_token
 

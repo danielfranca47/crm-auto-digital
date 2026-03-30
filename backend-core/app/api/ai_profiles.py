@@ -245,13 +245,18 @@ _META_PROMPTER_FIELDS = {"niche", "target_audience", "tone_of_voice", "offer_des
 
 def _profile_to_meta_dict(profile: models.AIProfile) -> dict:
     """Extrai os campos relevantes para o meta-prompter do perfil ORM."""
+    _am = profile.agent_mode
+    try:
+        _am_str = _am.value
+    except AttributeError:
+        _am_str = str(_am) if _am is not None else None
     return {
         "niche": profile.niche,
         "target_audience": profile.target_audience,
         "tone_of_voice": profile.tone_of_voice,
         "offer_description": profile.offer_description,
         "template_key": profile.template_key,
-        "agent_mode": str(profile.agent_mode.value) if profile.agent_mode else None,
+        "agent_mode": _am_str,
         "objection_common": getattr(profile, "objection_common", None),
         "language": getattr(profile, "language", None) or "pt-BR",
     }
