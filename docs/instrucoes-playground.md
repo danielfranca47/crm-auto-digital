@@ -75,35 +75,58 @@ curl http://localhost:8000/         # {"status":"API CRM rodando ..."}
 
 ## 4. Autenticação
 
-O playground usa o mesmo Bearer token do operador. Necessário:
+### Utilizador de teste já existente (usar directamente)
 
-1. Ter uma conta criada no `backend-core`
-2. Ter um `AiProfile` associado a essa conta
-3. Ter uma subscrição activa do produto `crm`
+Foi criado durante a Fase 6 (2026-03-30) um utilizador dedicado a testes do playground no `backend-core`:
 
-### Criar conta (só na primeira vez)
+| Campo | Valor |
+|---|---|
+| `user_id` | `3` |
+| `name` | `Playground Tester` |
+| `ai_profile_id` | `2` |
+| `agent_mode` | `consultivo` |
+| `template_key` | `sdr_padrao` |
+| `agent_name` | `Lucas` |
+
+As credenciais de acesso podem ser consultadas directamente no banco `backend-core/core.db` (tabela `users`, `id=3`).
+
+Para obter um token fresco (expira em 120 minutos):
 
 ```bash
+curl -X POST http://localhost:8001/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"email": "playground_test@test.com", "password": "<ver banco>"}'
+```
+
+> Se receber `{"detail":"Token inválido ou expirado"}` nalgum teste, basta fazer novo login.
+
+---
+
+### Criar nova conta de teste (alternativa)
+
+Caso o utilizador acima não exista ou seja necessário um novo ambiente limpo:
+
+```bash
+# 1. Registar conta
 curl -X POST http://localhost:8001/auth/register \
   -H "Content-Type: application/json" \
   -d '{"email": "test@test.com", "password": "testpass123", "name": "Tester"}'
-```
 
-### Login e obter token
-
-```bash
+# 2. Login
 curl -X POST http://localhost:8001/auth/login \
   -H "Content-Type: application/json" \
   -d '{"email": "test@test.com", "password": "testpass123"}'
 ```
 
-Guardar o `access_token` da resposta. Expira em 120 minutos — fazer novo login se receber `{"detail":"Token inválido ou expirado"}`.
+Guardar o `access_token` da resposta.
 
 ---
 
-## 5. Criar AI Profile (só na primeira vez)
+## 5. Criar AI Profile (só se não existir)
 
-Ver os `template_key` válidos:
+O utilizador `user_id=3` já tem o `ai_profile_id=2` criado — pode usar directamente nos testes.
+
+Para criar um novo perfil para outra conta, ver os `template_key` válidos:
 
 ```bash
 curl http://localhost:8001/ai-templates
@@ -130,7 +153,7 @@ curl -X POST http://localhost:8001/ai-profiles \
   }'
 ```
 
-Guardar o `id` retornado — será o `ai_profile_id` usado nos testes.
+Guardar o `id` retornado — será o `ai_profile_id` nos testes.
 
 ---
 
