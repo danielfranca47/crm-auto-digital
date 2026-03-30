@@ -7,7 +7,17 @@
       "Bash(find /c/crm-auto-digital/backend-crm -type f -name \"*.py\" -exec grep -l \"system.*role\\\\|system.*message\\\\|system_prompt\" {})",
       "Bash(grep -r \"reconcile_due_followups\\\\|/internal/followup/reconcile\" /c/crm-auto-digital --include=*.py --exclude-dir=.venv)",
       "Bash(grep -r \"HTMLResponse\\\\|FileResponse\\\\|render\\\\|html\\\\|@app\\\\.get\\\\|@router\\\\.get\" /c/crm-auto-digital/backend-crm/routes/*.py)",
-      "Bash(npx tsc:*)"
+      "Bash(npx tsc:*)",
+      "Read(//tmp/**)",
+      "Bash(curl -s http://localhost:8001/health)",
+      "Bash(curl -s http://localhost:8001/)",
+      "Bash(curl -s http://localhost:8001/openapi.json)",
+      "Bash(python3 -c \"import json,sys; d=json.load\\(sys.stdin\\); [print\\(k\\) for k in d.get\\(''''paths'''',{}\\).keys\\(\\)]\")",
+      "Bash(python3 -c \"import json,sys; d=json.load\\(sys.stdin\\); [print\\(k\\) for k in list\\(d.get\\(''''paths'''',{}\\).keys\\(\\)\\)[:30]]\")",
+      "Bash(.venv/Scripts/python -c \":*)",
+      "Bash(find /c/crm-auto-digital/backend-core -name \"*.pyc\" -path \"*/ai_profiles*\" -delete)",
+      "Bash(find /c/crm-auto-digital/backend-core -name \"__pycache__\" -path \"*/api/*\" -exec rm -rf {} +)",
+      "Bash(grep -rn EXECUTORS_BASE_URL /c/crm-auto-digital/backend-crm/ --include=*.env*)"
     ]
   }
 }
