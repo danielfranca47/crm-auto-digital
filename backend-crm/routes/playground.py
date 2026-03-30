@@ -21,7 +21,7 @@ from uuid import uuid4
 
 import httpx
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 from core_client import fetch_core_ai_profile_by_id
 from database import get_connection
@@ -68,15 +68,75 @@ class PlaygroundChatRequest(BaseModel):
     reset: bool = Field(False, description="Se true, limpa histórico e qualification_state antes de processar")
 
 
+class MotherDecision(BaseModel):
+    """Saída da LLM Mãe (roteamento)."""
+    route_to: Optional[str] = None
+    confidence: float = 0.0
+    reason: str = ""
+    signals: Optional[Dict[str, Any]] = None
+
+
+class ChildResult(BaseModel):
+    """Saída da LLM Filha (geração da mensagem)."""
+    message_text: str = ""
+    question_text: Optional[str] = None
+    field: Optional[str] = None
+    should_ask: bool = False
+    did_complete_phase: bool = False
+    recommended_next_category: Optional[str] = None
+    outcome: Optional[str] = None
+    kanban_highlight: Optional[str] = None
+    confidence: float = 0.0
+    signals_structured: Optional[Dict[str, Any]] = None
+
+
+class QualificationStateSnapshot(BaseModel):
+    """Estado de qualificação do lead no momento da resposta."""
+
+    # Campos extras do get_qualification_state() (confidence_json, attempts_json, etc.)
+    # são ignorados para expor apenas o que é relevante para o consumidor do playground.
+    model_config = ConfigDict(extra="ignore")
+
+    exists: bool = False
+    data_json: Optional[Dict[str, Any]] = None
+    missing_fields: List[str] = Field(default_factory=list)
+    filled_fields: List[str] = Field(default_factory=list)
+    power_score: int = 0
+    priority_score: int = 0
+    price_score: int = 0
+    timing_score: int = 0
+    qualification_total_score: int = 0
+
+
+class LeadState(BaseModel):
+    """Estado actual do lead após o processamento."""
+    category: str
+    qualification_state: Optional[QualificationStateSnapshot] = None
+
+
+class DecisionTrace(BaseModel):
+    """Metadados de debug do pipeline de decisão."""
+    agent_mode: Optional[str] = None
+    presentation_variant: Optional[str] = None
+    mother_route: Optional[str] = None
+    effective_route: Optional[str] = None
+    guardrails_applied: List[str] = Field(default_factory=list)
+    category_suggestion_cleared: bool = False
+    ai_profile_id: int
+    lead_id: int
+    lead_is_sandbox: bool = True
+    timestamp: str
+
+
 class PlaygroundChatResponse(BaseModel):
     lead_id: int
     message_to_send: str
     next_action: str
 
-    mother_decision: Optional[Dict[str, Any]] = None
-    child_result: Optional[Dict[str, Any]] = None
-    lead_state: Dict[str, Any]
-    decision_trace: Dict[str, Any]
+    mother_decision: Optional[MotherDecision] = None
+    child_result: Optional[ChildResult] = None
+    lead_state: LeadState
+    decision_trace: DecisionTrace
 
 
 # ---------------------------------------------------------------------------
