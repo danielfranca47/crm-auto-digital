@@ -434,6 +434,22 @@ async def resolve_ai_profile_by_secret(
     return _normalize_profile_offer_pack(profile)
 
 
+@router.get("/ai-profiles/{ai_profile_id}", response_model=AIProfileOut)
+async def get_ai_profile_by_id(
+    ai_profile_id: int,
+    user_id: int,
+    db: Session = Depends(get_db),
+    _: str = Depends(_require_service_token),
+):
+    """Busca um AiProfile específico pelo ID via service token. Valida que pertence ao user_id."""
+    profile = db.query(models.AIProfile).filter(models.AIProfile.id == ai_profile_id).first()
+    if not profile:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="AI profile not found")
+    if profile.user_id != user_id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="ai_profile_id não pertence ao utilizador")
+    return _normalize_profile_offer_pack(profile)
+
+
 @router.patch("/ai-profiles/{user_id}/generated-prompt-parts")
 async def save_generated_prompt_parts(
     user_id: int,
