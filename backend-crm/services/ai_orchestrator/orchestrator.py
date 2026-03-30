@@ -4,7 +4,7 @@ import json
 import logging
 import sqlite3
 from datetime import datetime
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 from fastapi import HTTPException
 from pydantic import BaseModel, Field
@@ -15,6 +15,7 @@ from security_core import CurrentUser
 from services.ai_playbooks import get_playbook
 from services.ai_orchestrator.history import get_recent_history
 from services.ai_orchestrator.inbound_event import InboundEvent
+from services.qualification_state import get_qualification_state
 
 logger = logging.getLogger(__name__)
 
@@ -118,6 +119,8 @@ class ContextBundle(BaseModel):
     next_action: str = "reply"
     metadata: Dict[str, Any]
     conversation_goal: str | None = None
+    qualification_state: Optional[Dict[str, Any]] = None
+    knowledge_items: Optional[Dict[str, str]] = None
 
 
 def build_context_bundle(
@@ -266,6 +269,87 @@ def build_context_bundle_from_inbound(event: InboundEvent) -> ContextBundle:
         next_action=playbook.get("default_next_action", "reply"),
         metadata=metadata,
         conversation_goal=conversation_goal,
+    )
+
+
+def _load_knowledge_items(user_id: int) -> Dict[str, str]:
+    """Carrega knowledge items do utilizador agrupados por categoria (primeira entrada por categoria)."""
+    knowledge_by_category: Dict[str, str] = {}
+    with get_connection() as conn:
+        conn.row_factory = sqlite3.Row
+        cur = conn.cursor()
+        cur.execute(
+            "SELECT category, content_text FROM knowledge_items WHERE user_id = ? ORDER BY updated_at DESC",
+            (user_id,),
+        )
+        for row in cur.fetchall():
+            cat = row["category"] or "uncategorized"
+            if cat not in knowledge_by_category:
+                knowledge_by_category[cat] = row["content_text"]
+    return knowledge_by_category
+
+
+def build_context_bundle_for_playground(
+    user_id: int,
+    ai_profile: Dict[str, Any],
+    lead_id: int,
+    message_text: str,
+) -> ContextBundle:
+    """
+    Constrói um ContextBundle para o playground, sem InboundEvent nem WhatsApp.
+    Reutiliza toda a lógica de normalização de agent_mode, playbook e histórico.
+    """
+    template_key = ai_profile.get("template_key") or None
+    normalized_mode = _normalize_agent_mode_for_bundle(ai_profile, template_key)
+
+    ai_profile = dict(ai_profile)
+    ai_profile["agent_mode"] = normalized_mode
+
+    presentation_contract = _resolve_presentation_contract(
+        ai_profile=ai_profile,
+        agent_mode_normalized=normalized_mode,
+    )
+    ai_profile["presentation_variant"] = presentation_contract["presentation_variant"]
+    ai_profile["hybrid_flow_style"] = presentation_contract["hybrid_flow_style"]
+    ai_profile["offer_pack"] = presentation_contract["offer_pack"]
+
+    playbook = get_playbook(template_key)
+    playbook["template_key"] = template_key or "sdr_padrao"
+    playbook = apply_mode_overrides(playbook, normalized_mode)
+    playbook["presentation_variant"] = presentation_contract["presentation_variant"]
+    playbook["hybrid_flow_style"] = presentation_contract["hybrid_flow_style"]
+    playbook["offer_pack"] = presentation_contract["offer_pack"]
+
+    lead = _load_lead(user_id, lead_id)
+    history = get_recent_history(lead_id)
+    conversation_goal = "qualify" if len(history) <= 1 else "advance"
+
+    qualification_state = get_qualification_state(lead_id)
+    knowledge_items = _load_knowledge_items(user_id)
+
+    metadata = {
+        "channel": "playground",
+        "inbound_message_text": message_text,
+        "received_at": datetime.utcnow().isoformat(),
+        "presentation_variant": presentation_contract["presentation_variant"],
+        "presentation_variant_source": presentation_contract["presentation_variant_source"],
+        "hybrid_flow_style": presentation_contract["hybrid_flow_style"],
+        "lead_origin": "playground",
+        "lead_origin_label": "PLAYGROUND (simulação sem WhatsApp)",
+    }
+
+    return ContextBundle(
+        user_id=user_id,
+        entitlements={},
+        ai_profile=ai_profile,
+        playbook=playbook,
+        lead=lead,
+        history=history,
+        next_action=playbook.get("default_next_action", "reply"),
+        metadata=metadata,
+        conversation_goal=conversation_goal,
+        qualification_state=qualification_state,
+        knowledge_items=knowledge_items,
     )
 
 
