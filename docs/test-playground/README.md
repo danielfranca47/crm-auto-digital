@@ -20,6 +20,25 @@ Pasta para testes estruturados do Playground de IA.
 - Os 3 serviços devem estar online (ver `docs/instrucoes-playground.md` secção 3)
 - Token JWT válido (expira em 120 min — fazer login se necessário)
 
+## Bug conhecido: criação de AI Profile via API
+
+O `backend-core` tem um bug menor na criação de AI Profile via API: a **background task do meta-prompter falha com HTTP 500**, mas o perfil é criado na mesma na base de dados.
+
+**Sintoma:** a chamada `POST /ai-profiles` devolve 500, mesmo que o perfil tenha sido persistido com sucesso.
+
+**Solução para o playground:** em vez de criar o AI Profile via API, criá-lo **directamente na base de dados** do `backend-core` (`app/core.db`, tabela `ai_profiles`).
+
+```sql
+-- Exemplo de inserção directa (ajustar valores conforme o cenário de teste)
+INSERT INTO ai_profiles (
+    user_id, agent_mode, presentation_variant, offer_pack, ...
+) VALUES (
+    3, 'consultivo', 'sales', 'default', ...
+);
+```
+
+Desta forma evita-se o 500 da API e o perfil fica disponível imediatamente para o utilizador de teste (`user_id=3`).
+
 ## Referência rápida
 
 | Recurso | Valor |
