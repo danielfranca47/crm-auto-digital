@@ -220,6 +220,17 @@ QUALIFICATION_FIELD_FALLBACK_LABELS = {
 }
 
 
+def _build_custom_instructions_block(ai_profile: Dict[str, Any]) -> str:
+    """Gera bloco de instruções personalizadas do operador com prioridade máxima."""
+    ci = (ai_profile.get("custom_instructions") or "").strip()
+    if not ci:
+        return ""
+    return (
+        "\nINSTRUÇÕES PERSONALIZADAS DO OPERADOR (prioridade máxima — seguir à risca):\n"
+        f"{ci}\n"
+    )
+
+
 def _build_tone_block(ai_profile: Dict[str, Any], playbook: Dict[str, Any]) -> str:
     """Gera o bloco de regras de tom WhatsApp operacional (Tarefa 2.1)."""
     tone_of_voice = str(ai_profile.get("tone_of_voice") or "profissional")
@@ -990,6 +1001,16 @@ def _build_mother_prompt(context: Dict[str, Any], message_text: str) -> str:
         f"- lead_origin: {lead_origin_label}\n"
         f"- origin_opener: {origin_opener}\n"
         f"- inbound_message_text: {message_text}\n"
+        + (
+            "\nMODO PASSIVO (response_style=passive): "
+            "Se a mensagem do cliente for uma pergunta directa (sobre serviços, preços, localização, "
+            "horários, massagista, etc.) E missing_fields NÃO ESTIVER VAZIO, "
+            "usa next_action_hint='reply' para sinalizar à filha que deve responder a pergunta primeiro. "
+            "O route_to continua 'qualification' (os campos ainda precisam de ser coletados), "
+            "mas a filha terá prioridade para responder antes de perguntar.\n"
+            if (ai_profile.get("response_style") or "active") == "passive"
+            else ""
+        )
     )
 
 
@@ -1124,6 +1145,20 @@ def _build_child_prompt_qualification(
     ][-2:]
 
     tone_block = _build_tone_block(ai_profile, playbook)
+    response_style = (ai_profile.get("response_style") or "active").strip().lower()
+
+    _passive_block = ""
+    if response_style == "passive":
+        _passive_block = (
+            "\nMODO PASSIVO ACTIVADO: Este agente responde primeiro, qualifica depois.\n"
+            "PRIORIDADE ABSOLUTA: se a mensagem do cliente for uma pergunta directa (sobre serviços,\n"
+            "preços, localização, horários, funcionamento, massagista, etc.), RESPONDE-A PRIMEIRO\n"
+            "usando offer_description e custom_instructions antes de qualquer pergunta de qualificação.\n"
+            "Só após responder, e de forma natural no mesmo turno ou no turno seguinte, recolhe campos em falta.\n"
+            "NUNCA ignores uma pergunta directa para fazer uma pergunta de qualificação.\n"
+            "RECUSAS passivo: Nunca inventes informação. Se a resposta não estiver em offer_description\n"
+            "ou custom_instructions, diz que vais verificar (→ handoff).\n"
+        )
 
     _qual_prompt = f"""Você é a FILHA QUALIFICATION de um CRM de vendas WhatsApp.
 
@@ -1131,7 +1166,7 @@ PAPEL: Coletar campos de qualificação do lead, um por vez, através de pergunt
 ESCOPO: Você APENAS faz perguntas de qualificação. Não agenda reuniões. Não faz pitch. Não apresenta ofertas.
 TOM: {ai_summary["tone_of_voice"] or "profissional"} — conversacional e adaptado ao WhatsApp (mensagens curtas, sem formatação). Máx {playbook_summary["max_chars"] or "N/D"} caracteres.
 FRAMEWORK: Modo {agent_mode_normalized}. Template {playbook_summary["template_key"]}. Campos obrigatórios: {json.dumps(mode_contract['required_fields'], ensure_ascii=False)}. Campo atual: {json.dumps(current_field, ensure_ascii=False)}.
-RECUSAS: Nunca invente informação. Nunca cite preços. Nunca agende reunião nesta fase. Se não souber responder, redirecione ao tema da qualificação.
+RECUSAS: Nunca invente informação. Nunca cite preços. Nunca agende reunião nesta fase. Se não souber responder, redirecione ao tema da qualificação.{_passive_block}
 {tone_block}
 Retorne SOMENTE JSON válido no schema ChildResult:
 {{
@@ -1185,7 +1220,7 @@ CONTEXTO:
 - lead_origin: {lead_origin_label}
 - origin_opener: {origin_opener}
 - inbound_message_text: {message_text}
-"""
+{_build_custom_instructions_block(ai_profile)}"""
     return _inject_generated_parts(_qual_prompt, context, "qualification")
 
 def _build_child_prompt_apresentation(
@@ -1483,6 +1518,7 @@ def _build_child_prompt_apresentation(
         f"- warming_stage_active: {bool(warming_injection)}\n"
         f"- commercial_mode_active: {bool(commercial_injection)}\n"
         f"- inbound_message_text: {message_text}\n"
+        + _build_custom_instructions_block(ai_profile)
     )
     return _inject_generated_parts(_apres_prompt, context, "apresentation")
 

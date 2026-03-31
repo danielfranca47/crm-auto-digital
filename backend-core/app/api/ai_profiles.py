@@ -76,6 +76,11 @@ class HybridFlowStyle(str, Enum):
     schedule_then_offer = "schedule_then_offer"
 
 
+class ResponseStyle(str, Enum):
+    active = "active"    # agente faz perguntas de qualificação
+    passive = "passive"  # agente responde perguntas do cliente antes de qualificar
+
+
 _TEMPLATE_OPENERS: dict = {
     "sdr_padrao": {
         "inbound": "Olá! Obrigado por entrar em contato. Me conta o que você está buscando.",
@@ -161,6 +166,7 @@ class AIProfileBase(BaseModel):
     warming_social_proof: Optional[str] = None
     warming_session_preview: Optional[str] = None
     appointment_mode: Optional[str] = None
+    response_style: Optional[ResponseStyle] = ResponseStyle.active
 
 
 class AIProfileCreate(AIProfileBase):
@@ -208,6 +214,7 @@ class AIProfileUpdate(BaseModel):
     warming_social_proof: Optional[str] = None
     warming_session_preview: Optional[str] = None
     appointment_mode: Optional[str] = None
+    response_style: Optional[ResponseStyle] = None
 
 
 class AIProfileOut(AIProfileBase):

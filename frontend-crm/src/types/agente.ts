@@ -64,6 +64,7 @@ export interface AgentConfig {
   human_in_loop: boolean;
   timezone: string;
   custom_instructions: string;
+  response_style: 'active' | 'passive';
 
   // ── Camada 1 — Contexto de abertura ──────────────────────
   origin_inbound_opener: string;
@@ -148,6 +149,7 @@ export const DEFAULT_AGENT_CONFIG: AgentConfig = {
   human_in_loop: false,
   timezone: 'America/Sao_Paulo',
   custom_instructions: '',
+  response_style: 'active',
 
   origin_inbound_opener: '',
   origin_outbound_opener: '',
@@ -275,6 +277,11 @@ export const HANDOFF_LABELS: Record<string, string> = {
   disable_bot:        'Desabilitar bot',
   keep_active_notify: 'Manter ativo e notificar',
   ignore:             'Ignorar',
+};
+
+export const RESPONSE_STYLE_LABELS: Record<string, string> = {
+  active:  'Ativo — faz perguntas de qualificação',
+  passive: 'Passivo — responde primeiro, qualifica depois',
 };
 
 // ─── Presets de agente (mapeiam os 3 arquétipos de /agentes-info) ──

@@ -185,6 +185,46 @@ function DrawerSessionPreview({ value, onSave, onClose }: { value: string; onSav
   );
 }
 
+// ─── Drawer: Modo de resposta ─────────────────────────────────
+function DrawerResponseStyle({ value, onSave, onClose }: { value: string; onSave: (v: string) => void; onClose: () => void }) {
+  const [local, setLocal] = useState(value || 'active');
+  const options = [
+    {
+      v: 'active',
+      label: 'Ativo — faz perguntas',
+      desc: 'O agente qualifica o lead fazendo perguntas estruturadas antes de responder sobre serviços ou preços. Ideal para funis consultivos onde é importante entender o perfil do cliente.',
+    },
+    {
+      v: 'passive',
+      label: 'Passivo — responde primeiro',
+      desc: 'O agente responde primeiro às perguntas directas do cliente (serviços, preços, localização) e depois, de forma natural, recolhe as informações de qualificação. Ideal para negócios onde o cliente já chegou com dúvidas concretas.',
+    },
+  ];
+  return (
+    <DrawerBase title="Modo de resposta" sub="Como o agente reage às perguntas do cliente" onClose={onClose} onSave={() => onSave(local)}>
+      {options.map(o => (
+        <div
+          key={o.v}
+          onClick={() => setLocal(o.v)}
+          style={{
+            padding: '12px 14px',
+            borderRadius: 6,
+            border: `1px solid ${local === o.v ? 'var(--o-purple)' : 'var(--o-b1)'}`,
+            background: local === o.v ? 'rgba(139,92,246,0.06)' : 'transparent',
+            cursor: 'pointer',
+            marginBottom: 10,
+          }}
+        >
+          <div style={{ fontWeight: 500, fontSize: 13, color: local === o.v ? 'var(--o-purple)' : 'var(--o-text)', marginBottom: 4 }}>
+            {o.label}
+          </div>
+          <div style={{ fontSize: 12, color: 'var(--o-sub)', lineHeight: 1.4 }}>{o.desc}</div>
+        </div>
+      ))}
+    </DrawerBase>
+  );
+}
+
 // ─── Drawer: Tom ─────────────────────────────────────────────
 function DrawerTom({ value, onSave, onClose }: { value: string; onSave: (v: string) => void; onClose: () => void }) {
   const [local, setLocal] = useState(value);
@@ -254,7 +294,7 @@ function ModalPerfil({ value, name, brand, agentMode, tone, onSave, onClose }: {
 // Componente principal
 // ─────────────────────────────────────────────────────────────
 
-type DrawerKey = 'nome' | 'empresa' | 'nicho' | 'timezone' | 'tom' | 'goals' | 'handoff' | 'inbound_opener' | 'outbound_opener' | 'social_proof' | 'session_preview' | null;
+type DrawerKey = 'nome' | 'empresa' | 'nicho' | 'timezone' | 'tom' | 'goals' | 'handoff' | 'inbound_opener' | 'outbound_opener' | 'social_proof' | 'session_preview' | 'response_style' | null;
 type ModalKey  = 'identidade' | 'perfil' | null;
 
 export function CamadaIdentidade({ config, onUpdate, resumo }: CamadaIdentidadeProps) {
@@ -362,6 +402,25 @@ export function CamadaIdentidade({ config, onUpdate, resumo }: CamadaIdentidadeP
             />
           </div>
 
+          {/* Seção: Modo de resposta (só Agente 03 · Híbrido) */}
+          {config.template_key === 'hybrid_scheduler' && (
+            <>
+              <div className="o-section-hdr">
+                <span className="font-mono-orion" style={{ fontSize: 9, letterSpacing: '2.5px', textTransform: 'uppercase', color: 'var(--o-sub)' }}>
+                  Modo de resposta · Híbrido Agendador
+                </span>
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 14, marginBottom: 24 }}>
+                <EditCard
+                  label="Modo de resposta"
+                  value={config.response_style === 'passive' ? 'Passivo — responde primeiro' : 'Ativo — faz perguntas'}
+                  sub={config.response_style === 'passive' ? 'Responde dúvidas antes de qualificar' : 'Qualifica antes de responder'}
+                  onClick={() => setDrawer('response_style')}
+                />
+              </div>
+            </>
+          )}
+
           {/* Seção: Contexto de abertura */}
           <div className="o-section-hdr">
             <span className="font-mono-orion" style={{ fontSize: 9, letterSpacing: '2.5px', textTransform: 'uppercase', color: 'var(--o-sub)' }}>
@@ -465,6 +524,9 @@ export function CamadaIdentidade({ config, onUpdate, resumo }: CamadaIdentidadeP
       )}
       {drawer === 'session_preview' && (
         <DrawerSessionPreview value={config.warming_session_preview} onClose={() => setDrawer(null)} onSave={v => { onUpdate({ warming_session_preview: v }); setDrawer(null); }} />
+      )}
+      {drawer === 'response_style' && (
+        <DrawerResponseStyle value={config.response_style} onClose={() => setDrawer(null)} onSave={v => { onUpdate({ response_style: v as AgentConfig['response_style'] }); setDrawer(null); }} />
       )}
 
       {/* Modais */}

@@ -27,6 +27,7 @@ class AIProfile(Base):
     agent_mode = Column(String, nullable=True, server_default="sdr_scheduler")
     presentation_variant = Column(String, nullable=True)
     hybrid_flow_style = Column(String, nullable=True)
+    response_style = Column(String, nullable=True, server_default="active")
     offer_pack = Column(JSON, nullable=True)
     identity_mode = Column(String, nullable=True, server_default="human_agent")
     handoff_policy = Column(String, nullable=True, server_default="keep_active_notify")

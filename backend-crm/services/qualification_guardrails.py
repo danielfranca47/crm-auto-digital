@@ -19,7 +19,6 @@ _MIN_REQUIRED_FIELDS = {
     "agenda": [
         "service_interest",
         "availability_window",
-        "location_preference",
         "price_acceptance",
     ],
     "direto": [

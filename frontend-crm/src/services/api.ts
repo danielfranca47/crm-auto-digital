@@ -89,6 +89,7 @@ export type AiProfilePayload = {
   buying_signal_keywords?: string[] | null;
   calendar_integration?: "none" | "google_calendar" | "calendly" | null;
   payment_gateway?: "hotmart" | "kiwify" | "stripe" | "generico" | null;
+  response_style?: "active" | "passive" | null;
 };
 
 export type AiProfile = AiProfilePayload & {
@@ -866,6 +867,7 @@ export const api = {
         human_in_loop:     (profile as any)?.human_in_loop     ?? DEFAULT_AGENT_CONFIG.human_in_loop,
         timezone:          (profile as any)?.timezone          ?? DEFAULT_AGENT_CONFIG.timezone,
         custom_instructions: (profile as any)?.custom_instructions ?? DEFAULT_AGENT_CONFIG.custom_instructions,
+        response_style:      ((profile as any)?.response_style ?? DEFAULT_AGENT_CONFIG.response_style) as 'active' | 'passive',
 
         // Camada 2
         niche:            (profile as any)?.niche            ?? DEFAULT_AGENT_CONFIG.niche,
@@ -917,6 +919,7 @@ export const api = {
         followup_allowed_hours: pack.followup_allowed_hours ?? DEFAULT_AGENT_CONFIG.followup_allowed_hours,
 
         // Apresentação e agendamento
+        appointment_mode:        ((profile as any)?.appointment_mode ?? pack.appointment_mode ?? DEFAULT_AGENT_CONFIG.appointment_mode) as 'commercial' | 'exploratory',
         appointment_reminder_h1: pack.appointment_reminder_h1 ?? DEFAULT_AGENT_CONFIG.appointment_reminder_h1,
         appointment_reminder_h2: pack.appointment_reminder_h2 ?? DEFAULT_AGENT_CONFIG.appointment_reminder_h2,
         briefing_enabled:        pack.briefing_enabled        ?? DEFAULT_AGENT_CONFIG.briefing_enabled,
@@ -1017,6 +1020,7 @@ export const api = {
         human_in_loop:       config.human_in_loop,
         timezone:            config.timezone,
         custom_instructions: config.custom_instructions,
+        response_style:      config.response_style,
         niche:               config.niche,
         target_audience:     config.target_audience,
         offer_description:   config.offer_description,

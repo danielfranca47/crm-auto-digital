@@ -102,6 +102,7 @@ def ensure_ai_profile_columns() -> None:
         "generated_prompt_parts": {"default": None, "sqlite_type": "TEXT", "pg_type": "JSON"},
         "prompt_parts_generated_at": {"default": None, "sqlite_type": "TEXT", "pg_type": "TIMESTAMP"},
         "prompt_parts_version": {"default": 0, "sqlite_type": "INTEGER", "pg_type": "INTEGER"},
+        "response_style": {"default": "active", "sqlite_type": "TEXT", "pg_type": "VARCHAR"},
     }
 
     with engine.begin() as conn:
