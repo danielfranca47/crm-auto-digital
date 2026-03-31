@@ -1,6 +1,7 @@
 # Massagem Sensi Vitae — Output
 
 > Gerado pelo Claude após execução no playground em 2026-03-31.
+> **Teste 2 (pós-otimizações):** 2026-03-31 ~21:30 UTC — com `response_style=passive`, `location_preference` removido dos campos obrigatórios, `custom_instructions` injectadas.
 
 ---
 
@@ -9,19 +10,217 @@
 | Campo | Valor |
 |---|---|
 | `ai_profile_id` | `2` (perfil `user_id=3` actualizado para Sensi Vitae) |
-| `lead_id` Cenário A (sandbox) | `66` |
-| `lead_id` Cenário B (sandbox) | `67` |
-| `lead_id` Cenário C (sandbox) | `68` |
+| `lead_id` Cenário A — Teste 1 (sandbox) | `66` |
+| `lead_id` Cenário B — Teste 1 (sandbox) | `67` |
+| `lead_id` Cenário C — Teste 1 (sandbox) | `68` |
+| `lead_id` Cenário A — Teste 2 (sandbox) | `73` |
 | `agent_mode` | `agenda` |
 | `template_key` | `hybrid_scheduler` |
+| `response_style` | `passive` (novo campo, otimização pós-Teste 1) |
 | `presentation_variant` | `scheduler` (derivado pelo sistema) |
-| Data/hora do teste | 2026-03-31 ~15:10 UTC |
+| Data/hora Teste 1 | 2026-03-31 ~15:10 UTC |
+| Data/hora Teste 2 | 2026-03-31 ~21:30 UTC |
 
 > **Nota:** A tabela `ai_profiles` tem UNIQUE constraint em `user_id`, portanto o perfil existente (id=2) foi sobrescrito com a config Sensi Vitae. Num ambiente de produção existiriam perfis separados por utilizador.
+> **Nota Teste 2:** Os servidores (backend-core + backend-executors) foram reiniciados para carregar o código das otimizações. A coluna `response_style` foi adicionada ao banco via `ALTER TABLE` antes do restart.
+
+---
+
+## Cenário A — Teste 2 (pós-otimizações, `response_style=passive`)
+
+> Lead sandbox `id=73`. Executado após reinício dos servidores com código das otimizações.
+
+### Turno 1
+
+**Mensagem do cliente:**
+> Olá, vi o vosso anúncio. Quais massagens fazem e quais são os valores?
+
+**Resposta do agente:**
+> "Quando gostaria de agendar a sua massagem? Temos horários flexíveis a partir de terça-feira."
+
+| Campo | Valor |
+|---|---|
+| `next_action` | `ask_qualification` |
+| `mother_decision.route_to` | `qualification` |
+| `mother_decision.confidence` | `0.9` |
+| `child_result.field` | `availability_window` |
+| `child_result.should_ask` | `true` |
+| Campos qualificados neste turno | `service_interest: "massagens"` |
+| `missing_fields` | `["availability_window", "price_acceptance"]` |
+| `guardrails_applied` | `["guardrail_reason"]` |
+
+**Avaliação:** ❌ FALHA (MODO PASSIVO inactivo) / ✅ Melhoria Fix #1
+
+- O agente não apresentou os serviços nem os valores — MODO PASSIVO não funcionou.
+- ✅ **Fix #1 confirmado:** `missing_fields` não inclui `location_preference` (era `["location_preference", "price_acceptance"]` no Teste 1).
+- ✅ **custom_instructions #5 activa:** mencionou "horários flexíveis a partir de terça-feira" (instrução sobre horário de funcionamento).
+- ❌ A pergunta sobre disponibilidade é prematura para a primeira mensagem num negócio B2C.
+
+---
+
+### Turno 2
+
+**Mensagem do cliente:**
+> Fica em Faro mesmo?
+
+**Resposta do agente:**
+> "Qual é o melhor dia ou período para você agendar a sua massagem?"
+
+| Campo | Valor |
+|---|---|
+| `next_action` | `ask_qualification` |
+| `child_result.field` | `availability_window` |
+| `missing_fields` | `["price_acceptance"]` |
+| Campos qualificados neste turno | — |
+
+**Avaliação:** ❌ FALHA (pergunta directa ignorada) / ✅ Melhoria Fix #1
+
+- A pergunta "Fica em Faro mesmo?" foi ignorada — resposta esperada: "Sim, ficamos no Centro Comercial Algarb, Sala 2."
+- ✅ **Fix #1 confirmado:** `missing_fields` mostra apenas `["price_acceptance"]` — `location_preference` ausente.
+- O MODO PASSIVO deveria ter respondido a esta pergunta directa sobre localização.
+
+---
+
+### Turno 3
+
+**Mensagem do cliente:**
+> Gostava de experimentar a massagem terapêutica de 1 hora. Tem disponibilidade para quinta-feira à tarde?
+
+**Resposta do agente:**
+> "Que valor você pretende investir na sua experiência de massagem? Isso ajuda-nos a encontrar a melhor opção para você."
+
+| Campo | Valor |
+|---|---|
+| `next_action` | `ask_qualification` |
+| `child_result.field` | `price_acceptance` |
+| Campos qualificados neste turno | `service_interest: "massagens"`, `availability_window: "quinta-feira à tarde"` |
+
+**Avaliação:** ✅ Captura / ❌ Resposta inadequada
+
+- ✅ Capturou correctamente `service_interest` e `availability_window: "quinta-feira à tarde"`.
+- ❌ Não confirmou disponibilidade quinta-feira à tarde nem o valor 45€.
+- ❌ "Que valor você pretende investir?" é inadequado para negócio com tabela de preços visível — o cliente já escolheu o serviço (1h = 45€).
+
+---
+
+### Turno 4
+
+**Mensagem do cliente:**
+> Pode ser às 16h?
+
+**Resposta do agente:**
+> "Qual é o valor que você gostaria de investir na sua massagem? Isso vai ajudar-nos a oferecer a melhor opção para você."
+
+| Campo | Valor |
+|---|---|
+| `next_action` | `ask_qualification` |
+| `child_result.field` | `price_acceptance` |
+| Campos qualificados neste turno | — (`availability_window` manteve "quinta-feira à tarde", `16h` não foi capturado) |
+
+**Avaliação:** ❌ FALHA
+
+- O cliente confirmou "às 16h" — o agente deveria ter confirmado o horário.
+- `availability_window` não foi actualizado para incluir "16h" (o campo manteve "quinta-feira à tarde").
+- O loop de `price_acceptance` repete-se pela segunda vez, formulado de forma diferente mas igualmente inadequada.
+
+---
+
+### Turno 5
+
+**Mensagem do cliente:**
+> Perfeito, fica combinado então. Qual é a morada exacta?
+
+**Resposta do agente:**
+> "Que valor você gostaria de investir na sua massagem? Assim conseguimos ajudar a encontrar a melhor opção para você."
+
+| Campo | Valor |
+|---|---|
+| `next_action` | `ask_qualification` |
+| `child_result.field` | `price_acceptance` |
+| `lead_state.category` | `qualification` (nunca avançou) |
+| Campos qualificados neste turno | — |
+
+**Avaliação:** ❌ FALHA CRÍTICA
+
+- "Fica combinado" é sinal claro de fecho — o mother deveria ter roteado para `apresentation`.
+- Morada (Sala 2, Centro Comercial Algarb): **não fornecida**.
+- Confirmação estruturada de reserva: **não enviada**.
+- O `price_acceptance` foi pedido três vezes consecutivas.
+
+---
+
+## Estado Final de Qualificação — Teste 2
+
+### Lead 73 (Cenário A — Teste 2)
+```json
+{
+  "service_interest": "massagens",
+  "availability_window": "quinta-feira à tarde"
+}
+```
+
+| Métrica | Valor |
+|---|---|
+| Campos preenchidos | 2 de 3 (`price_acceptance` em falta) |
+| Campos em falta | `price_acceptance` |
+| `location_preference` nos missing_fields | ❌ Não (Fix #1 confirmado) |
+| Categoria final do lead | `qualification` (nunca avançou) |
+
+---
+
+## Diagnóstico — Problemas Restantes (Teste 2)
+
+### ✅ Fix #1 Confirmado — `location_preference` removido
+
+O campo `location_preference` foi removido dos campos obrigatórios do `agent_mode=agenda`. Confirmado em todos os turnos: `missing_fields` nunca incluiu `location_preference`.
+
+### ✅ Fix #2 Parcial — `custom_instructions` com visibilidade melhorada
+
+As custom_instructions têm maior presença nos prompts:
+- T1 mencionou "horários flexíveis a partir de terça-feira" (instrução #5) ✅
+- Nenhum turno usou linguagem inadequada para Lingam ✅
+- Mas a instrução de responder sobre localização (Sala 2) continuou ignorada ❌
+
+### ❌ Fix #3 Não funcional — `response_style=passive` sem efeito
+
+O bloco `MODO PASSIVO ACTIVADO` no prompt filho está posicionado DEPOIS de instruções contraditórias:
+- `ESCOPO: Você APENAS faz perguntas de qualificação. Não apresenta ofertas.`
+- `RECUSAS: Nunca cite preços.`
+
+O LLM resolve o conflito a favor das instruções anteriores. O efeito líquido é zero — o agente continua a ignorar perguntas directas e a qualificar em vez de responder.
+
+### ❌ Problema 4 (novo) — `price_acceptance` inadequado para preço fixo
+
+Mesmo com `location_preference` removido, `price_acceptance` permanece como campo obrigatório. Para um negócio com tabela de preços explícita em `offer_description`, perguntar "Que valor você pretende investir?" é:
+- Confuso (o cliente acabou de escolher o serviço com preço definido)
+- Pode ser percebido como negociação de preço num negócio que não negoceia
+
+### ❌ Problema 5 (novo) — Sinal de fecho não detectado
+
+"Fica combinado" (T5) é um sinal de compra claro. O mother decision engine deveria ter roteado para `apresentation` ou `scheduling`. Em vez disso, manteve `qualification` porque `price_acceptance` estava em falta.
+
+---
+
+## Comparativo Teste 1 vs Teste 2 — Cenário A
+
+| Critério | Teste 1 (score 2/10) | Teste 2 |
+|---|---|---|
+| `location_preference` nos missing_fields | ✅ Presente (bloqueava) | ✅ Removido |
+| Apresentação de serviços e valores | ❌ Nunca | ❌ Nunca |
+| Confirmação de localização (Faro/Sala 2) | ❌ Nunca | ❌ Nunca |
+| Tom "querido/a" | ✅ Presente | ✅ Parcial |
+| custom_instructions visíveis | ❌ Não | ✅ Parcial |
+| Disponibilidade capturada | ✅ Sim | ✅ Sim |
+| `price_acceptance` bloqueante | ✅ Sim | ✅ Sim |
+| Confirmação estruturada enviada | ❌ Não | ❌ Não |
+| MODO PASSIVO activo | N/A | ❌ Não (conflito de prompt) |
+| Score estimado Cenário A | 1/5 turnos ok | 2/5 turnos ok |
 
 ---
 
 ## Cenário A — Cliente normal pergunta serviços e agenda
+
+> ⚠️ Secção abaixo mantida como referência histórica do Teste 1 (score 2/10).
 
 ### Turno 1
 
