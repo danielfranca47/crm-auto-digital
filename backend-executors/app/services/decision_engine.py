@@ -1406,6 +1406,19 @@ def _build_child_prompt_apresentation(
                 )
                 + "  Após o lead confirmar a escolha de serviço/pacote, proponha o agendamento normalmente.\n"
             )
+        elif presentation_variant == "scheduler":
+            # presentation_variant=scheduler — serviço presencial (massagem, spa, bem-estar, etc.)
+            # Não há fase de warming B2B. Após qualificação concluída, confirmar disponibilidade e valor.
+            warming_injection = (
+                "\n- ESTÁGIO PÓS-QUALIFICAÇÃO (scheduler — serviço presencial): "
+                "O lead indicou o serviço pretendido e a disponibilidade. O teu papel agora é:\n"
+                "  1. Confirmar (ou verificar) a disponibilidade para o horário/dia mencionado\n"
+                "  2. Informar o valor do serviço solicitado, se ainda não foi mencionado nesta conversa\n"
+                "  3. Propor a confirmação da reserva de forma natural e acolhedora\n"
+                "  REGRA CRÍTICA: usa linguagem de spa/serviço — 'agendar sessão', 'reservar', 'marcar experiência'. "
+                "NUNCA uses linguagem de reunião B2B ('mapear situação', 'plano de ação', 'diagnóstico', "
+                "'cliente com o teu perfil', 'resultados incríveis').\n"
+            )
         else:
             # Modo exploratório (padrão): aquecer e propor sessão sem compromisso de compra.
             social_proof = str(ai_profile.get("warming_social_proof") or "").strip() or _DEFAULT_SOCIAL_PROOF

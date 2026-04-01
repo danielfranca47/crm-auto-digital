@@ -1,7 +1,7 @@
 # Otimização do Agente Híbrido Agendador
 
 > Documento de rastreio de problemas e correções do teste `massagem-sensi-vitae`.
-> Última atualização: 2026-04-01 — Fix #7, Fix #8 e Fix #9 aplicados. Nenhum problema pendente.
+> Última atualização: 2026-04-01 — Fix #7, Fix #8, Fix #9 e Fix #10 aplicados. Cenário A T3 validado.
 
 ---
 
@@ -19,6 +19,7 @@
 | Fix #7 | Passive mode falha em perguntas de catálogo (T1) — triggers semânticos expandidos (Fix A), `next_action_hint='reply'` tornado vinculativo no output assembly (Fix B), child recebe instrução de resposta imediata quando hint=reply (Fix C) | `decision_engine.py` — `_build_mother_prompt`, `compose_decision_output`, `_build_child_prompt_qualification` |
 | Fix #8 | Confirmação estruturada não enviada no T5 — `extracted_fields` injetado no CONTEXTO do filho `apresentation`; bloco CONFIRMAÇÃO ESTRUTURADA OBRIGATÓRIA activa quando `meeting_scheduled=true` + `presentation_variant=scheduler` | `decision_engine.py` — `_build_child_prompt_apresentation` |
 | Fix #9 | Tom SDR/B2B inadequado para nicho de massagem — `presentation_variant` adicionado ao contexto do meta-prompter com instrução explícita: `scheduler` proíbe linguagem de reunião comercial/consultoria e força tom de reserva de serviço alinhado ao nicho; frontend passa `presentation_variant` ao backend via `appointment_mode` (exploratory=scheduler, commercial=sales) | `meta_prompter.py`, `frontend-crm/src/services/api.ts` |
+| Fix #10 | Tom SDR persistia no T3 apesar do Fix #9 — bloco `warming_injection` no modo exploratório usava defaults B2B hardcoded (`_DEFAULT_SOCIAL_PROOF`, `_DEFAULT_SESSION_PREVIEW`) ignorando `presentation_variant`; novo branch `elif presentation_variant == "scheduler"` substitui o warming B2B por instrução de confirmação de disponibilidade + valor adequada para serviços presenciais | `backend-executors/app/services/decision_engine.py` — `_build_child_prompt_apresentation` |
 
 ---
 
@@ -47,7 +48,7 @@
 ### Cenário A — Cliente normal pergunta serviços e agenda
 - [x] Turno 1: Agente apresenta serviços e valores (Terapêutica + Exótica + Lingam opcional) — Fix #7
 - [x] Turno 2: Agente confirma localização (Faro, Centro Comercial Algarb + Sala 2) ✅ Teste 3
-- [ ] Turno 3: Agente confirma disponibilidade quinta-feira à tarde + valor 45€ + tom acolhedor (sem SDR) — Fix #9
+- [x] Turno 3: Agente confirma disponibilidade quinta-feira à tarde + valor 45€ + tom acolhedor (sem SDR) — Fix #9 + Fix #10
 - [x] Turno 4: Agente confirma 16h ✅ Teste 3
 - [x] Turno 5: Agente envia confirmação estruturada de reserva + Sala 2 — Fix #8
 
