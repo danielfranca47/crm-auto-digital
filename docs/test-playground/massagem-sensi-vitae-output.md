@@ -183,21 +183,39 @@ As custom_instructions têm maior presença nos prompts:
 
 ### ❌ Fix #3 Não funcional — `response_style=passive` sem efeito
 
-O bloco `MODO PASSIVO ACTIVADO` no prompt filho está posicionado DEPOIS de instruções contraditórias:
+O bloco `MODO PASSIVO ACTIVADO` no prompt filho estava posicionado DEPOIS de instruções contraditórias:
 - `ESCOPO: Você APENAS faz perguntas de qualificação. Não apresenta ofertas.`
 - `RECUSAS: Nunca cite preços.`
 
-O LLM resolve o conflito a favor das instruções anteriores. O efeito líquido é zero — o agente continua a ignorar perguntas directas e a qualificar em vez de responder.
+O LLM resolvia o conflito a favor das instruções anteriores. O efeito líquido era zero.
+→ **Resolvido pelo Fix #5 (2026-04-01). Ver estado abaixo.**
 
 ### ❌ Problema 4 (novo) — `price_acceptance` inadequado para preço fixo
 
-Mesmo com `location_preference` removido, `price_acceptance` permanece como campo obrigatório. Para um negócio com tabela de preços explícita em `offer_description`, perguntar "Que valor você pretende investir?" é:
-- Confuso (o cliente acabou de escolher o serviço com preço definido)
-- Pode ser percebido como negociação de preço num negócio que não negoceia
+Perguntar "Que valor você pretende investir?" era inadequado para negócio com tabela de preços definida.
+→ **Resolvido pelo Fix #4 (2026-04-01). Configurar `qualification_required_fields=["service_interest","availability_window"]`.**
 
 ### ❌ Problema 5 (novo) — Sinal de fecho não detectado
 
-"Fica combinado" (T5) é um sinal de compra claro. O mother decision engine deveria ter roteado para `apresentation` ou `scheduling`. Em vez disso, manteve `qualification` porque `price_acceptance` estava em falta.
+"Fica combinado" (T5) era ignorado — mother mantinha `qualification` com `price_acceptance` em falta.
+→ **Resolvido pelo Fix #6 (2026-04-01). Ver estado abaixo.**
+
+---
+
+## Estado dos Fixes — Pré-Teste 3 (2026-04-01)
+
+| Fix | Problema | Status |
+|---|---|---|
+| Fix #1 | `location_preference` removido dos campos obrigatórios `agenda` | ✅ Confirmado no Teste 2 |
+| Fix #2 | `custom_instructions` injectadas nos prompts filho | ✅ Parcialmente funcional |
+| Fix #3 | `response_style=passive` implementado (mas não funcionava) | ⚠️ Substituído pelo Fix #5 |
+| Fix #4 | `qualification_required_fields` configurável por ai_profile | ✅ Implementado — a configurar antes do Teste 3 |
+| Fix #5 | `ESCOPO`/`RECUSAS` condicionais; `_passive_header` antes do `PAPEL` | ✅ Implementado — aguarda validação |
+| Fix #6 | Detecção de sinais de fecho no mother prompt (excepção à PRIORIDADE 1) | ✅ Implementado — aguarda validação |
+
+**Configuração necessária antes do Teste 3:**
+- `response_style=passive` (já configurado no Teste 2)
+- `qualification_required_fields=["service_interest","availability_window"]` (novo — Fix #4)
 
 ---
 

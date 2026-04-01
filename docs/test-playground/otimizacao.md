@@ -1,7 +1,7 @@
 # Otimização do Agente Híbrido Agendador
 
 > Documento de rastreio das correções aplicadas após o teste `massagem-sensi-vitae` (score 2/10).
-> Última atualização: 2026-04-01
+> Última atualização: 2026-04-01 — Fix #5 e Fix #6 implementados. Teste 3 pendente.
 
 ---
 
@@ -86,21 +86,15 @@ INSTRUÇÕES PERSONALIZADAS DO OPERADOR (prioridade máxima — seguir à risca)
 
 ## Problemas identificados no Teste 2
 
-### Problema 4 — MODO PASSIVO conflita com ESCOPO do prompt filho
+### Problema 4 — MODO PASSIVO conflita com ESCOPO do prompt filho ✅ RESOLVIDO (Fix #5)
 
-**Causa raiz:** O bloco `_passive_block` é injectado no final da linha `RECUSAS:` do prompt filho `_build_child_prompt_qualification`. Mas antes desta linha existem duas instruções directamente contraditórias:
+**Causa raiz:** O bloco `_passive_block` era injectado no final da linha `RECUSAS:` do prompt filho `_build_child_prompt_qualification`. Antes desta linha existiam duas instruções directamente contraditórias:
 - `ESCOPO: Você APENAS faz perguntas de qualificação. Não apresenta ofertas.`
 - `RECUSAS: Nunca cite preços.`
 
-O LLM resolve o conflito a favor das instruções que aparecem primeiro no prompt, ignorando o `MODO PASSIVO ACTIVADO`.
+O LLM resolvia o conflito a favor das instruções que apareciam primeiro no prompt, ignorando o `MODO PASSIVO ACTIVADO`.
 
-**Ficheiro a alterar:** `backend-executors/app/services/decision_engine.py`
-
-**Solução:** Mover `_passive_block` para ANTES do `ESCOPO` no prompt, e tornar o `ESCOPO` e o bloco `RECUSAS` condicionais ao `response_style`:
-- Quando `response_style=passive`: ESCOPO deve permitir responder perguntas directas + apresentar oferta
-- Quando `response_style=active`: ESCOPO mantém-se como está
-
-**Impacto esperado:** Turno 1 apresenta serviços e valores; Turno 2 responde sobre localização.
+**Solução aplicada (2026-04-01):** Fix #5 — ver secção abaixo.
 
 ---
 
@@ -142,21 +136,55 @@ O LLM resolve o conflito a favor das instruções que aparecem primeiro no promp
 
 ---
 
-### Problema 6 — Sinal de fecho ("fica combinado") não reconhecido
+### Problema 6 — Sinal de fecho ("fica combinado") não reconhecido ✅ RESOLVIDO (Fix #6)
 
-**Causa raiz:** O mother decision engine não detecta frases de confirmação/fecho como trigger para rotar para `apresentation` ou `scheduling`. Quando o cliente diz "Perfeito, fica combinado", o mother ainda rota para `qualification` porque `price_acceptance` está em falta.
+**Causa raiz:** O mother decision engine não detectava frases de confirmação/fecho como trigger para rotar para `apresentation`. Quando o cliente dizia "Perfeito, fica combinado", o mother mantinha `qualification` porque `price_acceptance` estava em falta e a PRIORIDADE 1 era obrigatória sem excepção.
 
-**Ficheiro a alterar:** `backend-executors/app/services/decision_engine.py` — função `_build_mother_prompt`
-
-**Solução:** Adicionar ao mother prompt um bloco de detecção de sinais de fecho:
-- Palavras como "fica combinado", "perfeito", "pode ser", "ok", "aceito" → sinal de `meeting_scheduled=true` ou `price_acceptance=yes`
-- Quando detectado, mother deve rotar para `apresentation` mesmo com campos em falta
+**Solução aplicada (2026-04-01):** Fix #6 — ver secção abaixo.
 
 ---
 
-## Checklist de validação pós-implementação
+### Fix #5 — `response_style=passive` corrigido no prompt filho qualification (2026-04-01)
+
+**Motivação:** O modo passivo não tinha efeito porque as instruções contraditórias (`ESCOPO`, `RECUSAS`) apareciam antes do bloco passivo no prompt filho.
+
+**Ficheiro alterado:** `backend-executors/app/services/decision_engine.py` — função `_build_child_prompt_qualification`
+
+**Mudanças:**
+- Removido `_passive_block` que era appendado ao final de `RECUSAS:`
+- Novo `_passive_header`: bloco passivo injectado ANTES do `PAPEL:` (primeiro conteúdo do prompt) — garantia de precedência
+- `_escopo_line` condicional:
+  - `active`: `"Você APENAS faz perguntas de qualificação. Não agenda reuniões. Não faz pitch. Não apresenta ofertas."`
+  - `passive`: `"Responder perguntas directas do cliente PRIMEIRO, usando offer_description e custom_instructions. Depois qualificar de forma natural. Pode apresentar serviços e valores quando perguntado. Não agenda reunião nesta fase."`
+- `_recusas_line` condicional:
+  - `active`: inclui `"Nunca cite preços."`
+  - `passive`: remove proibição de preços; adiciona `"Se a resposta não estiver em offer_description ou custom_instructions, diz que vais verificar (→ handoff)."`
+
+**Impacto esperado:** Turno 1 apresenta serviços e valores; Turno 2 responde sobre localização.
+
+---
+
+### Fix #6 — Detecção de sinais de fecho no mother prompt (2026-04-01)
+
+**Motivação:** O cliente dizer "fica combinado" (T5, Teste 2) não era suficiente para avançar de `qualification` para `apresentation`, mesmo com sinal de compra explícito.
+
+**Ficheiro alterado:** `backend-executors/app/services/decision_engine.py` — função `_build_mother_prompt`
+
+**Mudanças:**
+- PRIORIDADE 1: adicionada `EXCEÇÃO FECHO` — quando a mensagem contém sinal explícito de confirmação/booking ("fica combinado", "perfeito", "pode ser", "fechado", "aceito", "tá bom", "ok então", "combinado", "confirmado" ou equivalentes) E `agent_mode=agenda/sdr_scheduler`:
+  - interpreta `price_acceptance='yes'` e `meeting_scheduled=true`
+  - `route_to = "apresentation"` mesmo com `missing_fields` não vazio
+- REGRA OBRIGATÓRIA DE QUALIFICAÇÃO: actualizada com nota da excepção de fecho
+- Adicionado Exemplo 11 nos exemplos do mother prompt (AGENDA com sinal de fecho)
+
+**Impacto esperado:** T5 "Perfeito, fica combinado então" → mother rota para `apresentation` e filha envia confirmação estruturada de reserva + morada.
+
+---
+
+## Checklist de validação — Teste 3 (pendente)
 
 Re-executar os 3 cenários do `massagem-sensi-vitae-input.md` com `response_style=passive` e `qualification_required_fields=["service_interest","availability_window"]`.
+Fixes activos: Fix #1 (location_preference), Fix #2 (custom_instructions), Fix #4 (qualification_required_fields), Fix #5 (passive mode), Fix #6 (sinais de fecho).
 
 ### Cenário A — Cliente normal pergunta serviços e agenda
 - [ ] Turno 1: Agente apresenta serviços e valores (Terapêutica + Exótica + Lingam opcional)

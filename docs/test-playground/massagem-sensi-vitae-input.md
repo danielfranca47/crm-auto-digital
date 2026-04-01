@@ -1,7 +1,8 @@
 # Massagem Sensi Vitae — Input
 
-> Primeiro teste real do playground. Nicho: terapias de massagem em Faro, Portugal.
+> Teste real do playground. Nicho: terapias de massagem em Faro, Portugal.
 > Baseado em conversas reais do terapeuta Daniel com clientes via WhatsApp.
+> **Teste 3 — 2026-04-01:** configuração actualizada com Fix #4 (`qualification_required_fields`) + Fix #5 (passive mode corrigido) + Fix #6 (sinais de fecho).
 
 ---
 
@@ -12,8 +13,10 @@
 | `name` | Assistente Sensi Vitae |
 | `brand_name` | Sensi Vitae |
 | `agent_name` | Daniel |
-| `agent_mode` | agenda |
-| `template_key` | hybrid_scheduler |
+| `agent_mode` | `agenda` |
+| `template_key` | `hybrid_scheduler` |
+| `response_style` | `passive` ← **Fix #5: modo passivo corrigido** |
+| `qualification_required_fields` | `["service_interest", "availability_window"]` ← **Fix #4: remove price_acceptance** |
 | `tone_of_voice` | Acolhedor, próximo, usa "querido/a" com naturalidade. Linguagem simples e directa, sem ser formal. Português de Portugal com influência brasileira leve. |
 | `niche` | Terapias de massagem e bem-estar |
 | `target_audience` | Homens e mulheres de 30 a 70 anos na região do Algarve, Portugal |
@@ -87,27 +90,35 @@ Simulação de um cliente que agenda mas depois tenta alterar o horário repetid
 
 ---
 
-## 3. O que Avaliar
+## 3. O que Avaliar — Teste 3
 
+### Validação dos novos fixes (critérios obrigatórios)
+- [ ] **Fix #5 (passive mode):** T1 apresenta serviços e valores sem pedir disponibilidade primeiro?
+- [ ] **Fix #5 (passive mode):** T2 responde "Sim, fica em Faro" antes de perguntar qualquer coisa?
+- [ ] **Fix #4 (qualification_required_fields):** Nenhuma pergunta sobre "que valor pretende investir"?
+- [ ] **Fix #6 (sinais de fecho):** T5 "Perfeito, fica combinado" → agente envia confirmação (não pede mais campos)?
+
+### Qualidade geral
 - [ ] O agente apresenta os serviços e valores correctamente (Terapêutica, Exótica, Lingam)?
 - [ ] O tom é acolhedor e usa "querido/a" de forma natural?
 - [ ] O agente lida com pedido de "final feliz" sem rejeitar — redireciona para Finalização Lingam?
-- [ ] A progressão para agendamento acontece de forma natural e passiva?
 - [ ] O agente envia confirmação estruturada da reserva (experiência, horário, dia, massagista)?
-- [ ] O agente é flexível mas firme quando um horário não está disponível?
-- [ ] As informações práticas (localização, sala, duche) são fornecidas quando pedidas?
+- [ ] O agente é flexível mas firme quando um horário não está disponível (Cenário C)?
+- [ ] As informações práticas (localização, Sala 2, duche) são fornecidas quando pedidas?
 - [ ] O agente NÃO usa linguagem sexualizada ao falar da Finalização Lingam?
-- [ ] O número de mensagens por turno é adequado (idealmente 1-2, máximo 3)?
-- [ ] O agente consegue funcionar como "clone" do Daniel — a experiência é natural?
 
 ---
 
 ## 4. Notas do Operador
 
-- Este é o primeiro teste real do sistema num nicho que já conheço. O objectivo é validar se o agente consegue replicar a experiência de atendimento do Daniel.
-- Os cenários foram baseados em conversas reais extraídas do WhatsApp do Daniel.
-- O cenário B é o mais crítico: muitos sistemas de IA rejeitam pedidos de "final feliz" por considerarem inapropriado. O nosso agente DEVE aceitar e redirecionar para a Finalização Lingam pois é um serviço legítimo oferecido pelo terapeuta.
-- O cenário C testa a capacidade do agente de manter posição em negociação de horário sem perder o tom acolhedor.
-- **Funcionalidade a observar:** o Daniel real envia imagens dos serviços (catálogo visual). O sistema actual possivelmente não suporta envio de imagens pelo agente — registar se isso faz falta no output.
-- **Formato de confirmação esperado:** O Daniel envia confirmações tipo recibo (✅ Experiência Reservada / Experiência / Horário / Dia / Massagista). Verificar se o agente reproduz algo similar.
+- **Teste 3** — foco em validar Fix #4, Fix #5 e Fix #6. Cenários A, B e C são os mesmos dos testes anteriores para permitir comparação directa.
+- Os cenários foram baseados em conversas reais do WhatsApp do Daniel.
+- **Configuração obrigatória antes do teste:**
+  1. Confirmar `response_style=passive` no ai_profile (campo adicionado no Fix #3)
+  2. Definir `qualification_required_fields=["service_interest","availability_window"]` (campo adicionado no Fix #4)
+  3. Reiniciar backend-executors para carregar o código do Fix #5 e Fix #6
+- O cenário B é o mais crítico para `custom_instructions`: "final feliz" → Finalização Lingam sem linguagem sexualizada.
+- O cenário C testa firmeza de horário sem perder o tom acolhedor.
+- **Critério de aprovação do Teste 3:** ≥ 7/10 turnos correctos + todos os critérios obrigatórios da checklist do `otimizacao.md`.
+- **Funcionalidade a observar:** confirmação estruturada tipo recibo (✅ Experiência Reservada / Experiência / Horário / Dia / Massagista) — confirmar se acontece após Fix #6.
 - Idioma: Português de Portugal com influência brasileira leve (o Daniel é brasileiro a viver em Portugal).

@@ -927,7 +927,9 @@ def _build_mother_prompt(context: Dict[str, Any], message_text: str) -> str:
         "- Em price_acceptance use SEMPRE string: no|unsure|yes (não use boolean).\n"
         "- Se o lead aceitar o preço/valor, use price_acceptance='yes'.\n"
         "- REGRA OBRIGATÓRIA DE QUALIFICAÇÃO: se missing_fields não estiver vazio, route_to DEVE ser \"qualification\".\n"
-        "- Enquanto houver missing_fields, NÃO sugerir avanço para apresentation, follow-up ou closing.\n"
+        "  EXCEÇÃO FECHO: sinal explícito de confirmação/booking em agent_mode=agenda/sdr_scheduler permite\n"
+        "  route_to=\"apresentation\" — ver PRIORIDADE 1 EXCEÇÃO FECHO abaixo.\n"
+        "- Enquanto houver missing_fields E sem sinal de fecho, NÃO sugerir avanço para apresentation, follow-up ou closing.\n"
         "- perceived_category pode refletir o estágio atual do lead, mas route_to deve permanecer qualification até completar o contrato.\n"
         "\n"
         "DEFINIÇÃO DO FUNIL (IMPORTANTE):\n"
@@ -964,7 +966,12 @@ def _build_mother_prompt(context: Dict[str, Any], message_text: str) -> str:
         "\n"
         "REGRAS DE ROUTING — AVALIAR NESTA ORDEM (a primeira que coincidir vence):\n\n"
         "PRIORIDADE 1 (obrigatória — sistema sobrescreve mesmo se você retornar outra):\n"
-        "- missing_fields NÃO vazio → route_to = \"qualification\"\n\n"
+        "- missing_fields NÃO vazio → route_to = \"qualification\"\n"
+        "  EXCEÇÃO FECHO (agent_mode=agenda/sdr_scheduler): se a mensagem contiver sinal EXPLÍCITO de\n"
+        "  confirmação/booking (\"fica combinado\", \"perfeito\", \"pode ser\", \"fechado\", \"aceito\",\n"
+        "  \"tá bom\", \"ok então\", \"combinado\", \"confirmado\", \"então fica assim\" ou equivalentes),\n"
+        "  interprete price_acceptance='yes' e meeting_scheduled=true\n"
+        "  → route_to = \"apresentation\" mesmo com missing_fields. Documentar no reason.\n\n"
         "PRIORIDADE 2 (sinais fortes):\n"
         "- Lead confirmou horário/data específica → route_to = \"apresentation\"\n"
         "- Lead disse \"quero comprar/assinar/fechar\" com intent_level=high → route_to = \"closing\"\n"
@@ -998,6 +1005,9 @@ def _build_mother_prompt(context: Dict[str, Any], message_text: str) -> str:
         '   -> {"route_to":"closing","perceived_category":"closing","confidence":0.85,"reason":"pedido de contrato"}\n'
         "10) CLOSER (negativo): inbound_message_text: \"Fechou amanhã 17h\"\n"
         '   -> {"route_to":"apresentation","perceived_category":"apresentation","confidence":0.8,"reason":"confirmou horário (no closer, sem meeting_scheduled)"}\n'
+        "11) AGENDA sinal de fecho: inbound_message_text: \"Perfeito, fica combinado então\"\n"
+        "   (missing_fields não vazio, agent_mode=agenda, sinal de fecho explícito)\n"
+        '   -> {"route_to":"apresentation","perceived_category":"apresentation","confidence":0.85,"reason":"meeting_scheduled|fica combinado — sinal de fecho override","signals":{"meeting_scheduled":true,"price_acceptance":"yes"}}\n'
         "\n"
         "CONTEXTO:\n"
         f"- lead: {json.dumps(lead_summary, ensure_ascii=False)}\n"
@@ -1157,26 +1167,39 @@ def _build_child_prompt_qualification(
     tone_block = _build_tone_block(ai_profile, playbook)
     response_style = (ai_profile.get("response_style") or "active").strip().lower()
 
-    _passive_block = ""
-    if response_style == "passive":
-        _passive_block = (
-            "\nMODO PASSIVO ACTIVADO: Este agente responde primeiro, qualifica depois.\n"
-            "PRIORIDADE ABSOLUTA: se a mensagem do cliente for uma pergunta directa (sobre serviços,\n"
-            "preços, localização, horários, funcionamento, massagista, etc.), RESPONDE-A PRIMEIRO\n"
-            "usando offer_description e custom_instructions antes de qualquer pergunta de qualificação.\n"
-            "Só após responder, e de forma natural no mesmo turno ou no turno seguinte, recolhe campos em falta.\n"
-            "NUNCA ignores uma pergunta directa para fazer uma pergunta de qualificação.\n"
-            "RECUSAS passivo: Nunca inventes informação. Se a resposta não estiver em offer_description\n"
-            "ou custom_instructions, diz que vais verificar (→ handoff).\n"
-        )
+    # Fix P4: ESCOPO e RECUSAS condicionais ao response_style.
+    # O bloco passivo aparece ANTES do PAPEL para ter precedência sobre qualquer instrução posterior.
+    _escopo_line = (
+        "Responder perguntas directas do cliente PRIMEIRO, usando offer_description e custom_instructions. "
+        "Depois qualificar de forma natural. Pode apresentar serviços e valores quando perguntado. "
+        "Não agenda reunião nesta fase."
+        if response_style == "passive"
+        else "Você APENAS faz perguntas de qualificação. Não agenda reuniões. Não faz pitch. Não apresenta ofertas."
+    )
+    _recusas_line = (
+        "Nunca invente informação. Nunca agende reunião nesta fase. "
+        "Se a resposta não estiver em offer_description ou custom_instructions, diz que vais verificar (→ handoff)."
+        if response_style == "passive"
+        else "Nunca invente informação. Nunca cite preços. Nunca agende reunião nesta fase. Se não souber responder, redirecione ao tema da qualificação."
+    )
+    _passive_header = (
+        "MODO PASSIVO ACTIVADO: Este agente responde primeiro, qualifica depois.\n"
+        "PRIORIDADE ABSOLUTA: se a mensagem do cliente for uma pergunta directa (sobre serviços,\n"
+        "preços, localização, horários, funcionamento, massagista, etc.), RESPONDE-A PRIMEIRO\n"
+        "usando offer_description e custom_instructions antes de qualquer pergunta de qualificação.\n"
+        "Só após responder, e de forma natural no mesmo turno ou no turno seguinte, recolhe campos em falta.\n"
+        "NUNCA ignores uma pergunta directa para fazer uma pergunta de qualificação.\n\n"
+        if response_style == "passive"
+        else ""
+    )
 
-    _qual_prompt = f"""Você é a FILHA QUALIFICATION de um CRM de vendas WhatsApp.
+    _qual_prompt = f"""{_passive_header}Você é a FILHA QUALIFICATION de um CRM de vendas WhatsApp.
 
 PAPEL: Coletar campos de qualificação do lead, um por vez, através de perguntas naturais e contextuais.
-ESCOPO: Você APENAS faz perguntas de qualificação. Não agenda reuniões. Não faz pitch. Não apresenta ofertas.
+ESCOPO: {_escopo_line}
 TOM: {ai_summary["tone_of_voice"] or "profissional"} — conversacional e adaptado ao WhatsApp (mensagens curtas, sem formatação). Máx {playbook_summary["max_chars"] or "N/D"} caracteres.
 FRAMEWORK: Modo {agent_mode_normalized}. Template {playbook_summary["template_key"]}. Campos obrigatórios: {json.dumps(mode_contract['required_fields'], ensure_ascii=False)}. Campo atual: {json.dumps(current_field, ensure_ascii=False)}.
-RECUSAS: Nunca invente informação. Nunca cite preços. Nunca agende reunião nesta fase. Se não souber responder, redirecione ao tema da qualificação.{_passive_block}
+RECUSAS: {_recusas_line}
 {tone_block}
 Retorne SOMENTE JSON válido no schema ChildResult:
 {{
