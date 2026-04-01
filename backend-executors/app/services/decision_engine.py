@@ -1024,7 +1024,9 @@ def _build_mother_prompt(context: Dict[str, Any], message_text: str) -> str:
         + (
             "\nMODO PASSIVO (response_style=passive): "
             "Se a mensagem do cliente for uma pergunta directa (sobre serviços, preços, localização, "
-            "horários, massagista, etc.) E missing_fields NÃO ESTIVER VAZIO, "
+            "horários, massagista, catálogo de tratamentos, quais opções/massagens/tratamentos existem, "
+            "menu de serviços, o que oferecem, o que fazem, quais são os valores, etc.) "
+            "E missing_fields NÃO ESTIVER VAZIO, "
             "usa next_action_hint='reply' para sinalizar à filha que deve responder a pergunta primeiro. "
             "O route_to continua 'qualification' (os campos ainda precisam de ser coletados), "
             "mas a filha terá prioridade para responder antes de perguntar.\n"
@@ -1182,15 +1184,28 @@ def _build_child_prompt_qualification(
         if response_style == "passive"
         else "Nunca invente informação. Nunca cite preços. Nunca agende reunião nesta fase. Se não souber responder, redirecione ao tema da qualificação."
     )
+    _mother_hint = (mother_decision.next_action_hint or "").strip().lower()
+    _passive_reply_now = response_style == "passive" and _mother_hint == "reply"
     _passive_header = (
-        "MODO PASSIVO ACTIVADO: Este agente responde primeiro, qualifica depois.\n"
-        "PRIORIDADE ABSOLUTA: se a mensagem do cliente for uma pergunta directa (sobre serviços,\n"
-        "preços, localização, horários, funcionamento, massagista, etc.), RESPONDE-A PRIMEIRO\n"
-        "usando offer_description e custom_instructions antes de qualquer pergunta de qualificação.\n"
-        "Só após responder, e de forma natural no mesmo turno ou no turno seguinte, recolhe campos em falta.\n"
-        "NUNCA ignores uma pergunta directa para fazer uma pergunta de qualificação.\n\n"
-        if response_style == "passive"
-        else ""
+        (
+            "MODO PASSIVO ACTIVADO — RESPOSTA IMEDIATA OBRIGATÓRIA.\n"
+            "A mãe sinalizou next_action_hint='reply': o cliente fez uma pergunta de catálogo/oferta/serviços.\n"
+            "INSTRUÇÃO CRÍTICA: coloca TODA a resposta em message_text. NÃO perguntes nada neste turno.\n"
+            "should_ask=false. question_text DEVE ficar vazio (\"\").\n"
+            "Responde à pergunta do cliente usando offer_description e custom_instructions.\n"
+            "A qualificação continua nos próximos turnos — NÃO neste.\n\n"
+        )
+        if _passive_reply_now
+        else (
+            "MODO PASSIVO ACTIVADO: Este agente responde primeiro, qualifica depois.\n"
+            "PRIORIDADE ABSOLUTA: se a mensagem do cliente for uma pergunta directa (sobre serviços,\n"
+            "preços, localização, horários, funcionamento, massagista, catálogo, menu, etc.), RESPONDE-A PRIMEIRO\n"
+            "usando offer_description e custom_instructions antes de qualquer pergunta de qualificação.\n"
+            "Só após responder, e de forma natural no mesmo turno ou no turno seguinte, recolhe campos em falta.\n"
+            "NUNCA ignores uma pergunta directa para fazer uma pergunta de qualificação.\n\n"
+            if response_style == "passive"
+            else ""
+        )
     )
 
     _qual_prompt = f"""{_passive_header}Você é a FILHA QUALIFICATION de um CRM de vendas WhatsApp.
@@ -1253,6 +1268,7 @@ CONTEXTO:
 - lead_origin: {lead_origin_label}
 - origin_opener: {origin_opener}
 - inbound_message_text: {message_text}
+- next_action_hint_mae: {mother_decision.next_action_hint or "null"}
 {_build_custom_instructions_block(ai_profile)}"""
     return _inject_generated_parts(_qual_prompt, context, "qualification")
 
@@ -2140,7 +2156,22 @@ def compose_decision_output(
     question_text = str(child_result.question_text or child_result.message_text or "").strip()
     message_text = question_text
     message_field_used: Optional[str] = None
-    if next_action == "ask_qualification":
+    # Fix P7: passive mode reply-first override.
+    # Se a mãe emitiu next_action_hint='reply' com response_style=passive, o cliente fez uma pergunta
+    # de catálogo/serviços. Nesse caso, o filho deve ter respondido em message_text — usar essa
+    # resposta diretamente em vez de question_text (a pergunta de qualificação).
+    _response_style = (ai_profile.get("response_style") or "active").strip().lower()
+    _passive_reply_override = (
+        effective_route_to == "qualification"
+        and (mother_decision.next_action_hint or "").strip().lower() == "reply"
+        and _response_style == "passive"
+        and bool(child_result.message_text)
+    )
+    if _passive_reply_override:
+        next_action = "reply"
+        message_text = str(child_result.message_text).strip()
+        message_field_used = None
+    elif next_action == "ask_qualification":
         if not current_field:
             next_action = "reply"
             effective_route_to = "apresentation"
