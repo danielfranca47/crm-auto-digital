@@ -88,6 +88,7 @@ export interface AgentConfig {
   qualification_score_threshold: number;
   nurture_vs_discard_rule: boolean;
   buying_signal_keywords: string[];
+  qualification_required_fields: string[] | null;
 
   // ── Camada 3 — Pipeline ──────────────────────────────────
   media_fallback: string;
@@ -170,6 +171,7 @@ export const DEFAULT_AGENT_CONFIG: AgentConfig = {
   qualification_score_threshold: 6,
   nurture_vs_discard_rule: false,
   buying_signal_keywords: [],
+  qualification_required_fields: null,
 
   media_fallback: 'continuar',
   media_fallback_msg: 'Oi! Não consegui abrir o que você enviou. Pode me responder em texto? Assim consigo te ajudar melhor 😊',

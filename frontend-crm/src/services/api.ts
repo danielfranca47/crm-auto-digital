@@ -87,6 +87,7 @@ export type AiProfilePayload = {
   briefing_lead_time?: number | null;
   operator_whatsapp?: string | null;
   buying_signal_keywords?: string[] | null;
+  qualification_required_fields?: string[] | null;
   calendar_integration?: "none" | "google_calendar" | "calendly" | null;
   payment_gateway?: "hotmart" | "kiwify" | "stripe" | "generico" | null;
   response_style?: "active" | "passive" | null;
@@ -911,6 +912,7 @@ export const api = {
         qualification_score_threshold: pack.qualification_score_threshold ?? DEFAULT_AGENT_CONFIG.qualification_score_threshold,
         nurture_vs_discard_rule:        pack.nurture_vs_discard_rule        ?? DEFAULT_AGENT_CONFIG.nurture_vs_discard_rule,
         buying_signal_keywords:         pack.buying_signal_keywords         ?? DEFAULT_AGENT_CONFIG.buying_signal_keywords,
+        qualification_required_fields:  pack.qualification_required_fields  ?? DEFAULT_AGENT_CONFIG.qualification_required_fields,
 
         // Camada 3 — Follow-up avançado
         followup_max_attempts:  pack.followup_max_attempts  ?? DEFAULT_AGENT_CONFIG.followup_max_attempts,
@@ -965,6 +967,7 @@ export const api = {
         qualification_score_threshold: config.qualification_score_threshold,
         nurture_vs_discard_rule:        config.nurture_vs_discard_rule,
         buying_signal_keywords:         config.buying_signal_keywords,
+        qualification_required_fields:  config.qualification_required_fields,
 
         // Camada 3
         media_fallback:      config.media_fallback,

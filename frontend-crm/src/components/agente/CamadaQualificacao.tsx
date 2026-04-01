@@ -155,8 +155,108 @@ function ModalBuyingSignals({ keywords, onSave, onClose }: {
   );
 }
 
+// ─── Modal: campos de qualificação obrigatórios ───────────────
+const ALL_QUAL_FIELDS: { key: string; label: string; desc: string }[] = [
+  { key: 'service_interest',    label: 'Serviço de interesse',   desc: 'O que o lead quer contratar' },
+  { key: 'availability_window', label: 'Disponibilidade',        desc: 'Horário ou data disponível' },
+  { key: 'price_acceptance',    label: 'Aceitação de preço',     desc: 'Lead aceitou o valor informado' },
+  { key: 'location_preference', label: 'Preferência de local',   desc: 'Presencial, online ou domicílio' },
+  { key: 'urgency',             label: 'Urgência',               desc: 'Quão urgente é a necessidade' },
+  { key: 'decision_role',       label: 'Decisor',                desc: 'Quem decide a compra' },
+  { key: 'budget_or_price_acceptance', label: 'Orçamento',       desc: 'Faixa de orçamento disponível' },
+  { key: 'constraints',         label: 'Restrições',             desc: 'Limitações de horário ou acesso' },
+];
+
+function ModalQualFields({ current, onSave, onClose }: {
+  current: string[] | null;
+  onSave: (v: string[] | null) => void;
+  onClose: () => void;
+}) {
+  // null = usar defaults do modo; array = override (pode ser vazio)
+  const [useOverride, setUseOverride] = useState(current !== null);
+  const [selected, setSelected] = useState<string[]>(current ?? []);
+
+  function toggle(key: string) {
+    setSelected(prev => prev.includes(key) ? prev.filter(k => k !== key) : [...prev, key]);
+  }
+
+  function handleSave() {
+    onSave(useOverride ? selected : null);
+  }
+
+  return (
+    <ModalBase
+      title="Campos de qualificação"
+      sub="Define quais informações o agente deve obter antes de avançar o lead no pipeline"
+      onClose={onClose}
+      onSave={handleSave}
+    >
+      <div className="o-field" style={{ marginBottom: 16 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', background: 'var(--o-b1)', borderRadius: 6, cursor: 'pointer' }}
+          onClick={() => setUseOverride(v => !v)}>
+          <div style={{
+            width: 36, height: 20, borderRadius: 10, background: useOverride ? 'var(--o-purple)' : 'var(--o-dim)',
+            position: 'relative', flexShrink: 0, transition: 'background .2s',
+          }}>
+            <div style={{
+              position: 'absolute', top: 3, left: useOverride ? 18 : 3,
+              width: 14, height: 14, borderRadius: '50%', background: '#fff', transition: 'left .2s',
+            }} />
+          </div>
+          <div>
+            <div style={{ fontSize: 12.5, color: 'var(--o-text)', fontWeight: 500 }}>
+              {useOverride ? 'Campos personalizados' : 'Usar padrão do modo de agente'}
+            </div>
+            <div style={{ fontSize: 11, color: 'var(--o-sub)', marginTop: 2 }}>
+              {useOverride
+                ? 'Marque os campos que o agente deve exigir. Lista vazia = agente passivo, sem qualificação obrigatória.'
+                : 'O sistema usa automaticamente os campos adequados ao modo configurado (agenda, consultivo, etc.)'}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {useOverride && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          {ALL_QUAL_FIELDS.map(f => {
+            const active = selected.includes(f.key);
+            return (
+              <div key={f.key}
+                onClick={() => toggle(f.key)}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 12, padding: '10px 14px',
+                  background: active ? 'color-mix(in srgb, var(--o-purple) 12%, transparent)' : 'var(--o-b1)',
+                  border: `1px solid ${active ? 'var(--o-purple)' : 'transparent'}`,
+                  borderRadius: 6, cursor: 'pointer',
+                }}
+              >
+                <div style={{
+                  width: 16, height: 16, borderRadius: 3, border: `2px solid ${active ? 'var(--o-purple)' : 'var(--o-dim)'}`,
+                  background: active ? 'var(--o-purple)' : 'transparent', flexShrink: 0,
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                }}>
+                  {active && <span style={{ color: '#fff', fontSize: 10, lineHeight: 1 }}>✓</span>}
+                </div>
+                <div>
+                  <div style={{ fontSize: 12.5, color: 'var(--o-text)', fontWeight: 500 }}>{f.label}</div>
+                  <div style={{ fontSize: 11, color: 'var(--o-sub)' }}>{f.desc}</div>
+                </div>
+              </div>
+            );
+          })}
+          {selected.length === 0 && (
+            <div style={{ fontSize: 11.5, color: 'var(--o-warn)', padding: '8px 0' }}>
+              Nenhum campo selecionado — o agente não fará qualificação obrigatória (modo passivo).
+            </div>
+          )}
+        </div>
+      )}
+    </ModalBase>
+  );
+}
+
 type DrawerKey = 'produto' | 'ticket' | 'publico' | 'dor' | 'objecao' | 'score' | null;
-type ModalKey  = 'f1' | 'f2' | 'f3' | 'buying_signals' | null;
+type ModalKey  = 'f1' | 'f2' | 'f3' | 'buying_signals' | 'qual_fields' | null;
 
 export function CamadaQualificacao({ config, onUpdate }: CamadaQualificacaoProps) {
   const [drawer, setDrawer] = useState<DrawerKey>(null);
@@ -233,6 +333,18 @@ export function CamadaQualificacao({ config, onUpdate }: CamadaQualificacaoProps
           </span>
           <span className="o-edit-arrow">›</span>
         </div>
+        <EditCard
+          label="Campos de qualificação"
+          value={
+            config.qualification_required_fields === null
+              ? 'Padrão do modo'
+              : config.qualification_required_fields.length === 0
+                ? 'Nenhum (modo passivo)'
+                : `${config.qualification_required_fields.length} campo(s) ativo(s)`
+          }
+          sub="Informações obrigatórias antes de avançar o lead"
+          onClick={() => setModal('qual_fields')}
+        />
         {showBuyingSignals && (
           <EditCard
             label="Sinais de compra"
@@ -300,6 +412,13 @@ export function CamadaQualificacao({ config, onUpdate }: CamadaQualificacaoProps
           keywords={config.buying_signal_keywords}
           onClose={() => setModal(null)}
           onSave={v => { onUpdate({ buying_signal_keywords: v }); setModal(null); }}
+        />
+      )}
+      {modal === 'qual_fields' && (
+        <ModalQualFields
+          current={config.qualification_required_fields}
+          onClose={() => setModal(null)}
+          onSave={v => { onUpdate({ qualification_required_fields: v }); setModal(null); }}
         />
       )}
     </>
