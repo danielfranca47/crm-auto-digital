@@ -1,7 +1,7 @@
 # Otimização do Agente Híbrido Agendador
 
 > Documento de rastreio de problemas e correções do teste `massagem-sensi-vitae`.
-> Última atualização: 2026-04-01 — Fix #7 e Fix #8 aplicados. Problema 9 pendente.
+> Última atualização: 2026-04-01 — Fix #7, Fix #8 e Fix #9 aplicados. Nenhum problema pendente.
 
 ---
 
@@ -18,18 +18,7 @@
 | Fix #6 | Sinais de fecho ("fica combinado") não reconhecidos — EXCEÇÃO FECHO adicionada ao mother prompt | `decision_engine.py` — `_build_mother_prompt` |
 | Fix #7 | Passive mode falha em perguntas de catálogo (T1) — triggers semânticos expandidos (Fix A), `next_action_hint='reply'` tornado vinculativo no output assembly (Fix B), child recebe instrução de resposta imediata quando hint=reply (Fix C) | `decision_engine.py` — `_build_mother_prompt`, `compose_decision_output`, `_build_child_prompt_qualification` |
 | Fix #8 | Confirmação estruturada não enviada no T5 — `extracted_fields` injetado no CONTEXTO do filho `apresentation`; bloco CONFIRMAÇÃO ESTRUTURADA OBRIGATÓRIA activa quando `meeting_scheduled=true` + `presentation_variant=scheduler` | `decision_engine.py` — `_build_child_prompt_apresentation` |
-
----
-
-## Problemas pendentes
-
-### Problema 9 — Tom SDR/B2B inadequado para nicho de massagem
-
-**Sintoma:** T3 — "Um cliente com o teu perfil já teve resultados incríveis... vamos mapear a tua situação e definir um plano de ação para ti." — linguagem de vendas B2B completamente inadequada para spa de massagem.
-
-**Causa provável:** `generated_prompt_parts` gerados pelo meta-prompter com tom genérico SDR que não reflecte o `niche` ("Terapias de massagem") nem o `tone_of_voice` ("Acolhedor, próximo, usa querido/a"). Os parts gerados contêm social proof e framing de tipo consultoria.
-
-**Solução proposta:** Forçar re-geração dos `generated_prompt_parts` (limpar `generated_prompt_parts=null` no ai_profile e reactivar o meta-prompter), ou injectar o `niche` e `tone_of_voice` como restrições explícitas no meta-prompter.
+| Fix #9 | Tom SDR/B2B inadequado para nicho de massagem — `presentation_variant` adicionado ao contexto do meta-prompter com instrução explícita: `scheduler` proíbe linguagem de reunião comercial/consultoria e força tom de reserva de serviço alinhado ao nicho; frontend passa `presentation_variant` ao backend via `appointment_mode` (exploratory=scheduler, commercial=sales) | `meta_prompter.py`, `frontend-crm/src/services/api.ts` |
 
 ---
 
@@ -58,7 +47,7 @@
 ### Cenário A — Cliente normal pergunta serviços e agenda
 - [x] Turno 1: Agente apresenta serviços e valores (Terapêutica + Exótica + Lingam opcional) — Fix #7
 - [x] Turno 2: Agente confirma localização (Faro, Centro Comercial Algarb + Sala 2) ✅ Teste 3
-- [ ] Turno 3: Agente confirma disponibilidade quinta-feira à tarde + valor 45€
+- [ ] Turno 3: Agente confirma disponibilidade quinta-feira à tarde + valor 45€ + tom acolhedor (sem SDR) — Fix #9
 - [x] Turno 4: Agente confirma 16h ✅ Teste 3
 - [x] Turno 5: Agente envia confirmação estruturada de reserva + Sala 2 — Fix #8
 
@@ -101,3 +90,4 @@
 | `agent_mode=direto` | Campos obrigatórios não alterados (3 campos) |
 | Tom "querido/a" | Presente em todos os cenários |
 | `is_playground=true` nos leads sandbox | Leads não aparecem no Kanban |
+| `presentation_variant=null` (padrão) | Meta-prompter usa `scheduler` como fallback — sem regressão para agentes existentes |

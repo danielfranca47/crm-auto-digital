@@ -3,6 +3,7 @@
 > Teste real do playground. Nicho: terapias de massagem em Faro, Portugal.
 > Baseado em conversas reais do terapeuta Daniel com clientes via WhatsApp.
 > **Teste 3 — 2026-04-01:** configuração actualizada com Fix #4 (`qualification_required_fields`) + Fix #5 (passive mode corrigido) + Fix #6 (sinais de fecho).
+> **Teste 4 — 2026-04-01:** configuração actualizada com Fix #9 (`presentation_variant=scheduler` para eliminar tom SDR/B2B).
 
 ---
 
@@ -16,6 +17,7 @@
 | `agent_mode` | `agenda` |
 | `template_key` | `hybrid_scheduler` |
 | `response_style` | `passive` ← **Fix #5: modo passivo corrigido** |
+| `presentation_variant` | `scheduler` ← **Fix #9: reserva de sessão presencial — sem linguagem SDR/B2B** |
 | `qualification_required_fields` | `["service_interest", "availability_window"]` ← **Fix #4: remove price_acceptance** |
 | `tone_of_voice` | Acolhedor, próximo, usa "querido/a" com naturalidade. Linguagem simples e directa, sem ser formal. Português de Portugal com influência brasileira leve. |
 | `niche` | Terapias de massagem e bem-estar |
@@ -97,6 +99,7 @@ Simulação de um cliente que agenda mas depois tenta alterar o horário repetid
 - [ ] **Fix #5 (passive mode):** T2 responde "Sim, fica em Faro" antes de perguntar qualquer coisa?
 - [ ] **Fix #4 (qualification_required_fields):** Nenhuma pergunta sobre "que valor pretende investir"?
 - [ ] **Fix #6 (sinais de fecho):** T5 "Perfeito, fica combinado" → agente envia confirmação (não pede mais campos)?
+- [ ] **Fix #9 (presentation_variant=scheduler):** Tom acolhedor de spa — sem "mapear situação", "plano de ação", "cliente com o teu perfil" ou linguagem SDR/B2B?
 
 ### Qualidade geral
 - [ ] O agente apresenta os serviços e valores correctamente (Terapêutica, Exótica, Lingam)?
@@ -116,7 +119,9 @@ Simulação de um cliente que agenda mas depois tenta alterar o horário repetid
 - **Configuração obrigatória antes do teste:**
   1. Confirmar `response_style=passive` no ai_profile (campo adicionado no Fix #3)
   2. Definir `qualification_required_fields=["service_interest","availability_window"]` (campo adicionado no Fix #4)
-  3. Reiniciar backend-executors para carregar o código do Fix #5 e Fix #6
+  3. Definir `presentation_variant=scheduler` no ai_profile — via UI (Camada 5 → Objetivo do agendamento → Agendamento Exploratório) ou directamente na BD
+  4. Após definir `presentation_variant`, limpar `generated_prompt_parts=null` no ai_profile e aguardar re-geração automática pelo meta-prompter (ou forçar via POST `/meta-prompter/regenerate`)
+  5. Reiniciar backend-executors para carregar o código dos fixes
 - O cenário B é o mais crítico para `custom_instructions`: "final feliz" → Finalização Lingam sem linguagem sexualizada.
 - O cenário C testa firmeza de horário sem perder o tom acolhedor.
 - **Critério de aprovação do Teste 3:** ≥ 7/10 turnos correctos + todos os critérios obrigatórios da checklist do `otimizacao.md`.

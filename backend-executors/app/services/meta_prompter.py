@@ -47,9 +47,25 @@ def _build_meta_prompt(ai_profile: Dict[str, Any]) -> str:
     offer_description = ai_profile.get("offer_description") or ""
     template_key = ai_profile.get("template_key") or "sdr_padrao"
     agent_mode = ai_profile.get("agent_mode") or "agenda"
+    presentation_variant = str(ai_profile.get("presentation_variant") or "scheduler").strip().lower()
     objections_faq = ai_profile.get("objection_common") or ""
     language = ai_profile.get("language") or "pt-BR"
     max_chars = 320
+
+    _presentation_variant_desc = {
+        "scheduler": (
+            "scheduler — o agente agenda uma sessão/serviço presencial onde o cliente paga no local. "
+            "NÃO usar linguagem de reunião comercial B2B (ex: 'mapear situação', 'plano de ação', 'diagnóstico consultivo', "
+            "'cliente com o teu perfil', social proof de consultoria). "
+            "Usar linguagem de reserva de serviço alinhada com o nicho (ex: 'agendar sessão', 'reservar horário', 'marcar experiência'). "
+            "Tom e exemplos devem reflectir o nicho configurado."
+        ),
+        "sales": (
+            "sales — o agente faz uma reunião/consulta comercial antes de fechar a venda. "
+            "Linguagem consultiva e social proof B2B são aceitáveis. "
+            "Focar em qualificação aprofundada e agendamento de reunião de diagnóstico."
+        ),
+    }.get(presentation_variant, "scheduler — ver descrição acima")
 
     # Campos obrigatórios: usa override do ai_profile se configurado, senão deriva do agent_mode
     override = ai_profile.get("qualification_required_fields")
@@ -72,6 +88,7 @@ CONTEXTO DO AGENTE:
 - Oferta: {offer_description}
 - Template: {template_key} (fluxo: {template_description})
 - Modo: {agent_mode}
+- Variante de apresentação: {_presentation_variant_desc}
 - Objeções configuradas pelo usuário: {objections_faq if objections_faq else "(não configuradas)"}
 - Campos de qualificação obrigatórios: {json.dumps(required_fields, ensure_ascii=False)}
 
@@ -116,7 +133,14 @@ REGRAS GERAIS:
 - NUNCA use placeholders genéricos ([nome], [serviço]) — use linguagem natural contextual
 - Os exemplos devem parecer conversas WhatsApp reais, não templates de CRM
 - Retorne SOMENTE JSON válido, sem texto adicional
-"""
+{"" if presentation_variant != "scheduler" else """
+RESTRIÇÃO CRÍTICA (presentation_variant=scheduler):
+- PROIBIDO em todos os blocos gerados: 'mapear situação', 'plano de ação', 'diagnóstico', 'consultoria',
+  'cliente com o teu perfil', 'resultados incríveis', 'reunião', 'call', 'discovery', social proof B2B.
+- Todos os exemplos devem usar linguagem de reserva de serviço/experiência presencial alinhada com o nicho.
+- few_shot_apresentation deve conter exemplos de proposta de sessão/experiência, não pitch de produto.
+- tone_rules devem reflectir o nicho e o tom de voz configurados — NÃO regras genéricas de SDR.
+"""}"""
 
 
 # ---------------------------------------------------------------------------

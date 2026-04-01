@@ -921,7 +921,12 @@ export const api = {
         followup_allowed_hours: pack.followup_allowed_hours ?? DEFAULT_AGENT_CONFIG.followup_allowed_hours,
 
         // Apresentação e agendamento
-        appointment_mode:        ((profile as any)?.appointment_mode ?? pack.appointment_mode ?? DEFAULT_AGENT_CONFIG.appointment_mode) as 'commercial' | 'exploratory',
+        // presentation_variant (backend) → appointment_mode (frontend): scheduler=exploratory, sales=commercial
+        appointment_mode:        (
+          (profile as any)?.presentation_variant === 'sales' ? 'commercial' :
+          (profile as any)?.presentation_variant === 'scheduler' ? 'exploratory' :
+          (profile as any)?.appointment_mode ?? pack.appointment_mode ?? DEFAULT_AGENT_CONFIG.appointment_mode
+        ) as 'commercial' | 'exploratory',
         appointment_reminder_h1: pack.appointment_reminder_h1 ?? DEFAULT_AGENT_CONFIG.appointment_reminder_h1,
         appointment_reminder_h2: pack.appointment_reminder_h2 ?? DEFAULT_AGENT_CONFIG.appointment_reminder_h2,
         briefing_enabled:        pack.briefing_enabled        ?? DEFAULT_AGENT_CONFIG.briefing_enabled,
@@ -995,6 +1000,7 @@ export const api = {
         followup_allowed_hours: config.followup_allowed_hours,
 
         // Apresentação e agendamento
+        appointment_mode:        config.appointment_mode,
         appointment_reminder_h1: config.appointment_reminder_h1,
         appointment_reminder_h2: config.appointment_reminder_h2,
         briefing_enabled:        config.briefing_enabled,
@@ -1024,6 +1030,8 @@ export const api = {
         timezone:            config.timezone,
         custom_instructions: config.custom_instructions,
         response_style:      config.response_style,
+        // appointment_mode (frontend) → presentation_variant (backend): exploratory=scheduler, commercial=sales
+        presentation_variant: config.appointment_mode === 'commercial' ? 'sales' : 'scheduler',
         niche:               config.niche,
         target_audience:     config.target_audience,
         offer_description:   config.offer_description,
