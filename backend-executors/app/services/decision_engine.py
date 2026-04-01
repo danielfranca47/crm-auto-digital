@@ -1478,6 +1478,30 @@ def _build_child_prompt_apresentation(
         + "\n".join(_apres_knowledge_parts)
     ) if _apres_knowledge_parts else ""
 
+    # Fix P8: bloco de confirmação estruturada obrigatória.
+    # Activa quando meeting_scheduled=true + presentation_variant=scheduler (modo agenda/hybrid).
+    # O filho entra em "modo recibo" e deve emitir o resumo estruturado da reserva.
+    _apres_meeting_scheduled = _extract_meeting_scheduled_signal(mother_decision)
+    _extracted_fields_apres = mode_contract.get("extracted_fields") or {}
+    _booking_confirmation_block = ""
+    if _apres_meeting_scheduled and presentation_variant == "scheduler":
+        _booking_confirmation_block = (
+            "\nCONFIRMAÇÃO ESTRUTURADA OBRIGATÓRIA (meeting_scheduled=true + scheduler):\n"
+            "O cliente confirmou a reserva. DEVES emitir o recibo de reserva no formato abaixo.\n"
+            "Usa os valores de extracted_fields para preencher cada campo. "
+            "Se um campo não estiver em extracted_fields, usa o que estiver no histórico ou em custom_instructions.\n"
+            "Formato obrigatório (adapta o texto ao tom de voz, mantém a estrutura):\n"
+            "✅ [nome do serviço] Reservada\n"
+            "📋 Experiência: [service_interest]\n"
+            "🕐 Horário: [hora de availability_window]\n"
+            "📅 Dia: [dia de availability_window]\n"
+            "👤 Massagista: [nome do massagista — de custom_instructions ou offer_description]\n"
+            "Após o recibo, podes acrescentar a morada/sala se ainda não foi dada neste turno, "
+            "ou uma frase de encerramento acolhedora.\n"
+            "NÃO substituas o recibo por texto verbal solto. O recibo É a resposta principal.\n"
+            f"extracted_fields disponíveis: {json.dumps(_extracted_fields_apres, ensure_ascii=False)}\n"
+        )
+
     _apres_prompt = (
         f"Você é a FILHA APRESENTATION de um CRM de vendas WhatsApp.\n\n"
         f"PAPEL: Conduzir a fase de apresentação — agendamento (scheduler) ou oferta+fechamento (sales).\n"
@@ -1542,7 +1566,8 @@ def _build_child_prompt_apresentation(
         + _build_validation_block(playbook_summary.get("max_chars"))
         + "\n"
         + f"{commercial_injection if commercial_injection else warming_injection}"
-        "Exemplos rápidos (sales):\n"
+        + (_booking_confirmation_block)
+        + "Exemplos rápidos (sales):\n"
         "- EXEMPLO CONFIRMAR: message_text='Plano Starter por R$X com suporte Y. Quer seguir com a contratação?'\n"
         "  signals_structured={offer_presented:true, checkout_sent:false, presentation_variant:'sales', offer_item_name:'Plano Starter'}\n"
         "- EXEMPLO ENVIAR LINK: message_text='Perfeito! Aqui está seu link: https://exemplo.com/checkout-starter\\nConclua e me confirme por aqui.'\n"
@@ -1566,6 +1591,7 @@ def _build_child_prompt_apresentation(
         f"- offer_pack_summary: {json.dumps(offer_pack_summary, ensure_ascii=False)}\n"
         f"- warming_stage_active: {bool(warming_injection)}\n"
         f"- commercial_mode_active: {bool(commercial_injection)}\n"
+        f"- extracted_fields: {json.dumps(mode_contract.get('extracted_fields') or {}, ensure_ascii=False)}\n"
         f"- inbound_message_text: {message_text}\n"
         + _build_custom_instructions_block(ai_profile)
     )

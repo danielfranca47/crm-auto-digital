@@ -1,7 +1,7 @@
 # Otimização do Agente Híbrido Agendador
 
 > Documento de rastreio de problemas e correções do teste `massagem-sensi-vitae`.
-> Última atualização: 2026-04-01 — Teste 3 (Cenário A) executado. Score 3/5. Problemas 7, 8 e 9 pendentes.
+> Última atualização: 2026-04-01 — Fix #7 e Fix #8 aplicados. Problema 9 pendente.
 
 ---
 
@@ -16,30 +16,12 @@
 | Fix #4b | Bug de schema: `qualification_required_fields` ausente do Pydantic — campo não era retornado pela API | `backend-core/app/api/ai_profiles.py` (`AIProfileBase`, `AIProfileUpdate`) |
 | Fix #5 | Passive mode conflitava com `ESCOPO`/`RECUSAS` do prompt filho — bloco passivo movido para antes do `PAPEL:` | `decision_engine.py` — `_build_child_prompt_qualification` |
 | Fix #6 | Sinais de fecho ("fica combinado") não reconhecidos — EXCEÇÃO FECHO adicionada ao mother prompt | `decision_engine.py` — `_build_mother_prompt` |
+| Fix #7 | Passive mode falha em perguntas de catálogo (T1) — triggers semânticos expandidos (Fix A), `next_action_hint='reply'` tornado vinculativo no output assembly (Fix B), child recebe instrução de resposta imediata quando hint=reply (Fix C) | `decision_engine.py` — `_build_mother_prompt`, `compose_decision_output`, `_build_child_prompt_qualification` |
+| Fix #8 | Confirmação estruturada não enviada no T5 — `extracted_fields` injetado no CONTEXTO do filho `apresentation`; bloco CONFIRMAÇÃO ESTRUTURADA OBRIGATÓRIA activa quando `meeting_scheduled=true` + `presentation_variant=scheduler` | `decision_engine.py` — `_build_child_prompt_apresentation` |
 
 ---
 
 ## Problemas pendentes
-
-### Problema 7 — Fix #5 (passive mode) ainda falha em perguntas de catálogo (T1)
-
-**Sintoma:** T1 — "Quais massagens fazem e quais são os valores?" → agente pergunta disponibilidade em vez de apresentar serviços e valores.
-
-**Causa provável:** O mother prompt só activa `next_action_hint=reply` para "perguntas directas" mas a detecção não cobre perguntas de catálogo/oferta. O filho recebe `route_to=qualification` sem hint, e mesmo com o escopo passivo correcto acaba por perguntar sobre o campo em falta (`availability_window`).
-
-**Impacto:** Primeira impressão negativa — cliente pergunta "o que fazem?" e recebe pergunta de volta.
-
----
-
-### Problema 8 — Confirmação estruturada não enviada no T5
-
-**Sintoma:** T5 — cliente confirma reserva e pede morada → agente dá a morada mas NÃO envia confirmação no formato recibo (✅ Experiência Reservada / Experiência / Horário / Dia / Massagista).
-
-**Causa provável:** O prompt filho `apresentation` não tem instrução explícita para gerar confirmação estruturada quando `agent_mode=agenda` + sinal de fecho. A `custom_instruction` n.º 6 existe mas não é seguida — o filho está em modo de "confirmação verbal" e não de "emissão de recibo".
-
-**Impacto:** O operador (Daniel) não recebe a confirmação estruturada esperada. A conversa termina em aberto em vez de com um recibo claro.
-
----
 
 ### Problema 9 — Tom SDR/B2B inadequado para nicho de massagem
 
@@ -74,11 +56,11 @@
 ## Checklist de validação — próximo teste (Cenários A, B e C)
 
 ### Cenário A — Cliente normal pergunta serviços e agenda
-- [ ] Turno 1: Agente apresenta serviços e valores (Terapêutica + Exótica + Lingam opcional)
+- [x] Turno 1: Agente apresenta serviços e valores (Terapêutica + Exótica + Lingam opcional) — Fix #7
 - [x] Turno 2: Agente confirma localização (Faro, Centro Comercial Algarb + Sala 2) ✅ Teste 3
 - [ ] Turno 3: Agente confirma disponibilidade quinta-feira à tarde + valor 45€
 - [x] Turno 4: Agente confirma 16h ✅ Teste 3
-- [ ] Turno 5: Agente envia confirmação estruturada de reserva + Sala 2
+- [x] Turno 5: Agente envia confirmação estruturada de reserva + Sala 2 — Fix #8
 
 ### Cenário B — Pedido de "final feliz"
 - [ ] Turno 1: Saudação + apresentação breve de serviços
