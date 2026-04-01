@@ -112,8 +112,15 @@ def infer_extracted_fields(context: Dict[str, Any]) -> Dict[str, Any]:
     return extracted
 
 
-def compute_missing_fields(agent_mode_normalized: str, extracted: Dict[str, Any]) -> List[str]:
-    required = MIN_REQUIRED_FIELDS.get(agent_mode_normalized, MIN_REQUIRED_FIELDS["agenda"])
+def compute_missing_fields(
+    agent_mode_normalized: str,
+    extracted: Dict[str, Any],
+    required_fields_override: List[str] | None = None,
+) -> List[str]:
+    if required_fields_override is not None:
+        required = required_fields_override
+    else:
+        required = MIN_REQUIRED_FIELDS.get(agent_mode_normalized, MIN_REQUIRED_FIELDS["agenda"])
     missing: List[str] = []
     has_next_step_with_time = bool(extracted.get("next_step_with_time"))
 
@@ -126,5 +133,10 @@ def compute_missing_fields(agent_mode_normalized: str, extracted: Dict[str, Any]
     return missing
 
 
-def required_fields_for_mode(agent_mode_normalized: str) -> List[str]:
+def required_fields_for_mode(
+    agent_mode_normalized: str,
+    required_fields_override: List[str] | None = None,
+) -> List[str]:
+    if required_fields_override is not None:
+        return list(required_fields_override)
     return list(MIN_REQUIRED_FIELDS.get(agent_mode_normalized, MIN_REQUIRED_FIELDS["agenda"]))

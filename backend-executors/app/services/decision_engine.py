@@ -595,9 +595,19 @@ def _get_heuristic_reason(context: Dict[str, Any]) -> str:
     return "state_absent"
 
 
+def _get_required_fields_override(context: Dict[str, Any]) -> Optional[List[str]]:
+    """Lê qualification_required_fields do ai_profile. None = usar defaults do modo."""
+    ai_profile = context.get("ai_profile") or {}
+    override = ai_profile.get("qualification_required_fields")
+    if isinstance(override, list):
+        return [str(f) for f in override if isinstance(f, str)]
+    return None
+
+
 def _build_mode_contract_context(context: Dict[str, Any], mother_decision: Optional[MotherDecision] = None) -> Dict[str, Any]:
     mode = _normalize_agent_mode(context, mother_decision)
-    required_fields = required_fields_for_mode(mode)
+    override = _get_required_fields_override(context)
+    required_fields = required_fields_for_mode(mode, required_fields_override=override)
     qualification_state = _qualification_state_from_context(context)
 
     state_data = qualification_state.get("data_json") if qualification_state else None
@@ -632,7 +642,7 @@ def _build_mode_contract_context(context: Dict[str, Any], mother_decision: Optio
         }
 
     extracted = infer_extracted_fields(context)
-    missing_fields = compute_missing_fields(mode, extracted)
+    missing_fields = compute_missing_fields(mode, extracted, required_fields_override=override)
     filled_fields = [field for field in required_fields if _is_filled_value(extracted.get(field))]
     return {
         "agent_mode_normalized": mode,

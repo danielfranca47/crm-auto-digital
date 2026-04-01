@@ -51,8 +51,10 @@ def _build_meta_prompt(ai_profile: Dict[str, Any]) -> str:
     language = ai_profile.get("language") or "pt-BR"
     max_chars = 320
 
-    # Campos obrigatórios derivados do agent_mode — fonte de verdade: qualification_contract.py
-    required_fields = required_fields_for_mode(agent_mode)
+    # Campos obrigatórios: usa override do ai_profile se configurado, senão deriva do agent_mode
+    override = ai_profile.get("qualification_required_fields")
+    required_fields_override = [str(f) for f in override if isinstance(f, str)] if isinstance(override, list) else None
+    required_fields = required_fields_for_mode(agent_mode, required_fields_override=required_fields_override)
 
     template_description = {
         "sdr_padrao": "qualificar + agendar reunião",
