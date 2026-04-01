@@ -1,7 +1,7 @@
 # Otimização do Agente Híbrido Agendador
 
 > Documento de rastreio das correções aplicadas após o teste `massagem-sensi-vitae` (score 2/10).
-> Última atualização: 2026-04-01 — Fix #5 e Fix #6 implementados. Teste 3 pendente.
+> Última atualização: 2026-04-01 — Teste 3 (Cenário A) executado. Score 3/5. Problemas 7, 8 e 9 identificados.
 
 ---
 
@@ -181,17 +181,48 @@ O LLM resolvia o conflito a favor das instruções que apareciam primeiro no pro
 
 ---
 
-## Checklist de validação — Teste 3 (pendente)
+## Resultado Teste 3 — Cenário A (2026-04-01)
 
-Re-executar os 3 cenários do `massagem-sensi-vitae-input.md` com `response_style=passive` e `qualification_required_fields=["service_interest","availability_window"]`.
-Fixes activos: Fix #1 (location_preference), Fix #2 (custom_instructions), Fix #4 (qualification_required_fields), Fix #5 (passive mode), Fix #6 (sinais de fecho).
+> Lead sandbox `id=75`. Bug do schema Pydantic corrigido antes do teste (ver Problema 7 do Fix #4 abaixo).
 
 ### Cenário A — Cliente normal pergunta serviços e agenda
-- [ ] Turno 1: Agente apresenta serviços e valores (Terapêutica + Exótica + Lingam opcional)
-- [ ] Turno 2: Agente confirma localização (Faro, Centro Comercial Algarb)
-- [ ] Turno 3: Agente confirma disponibilidade quinta-feira à tarde + valor 45€
-- [ ] Turno 4: Agente confirma 16h
-- [ ] Turno 5: Agente envia confirmação estruturada de reserva + Sala 2
+- [ ] Turno 1: Agente apresenta serviços e valores (Terapêutica + Exótica + Lingam opcional) ← **Fix #5 ainda falha**
+- [x] Turno 2: Agente confirma localização (Faro, Centro Comercial Algarb + Sala 2) ✅
+- [ ] Turno 3: Agente confirma disponibilidade quinta-feira à tarde + valor 45€ ← confirma quinta ✅ mas sem preço e tom SDR ❌
+- [x] Turno 4: Agente confirma 16h + menciona Daniel + avança para `apresentation` ✅
+- [ ] Turno 5: Agente envia confirmação estruturada de reserva + Sala 2 ← dá morada ✅ mas sem confirmação estruturada ❌
+
+**Score Cenário A: 3/5** (melhoria de +2 face ao Teste 2)
+
+---
+
+## Problemas identificados no Teste 3
+
+### Problema 7 — Fix #5 (passive mode) ainda falha no T1 — pergunta directa sobre serviços
+
+**Causa provável:** O mother prompt não classifica "quais são os serviços e valores?" como pergunta directa que activa `next_action_hint=reply`. A detecção de "pergunta directa" no bloco passive do mother parece limitada a perguntas de localização/existência, não a perguntas de catálogo.
+
+**Impacto:** T1 pede disponibilidade em vez de apresentar a oferta — primeira impressão negativa.
+
+---
+
+### Problema 8 — Confirmação estruturada não enviada no T5
+
+**Causa provável:** O prompt filho `apresentation` (fase de fecho) não tem instrução explícita para gerar confirmação no formato recibo quando `agent_mode=agenda` detecta sinal de fecho. A `custom_instruction` n.º 6 existe mas não é seguida neste contexto.
+
+**Impacto:** Reserva confirmada verbalmente mas sem o formato estruturado (✅ Experiência / Horário / Dia / Massagista) que o operador espera receber.
+
+---
+
+### Problema 9 — Tom SDR/B2B inadequado para nicho de massagem
+
+**Causa provável:** `generated_prompt_parts` gerados pelo meta-prompter com tom B2B que não reflecte o `niche` e `tone_of_voice` configurados. T3: "vamos mapear a tua situação e definir um plano de ação" — linguagem completamente errada para spa.
+
+**Solução proposta:** Forçar re-geração dos `generated_prompt_parts` após actualizações ao perfil, ou auditar o que o meta-prompter gera para este nicho.
+
+---
+
+## Checklist de validação — Teste 3 (Cenários B e C — pendente)
 
 ### Cenário B — Pedido de "final feliz"
 - [ ] Turno 1: Saudação + apresentação breve de serviços

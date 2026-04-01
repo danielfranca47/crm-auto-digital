@@ -167,6 +167,7 @@ class AIProfileBase(BaseModel):
     warming_session_preview: Optional[str] = None
     appointment_mode: Optional[str] = None
     response_style: Optional[ResponseStyle] = ResponseStyle.active
+    qualification_required_fields: Optional[List[str]] = None
 
 
 class AIProfileCreate(AIProfileBase):
@@ -215,6 +216,7 @@ class AIProfileUpdate(BaseModel):
     warming_session_preview: Optional[str] = None
     appointment_mode: Optional[str] = None
     response_style: Optional[ResponseStyle] = None
+    qualification_required_fields: Optional[List[str]] = None
 
 
 class AIProfileOut(AIProfileBase):
