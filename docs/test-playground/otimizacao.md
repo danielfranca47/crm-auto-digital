@@ -1,7 +1,7 @@
 # Otimização do Agente Híbrido Agendador
 
 > Documento de rastreio das correções aplicadas após o teste `massagem-sensi-vitae` (score 2/10).
-> Data: 2026-03-31
+> Última atualização: 2026-04-01
 
 ---
 
@@ -104,20 +104,41 @@ O LLM resolve o conflito a favor das instruções que aparecem primeiro no promp
 
 ---
 
-### Problema 5 — `price_acceptance` inadequado para negócio de preço fixo
+### Problema 5 — `price_acceptance` inadequado para negócio de preço fixo ✅ RESOLVIDO (Fix #4)
 
-**Causa raiz:** O campo `price_acceptance` está nos campos obrigatórios de `agent_mode=agenda` para qualquer negócio. Para um negócio com tabela de preços explícita em `offer_description`, este campo:
-1. Gera perguntas como "Que valor você pretende investir?" — confusas e inadequadas
-2. Bloqueia a progressão mesmo quando o cliente escolheu um serviço com preço definido
-3. É pedido repetidamente (3 vezes no Teste 2) mesmo com sinal de fecho claro
+**Causa raiz:** O campo `price_acceptance` estava hardcoded nos campos obrigatórios de `agent_mode=agenda` para qualquer negócio. Para um negócio com tabela de preços explícita em `offer_description`, este campo:
+1. Gerava perguntas como "Que valor você pretende investir?" — confusas e inadequadas
+2. Bloqueava a progressão mesmo quando o cliente escolheu um serviço com preço definido
+3. Era pedido repetidamente (3 vezes no Teste 2) mesmo com sinal de fecho claro
 
-**Solução:** Semelhante ao Fix #1 — para `agent_mode=agenda` com preços visíveis em `offer_description`:
-- Ou remover `price_acceptance` dos campos obrigatórios (se a oferta tem preço fixo)
-- Ou pre-preencher automaticamente `price_acceptance: "yes"` quando o cliente selecciona um serviço com preço explícito
+**Solução aplicada (2026-04-01):** Fix #4 — campo `qualification_required_fields` no ai_profile. O operador pode agora configurar quais campos são obrigatórios (ou nenhum) sem alterar código. Para a Sensi Vitae, configurar `["service_interest", "availability_window"]` remove o `price_acceptance` da obrigação.
 
-**Ficheiros a alterar:**
-- `backend-crm/services/qualification_guardrails.py` — remover ou tornar condicional
-- `backend-executors/app/contracts/qualification_contract.py` — idem
+---
+
+### Fix #4 — `qualification_required_fields` configurável por ai_profile (2026-04-01)
+
+**Motivação:** Os problemas 1 e 5 revelaram que os campos obrigatórios hardcoded por `agent_mode` não servem todos os nichos. Em vez de continuar a remover campos do código, a solução foi tornar a lista configurável pelo operador via ai_profile.
+
+**Ficheiros alterados:**
+- `backend-core/app/models/ai_profile.py` — nova coluna `qualification_required_fields` (JSON, nullable)
+- `backend-core/app/db.py` — migração automática via `ensure_ai_profile_columns()`
+- `backend-executors/app/contracts/qualification_contract.py` — `required_fields_for_mode()` e `compute_missing_fields()` aceitam `required_fields_override`
+- `backend-executors/app/services/decision_engine.py` — `_get_required_fields_override()` lê o override do `context["ai_profile"]`; `_build_mode_contract_context()` usa o override
+- `backend-executors/app/services/meta_prompter.py` — gera `qualification_phrasing` com base nos campos custom
+- `backend-crm/services/qualification_guardrails.py` — `can_advance_from_qualification()` lê override do ai_profile; ignora score threshold quando lista é `[]`
+- `frontend-crm/src/components/agente/CamadaQualificacao.tsx` — card + modal "Campos de qualificação" na Camada 2
+- `frontend-crm/src/types/agente.ts` — campo `qualification_required_fields` no tipo `AgentConfig`
+- `frontend-crm/src/services/api.ts` — campo no payload de load e save
+
+**Comportamento:**
+
+| Valor configurado | Resultado |
+|---|---|
+| `null` (padrão) | Usa defaults do modo — nada muda para agentes existentes |
+| `["service_interest", "availability_window"]` | Só exige estes 2 campos; sem `price_acceptance` |
+| `[]` (lista vazia) | Agente totalmente passivo — sem qualificação obrigatória |
+
+**Configuração recomendada para Sensi Vitae:** `["service_interest", "availability_window"]`
 
 ---
 
@@ -135,7 +156,7 @@ O LLM resolve o conflito a favor das instruções que aparecem primeiro no promp
 
 ## Checklist de validação pós-implementação
 
-Re-executar os 3 cenários do `massagem-sensi-vitae-input.md` com `response_style=passive`.
+Re-executar os 3 cenários do `massagem-sensi-vitae-input.md` com `response_style=passive` e `qualification_required_fields=["service_interest","availability_window"]`.
 
 ### Cenário A — Cliente normal pergunta serviços e agenda
 - [ ] Turno 1: Agente apresenta serviços e valores (Terapêutica + Exótica + Lingam opcional)
@@ -167,6 +188,7 @@ Re-executar os 3 cenários do `massagem-sensi-vitae-input.md` com `response_styl
 | Score global (checklist acima) | ≥ 7/10 |
 | `custom_instructions` aplicadas (Cenário B, T3) | Obrigatório |
 | Nenhuma pergunta de `location_preference` | Obrigatório |
+| Nenhuma pergunta de `price_acceptance` (preço já visível em offer_description) | Obrigatório |
 | Confirmação estruturada enviada (pelo menos 1 cenário) | Obrigatório |
 | Modo passivo activo — responde antes de perguntar | Obrigatório |
 
@@ -177,7 +199,8 @@ Re-executar os 3 cenários do `massagem-sensi-vitae-input.md` com `response_styl
 | Comportamento | Deve manter-se |
 |---|---|
 | `response_style=active` (padrão) | Qualificação activa — sem alteração |
-| `agent_mode=consultivo` | Campos obrigatórios não alterados (6 campos) |
-| `agent_mode=direto` | Campos obrigatórios não alterados (3 campos) |
+| `qualification_required_fields=null` (padrão) | Comportamento anterior mantido para todos os agentes existentes |
+| `agent_mode=consultivo` | Campos obrigatórios não alterados (6 campos) — a menos que override seja configurado |
+| `agent_mode=direto` | Campos obrigatórios não alterados (3 campos) — idem |
 | Tom "querido/a" | Presente em todos os cenários |
 | `is_playground=true` nos leads sandbox | Leads não aparecem no Kanban |
