@@ -7,15 +7,82 @@
 
 ## Diagnóstico Executivo
 
-O sistema atual tem a estrutura correta no modelo de dados (`qualification_required_fields` existe no AIProfile, o CRM já lê esse campo), mas tem três camadas de contradição que impedem que a intenção chegue ao comportamento:
+O sistema atual tem a estrutura correta no modelo de dados (`qualification_required_fields` existe no AIProfile, o CRM já lê esse campo), mas tem **quatro** camadas de contradição que impedem que a intenção chegue ao comportamento:
 
 | Camada | Problema real |
 |---|---|
 | **Backend — guardrails** | `_MIN_REQUIRED_FIELDS` hardcoded em `qualification_guardrails.py` sobrescreve a escolha do usuário quando o AI Profile não tem override |
 | **Backend — prompting** | `decision_engine.py` força `route_to="qualification"` antes de responder o lead (C1, C2, C7 de `solucoes.md`) |
 | **Frontend — UI** | `CamadaQualificacao.tsx` não diferencia obrigatório vs opcional, não adapta ao `agent_mode`, não permite campos personalizados |
+| **Dados — dois sistemas paralelos** | `f1/f2/f3_questions` e `qualification_required_fields` são desconexos — um diz o que perguntar, o outro diz o que checar, mas nenhum fala com o outro |
 
-O plano é dividido em **4 fases sequenciais**, do menor risco ao maior esforço, cada uma entregando valor independente.
+O plano é dividido em **5 fases sequenciais**, do menor risco ao maior esforço, cada uma entregando valor independente.
+
+---
+
+## Diagnóstico do Contrato de Qualificação (problema central)
+
+Este é o ponto mais importante do plano e precisava ser nomeado com clareza.
+
+### O estado atual em `agente.ts`
+
+```typescript
+// Camada 2 — Qualificação (em AgentConfig)
+f1_questions: string[];   // armazenadas em offer_pack — só texto, ex: "Você está em SP?"
+f2_questions: string[];   // armazenadas em offer_pack — só texto
+f3_questions: string[];   // armazenadas em offer_pack — só texto
+
+// Camada 2 — Qualificação avançada
+qualification_required_fields: string[] | null;  // coluna separada — só keys, ex: ["service_interest"]
+```
+
+### O problema
+
+Estes são **dois sistemas completamente desconexos**:
+
+- `f1/f2/f3_questions` → dizem ao agente **o que perguntar** (texto da pergunta em linguagem natural). Vivem no `offer_pack` como arrays de strings sem estrutura.
+- `qualification_required_fields` → dizem ao guardrail **o que verificar** (chaves de campo como `"availability_window"`). Vivem em coluna separada do AI Profile.
+
+Não há nenhum link entre os dois. O agente pode ter configurado a pergunta "Qual horário funciona para você?" em `f2_questions`, mas o guardrail verifica `availability_window` em `qualification_required_fields` — e estes dois nunca se falam. O resultado é que:
+
+1. O usuário preenche as perguntas em F1/F2/F3 achando que está configurando a qualificação
+2. O guardrail ignora completamente essas perguntas e usa sua própria lista de chaves
+3. Os campos hardcoded dos guardrails não têm correspondência com as perguntas do usuário
+
+### A solução: um único contrato de qualificação
+
+Substituir os dois sistemas por um único array estruturado:
+
+```typescript
+interface QualificationField {
+  key: string;           // chave interna: "availability_window" | "custom_pet_name" | ...
+  label: string;         // nome legível: "Disponibilidade" | "Nome do pet"
+  question?: string;     // pergunta para modo ativo: "Qual horário funciona para você?"
+  passive_hint?: string; // dica para modo passivo: "Inferir se lead mencionar horário"
+  mode: 'required' | 'optional' | 'off';
+}
+
+// Substitui f1_questions, f2_questions, f3_questions E qualification_required_fields
+qualification_fields: QualificationField[];
+```
+
+**O que cada campo faz no sistema:**
+
+| `mode` | Modo ativo | Modo passivo | Guardrail (Kanban) |
+|---|---|---|---|
+| `required` | Agente pergunta ativamente usando `question` | Agente tenta inferir; se não conseguir, pergunta suavemente | Bloqueia avanço se não preenchido |
+| `optional` | Agente pergunta se surgir oportunidade | Agente capta passivamente se o lead mencionar | Não bloqueia |
+| `off` | Agente ignora | Agente ignora | Ignora |
+
+**Para campos do sistema (predefinidos):** `key` é um slug padrão como `"availability_window"`. O extraction engine já sabe como extraí-los.
+
+**Para campos personalizados:** `key` é `"custom_" + slug(label)`, ex: `"custom_nome_do_pet"`. O agente usa o `label` e o `question` para saber o que perguntar e a `key` para armazenar no estado de qualificação.
+
+### Backward compatibility
+
+- `qualification_required_fields` passa a ser **derivado** de `qualification_fields.filter(f => f.mode === 'required').map(f => f.key)`. O backend-crm e os executores continuam lendo `qualification_required_fields` sem alteração.
+- `f1_questions`, `f2_questions`, `f3_questions` em `offer_pack` ficam como campos legados. O orquestrador passa a usar `qualification_fields[].question` como fonte primária para construir o prompt de qualificação.
+- Registros antigos que têm f1/f2/f3 mas não têm `qualification_fields` continuam funcionando com o comportamento atual até o usuário migrar via UI.
 
 ---
 
@@ -24,11 +91,11 @@ O plano é dividido em **4 fases sequenciais**, do menor risco ao maior esforço
 ### Decisão 1: `qualification_required_fields=null` passa a significar "sem campos obrigatórios"
 Hoje, `null` faz fallback para `_MIN_REQUIRED_FIELDS`. A intenção declarada é que o AI Profile seja a única fonte de verdade. Se o usuário não configurou nenhum campo, o sistema não deve inventar um. O onboarding/UI oferece sugestões por modo, mas a decisão final é do usuário.
 
-### Decisão 2: Adicionar `qualification_optional_fields` ao AI Profile
-Campos opcionais são coletados quando surgem naturalmente na conversa, mas não bloqueiam avanço e não são perguntados ativamente (em modo passivo). Isso resolve o pedido do item 3 sem criar uma estrutura de dados complexa.
+### Decisão 2: Unificar f1/f2/f3_questions + qualification_required_fields em `qualification_fields`
+Em vez de adicionar uma terceira estrutura separada (`qualification_optional_fields`), unificar tudo num único array `QualificationField[]`. Cada campo tem: `key`, `label`, `question` (para modo ativo), `passive_hint` (para modo passivo) e `mode: required|optional|off`. `qualification_required_fields` passa a ser derivado desta estrutura, mantendo backward compatibility com guardrails existentes.
 
-### Decisão 3: Campos personalizados via `label` no frontend, mapeados para `key` interno
-Em vez de restringir ao conjunto fixo de 8 campos, o usuário pode nomear campos livremente. O frontend salva como `{key: "custom_1", label: "Nome do pet"}` e o backend usa a label no prompt. A key é gerada automaticamente. O executor usa a label para injetar no prompt da LLM.
+### Decisão 3: Campos personalizados via `key = "custom_" + slug(label)`
+Usuário pode adicionar campos livres além dos predefinidos. Frontend gera a key automaticamente a partir do label. O extraction engine do executor identifica campos `custom_*` e usa o `question` configurado para extraí-los via LLM, armazenando o resultado no `data_json` de `lead_qualification_state`.
 
 ### Decisão 4: Adiar P2 (separar `reply_mode` de `route_to`) para depois das fases 1–3
 P2 tem o maior esforço e o maior risco de instabilidade no schema da LLM. P1 + P7 + P3 (de `solucoes.md`) resolvem o comportamento imediato sem redesenhar a arquitetura. P2 entra como Fase 4 (melhoria arquitetural).
@@ -172,112 +239,235 @@ sugere informação de forma indireta ("se quiser me contar mais sobre X, consig
 
 ---
 
-## Fase 3 — Backend: Adicionar `qualification_optional_fields` + Campos Personalizados
+## Fase 3 — Backend + Frontend: Contrato Unificado de Qualificação
 
-**Duração estimada:** 1 sessão  
-**Risco:** Baixo — adição de coluna nullable + ajuste no frontend  
-**Valor entregue:** Usuário diferencia o que é obrigatório do que é desejável; campos personalizados livres
+**Duração estimada:** 2 sessões (backend + frontend juntos, pois o schema é compartilhado)  
+**Risco:** Médio — nova estrutura de dados; requer migração de registros existentes  
+**Valor entregue:** Um único lugar onde o usuário define o que o agente pergunta, como infere, e o que bloqueia avanço. Fim da duplicação f1/f2/f3 vs qualification_required_fields.
 
-### 3.1 — `backend-core/app/models/ai_profile.py`
+### 3.1 — Novo schema: `QualificationField`
+
+O contrato compartilhado entre frontend e backend:
+
+```typescript
+// frontend-crm/src/types/agente.ts
+interface QualificationField {
+  key: string;           // "availability_window" | "custom_nome_do_pet" | ...
+  label: string;         // "Disponibilidade" | "Nome do pet"
+  question?: string;     // Pergunta para modo ativo: "Qual horário funciona?"
+  passive_hint?: string; // Dica para modo passivo: "Inferir se lead mencionar horário"
+  mode: 'required' | 'optional' | 'off';
+}
+```
+
+```python
+# backend-core/app/models/ai_profile.py — nova coluna
+qualification_fields = Column(JSON, nullable=True)
+# Estrutura: List[{"key": str, "label": str, "question": str|None,
+#                  "passive_hint": str|None, "mode": "required"|"optional"|"off"}]
+```
+
+**Campos do sistema predefinidos** (que o extraction engine já sabe extrair):
+
+| key | label sugerida |
+|---|---|
+| `service_interest` | Serviço de interesse |
+| `availability_window` | Disponibilidade |
+| `price_acceptance` | Aceitação de preço |
+| `location_preference` | Preferência de local |
+| `urgency` | Urgência |
+| `decision_role` | Decisor |
+| `budget_or_price_acceptance` | Orçamento |
+| `constraints` | Restrições |
+
+**Campos personalizados:** key gerada como `"custom_" + slug(label)`. Ex: label "Nome do pet" → key `"custom_nome_do_pet"`. O executor usa `question` para extrair e `key` para armazenar em `data_json`.
+
+### 3.2 — `backend-core/app/models/ai_profile.py`
 
 **O que adicionar:**
 ```python
-qualification_optional_fields = Column(JSON, nullable=True)
-# Estrutura: [{"key": "pet_name", "label": "Nome do pet"}]
-# Para campos personalizados. Para campos padrão: [{"key": "urgency", "label": "Urgência"}]
+qualification_fields = Column(JSON, nullable=True)
+# Mantém qualification_required_fields existente para backward compat
+# (guardrails leem qualification_required_fields, derivado pelo frontend antes de salvar)
 ```
 
-A migração é idempotente — coluna nullable, sem valor default, não quebra registros existentes.
+Migração: coluna nullable, sem impacto em registros existentes. Registros antigos com `qualification_required_fields` e f1/f2/f3 em `offer_pack` continuam funcionando via fallback.
 
-### 3.2 — `backend-core/app/api/ai_profiles.py`
-
-**O que adicionar:**
-- Adicionar `qualification_optional_fields: Optional[List[dict]] = None` em `AIProfileBase` e `AIProfileUpdate`
-- Adicionar `qualification_optional_fields` em `AIProfileOut`
-
-### 3.3 — `backend-crm/services/ai_orchestrator/orchestrator.py`
+### 3.3 — `backend-core/app/api/ai_profiles.py`
 
 **O que adicionar:**
-- Ler `qualification_optional_fields` do AI Profile
-- Injetar no contexto do prompt como "campos desejáveis mas não obrigatórios — coletar se surgir naturalmente"
+- `qualification_fields: Optional[List[dict]] = None` em `AIProfileBase`, `AIProfileUpdate` e `AIProfileOut`
+- No endpoint de update: quando `qualification_fields` é recebido, derivar e salvar automaticamente `qualification_required_fields` como lista das keys com `mode="required"`
+
+```python
+# Em _upsert_ai_profile:
+if "qualification_fields" in data and data["qualification_fields"] is not None:
+    fields = data["qualification_fields"]
+    data["qualification_required_fields"] = [
+        f["key"] for f in fields
+        if isinstance(f, dict) and f.get("mode") == "required"
+    ]
+```
+
+Isso mantém `qualification_required_fields` sempre atualizado para os guardrails, sem mudar nenhum código de backend-crm ou backend-executors.
+
+### 3.4 — `backend-crm/services/ai_orchestrator/orchestrator.py`
+
+**O que adicionar:**
+- Ler `qualification_fields` do AI Profile (além de `qualification_required_fields`)
+- Construir dois blocos para injeção no prompt:
+  - **`must_collect_with_questions`**: campos `mode=required` com seus `question` e `passive_hint`
+  - **`nice_to_collect`**: campos `mode=optional` com seus `question` e `passive_hint`
+
+```python
+# Exemplo de injeção no contexto do prompt
+qual_fields = ai_profile.get("qualification_fields") or []
+must_collect = [f for f in qual_fields if f.get("mode") == "required"]
+nice_to_collect = [f for f in qual_fields if f.get("mode") == "optional"]
+
+# Serializar para o prompt:
+# "Informações OBRIGATÓRIAS:
+#  - Disponibilidade: pergunta 'Qual horário funciona para você?' | inferir: 'se lead mencionar horário'"
+# "Informações DESEJÁVEIS (capturar se surgir):
+#  - Nome do pet: pergunta 'Qual o nome do seu pet?' | inferir: 'se lead mencionar o nome'"
+```
+
+### 3.5 — `frontend-crm/src/types/agente.ts` — Atualização do tipo `AgentConfig`
+
+**O que mudar:**
+```typescript
+// ADICIONAR — contrato unificado (substitui f1/f2/f3 conceitualmente)
+qualification_fields: QualificationField[];
+
+// MANTER como legado (ainda lido por código antigo, derivado de qualification_fields)
+f1_questions: string[];
+f2_questions: string[];
+f3_questions: string[];
+qualification_required_fields: string[] | null;
+```
+
+`qualification_fields` vazio em registros antigos → frontend mostra UI de migração sugerindo importar f1/f2/f3 existentes como campos do novo formato.
+
+### 3.6 — Lógica de serialização no frontend (antes de salvar via API)
+
+Quando o usuário salva `qualification_fields`, o frontend deve:
+1. Enviar `qualification_fields` (novo campo)
+2. Derivar e enviar `qualification_required_fields` = keys onde mode="required"
+3. Derivar e enviar f1/f2/f3_questions a partir das questions dos campos (para compatibilidade com prompts legados no executor que ainda leem offer_pack)
+
+Isso garante que ambas as versões do backend (com e sem suporte ao novo schema) funcionem corretamente durante a transição.
 
 ---
 
 ## Fase 4 — Frontend: CamadaQualificacao Dinâmica e Didática
 
-**Duração estimada:** 2–3 sessões  
-**Risco:** Baixo — apenas UI, não altera lógica de backend  
-**Valor entregue:** UI condicional, didática, com distinção obrigatório/opcional e campos personalizados
+**Duração estimada:** 2 sessões  
+**Risco:** Baixo — apenas UI (Fase 3 entrega o schema, Fase 4 consome)  
+**Valor entregue:** UI única que substitui f1/f2/f3 + qualification_required_fields, com distinção obrigatório/opcional, campos personalizados e comportamento condicional por modo
 
-### 4.1 — Toggle `response_style` em `CamadaIdentidade.tsx` ou nova seção
+### 4.1 — Toggle `response_style` visível (P9 de solucoes.md)
 
-**O que fazer (P9 de solucoes.md):**
-- Adicionar toggle visível com linguagem de negócio:
-  - "Conduz a conversa" (active) — agente pergunta ativamente
-  - "Segue o ritmo do cliente" (passive) — agente responde e infere
+Mover o toggle para o topo da Camada 2, pois ele determina como a seção inteira é apresentada:
 
-### 4.2 — `CamadaQualificacao.tsx` — Condicional por modo
-
-**O que fazer:**
-O componente deve mudar completamente de semântica baseado em `response_style`:
-
-**Quando `response_style=active`:**
 ```
-Seção: "Perguntas que o agente faz"
-Explicação: "O agente perguntará estas informações durante a conversa. 
-             Obrigatórias = lead não avança sem responder.
-             Opcionais = pergunta se surgir oportunidade."
+┌─ COMO O AGENTE COLETA INFORMAÇÕES ─────────────────────────┐
+│  ○ Conduz a conversa        ● Segue o ritmo do cliente      │
+│  Pergunta ativamente        Responde e infere               │
+└─────────────────────────────────────────────────────────────┘
 ```
 
-**Quando `response_style=passive`:**
+Este toggle salva `response_style: 'active' | 'passive'` no AI Profile.
+
+### 4.2 — `CamadaQualificacao.tsx` — Semântica condicional por `response_style`
+
+O componente inteiro muda de semântica baseado no toggle:
+
+**Quando `response_style=active` — "Conduz a conversa":**
 ```
-Seção: "O que o agente precisa saber"
-Explicação: "O agente não pergunta diretamente, mas capta estas informações 
-             naturalmente durante a conversa.
-             Essenciais = agente usa para personalizar respostas.
-             Desejáveis = enriquece o lead se mencionado."
+Seção: Perguntas que o agente faz
+
+Explicação contextual (por agent_mode):
+  sdr_scheduler → "O SDR qualifica e marca reunião. Defina o que ele deve descobrir."
+  agenda        → "Foco em agendar. Disponibilidade é o campo mais importante."
+  consultivo    → "O consultor aprofunda contexto antes de avançar."
+  closer/direto → "Filtro rápido. Menos campos, mais conversão."
+
+Lista de campos:
+  [●  Obrigatório] Disponibilidade           → pergunta: "Qual horário funciona?"
+  [○  Opcional   ] Orçamento                 → pergunta: "Tem uma faixa de investimento?"
+  [×  Desligado  ] Decisor                   → não relevante para este negócio
+  [+  Personalizado] Nome do pet             → pergunta: "Qual o nome do pet?"
 ```
 
-### 4.3 — `ModalQualFields` — Três estados por campo
-
-**O que mudar:**
-- Substituir toggle binário por três estados: **Obrigatório** | **Opcional** | **Desligado**
-- Campos obrigatórios → `qualification_required_fields`
-- Campos opcionais → `qualification_optional_fields`
-
-**UX:**
+**Quando `response_style=passive` — "Segue o ritmo do cliente":**
 ```
-[Obrigatório ●] Disponibilidade — Lead não avança sem informar horário
-[Opcional    ○] Orçamento       — Coletado se surgir, não bloqueia
-[Desligado   ×] Decisor         — Não relevante para este negócio
+Seção: O que o agente precisa saber
+
+Explicação: "O agente não pergunta diretamente. Ele capta estas informações
+             naturalmente — quando o cliente menciona, o agente registra."
+
+Lista de campos:
+  [●  Essencial  ] Serviço de interesse  → inferir: "se lead mencionar o que quer"
+  [○  Desejável  ] Disponibilidade       → inferir: "se lead mencionar horário"
+  [×  Ignorar    ] Decisor               → não relevante para este negócio
 ```
+
+O campo `question` some do editor em modo passivo; aparece `passive_hint` no lugar.
+
+### 4.3 — Editor de campo unificado (substitui `ModalFiltro` e `ModalQualFields`)
+
+Cada campo na lista abre um drawer com:
+
+```
+┌─ EDITAR CAMPO ──────────────────────────────────────────────┐
+│ Nome do campo          [Disponibilidade            ]        │
+│                                                             │
+│ Modo     ○ Obrigatório  ● Opcional  ○ Desligado            │
+│                                                             │
+│ — Modo ativo ─────────────────────────────────────────      │
+│ Pergunta   [Qual o melhor horário para você?       ]        │
+│                                                             │
+│ — Modo passivo ───────────────────────────────────          │
+│ Como inferir   [Se o lead mencionar horário ou data]        │
+└─────────────────────────────────────────────────────────────┘
+```
+
+Campos do sistema (predefinidos) têm `label` e `passive_hint` preenchidos por padrão mas editáveis. Campos personalizados começam em branco.
 
 ### 4.4 — Campos personalizados livres
 
-**O que adicionar:**
-- Botão "Adicionar campo personalizado" abre um drawer com:
-  - Campo: Nome do campo (ex: "Nome do pet", "Raça", "Bairro")
-  - Tipo: Obrigatório | Opcional
-- Frontend gera `key = "custom_" + slug(label)` para campos novos
-- Campos personalizados e campos padrão ficam na mesma lista, distinguidos visualmente
+Botão "Adicionar campo" no final da lista:
 
-### 4.5 — Sugestões por modo no onboarding
+```
+[+ Adicionar campo personalizado]
+```
 
-**O que adicionar:**
-- Quando o usuário muda `agent_mode`, a Camada 2 mostra uma sugestão de campos pré-selecionados com badge "Sugerido para este modo"
-- Usuário pode aceitar, remover ou adicionar antes de salvar
-- Isso substitui o hardcode do backend — a sugestão vive no frontend, a decisão final é do usuário
+Abre drawer novo com campos em branco. Frontend gera `key = "custom_" + slug(label)` automaticamente. Campos personalizados têm badge visual "personalizado" para distinguir dos predefinidos.
 
-### 4.6 — Camada 2 contextual por `agent_mode`
+### 4.5 — Sugestões por `agent_mode` (substitui hardcode do backend)
 
-**Adaptações por tipo:**
+Quando o usuário muda `agent_mode` (na Camada 1), a Camada 2 mostra banner:
 
-| agent_mode | Título da seção | Explicação contextual |
-|---|---|---|
-| `sdr_scheduler` | Qualificação e agenda | "O SDR qualifica e agenda. Defina o que ele deve descobrir antes de marcar." |
-| `agenda` | Dados para agendamento | "O agente foca em agendar. Disponibilidade é essencial." |
-| `consultivo` | Diagnóstico consultivo | "O consultor aprofunda contexto. Campos como urgência e decisor são críticos." |
-| `closer` / `direto` | Filtro rápido | "O closer vai direto. Poucos campos, alta conversão." |
+```
+⚙ Sugestão para modo "Agendador"
+  Adicionamos os campos mais comuns para este tipo de agente.
+  Você pode editar, remover ou adicionar mais.
+  [Aplicar sugestão]  [Manter configuração atual]
+```
+
+Sugestões vivem no frontend (constante por modo). Não são enviadas ao backend até o usuário aceitar e salvar.
+
+### 4.6 — Migração de registros antigos com f1/f2/f3
+
+Quando o usuário abre a Camada 2 e `qualification_fields` está vazio mas f1/f2/f3 têm perguntas, mostrar:
+
+```
+⚠ Você tem perguntas antigas configuradas (F1/F2/F3).
+  Importe-as para o novo formato e ganhe controle de obrigatório/opcional.
+  [Importar perguntas antigas]  [Começar do zero]
+```
+
+A importação mapeia as strings de f1/f2/f3 para `QualificationField` com `mode='optional'` e `question=<texto antigo>`, deixando o usuário ajustar o mode depois.
 
 ---
 
@@ -327,10 +517,12 @@ A Fase 2 resolve o comportamento da conversa (sem bloqueio de respostas).
 | Risco | Probabilidade | Mitigação |
 |---|---|---|
 | LLM mãe continua forçando qualification mesmo após P1 | Média | Testar no playground; se persistir, adicionar P2 (reply_mode) como segunda camada |
-| Usuários existentes com campos null ficam sem qualificação ativa | Baixa | server_default="active" no banco garante que maioria tem response_style salvo; notificar via UI |
-| Campos personalizados com keys duplicadas | Baixa | Frontend valida unicidade antes de salvar |
-| `qualification_optional_fields` null em registros antigos | Nenhum | Coluna nullable, tratada como lista vazia |
-| Remoção do fallback hardcoded causa regressão em testes | Média | Verificar e atualizar testes que dependiam do fallback |
+| Usuários existentes com campos null ficam sem qualificação ativa | Baixa | `server_default="active"` garante que maioria tem `response_style` salvo; UI exibe banner de configuração |
+| Campos personalizados com keys duplicadas | Baixa | Frontend valida `key` único antes de adicionar ao array |
+| `qualification_fields` null em registros antigos | Nenhum | Coluna nullable; orquestrador faz fallback para f1/f2/f3 + `qualification_required_fields` antigos |
+| Serialização dupla (qualification_fields + derivados) pode dessincronizar | Média | Lógica de derivação centralizada em uma única função utilitária no frontend; testada com jest |
+| Remoção do fallback hardcoded causa regressão em testes | Média | Verificar e atualizar testes que dependiam do fallback antes de merge |
+| Migração de f1/f2/f3 para novo formato pelo usuário nunca acontece | Baixa | UI funciona com ambos os formatos; não forçar migração, apenas sugerir |
 
 ---
 
@@ -345,34 +537,41 @@ A Fase 2 resolve o comportamento da conversa (sem bloqueio de respostas).
 
 ## Checklist de Entrega por Fase
 
-### Fase 1
+### Fase 1 — Backend: fonte única
 - [ ] `qualification_guardrails.py`: remover `_MIN_REQUIRED_FIELDS`, fallback = `[]`
 - [ ] `qualification_contract.py` (executors): idem
-- [ ] `orchestrator.py`: `apply_mode_overrides` respeita AI Profile
-- [ ] `ai_profiles.py` (core): sugestões por modo no create (não hardcode permanente)
+- [ ] `orchestrator.py` (`apply_mode_overrides`): não sobrescreve quando AI Profile tem campos
+- [ ] `ai_profiles.py` (core): sugestões por modo no create como ponto de partida editável
 
-### Fase 2
-- [ ] `decision_engine.py`: prompt da mãe invertido (P1)
-- [ ] `decision_engine.py`: default `response_style` = `"passive"` (P3)
-- [ ] `decision_engine.py`: prompt da filha reescrito (P7)
-- [ ] Teste playground: mensagem com pergunta direta → agente responde antes de qualificar
-- [ ] Teste playground: mensagem sem pergunta → agente qualifica naturalmente
+### Fase 2 — Backend: prompting
+- [ ] `decision_engine.py`: prompt da mãe — prioridade invertida (P1)
+- [ ] `decision_engine.py`: default `response_style` = `"passive"` para null (P3)
+- [ ] `decision_engine.py`: prompt da filha — responde antes, qualifica depois (P7)
+- [ ] `decision_engine.py`: injetar `qualification_fields[]` com question/passive_hint no contexto
+- [ ] Teste playground: pergunta direta → agente responde primeiro
+- [ ] Teste playground: sem pergunta + campos pendentes → qualifica naturalmente
 
-### Fase 3
-- [ ] `ai_profile.py` (model): coluna `qualification_optional_fields` adicionada
+### Fase 3 — Contrato unificado
+- [ ] `agente.ts`: adicionar `QualificationField` interface e `qualification_fields` em `AgentConfig`
+- [ ] `agente.ts`: manter `f1/f2/f3_questions` e `qualification_required_fields` como campos legados
+- [ ] `ai_profile.py` (model): coluna `qualification_fields` (JSON, nullable)
 - [ ] `ai_profiles.py` (API): campo nos schemas de create/update/out
-- [ ] `orchestrator.py`: campos opcionais injetados no contexto do prompt
-- [ ] Migration: verificar que coluna nullable não quebra registros existentes
+- [ ] `ai_profiles.py` (API): derivar `qualification_required_fields` automaticamente do `qualification_fields` ao salvar
+- [ ] `orchestrator.py`: ler `qualification_fields`, construir blocos `must_collect` e `nice_to_collect` com questions
+- [ ] Frontend: lógica de serialização (salvar `qualification_fields` + derivar `qualification_required_fields` + derivar f1/f2/f3 para compat)
 
-### Fase 4
-- [ ] Toggle `response_style` visível na UI (linguagem de negócio)
-- [ ] `CamadaQualificacao.tsx`: seção muda baseada em `response_style`
-- [ ] `ModalQualFields`: três estados (obrigatório/opcional/desligado)
-- [ ] Campos personalizados livres (add/remove)
-- [ ] Sugestões por modo no onboarding (substituem hardcode do backend)
-- [ ] Títulos e explicações contextuais por `agent_mode`
+### Fase 4 — Frontend: UI dinâmica
+- [ ] Toggle `response_style` no topo da Camada 2 (linguagem de negócio)
+- [ ] `CamadaQualificacao.tsx`: semântica muda baseado em `response_style`
+- [ ] Editor de campo unificado (drawer com label + mode + question + passive_hint)
+- [ ] Três estados por campo: Obrigatório / Opcional / Desligado
+- [ ] Campos personalizados livres (add/remove, key auto-gerada)
+- [ ] Sugestões por `agent_mode` (banner ao mudar o modo)
+- [ ] Migração de f1/f2/f3 antigos (banner de importação)
+- [ ] Títulos e explicações contextuais por `agent_mode` + `response_style`
 
-### Fase 5
-- [ ] Auditoria: `can_advance_from_qualification` isolado em rotas manuais
-- [ ] Auditoria: grep por hardcodes residuais em todos os serviços
-- [ ] Testes atualizados para refletir o novo comportamento (sem fallback hardcoded)
+### Fase 5 — Auditoria
+- [ ] Confirmar `can_advance_from_qualification` isolado em rotas manuais (`routes/leads.py`)
+- [ ] grep: nenhuma ocorrência de `MIN_REQUIRED_FIELDS` ou campos hardcoded fora do contrato
+- [ ] grep: `must_collect` hardcoded → deve existir apenas como derivado de `qualification_fields`
+- [ ] Testes unitários atualizados (sem fallback hardcoded, sem mock de campos fixos)
