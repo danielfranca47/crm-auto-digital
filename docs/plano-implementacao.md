@@ -63,10 +63,13 @@ Os três arquétipos de agente têm intenções distintas para a qualificação:
 
 ```typescript
 interface QualificationField {
-  key: string;           // "availability_window" | "custom_nome_do_pet" | ...
-  label: string;         // "Disponibilidade" | "Nome do pet"
-  question?: string;     // pergunta para modo ativo: "Qual horário funciona?"
-  passive_hint?: string; // dica para modo passivo: "Inferir se lead mencionar horário"
+  key: string;                  // "availability_window" | "custom_nome_do_pet" | ...
+  label: string;                // "Disponibilidade" | "Nome do pet"
+  question?: string;            // pergunta para modo ativo: "Qual horário funciona?"
+  passive_hint?: string;        // como capturar passivamente: "Se lead mencionar horário"
+  closing_question?: string;    // pergunta estratégica de fechamento — única pergunta
+                                // permitida no modo passivo (ex: "às 15h ou 16h?")
+  allow_closing_question: boolean; // habilita closing_question para este campo
   mode: 'required' | 'optional' | 'off';
   group?: 'f1' | 'f2' | 'f3'; // APENAS para SDR — qual filtro este campo pertence
 }
@@ -76,12 +79,23 @@ qualification_fields: QualificationField[];
 
 O campo `group` é o que permite ao SDR continuar tendo a UI de "Filtro 1 / Filtro 2 / Filtro 3" — os filtros são uma **vista agrupada** dos mesmos campos. Para os outros agentes, `group` é ignorado e a UI exibe lista plana.
 
-**O que cada campo faz no sistema:**
+**Semântica dos modos `active` vs `passive`:**
+
+Ambos os modos respondem perguntas do lead e capturam dados mencionados na conversa automaticamente. A diferença está em como o agente se comporta proativamente:
+
+| | Modo ativo (`active`) | Modo passivo (`passive`) |
+|---|---|---|
+| **Comportamento base** | Pergunta proativamente quando um campo está em falta | Responde de forma persuasiva guiando para o próximo passo — sem perguntas de qualificação |
+| **Captura de dados** | Registra respostas que surgem naturalmente | Registra dados mencionados pelo lead ao responder |
+| **Perguntas de qualificação** | Todas (F1, F2, F3) | **Nenhuma** — exceto `closing_question` em campos configurados |
+| **`closing_question`** | Não usada | **Única pergunta permitida** — confirmações e alternativas binárias (ex: "às 15h ou 16h?") |
+
+**O que cada modo de campo faz no sistema:**
 
 | `mode` | Modo ativo | Modo passivo | Guardrail (Kanban) |
 |---|---|---|---|
-| `required` | Agente pergunta ativamente usando `question` | Agente tenta inferir; se não conseguir, sugere suavemente | Bloqueia avanço se não preenchido |
-| `optional` | Agente pergunta se surgir oportunidade | Agente capta passivamente se o lead mencionar | Não bloqueia |
+| `required` | Agente pergunta usando `question` quando o dado falta | Agente guia persuasivamente; usa `closing_question` se configurada | Bloqueia avanço se não preenchido |
+| `optional` | Agente pergunta se surgir oportunidade | Agente capta se o lead mencionar — nunca pergunta | Não bloqueia |
 | `off` | Agente ignora | Agente ignora | Ignora |
 
 **Para campos do sistema (predefinidos):** `key` é um slug padrão como `"availability_window"`. O extraction engine já sabe como extraí-los.
@@ -229,23 +243,33 @@ response_style = (ai_profile.get("response_style") or "passive").strip().lower()
 
 **O que fazer:**
 - Localizar `_build_child_prompt_qualification` (~linha 1170)
-- Reescrever escopo do prompt de `"Você APENAS faz perguntas"` para `"Responde primeiro, qualifica depois"`
+- Reescrever escopo do prompt de `"Você APENAS faz perguntas"` para `"Responde primeiro, qualifica conforme o modo"`
 
-**Regra nova do prompt:**
+**Regra nova do prompt (modo ativo):**
 ```
 Responde SEMPRE à mensagem do cliente antes de qualificar.
 Se o cliente fez uma pergunta, responde usando offer_description e custom_instructions.
-Depois, se houver campos em falta, adicione UMA pergunta de qualificação natural ao final.
+Depois, se houver campos obrigatórios em falta, adicione UMA pergunta de qualificação natural ao final.
 Nunca respondas APENAS com uma pergunta de qualificação.
-Em modo passivo: nunca faças perguntas diretas. Apenas responde e, se oportuno,
-sugere informação de forma indireta ("se quiser me contar mais sobre X, consigo ajudar melhor").
 ```
 
-### 2.4 — `backend-executors/app/services/decision_engine.py` — Injetar `qualification_optional_fields` no contexto (novo)
+**Regra nova do prompt (modo passivo):**
+```
+NUNCA faças perguntas para coletar dados de qualificação.
+Responde sempre de forma persuasiva, guiando naturalmente para o próximo passo:
+  - Use prova social, benefícios concretos e contexto da oferta para criar motivação
+  - Conduza para o próximo passo (agendamento, proposta, pagamento) de forma direta mas sem pressão
+Se o lead mencionar dados relevantes, registre internamente — mas não peça por eles.
+ÚNICA EXCEÇÃO: se o campo tem `closing_question` configurada (confirmações e alternativas
+binárias tipo "às 15h ou 16h?"), ela pode ser usada neste momento — nunca perguntas abertas.
+```
+
+### 2.4 — `backend-executors/app/services/decision_engine.py` — Injetar `qualification_fields` no contexto (atualizado)
 
 **O que fazer:**
-- Quando `response_style=passive`, injetar os campos opcionais no contexto como "informações que o agente deve INFERIR da conversa, sem perguntar diretamente"
-- Quando `response_style=active`, injetar como "perguntas a fazer quando o assunto surgir naturalmente"
+- Quando `response_style=active`: injetar `must_collect` com os campos `required` e suas `question`; injetar `nice_to_collect` com os campos `optional`
+- Quando `response_style=passive`: injetar apenas `passive_hints` (captura silenciosa) e `closing_questions` (os campos que têm `allow_closing_question=true`) — **não injetar `must_collect`** como perguntas a fazer
+- O agente passivo só vê as `closing_questions` como perguntas permitidas
 
 ---
 
@@ -380,13 +404,22 @@ Isso garante que ambas as versões do backend (com e sem suporte ao novo schema)
 Mover o toggle para o topo da Camada 2, pois ele determina como a seção inteira é apresentada. A posição muda a semântica visual dos campos:
 
 ```
-┌─ COMO O AGENTE COLETA INFORMAÇÕES ─────────────────────────┐
-│  ○ Conduz a conversa        ● Segue o ritmo do cliente      │
-│  Pergunta ativamente        Responde e infere               │
-└─────────────────────────────────────────────────────────────┘
+┌─ COMO O AGENTE COLETA INFORMAÇÕES ──────────────────────────────────────┐
+│  Ambos respondem perguntas e capturam dados mencionados automaticamente. │
+│                                                                          │
+│  ○ Conduz a conversa              ● Responde com persuasão               │
+│  Pergunta proativamente           Guia para o próximo passo sem perguntar│
+│  Todos os campos · Sem restrição  ⚡ Fechamento permitido em F3          │
+└──────────────────────────────────────────────────────────────────────────┘
 ```
 
 Este toggle salva `response_style: 'active' | 'passive'` no AI Profile.
+
+**Semântica correta para comunicação ao usuário:**
+- **Ativo**: "Conduz a conversa — pergunta proativamente quando um campo está em falta"
+- **Passivo**: "Responde com persuasão — guia para o próximo passo sem fazer perguntas de qualificação. Apenas perguntas estratégicas de fechamento (F3) são permitidas."
+
+> **Nota de implementação:** A label "Responde e infere" usada em versões anteriores está **depreciada**. O passivo não é só "inferir" — é uma estratégia ativa de resposta persuasiva que também captura dados. A diferença real é que o passivo não interroga, mas conduz.
 
 ### 4.2 — UI do Agente 1 (SDR) — Estrutura de filtros PRESERVADA
 
@@ -429,14 +462,16 @@ O usuário clica no indicador `[●]/[○]` para alternar entre obrigatório/opc
 
 **Experiência de modo passivo para SDR:**
 
-Quando `response_style=passive`, os cards de filtro mudam de rótulo:
+Quando `response_style=passive`, os cards de filtro mudam de rótulo e comportamento:
 
 ```
-[Filtro 1 · Perfil e fit]  → [Sinais a capturar · Perfil e fit]
-"Perguntas que o agente faz"  → "O que o agente busca entender"
+F1 · Fit e Perfil     → "indícios de fit captados passivamente"    (sem perguntas)
+F2 · Intenção e Dor   → "sinais de dor captados sem perguntar"     (sem perguntas)
+F3 · 4Ps · Fechamento → "confirmações e perguntas de fechamento"   (⚡ closing_question ativa)
 ```
 
-O modal abre e mostra o campo `passive_hint` no lugar de `question`, explicando como o SDR deve inferir cada dado sem perguntar diretamente.
+- **F1 e F2 no passivo**: mostram `passive_hint` por campo — o agente apenas capta se o lead mencionar
+- **F3 no passivo**: destaque visual especial. Campos com `closing_question` configurada mostram a pergunta estratégica — ex: "Você teria disponibilidade na quinta às 14h ou na sexta às 10h?" A closing_question deve ser sempre uma alternativa binária ou confirmação, nunca uma pergunta de descoberta.
 
 ### 4.3 — UI dos Agentes 2 e 3 — Lista plana enriquecida
 
@@ -475,18 +510,34 @@ O modal abre e mostra o campo `passive_hint` no lugar de `question`, explicando 
 Clicar em qualquer campo abre drawer:
 
 ```
-┌─ EDITAR CAMPO ──────────────────────────────────────────────┐
-│ Nome do campo   [Disponibilidade               ]            │
-│                                                             │
-│ Importância  ○ Obrigatório  ● Opcional  ○ Desligado        │
-│                                                             │
-│ Pergunta (modo ativo)                                       │
-│ [Qual o melhor horário para você?              ]            │
-│                                                             │
-│ Como inferir (modo passivo)                                 │
-│ [Se mencionar horário, data ou "semana que vem"]            │
-└─────────────────────────────────────────────────────────────┘
+┌─ EDITAR CAMPO ─────────────────────────────────────────────────────────┐
+│ Nome do campo   [Disponibilidade                        ]               │
+│                                                                         │
+│ Importância  ○ Obrigatório  ● Opcional  ○ Desligado                    │
+│                                                                         │
+│ Filtro (SDR) ── [F1 · Fit]  [F2 · Dor]  [● F3 · Fechamento]           │
+│  ⚡ Campos F3 podem ter pergunta estratégica de fechamento no passivo   │
+│                                                                         │
+│ ─── Modo ativo ─────────────────────────────────────────────────────── │
+│ Pergunta direta                                                         │
+│ [Qual o melhor horário para você?                       ]               │
+│                                                                         │
+│ ─── Modo passivo ───────────────────────────────────────────────────── │
+│ Como capturar passivamente                                              │
+│ [Capturar se lead mencionar horário, data ou "semana que vem"]          │
+│                                                                         │
+│ ⚡ Pergunta estratégica de fechamento  [toggle ON/OFF]                  │
+│ [Você teria disponibilidade na quinta às 14h ou na sexta às 10h?]      │
+│  ↳ Única pergunta permitida no modo passivo. Use alternativas binárias. │
+└─────────────────────────────────────────────────────────────────────────┘
 ```
+
+**Regras do editor:**
+- `Pergunta direta`: obrigatória para campos `required`/`optional` em modo ativo. Esmaecida no passivo.
+- `Como capturar passivamente`: orienta o extraction engine a detectar o dado sem perguntar.
+- `Pergunta estratégica de fechamento`: disponível apenas em campos F3 (SDR) ou quando o toggle é ativado manualmente (outros agentes). Deve ser sempre uma **alternativa binária ou confirmação** — nunca uma pergunta aberta de descoberta.
+  - Bons exemplos: "às 15h ou 16h?", "fechamos hoje?", "o Pix de R$ X funciona?"
+  - Exemplos inválidos: "qual horário funciona?", "você tem verba?", "quando precisa resolver isso?"
 
 Para SDR: o drawer também mostra em qual filtro o campo está (F1/F2/F3), com opção de mover.
 
