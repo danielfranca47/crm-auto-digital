@@ -49,40 +49,50 @@ Não há nenhum link entre os dois. O agente pode ter configurado a pergunta "Qu
 2. O guardrail ignora completamente essas perguntas e usa sua própria lista de chaves
 3. Os campos hardcoded dos guardrails não têm correspondência com as perguntas do usuário
 
-### A solução: um único contrato de qualificação
+### A solução: um contrato unificado com semântica diferente por agente
 
-Substituir os dois sistemas por um único array estruturado:
+Os três arquétipos de agente têm intenções distintas para a qualificação:
+
+| Agente | `agent_mode` | Semântica das perguntas |
+|---|---|---|
+| **A1 — SDR** | `sdr_scheduler` | Pipeline sequencial: F1 filtra perfil, F2 aprofunda intenção, F3 qualifica 4Ps. A estrutura de filtros é parte do método de vendas. |
+| **A2 — Direto** | `closer` / `direto` | Lista plana. Poucas perguntas objetivas, sem estágios. Foco em fechar. |
+| **A3 — Híbrido** | `agenda` | Lista plana. Foco em capturar disponibilidade para agendar. |
+
+**A solução unifica o schema de dados mas preserva a UX por agente:**
 
 ```typescript
 interface QualificationField {
-  key: string;           // chave interna: "availability_window" | "custom_pet_name" | ...
-  label: string;         // nome legível: "Disponibilidade" | "Nome do pet"
-  question?: string;     // pergunta para modo ativo: "Qual horário funciona para você?"
+  key: string;           // "availability_window" | "custom_nome_do_pet" | ...
+  label: string;         // "Disponibilidade" | "Nome do pet"
+  question?: string;     // pergunta para modo ativo: "Qual horário funciona?"
   passive_hint?: string; // dica para modo passivo: "Inferir se lead mencionar horário"
   mode: 'required' | 'optional' | 'off';
+  group?: 'f1' | 'f2' | 'f3'; // APENAS para SDR — qual filtro este campo pertence
 }
 
-// Substitui f1_questions, f2_questions, f3_questions E qualification_required_fields
 qualification_fields: QualificationField[];
 ```
+
+O campo `group` é o que permite ao SDR continuar tendo a UI de "Filtro 1 / Filtro 2 / Filtro 3" — os filtros são uma **vista agrupada** dos mesmos campos. Para os outros agentes, `group` é ignorado e a UI exibe lista plana.
 
 **O que cada campo faz no sistema:**
 
 | `mode` | Modo ativo | Modo passivo | Guardrail (Kanban) |
 |---|---|---|---|
-| `required` | Agente pergunta ativamente usando `question` | Agente tenta inferir; se não conseguir, pergunta suavemente | Bloqueia avanço se não preenchido |
+| `required` | Agente pergunta ativamente usando `question` | Agente tenta inferir; se não conseguir, sugere suavemente | Bloqueia avanço se não preenchido |
 | `optional` | Agente pergunta se surgir oportunidade | Agente capta passivamente se o lead mencionar | Não bloqueia |
 | `off` | Agente ignora | Agente ignora | Ignora |
 
 **Para campos do sistema (predefinidos):** `key` é um slug padrão como `"availability_window"`. O extraction engine já sabe como extraí-los.
 
-**Para campos personalizados:** `key` é `"custom_" + slug(label)`, ex: `"custom_nome_do_pet"`. O agente usa o `label` e o `question` para saber o que perguntar e a `key` para armazenar no estado de qualificação.
+**Para campos personalizados:** `key` é `"custom_" + slug(label)`. O agente usa `question` para perguntar e `key` para armazenar em `data_json` de `lead_qualification_state`.
 
 ### Backward compatibility
 
-- `qualification_required_fields` passa a ser **derivado** de `qualification_fields.filter(f => f.mode === 'required').map(f => f.key)`. O backend-crm e os executores continuam lendo `qualification_required_fields` sem alteração.
-- `f1_questions`, `f2_questions`, `f3_questions` em `offer_pack` ficam como campos legados. O orquestrador passa a usar `qualification_fields[].question` como fonte primária para construir o prompt de qualificação.
-- Registros antigos que têm f1/f2/f3 mas não têm `qualification_fields` continuam funcionando com o comportamento atual até o usuário migrar via UI.
+- `qualification_required_fields` passa a ser **derivado** de `qualification_fields.filter(f => f.mode === 'required').map(f => f.key)`. Backend-crm e executores continuam lendo `qualification_required_fields` sem qualquer alteração.
+- `f1_questions`, `f2_questions`, `f3_questions` em `offer_pack` ficam como campos legados derivados. O orquestrador passa a preferir `qualification_fields[].question` por agente. Para SDR, `f1_questions` = questions de campos com `group='f1'`, e assim por diante.
+- Registros antigos continuam funcionando via fallback até o usuário salvar pela nova UI.
 
 ---
 
@@ -92,7 +102,7 @@ qualification_fields: QualificationField[];
 Hoje, `null` faz fallback para `_MIN_REQUIRED_FIELDS`. A intenção declarada é que o AI Profile seja a única fonte de verdade. Se o usuário não configurou nenhum campo, o sistema não deve inventar um. O onboarding/UI oferece sugestões por modo, mas a decisão final é do usuário.
 
 ### Decisão 2: Unificar f1/f2/f3_questions + qualification_required_fields em `qualification_fields`
-Em vez de adicionar uma terceira estrutura separada (`qualification_optional_fields`), unificar tudo num único array `QualificationField[]`. Cada campo tem: `key`, `label`, `question` (para modo ativo), `passive_hint` (para modo passivo) e `mode: required|optional|off`. `qualification_required_fields` passa a ser derivado desta estrutura, mantendo backward compatibility com guardrails existentes.
+Em vez de adicionar uma terceira estrutura separada (`qualification_optional_fields`), unificar tudo num único array `QualificationField[]`. Cada campo tem: `key`, `label`, `question` (para modo ativo), `passive_hint` (para modo passivo), `mode: required|optional|off` e `group?: f1|f2|f3`. O campo `group` preserva a estrutura de filtros do SDR sem afetar outros agentes. `qualification_required_fields` passa a ser derivado desta estrutura, mantendo backward compatibility com guardrails existentes. **A UI do SDR (cards F1/F2/F3) não muda — continua igual, mas agora cada pergunta dentro do filtro tem a marcação de obrigatória/opcional.**
 
 ### Decisão 3: Campos personalizados via `key = "custom_" + slug(label)`
 Usuário pode adicionar campos livres além dos predefinidos. Frontend gera a key automaticamente a partir do label. O extraction engine do executor identifica campos `custom_*` e usa o `question` configurado para extraí-los via LLM, armazenando o resultado no `data_json` de `lead_qualification_state`.
@@ -363,11 +373,11 @@ Isso garante que ambas as versões do backend (com e sem suporte ao novo schema)
 
 **Duração estimada:** 2 sessões  
 **Risco:** Baixo — apenas UI (Fase 3 entrega o schema, Fase 4 consome)  
-**Valor entregue:** UI única que substitui f1/f2/f3 + qualification_required_fields, com distinção obrigatório/opcional, campos personalizados e comportamento condicional por modo
+**Valor entregue:** UI distinta por tipo de agente — SDR mantém estrutura de filtros; outros agentes ganham lista enriquecida. Todos ganham distinção obrigatório/opcional e campos personalizados.
 
 ### 4.1 — Toggle `response_style` visível (P9 de solucoes.md)
 
-Mover o toggle para o topo da Camada 2, pois ele determina como a seção inteira é apresentada:
+Mover o toggle para o topo da Camada 2, pois ele determina como a seção inteira é apresentada. A posição muda a semântica visual dos campos:
 
 ```
 ┌─ COMO O AGENTE COLETA INFORMAÇÕES ─────────────────────────┐
@@ -378,96 +388,123 @@ Mover o toggle para o topo da Camada 2, pois ele determina como a seção inteir
 
 Este toggle salva `response_style: 'active' | 'passive'` no AI Profile.
 
-### 4.2 — `CamadaQualificacao.tsx` — Semântica condicional por `response_style`
+### 4.2 — UI do Agente 1 (SDR) — Estrutura de filtros PRESERVADA
 
-O componente inteiro muda de semântica baseado no toggle:
+**Para `agent_mode = 'sdr_scheduler'`, a UI de F1/F2/F3 não muda estruturalmente.** Os cards de filtro continuam idênticos ao que existe hoje. O que muda é que cada pergunta dentro do filtro ganha uma marcação de obrigatória/opcional.
 
-**Quando `response_style=active` — "Conduz a conversa":**
 ```
-Seção: Perguntas que o agente faz
-
-Explicação contextual (por agent_mode):
-  sdr_scheduler → "O SDR qualifica e marca reunião. Defina o que ele deve descobrir."
-  agenda        → "Foco em agendar. Disponibilidade é o campo mais importante."
-  consultivo    → "O consultor aprofunda contexto antes de avançar."
-  closer/direto → "Filtro rápido. Menos campos, mais conversão."
-
-Lista de campos:
-  [●  Obrigatório] Disponibilidade           → pergunta: "Qual horário funciona?"
-  [○  Opcional   ] Orçamento                 → pergunta: "Tem uma faixa de investimento?"
-  [×  Desligado  ] Decisor                   → não relevante para este negócio
-  [+  Personalizado] Nome do pet             → pergunta: "Qual o nome do pet?"
+┌─ FILTROS DE QUALIFICAÇÃO ─────────────────────────────────────────┐
+│                                                                    │
+│  [Filtro 1 · Perfil e fit]   3 perguntas  ›                       │
+│  Localização · uso pessoal · decisor                              │
+│                                                                    │
+│  [Filtro 2 · Intenção e dor]  2 perguntas  ›                      │
+│  Abertas · exploratórias · contexto                               │
+│                                                                    │
+│  [Filtro 3 · 4Ps]            4 perguntas  ›                       │
+│  Poder · prioridade · preço · timing                              │
+│                                                                    │
+└───────────────────────────────────────────────────────────────────┘
 ```
 
-**Quando `response_style=passive` — "Segue o ritmo do cliente":**
+Ao abrir um filtro (modal existente), cada pergunta passa a ter duas informações adicionais:
+
 ```
-Seção: O que o agente precisa saber
+01  [●] Você está em [cidade/região]?
+         ↳ Obrigatório — lead não avança sem responder
 
-Explicação: "O agente não pergunta diretamente. Ele capta estas informações
-             naturalmente — quando o cliente menciona, o agente registra."
+02  [○] Isso é para uso pessoal ou profissional?
+         ↳ Opcional — coletado se surgir
 
-Lista de campos:
-  [●  Essencial  ] Serviço de interesse  → inferir: "se lead mencionar o que quer"
-  [○  Desejável  ] Disponibilidade       → inferir: "se lead mencionar horário"
-  [×  Ignorar    ] Decisor               → não relevante para este negócio
+[+ Adicionar pergunta ao Filtro 1]
 ```
 
-O campo `question` some do editor em modo passivo; aparece `passive_hint` no lugar.
+O usuário clica no indicador `[●]/[○]` para alternar entre obrigatório/opcional/desligado. A pergunta com `mode=off` fica visualmente esmaecida e pode ser removida.
 
-### 4.3 — Editor de campo unificado (substitui `ModalFiltro` e `ModalQualFields`)
+**Mapeamento de dados para SDR:**
+- Perguntas em F1 → `QualificationField` com `group='f1'`
+- Perguntas em F2 → `QualificationField` com `group='f2'`
+- Perguntas em F3 → `QualificationField` com `group='f3'`
+- Campos predefinidos (availability_window, service_interest etc.) ficam na lista de campos rastreados pelo guardrail
 
-Cada campo na lista abre um drawer com:
+**Experiência de modo passivo para SDR:**
+
+Quando `response_style=passive`, os cards de filtro mudam de rótulo:
+
+```
+[Filtro 1 · Perfil e fit]  → [Sinais a capturar · Perfil e fit]
+"Perguntas que o agente faz"  → "O que o agente busca entender"
+```
+
+O modal abre e mostra o campo `passive_hint` no lugar de `question`, explicando como o SDR deve inferir cada dado sem perguntar diretamente.
+
+### 4.3 — UI dos Agentes 2 e 3 — Lista plana enriquecida
+
+**Para `agent_mode = 'closer'/'direto'/'agenda'/'consultivo'`, a UI é uma lista plana** — sem a estrutura de filtros do SDR:
+
+**Quando `response_style=active`:**
+```
+┌─ O QUE O AGENTE DEVE DESCOBRIR ──────────────────────────────────┐
+│  [agenda] Foco em agendar. Disponibilidade é o campo essencial.  │
+│  [direto] Filtro rápido. Menos campos, mais conversão.           │
+│                                                                   │
+│  [●  Obrigatório ] Disponibilidade  "Qual horário funciona?"  ›  │
+│  [○  Opcional    ] Serviço          "O que você busca?"       ›  │
+│  [×  Desligado   ] Orçamento        —                            │
+│  [+  Custom      ] Nome do pet      "Qual o nome?"            ›  │
+│                                                                   │
+│  [+ Adicionar campo]                                             │
+└───────────────────────────────────────────────────────────────────┘
+```
+
+**Quando `response_style=passive`:**
+```
+┌─ O QUE O AGENTE PRECISA SABER ────────────────────────────────────┐
+│  O agente não pergunta diretamente — capta naturalmente.          │
+│                                                                   │
+│  [●  Essencial ] Disponibilidade  "Inferir se mencionar horário" ›│
+│  [○  Desejável ] Serviço          "Inferir pelo contexto"       › │
+│  [×  Ignorar   ] Orçamento        —                              │
+│                                                                   │
+│  [+ Adicionar campo]                                             │
+└───────────────────────────────────────────────────────────────────┘
+```
+
+### 4.4 — Editor de campo (drawer compartilhado entre SDR e outros)
+
+Clicar em qualquer campo abre drawer:
 
 ```
 ┌─ EDITAR CAMPO ──────────────────────────────────────────────┐
-│ Nome do campo          [Disponibilidade            ]        │
+│ Nome do campo   [Disponibilidade               ]            │
 │                                                             │
-│ Modo     ○ Obrigatório  ● Opcional  ○ Desligado            │
+│ Importância  ○ Obrigatório  ● Opcional  ○ Desligado        │
 │                                                             │
-│ — Modo ativo ─────────────────────────────────────────      │
-│ Pergunta   [Qual o melhor horário para você?       ]        │
+│ Pergunta (modo ativo)                                       │
+│ [Qual o melhor horário para você?              ]            │
 │                                                             │
-│ — Modo passivo ───────────────────────────────────          │
-│ Como inferir   [Se o lead mencionar horário ou data]        │
+│ Como inferir (modo passivo)                                 │
+│ [Se mencionar horário, data ou "semana que vem"]            │
 └─────────────────────────────────────────────────────────────┘
 ```
 
-Campos do sistema (predefinidos) têm `label` e `passive_hint` preenchidos por padrão mas editáveis. Campos personalizados começam em branco.
+Para SDR: o drawer também mostra em qual filtro o campo está (F1/F2/F3), com opção de mover.
 
-### 4.4 — Campos personalizados livres
+### 4.5 — Campos personalizados
 
-Botão "Adicionar campo" no final da lista:
+Botão "+ Adicionar campo" (em qualquer modo/agente) abre drawer com campos em branco. Para SDR, pergunta também em qual filtro incluir (F1/F2/F3). Frontend gera `key = "custom_" + slug(label)`.
 
-```
-[+ Adicionar campo personalizado]
-```
+### 4.6 — Sugestões por `agent_mode`
 
-Abre drawer novo com campos em branco. Frontend gera `key = "custom_" + slug(label)` automaticamente. Campos personalizados têm badge visual "personalizado" para distinguir dos predefinidos.
-
-### 4.5 — Sugestões por `agent_mode` (substitui hardcode do backend)
-
-Quando o usuário muda `agent_mode` (na Camada 1), a Camada 2 mostra banner:
+Quando o usuário troca de modo na Camada 1, banner na Camada 2:
 
 ```
-⚙ Sugestão para modo "Agendador"
-  Adicionamos os campos mais comuns para este tipo de agente.
-  Você pode editar, remover ou adicionar mais.
-  [Aplicar sugestão]  [Manter configuração atual]
+⚙ Sugestão para "Agendador"
+  Campos típicos para este tipo de agente foram pré-selecionados.
+  [Aplicar sugestão]  [Manter atual]
 ```
 
-Sugestões vivem no frontend (constante por modo). Não são enviadas ao backend até o usuário aceitar e salvar.
-
-### 4.6 — Migração de registros antigos com f1/f2/f3
-
-Quando o usuário abre a Camada 2 e `qualification_fields` está vazio mas f1/f2/f3 têm perguntas, mostrar:
-
-```
-⚠ Você tem perguntas antigas configuradas (F1/F2/F3).
-  Importe-as para o novo formato e ganhe controle de obrigatório/opcional.
-  [Importar perguntas antigas]  [Começar do zero]
-```
-
-A importação mapeia as strings de f1/f2/f3 para `QualificationField` com `mode='optional'` e `question=<texto antigo>`, deixando o usuário ajustar o mode depois.
+Para SDR, a sugestão vem pré-distribuída nos filtros F1/F2/F3. Para outros agentes, vem como lista plana. Sugestões vivem no frontend — não são hardcode no backend.
 
 ---
 
@@ -562,13 +599,14 @@ A Fase 2 resolve o comportamento da conversa (sem bloqueio de respostas).
 
 ### Fase 4 — Frontend: UI dinâmica
 - [ ] Toggle `response_style` no topo da Camada 2 (linguagem de negócio)
-- [ ] `CamadaQualificacao.tsx`: semântica muda baseado em `response_style`
+- [ ] **SDR (`sdr_scheduler`)**: cards F1/F2/F3 preservados — cada pergunta ganha badge obrigatório/opcional
+- [ ] **SDR**: modal de filtro mostra `question` (ativo) ou `passive_hint` (passivo) por pergunta
+- [ ] **Outros agentes**: `CamadaQualificacao.tsx` renderiza lista plana de campos com mesmo editor
 - [ ] Editor de campo unificado (drawer com label + mode + question + passive_hint)
-- [ ] Três estados por campo: Obrigatório / Opcional / Desligado
-- [ ] Campos personalizados livres (add/remove, key auto-gerada)
-- [ ] Sugestões por `agent_mode` (banner ao mudar o modo)
-- [ ] Migração de f1/f2/f3 antigos (banner de importação)
-- [ ] Títulos e explicações contextuais por `agent_mode` + `response_style`
+- [ ] Três estados por campo: Obrigatório / Opcional / Desligado (toggle no card ou no drawer)
+- [ ] Campos personalizados livres — SDR pergunta em qual filtro incluir; outros vão para lista plana
+- [ ] Sugestões por `agent_mode` — SDR sugestão distribuída em F1/F2/F3; outros em lista
+- [ ] Explicação contextual por `agent_mode` + `response_style` (banner no topo da seção)
 
 ### Fase 5 — Auditoria
 - [ ] Confirmar `can_advance_from_qualification` isolado em rotas manuais (`routes/leads.py`)
