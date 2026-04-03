@@ -17,6 +17,7 @@ import AiProfile from "./pages/AiProfile";
 import TiposAgentes from "./pages/TiposAgentes";
 import FollowUpCenter from "./pages/FollowUpCenter";
 import FollowUpEdit from "./pages/FollowUpEdit";
+import DebugAiProfile from "./pages/DebugAiProfile";
 import { ThemeProvider } from "./contexts/ThemeContext";
 import { LeadsProvider } from "./contexts/LeadsContext";
 import { RateLimitModalProvider } from "./contexts/RateLimitModalContext";
@@ -122,6 +123,7 @@ const App = () => (
                   <Route path="/ai-profile" element={<AiProfile />} />
                   <Route path="/agentes-info" element={<TiposAgentes />} />
                   <Route path="/follow-ups/:leadId/edit" element={<FollowUpEdit />} />
+                  <Route path="/debug-ai-profile" element={<DebugAiProfile />} />
                 </Route>
 
                 {/* catch-all */}
