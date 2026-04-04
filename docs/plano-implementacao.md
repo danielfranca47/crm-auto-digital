@@ -690,8 +690,8 @@ A Fase 2 resolve o comportamento da conversa (sem bloqueio de respostas).
 - [x] `decision_engine.py`: default `response_style` = `"passive"` para null (P3)
 - [x] `decision_engine.py`: prompt da filha — responde antes, qualifica depois (P7)
 - [x] `decision_engine.py`: injetar `qualification_fields[]` com question/passive_hint no contexto
-- [ ] Teste playground: pergunta direta → agente responde primeiro
-- [ ] Teste playground: sem pergunta + campos pendentes → qualifica naturalmente
+- [x] Teste playground: pergunta direta → agente responde primeiro
+- [x] Teste playground: sem pergunta + campos pendentes → qualifica naturalmente
 
 ### Fase 3 — Contrato unificado
 - [x] `agente.ts`: adicionar `QualificationField` interface e `qualification_fields` em `AgentConfig`
