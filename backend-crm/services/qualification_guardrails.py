@@ -6,36 +6,13 @@ from typing import Any, Dict, List, Tuple
 
 logger = logging.getLogger(__name__)
 
-# NOTE: manter em sincronia com backend-executors/app/contracts/qualification_contract.py
-_MIN_REQUIRED_FIELDS = {
-    "consultivo": [
-        "service_interest",
-        "urgency",
-        "decision_role",
-        "constraints",
-        "availability_window",
-        "budget_or_price_acceptance",
-    ],
-    "agenda": [
-        "service_interest",
-        "availability_window",
-        "price_acceptance",
-    ],
-    "direto": [
-        "service_interest",
-        "availability_window",
-        "price_acceptance",
-    ],
-}
-
-
 def required_fields_for_mode(
     agent_mode_normalized: str,
     required_fields_override: List[str] | None = None,
 ) -> List[str]:
     if required_fields_override is not None:
         return list(required_fields_override)
-    return list(_MIN_REQUIRED_FIELDS.get(agent_mode_normalized, _MIN_REQUIRED_FIELDS["agenda"]))
+    return []  # Sem configuração no AI Profile = sem campos obrigatórios
 
 
 def compute_missing_fields(

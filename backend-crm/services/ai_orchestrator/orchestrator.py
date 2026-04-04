@@ -85,7 +85,11 @@ def _normalize_agent_mode_for_bundle(ai_profile: Dict[str, Any] | None, template
     return "agenda"
 
 
-def apply_mode_overrides(playbook: Dict[str, Any], agent_mode_normalized: str) -> Dict[str, Any]:
+def apply_mode_overrides(
+    playbook: Dict[str, Any],
+    agent_mode_normalized: str,
+    ai_profile: Dict[str, Any] | None = None,
+) -> Dict[str, Any]:
     merged = dict(playbook or {})
     if agent_mode_normalized == "consultivo":
         merged.update({
@@ -98,8 +102,13 @@ def apply_mode_overrides(playbook: Dict[str, Any], agent_mode_normalized: str) -
         merged.update({
             "max_chars": 350,
             "qualification_depth": "medium",
-            "must_collect": ["service_interest", "availability_window", "location_preference", "price_acceptance"],
         })
+        # Só injeta must_collect se o AI Profile definiu campos explicitamente
+        profile_fields = (ai_profile or {}).get("qualification_required_fields")
+        if isinstance(profile_fields, list) and len(profile_fields) > 0:
+            merged.update({"must_collect": profile_fields})
+        # profile_fields == None → não configurado, sem override automático
+        # profile_fields == [] → lista vazia explícita = modo passivo, sem must_collect
     elif agent_mode_normalized == "direto":
         merged.update({
             "max_chars": 300,
@@ -147,7 +156,7 @@ def build_context_bundle(
         ai_profile["offer_pack"] = presentation_contract["offer_pack"]
     playbook = get_playbook(template_key)
     playbook["template_key"] = template_key or "sdr_padrao"
-    playbook = apply_mode_overrides(playbook, normalized_mode)
+    playbook = apply_mode_overrides(playbook, normalized_mode, ai_profile=ai_profile)
     playbook["presentation_variant"] = presentation_contract["presentation_variant"]
     playbook["hybrid_flow_style"] = presentation_contract["hybrid_flow_style"]
     playbook["offer_pack"] = presentation_contract["offer_pack"]
@@ -228,7 +237,7 @@ def build_context_bundle_from_inbound(event: InboundEvent) -> ContextBundle:
         ai_profile["offer_pack"] = presentation_contract["offer_pack"]
     playbook = get_playbook(template_key)
     playbook["template_key"] = template_key or "sdr_padrao"
-    playbook = apply_mode_overrides(playbook, normalized_mode)
+    playbook = apply_mode_overrides(playbook, normalized_mode, ai_profile=ai_profile)
     playbook["presentation_variant"] = presentation_contract["presentation_variant"]
     playbook["hybrid_flow_style"] = presentation_contract["hybrid_flow_style"]
     playbook["offer_pack"] = presentation_contract["offer_pack"]
@@ -315,7 +324,7 @@ def build_context_bundle_for_playground(
 
     playbook = get_playbook(template_key)
     playbook["template_key"] = template_key or "sdr_padrao"
-    playbook = apply_mode_overrides(playbook, normalized_mode)
+    playbook = apply_mode_overrides(playbook, normalized_mode, ai_profile=ai_profile)
     playbook["presentation_variant"] = presentation_contract["presentation_variant"]
     playbook["hybrid_flow_style"] = presentation_contract["hybrid_flow_style"]
     playbook["offer_pack"] = presentation_contract["offer_pack"]

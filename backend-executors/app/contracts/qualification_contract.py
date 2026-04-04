@@ -28,27 +28,6 @@ SIGNALS_SCHEMA = {
     "offer_item_name",
 }
 
-MIN_REQUIRED_FIELDS = {
-    "consultivo": [
-        "service_interest",
-        "urgency",
-        "decision_role",
-        "constraints",
-        "availability_window",
-        "budget_or_price_acceptance",
-    ],
-    "agenda": [
-        "service_interest",
-        "availability_window",
-        "price_acceptance",
-    ],
-    "direto": [
-        "service_interest",
-        "availability_window",
-        "price_acceptance",
-    ],
-}
-
 
 _DAY_OR_TIME_RE = re.compile(
     r"\b(\d{1,2}h|\d{1,2}:\d{2}|hoje|amanh[ãa]|segunda|ter[cç]a|quarta|quinta|sexta|s[áa]bado|domingo|semana)\b",
@@ -120,7 +99,7 @@ def compute_missing_fields(
     if required_fields_override is not None:
         required = required_fields_override
     else:
-        required = MIN_REQUIRED_FIELDS.get(agent_mode_normalized, MIN_REQUIRED_FIELDS["agenda"])
+        required = []  # Sem configuração no AI Profile = sem campos obrigatórios
     missing: List[str] = []
     has_next_step_with_time = bool(extracted.get("next_step_with_time"))
 
@@ -139,4 +118,4 @@ def required_fields_for_mode(
 ) -> List[str]:
     if required_fields_override is not None:
         return list(required_fields_override)
-    return list(MIN_REQUIRED_FIELDS.get(agent_mode_normalized, MIN_REQUIRED_FIELDS["agenda"]))
+    return []  # Sem configuração no AI Profile = sem campos obrigatórios

@@ -334,6 +334,17 @@ def _upsert_ai_profile(
         # Auto-gerar payment_webhook_secret único ao criar perfil
         if not data.get("payment_webhook_secret"):
             data["payment_webhook_secret"] = secrets_module.token_urlsafe(32)
+        # Sugestão inicial de campos obrigatórios por modo (editável pelo usuário)
+        _DEFAULT_QUAL_FIELDS = {
+            "sdr_scheduler": ["service_interest", "availability_window"],
+            "agenda":        ["service_interest", "availability_window"],
+            "consultivo":    ["service_interest", "urgency", "decision_role"],
+            "closer":        ["service_interest", "price_acceptance"],
+            "direto":        ["service_interest", "price_acceptance"],
+        }
+        if data.get("qualification_required_fields") is None:
+            mode = str(data.get("agent_mode") or "agenda")
+            data["qualification_required_fields"] = _DEFAULT_QUAL_FIELDS.get(mode, [])
         required_fields = {
             "template_key",
             "name",
