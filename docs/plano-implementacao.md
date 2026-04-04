@@ -680,27 +680,27 @@ A Fase 2 resolve o comportamento da conversa (sem bloqueio de respostas).
 ## Checklist de Entrega por Fase
 
 ### Fase 1 — Backend: fonte única
-- [ ] `qualification_guardrails.py`: remover `_MIN_REQUIRED_FIELDS`, fallback = `[]`
-- [ ] `qualification_contract.py` (executors): idem
-- [ ] `orchestrator.py` (`apply_mode_overrides`): não sobrescreve quando AI Profile tem campos
-- [ ] `ai_profiles.py` (core): sugestões por modo no create como ponto de partida editável
+- [x] `qualification_guardrails.py`: remover `_MIN_REQUIRED_FIELDS`, fallback = `[]`
+- [x] `qualification_contract.py` (executors): idem
+- [x] `orchestrator.py` (`apply_mode_overrides`): não sobrescreve quando AI Profile tem campos
+- [x] `ai_profiles.py` (core): sugestões por modo no create como ponto de partida editável
 
 ### Fase 2 — Backend: prompting
-- [ ] `decision_engine.py`: prompt da mãe — prioridade invertida (P1)
-- [ ] `decision_engine.py`: default `response_style` = `"passive"` para null (P3)
-- [ ] `decision_engine.py`: prompt da filha — responde antes, qualifica depois (P7)
-- [ ] `decision_engine.py`: injetar `qualification_fields[]` com question/passive_hint no contexto
+- [x] `decision_engine.py`: prompt da mãe — prioridade invertida (P1)
+- [x] `decision_engine.py`: default `response_style` = `"passive"` para null (P3)
+- [x] `decision_engine.py`: prompt da filha — responde antes, qualifica depois (P7)
+- [x] `decision_engine.py`: injetar `qualification_fields[]` com question/passive_hint no contexto
 - [ ] Teste playground: pergunta direta → agente responde primeiro
 - [ ] Teste playground: sem pergunta + campos pendentes → qualifica naturalmente
 
 ### Fase 3 — Contrato unificado
-- [ ] `agente.ts`: adicionar `QualificationField` interface e `qualification_fields` em `AgentConfig`
-- [ ] `agente.ts`: manter `f1/f2/f3_questions` e `qualification_required_fields` como campos legados
-- [ ] `ai_profile.py` (model): coluna `qualification_fields` (JSON, nullable)
-- [ ] `ai_profiles.py` (API): campo nos schemas de create/update/out
-- [ ] `ai_profiles.py` (API): derivar `qualification_required_fields` automaticamente do `qualification_fields` ao salvar
-- [ ] `orchestrator.py`: ler `qualification_fields`, construir blocos `must_collect` e `nice_to_collect` com questions
-- [ ] Frontend: lógica de serialização (salvar `qualification_fields` + derivar `qualification_required_fields` + derivar f1/f2/f3 para compat)
+- [x] `agente.ts`: adicionar `QualificationField` interface e `qualification_fields` em `AgentConfig`
+- [x] `agente.ts`: manter `f1/f2/f3_questions` e `qualification_required_fields` como campos legados
+- [x] `ai_profile.py` (model): coluna `qualification_fields` (JSON, nullable)
+- [x] `ai_profiles.py` (API): campo nos schemas de create/update/out
+- [x] `ai_profiles.py` (API): derivar `qualification_required_fields` automaticamente do `qualification_fields` ao salvar
+- [x] `orchestrator.py`: ler `qualification_fields`, construir blocos `must_collect` e `nice_to_collect` com questions
+- [x] Frontend: lógica de serialização — salvar `qualification_fields` + derivar `qualification_required_fields` ✓ | derivar f1/f2/f3 para compat legado ✗ (pendente — executor já lê `qualification_fields` diretamente, impacto baixo)
 
 ### Fase 4 — Frontend: UI dinâmica
 - [ ] Toggle `response_style` no topo da Camada 2 (linguagem de negócio)
