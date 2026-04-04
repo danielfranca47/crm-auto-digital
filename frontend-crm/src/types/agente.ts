@@ -2,6 +2,15 @@
 // Tipos do módulo de Agente (dashboard + configuração)
 // ─────────────────────────────────────────────────────────────
 
+/** Contrato unificado de qualificação — Fase 3 */
+export interface QualificationField {
+  key: string;           // "availability_window" | "custom_nome_do_pet" | ...
+  label: string;         // "Disponibilidade" | "Nome do pet"
+  question?: string;     // Pergunta para modo ativo: "Qual horário funciona?"
+  passive_hint?: string; // Dica para modo passivo: "Inferir se lead mencionar horário"
+  mode: 'required' | 'optional' | 'off';
+}
+
 /** Resposta de GET /api/agents/ (agente local / runner)
  *  A API serializa com alias: o campo JSON é "id", não "agent_id"
  */
@@ -88,6 +97,9 @@ export interface AgentConfig {
   qualification_score_threshold: number;
   nurture_vs_discard_rule: boolean;
   buying_signal_keywords: string[];
+  // Contrato unificado (Fase 3) — substitui f1/f2/f3 + qualification_required_fields conceitualmente
+  qualification_fields: QualificationField[];
+  // Legado — mantidos para backward compat; derivados de qualification_fields ao salvar
   qualification_required_fields: string[] | null;
 
   // ── Camada 3 — Pipeline ──────────────────────────────────
@@ -171,6 +183,7 @@ export const DEFAULT_AGENT_CONFIG: AgentConfig = {
   qualification_score_threshold: 6,
   nurture_vs_discard_rule: false,
   buying_signal_keywords: [],
+  qualification_fields: [],
   qualification_required_fields: null,
 
   media_fallback: 'continuar',

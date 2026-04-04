@@ -168,6 +168,7 @@ class AIProfileBase(BaseModel):
     appointment_mode: Optional[str] = None
     response_style: Optional[ResponseStyle] = ResponseStyle.active
     qualification_required_fields: Optional[List[str]] = None
+    qualification_fields: Optional[List[dict]] = None
 
 
 class AIProfileCreate(AIProfileBase):
@@ -217,6 +218,7 @@ class AIProfileUpdate(BaseModel):
     appointment_mode: Optional[str] = None
     response_style: Optional[ResponseStyle] = None
     qualification_required_fields: Optional[List[str]] = None
+    qualification_fields: Optional[List[dict]] = None
 
 
 class AIProfileOut(AIProfileBase):
@@ -306,6 +308,13 @@ def _upsert_ai_profile(
     profile = db.query(models.AIProfile).filter(models.AIProfile.user_id == user_id).first()
     if "offer_pack" in data:
         data["offer_pack"] = _normalize_offer_pack(data.get("offer_pack"))
+    # Derivar qualification_required_fields a partir de qualification_fields quando presente
+    if "qualification_fields" in data and data["qualification_fields"] is not None:
+        fields = data["qualification_fields"]
+        data["qualification_required_fields"] = [
+            f["key"] for f in fields
+            if isinstance(f, dict) and f.get("mode") == "required"
+        ]
     # Default mode inference should happen only on create.
     # On update, omitted/null agent_mode must not rewrite existing mode.
     if not profile and data.get("agent_mode") is None:

@@ -88,6 +88,7 @@ export type AiProfilePayload = {
   operator_whatsapp?: string | null;
   buying_signal_keywords?: string[] | null;
   qualification_required_fields?: string[] | null;
+  qualification_fields?: import('../types/agente').QualificationField[] | null;
   calendar_integration?: "none" | "google_calendar" | "calendly" | null;
   payment_gateway?: "hotmart" | "kiwify" | "stripe" | "generico" | null;
   response_style?: "active" | "passive" | null;
@@ -912,7 +913,8 @@ export const api = {
         qualification_score_threshold: pack.qualification_score_threshold ?? DEFAULT_AGENT_CONFIG.qualification_score_threshold,
         nurture_vs_discard_rule:        pack.nurture_vs_discard_rule        ?? DEFAULT_AGENT_CONFIG.nurture_vs_discard_rule,
         buying_signal_keywords:         pack.buying_signal_keywords         ?? DEFAULT_AGENT_CONFIG.buying_signal_keywords,
-        qualification_required_fields:  pack.qualification_required_fields  ?? DEFAULT_AGENT_CONFIG.qualification_required_fields,
+        qualification_fields:           (profile as any)?.qualification_fields ?? DEFAULT_AGENT_CONFIG.qualification_fields,
+        qualification_required_fields:  (profile as any)?.qualification_required_fields ?? pack.qualification_required_fields ?? DEFAULT_AGENT_CONFIG.qualification_required_fields,
 
         // Camada 3 — Follow-up avançado
         followup_max_attempts:  pack.followup_max_attempts  ?? DEFAULT_AGENT_CONFIG.followup_max_attempts,
@@ -1017,6 +1019,11 @@ export const api = {
         upsell_message: config.offer_upsell_message,
       };
 
+      // Derivar qualification_required_fields a partir de qualification_fields (Fase 3)
+      const derivedRequiredFields = config.qualification_fields.length > 0
+        ? config.qualification_fields.filter(f => f.mode === 'required').map(f => f.key)
+        : config.qualification_required_fields;
+
       await coreClient.put('/ai-profiles/me', {
         name:                config.name,
         brand_name:          config.brand_name,
@@ -1037,6 +1044,8 @@ export const api = {
         offer_description:   config.offer_description,
         goals:               config.goals,
         payment_gateway:     config.payment_gateway,
+        qualification_fields: config.qualification_fields.length > 0 ? config.qualification_fields : undefined,
+        qualification_required_fields: derivedRequiredFields,
         offer_pack,
       });
     },

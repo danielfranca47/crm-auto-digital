@@ -85,6 +85,54 @@ def _normalize_agent_mode_for_bundle(ai_profile: Dict[str, Any] | None, template
     return "agenda"
 
 
+def _build_qualification_context(ai_profile: Dict[str, Any] | None) -> Dict[str, Any]:
+    """
+    Lê qualification_fields do AI Profile e constrói dois blocos para injeção no prompt:
+    - must_collect_with_questions: campos mode=required com question e passive_hint
+    - nice_to_collect: campos mode=optional com question e passive_hint
+    Mantém backward compat: se qualification_fields não existe, usa qualification_required_fields.
+    """
+    profile = ai_profile or {}
+    qual_fields = profile.get("qualification_fields")
+
+    if not isinstance(qual_fields, list) or len(qual_fields) == 0:
+        # Backward compat: sem qualification_fields, usa a lista simples de keys
+        required_keys = profile.get("qualification_required_fields")
+        if isinstance(required_keys, list) and len(required_keys) > 0:
+            return {"must_collect": required_keys}
+        return {}
+
+    must_collect_with_questions = [
+        {
+            "key": f["key"],
+            "label": f.get("label", f["key"]),
+            "question": f.get("question"),
+            "passive_hint": f.get("passive_hint"),
+        }
+        for f in qual_fields
+        if isinstance(f, dict) and f.get("mode") == "required"
+    ]
+    nice_to_collect = [
+        {
+            "key": f["key"],
+            "label": f.get("label", f["key"]),
+            "question": f.get("question"),
+            "passive_hint": f.get("passive_hint"),
+        }
+        for f in qual_fields
+        if isinstance(f, dict) and f.get("mode") == "optional"
+    ]
+
+    result: Dict[str, Any] = {}
+    if must_collect_with_questions:
+        result["must_collect_with_questions"] = must_collect_with_questions
+        # Mantém must_collect (lista de keys) para backward compat com executors
+        result["must_collect"] = [f["key"] for f in must_collect_with_questions]
+    if nice_to_collect:
+        result["nice_to_collect"] = nice_to_collect
+    return result
+
+
 def apply_mode_overrides(
     playbook: Dict[str, Any],
     agent_mode_normalized: str,
@@ -115,6 +163,12 @@ def apply_mode_overrides(
             "qualification_depth": "low",
             "cta_every_turn": True,
         })
+
+    # Injetar contexto de qualificação enriquecido (qualification_fields sobrescreve se presente)
+    qual_context = _build_qualification_context(ai_profile)
+    if qual_context:
+        merged.update(qual_context)
+
     return merged
 
 
