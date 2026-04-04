@@ -1,9 +1,639 @@
-import { useState } from 'react';
-import type { AgentConfig } from '@/types/agente';
+import { useState, useEffect, useRef } from 'react';
+import type { AgentConfig, QualificationField } from '@/types/agente';
 
 interface CamadaQualificacaoProps {
   config: AgentConfig;
   onUpdate: (partial: Partial<AgentConfig>) => void;
+}
+
+// ─── Sugestões por agent_mode ─────────────────────────────────
+
+const SUGGESTIONS: Record<string, QualificationField[]> = {
+  sdr_scheduler: [
+    { key: 'location_preference', label: 'Localização', question: 'Você está em [cidade/região]?', passive_hint: 'Capturar se lead mencionar cidade ou bairro', mode: 'required', group: 'f1' },
+    { key: 'decision_role', label: 'Decisor', question: 'Você toma as decisões de compra?', passive_hint: 'Capturar se lead mencionar outra pessoa', mode: 'required', group: 'f1' },
+    { key: 'service_interest', label: 'Serviço de interesse', question: 'O que você busca?', passive_hint: 'Inferir pelo contexto da conversa', mode: 'required', group: 'f2' },
+    { key: 'urgency', label: 'Urgência', question: 'Quão urgente é para você?', passive_hint: 'Capturar expressões de urgência', mode: 'optional', group: 'f2' },
+    { key: 'availability_window', label: 'Disponibilidade', question: 'Qual horário funciona para você?', passive_hint: 'Capturar se lead mencionar horário ou data', mode: 'required', group: 'f3', allow_closing_question: true, closing_question: 'Você teria disponibilidade na quinta às 14h ou na sexta às 10h?' },
+    { key: 'price_acceptance', label: 'Aceitação de preço', question: 'Já tem um valor em mente?', passive_hint: 'Capturar se lead mencionar valor', mode: 'optional', group: 'f3' },
+  ],
+  agenda: [
+    { key: 'availability_window', label: 'Disponibilidade', question: 'Qual o melhor horário para você?', passive_hint: 'Capturar horários ou datas mencionadas', mode: 'required', allow_closing_question: true, closing_question: 'Você prefere às 14h ou às 16h?' },
+    { key: 'service_interest', label: 'Serviço de interesse', question: 'O que você busca?', passive_hint: 'Inferir pelo contexto', mode: 'optional' },
+    { key: 'location_preference', label: 'Local', question: 'Prefere presencial ou online?', passive_hint: 'Capturar preferência de formato', mode: 'optional' },
+    { key: 'decision_role', label: 'Decisor', question: 'Você decide ou precisa consultar alguém?', passive_hint: 'Capturar menção de terceiros', mode: 'required' },
+  ],
+  closer: [
+    { key: 'service_interest', label: 'Serviço de interesse', question: 'O que você precisa?', passive_hint: 'Inferir pelo contexto', mode: 'required' },
+    { key: 'decision_role', label: 'Decisor', question: 'Você toma as decisões?', passive_hint: 'Capturar menção de terceiros', mode: 'required' },
+    { key: 'budget_or_price_acceptance', label: 'Orçamento', question: 'Qual o seu orçamento?', passive_hint: 'Capturar menção de valores', mode: 'optional' },
+  ],
+  direto: [
+    { key: 'service_interest', label: 'Serviço de interesse', question: 'O que você precisa?', passive_hint: 'Inferir pelo contexto', mode: 'required' },
+    { key: 'decision_role', label: 'Decisor', question: 'Você decide?', passive_hint: 'Capturar menção de terceiros', mode: 'required' },
+    { key: 'urgency', label: 'Urgência', question: 'Quando precisa resolver?', passive_hint: 'Capturar expressões de timing', mode: 'optional' },
+  ],
+  consultivo: [
+    { key: 'service_interest', label: 'Serviço de interesse', question: 'O que você busca?', passive_hint: 'Inferir pelo contexto', mode: 'required' },
+    { key: 'urgency', label: 'Urgência', question: 'Qual o prazo ideal?', passive_hint: 'Capturar expressões de urgência', mode: 'required' },
+    { key: 'decision_role', label: 'Decisor', question: 'Quem participa da decisão?', passive_hint: 'Capturar menção de terceiros', mode: 'optional' },
+    { key: 'budget_or_price_acceptance', label: 'Orçamento', question: 'Tem orçamento definido?', passive_hint: 'Capturar menção de valores', mode: 'optional' },
+    { key: 'constraints', label: 'Restrições', question: 'Tem alguma limitação de horário?', passive_hint: 'Capturar limitações mencionadas', mode: 'optional' },
+    { key: 'location_preference', label: 'Local preferido', question: 'Prefere presencial ou online?', passive_hint: 'Capturar preferência de formato', mode: 'optional' },
+  ],
+};
+
+const MODE_LABELS: Record<string, string> = {
+  sdr_scheduler: 'SDR Agendador',
+  agenda: 'Agendador',
+  closer: 'Closer',
+  direto: 'Direto',
+  consultivo: 'Consultivo',
+};
+
+// ─── Helpers ──────────────────────────────────────────────────
+
+function slugify(label: string): string {
+  return label.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '');
+}
+
+function deriveF1F2F3(fields: QualificationField[]) {
+  return {
+    f1_questions: fields.filter(f => f.group === 'f1' && f.mode !== 'off').map(f => f.question ?? f.label),
+    f2_questions: fields.filter(f => f.group === 'f2' && f.mode !== 'off').map(f => f.question ?? f.label),
+    f3_questions: fields.filter(f => f.group === 'f3' && f.mode !== 'off').map(f => f.question ?? f.label),
+    qualification_required_fields: fields.filter(f => f.mode === 'required').map(f => f.key),
+  };
+}
+
+function cycleMode(mode: QualificationField['mode']): QualificationField['mode'] {
+  if (mode === 'required') return 'optional';
+  if (mode === 'optional') return 'off';
+  return 'required';
+}
+
+// ─── 4.1 — Toggle response_style ─────────────────────────────
+
+function ToggleResponseStyle({ value, onChange }: {
+  value: 'active' | 'passive';
+  onChange: (v: 'active' | 'passive') => void;
+}) {
+  return (
+    <div style={{
+      border: '1px solid var(--o-b2)',
+      borderRadius: 8,
+      marginBottom: 24,
+      overflow: 'hidden',
+    }}>
+      <div style={{ padding: '10px 16px', background: 'var(--o-b1)', borderBottom: '1px solid var(--o-b2)' }}>
+        <span className="font-mono-orion" style={{ fontSize: 9, letterSpacing: '2.5px', textTransform: 'uppercase', color: 'var(--o-sub)' }}>
+          Como o agente coleta informações
+        </span>
+        <div style={{ fontSize: 11, color: 'var(--o-dim)', marginTop: 4 }}>
+          Ambos os modos respondem perguntas e capturam dados mencionados automaticamente.
+        </div>
+      </div>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr' }}>
+        <button
+          onClick={() => onChange('active')}
+          style={{
+            padding: '14px 16px', border: 'none', cursor: 'pointer', textAlign: 'left',
+            background: value === 'active' ? 'color-mix(in srgb, var(--o-purple) 10%, transparent)' : 'transparent',
+            borderRight: '1px solid var(--o-b2)',
+            borderBottom: 'none',
+            outline: value === 'active' ? '2px solid var(--o-purple)' : 'none',
+            outlineOffset: -2,
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+            <div style={{
+              width: 16, height: 16, borderRadius: '50%',
+              border: `2px solid ${value === 'active' ? 'var(--o-purple)' : 'var(--o-dim)'}`,
+              display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+            }}>
+              {value === 'active' && <div style={{ width: 8, height: 8, borderRadius: '50%', background: 'var(--o-purple)' }} />}
+            </div>
+            <span style={{ fontSize: 12.5, fontWeight: 500, color: 'var(--o-text)' }}>Conduz a conversa</span>
+          </div>
+          <div style={{ fontSize: 11, color: 'var(--o-sub)', paddingLeft: 24, lineHeight: 1.5 }}>
+            Pergunta proativamente quando um campo está em falta
+          </div>
+          <div style={{ fontSize: 10, color: 'var(--o-dim)', paddingLeft: 24, marginTop: 4 }}>
+            Todos os campos · Sem restrição
+          </div>
+        </button>
+        <button
+          onClick={() => onChange('passive')}
+          style={{
+            padding: '14px 16px', border: 'none', cursor: 'pointer', textAlign: 'left',
+            background: value === 'passive' ? 'color-mix(in srgb, var(--o-purple) 10%, transparent)' : 'transparent',
+            outline: value === 'passive' ? '2px solid var(--o-purple)' : 'none',
+            outlineOffset: -2,
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+            <div style={{
+              width: 16, height: 16, borderRadius: '50%',
+              border: `2px solid ${value === 'passive' ? 'var(--o-purple)' : 'var(--o-dim)'}`,
+              display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+            }}>
+              {value === 'passive' && <div style={{ width: 8, height: 8, borderRadius: '50%', background: 'var(--o-purple)' }} />}
+            </div>
+            <span style={{ fontSize: 12.5, fontWeight: 500, color: 'var(--o-text)' }}>Responde com persuasão</span>
+          </div>
+          <div style={{ fontSize: 11, color: 'var(--o-sub)', paddingLeft: 24, lineHeight: 1.5 }}>
+            Guia para o próximo passo sem perguntas de qualificação
+          </div>
+          <div style={{ fontSize: 10, color: 'var(--o-dim)', paddingLeft: 24, marginTop: 4 }}>
+            ⚡ Apenas perguntas de fechamento permitidas em F3
+          </div>
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ─── 4.6 — Banner de sugestão por agent_mode ─────────────────
+
+function BannerSugestao({ mode, onApply, onDismiss }: {
+  mode: string;
+  onApply: () => void;
+  onDismiss: () => void;
+}) {
+  return (
+    <div style={{
+      display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+      padding: '10px 14px', marginBottom: 16, borderRadius: 6,
+      background: 'color-mix(in srgb, var(--o-purple) 8%, transparent)',
+      border: '1px solid color-mix(in srgb, var(--o-purple) 30%, transparent)',
+    }}>
+      <div>
+        <div style={{ fontSize: 12.5, color: 'var(--o-text)', fontWeight: 500 }}>
+          ⚙ Sugestão para "{MODE_LABELS[mode] ?? mode}"
+        </div>
+        <div style={{ fontSize: 11, color: 'var(--o-sub)', marginTop: 3 }}>
+          Campos típicos para este tipo de agente foram pré-selecionados.
+        </div>
+      </div>
+      <div style={{ display: 'flex', gap: 8, flexShrink: 0, marginLeft: 16 }}>
+        <button className="o-btn o-btn-primary" style={{ fontSize: 11, padding: '4px 12px' }} onClick={onApply}>
+          Aplicar sugestão
+        </button>
+        <button className="o-btn" style={{ fontSize: 11, padding: '4px 10px' }} onClick={onDismiss}>
+          Manter atual
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ─── Badge de modo de campo ───────────────────────────────────
+
+function ModeBadge({ mode, passive, onClick }: {
+  mode: QualificationField['mode'];
+  passive?: boolean;
+  onClick?: () => void;
+}) {
+  const labels: Record<string, [string, string]> = passive
+    ? { required: ['●', 'Essencial'], optional: ['○', 'Desejável'], off: ['×', 'Ignorar'] }
+    : { required: ['●', 'Obrigatório'], optional: ['○', 'Opcional'], off: ['×', 'Desligado'] };
+
+  const colors: Record<string, string> = {
+    required: 'var(--o-purple)',
+    optional: 'var(--o-warn)',
+    off: 'var(--o-dim)',
+  };
+
+  const [icon, label] = labels[mode];
+  return (
+    <button
+      onClick={onClick}
+      title={onClick ? 'Clique para alternar' : undefined}
+      style={{
+        display: 'inline-flex', alignItems: 'center', gap: 5, padding: '2px 8px',
+        borderRadius: 4, border: `1px solid ${colors[mode]}`, background: 'transparent',
+        color: colors[mode], fontSize: 11, fontWeight: 500, cursor: onClick ? 'pointer' : 'default',
+        whiteSpace: 'nowrap', flexShrink: 0,
+      }}
+    >
+      <span>{icon}</span>
+      <span>{label}</span>
+    </button>
+  );
+}
+
+// ─── 4.4 — Drawer: Editor de campo ───────────────────────────
+
+function DrawerCampo({ field, isSdr, onSave, onClose, onRemove }: {
+  field: QualificationField;
+  isSdr: boolean;
+  onSave: (f: QualificationField) => void;
+  onClose: () => void;
+  onRemove?: () => void;
+}) {
+  const [local, setLocal] = useState<QualificationField>({ ...field });
+
+  function up<K extends keyof QualificationField>(key: K, val: QualificationField[K]) {
+    setLocal(prev => ({ ...prev, [key]: val }));
+  }
+
+  const isCustom = local.key.startsWith('custom_');
+
+  return (
+    <DrawerBase title="Editar campo" sub="Configure como o agente coleta esta informação" onClose={onClose} onSave={() => onSave(local)}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+
+        {/* Label */}
+        <div className="o-field">
+          <label className="o-field-label">Nome do campo</label>
+          {isCustom
+            ? <input className="o-input" value={local.label} onChange={e => up('label', e.target.value)} placeholder="Ex: Nome do pet" />
+            : <div style={{ fontSize: 13, color: 'var(--o-text)', padding: '8px 0' }}>{local.label}</div>
+          }
+        </div>
+
+        {/* Mode */}
+        <div className="o-field">
+          <label className="o-field-label">Importância</label>
+          <div style={{ display: 'flex', gap: 8, marginTop: 4 }}>
+            {(['required', 'optional', 'off'] as const).map(m => (
+              <button
+                key={m}
+                onClick={() => up('mode', m)}
+                style={{
+                  flex: 1, padding: '7px 0', borderRadius: 5, border: '1px solid',
+                  cursor: 'pointer', fontSize: 11.5, fontWeight: 500,
+                  borderColor: local.mode === m ? 'var(--o-purple)' : 'var(--o-b2)',
+                  background: local.mode === m ? 'color-mix(in srgb, var(--o-purple) 15%, transparent)' : 'transparent',
+                  color: local.mode === m ? 'var(--o-purple)' : 'var(--o-sub)',
+                }}
+              >
+                {m === 'required' ? '● Obrigatório' : m === 'optional' ? '○ Opcional' : '× Desligado'}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Group (SDR only) */}
+        {isSdr && (
+          <div className="o-field">
+            <label className="o-field-label">Filtro (SDR)</label>
+            <div style={{ display: 'flex', gap: 8, marginTop: 4 }}>
+              {(['f1', 'f2', 'f3'] as const).map(g => (
+                <button
+                  key={g}
+                  onClick={() => up('group', g)}
+                  style={{
+                    flex: 1, padding: '7px 0', borderRadius: 5, border: '1px solid',
+                    cursor: 'pointer', fontSize: 11.5, fontWeight: 500,
+                    borderColor: local.group === g ? 'var(--o-purple)' : 'var(--o-b2)',
+                    background: local.group === g ? 'color-mix(in srgb, var(--o-purple) 15%, transparent)' : 'transparent',
+                    color: local.group === g ? 'var(--o-purple)' : 'var(--o-sub)',
+                  }}
+                >
+                  {g === 'f1' ? 'F1 · Fit' : g === 'f2' ? 'F2 · Dor' : 'F3 · Fechamento'}
+                </button>
+              ))}
+            </div>
+            {local.group === 'f3' && (
+              <div style={{ fontSize: 10.5, color: 'var(--o-dim)', marginTop: 6 }}>
+                ⚡ Campos F3 podem ter pergunta estratégica de fechamento no modo passivo
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Divider */}
+        <div style={{ borderTop: '1px solid var(--o-b2)', paddingTop: 4 }}>
+          <div style={{ fontSize: 10, color: 'var(--o-dim)', letterSpacing: 1.5, textTransform: 'uppercase', marginBottom: 12 }}>
+            Modo ativo
+          </div>
+
+          <div className="o-field">
+            <label className="o-field-label">Pergunta direta</label>
+            <div className="o-field-hint">Usada quando o agente pergunta proativamente.</div>
+            <textarea
+              className="o-textarea"
+              rows={2}
+              value={local.question ?? ''}
+              onChange={e => up('question', e.target.value)}
+              placeholder="Ex: Qual o melhor horário para você?"
+            />
+          </div>
+        </div>
+
+        {/* Passive section */}
+        <div style={{ borderTop: '1px solid var(--o-b2)', paddingTop: 4 }}>
+          <div style={{ fontSize: 10, color: 'var(--o-dim)', letterSpacing: 1.5, textTransform: 'uppercase', marginBottom: 12 }}>
+            Modo passivo
+          </div>
+
+          <div className="o-field">
+            <label className="o-field-label">Como capturar passivamente</label>
+            <div className="o-field-hint">Orienta o agente a detectar o dado sem perguntar.</div>
+            <textarea
+              className="o-textarea"
+              rows={2}
+              value={local.passive_hint ?? ''}
+              onChange={e => up('passive_hint', e.target.value)}
+              placeholder="Ex: Capturar se lead mencionar horário, data ou 'semana que vem'"
+            />
+          </div>
+
+          {/* Closing question */}
+          <div className="o-field" style={{ marginTop: 12 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
+              <div
+                onClick={() => up('allow_closing_question', !local.allow_closing_question)}
+                style={{
+                  width: 36, height: 20, borderRadius: 10, cursor: 'pointer',
+                  background: local.allow_closing_question ? 'var(--o-purple)' : 'var(--o-dim)',
+                  position: 'relative', flexShrink: 0, transition: 'background .2s',
+                }}
+              >
+                <div style={{
+                  position: 'absolute', top: 3,
+                  left: local.allow_closing_question ? 18 : 3,
+                  width: 14, height: 14, borderRadius: '50%', background: '#fff', transition: 'left .2s',
+                }} />
+              </div>
+              <label className="o-field-label" style={{ marginBottom: 0, cursor: 'pointer' }}
+                onClick={() => up('allow_closing_question', !local.allow_closing_question)}>
+                ⚡ Pergunta estratégica de fechamento
+              </label>
+            </div>
+            {local.allow_closing_question && (
+              <>
+                <textarea
+                  className="o-textarea"
+                  rows={2}
+                  value={local.closing_question ?? ''}
+                  onChange={e => up('closing_question', e.target.value)}
+                  placeholder="Ex: Você teria disponibilidade na quinta às 14h ou na sexta às 10h?"
+                />
+                <div style={{ fontSize: 10.5, color: 'var(--o-dim)', marginTop: 6 }}>
+                  Única pergunta permitida no modo passivo. Use alternativas binárias ou confirmações — nunca perguntas abertas.
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+
+        {/* Remove custom field */}
+        {onRemove && (
+          <div style={{ borderTop: '1px solid var(--o-b2)', paddingTop: 12 }}>
+            <button
+              onClick={onRemove}
+              style={{
+                background: 'transparent', border: '1px solid var(--o-warn)',
+                color: 'var(--o-warn)', borderRadius: 5, padding: '5px 12px', cursor: 'pointer', fontSize: 12,
+              }}
+            >
+              Remover campo
+            </button>
+          </div>
+        )}
+      </div>
+    </DrawerBase>
+  );
+}
+
+// ─── 4.2 — Modal de filtro SDR (com badges de modo) ──────────
+
+function ModalFiltroSDR({ group, responseStyle, fields, onUpdate, onClose, onAddField }: {
+  group: 'f1' | 'f2' | 'f3';
+  responseStyle: 'active' | 'passive';
+  fields: QualificationField[];
+  onUpdate: (fields: QualificationField[]) => void;
+  onClose: () => void;
+  onAddField: () => void;
+}) {
+  const [editingField, setEditingField] = useState<QualificationField | null>(null);
+
+  const titles = { f1: 'Filtro 1 · Perfil e fit', f2: 'Filtro 2 · Intenção e dor', f3: 'Filtro 3 · 4Ps' };
+  const subs = {
+    f1: 'Perguntas binárias que validam se o lead está dentro do seu público-alvo',
+    f2: 'Perguntas abertas que revelam contexto, urgência e a dor do lead',
+    f3: 'Qualificação profunda via conversa consultiva — os 4Ps',
+  };
+  const passiveLabels = {
+    f1: 'indícios de fit captados passivamente',
+    f2: 'sinais de dor captados sem perguntar',
+    f3: 'confirmações e perguntas de fechamento',
+  };
+
+  const groupFields = fields.filter(f => f.group === group);
+
+  function handleCycleMode(key: string) {
+    onUpdate(fields.map(f => f.key === key ? { ...f, mode: cycleMode(f.mode) } : f));
+  }
+
+  function handleSaveField(updated: QualificationField) {
+    onUpdate(fields.map(f => f.key === updated.key ? updated : f));
+    setEditingField(null);
+  }
+
+  function handleRemoveField(key: string) {
+    onUpdate(fields.filter(f => f.key !== key));
+    setEditingField(null);
+  }
+
+  const isPassive = responseStyle === 'passive';
+
+  return (
+    <>
+      <ModalBase title={titles[group]} sub={isPassive ? passiveLabels[group] : subs[group]} onClose={onClose} onSave={onClose}>
+        {isPassive && (
+          <div style={{
+            padding: '8px 12px', marginBottom: 12, borderRadius: 5,
+            background: 'color-mix(in srgb, var(--o-purple) 8%, transparent)',
+            fontSize: 11, color: 'var(--o-sub)',
+          }}>
+            {group === 'f3'
+              ? '⚡ Modo passivo · Campos com pergunta de fechamento configurada a exibirão abaixo.'
+              : '○ Modo passivo · O agente capta passivamente — sem perguntar. Use o hint de captura.'}
+          </div>
+        )}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+          {groupFields.length === 0 && (
+            <div style={{ fontSize: 12, color: 'var(--o-dim)', padding: '12px 0', textAlign: 'center' }}>
+              Nenhum campo neste filtro. Clique em "Adicionar" para começar.
+            </div>
+          )}
+          {groupFields.map((f, i) => (
+            <div
+              key={f.key}
+              style={{
+                display: 'flex', alignItems: 'flex-start', gap: 10, padding: '10px 12px',
+                background: f.mode === 'off' ? 'transparent' : 'var(--o-b1)',
+                border: '1px solid var(--o-b2)', borderRadius: 6,
+                opacity: f.mode === 'off' ? 0.5 : 1,
+              }}
+            >
+              <span className="font-mono-orion" style={{ fontSize: 10, color: 'var(--o-dim)', paddingTop: 3, minWidth: 20, flexShrink: 0 }}>
+                {String(i + 1).padStart(2, '0')}
+              </span>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontSize: 12.5, color: 'var(--o-text)', fontWeight: 500 }}>{f.label}</div>
+                {isPassive
+                  ? <div style={{ fontSize: 11, color: 'var(--o-sub)', marginTop: 3 }}>
+                      {group === 'f3' && f.allow_closing_question && f.closing_question
+                        ? <><span style={{ color: 'var(--o-purple)' }}>⚡</span> {f.closing_question}</>
+                        : f.passive_hint ? `○ ${f.passive_hint}` : '—'
+                      }
+                    </div>
+                  : f.question && <div style={{ fontSize: 11, color: 'var(--o-sub)', marginTop: 3 }}>"{f.question}"</div>
+                }
+              </div>
+              <ModeBadge mode={f.mode} passive={isPassive} onClick={() => handleCycleMode(f.key)} />
+              <button
+                onClick={() => setEditingField(f)}
+                style={{ background: 'transparent', border: 'none', color: 'var(--o-sub)', cursor: 'pointer', padding: '2px 4px', fontSize: 14, flexShrink: 0 }}
+                title="Editar campo"
+              >›</button>
+            </div>
+          ))}
+        </div>
+        <button className="o-q-add" style={{ marginTop: 12 }} onClick={onAddField}>＋ Adicionar campo ao {titles[group]}</button>
+      </ModalBase>
+
+      {editingField && (
+        <DrawerCampo
+          field={editingField}
+          isSdr={true}
+          onClose={() => setEditingField(null)}
+          onSave={handleSaveField}
+          onRemove={editingField.key.startsWith('custom_') ? () => handleRemoveField(editingField.key) : undefined}
+        />
+      )}
+    </>
+  );
+}
+
+// ─── 4.3 — Lista plana (agentes não-SDR) ─────────────────────
+
+function SecaoCamposPlana({ fields, responseStyle, agentMode, onUpdate }: {
+  fields: QualificationField[];
+  responseStyle: 'active' | 'passive';
+  agentMode: string;
+  onUpdate: (fields: QualificationField[]) => void;
+}) {
+  const [editingField, setEditingField] = useState<QualificationField | null>(null);
+
+  const modeDescriptions: Record<string, string> = {
+    agenda: 'Foco em agendar. Disponibilidade é o campo essencial.',
+    closer: 'Filtro rápido. Menos campos, mais conversão.',
+    direto: 'Filtro rápido. Menos campos, mais conversão.',
+    consultivo: 'Atendimento consultivo. Campos revelam contexto e urgência.',
+  };
+
+  function handleCycleMode(key: string) {
+    onUpdate(fields.map(f => f.key === key ? { ...f, mode: cycleMode(f.mode) } : f));
+  }
+
+  function handleSaveField(updated: QualificationField) {
+    onUpdate(fields.map(f => f.key === updated.key ? updated : f));
+    setEditingField(null);
+  }
+
+  function handleRemoveField(key: string) {
+    onUpdate(fields.filter(f => f.key !== key));
+    setEditingField(null);
+  }
+
+  const isPassive = responseStyle === 'passive';
+  const headerLabel = isPassive ? 'O que o agente precisa saber' : 'O que o agente deve descobrir';
+  const headerSub = isPassive
+    ? 'O agente não pergunta diretamente — capta naturalmente.'
+    : modeDescriptions[agentMode] ?? '';
+
+  return (
+    <>
+      <div className="o-section-hdr">
+        <span className="font-mono-orion" style={{ fontSize: 9, letterSpacing: '2.5px', textTransform: 'uppercase', color: 'var(--o-sub)' }}>
+          {headerLabel}
+        </span>
+        <span className="font-mono-orion" style={{ fontSize: 8, color: 'var(--o-dim)', border: '1px solid var(--o-b1)', padding: '1px 6px', borderRadius: 2 }}>
+          {fields.filter(f => f.mode !== 'off').length} campo(s) ativo(s)
+        </span>
+      </div>
+
+      {headerSub && (
+        <div style={{ fontSize: 11.5, color: 'var(--o-sub)', marginBottom: 12, paddingLeft: 2 }}>{headerSub}</div>
+      )}
+
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 24 }}>
+        {fields.length === 0 && (
+          <div style={{ fontSize: 12, color: 'var(--o-dim)', padding: '12px 0', textAlign: 'center' }}>
+            Nenhum campo configurado. Clique em "Adicionar campo" para começar.
+          </div>
+        )}
+        {fields.map(f => (
+          <div
+            key={f.key}
+            style={{
+              display: 'flex', alignItems: 'flex-start', gap: 10, padding: '10px 14px',
+              background: f.mode === 'off' ? 'transparent' : 'var(--o-b1)',
+              border: '1px solid var(--o-b2)', borderRadius: 6,
+              opacity: f.mode === 'off' ? 0.5 : 1,
+            }}
+          >
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontSize: 12.5, color: 'var(--o-text)', fontWeight: 500 }}>{f.label}</div>
+              {isPassive
+                ? <div style={{ fontSize: 11, color: 'var(--o-sub)', marginTop: 3 }}>
+                    {f.allow_closing_question && f.closing_question
+                      ? <><span style={{ color: 'var(--o-purple)' }}>⚡</span> {f.closing_question}</>
+                      : f.passive_hint ? `○ ${f.passive_hint}` : '—'
+                    }
+                  </div>
+                : f.question && <div style={{ fontSize: 11, color: 'var(--o-sub)', marginTop: 3 }}>"{f.question}"</div>
+              }
+            </div>
+            <ModeBadge mode={f.mode} passive={isPassive} onClick={() => handleCycleMode(f.key)} />
+            <button
+              onClick={() => setEditingField(f)}
+              style={{ background: 'transparent', border: 'none', color: 'var(--o-sub)', cursor: 'pointer', padding: '2px 4px', fontSize: 14, flexShrink: 0 }}
+              title="Editar campo"
+            >›</button>
+          </div>
+        ))}
+
+        <button className="o-q-add" onClick={() => {
+          const key = `custom_novo_${Date.now()}`;
+          const newField: QualificationField = { key, label: '', mode: 'optional' };
+          setEditingField(newField);
+        }}>＋ Adicionar campo</button>
+      </div>
+
+      {editingField && (
+        <DrawerCampo
+          field={editingField}
+          isSdr={false}
+          onClose={() => setEditingField(null)}
+          onSave={(updated) => {
+            const existing = fields.find(f => f.key === updated.key);
+            if (existing) {
+              handleSaveField(updated);
+            } else {
+              // new custom field — fix key from label
+              const finalKey = updated.label.trim()
+                ? `custom_${slugify(updated.label)}`
+                : updated.key;
+              // ensure key uniqueness
+              const usedKeys = new Set(fields.map(f => f.key));
+              let k = finalKey;
+              let n = 2;
+              while (usedKeys.has(k)) k = `${finalKey}_${n++}`;
+              onUpdate([...fields, { ...updated, key: k }]);
+              setEditingField(null);
+            }
+          }}
+          onRemove={editingField.key.startsWith('custom_') ? () => handleRemoveField(editingField.key) : undefined}
+        />
+      )}
+    </>
+  );
 }
 
 // ─── Drawers simples ──────────────────────────────────────────
@@ -39,53 +669,6 @@ function DrawerTicket({ value, onSave, onClose }: { value: string; onSave: (v: s
   );
 }
 
-// ─── Modal: lista de perguntas ────────────────────────────────
-
-function ModalFiltro({ title, sub, questions, onSave, onClose }: {
-  title: string; sub: string; questions: string[];
-  onSave: (qs: string[]) => void; onClose: () => void;
-}) {
-  const [local, setLocal] = useState<string[]>([...questions]);
-
-  function updateQ(i: number, val: string) {
-    setLocal(prev => prev.map((q, idx) => idx === i ? val : q));
-  }
-  function removeQ(i: number) {
-    setLocal(prev => prev.filter((_, idx) => idx !== i));
-  }
-  function addQ() {
-    setLocal(prev => [...prev, '']);
-  }
-
-  return (
-    <ModalBase title={title} sub={sub} onClose={onClose} onSave={() => onSave(local.filter(q => q.trim()))}>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-        {local.map((q, i) => (
-          <div key={i} className="o-q-item">
-            <span className="font-mono-orion" style={{ fontSize: 10, color: 'var(--o-dim)', flexShrink: 0, paddingTop: 3, minWidth: 20 }}>
-              {String(i + 1).padStart(2, '0')}
-            </span>
-            <textarea
-              className="o-q-text"
-              rows={2}
-              value={q}
-              placeholder="Digite a pergunta…"
-              onChange={e => updateQ(i, e.target.value)}
-            />
-            <button className="o-q-del" onClick={() => removeQ(i)} title="Remover">✕</button>
-          </div>
-        ))}
-        <button className="o-q-add" onClick={addQ}>＋ Adicionar pergunta</button>
-      </div>
-    </ModalBase>
-  );
-}
-
-// ─────────────────────────────────────────────────────────────
-// Componente principal
-// ─────────────────────────────────────────────────────────────
-
-// ─── Drawer: Score threshold ──────────────────────────────────
 function DrawerScore({ value, onSave, onClose }: { value: number; onSave: (v: number) => void; onClose: () => void }) {
   const [local, setLocal] = useState(value);
   return (
@@ -111,7 +694,6 @@ function DrawerScore({ value, onSave, onClose }: { value: number; onSave: (v: nu
   );
 }
 
-// ─── Modal: Sinais de compra ──────────────────────────────────
 function ModalBuyingSignals({ keywords, onSave, onClose }: {
   keywords: string[]; onSave: (v: string[]) => void; onClose: () => void;
 }) {
@@ -155,118 +737,151 @@ function ModalBuyingSignals({ keywords, onSave, onClose }: {
   );
 }
 
-// ─── Modal: campos de qualificação obrigatórios ───────────────
-const ALL_QUAL_FIELDS: { key: string; label: string; desc: string }[] = [
-  { key: 'service_interest',    label: 'Serviço de interesse',   desc: 'O que o lead quer contratar' },
-  { key: 'availability_window', label: 'Disponibilidade',        desc: 'Horário ou data disponível' },
-  { key: 'price_acceptance',    label: 'Aceitação de preço',     desc: 'Lead aceitou o valor informado' },
-  { key: 'location_preference', label: 'Preferência de local',   desc: 'Presencial, online ou domicílio' },
-  { key: 'urgency',             label: 'Urgência',               desc: 'Quão urgente é a necessidade' },
-  { key: 'decision_role',       label: 'Decisor',                desc: 'Quem decide a compra' },
-  { key: 'budget_or_price_acceptance', label: 'Orçamento',       desc: 'Faixa de orçamento disponível' },
-  { key: 'constraints',         label: 'Restrições',             desc: 'Limitações de horário ou acesso' },
-];
+// ─── Drawer: nova adição de campo SDR (com escolha de filtro) ──
 
-function ModalQualFields({ current, onSave, onClose }: {
-  current: string[] | null;
-  onSave: (v: string[] | null) => void;
+function ModalAddCampoSDR({ fields, onAdd, onClose }: {
+  fields: QualificationField[];
+  onAdd: (f: QualificationField) => void;
   onClose: () => void;
 }) {
-  // null = usar defaults do modo; array = override (pode ser vazio)
-  const [useOverride, setUseOverride] = useState(current !== null);
-  const [selected, setSelected] = useState<string[]>(current ?? []);
+  const [label, setLabel] = useState('');
+  const [question, setQuestion] = useState('');
+  const [passiveHint, setPassiveHint] = useState('');
+  const [group, setGroup] = useState<'f1' | 'f2' | 'f3'>('f1');
+  const [mode, setMode] = useState<QualificationField['mode']>('optional');
 
-  function toggle(key: string) {
-    setSelected(prev => prev.includes(key) ? prev.filter(k => k !== key) : [...prev, key]);
-  }
-
-  function handleSave() {
-    onSave(useOverride ? selected : null);
+  function handleAdd() {
+    if (!label.trim()) return;
+    const baseKey = `custom_${slugify(label)}`;
+    const usedKeys = new Set(fields.map(f => f.key));
+    let k = baseKey;
+    let n = 2;
+    while (usedKeys.has(k)) k = `${baseKey}_${n++}`;
+    onAdd({ key: k, label: label.trim(), question, passive_hint: passiveHint, mode, group });
   }
 
   return (
-    <ModalBase
-      title="Campos de qualificação"
-      sub="Define quais informações o agente deve obter antes de avançar o lead no pipeline"
-      onClose={onClose}
-      onSave={handleSave}
-    >
-      <div className="o-field" style={{ marginBottom: 16 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', background: 'var(--o-b1)', borderRadius: 6, cursor: 'pointer' }}
-          onClick={() => setUseOverride(v => !v)}>
-          <div style={{
-            width: 36, height: 20, borderRadius: 10, background: useOverride ? 'var(--o-purple)' : 'var(--o-dim)',
-            position: 'relative', flexShrink: 0, transition: 'background .2s',
-          }}>
-            <div style={{
-              position: 'absolute', top: 3, left: useOverride ? 18 : 3,
-              width: 14, height: 14, borderRadius: '50%', background: '#fff', transition: 'left .2s',
-            }} />
-          </div>
-          <div>
-            <div style={{ fontSize: 12.5, color: 'var(--o-text)', fontWeight: 500 }}>
-              {useOverride ? 'Campos personalizados' : 'Usar padrão do modo de agente'}
-            </div>
-            <div style={{ fontSize: 11, color: 'var(--o-sub)', marginTop: 2 }}>
-              {useOverride
-                ? 'Marque os campos que o agente deve exigir. Lista vazia = agente passivo, sem qualificação obrigatória.'
-                : 'O sistema usa automaticamente os campos adequados ao modo configurado (agenda, consultivo, etc.)'}
-            </div>
-          </div>
+    <ModalBase title="Adicionar campo" sub="Campo personalizado para este perfil de agente" onClose={onClose} onSave={handleAdd}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+        <div className="o-field">
+          <label className="o-field-label">Nome do campo *</label>
+          <input className="o-input" value={label} onChange={e => setLabel(e.target.value)} placeholder="Ex: Nome do pet" />
         </div>
-      </div>
-
-      {useOverride && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-          {ALL_QUAL_FIELDS.map(f => {
-            const active = selected.includes(f.key);
-            return (
-              <div key={f.key}
-                onClick={() => toggle(f.key)}
+        <div className="o-field">
+          <label className="o-field-label">Filtro (SDR)</label>
+          <div style={{ display: 'flex', gap: 8, marginTop: 4 }}>
+            {(['f1', 'f2', 'f3'] as const).map(g => (
+              <button
+                key={g}
+                onClick={() => setGroup(g)}
                 style={{
-                  display: 'flex', alignItems: 'center', gap: 12, padding: '10px 14px',
-                  background: active ? 'color-mix(in srgb, var(--o-purple) 12%, transparent)' : 'var(--o-b1)',
-                  border: `1px solid ${active ? 'var(--o-purple)' : 'transparent'}`,
-                  borderRadius: 6, cursor: 'pointer',
+                  flex: 1, padding: '7px 0', borderRadius: 5, border: '1px solid',
+                  cursor: 'pointer', fontSize: 11.5, fontWeight: 500,
+                  borderColor: group === g ? 'var(--o-purple)' : 'var(--o-b2)',
+                  background: group === g ? 'color-mix(in srgb, var(--o-purple) 15%, transparent)' : 'transparent',
+                  color: group === g ? 'var(--o-purple)' : 'var(--o-sub)',
                 }}
               >
-                <div style={{
-                  width: 16, height: 16, borderRadius: 3, border: `2px solid ${active ? 'var(--o-purple)' : 'var(--o-dim)'}`,
-                  background: active ? 'var(--o-purple)' : 'transparent', flexShrink: 0,
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                }}>
-                  {active && <span style={{ color: '#fff', fontSize: 10, lineHeight: 1 }}>✓</span>}
-                </div>
-                <div>
-                  <div style={{ fontSize: 12.5, color: 'var(--o-text)', fontWeight: 500 }}>{f.label}</div>
-                  <div style={{ fontSize: 11, color: 'var(--o-sub)' }}>{f.desc}</div>
-                </div>
-              </div>
-            );
-          })}
-          {selected.length === 0 && (
-            <div style={{ fontSize: 11.5, color: 'var(--o-warn)', padding: '8px 0' }}>
-              Nenhum campo selecionado — o agente não fará qualificação obrigatória (modo passivo).
-            </div>
-          )}
+                {g === 'f1' ? 'F1 · Fit' : g === 'f2' ? 'F2 · Dor' : 'F3 · Fechamento'}
+              </button>
+            ))}
+          </div>
         </div>
-      )}
+        <div className="o-field">
+          <label className="o-field-label">Importância</label>
+          <div style={{ display: 'flex', gap: 8, marginTop: 4 }}>
+            {(['required', 'optional', 'off'] as const).map(m => (
+              <button
+                key={m}
+                onClick={() => setMode(m)}
+                style={{
+                  flex: 1, padding: '7px 0', borderRadius: 5, border: '1px solid',
+                  cursor: 'pointer', fontSize: 11, fontWeight: 500,
+                  borderColor: mode === m ? 'var(--o-purple)' : 'var(--o-b2)',
+                  background: mode === m ? 'color-mix(in srgb, var(--o-purple) 15%, transparent)' : 'transparent',
+                  color: mode === m ? 'var(--o-purple)' : 'var(--o-sub)',
+                }}
+              >
+                {m === 'required' ? '● Obrigatório' : m === 'optional' ? '○ Opcional' : '× Desligado'}
+              </button>
+            ))}
+          </div>
+        </div>
+        <div className="o-field">
+          <label className="o-field-label">Pergunta (modo ativo)</label>
+          <input className="o-input" value={question} onChange={e => setQuestion(e.target.value)} placeholder="Ex: Qual o nome do seu pet?" />
+        </div>
+        <div className="o-field">
+          <label className="o-field-label">Como capturar passivamente</label>
+          <input className="o-input" value={passiveHint} onChange={e => setPassiveHint(e.target.value)} placeholder="Ex: Capturar se lead mencionar nome de animal" />
+        </div>
+      </div>
     </ModalBase>
   );
 }
 
+// ─────────────────────────────────────────────────────────────
+// Componente principal
+// ─────────────────────────────────────────────────────────────
+
 type DrawerKey = 'produto' | 'ticket' | 'publico' | 'dor' | 'objecao' | 'score' | null;
-type ModalKey  = 'f1' | 'f2' | 'f3' | 'buying_signals' | 'qual_fields' | null;
+type ModalKey  = 'f1' | 'f2' | 'f3' | 'buying_signals' | 'add_campo_sdr' | null;
 
 export function CamadaQualificacao({ config, onUpdate }: CamadaQualificacaoProps) {
   const [drawer, setDrawer] = useState<DrawerKey>(null);
   const [modal, setModal]   = useState<ModalKey>(null);
+  // Banner de sugestão por agent_mode
+  const [bannerMode, setBannerMode] = useState<string | null>(null);
+  const prevModeRef = useRef(config.agent_mode);
 
-  const totalPerguntas = config.f1_questions.length + config.f2_questions.length + config.f3_questions.length;
-  const showBuyingSignals = config.agent_mode === 'sdr_scheduler' || config.agent_mode === 'agenda' || config.template_key === 'sdr_padrao' || config.template_key === 'hybrid_scheduler';
+  useEffect(() => {
+    if (prevModeRef.current !== config.agent_mode) {
+      setBannerMode(config.agent_mode);
+      prevModeRef.current = config.agent_mode;
+    }
+  }, [config.agent_mode]);
+
+  const isSdr = config.agent_mode === 'sdr_scheduler';
+  const showBuyingSignals = config.agent_mode === 'sdr_scheduler' || config.agent_mode === 'agenda'
+    || config.template_key === 'sdr_padrao' || config.template_key === 'hybrid_scheduler';
+
+  // Salvar qualification_fields + derivados
+  function updateFields(fields: QualificationField[]) {
+    const derived = deriveF1F2F3(fields);
+    onUpdate({ qualification_fields: fields, ...derived });
+  }
+
+  // Aplicar sugestão
+  function applySuggestion(mode: string) {
+    const suggested = SUGGESTIONS[mode] ?? [];
+    updateFields(suggested);
+    setBannerMode(null);
+  }
+
+  // Adicionar campo SDR
+  function handleAddCampoSDR(f: QualificationField) {
+    updateFields([...config.qualification_fields, f]);
+    setModal(null);
+  }
+
+  // Adicionar campo a grupo específico (a partir do modal do filtro SDR)
+  function handleAddToGroup(group: 'f1' | 'f2' | 'f3') {
+    setModal(group);
+  }
+
+  const f1Count = config.qualification_fields.filter(f => f.group === 'f1' && f.mode !== 'off').length;
+  const f2Count = config.qualification_fields.filter(f => f.group === 'f2' && f.mode !== 'off').length;
+  const f3Count = config.qualification_fields.filter(f => f.group === 'f3' && f.mode !== 'off').length;
+  const isPassive = config.response_style === 'passive';
 
   return (
     <>
+      {/* 4.1 — Toggle response_style */}
+      <ToggleResponseStyle
+        value={config.response_style}
+        onChange={v => onUpdate({ response_style: v })}
+      />
+
       {/* Contexto do negócio */}
       <div className="o-section-hdr">
         <span className="font-mono-orion" style={{ fontSize: 9, letterSpacing: '2.5px', textTransform: 'uppercase', color: 'var(--o-sub)' }}>
@@ -281,37 +896,63 @@ export function CamadaQualificacao({ config, onUpdate }: CamadaQualificacaoProps
         <EditCard label="Objeção mais comum" value={config.main_objection || '—'}     sub="O que o lead fala ao não comprar" onClick={() => setDrawer('objecao')} />
       </div>
 
-      {/* Filtros */}
-      <div className="o-section-hdr">
-        <span className="font-mono-orion" style={{ fontSize: 9, letterSpacing: '2.5px', textTransform: 'uppercase', color: 'var(--o-sub)' }}>
-          Filtros de qualificação
-        </span>
-        <span className="font-mono-orion" style={{ fontSize: 8, color: 'var(--o-dim)', border: '1px solid var(--o-b1)', padding: '1px 6px', borderRadius: 2 }}>
-          {totalPerguntas} perguntas ativas
-        </span>
-      </div>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 14, marginBottom: 24 }}>
-        <FiltroCard
-          label="Filtro 1 · Perfil e fit"
-          count={config.f1_questions.length}
-          sub="Localização · uso pessoal · decisor"
-          onClick={() => setModal('f1')}
+      {/* 4.6 — Banner de sugestão */}
+      {bannerMode && (
+        <BannerSugestao
+          mode={bannerMode}
+          onApply={() => applySuggestion(bannerMode)}
+          onDismiss={() => setBannerMode(null)}
         />
-        <FiltroCard
-          label="Filtro 2 · Intenção e dor"
-          count={config.f2_questions.length}
-          sub="Abertas · exploratórias · contexto"
-          onClick={() => setModal('f2')}
-        />
-        <FiltroCard
-          label="Filtro 3 · 4Ps"
-          count={config.f3_questions.length}
-          sub="Poder · prioridade · preço · timing"
-          onClick={() => setModal('f3')}
-        />
-      </div>
+      )}
 
-      {/* Qualificação avançada */}
+      {/* 4.2 — Filtros SDR  |  4.3 — Lista plana outros agentes */}
+      {isSdr ? (
+        <>
+          <div className="o-section-hdr">
+            <span className="font-mono-orion" style={{ fontSize: 9, letterSpacing: '2.5px', textTransform: 'uppercase', color: 'var(--o-sub)' }}>
+              Filtros de qualificação
+            </span>
+            <span className="font-mono-orion" style={{ fontSize: 8, color: 'var(--o-dim)', border: '1px solid var(--o-b1)', padding: '1px 6px', borderRadius: 2 }}>
+              {f1Count + f2Count + f3Count} campos ativos
+            </span>
+          </div>
+          {isPassive && (
+            <div style={{ fontSize: 11.5, color: 'var(--o-sub)', marginBottom: 12, paddingLeft: 2 }}>
+              Modo passivo · O agente capta naturalmente; apenas perguntas de fechamento (F3) são permitidas.
+            </div>
+          )}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 14, marginBottom: 24 }}>
+            <FiltroCard
+              label={isPassive ? 'F1 · Fit e Perfil' : 'Filtro 1 · Perfil e fit'}
+              count={f1Count}
+              sub={isPassive ? 'indícios de fit captados passivamente' : 'Localização · uso pessoal · decisor'}
+              onClick={() => setModal('f1')}
+            />
+            <FiltroCard
+              label={isPassive ? 'F2 · Intenção e Dor' : 'Filtro 2 · Intenção e dor'}
+              count={f2Count}
+              sub={isPassive ? 'sinais de dor captados sem perguntar' : 'Abertas · exploratórias · contexto'}
+              onClick={() => setModal('f2')}
+            />
+            <FiltroCard
+              label={isPassive ? 'F3 · 4Ps · Fechamento' : 'Filtro 3 · 4Ps'}
+              count={f3Count}
+              sub={isPassive ? '⚡ confirmações e perguntas de fechamento' : 'Poder · prioridade · preço · timing'}
+              onClick={() => setModal('f3')}
+              highlight={isPassive}
+            />
+          </div>
+        </>
+      ) : (
+        <SecaoCamposPlana
+          fields={config.qualification_fields}
+          responseStyle={config.response_style}
+          agentMode={config.agent_mode}
+          onUpdate={updateFields}
+        />
+      )}
+
+      {/* Parâmetros avançados */}
       <div className="o-section-hdr">
         <span className="font-mono-orion" style={{ fontSize: 9, letterSpacing: '2.5px', textTransform: 'uppercase', color: 'var(--o-sub)' }}>
           Parâmetros avançados
@@ -333,18 +974,6 @@ export function CamadaQualificacao({ config, onUpdate }: CamadaQualificacaoProps
           </span>
           <span className="o-edit-arrow">›</span>
         </div>
-        <EditCard
-          label="Campos de qualificação"
-          value={
-            config.qualification_required_fields === null
-              ? 'Padrão do modo'
-              : config.qualification_required_fields.length === 0
-                ? 'Nenhum (modo passivo)'
-                : `${config.qualification_required_fields.length} campo(s) ativo(s)`
-          }
-          sub="Informações obrigatórias antes de avançar o lead"
-          onClick={() => setModal('qual_fields')}
-        />
         {showBuyingSignals && (
           <EditCard
             label="Sinais de compra"
@@ -355,7 +984,7 @@ export function CamadaQualificacao({ config, onUpdate }: CamadaQualificacaoProps
         )}
       </div>
 
-      {/* Drawers */}
+      {/* Drawers de contexto de negócio */}
       {drawer === 'produto' && (
         <DrawerTexto title="Produto ou serviço" sub="Descreva em 1–2 frases o que você vende" value={config.offer_description}
           placeholder="Ex: Pacotes de procedimentos estéticos corporais" onClose={() => setDrawer(null)} onSave={v => { onUpdate({ offer_description: v }); setDrawer(null); }} />
@@ -379,32 +1008,25 @@ export function CamadaQualificacao({ config, onUpdate }: CamadaQualificacaoProps
         <DrawerScore value={config.qualification_score_threshold} onClose={() => setDrawer(null)} onSave={v => { onUpdate({ qualification_score_threshold: v }); setDrawer(null); }} />
       )}
 
-      {/* Modais de perguntas */}
-      {modal === 'f1' && (
-        <ModalFiltro
-          title="Filtro 1 · Perfil e fit"
-          sub="Perguntas binárias que validam se o lead está dentro do seu público-alvo"
-          questions={config.f1_questions}
+      {/* Modais SDR */}
+      {(modal === 'f1' || modal === 'f2' || modal === 'f3') && (
+        <ModalFiltroSDR
+          group={modal}
+          responseStyle={config.response_style}
+          fields={config.qualification_fields}
+          onUpdate={updateFields}
           onClose={() => setModal(null)}
-          onSave={qs => { onUpdate({ f1_questions: qs }); setModal(null); }}
+          onAddField={() => {
+            // abre modal de adição com grupo pré-selecionado
+            setModal('add_campo_sdr');
+          }}
         />
       )}
-      {modal === 'f2' && (
-        <ModalFiltro
-          title="Filtro 2 · Intenção e dor"
-          sub="Perguntas abertas que revelam contexto, urgência e a dor do lead"
-          questions={config.f2_questions}
+      {modal === 'add_campo_sdr' && (
+        <ModalAddCampoSDR
+          fields={config.qualification_fields}
+          onAdd={handleAddCampoSDR}
           onClose={() => setModal(null)}
-          onSave={qs => { onUpdate({ f2_questions: qs }); setModal(null); }}
-        />
-      )}
-      {modal === 'f3' && (
-        <ModalFiltro
-          title="Filtro 3 · Poder, Prioridade, Preço e Timing"
-          sub="Qualificação profunda via conversa consultiva — os 4Ps"
-          questions={config.f3_questions}
-          onClose={() => setModal(null)}
-          onSave={qs => { onUpdate({ f3_questions: qs }); setModal(null); }}
         />
       )}
       {modal === 'buying_signals' && (
@@ -412,13 +1034,6 @@ export function CamadaQualificacao({ config, onUpdate }: CamadaQualificacaoProps
           keywords={config.buying_signal_keywords}
           onClose={() => setModal(null)}
           onSave={v => { onUpdate({ buying_signal_keywords: v }); setModal(null); }}
-        />
-      )}
-      {modal === 'qual_fields' && (
-        <ModalQualFields
-          current={config.qualification_required_fields}
-          onClose={() => setModal(null)}
-          onSave={v => { onUpdate({ qualification_required_fields: v }); setModal(null); }}
         />
       )}
     </>
@@ -438,17 +1053,19 @@ function EditCard({ label, value, sub, onClick }: { label: string; value: string
   );
 }
 
-function FiltroCard({ label, count, sub, onClick }: { label: string; count: number; sub: string; onClick: () => void }) {
-  const hasQuestions = count > 0;
+function FiltroCard({ label, count, sub, onClick, highlight }: {
+  label: string; count: number; sub: string; onClick: () => void; highlight?: boolean;
+}) {
+  const hasFields = count > 0;
   return (
-    <div className="o-edit-card" onClick={onClick}>
-      <div className="font-mono-orion" style={{ fontSize: 8, letterSpacing: 2, textTransform: 'uppercase', color: 'var(--o-dim)', marginBottom: 6 }}>{label}</div>
+    <div className="o-edit-card" onClick={onClick} style={highlight ? { borderColor: 'color-mix(in srgb, var(--o-purple) 40%, transparent)' } : undefined}>
+      <div className="font-mono-orion" style={{ fontSize: 8, letterSpacing: 2, textTransform: 'uppercase', color: highlight ? 'var(--o-purple)' : 'var(--o-dim)', marginBottom: 6 }}>{label}</div>
       <div style={{ fontSize: 13, color: 'var(--o-text)', marginBottom: 4 }}>
-        {count === 0 ? 'Sem perguntas' : `${count} pergunta${count !== 1 ? 's' : ''} ativa${count !== 1 ? 's' : ''}`}
+        {count === 0 ? 'Sem campos' : `${count} campo${count !== 1 ? 's' : ''} ativo${count !== 1 ? 's' : ''}`}
       </div>
       <div style={{ fontSize: 11, color: 'var(--o-sub)', fontWeight: 300, marginBottom: 8 }}>{sub}</div>
-      <span className={`o-badge ${hasQuestions ? 'o-badge-ok' : 'o-badge-warn'}`}>
-        {hasQuestions ? 'Editar perguntas' : 'Adicionar perguntas'}
+      <span className={`o-badge ${hasFields ? 'o-badge-ok' : 'o-badge-warn'}`}>
+        {hasFields ? 'Editar campos' : 'Adicionar campos'}
       </span>
       <span className="o-edit-arrow">›</span>
     </div>

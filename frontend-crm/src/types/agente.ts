@@ -2,13 +2,16 @@
 // Tipos do módulo de Agente (dashboard + configuração)
 // ─────────────────────────────────────────────────────────────
 
-/** Contrato unificado de qualificação — Fase 3 */
+/** Contrato unificado de qualificação — Fase 3/4 */
 export interface QualificationField {
-  key: string;           // "availability_window" | "custom_nome_do_pet" | ...
-  label: string;         // "Disponibilidade" | "Nome do pet"
-  question?: string;     // Pergunta para modo ativo: "Qual horário funciona?"
-  passive_hint?: string; // Dica para modo passivo: "Inferir se lead mencionar horário"
+  key: string;                    // "availability_window" | "custom_nome_do_pet" | ...
+  label: string;                  // "Disponibilidade" | "Nome do pet"
+  question?: string;              // Pergunta para modo ativo: "Qual horário funciona?"
+  passive_hint?: string;          // Dica para modo passivo: "Inferir se lead mencionar horário"
+  closing_question?: string;      // Pergunta estratégica de fechamento — alternativa binária ou confirmação
+  allow_closing_question?: boolean; // Habilita closing_question para este campo
   mode: 'required' | 'optional' | 'off';
+  group?: 'f1' | 'f2' | 'f3';   // APENAS para SDR — filtro ao qual este campo pertence
 }
 
 /** Resposta de GET /api/agents/ (agente local / runner)
