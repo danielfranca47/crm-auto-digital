@@ -231,6 +231,76 @@ def _build_custom_instructions_block(ai_profile: Dict[str, Any]) -> str:
     )
 
 
+def _build_qualification_fields_block(ai_profile: Dict[str, Any], response_style: str) -> str:
+    """Gera bloco de campos de qualificação configurados pelo usuário para injeção no prompt da filha.
+
+    Modo ativo: expõe obrigatórios (com question) e desejáveis (nice_to_collect).
+    Modo passivo: expõe apenas passive_hints (captura silenciosa) e closing_questions.
+    Retorna string vazia se qualification_fields não estiver configurado.
+    """
+    qual_fields = ai_profile.get("qualification_fields")
+    if not qual_fields or not isinstance(qual_fields, list):
+        return ""
+
+    if response_style == "passive":
+        passive_fields = [
+            f for f in qual_fields
+            if isinstance(f, dict) and f.get("passive_hint") and f.get("mode") in ("required", "optional")
+        ]
+        closing_fields = [
+            f for f in qual_fields
+            if isinstance(f, dict) and f.get("allow_closing_question") and f.get("closing_question") and f.get("mode") != "off"
+        ]
+        if not passive_fields and not closing_fields:
+            return ""
+        block = "\nCAMPOS DE QUALIFICAÇÃO (MODO PASSIVO — captura silenciosa):\n"
+        if passive_fields:
+            block += "Registrar internamente se o lead mencionar (NÃO perguntar):\n"
+            for f in passive_fields:
+                label = f.get("label") or f.get("key", "")
+                hint = f.get("passive_hint", "")
+                tag = "[OBRIGATÓRIO]" if f.get("mode") == "required" else "[DESEJÁVEL]"
+                block += f"- {label} {tag} (key: {f.get('key', '')}): {hint}\n"
+        if closing_fields:
+            block += "Closing questions permitidas (únicas perguntas permitidas no modo passivo):\n"
+            for f in closing_fields:
+                label = f.get("label") or f.get("key", "")
+                cq = f.get("closing_question", "")
+                block += f'- {label}: "{cq}"\n'
+        return block
+    else:
+        required_fields = [f for f in qual_fields if isinstance(f, dict) and f.get("mode") == "required"]
+        optional_fields = [f for f in qual_fields if isinstance(f, dict) and f.get("mode") == "optional"]
+        if not required_fields and not optional_fields:
+            return ""
+        block = "\nCAMPOS DE QUALIFICAÇÃO CONFIGURADOS:\n"
+        if required_fields:
+            block += "OBRIGATÓRIOS — usar a question configurada ao perguntar:\n"
+            for f in required_fields:
+                label = f.get("label") or f.get("key", "")
+                question = f.get("question", "")
+                hint = f.get("passive_hint", "")
+                line = f"- {label} (key: {f.get('key', '')})"
+                if question:
+                    line += f': pergunta → "{question}"'
+                if hint:
+                    line += f' | inferir: "{hint}"'
+                block += line + "\n"
+        if optional_fields:
+            block += "DESEJÁVEIS — capturar se surgir oportunidade natural:\n"
+            for f in optional_fields:
+                label = f.get("label") or f.get("key", "")
+                question = f.get("question", "")
+                hint = f.get("passive_hint", "")
+                line = f"- {label} (key: {f.get('key', '')})"
+                if question:
+                    line += f': pergunta → "{question}"'
+                if hint:
+                    line += f' | inferir: "{hint}"'
+                block += line + "\n"
+        return block
+
+
 def _build_tone_block(ai_profile: Dict[str, Any], playbook: Dict[str, Any]) -> str:
     """Gera o bloco de regras de tom WhatsApp operacional (Tarefa 2.1)."""
     tone_of_voice = str(ai_profile.get("tone_of_voice") or "profissional")
@@ -926,10 +996,15 @@ def _build_mother_prompt(context: Dict[str, Any], message_text: str) -> str:
         "- Preencha signals seguindo schema padronizado quando possível (intent_level, urgency_level, price_acceptance, meeting_scheduled, handoff_requested, missing_fields, stop_reason).\n"
         "- Em price_acceptance use SEMPRE string: no|unsure|yes (não use boolean).\n"
         "- Se o lead aceitar o preço/valor, use price_acceptance='yes'.\n"
-        "- REGRA OBRIGATÓRIA DE QUALIFICAÇÃO: se missing_fields não estiver vazio, route_to DEVE ser \"qualification\".\n"
+        "- REGRA DE QUALIFICAÇÃO: se missing_fields não estiver vazio E a mensagem não for uma pergunta direta\n"
+        "  do lead sobre oferta/serviços/preços → route_to DEVE ser \"qualification\".\n"
+        "  Se o lead fez uma pergunta direta (sobre serviços, preços, como funciona, etc.) E missing_fields não\n"
+        "  estiver vazio → use route_to=\"qualification\" + next_action_hint=\"reply\" (filha responde primeiro,\n"
+        "  qualificação continua nos turnos seguintes). NUNCA force qualification sem next_action_hint=\"reply\"\n"
+        "  quando o lead fizer uma pergunta direta.\n"
         "  EXCEÇÃO FECHO: sinal explícito de confirmação/booking em agent_mode=agenda/sdr_scheduler permite\n"
         "  route_to=\"apresentation\" — ver PRIORIDADE 1 EXCEÇÃO FECHO abaixo.\n"
-        "- Enquanto houver missing_fields E sem sinal de fecho, NÃO sugerir avanço para apresentation, follow-up ou closing.\n"
+        "- Enquanto houver missing_fields E sem sinal de fecho E sem pergunta direta, NÃO sugerir avanço para apresentation, follow-up ou closing.\n"
         "- perceived_category pode refletir o estágio atual do lead, mas route_to deve permanecer qualification até completar o contrato.\n"
         "\n"
         "DEFINIÇÃO DO FUNIL (IMPORTANTE):\n"
@@ -966,7 +1041,10 @@ def _build_mother_prompt(context: Dict[str, Any], message_text: str) -> str:
         "\n"
         "REGRAS DE ROUTING — AVALIAR NESTA ORDEM (a primeira que coincidir vence):\n\n"
         "PRIORIDADE 1 (obrigatória — sistema sobrescreve mesmo se você retornar outra):\n"
-        "- missing_fields NÃO vazio → route_to = \"qualification\"\n"
+        "- PRIORIDADE 1A: missing_fields NÃO vazio + mensagem SEM pergunta direta → route_to = \"qualification\"\n"
+        "- PRIORIDADE 1B: missing_fields NÃO vazio + mensagem COM pergunta direta (serviços, preço, como\n"
+        "  funciona, horários, etc.) → route_to = \"qualification\", next_action_hint = \"reply\"\n"
+        "  (filha responde à pergunta antes de qualificar — NUNCA ignore uma pergunta direta do lead)\n"
         "  EXCEÇÃO FECHO (agent_mode=agenda/sdr_scheduler): se a mensagem contiver sinal EXPLÍCITO de\n"
         "  confirmação/booking (\"fica combinado\", \"perfeito\", \"pode ser\", \"fechado\", \"aceito\",\n"
         "  \"tá bom\", \"ok então\", \"combinado\", \"confirmado\", \"então fica assim\" ou equivalentes),\n"
@@ -1030,7 +1108,7 @@ def _build_mother_prompt(context: Dict[str, Any], message_text: str) -> str:
             "usa next_action_hint='reply' para sinalizar à filha que deve responder a pergunta primeiro. "
             "O route_to continua 'qualification' (os campos ainda precisam de ser coletados), "
             "mas a filha terá prioridade para responder antes de perguntar.\n"
-            if (ai_profile.get("response_style") or "active") == "passive"
+            if (ai_profile.get("response_style") or "passive") == "passive"
             else ""
         )
     )
@@ -1167,22 +1245,33 @@ def _build_child_prompt_qualification(
     ][-2:]
 
     tone_block = _build_tone_block(ai_profile, playbook)
-    response_style = (ai_profile.get("response_style") or "active").strip().lower()
+    response_style = (ai_profile.get("response_style") or "passive").strip().lower()
 
     # Fix P4: ESCOPO e RECUSAS condicionais ao response_style.
     # O bloco passivo aparece ANTES do PAPEL para ter precedência sobre qualquer instrução posterior.
     _escopo_line = (
         "Responder perguntas directas do cliente PRIMEIRO, usando offer_description e custom_instructions. "
         "Depois qualificar de forma natural. Pode apresentar serviços e valores quando perguntado. "
-        "Não agenda reunião nesta fase."
+        "Não agenda reunião nesta fase. NUNCA faças perguntas abertas de qualificação — apenas closing_questions "
+        "se configuradas (confirmações e alternativas binárias)."
         if response_style == "passive"
-        else "Você APENAS faz perguntas de qualificação. Não agenda reuniões. Não faz pitch. Não apresenta ofertas."
+        else (
+            "Responde SEMPRE à mensagem do cliente antes de qualificar. Se o cliente fez uma pergunta, "
+            "responde usando offer_description e custom_instructions. Depois, se houver campos obrigatórios "
+            "em falta, adicione UMA pergunta de qualificação natural ao final. "
+            "Nunca respondas APENAS com uma pergunta de qualificação. Não agenda reuniões nesta fase."
+        )
     )
     _recusas_line = (
         "Nunca invente informação. Nunca agende reunião nesta fase. "
-        "Se a resposta não estiver em offer_description ou custom_instructions, diz que vais verificar (→ handoff)."
+        "Se a resposta não estiver em offer_description ou custom_instructions, diz que vais verificar (→ handoff). "
+        "NUNCA faças perguntas abertas para coletar dados — guia persuasivamente para o próximo passo."
         if response_style == "passive"
-        else "Nunca invente informação. Nunca cite preços. Nunca agende reunião nesta fase. Se não souber responder, redirecione ao tema da qualificação."
+        else (
+            "Nunca invente informação. Nunca agende reunião nesta fase. "
+            "Pode apresentar serviços e valores quando perguntado usando offer_description. "
+            "Se não souber responder, diz que vais verificar (→ handoff)."
+        )
     )
     _mother_hint = (mother_decision.next_action_hint or "").strip().lower()
     _passive_reply_now = response_style == "passive" and _mother_hint == "reply"
@@ -1269,7 +1358,7 @@ CONTEXTO:
 - origin_opener: {origin_opener}
 - inbound_message_text: {message_text}
 - next_action_hint_mae: {mother_decision.next_action_hint or "null"}
-{_build_custom_instructions_block(ai_profile)}"""
+{_build_qualification_fields_block(ai_profile, response_style)}{_build_custom_instructions_block(ai_profile)}"""
     return _inject_generated_parts(_qual_prompt, context, "qualification")
 
 def _build_child_prompt_apresentation(
@@ -2199,7 +2288,7 @@ def compose_decision_output(
     # Se a mãe emitiu next_action_hint='reply' com response_style=passive, o cliente fez uma pergunta
     # de catálogo/serviços. Nesse caso, o filho deve ter respondido em message_text — usar essa
     # resposta diretamente em vez de question_text (a pergunta de qualificação).
-    _response_style = (ai_profile.get("response_style") or "active").strip().lower()
+    _response_style = (ai_profile.get("response_style") or "passive").strip().lower()
     _passive_reply_override = (
         effective_route_to == "qualification"
         and (mother_decision.next_action_hint or "").strip().lower() == "reply"
