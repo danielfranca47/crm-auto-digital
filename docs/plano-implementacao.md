@@ -393,6 +393,60 @@ Isso garante que ambas as versões do backend (com e sem suporte ao novo schema)
 
 ---
 
+## Mapa de impacto no frontend — AI Profile (Camada 2)
+
+Esta seção detalha exatamente quais partes da página AI Profile serão alteradas e quais permanecerão intactas. Serve como referência rápida para acompanhar o escopo da Fase 4.
+
+### Estrutura atual de `CamadaQualificacao.tsx`
+
+A Camada 2 do AI Profile tem três agrupamentos visuais:
+
+**1. Contexto do negócio**
+Subcampos: Produto, Ticket médio, Público-alvo, Dor principal, Objeção principal.
+→ **Não alterado.** Estas informações são contexto estático do negócio do usuário, lidas pelo agente para montar apresentações e ofertas. Não fazem parte do fluxo de qualificação dinâmica e não são tocadas pelo plano.
+
+**2. Filtros de qualificação** (cards F1, F2, F3)
+→ **Alterado pela Fase 4 (subseção 4.2).** A estrutura visual dos três cards é preservada — o que muda é o que está *dentro* de cada card. Cada pergunta passa a ter uma marcação de importância (`obrigatório / opcional / desligado`), um campo de dica passiva (`passive_hint`) e, exclusivamente para F3, a opção de `closing_question` para o modo passivo.
+
+**3. Qualificação avançada** — quatro subcampos:
+
+| Subcampo | Alterado? | Motivo |
+|---|---|---|
+| **Score mínimo** | **Não** | Lógica de pontuação não é objeto deste plano |
+| **Nurture vs Descarte** | **Não** | Regra de destino pós-descarte não é objeto deste plano |
+| **Campos de qualificação** | **Sim** | Modal atual (lista de checkboxes) é substituído pelo novo editor `QualificationField[]` descrito nas subseções 4.2–4.5. Para agentes não-SDR, o conteúdo desta seção migra para lista plana com obrigatório/opcional/desligado. |
+| **Sinais de compra** | **Não** | Palavras-chave de intenção de compra não são objeto deste plano |
+
+### Resumo visual
+
+```
+Camada 2 — Qualificação
+│
+├── Contexto do negócio          → NÃO alterado
+│     Produto · Ticket · Público · Dor · Objeção
+│
+├── Filtros de qualificação      → ALTERADO (Fase 4.2)
+│     F1 · F2 · F3               ↳ mesma estrutura de cards; perguntas ganham
+│                                   obrigatório/opcional + passive_hint + closing_question (F3)
+│
+└── Qualificação avançada
+      ├── Score mínimo           → NÃO alterado
+      ├── Nurture vs Descarte    → NÃO alterado
+      ├── Campos de qualificação → ALTERADO (Fase 4.3/4.4/4.5)
+      │                            ↳ substituído pelo editor QualificationField[]
+      └── Sinais de compra       → NÃO alterado
+```
+
+### O que a Fase 4 acrescenta (que não existe hoje)
+
+- Toggle `response_style` visível no topo da seção (hoje está oculto ou sem posição destacada)
+- Drawer de edição de campo individual (novo componente)
+- Botão "+ Adicionar campo" para campos personalizados
+- Banner de sugestão ao trocar `agent_mode`
+- UI distinta para agentes não-SDR (lista plana no lugar dos cards F1/F2/F3)
+
+---
+
 ## Fase 4 — Frontend: CamadaQualificacao Dinâmica e Didática
 
 **Duração estimada:** 2 sessões  
