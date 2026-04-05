@@ -703,15 +703,16 @@ A Fase 2 resolve o comportamento da conversa (sem bloqueio de respostas).
 - [x] Frontend: lógica de serialização — salvar `qualification_fields` + derivar `qualification_required_fields` ✓ | derivar f1/f2/f3 para compat legado ✗ (pendente — executor já lê `qualification_fields` diretamente, impacto baixo)
 
 ### Fase 4 — Frontend: UI dinâmica
-- [ ] Toggle `response_style` no topo da Camada 2 (linguagem de negócio)
-- [ ] **SDR (`sdr_scheduler`)**: cards F1/F2/F3 preservados — cada pergunta ganha badge obrigatório/opcional
-- [ ] **SDR**: modal de filtro mostra `question` (ativo) ou `passive_hint` (passivo) por pergunta
-- [ ] **Outros agentes**: `CamadaQualificacao.tsx` renderiza lista plana de campos com mesmo editor
-- [ ] Editor de campo unificado (drawer com label + mode + question + passive_hint)
-- [ ] Três estados por campo: Obrigatório / Opcional / Desligado (toggle no card ou no drawer)
-- [ ] Campos personalizados livres — SDR pergunta em qual filtro incluir; outros vão para lista plana
-- [ ] Sugestões por `agent_mode` — SDR sugestão distribuída em F1/F2/F3; outros em lista
-- [ ] Explicação contextual por `agent_mode` + `response_style` (banner no topo da seção)
+- [x] Toggle `response_style` no topo da Camada 2 (linguagem de negócio)
+- [x] **SDR (`sdr_scheduler`)**: cards F1/F2/F3 preservados — cada pergunta ganha badge obrigatório/opcional
+- [x] **SDR**: modal de filtro mostra `question` (ativo) ou `passive_hint` (passivo) por pergunta
+- [x] **Outros agentes**: `CamadaQualificacao.tsx` renderiza lista plana de campos com mesmo editor
+- [x] Editor de campo unificado (drawer com label + mode + question + passive_hint)
+- [x] Três estados por campo: Obrigatório / Opcional / Desligado (toggle no card ou no drawer)
+- [x] Campos personalizados livres — SDR pergunta em qual filtro incluir; outros vão para lista plana
+- [x] Sugestões por `agent_mode` — SDR sugestão distribuída em F1/F2/F3; outros em lista
+- [x] Explicação contextual por `agent_mode` + `response_style` (banner no topo da seção)
+- [x] `PainelResumo`: progresso e cards da Camada 2 refletem `qualification_fields` (não f1/f2/f3 legacy) para agentes não-SDR
 
 ### Fase 5 — Auditoria
 - [ ] Confirmar `can_advance_from_qualification` isolado em rotas manuais (`routes/leads.py`)

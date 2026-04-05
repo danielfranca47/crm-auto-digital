@@ -33,8 +33,13 @@ function PainelResumo({
   const criticals = [!optoutOk, !lgpdOk, !reatOk].filter(Boolean).length;
 
   const layer1Complete = !!(config.name && config.brand_name && config.agent_mode && config.identity_mode);
-  const layer2Questions = config.f1_questions.length + config.f2_questions.length + config.f3_questions.length;
-  const layer2Progress  = Math.min(100, Math.round((layer2Questions / 10) * 100));
+  const isSdrMode = config.agent_mode === 'sdr_scheduler';
+  // Para SDR: conta via f1/f2/f3 (derivados de qualification_fields ao salvar)
+  // Para outros: conta qualification_fields diretamente (sem group)
+  const layer2Questions = isSdrMode
+    ? config.f1_questions.length + config.f2_questions.length + config.f3_questions.length
+    : config.qualification_fields.filter(f => f.mode !== 'off').length;
+  const layer2Progress  = Math.min(100, Math.round((layer2Questions / 8) * 100));
   const layer3Items     = [optoutOk, lgpdOk, reatOk, config.media_fallback, config.followup_h1 > 0].filter(Boolean).length;
 
   return (
@@ -99,9 +104,28 @@ function PainelResumo({
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 14, marginBottom: 24 }}>
         <SummaryCard label="Produto / Serviço"  value={config.offer_description || '—'} onClick={() => onNavigate('c2')} />
         <SummaryCard label="Principal dor"       value={config.main_pain || '—'}          onClick={() => onNavigate('c2')} />
-        <SummaryCard label="Filtro 1 · F1"       value={`${config.f1_questions.length} pergunta(s)`} onClick={() => onNavigate('c2')} />
-        <SummaryCard label="Filtro 2 · F2"       value={`${config.f2_questions.length} pergunta(s)`} onClick={() => onNavigate('c2')} />
-        <SummaryCard label="Filtro 3 · F3"       value={`${config.f3_questions.length} pergunta(s)`} onClick={() => onNavigate('c2')} />
+        {isSdrMode ? (
+          <>
+            <SummaryCard label="Filtro 1 · F1" value={`${config.f1_questions.length} pergunta(s)`} onClick={() => onNavigate('c2')} />
+            <SummaryCard label="Filtro 2 · F2" value={`${config.f2_questions.length} pergunta(s)`} onClick={() => onNavigate('c2')} />
+            <SummaryCard label="Filtro 3 · F3" value={`${config.f3_questions.length} pergunta(s)`} onClick={() => onNavigate('c2')} />
+          </>
+        ) : (
+          <>
+            <SummaryCard
+              label="Campos de qualificação"
+              value={config.qualification_fields.length === 0
+                ? 'Não configurado'
+                : `${config.qualification_fields.filter(f => f.mode === 'required').length} obrig. · ${config.qualification_fields.filter(f => f.mode === 'optional').length} opcionais`}
+              onClick={() => onNavigate('c2')}
+            />
+            <SummaryCard
+              label="Modo de coleta"
+              value={config.response_style === 'passive' ? 'Passivo (persuasão)' : 'Ativo (pergunta)'}
+              onClick={() => onNavigate('c2')}
+            />
+          </>
+        )}
       </div>
 
       {/* Camada 3 */}
