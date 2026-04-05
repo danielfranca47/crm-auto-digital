@@ -68,19 +68,25 @@ Você é um roteador MÃE de um CRM (WhatsApp). Retorne SOMENTE JSON válido.
     "lead_origin_label": "OUTBOUND | INBOUND"
   },
   "history": "[histórico formatado da conversa]",
-  "required_fields": "[campos obrigatórios do modo]",
+  "required_fields": "[campos obrigatórios derivados de qualification_fields do AI Profile]",
   "missing_fields": "[campos ainda não coletados]",
   "inbound_message_text": "[mensagem recebida agora]"
 }
 ```
 
-**Regras aplicadas no prompt:**
+**Regras de prioridade aplicadas no prompt:**
 
-1. Se `missing_fields` não estiver vazio → rota obrigatória: `qualification`
-2. Sinais de reunião → `apresentation` (pedido de horário, confirmação, reagendamento, envio de link)
-3. Pós-apresentação com nutrição ("vou pensar", "me chama mês que vem") → `follow-up`
-4. Intenção direta de compra/assinatura → `closing`
-5. Sem evidência de apresentação prévia → bloquear `follow-up`, manter em `qualification`
+| Prioridade | Condição | Resultado |
+|---|---|---|
+| **1A** | `missing_fields` não vazio + mensagem **sem** pergunta direta | `route_to = "qualification"` |
+| **1B** | `missing_fields` não vazio + mensagem **com** pergunta direta (serviços, preço, como funciona, horários) | `route_to = "qualification"` + `next_action_hint = "reply"` — a filha responde primeiro, depois qualifica |
+| **2** | Sinais fortes de reunião (pedido de horário, confirmação, reagendamento, envio de link) | `route_to = "apresentation"` |
+| **3** | Pós-apresentação com nutrição ("vou pensar", "me chama mês que vem") | `route_to = "follow-up"` |
+| **4** | Intenção direta de compra/assinatura | `route_to = "closing"` |
+
+> **Regra crítica:** uma pergunta direta do lead nunca é ignorada. Quando `missing_fields` existe mas o lead fez uma pergunta, o sistema usa `next_action_hint="reply"` para que a filha responda à pergunta antes de qualificar.
+
+Sem evidência de apresentação prévia → bloquear `follow-up`, manter em `qualification`.
 
 ### Saída — `MotherDecision`
 
@@ -154,35 +160,68 @@ else:
 Você é a FILHA QUALIFICATION e deve responder SOMENTE JSON válido.
 ```
 
-**Responsabilidade:** Perguntar **um** campo de qualificação por vez, sem repetir perguntas semelhantes. Nunca agendar reuniões nesta fase.
+**Responsabilidade:** Opera em dois modos controlados por `response_style`. Nunca agenda reunião nesta fase.
 
-**Campos por modo de agente:**
+#### Fontes dos campos de qualificação
 
-| Modo | Campos obrigatórios |
-|---|---|
-| `consultivo` | `service_interest`, `decision_role`, `urgency` |
-| `agenda` | `service_interest`, `availability_window`, `location_preference`, `price_acceptance` |
-| `direto` | `service_interest`, `urgency`, `price_acceptance` |
+Os campos obrigatórios e opcionais vêm exclusivamente do `qualification_fields` do AI Profile — não há lista hardcoded por `agent_mode`. Quando não configurado → nenhum campo obrigatório.
 
-**Contexto adicional injetado:**
+`_build_qualification_fields_block(ai_profile, response_style)` constrói o bloco de contexto injetado no prompt a partir de `qualification_fields`.
+
+#### Contexto adicional injetado
 
 ```json
 {
+  "response_style": "active | passive",
+  "must_collect_with_questions": [
+    {"key": "availability_window", "label": "Disponibilidade", "question": "Qual horário funciona?", "passive_hint": "se lead mencionar horário"}
+  ],
+  "nice_to_collect": [
+    {"key": "service_interest", "label": "Serviço", "question": "O que você busca?", "passive_hint": "pelo contexto"}
+  ],
+  "passive_hints": "... apenas em response_style=passive",
+  "closing_questions": "... campos com allow_closing_question=true — apenas em response_style=passive",
   "current_field": "campo que deve ser perguntado agora",
   "asked_questions_for_current_field": ["perguntas já feitas para esse campo"],
   "missing_fields": ["campos ainda não coletados"],
-  "filled_fields": { "service_interest": "valor já coletado", "..." : "..." }
+  "filled_fields": { "service_interest": "valor já coletado" }
 }
+```
+
+#### Modo `active`
+
+```
+Responde SEMPRE à mensagem do cliente antes de qualificar.
+Se o cliente fez uma pergunta, responde usando offer_description e custom_instructions.
+Depois, se houver campos obrigatórios em falta, adicione UMA pergunta de qualificação natural
+ao final — usando a `question` configurada no campo, ou reformulando se já foi perguntado antes.
+Nunca respondas APENAS com uma pergunta de qualificação.
+```
+
+- Máximo 1 pergunta de qualificação por turno
+- `field` deve ser EXATAMENTE o `current_field` quando `should_ask=true`
+- Campos `custom_*`: usar a `question` configurada em `qualification_fields`
+
+#### Modo `passive`
+
+```
+NUNCA faças perguntas abertas de qualificação.
+Responde de forma persuasiva, guiando para o próximo passo:
+  - Use prova social, benefícios concretos e contexto da oferta
+  - Conduza para agendamento, proposta ou pagamento sem pressão excessiva
+Se o lead mencionar dados relevantes, registre internamente — não peça por eles.
+ÚNICA EXCEÇÃO: campos com closing_question configurada (alternativas binárias/confirmações
+tipo "às 15h ou 16h?") — nunca perguntas abertas.
 ```
 
 **Saída:**
 
 ```json
 {
-  "question_text": "Texto da pergunta a enviar",
-  "field": "nome_do_campo",
+  "question_text": "Texto da pergunta a enviar (null em modo passive)",
+  "field": "nome_do_campo | null",
   "should_ask": true,
-  "message_text": "retrocompat — mesmo valor de question_text",
+  "message_text": "mensagem completa a enviar",
   "did_complete_phase": false,
   "recommended_next_category": "apresentation | null",
   "signals_structured": {
@@ -243,9 +282,9 @@ Você é a FILHA APRESENTATION e deve responder SOMENTE JSON válido.
 }
 ```
 
-**Warm-up (hybrid_scheduler pós-qualificação):**
+**Warm-up (hybrid_scheduler — pós-qualificação completa):**
 
-Quando todos os campos foram coletados e a mãe ainda roteou para `qualification`, o prompt instrui a filha a fazer uma única mensagem de aquecimento antes de propor o agendamento:
+Ativado quando `template_key == "hybrid_scheduler"` + `missing_fields` vazio + `appointment_mode == "exploratory"`. O prompt instrui a filha a fazer uma mensagem de aquecimento antes de propor o agendamento:
 1. **Prova social** — contexto do perfil do lead com o serviço
 2. **Preview da sessão** — o que acontecerá na reunião
 
@@ -316,8 +355,8 @@ Nutrição consultiva pós-reunião: reforça valor, síntese do contexto, próx
 
 **Regra para follow-up automático (`is_followup_tick: true`):**
 - Usar `followup_contract_signals` como fonte primária
-- **Não** reperguntar campos de qualificação antigos por padrão
-- `qualification_state` é memória de leitura — não alterar
+- **Não** reperguntar campos de qualificação — `qualification_state` é memória de leitura
+- Só faz nova pergunta se diretamente ligada ao objetivo do follow-up (remarcação, confirmação de presença)
 
 **Saída:**
 
@@ -434,6 +473,7 @@ class DecisionOutput(BaseModel):
 3. [ MÃE ] _build_mother_prompt → llm_service.generate_mother_route → MotherDecision
 4. Se rota=qualification → field_extractor extrai campos e atualiza qualification_state
 5. [ FILHA ] _build_child_prompt_<rota> → llm_service.generate_child_result → ChildResult
+   ↳ response_style (active/passive) e qualification_fields do AI Profile injetados na filha qualification
 6. Guardrails aplicados: loop de qualificação, ordem de etapas, modo de agente
 7. compose_decision_output monta o DecisionOutput final
 8. Mensagem enviada ao WhatsApp + Kanban/CRM atualizado
