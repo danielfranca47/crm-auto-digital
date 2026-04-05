@@ -1,6 +1,6 @@
 # Prompts LLM — Referência Oficial
 
-> **Atualizado em:** 2026-03-29
+> **Atualizado em:** 2026-04-05
 > **Escopo:** Todos os prompts enviados a LLMs no sistema
 > **Arquivos cobertos:** `backend-executors/app/services/decision_engine.py`, `backend-executors/app/services/field_extractor.py`, `backend-crm/automations/assistente_ia/llm.py`
 
@@ -71,7 +71,7 @@ A LLM age como um sistema de roteamento puro — não tem persona, não tem nome
 | `last_bot_message` | banco CRM | última mensagem enviada pelo bot |
 | `short_reply_hint` | sistema | hint se detectado reply curto esperado |
 | `agent_mode_normalized` | `ai_profiles` | modo normalizado (consultivo, agenda, direto, etc.) |
-| `required_fields` | contrato de modo | campos de qualificação exigidos para este modo |
+| `required_fields` | `qualification_fields` do AI Profile | campos de qualificação com `mode=required` |
 | `missing_fields` | `qualification_state` | campos ainda não coletados |
 | `current_field` | sistema | próximo campo a ser coletado |
 | `asked_questions_for_current_field` | histórico | perguntas já feitas para o campo atual |
@@ -120,7 +120,9 @@ A LLM não responde ao lead — apenas decide para qual fase do funil rotear: `q
 
 | Regra | Descrição |
 |---|---|
-| Qualificação obrigatória | Se `missing_fields` não estiver vazio, `route_to` DEVE ser `qualification` — não avança para outras fases |
+| **PRIORIDADE 1** | Responder SEMPRE à mensagem do cliente — nunca bloquear resposta por qualificação pendente |
+| **PRIORIDADE 2** | Se a mensagem não contém pergunta direta E há campos pendentes → preferir `route_to="qualification"` |
+| Proibição de bloqueio | `route_to="qualification"` nunca pode ser a ÚNICA resposta se o cliente fez uma pergunta direta |
 | Definição de APRESENTATION | Agendar reunião, confirmar horário, reagendar, enviar link, confirmar presença |
 | Definição de FOLLOW-UP | Só pós-apresentação realizada com evidência textual — nunca por mera intenção de compra |
 | Modo `sdr_scheduler` | Qualquer confirmação de horário → `apresentation` + `meeting_scheduled=true` |
@@ -135,13 +137,13 @@ A LLM não responde ao lead — apenas decide para qual fase do funil rotear: `q
 **Papel da LLM no prompt:**
 > "Você é a FILHA QUALIFICATION"
 
-Coleta campos de qualificação um por vez, reformulando se já foram perguntados antes. Nunca agenda reunião nesta fase.
+Opera em dois modos controlados por `response_style`. Coleta campos de qualificação um por vez, reformulando se já foram perguntados antes. Nunca agenda reunião nesta fase.
 
 **Output esperado:**
 ```json
 {
   "question_text": "string",
-  "field": "service_interest|urgency|decision_role|constraints|availability_window|budget_or_price_acceptance|location_preference|price_acceptance|null",
+  "field": "service_interest|urgency|decision_role|constraints|availability_window|budget_or_price_acceptance|location_preference|price_acceptance|custom_*|null",
   "should_ask": true,
   "message_text": "string",
   "did_complete_phase": false,
@@ -158,14 +160,42 @@ Coleta campos de qualificação um por vez, reformulando se já foram perguntado
 
 | Variável | Descrição |
 |---|---|
+| `response_style` | `"active"` ou `"passive"` — controla se o agente pergunta proativamente ou persuade |
+| `must_collect_with_questions` | Campos `mode=required` com `question` e `passive_hint` — injetado apenas em `active` |
+| `nice_to_collect` | Campos `mode=optional` com `question` e `passive_hint` — ambos os estilos |
+| `passive_hints` | Dicas de captura passiva por campo — injetado apenas em `passive` |
+| `closing_questions` | Perguntas estratégicas de fechamento (alternativas binárias/confirmações) — única pergunta permitida no passivo |
 | `current_field` | Campo específico a ser coletado neste turno |
 | `asked_for_current` | Perguntas já feitas para este campo — a LLM deve REFORMULAR, não repetir |
 | `route_to`, `confidence`, `reason` | Decisão da Mãe — injetada no prompt |
 
-**Regras de copy/comportamento:**
-- Máximo 1 pergunta por turno
+**Regras de copy/comportamento — modo `active`:**
+
+```
+Responde SEMPRE à mensagem do cliente antes de qualificar.
+Se o cliente fez uma pergunta, responde usando offer_description e custom_instructions.
+Depois, se houver campos obrigatórios em falta, adicione UMA pergunta de qualificação
+natural ao final — usando a `question` configurada no campo, ou reformulando se já foi
+perguntado antes.
+Nunca respondas APENAS com uma pergunta de qualificação.
+```
+
+- Máximo 1 pergunta por turno (após a resposta ao cliente)
 - `field` deve ser EXATAMENTE o `current_field` quando `should_ask=true`
+- Campos `custom_*`: usar a `question` configurada em `qualification_fields`
 - Proibido agendar reunião aqui
+
+**Regras de copy/comportamento — modo `passive`:**
+
+```
+NUNCA faças perguntas para coletar dados de qualificação.
+Responde sempre de forma persuasiva, guiando naturalmente para o próximo passo:
+  - Use prova social, benefícios concretos e contexto da oferta para criar motivação
+  - Conduza para o próximo passo (agendamento, proposta, pagamento) de forma direta mas sem pressão
+Se o lead mencionar dados relevantes, registre internamente — mas não peça por eles.
+ÚNICA EXCEÇÃO: se o campo tem `closing_question` configurada (confirmações e alternativas
+binárias tipo "às 15h ou 16h?"), ela pode ser usada — nunca perguntas abertas.
+```
 
 ---
 
@@ -404,9 +434,67 @@ Fallback usado quando nenhuma fase especializada é selecionada. Sem persona, se
 
 ---
 
+### 1.8 Contrato de Qualificação — `qualification_fields`
+
+O AI Profile é a **única fonte de verdade** de qualificação. O campo `qualification_fields` unifica o que o agente pergunta, como infere passivamente, e o que bloqueia avanço de estágio no Kanban.
+
+**Schema do campo:**
+
+```typescript
+interface QualificationField {
+  key: string;                  // Campo do sistema: "availability_window", "service_interest", etc.
+                                // Campo personalizado: "custom_" + slug(label) — ex: "custom_nome_do_pet"
+  label: string;                // "Disponibilidade" | "Nome do pet"
+  question?: string;            // Pergunta para modo ativo: "Qual horário funciona?"
+  passive_hint?: string;        // Como capturar passivamente: "Se lead mencionar horário"
+  closing_question?: string;    // Pergunta estratégica de fechamento (alternativas binárias/confirmações)
+  allow_closing_question: boolean;
+  mode: 'required' | 'optional' | 'off';
+  group?: 'f1' | 'f2' | 'f3'; // Apenas para SDR (agent_mode="sdr_scheduler")
+}
+```
+
+**Campos do sistema predefinidos** (extraction engine extrai automaticamente):
+
+| key | label sugerida |
+|---|---|
+| `service_interest` | Serviço de interesse |
+| `availability_window` | Disponibilidade |
+| `price_acceptance` | Aceitação de preço |
+| `location_preference` | Preferência de local |
+| `urgency` | Urgência |
+| `decision_role` | Decisor |
+| `budget_or_price_acceptance` | Orçamento |
+| `constraints` | Restrições |
+
+**Campos personalizados (`custom_*`):** o `field_extractor.py` usa a `question` para extrair via LLM e armazena o resultado em `data_json` de `lead_qualification_state` sob a `key` configurada.
+
+**Como os campos são injetados no prompt:**
+
+```
+# Modo active → must_collect_with_questions + nice_to_collect
+Informações OBRIGATÓRIAS:
+  - Disponibilidade: pergunta "Qual horário funciona para você?" | inferir: "se lead mencionar horário"
+  - [custom] Nome do pet: pergunta "Qual o nome do seu pet?"
+
+Informações DESEJÁVEIS (capturar se surgir):
+  - Serviço de interesse: pergunta "O que você busca?" | inferir: "pelo contexto"
+
+# Modo passive → passive_hints + closing_questions
+Capturar passivamente (sem perguntar):
+  - Disponibilidade: "Capturar se lead mencionar horário, data ou 'semana que vem'"
+
+Perguntas estratégicas de fechamento permitidas:
+  - Disponibilidade: "Você teria disponibilidade na quinta às 14h ou na sexta às 10h?"
+```
+
+**Derivação automática:** `qualification_required_fields` é derivado como `qualification_fields.filter(mode="required").map(key)` ao salvar o AI Profile. Guardrails do Kanban e executores leem `qualification_required_fields`. `qualification_fields=null` ou `qualification_required_fields=null` → nenhum campo obrigatório, sem fallback.
+
+---
+
 ## 2. Extrator de Campos — `field_extractor.py`
 
-**Papel da LLM no prompt:** não há texto de persona — apenas instrução técnica direta.
+**Papel da LLM no prompt:** instrução técnica direta, sem persona.
 
 > "Você é um extractor de campos de qualificação."
 
@@ -433,7 +521,7 @@ Regras:
 
 | Variável | Descrição |
 |---|---|
-| `fields_schema` | Schema JSON com campos e tipos esperados (padrão: `service_interest`, `urgency`, `decision_role`, `constraints`, `availability_window`, `budget_or_price_acceptance`) |
+| `fields_schema` | Schema JSON com campos e tipos — inclui campos do sistema e campos `custom_*` de `qualification_fields` do AI Profile. Para `custom_*`, o `passive_hint` configurado é incluído como instrução de extração. |
 | `inbound` | Mensagem atual do lead |
 | `history` (últimas 6) | Histórico recente formatado como `[bot/lead]: texto` |
 
@@ -564,6 +652,9 @@ Estas variáveis são injetadas nos prompts do `decision_engine` e controlam o t
 | Prova social (warming) | `warming_social_proof` | Texto de prova social para fase de aquecimento |
 | Preview da sessão | `warming_session_preview` | Descrição do que acontece na marcação |
 | Modo de compromisso | `appointment_mode` | `exploratory` ou `commercial` (Agente 03) |
+| Estilo de resposta | `response_style` | `"active"` (pergunta proativamente) ou `"passive"` (persuade sem perguntar). Default `"passive"` quando `null`. |
+| Campos de qualificação | `qualification_fields` | `QualificationField[]` — source of truth para guardrails, prompts e extraction engine (ver seção 1.8) |
+| Campos obrigatórios | `qualification_required_fields` | Derivado de `qualification_fields[mode=required].map(key)`. Lido pelos guardrails do Kanban e executores. `null` = nenhum campo obrigatório. |
 
 ---
 
@@ -573,6 +664,10 @@ Alguns blocos só são injetados no prompt se certas condições forem atendidas
 
 | Bloco | Condição de ativação |
 |---|---|
+| `must_collect_with_questions` | `response_style == "active"` + `qualification_fields` com `mode=required` |
+| `nice_to_collect` | `qualification_fields` com `mode=optional` (ambos os estilos) |
+| `passive_hints` | `response_style == "passive"` + `passive_hint` preenchido em pelo menos um campo |
+| `closing_questions` | `response_style == "passive"` + campo com `allow_closing_question=true` e `closing_question` preenchida |
 | `WARMING INJECTION` | `template_key == "hybrid_scheduler"` + pós-qualificação + `appointment_mode == "exploratory"` |
 | `COMMERCIAL INJECTION` | `template_key == "hybrid_scheduler"` + pós-qualificação + `appointment_mode == "commercial"` |
 | `VARIANT_RULE cart_recovery` | `followup_variant == "cart_recovery"` |
@@ -589,8 +684,13 @@ Alguns blocos só são injetados no prompt se certas condições forem atendidas
 
 | Arquivo | Relevância |
 |---|---|
-| [backend-executors/app/services/decision_engine.py](../backend-executors/app/services/decision_engine.py) | Todos os prompts do funil de vendas WhatsApp (Mãe + 5 Filhas) |
-| [backend-executors/app/services/field_extractor.py](../backend-executors/app/services/field_extractor.py) | Extração estruturada de campos de qualificação |
+| [backend-executors/app/services/decision_engine.py](../backend-executors/app/services/decision_engine.py) | Todos os prompts do funil de vendas WhatsApp (Mãe + 5 Filhas); lê `response_style` e `qualification_fields` |
+| [backend-executors/app/services/field_extractor.py](../backend-executors/app/services/field_extractor.py) | Extração estruturada de campos — inclui campos `custom_*` do AI Profile |
+| [backend-executors/app/contracts/qualification_contract.py](../backend-executors/app/contracts/qualification_contract.py) | Contrato de qualificação do executor |
 | [backend-crm/automations/assistente_ia/llm.py](../backend-crm/automations/assistente_ia/llm.py) | Geração de outreach multicanal (e-mail, WhatsApp, Instagram, ligação) |
 | [backend-crm/routes/executor.py](../backend-crm/routes/executor.py) | Monta o `ContextBundle` + injeta `knowledge_items` antes de enviar ao `decision_engine` |
-| [backend-crm/services/ai_orchestrator/orchestrator.py](../backend-crm/services/ai_orchestrator/orchestrator.py) | Orquestra o fluxo inbound antes do `decision_engine` |
+| [backend-crm/services/ai_orchestrator/orchestrator.py](../backend-crm/services/ai_orchestrator/orchestrator.py) | Orquestra o fluxo inbound; constrói `must_collect_with_questions`, `nice_to_collect`, `passive_hints` |
+| [backend-crm/services/qualification_guardrails.py](../backend-crm/services/qualification_guardrails.py) | Guardrail do Kanban — chamado apenas em rotas manuais de `routes/leads.py` |
+| [backend-core/app/models/ai_profile.py](../backend-core/app/models/ai_profile.py) | Modelo SQLAlchemy — inclui `qualification_fields` (JSON nullable) |
+| [backend-core/app/api/ai_profiles.py](../backend-core/app/api/ai_profiles.py) | API de AI Profile; deriva `qualification_required_fields` de `qualification_fields` ao salvar |
+| [frontend-crm/src/types/agente.ts](../frontend-crm/src/types/agente.ts) | Tipos TypeScript — interface `QualificationField` e campo `qualification_fields` em `AgentConfig` |
