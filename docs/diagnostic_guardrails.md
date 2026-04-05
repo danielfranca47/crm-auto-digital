@@ -1,318 +1,264 @@
 # DIAGNÓSTICO — COMPORTAMENTO DE GUARDRAILS E PRIORIDADE DE QUALIFICAÇÃO
 
-## INSTRUÇÕES
-
-Para cada pergunta abaixo:
-
-- Responda diretamente no arquivo
-- Aponte:
-  - arquivo(s)
-  - função(ões)
-  - linha(s) aproximadas
-- Inclua trecho de código relevante
-- Não faça suposições
-- Se não encontrar, escreva: NÃO ENCONTRADO
+> Reflexo atualizado do código. Cada resposta aponta arquivo, função e linha aproximada com trecho real.
 
 ---
 
 ## 1. BLOQUEIO DE RESPOSTA AO USUÁRIO
 
-Existe em algum lugar do sistema uma lógica que:
+Existe em algum lugar do sistema uma lógica que impede ou ignora a resposta ao usuário quando existem campos faltantes de qualificação (`missing_fields`)?
 
-- impede ou ignora a resposta ao usuário
-- quando existem campos faltantes de qualificação (`missing_fields` ou equivalente)
+**Arquivos:**
+- `backend-executors/app/services/decision_engine.py` (função `_apply_mode_guardrails`, linha ~731)
+- `backend-crm/services/qualification_guardrails.py` (função `can_advance_from_qualification`, linha ~69)
 
-### Procurar por:
+**Funções:**
+- `_apply_mode_guardrails` — no executor, impede avanço de categoria para `closing` se `missing_fields` estiver preenchido (modos agenda e direto)
+- `can_advance_from_qualification` — no CRM, bloqueia promoção de categoria Kanban; agora verifica dois critérios: campos obrigatórios em falta **e** score mínimo abaixo do threshold
 
-- condicionais baseadas em:
-  - missing_fields
-  - required_fields
-  - qualification incomplete
-
-### Resposta:
-
-- **Arquivo(s):**
-  - `backend-executors/app/services/decision_engine.py` (função `_apply_mode_guardrails`, linha ~682)
-  - `backend-crm/services/qualification_guardrails.py` (função `can_advance_from_qualification`, linha ~92)
-
-- **Função(ões):**
-  - `_apply_mode_guardrails` — no executor, impede avanço de categoria se missing_fields estiver preenchido
-  - `can_advance_from_qualification` — no CRM, bloqueia promoção de categoria Kanban
-
-- **Trecho de código:**
+**Trecho de código:**
 
 ```python
-# decision_engine.py ~682 — guardrail modo agenda
+# decision_engine.py ~752 — guardrail modo agenda
 if mode == "agenda" and ("availability_window" in missing_fields or "location_preference" in missing_fields):
     if mother_decision.route_to == "closing" or decision.suggested_category == "closing":
         decision.suggested_category = "qualification"
         decision.reason = f"{decision.reason}|guardrail_agenda_missing_booking"
 
-# qualification_guardrails.py ~139
+# qualification_guardrails.py ~116 — verificação 1: campos
 missing_fields = compute_missing_fields(mode, extracted, required_fields_override=required_fields_override)
 if missing_fields:
     return False, missing_fields
+
+# qualification_guardrails.py ~126 — verificação 2: score
+if required_fields_override is not None and len(required_fields_override) == 0:
+    return True, []  # lista vazia explícita = avança sempre
+if total_score < threshold_int:
+    return False, [f"score_{total_score}_of_12_below_threshold_{threshold_int}"]
 ```
 
-- **Descrição objetiva do comportamento:**
-  Existem **dois bloqueios independentes**:
-  1. No executor (`_apply_mode_guardrails`): se `missing_fields` não estiver vazio, reverte `suggested_category` para `"qualification"` e bloqueia avanço para `closing` (modo agenda/direto).
-  2. No CRM (`can_advance_from_qualification`): bloqueia movimentação Kanban para fora de `qualification` via API (`/api/leads`). Chamado na rota de mudança de categoria.
+**Comportamento:**
+Existem dois bloqueios independentes:
+1. No executor (`_apply_mode_guardrails`): se `missing_fields` não estiver vazio (modos agenda/direto), reverte `suggested_category` para `"qualification"`.
+2. No CRM (`can_advance_from_qualification`): bloqueia movimentação Kanban. Verifica (a) campos obrigatórios em falta e (b) `qualification_total_score` abaixo do `qualification_score_threshold` do AI Profile (default: 6 de 12).
 
 ---
 
 ## 2. FORÇAMENTO DE PERGUNTA DE QUALIFICAÇÃO
 
-Existe alguma lógica que:
+Existe alguma lógica que força o sistema a fazer uma pergunta ao invés de responder o usuário quando há campos faltantes?
 
-- força o sistema a fazer uma pergunta
-- ao invés de responder o usuário
-- quando há campos faltantes
+**Arquivo:**
+- `backend-executors/app/services/decision_engine.py` (`_build_mother_prompt`, linha ~963)
 
-### Procurar por:
+**Função:**
+- `_build_mother_prompt` — injeta regras de prioridade no prompt da LLM mãe
 
-- next_action = ask_qualification
-- route_to = qualification
-- qualquer lógica que priorize pergunta
-
-### Resposta:
-
-- **Arquivo(s):**
-  - `backend-executors/app/services/decision_engine.py` (`_build_mother_prompt`, linha ~929 e ~968)
-
-- **Função(ões):**
-  - `_build_mother_prompt` — injeta regra obrigatória no prompt da LLM mãe
-
-- **Trecho de código:**
+**Trecho:**
 
 ```python
-# _build_mother_prompt ~929 — regra injetada diretamente no prompt da LLM mãe
-"- REGRA OBRIGATÓRIA DE QUALIFICAÇÃO: se missing_fields não estiver vazio, route_to DEVE ser \"qualification\".\n"
-"  EXCEÇÃO FECHO: sinal explícito de confirmação/booking em agent_mode=agenda/sdr_scheduler permite\n"
-"  route_to=\"apresentation\" — ver PRIORIDADE 1 EXCEÇÃO FECHO abaixo.\n"
-
-# ~968 — prioridade 1 no prompt
+# _build_mother_prompt ~1043 — PRIORIDADE 1 no prompt
 "PRIORIDADE 1 (obrigatória — sistema sobrescreve mesmo se você retornar outra):\n"
-"- missing_fields NÃO vazio → route_to = \"qualification\"\n"
+"- PRIORIDADE 1A: missing_fields NÃO vazio + mensagem SEM pergunta direta → route_to = \"qualification\"\n"
+"- PRIORIDADE 1B: missing_fields NÃO vazio + mensagem COM pergunta direta (serviços, preço, como\n"
+"  funciona, horários, etc.) → route_to = \"qualification\", next_action_hint = \"reply\"\n"
+"  (filha responde à pergunta antes de qualificar — NUNCA ignore uma pergunta direta do lead)\n"
+"  EXCEÇÃO FECHO (agent_mode=agenda/sdr_scheduler): se a mensagem contiver sinal EXPLÍCITO de\n"
+"  confirmação/booking → route_to = \"apresentation\" mesmo com missing_fields.\n"
 ```
 
-- **Condição que ativa esse comportamento:**
-  `missing_fields` não vazio (calculado por `_build_mode_contract_context` antes de construir o prompt). A regra é textual no prompt da mãe, não código Python — a LLM mãe é instruída a retornar `route_to="qualification"`, o que depois leva a filha qualification a gerar uma pergunta (`should_ask=true`).
+**Condição que ativa:**
+`missing_fields` não vazio (calculado por `_build_mode_contract_context`). A regra é textual no prompt da mãe. Há duas sub-prioridades:
+- **1A** — sem pergunta direta: filha qualification gera pergunta (`should_ask=true`)
+- **1B** — com pergunta direta: mãe retorna `next_action_hint="reply"` → filha responde primeiro, qualifica depois
 
 ---
 
 ## 3. PRIORIDADE ENTRE "RESPONDER" VS "PERGUNTAR"
 
-Onde no sistema é decidido:
+Onde é decidido se o agente deve responder o usuário ou fazer uma pergunta de qualificação?
 
-- se o agente deve responder o usuário
-- ou fazer uma pergunta de qualificação
+**Arquivo:**
+- `backend-executors/app/services/decision_engine.py`
+  - `_build_mother_prompt` (linha ~927) — decide `route_to` e `next_action_hint`
+  - `_build_child_prompt_qualification` (linha ~1192) — decide `should_ask` e conteúdo da resposta
 
-### Procurar por:
-
-- funções de decisão
-- orquestração
-- decision engine
-- lógica de next_action
-
-### Resposta:
-
-- **Arquivo(s):**
-  - `backend-executors/app/services/decision_engine.py`
-    - Funções `_build_mother_prompt` (linha ~857), `_build_child_prompt_qualification` (linha ~1114)
-    - Bloco de modo passivo (`response_style == "passive"`)
-
-- **Função(ões):**
-  - `_build_mother_prompt` — define `route_to` (mãe); se `missing_fields` não vazio → `qualification`
-  - `_build_child_prompt_qualification` — define se a filha pergunta (`should_ask=true`) ou responde (`should_ask=false`)
-  - Variável `_passive_reply_now` — controla se filha responde primeiro quando `response_style=passive` + `next_action_hint=reply`
-
-- **Trecho de código:**
+**Trecho:**
 
 ```python
-# _build_child_prompt_qualification ~1170
-response_style = (ai_profile.get("response_style") or "active").strip().lower()
+# _build_child_prompt_qualification ~1248 — default de response_style é agora "passive"
+response_style = (ai_profile.get("response_style") or "passive").strip().lower()
 
+# escopo para passive:
 _escopo_line = (
     "Responder perguntas directas do cliente PRIMEIRO, usando offer_description e custom_instructions. "
     "Depois qualificar de forma natural. ..."
     if response_style == "passive"
-    else "Você APENAS faz perguntas de qualificação. ..."
+    else (
+        # escopo para active — também responde primeiro, depois qualifica
+        "Responde SEMPRE à mensagem do cliente antes de qualificar. Se o cliente fez uma pergunta, "
+        "responde usando offer_description e custom_instructions. Depois, se houver campos obrigatórios "
+        "em falta, adicione UMA pergunta de qualificação natural ao final. ..."
+    )
 )
 
+# _passive_reply_now: modo passivo + mãe sinalizou "reply"
 _passive_reply_now = response_style == "passive" and _mother_hint == "reply"
-_passive_header = (
-    "MODO PASSIVO ACTIVADO — RESPOSTA IMEDIATA OBRIGATÓRIA.\n"
-    "A mãe sinalizou next_action_hint='reply': ..."
-    "INSTRUÇÃO CRÍTICA: coloca TODA a resposta em message_text. NÃO perguntes nada neste turno.\n"
-    if _passive_reply_now
-    else ...
-)
 ```
 
-- **Critério de decisão identificado:**
-  1. Se `response_style == "active"` (padrão): filha qualification **sempre pergunta** quando `missing_fields` não vazio.
-  2. Se `response_style == "passive"` e mãe retornou `next_action_hint="reply"`: filha **responde primeiro**, pergunta depois.
-  3. Se `response_style == "passive"` sem hint `reply`: filha responde primeiro se houver pergunta direta, depois qualifica.
+**Critério de decisão:**
+1. `response_style == "passive"` (default atual) + mãe retornou `next_action_hint="reply"`: filha entra em "MODO PASSIVO ACTIVADO — RESPOSTA IMEDIATA OBRIGATÓRIA" (`should_ask=false`, sem pergunta neste turno).
+2. `response_style == "passive"` sem hint `reply`: filha responde primeiro se houver pergunta direta, depois qualifica de forma natural.
+3. `response_style == "active"`: filha também responde antes de qualificar, mas pode adicionar uma pergunta de qualificação ao final do mesmo turno.
+
+> **Mudança importante:** o default de `response_style` passou de `"active"` para `"passive"`.
 
 ---
 
 ## 4. USO DE `compute_missing_fields`
 
-Onde a função `compute_missing_fields` (ou equivalente):
+Onde a função `compute_missing_fields` é chamada e como o resultado é utilizado?
 
-- é chamada
-- e como o resultado dela (`missing`) é utilizado
+**Arquivos:**
+- `backend-executors/app/contracts/qualification_contract.py` — definição da função (linha ~94)
+- `backend-crm/services/qualification_guardrails.py` — segunda definição paralela (linha ~18); usada em `can_advance_from_qualification`
+- `backend-executors/app/services/decision_engine.py` — chamada em `_build_mode_contract_context` (linha ~715)
 
-### Resposta:
+**Funções:**
+- `compute_missing_fields` (executor) — retorna lista de campos faltantes com base em `required_fields_override`
+- `_build_mode_contract_context` — chama `compute_missing_fields` e embute resultado em `mode_contract`
+- `can_advance_from_qualification` (CRM) — chama versão local e bloqueia avanço se lista não vazia ou score insuficiente
 
-- **Arquivo(s):**
-  - `backend-executors/app/contracts/qualification_contract.py` — **definição** da função (`compute_missing_fields`, linha ~115)
-  - `backend-crm/services/qualification_guardrails.py` — **segunda definição** paralela (linha ~41); usada em `can_advance_from_qualification`
-  - `backend-executors/app/services/decision_engine.py` — chamada em `_build_mode_contract_context` (linha ~645)
-
-- **Função(ões):**
-  - `compute_missing_fields` (em `qualification_contract.py`) — retorna lista de campos faltantes
-  - `_build_mode_contract_context` — chama `compute_missing_fields` e embute resultado em `mode_contract`
-  - `can_advance_from_qualification` (CRM) — chama versão local e bloqueia avanço se lista não vazia
-
-- **Trecho de código:**
+**Trecho:**
 
 ```python
-# qualification_contract.py ~115 (executor)
+# qualification_contract.py ~94 (executor)
 def compute_missing_fields(agent_mode_normalized, extracted, required_fields_override=None):
+    if required_fields_override is not None:
+        required = required_fields_override
+    else:
+        required = []  # Sem configuração no AI Profile = sem campos obrigatórios
     ...
-    missing.append(field)
     return missing
 
-# decision_engine.py ~644 — uso no executor
+# decision_engine.py ~715 — uso no executor (fallback heurístico)
 extracted = infer_extracted_fields(context)
 missing_fields = compute_missing_fields(mode, extracted, required_fields_override=override)
 
-# qualification_guardrails.py ~139 — uso no CRM
+# qualification_guardrails.py ~116 — uso no CRM
 missing_fields = compute_missing_fields(mode, extracted, required_fields_override=required_fields_override)
 if missing_fields:
     return False, missing_fields
 ```
 
-- **O que acontece quando existem campos faltantes:**
-  - No **executor**: `mode_contract["missing_fields"]` não vazio → prompt da mãe instrui `route_to="qualification"` → filha qualification pede pergunta (`should_ask=true`).
-  - No **CRM**: `can_advance_from_qualification` retorna `(False, missing_fields)` → endpoint de mudança de categoria rejeita a operação.
+**O que acontece quando existem campos faltantes:**
+- No **executor**: `mode_contract["missing_fields"]` não vazio → prompt da mãe instrui `route_to="qualification"` → filha qualification gera pergunta (`should_ask=true`), ou responde primeiro se `next_action_hint="reply"`.
+- No **CRM**: `can_advance_from_qualification` retorna `(False, missing_fields)` → endpoint de mudança de categoria rejeita a operação.
 
 ---
 
 ## 5. DEFINIÇÃO DE CAMPOS OBRIGATÓRIOS
 
-Onde são definidos os campos obrigatórios de qualificação:
+Onde são definidos os campos obrigatórios de qualificação?
 
-- required_fields_for_mode
-- ou qualquer outra fonte de definição
+**Arquivos:**
+- `backend-executors/app/contracts/qualification_contract.py` — função `required_fields_for_mode` (linha ~115)
+- `backend-crm/services/qualification_guardrails.py` — função `required_fields_for_mode` (linha ~9)
 
-### Resposta:
-
-- **Arquivo(s):**
-  - `backend-executors/app/contracts/qualification_contract.py` — constante `MIN_REQUIRED_FIELDS` (linha ~31)
-  - `backend-crm/services/qualification_guardrails.py` — constante `_MIN_REQUIRED_FIELDS` (linha ~10)
-
-- **Função(ões):**
-  - `required_fields_for_mode` — existe nas duas cópias; retorna lista para o modo dado, ou o override do AI Profile
-
-- **Estrutura dos campos:**
+**Comportamento atual:**
 
 ```python
-# qualification_contract.py (executor) — MIN_REQUIRED_FIELDS
-"consultivo": ["service_interest", "urgency", "decision_role", "constraints", "availability_window", "budget_or_price_acceptance"]
-"agenda":     ["service_interest", "availability_window", "price_acceptance"]
-"direto":     ["service_interest", "availability_window", "price_acceptance"]
+# qualification_contract.py ~115 (executor)
+def required_fields_for_mode(agent_mode_normalized, required_fields_override=None):
+    if required_fields_override is not None:
+        return list(required_fields_override)
+    return []  # Sem configuração no AI Profile = sem campos obrigatórios
 
-# qualification_guardrails.py (CRM) — _MIN_REQUIRED_FIELDS
-"consultivo": ["service_interest", "urgency", "decision_role", "constraints", "availability_window", "budget_or_price_acceptance"]
-"agenda":     ["service_interest", "availability_window", "price_acceptance"]
-"direto":     ["service_interest", "availability_window", "price_acceptance"]
+# qualification_guardrails.py ~9 (CRM) — idêntico
+def required_fields_for_mode(agent_mode_normalized, required_fields_override=None):
+    if required_fields_override is not None:
+        return list(required_fields_override)
+    return []  # Sem configuração no AI Profile = sem campos obrigatórios
 ```
 
-- **Origem:** **Hardcoded** em dois ficheiros separados (executor e CRM). O AI Profile pode sobrescrever via `qualification_required_fields` (lista enviada no perfil), que é lida por `_get_required_fields_override` no executor e por `_fetch_ai_profile` no CRM.
+> **Mudança importante:** as constantes `MIN_REQUIRED_FIELDS` e `_MIN_REQUIRED_FIELDS` (com campos hardcoded por modo) foram removidas. Sem `required_fields_override` configurado no AI Profile, **nenhum campo é obrigatório por padrão**.
+
+**Fonte dos campos:**
+- Exclusivamente via `qualification_required_fields` (lista de strings no AI Profile) — lida por `_get_required_fields_override` no executor e por `_fetch_ai_profile` no CRM.
+- Ou via `qualification_fields` (lista de objetos com `key`, `label`, `question`, `passive_hint`, `mode`) — processada por `_build_qualification_context` no orchestrator (backward compat: se não existir, usa `qualification_required_fields`).
 
 ---
 
 ## 6. EXISTÊNCIA DE GUARDRAILS HARDCODED
 
-Existem regras fixas no código que:
+Existem regras fixas no código que obrigam coleta de dados específicos independentemente do AI Profile?
 
-- obrigam coleta de dados específicos
-- independentemente do AI Profile
+**Arquivos:**
+- `backend-executors/app/services/decision_engine.py` — função `_apply_mode_guardrails` (linha ~731)
+- `backend-crm/services/ai_orchestrator/orchestrator.py` — função `apply_mode_overrides` (linha ~136)
 
-### Resposta:
-
-- **Arquivo(s):**
-  - `backend-executors/app/services/decision_engine.py` — função `_apply_mode_guardrails` (linha ~661)
-  - `backend-executors/app/contracts/qualification_contract.py` — constante `MIN_REQUIRED_FIELDS` (linha ~31)
-  - `backend-crm/services/qualification_guardrails.py` — constante `_MIN_REQUIRED_FIELDS` (linha ~10)
-  - `backend-crm/services/ai_orchestrator/orchestrator.py` — função `apply_mode_overrides` (linha ~88)
-
-- **Função(ões):**
-  - `_apply_mode_guardrails` — regras fixas por modo (agenda, direto, consultivo)
-  - `apply_mode_overrides` — injeta `must_collect` fixo para modo agenda
-
-- **Trecho de código:**
+**Trecho:**
 
 ```python
-# orchestrator.py ~101 — must_collect hardcoded para modo agenda
+# orchestrator.py ~149 — modo agenda: must_collect só injetado se AI Profile definiu campos
 elif agent_mode_normalized == "agenda":
     merged.update({
         "max_chars": 350,
         "qualification_depth": "medium",
-        "must_collect": ["service_interest", "availability_window", "location_preference", "price_acceptance"],
     })
+    profile_fields = (ai_profile or {}).get("qualification_required_fields")
+    if isinstance(profile_fields, list) and len(profile_fields) > 0:
+        merged.update({"must_collect": profile_fields})
+    # profile_fields == None → sem override automático
+    # profile_fields == [] → modo passivo, sem must_collect
 
-# decision_engine.py ~682 — guardrail agenda hardcoded
+# decision_engine.py ~752 — guardrail agenda hardcoded (ainda existe)
 if mode == "agenda" and ("availability_window" in missing_fields or "location_preference" in missing_fields):
     if mother_decision.route_to == "closing" or decision.suggested_category == "closing":
         decision.suggested_category = "qualification"
 
-# decision_engine.py ~690 — guardrail direto hardcoded
+# decision_engine.py ~760 — guardrail direto hardcoded (ainda existe)
 if mode == "direto":
     signals = _sanitize_signals_structured(mother_decision.signals)
     price_ok = signals.get("price_acceptance") in {"yes", True}
     intent_ok = signals.get("intent_level") in {"medium", "high"}
     if not (price_ok and intent_ok) and (...closing...):
         decision.suggested_category = "qualification"
+
+# decision_engine.py ~741 — guardrail consultivo: bloqueia outcome=won e força handoff em closing
+if mode == "consultivo" and decision.outcome == "won":
+    decision.outcome = None
+if mode == "consultivo" and mother_decision.route_to == "closing":
+    decision.decision_trace["next_action_hint"] = "handoff"
 ```
 
-- **Lista de campos hardcoded encontrados:**
-  | Campo | Modo | Onde |
-  |---|---|---|
-  | `availability_window` | agenda, consultivo, direto | `MIN_REQUIRED_FIELDS` (ambos ficheiros) |
-  | `price_acceptance` | agenda, direto | `MIN_REQUIRED_FIELDS` (ambos ficheiros) |
-  | `service_interest` | todos | `MIN_REQUIRED_FIELDS` (ambos ficheiros) |
-  | `urgency` | consultivo | `MIN_REQUIRED_FIELDS` (ambos ficheiros) |
-  | `decision_role` | consultivo | `MIN_REQUIRED_FIELDS` (ambos ficheiros) |
-  | `constraints` | consultivo | `MIN_REQUIRED_FIELDS` (ambos ficheiros) |
-  | `budget_or_price_acceptance` | consultivo | `MIN_REQUIRED_FIELDS` (ambos ficheiros) |
-  | `location_preference` | agenda | `apply_mode_overrides` (orchestrator) + guardrail executor |
+**Guardrails fixos por modo:**
+| Regra | Modo | Arquivo |
+|---|---|---|
+| `availability_window` ou `location_preference` em falta → revert to qualification | agenda | `_apply_mode_guardrails` |
+| `price_acceptance` não "yes" ou `intent_level` não medium/high → revert to qualification | direto | `_apply_mode_guardrails` |
+| `outcome=won` bloqueado | consultivo | `_apply_mode_guardrails` |
+| `route_to=closing` → força handoff | consultivo | `_apply_mode_guardrails` |
+
+> **Mudança importante:** `apply_mode_overrides` no orchestrator **não injeta mais `must_collect` hardcoded** para modo agenda. O bloco agora só injeta se o AI Profile tiver `qualification_required_fields` configurado explicitamente.
 
 ---
 
 ## 7. USO DO AI PROFILE NA QUALIFICAÇÃO
 
-Onde o AI Profile é utilizado para:
+Onde o AI Profile é utilizado para definir campos de qualificação?
 
-- definir perguntas
-- definir campos de qualificação
+**Arquivos:**
+- `backend-executors/app/services/decision_engine.py` — `_get_required_fields_override` (linha ~598), `_build_mode_contract_context` (linha ~677)
+- `backend-crm/services/qualification_guardrails.py` — `_fetch_ai_profile` (linha ~51), `can_advance_from_qualification` (linha ~69)
+- `backend-crm/services/ai_orchestrator/orchestrator.py` — `_build_qualification_context` (linha ~88), `apply_mode_overrides` (linha ~136)
 
-### Resposta:
+**Funções:**
+- `_get_required_fields_override` — lê `ai_profile.qualification_required_fields` (lista de keys)
+- `can_advance_from_qualification` — lê `ai_profile.qualification_required_fields` e `qualification_score_threshold`
+- `_build_qualification_context` — processa `qualification_fields` (formato rico: `key`, `label`, `question`, `passive_hint`, `mode`); backward compat com `qualification_required_fields`
 
-- **Arquivo(s):**
-  - `backend-executors/app/services/decision_engine.py` — `_get_required_fields_override` (linha ~598), `_build_mode_contract_context` (linha ~607)
-  - `backend-crm/services/qualification_guardrails.py` — `_fetch_ai_profile` (linha ~74), `can_advance_from_qualification` (linha ~132)
-  - `backend-executors/app/services/decision_engine.py` — `_build_child_prompt_qualification` (linha ~1114) usa `ai_profile.tone_of_voice`, `niche`, `agent_mode`, `response_style`, `custom_instructions`
-
-- **Função(ões):**
-  - `_get_required_fields_override` — lê `ai_profile.qualification_required_fields` (lista de override)
-  - `can_advance_from_qualification` — lê `ai_profile.qualification_required_fields` para override de campos obrigatórios
-  - `_build_child_prompt_qualification` — injeta `tone_of_voice`, `niche`, `agent_mode`, `response_style`, `custom_instructions`, `offer_description` do AI Profile no prompt da filha
-
-- **Trecho de código:**
+**Trecho:**
 
 ```python
 # decision_engine.py ~598
@@ -323,187 +269,168 @@ def _get_required_fields_override(context):
         return [str(f) for f in override if isinstance(f, str)]
     return None
 
-# qualification_guardrails.py ~132
-ai_profile = _fetch_ai_profile(user_id)
+# qualification_guardrails.py ~109
 override = ai_profile.get("qualification_required_fields")
-required_fields_override = [str(f) for f in override if isinstance(f, str)]
-    if isinstance(override, list) else None
+required_fields_override = [str(f) for f in override if isinstance(f, str)] if isinstance(override, list) else None
+
+# orchestrator.py ~88 — formato rico
+def _build_qualification_context(ai_profile):
+    qual_fields = profile.get("qualification_fields")
+    if not isinstance(qual_fields, list) or len(qual_fields) == 0:
+        # fallback para lista simples
+        required_keys = profile.get("qualification_required_fields")
+        ...
+    must_collect_with_questions = [f for f in qual_fields if f.get("mode") == "required"]
+    nice_to_collect = [f for f in qual_fields if f.get("mode") == "optional"]
 ```
 
-- **Como os campos/perguntas são carregados:**
-  1. `qualification_required_fields` (lista no AI Profile) sobrescreve os campos hardcoded quando presente.
-  2. `response_style` (AI Profile) controla se a filha pergunta primeiro ou responde primeiro.
-  3. `tone_of_voice`, `niche`, `custom_instructions`, `offer_description` são injetados no prompt textual da filha qualification.
-  4. O AI Profile **não define perguntas concretas** — apenas define tom, campos obrigatórios (via override) e estilo de resposta; as perguntas em si são geradas pela LLM filha.
+**Como os campos são carregados:**
+1. `qualification_fields` (lista de objetos com `key`, `label`, `question`, `passive_hint`, `mode`) — formato rico, gerado na UI de configuração.
+2. `qualification_required_fields` (lista de strings) — formato legado, ainda suportado via backward compat.
+3. `qualification_score_threshold` — threshold de score mínimo (4Ps, default 6 de 12) para `can_advance_from_qualification`.
+4. `response_style` — controla se a filha responde primeiro ou qualifica diretamente.
+5. `tone_of_voice`, `niche`, `custom_instructions`, `offer_description` — injetados no prompt textual da filha.
 
 ---
 
 ## 8. CONFLITO ENTRE AI PROFILE E GUARDRAILS
 
-Existe algum ponto onde:
+Existe algum ponto onde dados do AI Profile são ignorados ou substituídos por lógica fixa?
 
-- dados do AI Profile são ignorados
-- ou substituídos por lógica fixa (guardrails)
+**Arquivos:**
+- `backend-executors/app/services/decision_engine.py` — `_apply_mode_guardrails` (linha ~731)
+- `backend-crm/services/ai_orchestrator/orchestrator.py` — `apply_mode_overrides` (linha ~136)
 
-### Resposta:
-
-- **Arquivo(s):**
-  - `backend-executors/app/services/decision_engine.py` — `_apply_mode_guardrails` (linha ~661)
-  - `backend-crm/services/ai_orchestrator/orchestrator.py` — `apply_mode_overrides` (linha ~88)
-
-- **Função(ões):**
-  - `_apply_mode_guardrails` — sobrescreve `suggested_category` mesmo que o AI Profile configure campos diferentes
-  - `apply_mode_overrides` — injeta `must_collect` fixo no playbook, ignorando o que o AI Profile possa ter configurado via template
-
-- **Trecho de código:**
+**Trecho:**
 
 ```python
-# orchestrator.py ~101 — força must_collect independentemente do AI Profile
-elif agent_mode_normalized == "agenda":
-    merged.update({
-        "must_collect": ["service_interest", "availability_window", "location_preference", "price_acceptance"],
-    })
-
-# decision_engine.py ~682 — guardrail reverte category mesmo que a LLM (influenciada pelo AI Profile) tivesse decidido avançar
+# decision_engine.py ~752 — guardrail agenda sobrescreve decisão da LLM
 if mode == "agenda" and ("availability_window" in missing_fields or "location_preference" in missing_fields):
-    if mother_decision.route_to == "closing" or decision.suggested_category == "closing":
-        decision.suggested_category = "qualification"  # sobrescreve decisão da LLM
+    if ...:
+        decision.suggested_category = "qualification"  # sobrescreve mesmo que LLM retorne closing
+
+# orchestrator.py ~154 — must_collect só injetado se AI Profile configurou (não há mais sobreposição automática)
+profile_fields = (ai_profile or {}).get("qualification_required_fields")
+if isinstance(profile_fields, list) and len(profile_fields) > 0:
+    merged.update({"must_collect": profile_fields})
 ```
 
-- **Descrição do conflito:**
-  1. Se o AI Profile definir `qualification_required_fields=[]` (lista vazia), `can_advance_from_qualification` no CRM avança (`return True, []`). Mas no executor, `_build_mode_contract_context` também lê o override — se for lista vazia, `missing_fields` fica vazio e o guardrail não activa. **Neste caso os guardrails respeitam o AI Profile.**
-  2. Se o AI Profile **não** definir `qualification_required_fields` (None), os campos hardcoded de `MIN_REQUIRED_FIELDS` são usados. O AI Profile não tem forma de remover campos individuais hardcoded, apenas substituir a lista inteira.
-  3. `apply_mode_overrides` (orchestrator.py) injeta `must_collect` fixo para modo `agenda` **sem verificar** se o AI Profile configurou campos diferentes — é uma sobreposição unilateral no playbook.
+**Comportamento atual:**
+1. Se o AI Profile definir `qualification_required_fields=[]` (lista vazia), `can_advance_from_qualification` retorna `True` (avança sempre) e `compute_missing_fields` retorna `[]` (sem campos obrigatórios). Os guardrails de campos respeitam completamente o AI Profile.
+2. Se o AI Profile **não** definir `qualification_required_fields` (None), `required_fields` fica `[]` e **nenhum campo é exigido**. O sistema age como se todos os campos já estivessem preenchidos — exceto os guardrails hardcoded de `_apply_mode_guardrails` (agenda: `availability_window`/`location_preference`; direto: `price_acceptance`/`intent_level`).
+3. `apply_mode_overrides` (orchestrator) **não sobrepõe mais** `must_collect` para modo agenda sem configuração explícita. O conflito descrito anteriormente foi eliminado.
 
 ---
 
 ## 9. PROMPTS DAS LLMS (MÃE E FILHAS)
 
-Nos prompts das LLMs, existe alguma instrução que:
+Nos prompts das LLMs, existe instrução que força coleta de dados antes de responder?
 
-- força a coleta de todos os dados antes de responder
-- prioriza perguntas de qualificação sobre respostas
+**Arquivo:**
+- `backend-executors/app/services/decision_engine.py`
+  - Prompt mãe: `_build_mother_prompt` (linha ~927)
+  - Prompt filha qualification: `_build_child_prompt_qualification` (linha ~1192)
 
-### Procurar por frases como:
-
-- "ask until all information is collected"
-- "do not proceed without"
-- "always collect"
-
-### Resposta:
-
-- **Arquivo(s):**
-  - `backend-executors/app/services/decision_engine.py`
-
-- **Prompt(s):**
-  - Prompt da **mãe** (`_build_mother_prompt`, linha ~857)
-  - Prompt da **filha qualification** (`_build_child_prompt_qualification`, linha ~1114)
-
-- **Trecho relevante:**
+**Trechos relevantes:**
 
 ```
-# Prompt mãe (~929) — instrução obrigatória de qualificação
-"- REGRA OBRIGATÓRIA DE QUALIFICAÇÃO: se missing_fields não estiver vazio, route_to DEVE ser 'qualification'."
-"  Enquanto houver missing_fields E sem sinal de fecho, NÃO sugerir avanço para apresentation, follow-up ou closing."
+# Prompt mãe (~972) — instrução de qualificação
+"1. O lead tem missing_fields? Se sim → qualification (obrigatório)"
 
-# Prompt mãe (~968) — prioridade 1
+# Prompt mãe (~1043) — PRIORIDADE 1A/1B
 "PRIORIDADE 1 (obrigatória — sistema sobrescreve mesmo se você retornar outra):\n"
-"- missing_fields NÃO vazio → route_to = 'qualification'"
+"- PRIORIDADE 1A: missing_fields NÃO vazio + mensagem SEM pergunta direta → route_to = \"qualification\"\n"
+"- PRIORIDADE 1B: missing_fields NÃO vazio + mensagem COM pergunta direta → route_to = \"qualification\",
+  next_action_hint = \"reply\""
+"  EXCEÇÃO FECHO (agent_mode=agenda): sinal explícito de confirmação/booking → route_to = \"apresentation\""
 
-# Prompt filha qualification (~1217) — instrução de coleta campo por campo
+# Prompt filha qualification (~1305) — campo por vez
 "PAPEL: Coletar campos de qualificação do lead, um por vez, através de perguntas naturais e contextuais."
-"Campos obrigatórios: {required_fields}. Campo atual: {current_field}."
+"FRAMEWORK: ... Campos obrigatórios: {required_fields}. Campo atual: {current_field}."
 
-# Prompt filha qualification (~1232) — schema de retorno com should_ask
-'"should_ask": true'  # instrui a LLM a sinalizar se deve perguntar
+# Prompt filha qualification (~1327) — regra should_ask
+"- Quando should_ask=true, field deve ser EXATAMENTE o current_field."
+"- Quando should_ask=true, question_text não pode ser vazio."
 
-# Prompt filha qualification (~1239) — NÃO agendar sem qualificação
-"- NÃO agendar reunião aqui (só na rota apresentation, salvo pedido explícito do inbound)."
+# Prompt filha qualification — escopo active (responde sempre primeiro)
+"Responde SEMPRE à mensagem do cliente antes de qualificar. Se o cliente fez uma pergunta,
+responde usando offer_description e custom_instructions. Depois, se houver campos obrigatórios
+em falta, adicione UMA pergunta de qualificação natural ao final."
 ```
 
-- **Comportamento induzido:**
-  - A LLM mãe é instruída a retornar `route_to="qualification"` enquanto `missing_fields` não estiver vazio. Isso é declarado como "obrigatório" e "sistema sobrescreve".
-  - A LLM filha qualification é instruída a perguntar exatamente `current_field` (`should_ask=true`), um campo por turno.
-  - Não existe instrução explícita "ask until all information is collected" em texto, mas a combinação de `REGRA OBRIGATÓRIA` + `Campos obrigatórios: {required_fields}` + `should_ask=true` produz esse comportamento iterativo.
+**Comportamento induzido:**
+- A mãe é instruída a retornar `route_to="qualification"` enquanto `missing_fields` não estiver vazio, mas com distinção entre pergunta direta (1B, responde primeiro) e não-direta (1A, qualifica direto).
+- A filha qualification pergunta exatamente `current_field` (`should_ask=true`), um campo por turno.
+- Em ambos os `response_style` (`passive` e `active`), a filha responde primeiro se houver pergunta direta — a diferença é que no `active` pode adicionar uma pergunta de qualificação ao final do mesmo turno.
 
 ---
 
 ## 10. DEFINIÇÃO DE MODO ATIVO vs PASSIVO
 
-Existe no sistema alguma lógica que:
+Existe no sistema alguma lógica que diferencia comportamento ativo (pergunta) de passivo (não pergunta)?
 
-- diferencia comportamento ativo (pergunta)
-- de comportamento passivo (não pergunta)
+**Arquivo:**
+- `backend-executors/app/services/decision_engine.py`
+  - `_build_mother_prompt` (linha ~1102) — bloco passivo na mãe
+  - `_build_child_prompt_qualification` (linha ~1248) — controle passivo/ativo na filha
 
-### Resposta:
-
-- **Arquivo(s):**
-  - `backend-executors/app/services/decision_engine.py`
-    - `_build_mother_prompt` (linha ~1025) — bloco passivo na mãe
-    - `_build_child_prompt_qualification` (linha ~1170) — controle passivo na filha
-
-- **Função(ões):**
-  - `_build_child_prompt_qualification` — lê `ai_profile.response_style` e altera o comportamento da filha
-  - `_build_mother_prompt` — se `response_style == "passive"`, injeta instrução para mãe retornar `next_action_hint="reply"` quando há pergunta direta
-
-- **Trecho de código:**
+**Trecho:**
 
 ```python
-# _build_child_prompt_qualification ~1170
-response_style = (ai_profile.get("response_style") or "active").strip().lower()
+# _build_child_prompt_qualification ~1248
+response_style = (ai_profile.get("response_style") or "passive").strip().lower()  # default: passive
 
-_escopo_line = (
-    "Responder perguntas directas do cliente PRIMEIRO, ... Depois qualificar de forma natural."
-    if response_style == "passive"
-    else "Você APENAS faz perguntas de qualificação. ..."
-)
+# escopo passive
+_escopo_line = "Responder perguntas directas do cliente PRIMEIRO. Depois qualificar de forma natural. ..."
+
+# escopo active (também responde primeiro, mas pode adicionar pergunta ao final)
+_escopo_line = "Responde SEMPRE à mensagem do cliente antes de qualificar. ... Depois, se houver campos
+obrigatórios em falta, adicione UMA pergunta de qualificação natural ao final."
 
 _passive_reply_now = response_style == "passive" and _mother_hint == "reply"
+# → "MODO PASSIVO ACTIVADO — RESPOSTA IMEDIATA OBRIGATÓRIA. should_ask=false. NÃO perguntes nada neste turno."
 
-# _build_mother_prompt ~1025 (bloco injetado apenas quando passive)
+# _build_mother_prompt ~1102 — bloco passivo injetado somente quando response_style=passive
 "\nMODO PASSIVO (response_style=passive): "
 "Se a mensagem do cliente for uma pergunta directa ... "
 "E missing_fields NÃO ESTIVER VAZIO, "
-"usa next_action_hint='reply' para sinalizar à filha que deve responder a pergunta primeiro."
+"usa next_action_hint='reply' para sinalizar à filha que deve responder a pergunta primeiro.\n"
 ```
 
-- **Como essa decisão é feita:**
-  1. `ai_profile.response_style` é lido pelo executor no momento de construir o prompt.
-  2. Se `"active"` (padrão): filha qualification pede campo de qualificação sem olhar para o conteúdo da pergunta do lead.
-  3. Se `"passive"`: mãe pode sinalizar `next_action_hint="reply"` quando detecta pergunta direta → filha entra em "MODO PASSIVO ACTIVADO — RESPOSTA IMEDIATA OBRIGATÓRIA" e não pergunta naquele turno.
+**Como a decisão é feita:**
+1. `response_style == "passive"` (default) + `next_action_hint="reply"` da mãe → filha responde sem perguntar neste turno (`should_ask=false`).
+2. `response_style == "passive"` sem hint `reply` → filha responde primeiro a perguntas diretas, depois qualifica naturalmente.
+3. `response_style == "active"` → filha responde à mensagem e pode adicionar uma pergunta de qualificação ao final do mesmo turno.
+
+> **Mudança importante:** o default mudou de `"active"` para `"passive"`.
 
 ---
 
 ## 11. EXTRAÇÃO DE RESPOSTAS IMPLÍCITAS
 
-Existe alguma lógica que:
+Existe alguma lógica que extrai informações da mensagem do usuário e preenche automaticamente campos de qualificação?
 
-- extrai informações da mensagem do usuário
-- e preenche automaticamente campos de qualificação
+**Arquivos:**
+- `backend-executors/app/contracts/qualification_contract.py` — função `infer_extracted_fields` (linha ~51)
+- `backend-executors/app/services/field_extractor.py` — função `extract_fields_llm` (linha ~44) — via LLM
 
-### Resposta:
+**Funções:**
+- `infer_extracted_fields` — extração heurística (regex + keywords) sem LLM; usada como fallback em `_build_mode_contract_context`
+- `extract_fields_llm` — extração via LLM com schema de campos; chamada pelo runner após cada turno e persiste em `lead_qualification_state` no CRM
+- `_build_mode_contract_context` — usa `infer_extracted_fields` como fallback quando `qualification_state` do banco não está disponível
 
-- **Arquivo(s):**
-  - `backend-executors/app/contracts/qualification_contract.py` — função `infer_extracted_fields` (linha ~72)
-  - `backend-executors/app/services/field_extractor.py` — função `extract_fields_llm` (linha ~44) — via LLM
-
-- **Função(ões):**
-  - `infer_extracted_fields` — extração heurística (regex + keywords) sem LLM
-  - `extract_fields_llm` — extração via LLM com schema de campos
-  - `_build_mode_contract_context` — usa `infer_extracted_fields` como fallback quando `qualification_state` está ausente
-
-- **Trecho de código:**
+**Trecho:**
 
 ```python
-# qualification_contract.py ~72
+# qualification_contract.py ~51
 def infer_extracted_fields(context):
     text = _text_from_context(context).lower()
     extracted = {}
-    if any(k in text for k in ["quero", "interesse", "serviço", ...]):
+    if any(k in text for k in ["quero", "interesse", "serviço", "procedimento", "produto"]):
         extracted["service_interest"] = True
     if _DAY_OR_TIME_RE.search(text):
         extracted["availability_window"] = True
-    if any(k in text for k in ["bairro", "cidade", "presencial", "online", ...]):
+    if any(k in text for k in ["bairro", "cidade", "presencial", "online", "local"]):
         extracted["location_preference"] = True
     price_yes_terms = ["aceito", "ok o preço", ...]
     price_no_terms = ["caro", "muito caro", ...]
@@ -511,88 +438,81 @@ def infer_extracted_fields(context):
     return extracted
 ```
 
-- **Campos suportados:**
-  | Campo | Método de extração |
-  |---|---|
-  | `service_interest` | keywords: "quero", "interesse", "serviço", "procedimento", "produto" |
-  | `availability_window` | regex de dias/horários (`_DAY_OR_TIME_RE`) |
-  | `location_preference` | keywords: "bairro", "cidade", "presencial", "online", "local" |
-  | `price_acceptance` | keywords positivas/negativas + "unsure" |
-  | `budget_or_price_acceptance` | co-extraído com `price_acceptance` |
-  | `decision_role` | keywords: "eu decido", "decisor", "meu sócio", "aprovação" |
-  | `urgency` | keywords: "urgente", "hoje", "amanhã", "quanto antes" |
-  | `constraints` | keywords: "só de manhã", "não posso", "restrição" |
-  | `next_step` | keywords: "me chama", "próximo passo", "pode me ligar" |
-  | `next_step_with_time` | `next_step` + regex de dia/hora |
+**Campos suportados:**
+| Campo | Método de extração |
+|---|---|
+| `service_interest` | keywords: "quero", "interesse", "serviço", "procedimento", "produto" |
+| `availability_window` | regex de dias/horários (`_DAY_OR_TIME_RE`) |
+| `location_preference` | keywords: "bairro", "cidade", "presencial", "online", "local" |
+| `price_acceptance` | keywords positivas/negativas + "unsure" |
+| `budget_or_price_acceptance` | co-extraído com `price_acceptance` |
+| `decision_role` | keywords: "eu decido", "decisor", "meu sócio", "aprovação" |
+| `urgency` | keywords: "urgente", "hoje", "amanhã", "quanto antes" |
+| `constraints` | keywords: "só de manhã", "não posso", "restrição" |
+| `next_step` | keywords: "me chama", "próximo passo", "pode me ligar" |
+| `next_step_with_time` | `next_step` + regex de dia/hora |
 
-  Esta extração heurística é usada como **fallback** quando o `qualification_state` do banco não existe. A extração principal usa LLM via `field_extractor.extract_fields_llm`, que é chamada pelo runner do executor após cada turno e persiste os campos em `lead_qualification_state` no CRM.
+Esta extração heurística é usada como **fallback** quando o `qualification_state` do banco não existe. A extração principal usa LLM via `field_extractor.extract_fields_llm`, chamada pelo runner após cada turno e persistida em `lead_qualification_state` no CRM.
 
 ---
 
 ## 12. FLUXO COMPLETO DE DECISÃO
 
-Mapear o fluxo completo desde:
-
-entrada da mensagem do usuário → até decisão final do agente
-
-### Resposta:
-
-- **Sequência de funções chamadas:**
+Fluxo completo desde entrada da mensagem até decisão final do agente:
 
 ```
 1. [CRM] POST /webhooks/whatsapp/inbound
    └─ handle_inbound()                              [inbound_handler.py]
        ├─ normaliza telefone, idempotência, cria/encontra lead
-       ├─ save_inbound_message()                    [inbound_handler.py]
+       ├─ save_inbound_message()
        ├─ stop_followup_on_inbound_reply()          [followup_state.py]
        ├─ build_context_bundle_from_inbound()       [orchestrator.py]
        │   ├─ fetch_core_ai_profile_resolve()       [core_client.py]
-       │   ├─ _normalize_agent_mode_for_bundle()    [orchestrator.py]
-       │   ├─ _resolve_presentation_contract()      [orchestrator.py]
+       │   ├─ _normalize_agent_mode_for_bundle()
+       │   ├─ _resolve_presentation_contract()
+       │   ├─ apply_mode_overrides()                ← injeta must_collect só se AI Profile configurou
        │   └─ get_recent_history()                  [history.py]
        └─ create_job(type=whatsapp.inbound.n8n)     [jobs_service.py]
-          → job entra na fila
 
 2. [Executor] whatsapp_worker.py — polling da fila
    └─ execute_job()                                 [runners/whatsapp.py]
-       └─ decision_engine (via LLM)                 [services/decision_engine.py]
+       └─ decision_engine                           [services/decision_engine.py]
            ├─ fast_path.try_fast_handoff()          [fast_path.py]  ← sai cedo se handoff keyword
-           ├─ _build_mode_contract_context()        [decision_engine.py]
-           │   ├─ _qualification_state_from_context()  [lê qualification_state do CRM]
+           ├─ _build_mode_contract_context()
+           │   ├─ _qualification_state_from_context()  [lê lead_qualification_state do CRM]
+           │   ├─ required_fields_for_mode()        [qualification_contract.py]
            │   ├─ compute_missing_fields()          [qualification_contract.py]
-           │   └─ infer_extracted_fields() (fallback) [qualification_contract.py]
-           ├─ _build_mother_prompt()                [decision_engine.py]
-           │   └─ injeta missing_fields, regra obrigatória, modo passivo
-           ├─ LLM chamada (mãe) → MotherDecision    [llm_service.py]
-           │   └─ retorna route_to (qualification|apresentation|follow-up|closing)
+           │   └─ infer_extracted_fields() (fallback heurístico)
+           ├─ _build_mother_prompt()
+           │   └─ injeta missing_fields, PRIORIDADE 1A/1B, modo passivo
+           ├─ LLM (mãe) → MotherDecision
+           │   └─ retorna route_to + next_action_hint
            ├─ seleciona prompt filha por route_to:
            │   ├─ route_to=qualification → _build_child_prompt_qualification()
            │   ├─ route_to=apresentation → _build_child_prompt_apresentation()
            │   └─ route_to=follow-up/closing → _build_child_prompt()
-           ├─ LLM chamada (filha) → ChildResult     [llm_service.py]
+           ├─ LLM (filha) → ChildResult
            │   └─ retorna message_text, should_ask, field, signals_structured
-           ├─ _apply_mode_guardrails()              [decision_engine.py]  ← guardrails pós-LLM
-           ├─ _sanitize_category_decision()         [decision_engine.py]
+           ├─ _apply_mode_guardrails()              ← guardrails pós-LLM
+           ├─ _sanitize_category_decision()
            └─ envia mensagem via UazAPI + persiste qualification_state no CRM
 ```
 
-- **Arquivos envolvidos:**
-  - `backend-crm/services/whatsapp_inbound/inbound_handler.py`
-  - `backend-crm/services/ai_orchestrator/orchestrator.py`
-  - `backend-crm/services/jobs_service.py`
-  - `backend-executors/app/runners/whatsapp.py`
-  - `backend-executors/app/services/decision_engine.py`
-  - `backend-executors/app/services/fast_path.py`
-  - `backend-executors/app/contracts/qualification_contract.py`
-  - `backend-executors/app/services/field_extractor.py`
-  - `backend-executors/app/services/llm_service.py`
-  - `backend-crm/services/qualification_guardrails.py` (apenas para movimentação Kanban via API)
+**Arquivos envolvidos:**
+- `backend-crm/services/whatsapp_inbound/inbound_handler.py`
+- `backend-crm/services/ai_orchestrator/orchestrator.py`
+- `backend-crm/services/jobs_service.py`
+- `backend-executors/app/runners/whatsapp.py`
+- `backend-executors/app/services/decision_engine.py`
+- `backend-executors/app/services/fast_path.py`
+- `backend-executors/app/contracts/qualification_contract.py`
+- `backend-executors/app/services/field_extractor.py`
+- `backend-executors/app/services/llm_service.py`
+- `backend-crm/services/qualification_guardrails.py` (apenas para movimentação Kanban via API)
 
-- **Ponto onde decide responder:**
-  - `route_to` da mãe ≠ `"qualification"` → filha não-qualification → `message_text` com resposta
-  - OU `response_style=passive` + `next_action_hint=reply` → filha qualification responde sem perguntar (`should_ask=false`)
+**Ponto onde decide responder:**
+- `route_to` da mãe ≠ `"qualification"` → filha não-qualification → `message_text` com resposta
+- OU `_passive_reply_now=True` (`response_style=passive` + `next_action_hint=reply`) → filha qualification responde sem perguntar (`should_ask=false`)
 
-- **Ponto onde decide perguntar:**
-  - `missing_fields` não vazio + `response_style=active` → mãe retorna `route_to="qualification"` → filha qualification retorna `should_ask=true` com `question_text` para o campo `current_field`
-
----
+**Ponto onde decide perguntar:**
+- `missing_fields` não vazio + mãe retorna `route_to="qualification"` sem `next_action_hint="reply"` → filha qualification retorna `should_ask=true` com `question_text` para o `current_field`
