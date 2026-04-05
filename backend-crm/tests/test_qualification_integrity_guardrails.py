@@ -4,6 +4,7 @@ import sqlite3
 import sys
 import tempfile
 import unittest
+from unittest.mock import patch
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
@@ -47,6 +48,7 @@ def _create_schema(conn: sqlite3.Connection) -> None:
             attempts_json TEXT,
             asked_questions_json TEXT,
             last_question_text TEXT,
+            qualification_total_score INTEGER DEFAULT 0,
             updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
         );
         """
@@ -70,7 +72,14 @@ class QualificationIntegrityGuardrailsTest(unittest.TestCase):
         if os.path.exists(self.db_path):
             os.remove(self.db_path)
 
-    def test_can_advance_returns_missing_fields_when_incomplete(self):
+    @patch("services.qualification_guardrails._fetch_ai_profile")
+    def test_can_advance_returns_missing_fields_when_ai_profile_defines_required(self, mock_profile):
+        # Quando o AI Profile define campos obrigatórios e eles estão ausentes,
+        # can_advance_from_qualification deve retornar False com os campos faltantes.
+        mock_profile.return_value = {
+            "qualification_required_fields": ["availability_window", "location_preference", "price_acceptance"],
+            "qualification_score_threshold": None,
+        }
         cur = self.conn.cursor()
         cur.execute(
             "INSERT INTO leads (user_id, category, agent_type) VALUES (?, ?, ?)",
@@ -79,8 +88,8 @@ class QualificationIntegrityGuardrailsTest(unittest.TestCase):
         lead_id = int(cur.lastrowid)
         cur.execute(
             """
-            INSERT INTO lead_qualification_state (lead_id, user_id, stage, agent_mode_normalized, data_json)
-            VALUES (?, ?, 'qualification', 'agenda', ?)
+            INSERT INTO lead_qualification_state (lead_id, user_id, stage, agent_mode_normalized, data_json, qualification_total_score)
+            VALUES (?, ?, 'qualification', 'agenda', ?, 0)
             """,
             (lead_id, 99, json.dumps({"service_interest": "botox"}, ensure_ascii=False)),
         )
@@ -92,7 +101,9 @@ class QualificationIntegrityGuardrailsTest(unittest.TestCase):
         self.assertIn("location_preference", missing)
         self.assertIn("price_acceptance", missing)
 
-    def test_apply_suggested_category_blocks_advance_when_qualification_incomplete(self):
+    def test_apply_suggested_category_allows_advance_without_pipeline_guardrail(self):
+        # O guardrail de qualificação foi isolado apenas em rotas manuais do Kanban.
+        # apply_suggested_category (pipeline de IA) não deve mais bloquear avanço de categoria.
         cur = self.conn.cursor()
         cur.execute(
             "INSERT INTO leads (user_id, category, agent_type) VALUES (?, ?, ?)",
@@ -101,8 +112,8 @@ class QualificationIntegrityGuardrailsTest(unittest.TestCase):
         lead_id = int(cur.lastrowid)
         cur.execute(
             """
-            INSERT INTO lead_qualification_state (lead_id, user_id, stage, agent_mode_normalized, data_json)
-            VALUES (?, ?, 'qualification', 'agenda', ?)
+            INSERT INTO lead_qualification_state (lead_id, user_id, stage, agent_mode_normalized, data_json, qualification_total_score)
+            VALUES (?, ?, 'qualification', 'agenda', ?, 0)
             """,
             (lead_id, 55, json.dumps({"service_interest": "botox"}, ensure_ascii=False)),
         )
@@ -117,7 +128,7 @@ class QualificationIntegrityGuardrailsTest(unittest.TestCase):
             inbound_message_text="quero avançar",
             decision_trace={"agent_mode_normalized": "agenda"},
         )
-        self.assertFalse(moved)
+        self.assertTrue(moved)
         row = self.conn.execute("SELECT category FROM leads WHERE id = ?", (lead_id,)).fetchone()
-        self.assertEqual(row["category"], "qualification")
+        self.assertEqual(row["category"], "apresentation")
 

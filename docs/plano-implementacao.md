@@ -715,7 +715,7 @@ A Fase 2 resolve o comportamento da conversa (sem bloqueio de respostas).
 - [x] `PainelResumo`: progresso e cards da Camada 2 refletem `qualification_fields` (não f1/f2/f3 legacy) para agentes não-SDR
 
 ### Fase 5 — Auditoria
-- [ ] Confirmar `can_advance_from_qualification` isolado em rotas manuais (`routes/leads.py`)
-- [ ] grep: nenhuma ocorrência de `MIN_REQUIRED_FIELDS` ou campos hardcoded fora do contrato
-- [ ] grep: `must_collect` hardcoded → deve existir apenas como derivado de `qualification_fields`
-- [ ] Testes unitários atualizados (sem fallback hardcoded, sem mock de campos fixos)
+- [x] Confirmar `can_advance_from_qualification` isolado em rotas manuais (`routes/leads.py`) — removido de `jobs_service.apply_suggested_category`
+- [x] grep: nenhuma ocorrência de `MIN_REQUIRED_FIELDS` ou campos hardcoded fora do contrato
+- [x] grep: `must_collect` hardcoded → deve existir apenas como derivado de `qualification_fields`
+- [x] Testes unitários atualizados (sem fallback hardcoded, sem mock de campos fixos)
