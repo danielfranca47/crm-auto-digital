@@ -1,7 +1,6 @@
 import { Download, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import type { PlaygroundSession } from "./PlaygroundConfigModal";
 import type { ChatMessage } from "./MessageBubble";
@@ -54,12 +53,32 @@ export function PlaygroundFeedback({
 
     lines.push(`# Playground — Sessão ${date}`);
     lines.push("");
-    lines.push("## Configuração");
-    lines.push(`- **AI Profile:** ${session.aiProfileName} (ID: ${session.aiProfileId})`);
-    if (session.scenarioContext) {
-      lines.push(`- **Contexto:** ${session.scenarioContext}`);
+    lines.push("## Configuração do AI Profile");
+    lines.push("");
+    lines.push(`| Campo | Valor |`);
+    lines.push(`|---|---|`);
+    lines.push(`| **Nome** | ${session.aiProfileName} (ID: ${session.aiProfileId}) |`);
+    const s = session.profileSnapshot;
+    lines.push(`| **brand_name** | ${s.brand_name ?? "—"} |`);
+    lines.push(`| **agent_mode** | ${s.agent_mode ?? "—"} |`);
+    lines.push(`| **template_key** | ${s.template_key ?? "—"} |`);
+    lines.push(`| **presentation_variant** | ${s.presentation_variant ?? "—"} |`);
+    lines.push(`| **response_style** | ${s.response_style ?? "—"} |`);
+    lines.push(`| **tone_of_voice** | ${s.tone_of_voice ?? "—"} |`);
+    lines.push(`| **niche** | ${s.niche ?? "—"} |`);
+    lines.push(`| **target_audience** | ${s.target_audience ?? "—"} |`);
+    if (s.qualification_required_fields?.length) {
+      lines.push(`| **qualification_required_fields** | ${s.qualification_required_fields.join(", ")} |`);
     }
-    lines.push(`- **Lead ID (sandbox):** ${session.leadId ?? "—"}`);
+    if (s.custom_instructions) {
+      lines.push(`| **custom_instructions** | ${s.custom_instructions.replace(/\n/g, " ↵ ")} |`);
+    }
+    lines.push("");
+    if (session.scenarioContext) {
+      lines.push(`**Contexto do cenário:** ${session.scenarioContext}`);
+      lines.push("");
+    }
+    lines.push(`**Lead ID (sandbox):** ${session.leadId ?? "—"}`);
     lines.push("");
     lines.push("## Conversa");
     lines.push("");

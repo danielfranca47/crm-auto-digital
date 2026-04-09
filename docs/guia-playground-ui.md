@@ -115,20 +115,41 @@ Para cada mensagem marcada:
 
 ### 5. Exportar e trazer para análise
 
-Botão **"Exportar .md"** gera e faz download de um ficheiro `.md` com:
+Botão **"Exportar .md"** gera e faz download de um ficheiro com tudo que Claude precisa para analisar sem contexto adicional:
 
-- Cabeçalho: perfil, contexto do cenário, lead ID
+- Tabela completa da configuração do AI Profile no momento do teste (`agent_mode`, `template_key`, `presentation_variant`, `response_style`, `qualification_required_fields`, `custom_instructions`, etc.)
+- Contexto do cenário descrito no modal
 - Histórico completo da conversa com timestamps e traces por turno
 - Todos os feedbacks anotados com tags e notas
 
-**Para analisar com Claude Code:** colar o conteúdo do ficheiro diretamente nesta conversa. Claude irá:
+**Para analisar com Claude Code:** abrir uma nova conversa e usar o prompt padrão abaixo, colando o conteúdo do `.md` exportado no lugar indicado.
 
-1. Ler os `decision_trace` por turno — identifica onde o roteamento divergiu do esperado
-2. Cruzar as anotações com os campos do trace (guardrails, mother_route, effective_route, confidence)
-3. Localizar o ficheiro e função responsável pelo comportamento
-4. Propor um plano de correção antes de implementar qualquer coisa
+---
 
-Junto com o `.md` exportado, pode também incluir o ficheiro `*-input.md` do cenário (se existir) para que Claude tenha os critérios de avaliação esperados.
+#### Prompt padrão para análise (nova conversa)
+
+```
+Tenho uma sessão de teste do playground de IA do meu CRM para analisar.
+
+O ficheiro abaixo foi exportado diretamente da interface de playground e contém:
+- A configuração completa do AI Profile que estava ativa durante o teste
+- O histórico da conversa com os decision traces por turno
+- Os feedbacks que anotei em tempo real, com tags e notas
+
+Por favor:
+1. Lê a configuração do perfil e o histórico completo
+2. Para cada feedback anotado, identifica a causa raiz no trace (qual campo, rota, guardrail ou prompt originou o comportamento)
+3. Localiza o ficheiro e função no codebase responsável por esse comportamento
+4. Propõe um plano de correção — só depois de eu aprovar é que implementas
+
+---
+
+[COLAR AQUI O CONTEÚDO DO FICHEIRO .md EXPORTADO]
+```
+
+---
+
+Claude irá ler os `decision_trace` por turno, cruzar com as anotações (guardrails, mother_route, effective_route, confidence) e propor um plano antes de qualquer implementação.
 
 ---
 

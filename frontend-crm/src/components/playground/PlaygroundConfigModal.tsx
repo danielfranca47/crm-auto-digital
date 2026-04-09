@@ -13,6 +13,19 @@ export interface PlaygroundSession {
   leadId: number | null;
   scenarioContext: string;
   startedAt: string;
+  // Snapshot da configuração do AI Profile no momento do teste
+  profileSnapshot: {
+    agent_mode?: string | null;
+    template_key?: string | null;
+    presentation_variant?: string | null;
+    response_style?: string | null;
+    tone_of_voice?: string | null;
+    niche?: string | null;
+    target_audience?: string | null;
+    qualification_required_fields?: string[] | null;
+    custom_instructions?: string | null;
+    brand_name?: string | null;
+  };
 }
 
 interface PlaygroundConfigModalProps {
@@ -45,6 +58,18 @@ export function PlaygroundConfigModal({ open, onStart }: PlaygroundConfigModalPr
       leadId: null,
       scenarioContext: scenarioContext.trim(),
       startedAt: new Date().toISOString(),
+      profileSnapshot: {
+        agent_mode: profile.agent_mode,
+        template_key: profile.template_key,
+        presentation_variant: (profile as any).presentation_variant ?? null,
+        response_style: profile.response_style,
+        tone_of_voice: profile.tone_of_voice,
+        niche: profile.niche,
+        target_audience: profile.target_audience,
+        qualification_required_fields: profile.qualification_required_fields,
+        custom_instructions: profile.custom_instructions,
+        brand_name: profile.brand_name,
+      },
     });
   }
 
