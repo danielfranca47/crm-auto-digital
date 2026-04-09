@@ -10,6 +10,7 @@ import {
   Gauge,
   Sparkles,
   MessageSquareDot,
+  FlaskConical,
 } from "lucide-react";
 import { NavLink, useLocation, useNavigate } from "react-router-dom";
 import { useState } from "react";
@@ -33,6 +34,7 @@ const items = [
   { title: "Prospecção", url: "/prospeccao", icon: Search },
   { title: "Assistente IA", url: "/assistente-ia", icon: Bot },
   { title: "Pesquisa", url: "/pesquisa", icon: FileSearch },
+  { title: "Playground IA", url: "/playground", icon: FlaskConical },
 ];
 
 const accountItems = [

@@ -103,6 +103,67 @@ export type AiProfile = AiProfilePayload & {
   payment_webhook_url?: string | null;
 };
 
+// ── Playground ──────────────────────────────────────────────────────────────
+
+export type PlaygroundDecisionTrace = {
+  agent_mode?: string | null;
+  presentation_variant?: string | null;
+  mother_route?: string | null;
+  effective_route?: string | null;
+  guardrails_applied: string[];
+  category_suggestion_cleared: boolean;
+  ai_profile_id: number;
+  lead_id: number;
+  lead_is_sandbox: boolean;
+  timestamp: string;
+};
+
+export type PlaygroundMotherDecision = {
+  route_to?: string | null;
+  confidence: number;
+  reason: string;
+  signals?: Record<string, unknown> | null;
+};
+
+export type PlaygroundChildResult = {
+  message_text: string;
+  question_text?: string | null;
+  field?: string | null;
+  should_ask: boolean;
+  did_complete_phase: boolean;
+  recommended_next_category?: string | null;
+  outcome?: string | null;
+  kanban_highlight?: string | null;
+  confidence: number;
+};
+
+export type PlaygroundQualificationState = {
+  exists: boolean;
+  data_json?: Record<string, unknown> | null;
+  missing_fields: string[];
+  filled_fields: string[];
+  power_score: number;
+  priority_score: number;
+  price_score: number;
+  timing_score: number;
+  qualification_total_score: number;
+};
+
+export type PlaygroundChatResponse = {
+  lead_id: number;
+  message_to_send: string;
+  next_action: string;
+  mother_decision?: PlaygroundMotherDecision | null;
+  child_result?: PlaygroundChildResult | null;
+  lead_state: {
+    category: string;
+    qualification_state?: PlaygroundQualificationState | null;
+  };
+  decision_trace: PlaygroundDecisionTrace;
+};
+
+// ── FollowUp ─────────────────────────────────────────────────────────────────
+
 export type FollowUpContract = {
   status: string;
   attempts: number;
@@ -1055,6 +1116,16 @@ export const api = {
     getUnread: () => apiClient.get<AppNotification[]>("/notifications/unread"),
     markRead: (id: number) => apiClient.post(`/notifications/${id}/read`, {}),
     markAllRead: () => apiClient.post("/notifications/read-all", {}),
+  },
+
+  playground: {
+    chat: async (payload: {
+      ai_profile_id: number;
+      message: string;
+      lead_id?: number | null;
+      reset?: boolean;
+    }) =>
+      apiClient.post<PlaygroundChatResponse>("/playground/chat", payload),
   },
 
   followUps: {
