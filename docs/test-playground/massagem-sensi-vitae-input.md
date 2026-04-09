@@ -108,7 +108,7 @@ Simulação de um cliente que agenda mas depois tenta alterar o horário repetid
 - [ ] O agente envia confirmação estruturada da reserva (experiência, horário, dia, massagista)?
 - [ ] O agente é flexível mas firme quando um horário não está disponível (Cenário C)?
 - [ ] As informações práticas (localização, Sala 2, duche) são fornecidas quando pedidas?
-- [ ] O agente NÃO usa linguagem sexualizada ao falar da Finalização Lingam?
+
 
 ---
 
