@@ -19,6 +19,8 @@ from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 from uuid import uuid4
 
+import json
+
 import httpx
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, ConfigDict, Field
@@ -392,4 +394,271 @@ def playground_chat(
         child_result=_build_child_result(decision),
         lead_state=lead_state,
         decision_trace=_build_decision_trace(decision, body.ai_profile_id, lead_id),
+    )
+
+
+# ---------------------------------------------------------------------------
+# FeedbackAssist — Assistente IA para análise e correção de comportamentos
+# ---------------------------------------------------------------------------
+
+# Campos do AI Profile que podem ser expostos e alterados via assistente
+_SAFE_PROFILE_FIELDS = [
+    "brand_name", "name", "tone_of_voice", "response_style", "presentation_variant",
+    "identity_mode", "custom_instructions", "qualification_required_fields",
+    "qualification_score_threshold", "origin_inbound_opener", "origin_outbound_opener",
+    "agent_mode", "template_key", "objection_common", "handoff_policy",
+    "nurture_vs_discard_rule", "niche", "target_audience", "offer_description", "goals",
+]
+
+_FEEDBACK_ASSIST_SYSTEM_PROMPT = """Você é um especialista em configuração de agentes de IA de CRM.
+Sua tarefa é analisar comportamentos problemáticos observados em sessões de playground e determinar se são resolvíveis por mudança de configuração do AI Profile ou se exigem correção de código.
+
+## Campos do AI Profile e seus efeitos comportamentais
+
+- `brand_name` (str): Nome da marca/empresa que o bot usa. Se o bot se apresenta com nome errado → altere este campo.
+- `name` (str): Nome interno do perfil (não exibido ao lead).
+- `tone_of_voice` (str): Tom geral da comunicação (ex: "profissional", "amigável", "direto").
+- `response_style` ("active"|"passive"): "active" = bot é proativo e faz perguntas sem ser solicitado; "passive" = bot responde apenas ao que foi perguntado. Bot muito agressivo → mude para "passive".
+- `presentation_variant` ("sales"|"scheduler"): "sales" = tom de venda direta/B2B; "scheduler" = foco em agendamento, tom gentil. Se bot usa linguagem de vendas agressiva num contexto de agenda → altere para "scheduler".
+- `identity_mode` ("virtual_assistant"|"human_agent"|"user_clone"): Como o bot se apresenta. "human_agent" = simula humano real.
+- `custom_instructions` (str): Instrução livre de alta prioridade injetada no prompt do agente. Use para regras específicas: nome do responsável, frases proibidas, restrições de nicho, como apresentar preços, etc.
+- `qualification_required_fields` (list[str]): Campos que o bot DEVE coletar antes de avançar. Bot perguntando campos desnecessários ou não perguntando campos importantes → ajuste esta lista.
+- `qualification_score_threshold` (int, padrão 6): Pontuação mínima para considerar um lead qualificado.
+- `origin_inbound_opener` (str): Mensagem enviada pelo bot na PRIMEIRA interação com leads inbound. Se bot não envia mensagem de abertura → preencha este campo.
+- `origin_outbound_opener` (str): Mensagem de abertura para leads outbound.
+- `agent_mode` ("consultivo"|"agenda"|"direto"|"sdr_scheduler"|"closer"): Define o template macro de comportamento do agente. Mudança aqui tem impacto amplo.
+- `template_key` (str): Template de persona base. Mudança tem impacto estrutural.
+- `objection_common` (str): Resposta padrão para objeções comuns do nicho.
+- `handoff_policy` ("disable_bot"|"keep_active_notify"|"ignore"): Comportamento ao transferir para humano.
+- `nurture_vs_discard_rule` ("nurture"|"discard"): O que fazer com leads não qualificados.
+- `niche` (str): Nicho de mercado. Afeta o contexto dos prompts gerados.
+- `target_audience` (str): Público-alvo. Afeta o contexto dos prompts.
+- `offer_description` (str): Descrição da oferta. Usada nos prompts de apresentação.
+- `goals` (str): Objetivos do agente. Afeta priorização de ações.
+
+## Problemas NÃO resolvíveis por configuração (exigem código)
+- Lógica de roteamento da LLM Mãe (mother router — decisão de qual fluxo seguir)
+- Cálculo de confidence ou scores de qualificação (power_score, priority_score, etc.)
+- Disparo incorreto de guardrails (requer ajuste nos thresholds de código)
+- Comportamento de guardrails específicos
+
+## Instrução de resposta
+Responda EXCLUSIVAMENTE em JSON com este schema:
+{
+  "action": "update_profile" | "explain_only" | "export_required",
+  "fields_to_update": {field_name: new_value} | null,
+  "explanation": "Explicação clara em português para o utilizador (máx. 3 parágrafos curtos)",
+  "analysis": "Diagnóstico técnico resumido do comportamento observado (para log interno)",
+  "is_config_fixable": true | false
+}
+
+Regras:
+1. Se is_config_fixable=true E identificou campo(s) → action="update_profile", fields_to_update={campo: novo_valor}
+2. Se is_config_fixable=false → action="explain_only", fields_to_update=null
+3. Altere no máximo 2 campos por resposta — seja conservador
+4. Nunca invente campos que não estão na lista acima
+5. Seja direto na explanation — o utilizador não é técnico
+6. O campo analysis é para log interno, pode ser mais técnico
+"""
+
+
+class FeedbackItemPayload(BaseModel):
+    messageId: str
+    messagePreview: str
+    notes: str
+    tags: List[str]
+
+
+class ConversationMessagePayload(BaseModel):
+    role: str
+    text: str
+    timestamp: str
+    motherRoute: Optional[str] = None
+    confidence: Optional[float] = None
+    guardrails: Optional[List[str]] = None
+    decisionTrace: Optional[Dict[str, Any]] = None
+
+
+class PreviousAttempt(BaseModel):
+    attempt_number: int
+    user_question: str
+    analysis: str
+    fields_changed: Optional[Dict[str, Any]] = None
+    outcome: str
+
+
+class FeedbackAssistRequest(BaseModel):
+    ai_profile_id: int
+    conversation_messages: List[ConversationMessagePayload]
+    feedback_items: List[FeedbackItemPayload]
+    user_question: str = Field(..., min_length=1)
+    attempt_number: int = Field(default=1, ge=1)
+    previous_attempts: List[PreviousAttempt] = Field(default_factory=list)
+
+
+class FeedbackAssistResponse(BaseModel):
+    action: str
+    fields_to_update: Optional[Dict[str, Any]] = None
+    fields_current_values: Optional[Dict[str, Any]] = None
+    explanation: str
+    analysis: str
+    is_config_fixable: bool
+    attempt_number: int
+
+
+def _format_conversation_for_prompt(messages: List[ConversationMessagePayload]) -> str:
+    lines = []
+    for msg in messages:
+        role = "Lead" if msg.role == "lead" else "Bot"
+        text_preview = msg.text[:300] + ("…" if len(msg.text) > 300 else "")
+        lines.append(f"[{role}] {text_preview}")
+        if msg.decisionTrace:
+            t = msg.decisionTrace
+            route = t.get("mother_route", "—")
+            effective = t.get("effective_route", "—")
+            conf = msg.confidence
+            conf_str = f"{round(conf * 100)}%" if conf is not None else "—"
+            guardrails = msg.guardrails or []
+            lines.append(f"  → route={route}, effective={effective}, confidence={conf_str}, guardrails={guardrails}")
+    return "\n".join(lines) if lines else "(sem mensagens)"
+
+
+def _format_feedbacks_for_prompt(items: List[FeedbackItemPayload]) -> str:
+    if not items:
+        return "(nenhum feedback anotado)"
+    lines = []
+    for fb in items:
+        lines.append(f'- Mensagem: "{fb.messagePreview}"')
+        lines.append(f'  Tags: {", ".join(fb.tags) if fb.tags else "nenhuma"}')
+        lines.append(f'  Nota: {fb.notes or "(sem nota)"}')
+    return "\n".join(lines)
+
+
+def _format_previous_attempts_for_prompt(attempts: List[PreviousAttempt]) -> str:
+    if not attempts:
+        return "(nenhuma tentativa anterior)"
+    lines = []
+    for a in attempts:
+        lines.append(f"Tentativa {a.attempt_number}: {a.user_question}")
+        lines.append(f"  Análise: {a.analysis}")
+        if a.fields_changed:
+            for field, change in a.fields_changed.items():
+                lines.append(f"  Campo {field}: {change.get('from')} → {change.get('to')}")
+        lines.append(f"  Resultado: {a.outcome}")
+    return "\n".join(lines)
+
+
+def _build_feedback_assist_user_message(
+    ai_profile: Dict[str, Any],
+    conv_messages: List[ConversationMessagePayload],
+    feedback_items: List[FeedbackItemPayload],
+    user_question: str,
+    previous_attempts: List[PreviousAttempt],
+) -> str:
+    profile_safe = {k: ai_profile.get(k) for k in _SAFE_PROFILE_FIELDS if ai_profile.get(k) is not None}
+    return f"""## Configuração atual do AI Profile
+{json.dumps(profile_safe, ensure_ascii=False, indent=2)}
+
+## Conversa simulada (com traces)
+{_format_conversation_for_prompt(conv_messages)}
+
+## Feedbacks anotados pelo utilizador
+{_format_feedbacks_for_prompt(feedback_items)}
+
+## Tentativas anteriores
+{_format_previous_attempts_for_prompt(previous_attempts)}
+
+## Pergunta do utilizador
+{user_question}
+"""
+
+
+@router.post("/feedback-assist", response_model=FeedbackAssistResponse)
+def playground_feedback_assist(
+    body: FeedbackAssistRequest,
+    current_user: CurrentUser = Depends(require_crm_access),
+) -> FeedbackAssistResponse:
+    """
+    Assistente IA para análise e correção de comportamentos observados no playground.
+
+    Recebe o contexto completo (AI Profile + conversa + feedbacks anotados + pergunta do utilizador)
+    e determina se o problema é resolvível por configuração ou exige código.
+    Após 3 tentativas força export_required.
+    """
+    # Valida propriedade do ai_profile_id
+    ai_profile = fetch_core_ai_profile_by_id(body.ai_profile_id, current_user.id)
+
+    # Após 3 tentativas, encaminhar para exportação
+    if body.attempt_number >= 3:
+        return FeedbackAssistResponse(
+            action="export_required",
+            explanation=(
+                "Após 3 tentativas de ajuste, o comportamento pode ter uma causa mais profunda "
+                "que requer análise de código. Exporte o relatório completo e encaminhe para suporte — "
+                "ele já inclui tudo que foi tentado aqui."
+            ),
+            analysis="Limite de tentativas de configuração atingido.",
+            is_config_fixable=False,
+            attempt_number=body.attempt_number,
+        )
+
+    # Verificar se OpenAI está disponível
+    api_key = os.getenv("OPENAI_API_KEY")
+    if not api_key:
+        raise HTTPException(
+            status_code=503,
+            detail="OPENAI_API_KEY não configurado — assistente de feedback indisponível",
+        )
+
+    try:
+        from openai import OpenAI  # type: ignore
+        client_openai = OpenAI(api_key=api_key)
+    except ImportError:
+        raise HTTPException(status_code=503, detail="Biblioteca openai não instalada no backend-crm")
+
+    # Montar mensagens para a LLM
+    user_msg = _build_feedback_assist_user_message(
+        ai_profile=dict(ai_profile) if not isinstance(ai_profile, dict) else ai_profile,
+        conv_messages=body.conversation_messages,
+        feedback_items=body.feedback_items,
+        user_question=body.user_question,
+        previous_attempts=body.previous_attempts,
+    )
+
+    try:
+        raw = client_openai.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {"role": "system", "content": _FEEDBACK_ASSIST_SYSTEM_PROMPT},
+                {"role": "user", "content": user_msg},
+            ],
+            response_format={"type": "json_object"},
+            temperature=0.2,
+        )
+        parsed = json.loads(raw.choices[0].message.content)
+    except Exception as exc:
+        logger.warning("FeedbackAssist LLM error: %s", exc)
+        return FeedbackAssistResponse(
+            action="explain_only",
+            explanation="Não foi possível analisar o comportamento agora. Verifique a ligação e tente novamente.",
+            analysis=f"LLM error: {exc}",
+            is_config_fixable=False,
+            attempt_number=body.attempt_number,
+        )
+
+    # Enriquecer com valores atuais dos campos sugeridos
+    fields_to_update = parsed.get("fields_to_update") or None
+    fields_current_values: Optional[Dict[str, Any]] = None
+    if fields_to_update and isinstance(fields_to_update, dict):
+        profile_dict = dict(ai_profile) if not isinstance(ai_profile, dict) else ai_profile
+        fields_current_values = {k: profile_dict.get(k) for k in fields_to_update}
+
+    return FeedbackAssistResponse(
+        action=parsed.get("action", "explain_only"),
+        fields_to_update=fields_to_update,
+        fields_current_values=fields_current_values,
+        explanation=parsed.get("explanation", ""),
+        analysis=parsed.get("analysis", ""),
+        is_config_fixable=bool(parsed.get("is_config_fixable", False)),
+        attempt_number=body.attempt_number,
     )

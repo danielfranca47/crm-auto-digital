@@ -2,8 +2,10 @@ import { Download, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent } from "@/components/ui/card";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import type { PlaygroundSession } from "./PlaygroundConfigModal";
 import type { ChatMessage } from "./MessageBubble";
+import { FeedbackAssistant, type AgentReportEntry } from "./FeedbackAssistant";
 
 export type FeedbackTag = "tom" | "qualificação" | "guardrail" | "prompt" | "outro";
 
@@ -34,18 +36,22 @@ interface PlaygroundFeedbackProps {
   session: PlaygroundSession;
   feedbacks: FeedbackItem[];
   messages: ChatMessage[];
+  agentReportEntries: AgentReportEntry[];
   onUpdateNotes: (messageId: string, notes: string) => void;
   onToggleTag: (messageId: string, tag: FeedbackTag) => void;
   onRemove: (messageId: string) => void;
+  onAgentReportEntry: (entry: AgentReportEntry) => void;
 }
 
 export function PlaygroundFeedback({
   session,
   feedbacks,
   messages,
+  agentReportEntries,
   onUpdateNotes,
   onToggleTag,
   onRemove,
+  onAgentReportEntry,
 }: PlaygroundFeedbackProps) {
   function exportMarkdown() {
     const lines: string[] = [];
@@ -116,6 +122,28 @@ export function PlaygroundFeedback({
       });
     }
 
+    if (agentReportEntries.length > 0) {
+      lines.push("## Relatório do Agente IA");
+      lines.push("");
+      agentReportEntries.forEach((entry) => {
+        lines.push(
+          `### Tentativa ${entry.attemptNumber} — ${new Date(entry.timestamp).toLocaleString("pt-PT")}`
+        );
+        if (entry.userQuestion) lines.push(`**Pergunta:** ${entry.userQuestion}`);
+        if (entry.analysis) lines.push(`**Diagnóstico:** ${entry.analysis}`);
+        if (entry.fieldsChanged) {
+          lines.push("**Campos alterados:**");
+          Object.entries(entry.fieldsChanged).forEach(([field, change]) => {
+            lines.push(
+              `- \`${field}\`: \`${String(change.from ?? "—")}\` → \`${String(change.to)}\``
+            );
+          });
+        }
+        lines.push(`**Resultado:** ${entry.outcome}`);
+        lines.push("");
+      });
+    }
+
     const blob = new Blob([lines.join("\n")], { type: "text/markdown;charset=utf-8" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
@@ -132,89 +160,106 @@ export function PlaygroundFeedback({
 
   return (
     <div className="flex flex-col h-full">
-      {/* Header do painel */}
-      <div className="px-4 py-3 border-b flex items-center justify-between">
+      {/* Header */}
+      <div className="px-4 py-3 border-b flex items-center justify-between shrink-0">
         <div>
-          <h3 className="text-sm font-semibold">Feedback</h3>
+          <h3 className="text-sm font-semibold">Painel de Feedback</h3>
           <p className="text-xs text-muted-foreground">
             {feedbacks.length === 0
-              ? "Clique no ícone 🔖 em respostas do bot para anotar"
-              : `${feedbacks.length} mensage${feedbacks.length > 1 ? "ns" : "m"} selecionada${feedbacks.length > 1 ? "s" : ""}`}
+              ? "Marque mensagens com 🔖 ou use o Assistente IA"
+              : `${feedbacks.length} mensage${feedbacks.length > 1 ? "ns" : "m"} anotada${feedbacks.length > 1 ? "s" : ""}`}
           </p>
         </div>
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={exportMarkdown}
-          className="gap-1.5"
-        >
+        <Button variant="outline" size="sm" onClick={exportMarkdown} className="gap-1.5 shrink-0">
           <Download className="h-3.5 w-3.5" />
           Exportar .md
         </Button>
       </div>
 
-      {/* Lista de feedbacks */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-3">
-        {feedbacks.length === 0 ? (
-          <div className="flex flex-col items-center justify-center h-full text-center text-muted-foreground text-sm px-6 space-y-2">
-            <span className="text-3xl">🔖</span>
-            <p>Nenhuma mensagem selecionada ainda.</p>
-            <p className="text-xs">
-              Passe o cursor sobre uma resposta do bot e clique no ícone de marcador para adicionar ao feedback.
-            </p>
-          </div>
-        ) : (
-          feedbacks.map((fb) => (
-            <Card key={fb.messageId} className="border-amber-200 dark:border-amber-800">
-              <CardContent className="p-3 space-y-2">
-                {/* Preview da mensagem + botão remover */}
-                <div className="flex items-start gap-2">
-                  <p className="flex-1 text-xs text-muted-foreground italic line-clamp-2">
-                    "{fb.messagePreview}"
-                  </p>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-5 w-5 shrink-0 text-muted-foreground hover:text-destructive"
-                    onClick={() => onRemove(fb.messageId)}
-                  >
-                    <X className="h-3 w-3" />
-                  </Button>
-                </div>
+      {/* Tabs */}
+      <Tabs defaultValue="anotacoes" className="flex flex-col flex-1 min-h-0">
+        <TabsList className="mx-4 mt-2 grid grid-cols-2 self-start shrink-0">
+          <TabsTrigger value="anotacoes">Anotações</TabsTrigger>
+          <TabsTrigger value="assistente">Assistente IA</TabsTrigger>
+        </TabsList>
 
-                {/* Tags */}
-                <div className="flex flex-wrap gap-1">
-                  {(Object.keys(TAG_LABELS) as FeedbackTag[]).map((tag) => {
-                    const active = fb.tags.includes(tag);
-                    return (
-                      <button
-                        key={tag}
-                        onClick={() => onToggleTag(fb.messageId, tag)}
-                        className={`text-xs px-2 py-0.5 rounded-full border transition-colors ${
-                          active
-                            ? TAG_COLORS[tag]
-                            : "bg-transparent text-muted-foreground border-border hover:border-foreground"
-                        }`}
-                      >
-                        {TAG_LABELS[tag]}
-                      </button>
-                    );
-                  })}
-                </div>
+        {/* Tab: Anotações */}
+        <TabsContent
+          value="anotacoes"
+          className="flex-1 min-h-0 mt-0 overflow-y-auto p-4 space-y-3 data-[state=inactive]:hidden"
+        >
+          {feedbacks.length === 0 ? (
+            <div className="flex flex-col items-center justify-center h-full text-center text-muted-foreground text-sm px-6 space-y-2">
+              <span className="text-3xl">🔖</span>
+              <p>Nenhuma mensagem selecionada ainda.</p>
+              <p className="text-xs">
+                Passe o cursor sobre uma resposta do bot e clique no ícone de marcador.
+              </p>
+            </div>
+          ) : (
+            feedbacks.map((fb) => (
+              <Card key={fb.messageId} className="border-amber-200 dark:border-amber-800">
+                <CardContent className="p-3 space-y-2">
+                  <div className="flex items-start gap-2">
+                    <p className="flex-1 text-xs text-muted-foreground italic line-clamp-2">
+                      "{fb.messagePreview}"
+                    </p>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-5 w-5 shrink-0 text-muted-foreground hover:text-destructive"
+                      onClick={() => onRemove(fb.messageId)}
+                    >
+                      <X className="h-3 w-3" />
+                    </Button>
+                  </div>
 
-                {/* Notas */}
-                <Textarea
-                  value={fb.notes}
-                  onChange={(e) => onUpdateNotes(fb.messageId, e.target.value)}
-                  placeholder="Anote o que observou nesta resposta…"
-                  rows={3}
-                  className="resize-none text-xs"
-                />
-              </CardContent>
-            </Card>
-          ))
-        )}
-      </div>
+                  <div className="flex flex-wrap gap-1">
+                    {(Object.keys(TAG_LABELS) as FeedbackTag[]).map((tag) => {
+                      const active = fb.tags.includes(tag);
+                      return (
+                        <button
+                          key={tag}
+                          onClick={() => onToggleTag(fb.messageId, tag)}
+                          className={`text-xs px-2 py-0.5 rounded-full border transition-colors ${
+                            active
+                              ? TAG_COLORS[tag]
+                              : "bg-transparent text-muted-foreground border-border hover:border-foreground"
+                          }`}
+                        >
+                          {TAG_LABELS[tag]}
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  <Textarea
+                    value={fb.notes}
+                    onChange={(e) => onUpdateNotes(fb.messageId, e.target.value)}
+                    placeholder="Anote o que observou nesta resposta…"
+                    rows={3}
+                    className="resize-none text-xs"
+                  />
+                </CardContent>
+              </Card>
+            ))
+          )}
+        </TabsContent>
+
+        {/* Tab: Assistente IA */}
+        <TabsContent
+          value="assistente"
+          className="flex-1 min-h-0 mt-0 data-[state=active]:flex data-[state=active]:flex-col data-[state=inactive]:hidden"
+        >
+          <FeedbackAssistant
+            session={session}
+            feedbacks={feedbacks}
+            messages={messages}
+            onAgentReportEntry={onAgentReportEntry}
+            onExportRequested={exportMarkdown}
+          />
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }

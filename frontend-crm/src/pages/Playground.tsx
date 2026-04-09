@@ -8,11 +8,13 @@ import { PlaygroundConfigModal, type PlaygroundSession } from "@/components/play
 import { PlaygroundChat } from "@/components/playground/PlaygroundChat";
 import { PlaygroundFeedback, type FeedbackItem, type FeedbackTag } from "@/components/playground/PlaygroundFeedback";
 import { type ChatMessage } from "@/components/playground/MessageBubble";
+import { type AgentReportEntry } from "@/components/playground/FeedbackAssistant";
 
 export default function Playground() {
   const [session, setSession] = useState<PlaygroundSession | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [feedbacks, setFeedbacks] = useState<FeedbackItem[]>([]);
+  const [agentReport, setAgentReport] = useState<AgentReportEntry[]>([]);
   const [loading, setLoading] = useState(false);
 
   // ── Handlers de sessão ────────────────────────────────────────────────────
@@ -21,12 +23,14 @@ export default function Playground() {
     setSession(newSession);
     setMessages([]);
     setFeedbacks([]);
+    setAgentReport([]);
   }
 
   function handleNewSession() {
     setSession(null);
     setMessages([]);
     setFeedbacks([]);
+    setAgentReport([]);
   }
 
   // ── Enviar mensagem ────────────────────────────────────────────────────────
@@ -147,6 +151,10 @@ export default function Playground() {
     );
   }, []);
 
+  const handleAgentReportEntry = useCallback((entry: AgentReportEntry) => {
+    setAgentReport((prev) => [...prev, entry]);
+  }, []);
+
   // ── Render ────────────────────────────────────────────────────────────────
 
   return (
@@ -202,23 +210,18 @@ export default function Playground() {
               </div>
             </div>
 
-            {/* Painel direito — Feedback */}
+            {/* Painel direito — Feedback + Assistente */}
             <div className="flex flex-col w-1/2 min-h-0">
-              <div className="px-4 py-2 border-b bg-muted/30 shrink-0">
-                <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-                  Painel de feedback
-                </h3>
-              </div>
-              <div className="flex-1 min-h-0">
-                <PlaygroundFeedback
-                  session={session}
-                  feedbacks={feedbacks}
-                  messages={messages}
-                  onUpdateNotes={handleUpdateNotes}
-                  onToggleTag={handleToggleTag}
-                  onRemove={handleRemoveFeedback}
-                />
-              </div>
+              <PlaygroundFeedback
+                session={session}
+                feedbacks={feedbacks}
+                messages={messages}
+                agentReportEntries={agentReport}
+                onUpdateNotes={handleUpdateNotes}
+                onToggleTag={handleToggleTag}
+                onRemove={handleRemoveFeedback}
+                onAgentReportEntry={handleAgentReportEntry}
+              />
             </div>
           </div>
         </div>

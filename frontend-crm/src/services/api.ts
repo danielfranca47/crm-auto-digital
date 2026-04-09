@@ -162,6 +162,53 @@ export type PlaygroundChatResponse = {
   decision_trace: PlaygroundDecisionTrace;
 };
 
+// ── Playground FeedbackAssist ────────────────────────────────────────────────
+
+export type FeedbackAssistConversationMessage = {
+  role: "lead" | "bot";
+  text: string;
+  timestamp: string;
+  motherRoute?: string | null;
+  confidence?: number;
+  guardrails?: string[];
+  decisionTrace?: PlaygroundDecisionTrace;
+};
+
+export type FeedbackAssistItem = {
+  messageId: string;
+  messagePreview: string;
+  notes: string;
+  tags: string[];
+};
+
+export type FeedbackAssistPreviousAttempt = {
+  attempt_number: number;
+  user_question: string;
+  analysis: string;
+  fields_changed?: Record<string, { from: unknown; to: unknown }> | null;
+  outcome: string;
+  timestamp: string;
+};
+
+export type FeedbackAssistRequest = {
+  ai_profile_id: number;
+  conversation_messages: FeedbackAssistConversationMessage[];
+  feedback_items: FeedbackAssistItem[];
+  user_question: string;
+  attempt_number: number;
+  previous_attempts: FeedbackAssistPreviousAttempt[];
+};
+
+export type FeedbackAssistResponse = {
+  action: "update_profile" | "explain_only" | "export_required";
+  fields_to_update: Record<string, unknown> | null;
+  fields_current_values: Record<string, unknown> | null;
+  explanation: string;
+  analysis: string;
+  is_config_fixable: boolean;
+  attempt_number: number;
+};
+
 // ── FollowUp ─────────────────────────────────────────────────────────────────
 
 export type FollowUpContract = {
@@ -1126,6 +1173,9 @@ export const api = {
       reset?: boolean;
     }) =>
       apiClient.post<PlaygroundChatResponse>("/playground/chat", payload),
+
+    feedbackAssist: async (payload: FeedbackAssistRequest) =>
+      apiClient.post<FeedbackAssistResponse>("/playground/feedback-assist", payload),
   },
 
   followUps: {
