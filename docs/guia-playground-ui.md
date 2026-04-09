@@ -1,7 +1,23 @@
 # Guia de Uso — Playground IA (Interface Web)
 
-Interface visual para simular conversas com o agente e registar feedback em tempo real.
+Interface visual para simular conversas com o agente, registar feedback em tempo real e exportar para análise.
 Acesso: menu lateral → **Playground IA** (ícone de frasco) ou diretamente em `/playground`.
+
+---
+
+## Ciclo de trabalho completo
+
+```
+1. Subir os serviços  →  2. Abrir /playground  →  3. Simular conversa
+       ↓
+4. Marcar mensagens com 🔖  →  5. Anotar feedback no painel direito
+       ↓
+6. Exportar .md  →  7. Colar na conversa com Claude Code
+       ↓
+8. Claude analisa traces + feedback  →  identifica causas  →  propõe plano
+       ↓
+9. Aprovação  →  implementação  →  novo ciclo de teste
+```
 
 ---
 
@@ -20,13 +36,15 @@ Acesso: menu lateral → **Playground IA** (ícone de frasco) ou diretamente em 
 
 ### Não é necessário
 
-- `agent-local` — só usado para prospecção/scraping, não afeta o playground
+- `agent-local` — só usado para prospecção/scraping
 - `website` — site de marketing, independente
 - WhatsApp / UazAPI conectado — o playground bypassa completamente o WhatsApp
 
 ---
 
-## Pré-requisito: variável de ambiente
+## Pré-requisitos
+
+**1. Variável de ambiente**
 
 O `backend-crm` precisa saber onde está o `backend-executors`. Verificar que `backend-crm/.env` contém:
 
@@ -36,18 +54,13 @@ EXECUTORS_BASE_URL=http://localhost:8002
 
 Se não existir, o playground retorna erro 503 ao tentar enviar uma mensagem.
 
----
+**2. AI Profile configurado**
 
-## Pré-requisito: conta com perfil de IA configurado
+O utilizador autenticado precisa ter um AI Profile criado. Sem ele, o modal de configuração mostra erro.
 
-O utilizador autenticado precisa ter um **AI Profile** criado. Sem ele, o modal de configuração mostra erro ao tentar carregar o perfil.
+Para verificar: `curl http://localhost:8001/ai-profiles/me -H "Authorization: Bearer <TOKEN>"`
 
-Para verificar se existe:
-```bash
-curl http://localhost:8001/ai-profiles/me -H "Authorization: Bearer <TOKEN>"
-```
-
-Se retornar 404, criar o perfil em `/ai-profile` no frontend ou via API — ver [instrucoes-playground.md](./instrucoes-playground.md) secção 5.
+Se retornar 404, criar o perfil em `/ai-profile` no frontend. Ver [instrucoes-playground.md](./instrucoes-playground.md) secção 5 se precisar criar via API.
 
 ---
 
@@ -57,8 +70,8 @@ Se retornar 404, criar o perfil em `/ai-profile` no frontend ou via API — ver 
 
 Ao abrir `/playground`, aparece um modal com:
 
-- **Perfil de IA** — carregado automaticamente do utilizador autenticado. Mostra nome, `agent_mode` e `template_key`.
-- **Contexto do cenário** (opcional) — descrição livre do que está a testar. Vai para o cabeçalho do markdown exportado. Exemplo: `"Testar comportamento passivo quando lead menciona preço antes de qualificar"`
+- **Perfil de IA** — carregado automaticamente. Mostra nome, `agent_mode` e `template_key`.
+- **Contexto do cenário** (opcional) — descreva o que está a testar. Ex: `"Testar comportamento passivo quando lead menciona preço antes de qualificar"`. Vai para o cabeçalho do markdown exportado.
 
 Clicar **Iniciar Sessão**.
 
@@ -66,76 +79,64 @@ Clicar **Iniciar Sessão**.
 
 ### 2. Simular a conversa (painel esquerdo)
 
-- **Você escreve como se fosse o lead** — o campo de texto simula as mensagens do contacto.
-  - `Enter` → envia a mensagem
-  - `Shift + Enter` → nova linha sem enviar
-- As respostas do bot aparecem em bolhas cinzentas à esquerda.
-- Enquanto o bot "pensa", aparece o indicador "Bot digitando…".
+Escreva como se fosse o lead:
 
-#### Ver o trace de decisão
+- `Enter` → envia a mensagem
+- `Shift + Enter` → nova linha sem enviar
 
-Cada resposta do bot tem um link **"Ver trace"** por baixo. Ao expandir, mostra:
+As respostas do bot aparecem em bolhas cinzentas. Enquanto processa, aparece "Bot digitando…".
 
-```
-{
-  "agent_mode": "agenda",
-  "mother_route": "agenda_flow",
-  "effective_route": "agenda_flow",
-  "guardrails_applied": [],
-  "presentation_variant": "scheduler",
-  ...
-}
-```
-
-O badge ao lado indica a rota da mãe e a confiança (ex: `agenda_flow · 87%`). Se houverem guardrails ativados, aparece badge vermelho com a contagem.
+**Ver o trace de decisão:** cada resposta tem um link "Ver trace" por baixo. Ao expandir mostra `mother_route`, `effective_route`, `guardrails_applied`, `presentation_variant`, etc. O badge ao lado indica a rota e a confiança. Guardrails ativados aparecem em vermelho.
 
 ---
 
 ### 3. Marcar mensagens para feedback (em tempo real)
 
-Ao passar o cursor sobre uma resposta do bot, aparece o ícone **🔖** à esquerda da bolha.
+Ao passar o cursor sobre uma resposta do bot, aparece o ícone **🔖** à esquerda.
 
 - **Clicar** → a mensagem fica destacada a âmbar e aparece no painel direito
-- **Clicar novamente** → remove do painel de feedback
+- **Clicar novamente** → remove do painel
 
-> Marcar no momento exato em que notou o comportamento — não é necessário esperar o fim da conversa.
+> Marcar no momento em que notar o comportamento — não é necessário esperar o fim da conversa.
 
 ---
 
 ### 4. Anotar o feedback (painel direito)
 
-Para cada mensagem marcada, o painel direito mostra:
+Para cada mensagem marcada:
 
 | Elemento | O que fazer |
 |---|---|
-| **Preview** (itálico) | Trecho dos primeiros 80 caracteres da mensagem do bot |
 | **Tags** | Clicar para ativar: `Tom`, `Qualificação`, `Guardrail`, `Prompt`, `Outro` |
-| **Textarea de notas** | Escrever a observação livremente |
+| **Textarea de notas** | Descrever o comportamento observado e o que era esperado |
 | **× (remover)** | Remove do painel e desmarca a bolha |
-
-As notas são guardadas em memória durante a sessão — não persistem se fechar a aba.
 
 ---
 
-### 5. Exportar o feedback
+### 5. Exportar e trazer para análise
 
-Botão **"Exportar .md"** no topo do painel direito gera e faz download de um ficheiro `.md` com:
+Botão **"Exportar .md"** gera e faz download de um ficheiro `.md` com:
 
-- Cabeçalho com nome do perfil, contexto do cenário e lead ID
-- Histórico completo da conversa com timestamps e traces
-- Secção de feedbacks anotados com tags e notas
+- Cabeçalho: perfil, contexto do cenário, lead ID
+- Histórico completo da conversa com timestamps e traces por turno
+- Todos os feedbacks anotados com tags e notas
 
-O ficheiro é nomeado automaticamente: `playground-YYYY-MM-DD_HH-MM-output.md`
+**Para analisar com Claude Code:** colar o conteúdo do ficheiro diretamente nesta conversa. Claude irá:
 
-É compatível com o formato dos ficheiros `*-output.md` em `docs/test-playground/`.
+1. Ler os `decision_trace` por turno — identifica onde o roteamento divergiu do esperado
+2. Cruzar as anotações com os campos do trace (guardrails, mother_route, effective_route, confidence)
+3. Localizar o ficheiro e função responsável pelo comportamento
+4. Propor um plano de correção antes de implementar qualquer coisa
+
+Junto com o `.md` exportado, pode também incluir o ficheiro `*-input.md` do cenário (se existir) para que Claude tenha os critérios de avaliação esperados.
 
 ---
 
 ### 6. Nova sessão
 
-Botão **"Nova sessão"** no topo (ícone de refresh) → limpa o histórico e o painel de feedback e reabre o modal de configuração.
+Botão **"Nova sessão"** limpa o histórico e o painel e reabre o modal de configuração.
 
-> Exportar o markdown antes de iniciar uma nova sessão — o histórico não é recuperável depois de limpar.
+> Exportar antes de iniciar uma nova sessão — o histórico não é recuperável depois de limpar.
 
 ---
 
@@ -152,8 +153,7 @@ Frontend /playground
     → retorna PlaygroundChatResponse com trace completo
 ```
 
-- Leads sandbox têm `is_playground=1` → **não aparecem no Kanban**, não consomem quota, não recebem follow-ups
-- Cada sessão cria um lead novo (a não ser que reutilize o `lead_id` entre sessões — o playground mantém o ID na barra superior)
+Leads sandbox têm `is_playground=1` → não aparecem no Kanban, não consomem quota, não recebem follow-ups.
 
 ---
 
@@ -161,21 +161,19 @@ Frontend /playground
 
 | Sintoma | Causa provável | Solução |
 |---|---|---|
-| Modal carrega mas mostra erro no perfil | AI Profile não criado para este utilizador | Criar em `/ai-profile` no frontend |
-| Mensagem enviada, erro "Erro ao chamar o playground" | backend-crm ou backend-executors offline | Verificar os 3 serviços backend |
-| Erro 503 na primeira mensagem | `EXECUTORS_BASE_URL` ausente no `.env` do crm | Adicionar a variável e reiniciar o crm |
-| Bot responde mas trace vazio | `decision_trace` não propagado | Inspecionar resposta bruta no DevTools → Network |
-| Sessão expira durante uso | JWT do frontend expirou | Fazer logout e login novamente no frontend |
+| Modal mostra erro no perfil | AI Profile não criado | Criar em `/ai-profile` no frontend |
+| Erro ao enviar mensagem | backend-crm ou backend-executors offline | Verificar os 3 serviços backend |
+| Erro 503 na primeira mensagem | `EXECUTORS_BASE_URL` ausente no `.env` | Adicionar a variável e reiniciar o crm |
+| Sessão expira durante uso | JWT expirou | Logout e login novamente no frontend |
 
 ---
 
 ## Referências
 
-- [instrucoes-playground.md](./instrucoes-playground.md) — guia da API curl (versão anterior, sem UI)
-- [test-playground/README.md](./test-playground/README.md) — convenções dos ficheiros input/output
-- [test-playground/template-input.md](./test-playground/template-input.md) — template para criar cenários
+- [instrucoes-playground.md](./instrucoes-playground.md) — setup detalhado dos serviços e da conta de teste
+- [test-playground/README.md](./test-playground/README.md) — convenções dos ficheiros e fluxo de análise
 - [test-playground/otimizacao.md](./test-playground/otimizacao.md) — histórico de fixes e validações
 
 ---
 
-*Criado em 2026-04-09 — após implementação da interface web do playground.*
+*Atualizado em 2026-04-09.*

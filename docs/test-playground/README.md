@@ -2,47 +2,65 @@
 
 Pasta para testes estruturados do Playground de IA.
 
+## Fluxo de trabalho atual
+
+```
+1. Operador abre /playground no browser
+       ↓
+2. Simula conversa como lead (painel esquerdo)
+       ↓
+3. Marca mensagens com 🔖 e anota feedback em tempo real (painel direito)
+       ↓
+4. Exporta o ficheiro *-output.md
+       ↓
+5. Cola o conteúdo do .md nesta conversa com Claude Code
+       ↓
+6. Claude lê traces + feedback → identifica causas → propõe plano
+       ↓
+7. Aprovação do plano → implementação → novo ciclo de teste
+```
+
+Ver guia completo da interface em `docs/guia-playground-ui.md`.
+
+---
+
 ## Convenção de ficheiros
 
 ```
-<nome-cenario>-input.md    ← preenchido pelo operador antes do teste
-<nome-cenario>-output.md   ← gerado pelo Claude após executar o teste
+<nome-cenario>-input.md    ← contexto e cenários do teste (preenchido antes)
+<nome-cenario>-output.md   ← exportado pelo playground UI após a sessão
 ```
 
-## Fluxo de trabalho
+Os ficheiros `*-input.md` continuam úteis para documentar o que se pretende testar
+antes de iniciar a sessão (perfil, cenários A/B/C, critérios de avaliação).
 
-1. **Operador** cria `<nome>-input.md` com a configuração do bot e as mensagens a simular
-2. **Claude** lê o input, cria o AI Profile no banco, executa as mensagens via playground e gera `<nome>-output.md`
-3. O output regista por turno: resposta do agente, decisões mãe/filha, campos qualificados, trace completo
+Os ficheiros `*-output.md` são agora gerados pelo botão "Exportar .md" da interface —
+não são mais escritos manualmente pelo Claude.
 
-## Requisitos antes de iniciar
+---
 
-- Os 3 serviços devem estar online (ver `docs/instrucoes-playground.md` secção 3)
-- Token JWT válido (expira em 120 min — fazer login se necessário)
+## O que trazer para a conversa com Claude
 
-## Bug conhecido: criação de AI Profile via API
+Ao colar o `.md` exportado, incluir no mesmo contexto:
 
-O `backend-core` tem um bug menor na criação de AI Profile via API: a **background task do meta-prompter falha com HTTP 500**, mas o perfil é criado na mesma na base de dados.
+- O ficheiro `*-output.md` completo
+- O ficheiro `*-input.md` correspondente (se existir), para Claude ter os critérios esperados
+- Qualquer comportamento adicional que tenha notado mas não anotado no momento
 
-**Sintoma:** a chamada `POST /ai-profiles` devolve 500, mesmo que o perfil tenha sido persistido com sucesso.
+Claude irá:
+1. Ler os `decision_trace` por turno para identificar onde o roteamento divergiu do esperado
+2. Cruzar as anotações de feedback com os campos do trace (guardrails, mother_route, effective_route)
+3. Identificar o ficheiro e função responsável pelo comportamento
+4. Propor um plano de correção antes de implementar
 
-**Solução para o playground:** em vez de criar o AI Profile via API, criá-lo **directamente na base de dados** do `backend-core` (`app/core.db`, tabela `ai_profiles`).
-
-```sql
--- Exemplo de inserção directa (ajustar valores conforme o cenário de teste)
-INSERT INTO ai_profiles (
-    user_id, agent_mode, presentation_variant, offer_pack, ...
-) VALUES (
-    3, 'consultivo', 'sales', 'default', ...
-);
-```
-
-Desta forma evita-se o 500 da API e o perfil fica disponível imediatamente para o utilizador de teste (`user_id=3`).
+---
 
 ## Referência rápida
 
 | Recurso | Valor |
 |---|---|
-| Utilizador de teste | `user_id=3`, `playground_test@test.com` |
-| Endpoint playground | `POST http://localhost:8000/api/playground/chat` |
-| Instrucoes completas | `docs/instrucoes-playground.md` |
+| Interface web | `http://localhost:8080/playground` |
+| Serviços necessários | backend-core (8001), backend-crm (8000), backend-executors (8002), frontend-crm (8080) |
+| Instrucoes de setup | `docs/instrucoes-playground.md` (secções 1–6) |
+| Guia da interface UI | `docs/guia-playground-ui.md` |
+| Histórico de fixes | `docs/test-playground/otimizacao.md` |
