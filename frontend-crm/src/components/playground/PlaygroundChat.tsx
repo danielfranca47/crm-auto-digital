@@ -7,6 +7,7 @@ import { MessageBubble, type ChatMessage } from "./MessageBubble";
 interface PlaygroundChatProps {
   messages: ChatMessage[];
   loading: boolean;
+  scenarioType?: "inbound" | "outbound";
   onSend: (text: string) => void;
   onToggleFeedback: (id: string) => void;
 }
@@ -14,6 +15,7 @@ interface PlaygroundChatProps {
 export function PlaygroundChat({
   messages,
   loading,
+  scenarioType = "inbound",
   onSend,
   onToggleFeedback,
 }: PlaygroundChatProps) {
@@ -44,8 +46,10 @@ export function PlaygroundChat({
       {/* Área de mensagens */}
       <div className="flex-1 overflow-y-auto px-4 py-4 space-y-1">
         {messages.length === 0 ? (
-          <div className="flex items-center justify-center h-full text-muted-foreground text-sm">
-            Envie uma mensagem para iniciar a simulação
+          <div className="flex items-center justify-center h-full text-muted-foreground text-sm text-center px-4">
+            {scenarioType === "outbound"
+              ? "Aguarde, o bot irá enviar a mensagem de abertura outbound…"
+              : "Envie uma mensagem para iniciar a simulação"}
           </div>
         ) : (
           messages.map((msg) => (
@@ -76,7 +80,11 @@ export function PlaygroundChat({
           value={input}
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={handleKeyDown}
-          placeholder="Digite como se fosse o lead… (Enter para enviar, Shift+Enter para nova linha)"
+          placeholder={
+            scenarioType === "outbound"
+              ? "Responda como se fosse o lead… (Enter para enviar, Shift+Enter para nova linha)"
+              : "Digite como se fosse o lead… (Enter para enviar, Shift+Enter para nova linha)"
+          }
           rows={2}
           className="flex-1 resize-none text-sm min-h-[44px] max-h-32"
           disabled={loading}

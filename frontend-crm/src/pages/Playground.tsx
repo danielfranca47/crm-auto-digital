@@ -1,8 +1,8 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "@/hooks/use-toast";
-import { RefreshCw } from "lucide-react";
+import { RefreshCw, ArrowDownToLine, ArrowUpFromLine } from "lucide-react";
 import { api } from "@/services/api";
 import { PlaygroundConfigModal, type PlaygroundSession } from "@/components/playground/PlaygroundConfigModal";
 import { PlaygroundChat } from "@/components/playground/PlaygroundChat";
@@ -33,6 +33,55 @@ export default function Playground() {
     setAgentReport([]);
   }
 
+  // ── Outbound: dispara abertura automática do bot ao iniciar sessão ─────────
+  useEffect(() => {
+    if (!session || session.scenarioType !== "outbound" || messages.length > 0) return;
+    let cancelled = false;
+
+    async function fireOpener() {
+      if (!session) return;
+      setLoading(true);
+      try {
+        const res = await api.playground.chat({
+          ai_profile_id: session.aiProfileId,
+          message: "",
+          lead_id: null,
+          scenario_type: "outbound",
+          is_opener: true,
+        });
+
+        if (cancelled) return;
+
+        setSession((s) => s ? { ...s, leadId: res.lead_id } : s);
+
+        const botMsgId = crypto.randomUUID();
+        setMessages([
+          {
+            id: botMsgId,
+            role: "bot",
+            text: res.message_to_send,
+            timestamp: new Date().toISOString(),
+            decisionTrace: res.decision_trace,
+            motherRoute: res.decision_trace?.mother_route ?? null,
+            confidence: res.mother_decision?.confidence,
+            guardrails: res.decision_trace?.guardrails_applied ?? [],
+            selectedForFeedback: false,
+          },
+        ]);
+      } catch (err: unknown) {
+        if (cancelled) return;
+        const msg = err instanceof Error ? err.message : "Erro ao obter abertura outbound";
+        toast({ title: "Erro", description: msg, variant: "destructive" });
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    }
+
+    fireOpener();
+    return () => { cancelled = true; };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [session?.aiProfileId, session?.scenarioType]);
+
   // ── Enviar mensagem ────────────────────────────────────────────────────────
 
   const handleSend = useCallback(
@@ -58,6 +107,7 @@ export default function Playground() {
           ai_profile_id: session.aiProfileId,
           message: text,
           lead_id: session.leadId,
+          scenario_type: session.scenarioType,
         });
 
         // Atualiza o lead_id na sessão (na primeira mensagem vem o id criado)
@@ -169,6 +219,21 @@ export default function Playground() {
           <div className="flex items-center gap-3 px-4 py-2 border-b bg-background shrink-0">
             <div className="flex items-center gap-2 flex-1 min-w-0">
               <span className="text-sm font-medium truncate">{session.aiProfileName}</span>
+              <Badge
+                variant="outline"
+                className={`text-xs shrink-0 gap-1 ${
+                  session.scenarioType === "outbound"
+                    ? "border-amber-500/50 text-amber-600"
+                    : "border-blue-500/50 text-blue-600"
+                }`}
+              >
+                {session.scenarioType === "outbound" ? (
+                  <ArrowUpFromLine className="h-3 w-3" />
+                ) : (
+                  <ArrowDownToLine className="h-3 w-3" />
+                )}
+                {session.scenarioType}
+              </Badge>
               {session.leadId && (
                 <Badge variant="outline" className="text-xs shrink-0">
                   lead #{session.leadId}
@@ -204,6 +269,7 @@ export default function Playground() {
                 <PlaygroundChat
                   messages={messages}
                   loading={loading}
+                  scenarioType={session.scenarioType}
                   onSend={handleSend}
                   onToggleFeedback={handleToggleFeedback}
                 />

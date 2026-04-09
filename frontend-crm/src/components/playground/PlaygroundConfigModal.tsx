@@ -4,14 +4,17 @@ import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Skeleton } from "@/components/ui/skeleton";
-import { AlertCircle, FlaskConical } from "lucide-react";
+import { AlertCircle, FlaskConical, ArrowDownToLine, ArrowUpFromLine } from "lucide-react";
 import { api, type AiProfile } from "@/services/api";
+
+export type ScenarioType = "inbound" | "outbound";
 
 export interface PlaygroundSession {
   aiProfileId: number;
   aiProfileName: string;
   leadId: number | null;
   scenarioContext: string;
+  scenarioType: ScenarioType;
   startedAt: string;
   // Snapshot da configuração do AI Profile no momento do teste
   profileSnapshot: {
@@ -38,6 +41,7 @@ export function PlaygroundConfigModal({ open, onStart }: PlaygroundConfigModalPr
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [scenarioContext, setScenarioContext] = useState("");
+  const [scenarioType, setScenarioType] = useState<ScenarioType>("inbound");
 
   useEffect(() => {
     if (!open) return;
@@ -57,6 +61,7 @@ export function PlaygroundConfigModal({ open, onStart }: PlaygroundConfigModalPr
       aiProfileName: profile.name ?? `Perfil #${profile.id}`,
       leadId: null,
       scenarioContext: scenarioContext.trim(),
+      scenarioType,
       startedAt: new Date().toISOString(),
       profileSnapshot: {
         agent_mode: profile.agent_mode,
@@ -105,6 +110,48 @@ export function PlaygroundConfigModal({ open, onStart }: PlaygroundConfigModalPr
                 </span>
               </div>
             ) : null}
+          </div>
+
+          {/* Tipo de cenário */}
+          <div className="space-y-1.5">
+            <Label>Tipo de cenário</Label>
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                onClick={() => setScenarioType("inbound")}
+                className={`flex items-center gap-2 rounded-md border px-3 py-2.5 text-sm transition-colors text-left ${
+                  scenarioType === "inbound"
+                    ? "border-primary bg-primary/10 text-primary font-medium"
+                    : "border-border bg-background text-muted-foreground hover:border-muted-foreground"
+                }`}
+              >
+                <ArrowDownToLine className="h-4 w-4 shrink-0" />
+                <div>
+                  <div className="font-medium leading-tight">Inbound</div>
+                  <div className="text-xs leading-tight opacity-70">Lead inicia contato</div>
+                </div>
+              </button>
+              <button
+                type="button"
+                onClick={() => setScenarioType("outbound")}
+                className={`flex items-center gap-2 rounded-md border px-3 py-2.5 text-sm transition-colors text-left ${
+                  scenarioType === "outbound"
+                    ? "border-primary bg-primary/10 text-primary font-medium"
+                    : "border-border bg-background text-muted-foreground hover:border-muted-foreground"
+                }`}
+              >
+                <ArrowUpFromLine className="h-4 w-4 shrink-0" />
+                <div>
+                  <div className="font-medium leading-tight">Outbound</div>
+                  <div className="text-xs leading-tight opacity-70">Bot inicia contato</div>
+                </div>
+              </button>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              {scenarioType === "inbound"
+                ? "Simula um lead que te procura. Você digita como o lead e o bot responde."
+                : "Simula uma abordagem ativa. O bot envia a mensagem de abertura outbound primeiro."}
+            </p>
           </div>
 
           {/* Contexto do cenário */}

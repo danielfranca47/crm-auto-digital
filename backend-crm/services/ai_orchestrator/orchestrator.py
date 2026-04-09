@@ -357,6 +357,7 @@ def build_context_bundle_for_playground(
     ai_profile: Dict[str, Any],
     lead_id: int,
     message_text: str,
+    scenario_type: str = "inbound",
 ) -> ContextBundle:
     """
     Constrói um ContextBundle para o playground, sem InboundEvent nem WhatsApp.
@@ -390,6 +391,11 @@ def build_context_bundle_for_playground(
     qualification_state = get_qualification_state(lead_id)
     knowledge_items = _load_knowledge_items(user_id)
 
+    _lead_origin_label = (
+        "OUTBOUND (bot abordou o lead ativamente) — PLAYGROUND"
+        if scenario_type == "outbound"
+        else "INBOUND (lead veio te procurar) — PLAYGROUND"
+    )
     metadata = {
         "channel": "playground",
         "inbound_message_text": message_text,
@@ -397,8 +403,8 @@ def build_context_bundle_for_playground(
         "presentation_variant": presentation_contract["presentation_variant"],
         "presentation_variant_source": presentation_contract["presentation_variant_source"],
         "hybrid_flow_style": presentation_contract["hybrid_flow_style"],
-        "lead_origin": "playground",
-        "lead_origin_label": "PLAYGROUND (simulação sem WhatsApp)",
+        "lead_origin": scenario_type,
+        "lead_origin_label": _lead_origin_label,
     }
 
     return ContextBundle(

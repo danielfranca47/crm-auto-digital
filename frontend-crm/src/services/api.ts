@@ -1171,6 +1171,8 @@ export const api = {
       message: string;
       lead_id?: number | null;
       reset?: boolean;
+      scenario_type?: "inbound" | "outbound";
+      is_opener?: boolean;
     }) =>
       apiClient.post<PlaygroundChatResponse>("/playground/chat", payload),
 

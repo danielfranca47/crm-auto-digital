@@ -16,7 +16,7 @@ import logging
 import os
 import sqlite3
 from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Literal, Optional
 from uuid import uuid4
 
 import json
@@ -65,9 +65,11 @@ def _get_service_token() -> str:
 
 class PlaygroundChatRequest(BaseModel):
     ai_profile_id: int = Field(..., description="ID do AiProfile no backend-core")
-    message: str = Field(..., min_length=1, description="Mensagem simulada do lead")
+    message: str = Field("", description="Mensagem simulada do lead (vazio apenas em is_opener=True)")
     lead_id: Optional[int] = Field(None, description="ID do lead sandbox existente; null cria um novo")
     reset: bool = Field(False, description="Se true, limpa histórico e qualification_state antes de processar")
+    scenario_type: Literal["inbound", "outbound"] = Field("inbound", description="Tipo de cenário: inbound (lead inicia) ou outbound (bot inicia)")
+    is_opener: bool = Field(False, description="Se true e scenario_type=outbound, retorna a mensagem de abertura outbound sem processar mensagem do lead")
 
 
 class MotherDecision(BaseModel):
@@ -163,7 +165,7 @@ def _load_sandbox_lead(lead_id: int, user_id: int) -> Dict[str, Any]:
     return dict(row)
 
 
-def _create_sandbox_lead(user_id: int) -> int:
+def _create_sandbox_lead(user_id: int, origin: str = "playground") -> int:
     """Cria um novo lead sandbox e devolve o seu ID."""
     phone = f"playground_{uuid4().hex[:8]}"
     with get_connection() as conn:
@@ -173,7 +175,7 @@ def _create_sandbox_lead(user_id: int) -> int:
             INSERT INTO leads (user_id, companyName, contactName, phone, origin, category, is_playground)
             VALUES (?, ?, ?, ?, ?, ?, 1)
             """,
-            (user_id, "Playground Test", "Lead de Teste", phone, "playground", "qualification"),
+            (user_id, "Playground Test", "Lead de Teste", phone, origin, "qualification"),
         )
         conn.commit()
         return cur.lastrowid
@@ -332,17 +334,44 @@ def playground_chat(
     ai_profile = fetch_core_ai_profile_by_id(body.ai_profile_id, user_id)
 
     # ── Passo 2: Gestão do Lead Sandbox ─────────────────────────────────────
+    lead_origin = body.scenario_type  # "inbound" ou "outbound"
     if body.lead_id is not None:
         _load_sandbox_lead(body.lead_id, user_id)  # 404 se não encontrado
         lead_id = body.lead_id
     else:
-        lead_id = _create_sandbox_lead(user_id)
+        origin_label = f"playground_{body.scenario_type}"
+        lead_id = _create_sandbox_lead(user_id, origin=origin_label)
 
     # ── Passo 3: Reset (se solicitado) ───────────────────────────────────────
     if body.reset:
         _reset_sandbox_lead(lead_id, user_id)
 
+    # ── Atalho: Outbound opener — retorna abertura sem processar mensagem do lead ──
+    if body.is_opener and body.scenario_type == "outbound":
+        opener = (ai_profile.get("origin_outbound_opener") or "").strip()
+        if not opener:
+            opener = "Olá! Tudo bem? Aqui é da equipe e gostaria de apresentar uma solução que pode ser interessante para você."
+        _insert_message(lead_id, opener, "outbound")
+        return PlaygroundChatResponse(
+            lead_id=lead_id,
+            message_to_send=opener,
+            next_action="reply",
+            lead_state={"category": "qualification", "qualification_state": None},
+            decision_trace=DecisionTrace(
+                agent_mode=ai_profile.get("agent_mode"),
+                presentation_variant=ai_profile.get("presentation_variant"),
+                mother_route="outbound_opener",
+                effective_route="outbound_opener",
+                ai_profile_id=body.ai_profile_id,
+                lead_id=lead_id,
+                lead_is_sandbox=True,
+                timestamp=datetime.now(timezone.utc).isoformat(),
+            ),
+        )
+
     # ── Passo 3b: Guarda mensagem inbound ────────────────────────────────────
+    if not body.message:
+        raise HTTPException(status_code=422, detail="message é obrigatório quando is_opener=False")
     _insert_message(lead_id, body.message, "inbound")
 
     # ── Passo 5: Build Context Bundle ────────────────────────────────────────
@@ -351,6 +380,7 @@ def playground_chat(
         ai_profile=ai_profile,
         lead_id=lead_id,
         message_text=body.message,
+        scenario_type=body.scenario_type,
     )
 
     # Serializa para dict (compatível com decision_engine.decide(context: Dict))

@@ -80,6 +80,8 @@ export function PlaygroundFeedback({
       lines.push(`| **custom_instructions** | ${s.custom_instructions.replace(/\n/g, " ↵ ")} |`);
     }
     lines.push("");
+    lines.push(`**Tipo de cenário:** ${session.scenarioType === "outbound" ? "Outbound (bot iniciou)" : "Inbound (lead iniciou)"}`);
+    lines.push("");
     if (session.scenarioContext) {
       lines.push(`**Contexto do cenário:** ${session.scenarioContext}`);
       lines.push("");
