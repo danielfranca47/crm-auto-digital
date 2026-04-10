@@ -1,12 +1,12 @@
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Separator } from "@/components/ui/separator";
-import { AlertTriangle, Info, CheckCircle2, Phone, QrCode, Mic, ImageIcon, Video, MessageSquare, Zap, Loader2, Trash2 } from "lucide-react";
-import { api, SpyAgentModule, SpyAgentSample } from "@/services/api";
+import { AlertTriangle, Info, CheckCircle2, Phone, QrCode, Mic, ImageIcon, Video, MessageSquare, Zap, Loader2, Trash2, RefreshCw } from "lucide-react";
+import { api, SpyAgentModule, SpyAgentSample, WhatsappConnectResponse } from "@/services/api";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 
@@ -47,8 +47,49 @@ export function SpyAgentSetup({ sample, onStarted }: SpyAgentSetupProps) {
   const [useOptimizedStrategy, setUseOptimizedStrategy] = useState(true);
   const [loading, setLoading] = useState(false);
   const [connectingInstance, setConnectingInstance] = useState(false);
+  const [pendingConnect, setPendingConnect] = useState<WhatsappConnectResponse | null>(null);
+  const [qrExpired, setQrExpired] = useState(false);
+  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const qrTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const { toast } = useToast();
   const queryClient = useQueryClient();
+
+  // Limpa timers ao desmontar
+  useEffect(() => {
+    return () => {
+      if (pollRef.current) clearInterval(pollRef.current);
+      if (qrTimeoutRef.current) clearTimeout(qrTimeoutRef.current);
+    };
+  }, []);
+
+  const stopPolling = () => {
+    if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null; }
+    if (qrTimeoutRef.current) { clearTimeout(qrTimeoutRef.current); qrTimeoutRef.current = null; }
+  };
+
+  const startPolling = (instanceId: string) => {
+    stopPolling();
+    // Expira QR após 90s
+    qrTimeoutRef.current = setTimeout(() => {
+      setQrExpired(true);
+      stopPolling();
+    }, 90_000);
+
+    pollRef.current = setInterval(async () => {
+      try {
+        const status = await api.crm.whatsappStatus();
+        if (status.status === "connected") {
+          stopPolling();
+          await api.spyAgent.setInstanceConfig(instanceId);
+          queryClient.invalidateQueries({ queryKey: ["spy-instance-config"] });
+          setPendingConnect(null);
+          toast({ title: "Fone de observação conectado!", description: "WhatsApp escaneado com sucesso." });
+        }
+      } catch {
+        // ignora erros pontuais no polling
+      }
+    }, 3_000);
+  };
 
   const { data: instanceConfig, isLoading: instanceLoading } = useQuery({
     queryKey: ["spy-instance-config"],
@@ -63,22 +104,51 @@ export function SpyAgentSetup({ sample, onStarted }: SpyAgentSetupProps) {
 
   const handleConnectSpyInstance = async () => {
     setConnectingInstance(true);
+    setQrExpired(false);
     try {
       const resp = await api.crm.whatsappConnect();
-      // Salva o instance_id retornado como instância espiã
-      await api.spyAgent.setInstanceConfig(resp.instance_id);
-      queryClient.invalidateQueries({ queryKey: ["spy-instance-config"] });
-      toast({
-        title: "Fone de observação configurado!",
-        description: resp.qr?.value
-          ? "Escaneie o QR code no WhatsApp do fone que deseja observar."
-          : "Instância conectada.",
-      });
+      if (resp.qr?.value) {
+        setPendingConnect(resp);
+        startPolling(resp.instance_id);
+      } else {
+        // Já conectado — salva direto
+        await api.spyAgent.setInstanceConfig(resp.instance_id);
+        queryClient.invalidateQueries({ queryKey: ["spy-instance-config"] });
+        toast({ title: "Fone de observação configurado!", description: "Instância já conectada." });
+      }
     } catch {
       toast({ title: "Erro ao conectar fone espião", variant: "destructive" });
     } finally {
       setConnectingInstance(false);
     }
+  };
+
+  const handleRefreshQr = async () => {
+    if (!pendingConnect) return;
+    setQrExpired(false);
+    setConnectingInstance(true);
+    try {
+      const resp = await api.crm.whatsappRefreshQr();
+      setPendingConnect(resp);
+      startPolling(resp.instance_id);
+    } catch {
+      toast({ title: "Erro ao renovar QR code", variant: "destructive" });
+    } finally {
+      setConnectingInstance(false);
+    }
+  };
+
+  const handleCancelConnect = () => {
+    stopPolling();
+    setPendingConnect(null);
+    setQrExpired(false);
+  };
+
+  const getQrSrc = (qr: WhatsappConnectResponse["qr"]): string | null => {
+    if (!qr?.value) return null;
+    if (qr.kind === "url") return qr.value;
+    if (qr.kind === "base64") return `data:image/png;base64,${qr.value}`;
+    return null;
   };
 
   const handleRemoveSpyInstance = async () => {
@@ -151,6 +221,58 @@ export function SpyAgentSetup({ sample, onStarted }: SpyAgentSetupProps) {
               <Trash2 className="h-3.5 w-3.5" />
             </Button>
           </div>
+        ) : pendingConnect ? (
+          <div className="rounded-lg border border-border bg-muted/20 p-4 space-y-3">
+            {qrExpired ? (
+              <div className="flex flex-col items-center gap-3 py-2">
+                <p className="text-xs text-muted-foreground text-center">QR code expirado. Gere um novo.</p>
+                <div className="flex gap-2">
+                  <Button size="sm" variant="outline" className="gap-1.5" onClick={handleRefreshQr} disabled={connectingInstance}>
+                    {connectingInstance ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
+                    Novo QR code
+                  </Button>
+                  <Button size="sm" variant="ghost" onClick={handleCancelConnect}>Cancelar</Button>
+                </div>
+              </div>
+            ) : (
+              <>
+                <div className="flex items-center justify-between">
+                  <p className="text-xs font-medium">Escaneie com o WhatsApp do fone a observar:</p>
+                  <Button size="sm" variant="ghost" className="h-6 px-2 text-xs text-muted-foreground" onClick={handleCancelConnect}>
+                    Cancelar
+                  </Button>
+                </div>
+                {(() => {
+                  const src = getQrSrc(pendingConnect.qr);
+                  return src ? (
+                    <div className="flex flex-col items-center gap-2">
+                      <img
+                        src={src}
+                        alt="QR Code WhatsApp"
+                        className="w-48 h-48 rounded border border-border bg-white object-contain"
+                      />
+                      <div className="text-[10px] text-muted-foreground text-center space-y-0.5">
+                        <p>1. Abra o WhatsApp no celular que deseja observar</p>
+                        <p>2. Vá em Menu → Aparelhos conectados</p>
+                        <p>3. Escaneie este código</p>
+                      </div>
+                      <div className="flex items-center gap-1.5">
+                        <Loader2 className="h-3 w-3 animate-spin text-muted-foreground" />
+                        <span className="text-[10px] text-muted-foreground">Aguardando leitura...</span>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="flex flex-col items-center gap-2 py-2">
+                      <p className="text-xs text-muted-foreground">QR code em formato não suportado.</p>
+                      <Button size="sm" variant="outline" className="gap-1.5" onClick={handleRefreshQr} disabled={connectingInstance}>
+                        <RefreshCw className="h-3.5 w-3.5" /> Tentar novamente
+                      </Button>
+                    </div>
+                  );
+                })()}
+              </>
+            )}
+          </div>
         ) : (
           <Button
             variant="outline"
@@ -164,7 +286,7 @@ export function SpyAgentSetup({ sample, onStarted }: SpyAgentSetupProps) {
               : <><QrCode className="h-3.5 w-3.5" /> Conectar fone de observação</>}
           </Button>
         )}
-        {!instanceConfig?.configured && !instanceLoading && (
+        {!instanceConfig?.configured && !pendingConnect && !instanceLoading && (
           <p className="text-xs text-muted-foreground">
             Sem fone configurado o agente analisará o histórico do CRM existente.
           </p>
