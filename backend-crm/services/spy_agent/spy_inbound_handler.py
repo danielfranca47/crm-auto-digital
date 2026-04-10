@@ -67,6 +67,7 @@ def handle_spy_inbound(payload: Dict[str, Any]) -> Dict[str, Any]:
     message_id: str | None = payload.get("message_id")
     message_type: str = (payload.get("message_type") or "text").lower()
     media_url: str | None = payload.get("media_url")
+    from_me: bool = bool(payload.get("from_me", False))
 
     user_id = get_spy_user_id(instance_id)
     if user_id is None:
@@ -95,8 +96,8 @@ def handle_spy_inbound(payload: Dict[str, Any]) -> Dict[str, Any]:
         cur = conn.execute(
             """
             INSERT INTO spy_agent_messages
-                (user_id, sender_phone, body, message_type, media_url, external_message_id, received_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
+                (user_id, sender_phone, body, message_type, media_url, external_message_id, received_at, from_me)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 user_id,
@@ -106,6 +107,7 @@ def handle_spy_inbound(payload: Dict[str, Any]) -> Dict[str, Any]:
                 media_url,
                 message_id,
                 received_at,
+                1 if from_me else 0,
             ),
         )
         conn.commit()

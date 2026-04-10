@@ -185,7 +185,23 @@ async def get_spy_agent_session(
             (run["id"],),
         ).fetchall()
 
-        return _build_session_response(run, [dict(r) for r in reports])
+        response = _build_session_response(run, [dict(r) for r in reports])
+
+        # Durante a observação, enriquece com contadores ao vivo de spy_agent_messages
+        if run.get("status") == "observing":
+            live = conn.execute(
+                """
+                SELECT COUNT(DISTINCT sender_phone) as senders, COUNT(*) as msgs
+                  FROM spy_agent_messages
+                 WHERE user_id = ?
+                """,
+                (current_user.id,),
+            ).fetchone()
+            if live:
+                response["leads_collected_so_far"] = int(live["senders"] or 0)
+                response["messages_collected_so_far"] = int(live["msgs"] or 0)
+
+        return response
     finally:
         conn.close()
 

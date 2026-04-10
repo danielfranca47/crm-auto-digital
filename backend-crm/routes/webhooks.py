@@ -135,6 +135,33 @@ def whatsapp_uazapi_webhook(
 
     if event not in {"messages", "message"}:
         return {"status": "ignored", "reason": "event_not_messages"}
+
+    # ── Roteamento: instância espiã → spy handler (aceita mídia e fromMe) ─────
+    # Deve vir ANTES do filtro from_me: o spy precisa capturar mensagens do
+    # vendedor (fromMe=True) para aprender o estilo de comunicação.
+    if instance_id and is_spy_instance(instance_id):
+        is_group = is_group_message_payload(payload)
+        if not is_group:
+            media_url = (
+                data.get("mediaUrl")
+                or data.get("media_url")
+                or message.get("mediaUrl")
+                or message.get("media_url")
+            )
+            # sender já vem de _resolve_sender_e164() que usa chat.phone (lead) como prioridade,
+            # então tanto inbound quanto fromMe ficam agrupados pelo phone do lead.
+            spy_payload = {
+                "instance_id": instance_id,
+                "from": sender,
+                "message_text": message_text,
+                "message_id": message_id,
+                "message_type": message_type or "text",
+                "media_url": media_url,
+                "from_me": from_me,
+            }
+            return handle_spy_inbound(spy_payload)
+    # ─────────────────────────────────────────────────────────────────────────
+
     if from_me:
         return {"status": "ignored", "reason": "from_me"}
 
@@ -147,25 +174,6 @@ def whatsapp_uazapi_webhook(
             message_id,
         )
         return {"status": "ignored", "reason": "group_message"}
-
-    # ── Roteamento: instância espiã → spy handler (aceita mídia) ──────────────
-    if instance_id and is_spy_instance(instance_id):
-        media_url = (
-            data.get("mediaUrl")
-            or data.get("media_url")
-            or message.get("mediaUrl")
-            or message.get("media_url")
-        )
-        spy_payload = {
-            "instance_id": instance_id,
-            "from": sender,
-            "message_text": message_text,
-            "message_id": message_id,
-            "message_type": message_type or "text",
-            "media_url": media_url,
-        }
-        return handle_spy_inbound(spy_payload)
-    # ─────────────────────────────────────────────────────────────────────────
 
     if message_type and message_type != "text":
         return {"status": "ignored", "reason": "not_text"}

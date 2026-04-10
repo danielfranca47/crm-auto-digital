@@ -56,7 +56,8 @@ def load_spy_conversations(
 
             msgs = cur.execute(
                 """
-                SELECT id, body, message_type, media_url, transcription, processed_at, received_at
+                SELECT id, body, message_type, media_url, transcription, processed_at, received_at,
+                       COALESCE(from_me, 0) as from_me
                   FROM spy_agent_messages
                  WHERE user_id = ? AND sender_phone = ?
                  ORDER BY received_at ASC
@@ -77,10 +78,12 @@ def load_spy_conversations(
                 if not body:
                     continue
 
+                # from_me=1 → mensagem do vendedor (outbound); 0 → mensagem do lead (inbound)
+                role = "outbound" if m["from_me"] else "inbound"
                 formatted.append(
                     {
                         "body": body,
-                        "model": "inbound",  # mensagens da instância espiã são sempre inbound
+                        "model": role,
                         "message_type": msg_type,
                         "created_at": m["received_at"],
                     }
