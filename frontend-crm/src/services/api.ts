@@ -912,6 +912,8 @@ export const api = {
       coreClient.post<AiProfile>(`/ai-profiles`, payload),
     updateAiProfileMe: async (payload: Partial<AiProfilePayload>) =>
       coreClient.put<AiProfile>(`/ai-profiles/me`, payload),
+    patchAiProfileMe: async (payload: Partial<AiProfilePayload>) =>
+      coreClient.patch<AiProfile>(`/ai-profiles/me`, payload),
     regenerateWebhookSecret: async () =>
       coreClient.post<{ payment_webhook_secret: string; payment_webhook_url: string | null }>(
         `/ai-profiles/me/regenerate-webhook-secret`
@@ -1209,4 +1211,101 @@ export const api = {
       );
     },
   },
+
+  spyAgent: {
+    getSession: () => apiClient.get<SpyAgentSession>("/spy-agent/session"),
+    getConversationSample: () => apiClient.get<SpyAgentSample>("/spy-agent/conversation-sample"),
+    start: (payload: SpyAgentStartRequest) =>
+      apiClient.post<SpyAgentSession>("/spy-agent/start", payload),
+    apply: (payload: SpyAgentApplyRequest) =>
+      apiClient.post<SpyAgentApplyResponse>("/spy-agent/apply", payload),
+    getRuns: () => apiClient.get<SpyAgentRun[]>("/spy-agent/runs"),
+  },
+};
+
+// ── Spy Agent Types ──────────────────────────────────────────────────────────
+
+export type SpyAgentModule = "facts" | "identity" | "strategy";
+
+export type SpyAgentStartRequest = {
+  modules: SpyAgentModule[];
+  observation_days: number;
+  use_optimized_strategy: boolean;
+};
+
+export type SpyAgentSample = {
+  leads_count: number;
+  messages_count: number;
+  date_range: { from: string | null; to: string | null };
+  media_counts: { audio: number; image: number; video: number; text: number };
+  has_enough_data: boolean;
+};
+
+export type SpyAgentSuggestion = {
+  field: string;
+  current_value: unknown;
+  suggested_value: unknown;
+  rationale: string;
+};
+
+export type SpyAgentModuleResult = {
+  module: SpyAgentModule;
+  suggestions: SpyAgentSuggestion[];
+  confidence: number;
+  analysis: string;
+};
+
+export type CompatibilityFeature = {
+  feature: string;
+  mapped_field: string;
+  notes: string;
+};
+
+export type CompatibilityGap = {
+  feature: string;
+  reason: string;
+  workaround: string;
+};
+
+export type CompatibilityReport = {
+  pipeline_stages_detected: string[];
+  features_supported: CompatibilityFeature[];
+  features_unsupported: CompatibilityGap[];
+  recommended_agent_mode: string;
+};
+
+export type SpyAgentSession = {
+  run_id: number;
+  status: "observing" | "analyzing" | "completed" | "failed";
+  modules_requested: SpyAgentModule[];
+  use_optimized_strategy: boolean;
+  observation_start_at: string;
+  observation_end_at: string;
+  days_remaining: number;
+  days_elapsed: number;
+  days_total: number;
+  progress_pct: number;
+  leads_collected_so_far: number;
+  messages_collected_so_far: number;
+  module_results: SpyAgentModuleResult[] | null;
+  compatibility_report: CompatibilityReport | null;
+};
+
+export type SpyAgentRun = {
+  run_id: number;
+  status: SpyAgentSession["status"];
+  modules_requested: SpyAgentModule[];
+  observation_start_at: string;
+  observation_end_at: string;
+  completed_at: string | null;
+};
+
+export type SpyAgentApplyRequest = {
+  run_id: number;
+  accepted_suggestions: { module: SpyAgentModule; field: string; value: unknown }[];
+};
+
+export type SpyAgentApplyResponse = {
+  ok: boolean;
+  fields_updated: string[];
 };

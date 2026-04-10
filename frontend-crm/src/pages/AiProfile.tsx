@@ -18,6 +18,37 @@ interface KnowledgeSummary { criticalFilled: number; criticalTotal: number; }
 // ─── Tipos de painel ─────────────────────────────────────────
 type PanelId = 'overview' | 'c1' | 'c2' | 'c3' | 'c4' | 'c5' | 'c6' | 'conexao';
 
+// ─── CTA Agente Espião ───────────────────────────────────────
+function SpyAgentCTA() {
+  return (
+    <div style={{
+      display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12,
+      padding: '12px 16px', marginBottom: 24, borderRadius: 8,
+      border: '1px solid var(--o-purple)', background: 'color-mix(in srgb, var(--o-purple) 8%, transparent)',
+    }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+        <span style={{ fontSize: 18 }}>✦</span>
+        <div>
+          <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--o-text)' }}>Agente Espião</div>
+          <div style={{ fontSize: 11, color: 'var(--o-sub)', marginTop: 1 }}>
+            Aprenda com suas conversas reais e configure o agente automaticamente.
+          </div>
+        </div>
+      </div>
+      <Link
+        to="/spy-agent"
+        style={{
+          fontSize: 11, fontWeight: 600, color: 'var(--o-purple)',
+          border: '1px solid var(--o-purple)', borderRadius: 4,
+          padding: '4px 12px', whiteSpace: 'nowrap', textDecoration: 'none',
+        }}
+      >
+        Ativar →
+      </Link>
+    </div>
+  );
+}
+
 // ─── Painel: Resumo ──────────────────────────────────────────
 function PainelResumo({
   config, onNavigate, onSave, onDiscard, saving, dirty, knowledgeSummary,
@@ -72,6 +103,9 @@ function PainelResumo({
       <div style={{ fontSize: 12.5, color: 'var(--o-sub)', fontWeight: 300, marginBottom: 24 }}>
         Visão consolidada de todas as camadas. Clique em qualquer seção para editar.
       </div>
+
+      {/* CTA Agente Espião */}
+      <SpyAgentCTA />
 
       {/* Camada 1 */}
       <div className="o-section-hdr">

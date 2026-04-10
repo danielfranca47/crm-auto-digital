@@ -188,6 +188,12 @@ export const coreClient = {
       method: "PUT",
       body,
     }),
+  patch: <T = unknown>(path: string, body?: unknown, init?: RequestInit) =>
+    coreRequest<T>(path, {
+      ...init,
+      method: "PATCH",
+      body,
+    }),
 };
 
 export { API_BASE, CRM_API_BASE, CORE_AUTH_BASE, CORE_BASE };

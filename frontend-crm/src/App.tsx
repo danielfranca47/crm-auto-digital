@@ -19,6 +19,8 @@ import FollowUpCenter from "./pages/FollowUpCenter";
 import FollowUpEdit from "./pages/FollowUpEdit";
 import DebugAiProfile from "./pages/DebugAiProfile";
 import Playground from "./pages/Playground";
+import Onboarding from "./pages/Onboarding";
+import SpyAgent from "./pages/SpyAgent";
 import { ThemeProvider } from "./contexts/ThemeContext";
 import { LeadsProvider } from "./contexts/LeadsContext";
 import { RateLimitModalProvider } from "./contexts/RateLimitModalContext";
@@ -122,6 +124,8 @@ const App = () => (
                     </Protected>
                   }
                 >
+                  <Route path="/onboarding" element={<Onboarding />} />
+                  <Route path="/spy-agent" element={<SpyAgent />} />
                   <Route path="/ai-profile" element={<AiProfile />} />
                   <Route path="/agentes-info" element={<TiposAgentes />} />
                   <Route path="/follow-ups/:leadId/edit" element={<FollowUpEdit />} />

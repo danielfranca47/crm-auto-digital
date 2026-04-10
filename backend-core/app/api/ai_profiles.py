@@ -439,6 +439,63 @@ async def update_my_ai_profile(
     return _normalize_profile_offer_pack(profile)
 
 
+@router.patch("/ai-profiles/me", response_model=AIProfileOut)
+async def patch_my_ai_profile(
+    payload: AIProfileUpdate,
+    background_tasks: BackgroundTasks,
+    current_user: models.User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Atualização parcial do AI Profile. Campos omitidos não são sobrescritos.
+    Se o perfil ainda não existir, cria com os campos fornecidos (sem exigir todos os obrigatórios)."""
+    update_data = payload.dict(exclude_unset=True)
+    if "template_key" in update_data:
+        _validate_template_key(update_data.get("template_key"))
+
+    if not update_data:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="No data provided",
+        )
+
+    profile = _upsert_ai_profile(
+        db=db,
+        user_id=current_user.id,
+        data=update_data,
+        require_all_fields_for_create=False,
+    )
+    if _META_PROMPTER_FIELDS & set(update_data.keys()):
+        background_tasks.add_task(_trigger_meta_prompter_bg, current_user.id, _profile_to_meta_dict(profile))
+    return _normalize_profile_offer_pack(profile)
+
+
+@router.patch("/ai-profiles/patch-by-user/{user_id}", response_model=AIProfileOut)
+async def service_patch_ai_profile_by_user(
+    user_id: int,
+    payload: AIProfileUpdate,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db),
+    _: str = Depends(_require_service_token),
+):
+    """Endpoint service-to-service: aplica PATCH parcial no AI Profile de um usuário pelo user_id."""
+    update_data = payload.dict(exclude_unset=True)
+    if "template_key" in update_data:
+        _validate_template_key(update_data.get("template_key"))
+
+    if not update_data:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="No data provided")
+
+    profile = _upsert_ai_profile(
+        db=db,
+        user_id=user_id,
+        data=update_data,
+        require_all_fields_for_create=False,
+    )
+    if _META_PROMPTER_FIELDS & set(update_data.keys()):
+        background_tasks.add_task(_trigger_meta_prompter_bg, user_id, _profile_to_meta_dict(profile))
+    return _normalize_profile_offer_pack(profile)
+
+
 @router.get("/ai-profiles/resolve", response_model=AIProfileOut)
 async def resolve_ai_profile(
     user_id: int,

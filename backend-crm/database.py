@@ -262,6 +262,49 @@ def ensure_unmatched_payment_events_table(conn: sqlite3.Connection) -> None:
     )
 
 
+def ensure_spy_agent_tables(conn: sqlite3.Connection) -> None:
+    """Cria tabelas do Agente Espião (idempotente)."""
+    cur = conn.cursor()
+    cur.executescript(
+        """
+        CREATE TABLE IF NOT EXISTS spy_agent_runs (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL,
+            status TEXT NOT NULL DEFAULT 'observing'
+                CHECK (status IN ('observing','analyzing','completed','failed')),
+            modules_requested TEXT NOT NULL,
+            use_optimized_strategy INTEGER NOT NULL DEFAULT 1,
+            observation_days INTEGER NOT NULL DEFAULT 14,
+            observation_start_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            observation_end_at DATETIME NOT NULL,
+            analyzing_started_at DATETIME,
+            completed_at DATETIME,
+            leads_sampled INTEGER DEFAULT 0,
+            messages_sampled INTEGER DEFAULT 0,
+            error TEXT
+        );
+
+        CREATE TABLE IF NOT EXISTS spy_agent_reports (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            run_id INTEGER NOT NULL,
+            user_id INTEGER NOT NULL,
+            module TEXT NOT NULL,
+            suggestions_json TEXT,
+            compatibility_json TEXT,
+            applied INTEGER NOT NULL DEFAULT 0,
+            applied_at DATETIME,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (run_id) REFERENCES spy_agent_runs(id) ON DELETE CASCADE
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_spy_runs_user ON spy_agent_runs(user_id, status);
+        CREATE INDEX IF NOT EXISTS idx_spy_runs_expiry ON spy_agent_runs(status, observation_end_at);
+        CREATE INDEX IF NOT EXISTS idx_spy_reports_run ON spy_agent_reports(run_id);
+        CREATE INDEX IF NOT EXISTS idx_spy_reports_user ON spy_agent_reports(user_id, module);
+        """
+    )
+
+
 def ensure_knowledge_table(conn: sqlite3.Connection) -> None:
     """Cria tabela de knowledge base por usuário (idempotente)."""
     cur = conn.cursor()
@@ -771,6 +814,10 @@ def init_db() -> None:
 
         # Base de conhecimento por usuário
         ensure_knowledge_table(conn)
+
+        # Agente Espião
+        ensure_spy_agent_tables(conn)
+        ensure_column(conn, "messages", "message_type", "message_type TEXT DEFAULT 'text'")
 
         # Migrações
         migrate_user_profile(conn)

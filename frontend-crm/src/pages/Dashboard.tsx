@@ -5,9 +5,11 @@ import { Dashboard as DashboardComponent } from "../components/Dashboard";
 import { useAppointments } from "@/hooks/useAppointments";
 import { useLeads } from "@/contexts/LeadsContext";
 import { ScheduleAppointmentDialog } from "@/components/ScheduleAppointmentDialog";
+import { useQuery } from "@tanstack/react-query";
 import { api } from "@/services/api";
 import type { AiProfile } from "@/services/api";
 import type { AgentConfig } from "@/types/agente";
+import { SpyAgentObservationWidget } from "@/components/agente/SpyAgentObservationWidget";
 
 const Dashboard = () => {
   const navigate = useNavigate();
@@ -19,6 +21,19 @@ const Dashboard = () => {
     api.core.getAiProfileMe().then(setProfile).catch(() => {});
     api.agente.getConfig().then(setAgentConfig).catch(() => {});
   }, []);
+
+  const { data: spySession } = useQuery({
+    queryKey: ["spy-agent-session"],
+    queryFn: () => api.spyAgent.getSession(),
+    staleTime: 60_000,
+    refetchInterval: (query) => {
+      const s = (query.state.data as any)?.status;
+      return s === "observing" || s === "analyzing" ? 30_000 : false;
+    },
+  });
+
+  const spyStatus = (spySession as any)?.status;
+  const showSpyWidget = spyStatus === "observing" || spyStatus === "analyzing" || spyStatus === "completed";
 
   const todayRange = useMemo(() => {
     const start = new Date();
@@ -51,6 +66,11 @@ const Dashboard = () => {
 
   return (
     <>
+      {showSpyWidget && spySession && (
+        <div className="px-4 pt-4 max-w-5xl mx-auto">
+          <SpyAgentObservationWidget session={spySession as any} />
+        </div>
+      )}
       <DashboardComponent
         profile={profile}
         agentConfig={agentConfig}
