@@ -167,7 +167,7 @@ async def get_spy_agent_session(
     """Retorna a sessão ativa do Agente Espião com countdown e resultados (se houver)."""
     conn = get_connection()
     try:
-        run = _get_active_run(current_user.user_id, conn)
+        run = _get_active_run(current_user.id, conn)
         if not run:
             return {"status": "not_started"}
 
@@ -186,10 +186,10 @@ async def get_conversation_sample(
     current_user: CurrentUser = Depends(require_crm_access),
 ) -> Dict[str, Any]:
     """Preview das conversas disponíveis para análise, sem rodar LLM."""
-    stats = get_conversation_sample_stats(current_user.user_id)
+    stats = get_conversation_sample_stats(current_user.id)
     # Detecta mídia no sample (leve — apenas conta)
     from services.spy_agent.conversation_loader import load_real_conversations, detect_media_types
-    convs = load_real_conversations(current_user.user_id, limit_leads=5, limit_msgs_per_lead=10)
+    convs = load_real_conversations(current_user.id, limit_leads=5, limit_msgs_per_lead=10)
     media_counts = detect_media_types(convs)
     stats["media_counts"] = media_counts
     return stats
@@ -213,7 +213,7 @@ async def start_spy_agent(
             UPDATE spy_agent_runs SET status = 'failed', error = 'Substituída por nova sessão'
              WHERE user_id = ? AND status = 'observing'
             """,
-            (current_user.user_id,),
+            (current_user.id,),
         )
 
         end_at = _compute_end_at(body.observation_days)
@@ -225,7 +225,7 @@ async def start_spy_agent(
             VALUES (?, 'observing', ?, ?, ?, ?, ?)
             """,
             (
-                current_user.user_id,
+                current_user.id,
                 json.dumps(modules),
                 1 if body.use_optimized_strategy else 0,
                 body.observation_days if body.observation_days > 0 else 1,
@@ -252,7 +252,7 @@ async def apply_spy_agent_suggestions(
     try:
         run = conn.execute(
             "SELECT * FROM spy_agent_runs WHERE id = ? AND user_id = ?",
-            (body.run_id, current_user.user_id),
+            (body.run_id, current_user.id),
         ).fetchone()
 
         if not run:
@@ -275,7 +275,7 @@ async def apply_spy_agent_suggestions(
 
         # Aplica no AI Profile via service token
         try:
-            patch_ai_profile_via_service(current_user.user_id, patch_payload)
+            patch_ai_profile_via_service(current_user.id, patch_payload)
         except Exception as exc:
             logger.error("[spy_agent:apply] falha ao aplicar patch: %s", exc)
             raise HTTPException(status_code=502, detail=f"Falha ao atualizar AI Profile: {exc}")
@@ -316,7 +316,7 @@ async def list_spy_agent_runs(
              ORDER BY observation_start_at DESC
              LIMIT 20
             """,
-            (current_user.user_id,),
+            (current_user.id,),
         ).fetchall()
         return [
             {
