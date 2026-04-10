@@ -148,6 +148,9 @@ export function SpyAgentSetup({ sample, onStarted }: SpyAgentSetupProps) {
     if (!qr?.value) return null;
     if (qr.kind === "url") return qr.value;
     if (qr.kind === "base64") return `data:image/png;base64,${qr.value}`;
+    // "text": pode ser data URI (data:image/...) ou base64 puro sem padding correto
+    if (qr.value.startsWith("data:image")) return qr.value;
+    if (qr.value.length > 80) return `data:image/png;base64,${qr.value}`;
     return null;
   };
 
