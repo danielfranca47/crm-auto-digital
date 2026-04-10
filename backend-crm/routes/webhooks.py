@@ -16,6 +16,7 @@ from database import get_connection
 from services.followup_state import stop_followup_for_lead_category
 from services.jobs_service import TYPE_WHATSAPP_SEND, create_job
 from services.phone_normalizer import PhoneNormalizationError, normalize_to_e164
+from services.spy_agent.spy_inbound_handler import handle_spy_inbound, is_spy_instance
 from services.whatsapp_inbound.inbound_handler import InboundWebhookPayload, handle_inbound
 
 router = APIRouter(prefix="/webhooks", tags=["Webhooks"])
@@ -136,15 +137,6 @@ def whatsapp_uazapi_webhook(
         return {"status": "ignored", "reason": "event_not_messages"}
     if from_me:
         return {"status": "ignored", "reason": "from_me"}
-    if message_type and message_type != "text":
-        return {"status": "ignored", "reason": "not_text"}
-    if not message_text:
-        return {"status": "ignored", "reason": "missing_text"}
-    if not instance_id or not sender or not message_id:
-        detail = "Payload Uazapi incompleto"
-        if not sender:
-            detail = "Payload Uazapi incompleto (sender inválido)"
-        raise HTTPException(status_code=400, detail=detail)
 
     is_group = is_group_message_payload(payload)
     if is_group:
@@ -156,6 +148,35 @@ def whatsapp_uazapi_webhook(
         )
         return {"status": "ignored", "reason": "group_message"}
 
+    # ── Roteamento: instância espiã → spy handler (aceita mídia) ──────────────
+    if instance_id and is_spy_instance(instance_id):
+        media_url = (
+            data.get("mediaUrl")
+            or data.get("media_url")
+            or message.get("mediaUrl")
+            or message.get("media_url")
+        )
+        spy_payload = {
+            "instance_id": instance_id,
+            "from": sender,
+            "message_text": message_text,
+            "message_id": message_id,
+            "message_type": message_type or "text",
+            "media_url": media_url,
+        }
+        return handle_spy_inbound(spy_payload)
+    # ─────────────────────────────────────────────────────────────────────────
+
+    if message_type and message_type != "text":
+        return {"status": "ignored", "reason": "not_text"}
+    if not message_text:
+        return {"status": "ignored", "reason": "missing_text"}
+    if not instance_id or not sender or not message_id:
+        detail = "Payload Uazapi incompleto"
+        if not sender:
+            detail = "Payload Uazapi incompleto (sender inválido)"
+        raise HTTPException(status_code=400, detail=detail)
+
     inbound_payload = {
         "instance_id": instance_id,
         "from": sender,
@@ -163,7 +184,7 @@ def whatsapp_uazapi_webhook(
         "message_id": message_id,
         "timestamp": message.get("messageTimestamp") or data.get("messageTimestamp"),
         "provider": "uazapi",
-        "is_group": is_group,
+        "is_group": False,
     }
 
     return handle_inbound(inbound_payload)

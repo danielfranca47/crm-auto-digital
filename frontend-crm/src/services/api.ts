@@ -1220,17 +1220,34 @@ export const api = {
     apply: (payload: SpyAgentApplyRequest) =>
       apiClient.post<SpyAgentApplyResponse>("/spy-agent/apply", payload),
     getRuns: () => apiClient.get<SpyAgentRun[]>("/spy-agent/runs"),
+    getInstanceConfig: () =>
+      apiClient.get<SpyAgentInstanceConfig>("/spy-agent/instance-config"),
+    setInstanceConfig: (spy_instance_id: string) =>
+      apiClient.post<{ ok: boolean; spy_instance_id: string }>("/spy-agent/instance-config", {
+        spy_instance_id,
+      }),
+    removeInstanceConfig: () =>
+      apiClient.delete<{ ok: boolean }>("/spy-agent/instance-config"),
   },
 };
 
 // ── Spy Agent Types ──────────────────────────────────────────────────────────
 
-export type SpyAgentModule = "facts" | "identity" | "strategy";
+export type SpyAgentModule = "facts" | "identity" | "strategy" | "sales_pipeline";
+
+export type SpyAgentInstanceConfig = {
+  configured: boolean;
+  spy_instance_id: string | null;
+  phone_e164: string | null;
+  connection_status: string | null;
+  updated_at: string | null;
+};
 
 export type SpyAgentStartRequest = {
   modules: SpyAgentModule[];
   observation_days: number;
   use_optimized_strategy: boolean;
+  spy_instance_id?: string;
 };
 
 export type SpyAgentSample = {

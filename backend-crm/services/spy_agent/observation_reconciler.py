@@ -113,29 +113,59 @@ def save_module_report(run_id: int, user_id: int, module: str, result: Dict[str,
         conn.close()
 
 
+def _has_spy_instance(user_id: int) -> bool:
+    """Verifica se o usuário tem uma instância espiã configurada."""
+    from database import get_connection
+    conn = get_connection()
+    try:
+        row = conn.execute(
+            "SELECT id FROM spy_agent_config WHERE user_id = ? LIMIT 1",
+            (user_id,),
+        ).fetchone()
+        return row is not None
+    finally:
+        conn.close()
+
+
 def run_analysis_for_session(run: Dict[str, Any]) -> None:
     """
     Executa a análise LLM para uma sessão de espião que expirou o período de observação.
     Chamado em thread separada pelo reconciler loop.
+
+    Se o usuário tem instância espiã configurada, usa spy_conversation_loader (dados isolados).
+    Caso contrário, usa load_real_conversations (dados históricos do CRM).
     """
     run_id = run["id"]
     user_id = run["user_id"]
     modules: List[str] = json.loads(run.get("modules_requested") or '["facts","identity","strategy"]')
     use_optimized = bool(run.get("use_optimized_strategy", 1))
+    use_spy_source = _has_spy_instance(user_id)
 
-    logger.info("[spy_agent:reconciler] iniciando análise run_id=%s user_id=%s modules=%s", run_id, user_id, modules)
+    logger.info(
+        "[spy_agent:reconciler] iniciando análise run_id=%s user_id=%s modules=%s spy_source=%s",
+        run_id, user_id, modules, use_spy_source,
+    )
 
     try:
         mark_analyzing(run_id)
 
-        from services.spy_agent.conversation_loader import (
-            load_real_conversations,
-            detect_media_types,
-        )
         from services.spy_agent.compatibility_report import build_compatibility_report
 
-        conversations = load_real_conversations(user_id)
-        media_counts = detect_media_types(conversations)
+        if use_spy_source:
+            from services.spy_agent.spy_conversation_loader import (
+                load_spy_conversations,
+                get_spy_conversation_stats,
+            )
+            from services.spy_agent.conversation_loader import detect_media_types
+            conversations = load_spy_conversations(user_id)
+            media_counts = detect_media_types(conversations)
+        else:
+            from services.spy_agent.conversation_loader import (
+                load_real_conversations,
+                detect_media_types,
+            )
+            conversations = load_real_conversations(user_id)
+            media_counts = detect_media_types(conversations)
 
         leads_sampled = len(conversations)
         messages_sampled = sum(len(c["messages"]) for c in conversations)
@@ -172,6 +202,14 @@ def run_analysis_for_session(run: Dict[str, Any]) -> None:
             result = analyze_strategy(conversations, current_profile, use_optimized_strategy=use_optimized)
             recommended_mode = result.get("recommended_agent_mode")
             save_module_report(run_id, user_id, "strategy", result)
+
+        # Módulo 4 — Pipeline de vendas (sempre executa quando há dados espiões)
+        if use_spy_source:
+            from services.spy_agent.module_sales_pipeline import analyze_pipeline
+            pipeline_result = analyze_pipeline(conversations, current_profile)
+            if not recommended_mode:
+                recommended_mode = pipeline_result.get("recommended_agent_mode")
+            save_module_report(run_id, user_id, "sales_pipeline", pipeline_result)
 
         # Relatório de compatibilidade (sempre)
         compat = build_compatibility_report(conversations, media_counts, recommended_mode)

@@ -36,6 +36,7 @@ TYPE_WHATSAPP_APPOINTMENT_REMINDER = "whatsapp.appointment.reminder"
 TYPE_WHATSAPP_APPOINTMENT_BRIEFING = "whatsapp.appointment.briefing"
 TYPE_MAPS_SEARCH = "maps.search.local"
 TYPE_MAPS_ENRICH = "maps.enrich.local"
+TYPE_SPY_MEDIA_PROCESS = "spy.media.process"
 
 _TYPE_ALIASES: Dict[str, List[str]] = {
     TYPE_WHATSAPP_SEND: ["whatsapp_send"],
@@ -46,6 +47,7 @@ _TYPE_ALIASES: Dict[str, List[str]] = {
     TYPE_WHATSAPP_APPOINTMENT_BRIEFING: [],
     TYPE_MAPS_SEARCH: ["maps_search_fallback"],
     TYPE_MAPS_ENRICH: ["maps_enrich_fallback"],
+    TYPE_SPY_MEDIA_PROCESS: [],
 }
 
 _VALID_JOB_STATUSES = {

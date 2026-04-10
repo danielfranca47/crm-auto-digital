@@ -301,6 +301,32 @@ def ensure_spy_agent_tables(conn: sqlite3.Connection) -> None:
         CREATE INDEX IF NOT EXISTS idx_spy_runs_expiry ON spy_agent_runs(status, observation_end_at);
         CREATE INDEX IF NOT EXISTS idx_spy_reports_run ON spy_agent_reports(run_id);
         CREATE INDEX IF NOT EXISTS idx_spy_reports_user ON spy_agent_reports(user_id, module);
+
+        CREATE TABLE IF NOT EXISTS spy_agent_config (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL UNIQUE,
+            spy_instance_id TEXT NOT NULL,
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL
+        );
+
+        CREATE TABLE IF NOT EXISTS spy_agent_messages (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL,
+            sender_phone TEXT NOT NULL,
+            body TEXT,
+            message_type TEXT NOT NULL DEFAULT 'text',
+            media_url TEXT,
+            transcription TEXT,
+            external_message_id TEXT,
+            received_at TEXT NOT NULL,
+            processed_at TEXT,
+            UNIQUE(user_id, external_message_id)
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_spy_config_user ON spy_agent_config(user_id);
+        CREATE INDEX IF NOT EXISTS idx_spy_msgs_user ON spy_agent_messages(user_id, received_at);
+        CREATE INDEX IF NOT EXISTS idx_spy_msgs_sender ON spy_agent_messages(user_id, sender_phone, received_at);
         """
     )
 

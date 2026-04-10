@@ -2,11 +2,14 @@
 spy_agent.py — Endpoints do Agente Espião.
 
 Fluxo:
-  POST /api/spy-agent/start      → inicia período de observação
-  GET  /api/spy-agent/session    → retorna sessão ativa + countdown
+  POST /api/spy-agent/start               → inicia período de observação
+  GET  /api/spy-agent/session             → retorna sessão ativa + countdown
   GET  /api/spy-agent/conversation-sample → preview de dados disponíveis
-  POST /api/spy-agent/apply      → aplica sugestões aceitas no AI Profile
-  GET  /api/spy-agent/runs       → histórico de execuções
+  POST /api/spy-agent/apply               → aplica sugestões aceitas no AI Profile
+  GET  /api/spy-agent/runs                → histórico de execuções
+  GET  /api/spy-agent/instance-config     → retorna instância espiã configurada
+  POST /api/spy-agent/instance-config     → define instância espiã
+  DELETE /api/spy-agent/instance-config   → remove instância espiã
 """
 from __future__ import annotations
 
@@ -18,6 +21,7 @@ from typing import Any, Dict, List, Optional
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
+from core_client import fetch_core_whatsapp_connection_resolve
 from database import get_connection
 from security_core import CurrentUser, require_crm_access
 from services.spy_agent.conversation_loader import get_conversation_sample_stats
@@ -36,6 +40,11 @@ class SpyAgentStartRequest(BaseModel):
     modules: List[str] = Field(default=["facts", "identity", "strategy"])
     observation_days: int = Field(default=14, ge=0)  # 0 = 24h (1 dia)
     use_optimized_strategy: bool = True
+    spy_instance_id: Optional[str] = None  # se fornecido, salva como instância espiã
+
+
+class SpyAgentInstanceConfigRequest(BaseModel):
+    spy_instance_id: str
 
 
 class SpyAgentApplySuggestion(BaseModel):
@@ -53,7 +62,7 @@ class SpyAgentApplyRequest(BaseModel):
 # Helpers
 # ---------------------------------------------------------------------------
 
-_VALID_MODULES = {"facts", "identity", "strategy"}
+_VALID_MODULES = {"facts", "identity", "strategy", "sales_pipeline"}
 
 # Campos do AI Profile que podem ser atualizados pelo spy agent
 _ALLOWED_FIELDS = {
@@ -236,6 +245,21 @@ async def start_spy_agent(
         conn.commit()
         run_id = cur.lastrowid
 
+        # Salva instância espiã se fornecida
+        if body.spy_instance_id:
+            now = _now_utc_iso()
+            conn.execute(
+                """
+                INSERT INTO spy_agent_config (user_id, spy_instance_id, created_at, updated_at)
+                VALUES (?, ?, ?, ?)
+                ON CONFLICT(user_id) DO UPDATE SET
+                    spy_instance_id = excluded.spy_instance_id,
+                    updated_at = excluded.updated_at
+                """,
+                (current_user.id, body.spy_instance_id, now, now),
+            )
+            conn.commit()
+
         run = dict(conn.execute("SELECT * FROM spy_agent_runs WHERE id = ?", (run_id,)).fetchone())
         return _build_session_response(run, [])
     finally:
@@ -327,3 +351,90 @@ async def list_spy_agent_runs(
         ]
     finally:
         conn.close()
+
+
+# ---------------------------------------------------------------------------
+# Configuração da instância espiã
+# ---------------------------------------------------------------------------
+
+
+@router.get("/instance-config")
+async def get_instance_config(
+    current_user: CurrentUser = Depends(require_crm_access),
+) -> Dict[str, Any]:
+    """Retorna a instância WhatsApp configurada para observação espiã."""
+    conn = get_connection()
+    try:
+        row = conn.execute(
+            "SELECT spy_instance_id, created_at, updated_at FROM spy_agent_config WHERE user_id = ?",
+            (current_user.id,),
+        ).fetchone()
+    finally:
+        conn.close()
+
+    if not row:
+        return {"configured": False, "spy_instance_id": None}
+
+    spy_instance_id = row["spy_instance_id"]
+
+    # Enriquece com dados do core (phone_e164, status)
+    phone_e164 = None
+    connection_status = None
+    try:
+        conn_info = fetch_core_whatsapp_connection_resolve(spy_instance_id)
+        phone_e164 = conn_info.get("phone_e164")
+        connection_status = conn_info.get("connection_status")
+    except Exception:
+        pass
+
+    return {
+        "configured": True,
+        "spy_instance_id": spy_instance_id,
+        "phone_e164": phone_e164,
+        "connection_status": connection_status,
+        "updated_at": row["updated_at"],
+    }
+
+
+@router.post("/instance-config")
+async def set_instance_config(
+    body: SpyAgentInstanceConfigRequest,
+    current_user: CurrentUser = Depends(require_crm_access),
+) -> Dict[str, Any]:
+    """Define (ou atualiza) a instância WhatsApp a ser observada pelo Agente Espião."""
+    now = _now_utc_iso()
+    conn = get_connection()
+    try:
+        conn.execute(
+            """
+            INSERT INTO spy_agent_config (user_id, spy_instance_id, created_at, updated_at)
+            VALUES (?, ?, ?, ?)
+            ON CONFLICT(user_id) DO UPDATE SET
+                spy_instance_id = excluded.spy_instance_id,
+                updated_at = excluded.updated_at
+            """,
+            (current_user.id, body.spy_instance_id, now, now),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+    return {"ok": True, "spy_instance_id": body.spy_instance_id}
+
+
+@router.delete("/instance-config")
+async def delete_instance_config(
+    current_user: CurrentUser = Depends(require_crm_access),
+) -> Dict[str, Any]:
+    """Remove a instância espiã configurada."""
+    conn = get_connection()
+    try:
+        conn.execute(
+            "DELETE FROM spy_agent_config WHERE user_id = ?",
+            (current_user.id,),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+    return {"ok": True}

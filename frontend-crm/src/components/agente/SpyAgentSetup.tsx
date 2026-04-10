@@ -1,11 +1,11 @@
 import { useState } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
-import { AlertTriangle, Info, CheckCircle2, XCircle, Mic, ImageIcon, Video, MessageSquare, Zap } from "lucide-react";
+import { AlertTriangle, Info, CheckCircle2, Phone, QrCode, Mic, ImageIcon, Video, MessageSquare, Zap, Loader2, Trash2 } from "lucide-react";
 import { api, SpyAgentModule, SpyAgentSample } from "@/services/api";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
@@ -46,12 +46,49 @@ export function SpyAgentSetup({ sample, onStarted }: SpyAgentSetupProps) {
   const [observationDays, setObservationDays] = useState(14);
   const [useOptimizedStrategy, setUseOptimizedStrategy] = useState(true);
   const [loading, setLoading] = useState(false);
+  const [connectingInstance, setConnectingInstance] = useState(false);
   const { toast } = useToast();
+  const queryClient = useQueryClient();
+
+  const { data: instanceConfig, isLoading: instanceLoading } = useQuery({
+    queryKey: ["spy-instance-config"],
+    queryFn: () => api.spyAgent.getInstanceConfig(),
+  });
 
   const toggleModule = (id: SpyAgentModule) => {
     setSelectedModules((prev) =>
       prev.includes(id) ? prev.filter((m) => m !== id) : [...prev, id]
     );
+  };
+
+  const handleConnectSpyInstance = async () => {
+    setConnectingInstance(true);
+    try {
+      const resp = await api.crm.whatsappConnect();
+      // Salva o instance_id retornado como instância espiã
+      await api.spyAgent.setInstanceConfig(resp.instance_id);
+      queryClient.invalidateQueries({ queryKey: ["spy-instance-config"] });
+      toast({
+        title: "Fone de observação configurado!",
+        description: resp.qr?.value
+          ? "Escaneie o QR code no WhatsApp do fone que deseja observar."
+          : "Instância conectada.",
+      });
+    } catch {
+      toast({ title: "Erro ao conectar fone espião", variant: "destructive" });
+    } finally {
+      setConnectingInstance(false);
+    }
+  };
+
+  const handleRemoveSpyInstance = async () => {
+    try {
+      await api.spyAgent.removeInstanceConfig();
+      queryClient.invalidateQueries({ queryKey: ["spy-instance-config"] });
+      toast({ title: "Instância espiã removida" });
+    } catch {
+      toast({ title: "Erro ao remover instância", variant: "destructive" });
+    }
   };
 
   const handleStart = async () => {
@@ -65,6 +102,7 @@ export function SpyAgentSetup({ sample, onStarted }: SpyAgentSetupProps) {
         modules: selectedModules,
         observation_days: observationDays,
         use_optimized_strategy: useOptimizedStrategy,
+        spy_instance_id: instanceConfig?.configured ? instanceConfig.spy_instance_id ?? undefined : undefined,
       });
       toast({ title: "Agente Espião ativado!", description: "O período de observação começou." });
       onStarted();
@@ -79,6 +117,62 @@ export function SpyAgentSetup({ sample, onStarted }: SpyAgentSetupProps) {
 
   return (
     <div className="space-y-6">
+
+      {/* Fone de observação (instância espiã) */}
+      <div className="space-y-2">
+        <h3 className="text-sm font-semibold">Fone de observação</h3>
+        <p className="text-xs text-muted-foreground">
+          Conecte um telefone diferente do seu CRM. O agente observará as conversas desse fone sem interferir no seu pipeline.
+        </p>
+        {instanceLoading ? (
+          <div className="flex items-center gap-2 p-3 rounded-lg border border-border">
+            <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+            <span className="text-xs text-muted-foreground">Verificando...</span>
+          </div>
+        ) : instanceConfig?.configured ? (
+          <div className="flex items-center justify-between p-3 rounded-lg border border-green-500/30 bg-green-500/5">
+            <div className="flex items-center gap-2">
+              <Phone className="h-4 w-4 text-green-500 shrink-0" />
+              <div>
+                <p className="text-xs font-medium">
+                  {instanceConfig.phone_e164 ?? instanceConfig.spy_instance_id}
+                </p>
+                <p className="text-[10px] text-muted-foreground capitalize">
+                  {instanceConfig.connection_status ?? "verificando..."}
+                </p>
+              </div>
+            </div>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-7 w-7 text-muted-foreground hover:text-destructive"
+              onClick={handleRemoveSpyInstance}
+            >
+              <Trash2 className="h-3.5 w-3.5" />
+            </Button>
+          </div>
+        ) : (
+          <Button
+            variant="outline"
+            size="sm"
+            className="w-full gap-2"
+            onClick={handleConnectSpyInstance}
+            disabled={connectingInstance}
+          >
+            {connectingInstance
+              ? <><Loader2 className="h-3.5 w-3.5 animate-spin" /> Conectando...</>
+              : <><QrCode className="h-3.5 w-3.5" /> Conectar fone de observação</>}
+          </Button>
+        )}
+        {!instanceConfig?.configured && !instanceLoading && (
+          <p className="text-xs text-muted-foreground">
+            Sem fone configurado o agente analisará o histórico do CRM existente.
+          </p>
+        )}
+      </div>
+
+      <Separator />
+
       {/* Dados disponíveis */}
       {sample && (
         <Card className={cn("border", sample.has_enough_data ? "border-green-500/30 bg-green-500/5" : "border-yellow-500/30 bg-yellow-500/5")}>
@@ -218,7 +312,7 @@ export function SpyAgentSetup({ sample, onStarted }: SpyAgentSetupProps) {
             { icon: <MessageSquare className="h-3.5 w-3.5 text-green-500" />, label: "Texto", note: "Analisado automaticamente" },
             { icon: <Mic className="h-3.5 w-3.5 text-green-500" />, label: "Áudio", note: "Transcrito e analisado" },
             { icon: <ImageIcon className="h-3.5 w-3.5 text-green-500" />, label: "Imagem", note: "Interpretada visualmente" },
-            { icon: <Video className="h-3.5 w-3.5 text-yellow-500" />, label: "Vídeo", note: "Não analisado" },
+            { icon: <Video className="h-3.5 w-3.5 text-yellow-500" />, label: "Vídeo", note: "Texto acompanhante capturado" },
           ].map((item) => (
             <div key={item.label} className="flex items-center gap-2">
               {item.icon}
