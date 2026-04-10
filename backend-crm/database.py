@@ -843,7 +843,7 @@ def init_db() -> None:
 
         # Agente Espião
         ensure_spy_agent_tables(conn)
-        ensure_column(conn, "spy_agent_messages", "from_me", "INTEGER NOT NULL DEFAULT 0")
+        ensure_column(conn, "spy_agent_messages", "from_me", "from_me INTEGER NOT NULL DEFAULT 0")
         ensure_column(conn, "messages", "message_type", "message_type TEXT DEFAULT 'text'")
 
         # Migrações
