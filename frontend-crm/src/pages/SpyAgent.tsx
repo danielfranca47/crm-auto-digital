@@ -192,7 +192,13 @@ export default function SpyAgent() {
               <p className="text-xs text-muted-foreground text-center">
                 Previsão de conclusão:{" "}
                 <span className="font-medium">
-                  {new Date((session as any).observation_end_at).toLocaleDateString("pt-BR")}
+                  {new Date((session as any).observation_end_at).toLocaleString("pt-BR", {
+                    day: "2-digit",
+                    month: "2-digit",
+                    year: "numeric",
+                    hour: "2-digit",
+                    minute: "2-digit",
+                  })}
                 </span>
               </p>
             </div>
