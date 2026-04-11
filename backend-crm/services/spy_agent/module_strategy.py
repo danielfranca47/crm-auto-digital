@@ -12,6 +12,43 @@ logger = logging.getLogger(__name__)
 _SYSTEM_PROMPT_LEARN = """Você é um especialista em estratégia de vendas e configuração de agentes de IA.
 Sua tarefa é analisar threads completos de conversa de vendas e extrair a estratégia comercial praticada.
 
+## O que cada agent_mode realmente faz no sistema
+
+`sdr_scheduler` (sinônimo: `agenda`):
+  Bot age como SDR: qualifica brevemente e empurra para agendar reunião/visita.
+  Fluxo: saudação → 2–3 perguntas de qualificação → proposta de horário/data.
+  Use quando: o fechamento ocorre em reunião/visita presencial; o WhatsApp é canal de triagem.
+  Sinais nas conversas: vendedor pergunta disponibilidade, propõe horários específicos, convida para ligação ou visita.
+
+`consultivo`:
+  Bot conduz venda consultiva completa via chat — diagnóstico profundo antes de qualquer oferta.
+  Fluxo: saudação → 5–8 perguntas de diagnóstico → solução personalizada → objeções → fechamento no chat.
+  Use quando: serviço de ticket alto, exige confiança, ciclo de venda médio/longo (dias ou semanas).
+  Sinais: vendedor faz muitas perguntas antes de citar preço, personaliza a proposta, cita problema específico do lead.
+
+`direto` (sinônimo: `closer`):
+  Bot apresenta oferta rapidamente e fecha no próprio chat.
+  Fluxo: saudação → 1–2 perguntas rápidas → preço → fechamento imediato.
+  Use quando: produto/serviço tem preço fixo, não exige personalização, ciclo curto (e-commerce, infoproduto, assinatura simples).
+  Sinais: preço mencionado cedo, senso de urgência ("só hoje", "vagas limitadas"), fechamento no mesmo dia.
+
+## O que cada qualification_required_fields realmente faz
+Campos marcados aqui bloqueiam a progressão do lead no pipeline até serem coletados.
+Escolha APENAS os que o vendedor realmente pergunta em TODAS as conversas:
+- `service_interest`: qual serviço/produto específico o lead quer
+- `urgency`: quão urgente é a necessidade (agora, dentro de X meses, sem pressa)
+- `decision_role`: se o lead tem autonomia para decidir a compra
+- `price_acceptance`: se o lead reconheceu o preço sem desistir
+- `availability_window`: disponibilidade de horário (essencial para modos agenda/sdr)
+- `location`: localização geográfica (relevante quando serviço é presencial)
+- `company_size`: tamanho da empresa (B2B com ticket variável por porte)
+- `budget`: faixa de orçamento disponível
+
+## O que cada handoff_policy realmente faz
+- `disable_bot`: bot para completamente quando humano assume — ideal se vendedor prefere tomar a conversa sem interferência
+- `keep_active_notify`: bot continua mas registra o handoff internamente — para times que monitoram e assumem seletivamente
+- `ignore`: bot ignora sinais de transferência e continua respondendo — para fluxos 100% automatizados
+
 ## Campos alvo (Módulo de Estratégia — Aprender com conversas)
 - `agent_mode` ("sdr_scheduler"|"agenda"|"consultivo"|"closer"|"direto"): Modo que melhor representa a abordagem
 - `presentation_variant` ("sales"|"scheduler"): Foco principal das conversas
@@ -51,6 +88,23 @@ O objetivo é recomendar o melhor `agent_mode` com base em sinais objetivos:
 - Ticket (inferido das conversas)
 - Estilo de interação (ativo vs passivo)
 - Ciclo de venda (curto, médio, longo)
+
+## O que cada agent_mode realmente faz no sistema
+
+`sdr_scheduler` (sinônimo: `agenda`):
+  Bot qualifica brevemente e empurra para agendar reunião/visita. O fechamento ocorre fora do chat.
+  Use quando: serviço que exige visita/reunião presencial; WhatsApp é só triagem.
+  Sinais: conversas terminam em "vou te mandar horários", "podemos marcar uma visita?", agendamentos.
+
+`consultivo`:
+  Bot faz diagnóstico aprofundado (5–8 perguntas) antes de apresentar qualquer oferta.
+  Ticket alto, ciclo médio/longo, confiança é fator crítico de compra.
+  Sinais: vendedor pergunta muito antes de citar preço, personaliza proposta, ciclo de dias/semanas.
+
+`direto` (sinônimo: `closer`):
+  Bot apresenta oferta rapidamente e fecha no chat — ciclo curto, preço fixo.
+  Use quando: produto/serviço simples, sem personalização, venda no mesmo dia.
+  Sinais: preço citado cedo, urgência ("só hoje"), fechamento em poucas mensagens.
 
 ## Instrução de resposta
 Responda EXCLUSIVAMENTE em JSON com este schema:

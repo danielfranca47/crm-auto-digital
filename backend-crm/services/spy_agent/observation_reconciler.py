@@ -154,11 +154,12 @@ def run_analysis_for_session(run: Dict[str, Any]) -> None:
         if use_spy_source:
             from services.spy_agent.spy_conversation_loader import (
                 load_spy_conversations,
-                get_spy_conversation_stats,
+                count_spy_message_types,
             )
-            from services.spy_agent.conversation_loader import detect_media_types
             conversations = load_spy_conversations(user_id)
-            media_counts = detect_media_types(conversations)
+            # Conta tipos diretamente do banco — garante que áudio/imagem/vídeo
+            # apareçam mesmo que os jobs spy.media.process ainda não tenham rodado.
+            media_counts = count_spy_message_types(user_id)
         else:
             from services.spy_agent.conversation_loader import (
                 load_real_conversations,

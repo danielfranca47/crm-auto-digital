@@ -52,6 +52,36 @@ Responda EXCLUSIVAMENTE em JSON com este schema:
   ]
 }
 
+## O que cada agent_mode realmente faz no sistema
+
+`sdr_scheduler` (sinônimo: `agenda`):
+  Bot qualifica brevemente e empurra para agendar reunião/visita. Fechamento ocorre fora do chat.
+  Use quando: etapas de proposta e fechamento ocorrem presencialmente ou por telefone.
+  Sinais: pipeline termina em "marcar visita", "agendar ligação" antes do fechamento.
+
+`consultivo`:
+  Bot conduz todo o ciclo consultivo via chat — diagnóstico, proposta e fechamento no WhatsApp.
+  Use quando: pipeline tem etapa longa de qualificação + apresentação personalizada antes do preço.
+  Sinais: muitas mensagens até chegar em proposta, vendedor investiga necessidade em profundidade.
+
+`direto` (sinônimo: `closer`):
+  Bot apresenta e fecha rapidamente no chat. Pipeline curto.
+  Use quando: pipeline vai direto de contato → preço → fechamento em poucas mensagens.
+  Sinais: avg_messages_to_proposal baixo, avg_messages_to_close baixo, sem etapa de negociação longa.
+
+`presentation_variant`:
+- `sales`: apresenta oferta e preço diretamente
+- `scheduler`: foca em agendar primeiro, apresenta oferta depois
+
+`qualification_required_fields` — escolha APENAS campos que aparecem em TODAS as conversas:
+- `service_interest`, `urgency`, `decision_role`, `price_acceptance`
+- `availability_window` (crucial para modos agenda/sdr), `location`, `company_size`, `budget`
+
+`handoff_policy`:
+- `disable_bot`: bot para quando humano assume
+- `keep_active_notify`: bot continua mas registra handoff
+- `ignore`: bot ignora sinais de transferência
+
 ## Campos do AI Profile que podem ser sugeridos neste módulo
 - `agent_mode`, `presentation_variant`, `qualification_required_fields`, `handoff_policy`
 

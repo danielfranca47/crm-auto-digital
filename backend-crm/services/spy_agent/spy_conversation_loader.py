@@ -129,6 +129,37 @@ def _build_body(msg: Any) -> str | None:
     return body.strip() or None
 
 
+def count_spy_message_types(user_id: int) -> Dict[str, int]:
+    """
+    Conta tipos de mensagem diretamente de spy_agent_messages — não depende de
+    processamento de mídia. Garante que áudio/imagem/vídeo apareçam nos
+    media_counts mesmo que os jobs spy.media.process ainda não tenham rodado.
+    """
+    conn = get_connection()
+    try:
+        rows = conn.execute(
+            """
+            SELECT message_type, COUNT(*) as cnt
+              FROM spy_agent_messages
+             WHERE user_id = ?
+             GROUP BY message_type
+            """,
+            (user_id,),
+        ).fetchall()
+    finally:
+        conn.close()
+
+    counts: Dict[str, int] = {"audio": 0, "image": 0, "video": 0, "text": 0}
+    for row in rows:
+        mt = (row["message_type"] or "text").lower()
+        if mt in counts:
+            counts[mt] += int(row["cnt"])
+        else:
+            # tipos como "document", "sticker" contam como texto para fins de relatório
+            counts["text"] += int(row["cnt"])
+    return counts
+
+
 def get_spy_conversation_stats(user_id: int) -> Dict[str, Any]:
     """Retorna estatísticas das mensagens espiãs para preview."""
     conn = get_connection()

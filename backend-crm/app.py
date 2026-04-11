@@ -38,12 +38,14 @@ from routes import (
 from routes import public
 from services.followup_reconciler import reconcile_due_followups
 from services.spy_agent.observation_reconciler import reconcile_expired_observations
+from services.spy_agent.spy_media_worker import process_pending_spy_media_jobs
 
 logger = logging.getLogger(__name__)
 
 _RECONCILER_INTERVAL = int(os.getenv("FOLLOWUP_RECONCILER_INTERVAL_SECONDS", "60"))
 _RECONCILER_STARTUP_DELAY = 5  # segundos de grace period antes da 1ª execução
 _SPY_RECONCILER_INTERVAL = int(os.getenv("SPY_AGENT_RECONCILER_INTERVAL_SECONDS", "60"))
+_SPY_MEDIA_WORKER_INTERVAL = int(os.getenv("SPY_MEDIA_WORKER_INTERVAL_SECONDS", "30"))
 
 
 async def _reconciler_loop() -> None:
@@ -88,14 +90,33 @@ async def _spy_reconciler_loop() -> None:
         await asyncio.sleep(_SPY_RECONCILER_INTERVAL)
 
 
+async def _spy_media_worker_loop() -> None:
+    """Processa jobs spy.media.process (áudio → Whisper, imagem → Vision) internamente."""
+    logger.info("[spy_media_worker] scheduler iniciado — intervalo=%ds", _SPY_MEDIA_WORKER_INTERVAL)
+    await asyncio.sleep(_RECONCILER_STARTUP_DELAY + 4)  # stagger após os outros
+    while True:
+        try:
+            result = await asyncio.to_thread(process_pending_spy_media_jobs)
+            if result["processed"] > 0 or result["failed"] > 0:
+                logger.info(
+                    "[spy_media_worker] processed=%d failed=%d",
+                    result["processed"],
+                    result["failed"],
+                )
+        except Exception as exc:
+            logger.error("[spy_media_worker] erro inesperado: %s", exc, exc_info=True)
+        await asyncio.sleep(_SPY_MEDIA_WORKER_INTERVAL)
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     task = asyncio.create_task(_reconciler_loop())
     spy_task = asyncio.create_task(_spy_reconciler_loop())
+    spy_media_task = asyncio.create_task(_spy_media_worker_loop())
     try:
         yield
     finally:
-        for t in (task, spy_task):
+        for t in (task, spy_task, spy_media_task):
             t.cancel()
             try:
                 await t
