@@ -119,6 +119,51 @@ def whatsapp_uazapi_webhook(
         sender_phone = data.get("sender") or message.get("sender_pn")
         return _normalize_e164(chat_phone) or _normalize_e164(sender_phone)
 
+    def _resolve_spy_sender_e164(is_from_me: bool) -> str:
+        """
+        Para o spy handler, prioriza o telefone do lead (remoteJid/to) em mensagens
+        fromMe, para agrupar inbound e outbound sob o mesmo sender_phone.
+        """
+        base = _resolve_sender_e164()
+        if base:
+            return base
+        if is_from_me:
+            # Tenta remoteJid (UazAPI) ou campo 'to'
+            key_obj = data.get("key") if isinstance(data.get("key"), dict) else {}
+            remote_jid = (
+                key_obj.get("remoteJid")
+                or data.get("remoteJid")
+                or data.get("chatId")
+                or data.get("to")
+                or message.get("remoteJid")
+                or message.get("to")
+            )
+            if remote_jid:
+                # JID WhatsApp: "5511999999999@s.whatsapp.net" → extrai só os dígitos
+                jid_phone = str(remote_jid).split("@")[0]
+                return _normalize_e164(jid_phone) or _normalize_e164(f"+{jid_phone}")
+        return ""
+
+    def _normalize_spy_message_type(raw: Optional[str]) -> str:
+        """
+        Normaliza o messageType do UazAPI para o formato canônico do spy.
+        UazAPI envia "imageMessage", "videoMessage", "audioMessage", "pttMessage", etc.
+        """
+        if not raw:
+            return "text"
+        t = raw.lower().strip()
+        if t in ("imagemessage", "image"):
+            return "image"
+        if t in ("videomessage", "video"):
+            return "video"
+        if t in ("audiomessage", "pttmessage", "audio", "ptt"):
+            return "audio"
+        if t in ("documentmessage", "document"):
+            return "document"
+        if t in ("conversation", "extendedtextmessage", "text"):
+            return "text"
+        return t  # mantém literal desconhecido para debug
+
     sender = _resolve_sender_e164()
     message_id = data.get("messageId") or data.get("id") or message.get("messageid") or message.get("id")
     message_type = data.get("messageType") or message.get("type") or message.get("messageType")
@@ -148,17 +193,25 @@ def whatsapp_uazapi_webhook(
                 or message.get("mediaUrl")
                 or message.get("media_url")
             )
-            # sender já vem de _resolve_sender_e164() que usa chat.phone (lead) como prioridade,
-            # então tanto inbound quanto fromMe ficam agrupados pelo phone do lead.
+            # Para fromMe, usa _resolve_spy_sender_e164 que tenta remoteJid como fallback,
+            # garantindo que imagem/vídeo enviados pelo vendedor sejam agrupados pelo lead.
+            spy_sender = _resolve_spy_sender_e164(from_me)
             spy_payload = {
                 "instance_id": instance_id,
-                "from": sender,
+                "from": spy_sender,
                 "message_text": message_text,
                 "message_id": message_id,
-                "message_type": message_type or "text",
+                "message_type": _normalize_spy_message_type(message_type),
                 "media_url": media_url,
                 "from_me": from_me,
             }
+            logger.debug(
+                "[spy] routing to spy handler: sender=%s type=%s (raw=%s) from_me=%s",
+                spy_sender,
+                spy_payload["message_type"],
+                message_type,
+                from_me,
+            )
             return handle_spy_inbound(spy_payload)
     # ─────────────────────────────────────────────────────────────────────────
 
