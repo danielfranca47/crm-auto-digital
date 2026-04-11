@@ -15,13 +15,20 @@ from __future__ import annotations
 
 import json
 import logging
+import os
+import re
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
-from core_client import fetch_core_whatsapp_connection_resolve
+from core_client import (
+    connect_core_whatsapp_instance,
+    fetch_core_whatsapp_connection_resolve,
+    set_core_whatsapp_webhook,
+    status_core_whatsapp_instance,
+)
 from database import get_connection
 from security_core import CurrentUser, require_crm_access
 from services.spy_agent.conversation_loader import get_conversation_sample_stats
@@ -30,6 +37,77 @@ from services.spy_agent.core_patch_client import patch_ai_profile_via_service
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/spy-agent", tags=["SpyAgent"])
+
+# ---------------------------------------------------------------------------
+# Helpers de QR code (compartilhados com os endpoints de reconexão)
+# ---------------------------------------------------------------------------
+
+_QR_KEYS = {"qrcode", "qrCode", "qr_code"}
+
+
+def _find_in_payload(payload: Any, keys: set) -> Optional[str]:
+    if isinstance(payload, dict):
+        for k in keys:
+            v = payload.get(k)
+            if isinstance(v, str) and v.strip():
+                return v.strip()
+        for value in payload.values():
+            found = _find_in_payload(value, keys)
+            if found:
+                return found
+    elif isinstance(payload, list):
+        for item in payload:
+            found = _find_in_payload(item, keys)
+            if found:
+                return found
+    return None
+
+
+def _infer_qr_kind(value: str) -> str:
+    if value.startswith("http://") or value.startswith("https://") or value.startswith("data:image"):
+        return "url"
+    if re.fullmatch(r"[A-Za-z0-9+/=\n\r]+", value) and len(value) > 80:
+        return "base64"
+    return "text"
+
+
+def _normalize_status_raw(raw: Dict[str, Any]) -> Optional[str]:
+    status_payload = raw.get("status") if isinstance(raw.get("status"), dict) else {}
+    logged_in = (
+        raw.get("loggedIn")
+        if isinstance(raw.get("loggedIn"), bool)
+        else status_payload.get("loggedIn")
+        if isinstance(status_payload.get("loggedIn"), bool)
+        else None
+    )
+    connected = (
+        raw.get("connected")
+        if isinstance(raw.get("connected"), bool)
+        else status_payload.get("connected")
+        if isinstance(status_payload.get("connected"), bool)
+        else None
+    )
+    instance_status_raw = raw.get("instance")
+    instance_status = (
+        instance_status_raw.get("status")
+        if isinstance(instance_status_raw, dict)
+        else None
+    )
+    if logged_in is True:
+        return "connected"
+    if connected is False and logged_in is False:
+        return "disconnected"
+    if isinstance(instance_status, str):
+        return instance_status.strip().lower()
+    return None
+
+
+def _build_spy_webhook_url() -> Optional[str]:
+    base = os.getenv("CRM_PUBLIC_BASE_URL")
+    secret = os.getenv("CRM_WEBHOOK_SECRET")
+    if not base or not secret:
+        return None
+    return f"{base.rstrip('/')}/webhooks/whatsapp/uazapi?secret={secret}"
 
 # ---------------------------------------------------------------------------
 # Modelos de entrada/saída
@@ -454,3 +532,98 @@ async def delete_instance_config(
         conn.close()
 
     return {"ok": True}
+
+
+# ---------------------------------------------------------------------------
+# Reconexão da instância espiã via QR code
+# ---------------------------------------------------------------------------
+
+
+@router.post("/reconnect")
+async def reconnect_spy_instance(
+    current_user: CurrentUser = Depends(require_crm_access),
+) -> Dict[str, Any]:
+    """
+    Reconecta a instância espiã via QR code sem reiniciar a sessão de observação.
+    Retorna o QR code para ser escaneado pelo usuário — os dados já coletados são preservados.
+    """
+    conn = get_connection()
+    try:
+        row = conn.execute(
+            "SELECT spy_instance_id FROM spy_agent_config WHERE user_id = ?",
+            (current_user.id,),
+        ).fetchone()
+    finally:
+        conn.close()
+
+    if not row:
+        raise HTTPException(status_code=404, detail="Nenhuma instância espiã configurada")
+
+    spy_instance_id = row["spy_instance_id"]
+
+    try:
+        raw = connect_core_whatsapp_instance(current_user.id, spy_instance_id)
+    except HTTPException as exc:
+        logger.error("[spy_agent:reconnect] falha ao conectar instância %s: %s", spy_instance_id, exc.detail)
+        raise
+
+    # Reconfigura webhook para garantir que mensagens continuem chegando
+    webhook_url = _build_spy_webhook_url()
+    if webhook_url:
+        try:
+            set_core_whatsapp_webhook(
+                spy_instance_id,
+                webhook_url,
+                ["messages", "connection"],
+                False,
+                True,
+                ["wasSentByApi", "isGroupYes"],
+            )
+        except Exception as exc:
+            logger.warning("[spy_agent:reconnect] falha ao reconfigurar webhook: %s", exc)
+
+    qr_value = _find_in_payload(raw, _QR_KEYS)
+    qr_kind = _infer_qr_kind(qr_value) if qr_value else None
+    status_value = _normalize_status_raw(raw)
+
+    logger.info(
+        "[spy_agent:reconnect] user=%s instance=%s status=%s qr_present=%s",
+        current_user.id,
+        spy_instance_id,
+        status_value,
+        bool(qr_value),
+    )
+
+    return {
+        "instance_id": spy_instance_id,
+        "status": status_value,
+        "qr": {"kind": qr_kind, "value": qr_value},
+    }
+
+
+@router.get("/reconnect/status")
+async def reconnect_spy_status(
+    current_user: CurrentUser = Depends(require_crm_access),
+) -> Dict[str, Any]:
+    """Verifica o status de conexão atual da instância espiã (usado no polling do QR code)."""
+    conn = get_connection()
+    try:
+        row = conn.execute(
+            "SELECT spy_instance_id FROM spy_agent_config WHERE user_id = ?",
+            (current_user.id,),
+        ).fetchone()
+    finally:
+        conn.close()
+
+    if not row:
+        raise HTTPException(status_code=404, detail="Nenhuma instância espiã configurada")
+
+    spy_instance_id = row["spy_instance_id"]
+
+    try:
+        raw = status_core_whatsapp_instance(spy_instance_id)
+    except HTTPException:
+        return {"instance_id": spy_instance_id, "status": "disconnected"}
+
+    status_value = _normalize_status_raw(raw) or "unknown"
+    return {"instance_id": spy_instance_id, "status": status_value}

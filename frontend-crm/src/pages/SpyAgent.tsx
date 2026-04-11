@@ -1,11 +1,11 @@
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { ArrowLeft, Sparkles, Eye, Loader2, CheckCircle2 } from "lucide-react";
-import { api, SpyAgentModule } from "@/services/api";
+import { ArrowLeft, Sparkles, Eye, Loader2, CheckCircle2, RefreshCw, QrCode, WifiOff } from "lucide-react";
+import { api, SpyAgentModule, WhatsappConnectResponse } from "@/services/api";
 import { SpyAgentSetup } from "@/components/agente/SpyAgentSetup";
 import { SpyAgentModuleCard } from "@/components/agente/SpyAgentModuleCard";
 import { CompatibilityReportPanel } from "@/components/agente/CompatibilityReportPanel";
@@ -29,6 +29,99 @@ export default function SpyAgent() {
   const [accepted, setAccepted] = useState<Record<string, { module: string; value: unknown }>>({});
   const [applying, setApplying] = useState(false);
   const [applied, setApplied] = useState(false);
+
+  // Reconexão do fone espião
+  const [reconnecting, setReconnecting] = useState(false);
+  const [reconnectData, setReconnectData] = useState<WhatsappConnectResponse | null>(null);
+  const [reconnectQrExpired, setReconnectQrExpired] = useState(false);
+  const reconnectPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const reconnectTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (reconnectPollRef.current) clearInterval(reconnectPollRef.current);
+      if (reconnectTimeoutRef.current) clearTimeout(reconnectTimeoutRef.current);
+    };
+  }, []);
+
+  const stopReconnectTimers = () => {
+    if (reconnectPollRef.current) { clearInterval(reconnectPollRef.current); reconnectPollRef.current = null; }
+    if (reconnectTimeoutRef.current) { clearTimeout(reconnectTimeoutRef.current); reconnectTimeoutRef.current = null; }
+  };
+
+  const startReconnectPolling = () => {
+    stopReconnectTimers();
+    reconnectTimeoutRef.current = setTimeout(() => {
+      setReconnectQrExpired(true);
+      stopReconnectTimers();
+    }, 90_000);
+
+    reconnectPollRef.current = setInterval(async () => {
+      try {
+        const s = await api.spyAgent.reconnectStatus();
+        if (s.status === "connected") {
+          stopReconnectTimers();
+          setReconnectData(null);
+          setReconnectQrExpired(false);
+          toast({ title: "Fone espião reconectado!", description: "As mensagens voltarão a ser capturadas." });
+          queryClient.invalidateQueries({ queryKey: ["spy-instance-config"] });
+        }
+      } catch {
+        // ignora erros pontuais
+      }
+    }, 3_000);
+  };
+
+  const handleReconnect = async () => {
+    setReconnecting(true);
+    setReconnectQrExpired(false);
+    try {
+      const resp = await api.spyAgent.reconnect();
+      if (resp.qr?.value) {
+        setReconnectData(resp);
+        startReconnectPolling();
+      } else if (resp.status === "connected") {
+        toast({ title: "Fone espião já conectado!", description: "Nenhuma ação necessária." });
+      } else {
+        toast({ title: "Erro ao gerar QR code", description: "Tente novamente.", variant: "destructive" });
+      }
+    } catch {
+      toast({ title: "Erro ao reconectar fone espião", variant: "destructive" });
+    } finally {
+      setReconnecting(false);
+    }
+  };
+
+  const handleRefreshReconnectQr = async () => {
+    setReconnectQrExpired(false);
+    setReconnecting(true);
+    try {
+      const resp = await api.spyAgent.reconnect();
+      if (resp.qr?.value) {
+        setReconnectData(resp);
+        startReconnectPolling();
+      }
+    } catch {
+      toast({ title: "Erro ao renovar QR code", variant: "destructive" });
+    } finally {
+      setReconnecting(false);
+    }
+  };
+
+  const handleCancelReconnect = () => {
+    stopReconnectTimers();
+    setReconnectData(null);
+    setReconnectQrExpired(false);
+  };
+
+  const getQrSrc = (qr: WhatsappConnectResponse["qr"]): string | null => {
+    if (!qr?.value) return null;
+    if (qr.kind === "url") return qr.value;
+    if (qr.kind === "base64") return `data:image/png;base64,${qr.value}`;
+    if (qr.value.startsWith("data:image")) return qr.value;
+    if (qr.value.length > 80) return `data:image/png;base64,${qr.value}`;
+    return null;
+  };
 
   const { data: session, isLoading: sessionLoading } = useQuery({
     queryKey: ["spy-agent-session"],
@@ -202,6 +295,78 @@ export default function SpyAgent() {
                 </span>
               </p>
             </div>
+
+            {/* Painel de reconexão do fone espião */}
+            {reconnectData ? (
+              <div className="rounded-xl border border-border bg-muted/20 p-4 space-y-3">
+                <div className="flex items-center justify-between">
+                  <p className="text-xs font-medium flex items-center gap-1.5">
+                    <QrCode className="h-3.5 w-3.5 text-primary" />
+                    Escaneie com o fone espião para reconectar:
+                  </p>
+                  <Button size="sm" variant="ghost" className="h-6 px-2 text-xs text-muted-foreground" onClick={handleCancelReconnect}>
+                    Cancelar
+                  </Button>
+                </div>
+                {reconnectQrExpired ? (
+                  <div className="flex flex-col items-center gap-3 py-2">
+                    <p className="text-xs text-muted-foreground text-center">QR code expirado. Gere um novo.</p>
+                    <Button size="sm" variant="outline" className="gap-1.5" onClick={handleRefreshReconnectQr} disabled={reconnecting}>
+                      {reconnecting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
+                      Novo QR code
+                    </Button>
+                  </div>
+                ) : (() => {
+                  const src = getQrSrc(reconnectData.qr);
+                  return src ? (
+                    <div className="flex flex-col items-center gap-2">
+                      <img
+                        src={src}
+                        alt="QR Code WhatsApp"
+                        className="w-48 h-48 rounded border border-border bg-white object-contain"
+                      />
+                      <div className="text-[10px] text-muted-foreground text-center space-y-0.5">
+                        <p>1. Abra o WhatsApp no fone de observação</p>
+                        <p>2. Vá em Menu → Aparelhos conectados</p>
+                        <p>3. Escaneie este código</p>
+                      </div>
+                      <div className="flex items-center gap-1.5">
+                        <Loader2 className="h-3 w-3 animate-spin text-muted-foreground" />
+                        <span className="text-[10px] text-muted-foreground">Aguardando leitura...</span>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="flex flex-col items-center gap-2 py-2">
+                      <p className="text-xs text-muted-foreground">QR code em formato não suportado.</p>
+                      <Button size="sm" variant="outline" className="gap-1.5" onClick={handleRefreshReconnectQr} disabled={reconnecting}>
+                        <RefreshCw className="h-3.5 w-3.5" /> Tentar novamente
+                      </Button>
+                    </div>
+                  );
+                })()}
+              </div>
+            ) : (
+              <div className="flex items-center justify-between rounded-lg border border-yellow-500/30 bg-yellow-500/5 px-4 py-3">
+                <div className="flex items-center gap-2">
+                  <WifiOff className="h-4 w-4 text-yellow-500 shrink-0" />
+                  <p className="text-xs text-muted-foreground">
+                    Fone desconectou? Reconecte sem perder os dados coletados.
+                  </p>
+                </div>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="gap-1.5 shrink-0 ml-3"
+                  onClick={handleReconnect}
+                  disabled={reconnecting}
+                >
+                  {reconnecting
+                    ? <><Loader2 className="h-3.5 w-3.5 animate-spin" /> Aguarde...</>
+                    : <><QrCode className="h-3.5 w-3.5" /> Reconectar</>}
+                </Button>
+              </div>
+            )}
+
             <SpyAgentHistory />
           </>
         )}
