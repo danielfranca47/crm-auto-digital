@@ -163,6 +163,11 @@ _followup_media_dir = Path("data/uploads/followup-media")
 _followup_media_dir.mkdir(parents=True, exist_ok=True)
 app.mount("/api/followup-media", StaticFiles(directory=str(_followup_media_dir)), name="followup-media")
 
+# Static: mídia de knowledge (imagens/PDFs enviados ao lead)
+_knowledge_media_dir = Path("data/uploads/knowledge/media")
+_knowledge_media_dir.mkdir(parents=True, exist_ok=True)
+app.mount("/static/knowledge-media", StaticFiles(directory=str(_knowledge_media_dir)), name="knowledge-media")
+
 # -----------------------------------------------------------------------------
 # SUB-APP PÚBLICO (Website / Form) -> montado em /public
 # -----------------------------------------------------------------------------

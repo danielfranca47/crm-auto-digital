@@ -276,6 +276,8 @@ export type KnowledgeItem = {
   content_text: string;
   file_path?: string | null;
   category?: string | null;
+  active_in_funnel: number;
+  media_url?: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -922,11 +924,11 @@ export const api = {
 
   crm: {
     getKnowledgeList: async () => apiClient.get<KnowledgeItem[]>(`/knowledge`),
-    createKnowledgeManual: async (payload: { title: string; content_text: string; category?: string | null }) =>
+    createKnowledgeManual: async (payload: { title: string; content_text: string; category?: string | null; active_in_funnel?: number }) =>
       apiClient.post<KnowledgeItem>(`/knowledge`, payload),
     updateKnowledge: async (
       id: number,
-      payload: Partial<{ title: string; content_text: string; category: string | null }>
+      payload: Partial<{ title: string; content_text: string; category: string | null; active_in_funnel: number }>
     ) => apiClient.put<KnowledgeItem>(`/knowledge/${id}`, payload),
     deleteKnowledge: async (id: number) => apiClient.delete(`/knowledge/${id}`),
     uploadKnowledgeFile: async (file: File) => {
@@ -934,6 +936,13 @@ export const api = {
       formData.append("file", file);
       return apiClient.post<KnowledgeItem>(`/knowledge/upload`, formData);
     },
+    uploadKnowledgeMedia: async (id: number, file: File) => {
+      const formData = new FormData();
+      formData.append("file", file);
+      return apiClient.post<KnowledgeItem>(`/knowledge/${id}/upload-media`, formData);
+    },
+    deleteKnowledgeMedia: async (id: number) =>
+      apiClient.delete<KnowledgeItem>(`/knowledge/${id}/media`),
     whatsappConnect: async () => apiClient.post<WhatsappConnectResponse>(`/whatsapp/connect`),
     whatsappStatus: async () => apiClient.get<WhatsappStatusResponse>(`/whatsapp/status`),
     whatsappRefreshQr: async () =>

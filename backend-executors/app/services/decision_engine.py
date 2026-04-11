@@ -2441,6 +2441,25 @@ def compose_decision_output(
                     "media_type": str(raw_op.get("media_type") or "image").strip(),
                 }
 
+    # Mídia de knowledge — usa mídia associada à categoria relevante na fase de apresentation
+    # (somente se offer_pack não definiu pre_send_media)
+    if effective_route_to == "apresentation" and not decision.pre_send_media:
+        knowledge_media = context.get("knowledge_media") or {}
+        if agent_mode_normalized in ("direto", "closer", "direto_autonomo"):
+            _km_candidates = ["product_details", "pitch_script"]
+        elif agent_mode_normalized == "agenda":
+            _km_candidates = ["session_preview", "service_pricing_table"]
+        else:  # consultivo
+            _km_candidates = ["product_details", "session_preview"]
+        for _cat in _km_candidates:
+            _murl = knowledge_media.get(_cat)
+            if _murl and str(_murl).strip():
+                decision.pre_send_media = {
+                    "media_url": str(_murl).strip(),
+                    "media_type": "image",
+                }
+                break
+
     return decision
 
 

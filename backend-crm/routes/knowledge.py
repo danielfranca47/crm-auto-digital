@@ -46,7 +46,11 @@ router = APIRouter(prefix="/api/knowledge", tags=["Knowledge"])
 UPLOAD_BASE = Path("data/uploads/knowledge")
 UPLOAD_BASE.mkdir(parents=True, exist_ok=True)
 
+MEDIA_BASE = Path("data/uploads/knowledge/media")
+MEDIA_BASE.mkdir(parents=True, exist_ok=True)
+
 ALLOWED_EXTENSIONS = {".txt", ".csv", ".xlsx"}
+ALLOWED_MEDIA_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp", ".gif", ".mp4", ".pdf"}
 
 
 def _row_to_item(row) -> KnowledgeItemOut:
@@ -121,12 +125,13 @@ async def create_manual_item(
     try:
         cur = conn.cursor()
         now_iso = datetime.utcnow().isoformat()
+        active = payload.active_in_funnel if payload.active_in_funnel is not None else 1
         cur.execute(
             """
-            INSERT INTO knowledge_items (user_id, title, source_type, content_text, file_path, category, created_at, updated_at)
-            VALUES (?, ?, 'manual', ?, NULL, ?, ?, ?)
+            INSERT INTO knowledge_items (user_id, title, source_type, content_text, file_path, category, active_in_funnel, created_at, updated_at)
+            VALUES (?, ?, 'manual', ?, NULL, ?, ?, ?, ?)
             """,
-            (current_user.id, payload.title, payload.content_text, payload.category, now_iso, now_iso),
+            (current_user.id, payload.title, payload.content_text, payload.category, active, now_iso, now_iso),
         )
         conn.commit()
 
@@ -168,6 +173,12 @@ async def update_item(
         if payload.category is not None:
             fields.append("category = ?")
             values.append(payload.category)
+        if payload.active_in_funnel is not None:
+            fields.append("active_in_funnel = ?")
+            values.append(payload.active_in_funnel)
+        if payload.media_url is not None:
+            fields.append("media_url = ?")
+            values.append(payload.media_url)
 
         if not fields:
             raise HTTPException(status_code=400, detail="Nenhum campo para atualizar")
@@ -213,6 +224,7 @@ async def delete_item(item_id: int, current_user: CurrentUser = Depends(require_
             raise HTTPException(status_code=404, detail="Item não encontrado")
 
         file_path = row["file_path"] if hasattr(row, "__getitem__") else None
+        media_url = row["media_url"] if hasattr(row, "__getitem__") else None
         cur.execute(
             "DELETE FROM knowledge_items WHERE id = ? AND user_id = ?",
             (item_id, current_user.id),
@@ -224,6 +236,10 @@ async def delete_item(item_id: int, current_user: CurrentUser = Depends(require_
                 Path(file_path).unlink(missing_ok=True)
             except Exception:
                 pass
+
+        # Apagar mídia associada se for um arquivo local
+        if media_url:
+            _try_delete_media_file(media_url)
 
         return {"ok": True}
     finally:
@@ -264,8 +280,8 @@ async def upload_file(
         now_iso = datetime.utcnow().isoformat()
         cur.execute(
             """
-            INSERT INTO knowledge_items (user_id, title, source_type, content_text, file_path, created_at, updated_at)
-            VALUES (?, ?, 'file', ?, ?, ?, ?)
+            INSERT INTO knowledge_items (user_id, title, source_type, content_text, file_path, active_in_funnel, created_at, updated_at)
+            VALUES (?, ?, 'file', ?, ?, 1, ?, ?)
             """,
             (
                 current_user.id,
@@ -281,6 +297,118 @@ async def upload_file(
         cur.execute(
             "SELECT * FROM knowledge_items WHERE id = ?",
             (cur.lastrowid,),
+        )
+        row = cur.fetchone()
+        return _row_to_item(row)
+    finally:
+        conn.close()
+
+
+def _try_delete_media_file(media_url: str) -> None:
+    """Tenta apagar o arquivo de mídia se for uma URL local do servidor."""
+    try:
+        public_base = os.getenv("CRM_PUBLIC_BASE_URL", "").rstrip("/")
+        if public_base and media_url.startswith(public_base + "/static/knowledge-media/"):
+            fname = media_url.split("/static/knowledge-media/")[-1]
+            fpath = MEDIA_BASE / fname
+            fpath.unlink(missing_ok=True)
+    except Exception:
+        pass
+
+
+@router.post("/{item_id}/upload-media", response_model=KnowledgeItemOut)
+async def upload_media(
+    item_id: int,
+    file: UploadFile = File(...),
+    current_user: CurrentUser = Depends(require_crm_access),
+):
+    """Faz upload de uma imagem/vídeo/PDF para ser enviado ao lead quando o agente usar esta seção."""
+    conn = get_connection()
+    try:
+        cur = conn.cursor()
+        cur.execute(
+            "SELECT * FROM knowledge_items WHERE id = ? AND user_id = ?",
+            (item_id, current_user.id),
+        )
+        existing = cur.fetchone()
+        if not existing:
+            raise HTTPException(status_code=404, detail="Item não encontrado")
+    finally:
+        conn.close()
+
+    filename = file.filename or ""
+    ext = Path(filename).suffix.lower()
+    if ext not in ALLOWED_MEDIA_EXTENSIONS:
+        raise HTTPException(
+            status_code=400,
+            detail="Formatos aceitos: .jpg, .jpeg, .png, .webp, .gif, .mp4, .pdf",
+        )
+
+    uid = uuid.uuid4().hex
+    dest = MEDIA_BASE / f"{uid}{ext}"
+    try:
+        content = await file.read()
+        dest.write_bytes(content)
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Falha ao salvar mídia: {exc}")
+
+    public_base = os.getenv("CRM_PUBLIC_BASE_URL", "").rstrip("/")
+    media_url = f"{public_base}/static/knowledge-media/{uid}{ext}"
+
+    # Apagar mídia anterior se existir
+    old_media = existing["media_url"] if hasattr(existing, "__getitem__") else None
+    if old_media:
+        _try_delete_media_file(old_media)
+
+    conn = get_connection()
+    try:
+        cur = conn.cursor()
+        now_iso = datetime.utcnow().isoformat()
+        cur.execute(
+            "UPDATE knowledge_items SET media_url = ?, updated_at = ? WHERE id = ? AND user_id = ?",
+            (media_url, now_iso, item_id, current_user.id),
+        )
+        conn.commit()
+        cur.execute(
+            "SELECT * FROM knowledge_items WHERE id = ? AND user_id = ?",
+            (item_id, current_user.id),
+        )
+        row = cur.fetchone()
+        return _row_to_item(row)
+    finally:
+        conn.close()
+
+
+@router.delete("/{item_id}/media", response_model=KnowledgeItemOut)
+async def delete_media(
+    item_id: int,
+    current_user: CurrentUser = Depends(require_crm_access),
+):
+    """Remove a mídia associada a um item de conhecimento."""
+    conn = get_connection()
+    try:
+        cur = conn.cursor()
+        cur.execute(
+            "SELECT * FROM knowledge_items WHERE id = ? AND user_id = ?",
+            (item_id, current_user.id),
+        )
+        existing = cur.fetchone()
+        if not existing:
+            raise HTTPException(status_code=404, detail="Item não encontrado")
+
+        old_media = existing["media_url"] if hasattr(existing, "__getitem__") else None
+        if old_media:
+            _try_delete_media_file(old_media)
+
+        now_iso = datetime.utcnow().isoformat()
+        cur.execute(
+            "UPDATE knowledge_items SET media_url = NULL, updated_at = ? WHERE id = ? AND user_id = ?",
+            (now_iso, item_id, current_user.id),
+        )
+        conn.commit()
+        cur.execute(
+            "SELECT * FROM knowledge_items WHERE id = ? AND user_id = ?",
+            (item_id, current_user.id),
         )
         row = cur.fetchone()
         return _row_to_item(row)

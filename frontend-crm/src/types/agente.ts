@@ -377,6 +377,7 @@ export interface KnowledgeCategory {
   hint: string;
   placeholder: string;
   importance: 'critical' | 'recommended' | 'optional';
+  when_used?: string;
 }
 
 const CAT_SOCIAL_PROOF_SDR: KnowledgeCategory = {
@@ -386,6 +387,7 @@ const CAT_SOCIAL_PROOF_SDR: KnowledgeCategory = {
   hint: 'Escreva 2–4 casos reais de [PÚBLICO] em [NICHO]: perfil do cliente, problema que tinha, resultado obtido em números. Ex: "[Perfil do cliente] — reduziu [métrica] em X% em Y meses."',
   placeholder: 'Cliente 1: [PÚBLICO] — Problema: [...] — Resultado: [...]\nCliente 2: [perfil similar] — Problema: [...] — Resultado: [...]',
   importance: 'critical',
+  when_used: 'Aquecimento · Follow-up',
 };
 
 const CAT_OBJECTIONS_SDR: KnowledgeCategory = {
@@ -395,6 +397,7 @@ const CAT_OBJECTIONS_SDR: KnowledgeCategory = {
   hint: 'Liste cada objeção e a resposta recomendada. Foque em: preço ("está caro"), timing ("não é o momento"), decisor ("preciso consultar meu sócio"), concorrência ("já uso outra solução").',
   placeholder: 'Objeção: "Está caro para o nosso momento."\nResposta: "Entendo. Muitos dos nossos clientes disseram o mesmo antes — e descobrimos que o custo de não resolver isso costuma ser maior. Posso te mostrar como calculamos isso?"\n\nObjeção: "Preciso falar com meu sócio."\nResposta: "Faz todo sentido. Para facilitar, posso montar um resumo de 1 página para você apresentar — ou podemos incluí-lo na próxima conversa diretamente?"',
   importance: 'critical',
+  when_used: 'Apresentação · Follow-up',
 };
 
 const CAT_COMPANY_PROFILE: KnowledgeCategory = {
@@ -404,6 +407,7 @@ const CAT_COMPANY_PROFILE: KnowledgeCategory = {
   hint: 'Descreva quem é a empresa em [NICHO]: nome oficial, segmento, o que entrega para [PÚBLICO], e o principal diferencial competitivo. O agente usa isso para responder "quem vocês são?" durante a qualificação.',
   placeholder: 'Nome: [Empresa]\nSegmento: [NICHO]\nO que entrega: [Descreva a solução principal]\nPara quem: [PÚBLICO]\nDiferencial: [O que torna vocês únicos nesse mercado]',
   importance: 'critical',
+  when_used: 'Qualificação',
 };
 
 const CAT_QUALIFICATION_CRITERIA: KnowledgeCategory = {
@@ -413,6 +417,7 @@ const CAT_QUALIFICATION_CRITERIA: KnowledgeCategory = {
   hint: 'Defina os critérios que aprovam ou descartam um lead de [PÚBLICO] em [NICHO] para F1 e F3. O agente usa isso para decidir se avança ou encerra a conversa.',
   placeholder: 'Aprovado se:\n- Faturamento acima de R$ 2M/ano\n- Setor: [indústria, logística, varejo B2B]\n- Decisor: sócio, CEO, CFO ou diretor\n- Budget: mínimo R$ 3.000/mês\n- Timing: necessidade nos próximos 90 dias\n\nDesqualificado se:\n- Empresa com menos de 10 funcionários\n- Apenas operacional tomando a decisão',
   importance: 'recommended',
+  when_used: 'Qualificação',
 };
 
 const CAT_PRE_MEETING_FAQ: KnowledgeCategory = {
@@ -422,6 +427,7 @@ const CAT_PRE_MEETING_FAQ: KnowledgeCategory = {
   hint: 'Liste perguntas e respostas curtas. Ex: duração, formato (presencial/online), o que precisa preparar, se é uma venda ou uma conversa exploratória.',
   placeholder: '"Quanto tempo dura a reunião?" → 30–40 minutos.\n"É presencial ou online?" → Online via Google Meet, com link enviado na confirmação.\n"Vou ser pressionado a comprar?" → Não — é uma conversa de diagnóstico. Você só decide se fizer sentido.\n"Preciso preparar algo?" → Não é necessário, mas se puder, nos diga o maior desafio atual.',
   importance: 'recommended',
+  when_used: 'Qualificação',
 };
 
 const CAT_PRICE_POLICY: KnowledgeCategory = {
@@ -431,6 +437,7 @@ const CAT_PRICE_POLICY: KnowledgeCategory = {
   hint: 'Defina se o agente deve citar faixas de preço, dizer que o preço é apresentado na reunião, ou dar uma âncora de valor. Seja específico para evitar que o agente improvise.',
   placeholder: 'O agente NÃO deve citar preços específicos antes da reunião.\nSe perguntado, responder: "O investimento varia conforme o tamanho e as necessidades da sua operação — por isso a reunião existe, para entendermos o que faz sentido para vocês."\nFaixa de referência (para citar apenas se o lead insistir): a partir de R$ X/mês.',
   importance: 'recommended',
+  when_used: 'Apresentação',
 };
 
 const CAT_PITCH_SCRIPT: KnowledgeCategory = {
@@ -440,6 +447,7 @@ const CAT_PITCH_SCRIPT: KnowledgeCategory = {
   hint: 'Escreva o pitch de [OFERTA] para [PÚBLICO] seguindo a estrutura: 1) Dor (eco da dor do lead), 2) Solução (o que é o produto), 3) Benefícios (3 resultados concretos), 4) Prova social (1 caso de sucesso rápido), 5) Oferta (preço, o que inclui), 6) Urgência (por que agir agora).',
   placeholder: '🔴 Dor: "Você me disse que [dor]. Isso é exatamente o que [OFERTA] resolve."\n\n✅ Solução: [OFERTA] é [descrição em 1 frase].\n\n📈 Benefícios:\n1. [Resultado concreto 1]\n2. [Resultado concreto 2]\n3. [Resultado concreto 3]\n\n⭐ Prova social: "[Perfil de [PÚBLICO]] conseguiu [resultado] em [tempo]."\n\n💰 Oferta: [Preço] por [período]. Inclui: [lista rápida].\n\n⏰ Urgência: [Ex: "Essa condição é válida até [data] / Restam X vagas com esse preço."]',
   importance: 'critical',
+  when_used: 'Apresentação',
 };
 
 const CAT_OBJECTIONS_CLOSER: KnowledgeCategory = {
@@ -449,6 +457,7 @@ const CAT_OBJECTIONS_CLOSER: KnowledgeCategory = {
   hint: 'Liste cada objeção e a resposta exata (ou roteiro de resposta) que o agente deve dar. Seja direto — em low ticket a conversa é rápida e o agente precisa de respostas prontas.',
   placeholder: '"Está caro." → "Entendo. Para te dar um parâmetro: clientes nossos costumam recuperar o valor em [X dias/semanas] com [benefício específico]. Faz sentido?"\n\n"Vou pensar." → "Sem problema! Só lembrando que [urgência/condição especial] termina [data/condição]. Posso reservar sua vaga enquanto você decide?"\n\n"Já tentei algo parecido antes." → "O que não funcionou naquela época? [Aguardar resposta] — entendo. Nosso diferencial em relação a isso é [diferencial específico]."',
   importance: 'critical',
+  when_used: 'Apresentação · Follow-up',
 };
 
 const CAT_SOCIAL_PROOF_CLOSER: KnowledgeCategory = {
@@ -458,6 +467,7 @@ const CAT_SOCIAL_PROOF_CLOSER: KnowledgeCategory = {
   hint: 'Escreva depoimentos reais (ou compostos) com resultado específico. O bot os cita naturalmente durante o pitch. Inclua: perfil do cliente, resultado obtido, tempo para resultado.',
   placeholder: '"Consegui [resultado] em [X semanas] depois de [ação]. Simplesmente funcionou." — [Perfil: ex. mãe de 2 filhos, 34 anos]\n\n"Eu estava cético no início, mas em [X dias] já vi [resultado concreto]." — [Perfil: ex. professor de educação física]\n\n"Melhor investimento que fiz esse ano." — [Perfil]',
   importance: 'critical',
+  when_used: 'Aquecimento · Follow-up',
 };
 
 const CAT_PRODUCT_DETAILS: KnowledgeCategory = {
@@ -467,6 +477,7 @@ const CAT_PRODUCT_DETAILS: KnowledgeCategory = {
   hint: 'Descreva tudo que o cliente recebe ao comprar. O agente usa isso para responder "o que vem junto?" durante o pitch.',
   placeholder: 'O produto inclui:\n- [Módulo/item 1]: [descrição breve]\n- [Módulo/item 2]: [descrição breve]\n- Bônus: [nome do bônus] (valor: R$ X)\n- Acesso: [Ex: vitalício / 12 meses / imediato após pagamento]\n- Suporte: [Ex: grupo no WhatsApp / e-mail / sem suporte]',
   importance: 'recommended',
+  when_used: 'Apresentação',
 };
 
 const CAT_GUARANTEE: KnowledgeCategory = {
@@ -476,6 +487,7 @@ const CAT_GUARANTEE: KnowledgeCategory = {
   hint: 'Descreva a garantia de forma clara. O agente usa isso para reduzir o risco percebido antes do pagamento.',
   placeholder: 'Garantia de X dias. Se não ficar satisfeito por qualquer motivo, basta enviar um e-mail para [contato] dentro do prazo e o reembolso é feito em até [X dias úteis]. Sem perguntas, sem burocracia.',
   importance: 'recommended',
+  when_used: 'Apresentação',
 };
 
 const CAT_URGENCY_OFFER: KnowledgeCategory = {
@@ -485,6 +497,7 @@ const CAT_URGENCY_OFFER: KnowledgeCategory = {
   hint: 'Descreva a condição especial atual com precisão. IMPORTANTE: mantenha atualizado. O agente só cria urgência real se a informação for verdadeira.',
   placeholder: 'Condição vigente até [data]: preço de R$ X (de R$ Y cheio).\nVagas disponíveis nessa condição: [número ou "últimas unidades"].\nBônus exclusivo para quem comprar até [data]: [nome do bônus].',
   importance: 'recommended',
+  when_used: 'Apresentação',
 };
 
 const CAT_UPSELL: KnowledgeCategory = {
@@ -494,6 +507,7 @@ const CAT_UPSELL: KnowledgeCategory = {
   hint: 'Descreva o produto de upsell, o argumento para oferecê-lo e o preço especial. O bot apresenta logo após confirmar o pagamento.',
   placeholder: 'Upsell: [Nome do produto]\nArgumento: "Clientes que levaram [produto principal] normalmente levam isso junto porque [benefício complementar]."\nPreço especial pós-compra: R$ X (normal: R$ Y)\nLink: [URL do upsell]',
   importance: 'optional',
+  when_used: 'Pós-venda',
 };
 
 const CAT_CART_RECOVERY: KnowledgeCategory = {
@@ -503,6 +517,7 @@ const CAT_CART_RECOVERY: KnowledgeCategory = {
   hint: 'Escreva 3 mensagens com ângulos diferentes para os intervalos de 2h, 24h e 48h após o abandono. Cada mensagem deve ter um gancho diferente: urgência, benefício ou prova social.',
   placeholder: 'Mensagem 1 (2h depois):\n"Oi [nome]! Vi que você ficou de olho no [produto]. Ainda dá tempo de garantir com [condição especial]. Posso te ajudar com alguma dúvida?"\n\nMensagem 2 (24h depois):\n"[Nome], uma coisa que os nossos clientes mais elogiam é [benefício principal]. Você ainda tem a chance de garantir o seu com [desconto/bônus]. Válido até [data]."\n\nMensagem 3 (48h depois):\n"Última chance! A condição de R$ X termina hoje à meia-noite. [Prova social rápida]. Quer garantir antes que acabe?"',
   importance: 'recommended',
+  when_used: 'Follow-up',
 };
 
 const CAT_FIT_QUESTIONS: KnowledgeCategory = {
@@ -512,6 +527,7 @@ const CAT_FIT_QUESTIONS: KnowledgeCategory = {
   hint: 'Defina as 1–2 perguntas que filtram quem de [PÚBLICO] tem ou não tem a dor que [OFERTA] resolve. O objetivo é confirmar o fit antes do pitch — não é uma qualificação profunda.',
   placeholder: 'Pergunta 1: "[Pergunta que confirma a dor principal de [PÚBLICO]]"\nEx: "Você já tentou [solução alternativa] antes?"\n\nPergunta 2 (opcional): "[Pergunta que confirma o perfil]"\nEx: "Você está buscando resultado em quanto tempo?"',
   importance: 'recommended',
+  when_used: 'Qualificação',
 };
 
 const CAT_POST_PURCHASE_ONBOARDING: KnowledgeCategory = {
@@ -521,6 +537,7 @@ const CAT_POST_PURCHASE_ONBOARDING: KnowledgeCategory = {
   hint: 'Escreva a mensagem que o bot envia imediatamente após a compra ser confirmada. Deve passar: boas-vindas, como acessar o produto, o que fazer primeiro e onde pedir ajuda.',
   placeholder: 'Bem-vindo ao [produto], [nome]! 🎉\n\nSeu acesso foi liberado. Veja o que fazer agora:\n1️⃣ Acesse em: [LINK]\n2️⃣ Comece por: [módulo/etapa inicial]\n3️⃣ Dúvidas? Escreva aqui mesmo ou entre no grupo: [LINK DO GRUPO]\n\nQualquer coisa, é só chamar. Vamos juntos!',
   importance: 'optional',
+  when_used: 'Pós-venda',
 };
 
 const CAT_PROFESSIONAL_BIO: KnowledgeCategory = {
@@ -530,6 +547,7 @@ const CAT_PROFESSIONAL_BIO: KnowledgeCategory = {
   hint: 'Escreva como o agente deve se apresentar em nome do profissional que atua em [NICHO]. Inclua: nome, especialidade, formação relevante, anos de experiência, tipo de cliente atendido ([PÚBLICO]), diferencial.',
   placeholder: '[Nome] é [especialidade] com [X anos] de experiência em [NICHO]. Formado em [formação] e especializado em [área específica]. Atende [PÚBLICO] que querem [resultado]. Seu diferencial é [o que o torna único — método, abordagem, resultado recorrente].',
   importance: 'critical',
+  when_used: 'Apresentação',
 };
 
 const CAT_SOCIAL_PROOF_HYBRID: KnowledgeCategory = {
@@ -539,6 +557,7 @@ const CAT_SOCIAL_PROOF_HYBRID: KnowledgeCategory = {
   hint: 'Escreva 2–3 histórias de transformação de [PÚBLICO] em [NICHO]: perfil (sem nome completo), situação inicial, o que mudou após trabalhar com o profissional, e o resultado em detalhes. O agente as cita para aquecer o lead antes de propor o agendamento.',
   placeholder: 'História 1: [PÚBLICO] — Chegou com [situação inicial em [NICHO]]. Depois de [período] trabalhando com [Nome do profissional], [resultado concreto]. Hoje [situação atual].\n\nHistória 2: [perfil similar] — [Situação inicial]. O principal avanço foi [resultado específico].',
   importance: 'critical',
+  when_used: 'Aquecimento · Follow-up',
 };
 
 const CAT_SESSION_PREVIEW: KnowledgeCategory = {
@@ -548,6 +567,7 @@ const CAT_SESSION_PREVIEW: KnowledgeCategory = {
   hint: 'Descreva a sessão do ponto de vista do lead de [PÚBLICO] em [NICHO]. O agente usa isso para reduzir ansiedade antes do agendamento e aumentar o comparecimento.',
   placeholder: 'A sessão dura [X minutos] e acontece [online via Google Meet / presencialmente em X].\nNo encontro, [Nome] vai: 1) Entender sua situação em [NICHO], 2) Identificar os principais bloqueios, 3) Mostrar o caminho mais direto para [resultado esperado por [PÚBLICO]].\nNão é uma consulta de vendas — é um diagnóstico real. Você sai com [entregável concreto].',
   importance: 'critical',
+  when_used: 'Apresentação',
 };
 
 const CAT_PAIN_QUESTIONS: KnowledgeCategory = {
@@ -557,6 +577,7 @@ const CAT_PAIN_QUESTIONS: KnowledgeCategory = {
   hint: 'Escreva as perguntas que o agente deve fazer para entender o problema do lead de [PÚBLICO]. As respostas viram o briefing enviado ao profissional antes da sessão. Foque em perguntas abertas, não binárias.',
   placeholder: '"Qual é o seu principal desafio em relação a [NICHO] no momento?"\n"Como isso impacta o seu [dia a dia / resultados / bem-estar]?"\n"O que você já tentou fazer para resolver isso?"\n"O que mudaria na sua vida se você resolvesse isso nos próximos 3 meses?"',
   importance: 'recommended',
+  when_used: 'Qualificação',
 };
 
 const CAT_SCHEDULING_POLICY: KnowledgeCategory = {
@@ -566,6 +587,7 @@ const CAT_SCHEDULING_POLICY: KnowledgeCategory = {
   hint: 'Defina as regras com clareza para que o agente comunique ao lead durante e após o agendamento.',
   placeholder: 'Cancelamento: até [X horas antes], pelo WhatsApp ou pelo link da confirmação.\nReagendamento: possível uma vez sem custo. Para reagendar, responder esta mensagem.\nNo-show: se o lead não comparecer sem avisar, o agente reagenda automaticamente e envia uma mensagem de retorno.',
   importance: 'recommended',
+  when_used: 'Agendamento',
 };
 
 const CAT_SERVICE_FAQ: KnowledgeCategory = {
@@ -575,6 +597,7 @@ const CAT_SERVICE_FAQ: KnowledgeCategory = {
   hint: 'Antecipe as perguntas mais comuns que o lead faz antes de agendar. O agente responde com essas informações diretamente na conversa.',
   placeholder: '"Qual o valor da sessão?" → R$ X por [duração]. Pacotes a partir de [X sessões].\n"É online ou presencial?" → [Resposta]\n"Quantas sessões precisarei?" → Depende do objetivo — na 1ª sessão [Nome] faz o diagnóstico e indica o melhor formato.\n"Você aceita plano de saúde?" → [Resposta]',
   importance: 'recommended',
+  when_used: 'Apresentação · Follow-up',
 };
 
 const CAT_PRE_SESSION_MATERIAL: KnowledgeCategory = {
@@ -584,6 +607,7 @@ const CAT_PRE_SESSION_MATERIAL: KnowledgeCategory = {
   hint: 'Descreva o que o lead precisa fazer antes de comparecer — e o texto exato que o agente envia. Pode ser um link de formulário, perguntas por texto ou uma tarefa simples.',
   placeholder: 'Texto que o agente envia 24h antes:\n"Antes da nossa sessão, [Nome do profissional] gostaria que você respondesse rapidinho 3 perguntas — leva menos de 5 minutos e deixa a sessão muito mais aproveitada: [LINK DO FORMULÁRIO]"',
   importance: 'optional',
+  when_used: 'Agendamento',
 };
 
 const CAT_HANDOFF_BRIEFING: KnowledgeCategory = {
@@ -593,6 +617,7 @@ const CAT_HANDOFF_BRIEFING: KnowledgeCategory = {
   hint: 'Defina quais campos devem constar no dossiê entregue ao vendedor. O agente preenche automaticamente com as respostas coletadas durante a qualificação.',
   placeholder: 'DOSSIÊ DO LEAD — [Nome]\n\nPerfil:\n- Empresa: [resposta]\n- Setor: [resposta]\n- Porte / Faturamento: [resposta]\n- Cargo do decisor: [resposta]\n\nDor principal: [resposta F1]\nMomento: [urgência declarada]\nBudget confirmado: [sim/não + valor]\n\nObjeções levantadas: [se houver]\nNível de urgência (1–10): [resposta]\n\nLink da agenda: [se agendado via bot]',
   importance: 'recommended',
+  when_used: 'Handoff ao vendedor',
 };
 
 const CAT_COMPETITIVE_DIFFERENTIALS: KnowledgeCategory = {
@@ -602,6 +627,7 @@ const CAT_COMPETITIVE_DIFFERENTIALS: KnowledgeCategory = {
   hint: 'Liste os concorrentes mais comuns e o argumento de diferenciação para cada um. O agente usa quando o lead diz "já uso X" ou "estou avaliando Y também".',
   placeholder: 'Concorrente A: "[Nome]"\nDiferencial: "[O que nos torna melhor ou diferente nesse caso específico]"\n\nConcorrente B: "[Nome]"\nDiferencial: "[O que nos torna melhor ou diferente nesse caso específico]"\n\nResposta padrão (concorrente não listado):\n"Conheço [nome]. O que costumamos ouvir de quem migrou para nós é que [diferencial principal]. Mas cada caso é diferente — por isso a reunião existe."',
   importance: 'optional',
+  when_used: 'Qualificação · Apresentação',
 };
 
 const CAT_NURTURE_CONTENT: KnowledgeCategory = {
@@ -611,6 +637,7 @@ const CAT_NURTURE_CONTENT: KnowledgeCategory = {
   hint: 'Escreva 2–3 mensagens para manter contato com leads fora do timing ideal. O objetivo não é vender — é manter a relação quente para uma conversa futura.',
   placeholder: 'Mensagem 1 (imediata — após descarte suave):\n"Entendo que não é o momento certo agora. Quando fizer sentido revisitar, é só me chamar — vou estar aqui."\n\nMensagem 2 (30 dias depois):\n"Oi [nome], passando para dizer que [novidade relevante / insight do setor]. Acho que pode ser útil para o momento que você está. Qualquer coisa, é só falar."\n\nMensagem 3 (90 dias depois):\n"[Nome], faz um tempo! Como estão as coisas em [área]? Nosso [produto] teve algumas melhorias recentes que podem mudar o cálculo do que conversamos."',
   importance: 'optional',
+  when_used: 'Follow-up',
 };
 
 const CAT_WARMING_SCRIPT: KnowledgeCategory = {
@@ -620,6 +647,7 @@ const CAT_WARMING_SCRIPT: KnowledgeCategory = {
   hint: 'Escreva o texto que o agente usa para criar conexão emocional com [PÚBLICO] em [NICHO] e gerar desejo pelo agendamento. Deve soar natural, não como pitch. Use a dor do lead como ponto de partida.',
   placeholder: 'Roteiro de aquecimento:\n\n"[Nome], muitas pessoas que chegam até [profissional] estão passando exatamente pelo que você descreveu — [eco da dor]. O que elas costumam descobrir nas primeiras sessões é que [insight transformador].\n\n[História de transformação resumida — 2 linhas].\n\nA [Nome do profissional] tem uma abordagem diferente para isso: [diferencial do método]. Não é mais do mesmo — é [o que é único].\n\nVocê teria interesse em uma conversa rápida para ver se faz sentido para o seu caso?"',
   importance: 'recommended',
+  when_used: 'Aquecimento',
 };
 
 const CAT_POST_SESSION_FOLLOWUP: KnowledgeCategory = {
@@ -629,6 +657,7 @@ const CAT_POST_SESSION_FOLLOWUP: KnowledgeCategory = {
   hint: 'Escreva 2–3 mensagens para reconectar com clientes que participaram da sessão mas sumiram. O objetivo é propor uma nova marcação sem soar insistente.',
   placeholder: 'Mensagem 1 (3 dias após sessão sem retorno):\n"Oi [nome]! Esperamos que a sessão tenha sido boa. Como você está se sentindo desde então? Se quiser marcar o próximo encontro, é só me falar."\n\nMensagem 2 (10 dias após):\n"[Nome], [Nome do profissional] estava pensando em você. Tem alguma questão específica que ficou em aberto da nossa última sessão? Às vezes um ajuste pequeno faz toda a diferença."\n\nMensagem 3 (30 dias após):\n"Faz um tempo! Quando estiver pronto para continuar, a agenda de [Nome do profissional] está disponível. Qualquer dia é um bom dia para retomar."',
   importance: 'optional',
+  when_used: 'Follow-up',
 };
 
 const CAT_REFERRAL_SCRIPT: KnowledgeCategory = {
@@ -638,6 +667,7 @@ const CAT_REFERRAL_SCRIPT: KnowledgeCategory = {
   hint: 'Escreva a mensagem que o agente envia para pedir indicação. O momento ideal é logo após o cliente confirmar que a sessão foi boa. Deve soar natural, não como solicitação comercial.',
   placeholder: '"[Nome], fico feliz que a sessão tenha sido proveitosa! Uma coisa que ajuda muito [Nome do profissional] a ajudar mais pessoas é a indicação de quem já viveu a experiência.\n\nSe você conhece alguém que está passando por [dor / situação similar], eu adoraria bater um papo com essa pessoa. Pode ser uma mensagem simples apresentando a [Nome do profissional].\n\nE se quiser, posso preparar uma mensagem pronta para você encaminhar — leva 30 segundos. O que acha?"',
   importance: 'optional',
+  when_used: 'Pós-atendimento',
 };
 
 // ─── Categorias comerciais do hybrid_scheduler (sub-modo 'commercial') ───────
@@ -649,6 +679,7 @@ const CAT_SERVICE_PRICING_TABLE: KnowledgeCategory = {
   hint: 'Liste todos os serviços e pacotes disponíveis com seus respectivos valores. O agente usará essas informações para apresentar opções ao lead de [PÚBLICO] em [NICHO] e conduzir a escolha de um serviço antes de agendar.',
   placeholder: 'Sessão avulsa — [duração]: R$ [valor]\nPacote [X] sessões: R$ [valor] (economia de [%])\nPacote [Y] sessões: R$ [valor]\n\nSe houver diferença entre modalidades (ex: presencial vs. online), especifique aqui também.',
   importance: 'critical',
+  when_used: 'Apresentação comercial',
 };
 
 const CAT_COMMERCIAL_OBJECTIONS: KnowledgeCategory = {
@@ -658,6 +689,7 @@ const CAT_COMMERCIAL_OBJECTIONS: KnowledgeCategory = {
   hint: 'Liste as objeções mais comuns de [PÚBLICO] antes de fechar um pacote em [NICHO] e a resposta ideal para cada uma. O agente usa isso para tratar objeções e manter o lead avançando rumo ao compromisso.',
   placeholder: '"Está caro" → [Resposta que reformula o valor entregue e compara com o custo do problema não resolvido]\n"Vou pensar" → [Resposta que cria urgência real ou remove o risco da decisão]\n"Deixa eu ver minha agenda" → [Resposta que acelera o comprometimento propondo uma data imediatamente]\n"Não tenho certeza se vai funcionar pra mim" → [Resposta com prova social de perfil similar]',
   importance: 'critical',
+  when_used: 'Apresentação comercial',
 };
 
 const CAT_SERVICE_DIFFERENTIALS: KnowledgeCategory = {
@@ -667,6 +699,7 @@ const CAT_SERVICE_DIFFERENTIALS: KnowledgeCategory = {
   hint: 'Descreva o que torna este serviço em [NICHO] único: técnica, formação, ambiente, resultados comprovados, abordagem. O agente usa isso quando o lead menciona comparar com outro profissional ou questionar o diferencial.',
   placeholder: 'Técnica: [método ou abordagem exclusiva]\nFormação: [certificações, especializações relevantes para [PÚBLICO]]\nAmbiente: [localização, estrutura, comodidades]\nResultados: [métricas ou histórico comprovável]\nDiferencial central: [o que nenhum concorrente entrega da mesma forma]',
   importance: 'recommended',
+  when_used: 'Apresentação comercial',
 };
 
 const CAT_ACTIVE_PROMOTION: KnowledgeCategory = {
@@ -676,6 +709,7 @@ const CAT_ACTIVE_PROMOTION: KnowledgeCategory = {
   hint: 'Descreva a condição especial ativa no momento (se houver). O agente só cita se for real — não inventa urgência. Mantenha atualizado: quando a promoção terminar, remova ou edite este conteúdo.',
   placeholder: 'Condição vigente até [data]: [descrição da promoção — ex: "pacote de 4 sessões por R$X (antes R$Y)" ou "bônus de sessão extra para quem fechar até sexta"]\n\nRegra de comunicação: mencionar apenas se o lead estiver em dúvida entre fechar ou esperar.',
   importance: 'recommended',
+  when_used: 'Apresentação comercial',
 };
 
 const CAT_PAYMENT_POLICY: KnowledgeCategory = {
@@ -685,6 +719,7 @@ const CAT_PAYMENT_POLICY: KnowledgeCategory = {
   hint: 'Informe como o pagamento funciona na prática. O agente comunica isso ao lead após fechar o compromisso, para que ele chegue preparado.',
   placeholder: 'Formas aceitas: [Pix / Dinheiro / Cartão de débito ou crédito — especificar quais]\nSinal para reservar vaga: [valor ou percentual, se aplicável]\nPagamento integral: na chegada, antes da sessão.\n\nObs: nenhum link de pagamento digital é enviado — tudo presencialmente.',
   importance: 'recommended',
+  when_used: 'Apresentação comercial',
 };
 
 const CAT_PRE_COMMITMENT_FAQ: KnowledgeCategory = {
@@ -694,6 +729,7 @@ const CAT_PRE_COMMITMENT_FAQ: KnowledgeCategory = {
   hint: 'Antecipe as dúvidas que travam o "sim" final de [PÚBLICO]. O agente responde com essas informações durante a negociação.',
   placeholder: '"As sessões do pacote vencem?" → [Resposta]\n"Posso pausar ou trancar o pacote?" → [Resposta]\n"Consigo transferir para outra pessoa?" → [Resposta]\n"E se eu não gostar da primeira sessão?" → [Política de reembolso ou garantia]\n"Posso parcelar no cartão?" → [Resposta]',
   importance: 'recommended',
+  when_used: 'Apresentação comercial',
 };
 
 export const KNOWLEDGE_CATEGORIES_HYBRID_COMMERCIAL: KnowledgeCategory[] = [

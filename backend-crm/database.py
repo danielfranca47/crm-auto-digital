@@ -352,6 +352,8 @@ def ensure_knowledge_table(conn: sqlite3.Connection) -> None:
         """
     )
     ensure_column(conn, "knowledge_items", "category", "category TEXT NULL")
+    ensure_column(conn, "knowledge_items", "active_in_funnel", "INTEGER NOT NULL DEFAULT 1")
+    ensure_column(conn, "knowledge_items", "media_url", "TEXT NULL")
 
 
 # =========================

@@ -268,19 +268,22 @@ def whatsapp_execution_context(
 
     bundle.metadata["allowed_lead_categories"] = LEAD_CATEGORIES
 
-    # Buscar knowledge items do usuário para injeção no LLM (primeiro por categoria)
+    # Buscar knowledge items do usuário para injeção no LLM (primeiro por categoria, apenas ativos no funil)
     knowledge_by_category: Dict[str, str] = {}
+    knowledge_media: Dict[str, str] = {}
     with get_connection() as conn:
         conn.row_factory = sqlite3.Row
         cur = conn.cursor()
         cur.execute(
-            "SELECT category, content_text FROM knowledge_items WHERE user_id = ? ORDER BY updated_at DESC",
+            "SELECT category, content_text, media_url FROM knowledge_items WHERE user_id = ? AND active_in_funnel = 1 ORDER BY updated_at DESC",
             (event.user_id,),
         )
         for row in cur.fetchall():
             cat = row["category"] or "uncategorized"
             if cat not in knowledge_by_category:
                 knowledge_by_category[cat] = row["content_text"]
+                if row["media_url"]:
+                    knowledge_media[cat] = row["media_url"]
 
     return {
         "job": job,
@@ -292,6 +295,7 @@ def whatsapp_execution_context(
         "qualification_state": qualification_state,
         "metadata": bundle.metadata,
         "knowledge_items": knowledge_by_category,
+        "knowledge_media": knowledge_media,
         "generated_prompt_parts": (bundle.ai_profile or {}).get("generated_prompt_parts") or {},
     }
 

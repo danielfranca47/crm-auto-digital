@@ -179,12 +179,15 @@ class KnowledgeCreate(BaseModel):
     title: str = Field(min_length=3)
     content_text: str = Field(min_length=20)
     category: Optional[str] = None
+    active_in_funnel: Optional[int] = 1
 
 
 class KnowledgeUpdate(BaseModel):
     title: Optional[str] = Field(default=None, min_length=3)
     content_text: Optional[str] = Field(default=None, min_length=20)
     category: Optional[str] = None
+    active_in_funnel: Optional[int] = None
+    media_url: Optional[str] = None
 
 
 class KnowledgeItemOut(BaseModel):
@@ -195,6 +198,8 @@ class KnowledgeItemOut(BaseModel):
     content_text: str
     file_path: Optional[str] = None
     category: Optional[str] = None
+    active_in_funnel: int = 1
+    media_url: Optional[str] = None
     created_at: datetime
     updated_at: datetime
 
