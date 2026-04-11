@@ -70,6 +70,9 @@ def extract_fields_llm(context: Dict[str, Any], fields_schema: Dict[str, str]) -
         None,
     )
 
+    _custom_fields = list(fields_schema.keys()) if fields_schema else []
+    _custom_fields_str = ", ".join(_custom_fields) if _custom_fields else "(nenhum)"
+
     prompt = (
         f"Você é um extractor de campos de qualificação para um CRM de vendas.\n\n"
         f"CAMPO PRIORITÁRIO A EXTRAIR: {current_field or '(todos)'}\n"
@@ -79,8 +82,9 @@ def extract_fields_llm(context: Dict[str, Any], fields_schema: Dict[str, str]) -
         + (f"PÚBLICO-ALVO: {target_audience}\n\n" if target_audience else "\n")
         + "Regras:\n"
         f"- Priorize a extração de {current_field or 'todos os campos'}\n"
-        "- Para os demais campos, extraia APENAS se houver evidência CLARA e DIRETA\n"
-        "- confidence < 0.6 = não extrair (retornar null para o campo)\n"
+        f"- CAMPOS OBRIGATÓRIOS DO PERFIL [{_custom_fields_str}]: extraia TODOS que aparecerem no texto, "
+        f"mesmo sendo campos secundários ao campo prioritário. Limiar: confidence >= 0.4 é suficiente para extrair.\n"
+        "- Para campos de contexto padrão (não listados acima), extraia APENAS se houver evidência CLARA e DIRETA. Limiar: confidence >= 0.6.\n"
         "- Nunca infira valores — extraia apenas do texto\n"
         "- Se o lead disse algo ambíguo, retorne confidence baixa, não invente interpretação\n\n"
         f"Schema: {json.dumps(schema, ensure_ascii=False)}\n"

@@ -1435,6 +1435,31 @@ def _build_child_prompt_apresentation(
     hybrid_flow_style = _resolve_hybrid_flow_style(context)
     offer_pack_summary = _build_offer_pack_summary(context)
 
+    # Fix P9: passive reply antes do agendamento quando a qualificação foi auto-promovida
+    # neste mesmo turno e o lead tinha uma pergunta aberta de serviço na mensagem.
+    _response_style_apres = (ai_profile.get("response_style") or "passive").strip().lower()
+    _auto_promoted_from_qual = (
+        mother_decision.route_to == "qualification"
+        and not mode_contract.get("missing_fields")
+    )
+    _inbound_text_apres = str(metadata.get("inbound_message_text") or "").lower()
+    _apres_inbound_has_question = "?" in _inbound_text_apres or any(
+        m in _inbound_text_apres for m in [
+            "gostaria de saber", "como faço", "como funciona", "o que é",
+            "queria entender", "pode me dizer", "me explica", "preciso entender",
+        ]
+    )
+    _passive_apres_header = ""
+    if _auto_promoted_from_qual and _response_style_apres == "passive" and _apres_inbound_has_question:
+        _passive_apres_header = (
+            "ATENÇÃO — PERGUNTA ABERTA DO LEAD: O lead fez uma pergunta sobre o serviço neste turno "
+            "(ver inbound_message_text). A qualificação foi concluída neste mesmo turno.\n"
+            "INSTRUÇÃO CRÍTICA: ANTES de propor o agendamento, RESPONDE à pergunta do lead "
+            "usando offer_description e custom_instructions.\n"
+            "Integra a resposta e a proposta de agendamento numa única mensagem fluida e natural. "
+            "NUNCA ignores a pergunta do lead.\n\n"
+        )
+
     # Estágio de aquecimento (Tarefa 3.8) — Agent 3 (hybrid_scheduler) pós-qualificação.
     # Trigger: mother_decision.route_to == "qualification" e missing_fields vazio
     # (qualificação recém-aprovada/auto-promovida para apresentation).
@@ -1636,7 +1661,8 @@ def _build_child_prompt_apresentation(
         )
 
     _apres_prompt = (
-        f"Você é a FILHA APRESENTATION de um CRM de vendas WhatsApp.\n\n"
+        _passive_apres_header
+        + f"Você é a FILHA APRESENTATION de um CRM de vendas WhatsApp.\n\n"
         f"PAPEL: Conduzir a fase de apresentação — agendamento (scheduler) ou oferta+fechamento (sales).\n"
         f"ESCOPO: Variant {presentation_variant}. Gera a mensagem de apresentação e preenche signals_structured.\n"
         f"TOM: {ai_summary.get('tone_of_voice') or 'profissional'} — direto e focado na ação. Máx {playbook_summary.get('max_chars') or 'N/D'} caracteres.\n"
@@ -2331,10 +2357,35 @@ def compose_decision_output(
         and (mother_decision.next_action_hint or "").strip().lower() == "greet"
         and bool(child_result.message_text)
     )
+    # Fix P10: passive question override — fallback para quando a mãe não emitiu hint='reply'
+    # mas o lead fez uma pergunta directa de serviço/produto com response_style=passive.
+    # A filha de qualificação já foi instruída a responder primeiro (via _passive_header),
+    # mas o engine descartaria message_text em favor de question_text. Este override preserva
+    # message_text (resposta + pergunta integradas) mantendo next_action=ask_qualification para tracking.
+    _p10_inbound = str((context.get("metadata") or {}).get("inbound_message_text") or "").lower()
+    _p10_inbound_has_question = "?" in _p10_inbound or any(
+        m in _p10_inbound for m in [
+            "gostaria de saber", "como faço", "como funciona", "o que é",
+            "queria entender", "pode me dizer", "me explica", "preciso entender",
+        ]
+    )
+    _passive_question_override = (
+        effective_route_to == "qualification"
+        and not _passive_reply_override
+        and (mother_decision.next_action_hint or "").strip().lower() not in ("reply", "greet")
+        and _response_style == "passive"
+        and _p10_inbound_has_question
+        and bool(child_result.message_text)
+    )
     if _passive_reply_override:
         next_action = "reply"
         message_text = str(child_result.message_text).strip()
         message_field_used = None
+    elif _passive_question_override:
+        # Usa message_text do filho (resposta + pergunta integradas) mas mantém tracking de qualificação.
+        next_action = "ask_qualification"
+        message_text = str(child_result.message_text).strip()
+        message_field_used = str(child_result.field or "").strip() or current_field
     elif _greeting_override:
         # Greet mode: message_text contém cumprimento + pergunta; question_text contém só a pergunta.
         # Usa message_text para o output final, mantém next_action=ask_qualification
