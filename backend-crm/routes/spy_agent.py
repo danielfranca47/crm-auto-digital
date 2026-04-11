@@ -26,6 +26,7 @@ from pydantic import BaseModel, Field
 from core_client import (
     connect_core_whatsapp_instance,
     fetch_core_whatsapp_connection_resolve,
+    init_core_whatsapp_instance,
     set_core_whatsapp_webhook,
     status_core_whatsapp_instance,
 )
@@ -563,9 +564,18 @@ async def reconnect_spy_instance(
 
     try:
         raw = connect_core_whatsapp_instance(current_user.id, spy_instance_id)
-    except HTTPException as exc:
-        logger.error("[spy_agent:reconnect] falha ao conectar instância %s: %s", spy_instance_id, exc.detail)
-        raise
+    except HTTPException:
+        # Token da instância pode ter expirado (UazAPI 401 após desconexão prolongada).
+        # Re-inicia a instância para renovar o token no core, depois conecta novamente.
+        logger.info(
+            "[spy_agent:reconnect] token expirado para %s — reiniciando instância", spy_instance_id
+        )
+        try:
+            init_core_whatsapp_instance(current_user.id, spy_instance_id)
+            raw = connect_core_whatsapp_instance(current_user.id, spy_instance_id)
+        except HTTPException as exc2:
+            logger.error("[spy_agent:reconnect] falha após reinit %s: %s", spy_instance_id, exc2.detail)
+            raise
 
     # Reconfigura webhook para garantir que mensagens continuem chegando
     webhook_url = _build_spy_webhook_url()
