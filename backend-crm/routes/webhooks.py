@@ -121,19 +121,32 @@ def whatsapp_uazapi_webhook(
 
     def _resolve_spy_sender_e164(is_from_me: bool) -> str:
         """
-        Para o spy handler, prioriza o telefone do lead (remoteJid/to) em mensagens
-        fromMe, para agrupar inbound e outbound sob o mesmo sender_phone.
+        Para o spy handler, prioriza o telefone do lead em mensagens fromMe,
+        para agrupar inbound e outbound sob o mesmo sender_phone.
+
+        Ordem de resolução para fromMe:
+          1. chat.phone (estrutura legada UazAPI)
+          2. data.chatid — "ID da conversa relacionada" no schema Message da UazAPI:
+             para fromMe, este é o JID do lead (conversa oposta ao vendedor)
+          3. key.remoteJid / data.remoteJid / data.chatId / data.to (fallbacks)
         """
         base = _resolve_sender_e164()
         if base:
             return base
         if is_from_me:
-            # Tenta remoteJid (UazAPI) ou campo 'to'
+            # chatid = "ID da conversa relacionada" (schema Message UazAPI)
+            # Para fromMe: é o JID do lead, não do vendedor
+            chatid = data.get("chatid") or data.get("chatId")
+            if chatid:
+                jid_phone = str(chatid).split("@")[0]
+                resolved = _normalize_e164(jid_phone) or _normalize_e164(f"+{jid_phone}")
+                if resolved:
+                    return resolved
+            # Fallback: remoteJid da key ou campos 'to'
             key_obj = data.get("key") if isinstance(data.get("key"), dict) else {}
             remote_jid = (
                 key_obj.get("remoteJid")
                 or data.get("remoteJid")
-                or data.get("chatId")
                 or data.get("to")
                 or message.get("remoteJid")
                 or message.get("to")
@@ -147,20 +160,27 @@ def whatsapp_uazapi_webhook(
     def _normalize_spy_message_type(raw: Optional[str]) -> str:
         """
         Normaliza o messageType do UazAPI para o formato canônico do spy.
-        UazAPI envia "imageMessage", "videoMessage", "audioMessage", "pttMessage", etc.
+
+        Conforme schema Message da UazAPI (openapi-bundled.json), o campo messageType
+        é string sem enum. Exemplos documentados: "text", "reaction", "PinInChatMessage".
+        Tipos de mídia do /send/media: image, video, videoplay, document, audio, ptt, ptv, sticker.
+        Guardamos fallback para formato proto WhatsApp ("imageMessage" etc.) caso o UazAPI
+        repasse o tipo bruto em alguma versão futura.
         """
         if not raw:
             return "text"
         t = raw.lower().strip()
-        if t in ("imagemessage", "image"):
+        if t in ("image", "imagemessage"):
             return "image"
-        if t in ("videomessage", "video"):
+        if t in ("video", "videoplay", "videomessage", "ptv", "ptvmessage"):
             return "video"
-        if t in ("audiomessage", "pttmessage", "audio", "ptt"):
+        if t in ("audio", "myaudio", "ptt", "audiomessage", "pttmessage"):
             return "audio"
-        if t in ("documentmessage", "document"):
+        if t in ("document", "documentmessage"):
             return "document"
-        if t in ("conversation", "extendedtextmessage", "text"):
+        if t in ("sticker", "stickermessage"):
+            return "sticker"
+        if t in ("text", "conversation", "extendedtextmessage"):
             return "text"
         return t  # mantém literal desconhecido para debug
 
@@ -187,9 +207,13 @@ def whatsapp_uazapi_webhook(
     if instance_id and is_spy_instance(instance_id):
         is_group = is_group_message_payload(payload)
         if not is_group:
+            # UazAPI schema Message usa "fileURL" para URL de mídia.
+            # Fallbacks para variações de nomenclatura históricas.
             media_url = (
-                data.get("mediaUrl")
+                data.get("fileURL")      # campo canônico no schema Message da UazAPI
+                or data.get("mediaUrl")
                 or data.get("media_url")
+                or message.get("fileURL")
                 or message.get("mediaUrl")
                 or message.get("media_url")
             )
