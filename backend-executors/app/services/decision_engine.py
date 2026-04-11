@@ -983,7 +983,7 @@ def _build_mother_prompt(context: Dict[str, Any], message_text: str) -> str:
         '  "agent_mode": null (opcional; deixe null, o modo vem do perfil/sistema),\n'
         '  "signals": {"meeting_scheduled": true|false, "intent_level": "low|medium|high", "urgency_level": "low|medium|high", "price_acceptance": "no|unsure|yes"} (opcional),\n'
         '  "objective": "string curta opcional",\n'
-        '  "next_action_hint": "reply|ask_qualification|handoff|ignore|null (opcional)"\n'
+        '  "next_action_hint": "reply|ask_qualification|handoff|ignore|greet|null (opcional)"\n'
         "}\n"
         "Regras:\n"
         "- route_to é obrigatório e indica a próxima fase a focar.\n"
@@ -1059,6 +1059,11 @@ def _build_mother_prompt(context: Dict[str, Any], message_text: str) -> str:
         "- Lead pediu \"para pensar\" sem evidência de apresentação prévia → MANTER rota atual, não avançar\n\n"
         "PRIORIDADE 4 (sinais fracos — contexto decide):\n"
         "- Mensagem genérica (\"oi\", \"tudo bem\") → manter rota anterior, confidence baixa\n"
+        "  EXCEÇÃO SAUDAÇÃO INICIAL: se a mensagem for uma saudação social pura (oi, olá, boa tarde,\n"
+        "  boa noite, bom dia, tudo bem, tudo certo, como vai, e aí, etc.) SEM pergunta sobre\n"
+        "  serviços/preços/horários E o histórico estiver vazio ou tiver apenas 1 mensagem,\n"
+        "  → route_to = \"qualification\", next_action_hint = \"greet\", confidence = 0.6\n"
+        "  (a filha irá cumprimentar o lead de forma calorosa antes de qualificar)\n"
         "- Mensagem fora de contexto → route_to = rota atual, next_action_hint = \"reply\"\n\n"
         "SE EM DÚVIDA: mantenha a rota atual com confidence < 0.6.\n"
         "NUNCA retorne route_to=\"follow-up\" se não houver evidência textual de apresentação/sessão realizada.\n\n"
@@ -1108,6 +1113,10 @@ def _build_mother_prompt(context: Dict[str, Any], message_text: str) -> str:
             "usa next_action_hint='reply' para sinalizar à filha que deve responder a pergunta primeiro. "
             "O route_to continua 'qualification' (os campos ainda precisam de ser coletados), "
             "mas a filha terá prioridade para responder antes de perguntar.\n"
+            "OU se a mensagem for uma saudação social pura (oi, olá, boa tarde, boa noite, bom dia, "
+            "tudo bem, tudo certo, como vai, e aí, etc.) SEM pergunta sobre serviços/preços "
+            "E o histórico estiver vazio ou tiver apenas 1 mensagem, "
+            "usa next_action_hint='greet' (a filha cumprimenta o lead antes de qualificar; should_ask=true).\n"
             if (ai_profile.get("response_style") or "passive") == "passive"
             else ""
         )
@@ -1252,13 +1261,17 @@ def _build_child_prompt_qualification(
     _escopo_line = (
         "Responder perguntas directas do cliente PRIMEIRO, usando offer_description e custom_instructions. "
         "Depois qualificar de forma natural. Pode apresentar serviços e valores quando perguntado. "
+        "Se a mensagem do lead for uma saudação social (boa tarde, oi, olá, tudo bem, bom dia, etc.), "
+        "responde à saudação de forma calorosa antes de qualificar. "
         "Não agenda reunião nesta fase. NUNCA faças perguntas abertas de qualificação — apenas closing_questions "
         "se configuradas (confirmações e alternativas binárias)."
         if response_style == "passive"
         else (
             "Responde SEMPRE à mensagem do cliente antes de qualificar. Se o cliente fez uma pergunta, "
-            "responde usando offer_description e custom_instructions. Depois, se houver campos obrigatórios "
-            "em falta, adicione UMA pergunta de qualificação natural ao final. "
+            "responde usando offer_description e custom_instructions. "
+            "Se a mensagem do lead for uma saudação social (boa tarde, oi, olá, tudo bem, bom dia, etc.), "
+            "responde à saudação de forma calorosa antes de qualificar. "
+            "Depois, se houver campos obrigatórios em falta, adicione UMA pergunta de qualificação natural ao final. "
             "Nunca respondas APENAS com uma pergunta de qualificação. Não agenda reuniões nesta fase."
         )
     )
@@ -1275,29 +1288,47 @@ def _build_child_prompt_qualification(
     )
     _mother_hint = (mother_decision.next_action_hint or "").strip().lower()
     _passive_reply_now = response_style == "passive" and _mother_hint == "reply"
+    _greeting_now = _mother_hint == "greet"
+    _greeting_header = (
+        "MODO SAUDAÇÃO ACTIVADO — O lead abriu com uma saudação social.\n"
+        "INSTRUÇÃO OBRIGATÓRIA: A tua resposta DEVE começar por cumprimentar o lead de forma calorosa "
+        "e natural (ex.: 'Boa tarde! Tudo bem sim, e com você?', 'Oi! Tudo ótimo por aqui, e aí?'). "
+        "O cumprimento deve ser breve e genuíno — proporcional à saudação recebida, não excessivo.\n"
+        "DEPOIS do cumprimento, no MESMO turno, acrescenta UMA pergunta de qualificação de forma natural "
+        "como se fosse parte da conversa (ex.: 'Para te ajudar melhor, qual serviço te interessa?').\n"
+        "should_ask=true. field=current_field. question_text=a pergunta de qualificação isolada.\n"
+        "message_text=cumprimento + pergunta juntos numa única mensagem natural.\n"
+        "NUNCA ignores a saudação e vás directamente para a pergunta de qualificação.\n\n"
+        if _greeting_now
+        else ""
+    )
     _passive_header = (
-        (
-            "MODO PASSIVO ACTIVADO — RESPOSTA IMEDIATA OBRIGATÓRIA.\n"
-            "A mãe sinalizou next_action_hint='reply': o cliente fez uma pergunta de catálogo/oferta/serviços.\n"
-            "INSTRUÇÃO CRÍTICA: coloca TODA a resposta em message_text. NÃO perguntes nada neste turno.\n"
-            "should_ask=false. question_text DEVE ficar vazio (\"\").\n"
-            "Responde à pergunta do cliente usando offer_description e custom_instructions.\n"
-            "A qualificação continua nos próximos turnos — NÃO neste.\n\n"
-        )
-        if _passive_reply_now
+        ""  # _greeting_header tem precedência; nenhum header passivo necessário
+        if _greeting_now
         else (
-            "MODO PASSIVO ACTIVADO: Este agente responde primeiro, qualifica depois.\n"
-            "PRIORIDADE ABSOLUTA: se a mensagem do cliente for uma pergunta directa (sobre serviços,\n"
-            "preços, localização, horários, funcionamento, massagista, catálogo, menu, etc.), RESPONDE-A PRIMEIRO\n"
-            "usando offer_description e custom_instructions antes de qualquer pergunta de qualificação.\n"
-            "Só após responder, e de forma natural no mesmo turno ou no turno seguinte, recolhe campos em falta.\n"
-            "NUNCA ignores uma pergunta directa para fazer uma pergunta de qualificação.\n\n"
-            if response_style == "passive"
-            else ""
+            (
+                "MODO PASSIVO ACTIVADO — RESPOSTA IMEDIATA OBRIGATÓRIA.\n"
+                "A mãe sinalizou next_action_hint='reply': o cliente fez uma pergunta de catálogo/oferta/serviços.\n"
+                "INSTRUÇÃO CRÍTICA: coloca TODA a resposta em message_text. NÃO perguntes nada neste turno.\n"
+                "should_ask=false. question_text DEVE ficar vazio (\"\").\n"
+                "Responde à pergunta do cliente usando offer_description e custom_instructions.\n"
+                "A qualificação continua nos próximos turnos — NÃO neste.\n\n"
+            )
+            if _passive_reply_now
+            else (
+                "MODO PASSIVO ACTIVADO: Este agente responde primeiro, qualifica depois.\n"
+                "PRIORIDADE ABSOLUTA: se a mensagem do cliente for uma pergunta directa (sobre serviços,\n"
+                "preços, localização, horários, funcionamento, massagista, catálogo, menu, etc.), RESPONDE-A PRIMEIRO\n"
+                "usando offer_description e custom_instructions antes de qualquer pergunta de qualificação.\n"
+                "Só após responder, e de forma natural no mesmo turno ou no turno seguinte, recolhe campos em falta.\n"
+                "NUNCA ignores uma pergunta directa para fazer uma pergunta de qualificação.\n\n"
+                if response_style == "passive"
+                else ""
+            )
         )
     )
 
-    _qual_prompt = f"""{_passive_header}Você é a FILHA QUALIFICATION de um CRM de vendas WhatsApp.
+    _qual_prompt = f"""{_greeting_header}{_passive_header}Você é a FILHA QUALIFICATION de um CRM de vendas WhatsApp.
 
 PAPEL: Coletar campos de qualificação do lead, um por vez, através de perguntas naturais e contextuais.
 ESCOPO: {_escopo_line}
@@ -2295,10 +2326,22 @@ def compose_decision_output(
         and _response_style == "passive"
         and bool(child_result.message_text)
     )
+    _greeting_override = (
+        effective_route_to == "qualification"
+        and (mother_decision.next_action_hint or "").strip().lower() == "greet"
+        and bool(child_result.message_text)
+    )
     if _passive_reply_override:
         next_action = "reply"
         message_text = str(child_result.message_text).strip()
         message_field_used = None
+    elif _greeting_override:
+        # Greet mode: message_text contém cumprimento + pergunta; question_text contém só a pergunta.
+        # Usa message_text para o output final, mantém next_action=ask_qualification
+        # para que o tracking de qualificação (field, asked_questions) continue normalmente.
+        next_action = "ask_qualification"
+        message_text = str(child_result.message_text).strip()
+        message_field_used = str(child_result.field or "").strip() or current_field
     elif next_action == "ask_qualification":
         if not current_field:
             next_action = "reply"
