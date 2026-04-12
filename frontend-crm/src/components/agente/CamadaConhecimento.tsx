@@ -814,6 +814,7 @@ function GuidedSectionCard({
   onView,
   onDelete,
   onToggleActive,
+  onDismiss,
   deleting,
   togglingActive,
 }: {
@@ -824,6 +825,7 @@ function GuidedSectionCard({
   onView: () => void;
   onDelete: () => void;
   onToggleActive: (active: boolean) => void;
+  onDismiss: () => void;
   deleting: boolean;
   togglingActive: boolean;
 }) {
@@ -920,9 +922,19 @@ function GuidedSectionCard({
               </button>
             </>
           ) : (
-            <button className="o-btn o-btn-primary" style={{ fontSize: 11, padding: '3px 10px' }} onClick={onFill}>
-              Preencher →
-            </button>
+            <>
+              <button className="o-btn o-btn-primary" style={{ fontSize: 11, padding: '3px 10px' }} onClick={onFill}>
+                Preencher →
+              </button>
+              <button
+                className="o-btn"
+                style={{ fontSize: 11, padding: '3px 8px', color: 'var(--o-dim)' }}
+                onClick={onDismiss}
+                title="Ocultar esta seção da lista"
+              >
+                Ignorar
+              </button>
+            </>
           )}
         </div>
       </div>
@@ -963,6 +975,8 @@ export function CamadaConhecimento({
   const [deleting, setDeleting]       = useState<number | null>(null);
   const [wizardDismissed, setWizardDismissed] = useState(false);
   const [selectedPhases, setSelectedPhases]   = useState<Set<string>>(new Set());
+  const [dismissedKeys, setDismissedKeys]     = useState<Set<string>>(new Set());
+  const [showDismissed, setShowDismissed]     = useState(false);
 
   function handleTogglePhase(phase: string) {
     setSelectedPhases(prev => {
@@ -1030,8 +1044,12 @@ export function CamadaConhecimento({
     const parts = cat.when_used?.split(' · ') ?? [];
     return parts.some(p => selectedPhases.has(p));
   }
-  const filteredGuidedCategories = guidedCategories.filter(matchesPhaseFilter);
-  const filteredCommercialCategories = guidedCommercialCategories.filter(matchesPhaseFilter);
+  const filteredGuidedCategories = guidedCategories.filter(
+    cat => matchesPhaseFilter(cat) && !(dismissedKeys.has(cat.key) && !itemByCategory.has(cat.key))
+  );
+  const filteredCommercialCategories = guidedCommercialCategories.filter(
+    cat => matchesPhaseFilter(cat) && !(dismissedKeys.has(cat.key) && !itemByCategory.has(cat.key))
+  );
 
   async function load() {
     setLoading(true);
@@ -1048,6 +1066,33 @@ export function CamadaConhecimento({
   }
 
   useEffect(() => { load(); }, []);
+
+  // Ler seções ignoradas do localStorage após carregar items
+  useEffect(() => {
+    if (items.length === 0) return;
+    const uid = items[0].user_id;
+    try {
+      const raw = localStorage.getItem(`kb_dismissed_sections_${uid}`);
+      if (raw) setDismissedKeys(new Set(JSON.parse(raw) as string[]));
+    } catch { /* ignore */ }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [items.length > 0 ? items[0].user_id : null]);
+
+  function persistDismissed(next: Set<string>) {
+    if (items.length === 0) return;
+    localStorage.setItem(`kb_dismissed_sections_${items[0].user_id}`, JSON.stringify([...next]));
+    setDismissedKeys(next);
+  }
+
+  function handleDismiss(key: string) {
+    persistDismissed(new Set([...dismissedKeys, key]));
+  }
+
+  function handleRestore(key: string) {
+    const next = new Set(dismissedKeys);
+    next.delete(key);
+    persistDismissed(next);
+  }
 
   async function handleDelete(id: number) {
     if (!window.confirm('Remover este item da base de conhecimento?')) return;
@@ -1179,6 +1224,7 @@ export function CamadaConhecimento({
                   onView={() => setViewItem(item)}
                   onDelete={() => { if (item) handleDelete(item.id); }}
                   onToggleActive={() => { if (item) handleToggleActive(item); }}
+                  onDismiss={() => handleDismiss(cat.key)}
                   deleting={deleting === (item?.id ?? -1)}
                   togglingActive={togglingId === (item?.id ?? -1)}
                 />
@@ -1210,6 +1256,7 @@ export function CamadaConhecimento({
                       onView={() => setViewItem(item)}
                       onDelete={() => { if (item) handleDelete(item.id); }}
                       onToggleActive={() => { if (item) handleToggleActive(item); }}
+                      onDismiss={() => handleDismiss(cat.key)}
                       deleting={deleting === (item?.id ?? -1)}
                       togglingActive={togglingId === (item?.id ?? -1)}
                     />
@@ -1219,6 +1266,61 @@ export function CamadaConhecimento({
             </>
           )}
         </>
+      )}
+
+      {/* ── Seções ignoradas ─────────────────────────────────── */}
+      {dismissedKeys.size > 0 && (
+        <div style={{ marginBottom: 24 }}>
+          <button
+            onClick={() => setShowDismissed(v => !v)}
+            style={{
+              fontSize: 11, color: 'var(--o-dim)', background: 'none', border: 'none',
+              cursor: 'pointer', fontFamily: 'var(--font-mono)', letterSpacing: 0.5, padding: 0,
+            }}
+          >
+            {dismissedKeys.size} seção{dismissedKeys.size > 1 ? 'ões' : ''} ignorada{dismissedKeys.size > 1 ? 's' : ''}{' '}
+            {showDismissed ? '▲ ocultar' : '▼ mostrar'}
+          </button>
+
+          {showDismissed && (
+            <div style={{ marginTop: 8, display: 'flex', flexDirection: 'column', gap: 6 }}>
+              {[...dismissedKeys].map(key => {
+                const cat = [...guidedCategories, ...guidedCommercialCategories].find(c => c.key === key);
+                if (!cat) return null;
+                const importanceColor = cat.importance === 'critical' ? 'var(--o-hot)' : 'var(--o-dim)';
+                const importanceBorder = cat.importance === 'critical' ? 'var(--o-hot-b)' : 'var(--o-b1)';
+                return (
+                  <div
+                    key={key}
+                    style={{
+                      display: 'flex', alignItems: 'center', gap: 8,
+                      padding: '8px 12px', background: 'var(--o-b0)',
+                      border: '1px solid var(--o-b1)', borderRadius: 4, opacity: 0.7,
+                    }}
+                  >
+                    <span style={{ fontSize: 12, color: 'var(--o-sub)', flex: 1 }}>{cat.label}</span>
+                    <span
+                      className="font-mono-orion"
+                      style={{
+                        fontSize: 7, letterSpacing: 1.5, textTransform: 'uppercase', padding: '1px 5px',
+                        borderRadius: 2, border: `1px solid ${importanceBorder}`, color: importanceColor, flexShrink: 0,
+                      }}
+                    >
+                      {KNOWLEDGE_IMPORTANCE_LABELS[cat.importance]}
+                    </span>
+                    <button
+                      className="o-btn"
+                      style={{ fontSize: 11, padding: '3px 8px' }}
+                      onClick={() => handleRestore(key)}
+                    >
+                      Restaurar
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
       )}
 
       {/* ── Conteúdo adicional ───────────────────────────────── */}
