@@ -517,6 +517,44 @@ async def set_instance_config(
     return {"ok": True, "spy_instance_id": body.spy_instance_id}
 
 
+@router.delete("/session")
+async def dismiss_spy_agent_session(
+    current_user: CurrentUser = Depends(require_crm_access),
+) -> Dict[str, Any]:
+    """
+    Remove a sessão concluída do Agente Espião e todos os dados capturados.
+    Chamado quando o utilizador finaliza a revisão (aceitando ou recusando).
+    Após isso, GET /session volta a retornar {status: not_started} e a
+    notificação do Dashboard desaparece automaticamente.
+    """
+    conn = get_connection()
+    try:
+        # Encontra a run mais recente do utilizador (completed ou failed)
+        run = conn.execute(
+            """
+            SELECT id FROM spy_agent_runs
+             WHERE user_id = ?
+             ORDER BY observation_start_at DESC
+             LIMIT 1
+            """,
+            (current_user.id,),
+        ).fetchone()
+
+        if run:
+            run_id = run["id"]
+            conn.execute("DELETE FROM spy_agent_reports WHERE run_id = ?", (run_id,))
+            conn.execute("DELETE FROM spy_agent_runs WHERE id = ?", (run_id,))
+
+        # Limpa todas as mensagens capturadas pelo fone espião
+        conn.execute("DELETE FROM spy_agent_messages WHERE user_id = ?", (current_user.id,))
+
+        conn.commit()
+    finally:
+        conn.close()
+
+    return {"ok": True}
+
+
 @router.delete("/instance-config")
 async def delete_instance_config(
     current_user: CurrentUser = Depends(require_crm_access),

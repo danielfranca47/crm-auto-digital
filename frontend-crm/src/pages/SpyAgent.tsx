@@ -193,7 +193,6 @@ export default function SpyAgent() {
   // Derived counts
   const acceptedEntries = Object.entries(decisions).filter(([, v]) => v.status === "accepted");
   const acceptedCount = acceptedEntries.length;
-  const hasAnyDecision = Object.values(decisions).some((v) => v.status !== "pending");
 
   // ─── Decision actions ──────────────────────────────────────────────────────
 
@@ -323,7 +322,10 @@ export default function SpyAgent() {
         title: "Sugestões aplicadas!",
         description: `${res.fields_updated.length} campo(s) atualizados no AI Profile.`,
       });
+      // Apaga a sessão e dados capturados — notificação do Dashboard desaparece
+      try { await api.spyAgent.dismissSession(); } catch { /* ignora */ }
       queryClient.invalidateQueries({ queryKey: ["spy-agent-session"] });
+      queryClient.invalidateQueries({ queryKey: ["spy-agent-runs"] });
     } catch {
       toast({ title: "Erro ao aplicar sugestões", variant: "destructive" });
     } finally {
@@ -653,10 +655,14 @@ export default function SpyAgent() {
                   variant="ghost"
                   size="sm"
                   className="w-full text-muted-foreground hover:text-foreground text-xs"
-                  onClick={() => {
+                  onClick={async () => {
                     setDismissed(true);
                     setDecisions({});
                     setHistory([]);
+                    // Apaga sessão e dados capturados no backend
+                    try { await api.spyAgent.dismissSession(); } catch { /* ignora */ }
+                    queryClient.invalidateQueries({ queryKey: ["spy-agent-session"] });
+                    queryClient.invalidateQueries({ queryKey: ["spy-agent-runs"] });
                   }}
                 >
                   Finalizar sem aplicar
