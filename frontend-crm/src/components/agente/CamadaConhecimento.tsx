@@ -580,13 +580,17 @@ const READINESS_CONFIG = {
   },
 } as const;
 
-// ─── Barra de progresso por fase ─────────────────────────────
+// ─── Barra de progresso por fase (com filtro clicável) ───────
 function FunnelProgressBar({
   guidedCategories,
   itemByCategory,
+  selectedPhases,
+  onTogglePhase,
 }: {
   guidedCategories: KnowledgeCategory[];
   itemByCategory: Map<string, KnowledgeItem>;
+  selectedPhases: Set<string>;
+  onTogglePhase: (phase: string) => void;
 }) {
   // Agrupar por fase (when_used), ignorar undefined
   const phaseMap = new Map<string, { total: number; filled: number; active: number }>();
@@ -608,19 +612,33 @@ function FunnelProgressBar({
   const phases = Array.from(phaseMap.entries());
   if (phases.length === 0) return null;
 
+  const hasFilter = selectedPhases.size > 0;
+
   return (
-    <div style={{
-      display: 'flex', gap: 8, marginBottom: 20, flexWrap: 'wrap',
-    }}>
+    <div style={{ display: 'flex', gap: 8, marginBottom: 20, flexWrap: 'wrap' }}>
       {phases.map(([phase, { total, filled, active }]) => {
         const pct = total > 0 ? Math.round((filled / total) * 100) : 0;
         const colors = PHASE_COLORS[phase] || { bg: 'var(--o-b1)', text: 'var(--o-sub)' };
-        const allActive = filled > 0 && active === filled;
         const someInactive = filled > 0 && active < filled;
+        const isSelected = selectedPhases.has(phase);
+        const isDimmed = hasFilter && !isSelected;
+
         return (
-          <div key={phase} style={{ flex: '1 1 120px', minWidth: 100 }}>
+          <div
+            key={phase}
+            onClick={() => onTogglePhase(phase)}
+            style={{
+              flex: '1 1 120px', minWidth: 100, cursor: 'pointer',
+              padding: '6px 8px', borderRadius: 4,
+              border: `1px solid ${isSelected ? colors.text : 'var(--o-b1)'}`,
+              background: isSelected ? colors.bg : 'transparent',
+              opacity: isDimmed ? 0.4 : 1,
+              transition: 'opacity 0.15s, border-color 0.15s, background 0.15s',
+              userSelect: 'none',
+            }}
+          >
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 5 }}>
-              <span style={{ fontSize: 9, color: colors.text, textTransform: 'uppercase', letterSpacing: 1, fontFamily: 'var(--font-mono)' }}>
+              <span style={{ fontSize: 9, color: isSelected ? colors.text : 'var(--o-sub)', textTransform: 'uppercase', letterSpacing: 1, fontFamily: 'var(--font-mono)', transition: 'color 0.15s' }}>
                 {phase}
               </span>
               <span style={{ fontSize: 9, color: 'var(--o-dim)', fontFamily: 'var(--font-mono)' }}>
@@ -634,7 +652,7 @@ function FunnelProgressBar({
                 background: pct === 100 ? colors.text : (pct > 0 ? '#d97706' : 'transparent'),
                 borderRadius: 2,
                 transition: 'width 0.3s',
-                opacity: (someInactive && allActive === false) ? 0.5 : 1,
+                opacity: (someInactive) ? 0.5 : 1,
               }} />
             </div>
             {someInactive && (
@@ -847,6 +865,19 @@ export function CamadaConhecimento({
   const [error, setError]             = useState<string | null>(null);
   const [deleting, setDeleting]       = useState<number | null>(null);
   const [wizardDismissed, setWizardDismissed] = useState(false);
+  const [selectedPhases, setSelectedPhases]   = useState<Set<string>>(new Set());
+
+  function handleTogglePhase(phase: string) {
+    setSelectedPhases(prev => {
+      const next = new Set(prev);
+      if (next.has(phase)) {
+        next.delete(phase);
+      } else {
+        next.add(phase);
+      }
+      return next;
+    });
+  }
 
   // Overrides optimistas para active_in_funnel
   const [activeOverrides, setActiveOverrides] = useState<Map<number, boolean>>(new Map());
@@ -895,6 +926,15 @@ export function CamadaConhecimento({
   const allGuidedForReadiness = [...guidedCategories, ...guidedCommercialCategories];
   const readinessLevel = getReadinessLevel(allGuidedForReadiness, itemByCategory);
   const readiness = READINESS_CONFIG[readinessLevel];
+
+  // Categorias filtradas por fase selecionada
+  function matchesPhaseFilter(cat: KnowledgeCategory): boolean {
+    if (selectedPhases.size === 0) return true;
+    const parts = cat.when_used?.split(' · ') ?? [];
+    return parts.some(p => selectedPhases.has(p));
+  }
+  const filteredGuidedCategories = guidedCategories.filter(matchesPhaseFilter);
+  const filteredCommercialCategories = guidedCommercialCategories.filter(matchesPhaseFilter);
 
   async function load() {
     setLoading(true);
@@ -998,20 +1038,39 @@ export function CamadaConhecimento({
             </div>
           </div>
 
-          {/* Barra de progresso por fase */}
+          {/* Barra de progresso por fase (clicável para filtrar) */}
           <FunnelProgressBar
             guidedCategories={allGuidedForReadiness}
             itemByCategory={itemByCategory}
+            selectedPhases={selectedPhases}
+            onTogglePhase={handleTogglePhase}
           />
 
           <div className="o-section-hdr" style={{ marginBottom: 12 }}>
             <span className="font-mono-orion" style={{ fontSize: 9, letterSpacing: '2.5px', textTransform: 'uppercase', color: 'var(--o-sub)' }}>
               Seções sugeridas para este agente
             </span>
+            {selectedPhases.size > 0 && (
+              <button
+                onClick={() => setSelectedPhases(new Set())}
+                style={{
+                  marginLeft: 10, fontSize: 9, color: 'var(--o-dim)', background: 'none',
+                  border: '1px solid var(--o-b2)', borderRadius: 3, padding: '1px 7px',
+                  cursor: 'pointer', fontFamily: 'var(--font-mono)', letterSpacing: 0.5,
+                }}
+              >
+                limpar filtro ✕
+              </button>
+            )}
           </div>
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: guidedCommercialCategories.length > 0 ? 16 : 32 }}>
-            {guidedCategories.map(cat => {
+            {filteredGuidedCategories.length === 0 && (
+              <div style={{ fontSize: 12, color: 'var(--o-dim)', padding: '12px 0' }}>
+                Nenhuma seção nesta fase.
+              </div>
+            )}
+            {filteredGuidedCategories.map(cat => {
               const item = itemByCategory.get(cat.key) ?? null;
               return (
                 <GuidedSectionCard
@@ -1031,7 +1090,7 @@ export function CamadaConhecimento({
           </div>
 
           {/* Seção comercial — somente para hybrid_scheduler em modo commercial */}
-          {guidedCommercialCategories.length > 0 && (
+          {guidedCommercialCategories.length > 0 && filteredCommercialCategories.length > 0 && (
             <>
               <div className="o-section-hdr" style={{ marginBottom: 12 }}>
                 <span className="font-mono-orion" style={{ fontSize: 9, letterSpacing: '2.5px', textTransform: 'uppercase', color: 'var(--o-sub)' }}>
@@ -1042,7 +1101,7 @@ export function CamadaConhecimento({
                 </span>
               </div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 32 }}>
-                {guidedCommercialCategories.map(cat => {
+                {filteredCommercialCategories.map(cat => {
                   const item = itemByCategory.get(cat.key) ?? null;
                   return (
                     <GuidedSectionCard
