@@ -5,6 +5,8 @@ import { Button } from "@/components/ui/button";
 import { Check, X, ChevronDown, ChevronUp } from "lucide-react";
 import type { SpyAgentModuleResult, SpyAgentSuggestion } from "@/services/api";
 
+export type Decision = "pending" | "accepted" | "rejected";
+
 const MODULE_LABELS: Record<string, string> = {
   facts: "Complementação de Fatos",
   identity: "Identidade e Tom",
@@ -19,11 +21,19 @@ const MODULE_DESCRIPTIONS: Record<string, string> = {
 
 interface SpyAgentModuleCardProps {
   result: SpyAgentModuleResult;
-  acceptedFields: Set<string>;
-  onToggle: (field: string, value: unknown) => void;
+  decisions: Record<string, Decision>;
+  onDecide: (field: string, decision: Decision, value: unknown) => void;
+  onAcceptAll: (moduleId: string) => void;
+  onRejectAll: (moduleId: string) => void;
 }
 
-export function SpyAgentModuleCard({ result, acceptedFields, onToggle }: SpyAgentModuleCardProps) {
+export function SpyAgentModuleCard({
+  result,
+  decisions,
+  onDecide,
+  onAcceptAll,
+  onRejectAll,
+}: SpyAgentModuleCardProps) {
   const [expanded, setExpanded] = useState(true);
 
   const confidencePct = Math.round(result.confidence * 100);
@@ -50,13 +60,28 @@ export function SpyAgentModuleCard({ result, acceptedFields, onToggle }: SpyAgen
   return (
     <Card>
       <CardHeader className="pb-2">
-        <div className="flex items-center justify-between">
+        <div className="flex items-center justify-between gap-2">
           <CardTitle className="text-sm font-semibold">
             {MODULE_LABELS[result.module] ?? result.module}
           </CardTitle>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1.5 shrink-0">
+            <button
+              className="text-xs text-green-600 hover:text-green-700 font-medium px-1.5 py-0.5 rounded hover:bg-green-50 transition-colors"
+              onClick={() => onAcceptAll(result.module)}
+              title="Aceitar todas as sugestões deste módulo"
+            >
+              Aceitar todas
+            </button>
+            <span className="text-muted-foreground/40 text-xs">|</span>
+            <button
+              className="text-xs text-destructive/70 hover:text-destructive font-medium px-1.5 py-0.5 rounded hover:bg-destructive/5 transition-colors"
+              onClick={() => onRejectAll(result.module)}
+              title="Recusar todas as sugestões deste módulo"
+            >
+              Recusar todas
+            </button>
             <span className={`text-xs font-medium ${confidenceColor}`}>
-              {confidencePct}% confiança
+              {confidencePct}%
             </span>
             <Button
               variant="ghost"
@@ -74,12 +99,19 @@ export function SpyAgentModuleCard({ result, acceptedFields, onToggle }: SpyAgen
       {expanded && (
         <CardContent className="space-y-2 pt-0">
           {result.suggestions.map((s: SpyAgentSuggestion) => {
-            const accepted = acceptedFields.has(s.field);
+            const decision = decisions[s.field] ?? "pending";
+            const isAccepted = decision === "accepted";
+            const isRejected = decision === "rejected";
+
             return (
               <div
                 key={s.field}
                 className={`rounded-lg border p-3 transition-colors ${
-                  accepted ? "border-primary/60 bg-primary/5" : "border-border"
+                  isAccepted
+                    ? "border-primary/60 bg-primary/5"
+                    : isRejected
+                    ? "border-destructive/30 bg-destructive/5 opacity-60"
+                    : "border-border"
                 }`}
               >
                 <div className="flex items-start justify-between gap-2">
@@ -90,24 +122,37 @@ export function SpyAgentModuleCard({ result, acceptedFields, onToggle }: SpyAgen
                       </code>
                     </div>
                     {s.current_value !== null && s.current_value !== undefined && (
-                      <p className="text-xs text-muted-foreground line-through mb-0.5">
+                      <p className={`text-xs text-muted-foreground mb-0.5 ${isRejected ? "" : "line-through"}`}>
                         Atual: {JSON.stringify(s.current_value)}
                       </p>
                     )}
-                    <p className="text-xs font-medium text-foreground">
+                    <p className={`text-xs font-medium ${isRejected ? "text-muted-foreground line-through" : "text-foreground"}`}>
                       Sugerido: {JSON.stringify(s.suggested_value)}
                     </p>
                     <p className="text-xs text-muted-foreground mt-1">{s.rationale}</p>
                   </div>
-                  <Button
-                    variant={accepted ? "default" : "outline"}
-                    size="icon"
-                    className="h-7 w-7 shrink-0"
-                    onClick={() => onToggle(s.field, s.suggested_value)}
-                    title={accepted ? "Remover seleção" : "Aceitar sugestão"}
-                  >
-                    {accepted ? <Check className="h-3.5 w-3.5" /> : <X className="h-3.5 w-3.5 opacity-40" />}
-                  </Button>
+
+                  {/* Accept / Reject buttons */}
+                  <div className="flex items-center gap-1 shrink-0">
+                    <Button
+                      variant={isAccepted ? "default" : "outline"}
+                      size="icon"
+                      className={`h-7 w-7 ${isAccepted ? "bg-primary text-primary-foreground" : "text-green-600 border-green-600/40 hover:bg-green-50 hover:border-green-600"}`}
+                      onClick={() => onDecide(s.field, isAccepted ? "pending" : "accepted", s.suggested_value)}
+                      title={isAccepted ? "Clique para desfazer aceitação" : "Aceitar sugestão"}
+                    >
+                      <Check className="h-3.5 w-3.5" />
+                    </Button>
+                    <Button
+                      variant={isRejected ? "destructive" : "outline"}
+                      size="icon"
+                      className={`h-7 w-7 ${isRejected ? "" : "text-destructive/50 border-destructive/20 hover:bg-destructive/5 hover:border-destructive/50 hover:text-destructive"}`}
+                      onClick={() => onDecide(s.field, isRejected ? "pending" : "rejected", s.suggested_value)}
+                      title={isRejected ? "Clique para desfazer recusa" : "Recusar sugestão"}
+                    >
+                      <X className="h-3.5 w-3.5" />
+                    </Button>
+                  </div>
                 </div>
               </div>
             );

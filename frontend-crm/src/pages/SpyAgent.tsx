@@ -4,10 +4,20 @@ import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { ArrowLeft, Sparkles, Eye, Loader2, CheckCircle2, RefreshCw, QrCode, WifiOff } from "lucide-react";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@/components/ui/dialog";
+import {
+  ArrowLeft, Sparkles, Eye, Loader2, CheckCircle2,
+  RefreshCw, QrCode, WifiOff, Undo2, ArrowRight, X,
+} from "lucide-react";
 import { api, SpyAgentModule, WhatsappConnectResponse } from "@/services/api";
 import { SpyAgentSetup } from "@/components/agente/SpyAgentSetup";
-import { SpyAgentModuleCard } from "@/components/agente/SpyAgentModuleCard";
+import { SpyAgentModuleCard, type Decision } from "@/components/agente/SpyAgentModuleCard";
 import { CompatibilityReportPanel } from "@/components/agente/CompatibilityReportPanel";
 import { SpyAgentHistory } from "@/components/agente/SpyAgentHistory";
 import { useToast } from "@/hooks/use-toast";
@@ -20,13 +30,41 @@ const STATUS_LABELS: Record<string, { label: string; icon: React.ReactNode; colo
   failed:      { label: "Falhou", icon: null, color: "text-destructive" },
 };
 
+const MODULE_LABELS: Record<string, string> = {
+  facts: "Complementação de Fatos",
+  identity: "Identidade e Tom",
+  strategy: "Estratégia de Vendas",
+};
+
+// ─── Types ────────────────────────────────────────────────────────────────────
+
+interface SuggestionState {
+  status: Decision;
+  module: string;
+  value: unknown;
+}
+
+interface HistoryEntry {
+  field: string;
+  module: string;
+  value: unknown;
+  from: Decision;
+  to: Decision;
+  batch?: boolean; // true = this entry represents many fields
+  batchFields?: string[]; // fields included in the batch
+}
+
+// ─── Component ────────────────────────────────────────────────────────────────
+
 export default function SpyAgent() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { toast } = useToast();
 
-  // accepted: { [field]: { module, value } }
-  const [accepted, setAccepted] = useState<Record<string, { module: string; value: unknown }>>({});
+  // 3-state decisions: pending | accepted | rejected
+  const [decisions, setDecisions] = useState<Record<string, SuggestionState>>({});
+  const [history, setHistory] = useState<HistoryEntry[]>([]);
+  const [showPreview, setShowPreview] = useState(false);
   const [applying, setApplying] = useState(false);
   const [applied, setApplied] = useState(false);
 
@@ -141,38 +179,142 @@ export default function SpyAgent() {
   const status = (session as any)?.status ?? "not_started";
   const st = STATUS_LABELS[status] ?? STATUS_LABELS.not_started;
 
-  const toggleSuggestion = (module: string, field: string, value: unknown) => {
-    setAccepted((prev) => {
-      const next = { ...prev };
-      if (next[field]) {
-        delete next[field];
+  // Helper: all suggestions flat
+  const allSuggestions: Array<{ module: string; field: string; value: unknown }> = (
+    (session as any)?.module_results ?? []
+  ).flatMap((r: any) =>
+    r.suggestions.map((s: any) => ({ module: r.module, field: s.field, value: s.suggested_value }))
+  );
+
+  // Derived counts
+  const acceptedEntries = Object.entries(decisions).filter(([, v]) => v.status === "accepted");
+  const acceptedCount = acceptedEntries.length;
+  const hasAnyDecision = Object.values(decisions).some((v) => v.status !== "pending");
+
+  // ─── Decision actions ──────────────────────────────────────────────────────
+
+  const decide = (field: string, newStatus: Decision, module: string, value: unknown) => {
+    const from = decisions[field]?.status ?? "pending";
+    if (from === newStatus) return; // no change
+    setHistory((h) => [...h, { field, module, value, from, to: newStatus }]);
+    setDecisions((prev) => ({
+      ...prev,
+      [field]: { status: newStatus, module, value },
+    }));
+  };
+
+  const undoLast = () => {
+    setHistory((h) => {
+      if (h.length === 0) return h;
+      const last = h[h.length - 1];
+      const rest = h.slice(0, -1);
+
+      if (last.batch && last.batchFields) {
+        // Undo batch: revert all fields to their "from" state
+        setDecisions((prev) => {
+          const next = { ...prev };
+          // We stored individual "from" states as consecutive history entries
+          // For batch, we store batchFields — restore each to "pending" (they were all pending before batch)
+          for (const f of last.batchFields!) {
+            if (next[f]?.status === last.to) {
+              if (last.from === "pending") {
+                delete next[f];
+              } else {
+                next[f] = { ...next[f], status: last.from };
+              }
+            }
+          }
+          return next;
+        });
       } else {
-        next[field] = { module, value };
+        setDecisions((prev) => {
+          const next = { ...prev };
+          if (last.from === "pending") {
+            delete next[last.field];
+          } else {
+            next[last.field] = { status: last.from, module: last.module, value: last.value };
+          }
+          return next;
+        });
+      }
+
+      return rest;
+    });
+  };
+
+  const acceptAll = (moduleId?: string) => {
+    const targets = moduleId
+      ? allSuggestions.filter((s) => s.module === moduleId)
+      : allSuggestions;
+    if (targets.length === 0) return;
+
+    const batchFields = targets.map((s) => s.field);
+    // Record as a single batch undo entry
+    const batchEntry: HistoryEntry = {
+      field: "__batch__",
+      module: moduleId ?? "__all__",
+      value: null,
+      from: "pending",
+      to: "accepted",
+      batch: true,
+      batchFields,
+    };
+    setHistory((h) => [...h, batchEntry]);
+    setDecisions((prev) => {
+      const next = { ...prev };
+      for (const s of targets) {
+        next[s.field] = { status: "accepted", module: s.module, value: s.value };
       }
       return next;
     });
   };
 
+  const rejectAll = (moduleId?: string) => {
+    const targets = moduleId
+      ? allSuggestions.filter((s) => s.module === moduleId)
+      : allSuggestions;
+    if (targets.length === 0) return;
+
+    const batchFields = targets.map((s) => s.field);
+    const batchEntry: HistoryEntry = {
+      field: "__batch__",
+      module: moduleId ?? "__all__",
+      value: null,
+      from: "pending",
+      to: "rejected",
+      batch: true,
+      batchFields,
+    };
+    setHistory((h) => [...h, batchEntry]);
+    setDecisions((prev) => {
+      const next = { ...prev };
+      for (const s of targets) {
+        next[s.field] = { status: "rejected", module: s.module, value: s.value };
+      }
+      return next;
+    });
+  };
+
+  // ─── Apply ────────────────────────────────────────────────────────────────
+
   const handleApply = async () => {
     if (!session || (session as any).status !== "completed") return;
-    const run_id = (session as any).run_id;
+    if (acceptedCount === 0) return;
 
-    const accepted_suggestions = Object.entries(accepted).map(([field, { module, value }]) => ({
+    const run_id = (session as any).run_id;
+    const accepted_suggestions = acceptedEntries.map(([field, { module, value }]) => ({
       module: module as SpyAgentModule,
       field,
       value,
     }));
 
-    if (accepted_suggestions.length === 0) {
-      toast({ title: "Selecione pelo menos uma sugestão para aplicar", variant: "destructive" });
-      return;
-    }
-
     setApplying(true);
     try {
       const res = await api.spyAgent.apply({ run_id, accepted_suggestions });
       setApplied(true);
-      setAccepted({});
+      setDecisions({});
+      setHistory([]);
+      setShowPreview(false);
       toast({
         title: "Sugestões aplicadas!",
         description: `${res.fields_updated.length} campo(s) atualizados no AI Profile.`,
@@ -190,6 +332,33 @@ export default function SpyAgent() {
     queryClient.invalidateQueries({ queryKey: ["spy-agent-runs"] });
     queryClient.invalidateQueries({ queryKey: ["spy-agent-sample"] });
   };
+
+  // ─── Preview data ─────────────────────────────────────────────────────────
+
+  // Group accepted suggestions by module for the preview dialog
+  const previewByModule: Array<{
+    module: string;
+    label: string;
+    items: Array<{ field: string; current: unknown; suggested: unknown }>;
+  }> = [];
+
+  for (const result of (session as any)?.module_results ?? []) {
+    const accepted = result.suggestions.filter(
+      (s: any) => decisions[s.field]?.status === "accepted"
+    );
+    if (accepted.length === 0) continue;
+    previewByModule.push({
+      module: result.module,
+      label: MODULE_LABELS[result.module] ?? result.module,
+      items: accepted.map((s: any) => ({
+        field: s.field,
+        current: s.current_value,
+        suggested: s.suggested_value,
+      })),
+    });
+  }
+
+  // ─── Render ───────────────────────────────────────────────────────────────
 
   return (
     <div className="min-h-screen bg-background">
@@ -222,7 +391,7 @@ export default function SpyAgent() {
           </div>
         )}
 
-        {/* === NÃO INICIADO — mostrar setup === */}
+        {/* === NÃO INICIADO === */}
         {!sessionLoading && status === "not_started" && (
           <>
             <div className="space-y-1">
@@ -237,7 +406,7 @@ export default function SpyAgent() {
           </>
         )}
 
-        {/* === OBSERVANDO — countdown === */}
+        {/* === OBSERVANDO === */}
         {!sessionLoading && status === "observing" && session && (
           <>
             <div className="rounded-xl border bg-muted/30 p-5 space-y-4">
@@ -253,7 +422,6 @@ export default function SpyAgent() {
                 </div>
               </div>
 
-              {/* Barra de progresso */}
               <div className="space-y-1.5">
                 <div className="flex justify-between text-xs text-muted-foreground">
                   <span>Progresso</span>
@@ -286,11 +454,8 @@ export default function SpyAgent() {
                 Previsão de conclusão:{" "}
                 <span className="font-medium">
                   {new Date((session as any).observation_end_at).toLocaleString("pt-BR", {
-                    day: "2-digit",
-                    month: "2-digit",
-                    year: "numeric",
-                    hour: "2-digit",
-                    minute: "2-digit",
+                    day: "2-digit", month: "2-digit", year: "numeric",
+                    hour: "2-digit", minute: "2-digit",
                   })}
                 </span>
               </p>
@@ -384,30 +549,59 @@ export default function SpyAgent() {
           </div>
         )}
 
-        {/* === CONCLUÍDO — mostrar sugestões === */}
+        {/* === CONCLUÍDO — sugestões === */}
         {!sessionLoading && status === "completed" && session && (
           <>
-            <div className="flex items-center justify-between">
-              <div>
-                <h2 className="text-lg font-semibold">Sugestões do Agente Espião</h2>
-                <p className="text-sm text-muted-foreground">
-                  Selecione as sugestões que deseja aplicar no AI Profile.
-                </p>
+            {/* Título + ações globais */}
+            <div className="space-y-3">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <h2 className="text-lg font-semibold">Sugestões do Agente Espião</h2>
+                  <p className="text-sm text-muted-foreground">
+                    Selecione as sugestões que deseja aplicar no AI Profile.
+                  </p>
+                </div>
+                {applied && (
+                  <Badge variant="default" className="gap-1 shrink-0 mt-1">
+                    <CheckCircle2 className="h-3.5 w-3.5" /> Aplicado
+                  </Badge>
+                )}
               </div>
-              {Object.keys(accepted).length > 0 && !applied && (
-                <Button onClick={handleApply} disabled={applying} size="sm">
-                  {applying ? (
-                    <><Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" /> Aplicando...</>
-                  ) : (
-                    <>Aplicar {Object.keys(accepted).length} selecionada(s)</>
-                  )}
-                </Button>
-              )}
-              {applied && (
-                <Badge variant="default" className="gap-1">
-                  <CheckCircle2 className="h-3.5 w-3.5" /> Aplicado
-                </Badge>
-              )}
+
+              {/* Barra de ações globais */}
+              <div className="flex items-center justify-between gap-2 rounded-lg border bg-muted/20 px-3 py-2">
+                <div className="flex items-center gap-1">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-7 text-xs text-green-600 hover:text-green-700 hover:bg-green-50 gap-1"
+                    onClick={() => acceptAll()}
+                  >
+                    <CheckCircle2 className="h-3.5 w-3.5" />
+                    Aceitar todas
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-7 text-xs text-destructive/70 hover:text-destructive hover:bg-destructive/5 gap-1"
+                    onClick={() => rejectAll()}
+                  >
+                    <X className="h-3.5 w-3.5" />
+                    Recusar todas
+                  </Button>
+                </div>
+                {history.length > 0 && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-7 text-xs text-muted-foreground hover:text-foreground gap-1"
+                    onClick={undoLast}
+                  >
+                    <Undo2 className="h-3.5 w-3.5" />
+                    Desfazer ({history.length})
+                  </Button>
+                )}
+              </div>
             </div>
 
             {/* Cards de módulos */}
@@ -415,8 +609,16 @@ export default function SpyAgent() {
               <SpyAgentModuleCard
                 key={result.module}
                 result={result}
-                acceptedFields={new Set(Object.keys(accepted))}
-                onToggle={(field, value) => toggleSuggestion(result.module, field, value)}
+                decisions={Object.fromEntries(
+                  Object.entries(decisions)
+                    .filter(([, v]) => v.module === result.module)
+                    .map(([k, v]) => [k, v.status])
+                )}
+                onDecide={(field, decision, value) =>
+                  decide(field, decision, result.module, value)
+                }
+                onAcceptAll={(moduleId) => acceptAll(moduleId)}
+                onRejectAll={(moduleId) => rejectAll(moduleId)}
               />
             ))}
 
@@ -428,14 +630,18 @@ export default function SpyAgent() {
               />
             )}
 
-            {/* Botão aplicar no final (repetido para conveniência) */}
-            {Object.keys(accepted).length > 0 && !applied && (
-              <Button className="w-full" onClick={handleApply} disabled={applying} size="lg">
-                {applying ? (
-                  <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Aplicando...</>
-                ) : (
-                  <>Aplicar {Object.keys(accepted).length} sugestão(ões) selecionada(s)</>
-                )}
+            {/* Botão de pré-visualização / aplicar */}
+            {!applied && (
+              <Button
+                className="w-full gap-2"
+                size="lg"
+                disabled={acceptedCount === 0}
+                onClick={() => setShowPreview(true)}
+              >
+                <ArrowRight className="h-4 w-4" />
+                {acceptedCount === 0
+                  ? "Selecione sugestões para continuar"
+                  : `Pré-visualizar ${acceptedCount} aceite(s)`}
               </Button>
             )}
 
@@ -459,6 +665,62 @@ export default function SpyAgent() {
           </>
         )}
       </div>
+
+      {/* ─── Dialog de Preview / Confirmação ─────────────────────────────────── */}
+      <Dialog open={showPreview} onOpenChange={setShowPreview}>
+        <DialogContent className="max-w-lg max-h-[80vh] flex flex-col">
+          <DialogHeader>
+            <DialogTitle>Confirmar alterações ao AI Profile</DialogTitle>
+            <p className="text-sm text-muted-foreground">
+              {acceptedCount} campo(s) serão actualizados:
+            </p>
+          </DialogHeader>
+
+          {/* Lista de mudanças agrupada por módulo */}
+          <div className="flex-1 overflow-y-auto space-y-4 py-2 pr-1">
+            {previewByModule.map((group) => (
+              <div key={group.module} className="space-y-2">
+                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+                  {group.label}
+                </p>
+                {group.items.map((item) => (
+                  <div key={item.field} className="rounded-lg border bg-muted/20 p-3 space-y-1">
+                    <code className="text-xs bg-muted px-1.5 py-0.5 rounded font-mono">
+                      {item.field}
+                    </code>
+                    {item.current !== null && item.current !== undefined && (
+                      <p className="text-xs text-muted-foreground line-through">
+                        {JSON.stringify(item.current)}
+                      </p>
+                    )}
+                    <p className="text-xs font-semibold text-foreground">
+                      → {JSON.stringify(item.suggested)}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            ))}
+          </div>
+
+          <DialogFooter className="gap-2 pt-2">
+            <Button
+              variant="outline"
+              onClick={() => setShowPreview(false)}
+              disabled={applying}
+            >
+              Voltar
+            </Button>
+            <Button onClick={handleApply} disabled={applying} className="gap-1.5">
+              {applying ? (
+                <><Loader2 className="h-4 w-4 animate-spin" /> Aplicando...</>
+              ) : (
+                <><CheckCircle2 className="h-4 w-4" /> Confirmar e aplicar</>
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
+
