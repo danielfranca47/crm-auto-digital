@@ -2487,15 +2487,16 @@ def compose_decision_output(
         if isinstance(raw_op, dict):
             media_url = raw_op.get("media_url")
             if media_url and str(media_url).strip():
-                decision.pre_send_media = {
+                decision.pre_send_media = [{
                     "media_url": str(media_url).strip(),
                     "media_type": str(raw_op.get("media_type") or "image").strip(),
-                }
+                }]
 
-    # Mídia de knowledge — usa mídia associada à categoria relevante na fase de apresentation
+    # Mídia de knowledge — filtra por idioma do lead e devolve lista ordenada
     # (somente se offer_pack não definiu pre_send_media)
     if effective_route_to == "apresentation" and not decision.pre_send_media:
         knowledge_media = context.get("knowledge_media") or {}
+        lead_lang = str(context.get("lead_detected_language") or "all").lower()
         if agent_mode_normalized in ("direto", "closer", "direto_autonomo"):
             _km_candidates = ["product_details", "pitch_script"]
         elif agent_mode_normalized == "agenda":
@@ -2503,12 +2504,19 @@ def compose_decision_output(
         else:  # consultivo
             _km_candidates = ["product_details", "session_preview"]
         for _cat in _km_candidates:
-            _murl = knowledge_media.get(_cat)
-            if _murl and str(_murl).strip():
-                decision.pre_send_media = {
-                    "media_url": str(_murl).strip(),
-                    "media_type": "image",
-                }
+            entries = knowledge_media.get(_cat)
+            if not entries:
+                continue
+            # Compatibilidade: se for string (formato legado), converter para lista
+            if isinstance(entries, str):
+                entries = [{"media_url": entries, "media_type": "image", "language": "all", "send_order": 0}]
+            filtered = [
+                e for e in entries
+                if e.get("language") == "all" or e.get("language") == lead_lang
+            ]
+            if filtered:
+                filtered.sort(key=lambda e: e.get("send_order", 0))
+                decision.pre_send_media = filtered
                 break
 
     return decision

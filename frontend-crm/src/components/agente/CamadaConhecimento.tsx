@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { api, type KnowledgeItem } from '@/services/api';
+import { api, type KnowledgeItem, type KnowledgeMediaItem, type MediaLanguage } from '@/services/api';
 import {
   KNOWLEDGE_CATEGORIES_BY_TEMPLATE,
   KNOWLEDGE_CATEGORIES_HYBRID_COMMERCIAL,
@@ -65,160 +65,233 @@ function ModalBase({ title, sub, onClose, onSave, children, saveLabel = 'Salvar'
   );
 }
 
-// ─── Seção de upload de mídia (dentro do modal) ───────────────
-function MediaUploadSection({
+// ─── Helpers de mídia ────────────────────────────────────────
+const LANG_LABELS: Record<MediaLanguage, string> = { all: 'TODOS', pt: 'PT', en: 'EN', es: 'ES' };
+const LANG_COLORS: Record<MediaLanguage, { bg: string; text: string }> = {
+  all: { bg: 'var(--o-b1)', text: 'var(--o-sub)' },
+  pt:  { bg: '#1a2f1a', text: '#4ade80' },
+  en:  { bg: '#1a2040', text: '#60a5fa' },
+  es:  { bg: '#2a1a10', text: '#fb923c' },
+};
+
+function LangBadge({ lang }: { lang: MediaLanguage }) {
+  const c = LANG_COLORS[lang] || LANG_COLORS.all;
+  return (
+    <span className="font-mono-orion" style={{
+      fontSize: 7, letterSpacing: 1, padding: '2px 5px', borderRadius: 3,
+      background: c.bg, color: c.text, flexShrink: 0,
+    }}>
+      {LANG_LABELS[lang]}
+    </span>
+  );
+}
+
+function MediaThumb({ url, type }: { url: string; type: string }) {
+  const isImg = type === 'image' || /\.(jpg|jpeg|png|webp|gif)$/i.test(url);
+  const icon = type === 'pdf' ? '📄' : type === 'video' ? '🎬' : type === 'audio' ? '🎵' : '📎';
+  return (
+    <div style={{
+      width: 52, height: 52, borderRadius: 4, overflow: 'hidden', flexShrink: 0,
+      background: 'var(--o-b1)', display: 'flex', alignItems: 'center', justifyContent: 'center',
+      border: '1px solid var(--o-b2)',
+    }}>
+      {isImg
+        ? <img src={url} alt="mídia" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+        : <span style={{ fontSize: 20 }}>{icon}</span>
+      }
+    </div>
+  );
+}
+
+// ─── Seção de upload de mídia — múltiplas mídias e idiomas ────
+function MultiMediaSection({
   item,
-  onMediaChanged,
+  onItemChanged,
 }: {
   item: KnowledgeItem | null;
-  onMediaChanged: (updated: KnowledgeItem) => void;
+  onItemChanged: (updated: KnowledgeItem) => void;
 }) {
-  const [uploading, setUploading] = useState(false);
-  const [removing, setRemoving]   = useState(false);
-  const [error, setError]         = useState<string | null>(null);
+  const [mediaItems, setMediaItems] = useState<KnowledgeMediaItem[]>(item?.media_items ?? []);
+  const [uploading, setUploading]   = useState(false);
+  const [error, setError]           = useState<string | null>(null);
+  const [selectedLang, setSelectedLang] = useState<MediaLanguage>('all');
   const fileRef = useRef<HTMLInputElement>(null);
 
-  const currentMedia = item?.media_url || null;
+  // Sync when parent item changes (e.g. after save)
+  useEffect(() => {
+    setMediaItems(item?.media_items ?? []);
+  }, [item?.id, item?.media_items?.length]);
+
+  const ALLOWED = ['jpg', 'jpeg', 'png', 'webp', 'gif', 'mp4', 'pdf', 'mp3', 'ogg', 'opus'];
 
   async function handleFile(file: File) {
     if (!item) return;
     const ext = file.name.split('.').pop()?.toLowerCase() || '';
-    const allowed = ['jpg', 'jpeg', 'png', 'webp', 'gif', 'mp4', 'pdf'];
-    if (!allowed.includes(ext)) {
-      setError('Formato não suportado. Use: jpg, png, webp, gif, mp4 ou pdf.');
+    if (!ALLOWED.includes(ext)) {
+      setError('Formato não suportado. Use: jpg, png, gif, mp4, pdf, mp3, ogg.');
       return;
     }
     setUploading(true);
     setError(null);
     try {
-      const updated = await api.crm.uploadKnowledgeMedia(item.id, file);
-      onMediaChanged(updated);
+      const added = await api.crm.addKnowledgeMedia(item.id, file, selectedLang, mediaItems.length);
+      const next = [...mediaItems, added];
+      setMediaItems(next);
+      onItemChanged({ ...item, media_items: next, media_url: next[0]?.media_url ?? item.media_url });
     } catch {
       setError('Erro ao enviar mídia. Tente novamente.');
     } finally {
       setUploading(false);
+      if (fileRef.current) fileRef.current.value = '';
     }
   }
 
-  async function handleRemove() {
-    if (!item || !currentMedia) return;
-    setRemoving(true);
-    setError(null);
+  async function handleRemove(mediaId: number) {
+    if (!item) return;
     try {
-      const updated = await api.crm.deleteKnowledgeMedia(item.id);
-      onMediaChanged(updated);
+      await api.crm.deleteKnowledgeMediaItem(item.id, mediaId);
+      const next = mediaItems.filter(m => m.id !== mediaId);
+      setMediaItems(next);
+      onItemChanged({ ...item, media_items: next, media_url: next[0]?.media_url ?? null });
     } catch {
-      setError('Erro ao remover mídia. Tente novamente.');
-    } finally {
-      setRemoving(false);
+      setError('Erro ao remover mídia.');
     }
   }
 
-  const isImage = currentMedia && /\.(jpg|jpeg|png|webp|gif)$/i.test(currentMedia);
-  const isPdf   = currentMedia && /\.pdf$/i.test(currentMedia);
-  const isVideo = currentMedia && /\.mp4$/i.test(currentMedia);
+  async function handleLangChange(mediaId: number, lang: MediaLanguage) {
+    if (!item) return;
+    try {
+      const updated = await api.crm.updateKnowledgeMediaMeta(item.id, mediaId, { language: lang });
+      const next = mediaItems.map(m => m.id === mediaId ? updated : m);
+      setMediaItems(next);
+      onItemChanged({ ...item, media_items: next });
+    } catch {
+      setError('Erro ao atualizar idioma.');
+    }
+  }
+
+  async function handleMove(index: number, dir: -1 | 1) {
+    if (!item) return;
+    const target = index + dir;
+    if (target < 0 || target >= mediaItems.length) return;
+    const next = [...mediaItems];
+    [next[index], next[target]] = [next[target], next[index]];
+    const reordered = next.map((m, i) => ({ ...m, send_order: i }));
+    setMediaItems(reordered);
+    onItemChanged({ ...item, media_items: reordered });
+    try {
+      await api.crm.reorderKnowledgeMedia(item.id, reordered.map(m => ({ id: m.id, send_order: m.send_order })));
+    } catch {
+      setError('Erro ao reordenar mídias.');
+    }
+  }
 
   return (
     <div style={{ marginTop: 20 }}>
-      <div style={{
-        display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10,
-      }}>
-        <span style={{ fontSize: 11, color: 'var(--o-sub)', fontWeight: 400 }}>
-          MÍDIA PARA ENVIAR AO LEAD
-        </span>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+        <span style={{ fontSize: 11, color: 'var(--o-sub)', fontWeight: 400 }}>MÍDIA PARA ENVIAR AO LEAD</span>
         <span className="font-mono-orion" style={{ fontSize: 7, letterSpacing: 1, color: 'var(--o-dim)', border: '1px solid var(--o-b1)', padding: '1px 5px', borderRadius: 2 }}>
           OPCIONAL
         </span>
       </div>
 
-      <div style={{
-        background: 'var(--o-b0)', border: '1px solid var(--o-b1)', borderRadius: 6,
-        padding: '14px 16px',
-      }}>
-        {!currentMedia ? (
-          <>
-            <div style={{ fontSize: 12, color: 'var(--o-sub)', marginBottom: 10, lineHeight: 1.5 }}>
-              Imagem, PDF ou vídeo enviado automaticamente ao lead antes da mensagem do agente.
-              <br/>
-              <span style={{ color: 'var(--o-dim)', fontSize: 11 }}>
-                Ex: foto do espaço, tabela de preços visual, card de apresentação.
-              </span>
-            </div>
-            {!item ? (
-              <div style={{ fontSize: 11, color: 'var(--o-dim)', fontStyle: 'italic' }}>
-                Salve o conteúdo primeiro para poder adicionar mídia.
-              </div>
-            ) : (
-              <>
-                <input
-                  ref={fileRef}
-                  type="file"
-                  accept=".jpg,.jpeg,.png,.webp,.gif,.mp4,.pdf"
-                  style={{ display: 'none' }}
-                  onChange={e => { const f = e.target.files?.[0]; if (f) handleFile(f); }}
-                />
-                <button
-                  className="o-btn"
-                  style={{ fontSize: 11, padding: '4px 12px' }}
-                  onClick={() => fileRef.current?.click()}
-                  disabled={uploading}
-                >
-                  {uploading ? 'Enviando…' : '+ Selecionar imagem / PDF / vídeo'}
-                </button>
-                <div style={{ fontSize: 10, color: 'var(--o-dim)', marginTop: 6 }}>
-                  Aceita: .jpg .png .webp .gif .mp4 .pdf
+      <div style={{ background: 'var(--o-b0)', border: '1px solid var(--o-b1)', borderRadius: 6, padding: '14px 16px' }}>
+        {/* Lista de mídias existentes */}
+        {mediaItems.length > 0 && (
+          <div style={{ marginBottom: 14, display: 'flex', flexDirection: 'column', gap: 10 }}>
+            {mediaItems.map((m, i) => (
+              <div key={m.id} style={{
+                display: 'flex', alignItems: 'center', gap: 10,
+                padding: '8px 10px', borderRadius: 5,
+                background: 'var(--o-bg)', border: '1px solid var(--o-b1)',
+              }}>
+                <span style={{ fontSize: 10, color: 'var(--o-dim)', minWidth: 14, textAlign: 'center' }}>#{i + 1}</span>
+                <MediaThumb url={m.media_url} type={m.media_type} />
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: 11, color: 'var(--o-text)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', marginBottom: 4 }}>
+                    {m.media_url.split('/').pop()}
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <LangBadge lang={m.language as MediaLanguage} />
+                    <select
+                      value={m.language}
+                      onChange={e => handleLangChange(m.id, e.target.value as MediaLanguage)}
+                      style={{
+                        fontSize: 10, background: 'var(--o-b1)', color: 'var(--o-sub)',
+                        border: '1px solid var(--o-b2)', borderRadius: 3, padding: '1px 4px', cursor: 'pointer',
+                      }}
+                    >
+                      <option value="all">Todos os idiomas</option>
+                      <option value="pt">Português</option>
+                      <option value="en">English</option>
+                      <option value="es">Español</option>
+                    </select>
+                  </div>
                 </div>
-              </>
-            )}
-          </>
-        ) : (
-          <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
-            {/* Preview */}
-            <div style={{
-              width: 72, height: 72, borderRadius: 4, overflow: 'hidden', flexShrink: 0,
-              background: 'var(--o-b1)', display: 'flex', alignItems: 'center', justifyContent: 'center',
-              border: '1px solid var(--o-b2)',
-            }}>
-              {isImage ? (
-                <img src={currentMedia} alt="mídia" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-              ) : (
-                <span style={{ fontSize: 22 }}>{isPdf ? '📄' : isVideo ? '🎬' : '📎'}</span>
-              )}
-            </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                  <button
+                    className="o-btn" title="Mover para cima"
+                    style={{ fontSize: 9, padding: '1px 6px', lineHeight: 1.4 }}
+                    disabled={i === 0}
+                    onClick={() => handleMove(i, -1)}
+                  >▲</button>
+                  <button
+                    className="o-btn" title="Mover para baixo"
+                    style={{ fontSize: 9, padding: '1px 6px', lineHeight: 1.4 }}
+                    disabled={i === mediaItems.length - 1}
+                    onClick={() => handleMove(i, 1)}
+                  >▼</button>
+                </div>
+                <button
+                  className="o-btn"
+                  style={{ fontSize: 10, padding: '2px 8px', color: 'var(--o-hot)', flexShrink: 0 }}
+                  onClick={() => handleRemove(m.id)}
+                >
+                  Remover
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
 
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ fontSize: 12, color: 'var(--o-text)', marginBottom: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                {currentMedia.split('/').pop()}
-              </div>
-              <div style={{ fontSize: 11, color: 'var(--o-active)', marginBottom: 8 }}>
-                Enviada automaticamente ao lead na fase de apresentação
-              </div>
-              <div style={{ display: 'flex', gap: 8 }}>
-                <button
-                  className="o-btn"
-                  style={{ fontSize: 10, padding: '2px 8px' }}
-                  onClick={() => fileRef.current?.click()}
-                  disabled={uploading || removing}
-                >
-                  {uploading ? 'Enviando…' : 'Trocar'}
-                </button>
-                <button
-                  className="o-btn"
-                  style={{ fontSize: 10, padding: '2px 8px', color: 'var(--o-hot)' }}
-                  onClick={handleRemove}
-                  disabled={uploading || removing}
-                >
-                  {removing ? 'Removendo…' : 'Remover'}
-                </button>
-              </div>
-              <input
-                ref={fileRef}
-                type="file"
-                accept=".jpg,.jpeg,.png,.webp,.gif,.mp4,.pdf"
-                style={{ display: 'none' }}
-                onChange={e => { const f = e.target.files?.[0]; if (f) handleFile(f); }}
-              />
-            </div>
+        {/* Adicionar nova mídia */}
+        {!item ? (
+          <div style={{ fontSize: 11, color: 'var(--o-dim)', fontStyle: 'italic' }}>
+            Salve o conteúdo primeiro para poder adicionar mídia.
+          </div>
+        ) : (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+            <select
+              value={selectedLang}
+              onChange={e => setSelectedLang(e.target.value as MediaLanguage)}
+              style={{
+                fontSize: 11, background: 'var(--o-b1)', color: 'var(--o-sub)',
+                border: '1px solid var(--o-b2)', borderRadius: 4, padding: '4px 8px', cursor: 'pointer',
+              }}
+            >
+              <option value="all">Todos os idiomas</option>
+              <option value="pt">Português</option>
+              <option value="en">English</option>
+              <option value="es">Español</option>
+            </select>
+            <input
+              ref={fileRef}
+              type="file"
+              accept=".jpg,.jpeg,.png,.webp,.gif,.mp4,.pdf,.mp3,.ogg,.opus"
+              style={{ display: 'none' }}
+              onChange={e => { const f = e.target.files?.[0]; if (f) handleFile(f); }}
+            />
+            <button
+              className="o-btn"
+              style={{ fontSize: 11, padding: '4px 12px' }}
+              onClick={() => fileRef.current?.click()}
+              disabled={uploading}
+            >
+              {uploading ? 'Enviando…' : '+ Adicionar mídia'}
+            </button>
+            <span style={{ fontSize: 10, color: 'var(--o-dim)' }}>
+              jpg · png · gif · mp4 · pdf · mp3 · ogg
+            </span>
           </div>
         )}
 
@@ -327,9 +400,9 @@ function ModalGuided({
       {error && <div style={{ fontSize: 12, color: 'var(--o-hot)', marginTop: 4 }}>{error}</div>}
 
       {/* Seção de mídia */}
-      <MediaUploadSection
+      <MultiMediaSection
         item={savedItem}
-        onMediaChanged={updated => { setSavedItem(updated); }}
+        onItemChanged={updated => { setSavedItem(updated); }}
       />
     </ModalBase>
   );
@@ -430,9 +503,11 @@ function ModalAddExtra({ onClose, onAdded }: { onClose: () => void; onAdded: () 
 
 // ─── Modal: Ver conteúdo ──────────────────────────────────────
 function ModalView({ item, onClose }: { item: KnowledgeItem; onClose: () => void }) {
-  const isImage = item.media_url && /\.(jpg|jpeg|png|webp|gif)$/i.test(item.media_url);
-  const isPdf   = item.media_url && /\.pdf$/i.test(item.media_url);
-  const isVideo = item.media_url && /\.mp4$/i.test(item.media_url);
+  const allMedia = item.media_items?.length ? item.media_items : (item.media_url ? [{
+    id: 0, knowledge_item_id: item.id, media_url: item.media_url,
+    media_type: /\.(mp4)$/i.test(item.media_url) ? 'video' : /\.pdf$/i.test(item.media_url) ? 'pdf' : 'image',
+    language: 'all' as MediaLanguage, send_order: 0, created_at: '',
+  }] : []);
 
   return (
     <ModalBase
@@ -441,26 +516,46 @@ function ModalView({ item, onClose }: { item: KnowledgeItem; onClose: () => void
       onClose={onClose}
       wide
     >
-      {item.media_url && (
+      {allMedia.length > 0 && (
         <div style={{ marginBottom: 16 }}>
           <div className="font-mono-orion" style={{ fontSize: 8, letterSpacing: 2, textTransform: 'uppercase', color: 'var(--o-dim)', marginBottom: 8 }}>
             Mídia para envio ao lead
           </div>
-          {isImage ? (
-            <img
-              src={item.media_url}
-              alt="mídia"
-              style={{ maxWidth: '100%', maxHeight: 260, borderRadius: 6, border: '1px solid var(--o-b1)', objectFit: 'contain' }}
-            />
-          ) : (
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', background: 'var(--o-b0)', borderRadius: 6, border: '1px solid var(--o-b1)' }}>
-              <span style={{ fontSize: 20 }}>{isPdf ? '📄' : isVideo ? '🎬' : '📎'}</span>
-              <span style={{ fontSize: 12, color: 'var(--o-sub)' }}>{item.media_url.split('/').pop()}</span>
-              <a href={item.media_url} target="_blank" rel="noreferrer" style={{ fontSize: 11, color: 'var(--o-active)', marginLeft: 'auto' }}>
-                Abrir →
-              </a>
-            </div>
-          )}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {allMedia.map((m, i) => {
+              const isImg = m.media_type === 'image' || /\.(jpg|jpeg|png|webp|gif)$/i.test(m.media_url);
+              const icon = m.media_type === 'pdf' ? '📄' : m.media_type === 'video' ? '🎬' : m.media_type === 'audio' ? '🎵' : '📎';
+              return (
+                <div key={m.id || i}>
+                  {isImg && i === 0 ? (
+                    <div>
+                      <img
+                        src={m.media_url}
+                        alt="mídia"
+                        style={{ maxWidth: '100%', maxHeight: 200, borderRadius: 6, border: '1px solid var(--o-b1)', objectFit: 'contain', display: 'block', marginBottom: 6 }}
+                      />
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                        <span style={{ fontSize: 10, color: 'var(--o-dim)' }}>#{i + 1}</span>
+                        <LangBadge lang={m.language as MediaLanguage} />
+                      </div>
+                    </div>
+                  ) : (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 12px', background: 'var(--o-b0)', borderRadius: 5, border: '1px solid var(--o-b1)' }}>
+                      <span style={{ fontSize: 10, color: 'var(--o-dim)' }}>#{i + 1}</span>
+                      <span style={{ fontSize: 18 }}>{icon}</span>
+                      <span style={{ fontSize: 12, color: 'var(--o-sub)', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {m.media_url.split('/').pop()}
+                      </span>
+                      <LangBadge lang={m.language as MediaLanguage} />
+                      <a href={m.media_url} target="_blank" rel="noreferrer" style={{ fontSize: 11, color: 'var(--o-active)', flexShrink: 0 }}>
+                        Abrir →
+                      </a>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
         </div>
       )}
 
@@ -503,9 +598,9 @@ function ModalEditExtra({ item, onClose, onSaved }: { item: KnowledgeItem; onClo
         <textarea className="o-textarea" style={{ minHeight: 200 }} value={content} onChange={e => setContent(e.target.value)} />
       </div>
       {error && <div style={{ fontSize: 12, color: 'var(--o-hot)', marginTop: 8 }}>{error}</div>}
-      <MediaUploadSection
+      <MultiMediaSection
         item={liveItem}
-        onMediaChanged={updated => setLiveItem(updated)}
+        onItemChanged={updated => setLiveItem(updated)}
       />
     </ModalBase>
   );
@@ -776,8 +871,10 @@ function GuidedSectionCard({
               >
                 {KNOWLEDGE_IMPORTANCE_LABELS[category.importance]}
               </span>
-              {item?.media_url && (
-                <span title="Tem mídia para envio ao lead" style={{ fontSize: 11, flexShrink: 0 }}>📷</span>
+              {(item?.media_items?.length > 0 || item?.media_url) && (
+                <span title={`${item?.media_items?.length || 1} mídia(s) para envio`} style={{ fontSize: 11, flexShrink: 0 }}>
+                  📷{(item?.media_items?.length ?? 0) > 1 ? <sup style={{ fontSize: 8 }}>{item!.media_items.length}</sup> : null}
+                </span>
               )}
               {showStaleBadge && (
                 <span
@@ -1169,7 +1266,11 @@ export function CamadaConhecimento({
                   <span style={{ fontSize: 13, color: 'var(--o-text)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                     {item.title}
                   </span>
-                  {item.media_url && <span title="Tem mídia para envio" style={{ fontSize: 11, flexShrink: 0 }}>📷</span>}
+                  {(item.media_items?.length > 0 || item.media_url) && (
+                    <span title={`${item.media_items?.length || 1} mídia(s) para envio`} style={{ fontSize: 11, flexShrink: 0 }}>
+                      📷{item.media_items?.length > 1 ? <sup style={{ fontSize: 8 }}>{item.media_items.length}</sup> : null}
+                    </span>
+                  )}
                 </div>
                 <span className="o-badge o-badge-ok" style={{ justifySelf: 'start' }}>
                   {item.source_type === 'manual' ? 'Texto' : 'Arquivo'}

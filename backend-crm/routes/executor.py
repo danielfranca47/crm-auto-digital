@@ -270,20 +270,40 @@ def whatsapp_execution_context(
 
     # Buscar knowledge items do usuário para injeção no LLM (primeiro por categoria, apenas ativos no funil)
     knowledge_by_category: Dict[str, str] = {}
-    knowledge_media: Dict[str, str] = {}
+    knowledge_media: Dict[str, list] = {}
     with get_connection() as conn:
         conn.row_factory = sqlite3.Row
         cur = conn.cursor()
         cur.execute(
-            "SELECT category, content_text, media_url FROM knowledge_items WHERE user_id = ? AND active_in_funnel = 1 ORDER BY updated_at DESC",
+            "SELECT category, content_text FROM knowledge_items WHERE user_id = ? AND active_in_funnel = 1 ORDER BY updated_at DESC",
             (event.user_id,),
         )
         for row in cur.fetchall():
             cat = row["category"] or "uncategorized"
             if cat not in knowledge_by_category:
                 knowledge_by_category[cat] = row["content_text"]
-                if row["media_url"]:
-                    knowledge_media[cat] = row["media_url"]
+
+        # Múltiplas mídias por categoria via knowledge_item_media
+        cur.execute(
+            """
+            SELECT ki.category, kim.media_url, kim.media_type, kim.language, kim.send_order
+              FROM knowledge_item_media kim
+              JOIN knowledge_items ki ON ki.id = kim.knowledge_item_id
+             WHERE ki.user_id = ? AND ki.active_in_funnel = 1
+             ORDER BY ki.category, ki.updated_at DESC, kim.send_order ASC, kim.id ASC
+            """,
+            (event.user_id,),
+        )
+        for row in cur.fetchall():
+            cat = row["category"] or "uncategorized"
+            knowledge_media.setdefault(cat, []).append({
+                "media_url":  row["media_url"],
+                "media_type": row["media_type"],
+                "language":   row["language"],
+                "send_order": row["send_order"],
+            })
+
+    lead_detected_language = (bundle.lead or {}).get("detected_language") or "all"
 
     return {
         "job": job,
@@ -296,6 +316,7 @@ def whatsapp_execution_context(
         "metadata": bundle.metadata,
         "knowledge_items": knowledge_by_category,
         "knowledge_media": knowledge_media,
+        "lead_detected_language": lead_detected_language,
         "generated_prompt_parts": (bundle.ai_profile or {}).get("generated_prompt_parts") or {},
     }
 

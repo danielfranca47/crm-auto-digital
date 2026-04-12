@@ -356,6 +356,69 @@ def ensure_knowledge_table(conn: sqlite3.Connection) -> None:
     ensure_column(conn, "knowledge_items", "media_url", "media_url TEXT NULL")
 
 
+def ensure_knowledge_item_media_table(conn: sqlite3.Connection) -> None:
+    """Cria tabela de mídias por item de conhecimento (suporte a múltiplas mídias e idiomas)."""
+    cur = conn.cursor()
+    cur.executescript(
+        """
+        CREATE TABLE IF NOT EXISTS knowledge_item_media (
+            id                 INTEGER PRIMARY KEY AUTOINCREMENT,
+            knowledge_item_id  INTEGER NOT NULL,
+            media_url          TEXT NOT NULL,
+            media_type         TEXT NOT NULL DEFAULT 'image'
+                                   CHECK (media_type IN ('image','video','audio','pdf')),
+            language           TEXT NOT NULL DEFAULT 'all'
+                                   CHECK (language IN ('all','pt','en','es')),
+            send_order         INTEGER NOT NULL DEFAULT 0,
+            created_at         TEXT NOT NULL,
+            FOREIGN KEY (knowledge_item_id) REFERENCES knowledge_items(id) ON DELETE CASCADE
+        );
+        CREATE INDEX IF NOT EXISTS idx_kim_item     ON knowledge_item_media(knowledge_item_id);
+        CREATE INDEX IF NOT EXISTS idx_kim_item_ord ON knowledge_item_media(knowledge_item_id, send_order);
+        """
+    )
+
+
+def migrate_knowledge_media_to_table(conn: sqlite3.Connection) -> None:
+    """Migração idempotente: copia media_url existente de knowledge_items para knowledge_item_media."""
+    cur = conn.cursor()
+    cur.execute(
+        """
+        SELECT ki.id, ki.media_url
+          FROM knowledge_items ki
+         WHERE ki.media_url IS NOT NULL
+           AND NOT EXISTS (
+               SELECT 1 FROM knowledge_item_media kim
+                WHERE kim.knowledge_item_id = ki.id
+           )
+        """
+    )
+    rows = cur.fetchall()
+    if not rows:
+        return
+    now_iso = datetime.utcnow().isoformat()
+    for row in rows:
+        item_id = row[0] if not hasattr(row, "keys") else row["id"]
+        media_url = row[1] if not hasattr(row, "keys") else row["media_url"]
+        ext = media_url.rsplit(".", 1)[-1].lower() if "." in media_url else ""
+        if ext in {"mp4"}:
+            media_type = "video"
+        elif ext in {"pdf"}:
+            media_type = "pdf"
+        elif ext in {"mp3", "ogg", "opus"}:
+            media_type = "audio"
+        else:
+            media_type = "image"
+        cur.execute(
+            """
+            INSERT INTO knowledge_item_media
+                (knowledge_item_id, media_url, media_type, language, send_order, created_at)
+            VALUES (?, ?, ?, 'all', 0, ?)
+            """,
+            (item_id, media_url, media_type, now_iso),
+        )
+
+
 # =========================
 # APPOINTMENTS HELPERS
 # =========================
@@ -794,6 +857,7 @@ def init_db() -> None:
         ensure_column(conn, "lead_qualification_state", "qualification_total_score", "qualification_total_score INTEGER NOT NULL DEFAULT 0")
         ensure_column(conn, "leads", "checkout_token", "checkout_token TEXT")
         ensure_column(conn, "leads", "is_playground", "is_playground INTEGER NOT NULL DEFAULT 0")
+        ensure_column(conn, "leads", "detected_language", "detected_language TEXT NULL")
 
         cur.execute("CREATE INDEX IF NOT EXISTS idx_leads_user ON leads(user_id, createdAt);")
         cur.execute(
@@ -842,6 +906,7 @@ def init_db() -> None:
 
         # Base de conhecimento por usuário
         ensure_knowledge_table(conn)
+        ensure_knowledge_item_media_table(conn)
 
         # Agente Espião
         ensure_spy_agent_tables(conn)
@@ -849,6 +914,7 @@ def init_db() -> None:
         ensure_column(conn, "messages", "message_type", "message_type TEXT DEFAULT 'text'")
 
         # Migrações
+        migrate_knowledge_media_to_table(conn)
         migrate_user_profile(conn)
         migrate_atividades_to_appointments(conn)  # popula appointments a partir do legado (normalizado)
         backfill_appointment_dates(conn)          # garante start/end

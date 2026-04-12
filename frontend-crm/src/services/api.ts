@@ -268,6 +268,19 @@ export type FollowUpStats = {
   replied_today: number;
 };
 
+export type MediaLanguage = "all" | "pt" | "en" | "es";
+export type MediaFileType = "image" | "video" | "audio" | "pdf";
+
+export type KnowledgeMediaItem = {
+  id: number;
+  knowledge_item_id: number;
+  media_url: string;
+  media_type: MediaFileType;
+  language: MediaLanguage;
+  send_order: number;
+  created_at: string;
+};
+
 export type KnowledgeItem = {
   id: number;
   user_id: number;
@@ -278,6 +291,7 @@ export type KnowledgeItem = {
   category?: string | null;
   active_in_funnel: number;
   media_url?: string | null;
+  media_items: KnowledgeMediaItem[];
   created_at: string;
   updated_at: string;
 };
@@ -943,6 +957,20 @@ export const api = {
     },
     deleteKnowledgeMedia: async (id: number) =>
       apiClient.delete<KnowledgeItem>(`/knowledge/${id}/media`),
+    // Novos endpoints multi-mídia
+    addKnowledgeMedia: async (id: number, file: File, language: MediaLanguage = "all", send_order = 0) => {
+      const formData = new FormData();
+      formData.append("file", file);
+      formData.append("language", language);
+      formData.append("send_order", String(send_order));
+      return apiClient.post<KnowledgeMediaItem>(`/knowledge/${id}/media`, formData);
+    },
+    updateKnowledgeMediaMeta: async (itemId: number, mediaId: number, payload: { language?: MediaLanguage; send_order?: number }) =>
+      apiClient.patch<KnowledgeMediaItem>(`/knowledge/${itemId}/media/${mediaId}`, payload),
+    deleteKnowledgeMediaItem: async (itemId: number, mediaId: number) =>
+      apiClient.delete(`/knowledge/${itemId}/media/${mediaId}`),
+    reorderKnowledgeMedia: async (itemId: number, items: Array<{ id: number; send_order: number }>) =>
+      apiClient.put(`/knowledge/${itemId}/media/reorder`, { items }),
     whatsappConnect: async () => apiClient.post<WhatsappConnectResponse>(`/whatsapp/connect`),
     whatsappStatus: async () => apiClient.get<WhatsappStatusResponse>(`/whatsapp/status`),
     whatsappRefreshQr: async () =>

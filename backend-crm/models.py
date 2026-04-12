@@ -190,6 +190,27 @@ class KnowledgeUpdate(BaseModel):
     media_url: Optional[str] = None
 
 
+class KnowledgeMediaOut(BaseModel):
+    id: int
+    knowledge_item_id: int
+    media_url: str
+    media_type: str
+    language: str
+    send_order: int
+    created_at: str
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class KnowledgeMediaUpdate(BaseModel):
+    language: Optional[str] = None
+    send_order: Optional[int] = None
+
+
+class KnowledgeMediaReorder(BaseModel):
+    items: List[dict]  # [{id: int, send_order: int}]
+
+
 class KnowledgeItemOut(BaseModel):
     id: int
     user_id: int
@@ -200,6 +221,7 @@ class KnowledgeItemOut(BaseModel):
     category: Optional[str] = None
     active_in_funnel: int = 1
     media_url: Optional[str] = None
+    media_items: List[KnowledgeMediaOut] = Field(default_factory=list)
     created_at: datetime
     updated_at: datetime
 

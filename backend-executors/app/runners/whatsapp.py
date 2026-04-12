@@ -830,14 +830,23 @@ def execute_job(job_id: str, logger: logging.Logger) -> int:
             ctx_logger.info("event=job_completed status=%s", final_status, extra={"phase": "complete"})
             return 0
 
-        # Mídia rica no pitch — Agent 2 (Tarefa 3.6)
-        # Envia a mídia antes do texto; falha de mídia não aborta o envio de texto.
+        # Mídia rica no pitch — envia cada mídia antes do texto em sequência.
+        # Falha de mídia individual não aborta o envio de texto.
         if decision.pre_send_media:
-            media_url = decision.pre_send_media.get("media_url")
-            media_type = decision.pre_send_media.get("media_type", "image")
-            if media_url:
+            _media_list = decision.pre_send_media
+            # Normalizar: suporte a formato legado (dict único) e novo (lista)
+            if isinstance(_media_list, dict):
+                _media_list = [_media_list]
+            for _media_item in _media_list:
+                _media_url = _media_item.get("media_url")
+                _media_type = _media_item.get("media_type", "image")
+                if not _media_url:
+                    continue
                 ctx_logger.info(
-                    "event=pre_send_media_request media_type=%s", media_type, extra={"phase": "core_send"}
+                    "event=pre_send_media_request media_type=%s order=%s",
+                    _media_type,
+                    _media_item.get("send_order", 0),
+                    extra={"phase": "core_send"},
                 )
                 try:
                     core_client.send_whatsapp_media(
@@ -845,14 +854,14 @@ def execute_job(job_id: str, logger: logging.Logger) -> int:
                             "provider": provider,
                             "instance_id": instance_id,
                             "number": phone,
-                            "media_url": media_url,
-                            "media_type": media_type,
+                            "media_url": _media_url,
+                            "media_type": _media_type,
                         }
                     )
-                    ctx_logger.info("event=pre_send_media_success", extra={"phase": "core_send"})
+                    ctx_logger.info("event=pre_send_media_success media_type=%s", _media_type, extra={"phase": "core_send"})
                 except core_client.CoreClientError as media_exc:
                     ctx_logger.warning(
-                        "event=pre_send_media_error error=%s — continuando com envio de texto",
+                        "event=pre_send_media_error error=%s — continuando",
                         media_exc,
                         extra={"phase": "core_send"},
                     )
