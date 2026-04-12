@@ -67,6 +67,8 @@ export default function SpyAgent() {
   const [showPreview, setShowPreview] = useState(false);
   const [applying, setApplying] = useState(false);
   const [applied, setApplied] = useState(false);
+  // Permite fechar a análise concluída e voltar ao ecrã de setup
+  const [dismissed, setDismissed] = useState(false);
 
   // Reconexão do fone espião
   const [reconnecting, setReconnecting] = useState(false);
@@ -170,14 +172,16 @@ export default function SpyAgent() {
     },
   });
 
+  const status = (session as any)?.status ?? "not_started";
+  // Se o utilizador fechou a análise sem aplicar, mostrar o ecrã de setup
+  const effectiveStatus = dismissed ? "not_started" : status;
+  const st = STATUS_LABELS[effectiveStatus] ?? STATUS_LABELS.not_started;
+
   const { data: sample } = useQuery({
     queryKey: ["spy-agent-sample"],
     queryFn: () => api.spyAgent.getConversationSample(),
-    enabled: !session || (session as any).status === "not_started",
+    enabled: !session || effectiveStatus === "not_started",
   });
-
-  const status = (session as any)?.status ?? "not_started";
-  const st = STATUS_LABELS[status] ?? STATUS_LABELS.not_started;
 
   // Helper: all suggestions flat
   const allSuggestions: Array<{ module: string; field: string; value: unknown }> = (
@@ -328,6 +332,7 @@ export default function SpyAgent() {
   };
 
   const handleStarted = () => {
+    setDismissed(false);
     queryClient.invalidateQueries({ queryKey: ["spy-agent-session"] });
     queryClient.invalidateQueries({ queryKey: ["spy-agent-runs"] });
     queryClient.invalidateQueries({ queryKey: ["spy-agent-sample"] });
@@ -373,7 +378,7 @@ export default function SpyAgent() {
             <h1 className="font-semibold truncate">Agente Espião</h1>
             <Badge variant="secondary" className="text-xs shrink-0">Premium</Badge>
           </div>
-          {session && status !== "not_started" && (
+          {session && effectiveStatus !== "not_started" && (
             <div className={`flex items-center gap-1.5 text-xs font-medium ${st.color}`}>
               {st.icon}
               <span>{st.label}</span>
@@ -392,7 +397,7 @@ export default function SpyAgent() {
         )}
 
         {/* === NÃO INICIADO === */}
-        {!sessionLoading && status === "not_started" && (
+        {!sessionLoading && effectiveStatus === "not_started" && (
           <>
             <div className="space-y-1">
               <h2 className="text-lg font-semibold">Configure o Agente Espião</h2>
@@ -407,7 +412,7 @@ export default function SpyAgent() {
         )}
 
         {/* === OBSERVANDO === */}
-        {!sessionLoading && status === "observing" && session && (
+        {!sessionLoading && effectiveStatus === "observing" && session && (
           <>
             <div className="rounded-xl border bg-muted/30 p-5 space-y-4">
               <div className="flex items-center gap-3">
@@ -537,7 +542,7 @@ export default function SpyAgent() {
         )}
 
         {/* === ANALISANDO === */}
-        {!sessionLoading && status === "analyzing" && (
+        {!sessionLoading && effectiveStatus === "analyzing" && (
           <div className="rounded-xl border bg-muted/30 p-8 text-center space-y-4">
             <Loader2 className="h-10 w-10 text-primary mx-auto animate-spin" />
             <div>
@@ -550,7 +555,7 @@ export default function SpyAgent() {
         )}
 
         {/* === CONCLUÍDO — sugestões === */}
-        {!sessionLoading && status === "completed" && session && (
+        {!sessionLoading && effectiveStatus === "completed" && session && (
           <>
             {/* Título + ações globais */}
             <div className="space-y-3">
@@ -632,17 +637,31 @@ export default function SpyAgent() {
 
             {/* Botão de pré-visualização / aplicar */}
             {!applied && (
-              <Button
-                className="w-full gap-2"
-                size="lg"
-                disabled={acceptedCount === 0}
-                onClick={() => setShowPreview(true)}
-              >
-                <ArrowRight className="h-4 w-4" />
-                {acceptedCount === 0
-                  ? "Selecione sugestões para continuar"
-                  : `Pré-visualizar ${acceptedCount} aceite(s)`}
-              </Button>
+              <div className="space-y-2">
+                <Button
+                  className="w-full gap-2"
+                  size="lg"
+                  disabled={acceptedCount === 0}
+                  onClick={() => setShowPreview(true)}
+                >
+                  <ArrowRight className="h-4 w-4" />
+                  {acceptedCount === 0
+                    ? "Selecione sugestões para continuar"
+                    : `Pré-visualizar ${acceptedCount} aceite(s)`}
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="w-full text-muted-foreground hover:text-foreground text-xs"
+                  onClick={() => {
+                    setDismissed(true);
+                    setDecisions({});
+                    setHistory([]);
+                  }}
+                >
+                  Finalizar sem aplicar
+                </Button>
+              </div>
             )}
 
             <SpyAgentHistory />
@@ -650,7 +669,7 @@ export default function SpyAgent() {
         )}
 
         {/* === FALHOU === */}
-        {!sessionLoading && status === "failed" && (
+        {!sessionLoading && effectiveStatus === "failed" && (
           <>
             <div className="rounded-xl border border-destructive/30 bg-destructive/5 p-6 text-center space-y-3">
               <p className="font-semibold text-destructive">A análise falhou</p>
