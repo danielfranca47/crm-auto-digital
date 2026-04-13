@@ -232,6 +232,8 @@ class ContextBundle(BaseModel):
     conversation_goal: str | None = None
     qualification_state: Optional[Dict[str, Any]] = None
     knowledge_items: Optional[Dict[str, str]] = None
+    training_examples: Optional[Dict[str, Any]] = None
+    # Estrutura: { "qualification": { "good": [...], "bad": [...] }, "apresentation": {...}, ... }
 
 
 def build_context_bundle(
@@ -390,6 +392,60 @@ def build_context_bundle_from_inbound(event: InboundEvent) -> ContextBundle:
     )
 
 
+def _load_training_examples(user_id: int, ai_profile_id: int, agent_mode: str | None) -> Dict[str, Any]:
+    """
+    Carrega exemplos de treino do playground agrupados por fase.
+
+    Retorna até 3 exemplos bons e 3 ruins por fase (priorizando os mais recentes),
+    filtrados por user_id, ai_profile_id e agent_mode (quando disponível).
+    """
+    phases = ["qualification", "apresentation", "followup"]
+    result: Dict[str, Any] = {}
+
+    with get_connection() as conn:
+        conn.row_factory = sqlite3.Row
+        cur = conn.cursor()
+        for phase in phases:
+            good_examples: List[Dict[str, Any]] = []
+            bad_examples: List[Dict[str, Any]] = []
+
+            params: tuple = (str(user_id), ai_profile_id, phase)
+            mode_filter = ""
+            if agent_mode:
+                mode_filter = " AND (agent_mode IS NULL OR agent_mode = ?)"
+                params = (str(user_id), ai_profile_id, phase, agent_mode)
+
+            cur.execute(
+                f"""
+                SELECT lead_message, bot_message, rating, comment
+                  FROM playground_training_items
+                 WHERE user_id = ? AND ai_profile_id = ? AND phase = ?
+                   {mode_filter}
+                 ORDER BY created_at DESC
+                 LIMIT 30
+                """,
+                params,
+            )
+            for row in cur.fetchall():
+                item = {
+                    "lead_message": row["lead_message"],
+                    "bot_message": row["bot_message"],
+                    "rating": row["rating"],
+                    "comment": row["comment"],
+                }
+                if row["rating"] == "excelente" and len(good_examples) < 3:
+                    good_examples.append(item)
+                elif row["rating"] in ("boa",) and len(good_examples) < 3:
+                    good_examples.append(item)
+                elif row["rating"] in ("ruim", "regular") and len(bad_examples) < 3:
+                    bad_examples.append(item)
+
+            if good_examples or bad_examples:
+                result[phase] = {"good": good_examples, "bad": bad_examples}
+
+    return result
+
+
 def _load_knowledge_items(user_id: int) -> Dict[str, str]:
     """Carrega knowledge items do utilizador agrupados por categoria (primeira entrada por categoria)."""
     knowledge_by_category: Dict[str, str] = {}
@@ -445,6 +501,11 @@ def build_context_bundle_for_playground(
 
     qualification_state = get_qualification_state(lead_id)
     knowledge_items = _load_knowledge_items(user_id)
+    training_examples = _load_training_examples(
+        user_id=user_id,
+        ai_profile_id=ai_profile.get("id", 0),
+        agent_mode=normalized_mode,
+    )
 
     _lead_origin_label = (
         "OUTBOUND (bot abordou o lead ativamente) — PLAYGROUND"
@@ -474,6 +535,7 @@ def build_context_bundle_for_playground(
         conversation_goal=conversation_goal,
         qualification_state=qualification_state,
         knowledge_items=knowledge_items,
+        training_examples=training_examples if training_examples else None,
     )
 
 

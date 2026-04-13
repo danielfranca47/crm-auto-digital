@@ -14,6 +14,7 @@ from services.ai_orchestrator import (
     InboundEvent,
     build_context_bundle_from_inbound,
 )
+from services.ai_orchestrator.orchestrator import _load_training_examples
 from services.qualification_state import (
     get_qualification_state,
     increment_attempt,
@@ -305,6 +306,14 @@ def whatsapp_execution_context(
 
     lead_detected_language = (bundle.lead or {}).get("detected_language") or "all"
 
+    # Exemplos de treino do playground (few-shot por fase/agent_mode)
+    _ai_profile = bundle.ai_profile or {}
+    training_examples = _load_training_examples(
+        user_id=event.user_id,
+        ai_profile_id=_ai_profile.get("id", 0),
+        agent_mode=_ai_profile.get("agent_mode"),
+    )
+
     # Carregar informações gerais do negócio (business_info) e injetar como categoria especial
     with get_connection() as conn:
         conn.row_factory = sqlite3.Row
@@ -336,6 +345,7 @@ def whatsapp_execution_context(
         "knowledge_media": knowledge_media,
         "lead_detected_language": lead_detected_language,
         "generated_prompt_parts": (bundle.ai_profile or {}).get("generated_prompt_parts") or {},
+        "training_examples": training_examples,
     }
 
 

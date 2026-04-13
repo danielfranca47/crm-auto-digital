@@ -150,6 +150,12 @@ export type PlaygroundQualificationState = {
   qualification_total_score: number;
 };
 
+export type PlaygroundPreSendMediaItem = {
+  media_url: string;
+  media_type: "image" | "video" | "audio" | "pdf";
+  send_order: number;
+};
+
 export type PlaygroundChatResponse = {
   lead_id: number;
   message_to_send: string;
@@ -161,6 +167,7 @@ export type PlaygroundChatResponse = {
     qualification_state?: PlaygroundQualificationState | null;
   };
   decision_trace: PlaygroundDecisionTrace;
+  pre_send_media?: PlaygroundPreSendMediaItem[];
 };
 
 // ── Playground FeedbackAssist ────────────────────────────────────────────────
@@ -1240,6 +1247,19 @@ export const api = {
 
     feedbackAssist: async (payload: FeedbackAssistRequest) =>
       apiClient.post<FeedbackAssistResponse>("/playground/feedback-assist", payload),
+
+    training: async (payload: {
+      ai_profile_id: number;
+      lead_id?: number | null;
+      agent_mode?: string | null;
+      phase?: string | null;
+      mother_route?: string | null;
+      lead_message?: string | null;
+      bot_message: string;
+      rating: "ruim" | "regular" | "boa" | "excelente";
+      comment?: string | null;
+    }) =>
+      apiClient.post<{ id: number }>("/playground/training", payload),
   },
 
   followUps: {

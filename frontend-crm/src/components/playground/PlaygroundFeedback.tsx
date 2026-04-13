@@ -1,4 +1,4 @@
-import { Download, X } from "lucide-react";
+import { AlertTriangle, Download, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent } from "@/components/ui/card";
@@ -32,6 +32,13 @@ const TAG_COLORS: Record<FeedbackTag, string> = {
   outro: "bg-gray-100 text-gray-700 border-gray-300 dark:bg-gray-800 dark:text-gray-300",
 };
 
+const RATING_LABELS: Record<string, string> = {
+  ruim: "Ruim",
+  regular: "Regular",
+  boa: "Boa",
+  excelente: "Excelente",
+};
+
 interface PlaygroundFeedbackProps {
   session: PlaygroundSession;
   feedbacks: FeedbackItem[];
@@ -53,6 +60,8 @@ export function PlaygroundFeedback({
   onRemove,
   onAgentReportEntry,
 }: PlaygroundFeedbackProps) {
+  const hasExportRequired = agentReportEntries.some((e) => e.outcome === "export_required");
+
   function exportMarkdown() {
     const lines: string[] = [];
     const date = new Date(session.startedAt).toLocaleString("pt-PT");
@@ -97,17 +106,42 @@ export function PlaygroundFeedback({
         minute: "2-digit",
       });
       const who = msg.role === "lead" ? "**[Lead]**" : "**[Bot]**";
+
+      // Mídia simulada do lead
+      const leadMediaMatch = msg.role === "lead"
+        ? msg.text.trim().match(/^\{(áudio|audio|imagem|vídeo|video|documento)\}$/i)
+        : null;
+
       lines.push(`${who} ${time}`);
-      lines.push(`> ${msg.text.replace(/\n/g, "\n> ")}`);
-      if (msg.decisionTrace) {
-        const t = msg.decisionTrace;
-        lines.push(`>`);
-        lines.push(
-          `> _Trace: mother_route=${t.mother_route ?? "—"}, effective=${t.effective_route ?? "—"}, confidence=${
-            msg.confidence != null ? Math.round(msg.confidence * 100) + "%" : "—"
-          }, guardrails=[${(msg.guardrails ?? []).join(", ")}]_`
-        );
+
+      if (leadMediaMatch) {
+        const type = leadMediaMatch[1].toLowerCase().replace("á", "a").replace("é", "e").replace("í", "i");
+        lines.push(`> _[Lead enviou: ${type}]_`);
+      } else {
+        lines.push(`> ${msg.text.replace(/\n/g, "\n> ")}`);
       }
+
+      if (msg.role === "bot") {
+        // Cards de mídia do bot
+        if (msg.preMediaItems && msg.preMediaItems.length > 0) {
+          for (const media of msg.preMediaItems) {
+            lines.push(`> 📎 _[Mídia enviada: ${media.media_type} — ${media.media_url}]_`);
+          }
+        }
+        if (msg.decisionTrace) {
+          const t = msg.decisionTrace;
+          lines.push(`>`);
+          lines.push(
+            `> _Trace: mother_route=${t.mother_route ?? "—"}, effective=${t.effective_route ?? "—"}, confidence=${
+              msg.confidence != null ? Math.round(msg.confidence * 100) + "%" : "—"
+            }, guardrails=[${(msg.guardrails ?? []).join(", ")}]_`
+          );
+        }
+        if (msg.rating) {
+          lines.push(`> _Avaliação: **${RATING_LABELS[msg.rating] ?? msg.rating}**${msg.ratingComment ? ` — "${msg.ratingComment}"` : ""}_`);
+        }
+      }
+
       lines.push("");
     }
 
@@ -124,9 +158,30 @@ export function PlaygroundFeedback({
       });
     }
 
+    // Dados de treino (mensagens com rating)
+    const ratedMessages = messages.filter((m) => m.role === "bot" && m.rating);
+    if (ratedMessages.length > 0) {
+      lines.push("## Dados de Treino");
+      lines.push("");
+      lines.push("| Rota | Rating | Comentário | Mensagem do Bot |");
+      lines.push("|---|---|---|---|");
+      for (const m of ratedMessages) {
+        const route = m.motherRoute ?? m.decisionTrace?.effective_route ?? "—";
+        const rating = RATING_LABELS[m.rating!] ?? m.rating!;
+        const comment = m.ratingComment || "_(sem comentário)_";
+        const preview = m.text.slice(0, 80).replace(/\|/g, "\\|") + (m.text.length > 80 ? "…" : "");
+        lines.push(`| ${route} | ${rating} | ${comment} | "${preview}" |`);
+      }
+      lines.push("");
+    }
+
     if (agentReportEntries.length > 0) {
       lines.push("## Relatório do Agente IA");
       lines.push("");
+      if (hasExportRequired) {
+        lines.push("> ⚠️ O Assistente IA concluiu que uma ou mais situações não são resolvíveis apenas por configuração — requerem análise de código.");
+        lines.push("");
+      }
       agentReportEntries.forEach((entry) => {
         lines.push(
           `### Tentativa ${entry.attemptNumber} — ${new Date(entry.timestamp).toLocaleString("pt-PT")}`
@@ -190,6 +245,16 @@ export function PlaygroundFeedback({
           value="anotacoes"
           className="flex-1 min-h-0 mt-0 overflow-y-auto p-4 space-y-3 data-[state=inactive]:hidden"
         >
+          {/* Banner: Assistente IA identificou export_required */}
+          {hasExportRequired && (
+            <div className="rounded-md border border-amber-300 bg-amber-50 dark:bg-amber-950 p-3 text-xs flex gap-2 items-start">
+              <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5 text-amber-600" />
+              <span className="text-amber-800 dark:text-amber-200">
+                O Assistente IA concluiu que a correção requer mudança de código. O relatório completo será incluído automaticamente na exportação.
+              </span>
+            </div>
+          )}
+
           {feedbacks.length === 0 ? (
             <div className="flex flex-col items-center justify-center h-full text-center text-muted-foreground text-sm px-6 space-y-2">
               <span className="text-3xl">🔖</span>

@@ -231,6 +231,49 @@ def _build_custom_instructions_block(ai_profile: Dict[str, Any]) -> str:
     )
 
 
+def _build_training_examples_block(context: Dict[str, Any], phase: str) -> str:
+    """
+    Gera bloco de exemplos de treino classificados pelo operador para a fase atual.
+
+    Esses exemplos são classificações reais de respostas do bot feitas pelo utilizador
+    no playground e servem como few-shot de referência para reduzir aleatoriedade.
+    """
+    training = context.get("training_examples") or {}
+    phase_data = training.get(phase) or {}
+    good = phase_data.get("good") or []
+    bad = phase_data.get("bad") or []
+    if not good and not bad:
+        return ""
+
+    lines = ["\nEXEMPLOS DE TREINO DO OPERADOR (baseados em classificações reais — usar como referência):"]
+
+    for item in good:
+        lead_msg = (item.get("lead_message") or "").strip()
+        bot_msg = (item.get("bot_message") or "").strip()
+        if not bot_msg:
+            continue
+        lines.append("\n✅ RESPOSTA APROVADA:")
+        if lead_msg:
+            lines.append(f'Lead: "{lead_msg}"')
+        lines.append(f'Bot: "{bot_msg}"')
+
+    for item in bad:
+        lead_msg = (item.get("lead_message") or "").strip()
+        bot_msg = (item.get("bot_message") or "").strip()
+        comment = (item.get("comment") or "").strip()
+        if not bot_msg:
+            continue
+        lines.append("\n❌ RESPOSTA REJEITADA:")
+        if lead_msg:
+            lines.append(f'Lead: "{lead_msg}"')
+        lines.append(f'Bot: "{bot_msg}"')
+        if comment:
+            lines.append(f'Motivo do operador: "{comment}"')
+
+    lines.append("")
+    return "\n".join(lines)
+
+
 def _build_qualification_fields_block(ai_profile: Dict[str, Any], response_style: str) -> str:
     """Gera bloco de campos de qualificação configurados pelo usuário para injeção no prompt da filha.
 
@@ -1407,7 +1450,7 @@ CONTEXTO:
 - origin_opener: {origin_opener}
 - inbound_message_text: {message_text}
 - next_action_hint_mae: {mother_decision.next_action_hint or "null"}
-{_build_qualification_fields_block(ai_profile, response_style)}{_build_custom_instructions_block(ai_profile)}"""
+{_build_qualification_fields_block(ai_profile, response_style)}{_build_custom_instructions_block(ai_profile)}{_build_training_examples_block(context, "qualification")}"""
     return _inject_generated_parts(_qual_prompt, context, "qualification")
 
 def _build_child_prompt_apresentation(
@@ -1788,6 +1831,7 @@ def _build_child_prompt_apresentation(
         f"- extracted_fields: {json.dumps(mode_contract.get('extracted_fields') or {}, ensure_ascii=False)}\n"
         f"- inbound_message_text: {message_text}\n"
         + _build_custom_instructions_block(ai_profile)
+        + _build_training_examples_block(context, "apresentation")
     )
     return _inject_generated_parts(_apres_prompt, context, "apresentation")
 
@@ -2022,6 +2066,7 @@ def _build_child_prompt_follow_up(
         f"- followup_contract_signals: {json.dumps(followup_summary, ensure_ascii=False)}\n"
         f"- history: {history_text}\n"
         f"- inbound_message_text: {message_text}\n"
+        + _build_training_examples_block(context, "followup")
     )
     return _inject_generated_parts(_followup_prompt, context, "followup")
 

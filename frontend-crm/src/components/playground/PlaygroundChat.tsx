@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, KeyboardEvent } from "react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Loader2, Send } from "lucide-react";
-import { MessageBubble, type ChatMessage } from "./MessageBubble";
+import { MessageBubble, type ChatMessage, type RatingValue } from "./MessageBubble";
 
 interface PlaygroundChatProps {
   messages: ChatMessage[];
@@ -10,6 +10,7 @@ interface PlaygroundChatProps {
   scenarioType?: "inbound" | "outbound";
   onSend: (text: string) => void;
   onToggleFeedback: (id: string) => void;
+  onRate: (id: string, rating: RatingValue, comment: string) => void;
 }
 
 export function PlaygroundChat({
@@ -18,6 +19,7 @@ export function PlaygroundChat({
   scenarioType = "inbound",
   onSend,
   onToggleFeedback,
+  onRate,
 }: PlaygroundChatProps) {
   const [input, setInput] = useState("");
   const bottomRef = useRef<HTMLDivElement>(null);
@@ -41,6 +43,9 @@ export function PlaygroundChat({
     }
   }
 
+  // Detecta se o input contém um marcador de mídia para mostrar hint
+  const isMediaMarker = /^\{(áudio|audio|imagem|vídeo|video|documento)\}$/i.test(input.trim());
+
   return (
     <div className="flex flex-col h-full">
       {/* Área de mensagens */}
@@ -57,6 +62,7 @@ export function PlaygroundChat({
               key={msg.id}
               message={msg}
               onToggleFeedback={onToggleFeedback}
+              onRate={onRate}
             />
           ))
         )}
@@ -75,32 +81,47 @@ export function PlaygroundChat({
       </div>
 
       {/* Input */}
-      <div className="border-t p-3 flex gap-2 items-end bg-background">
-        <Textarea
-          value={input}
-          onChange={(e) => setInput(e.target.value)}
-          onKeyDown={handleKeyDown}
-          placeholder={
-            scenarioType === "outbound"
-              ? "Responda como se fosse o lead… (Enter para enviar, Shift+Enter para nova linha)"
-              : "Digite como se fosse o lead… (Enter para enviar, Shift+Enter para nova linha)"
-          }
-          rows={2}
-          className="flex-1 resize-none text-sm min-h-[44px] max-h-32"
-          disabled={loading}
-        />
-        <Button
-          onClick={handleSend}
-          disabled={!input.trim() || loading}
-          size="icon"
-          className="shrink-0 h-[44px] w-[44px]"
-        >
-          {loading ? (
-            <Loader2 className="h-4 w-4 animate-spin" />
-          ) : (
-            <Send className="h-4 w-4" />
-          )}
-        </Button>
+      <div className="border-t p-3 flex flex-col gap-1.5 bg-background">
+        <div className="flex gap-2 items-end">
+          <Textarea
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            onKeyDown={handleKeyDown}
+            placeholder={
+              scenarioType === "outbound"
+                ? "Responda como se fosse o lead… (Enter para enviar, Shift+Enter para nova linha)"
+                : "Digite como se fosse o lead… (Enter para enviar, Shift+Enter para nova linha)"
+            }
+            rows={2}
+            className="flex-1 resize-none text-sm min-h-[44px] max-h-32"
+            disabled={loading}
+          />
+          <Button
+            onClick={handleSend}
+            disabled={!input.trim() || loading}
+            size="icon"
+            className="shrink-0 h-[44px] w-[44px]"
+          >
+            {loading ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <Send className="h-4 w-4" />
+            )}
+          </Button>
+        </div>
+
+        {/* Hint de marcadores de mídia */}
+        {isMediaMarker ? (
+          <p className="text-xs text-primary font-medium px-1">
+            Mídia simulada — será exibida como card no chat
+          </p>
+        ) : (
+          <p className="text-xs text-muted-foreground px-1">
+            Dica: escreva <code className="bg-muted px-1 rounded">{"{áudio}"}</code>,{" "}
+            <code className="bg-muted px-1 rounded">{"{imagem}"}</code> ou{" "}
+            <code className="bg-muted px-1 rounded">{"{vídeo}"}</code> para simular envio de mídia
+          </p>
+        )}
       </div>
     </div>
   );

@@ -383,6 +383,31 @@ def seed_business_info_defaults(conn: sqlite3.Connection, user_id: int) -> None:
         )
 
 
+def ensure_playground_training_table(conn: sqlite3.Connection) -> None:
+    """Cria tabela de exemplos de treino do playground (idempotente)."""
+    cur = conn.cursor()
+    cur.executescript(
+        """
+        CREATE TABLE IF NOT EXISTS playground_training_items (
+            id            INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id       TEXT NOT NULL,
+            ai_profile_id INTEGER NOT NULL,
+            agent_mode    TEXT,
+            phase         TEXT,
+            mother_route  TEXT,
+            lead_message  TEXT,
+            bot_message   TEXT NOT NULL,
+            rating        TEXT NOT NULL CHECK(rating IN ('ruim','regular','boa','excelente')),
+            comment       TEXT,
+            created_at    TEXT DEFAULT (datetime('now'))
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_training_user_profile
+            ON playground_training_items(user_id, ai_profile_id, agent_mode, phase);
+        """
+    )
+
+
 def ensure_knowledge_table(conn: sqlite3.Connection) -> None:
     """Cria tabela de knowledge base por usuário (idempotente)."""
     cur = conn.cursor()
@@ -960,6 +985,9 @@ def init_db() -> None:
         ensure_knowledge_table(conn)
         ensure_knowledge_item_media_table(conn)
         ensure_business_info_table(conn)
+
+        # Tabela de training do playground
+        ensure_playground_training_table(conn)
 
         # Agente Espião
         ensure_spy_agent_tables(conn)

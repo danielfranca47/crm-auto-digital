@@ -7,7 +7,7 @@ import { api } from "@/services/api";
 import { PlaygroundConfigModal, type PlaygroundSession } from "@/components/playground/PlaygroundConfigModal";
 import { PlaygroundChat } from "@/components/playground/PlaygroundChat";
 import { PlaygroundFeedback, type FeedbackItem, type FeedbackTag } from "@/components/playground/PlaygroundFeedback";
-import { type ChatMessage } from "@/components/playground/MessageBubble";
+import { type ChatMessage, type RatingValue } from "@/components/playground/MessageBubble";
 import { type AgentReportEntry } from "@/components/playground/FeedbackAssistant";
 
 export default function Playground() {
@@ -66,6 +66,7 @@ export default function Playground() {
             confidence: res.mother_decision?.confidence,
             guardrails: res.decision_trace?.guardrails_applied ?? [],
             selectedForFeedback: false,
+            preMediaItems: res.pre_send_media ?? [],
           },
         ]);
       } catch (err: unknown) {
@@ -129,6 +130,7 @@ export default function Playground() {
             confidence: res.mother_decision?.confidence,
             guardrails: res.decision_trace?.guardrails_applied ?? [],
             selectedForFeedback: false,
+            preMediaItems: res.pre_send_media ?? [],
           },
         ]);
       } catch (err: unknown) {
@@ -205,6 +207,58 @@ export default function Playground() {
     setAgentReport((prev) => [...prev, entry]);
   }, []);
 
+  // ── Rating de treino ──────────────────────────────────────────────────────
+
+  const handleRate = useCallback(
+    async (messageId: string, rating: RatingValue, comment: string) => {
+      if (!session) return;
+
+      // Marcar como pending
+      setMessages((prev) =>
+        prev.map((m) => (m.id === messageId ? { ...m, ratingPending: true } : m))
+      );
+
+      const msg = messages.find((m) => m.id === messageId);
+      const trace = msg?.decisionTrace;
+
+      // Última mensagem do lead antes desta resposta do bot
+      const msgIndex = messages.findIndex((m) => m.id === messageId);
+      const prevLeadMsg = messages
+        .slice(0, msgIndex)
+        .reverse()
+        .find((m) => m.role === "lead");
+
+      try {
+        await api.playground.training({
+          ai_profile_id: session.aiProfileId,
+          lead_id: session.leadId ?? null,
+          agent_mode: trace?.agent_mode ?? null,
+          phase: trace?.effective_route ?? trace?.mother_route ?? null,
+          mother_route: trace?.mother_route ?? null,
+          lead_message: prevLeadMsg?.text ?? null,
+          bot_message: msg?.text ?? "",
+          rating,
+          comment: comment || null,
+        });
+
+        setMessages((prev) =>
+          prev.map((m) =>
+            m.id === messageId
+              ? { ...m, rating, ratingComment: comment, ratingPending: false }
+              : m
+          )
+        );
+        toast({ title: "Avaliação guardada", description: "O bot aprenderá com este exemplo." });
+      } catch {
+        setMessages((prev) =>
+          prev.map((m) => (m.id === messageId ? { ...m, ratingPending: false } : m))
+        );
+        toast({ title: "Erro ao guardar avaliação", variant: "destructive" });
+      }
+    },
+    [session, messages]
+  );
+
   // ── Render ────────────────────────────────────────────────────────────────
 
   return (
@@ -272,6 +326,7 @@ export default function Playground() {
                   scenarioType={session.scenarioType}
                   onSend={handleSend}
                   onToggleFeedback={handleToggleFeedback}
+                  onRate={handleRate}
                 />
               </div>
             </div>

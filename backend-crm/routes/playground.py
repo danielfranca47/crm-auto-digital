@@ -138,6 +138,12 @@ class DecisionTrace(BaseModel):
     timestamp: str
 
 
+class PreSendMediaItem(BaseModel):
+    media_url: str
+    media_type: str  # "image" | "video" | "audio" | "pdf"
+    send_order: int = 0
+
+
 class PlaygroundChatResponse(BaseModel):
     lead_id: int
     message_to_send: str
@@ -147,6 +153,7 @@ class PlaygroundChatResponse(BaseModel):
     child_result: Optional[ChildResult] = None
     lead_state: LeadState
     decision_trace: DecisionTrace
+    pre_send_media: List[PreSendMediaItem] = Field(default_factory=list)
 
 
 # ---------------------------------------------------------------------------
@@ -423,6 +430,20 @@ def playground_chat(
         "qualification_state": qualification_state,
     }
 
+    # Normalizar pre_send_media retornado pelo executor
+    raw_media = decision.get("pre_send_media") or []
+    if isinstance(raw_media, dict):
+        raw_media = [raw_media]
+    pre_send_media = [
+        PreSendMediaItem(
+            media_url=m.get("media_url", ""),
+            media_type=m.get("media_type", "image"),
+            send_order=m.get("send_order", 0),
+        )
+        for m in raw_media
+        if m.get("media_url")
+    ]
+
     return PlaygroundChatResponse(
         lead_id=lead_id,
         message_to_send=message_to_send,
@@ -431,6 +452,7 @@ def playground_chat(
         child_result=_build_child_result(decision),
         lead_state=lead_state,
         decision_trace=_build_decision_trace(decision, body.ai_profile_id, lead_id),
+        pre_send_media=pre_send_media,
     )
 
 
@@ -699,3 +721,71 @@ def playground_feedback_assist(
         is_config_fixable=bool(parsed.get("is_config_fixable", False)),
         attempt_number=body.attempt_number,
     )
+
+
+# ---------------------------------------------------------------------------
+# Training — classificação de respostas do bot para aprendizado contínuo
+# ---------------------------------------------------------------------------
+
+class PlaygroundTrainingRequest(BaseModel):
+    ai_profile_id: int
+    lead_id: Optional[int] = None
+    agent_mode: Optional[str] = None
+    phase: Optional[str] = None       # qualification | apresentation | followup
+    mother_route: Optional[str] = None
+    lead_message: Optional[str] = None
+    bot_message: str
+    rating: Literal["ruim", "regular", "boa", "excelente"]
+    comment: Optional[str] = None
+
+
+class PlaygroundTrainingResponse(BaseModel):
+    id: int
+
+
+@router.post("/training", response_model=PlaygroundTrainingResponse)
+def playground_save_training(
+    body: PlaygroundTrainingRequest,
+    current_user: CurrentUser = Depends(require_crm_access),
+) -> PlaygroundTrainingResponse:
+    """
+    Persiste a classificação de uma resposta do bot como dado de treino.
+
+    Esses dados são carregados pelo orquestrador e injetados no prompt
+    como exemplos few-shot por fase/agent_mode, especializando o bot
+    sem necessidade de alterar configurações manuais.
+    """
+    user_id = current_user.id
+
+    # Valida propriedade do perfil
+    fetch_core_ai_profile_by_id(body.ai_profile_id, user_id)
+
+    with get_connection() as conn:
+        cur = conn.cursor()
+        cur.execute(
+            """
+            INSERT INTO playground_training_items
+                (user_id, ai_profile_id, agent_mode, phase, mother_route,
+                 lead_message, bot_message, rating, comment)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                str(user_id),
+                body.ai_profile_id,
+                body.agent_mode,
+                body.phase,
+                body.mother_route,
+                body.lead_message,
+                body.bot_message,
+                body.rating,
+                body.comment,
+            ),
+        )
+        conn.commit()
+        item_id = cur.lastrowid
+
+    logger.info(
+        "training_saved user_id=%s profile=%s rating=%s phase=%s",
+        user_id, body.ai_profile_id, body.rating, body.phase,
+    )
+    return PlaygroundTrainingResponse(id=item_id)
