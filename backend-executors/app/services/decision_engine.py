@@ -122,6 +122,8 @@ _ESCAPE_HATCH_BLOCK = (
     "- Se o lead fez uma pergunta técnica fora do knowledge fornecido, use:\n"
     "  'Vou confirmar essa informação com a equipa e já te respondo.'\n"
     "  E retorne signals_structured.handoff_requested = true\n"
+    "\nNOME DO LEAD: Se lead.name for null, NÃO invente nem adivinhe o nome do lead. "
+    "Nunca chame o lead pelo nome se ele não o forneceu na conversa.\n"
 )
 
 
@@ -1208,7 +1210,8 @@ def _build_child_prompt(
         f"ESCOPO: Responder apenas ao que o contexto fornecido permite. Nunca inventar informação.\n"
         f"TOM: {ai_summary.get('tone_of_voice') or 'profissional'} — conversacional, adaptado ao WhatsApp.\n"
         f"FRAMEWORK: Modo {agent_mode_normalized}. Template {playbook_summary['template_key']}.\n"
-        "RECUSAS: Nunca invente informação. Nunca prometa condições não presentes no contexto. Nunca dê conselhos médicos, jurídicos ou financeiros.\n\n"
+        "RECUSAS: Nunca invente informação. Nunca prometa condições não presentes no contexto. Nunca dê conselhos médicos, jurídicos ou financeiros.\n"
+        "NOME DO LEAD: Se lead.name for null, NÃO invente nem adivinhe o nome do lead. Nunca chame o lead pelo nome se ele não o forneceu na conversa.\n\n"
         "Retorne SOMENTE JSON válido no schema ChildResult:\n"
         "{\n"
         '  "message_text": "string",\n'
