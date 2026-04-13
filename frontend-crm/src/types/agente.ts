@@ -149,6 +149,9 @@ export interface AgentConfig {
   payment_gateway: string;
   payment_webhook_url: string;
   payment_webhook_secret: string;
+
+  // ── Variáveis personalizadas ─────────────────────────────────
+  custom_variables: Record<string, string>;
 }
 
 /** Valores padrão para o estado inicial (antes de carregar da API) */
@@ -229,6 +232,8 @@ export const DEFAULT_AGENT_CONFIG: AgentConfig = {
   payment_gateway: '',
   payment_webhook_url: '',
   payment_webhook_secret: '',
+
+  custom_variables: {},
 };
 
 // ─── Dashboard ────────────────────────────────────────────────

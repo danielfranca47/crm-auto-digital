@@ -1,6 +1,8 @@
 import { useState } from 'react';
 import type { AgentConfig } from '@/types/agente';
 import { LGPD_LABELS, REATIVACAO_LABELS, MEDIA_FALLBACK_LABELS } from '@/types/agente';
+import { buildVariableList } from '@/types/variables';
+import { VariableTextarea } from './VariableTextarea';
 
 interface CamadaPipelineProps {
   config: AgentConfig;
@@ -59,6 +61,7 @@ function DrawerMidia({ config, onSave, onClose }: {
 }) {
   const [fallback, setFallback] = useState(config.media_fallback);
   const [msg, setMsg] = useState(config.media_fallback_msg);
+  const variables = buildVariableList(config.custom_variables || {});
   return (
     <DrawerBase title="Mídia inválida" sub="O que fazer quando o lead envia áudio, vídeo, figurinha ou reação" onClose={onClose} onSave={() => onSave({ media_fallback: fallback, media_fallback_msg: msg })}>
       <div className="o-field">
@@ -72,7 +75,7 @@ function DrawerMidia({ config, onSave, onClose }: {
       {fallback !== 'ignorar' && (
         <div className="o-field">
           <label className="o-field-label">Mensagem ao lead</label>
-          <textarea className="o-textarea" value={msg} onChange={e => setMsg(e.target.value)} />
+          <VariableTextarea value={msg} onChange={setMsg} variables={variables} />
         </div>
       )}
     </DrawerBase>
@@ -89,6 +92,7 @@ function ModalOptOut({ config, onSave, onClose }: {
   const [notify, setNotify] = useState(config.opt_out_notify);
   const [confirm, setConfirm] = useState(config.opt_out_confirm);
   const [confirmMsg, setConfirmMsg] = useState(config.opt_out_confirm_msg);
+  const optOutVariables = buildVariableList(config.custom_variables || {});
 
   function addKw() {
     const v = kwInput.trim().toUpperCase();
@@ -136,7 +140,7 @@ function ModalOptOut({ config, onSave, onClose }: {
       {confirm && (
         <div className="o-field">
           <label className="o-field-label">Mensagem de confirmação ao lead</label>
-          <textarea className="o-textarea" value={confirmMsg} onChange={e => setConfirmMsg(e.target.value)} />
+          <VariableTextarea value={confirmMsg} onChange={setConfirmMsg} variables={optOutVariables} />
         </div>
       )}
     </ModalBase>
@@ -149,6 +153,7 @@ function ModalLGPD({ config, onSave, onClose }: {
 }) {
   const [mode, setMode] = useState(config.lgpd_mode);
   const [msg, setMsg] = useState(config.lgpd_msg);
+  const lgpdVariables = buildVariableList(config.custom_variables || {});
 
   return (
     <ModalBase title="Consentimento LGPD" sub="Lei Geral de Proteção de Dados — obrigatório independente do tipo de API" onClose={onClose}
@@ -162,7 +167,7 @@ function ModalLGPD({ config, onSave, onClose }: {
       {mode === 'explicit' && (
         <div className="o-field">
           <label className="o-field-label">Mensagem de opt-in explícito</label>
-          <textarea className="o-textarea" value={msg} onChange={e => setMsg(e.target.value)} />
+          <VariableTextarea value={msg} onChange={setMsg} variables={lgpdVariables} />
         </div>
       )}
     </ModalBase>
@@ -175,6 +180,7 @@ function ModalReativacao({ config, onSave, onClose }: {
 }) {
   const [mode, setMode] = useState(config.reactivation_mode);
   const [msg, setMsg] = useState(config.reactivation_msg);
+  const reativacaoVariables = buildVariableList(config.custom_variables || {});
 
   return (
     <ModalBase title="Reativação de arquivados" sub="O que acontece quando um lead arquivado envia uma mensagem espontaneamente" onClose={onClose}
@@ -188,7 +194,7 @@ function ModalReativacao({ config, onSave, onClose }: {
       </div>
       <div className="o-field">
         <label className="o-field-label">Mensagem de reabertura</label>
-        <textarea className="o-textarea" value={msg} onChange={e => setMsg(e.target.value)} />
+        <VariableTextarea value={msg} onChange={setMsg} variables={reativacaoVariables} />
       </div>
     </ModalBase>
   );

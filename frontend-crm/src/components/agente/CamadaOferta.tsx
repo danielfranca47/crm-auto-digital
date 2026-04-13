@@ -2,6 +2,8 @@ import { useState } from 'react';
 import type { AgentConfig } from '@/types/agente';
 import { PAYMENT_GATEWAY_LABELS, OFFER_MEDIA_TYPE_LABELS } from '@/types/agente';
 import { api } from '@/services/api';
+import { buildVariableList } from '@/types/variables';
+import { VariableTextarea } from './VariableTextarea';
 
 interface CamadaOfertaProps {
   config: AgentConfig;
@@ -38,9 +40,10 @@ function DrawerMidia({ mediaUrl, mediaType, onSave, onClose }: {
 function DrawerDetalhes({ config, onSave, onClose }: {
   config: AgentConfig; onSave: (v: Partial<AgentConfig>) => void; onClose: () => void;
 }) {
-  const [price, setPrice]       = useState(config.offer_anchor_price);
+  const [price, setPrice]         = useState(config.offer_anchor_price);
   const [guarantee, setGuarantee] = useState(config.offer_guarantee_text);
-  const [upsell, setUpsell]     = useState(config.offer_upsell_message);
+  const [upsell, setUpsell]       = useState(config.offer_upsell_message);
+  const variables = buildVariableList(config.custom_variables || {});
   return (
     <DrawerBase title="Detalhes da oferta" sub="Preço, garantia e mensagem de upsell pós-compra" onClose={onClose}
       onSave={() => onSave({ offer_anchor_price: price, offer_guarantee_text: guarantee, offer_upsell_message: upsell })}>
@@ -52,16 +55,24 @@ function DrawerDetalhes({ config, onSave, onClose }: {
       </div>
       <div className="o-field">
         <label className="o-field-label">Texto da garantia</label>
-        <textarea className="o-textarea" value={guarantee} maxLength={300} onChange={e => setGuarantee(e.target.value)}
-          placeholder="Ex: Garantia incondicional de 7 dias. Se não gostar, devolvemos 100%." />
-        <div className="o-char-count">{guarantee.length}/300</div>
+        <VariableTextarea
+          value={guarantee}
+          onChange={setGuarantee}
+          variables={variables}
+          maxLength={300}
+          placeholder="Ex: Garantia incondicional de 7 dias. Se não gostar, devolvemos 100%."
+        />
       </div>
       <div className="o-field">
         <label className="o-field-label">Mensagem de upsell pós-compra</label>
         <div className="o-field-hint">Enviada após o cliente confirmar a compra.</div>
-        <textarea className="o-textarea" value={upsell} maxLength={400} onChange={e => setUpsell(e.target.value)}
-          placeholder="Ex: Parabéns! Enquanto aguarda o acesso, que tal nosso complemento exclusivo?" />
-        <div className="o-char-count">{upsell.length}/400</div>
+        <VariableTextarea
+          value={upsell}
+          onChange={setUpsell}
+          variables={variables}
+          maxLength={400}
+          placeholder="Ex: Parabéns, {{lead.nome}}! Enquanto aguarda o acesso, que tal nosso complemento exclusivo?"
+        />
       </div>
     </DrawerBase>
   );

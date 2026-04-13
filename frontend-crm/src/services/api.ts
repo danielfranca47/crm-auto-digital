@@ -92,6 +92,7 @@ export type AiProfilePayload = {
   calendar_integration?: "none" | "google_calendar" | "calendly" | null;
   payment_gateway?: "hotmart" | "kiwify" | "stripe" | "generico" | null;
   response_style?: "active" | "passive" | null;
+  custom_variables?: Record<string, string> | null;
 };
 
 export type AiProfile = AiProfilePayload & {
@@ -1112,6 +1113,8 @@ export const api = {
         payment_gateway:      (profile as any)?.payment_gateway      ?? DEFAULT_AGENT_CONFIG.payment_gateway,
         payment_webhook_url:  (profile as any)?.payment_webhook_url  ?? DEFAULT_AGENT_CONFIG.payment_webhook_url,
         payment_webhook_secret:(profile as any)?.payment_webhook_secret ?? DEFAULT_AGENT_CONFIG.payment_webhook_secret,
+
+        custom_variables: (profile as any)?.custom_variables ?? DEFAULT_AGENT_CONFIG.custom_variables,
       };
     },
 
@@ -1212,6 +1215,7 @@ export const api = {
         payment_gateway:     config.payment_gateway,
         qualification_fields: config.qualification_fields.length > 0 ? config.qualification_fields : undefined,
         qualification_required_fields: derivedRequiredFields,
+        custom_variables: config.custom_variables,
         offer_pack,
       });
     },

@@ -169,6 +169,7 @@ class AIProfileBase(BaseModel):
     response_style: Optional[ResponseStyle] = ResponseStyle.active
     qualification_required_fields: Optional[List[str]] = None
     qualification_fields: Optional[List[dict]] = None
+    custom_variables: Optional[Dict[str, str]] = None
 
 
 class AIProfileCreate(AIProfileBase):
@@ -219,6 +220,7 @@ class AIProfileUpdate(BaseModel):
     response_style: Optional[ResponseStyle] = None
     qualification_required_fields: Optional[List[str]] = None
     qualification_fields: Optional[List[dict]] = None
+    custom_variables: Optional[Dict[str, str]] = None
 
 
 class AIProfileOut(AIProfileBase):

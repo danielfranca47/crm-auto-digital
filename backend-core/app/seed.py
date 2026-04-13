@@ -62,6 +62,14 @@ def seed_initial_data(db: Session) -> None:
     except Exception:
         pass
 
+    try:
+        ai_cols = db.execute(text("PRAGMA table_info(ai_profiles)")).fetchall()
+        if ai_cols is not None and "custom_variables" not in {row[1] for row in ai_cols}:
+            db.execute(text("ALTER TABLE ai_profiles ADD COLUMN custom_variables JSON"))
+            db.commit()
+    except Exception:
+        pass
+
     products_seed = [
         {"code": "crm", "name": "CRM AutoDigital", "description": ""},
         {"code": "conversational_ai", "name": "Conversational AI", "description": ""},

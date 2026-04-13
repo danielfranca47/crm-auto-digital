@@ -9,6 +9,10 @@ from typing import Any, Dict, List, Optional
 from fastapi import HTTPException
 from pydantic import BaseModel, Field
 
+from automations.assistente_ia.variable_resolver import (
+    build_resolution_context_from_db,
+    resolve_template,
+)
 from core_client import fetch_core_ai_profile, fetch_core_ai_profile_resolve
 from database import get_connection
 from security_core import CurrentUser
@@ -18,6 +22,50 @@ from services.ai_orchestrator.inbound_event import InboundEvent
 from services.qualification_state import get_qualification_state
 
 logger = logging.getLogger(__name__)
+
+# Campos do AI Profile que podem conter tokens {{variavel}}
+_TEMPLATE_FIELDS = [
+    "origin_inbound_opener",
+    "origin_outbound_opener",
+    "handoff_custom_text",
+    "warming_social_proof",
+    "warming_session_preview",
+]
+# Campos dentro de offer_pack que também podem ter tokens
+_OFFER_PACK_TEMPLATE_FIELDS = ["guarantee_text", "upsell_message"]
+
+
+def _resolve_profile_templates(
+    ai_profile: Dict[str, Any],
+    lead_id: int,
+    user_id: int,
+) -> None:
+    """
+    Resolve variáveis dinâmicas ({{lead.nome}}, {{saudacao}}, etc.) nos campos
+    de template do ai_profile, alterando o dict in-place.
+    Não lança exceção — em caso de erro, os campos permanecem sem substituição.
+    """
+    try:
+        with get_connection() as conn:
+            conn.row_factory = sqlite3.Row
+            ctx = build_resolution_context_from_db(
+                conn=conn,
+                lead_id=lead_id,
+                user_id=user_id,
+                ai_profile=ai_profile,
+            )
+        for field in _TEMPLATE_FIELDS:
+            raw = ai_profile.get(field)
+            if raw:
+                ai_profile[field] = resolve_template(raw, ctx)
+        offer_pack = ai_profile.get("offer_pack")
+        if isinstance(offer_pack, dict):
+            for field in _OFFER_PACK_TEMPLATE_FIELDS:
+                raw = offer_pack.get(field)
+                if raw:
+                    offer_pack[field] = resolve_template(raw, ctx)
+    except Exception:
+        logger.exception("_resolve_profile_templates failed — using raw template text")
 
 
 def _resolve_presentation_contract(
@@ -225,6 +273,9 @@ def build_context_bundle(
 
     lead_data = {key: row[key] for key in row.keys()}
 
+    if ai_profile:
+        _resolve_profile_templates(ai_profile, lead_id, current_user.id)
+
     _lead_origin_raw = lead_data.get("origin") or ""
     _is_outbound = _lead_origin_raw.lower() not in ("whatsapp", "inbound", "manual", "planilha", "")
     metadata = {
@@ -297,6 +348,10 @@ def build_context_bundle_from_inbound(event: InboundEvent) -> ContextBundle:
     playbook["offer_pack"] = presentation_contract["offer_pack"]
 
     lead_data = _load_lead(user_id=event.user_id, lead_id=event.lead_id)
+
+    if ai_profile:
+        _resolve_profile_templates(ai_profile, event.lead_id, event.user_id)
+
     history = get_recent_history(event.lead_id)
     conversation_goal = "qualify" if len(history) <= 1 else "advance"
 

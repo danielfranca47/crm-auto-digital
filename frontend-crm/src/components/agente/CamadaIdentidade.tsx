@@ -7,6 +7,9 @@ import {
   AGENT_PRESETS,
   getActivePreset,
 } from '@/types/agente';
+import { buildVariableList } from '@/types/variables';
+import { VariableTextarea } from './VariableTextarea';
+import { CustomVariablesManager } from './CustomVariablesManager';
 
 interface CamadaIdentidadeProps {
   config: AgentConfig;
@@ -99,12 +102,13 @@ function DrawerGoals({ value, onSave, onClose }: { value: string; onSave: (v: st
 }
 
 // ─── Drawer: Handoff ─────────────────────────────────────────
-function DrawerHandoff({ policy, text, onSave, onClose }: {
-  policy: string; text: string;
+function DrawerHandoff({ policy, text, customVars, onSave, onClose }: {
+  policy: string; text: string; customVars: Record<string, string>;
   onSave: (policy: string, text: string) => void; onClose: () => void;
 }) {
   const [localPolicy, setLocalPolicy] = useState(policy);
   const [localText, setLocalText] = useState(text);
+  const variables = buildVariableList(customVars);
   return (
     <DrawerBase title="Política de handoff" sub="O que acontece quando um humano precisa assumir a conversa" onClose={onClose} onSave={() => onSave(localPolicy, localText)}>
       <div className="o-field">
@@ -118,69 +122,116 @@ function DrawerHandoff({ policy, text, onSave, onClose }: {
       <div className="o-field">
         <label className="o-field-label">Mensagem personalizada de handoff</label>
         <div className="o-field-hint">Enviada ao lead quando o bot encaminha para humano. Deixe em branco para usar o padrão do sistema.</div>
-        <textarea className="o-textarea" value={localText} maxLength={400} onChange={e => setLocalText(e.target.value)} placeholder="Ex: Oi! Vou passar sua conversa para um especialista que vai te ajudar melhor. Aguarde um momento 🙂" />
-        <div className="o-char-count">{localText.length}/400</div>
+        <VariableTextarea
+          value={localText}
+          onChange={setLocalText}
+          variables={variables}
+          maxLength={400}
+          placeholder="Ex: Oi! Vou passar sua conversa para um especialista que vai te ajudar melhor. Aguarde um momento 🙂"
+        />
       </div>
     </DrawerBase>
   );
 }
 
 // ─── Drawer: Opener inbound ───────────────────────────────────
-function DrawerOpenerInbound({ value, onSave, onClose }: { value: string; onSave: (v: string) => void; onClose: () => void }) {
+function DrawerOpenerInbound({ value, customVars, onSave, onClose }: { value: string; customVars: Record<string, string>; onSave: (v: string) => void; onClose: () => void }) {
   const [local, setLocal] = useState(value);
+  const variables = buildVariableList(customVars);
   return (
     <DrawerBase title="Mensagem de abertura · Inbound" sub="Primeira mensagem quando o lead entra em contato" onClose={onClose} onSave={() => onSave(local)}>
       <div className="o-field">
         <label className="o-field-label">Texto de abertura</label>
-        <div className="o-field-hint">Personalize com o nome do agente ({'{nome}'}) e da empresa ({'{empresa}'}).</div>
-        <textarea className="o-textarea" style={{ minHeight: 120 }} value={local} maxLength={500} onChange={e => setLocal(e.target.value)} placeholder="Oi! Sou a {nome} da {empresa} 😊 Vi que você entrou em contato. Como posso te ajudar hoje?" />
-        <div className="o-char-count">{local.length}/500</div>
+        <div className="o-field-hint">Digite <kbd style={{ fontFamily: 'monospace', padding: '0 3px', borderRadius: 2, background: 'var(--o-b1)', fontSize: 10 }}>/</kbd> para inserir variáveis como <code style={{ fontSize: 11 }}>{'{{saudacao}}'}</code>, <code style={{ fontSize: 11 }}>{'{{lead.nome}}'}</code>, <code style={{ fontSize: 11 }}>{'{{agente.nome}}'}</code>.</div>
+        <VariableTextarea
+          value={local}
+          onChange={setLocal}
+          variables={variables}
+          maxLength={500}
+          minHeight={120}
+          placeholder={`{{saudacao}}! Sou {{agente.nome}} da {{negocio.nome}} 😊 Vi que você entrou em contato. Como posso te ajudar hoje?`}
+        />
       </div>
     </DrawerBase>
   );
 }
 
 // ─── Drawer: Opener outbound ──────────────────────────────────
-function DrawerOpenerOutbound({ value, onSave, onClose }: { value: string; onSave: (v: string) => void; onClose: () => void }) {
+function DrawerOpenerOutbound({ value, customVars, onSave, onClose }: { value: string; customVars: Record<string, string>; onSave: (v: string) => void; onClose: () => void }) {
   const [local, setLocal] = useState(value);
+  const variables = buildVariableList(customVars);
   return (
     <DrawerBase title="Mensagem de abertura · Outbound" sub="Primeira mensagem quando o bot inicia o contato" onClose={onClose} onSave={() => onSave(local)}>
       <div className="o-field">
         <label className="o-field-label">Texto de abertura</label>
-        <div className="o-field-hint">Personalize com o nome do lead ({'{nome}'}), agente ({'{agente}'}) e empresa ({'{empresa}'}).</div>
-        <textarea className="o-textarea" style={{ minHeight: 120 }} value={local} maxLength={500} onChange={e => setLocal(e.target.value)} placeholder="Olá {nome}! Sou a {agente} da {empresa}. Tudo bem? Entrei em contato pois tenho algo que pode te interessar…" />
-        <div className="o-char-count">{local.length}/500</div>
+        <div className="o-field-hint">Digite <kbd style={{ fontFamily: 'monospace', padding: '0 3px', borderRadius: 2, background: 'var(--o-b1)', fontSize: 10 }}>/</kbd> para inserir variáveis como <code style={{ fontSize: 11 }}>{'{{lead.nome}}'}</code>, <code style={{ fontSize: 11 }}>{'{{saudacao}}'}</code>, <code style={{ fontSize: 11 }}>{'{{negocio.nome}}'}</code>.</div>
+        <VariableTextarea
+          value={local}
+          onChange={setLocal}
+          variables={variables}
+          maxLength={500}
+          minHeight={120}
+          placeholder={`{{saudacao}}, {{lead.nome}}! Sou {{agente.nome}} da {{negocio.nome}}. Tudo bem? Entrei em contato pois tenho algo que pode te interessar…`}
+        />
       </div>
     </DrawerBase>
   );
 }
 
 // ─── Drawer: Social proof ─────────────────────────────────────
-function DrawerSocialProof({ value, onSave, onClose }: { value: string; onSave: (v: string) => void; onClose: () => void }) {
+function DrawerSocialProof({ value, customVars, onSave, onClose }: { value: string; customVars: Record<string, string>; onSave: (v: string) => void; onClose: () => void }) {
   const [local, setLocal] = useState(value);
+  const variables = buildVariableList(customVars);
   return (
     <DrawerBase title="Social proof para aquecimento" sub="Prova social usada para gerar confiança no início da conversa" onClose={onClose} onSave={() => onSave(local)}>
       <div className="o-field">
         <label className="o-field-label">Texto de social proof</label>
         <div className="o-field-hint">Ex: depoimentos, números de clientes, resultados alcançados.</div>
-        <textarea className="o-textarea" style={{ minHeight: 120 }} value={local} maxLength={500} onChange={e => setLocal(e.target.value)} placeholder="Ex: Já ajudamos mais de 500 clientes a atingir [resultado]. Nossa taxa de satisfação é de 98%." />
-        <div className="o-char-count">{local.length}/500</div>
+        <VariableTextarea
+          value={local}
+          onChange={setLocal}
+          variables={variables}
+          maxLength={500}
+          minHeight={120}
+          placeholder="Ex: Já ajudamos mais de 500 clientes a atingir resultados. Nossa taxa de satisfação é de 98%."
+        />
       </div>
     </DrawerBase>
   );
 }
 
 // ─── Drawer: Session preview ──────────────────────────────────
-function DrawerSessionPreview({ value, onSave, onClose }: { value: string; onSave: (v: string) => void; onClose: () => void }) {
+function DrawerSessionPreview({ value, customVars, onSave, onClose }: { value: string; customVars: Record<string, string>; onSave: (v: string) => void; onClose: () => void }) {
   const [local, setLocal] = useState(value);
+  const variables = buildVariableList(customVars);
   return (
     <DrawerBase title="Preview da sessão/serviço" sub="O que o lead pode esperar ao começar com você" onClose={onClose} onSave={() => onSave(local)}>
       <div className="o-field">
         <label className="o-field-label">Descrição do que acontece ao contratar</label>
         <div className="o-field-hint">Use na fase de aquecimento para preparar o lead mentalmente para a compra.</div>
-        <textarea className="o-textarea" style={{ minHeight: 120 }} value={local} maxLength={500} onChange={e => setLocal(e.target.value)} placeholder="Ex: Na nossa primeira sessão, vamos [descrever o processo]. É rápido, indolor e você já sai com [resultado inicial]." />
-        <div className="o-char-count">{local.length}/500</div>
+        <VariableTextarea
+          value={local}
+          onChange={setLocal}
+          variables={variables}
+          maxLength={500}
+          minHeight={120}
+          placeholder="Ex: Na nossa primeira sessão, vamos fazer um diagnóstico completo. É rápido e você já sai com um plano de ação."
+        />
       </div>
+    </DrawerBase>
+  );
+}
+
+// ─── Drawer: Variáveis personalizadas ────────────────────────
+function DrawerVariaveis({ variables, onSave, onClose }: {
+  variables: Record<string, string>;
+  onSave: (vars: Record<string, string>) => void;
+  onClose: () => void;
+}) {
+  const [local, setLocal] = useState<Record<string, string>>(variables);
+  return (
+    <DrawerBase title="Variáveis personalizadas" sub="Crie variáveis reutilizáveis nos seus templates de mensagem" onClose={onClose} onSave={() => onSave(local)}>
+      <CustomVariablesManager variables={local} onChange={setLocal} />
     </DrawerBase>
   );
 }
@@ -294,7 +345,7 @@ function ModalPerfil({ value, name, brand, agentMode, tone, onSave, onClose }: {
 // Componente principal
 // ─────────────────────────────────────────────────────────────
 
-type DrawerKey = 'nome' | 'empresa' | 'nicho' | 'timezone' | 'tom' | 'goals' | 'handoff' | 'inbound_opener' | 'outbound_opener' | 'social_proof' | 'session_preview' | 'response_style' | null;
+type DrawerKey = 'nome' | 'empresa' | 'nicho' | 'timezone' | 'tom' | 'goals' | 'handoff' | 'inbound_opener' | 'outbound_opener' | 'social_proof' | 'session_preview' | 'response_style' | 'variaveis' | null;
 type ModalKey  = 'identidade' | 'perfil' | null;
 
 export function CamadaIdentidade({ config, onUpdate, resumo }: CamadaIdentidadeProps) {
@@ -458,6 +509,25 @@ export function CamadaIdentidade({ config, onUpdate, resumo }: CamadaIdentidadeP
             />
           </div>
 
+          {/* Seção: Variáveis personalizadas */}
+          <div className="o-section-hdr">
+            <span className="font-mono-orion" style={{ fontSize: 9, letterSpacing: '2.5px', textTransform: 'uppercase', color: 'var(--o-sub)' }}>
+              Variáveis dinâmicas
+            </span>
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 14, marginBottom: 24 }}>
+            <EditCard
+              label="Variáveis personalizadas"
+              value={
+                Object.keys(config.custom_variables || {}).length > 0
+                  ? `${Object.keys(config.custom_variables).length} variável(is) configurada(s)`
+                  : 'Nenhuma configurada'
+              }
+              sub="Use / nos campos de mensagem para inserir"
+              onClick={() => setDrawer('variaveis')}
+            />
+          </div>
+
           {/* Seção: Handoff (condicional) */}
           {showHandoff && (
             <>
@@ -509,21 +579,25 @@ export function CamadaIdentidade({ config, onUpdate, resumo }: CamadaIdentidadeP
         <DrawerHandoff
           policy={config.handoff_policy}
           text={config.handoff_custom_text}
+          customVars={config.custom_variables || {}}
           onClose={() => setDrawer(null)}
           onSave={(policy, text) => { onUpdate({ handoff_policy: policy as AgentConfig['handoff_policy'], handoff_custom_text: text }); setDrawer(null); }}
         />
       )}
       {drawer === 'inbound_opener' && (
-        <DrawerOpenerInbound value={config.origin_inbound_opener} onClose={() => setDrawer(null)} onSave={v => { onUpdate({ origin_inbound_opener: v }); setDrawer(null); }} />
+        <DrawerOpenerInbound value={config.origin_inbound_opener} customVars={config.custom_variables || {}} onClose={() => setDrawer(null)} onSave={v => { onUpdate({ origin_inbound_opener: v }); setDrawer(null); }} />
       )}
       {drawer === 'outbound_opener' && (
-        <DrawerOpenerOutbound value={config.origin_outbound_opener} onClose={() => setDrawer(null)} onSave={v => { onUpdate({ origin_outbound_opener: v }); setDrawer(null); }} />
+        <DrawerOpenerOutbound value={config.origin_outbound_opener} customVars={config.custom_variables || {}} onClose={() => setDrawer(null)} onSave={v => { onUpdate({ origin_outbound_opener: v }); setDrawer(null); }} />
       )}
       {drawer === 'social_proof' && (
-        <DrawerSocialProof value={config.warming_social_proof} onClose={() => setDrawer(null)} onSave={v => { onUpdate({ warming_social_proof: v }); setDrawer(null); }} />
+        <DrawerSocialProof value={config.warming_social_proof} customVars={config.custom_variables || {}} onClose={() => setDrawer(null)} onSave={v => { onUpdate({ warming_social_proof: v }); setDrawer(null); }} />
       )}
       {drawer === 'session_preview' && (
-        <DrawerSessionPreview value={config.warming_session_preview} onClose={() => setDrawer(null)} onSave={v => { onUpdate({ warming_session_preview: v }); setDrawer(null); }} />
+        <DrawerSessionPreview value={config.warming_session_preview} customVars={config.custom_variables || {}} onClose={() => setDrawer(null)} onSave={v => { onUpdate({ warming_session_preview: v }); setDrawer(null); }} />
+      )}
+      {drawer === 'variaveis' && (
+        <DrawerVariaveis variables={config.custom_variables || {}} onClose={() => setDrawer(null)} onSave={vars => { onUpdate({ custom_variables: vars }); setDrawer(null); }} />
       )}
       {drawer === 'response_style' && (
         <DrawerResponseStyle value={config.response_style} onClose={() => setDrawer(null)} onSave={v => { onUpdate({ response_style: v as AgentConfig['response_style'] }); setDrawer(null); }} />
