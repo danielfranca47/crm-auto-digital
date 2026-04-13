@@ -10,8 +10,11 @@ import pandas as pd
 from fastapi import APIRouter, BackgroundTasks, Depends, File, Form, HTTPException, UploadFile
 
 from core_client import fetch_core_ai_profile_resolve
-from database import get_connection
+from database import get_connection, seed_business_info_defaults
 from models import (
+    BusinessInfoCustomCreate,
+    BusinessInfoField,
+    BusinessInfoFieldUpdate,
     KnowledgeCreate,
     KnowledgeItemOut,
     KnowledgeMediaOut,
@@ -708,6 +711,175 @@ async def reorder_media(
                 "UPDATE knowledge_item_media SET send_order = ? WHERE id = ? AND knowledge_item_id = ?",
                 (order, mid, item_id),
             )
+        conn.commit()
+        return {"ok": True}
+    finally:
+        conn.close()
+
+
+# ─── Business Info ────────────────────────────────────────────────────────────
+
+@router.get("/business-info", response_model=list[BusinessInfoField])
+async def get_business_info(current_user: CurrentUser = Depends(require_crm_access)):
+    conn = get_connection()
+    try:
+        cur = conn.cursor()
+        # Seed campos padrão na primeira vez
+        seed_business_info_defaults(conn, current_user.id)
+        conn.commit()
+        cur.execute(
+            "SELECT id, field_key, label, value, enabled, sort_order FROM business_info WHERE user_id = ? ORDER BY sort_order ASC, id ASC",
+            (current_user.id,),
+        )
+        rows = cur.fetchall()
+        return [BusinessInfoField(**{k: row[k] for k in row.keys()}) for row in rows]
+    finally:
+        conn.close()
+
+
+@router.put("/business-info/{field_id}", response_model=BusinessInfoField)
+async def update_business_info_field(
+    field_id: int,
+    payload: BusinessInfoFieldUpdate,
+    current_user: CurrentUser = Depends(require_crm_access),
+):
+    conn = get_connection()
+    try:
+        cur = conn.cursor()
+        cur.execute(
+            "SELECT id FROM business_info WHERE id = ? AND user_id = ?",
+            (field_id, current_user.id),
+        )
+        if not cur.fetchone():
+            raise HTTPException(status_code=404, detail="Campo não encontrado")
+
+        fields, values = [], []
+        if payload.label is not None:
+            fields.append("label = ?")
+            values.append(payload.label)
+        if payload.value is not None:
+            fields.append("value = ?")
+            values.append(payload.value)
+        if payload.enabled is not None:
+            fields.append("enabled = ?")
+            values.append(payload.enabled)
+        if payload.sort_order is not None:
+            fields.append("sort_order = ?")
+            values.append(payload.sort_order)
+
+        if not fields:
+            raise HTTPException(status_code=400, detail="Nenhum campo para atualizar")
+
+        fields.append("updated_at = ?")
+        values.extend([datetime.utcnow().isoformat(), field_id, current_user.id])
+        cur.execute(
+            f"UPDATE business_info SET {', '.join(fields)} WHERE id = ? AND user_id = ?",
+            tuple(values),
+        )
+        conn.commit()
+        cur.execute(
+            "SELECT id, field_key, label, value, enabled, sort_order FROM business_info WHERE id = ?",
+            (field_id,),
+        )
+        row = cur.fetchone()
+        return BusinessInfoField(**{k: row[k] for k in row.keys()})
+    finally:
+        conn.close()
+
+
+@router.patch("/business-info/{field_id}/clear", response_model=BusinessInfoField)
+async def clear_business_info_field(
+    field_id: int,
+    current_user: CurrentUser = Depends(require_crm_access),
+):
+    """Limpa o value de um campo (define como NULL)."""
+    conn = get_connection()
+    try:
+        cur = conn.cursor()
+        cur.execute(
+            "SELECT id FROM business_info WHERE id = ? AND user_id = ?",
+            (field_id, current_user.id),
+        )
+        if not cur.fetchone():
+            raise HTTPException(status_code=404, detail="Campo não encontrado")
+
+        cur.execute(
+            "UPDATE business_info SET value = NULL, updated_at = ? WHERE id = ? AND user_id = ?",
+            (datetime.utcnow().isoformat(), field_id, current_user.id),
+        )
+        conn.commit()
+        cur.execute(
+            "SELECT id, field_key, label, value, enabled, sort_order FROM business_info WHERE id = ?",
+            (field_id,),
+        )
+        row = cur.fetchone()
+        return BusinessInfoField(**{k: row[k] for k in row.keys()})
+    finally:
+        conn.close()
+
+
+@router.post("/business-info", response_model=BusinessInfoField)
+async def create_business_info_field(
+    payload: BusinessInfoCustomCreate,
+    current_user: CurrentUser = Depends(require_crm_access),
+):
+    """Cria um campo customizado de business info."""
+    conn = get_connection()
+    try:
+        cur = conn.cursor()
+        # Garantir unicidade de field_key por usuário
+        cur.execute(
+            "SELECT id FROM business_info WHERE user_id = ? AND field_key = ?",
+            (current_user.id, payload.field_key),
+        )
+        if cur.fetchone():
+            raise HTTPException(status_code=409, detail="field_key já existe para este usuário")
+
+        cur.execute(
+            "SELECT COALESCE(MAX(sort_order), -1) + 1 FROM business_info WHERE user_id = ?",
+            (current_user.id,),
+        )
+        next_order = cur.fetchone()[0]
+        now = datetime.utcnow().isoformat()
+        cur.execute(
+            """
+            INSERT INTO business_info (user_id, field_key, label, value, enabled, sort_order, created_at, updated_at)
+            VALUES (?, ?, ?, ?, 1, ?, ?, ?)
+            """,
+            (current_user.id, payload.field_key, payload.label, payload.value, next_order, now, now),
+        )
+        conn.commit()
+        cur.execute(
+            "SELECT id, field_key, label, value, enabled, sort_order FROM business_info WHERE id = ?",
+            (cur.lastrowid,),
+        )
+        row = cur.fetchone()
+        return BusinessInfoField(**{k: row[k] for k in row.keys()})
+    finally:
+        conn.close()
+
+
+@router.delete("/business-info/{field_id}")
+async def delete_business_info_field(
+    field_id: int,
+    current_user: CurrentUser = Depends(require_crm_access),
+):
+    """Remove um campo customizado de business info."""
+    conn = get_connection()
+    try:
+        cur = conn.cursor()
+        cur.execute(
+            "SELECT field_key FROM business_info WHERE id = ? AND user_id = ?",
+            (field_id, current_user.id),
+        )
+        row = cur.fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="Campo não encontrado")
+
+        cur.execute(
+            "DELETE FROM business_info WHERE id = ? AND user_id = ?",
+            (field_id, current_user.id),
+        )
         conn.commit()
         return {"ok": True}
     finally:

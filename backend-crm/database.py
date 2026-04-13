@@ -331,6 +331,58 @@ def ensure_spy_agent_tables(conn: sqlite3.Connection) -> None:
     )
 
 
+def ensure_business_info_table(conn: sqlite3.Connection) -> None:
+    """Cria tabela de informações gerais do negócio por usuário (idempotente)."""
+    cur = conn.cursor()
+    cur.executescript(
+        """
+        CREATE TABLE IF NOT EXISTS business_info (
+            id         INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id    INTEGER NOT NULL,
+            field_key  TEXT NOT NULL,
+            label      TEXT NOT NULL,
+            value      TEXT,
+            enabled    INTEGER NOT NULL DEFAULT 1,
+            sort_order INTEGER NOT NULL DEFAULT 0,
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL
+        );
+
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_business_info_user_key
+            ON business_info(user_id, field_key);
+        CREATE INDEX IF NOT EXISTS idx_business_info_user
+            ON business_info(user_id, sort_order);
+        """
+    )
+
+
+_BUSINESS_INFO_DEFAULTS = [
+    ("horario",   "Horário de funcionamento", 0),
+    ("telefone",  "Telefone para ligações",   1),
+    ("website",   "Website",                  2),
+    ("endereco",  "Endereço",                 3),
+    ("instagram", "Instagram",                4),
+    ("facebook",  "Facebook",                 5),
+    ("youtube",   "YouTube",                  6),
+    ("whatsapp",  "WhatsApp de atendimento",  7),
+]
+
+
+def seed_business_info_defaults(conn: sqlite3.Connection, user_id: int) -> None:
+    """Insere os campos padrão de business_info para um usuário, se ainda não existirem."""
+    now = datetime.utcnow().isoformat()
+    cur = conn.cursor()
+    for field_key, label, sort_order in _BUSINESS_INFO_DEFAULTS:
+        cur.execute(
+            """
+            INSERT OR IGNORE INTO business_info
+                (user_id, field_key, label, value, enabled, sort_order, created_at, updated_at)
+            VALUES (?, ?, ?, NULL, 1, ?, ?, ?)
+            """,
+            (user_id, field_key, label, sort_order, now, now),
+        )
+
+
 def ensure_knowledge_table(conn: sqlite3.Connection) -> None:
     """Cria tabela de knowledge base por usuário (idempotente)."""
     cur = conn.cursor()
@@ -907,6 +959,7 @@ def init_db() -> None:
         # Base de conhecimento por usuário
         ensure_knowledge_table(conn)
         ensure_knowledge_item_media_table(conn)
+        ensure_business_info_table(conn)
 
         # Agente Espião
         ensure_spy_agent_tables(conn)

@@ -8,6 +8,7 @@ import {
   type AgentConfig,
 } from '@/types/agente';
 import { CamadaConhecimentoWizard } from './CamadaConhecimentoWizard';
+import { BusinessInfo } from './BusinessInfo';
 
 // ─── Cores de fase do funil ───────────────────────────────────
 const PHASE_COLORS: Record<string, { bg: string; text: string }> = {
@@ -1402,6 +1403,16 @@ export function CamadaConhecimento({
           })}
         </div>
       )}
+
+      {/* ── Informações gerais do negócio ───────────────────── */}
+      <div style={{ marginTop: 32, marginBottom: 8 }}>
+        <div className="o-section-hdr" style={{ marginBottom: 12 }}>
+          <span className="font-mono-orion" style={{ fontSize: 9, letterSpacing: '2.5px', textTransform: 'uppercase', color: 'var(--o-sub)' }}>
+            Informações gerais do negócio
+          </span>
+        </div>
+        <BusinessInfo />
+      </div>
 
       {/* ── Modais ───────────────────────────────────────────── */}
       {guidedModal && (

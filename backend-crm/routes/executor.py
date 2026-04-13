@@ -305,6 +305,24 @@ def whatsapp_execution_context(
 
     lead_detected_language = (bundle.lead or {}).get("detected_language") or "all"
 
+    # Carregar informações gerais do negócio (business_info) e injetar como categoria especial
+    with get_connection() as conn:
+        conn.row_factory = sqlite3.Row
+        cur = conn.cursor()
+        cur.execute(
+            """
+            SELECT label, value FROM business_info
+             WHERE user_id = ? AND enabled = 1
+               AND value IS NOT NULL AND trim(coalesce(value,'')) != ''
+             ORDER BY sort_order ASC, id ASC
+            """,
+            (event.user_id,),
+        )
+        biz_lines = [f"• {row['label']}: {row['value']}" for row in cur.fetchall()]
+
+    if biz_lines:
+        knowledge_by_category["business_info"] = "\n".join(biz_lines)
+
     return {
         "job": job,
         "lead": bundle.lead,

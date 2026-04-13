@@ -296,6 +296,15 @@ export type KnowledgeItem = {
   updated_at: string;
 };
 
+export type BusinessInfoField = {
+  id: number;
+  field_key: string;
+  label: string;
+  value: string | null;
+  enabled: number;
+  sort_order: number;
+};
+
 export type WhatsappQrPayload = {
   kind: "base64" | "text" | "url" | null;
   value: string | null;
@@ -971,6 +980,16 @@ export const api = {
       apiClient.delete(`/knowledge/${itemId}/media/${mediaId}`),
     reorderKnowledgeMedia: async (itemId: number, items: Array<{ id: number; send_order: number }>) =>
       apiClient.put(`/knowledge/${itemId}/media/reorder`, { items }),
+    // Business Info
+    getBusinessInfo: async () => apiClient.get<BusinessInfoField[]>(`/knowledge/business-info`),
+    updateBusinessInfoField: async (id: number, payload: { label?: string; value?: string | null; enabled?: number; sort_order?: number }) =>
+      apiClient.put<BusinessInfoField>(`/knowledge/business-info/${id}`, payload),
+    clearBusinessInfoField: async (id: number) =>
+      apiClient.patch<BusinessInfoField>(`/knowledge/business-info/${id}/clear`, {}),
+    createBusinessInfoField: async (payload: { field_key: string; label: string; value?: string | null }) =>
+      apiClient.post<BusinessInfoField>(`/knowledge/business-info`, payload),
+    deleteBusinessInfoField: async (id: number) =>
+      apiClient.delete(`/knowledge/business-info/${id}`),
     whatsappConnect: async () => apiClient.post<WhatsappConnectResponse>(`/whatsapp/connect`),
     whatsappStatus: async () => apiClient.get<WhatsappStatusResponse>(`/whatsapp/status`),
     whatsappRefreshQr: async () =>

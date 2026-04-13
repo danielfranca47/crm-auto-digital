@@ -226,3 +226,30 @@ class KnowledgeItemOut(BaseModel):
     updated_at: datetime
 
     model_config = ConfigDict(from_attributes=True)
+
+
+# -----------------------------
+# Business Info
+# -----------------------------
+class BusinessInfoField(BaseModel):
+    id: int
+    field_key: str
+    label: str
+    value: Optional[str] = None
+    enabled: int = 1
+    sort_order: int = 0
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class BusinessInfoFieldUpdate(BaseModel):
+    label: Optional[str] = None
+    value: Optional[str] = None
+    enabled: Optional[int] = None
+    sort_order: Optional[int] = None
+
+
+class BusinessInfoCustomCreate(BaseModel):
+    field_key: str = Field(min_length=2, max_length=64)
+    label: str = Field(min_length=2, max_length=128)
+    value: Optional[str] = None
