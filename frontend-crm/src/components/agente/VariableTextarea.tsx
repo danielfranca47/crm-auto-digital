@@ -4,6 +4,7 @@ import React, {
   useRef,
   useState,
 } from 'react';
+import { createPortal } from 'react-dom';
 import { VariableDef } from '@/types/variables';
 import { VariablePicker } from './VariablePicker';
 
@@ -265,8 +266,8 @@ export function VariableTextarea({
       {/* Preview de tokens */}
       {hasTokens && <TokenPreview text={value} variables={variables} />}
 
-      {/* Picker de variáveis */}
-      {showPicker && (
+      {/* Picker de variáveis — portal para escapar do containing block do drawer (transform) */}
+      {showPicker && createPortal(
         <VariablePicker
           variables={variables}
           filterText={filterText}
@@ -277,7 +278,8 @@ export function VariableTextarea({
             setShowPicker(false);
             triggerPosRef.current = -1;
           }}
-        />
+        />,
+        document.body
       )}
     </div>
   );
