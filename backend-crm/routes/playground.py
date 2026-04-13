@@ -14,10 +14,16 @@ from __future__ import annotations
 
 import logging
 import os
+import random
 import sqlite3
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Literal, Optional
 from uuid import uuid4
+
+_SANDBOX_NAMES = [
+    "Ana Silva", "Carlos Mendes", "Maria Santos", "João Ferreira",
+    "Sofia Costa", "Pedro Oliveira", "Beatriz Lopes", "Rui Sousa",
+]
 
 import json
 
@@ -168,6 +174,7 @@ def _load_sandbox_lead(lead_id: int, user_id: int) -> Dict[str, Any]:
 def _create_sandbox_lead(user_id: int, origin: str = "playground") -> int:
     """Cria um novo lead sandbox e devolve o seu ID."""
     phone = f"playground_{uuid4().hex[:8]}"
+    contact_name = random.choice(_SANDBOX_NAMES)
     with get_connection() as conn:
         cur = conn.cursor()
         cur.execute(
@@ -175,7 +182,7 @@ def _create_sandbox_lead(user_id: int, origin: str = "playground") -> int:
             INSERT INTO leads (user_id, companyName, contactName, phone, origin, category, is_playground)
             VALUES (?, ?, ?, ?, ?, ?, 1)
             """,
-            (user_id, "Playground Test", "Lead de Teste", phone, origin, "qualification"),
+            (user_id, "Empresa Teste", contact_name, phone, origin, "qualification"),
         )
         conn.commit()
         return cur.lastrowid

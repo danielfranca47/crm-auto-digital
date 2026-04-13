@@ -1237,6 +1237,7 @@ def _build_child_prompt_qualification(
     origin_opener = (
         ai_profile.get("origin_outbound_opener") if _is_outbound_lead else ai_profile.get("origin_inbound_opener")
     ) or ""
+    is_first_contact = len(history) <= 1
 
     history_text = _format_history(history)
     mode_contract = _build_mode_contract_context(context, mother_decision)
@@ -1291,10 +1292,18 @@ def _build_child_prompt_qualification(
     _greeting_now = _mother_hint == "greet"
     _greeting_header = (
         "MODO SAUDAÇÃO ACTIVADO — O lead abriu com uma saudação social.\n"
-        "INSTRUÇÃO OBRIGATÓRIA: A tua resposta DEVE começar por cumprimentar o lead de forma calorosa "
-        "e natural (ex.: 'Boa tarde! Tudo bem sim, e com você?', 'Oi! Tudo ótimo por aqui, e aí?'). "
-        "O cumprimento deve ser breve e genuíno — proporcional à saudação recebida, não excessivo.\n"
-        "DEPOIS do cumprimento, no MESMO turno, acrescenta UMA pergunta de qualificação de forma natural "
+        + (
+            f"ABERTURA CONFIGURADA (primeiro contato): Use o texto abaixo como BASE da tua resposta de saudação.\n"
+            f"Adapte ao WhatsApp e ao tom de voz, mas preserve a essência. Depois inclua UMA pergunta de qualificação natural:\n"
+            f"{origin_opener}\n"
+            if (is_first_contact and origin_opener.strip())
+            else (
+                "INSTRUÇÃO OBRIGATÓRIA: A tua resposta DEVE começar por cumprimentar o lead de forma calorosa "
+                "e natural (ex.: 'Boa tarde! Tudo bem sim, e com você?', 'Oi! Tudo ótimo por aqui, e aí?'). "
+                "O cumprimento deve ser breve e genuíno — proporcional à saudação recebida, não excessivo.\n"
+            )
+        )
+        + "DEPOIS do cumprimento, no MESMO turno, acrescenta UMA pergunta de qualificação de forma natural "
         "como se fosse parte da conversa (ex.: 'Para te ajudar melhor, qual serviço te interessa?').\n"
         "should_ask=true. field=current_field. question_text=a pergunta de qualificação isolada.\n"
         "message_text=cumprimento + pergunta juntos numa única mensagem natural.\n"
@@ -1328,7 +1337,16 @@ def _build_child_prompt_qualification(
         )
     )
 
-    _qual_prompt = f"""{_greeting_header}{_passive_header}Você é a FILHA QUALIFICATION de um CRM de vendas WhatsApp.
+    _first_contact_opener_header = (
+        f"ABERTURA OBRIGATÓRIA — PRIMEIRO CONTATO:\n"
+        f"Este é o PRIMEIRO contacto do lead. Use o texto abaixo como BASE da tua resposta.\n"
+        f"Adapte ao WhatsApp e ao tom de voz, mas preserve a essência:\n"
+        f"{origin_opener}\n\n"
+        if (is_first_contact and origin_opener.strip() and not _greeting_now)
+        else ""
+    )
+
+    _qual_prompt = f"""{_first_contact_opener_header}{_greeting_header}{_passive_header}Você é a FILHA QUALIFICATION de um CRM de vendas WhatsApp.
 
 PAPEL: Coletar campos de qualificação do lead, um por vez, através de perguntas naturais e contextuais.
 ESCOPO: {_escopo_line}
@@ -1459,6 +1477,22 @@ def _build_child_prompt_apresentation(
             "Integra a resposta e a proposta de agendamento numa única mensagem fluida e natural. "
             "NUNCA ignores a pergunta do lead.\n\n"
         )
+
+    # Opener de primeiro contato para apresentation
+    _is_outbound_lead_apres = (metadata.get("lead_origin") or "inbound") == "outbound"
+    origin_opener_apres = (
+        ai_profile.get("origin_outbound_opener") if _is_outbound_lead_apres
+        else ai_profile.get("origin_inbound_opener")
+    ) or ""
+    is_first_contact_apres = len(history) <= 1
+    _apres_first_contact_opener = (
+        f"ABERTURA OBRIGATÓRIA — PRIMEIRO CONTATO:\n"
+        f"Este é o PRIMEIRO contacto do lead. Use o texto abaixo como BASE da tua resposta.\n"
+        f"Adapte ao WhatsApp e ao tom de voz, mas preserve a essência:\n"
+        f"{origin_opener_apres}\n\n"
+        if (is_first_contact_apres and origin_opener_apres.strip())
+        else ""
+    )
 
     # Estágio de aquecimento (Tarefa 3.8) — Agent 3 (hybrid_scheduler) pós-qualificação.
     # Trigger: mother_decision.route_to == "qualification" e missing_fields vazio
@@ -1661,7 +1695,8 @@ def _build_child_prompt_apresentation(
         )
 
     _apres_prompt = (
-        _passive_apres_header
+        _apres_first_contact_opener
+        + _passive_apres_header
         + f"Você é a FILHA APRESENTATION de um CRM de vendas WhatsApp.\n\n"
         f"PAPEL: Conduzir a fase de apresentação — agendamento (scheduler) ou oferta+fechamento (sales).\n"
         f"ESCOPO: Variant {presentation_variant}. Gera a mensagem de apresentação e preenche signals_structured.\n"
