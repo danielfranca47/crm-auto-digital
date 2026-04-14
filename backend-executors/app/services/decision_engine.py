@@ -1303,29 +1303,44 @@ def _build_child_prompt_qualification(
     tone_block = _build_tone_block(ai_profile, playbook)
     response_style = (ai_profile.get("response_style") or "passive").strip().lower()
 
-    # Fix P4: ESCOPO e RECUSAS condicionais ao response_style.
+    # Nota de mídia: quando o usuário configurou mídia no knowledge, instrui o LLM a escrever
+    # apenas um texto curto de introdução, pois as imagens serão enviadas automaticamente após.
+    _has_knowledge_media = bool(context.get("knowledge_media"))
+    _media_intro_note = (
+        "\nMÍDIA DISPONÍVEL: Imagens/arquivos serão enviados automaticamente após esta mensagem.\n"
+        "Escreva APENAS uma frase curta de introdução (ex.: 'Aqui estão as informações:', "
+        "'Veja os detalhes abaixo:'). NÃO descreva o conteúdo da mídia no texto — a mídia tem prioridade.\n"
+        if _has_knowledge_media
+        else ""
+    )
+
+    # ESCOPO e RECUSAS condicionais ao response_style.
     # O bloco passivo aparece ANTES do PAPEL para ter precedência sobre qualquer instrução posterior.
     _escopo_line = (
         "Responder perguntas directas do cliente PRIMEIRO, usando offer_description e custom_instructions. "
-        "Depois qualificar de forma natural. Pode apresentar serviços e valores quando perguntado. "
+        "Pode apresentar serviços e valores quando perguntado. "
         "Se a mensagem do lead for uma saudação social (boa tarde, oi, olá, tudo bem, bom dia, etc.), "
-        "responde à saudação de forma calorosa antes de qualificar. "
-        "Não agenda reunião nesta fase. NUNCA faças perguntas abertas de qualificação — apenas closing_questions "
-        "se configuradas (confirmações e alternativas binárias)."
+        "responde à saudação de forma calorosa. "
+        "NÃO agenda reunião nesta fase. "
+        "MODO PASSIVO — REGRA ABSOLUTA DE PERGUNTAS: ZERO perguntas abertas. "
+        "should_ask=false na esmagadora maioria dos casos. "
+        "A qualificação é feita por INFERÊNCIA SILENCIOSA — lê o que o lead diz e preenche os campos internamente. "
+        "A única exceção permitida: pergunta de fechamento binária no contexto de marcação de hora "
+        "(ex.: 'Tenho segunda às 15h ou 17h — qual prefere?'). Mesmo assim, only 1 pergunta, nunca aberta."
         if response_style == "passive"
         else (
             "Responde SEMPRE à mensagem do cliente antes de qualificar. Se o cliente fez uma pergunta, "
             "responde usando offer_description e custom_instructions. "
             "Se a mensagem do lead for uma saudação social (boa tarde, oi, olá, tudo bem, bom dia, etc.), "
             "responde à saudação de forma calorosa antes de qualificar. "
-            "Depois, se houver campos obrigatórios em falta, adicione UMA pergunta de qualificação natural ao final. "
+            "Depois, se houver campos obrigatórios em falta, adicione UMA única pergunta de qualificação natural ao final. "
             "Nunca respondas APENAS com uma pergunta de qualificação. Não agenda reuniões nesta fase."
         )
     )
     _recusas_line = (
         "Nunca invente informação. Nunca agende reunião nesta fase. "
         "Se a resposta não estiver em offer_description ou custom_instructions, diz que vais verificar (→ handoff). "
-        "NUNCA faças perguntas abertas para coletar dados — guia persuasivamente para o próximo passo."
+        "Em modo passivo: NUNCA faças perguntas para coletar dados — infere silenciosamente da conversa."
         if response_style == "passive"
         else (
             "Nunca invente informação. Nunca agende reunião nesta fase. "
@@ -1371,11 +1386,12 @@ def _build_child_prompt_qualification(
             )
             if _passive_reply_now
             else (
-                "MODO PASSIVO ACTIVADO: Este agente responde primeiro, qualifica depois.\n"
+                "MODO PASSIVO ACTIVADO — ZERO PERGUNTAS ABERTAS.\n"
                 "PRIORIDADE ABSOLUTA: se a mensagem do cliente for uma pergunta directa (sobre serviços,\n"
-                "preços, localização, horários, funcionamento, massagista, catálogo, menu, etc.), RESPONDE-A PRIMEIRO\n"
-                "usando offer_description e custom_instructions antes de qualquer pergunta de qualificação.\n"
-                "Só após responder, e de forma natural no mesmo turno ou no turno seguinte, recolhe campos em falta.\n"
+                "preços, localização, horários, funcionamento, catálogo, etc.), RESPONDE-A PRIMEIRO\n"
+                "usando offer_description e custom_instructions.\n"
+                "NÃO faças perguntas de qualificação. Infere os campos silenciosamente da conversa.\n"
+                "should_ask=false na esmagadora maioria dos casos.\n"
                 "NUNCA ignores uma pergunta directa para fazer uma pergunta de qualificação.\n\n"
                 if response_style == "passive"
                 else ""
@@ -1395,7 +1411,7 @@ def _build_child_prompt_qualification(
     _qual_prompt = f"""{_first_contact_opener_header}{_greeting_header}{_passive_header}Você é a FILHA QUALIFICATION de um CRM de vendas WhatsApp.
 
 PAPEL: Coletar campos de qualificação do lead, um por vez, através de perguntas naturais e contextuais.
-ESCOPO: {_escopo_line}
+ESCOPO: {_escopo_line}{_media_intro_note}
 TOM: {ai_summary["tone_of_voice"] or "profissional"} — conversacional e adaptado ao WhatsApp (mensagens curtas, sem formatação). Máx {playbook_summary["max_chars"] or "N/D"} caracteres.
 FRAMEWORK: Modo {agent_mode_normalized}. Template {playbook_summary["template_key"]}. Campos obrigatórios: {json.dumps(mode_contract['required_fields'], ensure_ascii=False)}. Campo atual: {json.dumps(current_field, ensure_ascii=False)}.
 RECUSAS: {_recusas_line}
@@ -1415,7 +1431,10 @@ Retorne SOMENTE JSON válido no schema ChildResult:
   "confidence": 0.0
 }}
 Regras:
-- Só pode perguntar 1 coisa por turno.
+- LIMITE CRÍTICO DE PERGUNTAS: máximo 1 (UMA) pergunta por mensagem, sem exceção.
+  Nunca coloque 2 ou mais perguntas numa mesma resposta (nem com "e também", "além disso", listas, etc.).
+  Se precisar de múltiplos campos, pergunte UM por vez, em rodadas separadas.
+  Puxe gancho da última resposta do lead para formular a próxima pergunta de forma natural.
 - Quando should_ask=true, field deve ser EXATAMENTE o current_field.
 - Quando should_ask=true, question_text não pode ser vazio.
 - Evite repetir frases de asked_questions_for_current_field; reformule.
@@ -1659,6 +1678,16 @@ def _build_child_prompt_apresentation(
 
     tone_block_apresentation = _build_tone_block(ai_profile, playbook)
 
+    # Nota de mídia: quando há mídia configurada no knowledge, instrui o LLM a escrever texto curto.
+    _has_knowledge_media_apres = bool(context.get("knowledge_media"))
+    _media_intro_note_apres = (
+        "\nMÍDIA DISPONÍVEL: Imagens/arquivos serão enviados automaticamente após esta mensagem.\n"
+        "Escreva APENAS uma frase curta de introdução (ex.: 'Aqui estão os detalhes:', "
+        "'Veja as informações abaixo:'). NÃO descreva o conteúdo da mídia no texto — a mídia tem prioridade.\n"
+        if _has_knowledge_media_apres
+        else ""
+    )
+
     # Tarefa 1.3 — knowledge_items com directivas de uso para sdr_padrao / closer_agressivo
     # (e qualquer path que não use commercial_injection, onde knowledge não é injectado inline)
     _apres_knowledge_parts: list[str] = []
@@ -1745,7 +1774,7 @@ def _build_child_prompt_apresentation(
         + _passive_apres_header
         + f"Você é a FILHA APRESENTATION de um CRM de vendas WhatsApp.\n\n"
         f"PAPEL: Conduzir a fase de apresentação — agendamento (scheduler) ou oferta+fechamento (sales).\n"
-        f"ESCOPO: Variant {presentation_variant}. Gera a mensagem de apresentação e preenche signals_structured.\n"
+        f"ESCOPO: Variant {presentation_variant}. Gera a mensagem de apresentação e preenche signals_structured.{_media_intro_note_apres}\n"
         f"TOM: {ai_summary.get('tone_of_voice') or 'profissional'} — direto e focado na ação. Máx {playbook_summary.get('max_chars') or 'N/D'} caracteres.\n"
         f"FRAMEWORK: Modo {agent_mode_normalized}. Template {playbook_summary.get('template_key')}. Appointment mode: {ai_summary.get('appointment_mode') or 'exploratory'}.\n"
         "RECUSAS: Nunca invente features ou benefícios fora de knowledge_items. Nunca cite preço diferente de offer_pack. Nunca mencione \"veja a imagem/vídeo\" (mídia enviada automaticamente). Nunca envie link E peça permissão no mesmo turno.\n"
@@ -2575,32 +2604,31 @@ def compose_decision_output(
                     "media_type": str(raw_op.get("media_type") or "image").strip(),
                 }]
 
-    # Mídia de knowledge — filtra por idioma do lead e devolve lista ordenada
-    # (somente se offer_pack não definiu pre_send_media)
-    if effective_route_to == "apresentation" and not decision.pre_send_media:
+    # Mídia de knowledge — filtra por idioma do lead e devolve lista ordenada.
+    # Injeta em apresentation OU em qualificação quando o lead fez pergunta direta (next_action_hint=reply).
+    # Usa TODAS as categorias disponíveis no knowledge_media (não apenas categorias hardcoded),
+    # para respeitar qualquer nome de categoria que o usuário tenha configurado.
+    _should_send_knowledge_media = (
+        effective_route_to == "apresentation"
+        or (
+            effective_route_to == "qualification"
+            and getattr(mother_decision, "next_action_hint", None) == "reply"
+        )
+    )
+    if _should_send_knowledge_media and not decision.pre_send_media:
         knowledge_media = context.get("knowledge_media") or {}
         lead_lang = str(context.get("lead_detected_language") or "all").lower()
-        if agent_mode_normalized in ("direto", "closer", "direto_autonomo"):
-            _km_candidates = ["product_details", "pitch_script"]
-        elif agent_mode_normalized == "agenda":
-            _km_candidates = ["session_preview", "service_pricing_table"]
-        else:  # consultivo
-            _km_candidates = ["product_details", "session_preview"]
-        for _cat in _km_candidates:
-            entries = knowledge_media.get(_cat)
-            if not entries:
-                continue
+        _all_km_media: list[dict] = []
+        for _cat, entries in knowledge_media.items():
             # Compatibilidade: se for string (formato legado), converter para lista
             if isinstance(entries, str):
                 entries = [{"media_url": entries, "media_type": "image", "language": "all", "send_order": 0}]
-            filtered = [
-                e for e in entries
-                if e.get("language") == "all" or e.get("language") == lead_lang
-            ]
-            if filtered:
-                filtered.sort(key=lambda e: e.get("send_order", 0))
-                decision.pre_send_media = filtered
-                break
+            for e in entries:
+                if e.get("language") in ("all", lead_lang):
+                    _all_km_media.append(e)
+        if _all_km_media:
+            _all_km_media.sort(key=lambda e: e.get("send_order", 0))
+            decision.pre_send_media = _all_km_media
 
     return decision
 
