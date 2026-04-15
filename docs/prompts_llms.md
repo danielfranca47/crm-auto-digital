@@ -1,50 +1,109 @@
 # Prompts LLM — Referência Oficial
 
-> **Atualizado em:** 2026-04-05
+> **Atualizado em:** 2026-04-16
 > **Escopo:** Todos os prompts enviados a LLMs no sistema
-> **Arquivos cobertos:** `backend-executors/app/services/decision_engine.py`, `backend-executors/app/services/field_extractor.py`, `backend-crm/automations/assistente_ia/llm.py`
+> **Arquivos cobertos:**
+> - [`backend-executors/app/services/decision_engine.py`](../backend-executors/app/services/decision_engine.py) — Motor de decisão (WhatsApp inbound)
+> - [`backend-executors/app/services/field_extractor.py`](../backend-executors/app/services/field_extractor.py) — Extração de campos
+> - [`backend-crm/automations/assistente_ia/llm.py`](../backend-crm/automations/assistente_ia/llm.py) — Geração de outreach
+
+---
+
+## Índice rápido para avaliadores
+
+| Seção | Prompt | Agente(s) | Output | Tem exemplos? |
+|---|---|---|---|---|
+| 1.1 | `_build_prompt()` | Todos (fallback) | JSON DecisionOutput | Não |
+| 1.2 | `_build_mother_prompt()` | Todos | JSON MotherDecision | Sim (11 casos) |
+| 1.3 | `_build_child_prompt_qualification()` | Todos | JSON ChildResult | Não (usa training_examples) |
+| 1.4 | `_build_child_prompt_apresentation()` | Todos | JSON ChildResult | Sim (2 casos sales) |
+| 1.5 | `_build_child_prompt_follow_up()` | Todos | JSON ChildResult | Não |
+| 1.6 | `_build_child_prompt_closing()` | Todos | JSON ChildResult | Não |
+| 1.7 | `_build_child_prompt()` | Todos (fallback) | JSON ChildResult | Não |
+| 2 | `field_extractor.py` | Todos | JSON extração | Não |
+| 3 | `llm.py` (outreach) | Agent Local | Texto/JSON por canal | Não |
 
 ---
 
 ## Visão geral da arquitetura de prompts
 
-O sistema usa **dois tipos de LLM** com propósitos distintos:
+O sistema usa **três tipos de LLM** com propósitos distintos:
 
-| Tipo | Onde | Papel |
+| Tipo | Arquivo | Papel |
 |---|---|---|
-| **Decisão / Execução** | `decision_engine.py` | Processa inbound WhatsApp, roteia o lead pelo funil e gera a resposta comercial |
-| **Geração de outreach** | `llm.py` | Gera cold outreach (e-mail, WhatsApp, Instagram, roteiro de ligação) para prospecção |
+| **Decisão / Execução** | `decision_engine.py` | Processa inbound WhatsApp; roteia o lead pelo funil (Mãe) e gera a resposta comercial (Filha) |
 | **Extração** | `field_extractor.py` | Extrai campos de qualificação estruturados da conversa |
+| **Outreach** | `llm.py` | Gera cold outreach (e-mail, WhatsApp, Instagram, roteiro de ligação) para prospecção |
 
-Todos os prompts de `decision_engine.py` e `field_extractor.py` retornam **SOMENTE JSON válido** — sem texto livre, sem markdown. A LLM em `llm.py` retorna texto ou JSON dependendo do canal.
+**Regra absoluta de output:** todos os prompts de `decision_engine.py` e `field_extractor.py` retornam **SOMENTE JSON válido** — sem texto livre, sem markdown. A LLM em `llm.py` retorna texto ou JSON dependendo do canal.
+
+---
+
+## Contexto que chega a todos os prompts do `decision_engine`
+
+Antes de entrar em cada prompt individualmente, é importante entender o **ContextBundle** — o objeto que o `backend-crm` monta e envia ao executor. Todos os prompts extraem dados deste bundle.
+
+```
+ContextBundle {
+  lead             — dados do lead (id, nome, categoria, segmento, status)
+  ai_profile       — perfil de IA configurado pelo usuário (vem do backend-core)
+  playbook         — template/playbook do agente
+  metadata         — inbound_message_text, instance_id, provider, lead_origin,
+                     lead_origin_label, followup_context, allowed_lead_categories,
+                     force_presentation_variant
+  history          — histórico da conversa (últimas N mensagens, [{model, body}])
+  qualification_state — estado atual de qualificação do lead (data_json, attempts_json,
+                        asked_questions_json, last_question_text)
+  knowledge_items  — base de conhecimento do usuário (dict por categoria)
+  knowledge_media  — chaves das categorias que têm mídia (set)
+  training_examples — exemplos classificados pelo operador no Playground (bom/ruim por fase)
+  generated_prompt_parts — blocos gerados pelo meta-prompter (few-shot por fase,
+                           tone_rules, qualification_phrasing, objection_rewrites,
+                           outreach_scenarios)
+}
+```
 
 ---
 
 ## 1. Motor de Decisão — `decision_engine.py`
 
-Este arquivo implementa uma **arquitetura Mãe + Filha**: a LLM Mãe roteia o lead para a fase correta do funil; a LLM Filha especializada executa a ação naquela fase.
+### Por que a arquitetura Mãe + Filha?
+
+A LLM Mãe e as LLMs Filhas são **duas chamadas separadas ao modelo**. Esta divisão existe por motivos funcionais e de qualidade:
+
+1. **Separação de responsabilidade:** a Mãe apenas roteia (sem texto para o lead); as Filhas apenas geram resposta (sem ter que roteiar). Prompts mais curtos e com menor risco de conflito de instrução.
+2. **Especialização por fase:** cada Filha tem um contexto, tom e regras otimizadas para sua fase (qualificação vs. fechamento são tarefas muito diferentes).
+3. **Auditabilidade:** o raciocínio de roteamento fica separado da resposta comercial — é possível inspecionar por que o lead foi enviado para uma fase sem misturar com o output.
+4. **Guardrails isolados:** os guardrails de modo (`_apply_mode_guardrails`) atuam sobre a saída da Mãe antes de escolher a Filha, sem contaminar o prompt da Filha.
 
 ```
 Inbound WhatsApp
     ↓
-_build_mother_prompt()   ← LLM Mãe: decide em qual fase o lead está
+_build_mother_prompt()   ← LLM Mãe: decide a fase (route_to)
+    ↓                       retorna MotherDecision (JSON)
+[guardrails de modo]     ← código Python valida/corrige o route_to
     ↓
-_build_child_prompt_qualification()   ← se em qualificação
-_build_child_prompt_apresentation()   ← se em apresentação/agendamento
-_build_child_prompt_follow_up()       ← se em follow-up
-_build_child_prompt_closing()         ← se em fechamento
+_build_child_prompt_qualification()   ← route_to == "qualification"
+_build_child_prompt_apresentation()   ← route_to == "apresentation"
+_build_child_prompt_follow_up()       ← route_to == "follow-up"
+_build_child_prompt_closing()         ← route_to == "closing"
+_build_child_prompt()                 ← fallback (sem fase especializada)
 ```
 
-Há também `_build_prompt()` como fallback geral (decisão simples sem fase especializada).
+Há também `_build_prompt()` como caminho legado/fallback sem Mãe — usada quando o executor decide não usar a arquitetura bifurcada.
 
 ---
 
 ### 1.1 `_build_prompt()` — Motor de decisão geral (fallback)
 
-**Papel da LLM no prompt:**
+> **Arquivo:** `decision_engine.py` — função `_build_prompt()`
+> **Usado por:** todos os agentes como caminho de fallback (sem bifurcação Mãe/Filha)
+> **Agentes:** qualquer `agent_mode` / `template_key`
+
+**Papel da LLM:**
 > "Você é um motor de decisão de um CRM (WhatsApp)."
 
-A LLM age como um sistema de roteamento puro — não tem persona, não tem nome, não é o agente comercial. Decide a ação (`reply`, `ask_qualification`, `handoff`, `ignore`) e redige a resposta se necessário.
+A LLM age como sistema de roteamento e geração em uma única chamada. Decide a ação (`reply`, `ask_qualification`, `handoff`, `ignore`) e redige a resposta se necessário.
 
 **Output esperado:**
 ```json
@@ -58,30 +117,30 @@ A LLM age como um sistema de roteamento puro — não tem persona, não tem nome
 }
 ```
 
-**Variáveis dinâmicas injetadas no prompt:**
+**Variáveis injetadas no prompt — de onde vêm:**
 
-| Variável | Origem | Conteúdo |
+| Variável | Origem no bundle | Conteúdo |
 |---|---|---|
-| `lead_summary` | banco CRM | id, nome, telefone, segmento, status, categoria |
-| `ai_summary` | `ai_profiles` (core) | template_key, agent_mode, brand_name, tone_of_voice, niche, target_audience, offer_description, goals, custom_instructions, identity_mode, handoff_policy, handoff_custom_text, `appointment_mode` |
-| `playbook_summary` | playbook | nome/template do playbook |
-| `metadata_summary` | inbound | provider, instance_id |
-| `allowed_categories` | sistema | lista de categorias Kanban permitidas |
-| `history_text` | banco CRM | histórico formatado da conversa |
-| `last_bot_message` | banco CRM | última mensagem enviada pelo bot |
-| `short_reply_hint` | sistema | hint se detectado reply curto esperado |
-| `agent_mode_normalized` | `ai_profiles` | modo normalizado (consultivo, agenda, direto, etc.) |
-| `required_fields` | `qualification_fields` do AI Profile | campos de qualificação com `mode=required` |
-| `missing_fields` | `qualification_state` | campos ainda não coletados |
-| `current_field` | sistema | próximo campo a ser coletado |
-| `asked_questions_for_current_field` | histórico | perguntas já feitas para o campo atual |
-| `last_question_text` | histórico | última pergunta enviada |
-| `lead_origin_label` | lead | origem do lead (formulário, WhatsApp direto, etc.) |
-| `origin_opener` | `ai_profiles` | texto de abertura personalizado por origem |
-| `message_text` | inbound | mensagem atual do lead |
+| `lead_summary` | `context["lead"]` | id, nome, telefone, segmento, status, categoria |
+| `ai_summary` | `context["ai_profile"]` | template_key, agent_mode, brand_name, tone_of_voice, niche, target_audience, offer_description, goals, custom_instructions, identity_mode, handoff_policy, handoff_custom_text |
+| `playbook_summary` | `context["playbook"]` | template_key / name |
+| `metadata_summary` | `context["metadata"]` | provider, instance_id |
+| `allowed_categories` | `context["metadata"]["allowed_lead_categories"]` | lista de categorias Kanban permitidas (ou DEFAULT_ALLOWED_LEAD_CATEGORIES) |
+| `history_text` | `context["history"]` | últimas 10 mensagens formatadas como `role: body` |
+| `last_bot_message` | derivado do `history` | última mensagem `model=outbound` — só injetado se `_is_short_reply()` retornar True |
+| `short_reply_hint` | lógica interna | hint `"message_text é resposta direta"` — só injetado se reply curto detectado |
+| `agent_mode_normalized` | `_compute_system_agent_mode()` | modo normalizado (consultivo, agenda, direto) |
+| `required_fields` | `_build_mode_contract_context()` | campos obrigatórios do modo ativo |
+| `missing_fields` | `qualification_state.data_json` vs `required_fields` | campos ainda não coletados |
+| `current_field` | `_select_current_field()` | próximo campo a coletar (primeiro dos missing) |
+| `asked_questions_for_current_field` | `qualification_state.asked_questions_json` | últimas 2 perguntas feitas para o campo atual |
+| `last_question_text` | `qualification_state.last_question_text` | última pergunta enviada |
+| `lead_origin_label` | `context["metadata"]["lead_origin_label"]` | ex.: `"INBOUND"` ou `"OUTBOUND"` |
+| `origin_opener` | `ai_profile.origin_inbound_opener` ou `origin_outbound_opener` | texto de abertura configurado pelo operador |
+| `message_text` | `context["metadata"]["inbound_message_text"]` | mensagem atual do lead |
 
-**Regras de copy/comportamento embutidas no texto:**
-- Nunca usa categorias fora de `ALLOWED_LEAD_CATEGORIES`
+**Regras críticas embutidas:**
+- `suggested_category` deve ser um estágio do funil (`ALLOWED_LEAD_CATEGORIES`), nunca um nicho/tema
 - Se inbound for genérico ("oi"), pergunta UMA coisa — não sugere categoria
 - `handoff` só em pedido explícito de humano
 - `short_reply_hint`: se presente, responde ao contexto anterior sem iniciar assunto novo
@@ -90,16 +149,20 @@ A LLM age como um sistema de roteamento puro — não tem persona, não tem nome
 
 ### 1.2 `_build_mother_prompt()` — Roteador Mãe
 
-**Papel da LLM no prompt:**
-> "Você é um roteador MÃE de um CRM (WhatsApp)."
+> **Arquivo:** `decision_engine.py` — função `_build_mother_prompt()`
+> **Usado por:** todos os agentes (antes de qualquer Filha especializada)
+> **Agentes:** qualquer `agent_mode` / `template_key`
 
-A LLM não responde ao lead — apenas decide para qual fase do funil rotear: `qualification`, `apresentation`, `follow-up` ou `closing`. É uma LLM de roteamento puro.
+**Papel da LLM:**
+> "Você é o ROTEADOR MÃE de um CRM de vendas WhatsApp."
+
+A LLM não responde ao lead. Apenas decide o `route_to` e emite sinais para a Filha usar.
 
 **Output esperado:**
 ```json
 {
   "route_to": "qualification|apresentation|follow-up|closing",
-  "perceived_category": "...|null",
+  "perceived_category": "qualification|apresentation|follow-up|closing|null",
   "confidence": 0.0,
   "reason": "curto",
   "agent_mode": null,
@@ -110,34 +173,64 @@ A LLM não responde ao lead — apenas decide para qual fase do funil rotear: `q
     "price_acceptance": "no|unsure|yes"
   },
   "objective": "string curta",
-  "next_action_hint": "reply|ask_qualification|handoff|ignore|null"
+  "next_action_hint": "reply|ask_qualification|handoff|ignore|greet|null"
 }
 ```
 
-**Variáveis dinâmicas injetadas:** mesmas de `_build_prompt()`.
+**Variáveis injetadas:** subconjunto do `_build_prompt()` — mesmos campos de `lead_summary`, `ai_summary`, `playbook_summary`, `metadata_summary`, `history_text`, `agent_mode_normalized`, `required_fields`, `missing_fields`, `lead_origin_label`, `origin_opener`, `message_text`.
 
-**Regras de copy/comportamento embutidas no texto:**
+**Bloco condicional adicional — modo passivo:**
+Injetado **somente** quando `ai_profile.response_style == "passive"`:
+```
+MODO PASSIVO (response_style=passive): se a mensagem for pergunta directa E missing_fields NÃO VAZIO
+→ usar next_action_hint='reply' para sinalizar à filha que deve responder a pergunta primeiro.
+OU se for saudação social pura E histórico vazio/1 msg → usar next_action_hint='greet'.
+```
 
-| Regra | Descrição |
-|---|---|
-| **PRIORIDADE 1** | Responder SEMPRE à mensagem do cliente — nunca bloquear resposta por qualificação pendente |
-| **PRIORIDADE 2** | Se a mensagem não contém pergunta direta E há campos pendentes → preferir `route_to="qualification"` |
-| Proibição de bloqueio | `route_to="qualification"` nunca pode ser a ÚNICA resposta se o cliente fez uma pergunta direta |
-| Definição de APRESENTATION | Agendar reunião, confirmar horário, reagendar, enviar link, confirmar presença |
-| Definição de FOLLOW-UP | Só pós-apresentação realizada com evidência textual — nunca por mera intenção de compra |
-| Modo `sdr_scheduler` | Qualquer confirmação de horário → `apresentation` + `meeting_scheduled=true` |
-| Modo `closer` | `meeting_scheduled=false` por padrão; fechamento é `closing`, não `apresentation` |
+**Regras de roteamento (prioridade decrescente):**
 
-**Exemplos de saída fornecidos no próprio prompt** (10 casos) — usados como treinamento in-context para respostas consistentes.
+| Prioridade | Condição | Rota |
+|---|---|---|
+| 1A | `missing_fields` não vazio + mensagem sem pergunta direta | `qualification` |
+| 1B | `missing_fields` não vazio + mensagem com pergunta direta | `qualification` + `next_action_hint=reply` |
+| EXCEÇÃO FECHO | `agent_mode=agenda` + sinal explícito de booking (mesmo com missing_fields) | `apresentation` |
+| 2 | Lead confirmou data/horário | `apresentation` |
+| 2 | Lead disse "quero comprar/fechar" com `intent_level=high` | `closing` |
+| 2 | Lead mencionou sessão passada + objeção | `follow-up` |
+| 3 | Interesse sem confirmação | `apresentation` (confidence < 0.7) |
+| 4 | Mensagem genérica | manter rota atual |
+| SAUDAÇÃO | Saudação pura + histórico vazio | `qualification` + `next_action_hint=greet` |
+
+**Exemplos fornecidos no prompt (11 casos — few-shot in-context):**
+
+| # | Inbound | Rota esperada |
+|---|---|---|
+| 1 | "Amanhã 17h tá confirmado" | `apresentation` + `meeting_scheduled=true` |
+| 2 | "Pode reagendar pra sexta?" | `apresentation` |
+| 3 | "Vou pensar" (pós-apresentação) | `follow-up` |
+| 4 | "Vou pensar" (sem apresentação) | ❌ não usar follow-up |
+| 5 | "Qual o preço?" | ❌ não usar closing |
+| 6 | SDR "Fechou amanhã 17h, manda o link" | `apresentation` + `meeting_scheduled` |
+| 7 | SDR "Pode confirmar a reunião?" | `apresentation` |
+| 8 | CLOSER "Posso assinar hoje?" | `closing` |
+| 9 | CLOSER "Manda contrato" | `closing` |
+| 10 | CLOSER "Fechou amanhã 17h" | `apresentation` (sem meeting_scheduled) |
+| 11 | AGENDA "Perfeito, fica combinado" | `apresentation` + sinal de fecho override |
+
+> **Por que 11 exemplos?** Para cobrir os 3 `agent_mode` distintos (consultivo, agenda, direto/closer) em variações de saudação, fechamento e roteamento negativo. O modelo tende a confundir `follow-up` e `closing` sem exemplos negativos explícitos.
 
 ---
 
 ### 1.3 `_build_child_prompt_qualification()` — Filha Qualificação
 
-**Papel da LLM no prompt:**
-> "Você é a FILHA QUALIFICATION"
+> **Arquivo:** `decision_engine.py` — função `_build_child_prompt_qualification()`
+> **Usado por:** todos os agentes quando `route_to == "qualification"`
+> **Agentes:** qualquer `agent_mode` / `template_key`
 
-Opera em dois modos controlados por `response_style`. Coleta campos de qualificação um por vez, reformulando se já foram perguntados antes. Nunca agenda reunião nesta fase.
+**Papel da LLM:**
+> "Você é a FILHA QUALIFICATION de um CRM de vendas WhatsApp."
+
+Opera em dois modos controlados por `response_style`. Coleta campos de qualificação um por vez.
 
 **Output esperado:**
 ```json
@@ -156,58 +249,107 @@ Opera em dois modos controlados por `response_style`. Coleta campos de qualifica
 }
 ```
 
-**Variáveis dinâmicas adicionais:**
+**Variáveis adicionais (além do core do ContextBundle):**
 
-| Variável | Descrição |
-|---|---|
-| `response_style` | `"active"` ou `"passive"` — controla se o agente pergunta proativamente ou persuade |
-| `must_collect_with_questions` | Campos `mode=required` com `question` e `passive_hint` — injetado apenas em `active` |
-| `nice_to_collect` | Campos `mode=optional` com `question` e `passive_hint` — ambos os estilos |
-| `passive_hints` | Dicas de captura passiva por campo — injetado apenas em `passive` |
-| `closing_questions` | Perguntas estratégicas de fechamento (alternativas binárias/confirmações) — única pergunta permitida no passivo |
-| `current_field` | Campo específico a ser coletado neste turno |
-| `asked_for_current` | Perguntas já feitas para este campo — a LLM deve REFORMULAR, não repetir |
-| `route_to`, `confidence`, `reason` | Decisão da Mãe — injetada no prompt |
+| Variável | Origem | Conteúdo |
+|---|---|---|
+| `response_style` | `ai_profile.response_style` (default `"passive"`) | `"active"` ou `"passive"` — muda radicalmente o comportamento |
+| `current_field` | `_select_current_field(missing, filled)` | próximo campo a coletar |
+| `asked_for_current` | `qualification_state.asked_questions_json` | últimas 2 perguntas já feitas para este campo — a LLM DEVE reformular |
+| `last_question_text` | `qualification_state.last_question_text` | última pergunta enviada |
+| `lead_origin_label` / `origin_opener` | `ai_profile` + `metadata` | abertura de primeiro contato |
+| `tone_block` | `_build_tone_block(ai_profile, playbook)` | regras de tom WhatsApp (veja seção 1.3.1) |
+| `qualification_fields_block` | `_build_qualification_fields_block(ai_profile, response_style)` | campos configurados + instruções de uso (veja seção 1.3.2) |
+| `custom_instructions_block` | `_build_custom_instructions_block(ai_profile)` | instruções livres do operador (prioridade máxima) |
+| `training_examples_block` | `_build_training_examples_block(context, "qualification")` | exemplos bom/ruim classificados pelo operador no Playground |
+| `generated_prompt_parts` | `context["generated_prompt_parts"]` | injetado via `_inject_generated_parts()` pós-construção (veja seção 1.8) |
+| `knowledge_media` | `context["knowledge_media"]` | chaves de categorias com mídia — ativa nota de supressão de texto |
 
-**Regras de copy/comportamento — modo `active`:**
+**Blocos condicionais injetados no cabeçalho do prompt:**
 
+| Bloco | Condição de ativação | Descrição |
+|---|---|---|
+| `_first_contact_opener_header` | `is_first_contact=True` + `origin_opener` preenchido + sem saudação | Força uso do texto de abertura configurado no AI Profile |
+| `_greeting_header` | `next_action_hint == "greet"` | Modo saudação: cumprimenta ANTES de qualificar, origin_opener opcional |
+| `_passive_header` (modo reply) | `response_style == "passive"` + `next_action_hint == "reply"` | Resposta imediata proibindo qualquer pergunta neste turno |
+| `_passive_header` (modo padrão) | `response_style == "passive"` (sem hint especial) | Zero perguntas abertas; inferência silenciosa obrigatória |
+| `_media_intro_note` | `context["knowledge_media"]` não vazio | Instrui LLM a escrever apenas introdução curta (mídia enviada automaticamente) |
+
+**Regras de copy — modo `active`:**
 ```
 Responde SEMPRE à mensagem do cliente antes de qualificar.
 Se o cliente fez uma pergunta, responde usando offer_description e custom_instructions.
 Depois, se houver campos obrigatórios em falta, adicione UMA pergunta de qualificação
-natural ao final — usando a `question` configurada no campo, ou reformulando se já foi
-perguntado antes.
-Nunca respondas APENAS com uma pergunta de qualificação.
+natural ao final. Nunca respondas APENAS com uma pergunta de qualificação.
 ```
-
-- Máximo 1 pergunta por turno (após a resposta ao cliente)
+- Máximo 1 pergunta por turno
 - `field` deve ser EXATAMENTE o `current_field` quando `should_ask=true`
-- Campos `custom_*`: usar a `question` configurada em `qualification_fields`
 - Proibido agendar reunião aqui
 
-**Regras de copy/comportamento — modo `passive`:**
+**Regras de copy — modo `passive`:**
+```
+NUNCA faças perguntas abertas de qualificação.
+ZERO perguntas de qualificação. should_ask=false na esmagadora maioria dos casos.
+Qualificação por INFERÊNCIA SILENCIOSA — lê o que o lead diz e preenche internamente.
+ÚNICA EXCEÇÃO: closing_question binária configurada (ex: "às 15h ou 17h?").
+```
 
+**Proibições (7 regras críticas embutidas no prompt):**
+1. Nunca invente informações fora do contexto
+2. Nunca prometa condições não presentes em offer_pack / knowledge_items
+3. Nunca dê conselhos médicos, jurídicos ou financeiros
+4. Nunca mencione concorrentes (exceto se em knowledge_items)
+5. Nunca use urgência artificial
+6. Nunca responda fora do nicho
+7. Se não souber, diga que vai verificar (→ handoff)
+
+Plus `_ESCAPE_HATCH_BLOCK` (o que fazer quando não sabe responder) e `_build_validation_block` (checklist pré-retorno).
+
+#### 1.3.1 `_build_tone_block()` — Bloco de tom WhatsApp
+
+Gerado em tempo de execução para cada prompt de Filha. Contém:
+- Tom de voz configurado (`ai_profile.tone_of_voice`)
+- Limite de caracteres (`playbook.max_chars`)
+- Regras de formato WhatsApp (sem bullet points, sem markdown, 1-2 parágrafos)
+- Proibições de estilo (emojis excessivos, CAPS, exclamações consecutivas)
+- **Condicional `hybrid_scheduler`:** se `template_key == "hybrid_scheduler"` e `brand_name` preenchido, adiciona regra de persona como assistente pessoal do profissional (ex: "fale como o assistente da Dra. Maria").
+
+#### 1.3.2 `_build_qualification_fields_block()` — Campos de qualificação por modo
+
+Gerado a partir de `ai_profile.qualification_fields` (array `QualificationField[]`).
+
+**Modo `active`** — expõe:
+- `required` com `question` e `passive_hint`: "OBRIGATÓRIOS — usar a question configurada ao perguntar"
+- `optional` com `question` e `passive_hint`: "DESEJÁVEIS — capturar se surgir oportunidade"
+
+Exemplo injetado:
 ```
-NUNCA faças perguntas para coletar dados de qualificação.
-Responde sempre de forma persuasiva, guiando naturalmente para o próximo passo:
-  - Use prova social, benefícios concretos e contexto da oferta para criar motivação
-  - Conduza para o próximo passo (agendamento, proposta, pagamento) de forma direta mas sem pressão
-Se o lead mencionar dados relevantes, registre internamente — mas não peça por eles.
-ÚNICA EXCEÇÃO: se o campo tem `closing_question` configurada (confirmações e alternativas
-binárias tipo "às 15h ou 16h?"), ela pode ser usada — nunca perguntas abertas.
+CAMPOS DE QUALIFICAÇÃO CONFIGURADOS:
+OBRIGATÓRIOS — usar a question configurada ao perguntar:
+- Disponibilidade (key: availability_window): pergunta → "Qual horário funciona?" | inferir: "se lead mencionar horário"
+- Nome do pet (key: custom_nome_do_pet): pergunta → "Qual o nome do seu pet?"
+DESEJÁVEIS — capturar se surgir oportunidade natural:
+- Serviço de interesse (key: service_interest): pergunta → "O que você busca?" | inferir: "pelo contexto"
 ```
+
+**Modo `passive`** — expõe:
+- `passive_hint` por campo: "Registrar internamente se o lead mencionar (NÃO perguntar)"
+- `closing_question` por campo (se `allow_closing_question=true`): únicas perguntas permitidas
+
+**Não gera bloco** se `qualification_fields` for null/vazio.
 
 ---
 
 ### 1.4 `_build_child_prompt_apresentation()` — Filha Apresentação
 
-**Papel da LLM no prompt:**
-> "Você é a FILHA APRESENTATION"
+> **Arquivo:** `decision_engine.py` — função `_build_child_prompt_apresentation()`
+> **Usado por:** todos os agentes quando `route_to == "apresentation"`
+> **Agentes:** qualquer `agent_mode` / `template_key`
 
-É o prompt mais complexo do sistema. Tem dois modos de operação internos controlados por `presentation_variant`:
+**Papel da LLM:**
+> "Você é a FILHA APRESENTATION de um CRM de vendas WhatsApp."
 
-- **`sales`** — apresenta oferta com preço, conduz ao fechamento ou envio de link de checkout
-- **`scheduler`** — conduz agendamento (propor horário, confirmar, reagendar, enviar link de call)
+É o prompt mais complexo do sistema. Comportamento controlado por `presentation_variant`.
 
 **Output esperado:**
 ```json
@@ -232,100 +374,127 @@ binárias tipo "às 15h ou 16h?"), ela pode ser usada — nunca perguntas aberta
 }
 ```
 
-**Variáveis dinâmicas adicionais:**
+**Variáveis adicionais:**
 
-| Variável | Origem | Descrição |
+| Variável | Origem | Como é resolvida |
 |---|---|---|
-| `presentation_variant` | `ai_profiles` | `sales` ou `scheduler` |
-| `hybrid_flow_style` | `ai_profiles` | `offer_then_schedule` ou `schedule_then_offer` |
-| `offer_pack_summary` | `ai_profiles` > catálogo | itens da oferta, preços, mídia, garantia, preço âncora |
-| `appointment_mode` | `ai_profiles` | `exploratory` ou `commercial` (para `hybrid_scheduler`) |
-| `knowledge_items` | tabela `knowledge_items` | categorias comerciais (ver seção 1.4.2) |
-| `warming_social_proof` | `ai_profiles` | texto de prova social configurado pelo usuário |
-| `warming_session_preview` | `ai_profiles` | preview da sessão/serviço configurado pelo usuário |
-| `template_key_for_warming` | `ai_profiles` | verifica se é `hybrid_scheduler` para ativar injeção |
+| `presentation_variant` | `_resolve_presentation_variant()` | 1º `metadata.force_presentation_variant`; 2º `ai_profile.presentation_variant`; 3º derivado de `agent_mode` (direto→sales, agenda→scheduler) |
+| `hybrid_flow_style` | `_resolve_hybrid_flow_style()` | `ai_profile.hybrid_flow_style` ou `metadata.hybrid_flow_style` |
+| `offer_pack_summary` | `_build_offer_pack_summary()` | `ai_profile.offer_pack` (JSON) ou fallback de `offer_description` |
+| `appointment_mode` | `ai_profile.appointment_mode` | `"exploratory"` (padrão) ou `"commercial"` — só relevante para `hybrid_scheduler` |
+| `knowledge_items` | `context["knowledge_items"]` | dict com categorias: social_proof, pitch_script, product_details, objections_faq, service_faq, guarantee_policy |
+| `knowledge_media` | `context["knowledge_media"]` | chaves com mídia — suprime texto descritivo |
+| `warming_social_proof` | `ai_profile.warming_social_proof` | texto de prova social (agent 3 exploratory) |
+| `warming_session_preview` | `ai_profile.warming_session_preview` | preview da sessão (agent 3 exploratory) |
+| `extracted_fields` | `qualification_state.data_json` | campos já coletados — usados no recibo de reserva |
 
-**Regras de copy do modo `sales`:**
-- **UM TURNO = UMA AÇÃO**: ou apresenta/confirma sem link, ou envia link — nunca os dois
-- Quando confirma sem link: `checkout_sent=false` — proibido URL ou placeholder de link
-- Quando envia link: `checkout_sent=true` — não pede permissão no mesmo turno
-- Oferece `anchor_price` se disponível: "De R$X por apenas R$Y"
-- Menciona `guarantee_text` se disponível
-- Se `media_url` presente: a mídia já foi enviada automaticamente — NÃO mencionar "veja a imagem/vídeo"
+**Blocos condicionais:**
 
-**Regras de copy do modo `scheduler`:**
-- Sempre preenche `meeting_proposed` e `meeting_datetime_candidate`
-- ISO naive no timezone de `ai_profile.timezone` (ex.: `2026-03-05T17:00:00`)
-- Se houver confirmação final: inclui `meeting_scheduled` nos signals
+| Bloco | Condição | Descrição |
+|---|---|---|
+| `_apres_first_contact_opener` | `is_first_contact=True` + `origin_opener` preenchido | Abertura de primeiro contato |
+| `_passive_apres_header` | `response_style=passive` + qualificação concluída neste turno + pergunta no inbound | Instrui responder pergunta do lead antes de propor agendamento |
+| `warming_injection` (exploratory) | `template_key=hybrid_scheduler` + qualificação recém-aprovada + `appointment_mode=exploratory` | Aquecimento: prova social + preview da sessão antes de propor agendamento (veja 1.4.1) |
+| `warming_injection` (scheduler) | `template_key=hybrid_scheduler` + qualificação recém-aprovada + `presentation_variant=scheduler` | Pós-qualificação para serviços presenciais: confirmar disponibilidade e valor |
+| `commercial_injection` | `template_key=hybrid_scheduler` + qualificação recém-aprovada + `appointment_mode=commercial` | Modo comercial: apresentar serviços, tratar objeções, fechar compromisso ANTES de agendar (veja 1.4.2) |
+| `_booking_confirmation_block` | `meeting_scheduled=True` + `presentation_variant=scheduler` | "Modo recibo": emite resumo estruturado da reserva usando `extracted_fields` |
+| `standard_knowledge_block` | quando NÃO há `commercial_injection` + knowledge não vazio | Injeção dos itens de knowledge com instruções de uso por categoria |
+| `_media_intro_note_apres` | `knowledge_media` não vazio | Suprime descrição — mídia enviada automaticamente |
 
-#### 1.4.1 Injeção WARMING (modo `exploratory`)
+**Regras do modo `sales`:**
+- **UM TURNO = UMA AÇÃO**: confirmar (sem link) OU enviar link — nunca os dois
+- `checkout_sent=false` + proibido URL/placeholder quando confirma
+- `checkout_sent=true` + deve incluir URL real quando envia link
+- Usar `anchor_price` se disponível: "De R$X por apenas R$Y"
+- Usar `guarantee_text` se disponível
+- Se `media_url` presente em offer_pack: mídia já foi enviada — NÃO mencionar "veja a imagem/vídeo"
 
-Ativado quando: `template_key == "hybrid_scheduler"` + fase pós-qualificação + `appointment_mode == "exploratory"`.
+**Regras do modo `scheduler`:**
+- Sempre preencher `meeting_proposed` e `meeting_datetime_candidate`
+- ISO naive no timezone de `ai_profile.timezone`
+- Confirmação final inclui `meeting_scheduled` nos signals
 
-**Texto injetado no prompt:**
+**Exemplos fornecidos no prompt:**
 ```
-- ESTÁGIO WARMING (pós-qualificação aprovada para hybrid_scheduler): O lead acabou de concluir
-  a qualificação. Antes de propor o agendamento, execute os 2 passos de aquecimento em UMA
-  mensagem natural:
-  1. PROVA SOCIAL: {warming_social_proof ou fallback padrão}
-  2. PRÉVIA DA SESSÃO: {warming_session_preview ou fallback padrão}
-  Combine os 2 passos de forma fluida e, ao final, proponha o agendamento da sessão.
-  Não mencione os termos 'prova social' ou 'prévia da sessão' explicitamente — use linguagem natural.
-```
-
-**Fallback padrão de prova social** (quando não configurado):
-```
-"Tenho ajudado muitas pessoas a transformarem [área de atuação] com resultados concretos. Cada sessão é personalizada para o que você precisa."
-```
-
-**Fallback padrão de preview da sessão** (quando não configurado):
-```
-"Nossa sessão tem [duração configurável] — combinamos um horário que funcione para você, trabalhamos com foco total no seu objetivo e você sai com clareza e próximos passos concretos."
+EXEMPLO CONFIRMAR: message_text='Plano Starter por R$X. Quer seguir?'
+  signals_structured={offer_presented:true, checkout_sent:false, ...}
+EXEMPLO ENVIAR LINK: message_text='Aqui está seu link: https://...\nConclua e confirme.'
+  signals_structured={offer_presented:true, checkout_sent:true, ...}
 ```
 
-#### 1.4.2 Injeção COMMERCIAL (modo `commercial`)
+#### 1.4.1 Injeção WARMING — modo `exploratory` (hybrid_scheduler)
 
-Ativado quando: `template_key == "hybrid_scheduler"` + fase pós-qualificação + `appointment_mode == "commercial"`.
+**Quando ativa:** `template_key == "hybrid_scheduler"` + qualificação recém-aprovada + `appointment_mode == "exploratory"`
 
-**Texto injetado no prompt:**
+**Texto injetado:**
 ```
-- MODO COMERCIAL (hybrid_scheduler — compromisso antes do agendamento):
-  O lead concluiu a qualificação. Seu objetivo neste turno e nos seguintes é:
-  1. Aquecer com prova social (se disponível)
-  2. Apresentar os serviços/pacotes disponíveis com clareza
-  3. Tratar objeções conforme as respostas configuradas
-  4. Obter o compromisso verbal/escrito do lead com um serviço ou pacote específico
-  5. SÓ ENTÃO propor o agendamento
-  REGRA CRÍTICA: o pagamento é SEMPRE presencial na marcação — NUNCA envie link de checkout.
-  Não mencione modalidade 'exploratória' ou 'diagnóstico gratuito' — a sessão já tem valor definido.
-  PROVA SOCIAL: {social_proof ou fallback}
-  TABELA DE SERVIÇOS/PREÇOS: {service_pricing_table ou fallback}
-  OBJEÇÕES E RESPOSTAS: {commercial_objections ou fallback}
-  [DIFERENCIAIS DO SERVIÇO: {service_differentials}]   ← se preenchido
-  [CONDIÇÃO ESPECIAL VIGENTE: {active_promotion}]       ← se preenchida
-  [POLÍTICA DE PAGAMENTO PRESENCIAL: {payment_policy}] ← se preenchida
-  [FAQ PRÉ-COMPROMISSO: {pre_commitment_faq}]           ← se preenchido
-  Após o lead confirmar a escolha de serviço/pacote, proponha o agendamento normalmente.
+ESTÁGIO WARMING (pós-qualificação aprovada para hybrid_scheduler):
+O lead acabou de concluir a qualificação. Execute os 2 passos em UMA mensagem natural:
+1. PROVA SOCIAL: {warming_social_proof ou fallback}
+2. PRÉVIA DA SESSÃO: {warming_session_preview ou fallback}
+Combine de forma fluida e, ao final, proponha o agendamento.
+Não mencione 'prova social' ou 'prévia da sessão' explicitamente.
 ```
 
-**Fallbacks por campo quando não configurado:**
+Fallback de prova social (quando não configurado): `"Tenho ajudado muitas pessoas a transformarem [área] com resultados concretos. Posso te contar mais na nossa conversa."`
 
-| Campo | Fallback |
+Fallback de preview (quando não configurado): `"Na sessão de aproximadamente 1h, vamos mapear sua situação atual e sair com um plano de ação claro."`
+
+#### 1.4.1b Injeção WARMING — modo `scheduler` (serviço presencial)
+
+**Quando ativa:** `template_key == "hybrid_scheduler"` + qualificação recém-aprovada + `presentation_variant == "scheduler"` (e NÃO commercial)
+
+**Texto injetado:**
+```
+ESTÁGIO PÓS-QUALIFICAÇÃO (scheduler — serviço presencial):
+1. Confirmar (ou verificar) disponibilidade para o horário mencionado
+2. Informar o valor do serviço solicitado (se ainda não mencionado)
+3. Propor confirmação da reserva de forma acolhedora
+REGRA CRÍTICA: usa linguagem de spa/serviço — 'agendar sessão', 'reservar'.
+NUNCA 'mapear situação', 'plano de ação', 'diagnóstico'.
+```
+
+#### 1.4.2 Injeção COMMERCIAL — modo `commercial` (hybrid_scheduler)
+
+**Quando ativa:** `template_key == "hybrid_scheduler"` + qualificação recém-aprovada + `appointment_mode == "commercial"`
+
+Lê as categorias de `knowledge_items` específicas do modo comercial:
+
+| Campo knowledge | Fallback quando vazio |
 |---|---|
-| `social_proof` | "(não configurada — use tom acolhedor e destaque o diferencial do profissional)" |
-| `service_pricing_table` | "(não configurada — pergunte o interesse antes de citar valores)" |
-| `commercial_objections` | "(não configurada — use empatia e reformule o valor entregue)" |
+| `social_proof` ou `ai_profile.warming_social_proof` | "use tom acolhedor e destaque o diferencial" |
+| `service_pricing_table` | "pergunte o interesse antes de citar valores" |
+| `commercial_objections` | "use empatia e reformule o valor entregue" |
+| `service_differentials` | campo omitido do prompt |
+| `active_promotion` | campo omitido do prompt |
+| `payment_policy` | campo omitido do prompt |
+| `pre_commitment_faq` | campo omitido do prompt |
 
-Os campos `service_differentials`, `active_promotion`, `payment_policy` e `pre_commitment_faq` só aparecem no prompt se estiverem preenchidos.
+Regra crítica embutida: "pagamento é SEMPRE presencial — NUNCA envie link de checkout."
+
+#### 1.4.3 `standard_knowledge_block` — Knowledge Base (fora do commercial)
+
+Injetado quando NÃO há `commercial_injection` e `knowledge_items` não está vazio. Cada categoria tem instrução de uso diferente:
+
+| Categoria | Instrução de uso | Comportamento com mídia |
+|---|---|---|
+| `social_proof` | Integrar na fase de warming ou quando lead hesitar. Nunca dizer "temos uma prova social" | — |
+| `pitch_script` | Usar como guia estrutural, não copiar literalmente | Se tiver mídia: omite texto, só introdução curta |
+| `product_details` | Usar dados presentes; nunca inventar features | Se tiver mídia: omite texto, só introdução curta |
+| `objections_faq` | Usar apenas quando lead levantar objeção; adaptar tom | — |
+| `service_faq` | Usar apenas quando lead fizer pergunta coberta; handoff se não coberta | Se tiver mídia: omite texto, só introdução curta |
+| `guarantee_policy` | Citar apenas quando lead demonstrar hesitação sobre risco | — |
 
 ---
 
 ### 1.5 `_build_child_prompt_follow_up()` — Filha Follow-up
 
-**Papel da LLM no prompt:**
-> "Você é a FILHA FOLLOW-UP"
+> **Arquivo:** `decision_engine.py` — função `_build_child_prompt_follow_up()`
+> **Usado por:** todos os agentes quando `route_to == "follow-up"`
+> **Agentes:** qualquer `agent_mode`; comportamento varia muito por `followup_variant`
 
-Responsável por re-engajar leads pós-apresentação. O comportamento muda radicalmente por `followup_variant`.
+**Papel da LLM:**
+> "Você é a FILHA FOLLOW-UP de um CRM de vendas WhatsApp."
 
 **Output esperado:**
 ```json
@@ -341,61 +510,75 @@ Responsável por re-engajar leads pós-apresentação. O comportamento muda radi
 }
 ```
 
-**Variáveis dinâmicas adicionais:**
+**Variáveis adicionais:**
 
-| Variável | Descrição |
-|---|---|
-| `followup_summary` | goal, outcome, variant, attempts, max_attempts, meeting_happened, proposal_sent, operator_note, status |
-| `followup_variant` | `sdr_scheduler`, `cart_recovery` ou `hybrid_scheduler` |
-| `is_followup_tick` | `true` = disparo automático agendado; `false` = resposta a inbound |
-| `next_attempt` | número da tentativa atual (para `cart_recovery`) |
-| `attempt_instruction` | instrução específica para aquela tentativa |
-| `outcome` | `interested_not_closed`, `reschedule_needed`, `converted`, etc. |
+| Variável | Origem | Conteúdo |
+|---|---|---|
+| `followup_ctx` | `context["metadata"]["followup_context"]` (dict) | contrato de follow-up do lead |
+| `followup_summary` | derivado de `followup_ctx` | goal, outcome, variant, attempts, max_attempts, meeting_happened, meeting_or_session_happened, proposal_sent, operator_note, status, next_followup_at |
+| `followup_variant` | `followup_ctx.followup_variant` | `sdr_scheduler`, `cart_recovery` ou `hybrid_scheduler` |
+| `is_followup_tick` | `_is_followup_tick_context(context)` | `True` = disparo automático (`job_type=whatsapp.followup.tick`); `False` = resposta a inbound |
+| `qualification_context_block` | read-only quando `is_followup_tick=True` | só memória auxiliar — proibido coletar campos |
 
-**Regras de copy por variante:**
+**`variant_rule` — instrução por variante (injetada no corpo do prompt):**
 
-#### `sdr_scheduler`
+**`sdr_scheduler`:**
 ```
-Variante sdr_scheduler: follow-up consultivo pós-reunião; reforçar valor, síntese do contexto
-e próximo passo comercial.
-```
-
-#### `cart_recovery` (Agente 02 — low ticket)
-```
-Variante cart_recovery: recuperar pagamento pendente após link enviado. Mensagens curtas (máx 280 chars).
-Tentativa 1: lembrete neutro (sem pressão)
-Tentativa 2: benefício + objeção (tom amigável)
-Tentativa 3: urgência máxima (CTA direto, não reabra qualificação)
+Variante sdr_scheduler: follow-up consultivo pós-reunião;
+reforçar valor, síntese do contexto e próximo passo comercial.
 ```
 
-#### `hybrid_scheduler` (Agente 03 — coaches/terapeutas)
+**`cart_recovery`** (Agent 2 — low ticket):
+```
+Variante cart_recovery: recuperar pagamento pendente. Mensagens curtas (máx 280 chars).
+Instrução para tentativa N/3: [baseada em attempts_done+1]
+```
+- Tentativa 1: lembrete neutro
+- Tentativa 2: benefício + objeção
+- Tentativa 3: urgência máxima + CTA direto
+
+**`hybrid_scheduler`** (Agent 3 — coaches/terapeutas/consultores):
 ```
 Variante hybrid_scheduler: tom pessoal e próximo, como assistente do próprio profissional
 — nunca SDR agressivo.
+Regra por outcome (XXXX): [instrução específica]
 ```
 
 Por `outcome`:
-| Outcome | Instrução |
+| Outcome | Instrução injetada |
 |---|---|
-| `interested_not_closed` | Retome contexto, remova objeção, ofereça nova data |
-| `reschedule_needed` | Tom leve, ofereça 2-3 horários, encerre com pergunta fechada |
-| `converted` | Tom de onboarding, parabenize, confirme próximo passo, envie link/instrução |
-| outros | Priorizar recuperação de no-show |
+| `interested_not_closed` | Retome contexto, remova objeção específica, ofereça nova data |
+| `reschedule_needed` | Tom leve, 2-3 horários diretos, encerre com pergunta fechada |
+| `converted` | Tom de onboarding; parabenize, confirme próximo passo, link/acesso |
+| outros | Recuperação de no-show, confirmação de presença, reengajamento |
 
-**Comportamento especial em `is_followup_tick=true`:**
-- `followup_contract_signals` é a fonte principal — não o histórico de qualificação
-- Histórico é **memória contextual** — não é backlog de perguntas pendentes
-- `missing_fields` de qualificação são **read-only** — proibido usá-los como alvo de coleta
-- Só faz nova pergunta se diretamente ligada ao objetivo do follow-up (remarcação, confirmação de presença)
+**`followup_priority_rule` — regra condicional ao `is_followup_tick`:**
+
+Quando `is_followup_tick=True`:
+```
+CONTEXTO PRIORITÁRIO (follow-up tick): use followup_contract_signals como fonte principal.
+Histórico é memória contextual — não é backlog de perguntas pendentes.
+missing_fields de qualification são SOMENTE memória auxiliar (read-only).
+É proibido usar missing_fields como alvo de coleta/pergunta.
+```
+
+Quando `is_followup_tick=False`:
+```
+Faça no máximo 1 pergunta por mensagem e priorize o próximo missing_field.
+```
+
+**Knowledge Base (follow-up):** injetado via `followup_knowledge_block` com categorias: `social_proof`, `objections_faq`, `service_faq` (com mesmas instruções de uso da apresentação).
 
 ---
 
 ### 1.6 `_build_child_prompt_closing()` — Filha Closing
 
-**Papel da LLM no prompt:**
-> "Você é a FILHA CLOSING"
+> **Arquivo:** `decision_engine.py` — função `_build_child_prompt_closing()`
+> **Usado por:** todos os agentes quando `route_to == "closing"`
+> **Agentes:** comportamento central controlado por `agent_mode_normalized`
 
-Conduz o fechamento. O comportamento por `agent_mode` é central.
+**Papel da LLM:**
+> "Você é a FILHA CLOSING de um CRM de vendas WhatsApp."
 
 **Output esperado:**
 ```json
@@ -411,94 +594,116 @@ Conduz o fechamento. O comportamento por `agent_mode` é central.
 }
 ```
 
-**Regras de copy por `agent_mode`:**
+**Nota:** `outcome` e `kanban_highlight` só têm efeito visual no Kanban se `lead.category == "closing"` (guardrail `apply_outcome_guardrails` em código Python).
+
+**Regras por `agent_mode_normalized`:**
 
 | Modo | Comportamento |
 |---|---|
 | `consultivo` | Não fecha sozinho; responde curto e encaminha para humano |
-| `agenda` | Fechamento operacional — confirma horário, políticas, pagamento |
+| `agenda` | Fechamento operacional — confirma horário, políticas, pagamento quando aplicável |
 | `direto` | Conduz fechamento e confirmação de pagamento com objetividade |
 
-**Variáveis dinâmicas:** mesmas das outras filhas + `required_fields` e `missing_fields` explicitados no prompt.
+**Diferença em relação às outras Filhas:**
+- Sem chamada a `_inject_generated_parts()` — o `closing` não tem `few_shot_closing` no meta-prompter (e `tone_rules` já vêm via `_build_tone_block`, evitando duplicação).
 
 ---
 
 ### 1.7 `_build_child_prompt()` — Filha genérica (fallback)
 
-**Papel da LLM no prompt:**
-> "Você é uma LLM FILHA"
+> **Arquivo:** `decision_engine.py` — função `_build_child_prompt()`
+> **Usado por:** quando nenhuma Filha especializada é selecionada (rota não reconhecida)
 
-Fallback usado quando nenhuma fase especializada é selecionada. Sem persona, sem instruções de modo.
+**Papel da LLM:**
+> "Você é uma LLM FILHA de um CRM de vendas WhatsApp."
 
-**Output esperado:** mesmo schema das outras filhas.
+Sem persona, sem instruções de modo específicas. Output: mesmo schema ChildResult.
 
 ---
 
-### 1.8 Contrato de Qualificação — `qualification_fields`
+### 1.8 Injeção do Meta-prompter — `_inject_generated_parts()`
 
-O AI Profile é a **única fonte de verdade** de qualificação. O campo `qualification_fields` unifica o que o agente pergunta, como infere passivamente, e o que bloqueia avanço de estágio no Kanban.
+> **Arquivo:** `decision_engine.py` — função `_inject_generated_parts()`
+> **Ativação:** quando `context["generated_prompt_parts"]` não está vazio (Tarefa 4 — aditivo)
 
-**Schema do campo:**
+Esta função é chamada **após** a construção do prompt de cada Filha. Injeta blocos gerados pelo meta-prompter do nicho, sem sobrescrever nada — apenas adiciona ao final.
 
-```typescript
-interface QualificationField {
-  key: string;                  // Campo do sistema: "availability_window", "service_interest", etc.
-                                // Campo personalizado: "custom_" + slug(label) — ex: "custom_nome_do_pet"
-  label: string;                // "Disponibilidade" | "Nome do pet"
-  question?: string;            // Pergunta para modo ativo: "Qual horário funciona?"
-  passive_hint?: string;        // Como capturar passivamente: "Se lead mencionar horário"
-  closing_question?: string;    // Pergunta estratégica de fechamento (alternativas binárias/confirmações)
-  allow_closing_question: boolean;
-  mode: 'required' | 'optional' | 'off';
-  group?: 'f1' | 'f2' | 'f3'; // Apenas para SDR (agent_mode="sdr_scheduler")
+**Estrutura de `generated_prompt_parts`:**
+
+| Chave | Fases que usa | Descrição |
+|---|---|---|
+| `few_shot_qualification` | `qualification` | Exemplos lead+resposta esperada para o nicho |
+| `few_shot_apresentation` | `apresentation` | Exemplos de pitch/agendamento do nicho |
+| `few_shot_followup` | `followup` | Exemplos de reengajamento do nicho |
+| `tone_rules` | todas (qualif, apres, followup) | Regras de tom específicas do nicho (lista de strings) |
+| `qualification_phrasing` | `qualification` | Formas naturais de perguntar um campo naquele nicho |
+| `objection_rewrites` | `apresentation`, `followup` | Objeções no formato LAER (causa, reconhecer, explorar, responder, próximo passo) |
+| `outreach_scenarios` | `llm.py` (outreach) | Cenários dinâmicos para cold outreach (substitui cenários fixos no_site/weak_site) |
+
+**Formato de injeção dos few-shot:**
+```
+EXEMPLOS DE REFERÊNCIA PARA ESTE NICHO (adapte ao contexto atual, não copie):
+Cenário: [scenario]
+Lead: "[inbound]"
+Resposta esperada: {expected_output JSON}
+```
+
+**Formato de injeção das objeções (LAER):**
+```
+OBJEÇÕES REFORMULADAS (formato LAER — usar quando o lead levantar objeção):
+Objeção: "é caro"
+  Causa real: lead compara com concorrente
+  Reconhecer: "Entendo, é um investimento..."
+  Explorar: "O que seria ideal para você?"
+  Responder: "Incluímos X e Y que evitam..."
+  Próximo passo: "Se fizer sentido, proponho..."
+```
+
+---
+
+### 1.9 `_build_training_examples_block()` — Exemplos do Playground
+
+> **Arquivo:** `decision_engine.py` — função `_build_training_examples_block()`
+> **Ativação:** quando `context["training_examples"]` não está vazio
+
+Injetado ao final dos prompts de qualificação, apresentação e follow-up. Fonte: classificações reais do operador feitas no Playground (aprovar/rejeitar respostas do bot).
+
+**Estrutura de `training_examples`:**
+```json
+{
+  "qualification": {
+    "good": [{"lead_message": "...", "bot_message": "..."}],
+    "bad": [{"lead_message": "...", "bot_message": "...", "comment": "..."}]
+  },
+  "apresentation": { ... },
+  "followup": { ... }
 }
 ```
 
-**Campos do sistema predefinidos** (extraction engine extrai automaticamente):
-
-| key | label sugerida |
-|---|---|
-| `service_interest` | Serviço de interesse |
-| `availability_window` | Disponibilidade |
-| `price_acceptance` | Aceitação de preço |
-| `location_preference` | Preferência de local |
-| `urgency` | Urgência |
-| `decision_role` | Decisor |
-| `budget_or_price_acceptance` | Orçamento |
-| `constraints` | Restrições |
-
-**Campos personalizados (`custom_*`):** o `field_extractor.py` usa a `question` para extrair via LLM e armazena o resultado em `data_json` de `lead_qualification_state` sob a `key` configurada.
-
-**Como os campos são injetados no prompt:**
-
+**Formato injetado:**
 ```
-# Modo active → must_collect_with_questions + nice_to_collect
-Informações OBRIGATÓRIAS:
-  - Disponibilidade: pergunta "Qual horário funciona para você?" | inferir: "se lead mencionar horário"
-  - [custom] Nome do pet: pergunta "Qual o nome do seu pet?"
+EXEMPLOS DE TREINO DO OPERADOR (baseados em classificações reais):
 
-Informações DESEJÁVEIS (capturar se surgir):
-  - Serviço de interesse: pergunta "O que você busca?" | inferir: "pelo contexto"
+✅ RESPOSTA APROVADA:
+Lead: "quanto custa?"
+Bot: "O plano Starter começa em R$X. Quer que eu te explique o que inclui?"
 
-# Modo passive → passive_hints + closing_questions
-Capturar passivamente (sem perguntar):
-  - Disponibilidade: "Capturar se lead mencionar horário, data ou 'semana que vem'"
-
-Perguntas estratégicas de fechamento permitidas:
-  - Disponibilidade: "Você teria disponibilidade na quinta às 14h ou na sexta às 10h?"
+❌ RESPOSTA REJEITADA:
+Lead: "quanto custa?"
+Bot: "Posso te enviar uma proposta detalhada. Qual é a tua empresa?"
+Motivo do operador: "respondeu com pergunta em vez de responder o preço"
 ```
-
-**Derivação automática:** `qualification_required_fields` é derivado como `qualification_fields.filter(mode="required").map(key)` ao salvar o AI Profile. Guardrails do Kanban e executores leem `qualification_required_fields`. `qualification_fields=null` ou `qualification_required_fields=null` → nenhum campo obrigatório, sem fallback.
 
 ---
 
 ## 2. Extrator de Campos — `field_extractor.py`
 
-**Papel da LLM no prompt:** instrução técnica direta, sem persona.
+> **Arquivo:** `backend-executors/app/services/field_extractor.py`
+> **Função principal:** `extract_fields_llm(context, fields_schema)`
+> **Usado por:** todos os agentes após cada inbound, para atualizar `qualification_state`
 
+**Papel da LLM:**
 > "Você é um extractor de campos de qualificação."
-
-**Função:** `extract_fields_llm(context, fields_schema)`
 
 **Prompt:**
 ```
@@ -517,166 +722,157 @@ Regras:
 - history: {últimas 6 mensagens}
 ```
 
-**Variáveis dinâmicas injetadas:**
+**Variáveis injetadas:**
 
-| Variável | Descrição |
-|---|---|
-| `fields_schema` | Schema JSON com campos e tipos — inclui campos do sistema e campos `custom_*` de `qualification_fields` do AI Profile. Para `custom_*`, o `passive_hint` configurado é incluído como instrução de extração. |
-| `inbound` | Mensagem atual do lead |
-| `history` (últimas 6) | Histórico recente formatado como `[bot/lead]: texto` |
+| Variável | Origem | Conteúdo |
+|---|---|---|
+| `fields_schema` | `ai_profile.qualification_fields` (todos os campos) | Schema JSON com campos do sistema + campos `custom_*`. Para `custom_*`, o `passive_hint` configurado é incluído como instrução de extração. |
+| `inbound_message_text` | `context["metadata"]["inbound_message_text"]` | Mensagem atual do lead |
+| `history` | `context["history"][-6:]` | Últimas 6 mensagens formatadas como `[bot/lead]: texto` |
+
+**Por que não tem exemplos:** o extrator opera sobre dados factuais do texto — exemplo prévio não ajuda e pode enviesar a extração.
 
 ---
 
 ## 3. Geração de Outreach — `llm.py`
 
-Este arquivo tem dois papéis LLM distintos, definidos como **system prompts fixos**, não dinâmicos.
+> **Arquivo:** `backend-crm/automations/assistente_ia/llm.py`
+> **Classe:** `LLMClient`
+> **Modelo:** OpenAI (default `gpt-3.5-turbo`, configurável)
+> **Usado por:** Agent Local de prospecção (não é usado no fluxo WhatsApp inbound)
 
-### System prompts
+### System prompts fixos
 
-| Função | System Prompt | Uso |
+| Método | System Prompt | Uso |
 |---|---|---|
-| `_chat_text()` | `"Você é um assistente de prospecção objetivo e cordial."` | Geração de texto livre (scripts de ligação) |
-| `_chat_json()` | `"Você escreve e-mails comerciais objetivos e cordiais."` | Geração de JSON estruturado (e-mail, WhatsApp, Instagram) |
+| `_chat_text()` | `"Você é um assistente de prospecção objetivo e cordial."` | Texto livre (scripts de ligação, WhatsApp, Instagram) |
+| `_chat_json()` | `"Você escreve e-mails comerciais objetivos e cordiais."` | JSON estruturado (e-mail) |
 
-### `generate_for_lead()` — Prompts por canal
+### `generate_for_lead()` — prompts por canal
 
-**Função:** `generate_for_lead(lead, channels, tone, language, context, sender)`
+**Parâmetros:**
+```python
+generate_for_lead(lead, channels, tone, language, context, sender, ai_profile)
+```
 
 **Bloco de contexto comum** (injetado em todos os canais):
 ```
 Empresa do prospect: {lead.companyName}
-Cenário: {scenario}
-Contexto: {ctx_summary}
-Remetente: Nome={sender.name}; Empresa={sender.company}; Email={sender.email}; Telefone={sender.phone}
-NUNCA use placeholders como [Seu Nome] ou [Sua Empresa]; use os dados do Remetente fornecidos.
-Se contactName estiver vazio, cumprimente pela empresa (ex.: 'Olá, A Casa do Porco Bar').
+{scenario_context}  ← cenários dinâmicos OU legado (veja abaixo)
+Remetente: Nome=X; Empresa=Y; Email=Z; Telefone=W
+NUNCA use placeholders como [Seu Nome]; use os dados do Remetente fornecidos.
+Se contactName estiver vazio, cumprimente pela empresa.
 ```
 
-**Variáveis dinâmicas globais:**
+**Variáveis globais:**
 
 | Variável | Origem | Conteúdo |
 |---|---|---|
 | `lead.companyName` | banco CRM | nome da empresa prospectada |
 | `lead.contactName` | banco CRM | nome do contato (pode ser vazio) |
-| `scenario` | computado | `no_site`, `weak_site` ou `decent_site` |
-| `ctx_summary` | computado | flags formatadas: `mobile_ready`, `ssl_ok`, `issues_count`, `services_keywords`, `instagram_handle`, `trust_score_adj`, `next_action` |
-| `tone` | parâmetro | tom de voz escolhido pelo usuário |
-| `language` | parâmetro | idioma do output (`pt-PT`, `pt-BR`, `en`, etc.) |
-| `sender.name/company/email/phone/signature` | perfil do usuário | dados do remetente |
+| `scenario_context` | `_format_outreach_scenarios()` ou `_format_legacy_scenario()` | veja abaixo |
+| `tone` | parâmetro da chamada | tom de voz escolhido pelo usuário |
+| `language` | parâmetro da chamada | idioma do output (`pt-PT`, `pt-BR`, `en`, etc.) |
+| `sender.*` | perfil do usuário logado | name, company, email, phone, signature |
 
-**Variáveis template pós-processadas** (não resolvidas pela LLM — substituídas depois):
-- `{{prospect.company}}` — substituído pelo nome da empresa
-- `{{sender.signature}}` — substituído pela assinatura do remetente
+**Cenários dinâmicos vs. legado:**
 
----
+| Modo | Condição | Variável injetada |
+|---|---|---|
+| **Dinâmico** (Tarefa 4.3) | `ai_profile.generated_prompt_parts.outreach_scenarios` não vazio | Lista de cenários com `scenario_key`, `description`, `whatsapp_angle`, `cta` — instruindo LLM a escolher o ângulo mais relevante |
+| **Legado** | cenários dinâmicos ausentes | `scenario = no_site|weak_site|decent_site` derivado de `context` (ssl, mobile, issues) |
 
-#### Canal: E-mail
+**Variáveis template pós-processadas** (não pela LLM — substituídas depois no processador):
+- `{{prospect.company}}` → nome da empresa
+- `{{sender.signature}}` → assinatura do remetente
 
-**Prompt:**
-```
-[contexto comum]
-Escreva um e-mail em {language} com tom {tone}.
-Regras: assunto <= 60 caracteres; corpo com 120–180 palavras; sem links;
-parágrafos separados por uma linha em branco;
-CTA final: 'Posso enviar 2 ideias e valores?'.
-Se cenário='no_site': proponha site próprio com CTA/WhatsApp.
-Se cenário='weak_site': 2–3 melhorias rápidas (mobile/HTTPS/SEO) + convite para call de 15 min.
-Se cenário='decent_site': foque em automações de captação (form->WhatsApp, agendador, chat) e teste-piloto.
-Retorne como JSON: {"subject":"...","body":"..."}
-Use as variáveis literais {{prospect.company}} e {{sender.signature}} nos locais apropriados.
-```
+**Prompts por canal:**
 
-**Comportamento de copy por cenário:**
+| Canal | Regras principais | Output |
+|---|---|---|
+| `email` | assunto ≤ 60 chars; corpo 120-180 palavras; sem links; CTA "posso enviar 2 ideias?"; comportamento por cenário legado se dinâmico ausente | JSON `{subject, body}` |
+| `whatsapp` | 4-6 linhas; sem links; CTA de permissão para enviar ideias; assinar como `{{sender.name}}, {{sender.company}}` | texto |
+| `instagram` | 2-4 linhas; amigável; sem spam; CTA de ideias | texto |
+| `call` | bullets: abertura 10-15s; 2-3 perguntas; pitch 20s; CTA próximo passo | texto |
+
+**Comportamento por cenário legado (quando `outreach_scenarios` ausente):**
 
 | Cenário | Instrução ao LLM |
 |---|---|
 | `no_site` | Propor criação de site com CTA + WhatsApp |
-| `weak_site` | 2–3 melhorias rápidas (mobile, HTTPS, SEO) + convite call 15 min |
-| `decent_site` | Focar em automações (form→WhatsApp, agendador, chat) + teste-piloto |
-
----
-
-#### Canal: WhatsApp
-
-**Prompt:**
-```
-[contexto comum]
-Escreva uma mensagem de WhatsApp em {language} com tom {tone}.
-Comprimento: 4–6 linhas; sem links;
-CTA final pedindo permissão para enviar 2 ideias e valores.
-Use {{prospect.company}} onde a empresa deva aparecer e assine como '{{sender.name}}, {{sender.company}}'.
-```
-
----
-
-#### Canal: Instagram DM
-
-**Prompt:**
-```
-[contexto comum]
-Escreva uma DM curta em {language} com tom {tone}.
-Comprimento: 2–4 linhas; amigável; sem parecer spam;
-CTA: posso enviar 2 ideias curtas?
-Use {{prospect.company}} e '@handle' se existir.
-```
-
----
-
-#### Canal: Roteiro de Ligação
-
-**Prompt:**
-```
-[contexto comum]
-Monte um roteiro de ligação em {language} com bullets:
-abertura (10–15s), 2–3 perguntas, pitch 20s (site/automação) e CTA de próximo passo.
-```
+| `weak_site` | 2-3 melhorias rápidas (mobile, HTTPS, SEO) + convite call 15 min |
+| `decent_site` | Focar em automações de captação (form→WhatsApp, agendador, chat) + teste-piloto |
 
 ---
 
 ## 4. Variáveis de identidade e copy do `ai_profile`
 
-Estas variáveis são injetadas nos prompts do `decision_engine` e controlam o tom e a persona da LLM ao responder o lead:
+Estas variáveis são injetadas nos prompts do `decision_engine` e controlam o tom e persona:
 
-| Campo | Chave | Descrição |
+| Campo | Chave `ai_profile` | Onde é usado |
 |---|---|---|
-| Nome do agente/marca | `brand_name` | Usado em apresentações e assinatura |
-| Tom de voz | `tone_of_voice` | Ex.: "formal e empático", "descontraído e direto" |
-| Nicho | `niche` | Segmento de mercado — contextualiza respostas |
-| Público-alvo | `target_audience` | Quem é o lead ideal — afeta linguagem |
-| Oferta | `offer_description` | Resumo do que está sendo vendido |
-| Objetivos | `goals` | O que o agente deve alcançar (ex.: "agendar consulta") |
-| Instruções customizadas | `custom_instructions` | Campo livre — regras específicas do usuário |
-| Modo de identidade | `identity_mode` | Define como o agente se apresenta (ex.: como assistente do profissional) |
-| Política de handoff | `handoff_policy` | Quando e como transferir para humano |
-| Texto de handoff | `handoff_custom_text` | Mensagem usada na transferência |
-| Prova social (warming) | `warming_social_proof` | Texto de prova social para fase de aquecimento |
-| Preview da sessão | `warming_session_preview` | Descrição do que acontece na marcação |
-| Modo de compromisso | `appointment_mode` | `exploratory` ou `commercial` (Agente 03) |
-| Estilo de resposta | `response_style` | `"active"` (pergunta proativamente) ou `"passive"` (persuade sem perguntar). Default `"passive"` quando `null`. |
-| Campos de qualificação | `qualification_fields` | `QualificationField[]` — source of truth para guardrails, prompts e extraction engine (ver seção 1.8) |
-| Campos obrigatórios | `qualification_required_fields` | Derivado de `qualification_fields[mode=required].map(key)`. Lido pelos guardrails do Kanban e executores. `null` = nenhum campo obrigatório. |
+| Nome do agente/marca | `brand_name` | `_build_tone_block()` (persona hybrid_scheduler), todos os ai_summary |
+| Tom de voz | `tone_of_voice` | Todos os prompts de Filha |
+| Nicho | `niche` | ai_summary em todos os prompts |
+| Público-alvo | `target_audience` | ai_summary em prompts de Mãe e fallback |
+| Oferta | `offer_description` | Disponível como fallback do offer_pack; qualificação (responder perguntas do lead) |
+| Objetivos | `goals` | ai_summary no fallback geral |
+| Instruções customizadas | `custom_instructions` | `_build_custom_instructions_block()` — prioridade máxima |
+| Modo de identidade | `identity_mode` | ai_summary no fallback geral |
+| Política de handoff | `handoff_policy` | ai_summary no fallback geral |
+| Texto de handoff | `handoff_custom_text` | ai_summary no fallback geral |
+| Prova social warming | `warming_social_proof` | `_build_child_prompt_apresentation()` modo exploratory |
+| Preview da sessão | `warming_session_preview` | `_build_child_prompt_apresentation()` modo exploratory |
+| Modo de compromisso | `appointment_mode` | Apresentação: `exploratory` (default) ou `commercial` (hybrid_scheduler) |
+| Estilo de resposta | `response_style` | `"active"` (pergunta) ou `"passive"` (infere). Default `"passive"` quando null |
+| Opener inbound | `origin_inbound_opener` | Abertura de primeiro contato para leads inbound |
+| Opener outbound | `origin_outbound_opener` | Abertura de primeiro contato para leads outbound |
+| Campos de qualificação | `qualification_fields` | `QualificationField[]` — source of truth para prompts, extração e guardrails |
+| Campos obrigatórios | `qualification_required_fields` | Derivado de `qualification_fields[mode=required].map(key)` ao salvar no core |
+| Timezone | `timezone` | Usado na Filha Apresentação para formato ISO de `meeting_datetime_candidate` |
+| Template key | `template_key` | Seleciona comportamentos condicionais (hybrid_scheduler, sdr_padrao, closer_agressivo) |
+| Offer pack | `offer_pack` | JSON com itens, preços, bullets, provas, checkout_link, media_url, anchor_price, guarantee_text |
 
 ---
 
 ## 5. Mapa de injeções condicionais
 
-Alguns blocos só são injetados no prompt se certas condições forem atendidas:
+Blocos que só aparecem no prompt quando certas condições são atendidas:
 
-| Bloco | Condição de ativação |
-|---|---|
-| `must_collect_with_questions` | `response_style == "active"` + `qualification_fields` com `mode=required` |
-| `nice_to_collect` | `qualification_fields` com `mode=optional` (ambos os estilos) |
-| `passive_hints` | `response_style == "passive"` + `passive_hint` preenchido em pelo menos um campo |
-| `closing_questions` | `response_style == "passive"` + campo com `allow_closing_question=true` e `closing_question` preenchida |
-| `WARMING INJECTION` | `template_key == "hybrid_scheduler"` + pós-qualificação + `appointment_mode == "exploratory"` |
-| `COMMERCIAL INJECTION` | `template_key == "hybrid_scheduler"` + pós-qualificação + `appointment_mode == "commercial"` |
-| `VARIANT_RULE cart_recovery` | `followup_variant == "cart_recovery"` |
-| `VARIANT_RULE hybrid_scheduler` | `followup_variant == "hybrid_scheduler"` |
-| `FOLLOWUP_PRIORITY_RULE` (modo tick) | `is_followup_tick == true` |
-| `offer_pack_summary` com mídia | `offer_pack_summary.media_url` preenchido |
-| `anchor_price` no pitch | `offer_pack_summary.anchor_price` preenchido |
-| `guarantee_text` no pitch | `offer_pack_summary.guarantee_text` preenchido |
-| Campos comerciais knowledge | `appointment_mode == "commercial"` + campo preenchido em `knowledge_items` |
+| Bloco | Condição de ativação | Prompts afetados |
+|---|---|---|
+| `_first_contact_opener_header` | `is_first_contact=True` + `origin_opener` preenchido + sem saudação | qualification, apresentation |
+| `_greeting_header` | `next_action_hint == "greet"` | qualification |
+| `_passive_header` (reply now) | `response_style=passive` + `next_action_hint=reply` | qualification |
+| `_passive_header` (default) | `response_style=passive` (sem hint especial) | qualification |
+| `_passive_apres_header` | `response_style=passive` + qualif concluída neste turno + pergunta no inbound | apresentation |
+| `must_collect_with_questions` | `response_style=active` + `qualification_fields` com `mode=required` | qualification |
+| `passive_hints` | `response_style=passive` + `passive_hint` preenchido em algum campo | qualification |
+| `closing_questions` | `response_style=passive` + `allow_closing_question=True` + `closing_question` preenchida | qualification |
+| `WARMING exploratory` | `template_key=hybrid_scheduler` + qualif recém-aprovada + `appointment_mode=exploratory` | apresentation |
+| `WARMING scheduler` | `template_key=hybrid_scheduler` + qualif recém-aprovada + `presentation_variant=scheduler` | apresentation |
+| `COMMERCIAL INJECTION` | `template_key=hybrid_scheduler` + qualif recém-aprovada + `appointment_mode=commercial` | apresentation |
+| `_booking_confirmation_block` | `meeting_scheduled=True` + `presentation_variant=scheduler` | apresentation |
+| `standard_knowledge_block` | `not commercial_injection` + `knowledge_items` não vazio | apresentation |
+| `followup_knowledge_block` | `knowledge_items` com social_proof/objections_faq/service_faq | followup |
+| `VARIANT_RULE cart_recovery` | `followup_variant=cart_recovery` | followup |
+| `VARIANT_RULE hybrid_scheduler` | `followup_variant=hybrid_scheduler` | followup |
+| `FOLLOWUP_PRIORITY_RULE` (tick) | `is_followup_tick=True` | followup |
+| `qualification_context_block` (read-only) | `is_followup_tick=True` | followup |
+| `offer_pack media_url` | `offer_pack_summary.media_url` preenchido | apresentation |
+| `anchor_price` no pitch | `offer_pack_summary.anchor_price` preenchido | apresentation |
+| `guarantee_text` no pitch | `offer_pack_summary.guarantee_text` preenchido | apresentation |
+| `_media_intro_note` | `context["knowledge_media"]` não vazio | qualification, apresentation |
+| `media_suppressed (category)` | chave da categoria presente em `knowledge_media` | apresentation, followup |
+| `MODO PASSIVO` no mother | `ai_profile.response_style == "passive"` | mother |
+| `custom_instructions_block` | `ai_profile.custom_instructions` preenchido | qualification, apresentation |
+| `training_examples_block` | `context["training_examples"]` não vazio | qualification, apresentation, followup |
+| `generated_prompt_parts` | `context["generated_prompt_parts"]` não vazio | qualification, apresentation, followup |
+| `tone_rules` (meta) | `generated_prompt_parts.tone_rules` preenchido | qualification, apresentation, followup |
+| `few_shot_{phase}` (meta) | `generated_prompt_parts.few_shot_{phase}` preenchido | qualification, apresentation, followup |
+| `qualification_phrasing` (meta) | `generated_prompt_parts.qualification_phrasing[current_field]` | qualification |
+| `objection_rewrites` (meta) | `generated_prompt_parts.objection_rewrites` preenchido | apresentation, followup |
+| `outreach_scenarios` (meta) | `ai_profile.generated_prompt_parts.outreach_scenarios` | llm.py outreach |
 
 ---
 
@@ -684,13 +880,14 @@ Alguns blocos só são injetados no prompt se certas condições forem atendidas
 
 | Arquivo | Relevância |
 |---|---|
-| [backend-executors/app/services/decision_engine.py](../backend-executors/app/services/decision_engine.py) | Todos os prompts do funil de vendas WhatsApp (Mãe + 5 Filhas); lê `response_style` e `qualification_fields` |
-| [backend-executors/app/services/field_extractor.py](../backend-executors/app/services/field_extractor.py) | Extração estruturada de campos — inclui campos `custom_*` do AI Profile |
-| [backend-executors/app/contracts/qualification_contract.py](../backend-executors/app/contracts/qualification_contract.py) | Contrato de qualificação do executor |
-| [backend-crm/automations/assistente_ia/llm.py](../backend-crm/automations/assistente_ia/llm.py) | Geração de outreach multicanal (e-mail, WhatsApp, Instagram, ligação) |
-| [backend-crm/routes/executor.py](../backend-crm/routes/executor.py) | Monta o `ContextBundle` + injeta `knowledge_items` antes de enviar ao `decision_engine` |
-| [backend-crm/services/ai_orchestrator/orchestrator.py](../backend-crm/services/ai_orchestrator/orchestrator.py) | Orquestra o fluxo inbound; constrói `must_collect_with_questions`, `nice_to_collect`, `passive_hints` |
-| [backend-crm/services/qualification_guardrails.py](../backend-crm/services/qualification_guardrails.py) | Guardrail do Kanban — chamado apenas em rotas manuais de `routes/leads.py` |
-| [backend-core/app/models/ai_profile.py](../backend-core/app/models/ai_profile.py) | Modelo SQLAlchemy — inclui `qualification_fields` (JSON nullable) |
-| [backend-core/app/api/ai_profiles.py](../backend-core/app/api/ai_profiles.py) | API de AI Profile; deriva `qualification_required_fields` de `qualification_fields` ao salvar |
-| [frontend-crm/src/types/agente.ts](../frontend-crm/src/types/agente.ts) | Tipos TypeScript — interface `QualificationField` e campo `qualification_fields` em `AgentConfig` |
+| [backend-executors/app/services/decision_engine.py](../backend-executors/app/services/decision_engine.py) | Todos os prompts do funil WhatsApp (Mãe + Filhas + helpers de bloco) |
+| [backend-executors/app/services/field_extractor.py](../backend-executors/app/services/field_extractor.py) | Extração estruturada de campos — inclui custom_* |
+| [backend-executors/app/contracts/qualification_contract.py](../backend-executors/app/contracts/qualification_contract.py) | Contrato de qualificação: campos por modo, SIGNALS_SCHEMA, compute_missing_fields |
+| [backend-executors/app/services/orchestrator_models.py](../backend-executors/app/services/orchestrator_models.py) | Modelos Pydantic: MotherDecision, ChildResult |
+| [backend-crm/automations/assistente_ia/llm.py](../backend-crm/automations/assistente_ia/llm.py) | Geração de outreach multicanal (prospecção local) |
+| [backend-crm/routes/executor.py](../backend-crm/routes/executor.py) | Monta o ContextBundle + injeta knowledge_items + training_examples antes de enviar ao decision_engine |
+| [backend-crm/services/ai_orchestrator/orchestrator.py](../backend-crm/services/ai_orchestrator/orchestrator.py) | Orquestra fluxo inbound; constrói qualification context antes do executor |
+| [backend-crm/services/qualification_guardrails.py](../backend-crm/services/qualification_guardrails.py) | Guardrail do Kanban — lê qualification_required_fields; chamado nas rotas manuais de leads |
+| [backend-core/app/models/ai_profile.py](../backend-core/app/models/ai_profile.py) | Modelo SQLAlchemy — inclui qualification_fields (JSON nullable), response_style, appointment_mode, origin_openers |
+| [backend-core/app/api/ai_profiles.py](../backend-core/app/api/ai_profiles.py) | API de AI Profile; deriva qualification_required_fields de qualification_fields ao salvar |
+| [frontend-crm/src/types/agente.ts](../frontend-crm/src/types/agente.ts) | Tipos TypeScript — interface QualificationField, AgentConfig |
