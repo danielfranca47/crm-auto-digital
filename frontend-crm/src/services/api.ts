@@ -1249,6 +1249,17 @@ export const api = {
     feedbackAssist: async (payload: FeedbackAssistRequest) =>
       apiClient.post<FeedbackAssistResponse>("/playground/feedback-assist", payload),
 
+    exportTraining: async (): Promise<{ items: import('../types/agente').TrainingItem[] }> =>
+      apiClient.get<{ items: import('../types/agente').TrainingItem[] }>("/playground/training/export"),
+
+    importTraining: async (
+      items: import('../types/agente').TrainingItem[]
+    ): Promise<{ imported: number; deleted: number }> =>
+      apiClient.post<{ imported: number; deleted: number }>(
+        "/playground/training/import",
+        { items }
+      ),
+
     training: async (payload: {
       ai_profile_id: number;
       lead_id?: number | null;

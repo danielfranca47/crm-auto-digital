@@ -8,6 +8,7 @@ import { CamadaConhecimento } from '@/components/agente/CamadaConhecimento';
 import { CamadaApresentacao } from '@/components/agente/CamadaApresentacao';
 import { CamadaOferta } from '@/components/agente/CamadaOferta';
 import { ConexaoNumero } from '@/components/agente/ConexaoNumero';
+import { AgentExportImportPanel } from '@/components/agente/AgentExportImportPanel';
 import { api } from '@/services/api';
 import { DEFAULT_AGENT_CONFIG, KNOWLEDGE_CATEGORIES_BY_TEMPLATE } from '@/types/agente';
 import type { AgentConfig } from '@/types/agente';
@@ -366,6 +367,16 @@ export default function AiProfile() {
   const [saving, setSaving]               = useState(false);
   const [error, setError]                 = useState<string | null>(null);
   const [knowledgeSummary, setKnowledgeSummary] = useState<KnowledgeSummary | null>(null);
+  const [showExportImport, setShowExportImport] = useState(false);
+
+  function handleImportSuccess() {
+    api.agente.getConfig().then(reloaded => {
+      setConfig(reloaded);
+      setSavedConfig(reloaded);
+    }).catch(() => {
+      setError('Configuração importada, mas houve erro ao recarregar. Atualize a página.');
+    });
+  }
 
   // Computed flags
   const isDirectMode   = config.agent_mode === 'direto' || config.agent_mode === 'closer';
@@ -484,10 +495,19 @@ export default function AiProfile() {
           <span style={{ color: 'var(--o-text)' }}>{config.name || '—'}</span>
         </div>
         <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 12 }}>
+          <button className="o-btn" style={{ fontSize: 8 }} onClick={() => setShowExportImport(true)}>↕ Exportar / Importar</button>
           <Link to="/agentes-info" className="o-btn" style={{ fontSize: 8 }}>? Entenda os tipos de agentes</Link>
           <Link to="/" className="o-btn" style={{ fontSize: 8 }}>← CRM</Link>
         </div>
       </header>
+
+      {showExportImport && (
+        <AgentExportImportPanel
+          config={config}
+          onClose={() => setShowExportImport(false)}
+          onImportSuccess={handleImportSuccess}
+        />
+      )}
 
       {/* Subnav */}
       <nav className="o-subnav">

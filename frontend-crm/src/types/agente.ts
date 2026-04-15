@@ -818,3 +818,27 @@ export const BRIEFING_CHANNEL_LABELS: Record<string, string> = {
   whatsapp: 'WhatsApp',
   internal: 'Interno (CRM)',
 };
+
+// ─── Exportação / Importação de agente ───────────────────────
+
+/** Um item de treinamento exportável (sem IDs internos nem dados do usuário) */
+export interface TrainingItem {
+  agent_mode: string | null;
+  phase: string | null;
+  mother_route: string | null;
+  lead_message: string | null;
+  bot_message: string;
+  rating: 'ruim' | 'regular' | 'boa' | 'excelente';
+  comment: string | null;
+}
+
+/** Contrato JSON de exportação de agente */
+export interface AgentExportPayload {
+  version: '1.0';
+  schema: 'crm-agent-export';
+  exported_at: string;
+  agent_name: string;
+  includes_training: boolean;
+  profile: Partial<AgentConfig>;
+  training: TrainingItem[];
+}

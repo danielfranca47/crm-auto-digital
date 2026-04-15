@@ -25,7 +25,7 @@ import httpx
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, ConfigDict, Field
 
-from core_client import fetch_core_ai_profile_by_id
+from core_client import fetch_core_ai_profile, fetch_core_ai_profile_by_id
 from database import get_connection
 from security_core import CurrentUser, require_crm_access
 from services.ai_orchestrator.orchestrator import build_context_bundle_for_playground
@@ -811,6 +811,99 @@ class PlaygroundTrainingRequest(BaseModel):
 
 class PlaygroundTrainingResponse(BaseModel):
     id: int
+
+
+class TrainingExportItem(BaseModel):
+    agent_mode: Optional[str] = None
+    phase: Optional[str] = None
+    mother_route: Optional[str] = None
+    lead_message: Optional[str] = None
+    bot_message: str
+    rating: Literal["ruim", "regular", "boa", "excelente"]
+    comment: Optional[str] = None
+
+
+class TrainingImportRequest(BaseModel):
+    items: List[TrainingExportItem]
+
+
+@router.get("/training/export")
+def playground_export_training(
+    current_user: CurrentUser = Depends(require_crm_access),
+) -> dict:
+    """
+    Exporta todos os itens de treinamento do usuário (sem dados sensíveis).
+    Usado para gerar o contrato JSON de exportação do agente.
+    """
+    with get_connection() as conn:
+        conn.row_factory = sqlite3.Row
+        cur = conn.cursor()
+        cur.execute(
+            """
+            SELECT agent_mode, phase, mother_route, lead_message,
+                   bot_message, rating, comment
+            FROM playground_training_items
+            WHERE user_id = ?
+            ORDER BY id ASC
+            """,
+            (str(current_user.id),),
+        )
+        rows = [dict(r) for r in cur.fetchall()]
+    return {"items": rows}
+
+
+@router.post("/training/import")
+def playground_import_training(
+    body: TrainingImportRequest,
+    current_user: CurrentUser = Depends(require_crm_access),
+) -> dict:
+    """
+    Importa itens de treinamento para o usuário atual.
+    Substitui (DELETE + INSERT) todos os itens existentes do usuário.
+    """
+    profile = fetch_core_ai_profile(current_user.token or "")
+    if not profile:
+        raise HTTPException(
+            status_code=400,
+            detail="Configure seu perfil de IA antes de importar treinamento",
+        )
+    ai_profile_id = profile["id"]
+    user_id = str(current_user.id)
+
+    with get_connection() as conn:
+        cur = conn.cursor()
+        cur.execute(
+            "DELETE FROM playground_training_items WHERE user_id = ?",
+            (user_id,),
+        )
+        deleted = cur.rowcount
+        for item in body.items:
+            cur.execute(
+                """
+                INSERT INTO playground_training_items
+                    (user_id, ai_profile_id, agent_mode, phase, mother_route,
+                     lead_message, bot_message, rating, comment)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    user_id,
+                    ai_profile_id,
+                    item.agent_mode,
+                    item.phase,
+                    item.mother_route,
+                    item.lead_message,
+                    item.bot_message,
+                    item.rating,
+                    item.comment,
+                ),
+            )
+        conn.commit()
+
+    logger.info(
+        "training_import user_id=%s profile=%s imported=%s deleted=%s",
+        user_id, ai_profile_id, len(body.items), deleted,
+    )
+    return {"imported": len(body.items), "deleted": deleted}
 
 
 @router.post("/training", response_model=PlaygroundTrainingResponse)
