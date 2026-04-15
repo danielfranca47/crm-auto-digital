@@ -232,6 +232,7 @@ class ContextBundle(BaseModel):
     conversation_goal: str | None = None
     qualification_state: Optional[Dict[str, Any]] = None
     knowledge_items: Optional[Dict[str, str]] = None
+    knowledge_media: Optional[Dict[str, List]] = None
     training_examples: Optional[Dict[str, Any]] = None
     # Estrutura: { "qualification": { "good": [...], "bad": [...] }, "apresentation": {...}, ... }
 
@@ -463,6 +464,33 @@ def _load_knowledge_items(user_id: int) -> Dict[str, str]:
     return knowledge_by_category
 
 
+def _load_knowledge_media(user_id: int) -> Dict[str, list]:
+    """Carrega mídias do knowledge agrupadas por categoria (espelho do executor.py)."""
+    knowledge_media: Dict[str, list] = {}
+    with get_connection() as conn:
+        conn.row_factory = sqlite3.Row
+        cur = conn.cursor()
+        cur.execute(
+            """
+            SELECT ki.category, kim.media_url, kim.media_type, kim.language, kim.send_order
+              FROM knowledge_item_media kim
+              JOIN knowledge_items ki ON ki.id = kim.knowledge_item_id
+             WHERE ki.user_id = ? AND ki.active_in_funnel = 1
+             ORDER BY ki.category, ki.updated_at DESC, kim.send_order ASC, kim.id ASC
+            """,
+            (user_id,),
+        )
+        for row in cur.fetchall():
+            cat = row["category"] or "uncategorized"
+            knowledge_media.setdefault(cat, []).append({
+                "media_url":  row["media_url"],
+                "media_type": row["media_type"],
+                "language":   row["language"],
+                "send_order": row["send_order"],
+            })
+    return knowledge_media
+
+
 def build_context_bundle_for_playground(
     user_id: int,
     ai_profile: Dict[str, Any],
@@ -501,6 +529,7 @@ def build_context_bundle_for_playground(
 
     qualification_state = get_qualification_state(lead_id)
     knowledge_items = _load_knowledge_items(user_id)
+    knowledge_media = _load_knowledge_media(user_id)
     training_examples = _load_training_examples(
         user_id=user_id,
         ai_profile_id=ai_profile.get("id", 0),
@@ -535,6 +564,7 @@ def build_context_bundle_for_playground(
         conversation_goal=conversation_goal,
         qualification_state=qualification_state,
         knowledge_items=knowledge_items,
+        knowledge_media=knowledge_media or None,
         training_examples=training_examples if training_examples else None,
     )
 
