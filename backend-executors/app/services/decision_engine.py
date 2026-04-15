@@ -1573,6 +1573,9 @@ def _build_child_prompt_apresentation(
     template_key_for_warming = str(ai_profile.get("template_key") or "").strip().lower()
     appointment_mode = str(ai_profile.get("appointment_mode") or "exploratory").strip().lower()
     knowledge_items = context.get("knowledge_items") or {}
+    # Categorias do knowledge que têm mídia configurada — usadas para suprimir texto
+    # quando a mídia é preferencial (evita que o LLM descreva o conteúdo em texto).
+    _km_categories = set((context.get("knowledge_media") or {}).keys())
     warming_injection = ""
     commercial_injection = ""
     if (
@@ -1706,18 +1709,32 @@ def _build_child_prompt_apresentation(
                 f"Adapte ao perfil do lead se possível.\n"
             )
         if _pitch_script_apres:
-            _apres_knowledge_parts.append(
-                f"SCRIPT DE PITCH (usar como guia estrutural da apresentação, não copiar literalmente):\n"
-                f"{_pitch_script_apres}\n"
-                f"INSTRUÇÃO: Adapte ao contexto da conversa e ao tom de voz configurado. "
-                f"Nunca copie o script palavra por palavra.\n"
-            )
+            if "pitch_script" in _km_categories:
+                _apres_knowledge_parts.append(
+                    "SCRIPT DE PITCH: Conteúdo disponível em mídia visual (enviada automaticamente).\n"
+                    "INSTRUÇÃO CRÍTICA: Escreva APENAS uma frase curta de introdução. "
+                    "NÃO descreva o conteúdo — a mídia tem prioridade absoluta.\n"
+                )
+            else:
+                _apres_knowledge_parts.append(
+                    f"SCRIPT DE PITCH (usar como guia estrutural da apresentação, não copiar literalmente):\n"
+                    f"{_pitch_script_apres}\n"
+                    f"INSTRUÇÃO: Adapte ao contexto da conversa e ao tom de voz configurado. "
+                    f"Nunca copie o script palavra por palavra.\n"
+                )
         if _product_details_apres:
-            _apres_knowledge_parts.append(
-                f"DETALHES DO PRODUTO/SERVIÇO (usar para enriquecer o pitch com informações precisas):\n"
-                f"{_product_details_apres}\n"
-                f"INSTRUÇÃO: Use apenas os dados presentes neste bloco. Nunca invente features ou condições não listadas.\n"
-            )
+            if "product_details" in _km_categories:
+                _apres_knowledge_parts.append(
+                    "DETALHES DO PRODUTO/SERVIÇO: Conteúdo disponível em mídia visual (enviada automaticamente).\n"
+                    "INSTRUÇÃO CRÍTICA: Escreva APENAS uma frase curta de introdução. "
+                    "NÃO descreva features nem condições — a mídia tem prioridade absoluta.\n"
+                )
+            else:
+                _apres_knowledge_parts.append(
+                    f"DETALHES DO PRODUTO/SERVIÇO (usar para enriquecer o pitch com informações precisas):\n"
+                    f"{_product_details_apres}\n"
+                    f"INSTRUÇÃO: Use apenas os dados presentes neste bloco. Nunca invente features ou condições não listadas.\n"
+                )
         if _objections_faq_apres:
             _apres_knowledge_parts.append(
                 f"OBJEÇÕES E RESPOSTAS (usar APENAS quando o lead levantar uma objeção):\n"
@@ -1727,12 +1744,20 @@ def _build_child_prompt_apresentation(
                 f"Se a objeção NÃO estiver listada, use empatia + reformulação de valor.\n"
             )
         if _service_faq_apres:
-            _apres_knowledge_parts.append(
-                f"FAQ DO SERVIÇO (usar APENAS quando o lead fizer uma pergunta diretamente coberta):\n"
-                f"{_service_faq_apres}\n"
-                f"INSTRUÇÃO: Responda com base no FAQ. Se a pergunta não estiver coberta, "
-                f"diga que vai confirmar com a equipa.\n"
-            )
+            if "service_faq" in _km_categories:
+                _apres_knowledge_parts.append(
+                    "FAQ DO SERVIÇO: Informação completa disponível em arquivo de mídia (enviado automaticamente).\n"
+                    "INSTRUÇÃO CRÍTICA: Escreva APENAS uma frase curta de introdução "
+                    "(ex.: 'Aqui estão os valores:', 'Veja os detalhes abaixo:'). "
+                    "NÃO liste preços, serviços nem detalhes — a mídia tem prioridade absoluta sobre o texto.\n"
+                )
+            else:
+                _apres_knowledge_parts.append(
+                    f"FAQ DO SERVIÇO (usar APENAS quando o lead fizer uma pergunta diretamente coberta):\n"
+                    f"{_service_faq_apres}\n"
+                    f"INSTRUÇÃO: Responda com base no FAQ. Se a pergunta não estiver coberta, "
+                    f"diga que vai confirmar com a equipa.\n"
+                )
         if _guarantee_policy_apres:
             _apres_knowledge_parts.append(
                 f"POLÍTICA DE GARANTIA (mencionar para reforçar confiança quando relevante):\n"
@@ -1984,6 +2009,7 @@ def _build_child_prompt_follow_up(
 
     # Tarefa 1.3 — knowledge_items com directivas de uso
     knowledge_items = context.get("knowledge_items") or {}
+    _km_categories_fu = set((context.get("knowledge_media") or {}).keys())
     _followup_knowledge_parts: list[str] = []
     _social_proof_ki = knowledge_items.get("social_proof") or ""
     _objections_faq_ki = knowledge_items.get("objections_faq") or ""
@@ -2004,12 +2030,20 @@ def _build_child_prompt_follow_up(
             f"Se a objeção NÃO estiver listada, use empatia + reformulação de valor.\n"
         )
     if _service_faq_ki:
-        _followup_knowledge_parts.append(
-            f"FAQ DO SERVIÇO (usar APENAS quando o lead fizer uma pergunta diretamente coberta):\n"
-            f"{_service_faq_ki}\n"
-            f"INSTRUÇÃO: Responda com base no FAQ. Se a pergunta não estiver coberta, "
-            f"diga que vai confirmar com a equipa.\n"
-        )
+        if "service_faq" in _km_categories_fu:
+            _followup_knowledge_parts.append(
+                "FAQ DO SERVIÇO: Informação completa disponível em arquivo de mídia (enviado automaticamente).\n"
+                "INSTRUÇÃO CRÍTICA: Escreva APENAS uma frase curta de introdução "
+                "(ex.: 'Aqui estão os valores:', 'Veja os detalhes abaixo:'). "
+                "NÃO liste preços, serviços nem detalhes — a mídia tem prioridade absoluta sobre o texto.\n"
+            )
+        else:
+            _followup_knowledge_parts.append(
+                f"FAQ DO SERVIÇO (usar APENAS quando o lead fizer uma pergunta diretamente coberta):\n"
+                f"{_service_faq_ki}\n"
+                f"INSTRUÇÃO: Responda com base no FAQ. Se a pergunta não estiver coberta, "
+                f"diga que vai confirmar com a equipa.\n"
+            )
     followup_knowledge_block = (
         "\nKNOWLEDGE BASE (usar conforme as instruções de cada bloco):\n"
         + "\n".join(_followup_knowledge_parts)
@@ -2605,7 +2639,8 @@ def compose_decision_output(
                 }]
 
     # Mídia de knowledge — filtra por idioma do lead e devolve lista ordenada.
-    # Injeta em apresentation OU em qualificação quando o lead fez pergunta direta (next_action_hint=reply).
+    # Injeta em apresentation OU quando o agente está a responder directamente ao lead
+    # (Fix P7 activo = qualificação passiva com reply, ou greeting com resposta).
     # Usa TODAS as categorias disponíveis no knowledge_media (não apenas categorias hardcoded),
     # para respeitar qualquer nome de categoria que o usuário tenha configurado.
     _should_send_knowledge_media = (
@@ -2614,6 +2649,8 @@ def compose_decision_output(
             effective_route_to == "qualification"
             and getattr(mother_decision, "next_action_hint", None) == "reply"
         )
+        or _passive_reply_override   # resposta directa a pergunta de catálogo/serviços
+        or _passive_question_override  # P10: resposta passiva integrada com pergunta
     )
     if _should_send_knowledge_media and not decision.pre_send_media:
         knowledge_media = context.get("knowledge_media") or {}
@@ -2624,7 +2661,9 @@ def compose_decision_output(
             if isinstance(entries, str):
                 entries = [{"media_url": entries, "media_type": "image", "language": "all", "send_order": 0}]
             for e in entries:
-                if e.get("language") in ("all", lead_lang):
+                # Quando o idioma do lead é desconhecido ("all"), inclui todas as mídias
+                # independentemente do idioma configurado (pt, en, es, all).
+                if lead_lang == "all" or e.get("language") in ("all", lead_lang):
                     _all_km_media.append(e)
         if _all_km_media:
             _all_km_media.sort(key=lambda e: e.get("send_order", 0))
