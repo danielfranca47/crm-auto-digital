@@ -1,5 +1,5 @@
-import { useRef, useState, KeyboardEvent } from "react";
-import { Loader2, Send, CheckCircle, XCircle, Download } from "lucide-react";
+import { useRef, useState, KeyboardEvent, type ReactNode } from "react";
+import { Loader2, Send, CheckCircle, XCircle, Download, Pencil, Map, HelpCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent } from "@/components/ui/card";
@@ -15,6 +15,29 @@ import type { FeedbackItem } from "./PlaygroundFeedback";
 import type { ChatMessage } from "./MessageBubble";
 
 // ── Tipos internos ────────────────────────────────────────────────────────────
+
+type AssistantMode = "edicao" | "planejamento" | "duvidas";
+
+const MODE_CONFIG: Record<AssistantMode, { label: string; icon: ReactNode; placeholder: string; badgeClass: string }> = {
+  edicao: {
+    label: "Edição",
+    icon: <Pencil className="h-3.5 w-3.5" />,
+    placeholder: "Descreva o comportamento a corrigir… (Enter para enviar)",
+    badgeClass: "border-blue-500/50 text-blue-600",
+  },
+  planejamento: {
+    label: "Planejamento",
+    icon: <Map className="h-3.5 w-3.5" />,
+    placeholder: "Descreva o que quer melhorar ou planejar… (Enter para enviar)",
+    badgeClass: "border-amber-500/50 text-amber-600",
+  },
+  duvidas: {
+    label: "Dúvidas",
+    icon: <HelpCircle className="h-3.5 w-3.5" />,
+    placeholder: "Faça uma pergunta sobre o agente… (Enter para enviar)",
+    badgeClass: "border-green-500/50 text-green-600",
+  },
+};
 
 interface ProposedUpdate {
   fieldsToUpdate: Record<string, unknown>;
@@ -73,6 +96,7 @@ export function FeedbackAssistant({
   const [loading, setLoading] = useState(false);
   const [attemptNumber, setAttemptNumber] = useState(1);
   const [previousAttempts, setPreviousAttempts] = useState<FeedbackAssistPreviousAttempt[]>([]);
+  const [mode, setMode] = useState<AssistantMode>("edicao");
   const bottomRef = useRef<HTMLDivElement>(null);
 
   function scrollToBottom() {
@@ -116,6 +140,7 @@ export function FeedbackAssistant({
         user_question: text,
         attempt_number: attemptNumber,
         previous_attempts: previousAttempts,
+        mode,
       });
 
       const assistantMsg: AssistantMessage = {
@@ -244,6 +269,29 @@ export function FeedbackAssistant({
 
   return (
     <div className="flex flex-col h-full">
+      {/* Badge do modo ativo */}
+      <div className="flex items-center gap-2 px-3 pt-2 pb-1 border-b shrink-0">
+        <Badge variant="outline" className={`text-xs gap-1 ${MODE_CONFIG[mode].badgeClass}`}>
+          {MODE_CONFIG[mode].icon}
+          {MODE_CONFIG[mode].label}
+        </Badge>
+        {mode === "edicao" && (
+          <span className="text-xs text-muted-foreground">
+            Diagnóstico primeiro, edição após confirmação
+          </span>
+        )}
+        {mode === "planejamento" && (
+          <span className="text-xs text-muted-foreground">
+            Plano de melhorias, sem edições
+          </span>
+        )}
+        {mode === "duvidas" && (
+          <span className="text-xs text-muted-foreground">
+            Só respostas, sem edições
+          </span>
+        )}
+      </div>
+
       {/* Área de chat */}
       <div className="flex-1 overflow-y-auto px-3 py-3 space-y-3">
         {chatHistory.length === 0 ? (
@@ -251,8 +299,9 @@ export function FeedbackAssistant({
             <span className="text-3xl">🤖</span>
             <p className="font-medium">Assistente de configuração</p>
             <p className="text-xs">
-              Descreva o comportamento que observou. O assistente analisa o perfil
-              configurado e sugere ajustes — ou explica se requer correção de código.
+              {mode === "edicao" && "Descreva o comportamento observado. O assistente diagnostica primeiro e, após confirmação, sugere ajustes no perfil."}
+              {mode === "planejamento" && "Descreva o que quer melhorar. O assistente devolve um plano de melhorias numerado, sem aplicar alterações."}
+              {mode === "duvidas" && "Faça uma pergunta sobre o agente ou configurações. O assistente só responde — sem sugerir edições."}
             </p>
           </div>
         ) : (
@@ -380,24 +429,51 @@ export function FeedbackAssistant({
       </div>
 
       {/* Input */}
-      <div className="border-t p-3 flex gap-2 items-end bg-background">
-        <Textarea
-          value={input}
-          onChange={(e) => setInput(e.target.value)}
-          onKeyDown={handleKeyDown}
-          placeholder="Descreva o comportamento observado… (Enter para enviar)"
-          rows={2}
-          className="flex-1 resize-none text-sm min-h-[44px] max-h-28"
-          disabled={loading}
-        />
-        <Button
-          onClick={handleSend}
-          disabled={!input.trim() || loading}
-          size="icon"
-          className="shrink-0 h-[44px] w-[44px]"
-        >
-          {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
-        </Button>
+      <div className="border-t p-3 flex flex-col gap-2 bg-background">
+        {/* Seletor de modo */}
+        <div className="flex items-center gap-1">
+          {(["edicao", "planejamento", "duvidas"] as AssistantMode[]).map((m) => {
+            const cfg = MODE_CONFIG[m];
+            const isActive = mode === m;
+            return (
+              <button
+                key={m}
+                type="button"
+                onClick={() => setMode(m)}
+                disabled={loading}
+                className={`flex items-center gap-1.5 rounded-md px-2 py-1 text-xs font-medium transition-colors ${
+                  isActive
+                    ? "bg-primary text-primary-foreground"
+                    : "text-muted-foreground hover:bg-muted hover:text-foreground"
+                }`}
+              >
+                {cfg.icon}
+                {cfg.label}
+              </button>
+            );
+          })}
+        </div>
+
+        {/* Textarea + send */}
+        <div className="flex gap-2 items-end">
+          <Textarea
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            onKeyDown={handleKeyDown}
+            placeholder={MODE_CONFIG[mode].placeholder}
+            rows={2}
+            className="flex-1 resize-none text-sm min-h-[44px] max-h-28"
+            disabled={loading}
+          />
+          <Button
+            onClick={handleSend}
+            disabled={!input.trim() || loading}
+            size="icon"
+            className="shrink-0 h-[44px] w-[44px]"
+          >
+            {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+          </Button>
+        </div>
       </div>
     </div>
   );

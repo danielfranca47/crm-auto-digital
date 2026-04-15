@@ -205,6 +205,7 @@ export type FeedbackAssistRequest = {
   user_question: string;
   attempt_number: number;
   previous_attempts: FeedbackAssistPreviousAttempt[];
+  mode?: "edicao" | "planejamento" | "duvidas";
 };
 
 export type FeedbackAssistResponse = {

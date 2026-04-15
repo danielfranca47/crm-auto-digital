@@ -546,6 +546,10 @@ class FeedbackAssistRequest(BaseModel):
     user_question: str = Field(..., min_length=1)
     attempt_number: int = Field(default=1, ge=1)
     previous_attempts: List[PreviousAttempt] = Field(default_factory=list)
+    mode: Literal["edicao", "planejamento", "duvidas"] = Field(
+        "edicao",
+        description="Modo de trabalho do assistente: edicao (diagnóstico+edição), planejamento (plano sem edição), duvidas (só respostas)",
+    )
 
 
 class FeedbackAssistResponse(BaseModel):
@@ -598,6 +602,58 @@ def _format_previous_attempts_for_prompt(attempts: List[PreviousAttempt]) -> str
                 lines.append(f"  Campo {field}: {change.get('from')} → {change.get('to')}")
         lines.append(f"  Resultado: {a.outcome}")
     return "\n".join(lines)
+
+
+def _get_mode_instructions(
+    mode: str,
+    attempt_number: int,
+    previous_attempts: List[PreviousAttempt],
+) -> str:
+    """Devolve instruções adicionais para o system prompt com base no modo selecionado."""
+    is_first_interaction = attempt_number == 1 and len(previous_attempts) == 0
+
+    if mode == "duvidas":
+        return """
+## MODO ATUAL: Dúvidas
+O utilizador quer apenas fazer perguntas e receber explicações sobre o agente ou as configurações.
+REGRAS OBRIGATÓRIAS:
+- Nunca sugira alterações de campos do AI Profile.
+- Nunca retorne action="update_profile".
+- SEMPRE retorne action="explain_only" e fields_to_update=null.
+- Responda de forma clara e educativa.
+"""
+
+    if mode == "planejamento":
+        return """
+## MODO ATUAL: Planejamento
+O utilizador quer entender o problema e receber um plano de melhorias, sem aplicar nada agora.
+REGRAS OBRIGATÓRIAS:
+- Nunca retorne action="update_profile".
+- SEMPRE retorne action="explain_only" e fields_to_update=null.
+- Na sua explanation, devolva um PLANO NUMERADO com as melhorias sugeridas, ordenadas por impacto.
+- Para cada passo do plano, indique: o campo a alterar (se aplicável), o valor sugerido e o efeito esperado.
+- Seja detalhado e didático — este é um plano para o utilizador executar à sua própria velocidade.
+"""
+
+    # Modo "edicao"
+    if is_first_interaction:
+        return """
+## MODO ATUAL: Edição — Fase de Diagnóstico (1ª mensagem)
+Esta é a PRIMEIRA interação desta sessão. O utilizador precisa primeiro entender o diagnóstico antes de aplicar mudanças.
+REGRAS OBRIGATÓRIAS:
+- NÃO proponha campos para alterar ainda.
+- NÃO retorne action="update_profile".
+- SEMPRE retorne action="explain_only" e fields_to_update=null nesta resposta.
+- Explique claramente: (1) qual é o problema identificado, (2) qual a causa provável, (3) o que poderia ser feito.
+- Termine a explicação com uma frase convidando o utilizador a confirmar se quer prosseguir com as alterações sugeridas.
+"""
+
+    return """
+## MODO ATUAL: Edição — Fase de Proposta
+O utilizador já viu o diagnóstico e quer avançar com as alterações.
+Pode agora propor campos para alterar se o problema for resolvível por configuração.
+Se identificou campos a alterar → retorne action="update_profile" com fields_to_update preenchido.
+"""
 
 
 def _build_feedback_assist_user_message(
@@ -668,6 +724,14 @@ def playground_feedback_assist(
     except ImportError:
         raise HTTPException(status_code=503, detail="Biblioteca openai não instalada no backend-crm")
 
+    # Montar system prompt com instruções do modo
+    mode_instructions = _get_mode_instructions(
+        mode=body.mode,
+        attempt_number=body.attempt_number,
+        previous_attempts=body.previous_attempts,
+    )
+    system_prompt = _FEEDBACK_ASSIST_SYSTEM_PROMPT + mode_instructions
+
     # Montar mensagens para a LLM
     user_msg = _build_feedback_assist_user_message(
         ai_profile=dict(ai_profile) if not isinstance(ai_profile, dict) else ai_profile,
@@ -681,7 +745,7 @@ def playground_feedback_assist(
         raw = client_openai.chat.completions.create(
             model="gpt-4o-mini",
             messages=[
-                {"role": "system", "content": _FEEDBACK_ASSIST_SYSTEM_PROMPT},
+                {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_msg},
             ],
             response_format={"type": "json_object"},
@@ -697,6 +761,19 @@ def playground_feedback_assist(
             is_config_fixable=False,
             attempt_number=body.attempt_number,
         )
+
+    # Safety net: forçar explain_only quando o modo não permite edições
+    is_first_edicao = (
+        body.mode == "edicao"
+        and body.attempt_number == 1
+        and len(body.previous_attempts) == 0
+    )
+    force_explain_only = body.mode in ("duvidas", "planejamento") or is_first_edicao
+
+    if force_explain_only:
+        parsed["action"] = "explain_only"
+        parsed["fields_to_update"] = None
+        parsed["is_config_fixable"] = False
 
     # Enriquecer com valores atuais dos campos sugeridos
     fields_to_update = parsed.get("fields_to_update") or None
