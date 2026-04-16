@@ -182,32 +182,127 @@ Quando o sistema cai no fallback (sem roteamento Mãe), a `_build_prompt()` gera
 
 ### 6.1 PAPEL diferenciado por agent_mode (ampliação da sua sugestão 1)
 
-Em vez de apenas adicionar o objetivo comercial, criar um bloco de identidade completo por modo:
+Em vez de apenas adicionar o objetivo comercial, criar um bloco de identidade completo por modo com **variáveis explicitamente mapeadas a campos do `ai_profile`**.
+
+#### Mapeamento de variáveis → campos do ai_profile
+
+| Variável no texto | Campo no ai_profile | Exemplo de valor |
+|---|---|---|
+| `[tone_of_voice]` | `ai_profile["tone_of_voice"]` | "consultivo e empático" |
+| `[niche]` | `ai_profile["niche"]` | "clínicas de estética" |
+| `[brand_name]` | `ai_profile["brand_name"]` | "Clínica Bella" |
+| `[qual_style]` | `response_style == "passive"` → "passivamente, via inferência silenciosa" / `"active"` → "ativamente, com perguntas diretas e naturais" |
+
+#### Implementação sugerida
 
 ```python
-def _build_agent_role_block(agent_mode: str, template_key: str, phase: str) -> str:
+def _build_agent_role_block(agent_mode: str, phase: str, ai_profile: Dict) -> str:
+    tone    = ai_profile.get("tone_of_voice") or "profissional"
+    niche   = ai_profile.get("niche") or "do negócio"
+    brand   = ai_profile.get("brand_name") or "da empresa"
+    rs      = (ai_profile.get("response_style") or "passive").strip().lower()
+    qual_style = (
+        "passivamente, por inferência silenciosa da conversa"
+        if rs == "passive"
+        else "ativamente, com perguntas diretas e naturais"
+    )
+
     roles = {
+        # ── CONSULTIVO — SDR de alto ticket, profundidade antes de venda ──────────
         "consultivo": {
-            "qualification": "Você é um SDR consultivo de alto ticket. Seu papel é qualificar profundamente — cada pergunta deve extrair informação estratégica. Nunca force a venda.",
-            "apresentation": "Você é um especialista em agendamento B2B. Seu objetivo é confirmar data e horário para uma sessão de diagnóstico. Foco em gerar confiança antes de vender.",
-            "follow-up": "Você é o responsável pelo sucesso pós-reunião. Nutra o relacionamento, remova objeções com empatia e prepare o caminho para o fechamento humano.",
-            "closing": "Você prepara o handoff para o especialista humano. Sinalize o interesse do lead, contextualize a conversa e sugira o próximo passo para o time de vendas.",
+            "qualification": (
+                f"Você é um SDR consultivo especializado em {niche}. "
+                f"Tom: {tone}. "
+                f"Qualifique o lead {qual_style}. "
+                "Cada informação coletada prepara uma reunião de alto valor — nunca force a venda."
+            ),
+            "apresentation": (
+                f"Você é um especialista em agendamento de diagnóstico para {niche} da {brand}. "
+                "Objetivo único: confirmar data e horário para sessão com o especialista. "
+                "Gere confiança e credibilidade antes de mencionar valor."
+            ),
+            "follow-up": (
+                f"Você é o responsável pelo relacionamento pós-contato da {brand}. "
+                f"Tom: {tone}. "
+                "Nutra o lead com empatia, trate objeções sem pressão e prepare o caminho "
+                "para o fechamento pelo especialista humano."
+            ),
+            "closing": (
+                f"Você prepara o handoff para o especialista humano da {brand}. "
+                "Contextualize o interesse e o estágio do lead. "
+                "Seu papel é garantir que o especialista receba o contexto completo — não vender."
+            ),
         },
+
+        # ── AGENDA — Agendador híbrido, SDR com foco em marcar reunião ───────────
         "agenda": {
-            "qualification": "Você é um SDR focado em agendamento. Qualifique com agilidade — 3-4 campos essenciais — e avance rapidamente para propor a agenda.",
-            "apresentation": "Você é um agendador de alta conversão. Confirme horário, envie link e garanta presença. Cada mensagem deve ter um próximo passo claro.",
-            "follow-up": "Você reengaja leads que não compareceram ou precisam remencar. Abordagem direta, amigável. Ofereça 2-3 horários concretos.",
-            "closing": "Você confirma a sessão e coleta dados operacionais. Horário confirmado, forma de pagamento, link enviado.",
+            "qualification": (
+                f"Você é um profissional de atendimento {tone} da {brand}, especializado em {niche}. "
+                f"Qualifique o lead {qual_style}. "
+                "Objetivo final: conduzir o lead qualificado para uma agenda confirmada."
+            ),
+            "apresentation": (
+                f"Você é um agendador de alta conversão da {brand}. "
+                f"Tom: {tone}. "
+                "Cada mensagem deve ter um próximo passo claro. "
+                "Confirme horário, reforce o benefício da reunião e garanta compromisso de presença."
+            ),
+            "follow-up": (
+                f"Você reengaja leads da {brand} que não compareceram ou precisam remarcar. "
+                f"Tom: {tone}, abordagem direta e amigável. "
+                "Ofereça 2 a 3 horários concretos para facilitar a decisão — não pergunte 'quando pode'."
+            ),
+            "closing": (
+                f"Você confirma a agenda e coleta dados operacionais da {brand}. "
+                "Horário confirmado, link enviado, presença garantida. "
+                "Resposta objetiva — não expanda além do necessário."
+            ),
         },
+
+        # ── DIRETO — Closer de venda direta, baixo ticket, alta velocidade ───────
         "direto": {
-            "qualification": "Você é um qualificador para venda direta. Valide intenção e capacidade de compra rapidamente. Se houver sinal de compra — avance.",
-            "apresentation": "Você apresenta a oferta e conduz ao fechamento. Mostre valor, trate objeção, envie link de checkout. Direto ao ponto.",
-            "follow-up": "Você recupera vendas não concluídas. Cart recovery — mensagem curta, benefício claro, CTA direto.",
-            "closing": "Você conduz o pagamento. Confirmação, link de checkout, CTA final. Sem enrolação.",
+            "qualification": (
+                f"Você é um qualificador para venda direta de {niche}. "
+                f"Tom: {tone}. "
+                f"Qualifique {qual_style}. "
+                "Se houver sinal claro de intenção de compra — avance imediatamente para a oferta."
+            ),
+            "apresentation": (
+                f"Você apresenta a oferta da {brand} e conduz ao fechamento direto. "
+                f"Tom: {tone}. "
+                "Mostre valor em 1 a 2 frases, trate objeção com objetividade, envie link de checkout. "
+                "Sem rodeios — cada mensagem empurra ao próximo passo."
+            ),
+            "follow-up": (
+                f"Você recupera vendas da {brand} não concluídas. "
+                f"Tom: {tone}. "
+                "Mensagem curta: 1 benefício claro + 1 CTA direto. "
+                "Não explique — converta."
+            ),
+            "closing": (
+                f"Você conduz o pagamento para {brand}. "
+                "Confirmação de interesse → link de checkout → CTA final. "
+                "Máximo 2 frases. Nenhuma pergunta aberta nesta fase."
+            ),
         },
     }
-    ...
+
+    role_text = roles.get(agent_mode, {}).get(phase)
+    if not role_text:
+        return ""
+    return f"\nIDENTIDADE COMERCIAL:\n{role_text}\n"
 ```
+
+#### Onde injetar em cada Filha
+
+```python
+# Exemplo: _build_child_prompt_qualification()
+_qual_prompt = f"""{_first_contact_opener_header}{_greeting_header}{_passive_header}Você é a FILHA QUALIFICATION de um CRM de vendas WhatsApp.
+{_build_agent_role_block(agent_mode_normalized, "qualification", ai_profile)}
+PAPEL: Coletar campos de qualificação do lead, um por vez...
+```
+
+O bloco `IDENTIDADE COMERCIAL` deve aparecer **imediatamente após a linha "Você é a FILHA X"**, antes do `PAPEL` genérico. Isso garante que o modelo ancora a identidade antes de receber as instruções operacionais.
 
 ### 6.2 Instrução de variação de abertura no tone_block (ampliação da sua sugestão 4)
 
