@@ -2,13 +2,14 @@
 from typing import Any, Dict
 
 # Defaults para o estágio de aquecimento do hybrid_scheduler (Tarefa 3.8)
+# Nota: o decision_engine gera defaults context-aware usando ai_profile.niche em runtime.
+# Estes valores são fallback genérico neutro (sem linguagem B2B como "profissional com o seu perfil").
 DEFAULT_SOCIAL_PROOF = (
-    "Um profissional com o seu perfil já utilizou essa abordagem e conseguiu resultados expressivos. "
-    "Posso te contar mais detalhes na nossa conversa."
+    "Vários clientes já utilizaram o serviço e tiveram ótimos resultados. "
+    "Posso te contar mais na nossa conversa."
 )
 DEFAULT_SESSION_PREVIEW = (
-    "Na sessão de aproximadamente 1h, vamos mapear sua situação atual, identificar os principais pontos de melhoria "
-    "e sair com um plano de ação claro para você."
+    "Na nossa sessão, vamos entender o que você precisa e encontrar a melhor forma de te ajudar."
 )
 
 PLAYBOOKS: Dict[str, Dict[str, Any]] = {

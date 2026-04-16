@@ -1543,6 +1543,23 @@ def _build_child_prompt_apresentation(
             "NUNCA ignores a pergunta do lead.\n\n"
         )
 
+    # Greeting awareness — quando a mãe sinaliza next_action_hint='greet', o lead abriu com uma
+    # saudação social. O prompt de apresentação deve responder à saudação antes de executar o
+    # objetivo do estágio (agendamento, aquecimento ou pitch). Sem alterar roteamento.
+    _mother_hint_apres = (mother_decision.next_action_hint or "").strip().lower()
+    _is_greeting_apres = _mother_hint_apres == "greet"
+    _greeting_apres_header = (
+        "ATENÇÃO — SAUDAÇÃO DO LEAD: O lead enviou uma saudação como primeira mensagem.\n"
+        "INSTRUÇÃO OBRIGATÓRIA: A tua resposta DEVE começar com um cumprimento caloroso e natural "
+        "(ex.: 'Boa noite!', 'Olá, boa noite!', 'Oi, boa noite! Tudo bem?'). "
+        "O cumprimento deve ser breve e proporcional à saudação recebida.\n"
+        "DEPOIS do cumprimento, de forma fluida e natural na MESMA mensagem, "
+        "executa o objetivo do estágio atual (agendamento, aquecimento ou apresentação).\n"
+        "NUNCA ignores a saudação e vás directamente para o pitch ou para o agendamento.\n\n"
+        if _is_greeting_apres
+        else ""
+    )
+
     # Opener de primeiro contato para apresentation
     _is_outbound_lead_apres = (metadata.get("lead_origin") or "inbound") == "outbound"
     origin_opener_apres = (
@@ -1562,13 +1579,21 @@ def _build_child_prompt_apresentation(
     # Estágio de aquecimento (Tarefa 3.8) — Agent 3 (hybrid_scheduler) pós-qualificação.
     # Trigger: mother_decision.route_to == "qualification" e missing_fields vazio
     # (qualificação recém-aprovada/auto-promovida para apresentation).
+    # Defaults context-aware: usam o niche do ai_profile para evitar linguagem B2B genérica
+    # ("profissional com o seu perfil", "mapear situação", "plano de ação") em nichos B2C.
+    _niche_for_defaults = str(ai_profile.get("niche") or "").strip()
     _DEFAULT_SOCIAL_PROOF = (
-        "Um profissional com o seu perfil já utilizou essa abordagem e conseguiu resultados expressivos. "
-        "Posso te contar mais detalhes na nossa conversa."
+        f"Já trabalhei com vários clientes na área de {_niche_for_defaults} e os resultados têm sido muito positivos. "
+        "Posso te contar mais na nossa conversa."
+        if _niche_for_defaults else
+        "Vários clientes já utilizaram o serviço e tiveram ótimos resultados. "
+        "Posso te contar mais na nossa conversa."
     )
     _DEFAULT_SESSION_PREVIEW = (
-        "Na sessão de aproximadamente 1h, vamos mapear sua situação atual, identificar os principais pontos de melhoria "
-        "e sair com um plano de ação claro para você."
+        f"Na nossa sessão, vou perceber melhor o que precisas na área de {_niche_for_defaults} "
+        "e encontraremos juntos a melhor abordagem para ti."
+        if _niche_for_defaults else
+        "Na nossa sessão, vamos entender o que você precisa e encontrar a melhor forma de te ajudar."
     )
     template_key_for_warming = str(ai_profile.get("template_key") or "").strip().lower()
     appointment_mode = str(ai_profile.get("appointment_mode") or "exploratory").strip().lower()
@@ -1795,7 +1820,8 @@ def _build_child_prompt_apresentation(
         )
 
     _apres_prompt = (
-        _apres_first_contact_opener
+        _greeting_apres_header
+        + _apres_first_contact_opener
         + _passive_apres_header
         + f"Você é a FILHA APRESENTATION de um CRM de vendas WhatsApp.\n\n"
         f"PAPEL: Conduzir a fase de apresentação — agendamento (scheduler) ou oferta+fechamento (sales).\n"
@@ -2074,8 +2100,21 @@ def _build_child_prompt_follow_up(
     )
     tone_block_followup = _build_tone_block(ai_profile, playbook)
 
+    # Greeting awareness — quando o lead em follow-up abre com uma saudação, o bot responde
+    # ao cumprimento antes de continuar o objetivo do follow-up. Sem alterar roteamento.
+    _mother_hint_fu = (mother_decision.next_action_hint or "").strip().lower()
+    _is_greeting_fu = _mother_hint_fu == "greet"
+    _greeting_fu_header = (
+        "ATENÇÃO — SAUDAÇÃO DO LEAD: O lead enviou uma saudação.\n"
+        "INSTRUÇÃO OBRIGATÓRIA: Começa com um cumprimento natural e breve antes de continuar o follow-up.\n"
+        "DEPOIS, de forma fluida na MESMA mensagem, executa o objetivo do estágio de follow-up.\n\n"
+        if _is_greeting_fu
+        else ""
+    )
+
     _followup_prompt = (
-        f"Você é a FILHA FOLLOW-UP de um CRM de vendas WhatsApp.\n\n"
+        _greeting_fu_header
+        + f"Você é a FILHA FOLLOW-UP de um CRM de vendas WhatsApp.\n\n"
         f"PAPEL: Re-engajar o lead pós-apresentação. Variante: {followup_variant or 'padrão'}.\n"
         f"ESCOPO: Nutrir, tratar objeções, reagendar. Nunca reabrir campos de qualificação antigos em ticks automáticos.\n"
         f"TOM: {ai_summary.get('tone_of_voice') or 'profissional'} — empático e orientado a ação. Máx {playbook_summary.get('max_chars') or 'N/D'} caracteres.\n"
@@ -2178,8 +2217,21 @@ def _build_child_prompt_closing(
     hybrid_flow_style = _resolve_hybrid_flow_style(context)
     tone_block_closing = _build_tone_block(ai_profile, playbook)
 
+    # Greeting awareness — quando o lead retoma uma conversa com saudação em estágio de closing,
+    # o bot responde ao cumprimento antes de continuar o fechamento. Sem alterar roteamento.
+    _mother_hint_closing = (mother_decision.next_action_hint or "").strip().lower()
+    _is_greeting_closing = _mother_hint_closing == "greet"
+    _greeting_closing_header = (
+        "ATENÇÃO — SAUDAÇÃO DO LEAD: O lead enviou uma saudação.\n"
+        "INSTRUÇÃO OBRIGATÓRIA: Começa com um cumprimento natural e breve antes de continuar o fechamento.\n"
+        "DEPOIS, de forma fluida na MESMA mensagem, executa o objetivo do estágio de closing.\n\n"
+        if _is_greeting_closing
+        else ""
+    )
+
     _closing_prompt = (
-        f"Você é a FILHA CLOSING de um CRM de vendas WhatsApp.\n\n"
+        _greeting_closing_header
+        + f"Você é a FILHA CLOSING de um CRM de vendas WhatsApp.\n\n"
         f"PAPEL: Finalizar o fechamento conforme o modo do agente.\n"
         f"ESCOPO: Modo {agent_mode_normalized}. Consultivo: handoff para humano. Agenda: confirmar horário+pagamento. Direto: conduzir pagamento.\n"
         f"TOM: {ai_summary.get('tone_of_voice') or 'profissional'} — confiante e claro. Máx {playbook_summary.get('max_chars') or 'N/D'} caracteres.\n"
