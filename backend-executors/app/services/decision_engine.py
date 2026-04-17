@@ -836,6 +836,16 @@ def _get_required_fields_override(context: Dict[str, Any]) -> Optional[List[str]
     override = ai_profile.get("qualification_required_fields")
     if isinstance(override, list):
         return [str(f) for f in override if isinstance(f, str)]
+    # Fallback: derivar das chaves com mode=required em qualification_fields (UI rica)
+    qual_fields = ai_profile.get("qualification_fields")
+    if isinstance(qual_fields, list) and len(qual_fields) > 0:
+        required_keys = [
+            str(f["key"])
+            for f in qual_fields
+            if isinstance(f, dict) and f.get("mode") == "required" and isinstance(f.get("key"), str)
+        ]
+        if required_keys:
+            return required_keys
     return None
 
 
