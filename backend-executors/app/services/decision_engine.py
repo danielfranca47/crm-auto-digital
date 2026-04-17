@@ -354,6 +354,7 @@ def _build_tone_block(ai_profile: Dict[str, Any], playbook: Dict[str, Any]) -> s
         ai_profile.get("template_key") or playbook.get("template_key") or ""
     ).strip().lower()
     brand_name = str(ai_profile.get("brand_name") or "").strip()
+    agent_mode = str(ai_profile.get("agent_mode") or "").strip().lower()
 
     block = (
         f"\nTOM DE VOZ — REGRAS WHATSAPP:\n"
@@ -369,6 +370,18 @@ def _build_tone_block(ai_profile: Dict[str, Any], playbook: Dict[str, Any]) -> s
         f"- PROIBIDO: emojis excessivos (máx 1 por mensagem), CAPS LOCK, exclamações consecutivas (!!), "
         f"linguagem de vendas agressiva ('IMPERDÍVEL', 'CORRA', 'NÃO PERCA').\n"
     )
+    if agent_mode in ("direto", "closer"):
+        block += (
+            f"- Comprimento adaptativo (modo direto): mensagens curtas e objetivas. "
+            f"Se a resposta cabe em 1 frase, use 1 frase. "
+            f"Não expanda para preencher o limite de {max_chars} caracteres.\n"
+        )
+    elif agent_mode in ("consultivo",):
+        block += (
+            f"- Comprimento adaptativo (modo consultivo): pode usar até {max_chars} chars "
+            f"quando o lead faz uma pergunta complexa ou levanta uma objeção. "
+            f"Para perguntas simples, responda de forma objetiva mesmo abaixo do limite.\n"
+        )
     if template_key == "hybrid_scheduler":
         if brand_name:
             block += (
@@ -382,6 +395,18 @@ def _build_tone_block(ai_profile: Dict[str, Any], playbook: Dict[str, Any]) -> s
                 "- Referência ao profissional: use o nome do profissional na terceira pessoa.\n"
             )
     return block
+
+
+def _build_followup_tone_extensions() -> str:
+    """Diretivas de tom específicas para Follow-up e Closing — fases de reengajamento."""
+    return (
+        "\nTOM — EXTENSÕES PARA REENGAJAMENTO:\n"
+        "- Contexto do histórico: abra fazendo referência a algo concreto da última troca "
+        "(ex.: 'Como conversamos na semana passada...', 'Você mencionou que...', 'Desde a nossa última conversa...').\n"
+        "- Nunca abra como se fosse o primeiro contato — o lead já te conhece.\n"
+        "- Anti-repetição de perguntas: antes de fazer qualquer pergunta, verifique no history se ela já foi feita. "
+        "Se a resposta já consta no histórico, não repita a pergunta.\n"
+    )
 
 
 def _build_agent_role_block(agent_mode: str, phase: str, ai_profile: Dict[str, Any]) -> str:
@@ -2220,6 +2245,7 @@ def _build_child_prompt_follow_up(
         f"FRAMEWORK: Modo {agent_mode_normalized}. Template {playbook_summary.get('template_key')}. is_followup_tick: {is_followup_tick}.\n"
         "RECUSAS: Nunca invente informação. Nunca use urgência artificial sem urgency_offer. Nunca reabra qualificação em follow-up tick.\n"
         + tone_block_followup
+        + _build_followup_tone_extensions()
         + "\nRetorne SOMENTE JSON válido no schema ChildResult:\n"
         "{\n"
         '  "message_text": "string",\n'
@@ -2340,6 +2366,7 @@ def _build_child_prompt_closing(
         f"FRAMEWORK: Template {playbook_summary.get('template_key')}. Campos verificados: {json.dumps(mode_contract['required_fields'], ensure_ascii=False)}. Missing: {json.dumps(mode_contract['missing_fields'], ensure_ascii=False)}.\n"
         "RECUSAS: Nunca feche sozinho em modo consultivo (handoff obrigatório). Nunca emita outcome/kanban_highlight fora da categoria closing.\n"
         + tone_block_closing
+        + _build_followup_tone_extensions()
         + "\nRetorne SOMENTE JSON válido no schema ChildResult:\n"
         "{\n"
         '  "message_text": "string",\n'
