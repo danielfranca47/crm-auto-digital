@@ -3102,22 +3102,37 @@ def decide(context: Dict[str, Any], logger: Optional[logging.Logger] = None) -> 
                         context["qualification_state"] = updated_state
                 except Exception:
                     pass
+        # T4.1 — registrar qual função de prompt filha foi usada e o agent_mode resolvido.
+        # T4.2 — ler prompt_variant do AI Profile para correlação A/B futura.
+        _ai_profile_obs = context.get("ai_profile") or {}
+        _agent_mode_resolved = _normalize_agent_mode(context, mother_decision)
+        _prompt_variant = str(_ai_profile_obs.get("prompt_variant") or "v1").strip().lower()
+        if _prompt_variant not in ("v1", "v2"):
+            _prompt_variant = "v1"
+
         if route_for_child == "qualification":
             child_prompt = _build_child_prompt_qualification(context, message_text, mother_decision)
+            _prompt_function_used = "_build_child_prompt_qualification"
         elif route_for_child == "apresentation":
             child_prompt = _build_child_prompt_apresentation(context, message_text, mother_decision)
+            _prompt_function_used = "_build_child_prompt_apresentation"
         elif route_for_child == "follow-up":
             try:
                 child_prompt = _build_child_prompt_follow_up(context, message_text, mother_decision)
+                _prompt_function_used = "_build_child_prompt_follow_up"
             except Exception:
                 child_prompt = _build_child_prompt(context, message_text, mother_decision)
+                _prompt_function_used = "_build_child_prompt(fallback)"
         elif route_for_child == "closing":
             try:
                 child_prompt = _build_child_prompt_closing(context, message_text, mother_decision)
+                _prompt_function_used = "_build_child_prompt_closing"
             except Exception:
                 child_prompt = _build_child_prompt(context, message_text, mother_decision)
+                _prompt_function_used = "_build_child_prompt(fallback)"
         else:
             child_prompt = _build_child_prompt(context, message_text, mother_decision)
+            _prompt_function_used = "_build_child_prompt(generic)"
         stage = "child_call"
         child_result: Optional[ChildResult] = None
         validation_errors: list[str] = []
@@ -3231,6 +3246,9 @@ def decide(context: Dict[str, Any], logger: Optional[logging.Logger] = None) -> 
                     pass
         decision = _sanitize_category_decision(decision, context, logger_instance=logger)
         if decision.decision_trace and isinstance(decision.decision_trace, dict):
+            decision.decision_trace["prompt_function_used"] = _prompt_function_used
+            decision.decision_trace["agent_mode_resolved"] = _agent_mode_resolved
+            decision.decision_trace["prompt_variant"] = _prompt_variant
             decision.decision_trace["suggested_category_final"] = decision.suggested_category
             is_qualification_ask = (
                 decision.decision_trace.get("effective_route_to") == "qualification"
@@ -3306,6 +3324,18 @@ def decide(context: Dict[str, Any], logger: Optional[logging.Logger] = None) -> 
                 trace.get("anti_loop_rule1_applied"),
                 trace.get("anti_loop_rule3_applied"),
                 decision.next_action,
+            )
+            # T4.1 / T4.2 — observabilidade de qualidade de prompt
+            logger.info(
+                "event=prompt_observability job_id=%s lead_id=%s user_id=%s "
+                "prompt_function=%s agent_mode_resolved=%s prompt_variant=%s route_for_child=%s",
+                log_context["job_id"],
+                log_context["lead_id"],
+                log_context["user_id"],
+                trace.get("prompt_function_used"),
+                trace.get("agent_mode_resolved"),
+                trace.get("prompt_variant"),
+                route_for_child,
             )
         # Detecção de sinal de compra — Agent 1 (Tarefa 3.7)
         # Só aplicável a modos consultivo/agenda; Agent 2 (direto) tem fluxo próprio.
