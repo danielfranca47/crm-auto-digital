@@ -9,6 +9,7 @@ import { CamadaApresentacao } from '@/components/agente/CamadaApresentacao';
 import { CamadaOferta } from '@/components/agente/CamadaOferta';
 import { ConexaoNumero } from '@/components/agente/ConexaoNumero';
 import { AgentExportImportPanel } from '@/components/agente/AgentExportImportPanel';
+import { TooltipProvider } from '@/components/ui/tooltip';
 import { api } from '@/services/api';
 import { DEFAULT_AGENT_CONFIG, KNOWLEDGE_CATEGORIES_BY_TEMPLATE } from '@/types/agente';
 import type { AgentConfig } from '@/types/agente';
@@ -484,6 +485,7 @@ export default function AiProfile() {
 
   return (
     <OrionShell>
+    <TooltipProvider>
       {/* Topbar */}
       <header className="o-topbar">
         <div className="font-mono-orion" style={{ fontSize: 11, letterSpacing: 3, textTransform: 'uppercase', color: 'var(--o-sub)', paddingRight: 24, borderRight: '1px solid var(--o-b1)', marginRight: 20, whiteSpace: 'nowrap' }}>
@@ -658,6 +660,7 @@ export default function AiProfile() {
           </div>
         )}
       </div>
+    </TooltipProvider>
     </OrionShell>
   );
 }

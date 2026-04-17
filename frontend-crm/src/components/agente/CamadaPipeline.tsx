@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { FieldHelp } from './FieldHelp';
 import type { AgentConfig } from '@/types/agente';
 import { LGPD_LABELS, REATIVACAO_LABELS, MEDIA_FALLBACK_LABELS } from '@/types/agente';
 import { buildVariableList } from '@/types/variables';
@@ -282,8 +283,8 @@ export function CamadaPipeline({ config, onUpdate, phoneNumber }: CamadaPipeline
       </div>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 14, marginBottom: 24 }}>
         <InfoCard label="Número conectado" value={phoneNumber ?? '—'} sub="Sessão QR via WhatsApp Web" status="ok" />
-        <EditCard label="Intervalo entre mensagens" value={`${config.interval_min}–${config.interval_max} segundos`} sub="Delay simulado de comportamento humano" onClick={() => setDrawer('intervalo')} status="ok" />
-        <EditCard label="Limite diário de disparos" value={`${config.daily_limit} mensagens/dia`} sub="Proteção comportamental" onClick={() => setDrawer('limite')} status="ok" />
+        <EditCard label="Intervalo entre mensagens" value={`${config.interval_min}–${config.interval_max} segundos`} sub="Delay simulado de comportamento humano" onClick={() => setDrawer('intervalo')} status="ok" help="Intervalo aleatório entre mensagens consecutivas. Simula comportamento humano e reduz risco de ban pelo WhatsApp. Valores muito baixos aumentam a suspeita de automação." />
+        <EditCard label="Limite diário de disparos" value={`${config.daily_limit} mensagens/dia`} sub="Proteção comportamental" onClick={() => setDrawer('limite')} status="ok" help="Limite de disparos por dia neste número. Recomendado 150–300 para uso regular. Acima disso aumenta o risco de detecção e bloqueio pelo WhatsApp." />
       </div>
 
       {/* Seção 1: Comportamento por evento */}
@@ -302,18 +303,21 @@ export function CamadaPipeline({ config, onUpdate, phoneNumber }: CamadaPipeline
           label="Mídia inválida" sub="Áudio, vídeo, figurinha ou reação"
           value={MEDIA_FALLBACK_LABELS[config.media_fallback] || config.media_fallback || '—'}
           onClick={() => setDrawer('midia')} status={mediaConfigured ? 'ok' : 'warn'}
+          help="O que fazer quando o lead envia mídia não processável (áudio, vídeo, figurinha, reação): continuar o fluxo normalmente, pausar o bot ou ignorar silenciosamente."
         />
         <EditCard
           label="Opt-out por palavra-chave" sub="STOP · PARAR · SAIR · CANCELAR"
           value={optoutConfigured ? `${config.opt_out_keywords.length} palavras configuradas` : 'Não configurado'}
           onClick={() => setModal('optout')} status={optoutConfigured ? 'ok' : 'miss'}
           critical={!optoutConfigured}
+          help="Palavras que indicam que o lead quer parar de receber mensagens. Crítico: sem configuração, o bot continua contatando quem pediu para parar — risco direto de ban do número."
         />
         <EditCard
           label="Consentimento LGPD" sub="Lei brasileira — obrigatório"
           value={LGPD_LABELS[config.lgpd_mode] || 'Não configurado'}
           onClick={() => setModal('lgpd')} status={lgpdConfigured ? 'ok' : 'miss'}
           critical={!lgpdConfigured}
+          help="Define quando o agente coleta consentimento de uso de dados. Obrigatório por lei brasileira (LGPD). Pode ser implícito (inbound), explícito (confirmação) ou apenas no outbound."
         />
       </div>
 
@@ -328,12 +332,14 @@ export function CamadaPipeline({ config, onUpdate, phoneNumber }: CamadaPipeline
           label="Thresholds de follow-up" sub="Cadência espaçada — proteção comportamental"
           value={fu1Label}
           onClick={() => setDrawer('followup')} status={followupConfigured ? 'ok' : 'warn'}
+          help="Intervalos da cadência de follow-up após silêncio do lead (1ª, 2ª e 3ª tentativa). Cadências muito curtas parecem spam; muito longas perdem o momento de compra."
         />
         <EditCard
           label="Follow-up avançado"
           sub={`Máx. ${config.followup_max_attempts} tentativas · ${config.followup_allowed_hours}`}
           value={`Cadência: ${config.followup_cadence || 'não configurada'}`}
           onClick={() => setDrawer('followup_avancado')} status="ok"
+          help="Parâmetros avançados: máximo de tentativas (após isso o lead é arquivado), horário permitido de envio e cadência personalizada em minutos."
         />
       </div>
 
@@ -354,6 +360,7 @@ export function CamadaPipeline({ config, onUpdate, phoneNumber }: CamadaPipeline
           value={REATIVACAO_LABELS[config.reactivation_mode] || 'Não configurado'}
           onClick={() => setModal('reativacao')} status={reatConfigured ? 'ok' : 'miss'}
           critical={!reatConfigured}
+          help="O que acontece quando um lead arquivado envia uma mensagem espontaneamente: reativar o bot, reiniciar o fluxo, retomar do ponto exato, ou apenas notificar o operador sem responder."
         />
       </div>
 
@@ -374,15 +381,15 @@ export function CamadaPipeline({ config, onUpdate, phoneNumber }: CamadaPipeline
 
 // ─── Componentes internos ─────────────────────────────────────
 
-function EditCard({ label, value, sub, onClick, status, critical }: {
+function EditCard({ label, value, sub, onClick, status, critical, help }: {
   label: string; value: string; sub: string; onClick: () => void;
-  status: 'ok' | 'warn' | 'miss'; critical?: boolean;
+  status: 'ok' | 'warn' | 'miss'; critical?: boolean; help?: string;
 }) {
   const borderColor = critical ? 'var(--o-hot-b)' : 'var(--o-b0)';
   const valueColor  = status === 'miss' ? 'var(--o-hot)' : status === 'warn' ? 'var(--o-warn)' : 'var(--o-text)';
   return (
     <div className="o-edit-card" style={{ borderColor }} onClick={onClick}>
-      <div className="font-mono-orion" style={{ fontSize: 8, letterSpacing: 2, textTransform: 'uppercase', color: 'var(--o-dim)', marginBottom: 6 }}>{label}</div>
+      <div className="font-mono-orion" style={{ fontSize: 8, letterSpacing: 2, textTransform: 'uppercase', color: 'var(--o-dim)', marginBottom: 6, display: 'flex', alignItems: 'center' }}>{label}{help && <FieldHelp text={help} />}</div>
       <div style={{ fontSize: 13, color: valueColor, marginBottom: 4 }}>{value}</div>
       <div style={{ fontSize: 11, color: 'var(--o-sub)', fontWeight: 300, marginBottom: 8 }}>{sub}</div>
       <span className={`o-badge ${status === 'ok' ? 'o-badge-ok' : status === 'warn' ? 'o-badge-warn' : 'o-badge-miss'}`}>

@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { FieldHelp } from './FieldHelp';
 import type { AgentConfig } from '@/types/agente';
 import { PAYMENT_GATEWAY_LABELS, OFFER_MEDIA_TYPE_LABELS } from '@/types/agente';
 import { api } from '@/services/api';
@@ -147,6 +148,7 @@ export function CamadaOferta({ config, onUpdate }: CamadaOfertaProps) {
           sub="Imagem, vídeo ou áudio enviado com a oferta"
           onClick={() => setDrawer('midia')}
           status={config.offer_media_url ? 'ok' : 'warn'}
+          help="Mídia enviada ao lead junto com a oferta (imagem de produto, vídeo de vendas, áudio de apresentação). Use um link público direto — o WhatsApp precisa acessar a URL para baixar."
         />
       </div>
 
@@ -163,6 +165,7 @@ export function CamadaOferta({ config, onUpdate }: CamadaOfertaProps) {
           sub="Preço apresentado ao lead"
           onClick={() => setDrawer('detalhes')}
           status={config.offer_anchor_price ? 'ok' : 'warn'}
+          help="Preço âncora para criar percepção de valor. Ex: 'de R$997 por R$497'. Mostrar o preço original antes do desconto aumenta a conversão da oferta."
         />
         <EditCard
           label="Garantia"
@@ -171,6 +174,7 @@ export function CamadaOferta({ config, onUpdate }: CamadaOfertaProps) {
           onClick={() => setDrawer('detalhes')}
           status={config.offer_guarantee_text ? 'ok' : 'warn'}
           italic
+          help="Texto da garantia apresentada ao lead. Ex: '7 dias de reembolso total'. Reduz a objeção de risco — o lead se sente mais seguro para decidir na hora."
         />
         <EditCard
           label="Upsell pós-compra"
@@ -179,6 +183,7 @@ export function CamadaOferta({ config, onUpdate }: CamadaOfertaProps) {
           onClick={() => setDrawer('detalhes')}
           status={config.offer_upsell_message ? 'ok' : 'warn'}
           italic
+          help="Mensagem enviada automaticamente após o cliente confirmar a compra. Use para oferecer um upgrade, produto complementar ou bônus exclusivo enquanto o cliente ainda está aquecido."
         />
       </div>
 
@@ -195,6 +200,7 @@ export function CamadaOferta({ config, onUpdate }: CamadaOfertaProps) {
           sub="Onde o lead finaliza a compra"
           onClick={() => setModal('gateway')}
           status={config.payment_gateway ? 'ok' : 'warn'}
+          help="Plataforma de pagamento integrada (Hotmart, Kiwify, Stripe ou link genérico). O agente envia o link de checkout automaticamente após fechar a venda. Habilita o webhook de compra confirmada."
         />
       </div>
 
@@ -209,8 +215,8 @@ export function CamadaOferta({ config, onUpdate }: CamadaOfertaProps) {
           <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginBottom: 24 }}>
             {/* URL do webhook */}
             <div>
-              <div className="font-mono-orion" style={{ fontSize: 8, letterSpacing: 2, textTransform: 'uppercase', color: 'var(--o-dim)', marginBottom: 6 }}>
-                URL do webhook
+              <div className="font-mono-orion" style={{ fontSize: 8, letterSpacing: 2, textTransform: 'uppercase', color: 'var(--o-dim)', marginBottom: 6, display: 'flex', alignItems: 'center' }}>
+                URL do webhook <FieldHelp text="URL gerada automaticamente. Configure este endereço no painel da plataforma de pagamento para que ela notifique o CRM quando uma compra for confirmada." />
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                 <input
@@ -232,8 +238,8 @@ export function CamadaOferta({ config, onUpdate }: CamadaOfertaProps) {
 
             {/* Token do webhook */}
             <div>
-              <div className="font-mono-orion" style={{ fontSize: 8, letterSpacing: 2, textTransform: 'uppercase', color: 'var(--o-dim)', marginBottom: 6 }}>
-                Token de validação (secret)
+              <div className="font-mono-orion" style={{ fontSize: 8, letterSpacing: 2, textTransform: 'uppercase', color: 'var(--o-dim)', marginBottom: 6, display: 'flex', alignItems: 'center' }}>
+                Token de validação (secret) <FieldHelp text="Token de segurança para validar que as notificações vêm realmente da plataforma de pagamento. Nunca compartilhe publicamente — configure-o no painel da plataforma." />
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                 <input
@@ -285,15 +291,15 @@ export function CamadaOferta({ config, onUpdate }: CamadaOfertaProps) {
 
 // ─── Componentes internos ─────────────────────────────────────
 
-function EditCard({ label, value, sub, onClick, status, italic }: {
+function EditCard({ label, value, sub, onClick, status, italic, help }: {
   label: string; value: string; sub: string; onClick: () => void;
-  status?: 'ok' | 'warn' | 'miss'; italic?: boolean;
+  status?: 'ok' | 'warn' | 'miss'; italic?: boolean; help?: string;
 }) {
   const borderColor = status === 'miss' ? 'var(--o-hot-b)' : 'var(--o-b0)';
   const valueColor  = status === 'miss' ? 'var(--o-hot)' : status === 'warn' ? 'var(--o-warn)' : 'var(--o-text)';
   return (
     <div className="o-edit-card" style={{ borderColor }} onClick={onClick}>
-      <div className="font-mono-orion" style={{ fontSize: 8, letterSpacing: 2, textTransform: 'uppercase', color: 'var(--o-dim)', marginBottom: 6 }}>{label}</div>
+      <div className="font-mono-orion" style={{ fontSize: 8, letterSpacing: 2, textTransform: 'uppercase', color: 'var(--o-dim)', marginBottom: 6, display: 'flex', alignItems: 'center' }}>{label}{help && <FieldHelp text={help} />}</div>
       <div style={{ fontSize: 13, color: valueColor, marginBottom: 4, fontStyle: italic ? 'italic' : 'normal' }}>{value}</div>
       <div style={{ fontSize: 11, color: 'var(--o-sub)', fontWeight: 300, marginBottom: status ? 8 : 0 }}>{sub}</div>
       {status && (

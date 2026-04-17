@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { FieldHelp } from './FieldHelp';
 import type { AgentConfig } from '@/types/agente';
 import { CALENDAR_INTEGRATION_LABELS, BRIEFING_CHANNEL_LABELS } from '@/types/agente';
 
@@ -161,6 +162,7 @@ export function CamadaApresentacao({ config, onUpdate }: CamadaApresentacaoProps
           sub="Como o agente conduz o lead após qualificar"
           onClick={() => setModal('modoOperacao')}
           status="ok"
+          help="Exploratório: o lead agenda uma sessão de diagnóstico sem compromisso. Comercial: o agente apresenta preços e trata objeções antes de agendar — maior conversão, maior resistência inicial."
         />
       </div>
 
@@ -177,6 +179,7 @@ export function CamadaApresentacao({ config, onUpdate }: CamadaApresentacaoProps
           sub="Mensagens enviadas ao lead antes da reunião"
           onClick={() => setDrawer('lembretes')}
           status="ok"
+          help="Mensagens automáticas de lembrete enviadas ao lead via WhatsApp antes da reunião. Reduz no-show significativamente. O fuso horário é o configurado na Camada 1."
         />
       </div>
 
@@ -193,6 +196,7 @@ export function CamadaApresentacao({ config, onUpdate }: CamadaApresentacaoProps
           sub="Resumo do lead para o operador"
           onClick={() => setDrawer('briefing')}
           status={config.briefing_enabled ? 'ok' : 'warn'}
+          help="Ativa o envio automático de um resumo do lead ao operador antes da reunião. O operador chega preparado para a conversa com contexto, histórico e qualificação do lead."
         />
         {config.briefing_enabled && config.briefing_channel === 'whatsapp' && (
           <EditCard
@@ -201,6 +205,7 @@ export function CamadaApresentacao({ config, onUpdate }: CamadaApresentacaoProps
             sub="WhatsApp de destino do dossiê"
             onClick={() => setDrawer('briefing')}
             status={config.operator_whatsapp ? 'ok' : 'miss'}
+            help="Número de WhatsApp que receberá o dossiê pré-reunião. Formato internacional com DDI: +5511999999999."
           />
         )}
       </div>
@@ -218,6 +223,7 @@ export function CamadaApresentacao({ config, onUpdate }: CamadaApresentacaoProps
           sub="Verificação de disponibilidade e agendamento"
           onClick={() => setModal('calendario')}
           status={config.calendar_integration && config.calendar_integration !== 'none' ? 'ok' : 'warn'}
+          help="Integração de calendário: sem integração (agendamento manual), Google Calendar (cria eventos e verifica disponibilidade automaticamente) ou Calendly (compartilha link)."
         />
       </div>
 
@@ -255,15 +261,15 @@ export function CamadaApresentacao({ config, onUpdate }: CamadaApresentacaoProps
 
 // ─── Componentes internos ─────────────────────────────────────
 
-function EditCard({ label, value, sub, onClick, status }: {
+function EditCard({ label, value, sub, onClick, status, help }: {
   label: string; value: string; sub: string; onClick: () => void;
-  status?: 'ok' | 'warn' | 'miss';
+  status?: 'ok' | 'warn' | 'miss'; help?: string;
 }) {
   const borderColor = status === 'miss' ? 'var(--o-hot-b)' : 'var(--o-b0)';
   const valueColor  = status === 'miss' ? 'var(--o-hot)' : status === 'warn' ? 'var(--o-warn)' : 'var(--o-text)';
   return (
     <div className="o-edit-card" style={{ borderColor }} onClick={onClick}>
-      <div className="font-mono-orion" style={{ fontSize: 8, letterSpacing: 2, textTransform: 'uppercase', color: 'var(--o-dim)', marginBottom: 6 }}>{label}</div>
+      <div className="font-mono-orion" style={{ fontSize: 8, letterSpacing: 2, textTransform: 'uppercase', color: 'var(--o-dim)', marginBottom: 6, display: 'flex', alignItems: 'center' }}>{label}{help && <FieldHelp text={help} />}</div>
       <div style={{ fontSize: 13, color: valueColor, marginBottom: 4 }}>{value}</div>
       <div style={{ fontSize: 11, color: 'var(--o-sub)', fontWeight: 300, marginBottom: status ? 8 : 0 }}>{sub}</div>
       {status && (

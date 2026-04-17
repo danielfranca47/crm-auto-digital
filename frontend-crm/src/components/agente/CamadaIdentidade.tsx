@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { FieldHelp } from './FieldHelp';
 import type { AgentConfig } from '@/types/agente';
 import {
   AGENT_MODE_LABELS,
@@ -24,7 +25,7 @@ function DrawerNome({ value, onSave, onClose }: { value: string; onSave: (v: str
   return (
     <DrawerBase title="Nome do agente" sub="Como o agente se apresenta ao lead" onClose={onClose} onSave={() => onSave(local)}>
       <div className="o-field">
-        <label className="o-field-label">Nome</label>
+        <label className="o-field-label">Nome <FieldHelp text="Este nome aparece em todas as mensagens. Escolha um nome que combine com a personalidade e o posicionamento da marca." /></label>
         <div className="o-field-hint">Este nome aparecerá em todas as mensagens enviadas.</div>
         <input className="o-input" value={local} maxLength={40} onChange={e => setLocal(e.target.value)} placeholder="Ex: Sofia, Max, Atendente…" />
         <div className="o-char-count">{local.length}/40</div>
@@ -92,7 +93,7 @@ function DrawerGoals({ value, onSave, onClose }: { value: string; onSave: (v: st
   return (
     <DrawerBase title="Prioridades do atendimento" sub="Objetivos que o agente deve ter em toda conversa" onClose={onClose} onSave={() => onSave(local)}>
       <div className="o-field">
-        <label className="o-field-label">Prioridades (uma por linha)</label>
+        <label className="o-field-label">Prioridades (uma por linha) <FieldHelp text="Liste as prioridades em ordem de importância. O agente usa essas instruções para decidir como conduzir cada conversa." /></label>
         <div className="o-field-hint">Ex: "1. Qualificar em até 5 mensagens" · "2. Sempre perguntar sobre urgência"</div>
         <textarea className="o-textarea" style={{ minHeight: 140 }} value={local} maxLength={600} onChange={e => setLocal(e.target.value)} placeholder="1. Identificar a dor principal&#10;2. Apresentar a solução de forma consultiva&#10;3. Conduzir para o agendamento" />
         <div className="o-char-count">{local.length}/600</div>
@@ -112,7 +113,7 @@ function DrawerHandoff({ policy, text, customVars, onSave, onClose }: {
   return (
     <DrawerBase title="Política de handoff" sub="O que acontece quando um humano precisa assumir a conversa" onClose={onClose} onSave={() => onSave(localPolicy, localText)}>
       <div className="o-field">
-        <label className="o-field-label">Comportamento ao fazer handoff</label>
+        <label className="o-field-label">Comportamento ao fazer handoff <FieldHelp text="Define o que o bot faz quando um humano assume: desabilitar para não atrapalhar, manter ativo notificando o lead, ou não tomar ação alguma." /></label>
         <select className="o-select" value={localPolicy} onChange={e => setLocalPolicy(e.target.value)}>
           <option value="keep_active_notify">Manter bot ativo e notificar operador</option>
           <option value="disable_bot">Desabilitar bot imediatamente</option>
@@ -120,7 +121,7 @@ function DrawerHandoff({ policy, text, customVars, onSave, onClose }: {
         </select>
       </div>
       <div className="o-field">
-        <label className="o-field-label">Mensagem personalizada de handoff</label>
+        <label className="o-field-label">Mensagem personalizada de handoff <FieldHelp text="Enviada ao lead no momento da transferência para humano. Use variáveis como {{agente.nome}} para personalizar." /></label>
         <div className="o-field-hint">Enviada ao lead quando o bot encaminha para humano. Deixe em branco para usar o padrão do sistema.</div>
         <VariableTextarea
           value={localText}
@@ -415,15 +416,16 @@ export function CamadaIdentidade({ config, onUpdate, resumo }: CamadaIdentidadeP
 
       {/* Seção: Identidade */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 14, marginBottom: 24 }}>
-        <EditCard label="Nome do agente"    value={config.name || '—'}       sub="Como se apresenta ao lead"       onClick={() => setDrawer('nome')} />
-        <EditCard label="Empresa"           value={config.brand_name || '—'} sub="Marca ou empresa representada"   onClick={() => setDrawer('empresa')} />
-        <EditCard label="Nicho de mercado"  value={config.niche || '—'}      sub="Segmento de atuação"             onClick={() => setDrawer('nicho')} />
-        <EditCard label="Fuso horário"      value={config.timezone || '—'}   sub="Para follow-ups e lembretes"     onClick={() => setDrawer('timezone')} />
+        <EditCard label="Nome do agente"    value={config.name || '—'}       sub="Como se apresenta ao lead"       onClick={() => setDrawer('nome')}    help="Nome com que o agente se identifica nas conversas. Aparece nas mensagens de abertura e no perfil gerado automaticamente." />
+        <EditCard label="Empresa"           value={config.brand_name || '—'} sub="Marca ou empresa representada"   onClick={() => setDrawer('empresa')} help="Nome da empresa representada. Usado em mensagens de apresentação e na base de conhecimento." />
+        <EditCard label="Nicho de mercado"  value={config.niche || '—'}      sub="Segmento de atuação"             onClick={() => setDrawer('nicho')}   help="Segmento de mercado (ex: clínica odontológica, consultoria de RH). Orienta o tom e o vocabulário do agente." />
+        <EditCard label="Fuso horário"      value={config.timezone || '—'}   sub="Para follow-ups e lembretes"     onClick={() => setDrawer('timezone')} help="Fuso horário do negócio. Usado para agendar follow-ups e lembretes no horário correto para o lead." />
         <EditCard
           label="Modo de identidade"
           value={IDENTITY_MODE_LABELS[config.identity_mode] || config.identity_mode || '—'}
           sub="Como se apresenta ao lead"
           onClick={() => setModal('identidade')}
+          help="Como o agente se apresenta: Assistente Virtual (transparente sobre ser IA), Agente Humano (persona humana) ou Clone do Usuário (imita você mesmo). Afeta confiança e tom da conversa."
         />
         <EditCard
           label="Perfil gerado"
@@ -431,6 +433,7 @@ export function CamadaIdentidade({ config, onUpdate, resumo }: CamadaIdentidadeP
           sub="Instruções personalizadas do system prompt"
           onClick={() => setModal('perfil')}
           italic
+          help="Perfil detalhado injetado no system prompt. Define personalidade, contexto e regras internas do agente. Edite livremente ou regenere a partir das configurações."
         />
       </div>
 
@@ -443,13 +446,14 @@ export function CamadaIdentidade({ config, onUpdate, resumo }: CamadaIdentidadeP
             </span>
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 14, marginBottom: 24 }}>
-            <EditCard label="Tom de comunicação" value={config.tone_of_voice || '—'} sub="Estilo de linguagem" onClick={() => setDrawer('tom')} />
+            <EditCard label="Tom de comunicação" value={config.tone_of_voice || '—'} sub="Estilo de linguagem" onClick={() => setDrawer('tom')} help="Descreva o tom ideal: formal, descontraído, técnico, empático etc. O agente adapta o estilo de escrita de acordo." />
             <EditCard
               label="Prioridades do atendimento"
               value={config.goals ? config.goals.slice(0, 50) + '…' : 'Não configurado'}
               sub="Objetivos de cada conversa"
               onClick={() => setDrawer('goals')}
               italic
+              help="Prioridades de atendimento em ordem. Ex: 1. Qualificar em até 5 mensagens · 2. Sempre perguntar urgência. Orienta o foco do agente em cada conversa."
             />
           </div>
 
@@ -467,6 +471,7 @@ export function CamadaIdentidade({ config, onUpdate, resumo }: CamadaIdentidadeP
                   value={config.response_style === 'passive' ? 'Passivo — responde primeiro' : 'Ativo — faz perguntas'}
                   sub={config.response_style === 'passive' ? 'Responde dúvidas antes de qualificar' : 'Qualifica antes de responder'}
                   onClick={() => setDrawer('response_style')}
+                  help="Ativo: o agente faz perguntas diretas para qualificar. Passivo: responde primeiro às dúvidas do lead e captura dados de forma natural. Recomendado Passivo para alto ticket."
                 />
               </div>
             </>
@@ -485,6 +490,7 @@ export function CamadaIdentidade({ config, onUpdate, resumo }: CamadaIdentidadeP
               sub="Lead entra em contato primeiro"
               onClick={() => setDrawer('inbound_opener')}
               italic
+              help="Primeira mensagem enviada quando o lead chega por conta própria (inbound). Define o tom de boas-vindas. Use variáveis como {{lead.nome}} para personalizar."
             />
             <EditCard
               label="Abertura · Outbound"
@@ -492,6 +498,7 @@ export function CamadaIdentidade({ config, onUpdate, resumo }: CamadaIdentidadeP
               sub="Bot inicia o contato"
               onClick={() => setDrawer('outbound_opener')}
               italic
+              help="Primeira mensagem enviada em prospecção ativa (outbound). Deve ser direta e gerar curiosidade sem parecer spam. Use {{lead.nome}} para personalizar."
             />
             <EditCard
               label="Social proof"
@@ -499,6 +506,7 @@ export function CamadaIdentidade({ config, onUpdate, resumo }: CamadaIdentidadeP
               sub="Prova social para aquecimento"
               onClick={() => setDrawer('social_proof')}
               italic
+              help="Prova social enviada durante o aquecimento. Ex: depoimentos, número de clientes, resultados alcançados. Aumenta credibilidade antes da oferta."
             />
             <EditCard
               label="Preview da sessão"
@@ -506,6 +514,7 @@ export function CamadaIdentidade({ config, onUpdate, resumo }: CamadaIdentidadeP
               sub="O que o lead pode esperar"
               onClick={() => setDrawer('session_preview')}
               italic
+              help="Preview do que acontecerá na sessão ou reunião. Reduz ansiedade e aumenta o comparecimento ao preparar o lead mentalmente para a compra."
             />
           </div>
 
@@ -525,6 +534,7 @@ export function CamadaIdentidade({ config, onUpdate, resumo }: CamadaIdentidadeP
               }
               sub="Use / nos campos de mensagem para inserir"
               onClick={() => setDrawer('variaveis')}
+              help="Variáveis reutilizáveis injetáveis em qualquer mensagem via {{variavel}}. Ex: link do calendário, nome do responsável, endereço do escritório."
             />
           </div>
 
@@ -542,6 +552,7 @@ export function CamadaIdentidade({ config, onUpdate, resumo }: CamadaIdentidadeP
                   value={HANDOFF_LABELS[config.handoff_policy] || config.handoff_policy || '—'}
                   sub="Ação ao transferir para humano"
                   onClick={() => setDrawer('handoff')}
+                  help="O que o agente faz quando um humano assume a conversa: desativar o bot, continuar ativo avisando o lead, ou não fazer nada."
                 />
                 <EditCard
                   label="Mensagem de handoff"
@@ -549,6 +560,7 @@ export function CamadaIdentidade({ config, onUpdate, resumo }: CamadaIdentidadeP
                   sub="Texto enviado ao transferir"
                   onClick={() => setDrawer('handoff')}
                   italic
+                  help="Mensagem enviada ao lead quando o bot passa para atendimento humano. Deixe em branco para usar o texto padrão do sistema."
                 />
               </div>
             </>
@@ -624,13 +636,13 @@ export function CamadaIdentidade({ config, onUpdate, resumo }: CamadaIdentidadeP
 
 // ─── Componentes internos reutilizáveis ───────────────────────
 
-function EditCard({ label, value, sub, onClick, italic }: {
-  label: string; value: string; sub: string; onClick: () => void; italic?: boolean;
+function EditCard({ label, value, sub, onClick, italic, help }: {
+  label: string; value: string; sub: string; onClick: () => void; italic?: boolean; help?: string;
 }) {
   return (
     <div className="o-edit-card" onClick={onClick}>
-      <div className="font-mono-orion" style={{ fontSize: 8, letterSpacing: 2, textTransform: 'uppercase', color: 'var(--o-dim)', marginBottom: 6 }}>
-        {label}
+      <div className="font-mono-orion" style={{ fontSize: 8, letterSpacing: 2, textTransform: 'uppercase', color: 'var(--o-dim)', marginBottom: 6, display: 'flex', alignItems: 'center' }}>
+        {label}{help && <FieldHelp text={help} />}
       </div>
       <div style={{ fontSize: 13, color: 'var(--o-text)', marginBottom: 4, fontStyle: italic ? 'italic' : 'normal' }}>
         {value}

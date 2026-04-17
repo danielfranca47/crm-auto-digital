@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
+import { FieldHelp } from './FieldHelp';
 import type { AgentConfig, QualificationField } from '@/types/agente';
 
 interface CamadaQualificacaoProps {
@@ -889,11 +890,11 @@ export function CamadaQualificacao({ config, onUpdate }: CamadaQualificacaoProps
         </span>
       </div>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 14, marginBottom: 24 }}>
-        <EditCard label="Produto ou serviço" value={config.offer_description || '—'} sub="O que você vende em uma frase" onClick={() => setDrawer('produto')} />
-        <EditCard label="Ticket médio"       value={config.ticket_range || '—'}      sub="Valor por venda ou contrato"     onClick={() => setDrawer('ticket')} />
-        <EditCard label="Cliente ideal"      value={config.target_audience || '—'}   sub="Perfil e situação de vida"        onClick={() => setDrawer('publico')} />
-        <EditCard label="Principal dor"      value={config.main_pain || '—'}          sub="Problema antes de te contratar"  onClick={() => setDrawer('dor')} />
-        <EditCard label="Objeção mais comum" value={config.main_objection || '—'}     sub="O que o lead fala ao não comprar" onClick={() => setDrawer('objecao')} />
+        <EditCard label="Produto ou serviço" value={config.offer_description || '—'} sub="O que você vende em uma frase" onClick={() => setDrawer('produto')} help="Descreva o produto ou serviço em 1–2 frases. Quanto mais detalhado, melhor o agente contextualiza a oferta nas conversas." />
+        <EditCard label="Ticket médio"       value={config.ticket_range || '—'}      sub="Valor por venda ou contrato"     onClick={() => setDrawer('ticket')} help="Faixa de preço do produto. Ajuda o agente a calibrar o tom — produtos de alto ticket exigem mais confiança e qualificação antes da oferta." />
+        <EditCard label="Cliente ideal"      value={config.target_audience || '—'}   sub="Perfil e situação de vida"        onClick={() => setDrawer('publico')} help="Perfil do cliente ideal (persona). Usado para que o agente identifique leads alinhados e filtre os que não têm fit com a oferta." />
+        <EditCard label="Principal dor"      value={config.main_pain || '—'}          sub="Problema antes de te contratar"  onClick={() => setDrawer('dor')} help="Principal dor ou problema que seu produto resolve. O agente usa isso para criar conexão emocional e aumentar relevância na conversa." />
+        <EditCard label="Objeção mais comum" value={config.main_objection || '—'}     sub="O que o lead fala ao não comprar" onClick={() => setDrawer('objecao')} help="Objeção mais frequente antes da compra (ex: está caro, preciso pensar). O agente aprende a tratar esta objeção com antecedência." />
       </div>
 
       {/* 4.6 — Banner de sugestão */}
@@ -927,12 +928,14 @@ export function CamadaQualificacao({ config, onUpdate }: CamadaQualificacaoProps
               count={f1Count}
               sub={isPassive ? 'indícios de fit captados passivamente' : 'Localização · uso pessoal · decisor'}
               onClick={() => setModal('f1')}
+              help="Perguntas binárias que validam se o lead está dentro do público-alvo (localização, decisor, uso). Fase inicial de triagem — elimina leads sem fit antes de gastar mais tempo."
             />
             <FiltroCard
               label={isPassive ? 'F2 · Intenção e Dor' : 'Filtro 2 · Intenção e dor'}
               count={f2Count}
               sub={isPassive ? 'sinais de dor captados sem perguntar' : 'Abertas · exploratórias · contexto'}
               onClick={() => setModal('f2')}
+              help="Perguntas abertas para revelar contexto, urgência e a dor do lead. Avança leads com intenção clara e dor identificada para a fase de fechamento."
             />
             <FiltroCard
               label={isPassive ? 'F3 · 4Ps · Fechamento' : 'Filtro 3 · 4Ps'}
@@ -940,6 +943,7 @@ export function CamadaQualificacao({ config, onUpdate }: CamadaQualificacaoProps
               sub={isPassive ? '⚡ confirmações e perguntas de fechamento' : 'Poder · prioridade · preço · timing'}
               onClick={() => setModal('f3')}
               highlight={isPassive}
+              help="Qualificação profunda via os 4Ps: Problema, Prioridade, Poder de compra e Prazo. No modo passivo, apenas perguntas estratégicas de fechamento (alternativas binárias) são permitidas aqui."
             />
           </div>
         </>
@@ -964,9 +968,10 @@ export function CamadaQualificacao({ config, onUpdate }: CamadaQualificacaoProps
           value={`${config.qualification_score_threshold} / 12`}
           sub="Pontuação para avançar no pipeline"
           onClick={() => setDrawer('score')}
+          help="Pontuação mínima para o lead avançar no pipeline. Cada campo de qualificação respondido vale 1 ponto. Leads abaixo são descartados ou enviados para nurture."
         />
         <div className="o-edit-card" onClick={() => onUpdate({ nurture_vs_discard_rule: !config.nurture_vs_discard_rule })}>
-          <div className="font-mono-orion" style={{ fontSize: 8, letterSpacing: 2, textTransform: 'uppercase', color: 'var(--o-dim)', marginBottom: 6 }}>Nurture vs Descarte</div>
+          <div className="font-mono-orion" style={{ fontSize: 8, letterSpacing: 2, textTransform: 'uppercase', color: 'var(--o-dim)', marginBottom: 6, display: 'flex', alignItems: 'center' }}>Nurture vs Descarte <FieldHelp text="Leads abaixo do score mínimo: Nurture — continua recebendo conteúdo e pode avançar depois; Descarte — arquivado imediatamente." /></div>
           <div style={{ fontSize: 13, color: 'var(--o-text)', marginBottom: 4 }}>{config.nurture_vs_discard_rule ? 'Nurture passivo' : 'Descarte imediato'}</div>
           <div style={{ fontSize: 11, color: 'var(--o-sub)', fontWeight: 300, marginBottom: 8 }}>Lead abaixo do score</div>
           <span className={`o-badge ${config.nurture_vs_discard_rule ? 'o-badge-ok' : 'o-badge-warn'}`}>
@@ -980,6 +985,7 @@ export function CamadaQualificacao({ config, onUpdate }: CamadaQualificacaoProps
             value={config.buying_signal_keywords.length > 0 ? `${config.buying_signal_keywords.length} sinal(is)` : 'Não configurado'}
             sub="Palavras que indicam intenção de compra"
             onClick={() => setModal('buying_signals')}
+            help="Palavras ou frases que indicam intenção de compra do lead (ex: quanto custa, quero contratar, já decidi). Ao detectá-las, o agente acelera o funil automaticamente."
           />
         )}
       </div>
@@ -1042,10 +1048,10 @@ export function CamadaQualificacao({ config, onUpdate }: CamadaQualificacaoProps
 
 // ─── Componentes internos ─────────────────────────────────────
 
-function EditCard({ label, value, sub, onClick }: { label: string; value: string; sub: string; onClick: () => void }) {
+function EditCard({ label, value, sub, onClick, help }: { label: string; value: string; sub: string; onClick: () => void; help?: string }) {
   return (
     <div className="o-edit-card" onClick={onClick}>
-      <div className="font-mono-orion" style={{ fontSize: 8, letterSpacing: 2, textTransform: 'uppercase', color: 'var(--o-dim)', marginBottom: 6 }}>{label}</div>
+      <div className="font-mono-orion" style={{ fontSize: 8, letterSpacing: 2, textTransform: 'uppercase', color: 'var(--o-dim)', marginBottom: 6, display: 'flex', alignItems: 'center' }}>{label}{help && <FieldHelp text={help} />}</div>
       <div style={{ fontSize: 13, color: 'var(--o-text)', marginBottom: 4 }}>{value}</div>
       <div style={{ fontSize: 11, color: 'var(--o-sub)', fontWeight: 300 }}>{sub}</div>
       <span className="o-edit-arrow">›</span>
@@ -1053,13 +1059,13 @@ function EditCard({ label, value, sub, onClick }: { label: string; value: string
   );
 }
 
-function FiltroCard({ label, count, sub, onClick, highlight }: {
-  label: string; count: number; sub: string; onClick: () => void; highlight?: boolean;
+function FiltroCard({ label, count, sub, onClick, highlight, help }: {
+  label: string; count: number; sub: string; onClick: () => void; highlight?: boolean; help?: string;
 }) {
   const hasFields = count > 0;
   return (
     <div className="o-edit-card" onClick={onClick} style={highlight ? { borderColor: 'color-mix(in srgb, var(--o-purple) 40%, transparent)' } : undefined}>
-      <div className="font-mono-orion" style={{ fontSize: 8, letterSpacing: 2, textTransform: 'uppercase', color: highlight ? 'var(--o-purple)' : 'var(--o-dim)', marginBottom: 6 }}>{label}</div>
+      <div className="font-mono-orion" style={{ fontSize: 8, letterSpacing: 2, textTransform: 'uppercase', color: highlight ? 'var(--o-purple)' : 'var(--o-dim)', marginBottom: 6, display: 'flex', alignItems: 'center' }}>{label}{help && <FieldHelp text={help} />}</div>
       <div style={{ fontSize: 13, color: 'var(--o-text)', marginBottom: 4 }}>
         {count === 0 ? 'Sem campos' : `${count} campo${count !== 1 ? 's' : ''} ativo${count !== 1 ? 's' : ''}`}
       </div>
