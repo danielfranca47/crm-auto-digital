@@ -98,6 +98,13 @@ WhatsApp → UazAPI → POST /webhooks/whatsapp/inbound
   → job enfileirado → backend-executors → UazAPI → WhatsApp
 ```
 
+### Paridade Playground ↔ WhatsApp Real
+
+> **Leia antes de alterar:** `routes/playground.py`, `services/whatsapp_inbound/inbound_handler.py`, `routes/executor.py` ou `services/ai_orchestrator/orchestrator.py`.
+> Documentação completa: [`backend-crm/docs/playground-whatsapp-parity.md`](backend-crm/docs/playground-whatsapp-parity.md)
+
+**Regra central:** todo campo novo do `ContextBundle` que afeta o comportamento do LLM deve ser adicionado via `enrich_context_bundle()` em `services/ai_orchestrator/orchestrator.py` — nunca diretamente em apenas um dos builders. Isso garante que o playground e o executor (agente real) recebam contexto equivalente.
+
 ### Serviços críticos de negócio
 
 - **`services/qualification_state.py`** — extrai e persiste campos de qualificação do lead
