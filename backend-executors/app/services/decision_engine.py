@@ -363,6 +363,8 @@ def _build_tone_block(ai_profile: Dict[str, Any], playbook: Dict[str, Any]) -> s
         f"- Linguagem: conversacional, como se escrevesse a um colega. Sem jargão corporativo.\n"
         f"- Abertura: nunca comece com 'Olá, tudo bem?' genérico se já houve conversa anterior. "
         f"Use o contexto: referir algo que o lead disse antes, ou o campo recém-coletado.\n"
+        f"- Variação obrigatória: nunca inicie 2 mensagens consecutivas com a mesma palavra ou expressão. "
+        f"Consulte o history para garantir variedade. Proibido repetir 'Ótimo!', 'Perfeito!', 'Claro!' consecutivamente.\n"
         f"- Encerramento: sempre feche com UMA pergunta ou UM próximo passo claro. Nunca dois.\n"
         f"- PROIBIDO: emojis excessivos (máx 1 por mensagem), CAPS LOCK, exclamações consecutivas (!!), "
         f"linguagem de vendas agressiva ('IMPERDÍVEL', 'CORRA', 'NÃO PERCA').\n"
@@ -2172,6 +2174,7 @@ def _build_child_prompt_follow_up(
         f"- history: {history_text}\n"
         f"- inbound_message_text: {message_text}\n"
         + _build_training_examples_block(context, "followup")
+        + _build_custom_instructions_block(ai_profile)
     )
     return _inject_generated_parts(_followup_prompt, context, "followup")
 
@@ -2281,10 +2284,12 @@ def _build_child_prompt_closing(
         f"- metadata: {json.dumps(metadata_summary, ensure_ascii=False)}\n"
         f"- history: {history_text}\n"
         f"- inbound_message_text: {message_text}\n"
+        + _build_training_examples_block(context, "closing")
+        + _build_custom_instructions_block(ai_profile)
     )
-    # Fase "closing" não tem few_shot_closing nem objection_rewrites gerados pelo meta-prompter.
-    # tone_rules já está injectado via _build_tone_block() acima — chamar _inject_generated_parts
-    # aqui causaria duplicação de regras de tom. Retorna o prompt directamente.
+    # _inject_generated_parts não é chamado aqui para evitar duplicação do tone_rules
+    # (já injectado via _build_tone_block). training_examples e custom_instructions são
+    # adicionados directamente ao prompt.
     return _closing_prompt
 
 def _extract_json_payload(text: str) -> Optional[Dict[str, Any]]:

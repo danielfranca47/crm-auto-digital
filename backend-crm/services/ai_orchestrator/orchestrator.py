@@ -400,7 +400,7 @@ def _load_training_examples(user_id: int, ai_profile_id: int, agent_mode: str | 
     Retorna até 3 exemplos bons e 3 ruins por fase (priorizando os mais recentes),
     filtrados por user_id, ai_profile_id e agent_mode (quando disponível).
     """
-    phases = ["qualification", "apresentation", "followup"]
+    phases = ["qualification", "apresentation", "followup", "closing"]
     result: Dict[str, Any] = {}
 
     with get_connection() as conn:
