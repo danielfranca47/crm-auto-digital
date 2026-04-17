@@ -7,6 +7,7 @@ from services.ai_orchestrator.orchestrator import (
     build_context_bundle_from_inbound,
     decide_next_action,
     log_ai_decision,
+    enrich_context_bundle,
 )
 from services.ai_orchestrator.history import get_recent_history
 
@@ -18,4 +19,5 @@ __all__ = [
     "decide_next_action",
     "log_ai_decision",
     "get_recent_history",
+    "enrich_context_bundle",
 ]

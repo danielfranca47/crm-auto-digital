@@ -13,6 +13,7 @@ from database import get_connection
 from services.ai_orchestrator import (
     InboundEvent,
     build_context_bundle_from_inbound,
+    enrich_context_bundle,
 )
 from services.ai_orchestrator.orchestrator import _load_training_examples
 from services.qualification_state import (
@@ -261,6 +262,7 @@ def whatsapp_execution_context(
     )
 
     bundle = build_context_bundle_from_inbound(event)
+    bundle = enrich_context_bundle(bundle, event.user_id)
     decision = _fetch_latest_ai_decision(lead_id=event.lead_id)
     qualification_state = get_qualification_state(event.lead_id)
 
@@ -269,68 +271,13 @@ def whatsapp_execution_context(
 
     bundle.metadata["allowed_lead_categories"] = LEAD_CATEGORIES
 
-    # Buscar knowledge items do usuário para injeção no LLM (primeiro por categoria, apenas ativos no funil)
-    knowledge_by_category: Dict[str, str] = {}
-    knowledge_media: Dict[str, list] = {}
-    with get_connection() as conn:
-        conn.row_factory = sqlite3.Row
-        cur = conn.cursor()
-        cur.execute(
-            "SELECT category, content_text FROM knowledge_items WHERE user_id = ? AND active_in_funnel = 1 ORDER BY updated_at DESC",
-            (event.user_id,),
-        )
-        for row in cur.fetchall():
-            cat = row["category"] or "uncategorized"
-            if cat not in knowledge_by_category:
-                knowledge_by_category[cat] = row["content_text"]
-
-        # Múltiplas mídias por categoria via knowledge_item_media
-        cur.execute(
-            """
-            SELECT ki.category, kim.media_url, kim.media_type, kim.language, kim.send_order
-              FROM knowledge_item_media kim
-              JOIN knowledge_items ki ON ki.id = kim.knowledge_item_id
-             WHERE ki.user_id = ? AND ki.active_in_funnel = 1
-             ORDER BY ki.category, ki.updated_at DESC, kim.send_order ASC, kim.id ASC
-            """,
-            (event.user_id,),
-        )
-        for row in cur.fetchall():
-            cat = row["category"] or "uncategorized"
-            knowledge_media.setdefault(cat, []).append({
-                "media_url":  row["media_url"],
-                "media_type": row["media_type"],
-                "language":   row["language"],
-                "send_order": row["send_order"],
-            })
-
-    lead_detected_language = (bundle.lead or {}).get("detected_language") or "all"
-
-    # Exemplos de treino do playground (few-shot por fase/agent_mode)
+    # training_examples carregado separadamente pois requer ai_profile_id resolvido
     _ai_profile = bundle.ai_profile or {}
     training_examples = _load_training_examples(
         user_id=event.user_id,
         ai_profile_id=_ai_profile.get("id", 0),
         agent_mode=_ai_profile.get("agent_mode"),
     )
-
-    # Carregar informações gerais do negócio (business_info) e injetar como categoria especial
-    with get_connection() as conn:
-        conn.row_factory = sqlite3.Row
-        cur = conn.cursor()
-        cur.execute(
-            """
-            SELECT label, value FROM business_info
-             WHERE user_id = ? AND enabled = 1
-               AND value IS NOT NULL AND trim(coalesce(value,'')) != ''
-             ORDER BY sort_order ASC, id ASC
-            """,
-            (event.user_id,),
-        )
-        biz_lines = [f"• {row['label']}: {row['value']}" for row in cur.fetchall()]
-
-    if biz_lines:
-        knowledge_by_category["business_info"] = "\n".join(biz_lines)
 
     return {
         "job": job,
@@ -341,10 +288,10 @@ def whatsapp_execution_context(
         "decision": decision,
         "qualification_state": qualification_state,
         "metadata": bundle.metadata,
-        "knowledge_items": knowledge_by_category,
-        "knowledge_media": knowledge_media,
-        "lead_detected_language": lead_detected_language,
-        "generated_prompt_parts": (bundle.ai_profile or {}).get("generated_prompt_parts") or {},
+        "knowledge_items": bundle.knowledge_items or {},
+        "knowledge_media": bundle.knowledge_media or {},
+        "lead_detected_language": bundle.lead_detected_language or "all",
+        "generated_prompt_parts": bundle.generated_prompt_parts or {},
         "training_examples": training_examples,
     }
 

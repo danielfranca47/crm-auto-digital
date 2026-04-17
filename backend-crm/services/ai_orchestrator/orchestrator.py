@@ -235,6 +235,8 @@ class ContextBundle(BaseModel):
     knowledge_media: Optional[Dict[str, List]] = None
     training_examples: Optional[Dict[str, Any]] = None
     # Estrutura: { "qualification": { "good": [...], "bad": [...] }, "apresentation": {...}, ... }
+    generated_prompt_parts: Optional[Dict[str, Any]] = None
+    lead_detected_language: Optional[str] = None
 
 
 def build_context_bundle(
@@ -454,7 +456,7 @@ def _load_knowledge_items(user_id: int) -> Dict[str, str]:
         conn.row_factory = sqlite3.Row
         cur = conn.cursor()
         cur.execute(
-            "SELECT category, content_text FROM knowledge_items WHERE user_id = ? ORDER BY updated_at DESC",
+            "SELECT category, content_text FROM knowledge_items WHERE user_id = ? AND active_in_funnel = 1 ORDER BY updated_at DESC",
             (user_id,),
         )
         for row in cur.fetchall():
@@ -489,6 +491,56 @@ def _load_knowledge_media(user_id: int) -> Dict[str, list]:
                 "send_order": row["send_order"],
             })
     return knowledge_media
+
+
+def _load_business_info(user_id: int) -> Optional[str]:
+    """Carrega business_info — espelho de executor.py para garantir paridade de contexto."""
+    with get_connection() as conn:
+        conn.row_factory = sqlite3.Row
+        cur = conn.cursor()
+        cur.execute(
+            """
+            SELECT label, value FROM business_info
+             WHERE user_id = ? AND enabled = 1
+               AND value IS NOT NULL AND trim(coalesce(value,'')) != ''
+             ORDER BY sort_order ASC, id ASC
+            """,
+            (user_id,),
+        )
+        biz_lines = [f"• {row['label']}: {row['value']}" for row in cur.fetchall()]
+    return "\n".join(biz_lines) if biz_lines else None
+
+
+def enrich_context_bundle(bundle: ContextBundle, user_id: int) -> ContextBundle:
+    """
+    Enriquece o ContextBundle com todos os campos extras necessários para o decision_engine.
+
+    É a ÚNICA fonte de enriquecimento — chamada pelo playground E pelo executor.
+    Adicionar qualquer campo novo aqui garante paridade automática entre os dois caminhos.
+    """
+    updates: Dict[str, Any] = {}
+
+    # B2 — business_info (injetado como categoria especial em knowledge_items)
+    business_info_text = _load_business_info(user_id)
+    if business_info_text:
+        knowledge_items = dict(bundle.knowledge_items or {})
+        knowledge_items["business_info"] = business_info_text
+        updates["knowledge_items"] = knowledge_items
+
+    # B3 — generated_prompt_parts (sobe do ai_profile para o nível raiz do contexto)
+    if bundle.generated_prompt_parts is None:
+        gpp = (bundle.ai_profile or {}).get("generated_prompt_parts") or {}
+        if gpp:
+            updates["generated_prompt_parts"] = gpp
+
+    # B4 — lead_detected_language (para filtro de knowledge_media por idioma)
+    if bundle.lead_detected_language is None:
+        lang = (bundle.lead or {}).get("detected_language") or "all"
+        updates["lead_detected_language"] = lang
+
+    if updates:
+        bundle = bundle.model_copy(update=updates)
+    return bundle
 
 
 def build_context_bundle_for_playground(
@@ -552,7 +604,7 @@ def build_context_bundle_for_playground(
         "lead_origin_label": _lead_origin_label,
     }
 
-    return ContextBundle(
+    bundle = ContextBundle(
         user_id=user_id,
         entitlements={},
         ai_profile=ai_profile,
@@ -567,6 +619,7 @@ def build_context_bundle_for_playground(
         knowledge_media=knowledge_media or None,
         training_examples=training_examples if training_examples else None,
     )
+    return enrich_context_bundle(bundle, user_id)
 
 
 def decide_next_action(bundle: ContextBundle) -> Dict[str, Any]:
