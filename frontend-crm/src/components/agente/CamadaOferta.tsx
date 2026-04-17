@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { FieldHelp } from './FieldHelp';
+import { SuggestInput } from './SuggestField';
 import type { AgentConfig } from '@/types/agente';
 import { PAYMENT_GATEWAY_LABELS, OFFER_MEDIA_TYPE_LABELS } from '@/types/agente';
 import { api } from '@/services/api';
@@ -31,7 +32,7 @@ function DrawerMidia({ mediaUrl, mediaType, onSave, onClose }: {
       <div className="o-field">
         <label className="o-field-label">URL da mídia</label>
         <div className="o-field-hint">Link público direto para o arquivo. O WhatsApp deve conseguir acessar esta URL.</div>
-        <input className="o-input" type="url" value={url} onChange={e => setUrl(e.target.value)} placeholder="https://…" />
+        <SuggestInput className="o-input" type="url" value={url} onChange={e => setUrl(e.target.value)} placeholder="https://…" />
       </div>
     </DrawerBase>
   );
@@ -51,7 +52,7 @@ function DrawerDetalhes({ config, onSave, onClose }: {
       <div className="o-field">
         <label className="o-field-label">Preço âncora</label>
         <div className="o-field-hint">Ex: "de R$997 por R$497" ou "R$1.500/mês"</div>
-        <input className="o-input" value={price} onChange={e => setPrice(e.target.value)} maxLength={80} placeholder="R$ 997,00" />
+        <SuggestInput className="o-input" value={price} onChange={e => setPrice(e.target.value)} maxLength={80} placeholder="R$ 997,00" />
         <div className="o-char-count">{price.length}/80</div>
       </div>
       <div className="o-field">

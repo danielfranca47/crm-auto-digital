@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
+import { SuggestInput, SuggestTextarea } from './SuggestField';
 import { api, type KnowledgeItem, type KnowledgeMediaItem, type MediaLanguage } from '@/services/api';
 import {
   KNOWLEDGE_CATEGORIES_BY_TEMPLATE,
@@ -378,18 +379,19 @@ function ModalGuided({
 
       <div className="o-field">
         <label className="o-field-label">Título</label>
-        <input
+        <SuggestInput
           className="o-input"
           value={title}
           onChange={e => setTitle(e.target.value)}
           maxLength={120}
+          placeholder={category.title ? `Ex: ${category.title}` : undefined}
         />
         <div className="o-char-count">{title.length}/120</div>
       </div>
 
       <div className="o-field">
         <label className="o-field-label">Conteúdo</label>
-        <textarea
+        <SuggestTextarea
           className="o-textarea"
           style={{ minHeight: 200 }}
           value={content}
@@ -466,13 +468,13 @@ function ModalAddExtra({ onClose, onAdded }: { onClose: () => void; onAdded: () 
         <>
           <div className="o-field">
             <label className="o-field-label">Título</label>
-            <input className="o-input" value={title} onChange={e => setTitle(e.target.value)} maxLength={120}
+            <SuggestInput className="o-input" value={title} onChange={e => setTitle(e.target.value)} maxLength={120}
               placeholder="Ex: Política de preços, FAQ, Script de vendas…" />
             <div className="o-char-count">{title.length}/120</div>
           </div>
           <div className="o-field">
             <label className="o-field-label">Conteúdo</label>
-            <textarea className="o-textarea" style={{ minHeight: 180 }} value={content}
+            <SuggestTextarea className="o-textarea" style={{ minHeight: 180 }} value={content}
               onChange={e => setContent(e.target.value)}
               placeholder="Cole ou escreva o conteúdo que o agente deve saber…" />
           </div>
@@ -591,12 +593,12 @@ function ModalEditExtra({ item, onClose, onSaved }: { item: KnowledgeItem; onClo
       saveLabel={saving ? 'Salvando…' : 'Salvar'} wide>
       <div className="o-field">
         <label className="o-field-label">Título</label>
-        <input className="o-input" value={title} onChange={e => setTitle(e.target.value)} maxLength={120} />
+        <SuggestInput className="o-input" value={title} onChange={e => setTitle(e.target.value)} maxLength={120} />
         <div className="o-char-count">{title.length}/120</div>
       </div>
       <div className="o-field">
         <label className="o-field-label">Conteúdo</label>
-        <textarea className="o-textarea" style={{ minHeight: 200 }} value={content} onChange={e => setContent(e.target.value)} />
+        <SuggestTextarea className="o-textarea" style={{ minHeight: 200 }} value={content} onChange={e => setContent(e.target.value)} />
       </div>
       {error && <div style={{ fontSize: 12, color: 'var(--o-hot)', marginTop: 8 }}>{error}</div>}
       <MultiMediaSection

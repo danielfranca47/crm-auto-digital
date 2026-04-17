@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { FieldHelp } from './FieldHelp';
+import { SuggestInput } from './SuggestField';
 import type { AgentConfig } from '@/types/agente';
 import { CALENDAR_INTEGRATION_LABELS, BRIEFING_CHANNEL_LABELS } from '@/types/agente';
 
@@ -63,7 +64,7 @@ function DrawerBriefing({ config, onSave, onClose }: {
             <div className="o-field">
               <label className="o-field-label">Número do operador (WhatsApp)</label>
               <div className="o-field-hint">Formato internacional: +5511999999999</div>
-              <input
+              <SuggestInput
                 className="o-input"
                 type="tel"
                 value={whatsapp}

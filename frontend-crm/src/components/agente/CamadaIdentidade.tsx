@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { FieldHelp } from './FieldHelp';
+import { SuggestInput, SuggestTextarea } from './SuggestField';
 import type { AgentConfig } from '@/types/agente';
 import {
   AGENT_MODE_LABELS,
@@ -27,7 +28,7 @@ function DrawerNome({ value, onSave, onClose }: { value: string; onSave: (v: str
       <div className="o-field">
         <label className="o-field-label">Nome <FieldHelp text="Este nome aparece em todas as mensagens. Escolha um nome que combine com a personalidade e o posicionamento da marca." /></label>
         <div className="o-field-hint">Este nome aparecerá em todas as mensagens enviadas.</div>
-        <input className="o-input" value={local} maxLength={40} onChange={e => setLocal(e.target.value)} placeholder="Ex: Sofia, Max, Atendente…" />
+        <SuggestInput className="o-input" value={local} maxLength={40} onChange={e => setLocal(e.target.value)} placeholder="Ex: Sofia, Max, Atendente…" />
         <div className="o-char-count">{local.length}/40</div>
       </div>
     </DrawerBase>
@@ -55,7 +56,7 @@ function DrawerNicho({ value, onSave, onClose }: { value: string; onSave: (v: st
     <DrawerBase title="Nicho de mercado" sub="Segmento em que o agente atua" onClose={onClose} onSave={() => onSave(local)}>
       <div className="o-field">
         <label className="o-field-label">Nicho</label>
-        <input className="o-input" value={local} maxLength={80} onChange={e => setLocal(e.target.value)} placeholder="Ex: Estética corporal, Imóveis, Coaching…" />
+        <SuggestInput className="o-input" value={local} maxLength={80} onChange={e => setLocal(e.target.value)} placeholder="Ex: Estética corporal, Imóveis, Coaching…" />
         <div className="o-char-count">{local.length}/80</div>
       </div>
     </DrawerBase>
@@ -95,7 +96,7 @@ function DrawerGoals({ value, onSave, onClose }: { value: string; onSave: (v: st
       <div className="o-field">
         <label className="o-field-label">Prioridades (uma por linha) <FieldHelp text="Liste as prioridades em ordem de importância. O agente usa essas instruções para decidir como conduzir cada conversa." /></label>
         <div className="o-field-hint">Ex: "1. Qualificar em até 5 mensagens" · "2. Sempre perguntar sobre urgência"</div>
-        <textarea className="o-textarea" style={{ minHeight: 140 }} value={local} maxLength={600} onChange={e => setLocal(e.target.value)} placeholder="1. Identificar a dor principal&#10;2. Apresentar a solução de forma consultiva&#10;3. Conduzir para o agendamento" />
+        <SuggestTextarea className="o-textarea" style={{ minHeight: 140 }} value={local} maxLength={600} onChange={e => setLocal(e.target.value)} placeholder="1. Identificar a dor principal&#10;2. Apresentar a solução de forma consultiva&#10;3. Conduzir para o agendamento" />
         <div className="o-char-count">{local.length}/600</div>
       </div>
     </DrawerBase>
@@ -284,7 +285,7 @@ function DrawerTom({ value, onSave, onClose }: { value: string; onSave: (v: stri
     <DrawerBase title="Tom de comunicação" sub="Estilo de linguagem em todas as mensagens" onClose={onClose} onSave={() => onSave(local)}>
       <div className="o-field">
         <label className="o-field-label">Tom</label>
-        <input className="o-input" value={local} onChange={e => setLocal(e.target.value)} placeholder="Ex: equilibrado, formal, descontraído…" />
+        <SuggestInput className="o-input" value={local} onChange={e => setLocal(e.target.value)} placeholder="Ex: equilibrado, formal, descontraído…" />
         <div className="o-field-hint">Texto livre — descreva o tom que o agente deve usar.</div>
       </div>
     </DrawerBase>

@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { FieldHelp } from './FieldHelp';
+import { SuggestInput, SuggestTextarea } from './SuggestField';
 import type { AgentConfig, QualificationField } from '@/types/agente';
 
 interface CamadaQualificacaoProps {
@@ -248,7 +249,7 @@ function DrawerCampo({ field, isSdr, onSave, onClose, onRemove }: {
         <div className="o-field">
           <label className="o-field-label">Nome do campo</label>
           {isCustom
-            ? <input className="o-input" value={local.label} onChange={e => up('label', e.target.value)} placeholder="Ex: Nome do pet" />
+            ? <SuggestInput className="o-input" value={local.label} onChange={e => up('label', e.target.value)} placeholder="Ex: Nome do pet" />
             : <div style={{ fontSize: 13, color: 'var(--o-text)', padding: '8px 0' }}>{local.label}</div>
           }
         </div>
@@ -313,7 +314,7 @@ function DrawerCampo({ field, isSdr, onSave, onClose, onRemove }: {
           <div className="o-field">
             <label className="o-field-label">Pergunta direta</label>
             <div className="o-field-hint">Usada quando o agente pergunta proativamente.</div>
-            <textarea
+            <SuggestTextarea
               className="o-textarea"
               rows={2}
               value={local.question ?? ''}
@@ -332,7 +333,7 @@ function DrawerCampo({ field, isSdr, onSave, onClose, onRemove }: {
           <div className="o-field">
             <label className="o-field-label">Como capturar passivamente</label>
             <div className="o-field-hint">Orienta o agente a detectar o dado sem perguntar.</div>
-            <textarea
+            <SuggestTextarea
               className="o-textarea"
               rows={2}
               value={local.passive_hint ?? ''}
@@ -365,7 +366,7 @@ function DrawerCampo({ field, isSdr, onSave, onClose, onRemove }: {
             </div>
             {local.allow_closing_question && (
               <>
-                <textarea
+                <SuggestTextarea
                   className="o-textarea"
                   rows={2}
                   value={local.closing_question ?? ''}
@@ -648,7 +649,7 @@ function DrawerTexto({ title, sub, value, placeholder, maxLen, onSave, onClose }
   return (
     <DrawerBase title={title} sub={sub} onClose={onClose} onSave={() => onSave(local)}>
       <div className="o-field">
-        <textarea className="o-textarea" value={local} maxLength={max} placeholder={placeholder} onChange={e => setLocal(e.target.value)} />
+        <SuggestTextarea className="o-textarea" value={local} maxLength={max} placeholder={placeholder} onChange={e => setLocal(e.target.value)} />
         <div className="o-char-count">{local.length}/{max}</div>
       </div>
     </DrawerBase>
@@ -766,7 +767,7 @@ function ModalAddCampoSDR({ fields, onAdd, onClose }: {
       <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
         <div className="o-field">
           <label className="o-field-label">Nome do campo *</label>
-          <input className="o-input" value={label} onChange={e => setLabel(e.target.value)} placeholder="Ex: Nome do pet" />
+          <SuggestInput className="o-input" value={label} onChange={e => setLabel(e.target.value)} placeholder="Ex: Nome do pet" />
         </div>
         <div className="o-field">
           <label className="o-field-label">Filtro (SDR)</label>
@@ -810,11 +811,11 @@ function ModalAddCampoSDR({ fields, onAdd, onClose }: {
         </div>
         <div className="o-field">
           <label className="o-field-label">Pergunta (modo ativo)</label>
-          <input className="o-input" value={question} onChange={e => setQuestion(e.target.value)} placeholder="Ex: Qual o nome do seu pet?" />
+          <SuggestInput className="o-input" value={question} onChange={e => setQuestion(e.target.value)} placeholder="Ex: Qual o nome do seu pet?" />
         </div>
         <div className="o-field">
           <label className="o-field-label">Como capturar passivamente</label>
-          <input className="o-input" value={passiveHint} onChange={e => setPassiveHint(e.target.value)} placeholder="Ex: Capturar se lead mencionar nome de animal" />
+          <SuggestInput className="o-input" value={passiveHint} onChange={e => setPassiveHint(e.target.value)} placeholder="Ex: Capturar se lead mencionar nome de animal" />
         </div>
       </div>
     </ModalBase>

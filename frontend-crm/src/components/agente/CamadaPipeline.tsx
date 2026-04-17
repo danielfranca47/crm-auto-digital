@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { FieldHelp } from './FieldHelp';
+import { SuggestInput } from './SuggestField';
 import type { AgentConfig } from '@/types/agente';
 import { LGPD_LABELS, REATIVACAO_LABELS, MEDIA_FALLBACK_LABELS } from '@/types/agente';
 import { buildVariableList } from '@/types/variables';
@@ -244,7 +245,7 @@ function DrawerFollowupAvancado({ config, onSave, onClose }: {
       <div className="o-field">
         <label className="o-field-label">Horário permitido (UTC)</label>
         <div className="o-field-hint">Formato: HH:MM-HH:MM. Ex: 08:00-20:00 (fuso configurado na Camada 1)</div>
-        <input
+        <SuggestInput
           className="o-input"
           value={allowedHours}
           onChange={e => setAllowedHours(e.target.value)}
