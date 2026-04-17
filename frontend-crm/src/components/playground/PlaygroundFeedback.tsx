@@ -163,14 +163,15 @@ export function PlaygroundFeedback({
     if (ratedMessages.length > 0) {
       lines.push("## Dados de Treino");
       lines.push("");
-      lines.push("| Rota | Rating | Comentário | Mensagem do Bot |");
-      lines.push("|---|---|---|---|");
+      lines.push("| Modo | Rota | Rating | Comentário | Mensagem do Bot |");
+      lines.push("|---|---|---|---|---|");
       for (const m of ratedMessages) {
+        const mode = m.decisionTrace?.agent_mode ?? "—";
         const route = m.motherRoute ?? m.decisionTrace?.effective_route ?? "—";
         const rating = RATING_LABELS[m.rating!] ?? m.rating!;
         const comment = m.ratingComment || "_(sem comentário)_";
         const preview = m.text.slice(0, 80).replace(/\|/g, "\\|") + (m.text.length > 80 ? "…" : "");
-        lines.push(`| ${route} | ${rating} | ${comment} | "${preview}" |`);
+        lines.push(`| ${mode} | ${route} | ${rating} | ${comment} | "${preview}" |`);
       }
       lines.push("");
     }

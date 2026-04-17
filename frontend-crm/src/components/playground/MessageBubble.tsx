@@ -126,8 +126,15 @@ function RatingRow({
     onRate(message.id, draft, comment);
   }
 
+  const capturedMode = message.decisionTrace?.agent_mode;
+
   return (
     <div className="mt-2 ml-8 space-y-1.5">
+      {capturedMode && (
+        <p className="text-xs text-muted-foreground">
+          Modo capturado: <span className="font-mono bg-muted px-1 rounded">{capturedMode}</span>
+        </p>
+      )}
       <div className="flex items-center gap-1">
         {RATING_CONFIG.map(({ value, label, icon: Icon, activeClass }) => {
           const isActive = active === value;

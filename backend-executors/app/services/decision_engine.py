@@ -384,6 +384,99 @@ def _build_tone_block(ai_profile: Dict[str, Any], playbook: Dict[str, Any]) -> s
     return block
 
 
+def _build_agent_role_block(agent_mode: str, phase: str, ai_profile: Dict[str, Any]) -> str:
+    """Gera parágrafo de identidade comercial diferenciado por agent_mode e fase."""
+    tone  = str(ai_profile.get("tone_of_voice") or "profissional").strip()
+    niche = str(ai_profile.get("niche") or "do negócio").strip()
+    brand = str(ai_profile.get("brand_name") or "da empresa").strip()
+    rs    = (ai_profile.get("response_style") or "passive").strip().lower()
+    qual_style = (
+        "passivamente, por inferência silenciosa da conversa"
+        if rs == "passive"
+        else "ativamente, com perguntas diretas e naturais"
+    )
+
+    roles: Dict[str, Dict[str, str]] = {
+        "consultivo": {
+            "qualification": (
+                f"Você é um SDR consultivo especializado em {niche}. "
+                f"Tom: {tone}. "
+                f"Qualifique o lead {qual_style}. "
+                "Cada informação coletada prepara uma reunião de alto valor — nunca force a venda."
+            ),
+            "apresentation": (
+                f"Você é um especialista em agendamento de diagnóstico para {niche} da {brand}. "
+                "Objetivo único: confirmar data e horário para sessão com o especialista. "
+                "Gere confiança e credibilidade antes de mencionar valor."
+            ),
+            "follow-up": (
+                f"Você é o responsável pelo relacionamento pós-contato da {brand}. "
+                f"Tom: {tone}. "
+                "Nutra o lead com empatia, trate objeções sem pressão e prepare o caminho "
+                "para o fechamento pelo especialista humano."
+            ),
+            "closing": (
+                f"Você prepara o handoff para o especialista humano da {brand}. "
+                "Contextualize o interesse e o estágio do lead. "
+                "Seu papel é garantir que o especialista receba o contexto completo — não vender."
+            ),
+        },
+        "agenda": {
+            "qualification": (
+                f"Você é um profissional de atendimento {tone} da {brand}, especializado em {niche}. "
+                f"Qualifique o lead {qual_style}. "
+                "Objetivo final: conduzir o lead qualificado para uma agenda confirmada."
+            ),
+            "apresentation": (
+                f"Você é um agendador de alta conversão da {brand}. "
+                f"Tom: {tone}. "
+                "Cada mensagem deve ter um próximo passo claro. "
+                "Confirme horário, reforce o benefício da reunião e garanta compromisso de presença."
+            ),
+            "follow-up": (
+                f"Você reengaja leads da {brand} que não compareceram ou precisam remarcar. "
+                f"Tom: {tone}, abordagem direta e amigável. "
+                "Ofereça 2 a 3 horários concretos para facilitar a decisão — não pergunte 'quando pode'."
+            ),
+            "closing": (
+                f"Você confirma a agenda e coleta dados operacionais da {brand}. "
+                "Horário confirmado, link enviado, presença garantida. "
+                "Resposta objetiva — não expanda além do necessário."
+            ),
+        },
+        "direto": {
+            "qualification": (
+                f"Você é um qualificador para venda direta de {niche}. "
+                f"Tom: {tone}. "
+                f"Qualifique {qual_style}. "
+                "Se houver sinal claro de intenção de compra — avance imediatamente para a oferta."
+            ),
+            "apresentation": (
+                f"Você apresenta a oferta da {brand} e conduz ao fechamento direto. "
+                f"Tom: {tone}. "
+                "Mostre valor em 1 a 2 frases, trate objeção com objetividade, envie link de checkout. "
+                "Sem rodeios — cada mensagem empurra ao próximo passo."
+            ),
+            "follow-up": (
+                f"Você recupera vendas da {brand} não concluídas. "
+                f"Tom: {tone}. "
+                "Mensagem curta: 1 benefício claro + 1 CTA direto. "
+                "Não explique — converta."
+            ),
+            "closing": (
+                f"Você conduz o pagamento para {brand}. "
+                "Confirmação de interesse → link de checkout → CTA final. "
+                "Máximo 2 frases. Nenhuma pergunta aberta nesta fase."
+            ),
+        },
+    }
+
+    role_text = roles.get(agent_mode, {}).get(phase)
+    if not role_text:
+        return ""
+    return f"\nIDENTIDADE COMERCIAL:\n{role_text}\n"
+
+
 def _select_current_field(missing_fields: list[str], filled_fields: list[str]) -> Optional[str]:
     if not missing_fields:
         return None
@@ -1411,7 +1504,7 @@ def _build_child_prompt_qualification(
     )
 
     _qual_prompt = f"""{_first_contact_opener_header}{_greeting_header}{_passive_header}Você é a FILHA QUALIFICATION de um CRM de vendas WhatsApp.
-
+{_build_agent_role_block(agent_mode_normalized, "qualification", ai_profile)}
 PAPEL: Coletar campos de qualificação do lead, um por vez, através de perguntas naturais e contextuais.
 ESCOPO: {_escopo_line}{_media_intro_note}
 TOM: {ai_summary["tone_of_voice"] or "profissional"} — conversacional e adaptado ao WhatsApp (mensagens curtas, sem formatação). Máx {playbook_summary["max_chars"] or "N/D"} caracteres.
@@ -1825,8 +1918,10 @@ def _build_child_prompt_apresentation(
         _greeting_apres_header
         + _apres_first_contact_opener
         + _passive_apres_header
-        + f"Você é a FILHA APRESENTATION de um CRM de vendas WhatsApp.\n\n"
-        f"PAPEL: Conduzir a fase de apresentação — agendamento (scheduler) ou oferta+fechamento (sales).\n"
+        + f"Você é a FILHA APRESENTATION de um CRM de vendas WhatsApp.\n"
+        + _build_agent_role_block(agent_mode_normalized, "apresentation", ai_profile)
+        + "\n"
+        + f"PAPEL: Conduzir a fase de apresentação — agendamento (scheduler) ou oferta+fechamento (sales).\n"
         f"ESCOPO: Variant {presentation_variant}. Gera a mensagem de apresentação e preenche signals_structured.{_media_intro_note_apres}\n"
         f"TOM: {ai_summary.get('tone_of_voice') or 'profissional'} — direto e focado na ação. Máx {playbook_summary.get('max_chars') or 'N/D'} caracteres.\n"
         f"FRAMEWORK: Modo {agent_mode_normalized}. Template {playbook_summary.get('template_key')}. Appointment mode: {ai_summary.get('appointment_mode') or 'exploratory'}.\n"
@@ -2116,8 +2211,10 @@ def _build_child_prompt_follow_up(
 
     _followup_prompt = (
         _greeting_fu_header
-        + f"Você é a FILHA FOLLOW-UP de um CRM de vendas WhatsApp.\n\n"
-        f"PAPEL: Re-engajar o lead pós-apresentação. Variante: {followup_variant or 'padrão'}.\n"
+        + f"Você é a FILHA FOLLOW-UP de um CRM de vendas WhatsApp.\n"
+        + _build_agent_role_block(agent_mode_normalized, "follow-up", ai_profile)
+        + "\n"
+        + f"PAPEL: Re-engajar o lead pós-apresentação. Variante: {followup_variant or 'padrão'}.\n"
         f"ESCOPO: Nutrir, tratar objeções, reagendar. Nunca reabrir campos de qualificação antigos em ticks automáticos.\n"
         f"TOM: {ai_summary.get('tone_of_voice') or 'profissional'} — empático e orientado a ação. Máx {playbook_summary.get('max_chars') or 'N/D'} caracteres.\n"
         f"FRAMEWORK: Modo {agent_mode_normalized}. Template {playbook_summary.get('template_key')}. is_followup_tick: {is_followup_tick}.\n"
@@ -2234,8 +2331,10 @@ def _build_child_prompt_closing(
 
     _closing_prompt = (
         _greeting_closing_header
-        + f"Você é a FILHA CLOSING de um CRM de vendas WhatsApp.\n\n"
-        f"PAPEL: Finalizar o fechamento conforme o modo do agente.\n"
+        + f"Você é a FILHA CLOSING de um CRM de vendas WhatsApp.\n"
+        + _build_agent_role_block(agent_mode_normalized, "closing", ai_profile)
+        + "\n"
+        + f"PAPEL: Finalizar o fechamento conforme o modo do agente.\n"
         f"ESCOPO: Modo {agent_mode_normalized}. Consultivo: handoff para humano. Agenda: confirmar horário+pagamento. Direto: conduzir pagamento.\n"
         f"TOM: {ai_summary.get('tone_of_voice') or 'profissional'} — confiante e claro. Máx {playbook_summary.get('max_chars') or 'N/D'} caracteres.\n"
         f"FRAMEWORK: Template {playbook_summary.get('template_key')}. Campos verificados: {json.dumps(mode_contract['required_fields'], ensure_ascii=False)}. Missing: {json.dumps(mode_contract['missing_fields'], ensure_ascii=False)}.\n"
