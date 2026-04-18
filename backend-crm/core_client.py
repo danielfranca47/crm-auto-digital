@@ -120,6 +120,71 @@ def fetch_core_ai_profile(token: str) -> Dict[str, Any] | None:
     return data
 
 
+def fetch_core_ai_profile_by_webhook_secret(secret: str) -> Dict[str, Any] | None:
+    """Resolve o AI profile pelo payment_webhook_secret. Retorna None se não encontrado."""
+
+    if not secret:
+        return None
+
+    base = _get_core_base()
+    url = f"{base}/ai-profiles/resolve-by-secret"
+    headers = _service_headers()
+
+    try:
+        with httpx.Client(timeout=10) as client:
+            resp = client.get(url, params={"token": secret}, headers=headers)
+    except httpx.RequestError as exc:
+        logger.warning("fetch_core_ai_profile_by_webhook_secret network_error=%s", exc)
+        return None
+
+    if resp.status_code == 404:
+        return None
+    if resp.status_code != 200:
+        logger.warning("fetch_core_ai_profile_by_webhook_secret status=%s", resp.status_code)
+        return None
+
+    data = resp.json()
+    if not isinstance(data, dict) or "user_id" not in data:
+        return None
+    return data
+
+
+def fetch_core_ai_profile_by_id(ai_profile_id: int, user_id: int) -> Dict[str, Any]:
+    """
+    Busca um AiProfile específico pelo ID via service token.
+    Valida que pertence ao user_id — lança HTTPException(403) se não pertencer.
+    Lança HTTPException(404) se não encontrado.
+    """
+    if not ai_profile_id:
+        raise HTTPException(status_code=400, detail="ai_profile_id obrigatório")
+    if not user_id:
+        raise HTTPException(status_code=400, detail="user_id obrigatório")
+
+    base = _get_core_base()
+    url = f"{base}/ai-profiles/{ai_profile_id}"
+    headers = _service_headers()
+
+    try:
+        with httpx.Client(timeout=10) as client:
+            resp = client.get(url, headers=headers, params={"user_id": user_id})
+    except httpx.RequestError as exc:
+        raise HTTPException(status_code=502, detail=f"Falha ao contatar backend-core: {exc}") from exc
+
+    if resp.status_code == 404:
+        raise HTTPException(status_code=404, detail="AI Profile não encontrado")
+    if resp.status_code == 403:
+        raise HTTPException(status_code=403, detail="ai_profile_id não pertence ao utilizador")
+    if resp.status_code == 401:
+        raise HTTPException(status_code=401, detail="Token de serviço inválido para consultar AIProfile")
+    if resp.status_code != 200:
+        raise HTTPException(status_code=502, detail="Falha ao consultar AIProfile no core")
+
+    data = resp.json()
+    if not isinstance(data, dict) or "user_id" not in data:
+        raise HTTPException(status_code=502, detail="Resposta inesperada do backend-core")
+    return data
+
+
 def fetch_core_ai_profile_resolve(user_id: int) -> Dict[str, Any] | None:
     """Consulta o backend-core via service token para resolver o AIProfile de um usuário."""
 

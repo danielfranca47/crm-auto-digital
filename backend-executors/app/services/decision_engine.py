@@ -2,9 +2,10 @@ from __future__ import annotations
 
 import json
 import logging
+import unicodedata
 from datetime import datetime
 from difflib import SequenceMatcher
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 
 from app.contracts.qualification_contract import (
     SIGNALS_SCHEMA,
@@ -34,6 +35,37 @@ BOT_DISABLED_DECISION = DecisionOutput(
     questions=[],
     reason="bot_disabled",
 )
+
+
+BUYING_SIGNAL_DEFAULTS: List[str] = [
+    "quanto custa",
+    "qual o valor",
+    "como assino",
+    "qual o contrato",
+    "como faço para contratar",
+    "aceita cartão",
+    "tem parcelamento",
+    "quando começa",
+    "qual o prazo",
+    "me manda a proposta",
+]
+
+_AGENT1_MODES = {"consultivo", "agenda"}
+
+
+def _normalize_str(text: str) -> str:
+    nfkd = unicodedata.normalize("NFKD", text.lower())
+    return "".join(c for c in nfkd if not unicodedata.combining(c))
+
+
+def _detect_buying_signals(message_text: str, keywords_list: Optional[List[str]]) -> bool:
+    """Retorna True se message_text contém alguma keyword de compra (Agent 1)."""
+    keywords = keywords_list if keywords_list else BUYING_SIGNAL_DEFAULTS
+    normalized_msg = _normalize_str(message_text or "")
+    for kw in keywords:
+        if _normalize_str(kw) in normalized_msg:
+            return True
+    return False
 
 
 def _safe_get(data: Dict[str, Any], *keys: str) -> Optional[Any]:
@@ -76,21 +108,92 @@ def _format_history(history: list[Dict[str, Any]], limit: int = 10) -> str:
 
 
 _SHORT_REPLIES = {
-    "sim",
-    "nao",
-    "não",
-    "ok",
-    "blz",
-    "beleza",
-    "pode",
-    "claro",
-    "👍",
     "😂",
     "kk",
     "kkk",
     "rs",
     "rss",
 }
+
+_ESCAPE_HATCH_BLOCK = (
+    "\nQUANDO NÃO SOUBER RESPONDER:\n"
+    "- Se não tem informação suficiente para responder com confiança → retorne confidence < 0.5\n"
+    "- Em message_text, faça uma pergunta de esclarecimento em vez de inventar\n"
+    "- Se o lead fez uma pergunta técnica fora do knowledge fornecido, use:\n"
+    "  'Vou confirmar essa informação com a equipa e já te respondo.'\n"
+    "  E retorne signals_structured.handoff_requested = true\n"
+    "\nNOME DO LEAD: Se lead.name for null, NÃO invente nem adivinhe o nome do lead. "
+    "Nunca chame o lead pelo nome se ele não o forneceu na conversa.\n"
+)
+
+
+def _build_validation_block(max_chars: Optional[int]) -> str:
+    max_chars_label = str(max_chars) if max_chars else "N/D"
+    return (
+        "\nVALIDAÇÃO — VERIFICAR ANTES DE RETORNAR:\n"
+        "- Se should_ask=true → field DEVE estar preenchido com o current_field\n"
+        "- Se checkout_sent=true → message_text DEVE conter uma URL real (não placeholder)\n"
+        "- Se did_complete_phase=true → recommended_next_category DEVE estar preenchido\n"
+        "- confidence DEVE refletir a certeza real (não usar 0.85 como padrão)\n"
+        f"- message_text NÃO deve exceder {max_chars_label} caracteres\n"
+    )
+
+def _inject_generated_parts(prompt: str, context: Dict[str, Any], phase: str) -> str:
+    """Injeta blocos gerados pelo meta-prompter no prompt da filha (Fase 4 — Tarefa 4.2).
+
+    Fase 4 é aditiva: se generated_prompt_parts for null/vazio, o prompt volta inalterado.
+    """
+    parts = context.get("generated_prompt_parts") or {}
+    if not parts:
+        return prompt
+
+    # --- Few-shot examples ---
+    few_shot_key = f"few_shot_{phase}"  # qualification, apresentation, followup
+    examples = parts.get(few_shot_key)
+    if examples:
+        prompt += "\n\nEXEMPLOS DE REFERÊNCIA PARA ESTE NICHO (adapte ao contexto atual, não copie):\n"
+        for ex in examples:
+            prompt += f"\nCenário: {ex.get('scenario', '')}\n"
+            prompt += f"Lead: \"{ex.get('inbound', '')}\"\n"
+            prompt += f"Resposta esperada: {json.dumps(ex.get('expected_output', {}), ensure_ascii=False)}\n"
+
+    # --- Tone rules ---
+    tone_rules = parts.get("tone_rules")
+    if tone_rules:
+        prompt += "\n\nREGRAS DE TOM PARA ESTE NICHO:\n"
+        for rule in tone_rules:
+            prompt += f"- {rule}\n"
+
+    # --- Qualification phrasing (apenas para filha qualification) ---
+    if phase == "qualification":
+        phrasing = parts.get("qualification_phrasing") or {}
+        current_field = context.get("current_field")
+        if not current_field:
+            # Tentar derivar do contexto de qualificação
+            qual_state = context.get("qualification_state") or {}
+            current_field = qual_state.get("current_field")
+        if current_field and current_field in phrasing:
+            prompt += f"\n\nFORMAS NATURAIS DE PERGUNTAR '{current_field}' NESTE NICHO:\n"
+            for p in phrasing[current_field]:
+                prompt += f"- {p}\n"
+
+    # --- Objection rewrites (para apresentation e follow-up) ---
+    if phase in ("apresentation", "followup"):
+        rewrites = parts.get("objection_rewrites")
+        if rewrites:
+            prompt += "\n\nOBJEÇÕES REFORMULADAS (formato LAER — usar quando o lead levantar objeção):\n"
+            for obj in rewrites:
+                prompt += (
+                    f"\nObjeção: \"{obj.get('objection', '')}\"\n"
+                    f"  Causa real: {obj.get('real_concern', '')}\n"
+                    f"  Reconhecer: {obj.get('acknowledge', '')}\n"
+                    f"  Explorar: {obj.get('explore', '')}\n"
+                    f"  Responder: {obj.get('respond', '')}\n"
+                    f"  Próximo passo: {obj.get('next_step', '')}\n"
+                )
+
+    return prompt
+
 
 DEFAULT_ALLOWED_LEAD_CATEGORIES = [
     "to-prospect",
@@ -117,6 +220,286 @@ QUALIFICATION_FIELD_FALLBACK_LABELS = {
     "location_preference": "preferência de local (online/presencial)",
     "price_acceptance": "aceite do valor",
 }
+
+
+def _build_custom_instructions_block(ai_profile: Dict[str, Any]) -> str:
+    """Gera bloco de instruções personalizadas do operador com prioridade máxima."""
+    ci = (ai_profile.get("custom_instructions") or "").strip()
+    if not ci:
+        return ""
+    return (
+        "\nINSTRUÇÕES PERSONALIZADAS DO OPERADOR (prioridade máxima — seguir à risca):\n"
+        f"{ci}\n"
+    )
+
+
+def _build_training_examples_block(context: Dict[str, Any], phase: str) -> str:
+    """
+    Gera bloco de exemplos de treino classificados pelo operador para a fase atual.
+
+    Esses exemplos são classificações reais de respostas do bot feitas pelo utilizador
+    no playground e servem como few-shot de referência para reduzir aleatoriedade.
+    """
+    training = context.get("training_examples") or {}
+    phase_data = training.get(phase) or {}
+    good = phase_data.get("good") or []
+    bad = phase_data.get("bad") or []
+    if not good and not bad:
+        return ""
+
+    lines = ["\nEXEMPLOS DE TREINO DO OPERADOR (baseados em classificações reais — usar como referência):"]
+
+    for item in good:
+        lead_msg = (item.get("lead_message") or "").strip()
+        bot_msg = (item.get("bot_message") or "").strip()
+        if not bot_msg:
+            continue
+        lines.append("\n✅ RESPOSTA APROVADA:")
+        if lead_msg:
+            lines.append(f'Lead: "{lead_msg}"')
+        lines.append(f'Bot: "{bot_msg}"')
+
+    for item in bad:
+        lead_msg = (item.get("lead_message") or "").strip()
+        bot_msg = (item.get("bot_message") or "").strip()
+        comment = (item.get("comment") or "").strip()
+        if not bot_msg:
+            continue
+        lines.append("\n❌ RESPOSTA REJEITADA:")
+        if lead_msg:
+            lines.append(f'Lead: "{lead_msg}"')
+        lines.append(f'Bot: "{bot_msg}"')
+        if comment:
+            lines.append(f'Motivo do operador: "{comment}"')
+
+    lines.append("")
+    return "\n".join(lines)
+
+
+def _build_qualification_fields_block(ai_profile: Dict[str, Any], response_style: str) -> str:
+    """Gera bloco de campos de qualificação configurados pelo usuário para injeção no prompt da filha.
+
+    Modo ativo: expõe obrigatórios (com question) e desejáveis (nice_to_collect).
+    Modo passivo: expõe apenas passive_hints (captura silenciosa) e closing_questions.
+    Retorna string vazia se qualification_fields não estiver configurado.
+    """
+    qual_fields = ai_profile.get("qualification_fields")
+    if not qual_fields or not isinstance(qual_fields, list):
+        return ""
+
+    if response_style == "passive":
+        passive_fields = [
+            f for f in qual_fields
+            if isinstance(f, dict) and f.get("passive_hint") and f.get("mode") in ("required", "optional")
+        ]
+        closing_fields = [
+            f for f in qual_fields
+            if isinstance(f, dict) and f.get("allow_closing_question") and f.get("closing_question") and f.get("mode") != "off"
+        ]
+        if not passive_fields and not closing_fields:
+            return ""
+        block = "\nCAMPOS DE QUALIFICAÇÃO (MODO PASSIVO — captura silenciosa):\n"
+        if passive_fields:
+            block += "Registrar internamente se o lead mencionar (NÃO perguntar):\n"
+            for f in passive_fields:
+                label = f.get("label") or f.get("key", "")
+                hint = f.get("passive_hint", "")
+                tag = "[OBRIGATÓRIO]" if f.get("mode") == "required" else "[DESEJÁVEL]"
+                block += f"- {label} {tag} (key: {f.get('key', '')}): {hint}\n"
+        if closing_fields:
+            block += "Closing questions permitidas (únicas perguntas permitidas no modo passivo):\n"
+            for f in closing_fields:
+                label = f.get("label") or f.get("key", "")
+                cq = f.get("closing_question", "")
+                block += f'- {label}: "{cq}"\n'
+        return block
+    else:
+        required_fields = [f for f in qual_fields if isinstance(f, dict) and f.get("mode") == "required"]
+        optional_fields = [f for f in qual_fields if isinstance(f, dict) and f.get("mode") == "optional"]
+        if not required_fields and not optional_fields:
+            return ""
+        block = "\nCAMPOS DE QUALIFICAÇÃO CONFIGURADOS:\n"
+        if required_fields:
+            block += "OBRIGATÓRIOS — usar a question configurada ao perguntar:\n"
+            for f in required_fields:
+                label = f.get("label") or f.get("key", "")
+                question = f.get("question", "")
+                hint = f.get("passive_hint", "")
+                line = f"- {label} (key: {f.get('key', '')})"
+                if question:
+                    line += f': pergunta → "{question}"'
+                if hint:
+                    line += f' | inferir: "{hint}"'
+                block += line + "\n"
+        if optional_fields:
+            block += "DESEJÁVEIS — capturar se surgir oportunidade natural:\n"
+            for f in optional_fields:
+                label = f.get("label") or f.get("key", "")
+                question = f.get("question", "")
+                hint = f.get("passive_hint", "")
+                line = f"- {label} (key: {f.get('key', '')})"
+                if question:
+                    line += f': pergunta → "{question}"'
+                if hint:
+                    line += f' | inferir: "{hint}"'
+                block += line + "\n"
+        return block
+
+
+def _build_tone_block(ai_profile: Dict[str, Any], playbook: Dict[str, Any]) -> str:
+    """Gera o bloco de regras de tom WhatsApp operacional (Tarefa 2.1)."""
+    tone_of_voice = str(ai_profile.get("tone_of_voice") or "profissional")
+    max_chars = playbook.get("max_chars") or "N/D"
+    template_key = str(
+        ai_profile.get("template_key") or playbook.get("template_key") or ""
+    ).strip().lower()
+    brand_name = str(ai_profile.get("brand_name") or "").strip()
+    agent_mode = str(ai_profile.get("agent_mode") or "").strip().lower()
+
+    block = (
+        f"\nTOM DE VOZ — REGRAS WHATSAPP:\n"
+        f"- Tom configurado: {tone_of_voice}\n"
+        f"- Comprimento máximo: {max_chars} caracteres\n"
+        f"- Formato: 1 parágrafo curto ou 2–3 linhas. Sem bullet points. Sem formatação markdown.\n"
+        f"- Linguagem: conversacional, como se escrevesse a um colega. Sem jargão corporativo.\n"
+        f"- Abertura: nunca comece com 'Olá, tudo bem?' genérico se já houve conversa anterior. "
+        f"Use o contexto: referir algo que o lead disse antes, ou o campo recém-coletado.\n"
+        f"- Variação obrigatória: nunca inicie 2 mensagens consecutivas com a mesma palavra ou expressão. "
+        f"Consulte o history para garantir variedade. Proibido repetir 'Ótimo!', 'Perfeito!', 'Claro!' consecutivamente.\n"
+        f"- Encerramento: sempre feche com UMA pergunta ou UM próximo passo claro. Nunca dois.\n"
+        f"- PROIBIDO: emojis excessivos (máx 1 por mensagem), CAPS LOCK, exclamações consecutivas (!!), "
+        f"linguagem de vendas agressiva ('IMPERDÍVEL', 'CORRA', 'NÃO PERCA').\n"
+    )
+    if agent_mode in ("direto", "closer"):
+        block += (
+            f"- Comprimento adaptativo (modo direto): mensagens curtas e objetivas. "
+            f"Se a resposta cabe em 1 frase, use 1 frase. "
+            f"Não expanda para preencher o limite de {max_chars} caracteres.\n"
+        )
+    elif agent_mode in ("consultivo",):
+        block += (
+            f"- Comprimento adaptativo (modo consultivo): pode usar até {max_chars} chars "
+            f"quando o lead faz uma pergunta complexa ou levanta uma objeção. "
+            f"Para perguntas simples, responda de forma objetiva mesmo abaixo do limite.\n"
+        )
+    if template_key == "hybrid_scheduler":
+        if brand_name:
+            block += (
+                f"- Persona: fale como se fosse o assistente pessoal do {brand_name}, não como vendedor.\n"
+                f"- Referência ao profissional: use 'o/a {brand_name}' na terceira pessoa. "
+                f"Ex: 'A Dra. Maria tem horário disponível terça e quinta.'\n"
+            )
+        else:
+            block += (
+                "- Persona: fale como se fosse o assistente pessoal do profissional, não como vendedor.\n"
+                "- Referência ao profissional: use o nome do profissional na terceira pessoa.\n"
+            )
+    return block
+
+
+def _build_followup_tone_extensions() -> str:
+    """Diretivas de tom específicas para Follow-up e Closing — fases de reengajamento."""
+    return (
+        "\nTOM — EXTENSÕES PARA REENGAJAMENTO:\n"
+        "- Contexto do histórico: abra fazendo referência a algo concreto da última troca "
+        "(ex.: 'Como conversamos na semana passada...', 'Você mencionou que...', 'Desde a nossa última conversa...').\n"
+        "- Nunca abra como se fosse o primeiro contato — o lead já te conhece.\n"
+        "- Anti-repetição de perguntas: antes de fazer qualquer pergunta, verifique no history se ela já foi feita. "
+        "Se a resposta já consta no histórico, não repita a pergunta.\n"
+    )
+
+
+def _build_agent_role_block(agent_mode: str, phase: str, ai_profile: Dict[str, Any]) -> str:
+    """Gera parágrafo de identidade comercial diferenciado por agent_mode e fase."""
+    tone  = str(ai_profile.get("tone_of_voice") or "profissional").strip()
+    niche = str(ai_profile.get("niche") or "do negócio").strip()
+    brand = str(ai_profile.get("brand_name") or "da empresa").strip()
+    rs    = (ai_profile.get("response_style") or "passive").strip().lower()
+    qual_style = (
+        "passivamente, por inferência silenciosa da conversa"
+        if rs == "passive"
+        else "ativamente, com perguntas diretas e naturais"
+    )
+
+    roles: Dict[str, Dict[str, str]] = {
+        "consultivo": {
+            "qualification": (
+                f"Você é um SDR consultivo especializado em {niche}. "
+                f"Tom: {tone}. "
+                f"Qualifique o lead {qual_style}. "
+                "Cada informação coletada prepara uma reunião de alto valor — nunca force a venda."
+            ),
+            "apresentation": (
+                f"Você é um especialista em agendamento de diagnóstico para {niche} da {brand}. "
+                "Objetivo único: confirmar data e horário para sessão com o especialista. "
+                "Gere confiança e credibilidade antes de mencionar valor."
+            ),
+            "follow-up": (
+                f"Você é o responsável pelo relacionamento pós-contato da {brand}. "
+                f"Tom: {tone}. "
+                "Nutra o lead com empatia, trate objeções sem pressão e prepare o caminho "
+                "para o fechamento pelo especialista humano."
+            ),
+            "closing": (
+                f"Você prepara o handoff para o especialista humano da {brand}. "
+                "Contextualize o interesse e o estágio do lead. "
+                "Seu papel é garantir que o especialista receba o contexto completo — não vender."
+            ),
+        },
+        "agenda": {
+            "qualification": (
+                f"Você é um profissional de atendimento {tone} da {brand}, especializado em {niche}. "
+                f"Qualifique o lead {qual_style}. "
+                "Objetivo final: conduzir o lead qualificado para uma agenda confirmada."
+            ),
+            "apresentation": (
+                f"Você é um agendador de alta conversão da {brand}. "
+                f"Tom: {tone}. "
+                "Cada mensagem deve ter um próximo passo claro. "
+                "Confirme horário, reforce o benefício da reunião e garanta compromisso de presença."
+            ),
+            "follow-up": (
+                f"Você reengaja leads da {brand} que não compareceram ou precisam remarcar. "
+                f"Tom: {tone}, abordagem direta e amigável. "
+                "Ofereça 2 a 3 horários concretos para facilitar a decisão — não pergunte 'quando pode'."
+            ),
+            "closing": (
+                f"Você confirma a agenda e coleta dados operacionais da {brand}. "
+                "Horário confirmado, link enviado, presença garantida. "
+                "Resposta objetiva — não expanda além do necessário."
+            ),
+        },
+        "direto": {
+            "qualification": (
+                f"Você é um qualificador para venda direta de {niche}. "
+                f"Tom: {tone}. "
+                f"Qualifique {qual_style}. "
+                "Se houver sinal claro de intenção de compra — avance imediatamente para a oferta."
+            ),
+            "apresentation": (
+                f"Você apresenta a oferta da {brand} e conduz ao fechamento direto. "
+                f"Tom: {tone}. "
+                "Mostre valor em 1 a 2 frases, trate objeção com objetividade, envie link de checkout. "
+                "Sem rodeios — cada mensagem empurra ao próximo passo."
+            ),
+            "follow-up": (
+                f"Você recupera vendas da {brand} não concluídas. "
+                f"Tom: {tone}. "
+                "Mensagem curta: 1 benefício claro + 1 CTA direto. "
+                "Não explique — converta."
+            ),
+            "closing": (
+                f"Você conduz o pagamento para {brand}. "
+                "Confirmação de interesse → link de checkout → CTA final. "
+                "Máximo 2 frases. Nenhuma pergunta aberta nesta fase."
+            ),
+        },
+    }
+
+    role_text = roles.get(agent_mode, {}).get(phase)
+    if not role_text:
+        return ""
+    return f"\nIDENTIDADE COMERCIAL:\n{role_text}\n"
 
 
 def _select_current_field(missing_fields: list[str], filled_fields: list[str]) -> Optional[str]:
@@ -349,6 +732,11 @@ def _build_offer_pack_summary(context: Dict[str, Any]) -> dict:
         "items": normalized_items,
         "cta_text": offer_pack.get("cta_text"),
         "disclaimers": offer_pack.get("disclaimers") if isinstance(offer_pack.get("disclaimers"), list) else [],
+        "media_url": offer_pack.get("media_url"),
+        "media_type": offer_pack.get("media_type"),
+        "anchor_price": offer_pack.get("anchor_price"),
+        "guarantee_text": offer_pack.get("guarantee_text"),
+        "upsell_message": offer_pack.get("upsell_message"),
     }
 
 
@@ -442,9 +830,29 @@ def _get_heuristic_reason(context: Dict[str, Any]) -> str:
     return "state_absent"
 
 
+def _get_required_fields_override(context: Dict[str, Any]) -> Optional[List[str]]:
+    """Lê qualification_required_fields do ai_profile. None = usar defaults do modo."""
+    ai_profile = context.get("ai_profile") or {}
+    override = ai_profile.get("qualification_required_fields")
+    if isinstance(override, list):
+        return [str(f) for f in override if isinstance(f, str)]
+    # Fallback: derivar das chaves com mode=required em qualification_fields (UI rica)
+    qual_fields = ai_profile.get("qualification_fields")
+    if isinstance(qual_fields, list) and len(qual_fields) > 0:
+        required_keys = [
+            str(f["key"])
+            for f in qual_fields
+            if isinstance(f, dict) and f.get("mode") == "required" and isinstance(f.get("key"), str)
+        ]
+        if required_keys:
+            return required_keys
+    return None
+
+
 def _build_mode_contract_context(context: Dict[str, Any], mother_decision: Optional[MotherDecision] = None) -> Dict[str, Any]:
     mode = _normalize_agent_mode(context, mother_decision)
-    required_fields = required_fields_for_mode(mode)
+    override = _get_required_fields_override(context)
+    required_fields = required_fields_for_mode(mode, required_fields_override=override)
     qualification_state = _qualification_state_from_context(context)
 
     state_data = qualification_state.get("data_json") if qualification_state else None
@@ -479,7 +887,7 @@ def _build_mode_contract_context(context: Dict[str, Any], mother_decision: Optio
         }
 
     extracted = infer_extracted_fields(context)
-    missing_fields = compute_missing_fields(mode, extracted)
+    missing_fields = compute_missing_fields(mode, extracted, required_fields_override=override)
     filled_fields = [field for field in required_fields if _is_filled_value(extracted.get(field))]
     return {
         "agent_mode_normalized": mode,
@@ -730,7 +1138,18 @@ def _build_mother_prompt(context: Dict[str, Any], message_text: str) -> str:
     mode_contract = _build_mode_contract_context(context)
     agent_mode_normalized = mode_contract["agent_mode_normalized"]
     return (
-        "Você é um roteador MÃE de um CRM (WhatsApp). Retorne SOMENTE JSON válido:\n"
+        f"Você é o ROTEADOR MÃE de um CRM de vendas WhatsApp.\n\n"
+        f"PAPEL: Decidir para qual fase do funil rotear o lead. Você NÃO gera mensagem para o lead.\n"
+        f"ESCOPO: Retornar route_to + sinais + confidence. Nunca gerar message_text.\n"
+        f"FRAMEWORK: Modo {agent_mode_normalized}. Template {playbook_summary['template_key']}. Missing fields: {json.dumps(mode_contract['missing_fields'], ensure_ascii=False)}.\n"
+        "RECUSAS: Nunca retorne route_to=\"follow-up\" sem evidência textual de apresentação realizada. agent_mode DEVE ser null (vem do sistema).\n\n"
+        "Antes de decidir o route_to, raciocine internamente:\n"
+        "1. O lead tem missing_fields? Se sim → qualification (obrigatório)\n"
+        "2. Há evidência de apresentação/sessão já realizada? Se sim, qual foi o resultado?\n"
+        "3. O lead demonstrou intenção de compra/agendamento? Qual o nível?\n"
+        "4. A mensagem é uma resposta a algo que o bot perguntou, ou é espontânea?\n\n"
+        "Use o campo \"reason\" para documentar o raciocínio em 1-2 frases curtas.\n\n"
+        "Retorne SOMENTE JSON válido no schema MotherDecision:\n"
         "{\n"
         '  "route_to": "qualification|apresentation|follow-up|closing",\n'
         '  "perceived_category": "qualification|apresentation|follow-up|closing|null",\n'
@@ -739,7 +1158,7 @@ def _build_mother_prompt(context: Dict[str, Any], message_text: str) -> str:
         '  "agent_mode": null (opcional; deixe null, o modo vem do perfil/sistema),\n'
         '  "signals": {"meeting_scheduled": true|false, "intent_level": "low|medium|high", "urgency_level": "low|medium|high", "price_acceptance": "no|unsure|yes"} (opcional),\n'
         '  "objective": "string curta opcional",\n'
-        '  "next_action_hint": "reply|ask_qualification|handoff|ignore|null (opcional)"\n'
+        '  "next_action_hint": "reply|ask_qualification|handoff|ignore|greet|null (opcional)"\n'
         "}\n"
         "Regras:\n"
         "- route_to é obrigatório e indica a próxima fase a focar.\n"
@@ -752,8 +1171,15 @@ def _build_mother_prompt(context: Dict[str, Any], message_text: str) -> str:
         "- Preencha signals seguindo schema padronizado quando possível (intent_level, urgency_level, price_acceptance, meeting_scheduled, handoff_requested, missing_fields, stop_reason).\n"
         "- Em price_acceptance use SEMPRE string: no|unsure|yes (não use boolean).\n"
         "- Se o lead aceitar o preço/valor, use price_acceptance='yes'.\n"
-        "- REGRA OBRIGATÓRIA DE QUALIFICAÇÃO: se missing_fields não estiver vazio, route_to DEVE ser \"qualification\".\n"
-        "- Enquanto houver missing_fields, NÃO sugerir avanço para apresentation, follow-up ou closing.\n"
+        "- REGRA DE QUALIFICAÇÃO: se missing_fields não estiver vazio E a mensagem não for uma pergunta direta\n"
+        "  do lead sobre oferta/serviços/preços → route_to DEVE ser \"qualification\".\n"
+        "  Se o lead fez uma pergunta direta (sobre serviços, preços, como funciona, etc.) E missing_fields não\n"
+        "  estiver vazio → use route_to=\"qualification\" + next_action_hint=\"reply\" (filha responde primeiro,\n"
+        "  qualificação continua nos turnos seguintes). NUNCA force qualification sem next_action_hint=\"reply\"\n"
+        "  quando o lead fizer uma pergunta direta.\n"
+        "  EXCEÇÃO FECHO: sinal explícito de confirmação/booking em agent_mode=agenda/sdr_scheduler permite\n"
+        "  route_to=\"apresentation\" — ver PRIORIDADE 1 EXCEÇÃO FECHO abaixo.\n"
+        "- Enquanto houver missing_fields E sem sinal de fecho E sem pergunta direta, NÃO sugerir avanço para apresentation, follow-up ou closing.\n"
         "- perceived_category pode refletir o estágio atual do lead, mas route_to deve permanecer qualification até completar o contrato.\n"
         "\n"
         "DEFINIÇÃO DO FUNIL (IMPORTANTE):\n"
@@ -788,6 +1214,34 @@ def _build_mother_prompt(context: Dict[str, Any], message_text: str) -> str:
         "  - Se inbound for claramente de fechamento (\"posso assinar\", \"manda contrato\", \"quero fechar\"),\n"
         "    route_to=closing e perceived_category=closing.\n"
         "\n"
+        "REGRAS DE ROUTING — AVALIAR NESTA ORDEM (a primeira que coincidir vence):\n\n"
+        "PRIORIDADE 1 (obrigatória — sistema sobrescreve mesmo se você retornar outra):\n"
+        "- PRIORIDADE 1A: missing_fields NÃO vazio + mensagem SEM pergunta direta → route_to = \"qualification\"\n"
+        "- PRIORIDADE 1B: missing_fields NÃO vazio + mensagem COM pergunta direta (serviços, preço, como\n"
+        "  funciona, horários, etc.) → route_to = \"qualification\", next_action_hint = \"reply\"\n"
+        "  (filha responde à pergunta antes de qualificar — NUNCA ignore uma pergunta direta do lead)\n"
+        "  EXCEÇÃO FECHO (agent_mode=agenda/sdr_scheduler): se a mensagem contiver sinal EXPLÍCITO de\n"
+        "  confirmação/booking (\"fica combinado\", \"perfeito\", \"pode ser\", \"fechado\", \"aceito\",\n"
+        "  \"tá bom\", \"ok então\", \"combinado\", \"confirmado\", \"então fica assim\" ou equivalentes),\n"
+        "  interprete price_acceptance='yes' e meeting_scheduled=true\n"
+        "  → route_to = \"apresentation\" mesmo com missing_fields. Documentar no reason.\n\n"
+        "PRIORIDADE 2 (sinais fortes):\n"
+        "- Lead confirmou horário/data específica → route_to = \"apresentation\"\n"
+        "- Lead disse \"quero comprar/assinar/fechar\" com intent_level=high → route_to = \"closing\"\n"
+        "- Lead mencionou reunião/sessão passada + dúvida/objeção/feedback → route_to = \"follow-up\"\n\n"
+        "PRIORIDADE 3 (sinais médios — usar confidence para desambiguar):\n"
+        "- Lead mostrou interesse mas sem confirmação → route_to = \"apresentation\", confidence < 0.7\n"
+        "- Lead pediu \"para pensar\" sem evidência de apresentação prévia → MANTER rota atual, não avançar\n\n"
+        "PRIORIDADE 4 (sinais fracos — contexto decide):\n"
+        "- Mensagem genérica (\"oi\", \"tudo bem\") → manter rota anterior, confidence baixa\n"
+        "  EXCEÇÃO SAUDAÇÃO INICIAL: se a mensagem for uma saudação social pura (oi, olá, boa tarde,\n"
+        "  boa noite, bom dia, tudo bem, tudo certo, como vai, e aí, etc.) SEM pergunta sobre\n"
+        "  serviços/preços/horários E o histórico estiver vazio ou tiver apenas 1 mensagem,\n"
+        "  → route_to = \"qualification\", next_action_hint = \"greet\", confidence = 0.6\n"
+        "  (a filha irá cumprimentar o lead de forma calorosa antes de qualificar)\n"
+        "- Mensagem fora de contexto → route_to = rota atual, next_action_hint = \"reply\"\n\n"
+        "SE EM DÚVIDA: mantenha a rota atual com confidence < 0.6.\n"
+        "NUNCA retorne route_to=\"follow-up\" se não houver evidência textual de apresentação/sessão realizada.\n\n"
         "EXEMPLOS (ultracurtos):\n"
         '1) inbound_message_text: "Amanhã 17h tá confirmado"\n'
         '   -> {"route_to":"apresentation","perceived_category":"apresentation","confidence":0.8,"reason":"meeting_scheduled|confirmou horário"}\n'
@@ -809,6 +1263,9 @@ def _build_mother_prompt(context: Dict[str, Any], message_text: str) -> str:
         '   -> {"route_to":"closing","perceived_category":"closing","confidence":0.85,"reason":"pedido de contrato"}\n'
         "10) CLOSER (negativo): inbound_message_text: \"Fechou amanhã 17h\"\n"
         '   -> {"route_to":"apresentation","perceived_category":"apresentation","confidence":0.8,"reason":"confirmou horário (no closer, sem meeting_scheduled)"}\n'
+        "11) AGENDA sinal de fecho: inbound_message_text: \"Perfeito, fica combinado então\"\n"
+        "   (missing_fields não vazio, agent_mode=agenda, sinal de fecho explícito)\n"
+        '   -> {"route_to":"apresentation","perceived_category":"apresentation","confidence":0.85,"reason":"meeting_scheduled|fica combinado — sinal de fecho override","signals":{"meeting_scheduled":true,"price_acceptance":"yes"}}\n'
         "\n"
         "CONTEXTO:\n"
         f"- lead: {json.dumps(lead_summary, ensure_ascii=False)}\n"
@@ -822,6 +1279,22 @@ def _build_mother_prompt(context: Dict[str, Any], message_text: str) -> str:
         f"- lead_origin: {lead_origin_label}\n"
         f"- origin_opener: {origin_opener}\n"
         f"- inbound_message_text: {message_text}\n"
+        + (
+            "\nMODO PASSIVO (response_style=passive): "
+            "Se a mensagem do cliente for uma pergunta directa (sobre serviços, preços, localização, "
+            "horários, massagista, catálogo de tratamentos, quais opções/massagens/tratamentos existem, "
+            "menu de serviços, o que oferecem, o que fazem, quais são os valores, etc.) "
+            "E missing_fields NÃO ESTIVER VAZIO, "
+            "usa next_action_hint='reply' para sinalizar à filha que deve responder a pergunta primeiro. "
+            "O route_to continua 'qualification' (os campos ainda precisam de ser coletados), "
+            "mas a filha terá prioridade para responder antes de perguntar.\n"
+            "OU se a mensagem for uma saudação social pura (oi, olá, boa tarde, boa noite, bom dia, "
+            "tudo bem, tudo certo, como vai, e aí, etc.) SEM pergunta sobre serviços/preços "
+            "E o histórico estiver vazio ou tiver apenas 1 mensagem, "
+            "usa next_action_hint='greet' (a filha cumprimenta o lead antes de qualificar; should_ask=true).\n"
+            if (ai_profile.get("response_style") or "passive") == "passive"
+            else ""
+        )
     )
 
 
@@ -862,7 +1335,14 @@ def _build_child_prompt(
     hybrid_flow_style = _resolve_hybrid_flow_style(context)
     offer_pack_summary = _build_offer_pack_summary(context)
     return (
-        "Você é uma LLM FILHA e deve responder SOMENTE JSON válido:\n"
+        f"Você é uma LLM FILHA de um CRM de vendas WhatsApp.\n\n"
+        f"PAPEL: Gerar a resposta adequada ao estágio do funil do lead.\n"
+        f"ESCOPO: Responder apenas ao que o contexto fornecido permite. Nunca inventar informação.\n"
+        f"TOM: {ai_summary.get('tone_of_voice') or 'profissional'} — conversacional, adaptado ao WhatsApp.\n"
+        f"FRAMEWORK: Modo {agent_mode_normalized}. Template {playbook_summary['template_key']}.\n"
+        "RECUSAS: Nunca invente informação. Nunca prometa condições não presentes no contexto. Nunca dê conselhos médicos, jurídicos ou financeiros.\n"
+        "NOME DO LEAD: Se lead.name for null, NÃO invente nem adivinhe o nome do lead. Nunca chame o lead pelo nome se ele não o forneceu na conversa.\n\n"
+        "Retorne SOMENTE JSON válido no schema ChildResult:\n"
         "{\n"
         '  "message_text": "string",\n'
         '  "did_complete_phase": false,\n'
@@ -933,6 +1413,7 @@ def _build_child_prompt_qualification(
     origin_opener = (
         ai_profile.get("origin_outbound_opener") if _is_outbound_lead else ai_profile.get("origin_inbound_opener")
     ) or ""
+    is_first_contact = len(history) <= 1
 
     history_text = _format_history(history)
     mode_contract = _build_mode_contract_context(context, mother_decision)
@@ -949,7 +1430,123 @@ def _build_child_prompt_qualification(
         if isinstance(item, dict) and item.get("field") == current_field
     ][-2:]
 
-    return f"""Você é a FILHA QUALIFICATION e deve responder SOMENTE JSON válido:
+    tone_block = _build_tone_block(ai_profile, playbook)
+    response_style = (ai_profile.get("response_style") or "passive").strip().lower()
+
+    # Nota de mídia: quando o usuário configurou mídia no knowledge, instrui o LLM a escrever
+    # apenas um texto curto de introdução, pois as imagens serão enviadas automaticamente após.
+    _has_knowledge_media = bool(context.get("knowledge_media"))
+    _media_intro_note = (
+        "\nMÍDIA DISPONÍVEL: Imagens/arquivos serão enviados automaticamente após esta mensagem.\n"
+        "Escreva APENAS uma frase curta de introdução (ex.: 'Aqui estão as informações:', "
+        "'Veja os detalhes abaixo:'). NÃO descreva o conteúdo da mídia no texto — a mídia tem prioridade.\n"
+        if _has_knowledge_media
+        else ""
+    )
+
+    # ESCOPO e RECUSAS condicionais ao response_style.
+    # O bloco passivo aparece ANTES do PAPEL para ter precedência sobre qualquer instrução posterior.
+    _escopo_line = (
+        "Responder perguntas directas do cliente PRIMEIRO, usando offer_description e custom_instructions. "
+        "Pode apresentar serviços e valores quando perguntado. "
+        "Se a mensagem do lead for uma saudação social (boa tarde, oi, olá, tudo bem, bom dia, etc.), "
+        "responde à saudação de forma calorosa. "
+        "NÃO agenda reunião nesta fase. "
+        "MODO PASSIVO — REGRA ABSOLUTA DE PERGUNTAS: ZERO perguntas abertas. "
+        "should_ask=false na esmagadora maioria dos casos. "
+        "A qualificação é feita por INFERÊNCIA SILENCIOSA — lê o que o lead diz e preenche os campos internamente. "
+        "A única exceção permitida: pergunta de fechamento binária no contexto de marcação de hora "
+        "(ex.: 'Tenho segunda às 15h ou 17h — qual prefere?'). Mesmo assim, only 1 pergunta, nunca aberta."
+        if response_style == "passive"
+        else (
+            "Responde SEMPRE à mensagem do cliente antes de qualificar. Se o cliente fez uma pergunta, "
+            "responde usando offer_description e custom_instructions. "
+            "Se a mensagem do lead for uma saudação social (boa tarde, oi, olá, tudo bem, bom dia, etc.), "
+            "responde à saudação de forma calorosa antes de qualificar. "
+            "Depois, se houver campos obrigatórios em falta, adicione UMA única pergunta de qualificação natural ao final. "
+            "Nunca respondas APENAS com uma pergunta de qualificação. Não agenda reuniões nesta fase."
+        )
+    )
+    _recusas_line = (
+        "Nunca invente informação. Nunca agende reunião nesta fase. "
+        "Se a resposta não estiver em offer_description ou custom_instructions, diz que vais verificar (→ handoff). "
+        "Em modo passivo: NUNCA faças perguntas para coletar dados — infere silenciosamente da conversa."
+        if response_style == "passive"
+        else (
+            "Nunca invente informação. Nunca agende reunião nesta fase. "
+            "Pode apresentar serviços e valores quando perguntado usando offer_description. "
+            "Se não souber responder, diz que vais verificar (→ handoff)."
+        )
+    )
+    _mother_hint = (mother_decision.next_action_hint or "").strip().lower()
+    _passive_reply_now = response_style == "passive" and _mother_hint == "reply"
+    _greeting_now = _mother_hint == "greet"
+    _greeting_header = (
+        "MODO SAUDAÇÃO ACTIVADO — O lead abriu com uma saudação social.\n"
+        + (
+            f"ABERTURA CONFIGURADA (primeiro contato): Use o texto abaixo como BASE da tua resposta de saudação.\n"
+            f"Adapte ao WhatsApp e ao tom de voz, mas preserve a essência. Depois inclua UMA pergunta de qualificação natural:\n"
+            f"{origin_opener}\n"
+            if (is_first_contact and origin_opener.strip())
+            else (
+                "INSTRUÇÃO OBRIGATÓRIA: A tua resposta DEVE começar por cumprimentar o lead de forma calorosa "
+                "e natural (ex.: 'Boa tarde! Tudo bem sim, e com você?', 'Oi! Tudo ótimo por aqui, e aí?'). "
+                "O cumprimento deve ser breve e genuíno — proporcional à saudação recebida, não excessivo.\n"
+            )
+        )
+        + "DEPOIS do cumprimento, no MESMO turno, acrescenta UMA pergunta de qualificação de forma natural "
+        "como se fosse parte da conversa (ex.: 'Para te ajudar melhor, qual serviço te interessa?').\n"
+        "should_ask=true. field=current_field. question_text=a pergunta de qualificação isolada.\n"
+        "message_text=cumprimento + pergunta juntos numa única mensagem natural.\n"
+        "NUNCA ignores a saudação e vás directamente para a pergunta de qualificação.\n\n"
+        if _greeting_now
+        else ""
+    )
+    _passive_header = (
+        ""  # _greeting_header tem precedência; nenhum header passivo necessário
+        if _greeting_now
+        else (
+            (
+                "MODO PASSIVO ACTIVADO — RESPOSTA IMEDIATA OBRIGATÓRIA.\n"
+                "A mãe sinalizou next_action_hint='reply': o cliente fez uma pergunta de catálogo/oferta/serviços.\n"
+                "INSTRUÇÃO CRÍTICA: coloca TODA a resposta em message_text. NÃO perguntes nada neste turno.\n"
+                "should_ask=false. question_text DEVE ficar vazio (\"\").\n"
+                "Responde à pergunta do cliente usando offer_description e custom_instructions.\n"
+                "A qualificação continua nos próximos turnos — NÃO neste.\n\n"
+            )
+            if _passive_reply_now
+            else (
+                "MODO PASSIVO ACTIVADO — ZERO PERGUNTAS ABERTAS.\n"
+                "PRIORIDADE ABSOLUTA: se a mensagem do cliente for uma pergunta directa (sobre serviços,\n"
+                "preços, localização, horários, funcionamento, catálogo, etc.), RESPONDE-A PRIMEIRO\n"
+                "usando offer_description e custom_instructions.\n"
+                "NÃO faças perguntas de qualificação. Infere os campos silenciosamente da conversa.\n"
+                "should_ask=false na esmagadora maioria dos casos.\n"
+                "NUNCA ignores uma pergunta directa para fazer uma pergunta de qualificação.\n\n"
+                if response_style == "passive"
+                else ""
+            )
+        )
+    )
+
+    _first_contact_opener_header = (
+        f"ABERTURA OBRIGATÓRIA — PRIMEIRO CONTATO:\n"
+        f"Este é o PRIMEIRO contacto do lead. Use o texto abaixo como BASE da tua resposta.\n"
+        f"Adapte ao WhatsApp e ao tom de voz, mas preserve a essência:\n"
+        f"{origin_opener}\n\n"
+        if (is_first_contact and origin_opener.strip() and not _greeting_now)
+        else ""
+    )
+
+    _qual_prompt = f"""{_first_contact_opener_header}{_greeting_header}{_passive_header}Você é a FILHA QUALIFICATION de um CRM de vendas WhatsApp.
+{_build_agent_role_block(agent_mode_normalized, "qualification", ai_profile)}
+PAPEL: Coletar campos de qualificação do lead, um por vez, através de perguntas naturais e contextuais.
+ESCOPO: {_escopo_line}{_media_intro_note}
+TOM: {ai_summary["tone_of_voice"] or "profissional"} — conversacional e adaptado ao WhatsApp (mensagens curtas, sem formatação). Máx {playbook_summary["max_chars"] or "N/D"} caracteres.
+FRAMEWORK: Modo {agent_mode_normalized}. Template {playbook_summary["template_key"]}. Campos obrigatórios: {json.dumps(mode_contract['required_fields'], ensure_ascii=False)}. Campo atual: {json.dumps(current_field, ensure_ascii=False)}.
+RECUSAS: {_recusas_line}
+{tone_block}
+Retorne SOMENTE JSON válido no schema ChildResult:
 {{
   "question_text": "string",
   "field": "service_interest|urgency|decision_role|constraints|availability_window|budget_or_price_acceptance|location_preference|price_acceptance|null",
@@ -964,7 +1561,10 @@ def _build_child_prompt_qualification(
   "confidence": 0.0
 }}
 Regras:
-- Só pode perguntar 1 coisa por turno.
+- LIMITE CRÍTICO DE PERGUNTAS: máximo 1 (UMA) pergunta por mensagem, sem exceção.
+  Nunca coloque 2 ou mais perguntas numa mesma resposta (nem com "e também", "além disso", listas, etc.).
+  Se precisar de múltiplos campos, pergunte UM por vez, em rodadas separadas.
+  Puxe gancho da última resposta do lead para formular a próxima pergunta de forma natural.
 - Quando should_ask=true, field deve ser EXATAMENTE o current_field.
 - Quando should_ask=true, question_text não pode ser vazio.
 - Evite repetir frases de asked_questions_for_current_field; reformule.
@@ -973,6 +1573,16 @@ Regras:
 - recommended_next_category pode ser null ou 'apresentation'.
 - outcome e kanban_highlight devem ser null.
 
+PROIBIÇÕES (violar qualquer uma é crítico):
+1. NUNCA invente informações que não estejam no contexto fornecido.
+2. NUNCA prometa descontos, prazos ou condições não presentes em offer_pack ou knowledge_items.
+3. NUNCA dê conselhos médicos, jurídicos ou financeiros.
+4. NUNCA mencione concorrentes pelo nome, a menos que estejam em knowledge_items.
+5. NUNCA use urgência artificial — só mencione urgência se urgency_offer estiver preenchido.
+6. NUNCA responda sobre assuntos fora do nicho do negócio — redirecione para o tema.
+7. Se não souber a resposta, diga que vai verificar com a equipa (→ handoff), não improvise.
+{_ESCAPE_HATCH_BLOCK}
+{_build_validation_block(playbook_summary["max_chars"])}
 ROTA MÃE: {mother_decision.route_to} (confidence={mother_decision.confidence})
 Motivo MÃE: {mother_decision.reason}
 
@@ -991,7 +1601,10 @@ CONTEXTO:
 - lead_origin: {lead_origin_label}
 - origin_opener: {origin_opener}
 - inbound_message_text: {message_text}
-"""
+- next_action_hint_mae: {mother_decision.next_action_hint or "null"}
+{_build_qualification_fields_block(ai_profile, response_style)}{_build_custom_instructions_block(ai_profile)}{_build_training_examples_block(context, "qualification")}"""
+    return _inject_generated_parts(_qual_prompt, context, "qualification")
+
 def _build_child_prompt_apresentation(
     context: Dict[str, Any],
     message_text: str,
@@ -1017,6 +1630,7 @@ def _build_child_prompt_apresentation(
         "niche": ai_profile.get("niche"),
         "agent_mode": ai_profile.get("agent_mode"),
         "timezone": ai_profile.get("timezone"),
+        "appointment_mode": ai_profile.get("appointment_mode"),
     }
     playbook_summary = {
         "template_key": playbook.get("template_key") or playbook.get("name"),
@@ -1033,8 +1647,322 @@ def _build_child_prompt_apresentation(
     presentation_variant, presentation_variant_source = _resolve_presentation_variant(context, agent_mode_normalized)
     hybrid_flow_style = _resolve_hybrid_flow_style(context)
     offer_pack_summary = _build_offer_pack_summary(context)
-    return (
-        "Você é a FILHA APRESENTATION e deve responder SOMENTE JSON válido:\n"
+
+    # Fix P9: passive reply antes do agendamento quando a qualificação foi auto-promovida
+    # neste mesmo turno e o lead tinha uma pergunta aberta de serviço na mensagem.
+    _response_style_apres = (ai_profile.get("response_style") or "passive").strip().lower()
+    _auto_promoted_from_qual = (
+        mother_decision.route_to == "qualification"
+        and not mode_contract.get("missing_fields")
+    )
+    _inbound_text_apres = str(metadata.get("inbound_message_text") or "").lower()
+    _apres_inbound_has_question = "?" in _inbound_text_apres or any(
+        m in _inbound_text_apres for m in [
+            "gostaria de saber", "como faço", "como funciona", "o que é",
+            "queria entender", "pode me dizer", "me explica", "preciso entender",
+        ]
+    )
+    _passive_apres_header = ""
+    if _auto_promoted_from_qual and _response_style_apres == "passive" and _apres_inbound_has_question:
+        _passive_apres_header = (
+            "ATENÇÃO — PERGUNTA ABERTA DO LEAD: O lead fez uma pergunta sobre o serviço neste turno "
+            "(ver inbound_message_text). A qualificação foi concluída neste mesmo turno.\n"
+            "INSTRUÇÃO CRÍTICA: ANTES de propor o agendamento, RESPONDE à pergunta do lead "
+            "usando offer_description e custom_instructions.\n"
+            "Integra a resposta e a proposta de agendamento numa única mensagem fluida e natural. "
+            "NUNCA ignores a pergunta do lead.\n\n"
+        )
+
+    # Greeting awareness — quando a mãe sinaliza next_action_hint='greet', o lead abriu com uma
+    # saudação social. O prompt de apresentação deve responder à saudação antes de executar o
+    # objetivo do estágio (agendamento, aquecimento ou pitch). Sem alterar roteamento.
+    _mother_hint_apres = (mother_decision.next_action_hint or "").strip().lower()
+    _is_greeting_apres = _mother_hint_apres == "greet"
+    _greeting_apres_header = (
+        "ATENÇÃO — SAUDAÇÃO DO LEAD: O lead enviou uma saudação como primeira mensagem.\n"
+        "INSTRUÇÃO OBRIGATÓRIA: A tua resposta DEVE começar com um cumprimento caloroso e natural "
+        "(ex.: 'Boa noite!', 'Olá, boa noite!', 'Oi, boa noite! Tudo bem?'). "
+        "O cumprimento deve ser breve e proporcional à saudação recebida.\n"
+        "DEPOIS do cumprimento, de forma fluida e natural na MESMA mensagem, "
+        "executa o objetivo do estágio atual (agendamento, aquecimento ou apresentação).\n"
+        "NUNCA ignores a saudação e vás directamente para o pitch ou para o agendamento.\n\n"
+        if _is_greeting_apres
+        else ""
+    )
+
+    # Opener de primeiro contato para apresentation
+    _is_outbound_lead_apres = (metadata.get("lead_origin") or "inbound") == "outbound"
+    origin_opener_apres = (
+        ai_profile.get("origin_outbound_opener") if _is_outbound_lead_apres
+        else ai_profile.get("origin_inbound_opener")
+    ) or ""
+    is_first_contact_apres = len(history) <= 1
+    _apres_first_contact_opener = (
+        f"ABERTURA OBRIGATÓRIA — PRIMEIRO CONTATO:\n"
+        f"Este é o PRIMEIRO contacto do lead. Use o texto abaixo como BASE da tua resposta.\n"
+        f"Adapte ao WhatsApp e ao tom de voz, mas preserve a essência:\n"
+        f"{origin_opener_apres}\n\n"
+        if (is_first_contact_apres and origin_opener_apres.strip())
+        else ""
+    )
+
+    # Estágio de aquecimento (Tarefa 3.8) — Agent 3 (hybrid_scheduler) pós-qualificação.
+    # Trigger: mother_decision.route_to == "qualification" e missing_fields vazio
+    # (qualificação recém-aprovada/auto-promovida para apresentation).
+    # Defaults context-aware: usam o niche do ai_profile para evitar linguagem B2B genérica
+    # ("profissional com o seu perfil", "mapear situação", "plano de ação") em nichos B2C.
+    _niche_for_defaults = str(ai_profile.get("niche") or "").strip()
+    _DEFAULT_SOCIAL_PROOF = (
+        f"Já trabalhei com vários clientes na área de {_niche_for_defaults} e os resultados têm sido muito positivos. "
+        "Posso te contar mais na nossa conversa."
+        if _niche_for_defaults else
+        "Vários clientes já utilizaram o serviço e tiveram ótimos resultados. "
+        "Posso te contar mais na nossa conversa."
+    )
+    _DEFAULT_SESSION_PREVIEW = (
+        f"Na nossa sessão, vou perceber melhor o que precisas na área de {_niche_for_defaults} "
+        "e encontraremos juntos a melhor abordagem para ti."
+        if _niche_for_defaults else
+        "Na nossa sessão, vamos entender o que você precisa e encontrar a melhor forma de te ajudar."
+    )
+    template_key_for_warming = str(ai_profile.get("template_key") or "").strip().lower()
+    appointment_mode = str(ai_profile.get("appointment_mode") or "exploratory").strip().lower()
+    knowledge_items = context.get("knowledge_items") or {}
+    # Categorias do knowledge que têm mídia configurada — usadas para suprimir texto
+    # quando a mídia é preferencial (evita que o LLM descreva o conteúdo em texto).
+    _km_categories = set((context.get("knowledge_media") or {}).keys())
+    warming_injection = ""
+    commercial_injection = ""
+    if (
+        template_key_for_warming == "hybrid_scheduler"
+        and mother_decision.route_to == "qualification"
+        and not mode_contract.get("missing_fields")
+    ):
+        if appointment_mode == "commercial":
+            # Modo comercial: apresentar serviços/preços, tratar objeções, fechar compromisso, DEPOIS agendar.
+            # Pagamento sempre presencial — nunca enviar link de checkout.
+            social = (
+                knowledge_items.get("social_proof")
+                or str(ai_profile.get("warming_social_proof") or "").strip()
+            )
+            pricing       = knowledge_items.get("service_pricing_table", "")
+            objections    = knowledge_items.get("commercial_objections", "")
+            differentials = knowledge_items.get("service_differentials", "")
+            promotion     = knowledge_items.get("active_promotion", "")
+            payment       = knowledge_items.get("payment_policy", "")
+            faq_commit    = knowledge_items.get("pre_commitment_faq", "")
+            commercial_injection = (
+                "\n- MODO COMERCIAL (hybrid_scheduler — compromisso antes do agendamento):\n"
+                "  O lead concluiu a qualificação. Seu objetivo neste turno e nos seguintes é:\n"
+                "  1. Aquecer com prova social (se disponível)\n"
+                "  2. Apresentar os serviços/pacotes disponíveis com clareza\n"
+                "  3. Tratar objeções conforme as respostas configuradas\n"
+                "  4. Obter o compromisso verbal/escrito do lead com um serviço ou pacote específico\n"
+                "  5. SÓ ENTÃO propor o agendamento\n"
+                "  REGRA CRÍTICA: o pagamento é SEMPRE presencial na marcação — NUNCA envie link de checkout.\n"
+                "  Não mencione modalidade 'exploratória' ou 'diagnóstico gratuito' — a sessão já tem valor definido.\n"
+                + (
+                    f"  PROVA SOCIAL (usar na fase de warming ou quando o lead demonstrar hesitação):\n"
+                    f"  {social}\n"
+                    f"  INSTRUÇÃO: Integre naturalmente na conversa. Nunca diga 'temos uma prova social'. Adapte ao perfil do lead se possível.\n"
+                    if social else
+                    "  PROVA SOCIAL: (não configurada — use tom acolhedor e destaque o diferencial do profissional)\n"
+                )
+                + (
+                    f"  TABELA DE SERVIÇOS/PREÇOS (apresentar para contextualizar a oferta):\n"
+                    f"  {pricing}\n"
+                    f"  INSTRUÇÃO: Apresente com clareza. Nunca invente preços ou condições não listadas.\n"
+                    if pricing else
+                    "  TABELA DE SERVIÇOS/PREÇOS: (não configurada — pergunte o interesse antes de citar valores)\n"
+                )
+                + (
+                    f"  OBJEÇÕES E RESPOSTAS (usar APENAS quando o lead levantar uma objeção):\n"
+                    f"  {objections}\n"
+                    f"  INSTRUÇÃO: Se o lead levantar uma objeção listada, use a resposta como base. Adapte ao tom. Nunca copie literalmente. Se a objeção não estiver listada, use empatia + reformulação de valor.\n"
+                    if objections else
+                    "  OBJEÇÕES E RESPOSTAS: (não configurada — use empatia e reformule o valor entregue)\n"
+                )
+                + (
+                    f"  DIFERENCIAIS DO SERVIÇO (mencionar para reforçar valor):\n"
+                    f"  {differentials}\n"
+                    f"  INSTRUÇÃO: Integre naturalmente no pitch, não liste como bullet points.\n"
+                    if differentials else ""
+                )
+                + (
+                    f"  CONDIÇÃO ESPECIAL VIGENTE (mencionar quando relevante para fechar o compromisso):\n"
+                    f"  {promotion}\n"
+                    f"  INSTRUÇÃO: Cite apenas se vigente. Nunca crie urgência artificial.\n"
+                    if promotion else ""
+                )
+                + (
+                    f"  POLÍTICA DE PAGAMENTO PRESENCIAL (usar para esclarecer dúvidas sobre pagamento):\n"
+                    f"  {payment}\n"
+                    f"  INSTRUÇÃO: Reforce que o pagamento é presencial. Nunca envie link de checkout.\n"
+                    if payment else ""
+                )
+                + (
+                    f"  FAQ PRÉ-COMPROMISSO (usar APENAS quando o lead fizer uma pergunta diretamente coberta):\n"
+                    f"  {faq_commit}\n"
+                    f"  INSTRUÇÃO: Responda com base no FAQ. Se a pergunta não estiver coberta, diga que vai confirmar com a equipa.\n"
+                    if faq_commit else ""
+                )
+                + "  Após o lead confirmar a escolha de serviço/pacote, proponha o agendamento normalmente.\n"
+            )
+        elif presentation_variant == "scheduler":
+            # presentation_variant=scheduler — serviço presencial (massagem, spa, bem-estar, etc.)
+            # Não há fase de warming B2B. Após qualificação concluída, confirmar disponibilidade e valor.
+            warming_injection = (
+                "\n- ESTÁGIO PÓS-QUALIFICAÇÃO (scheduler — serviço presencial): "
+                "O lead indicou o serviço pretendido e a disponibilidade. O teu papel agora é:\n"
+                "  1. Confirmar (ou verificar) a disponibilidade para o horário/dia mencionado\n"
+                "  2. Informar o valor do serviço solicitado, se ainda não foi mencionado nesta conversa\n"
+                "  3. Propor a confirmação da reserva de forma natural e acolhedora\n"
+                "  REGRA CRÍTICA: usa linguagem de spa/serviço — 'agendar sessão', 'reservar', 'marcar experiência'. "
+                "NUNCA uses linguagem de reunião B2B ('mapear situação', 'plano de ação', 'diagnóstico', "
+                "'cliente com o teu perfil', 'resultados incríveis').\n"
+            )
+        else:
+            # Modo exploratório (padrão): aquecer e propor sessão sem compromisso de compra.
+            social_proof = str(ai_profile.get("warming_social_proof") or "").strip() or _DEFAULT_SOCIAL_PROOF
+            session_preview = str(ai_profile.get("warming_session_preview") or "").strip() or _DEFAULT_SESSION_PREVIEW
+            warming_injection = (
+                "\n- ESTÁGIO WARMING (pós-qualificação aprovada para hybrid_scheduler): "
+                "O lead acabou de concluir a qualificação. Antes de propor o agendamento, execute os 2 passos de aquecimento em UMA mensagem natural:\n"
+                f"  1. PROVA SOCIAL: {social_proof}\n"
+                f"  2. PRÉVIA DA SESSÃO: {session_preview}\n"
+                "  Combine os 2 passos de forma fluida e, ao final, proponha o agendamento da sessão.\n"
+                "  Não mencione os termos 'prova social' ou 'prévia da sessão' explicitamente — use linguagem natural.\n"
+            )
+
+    tone_block_apresentation = _build_tone_block(ai_profile, playbook)
+
+    # Nota de mídia: quando há mídia configurada no knowledge, instrui o LLM a escrever texto curto.
+    _has_knowledge_media_apres = bool(context.get("knowledge_media"))
+    _media_intro_note_apres = (
+        "\nMÍDIA DISPONÍVEL: Imagens/arquivos serão enviados automaticamente após esta mensagem.\n"
+        "Escreva APENAS uma frase curta de introdução (ex.: 'Aqui estão os detalhes:', "
+        "'Veja as informações abaixo:'). NÃO descreva o conteúdo da mídia no texto — a mídia tem prioridade.\n"
+        if _has_knowledge_media_apres
+        else ""
+    )
+
+    # Tarefa 1.3 — knowledge_items com directivas de uso para sdr_padrao / closer_agressivo
+    # (e qualquer path que não use commercial_injection, onde knowledge não é injectado inline)
+    _apres_knowledge_parts: list[str] = []
+    if not commercial_injection:
+        _social_proof_apres = knowledge_items.get("social_proof") or ""
+        _pitch_script_apres = knowledge_items.get("pitch_script") or ""
+        _product_details_apres = knowledge_items.get("product_details") or ""
+        _objections_faq_apres = knowledge_items.get("objections_faq") or ""
+        _service_faq_apres = knowledge_items.get("service_faq") or ""
+        _guarantee_policy_apres = knowledge_items.get("guarantee_policy") or ""
+        if _social_proof_apres:
+            _apres_knowledge_parts.append(
+                f"PROVA SOCIAL (usar na fase de aquecimento ou quando o lead demonstrar hesitação):\n"
+                f"{_social_proof_apres}\n"
+                f"INSTRUÇÃO: Integre naturalmente na conversa. Nunca diga 'temos uma prova social'. "
+                f"Adapte ao perfil do lead se possível.\n"
+            )
+        if _pitch_script_apres:
+            if "pitch_script" in _km_categories:
+                _apres_knowledge_parts.append(
+                    "SCRIPT DE PITCH: Conteúdo disponível em mídia visual (enviada automaticamente).\n"
+                    "INSTRUÇÃO CRÍTICA: Escreva APENAS uma frase curta de introdução. "
+                    "NÃO descreva o conteúdo — a mídia tem prioridade absoluta.\n"
+                )
+            else:
+                _apres_knowledge_parts.append(
+                    f"SCRIPT DE PITCH (usar como guia estrutural da apresentação, não copiar literalmente):\n"
+                    f"{_pitch_script_apres}\n"
+                    f"INSTRUÇÃO: Adapte ao contexto da conversa e ao tom de voz configurado. "
+                    f"Nunca copie o script palavra por palavra.\n"
+                )
+        if _product_details_apres:
+            if "product_details" in _km_categories:
+                _apres_knowledge_parts.append(
+                    "DETALHES DO PRODUTO/SERVIÇO: Conteúdo disponível em mídia visual (enviada automaticamente).\n"
+                    "INSTRUÇÃO CRÍTICA: Escreva APENAS uma frase curta de introdução. "
+                    "NÃO descreva features nem condições — a mídia tem prioridade absoluta.\n"
+                )
+            else:
+                _apres_knowledge_parts.append(
+                    f"DETALHES DO PRODUTO/SERVIÇO (usar para enriquecer o pitch com informações precisas):\n"
+                    f"{_product_details_apres}\n"
+                    f"INSTRUÇÃO: Use apenas os dados presentes neste bloco. Nunca invente features ou condições não listadas.\n"
+                )
+        if _objections_faq_apres:
+            _apres_knowledge_parts.append(
+                f"OBJEÇÕES E RESPOSTAS (usar APENAS quando o lead levantar uma objeção):\n"
+                f"{_objections_faq_apres}\n"
+                f"INSTRUÇÃO: Se o lead levantar uma objeção listada, use a resposta configurada como base. "
+                f"Adapte ao tom de voz e ao contexto. Nunca copie literalmente. "
+                f"Se a objeção NÃO estiver listada, use empatia + reformulação de valor.\n"
+            )
+        if _service_faq_apres:
+            if "service_faq" in _km_categories:
+                _apres_knowledge_parts.append(
+                    "FAQ DO SERVIÇO: Informação completa disponível em arquivo de mídia (enviado automaticamente).\n"
+                    "INSTRUÇÃO CRÍTICA: Escreva APENAS uma frase curta de introdução "
+                    "(ex.: 'Aqui estão os valores:', 'Veja os detalhes abaixo:'). "
+                    "NÃO liste preços, serviços nem detalhes — a mídia tem prioridade absoluta sobre o texto.\n"
+                )
+            else:
+                _apres_knowledge_parts.append(
+                    f"FAQ DO SERVIÇO (usar APENAS quando o lead fizer uma pergunta diretamente coberta):\n"
+                    f"{_service_faq_apres}\n"
+                    f"INSTRUÇÃO: Responda com base no FAQ. Se a pergunta não estiver coberta, "
+                    f"diga que vai confirmar com a equipa.\n"
+                )
+        if _guarantee_policy_apres:
+            _apres_knowledge_parts.append(
+                f"POLÍTICA DE GARANTIA (mencionar para reforçar confiança quando relevante):\n"
+                f"{_guarantee_policy_apres}\n"
+                f"INSTRUÇÃO: Cite apenas quando o lead demonstrar hesitação sobre risco. "
+                f"Nunca invente garantias não configuradas.\n"
+            )
+    standard_knowledge_block = (
+        "\nKNOWLEDGE BASE (usar conforme as instruções de cada bloco):\n"
+        + "\n".join(_apres_knowledge_parts)
+    ) if _apres_knowledge_parts else ""
+
+    # Fix P8: bloco de confirmação estruturada obrigatória.
+    # Activa quando meeting_scheduled=true + presentation_variant=scheduler (modo agenda/hybrid).
+    # O filho entra em "modo recibo" e deve emitir o resumo estruturado da reserva.
+    _apres_meeting_scheduled = _extract_meeting_scheduled_signal(mother_decision)
+    _extracted_fields_apres = mode_contract.get("extracted_fields") or {}
+    _booking_confirmation_block = ""
+    if _apres_meeting_scheduled and presentation_variant == "scheduler":
+        _booking_confirmation_block = (
+            "\nCONFIRMAÇÃO ESTRUTURADA OBRIGATÓRIA (meeting_scheduled=true + scheduler):\n"
+            "O cliente confirmou a reserva. DEVES emitir o recibo de reserva no formato abaixo.\n"
+            "Usa os valores de extracted_fields para preencher cada campo. "
+            "Se um campo não estiver em extracted_fields, usa o que estiver no histórico ou em custom_instructions.\n"
+            "Formato obrigatório (adapta o texto ao tom de voz, mantém a estrutura):\n"
+            "✅ [nome do serviço] Reservada\n"
+            "📋 Experiência: [service_interest]\n"
+            "🕐 Horário: [hora de availability_window]\n"
+            "📅 Dia: [dia de availability_window]\n"
+            "👤 Massagista: [nome do massagista — de custom_instructions ou offer_description]\n"
+            "Após o recibo, podes acrescentar a morada/sala se ainda não foi dada neste turno, "
+            "ou uma frase de encerramento acolhedora.\n"
+            "NÃO substituas o recibo por texto verbal solto. O recibo É a resposta principal.\n"
+            f"extracted_fields disponíveis: {json.dumps(_extracted_fields_apres, ensure_ascii=False)}\n"
+        )
+
+    _apres_prompt = (
+        _greeting_apres_header
+        + _apres_first_contact_opener
+        + _passive_apres_header
+        + f"Você é a FILHA APRESENTATION de um CRM de vendas WhatsApp.\n"
+        + _build_agent_role_block(agent_mode_normalized, "apresentation", ai_profile)
+        + "\n"
+        + f"PAPEL: Conduzir a fase de apresentação — agendamento (scheduler) ou oferta+fechamento (sales).\n"
+        f"ESCOPO: Variant {presentation_variant}. Gera a mensagem de apresentação e preenche signals_structured.{_media_intro_note_apres}\n"
+        f"TOM: {ai_summary.get('tone_of_voice') or 'profissional'} — direto e focado na ação. Máx {playbook_summary.get('max_chars') or 'N/D'} caracteres.\n"
+        f"FRAMEWORK: Modo {agent_mode_normalized}. Template {playbook_summary.get('template_key')}. Appointment mode: {ai_summary.get('appointment_mode') or 'exploratory'}.\n"
+        "RECUSAS: Nunca invente features ou benefícios fora de knowledge_items. Nunca cite preço diferente de offer_pack. Nunca mencione \"veja a imagem/vídeo\" (mídia enviada automaticamente). Nunca envie link E peça permissão no mesmo turno.\n"
+        + tone_block_apresentation
+        + "\nRetorne SOMENTE JSON válido no schema ChildResult:\n"
         "{\n"
         '  "message_text": "string",\n'
         '  "did_complete_phase": false,\n'
@@ -1072,7 +2000,26 @@ def _build_child_prompt_apresentation(
         "- recommended_next_category é informativo nesta rota; não é aplicado automaticamente na mudança de estágio.\n"
         "- outcome e kanban_highlight devem ser null.\n"
         "- signals_structured deve incluir: offer_presented, checkout_sent, presentation_variant e offer_item_name.\n"
-        "Exemplos rápidos (sales):\n"
+        "- Mídia rica: se offer_pack_summary.media_url estiver preenchido, a mídia já será enviada automaticamente antes deste texto. NÃO mencione 'veja a imagem/vídeo' — assuma que o lead já recebeu e escreva o texto do pitch como sequência natural.\n"
+        "- Se offer_pack_summary.anchor_price estiver preenchido, use o preço âncora no pitch (ex: 'De R$997 por apenas R$X').\n"
+        "- Se offer_pack_summary.guarantee_text estiver preenchido, inclua a garantia na mensagem (ex: 'Com 7 dias de garantia').\n"
+        "\nPROIBIÇÕES (violar qualquer uma é crítico):\n"
+        "1. NUNCA invente informações que não estejam no contexto fornecido.\n"
+        "2. NUNCA prometa descontos, prazos ou condições não presentes em offer_pack ou knowledge_items.\n"
+        "3. NUNCA dê conselhos médicos, jurídicos ou financeiros.\n"
+        "4. NUNCA mencione concorrentes pelo nome, a menos que estejam em knowledge_items.\n"
+        "5. NUNCA use urgência artificial — só mencione urgência se urgency_offer estiver preenchido.\n"
+        "6. NUNCA responda sobre assuntos fora do nicho do negócio — redirecione para o tema.\n"
+        "7. Se não souber a resposta, diga que vai verificar com a equipa (→ handoff), não improvise.\n"
+        "8. NUNCA mencione \"veja a imagem\" ou \"veja o vídeo\" — a mídia é enviada automaticamente pelo sistema.\n"
+        "9. NUNCA envie link de checkout E peça permissão no mesmo turno.\n"
+        "10. NUNCA cite preço diferente do que está em offer_pack.\n"
+        + _ESCAPE_HATCH_BLOCK
+        + _build_validation_block(playbook_summary.get("max_chars"))
+        + "\n"
+        + f"{commercial_injection if commercial_injection else warming_injection}"
+        + (_booking_confirmation_block)
+        + "Exemplos rápidos (sales):\n"
         "- EXEMPLO CONFIRMAR: message_text='Plano Starter por R$X com suporte Y. Quer seguir com a contratação?'\n"
         "  signals_structured={offer_presented:true, checkout_sent:false, presentation_variant:'sales', offer_item_name:'Plano Starter'}\n"
         "- EXEMPLO ENVIAR LINK: message_text='Perfeito! Aqui está seu link: https://exemplo.com/checkout-starter\\nConclua e me confirme por aqui.'\n"
@@ -1080,7 +2027,8 @@ def _build_child_prompt_apresentation(
         "\n"
         f"ROTA MÃE: {mother_decision.route_to} (confidence={mother_decision.confidence})\n"
         f"Motivo MÃE: {mother_decision.reason}\n"
-        "\n"
+        + standard_knowledge_block
+        + "\n"
         "CONTEXTO:\n"
         f"- lead: {json.dumps(lead_summary, ensure_ascii=False)}\n"
         f"- ai_profile: {json.dumps(ai_summary, ensure_ascii=False)}\n"
@@ -1093,8 +2041,14 @@ def _build_child_prompt_apresentation(
         f"- presentation_variant: {presentation_variant} (source={presentation_variant_source})\n"
         f"- hybrid_flow_style: {hybrid_flow_style or ''}\n"
         f"- offer_pack_summary: {json.dumps(offer_pack_summary, ensure_ascii=False)}\n"
+        f"- warming_stage_active: {bool(warming_injection)}\n"
+        f"- commercial_mode_active: {bool(commercial_injection)}\n"
+        f"- extracted_fields: {json.dumps(mode_contract.get('extracted_fields') or {}, ensure_ascii=False)}\n"
         f"- inbound_message_text: {message_text}\n"
+        + _build_custom_instructions_block(ai_profile)
+        + _build_training_examples_block(context, "apresentation")
     )
+    return _inject_generated_parts(_apres_prompt, context, "apresentation")
 
 
 
@@ -1210,6 +2164,49 @@ def _build_child_prompt_follow_up(
     presentation_variant, presentation_variant_source = _resolve_presentation_variant(context, agent_mode_normalized)
     hybrid_flow_style = _resolve_hybrid_flow_style(context)
     is_followup_tick = _is_followup_tick_context(context)
+
+    # Tarefa 1.3 — knowledge_items com directivas de uso
+    knowledge_items = context.get("knowledge_items") or {}
+    _km_categories_fu = set((context.get("knowledge_media") or {}).keys())
+    _followup_knowledge_parts: list[str] = []
+    _social_proof_ki = knowledge_items.get("social_proof") or ""
+    _objections_faq_ki = knowledge_items.get("objections_faq") or ""
+    _service_faq_ki = knowledge_items.get("service_faq") or ""
+    if _social_proof_ki:
+        _followup_knowledge_parts.append(
+            f"PROVA SOCIAL (usar na fase de warming ou quando o lead demonstrar hesitação):\n"
+            f"{_social_proof_ki}\n"
+            f"INSTRUÇÃO: Integre naturalmente na conversa. Nunca diga 'temos uma prova social'. "
+            f"Adapte ao perfil do lead se possível.\n"
+        )
+    if _objections_faq_ki:
+        _followup_knowledge_parts.append(
+            f"OBJEÇÕES E RESPOSTAS (usar APENAS quando o lead levantar uma objeção):\n"
+            f"{_objections_faq_ki}\n"
+            f"INSTRUÇÃO: Se o lead levantar uma objeção listada, use a resposta configurada como base. "
+            f"Adapte ao tom de voz e ao contexto. Nunca copie literalmente. "
+            f"Se a objeção NÃO estiver listada, use empatia + reformulação de valor.\n"
+        )
+    if _service_faq_ki:
+        if "service_faq" in _km_categories_fu:
+            _followup_knowledge_parts.append(
+                "FAQ DO SERVIÇO: Informação completa disponível em arquivo de mídia (enviado automaticamente).\n"
+                "INSTRUÇÃO CRÍTICA: Escreva APENAS uma frase curta de introdução "
+                "(ex.: 'Aqui estão os valores:', 'Veja os detalhes abaixo:'). "
+                "NÃO liste preços, serviços nem detalhes — a mídia tem prioridade absoluta sobre o texto.\n"
+            )
+        else:
+            _followup_knowledge_parts.append(
+                f"FAQ DO SERVIÇO (usar APENAS quando o lead fizer uma pergunta diretamente coberta):\n"
+                f"{_service_faq_ki}\n"
+                f"INSTRUÇÃO: Responda com base no FAQ. Se a pergunta não estiver coberta, "
+                f"diga que vai confirmar com a equipa.\n"
+            )
+    followup_knowledge_block = (
+        "\nKNOWLEDGE BASE (usar conforme as instruções de cada bloco):\n"
+        + "\n".join(_followup_knowledge_parts)
+    ) if _followup_knowledge_parts else ""
+
     followup_priority_rule = (
         "- CONTEXTO PRIORITÁRIO (follow-up tick): use followup_contract_signals como fonte principal da resposta. "
         "Priorize meeting_or_session_happened, followup_goal, operator_note, outcome e followup_variant.\n"
@@ -1233,8 +2230,33 @@ def _build_child_prompt_follow_up(
             f"Missing fields: {json.dumps(mode_contract['missing_fields'], ensure_ascii=False)}\n"
         )
     )
-    return (
-        "Você é a FILHA FOLLOW-UP e deve responder SOMENTE JSON válido:\n"
+    tone_block_followup = _build_tone_block(ai_profile, playbook)
+
+    # Greeting awareness — quando o lead em follow-up abre com uma saudação, o bot responde
+    # ao cumprimento antes de continuar o objetivo do follow-up. Sem alterar roteamento.
+    _mother_hint_fu = (mother_decision.next_action_hint or "").strip().lower()
+    _is_greeting_fu = _mother_hint_fu == "greet"
+    _greeting_fu_header = (
+        "ATENÇÃO — SAUDAÇÃO DO LEAD: O lead enviou uma saudação.\n"
+        "INSTRUÇÃO OBRIGATÓRIA: Começa com um cumprimento natural e breve antes de continuar o follow-up.\n"
+        "DEPOIS, de forma fluida na MESMA mensagem, executa o objetivo do estágio de follow-up.\n\n"
+        if _is_greeting_fu
+        else ""
+    )
+
+    _followup_prompt = (
+        _greeting_fu_header
+        + f"Você é a FILHA FOLLOW-UP de um CRM de vendas WhatsApp.\n"
+        + _build_agent_role_block(agent_mode_normalized, "follow-up", ai_profile)
+        + "\n"
+        + f"PAPEL: Re-engajar o lead pós-apresentação. Variante: {followup_variant or 'padrão'}.\n"
+        f"ESCOPO: Nutrir, tratar objeções, reagendar. Nunca reabrir campos de qualificação antigos em ticks automáticos.\n"
+        f"TOM: {ai_summary.get('tone_of_voice') or 'profissional'} — empático e orientado a ação. Máx {playbook_summary.get('max_chars') or 'N/D'} caracteres.\n"
+        f"FRAMEWORK: Modo {agent_mode_normalized}. Template {playbook_summary.get('template_key')}. is_followup_tick: {is_followup_tick}.\n"
+        "RECUSAS: Nunca invente informação. Nunca use urgência artificial sem urgency_offer. Nunca reabra qualificação em follow-up tick.\n"
+        + tone_block_followup
+        + _build_followup_tone_extensions()
+        + "\nRetorne SOMENTE JSON válido no schema ChildResult:\n"
         "{\n"
         '  "message_text": "string",\n'
         '  "did_complete_phase": false,\n'
@@ -1255,13 +2277,26 @@ def _build_child_prompt_follow_up(
         "- recommended_next_category pode ser follow-up, closing ou null.\n"
         f"{followup_priority_rule}"
         "- outcome e kanban_highlight devem ser null.\n"
-        "\n"
+        "\nPROIBIÇÕES (violar qualquer uma é crítico):\n"
+        "1. NUNCA invente informações que não estejam no contexto fornecido.\n"
+        "2. NUNCA prometa descontos, prazos ou condições não presentes em offer_pack ou knowledge_items.\n"
+        "3. NUNCA dê conselhos médicos, jurídicos ou financeiros.\n"
+        "4. NUNCA mencione concorrentes pelo nome, a menos que estejam em knowledge_items.\n"
+        "5. NUNCA use urgência artificial — só mencione urgência se urgency_offer estiver preenchido.\n"
+        "6. NUNCA responda sobre assuntos fora do nicho do negócio — redirecione para o tema.\n"
+        "7. Se não souber a resposta, diga que vai verificar com a equipa (→ handoff), não improvise.\n"
+        "8. NUNCA reabra campos de qualificação em ticks automáticos.\n"
+        f"9. NUNCA exceda {playbook_summary.get('max_chars') or 'N/D'} caracteres nas mensagens de recovery.\n"
+        + _ESCAPE_HATCH_BLOCK
+        + _build_validation_block(playbook_summary.get("max_chars"))
+        + "\n"
         f"ROTA MÃE: {mother_decision.route_to} (confidence={mother_decision.confidence})\n"
         f"Motivo MÃE: {mother_decision.reason}\n"
         f"Objetivo MÃE: {mother_decision.objective or ''}\n"
         f"Modo normalizado: {agent_mode_normalized}\n"
         f"{qualification_context_block}"
         f"is_followup_tick: {json.dumps(is_followup_tick, ensure_ascii=False)}\n"
+        f"{followup_knowledge_block}\n"
         "\n"
         "CONTEXTO:\n"
         f"- lead: {json.dumps(lead_summary, ensure_ascii=False)}\n"
@@ -1271,7 +2306,10 @@ def _build_child_prompt_follow_up(
         f"- followup_contract_signals: {json.dumps(followup_summary, ensure_ascii=False)}\n"
         f"- history: {history_text}\n"
         f"- inbound_message_text: {message_text}\n"
+        + _build_training_examples_block(context, "followup")
+        + _build_custom_instructions_block(ai_profile)
     )
+    return _inject_generated_parts(_followup_prompt, context, "followup")
 
 
 def _build_child_prompt_closing(
@@ -1313,8 +2351,33 @@ def _build_child_prompt_closing(
     agent_mode_normalized = mode_contract["agent_mode_normalized"]
     presentation_variant, presentation_variant_source = _resolve_presentation_variant(context, agent_mode_normalized)
     hybrid_flow_style = _resolve_hybrid_flow_style(context)
-    return (
-        "Você é a FILHA CLOSING e deve responder SOMENTE JSON válido:\n"
+    tone_block_closing = _build_tone_block(ai_profile, playbook)
+
+    # Greeting awareness — quando o lead retoma uma conversa com saudação em estágio de closing,
+    # o bot responde ao cumprimento antes de continuar o fechamento. Sem alterar roteamento.
+    _mother_hint_closing = (mother_decision.next_action_hint or "").strip().lower()
+    _is_greeting_closing = _mother_hint_closing == "greet"
+    _greeting_closing_header = (
+        "ATENÇÃO — SAUDAÇÃO DO LEAD: O lead enviou uma saudação.\n"
+        "INSTRUÇÃO OBRIGATÓRIA: Começa com um cumprimento natural e breve antes de continuar o fechamento.\n"
+        "DEPOIS, de forma fluida na MESMA mensagem, executa o objetivo do estágio de closing.\n\n"
+        if _is_greeting_closing
+        else ""
+    )
+
+    _closing_prompt = (
+        _greeting_closing_header
+        + f"Você é a FILHA CLOSING de um CRM de vendas WhatsApp.\n"
+        + _build_agent_role_block(agent_mode_normalized, "closing", ai_profile)
+        + "\n"
+        + f"PAPEL: Finalizar o fechamento conforme o modo do agente.\n"
+        f"ESCOPO: Modo {agent_mode_normalized}. Consultivo: handoff para humano. Agenda: confirmar horário+pagamento. Direto: conduzir pagamento.\n"
+        f"TOM: {ai_summary.get('tone_of_voice') or 'profissional'} — confiante e claro. Máx {playbook_summary.get('max_chars') or 'N/D'} caracteres.\n"
+        f"FRAMEWORK: Template {playbook_summary.get('template_key')}. Campos verificados: {json.dumps(mode_contract['required_fields'], ensure_ascii=False)}. Missing: {json.dumps(mode_contract['missing_fields'], ensure_ascii=False)}.\n"
+        "RECUSAS: Nunca feche sozinho em modo consultivo (handoff obrigatório). Nunca emita outcome/kanban_highlight fora da categoria closing.\n"
+        + tone_block_closing
+        + _build_followup_tone_extensions()
+        + "\nRetorne SOMENTE JSON válido no schema ChildResult:\n"
         "{\n"
         '  "message_text": "string",\n'
         '  "did_complete_phase": false,\n'
@@ -1332,7 +2395,17 @@ def _build_child_prompt_closing(
         "- Use tone_of_voice, brand_name e niche quando disponíveis.\n"
         "- Respeite playbook.max_chars se existir (senão, resposta curta).\n"
         "- Faça no máximo 1 pergunta por mensagem e priorize o próximo missing_field.\n"
-        "\n"
+        "\nPROIBIÇÕES (violar qualquer uma é crítico):\n"
+        "1. NUNCA invente informações que não estejam no contexto fornecido.\n"
+        "2. NUNCA prometa descontos, prazos ou condições não presentes em offer_pack ou knowledge_items.\n"
+        "3. NUNCA dê conselhos médicos, jurídicos ou financeiros.\n"
+        "4. NUNCA mencione concorrentes pelo nome, a menos que estejam em knowledge_items.\n"
+        "5. NUNCA use urgência artificial — só mencione urgência se urgency_offer estiver preenchido.\n"
+        "6. NUNCA responda sobre assuntos fora do nicho do negócio — redirecione para o tema.\n"
+        "7. Se não souber a resposta, diga que vai verificar com a equipa (→ handoff), não improvise.\n"
+        + _ESCAPE_HATCH_BLOCK
+        + _build_validation_block(playbook_summary.get("max_chars"))
+        + "\n"
         f"ROTA MÃE: {mother_decision.route_to} (confidence={mother_decision.confidence})\n"
         f"Motivo MÃE: {mother_decision.reason}\n"
         f"Objetivo MÃE: {mother_decision.objective or ''}\n"
@@ -1347,7 +2420,13 @@ def _build_child_prompt_closing(
         f"- metadata: {json.dumps(metadata_summary, ensure_ascii=False)}\n"
         f"- history: {history_text}\n"
         f"- inbound_message_text: {message_text}\n"
+        + _build_training_examples_block(context, "closing")
+        + _build_custom_instructions_block(ai_profile)
     )
+    # _inject_generated_parts não é chamado aqui para evitar duplicação do tone_rules
+    # (já injectado via _build_tone_block). training_examples e custom_instructions são
+    # adicionados directamente ao prompt.
+    return _closing_prompt
 
 def _extract_json_payload(text: str) -> Optional[Dict[str, Any]]:
     text = text.strip()
@@ -1601,7 +2680,59 @@ def compose_decision_output(
     question_text = str(child_result.question_text or child_result.message_text or "").strip()
     message_text = question_text
     message_field_used: Optional[str] = None
-    if next_action == "ask_qualification":
+    # Fix P7: passive mode reply-first override.
+    # Se a mãe emitiu next_action_hint='reply' com response_style=passive, o cliente fez uma pergunta
+    # de catálogo/serviços. Nesse caso, o filho deve ter respondido em message_text — usar essa
+    # resposta diretamente em vez de question_text (a pergunta de qualificação).
+    _response_style = (ai_profile.get("response_style") or "passive").strip().lower()
+    _passive_reply_override = (
+        effective_route_to == "qualification"
+        and (mother_decision.next_action_hint or "").strip().lower() == "reply"
+        and _response_style == "passive"
+        and bool(child_result.message_text)
+    )
+    _greeting_override = (
+        effective_route_to == "qualification"
+        and (mother_decision.next_action_hint or "").strip().lower() == "greet"
+        and bool(child_result.message_text)
+    )
+    # Fix P10: passive question override — fallback para quando a mãe não emitiu hint='reply'
+    # mas o lead fez uma pergunta directa de serviço/produto com response_style=passive.
+    # A filha de qualificação já foi instruída a responder primeiro (via _passive_header),
+    # mas o engine descartaria message_text em favor de question_text. Este override preserva
+    # message_text (resposta + pergunta integradas) mantendo next_action=ask_qualification para tracking.
+    _p10_inbound = str((context.get("metadata") or {}).get("inbound_message_text") or "").lower()
+    _p10_inbound_has_question = "?" in _p10_inbound or any(
+        m in _p10_inbound for m in [
+            "gostaria de saber", "como faço", "como funciona", "o que é",
+            "queria entender", "pode me dizer", "me explica", "preciso entender",
+        ]
+    )
+    _passive_question_override = (
+        effective_route_to == "qualification"
+        and not _passive_reply_override
+        and (mother_decision.next_action_hint or "").strip().lower() not in ("reply", "greet")
+        and _response_style == "passive"
+        and _p10_inbound_has_question
+        and bool(child_result.message_text)
+    )
+    if _passive_reply_override:
+        next_action = "reply"
+        message_text = str(child_result.message_text).strip()
+        message_field_used = None
+    elif _passive_question_override:
+        # Usa message_text do filho (resposta + pergunta integradas) mas mantém tracking de qualificação.
+        next_action = "ask_qualification"
+        message_text = str(child_result.message_text).strip()
+        message_field_used = str(child_result.field or "").strip() or current_field
+    elif _greeting_override:
+        # Greet mode: message_text contém cumprimento + pergunta; question_text contém só a pergunta.
+        # Usa message_text para o output final, mantém next_action=ask_qualification
+        # para que o tracking de qualificação (field, asked_questions) continue normalmente.
+        next_action = "ask_qualification"
+        message_text = str(child_result.message_text).strip()
+        message_field_used = str(child_result.field or "").strip() or current_field
+    elif next_action == "ask_qualification":
         if not current_field:
             next_action = "reply"
             effective_route_to = "apresentation"
@@ -1681,6 +2812,56 @@ def compose_decision_output(
         },
     )
     decision = _apply_mode_guardrails(decision, context, mother_decision, child_result)
+
+    # Mídia rica no pitch — Agent 2 (Tarefa 3.6)
+    # Se estamos em rota de apresentation para agent closer e offer_pack tem media_url,
+    # sinaliza o runner para enviar a mídia antes do texto do pitch.
+    if effective_route_to == "apresentation" and agent_mode_normalized in ("closer", "direto", "direto_autonomo"):
+        raw_op = ai_profile.get("offer_pack")
+        if isinstance(raw_op, str):
+            try:
+                raw_op = json.loads(raw_op)
+            except Exception:
+                raw_op = None
+        if isinstance(raw_op, dict):
+            media_url = raw_op.get("media_url")
+            if media_url and str(media_url).strip():
+                decision.pre_send_media = [{
+                    "media_url": str(media_url).strip(),
+                    "media_type": str(raw_op.get("media_type") or "image").strip(),
+                }]
+
+    # Mídia de knowledge — filtra por idioma do lead e devolve lista ordenada.
+    # Injeta em apresentation OU quando o agente está a responder directamente ao lead
+    # (Fix P7 activo = qualificação passiva com reply, ou greeting com resposta).
+    # Usa TODAS as categorias disponíveis no knowledge_media (não apenas categorias hardcoded),
+    # para respeitar qualquer nome de categoria que o usuário tenha configurado.
+    _should_send_knowledge_media = (
+        effective_route_to == "apresentation"
+        or (
+            effective_route_to == "qualification"
+            and getattr(mother_decision, "next_action_hint", None) == "reply"
+        )
+        or _passive_reply_override   # resposta directa a pergunta de catálogo/serviços
+        or _passive_question_override  # P10: resposta passiva integrada com pergunta
+    )
+    if _should_send_knowledge_media and not decision.pre_send_media:
+        knowledge_media = context.get("knowledge_media") or {}
+        lead_lang = str(context.get("lead_detected_language") or "all").lower()
+        _all_km_media: list[dict] = []
+        for _cat, entries in knowledge_media.items():
+            # Compatibilidade: se for string (formato legado), converter para lista
+            if isinstance(entries, str):
+                entries = [{"media_url": entries, "media_type": "image", "language": "all", "send_order": 0}]
+            for e in entries:
+                # Quando o idioma do lead é desconhecido ("all"), inclui todas as mídias
+                # independentemente do idioma configurado (pt, en, es, all).
+                if lead_lang == "all" or e.get("language") in ("all", lead_lang):
+                    _all_km_media.append(e)
+        if _all_km_media:
+            _all_km_media.sort(key=lambda e: e.get("send_order", 0))
+            decision.pre_send_media = _all_km_media
+
     return decision
 
 
@@ -1931,22 +3112,37 @@ def decide(context: Dict[str, Any], logger: Optional[logging.Logger] = None) -> 
                         context["qualification_state"] = updated_state
                 except Exception:
                     pass
+        # T4.1 — registrar qual função de prompt filha foi usada e o agent_mode resolvido.
+        # T4.2 — ler prompt_variant do AI Profile para correlação A/B futura.
+        _ai_profile_obs = context.get("ai_profile") or {}
+        _agent_mode_resolved = _normalize_agent_mode(context, mother_decision)
+        _prompt_variant = str(_ai_profile_obs.get("prompt_variant") or "v1").strip().lower()
+        if _prompt_variant not in ("v1", "v2"):
+            _prompt_variant = "v1"
+
         if route_for_child == "qualification":
             child_prompt = _build_child_prompt_qualification(context, message_text, mother_decision)
+            _prompt_function_used = "_build_child_prompt_qualification"
         elif route_for_child == "apresentation":
             child_prompt = _build_child_prompt_apresentation(context, message_text, mother_decision)
+            _prompt_function_used = "_build_child_prompt_apresentation"
         elif route_for_child == "follow-up":
             try:
                 child_prompt = _build_child_prompt_follow_up(context, message_text, mother_decision)
+                _prompt_function_used = "_build_child_prompt_follow_up"
             except Exception:
                 child_prompt = _build_child_prompt(context, message_text, mother_decision)
+                _prompt_function_used = "_build_child_prompt(fallback)"
         elif route_for_child == "closing":
             try:
                 child_prompt = _build_child_prompt_closing(context, message_text, mother_decision)
+                _prompt_function_used = "_build_child_prompt_closing"
             except Exception:
                 child_prompt = _build_child_prompt(context, message_text, mother_decision)
+                _prompt_function_used = "_build_child_prompt(fallback)"
         else:
             child_prompt = _build_child_prompt(context, message_text, mother_decision)
+            _prompt_function_used = "_build_child_prompt(generic)"
         stage = "child_call"
         child_result: Optional[ChildResult] = None
         validation_errors: list[str] = []
@@ -2060,6 +3256,9 @@ def decide(context: Dict[str, Any], logger: Optional[logging.Logger] = None) -> 
                     pass
         decision = _sanitize_category_decision(decision, context, logger_instance=logger)
         if decision.decision_trace and isinstance(decision.decision_trace, dict):
+            decision.decision_trace["prompt_function_used"] = _prompt_function_used
+            decision.decision_trace["agent_mode_resolved"] = _agent_mode_resolved
+            decision.decision_trace["prompt_variant"] = _prompt_variant
             decision.decision_trace["suggested_category_final"] = decision.suggested_category
             is_qualification_ask = (
                 decision.decision_trace.get("effective_route_to") == "qualification"
@@ -2136,6 +3335,63 @@ def decide(context: Dict[str, Any], logger: Optional[logging.Logger] = None) -> 
                 trace.get("anti_loop_rule3_applied"),
                 decision.next_action,
             )
+            # T4.1 / T4.2 — observabilidade de qualidade de prompt
+            logger.info(
+                "event=prompt_observability job_id=%s lead_id=%s user_id=%s "
+                "prompt_function=%s agent_mode_resolved=%s prompt_variant=%s route_for_child=%s",
+                log_context["job_id"],
+                log_context["lead_id"],
+                log_context["user_id"],
+                trace.get("prompt_function_used"),
+                trace.get("agent_mode_resolved"),
+                trace.get("prompt_variant"),
+                route_for_child,
+            )
+        # Detecção de sinal de compra — Agent 1 (Tarefa 3.7)
+        # Só aplicável a modos consultivo/agenda; Agent 2 (direto) tem fluxo próprio.
+        _ai_profile_for_signal = context.get("ai_profile") or {}
+        _agent_mode_for_signal = _normalize_agent_mode(context, mother_decision)
+        if _agent_mode_for_signal in _AGENT1_MODES and decision.next_action in ("reply", "ask_qualification"):
+            _raw_keywords = _ai_profile_for_signal.get("buying_signal_keywords")
+            if isinstance(_raw_keywords, str):
+                try:
+                    _raw_keywords = json.loads(_raw_keywords)
+                except Exception:
+                    _raw_keywords = None
+            _keywords_list: Optional[List[str]] = (
+                [str(k) for k in _raw_keywords if k]
+                if isinstance(_raw_keywords, list)
+                else None
+            )
+            if _detect_buying_signals(message_text, _keywords_list):
+                _lead_for_signal = context.get("lead") or {}
+                _lead_id_signal = _lead_for_signal.get("id") or (context.get("job") or {}).get("payload", {}).get("lead_id")
+                if _lead_id_signal:
+                    try:
+                        crm_client.create_buying_signal_notification(int(_lead_id_signal))
+                    except Exception:
+                        pass
+                # Se offer_pack tem checkout_link, incluir na mensagem automaticamente
+                _offer_pack_raw = _ai_profile_for_signal.get("offer_pack")
+                if isinstance(_offer_pack_raw, str):
+                    try:
+                        _offer_pack_raw = json.loads(_offer_pack_raw)
+                    except Exception:
+                        _offer_pack_raw = None
+                _checkout_link: Optional[str] = None
+                if isinstance(_offer_pack_raw, dict):
+                    _checkout_link = str(_offer_pack_raw.get("checkout_link") or "").strip() or None
+                    # Também verifica no primeiro item de items
+                    if not _checkout_link:
+                        _items = _offer_pack_raw.get("items")
+                        if isinstance(_items, list) and _items and isinstance(_items[0], dict):
+                            _checkout_link = str(_items[0].get("checkout_link") or "").strip() or None
+                if _checkout_link and decision.message_text and _checkout_link not in decision.message_text:
+                    decision.message_text = f"{decision.message_text}\n\n{_checkout_link}"
+                if decision.decision_trace is None:
+                    decision.decision_trace = {}
+                decision.decision_trace["buying_signal_detected"] = True
+                decision.decision_trace["checkout_link_injected"] = bool(_checkout_link)
         return handoff_policy.apply(context, decision, logger=logger)
     except Exception as exc:
         if logger:

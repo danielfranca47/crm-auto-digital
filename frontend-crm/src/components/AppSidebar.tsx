@@ -10,9 +10,12 @@ import {
   Gauge,
   Sparkles,
   MessageSquareDot,
+  FlaskConical,
+  Eye,
 } from "lucide-react";
 import { NavLink, useLocation, useNavigate } from "react-router-dom";
 import { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { api } from "@/services/api";
 
 import {
@@ -33,6 +36,7 @@ const items = [
   { title: "Prospecção", url: "/prospeccao", icon: Search },
   { title: "Assistente IA", url: "/assistente-ia", icon: Bot },
   { title: "Pesquisa", url: "/pesquisa", icon: FileSearch },
+  { title: "Playground IA", url: "/playground", icon: FlaskConical },
 ];
 
 const accountItems = [
@@ -46,6 +50,25 @@ export function AppSidebar() {
   const location = useLocation();
   const navigate = useNavigate();
   const [loggingOut, setLoggingOut] = useState(false);
+
+  const { data: spySession } = useQuery({
+    queryKey: ["spy-agent-session"],
+    queryFn: () => api.spyAgent.getSession(),
+    refetchInterval: 60_000,
+    staleTime: 30_000,
+  });
+
+  const spyStatus = (spySession as any)?.status;
+  const spyDaysRemaining = (spySession as any)?.days_remaining;
+
+  const spyBadge =
+    spyStatus === "completed"
+      ? { label: "Novo", className: "bg-green-500 text-white" }
+      : spyStatus === "observing" && spyDaysRemaining != null
+      ? { label: `${spyDaysRemaining}d`, className: "bg-blue-500 text-white" }
+      : spyStatus === "analyzing"
+      ? { label: "...", className: "bg-primary text-primary-foreground" }
+      : null;
 
   const getNavCls = ({ isActive }: { isActive: boolean }) =>
     isActive ? "bg-muted text-primary font-medium" : "hover:bg-muted/50";
@@ -80,6 +103,27 @@ export function AppSidebar() {
                   </SidebarMenuButton>
                 </SidebarMenuItem>
               ))}
+            </SidebarMenu>
+          </SidebarGroupContent>
+        </SidebarGroup>
+
+        <SidebarGroup>
+          <SidebarGroupLabel>Automação</SidebarGroupLabel>
+          <SidebarGroupContent>
+            <SidebarMenu>
+              <SidebarMenuItem>
+                <SidebarMenuButton asChild>
+                  <NavLink to="/spy-agent" end className={getNavCls}>
+                    <Eye className="mr-2 h-4 w-4" />
+                    <span className="flex-1">Agente Espião</span>
+                    {spyBadge && (
+                      <span className={`ml-1 rounded-full px-1.5 py-0.5 text-[10px] font-semibold leading-none ${spyBadge.className}`}>
+                        {spyBadge.label}
+                      </span>
+                    )}
+                  </NavLink>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>

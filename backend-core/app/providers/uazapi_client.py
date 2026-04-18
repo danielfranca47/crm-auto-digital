@@ -16,6 +16,49 @@ class UazapiTimeoutError(UazapiClientError):
     pass
 
 
+_MEDIA_TYPE_TO_ENDPOINT: Dict[str, str] = {
+    "image": "send/image",
+    "video": "send/video",
+    "audio": "send/audio",
+    "document": "send/document",
+}
+
+
+async def send_media(
+    *, base_url: str, token: str, number: str, media_url: str, media_type: str, caption: str = ""
+) -> Dict[str, Any]:
+    base = base_url.rstrip("/")
+    if not base:
+        raise UazapiClientError("UAZAPI_BASE_URL is not configured")
+    endpoint = _MEDIA_TYPE_TO_ENDPOINT.get(media_type.lower(), "send/image")
+    url = f"{base}/{endpoint}"
+    headers = {"token": token, "Content-Type": "application/json"}
+    payload: Dict[str, Any] = {"number": number, "url": media_url}
+    if caption:
+        payload["caption"] = caption
+
+    try:
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            response = await client.post(url, headers=headers, json=payload)
+    except httpx.TimeoutException as exc:
+        raise UazapiTimeoutError("Uazapi media request timed out") from exc
+    except httpx.RequestError as exc:
+        raise UazapiClientError("Uazapi media request failed") from exc
+
+    if response.is_error:
+        body = response.text
+        raise UazapiClientError(
+            f"Uazapi media error status={response.status_code}",
+            status_code=response.status_code,
+            body=body,
+        )
+
+    try:
+        return response.json()
+    except ValueError as exc:
+        raise UazapiClientError("Uazapi returned invalid JSON for media") from exc
+
+
 async def send_text(*, base_url: str, token: str, number: str, text: str) -> Dict[str, Any]:
     base = base_url.rstrip("/")
     if not base:

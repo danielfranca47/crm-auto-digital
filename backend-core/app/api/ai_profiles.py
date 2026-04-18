@@ -1,11 +1,16 @@
 import json
+import logging
+import secrets as secrets_module
 from datetime import datetime
 from enum import Enum
-from typing import List, Optional
+from typing import Any, Dict, List, Optional
 
-from fastapi import APIRouter, Depends, Header, HTTPException, status
+import httpx
+from fastapi import APIRouter, BackgroundTasks, Depends, Header, HTTPException, status
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
+
+logger = logging.getLogger(__name__)
 
 from app import models
 from app.config import settings
@@ -71,6 +76,11 @@ class HybridFlowStyle(str, Enum):
     schedule_then_offer = "schedule_then_offer"
 
 
+class ResponseStyle(str, Enum):
+    active = "active"    # agente faz perguntas de qualificação
+    passive = "passive"  # agente responde perguntas do cliente antes de qualificar
+
+
 _TEMPLATE_OPENERS: dict = {
     "sdr_padrao": {
         "inbound": "Olá! Obrigado por entrar em contato. Me conta o que você está buscando.",
@@ -121,6 +131,7 @@ class AIProfileBase(BaseModel):
     brand_name: str
     tone_of_voice: str
     timezone: Optional[str] = "UTC"
+    language: Optional[str] = "pt-BR"
     niche: str
     target_audience: str
     offer_description: str
@@ -141,6 +152,24 @@ class AIProfileBase(BaseModel):
     followup_allowed_hours: Optional[str] = None
     origin_inbound_opener: Optional[str] = None
     origin_outbound_opener: Optional[str] = None
+    objection_common: Optional[str] = None
+    qualification_score_threshold: Optional[int] = None
+    nurture_vs_discard_rule: Optional[str] = None
+    appointment_reminder_offsets: Optional[List[int]] = None
+    briefing_enabled: Optional[bool] = True
+    briefing_channel: Optional[str] = "whatsapp"
+    briefing_lead_time: Optional[int] = 120
+    operator_whatsapp: Optional[str] = None
+    buying_signal_keywords: Optional[List[str]] = None
+    calendar_integration: Optional[str] = "none"
+    payment_gateway: Optional[str] = None
+    warming_social_proof: Optional[str] = None
+    warming_session_preview: Optional[str] = None
+    appointment_mode: Optional[str] = None
+    response_style: Optional[ResponseStyle] = ResponseStyle.active
+    qualification_required_fields: Optional[List[str]] = None
+    qualification_fields: Optional[List[dict]] = None
+    custom_variables: Optional[Dict[str, str]] = None
 
 
 class AIProfileCreate(AIProfileBase):
@@ -153,6 +182,7 @@ class AIProfileUpdate(BaseModel):
     brand_name: Optional[str] = None
     tone_of_voice: Optional[str] = None
     timezone: Optional[str] = None
+    language: Optional[str] = None
     niche: Optional[str] = None
     target_audience: Optional[str] = None
     offer_description: Optional[str] = None
@@ -173,6 +203,24 @@ class AIProfileUpdate(BaseModel):
     followup_allowed_hours: Optional[str] = None
     origin_inbound_opener: Optional[str] = None
     origin_outbound_opener: Optional[str] = None
+    objection_common: Optional[str] = None
+    qualification_score_threshold: Optional[int] = None
+    nurture_vs_discard_rule: Optional[str] = None
+    appointment_reminder_offsets: Optional[List[int]] = None
+    briefing_enabled: Optional[bool] = None
+    briefing_channel: Optional[str] = None
+    briefing_lead_time: Optional[int] = None
+    operator_whatsapp: Optional[str] = None
+    buying_signal_keywords: Optional[List[str]] = None
+    calendar_integration: Optional[str] = None
+    payment_gateway: Optional[str] = None
+    warming_social_proof: Optional[str] = None
+    warming_session_preview: Optional[str] = None
+    appointment_mode: Optional[str] = None
+    response_style: Optional[ResponseStyle] = None
+    qualification_required_fields: Optional[List[str]] = None
+    qualification_fields: Optional[List[dict]] = None
+    custom_variables: Optional[Dict[str, str]] = None
 
 
 class AIProfileOut(AIProfileBase):
@@ -180,6 +228,11 @@ class AIProfileOut(AIProfileBase):
     user_id: int
     created_at: datetime
     updated_at: datetime
+    payment_webhook_secret: Optional[str] = None
+    payment_webhook_url: Optional[str] = None
+    generated_prompt_parts: Optional[dict] = None
+    prompt_parts_generated_at: Optional[datetime] = None
+    prompt_parts_version: Optional[int] = None
 
     class Config:
         orm_mode = True
@@ -199,6 +252,47 @@ def _validate_template_key(template_key: Optional[str]) -> None:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid template_key")
 
 
+# Campos cujas alterações disparam regeneração do meta-prompter
+_META_PROMPTER_FIELDS = {"niche", "target_audience", "tone_of_voice", "offer_description"}
+
+
+def _profile_to_meta_dict(profile: models.AIProfile) -> dict:
+    """Extrai os campos relevantes para o meta-prompter do perfil ORM."""
+    _am = profile.agent_mode
+    try:
+        _am_str = _am.value
+    except AttributeError:
+        _am_str = str(_am) if _am is not None else None
+    return {
+        "niche": profile.niche,
+        "target_audience": profile.target_audience,
+        "tone_of_voice": profile.tone_of_voice,
+        "offer_description": profile.offer_description,
+        "template_key": profile.template_key,
+        "agent_mode": _am_str,
+        "objection_common": getattr(profile, "objection_common", None),
+        "language": getattr(profile, "language", None) or "pt-BR",
+    }
+
+
+def _trigger_meta_prompter_bg(user_id: int, ai_profile_data: dict) -> None:
+    """Fire-and-forget: chama o backend-executors para regenerar os blocos de prompt."""
+    base = (settings.EXECUTORS_BASE_URL or "").rstrip("/")
+    token = settings.CORE_SERVICE_TOKEN
+    if not base or not token:
+        logger.debug("meta_prompter trigger ignorado: EXECUTORS_BASE_URL ou CORE_SERVICE_TOKEN ausente")
+        return
+    url = f"{base}/api/meta-prompter/generate/{user_id}"
+    headers = {"X-Service-Token": token, "Content-Type": "application/json"}
+    try:
+        with httpx.Client(timeout=5.0) as client:
+            resp = client.post(url, headers=headers, json={"ai_profile": ai_profile_data})
+        if not resp.is_success:
+            logger.warning("meta_prompter trigger falhou user_id=%s status=%s", user_id, resp.status_code)
+    except Exception as exc:
+        logger.warning("meta_prompter trigger erro user_id=%s: %s", user_id, exc)
+
+
 async def _require_service_token(x_service_token: str = Header(None)) -> str:
     expected = settings.CORE_SERVICE_TOKEN
     if not expected or x_service_token != expected:
@@ -216,6 +310,13 @@ def _upsert_ai_profile(
     profile = db.query(models.AIProfile).filter(models.AIProfile.user_id == user_id).first()
     if "offer_pack" in data:
         data["offer_pack"] = _normalize_offer_pack(data.get("offer_pack"))
+    # Derivar qualification_required_fields a partir de qualification_fields quando presente
+    if "qualification_fields" in data and data["qualification_fields"] is not None:
+        fields = data["qualification_fields"]
+        data["qualification_required_fields"] = [
+            f["key"] for f in fields
+            if isinstance(f, dict) and f.get("mode") == "required"
+        ]
     # Default mode inference should happen only on create.
     # On update, omitted/null agent_mode must not rewrite existing mode.
     if not profile and data.get("agent_mode") is None:
@@ -241,6 +342,20 @@ def _upsert_ai_profile(
             data["origin_inbound_opener"] = openers.get("inbound")
         if data.get("origin_outbound_opener") is None:
             data["origin_outbound_opener"] = openers.get("outbound")
+        # Auto-gerar payment_webhook_secret único ao criar perfil
+        if not data.get("payment_webhook_secret"):
+            data["payment_webhook_secret"] = secrets_module.token_urlsafe(32)
+        # Sugestão inicial de campos obrigatórios por modo (editável pelo usuário)
+        _DEFAULT_QUAL_FIELDS = {
+            "sdr_scheduler": ["service_interest", "availability_window"],
+            "agenda":        ["service_interest", "availability_window"],
+            "consultivo":    ["service_interest", "urgency", "decision_role"],
+            "closer":        ["service_interest", "price_acceptance"],
+            "direto":        ["service_interest", "price_acceptance"],
+        }
+        if data.get("qualification_required_fields") is None:
+            mode = str(data.get("agent_mode") or "agenda")
+            data["qualification_required_fields"] = _DEFAULT_QUAL_FIELDS.get(mode, [])
         required_fields = {
             "template_key",
             "name",
@@ -284,17 +399,21 @@ async def get_my_ai_profile(
 @router.post("/ai-profiles", response_model=AIProfileOut, status_code=status.HTTP_201_CREATED)
 async def create_or_replace_ai_profile(
     payload: AIProfileCreate,
+    background_tasks: BackgroundTasks,
     current_user: models.User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
     _validate_template_key(payload.template_key)
     profile = _upsert_ai_profile(db=db, user_id=current_user.id, data=payload.dict())
+    # Trigger 1: onboarding wizard finalizado → gerar blocos de prompt
+    background_tasks.add_task(_trigger_meta_prompter_bg, current_user.id, _profile_to_meta_dict(profile))
     return _normalize_profile_offer_pack(profile)
 
 
 @router.put("/ai-profiles/me", response_model=AIProfileOut)
 async def update_my_ai_profile(
     payload: AIProfileUpdate,
+    background_tasks: BackgroundTasks,
     current_user: models.User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
@@ -316,6 +435,66 @@ async def update_my_ai_profile(
         data=update_data,
         require_all_fields_for_create=True,
     )
+    # Trigger 2: edição de campos relevantes → regenerar blocos de prompt
+    if _META_PROMPTER_FIELDS & set(update_data.keys()):
+        background_tasks.add_task(_trigger_meta_prompter_bg, current_user.id, _profile_to_meta_dict(profile))
+    return _normalize_profile_offer_pack(profile)
+
+
+@router.patch("/ai-profiles/me", response_model=AIProfileOut)
+async def patch_my_ai_profile(
+    payload: AIProfileUpdate,
+    background_tasks: BackgroundTasks,
+    current_user: models.User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Atualização parcial do AI Profile. Campos omitidos não são sobrescritos.
+    Se o perfil ainda não existir, cria com os campos fornecidos (sem exigir todos os obrigatórios)."""
+    update_data = payload.dict(exclude_unset=True)
+    if "template_key" in update_data:
+        _validate_template_key(update_data.get("template_key"))
+
+    if not update_data:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="No data provided",
+        )
+
+    profile = _upsert_ai_profile(
+        db=db,
+        user_id=current_user.id,
+        data=update_data,
+        require_all_fields_for_create=False,
+    )
+    if _META_PROMPTER_FIELDS & set(update_data.keys()):
+        background_tasks.add_task(_trigger_meta_prompter_bg, current_user.id, _profile_to_meta_dict(profile))
+    return _normalize_profile_offer_pack(profile)
+
+
+@router.patch("/ai-profiles/patch-by-user/{user_id}", response_model=AIProfileOut)
+async def service_patch_ai_profile_by_user(
+    user_id: int,
+    payload: AIProfileUpdate,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db),
+    _: str = Depends(_require_service_token),
+):
+    """Endpoint service-to-service: aplica PATCH parcial no AI Profile de um usuário pelo user_id."""
+    update_data = payload.dict(exclude_unset=True)
+    if "template_key" in update_data:
+        _validate_template_key(update_data.get("template_key"))
+
+    if not update_data:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="No data provided")
+
+    profile = _upsert_ai_profile(
+        db=db,
+        user_id=user_id,
+        data=update_data,
+        require_all_fields_for_create=False,
+    )
+    if _META_PROMPTER_FIELDS & set(update_data.keys()):
+        background_tasks.add_task(_trigger_meta_prompter_bg, user_id, _profile_to_meta_dict(profile))
     return _normalize_profile_offer_pack(profile)
 
 
@@ -329,3 +508,76 @@ async def resolve_ai_profile(
     if not profile:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="AI profile not found")
     return _normalize_profile_offer_pack(profile)
+
+
+@router.get("/ai-profiles/resolve-by-secret", response_model=AIProfileOut)
+async def resolve_ai_profile_by_secret(
+    token: str,
+    db: Session = Depends(get_db),
+    _: str = Depends(_require_service_token),
+):
+    """Resolve o AI profile pelo payment_webhook_secret. Usado pelo backend-crm para autenticar webhooks de pagamento."""
+    profile = (
+        db.query(models.AIProfile)
+        .filter(models.AIProfile.payment_webhook_secret == token)
+        .first()
+    )
+    if not profile:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Webhook secret não encontrado")
+    return _normalize_profile_offer_pack(profile)
+
+
+@router.get("/ai-profiles/{ai_profile_id}", response_model=AIProfileOut)
+async def get_ai_profile_by_id(
+    ai_profile_id: int,
+    user_id: int,
+    db: Session = Depends(get_db),
+    _: str = Depends(_require_service_token),
+):
+    """Busca um AiProfile específico pelo ID via service token. Valida que pertence ao user_id."""
+    profile = db.query(models.AIProfile).filter(models.AIProfile.id == ai_profile_id).first()
+    if not profile:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="AI profile not found")
+    if profile.user_id != user_id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="ai_profile_id não pertence ao utilizador")
+    return _normalize_profile_offer_pack(profile)
+
+
+@router.patch("/ai-profiles/{user_id}/generated-prompt-parts")
+async def save_generated_prompt_parts(
+    user_id: int,
+    payload: dict,
+    db: Session = Depends(get_db),
+    _: str = Depends(_require_service_token),
+):
+    """Salva os blocos gerados pelo meta-prompter no ai_profile. Chamado pelo backend-executors."""
+    profile = db.query(models.AIProfile).filter(models.AIProfile.user_id == user_id).first()
+    if not profile:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="AI profile not found")
+    profile.generated_prompt_parts = payload.get("generated_prompt_parts")
+    profile.prompt_parts_generated_at = datetime.utcnow()
+    profile.prompt_parts_version = (profile.prompt_parts_version or 0) + 1
+    profile.updated_at = datetime.utcnow()
+    db.commit()
+    db.refresh(profile)
+    return {"ok": True, "prompt_parts_version": profile.prompt_parts_version}
+
+
+@router.post("/ai-profiles/me/regenerate-webhook-secret")
+async def regenerate_webhook_secret(
+    current_user: models.User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Regenera o payment_webhook_secret do usuário. Retorna o novo secret e a URL gerada."""
+    profile = db.query(models.AIProfile).filter(models.AIProfile.user_id == current_user.id).first()
+    if not profile:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="AI profile not found")
+    new_secret = secrets_module.token_urlsafe(32)
+    profile.payment_webhook_secret = new_secret
+    profile.updated_at = datetime.utcnow()
+    db.commit()
+    db.refresh(profile)
+    return {
+        "payment_webhook_secret": new_secret,
+        "payment_webhook_url": profile.payment_webhook_url,
+    }

@@ -305,6 +305,13 @@ def attach_whatsapp_outbound_provider(outbound_event_id: int, payload: Dict[str,
     )
 
 
+def create_buying_signal_notification(lead_id: int) -> Dict[str, Any]:
+    base_url = settings.crm_api_base.rstrip("/")
+    url = f"{base_url}/api/internal/leads/{lead_id}/buying-signal"
+    response = _send_request("POST", url)
+    return _handle_response(response, str(lead_id), for_context=False)
+
+
 def get_lead_qualification_state(lead_id: int) -> Dict[str, Any]:
     base_url = settings.crm_api_base.rstrip("/")
     url = f"{base_url}/api/internal/leads/{lead_id}/qualification-state"

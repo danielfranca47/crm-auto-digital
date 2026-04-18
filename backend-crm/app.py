@@ -32,14 +32,20 @@ from routes import (
     executor,
     whatsapp_connect,
     notifications,
+    playground,
+    spy_agent,
 )
 from routes import public
 from services.followup_reconciler import reconcile_due_followups
+from services.spy_agent.observation_reconciler import reconcile_expired_observations
+from services.spy_agent.spy_media_worker import process_pending_spy_media_jobs
 
 logger = logging.getLogger(__name__)
 
 _RECONCILER_INTERVAL = int(os.getenv("FOLLOWUP_RECONCILER_INTERVAL_SECONDS", "60"))
 _RECONCILER_STARTUP_DELAY = 5  # segundos de grace period antes da 1ª execução
+_SPY_RECONCILER_INTERVAL = int(os.getenv("SPY_AGENT_RECONCILER_INTERVAL_SECONDS", "60"))
+_SPY_MEDIA_WORKER_INTERVAL = int(os.getenv("SPY_MEDIA_WORKER_INTERVAL_SECONDS", "30"))
 
 
 async def _reconciler_loop() -> None:
@@ -67,18 +73,56 @@ async def _reconciler_loop() -> None:
         await asyncio.sleep(_RECONCILER_INTERVAL)
 
 
+async def _spy_reconciler_loop() -> None:
+    logger.info("[spy_reconciler] scheduler iniciado — intervalo=%ds", _SPY_RECONCILER_INTERVAL)
+    await asyncio.sleep(_RECONCILER_STARTUP_DELAY + 2)  # stagger levemente
+    while True:
+        try:
+            result = await asyncio.to_thread(reconcile_expired_observations)
+            if result["triggered"] > 0:
+                logger.info(
+                    "[spy_reconciler] scanned=%d triggered=%d",
+                    result["scanned"],
+                    result["triggered"],
+                )
+        except Exception as exc:
+            logger.error("[spy_reconciler] erro inesperado: %s", exc, exc_info=True)
+        await asyncio.sleep(_SPY_RECONCILER_INTERVAL)
+
+
+async def _spy_media_worker_loop() -> None:
+    """Processa jobs spy.media.process (áudio → Whisper, imagem → Vision) internamente."""
+    logger.info("[spy_media_worker] scheduler iniciado — intervalo=%ds", _SPY_MEDIA_WORKER_INTERVAL)
+    await asyncio.sleep(_RECONCILER_STARTUP_DELAY + 4)  # stagger após os outros
+    while True:
+        try:
+            result = await asyncio.to_thread(process_pending_spy_media_jobs)
+            if result["processed"] > 0 or result["failed"] > 0:
+                logger.info(
+                    "[spy_media_worker] processed=%d failed=%d",
+                    result["processed"],
+                    result["failed"],
+                )
+        except Exception as exc:
+            logger.error("[spy_media_worker] erro inesperado: %s", exc, exc_info=True)
+        await asyncio.sleep(_SPY_MEDIA_WORKER_INTERVAL)
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     task = asyncio.create_task(_reconciler_loop())
+    spy_task = asyncio.create_task(_spy_reconciler_loop())
+    spy_media_task = asyncio.create_task(_spy_media_worker_loop())
     try:
         yield
     finally:
-        task.cancel()
-        try:
-            await task
-        except asyncio.CancelledError:
-            pass
-        logger.info("[reconciler] scheduler encerrado")
+        for t in (task, spy_task, spy_media_task):
+            t.cancel()
+            try:
+                await t
+            except asyncio.CancelledError:
+                pass
+        logger.info("[reconciler] schedulers encerrados")
 
 
 def _parse_origins(csv: str | None) -> list[str]:
@@ -131,12 +175,19 @@ app.include_router(webhooks.router)                                 # /webhooks/
 app.include_router(executor.router)                                 # /api/jobs, /api/whatsapp/* internal
 app.include_router(whatsapp_connect.router)                         # /api/whatsapp/connect, /api/whatsapp/status
 app.include_router(notifications.router)                            # /api/notifications
+app.include_router(playground.router)                               # /api/playground
+app.include_router(spy_agent.router)                                # /api/spy-agent
 # app.include_router(dashboard.router)
 
 # Static: mídia de follow-up
 _followup_media_dir = Path("data/uploads/followup-media")
 _followup_media_dir.mkdir(parents=True, exist_ok=True)
 app.mount("/api/followup-media", StaticFiles(directory=str(_followup_media_dir)), name="followup-media")
+
+# Static: mídia de knowledge (imagens/PDFs enviados ao lead)
+_knowledge_media_dir = Path("data/uploads/knowledge/media")
+_knowledge_media_dir.mkdir(parents=True, exist_ok=True)
+app.mount("/static/knowledge-media", StaticFiles(directory=str(_knowledge_media_dir)), name="knowledge-media")
 
 # -----------------------------------------------------------------------------
 # SUB-APP PÚBLICO (Website / Form) -> montado em /public

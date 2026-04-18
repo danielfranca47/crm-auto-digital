@@ -1,4 +1,4 @@
-from typing import Optional, List, Literal
+from typing import Any, Dict, Optional, List, Literal
 from datetime import datetime
 from pydantic import BaseModel, Field, ConfigDict
 
@@ -46,6 +46,10 @@ class StartFollowupPayload(BaseModel):
     followup_goal: Optional[str] = None
     proposal_sent: Optional[bool] = None
     operator_note: Optional[str] = None
+
+
+class QualificationPatchPayload(BaseModel):
+    fields: Dict[str, Any]
 
 
 class BotDisabledUpdate(BaseModel):
@@ -178,11 +182,37 @@ class SendNowPayload(BaseModel):
 class KnowledgeCreate(BaseModel):
     title: str = Field(min_length=3)
     content_text: str = Field(min_length=20)
+    category: Optional[str] = None
+    active_in_funnel: Optional[int] = 1
 
 
 class KnowledgeUpdate(BaseModel):
     title: Optional[str] = Field(default=None, min_length=3)
     content_text: Optional[str] = Field(default=None, min_length=20)
+    category: Optional[str] = None
+    active_in_funnel: Optional[int] = None
+    media_url: Optional[str] = None
+
+
+class KnowledgeMediaOut(BaseModel):
+    id: int
+    knowledge_item_id: int
+    media_url: str
+    media_type: str
+    language: str
+    send_order: int
+    created_at: str
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class KnowledgeMediaUpdate(BaseModel):
+    language: Optional[str] = None
+    send_order: Optional[int] = None
+
+
+class KnowledgeMediaReorder(BaseModel):
+    items: List[dict]  # [{id: int, send_order: int}]
 
 
 class KnowledgeItemOut(BaseModel):
@@ -192,7 +222,38 @@ class KnowledgeItemOut(BaseModel):
     source_type: Literal["manual", "file"]
     content_text: str
     file_path: Optional[str] = None
+    category: Optional[str] = None
+    active_in_funnel: int = 1
+    media_url: Optional[str] = None
+    media_items: List[KnowledgeMediaOut] = Field(default_factory=list)
     created_at: datetime
     updated_at: datetime
 
     model_config = ConfigDict(from_attributes=True)
+
+
+# -----------------------------
+# Business Info
+# -----------------------------
+class BusinessInfoField(BaseModel):
+    id: int
+    field_key: str
+    label: str
+    value: Optional[str] = None
+    enabled: int = 1
+    sort_order: int = 0
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class BusinessInfoFieldUpdate(BaseModel):
+    label: Optional[str] = None
+    value: Optional[str] = None
+    enabled: Optional[int] = None
+    sort_order: Optional[int] = None
+
+
+class BusinessInfoCustomCreate(BaseModel):
+    field_key: str = Field(min_length=2, max_length=64)
+    label: str = Field(min_length=2, max_length=128)
+    value: Optional[str] = None

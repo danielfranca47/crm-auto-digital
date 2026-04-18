@@ -28,28 +28,6 @@ SIGNALS_SCHEMA = {
     "offer_item_name",
 }
 
-MIN_REQUIRED_FIELDS = {
-    "consultivo": [
-        "service_interest",
-        "urgency",
-        "decision_role",
-        "constraints",
-        "availability_window",
-        "budget_or_price_acceptance",
-    ],
-    "agenda": [
-        "service_interest",
-        "availability_window",
-        "location_preference",
-        "price_acceptance",
-    ],
-    "direto": [
-        "service_interest",
-        "availability_window",
-        "price_acceptance",
-    ],
-}
-
 
 _DAY_OR_TIME_RE = re.compile(
     r"\b(\d{1,2}h|\d{1,2}:\d{2}|hoje|amanh[ãa]|segunda|ter[cç]a|quarta|quinta|sexta|s[áa]bado|domingo|semana)\b",
@@ -113,8 +91,15 @@ def infer_extracted_fields(context: Dict[str, Any]) -> Dict[str, Any]:
     return extracted
 
 
-def compute_missing_fields(agent_mode_normalized: str, extracted: Dict[str, Any]) -> List[str]:
-    required = MIN_REQUIRED_FIELDS.get(agent_mode_normalized, MIN_REQUIRED_FIELDS["agenda"])
+def compute_missing_fields(
+    agent_mode_normalized: str,
+    extracted: Dict[str, Any],
+    required_fields_override: List[str] | None = None,
+) -> List[str]:
+    if required_fields_override is not None:
+        required = required_fields_override
+    else:
+        required = []  # Sem configuração no AI Profile = sem campos obrigatórios
     missing: List[str] = []
     has_next_step_with_time = bool(extracted.get("next_step_with_time"))
 
@@ -127,5 +112,10 @@ def compute_missing_fields(agent_mode_normalized: str, extracted: Dict[str, Any]
     return missing
 
 
-def required_fields_for_mode(agent_mode_normalized: str) -> List[str]:
-    return list(MIN_REQUIRED_FIELDS.get(agent_mode_normalized, MIN_REQUIRED_FIELDS["agenda"]))
+def required_fields_for_mode(
+    agent_mode_normalized: str,
+    required_fields_override: List[str] | None = None,
+) -> List[str]:
+    if required_fields_override is not None:
+        return list(required_fields_override)
+    return []  # Sem configuração no AI Profile = sem campos obrigatórios

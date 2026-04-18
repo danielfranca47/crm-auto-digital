@@ -13,7 +13,6 @@ from fastapi import HTTPException
 
 from database import DB_PATH, get_connection
 from services.lead_category_policy import apply_closing_bot_disable_side_effect
-from services.qualification_guardrails import can_advance_from_qualification
 
 logger = logging.getLogger(__name__)
 
@@ -33,16 +32,22 @@ TYPE_WHATSAPP_SEND = "whatsapp.send.local"
 TYPE_WHATSAPP_INBOUND = "whatsapp.inbound.n8n"
 TYPE_WHATSAPP_FOLLOWUP_TICK = "whatsapp.followup.tick"
 TYPE_WHATSAPP_FOLLOWUP_PREGENERATE = "whatsapp.followup.pregenerate"
+TYPE_WHATSAPP_APPOINTMENT_REMINDER = "whatsapp.appointment.reminder"
+TYPE_WHATSAPP_APPOINTMENT_BRIEFING = "whatsapp.appointment.briefing"
 TYPE_MAPS_SEARCH = "maps.search.local"
 TYPE_MAPS_ENRICH = "maps.enrich.local"
+TYPE_SPY_MEDIA_PROCESS = "spy.media.process"
 
 _TYPE_ALIASES: Dict[str, List[str]] = {
     TYPE_WHATSAPP_SEND: ["whatsapp_send"],
     TYPE_WHATSAPP_INBOUND: [],
     TYPE_WHATSAPP_FOLLOWUP_TICK: [],
     TYPE_WHATSAPP_FOLLOWUP_PREGENERATE: [],
+    TYPE_WHATSAPP_APPOINTMENT_REMINDER: [],
+    TYPE_WHATSAPP_APPOINTMENT_BRIEFING: [],
     TYPE_MAPS_SEARCH: ["maps_search_fallback"],
     TYPE_MAPS_ENRICH: ["maps_enrich_fallback"],
+    TYPE_SPY_MEDIA_PROCESS: [],
 }
 
 _VALID_JOB_STATUSES = {
@@ -62,6 +67,7 @@ LEAD_CATEGORIES = [
     "client-list",
     "prospect-refused",
     "disqualified",
+    "nurture",
 ]
 
 LEAD_CATEGORIES_SET = set(LEAD_CATEGORIES)
@@ -853,17 +859,6 @@ def apply_suggested_category(
             normalized,
         )
         return False
-    if current_category == "qualification" and normalized in {"apresentation", "follow-up", "closing"}:
-        effective_user_id = int(user_id) if user_id is not None else int(row["user_id"])
-        can_advance, missing_fields = can_advance_from_qualification(conn, lead_id=lead_id, user_id=effective_user_id)
-        if not can_advance:
-            logger.info(
-                "lead_category_blocked_incomplete_qualification lead_id=%s missing=%s origin=executor",
-                lead_id,
-                missing_fields,
-            )
-            return False
-
     update_params: List[Any] = [normalized, lead_id]
     update_clause = "WHERE id=?"
     if user_id is not None:

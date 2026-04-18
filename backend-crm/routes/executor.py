@@ -13,7 +13,9 @@ from database import get_connection
 from services.ai_orchestrator import (
     InboundEvent,
     build_context_bundle_from_inbound,
+    enrich_context_bundle,
 )
+from services.ai_orchestrator.orchestrator import _load_training_examples
 from services.qualification_state import (
     get_qualification_state,
     increment_attempt,
@@ -29,6 +31,8 @@ from services.jobs_service import (
     LEAD_CATEGORIES,
     TYPE_WHATSAPP_FOLLOWUP_TICK,
     TYPE_WHATSAPP_FOLLOWUP_PREGENERATE,
+    TYPE_WHATSAPP_APPOINTMENT_REMINDER,
+    TYPE_WHATSAPP_APPOINTMENT_BRIEFING,
     TYPE_WHATSAPP_INBOUND,
     apply_outcome_highlight,
     apply_suggested_category,
@@ -38,6 +42,7 @@ from services.jobs_service import (
     get_job,
     normalize_job_type,
 )
+from services.briefing_service import generate_and_send_briefing
 from services.followup_reconciler import reconcile_due_followups
 from services.followup_channel_context import resolve_followup_tick_channel_context
 from services.followup_state import (
@@ -233,6 +238,16 @@ def whatsapp_execution_context(
             "provider": channel_ctx.get("provider"),
             "phone": channel_ctx.get("phone") or payload.get("phone"),
         }
+    elif job_type == TYPE_WHATSAPP_APPOINTMENT_REMINDER:
+        with get_connection() as conn:
+            channel_ctx = resolve_followup_tick_channel_context(conn, lead_id=int(lead_id), user_id=int(user_id))
+        payload = {
+            **payload,
+            "message_text": str(message_text or "appointment_reminder_trigger"),
+            "instance_id": channel_ctx.get("instance_id"),
+            "provider": channel_ctx.get("provider"),
+            "phone": channel_ctx.get("phone") or payload.get("phone"),
+        }
 
     event = InboundEvent(
         user_id=int(user_id),
@@ -247,6 +262,7 @@ def whatsapp_execution_context(
     )
 
     bundle = build_context_bundle_from_inbound(event)
+    bundle = enrich_context_bundle(bundle, event.user_id)
     decision = _fetch_latest_ai_decision(lead_id=event.lead_id)
     qualification_state = get_qualification_state(event.lead_id)
 
@@ -254,6 +270,14 @@ def whatsapp_execution_context(
         bundle.metadata["bot_disabled"] = True
 
     bundle.metadata["allowed_lead_categories"] = LEAD_CATEGORIES
+
+    # training_examples carregado separadamente pois requer ai_profile_id resolvido
+    _ai_profile = bundle.ai_profile or {}
+    training_examples = _load_training_examples(
+        user_id=event.user_id,
+        ai_profile_id=_ai_profile.get("id", 0),
+        agent_mode=_ai_profile.get("agent_mode"),
+    )
 
     return {
         "job": job,
@@ -264,6 +288,11 @@ def whatsapp_execution_context(
         "decision": decision,
         "qualification_state": qualification_state,
         "metadata": bundle.metadata,
+        "knowledge_items": bundle.knowledge_items or {},
+        "knowledge_media": bundle.knowledge_media or {},
+        "lead_detected_language": bundle.lead_detected_language or "all",
+        "generated_prompt_parts": bundle.generated_prompt_parts or {},
+        "training_examples": training_examples,
     }
 
 
@@ -330,6 +359,39 @@ class QualificationStateAttemptRequest(BaseModel):
 class FollowupReconcileRequest(BaseModel):
     limit: int = Field(default=100, ge=1, le=500)
     dry_run: bool = False
+
+
+class ExecuteBriefingRequest(BaseModel):
+    job_id: int
+    lead_id: int
+    user_id: int
+    appointment_id: Optional[int] = None
+
+
+@router.post("/internal/appointments/briefing/execute")
+def execute_appointment_briefing(
+    payload: ExecuteBriefingRequest,
+    _: str = Depends(_require_service_token),
+):
+    """Executa o job de briefing pré-reunião: gera e envia o dossiê para o operador."""
+    job = get_job(payload.job_id)
+    if not job:
+        raise HTTPException(status_code=404, detail="Job não encontrado")
+
+    job_type = normalize_job_type(job.get("type") or "")
+    if job_type != TYPE_WHATSAPP_APPOINTMENT_BRIEFING:
+        raise HTTPException(status_code=400, detail="Tipo de job inválido para briefing")
+
+    try:
+        generate_and_send_briefing(
+            lead_id=payload.lead_id,
+            user_id=payload.user_id,
+            appointment_id=payload.appointment_id,
+        )
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Erro ao gerar briefing: {exc}")
+
+    return {"status": "ok", "job_id": payload.job_id}
 
 
 @router.post("/internal/followup/reconcile")
@@ -707,6 +769,29 @@ def set_lead_bot_disabled(
             )
         conn.commit()
         return {"status": "ok", "lead_id": lead_id, "bot_disabled": payload.disabled}
+
+
+@router.post("/internal/leads/{lead_id}/buying-signal")
+def create_buying_signal_notification(
+    lead_id: int,
+    _: str = Depends(_require_service_token),
+):
+    """Cria notificação buying_signal_detected para o operador."""
+    with get_connection() as conn:
+        cur = conn.cursor()
+        row = cur.execute("SELECT id, user_id FROM leads WHERE id = ?", (lead_id,)).fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="Lead não encontrado")
+        user_id = row["user_id"]
+        cur.execute(
+            """
+            INSERT INTO notifications (user_id, lead_id, type, read, created_at)
+            VALUES (?, ?, 'buying_signal_detected', 0, CURRENT_TIMESTAMP)
+            """,
+            (user_id, lead_id),
+        )
+        conn.commit()
+    return {"status": "ok", "lead_id": lead_id}
 
 
 @router.post("/internal/logs/handoff-requested")

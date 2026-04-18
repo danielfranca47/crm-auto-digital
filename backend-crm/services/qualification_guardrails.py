@@ -1,39 +1,26 @@
 from __future__ import annotations
 
+import logging
 import sqlite3
 from typing import Any, Dict, List, Tuple
 
+logger = logging.getLogger(__name__)
 
-# NOTE: manter em sincronia com backend-executors/app/contracts/qualification_contract.py
-_MIN_REQUIRED_FIELDS = {
-    "consultivo": [
-        "service_interest",
-        "urgency",
-        "decision_role",
-        "constraints",
-        "availability_window",
-        "budget_or_price_acceptance",
-    ],
-    "agenda": [
-        "service_interest",
-        "availability_window",
-        "location_preference",
-        "price_acceptance",
-    ],
-    "direto": [
-        "service_interest",
-        "availability_window",
-        "price_acceptance",
-    ],
-}
+def required_fields_for_mode(
+    agent_mode_normalized: str,
+    required_fields_override: List[str] | None = None,
+) -> List[str]:
+    if required_fields_override is not None:
+        return list(required_fields_override)
+    return []  # Sem configuração no AI Profile = sem campos obrigatórios
 
 
-def required_fields_for_mode(agent_mode_normalized: str) -> List[str]:
-    return list(_MIN_REQUIRED_FIELDS.get(agent_mode_normalized, _MIN_REQUIRED_FIELDS["agenda"]))
-
-
-def compute_missing_fields(agent_mode_normalized: str, extracted: Dict[str, Any]) -> List[str]:
-    required = required_fields_for_mode(agent_mode_normalized)
+def compute_missing_fields(
+    agent_mode_normalized: str,
+    extracted: Dict[str, Any],
+    required_fields_override: List[str] | None = None,
+) -> List[str]:
+    required = required_fields_for_mode(agent_mode_normalized, required_fields_override=required_fields_override)
     missing: List[str] = []
     has_next_step_with_time = bool((extracted or {}).get("next_step_with_time"))
     for field in required:
@@ -61,6 +48,24 @@ def _agent_type_to_mode(agent_type: str | None) -> str:
     return "agenda"
 
 
+def _fetch_ai_profile(user_id: int) -> Dict[str, Any]:
+    """Retorna o ai_profile completo do usuário via service token. Em caso de erro, retorna {}."""
+    try:
+        from core_client import fetch_core_ai_profile_resolve
+        return fetch_core_ai_profile_resolve(user_id) or {}
+    except Exception as exc:
+        logger.warning("can_advance_from_qualification: falha ao buscar ai_profile user_id=%s: %s", user_id, exc)
+        return {}
+
+
+def _fetch_ai_profile_threshold(user_id: int) -> Tuple[int, str]:
+    """Retorna (qualification_score_threshold, nurture_vs_discard_rule) do ai_profile do usuário."""
+    profile = _fetch_ai_profile(user_id)
+    threshold = profile.get("qualification_score_threshold")
+    rule = profile.get("nurture_vs_discard_rule") or "discard"
+    return (int(threshold) if threshold is not None else 6, str(rule))
+
+
 def can_advance_from_qualification(conn, lead_id: int, user_id: int) -> Tuple[bool, List[str]]:
     conn.row_factory = sqlite3.Row
     cur = conn.cursor()
@@ -73,7 +78,8 @@ def can_advance_from_qualification(conn, lead_id: int, user_id: int) -> Tuple[bo
 
     state_row = cur.execute(
         """
-        SELECT agent_mode_normalized, data_json
+        SELECT agent_mode_normalized, data_json,
+               qualification_total_score
           FROM lead_qualification_state
          WHERE lead_id = ?
         """,
@@ -82,6 +88,7 @@ def can_advance_from_qualification(conn, lead_id: int, user_id: int) -> Tuple[bo
 
     mode = _agent_type_to_mode(lead_row["agent_type"])
     extracted: Dict[str, Any] = {}
+    total_score = 0
     if state_row:
         mode = str(state_row["agent_mode_normalized"] or "").strip().lower() or mode
         raw_data = state_row["data_json"]
@@ -96,6 +103,38 @@ def can_advance_from_qualification(conn, lead_id: int, user_id: int) -> Tuple[bo
                     extracted = parsed
             except Exception:
                 extracted = {}
+        total_score = int(state_row["qualification_total_score"] or 0)
 
-    missing_fields = compute_missing_fields(mode, extracted)
-    return (len(missing_fields) == 0, missing_fields)
+    # Lê override de campos do ai_profile (None = usar defaults do modo)
+    ai_profile = _fetch_ai_profile(user_id)
+    override = ai_profile.get("qualification_required_fields")
+    required_fields_override: List[str] | None = None
+    if isinstance(override, list):
+        required_fields_override = [str(f) for f in override if isinstance(f, str)]
+
+    # Verificação 1: campos obrigatórios completos
+    missing_fields = compute_missing_fields(mode, extracted, required_fields_override=required_fields_override)
+    if missing_fields:
+        return False, missing_fields
+
+    # Verificação 2: score mínimo dos 4Ps (ignorado se não houver campos obrigatórios)
+    threshold = ai_profile.get("qualification_score_threshold")
+    threshold_int = int(threshold) if threshold is not None else 6
+    if required_fields_override is not None and len(required_fields_override) == 0:
+        # Lista vazia configurada explicitamente — sem qualificação obrigatória, avança sempre
+        return True, []
+
+    # Só aplicar o check de score se o usuário tiver pelo menos um campo 4P configurado.
+    # compute_4p_scores() é hardcoded para ler apenas as 4 chaves abaixo; se o AI Profile
+    # do usuário usar campos 100% custom (sem nenhuma das 4 chaves), o score será sempre 0
+    # e o guardrail se tornaria permanentemente bloqueante.
+    _4P_KEYS = {"decision_role", "urgency", "budget_or_price_acceptance", "availability_window"}
+    _qfields = ai_profile.get("qualification_fields") or []
+    _configured_keys = {f["key"] for f in _qfields if isinstance(f, dict) and "key" in f}
+    if _configured_keys and not (_configured_keys & _4P_KEYS):
+        return True, []
+
+    if total_score < threshold_int:
+        return False, [f"score_{total_score}_of_12_below_threshold_{threshold_int}"]
+
+    return True, []

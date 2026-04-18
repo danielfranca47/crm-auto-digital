@@ -270,6 +270,19 @@ def handle_inbound(payload: Dict[str, Any]) -> Dict[str, Any]:
             (lead_id, user_id, phone_norm, month_key),
         )
         save_inbound_message(conn, lead_id=lead_id, body=message_text, user_id=user_id)
+
+        # Detetar e persistir idioma do lead (first-detect wins)
+        try:
+            from services.language_detector import detect_language as _detect_lang
+            _detected = _detect_lang(message_text)
+            if _detected:
+                conn.execute(
+                    "UPDATE leads SET detected_language = ? WHERE id = ? AND (detected_language IS NULL OR detected_language = '')",
+                    (_detected, lead_id),
+                )
+        except Exception as _lang_exc:
+            logger.debug("language_detector erro: %s", _lang_exc)
+
         followup_stopped = stop_followup_on_inbound_reply(
             conn,
             lead_id=lead_id,

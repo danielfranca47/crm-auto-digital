@@ -1,12 +1,23 @@
-from datetime import datetime, timezone
+import logging
+from datetime import datetime, timedelta, timezone
 from typing import List, Optional
 
 from fastapi import APIRouter, HTTPException, Query, Depends
 
+from core_client import fetch_core_ai_profile_resolve
 from database import get_connection
 from models import AppointmentCreate, AppointmentOut, AppointmentUpdate, AppointmentStatus, AppointmentOutcomeUpdate
 from security_core import CurrentUser, require_crm_access
 from services.appointment_outcomes import apply_outcome
+from services.briefing_service import schedule_briefing_job
+from services.jobs_service import TYPE_WHATSAPP_APPOINTMENT_REMINDER, create_job
+
+logger = logging.getLogger(__name__)
+
+_REMINDER_DEFAULTS_BY_TEMPLATE = {
+    "hybrid_scheduler": [-1440, -120],  # Agent 3: -24h, -2h
+}
+_REMINDER_DEFAULTS_FALLBACK = [-1440, -60]  # Agent 1 default: -24h, -1h
 
 router = APIRouter(prefix="/api/appointments", tags=["Appointments"])
 
@@ -151,9 +162,114 @@ def create_appointment(payload: AppointmentCreate) -> AppointmentOut:
         appointment_id = cur.lastrowid
         cur.execute("SELECT * FROM appointments WHERE id = ?", (appointment_id,))
         row = cur.fetchone()
-        return _serialize(row)
+        result = _serialize(row)
+
+        # Agendar jobs de lembrete
+        lead_row = cur.execute(
+            "SELECT user_id FROM leads WHERE id = ?", (payload.lead_id,)
+        ).fetchone()
+        if lead_row:
+            user_id = lead_row["user_id"]
+            _schedule_reminder_jobs(
+                lead_id=payload.lead_id,
+                user_id=user_id,
+                appointment_id=appointment_id,
+                appointment_title=payload.title,
+                appointment_start_at=payload.start_at,
+            )
+            _schedule_briefing_job(
+                lead_id=payload.lead_id,
+                user_id=user_id,
+                appointment_id=appointment_id,
+                appointment_start_at=payload.start_at,
+            )
+
+        return result
     finally:
         conn.close()
+
+
+def _schedule_reminder_jobs(
+    *,
+    lead_id: int,
+    user_id: int,
+    appointment_id: int,
+    appointment_title: str,
+    appointment_start_at: datetime,
+) -> None:
+    try:
+        ai_profile = fetch_core_ai_profile_resolve(user_id)
+    except Exception:
+        ai_profile = None
+
+    template_key = (ai_profile or {}).get("template_key") or ""
+    offsets = None
+    if ai_profile:
+        offsets = ai_profile.get("appointment_reminder_offsets")
+    if not offsets:
+        offsets = _REMINDER_DEFAULTS_BY_TEMPLATE.get(template_key, _REMINDER_DEFAULTS_FALLBACK)
+
+    now_utc = datetime.now(timezone.utc)
+    for offset_minutes in offsets:
+        send_at = appointment_start_at + timedelta(minutes=offset_minutes)
+        # Garantir timezone-aware para comparação
+        if send_at.tzinfo is None:
+            send_at = send_at.replace(tzinfo=timezone.utc)
+        if send_at <= now_utc:
+            continue
+        try:
+            create_job(
+                job_type=TYPE_WHATSAPP_APPOINTMENT_REMINDER,
+                payload={
+                    "lead_id": lead_id,
+                    "user_id": user_id,
+                    "appointment_id": appointment_id,
+                    "appointment_title": appointment_title,
+                    "appointment_start_at": appointment_start_at.isoformat(),
+                    "message_text": "appointment_reminder_trigger",
+                },
+                scheduled_at=send_at,
+                user_id=user_id,
+            )
+            logger.info(
+                "reminder_job_scheduled lead_id=%s appointment_id=%s send_at=%s",
+                lead_id,
+                appointment_id,
+                send_at.isoformat(),
+            )
+        except Exception as exc:
+            logger.warning(
+                "reminder_job_schedule_failed lead_id=%s appointment_id=%s error=%s",
+                lead_id,
+                appointment_id,
+                exc,
+            )
+
+
+def _schedule_briefing_job(
+    *,
+    lead_id: int,
+    user_id: int,
+    appointment_id: int,
+    appointment_start_at: datetime,
+) -> None:
+    try:
+        ai_profile = fetch_core_ai_profile_resolve(user_id) or {}
+    except Exception:
+        ai_profile = {}
+
+    briefing_enabled = ai_profile.get("briefing_enabled")
+    if briefing_enabled is False:
+        return
+
+    lead_time = ai_profile.get("briefing_lead_time") or 120
+    schedule_briefing_job(
+        lead_id=lead_id,
+        user_id=user_id,
+        appointment_id=appointment_id,
+        appointment_start_at=appointment_start_at,
+        lead_time_minutes=int(lead_time),
+    )
 
 
 @router.put("/{appointment_id}", response_model=AppointmentOut)

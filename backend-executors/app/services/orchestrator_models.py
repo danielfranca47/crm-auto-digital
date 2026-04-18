@@ -13,7 +13,7 @@ class MotherDecision(BaseModel):
     agent_mode: Optional[Literal["consultivo", "agenda", "direto"]] = None
     signals: Optional[dict] = None
     objective: Optional[str] = None
-    next_action_hint: Optional[Literal["reply", "ask_qualification", "handoff", "ignore"]] = None
+    next_action_hint: Optional[Literal["reply", "ask_qualification", "handoff", "ignore", "greet"]] = None
 
 
 class ChildResult(BaseModel):

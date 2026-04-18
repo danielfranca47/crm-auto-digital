@@ -33,6 +33,25 @@ export type AiTemplate = {
   description?: string;
 };
 
+export type OfferPack = {
+  items?: Array<{
+    name?: string;
+    price?: string;
+    description?: string;
+    checkout_link?: string;
+    bullets?: string[];
+  }> | null;
+  checkout_link?: string | null;
+  cta_text?: string | null;
+  disclaimers?: string[] | null;
+  // Mídia rica — Tarefa 3.6
+  media_url?: string | null;
+  media_type?: "image" | "video" | "audio" | null;
+  anchor_price?: string | null;
+  guarantee_text?: string | null;
+  upsell_message?: string | null;
+};
+
 export type AiProfilePayload = {
   template_key: string;
   name: string;
@@ -54,6 +73,26 @@ export type AiProfilePayload = {
   followup_max_attempts?: number | null;
   followup_first_offset?: number | null;
   followup_allowed_hours?: string | null;
+  origin_inbound_opener?: string | null;
+  origin_outbound_opener?: string | null;
+  objection_common?: string | null;
+  qualification_score_threshold?: number | null;
+  nurture_vs_discard_rule?: "nurture" | "discard" | null;
+  warming_social_proof?: string | null;
+  warming_session_preview?: string | null;
+  offer_pack?: OfferPack | null;
+  appointment_reminder_offsets?: number[] | null;
+  briefing_enabled?: boolean | null;
+  briefing_channel?: "whatsapp" | "internal" | null;
+  briefing_lead_time?: number | null;
+  operator_whatsapp?: string | null;
+  buying_signal_keywords?: string[] | null;
+  qualification_required_fields?: string[] | null;
+  qualification_fields?: import('../types/agente').QualificationField[] | null;
+  calendar_integration?: "none" | "google_calendar" | "calendly" | null;
+  payment_gateway?: "hotmart" | "kiwify" | "stripe" | "generico" | null;
+  response_style?: "active" | "passive" | null;
+  custom_variables?: Record<string, string> | null;
 };
 
 export type AiProfile = AiProfilePayload & {
@@ -61,7 +100,125 @@ export type AiProfile = AiProfilePayload & {
   user_id?: number;
   created_at?: string;
   updated_at?: string;
+  payment_webhook_secret?: string | null;
+  payment_webhook_url?: string | null;
 };
+
+// ── Playground ──────────────────────────────────────────────────────────────
+
+export type PlaygroundDecisionTrace = {
+  agent_mode?: string | null;
+  presentation_variant?: string | null;
+  mother_route?: string | null;
+  effective_route?: string | null;
+  guardrails_applied: string[];
+  category_suggestion_cleared: boolean;
+  ai_profile_id: number;
+  lead_id: number;
+  lead_is_sandbox: boolean;
+  timestamp: string;
+};
+
+export type PlaygroundMotherDecision = {
+  route_to?: string | null;
+  confidence: number;
+  reason: string;
+  signals?: Record<string, unknown> | null;
+};
+
+export type PlaygroundChildResult = {
+  message_text: string;
+  question_text?: string | null;
+  field?: string | null;
+  should_ask: boolean;
+  did_complete_phase: boolean;
+  recommended_next_category?: string | null;
+  outcome?: string | null;
+  kanban_highlight?: string | null;
+  confidence: number;
+};
+
+export type PlaygroundQualificationState = {
+  exists: boolean;
+  data_json?: Record<string, unknown> | null;
+  missing_fields: string[];
+  filled_fields: string[];
+  power_score: number;
+  priority_score: number;
+  price_score: number;
+  timing_score: number;
+  qualification_total_score: number;
+};
+
+export type PlaygroundPreSendMediaItem = {
+  media_url: string;
+  media_type: "image" | "video" | "audio" | "pdf";
+  send_order: number;
+};
+
+export type PlaygroundChatResponse = {
+  lead_id: number;
+  message_to_send: string;
+  next_action: string;
+  mother_decision?: PlaygroundMotherDecision | null;
+  child_result?: PlaygroundChildResult | null;
+  lead_state: {
+    category: string;
+    qualification_state?: PlaygroundQualificationState | null;
+  };
+  decision_trace: PlaygroundDecisionTrace;
+  pre_send_media?: PlaygroundPreSendMediaItem[];
+};
+
+// ── Playground FeedbackAssist ────────────────────────────────────────────────
+
+export type FeedbackAssistConversationMessage = {
+  role: "lead" | "bot";
+  text: string;
+  timestamp: string;
+  motherRoute?: string | null;
+  confidence?: number;
+  guardrails?: string[];
+  decisionTrace?: PlaygroundDecisionTrace;
+};
+
+export type FeedbackAssistItem = {
+  messageId: string;
+  messagePreview: string;
+  notes: string;
+  tags: string[];
+};
+
+export type FeedbackAssistPreviousAttempt = {
+  attempt_number: number;
+  user_question: string;
+  analysis: string;
+  fields_changed?: Record<string, { from: unknown; to: unknown }> | null;
+  outcome: string;
+  timestamp: string;
+};
+
+export type FeedbackAssistRequest = {
+  ai_profile_id: number;
+  conversation_messages: FeedbackAssistConversationMessage[];
+  feedback_items: FeedbackAssistItem[];
+  user_question: string;
+  attempt_number: number;
+  previous_attempts: FeedbackAssistPreviousAttempt[];
+  mode?: "edicao" | "planejamento" | "duvidas";
+};
+
+export type FeedbackAssistResponse = {
+  action: "update_profile" | "explain_only" | "export_required";
+  fields_to_update: Record<string, unknown> | null;
+  fields_current_values: Record<string, unknown> | null;
+  explanation: string;
+  analysis: string;
+  is_config_fixable: boolean;
+  attempt_number: number;
+};
+
+// ── FollowUp ─────────────────────────────────────────────────────────────────
 
 export type FollowUpContract = {
   status: string;
@@ -120,6 +277,19 @@ export type FollowUpStats = {
   replied_today: number;
 };
 
+export type MediaLanguage = "all" | "pt" | "en" | "es";
+export type MediaFileType = "image" | "video" | "audio" | "pdf";
+
+export type KnowledgeMediaItem = {
+  id: number;
+  knowledge_item_id: number;
+  media_url: string;
+  media_type: MediaFileType;
+  language: MediaLanguage;
+  send_order: number;
+  created_at: string;
+};
+
 export type KnowledgeItem = {
   id: number;
   user_id: number;
@@ -127,8 +297,21 @@ export type KnowledgeItem = {
   source_type: "manual" | "file";
   content_text: string;
   file_path?: string | null;
+  category?: string | null;
+  active_in_funnel: number;
+  media_url?: string | null;
+  media_items: KnowledgeMediaItem[];
   created_at: string;
   updated_at: string;
+};
+
+export type BusinessInfoField = {
+  id: number;
+  field_key: string;
+  label: string;
+  value: string | null;
+  enabled: number;
+  sort_order: number;
 };
 
 export type WhatsappQrPayload = {
@@ -381,6 +564,10 @@ export const api = {
     payload: { disabled: boolean; reason?: string }
   ) => {
     return apiClient.post(`/leads/${leadId}/bot-disabled`, payload);
+  },
+
+  patchLeadQualificationFields: async (leadId: number, fields: Record<string, string>) => {
+    return apiClient.patch(`/leads/${leadId}/qualification-fields`, { fields });
   },
 
   startFollowup: async (payload: {
@@ -763,15 +950,21 @@ export const api = {
       coreClient.post<AiProfile>(`/ai-profiles`, payload),
     updateAiProfileMe: async (payload: Partial<AiProfilePayload>) =>
       coreClient.put<AiProfile>(`/ai-profiles/me`, payload),
+    patchAiProfileMe: async (payload: Partial<AiProfilePayload>) =>
+      coreClient.patch<AiProfile>(`/ai-profiles/me`, payload),
+    regenerateWebhookSecret: async () =>
+      coreClient.post<{ payment_webhook_secret: string; payment_webhook_url: string | null }>(
+        `/ai-profiles/me/regenerate-webhook-secret`
+      ),
   },
 
   crm: {
     getKnowledgeList: async () => apiClient.get<KnowledgeItem[]>(`/knowledge`),
-    createKnowledgeManual: async (payload: { title: string; content_text: string }) =>
+    createKnowledgeManual: async (payload: { title: string; content_text: string; category?: string | null; active_in_funnel?: number }) =>
       apiClient.post<KnowledgeItem>(`/knowledge`, payload),
     updateKnowledge: async (
       id: number,
-      payload: Partial<{ title: string; content_text: string }>
+      payload: Partial<{ title: string; content_text: string; category: string | null; active_in_funnel: number }>
     ) => apiClient.put<KnowledgeItem>(`/knowledge/${id}`, payload),
     deleteKnowledge: async (id: number) => apiClient.delete(`/knowledge/${id}`),
     uploadKnowledgeFile: async (file: File) => {
@@ -779,6 +972,37 @@ export const api = {
       formData.append("file", file);
       return apiClient.post<KnowledgeItem>(`/knowledge/upload`, formData);
     },
+    uploadKnowledgeMedia: async (id: number, file: File) => {
+      const formData = new FormData();
+      formData.append("file", file);
+      return apiClient.post<KnowledgeItem>(`/knowledge/${id}/upload-media`, formData);
+    },
+    deleteKnowledgeMedia: async (id: number) =>
+      apiClient.delete<KnowledgeItem>(`/knowledge/${id}/media`),
+    // Novos endpoints multi-mídia
+    addKnowledgeMedia: async (id: number, file: File, language: MediaLanguage = "all", send_order = 0) => {
+      const formData = new FormData();
+      formData.append("file", file);
+      formData.append("language", language);
+      formData.append("send_order", String(send_order));
+      return apiClient.post<KnowledgeMediaItem>(`/knowledge/${id}/media`, formData);
+    },
+    updateKnowledgeMediaMeta: async (itemId: number, mediaId: number, payload: { language?: MediaLanguage; send_order?: number }) =>
+      apiClient.patch<KnowledgeMediaItem>(`/knowledge/${itemId}/media/${mediaId}`, payload),
+    deleteKnowledgeMediaItem: async (itemId: number, mediaId: number) =>
+      apiClient.delete(`/knowledge/${itemId}/media/${mediaId}`),
+    reorderKnowledgeMedia: async (itemId: number, items: Array<{ id: number; send_order: number }>) =>
+      apiClient.put(`/knowledge/${itemId}/media/reorder`, { items }),
+    // Business Info
+    getBusinessInfo: async () => apiClient.get<BusinessInfoField[]>(`/knowledge/business-info`),
+    updateBusinessInfoField: async (id: number, payload: { label?: string; value?: string | null; enabled?: number; sort_order?: number }) =>
+      apiClient.put<BusinessInfoField>(`/knowledge/business-info/${id}`, payload),
+    clearBusinessInfoField: async (id: number) =>
+      apiClient.patch<BusinessInfoField>(`/knowledge/business-info/${id}/clear`, {}),
+    createBusinessInfoField: async (payload: { field_key: string; label: string; value?: string | null }) =>
+      apiClient.post<BusinessInfoField>(`/knowledge/business-info`, payload),
+    deleteBusinessInfoField: async (id: number) =>
+      apiClient.delete(`/knowledge/business-info/${id}`),
     whatsappConnect: async () => apiClient.post<WhatsappConnectResponse>(`/whatsapp/connect`),
     whatsappStatus: async () => apiClient.get<WhatsappStatusResponse>(`/whatsapp/status`),
     whatsappRefreshQr: async () =>
@@ -787,7 +1011,7 @@ export const api = {
 
   agents: {
     overview: async (seconds = 120) => {
-      return apiClient.get(`/agents/overview?seconds=${seconds}`);
+      return apiClient.get<{ agents: any[] }>(`/agents/overview?seconds=${seconds}`);
     },
     summary: async () => {
       return apiClient.get(`/agents/jobs/summary`);
@@ -824,6 +1048,7 @@ export const api = {
         human_in_loop:     (profile as any)?.human_in_loop     ?? DEFAULT_AGENT_CONFIG.human_in_loop,
         timezone:          (profile as any)?.timezone          ?? DEFAULT_AGENT_CONFIG.timezone,
         custom_instructions: (profile as any)?.custom_instructions ?? DEFAULT_AGENT_CONFIG.custom_instructions,
+        response_style:      ((profile as any)?.response_style ?? DEFAULT_AGENT_CONFIG.response_style) as 'active' | 'passive',
 
         // Camada 2
         niche:            (profile as any)?.niche            ?? DEFAULT_AGENT_CONFIG.niche,
@@ -836,6 +1061,13 @@ export const api = {
         f1_questions:     pack.f1_questions   ?? DEFAULT_AGENT_CONFIG.f1_questions,
         f2_questions:     pack.f2_questions   ?? DEFAULT_AGENT_CONFIG.f2_questions,
         f3_questions:     pack.f3_questions   ?? DEFAULT_AGENT_CONFIG.f3_questions,
+
+        // Camada 1 — Contexto de abertura
+        handoff_custom_text:    pack.handoff_custom_text    ?? DEFAULT_AGENT_CONFIG.handoff_custom_text,
+        origin_inbound_opener:  pack.origin_inbound_opener  ?? DEFAULT_AGENT_CONFIG.origin_inbound_opener,
+        origin_outbound_opener: pack.origin_outbound_opener ?? DEFAULT_AGENT_CONFIG.origin_outbound_opener,
+        warming_social_proof:   pack.warming_social_proof   ?? DEFAULT_AGENT_CONFIG.warming_social_proof,
+        warming_session_preview:pack.warming_session_preview?? DEFAULT_AGENT_CONFIG.warming_session_preview,
 
         // Camada 3
         media_fallback:     pack.media_fallback     ?? DEFAULT_AGENT_CONFIG.media_fallback,
@@ -855,6 +1087,46 @@ export const api = {
         daily_limit:        pack.daily_limit         ?? DEFAULT_AGENT_CONFIG.daily_limit,
         interval_min:       pack.interval_min        ?? DEFAULT_AGENT_CONFIG.interval_min,
         interval_max:       pack.interval_max        ?? DEFAULT_AGENT_CONFIG.interval_max,
+
+        // Camada 2 — Qualificação avançada
+        qualification_score_threshold: pack.qualification_score_threshold ?? DEFAULT_AGENT_CONFIG.qualification_score_threshold,
+        nurture_vs_discard_rule:        pack.nurture_vs_discard_rule        ?? DEFAULT_AGENT_CONFIG.nurture_vs_discard_rule,
+        buying_signal_keywords:         pack.buying_signal_keywords         ?? DEFAULT_AGENT_CONFIG.buying_signal_keywords,
+        qualification_fields:           (profile as any)?.qualification_fields ?? DEFAULT_AGENT_CONFIG.qualification_fields,
+        qualification_required_fields:  (profile as any)?.qualification_required_fields ?? pack.qualification_required_fields ?? DEFAULT_AGENT_CONFIG.qualification_required_fields,
+
+        // Camada 3 — Follow-up avançado
+        followup_max_attempts:  pack.followup_max_attempts  ?? DEFAULT_AGENT_CONFIG.followup_max_attempts,
+        followup_first_offset:  pack.followup_first_offset  ?? DEFAULT_AGENT_CONFIG.followup_first_offset,
+        followup_cadence:       pack.followup_cadence       ?? DEFAULT_AGENT_CONFIG.followup_cadence,
+        followup_allowed_hours: pack.followup_allowed_hours ?? DEFAULT_AGENT_CONFIG.followup_allowed_hours,
+
+        // Apresentação e agendamento
+        // presentation_variant (backend) → appointment_mode (frontend): scheduler=exploratory, sales=commercial
+        appointment_mode:        (
+          (profile as any)?.presentation_variant === 'sales' ? 'commercial' :
+          (profile as any)?.presentation_variant === 'scheduler' ? 'exploratory' :
+          (profile as any)?.appointment_mode ?? pack.appointment_mode ?? DEFAULT_AGENT_CONFIG.appointment_mode
+        ) as 'commercial' | 'exploratory',
+        appointment_reminder_h1: pack.appointment_reminder_h1 ?? DEFAULT_AGENT_CONFIG.appointment_reminder_h1,
+        appointment_reminder_h2: pack.appointment_reminder_h2 ?? DEFAULT_AGENT_CONFIG.appointment_reminder_h2,
+        briefing_enabled:        pack.briefing_enabled        ?? DEFAULT_AGENT_CONFIG.briefing_enabled,
+        briefing_channel:        pack.briefing_channel        ?? DEFAULT_AGENT_CONFIG.briefing_channel,
+        briefing_lead_time:      pack.briefing_lead_time      ?? DEFAULT_AGENT_CONFIG.briefing_lead_time,
+        operator_whatsapp:       pack.operator_whatsapp       ?? DEFAULT_AGENT_CONFIG.operator_whatsapp,
+        calendar_integration:    pack.calendar_integration    ?? DEFAULT_AGENT_CONFIG.calendar_integration,
+
+        // Oferta e pagamento
+        offer_media_url:      pack.media_url      ?? DEFAULT_AGENT_CONFIG.offer_media_url,
+        offer_media_type:     pack.media_type     ?? DEFAULT_AGENT_CONFIG.offer_media_type,
+        offer_anchor_price:   pack.anchor_price   ?? DEFAULT_AGENT_CONFIG.offer_anchor_price,
+        offer_guarantee_text: pack.guarantee_text ?? DEFAULT_AGENT_CONFIG.offer_guarantee_text,
+        offer_upsell_message: pack.upsell_message ?? DEFAULT_AGENT_CONFIG.offer_upsell_message,
+        payment_gateway:      (profile as any)?.payment_gateway      ?? DEFAULT_AGENT_CONFIG.payment_gateway,
+        payment_webhook_url:  (profile as any)?.payment_webhook_url  ?? DEFAULT_AGENT_CONFIG.payment_webhook_url,
+        payment_webhook_secret:(profile as any)?.payment_webhook_secret ?? DEFAULT_AGENT_CONFIG.payment_webhook_secret,
+
+        custom_variables: (profile as any)?.custom_variables ?? DEFAULT_AGENT_CONFIG.custom_variables,
       };
     },
 
@@ -864,12 +1136,28 @@ export const api = {
      */
     saveConfig: async (config: import('../types/agente').AgentConfig): Promise<void> => {
       const offer_pack = {
+        // Camada 1 — Contexto de abertura
+        handoff_custom_text:     config.handoff_custom_text,
+        origin_inbound_opener:   config.origin_inbound_opener,
+        origin_outbound_opener:  config.origin_outbound_opener,
+        warming_social_proof:    config.warming_social_proof,
+        warming_session_preview: config.warming_session_preview,
+
+        // Camada 2
         ticket_range:        config.ticket_range,
         main_pain:           config.main_pain,
         main_objection:      config.main_objection,
         f1_questions:        config.f1_questions,
         f2_questions:        config.f2_questions,
         f3_questions:        config.f3_questions,
+
+        // Camada 2 — Qualificação avançada
+        qualification_score_threshold: config.qualification_score_threshold,
+        nurture_vs_discard_rule:        config.nurture_vs_discard_rule,
+        buying_signal_keywords:         config.buying_signal_keywords,
+        qualification_required_fields:  config.qualification_required_fields,
+
+        // Camada 3
         media_fallback:      config.media_fallback,
         media_fallback_msg:  config.media_fallback_msg,
         opt_out_keywords:    config.opt_out_keywords,
@@ -887,7 +1175,35 @@ export const api = {
         daily_limit:         config.daily_limit,
         interval_min:        config.interval_min,
         interval_max:        config.interval_max,
+
+        // Camada 3 — Follow-up avançado
+        followup_max_attempts:  config.followup_max_attempts,
+        followup_first_offset:  config.followup_first_offset,
+        followup_cadence:       config.followup_cadence,
+        followup_allowed_hours: config.followup_allowed_hours,
+
+        // Apresentação e agendamento
+        appointment_mode:        config.appointment_mode,
+        appointment_reminder_h1: config.appointment_reminder_h1,
+        appointment_reminder_h2: config.appointment_reminder_h2,
+        briefing_enabled:        config.briefing_enabled,
+        briefing_channel:        config.briefing_channel,
+        briefing_lead_time:      config.briefing_lead_time,
+        operator_whatsapp:       config.operator_whatsapp,
+        calendar_integration:    config.calendar_integration,
+
+        // Oferta e pagamento
+        media_url:      config.offer_media_url,
+        media_type:     config.offer_media_type,
+        anchor_price:   config.offer_anchor_price,
+        guarantee_text: config.offer_guarantee_text,
+        upsell_message: config.offer_upsell_message,
       };
+
+      // Derivar qualification_required_fields a partir de qualification_fields (Fase 3)
+      const derivedRequiredFields = config.qualification_fields.length > 0
+        ? config.qualification_fields.filter(f => f.mode === 'required').map(f => f.key)
+        : config.qualification_required_fields;
 
       await coreClient.put('/ai-profiles/me', {
         name:                config.name,
@@ -901,10 +1217,17 @@ export const api = {
         human_in_loop:       config.human_in_loop,
         timezone:            config.timezone,
         custom_instructions: config.custom_instructions,
+        response_style:      config.response_style,
+        // appointment_mode (frontend) → presentation_variant (backend): exploratory=scheduler, commercial=sales
+        presentation_variant: config.appointment_mode === 'commercial' ? 'sales' : 'scheduler',
         niche:               config.niche,
         target_audience:     config.target_audience,
         offer_description:   config.offer_description,
         goals:               config.goals,
+        payment_gateway:     config.payment_gateway,
+        qualification_fields: config.qualification_fields.length > 0 ? config.qualification_fields : undefined,
+        qualification_required_fields: derivedRequiredFields,
+        custom_variables: config.custom_variables,
         offer_pack,
       });
     },
@@ -914,6 +1237,45 @@ export const api = {
     getUnread: () => apiClient.get<AppNotification[]>("/notifications/unread"),
     markRead: (id: number) => apiClient.post(`/notifications/${id}/read`, {}),
     markAllRead: () => apiClient.post("/notifications/read-all", {}),
+  },
+
+  playground: {
+    chat: async (payload: {
+      ai_profile_id: number;
+      message: string;
+      lead_id?: number | null;
+      reset?: boolean;
+      scenario_type?: "inbound" | "outbound";
+      is_opener?: boolean;
+    }) =>
+      apiClient.post<PlaygroundChatResponse>("/playground/chat", payload),
+
+    feedbackAssist: async (payload: FeedbackAssistRequest) =>
+      apiClient.post<FeedbackAssistResponse>("/playground/feedback-assist", payload),
+
+    exportTraining: async (): Promise<{ items: import('../types/agente').TrainingItem[] }> =>
+      apiClient.get<{ items: import('../types/agente').TrainingItem[] }>("/playground/training/export"),
+
+    importTraining: async (
+      items: import('../types/agente').TrainingItem[]
+    ): Promise<{ imported: number; deleted: number }> =>
+      apiClient.post<{ imported: number; deleted: number }>(
+        "/playground/training/import",
+        { items }
+      ),
+
+    training: async (payload: {
+      ai_profile_id: number;
+      lead_id?: number | null;
+      agent_mode?: string | null;
+      phase?: string | null;
+      mother_route?: string | null;
+      lead_message?: string | null;
+      bot_message: string;
+      rating: "ruim" | "regular" | "boa" | "excelente";
+      comment?: string | null;
+    }) =>
+      apiClient.post<{ id: number }>("/playground/training", payload),
   },
 
   followUps: {
@@ -945,4 +1307,124 @@ export const api = {
       );
     },
   },
+
+  spyAgent: {
+    getSession: () => apiClient.get<SpyAgentSession>("/spy-agent/session"),
+    getConversationSample: () => apiClient.get<SpyAgentSample>("/spy-agent/conversation-sample"),
+    start: (payload: SpyAgentStartRequest) =>
+      apiClient.post<SpyAgentSession>("/spy-agent/start", payload),
+    apply: (payload: SpyAgentApplyRequest) =>
+      apiClient.post<SpyAgentApplyResponse>("/spy-agent/apply", payload),
+    getRuns: () => apiClient.get<SpyAgentRun[]>("/spy-agent/runs"),
+    getInstanceConfig: () =>
+      apiClient.get<SpyAgentInstanceConfig>("/spy-agent/instance-config"),
+    setInstanceConfig: (spy_instance_id: string) =>
+      apiClient.post<{ ok: boolean; spy_instance_id: string }>("/spy-agent/instance-config", {
+        spy_instance_id,
+      }),
+    removeInstanceConfig: () =>
+      apiClient.delete<{ ok: boolean }>("/spy-agent/instance-config"),
+    dismissSession: () =>
+      apiClient.delete<{ ok: boolean }>("/spy-agent/session"),
+    reconnect: () =>
+      apiClient.post<WhatsappConnectResponse>("/spy-agent/reconnect"),
+    reconnectStatus: () =>
+      apiClient.get<{ instance_id: string; status: string }>("/spy-agent/reconnect/status"),
+  },
+};
+
+// ── Spy Agent Types ──────────────────────────────────────────────────────────
+
+export type SpyAgentModule = "facts" | "identity" | "strategy" | "sales_pipeline";
+
+export type SpyAgentInstanceConfig = {
+  configured: boolean;
+  spy_instance_id: string | null;
+  phone_e164: string | null;
+  connection_status: string | null;
+  updated_at: string | null;
+};
+
+export type SpyAgentStartRequest = {
+  modules: SpyAgentModule[];
+  observation_days: number;
+  use_optimized_strategy: boolean;
+  spy_instance_id?: string;
+};
+
+export type SpyAgentSample = {
+  leads_count: number;
+  messages_count: number;
+  date_range: { from: string | null; to: string | null };
+  media_counts: { audio: number; image: number; video: number; text: number };
+  has_enough_data: boolean;
+};
+
+export type SpyAgentSuggestion = {
+  field: string;
+  current_value: unknown;
+  suggested_value: unknown;
+  rationale: string;
+};
+
+export type SpyAgentModuleResult = {
+  module: SpyAgentModule;
+  suggestions: SpyAgentSuggestion[];
+  confidence: number;
+  analysis: string;
+};
+
+export type CompatibilityFeature = {
+  feature: string;
+  mapped_field: string;
+  notes: string;
+};
+
+export type CompatibilityGap = {
+  feature: string;
+  reason: string;
+  workaround: string;
+};
+
+export type CompatibilityReport = {
+  pipeline_stages_detected: string[];
+  features_supported: CompatibilityFeature[];
+  features_unsupported: CompatibilityGap[];
+  recommended_agent_mode: string;
+};
+
+export type SpyAgentSession = {
+  run_id: number;
+  status: "observing" | "analyzing" | "completed" | "failed";
+  modules_requested: SpyAgentModule[];
+  use_optimized_strategy: boolean;
+  observation_start_at: string;
+  observation_end_at: string;
+  days_remaining: number;
+  days_elapsed: number;
+  days_total: number;
+  progress_pct: number;
+  leads_collected_so_far: number;
+  messages_collected_so_far: number;
+  module_results: SpyAgentModuleResult[] | null;
+  compatibility_report: CompatibilityReport | null;
+};
+
+export type SpyAgentRun = {
+  run_id: number;
+  status: SpyAgentSession["status"];
+  modules_requested: SpyAgentModule[];
+  observation_start_at: string;
+  observation_end_at: string;
+  completed_at: string | null;
+};
+
+export type SpyAgentApplyRequest = {
+  run_id: number;
+  accepted_suggestions: { module: SpyAgentModule; field: string; value: unknown }[];
+};
+
+export type SpyAgentApplyResponse = {
+  ok: boolean;
+  fields_updated: string[];
 };

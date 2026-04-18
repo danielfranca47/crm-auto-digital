@@ -1,1548 +1,691 @@
-import { useEffect, useMemo, useRef, useState } from "react";
-import {
-  Alert,
-  AlertDescription,
-  AlertTitle,
-} from "@/components/ui/alert";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-import {
-  Dialog,
-  DialogContent,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Textarea } from "@/components/ui/textarea";
-import { useApiErrorHandler } from "@/hooks/useApiErrorHandler";
-import { useToast } from "@/hooks/use-toast";
-import {
-  api,
-  AiProfilePayload,
-  AiTemplate,
-  KnowledgeItem,
-  WhatsappConnectResponse,
-  WhatsappQrPayload,
-  WhatsappStatusResponse,
-} from "@/services/api";
-import { useUsage } from "@/hooks/useUsage";
-import { AlertCircle, Brain, Clock, FileEdit, FilePlus, RefreshCw, Sparkles, Upload, Wand2 } from "lucide-react";
+import { useEffect, useState, useCallback } from 'react';
+import { Link } from 'react-router-dom';
+import { OrionShell } from '@/components/agente/OrionShell';
+import { CamadaIdentidade } from '@/components/agente/CamadaIdentidade';
+import { CamadaQualificacao } from '@/components/agente/CamadaQualificacao';
+import { CamadaPipeline } from '@/components/agente/CamadaPipeline';
+import { CamadaConhecimento } from '@/components/agente/CamadaConhecimento';
+import { CamadaApresentacao } from '@/components/agente/CamadaApresentacao';
+import { CamadaOferta } from '@/components/agente/CamadaOferta';
+import { ConexaoNumero } from '@/components/agente/ConexaoNumero';
+import { AgentExportImportPanel } from '@/components/agente/AgentExportImportPanel';
+import { TooltipProvider } from '@/components/ui/tooltip';
+import { api } from '@/services/api';
+import { DEFAULT_AGENT_CONFIG, KNOWLEDGE_CATEGORIES_BY_TEMPLATE } from '@/types/agente';
+import type { AgentConfig } from '@/types/agente';
+import { AGENT_MODE_LABELS, IDENTITY_MODE_LABELS, LGPD_LABELS, REATIVACAO_LABELS, MEDIA_FALLBACK_LABELS } from '@/types/agente';
 
-const fallbackTemplates: Record<
-  string,
-  { name: string; description: string; tone: string; goals: string[] }
-> = {
-  sdr_padrao: {
-    name: "SDR Padrão",
-    description: "Abordagem consultiva para prospecção e qualificação inicial.",
-    tone: "profissional e próximo",
-    goals: ["Gerar interesse", "Agendar reuniões", "Nutrir leads frios"],
-  },
-  consultor_especialista: {
-    name: "Consultor Especialista",
-    description: "Consultor para vendas high-ticket com foco em discovery profundo.",
-    tone: "consultivo e estratégico",
-    goals: ["Conduzir discovery", "Mapear dores", "Elevar autoridade"],
-  },
-  closer_agressivo: {
-    name: "Closer Agressivo",
-    description: "Closer para low-ticket com senso de urgência controlado.",
-    tone: "direto e objetivo",
-    goals: ["Gerar urgência", "Objeções rápidas", "Fechar no primeiro contato"],
-  },
-};
+interface KnowledgeSummary { criticalFilled: number; criticalTotal: number; }
 
-const initialProfileState: AiProfilePayload = {
-  template_key: "",
-  name: "",
-  brand_name: "",
-  tone_of_voice: "",
-  timezone: "UTC",
-  niche: "",
-  target_audience: "",
-  offer_description: "",
-  goals: "",
-  custom_instructions: "",
-  agent_mode: "agenda",
-  identity_mode: "human_agent",
-  handoff_policy: "keep_active_notify",
-  handoff_custom_text: "",
-  requires_handoff: false,
-  human_in_loop: false,
-};
+// ─── Tipos de painel ─────────────────────────────────────────
+type PanelId = 'overview' | 'c1' | 'c2' | 'c3' | 'c4' | 'c5' | 'c6' | 'conexao';
 
-const goalSuggestions = [
-  "Confirmar preço/local antes de sugerir horários",
-  "Perguntar 3 informações obrigatórias antes de avançar",
-  "Lidar com objeções comuns sem alongar conversa",
-  "Encerrar educadamente quando não houver intenção",
-  "Não agendar sem confirmação do lead",
-];
-
-const allowedExtensions = [".txt", ".csv", ".xlsx"];
-
-function summarizeProfile(profile: AiProfilePayload) {
-  const missing: string[] = [];
-  ("template_key name brand_name tone_of_voice niche target_audience offer_description goals".split(
-    " "
-  ) as (keyof AiProfilePayload)[]).forEach((field) => {
-    if (!profile[field]?.trim()) missing.push(field);
-  });
-  return { missing, complete: missing.length === 0 };
-}
-
-function toBulletList(goals: string[]) {
-  return goals.map((g) => `- ${g}`).join("\n");
-}
-
-function formatDate(value?: string | null) {
-  if (!value) return "";
-  try {
-    return new Date(value).toLocaleString("pt-BR");
-  } catch {
-    return value;
-  }
-}
-
-type AgentModelUi = "agendador_com_humano" | "direto_autonomo" | "hibrido_agendador";
-
-function profileToAgentModelUi(profile: Partial<AiProfilePayload>): AgentModelUi {
-  const template = String(profile.template_key || "").toLowerCase();
-  if (template === "hybrid_scheduler") return "hibrido_agendador";
-  if (template === "closer_agressivo") return "direto_autonomo";
-  if (template === "sdr_padrao" || template === "consultor_especialista") return "agendador_com_humano";
-
-  const mode = String(profile.agent_mode || "").toLowerCase();
-  const requires = Boolean(profile.requires_handoff);
-  const human = Boolean(profile.human_in_loop);
-
-  if (mode === "agendador_com_humano") return "agendador_com_humano";
-  if (mode === "direto_autonomo") return "direto_autonomo";
-  if (mode === "hibrido_agendador") return "hibrido_agendador";
-  if (mode === "consultivo") return "agendador_com_humano";
-  if (mode === "direto" || mode === "closer") return "direto_autonomo";
-  if (mode === "sdr_scheduler") return "agendador_com_humano";
-  if (mode === "agenda") return requires || human ? "agendador_com_humano" : "hibrido_agendador";
-  return "hibrido_agendador";
-}
-
-function applyAgentModelUi(profile: AiProfilePayload, model: AgentModelUi): AiProfilePayload {
-  if (model === "agendador_com_humano") {
-    return {
-      ...profile,
-      template_key: profile.template_key || "sdr_padrao",
-      agent_mode: "consultivo",
-      requires_handoff: true,
-      human_in_loop: true,
-    };
-  }
-  if (model === "direto_autonomo") {
-    return {
-      ...profile,
-      template_key: "closer_agressivo",
-      agent_mode: "direto",
-      requires_handoff: false,
-      human_in_loop: false,
-    };
-  }
-  return {
-    ...profile,
-    template_key: "hybrid_scheduler",
-    agent_mode: "agenda",
-    requires_handoff: false,
-    human_in_loop: false,
-  };
-}
-
-function KnowledgeLevel({ count }: { count: number }) {
-  const label = count === 0 ? "Vazio" : count <= 3 ? "Básico" : "Enriquecido";
-  const variant: "secondary" | "outline" | "default" =
-    count === 0 ? "secondary" : count <= 3 ? "outline" : "default";
-  return <Badge variant={variant}>{label}</Badge>;
-}
-
-export default function AiProfilePage() {
-  const { toast } = useToast();
-  const { handleError } = useApiErrorHandler();
-  const { data: usageData, loading: usageLoading } = useUsage();
-
-  const [templates, setTemplates] = useState<AiTemplate[]>([]);
-  const [loadingTemplates, setLoadingTemplates] = useState(false);
-  const [profile, setProfile] = useState<AiProfilePayload>(initialProfileState);
-  const [agentModelUi, setAgentModelUi] = useState<AgentModelUi>("hibrido_agendador");
-  const [profileExists, setProfileExists] = useState(false);
-  const [loadingProfile, setLoadingProfile] = useState(false);
-  const [saving, setSaving] = useState(false);
-
-  const [knowledgeItems, setKnowledgeItems] = useState<KnowledgeItem[]>([]);
-  const [loadingKnowledge, setLoadingKnowledge] = useState(false);
-  const [knowledgeModalOpen, setKnowledgeModalOpen] = useState(false);
-  const [knowledgeTab, setKnowledgeTab] = useState("manual");
-  const [manualTitle, setManualTitle] = useState("");
-  const [manualContent, setManualContent] = useState("");
-  const [selectedFile, setSelectedFile] = useState<File | null>(null);
-  const [uploading, setUploading] = useState(false);
-  const [editingItem, setEditingItem] = useState<KnowledgeItem | null>(null);
-  const [editTitle, setEditTitle] = useState("");
-  const [editContent, setEditContent] = useState("");
-  const [viewItem, setViewItem] = useState<KnowledgeItem | null>(null);
-
-  const [cadenceStr, setCadenceStr] = useState("");
-  const [cadenceError, setCadenceError] = useState<string | null>(null);
-
-  const [whatsappQr, setWhatsappQr] = useState<WhatsappQrPayload | null>(null);
-  const [whatsappStatus, setWhatsappStatus] = useState<WhatsappStatusResponse | null>(null);
-  const [whatsappPhase, setWhatsappPhase] = useState<"idle" | "connecting" | "connected" | "error">(
-    "idle"
+// ─── CTA Agente Espião ───────────────────────────────────────
+function SpyAgentCTA() {
+  return (
+    <div style={{
+      display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12,
+      padding: '12px 16px', marginBottom: 24, borderRadius: 8,
+      border: '1px solid var(--o-purple)', background: 'color-mix(in srgb, var(--o-purple) 8%, transparent)',
+    }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+        <span style={{ fontSize: 18 }}>✦</span>
+        <div>
+          <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--o-text)' }}>Agente Espião</div>
+          <div style={{ fontSize: 11, color: 'var(--o-sub)', marginTop: 1 }}>
+            Aprenda com suas conversas reais e configure o agente automaticamente.
+          </div>
+        </div>
+      </div>
+      <Link
+        to="/spy-agent"
+        style={{
+          fontSize: 11, fontWeight: 600, color: 'var(--o-purple)',
+          border: '1px solid var(--o-purple)', borderRadius: 4,
+          padding: '4px 12px', whiteSpace: 'nowrap', textDecoration: 'none',
+        }}
+      >
+        Ativar →
+      </Link>
+    </div>
   );
-  const [whatsappError, setWhatsappError] = useState<string | null>(null);
-  const [whatsappLoading, setWhatsappLoading] = useState(false);
-  const pollingRef = useRef<number | null>(null);
-  const refreshTimeoutRef = useRef<number | null>(null);
-  const refreshCountRef = useRef(0);
-  const connectDebounceRef = useRef(0);
-  const connectLockRef = useRef(false);
-  const pollAttemptRef = useRef(0);
-  const phaseRef = useRef(whatsappPhase);
+}
 
-  const entitlements = usageData?.entitlements;
-  const limits = entitlements?.limits ?? {};
-  const maxIa = limits?.max_ia_conversas_monthly;
-  const crmSub = entitlements?.products?.find(
-    (p) => p?.product_code === "crm" && (p.status ?? "") === "active"
+// ─── Painel: Resumo ──────────────────────────────────────────
+function PainelResumo({
+  config, onNavigate, onSave, onDiscard, saving, dirty, knowledgeSummary,
+}: {
+  config: AgentConfig;
+  onNavigate: (p: PanelId) => void; onUpdate: (partial: Partial<AgentConfig>) => void;
+  onSave: () => void; onDiscard: () => void; saving: boolean; dirty: boolean;
+  knowledgeSummary: KnowledgeSummary | null;
+}) {
+  const optoutOk = config.opt_out_keywords.length > 0;
+  const lgpdOk   = !!config.lgpd_mode;
+  const reatOk   = !!config.reactivation_mode;
+  const criticals = [!optoutOk, !lgpdOk, !reatOk].filter(Boolean).length;
+
+  const layer1Complete = !!(config.name && config.brand_name && config.agent_mode && config.identity_mode);
+  const isSdrMode = config.agent_mode === 'sdr_scheduler';
+  // Para SDR: conta via f1/f2/f3 (derivados de qualification_fields ao salvar)
+  // Para outros: conta qualification_fields diretamente (sem group)
+  const layer2Questions = isSdrMode
+    ? config.f1_questions.length + config.f2_questions.length + config.f3_questions.length
+    : config.qualification_fields.filter(f => f.mode !== 'off').length;
+  const layer2Progress  = Math.min(100, Math.round((layer2Questions / 8) * 100));
+  const layer3Items     = [optoutOk, lgpdOk, reatOk, config.media_fallback, config.followup_h1 > 0].filter(Boolean).length;
+
+  return (
+    <div className="o-panel o-fade-in">
+      {dirty && (
+        <div className="o-draft-banner">
+          <span>●</span>
+          <span><strong>Modo de edição.</strong> Alterações salvas como rascunho — aplicadas apenas em novas conversas.</span>
+          <button className="o-btn o-btn-primary" style={{ marginLeft: 'auto' }} onClick={onSave} disabled={saving}>
+            {saving ? 'Salvando…' : 'Publicar alterações'}
+          </button>
+          <button className="o-btn" onClick={onDiscard}>Descartar</button>
+        </div>
+      )}
+
+      {criticals > 0 && (
+        <div className="o-alert o-alert-danger" style={{ marginBottom: 20 }}>
+          <span style={{ flexShrink: 0 }}>⚠</span>
+          <span>
+            <strong>{criticals} itens críticos</strong> na Camada 3 sem configuração.
+            Opt-out não configurado — leads que pedem para parar continuam sendo contactados.
+          </span>
+        </div>
+      )}
+
+      <div className="font-mono-orion" style={{ fontSize: 9, letterSpacing: 3, textTransform: 'uppercase', marginBottom: 8, color: 'var(--o-purple)' }}>
+        Configuração · {config.name || '—'}
+      </div>
+      <div className="font-display" style={{ fontSize: 28, fontWeight: 400, marginBottom: 6, color: 'var(--o-text)' }}>Resumo do agente</div>
+      <div style={{ fontSize: 12.5, color: 'var(--o-sub)', fontWeight: 300, marginBottom: 24 }}>
+        Visão consolidada de todas as camadas. Clique em qualquer seção para editar.
+      </div>
+
+      {/* CTA Agente Espião */}
+      <SpyAgentCTA />
+
+      {/* Camada 1 */}
+      <div className="o-section-hdr">
+        <span className="font-mono-orion" style={{ fontSize: 9, letterSpacing: '2.5px', textTransform: 'uppercase', color: 'var(--o-sub)' }}>
+          Camada 1 — Identidade e estratégia
+        </span>
+        <span className="font-mono-orion" style={{ fontSize: 8, color: 'var(--o-dim)', border: '1px solid var(--o-b1)', padding: '1px 6px', borderRadius: 2 }}>
+          {layer1Complete ? 'Completa' : 'Incompleta'}
+        </span>
+      </div>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 14, marginBottom: 24 }}>
+        <SummaryCard label="Nome do agente"  value={config.name || '—'}                               onClick={() => onNavigate('c1')} />
+        <SummaryCard label="Empresa"         value={config.brand_name || '—'}                         onClick={() => onNavigate('c1')} />
+        <SummaryCard label="Tipo de agente"  value={config.template_key || '—'}                       onClick={() => onNavigate('c1')} />
+        <SummaryCard label="Modo de identidade" value={IDENTITY_MODE_LABELS[config.identity_mode] || '—'} onClick={() => onNavigate('c1')} />
+        <SummaryCard label="Forma de vender" value={AGENT_MODE_LABELS[config.agent_mode] || '—'}     onClick={() => onNavigate('c1')} />
+        <SummaryCard label="Perfil gerado"   value={config.custom_instructions ? config.custom_instructions.slice(0, 50) + '…' : 'Não configurado'}
+          onClick={() => onNavigate('c1')} italic />
+      </div>
+
+      {/* Camada 2 */}
+      <div className="o-section-hdr">
+        <span className="font-mono-orion" style={{ fontSize: 9, letterSpacing: '2.5px', textTransform: 'uppercase', color: 'var(--o-sub)' }}>
+          Camada 2 — Qualificação
+        </span>
+        <span className="font-mono-orion" style={{ fontSize: 8, color: 'var(--o-dim)', border: '1px solid var(--o-b1)', padding: '1px 6px', borderRadius: 2 }}>
+          {layer2Progress}%
+        </span>
+      </div>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 14, marginBottom: 24 }}>
+        <SummaryCard label="Produto / Serviço"  value={config.offer_description || '—'} onClick={() => onNavigate('c2')} />
+        <SummaryCard label="Principal dor"       value={config.main_pain || '—'}          onClick={() => onNavigate('c2')} />
+        {isSdrMode ? (
+          <>
+            <SummaryCard label="Filtro 1 · F1" value={`${config.f1_questions.length} pergunta(s)`} onClick={() => onNavigate('c2')} />
+            <SummaryCard label="Filtro 2 · F2" value={`${config.f2_questions.length} pergunta(s)`} onClick={() => onNavigate('c2')} />
+            <SummaryCard label="Filtro 3 · F3" value={`${config.f3_questions.length} pergunta(s)`} onClick={() => onNavigate('c2')} />
+          </>
+        ) : (
+          <>
+            <SummaryCard
+              label="Campos de qualificação"
+              value={config.qualification_fields.length === 0
+                ? 'Não configurado'
+                : `${config.qualification_fields.filter(f => f.mode === 'required').length} obrig. · ${config.qualification_fields.filter(f => f.mode === 'optional').length} opcionais`}
+              onClick={() => onNavigate('c2')}
+            />
+            <SummaryCard
+              label="Modo de coleta"
+              value={config.response_style === 'passive' ? 'Passivo (persuasão)' : 'Ativo (pergunta)'}
+              onClick={() => onNavigate('c2')}
+            />
+          </>
+        )}
+      </div>
+
+      {/* Camada 3 */}
+      <div className="o-section-hdr">
+        <span className="font-mono-orion" style={{ fontSize: 9, letterSpacing: '2.5px', textTransform: 'uppercase', color: 'var(--o-sub)' }}>
+          Camada 3 — Pipeline e comportamento
+        </span>
+        <span className="font-mono-orion" style={{ fontSize: 8, color: criticals > 0 ? 'var(--o-hot)' : 'var(--o-dim)', border: `1px solid ${criticals > 0 ? 'var(--o-hot-b)' : 'var(--o-b1)'}`, padding: '1px 6px', borderRadius: 2 }}>
+          {layer3Items} / 5 · {criticals > 0 ? `${criticals} críticos` : 'OK'}
+        </span>
+      </div>
+      {criticals > 0 && (
+        <div className="o-alert o-alert-danger" style={{ marginBottom: 8 }}>
+          <span style={{ flexShrink: 0 }}>⚠</span>
+          <span>Opt-out não configurado — risco de ban do número. LGPD é lei brasileira, obrigatório.</span>
+        </div>
+      )}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 14 }}>
+        <SummaryCard label="Opt-out"         value={optoutOk ? `${config.opt_out_keywords.length} palavras` : 'Não configurado'} status={optoutOk ? 'ok' : 'miss'} onClick={() => onNavigate('c3')} />
+        <SummaryCard label="LGPD"            value={LGPD_LABELS[config.lgpd_mode] || 'Não configurado'}                         status={lgpdOk ? 'ok' : 'miss'}   onClick={() => onNavigate('c3')} />
+        <SummaryCard label="Reativação"      value={REATIVACAO_LABELS[config.reactivation_mode] || 'Não configurado'}           status={reatOk ? 'ok' : 'miss'}   onClick={() => onNavigate('c3')} />
+        <SummaryCard label="Cadência follow-up" value={`${config.followup_h1}h · ${Math.round(config.followup_h2/24)}d · ${Math.round(config.followup_h3/24)}d`} status="ok" onClick={() => onNavigate('c3')} />
+        <SummaryCard label="Mídia inválida"  value={MEDIA_FALLBACK_LABELS[config.media_fallback] || '—'}                         status="ok"                       onClick={() => onNavigate('c3')} />
+      </div>
+
+      {/* Camada 4 */}
+      {knowledgeSummary !== null && (
+        <>
+          <div className="o-section-hdr" style={{ marginTop: 24 }}>
+            <span className="font-mono-orion" style={{ fontSize: 9, letterSpacing: '2.5px', textTransform: 'uppercase', color: 'var(--o-sub)' }}>
+              Camada 4 — Base de conhecimento
+            </span>
+            <span className="font-mono-orion" style={{
+              fontSize: 8, padding: '1px 6px', borderRadius: 2,
+              border: `1px solid ${knowledgeSummary.criticalFilled < knowledgeSummary.criticalTotal ? 'var(--o-hot-b)' : 'var(--o-b1)'}`,
+              color: knowledgeSummary.criticalFilled < knowledgeSummary.criticalTotal ? 'var(--o-hot)' : 'var(--o-dim)',
+            }}>
+              {knowledgeSummary.criticalFilled} / {knowledgeSummary.criticalTotal} críticas preenchidas
+            </span>
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 14, marginTop: 8 }}>
+            <SummaryCard
+              label="Conhecimento crítico"
+              value={knowledgeSummary.criticalFilled === knowledgeSummary.criticalTotal
+                ? 'Completo'
+                : `${knowledgeSummary.criticalTotal - knowledgeSummary.criticalFilled} seção(ões) pendente(s)`}
+              status={knowledgeSummary.criticalFilled === knowledgeSummary.criticalTotal ? 'ok' : 'miss'}
+              onClick={() => onNavigate('c4')}
+            />
+          </div>
+        </>
+      )}
+
+      <div style={{ marginTop: 24, display: 'flex', gap: 10 }}>
+        {dirty && (
+          <>
+            <button className="o-btn o-btn-primary" onClick={onSave} disabled={saving}>
+              {saving ? 'Salvando…' : 'Publicar alterações'}
+            </button>
+            <button className="o-btn" onClick={onDiscard}>Descartar rascunho</button>
+          </>
+        )}
+      </div>
+    </div>
   );
-  const isCrmFree = crmSub?.plan_code === "crm_free";
-  const isUnlimited = maxIa === null;
-  const isUnknown = maxIa === undefined;
-  const iaAvailable = isUnlimited || (typeof maxIa === "number" && maxIa > 0);
-  const showIaUnavailableBanner = !usageLoading && !!usageData && !isUnknown && !iaAvailable;
+}
 
-  const status = useMemo(() => summarizeProfile(profile), [profile]);
-  const previewText = useMemo(() => {
-    if (!profile.name && !profile.brand_name) return "Preencha os campos para ver o preview.";
-    const intro = `Olá! Eu sou ${profile.name || "seu agente"} da ${profile.brand_name || "sua marca"}.`;
-    const tone = profile.tone_of_voice ? `Vou manter um tom ${profile.tone_of_voice}.` : "";
-    const offer = profile.offer_description
-      ? `Posso te ajudar com ${profile.offer_description.toLowerCase()}.`
-      : "";
-    const target = profile.target_audience ? `Atendo principalmente ${profile.target_audience}.` : "";
-    return `${intro} ${tone} ${offer} ${target}`.trim();
-  }, [profile]);
+// ─── Painel: Camada 1 ─────────────────────────────────────────
+function PainelCamada1({ config, onUpdate, onBack, onSave, saving, dirty }: {
+  config: AgentConfig; onUpdate: (p: Partial<AgentConfig>) => void;
+  onBack: () => void; onSave: () => void; saving: boolean; dirty: boolean;
+}) {
+  return (
+    <div className="o-panel o-fade-in">
+      {dirty && (
+        <div className="o-draft-banner">
+          <span>●</span>
+          <span><strong>Editando Camada 1.</strong> Alterações aplicadas apenas em novas conversas.</span>
+          <button className="o-btn o-btn-primary" style={{ marginLeft: 'auto' }} onClick={onSave} disabled={saving}>
+            {saving ? 'Salvando…' : 'Salvar camada'}
+          </button>
+          <button className="o-btn" onClick={onBack}>Cancelar</button>
+        </div>
+      )}
+      <div className="font-mono-orion" style={{ fontSize: 9, letterSpacing: 3, textTransform: 'uppercase', marginBottom: 8, color: 'var(--o-active)' }}>
+        Camada 1 · Identidade e estratégia
+      </div>
+      <div className="font-display" style={{ fontSize: 28, fontWeight: 400, marginBottom: 6, color: 'var(--o-text)' }}>Identidade e estratégia</div>
+      <div style={{ fontSize: 12.5, color: 'var(--o-sub)', fontWeight: 300, marginBottom: 24 }}>
+        Define quem é o agente, como ele se apresenta, com qual tom fala e como aborda vendas.
+      </div>
 
-  const exampleReply = useMemo(() => {
-    if (!profile.tone_of_voice) return "Defina o tom de voz para gerar uma resposta exemplo.";
-    return `Exemplo (${profile.tone_of_voice}): Obrigado pelo interesse! ${
-      profile.offer_description
-        ? `Temos uma oferta focada em ${profile.offer_description.toLowerCase()}.`
-        : "Posso explicar melhor nossa solução."
-    }`;
-  }, [profile]);
+      <div className="o-section-hdr">
+        <span className="font-mono-orion" style={{ fontSize: 9, letterSpacing: '2.5px', textTransform: 'uppercase', color: 'var(--o-sub)' }}>
+          Dados básicos e identidade
+        </span>
+      </div>
+      <CamadaIdentidade config={config} onUpdate={onUpdate} />
 
-  const mappedTemplates = useMemo(() => {
-    if (!templates.length) return Object.entries(fallbackTemplates).map(([key, meta]) => ({
-      key,
-      name: meta.name,
-      description: meta.description,
-    }));
-    return templates.map((tpl) => ({
-      ...tpl,
-      name: tpl.name || fallbackTemplates[tpl.key]?.name || tpl.key,
-      description: tpl.description ?? fallbackTemplates[tpl.key]?.description,
-    }));
-  }, [templates]);
+      <div style={{ display: 'flex', gap: 10, marginTop: 24 }}>
+        {dirty && (
+          <button className="o-btn o-btn-primary" onClick={onSave} disabled={saving}>
+            {saving ? 'Salvando…' : 'Salvar Camada 1'}
+          </button>
+        )}
+        <button className="o-btn" onClick={onBack}>← Voltar</button>
+      </div>
+    </div>
+  );
+}
 
-  const normalizedWhatsStatus = (whatsappStatus?.status || "").toLowerCase();
-  const isWhatsappConnected = normalizedWhatsStatus === "connected";
-  const showAdvancedTechnical = import.meta.env.DEV;
+// ─── Painel: Camada 2 ─────────────────────────────────────────
+function PainelCamada2({ config, onUpdate, onBack, onSave, saving, dirty }: {
+  config: AgentConfig; onUpdate: (p: Partial<AgentConfig>) => void;
+  onBack: () => void; onSave: () => void; saving: boolean; dirty: boolean;
+}) {
+  return (
+    <div className="o-panel o-fade-in">
+      {dirty && (
+        <div className="o-draft-banner">
+          <span>●</span>
+          <span><strong>Editando Camada 2.</strong> Alterações aplicadas apenas em novas conversas.</span>
+          <button className="o-btn o-btn-primary" style={{ marginLeft: 'auto' }} onClick={onSave} disabled={saving}>
+            {saving ? 'Salvando…' : 'Salvar camada'}
+          </button>
+          <button className="o-btn" onClick={onBack}>Cancelar</button>
+        </div>
+      )}
+      <div className="font-mono-orion" style={{ fontSize: 9, letterSpacing: 3, textTransform: 'uppercase', marginBottom: 8, color: 'var(--o-warn)' }}>
+        Camada 2 · Qualificação
+      </div>
+      <div className="font-display" style={{ fontSize: 28, fontWeight: 400, marginBottom: 6, color: 'var(--o-text)' }}>Qualificação</div>
+      <div style={{ fontSize: 12.5, color: 'var(--o-sub)', fontWeight: 300, marginBottom: 24 }}>
+        Define o contexto do negócio e as perguntas dos três filtros de qualificação.
+      </div>
+      <CamadaQualificacao config={config} onUpdate={onUpdate} />
+      <div style={{ display: 'flex', gap: 10, marginTop: 24 }}>
+        {dirty && (
+          <button className="o-btn o-btn-primary" onClick={onSave} disabled={saving}>
+            {saving ? 'Salvando…' : 'Salvar Camada 2'}
+          </button>
+        )}
+        <button className="o-btn" onClick={onBack}>← Voltar</button>
+      </div>
+    </div>
+  );
+}
 
-  const whatsappStatusLabel = (() => {
-    if (whatsappPhase === "error") return "Erro";
-    if (isWhatsappConnected) return "Conectado";
-    if (whatsappPhase === "connecting") return "Conectando";
-    if (whatsappStatus?.status) return whatsappStatus.status;
-    return "Não conectado";
-  })();
+// ─── Painel: Camada 3 ─────────────────────────────────────────
+function PainelCamada3({ config, onUpdate, onBack, onSave, saving, dirty, phoneNumber }: {
+  config: AgentConfig; onUpdate: (p: Partial<AgentConfig>) => void;
+  onBack: () => void; onSave: () => void; saving: boolean; dirty: boolean;
+  phoneNumber?: string | null;
+}) {
+  const criticals = [!config.opt_out_keywords.length, !config.lgpd_mode, !config.reactivation_mode].filter(Boolean).length;
 
-  const whatsappBadgeVariant = isWhatsappConnected
-    ? "default"
-    : whatsappPhase === "error"
-    ? "destructive"
-    : "secondary";
+  return (
+    <div className="o-panel o-fade-in">
+      {criticals > 0 && (
+        <div className="o-alert o-alert-danger" style={{ marginBottom: 12 }}>
+          <span style={{ flexShrink: 0 }}>⚠</span>
+          <span>{criticals} configurações críticas ausentes. Opt-out: risco de ban do número. LGPD: exigência legal.</span>
+        </div>
+      )}
+      {dirty && (
+        <div className="o-draft-banner">
+          <span>●</span>
+          <span><strong>Editando Camada 3.</strong> Alterações aplicadas apenas em novas conversas.</span>
+          <button className="o-btn o-btn-primary" style={{ marginLeft: 'auto' }} onClick={onSave} disabled={saving}>
+            {saving ? 'Salvando…' : 'Salvar camada'}
+          </button>
+          <button className="o-btn" onClick={onBack}>Cancelar</button>
+        </div>
+      )}
+      <div className="font-mono-orion" style={{ fontSize: 9, letterSpacing: 3, textTransform: 'uppercase', marginBottom: 8, color: 'var(--o-purple)' }}>
+        Camada 3 · Pipeline e comportamento
+      </div>
+      <div className="font-display" style={{ fontSize: 28, fontWeight: 400, marginBottom: 6, color: 'var(--o-text)' }}>Pipeline e comportamento</div>
+      <div style={{ fontSize: 12.5, color: 'var(--o-sub)', fontWeight: 300, marginBottom: 24 }}>
+        Configura como o agente reage a eventos, gerencia a cadência e protege o número.
+      </div>
+      <CamadaPipeline config={config} onUpdate={onUpdate} phoneNumber={phoneNumber} />
+      <div style={{ display: 'flex', gap: 10, marginTop: 24 }}>
+        {dirty && (
+          <button className="o-btn o-btn-primary" onClick={onSave} disabled={saving}>
+            {saving ? 'Salvando…' : 'Salvar Camada 3'}
+          </button>
+        )}
+        <button className="o-btn" onClick={onBack}>← Voltar</button>
+      </div>
+    </div>
+  );
+}
 
-  const clearPolling = () => {
-    if (pollingRef.current) {
-      window.clearTimeout(pollingRef.current);
-      pollingRef.current = null;
-    }
-  };
+// ─────────────────────────────────────────────────────────────
+// Página principal
+// ─────────────────────────────────────────────────────────────
 
-  const clearRefreshTimeout = () => {
-    if (refreshTimeoutRef.current) {
-      window.clearTimeout(refreshTimeoutRef.current);
-      refreshTimeoutRef.current = null;
-    }
-  };
+export default function AiProfile() {
+  const [activePanel, setActivePanel]     = useState<PanelId>('overview');
+  const [config, setConfig]               = useState<AgentConfig>(DEFAULT_AGENT_CONFIG);
+  const [savedConfig, setSavedConfig]     = useState<AgentConfig>(DEFAULT_AGENT_CONFIG);
+  const [loading, setLoading]             = useState(true);
+  const [saving, setSaving]               = useState(false);
+  const [error, setError]                 = useState<string | null>(null);
+  const [knowledgeSummary, setKnowledgeSummary] = useState<KnowledgeSummary | null>(null);
+  const [showExportImport, setShowExportImport] = useState(false);
 
-  const POLL_BACKOFF_MS = [2000, 4000, 8000, 15000];
-
-  const scheduleStatusPoll = () => {
-    clearPolling();
-    const attempt = Math.min(pollAttemptRef.current, POLL_BACKOFF_MS.length - 1);
-    const waitMs = POLL_BACKOFF_MS[attempt];
-    pollingRef.current = window.setTimeout(async () => {
-      if (phaseRef.current !== "connecting") return;
-      await handleWhatsappStatus(true);
-      if (phaseRef.current === "connecting") {
-        pollAttemptRef.current += 1;
-        scheduleStatusPoll();
-      }
-    }, waitMs);
-  };
-
-  const startPolling = () => {
-    pollAttemptRef.current = 0;
-    scheduleStatusPoll();
-  };
-
-  const scheduleAutoRefresh = () => {
-    clearRefreshTimeout();
-    refreshTimeoutRef.current = window.setTimeout(async () => {
-      if (phaseRef.current !== "connecting") return;
-      if (refreshCountRef.current >= 3) return;
-      refreshCountRef.current += 1;
-      if (import.meta.env.DEV) {
-        console.log("WhatsApp auto-refresh QR", { attempt: refreshCountRef.current });
-      }
-      await handleWhatsappRefreshQr({ auto: true });
-    }, 20000);
-  };
-
-  const startConnectingFlow = () => {
-    setWhatsappPhase("connecting");
-    startPolling();
-    scheduleAutoRefresh();
-  };
-
-  const stopConnectingFlow = () => {
-    clearPolling();
-    clearRefreshTimeout();
-    pollAttemptRef.current = 0;
-  };
-
-  async function loadTemplates() {
-    setLoadingTemplates(true);
-    try {
-      const data = await api.core.getAiTemplates();
-      setTemplates(data);
-    } catch (err) {
-      handleError(err, { fallbackMessage: "Falha ao carregar templates." });
-    } finally {
-      setLoadingTemplates(false);
-    }
-  }
-
-  async function loadProfile() {
-    setLoadingProfile(true);
-    try {
-      const data = await api.core.getAiProfileMe();
-      const loadedProfile = {
-        ...initialProfileState,
-        ...data,
-      };
-      const inferredModel = profileToAgentModelUi(loadedProfile);
-      const normalizedLoadedProfile = applyAgentModelUi(loadedProfile, inferredModel);
-      setProfile(normalizedLoadedProfile);
-      setCadenceStr(Array.isArray(data.followup_cadence) ? data.followup_cadence.join(", ") : "");
-      setAgentModelUi(inferredModel);
-      setProfileExists(true);
-    } catch (err: any) {
-      handleError(err, {
-        fallbackMessage: "Falha ao carregar perfil de IA.",
-        silent: err?.status === 404,
-      });
-      if ((err as any)?.status === 404) {
-        setProfile(initialProfileState);
-        setAgentModelUi(profileToAgentModelUi(initialProfileState));
-        setProfileExists(false);
-      }
-    } finally {
-      setLoadingProfile(false);
-    }
-  }
-
-  async function loadKnowledge() {
-    setLoadingKnowledge(true);
-    try {
-      const data = await api.crm.getKnowledgeList();
-      setKnowledgeItems(data);
-    } catch (err) {
-      handleError(err, { fallbackMessage: "Falha ao carregar conhecimento." });
-    } finally {
-      setLoadingKnowledge(false);
-    }
-  }
-
-  useEffect(() => {
-    loadTemplates();
-    loadProfile();
-    loadKnowledge();
-    handleWhatsappStatus(true);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  useEffect(() => {
-    return () => {
-      clearPolling();
-      clearRefreshTimeout();
-    };
-  }, []);
-
-  useEffect(() => {
-    phaseRef.current = whatsappPhase;
-    if (isWhatsappConnected) {
-      setWhatsappPhase("connected");
-      stopConnectingFlow();
-    }
-  }, [isWhatsappConnected]);
-
-  useEffect(() => {
-    setProfile((prev) => {
-      if (prev.agent_mode) return prev;
-      const inferred =
-        prev.template_key && prev.template_key.startsWith("closer") ? "direto" : "agenda";
-      return { ...prev, agent_mode: inferred };
+  function handleImportSuccess() {
+    api.agente.getConfig().then(reloaded => {
+      setConfig(reloaded);
+      setSavedConfig(reloaded);
+    }).catch(() => {
+      setError('Configuração importada, mas houve erro ao recarregar. Atualize a página.');
     });
-  }, [profile.template_key]);
+  }
+
+  // Computed flags
+  const isDirectMode   = config.agent_mode === 'direto' || config.agent_mode === 'closer';
+  const isScheduleMode = !isDirectMode;
+
+  // Subnav config
+  const navItems: { id: PanelId; label: string; badge?: number }[] = [
+    { id: 'overview', label: 'Resumo' },
+    { id: 'c1',       label: '① Identidade' },
+    { id: 'c2',       label: '② Qualificação' },
+    {
+      id: 'c3', label: '③ Pipeline',
+      badge: [!config.opt_out_keywords.length, !config.lgpd_mode, !config.reactivation_mode].filter(Boolean).length || undefined,
+    },
+    {
+      id: 'c4', label: '④ Conhecimento',
+      badge: knowledgeSummary && knowledgeSummary.criticalFilled < knowledgeSummary.criticalTotal
+        ? knowledgeSummary.criticalTotal - knowledgeSummary.criticalFilled
+        : undefined,
+    },
+    ...(isScheduleMode ? [{ id: 'c5' as PanelId, label: '⑤ Apresentação' }] : []),
+    ...(isDirectMode   ? [{ id: 'c6' as PanelId, label: '⑥ Oferta' }]      : []),
+    { id: 'conexao',  label: 'Conexão' },
+  ];
 
   useEffect(() => {
-    setAgentModelUi(profileToAgentModelUi(profile));
-  }, [profile.agent_mode, profile.requires_handoff, profile.human_in_loop]);
+    let alive = true;
+    (async () => {
+      try {
+        const [loaded, knowledgeItems] = await Promise.all([
+          api.agente.getConfig(),
+          api.crm.getKnowledgeList().catch(() => [] as Awaited<ReturnType<typeof api.crm.getKnowledgeList>>),
+        ]);
+        if (alive) {
+          setConfig(loaded);
+          setSavedConfig(loaded);
+          const categories = KNOWLEDGE_CATEGORIES_BY_TEMPLATE[loaded.template_key] ?? [];
+          const criticalCats = categories.filter(c => c.importance === 'critical');
+          const filledKeys = new Set(knowledgeItems.map(i => i.category).filter(Boolean));
+          setKnowledgeSummary({
+            criticalTotal: criticalCats.length,
+            criticalFilled: criticalCats.filter(c => filledKeys.has(c.key)).length,
+          });
+        }
+      } catch {
+        if (alive) setError('Não foi possível carregar a configuração do agente.');
+      } finally {
+        if (alive) setLoading(false);
+      }
+    })();
+    return () => { alive = false; };
+  }, []);
 
-  const handleTemplateSelect = (tpl: AiTemplate) => {
-    const preset = fallbackTemplates[tpl.key] || fallbackTemplates.sdr_padrao;
-    setProfile((prev) => ({
-      ...prev,
-      template_key: tpl.key,
-      tone_of_voice: prev.tone_of_voice || preset.tone,
-      goals: prev.goals || toBulletList(preset.goals),
-    }));
-  };
+  const updateConfig = useCallback((partial: Partial<AgentConfig>) => {
+    setConfig(prev => ({ ...prev, ...partial }));
+  }, []);
+
+  const isDirty = JSON.stringify(config) !== JSON.stringify(savedConfig);
 
   async function handleSave() {
-    if (saving) return;
-    if (!profileExists) {
-      const essentials = summarizeProfile(profile);
-      if (!essentials.complete) {
-        toast({
-          title: "Campos obrigatórios",
-          description: "Preencha os campos essenciais para criar o perfil.",
-          variant: "destructive",
-        });
-        return;
-      }
-    }
-    // Validar e parsear cadência
-    let parsedCadence: number[] | null = null;
-    if (cadenceStr.trim()) {
-      const parts = cadenceStr.split(",").map((s) => s.trim()).filter(Boolean);
-      const nums = parts.map(Number);
-      if (nums.some(isNaN) || nums.some((n) => n <= 0)) {
-        setCadenceError("Cadência inválida: use números positivos separados por vírgula (ex: 30, 1440, 4320).");
-        return;
-      }
-      const maxAttempts = profile.followup_max_attempts ?? 0;
-      if (maxAttempts > 0 && nums.length !== maxAttempts - 1) {
-        setCadenceError(`A cadência deve ter exatamente ${maxAttempts - 1} elemento(s) para ${maxAttempts} tentativas.`);
-        return;
-      }
-      parsedCadence = nums;
-    }
-    setCadenceError(null);
-
     setSaving(true);
     try {
-      const inferredModel = profileToAgentModelUi(profile);
-      const normalizedProfile = applyAgentModelUi(profile, inferredModel);
-      const payload: AiProfilePayload = {
-        ...normalizedProfile,
-        timezone: normalizedProfile.timezone?.trim() ? normalizedProfile.timezone : "UTC",
-        custom_instructions: normalizedProfile.custom_instructions?.trim() || null,
-        handoff_custom_text: normalizedProfile.handoff_custom_text?.trim() || null,
-        followup_cadence: parsedCadence,
-        followup_allowed_hours: normalizedProfile.followup_allowed_hours?.trim() || null,
-      };
-      const fn = profileExists ? api.core.updateAiProfileMe : api.core.createAiProfile;
-      const saved = await fn(payload);
-      const savedProfile = { ...initialProfileState, ...saved };
-      const savedModel = profileToAgentModelUi(savedProfile);
-      setProfile(applyAgentModelUi(savedProfile, savedModel));
-      setAgentModelUi(savedModel);
-      setProfileExists(true);
-      toast({ title: "Perfil salvo", description: "Identidade do agente atualizada." });
-    } catch (err) {
-      handleError(err, { fallbackMessage: "Falha ao salvar perfil." });
+      await api.agente.saveConfig(config);
+      setSavedConfig(config);
+    } catch {
+      setError('Erro ao salvar. Tente novamente.');
     } finally {
       setSaving(false);
     }
   }
 
-  const normalizeConnectResponse = (data: WhatsappConnectResponse) => {
-    setWhatsappStatus((prev) => ({
-      ...prev,
-      instance_id: data.instance_id,
-      status: data.status ?? prev?.status,
-    }));
-    if (data.qr) {
-      setWhatsappQr(data.qr);
-    }
-    if (import.meta.env.DEV) {
-      console.log("WhatsApp connect response", { status: data.status, qrKind: data.qr?.kind });
-    }
-    if (data.status && data.status.toLowerCase() === "connected") {
-      setWhatsappPhase("connected");
-      stopConnectingFlow();
-    } else {
-      startConnectingFlow();
-    }
-  };
-
-  async function handleWhatsappConnect() {
-    const now = Date.now();
-    if (whatsappLoading || connectLockRef.current) return;
-    if (now - connectDebounceRef.current < 1200) return;
-    connectDebounceRef.current = now;
-    connectLockRef.current = true;
-    setWhatsappLoading(true);
-    setWhatsappError(null);
-    try {
-      refreshCountRef.current = 0;
-      pollAttemptRef.current = 0;
-      const data = await api.crm.whatsappConnect();
-      normalizeConnectResponse(data);
-    } catch (err: any) {
-      setWhatsappPhase("error");
-      setWhatsappError(err?.message || "Falha ao conectar WhatsApp.");
-      handleError(err, { fallbackMessage: "Falha ao conectar WhatsApp." });
-    } finally {
-      setWhatsappLoading(false);
-      window.setTimeout(() => {
-        connectLockRef.current = false;
-      }, 1200);
-    }
+  function handleDiscard() {
+    setConfig(savedConfig);
   }
 
-  async function handleWhatsappStatus(silent = false) {
-    try {
-      const data = await api.crm.whatsappStatus();
-      if (import.meta.env.DEV) {
-        console.log("WhatsApp status poll", { status: data.status });
-      }
-      setWhatsappStatus(data);
-      if (data.status && data.status.toLowerCase() === "connected") {
-        setWhatsappPhase("connected");
-        stopConnectingFlow();
-      } else if (phaseRef.current !== "connecting") {
-        setWhatsappPhase("idle");
-      }
-    } catch (err: any) {
-      if (err?.status === 404) {
-        setWhatsappStatus(null);
-        setWhatsappPhase("idle");
-        setWhatsappQr(null);
-        return;
-      }
-      if (!silent) {
-        setWhatsappPhase("error");
-        setWhatsappError(err?.message || "Falha ao consultar status.");
-        handleError(err, { fallbackMessage: "Falha ao consultar status." });
-      }
-    }
+  function navigate(panel: PanelId) {
+    setActivePanel(panel);
+    window.scrollTo(0, 0);
   }
 
-  async function handleWhatsappRefreshQr(opts?: { auto?: boolean }) {
-    if (whatsappLoading) return;
-    setWhatsappLoading(true);
-    setWhatsappError(null);
-    try {
-      const data = await api.crm.whatsappRefreshQr();
-      if (import.meta.env.DEV) {
-        console.log("WhatsApp QR refresh", { status: data.status, qrKind: data.qr?.kind });
-      }
-      if (!opts?.auto) {
-        refreshCountRef.current = 0;
-      }
-      normalizeConnectResponse(data);
-    } catch (err: any) {
-      setWhatsappPhase("error");
-      setWhatsappError(err?.message || "Falha ao gerar novo QR.");
-      handleError(err, { fallbackMessage: "Falha ao gerar novo QR." });
-    } finally {
-      setWhatsappLoading(false);
-    }
+  const phoneNumber = null;
+
+  if (loading) {
+    return (
+      <OrionShell>
+        <div style={{ padding: 48, textAlign: 'center' }}>
+          <span className="font-mono-orion" style={{ fontSize: 10, color: 'var(--o-dim)' }}>Carregando configuração…</span>
+        </div>
+      </OrionShell>
+    );
   }
 
-  async function handleCreateManual() {
-    if (!manualTitle.trim() || manualContent.trim().length < 20) {
-      toast({
-        title: "Conteúdo insuficiente",
-        description: "Informe um título e pelo menos 20 caracteres de conteúdo.",
-        variant: "destructive",
-      });
-      return;
-    }
-    setUploading(true);
-    try {
-      const created = await api.crm.createKnowledgeManual({
-        title: manualTitle.trim(),
-        content_text: manualContent.trim(),
-      });
-      setKnowledgeItems((items) => [created, ...items]);
-      setManualTitle("");
-      setManualContent("");
-      setKnowledgeModalOpen(false);
-      toast({ title: "Conhecimento adicionado", description: "Conteúdo manual salvo." });
-    } catch (err) {
-      handleError(err, { fallbackMessage: "Falha ao salvar conhecimento." });
-    } finally {
-      setUploading(false);
-    }
+  if (error) {
+    return (
+      <OrionShell>
+        <div style={{ padding: 48, textAlign: 'center' }}>
+          <div className="o-alert o-alert-danger" style={{ maxWidth: 500, margin: '0 auto' }}>
+            <span>⚠</span>
+            <span>{error}</span>
+          </div>
+        </div>
+      </OrionShell>
+    );
   }
-
-  const validateFile = (file: File) => {
-    const ext = file.name.toLowerCase().slice(file.name.lastIndexOf("."));
-    return allowedExtensions.includes(ext);
-  };
-
-  async function handleUploadFile() {
-    if (!selectedFile) {
-      toast({ title: "Selecione um arquivo", variant: "destructive" });
-      return;
-    }
-    if (!validateFile(selectedFile)) {
-      toast({
-        title: "Formato não suportado",
-        description: "Use apenas .txt, .csv ou .xlsx (sem PDF).",
-        variant: "destructive",
-      });
-      return;
-    }
-    setUploading(true);
-    try {
-      const created = await api.crm.uploadKnowledgeFile(selectedFile);
-      setKnowledgeItems((items) => [created, ...items]);
-      setSelectedFile(null);
-      setKnowledgeModalOpen(false);
-      toast({ title: "Arquivo processado", description: "Conhecimento criado a partir do arquivo." });
-    } catch (err) {
-      handleError(err, { fallbackMessage: "Falha no upload." });
-    } finally {
-      setUploading(false);
-    }
-  }
-
-  async function handleDeleteItem(item: KnowledgeItem) {
-    const confirmed = window.confirm(`Remover '${item.title}'?`);
-    if (!confirmed) return;
-    try {
-      await api.crm.deleteKnowledge(item.id);
-      setKnowledgeItems((items) => items.filter((k) => k.id !== item.id));
-      toast({ title: "Removido", description: "Item excluído com sucesso." });
-    } catch (err) {
-      handleError(err, { fallbackMessage: "Não foi possível remover o item." });
-    }
-  }
-
-  function openEdit(item: KnowledgeItem) {
-    setEditingItem(item);
-    setEditTitle(item.title);
-    setEditContent(item.content_text);
-  }
-
-  async function handleEditSave() {
-    if (!editingItem) return;
-    try {
-      const updated = await api.crm.updateKnowledge(editingItem.id, {
-        title: editTitle,
-        content_text: editContent,
-      });
-      setKnowledgeItems((items) =>
-        items.map((k) => (k.id === editingItem.id ? updated : k))
-      );
-      setEditingItem(null);
-      toast({ title: "Item atualizado", description: "Alterações salvas." });
-    } catch (err) {
-      handleError(err, { fallbackMessage: "Não foi possível atualizar." });
-    }
-  }
-
-  const knowledgeStatus = <KnowledgeLevel count={knowledgeItems.length} />;
-  const qrIsImage =
-    !!whatsappQr?.value &&
-    (whatsappQr.kind === "url" || whatsappQr.value.startsWith("data:image/"));
 
   return (
-    <div className="p-6 space-y-6">
-      <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-        <div className="space-y-1">
-          <div className="flex items-center gap-2">
-            <Sparkles className="h-5 w-5 text-primary" />
-            <h1 className="text-3xl font-bold tracking-tight">Identidade do Agente</h1>
-          </div>
-          <p className="text-muted-foreground">
-            Configure o comportamento do agente e organize o conhecimento do negócio.
-          </p>
-          {showIaUnavailableBanner && (
-            <Alert className="mt-3 border-orange-400/60 bg-orange-50/40 dark:bg-orange-950/20">
-              <AlertCircle className="h-4 w-4" />
-              {isCrmFree ? (
-                <>
-                  <AlertTitle>Conversational AI indisponível</AlertTitle>
-                  <AlertDescription>
-                    Seu plano atual não inclui o agente conversacional. Ainda assim, você pode
-                    configurar o perfil e o conhecimento.{" "}
-                    <a className="underline" href="/assinatura">
-                      Ver planos
-                    </a>.
-                  </AlertDescription>
-                </>
-              ) : (
-                <>
-                  <AlertTitle>Créditos de Conversational AI esgotados</AlertTitle>
-                  <AlertDescription>
-                    Seus créditos de conversas mensais foram esgotados.{" "}
-                    <a className="underline" href="/assinatura">
-                      Comprar créditos
-                    </a>.
-                  </AlertDescription>
-                </>
-              )}
-            </Alert>
-          )}
+    <OrionShell>
+    <TooltipProvider>
+      {/* Topbar */}
+      <header className="o-topbar">
+        <div className="font-mono-orion" style={{ fontSize: 11, letterSpacing: 3, textTransform: 'uppercase', color: 'var(--o-sub)', paddingRight: 24, borderRight: '1px solid var(--o-b1)', marginRight: 20, whiteSpace: 'nowrap' }}>
+          Orion CRM
         </div>
-        <div className="flex items-center gap-2">
-          <Badge variant={status.complete ? "default" : "secondary"}>
-            {status.complete ? "Perfil completo" : "Perfil incompleto"}
-          </Badge>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={loadProfile}
-            disabled={loadingProfile || loadingTemplates}
+        <div className="font-mono-orion" style={{ fontSize: 10, letterSpacing: '1.5px', color: 'var(--o-dim)', display: 'flex', alignItems: 'center', gap: 8 }}>
+          <span>Identidade do Agente</span>
+          <span>›</span>
+          <span style={{ color: 'var(--o-text)' }}>{config.name || '—'}</span>
+        </div>
+        <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 12 }}>
+          <button className="o-btn" style={{ fontSize: 8 }} onClick={() => setShowExportImport(true)}>↕ Exportar / Importar</button>
+          <Link to="/agentes-info" className="o-btn" style={{ fontSize: 8 }}>? Entenda os tipos de agentes</Link>
+          <Link to="/" className="o-btn" style={{ fontSize: 8 }}>← CRM</Link>
+        </div>
+      </header>
+
+      {showExportImport && (
+        <AgentExportImportPanel
+          config={config}
+          onClose={() => setShowExportImport(false)}
+          onImportSuccess={handleImportSuccess}
+        />
+      )}
+
+      {/* Subnav */}
+      <nav className="o-subnav">
+        {navItems.map(item => (
+          <div
+            key={item.id}
+            className={`o-subnav-item ${activePanel === item.id ? 'o-active' : ''}`}
+            onClick={() => navigate(item.id)}
           >
-            <RefreshCw className={`mr-2 h-4 w-4 ${loadingProfile ? "animate-spin" : ""}`} />
-            Restaurar
-          </Button>
-          <Button onClick={handleSave} disabled={saving || loadingTemplates}>
-            {saving ? "Salvando..." : "Salvar"}
-          </Button>
-        </div>
+            {item.label}
+            {item.badge != null && item.badge > 0 && (
+              <span className="o-num-badge">{item.badge}</span>
+            )}
+          </div>
+        ))}
+      </nav>
+
+      {/* Conteúdo por painel */}
+      <div className="o-content">
+        {activePanel === 'overview' && (
+          <PainelResumo
+            config={config}
+            onNavigate={navigate}
+            onUpdate={updateConfig}
+            onSave={handleSave}
+            onDiscard={handleDiscard}
+            saving={saving}
+            dirty={isDirty}
+            knowledgeSummary={knowledgeSummary}
+          />
+        )}
+        {activePanel === 'c1' && (
+          <PainelCamada1
+            config={config}
+            onUpdate={updateConfig}
+            onBack={() => navigate('overview')}
+            onSave={handleSave}
+            saving={saving}
+            dirty={isDirty}
+          />
+        )}
+        {activePanel === 'c2' && (
+          <PainelCamada2
+            config={config}
+            onUpdate={updateConfig}
+            onBack={() => navigate('overview')}
+            onSave={handleSave}
+            saving={saving}
+            dirty={isDirty}
+          />
+        )}
+        {activePanel === 'c3' && (
+          <PainelCamada3
+            config={config}
+            onUpdate={updateConfig}
+            onBack={() => navigate('overview')}
+            onSave={handleSave}
+            saving={saving}
+            dirty={isDirty}
+            phoneNumber={phoneNumber}
+          />
+        )}
+        {activePanel === 'c4' && (
+          <div className="o-panel o-fade-in">
+            <div className="font-mono-orion" style={{ fontSize: 9, letterSpacing: 3, textTransform: 'uppercase', marginBottom: 8, color: 'var(--o-purple)' }}>
+              Camada 4 · Conhecimento
+            </div>
+            <div className="font-display" style={{ fontSize: 28, fontWeight: 400, marginBottom: 6, color: 'var(--o-text)' }}>Base de conhecimento</div>
+            <div style={{ fontSize: 12.5, color: 'var(--o-sub)', fontWeight: 300, marginBottom: 24 }}>
+              Documentos e textos que o agente consulta durante as conversas.
+            </div>
+            <CamadaConhecimento templateKey={config.template_key} agentConfig={config} />
+            <div style={{ marginTop: 24 }}>
+              <button className="o-btn" onClick={() => navigate('overview')}>← Voltar</button>
+            </div>
+          </div>
+        )}
+        {activePanel === 'c5' && isScheduleMode && (
+          <div className="o-panel o-fade-in">
+            {isDirty && (
+              <div className="o-draft-banner">
+                <span>●</span>
+                <span><strong>Editando Apresentação.</strong> Alterações aplicadas apenas em novas conversas.</span>
+                <button className="o-btn o-btn-primary" style={{ marginLeft: 'auto' }} onClick={handleSave} disabled={saving}>
+                  {saving ? 'Salvando…' : 'Salvar'}
+                </button>
+                <button className="o-btn" onClick={() => navigate('overview')}>Cancelar</button>
+              </div>
+            )}
+            <div className="font-mono-orion" style={{ fontSize: 9, letterSpacing: 3, textTransform: 'uppercase', marginBottom: 8, color: 'var(--o-warn)' }}>
+              Camada 5 · Apresentação e agendamento
+            </div>
+            <div className="font-display" style={{ fontSize: 28, fontWeight: 400, marginBottom: 6, color: 'var(--o-text)' }}>Apresentação e agendamento</div>
+            <div style={{ fontSize: 12.5, color: 'var(--o-sub)', fontWeight: 300, marginBottom: 24 }}>
+              Lembretes de reunião, dossiê pré-reunião e integração de calendário.
+            </div>
+            <CamadaApresentacao config={config} onUpdate={updateConfig} />
+            <div style={{ display: 'flex', gap: 10, marginTop: 24 }}>
+              {isDirty && (
+                <button className="o-btn o-btn-primary" onClick={handleSave} disabled={saving}>
+                  {saving ? 'Salvando…' : 'Salvar Apresentação'}
+                </button>
+              )}
+              <button className="o-btn" onClick={() => navigate('overview')}>← Voltar</button>
+            </div>
+          </div>
+        )}
+        {activePanel === 'c6' && isDirectMode && (
+          <div className="o-panel o-fade-in">
+            {isDirty && (
+              <div className="o-draft-banner">
+                <span>●</span>
+                <span><strong>Editando Oferta.</strong> Alterações aplicadas apenas em novas conversas.</span>
+                <button className="o-btn o-btn-primary" style={{ marginLeft: 'auto' }} onClick={handleSave} disabled={saving}>
+                  {saving ? 'Salvando…' : 'Salvar'}
+                </button>
+                <button className="o-btn" onClick={() => navigate('overview')}>Cancelar</button>
+              </div>
+            )}
+            <div className="font-mono-orion" style={{ fontSize: 9, letterSpacing: 3, textTransform: 'uppercase', marginBottom: 8, color: 'var(--o-active)' }}>
+              Camada 6 · Oferta e pagamento
+            </div>
+            <div className="font-display" style={{ fontSize: 28, fontWeight: 400, marginBottom: 6, color: 'var(--o-text)' }}>Oferta e pagamento</div>
+            <div style={{ fontSize: 12.5, color: 'var(--o-sub)', fontWeight: 300, marginBottom: 24 }}>
+              Mídia do pitch, detalhes da oferta e integração com gateway de pagamento.
+            </div>
+            <CamadaOferta config={config} onUpdate={updateConfig} />
+            <div style={{ display: 'flex', gap: 10, marginTop: 24 }}>
+              {isDirty && (
+                <button className="o-btn o-btn-primary" onClick={handleSave} disabled={saving}>
+                  {saving ? 'Salvando…' : 'Salvar Oferta'}
+                </button>
+              )}
+              <button className="o-btn" onClick={() => navigate('overview')}>← Voltar</button>
+            </div>
+          </div>
+        )}
+        {activePanel === 'conexao' && (
+          <div className="o-panel o-fade-in">
+            <div className="font-mono-orion" style={{ fontSize: 9, letterSpacing: 3, textTransform: 'uppercase', marginBottom: 8, color: 'var(--o-active)' }}>
+              Conexão do número
+            </div>
+            <div className="font-display" style={{ fontSize: 28, fontWeight: 400, marginBottom: 6, color: 'var(--o-text)' }}>WhatsApp</div>
+            <div style={{ fontSize: 12.5, color: 'var(--o-sub)', fontWeight: 300, marginBottom: 24 }}>
+              Gerencie a conexão do número de WhatsApp vinculado a este agente.
+            </div>
+            <ConexaoNumero />
+          </div>
+        )}
       </div>
+    </TooltipProvider>
+    </OrionShell>
+  );
+}
 
-      <Tabs defaultValue="profile">
-        <TabsList>
-          <TabsTrigger value="profile">Identidade do agente</TabsTrigger>
-          <TabsTrigger value="knowledge">Conhecimento do negócio</TabsTrigger>
-          <TabsTrigger value="followup">Follow-up</TabsTrigger>
-        </TabsList>
+// ─── Componentes internos do resumo ──────────────────────────
 
-        <TabsContent value="profile" className="space-y-4">
-          <Card>
-            <CardHeader>
-              <CardTitle>Modelo do Agente</CardTitle>
-              <CardDescription>Escolha o formato de atendimento principal.</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              <div className="grid gap-2 md:grid-cols-3">
-                <button
-                  type="button"
-                  className={`rounded-md border p-3 text-left ${agentModelUi === "agendador_com_humano" ? "border-primary bg-primary/5" : ""}`}
-                  onClick={() => setProfile((p) => applyAgentModelUi(p, "agendador_com_humano"))}
-                >
-                  <div className="font-medium">Agendador com humano</div>
-                  <p className="text-xs text-muted-foreground">Qualifica e agenda com handoff humano.</p>
-                </button>
-                <button
-                  type="button"
-                  className={`rounded-md border p-3 text-left ${agentModelUi === "direto_autonomo" ? "border-primary bg-primary/5" : ""}`}
-                  onClick={() => setProfile((p) => applyAgentModelUi(p, "direto_autonomo"))}
-                >
-                  <div className="font-medium">Direto autônomo</div>
-                  <p className="text-xs text-muted-foreground">Foco em fechamento sem handoff.</p>
-                </button>
-                <button
-                  type="button"
-                  className={`rounded-md border p-3 text-left ${agentModelUi === "hibrido_agendador" ? "border-primary bg-primary/5" : ""}`}
-                  onClick={() => setProfile((p) => applyAgentModelUi(p, "hibrido_agendador"))}
-                >
-                  <div className="font-medium">Híbrido agendador</div>
-                  <p className="text-xs text-muted-foreground">Agenda com autonomia operacional.</p>
-                </button>
-              </div>
-
-              {showAdvancedTechnical && (
-                <details className="rounded-md border p-3">
-                  <summary className="cursor-pointer text-sm font-medium">Configurações avançadas (técnico)</summary>
-                  <div className="mt-3 space-y-4">
-                  <div className="space-y-2">
-                    <div className="flex items-center gap-2 text-sm font-medium">
-                      <Wand2 className="h-4 w-4 text-primary" /> Template / Estilo do agente
-                    </div>
-                    <div className="grid gap-3 md:grid-cols-3">
-                      {loadingTemplates && <p>Carregando templates...</p>}
-                      {!loadingTemplates &&
-                        mappedTemplates.map((tpl) => (
-                          <button
-                            key={tpl.key}
-                            className={`rounded-lg border p-4 text-left transition hover:border-primary/60 hover:shadow-sm ${
-                              profile.template_key === tpl.key ? "border-primary bg-primary/5" : ""
-                            }`}
-                            onClick={() => handleTemplateSelect(tpl)}
-                            type="button"
-                          >
-                            <div className="flex items-center justify-between">
-                              <div className="font-semibold">{tpl.name || tpl.key}</div>
-                              {profile.template_key === tpl.key && (
-                                <Badge variant="default" className="text-xs">Selecionado</Badge>
-                              )}
-                            </div>
-                            <p className="mt-2 text-sm text-muted-foreground line-clamp-3">
-                              {tpl.description || fallbackTemplates[tpl.key]?.description}
-                            </p>
-                          </button>
-                        ))}
-                    </div>
-                  </div>
-
-                  <div className="grid gap-3 md:grid-cols-3">
-                    <div className="space-y-2">
-                      <Label>Agent Profile Mode</Label>
-                      <Select
-                        value={profile.agent_mode || "agenda"}
-                        onValueChange={(value) =>
-                          setProfile((p) => ({ ...p, agent_mode: value as AiProfilePayload["agent_mode"] }))
-                        }
-                      >
-                        <SelectTrigger>
-                          <SelectValue placeholder="Selecione o modo do agente" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="consultivo">Consultivo</SelectItem>
-                          <SelectItem value="agenda">Agenda</SelectItem>
-                          <SelectItem value="direto">Direto</SelectItem>
-                          <SelectItem value="sdr_scheduler">SDR Scheduler (legado)</SelectItem>
-                          <SelectItem value="closer">Closer (legado)</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div className="space-y-2">
-                      <Label>Requer handoff humano</Label>
-                      <Select
-                        value={String(!!profile.requires_handoff)}
-                        onValueChange={(value) =>
-                          setProfile((p) => ({ ...p, requires_handoff: value === "true" }))
-                        }
-                      >
-                        <SelectTrigger>
-                          <SelectValue placeholder="Selecione" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="false">Não</SelectItem>
-                          <SelectItem value="true">Sim</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div className="space-y-2">
-                      <Label>Human in loop</Label>
-                      <Select
-                        value={String(!!profile.human_in_loop)}
-                        onValueChange={(value) =>
-                          setProfile((p) => ({ ...p, human_in_loop: value === "true" }))
-                        }
-                      >
-                        <SelectTrigger>
-                          <SelectValue placeholder="Selecione" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="false">Não</SelectItem>
-                          <SelectItem value="true">Sim</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                  </div>
-                  </div>
-                </details>
-              )}
-            </CardContent>
-          </Card>
-
-          <div className="grid gap-4 md:grid-cols-2">
-            <Card>
-              <CardHeader>
-                <CardTitle>Identidade e marca</CardTitle>
-                <CardDescription>Como o agente se apresenta.</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                <div className="space-y-2">
-                  <Label>Nome do agente</Label>
-                  <Input
-                    value={profile.name}
-                    placeholder="Ex.: Ana, seu copilot de vendas"
-                    onChange={(e) => setProfile((p) => ({ ...p, name: e.target.value }))}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label>Marca</Label>
-                  <Input
-                    value={profile.brand_name}
-                    placeholder="Ex.: Auto Digital"
-                    onChange={(e) => setProfile((p) => ({ ...p, brand_name: e.target.value }))}
-                  />
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader>
-                <CardTitle>Nicho e público</CardTitle>
-                <CardDescription>Quem você atende.</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                <div className="space-y-2">
-                  <Label>Fuso horário (timezone)</Label>
-                  <Select
-                    value={profile.timezone || "UTC"}
-                    onValueChange={(value) => setProfile((p) => ({ ...p, timezone: value }))}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Selecione o fuso horário" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="UTC">UTC</SelectItem>
-                      <SelectItem value="Europe/Lisbon">Europe/Lisbon</SelectItem>
-                      <SelectItem value="America/Sao_Paulo">America/Sao_Paulo</SelectItem>
-                    </SelectContent>
-                  </Select>
-                  <p className="text-xs text-muted-foreground">
-                    Use o formato IANA (ex.: Europe/Lisbon).
-                  </p>
-                </div>
-                <div className="space-y-2">
-                  <Label>Nicho</Label>
-                  <Input
-                    value={profile.niche}
-                    placeholder="Ex.: Software B2B para marketing"
-                    onChange={(e) => setProfile((p) => ({ ...p, niche: e.target.value }))}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label>Público-alvo</Label>
-                  <Input
-                    value={profile.target_audience}
-                    placeholder="Ex.: PMEs de e-commerce"
-                    onChange={(e) => setProfile((p) => ({ ...p, target_audience: e.target.value }))}
-                  />
-                </div>
-              </CardContent>
-            </Card>
-          </div>
-
-          <div className="grid gap-4 md:grid-cols-2">
-            <Card>
-              <CardHeader>
-                <CardTitle>Oferta</CardTitle>
-                <CardDescription>Explique o que você vende.</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-2">
-                <Textarea
-                  value={profile.offer_description}
-                  placeholder="Ex.: Implementação completa do CRM com onboarding em 14 dias."
-                  onChange={(e) =>
-                    setProfile((p) => ({ ...p, offer_description: e.target.value }))
-                  }
-                  rows={4}
-                />
-                <div className="text-xs text-muted-foreground text-right">
-                  {profile.offer_description.length} caracteres
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader>
-                <CardTitle>Tom de voz</CardTitle>
-                <CardDescription>Como o agente fala.</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-2">
-                <Select
-                  value={profile.tone_of_voice}
-                  onValueChange={(value) => setProfile((p) => ({ ...p, tone_of_voice: value }))}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Selecione um tom" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="consultivo">Consultivo</SelectItem>
-                    <SelectItem value="direto">Direto</SelectItem>
-                    <SelectItem value="acolhedor">Acolhedor</SelectItem>
-                    <SelectItem value="entusiasmado">Entusiasmado</SelectItem>
-                    <SelectItem value="profissional e próximo">Profissional e próximo</SelectItem>
-                  </SelectContent>
-                </Select>
-                <Input
-                  value={profile.tone_of_voice}
-                  onChange={(e) => setProfile((p) => ({ ...p, tone_of_voice: e.target.value }))}
-                  placeholder="Ou personalize o tom"
-                />
-              </CardContent>
-            </Card>
-          </div>
-
-          {(profile.requires_handoff || profile.human_in_loop) && (
-            <Card>
-              <CardHeader>
-                <CardTitle>Atendimento humano (Handoff)</CardTitle>
-                <CardDescription>Defina como o agente se identifica e quando aciona um humano.</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="space-y-2">
-                  <Label>Modo de identidade</Label>
-                  <Select
-                    value={profile.identity_mode}
-                    onValueChange={(value) =>
-                      setProfile((p) => ({ ...p, identity_mode: value as AiProfilePayload["identity_mode"] }))
-                    }
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Selecione o modo" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="virtual_assistant">Assistente virtual</SelectItem>
-                      <SelectItem value="human_agent">Humano do time</SelectItem>
-                      <SelectItem value="user_clone">Clone do usuário</SelectItem>
-                    </SelectContent>
-                  </Select>
-                  <p className="text-xs text-muted-foreground">
-                    Define como o agente se apresenta no início das conversas.
-                  </p>
-                </div>
-                <div className="space-y-2">
-                  <Label>Política quando o lead pedir humano</Label>
-                  <Select
-                    value={profile.handoff_policy}
-                    onValueChange={(value) =>
-                      setProfile((p) => ({ ...p, handoff_policy: value as AiProfilePayload["handoff_policy"] }))
-                    }
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Selecione a política" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="keep_active_notify">Manter bot e notificar</SelectItem>
-                      <SelectItem value="disable_bot">Desativar bot para este lead</SelectItem>
-                      <SelectItem value="ignore">Ignorar pedido e continuar conversa</SelectItem>
-                    </SelectContent>
-                  </Select>
-                  <p className="text-xs text-muted-foreground">
-                    Controla se o bot continua ativo ou entrega para o time humano.
-                  </p>
-                  {profile.handoff_policy === "ignore" && (
-                    <p className="text-xs text-amber-600 dark:text-amber-400">
-                      Aviso: &ldquo;ignore&rdquo; impede handoff e o bot continuará respondendo
-                      mesmo se o lead pedir humano.
-                    </p>
-                  )}
-                </div>
-                <div className="space-y-2">
-                  <Label>Texto personalizado de handoff</Label>
-                  <Textarea
-                    value={profile.handoff_custom_text ?? ""}
-                    placeholder="Ex: Vou te conectar com alguém do time agora. Só um instante."
-                    onChange={(e) =>
-                      setProfile((p) => ({ ...p, handoff_custom_text: e.target.value }))
-                    }
-                    rows={3}
-                  />
-                  <p className="text-xs text-muted-foreground">
-                    Se preenchido, substitui a mensagem padrão do handoff.
-                  </p>
-                </div>
-              </CardContent>
-            </Card>
-          )}
-
-          <Card>
-            <CardHeader>
-              <CardTitle>Prioridades do atendimento</CardTitle>
-              <CardDescription>Defina prioridades operacionais em formato de bullets.</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              <Textarea
-                value={profile.goals}
-                placeholder="Use bullets. Ex.:
-- Confirmar orçamento antes de sugerir horário
-- Coletar os 3 dados obrigatórios"
-                onChange={(e) => setProfile((p) => ({ ...p, goals: e.target.value }))}
-                rows={4}
-              />
-              <div className="flex flex-wrap gap-2">
-                {goalSuggestions.map((goal) => (
-                  <Button
-                    key={goal}
-                    variant="secondary"
-                    size="sm"
-                    type="button"
-                    onClick={() =>
-                      setProfile((p) => ({
-                        ...p,
-                        goals: p.goals.includes(goal)
-                          ? p.goals
-                          : `${p.goals ? `${p.goals}
-` : ""}${`- ${goal}`}`,
-                      }))
-                    }
-                  >
-                    {goal}
-                  </Button>
-                ))}
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader>
-              <CardTitle>Instruções extras</CardTitle>
-              <CardDescription>Diretrizes adicionais para o agente.</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-2">
-              <Textarea
-                value={profile.custom_instructions || ""}
-                placeholder="Ex.: Sempre responder em português do Brasil e sugerir próximos passos claros."
-                onChange={(e) =>
-                  setProfile((p) => ({ ...p, custom_instructions: e.target.value }))
-                }
-                rows={4}
-              />
-              <div className="text-xs text-muted-foreground text-right">
-                {(profile.custom_instructions || "").length} caracteres
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader>
-              <CardTitle>WhatsApp</CardTitle>
-              <CardDescription>Conecte seu número via QR Code para o agente usar.</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="flex flex-wrap items-center gap-3">
-                <Badge variant={whatsappBadgeVariant}>{whatsappStatusLabel}</Badge>
-                {whatsappStatus?.phone_e164 && (
-                  <span className="text-sm text-muted-foreground">
-                    Telefone: <strong>{whatsappStatus.phone_e164}</strong>
-                  </span>
-                )}
-                {whatsappStatus?.last_updated && (
-                  <span className="text-xs text-muted-foreground">
-                    Última atualização: {formatDate(whatsappStatus.last_updated)}
-                  </span>
-                )}
-              </div>
-
-              {whatsappError && (
-                <Alert variant="destructive">
-                  <AlertTitle>Falha na conexão</AlertTitle>
-                  <AlertDescription>{whatsappError}</AlertDescription>
-                </Alert>
-              )}
-
-              {!isWhatsappConnected && whatsappQr?.value && (
-                <div className="rounded-md border p-4 space-y-3">
-                  <div className="text-sm text-muted-foreground">
-                    {whatsappPhase === "connecting" ? "Aguardando scan..." : "Escaneie o QR com o WhatsApp."}
-                  </div>
-                  {qrIsImage && (
-                    <img
-                      src={
-                        whatsappQr.value.startsWith("data:image/")
-                          ? whatsappQr.value
-                          : whatsappQr.kind === "url"
-                          ? whatsappQr.value
-                          : `data:image/png;base64,${whatsappQr.value}`
-                      }
-                      alt="QR Code do WhatsApp"
-                      className="h-56 w-56"
-                    />
-                  )}
-                  {!qrIsImage && (
-                    <pre className="whitespace-pre-wrap rounded-md bg-muted p-3 text-xs">
-                      {whatsappQr.value}
-                    </pre>
-                  )}
-                </div>
-              )}
-
-              {isWhatsappConnected && (
-                <div className="rounded-md border border-emerald-200 bg-emerald-50/60 p-3 text-sm text-emerald-700 dark:border-emerald-500/30 dark:bg-emerald-500/10 dark:text-emerald-200">
-                  Conectado ✅
-                </div>
-              )}
-
-              <div className="flex flex-wrap gap-2">
-                <Button onClick={handleWhatsappConnect} disabled={whatsappLoading || whatsappPhase === "connecting" || connectLockRef.current}>
-                  {whatsappLoading ? "Conectando..." : "Criar/Conectar WhatsApp"}
-                </Button>
-                <Button
-                  variant="outline"
-                  onClick={() => handleWhatsappStatus(false)}
-                  disabled={whatsappLoading}
-                >
-                  Atualizar status
-                </Button>
-                {!isWhatsappConnected && whatsappQr?.value && (
-                  <Button
-                    variant="secondary"
-                    onClick={() => handleWhatsappRefreshQr()}
-                    disabled={whatsappLoading}
-                  >
-                    Gerar novo QR
-                  </Button>
-                )}
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader>
-              <CardTitle>Preview</CardTitle>
-              <CardDescription>Simulação local de apresentação e resposta.</CardDescription>
-            </CardHeader>
-            <CardContent className="grid gap-4 md:grid-cols-2">
-              <div className="rounded-lg border bg-muted/30 p-4 space-y-2">
-                <div className="text-sm font-semibold text-muted-foreground">Apresentação</div>
-                <p className="leading-relaxed">{previewText}</p>
-              </div>
-              <div className="rounded-lg border bg-muted/30 p-4 space-y-2">
-                <div className="text-sm font-semibold text-muted-foreground">Resposta exemplo</div>
-                <p className="leading-relaxed">{exampleReply}</p>
-              </div>
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        <TabsContent value="knowledge" className="space-y-4">
-          <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-            <div>
-              <div className="flex items-center gap-2">
-                <Brain className="h-5 w-5 text-primary" />
-                <h2 className="text-2xl font-semibold">Conhecimento do negócio</h2>
-              </div>
-              <p className="text-muted-foreground text-sm">
-                Base privada do usuário para alimentar o agente.
-              </p>
-              <div className="mt-2 flex items-center gap-2">
-                <span className="text-sm text-muted-foreground">Status:</span>
-                {knowledgeStatus}
-              </div>
-            </div>
-            <Button onClick={() => setKnowledgeModalOpen(true)}>
-              <FilePlus className="mr-2 h-4 w-4" /> Adicionar conhecimento
-            </Button>
-          </div>
-
-          <Card>
-            <CardHeader>
-              <CardTitle>Itens cadastrados</CardTitle>
-              <CardDescription>CRUD completo e upload dedicado (sem PDFs).</CardDescription>
-            </CardHeader>
-            <CardContent>
-              {loadingKnowledge ? (
-                <p>Carregando conhecimento...</p>
-              ) : knowledgeItems.length === 0 ? (
-                <div className="flex flex-col items-start gap-2 rounded-md border border-dashed p-4 text-sm text-muted-foreground">
-                  <p>Nenhum conhecimento cadastrado ainda.</p>
-                  <Button variant="outline" size="sm" onClick={() => setKnowledgeModalOpen(true)}>
-                    <FilePlus className="mr-2 h-4 w-4" /> Adicionar
-                  </Button>
-                </div>
-              ) : (
-                <div className="overflow-x-auto">
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Título</TableHead>
-                        <TableHead>Tipo</TableHead>
-                        <TableHead>Atualizado em</TableHead>
-                        <TableHead className="text-right">Ações</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {knowledgeItems.map((item) => (
-                        <TableRow key={item.id}>
-                          <TableCell className="font-medium">{item.title}</TableCell>
-                          <TableCell>
-                            <Badge variant={item.source_type === "file" ? "outline" : "secondary"}>
-                              {item.source_type}
-                            </Badge>
-                          </TableCell>
-                          <TableCell>{formatDate(item.updated_at)}</TableCell>
-                          <TableCell className="flex justify-end gap-2">
-                            <Button
-                              size="sm"
-                              variant="ghost"
-                              onClick={() => setViewItem(item)}
-                            >
-                              Ver
-                            </Button>
-                            <Button size="sm" variant="outline" onClick={() => openEdit(item)}>
-                              <FileEdit className="mr-1 h-4 w-4" /> Editar
-                            </Button>
-                            <Button
-                              size="sm"
-                              variant="destructive"
-                              onClick={() => handleDeleteItem(item)}
-                            >
-                              Remover
-                            </Button>
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        <TabsContent value="followup" className="space-y-4">
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Clock className="h-5 w-5 text-primary" />
-                Cadência de Follow-up
-              </CardTitle>
-              <CardDescription>
-                Configure os intervalos e horários de envio automático de follow-up.
-                Deixe em branco para usar os valores padrão do plano.
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-6">
-              <div className="grid gap-5 md:grid-cols-2">
-                <div className="space-y-2">
-                  <Label htmlFor="followup_max_attempts">Máx. tentativas</Label>
-                  <Input
-                    id="followup_max_attempts"
-                    type="number"
-                    min={1}
-                    max={10}
-                    placeholder="Ex: 4"
-                    value={profile.followup_max_attempts ?? ""}
-                    onChange={(e) =>
-                      setProfile((p) => ({
-                        ...p,
-                        followup_max_attempts: e.target.value ? Number(e.target.value) : null,
-                      }))
-                    }
-                  />
-                  <p className="text-xs text-muted-foreground">
-                    Número total de mensagens enviadas antes de encerrar o follow-up.
-                    Padrão: 4 (SDR) / 3 (híbrido).
-                  </p>
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="followup_first_offset">Primeiro offset (minutos)</Label>
-                  <Input
-                    id="followup_first_offset"
-                    type="number"
-                    min={1}
-                    placeholder="Ex: 30"
-                    value={profile.followup_first_offset ?? ""}
-                    onChange={(e) =>
-                      setProfile((p) => ({
-                        ...p,
-                        followup_first_offset: e.target.value ? Number(e.target.value) : null,
-                      }))
-                    }
-                  />
-                  <p className="text-xs text-muted-foreground">
-                    Minutos após a transição manual até o 1.º envio automático.
-                    Padrão: 30 min (SDR) / 120 min (híbrido).
-                  </p>
-                </div>
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="followup_cadence">
-                  Cadência (minutos entre envios, separados por vírgula)
-                </Label>
-                <Input
-                  id="followup_cadence"
-                  placeholder="Ex: 1440, 4320, 10080"
-                  value={cadenceStr}
-                  onChange={(e) => {
-                    setCadenceStr(e.target.value);
-                    setCadenceError(null);
-                  }}
-                />
-                {cadenceError && (
-                  <p className="text-xs text-destructive">{cadenceError}</p>
-                )}
-                <p className="text-xs text-muted-foreground">
-                  Intervalo entre cada tentativa em minutos. Deve ter{" "}
-                  <strong>máx. tentativas − 1</strong> elemento(s).
-                  Sugestões: SDR — 1440, 4320, 10080 | Híbrido — 1440, 2880 | Carrinho — 120, 1440.
-                </p>
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="followup_allowed_hours" className="flex items-center gap-1">
-                  <Clock className="h-3.5 w-3.5" /> Horário permitido (UTC)
-                </Label>
-                <Input
-                  id="followup_allowed_hours"
-                  placeholder="Ex: 09:00-18:00"
-                  value={profile.followup_allowed_hours ?? ""}
-                  onChange={(e) =>
-                    setProfile((p) => ({ ...p, followup_allowed_hours: e.target.value }))
-                  }
-                />
-                <p className="text-xs text-muted-foreground">
-                  Formato <strong>HH:MM-HH:MM</strong> em UTC. Fora desta janela o follow-up é
-                  adiado para o início do próximo período. Deixe vazio para enviar a qualquer hora.
-                </p>
-              </div>
-            </CardContent>
-          </Card>
-        </TabsContent>
-      </Tabs>
-
-      <Dialog open={knowledgeModalOpen} onOpenChange={setKnowledgeModalOpen}>
-        <DialogContent className="sm:max-w-xl">
-          <DialogHeader>
-            <DialogTitle>Adicionar conhecimento</DialogTitle>
-          </DialogHeader>
-          <Tabs value={knowledgeTab} onValueChange={setKnowledgeTab}>
-            <TabsList>
-              <TabsTrigger value="manual">Texto livre</TabsTrigger>
-              <TabsTrigger value="upload">Upload (.txt/.csv/.xlsx)</TabsTrigger>
-            </TabsList>
-            <TabsContent value="manual" className="space-y-3">
-              <div className="space-y-2">
-                <Label>Título</Label>
-                <Input
-                  value={manualTitle}
-                  onChange={(e) => setManualTitle(e.target.value)}
-                  placeholder="Ex.: Tabela de preços"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label>Conteúdo</Label>
-                <Textarea
-                  value={manualContent}
-                  onChange={(e) => setManualContent(e.target.value)}
-                  placeholder="Inclua regras, objeções, horários, etc."
-                  rows={5}
-                />
-                <div className="text-xs text-muted-foreground text-right">
-                  {manualContent.length} caracteres
-                </div>
-              </div>
-              <DialogFooter>
-                <Button onClick={handleCreateManual} disabled={uploading}>
-                  {uploading ? "Salvando..." : "Salvar"}
-                </Button>
-              </DialogFooter>
-            </TabsContent>
-            <TabsContent value="upload" className="space-y-3">
-              <div className="rounded-md border border-dashed p-4 text-sm text-muted-foreground">
-                <p>Envie .txt, .csv ou .xlsx. PDF não é suportado no MVP.</p>
-              </div>
-              <Input
-                type="file"
-                accept={allowedExtensions.join(",")}
-                onChange={(e) => setSelectedFile(e.target.files?.[0] ?? null)}
-              />
-              {selectedFile && (
-                <div className="text-sm text-muted-foreground">
-                  Arquivo: {selectedFile.name}
-                </div>
-              )}
-              <DialogFooter>
-                <Button onClick={handleUploadFile} disabled={uploading}>
-                  <Upload className="mr-2 h-4 w-4" />
-                  {uploading ? "Enviando..." : "Enviar"}
-                </Button>
-              </DialogFooter>
-            </TabsContent>
-          </Tabs>
-        </DialogContent>
-      </Dialog>
-
-      <Dialog open={!!editingItem} onOpenChange={(open) => !open && setEditingItem(null)}>
-        <DialogContent className="sm:max-w-lg">
-          <DialogHeader>
-            <DialogTitle>Editar item</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-3">
-            <div className="space-y-2">
-              <Label>Título</Label>
-              <Input value={editTitle} onChange={(e) => setEditTitle(e.target.value)} />
-            </div>
-            <div className="space-y-2">
-              <Label>Conteúdo</Label>
-              <Textarea
-                value={editContent}
-                onChange={(e) => setEditContent(e.target.value)}
-                rows={6}
-              />
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setEditingItem(null)}>
-              Cancelar
-            </Button>
-            <Button onClick={handleEditSave}>Salvar alterações</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      <Dialog open={!!viewItem} onOpenChange={(open) => !open && setViewItem(null)}>
-        <DialogContent className="sm:max-w-lg">
-          <DialogHeader>
-            <DialogTitle>{viewItem?.title}</DialogTitle>
-            <p className="text-sm text-muted-foreground">
-              {viewItem?.source_type === "file" ? "Arquivo" : "Manual"} · Atualizado em {formatDate(viewItem?.updated_at)}
-            </p>
-          </DialogHeader>
-          <div className="rounded-md border bg-muted/40 p-3 text-sm whitespace-pre-wrap">
-            {viewItem?.content_text}
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setViewItem(null)}>
-              Fechar
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+function SummaryCard({ label, value, sub, status, onClick, italic }: {
+  label: string; value: string; sub?: string; status?: 'ok' | 'warn' | 'miss'; onClick: () => void; italic?: boolean;
+}) {
+  const valueColor = status === 'miss' ? 'var(--o-hot)' : status === 'warn' ? 'var(--o-warn)' : 'var(--o-text)';
+  return (
+    <div className="o-edit-card" onClick={onClick}>
+      <div className="font-mono-orion" style={{ fontSize: 8, letterSpacing: 2, textTransform: 'uppercase', color: 'var(--o-dim)', marginBottom: 6 }}>
+        {label}
+      </div>
+      <div style={{ fontSize: 13, color: valueColor, marginBottom: 4, fontStyle: italic ? 'italic' : 'normal' }}>
+        {value}
+      </div>
+      {sub && <div style={{ fontSize: 11, color: 'var(--o-sub)', fontWeight: 300 }}>{sub}</div>}
+      {status && (
+        <span className={`o-badge ${status === 'ok' ? 'o-badge-ok' : status === 'miss' ? 'o-badge-miss' : 'o-badge-warn'}`} style={{ marginTop: 8 }}>
+          {status === 'ok' ? 'Configurado' : status === 'miss' ? 'Crítico' : 'Parcial'}
+        </span>
+      )}
+      <span className="o-edit-arrow">›</span>
     </div>
   );
 }

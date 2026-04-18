@@ -232,6 +232,7 @@ export function LeadCardDialog({ lead, isOpen, onClose, onUpdateLead, onDeleteLe
 /** Body com os hooks — só é montado quando isOpen && lead. */
 function LeadCardDialogBody({
   lead,
+  onClose,
   onUpdateLead,
   onDeleteLead,
 }: LeadCardDialogProps & { lead: Lead }) {
@@ -1030,7 +1031,7 @@ function LeadCardDialogBody({
           </div>
 
           {/* Resumo do contrato */}
-          <FollowUpContractSummary contract={currentLead.followup_contract} />
+          <FollowUpContractSummary contract={currentLead.followup_contract as FollowUpContract} />
 
           {/* Linha do tempo de mensagens */}
           {messagesData?.messages && messagesData.messages.length > 0 && (

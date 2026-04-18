@@ -10,7 +10,7 @@ import os
 import uuid
 from fastapi import UploadFile, File
 from pathlib import Path
-from models import Lead, LeadUpdate, AppointmentCreate, AppointmentUpdate, BotDisabledUpdate, StartFollowupPayload, ScheduledMessagePayload, SendNowPayload
+from models import Lead, LeadUpdate, AppointmentCreate, AppointmentUpdate, BotDisabledUpdate, StartFollowupPayload, QualificationPatchPayload, ScheduledMessagePayload, SendNowPayload
 from security_core import CurrentUser, require_crm_access
 from services import rate_limit_service
 from services.agent_type import resolve_agent_type_for_user
@@ -27,6 +27,7 @@ from services.followup_state import (
 )
 from services.jobs_service import TYPE_WHATSAPP_SEND, TYPE_WHATSAPP_FOLLOWUP_PREGENERATE, create_job
 from services.qualification_guardrails import can_advance_from_qualification
+from services.qualification_state import upsert_qualification_state
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -115,6 +116,69 @@ def _resolve_first_followup_offset_minutes(
     scenario_key = str(meeting_or_session_happened or "").strip().lower()
     rules = _FIRST_FOLLOWUP_OFFSET_MINUTES.get(variant_key) or {"default": 30}
     return int(rules.get(scenario_key, rules.get("default", 30)))
+
+
+def _generate_followup_message_llm(
+    *,
+    first_name: str,
+    brand_name: str,
+    niche: str,
+    tone_of_voice: str,
+    situation: str,
+    goal: str,
+    operator_note: str,
+) -> str:
+    import os
+    try:
+        from openai import OpenAI
+        api_key = os.getenv("OPENAI_API_KEY")
+        if not api_key:
+            raise RuntimeError("no key")
+        client = OpenAI(api_key=api_key)
+        identity = f"da {brand_name}" if brand_name else "do time de vendas"
+        niche_line = f"do segmento de {niche}" if niche else ""
+        context_parts = []
+        if situation:
+            context_parts.append(f"- Situação atual: {situation}")
+        if goal:
+            context_parts.append(f"- Objetivo desta mensagem: {goal}")
+        if operator_note:
+            context_parts.append(f"- Contexto adicional (use como orientação, não copie literalmente): {operator_note}")
+        context_block = "\n".join(context_parts) if context_parts else "- Dar continuidade ao relacionamento comercial"
+        system_prompt = (
+            f"Você é um vendedor {identity} {niche_line}.\n"
+            "Escreva UMA mensagem curta de follow-up para WhatsApp.\n"
+            "REGRAS:\n"
+            f"- Tom: {tone_of_voice}\n"
+            "- Máximo 280 caracteres\n"
+            "- Natural e humano, como uma pessoa real enviaria no WhatsApp\n"
+            "- NÃO mencione número de tentativa, sequência ou contagem\n"
+            "- NÃO use rótulos como 'Objetivo:', 'Contexto:', 'Situação:'\n"
+            "- NÃO invente informações além do fornecido\n"
+            "- Finalize com uma pergunta ou chamada para ação clara\n"
+            "- Retorne APENAS o texto da mensagem, sem aspas, sem prefixo"
+        )
+        user_prompt = (
+            f"Lead: {first_name}\n\n"
+            f"Contexto interno (oriente a mensagem com base nisso):\n{context_block}"
+        )
+        r = client.chat.completions.create(
+            model="gpt-3.5-turbo",
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_prompt},
+            ],
+            temperature=0.8,
+            max_tokens=200,
+        )
+        return r.choices[0].message.content.strip()
+    except Exception:
+        goal_sentence = f"Queria saber se você conseguiu avançar com {goal}." if goal else "Queria saber como posso te ajudar a dar o próximo passo."
+        return (
+            f"Oi {first_name}! Tudo bem?\n\n"
+            f"{goal_sentence}\n\n"
+            "Qualquer dúvida, pode falar comigo!"
+        )
 
 
 def _normalize_followup_contract(raw_contract: Any, *, agent_type: Optional[str] = None) -> Optional[dict[str, Any]]:
@@ -305,6 +369,7 @@ def listar_leads(current_user: CurrentUser = Depends(require_crm_access)):
             ) AS next_app
             ON next_app.lead_id = l.id
             WHERE l.user_id = ?
+              AND (l.is_playground IS NULL OR l.is_playground = 0)
             ORDER BY l.createdAt DESC
             """
             ,
@@ -452,11 +517,44 @@ def start_followup_transition(
                 payload.lead_id,
                 missing_fields,
             )
+            _SCORE_SENTINEL = "_below_threshold_"
+            _real_missing = [k for k in missing_fields if _SCORE_SENTINEL not in k]
+            _score_failure = any(_SCORE_SENTINEL in k for k in missing_fields)
+            missing_fields_detail = []
+            try:
+                _profile = fetch_core_ai_profile(current_user.token) or {}
+                _qfields = _profile.get("qualification_fields") or []
+                _field_meta = {f["key"]: f for f in _qfields if isinstance(f, dict) and "key" in f}
+                for _key in _real_missing:
+                    _meta = _field_meta.get(_key, {})
+                    missing_fields_detail.append({
+                        "key": _key,
+                        "label": _meta.get("label") or _key,
+                        "question": _meta.get("question"),
+                    })
+                if _score_failure:
+                    # Sempre exibir os 4 campos 4P — são os únicos que compute_4p_scores() lê.
+                    # Campos custom do AI Profile (ex: "Quer agendar") não afetam o score,
+                    # por isso não podem resolver uma falha de pontuação.
+                    _active_keys = {d["key"] for d in missing_fields_detail}
+                    _4p_defaults = [
+                        ("decision_role", "Papel na decisão de compra", "O lead decide sozinho? Ex: 'Sim, sou eu' ou 'Preciso consultar meu sócio'"),
+                        ("urgency", "Urgência / necessidade", "Qual a urgência? Ex: 'Precisa essa semana' ou 'Sem pressa por enquanto'"),
+                        ("budget_or_price_acceptance", "Orçamento / aceitação de preço", "O lead aceitou o preço? Ex: 'Ok, tranquilo' ou 'Está um pouco caro'"),
+                        ("availability_window", "Janela de disponibilidade", "Quando o lead tem disponibilidade? Ex: 'Terças de manhã' ou 'Qualquer dia da semana'"),
+                    ]
+                    for _key, _label, _question in _4p_defaults:
+                        if _key not in _active_keys:
+                            missing_fields_detail.append({"key": _key, "label": _label, "question": _question})
+            except Exception:
+                missing_fields_detail = [{"key": k, "label": k, "question": None} for k in _real_missing]
             raise HTTPException(
                 status_code=400,
                 detail={
                     "error": "qualification_incomplete",
                     "missing_fields": missing_fields,
+                    "missing_fields_detail": missing_fields_detail,
+                    "score_failure": _score_failure,
                     "message": "Não é possível iniciar follow-up: qualification incompleta",
                 },
             )
@@ -570,6 +668,30 @@ def start_followup_transition(
         conn.close()
 
 
+@router.patch("/{lead_id}/qualification-fields")
+def patch_lead_qualification_fields(
+    lead_id: int,
+    body: QualificationPatchPayload,
+    current_user: CurrentUser = Depends(require_crm_access),
+):
+    conn = get_connection()
+    try:
+        row = conn.execute(
+            "SELECT id FROM leads WHERE id = ? AND user_id = ?",
+            (lead_id, current_user.id),
+        ).fetchone()
+        if row is None:
+            raise HTTPException(status_code=404, detail="Lead não encontrado")
+        upsert_qualification_state(lead_id, current_user.id, {"data_json": body.fields})
+        return {"status": "ok", "lead_id": lead_id}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        conn.close()
+
+
 @router.get("/followups/active")
 def list_active_followups(current_user: CurrentUser = Depends(require_crm_access)):
     """Lista leads em follow-up não encerrado, ordenados por próximo envio."""
@@ -583,6 +705,7 @@ def list_active_followups(current_user: CurrentUser = Depends(require_crm_access
              WHERE user_id = ?
                AND category = 'follow-up'
                AND COALESCE(followup_status, '') != 'closed'
+               AND (is_playground IS NULL OR is_playground = 0)
              ORDER BY
                CASE COALESCE(followup_status,'')
                     WHEN 'active' THEN 0
@@ -624,6 +747,7 @@ def followup_stats(current_user: CurrentUser = Depends(require_crm_access)):
              WHERE user_id = ?
                AND category = 'follow-up'
                AND COALESCE(followup_status, '') != 'closed'
+               AND (is_playground IS NULL OR is_playground = 0)
             """,
             (current_user.id,),
         ).fetchall()
@@ -1241,26 +1365,41 @@ def regenerate_followup_message(lead_id: int, current_user: CurrentUser = Depend
     contract = _normalize_followup_contract(row["followup_contract"], agent_type=row["agent_type"]) or {}
     attempts = int(contract.get("attempts") or 0)
     max_attempts = int(contract.get("max_attempts") or 4)
-    temperature = str(contract.get("outcome") or "warm").lower()
-    goal = str(contract.get("followup_goal") or "avançar o processo de vendas")
-    operator_note = str(contract.get("operator_note") or "")
+    outcome = str(contract.get("outcome") or "warm").lower()
+    goal = str(contract.get("followup_goal") or "").strip()
+    operator_note = str(contract.get("operator_note") or "").strip()
     contact = str(row["contactName"] or row["companyName"] or "")
     first_name = contact.split()[0] if contact else "você"
 
-    temp_context = {
-        "hot":  "o lead demonstrou alto interesse e está próximo de fechar",
-        "warm": "o lead tem interesse moderado e precisa de um acompanhamento",
+    ai_profile: dict = {}
+    try:
+        ai_profile = fetch_core_ai_profile(current_user.token) or {}
+    except Exception:
+        pass
+
+    brand_name = str(ai_profile.get("brand_name") or "").strip()
+    tone_of_voice = str(ai_profile.get("tone_of_voice") or "amigável e profissional").strip()
+    niche = str(ai_profile.get("niche") or "").strip()
+
+    situation_map = {
+        "hot": "o lead demonstrou alto interesse e está próximo de fechar",
+        "warm": "o lead tem interesse moderado e está sendo acompanhado",
         "cold": "o lead está distante e precisa ser reengajado com cuidado",
-    }.get(temperature, "o lead está em acompanhamento")
+        "interested_not_closed": "o lead tem interesse mas ainda não fechou",
+        "reschedule_needed": "o lead precisa remarcar o horário",
+        "converted": "o lead converteu e está entrando no processo de onboarding",
+        "no_show": "o lead não compareceu ao último contato",
+    }
+    situation = situation_map.get(outcome, "o lead está em acompanhamento")
 
-    note_fragment = f"\n\nContexto: {operator_note}" if operator_note else ""
-
-    content = (
-        f"Oi {first_name}! Tudo bem por aí?\n\n"
-        f"Passando para dar continuidade à nossa conversa — esta é a tentativa {attempts + 1} de {max_attempts}. "
-        f"Sei que {temp_context}, e quero garantir que você tenha tudo que precisa para seguir em frente.\n\n"
-        f"Objetivo: {goal}.{note_fragment}\n\n"
-        f"Pode contar comigo para qualquer dúvida! 💬"
+    content = _generate_followup_message_llm(
+        first_name=first_name,
+        brand_name=brand_name,
+        niche=niche,
+        tone_of_voice=tone_of_voice,
+        situation=situation,
+        goal=goal,
+        operator_note=operator_note,
     )
 
     return {"content": content, "generated": True, "attempts": attempts, "max_attempts": max_attempts}

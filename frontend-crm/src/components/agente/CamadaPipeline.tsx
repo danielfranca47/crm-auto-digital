@@ -1,6 +1,10 @@
 import { useState } from 'react';
+import { FieldHelp } from './FieldHelp';
+import { SuggestInput } from './SuggestField';
 import type { AgentConfig } from '@/types/agente';
 import { LGPD_LABELS, REATIVACAO_LABELS, MEDIA_FALLBACK_LABELS } from '@/types/agente';
+import { buildVariableList } from '@/types/variables';
+import { VariableTextarea } from './VariableTextarea';
 
 interface CamadaPipelineProps {
   config: AgentConfig;
@@ -59,6 +63,7 @@ function DrawerMidia({ config, onSave, onClose }: {
 }) {
   const [fallback, setFallback] = useState(config.media_fallback);
   const [msg, setMsg] = useState(config.media_fallback_msg);
+  const variables = buildVariableList(config.custom_variables || {});
   return (
     <DrawerBase title="Mídia inválida" sub="O que fazer quando o lead envia áudio, vídeo, figurinha ou reação" onClose={onClose} onSave={() => onSave({ media_fallback: fallback, media_fallback_msg: msg })}>
       <div className="o-field">
@@ -72,7 +77,7 @@ function DrawerMidia({ config, onSave, onClose }: {
       {fallback !== 'ignorar' && (
         <div className="o-field">
           <label className="o-field-label">Mensagem ao lead</label>
-          <textarea className="o-textarea" value={msg} onChange={e => setMsg(e.target.value)} />
+          <VariableTextarea value={msg} onChange={setMsg} variables={variables} />
         </div>
       )}
     </DrawerBase>
@@ -89,6 +94,7 @@ function ModalOptOut({ config, onSave, onClose }: {
   const [notify, setNotify] = useState(config.opt_out_notify);
   const [confirm, setConfirm] = useState(config.opt_out_confirm);
   const [confirmMsg, setConfirmMsg] = useState(config.opt_out_confirm_msg);
+  const optOutVariables = buildVariableList(config.custom_variables || {});
 
   function addKw() {
     const v = kwInput.trim().toUpperCase();
@@ -136,7 +142,7 @@ function ModalOptOut({ config, onSave, onClose }: {
       {confirm && (
         <div className="o-field">
           <label className="o-field-label">Mensagem de confirmação ao lead</label>
-          <textarea className="o-textarea" value={confirmMsg} onChange={e => setConfirmMsg(e.target.value)} />
+          <VariableTextarea value={confirmMsg} onChange={setConfirmMsg} variables={optOutVariables} />
         </div>
       )}
     </ModalBase>
@@ -149,6 +155,7 @@ function ModalLGPD({ config, onSave, onClose }: {
 }) {
   const [mode, setMode] = useState(config.lgpd_mode);
   const [msg, setMsg] = useState(config.lgpd_msg);
+  const lgpdVariables = buildVariableList(config.custom_variables || {});
 
   return (
     <ModalBase title="Consentimento LGPD" sub="Lei Geral de Proteção de Dados — obrigatório independente do tipo de API" onClose={onClose}
@@ -162,7 +169,7 @@ function ModalLGPD({ config, onSave, onClose }: {
       {mode === 'explicit' && (
         <div className="o-field">
           <label className="o-field-label">Mensagem de opt-in explícito</label>
-          <textarea className="o-textarea" value={msg} onChange={e => setMsg(e.target.value)} />
+          <VariableTextarea value={msg} onChange={setMsg} variables={lgpdVariables} />
         </div>
       )}
     </ModalBase>
@@ -175,6 +182,7 @@ function ModalReativacao({ config, onSave, onClose }: {
 }) {
   const [mode, setMode] = useState(config.reactivation_mode);
   const [msg, setMsg] = useState(config.reactivation_msg);
+  const reativacaoVariables = buildVariableList(config.custom_variables || {});
 
   return (
     <ModalBase title="Reativação de arquivados" sub="O que acontece quando um lead arquivado envia uma mensagem espontaneamente" onClose={onClose}
@@ -188,7 +196,7 @@ function ModalReativacao({ config, onSave, onClose }: {
       </div>
       <div className="o-field">
         <label className="o-field-label">Mensagem de reabertura</label>
-        <textarea className="o-textarea" value={msg} onChange={e => setMsg(e.target.value)} />
+        <VariableTextarea value={msg} onChange={setMsg} variables={reativacaoVariables} />
       </div>
     </ModalBase>
   );
@@ -198,7 +206,57 @@ function ModalReativacao({ config, onSave, onClose }: {
 // Componente principal
 // ─────────────────────────────────────────────────────────────
 
-type DrawerKey = 'followup' | 'limite' | 'intervalo' | 'midia' | null;
+// ─── Drawer: Follow-up avançado ───────────────────────────────
+function DrawerFollowupAvancado({ config, onSave, onClose }: {
+  config: AgentConfig; onSave: (v: Partial<AgentConfig>) => void; onClose: () => void;
+}) {
+  const [maxAttempts, setMaxAttempts] = useState(config.followup_max_attempts);
+  const [firstOffset, setFirstOffset] = useState(config.followup_first_offset);
+  const [cadence, setCadence]         = useState(config.followup_cadence);
+  const [allowedHours, setAllowedHours] = useState(config.followup_allowed_hours);
+  const [cadenceError, setCadenceError] = useState<string | null>(null);
+
+  function validateCadence(v: string) {
+    setCadence(v);
+    const parts = v.split(',').map(s => s.trim());
+    if (parts.some(p => isNaN(Number(p)) || Number(p) <= 0)) {
+      setCadenceError('Formato inválido — use números separados por vírgula. Ex: 60,1440,4320');
+    } else {
+      setCadenceError(null);
+    }
+  }
+
+  return (
+    <DrawerBase title="Follow-up avançado" sub="Parâmetros detalhados de cadência e horário de envio" onClose={onClose}
+      onSave={() => onSave({ followup_max_attempts: maxAttempts, followup_first_offset: firstOffset, followup_cadence: cadence, followup_allowed_hours: allowedHours })}>
+      <SliderField label="Máx. tentativas de follow-up" value={maxAttempts} min={1} max={10} step={1} format={v => String(v)} onChange={setMaxAttempts} />
+      <SliderField label="Primeiro offset (minutos após silêncio)" value={firstOffset} min={5} max={1440} step={5} format={v => v < 60 ? `${v}min` : `${Math.round(v/60)}h`} onChange={setFirstOffset} />
+      <div className="o-field">
+        <label className="o-field-label">Cadência completa (minutos, separados por vírgula)</label>
+        <div className="o-field-hint">Ex: 60,1440,4320 → 1h depois, 1 dia depois, 3 dias depois</div>
+        <input
+          className={`o-input${cadenceError ? ' o-input-error' : ''}`}
+          value={cadence}
+          onChange={e => validateCadence(e.target.value)}
+          placeholder="60,1440,4320"
+        />
+        {cadenceError && <div style={{ fontSize: 11, color: 'var(--o-hot)', marginTop: 4 }}>{cadenceError}</div>}
+      </div>
+      <div className="o-field">
+        <label className="o-field-label">Horário permitido (UTC)</label>
+        <div className="o-field-hint">Formato: HH:MM-HH:MM. Ex: 08:00-20:00 (fuso configurado na Camada 1)</div>
+        <SuggestInput
+          className="o-input"
+          value={allowedHours}
+          onChange={e => setAllowedHours(e.target.value)}
+          placeholder="08:00-20:00"
+        />
+      </div>
+    </DrawerBase>
+  );
+}
+
+type DrawerKey = 'followup' | 'followup_avancado' | 'limite' | 'intervalo' | 'midia' | null;
 type ModalKey  = 'optout' | 'lgpd' | 'reativacao' | null;
 
 export function CamadaPipeline({ config, onUpdate, phoneNumber }: CamadaPipelineProps) {
@@ -226,8 +284,8 @@ export function CamadaPipeline({ config, onUpdate, phoneNumber }: CamadaPipeline
       </div>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 14, marginBottom: 24 }}>
         <InfoCard label="Número conectado" value={phoneNumber ?? '—'} sub="Sessão QR via WhatsApp Web" status="ok" />
-        <EditCard label="Intervalo entre mensagens" value={`${config.interval_min}–${config.interval_max} segundos`} sub="Delay simulado de comportamento humano" onClick={() => setDrawer('intervalo')} status="ok" />
-        <EditCard label="Limite diário de disparos" value={`${config.daily_limit} mensagens/dia`} sub="Proteção comportamental" onClick={() => setDrawer('limite')} status="ok" />
+        <EditCard label="Intervalo entre mensagens" value={`${config.interval_min}–${config.interval_max} segundos`} sub="Delay simulado de comportamento humano" onClick={() => setDrawer('intervalo')} status="ok" help="Intervalo aleatório entre mensagens consecutivas. Simula comportamento humano e reduz risco de ban pelo WhatsApp. Valores muito baixos aumentam a suspeita de automação." />
+        <EditCard label="Limite diário de disparos" value={`${config.daily_limit} mensagens/dia`} sub="Proteção comportamental" onClick={() => setDrawer('limite')} status="ok" help="Limite de disparos por dia neste número. Recomendado 150–300 para uso regular. Acima disso aumenta o risco de detecção e bloqueio pelo WhatsApp." />
       </div>
 
       {/* Seção 1: Comportamento por evento */}
@@ -246,18 +304,21 @@ export function CamadaPipeline({ config, onUpdate, phoneNumber }: CamadaPipeline
           label="Mídia inválida" sub="Áudio, vídeo, figurinha ou reação"
           value={MEDIA_FALLBACK_LABELS[config.media_fallback] || config.media_fallback || '—'}
           onClick={() => setDrawer('midia')} status={mediaConfigured ? 'ok' : 'warn'}
+          help="O que fazer quando o lead envia mídia não processável (áudio, vídeo, figurinha, reação): continuar o fluxo normalmente, pausar o bot ou ignorar silenciosamente."
         />
         <EditCard
           label="Opt-out por palavra-chave" sub="STOP · PARAR · SAIR · CANCELAR"
           value={optoutConfigured ? `${config.opt_out_keywords.length} palavras configuradas` : 'Não configurado'}
           onClick={() => setModal('optout')} status={optoutConfigured ? 'ok' : 'miss'}
           critical={!optoutConfigured}
+          help="Palavras que indicam que o lead quer parar de receber mensagens. Crítico: sem configuração, o bot continua contatando quem pediu para parar — risco direto de ban do número."
         />
         <EditCard
           label="Consentimento LGPD" sub="Lei brasileira — obrigatório"
           value={LGPD_LABELS[config.lgpd_mode] || 'Não configurado'}
           onClick={() => setModal('lgpd')} status={lgpdConfigured ? 'ok' : 'miss'}
           critical={!lgpdConfigured}
+          help="Define quando o agente coleta consentimento de uso de dados. Obrigatório por lei brasileira (LGPD). Pode ser implícito (inbound), explícito (confirmação) ou apenas no outbound."
         />
       </div>
 
@@ -272,6 +333,14 @@ export function CamadaPipeline({ config, onUpdate, phoneNumber }: CamadaPipeline
           label="Thresholds de follow-up" sub="Cadência espaçada — proteção comportamental"
           value={fu1Label}
           onClick={() => setDrawer('followup')} status={followupConfigured ? 'ok' : 'warn'}
+          help="Intervalos da cadência de follow-up após silêncio do lead (1ª, 2ª e 3ª tentativa). Cadências muito curtas parecem spam; muito longas perdem o momento de compra."
+        />
+        <EditCard
+          label="Follow-up avançado"
+          sub={`Máx. ${config.followup_max_attempts} tentativas · ${config.followup_allowed_hours}`}
+          value={`Cadência: ${config.followup_cadence || 'não configurada'}`}
+          onClick={() => setDrawer('followup_avancado')} status="ok"
+          help="Parâmetros avançados: máximo de tentativas (após isso o lead é arquivado), horário permitido de envio e cadência personalizada em minutos."
         />
       </div>
 
@@ -292,14 +361,16 @@ export function CamadaPipeline({ config, onUpdate, phoneNumber }: CamadaPipeline
           value={REATIVACAO_LABELS[config.reactivation_mode] || 'Não configurado'}
           onClick={() => setModal('reativacao')} status={reatConfigured ? 'ok' : 'miss'}
           critical={!reatConfigured}
+          help="O que acontece quando um lead arquivado envia uma mensagem espontaneamente: reativar o bot, reiniciar o fluxo, retomar do ponto exato, ou apenas notificar o operador sem responder."
         />
       </div>
 
       {/* Drawers */}
-      {drawer === 'followup'  && <DrawerFollowup  config={config} onClose={() => setDrawer(null)} onSave={v => { onUpdate(v); setDrawer(null); }} />}
-      {drawer === 'limite'    && <DrawerLimite    value={config.daily_limit} onClose={() => setDrawer(null)} onSave={v => { onUpdate({ daily_limit: v }); setDrawer(null); }} />}
-      {drawer === 'intervalo' && <DrawerIntervalo config={config} onClose={() => setDrawer(null)} onSave={v => { onUpdate(v); setDrawer(null); }} />}
-      {drawer === 'midia'     && <DrawerMidia     config={config} onClose={() => setDrawer(null)} onSave={v => { onUpdate(v); setDrawer(null); }} />}
+      {drawer === 'followup'          && <DrawerFollowup          config={config} onClose={() => setDrawer(null)} onSave={v => { onUpdate(v); setDrawer(null); }} />}
+      {drawer === 'followup_avancado' && <DrawerFollowupAvancado  config={config} onClose={() => setDrawer(null)} onSave={v => { onUpdate(v); setDrawer(null); }} />}
+      {drawer === 'limite'            && <DrawerLimite    value={config.daily_limit} onClose={() => setDrawer(null)} onSave={v => { onUpdate({ daily_limit: v }); setDrawer(null); }} />}
+      {drawer === 'intervalo'         && <DrawerIntervalo config={config} onClose={() => setDrawer(null)} onSave={v => { onUpdate(v); setDrawer(null); }} />}
+      {drawer === 'midia'             && <DrawerMidia     config={config} onClose={() => setDrawer(null)} onSave={v => { onUpdate(v); setDrawer(null); }} />}
 
       {/* Modais */}
       {modal === 'optout'    && <ModalOptOut    config={config} onClose={() => setModal(null)} onSave={v => { onUpdate(v); setModal(null); }} />}
@@ -311,15 +382,15 @@ export function CamadaPipeline({ config, onUpdate, phoneNumber }: CamadaPipeline
 
 // ─── Componentes internos ─────────────────────────────────────
 
-function EditCard({ label, value, sub, onClick, status, critical }: {
+function EditCard({ label, value, sub, onClick, status, critical, help }: {
   label: string; value: string; sub: string; onClick: () => void;
-  status: 'ok' | 'warn' | 'miss'; critical?: boolean;
+  status: 'ok' | 'warn' | 'miss'; critical?: boolean; help?: string;
 }) {
   const borderColor = critical ? 'var(--o-hot-b)' : 'var(--o-b0)';
   const valueColor  = status === 'miss' ? 'var(--o-hot)' : status === 'warn' ? 'var(--o-warn)' : 'var(--o-text)';
   return (
     <div className="o-edit-card" style={{ borderColor }} onClick={onClick}>
-      <div className="font-mono-orion" style={{ fontSize: 8, letterSpacing: 2, textTransform: 'uppercase', color: 'var(--o-dim)', marginBottom: 6 }}>{label}</div>
+      <div className="font-mono-orion" style={{ fontSize: 8, letterSpacing: 2, textTransform: 'uppercase', color: 'var(--o-dim)', marginBottom: 6, display: 'flex', alignItems: 'center' }}>{label}{help && <FieldHelp text={help} />}</div>
       <div style={{ fontSize: 13, color: valueColor, marginBottom: 4 }}>{value}</div>
       <div style={{ fontSize: 11, color: 'var(--o-sub)', fontWeight: 300, marginBottom: 8 }}>{sub}</div>
       <span className={`o-badge ${status === 'ok' ? 'o-badge-ok' : status === 'warn' ? 'o-badge-warn' : 'o-badge-miss'}`}>

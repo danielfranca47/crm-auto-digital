@@ -118,6 +118,8 @@ def _normalize_status(raw: Dict[str, Any]) -> Optional[str]:
 def _infer_qr_kind(value: str) -> str:
     if value.startswith("http://") or value.startswith("https://"):
         return "url"
+    if value.startswith("data:image"):
+        return "url"  # data URI — frontend pode usar como src diretamente
     if re.fullmatch(r"[A-Za-z0-9+/=\n\r]+", value) and len(value) > 80:
         return "base64"
     return "text"

@@ -1,6 +1,17 @@
 """Playbook definitions and helper for AI responses (ETAPA 1 MVP)."""
 from typing import Any, Dict
 
+# Defaults para o estágio de aquecimento do hybrid_scheduler (Tarefa 3.8)
+# Nota: o decision_engine gera defaults context-aware usando ai_profile.niche em runtime.
+# Estes valores são fallback genérico neutro (sem linguagem B2B como "profissional com o seu perfil").
+DEFAULT_SOCIAL_PROOF = (
+    "Vários clientes já utilizaram o serviço e tiveram ótimos resultados. "
+    "Posso te contar mais na nossa conversa."
+)
+DEFAULT_SESSION_PREVIEW = (
+    "Na nossa sessão, vamos entender o que você precisa e encontrar a melhor forma de te ajudar."
+)
+
 PLAYBOOKS: Dict[str, Dict[str, Any]] = {
     "sdr_padrao": {
         "max_chars": 350,
@@ -61,8 +72,26 @@ PLAYBOOKS: Dict[str, Dict[str, Any]] = {
             },
         },
     },
-    # Playbook para Agent 3 (hybrid_scheduler) — coaches, terapeutas e consultores solo.
+    # Playbook principal para Agent 3 (hybrid_scheduler) — coaches, terapeutas e consultores solo.
     # Tom: pessoal e próximo, como assistente do próprio profissional — nunca SDR agressivo.
+    # Inclui estágio de aquecimento (warming) entre qualificação e proposta de agenda.
+    "hybrid_scheduler": {
+        "max_chars": 400,
+        "response_style": "personal",
+        "default_next_action": "reply",
+        "qualification_questions": [
+            "Qual é o principal desafio que você quer resolver?",
+            "Já tentou outras abordagens antes? Como foi?",
+        ],
+        "tone_rule": "pessoal e próximo, como assistente do próprio profissional — nunca SDR agressivo",
+        "warming": {
+            "trigger": "after_qualification_approved",
+            "steps": ["social_proof", "session_preview"],
+            # templates resolvidos em runtime a partir de ai_profile.warming_social_proof
+            # e ai_profile.warming_session_preview; os defaults estão nas constantes acima
+        },
+    },
+    # Playbook de follow-up para Agent 3 — ramificações por outcome pós-apresentação.
     # As 3 ramificações de outcome são usadas pelo decision_engine para personalizar o prompt.
     "hybrid_scheduler_followup": {
         "max_chars": 400,
@@ -99,8 +128,8 @@ def get_playbook(template_key: str | None) -> Dict[str, Any]:
     key = template_key or "sdr_padrao"
     if key == "closer_agressivo_controlado":
         key = "closer_agressivo"
-    if key == "hybrid_scheduler":
-        key = "hybrid_scheduler_followup"
+    # hybrid_scheduler agora tem playbook próprio (com estágio warming).
+    # hybrid_scheduler_followup continua disponível para contexto específico de follow-up.
     playbook = PLAYBOOKS.get(key)
     if playbook is None:
         return dict(PLAYBOOKS["sdr_padrao"])

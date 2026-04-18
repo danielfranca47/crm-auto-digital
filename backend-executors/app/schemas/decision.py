@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Literal, Optional
+from typing import List, Literal, Optional, Union
 
 from pydantic import BaseModel, Field, field_validator
 
@@ -17,6 +17,8 @@ class DecisionOutput(BaseModel):
     signals: list[str] = Field(default_factory=list)
     confidence: Optional[float] = None
     decision_trace: Optional[dict] = None
+    # Mídia rica: lista de mídias enviadas antes do texto (suporte a múltiplas mídias e idiomas)
+    pre_send_media: Optional[Union[List[dict], dict]] = None
 
     @field_validator("questions", mode="after")
     @classmethod

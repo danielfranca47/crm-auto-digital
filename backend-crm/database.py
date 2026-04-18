@@ -238,6 +238,174 @@ def ensure_notifications_table(conn: sqlite3.Connection) -> None:
         CREATE INDEX IF NOT EXISTS idx_notifications_lead ON notifications(lead_id);
         """
     )
+    ensure_column(conn, "notifications", "body", "body TEXT")
+
+
+def ensure_unmatched_payment_events_table(conn: sqlite3.Connection) -> None:
+    """Cria tabela para eventos de pagamento sem lead vinculado (idempotente)."""
+    cur = conn.cursor()
+    cur.executescript(
+        """
+        CREATE TABLE IF NOT EXISTS unmatched_payment_events (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            gateway TEXT NOT NULL,
+            raw_payload TEXT NOT NULL,
+            buyer_email TEXT,
+            buyer_phone TEXT,
+            buyer_document TEXT,
+            checkout_token TEXT,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_unmatched_payment_created ON unmatched_payment_events(created_at);
+        """
+    )
+
+
+def ensure_spy_agent_tables(conn: sqlite3.Connection) -> None:
+    """Cria tabelas do Agente Espião (idempotente)."""
+    cur = conn.cursor()
+    cur.executescript(
+        """
+        CREATE TABLE IF NOT EXISTS spy_agent_runs (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL,
+            status TEXT NOT NULL DEFAULT 'observing'
+                CHECK (status IN ('observing','analyzing','completed','failed')),
+            modules_requested TEXT NOT NULL,
+            use_optimized_strategy INTEGER NOT NULL DEFAULT 1,
+            observation_days INTEGER NOT NULL DEFAULT 14,
+            observation_start_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            observation_end_at DATETIME NOT NULL,
+            analyzing_started_at DATETIME,
+            completed_at DATETIME,
+            leads_sampled INTEGER DEFAULT 0,
+            messages_sampled INTEGER DEFAULT 0,
+            error TEXT
+        );
+
+        CREATE TABLE IF NOT EXISTS spy_agent_reports (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            run_id INTEGER NOT NULL,
+            user_id INTEGER NOT NULL,
+            module TEXT NOT NULL,
+            suggestions_json TEXT,
+            compatibility_json TEXT,
+            applied INTEGER NOT NULL DEFAULT 0,
+            applied_at DATETIME,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (run_id) REFERENCES spy_agent_runs(id) ON DELETE CASCADE
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_spy_runs_user ON spy_agent_runs(user_id, status);
+        CREATE INDEX IF NOT EXISTS idx_spy_runs_expiry ON spy_agent_runs(status, observation_end_at);
+        CREATE INDEX IF NOT EXISTS idx_spy_reports_run ON spy_agent_reports(run_id);
+        CREATE INDEX IF NOT EXISTS idx_spy_reports_user ON spy_agent_reports(user_id, module);
+
+        CREATE TABLE IF NOT EXISTS spy_agent_config (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL UNIQUE,
+            spy_instance_id TEXT NOT NULL,
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL
+        );
+
+        CREATE TABLE IF NOT EXISTS spy_agent_messages (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL,
+            sender_phone TEXT NOT NULL,
+            body TEXT,
+            message_type TEXT NOT NULL DEFAULT 'text',
+            media_url TEXT,
+            transcription TEXT,
+            external_message_id TEXT,
+            received_at TEXT NOT NULL,
+            processed_at TEXT,
+            UNIQUE(user_id, external_message_id)
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_spy_config_user ON spy_agent_config(user_id);
+        CREATE INDEX IF NOT EXISTS idx_spy_msgs_user ON spy_agent_messages(user_id, received_at);
+        CREATE INDEX IF NOT EXISTS idx_spy_msgs_sender ON spy_agent_messages(user_id, sender_phone, received_at);
+        """
+    )
+
+
+def ensure_business_info_table(conn: sqlite3.Connection) -> None:
+    """Cria tabela de informações gerais do negócio por usuário (idempotente)."""
+    cur = conn.cursor()
+    cur.executescript(
+        """
+        CREATE TABLE IF NOT EXISTS business_info (
+            id         INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id    INTEGER NOT NULL,
+            field_key  TEXT NOT NULL,
+            label      TEXT NOT NULL,
+            value      TEXT,
+            enabled    INTEGER NOT NULL DEFAULT 1,
+            sort_order INTEGER NOT NULL DEFAULT 0,
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL
+        );
+
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_business_info_user_key
+            ON business_info(user_id, field_key);
+        CREATE INDEX IF NOT EXISTS idx_business_info_user
+            ON business_info(user_id, sort_order);
+        """
+    )
+
+
+_BUSINESS_INFO_DEFAULTS = [
+    ("horario",   "Horário de funcionamento", 0),
+    ("telefone",  "Telefone para ligações",   1),
+    ("website",   "Website",                  2),
+    ("endereco",  "Endereço",                 3),
+    ("instagram", "Instagram",                4),
+    ("facebook",  "Facebook",                 5),
+    ("youtube",   "YouTube",                  6),
+    ("whatsapp",  "WhatsApp de atendimento",  7),
+]
+
+
+def seed_business_info_defaults(conn: sqlite3.Connection, user_id: int) -> None:
+    """Insere os campos padrão de business_info para um usuário, se ainda não existirem."""
+    now = datetime.utcnow().isoformat()
+    cur = conn.cursor()
+    for field_key, label, sort_order in _BUSINESS_INFO_DEFAULTS:
+        cur.execute(
+            """
+            INSERT OR IGNORE INTO business_info
+                (user_id, field_key, label, value, enabled, sort_order, created_at, updated_at)
+            VALUES (?, ?, ?, NULL, 1, ?, ?, ?)
+            """,
+            (user_id, field_key, label, sort_order, now, now),
+        )
+
+
+def ensure_playground_training_table(conn: sqlite3.Connection) -> None:
+    """Cria tabela de exemplos de treino do playground (idempotente)."""
+    cur = conn.cursor()
+    cur.executescript(
+        """
+        CREATE TABLE IF NOT EXISTS playground_training_items (
+            id            INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id       TEXT NOT NULL,
+            ai_profile_id INTEGER NOT NULL,
+            agent_mode    TEXT,
+            phase         TEXT,
+            mother_route  TEXT,
+            lead_message  TEXT,
+            bot_message   TEXT NOT NULL,
+            rating        TEXT NOT NULL CHECK(rating IN ('ruim','regular','boa','excelente')),
+            comment       TEXT,
+            created_at    TEXT DEFAULT (datetime('now'))
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_training_user_profile
+            ON playground_training_items(user_id, ai_profile_id, agent_mode, phase);
+        """
+    )
 
 
 def ensure_knowledge_table(conn: sqlite3.Connection) -> None:
@@ -260,6 +428,72 @@ def ensure_knowledge_table(conn: sqlite3.Connection) -> None:
         CREATE INDEX IF NOT EXISTS idx_knowledge_user_created ON knowledge_items(user_id, created_at);
         """
     )
+    ensure_column(conn, "knowledge_items", "category", "category TEXT NULL")
+    ensure_column(conn, "knowledge_items", "active_in_funnel", "active_in_funnel INTEGER NOT NULL DEFAULT 1")
+    ensure_column(conn, "knowledge_items", "media_url", "media_url TEXT NULL")
+
+
+def ensure_knowledge_item_media_table(conn: sqlite3.Connection) -> None:
+    """Cria tabela de mídias por item de conhecimento (suporte a múltiplas mídias e idiomas)."""
+    cur = conn.cursor()
+    cur.executescript(
+        """
+        CREATE TABLE IF NOT EXISTS knowledge_item_media (
+            id                 INTEGER PRIMARY KEY AUTOINCREMENT,
+            knowledge_item_id  INTEGER NOT NULL,
+            media_url          TEXT NOT NULL,
+            media_type         TEXT NOT NULL DEFAULT 'image'
+                                   CHECK (media_type IN ('image','video','audio','pdf')),
+            language           TEXT NOT NULL DEFAULT 'all'
+                                   CHECK (language IN ('all','pt','en','es')),
+            send_order         INTEGER NOT NULL DEFAULT 0,
+            created_at         TEXT NOT NULL,
+            FOREIGN KEY (knowledge_item_id) REFERENCES knowledge_items(id) ON DELETE CASCADE
+        );
+        CREATE INDEX IF NOT EXISTS idx_kim_item     ON knowledge_item_media(knowledge_item_id);
+        CREATE INDEX IF NOT EXISTS idx_kim_item_ord ON knowledge_item_media(knowledge_item_id, send_order);
+        """
+    )
+
+
+def migrate_knowledge_media_to_table(conn: sqlite3.Connection) -> None:
+    """Migração idempotente: copia media_url existente de knowledge_items para knowledge_item_media."""
+    cur = conn.cursor()
+    cur.execute(
+        """
+        SELECT ki.id, ki.media_url
+          FROM knowledge_items ki
+         WHERE ki.media_url IS NOT NULL
+           AND NOT EXISTS (
+               SELECT 1 FROM knowledge_item_media kim
+                WHERE kim.knowledge_item_id = ki.id
+           )
+        """
+    )
+    rows = cur.fetchall()
+    if not rows:
+        return
+    now_iso = datetime.utcnow().isoformat()
+    for row in rows:
+        item_id = row[0] if not hasattr(row, "keys") else row["id"]
+        media_url = row[1] if not hasattr(row, "keys") else row["media_url"]
+        ext = media_url.rsplit(".", 1)[-1].lower() if "." in media_url else ""
+        if ext in {"mp4"}:
+            media_type = "video"
+        elif ext in {"pdf"}:
+            media_type = "pdf"
+        elif ext in {"mp3", "ogg", "opus"}:
+            media_type = "audio"
+        else:
+            media_type = "image"
+        cur.execute(
+            """
+            INSERT INTO knowledge_item_media
+                (knowledge_item_id, media_url, media_type, language, send_order, created_at)
+            VALUES (?, ?, ?, 'all', 0, ?)
+            """,
+            (item_id, media_url, media_type, now_iso),
+        )
 
 
 # =========================
@@ -693,6 +927,14 @@ def init_db() -> None:
         ensure_column(conn, "appointments", "outcome_at", "outcome_at DATETIME")
         ensure_column(conn, "lead_qualification_state", "asked_questions_json", "asked_questions_json TEXT DEFAULT '[]'")
         ensure_column(conn, "lead_qualification_state", "last_question_text", "last_question_text TEXT")
+        ensure_column(conn, "lead_qualification_state", "power_score", "power_score INTEGER NOT NULL DEFAULT 0")
+        ensure_column(conn, "lead_qualification_state", "priority_score", "priority_score INTEGER NOT NULL DEFAULT 0")
+        ensure_column(conn, "lead_qualification_state", "price_score", "price_score INTEGER NOT NULL DEFAULT 0")
+        ensure_column(conn, "lead_qualification_state", "timing_score", "timing_score INTEGER NOT NULL DEFAULT 0")
+        ensure_column(conn, "lead_qualification_state", "qualification_total_score", "qualification_total_score INTEGER NOT NULL DEFAULT 0")
+        ensure_column(conn, "leads", "checkout_token", "checkout_token TEXT")
+        ensure_column(conn, "leads", "is_playground", "is_playground INTEGER NOT NULL DEFAULT 0")
+        ensure_column(conn, "leads", "detected_language", "detected_language TEXT NULL")
 
         cur.execute("CREATE INDEX IF NOT EXISTS idx_leads_user ON leads(user_id, createdAt);")
         cur.execute(
@@ -708,6 +950,10 @@ def init_db() -> None:
         cur.execute(
             "CREATE INDEX IF NOT EXISTS idx_leads_followup_due "
             "ON leads(followup_status, next_followup_at, bot_disabled, user_id);"
+        )
+        cur.execute(
+            "CREATE INDEX IF NOT EXISTS idx_leads_playground "
+            "ON leads(user_id, is_playground);"
         )
         try:
             cur.execute("CREATE UNIQUE INDEX IF NOT EXISTS ux_leads_user_phone ON leads(user_id, phone);")
@@ -732,10 +978,24 @@ def init_db() -> None:
         # Notificações in-app
         ensure_notifications_table(conn)
 
+        # Eventos de pagamento sem lead vinculado (Agent 2)
+        ensure_unmatched_payment_events_table(conn)
+
         # Base de conhecimento por usuário
         ensure_knowledge_table(conn)
+        ensure_knowledge_item_media_table(conn)
+        ensure_business_info_table(conn)
+
+        # Tabela de training do playground
+        ensure_playground_training_table(conn)
+
+        # Agente Espião
+        ensure_spy_agent_tables(conn)
+        ensure_column(conn, "spy_agent_messages", "from_me", "from_me INTEGER NOT NULL DEFAULT 0")
+        ensure_column(conn, "messages", "message_type", "message_type TEXT DEFAULT 'text'")
 
         # Migrações
+        migrate_knowledge_media_to_table(conn)
         migrate_user_profile(conn)
         migrate_atividades_to_appointments(conn)  # popula appointments a partir do legado (normalizado)
         backfill_appointment_dates(conn)          # garante start/end

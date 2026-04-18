@@ -44,25 +44,53 @@ def _history_text(history: List[Dict[str, Any]]) -> str:
 def extract_fields_llm(context: Dict[str, Any], fields_schema: Dict[str, str]) -> Dict[str, Any]:
     metadata = context.get("metadata") or {}
     history = context.get("history") or []
+    ai_profile = context.get("ai_profile") or {}
     inbound = str(metadata.get("inbound_message_text") or "")
 
     schema = dict(DEFAULT_FIELD_SCHEMA)
     schema.update(fields_schema or {})
 
+    # Contexto de nicho para extração mais precisa (Tarefa 2.2)
+    niche = str(ai_profile.get("niche") or "")
+    target_audience = str(ai_profile.get("target_audience") or "")
+
+    # Derivar current_field e filled_fields a partir do qualification_state
+    qual_state = context.get("qualification_state")
+    qual_data: Dict[str, Any] = {}
+    if isinstance(qual_state, dict) and qual_state.get("exists") is not False:
+        raw_data = qual_state.get("data_json")
+        if isinstance(raw_data, dict):
+            qual_data = raw_data
+    filled_fields = {
+        k: v for k, v in qual_data.items()
+        if v is not None and v != "" and v != [] and v != {}
+    }
+    current_field = next(
+        (f for f in (fields_schema or {}) if f not in filled_fields),
+        None,
+    )
+
+    _custom_fields = list(fields_schema.keys()) if fields_schema else []
+    _custom_fields_str = ", ".join(_custom_fields) if _custom_fields else "(nenhum)"
+
     prompt = (
-        "Você é um extractor de campos de qualificação. Retorne SOMENTE JSON válido:\n"
-        "{\n"
-        '  "extracted": {"field": "value"},\n'
-        '  "confidence": {"field": 0.0},\n'
-        '  "evidence": {"field": "trecho curto"}\n'
-        "}\n"
-        "Regras:\n"
-        "- Extraia APENAS com base no texto disponível.\n"
-        "- Se não houver evidência, não invente campo.\n"
-        "- confidence entre 0 e 1 por campo.\n"
-        f"- schema: {json.dumps(schema, ensure_ascii=False)}\n"
-        f"- inbound_message_text: {inbound}\n"
-        f"- history: {_history_text(history)}\n"
+        f"Você é um extractor de campos de qualificação para um CRM de vendas.\n\n"
+        f"CAMPO PRIORITÁRIO A EXTRAIR: {current_field or '(todos)'}\n"
+        f"CAMPOS JÁ PREENCHIDOS (não sobrescrever a menos que haja evidência forte de correção):\n"
+        f"{json.dumps(filled_fields, ensure_ascii=False)}\n\n"
+        + (f"NICHO DO NEGÓCIO: {niche}\n" if niche else "")
+        + (f"PÚBLICO-ALVO: {target_audience}\n\n" if target_audience else "\n")
+        + "Regras:\n"
+        f"- Priorize a extração de {current_field or 'todos os campos'}\n"
+        f"- CAMPOS OBRIGATÓRIOS DO PERFIL [{_custom_fields_str}]: extraia TODOS que aparecerem no texto, "
+        f"mesmo sendo campos secundários ao campo prioritário. Limiar: confidence >= 0.4 é suficiente para extrair.\n"
+        "- Para campos de contexto padrão (não listados acima), extraia APENAS se houver evidência CLARA e DIRETA. Limiar: confidence >= 0.6.\n"
+        "- Nunca infira valores — extraia apenas do texto\n"
+        "- Se o lead disse algo ambíguo, retorne confidence baixa, não invente interpretação\n\n"
+        f"Schema: {json.dumps(schema, ensure_ascii=False)}\n"
+        f"Inbound: {inbound}\n"
+        f"Histórico: {_history_text(history)}\n\n"
+        'Retorne SOMENTE JSON válido: {"extracted": {}, "confidence": {}, "evidence": {}}'
     )
 
     raw = llm_service.generate_decision_text(prompt)

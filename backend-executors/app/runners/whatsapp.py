@@ -14,6 +14,7 @@ from app.services import meeting_scheduler
 JOB_MAX_ATTEMPTS = 3
 TYPE_WHATSAPP_FOLLOWUP_TICK = "whatsapp.followup.tick"
 TYPE_WHATSAPP_FOLLOWUP_PREGENERATE = "whatsapp.followup.pregenerate"
+TYPE_WHATSAPP_APPOINTMENT_REMINDER = "whatsapp.appointment.reminder"
 
 
 class ExecutionError(Exception):
@@ -133,6 +134,10 @@ def _is_followup_tick_job(job: Dict[str, Any]) -> bool:
 
 def _is_pregenerate_job(job: Dict[str, Any]) -> bool:
     return str(job.get("type") or "").strip().lower() == TYPE_WHATSAPP_FOLLOWUP_PREGENERATE
+
+
+def _is_appointment_reminder_job(job: Dict[str, Any]) -> bool:
+    return str(job.get("type") or "").strip().lower() == TYPE_WHATSAPP_APPOINTMENT_REMINDER
 
 
 def _resolve_in_reply_to_message_id(*, job_id: str, job: Dict[str, Any], metadata: Dict[str, Any]) -> Optional[str]:
@@ -295,6 +300,47 @@ def _enforce_checkout_link_guardrail_legacy(
     decision.message_text = f"{message_text}{separator}{checkout_link}"
 
 
+def _split_message_body(text: str, max_chars: int) -> list[str]:
+    """Divide um texto longo em partes respeitando parágrafos e max_chars.
+
+    Retorna lista com 1+ strings. O caller envia a primeira como mensagem rastreada
+    e as demais como fire-and-forget para comportamento multi-mensagem humanizado.
+    """
+    if not text or len(text) <= max_chars:
+        return [text] if text else []
+    raw_paras = [p.strip() for p in text.split("\n\n") if p.strip()]
+    if len(raw_paras) <= 1:
+        # Sem parágrafos: tenta dividir por frases (., !, ?)
+        import re as _re
+        sentences = _re.split(r"(?<=[.!?])\s+", text.strip())
+        parts: list[str] = []
+        current = ""
+        for sent in sentences:
+            candidate = (current + " " + sent).strip() if current else sent
+            if len(candidate) <= max_chars:
+                current = candidate
+            else:
+                if current:
+                    parts.append(current)
+                current = sent
+        if current:
+            parts.append(current)
+        return parts if parts else [text]
+    parts = []
+    current = ""
+    for para in raw_paras:
+        candidate = (current + "\n\n" + para).strip() if current else para
+        if len(candidate) <= max_chars:
+            current = candidate
+        else:
+            if current:
+                parts.append(current)
+            current = para
+    if current:
+        parts.append(current)
+    return parts if parts else [text]
+
+
 def _format_questions(questions: List[str]) -> str:
     normalized = [str(item).strip() for item in questions if str(item).strip()]
     if not normalized:
@@ -397,6 +443,81 @@ def _fail_job(job_id: str, logger: logging.LoggerAdapter, exc: ExecutionError, a
     return 1
 
 
+def _execute_appointment_reminder_pipeline(
+    job_id: str,
+    job: Dict[str, Any],
+    context: Dict[str, Any],
+    ctx_logger: logging.Logger,
+    attempt: Optional[int],
+) -> int:
+    """Envia lembrete de appointment via WhatsApp usando template fixo, sem LLM."""
+    try:
+        lead = context.get("lead") or {}
+        metadata = context.get("metadata") or {}
+        payload = job.get("payload") or {}
+
+        lead_id = lead.get("id") or payload.get("lead_id")
+        user_id = lead.get("user_id") or payload.get("user_id")
+        phone = metadata.get("phone") or lead.get("phone") or payload.get("phone")
+        instance_id = metadata.get("instance_id") or payload.get("instance_id")
+        provider = metadata.get("provider") or payload.get("provider") or "uazapi"
+        appointment_id = payload.get("appointment_id")
+        title = payload.get("appointment_title") or "reunião"
+        start_at_iso = payload.get("appointment_start_at") or ""
+
+        if not phone:
+            exec_error = ExecutionError(
+                "phone ausente no contexto do lembrete",
+                phase="context",
+                service="executor",
+                retryable=False,
+            )
+            return _fail_job(job_id, ctx_logger, exec_error, attempt)
+
+        lead_name = str(lead.get("contactName") or lead.get("name") or "").strip()
+        greeting = f"Olá{', ' + lead_name if lead_name else ''}!"
+
+        try:
+            from datetime import datetime as _dt
+            start_dt = _dt.fromisoformat(start_at_iso)
+            time_str = start_dt.strftime("%d/%m às %H:%M")
+        except Exception:
+            time_str = "em breve"
+
+        reminder_text = (
+            f"{greeting} Lembrando da sua {title} agendada para {time_str}. "
+            "Qualquer dúvida, estou por aqui. Até lá! 😊"
+        )
+
+        in_reply_to_message_id = f"reminder:{job_id}:{appointment_id}"
+        outbound_payload: Dict[str, Any] = {
+            "job_id": int(job_id),
+            "lead_id": lead_id,
+            "user_id": user_id,
+            "phone": phone,
+            "body": reminder_text,
+            "provider": provider,
+            "in_reply_to_message_id": in_reply_to_message_id,
+        }
+        if instance_id:
+            outbound_payload["instance_id"] = instance_id
+
+        ctx_logger.info(
+            "event=appointment_reminder_send lead_id=%s appointment_id=%s",
+            lead_id,
+            appointment_id,
+            extra={"phase": "reminder"},
+        )
+        crm_client.register_whatsapp_outbound(outbound_payload)
+        crm_client.complete_job(job_id, {"status": "sent", "lead_id": lead_id, "appointment_id": appointment_id})
+        ctx_logger.info("event=appointment_reminder_done lead_id=%s", lead_id, extra={"phase": "reminder"})
+        return 0
+    except Exception as exc:
+        ctx_logger.exception("event=appointment_reminder_error error=%s", exc, extra={"phase": "reminder"})
+        exec_error = ExecutionError(str(exc), phase="reminder", service="executor", retryable=True)
+        return _fail_job(job_id, ctx_logger, exec_error, attempt)
+
+
 def _execute_pregenerate_pipeline(
     job_id: str,
     job: Dict[str, Any],
@@ -491,6 +612,9 @@ def execute_job(job_id: str, logger: logging.Logger) -> int:
     if _is_pregenerate_job(job):
         return _execute_pregenerate_pipeline(job_id, job, context, ctx_logger, attempt)
 
+    if _is_appointment_reminder_job(job):
+        return _execute_appointment_reminder_pipeline(job_id, job, context, ctx_logger, attempt)
+
     lead_id = _safe_get(lead, "id")
     lead_name = _safe_get(lead, "contactName", "companyName", "name")
     lead_phone = _safe_get(lead, "phone", "phone_e164")
@@ -584,6 +708,17 @@ def execute_job(job_id: str, logger: logging.Logger) -> int:
             outbound_body = saved_content
         elif not outbound_body:
             outbound_body = _build_followup_fallback_outbound_body(context)
+
+    # Dividir mensagem longa em partes (comportamento multi-mensagem humanizado).
+    # A primeira parte é rastreada normalmente; as demais são enviadas como fire-and-forget.
+    _playbook_max_chars = int((context.get("playbook") or {}).get("max_chars") or 350)
+    _body_parts = _split_message_body(outbound_body or "", _playbook_max_chars) if outbound_body else []
+    if len(_body_parts) > 1:
+        outbound_body = _body_parts[0]
+        _extra_body_parts: list[str] = _body_parts[1:]
+    else:
+        _extra_body_parts = []
+
     result_payload = _build_result_payload(
         decision,
         lead_id=lead_id,
@@ -809,6 +944,41 @@ def execute_job(job_id: str, logger: logging.Logger) -> int:
         provider_message_id = attach_response.get("provider_message_id") or provider_message_id
         ctx_logger.info("event=attach_provider_success", extra={"phase": "attach_provider"})
 
+        # Mídia rica — envia cada mídia APÓS o texto em sequência (texto aparece primeiro no chat).
+        # Falha de mídia individual não aborta o job; é fire-and-forget sem tracking de outbound_event.
+        if decision.pre_send_media:
+            _media_list = decision.pre_send_media
+            if isinstance(_media_list, dict):
+                _media_list = [_media_list]
+            for _media_item in _media_list:
+                _media_url = _media_item.get("media_url")
+                _media_type = _media_item.get("media_type", "image")
+                if not _media_url:
+                    continue
+                ctx_logger.info(
+                    "event=post_send_media_request media_type=%s order=%s",
+                    _media_type,
+                    _media_item.get("send_order", 0),
+                    extra={"phase": "core_send"},
+                )
+                try:
+                    core_client.send_whatsapp_media(
+                        {
+                            "provider": provider,
+                            "instance_id": instance_id,
+                            "number": phone,
+                            "media_url": _media_url,
+                            "media_type": _media_type,
+                        }
+                    )
+                    ctx_logger.info("event=post_send_media_success media_type=%s", _media_type, extra={"phase": "core_send"})
+                except core_client.CoreClientError as media_exc:
+                    ctx_logger.warning(
+                        "event=post_send_media_error error=%s — continuando",
+                        media_exc,
+                        extra={"phase": "core_send"},
+                    )
+
         ctx_logger.info("event=mark_sent_request url=mark-sent", extra={"phase": "mark_sent"})
         try:
             mark_sent_response = crm_client.mark_whatsapp_outbound_sent(
@@ -839,6 +1009,24 @@ def execute_job(job_id: str, logger: logging.Logger) -> int:
         result_payload["outbound_mark_sent_status"] = final_status
         result_payload["outbound_status"] = final_status
         ctx_logger.info("event=mark_sent_success status=%s", final_status, extra={"phase": "mark_sent"})
+
+        # Partes extras do texto longo — enviadas como fire-and-forget após o texto principal.
+        for _extra_part in _extra_body_parts:
+            try:
+                core_client.send_whatsapp_message(
+                    {
+                        "provider": provider,
+                        "instance_id": instance_id,
+                        "number": phone,
+                        "text": _extra_part,
+                    }
+                )
+            except core_client.CoreClientError as _extra_exc:
+                ctx_logger.warning(
+                    "event=extra_body_part_error error=%s — continuando",
+                    _extra_exc,
+                    extra={"phase": "core_send"},
+                )
 
         try:
             crm_client.complete_job(job_id, result=result_payload)

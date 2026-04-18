@@ -13,10 +13,14 @@ import NotFound from "./pages/NotFound";
 import MinhaConta from "./pages/MinhaConta";
 import Assinatura from "./pages/Assinatura";
 import UsoDoPlano from "./pages/UsoDoPlano";
-import AgenteConfiguracao from "./pages/AgenteConfiguracao";
+import AiProfile from "./pages/AiProfile";
 import TiposAgentes from "./pages/TiposAgentes";
 import FollowUpCenter from "./pages/FollowUpCenter";
 import FollowUpEdit from "./pages/FollowUpEdit";
+import DebugAiProfile from "./pages/DebugAiProfile";
+import Playground from "./pages/Playground";
+import Onboarding from "./pages/Onboarding";
+import SpyAgent from "./pages/SpyAgent";
 import { ThemeProvider } from "./contexts/ThemeContext";
 import { LeadsProvider } from "./contexts/LeadsContext";
 import { RateLimitModalProvider } from "./contexts/RateLimitModalContext";
@@ -109,6 +113,7 @@ const App = () => (
                   <Route path="/assinatura" element={<Assinatura />} />
                   <Route path="/uso-do-plano" element={<UsoDoPlano />} />
                   <Route path="/follow-ups" element={<FollowUpCenter />} />
+                  <Route path="/playground" element={<Playground />} />
                 </Route>
 
                 {/* Rotas do Agente Orion — layout próprio (sem sidebar) */}
@@ -119,9 +124,12 @@ const App = () => (
                     </Protected>
                   }
                 >
-                  <Route path="/ai-profile" element={<AgenteConfiguracao />} />
+                  <Route path="/onboarding" element={<Onboarding />} />
+                  <Route path="/spy-agent" element={<SpyAgent />} />
+                  <Route path="/ai-profile" element={<AiProfile />} />
                   <Route path="/agentes-info" element={<TiposAgentes />} />
                   <Route path="/follow-ups/:leadId/edit" element={<FollowUpEdit />} />
+                  <Route path="/debug-ai-profile" element={<DebugAiProfile />} />
                 </Route>
 
                 {/* catch-all */}

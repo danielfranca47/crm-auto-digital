@@ -14,6 +14,8 @@ class Settings(BaseSettings):
     core_whatsapp_stub: bool = Field(False, env="CORE_WHATSAPP_STUB")
     UAZAPI_BASE_URL: Optional[str] = None
     UAZAPI_ADMIN_TOKEN: Optional[str] = None
+    CRM_PUBLIC_BASE_URL: Optional[str] = None
+    EXECUTORS_BASE_URL: Optional[str] = None
 
     class Config:
         env_file = ".env"
