@@ -1,3 +1,20 @@
+## Protótipo visual de referência
+
+O arquivo [`docs/admin-dashboard-prototype.jsx`](admin-dashboard-prototype.jsx) contém um protótipo funcional em React que serve como referência visual e de UX para o desenvolvimento do painel.
+
+**O que o protótipo cobre:**
+- Layout sidebar + main com navegação entre as 7 seções
+- Design system: paleta dark, tokens CSS, tipografia
+- Seção Dashboard: cards de KPIs, alertas ativos, tabela de instâncias com tabs de filtro, pipeline de agentes com expand/collapse, gráfico MRR e funil de onboarding
+- Dados mock que ilustram os campos esperados de cada endpoint
+
+**Como usar na implementação:**
+- Usar como especificação visual de cada componente ao construir as páginas em `SaaSAdmin/`
+- Os `MOCK_*` mostram a estrutura de dados esperada de cada endpoint admin
+- **Design:** dar preferência aos componentes shadcn/ui e Tailwind já instalados no `frontend-crm` — não instalar novas bibliotecas de UI. O protótipo usa CSS-in-JS próprio apenas para facilitar a visualização; na implementação real, traduzir para as primitivas existentes (`Card`, `Badge`, `Button`, `Table` etc. de `src/components/ui/`).
+
+---
+
 ## Gostaria de um lugar para que eu consiga ver e gerenciar a plataforma como administrador.
 
 Aqui vai o resumo direto de cada página do painel admin:
