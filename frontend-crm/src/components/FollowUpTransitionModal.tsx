@@ -37,6 +37,7 @@ export function FollowUpTransitionModal({ open, onOpenChange, lead, onSuccess }:
   const [submitting, setSubmitting] = useState(false);
   const [missingFields, setMissingFields] = useState<{ key: string; label: string; question: string | null }[]>([]);
   const [qualificationValues, setQualificationValues] = useState<Record<string, string>>({});
+  const [scoreFailure, setScoreFailure] = useState(false);
 
   const agentType = (lead?.agent_type || "") as AgentType;
   const isAgent1 = agentType === "agent_1";
@@ -74,6 +75,7 @@ export function FollowUpTransitionModal({ open, onOpenChange, lead, onSuccess }:
     setOperatorNote("");
     setMissingFields([]);
     setQualificationValues({});
+    setScoreFailure(false);
   };
 
   const handleOpenChange = (next: boolean) => {
@@ -108,6 +110,7 @@ export function FollowUpTransitionModal({ open, onOpenChange, lead, onSuccess }:
       if (detail?.error === "qualification_incomplete" && Array.isArray(detail?.missing_fields_detail)) {
         setMissingFields(detail.missing_fields_detail);
         setQualificationValues({});
+        setScoreFailure(!!detail.score_failure);
         return;
       }
       toast({
@@ -269,7 +272,9 @@ export function FollowUpTransitionModal({ open, onOpenChange, lead, onSuccess }:
           {missingFields.length > 0 && (
             <div className="space-y-3 border-t pt-4">
               <p className="text-sm text-muted-foreground font-medium">
-                Preencha os campos de qualificação pendentes para continuar:
+                {scoreFailure
+                  ? "A qualificação deste lead está incompleta (pontuação insuficiente). Preencha os dados abaixo para continuar:"
+                  : "Preencha os campos de qualificação pendentes para continuar:"}
               </p>
               {missingFields.map((f) => (
                 <div key={f.key} className="space-y-1">

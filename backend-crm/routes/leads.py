@@ -454,26 +454,55 @@ def start_followup_transition(
                 payload.lead_id,
                 missing_fields,
             )
+            _SCORE_SENTINEL = "_below_threshold_"
+            _real_missing = [k for k in missing_fields if _SCORE_SENTINEL not in k]
+            _score_failure = any(_SCORE_SENTINEL in k for k in missing_fields)
             missing_fields_detail = []
             try:
                 _profile = fetch_core_ai_profile(current_user.token) or {}
                 _qfields = _profile.get("qualification_fields") or []
                 _field_meta = {f["key"]: f for f in _qfields if isinstance(f, dict) and "key" in f}
-                for _key in missing_fields:
+                for _key in _real_missing:
                     _meta = _field_meta.get(_key, {})
                     missing_fields_detail.append({
                         "key": _key,
                         "label": _meta.get("label") or _key,
                         "question": _meta.get("question"),
                     })
+                if _score_failure:
+                    _active_keys = {d["key"] for d in missing_fields_detail}
+                    _score_fields = [
+                        f for f in _qfields
+                        if isinstance(f, dict)
+                        and f.get("mode") in ("required", "optional")
+                        and f.get("key") not in _active_keys
+                    ]
+                    if _score_fields:
+                        for _f in _score_fields:
+                            missing_fields_detail.append({
+                                "key": _f["key"],
+                                "label": _f.get("label") or _f["key"],
+                                "question": _f.get("question"),
+                            })
+                    else:
+                        _4p_defaults = [
+                            ("decision_role", "Papel na decisão de compra"),
+                            ("urgency", "Urgência / necessidade"),
+                            ("budget_or_price_acceptance", "Orçamento / aceitação de preço"),
+                            ("availability_window", "Janela de disponibilidade"),
+                        ]
+                        for _key, _label in _4p_defaults:
+                            if _key not in _active_keys:
+                                missing_fields_detail.append({"key": _key, "label": _label, "question": None})
             except Exception:
-                missing_fields_detail = [{"key": k, "label": k, "question": None} for k in missing_fields]
+                missing_fields_detail = [{"key": k, "label": k, "question": None} for k in _real_missing]
             raise HTTPException(
                 status_code=400,
                 detail={
                     "error": "qualification_incomplete",
                     "missing_fields": missing_fields,
                     "missing_fields_detail": missing_fields_detail,
+                    "score_failure": _score_failure,
                     "message": "Não é possível iniciar follow-up: qualification incompleta",
                 },
             )
