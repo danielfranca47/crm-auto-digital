@@ -1,17 +1,17 @@
-import { useState, useEffect } from “react”
-import { useForm } from “react-hook-form”
-import { zodResolver } from “@hookform/resolvers/zod”
-import { z } from “zod”
-import { Button } from “@/components/ui/button”
-import { Input } from “@/components/ui/input”
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from “@/components/ui/select”
-import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from “@/components/ui/form”
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from “@/components/ui/card”
-import { Search, Lock, Globe, Linkedin, Instagram, Star, ExternalLink } from “lucide-react”
-import { toast } from “@/hooks/use-toast”
-import { useApiErrorHandler } from “@/hooks/useApiErrorHandler”
+import { useState, useEffect } from "react"
+import { useForm } from "react-hook-form"
+import { zodResolver } from "@hookform/resolvers/zod"
+import { z } from "zod"
+import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Search, Lock, Globe, Linkedin, Instagram, Star, ExternalLink } from "lucide-react"
+import { toast } from "@/hooks/use-toast"
+import { useApiErrorHandler } from "@/hooks/useApiErrorHandler"
 
-import { api, type SearchPayload, type Manifest } from “@/services/api”
+import { api, type SearchPayload, type Manifest } from "@/services/api"
 
 type Extension = {
   id: string
@@ -23,53 +23,53 @@ type Extension = {
 
 const AVAILABLE_EXTENSIONS: Extension[] = [
   {
-    id: “website_audit”,
-    name: “Auditoria de Site”,
-    description: “Verifica se a empresa tem site, faz webscraping e gera relatório de melhorias automaticamente.”,
-    icon: <Globe className=”h-6 w-6” />,
-    whatsappText: “Olá! Tenho interesse na extensão de Auditoria de Site para minha conta.”,
+    id: "website_audit",
+    name: "Auditoria de Site",
+    description: "Verifica se a empresa tem site, faz webscraping e gera relatório de melhorias automaticamente.",
+    icon: <Globe className="h-6 w-6" />,
+    whatsappText: "Olá! Tenho interesse na extensão de Auditoria de Site para minha conta.",
   },
   {
-    id: “instagram_profile”,
-    name: “Perfil Instagram”,
-    description: “Coleta seguidores, bio e posts recentes das empresas encontradas via agente local.”,
-    icon: <Instagram className=”h-6 w-6” />,
-    whatsappText: “Olá! Tenho interesse na extensão de Pesquisa no Instagram para minha conta.”,
+    id: "instagram_profile",
+    name: "Perfil Instagram",
+    description: "Coleta seguidores, bio e posts recentes das empresas encontradas via agente local.",
+    icon: <Instagram className="h-6 w-6" />,
+    whatsappText: "Olá! Tenho interesse na extensão de Pesquisa no Instagram para minha conta.",
   },
   {
-    id: “linkedin_company”,
-    name: “LinkedIn Empresa”,
-    description: “Coleta tamanho, setor e vagas abertas das empresas via agente local.”,
-    icon: <Linkedin className=”h-6 w-6” />,
-    whatsappText: “Olá! Tenho interesse na extensão de Pesquisa no LinkedIn para minha conta.”,
+    id: "linkedin_company",
+    name: "LinkedIn Empresa",
+    description: "Coleta tamanho, setor e vagas abertas das empresas via agente local.",
+    icon: <Linkedin className="h-6 w-6" />,
+    whatsappText: "Olá! Tenho interesse na extensão de Pesquisa no LinkedIn para minha conta.",
   },
   {
-    id: “google_reviews”,
-    name: “Avaliações Google”,
-    description: “Coleta avaliações e comentários do Google Maps para análise de reputação.”,
-    icon: <Star className=”h-6 w-6” />,
-    whatsappText: “Olá! Tenho interesse na extensão de Avaliações Google para minha conta.”,
+    id: "google_reviews",
+    name: "Avaliações Google",
+    description: "Coleta avaliações e comentários do Google Maps para análise de reputação.",
+    icon: <Star className="h-6 w-6" />,
+    whatsappText: "Olá! Tenho interesse na extensão de Avaliações Google para minha conta.",
   },
 ]
 
-const OWNER_WHATSAPP = “+351912345678” // substituir pelo WhatsApp real do dono
+const OWNER_WHATSAPP = "+351912345678" // substituir pelo WhatsApp real do dono
 
 const API_BASE =
-  (import.meta as any)?.env?.VITE_API_BASE_URL ?? “http://127.0.0.1:8000”
+  (import.meta as any)?.env?.VITE_API_BASE_URL ?? "http://127.0.0.1:8000"
 
 const pesquisaSchema = z.object({
-  proposta: z.string().min(2, “Descreva a sua proposta”),
-  pais: z.string().min(2, “País deve ter pelo menos 2 caracteres”),
-  provincia: z.string().min(2, “Província/Estado deve ter pelo menos 2 caracteres”),
-  cidade: z.string().min(2, “Cidade deve ter pelo menos 2 caracteres”),
+  proposta: z.string().min(2, "Descreva a sua proposta"),
+  pais: z.string().min(2, "País deve ter pelo menos 2 caracteres"),
+  provincia: z.string().min(2, "Província/Estado deve ter pelo menos 2 caracteres"),
+  cidade: z.string().min(2, "Cidade deve ter pelo menos 2 caracteres"),
   bairro: z.string().optional(),
-  setor: z.string().min(2, “Setor deve ter pelo menos 2 caracteres”),
-  quantidade: z.string({ required_error: “Selecione a quantidade” }),
+  setor: z.string().min(2, "Setor deve ter pelo menos 2 caracteres"),
+  quantidade: z.string({ required_error: "Selecione a quantidade" }),
 })
 
 type PesquisaFormData = z.infer<typeof pesquisaSchema>
 
-const propostaSugestoes = [“Site”, “Automações”, “Tráfego Pago”, “Produção de Conteúdo”]
+const propostaSugestoes = ["Site", "Automações", "Tráfego Pago", "Produção de Conteúdo"]
 const quantidades = Array.from({ length: 21 }, (_, i) => i + 5) // 5 a 25
 
 export default function Pesquisa() {
@@ -88,7 +88,7 @@ export default function Pesquisa() {
 
   const form = useForm<PesquisaFormData>({
     resolver: zodResolver(pesquisaSchema),
-    defaultValues: { bairro: “” },
+    defaultValues: { bairro: "" },
   })
 
   const onSubmit = async (data: PesquisaFormData) => {
@@ -101,7 +101,7 @@ export default function Pesquisa() {
         country: data.pais.trim(),
         state: data.provincia.trim(),
         city: data.cidade.trim(),
-        neighborhood: (data.bairro || “”).trim(),
+        neighborhood: (data.bairro || "").trim(),
         sector: data.setor.trim(),
         quantity: Math.max(5, Math.min(50, parseInt(data.quantidade, 10) || 20)),
       }
