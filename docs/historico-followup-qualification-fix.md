@@ -116,12 +116,66 @@ O sentinel nunca deve ser exposto como campo preenchível. O score é recalculad
 
 ---
 
+## Tentativa 3 — Corrigir campos exibidos no score failure (commit seguinte)
+
+### Sintoma
+
+Após a Tentativa 2, o modal passou a exibir os campos de qualificação corretos (sem o sentinel). Porém ao preencher os campos e clicar "Salvar e iniciar follow-up", **nada mais acontecia** — o modal ficava aberto com os campos resetados e vazios.
+
+### Causa raiz
+
+O fluxo era um **loop infinito silencioso**:
+
+1. 1º submit → `POST /start-followup` → `400 score_failure` → modal exibe campos custom do AI Profile (ex: "Quer agendar", "Disponibilidade", "Preços de massagens")
+2. Operador preenche os campos → `PATCH /qualification-fields` salva os valores
+3. `upsert_qualification_state` chama `compute_4p_scores()` — que **só lê** `decision_role`, `urgency`, `budget_or_price_acceptance`, `availability_window`
+4. Campos custom ignorados → score permanece 0 → 2º `POST /start-followup` ainda falha com o mesmo sentinel
+5. Catch block: `setMissingFields(...)` + `setQualificationValues({})` → modal fica aberto com campos vazios
+6. Do ponto de vista do operador: "nada acontece"
+
+A origem estava na lógica do branch `_score_failure` em `routes/leads.py`: quando o AI Profile tem `qualification_fields` configurados com `mode=required/optional` (campos de negócio custom), esses campos eram exibidos ao operador. Mas `compute_4p_scores()` é hardcoded para ler apenas os 4 campos 4P — campos custom nunca afetam o score.
+
+### O que foi feito
+
+**Backend (`backend-crm/routes/leads.py`):**
+- Substituída a lógica do branch `_score_failure` que exibia campos custom do AI Profile
+- Agora **sempre exibe os 4 campos 4P reais** com perguntas orientativas:
+  - `decision_role` — "Papel na decisão de compra"
+  - `urgency` — "Urgência / necessidade"
+  - `budget_or_price_acceptance` — "Orçamento / aceitação de preço"
+  - `availability_window` — "Janela de disponibilidade"
+- Com qualquer texto não-vazio preenchido nesses campos, o score mínimo é ≥8 (cada campo não-negativo pontua 2), acima do threshold padrão de 6
+
+### Fluxo corrigido
+
+```
+1. Operador preenche o modal e clica "Salvar e iniciar follow-up"
+   ↓
+2. POST /api/leads/start-followup
+   ├─ Se 200 OK → lead movido para follow-up ✓
+   └─ Se 400 qualification_incomplete
+      ├─ score_failure=false → missing_fields_detail = campos reais ausentes
+      └─ score_failure=true  → missing_fields_detail = 4 campos 4P com perguntas orientativas
+         ↓
+3. Operador preenche os 4 campos 4P
+   ↓
+4. Botão habilitado → clica novamente
+   ↓
+5. PATCH /api/leads/{id}/qualification-fields
+   → upsert_qualification_state → salva data_json + recalcula score 4P (agora ≥8)
+   ↓
+6. POST /api/leads/start-followup (2ª tentativa)
+   └─ 200 OK → lead movido para follow-up ✓
+```
+
+---
+
 ## Arquivos modificados
 
 | Arquivo | Mudança |
 |---|---|
 | `backend-crm/models.py` | `QualificationPatchPayload` |
-| `backend-crm/routes/leads.py` | 400 enriquecido com `missing_fields_detail` / `score_failure`; rota `PATCH /{lead_id}/qualification-fields` |
+| `backend-crm/routes/leads.py` | 400 enriquecido com `missing_fields_detail` / `score_failure`; rota `PATCH /{lead_id}/qualification-fields`; branch `_score_failure` corrigido para sempre exibir campos 4P |
 | `frontend-crm/src/services/api.ts` | `patchLeadQualificationFields` |
 | `frontend-crm/src/components/FollowUpTransitionModal.tsx` | etapa de qualificação + diferenciação score vs. campos |
 
@@ -130,6 +184,7 @@ O sentinel nunca deve ser exposto como campo preenchível. O score é recalculad
 ## Observações para manutenção futura
 
 - O sentinel `score_X_of_12_below_threshold_Y` **nunca deve ser exposto como campo preenchível** na UI. Sempre filtrá-lo por `_below_threshold_` antes de montar `missing_fields_detail`.
+- `compute_4p_scores()` é hardcoded para ler apenas `decision_role`, `urgency`, `budget_or_price_acceptance`, `availability_window`. **Campos custom do AI Profile não afetam o score 4P**, independentemente de seu `mode`. Portanto, a falha de score só pode ser resolvida preenchendo os 4 campos 4P — não campos de negócio custom.
 - `upsert_qualification_state` recalcula o score 4P automaticamente ao persistir — não é necessário chamar `compute_4p_scores` manualmente.
 - A rota `PATCH /api/leads/{id}/qualification-fields` é pública (auth obrigatória, mas sem service token). Ela só deve receber os valores extraídos do operador e não deve sobrescrever campos já existentes com strings vazias — o `merge_data` em `qualification_state.py` já garante isso (valores vazios não substituem valores preenchidos).
 - Para leads qualificados por ligação ou presencialmente (fora do chat), este é o fluxo correto de entrada de dados de qualificação.

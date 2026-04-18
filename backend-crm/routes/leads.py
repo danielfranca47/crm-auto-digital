@@ -470,30 +470,19 @@ def start_followup_transition(
                         "question": _meta.get("question"),
                     })
                 if _score_failure:
+                    # Sempre exibir os 4 campos 4P — são os únicos que compute_4p_scores() lê.
+                    # Campos custom do AI Profile (ex: "Quer agendar") não afetam o score,
+                    # por isso não podem resolver uma falha de pontuação.
                     _active_keys = {d["key"] for d in missing_fields_detail}
-                    _score_fields = [
-                        f for f in _qfields
-                        if isinstance(f, dict)
-                        and f.get("mode") in ("required", "optional")
-                        and f.get("key") not in _active_keys
+                    _4p_defaults = [
+                        ("decision_role", "Papel na decisão de compra", "O lead decide sozinho? Ex: 'Sim, sou eu' ou 'Preciso consultar meu sócio'"),
+                        ("urgency", "Urgência / necessidade", "Qual a urgência? Ex: 'Precisa essa semana' ou 'Sem pressa por enquanto'"),
+                        ("budget_or_price_acceptance", "Orçamento / aceitação de preço", "O lead aceitou o preço? Ex: 'Ok, tranquilo' ou 'Está um pouco caro'"),
+                        ("availability_window", "Janela de disponibilidade", "Quando o lead tem disponibilidade? Ex: 'Terças de manhã' ou 'Qualquer dia da semana'"),
                     ]
-                    if _score_fields:
-                        for _f in _score_fields:
-                            missing_fields_detail.append({
-                                "key": _f["key"],
-                                "label": _f.get("label") or _f["key"],
-                                "question": _f.get("question"),
-                            })
-                    else:
-                        _4p_defaults = [
-                            ("decision_role", "Papel na decisão de compra"),
-                            ("urgency", "Urgência / necessidade"),
-                            ("budget_or_price_acceptance", "Orçamento / aceitação de preço"),
-                            ("availability_window", "Janela de disponibilidade"),
-                        ]
-                        for _key, _label in _4p_defaults:
-                            if _key not in _active_keys:
-                                missing_fields_detail.append({"key": _key, "label": _label, "question": None})
+                    for _key, _label, _question in _4p_defaults:
+                        if _key not in _active_keys:
+                            missing_fields_detail.append({"key": _key, "label": _label, "question": _question})
             except Exception:
                 missing_fields_detail = [{"key": k, "label": k, "question": None} for k in _real_missing]
             raise HTTPException(
