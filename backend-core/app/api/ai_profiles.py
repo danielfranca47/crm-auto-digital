@@ -233,9 +233,14 @@ class AIProfileOut(AIProfileBase):
     generated_prompt_parts: Optional[dict] = None
     prompt_parts_generated_at: Optional[datetime] = None
     prompt_parts_version: Optional[int] = None
+    enabled_extensions: Optional[List[str]] = None
 
     class Config:
         orm_mode = True
+
+
+class ExtensionsUpdate(BaseModel):
+    enabled_extensions: List[str]
 
 
 class AITemplate(BaseModel):
@@ -581,3 +586,21 @@ async def regenerate_webhook_secret(
         "payment_webhook_secret": new_secret,
         "payment_webhook_url": profile.payment_webhook_url,
     }
+
+
+@router.patch("/ai-profiles/admin/{user_id}/extensions")
+async def admin_set_extensions(
+    user_id: int,
+    payload: ExtensionsUpdate,
+    db: Session = Depends(get_db),
+    _: str = Depends(_require_service_token),
+):
+    """Admin: define as extensões ativas para um usuário (requer service token)."""
+    profile = db.query(models.AIProfile).filter(models.AIProfile.user_id == user_id).first()
+    if not profile:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="AI profile not found")
+    profile.enabled_extensions = payload.enabled_extensions
+    profile.updated_at = datetime.utcnow()
+    db.commit()
+    db.refresh(profile)
+    return {"ok": True, "enabled_extensions": profile.enabled_extensions}

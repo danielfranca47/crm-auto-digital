@@ -1,53 +1,94 @@
-import { useState } from "react"
-import { useForm } from "react-hook-form"
-import { zodResolver } from "@hookform/resolvers/zod"
-import { z } from "zod"
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Search } from "lucide-react"
-import { toast } from "@/hooks/use-toast"
-import { useApiErrorHandler } from "@/hooks/useApiErrorHandler"
+import { useState, useEffect } from “react”
+import { useForm } from “react-hook-form”
+import { zodResolver } from “@hookform/resolvers/zod”
+import { z } from “zod”
+import { Button } from “@/components/ui/button”
+import { Input } from “@/components/ui/input”
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from “@/components/ui/select”
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from “@/components/ui/form”
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from “@/components/ui/card”
+import { Search, Lock, Globe, Linkedin, Instagram, Star, ExternalLink } from “lucide-react”
+import { toast } from “@/hooks/use-toast”
+import { useApiErrorHandler } from “@/hooks/useApiErrorHandler”
 
-// 👉 usa o wrapper da API
-import { api, type SearchPayload, type Manifest } from "@/services/api"
+import { api, type SearchPayload, type Manifest } from “@/services/api”
 
-// (mantido; não é usado diretamente aqui)
+type Extension = {
+  id: string
+  name: string
+  description: string
+  icon: React.ReactNode
+  whatsappText: string
+}
+
+const AVAILABLE_EXTENSIONS: Extension[] = [
+  {
+    id: “website_audit”,
+    name: “Auditoria de Site”,
+    description: “Verifica se a empresa tem site, faz webscraping e gera relatório de melhorias automaticamente.”,
+    icon: <Globe className=”h-6 w-6” />,
+    whatsappText: “Olá! Tenho interesse na extensão de Auditoria de Site para minha conta.”,
+  },
+  {
+    id: “instagram_profile”,
+    name: “Perfil Instagram”,
+    description: “Coleta seguidores, bio e posts recentes das empresas encontradas via agente local.”,
+    icon: <Instagram className=”h-6 w-6” />,
+    whatsappText: “Olá! Tenho interesse na extensão de Pesquisa no Instagram para minha conta.”,
+  },
+  {
+    id: “linkedin_company”,
+    name: “LinkedIn Empresa”,
+    description: “Coleta tamanho, setor e vagas abertas das empresas via agente local.”,
+    icon: <Linkedin className=”h-6 w-6” />,
+    whatsappText: “Olá! Tenho interesse na extensão de Pesquisa no LinkedIn para minha conta.”,
+  },
+  {
+    id: “google_reviews”,
+    name: “Avaliações Google”,
+    description: “Coleta avaliações e comentários do Google Maps para análise de reputação.”,
+    icon: <Star className=”h-6 w-6” />,
+    whatsappText: “Olá! Tenho interesse na extensão de Avaliações Google para minha conta.”,
+  },
+]
+
+const OWNER_WHATSAPP = “+351912345678” // substituir pelo WhatsApp real do dono
+
 const API_BASE =
-  (import.meta as any)?.env?.VITE_API_BASE_URL ?? "http://127.0.0.1:8000"
+  (import.meta as any)?.env?.VITE_API_BASE_URL ?? “http://127.0.0.1:8000”
 
 const pesquisaSchema = z.object({
-  proposta: z.string({ required_error: "Selecione uma proposta" }),
-  pais: z.string().min(2, "País deve ter pelo menos 2 caracteres"),
-  provincia: z.string().min(2, "Província/Estado deve ter pelo menos 2 caracteres"),
-  cidade: z.string().min(2, "Cidade deve ter pelo menos 2 caracteres"),
+  proposta: z.string().min(2, “Descreva a sua proposta”),
+  pais: z.string().min(2, “País deve ter pelo menos 2 caracteres”),
+  provincia: z.string().min(2, “Província/Estado deve ter pelo menos 2 caracteres”),
+  cidade: z.string().min(2, “Cidade deve ter pelo menos 2 caracteres”),
   bairro: z.string().optional(),
-  setor: z.string().min(2, "Setor deve ter pelo menos 2 caracteres"),
-  quantidade: z.string({ required_error: "Selecione a quantidade" }),
+  setor: z.string().min(2, “Setor deve ter pelo menos 2 caracteres”),
+  quantidade: z.string({ required_error: “Selecione a quantidade” }),
 })
 
 type PesquisaFormData = z.infer<typeof pesquisaSchema>
 
-const propostas = ["Site", "Automações", "Tráfego Pago", "Produção de Conteúdo"]
+const propostaSugestoes = [“Site”, “Automações”, “Tráfego Pago”, “Produção de Conteúdo”]
 const quantidades = Array.from({ length: 21 }, (_, i) => i + 5) // 5 a 25
-
-// helper: “Site” -> "site" (suportado agora)
-function propostaToKey(p?: string): "site" | null {
-  if (!p) return null
-  const low = p.trim().toLowerCase()
-  return low.includes("site") ? "site" : null
-}
 
 export default function Pesquisa() {
   const [isLoading, setIsLoading] = useState(false)
   const [manifest, setManifest] = useState<Manifest | null>(null)
   const { handleError } = useApiErrorHandler()
 
+  const [enabledExtensions, setEnabledExtensions] = useState<string[]>([])
+  const [upsellModal, setUpsellModal] = useState<Extension | null>(null)
+
+  useEffect(() => {
+    api.core.getAiProfileMe().then((profile: any) => {
+      setEnabledExtensions(Array.isArray(profile?.enabled_extensions) ? profile.enabled_extensions : [])
+    }).catch(() => {})
+  }, [])
+
   const form = useForm<PesquisaFormData>({
     resolver: zodResolver(pesquisaSchema),
-    defaultValues: { bairro: "" },
+    defaultValues: { bairro: “” },
   })
 
   const onSubmit = async (data: PesquisaFormData) => {
@@ -55,22 +96,12 @@ export default function Pesquisa() {
     setManifest(null)
 
     try {
-      const proposal = propostaToKey(data.proposta)
-      if (proposal !== "site") {
-        toast({
-          title: "Proposta não suportada",
-          description: "Por enquanto, selecione a proposta “Site”.",
-          variant: "destructive",
-        })
-        return
-      }
-
       const payload: SearchPayload = {
-        proposal, // <- literal "site"
+        proposal: data.proposta.trim(),
         country: data.pais.trim(),
         state: data.provincia.trim(),
         city: data.cidade.trim(),
-        neighborhood: (data.bairro || "").trim(),
+        neighborhood: (data.bairro || “”).trim(),
         sector: data.setor.trim(),
         quantity: Math.max(5, Math.min(50, parseInt(data.quantidade, 10) || 20)),
       }
@@ -97,7 +128,7 @@ export default function Pesquisa() {
     manifest ? api.pesquisa.downloadUrl(manifest.run_id, kind) : "#"
 
   return (
-    <div className="container mx-auto p-6 max-w-2xl">
+    <div className="container mx-auto p-6 max-w-3xl">
       <div className="mb-8">
         <h1 className="text-3xl font-bold tracking-tight">Pesquisa de Empresas</h1>
         <p className="text-muted-foreground mt-2">
@@ -124,20 +155,20 @@ export default function Pesquisa() {
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>Proposta *</FormLabel>
-                    <Select onValueChange={field.onChange} defaultValue={field.value}>
-                      <FormControl>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Selecione o tipo de proposta" />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        {propostas.map((proposta) => (
-                          <SelectItem key={proposta} value={proposta}>
-                            {proposta}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                    <FormControl>
+                      <>
+                        <Input
+                          placeholder="Ex: Site, Automações, Consultoria Jurídica…"
+                          list="proposta-sugestoes"
+                          {...field}
+                        />
+                        <datalist id="proposta-sugestoes">
+                          {propostaSugestoes.map((s) => (
+                            <option key={s} value={s} />
+                          ))}
+                        </datalist>
+                      </>
+                    </FormControl>
                     <FormMessage />
                   </FormItem>
                 )}
@@ -282,6 +313,85 @@ export default function Pesquisa() {
           )}
         </CardContent>
       </Card>
+
+      {/* Seção de Extensões */}
+      <div className="mt-8">
+        <h2 className="text-xl font-semibold mb-1">Extensões de Pesquisa</h2>
+        <p className="text-sm text-muted-foreground mb-4">
+          Enriquecimentos avançados para sua pesquisa. Extensões desbloqueadas ficam disponíveis automaticamente.
+        </p>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          {AVAILABLE_EXTENSIONS.map((ext) => {
+            const unlocked = enabledExtensions.includes(ext.id)
+            return (
+              <div
+                key={ext.id}
+                onClick={() => { if (!unlocked) setUpsellModal(ext) }}
+                className={`relative border rounded-lg p-4 flex gap-3 transition-colors ${
+                  unlocked
+                    ? "bg-card border-primary/30 cursor-default"
+                    : "bg-muted/30 border-border cursor-pointer hover:border-primary/50 hover:bg-muted/50"
+                }`}
+              >
+                <div className={`shrink-0 mt-0.5 ${unlocked ? "text-primary" : "text-muted-foreground"}`}>
+                  {ext.icon}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="font-medium text-sm">{ext.name}</p>
+                  <p className="text-xs text-muted-foreground mt-0.5 leading-relaxed">{ext.description}</p>
+                </div>
+                {!unlocked && (
+                  <div className="absolute top-3 right-3 text-muted-foreground">
+                    <Lock className="h-4 w-4" />
+                  </div>
+                )}
+                {unlocked && (
+                  <div className="absolute top-3 right-3">
+                    <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full">Ativo</span>
+                  </div>
+                )}
+              </div>
+            )
+          })}
+        </div>
+      </div>
+
+      {/* Modal Upsell */}
+      {upsellModal && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
+          onClick={() => setUpsellModal(null)}
+        >
+          <div
+            className="bg-card rounded-xl shadow-xl p-6 max-w-sm mx-4 space-y-4"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center gap-3">
+              <div className="text-primary">{upsellModal.icon}</div>
+              <h3 className="text-lg font-semibold">{upsellModal.name}</h3>
+            </div>
+            <p className="text-sm text-muted-foreground">{upsellModal.description}</p>
+            <p className="text-sm">
+              Esta extensão requer contratação adicional. Entre em contato para ativar na sua conta.
+            </p>
+            <div className="flex gap-2">
+              <Button
+                className="flex-1"
+                onClick={() => {
+                  const url = `https://wa.me/${OWNER_WHATSAPP.replace(/\D/g, "")}?text=${encodeURIComponent(upsellModal.whatsappText)}`
+                  window.open(url, "_blank")
+                }}
+              >
+                <ExternalLink className="h-4 w-4 mr-2" />
+                Quero contratar
+              </Button>
+              <Button variant="outline" onClick={() => setUpsellModal(null)}>
+                Fechar
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

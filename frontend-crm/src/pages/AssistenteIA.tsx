@@ -1,15 +1,33 @@
 // src/pages/AssistenteIA.tsx
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
-import { Upload, FileText, Bot, Download, X, Sparkles, ArrowRight } from 'lucide-react';
+import { Upload, FileText, Bot, Download, X, Sparkles, ArrowRight, Info } from 'lucide-react';
 import { CrmHeader } from '@/components/CrmHeader';
 import { useNavigate } from 'react-router-dom';
 import { api } from '@/services/api';
 import { useApiErrorHandler } from '@/hooks/useApiErrorHandler';
+
+// known aliases used for auto-detecting column mapping
+const COLUMN_ALIASES: Record<string, string[]> = {
+  empresa: ['empresa', 'company', 'companyname', 'name', 'nome_empresa', 'razao_social'],
+  contato: ['contato', 'contact', 'contactname', 'nome', 'nome_contato'],
+  telefone: ['telefone', 'phone', 'tel', 'celular', 'whatsapp'],
+  notas: ['notas', 'notes', 'observacao', 'observações', 'obs', 'descricao'],
+};
+
+function autoDetectMapping(columns: string[]): Record<string, string> {
+  const lower = columns.map((c) => c.toLowerCase().trim());
+  const result: Record<string, string> = {};
+  for (const [field, aliases] of Object.entries(COLUMN_ALIASES)) {
+    const found = aliases.find((a) => lower.includes(a));
+    result[field] = found ? columns[lower.indexOf(found)] : '';
+  }
+  return result;
+}
 
 const AssistenteIA = () => {
   // ======= estados existentes =======
@@ -39,9 +57,25 @@ const AssistenteIA = () => {
 
   const [overwrite, setOverwrite] = useState<'skip' | 'update' | 'duplicate'>('update');
   const [tone, setTone] = useState('profissional e próximo');
+  const [toneFromProfile, setToneFromProfile] = useState(false);
   const [language, setLanguage] = useState('pt-PT');
 
   const [processResult, setProcessResult] = useState<any | null>(null);
+
+  // ======= mapeamento de colunas =======
+  const [detectedColumns, setDetectedColumns] = useState<string[]>([]);
+  const [columnMap, setColumnMap] = useState<Record<string, string>>({});
+  const [mappingConfirmed, setMappingConfirmed] = useState(false);
+
+  // ======= ai profile =======
+  useEffect(() => {
+    api.core.getAiProfileMe().then((profile: any) => {
+      if (profile?.tone_of_voice) {
+        setTone(profile.tone_of_voice);
+        setToneFromProfile(true);
+      }
+    }).catch(() => {}); // silencioso — não bloqueia a página
+  }, []);
 
   // ======= helpers =======
   const allowedTypes = [
@@ -70,20 +104,31 @@ const AssistenteIA = () => {
       return;
     }
     setUploadedFile(file);
-    setProcessResult(null); // reset de execução anterior
+    setProcessResult(null);
+    setMappingConfirmed(false);
     try {
       // envia ao backend e obtém upload_id + sample (20 linhas)
       const r = await api.uploads.enviar(file);
       setUploadId(r.upload_id);
       setUploadInfo({ filename: r.filename, ext: r.ext });
 
-      // amostra crua (sem dedupe) para mostrar na prévia básica
-      setProcessedData(Array.isArray(r.sample) ? r.sample : []);
+      // extrai colunas da amostra e auto-detecta mapeamento
+      const sample = Array.isArray(r.sample) ? r.sample : [];
+      setProcessedData(sample);
       setPreviewStats(null);
+
+      if (sample.length > 0) {
+        const cols = Object.keys(sample[0]);
+        setDetectedColumns(cols);
+        setColumnMap(autoDetectMapping(cols));
+      } else {
+        setDetectedColumns([]);
+        setColumnMap({});
+      }
 
       toast({
         title: "Planilha carregada",
-        description: `${file.name} foi recebida. Agora, gere a PRÉVIA para analisar duplicados.`,
+        description: `${file.name} foi recebida. Confirme o mapeamento de colunas para continuar.`,
       });
     } catch (err: any) {
       console.error(err);
@@ -128,6 +173,9 @@ const AssistenteIA = () => {
     setProcessedData([]);
     setPreviewStats(null);
     setProcessResult(null);
+    setDetectedColumns([]);
+    setColumnMap({});
+    setMappingConfirmed(false);
     if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
@@ -143,7 +191,7 @@ const AssistenteIA = () => {
     }
     setIsPreviewing(true);
     try {
-      const p = await api.assistenteIA.preview({ upload_id: uploadId, overwrite });
+      const p = await api.assistenteIA.preview({ upload_id: uploadId, overwrite, column_map: columnMap } as any);
       // rows anotadas (dup_phone/dup_email/dup_name + pred_action)
       setProcessedData(Array.isArray(p.rows) ? p.rows : []);
       setPreviewStats(p.stats || null);
@@ -184,6 +232,7 @@ const AssistenteIA = () => {
         limit: undefined,
         tone,
         language,
+        column_map: columnMap,
       };
 
       const r = await api.assistenteIA.processar(payload);
@@ -278,7 +327,7 @@ const AssistenteIA = () => {
                   <div className="space-y-2">
                     <p className="text-lg font-medium">Arraste e solte sua planilha aqui</p>
                     <p className="text-sm text-muted-foreground">ou clique para selecionar um arquivo</p>
-                    <p className="text-xs text-muted-foreground">Formatos: CSV, XLSX (aba "Leads")</p>
+                    <p className="text-xs text-muted-foreground">Formatos: CSV, XLSX — qualquer estrutura de colunas</p>
                   </div>
                   <Button variant="outline" className="mt-4" onClick={() => fileInputRef.current?.click()}>
                     Selecionar Arquivo
@@ -316,6 +365,61 @@ const AssistenteIA = () => {
               )}
             </CardContent>
           </Card>
+
+          {/* 1.5 Mapeamento de colunas */}
+          {uploadId && detectedColumns.length > 0 && (
+            <Card className="gradient-card border-lead-card-border">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <FileText className="h-5 w-5" />
+                  1.5. Mapeamento de Colunas
+                  {mappingConfirmed && (
+                    <span className="ml-2 text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full">Confirmado</span>
+                  )}
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <p className="text-sm text-muted-foreground flex items-start gap-2">
+                  <Info className="h-4 w-4 mt-0.5 shrink-0" />
+                  Indique quais colunas da planilha correspondem a cada campo. Deixe em branco para ignorar.
+                </p>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {(['empresa', 'contato', 'telefone', 'notas'] as const).map((field) => (
+                    <div key={field} className="space-y-1">
+                      <Label className="capitalize">{field}</Label>
+                      <select
+                        className="w-full border rounded px-3 py-2 bg-background text-sm"
+                        value={columnMap[field] ?? ''}
+                        onChange={(e) => {
+                          setColumnMap({ ...columnMap, [field]: e.target.value });
+                          setMappingConfirmed(false);
+                        }}
+                        disabled={mappingConfirmed && isProcessing}
+                      >
+                        <option value="">-- ignorar --</option>
+                        {detectedColumns.map((col) => (
+                          <option key={col} value={col}>{col}</option>
+                        ))}
+                      </select>
+                    </div>
+                  ))}
+                </div>
+                {!mappingConfirmed && (
+                  <Button
+                    variant="outline"
+                    onClick={() => setMappingConfirmed(true)}
+                  >
+                    Confirmar Mapeamento
+                  </Button>
+                )}
+                {mappingConfirmed && (
+                  <p className="text-sm text-green-600">
+                    Mapeamento confirmado. Pode gerar a prévia ou processar.
+                  </p>
+                )}
+              </CardContent>
+            </Card>
+          )}
 
           {/* 2. Prévia e Opções */}
           <Card className="gradient-card border-lead-card-border">
@@ -416,10 +520,17 @@ const AssistenteIA = () => {
                 </div>
 
                 <div className="space-y-2">
-                  <Label>Tom</Label>
+                  <Label className="flex items-center gap-2">
+                    Tom
+                    {toneFromProfile && (
+                      <span className="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full font-normal">
+                        AI Profile
+                      </span>
+                    )}
+                  </Label>
                   <Input
                     value={tone}
-                    onChange={(e) => setTone(e.target.value)}
+                    onChange={(e) => { setTone(e.target.value); setToneFromProfile(false); }}
                     placeholder="ex.: profissional e próximo"
                     disabled={isProcessing}
                   />
@@ -493,9 +604,10 @@ const AssistenteIA = () => {
                   <h4 className="font-medium mb-3">Prévia (amostra/anotações):</h4>
                   <div className="space-y-2 text-sm">
                     {processedData.slice(0, 10).map((item, idx) => {
-                      const empresa = item.empresa || item.company || item.companyname || item.name || '—';
-                      const contatoNome = item.nome || item.contact || item.contactname || '';
-                      const contatoTel = item.telefone || item.phone || '';
+                      const get = (field: string) => columnMap[field] ? item[columnMap[field]] : undefined;
+                      const empresa = get('empresa') || item.empresa || item.company || item.companyname || item.name || '—';
+                      const contatoNome = get('contato') || item.nome || item.contact || item.contactname || '';
+                      const contatoTel = get('telefone') || item.telefone || item.phone || '';
                       const contatoEmail = item.email || (Array.isArray?.(item.emails) ? item.emails[0] : item.emails) || '';
                       const contato = contatoNome
                         ? `${contatoNome}${contatoTel || contatoEmail ? ' - ' : ''}${contatoTel || contatoEmail || ''}`

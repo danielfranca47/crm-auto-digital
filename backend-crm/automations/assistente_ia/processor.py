@@ -104,16 +104,32 @@ class AssistIAProcessor:
         return df
 
 # ----------------- Mapeamento p/ tabela leads -----------------
-def map_row_to_lead(row: pd.Series) -> Dict:
+def map_row_to_lead(row: pd.Series, column_map: Optional[Dict[str, str]] = None) -> Dict:
     d = {str(k).lower(): row[k] for k in row.index}
-    company = (d.get("companyname") or d.get("name") or d.get("empresa") or "Sem nome")
-    contact = d.get("contactname") or d.get("contato") or d.get("responsavel")
-    email = _pick_first_email(d.get("emails"), d.get("email"))
-    phone = _pick_phone(d)
+    cm = {k: v.lower().strip() for k, v in (column_map or {}).items() if v}
+
+    def _pick(field: str, *fallbacks: str):
+        mapped_col = cm.get(field, "")
+        if mapped_col and d.get(mapped_col) is not None:
+            val = d[mapped_col]
+            if val and str(val).strip():
+                return str(val).strip()
+        for fb in fallbacks:
+            val = d.get(fb)
+            if val and str(val).strip():
+                return str(val).strip()
+        return None
+
+    company = _pick("empresa", "companyname", "name", "empresa") or "Sem nome"
+    contact = _pick("contato", "contactname", "contato", "responsavel")
+    email = _pick_first_email(d.get("emails"), _pick("", "email"))
+    phone_raw = _pick("telefone", "phone", "phone_site_norm", "telefone")
+    phone = normalize_phone(phone_raw) if phone_raw else _pick_phone(d)
+    notes_raw = _pick("notas", "notas", "notes", "observacao", "obs")
     origin = (d.get("origin") or d.get("origem") or "Planilha")
     category = "to-prospect"
     priority = _priority_from_letter(d.get("priority"))
-    observations = _obs_bundle(d)
+    observations = notes_raw or _obs_bundle(d)
 
     lead = {
         "companyName": company,
@@ -218,6 +234,8 @@ class AssistIAProcessor:
         language: Optional[str],
         user_id: int,
         entitlements: Optional[Dict] = None,
+        column_map: Optional[Dict[str, str]] = None,
+        ai_profile: Optional[Dict] = None,
     ) -> Dict:
         if not file_path.exists():
             raise AssistIAProcessadorErro("Arquivo de upload não encontrado.")
@@ -249,8 +267,13 @@ class AssistIAProcessor:
             lang = language or profile.get("default_language") or "pt-PT"
             lang = normalize_language(lang)
 
-            # resolve tom (UI > default perfil > fallback)
-            tone_resolved = tone or profile.get("default_tone") or "profissional e próximo"
+            # resolve tom: UI > AI Profile > default perfil > fallback
+            tone_resolved = (
+                tone
+                or (ai_profile or {}).get("tone_of_voice")
+                or profile.get("default_tone")
+                or "profissional e próximo"
+            )
 
             if create_cards:
                 remaining_lead_slots = get_remaining_lead_slots(
@@ -274,7 +297,7 @@ class AssistIAProcessor:
 
             for idx, row in df.iterrows():
                 try:
-                    lead_data = map_row_to_lead(row)
+                    lead_data = map_row_to_lead(row, column_map=column_map)
                     existing_id = find_existing_lead(
                         conn, lead_data["companyName"], lead_data["email"], lead_data["phone"], user_id=user_id
                     )
@@ -368,7 +391,8 @@ class AssistIAProcessor:
                             tone=tone_resolved,
                             language=lang,
                             context=context,
-                            sender=sender_ctx,  # 👈 envia remetente ao LLM
+                            sender=sender_ctx,
+                            ai_profile=ai_profile,
                         )
 
                         # render por canal (interpolação + respiro) e salvar

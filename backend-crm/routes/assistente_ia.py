@@ -8,6 +8,7 @@ from database import get_connection
 import pandas as pd
 from datetime import datetime
 from security_core import CurrentUser, require_crm_access
+from core_client import fetch_core_ai_profile
 
 router = APIRouter()
 
@@ -34,6 +35,7 @@ class AssistIAProcessRequest(BaseModel):
     limit: Optional[int] = None
     tone: Optional[str] = "profissional e próximo"
     language: Optional[str] = "pt-PT"
+    column_map: Optional[Dict[str, str]] = None
 
     @field_validator("channels")
     @classmethod
@@ -78,6 +80,12 @@ def processar(req: AssistIAProcessRequest, current_user: CurrentUser = Depends(r
     if not file_path:
         raise HTTPException(status_code=404, detail="Arquivo de upload não encontrado (xlsx/csv).")
 
+    ai_profile: Dict = {}
+    try:
+        ai_profile = fetch_core_ai_profile(current_user.token or "") or {}
+    except Exception:
+        pass
+
     processor = AssistIAProcessor()
     try:
         result = processor.process(
@@ -91,6 +99,8 @@ def processar(req: AssistIAProcessRequest, current_user: CurrentUser = Depends(r
             language=req.language,
             user_id=current_user.id,
             entitlements=current_user.entitlements,
+            column_map=req.column_map or {},
+            ai_profile=ai_profile,
         )
         return {"ok": True, **result}
     except HTTPException as e:
@@ -221,6 +231,7 @@ def _read_preview_table(file_path: Path, limit: int = 200) -> pd.DataFrame:
 def preview(req: dict = Body(...), current_user: CurrentUser = Depends(require_crm_access)):
     upload_id = req.get("upload_id")
     overwrite = req.get("overwrite", "update")
+    column_map: Dict[str, str] = req.get("column_map") or {}
     if not upload_id:
         raise HTTPException(400, "upload_id é obrigatório")
 
@@ -230,13 +241,27 @@ def preview(req: dict = Body(...), current_user: CurrentUser = Depends(require_c
         raise HTTPException(404, "Arquivo não encontrado")
 
     df = _read_preview_table(fp, limit=200)
+
+    def _resolve(r, field: str, *fallback_keys: str) -> str:
+        # use column_map first, then fallback_keys (all lowercased in df)
+        mapped = column_map.get(field, "")
+        if mapped:
+            val = r.get(mapped.lower().strip())
+            if val is not None:
+                return str(val).strip()
+        for k in fallback_keys:
+            val = r.get(k)
+            if val is not None:
+                return str(val).strip()
+        return ""
+
     phones = set()
     emails = set()
     names  = set()
     for _, r in df.iterrows():
-        phone = str(r.get("phone") or r.get("telefone") or "").strip()
-        email = str(r.get("email") or "").strip()
-        name  = str(r.get("companyname") or r.get("name") or r.get("empresa") or "").strip()
+        phone = _resolve(r, "telefone", "phone", "telefone")
+        email = _resolve(r, "", "email")
+        name  = _resolve(r, "empresa", "companyname", "name", "empresa")
         if phone: phones.add(phone)
         if email: emails.add(email)
         if name:  names.add(name)
@@ -272,9 +297,9 @@ def preview(req: dict = Body(...), current_user: CurrentUser = Depends(require_c
     stats = {"total": int(df.shape[0]), "dups_phone": 0, "dups_email": 0, "dups_name": 0,
              "pred_create": 0, "pred_update": 0, "pred_skip": 0}
     for _, r in df.iterrows():
-        phone = str(r.get("phone") or r.get("telefone") or "").strip()
-        email = str(r.get("email") or "").strip()
-        name  = str(r.get("companyname") or r.get("name") or r.get("empresa") or "").strip()
+        phone = _resolve(r, "telefone", "phone", "telefone")
+        email = _resolve(r, "", "email")
+        name  = _resolve(r, "empresa", "companyname", "name", "empresa")
         is_dp = bool(phone and phone in dup_phone)
         is_de = bool(email and email in dup_email)
         is_dn = bool(name  and name  in dup_name)

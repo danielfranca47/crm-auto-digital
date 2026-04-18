@@ -344,9 +344,9 @@ export type AppNotification = {
 const AUTH_BASE = CORE_AUTH_BASE;
 const CORE_BASE = CORE_AUTH_BASE.replace(/\/auth$/, "");
 
-// ---- Tipos da Pesquisa (site) ----
+// ---- Tipos da Pesquisa ----
 export type SearchPayload = {
-  proposal: "site";
+  proposal: string;
   country: string;
   state: string;
   city: string;
@@ -956,6 +956,23 @@ export const api = {
       coreClient.post<{ payment_webhook_secret: string; payment_webhook_url: string | null }>(
         `/ai-profiles/me/regenerate-webhook-secret`
       ),
+  },
+
+  admin: {
+    listUsers: async (serviceToken: string, search?: string) => {
+      const qs = search ? `?search=${encodeURIComponent(search)}` : ""
+      return coreClient.get<Array<{ id: number; email: string; name?: string; enabled_extensions?: string[] }>>(
+        `/users/admin/list${qs}`,
+        { headers: { "X-Service-Token": serviceToken } }
+      )
+    },
+    setExtensions: async (serviceToken: string, userId: number, extensions: string[]) => {
+      return coreClient.patch<{ ok: boolean; enabled_extensions: string[] }>(
+        `/ai-profiles/admin/${userId}/extensions`,
+        { enabled_extensions: extensions },
+        { headers: { "X-Service-Token": serviceToken } }
+      )
+    },
   },
 
   crm: {

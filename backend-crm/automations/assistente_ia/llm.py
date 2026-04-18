@@ -90,6 +90,13 @@ class LLMClient:
         s_phone = sender.get("phone") or ""
         s_signature = sender.get("signature") or ""
 
+        # Contexto do AI Profile (negócio do remetente)
+        _ap = ai_profile or {}
+        ap_niche = _ap.get("niche") or ""
+        ap_offer = _ap.get("offer_description") or ""
+        ap_audience = _ap.get("target_audience") or ""
+        ap_brand = _ap.get("brand_name") or s_company
+
         if not self.enabled:
             # MOCK para desenvolvimento local (sem API)
             for ch in channels:
@@ -124,10 +131,20 @@ class LLMClient:
 
         # ---------- prompts reais ----------
         # Contexto comum a todos os canais
+        business_ctx = ""
+        if ap_niche or ap_offer or ap_audience:
+            parts = []
+            if ap_brand: parts.append(f"Empresa remetente: {ap_brand}")
+            if ap_niche: parts.append(f"Nicho: {ap_niche}")
+            if ap_offer: parts.append(f"Oferta: {ap_offer}")
+            if ap_audience: parts.append(f"Público-alvo: {ap_audience}")
+            business_ctx = "\n".join(parts) + "\n"
+
         common = (
             f"Empresa do prospect: {lead['companyName']}\n"
             f"{scenario_context}\n"
-            f"Remetente: Nome={s_name}; Empresa={s_company}; Email={s_email}; Telefone={s_phone}\n"
+            f"{business_ctx}"
+            f"Remetente: Nome={s_name}; Empresa={ap_brand or s_company}; Email={s_email}; Telefone={s_phone}\n"
             "NUNCA use placeholders como [Seu Nome] ou [Sua Empresa]; use os dados do Remetente fornecidos.\n"
             "Se contactName estiver vazio, cumprimente pela empresa (ex.: 'Olá, A Casa do Porco Bar').\n"
         )
