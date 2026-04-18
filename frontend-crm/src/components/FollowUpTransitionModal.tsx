@@ -8,6 +8,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
+import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
@@ -34,6 +35,8 @@ export function FollowUpTransitionModal({ open, onOpenChange, lead, onSuccess }:
   const [proposalSent, setProposalSent] = useState<"yes" | "no" | "">("");
   const [operatorNote, setOperatorNote] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [missingFields, setMissingFields] = useState<{ key: string; label: string; question: string | null }[]>([]);
+  const [qualificationValues, setQualificationValues] = useState<Record<string, string>>({});
 
   const agentType = (lead?.agent_type || "") as AgentType;
   const isAgent1 = agentType === "agent_1";
@@ -54,10 +57,14 @@ export function FollowUpTransitionModal({ open, onOpenChange, lead, onSuccess }:
         if (outcome === "interested_not_closed" && !followupGoal) return false;
         if (outcome === "reschedule_needed" && !proposalSent) return false;
       }
-      return true;
+    } else {
+      if (!followupGoal) return false;
     }
-    return !!followupGoal;
-  }, [lead, isAgent1, isAgent3, meetingHappened, showMeetingYes, outcome, followupGoal, proposalSent]);
+    if (missingFields.length > 0) {
+      if (missingFields.some((f) => !qualificationValues[f.key]?.trim())) return false;
+    }
+    return true;
+  }, [lead, isAgent1, isAgent3, meetingHappened, showMeetingYes, outcome, followupGoal, proposalSent, missingFields, qualificationValues]);
 
   const resetState = () => {
     setMeetingHappened("");
@@ -65,6 +72,8 @@ export function FollowUpTransitionModal({ open, onOpenChange, lead, onSuccess }:
     setFollowupGoal("");
     setProposalSent("");
     setOperatorNote("");
+    setMissingFields([]);
+    setQualificationValues({});
   };
 
   const handleOpenChange = (next: boolean) => {
@@ -77,6 +86,11 @@ export function FollowUpTransitionModal({ open, onOpenChange, lead, onSuccess }:
     if (!lead || !canSubmit || !(isAgent1 || isAgent3)) return;
     setSubmitting(true);
     try {
+      if (missingFields.length > 0) {
+        await api.patchLeadQualificationFields(lead.id as number, qualificationValues);
+        setMissingFields([]);
+        setQualificationValues({});
+      }
       await api.startFollowup({
         lead_id: lead.id,
         agent_type: agentType,
@@ -90,9 +104,15 @@ export function FollowUpTransitionModal({ open, onOpenChange, lead, onSuccess }:
       onSuccess();
       handleOpenChange(false);
     } catch (error: any) {
+      const detail = (error?.data as any)?.detail;
+      if (detail?.error === "qualification_incomplete" && Array.isArray(detail?.missing_fields_detail)) {
+        setMissingFields(detail.missing_fields_detail);
+        setQualificationValues({});
+        return;
+      }
       toast({
         title: "Erro ao iniciar follow-up",
-        description: error?.message ?? "Não foi possível iniciar o follow-up.",
+        description: typeof error?.message === "string" ? error.message : "Não foi possível iniciar o follow-up.",
         variant: "destructive",
       });
     } finally {
@@ -245,6 +265,25 @@ export function FollowUpTransitionModal({ open, onOpenChange, lead, onSuccess }:
 
           {isAgent1 && meetingHappened && renderAgent1()}
           {isAgent3 && meetingHappened && renderAgent3()}
+
+          {missingFields.length > 0 && (
+            <div className="space-y-3 border-t pt-4">
+              <p className="text-sm text-muted-foreground font-medium">
+                Preencha os campos de qualificação pendentes para continuar:
+              </p>
+              {missingFields.map((f) => (
+                <div key={f.key} className="space-y-1">
+                  <Label>{f.label}</Label>
+                  {f.question && <p className="text-xs text-muted-foreground">{f.question}</p>}
+                  <Input
+                    value={qualificationValues[f.key] ?? ""}
+                    onChange={(e) => setQualificationValues((prev) => ({ ...prev, [f.key]: e.target.value }))}
+                    placeholder={f.label}
+                  />
+                </div>
+              ))}
+            </div>
+          )}
 
           <div className="space-y-2">
             <Label>Observação (opcional)</Label>

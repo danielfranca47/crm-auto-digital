@@ -566,6 +566,10 @@ export const api = {
     return apiClient.post(`/leads/${leadId}/bot-disabled`, payload);
   },
 
+  patchLeadQualificationFields: async (leadId: number, fields: Record<string, string>) => {
+    return apiClient.patch(`/leads/${leadId}/qualification-fields`, { fields });
+  },
+
   startFollowup: async (payload: {
     lead_id: string | number;
     agent_type: "agent_1" | "agent_3";

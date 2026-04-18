@@ -10,7 +10,7 @@ import os
 import uuid
 from fastapi import UploadFile, File
 from pathlib import Path
-from models import Lead, LeadUpdate, AppointmentCreate, AppointmentUpdate, BotDisabledUpdate, StartFollowupPayload, ScheduledMessagePayload, SendNowPayload
+from models import Lead, LeadUpdate, AppointmentCreate, AppointmentUpdate, BotDisabledUpdate, StartFollowupPayload, QualificationPatchPayload, ScheduledMessagePayload, SendNowPayload
 from security_core import CurrentUser, require_crm_access
 from services import rate_limit_service
 from services.agent_type import resolve_agent_type_for_user
@@ -27,6 +27,7 @@ from services.followup_state import (
 )
 from services.jobs_service import TYPE_WHATSAPP_SEND, TYPE_WHATSAPP_FOLLOWUP_PREGENERATE, create_job
 from services.qualification_guardrails import can_advance_from_qualification
+from services.qualification_state import upsert_qualification_state
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -453,11 +454,26 @@ def start_followup_transition(
                 payload.lead_id,
                 missing_fields,
             )
+            missing_fields_detail = []
+            try:
+                _profile = fetch_core_ai_profile(current_user.token) or {}
+                _qfields = _profile.get("qualification_fields") or []
+                _field_meta = {f["key"]: f for f in _qfields if isinstance(f, dict) and "key" in f}
+                for _key in missing_fields:
+                    _meta = _field_meta.get(_key, {})
+                    missing_fields_detail.append({
+                        "key": _key,
+                        "label": _meta.get("label") or _key,
+                        "question": _meta.get("question"),
+                    })
+            except Exception:
+                missing_fields_detail = [{"key": k, "label": k, "question": None} for k in missing_fields]
             raise HTTPException(
                 status_code=400,
                 detail={
                     "error": "qualification_incomplete",
                     "missing_fields": missing_fields,
+                    "missing_fields_detail": missing_fields_detail,
                     "message": "Não é possível iniciar follow-up: qualification incompleta",
                 },
             )
@@ -566,6 +582,30 @@ def start_followup_transition(
         raise
     except Exception as e:
         conn.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        conn.close()
+
+
+@router.patch("/{lead_id}/qualification-fields")
+def patch_lead_qualification_fields(
+    lead_id: int,
+    body: QualificationPatchPayload,
+    current_user: CurrentUser = Depends(require_crm_access),
+):
+    conn = get_connection()
+    try:
+        row = conn.execute(
+            "SELECT id FROM leads WHERE id = ? AND user_id = ?",
+            (lead_id, current_user.id),
+        ).fetchone()
+        if row is None:
+            raise HTTPException(status_code=404, detail="Lead não encontrado")
+        upsert_qualification_state(lead_id, current_user.id, {"data_json": body.fields})
+        return {"status": "ok", "lead_id": lead_id}
+    except HTTPException:
+        raise
+    except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
     finally:
         conn.close()

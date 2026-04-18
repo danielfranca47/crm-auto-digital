@@ -1,4 +1,4 @@
-from typing import Optional, List, Literal
+from typing import Any, Dict, Optional, List, Literal
 from datetime import datetime
 from pydantic import BaseModel, Field, ConfigDict
 
@@ -46,6 +46,10 @@ class StartFollowupPayload(BaseModel):
     followup_goal: Optional[str] = None
     proposal_sent: Optional[bool] = None
     operator_note: Optional[str] = None
+
+
+class QualificationPatchPayload(BaseModel):
+    fields: Dict[str, Any]
 
 
 class BotDisabledUpdate(BaseModel):
