@@ -123,6 +123,17 @@ def can_advance_from_qualification(conn, lead_id: int, user_id: int) -> Tuple[bo
     if required_fields_override is not None and len(required_fields_override) == 0:
         # Lista vazia configurada explicitamente — sem qualificação obrigatória, avança sempre
         return True, []
+
+    # Só aplicar o check de score se o usuário tiver pelo menos um campo 4P configurado.
+    # compute_4p_scores() é hardcoded para ler apenas as 4 chaves abaixo; se o AI Profile
+    # do usuário usar campos 100% custom (sem nenhuma das 4 chaves), o score será sempre 0
+    # e o guardrail se tornaria permanentemente bloqueante.
+    _4P_KEYS = {"decision_role", "urgency", "budget_or_price_acceptance", "availability_window"}
+    _qfields = ai_profile.get("qualification_fields") or []
+    _configured_keys = {f["key"] for f in _qfields if isinstance(f, dict) and "key" in f}
+    if _configured_keys and not (_configured_keys & _4P_KEYS):
+        return True, []
+
     if total_score < threshold_int:
         return False, [f"score_{total_score}_of_12_below_threshold_{threshold_int}"]
 
