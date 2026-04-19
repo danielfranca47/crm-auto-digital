@@ -977,6 +977,42 @@ export const api = {
         { headers: { Authorization: `Bearer ${token}` } }
       );
     },
+    getStats: async () => {
+      const { readAdminToken } = await import("../lib/admin-token");
+      const token = readAdminToken();
+      return coreClient.get<{
+        total_users: number;
+        active_subscriptions: number;
+        instances_total: number;
+        instances_online: number;
+        instances_offline: number;
+        subscriptions_by_plan: Array<{ plan: string; count: number }>;
+      }>(`/admin/stats`, { headers: { Authorization: `Bearer ${token}` } });
+    },
+    listInstances: async () => {
+      const { readAdminToken } = await import("../lib/admin-token");
+      const token = readAdminToken();
+      return coreClient.get<Array<{
+        id: number;
+        instance_id: string;
+        user_id: number;
+        user_email: string;
+        phone_e164: string | null;
+        provider: string;
+        status: string;
+        created_at: string | null;
+        updated_at: string | null;
+      }>>(`/admin/instances`, { headers: { Authorization: `Bearer ${token}` } });
+    },
+    reconnectInstance: async (instanceId: string) => {
+      const { readAdminToken } = await import("../lib/admin-token");
+      const token = readAdminToken();
+      return coreClient.post<{ ok: boolean; error?: string; result?: unknown }>(
+        `/admin/instances/${instanceId}/reconnect`,
+        {},
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+    },
   },
 
   crm: {

@@ -139,11 +139,11 @@ A área de admin é a interface central de operação do dia a dia: ver quem est
 ### Fase 3 — Dashboard e Instâncias (alto valor operacional)
 *As duas seções mais úteis no dia-a-dia de operação.*
 
-- [ ] `backend-core`: `GET /admin/stats` — KPIs: total de usuários, instâncias online/offline, MRR estimado.
-- [ ] `backend-core`: `GET /admin/instances` — lista instâncias WhatsApp com status UazAPI.
-- [ ] `backend-core`: `POST /admin/instances/{id}/reconnect` — força reconexão remota.
-- [ ] `AdminDashboard.tsx`: KPIs + alertas de instâncias offline.
-- [ ] `AdminInstances.tsx`: tabela com status em tempo real, ação de reconexão.
+- [x] `backend-core`: `GET /admin/stats` — KPIs: total de usuários, instâncias online/offline, MRR estimado.
+- [x] `backend-core`: `GET /admin/instances` — lista instâncias WhatsApp com status UazAPI.
+- [x] `backend-core`: `POST /admin/instances/{id}/reconnect` — força reconexão remota.
+- [x] `AdminDashboard.tsx`: KPIs + alertas de instâncias offline.
+- [x] `AdminInstances.tsx`: tabela com status em tempo real, ação de reconexão.
 
 ### Fase 4 — Agentes e Configurações
 
