@@ -182,3 +182,77 @@ Fase 4 (agentes + config)  →  Fase 5 (métricas avançadas)
 ```
 
 Fases 1–3 cobrem o uso operacional diário. Fases 4–5 são analytics e podem ser incrementais.
+
+---
+
+## Como acessar o painel admin
+
+### Pré-requisitos
+
+Os três serviços precisam estar rodando simultaneamente:
+
+| Serviço | Porta | Comando |
+|---|---|---|
+| `backend-core` | 8001 | `cd backend-core && uvicorn app.main:app --port 8001` |
+| `backend-crm` | 8000 | `cd backend-crm && uvicorn app:app --port 8000` |
+| `frontend-crm` | 8080 | `cd frontend-crm && npm run dev` |
+
+> O `backend-core` deve subir antes do `backend-crm`.
+
+---
+
+### Configurar a senha (uma vez)
+
+A senha do admin é uma variável de ambiente no `backend-core`. Verifique ou defina em `backend-core/.env`:
+
+```env
+ADMIN_SECRET=<seu-segredo-forte>
+```
+
+Não há usuário de banco de dados — o `ADMIN_SECRET` é a única credencial. Para trocar a senha: edite o `.env` e reinicie o `backend-core`.
+
+---
+
+### Fazer login
+
+1. Abra no browser: `http://localhost:8080/saas-admin/login`
+2. Digite o valor de `ADMIN_SECRET` definido no `.env` do `backend-core`.
+3. Clique em **Entrar**.
+
+O frontend envia o segredo para `POST http://localhost:8001/admin/login`. Se correto, o backend-core retorna um JWT com `role: admin` e validade de **8 horas**. Esse JWT é armazenado no `sessionStorage` do browser (não persiste ao fechar a aba/janela).
+
+---
+
+### Navegar pelo painel
+
+Após o login, você é redirecionado para `/saas-admin` (Dashboard). A sidebar à esquerda dá acesso a todas as seções:
+
+| Rota | Seção | Status |
+|---|---|---|
+| `/saas-admin` | Dashboard — KPIs e alertas | ✅ Implementado |
+| `/saas-admin/instancias` | Instâncias WhatsApp | ✅ Implementado |
+| `/saas-admin/usuarios` | Usuários e extensões | ✅ Implementado |
+| `/saas-admin/agentes` | Agentes e Prompts ao vivo | ✅ Implementado |
+| `/saas-admin/crescimento` | Crescimento e métricas | 🔜 Fase 5 |
+| `/saas-admin/financeiro` | Financeiro e receita | 🔜 Fase 5 |
+| `/saas-admin/configuracoes` | Configurações e feature flags | 🔜 Fase 4d |
+
+---
+
+### Logout e expiração
+
+- **Logout manual:** botão "Sair" no rodapé da sidebar — limpa o JWT do `sessionStorage` e redireciona para o login.
+- **Expiração automática:** o JWT expira em 8 horas. Ao tentar acessar qualquer rota protegida com token expirado, o `AdminGuard` redireciona automaticamente para o login.
+- **Fechar o browser:** o `sessionStorage` é limpo automaticamente — o próximo acesso exige novo login.
+
+---
+
+### Troubleshooting
+
+| Problema | Causa provável | Solução |
+|---|---|---|
+| "Admin não configurado" no login | `ADMIN_SECRET` não definido no `.env` | Adicionar `ADMIN_SECRET=...` em `backend-core/.env` e reiniciar |
+| "Credenciais inválidas" | Segredo digitado errado | Verificar o valor exato em `backend-core/.env` (case-sensitive) |
+| Tela branca / redireciona para login | JWT expirado ou `sessionStorage` limpo | Fazer login novamente |
+| Erro ao carregar dados de agentes | `backend-crm` offline ou JWT inválido para o CRM | Verificar se o `backend-crm` está rodando na porta 8000 |
+| Dados de stats/instâncias não carregam | `backend-core` offline | Verificar se o `backend-core` está rodando na porta 8001 |
