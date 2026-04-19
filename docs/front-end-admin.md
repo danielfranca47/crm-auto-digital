@@ -153,14 +153,14 @@ A área de admin é a interface central de operação do dia a dia: ver quem est
 - [x] `backend-crm`: `GET /admin/agents/users/{user_id}` — detalhe do AI profile de um usuário, com diff em relação aos valores padrão do seu `agent_mode`.
 
 #### 4b — Frontend `AdminAgents.tsx`
-- [ ] Cards por `agent_mode`, expansíveis, com fluxo em colunas de estágios (shadcn/ui `Accordion` + layout flex).
-- [ ] Cada coluna de estágio exibe título e prévia do prompt; clique abre `Sheet` (drawer lateral) com o prompt completo.
-- [ ] Seletor de usuário (combobox) que sobrepõe os valores do AI profile do usuário ao fluxo padrão, destacando campos personalizados com badge ou cor distinta.
-- [ ] Indicador de "última atualização" dos dados (timestamp da consulta) para deixar claro que são dados ao vivo.
+- [x] Cards por `agent_mode`, expansíveis, com fluxo em colunas de estágios (shadcn/ui `Accordion` + layout flex).
+- [x] Cada coluna de estágio exibe título e prévia do prompt; clique abre `Sheet` (drawer lateral) com o prompt completo.
+- [x] Seletor de usuário (combobox) que sobrepõe os valores do AI profile do usuário ao fluxo padrão, destacando campos personalizados com badge ou cor distinta.
+- [x] Indicador de "última atualização" dos dados (timestamp da consulta) para deixar claro que são dados ao vivo.
 
 #### 4c — Contrato e proteção contra mudanças futuras
-- [ ] Criar `docs/admin-agents-contract.md` listando todos os campos do AI profile e estágios de agente que o painel captura, com tipo, origem (tabela/rota) e o que acontece no painel se o campo mudar ou for adicionado.
-- [ ] Ao finalizar a implementação da Fase 4, adicionar regra no `CLAUDE.md`: *"Sempre que um novo campo for adicionado ao AI profile (`ai_profiles`) ou um novo estágio/variável de agente for introduzido no sistema, `docs/admin-agents-contract.md` deve ser atualizado e verificar se `AdminAgents.tsx` precisa capturar o novo campo."*
+- [x] Criar `docs/admin-agents-contract.md` listando todos os campos do AI profile e estágios de agente que o painel captura, com tipo, origem (tabela/rota) e o que acontece no painel se o campo mudar ou for adicionado.
+- [x] Ao finalizar a implementação da Fase 4, adicionar regra no `CLAUDE.md`: *"Sempre que um novo campo for adicionado ao AI profile (`ai_profiles`) ou um novo estágio/variável de agente for introduzido no sistema, `docs/admin-agents-contract.md` deve ser atualizado e verificar se `AdminAgents.tsx` precisa capturar o novo campo."*
 
 #### 4d — Configurações
 - [ ] `AdminSettings.tsx`: feature flags por plano/usuário (integra com `enabled_extensions`).

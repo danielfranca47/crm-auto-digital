@@ -230,6 +230,12 @@ Configuração via `.env` e `.env.agent1` / `.env.agent2`.
 - Estado de leads centralizado no `LeadsContext`
 - Chamadas HTTP somente via `src/services/api.ts`
 
+### Painel Admin — Agentes e AI Profiles
+
+**Regra obrigatória:** sempre que um novo campo for adicionado ao AI profile (`ai_profiles`) ou um novo estágio/variável de agente for introduzido no sistema, `docs/admin-agents-contract.md` deve ser atualizado. Verificar também se `AdminAgents.tsx` precisa capturar e exibir o novo campo.
+
+Contexto: o painel admin em `frontend-crm/src/pages/SaaSAdmin/AdminAgents.tsx` consome `GET /admin/agents/overview` e `GET /admin/agents/users/{id}` do backend-crm (montados sem o prefixo `/api/`). O contrato de campos está documentado em `docs/admin-agents-contract.md`.
+
 ---
 
 ## Como rodar localmente

@@ -1013,6 +1013,110 @@ export const api = {
         { headers: { Authorization: `Bearer ${token}` } }
       );
     },
+
+    // --- Admin Agents (backend-crm, montado em /admin/agents/* sem prefixo /api/) ---
+    getAgentsOverview: async () => {
+      const { readAdminToken } = await import("../lib/admin-token");
+      const token = readAdminToken();
+      const crmBase = API_BASE.replace(/\/api$/, "");
+      const res = await fetch(`${crmBase}/admin/agents/overview`, {
+        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      return res.json() as Promise<{
+        queried_at: string;
+        total: number;
+        agent_modes: Array<{
+          key: string;
+          name: string;
+          description: string;
+          canonical_agent_mode: string;
+          max_chars?: number;
+          response_style?: string;
+          default_next_action?: string;
+          tone_rule?: string;
+          has_warming: boolean;
+          has_followup_attempts: boolean;
+          has_followup_outcomes: boolean;
+          stages: Array<{
+            key: string;
+            label: string;
+            description: string;
+            sample_questions?: string[];
+            tone_rule?: string;
+            followup_attempts?: number[];
+            followup_outcomes?: Record<string, string>;
+          }>;
+        }>;
+      }>;
+    },
+
+    getAgentsUsers: async () => {
+      const { readAdminToken } = await import("../lib/admin-token");
+      const token = readAdminToken();
+      const crmBase = API_BASE.replace(/\/api$/, "");
+      const res = await fetch(`${crmBase}/admin/agents/users`, {
+        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      return res.json() as Promise<{
+        queried_at: string;
+        total: number;
+        users: Array<{
+          user_id: number;
+          email?: string;
+          name?: string;
+          brand_name?: string;
+          niche?: string;
+          template_key?: string;
+          agent_mode?: string;
+          presentation_variant?: string;
+          hybrid_flow_style?: string;
+          offer_pack?: unknown;
+          qualification_score_threshold?: number;
+          qualification_required_fields?: string[];
+          followup_max_attempts?: number;
+          has_custom_config: boolean;
+          updated_at?: string;
+        }>;
+      }>;
+    },
+
+    getAgentUserDetail: async (userId: number) => {
+      const { readAdminToken } = await import("../lib/admin-token");
+      const token = readAdminToken();
+      const crmBase = API_BASE.replace(/\/api$/, "");
+      const res = await fetch(`${crmBase}/admin/agents/users/${userId}`, {
+        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      return res.json() as Promise<{
+        queried_at: string;
+        user_id: number;
+        profile: Record<string, unknown>;
+        playbook: {
+          key: string;
+          name: string;
+          description: string;
+          canonical_agent_mode: string;
+          max_chars?: number;
+          response_style?: string;
+          tone_rule?: string;
+          stages: Array<{
+            key: string;
+            label: string;
+            description: string;
+            sample_questions?: string[];
+            tone_rule?: string;
+            followup_attempts?: number[];
+            followup_outcomes?: Record<string, string>;
+          }>;
+        };
+        diff: Record<string, { default: unknown; user: unknown }>;
+        has_custom_config: boolean;
+        default_qual_fields_for_mode: string[];
+      }>;
+    },
   },
 
   crm: {
