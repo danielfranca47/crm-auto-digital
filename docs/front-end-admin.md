@@ -29,7 +29,13 @@ A área de admin é a interface central de operação do dia a dia: ver quem est
 
 **3. Usuários** — Gestão completa de cada cliente. Lista com filtros por plano e status, visualização do perfil (plano, consumo, histórico de ações), capacidade de impersonar (ver o sistema como o usuário vê), e gerenciar plano/permissões manualmente.
 
-**4. Agentes e prompts** — Overview hierárquico dos 3 modelos de agentes. Pipeline visual mostrando os estágios de cada agente, os prompts padrão de cada estágio, e a visão por usuário mostrando como o AI profile e o treinamento no playground alteraram os prompts em relação ao padrão.
+**4. Agentes e prompts** — Visualização ao vivo da configuração de todos os agentes do sistema, lida diretamente do estado atual do backend (não estática). Os dados refletem o que está configurado no momento da consulta.
+
+*Formato visual sugerido:* cards por tipo de agente (`agent_mode`), cada card expansível revelando um fluxo em colunas — uma coluna por estágio (`qualificação → apresentação → negociação → fechamento`), com o texto do prompt daquele estágio exibido abaixo do título. A cor do card segue a variante (`sales`, `scheduler`, `hybrid`). Ao clicar em um estágio, abre um drawer com o prompt completo e os metadados do estágio.
+
+*Visão por usuário:* ao selecionar um usuário, a mesma estrutura de fluxo é exibida com os valores do AI profile daquele usuário sobrepostos aos padrões — destacando visualmente os campos que diferem do padrão (badge "personalizado" ou cor diferente nas células modificadas). Campos exibidos por usuário: `agent_mode`, `presentation_variant`, `hybrid_flow_style`, `offer_pack`, variáveis de qualificação mínima por modo.
+
+*Campos capturados pelo painel (contrato):* ver [`docs/admin-agents-contract.md`](admin-agents-contract.md).
 
 **5. Crescimento** — Métricas de saúde do negócio. Churn rate por cohort mensal, funil trial → conversão, taxa de conclusão do onboarding (onde os usuários desistem), feature adoption (quais funcionalidades são usadas de fato), e NPS/satisfação.
 
@@ -140,7 +146,23 @@ A área de admin é a interface central de operação do dia a dia: ver quem est
 - [ ] `AdminInstances.tsx`: tabela com status em tempo real, ação de reconexão.
 
 ### Fase 4 — Agentes e Configurações
-- [ ] `AdminAgents.tsx`: overview dos prompts padrão por agente e desvios por usuário.
+
+#### 4a — Endpoint e contrato de dados
+- [ ] `backend-crm`: `GET /admin/agents/overview` — retorna lista de `agent_mode` disponíveis, com seus estágios e os prompts ativos de cada estágio (lidos do estado real, não hardcoded).
+- [ ] `backend-crm`: `GET /admin/agents/users` — retorna lista de usuários com os campos do AI profile: `agent_mode`, `presentation_variant`, `hybrid_flow_style`, `offer_pack`, limites de qualificação por modo.
+- [ ] `backend-crm`: `GET /admin/agents/users/{user_id}` — detalhe do AI profile de um usuário, com diff em relação aos valores padrão do seu `agent_mode`.
+
+#### 4b — Frontend `AdminAgents.tsx`
+- [ ] Cards por `agent_mode`, expansíveis, com fluxo em colunas de estágios (shadcn/ui `Accordion` + layout flex).
+- [ ] Cada coluna de estágio exibe título e prévia do prompt; clique abre `Sheet` (drawer lateral) com o prompt completo.
+- [ ] Seletor de usuário (combobox) que sobrepõe os valores do AI profile do usuário ao fluxo padrão, destacando campos personalizados com badge ou cor distinta.
+- [ ] Indicador de "última atualização" dos dados (timestamp da consulta) para deixar claro que são dados ao vivo.
+
+#### 4c — Contrato e proteção contra mudanças futuras
+- [ ] Criar `docs/admin-agents-contract.md` listando todos os campos do AI profile e estágios de agente que o painel captura, com tipo, origem (tabela/rota) e o que acontece no painel se o campo mudar ou for adicionado.
+- [ ] Ao finalizar a implementação da Fase 4, adicionar regra no `CLAUDE.md`: *"Sempre que um novo campo for adicionado ao AI profile (`ai_profiles`) ou um novo estágio/variável de agente for introduzido no sistema, `docs/admin-agents-contract.md` deve ser atualizado e verificar se `AdminAgents.tsx` precisa capturar o novo campo."*
+
+#### 4d — Configurações
 - [ ] `AdminSettings.tsx`: feature flags por plano/usuário (integra com `enabled_extensions`).
 
 ### Fase 5 — Crescimento e Financeiro
