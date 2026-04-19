@@ -15,9 +15,13 @@ O arquivo [`docs/admin-dashboard-prototype.jsx`](admin-dashboard-prototype.jsx) 
 
 ---
 
-## Gostaria de um lugar para que eu consiga ver e gerenciar a plataforma como administrador.
+## Objetivo
 
-Aqui vai o resumo direto de cada página do painel admin:
+Implementar uma área administrativa isolada dentro do `frontend-crm`, acessível apenas pelo operador da plataforma (o dono do SaaS), que permita monitorar e controlar todos os aspectos do sistema sem depender de acesso direto ao banco de dados ou ao terminal.
+
+A área de admin é a interface central de operação do dia a dia: ver quem está online, quais instâncias caíram, quanto está sendo gerado de receita, e agir diretamente sobre usuários, planos e configurações — tudo em um único painel autenticado, separado do fluxo normal de login dos clientes.
+
+### Páginas previstas
 
 **1. Dashboard** — Visão geral rápida. KPIs principais (usuários, instâncias online, MRR, churn), alertas ativos que precisam de ação imediata, e snapshot do funil de onboarding. É a primeira tela que você abre no dia.
 
