@@ -36,6 +36,7 @@ from routes import (
     spy_agent,
 )
 from routes import public
+from routes import admin_agents
 from services.followup_reconciler import reconcile_due_followups
 from services.spy_agent.observation_reconciler import reconcile_expired_observations
 from services.spy_agent.spy_media_worker import process_pending_spy_media_jobs
@@ -177,6 +178,7 @@ app.include_router(whatsapp_connect.router)                         # /api/whats
 app.include_router(notifications.router)                            # /api/notifications
 app.include_router(playground.router)                               # /api/playground
 app.include_router(spy_agent.router)                                # /api/spy-agent
+app.include_router(admin_agents.router)                             # /admin/agents/*
 # app.include_router(dashboard.router)
 
 # Static: mídia de follow-up

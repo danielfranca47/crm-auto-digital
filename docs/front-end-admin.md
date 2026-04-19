@@ -148,9 +148,9 @@ A área de admin é a interface central de operação do dia a dia: ver quem est
 ### Fase 4 — Agentes e Configurações
 
 #### 4a — Endpoint e contrato de dados
-- [ ] `backend-crm`: `GET /admin/agents/overview` — retorna lista de `agent_mode` disponíveis, com seus estágios e os prompts ativos de cada estágio (lidos do estado real, não hardcoded).
-- [ ] `backend-crm`: `GET /admin/agents/users` — retorna lista de usuários com os campos do AI profile: `agent_mode`, `presentation_variant`, `hybrid_flow_style`, `offer_pack`, limites de qualificação por modo.
-- [ ] `backend-crm`: `GET /admin/agents/users/{user_id}` — detalhe do AI profile de um usuário, com diff em relação aos valores padrão do seu `agent_mode`.
+- [x] `backend-crm`: `GET /admin/agents/overview` — retorna lista de `agent_mode` disponíveis, com seus estágios e os prompts ativos de cada estágio (lidos do estado real, não hardcoded).
+- [x] `backend-crm`: `GET /admin/agents/users` — retorna lista de usuários com os campos do AI profile: `agent_mode`, `presentation_variant`, `hybrid_flow_style`, `offer_pack`, limites de qualificação por modo.
+- [x] `backend-crm`: `GET /admin/agents/users/{user_id}` — detalhe do AI profile de um usuário, com diff em relação aos valores padrão do seu `agent_mode`.
 
 #### 4b — Frontend `AdminAgents.tsx`
 - [ ] Cards por `agent_mode`, expansíveis, com fluxo em colunas de estágios (shadcn/ui `Accordion` + layout flex).

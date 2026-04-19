@@ -1,9 +1,10 @@
 import logging
 import os
-from typing import Any, Dict
+from typing import Any, Dict, List
 
 import httpx
-from fastapi import HTTPException
+from fastapi import Depends, HTTPException
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
 CORE_API_BASE = os.getenv("CORE_API_BASE", "").rstrip("/")
 logger = logging.getLogger(__name__)
@@ -400,6 +401,93 @@ def set_core_whatsapp_webhook(
         ",".join(sorted(data.keys())),
     )
     return data
+
+
+def validate_admin_token(token: str) -> bool:
+    """Valida um JWT de admin chamando /admin/stats no backend-core. Retorna True se válido."""
+    if not token:
+        return False
+    base = _get_core_base()
+    url = f"{base}/admin/stats"
+    headers = {"Authorization": f"Bearer {token}"}
+    try:
+        with httpx.Client(timeout=10) as client:
+            resp = client.get(url, headers=headers)
+        return resp.status_code == 200
+    except httpx.RequestError:
+        return False
+
+
+_admin_bearer = HTTPBearer(auto_error=False)
+
+
+async def require_crm_admin(
+    credentials: HTTPAuthorizationCredentials = Depends(_admin_bearer),
+) -> dict:
+    """Dependency FastAPI: valida JWT de admin via backend-core."""
+    if not credentials or not credentials.credentials:
+        raise HTTPException(status_code=401, detail="Authorization header ausente")
+    if not validate_admin_token(credentials.credentials):
+        raise HTTPException(
+            status_code=401,
+            detail="Acesso negado — JWT admin inválido ou expirado",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    return {"token": credentials.credentials}
+
+
+def fetch_core_admin_ai_profiles() -> List[Dict[str, Any]]:
+    """Busca todos os AI profiles via service token (usado pelo admin do CRM)."""
+    base = _get_core_base()
+    url = f"{base}/ai-profiles/admin/all"
+    headers = _service_headers()
+    try:
+        with httpx.Client(timeout=15) as client:
+            resp = client.get(url, headers=headers)
+    except httpx.RequestError as exc:
+        raise HTTPException(status_code=502, detail=f"Falha ao contatar backend-core: {exc}") from exc
+    if resp.status_code != 200:
+        raise HTTPException(status_code=502, detail="Falha ao listar AI profiles no core")
+    data = resp.json()
+    if not isinstance(data, list):
+        raise HTTPException(status_code=502, detail="Resposta inesperada do backend-core")
+    return data
+
+
+def fetch_core_admin_ai_profile_user(user_id: int) -> Dict[str, Any] | None:
+    """Busca o AI profile de um usuário via service token para uso no admin do CRM."""
+    if not user_id:
+        raise HTTPException(status_code=400, detail="user_id obrigatório")
+    base = _get_core_base()
+    url = f"{base}/ai-profiles/resolve"
+    headers = _service_headers()
+    try:
+        with httpx.Client(timeout=10) as client:
+            resp = client.get(url, params={"user_id": user_id}, headers=headers)
+    except httpx.RequestError as exc:
+        raise HTTPException(status_code=502, detail=f"Falha ao contatar backend-core: {exc}") from exc
+    if resp.status_code == 404:
+        return None
+    if resp.status_code != 200:
+        raise HTTPException(status_code=502, detail="Falha ao buscar AI profile no core")
+    data = resp.json()
+    return data if isinstance(data, dict) else None
+
+
+def fetch_core_admin_users() -> List[Dict[str, Any]]:
+    """Busca lista de usuários (id, email, name) via service token para cruzar com AI profiles."""
+    base = _get_core_base()
+    url = f"{base}/users/admin/list"
+    headers = _service_headers()
+    try:
+        with httpx.Client(timeout=15) as client:
+            resp = client.get(url, headers=headers)
+    except httpx.RequestError as exc:
+        raise HTTPException(status_code=502, detail=f"Falha ao contatar backend-core: {exc}") from exc
+    if resp.status_code != 200:
+        return []
+    data = resp.json()
+    return data if isinstance(data, list) else []
 
 
 def fetch_core_whatsapp_connection_resolve(instance_id: str) -> Dict[str, Any]:

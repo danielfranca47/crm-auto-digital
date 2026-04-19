@@ -604,3 +604,35 @@ async def admin_set_extensions(
     db.commit()
     db.refresh(profile)
     return {"ok": True, "enabled_extensions": profile.enabled_extensions}
+
+
+@router.get("/ai-profiles/admin/all")
+async def admin_list_all_ai_profiles(
+    db: Session = Depends(get_db),
+    _: str = Depends(_require_service_token),
+) -> List[Dict[str, Any]]:
+    """Admin: lista todos os AI profiles com campos relevantes para o painel (requer service token)."""
+    profiles = db.query(models.AIProfile).order_by(models.AIProfile.user_id).all()
+    result = []
+    for p in profiles:
+        result.append({
+            "user_id": p.user_id,
+            "template_key": p.template_key,
+            "name": p.name,
+            "brand_name": p.brand_name,
+            "niche": p.niche,
+            "target_audience": p.target_audience,
+            "agent_mode": p.agent_mode,
+            "presentation_variant": p.presentation_variant,
+            "hybrid_flow_style": p.hybrid_flow_style,
+            "offer_pack": _normalize_offer_pack(getattr(p, "offer_pack", None)),
+            "qualification_score_threshold": p.qualification_score_threshold,
+            "qualification_required_fields": p.qualification_required_fields,
+            "qualification_fields": p.qualification_fields,
+            "followup_max_attempts": p.followup_max_attempts,
+            "prompt_parts_generated_at": p.prompt_parts_generated_at.isoformat() if p.prompt_parts_generated_at else None,
+            "prompt_parts_version": p.prompt_parts_version,
+            "enabled_extensions": p.enabled_extensions,
+            "updated_at": p.updated_at.isoformat() if p.updated_at else None,
+        })
+    return result
