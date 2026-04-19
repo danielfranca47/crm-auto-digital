@@ -959,19 +959,23 @@ export const api = {
   },
 
   admin: {
-    listUsers: async (serviceToken: string, search?: string) => {
-      const qs = search ? `?search=${encodeURIComponent(search)}` : ""
+    listUsers: async (search?: string) => {
+      const { readAdminToken } = await import("../lib/admin-token");
+      const token = readAdminToken();
+      const qs = search ? `?search=${encodeURIComponent(search)}` : "";
       return coreClient.get<Array<{ id: number; email: string; name?: string; enabled_extensions?: string[] }>>(
-        `/users/admin/list${qs}`,
-        { headers: { "X-Service-Token": serviceToken } }
-      )
+        `/admin/users${qs}`,
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
     },
-    setExtensions: async (serviceToken: string, userId: number, extensions: string[]) => {
+    setExtensions: async (userId: number, extensions: string[]) => {
+      const { readAdminToken } = await import("../lib/admin-token");
+      const token = readAdminToken();
       return coreClient.patch<{ ok: boolean; enabled_extensions: string[] }>(
-        `/ai-profiles/admin/${userId}/extensions`,
+        `/admin/users/${userId}/extensions`,
         { enabled_extensions: extensions },
-        { headers: { "X-Service-Token": serviceToken } }
-      )
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
     },
   },
 

@@ -131,10 +131,10 @@ A área de admin é a interface central de operação do dia a dia: ver quem est
 ### Fase 2 — Migrar o que existe
 *Aproveitar o trabalho já feito, removendo o anti-pattern do service token no frontend.*
 
-- [ ] `AdminUsers.tsx`: absorver lógica de `Subscriptions.tsx` (lista de usuários + extensões), autenticando via JWT admin.
-- [ ] `backend-core`: rota `GET /admin/users` protegida por `require_admin` (substituindo a rota que usava service token).
-- [ ] `backend-core`: rota `PATCH /admin/users/{user_id}/extensions` protegida por `require_admin`.
-- [ ] Deprecar o padrão de service token no frontend — `Subscriptions.tsx` pode ser removido ou redirecionado.
+- [x] `AdminUsers.tsx`: absorver lógica de `Subscriptions.tsx` (lista de usuários + extensões), autenticando via JWT admin.
+- [x] `backend-core`: rota `GET /admin/users` protegida por `require_admin` (substituindo a rota que usava service token).
+- [x] `backend-core`: rota `PATCH /admin/users/{user_id}/extensions` protegida por `require_admin`.
+- [x] Deprecar o padrão de service token no frontend — `Subscriptions.tsx` removido.
 
 ### Fase 3 — Dashboard e Instâncias (alto valor operacional)
 *As duas seções mais úteis no dia-a-dia de operação.*
