@@ -120,13 +120,13 @@ A área de admin é a interface central de operação do dia a dia: ver quem est
 ### Fase 1 — Fundação de auth admin
 *Pré-requisito de tudo. Sem isso o painel não tem segurança.*
 
-- [ ] `backend-core`: variável `ADMIN_SECRET` lida do env.
-- [ ] `backend-core`: `POST /admin/login` — valida segredo, emite JWT com `role: admin` e expiração de 8h.
-- [ ] `backend-core`: middleware `require_admin` que valida esse JWT.
-- [ ] `frontend-crm`: `AdminLogin.tsx` — tela de login, armazena JWT no `sessionStorage`.
-- [ ] `frontend-crm`: `AdminGuard` — HOC/wrapper que redireciona para login se não houver JWT admin válido.
-- [ ] `frontend-crm`: `AdminLayout.tsx` — sidebar com links para as 7 seções + botão de logout.
-- [ ] Rota `/saas-admin` apontando para o layout, com subrotas para cada página.
+- [x] `backend-core`: variável `ADMIN_SECRET` lida do env.
+- [x] `backend-core`: `POST /admin/login` — valida segredo, emite JWT com `role: admin` e expiração de 8h.
+- [x] `backend-core`: middleware `require_admin` que valida esse JWT.
+- [x] `frontend-crm`: `AdminLogin.tsx` — tela de login, armazena JWT no `sessionStorage`.
+- [x] `frontend-crm`: `AdminGuard` — HOC/wrapper que redireciona para login se não houver JWT admin válido.
+- [x] `frontend-crm`: `AdminLayout.tsx` — sidebar com links para as 7 seções + botão de logout.
+- [x] Rota `/saas-admin` apontando para o layout, com subrotas para cada página.
 
 ### Fase 2 — Migrar o que existe
 *Aproveitar o trabalho já feito, removendo o anti-pattern do service token no frontend.*

@@ -16,6 +16,7 @@ class Settings(BaseSettings):
     UAZAPI_ADMIN_TOKEN: Optional[str] = None
     CRM_PUBLIC_BASE_URL: Optional[str] = None
     EXECUTORS_BASE_URL: Optional[str] = None
+    ADMIN_SECRET: Optional[str] = None
 
     class Config:
         env_file = ".env"

@@ -25,6 +25,16 @@ import { ThemeProvider } from "./contexts/ThemeContext";
 import { LeadsProvider } from "./contexts/LeadsContext";
 import { RateLimitModalProvider } from "./contexts/RateLimitModalContext";
 import { AppSidebar } from "./components/AppSidebar";
+import AdminGuard from "./components/AdminGuard";
+import AdminLayout from "./pages/SaaSAdmin/AdminLayout";
+import AdminLogin from "./pages/SaaSAdmin/AdminLogin";
+import AdminDashboard from "./pages/SaaSAdmin/AdminDashboard";
+import AdminInstances from "./pages/SaaSAdmin/AdminInstances";
+import AdminUsers from "./pages/SaaSAdmin/AdminUsers";
+import AdminAgents from "./pages/SaaSAdmin/AdminAgents";
+import AdminGrowth from "./pages/SaaSAdmin/AdminGrowth";
+import AdminFinancial from "./pages/SaaSAdmin/AdminFinancial";
+import AdminSettings from "./pages/SaaSAdmin/AdminSettings";
 import TestContext from "./tests/TestContext";
 import Login from "./pages/Login"; // tem que estar exatamente assim
 import { useEffect, useState } from "react";
@@ -130,6 +140,25 @@ const App = () => (
                   <Route path="/agentes-info" element={<TiposAgentes />} />
                   <Route path="/follow-ups/:leadId/edit" element={<FollowUpEdit />} />
                   <Route path="/debug-ai-profile" element={<DebugAiProfile />} />
+                </Route>
+
+                {/* Rotas do painel admin — guard próprio, sem sidebar do app */}
+                <Route path="/saas-admin/login" element={<AdminLogin />} />
+                <Route
+                  path="/saas-admin"
+                  element={
+                    <AdminGuard>
+                      <AdminLayout />
+                    </AdminGuard>
+                  }
+                >
+                  <Route index element={<AdminDashboard />} />
+                  <Route path="instancias" element={<AdminInstances />} />
+                  <Route path="usuarios" element={<AdminUsers />} />
+                  <Route path="agentes" element={<AdminAgents />} />
+                  <Route path="crescimento" element={<AdminGrowth />} />
+                  <Route path="financeiro" element={<AdminFinancial />} />
+                  <Route path="configuracoes" element={<AdminSettings />} />
                 </Route>
 
                 {/* catch-all */}
