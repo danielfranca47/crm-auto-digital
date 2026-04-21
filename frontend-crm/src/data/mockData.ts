@@ -20,6 +20,18 @@ export const KANBAN_COLUMNS: KanbanColumn[] = [
     color: '#f59e0b'
   },
   {
+    id: 'pre-agendamento',
+    title: 'Pré-Agendamento',
+    leads: [],
+    color: '#8b5cf6'
+  },
+  {
+    id: 'agendamento',
+    title: 'Agendamento',
+    leads: [],
+    color: '#a855f7'
+  },
+  {
     id: 'follow-up',
     title: 'Acompanhamento',
     leads: [],

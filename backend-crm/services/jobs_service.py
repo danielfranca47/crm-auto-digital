@@ -62,6 +62,8 @@ LEAD_CATEGORIES = [
     "in-progress",
     "qualification",
     "apresentation",
+    "pre-agendamento",
+    "agendamento",
     "follow-up",
     "closing",
     "client-list",

@@ -57,6 +57,7 @@ class AIProfile(Base):
     warming_social_proof = Column(String, nullable=True)
     warming_session_preview = Column(String, nullable=True)
     appointment_mode = Column(String, nullable=True, server_default="exploratory")
+    availability_schedule = Column(String, nullable=True)
     custom_variables = Column(JSON, nullable=True)
     enabled_extensions = Column(JSON, nullable=True)
     generated_prompt_parts = Column(JSON, nullable=True)

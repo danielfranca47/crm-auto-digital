@@ -342,6 +342,18 @@ def handle_inbound(payload: Dict[str, Any]) -> Dict[str, Any]:
     except Exception as exc:  # fail-safe: não bloquear webhook
         logger.exception("Falha ao orquestrar decisão de IA", exc_info=exc)
 
+    with get_connection() as _conn_check:
+        _bot_row = _conn_check.execute(
+            "SELECT bot_disabled FROM leads WHERE id = ?", (lead_id,)
+        ).fetchone()
+        if _bot_row and int(_bot_row["bot_disabled"] or 0) == 1:
+            logger.info(
+                "inbound_bot_disabled_skip lead_id=%s user_id=%s reason=bot_disabled",
+                lead_id,
+                user_id,
+            )
+            return {"status": "skipped", "lead_id": lead_id, "job_id": None, "reason": "bot_disabled"}
+
     job_payload = build_job_payload(
         lead_id=lead_id,
         user_id=user_id,

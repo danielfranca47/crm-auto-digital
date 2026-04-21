@@ -200,6 +200,8 @@ DEFAULT_ALLOWED_LEAD_CATEGORIES = [
     "in-progress",
     "qualification",
     "apresentation",
+    "pre-agendamento",
+    "agendamento",
     "follow-up",
     "closing",
     "client-list",
@@ -1151,8 +1153,8 @@ def _build_mother_prompt(context: Dict[str, Any], message_text: str) -> str:
         "Use o campo \"reason\" para documentar o raciocínio em 1-2 frases curtas.\n\n"
         "Retorne SOMENTE JSON válido no schema MotherDecision:\n"
         "{\n"
-        '  "route_to": "qualification|apresentation|follow-up|closing",\n'
-        '  "perceived_category": "qualification|apresentation|follow-up|closing|null",\n'
+        '  "route_to": "qualification|apresentation|pre-agendamento|agendamento|follow-up|closing",\n'
+        '  "perceived_category": "qualification|apresentation|pre-agendamento|agendamento|follow-up|closing|null",\n'
         '  "confidence": 0.0,\n'
         '  "reason": "curto",\n'
         '  "agent_mode": null (opcional; deixe null, o modo vem do perfil/sistema),\n'
@@ -1183,19 +1185,20 @@ def _build_mother_prompt(context: Dict[str, Any], message_text: str) -> str:
         "- perceived_category pode refletir o estágio atual do lead, mas route_to deve permanecer qualification até completar o contrato.\n"
         "\n"
         "DEFINIÇÃO DO FUNIL (IMPORTANTE):\n"
-        "- APRESENTATION inclui: agendar reunião, confirmar horário, marcar call, lembrar da reunião,\n"
-        "  reagendar, enviar link da call, confirmar presença.\n"
-        '  => route_to="apresentation" e perceived_category="apresentation".\n'
-        "- FOLLOW-UP é SOMENTE após a apresentação quando o lead não fechou, com sinais de nutrição,\n"
-        '  ex.: "vou pensar", "me chama mês que vem", "manda material", "preciso falar com sócio",\n'
-        '  "agora não", "sem budget", "vamos ver depois".\n'
-        "- REGRA FORTE FOLLOW-UP: só use follow-up se houver evidência de apresentação realizada,\n"
-        "  seja por history (ex.: \"na call de ontem\", \"como falamos na apresentação\")\n"
-        "  OU se lead.category atual já for follow-up/closing. Se for apenas apresentation e não houver\n"
-        "  evidência textual de que a call aconteceu, prefira apresentation.\n"
+        "- APRESENTATION: apresentação do serviço/produto, resposta a dúvidas de valor, pitch inicial.\n"
+        '  => route_to="apresentation".\n'
+        "- PRÉ-AGENDAMENTO (template sdr_padrao/hybrid_scheduler): dúvidas pré-booking (duração, local,\n"
+        "  preparo, pagamento, cancelamento). Use quando a apresentação já ocorreu e o lead ainda tem\n"
+        "  dúvidas antes de confirmar o horário.\n"
+        '  => route_to="pre-agendamento".\n'
+        "- AGENDAMENTO (template sdr_padrao/hybrid_scheduler): lead pede ou confirma horário específico,\n"
+        "  menciona dia/turno/hora. Use quando há sinal de disponibilidade ou pedido de booking.\n"
+        '  => route_to="agendamento".\n'
+        "- FOLLOW-UP é SOMENTE após apresentação quando o lead não fechou, com sinais de nutrição,\n"
+        '  ex.: "vou pensar", "me chama mês que vem", "manda material", "preciso falar com sócio".\n'
+        "- REGRA FORTE FOLLOW-UP: só use follow-up se houver evidência de apresentação realizada.\n"
         "  Se não houver evidência, mantenha qualification ou apresentation conforme o contexto.\n"
-        "- Qualification: dúvidas iniciais (preço/como funciona/serve pra mim) sem combinação de horário/link.\n"
-        "- Apresentation: qualquer ação de agendar/confirmar/reagendar/pedir link/confirmar presença.\n"
+        "- Qualification: dúvidas iniciais (preço/como funciona/serve pra mim) sem sinal de booking.\n"
         "\n"
         # ETAPA 4 (roadmap): o marcador "meeting_scheduled" em reason é provisório.
         # Nesta etapa usamos sinal textual simples para orientar o executor, mas a Etapa 4
@@ -2428,6 +2431,151 @@ def _build_child_prompt_closing(
     # adicionados directamente ao prompt.
     return _closing_prompt
 
+def _build_child_prompt_pre_agendamento(
+    context: Dict[str, Any],
+    message_text: str,
+    mother_decision: MotherDecision,
+) -> str:
+    lead = context.get("lead") or {}
+    ai_profile = context.get("ai_profile") or {}
+    playbook = context.get("playbook") or {}
+    history = context.get("history") or []
+
+    lead_summary = {
+        "id": lead.get("id"),
+        "name": _safe_get(lead, "contactName", "companyName", "name"),
+        "category": lead.get("category"),
+    }
+    ai_summary = {
+        "name": ai_profile.get("name"),
+        "brand_name": ai_profile.get("brand_name"),
+        "tone_of_voice": ai_profile.get("tone_of_voice"),
+        "niche": ai_profile.get("niche"),
+        "agent_mode": ai_profile.get("agent_mode"),
+        "custom_instructions": ai_profile.get("custom_instructions"),
+    }
+    playbook_summary = {
+        "template_key": playbook.get("template_key") or playbook.get("name"),
+        "max_chars": playbook.get("max_chars"),
+    }
+
+    history_text = _format_history(history)
+    mode_contract = _build_mode_contract_context(context, mother_decision)
+    agent_mode_normalized = mode_contract["agent_mode_normalized"]
+
+    _pre_prompt = (
+        "Você é o assistente de um CRM de WhatsApp na fase de PRÉ-AGENDAMENTO.\n\n"
+        f"FRAMEWORK: Modo {agent_mode_normalized}. Template {playbook_summary['template_key']}.\n\n"
+        "OBJETIVO: Responder às dúvidas do lead sobre o serviço antes de confirmar o horário.\n"
+        "Temas comuns: duração, local, preparo, forma de pagamento, política de cancelamento.\n\n"
+        "REGRAS OBRIGATÓRIAS:\n"
+        "- Responda de forma direta e curta (máximo 2-3 frases).\n"
+        "- NÃO repita tabela de preços nem faça pitch de venda.\n"
+        "- NÃO insista em agendar; responda a dúvida e deixe o lead conduzir.\n"
+        "- Quando a dúvida estiver resolvida e o lead demonstrar pronto para agendar, "
+        "recomende naturally a transição para agendamento via recommended_next_category='agendamento'.\n\n"
+        + _build_tone_block(ai_profile, playbook)
+        + _build_agent_role_block(agent_mode_normalized, "pre-agendamento", ai_profile)
+        + "\nRetorne SOMENTE JSON válido no schema ChildResult:\n"
+        "{\n"
+        '  "message_text": "resposta à dúvida do lead",\n'
+        '  "did_complete_phase": false|true,\n'
+        '  "recommended_next_category": "agendamento"|null,\n'
+        '  "outcome": null,\n'
+        '  "kanban_highlight": null,\n'
+        '  "signals": [],\n'
+        '  "confidence": 0.0\n'
+        "}\n\n"
+        f"Contexto:\n"
+        f"- lead: {json.dumps(lead_summary, ensure_ascii=False)}\n"
+        f"- ai_profile: {json.dumps(ai_summary, ensure_ascii=False)}\n"
+        f"- history: {history_text}\n"
+        f"- inbound_message_text: {message_text}\n"
+        + _build_custom_instructions_block(ai_profile)
+    )
+    return _pre_prompt
+
+
+def _build_child_prompt_agendamento(
+    context: Dict[str, Any],
+    message_text: str,
+    mother_decision: MotherDecision,
+) -> str:
+    lead = context.get("lead") or {}
+    ai_profile = context.get("ai_profile") or {}
+    playbook = context.get("playbook") or {}
+    history = context.get("history") or []
+
+    lead_summary = {
+        "id": lead.get("id"),
+        "name": _safe_get(lead, "contactName", "companyName", "name"),
+        "category": lead.get("category"),
+    }
+    availability_schedule = str(ai_profile.get("availability_schedule") or "").strip()
+    ai_summary = {
+        "name": ai_profile.get("name"),
+        "brand_name": ai_profile.get("brand_name"),
+        "tone_of_voice": ai_profile.get("tone_of_voice"),
+        "niche": ai_profile.get("niche"),
+        "agent_mode": ai_profile.get("agent_mode"),
+        "availability_schedule": availability_schedule or None,
+        "custom_instructions": ai_profile.get("custom_instructions"),
+    }
+    playbook_summary = {
+        "template_key": playbook.get("template_key") or playbook.get("name"),
+        "max_chars": playbook.get("max_chars"),
+    }
+
+    history_text = _format_history(history)
+    mode_contract = _build_mode_contract_context(context, mother_decision)
+    agent_mode_normalized = mode_contract["agent_mode_normalized"]
+
+    _avail_block = ""
+    if availability_schedule:
+        _avail_block = (
+            f"DISPONIBILIDADE DO PROFISSIONAL:\n{availability_schedule}\n\n"
+            "Com base na disponibilidade acima, proponha 2-3 horários concretos que se encaixem "
+            "no que o lead solicitou. Use linguagem natural e fluida.\n\n"
+        )
+    else:
+        _avail_block = (
+            "DISPONIBILIDADE: não configurada.\n"
+            "Pergunte ao lead qual horário prefere e confirme que vai verificar a agenda.\n\n"
+        )
+
+    _sched_prompt = (
+        "Você é o assistente de um CRM de WhatsApp na fase de AGENDAMENTO.\n\n"
+        f"FRAMEWORK: Modo {agent_mode_normalized}. Template {playbook_summary['template_key']}.\n\n"
+        "OBJETIVO: Confirmar data e horário para o serviço solicitado pelo lead.\n\n"
+        + _avail_block
+        + "REGRAS OBRIGATÓRIAS:\n"
+        "- Foco total em confirmar o horário. NÃO reintroduza temas de venda ou preços.\n"
+        "- Seja conciso e direto: máximo 2-3 frases.\n"
+        "- Ao confirmar o agendamento, recomende a transição para 'client-list' ou 'follow-up' "
+        "via recommended_next_category.\n"
+        "- Se o lead quiser reagendar ou cancelar, lide com isso naturalmente.\n\n"
+        + _build_tone_block(ai_profile, playbook)
+        + _build_agent_role_block(agent_mode_normalized, "agendamento", ai_profile)
+        + "\nRetorne SOMENTE JSON válido no schema ChildResult:\n"
+        "{\n"
+        '  "message_text": "proposta de horário ou confirmação",\n'
+        '  "did_complete_phase": false|true,\n'
+        '  "recommended_next_category": "client-list"|"follow-up"|null,\n'
+        '  "outcome": null,\n'
+        '  "kanban_highlight": null,\n'
+        '  "signals": [],\n'
+        '  "confidence": 0.0\n'
+        "}\n\n"
+        f"Contexto:\n"
+        f"- lead: {json.dumps(lead_summary, ensure_ascii=False)}\n"
+        f"- ai_profile: {json.dumps(ai_summary, ensure_ascii=False)}\n"
+        f"- history: {history_text}\n"
+        f"- inbound_message_text: {message_text}\n"
+        + _build_custom_instructions_block(ai_profile)
+    )
+    return _sched_prompt
+
+
 def _extract_json_payload(text: str) -> Optional[Dict[str, Any]]:
     text = text.strip()
     if not text:
@@ -2499,12 +2647,59 @@ def _enforce_qualification_route_when_missing(
 
 _ALLOWED_ADVANCE = {
     "qualification": {"apresentation"},
-    "apresentation": {"closing", "follow-up"},
+    "apresentation": {"closing", "follow-up", "pre-agendamento"},
+    "pre-agendamento": {"agendamento", "follow-up"},
+    "agendamento": {"follow-up", "client-list"},
     "follow-up": {"closing"},
 }
 
-_STAGE_ORDER = ["qualification", "apresentation", "follow-up", "closing"]
+_STAGE_ORDER = ["qualification", "apresentation", "pre-agendamento", "agendamento", "follow-up", "closing"]
 _STAGE_INDEX = {stage: index for index, stage in enumerate(_STAGE_ORDER)}
+
+# Templates que usam as fases de pré-agendamento e agendamento
+_SCHEDULING_AGENT_TEMPLATES = {"sdr_padrao", "hybrid_scheduler"}
+
+
+_SCHEDULING_TEMPORAL_SIGNALS = {
+    "amanha", "amanhã", "hoje", "semana", "segunda", "terca", "quarta",
+    "quinta", "sexta", "sabado", "domingo", "manha", "tarde", "noite",
+    "horario", "hora", "disponibilidade", "disponivel", "quando",
+    "proximo", "prochain", "próximo", "próxima", "essa semana",
+}
+
+_SCHEDULING_ACTION_SIGNALS = {
+    "agendar", "marcar", "reservar", "confirmar", "combinar",
+    "posso marcar", "quero agendar", "gostaria de agendar",
+    "tem vaga", "tem horario", "tem hora", "vaga disponivel",
+    "como faço para agendar", "como marco",
+}
+
+
+def _has_scheduling_intent(message_text: str, context: Dict[str, Any]) -> bool:
+    """Detecta intenção de agendamento — direta ou implícita.
+
+    Captura tanto pedidos explícitos ("Posso marcar para amanhã?") quanto
+    intenções implícitas ("tem disponibilidade amanhã?", "atende sábado?").
+    """
+    text_norm = _normalize_str(message_text)
+    history = context.get("history") or []
+
+    has_temporal = any(sig in text_norm for sig in _SCHEDULING_TEMPORAL_SIGNALS)
+    has_action = any(sig in text_norm for sig in _SCHEDULING_ACTION_SIGNALS)
+
+    # Sinal forte: verbo de agendamento presente
+    if has_action:
+        return True
+
+    # Sinal temporal + qualquer pergunta ou interesse
+    if has_temporal and ("?" in message_text or len(message_text.split()) <= 8):
+        return True
+
+    # Sinal temporal + histórico de conversa (lead já sabe do serviço)
+    if has_temporal and len(history) >= 2:
+        return True
+
+    return False
 
 
 def _is_sdr_escalate_closing(context: Dict[str, Any], mother_decision: MotherDecision) -> bool:
@@ -2651,6 +2846,11 @@ def compose_decision_output(
     if template_key == "hybrid_scheduler" and suggested_category == "closing":
         suggested_category = "apresentation"
         reason_add = "guardrail_hybrid_scheduler_no_closing"
+        category_reason = f"{category_reason}|{reason_add}" if category_reason else reason_add
+
+    if suggested_category in {"pre-agendamento", "agendamento"} and template_key not in _SCHEDULING_AGENT_TEMPLATES:
+        suggested_category = "apresentation"
+        reason_add = "guardrail_scheduling_stage_non_scheduling_agent"
         category_reason = f"{category_reason}|{reason_add}" if category_reason else reason_add
 
     qualification_auto_promoted = False
@@ -2933,22 +3133,46 @@ def decide(context: Dict[str, Any], logger: Optional[logging.Logger] = None) -> 
             mode_ctx_pre = _build_mode_contract_context(context, mother_decision)
             missing_pre = list(mode_ctx_pre.get("missing_fields") or [])
             normalized_current_category = _normalize_category(lead.get("category"))
-            is_upper_stage = normalized_current_category in {"apresentation", "follow-up", "closing"}
-            if is_upper_stage or not missing_pre:
-                route_for_child = "apresentation"
-                anti_loop_rule3_applied = True
+
+            _tkey_rule3 = str((context.get("ai_profile") or {}).get("template_key") or "").strip().lower()
+            _is_sched_agent_rule3 = _tkey_rule3 in _SCHEDULING_AGENT_TEMPLATES
+            _sched_upper = {"apresentation", "pre-agendamento"}
+            if (
+                _is_sched_agent_rule3
+                and normalized_current_category in _sched_upper
+                and _has_scheduling_intent(message_text, context)
+            ):
+                route_for_child = "agendamento"
                 if logger:
                     job = context.get("job") or {}
                     payload = job.get("payload") or {}
                     logger.info(
-                        "event=qualification_anti_loop_rule3 route_override=%s mother_route_to=%s lead_category=%s "
+                        "event=scheduling_intent_override route_override=%s lead_category=%s "
                         "job_id=%s lead_id=%s",
                         route_for_child,
-                        mother_decision.route_to,
                         lead.get("category"),
                         job.get("id") or payload.get("job_id"),
                         lead.get("id") or payload.get("lead_id"),
                     )
+            else:
+                is_upper_stage = normalized_current_category in {
+                    "apresentation", "pre-agendamento", "agendamento", "follow-up", "closing"
+                }
+                if is_upper_stage or not missing_pre:
+                    route_for_child = "apresentation"
+                    anti_loop_rule3_applied = True
+                    if logger:
+                        job = context.get("job") or {}
+                        payload = job.get("payload") or {}
+                        logger.info(
+                            "event=qualification_anti_loop_rule3 route_override=%s mother_route_to=%s lead_category=%s "
+                            "job_id=%s lead_id=%s",
+                            route_for_child,
+                            mother_decision.route_to,
+                            lead.get("category"),
+                            job.get("id") or payload.get("job_id"),
+                            lead.get("id") or payload.get("lead_id"),
+                        )
 
         if _is_sdr_escalate_closing(context, mother_decision):
             reason = f"guardrail_sdr_escalate_closing|{mother_decision.reason}"
@@ -3126,6 +3350,20 @@ def decide(context: Dict[str, Any], logger: Optional[logging.Logger] = None) -> 
         elif route_for_child == "apresentation":
             child_prompt = _build_child_prompt_apresentation(context, message_text, mother_decision)
             _prompt_function_used = "_build_child_prompt_apresentation"
+        elif route_for_child == "pre-agendamento":
+            try:
+                child_prompt = _build_child_prompt_pre_agendamento(context, message_text, mother_decision)
+                _prompt_function_used = "_build_child_prompt_pre_agendamento"
+            except Exception:
+                child_prompt = _build_child_prompt(context, message_text, mother_decision)
+                _prompt_function_used = "_build_child_prompt(fallback)"
+        elif route_for_child == "agendamento":
+            try:
+                child_prompt = _build_child_prompt_agendamento(context, message_text, mother_decision)
+                _prompt_function_used = "_build_child_prompt_agendamento"
+            except Exception:
+                child_prompt = _build_child_prompt(context, message_text, mother_decision)
+                _prompt_function_used = "_build_child_prompt(fallback)"
         elif route_for_child == "follow-up":
             try:
                 child_prompt = _build_child_prompt_follow_up(context, message_text, mother_decision)
@@ -3407,5 +3645,19 @@ def decide(context: Dict[str, Any], logger: Optional[logging.Logger] = None) -> 
                 "decision fallback next_action=%s reason=%s",
                 FALLBACK_DECISION.next_action,
                 FALLBACK_DECISION.reason,
+            )
+        _history_for_fallback = context.get("history") or []
+        if len(_history_for_fallback) <= 2:
+            # Lead novo: suprimir handoff indevido e aguardar retry humano
+            if logger:
+                logger.info(
+                    "event=llm_failure_first_message_suppressed history_len=%d",
+                    len(_history_for_fallback),
+                )
+            return DecisionOutput(
+                next_action="ignore",
+                message_text="",
+                questions=[],
+                reason="llm_failure_first_message",
             )
         return handoff_policy.apply(context, FALLBACK_DECISION, logger=logger)

@@ -139,6 +139,7 @@ export interface AgentConfig {
   briefing_lead_time: number;
   operator_whatsapp: string;
   calendar_integration: string;
+  availability_schedule: string;
 
   // ── Oferta e pagamento ───────────────────────────────────
   offer_media_url: string;
@@ -223,6 +224,7 @@ export const DEFAULT_AGENT_CONFIG: AgentConfig = {
   briefing_lead_time: 1,
   operator_whatsapp: '',
   calendar_integration: 'none',
+  availability_schedule: '',
 
   offer_media_url: '',
   offer_media_type: 'image',

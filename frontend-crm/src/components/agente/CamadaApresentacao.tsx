@@ -211,6 +211,28 @@ export function CamadaApresentacao({ config, onUpdate }: CamadaApresentacaoProps
         )}
       </div>
 
+      {/* Seção: Disponibilidade de horários */}
+      <div className="o-section-hdr">
+        <span className="font-mono-orion" style={{ fontSize: 9, letterSpacing: '2.5px', textTransform: 'uppercase', color: 'var(--o-sub)' }}>
+          Disponibilidade de horários
+        </span>
+      </div>
+      <div style={{ marginBottom: 24 }}>
+        <div style={{ fontSize: 12, color: 'var(--o-sub)', fontWeight: 300, marginBottom: 10 }}>
+          Informe os dias e horários disponíveis para atendimento. O bot usará estas informações para propor horários ao lead na fase de Agendamento.
+        </div>
+        <div className="o-field-hint" style={{ marginBottom: 8, fontSize: 11 }}>
+          Exemplo: Seg-Sex: 14h, 16h, 18h · Sáb: 10h, 12h
+        </div>
+        <textarea
+          className="o-input"
+          style={{ width: '100%', minHeight: 80, resize: 'vertical', fontFamily: 'inherit', fontSize: 13 }}
+          placeholder={'Seg-Sex: 14h, 16h, 18h\nSábado: 10h, 12h'}
+          value={config.availability_schedule || ''}
+          onChange={e => onUpdate({ availability_schedule: e.target.value })}
+        />
+      </div>
+
       {/* Seção: Calendário */}
       <div className="o-section-hdr">
         <span className="font-mono-orion" style={{ fontSize: 9, letterSpacing: '2.5px', textTransform: 'uppercase', color: 'var(--o-sub)' }}>

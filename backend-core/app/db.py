@@ -107,6 +107,7 @@ def ensure_ai_profile_columns() -> None:
         "qualification_fields": {"default": None, "sqlite_type": "TEXT", "pg_type": "JSON"},
         "custom_variables": {"default": None, "sqlite_type": "TEXT", "pg_type": "JSON"},
         "enabled_extensions": {"default": None, "sqlite_type": "TEXT", "pg_type": "JSON"},
+        "availability_schedule": {"default": None, "sqlite_type": "TEXT", "pg_type": "TEXT"},
     }
 
     with engine.begin() as conn:
