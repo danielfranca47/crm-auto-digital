@@ -33,6 +33,7 @@ from services.jobs_service import (
     TYPE_WHATSAPP_FOLLOWUP_PREGENERATE,
     TYPE_WHATSAPP_APPOINTMENT_REMINDER,
     TYPE_WHATSAPP_APPOINTMENT_BRIEFING,
+    TYPE_WHATSAPP_PREAGENDAMENTO_CHECKIN,
     TYPE_WHATSAPP_INBOUND,
     apply_outcome_highlight,
     apply_suggested_category,
@@ -211,6 +212,36 @@ def _fetch_latest_ai_decision(lead_id: int) -> Optional[Dict[str, Any]]:
         return {"raw_notes": notes}
 
 
+def _extract_preagendamento_checkin_iso(result_obj: Dict[str, Any]) -> Optional[str]:
+    """Extrai checkin_at_iso do sinal emitido pelo child de pré-agendamento."""
+    trace = result_obj.get("decision_trace") or {}
+    child_sigs = trace.get("child_signals_structured") or {}
+    val = child_sigs.get("checkin_at_iso")
+    return str(val).strip() if val else None
+
+
+def _schedule_preagendamento_checkin(
+    lead_id: int,
+    user_id: int,
+    checkin_at_iso: str,
+) -> None:
+    from services.jobs_service import create_job
+    try:
+        checkin_dt = datetime.fromisoformat(checkin_at_iso)
+        if checkin_dt.tzinfo is None:
+            checkin_dt = checkin_dt.replace(tzinfo=timezone.utc)
+    except ValueError:
+        return
+    if checkin_dt <= datetime.now(timezone.utc):
+        return
+    create_job(
+        job_type=TYPE_WHATSAPP_PREAGENDAMENTO_CHECKIN,
+        payload={"lead_id": lead_id, "user_id": user_id, "checkin_at_iso": checkin_at_iso},
+        scheduled_at=checkin_dt,
+        user_id=user_id,
+    )
+
+
 @router.get("/whatsapp/execution-context")
 def whatsapp_execution_context(
     job_id: int = Query(..., description="ID do job inbound"),
@@ -244,6 +275,16 @@ def whatsapp_execution_context(
         payload = {
             **payload,
             "message_text": str(message_text or "appointment_reminder_trigger"),
+            "instance_id": channel_ctx.get("instance_id"),
+            "provider": channel_ctx.get("provider"),
+            "phone": channel_ctx.get("phone") or payload.get("phone"),
+        }
+    elif job_type == TYPE_WHATSAPP_PREAGENDAMENTO_CHECKIN:
+        with get_connection() as conn:
+            channel_ctx = resolve_followup_tick_channel_context(conn, lead_id=int(lead_id), user_id=int(user_id))
+        payload = {
+            **payload,
+            "message_text": "preagendamento_checkin_trigger",
             "instance_id": channel_ctx.get("instance_id"),
             "provider": channel_ctx.get("provider"),
             "phone": channel_ctx.get("phone") or payload.get("phone"),
@@ -641,6 +682,13 @@ def complete_job_internal(
                     reason=outcome_reason,
                     source_job_id=source_job_id,
                 )
+                checkin_iso = _extract_preagendamento_checkin_iso(result_obj)
+                if checkin_iso:
+                    _schedule_preagendamento_checkin(
+                        lead_id=int(lead_id),
+                        user_id=row["user_id"],
+                        checkin_at_iso=checkin_iso,
+                    )
 
         refreshed = cur.execute("SELECT * FROM jobs WHERE id=?", (job_id,)).fetchone()
         conn.commit()

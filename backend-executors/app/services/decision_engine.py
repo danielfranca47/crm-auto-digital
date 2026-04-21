@@ -1187,12 +1187,14 @@ def _build_mother_prompt(context: Dict[str, Any], message_text: str) -> str:
         "DEFINIÇÃO DO FUNIL (IMPORTANTE):\n"
         "- APRESENTATION: apresentação do serviço/produto, resposta a dúvidas de valor, pitch inicial.\n"
         '  => route_to="apresentation".\n'
-        "- PRÉ-AGENDAMENTO (template sdr_padrao/hybrid_scheduler): dúvidas pré-booking (duração, local,\n"
-        "  preparo, pagamento, cancelamento). Use quando a apresentação já ocorreu e o lead ainda tem\n"
-        "  dúvidas antes de confirmar o horário.\n"
+        "- PRÉ-AGENDAMENTO (template sdr_padrao/hybrid_scheduler): lead demonstra interesse TENTATIVO\n"
+        "  sem data confirmada (ex.: 'quero ir sim, vou tentar semana que vem', 'vou ver pra próxima\n"
+        "  semana', 'quero marcar mas ainda não sei quando'). Interesse real, sem compromisso de horário.\n"
+        "  NÃO use para dúvidas sobre o serviço (essas vão para apresentation).\n"
         '  => route_to="pre-agendamento".\n'
-        "- AGENDAMENTO (template sdr_padrao/hybrid_scheduler): lead pede ou confirma horário específico,\n"
-        "  menciona dia/turno/hora. Use quando há sinal de disponibilidade ou pedido de booking.\n"
+        "- AGENDAMENTO (template sdr_padrao/hybrid_scheduler): lead pede ou confirma horário ESPECÍFICO,\n"
+        "  menciona dia/turno/hora concreta (ex.: 'amanhã às 14h tem?', 'posso marcar pra sexta de manhã?').\n"
+        "  Use quando há pedido de booking com data/horário definidos ou semi-definidos.\n"
         '  => route_to="agendamento".\n'
         "- FOLLOW-UP é SOMENTE após apresentação quando o lead não fechou, com sinais de nutrição,\n"
         '  ex.: "vou pensar", "me chama mês que vem", "manda material", "preciso falar com sócio".\n'
@@ -2441,9 +2443,10 @@ def _build_child_prompt_pre_agendamento(
     playbook = context.get("playbook") or {}
     history = context.get("history") or []
 
+    lead_name = _safe_get(lead, "contactName", "companyName", "name") or ""
     lead_summary = {
         "id": lead.get("id"),
-        "name": _safe_get(lead, "contactName", "companyName", "name"),
+        "name": lead_name,
         "category": lead.get("category"),
     }
     ai_summary = {
@@ -2462,31 +2465,82 @@ def _build_child_prompt_pre_agendamento(
     history_text = _format_history(history)
     mode_contract = _build_mode_contract_context(context, mother_decision)
     agent_mode_normalized = mode_contract["agent_mode_normalized"]
+    today_date = datetime.utcnow().strftime("%Y-%m-%d")
+
+    # Detecta se é o trigger de check-in agendado (mensagem gerada pelo job)
+    is_checkin_trigger = message_text.strip() == "preagendamento_checkin_trigger"
+
+    if is_checkin_trigger:
+        greeting_name = f" {lead_name.split()[0]}" if lead_name else ""
+        _pre_prompt = (
+            "Você é o assistente de um CRM de WhatsApp.\n\n"
+            "TAREFA: Gerar a mensagem de check-in de confirmação de sessão combinada anteriormente.\n\n"
+            "REGRAS:\n"
+            "- Seja breve e cordial (1-2 frases).\n"
+            "- Relembre o combinado e pergunte se o lead confirma a sessão de amanhã.\n"
+            "- NÃO mencione preços, não faça pitch de venda.\n"
+            "- NÃO recomende transição de categoria (recommended_next_category deve ser null).\n"
+            "- NÃO preencha signals_structured.\n\n"
+            f"Exemplo de tom: 'Oi{greeting_name}! 👋 Como combinamos, estou passando para confirmar "
+            "a sessão de amanhã. Você confirma?'\n\n"
+            + _build_tone_block(ai_profile, playbook)
+            + "\nRetorne SOMENTE JSON válido no schema ChildResult:\n"
+            "{\n"
+            '  "message_text": "mensagem de confirmação",\n'
+            '  "did_complete_phase": false,\n'
+            '  "recommended_next_category": null,\n'
+            '  "outcome": null,\n'
+            '  "kanban_highlight": null,\n'
+            '  "signals": [],\n'
+            '  "signals_structured": null,\n'
+            '  "confidence": 0.9\n'
+            "}\n\n"
+            f"Contexto:\n"
+            f"- lead: {json.dumps(lead_summary, ensure_ascii=False)}\n"
+            f"- ai_profile: {json.dumps(ai_summary, ensure_ascii=False)}\n"
+            f"- history: {history_text}\n"
+        )
+        return _pre_prompt
 
     _pre_prompt = (
         "Você é o assistente de um CRM de WhatsApp na fase de PRÉ-AGENDAMENTO.\n\n"
         f"FRAMEWORK: Modo {agent_mode_normalized}. Template {playbook_summary['template_key']}.\n\n"
-        "OBJETIVO: Responder às dúvidas do lead sobre o serviço antes de confirmar o horário.\n"
-        "Temas comuns: duração, local, preparo, forma de pagamento, política de cancelamento.\n\n"
+        "SITUAÇÃO: O lead demonstrou interesse tentativo em marcar uma sessão, mas SEM data confirmada.\n"
+        "Ex.: 'quero ir sim, vou tentar semana que vem', 'vou ver pra próxima semana'.\n\n"
+        "OBJETIVO: Capturar um dia estimado e solicitar permissão para enviar uma mensagem de check-in\n"
+        "um dia antes da sessão para confirmar o compromisso.\n\n"
+        "FLUXO DE CONVERSA (siga esta progressão):\n"
+        "1. Se ainda NÃO souber o dia estimado do lead:\n"
+        "   → Responda acolhedoramente e pergunte: 'Que dia funcionaria melhor pra você?'\n"
+        "2. Se souber o dia estimado MAS ainda não pediu permissão para o check-in:\n"
+        "   → Confirme o dia e peça permissão: 'Posso te mandar uma mensagem [dia anterior] de manhã\n"
+        "     para confirmar a sessão?'\n"
+        "3. Se o lead JÁ confirmou o dia E confirmou permissão para o check-in:\n"
+        "   → Responda positivamente e sinalize o check-in no campo signals_structured:\n"
+        "     Calcule checkin_at_iso = data do dia ANTERIOR à sessão às 09:00 (use today_date abaixo)\n"
+        "     Emita: signals_structured = {\"checkin_at_iso\": \"YYYY-MM-DDTHH:MM:SS\"}\n\n"
         "REGRAS OBRIGATÓRIAS:\n"
-        "- Responda de forma direta e curta (máximo 2-3 frases).\n"
-        "- NÃO repita tabela de preços nem faça pitch de venda.\n"
-        "- NÃO insista em agendar; responda a dúvida e deixe o lead conduzir.\n"
-        "- Quando a dúvida estiver resolvida e o lead demonstrar pronto para agendar, "
-        "recomende naturally a transição para agendamento via recommended_next_category='agendamento'.\n\n"
+        "- Máximo 2-3 frases por resposta.\n"
+        "- NÃO repita preços nem faça pitch de venda.\n"
+        "- Se o lead der um dia/hora ESPECÍFICA e objetiva (ex.: 'amanhã às 14h'), use\n"
+        "  recommended_next_category='agendamento' para avançar direto ao agendamento.\n"
+        "- checkin_at_iso SOMENTE quando lead confirmar permissão E um dia estiver claro.\n"
+        "- Se lead disser 'não' ao check-in → apenas confirme o interesse e encerre educadamente.\n\n"
         + _build_tone_block(ai_profile, playbook)
         + _build_agent_role_block(agent_mode_normalized, "pre-agendamento", ai_profile)
         + "\nRetorne SOMENTE JSON válido no schema ChildResult:\n"
         "{\n"
-        '  "message_text": "resposta à dúvida do lead",\n'
+        '  "message_text": "resposta ao lead",\n'
         '  "did_complete_phase": false|true,\n'
         '  "recommended_next_category": "agendamento"|null,\n'
         '  "outcome": null,\n'
         '  "kanban_highlight": null,\n'
         '  "signals": [],\n'
+        '  "signals_structured": {"checkin_at_iso": "YYYY-MM-DDTHH:MM:SS"} | null,\n'
         '  "confidence": 0.0\n'
         "}\n\n"
         f"Contexto:\n"
+        f"- today_date: {today_date}\n"
         f"- lead: {json.dumps(lead_summary, ensure_ascii=False)}\n"
         f"- ai_profile: {json.dumps(ai_summary, ensure_ascii=False)}\n"
         f"- history: {history_text}\n"
@@ -2674,6 +2728,15 @@ _SCHEDULING_ACTION_SIGNALS = {
     "como faço para agendar", "como marco",
 }
 
+# Sinais de interesse TENTATIVO — sem data confirmada (→ pre-agendamento)
+_SOFT_SCHEDULING_SIGNALS = {
+    "vou ver", "vou tentar", "quero ir", "pretendo ir", "pensando em",
+    "semana que vem", "proxima semana", "próxima semana", "quero sim",
+    "vou verificar", "vou checar", "deixa eu ver", "gostaria de ir",
+    "quero marcar sim", "vou marcar", "vou tentar marcar", "vou tentar ir",
+    "quero ir sim", "quero ir mas", "quero mas", "tenho interesse",
+}
+
 
 def _has_scheduling_intent(message_text: str, context: Dict[str, Any]) -> bool:
     """Detecta intenção de agendamento — direta ou implícita.
@@ -2699,6 +2762,36 @@ def _has_scheduling_intent(message_text: str, context: Dict[str, Any]) -> bool:
     if has_temporal and len(history) >= 2:
         return True
 
+    return False
+
+
+def _has_soft_scheduling_intent(message_text: str) -> bool:
+    """Detecta interesse TENTATIVO de agendamento, sem data confirmada.
+
+    Ex.: 'vou ver pra semana que vem', 'quero ir sim, vou tentar marcar'.
+    Distingue do interesse firme (dia/hora específicos) para rotear ao pré-agendamento.
+    """
+    text_norm = _normalize_str(message_text)
+    return any(sig in text_norm for sig in _SOFT_SCHEDULING_SIGNALS)
+
+
+def _has_hard_scheduling_intent(message_text: str, context: Dict[str, Any]) -> bool:
+    """Detecta intenção FIRME de agendamento — dia/hora específicos ou verbo de agendar.
+
+    Ex.: 'Amanhã às 14h tem disponível?', 'Posso marcar para sexta de manhã?'.
+    """
+    text_norm = _normalize_str(message_text)
+    has_action = any(sig in text_norm for sig in _SCHEDULING_ACTION_SIGNALS)
+    if has_action:
+        return True
+    has_temporal = any(sig in text_norm for sig in _SCHEDULING_TEMPORAL_SIGNALS)
+    if has_temporal and ("?" in message_text or len(message_text.split()) <= 8):
+        return True
+    history = context.get("history") or []
+    if has_temporal and len(history) >= 2:
+        # Só considera hard se NÃO tiver sinal suave dominando
+        soft = _has_soft_scheduling_intent(message_text)
+        return not soft
     return False
 
 
@@ -3137,23 +3230,49 @@ def decide(context: Dict[str, Any], logger: Optional[logging.Logger] = None) -> 
             _tkey_rule3 = str((context.get("ai_profile") or {}).get("template_key") or "").strip().lower()
             _is_sched_agent_rule3 = _tkey_rule3 in _SCHEDULING_AGENT_TEMPLATES
             _sched_upper = {"apresentation", "pre-agendamento"}
-            if (
-                _is_sched_agent_rule3
-                and normalized_current_category in _sched_upper
-                and _has_scheduling_intent(message_text, context)
-            ):
-                route_for_child = "agendamento"
-                if logger:
-                    job = context.get("job") or {}
-                    payload = job.get("payload") or {}
-                    logger.info(
-                        "event=scheduling_intent_override route_override=%s lead_category=%s "
-                        "job_id=%s lead_id=%s",
-                        route_for_child,
-                        lead.get("category"),
-                        job.get("id") or payload.get("job_id"),
-                        lead.get("id") or payload.get("lead_id"),
-                    )
+            _any_sched_intent = _has_scheduling_intent(message_text, context)
+            _soft_intent = _has_soft_scheduling_intent(message_text)
+            _hard_intent = _has_hard_scheduling_intent(message_text, context)
+
+            if _is_sched_agent_rule3 and normalized_current_category in _sched_upper and _any_sched_intent:
+                job = context.get("job") or {}
+                payload_log = job.get("payload") or {}
+                # Soft intent (sem data confirmada) vindos de apresentation → pré-agendamento
+                if normalized_current_category == "apresentation" and _soft_intent and not _hard_intent:
+                    route_for_child = "pre-agendamento"
+                    if logger:
+                        logger.info(
+                            "event=soft_scheduling_intent_override route_override=%s lead_category=%s "
+                            "job_id=%s lead_id=%s",
+                            route_for_child,
+                            lead.get("category"),
+                            job.get("id") or payload_log.get("job_id"),
+                            lead.get("id") or payload_log.get("lead_id"),
+                        )
+                # Hard intent (dia/hora específica) de apresentation ou pre-agendamento → agendamento
+                elif _hard_intent or normalized_current_category == "pre-agendamento":
+                    route_for_child = "agendamento"
+                    if logger:
+                        logger.info(
+                            "event=scheduling_intent_override route_override=%s lead_category=%s "
+                            "job_id=%s lead_id=%s",
+                            route_for_child,
+                            lead.get("category"),
+                            job.get("id") or payload_log.get("job_id"),
+                            lead.get("id") or payload_log.get("lead_id"),
+                        )
+                else:
+                    # Fallback: qualquer intenção de apresentation sem distinção clara → agendamento
+                    route_for_child = "agendamento"
+                    if logger:
+                        logger.info(
+                            "event=scheduling_intent_override route_override=%s lead_category=%s "
+                            "job_id=%s lead_id=%s",
+                            route_for_child,
+                            lead.get("category"),
+                            job.get("id") or payload_log.get("job_id"),
+                            lead.get("id") or payload_log.get("lead_id"),
+                        )
             else:
                 is_upper_stage = normalized_current_category in {
                     "apresentation", "pre-agendamento", "agendamento", "follow-up", "closing"
