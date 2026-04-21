@@ -232,9 +232,28 @@ Configuração via `.env` e `.env.agent1` / `.env.agent2`.
 
 ### Painel Admin — Agentes e AI Profiles
 
-**Regra obrigatória:** sempre que um novo campo for adicionado ao AI profile (`ai_profiles`) ou um novo estágio/variável de agente for introduzido no sistema, `docs/admin-agents-contract.md` deve ser atualizado. Verificar também se `AdminAgents.tsx` precisa capturar e exibir o novo campo.
+**Regra obrigatória:** sempre que um novo campo for adicionado ao AI profile (`ai_profiles`) ou um novo estágio/variável de agente for introduzido no sistema, `docs/architecture/admin-agents-contract.md` deve ser atualizado. Verificar também se `AdminAgents.tsx` precisa capturar e exibir o novo campo.
 
-Contexto: o painel admin em `frontend-crm/src/pages/SaaSAdmin/AdminAgents.tsx` consome `GET /admin/agents/overview` e `GET /admin/agents/users/{id}` do backend-crm (montados sem o prefixo `/api/`). O contrato de campos está documentado em `docs/admin-agents-contract.md`.
+Contexto: o painel admin em `frontend-crm/src/pages/SaaSAdmin/AdminAgents.tsx` consome `GET /admin/agents/overview` e `GET /admin/agents/users/{id}` do backend-crm (montados sem o prefixo `/api/`). O contrato de campos está documentado em `docs/architecture/admin-agents-contract.md`.
+
+---
+
+## Documentação de Arquitetura
+
+Os arquivos abaixo descrevem a estrutura **atual** de cada área do sistema. Ler o arquivo relevante antes de trabalhar em uma área desconhecida.
+
+| Arquivo | Cobre |
+|---|---|
+| [`docs/architecture/pipeline-phases.md`](docs/architecture/pipeline-phases.md) | Fases de qualificação, apresentação e fechamento por tipo de agente; guardrails anti-loop |
+| [`docs/architecture/followup.md`](docs/architecture/followup.md) | Arquitetura de follow-up: estados, reconciliador, jobs, modal |
+| [`docs/architecture/llm-architecture.md`](docs/architecture/llm-architecture.md) | LLMs Mãe e Filhas, contratos, fluxo de decisão |
+| [`docs/architecture/agents.md`](docs/architecture/agents.md) | Agentes locais e AI Profiles: campos, endpoints, ciclo de vida |
+| [`docs/architecture/webhooks.md`](docs/architecture/webhooks.md) | Webhook inbound WhatsApp: filtros, fluxo, grupos ignorados |
+| [`docs/architecture/playground-parity.md`](docs/architecture/playground-parity.md) | Paridade Playground ↔ WhatsApp real (ContextBundle) |
+| [`docs/architecture/admin-agents-contract.md`](docs/architecture/admin-agents-contract.md) | Contrato AdminAgents frontend ↔ backend |
+
+**Intenções futuras e roadmaps:** [`docs/plans/`](docs/plans/)
+**Setup e operação:** [`docs/ops/`](docs/ops/)
 
 ---
 
@@ -293,3 +312,13 @@ feat: adicionar rota de exportação de leads
 - **Nunca** fazer push automático — somente commit local
 - Usar `git add` nos arquivos específicos alterados (evitar `git add -A` com arquivos sensíveis)
 - Se não houver alteração de código (apenas leitura/análise), **não criar commit**
+
+### Manutenção de docs de arquitetura
+
+Antes de criar o commit, verificar se alguma alteração afeta uma área documentada em `docs/architecture/`. Se sim:
+- Abrir o arquivo correspondente
+- Atualizar apenas as seções afetadas para refletir o estado atual
+- **Sem histórico**: reescrever a seção, não acrescentar parágrafos de "agora passou a..."
+- Se a funcionalidade for nova e não existir doc correspondente, criar `docs/architecture/<nome>.md`
+
+O objetivo dos docs de arquitetura é ser um espelho do código atual — enxuto e confiável.

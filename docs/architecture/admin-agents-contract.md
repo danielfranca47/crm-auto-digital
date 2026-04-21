@@ -54,8 +54,8 @@ Cada estágio expõe:
 
 ### Novo estágio ou `agent_mode` adicionado
 1. Adicionar na tabela "Estágios de agente" acima.
-2. O endpoint `GET /admin/agents/overview` deve retornar o novo modo/estágio automaticamente se for lido do playbook real — verificar se está hardcoded em algum lugar.
-3. O frontend deve renderizar o novo estágio sem precisar de alteração se seguir o padrão dinâmico (iterar sobre os estágios retornados pela API, não lista fixa).
+2. Verificar se o endpoint `GET /admin/agents/overview` está hardcoded ou lê do playbook real.
+3. O frontend deve renderizar o novo estágio sem precisar de alteração se seguir o padrão dinâmico (iterar sobre estágios retornados pela API).
 
 ### Campo renomeado ou removido
 1. Remover ou atualizar a linha neste contrato.
