@@ -8,7 +8,7 @@ Guia de referência para o Claude Code trabalhar neste repositório.
 
 SaaS de CRM com automação de vendas via WhatsApp (IA). Arquitetura multi-serviço:
 - 3 backends FastAPI (Python)
-- 2 frontends React (TypeScript)
+- 3 frontends React (TypeScript)
 - 1 agente local de prospecção (Python)
 
 ---
@@ -21,6 +21,7 @@ crm-auto-digital/
 ├── backend-crm/        # Lógica central do CRM, IA, leads, follow-up
 ├── backend-executors/  # Executor assíncrono de envio WhatsApp
 ├── frontend-crm/       # SPA do CRM (React + Vite)
+├── frontend-admin/     # Painel SaaS admin isolado (React + Vite, porta 5174)
 ├── website/            # Site de marketing multi-idioma (React + Vite)
 └── agent-local/        # Agente local de prospecção/scraping (Python)
 ```
@@ -168,7 +169,6 @@ A movimentação entre estágios tem guardrails e side-effects definidos em `ser
 - `AiProfile.tsx` — configuração do perfil de IA
 - `Assinatura.tsx` — plano e assinatura
 - `MinhaConta.tsx` / `UsoDoPlano.tsx` — conta e consumo
-- `SaaSAdmin/` — área administrativa SaaS
 
 ### Componentes chave (`src/components/`)
 - `KanbanBoard.tsx` / `KanbanColumn.tsx` / `LeadCard.tsx` — pipeline visual
@@ -181,6 +181,33 @@ A movimentação entre estágios tem guardrails e side-effects definidos em `ser
 - `LeadsContext` (`src/contexts/`) — estado do Kanban, colunas, leads
 - React Query — fetching/caching de dados assíncronos
 - `src/services/api.ts` — cliente HTTP centralizado para o backend-crm
+
+---
+
+## frontend-admin
+
+**Porta dev:** 5174
+**Stack:** React 18 + TypeScript + Vite + TailwindCSS + shadcn/ui
+**Responsabilidade:** painel SaaS admin completamente isolado do `frontend-crm`
+
+Separado do frontend-crm para evitar colisões com o contexto de autenticação de usuário (o CRM redirecionava `/saas-admin` para `/login` por falta de token de usuário).
+
+### Páginas (`src/pages/`)
+- `AdminLogin.tsx` — login admin independente
+- `AdminDashboard.tsx` — KPIs globais e instâncias offline
+- `AdminUsers.tsx` — listagem e gestão de extensões de usuários
+- `AdminInstances.tsx` — reconexão de instâncias WhatsApp
+- `AdminAgents.tsx` — agentes, playbooks e diff de AI profile por usuário
+
+### Estrutura
+- `src/lib/admin-token.ts` — persist/read/clear/validate JWT admin
+- `src/services/api.ts` — cliente admin-only (core + crm), sem LeadsContext
+- `src/components/AdminGuard.tsx` — guard de autenticação via `<Navigate>`
+- `src/components/AdminLayout.tsx` — sidebar com NavLink
+
+### Env
+- `VITE_CORE_BASE` — URL do backend-core
+- `VITE_CRM_BASE` — URL do backend-crm
 
 ---
 
@@ -234,7 +261,7 @@ Configuração via `.env` e `.env.agent1` / `.env.agent2`.
 
 **Regra obrigatória:** sempre que um novo campo for adicionado ao AI profile (`ai_profiles`) ou um novo estágio/variável de agente for introduzido no sistema, `docs/architecture/admin-agents-contract.md` deve ser atualizado. Verificar também se `AdminAgents.tsx` precisa capturar e exibir o novo campo.
 
-Contexto: o painel admin em `frontend-crm/src/pages/SaaSAdmin/AdminAgents.tsx` consome `GET /admin/agents/overview` e `GET /admin/agents/users/{id}` do backend-crm (montados sem o prefixo `/api/`). O contrato de campos está documentado em `docs/architecture/admin-agents-contract.md`.
+Contexto: o painel admin em `frontend-admin/src/pages/AdminAgents.tsx` consome `GET /admin/agents/overview` e `GET /admin/agents/users/{id}` do backend-crm (montados sem o prefixo `/api/`). O contrato de campos está documentado em `docs/architecture/admin-agents-contract.md`.
 
 ---
 
@@ -271,6 +298,9 @@ cd backend-executors && pip install -r requirements.txt && uvicorn app.main:app 
 
 # frontend-crm
 cd frontend-crm && npm install && npm run dev
+
+# frontend-admin (porta 5174)
+cd frontend-admin && npm install && npm run dev
 
 # website
 cd website && npm install && npm run dev
