@@ -361,3 +361,25 @@ Knowledge como fundo: respostas usam palavras próprias baseadas no conhecimento
 Identidade da profissional: trace e resposta refletem o nome/niche/tom do ai_profile, não identidade genérica
 Custom instructions respeitadas: regras do ai_profile.custom_instructions aplicadas (ex.: não dizer "Posso ajudar")
 
+# Registros das mudanças:
+Commit 44f2d47 criado. Aqui está o resumo do que foi implementado em decision_engine.py:
+
+O que mudou
+_build_daughter_identity_block(context, phase) — nova função:
+
+Para hybrid_scheduler: bot fala COMO a própria profissional (ex.: "Você é Cristina, massagista em Faro")
+Para outros templates: identidade contextualizada (assistente, consultor, closer)
+Inclui custom_instructions com prioridade máxima e regra anti-repetição obrigatória em todos os builders
+
+Supressão de mídia no greeting:
+
+_media_intro_note nos builders de qualification e apresentation agora é vazio quando é turno de saudação (_greeting_now) ou quando a mídia já foi enviada antes
+Deduplicação em compose_decision_output:
+
+Conta mensagens outbound no histórico
+Se já há resposta anterior → só reenvia knowledge_media se lead fez pedido explícito (next_action_hint=reply)
+Nunca envia em turno de greeting
+Reconhecimento de intenção de agendamento:
+
+Qualification: quando lead diz "quero [serviço]" ou "que horas posso marcar?" → did_complete_phase=true, recommended_next_category="pre-agendamento"
+Apresentation: mesma lógica, skip do warming script quando interesse concreto detectado
