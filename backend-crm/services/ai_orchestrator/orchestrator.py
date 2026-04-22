@@ -199,12 +199,16 @@ def apply_mode_overrides(
             "max_chars": 350,
             "qualification_depth": "medium",
         })
-        # Só injeta must_collect se o AI Profile definiu campos explicitamente
-        profile_fields = (ai_profile or {}).get("qualification_required_fields")
-        if isinstance(profile_fields, list) and len(profile_fields) > 0:
-            merged.update({"must_collect": profile_fields})
-        # profile_fields == None → não configurado, sem override automático
-        # profile_fields == [] → lista vazia explícita = modo passivo, sem must_collect
+        # qualification_fields (novo formato rico) tem precedência sobre qualification_required_fields
+        new_format = (ai_profile or {}).get("qualification_fields")
+        has_new_format = isinstance(new_format, list) and len(new_format) > 0
+        if not has_new_format:
+            # Só injeta must_collect se o AI Profile definiu campos explicitamente (formato legado)
+            profile_fields = (ai_profile or {}).get("qualification_required_fields")
+            if isinstance(profile_fields, list) and len(profile_fields) > 0:
+                merged.update({"must_collect": profile_fields})
+            # profile_fields == None → não configurado, sem override automático
+            # profile_fields == [] → lista vazia explícita = modo passivo, sem must_collect
     elif agent_mode_normalized == "direto":
         merged.update({
             "max_chars": 300,
@@ -493,6 +497,30 @@ def _load_knowledge_media(user_id: int) -> Dict[str, list]:
     return knowledge_media
 
 
+def _format_hours_value(value: str) -> str:
+    """Converte JSON estruturado de horários em texto legível para o prompt."""
+    import json as _json
+    try:
+        days = _json.loads(value)
+        if not isinstance(days, list):
+            return value
+    except Exception:
+        return value
+
+    DAY_ABBR = {"seg": "Seg", "ter": "Ter", "qua": "Qua", "qui": "Qui",
+                "sex": "Sex", "sab": "Sáb", "dom": "Dom"}
+    parts = []
+    for d in days:
+        abbr = DAY_ABBR.get(d.get("day", ""), d.get("label", d.get("day", "")))
+        if d.get("closed"):
+            parts.append(f"{abbr}: Fechado")
+        else:
+            open_t = (d.get("open") or "").replace(":", "h")
+            close_t = (d.get("close") or "").replace(":", "h")
+            parts.append(f"{abbr}: {open_t}-{close_t}")
+    return " | ".join(parts) if parts else value
+
+
 def _load_business_info(user_id: int) -> Optional[str]:
     """Carrega business_info — espelho de executor.py para garantir paridade de contexto."""
     with get_connection() as conn:
@@ -500,14 +528,19 @@ def _load_business_info(user_id: int) -> Optional[str]:
         cur = conn.cursor()
         cur.execute(
             """
-            SELECT label, value FROM business_info
+            SELECT field_key, label, value FROM business_info
              WHERE user_id = ? AND enabled = 1
                AND value IS NOT NULL AND trim(coalesce(value,'')) != ''
              ORDER BY sort_order ASC, id ASC
             """,
             (user_id,),
         )
-        biz_lines = [f"• {row['label']}: {row['value']}" for row in cur.fetchall()]
+        biz_lines = []
+        for row in cur.fetchall():
+            v = row["value"]
+            if row["field_key"] == "horario":
+                v = _format_hours_value(v)
+            biz_lines.append(f"• {row['label']}: {v}")
     return "\n".join(biz_lines) if biz_lines else None
 
 

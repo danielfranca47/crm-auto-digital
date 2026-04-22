@@ -359,12 +359,13 @@ def ensure_business_info_table(conn: sqlite3.Connection) -> None:
 _BUSINESS_INFO_DEFAULTS = [
     ("horario",   "Horário de funcionamento", 0),
     ("telefone",  "Telefone para ligações",   1),
-    ("website",   "Website",                  2),
-    ("endereco",  "Endereço",                 3),
-    ("instagram", "Instagram",                4),
-    ("facebook",  "Facebook",                 5),
-    ("youtube",   "YouTube",                  6),
-    ("whatsapp",  "WhatsApp de atendimento",  7),
+    ("email",     "E-mail de contato",        2),
+    ("website",   "Website",                  3),
+    ("endereco",  "Endereço",                 4),
+    ("instagram", "Instagram",                5),
+    ("facebook",  "Facebook",                 6),
+    ("youtube",   "YouTube",                  7),
+    ("whatsapp",  "WhatsApp de atendimento",  8),
 ]
 
 

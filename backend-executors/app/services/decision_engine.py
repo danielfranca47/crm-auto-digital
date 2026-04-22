@@ -235,6 +235,14 @@ def _build_custom_instructions_block(ai_profile: Dict[str, Any]) -> str:
     )
 
 
+def _build_business_info_block(context: Dict[str, Any]) -> str:
+    """Injeta informações gerais do negócio disponíveis em qualquer fase do funil."""
+    biz = (context.get("knowledge_items") or {}).get("business_info", "").strip()
+    if not biz:
+        return ""
+    return f"\nINFORMAÇÕES DO NEGÓCIO (disponíveis em qualquer fase):\n{biz}\n"
+
+
 def _build_training_examples_block(context: Dict[str, Any], phase: str) -> str:
     """
     Gera bloco de exemplos de treino classificados pelo operador para a fase atual.
@@ -1832,7 +1840,7 @@ CONTEXTO:
 - origin_opener: {origin_opener}
 - inbound_message_text: {message_text}
 - next_action_hint_mae: {mother_decision.next_action_hint or "null"}
-{_build_qualification_fields_block(ai_profile, response_style)}{_build_custom_instructions_block(ai_profile)}{_build_training_examples_block(context, "qualification")}"""
+{_build_qualification_fields_block(ai_profile, response_style)}{_build_custom_instructions_block(ai_profile)}{_build_business_info_block(context)}{_build_training_examples_block(context, "qualification")}"""
     return _inject_generated_parts(_qual_prompt, context, "qualification")
 
 def _build_child_prompt_apresentation(
@@ -2284,6 +2292,7 @@ def _build_child_prompt_apresentation(
         f"- extracted_fields: {json.dumps(mode_contract.get('extracted_fields') or {}, ensure_ascii=False)}\n"
         f"- inbound_message_text: {message_text}\n"
         + _build_custom_instructions_block(ai_profile)
+        + _build_business_info_block(context)
         + _build_training_examples_block(context, "apresentation")
     )
     return _inject_generated_parts(_apres_prompt, context, "apresentation")
@@ -2547,6 +2556,7 @@ def _build_child_prompt_follow_up(
         f"- inbound_message_text: {message_text}\n"
         + _build_training_examples_block(context, "followup")
         + _build_custom_instructions_block(ai_profile)
+        + _build_business_info_block(context)
     )
     return _inject_generated_parts(_followup_prompt, context, "followup")
 
@@ -2662,6 +2672,7 @@ def _build_child_prompt_closing(
         f"- inbound_message_text: {message_text}\n"
         + _build_training_examples_block(context, "closing")
         + _build_custom_instructions_block(ai_profile)
+        + _build_business_info_block(context)
     )
     # _inject_generated_parts não é chamado aqui para evitar duplicação do tone_rules
     # (já injectado via _build_tone_block). training_examples e custom_instructions são
@@ -2782,6 +2793,7 @@ def _build_child_prompt_pre_agendamento(
         f"- history: {history_text}\n"
         f"- inbound_message_text: {message_text}\n"
         + _build_custom_instructions_block(ai_profile)
+        + _build_business_info_block(context)
     )
     return _pre_prompt
 
@@ -2863,6 +2875,7 @@ def _build_child_prompt_agendamento(
         f"- history: {history_text}\n"
         f"- inbound_message_text: {message_text}\n"
         + _build_custom_instructions_block(ai_profile)
+        + _build_business_info_block(context)
     )
     return _sched_prompt
 
