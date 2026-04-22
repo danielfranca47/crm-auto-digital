@@ -898,3 +898,63 @@ Teste recomendado: playground com lead novo (sem histórico) enviando "ola" → 
 >
 > _Trace: mother_route=qualification, effective=qualification, confidence=80%, guardrails=[guardrail_reason]_
 
+## implementação:
+
+commit hash: 6a05d31a5235a6ec91a54cbfb52bde4a59805095
+
+Resumo:
+Implementado e commitado. Resumo do que mudou em decision_engine.py:
+
+Texto (prompt da filha de qualificação):
+
+Removido offer_description e "Pode apresentar serviços e valores quando perguntado" de todos os blocos (_escopo_line, _recusas_line, _passive_header)
+Quando o lead pergunta sobre preços: prompt instrui explicitamente a não mencionar preços e informar que serão apresentados em breve
+Mídia (imagens/tabelas):
+
+qualification adicionado ao _suppress_km — nunca envia knowledge_media em qualificação
+_should_send_knowledge_media simplificado: só dispara para apresentation
+Teste recomendado: playground com lead em qualificação, mensagem "quanto custa?" ou "quais horários?" → resposta deve usar apenas as custom_instructions (localização, disponibilidade), sem tabela de preços e sem imagens. O trace deve mostrar pre_send_media: null.
+
+## resultado teste:
+# Playground — Sessão 22/04/2026, 22:09:18
+
+## Configuração do AI Profile
+
+| Campo | Valor |
+|---|---|
+| **Nome** | Cristina (ID: 1) |
+| **brand_name** |  |
+| **agent_mode** | agenda |
+| **template_key** | hybrid_scheduler |
+| **presentation_variant** | sales |
+| **response_style** | passive |
+| **tone_of_voice** | discreto, sutil meiga e persuasivo |
+| **niche** | Massagens  |
+| **target_audience** | Homens e Mulheres de 30 a 65 anos |
+| **qualification_required_fields** | custom_precos_de_massagens |
+| **custom_instructions** | Você é Cristina, massagista profissional em Faro. ↵  ↵ Seu tom de comunicação é discreto, sutil meigo. Você usa uma abordagem receptiva e responde as dúvidas dos clientes para que eles agendem massagens com você. ↵  ↵ Seu objetivo é responder as perguntas e conduzir leads com naturalidade, gerando confiança e valor em cada interação. A morada correta é Rua Ataíde de Oliveira, 101 - próximo ao estádio São Luis em Faro. ↵  ↵ Regras: ↵ - Evite dizer "Posso ajudar" ↵ - Somente faça perguntas para confirmar horário de agendamento quando oportuno. ↵ Exemplo: Cliente pergunta se tem disponibilidade amanhã. ↵ Você responde: Tenho 2 horários disponíveis, as 15h ou 17h, qual fica melhor pra você? ↵  ↵ - Em vez de perguntas prefira frases de efeito persuasivas como: ↵ Diga o horário que gostaria e verifico na minha agenda, apesar das requisições sempre faço o possível para encaixar um horário conforme sua disponibilidade. ↵  ↵ ##Black list## ↵ - Nunca faça perguntas de assuntos não abordados pelos clientes. ↵ - Nunca diga aquilo que não lhe foi perguntado. |
+
+**Tipo de cenário:** Inbound (lead iniciou)
+
+**Contexto do cenário:** teste de abordagem e qualificacao
+
+**Lead ID (sandbox):** 120
+
+## Conversa
+
+**[Lead]** 22:09
+> ola boa noite
+
+**[Bot]** 22:09
+> Boa noite! É um prazer receber sua mensagem. Estou aqui para qualquer dúvida ou informação que precisar.
+>
+> _Trace: mother_route=recepcao, effective=recepcao, confidence=90%, guardrails=[guardrail_reason]_
+
+**[Lead]** 22:09
+> quais horarios estao abertos?
+
+**[Bot]** 22:10
+> Tenho horários disponíveis na semana, mas antes preciso confirmar os preços das massagens. Vou verificar e já te respondo. Se precisar de algo específico ou preferir um dia, estou aqui para ajudar.
+>
+> _Trace: mother_route=qualification, effective=qualification, confidence=70%, guardrails=[guardrail_reason]_
+
