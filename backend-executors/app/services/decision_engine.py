@@ -504,6 +504,84 @@ def _build_agent_role_block(agent_mode: str, phase: str, ai_profile: Dict[str, A
     return f"\nIDENTIDADE COMERCIAL:\n{role_text}\n"
 
 
+def _build_daughter_identity_block(context: Dict[str, Any], phase: str) -> str:
+    """Gera bloco de identidade da profissional para as filhas, análogo ao da mãe.
+
+    Para hybrid_scheduler o bot fala COMO a própria profissional (ex.: Cristina, massagista).
+    Para os demais templates, fala como assistente do negócio.
+    Inclui tom, nicho, público-alvo e instruções personalizadas do operador com prioridade máxima.
+    """
+    ai_profile = context.get("ai_profile") or {}
+    playbook = context.get("playbook") or {}
+
+    name = (ai_profile.get("name") or "").strip()
+    brand = (ai_profile.get("brand_name") or "").strip()
+    niche = (ai_profile.get("niche") or "").strip()
+    audience = (ai_profile.get("target_audience") or "").strip()
+    tone = (ai_profile.get("tone_of_voice") or "").strip()
+    custom = (ai_profile.get("custom_instructions") or "").strip()
+    template_key = str(ai_profile.get("template_key") or playbook.get("template_key") or "").strip().lower()
+
+    phase_labels = {
+        "qualification": "qualificação",
+        "apresentation": "apresentação",
+        "follow-up": "follow-up",
+        "closing": "fechamento",
+        "pre-agendamento": "pré-agendamento",
+        "agendamento": "agendamento",
+    }
+    phase_label = phase_labels.get(phase, phase)
+
+    if template_key == "hybrid_scheduler":
+        # Identidade direta: o bot é a própria profissional
+        who = name if name else (f"profissional de {niche}" if niche else "a profissional")
+        niche_label = f" especializada em {niche}" if niche else ""
+        brand_label = f" ({brand})" if brand else ""
+        intro = f"Você é {who}{niche_label}{brand_label}, falando diretamente com o cliente pelo WhatsApp."
+    elif template_key in {"consultor_especialista"}:
+        business_label = f"da {brand}" if brand else "do negócio"
+        niche_label = f" no nicho de {niche}" if niche else ""
+        who = name if name else "consultor(a) especialista"
+        intro = f"Você é {who}, {business_label}{niche_label}."
+    elif template_key in {"closer_agressivo", "closer_agressivo_cart_recovery"}:
+        business_label = f"da {brand}" if brand else "do negócio"
+        niche_label = f" ({niche})" if niche else ""
+        intro = f"Você é vendedor(a) direto(a) {business_label}{niche_label}."
+    else:
+        # sdr_padrao e outros
+        business_label = f"da {brand}" if brand else "do negócio"
+        niche_label = f" no nicho de {niche}" if niche else ""
+        who = name if name else "assistente de vendas"
+        intro = f"Você é {who}, {business_label}{niche_label}."
+
+    lines = [intro]
+    if audience:
+        lines.append(f"Público-alvo: {audience}.")
+    if tone:
+        lines.append(f"Tom de comunicação: {tone}.")
+    lines.append(f"Fase atual: {phase_label}.")
+    lines.append("Papel nesta fase: gerar a resposta para o WhatsApp — conversacional, adaptada ao negócio e ao contexto.")
+
+    identity = "\n".join(lines)
+    block = f"\nIDENTIDADE DA PROFISSIONAL:\n{identity}\n"
+
+    if custom:
+        block += (
+            "\nINSTRUÇÕES DO NEGÓCIO (prioridade máxima — seguir à risca, acima de qualquer padrão genérico):\n"
+            f"{custom}\n"
+        )
+
+    block += (
+        "\nREGRA ANTI-REPETIÇÃO (obrigatória):\n"
+        "- Leia o histórico antes de responder.\n"
+        "- NUNCA repita frases, conteúdo ou informações já enviados nesta conversa.\n"
+        "- NUNCA envie tabelas de preços ou imagens de forma repetida — se já foram enviadas, não mencione nem instrua o cliente a 'ver as informações'.\n"
+        "- Cada resposta deve avançar a conversa, não repetir o turno anterior.\n"
+    )
+
+    return block
+
+
 def _select_current_field(missing_fields: list[str], filled_fields: list[str]) -> Optional[str]:
     if not missing_fields:
         return None
@@ -1500,14 +1578,22 @@ def _build_child_prompt_qualification(
     tone_block = _build_tone_block(ai_profile, playbook)
     response_style = (ai_profile.get("response_style") or "passive").strip().lower()
 
+    # Calcular hint e greeting antes da nota de mídia (para poder suprimi-la no greeting)
+    _mother_hint = (mother_decision.next_action_hint or "").strip().lower()
+    _passive_reply_now = response_style == "passive" and _mother_hint == "reply"
+    _greeting_now = _mother_hint == "greet"
+
     # Nota de mídia: quando o usuário configurou mídia no knowledge, instrui o LLM a escrever
     # apenas um texto curto de introdução, pois as imagens serão enviadas automaticamente após.
+    # Suprimido em turnos de saudação (greeting) — a mídia nunca é enviada no primeiro cumprimento.
     _has_knowledge_media = bool(context.get("knowledge_media"))
+    _qual_outbound_count = sum(1 for h in history if str(h.get("model") or "").lower() == "outbound")
+    _media_already_sent = _qual_outbound_count >= 1
     _media_intro_note = (
         "\nMÍDIA DISPONÍVEL: Imagens/arquivos serão enviados automaticamente após esta mensagem.\n"
         "Escreva APENAS uma frase curta de introdução (ex.: 'Aqui estão as informações:', "
         "'Veja os detalhes abaixo:'). NÃO descreva o conteúdo da mídia no texto — a mídia tem prioridade.\n"
-        if _has_knowledge_media
+        if (_has_knowledge_media and not _greeting_now and not _media_already_sent)
         else ""
     )
 
@@ -1545,9 +1631,6 @@ def _build_child_prompt_qualification(
             "Se não souber responder, diz que vais verificar (→ handoff)."
         )
     )
-    _mother_hint = (mother_decision.next_action_hint or "").strip().lower()
-    _passive_reply_now = response_style == "passive" and _mother_hint == "reply"
-    _greeting_now = _mother_hint == "greet"
     _greeting_header = (
         "MODO SAUDAÇÃO ACTIVADO — O lead abriu com uma saudação social.\n"
         + (
@@ -1605,7 +1688,7 @@ def _build_child_prompt_qualification(
         else ""
     )
 
-    _qual_prompt = f"""{_first_contact_opener_header}{_greeting_header}{_passive_header}Você é a FILHA QUALIFICATION de um CRM de vendas WhatsApp.
+    _qual_prompt = f"""{_first_contact_opener_header}{_greeting_header}{_passive_header}{_build_daughter_identity_block(context, "qualification")}
 {_build_agent_role_block(agent_mode_normalized, "qualification", ai_profile)}
 PAPEL: Coletar campos de qualificação do lead, um por vez, através de perguntas naturais e contextuais.
 ESCOPO: {_escopo_line}{_media_intro_note}
@@ -1620,7 +1703,7 @@ Retorne SOMENTE JSON válido no schema ChildResult:
   "should_ask": true,
   "message_text": "string (retrocompat opcional)",
   "did_complete_phase": false,
-  "recommended_next_category": "apresentation|null",
+  "recommended_next_category": "apresentation|pre-agendamento|null",
   "outcome": null,
   "kanban_highlight": null,
   "signals": ["..."],
@@ -1637,8 +1720,14 @@ Regras:
 - Evite repetir frases de asked_questions_for_current_field; reformule.
 - Se current_field já tiver sido preenchido, retorne should_ask=false, field=null, question_text="".
 - NÃO agendar reunião aqui (só na rota apresentation, salvo pedido explícito do inbound).
-- recommended_next_category pode ser null ou 'apresentation'.
+- recommended_next_category pode ser null, 'apresentation' ou 'pre-agendamento'.
 - outcome e kanban_highlight devem ser null.
+- RECONHECIMENTO DE INTENÇÃO DE AGENDAMENTO: Se o lead demonstrou interesse concreto num serviço específico
+  ("quero [serviço]", "quero experimentar", "quero marcar", "vou querer") OU perguntou sobre
+  disponibilidade/horários ("que horas", "que dia", "tem horário", "posso marcar"), mesmo que ainda haja
+  campos em falta, sinalize: should_ask=false, did_complete_phase=true,
+  recommended_next_category="pre-agendamento". Em message_text: reconheça o interesse com naturalidade
+  e pergunte quando o cliente pode vir (dia e horário). Não continue o fluxo de qualificação neste turno.
 
 PROIBIÇÕES (violar qualquer uma é crítico):
 1. NUNCA invente informações que não estejam no contexto fornecido.
@@ -1904,12 +1993,15 @@ def _build_child_prompt_apresentation(
     tone_block_apresentation = _build_tone_block(ai_profile, playbook)
 
     # Nota de mídia: quando há mídia configurada no knowledge, instrui o LLM a escrever texto curto.
+    # Suprimido em greeting e quando a mídia já foi enviada antes (deduplicação).
     _has_knowledge_media_apres = bool(context.get("knowledge_media"))
+    _apres_outbound_count = sum(1 for h in history if str(h.get("model") or "").lower() == "outbound")
+    _apres_media_already_sent = _apres_outbound_count >= 1
     _media_intro_note_apres = (
         "\nMÍDIA DISPONÍVEL: Imagens/arquivos serão enviados automaticamente após esta mensagem.\n"
         "Escreva APENAS uma frase curta de introdução (ex.: 'Aqui estão os detalhes:', "
         "'Veja as informações abaixo:'). NÃO descreva o conteúdo da mídia no texto — a mídia tem prioridade.\n"
-        if _has_knowledge_media_apres
+        if (_has_knowledge_media_apres and not _is_greeting_apres and not _apres_media_already_sent)
         else ""
     )
 
@@ -2020,7 +2112,7 @@ def _build_child_prompt_apresentation(
         _greeting_apres_header
         + _apres_first_contact_opener
         + _passive_apres_header
-        + f"Você é a FILHA APRESENTATION de um CRM de vendas WhatsApp.\n"
+        + _build_daughter_identity_block(context, "apresentation")
         + _build_agent_role_block(agent_mode_normalized, "apresentation", ai_profile)
         + "\n"
         + f"PAPEL: Conduzir a fase de apresentação — agendamento (scheduler) ou oferta+fechamento (sales).\n"
@@ -2066,6 +2158,11 @@ def _build_child_prompt_apresentation(
         "- Respeite playbook.max_chars se existir (senão, resposta curta).\n"
         "- recommended_next_category é informativo nesta rota; não é aplicado automaticamente na mudança de estágio.\n"
         "- outcome e kanban_highlight devem ser null.\n"
+        "- RECONHECIMENTO DE INTERESSE DE AGENDAMENTO: Se o lead já escolheu um serviço específico ou perguntou\n"
+        "  sobre horários/disponibilidade ('que horas', 'que dia', 'tem horário'), sinalize:\n"
+        "  did_complete_phase=true, recommended_next_category='pre-agendamento'. Em message_text: reconheça\n"
+        "  o interesse e pergunte sobre dia/horário preferencial de forma direta e natural.\n"
+        "  Não envie warming script neste caso — o lead já está pronto para marcar.\n"
         "- signals_structured deve incluir: offer_presented, checkout_sent, presentation_variant e offer_item_name.\n"
         "- Mídia rica: se offer_pack_summary.media_url estiver preenchido, a mídia já será enviada automaticamente antes deste texto. NÃO mencione 'veja a imagem/vídeo' — assuma que o lead já recebeu e escreva o texto do pitch como sequência natural.\n"
         "- Se offer_pack_summary.anchor_price estiver preenchido, use o preço âncora no pitch (ex: 'De R$997 por apenas R$X').\n"
@@ -2313,6 +2410,7 @@ def _build_child_prompt_follow_up(
 
     _followup_prompt = (
         _greeting_fu_header
+        + _build_daughter_identity_block(context, "follow-up")
         + f"Você é a FILHA FOLLOW-UP de um CRM de vendas WhatsApp.\n"
         + _build_agent_role_block(agent_mode_normalized, "follow-up", ai_profile)
         + "\n"
@@ -2434,6 +2532,7 @@ def _build_child_prompt_closing(
 
     _closing_prompt = (
         _greeting_closing_header
+        + _build_daughter_identity_block(context, "closing")
         + f"Você é a FILHA CLOSING de um CRM de vendas WhatsApp.\n"
         + _build_agent_role_block(agent_mode_normalized, "closing", ai_profile)
         + "\n"
@@ -2565,7 +2664,8 @@ def _build_child_prompt_pre_agendamento(
         return _pre_prompt
 
     _pre_prompt = (
-        "Você é o assistente de um CRM de WhatsApp na fase de PRÉ-AGENDAMENTO.\n\n"
+        _build_daughter_identity_block(context, "pre-agendamento")
+        + "Você é o assistente de um CRM de WhatsApp na fase de PRÉ-AGENDAMENTO.\n\n"
         f"FRAMEWORK: Modo {agent_mode_normalized}. Template {playbook_summary['template_key']}.\n\n"
         "SITUAÇÃO: O lead demonstrou interesse tentativo em marcar uma sessão, mas SEM data confirmada.\n"
         "Ex.: 'quero ir sim, vou tentar semana que vem', 'vou ver pra próxima semana'.\n\n"
@@ -2660,7 +2760,8 @@ def _build_child_prompt_agendamento(
         )
 
     _sched_prompt = (
-        "Você é o assistente de um CRM de WhatsApp na fase de AGENDAMENTO.\n\n"
+        _build_daughter_identity_block(context, "agendamento")
+        + "Você é o assistente de um CRM de WhatsApp na fase de AGENDAMENTO.\n\n"
         f"FRAMEWORK: Modo {agent_mode_normalized}. Template {playbook_summary['template_key']}.\n\n"
         "OBJETIVO: Confirmar data e horário para o serviço solicitado pelo lead.\n\n"
         + _avail_block
@@ -3207,14 +3308,29 @@ def compose_decision_output(
     # (Fix P7 activo = qualificação passiva com reply, ou greeting com resposta).
     # Usa TODAS as categorias disponíveis no knowledge_media (não apenas categorias hardcoded),
     # para respeitar qualquer nome de categoria que o usuário tenha configurado.
+
+    # Deduplicação: nunca enviar knowledge_media em saudações (greeting) nem repetir
+    # nas respostas subsequentes. Só reenviar se o lead fizer pergunta explícita de catálogo
+    # (next_action_hint='reply'). Isso evita que a tabela de preços apareça em cada turno.
+    _km_history = context.get("history") or []
+    _km_outbound_count = sum(1 for h in _km_history if str(h.get("model") or "").lower() == "outbound")
+    _km_is_greeting = (mother_decision.next_action_hint or "").strip().lower() == "greet"
+    _km_explicit_request = (mother_decision.next_action_hint or "").strip().lower() == "reply"
+    # Primeira resposta do bot → pode enviar. Respostas seguintes → só se lead pediu explicitamente.
+    _km_already_sent = _km_outbound_count >= 1
+    _suppress_km = _km_is_greeting or (_km_already_sent and not _km_explicit_request)
+
     _should_send_knowledge_media = (
-        effective_route_to == "apresentation"
-        or (
-            effective_route_to == "qualification"
-            and getattr(mother_decision, "next_action_hint", None) == "reply"
+        not _suppress_km
+        and (
+            effective_route_to == "apresentation"
+            or (
+                effective_route_to == "qualification"
+                and getattr(mother_decision, "next_action_hint", None) == "reply"
+            )
+            or _passive_reply_override   # resposta directa a pergunta de catálogo/serviços
+            or _passive_question_override  # P10: resposta passiva integrada com pergunta
         )
-        or _passive_reply_override   # resposta directa a pergunta de catálogo/serviços
-        or _passive_question_override  # P10: resposta passiva integrada com pergunta
     )
     if _should_send_knowledge_media and not decision.pre_send_media:
         knowledge_media = context.get("knowledge_media") or {}
