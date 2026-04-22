@@ -1101,6 +1101,97 @@ def _build_prompt(context: Dict[str, Any], message_text: str) -> str:
     )
 
 
+def _build_mother_identity_block(ai_profile: dict) -> str:
+    brand = (ai_profile.get("brand_name") or "").strip()
+    niche = (ai_profile.get("niche") or "").strip()
+    audience = (ai_profile.get("target_audience") or "").strip()
+    tone = (ai_profile.get("tone_of_voice") or "").strip()
+    mode = (ai_profile.get("agent_mode") or "").strip()
+    offer = (ai_profile.get("offer_description") or "").strip()
+
+    business_label = f"da {brand}" if brand else "do negócio"
+    niche_label = f"no nicho de {niche}" if niche else "de vendas"
+    audience_label = f"Seu público-alvo: {audience}." if audience else ""
+    tone_label = f"Tom de comunicação: {tone}." if tone else ""
+    offer_label = f"O que é vendido: {offer}." if offer else ""
+
+    mode_descriptions = {
+        "agenda": "foco em conduzir o cliente até o agendamento",
+        "consultivo": "foco em qualificar e preparar handoff consultivo",
+        "direto": "foco em fechamento direto e objetivo",
+        "closer": "foco em fechamento, sem etapas de agendamento",
+        "sdr_scheduler": "foco em agendamento via SDR",
+    }
+    mode_label = mode_descriptions.get(mode, f"modo {mode}") if mode else "modo de vendas"
+
+    lines = [
+        f"Você é supervisora de vendas {business_label}, um negócio {niche_label}.",
+        f"Seu papel: avaliar em qual fase do processo de compra cada cliente está e decidir o próximo passo ideal para avançar a venda. Você opera com {mode_label}.",
+    ]
+    if audience_label:
+        lines.append(audience_label)
+    if tone_label:
+        lines.append(tone_label)
+    if offer_label:
+        lines.append(offer_label)
+    lines.append("Você NÃO gera mensagens para o cliente — apenas diagnostica o estado e decide a rota.")
+    return "\n".join(lines)
+
+
+_SCHEDULING_AGENT_TEMPLATES_SET = {"sdr_padrao", "hybrid_scheduler"}
+
+
+def _build_mother_pipeline_block(template_key: str, ai_profile: dict) -> str:
+    tkey = (template_key or "").strip().lower()
+    niche = (ai_profile.get("niche") or "serviço").strip()
+
+    if tkey in _SCHEDULING_AGENT_TEMPLATES_SET:
+        return (
+            f"FASES DA VENDA — pipeline deste agente (nesta sequência):\n\n"
+            f"1. QUALIFICAÇÃO — entender o cliente antes de avançar.\n"
+            f"   Quando usar: ainda há campos obrigatórios não coletados (missing_fields não vazio).\n"
+            f"   Próximo passo: coletar o que falta com naturalidade, sem interrogar.\n\n"
+            f"2. APRESENTAÇÃO — apresentar o {niche} e responder dúvidas.\n"
+            f"   Quando usar: cliente pergunta sobre serviços, preços, como funciona, localização,\n"
+            f"   ou demonstra curiosidade sem ainda ter feito uma escolha concreta.\n"
+            f"   Próximo passo: gerar valor, responder, criar interesse.\n\n"
+            f"3. PRÉ-AGENDAMENTO — cliente mostrou que quer, mas ainda não disse quando.\n"
+            f"   Quando usar: cliente fez uma escolha concreta de serviço/produto ou confirmou\n"
+            f"   interesse real (ex.: 'quero o serviço X', 'quero experimentar', 'vou com essa opção',\n"
+            f"   'tenho interesse', 'quero marcar') — mas NÃO mencionou data ou horário.\n"
+            f"   Não confundir com dúvida: dúvida vai para apresentação. Escolha feita vai aqui.\n"
+            f"   Próximo passo: perguntar quando o cliente quer vir.\n\n"
+            f"4. AGENDAMENTO — fechar o horário.\n"
+            f"   Quando usar: cliente mencionou dia, turno ou hora específica\n"
+            f"   (ex.: 'amanhã', 'sexta à tarde', 'às 15h', 'pode ser segunda de manhã?').\n"
+            f"   Próximo passo: confirmar e registrar.\n\n"
+            f"5. FOLLOW-UP — nutrição pós-apresentação.\n"
+            f"   Quando usar: SOMENTE após apresentação realizada, com sinais de adiamento\n"
+            f"   (ex.: 'vou pensar', 'me chama mês que vem', 'preciso falar com alguém').\n"
+            f"   NUNCA use se não houver evidência de apresentação prévia.\n\n"
+            f"6. CLOSING — venda confirmada ou encerrada."
+        )
+    elif tkey == "closer_agressivo":
+        return (
+            f"FASES DA VENDA — pipeline deste agente (nesta sequência):\n\n"
+            f"1. QUALIFICAÇÃO — validar fit e urgência rapidamente.\n"
+            f"   Quando usar: missing_fields não vazio.\n\n"
+            f"2. APRESENTAÇÃO — pitch direto da oferta de {niche}.\n"
+            f"   Quando usar: cliente demonstra interesse ou faz perguntas sobre o serviço.\n\n"
+            f"3. CLOSING — fechar ou tratar objeção.\n"
+            f"   Quando usar: cliente sinalizou intenção de compra ('quero fechar', 'posso assinar',\n"
+            f"   'manda contrato') ou após apresentação com sinal de decisão.\n"
+            f"   NÃO há etapas de pré-agendamento ou agendamento neste agente.\n\n"
+            f"4. FOLLOW-UP — SOMENTE após apresentação com adiamento explícito."
+        )
+    else:
+        return (
+            f"FASES DA VENDA:\n"
+            f"1. QUALIFICAÇÃO → 2. APRESENTAÇÃO → 3. FOLLOW-UP → 4. CLOSING\n"
+            f"Use cada fase conforme o estado atual do cliente na conversa."
+        )
+
+
 def _build_mother_prompt(context: Dict[str, Any], message_text: str) -> str:
     lead = context.get("lead") or {}
     ai_profile = context.get("ai_profile") or {}
@@ -1118,11 +1209,15 @@ def _build_mother_prompt(context: Dict[str, Any], message_text: str) -> str:
     ai_summary = {
         "id": ai_profile.get("id"),
         "name": ai_profile.get("name"),
+        "brand_name": ai_profile.get("brand_name"),
         "template_key": ai_profile.get("template_key"),
         "tone_of_voice": ai_profile.get("tone_of_voice"),
         "niche": ai_profile.get("niche"),
         "target_audience": ai_profile.get("target_audience"),
         "agent_mode": ai_profile.get("agent_mode"),
+        "offer_description": ai_profile.get("offer_description"),
+        "goals": ai_profile.get("goals"),
+        "custom_instructions": ai_profile.get("custom_instructions"),
     }
     playbook_summary = {"template_key": playbook.get("template_key") or playbook.get("name")}
     metadata_summary = {
@@ -1139,17 +1234,30 @@ def _build_mother_prompt(context: Dict[str, Any], message_text: str) -> str:
     history_text = _format_history(history)
     mode_contract = _build_mode_contract_context(context)
     agent_mode_normalized = mode_contract["agent_mode_normalized"]
+    template_key = playbook_summary["template_key"] or ""
+    custom_instructions = (ai_profile.get("custom_instructions") or "").strip()
+
+    identity_block = _build_mother_identity_block(ai_profile)
+    pipeline_block = _build_mother_pipeline_block(template_key, ai_profile)
+
+    custom_block = (
+        f"\nINSTRUÇÕES ESPECÍFICAS DO NEGÓCIO:\n{custom_instructions}\n"
+        if custom_instructions else ""
+    )
+
     return (
-        f"Você é o ROTEADOR MÃE de um CRM de vendas WhatsApp.\n\n"
-        f"PAPEL: Decidir para qual fase do funil rotear o lead. Você NÃO gera mensagem para o lead.\n"
-        f"ESCOPO: Retornar route_to + sinais + confidence. Nunca gerar message_text.\n"
-        f"FRAMEWORK: Modo {agent_mode_normalized}. Template {playbook_summary['template_key']}. Missing fields: {json.dumps(mode_contract['missing_fields'], ensure_ascii=False)}.\n"
+        f"{identity_block}\n\n"
+        f"{pipeline_block}\n"
+        f"{custom_block}\n"
+        f"FRAMEWORK: Modo {agent_mode_normalized}. Template {template_key}. Missing fields: {json.dumps(mode_contract['missing_fields'], ensure_ascii=False)}.\n"
         "RECUSAS: Nunca retorne route_to=\"follow-up\" sem evidência textual de apresentação realizada. agent_mode DEVE ser null (vem do sistema).\n\n"
-        "Antes de decidir o route_to, raciocine internamente:\n"
-        "1. O lead tem missing_fields? Se sim → qualification (obrigatório)\n"
-        "2. Há evidência de apresentação/sessão já realizada? Se sim, qual foi o resultado?\n"
-        "3. O lead demonstrou intenção de compra/agendamento? Qual o nível?\n"
-        "4. A mensagem é uma resposta a algo que o bot perguntou, ou é espontânea?\n\n"
+        "Antes de decidir o route_to, raciocine como uma supervisora experiente:\n"
+        "1. Ainda há campos obrigatórios não coletados? (missing_fields não vazio) → qualificação\n"
+        "2. O cliente está fazendo perguntas sobre o serviço/produto? → apresentação\n"
+        "3. O cliente fez uma escolha concreta de serviço mas não disse quando quer vir? → pré-agendamento\n"
+        "4. O cliente mencionou dia, hora ou turno específico? → agendamento\n"
+        "5. Apresentação já aconteceu e o cliente pediu tempo? → follow-up\n"
+        "6. Sinal claro de fechamento/compra? → closing\n\n"
         "Use o campo \"reason\" para documentar o raciocínio em 1-2 frases curtas.\n\n"
         "Retorne SOMENTE JSON válido no schema MotherDecision:\n"
         "{\n"
@@ -1184,41 +1292,6 @@ def _build_mother_prompt(context: Dict[str, Any], message_text: str) -> str:
         "- Enquanto houver missing_fields E sem sinal de fecho E sem pergunta direta, NÃO sugerir avanço para apresentation, follow-up ou closing.\n"
         "- perceived_category pode refletir o estágio atual do lead, mas route_to deve permanecer qualification até completar o contrato.\n"
         "\n"
-        "DEFINIÇÃO DO FUNIL (IMPORTANTE):\n"
-        "- APRESENTATION: apresentação do serviço/produto, resposta a dúvidas de valor, pitch inicial.\n"
-        '  => route_to="apresentation".\n'
-        "- PRÉ-AGENDAMENTO (template sdr_padrao/hybrid_scheduler): lead demonstra interesse TENTATIVO\n"
-        "  sem data confirmada (ex.: 'quero ir sim, vou tentar semana que vem', 'vou ver pra próxima\n"
-        "  semana', 'quero marcar mas ainda não sei quando'). Interesse real, sem compromisso de horário.\n"
-        "  NÃO use para dúvidas sobre o serviço (essas vão para apresentation).\n"
-        '  => route_to="pre-agendamento".\n'
-        "- AGENDAMENTO (template sdr_padrao/hybrid_scheduler): lead pede ou confirma horário ESPECÍFICO,\n"
-        "  menciona dia/turno/hora concreta (ex.: 'amanhã às 14h tem?', 'posso marcar pra sexta de manhã?').\n"
-        "  Use quando há pedido de booking com data/horário definidos ou semi-definidos.\n"
-        '  => route_to="agendamento".\n'
-        "- FOLLOW-UP é SOMENTE após apresentação quando o lead não fechou, com sinais de nutrição,\n"
-        '  ex.: "vou pensar", "me chama mês que vem", "manda material", "preciso falar com sócio".\n'
-        "- REGRA FORTE FOLLOW-UP: só use follow-up se houver evidência de apresentação realizada.\n"
-        "  Se não houver evidência, mantenha qualification ou apresentation conforme o contexto.\n"
-        "- Qualification: dúvidas iniciais (preço/como funciona/serve pra mim) sem sinal de booking.\n"
-        "\n"
-        # ETAPA 4 (roadmap): o marcador "meeting_scheduled" em reason é provisório.
-        # Nesta etapa usamos sinal textual simples para orientar o executor, mas a Etapa 4
-        # deve migrar isso para um sinal estruturado (ex.: fields JSON/signals) e o CRM
-        # será responsável por criar appointment e setar bot_disabled.
-        "POLÍTICA POR MODO (agent_mode):\n"
-        "- consultivo: não fechar sozinho; qualificar, preparar handoff e agendar quando aplicável.\n"
-        "- agenda: foco em vender até booking e confirmar presença.\n"
-        "- direto: foco em fechamento objetivo e comercial.\n"
-        "- sdr_scheduler: compatível com agenda/consultivo (normalização no executor).\n"
-        "  - Se agendar/confirmar/reagendar/pedir link, route_to=apresentation e perceived_category=apresentation.\n"
-        "  - Se confirmação de horário/link fechado (ex.: \"Fechou amanhã 17h\", \"pode confirmar\", \"manda o link\"),\n"
-        '    prefira signals.meeting_scheduled=true e mantenha substring "meeting_scheduled" no reason por compatibilidade.\n'
-        "- closer: foco em avançar até fechamento.\n"
-        "  - Agendamento NÃO é objetivo final; meeting_scheduled deve ficar false, salvo agendamento real com necessidade operacional.\n"
-        "  - Se inbound for claramente de fechamento (\"posso assinar\", \"manda contrato\", \"quero fechar\"),\n"
-        "    route_to=closing e perceived_category=closing.\n"
-        "\n"
         "REGRAS DE ROUTING — AVALIAR NESTA ORDEM (a primeira que coincidir vence):\n\n"
         "PRIORIDADE 1 (obrigatória — sistema sobrescreve mesmo se você retornar outra):\n"
         "- PRIORIDADE 1A: missing_fields NÃO vazio + mensagem SEM pergunta direta → route_to = \"qualification\"\n"
@@ -1230,47 +1303,38 @@ def _build_mother_prompt(context: Dict[str, Any], message_text: str) -> str:
         "  \"tá bom\", \"ok então\", \"combinado\", \"confirmado\", \"então fica assim\" ou equivalentes),\n"
         "  interprete price_acceptance='yes' e meeting_scheduled=true\n"
         "  → route_to = \"apresentation\" mesmo com missing_fields. Documentar no reason.\n\n"
-        "PRIORIDADE 2 (sinais fortes):\n"
-        "- Lead confirmou horário/data específica → route_to = \"apresentation\"\n"
-        "- Lead disse \"quero comprar/assinar/fechar\" com intent_level=high → route_to = \"closing\"\n"
-        "- Lead mencionou reunião/sessão passada + dúvida/objeção/feedback → route_to = \"follow-up\"\n\n"
+        "PRIORIDADE 2 (sinais fortes de intenção — raciocine pelo contexto, não por palavras específicas):\n"
+        "- Cliente fez escolha concreta de serviço/produto sem mencionar data → route_to = \"pre-agendamento\"\n"
+        "  (só para templates com fases de agendamento: sdr_padrao, hybrid_scheduler)\n"
+        "- Cliente mencionou dia, hora ou turno → route_to = \"agendamento\"\n"
+        "  (só para templates com fases de agendamento)\n"
+        "- Cliente disse que quer comprar/assinar/fechar com intenção clara → route_to = \"closing\"\n"
+        "- Cliente mencionou sessão/reunião passada + dúvida/objeção/feedback → route_to = \"follow-up\"\n\n"
         "PRIORIDADE 3 (sinais médios — usar confidence para desambiguar):\n"
-        "- Lead mostrou interesse mas sem confirmação → route_to = \"apresentation\", confidence < 0.7\n"
-        "- Lead pediu \"para pensar\" sem evidência de apresentação prévia → MANTER rota atual, não avançar\n\n"
+        "- Cliente mostrou interesse mas ainda explora dúvidas → route_to = \"apresentation\", confidence < 0.7\n"
+        "- Cliente pediu \"para pensar\" sem evidência de apresentação prévia → MANTER rota atual, não avançar\n\n"
         "PRIORIDADE 4 (sinais fracos — contexto decide):\n"
         "- Mensagem genérica (\"oi\", \"tudo bem\") → manter rota anterior, confidence baixa\n"
-        "  EXCEÇÃO SAUDAÇÃO INICIAL: se a mensagem for uma saudação social pura (oi, olá, boa tarde,\n"
-        "  boa noite, bom dia, tudo bem, tudo certo, como vai, e aí, etc.) SEM pergunta sobre\n"
+        "  EXCEÇÃO SAUDAÇÃO INICIAL: se a mensagem for uma saudação social pura SEM pergunta sobre\n"
         "  serviços/preços/horários E o histórico estiver vazio ou tiver apenas 1 mensagem,\n"
         "  → route_to = \"qualification\", next_action_hint = \"greet\", confidence = 0.6\n"
-        "  (a filha irá cumprimentar o lead de forma calorosa antes de qualificar)\n"
         "- Mensagem fora de contexto → route_to = rota atual, next_action_hint = \"reply\"\n\n"
         "SE EM DÚVIDA: mantenha a rota atual com confidence < 0.6.\n"
         "NUNCA retorne route_to=\"follow-up\" se não houver evidência textual de apresentação/sessão realizada.\n\n"
-        "EXEMPLOS (ultracurtos):\n"
-        '1) inbound_message_text: "Amanhã 17h tá confirmado"\n'
-        '   -> {"route_to":"apresentation","perceived_category":"apresentation","confidence":0.8,"reason":"meeting_scheduled|confirmou horário"}\n'
-        '2) inbound_message_text: "Pode reagendar pra sexta?"\n'
-        '   -> {"route_to":"apresentation","perceived_category":"apresentation","confidence":0.8,"reason":"meeting_scheduled|reagendar"}\n'
-        '3) inbound_message_text: "Vou pensar, me chama mês que vem" (apresentação já ocorreu)\n'
-        '   -> {"route_to":"follow-up","perceived_category":"follow-up","confidence":0.7,"reason":"nutrição pós-apresentação"}\n'
-        '4) NEGATIVO: inbound_message_text: "Vou pensar" (sem evidência de apresentação)\n'
-        '   -> NÃO use follow-up; mantenha qualification ou apresentation conforme contexto.\n'
-        '5) NEGATIVO: inbound_message_text: "Qual o preço?"\n'
-        '   -> NÃO use closing; prefira qualification.\n'
-        "6) SDR: inbound_message_text: \"Fechou amanhã 17h, manda o link\"\n"
-        '   -> {"route_to":"apresentation","perceived_category":"apresentation","confidence":0.85,"reason":"meeting_scheduled|confirmou horário"}\n'
-        "7) SDR: inbound_message_text: \"Pode confirmar a reunião?\"\n"
-        '   -> {"route_to":"apresentation","perceived_category":"apresentation","confidence":0.8,"reason":"meeting_scheduled|confirmou reunião"}\n'
-        "8) CLOSER: inbound_message_text: \"Posso assinar hoje?\"\n"
-        '   -> {"route_to":"closing","perceived_category":"closing","confidence":0.9,"reason":"intenção de fechamento"}\n'
-        "9) CLOSER: inbound_message_text: \"Manda contrato\"\n"
-        '   -> {"route_to":"closing","perceived_category":"closing","confidence":0.85,"reason":"pedido de contrato"}\n'
-        "10) CLOSER (negativo): inbound_message_text: \"Fechou amanhã 17h\"\n"
-        '   -> {"route_to":"apresentation","perceived_category":"apresentation","confidence":0.8,"reason":"confirmou horário (no closer, sem meeting_scheduled)"}\n'
-        "11) AGENDA sinal de fecho: inbound_message_text: \"Perfeito, fica combinado então\"\n"
-        "   (missing_fields não vazio, agent_mode=agenda, sinal de fecho explícito)\n"
-        '   -> {"route_to":"apresentation","perceived_category":"apresentation","confidence":0.85,"reason":"meeting_scheduled|fica combinado — sinal de fecho override","signals":{"meeting_scheduled":true,"price_acceptance":"yes"}}\n'
+        # ETAPA 4 (roadmap): o marcador "meeting_scheduled" em reason é provisório.
+        # Nesta etapa usamos sinal textual simples para orientar o executor, mas a Etapa 4
+        # deve migrar isso para um sinal estruturado (ex.: fields JSON/signals) e o CRM
+        # será responsável por criar appointment e setar bot_disabled.
+        "POLÍTICA POR MODO (agent_mode):\n"
+        "- consultivo: não fechar sozinho; qualificar, preparar handoff e agendar quando aplicável.\n"
+        "- agenda: foco em conduzir até booking e confirmar presença.\n"
+        "- direto: foco em fechamento objetivo e comercial.\n"
+        "- sdr_scheduler: compatível com agenda/consultivo.\n"
+        "  - Se confirmação de horário/link fechado (ex.: \"Fechou amanhã 17h\", \"pode confirmar\", \"manda o link\"),\n"
+        '    prefira signals.meeting_scheduled=true e mantenha substring "meeting_scheduled" no reason por compatibilidade.\n'
+        "- closer: foco em avançar até fechamento.\n"
+        "  - Agendamento NÃO é objetivo final; meeting_scheduled deve ficar false, salvo agendamento real com necessidade operacional.\n"
+        "  - Se inbound for claramente de fechamento, route_to=closing.\n"
         "\n"
         "CONTEXTO:\n"
         f"- lead: {json.dumps(lead_summary, ensure_ascii=False)}\n"
@@ -1287,16 +1351,14 @@ def _build_mother_prompt(context: Dict[str, Any], message_text: str) -> str:
         + (
             "\nMODO PASSIVO (response_style=passive): "
             "Se a mensagem do cliente for uma pergunta directa (sobre serviços, preços, localização, "
-            "horários, massagista, catálogo de tratamentos, quais opções/massagens/tratamentos existem, "
-            "menu de serviços, o que oferecem, o que fazem, quais são os valores, etc.) "
+            "horários, catálogo de opções, o que oferecem, quais são os valores, etc.) "
             "E missing_fields NÃO ESTIVER VAZIO, "
             "usa next_action_hint='reply' para sinalizar à filha que deve responder a pergunta primeiro. "
             "O route_to continua 'qualification' (os campos ainda precisam de ser coletados), "
             "mas a filha terá prioridade para responder antes de perguntar.\n"
-            "OU se a mensagem for uma saudação social pura (oi, olá, boa tarde, boa noite, bom dia, "
-            "tudo bem, tudo certo, como vai, e aí, etc.) SEM pergunta sobre serviços/preços "
+            "OU se a mensagem for uma saudação social pura SEM pergunta sobre serviços/preços "
             "E o histórico estiver vazio ou tiver apenas 1 mensagem, "
-            "usa next_action_hint='greet' (a filha cumprimenta o lead antes de qualificar; should_ask=true).\n"
+            "usa next_action_hint='greet' (a filha cumprimenta o lead antes de qualificar).\n"
             if (ai_profile.get("response_style") or "passive") == "passive"
             else ""
         )
@@ -2963,6 +3025,22 @@ def compose_decision_output(
         auto_promote_reason = "qualification_complete_auto_promote:apresentation"
         category_reason = (
             f"{category_reason}|{auto_promote_reason}" if category_reason else auto_promote_reason
+        )
+
+    # Guardrail: apresentation completa → avança para próxima fase (análogo ao de qualificação).
+    # A Filha já sinaliza did_complete_phase + recommended_next_category — aqui apenas homologamos.
+    # Restrito a agentes com fases de agendamento para não impactar closer_agressivo.
+    _apres_complete_next = str(child_result.recommended_next_category or "").strip().lower()
+    if (
+        effective_route_to == "apresentation"
+        and child_result.did_complete_phase
+        and _apres_complete_next in {"pre-agendamento", "agendamento", "follow-up"}
+        and template_key in _SCHEDULING_AGENT_TEMPLATES
+    ):
+        suggested_category = _apres_complete_next
+        category_reason = (
+            f"{category_reason}|apresentation_complete_auto_advance:{_apres_complete_next}"
+            if category_reason else f"apresentation_complete_auto_advance:{_apres_complete_next}"
         )
 
     outcome, highlight = apply_outcome_guardrails(current_category, child_result)
