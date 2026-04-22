@@ -1389,10 +1389,13 @@ def _build_mother_prompt(context: Dict[str, Any], message_text: str) -> str:
         "\n"
         "REGRAS DE ROUTING — AVALIAR NESTA ORDEM (a primeira que coincidir vence):\n\n"
         "PRIORIDADE 0 — PRIMEIRO CONTATO: SAUDAÇÃO PURA (REGRA ABSOLUTA):\n"
-        "Quando outbound_count = 0 (você nunca respondeu este lead) E a mensagem do lead\n"
+        "Quando greeting_responded = false (bot nunca respondeu este lead) E a mensagem do lead\n"
         "é exclusivamente uma saudação social, sem nenhuma intenção comercial embutida\n"
         "(sem pedido de serviço, preço, disponibilidade, produto ou qualquer dúvida):\n"
         "→ route_to = \"recepcao\", confidence = 0.9\n\n"
+        "IMPORTANTE: o sistema vai forçar route_to=\"recepcao\" via guardrail de código quando\n"
+        "greeting_responded = false, independente do que você decidir. Esta regra existe para\n"
+        "você entender o porquê e tomar a decisão conscientemente.\n\n"
         "Por que esta regra existe e por que ela vence sobre todas as outras:\n"
         "Um cliente que chega e apenas diz \"olá\" ainda não expressou o que quer.\n"
         "Qualquer profissional de vendas experiente sabe que o primeiro passo é acolher,\n"
@@ -1411,9 +1414,8 @@ def _build_mother_prompt(context: Dict[str, Any], message_text: str) -> str:
         "Exemplo: mensagem com cumprimento + pergunta de serviço → recepcao + compound_follow_through=\"qualification\"\n\n"
         "PRIORIDADE 1 (obrigatória — sistema sobrescreve mesmo se você retornar outra):\n"
         "- PRIORIDADE 1A: missing_fields NÃO vazio + mensagem SEM pergunta direta → route_to = \"qualification\"\n"
-        "  ATENÇÃO — EXCEÇÃO OBRIGATÓRIA: esta regra NÃO se aplica quando outbound_count = 0\n"
-        "  E a mensagem for exclusivamente saudação social sem intenção comercial.\n"
-        "  Nesse caso, ver PRIORIDADE 0 acima — que sempre vence.\n"
+        "  EXCEÇÃO ABSOLUTA: se greeting_responded = false → PRIORIDADE 0 vence; não aplique esta regra.\n"
+        "  O guardrail de código também irá forçar recepcao neste caso.\n"
         "- PRIORIDADE 1B: missing_fields NÃO vazio + mensagem COM pergunta direta (serviços, preço, como\n"
         "  funciona, horários, etc.) → route_to = \"qualification\", next_action_hint = \"reply\"\n"
         "  (filha responde à pergunta antes de qualificar — NUNCA ignore uma pergunta direta do lead)\n"
@@ -1462,7 +1464,9 @@ def _build_mother_prompt(context: Dict[str, Any], message_text: str) -> str:
         f"- agent_mode_normalized: {agent_mode_normalized}\n"
         f"- required_fields: {json.dumps(mode_contract['required_fields'], ensure_ascii=False)}\n"
         f"- missing_fields: {json.dumps(mode_contract['missing_fields'], ensure_ascii=False)}\n"
-        f"- outbound_count: {_mother_outbound_count} (número de mensagens já enviadas pelo bot nesta conversa; 0 = primeiro contato)\n"
+        f"- outbound_count: {_mother_outbound_count}\n"
+        f"- greeting_responded: {'true' if _mother_outbound_count >= 1 else 'false'} "
+        f"({'saudação já feita — pipeline normal' if _mother_outbound_count >= 1 else 'PRIMEIRO CONTATO — bot nunca respondeu este lead'})\n"
         f"- lead_origin: {lead_origin_label}\n"
         f"- origin_opener: {origin_opener}\n"
         f"- inbound_message_text: {message_text}\n"
@@ -2943,6 +2947,27 @@ def _enforce_qualification_route_when_missing(
     return mother_decision
 
 
+def _enforce_greeting_first(
+    mother_decision: MotherDecision,
+    context: Dict[str, Any],
+) -> MotherDecision:
+    """Garante que o primeiro contato seja sempre recepcao.
+
+    Análogo ao _enforce_qualification_route_when_missing: baseado em estado
+    (histórico), não em análise de texto. Se o bot nunca respondeu (outbound_count=0),
+    a saudação ainda não foi feita — força recepcao antes de qualquer outra rota.
+    """
+    if mother_decision.route_to == "recepcao":
+        return mother_decision
+    history = context.get("history") or []
+    outbound_count = sum(1 for h in history if str(h.get("model") or "").lower() == "outbound")
+    if outbound_count == 0:
+        reason = str(mother_decision.reason or "").strip()
+        mother_decision.reason = f"{reason}|greeting_first_enforced" if reason else "greeting_first_enforced"
+        mother_decision.route_to = "recepcao"
+    return mother_decision
+
+
 _ALLOWED_ADVANCE = {
     "qualification": {"apresentation"},
     "apresentation": {"closing", "follow-up", "pre-agendamento"},
@@ -3478,6 +3503,7 @@ def decide(context: Dict[str, Any], logger: Optional[logging.Logger] = None) -> 
             mother_decision,
             mode_ctx_forced_route,
         )
+        mother_decision = _enforce_greeting_first(mother_decision, context)
         lead = context.get("lead") or {}
         force_followup_route = _is_followup_tick_context(context)
         route_for_child = "follow-up" if force_followup_route else mother_decision.route_to
