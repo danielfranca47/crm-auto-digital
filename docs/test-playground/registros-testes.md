@@ -840,3 +840,61 @@ Verificação
 "ola" com lead que já tem histórico (outbound_count≥1) → guardrail não dispara → mãe decide normalmente
 Mensagem comercial direta com lead novo (ex: "quanto custa?") → _enforce_greeting_first força recepcao → filha recepcao acolhe + compound_follow_through ativo para próximo turno
 Fluxo normal após recepcao → próxima mensagem tem outbound_count=1 → guardrail não interfere → qualificação/apresentação procedem normalmente
+
+## O que mudou e por quê
+Causa raiz confirmada: a mãe LLM retornava qualification com 90% de confiança porque a REGRA DE QUALIFICAÇÃO (missing_fields não vazio + mensagem sem pergunta direta) encaixava perfeitamente em "ola" — e o LLM aplicava com alta confiança antes de avaliar a PRIORIDADE 0. Nenhuma instrução de prompt consegue vencer isso de forma confiável.
+
+A solução seguiu o padrão já existente no projeto: assim como _enforce_qualification_route_when_missing garante via código que qualificação incompleta → qualification, a nova _enforce_greeting_first() garante via código que outbound_count=0 → recepcao. Nenhuma análise de texto — apenas estado do histórico.
+
+Hierarquia de estados agora:
+
+
+outbound_count = 0  →  greeting_responded = false  →  recepcao  (guardrail força)
+outbound_count ≥ 1  →  greeting_responded = true   →  mãe decide normalmente
+Teste recomendado: playground com lead novo (sem histórico) enviando "ola" → trace deve mostrar guardrails=[greeting_first_enforced], bot responde com cumprimento caloroso, sem preços e sem imagens.
+
+## Resultado teste:
+# Playground — Sessão 22/04/2026, 20:06:15
+
+## Configuração do AI Profile
+
+| Campo | Valor |
+|---|---|
+| **Nome** | Cristina (ID: 1) |
+| **brand_name** |  |
+| **agent_mode** | agenda |
+| **template_key** | hybrid_scheduler |
+| **presentation_variant** | sales |
+| **response_style** | passive |
+| **tone_of_voice** | discreto, sutil meiga e persuasivo |
+| **niche** | Massagens  |
+| **target_audience** | Homens e Mulheres de 30 a 65 anos |
+| **qualification_required_fields** | custom_precos_de_massagens |
+| **custom_instructions** | Você é Cristina, massagista profissional em Faro. ↵  ↵ Seu tom de comunicação é discreto, sutil meigo. Você usa uma abordagem receptiva e responde as dúvidas dos clientes para que eles agendem massagens com você. ↵  ↵ Seu objetivo é responder as perguntas e conduzir leads com naturalidade, gerando confiança e valor em cada interação. A morada correta é Rua Ataíde de Oliveira, 101 - próximo ao estádio São Luis em Faro. ↵  ↵ Regras: ↵ - Evite dizer "Posso ajudar" ↵ - Somente faça perguntas para confirmar horário de agendamento quando oportuno. ↵ Exemplo: Cliente pergunta se tem disponibilidade amanhã. ↵ Você responde: Tenho 2 horários disponíveis, as 15h ou 17h, qual fica melhor pra você? ↵  ↵ - Em vez de perguntas prefira frases de efeito persuasivas como: ↵ Diga o horário que gostaria e verifico na minha agenda, apesar das requisições sempre faço o possível para encaixar um horário conforme sua disponibilidade. ↵  ↵ ##Black list## ↵ - Nunca faça perguntas de assuntos não abordados pelos clientes. ↵ - Nunca diga aquilo que não lhe foi perguntado. |
+
+**Tipo de cenário:** Inbound (lead iniciou)
+
+**Contexto do cenário:** testar saudação
+
+**Lead ID (sandbox):** 119
+
+## Conversa
+
+**[Lead]** 20:06
+> ola bom dia
+
+**[Bot]** 20:06
+> Bom dia! É um prazer receber sua mensagem. Como posso atender você hoje?
+>
+> _Trace: mother_route=recepcao, effective=recepcao, confidence=90%, guardrails=[guardrail_reason]_
+
+**[Lead]** 20:19
+> sim, quais horarios estao abertos?
+
+**[Bot]** 20:19
+> Atuo com várias técnicas de massagem, proporcionando uma experiência relaxante e revigorante. Os preços das massagens variam conforme o tipo e a duração, sendo a partir de 50€. Se precisar de mais detalhes, estou aqui para ajudar!
+> 📎 _[Mídia enviada: image — https://api.danielfranca.pt/static/knowledge-media/6fe8c2067a4542f584a47b84811c23c4.png]_
+> 📎 _[Mídia enviada: image — https://api.danielfranca.pt/static/knowledge-media/5cc9452007bc49a89d78253e185d09d2.png]_
+>
+> _Trace: mother_route=qualification, effective=qualification, confidence=80%, guardrails=[guardrail_reason]_
+
