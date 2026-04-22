@@ -6,7 +6,7 @@
 
 **Infraestrutura WhatsApp:** Uazapi (API não oficial) — ~R$79/mês por instância. Sem taxa por mensagem da Meta.
 
-**Custo médio estimado por conversa IA:** ~R$0,06 (modelo Sonnet).
+**Custo médio estimado por conversa IA:** ~R$0,06 (modelo Sonnet). Esses numeros podem ser diferente  
 
 **Agentes disponíveis em todos os planos** — SDR, Closer, Hybrid. Não é limitação de plano, é escolha estratégica.
 

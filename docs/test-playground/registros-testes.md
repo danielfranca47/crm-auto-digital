@@ -687,3 +687,156 @@ Verificação
 "quero a massagem relaxante" → trace pre-agendamento — bot NÃO envia tabela de preços
 Segunda mensagem do mesmo lead → outbound_count >= 1 visível para a mãe; mãe não roteia para recepcao, fluxo de pipeline normal
 Nicho diferente / idioma diferente → o raciocínio de intenção funciona sem depender de palavras específicas
+
+## Alterações Commit c29a83f criado. Aqui está o resumo do que foi feito:
+
+O que mudou em decision_engine.py
+_build_mother_prompt():
+
+outbound_count injetado no contexto — a mãe agora sabe exatamente quantas mensagens ela já enviou nesta conversa. 0 = primeiro contato.
+
+Bloco PRINCÍPIO FUNDAMENTAL — antes de qualquer prioridade, a mãe é ensinada a classificar a mensagem em 3 categorias de intenção: presença social, intenção comercial, intenção de avançar. Presença social sempre prevalece sobre missing_fields.
+
+PRIORIDADE 0 (nova, acima de tudo) — saudação pura com outbound_count=0 → recepcao. A regra inclui o raciocínio de negócio explicado ("é como um vendedor que ignora o bom dia e já pergunta o orçamento") e exemplos de lógica de intenção, sem listas de palavras.
+
+PRIORIDADE 1A com EXCEÇÃO OBRIGATÓRIA — a regra de qualificação agora diz explicitamente que NÃO se aplica quando outbound_count=0 + saudação pura. PRIORIDADE 0 vence.
+
+REGRA DE QUALIFICAÇÃO (bloco de regras gerais) também atualizada com a mesma exceção para consistência.
+
+O que mudou em registros-testes.md
+Seção "Regra de Projeto" adicionada na introdução do documento, documentando a proibição de abordagens determinísticas e o foco em otimização de prompt e decisão por LLM.
+
+Teste recomendado: playground com "ola boa tarde" no perfil Cristina → trace deve mostrar mother_route=recepcao, bot responde com cumprimento caloroso, sem preços e sem imagens.
+
+## Resultados teste
+# Playground — Sessão 22/04/2026, 19:36:33
+
+## Configuração do AI Profile
+
+| Campo | Valor |
+|---|---|
+| **Nome** | Cristina (ID: 1) |
+| **brand_name** |  |
+| **agent_mode** | agenda |
+| **template_key** | hybrid_scheduler |
+| **presentation_variant** | sales |
+| **response_style** | passive |
+| **tone_of_voice** | discreto, sutil meiga e persuasivo |
+| **niche** | Massagens  |
+| **target_audience** | Homens e Mulheres de 30 a 65 anos |
+| **qualification_required_fields** | custom_precos_de_massagens |
+| **custom_instructions** | Você é Cristina, massagista profissional em Faro. ↵  ↵ Seu tom de comunicação é discreto, sutil meigo. Você usa uma abordagem receptiva e responde as dúvidas dos clientes para que eles agendem massagens com você. ↵  ↵ Seu objetivo é responder as perguntas e conduzir leads com naturalidade, gerando confiança e valor em cada interação. A morada correta é Rua Ataíde de Oliveira, 101 - próximo ao estádio São Luis em Faro. ↵  ↵ Regras: ↵ - Evite dizer "Posso ajudar" ↵ - Somente faça perguntas para confirmar horário de agendamento quando oportuno. ↵ Exemplo: Cliente pergunta se tem disponibilidade amanhã. ↵ Você responde: Tenho 2 horários disponíveis, as 15h ou 17h, qual fica melhor pra você? ↵  ↵ - Em vez de perguntas prefira frases de efeito persuasivas como: ↵ Diga o horário que gostaria e verifico na minha agenda, apesar das requisições sempre faço o possível para encaixar um horário conforme sua disponibilidade. ↵  ↵ ##Black list## ↵ - Nunca faça perguntas de assuntos não abordados pelos clientes. ↵ - Nunca diga aquilo que não lhe foi perguntado. |
+
+**Tipo de cenário:** Inbound (lead iniciou)
+
+**Contexto do cenário:** testar saudação
+
+**Lead ID (sandbox):** 117
+
+## Conversa
+
+**[Lead]** 19:36
+> ola
+
+**[Bot]** 19:37
+> Aqui estão as informações: as massagens variam conforme a duração e o tipo, começando a partir de 50€. Diga o horário que gostaria e verifico na minha agenda, apesar das requisições sempre faço o possível para encaixar um horário conforme sua disponibilidade.
+> 📎 _[Mídia enviada: image — https://api.danielfranca.pt/static/knowledge-media/6fe8c2067a4542f584a47b84811c23c4.png]_
+> 📎 _[Mídia enviada: image — https://api.danielfranca.pt/static/knowledge-media/5cc9452007bc49a89d78253e185d09d2.png]_
+>
+> _Trace: mother_route=qualification, effective=qualification, confidence=90%, guardrails=[guardrail_reason]_
+
+## Solução: Plano: Guardrail greeting_responded — Correção Definitiva do Roteamento de Saudação
+Contexto
+Nos testes de 22/04/2026, mesmo após commits 0dbacae (filha recepcao) e c29a83f (PRIORIDADE 0 no prompt da mãe), o trace continua mostrando mother_route=qualification, effective=qualification, confidence=90% quando o lead envia apenas "ola".
+
+O que ficou provado com a investigação:
+
+A mãe LLM não está roteando para recepcao porque aplica a REGRA DE QUALIFICAÇÃO com 90% de confiança (missing_fields presente + mensagem sem pergunta direta). PRIORIDADE 0 existe no prompt mas perde para o padrão mecânico que o LLM já aprendeu.
+A confiança subiu de 50% para 90% com os últimos commits — sinal de que o modelo ficou mais certo de "qualification" ao ver as regras mais detalhadas, não mais certo de "recepcao".
+O _enforce_qualification_route_when_missing já aceita recepcao sem override (linha 2937), mas a mãe nunca emite recepcao para chegar lá.
+Não existe nenhum guardrail de código que force recepcao quando outbound_count == 0, equivalente ao que _enforce_qualification_route_when_missing faz para qualificação.
+Diagnóstico Resumido
+Lead 117, "ola", outbound_count=0, missing_fields=["custom_precos_de_massagens"]
+
+Mãe vê: missing_fields não vazio + "ola" sem pergunta direta
+→ REGRA DE QUALIFICAÇÃO dispara com 90% de confiança → qualification
+→ PRIORIDADE 0 nunca é avaliada
+
+_enforce_qualification_route_when_missing: route_to="qualification" → passa
+_enforce_greeting_first: ← NÃO EXISTE (esse é o bug)
+
+route_for_child = "qualification" → _build_child_prompt_recepcao NUNCA chamada
+→ Bot responde com tabela de preços + imagens
+Solução
+Criar _enforce_greeting_first() — guardrail de código determinístico e baseado em estado (não em texto), análogo ao _enforce_qualification_route_when_missing. Segue o mesmo padrão já aceito no projeto.
+
+Regra: se outbound_count == 0 (bot nunca respondeu este lead), a saudação nunca foi feita → forçar recepcao independente do que a mãe decidiu.
+
+Complementar: injetar greeting_responded como variável booleana semântica no prompt da mãe (em vez de apenas outbound_count), para que o LLM entenda o estado com mais clareza.
+
+Arquivo Crítico
+backend-executors/app/services/decision_engine.py
+
+Mudanças
+1. Nova função _enforce_greeting_first() (próximo de _enforce_qualification_route_when_missing, ~linha 2943)
+def _enforce_greeting_first(
+    mother_decision: MotherDecision,
+    context: Dict[str, Any],
+) -> MotherDecision:
+    """Garante que o primeiro contato seja sempre recepcao.
+
+    Análogo ao _enforce_qualification_route_when_missing: baseado em estado
+    (histórico), não em análise de texto. Se o bot nunca respondeu (outbound_count=0),
+    a saudação ainda não foi feita — força recepcao antes de qualquer outra rota.
+    """
+    if mother_decision.route_to == "recepcao":
+        return mother_decision
+    history = context.get("history") or []
+    outbound_count = sum(1 for h in history if str(h.get("model") or "").lower() == "outbound")
+    if outbound_count == 0:
+        reason = str(mother_decision.reason or "").strip()
+        mother_decision.reason = f"{reason}|greeting_first_enforced" if reason else "greeting_first_enforced"
+        mother_decision.route_to = "recepcao"
+    return mother_decision
+2. Chamar _enforce_greeting_first() em decide() (~linha 3479)
+Logo após o _enforce_qualification_route_when_missing existente:
+
+mother_decision = _enforce_qualification_route_when_missing(
+    mother_decision,
+    mode_ctx_forced_route,
+)
+# NOVO — garante primeiro contato via recepcao (estado, não texto)
+mother_decision = _enforce_greeting_first(mother_decision, context)
+3. Injetar greeting_responded no prompt da mãe em _build_mother_prompt() (~linha 1465)
+Substituir a linha atual:
+
+f"- outbound_count: {_mother_outbound_count} (número de mensagens já enviadas pelo bot nesta conversa; 0 = primeiro contato)\n"
+Por:
+
+_greeting_responded = _mother_outbound_count >= 1
+f"- outbound_count: {_mother_outbound_count}\n"
+f"- greeting_responded: {'true' if _greeting_responded else 'false'} "
+f"({'saudação já feita — pipeline normal' if _greeting_responded else 'PRIMEIRO CONTATO — bot nunca respondeu este lead'})\n"
+4. Atualizar PRIORIDADE 0 no prompt (~linha 1391) para referenciar greeting_responded
+Substituir a condição outbound_count = 0 por greeting_responded: false na descrição da PRIORIDADE 0:
+
+PRIORIDADE 0 — PRIMEIRO CONTATO: SAUDAÇÃO PURA (REGRA ABSOLUTA):
+Quando greeting_responded = false (bot nunca respondeu este lead) E a mensagem
+não contém intenção comercial embutida:
+→ route_to = "recepcao", confidence = 0.9
+...
+ATENÇÃO: o sistema vai forçar recepcao via guardrail de código quando
+greeting_responded = false, independente do que você decidir. Esta regra
+existe para você entender o porquê e tomar a decisão conscientemente.
+5. Atualizar EXCEÇÃO da PRIORIDADE 1A (~linha 1414) com mesma linguagem
+EXCEÇÃO ABSOLUTA: se greeting_responded = false → PRIORIDADE 0 vence; não aplique esta regra.
+Por que esta abordagem respeita as regras do projeto
+Abordagem proibida	Esta solução
+Lista de palavras-chave para detectar saudação	Não analisa texto — verifica estado (outbound_count)
+Filtro por comprimento/padrão de mensagem	Não analisa mensagem
+Decisão de roteamento sem passar pelo LLM	A mãe ainda raciocina; o guardrail é safety net de estado, idêntico ao _enforce_qualification_route_when_missing já existente
+Verificação
+"ola" com lead novo (outbound_count=0) → trace deve mostrar mother_route=X, effective=recepcao, guardrails=[greeting_first_enforced] → bot responde com cumprimento, sem preços, sem imagens
+"ola" com lead que já tem histórico (outbound_count≥1) → guardrail não dispara → mãe decide normalmente
+Mensagem comercial direta com lead novo (ex: "quanto custa?") → _enforce_greeting_first força recepcao → filha recepcao acolhe + compound_follow_through ativo para próximo turno
+Fluxo normal após recepcao → próxima mensagem tem outbound_count=1 → guardrail não interfere → qualificação/apresentação procedem normalmente
