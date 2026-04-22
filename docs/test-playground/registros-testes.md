@@ -383,3 +383,71 @@ Reconhecimento de intenção de agendamento:
 
 Qualification: quando lead diz "quero [serviço]" ou "que horas posso marcar?" → did_complete_phase=true, recommended_next_category="pre-agendamento"
 Apresentation: mesma lógica, skip do warming script quando interesse concreto detectado
+
+## Teste após otimização:
+# Playground — Sessão 22/04/2026, 16:25:34
+
+## Configuração do AI Profile
+
+| Campo | Valor |
+|---|---|
+| **Nome** | Cristina (ID: 1) |
+| **brand_name** |  |
+| **agent_mode** | agenda |
+| **template_key** | hybrid_scheduler |
+| **presentation_variant** | sales |
+| **response_style** | passive |
+| **tone_of_voice** | discreto, sutil meiga e persuasivo |
+| **niche** | Massagens  |
+| **target_audience** | Homens e Mulheres de 30 a 65 anos |
+| **qualification_required_fields** | custom_precos_de_massagens |
+| **custom_instructions** | Você é Cristina, massagista profissional em Faro. ↵  ↵ Seu tom de comunicação é discreto, sutil meigo. Você usa uma abordagem receptiva e responde as dúvidas dos clientes para que eles agendem massagens com você. ↵  ↵ Seu objetivo é responder as perguntas e conduzir leads com naturalidade, gerando confiança e valor em cada interação. A morada correta é Rua Ataíde de Oliveira, 101 - próximo ao estádio São Luis em Faro. ↵  ↵ Regras: ↵ - Evite dizer "Posso ajudar" ↵ - Somente faça perguntas para confirmar horário de agendamento quando oportuno. ↵ Exemplo: Cliente pergunta se tem disponibilidade amanhã. ↵ Você responde: Tenho 2 horários disponíveis, as 15h ou 17h, qual fica melhor pra você? ↵  ↵ - Em vez de perguntas prefira frases de efeito persuasivas como: ↵ Diga o horário que gostaria e verifico na minha agenda, apesar das requisições sempre faço o possível para encaixar um horário conforme sua disponibilidade. ↵  ↵ ##Black list## ↵ - Nunca faça perguntas de assuntos não abordados pelos clientes. ↵ - Nunca diga aquilo que não lhe foi perguntado. |
+
+**Tipo de cenário:** Inbound (lead iniciou)
+
+**Contexto do cenário:** testar saudação
+
+**Lead ID (sandbox):** 113
+
+## Conversa
+
+**[Lead]** 16:25
+> ola
+
+**[Bot]** 16:26
+> Os preços das massagens variam conforme o tipo e duração. As opções começam a partir de 50€. Se precisar de mais detalhes, estarei à disposição para ajudar. Diga o horário que gostaria e verifico na minha agenda, apesar das requisições, sempre faço o possível para encaixar um horário conforme sua disponibilidade.
+> 📎 _[Mídia enviada: image — https://api.danielfranca.pt/static/knowledge-media/6fe8c2067a4542f584a47b84811c23c4.png]_
+> 📎 _[Mídia enviada: image — https://api.danielfranca.pt/static/knowledge-media/5cc9452007bc49a89d78253e185d09d2.png]_
+>
+> _Trace: mother_route=qualification, effective=qualification, confidence=50%, guardrails=[guardrail_reason]_
+
+
+## Diagnóstico
+Contexto
+Após o commit 44f2d47, esperava-se que "ola" gerasse resposta de saudação calorosa. No teste de 22/04/26 com perfil Cristina (hybrid_scheduler, passive), o bot respondeu à saudação com tabela de preços + 2 imagens — o exato comportamento que as mudanças anteriores tentavam corrigir.
+
+Causa raiz confirmada na investigação: todo o sistema de proteção de saudação depende da Mãe emitir next_action_hint="greet", o que o LLM faz de forma não confiável (trace mostrou confidence=50%, instrução pede 0.6). Quando a Mãe falha, _greeting_now = False e todas as salvaguardas caem.
+
+Problema secundário: mesmo quando a Mãe emite greet, se a qualificação já estava completa (lead 113 tinha campos preenchidos de sessão anterior), o code auto-promove effective_route_to = "apresentation" dentro do compose_decision_output, e o check de mídia vê a rota "apresentation" e envia mídia — bypassando a proteção de saudação.
+
+Diagnóstico: onde o bug acontece
+"ola"
+  ↓
+Mãe: route_to="qualification", next_action_hint=null (falhou emitir "greet")
+  ↓
+_greeting_now = (null == "greet") → False
+  ↓
+_media_intro_note é injetada no prompt (mídia disponível + _greeting_now=False)
+  ↓
+Filha gera resposta usando offer_description + custom_instructions + knowledge
+  ↓
+compose_decision_output: current_field=None (campo já preenchido)
+  → auto-promove effective_route_to = "apresentation"
+  ↓
+_km_is_greeting = (null == "greet") → False
+_suppress_km = False (não é greeting + 0 outbounds)
+effective_route_to = "apresentation" → _should_send_knowledge_media = True
+  ↓
+Mídia enviada. Resposta com preços.
+
+
