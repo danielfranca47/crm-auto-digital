@@ -529,6 +529,7 @@ def _build_daughter_identity_block(context: Dict[str, Any], phase: str) -> str:
         "closing": "fechamento",
         "pre-agendamento": "pré-agendamento",
         "agendamento": "agendamento",
+        "recepcao": "recepção",
     }
     phase_label = phase_labels.get(phase, phase)
 
@@ -1393,9 +1394,12 @@ def _build_mother_prompt(context: Dict[str, Any], message_text: str) -> str:
         "- Cliente pediu \"para pensar\" sem evidência de apresentação prévia → MANTER rota atual, não avançar\n\n"
         "PRIORIDADE 4 (sinais fracos — contexto decide):\n"
         "- Mensagem genérica (\"oi\", \"tudo bem\") → manter rota anterior, confidence baixa\n"
-        "  EXCEÇÃO SAUDAÇÃO INICIAL: se a mensagem for uma saudação social pura SEM pergunta sobre\n"
-        "  serviços/preços/horários E o histórico estiver vazio ou tiver apenas 1 mensagem,\n"
-        "  → route_to = \"qualification\", next_action_hint = \"greet\", confidence = 0.6\n"
+        "  SAUDAÇÃO PURA: se a mensagem for uma saudação social SEM pedido de serviço/preço/horário\n"
+        "  E o histórico tiver 0 mensagens outbound,\n"
+        "  → route_to = \"recepcao\", confidence = 0.9\n"
+        "  SAUDAÇÃO COMPOSTA (saudação + pergunta de serviço): ex. \"Olá, quais massagens têm?\",\n"
+        "  → route_to = \"recepcao\", compound_follow_through = \"<rota_da_pergunta>\", confidence = 0.9\n"
+        "  (compound_follow_through usa os mesmos valores de route_to: qualification, apresentation, etc.)\n"
         "- Mensagem fora de contexto → route_to = rota atual, next_action_hint = \"reply\"\n\n"
         "SE EM DÚVIDA: mantenha a rota atual com confidence < 0.6.\n"
         "NUNCA retorne route_to=\"follow-up\" se não houver evidência textual de apresentação/sessão realizada.\n\n"
@@ -1434,13 +1438,82 @@ def _build_mother_prompt(context: Dict[str, Any], message_text: str) -> str:
             "usa next_action_hint='reply' para sinalizar à filha que deve responder a pergunta primeiro. "
             "O route_to continua 'qualification' (os campos ainda precisam de ser coletados), "
             "mas a filha terá prioridade para responder antes de perguntar.\n"
-            "OU se a mensagem for uma saudação social pura SEM pergunta sobre serviços/preços "
-            "E o histórico estiver vazio ou tiver apenas 1 mensagem, "
-            "usa next_action_hint='greet' (a filha cumprimenta o lead antes de qualificar).\n"
             if (ai_profile.get("response_style") or "passive") == "passive"
             else ""
         )
     )
+
+
+def _build_child_prompt_recepcao(
+    context: Dict[str, Any],
+    message_text: str,
+    mother_decision: MotherDecision,
+) -> str:
+    """Filha Recepcionista: prompt enxuto para saudações. Sem acesso a mídia, preços ou catálogo."""
+    ai_profile = context.get("ai_profile") or {}
+    lead = context.get("lead") or {}
+    metadata = context.get("metadata") or {}
+    history = context.get("history") or []
+    playbook = context.get("playbook") or {}
+
+    lead_name = (_safe_get(lead, "contactName", "companyName", "name") or "").strip()
+    _is_outbound_lead = (metadata.get("lead_origin") or "inbound") == "outbound"
+    origin_opener = (
+        ai_profile.get("origin_outbound_opener") if _is_outbound_lead else ai_profile.get("origin_inbound_opener")
+    ) or ""
+
+    outbound_count = sum(1 for h in history if str(h.get("model") or "").lower() == "outbound")
+    is_new_lead = outbound_count == 0
+
+    identity_block = _build_daughter_identity_block(context, "recepcao")
+    tone_block = _build_tone_block(ai_profile, playbook)
+
+    if is_new_lead and origin_opener.strip():
+        greeting_instruction = (
+            "ABERTURA CONFIGURADA — PRIMEIRO CONTATO:\n"
+            f"Use o texto abaixo como BASE da sua resposta de boas-vindas.\n"
+            f"Adapte ao WhatsApp e ao tom de voz, mas preserve a essência:\n"
+            f"{origin_opener}\n"
+        )
+    elif is_new_lead:
+        greeting_instruction = (
+            "INSTRUÇÃO: Dê boas-vindas ao lead de forma calorosa e natural.\n"
+            "Exemplo de tom (adapte): 'Olá! Seja bem-vindo(a)! Como posso ajudar?'\n"
+        )
+    else:
+        lead_name_part = f", {lead_name}" if lead_name else ""
+        greeting_instruction = (
+            f"INSTRUÇÃO: O lead retornou. Cumprimente de volta de forma calorosa e breve "
+            f"(ex.: 'Olá{lead_name_part}! Que bom ter você de volta.').\n"
+            "Convide-o a continuar com uma frase natural (ex.: 'Como posso te ajudar hoje?').\n"
+        )
+
+    lead_name_ctx = f"Nome do lead: {lead_name}." if lead_name else "Nome do lead: desconhecido."
+
+    return f"""{identity_block}
+{tone_block}PAPEL: Recepcionista — dar boas-vindas e criar uma primeira impressão calorosa.
+FASE: recepção (saudação).
+
+{lead_name_ctx}
+Mensagem recebida: {message_text}
+
+{greeting_instruction}
+RESTRIÇÕES ABSOLUTAS:
+- NUNCA mencione preços, tabelas, serviços, imagens, links ou informações de catálogo.
+- NUNCA faça perguntas de qualificação neste turno.
+- Apenas cumprimento. Máximo 2-3 linhas.
+
+Retorne SOMENTE JSON válido:
+{{
+  "message_text": "<cumprimento caloroso — máximo 2-3 linhas>",
+  "should_ask": false,
+  "question_text": "",
+  "field": null,
+  "did_complete_phase": false,
+  "confidence": 0.95,
+  "signals": []
+}}
+"""
 
 
 def _build_child_prompt(
@@ -1578,14 +1651,11 @@ def _build_child_prompt_qualification(
     tone_block = _build_tone_block(ai_profile, playbook)
     response_style = (ai_profile.get("response_style") or "passive").strip().lower()
 
-    # Calcular hint e greeting antes da nota de mídia (para poder suprimi-la no greeting)
     _mother_hint = (mother_decision.next_action_hint or "").strip().lower()
     _passive_reply_now = response_style == "passive" and _mother_hint == "reply"
-    _greeting_now = _mother_hint == "greet"
 
     # Nota de mídia: quando o usuário configurou mídia no knowledge, instrui o LLM a escrever
     # apenas um texto curto de introdução, pois as imagens serão enviadas automaticamente após.
-    # Suprimido em turnos de saudação (greeting) — a mídia nunca é enviada no primeiro cumprimento.
     _has_knowledge_media = bool(context.get("knowledge_media"))
     _qual_outbound_count = sum(1 for h in history if str(h.get("model") or "").lower() == "outbound")
     _media_already_sent = _qual_outbound_count >= 1
@@ -1593,7 +1663,7 @@ def _build_child_prompt_qualification(
         "\nMÍDIA DISPONÍVEL: Imagens/arquivos serão enviados automaticamente após esta mensagem.\n"
         "Escreva APENAS uma frase curta de introdução (ex.: 'Aqui estão as informações:', "
         "'Veja os detalhes abaixo:'). NÃO descreva o conteúdo da mídia no texto — a mídia tem prioridade.\n"
-        if (_has_knowledge_media and not _greeting_now and not _media_already_sent)
+        if (_has_knowledge_media and not _media_already_sent)
         else ""
     )
 
@@ -1631,51 +1701,26 @@ def _build_child_prompt_qualification(
             "Se não souber responder, diz que vais verificar (→ handoff)."
         )
     )
-    _greeting_header = (
-        "MODO SAUDAÇÃO ACTIVADO — O lead abriu com uma saudação social.\n"
-        + (
-            f"ABERTURA CONFIGURADA (primeiro contato): Use o texto abaixo como BASE da tua resposta de saudação.\n"
-            f"Adapte ao WhatsApp e ao tom de voz, mas preserve a essência. Depois inclua UMA pergunta de qualificação natural:\n"
-            f"{origin_opener}\n"
-            if (is_first_contact and origin_opener.strip())
-            else (
-                "INSTRUÇÃO OBRIGATÓRIA: A tua resposta DEVE começar por cumprimentar o lead de forma calorosa "
-                "e natural (ex.: 'Boa tarde! Tudo bem sim, e com você?', 'Oi! Tudo ótimo por aqui, e aí?'). "
-                "O cumprimento deve ser breve e genuíno — proporcional à saudação recebida, não excessivo.\n"
-            )
-        )
-        + "DEPOIS do cumprimento, no MESMO turno, acrescenta UMA pergunta de qualificação de forma natural "
-        "como se fosse parte da conversa (ex.: 'Para te ajudar melhor, qual serviço te interessa?').\n"
-        "should_ask=true. field=current_field. question_text=a pergunta de qualificação isolada.\n"
-        "message_text=cumprimento + pergunta juntos numa única mensagem natural.\n"
-        "NUNCA ignores a saudação e vás directamente para a pergunta de qualificação.\n\n"
-        if _greeting_now
-        else ""
-    )
     _passive_header = (
-        ""  # _greeting_header tem precedência; nenhum header passivo necessário
-        if _greeting_now
+        (
+            "MODO PASSIVO ACTIVADO — RESPOSTA IMEDIATA OBRIGATÓRIA.\n"
+            "A mãe sinalizou next_action_hint='reply': o cliente fez uma pergunta de catálogo/oferta/serviços.\n"
+            "INSTRUÇÃO CRÍTICA: coloca TODA a resposta em message_text. NÃO perguntes nada neste turno.\n"
+            "should_ask=false. question_text DEVE ficar vazio (\"\").\n"
+            "Responde à pergunta do cliente usando offer_description e custom_instructions.\n"
+            "A qualificação continua nos próximos turnos — NÃO neste.\n\n"
+        )
+        if _passive_reply_now
         else (
-            (
-                "MODO PASSIVO ACTIVADO — RESPOSTA IMEDIATA OBRIGATÓRIA.\n"
-                "A mãe sinalizou next_action_hint='reply': o cliente fez uma pergunta de catálogo/oferta/serviços.\n"
-                "INSTRUÇÃO CRÍTICA: coloca TODA a resposta em message_text. NÃO perguntes nada neste turno.\n"
-                "should_ask=false. question_text DEVE ficar vazio (\"\").\n"
-                "Responde à pergunta do cliente usando offer_description e custom_instructions.\n"
-                "A qualificação continua nos próximos turnos — NÃO neste.\n\n"
-            )
-            if _passive_reply_now
-            else (
-                "MODO PASSIVO ACTIVADO — ZERO PERGUNTAS ABERTAS.\n"
-                "PRIORIDADE ABSOLUTA: se a mensagem do cliente for uma pergunta directa (sobre serviços,\n"
-                "preços, localização, horários, funcionamento, catálogo, etc.), RESPONDE-A PRIMEIRO\n"
-                "usando offer_description e custom_instructions.\n"
-                "NÃO faças perguntas de qualificação. Infere os campos silenciosamente da conversa.\n"
-                "should_ask=false na esmagadora maioria dos casos.\n"
-                "NUNCA ignores uma pergunta directa para fazer uma pergunta de qualificação.\n\n"
-                if response_style == "passive"
-                else ""
-            )
+            "MODO PASSIVO ACTIVADO — ZERO PERGUNTAS ABERTAS.\n"
+            "PRIORIDADE ABSOLUTA: se a mensagem do cliente for uma pergunta directa (sobre serviços,\n"
+            "preços, localização, horários, funcionamento, catálogo, etc.), RESPONDE-A PRIMEIRO\n"
+            "usando offer_description e custom_instructions.\n"
+            "NÃO faças perguntas de qualificação. Infere os campos silenciosamente da conversa.\n"
+            "should_ask=false na esmagadora maioria dos casos.\n"
+            "NUNCA ignores uma pergunta directa para fazer uma pergunta de qualificação.\n\n"
+            if response_style == "passive"
+            else ""
         )
     )
 
@@ -1684,11 +1729,11 @@ def _build_child_prompt_qualification(
         f"Este é o PRIMEIRO contacto do lead. Use o texto abaixo como BASE da tua resposta.\n"
         f"Adapte ao WhatsApp e ao tom de voz, mas preserve a essência:\n"
         f"{origin_opener}\n\n"
-        if (is_first_contact and origin_opener.strip() and not _greeting_now)
+        if (is_first_contact and origin_opener.strip())
         else ""
     )
 
-    _qual_prompt = f"""{_first_contact_opener_header}{_greeting_header}{_passive_header}{_build_daughter_identity_block(context, "qualification")}
+    _qual_prompt = f"""{_first_contact_opener_header}{_passive_header}{_build_daughter_identity_block(context, "qualification")}
 {_build_agent_role_block(agent_mode_normalized, "qualification", ai_profile)}
 PAPEL: Coletar campos de qualificação do lead, um por vez, através de perguntas naturais e contextuais.
 ESCOPO: {_escopo_line}{_media_intro_note}
@@ -2853,7 +2898,7 @@ def _enforce_qualification_route_when_missing(
     missing_fields = list(mode_contract.get("missing_fields") or [])
     if not missing_fields:
         return mother_decision
-    if mother_decision.route_to == "qualification":
+    if mother_decision.route_to in ("qualification", "recepcao"):
         return mother_decision
     mother_decision.route_to = "qualification"
     reason = str(mother_decision.reason or "").strip()
@@ -3314,11 +3359,10 @@ def compose_decision_output(
     # (next_action_hint='reply'). Isso evita que a tabela de preços apareça em cada turno.
     _km_history = context.get("history") or []
     _km_outbound_count = sum(1 for h in _km_history if str(h.get("model") or "").lower() == "outbound")
-    _km_is_greeting = (mother_decision.next_action_hint or "").strip().lower() == "greet"
     _km_explicit_request = (mother_decision.next_action_hint or "").strip().lower() == "reply"
-    # Primeira resposta do bot → pode enviar. Respostas seguintes → só se lead pediu explicitamente.
+    # Recepcao nunca envia mídia. Respostas subsequentes → só se lead pediu explicitamente.
     _km_already_sent = _km_outbound_count >= 1
-    _suppress_km = _km_is_greeting or (_km_already_sent and not _km_explicit_request)
+    _suppress_km = (effective_route_to == "recepcao") or (_km_already_sent and not _km_explicit_request)
 
     _should_send_knowledge_media = (
         not _suppress_km
@@ -3657,7 +3701,10 @@ def decide(context: Dict[str, Any], logger: Optional[logging.Logger] = None) -> 
         if _prompt_variant not in ("v1", "v2"):
             _prompt_variant = "v1"
 
-        if route_for_child == "qualification":
+        if route_for_child == "recepcao":
+            child_prompt = _build_child_prompt_recepcao(context, message_text, mother_decision)
+            _prompt_function_used = "_build_child_prompt_recepcao"
+        elif route_for_child == "qualification":
             child_prompt = _build_child_prompt_qualification(context, message_text, mother_decision)
             _prompt_function_used = "_build_child_prompt_qualification"
         elif route_for_child == "apresentation":

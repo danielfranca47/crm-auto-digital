@@ -6,7 +6,7 @@ from pydantic import BaseModel, Field
 
 
 class MotherDecision(BaseModel):
-    route_to: Literal["qualification", "apresentation", "pre-agendamento", "agendamento", "follow-up", "closing"]
+    route_to: Literal["qualification", "apresentation", "pre-agendamento", "agendamento", "follow-up", "closing", "recepcao"]
     perceived_category: Optional[Literal["qualification", "apresentation", "pre-agendamento", "agendamento", "follow-up", "closing"]] = None
     confidence: float = Field(ge=0.0, le=1.0)
     reason: str
@@ -14,6 +14,7 @@ class MotherDecision(BaseModel):
     signals: Optional[dict] = None
     objective: Optional[str] = None
     next_action_hint: Optional[Literal["reply", "ask_qualification", "handoff", "ignore", "greet"]] = None
+    compound_follow_through: Optional[Literal["qualification", "apresentation", "pre-agendamento", "agendamento", "follow-up", "closing"]] = None
 
 
 class ChildResult(BaseModel):
