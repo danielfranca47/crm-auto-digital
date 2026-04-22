@@ -1694,24 +1694,12 @@ def _build_child_prompt_qualification(
     _mother_hint = (mother_decision.next_action_hint or "").strip().lower()
     _passive_reply_now = response_style == "passive" and _mother_hint == "reply"
 
-    # Nota de mídia: quando o usuário configurou mídia no knowledge, instrui o LLM a escrever
-    # apenas um texto curto de introdução, pois as imagens serão enviadas automaticamente após.
-    _has_knowledge_media = bool(context.get("knowledge_media"))
-    _qual_outbound_count = sum(1 for h in history if str(h.get("model") or "").lower() == "outbound")
-    _media_already_sent = _qual_outbound_count >= 1
-    _media_intro_note = (
-        "\nMÍDIA DISPONÍVEL: Imagens/arquivos serão enviados automaticamente após esta mensagem.\n"
-        "Escreva APENAS uma frase curta de introdução (ex.: 'Aqui estão as informações:', "
-        "'Veja os detalhes abaixo:'). NÃO descreva o conteúdo da mídia no texto — a mídia tem prioridade.\n"
-        if (_has_knowledge_media and not _media_already_sent)
-        else ""
-    )
+    _media_intro_note = ""  # qualificação nunca envia knowledge_media
 
     # ESCOPO e RECUSAS condicionais ao response_style.
     # O bloco passivo aparece ANTES do PAPEL para ter precedência sobre qualquer instrução posterior.
     _escopo_line = (
-        "Responder perguntas directas do cliente PRIMEIRO, usando offer_description e custom_instructions. "
-        "Pode apresentar serviços e valores quando perguntado. "
+        "Responder perguntas directas do cliente PRIMEIRO, usando custom_instructions. "
         "Se a mensagem do lead for uma saudação social (boa tarde, oi, olá, tudo bem, bom dia, etc.), "
         "responde à saudação de forma calorosa. "
         "NÃO agenda reunião nesta fase. "
@@ -1723,7 +1711,7 @@ def _build_child_prompt_qualification(
         if response_style == "passive"
         else (
             "Responde SEMPRE à mensagem do cliente antes de qualificar. Se o cliente fez uma pergunta, "
-            "responde usando offer_description e custom_instructions. "
+            "responde usando custom_instructions. "
             "Se a mensagem do lead for uma saudação social (boa tarde, oi, olá, tudo bem, bom dia, etc.), "
             "responde à saudação de forma calorosa antes de qualificar. "
             "Depois, se houver campos obrigatórios em falta, adicione UMA única pergunta de qualificação natural ao final. "
@@ -1732,30 +1720,31 @@ def _build_child_prompt_qualification(
     )
     _recusas_line = (
         "Nunca invente informação. Nunca agende reunião nesta fase. "
-        "Se a resposta não estiver em offer_description ou custom_instructions, diz que vais verificar (→ handoff). "
+        "Se a resposta não estiver em custom_instructions, diz que vais verificar (→ handoff). "
         "Em modo passivo: NUNCA faças perguntas para coletar dados — infere silenciosamente da conversa."
         if response_style == "passive"
         else (
             "Nunca invente informação. Nunca agende reunião nesta fase. "
-            "Pode apresentar serviços e valores quando perguntado usando offer_description. "
             "Se não souber responder, diz que vais verificar (→ handoff)."
         )
     )
     _passive_header = (
         (
             "MODO PASSIVO ACTIVADO — RESPOSTA IMEDIATA OBRIGATÓRIA.\n"
-            "A mãe sinalizou next_action_hint='reply': o cliente fez uma pergunta de catálogo/oferta/serviços.\n"
+            "A mãe sinalizou next_action_hint='reply': o cliente fez uma pergunta directa.\n"
             "INSTRUÇÃO CRÍTICA: coloca TODA a resposta em message_text. NÃO perguntes nada neste turno.\n"
             "should_ask=false. question_text DEVE ficar vazio (\"\").\n"
-            "Responde à pergunta do cliente usando offer_description e custom_instructions.\n"
+            "Responde à pergunta do cliente usando apenas custom_instructions. "
+            "NÃO menciones preços, tabelas de valores, promoções ou oferta comercial — "
+            "essas informações são exclusivas da fase de apresentação.\n"
             "A qualificação continua nos próximos turnos — NÃO neste.\n\n"
         )
         if _passive_reply_now
         else (
             "MODO PASSIVO ACTIVADO — ZERO PERGUNTAS ABERTAS.\n"
-            "PRIORIDADE ABSOLUTA: se a mensagem do cliente for uma pergunta directa (sobre serviços,\n"
-            "preços, localização, horários, funcionamento, catálogo, etc.), RESPONDE-A PRIMEIRO\n"
-            "usando offer_description e custom_instructions.\n"
+            "PRIORIDADE ABSOLUTA: se a mensagem do cliente for uma pergunta directa (sobre\n"
+            "localização, horários, funcionamento, etc.), RESPONDE-A PRIMEIRO usando custom_instructions.\n"
+            "Para perguntas sobre preços ou oferta: informa que essas informações serão apresentadas em breve.\n"
             "NÃO faças perguntas de qualificação. Infere os campos silenciosamente da conversa.\n"
             "should_ask=false na esmagadora maioria dos casos.\n"
             "NUNCA ignores uma pergunta directa para fazer uma pergunta de qualificação.\n\n"
@@ -3421,21 +3410,13 @@ def compose_decision_output(
     _km_history = context.get("history") or []
     _km_outbound_count = sum(1 for h in _km_history if str(h.get("model") or "").lower() == "outbound")
     _km_explicit_request = (mother_decision.next_action_hint or "").strip().lower() == "reply"
-    # Recepcao nunca envia mídia. Respostas subsequentes → só se lead pediu explicitamente.
+    # Recepcao e qualification nunca enviam mídia. Respostas subsequentes → só se lead pediu explicitamente.
     _km_already_sent = _km_outbound_count >= 1
-    _suppress_km = (effective_route_to == "recepcao") or (_km_already_sent and not _km_explicit_request)
+    _suppress_km = (effective_route_to in ("recepcao", "qualification")) or (_km_already_sent and not _km_explicit_request)
 
     _should_send_knowledge_media = (
         not _suppress_km
-        and (
-            effective_route_to == "apresentation"
-            or (
-                effective_route_to == "qualification"
-                and getattr(mother_decision, "next_action_hint", None) == "reply"
-            )
-            or _passive_reply_override   # resposta directa a pergunta de catálogo/serviços
-            or _passive_question_override  # P10: resposta passiva integrada com pergunta
-        )
+        and effective_route_to == "apresentation"
     )
     if _should_send_knowledge_media and not decision.pre_send_media:
         knowledge_media = context.get("knowledge_media") or {}
