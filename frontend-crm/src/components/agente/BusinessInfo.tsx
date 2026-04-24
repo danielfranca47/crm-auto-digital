@@ -412,6 +412,7 @@ export function BusinessInfo() {
         }
       }
       setSavedAt(new Date());
+      setTimeout(() => setSavedAt(null), 4000);
     } catch {
       setSaveError('Erro ao salvar. Tente novamente.');
     } finally {
@@ -580,31 +581,34 @@ export function BusinessInfo() {
         )}
       </div>
 
-      {/* BOTÃO DE SALVAR */}
-      <div style={{ marginTop: 8, marginBottom: 24, display: 'flex', alignItems: 'center', gap: 12 }}>
-        <button
-          onClick={handleSaveAll}
-          disabled={!isDirty || saving}
-          style={{
-            padding: '8px 20px', borderRadius: 4, fontSize: 13, fontWeight: 500,
-            background: isDirty ? 'var(--o-active)' : 'var(--o-b1)',
-            color: isDirty ? '#000' : 'var(--o-dim)',
-            border: 'none', cursor: isDirty ? 'pointer' : 'default',
-            transition: 'background 0.2s, color 0.2s',
-            opacity: saving ? 0.7 : 1,
-          }}
-        >
-          {saving ? 'Salvando...' : 'Salvar informações'}
-        </button>
-        {savedAt && !isDirty && (
-          <span style={{ fontSize: 11, color: 'var(--o-green)' }}>
-            ✓ Salvo às {savedAt.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
-          </span>
-        )}
-        {saveError && (
-          <span style={{ fontSize: 11, color: 'var(--o-hot)' }}>{saveError}</span>
-        )}
-      </div>
+      {/* BOTÃO DE SALVAR — só aparece quando há alterações pendentes ou feedback */}
+      {(isDirty || saving || savedAt || saveError) && (
+        <div style={{ marginTop: 8, marginBottom: 24, display: 'flex', alignItems: 'center', gap: 12 }}>
+          {(isDirty || saving) && (
+            <button
+              onClick={handleSaveAll}
+              disabled={saving}
+              style={{
+                padding: '8px 20px', borderRadius: 4, fontSize: 13, fontWeight: 500,
+                background: 'var(--o-active)',
+                color: '#000',
+                border: 'none', cursor: saving ? 'default' : 'pointer',
+                opacity: saving ? 0.7 : 1,
+              }}
+            >
+              {saving ? 'Salvando...' : 'Salvar informações'}
+            </button>
+          )}
+          {savedAt && !isDirty && (
+            <span style={{ fontSize: 11, color: 'var(--o-green)' }}>
+              ✓ Salvo às {savedAt.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+            </span>
+          )}
+          {saveError && (
+            <span style={{ fontSize: 11, color: 'var(--o-hot)' }}>{saveError}</span>
+          )}
+        </div>
+      )}
 
       {showAddModal && (
         <AddCustomModal
