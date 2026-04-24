@@ -958,3 +958,114 @@ Teste recomendado: playground com lead em qualificação, mensagem "quanto custa
 >
 > _Trace: mother_route=qualification, effective=qualification, confidence=70%, guardrails=[guardrail_reason]_
 
+
+## Plano de solução:
+Plano: Fix qualificação + Redesign BusinessInfo
+Contexto
+Dois problemas independentes a resolver após os ajustes da etapa 8-5:
+
+Bug "confirmar preços" na qualificação — O agente diz "preciso confirmar os preços das massagens" ao ser perguntado sobre horários. A causa raiz: o campo qualification_required_fields: ["custom_precos_de_massagens"] está configurado no AI profile (dado legado). Em apply_mode_overrides, esse campo é injetado como must_collect, e o LLM interpreta a chave custom_precos_de_massagens como "precisa confirmar preços".
+
+BusinessInfo UX ruim — A UI atual é uma lista flat de campos com textarea genérica. O usuário quer UI estruturada com campos específicos (dias/horários, endereço, telefone, email, site) e campos personalizados livres. Além disso, o business_info já é carregado no ContextBundle (via _load_business_info no orchestrator), mas nunca é consumido pelo decision_engine.py — as filhas não têm acesso a essas informações.
+
+Task 1 — Fix bug qualificação (1 arquivo, mudança cirúrgica)
+Causa: apply_mode_overrides em orchestrator.py injeta qualification_required_fields como must_collect mesmo quando qualification_fields (novo formato rico do knowledge base) já está definido.
+
+Fix: Em apply_mode_overrides (linhas 202-207 de backend-crm/services/ai_orchestrator/orchestrator.py), pular a injeção de qualification_required_fields quando qualification_fields já estiver presente e não vazio.
+
+# Antes (linha 203-205):
+profile_fields = (ai_profile or {}).get("qualification_required_fields")
+if isinstance(profile_fields, list) and len(profile_fields) > 0:
+    merged.update({"must_collect": profile_fields})
+
+# Depois:
+new_format = (ai_profile or {}).get("qualification_fields")
+has_new_format = isinstance(new_format, list) and len(new_format) > 0
+if not has_new_format:
+    profile_fields = (ai_profile or {}).get("qualification_required_fields")
+    if isinstance(profile_fields, list) and len(profile_fields) > 0:
+        merged.update({"must_collect": profile_fields})
+Arquivo: backend-crm/services/ai_orchestrator/orchestrator.py
+
+Task 2 — BusinessInfo: prompt injection + UX redesign
+2a. Formatação de horário no _load_business_info
+O campo horario passará a armazenar JSON estruturado (lista de dias). O _load_business_info precisa detectar JSON e formatar legível para o prompt.
+
+Arquivo: backend-crm/services/ai_orchestrator/orchestrator.py — função _load_business_info (linha 496)
+
+Lógica: ao processar cada linha, tentar json.loads(value). Se for lista, converter em texto:
+
+Dias abertos consecutivos agrupados: "Seg-Sex: 9h-18h"
+Dias fechados: omitir ou marcar "Fechado"
+Exemplo saída: "• Horário de funcionamento: Seg-Sex 9h-18h | Sáb 9h-13h | Dom Fechado"
+2b. Injeção no decision_engine (executor)
+Criar _build_business_info_block(context) em backend-executors/app/services/decision_engine.py:
+
+def _build_business_info_block(context: Dict[str, Any]) -> str:
+    biz = (context.get("knowledge_items") or {}).get("business_info", "").strip()
+    if not biz:
+        return ""
+    return f"\nINFORMAÇÕES DO NEGÓCIO (disponíveis em qualquer fase):\n{biz}\n"
+Injetar em todas as filhas ao lado de _build_custom_instructions_block:
+
+_build_child_prompt_qualification (linha 1835)
+_build_child_prompt_apresentation (linha 2286)
+_build_child_prompt_recepcao (linha 1492+)
+_build_child_prompt_pre_agendamento (linha ~2406)
+_build_child_prompt_closing (linha ~2549)
+_build_child_prompt_pos_atendimento (linha ~2664)
+_build_child_prompt_followup (linha ~2784)
+Arquivo: backend-executors/app/services/decision_engine.py
+
+2c. Frontend redesign (BusinessInfo.tsx)
+Redesenhar o componente com 4 seções visuais (cards com header de seção):
+
+CONTATO
+
+Telefone — <input type="tel">
+E-mail — <input type="email">
+Website — <input type="url">
+WhatsApp — <input type="tel">
+LOCALIZAÇÃO
+
+Endereço — <textarea rows=2>
+HORÁRIO DE FUNCIONAMENTO
+
+Tabela de 7 dias (Seg-Dom) com:
+Toggle checkbox por dia (Aberto / Fechado)
+Se aberto: dois <input type="time"> (abertura e fechamento)
+Salva como JSON string: [{"day":"seg","label":"Segunda","open":"09:00","close":"18:00","closed":false}, ...]
+Preview gerado abaixo: "Seg-Sex: 9h-18h · Sáb: 9h-13h · Dom: Fechado"
+REDES SOCIAIS (colapsável, opcional)
+
+Instagram, Facebook, YouTube — inputs de texto
+CAMPOS PERSONALIZADOS — lista + botão "Adicionar campo" (comportamento atual mantido)
+
+Arquivo: frontend-crm/src/components/agente/BusinessInfo.tsx — reescrita completa
+
+Arquivos a modificar
+Arquivo	Mudança
+backend-crm/services/ai_orchestrator/orchestrator.py	Fix apply_mode_overrides + parse JSON em _load_business_info
+backend-executors/app/services/decision_engine.py	Adicionar _build_business_info_block + injetar em todas as filhas
+frontend-crm/src/components/agente/BusinessInfo.tsx	Reescrita completa com seções estruturadas
+Verificação
+Bug fix: Playground com perfil agenda + qualification_required_fields preenchido + qualification_fields configurado → agente deve fazer apenas a pergunta do knowledge base, sem mencionar preços
+Horário no prompt: Preencher horário estruturado no BusinessInfo → trace do playground deve mostrar knowledge_items.business_info com texto legível
+Filha recebe info: No prompt trace, verificar que o bloco "INFORMAÇÕES DO NEGÓCIO" aparece na filha de qualificação
+UX: Abrir AiProfile > BusinessInfo → ver seções Contato / Localização / Horário (com selector de dias/horas) / Social / Personalizados
+
+Tudo commitado. Resumo do que foi implementado:
+
+Bug fix — "confirmar preços" na qualificação
+
+orchestrator.py: quando qualification_fields (knowledge base) está configurado, o qualification_required_fields legado é ignorado completamente. O campo custom_precos_de_massagens não entra mais como must_collect.
+
+Business Info — injeção no prompt
+
+orchestrator.py: _load_business_info agora interpreta o JSON do horário e formata como "Seg: 9h-18h · Sáb: 9h-13h · Dom: Fechado" antes de injetar no contexto.
+
+decision_engine.py: nova função _build_business_info_block que injeta o bloco INFORMAÇÕES DO NEGÓCIO em todas as filhas (qualificação, apresentação, follow-up, closing, pré-agendamento, agendamento).
+
+BusinessInfo UX redesign
+
+BusinessInfo.tsx: redesenhado com 4 seções — Contato (telefone, e-mail, website, whatsapp), Localização (endereço), Horário (selector dia-a-dia com checkbox + inputs time), Redes Sociais (colapsável), Campos Personalizados. Campo email também adicionado aos defaults do banco.
