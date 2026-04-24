@@ -92,6 +92,7 @@ class ChildResult(BaseModel):
     kanban_highlight: Optional[str] = None
     confidence: float = 0.0
     signals_structured: Optional[Dict[str, Any]] = None
+    media_keys_to_send: Optional[List[str]] = None
 
 
 class QualificationStateSnapshot(BaseModel):

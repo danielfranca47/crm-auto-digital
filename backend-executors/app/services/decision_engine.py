@@ -2190,6 +2190,54 @@ def _build_child_prompt_apresentation(
             f"extracted_fields disponíveis: {json.dumps(_extracted_fields_apres, ensure_ascii=False)}\n"
         )
 
+    # Bloco de seleção contextual de mídias — a filha declara explicitamente quais
+    # mídias do knowledge devem ser anexadas neste turno. O decision_engine usa essa
+    # lista para filtrar o envio (substitui a anexação determinística que enviava tudo).
+    _CATEGORY_LABELS_APRES = {
+        "service_pricing_table": "Tabela de preços e serviços",
+        "commercial_objections": "Respostas a objeções comerciais",
+        "payment_policy": "Política de pagamento",
+        "service_differentials": "Diferenciais do serviço",
+        "active_promotion": "Condição/promoção vigente",
+        "pre_commitment_faq": "FAQ pré-compromisso",
+        "social_proof": "Prova social",
+        "pitch_script": "Script de pitch",
+        "product_details": "Detalhes do produto/serviço",
+        "service_faq": "FAQ do serviço",
+        "guarantee_policy": "Política de garantia",
+    }
+    _media_catalog_lines = []
+    for _cat, _entries in (context.get("knowledge_media") or {}).items():
+        _n = len(_entries) if isinstance(_entries, list) else 1
+        _label = _CATEGORY_LABELS_APRES.get(_cat, _cat)
+        _media_catalog_lines.append(
+            f"  - {_cat}: {_label} ({_n} {'mídia' if _n == 1 else 'mídias'})"
+        )
+    _media_selection_block = (
+        "\nSELEÇÃO CONTEXTUAL DE MÍDIA (campo media_keys_to_send do JSON):\n"
+        "O sistema enviará automaticamente APENAS as mídias cujas chaves você listar em media_keys_to_send.\n"
+        "MÍDIAS DISPONÍVEIS:\n"
+        + "\n".join(_media_catalog_lines) + "\n"
+        "REGRA CRÍTICA — mídia NUNCA é enviada proativamente:\n"
+        "- Default: media_keys_to_send=[]. Em dúvida, deixe vazio.\n"
+        "- Inclua service_pricing_table APENAS se o lead pediu explicitamente preços, valores, "
+        "tabela, pacotes, condições ou informações diretas sobre o serviço "
+        "(ex.: 'quanto custa?', 'quais os pacotes?', 'me manda a tabela').\n"
+        "- NÃO envie service_pricing_table no primeiro turno pós-qualificação se o lead não pediu — "
+        "apresente em texto via o bloco COMERCIAL do prompt, não por anexo.\n"
+        "- NÃO envie nenhuma mídia quando o lead só cumprimentou, perguntou horário/dia, "
+        "endereço/localização, formas de pagamento (texto), ou pediu contato humano.\n"
+        "- Inclua payment_policy APENAS se o lead perguntou sobre pagamento/forma de pagar.\n"
+        "- Inclua commercial_objections APENAS se o lead levantou objeção explícita "
+        "(preço alto, já tem fornecedor, desconfiança, etc.).\n"
+        "- Inclua service_differentials / active_promotion / guarantee_policy / service_faq / "
+        "product_details / pitch_script / social_proof APENAS quando o lead fizer pergunta "
+        "diretamente coberta pela categoria.\n"
+        "- Para categorias custom (não listadas acima): mesma regra — só se o conteúdo for diretamente "
+        "relevante ao que o lead pediu no turno atual.\n"
+        "- Se media_already_sent=true e o lead NÃO está repetindo o pedido do conteúdo, mantenha [].\n"
+    ) if _media_catalog_lines else ""
+
     _apres_prompt = (
         _greeting_apres_header
         + _apres_first_contact_opener
@@ -2212,6 +2260,7 @@ def _build_child_prompt_apresentation(
         '  "kanban_highlight": null,\n'
         '  "signals": ["..."],\n'
         '  "signals_structured": {"missing_fields": ["..."], "handoff_requested": false, "meeting_proposed": false, "meeting_datetime_candidate": null} (opcional),\n'
+        '  "media_keys_to_send": ["..."],\n'
         '  "confidence": 0.0\n'
         "}\n"
         "Regras:\n"
@@ -2260,6 +2309,7 @@ def _build_child_prompt_apresentation(
         "8. NUNCA mencione \"veja a imagem\" ou \"veja o vídeo\" — a mídia é enviada automaticamente pelo sistema.\n"
         "9. NUNCA envie link de checkout E peça permissão no mesmo turno.\n"
         "10. NUNCA cite preço diferente do que está em offer_pack.\n"
+        + _media_selection_block
         + _ESCAPE_HATCH_BLOCK
         + _build_validation_block(playbook_summary.get("max_chars"))
         + "\n"
@@ -2289,6 +2339,7 @@ def _build_child_prompt_apresentation(
         f"- offer_pack_summary: {json.dumps(offer_pack_summary, ensure_ascii=False)}\n"
         f"- warming_stage_active: {bool(warming_injection)}\n"
         f"- commercial_mode_active: {bool(commercial_injection)}\n"
+        f"- media_already_sent: {bool(_apres_media_already_sent)}\n"
         f"- extracted_fields: {json.dumps(mode_contract.get('extracted_fields') or {}, ensure_ascii=False)}\n"
         f"- inbound_message_text: {message_text}\n"
         + _build_custom_instructions_block(ai_profile)
@@ -3377,6 +3428,7 @@ def compose_decision_output(
             "anti_loop_rule3_applied": anti_loop_rule3_applied,
             "child_signals_structured": child_signals_structured,
             "child_recommended_next_category": child_result.recommended_next_category,
+            "child_media_keys_to_send": child_result.media_keys_to_send,
             "mother_signals": {
                 "meeting_scheduled": meeting_scheduled,
                 "intent_level": ((mother_decision.signals or {}).get("intent_level") if isinstance(mother_decision.signals, dict) else None),
@@ -3411,31 +3463,20 @@ def compose_decision_output(
                     "media_type": str(raw_op.get("media_type") or "image").strip(),
                 }]
 
-    # Mídia de knowledge — filtra por idioma do lead e devolve lista ordenada.
-    # Injeta em apresentation OU quando o agente está a responder directamente ao lead
-    # (Fix P7 activo = qualificação passiva com reply, ou greeting com resposta).
-    # Usa TODAS as categorias disponíveis no knowledge_media (não apenas categorias hardcoded),
-    # para respeitar qualquer nome de categoria que o usuário tenha configurado.
-
-    # Deduplicação: nunca enviar knowledge_media em saudações (greeting) nem repetir
-    # nas respostas subsequentes. Só reenviar se o lead fizer pergunta explícita de catálogo
-    # (next_action_hint='reply'). Isso evita que a tabela de preços apareça em cada turno.
-    _km_history = context.get("history") or []
-    _km_outbound_count = sum(1 for h in _km_history if str(h.get("model") or "").lower() == "outbound")
-    _km_explicit_request = (mother_decision.next_action_hint or "").strip().lower() == "reply"
-    # Recepcao e qualification nunca enviam mídia. Respostas subsequentes → só se lead pediu explicitamente.
-    _km_already_sent = _km_outbound_count >= 1
-    _suppress_km = (effective_route_to in ("recepcao", "qualification")) or (_km_already_sent and not _km_explicit_request)
-
-    _should_send_knowledge_media = (
-        not _suppress_km
-        and effective_route_to == "apresentation"
-    )
+    # Mídia de knowledge — anexação contextual guiada pela LLM filha.
+    # A filha declara em child_result.media_keys_to_send quais categorias são
+    # relevantes ao turno atual. Fallback estrito: se o campo vier None/vazio,
+    # NÃO anexa nada — evita o bug histórico de enviar todas as mídias sempre
+    # que effective_route_to=="apresentation".
+    _should_send_knowledge_media = (effective_route_to == "apresentation")
     if _should_send_knowledge_media and not decision.pre_send_media:
         knowledge_media = context.get("knowledge_media") or {}
         lead_lang = str(context.get("lead_detected_language") or "all").lower()
+        selected_keys = set(child_result.media_keys_to_send or [])
         _all_km_media: list[dict] = []
         for _cat, entries in knowledge_media.items():
+            if _cat not in selected_keys:
+                continue
             # Compatibilidade: se for string (formato legado), converter para lista
             if isinstance(entries, str):
                 entries = [{"media_url": entries, "media_type": "image", "language": "all", "send_order": 0}]

@@ -53,6 +53,8 @@ whatsapp_worker
 | `outcome` | `won\|lost\|null` | Outcome se aplicável |
 | `kanban_highlight` | `green\|orange\|null` | Destaque visual no Kanban |
 | `signals` | list[string] | Sinais detectados |
+| `signals_structured` | dict\|null | Sinais estruturados (meeting_proposed, checkout_sent, etc.) |
+| `media_keys_to_send` | list[string]\|null | Chaves de `knowledge_media` cujas mídias a filha decidiu anexar neste turno. Só populado na filha de apresentação. Fallback estrito: `null`/`[]` → nenhuma mídia anexada. |
 | `confidence` | 0..1 | Confiança da resposta |
 
 ### DecisionOutput (saída final do executor)
@@ -72,6 +74,7 @@ Combinação de MotherDecision + ChildResult + guardrails, enviado ao CRM via `c
 - Instrução: lidar com agendamento (pedir dia/horário, confirmar, reagendar, enviar link)
 - SDR: confirma horário e indica envio de link
 - Closer: mantém postura comercial ao tratar agendamento
+- **Seleção contextual de mídia** (`media_keys_to_send`): o prompt lista as categorias de `knowledge_media` disponíveis e a filha declara quais devem ser anexadas neste turno. Regra: mídia só entra quando o lead pediu explicitamente (preço, pagamento, objeção, etc.). O `decision_engine` usa essa lista para filtrar as mídias enviadas — fallback estrito: se a filha omitir o campo, nenhuma mídia é anexada.
 
 ### Filha Follow-up (`_build_child_followup_prompt`)
 - Monta `followup_summary` com `followup_goal`, `outcome`, `operator_note`, `meeting_happened`, `proposal_sent`
