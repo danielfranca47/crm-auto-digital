@@ -123,9 +123,11 @@ function SimpleField({
 function HoursEditor({
   value,
   onSave,
+  onChange,
 }: {
   value: string;
   onSave: (v: string) => Promise<void>;
+  onChange?: (v: string) => void;
 }) {
   const [days, setDays] = useState<HoursDay[]>(() => {
     try {
@@ -144,9 +146,10 @@ function HoursEditor({
   }, [value]);
 
   const save = useCallback(async (updated: HoursDay[]) => {
+    onChange?.(JSON.stringify(updated));
     setSaving(true);
     try { await onSave(JSON.stringify(updated)); } finally { setSaving(false); }
-  }, [onSave]);
+  }, [onSave, onChange]);
 
   function toggle(idx: number) {
     const next = days.map((d, i) => i === idx ? { ...d, closed: !d.closed } : d);
@@ -354,7 +357,7 @@ function AddCustomModal({ onClose, onAdd }: { onClose: () => void; onAdd: (label
 // ─── Componente principal ─────────────────────────────────────
 const DEFAULT_KEYS = new Set(['horario', 'telefone', 'email', 'website', 'endereco', 'instagram', 'facebook', 'youtube', 'whatsapp']);
 
-const SIMPLE_KEYS = ['telefone', 'email', 'website', 'whatsapp', 'endereco', 'instagram', 'facebook', 'youtube'] as const;
+const SIMPLE_KEYS = ['telefone', 'email', 'website', 'whatsapp', 'endereco', 'instagram', 'facebook', 'youtube', 'horario'] as const;
 
 export function BusinessInfo() {
   const [fields, setFields] = useState<BusinessInfoField[]>([]);
@@ -364,7 +367,7 @@ export function BusinessInfo() {
   const [saveError, setSaveError] = useState<string | null>(null);
   const [drafts, setDrafts] = useState<Record<string, string>>({});
   const [showAddModal, setShowAddModal] = useState(false);
-  const [showSocial, setShowSocial] = useState(false);
+  const [showSocial, setShowSocial] = useState(true);
 
   useEffect(() => {
     api.crm.getBusinessInfo()
@@ -512,38 +515,13 @@ export function BusinessInfo() {
         />
       </div>
 
-      {/* BOTÃO DE SALVAR (contato + localização) */}
-      <div style={{ marginBottom: 24, display: 'flex', alignItems: 'center', gap: 12 }}>
-        <button
-          onClick={handleSaveAll}
-          disabled={!isDirty || saving}
-          style={{
-            padding: '8px 20px', borderRadius: 4, fontSize: 13, fontWeight: 500,
-            background: isDirty ? 'var(--o-active)' : 'var(--o-b1)',
-            color: isDirty ? '#000' : 'var(--o-dim)',
-            border: 'none', cursor: isDirty ? 'pointer' : 'default',
-            transition: 'background 0.2s, color 0.2s',
-            opacity: saving ? 0.7 : 1,
-          }}
-        >
-          {saving ? 'Salvando...' : 'Salvar informações'}
-        </button>
-        {savedAt && !isDirty && (
-          <span style={{ fontSize: 11, color: 'var(--o-green)' }}>
-            ✓ Salvo às {savedAt.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
-          </span>
-        )}
-        {saveError && (
-          <span style={{ fontSize: 11, color: 'var(--o-hot)' }}>{saveError}</span>
-        )}
-      </div>
-
       {/* HORÁRIO */}
       <div style={sectionStyle}>
         <div style={sectionHeaderStyle}>Horário de Funcionamento</div>
         <HoursEditor
           value={getField('horario')?.value ?? ''}
           onSave={handleSaveHorario}
+          onChange={val => setDraft('horario', val)}
         />
       </div>
 
@@ -599,6 +577,32 @@ export function BusinessInfo() {
               onDelete={handleDeleteCustom}
             />
           ))
+        )}
+      </div>
+
+      {/* BOTÃO DE SALVAR */}
+      <div style={{ marginTop: 8, marginBottom: 24, display: 'flex', alignItems: 'center', gap: 12 }}>
+        <button
+          onClick={handleSaveAll}
+          disabled={!isDirty || saving}
+          style={{
+            padding: '8px 20px', borderRadius: 4, fontSize: 13, fontWeight: 500,
+            background: isDirty ? 'var(--o-active)' : 'var(--o-b1)',
+            color: isDirty ? '#000' : 'var(--o-dim)',
+            border: 'none', cursor: isDirty ? 'pointer' : 'default',
+            transition: 'background 0.2s, color 0.2s',
+            opacity: saving ? 0.7 : 1,
+          }}
+        >
+          {saving ? 'Salvando...' : 'Salvar informações'}
+        </button>
+        {savedAt && !isDirty && (
+          <span style={{ fontSize: 11, color: 'var(--o-green)' }}>
+            ✓ Salvo às {savedAt.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+          </span>
+        )}
+        {saveError && (
+          <span style={{ fontSize: 11, color: 'var(--o-hot)' }}>{saveError}</span>
         )}
       </div>
 
