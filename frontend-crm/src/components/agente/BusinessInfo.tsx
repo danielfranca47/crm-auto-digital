@@ -79,41 +79,29 @@ const inputStyle: React.CSSProperties = {
   outline: 'none',
 };
 
-// ─── Campo simples com auto-save ──────────────────────────────
+// ─── Campo simples (controlado pelo pai) ─────────────────────
 function SimpleField({
   label,
   value,
   inputType = 'text',
   placeholder,
-  onSave,
+  onChange,
   multiline = false,
 }: {
   label: string;
   value: string;
   inputType?: string;
   placeholder?: string;
-  onSave: (v: string) => Promise<void>;
+  onChange: (v: string) => void;
   multiline?: boolean;
 }) {
-  const [draft, setDraft] = useState(value);
-  const [saving, setSaving] = useState(false);
-
-  useEffect(() => { setDraft(value); }, [value]);
-
-  async function commit() {
-    if (draft === value) return;
-    setSaving(true);
-    try { await onSave(draft.trim()); } finally { setSaving(false); }
-  }
-
   return (
     <div style={fieldRowStyle}>
       <span style={labelStyle}>{label}</span>
       {multiline ? (
         <textarea
-          value={draft}
-          onChange={e => setDraft(e.target.value)}
-          onBlur={commit}
+          value={value}
+          onChange={e => onChange(e.target.value)}
           placeholder={placeholder}
           rows={2}
           style={{ ...inputStyle, resize: 'vertical' as const, fontFamily: 'inherit' }}
@@ -121,15 +109,10 @@ function SimpleField({
       ) : (
         <input
           type={inputType}
-          value={draft}
-          onChange={e => setDraft(e.target.value)}
-          onBlur={commit}
-          onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); commit(); } }}
+          value={value}
+          onChange={e => onChange(e.target.value)}
           placeholder={placeholder}
-          style={{
-            ...inputStyle,
-            borderColor: saving ? 'var(--o-green)' : 'var(--o-border)',
-          }}
+          style={inputStyle}
         />
       )}
     </div>
@@ -371,15 +354,26 @@ function AddCustomModal({ onClose, onAdd }: { onClose: () => void; onAdd: (label
 // ─── Componente principal ─────────────────────────────────────
 const DEFAULT_KEYS = new Set(['horario', 'telefone', 'email', 'website', 'endereco', 'instagram', 'facebook', 'youtube', 'whatsapp']);
 
+const SIMPLE_KEYS = ['telefone', 'email', 'website', 'whatsapp', 'endereco', 'instagram', 'facebook', 'youtube'] as const;
+
 export function BusinessInfo() {
   const [fields, setFields] = useState<BusinessInfoField[]>([]);
   const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [savedAt, setSavedAt] = useState<Date | null>(null);
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const [drafts, setDrafts] = useState<Record<string, string>>({});
   const [showAddModal, setShowAddModal] = useState(false);
   const [showSocial, setShowSocial] = useState(false);
 
   useEffect(() => {
     api.crm.getBusinessInfo()
-      .then(setFields)
+      .then(data => {
+        setFields(data);
+        const initial: Record<string, string> = {};
+        for (const f of data) initial[f.field_key] = f.value ?? '';
+        setDrafts(initial);
+      })
       .catch(console.error)
       .finally(() => setLoading(false));
   }, []);
@@ -388,10 +382,44 @@ export function BusinessInfo() {
     return fields.find(f => f.field_key === key);
   }
 
-  async function handleSaveField(key: string, value: string) {
-    const f = getField(key);
+  function setDraft(key: string, val: string) {
+    setDrafts(prev => ({ ...prev, [key]: val }));
+    setSavedAt(null);
+    setSaveError(null);
+  }
+
+  const isDirty = SIMPLE_KEYS.some(key => {
+    const field = getField(key);
+    const serverVal = field?.value ?? '';
+    return (drafts[key] ?? '') !== serverVal;
+  });
+
+  async function handleSaveAll() {
+    setSaving(true);
+    setSaveError(null);
+    try {
+      for (const key of SIMPLE_KEYS) {
+        const f = getField(key);
+        if (!f) continue;
+        const draft = drafts[key] ?? '';
+        const serverVal = f.value ?? '';
+        if (draft !== serverVal) {
+          const updated = await api.crm.updateBusinessInfoField(f.id, { value: draft.trim() || null });
+          setFields(prev => prev.map(x => x.id === f.id ? updated : x));
+        }
+      }
+      setSavedAt(new Date());
+    } catch {
+      setSaveError('Erro ao salvar. Tente novamente.');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function handleSaveHorario(val: string) {
+    const f = getField('horario');
     if (!f) return;
-    const updated = await api.crm.updateBusinessInfoField(f.id, { value: value || null });
+    const updated = await api.crm.updateBusinessInfoField(f.id, { value: val || null });
     setFields(prev => prev.map(x => x.id === f.id ? updated : x));
   }
 
@@ -409,12 +437,13 @@ export function BusinessInfo() {
     const field_key = slugify(label);
     const created = await api.crm.createBusinessInfoField({ field_key, label, value: value || null });
     setFields(prev => [...prev, created]);
+    setDrafts(prev => ({ ...prev, [field_key]: value }));
   }
 
   const customFields = fields.filter(f => !DEFAULT_KEYS.has(f.field_key));
   const filledCount = fields.filter(f => f.enabled && f.value && f.value.trim() !== '').length;
 
-  const v = (key: string) => getField(key)?.value ?? '';
+  const d = (key: string) => drafts[key] ?? '';
 
   if (loading) {
     return <div style={{ padding: '20px 0', color: 'var(--o-sub)', fontSize: 13, textAlign: 'center' }}>Carregando...</div>;
@@ -443,31 +472,31 @@ export function BusinessInfo() {
         <div style={sectionHeaderStyle}>Contato</div>
         <SimpleField
           label="Telefone"
-          value={v('telefone')}
+          value={d('telefone')}
           inputType="tel"
           placeholder="+351 912 345 678"
-          onSave={val => handleSaveField('telefone', val)}
+          onChange={val => setDraft('telefone', val)}
         />
         <SimpleField
           label="E-mail"
-          value={v('email')}
+          value={d('email')}
           inputType="email"
           placeholder="contato@exemplo.com"
-          onSave={val => handleSaveField('email', val)}
+          onChange={val => setDraft('email', val)}
         />
         <SimpleField
           label="Website"
-          value={v('website')}
+          value={d('website')}
           inputType="url"
           placeholder="https://exemplo.com"
-          onSave={val => handleSaveField('website', val)}
+          onChange={val => setDraft('website', val)}
         />
         <SimpleField
           label="WhatsApp"
-          value={v('whatsapp')}
+          value={d('whatsapp')}
           inputType="tel"
           placeholder="+351 912 345 678"
-          onSave={val => handleSaveField('whatsapp', val)}
+          onChange={val => setDraft('whatsapp', val)}
         />
       </div>
 
@@ -476,19 +505,45 @@ export function BusinessInfo() {
         <div style={sectionHeaderStyle}>Localização</div>
         <SimpleField
           label="Endereço"
-          value={v('endereco')}
+          value={d('endereco')}
           placeholder="Rua Exemplo, 123 — Cidade"
-          onSave={val => handleSaveField('endereco', val)}
+          onChange={val => setDraft('endereco', val)}
           multiline
         />
+      </div>
+
+      {/* BOTÃO DE SALVAR (contato + localização) */}
+      <div style={{ marginBottom: 24, display: 'flex', alignItems: 'center', gap: 12 }}>
+        <button
+          onClick={handleSaveAll}
+          disabled={!isDirty || saving}
+          style={{
+            padding: '8px 20px', borderRadius: 4, fontSize: 13, fontWeight: 500,
+            background: isDirty ? 'var(--o-active)' : 'var(--o-b1)',
+            color: isDirty ? '#000' : 'var(--o-dim)',
+            border: 'none', cursor: isDirty ? 'pointer' : 'default',
+            transition: 'background 0.2s, color 0.2s',
+            opacity: saving ? 0.7 : 1,
+          }}
+        >
+          {saving ? 'Salvando...' : 'Salvar informações'}
+        </button>
+        {savedAt && !isDirty && (
+          <span style={{ fontSize: 11, color: 'var(--o-green)' }}>
+            ✓ Salvo às {savedAt.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+          </span>
+        )}
+        {saveError && (
+          <span style={{ fontSize: 11, color: 'var(--o-hot)' }}>{saveError}</span>
+        )}
       </div>
 
       {/* HORÁRIO */}
       <div style={sectionStyle}>
         <div style={sectionHeaderStyle}>Horário de Funcionamento</div>
         <HoursEditor
-          value={v('horario')}
-          onSave={val => handleSaveField('horario', val)}
+          value={getField('horario')?.value ?? ''}
+          onSave={handleSaveHorario}
         />
       </div>
 
@@ -508,9 +563,9 @@ export function BusinessInfo() {
         </button>
         {showSocial && (
           <div style={{ marginTop: 10 }}>
-            <SimpleField label="Instagram" value={v('instagram')} placeholder="@usuario" onSave={val => handleSaveField('instagram', val)} />
-            <SimpleField label="Facebook"  value={v('facebook')}  placeholder="facebook.com/pagina" onSave={val => handleSaveField('facebook', val)} />
-            <SimpleField label="YouTube"   value={v('youtube')}   placeholder="youtube.com/@canal" onSave={val => handleSaveField('youtube', val)} />
+            <SimpleField label="Instagram" value={d('instagram')} placeholder="@usuario" onChange={val => setDraft('instagram', val)} />
+            <SimpleField label="Facebook"  value={d('facebook')}  placeholder="facebook.com/pagina" onChange={val => setDraft('facebook', val)} />
+            <SimpleField label="YouTube"   value={d('youtube')}   placeholder="youtube.com/@canal" onChange={val => setDraft('youtube', val)} />
           </div>
         )}
       </div>
