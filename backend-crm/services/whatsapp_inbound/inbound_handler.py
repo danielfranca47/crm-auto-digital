@@ -14,6 +14,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from core_client import fetch_core_whatsapp_connection_resolve
 from database import get_connection
 from services.jobs_service import TYPE_WHATSAPP_INBOUND, create_job
+from services.humanization import compute_reply_delay, scheduled_at_from_delay
 from services.ai_orchestrator import (
     InboundEvent,
     build_context_bundle_from_inbound,
@@ -296,6 +297,7 @@ def handle_inbound(payload: Dict[str, Any]) -> Dict[str, Any]:
             )
         conn.commit()
 
+    _ai_profile_for_delay: Optional[Dict[str, Any]] = None
     try:
         event = InboundEvent(
             user_id=user_id,
@@ -309,6 +311,7 @@ def handle_inbound(payload: Dict[str, Any]) -> Dict[str, Any]:
             provider=provider,
         )
         bundle = build_context_bundle_from_inbound(event)
+        _ai_profile_for_delay = bundle.ai_profile
         if _disable_local_orchestrator():
             logger.info(
                 "crm_inbound delegated_to_executor lead_id=%s user_id=%s message_id=%s",
@@ -354,6 +357,20 @@ def handle_inbound(payload: Dict[str, Any]) -> Dict[str, Any]:
             )
             return {"status": "skipped", "lead_id": lead_id, "job_id": None, "reason": "bot_disabled"}
 
+    with get_connection() as _conn_delay:
+        _msg_row = _conn_delay.execute(
+            "SELECT COUNT(*) as cnt FROM messages WHERE lead_id = ?", (lead_id,)
+        ).fetchone()
+        _msg_count = int(_msg_row["cnt"]) if _msg_row else 0
+    _is_first_message = _msg_count <= 1
+
+    _delay_secs = 0
+    if _ai_profile_for_delay:
+        try:
+            _delay_secs = compute_reply_delay(_ai_profile_for_delay, _is_first_message)
+        except Exception as _delay_exc:
+            logger.debug("humanization delay error (fallback 0): %s", _delay_exc)
+
     job_payload = build_job_payload(
         lead_id=lead_id,
         user_id=user_id,
@@ -364,5 +381,10 @@ def handle_inbound(payload: Dict[str, Any]) -> Dict[str, Any]:
         external_event_id=external_event_id,
         received_at=received_iso,
     )
-    job = create_job(job_type=TYPE_WHATSAPP_INBOUND, payload=job_payload, user_id=user_id)
+    job = create_job(
+        job_type=TYPE_WHATSAPP_INBOUND,
+        payload=job_payload,
+        user_id=user_id,
+        scheduled_at=scheduled_at_from_delay(_delay_secs),
+    )
     return {"status": "accepted", "lead_id": lead_id, "job_id": job.get("id")}

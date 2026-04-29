@@ -26,6 +26,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, ConfigDict, Field
 
 from core_client import fetch_core_ai_profile, fetch_core_ai_profile_by_id
+from services.humanization import compute_reply_delay
 from database import get_connection
 from security_core import CurrentUser, require_crm_access
 from services.ai_orchestrator.orchestrator import build_context_bundle_for_playground
@@ -149,6 +150,7 @@ class PlaygroundChatResponse(BaseModel):
     lead_state: LeadState
     decision_trace: DecisionTrace
     pre_send_media: List[PreSendMediaItem] = Field(default_factory=list)
+    simulated_delay_seconds: int = 0
 
 
 # ---------------------------------------------------------------------------
@@ -382,6 +384,15 @@ def playground_chat(
         raise HTTPException(status_code=422, detail="message é obrigatório quando is_opener=False")
     _insert_message(lead_id, body.message, "inbound")
 
+    # ── Delay simulado (paridade com WhatsApp real) ───────────────────────────
+    with get_connection() as _conn_pg:
+        _pg_msg_row = _conn_pg.execute(
+            "SELECT COUNT(*) as cnt FROM messages WHERE lead_id = ?", (lead_id,)
+        ).fetchone()
+        _pg_msg_count = int(_pg_msg_row["cnt"]) if _pg_msg_row else 0
+    _pg_is_first = _pg_msg_count <= 1
+    _simulated_delay = compute_reply_delay(dict(ai_profile), _pg_is_first)
+
     # ── Passo 5: Build Context Bundle ────────────────────────────────────────
     bundle = build_context_bundle_for_playground(
         user_id=user_id,
@@ -447,6 +458,7 @@ def playground_chat(
         lead_state=lead_state,
         decision_trace=_build_decision_trace(decision, body.ai_profile_id, lead_id),
         pre_send_media=pre_send_media,
+        simulated_delay_seconds=_simulated_delay,
     )
 
 

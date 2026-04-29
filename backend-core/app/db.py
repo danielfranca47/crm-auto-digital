@@ -108,6 +108,10 @@ def ensure_ai_profile_columns() -> None:
         "custom_variables": {"default": None, "sqlite_type": "TEXT", "pg_type": "JSON"},
         "enabled_extensions": {"default": None, "sqlite_type": "TEXT", "pg_type": "JSON"},
         "availability_schedule": {"default": None, "sqlite_type": "TEXT", "pg_type": "TEXT"},
+        "first_reply_delay_min_seconds": {"default": 0, "sqlite_type": "INTEGER", "pg_type": "INTEGER"},
+        "first_reply_delay_max_seconds": {"default": 0, "sqlite_type": "INTEGER", "pg_type": "INTEGER"},
+        "reply_delay_min_seconds": {"default": 0, "sqlite_type": "INTEGER", "pg_type": "INTEGER"},
+        "reply_delay_max_seconds": {"default": 0, "sqlite_type": "INTEGER", "pg_type": "INTEGER"},
     }
 
     with engine.begin() as conn:
