@@ -313,3 +313,29 @@ agente.ts — availability_mode no tipo e default
 api.ts — leitura e escrita dos campos em getConfig/saveConfig
 CamadaPipeline.tsx — DrawerHorarioTrabalho com 3 modos: 24h, Horário comercial (Seg–Sex 09–18h no timezone da Camada 1), Personalizado (grade de dias com toggle e inputs de hora). EditCard visível na Seção 0.
 
+## Item 5 — Áudio estático com recording indicator
+
+commit hash: 8dfa179
+
+Implementação concluída. Resumo do que foi feito:
+
+9 arquivos alterados:
+
+backend-core/app/providers/uazapi_client.py — myaudio → send/myaudio e ptt → send/ptt adicionados em _MEDIA_TYPE_TO_ENDPOINT
+
+backend-crm/database.py — ensure_knowledge_item_media_myaudio_type() recria knowledge_item_media com myaudio/ptt no CHECK constraint; chamada no init_db(); migrate_knowledge_media_to_table usa myaudio para mp3/ogg/opus
+
+backend-crm/routes/knowledge.py — _ext_to_media_type() retorna "myaudio" para mp3/ogg/opus (padrão agora é mensagem de voz)
+
+backend-executors/app/runners/whatsapp.py — ao enviar pre_send_media do tipo myaudio/ptt, passa delay_ms=3000 para exibir "Gravando áudio..." na UazAPI
+
+backend-crm/routes/playground.py — campo audio_previews: List[str] na PlaygroundChatResponse com URLs dos myaudio que seriam enviados
+
+frontend-crm/src/components/agente/CamadaConhecimento.tsx — ícone 🎙️ para myaudio/ptt; hint "áudio → mensagem de voz" no upload
+
+frontend-crm/src/components/playground/MessageBubble.tsx — ícone Mic e label "Mensagem de voz" para myaudio/ptt nos MediaCard
+
+frontend-crm/src/services/api.ts — myaudio/ptt no union type de PlaygroundPreSendMediaItem.media_type; campo audio_previews em PlaygroundChatResponse
+
+Efeito: a partir de agora, qualquer upload de mp3/ogg/opus na base de conhecimento é salvo como myaudio. Quando o agente seleciona esse item para enviar, ele chega ao WhatsApp do lead como bolha de voz com "Gravando áudio..." por 3s antes da entrega. No playground, o tipo aparece com ícone de microfone e label "Mensagem de voz".
+
