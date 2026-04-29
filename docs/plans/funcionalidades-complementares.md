@@ -70,48 +70,70 @@ Um splitter que divida o texto gerado pela LLM por marcadores de pontuação (`.
 
 ### 2. Envio de áudio estático
 
-**Estado atual:**
-A UazAPI suporta envio de áudio via `POST /send/audio` com parâmetro `url`. O cliente `uazapi_client.py` já implementa `send_media()` com suporte ao tipo `"audio"`. A rota `POST /whatsapp/send-media` no backend-core também já suporta `media_type="audio"`. Portanto, **a infraestrutura de envio já existe**.
+**Verificação da documentação UazAPI (`POST /send/media`) — confirmado via browser:**
+
+A UazAPI V2 unifica todos os tipos de mídia em um único endpoint `POST /send/media` com campo `type`. Os tipos de áudio disponíveis são:
+
+| type | Comportamento no WhatsApp |
+|---|---|
+| `audio` | Arquivo de áudio comum — aparece como player de MP3/OGG |
+| `myaudio` | **Mensagem de voz** (alternativa ao PTT) — aparece como bolha de voz |
+| `ptt` | Mensagem de voz Push-to-Talk — aparece como bolha de voz |
+
+**Para "áudio estático que parece gravado na hora"** o tipo correto é `myaudio` ou `ptt` — ambos aparecem como mensagem de voz no WhatsApp. O `myaudio` é a alternativa preferida ao `ptt` segundo a documentação.
+
+**Estado atual do código:**
+O cliente `uazapi_client.py` usa endpoints separados (`send/image`, `send/audio`, etc.) que são o padrão da V1. A V2 usa `POST /send/media` com campo `type`. O tipo `"myaudio"` não existe no mapeamento atual — apenas `"audio"` (que envia como arquivo, não como voz). Isso significa que **o envio de áudio como mensagem de voz ainda não está implementado**.
 
 O que não existe:
+- Suporte ao tipo `myaudio` no `uazapi_client.py` (necessário migrar para o endpoint `/send/media` da V2 ou adicionar `myaudio` como endpoint separado se a V1 também suportar)
 - Campo específico para áudio na base de conhecimento
 - Lógica no orchestrator ou playbook para decidir **quando** enviar áudio
-- Tipo de job dedicado para envio de áudio
 - Endpoint de upload de arquivo de áudio pelo usuário
-- O type `myaudio` mencionado na nota (alternativa ao PTT) — isso seria `"audio"` no nosso mapeamento interno, mas precisa ser verificado se a UazAPI requer parâmetros diferentes para voz vs. arquivo de áudio comum
 
 **O que falta:**
-1. Um campo na base de conhecimento (tabela `knowledge_items`) para armazenar URLs de áudio com uma categoria/tag (ex: `"audio_introduction"`, `"audio_offer"`)
-2. Lógica no orchestrator para incluir esses áudios no `knowledge_media` do ContextBundle
-3. Decisão no executor: se o playbook ou AI Profile indicar `send_audio_on_opening: true`, enviar o áudio correspondente logo após (ou antes de) a mensagem de texto
-4. UI no frontend-crm para o usuário fazer upload e vincular o áudio a uma categoria
+1. Atualizar `_MEDIA_TYPE_TO_ENDPOINT` em `uazapi_client.py` para incluir `myaudio` e verificar se aponta para `send/media?type=myaudio` ou `send/myaudio` (depende da versão da API em uso)
+2. Um campo na base de conhecimento (tabela `knowledge_items`) para armazenar URLs de áudio com uma categoria/tag (ex: `"audio_introduction"`, `"audio_offer"`)
+3. Lógica no orchestrator para incluir esses áudios no `knowledge_media` do ContextBundle
+4. Decisão no executor: se o playbook ou AI Profile indicar `send_audio_on_opening: true`, enviar o áudio `myaudio` correspondente antes da mensagem de texto
+5. UI no frontend-crm para o usuário fazer upload e vincular o áudio a uma categoria
 
-**Recomendação:** Começar pela infraestrutura de dados (campo na tabela de knowledge e lógica no orchestrator). O envio em si já funciona — só precisa de contexto para saber quando usar.
+**Recomendação:** Confirmar versão da UazAPI em uso no projeto antes de implementar (V1 com endpoints separados vs. V2 com `/send/media` unificado). Depois, mapear `myaudio` corretamente e construir a infraestrutura de base de conhecimento para áudio.
 
 ---
 
 ### 3. API de "digitando" e "gravando áudio"
 
+**Verificação da documentação UazAPI — confirmado via browser:**
+
+**A UazAPI já resolve isso nativamente com o campo `delay`.** Não é necessário implementar endpoints separados de typing/recording indicator.
+
+Da documentação oficial do campo `delay`:
+> *"Atraso em milissegundos antes do envio, durante o atraso aparecerá 'Digitando...' ou 'Gravando áudio...'"*
+
+O comportamento é automático:
+- Para mensagens de texto: mostra **"Digitando..."** durante o delay
+- Para áudio (`audio`, `myaudio`, `ptt`): mostra **"Gravando áudio..."** durante o delay
+
 **Estado atual:**
-**Nenhuma implementação existe.** O `uazapi_client.py` só tem `send_text()` e `send_media()`. Não há método para enviar typing indicator ou recording indicator. A UazAPI provavelmente disponibiliza esses endpoints (ex: `POST /presence/typing` ou similar — verificar documentação).
+O campo `delay` não está sendo passado em nenhum envio. Tanto `send_text()` quanto `send_media()` em `uazapi_client.py` não aceitam esse parâmetro. A rota `POST /whatsapp/send` no backend-core também não expõe esse campo.
 
 **O que falta:**
-1. Verificar na documentação UazAPI o endpoint exato e parâmetros para typing/recording indicator
-2. Implementar `send_typing_indicator(instance_id, number, duration_ms)` em `uazapi_client.py`
-3. Implementar `send_recording_indicator(instance_id, number, duration_ms)` em `uazapi_client.py`
-4. Adicionar chamada no `backend-core/app/api/whatsapp_send.py`, antes de chamar `send_text()` ou `send_media()`, para:
-   - Enviar typing por N segundos (proporcional ao tamanho do texto)
-   - Enviar recording quando for enviar áudio
+1. Adicionar parâmetro `delay_ms: int = 0` em `send_text()` e `send_media()` em `uazapi_client.py`, incluindo no payload quando maior que zero
+2. Expor `delay_ms` na rota `POST /whatsapp/send` e `POST /whatsapp/send-media` no backend-core
+3. No executor (`backend-executors/app/runners/whatsapp.py`), calcular o delay antes de enviar:
+   - Texto: `delay_ms = min(max(len(text) * 40, 1000), 8000)` (40ms/char, entre 1s e 8s)
+   - Áudio (`myaudio`/`ptt`): `delay_ms` fixo entre 2000–5000ms (simula gravação)
+4. Passar o `delay_ms` calculado na chamada ao core, que repassa à UazAPI
 
 **Paridade com playground:**
-No playground não faz sentido chamar a UazAPI. A resposta do playground (`PlaygroundChatResponse`) pode incluir um campo `humanization_preview: { typing_seconds: float, recording_seconds: float }` para o frontend exibir visualmente o comportamento simulado.
+No playground a UazAPI não é chamada. A resposta `PlaygroundChatResponse` pode incluir `humanization_preview: { typing_seconds: float, recording_seconds: float }` para o frontend exibir visualmente a simulação do que aconteceria no WhatsApp real.
 
 **Onde implementar:**
-- `backend-core/app/providers/uazapi_client.py` — novos métodos
-- `backend-core/app/api/whatsapp_send.py` — chamada antes do envio
+- `backend-core/app/providers/uazapi_client.py` — adicionar `delay_ms` nos métodos existentes
+- `backend-core/app/api/whatsapp_send.py` — expor `delay_ms` nos request bodies
+- `backend-executors/app/runners/whatsapp.py` — calcular e passar o delay
 - `backend-crm/routes/playground.py` — campo adicional na resposta para simulação visual
-
-**Recomendação:** O typing indicator deve ser proporcional ao comprimento da mensagem (ex: `len(text) * 40ms`, com mínimo 1s e máximo 8s). Para áudio, simular "gravando" por 2–5s antes de enviar.
 
 ---
 
