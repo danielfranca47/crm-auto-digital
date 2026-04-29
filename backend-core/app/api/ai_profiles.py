@@ -171,6 +171,10 @@ class AIProfileBase(BaseModel):
     qualification_required_fields: Optional[List[str]] = None
     qualification_fields: Optional[List[dict]] = None
     custom_variables: Optional[Dict[str, str]] = None
+    first_reply_delay_min_seconds: Optional[int] = 0
+    first_reply_delay_max_seconds: Optional[int] = 0
+    reply_delay_min_seconds: Optional[int] = 0
+    reply_delay_max_seconds: Optional[int] = 0
 
 
 class AIProfileCreate(AIProfileBase):
@@ -223,6 +227,10 @@ class AIProfileUpdate(BaseModel):
     qualification_required_fields: Optional[List[str]] = None
     qualification_fields: Optional[List[dict]] = None
     custom_variables: Optional[Dict[str, str]] = None
+    first_reply_delay_min_seconds: Optional[int] = None
+    first_reply_delay_max_seconds: Optional[int] = None
+    reply_delay_min_seconds: Optional[int] = None
+    reply_delay_max_seconds: Optional[int] = None
 
 
 class AIProfileOut(AIProfileBase):

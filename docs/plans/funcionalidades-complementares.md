@@ -263,3 +263,15 @@ backend-crm/routes/playground.py — campo message_parts: List[str] adicionado �
 
 Efeito: a partir de agora, toda resposta da IA com múltiplas frases chega ao WhatsApp do lead como bolhas separadas, cada uma precedida de "Digitando...", com gap proporcional ao tamanho da frase anterior.
 
+## Item 6 | Paridade playground (preview de humanização) | Baixa | Médio | Depende de 1, 2 e 3 |
+
+commit hash: 353530eb3970e320ddb6d42ca51f8fabaa455cfd
+Implementação concluída. Resumo do que foi feito:
+
+3 arquivos alterados:
+
+api.ts — +3 campos opcionais em PlaygroundChatResponse: simulated_delay_seconds, typing_seconds, message_parts
+
+MessageBubble.tsx — campo humanizationPreview em ChatMessage + bloco de badges informativos na primeira bolha do bot (Clock delay · Keyboard digitando · Layers N bolhas), exibidos apenas quando os valores são significativos
+
+Playground.tsx — helper buildBotMessage (monta o objeto ChatMessage da primeira parte com trace/preview) + helper revealExtraParts (fire-and-forget: alterna setLoading(true) → espera proporcional ao tamanho → revela a bolha) → tanto handleSend quanto fireOpener agora consomem message_parts e entregam as bolhas sequencialmente com "Bot digitando…" entre elas.

@@ -123,6 +123,10 @@ export interface AgentConfig {
   daily_limit: number;
   interval_min: number;
   interval_max: number;
+  first_reply_delay_min_seconds: number;
+  first_reply_delay_max_seconds: number;
+  reply_delay_min_seconds: number;
+  reply_delay_max_seconds: number;
 
   // ── Camada 3 — Follow-up avançado ────────────────────────
   followup_max_attempts: number;
@@ -210,6 +214,10 @@ export const DEFAULT_AGENT_CONFIG: AgentConfig = {
   daily_limit: 200,
   interval_min: 3,
   interval_max: 8,
+  first_reply_delay_min_seconds: 0,
+  first_reply_delay_max_seconds: 0,
+  reply_delay_min_seconds: 0,
+  reply_delay_max_seconds: 0,
 
   followup_max_attempts: 3,
   followup_first_offset: 60,

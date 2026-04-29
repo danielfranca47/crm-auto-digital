@@ -13,6 +13,83 @@ interface CamadaPipelineProps {
   phoneNumber?: string | null;
 }
 
+// ─── Presets de delay ─────────────────────────────────────────
+const FIRST_REPLY_PRESETS = [
+  { key: 'imediato', label: 'Imediato',      desc: 'Responde assim que a mensagem chega',        min: 0,   max: 0    },
+  { key: 'rapido',   label: 'Rápido',        desc: '1–3 minutos de delay',                       min: 60,  max: 180  },
+  { key: 'normal',   label: 'Normal',        desc: '5–15 minutos — padrão recomendado',          min: 300, max: 900  },
+  { key: 'lento',    label: 'Lento',         desc: '15–60 minutos — máxima humanização',         min: 900, max: 3600 },
+  { key: 'custom',   label: 'Personalizado', desc: 'Defina o intervalo manualmente com sliders', min: -1,  max: -1   },
+];
+const REPLY_PRESETS = [
+  { key: 'imediato', label: 'Imediato',      desc: 'Responde sem delay',                         min: 0,  max: 0   },
+  { key: 'rapido',   label: 'Rápido',        desc: '5–15 segundos',                              min: 5,  max: 15  },
+  { key: 'normal',   label: 'Normal',        desc: '15 segundos a 1 minuto — padrão recomendado',min: 15, max: 60  },
+  { key: 'lento',    label: 'Lento',         desc: '1–3 minutos',                                min: 60, max: 180 },
+  { key: 'custom',   label: 'Personalizado', desc: 'Defina o intervalo manualmente com sliders', min: -1, max: -1  },
+];
+function detectPreset(presets: typeof FIRST_REPLY_PRESETS, min: number, max: number): string {
+  return presets.find(p => p.min === min && p.max === max)?.key ?? 'custom';
+}
+
+// ─── Drawer: Delay de resposta ────────────────────────────────
+function DrawerDelayResposta({ config, onSave, onClose }: {
+  config: AgentConfig; onSave: (v: Partial<AgentConfig>) => void; onClose: () => void;
+}) {
+  const [frPreset, setFrPreset] = useState(() => detectPreset(FIRST_REPLY_PRESETS, config.first_reply_delay_min_seconds, config.first_reply_delay_max_seconds));
+  const [frMin, setFrMin] = useState(config.first_reply_delay_min_seconds);
+  const [frMax, setFrMax] = useState(config.first_reply_delay_max_seconds);
+  const [rPreset, setRPreset]   = useState(() => detectPreset(REPLY_PRESETS, config.reply_delay_min_seconds, config.reply_delay_max_seconds));
+  const [rMin,  setRMin]  = useState(config.reply_delay_min_seconds);
+  const [rMax,  setRMax]  = useState(config.reply_delay_max_seconds);
+
+  function selectFrPreset(p: typeof FIRST_REPLY_PRESETS[number]) {
+    setFrPreset(p.key);
+    if (p.key !== 'custom') { setFrMin(p.min); setFrMax(p.max); }
+  }
+  function selectRPreset(p: typeof REPLY_PRESETS[number]) {
+    setRPreset(p.key);
+    if (p.key !== 'custom') { setRMin(p.min); setRMax(p.max); }
+  }
+
+  const fmtFirst = (v: number) => v === 0 ? 'imediato' : v < 60 ? `${v}s` : `${Math.round(v / 60)}min`;
+  const fmtReply = (v: number) => v === 0 ? 'imediato' : `${v}s`;
+
+  return (
+    <DrawerBase title="Delay de resposta" sub="Simula tempo de leitura e digitação humana — aumenta taxa de abertura" onClose={onClose}
+      onSave={() => onSave({ first_reply_delay_min_seconds: frMin, first_reply_delay_max_seconds: frMax, reply_delay_min_seconds: rMin, reply_delay_max_seconds: rMax })}>
+
+      <div className="o-field">
+        <label className="o-field-label">Primeira mensagem (novo lead)</label>
+        <div className="o-field-hint">Delay antes de responder o primeiro contato. O lead verá "Digitando..." durante o período.</div>
+        {FIRST_REPLY_PRESETS.map(p => (
+          <OptCard key={p.key} selected={frPreset === p.key} onClick={() => selectFrPreset(p)} label={p.label} desc={p.desc} />
+        ))}
+        {frPreset === 'custom' && (
+          <>
+            <SliderField label="Mínimo" value={frMin} min={0} max={7200} step={60} format={fmtFirst} onChange={setFrMin} />
+            <SliderField label="Máximo" value={frMax} min={0} max={7200} step={60} format={fmtFirst} onChange={setFrMax} />
+          </>
+        )}
+      </div>
+
+      <div className="o-field" style={{ marginTop: 8 }}>
+        <label className="o-field-label">Dentro da conversa</label>
+        <div className="o-field-hint">Delay antes de cada resposta subsequente ao longo da conversa.</div>
+        {REPLY_PRESETS.map(p => (
+          <OptCard key={p.key} selected={rPreset === p.key} onClick={() => selectRPreset(p)} label={p.label} desc={p.desc} />
+        ))}
+        {rPreset === 'custom' && (
+          <>
+            <SliderField label="Mínimo" value={rMin} min={0} max={300} step={5} format={fmtReply} onChange={setRMin} />
+            <SliderField label="Máximo" value={rMax} min={0} max={300} step={5} format={fmtReply} onChange={setRMax} />
+          </>
+        )}
+      </div>
+    </DrawerBase>
+  );
+}
+
 // ─── Drawer: Follow-up cadência ───────────────────────────────
 function DrawerFollowup({ config, onSave, onClose }: {
   config: AgentConfig; onSave: (v: Partial<AgentConfig>) => void; onClose: () => void;
@@ -256,7 +333,7 @@ function DrawerFollowupAvancado({ config, onSave, onClose }: {
   );
 }
 
-type DrawerKey = 'followup' | 'followup_avancado' | 'limite' | 'intervalo' | 'midia' | null;
+type DrawerKey = 'followup' | 'followup_avancado' | 'limite' | 'intervalo' | 'midia' | 'delay_resposta' | null;
 type ModalKey  = 'optout' | 'lgpd' | 'reativacao' | null;
 
 export function CamadaPipeline({ config, onUpdate, phoneNumber }: CamadaPipelineProps) {
@@ -270,6 +347,14 @@ export function CamadaPipeline({ config, onUpdate, phoneNumber }: CamadaPipeline
   const followupConfigured = config.followup_h1 > 0;
 
   const fu1Label = `${config.followup_h1}h · ${Math.round(config.followup_h2 / 24)}d · ${Math.round(config.followup_h3 / 24)}d`;
+
+  const fmtDelayFirst = (v: number) => v === 0 ? 'imediato' : v < 60 ? `${v}s` : `${Math.round(v / 60)}min`;
+  const delayFirstLabel = config.first_reply_delay_max_seconds > 0
+    ? `${fmtDelayFirst(config.first_reply_delay_min_seconds)}–${fmtDelayFirst(config.first_reply_delay_max_seconds)}`
+    : 'Imediato';
+  const delayReplyLabel = config.reply_delay_max_seconds > 0
+    ? `${config.reply_delay_min_seconds}–${config.reply_delay_max_seconds}s`
+    : 'Imediato';
 
   return (
     <>
@@ -286,6 +371,12 @@ export function CamadaPipeline({ config, onUpdate, phoneNumber }: CamadaPipeline
         <InfoCard label="Número conectado" value={phoneNumber ?? '—'} sub="Sessão QR via WhatsApp Web" status="ok" />
         <EditCard label="Intervalo entre mensagens" value={`${config.interval_min}–${config.interval_max} segundos`} sub="Delay simulado de comportamento humano" onClick={() => setDrawer('intervalo')} status="ok" help="Intervalo aleatório entre mensagens consecutivas. Simula comportamento humano e reduz risco de ban pelo WhatsApp. Valores muito baixos aumentam a suspeita de automação." />
         <EditCard label="Limite diário de disparos" value={`${config.daily_limit} mensagens/dia`} sub="Proteção comportamental" onClick={() => setDrawer('limite')} status="ok" help="Limite de disparos por dia neste número. Recomendado 150–300 para uso regular. Acima disso aumenta o risco de detecção e bloqueio pelo WhatsApp." />
+        <EditCard
+          label="Delay de resposta" sub="Tempo antes de responder o lead"
+          value={`1ª msg: ${delayFirstLabel} · conversa: ${delayReplyLabel}`}
+          onClick={() => setDrawer('delay_resposta')} status="ok"
+          help="Delay sorteado entre mínimo e máximo antes de enviar cada resposta. Simula tempo humano de leitura e digitação. O lead vê 'Digitando...' durante o delay."
+        />
       </div>
 
       {/* Seção 1: Comportamento por evento */}
@@ -370,7 +461,8 @@ export function CamadaPipeline({ config, onUpdate, phoneNumber }: CamadaPipeline
       {drawer === 'followup_avancado' && <DrawerFollowupAvancado  config={config} onClose={() => setDrawer(null)} onSave={v => { onUpdate(v); setDrawer(null); }} />}
       {drawer === 'limite'            && <DrawerLimite    value={config.daily_limit} onClose={() => setDrawer(null)} onSave={v => { onUpdate({ daily_limit: v }); setDrawer(null); }} />}
       {drawer === 'intervalo'         && <DrawerIntervalo config={config} onClose={() => setDrawer(null)} onSave={v => { onUpdate(v); setDrawer(null); }} />}
-      {drawer === 'midia'             && <DrawerMidia     config={config} onClose={() => setDrawer(null)} onSave={v => { onUpdate(v); setDrawer(null); }} />}
+      {drawer === 'midia'             && <DrawerMidia          config={config} onClose={() => setDrawer(null)} onSave={v => { onUpdate(v); setDrawer(null); }} />}
+      {drawer === 'delay_resposta'    && <DrawerDelayResposta  config={config} onClose={() => setDrawer(null)} onSave={v => { onUpdate(v); setDrawer(null); }} />}
 
       {/* Modais */}
       {modal === 'optout'    && <ModalOptOut    config={config} onClose={() => setModal(null)} onSave={v => { onUpdate(v); setModal(null); }} />}

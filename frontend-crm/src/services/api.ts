@@ -1251,6 +1251,10 @@ export const api = {
         daily_limit:        pack.daily_limit         ?? DEFAULT_AGENT_CONFIG.daily_limit,
         interval_min:       pack.interval_min        ?? DEFAULT_AGENT_CONFIG.interval_min,
         interval_max:       pack.interval_max        ?? DEFAULT_AGENT_CONFIG.interval_max,
+        first_reply_delay_min_seconds: (profile as any)?.first_reply_delay_min_seconds ?? 0,
+        first_reply_delay_max_seconds: (profile as any)?.first_reply_delay_max_seconds ?? 0,
+        reply_delay_min_seconds:       (profile as any)?.reply_delay_min_seconds       ?? 0,
+        reply_delay_max_seconds:       (profile as any)?.reply_delay_max_seconds       ?? 0,
 
         // Camada 2 — Qualificação avançada
         qualification_score_threshold: pack.qualification_score_threshold ?? DEFAULT_AGENT_CONFIG.qualification_score_threshold,
@@ -1279,6 +1283,7 @@ export const api = {
         briefing_lead_time:      pack.briefing_lead_time      ?? DEFAULT_AGENT_CONFIG.briefing_lead_time,
         operator_whatsapp:       pack.operator_whatsapp       ?? DEFAULT_AGENT_CONFIG.operator_whatsapp,
         calendar_integration:    pack.calendar_integration    ?? DEFAULT_AGENT_CONFIG.calendar_integration,
+        availability_schedule:   (profile as any)?.availability_schedule ?? DEFAULT_AGENT_CONFIG.availability_schedule,
 
         // Oferta e pagamento
         offer_media_url:      pack.media_url      ?? DEFAULT_AGENT_CONFIG.offer_media_url,
@@ -1392,6 +1397,10 @@ export const api = {
         qualification_fields: config.qualification_fields.length > 0 ? config.qualification_fields : undefined,
         qualification_required_fields: derivedRequiredFields,
         custom_variables: config.custom_variables,
+        first_reply_delay_min_seconds: config.first_reply_delay_min_seconds,
+        first_reply_delay_max_seconds: config.first_reply_delay_max_seconds,
+        reply_delay_min_seconds:       config.reply_delay_min_seconds,
+        reply_delay_max_seconds:       config.reply_delay_max_seconds,
         offer_pack,
       });
     },
