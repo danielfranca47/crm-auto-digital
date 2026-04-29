@@ -279,6 +279,103 @@ function ModalReativacao({ config, onSave, onClose }: {
   );
 }
 
+// ─── Drawer: Janela de horário ────────────────────────────────
+const DAYS = [
+  { key: 'mon', label: 'Seg' }, { key: 'tue', label: 'Ter' },
+  { key: 'wed', label: 'Qua' }, { key: 'thu', label: 'Qui' },
+  { key: 'fri', label: 'Sex' }, { key: 'sat', label: 'Sáb' },
+  { key: 'sun', label: 'Dom' },
+];
+type DaySchedule  = { enabled: boolean; start: string; end: string };
+type WeekSchedule = Record<string, DaySchedule>;
+
+const DAY_DEFAULTS: WeekSchedule = {
+  mon: { enabled: true,  start: '09:00', end: '18:00' },
+  tue: { enabled: true,  start: '09:00', end: '18:00' },
+  wed: { enabled: true,  start: '09:00', end: '18:00' },
+  thu: { enabled: true,  start: '09:00', end: '18:00' },
+  fri: { enabled: true,  start: '09:00', end: '18:00' },
+  sat: { enabled: false, start: '09:00', end: '18:00' },
+  sun: { enabled: false, start: '09:00', end: '18:00' },
+};
+
+function parseCustomSchedule(json: string): WeekSchedule {
+  const result: WeekSchedule = JSON.parse(JSON.stringify(DAY_DEFAULTS));
+  try {
+    const data = JSON.parse(json);
+    for (const [k, val] of Object.entries(data)) {
+      if (k in result && typeof val === 'string') {
+        if (val) {
+          const parts = val.split('-');
+          result[k] = parts.length === 2
+            ? { enabled: true, start: parts[0], end: parts[1] }
+            : { ...result[k], enabled: false };
+        } else {
+          result[k] = { ...result[k], enabled: false };
+        }
+      }
+    }
+  } catch { /* usa defaults */ }
+  return result;
+}
+
+function serializeCustomSchedule(s: WeekSchedule): string {
+  const obj: Record<string, string> = {};
+  for (const [k, v] of Object.entries(s)) obj[k] = v.enabled ? `${v.start}-${v.end}` : '';
+  return JSON.stringify(obj);
+}
+
+function DrawerHorarioTrabalho({ config, onSave, onClose }: {
+  config: AgentConfig; onSave: (v: Partial<AgentConfig>) => void; onClose: () => void;
+}) {
+  const [mode, setMode] = useState(config.availability_mode);
+  const [schedule, setSchedule] = useState<WeekSchedule>(() => parseCustomSchedule(config.availability_schedule));
+
+  function toggleDay(key: string) {
+    setSchedule(prev => ({ ...prev, [key]: { ...prev[key], enabled: !prev[key].enabled } }));
+  }
+  function setTime(key: string, field: 'start' | 'end', value: string) {
+    setSchedule(prev => ({ ...prev, [key]: { ...prev[key], [field]: value } }));
+  }
+
+  return (
+    <DrawerBase title="Janela de horário" sub="Define quando o agente está disponível para responder — mensagens fora do horário são agendadas para a próxima janela" onClose={onClose}
+      onSave={() => onSave({ availability_mode: mode, availability_schedule: mode === 'custom' ? serializeCustomSchedule(schedule) : config.availability_schedule })}>
+
+      <div className="o-field">
+        <label className="o-field-label">Disponibilidade</label>
+        <OptCard selected={mode === '24h'}            onClick={() => setMode('24h')}            label="24 horas"           desc="O agente responde a qualquer hora, todos os dias." />
+        <OptCard selected={mode === 'business_hours'} onClick={() => setMode('business_hours')} label="Horário comercial"  desc="Segunda a sexta, 09:00–18:00 — fuso configurado na Camada 1." />
+        <OptCard selected={mode === 'custom'}         onClick={() => setMode('custom')}         label="Personalizado"      desc="Defina dias e horários específicos manualmente." />
+      </div>
+
+      {mode === 'custom' && (
+        <div className="o-field" style={{ marginTop: 8 }}>
+          <label className="o-field-label">Agenda personalizada</label>
+          <div className="o-field-hint">Fuso horário configurado na Camada 1. Mensagens fora do horário são agendadas para a próxima abertura.</div>
+          {DAYS.map(({ key, label }) => (
+            <div key={key} style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
+              <div className={`o-toggle ${schedule[key].enabled ? 'on' : ''}`} onClick={() => toggleDay(key)} style={{ flexShrink: 0 }} />
+              <span style={{ fontSize: 12, color: 'var(--o-sub)', width: 28, flexShrink: 0 }}>{label}</span>
+              {schedule[key].enabled ? (
+                <>
+                  <input type="time" className="o-input" style={{ width: 90, padding: '3px 8px', fontSize: 12 }}
+                    value={schedule[key].start} onChange={e => setTime(key, 'start', e.target.value)} />
+                  <span style={{ fontSize: 12, color: 'var(--o-sub)' }}>–</span>
+                  <input type="time" className="o-input" style={{ width: 90, padding: '3px 8px', fontSize: 12 }}
+                    value={schedule[key].end} onChange={e => setTime(key, 'end', e.target.value)} />
+                </>
+              ) : (
+                <span style={{ fontSize: 11, color: 'var(--o-dim)' }}>Indisponível</span>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+    </DrawerBase>
+  );
+}
+
 // ─────────────────────────────────────────────────────────────
 // Componente principal
 // ─────────────────────────────────────────────────────────────
@@ -333,7 +430,7 @@ function DrawerFollowupAvancado({ config, onSave, onClose }: {
   );
 }
 
-type DrawerKey = 'followup' | 'followup_avancado' | 'limite' | 'intervalo' | 'midia' | 'delay_resposta' | null;
+type DrawerKey = 'followup' | 'followup_avancado' | 'limite' | 'intervalo' | 'midia' | 'delay_resposta' | 'horario_trabalho' | null;
 type ModalKey  = 'optout' | 'lgpd' | 'reativacao' | null;
 
 export function CamadaPipeline({ config, onUpdate, phoneNumber }: CamadaPipelineProps) {
@@ -355,6 +452,11 @@ export function CamadaPipeline({ config, onUpdate, phoneNumber }: CamadaPipeline
   const delayReplyLabel = config.reply_delay_max_seconds > 0
     ? `${config.reply_delay_min_seconds}–${config.reply_delay_max_seconds}s`
     : 'Imediato';
+  const availabilityLabel = config.availability_mode === 'business_hours'
+    ? 'Seg–Sex · 09–18h'
+    : config.availability_mode === 'custom'
+    ? 'Personalizado'
+    : '24h (sempre ativo)';
 
   return (
     <>
@@ -376,6 +478,12 @@ export function CamadaPipeline({ config, onUpdate, phoneNumber }: CamadaPipeline
           value={`1ª msg: ${delayFirstLabel} · conversa: ${delayReplyLabel}`}
           onClick={() => setDrawer('delay_resposta')} status="ok"
           help="Delay sorteado entre mínimo e máximo antes de enviar cada resposta. Simula tempo humano de leitura e digitação. O lead vê 'Digitando...' durante o delay."
+        />
+        <EditCard
+          label="Janela de horário" sub="Período em que o agente responde"
+          value={availabilityLabel}
+          onClick={() => setDrawer('horario_trabalho')} status="ok"
+          help="Controla quando o agente está disponível para responder. Mensagens recebidas fora do horário são agendadas para a próxima abertura da janela (não são descartadas)."
         />
       </div>
 
@@ -461,8 +569,9 @@ export function CamadaPipeline({ config, onUpdate, phoneNumber }: CamadaPipeline
       {drawer === 'followup_avancado' && <DrawerFollowupAvancado  config={config} onClose={() => setDrawer(null)} onSave={v => { onUpdate(v); setDrawer(null); }} />}
       {drawer === 'limite'            && <DrawerLimite    value={config.daily_limit} onClose={() => setDrawer(null)} onSave={v => { onUpdate({ daily_limit: v }); setDrawer(null); }} />}
       {drawer === 'intervalo'         && <DrawerIntervalo config={config} onClose={() => setDrawer(null)} onSave={v => { onUpdate(v); setDrawer(null); }} />}
-      {drawer === 'midia'             && <DrawerMidia          config={config} onClose={() => setDrawer(null)} onSave={v => { onUpdate(v); setDrawer(null); }} />}
-      {drawer === 'delay_resposta'    && <DrawerDelayResposta  config={config} onClose={() => setDrawer(null)} onSave={v => { onUpdate(v); setDrawer(null); }} />}
+      {drawer === 'midia'             && <DrawerMidia           config={config} onClose={() => setDrawer(null)} onSave={v => { onUpdate(v); setDrawer(null); }} />}
+      {drawer === 'delay_resposta'    && <DrawerDelayResposta   config={config} onClose={() => setDrawer(null)} onSave={v => { onUpdate(v); setDrawer(null); }} />}
+      {drawer === 'horario_trabalho'  && <DrawerHorarioTrabalho config={config} onClose={() => setDrawer(null)} onSave={v => { onUpdate(v); setDrawer(null); }} />}
 
       {/* Modais */}
       {modal === 'optout'    && <ModalOptOut    config={config} onClose={() => setModal(null)} onSave={v => { onUpdate(v); setModal(null); }} />}

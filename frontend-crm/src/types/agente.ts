@@ -143,6 +143,7 @@ export interface AgentConfig {
   briefing_lead_time: number;
   operator_whatsapp: string;
   calendar_integration: string;
+  availability_mode: 'business_hours' | '24h' | 'custom';
   availability_schedule: string;
 
   // ── Oferta e pagamento ───────────────────────────────────
@@ -232,7 +233,8 @@ export const DEFAULT_AGENT_CONFIG: AgentConfig = {
   briefing_lead_time: 1,
   operator_whatsapp: '',
   calendar_integration: 'none',
-  availability_schedule: '',
+  availability_mode: '24h',
+  availability_schedule: '{"mon":"09:00-18:00","tue":"09:00-18:00","wed":"09:00-18:00","thu":"09:00-18:00","fri":"09:00-18:00","sat":"","sun":""}',
 
   offer_media_url: '',
   offer_media_type: 'image',

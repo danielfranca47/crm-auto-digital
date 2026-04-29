@@ -14,7 +14,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from core_client import fetch_core_whatsapp_connection_resolve
 from database import get_connection
 from services.jobs_service import TYPE_WHATSAPP_INBOUND, create_job
-from services.humanization import compute_reply_delay, scheduled_at_from_delay
+from services.humanization import compute_reply_delay, compute_scheduled_at, scheduled_at_from_delay
 from services.ai_orchestrator import (
     InboundEvent,
     build_context_bundle_from_inbound,
@@ -364,12 +364,12 @@ def handle_inbound(payload: Dict[str, Any]) -> Dict[str, Any]:
         _msg_count = int(_msg_row["cnt"]) if _msg_row else 0
     _is_first_message = _msg_count <= 1
 
-    _delay_secs = 0
+    _scheduled_at = None
     if _ai_profile_for_delay:
         try:
-            _delay_secs = compute_reply_delay(_ai_profile_for_delay, _is_first_message)
+            _scheduled_at = compute_scheduled_at(_ai_profile_for_delay, _is_first_message)
         except Exception as _delay_exc:
-            logger.debug("humanization delay error (fallback 0): %s", _delay_exc)
+            logger.debug("humanization scheduled_at error (fallback None): %s", _delay_exc)
 
     job_payload = build_job_payload(
         lead_id=lead_id,
@@ -385,6 +385,6 @@ def handle_inbound(payload: Dict[str, Any]) -> Dict[str, Any]:
         job_type=TYPE_WHATSAPP_INBOUND,
         payload=job_payload,
         user_id=user_id,
-        scheduled_at=scheduled_at_from_delay(_delay_secs),
+        scheduled_at=_scheduled_at,
     )
     return {"status": "accepted", "lead_id": lead_id, "job_id": job.get("id")}

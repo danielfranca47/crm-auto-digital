@@ -1283,6 +1283,7 @@ export const api = {
         briefing_lead_time:      pack.briefing_lead_time      ?? DEFAULT_AGENT_CONFIG.briefing_lead_time,
         operator_whatsapp:       pack.operator_whatsapp       ?? DEFAULT_AGENT_CONFIG.operator_whatsapp,
         calendar_integration:    pack.calendar_integration    ?? DEFAULT_AGENT_CONFIG.calendar_integration,
+        availability_mode:       ((profile as any)?.availability_mode ?? DEFAULT_AGENT_CONFIG.availability_mode) as import('../types/agente').AgentConfig['availability_mode'],
         availability_schedule:   (profile as any)?.availability_schedule ?? DEFAULT_AGENT_CONFIG.availability_schedule,
 
         // Oferta e pagamento
@@ -1401,6 +1402,8 @@ export const api = {
         first_reply_delay_max_seconds: config.first_reply_delay_max_seconds,
         reply_delay_min_seconds:       config.reply_delay_min_seconds,
         reply_delay_max_seconds:       config.reply_delay_max_seconds,
+        availability_mode:             config.availability_mode,
+        availability_schedule:         config.availability_schedule,
         offer_pack,
       });
     },
