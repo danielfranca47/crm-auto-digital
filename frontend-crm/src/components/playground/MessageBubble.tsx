@@ -3,6 +3,7 @@ import {
   Bookmark, BookmarkCheck, ChevronDown, ChevronUp,
   ThumbsDown, Minus, ThumbsUp, Star, Loader2,
   Headphones, ImageIcon, Video, FileText,
+  Clock, Keyboard, Layers,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -25,6 +26,11 @@ export interface ChatMessage {
   rating?: RatingValue;
   ratingComment?: string;
   ratingPending?: boolean;
+  humanizationPreview?: {
+    delay_s: number;
+    typing_s: number;
+    total_parts: number;
+  };
 }
 
 interface MessageBubbleProps {
@@ -290,6 +296,34 @@ export function MessageBubble({ message, onToggleFeedback, onRate }: MessageBubb
               </pre>
             )}
           </div>
+        )}
+
+        {/* Preview de humanização — badges com delay/typing/bolhas */}
+        {!isLead && message.humanizationPreview && (
+          (message.humanizationPreview.delay_s > 0 ||
+           message.humanizationPreview.typing_s > 0 ||
+           message.humanizationPreview.total_parts > 1) && (
+            <div className="mt-1 ml-8 flex flex-wrap gap-1">
+              {message.humanizationPreview.delay_s > 0 && (
+                <Badge variant="outline" className="text-xs gap-1 text-muted-foreground">
+                  <Clock className="h-2.5 w-2.5" />
+                  {message.humanizationPreview.delay_s}s delay
+                </Badge>
+              )}
+              {message.humanizationPreview.typing_s > 0 && (
+                <Badge variant="outline" className="text-xs gap-1 text-muted-foreground">
+                  <Keyboard className="h-2.5 w-2.5" />
+                  {message.humanizationPreview.typing_s}s digitando
+                </Badge>
+              )}
+              {message.humanizationPreview.total_parts > 1 && (
+                <Badge variant="outline" className="text-xs gap-1 text-muted-foreground">
+                  <Layers className="h-2.5 w-2.5" />
+                  {message.humanizationPreview.total_parts} bolhas
+                </Badge>
+              )}
+            </div>
+          )
         )}
 
         {/* Linha de rating — só para mensagens do bot */}

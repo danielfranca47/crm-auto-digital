@@ -168,6 +168,9 @@ export type PlaygroundChatResponse = {
   };
   decision_trace: PlaygroundDecisionTrace;
   pre_send_media?: PlaygroundPreSendMediaItem[];
+  simulated_delay_seconds?: number;
+  typing_seconds?: number;
+  message_parts?: string[];
 };
 
 // ── Playground FeedbackAssist ────────────────────────────────────────────────

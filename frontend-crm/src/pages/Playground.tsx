@@ -1,14 +1,63 @@
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect, type Dispatch, type SetStateAction } from "react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "@/hooks/use-toast";
 import { RefreshCw, ArrowDownToLine, ArrowUpFromLine } from "lucide-react";
-import { api } from "@/services/api";
+import { api, type PlaygroundChatResponse } from "@/services/api";
 import { PlaygroundConfigModal, type PlaygroundSession } from "@/components/playground/PlaygroundConfigModal";
 import { PlaygroundChat } from "@/components/playground/PlaygroundChat";
 import { PlaygroundFeedback, type FeedbackItem, type FeedbackTag } from "@/components/playground/PlaygroundFeedback";
 import { type ChatMessage, type RatingValue } from "@/components/playground/MessageBubble";
 import { type AgentReportEntry } from "@/components/playground/FeedbackAssistant";
+
+function buildBotMessage(
+  text: string,
+  res: PlaygroundChatResponse,
+  opts: { isFirst: boolean; totalParts: number }
+): ChatMessage {
+  return {
+    id: crypto.randomUUID(),
+    role: "bot",
+    text,
+    timestamp: new Date().toISOString(),
+    ...(opts.isFirst ? {
+      decisionTrace: res.decision_trace,
+      motherRoute: res.decision_trace?.mother_route ?? null,
+      confidence: res.mother_decision?.confidence,
+      guardrails: res.decision_trace?.guardrails_applied ?? [],
+      preMediaItems: res.pre_send_media ?? [],
+      humanizationPreview: {
+        delay_s: res.simulated_delay_seconds ?? 0,
+        typing_s: res.typing_seconds ?? 0,
+        total_parts: opts.totalParts,
+      },
+    } : {}),
+    selectedForFeedback: false,
+  };
+}
+
+async function revealExtraParts(
+  extraParts: string[],
+  setMessages: Dispatch<SetStateAction<ChatMessage[]>>,
+  setLoading: Dispatch<SetStateAction<boolean>>
+) {
+  for (const part of extraParts) {
+    setLoading(true);
+    const delayMs = Math.min(Math.max(part.length * 40, 500), 1500);
+    await new Promise<void>((r) => setTimeout(r, delayMs));
+    setLoading(false);
+    setMessages((prev) => [
+      ...prev,
+      {
+        id: crypto.randomUUID(),
+        role: "bot",
+        text: part,
+        timestamp: new Date().toISOString(),
+        selectedForFeedback: false,
+      },
+    ]);
+  }
+}
 
 export default function Playground() {
   const [session, setSession] = useState<PlaygroundSession | null>(null);
@@ -54,21 +103,11 @@ export default function Playground() {
 
         setSession((s) => s ? { ...s, leadId: res.lead_id } : s);
 
-        const botMsgId = crypto.randomUUID();
-        setMessages([
-          {
-            id: botMsgId,
-            role: "bot",
-            text: res.message_to_send,
-            timestamp: new Date().toISOString(),
-            decisionTrace: res.decision_trace,
-            motherRoute: res.decision_trace?.mother_route ?? null,
-            confidence: res.mother_decision?.confidence,
-            guardrails: res.decision_trace?.guardrails_applied ?? [],
-            selectedForFeedback: false,
-            preMediaItems: res.pre_send_media ?? [],
-          },
-        ]);
+        const parts = res.message_parts?.length ? res.message_parts : [res.message_to_send];
+        setMessages([buildBotMessage(parts[0], res, { isFirst: true, totalParts: parts.length })]);
+        if (parts.length > 1) {
+          revealExtraParts(parts.slice(1), setMessages, setLoading);
+        }
       } catch (err: unknown) {
         if (cancelled) return;
         const msg = err instanceof Error ? err.message : "Erro ao obter abertura outbound";
@@ -116,23 +155,15 @@ export default function Playground() {
           setSession((s) => s ? { ...s, leadId: res.lead_id } : s);
         }
 
-        // Adiciona resposta do bot
-        const botMsgId = crypto.randomUUID();
+        // Adiciona resposta do bot (primeira parte imediatamente; extras de forma sequencial)
+        const parts = res.message_parts?.length ? res.message_parts : [res.message_to_send];
         setMessages((prev) => [
           ...prev,
-          {
-            id: botMsgId,
-            role: "bot",
-            text: res.message_to_send,
-            timestamp: new Date().toISOString(),
-            decisionTrace: res.decision_trace,
-            motherRoute: res.decision_trace?.mother_route ?? null,
-            confidence: res.mother_decision?.confidence,
-            guardrails: res.decision_trace?.guardrails_applied ?? [],
-            selectedForFeedback: false,
-            preMediaItems: res.pre_send_media ?? [],
-          },
+          buildBotMessage(parts[0], res, { isFirst: true, totalParts: parts.length }),
         ]);
+        if (parts.length > 1) {
+          revealExtraParts(parts.slice(1), setMessages, setLoading);
+        }
       } catch (err: unknown) {
         const msg = err instanceof Error ? err.message : "Erro ao chamar o playground";
         toast({ title: "Erro", description: msg, variant: "destructive" });
