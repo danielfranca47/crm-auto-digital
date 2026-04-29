@@ -28,3 +28,8 @@ def scheduled_at_from_delay(delay_seconds: int) -> Optional[datetime]:
     if delay_seconds <= 0:
         return None
     return datetime.utcnow() + timedelta(seconds=delay_seconds)
+
+
+def compute_typing_ms(text: str) -> int:
+    """Calcula duração do 'Digitando...' em ms: 40ms/char, mínimo 1s, máximo 8s."""
+    return min(max(len(text) * 40, 1000), 8000)

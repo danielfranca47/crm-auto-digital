@@ -27,6 +27,7 @@ class WhatsAppSendRequest(BaseModel):
     number: str
     text: str
     in_reply_to_message_id: Optional[str] = None
+    delay_ms: int = 0
 
 
 class WhatsAppSendMediaRequest(BaseModel):
@@ -36,6 +37,7 @@ class WhatsAppSendMediaRequest(BaseModel):
     media_url: str
     media_type: str = Field(default="image")  # image | video | audio | document
     caption: Optional[str] = None
+    delay_ms: int = 0
 
 
 class WhatsAppSendResponse(BaseModel):
@@ -132,6 +134,7 @@ async def send_whatsapp(
             token=token_plain,
             number=sanitized_number,
             text=payload.text,
+            delay_ms=payload.delay_ms,
         )
     except uazapi_client.UazapiTimeoutError:
         raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail="provider_timeout")
@@ -214,6 +217,7 @@ async def send_whatsapp_media(
             media_url=payload.media_url,
             media_type=payload.media_type,
             caption=payload.caption or "",
+            delay_ms=payload.delay_ms,
         )
     except uazapi_client.UazapiTimeoutError:
         raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail="provider_timeout")

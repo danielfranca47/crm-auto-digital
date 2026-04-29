@@ -25,7 +25,7 @@ _MEDIA_TYPE_TO_ENDPOINT: Dict[str, str] = {
 
 
 async def send_media(
-    *, base_url: str, token: str, number: str, media_url: str, media_type: str, caption: str = ""
+    *, base_url: str, token: str, number: str, media_url: str, media_type: str, caption: str = "", delay_ms: int = 0
 ) -> Dict[str, Any]:
     base = base_url.rstrip("/")
     if not base:
@@ -36,6 +36,8 @@ async def send_media(
     payload: Dict[str, Any] = {"number": number, "url": media_url}
     if caption:
         payload["caption"] = caption
+    if delay_ms > 0:
+        payload["delay"] = delay_ms
 
     try:
         async with httpx.AsyncClient(timeout=30.0) as client:
@@ -59,13 +61,15 @@ async def send_media(
         raise UazapiClientError("Uazapi returned invalid JSON for media") from exc
 
 
-async def send_text(*, base_url: str, token: str, number: str, text: str) -> Dict[str, Any]:
+async def send_text(*, base_url: str, token: str, number: str, text: str, delay_ms: int = 0) -> Dict[str, Any]:
     base = base_url.rstrip("/")
     if not base:
         raise UazapiClientError("UAZAPI_BASE_URL is not configured")
     url = f"{base}/send/text"
     headers = {"token": token, "Content-Type": "application/json"}
-    payload = {"number": number, "text": text}
+    payload: Dict[str, Any] = {"number": number, "text": text}
+    if delay_ms > 0:
+        payload["delay"] = delay_ms
 
     try:
         async with httpx.AsyncClient(timeout=20.0) as client:

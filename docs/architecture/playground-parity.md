@@ -117,3 +117,31 @@ Esta é a **única fonte de enriquecimento**. Qualquer campo novo que afete o co
 | `backend-crm/services/whatsapp_inbound/inbound_handler.py` | Recebe webhook, monta bundle base, enfileira ou decide |
 | `backend-crm/routes/executor.py` | Consome fila, chama `enrich_context_bundle`, decide e envia |
 | `backend-crm/routes/playground.py` | Endpoint de simulação |
+
+---
+
+## Paridade de Humanização Comportamental
+
+Além da paridade de contexto LLM, o playground expõe campos de preview que simulam o comportamento temporal do agente no WhatsApp real.
+
+### Campos na resposta do playground (`PlaygroundChatResponse`)
+
+| Campo | Descrição | Equivalente real |
+|-------|-----------|-----------------|
+| `simulated_delay_seconds` | Delay antes de responder (sorteado entre min/max do AI Profile) | `scheduled_at` do job em `inbound_handler.py` |
+| `typing_seconds` | Duração do "Digitando..." exibido no WhatsApp | Campo `delay` enviado à UazAPI via `whatsapp_send.py` |
+
+### Fórmula do typing indicator
+
+```
+delay_ms = min(max(len(text) * 40, 1000), 8000)  # 40ms/char, entre 1s e 8s
+```
+
+Implementada em:
+- `backend-crm/services/humanization.py` → `compute_typing_ms()` (usado pelo playground)
+- `backend-executors/app/runners/whatsapp.py` → inline antes de `core_client.send_whatsapp_message()` (mesmo cálculo, serviços separados)
+
+O campo `delay` é propagado via:
+```
+executor → POST /whatsapp/send (backend-core) → uazapi_client.send_text(delay_ms=...) → UazAPI
+```

@@ -217,3 +217,22 @@ Esses campos não chamam nenhuma API real — apenas expõem a lógica de cálcu
 | 6 | Paridade playground (preview de humanização) | Baixa | Médio | Depende de 1, 2 e 3 |
 
 A ordem recomendada para a Fase 1: **1 → 2 → 3 → 6**, deixando áudio e janela de horário para uma Fase 2.
+
+
+----
+
+Implementações:
+
+Implementação concluída. Aqui está o resumo do que foi feito:
+
+5 arquivos alterados / criados:
+
+Commit hash: 5853a0af90e65f82f3861d4d48295654874ee084
+
+backend-core/app/models/ai_profile.py — 4 novos campos: first_reply_delay_min/max_seconds e reply_delay_min/max_seconds (default 0 = sem delay)
+backend-core/app/db.py — migrations idempotentes para os 4 campos via ensure_ai_profile_columns
+backend-crm/services/humanization.py — novo módulo com compute_reply_delay() (sorteia entre min/max) e scheduled_at_from_delay() (retorna None se delay = 0)
+backend-crm/services/whatsapp_inbound/inbound_handler.py — captura bundle.ai_profile, conta mensagens do lead para detectar primeira mensagem, passa scheduled_at ao create_job() com fallback seguro
+backend-crm/routes/playground.py — campo simulated_delay_seconds: int na resposta do playground para paridade visual com o WhatsApp real
+O worker já respeitava scheduled_at automaticamente — nenhuma alteração necessária no executor.
+

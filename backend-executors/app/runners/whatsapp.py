@@ -883,6 +883,7 @@ def execute_job(job_id: str, logger: logging.Logger) -> int:
             return 0
 
         ctx_logger.info("event=core_send_request url=/whatsapp/send", extra={"phase": "core_send"})
+        _delay_ms = min(max(len(outbound_body) * 40, 1000), 8000)
         try:
             core_response = core_client.send_whatsapp_message(
                 {
@@ -890,6 +891,7 @@ def execute_job(job_id: str, logger: logging.Logger) -> int:
                     "instance_id": instance_id,
                     "number": phone,
                     "text": outbound_body,
+                    "delay_ms": _delay_ms,
                 }
             )
         except core_client.CoreClientError as exc:
