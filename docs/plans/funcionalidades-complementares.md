@@ -252,6 +252,8 @@ Efeito: a partir de agora, toda mensagem enviada pelo agente real exibirá "Digi
 
 
 ## Item 3 — Quebra de mensagem por pontuação
+commit hash: 97497f4ec367ac4c6859377ba1507ac52d0ff023
+
 
 Implementação concluída. 3 arquivos alterados:
 
