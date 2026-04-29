@@ -275,3 +275,22 @@ api.ts — +3 campos opcionais em PlaygroundChatResponse: simulated_delay_second
 MessageBubble.tsx — campo humanizationPreview em ChatMessage + bloco de badges informativos na primeira bolha do bot (Clock delay · Keyboard digitando · Layers N bolhas), exibidos apenas quando os valores são significativos
 
 Playground.tsx — helper buildBotMessage (monta o objeto ChatMessage da primeira parte com trace/preview) + helper revealExtraParts (fire-and-forget: alterna setLoading(true) → espera proporcional ao tamanho → revela a bolha) → tanto handleSend quanto fireOpener agora consomem message_parts e entregam as bolhas sequencialmente com "Bot digitando…" entre elas.
+
+## Janela de horário
+
+## 4a e 4B
+commit hash: 816a7bf1a8a7a5ceabb44a4c91f7cf5650e56337
+
+Implementação concluída. Resumo do que foi feito:
+
+5 arquivos alterados:
+
+backend-core/app/api/ai_profiles.py — 4 campos adicionados a AIProfileBase e AIProfileUpdate; agora a API expõe e aceita first_reply_delay_min/max_seconds e reply_delay_min/max_seconds
+
+frontend-crm/src/types/agente.ts — 4 campos na interface AgentConfig + defaults zerados em DEFAULT_AGENT_CONFIG
+
+frontend-crm/src/services/api.ts — leitura no getConfig (do profile, não do offer_pack) e escrita no saveConfig (direto no PUT); também corrigido availability_schedule que estava no tipo mas nunca mapeado
+
+frontend-crm/src/components/agente/CamadaPipeline.tsx — DrawerDelayResposta com presets Imediato / Rápido / Normal / Lento / Personalizado para ambos os contextos (primeira mensagem e dentro da conversa); ao selecionar "Personalizado" os sliders aparecem; EditCard novo na Seção 0 mostrando o resumo atual.
+
+
