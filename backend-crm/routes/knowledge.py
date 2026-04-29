@@ -77,7 +77,7 @@ def _ext_to_media_type(ext: str) -> str:
     if ext in {"pdf"}:
         return "pdf"
     if ext in {"mp3", "ogg", "opus"}:
-        return "audio"
+        return "myaudio"  # Mensagem de voz (bolha PTT) em vez de arquivo de áudio comum
     return "image"
 
 

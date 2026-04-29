@@ -457,6 +457,42 @@ def ensure_knowledge_item_media_table(conn: sqlite3.Connection) -> None:
     )
 
 
+def ensure_knowledge_item_media_myaudio_type(conn: sqlite3.Connection) -> None:
+    """Migration: adiciona 'myaudio' ao CHECK constraint de knowledge_item_media.media_type.
+    SQLite não suporta ALTER COLUMN — recria a tabela preservando todos os dados."""
+    cur = conn.cursor()
+    cur.execute("SELECT sql FROM sqlite_master WHERE type='table' AND name='knowledge_item_media'")
+    row = cur.fetchone()
+    ddl = (row[0] if row else "") or ""
+    if "myaudio" in ddl:
+        return  # já migrado
+    conn.executescript(
+        """
+        BEGIN;
+        CREATE TABLE knowledge_item_media_new (
+            id                 INTEGER PRIMARY KEY AUTOINCREMENT,
+            knowledge_item_id  INTEGER NOT NULL,
+            media_url          TEXT NOT NULL,
+            media_type         TEXT NOT NULL DEFAULT 'image'
+                                   CHECK (media_type IN ('image','video','audio','pdf','myaudio','ptt')),
+            language           TEXT NOT NULL DEFAULT 'all'
+                                   CHECK (language IN ('all','pt','en','es')),
+            send_order         INTEGER NOT NULL DEFAULT 0,
+            created_at         TEXT NOT NULL,
+            FOREIGN KEY (knowledge_item_id) REFERENCES knowledge_items(id) ON DELETE CASCADE
+        );
+        INSERT INTO knowledge_item_media_new
+            SELECT id, knowledge_item_id, media_url, media_type, language, send_order, created_at
+              FROM knowledge_item_media;
+        DROP TABLE knowledge_item_media;
+        ALTER TABLE knowledge_item_media_new RENAME TO knowledge_item_media;
+        CREATE INDEX IF NOT EXISTS idx_kim_item     ON knowledge_item_media(knowledge_item_id);
+        CREATE INDEX IF NOT EXISTS idx_kim_item_ord ON knowledge_item_media(knowledge_item_id, send_order);
+        COMMIT;
+        """
+    )
+
+
 def migrate_knowledge_media_to_table(conn: sqlite3.Connection) -> None:
     """Migração idempotente: copia media_url existente de knowledge_items para knowledge_item_media."""
     cur = conn.cursor()
@@ -484,7 +520,7 @@ def migrate_knowledge_media_to_table(conn: sqlite3.Connection) -> None:
         elif ext in {"pdf"}:
             media_type = "pdf"
         elif ext in {"mp3", "ogg", "opus"}:
-            media_type = "audio"
+            media_type = "myaudio"
         else:
             media_type = "image"
         cur.execute(
@@ -997,6 +1033,7 @@ def init_db() -> None:
 
         # Migrações
         migrate_knowledge_media_to_table(conn)
+        ensure_knowledge_item_media_myaudio_type(conn)
         migrate_user_profile(conn)
         migrate_atividades_to_appointments(conn)  # popula appointments a partir do legado (normalizado)
         backfill_appointment_dates(conn)          # garante start/end

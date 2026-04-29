@@ -21,6 +21,8 @@ _MEDIA_TYPE_TO_ENDPOINT: Dict[str, str] = {
     "video": "send/video",
     "audio": "send/audio",
     "document": "send/document",
+    "myaudio": "send/myaudio",  # Mensagem de voz — aparece como bolha PTT no WhatsApp
+    "ptt": "send/ptt",
 }
 
 

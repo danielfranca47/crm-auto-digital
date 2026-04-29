@@ -292,7 +292,7 @@ function MultiMediaSection({
               {uploading ? 'Enviando…' : '+ Adicionar mídia'}
             </button>
             <span style={{ fontSize: 10, color: 'var(--o-dim)' }}>
-              jpg · png · gif · mp4 · pdf · mp3 · ogg
+              jpg · png · gif · mp4 · pdf · mp3 · ogg (áudio → mensagem de voz)
             </span>
           </div>
         )}
@@ -527,7 +527,7 @@ function ModalView({ item, onClose }: { item: KnowledgeItem; onClose: () => void
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
             {allMedia.map((m, i) => {
               const isImg = m.media_type === 'image' || /\.(jpg|jpeg|png|webp|gif)$/i.test(m.media_url);
-              const icon = m.media_type === 'pdf' ? '📄' : m.media_type === 'video' ? '🎬' : m.media_type === 'audio' ? '🎵' : '📎';
+              const icon = m.media_type === 'pdf' ? '📄' : m.media_type === 'video' ? '🎬' : m.media_type === 'myaudio' || m.media_type === 'ptt' ? '🎙️' : m.media_type === 'audio' ? '🎵' : '📎';
               return (
                 <div key={m.id || i}>
                   {isImg && i === 0 ? (

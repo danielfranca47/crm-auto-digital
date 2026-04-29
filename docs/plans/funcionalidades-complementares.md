@@ -293,4 +293,23 @@ frontend-crm/src/services/api.ts — leitura no getConfig (do profile, não do o
 
 frontend-crm/src/components/agente/CamadaPipeline.tsx — DrawerDelayResposta com presets Imediato / Rápido / Normal / Lento / Personalizado para ambos os contextos (primeira mensagem e dentro da conversa); ao selecionar "Personalizado" os sliders aparecem; EditCard novo na Seção 0 mostrando o resumo atual.
 
+## 4c e 4d
+Implementação concluída. Commit 3afdc57.
+
+O que foi feito:
+
+Backend-Core (3 arquivos):
+
+ai_profile.py — novo campo availability_mode (default "24h")
+db.py — migration idempotente para o novo campo
+ai_profiles.py — campo exposto em AIProfileBase e AIProfileUpdate
+Backend-CRM (2 arquivos):
+
+humanization.py — funções next_available_at() (calcula próxima abertura da janela respeitando timezone do perfil) e compute_scheduled_at() (combina delay de humanização + janela de horário em uma única chamada)
+inbound_handler.py — substituído compute_reply_delay + scheduled_at_from_delay por compute_scheduled_at() unificado
+Frontend (3 arquivos):
+
+agente.ts — availability_mode no tipo e default
+api.ts — leitura e escrita dos campos em getConfig/saveConfig
+CamadaPipeline.tsx — DrawerHorarioTrabalho com 3 modos: 24h, Horário comercial (Seg–Sex 09–18h no timezone da Camada 1), Personalizado (grade de dias com toggle e inputs de hora). EditCard visível na Seção 0.
 

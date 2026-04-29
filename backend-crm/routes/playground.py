@@ -153,6 +153,7 @@ class PlaygroundChatResponse(BaseModel):
     simulated_delay_seconds: int = 0
     typing_seconds: float = 0.0
     message_parts: List[str] = Field(default_factory=list)
+    audio_previews: List[str] = Field(default_factory=list)  # URLs de myaudio que seriam enviados como voz
 
 
 # ---------------------------------------------------------------------------
@@ -453,6 +454,9 @@ def playground_chat(
 
     _typing_ms = compute_typing_ms(message_to_send) if message_to_send else 0
     _message_parts = split_by_punctuation(message_to_send) if message_to_send else []
+    _audio_previews = [
+        m.media_url for m in pre_send_media if m.media_type in ("myaudio", "ptt")
+    ]
 
     return PlaygroundChatResponse(
         lead_id=lead_id,
@@ -466,6 +470,7 @@ def playground_chat(
         simulated_delay_seconds=_simulated_delay,
         typing_seconds=round(_typing_ms / 1000, 1),
         message_parts=_message_parts,
+        audio_previews=_audio_previews,
     )
 
 

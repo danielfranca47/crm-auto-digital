@@ -152,7 +152,7 @@ export type PlaygroundQualificationState = {
 
 export type PlaygroundPreSendMediaItem = {
   media_url: string;
-  media_type: "image" | "video" | "audio" | "pdf";
+  media_type: "image" | "video" | "audio" | "pdf" | "myaudio" | "ptt";
   send_order: number;
 };
 
@@ -171,6 +171,7 @@ export type PlaygroundChatResponse = {
   simulated_delay_seconds?: number;
   typing_seconds?: number;
   message_parts?: string[];
+  audio_previews?: string[];
 };
 
 // ── Playground FeedbackAssist ────────────────────────────────────────────────

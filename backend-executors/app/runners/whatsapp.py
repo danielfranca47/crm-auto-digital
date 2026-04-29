@@ -952,6 +952,7 @@ def execute_job(job_id: str, logger: logging.Logger) -> int:
                     extra={"phase": "core_send"},
                 )
                 try:
+                    _media_delay_ms = 3000 if _media_type in ("myaudio", "ptt") else 0
                     core_client.send_whatsapp_media(
                         {
                             "provider": provider,
@@ -959,6 +960,7 @@ def execute_job(job_id: str, logger: logging.Logger) -> int:
                             "number": phone,
                             "media_url": _media_url,
                             "media_type": _media_type,
+                            "delay_ms": _media_delay_ms,
                         }
                     )
                     ctx_logger.info("event=post_send_media_success media_type=%s", _media_type, extra={"phase": "core_send"})

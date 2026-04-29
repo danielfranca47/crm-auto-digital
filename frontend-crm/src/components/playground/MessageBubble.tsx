@@ -2,7 +2,7 @@ import { useState } from "react";
 import {
   Bookmark, BookmarkCheck, ChevronDown, ChevronUp,
   ThumbsDown, Minus, ThumbsUp, Star, Loader2,
-  Headphones, ImageIcon, Video, FileText,
+  Headphones, ImageIcon, Video, FileText, Mic,
   Clock, Keyboard, Layers,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
@@ -43,6 +43,8 @@ interface MessageBubbleProps {
 
 const MEDIA_ICONS = {
   audio: Headphones,
+  myaudio: Mic,
+  ptt: Mic,
   image: ImageIcon,
   video: Video,
   pdf: FileText,
@@ -50,6 +52,8 @@ const MEDIA_ICONS = {
 
 const MEDIA_LABELS: Record<string, string> = {
   audio: "Áudio",
+  myaudio: "Mensagem de voz",
+  ptt: "Mensagem de voz",
   image: "Imagem",
   video: "Vídeo",
   pdf: "Documento",
