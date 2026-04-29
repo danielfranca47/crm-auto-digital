@@ -300,45 +300,34 @@ def _enforce_checkout_link_guardrail_legacy(
     decision.message_text = f"{message_text}{separator}{checkout_link}"
 
 
-def _split_message_body(text: str, max_chars: int) -> list[str]:
-    """Divide um texto longo em partes respeitando parágrafos e max_chars.
+def _split_message_by_punctuation(text: str, min_chars: int = 15) -> list[str]:
+    """Divide texto em partes por marcadores de sentença (. ! ? …).
 
-    Retorna lista com 1+ strings. O caller envia a primeira como mensagem rastreada
-    e as demais como fire-and-forget para comportamento multi-mensagem humanizado.
+    Parágrafos duplos (\\n\\n) sempre criam quebra independente de tamanho.
+    Frases curtas (< min_chars) são fundidas com a próxima para evitar bolhas triviais.
+    Retorna lista com 1+ strings; o caller envia a primeira rastreada e as demais com delay.
     """
-    if not text or len(text) <= max_chars:
-        return [text] if text else []
-    raw_paras = [p.strip() for p in text.split("\n\n") if p.strip()]
-    if len(raw_paras) <= 1:
-        # Sem parágrafos: tenta dividir por frases (., !, ?)
-        import re as _re
-        sentences = _re.split(r"(?<=[.!?])\s+", text.strip())
-        parts: list[str] = []
-        current = ""
-        for sent in sentences:
-            candidate = (current + " " + sent).strip() if current else sent
-            if len(candidate) <= max_chars:
-                current = candidate
-            else:
-                if current:
-                    parts.append(current)
-                current = sent
-        if current:
-            parts.append(current)
-        return parts if parts else [text]
-    parts = []
-    current = ""
-    for para in raw_paras:
-        candidate = (current + "\n\n" + para).strip() if current else para
-        if len(candidate) <= max_chars:
-            current = candidate
+    import re as _re
+
+    if not text or not text.strip():
+        return []
+    normalized = text.strip().replace("...", "…")
+    paras = [p.strip() for p in normalized.split("\n\n") if p.strip()]
+    if len(paras) > 1:
+        return paras
+    raw = _re.split(r"(?<=[.!?…])\s+", normalized)
+    parts: list[str] = []
+    buffer = ""
+    for i, frag in enumerate(raw):
+        candidate = (buffer + " " + frag).strip() if buffer else frag.strip()
+        if len(candidate) < min_chars and i < len(raw) - 1:
+            buffer = candidate
         else:
-            if current:
-                parts.append(current)
-            current = para
-    if current:
-        parts.append(current)
-    return parts if parts else [text]
+            parts.append(candidate)
+            buffer = ""
+    if buffer:
+        parts.append(buffer)
+    return [p for p in parts if p] or [text]
 
 
 def _format_questions(questions: List[str]) -> str:
@@ -709,10 +698,9 @@ def execute_job(job_id: str, logger: logging.Logger) -> int:
         elif not outbound_body:
             outbound_body = _build_followup_fallback_outbound_body(context)
 
-    # Dividir mensagem longa em partes (comportamento multi-mensagem humanizado).
-    # A primeira parte é rastreada normalmente; as demais são enviadas como fire-and-forget.
-    _playbook_max_chars = int((context.get("playbook") or {}).get("max_chars") or 350)
-    _body_parts = _split_message_body(outbound_body or "", _playbook_max_chars) if outbound_body else []
+    # Dividir mensagem em partes por pontuação (comportamento multi-mensagem humanizado).
+    # A primeira parte é rastreada normalmente; as demais são enviadas com delay progressivo.
+    _body_parts = _split_message_by_punctuation(outbound_body or "") if outbound_body else []
     if len(_body_parts) > 1:
         outbound_body = _body_parts[0]
         _extra_body_parts: list[str] = _body_parts[1:]
@@ -1012,15 +1000,19 @@ def execute_job(job_id: str, logger: logging.Logger) -> int:
         result_payload["outbound_status"] = final_status
         ctx_logger.info("event=mark_sent_success status=%s", final_status, extra={"phase": "mark_sent"})
 
-        # Partes extras do texto longo — enviadas como fire-and-forget após o texto principal.
+        # Partes extras por pontuação — enviadas com delay progressivo após o texto principal.
         for _extra_part in _extra_body_parts:
             try:
+                _extra_delay_ms = min(max(len(_extra_part) * 40, 1000), 8000)
+                import time as _time
+                _time.sleep(_extra_delay_ms / 1000)
                 core_client.send_whatsapp_message(
                     {
                         "provider": provider,
                         "instance_id": instance_id,
                         "number": phone,
                         "text": _extra_part,
+                        "delay_ms": _extra_delay_ms,
                     }
                 )
             except core_client.CoreClientError as _extra_exc:

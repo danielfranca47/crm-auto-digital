@@ -221,7 +221,7 @@ A ordem recomendada para a Fase 1: **1 → 2 → 3 → 6**, deixando áudio e ja
 
 ----
 
-Implementações:
+## Implementações:
 
 Implementação concluída. Aqui está o resumo do que foi feito:
 
@@ -235,4 +235,29 @@ backend-crm/services/humanization.py — novo módulo com compute_reply_delay() 
 backend-crm/services/whatsapp_inbound/inbound_handler.py — captura bundle.ai_profile, conta mensagens do lead para detectar primeira mensagem, passa scheduled_at ao create_job() com fallback seguro
 backend-crm/routes/playground.py — campo simulated_delay_seconds: int na resposta do playground para paridade visual com o WhatsApp real
 O worker já respeitava scheduled_at automaticamente — nenhuma alteração necessária no executor.
+
+
+## Commit hash : 1fb7fe57f94ef9c3cc6f80baac2a9af230714976
+Implementação concluída. Resumo do que foi feito:
+
+5 arquivos de código + 1 doc alterados:
+
+humanization.py — nova função compute_typing_ms(): 40ms/char, mínimo 1s, máximo 8s
+uazapi_client.py — delay_ms em send_text() e send_media(); injeta campo "delay" no payload quando > 0
+whatsapp_send.py — campo delay_ms: int = 0 nos dois request bodies; repassado ao client
+whatsapp.py (executor) — calcula _delay_ms = min(max(len(text) * 40, 1000), 8000) e inclui no payload ao core
+playground.py — campo typing_seconds: float na resposta, calculado com compute_typing_ms()
+playground-parity.md — documenta a paridade de humanização comportamental
+Efeito: a partir de agora, toda mensagem enviada pelo agente real exibirá "Digitando..." no WhatsApp do lead proporcional ao tamanho da mensagem antes de ela chegar.
+
+
+## Item 3 — Quebra de mensagem por pontuação
+
+Implementação concluída. 3 arquivos alterados:
+
+backend-crm/services/humanization.py — nova função split_by_punctuation(): divide texto em partes por marcadores de sentença (. ! ? …); parágrafos duplos sempre criam quebra; frases curtas (< 15 chars) fundidas com a próxima para evitar bolhas triviais.
+backend-executors/app/runners/whatsapp.py — _split_message_body() substituída por _split_message_by_punctuation() (pontuação-first, sem limite de chars); partes extras agora enviadas com time.sleep proporcional ao tamanho + delay_ms na chamada ao core (typing indicator para cada bolha).
+backend-crm/routes/playground.py — campo message_parts: List[str] adicionado à PlaygroundChatResponse, populado com split_by_punctuation() para paridade visual.
+
+Efeito: a partir de agora, toda resposta da IA com múltiplas frases chega ao WhatsApp do lead como bolhas separadas, cada uma precedida de "Digitando...", com gap proporcional ao tamanho da frase anterior.
 

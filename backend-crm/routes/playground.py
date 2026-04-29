@@ -26,7 +26,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, ConfigDict, Field
 
 from core_client import fetch_core_ai_profile, fetch_core_ai_profile_by_id
-from services.humanization import compute_reply_delay, compute_typing_ms
+from services.humanization import compute_reply_delay, compute_typing_ms, split_by_punctuation
 from database import get_connection
 from security_core import CurrentUser, require_crm_access
 from services.ai_orchestrator.orchestrator import build_context_bundle_for_playground
@@ -152,6 +152,7 @@ class PlaygroundChatResponse(BaseModel):
     pre_send_media: List[PreSendMediaItem] = Field(default_factory=list)
     simulated_delay_seconds: int = 0
     typing_seconds: float = 0.0
+    message_parts: List[str] = Field(default_factory=list)
 
 
 # ---------------------------------------------------------------------------
@@ -451,6 +452,7 @@ def playground_chat(
     ]
 
     _typing_ms = compute_typing_ms(message_to_send) if message_to_send else 0
+    _message_parts = split_by_punctuation(message_to_send) if message_to_send else []
 
     return PlaygroundChatResponse(
         lead_id=lead_id,
@@ -463,6 +465,7 @@ def playground_chat(
         pre_send_media=pre_send_media,
         simulated_delay_seconds=_simulated_delay,
         typing_seconds=round(_typing_ms / 1000, 1),
+        message_parts=_message_parts,
     )
 
 
