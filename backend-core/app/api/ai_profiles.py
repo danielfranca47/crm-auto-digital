@@ -409,7 +409,7 @@ async def get_my_ai_profile(
 ):
     profile = db.query(models.AIProfile).filter(models.AIProfile.user_id == current_user.id).first()
     if not profile:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="AI profile not found")
+        profile = _upsert_ai_profile(db=db, user_id=current_user.id, data={}, require_all_fields_for_create=False)
     return _normalize_profile_offer_pack(profile)
 
 
