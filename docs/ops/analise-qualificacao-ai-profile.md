@@ -161,3 +161,34 @@ O risco se materializa quando o usuário coloca na base de conhecimento da fase 
 | Knowledge base e `required_fields` completamente alinhados | Nulo | Configuração ideal |
 
 Confirmar o impacto real em um caso específico **requer teste** — a interação entre conhecimento injetado e fluxo estruturado depende muito do prompt da Filha, que varia por playbook.
+
+## 6 sobre os campos f1, f2 e f3 no ai-profile
+
+Esses campos são salvos em qualification_fields — não têm nada a ver com custom_instructions.
+
+Como funciona o ciclo completo
+No modal "Adicionar campo", cada item que você cria gera um objeto assim:
+
+
+{
+  "key": "nome_do_pet",
+  "label": "Nome do pet",
+  "question": "Qual é o nome do seu pet?",
+  "passive_hint": "Capturar se lead mencionar",
+  "mode": "required",   // ou "optional" ou "off"
+  "group": "f1"         // f1, f2 ou f3
+}
+Esse objeto vai para qualification_fields (JSON no banco).
+
+O backend deriva automaticamente qualification_required_fields filtrando só os itens com mode = "required". Você nunca precisa preencher qualification_required_fields manualmente — ele é uma consequência do que você marca como "Obrigatório" no modal.
+
+O orquestrador, na hora de montar o contexto para o LLM, lê qualification_fields e separa:
+
+must_collect_with_questions — campos com mode = "required" (LLM vai perguntar ativamente)
+nice_to_collect — campos com mode = "optional" (LLM captura se surgir na conversa)
+Resumo dos três conceitos
+Campo	O que é	Quem preenche
+qualification_fields	Definição rica de cada campo (nome, pergunta, hint, grupo, importância)	Você, via modal F1/F2/F3
+qualification_required_fields	Lista de chaves obrigatórias — derivada automaticamente	Backend (nunca você)
+custom_instructions	Instruções gerais de comportamento do agente (tom, regras, exceções)	Campo separado no AI Profile
+Os filtros F1 (Perfil e Fit), F2 (Intenção e Dor), F3 (4Ps) são apenas agrupamento visual para organizar os campos no painel — no backend tudo vai junto em qualification_fields com o atributo group indicando a qual filtro pertence.
