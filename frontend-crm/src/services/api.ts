@@ -1408,6 +1408,13 @@ export const api = {
         offer_pack,
       });
     },
+
+    generateQualificationFields: async (): Promise<{
+      fields: import('../types/agente').QualificationField[];
+      explanation: string;
+    }> => {
+      return apiClient.post('/qualification/generate-fields', {});
+    },
   },
 
   notifications: {

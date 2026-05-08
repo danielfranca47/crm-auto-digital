@@ -28,6 +28,7 @@ from routes import (
     agents,
     usage,
     knowledge,
+    qualification,
     webhooks,
     executor,
     whatsapp_connect,
@@ -172,6 +173,7 @@ app.include_router(appointments.router)                             # já define
 app.include_router(agents.router)                                   # /api/agents
 app.include_router(usage.router)                                    # /api/usage
 app.include_router(knowledge.router)                                # /api/knowledge
+app.include_router(qualification.router)                            # /api/qualification
 app.include_router(webhooks.router)                                 # /webhooks/whatsapp/inbound
 app.include_router(executor.router)                                 # /api/jobs, /api/whatsapp/* internal
 app.include_router(whatsapp_connect.router)                         # /api/whatsapp/connect, /api/whatsapp/status

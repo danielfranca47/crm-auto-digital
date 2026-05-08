@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { FieldHelp } from './FieldHelp';
 import { SuggestInput, SuggestTextarea } from './SuggestField';
 import type { AgentConfig, QualificationField } from '@/types/agente';
+import { api } from '@/services/api';
 
 interface CamadaQualificacaoProps {
   config: AgentConfig;
@@ -829,12 +830,20 @@ function ModalAddCampoSDR({ fields, onAdd, onClose }: {
 type DrawerKey = 'produto' | 'ticket' | 'publico' | 'dor' | 'objecao' | 'score' | null;
 type ModalKey  = 'f1' | 'f2' | 'f3' | 'buying_signals' | 'add_campo_sdr' | null;
 
+type GeneratePreview = {
+  fields: QualificationField[];
+  explanation: string;
+} | null;
+
 export function CamadaQualificacao({ config, onUpdate }: CamadaQualificacaoProps) {
   const [drawer, setDrawer] = useState<DrawerKey>(null);
   const [modal, setModal]   = useState<ModalKey>(null);
   // Banner de sugestão por agent_mode
   const [bannerMode, setBannerMode] = useState<string | null>(null);
   const prevModeRef = useRef(config.agent_mode);
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [generatePreview, setGeneratePreview] = useState<GeneratePreview>(null);
+  const [generateError, setGenerateError] = useState<string | null>(null);
 
   useEffect(() => {
     if (prevModeRef.current !== config.agent_mode) {
@@ -858,6 +867,32 @@ export function CamadaQualificacao({ config, onUpdate }: CamadaQualificacaoProps
     const suggested = SUGGESTIONS[mode] ?? [];
     updateFields(suggested);
     setBannerMode(null);
+  }
+
+  async function handleGenerate() {
+    setIsGenerating(true);
+    setGenerateError(null);
+    try {
+      const result = await api.agente.generateQualificationFields();
+      setGeneratePreview(result);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Erro ao gerar campos';
+      setGenerateError(msg);
+    } finally {
+      setIsGenerating(false);
+    }
+  }
+
+  function applyGeneratedFields(mode: 'replace' | 'merge') {
+    if (!generatePreview) return;
+    if (mode === 'replace') {
+      updateFields(generatePreview.fields);
+    } else {
+      const existingKeys = new Set(config.qualification_fields.map(f => f.key));
+      const newFields = generatePreview.fields.filter(f => !existingKeys.has(f.key));
+      updateFields([...config.qualification_fields, ...newFields]);
+    }
+    setGeneratePreview(null);
   }
 
   // Adicionar campo SDR
@@ -914,10 +949,25 @@ export function CamadaQualificacao({ config, onUpdate }: CamadaQualificacaoProps
             <span className="font-mono-orion" style={{ fontSize: 9, letterSpacing: '2.5px', textTransform: 'uppercase', color: 'var(--o-sub)' }}>
               Filtros de qualificação
             </span>
-            <span className="font-mono-orion" style={{ fontSize: 8, color: 'var(--o-dim)', border: '1px solid var(--o-b1)', padding: '1px 6px', borderRadius: 2 }}>
-              {f1Count + f2Count + f3Count} campos ativos
-            </span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <span className="font-mono-orion" style={{ fontSize: 8, color: 'var(--o-dim)', border: '1px solid var(--o-b1)', padding: '1px 6px', borderRadius: 2 }}>
+                {f1Count + f2Count + f3Count} campos ativos
+              </span>
+              <button
+                className="o-btn o-btn-sm"
+                onClick={handleGenerate}
+                disabled={isGenerating}
+                style={{ fontSize: 10, padding: '2px 8px', opacity: isGenerating ? 0.6 : 1 }}
+              >
+                {isGenerating ? '...' : '✦ Gerar com IA'}
+              </button>
+            </div>
           </div>
+          {generateError && (
+            <div style={{ fontSize: 11, color: 'var(--o-error, #f87171)', marginBottom: 8, paddingLeft: 2 }}>
+              {generateError}
+            </div>
+          )}
           {isPassive && (
             <div style={{ fontSize: 11.5, color: 'var(--o-sub)', marginBottom: 12, paddingLeft: 2 }}>
               Modo passivo · O agente capta naturalmente; apenas perguntas de fechamento (F3) são permitidas.
@@ -949,12 +999,29 @@ export function CamadaQualificacao({ config, onUpdate }: CamadaQualificacaoProps
           </div>
         </>
       ) : (
-        <SecaoCamposPlana
-          fields={config.qualification_fields}
-          responseStyle={config.response_style}
-          agentMode={config.agent_mode}
-          onUpdate={updateFields}
-        />
+        <>
+          <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 8 }}>
+            <button
+              className="o-btn o-btn-sm"
+              onClick={handleGenerate}
+              disabled={isGenerating}
+              style={{ fontSize: 10, padding: '2px 8px', opacity: isGenerating ? 0.6 : 1 }}
+            >
+              {isGenerating ? '...' : '✦ Gerar com IA'}
+            </button>
+          </div>
+          {generateError && (
+            <div style={{ fontSize: 11, color: 'var(--o-error, #f87171)', marginBottom: 8, paddingLeft: 2 }}>
+              {generateError}
+            </div>
+          )}
+          <SecaoCamposPlana
+            fields={config.qualification_fields}
+            responseStyle={config.response_style}
+            agentMode={config.agent_mode}
+            onUpdate={updateFields}
+          />
+        </>
       )}
 
       {/* Parâmetros avançados */}
@@ -1043,6 +1110,16 @@ export function CamadaQualificacao({ config, onUpdate }: CamadaQualificacaoProps
           onSave={v => { onUpdate({ buying_signal_keywords: v }); setModal(null); }}
         />
       )}
+
+      {generatePreview && (
+        <DrawerGerarCampos
+          preview={generatePreview}
+          isSdr={isSdr}
+          onReplace={() => applyGeneratedFields('replace')}
+          onMerge={() => applyGeneratedFields('merge')}
+          onClose={() => setGeneratePreview(null)}
+        />
+      )}
     </>
   );
 }
@@ -1119,6 +1196,108 @@ function ModalBase({ title, sub, onClose, onSave, children }: {
         <div className="o-modal-body">{children}</div>
         <div className="o-modal-footer">
           <button className="o-btn o-btn-primary" onClick={onSave}>Salvar alterações</button>
+          <button className="o-btn" onClick={onClose}>Cancelar</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── DrawerGerarCampos ────────────────────────────────────────
+
+const GROUP_LABELS: Record<string, string> = {
+  f1: 'F1 · Perfil e Fit',
+  f2: 'F2 · Intenção e Dor',
+  f3: 'F3 · 4Ps',
+};
+
+function DrawerGerarCampos({
+  preview,
+  isSdr,
+  onReplace,
+  onMerge,
+  onClose,
+}: {
+  preview: { fields: QualificationField[]; explanation: string };
+  isSdr: boolean;
+  onReplace: () => void;
+  onMerge: () => void;
+  onClose: () => void;
+}) {
+  const groups = isSdr
+    ? (['f1', 'f2', 'f3'] as const)
+    : null;
+
+  function renderField(f: QualificationField) {
+    return (
+      <div key={f.key} style={{ padding: '10px 12px', background: 'var(--o-b1)', borderRadius: 6, marginBottom: 8 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+          <span style={{ fontSize: 12, color: 'var(--o-text)', fontWeight: 500 }}>{f.label}</span>
+          <span className={`o-badge ${f.mode === 'required' ? 'o-badge-ok' : 'o-badge-warn'}`} style={{ fontSize: 9 }}>
+            {f.mode === 'required' ? 'Obrigatório' : 'Opcional'}
+          </span>
+        </div>
+        {f.question && (
+          <div style={{ fontSize: 11, color: 'var(--o-sub)', marginBottom: 2 }}>
+            <span style={{ color: 'var(--o-dim)' }}>Pergunta:</span> {f.question}
+          </div>
+        )}
+        {f.passive_hint && (
+          <div style={{ fontSize: 11, color: 'var(--o-sub)' }}>
+            <span style={{ color: 'var(--o-dim)' }}>Capturar:</span> {f.passive_hint}
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  return (
+    <div className="o-modal-overlay open" onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
+      <div className="o-modal" style={{ maxWidth: 560 }}>
+        <div className="o-modal-header">
+          <div>
+            <div className="font-display" style={{ fontSize: 20, fontWeight: 400, color: 'var(--o-text)' }}>Campos gerados pela IA</div>
+            <div style={{ fontSize: 12, color: 'var(--o-sub)', fontWeight: 300, marginTop: 3 }}>
+              Baseado nos seus Critérios de Qualificação
+            </div>
+          </div>
+          <button className="o-close-btn" onClick={onClose}>✕</button>
+        </div>
+
+        <div className="o-modal-body" style={{ maxHeight: '60vh', overflowY: 'auto' }}>
+          {preview.explanation && (
+            <div style={{ fontSize: 11.5, color: 'var(--o-sub)', marginBottom: 16, padding: '8px 12px', background: 'var(--o-b1)', borderRadius: 6, borderLeft: '2px solid var(--o-purple, #7c3aed)' }}>
+              {preview.explanation}
+            </div>
+          )}
+
+          {groups ? (
+            groups.map(g => {
+              const groupFields = preview.fields.filter(f => f.group === g);
+              if (groupFields.length === 0) return null;
+              return (
+                <div key={g} style={{ marginBottom: 16 }}>
+                  <div className="font-mono-orion" style={{ fontSize: 8, letterSpacing: '2.5px', textTransform: 'uppercase', color: 'var(--o-dim)', marginBottom: 8 }}>
+                    {GROUP_LABELS[g]}
+                  </div>
+                  {groupFields.map(renderField)}
+                </div>
+              );
+            })
+          ) : (
+            preview.fields.map(renderField)
+          )}
+
+          {preview.fields.length === 0 && (
+            <div style={{ fontSize: 12, color: 'var(--o-sub)', textAlign: 'center', padding: 24 }}>
+              Nenhum campo foi gerado. Verifique os Critérios de Qualificação na base de conhecimento.
+            </div>
+          )}
+        </div>
+
+        <div className="o-modal-footer">
+          <button className="o-btn o-btn-primary" onClick={onReplace}>Substituir todos</button>
+          <button className="o-btn" onClick={onMerge}>Adicionar aos existentes</button>
           <button className="o-btn" onClick={onClose}>Cancelar</button>
         </div>
       </div>

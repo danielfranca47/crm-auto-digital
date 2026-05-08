@@ -920,21 +920,21 @@ def _get_heuristic_reason(context: Dict[str, Any]) -> str:
 
 
 def _get_required_fields_override(context: Dict[str, Any]) -> Optional[List[str]]:
-    """Lê qualification_required_fields do ai_profile. None = usar defaults do modo."""
+    """Lê campos obrigatórios do ai_profile. None = usar defaults do modo."""
     ai_profile = context.get("ai_profile") or {}
-    override = ai_profile.get("qualification_required_fields")
-    if isinstance(override, list):
-        return [str(f) for f in override if isinstance(f, str)]
-    # Fallback: derivar das chaves com mode=required em qualification_fields (UI rica)
+    # qualification_fields (UI rica) tem prioridade: contém exatamente o que o usuário configurou.
+    # Se presente, usar apenas esses — ignora a lista legada para evitar campos inesperados.
     qual_fields = ai_profile.get("qualification_fields")
     if isinstance(qual_fields, list) and len(qual_fields) > 0:
-        required_keys = [
+        return [
             str(f["key"])
             for f in qual_fields
             if isinstance(f, dict) and f.get("mode") == "required" and isinstance(f.get("key"), str)
         ]
-        if required_keys:
-            return required_keys
+    # Backward compat: perfis sem qualification_fields usam a lista plana legada
+    override = ai_profile.get("qualification_required_fields")
+    if isinstance(override, list):
+        return [str(f) for f in override if isinstance(f, str)]
     return None
 
 
