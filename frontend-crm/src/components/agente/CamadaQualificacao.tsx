@@ -883,13 +883,12 @@ export function CamadaQualificacao({ config, onUpdate }: CamadaQualificacaoProps
     }
   }
 
-  function applyGeneratedFields(mode: 'replace' | 'merge') {
-    if (!generatePreview) return;
+  function applyGeneratedFields(mode: 'replace' | 'merge', editedFields: QualificationField[]) {
     if (mode === 'replace') {
-      updateFields(generatePreview.fields);
+      updateFields(editedFields);
     } else {
       const existingKeys = new Set(config.qualification_fields.map(f => f.key));
-      const newFields = generatePreview.fields.filter(f => !existingKeys.has(f.key));
+      const newFields = editedFields.filter(f => !existingKeys.has(f.key));
       updateFields([...config.qualification_fields, ...newFields]);
     }
     setGeneratePreview(null);
@@ -1115,8 +1114,8 @@ export function CamadaQualificacao({ config, onUpdate }: CamadaQualificacaoProps
         <DrawerGerarCampos
           preview={generatePreview}
           isSdr={isSdr}
-          onReplace={() => applyGeneratedFields('replace')}
-          onMerge={() => applyGeneratedFields('merge')}
+          onReplace={(fields) => applyGeneratedFields('replace', fields)}
+          onMerge={(fields) => applyGeneratedFields('merge', fields)}
           onClose={() => setGeneratePreview(null)}
         />
       )}
@@ -1220,22 +1219,173 @@ function DrawerGerarCampos({
 }: {
   preview: { fields: QualificationField[]; explanation: string };
   isSdr: boolean;
-  onReplace: () => void;
-  onMerge: () => void;
+  onReplace: (fields: QualificationField[]) => void;
+  onMerge: (fields: QualificationField[]) => void;
   onClose: () => void;
 }) {
-  const groups = isSdr
-    ? (['f1', 'f2', 'f3'] as const)
-    : null;
+  const [editableFields, setEditableFields] = useState<QualificationField[]>(preview.fields);
+  const [editingKey, setEditingKey] = useState<string | null>(null);
+  const [editDraft, setEditDraft] = useState<QualificationField | null>(null);
+  const [isGeneratingMore, setIsGeneratingMore] = useState(false);
+  const [generateMoreError, setGenerateMoreError] = useState<string | null>(null);
+
+  const groups = isSdr ? (['f1', 'f2', 'f3'] as const) : null;
+
+  function startEdit(f: QualificationField) {
+    setEditingKey(f.key);
+    setEditDraft({ ...f });
+  }
+
+  function cancelEdit() {
+    if (editDraft && !editDraft.label.trim()) {
+      setEditableFields(prev => prev.filter(f => f.key !== editDraft.key));
+    }
+    setEditingKey(null);
+    setEditDraft(null);
+  }
+
+  function saveEdit() {
+    if (!editDraft || !editDraft.label.trim()) return;
+    setEditableFields(prev => prev.map(f => f.key === editDraft.key ? { ...editDraft } : f));
+    setEditingKey(null);
+    setEditDraft(null);
+  }
+
+  function removeField(key: string) {
+    setEditableFields(prev => prev.filter(f => f.key !== key));
+    if (editingKey === key) {
+      setEditingKey(null);
+      setEditDraft(null);
+    }
+  }
+
+  function addBlankField(group?: 'f1' | 'f2' | 'f3') {
+    const newKey = `custom_${Date.now()}`;
+    const blank: QualificationField = { key: newKey, label: '', question: '', passive_hint: '', mode: 'required', group };
+    setEditableFields(prev => [...prev, blank]);
+    setEditingKey(newKey);
+    setEditDraft({ ...blank });
+  }
+
+  async function handleGenerateMore() {
+    setIsGeneratingMore(true);
+    setGenerateMoreError(null);
+    try {
+      const result = await api.agente.generateQualificationFields();
+      const existingKeys = new Set(editableFields.map(f => f.key));
+      const newFields = result.fields.filter(f => !existingKeys.has(f.key));
+      setEditableFields(prev => [...prev, ...newFields]);
+    } catch (err: unknown) {
+      setGenerateMoreError(err instanceof Error ? err.message : 'Erro ao gerar mais campos');
+    } finally {
+      setIsGeneratingMore(false);
+    }
+  }
 
   function renderField(f: QualificationField) {
+    const isEditing = editingKey === f.key && editDraft;
+
+    if (isEditing) {
+      return (
+        <div key={f.key} style={{ padding: '10px 12px', background: 'var(--o-b1)', borderRadius: 6, marginBottom: 8, border: '1px solid color-mix(in srgb, var(--o-purple, #7c3aed) 50%, transparent)' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            <div>
+              <div style={{ fontSize: 10, color: 'var(--o-dim)', marginBottom: 3 }}>Label</div>
+              <input
+                className="o-input"
+                value={editDraft.label}
+                onChange={e => setEditDraft(d => d ? { ...d, label: e.target.value } : d)}
+                placeholder="Ex: Faturamento Anual"
+                style={{ width: '100%', fontSize: 12 }}
+                autoFocus
+              />
+            </div>
+            <div>
+              <div style={{ fontSize: 10, color: 'var(--o-dim)', marginBottom: 3 }}>Pergunta</div>
+              <textarea
+                className="o-input"
+                value={editDraft.question ?? ''}
+                onChange={e => setEditDraft(d => d ? { ...d, question: e.target.value } : d)}
+                placeholder="Ex: Qual é o faturamento anual da empresa?"
+                rows={2}
+                style={{ width: '100%', fontSize: 12, resize: 'vertical' }}
+              />
+            </div>
+            <div>
+              <div style={{ fontSize: 10, color: 'var(--o-dim)', marginBottom: 3 }}>Capturar passivamente</div>
+              <input
+                className="o-input"
+                value={editDraft.passive_hint ?? ''}
+                onChange={e => setEditDraft(d => d ? { ...d, passive_hint: e.target.value } : d)}
+                placeholder="Ex: Se o lead mencionar valores de faturamento"
+                style={{ width: '100%', fontSize: 12 }}
+              />
+            </div>
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+              <div>
+                <div style={{ fontSize: 10, color: 'var(--o-dim)', marginBottom: 3 }}>Modo</div>
+                <select
+                  className="o-input"
+                  value={editDraft.mode}
+                  onChange={e => setEditDraft(d => d ? { ...d, mode: e.target.value as 'required' | 'optional' } : d)}
+                  style={{ fontSize: 12 }}
+                >
+                  <option value="required">Obrigatório</option>
+                  <option value="optional">Opcional</option>
+                </select>
+              </div>
+              {isSdr && (
+                <div>
+                  <div style={{ fontSize: 10, color: 'var(--o-dim)', marginBottom: 3 }}>Grupo</div>
+                  <select
+                    className="o-input"
+                    value={editDraft.group ?? 'f1'}
+                    onChange={e => setEditDraft(d => d ? { ...d, group: e.target.value as 'f1' | 'f2' | 'f3' } : d)}
+                    style={{ fontSize: 12 }}
+                  >
+                    <option value="f1">F1 · Perfil e Fit</option>
+                    <option value="f2">F2 · Intenção e Dor</option>
+                    <option value="f3">F3 · 4Ps</option>
+                  </select>
+                </div>
+              )}
+            </div>
+            <div style={{ display: 'flex', gap: 6 }}>
+              <button className="o-btn o-btn-primary o-btn-sm" onClick={saveEdit} disabled={!editDraft.label.trim()} style={{ fontSize: 11, padding: '3px 10px' }}>
+                Salvar
+              </button>
+              <button className="o-btn o-btn-sm" onClick={cancelEdit} style={{ fontSize: 11, padding: '3px 10px' }}>
+                Cancelar
+              </button>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
     return (
       <div key={f.key} style={{ padding: '10px 12px', background: 'var(--o-b1)', borderRadius: 6, marginBottom: 8 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
-          <span style={{ fontSize: 12, color: 'var(--o-text)', fontWeight: 500 }}>{f.label}</span>
-          <span className={`o-badge ${f.mode === 'required' ? 'o-badge-ok' : 'o-badge-warn'}`} style={{ fontSize: 9 }}>
-            {f.mode === 'required' ? 'Obrigatório' : 'Opcional'}
-          </span>
+        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8, marginBottom: 4 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+            <span style={{ fontSize: 12, color: 'var(--o-text)', fontWeight: 500 }}>
+              {f.label || <span style={{ color: 'var(--o-dim)' }}>Sem nome</span>}
+            </span>
+            <span className={`o-badge ${f.mode === 'required' ? 'o-badge-ok' : 'o-badge-warn'}`} style={{ fontSize: 9 }}>
+              {f.mode === 'required' ? 'Obrigatório' : 'Opcional'}
+            </span>
+          </div>
+          <div style={{ display: 'flex', gap: 2, flexShrink: 0 }}>
+            <button
+              onClick={() => startEdit(f)}
+              title="Editar"
+              style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--o-dim)', fontSize: 13, padding: '1px 5px', borderRadius: 3, lineHeight: 1 }}
+            >✎</button>
+            <button
+              onClick={() => removeField(f.key)}
+              title="Remover"
+              style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--o-dim)', fontSize: 13, padding: '1px 5px', borderRadius: 3, lineHeight: 1 }}
+            >✕</button>
+          </div>
         </div>
         {f.question && (
           <div style={{ fontSize: 11, color: 'var(--o-sub)', marginBottom: 2 }}>
@@ -1258,7 +1408,7 @@ function DrawerGerarCampos({
           <div>
             <div className="font-display" style={{ fontSize: 20, fontWeight: 400, color: 'var(--o-text)' }}>Campos gerados pela IA</div>
             <div style={{ fontSize: 12, color: 'var(--o-sub)', fontWeight: 300, marginTop: 3 }}>
-              Baseado nos seus Critérios de Qualificação
+              Revise e personalize antes de salvar
             </div>
           </div>
           <button className="o-close-btn" onClick={onClose}>✕</button>
@@ -1273,32 +1423,59 @@ function DrawerGerarCampos({
 
           {groups ? (
             groups.map(g => {
-              const groupFields = preview.fields.filter(f => f.group === g);
-              if (groupFields.length === 0) return null;
+              const groupFields = editableFields.filter(f => f.group === g);
               return (
                 <div key={g} style={{ marginBottom: 16 }}>
                   <div className="font-mono-orion" style={{ fontSize: 8, letterSpacing: '2.5px', textTransform: 'uppercase', color: 'var(--o-dim)', marginBottom: 8 }}>
                     {GROUP_LABELS[g]}
                   </div>
                   {groupFields.map(renderField)}
+                  <button
+                    className="o-btn o-btn-sm"
+                    onClick={() => addBlankField(g)}
+                    style={{ fontSize: 10, padding: '2px 8px', marginTop: 2 }}
+                  >+ Adicionar campo</button>
                 </div>
               );
             })
           ) : (
-            preview.fields.map(renderField)
+            <>
+              {editableFields.map(renderField)}
+              <button
+                className="o-btn o-btn-sm"
+                onClick={() => addBlankField()}
+                style={{ fontSize: 10, padding: '2px 8px', marginTop: 4 }}
+              >+ Adicionar campo</button>
+            </>
           )}
 
-          {preview.fields.length === 0 && (
-            <div style={{ fontSize: 12, color: 'var(--o-sub)', textAlign: 'center', padding: 24 }}>
-              Nenhum campo foi gerado. Verifique os Critérios de Qualificação na base de conhecimento.
+          {editableFields.length === 0 && (
+            <div style={{ fontSize: 12, color: 'var(--o-sub)', textAlign: 'center', padding: '16px 0' }}>
+              Nenhum campo. Adicione manualmente ou gere com IA.
             </div>
           )}
         </div>
 
-        <div className="o-modal-footer">
-          <button className="o-btn o-btn-primary" onClick={onReplace}>Substituir todos</button>
-          <button className="o-btn" onClick={onMerge}>Adicionar aos existentes</button>
-          <button className="o-btn" onClick={onClose}>Cancelar</button>
+        {generateMoreError && (
+          <div style={{ fontSize: 11, color: 'var(--o-error, #f87171)', padding: '4px 16px' }}>
+            {generateMoreError}
+          </div>
+        )}
+
+        <div className="o-modal-footer" style={{ justifyContent: 'space-between' }}>
+          <button
+            className="o-btn o-btn-sm"
+            onClick={handleGenerateMore}
+            disabled={isGeneratingMore}
+            style={{ fontSize: 10, padding: '2px 8px', opacity: isGeneratingMore ? 0.6 : 1 }}
+          >
+            {isGeneratingMore ? '...' : '✦ Gerar mais com IA'}
+          </button>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button className="o-btn o-btn-primary" onClick={() => onReplace(editableFields)}>Substituir todos</button>
+            <button className="o-btn" onClick={() => onMerge(editableFields)}>Adicionar aos existentes</button>
+            <button className="o-btn" onClick={onClose}>Cancelar</button>
+          </div>
         </div>
       </div>
     </div>
