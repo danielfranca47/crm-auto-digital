@@ -1417,6 +1417,19 @@ export const api = {
     }> => {
       return apiClient.post('/qualification/generate-fields', {});
     },
+
+    generateFieldsForFilter: async (
+      group: 'f1' | 'f2' | 'f3',
+      existingKeys: string[],
+    ): Promise<{
+      fields: import('../types/agente').QualificationField[];
+      explanation: string;
+    }> => {
+      return apiClient.post('/qualification/generate-fields-for-filter', {
+        group,
+        existing_keys: existingKeys,
+      });
+    },
   },
 
   notifications: {

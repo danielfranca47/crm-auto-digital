@@ -412,6 +412,10 @@ function ModalFiltroSDR({ group, responseStyle, fields, onUpdate, onClose, onAdd
   onAddField: () => void;
 }) {
   const [editingField, setEditingField] = useState<QualificationField | null>(null);
+  const [filterPreview, setFilterPreview] = useState<QualificationField[] | null>(null);
+  const [filterExplanation, setFilterExplanation] = useState('');
+  const [isFilterGenerating, setIsFilterGenerating] = useState(false);
+  const [filterGenError, setFilterGenError] = useState<string | null>(null);
 
   const titles = { f1: 'Filtro 1 · Perfil e fit', f2: 'Filtro 2 · Intenção e dor', f3: 'Filtro 3 · 4Ps' };
   const subs = {
@@ -443,9 +447,92 @@ function ModalFiltroSDR({ group, responseStyle, fields, onUpdate, onClose, onAdd
 
   const isPassive = responseStyle === 'passive';
 
+  async function handleGenerateForFilter() {
+    setIsFilterGenerating(true);
+    setFilterGenError(null);
+    try {
+      const existingKeys = groupFields.map(f => f.key);
+      const result = await api.agente.generateFieldsForFilter(group, existingKeys);
+      setFilterPreview(result.fields);
+      setFilterExplanation(result.explanation);
+    } catch (err: unknown) {
+      setFilterGenError(err instanceof Error ? err.message : 'Erro ao gerar campos');
+    } finally {
+      setIsFilterGenerating(false);
+    }
+  }
+
+  function applyFilterPreview(mode: 'merge' | 'replace') {
+    if (!filterPreview) return;
+    if (mode === 'replace') {
+      onUpdate([...fields.filter(f => f.group !== group), ...filterPreview]);
+    } else {
+      const existingKeys = new Set(groupFields.map(f => f.key));
+      const toAdd = filterPreview.filter(f => !existingKeys.has(f.key));
+      onUpdate([...fields, ...toAdd]);
+    }
+    setFilterPreview(null);
+  }
+
   return (
     <>
       <ModalBase title={titles[group]} sub={isPassive ? passiveLabels[group] : subs[group]} onClose={onClose} onSave={onClose}>
+        {/* Botão Gerar com IA por filtro */}
+        <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 10 }}>
+          <button
+            className="o-btn o-btn-sm"
+            onClick={handleGenerateForFilter}
+            disabled={isFilterGenerating}
+            style={{ fontSize: 10, padding: '2px 8px', opacity: isFilterGenerating ? 0.6 : 1 }}
+          >
+            {isFilterGenerating ? '...' : '✦ Gerar com IA'}
+          </button>
+        </div>
+
+        {/* Erro de geração */}
+        {filterGenError && (
+          <div style={{ fontSize: 11, color: 'var(--o-error, #f87171)', marginBottom: 8 }}>
+            {filterGenError}
+          </div>
+        )}
+
+        {/* Preview dos campos gerados */}
+        {filterPreview && (
+          <div style={{
+            background: 'color-mix(in srgb, var(--o-purple) 5%, transparent)',
+            border: '1px solid color-mix(in srgb, var(--o-purple) 30%, transparent)',
+            borderRadius: 6, padding: 12, marginBottom: 12,
+          }}>
+            {filterExplanation && (
+              <div style={{ fontSize: 11, color: 'var(--o-sub)', marginBottom: 10 }}>
+                ✦ {filterExplanation}
+              </div>
+            )}
+            {filterPreview.map(f => (
+              <div key={f.key} style={{ fontSize: 12, marginBottom: 6, padding: '7px 10px', background: 'var(--o-b1)', borderRadius: 4 }}>
+                <div style={{ fontWeight: 500, color: 'var(--o-text)' }}>{f.label}</div>
+                {f.question && (
+                  <div style={{ fontSize: 11, color: 'var(--o-sub)', marginTop: 2 }}>"{f.question}"</div>
+                )}
+              </div>
+            ))}
+            <div style={{ display: 'flex', gap: 6, marginTop: 10, flexWrap: 'wrap' }}>
+              <button className="o-btn o-btn-primary o-btn-sm" onClick={() => applyFilterPreview('merge')}
+                style={{ fontSize: 11, padding: '3px 10px' }}>
+                Adicionar ao filtro
+              </button>
+              <button className="o-btn o-btn-sm" onClick={() => applyFilterPreview('replace')}
+                style={{ fontSize: 11, padding: '3px 10px' }}>
+                Substituir campos do filtro
+              </button>
+              <button className="o-btn o-btn-sm" onClick={() => setFilterPreview(null)}
+                style={{ fontSize: 11, padding: '3px 10px' }}>
+                Descartar
+              </button>
+            </div>
+          </div>
+        )}
+
         {isPassive && (
           <div style={{
             padding: '8px 12px', marginBottom: 12, borderRadius: 5,
