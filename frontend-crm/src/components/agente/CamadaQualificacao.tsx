@@ -583,6 +583,11 @@ function ModalFiltroSDR({ group, responseStyle, fields, onUpdate, onClose, onAdd
               </div>
               <ModeBadge mode={f.mode} passive={isPassive} onClick={() => handleCycleMode(f.key)} />
               <button
+                onClick={() => handleRemoveField(f.key)}
+                style={{ background: 'transparent', border: 'none', color: 'var(--o-dim)', cursor: 'pointer', padding: '2px 4px', fontSize: 13, flexShrink: 0 }}
+                title="Remover campo"
+              >✕</button>
+              <button
                 onClick={() => setEditingField(f)}
                 style={{ background: 'transparent', border: 'none', color: 'var(--o-sub)', cursor: 'pointer', padding: '2px 4px', fontSize: 14, flexShrink: 0 }}
                 title="Editar campo"
