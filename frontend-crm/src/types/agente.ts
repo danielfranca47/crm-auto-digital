@@ -127,6 +127,7 @@ export interface AgentConfig {
   first_reply_delay_max_seconds: number;
   reply_delay_min_seconds: number;
   reply_delay_max_seconds: number;
+  multi_message_buffer_seconds: number;
 
   // ── Camada 3 — Follow-up avançado ────────────────────────
   followup_max_attempts: number;
@@ -219,6 +220,7 @@ export const DEFAULT_AGENT_CONFIG: AgentConfig = {
   first_reply_delay_max_seconds: 0,
   reply_delay_min_seconds: 0,
   reply_delay_max_seconds: 0,
+  multi_message_buffer_seconds: 8,
 
   followup_max_attempts: 3,
   followup_first_offset: 60,

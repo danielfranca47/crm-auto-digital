@@ -63,6 +63,7 @@ class AIProfile(Base):
     first_reply_delay_max_seconds = Column(Integer, nullable=True, server_default="0")
     reply_delay_min_seconds = Column(Integer, nullable=True, server_default="0")
     reply_delay_max_seconds = Column(Integer, nullable=True, server_default="0")
+    multi_message_buffer_seconds = Column(Integer, nullable=True, server_default="8")
     custom_variables = Column(JSON, nullable=True)
     enabled_extensions = Column(JSON, nullable=True)
     generated_prompt_parts = Column(JSON, nullable=True)

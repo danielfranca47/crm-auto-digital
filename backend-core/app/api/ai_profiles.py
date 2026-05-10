@@ -176,6 +176,7 @@ class AIProfileBase(BaseModel):
     first_reply_delay_max_seconds: Optional[int] = 0
     reply_delay_min_seconds: Optional[int] = 0
     reply_delay_max_seconds: Optional[int] = 0
+    multi_message_buffer_seconds: Optional[int] = 8
 
 
 class AIProfileCreate(AIProfileBase):
@@ -233,6 +234,7 @@ class AIProfileUpdate(BaseModel):
     first_reply_delay_max_seconds: Optional[int] = None
     reply_delay_min_seconds: Optional[int] = None
     reply_delay_max_seconds: Optional[int] = None
+    multi_message_buffer_seconds: Optional[int] = None
 
 
 class AIProfileOut(AIProfileBase):

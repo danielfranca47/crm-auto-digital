@@ -1344,6 +1344,51 @@ def get_jobs_overview(seconds: int = 120, *, user_id: Optional[int] = None) -> D
     }
 
 
+# ---------------------------------------------------------------------------
+# Multi-message buffer helpers
+# ---------------------------------------------------------------------------
+
+def find_pending_inbound_job(conn: sqlite3.Connection, lead_id: int, user_id: int) -> Optional[Dict[str, Any]]:
+    """Retorna o job whatsapp.inbound.n8n pendente mais recente para o lead, se existir."""
+    row = conn.execute(
+        """
+        SELECT * FROM jobs
+         WHERE user_id = ?
+           AND type = ?
+           AND status = ?
+           AND JSON_EXTRACT(payload, '$.lead_id') = ?
+         ORDER BY created_at DESC
+         LIMIT 1
+        """,
+        (user_id, TYPE_WHATSAPP_INBOUND, JOB_STATUS_PENDING, lead_id),
+    ).fetchone()
+    return dict(row) if row else None
+
+
+def update_inbound_job_accumulation(
+    conn: sqlite3.Connection,
+    job_id: int,
+    accumulated_text: str,
+    new_scheduled_at: datetime,
+) -> None:
+    """Acumula texto e reseta scheduled_at de um job inbound pendente."""
+    conn.execute(
+        """
+        UPDATE jobs
+           SET payload = JSON_SET(payload, '$.message_text', ?),
+               scheduled_at = ?,
+               updated_at = CURRENT_TIMESTAMP
+         WHERE id = ?
+        """,
+        (accumulated_text, new_scheduled_at.isoformat(), job_id),
+    )
+    logger.info(
+        "inbound_job_accumulated job_id=%s new_scheduled_at=%s",
+        job_id,
+        new_scheduled_at.isoformat(),
+    )
+
+
 __all__ = [
     "provision_agent",
     "register_agent",
@@ -1357,4 +1402,6 @@ __all__ = [
     "get_whatsapp_summary",
     "get_jobs_overview",
     "list_agents",
+    "find_pending_inbound_job",
+    "update_inbound_job_accumulation",
 ]

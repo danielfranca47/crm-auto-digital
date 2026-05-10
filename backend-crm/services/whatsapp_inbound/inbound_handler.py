@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 import os
 import sqlite3
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Any, Dict, Optional
 
 from fastapi import HTTPException
@@ -13,7 +13,12 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from core_client import fetch_core_whatsapp_connection_resolve
 from database import get_connection
-from services.jobs_service import TYPE_WHATSAPP_INBOUND, create_job
+from services.jobs_service import (
+    TYPE_WHATSAPP_INBOUND,
+    create_job,
+    find_pending_inbound_job,
+    update_inbound_job_accumulation,
+)
 from services.humanization import compute_reply_delay, compute_scheduled_at, scheduled_at_from_delay
 from services.ai_orchestrator import (
     InboundEvent,
@@ -364,12 +369,32 @@ def handle_inbound(payload: Dict[str, Any]) -> Dict[str, Any]:
         _msg_count = int(_msg_row["cnt"]) if _msg_row else 0
     _is_first_message = _msg_count <= 1
 
-    _scheduled_at = None
-    if _ai_profile_for_delay:
-        try:
-            _scheduled_at = compute_scheduled_at(_ai_profile_for_delay, _is_first_message)
-        except Exception as _delay_exc:
-            logger.debug("humanization scheduled_at error (fallback None): %s", _delay_exc)
+    _buffer_secs = int((_ai_profile_for_delay or {}).get("multi_message_buffer_seconds") or 0)
+
+    if _buffer_secs > 0:
+        with get_connection() as _conn_buf:
+            existing_job = find_pending_inbound_job(_conn_buf, lead_id, user_id)
+            if existing_job:
+                import json as _json
+                old_payload = _json.loads(existing_job["payload"])
+                accumulated_text = old_payload.get("message_text", "") + "\n" + message_text
+                new_scheduled_at = datetime.utcnow() + timedelta(seconds=_buffer_secs)
+                update_inbound_job_accumulation(_conn_buf, existing_job["id"], accumulated_text, new_scheduled_at)
+                _conn_buf.commit()
+                logger.info(
+                    "inbound_buffered lead_id=%s user_id=%s job_id=%s buffer_secs=%s",
+                    lead_id, user_id, existing_job["id"], _buffer_secs,
+                )
+                return {"status": "buffered", "lead_id": lead_id, "job_id": existing_job["id"]}
+
+        _scheduled_at = datetime.utcnow() + timedelta(seconds=_buffer_secs)
+    else:
+        _scheduled_at = None
+        if _ai_profile_for_delay:
+            try:
+                _scheduled_at = compute_scheduled_at(_ai_profile_for_delay, _is_first_message)
+            except Exception as _delay_exc:
+                logger.debug("humanization scheduled_at error (fallback None): %s", _delay_exc)
 
     job_payload = build_job_payload(
         lead_id=lead_id,

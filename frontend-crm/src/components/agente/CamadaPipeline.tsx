@@ -42,6 +42,7 @@ function DrawerDelayResposta({ config, onSave, onClose }: {
   const [rPreset, setRPreset]   = useState(() => detectPreset(REPLY_PRESETS, config.reply_delay_min_seconds, config.reply_delay_max_seconds));
   const [rMin,  setRMin]  = useState(config.reply_delay_min_seconds);
   const [rMax,  setRMax]  = useState(config.reply_delay_max_seconds);
+  const [bufSecs, setBufSecs] = useState(config.multi_message_buffer_seconds ?? 8);
 
   function selectFrPreset(p: typeof FIRST_REPLY_PRESETS[number]) {
     setFrPreset(p.key);
@@ -54,14 +55,25 @@ function DrawerDelayResposta({ config, onSave, onClose }: {
 
   const fmtFirst = (v: number) => v === 0 ? 'imediato' : v < 60 ? `${v}s` : `${Math.round(v / 60)}min`;
   const fmtReply = (v: number) => v === 0 ? 'imediato' : `${v}s`;
+  const fmtBuf   = (v: number) => v === 0 ? 'Desabilitado' : `${v}s`;
 
   return (
     <DrawerBase title="Delay de resposta" sub="Simula tempo de leitura e digitação humana — aumenta taxa de abertura" onClose={onClose}
-      onSave={() => onSave({ first_reply_delay_min_seconds: frMin, first_reply_delay_max_seconds: frMax, reply_delay_min_seconds: rMin, reply_delay_max_seconds: rMax })}>
+      onSave={() => onSave({ first_reply_delay_min_seconds: frMin, first_reply_delay_max_seconds: frMax, reply_delay_min_seconds: rMin, reply_delay_max_seconds: rMax, multi_message_buffer_seconds: bufSecs })}>
 
       <div className="o-field">
+        <label className="o-field-label">Absorção de mensagens consecutivas</label>
+        <div className="o-field-hint">
+          Quando o lead envia várias mensagens em sequência, o agente aguarda este período antes de responder,
+          acumulando todas as mensagens em uma única resposta. Evita respostas fragmentadas e dá uma sensação mais natural.
+          Defina 0 para desabilitar.
+        </div>
+        <SliderField label={fmtBuf(bufSecs)} value={bufSecs} min={0} max={30} step={1} format={fmtBuf} onChange={setBufSecs} />
+      </div>
+
+      <div className="o-field" style={{ marginTop: 8 }}>
         <label className="o-field-label">Primeira mensagem (novo lead)</label>
-        <div className="o-field-hint">Delay antes de responder o primeiro contato. O lead verá "Digitando..." durante o período.</div>
+        <div className="o-field-hint">Delay antes de responder o primeiro contato. Aplicado quando buffer está desabilitado ou não há mensagens acumuladas. O lead verá "Digitando..." durante o período.</div>
         {FIRST_REPLY_PRESETS.map(p => (
           <OptCard key={p.key} selected={frPreset === p.key} onClick={() => selectFrPreset(p)} label={p.label} desc={p.desc} />
         ))}
@@ -75,7 +87,7 @@ function DrawerDelayResposta({ config, onSave, onClose }: {
 
       <div className="o-field" style={{ marginTop: 8 }}>
         <label className="o-field-label">Dentro da conversa</label>
-        <div className="o-field-hint">Delay antes de cada resposta subsequente ao longo da conversa.</div>
+        <div className="o-field-hint">Delay antes de cada resposta subsequente. Aplicado quando buffer está desabilitado.</div>
         {REPLY_PRESETS.map(p => (
           <OptCard key={p.key} selected={rPreset === p.key} onClick={() => selectRPreset(p)} label={p.label} desc={p.desc} />
         ))}
@@ -452,6 +464,9 @@ export function CamadaPipeline({ config, onUpdate, phoneNumber }: CamadaPipeline
   const delayReplyLabel = config.reply_delay_max_seconds > 0
     ? `${config.reply_delay_min_seconds}–${config.reply_delay_max_seconds}s`
     : 'Imediato';
+  const bufferLabel = (config.multi_message_buffer_seconds ?? 0) > 0
+    ? `buffer ${config.multi_message_buffer_seconds}s`
+    : 'buffer off';
   const availabilityLabel = config.availability_mode === 'business_hours'
     ? 'Seg–Sex · 09–18h'
     : config.availability_mode === 'custom'
@@ -475,9 +490,9 @@ export function CamadaPipeline({ config, onUpdate, phoneNumber }: CamadaPipeline
         <EditCard label="Limite diário de disparos" value={`${config.daily_limit} mensagens/dia`} sub="Proteção comportamental" onClick={() => setDrawer('limite')} status="ok" help="Limite de disparos por dia neste número. Recomendado 150–300 para uso regular. Acima disso aumenta o risco de detecção e bloqueio pelo WhatsApp." />
         <EditCard
           label="Delay de resposta" sub="Tempo antes de responder o lead"
-          value={`1ª msg: ${delayFirstLabel} · conversa: ${delayReplyLabel}`}
+          value={`${bufferLabel} · 1ª msg: ${delayFirstLabel} · conversa: ${delayReplyLabel}`}
           onClick={() => setDrawer('delay_resposta')} status="ok"
-          help="Delay sorteado entre mínimo e máximo antes de enviar cada resposta. Simula tempo humano de leitura e digitação. O lead vê 'Digitando...' durante o delay."
+          help="Buffer acumula mensagens consecutivas do lead antes de responder (evita respostas fragmentadas). Delays simulam tempo humano de leitura e digitação — o lead vê 'Digitando...' durante o período."
         />
         <EditCard
           label="Janela de horário" sub="Período em que o agente responde"

@@ -1256,6 +1256,7 @@ export const api = {
         first_reply_delay_max_seconds: (profile as any)?.first_reply_delay_max_seconds ?? 0,
         reply_delay_min_seconds:       (profile as any)?.reply_delay_min_seconds       ?? 0,
         reply_delay_max_seconds:       (profile as any)?.reply_delay_max_seconds       ?? 0,
+        multi_message_buffer_seconds:  (profile as any)?.multi_message_buffer_seconds  ?? 8,
 
         // Camada 2 — Qualificação avançada
         qualification_score_threshold: pack.qualification_score_threshold ?? DEFAULT_AGENT_CONFIG.qualification_score_threshold,
@@ -1403,6 +1404,7 @@ export const api = {
         first_reply_delay_max_seconds: config.first_reply_delay_max_seconds,
         reply_delay_min_seconds:       config.reply_delay_min_seconds,
         reply_delay_max_seconds:       config.reply_delay_max_seconds,
+        multi_message_buffer_seconds:  config.multi_message_buffer_seconds,
         availability_mode:             config.availability_mode,
         availability_schedule:         config.availability_schedule,
         offer_pack,
