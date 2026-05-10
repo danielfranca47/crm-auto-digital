@@ -476,7 +476,13 @@ function ModalFiltroSDR({ group, responseStyle, fields, onUpdate, onClose, onAdd
 
   return (
     <>
-      <ModalBase title={titles[group]} sub={isPassive ? passiveLabels[group] : subs[group]} onClose={onClose} onSave={onClose}>
+      <ModalBase
+        title={titles[group]}
+        sub={isPassive ? passiveLabels[group] : subs[group]}
+        onClose={onClose}
+        onSave={onClose}
+        disableBackdropClose={!!editingField || !!filterPreview}
+      >
         {/* Botão Gerar com IA por filtro */}
         <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 10 }}>
           <button
@@ -1266,11 +1272,12 @@ function DrawerBase({ title, sub, onClose, onSave, children }: {
   );
 }
 
-function ModalBase({ title, sub, onClose, onSave, children }: {
-  title: string; sub: string; onClose: () => void; onSave: () => void; children: React.ReactNode;
+function ModalBase({ title, sub, onClose, onSave, children, disableBackdropClose }: {
+  title: string; sub: string; onClose: () => void; onSave: () => void;
+  children: React.ReactNode; disableBackdropClose?: boolean;
 }) {
   return (
-    <div className="o-modal-overlay open" onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
+    <div className="o-modal-overlay open" onClick={e => { if (!disableBackdropClose && e.target === e.currentTarget) onClose(); }}>
       <div className="o-modal">
         <div className="o-modal-header">
           <div>

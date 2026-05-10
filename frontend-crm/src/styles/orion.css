@@ -541,7 +541,7 @@
   position: fixed;
   inset: 0;
   background: rgba(0,0,0,0.55);
-  z-index: 300;
+  z-index: 450;
   opacity: 0;
   pointer-events: none;
   transition: opacity 0.25s;
@@ -557,7 +557,7 @@
   max-width: 100vw;
   background: var(--o-s1);
   border-left: 1px solid var(--o-b1);
-  z-index: 301;
+  z-index: 451;
   transform: translateX(100%);
   transition: transform 0.28s cubic-bezier(0.4,0,0.2,1);
   display: flex;
