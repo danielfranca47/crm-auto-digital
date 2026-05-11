@@ -145,17 +145,19 @@ function DrawerNode({ node: initial, qualFields, onSave, onClose }: {
   }, []);
 
   const categoriesWithMedia = useMemo(() => {
-    const map = new Map<string, { medias: KnowledgeMediaItem[]; isUncategorized: boolean }>();
+    const map = new Map<string, { medias: KnowledgeMediaItem[]; isUncategorized: boolean; titles: Set<string> }>();
     for (const item of knowledgeItems) {
       if (item.media_items.length === 0) continue;
       // Mesmo fallback do orchestrator backend: null → "uncategorized"
       const cat = item.category?.trim() || 'uncategorized';
-      const existing = map.get(cat) ?? { medias: [], isUncategorized: cat === 'uncategorized' };
-      map.set(cat, { medias: [...existing.medias, ...item.media_items], isUncategorized: cat === 'uncategorized' });
+      const existing = map.get(cat) ?? { medias: [], isUncategorized: cat === 'uncategorized', titles: new Set<string>() };
+      if (item.title?.trim()) existing.titles.add(item.title.trim());
+      map.set(cat, { medias: [...existing.medias, ...item.media_items], isUncategorized: cat === 'uncategorized', titles: existing.titles });
     }
-    return Array.from(map.entries()).map(([cat, { medias, isUncategorized }]) => ({
+    return Array.from(map.entries()).map(([cat, { medias, isUncategorized, titles }]) => ({
       cat,
       displayLabel: isUncategorized ? 'Sem categoria' : cat,
+      titles: Array.from(titles),
       medias,
     }));
   }, [knowledgeItems]);
@@ -344,7 +346,7 @@ function DrawerNode({ node: initial, qualFields, onSave, onClose }: {
             </div>
 
             {/* Cards de categoria */}
-            {categoriesWithMedia.map(({ cat, displayLabel, medias }) => {
+            {categoriesWithMedia.map(({ cat, displayLabel, titles, medias }) => {
               const selected = node.action_media_category === cat;
               const typeIcons: Record<string, string> = {
                 image: '🖼', video: '🎬', audio: '🎵', pdf: '📄', myaudio: '🎙', ptt: '🎙',
@@ -362,10 +364,15 @@ function DrawerNode({ node: initial, qualFields, onSave, onClose }: {
                   }}
                 >
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
                       <code style={{ fontSize: 12.5, color: selected ? 'var(--o-active)' : 'var(--o-text)', fontWeight: 500 }}>
                         {displayLabel}
                       </code>
+                      {titles.length > 0 && (
+                        <span style={{ fontSize: 11.5, color: selected ? 'var(--o-active)' : 'var(--o-sub)', fontWeight: 300 }}>
+                          {titles.join(' · ')}
+                        </span>
+                      )}
                       {displayLabel !== cat && (
                         <span style={{ fontSize: 10.5, color: 'var(--o-dim)', fontWeight: 300 }}>chave: {cat}</span>
                       )}
