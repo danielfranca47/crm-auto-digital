@@ -145,14 +145,19 @@ function DrawerNode({ node: initial, qualFields, onSave, onClose }: {
   }, []);
 
   const categoriesWithMedia = useMemo(() => {
-    const map = new Map<string, KnowledgeMediaItem[]>();
+    const map = new Map<string, { medias: KnowledgeMediaItem[]; isUncategorized: boolean }>();
     for (const item of knowledgeItems) {
-      const cat = item.category?.trim();
-      if (!cat || item.media_items.length === 0) continue;
-      const existing = map.get(cat) ?? [];
-      map.set(cat, [...existing, ...item.media_items]);
+      if (item.media_items.length === 0) continue;
+      // Mesmo fallback do orchestrator backend: null → "uncategorized"
+      const cat = item.category?.trim() || 'uncategorized';
+      const existing = map.get(cat) ?? { medias: [], isUncategorized: cat === 'uncategorized' };
+      map.set(cat, { medias: [...existing.medias, ...item.media_items], isUncategorized: cat === 'uncategorized' });
     }
-    return Array.from(map.entries()).map(([cat, medias]) => ({ cat, medias }));
+    return Array.from(map.entries()).map(([cat, { medias, isUncategorized }]) => ({
+      cat,
+      displayLabel: isUncategorized ? 'Sem categoria' : cat,
+      medias,
+    }));
   }, [knowledgeItems]);
 
   const allPhases: SalesFlowPhase[] = ['qualification', 'apresentation', 'follow-up', 'closing'];
@@ -339,7 +344,7 @@ function DrawerNode({ node: initial, qualFields, onSave, onClose }: {
             </div>
 
             {/* Cards de categoria */}
-            {categoriesWithMedia.map(({ cat, medias }) => {
+            {categoriesWithMedia.map(({ cat, displayLabel, medias }) => {
               const selected = node.action_media_category === cat;
               const typeIcons: Record<string, string> = {
                 image: '🖼', video: '🎬', audio: '🎵', pdf: '📄', myaudio: '🎙', ptt: '🎙',
@@ -357,9 +362,14 @@ function DrawerNode({ node: initial, qualFields, onSave, onClose }: {
                   }}
                 >
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                    <code style={{ fontSize: 12.5, color: selected ? 'var(--o-active)' : 'var(--o-text)', fontWeight: 500 }}>
-                      {cat}
-                    </code>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+                      <code style={{ fontSize: 12.5, color: selected ? 'var(--o-active)' : 'var(--o-text)', fontWeight: 500 }}>
+                        {displayLabel}
+                      </code>
+                      {displayLabel !== cat && (
+                        <span style={{ fontSize: 10.5, color: 'var(--o-dim)', fontWeight: 300 }}>chave: {cat}</span>
+                      )}
+                    </div>
                     <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
                       {types.map(t => (
                         <span key={t} title={t} style={{ fontSize: 14 }}>{typeIcons[t] ?? '📎'}</span>
