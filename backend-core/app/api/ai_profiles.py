@@ -39,6 +39,26 @@ def _normalize_offer_pack(value):
     return None
 
 
+def _normalize_sales_flow(value):
+    if value is None:
+        return None
+    if isinstance(value, str):
+        raw = value.strip()
+        if not raw:
+            return None
+        try:
+            value = json.loads(raw)
+        except json.JSONDecodeError:
+            return None
+    if not isinstance(value, dict):
+        return None
+    if not isinstance(value.get("enabled"), bool):
+        value["enabled"] = bool(value.get("enabled", False))
+    if not isinstance(value.get("nodes"), list):
+        value["nodes"] = []
+    return value
+
+
 def _normalize_profile_offer_pack(profile: models.AIProfile) -> models.AIProfile:
     try:
         profile.offer_pack = _normalize_offer_pack(getattr(profile, "offer_pack", None))
@@ -177,6 +197,7 @@ class AIProfileBase(BaseModel):
     reply_delay_min_seconds: Optional[int] = 0
     reply_delay_max_seconds: Optional[int] = 0
     multi_message_buffer_seconds: Optional[int] = 8
+    sales_flow: Optional[dict] = None
 
 
 class AIProfileCreate(AIProfileBase):
@@ -235,6 +256,7 @@ class AIProfileUpdate(BaseModel):
     reply_delay_min_seconds: Optional[int] = None
     reply_delay_max_seconds: Optional[int] = None
     multi_message_buffer_seconds: Optional[int] = None
+    sales_flow: Optional[dict] = None
 
 
 class AIProfileOut(AIProfileBase):
@@ -248,6 +270,7 @@ class AIProfileOut(AIProfileBase):
     prompt_parts_generated_at: Optional[datetime] = None
     prompt_parts_version: Optional[int] = None
     enabled_extensions: Optional[List[str]] = None
+    sales_flow: Optional[dict] = None
 
     class Config:
         orm_mode = True
@@ -329,6 +352,8 @@ def _upsert_ai_profile(
     profile = db.query(models.AIProfile).filter(models.AIProfile.user_id == user_id).first()
     if "offer_pack" in data:
         data["offer_pack"] = _normalize_offer_pack(data.get("offer_pack"))
+    if "sales_flow" in data:
+        data["sales_flow"] = _normalize_sales_flow(data.get("sales_flow"))
     # Derivar qualification_required_fields a partir de qualification_fields quando presente
     if "qualification_fields" in data and data["qualification_fields"] is not None:
         fields = data["qualification_fields"]

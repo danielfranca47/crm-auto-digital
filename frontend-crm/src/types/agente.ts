@@ -14,6 +14,71 @@ export interface QualificationField {
   group?: 'f1' | 'f2' | 'f3';   // APENAS para SDR — filtro ao qual este campo pertence
 }
 
+// ─── Fluxo de Venda ───────────────────────────────────────────
+
+export type SalesFlowTriggerType =
+  | 'phase_entered'
+  | 'signal'
+  | 'keyword'
+  | 'qualification_field';
+
+export type SalesFlowSignalKey =
+  | 'price_acceptance'
+  | 'intent_level'
+  | 'meeting_proposed'
+  | 'handoff_requested';
+
+export type SalesFlowPhase = 'qualification' | 'apresentation' | 'follow-up' | 'closing';
+
+export interface SalesFlowNode {
+  id: string;
+  label: string;
+  enabled: boolean;
+  trigger_phases: SalesFlowPhase[];
+  trigger_type: SalesFlowTriggerType;
+  trigger_signal: SalesFlowSignalKey | null;
+  trigger_value: string | null;
+  trigger_keywords: string[];
+  trigger_field_key: string | null;
+  trigger_field_value: string | null;
+  action_instruction: string;
+  action_media_category: string | null;
+  priority: number;
+}
+
+export interface SalesFlow {
+  enabled: boolean;
+  nodes: SalesFlowNode[];
+}
+
+export const SALES_FLOW_TRIGGER_LABELS: Record<SalesFlowTriggerType, string> = {
+  phase_entered:       'Fase iniciada',
+  signal:              'Sinal detectado',
+  keyword:             'Palavra-chave dita pelo lead',
+  qualification_field: 'Campo de qualificação preenchido',
+};
+
+export const SALES_FLOW_SIGNAL_LABELS: Record<SalesFlowSignalKey, string> = {
+  price_acceptance:  'Aceitação de preço',
+  intent_level:      'Nível de intenção',
+  meeting_proposed:  'Reunião proposta',
+  handoff_requested: 'Pedido de atendimento humano',
+};
+
+export const SALES_FLOW_SIGNAL_VALUES: Record<SalesFlowSignalKey, { value: string; label: string }[]> = {
+  price_acceptance:  [{ value: 'yes', label: 'Aceitou' }, { value: 'no', label: 'Recusou' }, { value: 'unsure', label: 'Indeciso' }],
+  intent_level:      [{ value: 'high', label: 'Alto' }, { value: 'medium', label: 'Médio' }, { value: 'low', label: 'Baixo' }],
+  meeting_proposed:  [{ value: 'true', label: 'Proposta feita' }],
+  handoff_requested: [{ value: 'true', label: 'Solicitado' }],
+};
+
+export const SALES_FLOW_PHASE_LABELS: Record<SalesFlowPhase, string> = {
+  qualification: 'Qualificação',
+  apresentation: 'Apresentação',
+  'follow-up':   'Follow-up',
+  closing:       'Fechamento',
+};
+
 /** Resposta de GET /api/agents/ (agente local / runner)
  *  A API serializa com alias: o campo JSON é "id", não "agent_id"
  */
@@ -159,6 +224,9 @@ export interface AgentConfig {
 
   // ── Variáveis personalizadas ─────────────────────────────────
   custom_variables: Record<string, string>;
+
+  // ── Fluxo de Venda (apenas modo ativo) ──────────────────────
+  sales_flow: SalesFlow | null;
 }
 
 /** Valores padrão para o estado inicial (antes de carregar da API) */
@@ -248,6 +316,8 @@ export const DEFAULT_AGENT_CONFIG: AgentConfig = {
   payment_webhook_secret: '',
 
   custom_variables: {},
+
+  sales_flow: null,
 };
 
 // ─── Dashboard ────────────────────────────────────────────────

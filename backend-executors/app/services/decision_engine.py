@@ -224,6 +224,104 @@ QUALIFICATION_FIELD_FALLBACK_LABELS = {
 }
 
 
+def _evaluate_sales_flow(
+    context: Dict[str, Any],
+    current_phase: str,
+    signals_structured: Optional[dict],
+) -> Optional[dict]:
+    """Avalia os nodes do sales_flow configurado e retorna o primeiro match ativo.
+
+    Retorna dict com {action_instruction, action_media_category, matched_node_id, matched_node_label}
+    ou None se nenhum node fizer match (ou fluxo estiver desabilitado).
+    """
+    ai_profile = context.get("ai_profile") or {}
+    response_style = (ai_profile.get("response_style") or "passive").strip().lower()
+    if response_style != "active":
+        return None
+
+    sales_flow = ai_profile.get("sales_flow")
+    if not isinstance(sales_flow, dict) or not sales_flow.get("enabled"):
+        return None
+
+    nodes = sales_flow.get("nodes")
+    if not isinstance(nodes, list) or not nodes:
+        return None
+
+    signals = _sanitize_signals_structured(signals_structured) if isinstance(signals_structured, dict) else {}
+    qual_state = _qualification_state_from_context(context)
+    qual_data = qual_state.get("data_json") or {}
+    message_text = _extract_message_text(context)
+    normalized_msg = _normalize_str(message_text)
+
+    sorted_nodes = sorted(
+        [n for n in nodes if isinstance(n, dict) and n.get("enabled", True)],
+        key=lambda n: int(n.get("priority") or 0),
+    )
+
+    for node in sorted_nodes:
+        trigger_phases = node.get("trigger_phases") or []
+        if trigger_phases and current_phase not in trigger_phases:
+            continue
+
+        trigger_type = (node.get("trigger_type") or "").strip().lower()
+        matched = False
+
+        if trigger_type == "phase_entered":
+            matched = True
+        elif trigger_type == "signal":
+            sig_key = (node.get("trigger_signal") or "").strip()
+            sig_val = (node.get("trigger_value") or "").strip().lower()
+            if sig_key and sig_key in signals:
+                actual = str(signals.get(sig_key) or "").strip().lower()
+                matched = (actual == sig_val) if sig_val else bool(actual)
+        elif trigger_type == "keyword":
+            keywords = [
+                _normalize_str(kw.strip())
+                for kw in (node.get("trigger_keywords") or [])
+                if kw and kw.strip()
+            ]
+            matched = any(kw in normalized_msg for kw in keywords)
+        elif trigger_type == "qualification_field":
+            field_key = (node.get("trigger_field_key") or "").strip()
+            field_val = (node.get("trigger_field_value") or "").strip().lower()
+            if field_key and field_key in qual_data:
+                actual = str(qual_data.get(field_key) or "").strip().lower()
+                matched = (actual == field_val) if field_val else bool(actual)
+
+        if matched:
+            instruction = (node.get("action_instruction") or "").strip()
+            if not instruction:
+                continue
+            return {
+                "action_instruction": instruction,
+                "action_media_category": (node.get("action_media_category") or "").strip() or None,
+                "matched_node_id": node.get("id", ""),
+                "matched_node_label": node.get("label", ""),
+            }
+
+    return None
+
+
+def _build_sales_flow_block(sf_match: Optional[dict]) -> str:
+    """Gera o bloco de instrução de Fluxo de Venda para injeção no prompt da filha."""
+    if not sf_match:
+        return ""
+    instruction = sf_match.get("action_instruction", "").strip()
+    if not instruction:
+        return ""
+    label = sf_match.get("matched_node_label", "")
+    header = "\nINSTRUÇÃO DE FLUXO DE VENDA"
+    if label:
+        header += f" [{label}]"
+    media_hint = sf_match.get("action_media_category")
+    media_line = f"\nsales_flow_media_hint: {media_hint}" if media_hint else ""
+    return (
+        f"{header} (prioridade alta — aplicar antes de responder):\n"
+        f"{instruction}\n"
+        f"{media_line}\n"
+    )
+
+
 def _build_custom_instructions_block(ai_profile: Dict[str, Any]) -> str:
     """Gera bloco de instruções personalizadas do operador com prioridade máxima."""
     ci = (ai_profile.get("custom_instructions") or "").strip()
@@ -1841,6 +1939,7 @@ CONTEXTO:
 - inbound_message_text: {message_text}
 - next_action_hint_mae: {mother_decision.next_action_hint or "null"}
 {_build_qualification_fields_block(ai_profile, response_style)}{_build_custom_instructions_block(ai_profile)}{_build_business_info_block(context)}{_build_training_examples_block(context, "qualification")}"""
+    _qual_prompt += _build_sales_flow_block(_evaluate_sales_flow(context, "qualification", mother_decision.signals))
     return _inject_generated_parts(_qual_prompt, context, "qualification")
 
 def _build_child_prompt_apresentation(
@@ -2346,6 +2445,7 @@ def _build_child_prompt_apresentation(
         + _build_business_info_block(context)
         + _build_training_examples_block(context, "apresentation")
     )
+    _apres_prompt += _build_sales_flow_block(_evaluate_sales_flow(context, "apresentation", mother_decision.signals))
     return _inject_generated_parts(_apres_prompt, context, "apresentation")
 
 
@@ -2609,6 +2709,7 @@ def _build_child_prompt_follow_up(
         + _build_custom_instructions_block(ai_profile)
         + _build_business_info_block(context)
     )
+    _followup_prompt += _build_sales_flow_block(_evaluate_sales_flow(context, "follow-up", mother_decision.signals))
     return _inject_generated_parts(_followup_prompt, context, "followup")
 
 

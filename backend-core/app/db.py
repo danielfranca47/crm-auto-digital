@@ -114,6 +114,7 @@ def ensure_ai_profile_columns() -> None:
         "reply_delay_min_seconds": {"default": 0, "sqlite_type": "INTEGER", "pg_type": "INTEGER"},
         "reply_delay_max_seconds": {"default": 0, "sqlite_type": "INTEGER", "pg_type": "INTEGER"},
         "multi_message_buffer_seconds": {"default": 8, "sqlite_type": "INTEGER", "pg_type": "INTEGER"},
+        "sales_flow": {"default": None, "sqlite_type": "TEXT", "pg_type": "JSON"},
     }
 
     with engine.begin() as conn:

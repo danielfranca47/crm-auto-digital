@@ -8,6 +8,7 @@ import { CamadaConhecimento } from '@/components/agente/CamadaConhecimento';
 import { CamadaApresentacao } from '@/components/agente/CamadaApresentacao';
 import { CamadaOferta } from '@/components/agente/CamadaOferta';
 import { ConexaoNumero } from '@/components/agente/ConexaoNumero';
+import { CamadaFluxoVenda } from '@/components/agente/CamadaFluxoVenda';
 import { AgentExportImportPanel } from '@/components/agente/AgentExportImportPanel';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { api } from '@/services/api';
@@ -18,7 +19,7 @@ import { AGENT_MODE_LABELS, IDENTITY_MODE_LABELS, LGPD_LABELS, REATIVACAO_LABELS
 interface KnowledgeSummary { criticalFilled: number; criticalTotal: number; }
 
 // ─── Tipos de painel ─────────────────────────────────────────
-type PanelId = 'overview' | 'c1' | 'c2' | 'c3' | 'c4' | 'c5' | 'c6' | 'conexao';
+type PanelId = 'overview' | 'c1' | 'c2' | 'c3' | 'c4' | 'c5' | 'c6' | 'fluxo' | 'conexao';
 
 // ─── CTA Agente Espião ───────────────────────────────────────
 function SpyAgentCTA() {
@@ -215,6 +216,30 @@ function PainelResumo({
         </>
       )}
 
+      {/* Fluxo de Venda */}
+      {config.response_style === 'active' && (
+        <>
+          <div className="o-section-hdr" style={{ marginTop: 24 }}>
+            <span className="font-mono-orion" style={{ fontSize: 9, letterSpacing: '2.5px', textTransform: 'uppercase', color: 'var(--o-sub)' }}>
+              Fluxo de Venda · Modo Ativo
+            </span>
+            <span className="font-mono-orion" style={{ fontSize: 8, color: 'var(--o-dim)', border: '1px solid var(--o-b1)', padding: '1px 6px', borderRadius: 2 }}>
+              {config.sales_flow?.enabled ? 'Ativo' : 'Inativo'}
+            </span>
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 14, marginTop: 8 }}>
+            <SummaryCard
+              label="Regras configuradas"
+              value={!config.sales_flow || config.sales_flow.nodes.length === 0
+                ? 'Nenhuma regra'
+                : `${config.sales_flow.nodes.filter(n => n.enabled).length} ativa(s) de ${config.sales_flow.nodes.length}`}
+              status={config.sales_flow && config.sales_flow.nodes.length > 0 ? 'ok' : undefined}
+              onClick={() => onNavigate('fluxo')}
+            />
+          </div>
+        </>
+      )}
+
       <div style={{ marginTop: 24, display: 'flex', gap: 10 }}>
         {dirty && (
           <>
@@ -400,6 +425,7 @@ export default function AiProfile() {
     },
     ...(isScheduleMode ? [{ id: 'c5' as PanelId, label: '⑤ Apresentação' }] : []),
     ...(isDirectMode   ? [{ id: 'c6' as PanelId, label: '⑥ Oferta' }]      : []),
+    ...(config.response_style === 'active' ? [{ id: 'fluxo' as PanelId, label: '⑦ Fluxo de Venda' }] : []),
     { id: 'conexao',  label: 'Conexão' },
   ];
 
@@ -641,6 +667,36 @@ export default function AiProfile() {
               {isDirty && (
                 <button className="o-btn o-btn-primary" onClick={handleSave} disabled={saving}>
                   {saving ? 'Salvando…' : 'Salvar Oferta'}
+                </button>
+              )}
+              <button className="o-btn" onClick={() => navigate('overview')}>← Voltar</button>
+            </div>
+          </div>
+        )}
+        {activePanel === 'fluxo' && config.response_style === 'active' && (
+          <div className="o-panel o-fade-in">
+            {isDirty && (
+              <div className="o-draft-banner">
+                <span>●</span>
+                <span><strong>Editando Fluxo de Venda.</strong> Alterações aplicadas apenas em novas conversas.</span>
+                <button className="o-btn o-btn-primary" style={{ marginLeft: 'auto' }} onClick={handleSave} disabled={saving}>
+                  {saving ? 'Salvando…' : 'Salvar'}
+                </button>
+                <button className="o-btn" onClick={() => navigate('overview')}>Cancelar</button>
+              </div>
+            )}
+            <div className="font-mono-orion" style={{ fontSize: 9, letterSpacing: 3, textTransform: 'uppercase', marginBottom: 8, color: 'var(--o-warn)' }}>
+              Camada 7 · Modo Ativo
+            </div>
+            <div className="font-display" style={{ fontSize: 28, fontWeight: 400, marginBottom: 6, color: 'var(--o-text)' }}>Fluxo de Venda</div>
+            <div style={{ fontSize: 12.5, color: 'var(--o-sub)', fontWeight: 300, marginBottom: 24 }}>
+              Regras condicionais que ativam instruções específicas do agente em momentos cruciais da conversa.
+            </div>
+            <CamadaFluxoVenda config={config} onUpdate={updateConfig} />
+            <div style={{ display: 'flex', gap: 10, marginTop: 24 }}>
+              {isDirty && (
+                <button className="o-btn o-btn-primary" onClick={handleSave} disabled={saving}>
+                  {saving ? 'Salvando…' : 'Salvar Fluxo de Venda'}
                 </button>
               )}
               <button className="o-btn" onClick={() => navigate('overview')}>← Voltar</button>
