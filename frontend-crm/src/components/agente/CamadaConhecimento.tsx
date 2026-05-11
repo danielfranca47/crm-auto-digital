@@ -413,13 +413,14 @@ function ModalGuided({
 
 // ─── Modal: Adicionar conteúdo extra (livre / upload) ────────
 function ModalAddExtra({ onClose, onAdded }: { onClose: () => void; onAdded: () => void }) {
-  const [tab, setTab]         = useState<'text' | 'file'>('text');
+  const [tab, setTab]         = useState<'text' | 'file' | 'audio'>('text');
   const [title, setTitle]     = useState('');
   const [content, setContent] = useState('');
   const [file, setFile]       = useState<File | null>(null);
   const [saving, setSaving]   = useState(false);
   const [error, setError]     = useState<string | null>(null);
-  const fileRef = useRef<HTMLInputElement>(null);
+  const fileRef  = useRef<HTMLInputElement>(null);
+  const audioRef = useRef<HTMLInputElement>(null);
 
   async function handleSave() {
     if (tab === 'text') {
@@ -431,7 +432,7 @@ function ModalAddExtra({ onClose, onAdded }: { onClose: () => void; onAdded: () 
       } catch {
         setError('Erro ao salvar. Tente novamente.');
       } finally { setSaving(false); }
-    } else {
+    } else if (tab === 'file') {
       if (!file) { setError('Selecione um arquivo.'); return; }
       setSaving(true);
       try {
@@ -440,8 +441,23 @@ function ModalAddExtra({ onClose, onAdded }: { onClose: () => void; onAdded: () 
       } catch {
         setError('Erro ao enviar arquivo. Tente novamente.');
       } finally { setSaving(false); }
+    } else {
+      if (!file) { setError('Selecione um arquivo de áudio.'); return; }
+      setSaving(true);
+      try {
+        await api.crm.uploadKnowledgeAudio(file);
+        onAdded();
+      } catch {
+        setError('Erro ao enviar áudio. Tente novamente.');
+      } finally { setSaving(false); }
     }
   }
+
+  const TABS = [
+    { key: 'text',  label: 'Texto livre' },
+    { key: 'file',  label: 'Upload (.txt/.csv/.xlsx)' },
+    { key: 'audio', label: 'Áudio (.mp3/.ogg)' },
+  ] as const;
 
   return (
     <ModalBase
@@ -452,14 +468,14 @@ function ModalAddExtra({ onClose, onAdded }: { onClose: () => void; onAdded: () 
       saveLabel={saving ? 'Salvando…' : 'Adicionar'}
     >
       <div style={{ display: 'flex', gap: 0, marginBottom: 16, borderBottom: '1px solid var(--o-b1)' }}>
-        {(['text', 'file'] as const).map(t => (
+        {TABS.map(t => (
           <button
-            key={t}
-            className={`o-btn${tab === t ? ' o-btn-primary' : ''}`}
-            style={{ borderRadius: 0, borderBottom: tab === t ? '2px solid var(--o-active)' : '2px solid transparent', marginBottom: -1 }}
-            onClick={() => setTab(t)}
+            key={t.key}
+            className={`o-btn${tab === t.key ? ' o-btn-primary' : ''}`}
+            style={{ borderRadius: 0, borderBottom: tab === t.key ? '2px solid var(--o-active)' : '2px solid transparent', marginBottom: -1 }}
+            onClick={() => { setTab(t.key); setFile(null); setError(null); }}
           >
-            {t === 'text' ? 'Texto livre' : 'Upload (.txt/.csv/.xlsx)'}
+            {t.label}
           </button>
         ))}
       </div>
@@ -495,6 +511,24 @@ function ModalAddExtra({ onClose, onAdded }: { onClose: () => void; onAdded: () 
           <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 8 }}>
             <button className="o-btn" onClick={() => fileRef.current?.click()}>Selecionar arquivo</button>
             {file && <span style={{ fontSize: 12, color: 'var(--o-sub)' }}>{file.name}</span>}
+          </div>
+        </div>
+      )}
+
+      {tab === 'audio' && (
+        <div className="o-field">
+          <label className="o-field-label">Áudio</label>
+          <div className="o-field-hint">Formatos aceitos: .mp3, .ogg, .opus. O agente enviará como mensagem de voz (🎙️) ao lead.</div>
+          <input
+            ref={audioRef}
+            type="file"
+            accept=".mp3,.ogg,.opus"
+            style={{ display: 'none' }}
+            onChange={e => setFile(e.target.files?.[0] ?? null)}
+          />
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 8 }}>
+            <button className="o-btn" onClick={() => audioRef.current?.click()}>Selecionar áudio</button>
+            {file && <span style={{ fontSize: 12, color: 'var(--o-sub)' }}>🎙️ {file.name}</span>}
           </div>
         </div>
       )}

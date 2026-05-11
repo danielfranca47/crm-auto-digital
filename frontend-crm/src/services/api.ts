@@ -1137,6 +1137,11 @@ export const api = {
       formData.append("file", file);
       return apiClient.post<KnowledgeItem>(`/knowledge/upload`, formData);
     },
+    uploadKnowledgeAudio: async (file: File) => {
+      const formData = new FormData();
+      formData.append("file", file);
+      return apiClient.post<KnowledgeItem>(`/knowledge/upload-audio`, formData);
+    },
     uploadKnowledgeMedia: async (id: number, file: File) => {
       const formData = new FormData();
       formData.append("file", file);

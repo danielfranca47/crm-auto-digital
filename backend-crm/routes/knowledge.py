@@ -537,6 +537,61 @@ async def upload_file(
         conn.close()
 
 
+# ─── Upload de áudio como knowledge item ─────────────────────────────────────
+
+ALLOWED_AUDIO_EXTENSIONS = {".mp3", ".ogg", ".opus"}
+
+
+@router.post("/upload-audio", response_model=KnowledgeItemOut)
+async def upload_audio(
+    file: UploadFile = File(...), current_user: CurrentUser = Depends(require_crm_access)
+):
+    """Cria um knowledge item a partir de um arquivo de áudio (.mp3/.ogg/.opus).
+    O arquivo é salvo como mídia (media_type='myaudio') e enviado como mensagem de voz ao lead."""
+    filename = file.filename or "audio"
+    ext = Path(filename).suffix.lower()
+    if ext not in ALLOWED_AUDIO_EXTENSIONS:
+        raise HTTPException(status_code=400, detail="Apenas arquivos .mp3, .ogg ou .opus são suportados")
+
+    uid = uuid.uuid4().hex
+    dest = MEDIA_BASE / f"{uid}{ext}"
+    try:
+        content = await file.read()
+        dest.write_bytes(content)
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Falha ao salvar áudio: {exc}")
+
+    public_base = os.getenv("CRM_PUBLIC_BASE_URL", "").rstrip("/")
+    media_url = f"{public_base}/static/knowledge-media/{uid}{ext}"
+    media_type = _ext_to_media_type(ext)  # → "myaudio"
+
+    conn = get_connection()
+    try:
+        cur = conn.cursor()
+        now_iso = datetime.utcnow().isoformat()
+        cur.execute(
+            """INSERT INTO knowledge_items (user_id, title, source_type, content_text, active_in_funnel, created_at, updated_at)
+               VALUES (?, ?, 'file', '', 1, ?, ?)""",
+            (current_user.id, filename, now_iso, now_iso),
+        )
+        item_id = cur.lastrowid
+        cur.execute(
+            """INSERT INTO knowledge_item_media (knowledge_item_id, media_url, media_type, language, send_order, created_at)
+               VALUES (?, ?, ?, 'all', 0, ?)""",
+            (item_id, media_url, media_type, now_iso),
+        )
+        conn.commit()
+        cur.execute("SELECT * FROM knowledge_items WHERE id = ?", (item_id,))
+        row = cur.fetchone()
+        media = _load_media_items(cur, item_id)
+        return _row_to_item(row, media)
+    except Exception:
+        dest.unlink(missing_ok=True)
+        raise
+    finally:
+        conn.close()
+
+
 # ─── Endpoints de mídia (legado — retrocompatibilidade) ──────────────────────
 
 @router.post("/{item_id}/upload-media", response_model=KnowledgeItemOut)
