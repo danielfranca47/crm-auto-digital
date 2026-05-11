@@ -1,4 +1,6 @@
-import { useState } from 'react';
+import { useState, useMemo, useEffect } from 'react';
+import { api } from '@/services/api';
+import type { KnowledgeItem, KnowledgeMediaItem } from '@/services/api';
 import type { AgentConfig, SalesFlow, SalesFlowNode, SalesFlowPhase, SalesFlowSignalKey, SalesFlowTriggerType } from '@/types/agente';
 import {
   SALES_FLOW_PHASE_LABELS,
@@ -88,6 +90,39 @@ function DrawerBase({ title, sub, onClose, onSave, children }: {
 
 // ─── Drawer de criação/edição de node ────────────────────────
 
+// ─── Preview de mídia ────────────────────────────────────────
+
+function MediaPreviewChip({ media }: { media: Pick<KnowledgeMediaItem, 'media_url' | 'media_type'> }) {
+  const { media_url, media_type } = media;
+  const isImage = media_type === 'image' || /\.(jpg|jpeg|png|webp|gif)$/i.test(media_url);
+  const icon = media_type === 'pdf' ? '📄'
+    : media_type === 'video' ? '🎬'
+    : (media_type === 'audio' || media_type === 'myaudio' || media_type === 'ptt') ? '🎵'
+    : '📎';
+
+  if (isImage) {
+    return (
+      <img
+        src={media_url}
+        alt=""
+        style={{ width: 44, height: 44, objectFit: 'cover', borderRadius: 4, border: '1px solid var(--o-b1)' }}
+        onError={e => { (e.target as HTMLImageElement).style.display = 'none'; }}
+      />
+    );
+  }
+  return (
+    <div style={{
+      width: 44, height: 44, borderRadius: 4, border: '1px solid var(--o-b1)',
+      display: 'flex', alignItems: 'center', justifyContent: 'center',
+      background: 'var(--o-bg2)', fontSize: 20,
+    }}>
+      {icon}
+    </div>
+  );
+}
+
+// ─── Drawer de criação/edição de node ────────────────────────
+
 function DrawerNode({ node: initial, qualFields, onSave, onClose }: {
   node: SalesFlowNode;
   qualFields: { key: string; label: string }[];
@@ -97,6 +132,28 @@ function DrawerNode({ node: initial, qualFields, onSave, onClose }: {
   const [node, setNode] = useState<SalesFlowNode>({ ...initial });
   const set = <K extends keyof SalesFlowNode>(k: K, v: SalesFlowNode[K]) =>
     setNode(prev => ({ ...prev, [k]: v }));
+
+  const [knowledgeItems, setKnowledgeItems] = useState<KnowledgeItem[]>([]);
+  const [knowledgeLoading, setKnowledgeLoading] = useState(false);
+
+  useEffect(() => {
+    setKnowledgeLoading(true);
+    api.crm.getKnowledgeList()
+      .then(setKnowledgeItems)
+      .catch(() => {})
+      .finally(() => setKnowledgeLoading(false));
+  }, []);
+
+  const categoriesWithMedia = useMemo(() => {
+    const map = new Map<string, KnowledgeMediaItem[]>();
+    for (const item of knowledgeItems) {
+      const cat = item.category?.trim();
+      if (!cat || item.media_items.length === 0) continue;
+      const existing = map.get(cat) ?? [];
+      map.set(cat, [...existing, ...item.media_items]);
+    }
+    return Array.from(map.entries()).map(([cat, medias]) => ({ cat, medias }));
+  }, [knowledgeItems]);
 
   const allPhases: SalesFlowPhase[] = ['qualification', 'apresentation', 'follow-up', 'closing'];
 
@@ -253,18 +310,84 @@ function DrawerNode({ node: initial, qualFields, onSave, onClose }: {
       {/* Categoria de mídia */}
       <div className="o-field">
         <label className="o-field-label">
-          Categoria de mídia para enviar <span style={{ color: 'var(--o-sub)', fontWeight: 300 }}>(opcional)</span>
+          Mídia para enviar <span style={{ color: 'var(--o-sub)', fontWeight: 300 }}>(opcional)</span>
         </label>
         <div className="o-field-hint">
-          Nome da categoria da base de conhecimento (ex: <code>roi_study</code>, <code>social_proof</code>).
-          O agente incluirá a mídia correspondente quando esta regra disparar.
+          Selecione uma categoria da base de conhecimento. O agente enviará as mídias correspondentes
+          quando esta regra disparar.
         </div>
-        <input
-          className="o-input"
-          placeholder="Ex: roi_study"
-          value={node.action_media_category ?? ''}
-          onChange={e => set('action_media_category', e.target.value.trim() || null)}
-        />
+
+        {knowledgeLoading ? (
+          <div style={{ fontSize: 12, color: 'var(--o-sub)', padding: '8px 0' }}>Carregando mídias…</div>
+        ) : categoriesWithMedia.length === 0 ? (
+          <div style={{ fontSize: 12, color: 'var(--o-sub)', padding: '8px 0' }}>
+            Nenhuma categoria com mídia cadastrada na base de conhecimento.
+          </div>
+        ) : (
+          <>
+            {/* Opção "nenhuma" */}
+            <div
+              onClick={() => set('action_media_category', null)}
+              style={{
+                padding: '8px 12px', borderRadius: 6, cursor: 'pointer', marginBottom: 6,
+                border: `1.5px solid ${node.action_media_category === null ? 'var(--o-active)' : 'var(--o-b1)'}`,
+                background: node.action_media_category === null ? 'color-mix(in srgb, var(--o-active) 8%, transparent)' : 'transparent',
+                fontSize: 12.5, color: 'var(--o-sub)',
+              }}
+            >
+              Nenhuma mídia
+            </div>
+
+            {/* Cards de categoria */}
+            {categoriesWithMedia.map(({ cat, medias }) => {
+              const selected = node.action_media_category === cat;
+              const typeIcons: Record<string, string> = {
+                image: '🖼', video: '🎬', audio: '🎵', pdf: '📄', myaudio: '🎙', ptt: '🎙',
+              };
+              const types = [...new Set(medias.map(m => m.media_type))];
+              return (
+                <div
+                  key={cat}
+                  onClick={() => set('action_media_category', cat)}
+                  style={{
+                    padding: '10px 12px', borderRadius: 6, cursor: 'pointer', marginBottom: 6,
+                    border: `1.5px solid ${selected ? 'var(--o-active)' : 'var(--o-b1)'}`,
+                    background: selected ? 'color-mix(in srgb, var(--o-active) 8%, transparent)' : 'var(--o-bg2)',
+                    transition: 'all .15s',
+                  }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <code style={{ fontSize: 12.5, color: selected ? 'var(--o-active)' : 'var(--o-text)', fontWeight: 500 }}>
+                      {cat}
+                    </code>
+                    <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                      {types.map(t => (
+                        <span key={t} title={t} style={{ fontSize: 14 }}>{typeIcons[t] ?? '📎'}</span>
+                      ))}
+                      <span style={{ fontSize: 11, color: 'var(--o-sub)' }}>
+                        {medias.length} arquivo{medias.length !== 1 ? 's' : ''}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Preview das mídias quando selecionado */}
+                  {selected && (
+                    <div style={{ display: 'flex', gap: 6, marginTop: 8, flexWrap: 'wrap' }}>
+                      {medias.slice(0, 6).map((m, i) => (
+                        <MediaPreviewChip key={i} media={m} />
+                      ))}
+                      {medias.length > 6 && (
+                        <span style={{ fontSize: 11, color: 'var(--o-sub)', alignSelf: 'center' }}>
+                          +{medias.length - 6} mais
+                        </span>
+                      )}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </>
+        )}
       </div>
 
       {/* Habilitado */}
