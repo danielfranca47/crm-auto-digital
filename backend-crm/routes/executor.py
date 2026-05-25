@@ -247,11 +247,12 @@ def _dispatch_sales_flow_media(
 
 
 _PHASE_ID_TO_CATEGORY = {
-    "p1": "qualification",
-    "p2a": "apresentation",
-    "p2b": "apresentation",
-    "p3": "followup",
-    "p4": "closing",
+    "p1":  "qualification",
+    "p2":  "apresentation",
+    "p3a": "apresentation",
+    "p3b": "apresentation",
+    "p4":  "followup",
+    "p5":  "closing",
 }
 
 

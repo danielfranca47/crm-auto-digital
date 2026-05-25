@@ -59,7 +59,7 @@ export type SalesFlowBlockTypeId =
   | 'orientacao' | 'mensagem' | 'midia' | 'avancar_fase' | 'webhook'
   | 'condicao' | 'espera';
 
-export type SalesFlowPhaseId = 'p0' | 'p1' | 'p2a' | 'p2b' | 'p3' | 'p4';
+export type SalesFlowPhaseId = 'p0' | 'p1' | 'p2' | 'p3a' | 'p3b' | 'p4' | 'p5';
 
 export interface SalesFlowBlock {
   id: string;
@@ -94,12 +94,19 @@ export interface SalesFlowPhaseData {
 }
 
 export const SALES_FLOW_PHASE_ID_LABELS: Record<SalesFlowPhaseId, string> = {
-  p0: 'Recepção',
-  p1: 'Qualificação',
-  p2a: 'Pré-Agendamento',
-  p2b: 'Agendamento',
-  p3: 'Follow Up',
-  p4: 'Fechamento',
+  p0:  'Recepção',
+  p1:  'Qualificação',
+  p2:  'Apresentação',
+  p3a: 'Pré-Agendamento',
+  p3b: 'Agendamento',
+  p4:  'Follow Up',
+  p5:  'Fechamento',
+};
+
+export const SALES_FLOW_PHASES_BY_AGENT_MODE: Record<string, SalesFlowPhaseId[]> = {
+  consultivo: ['p0', 'p1', 'p2', 'p4', 'p5'],
+  direto:     ['p0', 'p1', 'p2', 'p5'],
+  agenda:     ['p0', 'p1', 'p2', 'p3a', 'p3b', 'p4', 'p5'],
 };
 
 export const SALES_FLOW_BLOCK_TYPE_LABELS: Record<SalesFlowBlockTypeId, string> = {

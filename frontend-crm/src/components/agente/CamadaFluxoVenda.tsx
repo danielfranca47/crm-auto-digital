@@ -12,6 +12,7 @@ import type {
 import {
   SALES_FLOW_PHASE_ID_LABELS,
   SALES_FLOW_BLOCK_CATEGORIES,
+  SALES_FLOW_PHASES_BY_AGENT_MODE,
 } from '@/types/agente';
 
 interface Props {
@@ -36,16 +37,25 @@ const BLOCK_META: Record<SalesFlowBlockTypeId, { icon: string; color: string; de
 };
 
 const PHASE_COLORS: Record<SalesFlowPhaseId, string> = {
-  p0: '#10b981', p1: '#38bdf8', p2a: '#a78bfa', p2b: '#c084fc', p3: '#fb923c', p4: '#f472b6',
+  p0: '#10b981', p1: '#38bdf8', p2: '#60a5fa',
+  p3a: '#a78bfa', p3b: '#c084fc',
+  p4: '#fb923c', p5: '#f472b6',
+};
+
+const PHASE_LABEL_SHORT: Record<SalesFlowPhaseId, string> = {
+  p0: 'Fase 0', p1: 'Fase 1', p2: 'Fase 2',
+  p3a: 'Fase 3A', p3b: 'Fase 3B',
+  p4: 'Fase 4', p5: 'Fase 5',
 };
 
 const PHASE_DESC: Record<SalesFlowPhaseId, string> = {
   p0:  'Primeiro contacto — recepção e cumprimento',
   p1:  'Recolha de dados: faturamento, setor, decisor, orçamento',
-  p2a: 'Lead quer agendar mas não confirmou data/hora específica',
-  p2b: 'Lead confirmou data e hora — registo e confirmação',
-  p3:  'Reengajar leads que não responderam ou confirmaram',
-  p4:  'Converter o lead em cliente — proposta final',
+  p2:  'Apresentação do produto/serviço e proposta de valor',
+  p3a: 'Lead quer agendar mas não confirmou data/hora específica',
+  p3b: 'Lead confirmou data e hora — registo e confirmação',
+  p4:  'Reengajar leads que não responderam ou confirmaram',
+  p5:  'Converter o lead em cliente — proposta final',
 };
 
 // ─── Helpers ──────────────────────────────────────────────────
@@ -54,10 +64,11 @@ function flowOf(config: AgentConfig): SalesFlow {
   return config.sales_flow ?? { enabled: true, nodes: [] };
 }
 
+const ALL_PHASE_IDS: SalesFlowPhaseId[] = ['p0', 'p1', 'p2', 'p3a', 'p3b', 'p4', 'p5'];
+
 function initPhases(sf: SalesFlow): SalesFlowPhaseData[] {
-  const ids: SalesFlowPhaseId[] = ['p0', 'p1', 'p2a', 'p2b', 'p3', 'p4'];
-  if (!sf.phases?.length) return ids.map(id => ({ id, blocks: [] }));
-  return ids.map(id => sf.phases!.find(p => p.id === id) ?? { id, blocks: [] });
+  if (!sf.phases?.length) return ALL_PHASE_IDS.map(id => ({ id, blocks: [] }));
+  return ALL_PHASE_IDS.map(id => sf.phases!.find(p => p.id === id) ?? { id, blocks: [] });
 }
 
 function emptyBlock(typeId: SalesFlowBlockTypeId): SalesFlowBlock {
@@ -505,11 +516,12 @@ function BlockModal({ phaseId, initial, knowledgeItems, onSave, onClose }: {
 
 // ─── PhaseSection ─────────────────────────────────────────────
 
-function PhaseSection({ phase, onAddBlock, onEditBlock, onRemoveBlock }: {
+function PhaseSection({ phase, onAddBlock, onEditBlock, onRemoveBlock, isActive = true }: {
   phase: SalesFlowPhaseData;
   onAddBlock: (phaseId: SalesFlowPhaseId) => void;
   onEditBlock: (phaseId: SalesFlowPhaseId, blockId: string) => void;
   onRemoveBlock: (phaseId: SalesFlowPhaseId, blockId: string) => void;
+  isActive?: boolean;
 }) {
   const [expanded, setExpanded] = useState(false);
   const { id, blocks } = phase;
@@ -517,15 +529,15 @@ function PhaseSection({ phase, onAddBlock, onEditBlock, onRemoveBlock }: {
   const activeBlocks = blocks.length;
 
   return (
-    <div style={{ borderRadius: 12, border: `1.5px solid ${color}30`, background: 'var(--o-bg)', overflow: 'hidden' }}>
+    <div style={{ borderRadius: 12, border: `1.5px solid ${color}30`, background: 'var(--o-bg)', overflow: 'hidden', opacity: isActive ? 1 : 0.4 }}>
       {/* Header */}
       <div onClick={() => setExpanded(v => !v)}
         style={{ padding: '14px 16px', display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer', userSelect: 'none' }}>
-        <div style={{ width: 8, height: 8, borderRadius: '50%', background: color, flexShrink: 0, boxShadow: `0 0 6px ${color}` }} />
+        <div style={{ width: 8, height: 8, borderRadius: '50%', background: color, flexShrink: 0, boxShadow: isActive ? `0 0 6px ${color}` : 'none' }} />
         <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
             <span style={{ fontSize: 10.5, fontFamily: 'monospace', color, letterSpacing: '0.05em' }}>
-              {id === 'p0' ? 'Fase 0' : id === 'p1' ? 'Fase 1' : id === 'p2a' ? 'Fase 2A' : id === 'p2b' ? 'Fase 2B' : id === 'p3' ? 'Fase 3' : 'Fase 4'}
+              {PHASE_LABEL_SHORT[id]}
             </span>
             <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--o-text)' }}>{SALES_FLOW_PHASE_ID_LABELS[id]}</span>
             {activeBlocks > 0 && (
@@ -533,6 +545,12 @@ function PhaseSection({ phase, onAddBlock, onEditBlock, onRemoveBlock }: {
                 fontSize: 10, fontWeight: 600, padding: '1px 7px', borderRadius: 10,
                 background: `${color}22`, color,
               }}>{activeBlocks} bloco{activeBlocks !== 1 ? 's' : ''}</span>
+            )}
+            {!isActive && (
+              <span style={{
+                fontSize: 9.5, fontWeight: 500, padding: '1px 7px', borderRadius: 10,
+                background: 'var(--o-bg2)', color: 'var(--o-sub)', border: '1px solid var(--o-b1)',
+              }}>Não ativo neste agente</span>
             )}
           </div>
           {!expanded && (
@@ -596,6 +614,13 @@ function PhaseSection({ phase, onAddBlock, onEditBlock, onRemoveBlock }: {
 export function CamadaFluxoVenda({ config, onUpdate }: Props) {
   const sf = flowOf(config);
   const [phases, setPhases] = useState<SalesFlowPhaseData[]>(() => initPhases(sf));
+
+  const rawMode = config.agent_mode ?? 'consultivo';
+  const agentGroup: string = rawMode === 'sdr_scheduler' ? 'agenda'
+                           : rawMode === 'closer'         ? 'direto'
+                           : rawMode;
+  const activePhasesForMode = SALES_FLOW_PHASES_BY_AGENT_MODE[agentGroup]
+                           ?? SALES_FLOW_PHASES_BY_AGENT_MODE['agenda'];
   const [modal, setModal] = useState<{ phaseId: SalesFlowPhaseId; blockId: string | null } | null>(null);
   const [knowledgeItems, setKnowledgeItems] = useState<KnowledgeItem[]>([]);
 
@@ -676,44 +701,48 @@ export function CamadaFluxoVenda({ config, onUpdate }: Props) {
           onClick={() => onUpdate({ sales_flow: { ...sf, enabled: !sf.enabled } })} />
       </div>
 
-      {/* Fases p0 e p1 */}
+      {/* Fases p0, p1, p2 — sempre visíveis */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 8 }}>
-        {(['p0', 'p1'] as SalesFlowPhaseId[]).map(id => {
+        {(['p0', 'p1', 'p2'] as SalesFlowPhaseId[]).map(id => {
           const phase = phases.find(p => p.id === id)!;
           return (
             <PhaseSection key={id} phase={phase}
-              onAddBlock={openAdd} onEditBlock={openEdit} onRemoveBlock={removeBlock} />
+              onAddBlock={openAdd} onEditBlock={openEdit} onRemoveBlock={removeBlock}
+              isActive={activePhasesForMode.includes(id)} />
           );
         })}
       </div>
 
-      {/* Grupo Fase 2 (split p2a + p2b) */}
-      <div style={{
-        border: '1.5px solid #a78bfa30', borderRadius: 12, padding: '12px 12px 4px',
-        marginBottom: 8, background: 'transparent',
-      }}>
-        <div style={{ fontSize: 10, fontFamily: 'monospace', color: '#a78bfa', letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 10, display: 'flex', alignItems: 'center', gap: 6 }}>
-          <span>Fase 2 — Agendamento</span>
-        </div>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
-          <PhaseSection phase={phases.find(p => p.id === 'p2a')!}
-            onAddBlock={openAdd} onEditBlock={openEdit} onRemoveBlock={removeBlock} />
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 14px' }}>
-            <div style={{ width: 2, height: 24, background: 'var(--o-b1)', marginLeft: 12 }} />
-            <span style={{ fontSize: 10.5, color: 'var(--o-sub)', fontWeight: 300 }}>→ confirma data e hora</span>
+      {/* Grupo Fases de Agendamento (3A / 3B) — apenas para agenda/sdr_scheduler */}
+      {agentGroup === 'agenda' && (
+        <div style={{
+          border: '1.5px solid #a78bfa30', borderRadius: 12, padding: '12px 12px 4px',
+          marginBottom: 8, background: 'transparent',
+        }}>
+          <div style={{ fontSize: 10, fontFamily: 'monospace', color: '#a78bfa', letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 10, display: 'flex', alignItems: 'center', gap: 6 }}>
+            <span>Fases de Agendamento (3A / 3B)</span>
           </div>
-          <PhaseSection phase={phases.find(p => p.id === 'p2b')!}
-            onAddBlock={openAdd} onEditBlock={openEdit} onRemoveBlock={removeBlock} />
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
+            <PhaseSection phase={phases.find(p => p.id === 'p3a')!}
+              onAddBlock={openAdd} onEditBlock={openEdit} onRemoveBlock={removeBlock} />
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 14px' }}>
+              <div style={{ width: 2, height: 24, background: 'var(--o-b1)', marginLeft: 12 }} />
+              <span style={{ fontSize: 10.5, color: 'var(--o-sub)', fontWeight: 300 }}>→ confirma data e hora</span>
+            </div>
+            <PhaseSection phase={phases.find(p => p.id === 'p3b')!}
+              onAddBlock={openAdd} onEditBlock={openEdit} onRemoveBlock={removeBlock} />
+          </div>
         </div>
-      </div>
+      )}
 
-      {/* Fases p3 e p4 */}
+      {/* Fases p4 e p5 */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 16 }}>
-        {(['p3', 'p4'] as SalesFlowPhaseId[]).map(id => {
+        {(['p4', 'p5'] as SalesFlowPhaseId[]).map(id => {
           const phase = phases.find(p => p.id === id)!;
           return (
             <PhaseSection key={id} phase={phase}
-              onAddBlock={openAdd} onEditBlock={openEdit} onRemoveBlock={removeBlock} />
+              onAddBlock={openAdd} onEditBlock={openEdit} onRemoveBlock={removeBlock}
+              isActive={activePhasesForMode.includes(id)} />
           );
         })}
       </div>

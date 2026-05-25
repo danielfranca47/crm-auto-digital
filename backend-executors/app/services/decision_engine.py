@@ -350,12 +350,12 @@ def _evaluate_sales_flow_phases(
 
     _ROUTE_TO_PHASE_ID: Dict[str, str] = {
         "qualification":   "p1",
-        "apresentation":   "p2a",
-        "pre_agendamento": "p2a",
-        "agendamento":     "p2b",
-        "followup":        "p3",
-        "follow-up":       "p3",
-        "closing":         "p4",
+        "apresentation":   "p2",
+        "pre_agendamento": "p3a",
+        "agendamento":     "p3b",
+        "followup":        "p4",
+        "follow-up":       "p4",
+        "closing":         "p5",
     }
     phase_id = _ROUTE_TO_PHASE_ID.get(effective_route_to)
     if not phase_id:
