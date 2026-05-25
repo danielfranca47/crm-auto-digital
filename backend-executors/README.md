@@ -11,13 +11,13 @@ Serviço FastAPI mínimo para executar jobs internos (executor), sem integraçõ
    ```
 3) Suba o serviço:
    ```bash
-   uvicorn app.main:app --reload --port 8010 --app-dir backend-executors
+   uvicorn app.main:app --reload --port 8002 --app-dir backend-executors
    ```
 
 ## Health check
 
 ```bash
-curl http://localhost:8010/health
+curl http://localhost:8002/health
 ```
 
 Resposta esperada:
@@ -32,7 +32,7 @@ $env:CRM_API_BASE="http://localhost:8000"
 $env:CORE_API_BASE="http://localhost:8001"
 $env:CRM_SERVICE_TOKEN="<token>"
 $env:CORE_SERVICE_TOKEN="<token>"
-uvicorn app.main:app --reload --port 8010 --app-dir backend-executors
+uvicorn app.main:app --reload --port 8002 --app-dir backend-executors
 ```
 
 ## CLI stub (runner)
