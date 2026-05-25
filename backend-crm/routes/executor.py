@@ -220,6 +220,81 @@ def _extract_preagendamento_checkin_iso(result_obj: Dict[str, Any]) -> Optional[
     return str(val).strip() if val else None
 
 
+def _dispatch_sales_flow_media(
+    lead_id: int,
+    user_id: int,
+    phone: str,
+    pre_send_media: list,
+) -> None:
+    from services.jobs_service import TYPE_WHATSAPP_SEND, create_job
+    for item in sorted(pre_send_media, key=lambda m: m.get("send_order", 0)):
+        media_url = item.get("media_url")
+        if not media_url:
+            continue
+        create_job(
+            job_type=TYPE_WHATSAPP_SEND,
+            payload={
+                "lead_id": lead_id,
+                "user_id": user_id,
+                "phone": phone,
+                "body": "",
+                "media_url": media_url,
+                "media_type": item.get("media_type", "image"),
+                "source": "sales_flow_media",
+            },
+            user_id=user_id,
+        )
+
+
+_PHASE_ID_TO_CATEGORY = {
+    "p1": "qualification",
+    "p2a": "apresentation",
+    "p2b": "apresentation",
+    "p3": "followup",
+    "p4": "closing",
+}
+
+
+def _dispatch_system_actions(
+    lead_id: int,
+    user_id: int,
+    phone: str,
+    system_actions: list,
+    conn,
+) -> None:
+    from services.jobs_service import TYPE_WHATSAPP_SEND, create_job
+    for action in system_actions:
+        atype = action.get("type")
+
+        if atype == "send_message":
+            body = action.get("content", "")
+            if not body:
+                continue
+            create_job(
+                job_type=TYPE_WHATSAPP_SEND,
+                payload={
+                    "lead_id": lead_id,
+                    "user_id": user_id,
+                    "phone": phone,
+                    "body": body,
+                    "source": "sales_flow_message",
+                },
+                user_id=user_id,
+            )
+
+        elif atype == "advance_phase":
+            target = action.get("target_phase")
+            category = _PHASE_ID_TO_CATEGORY.get(target) if target else None
+            if category:
+                apply_suggested_category(
+                    conn,
+                    lead_id=lead_id,
+                    user_id=user_id,
+                    suggested_category=category,
+                    reason="sales_flow_advance_phase",
+                )
+
+
 def _schedule_preagendamento_checkin(
     lead_id: int,
     user_id: int,
@@ -688,6 +763,26 @@ def complete_job_internal(
                         lead_id=int(lead_id),
                         user_id=row["user_id"],
                         checkin_at_iso=checkin_iso,
+                    )
+                _pre_send_media = result_obj.get("pre_send_media") or []
+                if isinstance(_pre_send_media, dict):
+                    _pre_send_media = [_pre_send_media]
+                _lead_phone = job_payload.get("phone")
+                if _lead_phone and _pre_send_media:
+                    _dispatch_sales_flow_media(
+                        lead_id=int(lead_id),
+                        user_id=row["user_id"],
+                        phone=_lead_phone,
+                        pre_send_media=_pre_send_media,
+                    )
+                _system_actions = result_obj.get("system_actions") or []
+                if _lead_phone and _system_actions:
+                    _dispatch_system_actions(
+                        lead_id=int(lead_id),
+                        user_id=row["user_id"],
+                        phone=_lead_phone,
+                        system_actions=_system_actions,
+                        conn=conn,
                     )
 
         refreshed = cur.execute("SELECT * FROM jobs WHERE id=?", (job_id,)).fetchone()

@@ -49,7 +49,94 @@ export interface SalesFlowNode {
 export interface SalesFlow {
   enabled: boolean;
   nodes: SalesFlowNode[];
+  phases?: SalesFlowPhaseData[];
 }
+
+// ─── Blocos Tipados (novo sistema) ───────────────────────────
+
+export type SalesFlowBlockTypeId =
+  | 'kw_trigger' | 'phase_trigger' | 'no_reply_trigger' | 'intent_trigger'
+  | 'orientacao' | 'mensagem' | 'midia' | 'avancar_fase' | 'webhook'
+  | 'condicao' | 'espera';
+
+export type SalesFlowPhaseId = 'p0' | 'p1' | 'p2a' | 'p2b' | 'p3' | 'p4';
+
+export interface SalesFlowBlock {
+  id: string;
+  typeId: SalesFlowBlockTypeId;
+  // triggers
+  keywords?: string;
+  match?: string;
+  intent?: string;
+  wait_value?: string;
+  wait_unit?: string;
+  // actions
+  content?: string;
+  priority?: string;
+  channel?: string;
+  media_type?: string;
+  media_item_id?: number;
+  media_url?: string;
+  caption?: string;
+  target_phase?: SalesFlowPhaseId;
+  url?: string;
+  method?: string;
+  // logic
+  condition?: string;
+  branch_yes?: string;
+  branch_no?: string;
+  note?: string;
+}
+
+export interface SalesFlowPhaseData {
+  id: SalesFlowPhaseId;
+  blocks: SalesFlowBlock[];
+}
+
+export const SALES_FLOW_PHASE_ID_LABELS: Record<SalesFlowPhaseId, string> = {
+  p0: 'Recepção',
+  p1: 'Qualificação',
+  p2a: 'Pré-Agendamento',
+  p2b: 'Agendamento',
+  p3: 'Follow Up',
+  p4: 'Fechamento',
+};
+
+export const SALES_FLOW_BLOCK_TYPE_LABELS: Record<SalesFlowBlockTypeId, string> = {
+  kw_trigger:      'Palavra-chave',
+  phase_trigger:   'Fase iniciada',
+  no_reply_trigger:'Sem resposta',
+  intent_trigger:  'Intenção detectada pela IA',
+  orientacao:      'Orientação ao Agente',
+  mensagem:        'Mensagem fixa',
+  midia:           'Enviar Mídia',
+  avancar_fase:    'Avançar Fase',
+  webhook:         'Webhook / API',
+  condicao:        'Condição (Bifurcação)',
+  espera:          'Espera (Smart Delay)',
+};
+
+export const SALES_FLOW_BLOCK_CATEGORIES: {
+  id: 'trigger' | 'action' | 'logic';
+  label: string;
+  types: SalesFlowBlockTypeId[];
+}[] = [
+  {
+    id: 'trigger',
+    label: '⚡ Gatilho',
+    types: ['phase_trigger', 'kw_trigger', 'no_reply_trigger', 'intent_trigger'],
+  },
+  {
+    id: 'action',
+    label: '🎯 Ação',
+    types: ['orientacao', 'mensagem', 'midia', 'avancar_fase', 'webhook'],
+  },
+  {
+    id: 'logic',
+    label: '🔀 Lógica',
+    types: ['condicao', 'espera'],
+  },
+];
 
 export const SALES_FLOW_TRIGGER_LABELS: Record<SalesFlowTriggerType, string> = {
   phase_entered:       'Fase iniciada',

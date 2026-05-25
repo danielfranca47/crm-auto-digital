@@ -322,6 +322,158 @@ def _build_sales_flow_block(sf_match: Optional[dict]) -> str:
     )
 
 
+def _evaluate_sales_flow_phases(
+    context: Dict[str, Any],
+    effective_route_to: str,
+    message_text: str,
+) -> Dict[str, Any]:
+    """Avalia os blocos tipados do novo sistema de fases do Fluxo de Venda.
+
+    Retorna:
+      prompt_injections  — strings para injetar no prompt LLM (orientacao, intent_trigger)
+      pre_send_media     — mídias a enviar diretamente (blocos midia com media_url explícito)
+      system_actions     — ações a executar pelo executor (mensagem, avancar_fase, webhook, espera)
+    """
+    result: Dict[str, Any] = {"prompt_injections": [], "pre_send_media": [], "system_actions": []}
+
+    ai_profile = context.get("ai_profile") or {}
+    if (ai_profile.get("response_style") or "passive").strip().lower() != "active":
+        return result
+
+    sales_flow = ai_profile.get("sales_flow")
+    if not isinstance(sales_flow, dict) or not sales_flow.get("enabled"):
+        return result
+
+    phases = sales_flow.get("phases")
+    if not isinstance(phases, list) or not phases:
+        return result
+
+    _ROUTE_TO_PHASE_ID: Dict[str, str] = {
+        "qualification":   "p1",
+        "apresentation":   "p2a",
+        "pre_agendamento": "p2a",
+        "agendamento":     "p2b",
+        "followup":        "p3",
+        "follow-up":       "p3",
+        "closing":         "p4",
+    }
+    phase_id = _ROUTE_TO_PHASE_ID.get(effective_route_to)
+    if not phase_id:
+        return result
+
+    phase_data = next((p for p in phases if isinstance(p, dict) and p.get("id") == phase_id), None)
+    if not phase_data:
+        return result
+
+    blocks = phase_data.get("blocks") or []
+    normalized_msg = _normalize_str(message_text)
+
+    for block in blocks:
+        if not isinstance(block, dict):
+            continue
+        type_id = (block.get("typeId") or "").strip()
+
+        # Evaluate trigger condition
+        triggered = False
+        if type_id == "phase_trigger":
+            triggered = True
+        elif type_id == "kw_trigger":
+            keywords = [
+                _normalize_str(kw.strip())
+                for kw in (block.get("keywords") or "").split(",")
+                if kw.strip()
+            ]
+            if keywords:
+                match_mode = (block.get("match") or "contains").strip().lower()
+                if match_mode == "exact":
+                    triggered = any(kw == normalized_msg for kw in keywords)
+                elif match_mode == "starts_with":
+                    triggered = any(normalized_msg.startswith(kw) for kw in keywords)
+                else:
+                    triggered = any(kw in normalized_msg for kw in keywords)
+        elif type_id == "intent_trigger":
+            triggered = True  # hint-only; injected into LLM prompt, not hard-evaluated
+        # no_reply_trigger is managed by followup_state, skip here
+
+        if not triggered:
+            continue
+
+        # Dispatch block by type
+        if type_id in ("orientacao", "phase_trigger"):
+            content = (block.get("content") or "").strip()
+            if content:
+                priority = (block.get("priority") or "normal").strip().lower()
+                label = "INSTRUÇÃO CRÍTICA DE FLUXO DE VENDA" if priority == "critical" else "INSTRUÇÃO DE FLUXO DE VENDA"
+                result["prompt_injections"].append(f"{label}:\n{content}")
+        elif type_id == "intent_trigger":
+            intent = (block.get("intent") or "").strip()
+            if intent:
+                inj = f"FLUXO DE VENDA — Detetar intenção: {intent}"
+                note = (block.get("note") or "").strip()
+                if note:
+                    inj += f"\n{note}"
+                result["prompt_injections"].append(inj)
+        elif type_id == "midia":
+            media_url = (block.get("media_url") or "").strip()
+            if media_url:
+                result["pre_send_media"].append({
+                    "media_url": media_url,
+                    "media_type": block.get("media_type") or "image",
+                    "send_order": 0,
+                })
+        elif type_id == "mensagem":
+            content = (block.get("content") or "").strip()
+            if content:
+                result["system_actions"].append({
+                    "type": "send_message",
+                    "content": content,
+                    "channel": block.get("channel") or "whatsapp",
+                })
+        elif type_id == "avancar_fase":
+            target = (block.get("target_phase") or "").strip()
+            if target:
+                result["system_actions"].append({
+                    "type": "advance_phase",
+                    "target_phase": target,
+                })
+        elif type_id == "webhook":
+            url = (block.get("url") or "").strip()
+            if url:
+                result["system_actions"].append({
+                    "type": "webhook",
+                    "url": url,
+                    "method": block.get("method") or "POST",
+                    "note": block.get("note") or "",
+                })
+        elif type_id == "espera":
+            wait_value = str(block.get("wait_value") or "").strip()
+            if wait_value:
+                result["system_actions"].append({
+                    "type": "delay",
+                    "wait_value": wait_value,
+                    "wait_unit": block.get("wait_unit") or "hours",
+                })
+        elif type_id == "condicao":
+            condition = (block.get("condition") or "").strip()
+            if condition:
+                result["system_actions"].append({
+                    "type": "condition",
+                    "condition": condition,
+                    "branch_yes": block.get("branch_yes") or "",
+                    "branch_no": block.get("branch_no") or "",
+                })
+
+    return result
+
+
+def _build_sales_flow_phases_block(phases_result: Dict[str, Any]) -> str:
+    """Converte as prompt_injections do sistema de fases num bloco de texto para o prompt LLM."""
+    injections = phases_result.get("prompt_injections") or []
+    if not injections:
+        return ""
+    return "\n" + "\n".join(injections) + "\n"
+
+
 def _build_custom_instructions_block(ai_profile: Dict[str, Any]) -> str:
     """Gera bloco de instruções personalizadas do operador com prioridade máxima."""
     ci = (ai_profile.get("custom_instructions") or "").strip()
@@ -1940,6 +2092,7 @@ CONTEXTO:
 - next_action_hint_mae: {mother_decision.next_action_hint or "null"}
 {_build_qualification_fields_block(ai_profile, response_style)}{_build_custom_instructions_block(ai_profile)}{_build_business_info_block(context)}{_build_training_examples_block(context, "qualification")}"""
     _qual_prompt += _build_sales_flow_block(_evaluate_sales_flow(context, "qualification", mother_decision.signals))
+    _qual_prompt += _build_sales_flow_phases_block(_evaluate_sales_flow_phases(context, "qualification", message_text))
     return _inject_generated_parts(_qual_prompt, context, "qualification")
 
 def _build_child_prompt_apresentation(
@@ -2446,6 +2599,8 @@ def _build_child_prompt_apresentation(
         + _build_training_examples_block(context, "apresentation")
     )
     _apres_prompt += _build_sales_flow_block(_evaluate_sales_flow(context, "apresentation", mother_decision.signals))
+    _apres_route = mother_decision.route_to or "apresentation"
+    _apres_prompt += _build_sales_flow_phases_block(_evaluate_sales_flow_phases(context, _apres_route, message_text))
     return _inject_generated_parts(_apres_prompt, context, "apresentation")
 
 
@@ -2710,6 +2865,7 @@ def _build_child_prompt_follow_up(
         + _build_business_info_block(context)
     )
     _followup_prompt += _build_sales_flow_block(_evaluate_sales_flow(context, "follow-up", mother_decision.signals))
+    _followup_prompt += _build_sales_flow_phases_block(_evaluate_sales_flow_phases(context, "followup", message_text))
     return _inject_generated_parts(_followup_prompt, context, "followup")
 
 
@@ -3590,7 +3746,7 @@ def compose_decision_output(
             _all_km_media.sort(key=lambda e: e.get("send_order", 0))
             decision.pre_send_media = _all_km_media
 
-    # Mídia de Fluxo de Venda — resolve action_media_category para pre_send_media
+    # Mídia de Fluxo de Venda (legado) — resolve action_media_category para pre_send_media
     # independente da fase (o bloco acima só cobre "apresentation").
     if not decision.pre_send_media:
         _sf_match = _evaluate_sales_flow(context, effective_route_to, mother_decision.signals)
@@ -3609,6 +3765,15 @@ def compose_decision_output(
                 if _sf_media:
                     _sf_media.sort(key=lambda e: e.get("send_order", 0))
                     decision.pre_send_media = _sf_media
+
+    # Fluxo de Venda (novo sistema de fases) — mídia com URL explícita e system_actions
+    _phases_result = _evaluate_sales_flow_phases(
+        context, effective_route_to, _extract_message_text(context)
+    )
+    if _phases_result.get("pre_send_media") and not decision.pre_send_media:
+        decision.pre_send_media = _phases_result["pre_send_media"]
+    if _phases_result.get("system_actions"):
+        decision.system_actions = _phases_result["system_actions"]
 
     return decision
 

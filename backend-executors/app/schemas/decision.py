@@ -19,6 +19,8 @@ class DecisionOutput(BaseModel):
     decision_trace: Optional[dict] = None
     # Mídia rica: lista de mídias enviadas antes do texto (suporte a múltiplas mídias e idiomas)
     pre_send_media: Optional[Union[List[dict], dict]] = None
+    # Ações diretas do Fluxo de Venda (sistema de fases): mensagem fixa, avançar fase, webhook, espera
+    system_actions: Optional[List[dict]] = None
 
     @field_validator("questions", mode="after")
     @classmethod

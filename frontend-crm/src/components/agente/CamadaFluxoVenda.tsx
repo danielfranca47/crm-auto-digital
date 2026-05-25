@@ -1,12 +1,17 @@
 import { useState, useMemo, useEffect } from 'react';
 import { api } from '@/services/api';
 import type { KnowledgeItem, KnowledgeMediaItem } from '@/services/api';
-import type { AgentConfig, SalesFlow, SalesFlowNode, SalesFlowPhase, SalesFlowSignalKey, SalesFlowTriggerType } from '@/types/agente';
+import type {
+  AgentConfig,
+  SalesFlow,
+  SalesFlowBlock,
+  SalesFlowBlockTypeId,
+  SalesFlowPhaseData,
+  SalesFlowPhaseId,
+} from '@/types/agente';
 import {
-  SALES_FLOW_PHASE_LABELS,
-  SALES_FLOW_SIGNAL_LABELS,
-  SALES_FLOW_SIGNAL_VALUES,
-  SALES_FLOW_TRIGGER_LABELS,
+  SALES_FLOW_PHASE_ID_LABELS,
+  SALES_FLOW_BLOCK_CATEGORIES,
 } from '@/types/agente';
 
 interface Props {
@@ -14,491 +19,574 @@ interface Props {
   onUpdate: (partial: Partial<AgentConfig>) => void;
 }
 
-// ─── Helpers ─────────────────────────────────────────────────
+// ─── Constants ────────────────────────────────────────────────
 
-function emptyNode(): SalesFlowNode {
-  return {
-    id: crypto.randomUUID(),
-    label: '',
-    enabled: true,
-    trigger_phases: [],
-    trigger_type: 'signal',
-    trigger_signal: 'price_acceptance',
-    trigger_value: null,
-    trigger_keywords: [],
-    trigger_field_key: null,
-    trigger_field_value: null,
-    action_instruction: '',
-    action_media_category: null,
-    priority: 0,
-  };
-}
+const BLOCK_META: Record<SalesFlowBlockTypeId, { icon: string; color: string; desc: string }> = {
+  kw_trigger:       { icon: '💬', color: '#fbbf24', desc: 'Dispara ao detetar palavra-chave do lead' },
+  phase_trigger:    { icon: '🚀', color: '#fbbf24', desc: 'Dispara automaticamente ao entrar na fase' },
+  no_reply_trigger: { icon: '🔕', color: '#fbbf24', desc: 'Dispara se o lead não responder em X tempo' },
+  intent_trigger:   { icon: '🧠', color: '#fbbf24', desc: 'Dispara quando a IA deteta uma intenção' },
+  orientacao:       { icon: '🧭', color: '#6ee7b7', desc: 'Instrução injetada no contexto do agente' },
+  mensagem:         { icon: '✉️', color: '#38bdf8', desc: 'Mensagem de texto fixo enviada ao lead' },
+  midia:            { icon: '🎵', color: '#a78bfa', desc: 'Envio real de ficheiro (áudio/imagem/doc)' },
+  avancar_fase:     { icon: '➡️', color: '#34d399', desc: 'Move o lead para outra fase automaticamente' },
+  webhook:          { icon: '🌐', color: '#f472b6', desc: 'Chamada HTTP a sistema externo' },
+  condicao:         { icon: '🔀', color: '#fb923c', desc: 'Cria dois caminhos baseados numa condição' },
+  espera:           { icon: '⏳', color: '#94a3b8', desc: 'Pausa o fluxo por um tempo definido' },
+};
+
+const PHASE_COLORS: Record<SalesFlowPhaseId, string> = {
+  p0: '#10b981', p1: '#38bdf8', p2a: '#a78bfa', p2b: '#c084fc', p3: '#fb923c', p4: '#f472b6',
+};
+
+const PHASE_DESC: Record<SalesFlowPhaseId, string> = {
+  p0:  'Primeiro contacto — recepção e cumprimento',
+  p1:  'Recolha de dados: faturamento, setor, decisor, orçamento',
+  p2a: 'Lead quer agendar mas não confirmou data/hora específica',
+  p2b: 'Lead confirmou data e hora — registo e confirmação',
+  p3:  'Reengajar leads que não responderam ou confirmaram',
+  p4:  'Converter o lead em cliente — proposta final',
+};
+
+// ─── Helpers ──────────────────────────────────────────────────
 
 function flowOf(config: AgentConfig): SalesFlow {
   return config.sales_flow ?? { enabled: true, nodes: [] };
 }
 
-function triggerSummary(node: SalesFlowNode): string {
-  const phases = node.trigger_phases.map(p => SALES_FLOW_PHASE_LABELS[p]).join(', ');
-  const phaseStr = phases ? `Em: ${phases}` : '';
-
-  if (node.trigger_type === 'phase_entered') return phaseStr || 'Qualquer fase';
-  if (node.trigger_type === 'signal') {
-    const sig = node.trigger_signal ? SALES_FLOW_SIGNAL_LABELS[node.trigger_signal] : '—';
-    const val = node.trigger_value
-      ? SALES_FLOW_SIGNAL_VALUES[node.trigger_signal as SalesFlowSignalKey]?.find(v => v.value === node.trigger_value)?.label ?? node.trigger_value
-      : '(qualquer)';
-    return [phaseStr, `Sinal: ${sig} = ${val}`].filter(Boolean).join(' · ');
-  }
-  if (node.trigger_type === 'keyword') {
-    const kws = node.trigger_keywords.slice(0, 3).join(', ');
-    return [phaseStr, `Palavra: "${kws}"`].filter(Boolean).join(' · ');
-  }
-  if (node.trigger_type === 'qualification_field') {
-    const f = node.trigger_field_key ?? '—';
-    const v = node.trigger_field_value ? ` = "${node.trigger_field_value}"` : '';
-    return [phaseStr, `Campo: ${f}${v}`].filter(Boolean).join(' · ');
-  }
-  return phaseStr || '—';
+function initPhases(sf: SalesFlow): SalesFlowPhaseData[] {
+  const ids: SalesFlowPhaseId[] = ['p0', 'p1', 'p2a', 'p2b', 'p3', 'p4'];
+  if (!sf.phases?.length) return ids.map(id => ({ id, blocks: [] }));
+  return ids.map(id => sf.phases!.find(p => p.id === id) ?? { id, blocks: [] });
 }
 
-// ─── DrawerBase (padrão Orion) ────────────────────────────────
-
-function DrawerBase({ title, sub, onClose, onSave, children }: {
-  title: string; sub: string; onClose: () => void; onSave: () => void; children: React.ReactNode;
-}) {
-  return (
-    <>
-      <div className="o-drawer-overlay open" onClick={onClose} />
-      <div className="o-drawer open">
-        <div className="o-drawer-header">
-          <div>
-            <div className="font-display" style={{ fontSize: 20, fontWeight: 400, color: 'var(--o-text)' }}>{title}</div>
-            <div style={{ fontSize: 11.5, color: 'var(--o-sub)', marginTop: 4, fontWeight: 300 }}>{sub}</div>
-          </div>
-          <button className="o-close-btn" onClick={onClose}>✕</button>
-        </div>
-        <div className="o-drawer-body">{children}</div>
-        <div className="o-drawer-footer">
-          <button className="o-btn o-btn-primary" onClick={onSave}>Salvar</button>
-          <button className="o-btn" onClick={onClose}>Cancelar</button>
-        </div>
-      </div>
-    </>
-  );
+function emptyBlock(typeId: SalesFlowBlockTypeId): SalesFlowBlock {
+  return { id: crypto.randomUUID(), typeId };
 }
 
-// ─── Drawer de criação/edição de node ────────────────────────
+function blockSummary(block: SalesFlowBlock): string {
+  const kws = (block.keywords || '').split(',').map(k => k.trim()).filter(Boolean);
+  switch (block.typeId) {
+    case 'kw_trigger':       return kws.length ? `"${kws.slice(0, 3).join('", "')}"` : '—';
+    case 'phase_trigger':    return 'Auto ao entrar';
+    case 'no_reply_trigger': return block.wait_value ? `Sem resposta: ${block.wait_value} ${block.wait_unit || 'horas'}` : '—';
+    case 'intent_trigger':   return (block.intent || '').slice(0, 55) || '—';
+    case 'orientacao':       return (block.content || '').slice(0, 60) || '—';
+    case 'mensagem':         return `"${(block.content || '').slice(0, 55)}"`;
+    case 'midia':            return block.media_type ? `${block.media_type}${block.caption ? ': ' + block.caption.slice(0, 30) : ''}` : '—';
+    case 'avancar_fase':     return block.target_phase ? `→ ${SALES_FLOW_PHASE_ID_LABELS[block.target_phase]}` : '—';
+    case 'webhook':          return (block.url || '').slice(0, 50) || '—';
+    case 'condicao':         return (block.condition || '').slice(0, 50) || '—';
+    case 'espera':           return block.wait_value ? `${block.wait_value} ${block.wait_unit || 'horas'}` : '—';
+    default:                 return '';
+  }
+}
 
-// ─── Preview de mídia ────────────────────────────────────────
+// ─── MediaPreviewChip ─────────────────────────────────────────
 
 function MediaPreviewChip({ media }: { media: Pick<KnowledgeMediaItem, 'media_url' | 'media_type'> }) {
   const { media_url, media_type } = media;
   const isImage = media_type === 'image' || /\.(jpg|jpeg|png|webp|gif)$/i.test(media_url);
-  const icon = media_type === 'pdf' ? '📄'
-    : media_type === 'video' ? '🎬'
-    : (media_type === 'audio' || media_type === 'myaudio' || media_type === 'ptt') ? '🎵'
-    : '📎';
-
-  if (isImage) {
-    return (
-      <img
-        src={media_url}
-        alt=""
-        style={{ width: 44, height: 44, objectFit: 'cover', borderRadius: 4, border: '1px solid var(--o-b1)' }}
-        onError={e => { (e.target as HTMLImageElement).style.display = 'none'; }}
-      />
-    );
-  }
+  const icon = media_type === 'pdf' ? '📄' : media_type === 'video' ? '🎬'
+    : (media_type === 'audio' || media_type === 'myaudio' || media_type === 'ptt') ? '🎵' : '📎';
+  if (isImage) return (
+    <img src={media_url} alt="" style={{ width: 40, height: 40, objectFit: 'cover', borderRadius: 4, border: '1px solid var(--o-b1)' }}
+      onError={e => { (e.target as HTMLImageElement).style.display = 'none'; }} />
+  );
   return (
-    <div style={{
-      width: 44, height: 44, borderRadius: 4, border: '1px solid var(--o-b1)',
-      display: 'flex', alignItems: 'center', justifyContent: 'center',
-      background: 'var(--o-bg2)', fontSize: 20,
-    }}>
+    <div style={{ width: 40, height: 40, borderRadius: 4, border: '1px solid var(--o-b1)', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--o-bg2)', fontSize: 18 }}>
       {icon}
     </div>
   );
 }
 
-// ─── Drawer de criação/edição de node ────────────────────────
+// ─── BlockForm ────────────────────────────────────────────────
 
-function DrawerNode({ node: initial, qualFields, onSave, onClose }: {
-  node: SalesFlowNode;
-  qualFields: { key: string; label: string }[];
-  onSave: (n: SalesFlowNode) => void;
-  onClose: () => void;
+function BlockForm({ block, setBlock, knowledgeItems }: {
+  block: SalesFlowBlock;
+  setBlock: (b: SalesFlowBlock) => void;
+  knowledgeItems: KnowledgeItem[];
 }) {
-  const [node, setNode] = useState<SalesFlowNode>({ ...initial });
-  const set = <K extends keyof SalesFlowNode>(k: K, v: SalesFlowNode[K]) =>
-    setNode(prev => ({ ...prev, [k]: v }));
-
-  const [knowledgeItems, setKnowledgeItems] = useState<KnowledgeItem[]>([]);
-  const [knowledgeLoading, setKnowledgeLoading] = useState(false);
-
-  useEffect(() => {
-    setKnowledgeLoading(true);
-    api.crm.getKnowledgeList()
-      .then(setKnowledgeItems)
-      .catch(() => {})
-      .finally(() => setKnowledgeLoading(false));
-  }, []);
-
-  const categoriesWithMedia = useMemo(() => {
-    const map = new Map<string, { medias: KnowledgeMediaItem[]; isUncategorized: boolean; titles: Set<string> }>();
-    for (const item of knowledgeItems) {
-      if (item.media_items.length === 0) continue;
-      // Mesmo fallback do orchestrator backend: null → "uncategorized"
-      const cat = item.category?.trim() || 'uncategorized';
-      const existing = map.get(cat) ?? { medias: [], isUncategorized: cat === 'uncategorized', titles: new Set<string>() };
-      if (item.title?.trim()) existing.titles.add(item.title.trim());
-      map.set(cat, { medias: [...existing.medias, ...item.media_items], isUncategorized: cat === 'uncategorized', titles: existing.titles });
-    }
-    return Array.from(map.entries()).map(([cat, { medias, isUncategorized, titles }]) => ({
-      cat,
-      displayLabel: isUncategorized ? 'Sem categoria' : cat,
-      titles: Array.from(titles),
-      medias,
-    }));
-  }, [knowledgeItems]);
-
-  const allPhases: SalesFlowPhase[] = ['qualification', 'apresentation', 'follow-up', 'closing'];
-
-  function togglePhase(p: SalesFlowPhase) {
-    const phases = node.trigger_phases.includes(p)
-      ? node.trigger_phases.filter(x => x !== p)
-      : [...node.trigger_phases, p];
-    set('trigger_phases', phases);
+  function set<K extends keyof SalesFlowBlock>(k: K, v: SalesFlowBlock[K]) {
+    setBlock({ ...block, [k]: v });
   }
 
-  const sigValues = node.trigger_signal
-    ? (SALES_FLOW_SIGNAL_VALUES[node.trigger_signal] ?? [])
-    : [];
+  const allMedia = useMemo(() => {
+    const items: { item: KnowledgeItem; media: KnowledgeMediaItem }[] = [];
+    for (const ki of knowledgeItems) {
+      for (const m of ki.media_items) items.push({ item: ki, media: m });
+    }
+    return items;
+  }, [knowledgeItems]);
+
+  const phaseOptions: SalesFlowPhaseId[] = ['p0', 'p1', 'p2a', 'p2b', 'p3', 'p4'];
+
+  switch (block.typeId) {
+    case 'kw_trigger':
+      return (
+        <>
+          <div className="o-field">
+            <label className="o-field-label">Palavras-chave (separadas por vírgula) *</label>
+            <input className="o-input" placeholder="Ex: preço, valor, quanto custa"
+              value={block.keywords || ''} onChange={e => set('keywords', e.target.value)} />
+          </div>
+          <div className="o-field">
+            <label className="o-field-label">Tipo de correspondência</label>
+            <select className="o-input" value={block.match || 'contains'} onChange={e => set('match', e.target.value)}>
+              <option value="contains">Contém</option>
+              <option value="exact">Exato</option>
+              <option value="starts_with">Começa com</option>
+            </select>
+          </div>
+        </>
+      );
+
+    case 'phase_trigger':
+      return (
+        <div style={{ fontSize: 12.5, color: 'var(--o-sub)', padding: '8px 0', lineHeight: 1.6 }}>
+          Este gatilho dispara automaticamente quando o lead entra nesta fase. Não requer configuração adicional.
+        </div>
+      );
+
+    case 'no_reply_trigger':
+      return (
+        <>
+          <div className="o-field">
+            <label className="o-field-label">Aguardar *</label>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <input className="o-input" type="number" min="1" placeholder="24" style={{ flex: 1 }}
+                value={block.wait_value || ''} onChange={e => set('wait_value', e.target.value)} />
+              <select className="o-input" style={{ flex: 1 }} value={block.wait_unit || 'hours'} onChange={e => set('wait_unit', e.target.value)}>
+                <option value="minutes">minutos</option>
+                <option value="hours">horas</option>
+                <option value="days">dias</option>
+              </select>
+            </div>
+          </div>
+          <div className="o-field">
+            <label className="o-field-label">Nota (opcional)</label>
+            <input className="o-input" placeholder="Ex: Lead parou de responder após a proposta"
+              value={block.note || ''} onChange={e => set('note', e.target.value)} />
+          </div>
+        </>
+      );
+
+    case 'intent_trigger':
+      return (
+        <>
+          <div className="o-field">
+            <label className="o-field-label">Intenção a detetar *</label>
+            <input className="o-input" placeholder="Ex: pedir preço, demonstrar hesitação"
+              value={block.intent || ''} onChange={e => set('intent', e.target.value)} />
+          </div>
+          <div className="o-field">
+            <label className="o-field-label">Instrução ao agente (opcional)</label>
+            <textarea className="o-input" rows={3} placeholder="Ex: Se o lead hesitar, usar argumento de ROI"
+              value={block.note || ''} onChange={e => set('note', e.target.value)} style={{ resize: 'vertical' }} />
+          </div>
+        </>
+      );
+
+    case 'orientacao':
+      return (
+        <>
+          <div className="o-field">
+            <label className="o-field-label">Instrução para o agente *</label>
+            <div className="o-field-hint">Texto injetado no contexto do agente com alta prioridade.</div>
+            <textarea className="o-input" rows={5} placeholder="Ex: O lead mencionou orçamento limitado. Apresente ROI antes de repetir o preço."
+              value={block.content || ''} onChange={e => set('content', e.target.value)}
+              style={{ resize: 'vertical', minHeight: 110 }} />
+          </div>
+          <div className="o-field">
+            <label className="o-field-label">Prioridade</label>
+            <select className="o-input" value={block.priority || 'normal'} onChange={e => set('priority', e.target.value)}>
+              <option value="normal">Normal</option>
+              <option value="high">Alta</option>
+              <option value="critical">Crítica</option>
+            </select>
+          </div>
+        </>
+      );
+
+    case 'mensagem':
+      return (
+        <>
+          <div className="o-field">
+            <label className="o-field-label">Texto da mensagem *</label>
+            <div className="o-field-hint">Enviado diretamente ao lead — não gerado pela IA.</div>
+            <textarea className="o-input" rows={4} placeholder="Ex: Olá! Preparamos uma proposta especial para si."
+              value={block.content || ''} onChange={e => set('content', e.target.value)}
+              style={{ resize: 'vertical' }} />
+          </div>
+          <div className="o-field">
+            <label className="o-field-label">Canal</label>
+            <select className="o-input" value={block.channel || 'whatsapp'} onChange={e => set('channel', e.target.value)}>
+              <option value="whatsapp">WhatsApp</option>
+              <option value="all">Todos</option>
+            </select>
+          </div>
+        </>
+      );
+
+    case 'midia':
+      return (
+        <>
+          <div className="o-field">
+            <label className="o-field-label">Selecione o ficheiro *</label>
+            <div className="o-field-hint">Escolha um ficheiro da base de conhecimento.</div>
+            {allMedia.length === 0 ? (
+              <div style={{ fontSize: 12, color: 'var(--o-sub)', padding: '8px 0' }}>
+                Nenhum ficheiro encontrado na base de conhecimento.
+              </div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6, maxHeight: 240, overflowY: 'auto' }}>
+                {allMedia.map(({ item, media }) => {
+                  const selected = block.media_item_id === media.id;
+                  return (
+                    <div key={media.id}
+                      onClick={() => setBlock({ ...block, media_item_id: media.id, media_url: media.media_url, media_type: media.media_type })}
+                      style={{
+                        display: 'flex', gap: 10, alignItems: 'center', padding: '8px 10px',
+                        borderRadius: 8, cursor: 'pointer',
+                        border: `1.5px solid ${selected ? 'var(--o-active)' : 'var(--o-b1)'}`,
+                        background: selected ? 'color-mix(in srgb, var(--o-active) 8%, transparent)' : 'var(--o-bg2)',
+                        transition: 'all .15s',
+                      }}>
+                      <MediaPreviewChip media={media} />
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 2, minWidth: 0 }}>
+                        <span style={{ fontSize: 12.5, fontWeight: 500, color: 'var(--o-text)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          {item.title || 'Sem título'}
+                        </span>
+                        <span style={{ fontSize: 11, color: 'var(--o-sub)' }}>
+                          {media.media_type} · {item.category || 'sem categoria'}
+                        </span>
+                      </div>
+                      {selected && <span style={{ marginLeft: 'auto', fontSize: 16, color: 'var(--o-active)' }}>✓</span>}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+          <div className="o-field">
+            <label className="o-field-label">Legenda (opcional)</label>
+            <input className="o-input" placeholder="Texto que acompanha o envio"
+              value={block.caption || ''} onChange={e => set('caption', e.target.value)} />
+          </div>
+        </>
+      );
+
+    case 'avancar_fase':
+      return (
+        <>
+          <div className="o-field">
+            <label className="o-field-label">Fase de destino *</label>
+            <select className="o-input" value={block.target_phase || ''} onChange={e => set('target_phase', e.target.value as SalesFlowPhaseId)}>
+              <option value="">— Selecione —</option>
+              {phaseOptions.map(id => <option key={id} value={id}>{SALES_FLOW_PHASE_ID_LABELS[id]}</option>)}
+            </select>
+          </div>
+          <div className="o-field">
+            <label className="o-field-label">Nota (opcional)</label>
+            <input className="o-input" placeholder="Ex: Mover após confirmar interesse"
+              value={block.note || ''} onChange={e => set('note', e.target.value)} />
+          </div>
+        </>
+      );
+
+    case 'webhook':
+      return (
+        <>
+          <div className="o-field">
+            <label className="o-field-label">URL do endpoint *</label>
+            <input className="o-input" placeholder="https://..."
+              value={block.url || ''} onChange={e => set('url', e.target.value)} />
+          </div>
+          <div className="o-field">
+            <label className="o-field-label">Método</label>
+            <select className="o-input" value={block.method || 'POST'} onChange={e => set('method', e.target.value)}>
+              <option value="POST">POST</option>
+              <option value="GET">GET</option>
+              <option value="PUT">PUT</option>
+            </select>
+          </div>
+          <div className="o-field">
+            <label className="o-field-label">O que enviar / contexto</label>
+            <textarea className="o-input" rows={3} placeholder="Ex: Enviar dados do lead ao agendar"
+              value={block.note || ''} onChange={e => set('note', e.target.value)} style={{ resize: 'vertical' }} />
+          </div>
+        </>
+      );
+
+    case 'condicao':
+      return (
+        <>
+          <div className="o-field">
+            <label className="o-field-label">Condição a avaliar *</label>
+            <input className="o-input" placeholder="Ex: lead informou data e hora específica"
+              value={block.condition || ''} onChange={e => set('condition', e.target.value)} />
+          </div>
+          <div className="o-field">
+            <label className="o-field-label">Caminho SIM → ação</label>
+            <input className="o-input" placeholder="Ex: Avançar para Fase 2B"
+              value={block.branch_yes || ''} onChange={e => set('branch_yes', e.target.value)} />
+          </div>
+          <div className="o-field">
+            <label className="o-field-label">Caminho NÃO → ação</label>
+            <input className="o-input" placeholder="Ex: Permanecer em Fase 2A"
+              value={block.branch_no || ''} onChange={e => set('branch_no', e.target.value)} />
+          </div>
+        </>
+      );
+
+    case 'espera':
+      return (
+        <>
+          <div className="o-field">
+            <label className="o-field-label">Aguardar *</label>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <input className="o-input" type="number" min="1" placeholder="24" style={{ flex: 1 }}
+                value={block.wait_value || ''} onChange={e => set('wait_value', e.target.value)} />
+              <select className="o-input" style={{ flex: 1 }} value={block.wait_unit || 'hours'} onChange={e => set('wait_unit', e.target.value)}>
+                <option value="minutes">minutos</option>
+                <option value="hours">horas</option>
+                <option value="days">dias</option>
+              </select>
+            </div>
+          </div>
+          <div className="o-field">
+            <label className="o-field-label">Motivo / contexto</label>
+            <input className="o-input" placeholder="Ex: Aguardar resposta antes de follow up"
+              value={block.note || ''} onChange={e => set('note', e.target.value)} />
+          </div>
+        </>
+      );
+
+    default: return null;
+  }
+}
+
+// ─── BlockModal ───────────────────────────────────────────────
+
+function BlockModal({ phaseId, initial, knowledgeItems, onSave, onClose }: {
+  phaseId: SalesFlowPhaseId;
+  initial: SalesFlowBlock | null;
+  knowledgeItems: KnowledgeItem[];
+  onSave: (b: SalesFlowBlock) => void;
+  onClose: () => void;
+}) {
+  const isEdit = !!initial;
+  const [activeCat, setActiveCat] = useState<'trigger' | 'action' | 'logic'>(
+    initial ? (SALES_FLOW_BLOCK_CATEGORIES.find(c => c.types.includes(initial.typeId))?.id ?? 'action') : 'trigger'
+  );
+  const [selectedTypeId, setSelectedTypeId] = useState<SalesFlowBlockTypeId | null>(initial?.typeId ?? null);
+  const [block, setBlock] = useState<SalesFlowBlock>(initial ?? { id: crypto.randomUUID(), typeId: 'phase_trigger' });
+
+  const catDef = SALES_FLOW_BLOCK_CATEGORIES.find(c => c.id === activeCat)!;
+  const phaseName = SALES_FLOW_PHASE_ID_LABELS[phaseId];
+
+  function selectType(typeId: SalesFlowBlockTypeId) {
+    setSelectedTypeId(typeId);
+    setBlock(isEdit ? { ...block, typeId } : emptyBlock(typeId));
+  }
 
   function handleSave() {
-    if (!node.label.trim()) return;
-    if (!node.action_instruction.trim()) return;
-    onSave(node);
+    if (!selectedTypeId) return;
+    onSave(block);
   }
 
   return (
-    <DrawerBase
-      title={initial.label ? 'Editar Regra' : 'Nova Regra'}
-      sub="Configure quando e o que o agente deve fazer"
-      onClose={onClose}
-      onSave={handleSave}
-    >
-      {/* Nome/label */}
-      <div className="o-field">
-        <label className="o-field-label">Nome da regra <span style={{ color: 'var(--o-warn)' }}>*</span></label>
-        <input
-          className="o-input"
-          placeholder="Ex: Objeção de preço na apresentação"
-          value={node.label}
-          onChange={e => set('label', e.target.value)}
-        />
-      </div>
-
-      {/* Fases */}
-      <div className="o-field">
-        <label className="o-field-label">Fases onde esta regra pode disparar</label>
-        <div className="o-field-hint">Selecione uma ou mais fases. Se nenhuma for selecionada, a regra nunca dispara.</div>
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 8 }}>
-          {allPhases.map(p => {
-            const active = node.trigger_phases.includes(p);
-            return (
-              <div
-                key={p}
-                onClick={() => togglePhase(p)}
-                style={{
-                  padding: '6px 14px', borderRadius: 20, cursor: 'pointer', fontSize: 12.5, fontWeight: 500,
-                  border: `1.5px solid ${active ? 'var(--o-active)' : 'var(--o-b1)'}`,
-                  background: active ? 'var(--o-active)' : 'transparent',
-                  color: active ? '#fff' : 'var(--o-sub)',
-                  transition: 'all .15s',
-                }}
-              >
-                {SALES_FLOW_PHASE_LABELS[p]}
-              </div>
-            );
-          })}
-        </div>
-      </div>
-
-      {/* Tipo de trigger */}
-      <div className="o-field">
-        <label className="o-field-label">Tipo de gatilho</label>
-        <select className="o-input" value={node.trigger_type} onChange={e => set('trigger_type', e.target.value as SalesFlowTriggerType)}>
-          {(Object.keys(SALES_FLOW_TRIGGER_LABELS) as SalesFlowTriggerType[]).map(k => (
-            <option key={k} value={k}>{SALES_FLOW_TRIGGER_LABELS[k]}</option>
-          ))}
-        </select>
-      </div>
-
-      {/* Campos condicionais por tipo */}
-      {node.trigger_type === 'signal' && (
-        <>
-          <div className="o-field">
-            <label className="o-field-label">Sinal</label>
-            <select
-              className="o-input"
-              value={node.trigger_signal ?? ''}
-              onChange={e => { set('trigger_signal', e.target.value as SalesFlowSignalKey); set('trigger_value', null); }}
-            >
-              {(Object.keys(SALES_FLOW_SIGNAL_LABELS) as SalesFlowSignalKey[]).map(k => (
-                <option key={k} value={k}>{SALES_FLOW_SIGNAL_LABELS[k]}</option>
-              ))}
-            </select>
-          </div>
-          {sigValues.length > 0 && (
-            <div className="o-field">
-              <label className="o-field-label">Valor esperado</label>
-              <select className="o-input" value={node.trigger_value ?? ''} onChange={e => set('trigger_value', e.target.value || null)}>
-                <option value="">— Qualquer valor —</option>
-                {sigValues.map(v => <option key={v.value} value={v.value}>{v.label}</option>)}
-              </select>
+    <div style={{ position: 'fixed', inset: 0, zIndex: 9000, display: 'flex', alignItems: 'flex-end', justifyContent: 'center', background: 'rgba(0,0,0,0.6)' }}
+      onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
+      <div style={{
+        background: 'var(--o-bg)', border: '1px solid var(--o-b1)', borderRadius: '18px 18px 0 0',
+        width: '100%', maxWidth: 560, maxHeight: '90vh', overflowY: 'auto',
+        display: 'flex', flexDirection: 'column', gap: 0,
+      }}>
+        {/* Header */}
+        <div style={{ padding: '20px 20px 0', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <div>
+            <div style={{ fontSize: 15, fontWeight: 600, color: 'var(--o-text)' }}>
+              {isEdit ? 'Editar bloco' : 'Adicionar bloco'}
             </div>
-          )}
-        </>
-      )}
-
-      {node.trigger_type === 'keyword' && (
-        <div className="o-field">
-          <label className="o-field-label">Palavras-chave (separadas por vírgula)</label>
-          <div className="o-field-hint">O gatilho dispara se o lead enviar qualquer uma dessas palavras.</div>
-          <input
-            className="o-input"
-            placeholder="Ex: caro, não tenho verba, está muito alto"
-            value={node.trigger_keywords.join(', ')}
-            onChange={e => set('trigger_keywords', e.target.value.split(',').map(k => k.trim()).filter(Boolean))}
-          />
-        </div>
-      )}
-
-      {node.trigger_type === 'qualification_field' && (
-        <>
-          <div className="o-field">
-            <label className="o-field-label">Campo de qualificação</label>
-            <select className="o-input" value={node.trigger_field_key ?? ''} onChange={e => set('trigger_field_key', e.target.value || null)}>
-              <option value="">— Selecione —</option>
-              {qualFields.map(f => <option key={f.key} value={f.key}>{f.label} ({f.key})</option>)}
-            </select>
-          </div>
-          <div className="o-field">
-            <label className="o-field-label">Valor esperado <span style={{ color: 'var(--o-sub)', fontWeight: 300 }}>(opcional)</span></label>
-            <div className="o-field-hint">Se deixar em branco, dispara quando o campo tiver qualquer valor preenchido.</div>
-            <input
-              className="o-input"
-              placeholder="Ex: sim, decisor, urgente"
-              value={node.trigger_field_value ?? ''}
-              onChange={e => set('trigger_field_value', e.target.value || null)}
-            />
-          </div>
-        </>
-      )}
-
-      {/* Instrução para o agente */}
-      <div className="o-field" style={{ marginTop: 8 }}>
-        <label className="o-field-label">Instrução para o agente <span style={{ color: 'var(--o-warn)' }}>*</span></label>
-        <div className="o-field-hint">
-          Texto de alta prioridade injetado no prompt do agente quando esta regra disparar. Não é um script fixo —
-          é uma orientação sobre como conduzir este momento específico.
-        </div>
-        <textarea
-          className="o-input"
-          rows={5}
-          placeholder="Ex: O lead rejeitou o preço. Antes de continuar, apresente o caso de ROI com clientes similares. Use dados concretos e evite repetir o preço diretamente."
-          value={node.action_instruction}
-          onChange={e => set('action_instruction', e.target.value)}
-          style={{ resize: 'vertical', minHeight: 110 }}
-        />
-      </div>
-
-      {/* Categoria de mídia */}
-      <div className="o-field">
-        <label className="o-field-label">
-          Mídia para enviar <span style={{ color: 'var(--o-sub)', fontWeight: 300 }}>(opcional)</span>
-        </label>
-        <div className="o-field-hint">
-          Selecione uma categoria da base de conhecimento. O agente enviará as mídias correspondentes
-          quando esta regra disparar.
-        </div>
-
-        {knowledgeLoading ? (
-          <div style={{ fontSize: 12, color: 'var(--o-sub)', padding: '8px 0' }}>Carregando mídias…</div>
-        ) : categoriesWithMedia.length === 0 ? (
-          <div style={{ fontSize: 12, color: 'var(--o-sub)', padding: '8px 0' }}>
-            Nenhuma categoria com mídia cadastrada na base de conhecimento.
-          </div>
-        ) : (
-          <>
-            {/* Opção "nenhuma" */}
-            <div
-              onClick={() => set('action_media_category', null)}
-              style={{
-                padding: '8px 12px', borderRadius: 6, cursor: 'pointer', marginBottom: 6,
-                border: `1.5px solid ${node.action_media_category === null ? 'var(--o-active)' : 'var(--o-b1)'}`,
-                background: node.action_media_category === null ? 'color-mix(in srgb, var(--o-active) 8%, transparent)' : 'transparent',
-                fontSize: 12.5, color: 'var(--o-sub)',
-              }}
-            >
-              Nenhuma mídia
+            <div style={{ fontSize: 11.5, color: 'var(--o-sub)', marginTop: 2 }}>
+              {phaseName} — {SALES_FLOW_PHASE_ID_LABELS[phaseId]}
             </div>
+          </div>
+          <button style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 18, color: 'var(--o-sub)', padding: 4 }} onClick={onClose}>✕</button>
+        </div>
 
-            {/* Cards de categoria */}
-            {categoriesWithMedia.map(({ cat, displayLabel, titles, medias }) => {
-              const selected = node.action_media_category === cat;
-              const typeIcons: Record<string, string> = {
-                image: '🖼', video: '🎬', audio: '🎵', pdf: '📄', myaudio: '🎙', ptt: '🎙',
-              };
-              const types = [...new Set(medias.map(m => m.media_type))];
+        <div style={{ padding: '16px 20px', display: 'flex', flexDirection: 'column', gap: 16 }}>
+          {/* Category tabs */}
+          <div style={{ display: 'flex', gap: 6 }}>
+            {SALES_FLOW_BLOCK_CATEGORIES.map(cat => {
+              const isActive = cat.id === activeCat;
+              const catColors: Record<string, string> = { trigger: '#fbbf24', action: '#6ee7b7', logic: '#fb923c' };
               return (
-                <div
-                  key={cat}
-                  onClick={() => set('action_media_category', cat)}
+                <button key={cat.id}
+                  onClick={() => { setActiveCat(cat.id); setSelectedTypeId(null); }}
                   style={{
-                    padding: '10px 12px', borderRadius: 6, cursor: 'pointer', marginBottom: 6,
-                    border: `1.5px solid ${selected ? 'var(--o-active)' : 'var(--o-b1)'}`,
-                    background: selected ? 'color-mix(in srgb, var(--o-active) 8%, transparent)' : 'var(--o-bg2)',
+                    padding: '6px 14px', borderRadius: 20, fontSize: 12, fontWeight: 600, cursor: 'pointer',
+                    border: `1px solid ${isActive ? catColors[cat.id] : 'var(--o-b1)'}`,
+                    background: isActive ? `${catColors[cat.id]}22` : 'transparent',
+                    color: isActive ? catColors[cat.id] : 'var(--o-sub)',
                     transition: 'all .15s',
-                  }}
-                >
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                      <code style={{ fontSize: 12.5, color: selected ? 'var(--o-active)' : 'var(--o-text)', fontWeight: 500 }}>
-                        {displayLabel}
-                      </code>
-                      {titles.length > 0 && (
-                        <span style={{ fontSize: 11.5, color: selected ? 'var(--o-active)' : 'var(--o-sub)', fontWeight: 300 }}>
-                          {titles.join(' · ')}
-                        </span>
-                      )}
-                      {displayLabel !== cat && (
-                        <span style={{ fontSize: 10.5, color: 'var(--o-dim)', fontWeight: 300 }}>chave: {cat}</span>
-                      )}
-                    </div>
-                    <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-                      {types.map(t => (
-                        <span key={t} title={t} style={{ fontSize: 14 }}>{typeIcons[t] ?? '📎'}</span>
-                      ))}
-                      <span style={{ fontSize: 11, color: 'var(--o-sub)' }}>
-                        {medias.length} arquivo{medias.length !== 1 ? 's' : ''}
-                      </span>
-                    </div>
-                  </div>
+                  }}>
+                  {cat.label}
+                </button>
+              );
+            })}
+          </div>
 
-                  {/* Preview das mídias quando selecionado */}
-                  {selected && (
-                    <div style={{ display: 'flex', gap: 6, marginTop: 8, flexWrap: 'wrap' }}>
-                      {medias.slice(0, 6).map((m, i) => (
-                        <MediaPreviewChip key={i} media={m} />
-                      ))}
-                      {medias.length > 6 && (
-                        <span style={{ fontSize: 11, color: 'var(--o-sub)', alignSelf: 'center' }}>
-                          +{medias.length - 6} mais
-                        </span>
-                      )}
+          {/* Type grid */}
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+            {catDef.types.map(typeId => {
+              const meta = BLOCK_META[typeId];
+              const isSelected = selectedTypeId === typeId;
+              return (
+                <div key={typeId} onClick={() => selectType(typeId)}
+                  style={{
+                    borderRadius: 10, border: `1.5px solid ${isSelected ? meta.color : 'var(--o-b1)'}`,
+                    background: isSelected ? `${meta.color}12` : 'var(--o-bg2)',
+                    padding: '12px', cursor: 'pointer', transition: 'all .15s',
+                    display: 'flex', gap: 10, alignItems: 'flex-start',
+                  }}>
+                  <span style={{ fontSize: 20, lineHeight: 1, flexShrink: 0 }}>{meta.icon}</span>
+                  <div>
+                    <div style={{ fontSize: 12.5, fontWeight: 600, color: 'var(--o-text)', marginBottom: 2 }}>
+                      {SALES_FLOW_BLOCK_CATEGORIES.flatMap(c => c.types).includes(typeId)
+                        ? (typeId === 'kw_trigger' ? 'Palavra-chave'
+                          : typeId === 'phase_trigger' ? 'Fase iniciada'
+                          : typeId === 'no_reply_trigger' ? 'Sem resposta'
+                          : typeId === 'intent_trigger' ? 'Intenção IA'
+                          : typeId === 'orientacao' ? 'Orientação ao Agente'
+                          : typeId === 'mensagem' ? 'Mensagem fixa'
+                          : typeId === 'midia' ? 'Enviar Mídia'
+                          : typeId === 'avancar_fase' ? 'Avançar Fase'
+                          : typeId === 'webhook' ? 'Webhook / API'
+                          : typeId === 'condicao' ? 'Condição'
+                          : 'Espera')
+                        : typeId}
                     </div>
-                  )}
+                    <div style={{ fontSize: 11, color: 'var(--o-sub)', lineHeight: 1.4 }}>{meta.desc}</div>
+                    <span style={{
+                      display: 'inline-block', fontSize: 9, fontWeight: 700, textTransform: 'uppercase',
+                      letterSpacing: '0.06em', padding: '2px 5px', borderRadius: 4, marginTop: 4,
+                      background: `${meta.color}22`, color: meta.color,
+                    }}>
+                      {activeCat === 'trigger' ? 'GATILHO' : activeCat === 'action' ? 'AÇÃO' : 'LÓGICA'}
+                    </span>
+                  </div>
                 </div>
               );
             })}
-          </>
-        )}
-      </div>
+          </div>
 
-      {/* Habilitado */}
-      <div className="o-field" style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 4 }}>
-        <div>
-          <div className="o-field-label" style={{ marginBottom: 0 }}>Regra habilitada</div>
-          <div style={{ fontSize: 11.5, color: 'var(--o-sub)', fontWeight: 300 }}>Desabilitar mantém a regra salva sem avaliá-la</div>
+          {/* Form */}
+          {selectedTypeId && (
+            <div style={{ borderTop: '1px solid var(--o-b1)', paddingTop: 16, display: 'flex', flexDirection: 'column', gap: 0 }}>
+              <BlockForm block={block} setBlock={setBlock} knowledgeItems={knowledgeItems} />
+            </div>
+          )}
         </div>
-        <div className={`o-toggle ${node.enabled ? 'on' : ''}`} onClick={() => set('enabled', !node.enabled)} />
+
+        {/* Footer */}
+        <div style={{ padding: '12px 20px 20px', display: 'flex', gap: 8, justifyContent: 'flex-end', borderTop: '1px solid var(--o-b1)' }}>
+          <button className="o-btn" onClick={onClose}>Cancelar</button>
+          <button className="o-btn o-btn-primary" onClick={handleSave} disabled={!selectedTypeId}
+            style={{ opacity: selectedTypeId ? 1 : 0.45 }}>
+            Salvar bloco
+          </button>
+        </div>
       </div>
-    </DrawerBase>
+    </div>
   );
 }
 
-// ─── Card de node ─────────────────────────────────────────────
+// ─── PhaseSection ─────────────────────────────────────────────
 
-function FlowNodeCard({ node, index, total, onEdit, onRemove, onMove }: {
-  node: SalesFlowNode;
-  index: number;
-  total: number;
-  onEdit: () => void;
-  onRemove: () => void;
-  onMove: (dir: -1 | 1) => void;
+function PhaseSection({ phase, onAddBlock, onEditBlock, onRemoveBlock }: {
+  phase: SalesFlowPhaseData;
+  onAddBlock: (phaseId: SalesFlowPhaseId) => void;
+  onEditBlock: (phaseId: SalesFlowPhaseId, blockId: string) => void;
+  onRemoveBlock: (phaseId: SalesFlowPhaseId, blockId: string) => void;
 }) {
+  const [expanded, setExpanded] = useState(false);
+  const { id, blocks } = phase;
+  const color = PHASE_COLORS[id];
+  const activeBlocks = blocks.length;
+
   return (
-    <div style={{ marginBottom: 8, opacity: node.enabled ? 1 : 0.55 }}>
-      {/* Bloco SE */}
-      <div style={{
-        borderLeft: '3px solid var(--o-warn)',
-        background: 'var(--o-bg2)',
-        borderRadius: '8px 8px 0 0',
-        padding: '12px 14px',
-      }}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
-          <span style={{ fontSize: 10, letterSpacing: 2, textTransform: 'uppercase', color: 'var(--o-warn)', fontWeight: 600 }}>
-            SE (gatilho)
-          </span>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-            {!node.enabled && (
-              <span style={{ fontSize: 10, color: 'var(--o-sub)', background: 'var(--o-b1)', borderRadius: 10, padding: '2px 8px' }}>
-                desabilitada
-              </span>
-            )}
-            <span style={{ fontSize: 10.5, color: 'var(--o-sub)', fontWeight: 300 }}>
-              prioridade {node.priority}
+    <div style={{ borderRadius: 12, border: `1.5px solid ${color}30`, background: 'var(--o-bg)', overflow: 'hidden' }}>
+      {/* Header */}
+      <div onClick={() => setExpanded(v => !v)}
+        style={{ padding: '14px 16px', display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer', userSelect: 'none' }}>
+        <div style={{ width: 8, height: 8, borderRadius: '50%', background: color, flexShrink: 0, boxShadow: `0 0 6px ${color}` }} />
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <span style={{ fontSize: 10.5, fontFamily: 'monospace', color, letterSpacing: '0.05em' }}>
+              {id === 'p0' ? 'Fase 0' : id === 'p1' ? 'Fase 1' : id === 'p2a' ? 'Fase 2A' : id === 'p2b' ? 'Fase 2B' : id === 'p3' ? 'Fase 3' : 'Fase 4'}
             </span>
+            <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--o-text)' }}>{SALES_FLOW_PHASE_ID_LABELS[id]}</span>
+            {activeBlocks > 0 && (
+              <span style={{
+                fontSize: 10, fontWeight: 600, padding: '1px 7px', borderRadius: 10,
+                background: `${color}22`, color,
+              }}>{activeBlocks} bloco{activeBlocks !== 1 ? 's' : ''}</span>
+            )}
           </div>
+          {!expanded && (
+            <div style={{ fontSize: 11.5, color: 'var(--o-sub)', marginTop: 2, fontWeight: 300 }}>{PHASE_DESC[id]}</div>
+          )}
         </div>
-        <div style={{ fontSize: 13, fontWeight: 500, color: 'var(--o-text)', marginBottom: 2 }}>{node.label}</div>
-        <div style={{ fontSize: 12, color: 'var(--o-sub)', fontWeight: 300 }}>{triggerSummary(node)}</div>
+        <span style={{ fontSize: 13, color: 'var(--o-sub)', fontWeight: 300 }}>{expanded ? '▲' : '▼'}</span>
       </div>
 
-      {/* Conector */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-start', paddingLeft: 20 }}>
-        <div style={{ width: 2, height: 20, background: 'var(--o-b2)', borderLeft: '2px dashed var(--o-b2)' }} />
-      </div>
+      {/* Body */}
+      {expanded && (
+        <div style={{ borderTop: `1px solid ${color}20`, padding: '12px 14px', display: 'flex', flexDirection: 'column', gap: 8 }}>
+          {/* Block list */}
+          {blocks.map(block => {
+            const meta = BLOCK_META[block.typeId];
+            return (
+              <div key={block.id} style={{
+                display: 'flex', alignItems: 'center', gap: 10,
+                background: 'var(--o-bg2)', borderRadius: 8, padding: '9px 12px',
+                border: '1px solid var(--o-b1)',
+              }}>
+                <span style={{ fontSize: 16, flexShrink: 0 }}>{meta.icon}</span>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 2 }}>
+                    <span style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.07em', color: meta.color }}>
+                      {block.typeId.replace('_', ' ')}
+                    </span>
+                  </div>
+                  <div style={{ fontSize: 12, color: 'var(--o-sub)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {blockSummary(block)}
+                  </div>
+                </div>
+                <div style={{ display: 'flex', gap: 4, flexShrink: 0 }}>
+                  <button className="o-btn" style={{ fontSize: 10.5, padding: '3px 9px' }}
+                    onClick={() => onEditBlock(id, block.id)}>
+                    Editar
+                  </button>
+                  <button className="o-btn" style={{ fontSize: 10.5, padding: '3px 9px', color: 'var(--o-danger, #e05c5c)' }}
+                    onClick={() => onRemoveBlock(id, block.id)}>
+                    ✕
+                  </button>
+                </div>
+              </div>
+            );
+          })}
 
-      {/* Bloco ENTÃO */}
-      <div style={{
-        borderLeft: '3px solid var(--o-active)',
-        background: 'var(--o-bg2)',
-        borderRadius: '0 0 8px 8px',
-        padding: '12px 14px',
-      }}>
-        <div style={{ marginBottom: 6 }}>
-          <span style={{ fontSize: 10, letterSpacing: 2, textTransform: 'uppercase', color: 'var(--o-active)', fontWeight: 600 }}>
-            ENTÃO (ação)
-          </span>
+          {/* Add button */}
+          <button className="o-btn"
+            style={{ width: '100%', justifyContent: 'center', gap: 6, borderStyle: 'dashed', fontSize: 12.5 }}
+            onClick={() => onAddBlock(id)}>
+            <span style={{ fontSize: 15, lineHeight: 1 }}>+</span> Adicionar bloco nesta fase
+          </button>
         </div>
-        <div style={{ fontSize: 12.5, color: 'var(--o-text)', lineHeight: 1.55, marginBottom: 4 }}>
-          {node.action_instruction.length > 160
-            ? node.action_instruction.slice(0, 157) + '…'
-            : node.action_instruction}
-        </div>
-        {node.action_media_category && (
-          <div style={{ fontSize: 11.5, color: 'var(--o-sub)', marginTop: 4 }}>
-            Mídia: <code style={{ fontSize: 11, background: 'var(--o-b1)', padding: '1px 6px', borderRadius: 4 }}>
-              {node.action_media_category}
-            </code>
-          </div>
-        )}
-      </div>
-
-      {/* Ações */}
-      <div style={{ display: 'flex', gap: 6, marginTop: 6, justifyContent: 'flex-end' }}>
-        {index > 0 && (
-          <button className="o-btn" style={{ fontSize: 11, padding: '3px 10px' }} onClick={() => onMove(-1)}>↑</button>
-        )}
-        {index < total - 1 && (
-          <button className="o-btn" style={{ fontSize: 11, padding: '3px 10px' }} onClick={() => onMove(1)}>↓</button>
-        )}
-        <button className="o-btn" style={{ fontSize: 11, padding: '3px 10px' }} onClick={onEdit}>Editar</button>
-        <button className="o-btn" style={{ fontSize: 11, padding: '3px 10px', color: 'var(--o-danger, #e05c5c)' }} onClick={onRemove}>✕</button>
-      </div>
+      )}
     </div>
   );
 }
@@ -507,64 +595,65 @@ function FlowNodeCard({ node, index, total, onEdit, onRemove, onMove }: {
 
 export function CamadaFluxoVenda({ config, onUpdate }: Props) {
   const sf = flowOf(config);
-  const [drawerNode, setDrawerNode] = useState<SalesFlowNode | null>(null);
-  const [editingId, setEditingId] = useState<string | null>(null);
+  const [phases, setPhases] = useState<SalesFlowPhaseData[]>(() => initPhases(sf));
+  const [modal, setModal] = useState<{ phaseId: SalesFlowPhaseId; blockId: string | null } | null>(null);
+  const [knowledgeItems, setKnowledgeItems] = useState<KnowledgeItem[]>([]);
 
-  const qualFields = (config.qualification_fields ?? []).map(f => ({ key: f.key, label: f.label }));
+  useEffect(() => {
+    api.crm.getKnowledgeList()
+      .then(setKnowledgeItems)
+      .catch(() => {});
+  }, []);
 
-  function updateFlow(partial: Partial<SalesFlow>) {
-    onUpdate({ sales_flow: { ...sf, ...partial } });
+  function updateFlow(newPhases: SalesFlowPhaseData[]) {
+    setPhases(newPhases);
+    onUpdate({ sales_flow: { ...sf, phases: newPhases } });
   }
 
-  function openNew() {
-    const next = emptyNode();
-    next.priority = sf.nodes.length;
-    setEditingId(null);
-    setDrawerNode(next);
+  function openAdd(phaseId: SalesFlowPhaseId) {
+    setModal({ phaseId, blockId: null });
   }
 
-  function openEdit(id: string) {
-    const found = sf.nodes.find(n => n.id === id);
-    if (found) { setEditingId(id); setDrawerNode({ ...found }); }
+  function openEdit(phaseId: SalesFlowPhaseId, blockId: string) {
+    setModal({ phaseId, blockId });
   }
 
-  function saveNode(node: SalesFlowNode) {
-    let nodes: SalesFlowNode[];
-    if (editingId) {
-      nodes = sf.nodes.map(n => n.id === editingId ? node : n);
-    } else {
-      nodes = [...sf.nodes, node];
-    }
-    updateFlow({ nodes });
-    setDrawerNode(null);
-    setEditingId(null);
+  function removeBlock(phaseId: SalesFlowPhaseId, blockId: string) {
+    updateFlow(phases.map(p =>
+      p.id === phaseId ? { ...p, blocks: p.blocks.filter(b => b.id !== blockId) } : p
+    ));
   }
 
-  function removeNode(id: string) {
-    updateFlow({ nodes: sf.nodes.filter(n => n.id !== id).map((n, i) => ({ ...n, priority: i })) });
+  function saveBlock(block: SalesFlowBlock) {
+    if (!modal) return;
+    const { phaseId, blockId } = modal;
+    updateFlow(phases.map(p => {
+      if (p.id !== phaseId) return p;
+      if (blockId) {
+        return { ...p, blocks: p.blocks.map(b => b.id === blockId ? block : b) };
+      }
+      return { ...p, blocks: [...p.blocks, block] };
+    }));
+    setModal(null);
   }
 
-  function moveNode(id: string, dir: -1 | 1) {
-    const nodes = [...sf.nodes];
-    const idx = nodes.findIndex(n => n.id === id);
-    if (idx < 0) return;
-    const swapIdx = idx + dir;
-    if (swapIdx < 0 || swapIdx >= nodes.length) return;
-    [nodes[idx], nodes[swapIdx]] = [nodes[swapIdx], nodes[idx]];
-    updateFlow({ nodes: nodes.map((n, i) => ({ ...n, priority: i })) });
-  }
+  const modalPhase = modal ? phases.find(p => p.id === modal.phaseId) : null;
+  const modalInitial = modal?.blockId && modalPhase
+    ? (modalPhase.blocks.find(b => b.id === modal.blockId) ?? null)
+    : null;
 
-  const sorted = [...sf.nodes].sort((a, b) => a.priority - b.priority);
-  const activeCount = sf.nodes.filter(n => n.enabled).length;
+  const totalBlocks = phases.reduce((sum, p) => sum + p.blocks.length, 0);
+  const legacyCount = sf.nodes?.length ?? 0;
 
   return (
     <>
-      {drawerNode && (
-        <DrawerNode
-          node={drawerNode}
-          qualFields={qualFields}
-          onSave={saveNode}
-          onClose={() => { setDrawerNode(null); setEditingId(null); }}
+      {modal && modalPhase && (
+        <BlockModal
+          phaseId={modal.phaseId}
+          initial={modalInitial}
+          knowledgeItems={knowledgeItems}
+          onSave={saveBlock}
+          onClose={() => setModal(null)}
         />
       )}
 
@@ -573,69 +662,82 @@ export function CamadaFluxoVenda({ config, onUpdate }: Props) {
         <div>
           <div style={{ fontSize: 13.5, fontWeight: 500, color: 'var(--o-text)' }}>
             Fluxo de Venda
-            {sf.nodes.length > 0 && (
+            {totalBlocks > 0 && (
               <span style={{ marginLeft: 10, fontSize: 11.5, color: 'var(--o-sub)', fontWeight: 300 }}>
-                {activeCount} regra{activeCount !== 1 ? 's' : ''} ativa{activeCount !== 1 ? 's' : ''}
+                {totalBlocks} bloco{totalBlocks !== 1 ? 's' : ''} configurado{totalBlocks !== 1 ? 's' : ''}
               </span>
             )}
           </div>
           <div style={{ fontSize: 12, color: 'var(--o-sub)', fontWeight: 300, marginTop: 3 }}>
-            {sf.enabled ? 'Avaliando regras em cada turno' : 'Desabilitado — nenhuma regra será avaliada'}
+            {sf.enabled ? 'Avaliando blocos em cada turno' : 'Desabilitado — nenhum bloco será avaliado'}
           </div>
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-          <div className={`o-toggle ${sf.enabled ? 'on' : ''}`} onClick={() => updateFlow({ enabled: !sf.enabled })} />
+        <div className={`o-toggle ${sf.enabled ? 'on' : ''}`}
+          onClick={() => onUpdate({ sales_flow: { ...sf, enabled: !sf.enabled } })} />
+      </div>
+
+      {/* Fases p0 e p1 */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 8 }}>
+        {(['p0', 'p1'] as SalesFlowPhaseId[]).map(id => {
+          const phase = phases.find(p => p.id === id)!;
+          return (
+            <PhaseSection key={id} phase={phase}
+              onAddBlock={openAdd} onEditBlock={openEdit} onRemoveBlock={removeBlock} />
+          );
+        })}
+      </div>
+
+      {/* Grupo Fase 2 (split p2a + p2b) */}
+      <div style={{
+        border: '1.5px solid #a78bfa30', borderRadius: 12, padding: '12px 12px 4px',
+        marginBottom: 8, background: 'transparent',
+      }}>
+        <div style={{ fontSize: 10, fontFamily: 'monospace', color: '#a78bfa', letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 10, display: 'flex', alignItems: 'center', gap: 6 }}>
+          <span>Fase 2 — Agendamento</span>
+        </div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
+          <PhaseSection phase={phases.find(p => p.id === 'p2a')!}
+            onAddBlock={openAdd} onEditBlock={openEdit} onRemoveBlock={removeBlock} />
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 14px' }}>
+            <div style={{ width: 2, height: 24, background: 'var(--o-b1)', marginLeft: 12 }} />
+            <span style={{ fontSize: 10.5, color: 'var(--o-sub)', fontWeight: 300 }}>→ confirma data e hora</span>
+          </div>
+          <PhaseSection phase={phases.find(p => p.id === 'p2b')!}
+            onAddBlock={openAdd} onEditBlock={openEdit} onRemoveBlock={removeBlock} />
         </div>
       </div>
 
-      {/* Lista de nodes */}
-      {sorted.length === 0 ? (
+      {/* Fases p3 e p4 */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 16 }}>
+        {(['p3', 'p4'] as SalesFlowPhaseId[]).map(id => {
+          const phase = phases.find(p => p.id === id)!;
+          return (
+            <PhaseSection key={id} phase={phase}
+              onAddBlock={openAdd} onEditBlock={openEdit} onRemoveBlock={removeBlock} />
+          );
+        })}
+      </div>
+
+      {/* Aviso de regras legadas */}
+      {legacyCount > 0 && (
         <div style={{
-          border: '1.5px dashed var(--o-b1)', borderRadius: 10, padding: '32px 24px',
-          textAlign: 'center', color: 'var(--o-sub)', marginBottom: 16,
+          padding: '10px 14px', borderRadius: 8, fontSize: 12, color: 'var(--o-sub)', fontWeight: 300,
+          background: 'var(--o-bg2)', border: '1px dashed var(--o-b1)', lineHeight: 1.6, marginBottom: 12,
         }}>
-          <div style={{ fontSize: 13.5, fontWeight: 400, marginBottom: 6 }}>Nenhuma regra configurada</div>
-          <div style={{ fontSize: 12, fontWeight: 300 }}>
-            Adicione regras para instruir o agente em momentos cruciais da conversa.
-          </div>
-        </div>
-      ) : (
-        <div style={{ marginBottom: 12 }}>
-          {sorted.map((node, idx) => (
-            <div key={node.id}>
-              <FlowNodeCard
-                node={node}
-                index={idx}
-                total={sorted.length}
-                onEdit={() => openEdit(node.id)}
-                onRemove={() => removeNode(node.id)}
-                onMove={dir => moveNode(node.id, dir)}
-              />
-              {idx < sorted.length - 1 && (
-                <div style={{ textAlign: 'center', padding: '4px 0', color: 'var(--o-dim, var(--o-b2))' }}>
-                  <span style={{ fontSize: 16 }}>↕</span>
-                </div>
-              )}
-            </div>
-          ))}
+          <strong style={{ color: 'var(--o-warn)', fontWeight: 500 }}>⚠ {legacyCount} regra{legacyCount !== 1 ? 's' : ''} do sistema legado</strong>{' '}
+          ainda ativas. O agente continuará a avaliá-las. Para gerir, utilize o novo sistema de fases acima.
         </div>
       )}
 
-      {/* Botão adicionar */}
-      <button className="o-btn" style={{ width: '100%', justifyContent: 'center', gap: 8 }} onClick={openNew}>
-        <span style={{ fontSize: 16, lineHeight: 1 }}>+</span> Adicionar Regra
-      </button>
-
-      {/* Info sobre base de conhecimento */}
+      {/* Info */}
       <div style={{
-        marginTop: 20, padding: '12px 16px', borderRadius: 8,
-        background: 'var(--o-bg2)', border: '1px solid var(--o-b1)',
+        padding: '12px 16px', borderRadius: 8, background: 'var(--o-bg2)', border: '1px solid var(--o-b1)',
         fontSize: 12, color: 'var(--o-sub)', fontWeight: 300, lineHeight: 1.65,
       }}>
-        <strong style={{ color: 'var(--o-text)', fontWeight: 500 }}>Sobre este recurso:</strong>{' '}
-        As regras do Fluxo de Venda injetam instruções de alta prioridade no agente em momentos específicos.
-        O agente ainda consulta a base de conhecimento normalmente — este fluxo é complementar, não substituto.
-        Prioridade: regras de menor número são avaliadas primeiro; apenas a primeira com match dispara por turno.
+        <strong style={{ color: 'var(--o-text)', fontWeight: 500 }}>Como funciona:</strong>{' '}
+        Os blocos de cada fase são avaliados quando o lead entra nessa fase. Blocos de <em>Orientação</em> injetam instruções no agente;
+        blocos de <em>Mídia</em> e <em>Mensagem</em> são enviados diretamente sem passar pelo LLM.
+        Gatilhos de palavra-chave disparam apenas quando o lead escreve a palavra naquela fase.
       </div>
     </>
   );
