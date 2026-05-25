@@ -3590,6 +3590,26 @@ def compose_decision_output(
             _all_km_media.sort(key=lambda e: e.get("send_order", 0))
             decision.pre_send_media = _all_km_media
 
+    # Mídia de Fluxo de Venda — resolve action_media_category para pre_send_media
+    # independente da fase (o bloco acima só cobre "apresentation").
+    if not decision.pre_send_media:
+        _sf_match = _evaluate_sales_flow(context, effective_route_to, mother_decision.signals)
+        if _sf_match:
+            _sf_media_cat = _sf_match.get("action_media_category")
+            if _sf_media_cat:
+                _sf_knowledge_media = context.get("knowledge_media") or {}
+                _sf_lead_lang = str(context.get("lead_detected_language") or "all").lower()
+                _sf_entries = _sf_knowledge_media.get(_sf_media_cat, [])
+                if isinstance(_sf_entries, str):
+                    _sf_entries = [{"media_url": _sf_entries, "media_type": "image", "language": "all", "send_order": 0}]
+                _sf_media: list[dict] = [
+                    e for e in _sf_entries
+                    if _sf_lead_lang == "all" or e.get("language") in ("all", _sf_lead_lang)
+                ]
+                if _sf_media:
+                    _sf_media.sort(key=lambda e: e.get("send_order", 0))
+                    decision.pre_send_media = _sf_media
+
     return decision
 
 
