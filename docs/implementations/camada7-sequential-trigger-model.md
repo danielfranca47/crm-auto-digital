@@ -224,10 +224,10 @@ function saveBlocks(phaseId: SalesFlowPhaseId, newBlocks: SalesFlowBlock[]) {
   - `BlockModal` (EDITAR) inalterado — continua para edição de bloco único
 
 ### Verificação
-- [ ] Add com gatilho + 2 ações → salva 3 blocos em sequência
-- [ ] Add com "sem gatilho" → salva só ações no grupo "Sempre ao entrar"
-- [ ] Editar bloco existente (EDITAR) → abre BlockModal individual inalterado
-- [ ] Cancelar no Step 3 → nenhum bloco é salvo
+- [x] Add com gatilho + 2 ações → salva 3 blocos em sequência ✅
+- [x] Add com "sem gatilho" → salva só ações no grupo "Sempre ao entrar" ✅
+- [x] Editar bloco existente (EDITAR) → abre BlockModal individual inalterado ✅
+- [x] Cancelar no Step 3 → nenhum bloco é salvo ✅
 
 ---
 
