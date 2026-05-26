@@ -332,3 +332,69 @@ Campo `detected_intents` é `list[str]`, padrão `[]` quando não há `intent_tr
 - [ ] Enviar mensagem neutra no playground → mídia **não** deve ser enviada
 - [ ] Enviar mensagem com hesitação ("não sei se vale...") → mídia **deve** ser enviada
 - [ ] Fase sem `intent_trigger` → prompt da mãe não inclui secção de detecção
+
+---
+
+## Fase 7 — `phase_trigger` com deteção de entrada + guardrail "disparar apenas uma vez"
+
+### Problema identificado
+
+O `phase_trigger` avaliava `fired = True` **incondicionalmente** a cada mensagem enquanto o lead estivesse na fase. Consequência: se configurado `PHASE TRIGGER → MENSAGEM "Bem-vindo!" → MIDIA`, o bot enviaria essas ações em **toda mensagem** do lead naquela fase (loop).
+
+Bugs adicionais corrigidos nesta fase:
+1. **`_apres_route` errado** — `_build_child_prompt_apresentation()` usava `mother_decision.route_to` para selecionar a fase do Fluxo de Venda no child prompt. Quando a mãe dizia "qualification" e o sistema auto-promovia para "apresentation", os blocos de orientação da Fase 2 não chegavam ao LLM filho.
+2. **Mapeamento `_ROUTE_TO_PHASE_ID` incompleto** — `"pre-agendamento"` (hífen) não estava mapeado, apenas `"pre_agendamento"` (underscore). Blocos da Fase p3a nunca eram avaliados.
+
+### Arquitetura da solução
+
+**Parâmetro `is_phase_entry: bool = True`** adicionado a `_evaluate_sales_flow_phases()`.
+
+- Quando `True`: `phase_trigger` dispara → ações downstream executam
+- Quando `False`: `phase_trigger` não dispara → ações downstream ignoradas
+
+**Cálculo de `is_phase_entry`** em `compose_decision_output()` antes da chamada principal:
+
+```python
+_lead_current_route = _LEAD_CAT_TO_ROUTE.get(lead.category)
+_is_phase_entry = (_lead_current_route != effective_route_to)
+```
+
+Se `lead.category` (categoria antes desta mensagem) é diferente do `effective_route_to` (fase que vai executar agora) → é uma transição → dispara uma vez.
+
+**Chamadas dos child prompt builders** (qualification, apresentation, followup) mantêm `is_phase_entry=True` implícito (default) — as `prompt_injections` de orientação chegam sempre ao LLM.
+
+### Comportamento resultante
+
+| Cenário | `lead.category` | `effective_route_to` | `is_phase_entry` | `phase_trigger` dispara? |
+|---|---|---|---|---|
+| Qualificação completa → entra em Apresentação | `qualification` | `apresentation` | `True` | ✅ Uma vez |
+| 2ª mensagem já em Apresentação | `apresentation` | `apresentation` | `False` | ❌ Não repete |
+| Transição apresentação → pré-agendamento | `apresentation` | `pre-agendamento` | `True` | ✅ Uma vez |
+| Já em pré-agendamento, nova mensagem | `pre-agendamento` | `pre-agendamento` | `False` | ❌ Não repete |
+
+### Ficheiros alterados
+
+| Ficheiro | Mudança |
+|---|---|
+| `backend-executors/app/services/decision_engine.py` | Único ficheiro alterado |
+
+### Commits Fase 7
+
+| # | Commit | O que foi implementado |
+|---|---|---|
+| 1 | _(próximo commit)_ | `is_phase_entry` + `_ROUTE_TO_PHASE_ID` fix + `_apres_route` fix |
+
+**Detalhes:**
+- `_evaluate_sales_flow_phases()` — novo parâmetro `is_phase_entry: bool = True`; `phase_trigger`: `fired = is_phase_entry`
+- `_ROUTE_TO_PHASE_ID` — adicionado `"pre-agendamento": "p3a"` (hífen) ao lado de `"pre_agendamento"`
+- `compose_decision_output()` — computa `_is_phase_entry` a partir de `lead.category` vs `effective_route_to`; passa para chamada principal de `_evaluate_sales_flow_phases()`
+- `_build_child_prompt_apresentation()` — removida linha `_apres_route = mother_decision.route_to or "apresentation"`; chamada hardcoded com `"apresentation"`
+
+### Verificação
+- [ ] Configurar `phase_trigger → mensagem "Olá, aqui estão os detalhes" → mensagem "Gostou?"` na Fase Apresentação
+- [ ] Playground: conduzir qualificação completa → na mensagem de transição, `auto_messages` contém as duas mensagens configuradas
+- [ ] Enviar 2ª mensagem já em Apresentação → `auto_messages` está vazio (trigger não repete)
+- [ ] Verificar que o LLM filho continua recebendo as orientações de fase via `prompt_injections`
+- [ ] Fase pré-agendamento: configurar `phase_trigger → mensagem` e verificar disparo único na entrada
+
+

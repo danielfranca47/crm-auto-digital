@@ -327,6 +327,7 @@ def _evaluate_sales_flow_phases(
     effective_route_to: str,
     message_text: str,
     detected_intents: Optional[List[str]] = None,
+    is_phase_entry: bool = True,
 ) -> Dict[str, Any]:
     """Avalia os blocos tipados do novo sistema de fases do Fluxo de Venda.
 
@@ -350,13 +351,14 @@ def _evaluate_sales_flow_phases(
         return result
 
     _ROUTE_TO_PHASE_ID: Dict[str, str] = {
-        "qualification":   "p1",
-        "apresentation":   "p2",
-        "pre_agendamento": "p3a",
-        "agendamento":     "p3b",
-        "followup":        "p4",
-        "follow-up":       "p4",
-        "closing":         "p5",
+        "qualification":    "p1",
+        "apresentation":    "p2",
+        "pre-agendamento":  "p3a",
+        "pre_agendamento":  "p3a",
+        "agendamento":      "p3b",
+        "followup":         "p4",
+        "follow-up":        "p4",
+        "closing":          "p5",
     }
     phase_id = _ROUTE_TO_PHASE_ID.get(effective_route_to)
     if not phase_id:
@@ -383,7 +385,7 @@ def _evaluate_sales_flow_phases(
             # Avaliar e atualizar o flag de trigger ativo
             fired = False
             if type_id == "phase_trigger":
-                fired = True
+                fired = is_phase_entry
             elif type_id == "kw_trigger":
                 keywords = [
                     _normalize_str(kw.strip())
@@ -2675,8 +2677,7 @@ def _build_child_prompt_apresentation(
         + _build_training_examples_block(context, "apresentation")
     )
     _apres_prompt += _build_sales_flow_block(_evaluate_sales_flow(context, "apresentation", mother_decision.signals))
-    _apres_route = mother_decision.route_to or "apresentation"
-    _apres_prompt += _build_sales_flow_phases_block(_evaluate_sales_flow_phases(context, _apres_route, message_text, detected_intents=mother_decision.detected_intents))
+    _apres_prompt += _build_sales_flow_phases_block(_evaluate_sales_flow_phases(context, "apresentation", message_text, detected_intents=mother_decision.detected_intents))
     return _inject_generated_parts(_apres_prompt, context, "apresentation")
 
 
@@ -3843,9 +3844,26 @@ def compose_decision_output(
                     decision.pre_send_media = _sf_media
 
     # Fluxo de Venda (novo sistema de fases) — mídia com URL explícita e system_actions
+    # is_phase_entry: True quando o lead está a transitar para esta fase (category != effective_route_to)
+    # Garante que phase_trigger só dispara uma vez — na entrada — e não em cada mensagem seguinte.
+    _LEAD_CAT_TO_ROUTE: Dict[str, str] = {
+        "qualification":    "qualification",
+        "apresentation":    "apresentation",
+        "pre-agendamento":  "pre-agendamento",
+        "pre_agendamento":  "pre-agendamento",
+        "agendamento":      "agendamento",
+        "follow-up":        "followup",
+        "follow_up":        "followup",
+        "closing":          "closing",
+        "recepcao":         "recepcao",
+    }
+    _lead_cat_raw = ((context.get("lead") or {}).get("category") or "").strip().lower()
+    _lead_current_route = _LEAD_CAT_TO_ROUTE.get(_lead_cat_raw, _lead_cat_raw)
+    _is_phase_entry = (_lead_current_route != effective_route_to)
     _phases_result = _evaluate_sales_flow_phases(
         context, effective_route_to, _extract_message_text(context),
         detected_intents=mother_decision.detected_intents,
+        is_phase_entry=_is_phase_entry,
     )
     if _phases_result.get("pre_send_media") and not decision.pre_send_media:
         decision.pre_send_media = _phases_result["pre_send_media"]
