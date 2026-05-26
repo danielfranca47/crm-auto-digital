@@ -209,6 +209,20 @@ function saveBlocks(phaseId: SalesFlowPhaseId, newBlocks: SalesFlowBlock[]) {
 6. Clica "Salvar regra" → todos os blocos inseridos em sequência na fase
 7. Agrupamento visual mostra a regra completa com indentação correta
 
+### Commits Fase 5
+
+| # | Commit | O que foi implementado |
+|---|---|---|
+| 1 | `64304b6` | RuleBuilderModal + BLOCK_TYPE_LABELS + saveBlocks |
+
+**Detalhes do commit `64304b6`:**
+- `frontend-crm/src/components/agente/CamadaFluxoVenda.tsx`:
+  - Adicionado `BLOCK_TYPE_LABELS` — centraliza labels de tipo (elimina ternário longo no `BlockModal`)
+  - Adicionado `RuleBuilderModal` — modal multi-passo com 4 steps: `pick-trigger` → `config-trigger` → `rule-builder` → `adding-block`
+  - `openAdd` agora abre `RuleBuilderModal` em vez do `BlockModal`
+  - `saveBlocks()` — persiste array de blocos em sequência na fase
+  - `BlockModal` (EDITAR) inalterado — continua para edição de bloco único
+
 ### Verificação
 - [ ] Add com gatilho + 2 ações → salva 3 blocos em sequência
 - [ ] Add com "sem gatilho" → salva só ações no grupo "Sempre ao entrar"
@@ -220,5 +234,4 @@ function saveBlocks(phaseId: SalesFlowPhaseId, newBlocks: SalesFlowBlock[]) {
 ## Próximas Iterações
 
 - **Fase 4 — `condicao` com branching real:** requer mudança no modelo de dados e UI para editar blocos aninhados dentro de cada branch (Sim/Não). Não bloqueante para o caso de uso atual.
-- **Fase 5 (acima) — Modal composicional:** próxima implementação prioritária.
 - **`intent_trigger` real:** implementar avaliação real de intenção via LLM em vez de `fired = True` incondicional. Atualmente funciona como `phase_trigger`.
