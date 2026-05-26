@@ -165,15 +165,17 @@ export default function Playground() {
         setSession((s) => s ? { ...s, leadId: res.lead_id } : s);
 
         const parts = res.message_parts?.length ? res.message_parts : [res.message_to_send];
-        setMessages([buildBotMessage(parts[0], res, { isFirst: true, totalParts: parts.length })]);
-        const afterParts = parts.length > 1
-          ? revealExtraParts(parts.slice(1), setMessages, setLoading)
-          : Promise.resolve();
-        const _autoItems0 = resolveAutoItems(res);
-        const afterAuto = _autoItems0.length
-          ? afterParts.then(() => revealAutoMessages(_autoItems0, setMessages, setLoading))
-          : afterParts;
-        afterAuto.then(() => appendPhaseAdvances(res.phase_advances ?? [], setMessages));
+        const autoItems0 = resolveAutoItems(res);
+        if (res.phase_trigger_fired && autoItems0.length) {
+          await revealAutoMessages(autoItems0, setMessages, setLoading);
+          setMessages((prev) => [...prev, buildBotMessage(parts[0], res, { isFirst: true, totalParts: parts.length })]);
+          if (parts.length > 1) await revealExtraParts(parts.slice(1), setMessages, setLoading);
+        } else {
+          setMessages([buildBotMessage(parts[0], res, { isFirst: true, totalParts: parts.length })]);
+          if (parts.length > 1) await revealExtraParts(parts.slice(1), setMessages, setLoading);
+          if (autoItems0.length) await revealAutoMessages(autoItems0, setMessages, setLoading);
+        }
+        appendPhaseAdvances(res.phase_advances ?? [], setMessages);
       } catch (err: unknown) {
         if (cancelled) return;
         const msg = err instanceof Error ? err.message : "Erro ao obter abertura outbound";
@@ -221,20 +223,21 @@ export default function Playground() {
           setSession((s) => s ? { ...s, leadId: res.lead_id } : s);
         }
 
-        // Adiciona resposta do bot (primeira parte imediatamente; extras de forma sequencial)
+        // Adiciona resposta do bot
         const parts = res.message_parts?.length ? res.message_parts : [res.message_to_send];
-        setMessages((prev) => [
-          ...prev,
-          buildBotMessage(parts[0], res, { isFirst: true, totalParts: parts.length }),
-        ]);
-        const afterParts = parts.length > 1
-          ? revealExtraParts(parts.slice(1), setMessages, setLoading)
-          : Promise.resolve();
-        const _autoItems1 = resolveAutoItems(res);
-        const afterAuto = _autoItems1.length
-          ? afterParts.then(() => revealAutoMessages(_autoItems1, setMessages, setLoading))
-          : afterParts;
-        afterAuto.then(() => appendPhaseAdvances(res.phase_advances ?? [], setMessages));
+        const autoItems = resolveAutoItems(res);
+        if (res.phase_trigger_fired && autoItems.length) {
+          // phase_trigger: mensagens automáticas PRIMEIRO, depois LLM
+          await revealAutoMessages(autoItems, setMessages, setLoading);
+          setMessages((prev) => [...prev, buildBotMessage(parts[0], res, { isFirst: true, totalParts: parts.length })]);
+          if (parts.length > 1) await revealExtraParts(parts.slice(1), setMessages, setLoading);
+        } else {
+          // ordem normal: LLM primeiro, depois auto items
+          setMessages((prev) => [...prev, buildBotMessage(parts[0], res, { isFirst: true, totalParts: parts.length })]);
+          if (parts.length > 1) await revealExtraParts(parts.slice(1), setMessages, setLoading);
+          if (autoItems.length) await revealAutoMessages(autoItems, setMessages, setLoading);
+        }
+        appendPhaseAdvances(res.phase_advances ?? [], setMessages);
       } catch (err: unknown) {
         const msg = err instanceof Error ? err.message : "Erro ao chamar o playground";
         toast({ title: "Erro", description: msg, variant: "destructive" });

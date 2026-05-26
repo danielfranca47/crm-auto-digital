@@ -157,6 +157,7 @@ class PlaygroundChatResponse(BaseModel):
     auto_messages: List[str] = Field(default_factory=list)   # Mensagens automáticas de blocos 'mensagem' (texto) — compat
     auto_items: List[dict] = Field(default_factory=list)     # Sequência ordenada: {type:"text",content:...} | {type:"media",...}
     phase_advances: List[str] = Field(default_factory=list)  # Labels de fases avançadas por blocos 'avancar_fase'
+    phase_trigger_fired: bool = False                         # True quando phase_trigger disparou → frontend inverte ordem (auto antes do LLM)
 
 
 # ---------------------------------------------------------------------------
@@ -494,6 +495,10 @@ def playground_chat(
         elif atype == "mark_phase_triggered" and action.get("phase_id"):
             _mark_phase_triggered(lead_id, user_id, action["phase_id"])
 
+    phase_trigger_fired = any(
+        a.get("type") == "mark_phase_triggered" for a in raw_system_actions
+    )
+
     # ── Passo 8: Guarda mensagens outbound ───────────────────────────────────
     if message_to_send:
         _insert_message(lead_id, message_to_send, "outbound")
@@ -552,6 +557,7 @@ def playground_chat(
         auto_messages=auto_messages,
         auto_items=auto_items,
         phase_advances=phase_advances,
+        phase_trigger_fired=phase_trigger_fired,
     )
 
 

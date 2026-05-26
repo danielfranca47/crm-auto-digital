@@ -179,6 +179,7 @@ export type PlaygroundChatResponse = {
   auto_messages?: string[];
   auto_items?: PlaygroundAutoItem[];
   phase_advances?: string[];
+  phase_trigger_fired?: boolean;
 };
 
 // ── Playground FeedbackAssist ────────────────────────────────────────────────

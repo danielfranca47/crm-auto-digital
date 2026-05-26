@@ -414,6 +414,10 @@ def _evaluate_sales_flow_phases(
             if fired:
                 if type_id == "phase_trigger":
                     result["phase_trigger_fired"] = True
+                    result["prompt_injections"].append(
+                        "ATENÇÃO: As mensagens listadas abaixo foram enviadas AUTOMATICAMENTE ao lead "
+                        "antes da sua resposta. Complemente-as — não as repita."
+                    )
                     content = (block.get("content") or "").strip()
                     if content:
                         priority = (block.get("priority") or "normal").strip().lower()
@@ -448,6 +452,11 @@ def _evaluate_sales_flow_phases(
                         "media_type": block.get("media_type") or "image",
                         "caption": (block.get("caption") or "").strip() or None,
                     })
+                    if result.get("phase_trigger_fired"):
+                        _mtype = block.get("media_type") or "image"
+                        result["prompt_injections"].append(
+                            f"[Mídia enviada automaticamente ao lead: {_mtype}]"
+                        )
             elif type_id == "mensagem":
                 content = (block.get("content") or "").strip()
                 if content:
@@ -456,6 +465,10 @@ def _evaluate_sales_flow_phases(
                         "content": content,
                         "channel": block.get("channel") or "whatsapp",
                     })
+                    if result.get("phase_trigger_fired"):
+                        result["prompt_injections"].append(
+                            f"[Mensagem automática enviada ao lead antes desta resposta: \"{content}\"]"
+                        )
             elif type_id == "avancar_fase":
                 target = (block.get("target_phase") or "").strip()
                 if target:
