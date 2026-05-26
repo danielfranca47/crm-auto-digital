@@ -1418,6 +1418,7 @@ export const api = {
         availability_mode:             config.availability_mode,
         availability_schedule:         config.availability_schedule,
         offer_pack,
+        sales_flow:                    config.sales_flow,
       });
     },
 
