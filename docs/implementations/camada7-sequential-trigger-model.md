@@ -497,8 +497,126 @@ Quando `phase_trigger` dispara → adiciona `{type: "mark_phase_triggered", phas
 | `frontend-crm/src/pages/Playground.tsx` | `revealAutoMessages` com suporte a media; `resolveAutoItems()`; call sites actualizadas |
 
 ### Verificação Fase 8
-- [ ] Playground: transition qual → apres → confirmar ordem correcta: LLM → "Olá..." → 🎵 áudio → "Gostou?"
+- [ ] ~~Playground: transition qual → apres → confirmar ordem correcta: LLM → "Olá..." → 🎵 áudio → "Gostou?"~~ → **ordem esperada estava errada** — ver Fase 9
 - [ ] Enviar 2ª mensagem em apresentação → `auto_items` vazio (flag `["p2"]` impede re-disparo)
 - [ ] Lead avança para agendamento e volta para apresentação → trigger NÃO re-dispara
 - [ ] WhatsApp real: media e mensagens enviados em jobs separados na ordem correcta
 - [ ] Verificar coluna `phases_triggered` populada no DB após primeira execução
+
+---
+
+## Fase 9 — Ordem Correcta: Auto Antes do LLM + Contexto para o LLM (commit `04c6b2b`)
+
+### Problema identificado na verificação comportamental
+
+A Fase 8 assumiu que a ordem esperada era `LLM → auto_items`. Após revisão com o utilizador, a ordem correcta é a inversa:
+
+1. **Primeiro:** mensagens automáticas do `phase_trigger` (mensagens programadas pelo utilizador)
+2. **Depois:** resposta do LLM, com contexto do que foi enviado, para complementar
+
+**Exemplo concreto para a Fase Apresentação:**
+```
+Lead qualifica-se → bot responde:
+  1. "vou te enviar o nosso material de apresentação"  ← automática (violeta)
+  2. [áudio]                                           ← automática (violeta)
+  3. "Gostou?"                                         ← automática (violeta)
+  4. "Que tal agendarmos uma reunião para..."          ← LLM (normal)
+```
+
+### Dois problemas corrigidos
+
+#### Problema 1 — Ordem invertida no Playground
+
+A sequência de `handleSend`/`fireOpener` em `Playground.tsx` sempre mostrava LLM primeiro, `auto_items` depois. Para `phase_trigger` o correto é inverter.
+
+#### Problema 2 — LLM não sabia o que foi enviado automaticamente
+
+Em `_evaluate_sales_flow_phases()`, blocos `mensagem` e `midia` que disparam após `phase_trigger` iam apenas para `system_actions` — não para `prompt_injections`. O LLM filho gerava a resposta sem saber que "vou te enviar o áudio" e "Gostou?" já tinham sido enviados. Podia repetir ou ignorar o contexto.
+
+### Arquitectura das Correcções
+
+#### Fix 1 — `prompt_injections` para blocos after `phase_trigger` (`decision_engine.py`)
+
+Quando `phase_trigger` dispara, adiciona aviso preamble ao `prompt_injections`:
+```python
+result["prompt_injections"].append(
+    "ATENÇÃO: As mensagens listadas abaixo foram enviadas AUTOMATICAMENTE ao lead "
+    "antes da sua resposta. Complemente-as — não as repita."
+)
+```
+
+Blocos subsequentes (`mensagem`, `midia`) que também disparam adicionam a `prompt_injections` **condicionalmente** (`result.get("phase_trigger_fired")`), preservando o comportamento de `kw_trigger`/`intent_trigger` sem contaminação:
+
+```python
+elif type_id == "mensagem":
+    ...
+    if result.get("phase_trigger_fired"):
+        result["prompt_injections"].append(
+            f"[Mensagem automática enviada ao lead antes desta resposta: \"{content}\"]"
+        )
+
+elif type_id == "midia":
+    ...
+    if result.get("phase_trigger_fired"):
+        result["prompt_injections"].append(
+            f"[Mídia enviada automaticamente ao lead: {_mtype}]"
+        )
+```
+
+Esta mudança aplica-se tanto à chamada do child prompt builder (que usa `is_phase_entry=True` implícito) como à chamada de `compose_decision_output()`. O LLM filho recebe o contexto completo do que foi enviado.
+
+#### Fix 2 — Campo `phase_trigger_fired` no `PlaygroundChatResponse` (`playground.py`)
+
+Detectado via presença de `mark_phase_triggered` nas `system_actions`:
+```python
+phase_trigger_fired = any(
+    a.get("type") == "mark_phase_triggered" for a in raw_system_actions
+)
+```
+
+Retornado no `PlaygroundChatResponse` e exposto no tipo TypeScript em `api.ts`.
+
+#### Fix 3 — Inversão de ordem no `Playground.tsx`
+
+Quando `res.phase_trigger_fired && autoItems.length`:
+```typescript
+// phase_trigger: mensagens automáticas PRIMEIRO, depois LLM
+await revealAutoMessages(autoItems, setMessages, setLoading);
+setMessages(prev => [...prev, buildBotMessage(parts[0], res, ...)]);
+if (parts.length > 1) await revealExtraParts(parts.slice(1), ...);
+```
+
+Caso contrário (sem `phase_trigger_fired`): ordem original (LLM → auto_items).
+
+Aplicado tanto em `handleSend` como no `fireOpener` do outbound.
+
+### Comportamento resultante
+
+| Cenário | Ordem de exibição |
+|---|---|
+| `phase_trigger` dispara (entrada na fase) | Auto-mensagens → LLM |
+| `kw_trigger` ou `intent_trigger` disparam | LLM → auto-mensagens (ordem normal) |
+| Sem trigger activo | LLM → auto-mensagens (ordem normal) |
+| 2ª mensagem na mesma fase (trigger não dispara) | LLM sozinho (sem auto-mensagens) |
+
+### Nota: path de WhatsApp real
+
+No WhatsApp real, a mensagem LLM é enviada por `backend-executors` **directamente** antes de os jobs de `system_actions` serem criados pelo CRM. A inversão de ordem para WhatsApp real requer alteração no worker de `backend-executors` — **não incluída neste fix**. O comportamento correcto está garantido no playground.
+
+### Ficheiros alterados
+
+| Ficheiro | Mudança |
+|---|---|
+| `backend-executors/app/services/decision_engine.py` | `phase_trigger`: preamble no `prompt_injections`; `mensagem`/`midia`: também adicionam a `prompt_injections` quando `phase_trigger_fired` |
+| `backend-crm/routes/playground.py` | Campo `phase_trigger_fired: bool` + detecção por `mark_phase_triggered` |
+| `frontend-crm/src/services/api.ts` | `phase_trigger_fired?: boolean` em `PlaygroundChatResponse` |
+| `frontend-crm/src/pages/Playground.tsx` | Inversão de ordem em `handleSend` e `fireOpener` quando `phase_trigger_fired` |
+
+### Verificação Fase 9
+
+Configuração de teste: Fase Apresentação com `PHASE TRIGGER → MENSAGEM "vou te enviar o áudio" → MIDIA [áudio] → MENSAGEM "Gostou?"`
+
+- [ ] Playground: transition qual → apres → ordem correcta: "vou te enviar o áudio" (violeta) → 🎵 (violeta) → "Gostou?" (violeta) → resposta LLM (normal)
+- [ ] Resposta do LLM após o trigger complementa sem repetir o que foi enviado automaticamente
+- [ ] 2ª mensagem em apresentação: `auto_items` vazio, apenas LLM responde normalmente
+- [ ] `kw_trigger`/`intent_trigger` → ordem mantida: LLM primeiro, depois auto (sem regressão)
