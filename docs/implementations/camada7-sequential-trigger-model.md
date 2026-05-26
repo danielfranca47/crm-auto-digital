@@ -116,6 +116,109 @@ _(preencher)_
 
 ---
 
+## Observações Após Teste do Agrupamento Visual (commit `50f38f9`)
+
+Após testar o agrupamento visual implementado na Fase 2, o utilizador identificou dois problemas de UX e uma questão de comportamento prático:
+
+### Problema A — Modal não é composicional (UX bloqueante)
+O fluxo atual obriga a clicar "Adicionar bloco" N vezes para montar uma regra completa. Cada clique abre o modal, salva **um** bloco e fecha. Para configurar `phase_trigger → mensagem → mídia`, o utilizador precisa de 3 sessões separadas no modal. Isso é contra-intuitivo porque:
+- O utilizador não sabe antecipadamente quantos blocos precisará criar
+- Não há feedback visual de qual gatilho está "atualmente activo" durante a criação
+- A relação de hierarquia (gatilho governa as ações seguintes) não é comunicada no momento da adição
+
+### Problema B — `intent_trigger` sempre dispara (comportamento inesperado)
+Na implementação atual (`decision_engine.py`), `intent_trigger` tem `fired = True` incondicional — funciona como `phase_trigger` (sempre ativa). Isso significa que **qualquer bloco de ação após um `intent_trigger` dispara em cada mensagem**, independente de haver intenção detectada ou não. O utilizador configurou `intent_trigger "demonstrar hesitação" → midia "myaudio"` esperando que o áudio só fosse enviado quando hesitação fosse detectada — mas o áudio seria enviado em toda mensagem.
+
+### Interpretação visual do agrupamento atual
+- **Linha vertical colorida (seta amarela)** abaixo de `intent_trigger`: indica que `MIDIA myaudio` pertence a esse gatilho. A cor vem do `BLOCK_META` do tipo `intent_trigger`. Correto visualmente, mas o comportamento backend não corresponde à intenção.
+- **Grupo "⚡ Sempre ao entrar na fase" (seta cinza)**: agrupa blocos de ação sem gatilho explícito anterior. Não está conectado visualmente ao `kw_trigger` — são grupos independentes. O utilizador inicialmente interpretou como conexão entre os dois.
+
+---
+
+## Fase 5 — Modal Composicional de Regras
+
+### Motivação
+Resolver o Problema A (UX bloqueante) e tornar a configuração de regras intuitiva, incluindo suporte a lógica opcional (ex: `espera`) na mesma sessão.
+
+### Abordagem: Rule Builder Modal
+Substituir o modal de adição único por um modal multi-passo que produz N blocos de uma vez.
+
+**Fluxo do novo modal (modo ADD):**
+
+```
+Step 1: Pick Trigger
+  ┌─────────────────────────────────────────────┐
+  │ Escolhe: [Fase iniciada] [Palavra-chave]    │
+  │          [Sem resposta]  [Intenção IA]      │
+  │          [⚡ Sem gatilho (sempre ao entrar)] │
+  └─────────────────────────────────────────────┘
+           ↓ (se gatilho selecionado)
+Step 2: Configure Trigger
+  ┌─────────────────────────────────────────────┐
+  │ [BlockForm do tipo de gatilho]              │
+  │                          [Próximo →]        │
+  └─────────────────────────────────────────────┘
+           ↓
+Step 3: Rule Builder
+  ┌─────────────────────────────────────────────┐
+  │ GATILHO                                     │
+  │  🚀 FASE INICIADA                           │
+  │                                             │
+  │ AÇÕES / LÓGICA                              │
+  │  📩 MENSAGEM  "bom dia..."           [✕]   │
+  │  🎵 MIDIA     "audio.mp3"            [✕]   │
+  │                                             │
+  │  [+ Adicionar ação]  [+ Adicionar lógica]   │
+  │  [← Voltar]                [SALVAR REGRA]   │
+  └─────────────────────────────────────────────┘
+```
+
+**Sub-step "adding-block"** (aberto pelos botões `+`):
+- Grid de tipos filtrado por categoria (ação ou lógica)
+- Form de configuração do bloco
+- "Confirmar" → bloco adicionado à lista, volta ao Step 3
+
+**Modo EDIT** (botão "EDITAR" num bloco existente): inalterado — abre `BlockModal` existente para editar 1 bloco.
+
+### Ficheiro a alterar
+`frontend-crm/src/components/agente/CamadaFluxoVenda.tsx` — único ficheiro. Sem alterações a tipos, backend ou modelo de dados.
+
+**Reutilizações:**
+- `BlockForm` (linhas 116–378) — inalterado, reutilizado nos sub-steps
+- `BLOCK_META` / `SALES_FLOW_BLOCK_CATEGORIES` — labels, cores, ícones
+- `emptyBlock()` — criar blocos vazios por typeId
+- `updateFlow()` — persistir alterações
+- `BlockModal` — continua para edit mode
+
+**Nova função `saveBlocks`:**
+```typescript
+function saveBlocks(phaseId: SalesFlowPhaseId, newBlocks: SalesFlowBlock[]) {
+  updateFlow(phases.map(p => {
+    if (p.id !== phaseId) return p;
+    return { ...p, blocks: [...p.blocks, ...newBlocks] };
+  }));
+}
+```
+
+### Resolução esperada
+1. Utilizador clica "+ Adicionar bloco nesta fase"
+2. Seleciona "Fase iniciada" → configura (sem campos extras) → "Próximo"
+3. Clica "+ Adicionar ação" → escolhe Mensagem → escreve texto → "Confirmar"
+4. Clica "+ Adicionar ação" → escolhe Mídia → seleciona áudio → "Confirmar"
+5. Clica "+ Adicionar lógica" → escolhe Espera → configura tempo → "Confirmar" (opcional)
+6. Clica "Salvar regra" → todos os blocos inseridos em sequência na fase
+7. Agrupamento visual mostra a regra completa com indentação correta
+
+### Verificação
+- [ ] Add com gatilho + 2 ações → salva 3 blocos em sequência
+- [ ] Add com "sem gatilho" → salva só ações no grupo "Sempre ao entrar"
+- [ ] Editar bloco existente (EDITAR) → abre BlockModal individual inalterado
+- [ ] Cancelar no Step 3 → nenhum bloco é salvo
+
+---
+
 ## Próximas Iterações
 
 - **Fase 4 — `condicao` com branching real:** requer mudança no modelo de dados e UI para editar blocos aninhados dentro de cada branch (Sim/Não). Não bloqueante para o caso de uso atual.
+- **Fase 5 (acima) — Modal composicional:** próxima implementação prioritária.
+- **`intent_trigger` real:** implementar avaliação real de intenção via LLM em vez de `fired = True` incondicional. Atualmente funciona como `phase_trigger`.
