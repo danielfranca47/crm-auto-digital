@@ -313,6 +313,20 @@ Campo `detected_intents` é `list[str]`, padrão `[]` quando não há `intent_tr
 | `intent_trigger "interesse" → mensagem` | mensagem enviada em **toda** mensagem | mensagem só quando interesse detectado |
 | Fase sem `intent_trigger` | sem impacto | sem impacto (campo omitido do prompt) |
 
+### Commits Fase 6
+
+| # | Commit | O que foi implementado |
+|---|---|---|
+| 1 | `8947eb6` | `detected_intents` no MotherDecision + helper + `_evaluate_sales_flow_phases` + 4 call sites |
+
+**Detalhes do commit `8947eb6`:**
+- `backend-executors/app/services/orchestrator_models.py` — `detected_intents: list[str] = Field(default_factory=list)` adicionado ao `MotherDecision`
+- `backend-executors/app/services/decision_engine.py`:
+  - `_collect_intent_triggers_for_lead_phase()` — coleta `intent_trigger` blocks da fase atual do lead
+  - `_build_mother_prompt()` — injeta `[DETECÇÃO DE INTENÇÃO]` condicional + campo `detected_intents` no schema JSON
+  - `_evaluate_sales_flow_phases()` — parâmetro `detected_intents`; `intent_trigger`: `fired = intent_label in detected_intents` (fallback `True` se `detected_intents is None`)
+  - 4 call sites atualizados para passar `mother_decision.detected_intents`
+
 ### Verificação
 - [ ] Configurar `intent_trigger "demonstrar hesitação" → midia` numa fase
 - [ ] Enviar mensagem neutra no playground → mídia **não** deve ser enviada
