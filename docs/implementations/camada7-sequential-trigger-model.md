@@ -601,7 +601,7 @@ Aplicado tanto em `handleSend` como no `fireOpener` do outbound.
 
 ### Nota: path de WhatsApp real
 
-No WhatsApp real, a mensagem LLM é enviada por `backend-executors` **directamente** antes de os jobs de `system_actions` serem criados pelo CRM. A inversão de ordem para WhatsApp real requer alteração no worker de `backend-executors` — **não incluída neste fix**. O comportamento correcto está garantido no playground.
+No WhatsApp real, a mensagem LLM era enviada por `backend-executors` **directamente** antes de os jobs de `system_actions` serem criados pelo CRM — invertendo a ordem. Corrigido na **Fase 10**.
 
 ### Ficheiros alterados
 
@@ -620,3 +620,88 @@ Configuração de teste: Fase Apresentação com `PHASE TRIGGER → MENSAGEM "vo
 - [ ] Resposta do LLM após o trigger complementa sem repetir o que foi enviado automaticamente
 - [ ] 2ª mensagem em apresentação: `auto_items` vazio, apenas LLM responde normalmente
 - [ ] `kw_trigger`/`intent_trigger` → ordem mantida: LLM primeiro, depois auto (sem regressão)
+
+---
+
+## Fase 10 — WhatsApp Real: Paridade de Ordem + fire_once para kw/intent (commit `b9768a5`)
+
+### Três áreas implementadas
+
+#### Área 1 — WhatsApp real: ordenação síncrona pré-LLM
+
+**Problema:** No path de WhatsApp real (`backend-executors/app/runners/whatsapp.py`), as `system_actions` do Fluxo de Venda ficavam aninhadas em `result_payload["decision"]["system_actions"]`. O CRM lia `result.get("system_actions")` no nível de topo — por isso nunca as recebia. Consequências:
+- `mark_phase_triggered` / `advance_phase` / `mark_trigger_fired` nunca eram persistidos
+- `send_message` / `send_media` nunca eram enviados
+- Mesmo quando chegavam ao CRM (em path alternativo), eram criados como background jobs — chegando ao WhatsApp **depois** do LLM, invertendo a ordem
+
+**Solução:** No runner, após a decisão, as `system_actions` são agora classificadas e tratadas directamente:
+
+```python
+_decision_system_actions = list(decision.system_actions or [])
+_phase_trigger_fired = any(a.get("type") == "mark_phase_triggered" for a in _decision_system_actions)
+_send_actions = [a for a in _decision_system_actions if a.get("type") in ("send_message", "send_media")]
+_state_actions = [a for a in _decision_system_actions if a.get("type") not in ("send_message", "send_media")]
+```
+
+**Envio síncrono via `_send_sales_flow_action()`** (nova função auxiliar no runner):
+- Se `phase_trigger_fired`: envia `_send_actions` **antes** do LLM
+- Se não: envia `_send_actions` **depois** do LLM e extra_body_parts
+
+**Acções de estado passadas ao CRM** no `result_payload` de topo:
+```python
+result_payload["system_actions"] = _state_actions   # mark_phase_triggered, advance_phase, mark_trigger_fired
+result_payload["phase_trigger_fired"] = True         # quando aplicável
+```
+
+O `_dispatch_system_actions()` do CRM passa a receber apenas as acções de estado — sem criar jobs redundantes para `send_message`/`send_media` que o runner já enviou.
+
+#### Área 2 — `kw_trigger` com flag `fire_once`
+
+**Problema:** o `kw_trigger` disparava em **todas** as mensagens que contivessem a keyword, sem forma de limitar a um único disparo por lead.
+
+**Solução:** campo opcional `fire_once?: boolean` por bloco (checkbox no frontend):
+
+- Frontend: checkbox "Disparar apenas uma vez por lead" no formulário do bloco `kw_trigger`
+- DB: coluna `leads.triggers_fired TEXT NULL` (JSON array de block IDs que já dispararam)
+- Decision engine: se `fire_once=True` e `block.id ∈ triggers_fired` → `fired = False`; quando dispara com `fire_once` → emite `{"type": "mark_trigger_fired", "block_id": "..."}`
+- CRM (executor + playground): ao processar `mark_trigger_fired` → append do `block_id` em `leads.triggers_fired`
+
+#### Área 4 — `intent_trigger` com flag `fire_once`
+
+Comportamento e implementação idênticos à Área 2. O `intent_trigger` já tinha detecção real via `detected_intents` (Fase 6). O `fire_once` permite limitar o disparo a uma única vez por lead.
+
+**Nota sobre o fallback:** quando a LLM mãe não classifica intenções (`detected_intents is None`), `intent_trigger` dispara por defeito (`fired = True`). Com `fire_once=True`, isso significa que na primeira mensagem sem classificação o bloco já dispara e fica bloqueado. Comportamento esperado e documentado.
+
+#### Área 3 — `no_reply_trigger` (análise, sem código)
+
+O `no_reply_trigger` é **actualmente um placeholder de UI** — não é avaliado em `_evaluate_sales_flow_phases()`. O comentário no código diz "gerido pelo followup_state", mas o `followup_reconciler` só corre para leads com `category = 'follow-up'` — não para leads em fases do Fluxo de Venda. **Não há risco de loop** porque o bloco nunca dispara. Implementação real requereria um serviço de reconciliação próprio para o Fluxo de Venda.
+
+---
+
+### Ficheiros alterados
+
+| Ficheiro | Mudança |
+|---|---|
+| `backend-executors/app/runners/whatsapp.py` | `_send_sales_flow_action()` helper; extracção de `_send_actions`/`_state_actions`; envio síncrono pré/pós LLM; `result_payload["system_actions"]` no topo |
+| `backend-executors/app/services/decision_engine.py` | `kw_trigger` + `intent_trigger`: check `fire_once` + `already_fired`; emite `mark_trigger_fired` |
+| `backend-crm/database.py` | `ensure_column leads.triggers_fired TEXT NULL` |
+| `backend-crm/routes/executor.py` | Handler `mark_trigger_fired` em `_dispatch_system_actions` |
+| `backend-crm/routes/playground.py` | `_mark_trigger_fired()` helper; handler `mark_trigger_fired` no loop de system_actions |
+| `frontend-crm/src/types/agente.ts` | `fire_once?: boolean` em `SalesFlowBlock` |
+| `frontend-crm/src/components/agente/CamadaFluxoVenda.tsx` | Checkbox "Disparar apenas uma vez por lead" no BlockForm de `kw_trigger` e `intent_trigger` |
+
+### Verificação Fase 10
+
+**WhatsApp real — fase com phase_trigger:**
+- [ ] Enviar mensagem real via WhatsApp para lead em qualificação → entra em apresentação → mensagens automáticas chegam **antes** da resposta LLM
+- [ ] `phases_triggered` populado no DB após a primeira execução real
+
+**fire_once — kw_trigger:**
+- [ ] Configurar bloco `kw_trigger` com keyword "preço" e `fire_once=True`
+- [ ] Enviar "qual é o preço?" → bloco dispara, `triggers_fired` regista o block_id
+- [ ] Enviar "preço" novamente → bloco NÃO dispara
+
+**fire_once — intent_trigger:**
+- [ ] Configurar bloco `intent_trigger "demonstrar hesitação"` com `fire_once=True`
+- [ ] Lead expressa hesitação → bloco dispara uma vez
+- [ ] Lead expressa hesitação novamente → NÃO dispara
