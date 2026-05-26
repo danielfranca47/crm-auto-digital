@@ -36,6 +36,20 @@ const BLOCK_META: Record<SalesFlowBlockTypeId, { icon: string; color: string; de
   espera:           { icon: '⏳', color: '#94a3b8', desc: 'Pausa o fluxo por um tempo definido' },
 };
 
+const BLOCK_TYPE_LABELS: Record<SalesFlowBlockTypeId, string> = {
+  kw_trigger:       'Palavra-chave',
+  phase_trigger:    'Fase iniciada',
+  no_reply_trigger: 'Sem resposta',
+  intent_trigger:   'Intenção IA',
+  orientacao:       'Orientação ao Agente',
+  mensagem:         'Mensagem fixa',
+  midia:            'Enviar Mídia',
+  avancar_fase:     'Avançar Fase',
+  webhook:          'Webhook / API',
+  condicao:         'Condição',
+  espera:           'Espera',
+};
+
 const PHASE_COLORS: Record<SalesFlowPhaseId, string> = {
   p0: '#10b981', p1: '#38bdf8', p2: '#60a5fa',
   p3a: '#a78bfa', p3b: '#c084fc',
@@ -465,19 +479,7 @@ function BlockModal({ phaseId, initial, knowledgeItems, onSave, onClose }: {
                   <span style={{ fontSize: 20, lineHeight: 1, flexShrink: 0 }}>{meta.icon}</span>
                   <div>
                     <div style={{ fontSize: 12.5, fontWeight: 600, color: 'var(--o-text)', marginBottom: 2 }}>
-                      {SALES_FLOW_BLOCK_CATEGORIES.flatMap(c => c.types).includes(typeId)
-                        ? (typeId === 'kw_trigger' ? 'Palavra-chave'
-                          : typeId === 'phase_trigger' ? 'Fase iniciada'
-                          : typeId === 'no_reply_trigger' ? 'Sem resposta'
-                          : typeId === 'intent_trigger' ? 'Intenção IA'
-                          : typeId === 'orientacao' ? 'Orientação ao Agente'
-                          : typeId === 'mensagem' ? 'Mensagem fixa'
-                          : typeId === 'midia' ? 'Enviar Mídia'
-                          : typeId === 'avancar_fase' ? 'Avançar Fase'
-                          : typeId === 'webhook' ? 'Webhook / API'
-                          : typeId === 'condicao' ? 'Condição'
-                          : 'Espera')
-                        : typeId}
+                      {BLOCK_TYPE_LABELS[typeId]}
                     </div>
                     <div style={{ fontSize: 11, color: 'var(--o-sub)', lineHeight: 1.4 }}>{meta.desc}</div>
                     <span style={{
@@ -509,6 +511,279 @@ function BlockModal({ phaseId, initial, knowledgeItems, onSave, onClose }: {
             Salvar bloco
           </button>
         </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── RuleBuilderModal ─────────────────────────────────────────
+
+type RBStep = 'pick-trigger' | 'config-trigger' | 'rule-builder' | 'adding-block';
+
+function RuleBuilderModal({ phaseId, knowledgeItems, onSave, onClose }: {
+  phaseId: SalesFlowPhaseId;
+  knowledgeItems: KnowledgeItem[];
+  onSave: (blocks: SalesFlowBlock[]) => void;
+  onClose: () => void;
+}) {
+  const [step, setStep] = useState<RBStep>('pick-trigger');
+  const [triggerBlock, setTriggerBlock] = useState<SalesFlowBlock | null>(null);
+  const [extraBlocks, setExtraBlocks] = useState<SalesFlowBlock[]>([]);
+  const [addingCat, setAddingCat] = useState<'action' | 'logic' | null>(null);
+  const [pendingTypeId, setPendingTypeId] = useState<SalesFlowBlockTypeId | null>(null);
+  const [pendingBlock, setPendingBlock] = useState<SalesFlowBlock | null>(null);
+
+  const phaseName = SALES_FLOW_PHASE_ID_LABELS[phaseId];
+  const triggerCat = SALES_FLOW_BLOCK_CATEGORIES.find(c => c.id === 'trigger')!;
+
+  function pickTriggerType(typeId: SalesFlowBlockTypeId) {
+    setTriggerBlock(emptyBlock(typeId));
+    setStep('config-trigger');
+  }
+
+  function startAddingBlock(cat: 'action' | 'logic') {
+    setAddingCat(cat);
+    setPendingTypeId(null);
+    setPendingBlock(null);
+    setStep('adding-block');
+  }
+
+  function pickPendingType(typeId: SalesFlowBlockTypeId) {
+    setPendingTypeId(typeId);
+    setPendingBlock(emptyBlock(typeId));
+  }
+
+  function confirmPendingBlock() {
+    if (!pendingBlock) return;
+    setExtraBlocks(prev => [...prev, pendingBlock]);
+    setAddingCat(null);
+    setPendingTypeId(null);
+    setPendingBlock(null);
+    setStep('rule-builder');
+  }
+
+  function cancelAddingBlock() {
+    setAddingCat(null);
+    setPendingTypeId(null);
+    setPendingBlock(null);
+    setStep('rule-builder');
+  }
+
+  function removeExtra(id: string) {
+    setExtraBlocks(prev => prev.filter(b => b.id !== id));
+  }
+
+  function handleSave() {
+    const allBlocks: SalesFlowBlock[] = [];
+    if (triggerBlock) allBlocks.push(triggerBlock);
+    allBlocks.push(...extraBlocks);
+    if (!allBlocks.length) return;
+    onSave(allBlocks);
+  }
+
+  const canSave = triggerBlock !== null || extraBlocks.length > 0;
+
+  const stepTitles: Record<RBStep, string> = {
+    'pick-trigger':   'Escolher gatilho',
+    'config-trigger': 'Configurar gatilho',
+    'rule-builder':   'Montar regra',
+    'adding-block':   addingCat === 'action' ? 'Adicionar ação' : 'Adicionar lógica',
+  };
+
+  function renderContent() {
+    if (step === 'pick-trigger') return (
+      <>
+        <div style={{ padding: '16px 20px', display: 'flex', flexDirection: 'column', gap: 12 }}>
+          <div style={{ fontSize: 12, color: 'var(--o-sub)' }}>
+            Escolha o que ativa esta regra. O gatilho governa todas as ações que adicionar a seguir.
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+            {triggerCat.types.map(typeId => {
+              const meta = BLOCK_META[typeId];
+              return (
+                <div key={typeId} onClick={() => pickTriggerType(typeId)}
+                  style={{
+                    borderRadius: 10, border: '1.5px solid var(--o-b1)',
+                    background: 'var(--o-bg2)', padding: '12px', cursor: 'pointer', transition: 'all .15s',
+                    display: 'flex', gap: 10, alignItems: 'flex-start',
+                  }}
+                  onMouseEnter={e => { const el = e.currentTarget as HTMLDivElement; el.style.borderColor = meta.color; el.style.background = `${meta.color}10`; }}
+                  onMouseLeave={e => { const el = e.currentTarget as HTMLDivElement; el.style.borderColor = 'var(--o-b1)'; el.style.background = 'var(--o-bg2)'; }}>
+                  <span style={{ fontSize: 20, lineHeight: 1, flexShrink: 0 }}>{meta.icon}</span>
+                  <div>
+                    <div style={{ fontSize: 12.5, fontWeight: 600, color: 'var(--o-text)', marginBottom: 2 }}>{BLOCK_TYPE_LABELS[typeId]}</div>
+                    <div style={{ fontSize: 11, color: 'var(--o-sub)', lineHeight: 1.4 }}>{meta.desc}</div>
+                    <span style={{ display: 'inline-block', fontSize: 9, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', padding: '2px 5px', borderRadius: 4, marginTop: 4, background: `${meta.color}22`, color: meta.color }}>GATILHO</span>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+          <div onClick={() => { setTriggerBlock(null); setStep('rule-builder'); }}
+            style={{
+              borderRadius: 10, border: '1.5px dashed var(--o-b1)',
+              background: 'transparent', padding: '11px 14px', cursor: 'pointer', transition: 'all .15s',
+              display: 'flex', alignItems: 'center', gap: 10,
+            }}
+            onMouseEnter={e => { (e.currentTarget as HTMLDivElement).style.borderColor = 'var(--o-sub)'; }}
+            onMouseLeave={e => { (e.currentTarget as HTMLDivElement).style.borderColor = 'var(--o-b1)'; }}>
+            <span style={{ fontSize: 16 }}>⚡</span>
+            <div>
+              <div style={{ fontSize: 12.5, fontWeight: 500, color: 'var(--o-text)' }}>Sem gatilho — sempre ao entrar na fase</div>
+              <div style={{ fontSize: 11, color: 'var(--o-sub)' }}>As ações disparam automaticamente quando o lead chega a esta fase</div>
+            </div>
+          </div>
+        </div>
+        <div style={{ padding: '12px 20px 20px', display: 'flex', gap: 8, justifyContent: 'flex-end', borderTop: '1px solid var(--o-b1)' }}>
+          <button className="o-btn" onClick={onClose}>Cancelar</button>
+        </div>
+      </>
+    );
+
+    if (step === 'config-trigger' && triggerBlock) return (
+      <>
+        <div style={{ padding: '16px 20px', display: 'flex', flexDirection: 'column', gap: 16 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', borderRadius: 8, border: `1.5px solid ${BLOCK_META[triggerBlock.typeId].color}44`, background: `${BLOCK_META[triggerBlock.typeId].color}10` }}>
+            <span style={{ fontSize: 18 }}>{BLOCK_META[triggerBlock.typeId].icon}</span>
+            <div>
+              <div style={{ fontSize: 12.5, fontWeight: 600, color: 'var(--o-text)' }}>{BLOCK_TYPE_LABELS[triggerBlock.typeId]}</div>
+              <div style={{ fontSize: 11, color: 'var(--o-sub)' }}>{BLOCK_META[triggerBlock.typeId].desc}</div>
+            </div>
+          </div>
+          <BlockForm block={triggerBlock} setBlock={b => setTriggerBlock(b)} knowledgeItems={knowledgeItems} />
+        </div>
+        <div style={{ padding: '12px 20px 20px', display: 'flex', gap: 8, justifyContent: 'space-between', borderTop: '1px solid var(--o-b1)' }}>
+          <button className="o-btn" onClick={() => setStep('pick-trigger')}>← Voltar</button>
+          <button className="o-btn o-btn-primary" onClick={() => setStep('rule-builder')}>Próximo →</button>
+        </div>
+      </>
+    );
+
+    if (step === 'rule-builder') return (
+      <>
+        <div style={{ padding: '16px 20px', display: 'flex', flexDirection: 'column', gap: 12 }}>
+          <div>
+            <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--o-sub)', textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 6 }}>Gatilho</div>
+            {triggerBlock ? (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '9px 12px', borderRadius: 8, border: `1.5px solid ${BLOCK_META[triggerBlock.typeId].color}55`, background: `${BLOCK_META[triggerBlock.typeId].color}10` }}>
+                <span style={{ fontSize: 16 }}>{BLOCK_META[triggerBlock.typeId].icon}</span>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: 11.5, fontWeight: 600, color: BLOCK_META[triggerBlock.typeId].color }}>{BLOCK_TYPE_LABELS[triggerBlock.typeId]}</div>
+                  <div style={{ fontSize: 11, color: 'var(--o-sub)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{blockSummary(triggerBlock)}</div>
+                </div>
+              </div>
+            ) : (
+              <div style={{ padding: '9px 12px', borderRadius: 8, border: '1.5px dashed var(--o-b1)', fontSize: 12, color: 'var(--o-sub)' }}>
+                ⚡ Sempre ao entrar na fase
+              </div>
+            )}
+          </div>
+
+          <div>
+            <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--o-sub)', textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 6 }}>Ações / Lógica</div>
+            {extraBlocks.length === 0 ? (
+              <div style={{ padding: '9px 12px', borderRadius: 8, border: '1.5px dashed var(--o-b1)', fontSize: 12, color: 'var(--o-sub)', textAlign: 'center' }}>
+                Nenhuma ação adicionada ainda
+              </div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                {extraBlocks.map(b => {
+                  const meta = BLOCK_META[b.typeId];
+                  return (
+                    <div key={b.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '9px 12px', borderRadius: 8, border: '1px solid var(--o-b1)', background: 'var(--o-bg2)' }}>
+                      <span style={{ fontSize: 15 }}>{meta.icon}</span>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontSize: 10, fontWeight: 700, color: meta.color, textTransform: 'uppercase', letterSpacing: '0.06em' }}>{BLOCK_TYPE_LABELS[b.typeId]}</div>
+                        <div style={{ fontSize: 11, color: 'var(--o-sub)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{blockSummary(b)}</div>
+                      </div>
+                      <button style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 14, color: 'var(--o-sub)', padding: '2px 4px' }} onClick={() => removeExtra(b.id)}>✕</button>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button className="o-btn" style={{ flex: 1, justifyContent: 'center', gap: 5, fontSize: 12 }} onClick={() => startAddingBlock('action')}>
+              <span style={{ fontSize: 13 }}>+</span> Adicionar ação
+            </button>
+            <button className="o-btn" style={{ flex: 1, justifyContent: 'center', gap: 5, fontSize: 12 }} onClick={() => startAddingBlock('logic')}>
+              <span style={{ fontSize: 13 }}>+</span> Adicionar lógica
+            </button>
+          </div>
+        </div>
+        <div style={{ padding: '12px 20px 20px', display: 'flex', gap: 8, justifyContent: 'space-between', borderTop: '1px solid var(--o-b1)' }}>
+          <button className="o-btn" onClick={() => setStep(triggerBlock !== null ? 'config-trigger' : 'pick-trigger')}>← Voltar</button>
+          <button className="o-btn o-btn-primary" onClick={handleSave} disabled={!canSave} style={{ opacity: canSave ? 1 : 0.45 }}>
+            Salvar regra
+          </button>
+        </div>
+      </>
+    );
+
+    if (step === 'adding-block' && addingCat) {
+      const catDef = SALES_FLOW_BLOCK_CATEGORIES.find(c => c.id === addingCat)!;
+      return (
+        <>
+          <div style={{ padding: '16px 20px', display: 'flex', flexDirection: 'column', gap: 16 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+              {catDef.types.map(typeId => {
+                const meta = BLOCK_META[typeId];
+                const isSelected = pendingTypeId === typeId;
+                return (
+                  <div key={typeId} onClick={() => pickPendingType(typeId)}
+                    style={{
+                      borderRadius: 10,
+                      border: `1.5px solid ${isSelected ? meta.color : 'var(--o-b1)'}`,
+                      background: isSelected ? `${meta.color}12` : 'var(--o-bg2)',
+                      padding: '12px', cursor: 'pointer', transition: 'all .15s',
+                      display: 'flex', gap: 10, alignItems: 'flex-start',
+                    }}>
+                    <span style={{ fontSize: 20, lineHeight: 1, flexShrink: 0 }}>{meta.icon}</span>
+                    <div>
+                      <div style={{ fontSize: 12.5, fontWeight: 600, color: 'var(--o-text)', marginBottom: 2 }}>{BLOCK_TYPE_LABELS[typeId]}</div>
+                      <div style={{ fontSize: 11, color: 'var(--o-sub)', lineHeight: 1.4 }}>{meta.desc}</div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+            {pendingTypeId && pendingBlock && (
+              <div style={{ borderTop: '1px solid var(--o-b1)', paddingTop: 16 }}>
+                <BlockForm block={pendingBlock} setBlock={b => setPendingBlock(b)} knowledgeItems={knowledgeItems} />
+              </div>
+            )}
+          </div>
+          <div style={{ padding: '12px 20px 20px', display: 'flex', gap: 8, justifyContent: 'space-between', borderTop: '1px solid var(--o-b1)' }}>
+            <button className="o-btn" onClick={cancelAddingBlock}>Cancelar</button>
+            <button className="o-btn o-btn-primary" onClick={confirmPendingBlock} disabled={!pendingTypeId} style={{ opacity: pendingTypeId ? 1 : 0.45 }}>
+              Confirmar {addingCat === 'action' ? 'ação' : 'lógica'}
+            </button>
+          </div>
+        </>
+      );
+    }
+
+    return null;
+  }
+
+  return (
+    <div style={{ position: 'fixed', inset: 0, zIndex: 9000, display: 'flex', alignItems: 'flex-end', justifyContent: 'center', background: 'rgba(0,0,0,0.6)' }}
+      onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
+      <div style={{
+        background: 'var(--o-bg)', border: '1px solid var(--o-b1)', borderRadius: '18px 18px 0 0',
+        width: '100%', maxWidth: 560, maxHeight: '90vh', overflowY: 'auto',
+        display: 'flex', flexDirection: 'column', gap: 0,
+      }}>
+        <div style={{ padding: '20px 20px 0', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <div>
+            <div style={{ fontSize: 15, fontWeight: 600, color: 'var(--o-text)' }}>{stepTitles[step]}</div>
+            <div style={{ fontSize: 11.5, color: 'var(--o-sub)', marginTop: 2 }}>{phaseName}</div>
+          </div>
+          <button style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 18, color: 'var(--o-sub)', padding: 4 }} onClick={onClose}>✕</button>
+        </div>
+        {renderContent()}
       </div>
     </div>
   );
@@ -661,6 +936,7 @@ export function CamadaFluxoVenda({ config, onUpdate }: Props) {
   const activePhasesForMode = SALES_FLOW_PHASES_BY_AGENT_MODE[agentGroup]
                            ?? SALES_FLOW_PHASES_BY_AGENT_MODE['agenda'];
   const [modal, setModal] = useState<{ phaseId: SalesFlowPhaseId; blockId: string | null } | null>(null);
+  const [ruleBuilderPhaseId, setRuleBuilderPhaseId] = useState<SalesFlowPhaseId | null>(null);
   const [knowledgeItems, setKnowledgeItems] = useState<KnowledgeItem[]>([]);
 
   useEffect(() => {
@@ -675,7 +951,7 @@ export function CamadaFluxoVenda({ config, onUpdate }: Props) {
   }
 
   function openAdd(phaseId: SalesFlowPhaseId) {
-    setModal({ phaseId, blockId: null });
+    setRuleBuilderPhaseId(phaseId);
   }
 
   function openEdit(phaseId: SalesFlowPhaseId, blockId: string) {
@@ -686,6 +962,15 @@ export function CamadaFluxoVenda({ config, onUpdate }: Props) {
     updateFlow(phases.map(p =>
       p.id === phaseId ? { ...p, blocks: p.blocks.filter(b => b.id !== blockId) } : p
     ));
+  }
+
+  function saveBlocks(phaseId: SalesFlowPhaseId, newBlocks: SalesFlowBlock[]) {
+    if (!newBlocks.length) return;
+    updateFlow(phases.map(p => {
+      if (p.id !== phaseId) return p;
+      return { ...p, blocks: [...p.blocks, ...newBlocks] };
+    }));
+    setRuleBuilderPhaseId(null);
   }
 
   function saveBlock(block: SalesFlowBlock) {
@@ -718,6 +1003,14 @@ export function CamadaFluxoVenda({ config, onUpdate }: Props) {
           knowledgeItems={knowledgeItems}
           onSave={saveBlock}
           onClose={() => setModal(null)}
+        />
+      )}
+      {ruleBuilderPhaseId && (
+        <RuleBuilderModal
+          phaseId={ruleBuilderPhaseId}
+          knowledgeItems={knowledgeItems}
+          onSave={(blocks) => saveBlocks(ruleBuilderPhaseId, blocks)}
+          onClose={() => setRuleBuilderPhaseId(null)}
         />
       )}
 
