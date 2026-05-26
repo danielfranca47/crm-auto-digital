@@ -82,6 +82,24 @@ async function revealAutoMessages(
   }
 }
 
+function appendPhaseAdvances(
+  phaseAdvances: string[],
+  setMessages: Dispatch<SetStateAction<ChatMessage[]>>
+) {
+  if (!phaseAdvances.length) return;
+  setMessages((prev) => [
+    ...prev,
+    ...phaseAdvances.map((label) => ({
+      id: crypto.randomUUID(),
+      role: "bot" as const,
+      text: label,
+      timestamp: new Date().toISOString(),
+      isPhaseAdvance: true,
+      selectedForFeedback: false,
+    })),
+  ]);
+}
+
 export default function Playground() {
   const [session, setSession] = useState<PlaygroundSession | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -131,9 +149,10 @@ export default function Playground() {
         const afterParts = parts.length > 1
           ? revealExtraParts(parts.slice(1), setMessages, setLoading)
           : Promise.resolve();
-        if (res.auto_messages?.length) {
-          afterParts.then(() => revealAutoMessages(res.auto_messages!, setMessages, setLoading));
-        }
+        const afterAuto = res.auto_messages?.length
+          ? afterParts.then(() => revealAutoMessages(res.auto_messages!, setMessages, setLoading))
+          : afterParts;
+        afterAuto.then(() => appendPhaseAdvances(res.phase_advances ?? [], setMessages));
       } catch (err: unknown) {
         if (cancelled) return;
         const msg = err instanceof Error ? err.message : "Erro ao obter abertura outbound";
@@ -190,9 +209,10 @@ export default function Playground() {
         const afterParts = parts.length > 1
           ? revealExtraParts(parts.slice(1), setMessages, setLoading)
           : Promise.resolve();
-        if (res.auto_messages?.length) {
-          afterParts.then(() => revealAutoMessages(res.auto_messages!, setMessages, setLoading));
-        }
+        const afterAuto = res.auto_messages?.length
+          ? afterParts.then(() => revealAutoMessages(res.auto_messages!, setMessages, setLoading))
+          : afterParts;
+        afterAuto.then(() => appendPhaseAdvances(res.phase_advances ?? [], setMessages));
       } catch (err: unknown) {
         const msg = err instanceof Error ? err.message : "Erro ao chamar o playground";
         toast({ title: "Erro", description: msg, variant: "destructive" });

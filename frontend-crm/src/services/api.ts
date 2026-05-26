@@ -173,6 +173,7 @@ export type PlaygroundChatResponse = {
   message_parts?: string[];
   audio_previews?: string[];
   auto_messages?: string[];
+  phase_advances?: string[];
 };
 
 // ── Playground FeedbackAssist ────────────────────────────────────────────────
@@ -1305,6 +1306,9 @@ export const api = {
         payment_webhook_secret:(profile as any)?.payment_webhook_secret ?? DEFAULT_AGENT_CONFIG.payment_webhook_secret,
 
         custom_variables: (profile as any)?.custom_variables ?? DEFAULT_AGENT_CONFIG.custom_variables,
+
+        // Camada 7 — Fluxo de Venda
+        sales_flow: (profile as any)?.sales_flow ?? DEFAULT_AGENT_CONFIG.sales_flow,
       };
     },
 

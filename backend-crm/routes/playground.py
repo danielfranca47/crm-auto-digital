@@ -155,7 +155,31 @@ class PlaygroundChatResponse(BaseModel):
     message_parts: List[str] = Field(default_factory=list)
     audio_previews: List[str] = Field(default_factory=list)  # URLs de myaudio que seriam enviados como voz
     auto_messages: List[str] = Field(default_factory=list)   # Mensagens automáticas de blocos 'mensagem' do Fluxo de Venda
+    phase_advances: List[str] = Field(default_factory=list)  # Labels de fases avançadas por blocos 'avancar_fase'
 
+
+# ---------------------------------------------------------------------------
+# Fluxo de Venda — mapeamentos de fase
+# ---------------------------------------------------------------------------
+
+_PHASE_ID_TO_CATEGORY = {
+    "p1":  "qualification",
+    "p2":  "apresentation",
+    "p3a": "apresentation",
+    "p3b": "apresentation",
+    "p4":  "followup",
+    "p5":  "closing",
+}
+
+_PHASE_ID_LABELS = {
+    "p0":  "Recepção",
+    "p1":  "Qualificação",
+    "p2":  "Apresentação",
+    "p3a": "Pré-Agendamento",
+    "p3b": "Agendamento",
+    "p4":  "Follow Up",
+    "p5":  "Fechamento",
+}
 
 # ---------------------------------------------------------------------------
 # Helpers internos
@@ -419,13 +443,23 @@ def playground_chat(
 
     message_to_send = decision.get("message_text") or ""
 
-    # ── Passo 7b: Extrair mensagens automáticas do Fluxo de Venda ───────────
+    # ── Passo 7b: Processar system_actions do Fluxo de Venda ────────────────
     raw_system_actions = decision.get("system_actions") or []
-    auto_messages = [
-        a.get("content", "")
-        for a in raw_system_actions
-        if a.get("type") == "send_message" and a.get("content")
-    ]
+    auto_messages = []
+    phase_advances = []
+    for action in raw_system_actions:
+        atype = action.get("type")
+        if atype == "send_message" and action.get("content"):
+            auto_messages.append(action["content"])
+        elif atype == "advance_phase":
+            target = action.get("target_phase")
+            if not target:
+                continue
+            category = _PHASE_ID_TO_CATEGORY.get(target)
+            if category:
+                _update_lead_category(lead_id, user_id, category)
+                label = _PHASE_ID_LABELS.get(target, target)
+                phase_advances.append(f"{label} ({target})")
 
     # ── Passo 8: Guarda mensagens outbound ───────────────────────────────────
     if message_to_send:
@@ -483,6 +517,7 @@ def playground_chat(
         message_parts=_message_parts,
         audio_previews=_audio_previews,
         auto_messages=auto_messages,
+        phase_advances=phase_advances,
     )
 
 

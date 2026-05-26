@@ -18,6 +18,7 @@ export interface ChatMessage {
   text: string;
   timestamp: string;
   isAutoMessage?: boolean;
+  isPhaseAdvance?: boolean;
   decisionTrace?: PlaygroundDecisionTrace;
   motherRoute?: string | null;
   confidence?: number;
@@ -204,6 +205,17 @@ function RatingRow({
 export function MessageBubble({ message, onToggleFeedback, onRate }: MessageBubbleProps) {
   const [traceOpen, setTraceOpen] = useState(false);
   const isLead = message.role === "lead";
+
+  if (message.isPhaseAdvance) {
+    return (
+      <div className="flex justify-center my-2">
+        <span className="flex items-center gap-1.5 text-xs text-violet-500 bg-violet-50 border border-violet-200 rounded-full px-3 py-1 dark:bg-violet-950 dark:border-violet-800">
+          <Zap className="h-3 w-3" />
+          Fase avançada → {message.text}
+        </span>
+      </div>
+    );
+  }
 
   const time = new Date(message.timestamp).toLocaleTimeString("pt-PT", {
     hour: "2-digit",
