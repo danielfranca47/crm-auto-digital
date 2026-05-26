@@ -33,10 +33,10 @@ Implementar um **modelo de execução sequencial/herdado** (Sequential Inherited
 
 **Deficiências identificadas além do bug principal:**
 
-1. **Bug crítico (Fase 1):** Blocos de ação nunca executam — `_evaluate_sales_flow_phases`, `decision_engine.py:325–466`
-2. **Deficiência (Fase 2):** Frontend sem agrupamento visual — `CamadaFluxoVenda.tsx`
-3. **Deficiência (Fase 3):** Bloco `midia` ignora `media_item_id` (só usa `media_url`)
-4. **Futuro (Fase 4):** Bloco `condicao` armazenado mas não avaliado — branching Sim/Não inoperante
+1. **Bug crítico (Fase 1):** Blocos de ação nunca executam — `_evaluate_sales_flow_phases`, `decision_engine.py:325–466` ✅ **Corrigido**
+2. **Deficiência (Fase 2):** Frontend sem agrupamento visual — `CamadaFluxoVenda.tsx` ✅ **Corrigido**
+3. **Deficiência (Fase 3):** Bloco `midia` ignora `media_item_id` — **Não é problema real**: o frontend já persiste `media_url` ao selecionar da knowledge base (linha 258 do `CamadaFluxoVenda.tsx`)
+4. **Futuro (Fase 4):** Bloco `condicao` armazenado mas não avaliado — branching Sim/Não inoperante — iteração futura
 
 ---
 
@@ -76,10 +76,8 @@ else:
 
 Renderizar blocos agrupados visualmente por gatilho (indentação/borda). Nenhuma mudança no modelo de dados.
 
-### Fase 3 — Backend: resolução de `media_item_id`
-**Ficheiro:** `backend-executors/app/services/decision_engine.py`
-
-No handler do bloco `midia`, se `media_item_id` está presente, resolver para URL via `context["knowledge_media"]`.
+### Fase 3 — Backend: resolução de `media_item_id` — Não necessária
+O frontend já persiste `media_url` junto com `media_item_id` ao salvar um bloco `midia`. O backend usa `media_url` diretamente. Nenhuma alteração necessária.
 
 ### Fase 4 — Backend + Frontend: avaliação real de `condicao`
 Requer mudança no modelo de dados (`branch_yes`/`branch_no` passam a ser listas de blocos). Iteração futura separada.
@@ -90,27 +88,34 @@ Requer mudança no modelo de dados (`branch_yes`/`branch_no` passam a ser listas
 
 | # | Commit | O que foi implementado |
 |---|---|---|
-| 1 | _(a preencher)_ | Fase 1 — modelo sequencial de trigger no backend |
-| 2 | _(a preencher)_ | Fase 2 — agrupamento visual no frontend |
-| 3 | _(a preencher)_ | Fase 3 — resolução de `media_item_id` |
+| 1 | `50f38f9` | Fase 1 + 2 — modelo sequencial no backend + agrupamento visual no frontend |
+
+**Detalhes do commit `50f38f9`:**
+- `backend-executors/app/services/decision_engine.py` — `_evaluate_sales_flow_phases` refatorado: substituído modelo de trigger independente pelo modelo sequencial com `last_trigger_active`. Blocos `mensagem`, `midia`, `avancar_fase`, `webhook`, `espera`, `orientacao` agora executam corretamente.
+- `frontend-crm/src/components/agente/CamadaFluxoVenda.tsx` — lista de blocos agora renderiza grupos visuais: ações indentadas sob o gatilho que as governa, com linha vertical colorida; label "⚡ Sempre ao entrar na fase" para ações sem gatilho explícito.
+- `docs/implementations/camada7-sequential-trigger-model.md` — este ficheiro criado.
 
 ---
 
 ## Resultado / Notas de Acompanhamento
 
-> _Espaço para o utilizador preencher após testar._
+> _Preencher após testar no playground ou com lead real._
 
-**Fase 1 (backend sequencial):**
+**Fase 1 + 2 (backend sequencial + frontend visual) — commit `50f38f9`:**
 - [ ] Testado
 - Resultado: _(preencher)_
 
-**Fase 2 (frontend visual):**
-- [ ] Testado
-- Resultado: _(preencher)_
-
-**Fase 3 (media_item_id):**
-- [ ] Testado
-- Resultado: _(preencher)_
+**Comportamento esperado ao testar:**
+1. Configurar fase Apresentação com: `[phase_trigger com orientação]` → `[mensagem fixa]` → `[midia áudio]`
+2. Simular lead a entrar na fase no playground
+3. Esperado: mensagem fixa enviada + áudio enviado antes da resposta da filha LLM
+4. Verificar agrupamento visual no editor da Camada 7
 
 **Notas gerais / comportamentos inesperados observados:**
 _(preencher)_
+
+---
+
+## Próximas Iterações
+
+- **Fase 4 — `condicao` com branching real:** requer mudança no modelo de dados e UI para editar blocos aninhados dentro de cada branch (Sim/Não). Não bloqueante para o caso de uso atual.
