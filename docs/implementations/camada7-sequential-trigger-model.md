@@ -234,4 +234,87 @@ function saveBlocks(phaseId: SalesFlowPhaseId, newBlocks: SalesFlowBlock[]) {
 ## Próximas Iterações
 
 - **Fase 4 — `condicao` com branching real:** requer mudança no modelo de dados e UI para editar blocos aninhados dentro de cada branch (Sim/Não). Não bloqueante para o caso de uso atual.
-- **`intent_trigger` real:** implementar avaliação real de intenção via LLM em vez de `fired = True` incondicional. Atualmente funciona como `phase_trigger`.
+- **`intent_trigger` real:** ver Fase 6 abaixo — plano detalhado.
+
+---
+
+## Fase 6 — `intent_trigger` Real via LLM Mãe
+
+### Motivação
+
+Hoje `intent_trigger` tem `fired = True` incondicional no backend — funciona como `phase_trigger` (sempre ativa). O utilizador configura `intent_trigger "demonstrar hesitação" → midia "audio-objeção"` esperando que o áudio só seja enviado quando hesitação for detectada, mas o áudio é enviado em toda mensagem.
+
+### Abordagem: detecção integrada na LLM Mãe
+
+A avaliação de intenção será feita **na mesma chamada** da LLM Mãe, sem custo extra de LLM. A mãe já recebe histórico completo e contexto do lead — é o lugar natural para interpretar nuance emocional.
+
+**Por que a LLM Mãe e não uma chamada separada:**
+- Já possui histórico completo da conversa
+- Sem custo adicional de chamada LLM
+- Raciocínio contextual mais rico (sabe fase, qualificação, mensagens anteriores)
+- Prompt condicional: só aparece se a fase ativa tiver `intent_trigger` blocos configurados
+
+### Fluxo de implementação
+
+```
+Orchestrator
+  → coleta intent_triggers da fase ativa
+  → se existirem: injeta secção [DETECÇÃO DE INTENÇÃO] no prompt da mãe
+  → LLM Mãe retorna detected_intents: ["demonstrar hesitação"]
+  → decision_engine recebe detected_intents
+  → intent_trigger bloco: fired = intent_label in detected_intents
+```
+
+### Prompt condicional (secção injetada na LLM Mãe)
+
+Só adicionada ao prompt quando `len(active_intent_triggers) > 0`:
+
+```
+[DETECÇÃO DE INTENÇÃO]
+A mensagem do lead pode conter intenções específicas que ativam ações automáticas.
+Avalie a última mensagem do lead e indique quais das intenções abaixo foram detectadas:
+
+{lista dinâmica de intent_triggers da fase ativa}
+Ex:
+- "demonstrar hesitação": lead expressa dúvida, receio, resistência ou hesitação
+- "demonstrar interesse forte": lead pede mais detalhes, demonstra entusiasmo explícito
+
+Retorne no campo `detected_intents` uma lista dos labels detectados (pode ser lista vazia []).
+Seja conservador: só marque se houver sinal claro na mensagem. Dúvida = não marcar.
+```
+
+### Output estruturado da LLM Mãe (campo novo)
+
+```json
+{
+  "should_respond": true,
+  "routing_decision": "...",
+  "detected_intents": ["demonstrar hesitação"]
+}
+```
+
+Campo `detected_intents` é `list[str]`, padrão `[]` quando não há `intent_trigger` na fase.
+
+### Ficheiros a alterar
+
+| Ficheiro | Mudança |
+|---|---|
+| `backend-crm/services/ai_orchestrator/orchestrator.py` | Coletar `intent_triggers` da fase ativa; injetar secção no prompt da mãe se existirem |
+| `backend-crm/services/ai_orchestrator/orchestrator.py` | Parsear `detected_intents` do output da mãe e incluir no `ContextBundle` ou passar para o decision engine |
+| `backend-executors/app/services/decision_engine.py` | `intent_trigger`: substituir `fired = True` por `fired = intent_label in detected_intents` |
+
+**Sem alterações em:** modelo de dados, tipos frontend, `CamadaFluxoVenda.tsx`.
+
+### Comportamento esperado após implementação
+
+| Configuração | Comportamento atual | Comportamento após |
+|---|---|---|
+| `intent_trigger "hesitação" → midia` | áudio enviado em **toda** mensagem | áudio só quando hesitação detectada |
+| `intent_trigger "interesse" → mensagem` | mensagem enviada em **toda** mensagem | mensagem só quando interesse detectado |
+| Fase sem `intent_trigger` | sem impacto | sem impacto (campo omitido do prompt) |
+
+### Verificação
+- [ ] Configurar `intent_trigger "demonstrar hesitação" → midia` numa fase
+- [ ] Enviar mensagem neutra no playground → mídia **não** deve ser enviada
+- [ ] Enviar mensagem com hesitação ("não sei se vale...") → mídia **deve** ser enviada
+- [ ] Fase sem `intent_trigger` → prompt da mãe não inclui secção de detecção
