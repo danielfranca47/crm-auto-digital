@@ -12,6 +12,8 @@ Toda a lógica está em `backend-executors/app/services/decision_engine.py`.
 
 ## Fluxo simplificado
 
+> **Camada 7 (Fluxo de Venda):** `_evaluate_sales_flow_phases()` corre dentro de `decide()` após a decisão da LLM Mãe e antes do prompt filho. Produz `prompt_injections` (orientações injectadas no prompt), `pre_send_media` e `system_actions` que são compostos no `DecisionOutput`. Ver [`sales-flow.md`](sales-flow.md).
+
 ```
 whatsapp_worker
   → crm_client.get_whatsapp_execution_context(job_id)
@@ -19,7 +21,10 @@ whatsapp_worker
       → _build_mother_prompt(...)
       → llm_service.generate_mother_route(mother_prompt)
       → valida MotherDecision
-      → escolhe prompt filha por route_to:
+      → _evaluate_sales_flow_phases(context, route_to, message_text)
+          → avalia blocos da fase correspondente
+          → retorna {prompt_injections, pre_send_media, system_actions}
+      → escolhe prompt filha por route_to (+ injeta prompt_injections):
           qualification   → _build_child_prompt_qualification
           apresentation   → _build_child_prompt_apresentation
           follow-up       → _build_child_followup_prompt
@@ -29,6 +34,7 @@ whatsapp_worker
       → compose_decision_output(...)
           + guardrails de categoria e outcome
           + monta decision_trace
+          + inclui pre_send_media e system_actions do Fluxo de Venda
       → retorna DecisionOutput
 ```
 
@@ -58,7 +64,14 @@ whatsapp_worker
 | `confidence` | 0..1 | Confiança da resposta |
 
 ### DecisionOutput (saída final do executor)
-Combinação de MotherDecision + ChildResult + guardrails, enviado ao CRM via `complete_job`.
+Combinação de MotherDecision + ChildResult + guardrails + Fluxo de Venda, enviado ao CRM via `complete_job`.
+
+Campos adicionados pelo Fluxo de Venda (Camada 7):
+
+| Campo | Tipo | Descrição |
+|---|---|---|
+| `pre_send_media` | `list[dict]\|dict\|null` | Mídias enviadas antes da mensagem de texto (blocos `midia` do Fluxo de Venda ou `media_keys_to_send` da filha de apresentação) |
+| `system_actions` | `list[dict]\|null` | Ações do Fluxo de Venda: `{type: "send_message", content}` e `{type: "advance_phase", target_phase}` |
 
 ---
 

@@ -117,6 +117,23 @@ Prompt construído em `backend-executors/app/services/decision_engine.py`:
 
 ---
 
+## Camada 7 — Fluxo de Venda
+
+O Fluxo de Venda permite configurar comportamentos determinísticos por fase via blocos tipados. Corre **antes da construção do prompt filho** em cada job processado.
+
+**Função:** `_evaluate_sales_flow_phases(context, effective_route_to, message_text)` em `decision_engine.py`
+
+Três efeitos produzidos:
+1. **`prompt_injections`** — blocos `orientacao` são injectados como instrução adicional no prompt filho da fase
+2. **`pre_send_media`** — blocos `midia` geram itens enviados antes da mensagem de texto
+3. **`system_actions`** — blocos `mensagem` e `avancar_fase` geram ações executadas pelo executor do CRM
+
+`avancar_fase` → mapeado via `_PHASE_ID_TO_CATEGORY` → chama `apply_suggested_category()` para mover o lead no Kanban.
+
+Ver [`docs/architecture/sales-flow.md`](sales-flow.md) para detalhes completos sobre fases, tipos de bloco e fluxo de execução.
+
+---
+
 ## Hardcodes identificados (comportamentos não configuráveis pelo usuário)
 
 | Hardcode | Localização |

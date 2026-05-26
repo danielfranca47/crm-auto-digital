@@ -16,6 +16,7 @@ Origem: tabela `ai_profiles` em `backend-core` (via `GET /admin/agents/users/{us
 | `presentation_variant` | string | Variante de apresentação (`sales`, `scheduler`, `hybrid`) | Badge colorido no card |
 | `hybrid_flow_style` | string | Estilo do fluxo híbrido (quando `presentation_variant = hybrid`) | Campo detalhado no drawer |
 | `offer_pack` | string | Pack de oferta configurado | Campo detalhado no drawer |
+| `sales_flow` | object\|null | Configuração do Fluxo de Venda por fase (`{phases: [{id, blocks[]}]}`) | Não exibido no painel admin atualmente |
 
 ### Campos de qualificação mínima por modo
 

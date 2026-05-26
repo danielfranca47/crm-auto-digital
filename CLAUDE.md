@@ -272,6 +272,7 @@ Os arquivos abaixo descrevem a estrutura **atual** de cada área do sistema. Ler
 | Arquivo | Cobre |
 |---|---|
 | [`docs/architecture/pipeline-phases.md`](docs/architecture/pipeline-phases.md) | Fases de qualificação, apresentação e fechamento por tipo de agente; guardrails anti-loop |
+| [`docs/architecture/sales-flow.md`](docs/architecture/sales-flow.md) | Camada 7 — Fluxo de Venda: fases p0–p5, tipos de bloco, pipeline por agent_mode, execução backend |
 | [`docs/architecture/followup.md`](docs/architecture/followup.md) | Arquitetura de follow-up: estados, reconciliador, jobs, modal |
 | [`docs/architecture/llm-architecture.md`](docs/architecture/llm-architecture.md) | LLMs Mãe e Filhas, contratos, fluxo de decisão |
 | [`docs/architecture/agents.md`](docs/architecture/agents.md) | Agentes locais e AI Profiles: campos, endpoints, ciclo de vida |
