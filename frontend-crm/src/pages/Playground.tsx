@@ -3,7 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "@/hooks/use-toast";
 import { RefreshCw, ArrowDownToLine, ArrowUpFromLine } from "lucide-react";
-import { api, type PlaygroundChatResponse } from "@/services/api";
+import { api, type PlaygroundChatResponse, type PlaygroundAutoItem } from "@/services/api";
 import { PlaygroundConfigModal, type PlaygroundSession } from "@/components/playground/PlaygroundConfigModal";
 import { PlaygroundChat } from "@/components/playground/PlaygroundChat";
 import { PlaygroundFeedback, type FeedbackItem, type FeedbackTag } from "@/components/playground/PlaygroundFeedback";
@@ -60,26 +60,46 @@ async function revealExtraParts(
 }
 
 async function revealAutoMessages(
-  autoMessages: string[],
+  autoItems: PlaygroundAutoItem[],
   setMessages: Dispatch<SetStateAction<ChatMessage[]>>,
   setLoading: Dispatch<SetStateAction<boolean>>
 ) {
-  for (const msg of autoMessages) {
+  for (const item of autoItems) {
     setLoading(true);
     await new Promise<void>((r) => setTimeout(r, 600));
     setLoading(false);
-    setMessages((prev) => [
-      ...prev,
-      {
-        id: crypto.randomUUID(),
-        role: "bot",
-        text: msg,
-        timestamp: new Date().toISOString(),
-        isAutoMessage: true,
-        selectedForFeedback: false,
-      },
-    ]);
+    if (item.type === "media") {
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: crypto.randomUUID(),
+          role: "bot",
+          text: "",
+          timestamp: new Date().toISOString(),
+          isAutoMessage: true,
+          preMediaItems: [{ media_url: item.media_url, media_type: item.media_type, send_order: 0 }],
+          selectedForFeedback: false,
+        },
+      ]);
+    } else {
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: crypto.randomUUID(),
+          role: "bot",
+          text: item.content,
+          timestamp: new Date().toISOString(),
+          isAutoMessage: true,
+          selectedForFeedback: false,
+        },
+      ]);
+    }
   }
+}
+
+function resolveAutoItems(res: PlaygroundChatResponse): PlaygroundAutoItem[] {
+  if (res.auto_items?.length) return res.auto_items;
+  return (res.auto_messages ?? []).map((m) => ({ type: "text" as const, content: m }));
 }
 
 function appendPhaseAdvances(
@@ -149,8 +169,9 @@ export default function Playground() {
         const afterParts = parts.length > 1
           ? revealExtraParts(parts.slice(1), setMessages, setLoading)
           : Promise.resolve();
-        const afterAuto = res.auto_messages?.length
-          ? afterParts.then(() => revealAutoMessages(res.auto_messages!, setMessages, setLoading))
+        const _autoItems0 = resolveAutoItems(res);
+        const afterAuto = _autoItems0.length
+          ? afterParts.then(() => revealAutoMessages(_autoItems0, setMessages, setLoading))
           : afterParts;
         afterAuto.then(() => appendPhaseAdvances(res.phase_advances ?? [], setMessages));
       } catch (err: unknown) {
@@ -209,8 +230,9 @@ export default function Playground() {
         const afterParts = parts.length > 1
           ? revealExtraParts(parts.slice(1), setMessages, setLoading)
           : Promise.resolve();
-        const afterAuto = res.auto_messages?.length
-          ? afterParts.then(() => revealAutoMessages(res.auto_messages!, setMessages, setLoading))
+        const _autoItems1 = resolveAutoItems(res);
+        const afterAuto = _autoItems1.length
+          ? afterParts.then(() => revealAutoMessages(_autoItems1, setMessages, setLoading))
           : afterParts;
         afterAuto.then(() => appendPhaseAdvances(res.phase_advances ?? [], setMessages));
       } catch (err: unknown) {

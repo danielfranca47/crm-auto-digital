@@ -413,6 +413,7 @@ def _evaluate_sales_flow_phases(
             # Injeções de prompt para blocos de gatilho que dispararam
             if fired:
                 if type_id == "phase_trigger":
+                    result["phase_trigger_fired"] = True
                     content = (block.get("content") or "").strip()
                     if content:
                         priority = (block.get("priority") or "normal").strip().lower()
@@ -441,11 +442,11 @@ def _evaluate_sales_flow_phases(
             elif type_id == "midia":
                 media_url = (block.get("media_url") or "").strip()
                 if media_url:
-                    result["pre_send_media"].append({
+                    result["system_actions"].append({
+                        "type": "send_media",
                         "media_url": media_url,
                         "media_type": block.get("media_type") or "image",
                         "caption": (block.get("caption") or "").strip() or None,
-                        "send_order": 0,
                     })
             elif type_id == "mensagem":
                 content = (block.get("content") or "").strip()
@@ -3843,9 +3844,9 @@ def compose_decision_output(
                     _sf_media.sort(key=lambda e: e.get("send_order", 0))
                     decision.pre_send_media = _sf_media
 
-    # Fluxo de Venda (novo sistema de fases) — mídia com URL explícita e system_actions
+    # Fluxo de Venda (novo sistema de fases) — mídia via system_actions e system_actions sequenciais
     # is_phase_entry: True quando o lead está a transitar para esta fase (category != effective_route_to)
-    # Garante que phase_trigger só dispara uma vez — na entrada — e não em cada mensagem seguinte.
+    # phases_triggered: JSON array de phase_ids já disparados; garante disparo verdadeiramente único.
     _LEAD_CAT_TO_ROUTE: Dict[str, str] = {
         "qualification":    "qualification",
         "apresentation":    "apresentation",
@@ -3857,9 +3858,34 @@ def compose_decision_output(
         "closing":          "closing",
         "recepcao":         "recepcao",
     }
+    _ROUTE_TO_PHASE_ID_MAP: Dict[str, str] = {
+        "qualification":    "p1",
+        "apresentation":    "p2",
+        "pre-agendamento":  "p3a",
+        "pre_agendamento":  "p3a",
+        "agendamento":      "p3b",
+        "followup":         "p4",
+        "follow-up":        "p4",
+        "closing":          "p5",
+    }
     _lead_cat_raw = ((context.get("lead") or {}).get("category") or "").strip().lower()
     _lead_current_route = _LEAD_CAT_TO_ROUTE.get(_lead_cat_raw, _lead_cat_raw)
-    _is_phase_entry = (_lead_current_route != effective_route_to)
+    _effective_phase_id = _ROUTE_TO_PHASE_ID_MAP.get(effective_route_to)
+    _phases_triggered_raw = ((context.get("lead") or {}).get("phases_triggered") or "[]")
+    try:
+        import json as _json
+        _triggered_phases: set = set(
+            _json.loads(_phases_triggered_raw)
+            if isinstance(_phases_triggered_raw, str)
+            else (_phases_triggered_raw if isinstance(_phases_triggered_raw, list) else [])
+        )
+    except (ValueError, TypeError):
+        _triggered_phases = set()
+    # Entrada na fase: categoria do lead diferente E fase nunca disparada antes
+    _is_phase_entry = (
+        _lead_current_route != effective_route_to
+        and (not _effective_phase_id or _effective_phase_id not in _triggered_phases)
+    )
     _phases_result = _evaluate_sales_flow_phases(
         context, effective_route_to, _extract_message_text(context),
         detected_intents=mother_decision.detected_intents,
@@ -3869,6 +3895,11 @@ def compose_decision_output(
         decision.pre_send_media = _phases_result["pre_send_media"]
     if _phases_result.get("system_actions"):
         decision.system_actions = _phases_result["system_actions"]
+    # Se o phase_trigger disparou, adicionar ação para marcar fase como já disparada
+    if _phases_result.get("phase_trigger_fired") and _effective_phase_id:
+        _sys = list(decision.system_actions or [])
+        _sys.append({"type": "mark_phase_triggered", "phase_id": _effective_phase_id})
+        decision.system_actions = _sys
 
     return decision
 

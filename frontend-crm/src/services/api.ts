@@ -156,6 +156,10 @@ export type PlaygroundPreSendMediaItem = {
   send_order: number;
 };
 
+export type PlaygroundAutoItem =
+  | { type: "text"; content: string }
+  | { type: "media"; media_url: string; media_type: string };
+
 export type PlaygroundChatResponse = {
   lead_id: number;
   message_to_send: string;
@@ -173,6 +177,7 @@ export type PlaygroundChatResponse = {
   message_parts?: string[];
   audio_previews?: string[];
   auto_messages?: string[];
+  auto_items?: PlaygroundAutoItem[];
   phase_advances?: string[];
 };
 

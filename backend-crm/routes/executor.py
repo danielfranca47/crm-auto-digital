@@ -283,6 +283,24 @@ def _dispatch_system_actions(
                 user_id=user_id,
             )
 
+        elif atype == "send_media":
+            media_url = action.get("media_url", "")
+            if not media_url:
+                continue
+            create_job(
+                job_type=TYPE_WHATSAPP_SEND,
+                payload={
+                    "lead_id": lead_id,
+                    "user_id": user_id,
+                    "phone": phone,
+                    "body": "",
+                    "media_url": media_url,
+                    "media_type": action.get("media_type", "image"),
+                    "source": "sales_flow_media",
+                },
+                user_id=user_id,
+            )
+
         elif atype == "advance_phase":
             target = action.get("target_phase")
             category = _PHASE_ID_TO_CATEGORY.get(target) if target else None
@@ -294,6 +312,26 @@ def _dispatch_system_actions(
                     suggested_category=category,
                     reason="sales_flow_advance_phase",
                 )
+
+        elif atype == "mark_phase_triggered":
+            phase_id = action.get("phase_id", "")
+            if phase_id:
+                import json
+                row = conn.execute(
+                    "SELECT phases_triggered FROM leads WHERE id = ? AND user_id = ?", (lead_id, user_id)
+                ).fetchone()
+                if row:
+                    try:
+                        existing: list = json.loads(row["phases_triggered"] or "[]")
+                    except (ValueError, TypeError):
+                        existing = []
+                    if phase_id not in existing:
+                        existing.append(phase_id)
+                        conn.execute(
+                            "UPDATE leads SET phases_triggered = ? WHERE id = ? AND user_id = ?",
+                            (json.dumps(existing), lead_id, user_id),
+                        )
+                        conn.commit()
 
 
 def _schedule_preagendamento_checkin(

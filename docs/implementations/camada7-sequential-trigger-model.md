@@ -382,7 +382,7 @@ Se `lead.category` (categoria antes desta mensagem) é diferente do `effective_r
 
 | # | Commit | O que foi implementado |
 |---|---|---|
-| 1 | _(próximo commit)_ | `is_phase_entry` + `_ROUTE_TO_PHASE_ID` fix + `_apres_route` fix |
+| 1 | eb9b7675576547f16cf6ded978415bee5b05ad8d | `is_phase_entry` + `_ROUTE_TO_PHASE_ID` fix + `_apres_route` fix |
 
 **Detalhes:**
 - `_evaluate_sales_flow_phases()` — novo parâmetro `is_phase_entry: bool = True`; `phase_trigger`: `fired = is_phase_entry`
@@ -390,11 +390,115 @@ Se `lead.category` (categoria antes desta mensagem) é diferente do `effective_r
 - `compose_decision_output()` — computa `_is_phase_entry` a partir de `lead.category` vs `effective_route_to`; passa para chamada principal de `_evaluate_sales_flow_phases()`
 - `_build_child_prompt_apresentation()` — removida linha `_apres_route = mother_decision.route_to or "apresentation"`; chamada hardcoded com `"apresentation"`
 
-### Verificação
-- [ ] Configurar `phase_trigger → mensagem "Olá, aqui estão os detalhes" → mensagem "Gostou?"` na Fase Apresentação
-- [ ] Playground: conduzir qualificação completa → na mensagem de transição, `auto_messages` contém as duas mensagens configuradas
-- [ ] Enviar 2ª mensagem já em Apresentação → `auto_messages` está vazio (trigger não repete)
-- [ ] Verificar que o LLM filho continua recebendo as orientações de fase via `prompt_injections`
-- [ ] Fase pré-agendamento: configurar `phase_trigger → mensagem` e verificar disparo único na entrada
+### Verificação Fase 7
+- [x] Phase trigger disparou na transição qualification → apresentation (confirmado no teste 26/05/2026)
+- [x] `auto_messages` com "Olá, aqui estão os detalhes" e "Gostou?" apareceram correctamente
+- [x] LLM filho recebeu orientações via `prompt_injections`
+- [ ] ~~2ª mensagem já em Apresentação sem repetição~~ → substituído por Fase 8 (flag `phases_triggered`)
 
+---
 
+## Fase 8 — Diagnóstico da Verificação + Duas Correcções (26/05/2026)
+
+### Teste realizado
+
+Sessão de playground com agente `sdr_scheduler` (Sofia / AutoSell), lead ID 144, fase 2 configurada com `PHASE TRIGGER → MENSAGEM "Olá, aqui estão os detalhes" → MIDIA myaudio → MENSAGEM "Gostou?"`.
+
+### Problema 1 — Ordem dos blocos (media no sítio errado)
+
+**Observado:** media `myaudio` aparece inline com a mensagem LLM (antes das mensagens de texto configuradas).
+**Esperado:** sequência `LLM → "Olá..." → 🎵 áudio → "Gostou?"`.
+
+**Causa raiz:** blocos `midia` iam para `pre_send_media` (enviados *antes* da resposta LLM), enquanto blocos `mensagem` iam para `system_actions` → `auto_messages` (enviados *depois*). As duas pipelines quebravam a ordem sequencial configurada.
+
+### Problema 2 — Phase trigger re-disparava após lead avançar para outra fase
+
+**Observado:** no teste, à 20:38 o lead expressou dúvida e a LLM Mãe encaminhou de volta para `apresentation`. O phase trigger disparou de novo (media + "Olá..." + "Gostou?" repetiram).
+
+**Causa raiz:** o agente `sdr_scheduler` faz auto-advance imediato — na mesma mensagem que entra em apresentação, o LLM filho marca `did_complete_phase=True` e `suggested_category` avança para `agendamento`. Na mensagem seguinte, `lead.category = "agendamento"` ≠ `"apresentation"` → `is_phase_entry = True` → trigger re-dispara. O check de `lead.category != effective_route_to` capturava re-entradas de fases mais avançadas como "nova entrada".
+
+---
+
+### Arquitectura das Correcções
+
+#### Fix 1 — `midia` → `system_actions` (ordenação correcta)
+
+**`backend-executors/app/services/decision_engine.py`** — `_evaluate_sales_flow_phases()`:
+
+```python
+# ANTES: midia ia para pre_send_media (antes do LLM)
+result["pre_send_media"].append({...})
+
+# DEPOIS: midia vai para system_actions (sequência com mensagens)
+result["system_actions"].append({
+    "type": "send_media",
+    "media_url": media_url,
+    "media_type": ...,
+    "caption": ...,
+})
+```
+
+**`backend-crm/routes/playground.py`** — loop `raw_system_actions`:
+- `send_media` → adiciona a `auto_items` como `{type: "media", media_url, media_type}`
+- `auto_items` é o novo campo retornado com a sequência completa ordenada
+
+**`backend-crm/routes/executor.py`** — `_dispatch_system_actions()`:
+- `send_media` → cria job `whatsapp.send.local` com `media_url`
+
+**Frontend** — `Playground.tsx` + `api.ts`:
+- `PlaygroundAutoItem = {type:"text", content} | {type:"media", media_url, media_type}`
+- `revealAutoMessages` renomeado/actualizado: itera `auto_items`, cria mensagem de texto ou mensagem com `preMediaItems` para media
+- `resolveAutoItems()` — fallback: se não há `auto_items`, converte `auto_messages` em `[{type:"text"}]`
+
+#### Fix 2 — Flag `phases_triggered` por lead (disparo verdadeiramente único)
+
+**`backend-crm/database.py`** — `init_db()`:
+```python
+ensure_column(conn, "leads", "phases_triggered", "phases_triggered TEXT NULL")
+```
+JSON array de phase IDs já disparados por lead: `["p2", "p3a"]`.
+
+**`backend-executors/app/services/decision_engine.py`** — `compose_decision_output()`:
+```python
+# Carrega fases já disparadas do contexto do lead
+_triggered_phases = set(json.loads(lead["phases_triggered"] or "[]"))
+# Entrada na fase: categoria diferente E fase nunca disparada antes
+_is_phase_entry = (
+    _lead_current_route != effective_route_to
+    and _effective_phase_id not in _triggered_phases
+)
+```
+Quando `phase_trigger` dispara → adiciona `{type: "mark_phase_triggered", phase_id: "p2"}` aos `system_actions`.
+
+**`backend-crm/routes/playground.py`** — `_mark_phase_triggered()` + loop:
+- Quando recebe `mark_phase_triggered`: carrega JSON, adiciona `phase_id`, grava no DB.
+
+**`backend-crm/routes/executor.py`** — `_dispatch_system_actions()`:
+- Mesmo tratamento para WhatsApp real.
+
+### Comportamento resultante
+
+| Cenário | `lead.category` | `phases_triggered` | `effective_route_to` | `is_phase_entry` | Dispara? |
+|---|---|---|---|---|---|
+| 1ª entrada em apresentação | `qualification` | `[]` | `apresentation` | `True` | ✅ Uma vez |
+| 2ª mensagem em apresentação | `apresentation` | `["p2"]` | `apresentation` | `False` | ❌ Não |
+| Lead avança para agendamento, volta para apresentação | `agendamento` | `["p2"]` | `apresentation` | `False` | ❌ Não (já disparou) |
+| 1ª entrada em pré-agendamento | `apresentation` | `["p2"]` | `pre-agendamento` | `True` | ✅ Uma vez |
+
+### Ficheiros alterados
+
+| Ficheiro | Mudança |
+|---|---|
+| `backend-executors/app/services/decision_engine.py` | `midia`→`system_actions`; `phase_trigger_fired`; `_is_phase_entry` com `phases_triggered`; `mark_phase_triggered` action |
+| `backend-crm/database.py` | `ensure_column leads.phases_triggered TEXT NULL` |
+| `backend-crm/routes/playground.py` | `_mark_phase_triggered()`; `auto_items`; handlers `send_media` e `mark_phase_triggered` |
+| `backend-crm/routes/executor.py` | handlers `send_media` e `mark_phase_triggered` em `_dispatch_system_actions` |
+| `frontend-crm/src/services/api.ts` | tipo `PlaygroundAutoItem`; campo `auto_items` em `PlaygroundChatResponse` |
+| `frontend-crm/src/pages/Playground.tsx` | `revealAutoMessages` com suporte a media; `resolveAutoItems()`; call sites actualizadas |
+
+### Verificação Fase 8
+- [ ] Playground: transition qual → apres → confirmar ordem correcta: LLM → "Olá..." → 🎵 áudio → "Gostou?"
+- [ ] Enviar 2ª mensagem em apresentação → `auto_items` vazio (flag `["p2"]` impede re-disparo)
+- [ ] Lead avança para agendamento e volta para apresentação → trigger NÃO re-dispara
+- [ ] WhatsApp real: media e mensagens enviados em jobs separados na ordem correcta
+- [ ] Verificar coluna `phases_triggered` populada no DB após primeira execução

@@ -154,7 +154,8 @@ class PlaygroundChatResponse(BaseModel):
     typing_seconds: float = 0.0
     message_parts: List[str] = Field(default_factory=list)
     audio_previews: List[str] = Field(default_factory=list)  # URLs de myaudio que seriam enviados como voz
-    auto_messages: List[str] = Field(default_factory=list)   # Mensagens automáticas de blocos 'mensagem' do Fluxo de Venda
+    auto_messages: List[str] = Field(default_factory=list)   # Mensagens automáticas de blocos 'mensagem' (texto) — compat
+    auto_items: List[dict] = Field(default_factory=list)     # Sequência ordenada: {type:"text",content:...} | {type:"media",...}
     phase_advances: List[str] = Field(default_factory=list)  # Labels de fases avançadas por blocos 'avancar_fase'
 
 
@@ -258,6 +259,28 @@ def _update_lead_category(lead_id: int, user_id: int, category: str) -> None:
             (category, lead_id, user_id),
         )
         conn.commit()
+
+
+def _mark_phase_triggered(lead_id: int, user_id: int, phase_id: str) -> None:
+    """Regista que o phase_trigger de uma fase já disparou — impede re-disparo."""
+    import json
+    with get_connection() as conn:
+        cur = conn.cursor()
+        row = cur.execute(
+            "SELECT phases_triggered FROM leads WHERE id = ? AND user_id = ?", (lead_id, user_id)
+        ).fetchone()
+        if row:
+            try:
+                existing: list = json.loads(row["phases_triggered"] or "[]")
+            except (ValueError, TypeError):
+                existing = []
+            if phase_id not in existing:
+                existing.append(phase_id)
+                cur.execute(
+                    "UPDATE leads SET phases_triggered = ? WHERE id = ? AND user_id = ?",
+                    (json.dumps(existing), lead_id, user_id),
+                )
+                conn.commit()
 
 
 def _call_executors_decide(context_bundle_dict: Dict[str, Any]) -> Dict[str, Any]:
@@ -446,11 +469,19 @@ def playground_chat(
     # ── Passo 7b: Processar system_actions do Fluxo de Venda ────────────────
     raw_system_actions = decision.get("system_actions") or []
     auto_messages = []
+    auto_items = []
     phase_advances = []
     for action in raw_system_actions:
         atype = action.get("type")
         if atype == "send_message" and action.get("content"):
             auto_messages.append(action["content"])
+            auto_items.append({"type": "text", "content": action["content"]})
+        elif atype == "send_media" and action.get("media_url"):
+            auto_items.append({
+                "type": "media",
+                "media_url": action["media_url"],
+                "media_type": action.get("media_type") or "image",
+            })
         elif atype == "advance_phase":
             target = action.get("target_phase")
             if not target:
@@ -460,6 +491,8 @@ def playground_chat(
                 _update_lead_category(lead_id, user_id, category)
                 label = _PHASE_ID_LABELS.get(target, target)
                 phase_advances.append(f"{label} ({target})")
+        elif atype == "mark_phase_triggered" and action.get("phase_id"):
+            _mark_phase_triggered(lead_id, user_id, action["phase_id"])
 
     # ── Passo 8: Guarda mensagens outbound ───────────────────────────────────
     if message_to_send:
@@ -517,6 +550,7 @@ def playground_chat(
         message_parts=_message_parts,
         audio_previews=_audio_previews,
         auto_messages=auto_messages,
+        auto_items=auto_items,
         phase_advances=phase_advances,
     )
 
