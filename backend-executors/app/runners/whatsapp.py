@@ -339,6 +339,57 @@ def _format_questions(questions: List[str]) -> str:
     )
 
 
+def _send_sales_flow_action(
+    action: dict,
+    provider: str,
+    instance_id: str,
+    phone: str,
+    logger,
+) -> None:
+    """Envia uma action send_message/send_media do Fluxo de Venda directamente via core_client."""
+    atype = action.get("type")
+    if atype == "send_message":
+        content = action.get("content", "")
+        if not content:
+            return
+        try:
+            _delay = min(max(len(content) * 40, 800), 6000)
+            core_client.send_whatsapp_message({
+                "provider": provider,
+                "instance_id": instance_id,
+                "number": phone,
+                "text": content,
+                "delay_ms": _delay,
+            })
+        except core_client.CoreClientError as exc:
+            logger.warning(
+                "event=sales_flow_send_error type=message error=%s — continuando",
+                exc,
+                extra={"phase": "core_send"},
+            )
+    elif atype == "send_media":
+        media_url = action.get("media_url", "")
+        if not media_url:
+            return
+        try:
+            media_type = action.get("media_type", "image")
+            _delay = 3000 if media_type in ("myaudio", "ptt") else 0
+            core_client.send_whatsapp_media({
+                "provider": provider,
+                "instance_id": instance_id,
+                "number": phone,
+                "media_url": media_url,
+                "media_type": media_type,
+                "delay_ms": _delay,
+            })
+        except core_client.CoreClientError as exc:
+            logger.warning(
+                "event=sales_flow_send_error type=media error=%s — continuando",
+                exc,
+                extra={"phase": "core_send"},
+            )
+
+
 def _build_result_payload(
     decision: decision_engine.DecisionOutput,
     *,
@@ -685,6 +736,15 @@ def execute_job(job_id: str, logger: logging.Logger) -> int:
     meeting_scheduler.handle_meeting_scheduled(context, decision, logger=ctx_logger)
     _enforce_checkout_link_guardrail(decision=decision, context=context)
     _enforce_checkout_link_guardrail_legacy(decision=decision, context=context)
+
+    # Extrair system_actions do Fluxo de Venda: separar envios (síncronos) de acções de estado (→ CRM)
+    _decision_system_actions: list = list(decision.system_actions or [])
+    _phase_trigger_fired = any(
+        a.get("type") == "mark_phase_triggered" for a in _decision_system_actions
+    )
+    _send_actions = [a for a in _decision_system_actions if a.get("type") in ("send_message", "send_media")]
+    _state_actions = [a for a in _decision_system_actions if a.get("type") not in ("send_message", "send_media")]
+
     outbound_body = _build_outbound_body(decision)
     if decision.next_action == "ask_qualification" and not outbound_body:
         fallback_text = _format_questions(decision.questions or [])
@@ -870,6 +930,14 @@ def execute_job(job_id: str, logger: logging.Logger) -> int:
             ctx_logger.info("event=job_completed status=%s", final_status, extra={"phase": "complete"})
             return 0
 
+        # Phase trigger disparado → enviar mensagens automáticas ANTES do texto LLM
+        if _phase_trigger_fired and _send_actions:
+            ctx_logger.info(
+                "event=pre_trigger_send count=%d", len(_send_actions), extra={"phase": "core_send"}
+            )
+            for _sa in _send_actions:
+                _send_sales_flow_action(_sa, provider, instance_id, phone, ctx_logger)
+
         ctx_logger.info("event=core_send_request url=/whatsapp/send", extra={"phase": "core_send"})
         _delay_ms = min(max(len(outbound_body) * 40, 1000), 8000)
         try:
@@ -1023,6 +1091,20 @@ def execute_job(job_id: str, logger: logging.Logger) -> int:
                     _extra_exc,
                     extra={"phase": "core_send"},
                 )
+
+        # Mensagens automáticas de triggers não-fase → enviar APÓS o LLM
+        if not _phase_trigger_fired and _send_actions:
+            ctx_logger.info(
+                "event=post_trigger_send count=%d", len(_send_actions), extra={"phase": "core_send"}
+            )
+            for _sa in _send_actions:
+                _send_sales_flow_action(_sa, provider, instance_id, phone, ctx_logger)
+
+        # Expor acções de estado ao CRM (mark_phase_triggered, advance_phase, mark_trigger_fired)
+        if _state_actions:
+            result_payload["system_actions"] = _state_actions
+        if _phase_trigger_fired:
+            result_payload["phase_trigger_fired"] = True
 
         try:
             crm_client.complete_job(job_id, result=result_payload)

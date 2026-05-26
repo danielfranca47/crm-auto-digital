@@ -284,6 +284,28 @@ def _mark_phase_triggered(lead_id: int, user_id: int, phase_id: str) -> None:
                 conn.commit()
 
 
+def _mark_trigger_fired(lead_id: int, user_id: int, block_id: str) -> None:
+    """Regista que um trigger com fire_once=True já disparou — impede re-disparo."""
+    import json
+    with get_connection() as conn:
+        cur = conn.cursor()
+        row = cur.execute(
+            "SELECT triggers_fired FROM leads WHERE id = ? AND user_id = ?", (lead_id, user_id)
+        ).fetchone()
+        if row:
+            try:
+                existing: list = json.loads(row["triggers_fired"] or "[]")
+            except (ValueError, TypeError):
+                existing = []
+            if block_id not in existing:
+                existing.append(block_id)
+                cur.execute(
+                    "UPDATE leads SET triggers_fired = ? WHERE id = ? AND user_id = ?",
+                    (json.dumps(existing), lead_id, user_id),
+                )
+                conn.commit()
+
+
 def _call_executors_decide(context_bundle_dict: Dict[str, Any]) -> Dict[str, Any]:
     """
     Chama POST {EXECUTORS_BASE_URL}/api/internal/playground/decide de forma síncrona.
@@ -494,6 +516,8 @@ def playground_chat(
                 phase_advances.append(f"{label} ({target})")
         elif atype == "mark_phase_triggered" and action.get("phase_id"):
             _mark_phase_triggered(lead_id, user_id, action["phase_id"])
+        elif atype == "mark_trigger_fired" and action.get("block_id"):
+            _mark_trigger_fired(lead_id, user_id, action["block_id"])
 
     phase_trigger_fired = any(
         a.get("type") == "mark_phase_triggered" for a in raw_system_actions

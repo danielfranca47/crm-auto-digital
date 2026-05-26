@@ -333,6 +333,26 @@ def _dispatch_system_actions(
                         )
                         conn.commit()
 
+        elif atype == "mark_trigger_fired":
+            block_id = action.get("block_id", "")
+            if block_id:
+                import json
+                row = conn.execute(
+                    "SELECT triggers_fired FROM leads WHERE id = ? AND user_id = ?", (lead_id, user_id)
+                ).fetchone()
+                if row:
+                    try:
+                        existing_tf: list = json.loads(row["triggers_fired"] or "[]")
+                    except (ValueError, TypeError):
+                        existing_tf = []
+                    if block_id not in existing_tf:
+                        existing_tf.append(block_id)
+                        conn.execute(
+                            "UPDATE leads SET triggers_fired = ? WHERE id = ? AND user_id = ?",
+                            (json.dumps(existing_tf), lead_id, user_id),
+                        )
+                        conn.commit()
+
 
 def _schedule_preagendamento_checkin(
     lead_id: int,

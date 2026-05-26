@@ -70,6 +70,7 @@ export interface SalesFlowBlock {
   intent?: string;
   wait_value?: string;
   wait_unit?: string;
+  fire_once?: boolean;
   // actions
   content?: string;
   priority?: string;

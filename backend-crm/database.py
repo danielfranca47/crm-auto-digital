@@ -973,6 +973,7 @@ def init_db() -> None:
         ensure_column(conn, "leads", "is_playground", "is_playground INTEGER NOT NULL DEFAULT 0")
         ensure_column(conn, "leads", "detected_language", "detected_language TEXT NULL")
         ensure_column(conn, "leads", "phases_triggered", "phases_triggered TEXT NULL")
+        ensure_column(conn, "leads", "triggers_fired", "triggers_fired TEXT NULL")
 
         cur.execute("CREATE INDEX IF NOT EXISTS idx_leads_user ON leads(user_id, createdAt);")
         cur.execute(

@@ -163,6 +163,13 @@ function BlockForm({ block, setBlock, knowledgeItems }: {
               <option value="starts_with">Começa com</option>
             </select>
           </div>
+          <div className="o-field" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <input type="checkbox" id="kw-fire-once" checked={!!block.fire_once}
+              onChange={e => set('fire_once', e.target.checked)} style={{ cursor: 'pointer' }} />
+            <label htmlFor="kw-fire-once" style={{ cursor: 'pointer', fontSize: 12.5 }}>
+              Disparar apenas uma vez por lead
+            </label>
+          </div>
         </>
       );
 
@@ -208,6 +215,13 @@ function BlockForm({ block, setBlock, knowledgeItems }: {
             <label className="o-field-label">Instrução ao agente (opcional)</label>
             <textarea className="o-input" rows={3} placeholder="Ex: Se o lead hesitar, usar argumento de ROI"
               value={block.note || ''} onChange={e => set('note', e.target.value)} style={{ resize: 'vertical' }} />
+          </div>
+          <div className="o-field" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <input type="checkbox" id="intent-fire-once" checked={!!block.fire_once}
+              onChange={e => set('fire_once', e.target.checked)} style={{ cursor: 'pointer' }} />
+            <label htmlFor="intent-fire-once" style={{ cursor: 'pointer', fontSize: 12.5 }}>
+              Disparar apenas uma vez por lead
+            </label>
           </div>
         </>
       );

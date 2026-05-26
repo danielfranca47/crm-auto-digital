@@ -371,6 +371,18 @@ def _evaluate_sales_flow_phases(
     blocks = phase_data.get("blocks") or []
     normalized_msg = _normalize_str(message_text)
 
+    # Blocos que já dispararam com fire_once=True — lidos do lead para impedir re-disparo
+    _triggers_fired_raw = ((context.get("lead") or {}).get("triggers_fired") or "[]")
+    try:
+        import json as _json_tf
+        _triggers_fired: set = set(
+            _json_tf.loads(_triggers_fired_raw)
+            if isinstance(_triggers_fired_raw, str)
+            else (_triggers_fired_raw if isinstance(_triggers_fired_raw, list) else [])
+        )
+    except (ValueError, TypeError):
+        _triggers_fired = set()
+
     # Modelo sequencial: o último gatilho disparado governa os blocos de ação seguintes.
     # Por defeito True — ações sem gatilho antes delas disparam automaticamente ao entrar na fase.
     _TRIGGER_TYPES = {"phase_trigger", "kw_trigger", "intent_trigger", "no_reply_trigger"}
@@ -387,25 +399,39 @@ def _evaluate_sales_flow_phases(
             if type_id == "phase_trigger":
                 fired = is_phase_entry
             elif type_id == "kw_trigger":
-                keywords = [
-                    _normalize_str(kw.strip())
-                    for kw in (block.get("keywords") or "").split(",")
-                    if kw.strip()
-                ]
-                if keywords:
-                    match_mode = (block.get("match") or "contains").strip().lower()
-                    if match_mode == "exact":
-                        fired = any(kw == normalized_msg for kw in keywords)
-                    elif match_mode == "starts_with":
-                        fired = any(normalized_msg.startswith(kw) for kw in keywords)
-                    else:
-                        fired = any(kw in normalized_msg for kw in keywords)
-            elif type_id == "intent_trigger":
-                intent_label = (block.get("intent") or "").strip()
-                if detected_intents is not None and intent_label:
-                    fired = intent_label in detected_intents
+                _block_id = (block.get("id") or "").strip()
+                _fire_once = bool(block.get("fire_once"))
+                if _fire_once and _block_id and _block_id in _triggers_fired:
+                    fired = False
                 else:
-                    fired = True  # fallback: mãe não classificou, comportamento legado
+                    keywords = [
+                        _normalize_str(kw.strip())
+                        for kw in (block.get("keywords") or "").split(",")
+                        if kw.strip()
+                    ]
+                    if keywords:
+                        match_mode = (block.get("match") or "contains").strip().lower()
+                        if match_mode == "exact":
+                            fired = any(kw == normalized_msg for kw in keywords)
+                        elif match_mode == "starts_with":
+                            fired = any(normalized_msg.startswith(kw) for kw in keywords)
+                        else:
+                            fired = any(kw in normalized_msg for kw in keywords)
+                if fired and _fire_once and _block_id:
+                    result["system_actions"].append({"type": "mark_trigger_fired", "block_id": _block_id})
+            elif type_id == "intent_trigger":
+                _block_id = (block.get("id") or "").strip()
+                _fire_once = bool(block.get("fire_once"))
+                if _fire_once and _block_id and _block_id in _triggers_fired:
+                    fired = False
+                else:
+                    intent_label = (block.get("intent") or "").strip()
+                    if detected_intents is not None and intent_label:
+                        fired = intent_label in detected_intents
+                    else:
+                        fired = True  # fallback: mãe não classificou, comportamento legado
+                if fired and _fire_once and _block_id:
+                    result["system_actions"].append({"type": "mark_trigger_fired", "block_id": _block_id})
             # no_reply_trigger é gerido pelo followup_state — não avaliado aqui
 
             last_trigger_active = fired
