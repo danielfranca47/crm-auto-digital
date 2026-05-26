@@ -59,6 +59,29 @@ async function revealExtraParts(
   }
 }
 
+async function revealAutoMessages(
+  autoMessages: string[],
+  setMessages: Dispatch<SetStateAction<ChatMessage[]>>,
+  setLoading: Dispatch<SetStateAction<boolean>>
+) {
+  for (const msg of autoMessages) {
+    setLoading(true);
+    await new Promise<void>((r) => setTimeout(r, 600));
+    setLoading(false);
+    setMessages((prev) => [
+      ...prev,
+      {
+        id: crypto.randomUUID(),
+        role: "bot",
+        text: msg,
+        timestamp: new Date().toISOString(),
+        isAutoMessage: true,
+        selectedForFeedback: false,
+      },
+    ]);
+  }
+}
+
 export default function Playground() {
   const [session, setSession] = useState<PlaygroundSession | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -105,8 +128,11 @@ export default function Playground() {
 
         const parts = res.message_parts?.length ? res.message_parts : [res.message_to_send];
         setMessages([buildBotMessage(parts[0], res, { isFirst: true, totalParts: parts.length })]);
-        if (parts.length > 1) {
-          revealExtraParts(parts.slice(1), setMessages, setLoading);
+        const afterParts = parts.length > 1
+          ? revealExtraParts(parts.slice(1), setMessages, setLoading)
+          : Promise.resolve();
+        if (res.auto_messages?.length) {
+          afterParts.then(() => revealAutoMessages(res.auto_messages!, setMessages, setLoading));
         }
       } catch (err: unknown) {
         if (cancelled) return;
@@ -161,8 +187,11 @@ export default function Playground() {
           ...prev,
           buildBotMessage(parts[0], res, { isFirst: true, totalParts: parts.length }),
         ]);
-        if (parts.length > 1) {
-          revealExtraParts(parts.slice(1), setMessages, setLoading);
+        const afterParts = parts.length > 1
+          ? revealExtraParts(parts.slice(1), setMessages, setLoading)
+          : Promise.resolve();
+        if (res.auto_messages?.length) {
+          afterParts.then(() => revealAutoMessages(res.auto_messages!, setMessages, setLoading));
         }
       } catch (err: unknown) {
         const msg = err instanceof Error ? err.message : "Erro ao chamar o playground";

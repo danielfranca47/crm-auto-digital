@@ -172,6 +172,7 @@ export type PlaygroundChatResponse = {
   typing_seconds?: number;
   message_parts?: string[];
   audio_previews?: string[];
+  auto_messages?: string[];
 };
 
 // ── Playground FeedbackAssist ────────────────────────────────────────────────

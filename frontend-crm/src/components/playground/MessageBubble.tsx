@@ -3,7 +3,7 @@ import {
   Bookmark, BookmarkCheck, ChevronDown, ChevronUp,
   ThumbsDown, Minus, ThumbsUp, Star, Loader2,
   Headphones, ImageIcon, Video, FileText, Mic,
-  Clock, Keyboard, Layers,
+  Clock, Keyboard, Layers, Zap,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -17,6 +17,7 @@ export interface ChatMessage {
   role: "lead" | "bot";
   text: string;
   timestamp: string;
+  isAutoMessage?: boolean;
   decisionTrace?: PlaygroundDecisionTrace;
   motherRoute?: string | null;
   confidence?: number;
@@ -216,13 +217,16 @@ export function MessageBubble({ message, onToggleFeedback, onRate }: MessageBubb
     <div className={`flex ${isLead ? "justify-end" : "justify-start"} mb-3 group`}>
       <div className={`flex flex-col max-w-[75%] ${isLead ? "items-end" : "items-start"}`}>
         {/* Rótulo de quem enviou */}
-        <span className="text-xs text-muted-foreground mb-1 px-1">
-          {isLead ? "Lead" : "Bot"} · {time}
+        <span className="text-xs text-muted-foreground mb-1 px-1 flex items-center gap-1">
+          {isLead ? "Lead" : message.isAutoMessage ? (
+            <><Zap className="h-3 w-3 text-violet-400" /><span className="text-violet-400">Fluxo de Venda</span></>
+          ) : "Bot"}
+          {" · "}{time}
         </span>
 
         <div className="flex items-start gap-1">
-          {/* Botão de feedback — só para mensagens do bot */}
-          {!isLead && (
+          {/* Botão de feedback — só para mensagens do bot (não automáticas) */}
+          {!isLead && !message.isAutoMessage && (
             <Button
               variant="ghost"
               size="icon"
@@ -245,6 +249,8 @@ export function MessageBubble({ message, onToggleFeedback, onRate }: MessageBubb
             className={`rounded-2xl px-4 py-2.5 text-sm leading-relaxed whitespace-pre-wrap break-words ${
               isLead
                 ? "bg-primary text-primary-foreground rounded-tr-sm"
+                : message.isAutoMessage
+                ? "bg-violet-50 border border-violet-200 text-foreground rounded-tl-sm dark:bg-violet-950 dark:border-violet-800"
                 : message.selectedForFeedback
                 ? "bg-amber-50 border-2 border-amber-300 text-foreground rounded-tl-sm dark:bg-amber-950 dark:border-amber-600"
                 : "bg-muted text-foreground rounded-tl-sm"
@@ -268,8 +274,8 @@ export function MessageBubble({ message, onToggleFeedback, onRate }: MessageBubb
           </div>
         </div>
 
-        {/* Trace colapsável — só para mensagens do bot com trace */}
-        {!isLead && message.decisionTrace && (
+        {/* Trace colapsável — só para mensagens do bot (não automáticas) com trace */}
+        {!isLead && !message.isAutoMessage && message.decisionTrace && (
           <div className="mt-1 ml-8">
             <button
               onClick={() => setTraceOpen((o) => !o)}
@@ -330,8 +336,8 @@ export function MessageBubble({ message, onToggleFeedback, onRate }: MessageBubb
           )
         )}
 
-        {/* Linha de rating — só para mensagens do bot */}
-        {!isLead && (
+        {/* Linha de rating — só para mensagens do bot (não automáticas) */}
+        {!isLead && !message.isAutoMessage && (
           <RatingRow message={message} onRate={onRate} />
         )}
       </div>
