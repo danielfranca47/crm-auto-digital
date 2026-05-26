@@ -326,6 +326,7 @@ def _evaluate_sales_flow_phases(
     context: Dict[str, Any],
     effective_route_to: str,
     message_text: str,
+    detected_intents: Optional[List[str]] = None,
 ) -> Dict[str, Any]:
     """Avalia os blocos tipados do novo sistema de fases do Fluxo de Venda.
 
@@ -398,7 +399,11 @@ def _evaluate_sales_flow_phases(
                     else:
                         fired = any(kw in normalized_msg for kw in keywords)
             elif type_id == "intent_trigger":
-                fired = True  # hint-only; injetado no prompt LLM
+                intent_label = (block.get("intent") or "").strip()
+                if detected_intents is not None and intent_label:
+                    fired = intent_label in detected_intents
+                else:
+                    fired = True  # fallback: mãe não classificou, comportamento legado
             # no_reply_trigger é gerido pelo followup_state — não avaliado aqui
 
             last_trigger_active = fired
@@ -491,6 +496,40 @@ def _build_sales_flow_phases_block(phases_result: Dict[str, Any]) -> str:
     if not injections:
         return ""
     return "\n" + "\n".join(injections) + "\n"
+
+
+def _collect_intent_triggers_for_lead_phase(context: Dict[str, Any]) -> List[dict]:
+    """Coleta blocos intent_trigger da fase atual do lead para injeção no prompt da mãe."""
+    ai_profile = context.get("ai_profile") or {}
+    if (ai_profile.get("response_style") or "passive").strip().lower() != "active":
+        return []
+    sales_flow = ai_profile.get("sales_flow")
+    if not isinstance(sales_flow, dict) or not sales_flow.get("enabled"):
+        return []
+    phases = sales_flow.get("phases")
+    if not isinstance(phases, list):
+        return []
+    lead = context.get("lead") or {}
+    raw_category = (lead.get("category") or "").strip().lower().replace("-", "_")
+    _CATEGORY_TO_PHASE_ID: Dict[str, str] = {
+        "qualification": "p1",
+        "apresentation": "p2",
+        "pre_agendamento": "p3a",
+        "agendamento": "p3b",
+        "follow_up": "p4",
+        "followup": "p4",
+        "closing": "p5",
+    }
+    phase_id = _CATEGORY_TO_PHASE_ID.get(raw_category)
+    if not phase_id:
+        return []
+    phase_data = next((p for p in phases if isinstance(p, dict) and p.get("id") == phase_id), None)
+    if not phase_data:
+        return []
+    return [
+        b for b in (phase_data.get("blocks") or [])
+        if isinstance(b, dict) and b.get("typeId") == "intent_trigger" and (b.get("intent") or "").strip()
+    ]
 
 
 def _build_custom_instructions_block(ai_profile: Dict[str, Any]) -> str:
@@ -1602,6 +1641,22 @@ def _build_mother_prompt(context: Dict[str, Any], message_text: str) -> str:
         if custom_instructions else ""
     )
 
+    _active_intent_triggers = _collect_intent_triggers_for_lead_phase(context)
+    _intent_detection_block = ""
+    if _active_intent_triggers:
+        _intent_lines = "\n".join(
+            f'- "{b["intent"]}"' + (f": {(b.get('note') or '').strip()}" if (b.get("note") or "").strip() else "")
+            for b in _active_intent_triggers
+        )
+        _intent_detection_block = (
+            "\n[DETECÇÃO DE INTENÇÃO]\n"
+            "A mensagem do lead pode conter intenções específicas que ativam ações automáticas.\n"
+            "Avalie a última mensagem e indique quais das intenções abaixo foram detectadas:\n\n"
+            f"{_intent_lines}\n\n"
+            "Preencha o campo `detected_intents` com os labels detectados (pode ser lista vazia []).\n"
+            "Seja conservador: só marque se houver sinal claro na mensagem. Dúvida = não marcar.\n"
+        )
+
     return (
         f"{identity_block}\n\n"
         f"{pipeline_block}\n"
@@ -1638,7 +1693,8 @@ def _build_mother_prompt(context: Dict[str, Any], message_text: str) -> str:
         '  "agent_mode": null (opcional; deixe null, o modo vem do perfil/sistema),\n'
         '  "signals": {"meeting_scheduled": true|false, "intent_level": "low|medium|high", "urgency_level": "low|medium|high", "price_acceptance": "no|unsure|yes"} (opcional),\n'
         '  "objective": "string curta opcional",\n'
-        '  "next_action_hint": "reply|ask_qualification|handoff|ignore|greet|null (opcional)"\n'
+        '  "next_action_hint": "reply|ask_qualification|handoff|ignore|greet|null (opcional)",\n'
+        '  "detected_intents": [] (lista de intent labels detectados — ver [DETECÇÃO DE INTENÇÃO] se presente; caso contrário [])\n'
         "}\n"
         "Regras:\n"
         "- route_to é obrigatório e indica a próxima fase a focar.\n"
@@ -1758,6 +1814,7 @@ def _build_mother_prompt(context: Dict[str, Any], message_text: str) -> str:
             if (ai_profile.get("response_style") or "passive") == "passive"
             else ""
         )
+        + _intent_detection_block
     )
 
 
@@ -2111,7 +2168,7 @@ CONTEXTO:
 - next_action_hint_mae: {mother_decision.next_action_hint or "null"}
 {_build_qualification_fields_block(ai_profile, response_style)}{_build_custom_instructions_block(ai_profile)}{_build_business_info_block(context)}{_build_training_examples_block(context, "qualification")}"""
     _qual_prompt += _build_sales_flow_block(_evaluate_sales_flow(context, "qualification", mother_decision.signals))
-    _qual_prompt += _build_sales_flow_phases_block(_evaluate_sales_flow_phases(context, "qualification", message_text))
+    _qual_prompt += _build_sales_flow_phases_block(_evaluate_sales_flow_phases(context, "qualification", message_text, detected_intents=mother_decision.detected_intents))
     return _inject_generated_parts(_qual_prompt, context, "qualification")
 
 def _build_child_prompt_apresentation(
@@ -2619,7 +2676,7 @@ def _build_child_prompt_apresentation(
     )
     _apres_prompt += _build_sales_flow_block(_evaluate_sales_flow(context, "apresentation", mother_decision.signals))
     _apres_route = mother_decision.route_to or "apresentation"
-    _apres_prompt += _build_sales_flow_phases_block(_evaluate_sales_flow_phases(context, _apres_route, message_text))
+    _apres_prompt += _build_sales_flow_phases_block(_evaluate_sales_flow_phases(context, _apres_route, message_text, detected_intents=mother_decision.detected_intents))
     return _inject_generated_parts(_apres_prompt, context, "apresentation")
 
 
@@ -2884,7 +2941,7 @@ def _build_child_prompt_follow_up(
         + _build_business_info_block(context)
     )
     _followup_prompt += _build_sales_flow_block(_evaluate_sales_flow(context, "follow-up", mother_decision.signals))
-    _followup_prompt += _build_sales_flow_phases_block(_evaluate_sales_flow_phases(context, "followup", message_text))
+    _followup_prompt += _build_sales_flow_phases_block(_evaluate_sales_flow_phases(context, "followup", message_text, detected_intents=mother_decision.detected_intents))
     return _inject_generated_parts(_followup_prompt, context, "followup")
 
 
@@ -3787,7 +3844,8 @@ def compose_decision_output(
 
     # Fluxo de Venda (novo sistema de fases) — mídia com URL explícita e system_actions
     _phases_result = _evaluate_sales_flow_phases(
-        context, effective_route_to, _extract_message_text(context)
+        context, effective_route_to, _extract_message_text(context),
+        detected_intents=mother_decision.detected_intents,
     )
     if _phases_result.get("pre_send_media") and not decision.pre_send_media:
         decision.pre_send_media = _phases_result["pre_send_media"]

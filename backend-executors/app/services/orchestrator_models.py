@@ -15,6 +15,7 @@ class MotherDecision(BaseModel):
     objective: Optional[str] = None
     next_action_hint: Optional[Literal["reply", "ask_qualification", "handoff", "ignore", "greet"]] = None
     compound_follow_through: Optional[Literal["qualification", "apresentation", "pre-agendamento", "agendamento", "follow-up", "closing"]] = None
+    detected_intents: list[str] = Field(default_factory=list)
 
 
 class ChildResult(BaseModel):
