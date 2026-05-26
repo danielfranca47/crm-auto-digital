@@ -1,0 +1,116 @@
+# Implementação: Modelo Sequencial de Gatilho — Camada 7 (Sales Flow)
+
+## Porquê
+
+O utilizador queria configurar, na fase de Apresentação da Camada 7, que ao entrar na fase o sistema enviasse automaticamente uma **mensagem fixa + áudio** antes da resposta da filha LLM. Para isso configurou blocos na seguinte ordem:
+
+```
+[phase_trigger] → [mensagem] → [midia]
+```
+
+Nada acontecia. A investigação revelou que o sistema de blocos tipados (`_evaluate_sales_flow_phases`) tinha um bug estrutural: blocos de ação (`mensagem`, `midia`, `avancar_fase`, `webhook`, `espera`) **nunca eram executados**, porque o loop de avaliação só marcava como `triggered = True` os blocos de gatilho (`phase_trigger`, `kw_trigger`, `intent_trigger`) — todos os outros caíam no `if not triggered: continue`.
+
+---
+
+## O Que Estávamos Tentando
+
+Implementar um **modelo de execução sequencial/herdado** (Sequential Inherited Trigger) onde:
+
+- A sequência de blocos dentro de uma fase é processada em ordem
+- Quando um bloco de gatilho é encontrado, ele é avaliado e o resultado atualiza um flag `last_trigger_active`
+- Os blocos de ação subsequentes executam **se e somente se** `last_trigger_active == True`
+- Por defeito (no início da lista, sem nenhum gatilho antes), `last_trigger_active = True` — ações puras de fase disparam automaticamente
+
+**Regras práticas do novo modelo:**
+
+| Configuração | Comportamento |
+|---|---|
+| Ação sozinha (sem gatilho antes) | Sempre dispara ao entrar na fase |
+| `phase_trigger` → Ação | Sempre dispara (phase_trigger é sempre True) |
+| `kw_trigger` que não fez match → Ação | **Não** dispara |
+| `kw_trigger` que fez match → Ação | Dispara |
+| Múltiplos gatilhos em sequência | Cada um governa as ações que vêm depois dele |
+
+**Deficiências identificadas além do bug principal:**
+
+1. **Bug crítico (Fase 1):** Blocos de ação nunca executam — `_evaluate_sales_flow_phases`, `decision_engine.py:325–466`
+2. **Deficiência (Fase 2):** Frontend sem agrupamento visual — `CamadaFluxoVenda.tsx`
+3. **Deficiência (Fase 3):** Bloco `midia` ignora `media_item_id` (só usa `media_url`)
+4. **Futuro (Fase 4):** Bloco `condicao` armazenado mas não avaliado — branching Sim/Não inoperante
+
+---
+
+## Plano de Implementação
+
+### Fase 1 — Backend: modelo sequencial (bug crítico)
+**Ficheiro:** `backend-executors/app/services/decision_engine.py`
+**Função:** `_evaluate_sales_flow_phases` (linhas 325–466)
+
+Substituir o modelo de trigger independente:
+```python
+# ANTES — blocos de ação nunca executam
+triggered = False
+if type_id == "phase_trigger":
+    triggered = True
+if not triggered:
+    continue
+```
+
+Por modelo sequencial:
+```python
+# DEPOIS — ações herdam o trigger anterior
+last_trigger_active = True  # default: fase entrou
+
+if type_id in ("phase_trigger", "kw_trigger", "intent_trigger", "no_reply_trigger"):
+    fired = evaluate_trigger(block, ...)
+    last_trigger_active = fired
+    if fired:
+        dispatch_prompt_injection(block, result)
+else:
+    if last_trigger_active:
+        dispatch_action(block, result)
+```
+
+### Fase 2 — Frontend: agrupamento visual
+**Ficheiro:** `frontend-crm/src/components/agente/CamadaFluxoVenda.tsx`
+
+Renderizar blocos agrupados visualmente por gatilho (indentação/borda). Nenhuma mudança no modelo de dados.
+
+### Fase 3 — Backend: resolução de `media_item_id`
+**Ficheiro:** `backend-executors/app/services/decision_engine.py`
+
+No handler do bloco `midia`, se `media_item_id` está presente, resolver para URL via `context["knowledge_media"]`.
+
+### Fase 4 — Backend + Frontend: avaliação real de `condicao`
+Requer mudança no modelo de dados (`branch_yes`/`branch_no` passam a ser listas de blocos). Iteração futura separada.
+
+---
+
+## Commits Realizados
+
+| # | Commit | O que foi implementado |
+|---|---|---|
+| 1 | _(a preencher)_ | Fase 1 — modelo sequencial de trigger no backend |
+| 2 | _(a preencher)_ | Fase 2 — agrupamento visual no frontend |
+| 3 | _(a preencher)_ | Fase 3 — resolução de `media_item_id` |
+
+---
+
+## Resultado / Notas de Acompanhamento
+
+> _Espaço para o utilizador preencher após testar._
+
+**Fase 1 (backend sequencial):**
+- [ ] Testado
+- Resultado: _(preencher)_
+
+**Fase 2 (frontend visual):**
+- [ ] Testado
+- Resultado: _(preencher)_
+
+**Fase 3 (media_item_id):**
+- [ ] Testado
+- Resultado: _(preencher)_
+
+**Notas gerais / comportamentos inesperados observados:**
+_(preencher)_

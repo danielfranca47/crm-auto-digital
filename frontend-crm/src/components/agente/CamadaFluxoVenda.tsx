@@ -563,39 +563,78 @@ function PhaseSection({ phase, onAddBlock, onEditBlock, onRemoveBlock, isActive 
       {/* Body */}
       {expanded && (
         <div style={{ borderTop: `1px solid ${color}20`, padding: '12px 14px', display: 'flex', flexDirection: 'column', gap: 8 }}>
-          {/* Block list */}
-          {blocks.map(block => {
-            const meta = BLOCK_META[block.typeId];
-            return (
-              <div key={block.id} style={{
-                display: 'flex', alignItems: 'center', gap: 10,
-                background: 'var(--o-bg2)', borderRadius: 8, padding: '9px 12px',
-                border: '1px solid var(--o-b1)',
-              }}>
-                <span style={{ fontSize: 16, flexShrink: 0 }}>{meta.icon}</span>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 2 }}>
-                    <span style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.07em', color: meta.color }}>
-                      {block.typeId.replace('_', ' ')}
-                    </span>
+          {/* Block list — agrupado por gatilho */}
+          {(() => {
+            const TRIGGER_IDS = new Set(['phase_trigger', 'kw_trigger', 'no_reply_trigger', 'intent_trigger']);
+            type Group = { trigger: SalesFlowBlock | null; actions: SalesFlowBlock[] };
+            const groups: Group[] = [];
+            let cur: Group = { trigger: null, actions: [] };
+            for (const b of blocks) {
+              if (TRIGGER_IDS.has(b.typeId)) {
+                if (cur.trigger !== null || cur.actions.length > 0) groups.push(cur);
+                cur = { trigger: b, actions: [] };
+              } else {
+                cur.actions.push(b);
+              }
+            }
+            if (cur.trigger !== null || cur.actions.length > 0) groups.push(cur);
+
+            function BlockRow({ block }: { block: SalesFlowBlock }) {
+              const meta = BLOCK_META[block.typeId];
+              return (
+                <div style={{
+                  display: 'flex', alignItems: 'center', gap: 10,
+                  background: 'var(--o-bg2)', borderRadius: 8, padding: '9px 12px',
+                  border: '1px solid var(--o-b1)',
+                }}>
+                  <span style={{ fontSize: 16, flexShrink: 0 }}>{meta.icon}</span>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 2 }}>
+                      <span style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.07em', color: meta.color }}>
+                        {block.typeId.replace(/_/g, ' ')}
+                      </span>
+                    </div>
+                    <div style={{ fontSize: 12, color: 'var(--o-sub)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {blockSummary(block)}
+                    </div>
                   </div>
-                  <div style={{ fontSize: 12, color: 'var(--o-sub)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                    {blockSummary(block)}
+                  <div style={{ display: 'flex', gap: 4, flexShrink: 0 }}>
+                    <button className="o-btn" style={{ fontSize: 10.5, padding: '3px 9px' }}
+                      onClick={() => onEditBlock(id, block.id)}>Editar</button>
+                    <button className="o-btn" style={{ fontSize: 10.5, padding: '3px 9px', color: 'var(--o-danger, #e05c5c)' }}
+                      onClick={() => onRemoveBlock(id, block.id)}>✕</button>
                   </div>
                 </div>
-                <div style={{ display: 'flex', gap: 4, flexShrink: 0 }}>
-                  <button className="o-btn" style={{ fontSize: 10.5, padding: '3px 9px' }}
-                    onClick={() => onEditBlock(id, block.id)}>
-                    Editar
-                  </button>
-                  <button className="o-btn" style={{ fontSize: 10.5, padding: '3px 9px', color: 'var(--o-danger, #e05c5c)' }}
-                    onClick={() => onRemoveBlock(id, block.id)}>
-                    ✕
-                  </button>
-                </div>
+              );
+            }
+
+            return groups.map((group, gi) => (
+              <div key={gi} style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
+                {/* Gatilho (ou label implícito "sempre ao entrar") */}
+                {group.trigger ? (
+                  <BlockRow block={group.trigger} />
+                ) : group.actions.length > 0 ? (
+                  <div style={{ fontSize: 10, color: 'var(--o-sub)', fontWeight: 500, padding: '2px 4px 4px', letterSpacing: '0.04em' }}>
+                    ⚡ Sempre ao entrar na fase
+                  </div>
+                ) : null}
+
+                {/* Ações — indentadas com linha vertical */}
+                {group.actions.length > 0 && (
+                  <div style={{ display: 'flex', marginTop: 4 }}>
+                    <div style={{
+                      width: 2, flexShrink: 0, borderRadius: 2,
+                      background: group.trigger ? BLOCK_META[group.trigger.typeId].color + '55' : 'var(--o-b1)',
+                      marginLeft: 14, marginRight: 10,
+                    }} />
+                    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 4 }}>
+                      {group.actions.map(b => <BlockRow key={b.id} block={b} />)}
+                    </div>
+                  </div>
+                )}
               </div>
-            );
-          })}
+            ));
+          })()}
 
           {/* Add button */}
           <button className="o-btn"

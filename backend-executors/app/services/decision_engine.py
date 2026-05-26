@@ -368,100 +368,119 @@ def _evaluate_sales_flow_phases(
     blocks = phase_data.get("blocks") or []
     normalized_msg = _normalize_str(message_text)
 
+    # Modelo sequencial: o último gatilho disparado governa os blocos de ação seguintes.
+    # Por defeito True — ações sem gatilho antes delas disparam automaticamente ao entrar na fase.
+    _TRIGGER_TYPES = {"phase_trigger", "kw_trigger", "intent_trigger", "no_reply_trigger"}
+    last_trigger_active = True
+
     for block in blocks:
         if not isinstance(block, dict):
             continue
         type_id = (block.get("typeId") or "").strip()
 
-        # Evaluate trigger condition
-        triggered = False
-        if type_id == "phase_trigger":
-            triggered = True
-        elif type_id == "kw_trigger":
-            keywords = [
-                _normalize_str(kw.strip())
-                for kw in (block.get("keywords") or "").split(",")
-                if kw.strip()
-            ]
-            if keywords:
-                match_mode = (block.get("match") or "contains").strip().lower()
-                if match_mode == "exact":
-                    triggered = any(kw == normalized_msg for kw in keywords)
-                elif match_mode == "starts_with":
-                    triggered = any(normalized_msg.startswith(kw) for kw in keywords)
-                else:
-                    triggered = any(kw in normalized_msg for kw in keywords)
-        elif type_id == "intent_trigger":
-            triggered = True  # hint-only; injected into LLM prompt, not hard-evaluated
-        # no_reply_trigger is managed by followup_state, skip here
+        if type_id in _TRIGGER_TYPES:
+            # Avaliar e atualizar o flag de trigger ativo
+            fired = False
+            if type_id == "phase_trigger":
+                fired = True
+            elif type_id == "kw_trigger":
+                keywords = [
+                    _normalize_str(kw.strip())
+                    for kw in (block.get("keywords") or "").split(",")
+                    if kw.strip()
+                ]
+                if keywords:
+                    match_mode = (block.get("match") or "contains").strip().lower()
+                    if match_mode == "exact":
+                        fired = any(kw == normalized_msg for kw in keywords)
+                    elif match_mode == "starts_with":
+                        fired = any(normalized_msg.startswith(kw) for kw in keywords)
+                    else:
+                        fired = any(kw in normalized_msg for kw in keywords)
+            elif type_id == "intent_trigger":
+                fired = True  # hint-only; injetado no prompt LLM
+            # no_reply_trigger é gerido pelo followup_state — não avaliado aqui
 
-        if not triggered:
-            continue
+            last_trigger_active = fired
 
-        # Dispatch block by type
-        if type_id in ("orientacao", "phase_trigger"):
-            content = (block.get("content") or "").strip()
-            if content:
-                priority = (block.get("priority") or "normal").strip().lower()
-                label = "INSTRUÇÃO CRÍTICA DE FLUXO DE VENDA" if priority == "critical" else "INSTRUÇÃO DE FLUXO DE VENDA"
-                result["prompt_injections"].append(f"{label}:\n{content}")
-        elif type_id == "intent_trigger":
-            intent = (block.get("intent") or "").strip()
-            if intent:
-                inj = f"FLUXO DE VENDA — Detetar intenção: {intent}"
-                note = (block.get("note") or "").strip()
-                if note:
-                    inj += f"\n{note}"
-                result["prompt_injections"].append(inj)
-        elif type_id == "midia":
-            media_url = (block.get("media_url") or "").strip()
-            if media_url:
-                result["pre_send_media"].append({
-                    "media_url": media_url,
-                    "media_type": block.get("media_type") or "image",
-                    "send_order": 0,
-                })
-        elif type_id == "mensagem":
-            content = (block.get("content") or "").strip()
-            if content:
-                result["system_actions"].append({
-                    "type": "send_message",
-                    "content": content,
-                    "channel": block.get("channel") or "whatsapp",
-                })
-        elif type_id == "avancar_fase":
-            target = (block.get("target_phase") or "").strip()
-            if target:
-                result["system_actions"].append({
-                    "type": "advance_phase",
-                    "target_phase": target,
-                })
-        elif type_id == "webhook":
-            url = (block.get("url") or "").strip()
-            if url:
-                result["system_actions"].append({
-                    "type": "webhook",
-                    "url": url,
-                    "method": block.get("method") or "POST",
-                    "note": block.get("note") or "",
-                })
-        elif type_id == "espera":
-            wait_value = str(block.get("wait_value") or "").strip()
-            if wait_value:
-                result["system_actions"].append({
-                    "type": "delay",
-                    "wait_value": wait_value,
-                    "wait_unit": block.get("wait_unit") or "hours",
-                })
-        elif type_id == "condicao":
-            condition = (block.get("condition") or "").strip()
-            if condition:
-                result["system_actions"].append({
-                    "type": "condition",
-                    "condition": condition,
-                    "branch_yes": block.get("branch_yes") or "",
-                    "branch_no": block.get("branch_no") or "",
-                })
+            # Injeções de prompt para blocos de gatilho que dispararam
+            if fired:
+                if type_id == "phase_trigger":
+                    content = (block.get("content") or "").strip()
+                    if content:
+                        priority = (block.get("priority") or "normal").strip().lower()
+                        label = "INSTRUÇÃO CRÍTICA DE FLUXO DE VENDA" if priority == "critical" else "INSTRUÇÃO DE FLUXO DE VENDA"
+                        result["prompt_injections"].append(f"{label}:\n{content}")
+                elif type_id == "intent_trigger":
+                    intent = (block.get("intent") or "").strip()
+                    if intent:
+                        inj = f"FLUXO DE VENDA — Detetar intenção: {intent}"
+                        note = (block.get("note") or "").strip()
+                        if note:
+                            inj += f"\n{note}"
+                        result["prompt_injections"].append(inj)
+
+        else:
+            # Bloco de ação/lógica: executa apenas se o último gatilho disparou
+            if not last_trigger_active:
+                continue
+
+            if type_id == "orientacao":
+                content = (block.get("content") or "").strip()
+                if content:
+                    priority = (block.get("priority") or "normal").strip().lower()
+                    label = "INSTRUÇÃO CRÍTICA DE FLUXO DE VENDA" if priority == "critical" else "INSTRUÇÃO DE FLUXO DE VENDA"
+                    result["prompt_injections"].append(f"{label}:\n{content}")
+            elif type_id == "midia":
+                media_url = (block.get("media_url") or "").strip()
+                if media_url:
+                    result["pre_send_media"].append({
+                        "media_url": media_url,
+                        "media_type": block.get("media_type") or "image",
+                        "caption": (block.get("caption") or "").strip() or None,
+                        "send_order": 0,
+                    })
+            elif type_id == "mensagem":
+                content = (block.get("content") or "").strip()
+                if content:
+                    result["system_actions"].append({
+                        "type": "send_message",
+                        "content": content,
+                        "channel": block.get("channel") or "whatsapp",
+                    })
+            elif type_id == "avancar_fase":
+                target = (block.get("target_phase") or "").strip()
+                if target:
+                    result["system_actions"].append({
+                        "type": "advance_phase",
+                        "target_phase": target,
+                    })
+            elif type_id == "webhook":
+                url = (block.get("url") or "").strip()
+                if url:
+                    result["system_actions"].append({
+                        "type": "webhook",
+                        "url": url,
+                        "method": block.get("method") or "POST",
+                        "note": block.get("note") or "",
+                    })
+            elif type_id == "espera":
+                wait_value = str(block.get("wait_value") or "").strip()
+                if wait_value:
+                    result["system_actions"].append({
+                        "type": "delay",
+                        "wait_value": wait_value,
+                        "wait_unit": block.get("wait_unit") or "hours",
+                    })
+            elif type_id == "condicao":
+                condition = (block.get("condition") or "").strip()
+                if condition:
+                    result["system_actions"].append({
+                        "type": "condition",
+                        "condition": condition,
+                        "branch_yes": block.get("branch_yes") or "",
+                        "branch_no": block.get("branch_no") or "",
+                    })
 
     return result
 
