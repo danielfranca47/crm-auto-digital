@@ -31,29 +31,32 @@ Toggle "Modo lote" na barra de input do playground:
 
 **Backend:** nenhuma alteração necessária. O endpoint `/api/playground/chat` já aceita `message` multi-linha.
 
-## Como testar
+## Testes
 
-### Buffer estendido (CamadaPipeline)
-1. Abrir configurações do agente → "Camada Pipeline" → "Delay de resposta"
-2. Verificar que o slider "Absorção de mensagens consecutivas" vai de 0 até 2h
-3. Mover o slider para valores como 60s → deve mostrar "1min", 90min → "1h 30min", 7200s → "2h"
-4. Salvar e verificar que o AI Profile persiste o novo valor
+### Buffer estendido (CamadaPipeline) — ✅ Validado em 2026-05-27
 
-### Modo lote (Playground)
-1. Abrir Playground → iniciar sessão com qualquer agente
-2. Clicar no ícone de pilha de mensagens para ativar "Modo lote"
-3. Digitar "Oi" e pressionar Enter → aparece como chip (não envia)
-4. Digitar "Preciso de ajuda" e pressionar Enter → segundo chip
-5. Digitar "É urgente" e pressionar Enter → terceiro chip
-6. Clicar "Enviar lote (3)" → bot responde considerando as 3 mensagens como contexto único
-7. Verificar que a resposta do bot considera toda a sequência, não apenas a última mensagem
-8. Clicar X em um chip para remover e confirmar que fica apenas os restantes
-9. Desativar modo lote → Enter volta a enviar imediatamente
+1. ✅ Abrir configurações do agente → "Camada Pipeline" → "Delay de resposta"
+2. ✅ Verificar que o slider "Absorção de mensagens consecutivas" vai de 0 até 2h
+3. ✅ Mover o slider para valores como 60s → deve mostrar "1min", 90min → "1h 30min", 7200s → "2h"
+4. ✅ Salvar e verificar que o AI Profile persiste o novo valor
 
-### Paridade WhatsApp real vs. playground (buffer)
-- Configurar `multi_message_buffer_seconds = 30` no AI Profile
-- WhatsApp real: enviar 3 mensagens em < 30s → bot responde 1 vez com contexto acumulado
-- Playground (modo lote): escrever 3 mensagens, enviar lote → bot recebe contexto equivalente
+### Modo lote (Playground) — ✅ Validado em 2026-05-27
+
+1. ✅ Abrir Playground → iniciar sessão com qualquer agente
+2. ✅ Clicar no ícone de pilha de mensagens para ativar "Modo lote"
+3. ✅ Digitar "Oi" e pressionar Enter → aparece como chip (não envia)
+4. ✅ Digitar "Preciso de ajuda" e pressionar Enter → segundo chip
+5. ✅ Digitar "É urgente" e pressionar Enter → terceiro chip
+6. ✅ Clicar "Enviar lote (3)" → bot responde considerando as 3 mensagens como contexto único
+7. ✅ Verificar que a resposta do bot considera toda a sequência, não apenas a última mensagem
+8. ✅ Clicar X em um chip para remover e confirmar que fica apenas os restantes
+9. ✅ Desativar modo lote → Enter volta a enviar imediatamente
+
+### Paridade WhatsApp real vs. playground (buffer) — ⏳ Pendente
+
+- ⏳ Configurar `multi_message_buffer_seconds = 30` no AI Profile
+- ⏳ WhatsApp real: enviar 3 mensagens em < 30s → bot deve responder 1 vez com contexto acumulado
+- ✅ Playground (modo lote): escrever 3 mensagens, enviar lote → bot recebe contexto equivalente
 
 ## Arquivos alterados
 
