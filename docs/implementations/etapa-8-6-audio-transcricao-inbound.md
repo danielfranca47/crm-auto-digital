@@ -1,7 +1,7 @@
 # Etapa 8-6: Recebimento de Áudio e Transcrição para o LLM
 
 **Branch:** `etapa-8-6-audio-texto`  
-**Status:** Em implementação — Fase 4 (Áudio no modo lote) em planeamento
+**Status:** Fase 4 implementada e validada em playground (27/05/2026)
 
 ---
 
@@ -412,23 +412,27 @@ Clicar "Enviar lote (N)"
 ### Checks de Validação — Fase 4
 
 #### ✅ Cenário P10 — Lote de texto puro (regressão)
-- [ ] Activar batch mode; adicionar 2 mensagens de texto; enviar lote
-- [ ] Confirmar: comportamento idêntico ao anterior (sem regressão)
+- [x] Activar batch mode; adicionar 2 mensagens de texto; enviar lote
+- [x] Confirmar: comportamento idêntico ao anterior (sem regressão)
+- **Validado em:** 27/05/2026
 
 #### ✅ Cenário P11 — Lote com áudio único
-- [ ] Activar batch mode; gravar áudio; clicar "Adicionar ao lote"; enviar lote
-- [ ] Confirmar: bot responde ao conteúdo transcrito
-- [ ] Confirmar: bolha do lead mostra player de áudio com transcrição
+- [x] Activar batch mode; gravar áudio; clicar "Adicionar ao lote"; enviar lote
+- [x] Confirmar: bot responde ao conteúdo transcrito
+- [x] Confirmar: bolha do lead mostra player de áudio com transcrição
+- **Validado em:** 27/05/2026 — bolha do lead com player e transcrição; bot responde ao conteúdo
 
 #### ✅ Cenário P12 — Lote misto (texto + áudio)
-- [ ] Activar batch mode; adicionar texto "mensagem 1"; gravar áudio; adicionar ao lote; enviar lote
-- [ ] Confirmar: LLM recebe contexto completo ("mensagem 1\n[Áudio]: ...")
-- [ ] Confirmar: bolhas do lead mostram: chip de texto + bolha de áudio com player
+- [x] Activar batch mode; adicionar texto; gravar áudio; adicionar ao lote; enviar lote
+- [x] Confirmar: LLM recebe contexto completo ("mensagem 1\n[Áudio]: ...")
+- [x] Confirmar: bolhas do lead mostram: chip de texto + bolha de áudio com player
+- **Validado em:** 27/05/2026
 
 #### ✅ Cenário P13 — Lote com múltiplos áudios
-- [ ] Activar batch mode; gravar 2 áudios; adicionar ambos ao lote; enviar lote
-- [ ] Confirmar: LLM recebe "[Áudio]: trans1\n[Áudio]: trans2"
-- [ ] Confirmar: 2 bolhas de áudio com players individuais
+- [x] Activar batch mode; gravar 2 áudios; adicionar ambos ao lote; enviar lote
+- [x] Confirmar: LLM recebe "[Áudio]: trans1\n[Áudio]: trans2"
+- [x] Confirmar: 2 bolhas de áudio com players individuais
+- **Validado em:** 27/05/2026 — export mostra dois áudios consecutivos às 21:53 ("Gostaria de saber mais informações…" e "Quais são os preços e os valores?") enviados como lote; bot respondeu com base no contexto combinado (trigger "preço" detectado no segundo áudio)
 
 #### ✅ Cenário P14 — Toggle OFF com áudio em lote
 - [ ] Desligar `audio_transcription_enabled`; activar batch; gravar e adicionar ao lote; enviar
