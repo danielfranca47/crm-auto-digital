@@ -1,7 +1,7 @@
 # Etapa 8-6: Recebimento de Áudio e Transcrição para o LLM
 
 **Branch:** `etapa-8-6-audio-texto`  
-**Status:** Fase 4 implementada e validada em playground (27/05/2026)
+**Status:** Todas as fases do playground validadas (27/05/2026) — pendente: validação no fluxo real WhatsApp (Cenários 1–8)
 
 ---
 
@@ -435,9 +435,10 @@ Clicar "Enviar lote (N)"
 - **Validado em:** 27/05/2026 — export mostra dois áudios consecutivos às 21:53 ("Gostaria de saber mais informações…" e "Quais são os preços e os valores?") enviados como lote; bot respondeu com base no contexto combinado (trigger "preço" detectado no segundo áudio)
 
 #### ✅ Cenário P14 — Toggle OFF com áudio em lote
-- [ ] Desligar `audio_transcription_enabled`; activar batch; gravar e adicionar ao lote; enviar
-- [ ] Confirmar: bot responde com a `media_fallback_msg` configurada (igual ao fluxo individual)
-- [ ] Confirmar: bolha do lead mostra player sem transcrição
+- [x] Desligar `audio_transcription_enabled`; activar batch; gravar 2 áudios e adicionar ao lote; enviar
+- [x] Confirmar: bot responde com a `media_fallback_msg` configurada (igual ao fluxo individual)
+- [x] Confirmar: bolha do lead mostra players sem transcrição
+- **Validado em:** 27/05/2026 — dois áudios em lote com toggle OFF; bot respondeu "Não consegui abrir o que você enviou" com trace `audio_disabled`
 
 > **Bug corrigido em 27/05/2026 (commit `c0f7f44`):** no teste inicial, o batch com toggle OFF enviava
 > o texto `"[Áudio]: (transcrição desativada ou falhou)"` directamente ao LLM como mensagem normal,
