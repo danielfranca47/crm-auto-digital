@@ -734,18 +734,28 @@ Quando `suppress_llm_response=True` num bloco de gatilho e esse gatilho dispara:
 
 ### Playground
 
-Sem alterações. O playground processa `system_actions` de forma incondicional (independente de `next_action`). Com `message_text=""`, a mensagem da LLM simplesmente não aparece, e as mensagens automáticas continuam a surgir via `auto_messages`.
+O playground propaga `suppress_llm_response` no `PlaygroundChatResponse`. Quando `True`, o frontend omite o turno da LLM (incluindo a bolha vazia e o trace) e apresenta apenas os `autoItems` das ações automáticas.
+
+> **Nota (correcção aplicada):** A implementação inicial retornava `message_text=""` mas o frontend ainda gerava uma bolha vazia com o trace do motor. A correcção adicionou `suppress_llm_response` ao schema `PlaygroundChatResponse` (backend) e ao tipo `PlaygroundChatResponse` (frontend), e introduziu um branch `if (res.suppress_llm_response)` antes dos blocos `phase_trigger_fired` / ordem normal em `Playground.tsx`.
+
+### Ficheiros adicionais alterados (correcção playground)
+
+| Ficheiro | Mudança |
+|---|---|
+| `backend-crm/routes/playground.py` | `suppress_llm_response: bool = False` em `PlaygroundChatResponse`; campo incluído no return |
+| `frontend-crm/src/services/api.ts` | `suppress_llm_response?: boolean` em `PlaygroundChatResponse` |
+| `frontend-crm/src/pages/Playground.tsx` | Branch `if (res.suppress_llm_response)` nos dois handlers de resposta do bot (opener + handleSend) |
 
 ### Verificação Fase 11
 
 **suppress_llm_response — kw_trigger:**
-- [ ] Configurar `kw_trigger("preço") → mensagem("Preço: X") + suppress_llm=true`
-- [ ] No playground, enviar "qual é o preço?" → mensagem automática "Preço: X" aparece, sem resposta LLM
-- [ ] `next_action=ignore` visível no trace do playground
+- [x] Configurar `kw_trigger("preço") → mensagem("Preço: X") + suppress_llm=true`
+- [x] No playground, enviar "qual é o preço?" → mensagem automática "Preço: X" aparece, sem resposta LLM
+- [x] Bolha vazia da LLM não aparece (correcção aplicada — playground.py + Playground.tsx)
 
 **suppress_llm_response — intent_trigger:**
-- [ ] Configurar `intent_trigger("demonstrar hesitação") → mensagem("Usamos ROI") + suppress_llm=true`
-- [ ] Lead hesita → mensagem automática aparece, sem resposta LLM
+- [x] Configurar `intent_trigger("demonstrar hesitação") → mensagem + suppress_llm=true`
+- [x] Lead hesita → mensagem automática aparece, sem resposta LLM nem bolha vazia
 
 **Regressão:**
-- [ ] Bloco sem `suppress_llm_response` (ou `false`) → comportamento anterior inalterado
+- [x] Bloco sem `suppress_llm_response` (ou `false`) → comportamento anterior inalterado (terceiro turno no teste: "ainda tenho receio" → LLM respondeu normalmente)

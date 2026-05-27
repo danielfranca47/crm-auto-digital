@@ -166,7 +166,9 @@ export default function Playground() {
 
         const parts = res.message_parts?.length ? res.message_parts : [res.message_to_send];
         const autoItems0 = resolveAutoItems(res);
-        if (res.phase_trigger_fired && autoItems0.length) {
+        if (res.suppress_llm_response) {
+          if (autoItems0.length) await revealAutoMessages(autoItems0, setMessages, setLoading);
+        } else if (res.phase_trigger_fired && autoItems0.length) {
           await revealAutoMessages(autoItems0, setMessages, setLoading);
           setMessages((prev) => [...prev, buildBotMessage(parts[0], res, { isFirst: true, totalParts: parts.length })]);
           if (parts.length > 1) await revealExtraParts(parts.slice(1), setMessages, setLoading);
@@ -226,7 +228,10 @@ export default function Playground() {
         // Adiciona resposta do bot
         const parts = res.message_parts?.length ? res.message_parts : [res.message_to_send];
         const autoItems = resolveAutoItems(res);
-        if (res.phase_trigger_fired && autoItems.length) {
+        if (res.suppress_llm_response) {
+          // LLM suprimida pelo gatilho: apenas mensagens automáticas, sem turno da LLM
+          if (autoItems.length) await revealAutoMessages(autoItems, setMessages, setLoading);
+        } else if (res.phase_trigger_fired && autoItems.length) {
           // phase_trigger: mensagens automáticas PRIMEIRO, depois LLM
           await revealAutoMessages(autoItems, setMessages, setLoading);
           setMessages((prev) => [...prev, buildBotMessage(parts[0], res, { isFirst: true, totalParts: parts.length })]);

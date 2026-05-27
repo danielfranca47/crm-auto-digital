@@ -158,6 +158,7 @@ class PlaygroundChatResponse(BaseModel):
     auto_items: List[dict] = Field(default_factory=list)     # Sequência ordenada: {type:"text",content:...} | {type:"media",...}
     phase_advances: List[str] = Field(default_factory=list)  # Labels de fases avançadas por blocos 'avancar_fase'
     phase_trigger_fired: bool = False                         # True quando phase_trigger disparou → frontend inverte ordem (auto antes do LLM)
+    suppress_llm_response: bool = False                       # True quando trigger disparou com flag — frontend omite turno da LLM
 
 
 # ---------------------------------------------------------------------------
@@ -582,6 +583,7 @@ def playground_chat(
         auto_items=auto_items,
         phase_advances=phase_advances,
         phase_trigger_fired=phase_trigger_fired,
+        suppress_llm_response=bool(decision.get("suppress_llm_response")),
     )
 
 

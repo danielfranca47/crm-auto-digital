@@ -180,6 +180,7 @@ export type PlaygroundChatResponse = {
   auto_items?: PlaygroundAutoItem[];
   phase_advances?: string[];
   phase_trigger_fired?: boolean;
+  suppress_llm_response?: boolean;
 };
 
 // ── Playground FeedbackAssist ────────────────────────────────────────────────
