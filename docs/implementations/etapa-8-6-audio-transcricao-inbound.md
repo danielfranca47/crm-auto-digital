@@ -1,7 +1,7 @@
 # Etapa 8-6: Recebimento de Áudio e Transcrição para o LLM
 
 **Branch:** `etapa-8-6-audio-texto`  
-**Status:** Em implementação — Fase 3 (Transcrição visível) em andamento
+**Status:** Em implementação — Fase 4 (Áudio no modo lote) em planeamento
 
 ---
 
@@ -302,17 +302,135 @@ PlaygroundFeedback.tsx exportMarkdown: para isAudioMessage → escreve 🎙️ [
 ### Checks de Validação — Fase 3
 
 #### ✅ Cenário P7 — Transcrição visível na bolha
-- [ ] Ligar `audio_transcription_enabled`
-- [ ] Gravar e enviar áudio no playground
-- [ ] Confirmar: abaixo do player aparece o texto transcrito em itálico
-- [ ] Confirmar: bot responde ao conteúdo transcrito
+- [x] Ligar `audio_transcription_enabled`
+- [x] Gravar e enviar áudio no playground
+- [x] Confirmar: abaixo do player aparece o texto transcrito em itálico
+- [x] Confirmar: bot responde ao conteúdo transcrito
+- **Validado em:** 27/05/2026 — transcrição "Oi, alô, olá, isso aqui é uma mensagem de teste." visível sob o player
 
 #### ✅ Cenário P8 — Transcrição no export
-- [ ] Após sessão com áudio transcrito, exportar Markdown
-- [ ] Confirmar: entrada do lead mostra `🎙️ [Áudio gravado]` + `**Transcrição:** "..."`
-- [ ] Confirmar: entradas de texto continuam sem alteração (sem regressão)
+- [x] Após sessão com áudio transcrito, exportar Markdown
+- [x] Confirmar: entrada do lead mostra `🎙️ [Áudio gravado]` + `**Transcrição:** "..."`
+- [x] Confirmar: entradas de texto continuam sem alteração (sem regressão)
+- **Validado em:** 27/05/2026 — export gerado com transcrição completa incluída
 
 #### ✅ Cenário P9 — Áudio sem transcrição (toggle OFF)
 - [ ] Desligar toggle; gravar e enviar áudio
 - [ ] Confirmar: bolha do lead mostra player sem texto transcrito
 - [ ] Confirmar: export mostra `🎙️ [Áudio gravado]` sem linha de transcrição
+
+---
+
+## Nota: Delay de Resposta e Áudio
+
+**Questão levantada em 27/05/2026:** o delay configurado na Camada 3 do AI Profile (Secção 0 — Humanização: `reply_delay_min_seconds`, `reply_delay_max_seconds`, `first_reply_delay_*`) aplica-se a mensagens de áudio no playground?
+
+**Resposta:** Sim. O delay é calculado em `backend-crm/services/humanization.py → compute_reply_delay()` e é chamado em `routes/playground.py` APÓS a transcrição do áudio e a inserção da mensagem no histórico. O valor `simulated_delay_seconds` é devolvido na resposta e mostrado como badge de humanização na bolha do bot — o comportamento é idêntico ao fluxo de texto.
+
+---
+
+## Fase 4 — Áudio no Modo Lote (Batch)
+
+### Motivação
+
+Testado em 27/05/2026: o modo lote do playground (botão `Layers`) permite adicionar múltiplas mensagens de texto consecutivas antes de o bot responder, simulando a absorção de mensagens (`multi_message_buffer`). No entanto, áudios gravados não podem ser adicionados ao lote — o microfone permanece activo mas `pendingBatch: string[]` só aceita texto. O utilizador não consegue simular um lead que envia múltiplos áudios (ou mistura de texto + áudio) antes da resposta do bot.
+
+### Problema Técnico Identificado
+
+**Frontend (`PlaygroundChat.tsx`):**
+- `pendingBatch: string[]` — apenas texto
+- `pendingAudio: { blob: Blob; objectUrl: string } | null` — estado separado, sem ligação ao lote
+- Quando em batch mode + `pendingAudio` presente: a UI mostra o preview do áudio com botão "Enviar" individual — não há opção "Adicionar ao lote"
+- `handleSendBatch()` chama `onSend(pendingBatch.join("\n"))` — não suporta blobs
+
+**Backend (`routes/playground.py`):**
+- `PlaygroundChatRequest` aceita um único `audio_filename` opcional
+- Para batch misto (texto + múltiplos áudios), seria necessário ou múltiplas chamadas sequenciais (perde o contexto de absorção) ou um novo endpoint de transcrição isolada
+
+### Abordagem
+
+#### Novo endpoint de transcrição
+
+```
+POST /api/playground/audio/{filename}/transcribe
+  Body: { ai_profile_id: int }
+  Response: { transcription: str | null, audio_enabled: bool }
+```
+
+Reutiliza `transcribe_audio_from_path()` e respeita o toggle `audio_transcription_enabled`. Serve apenas para obter o texto — não chama o LLM.
+
+#### Mudança de tipo no batch (frontend)
+
+```typescript
+type BatchItem =
+  | { type: "text"; content: string }
+  | { type: "audio"; blob: Blob; objectUrl: string; label: string };
+```
+
+`pendingBatch` passa de `string[]` para `BatchItem[]`.
+
+#### Fluxo de "Adicionar áudio ao lote"
+
+```
+Batch mode activo + gravação terminada → pendingAudio disponível
+→ Mostrar botão "Adicionar ao lote" (em vez de apenas "Enviar")
+→ Clicar → BatchItem { type: "audio", blob, objectUrl, label: "Áudio Xseg" } adicionado
+→ pendingAudio limpo → nova gravação disponível imediatamente
+→ Fila do lote mostra chips: [texto] [🎙 Áudio] [texto] ...
+```
+
+#### Fluxo de "Enviar lote" com áudio
+
+```
+Clicar "Enviar lote (N)"
+→ Para cada BatchItem do tipo "audio":
+    1. POST /api/playground/upload-audio → { filename, audio_url }
+    2. POST /api/playground/audio/{filename}/transcribe → { transcription }
+    3. Converte para texto: "[Áudio]: {transcription}" ou "[Áudio]: (não transcrito)"
+→ Combina todos os itens (text + áudio transcrito) com "\n" → combined_message
+→ Adiciona bolhas do lead para cada item (texto simples ou bolha com player + transcrição)
+→ POST /api/playground/chat { message: combined_message, ... } — uma única chamada ao LLM
+→ Bot responde ao contexto completo de todos os itens
+```
+
+### Arquivos a modificar (Fase 4)
+
+| Arquivo | O que muda |
+|---|---|
+| `backend-crm/routes/playground.py` | Novo endpoint `POST /api/playground/audio/{filename}/transcribe` |
+| `frontend-crm/src/services/api.ts` | Nova função `transcribeAudio(filename, aiProfileId)` |
+| `frontend-crm/src/components/playground/PlaygroundChat.tsx` | `BatchItem` type; `pendingBatch: BatchItem[]`; botão "Adicionar ao lote" para áudio; chips de áudio na fila; prop `onSendBatch(items: BatchItem[])` |
+| `frontend-crm/src/pages/Playground.tsx` | `handleSendBatch(items)` — upload + transcrição + chat único; bolhas do lead para cada item |
+
+### Invariantes a preservar
+
+- **Batch de texto puro:** comportamento inalterado (`handleSendBatch` com items todos `text` deve produzir o mesmo resultado que hoje)
+- **Áudio individual (fora de batch mode):** inalterado — `onSendAudio` continua a existir
+- **Toggle `audio_transcription_enabled` OFF:** áudio no lote é transcrito como `"[Áudio]: (transcrição desativada)"` — o bot recebe o contexto mas sem conteúdo real; paridade com o comportamento individual
+- **Export de markdown:** bolhas de áudio em lote devem exportar correctamente (player + transcrição se disponível)
+
+### Checks de Validação — Fase 4
+
+#### ✅ Cenário P10 — Lote de texto puro (regressão)
+- [ ] Activar batch mode; adicionar 2 mensagens de texto; enviar lote
+- [ ] Confirmar: comportamento idêntico ao anterior (sem regressão)
+
+#### ✅ Cenário P11 — Lote com áudio único
+- [ ] Activar batch mode; gravar áudio; clicar "Adicionar ao lote"; enviar lote
+- [ ] Confirmar: bot responde ao conteúdo transcrito
+- [ ] Confirmar: bolha do lead mostra player de áudio com transcrição
+
+#### ✅ Cenário P12 — Lote misto (texto + áudio)
+- [ ] Activar batch mode; adicionar texto "mensagem 1"; gravar áudio; adicionar ao lote; enviar lote
+- [ ] Confirmar: LLM recebe contexto completo ("mensagem 1\n[Áudio]: ...")
+- [ ] Confirmar: bolhas do lead mostram: chip de texto + bolha de áudio com player
+
+#### ✅ Cenário P13 — Lote com múltiplos áudios
+- [ ] Activar batch mode; gravar 2 áudios; adicionar ambos ao lote; enviar lote
+- [ ] Confirmar: LLM recebe "[Áudio]: trans1\n[Áudio]: trans2"
+- [ ] Confirmar: 2 bolhas de áudio com players individuais
+
+#### ✅ Cenário P14 — Toggle OFF com áudio em lote
+- [ ] Desligar `audio_transcription_enabled`; activar batch; gravar e adicionar ao lote; enviar
+- [ ] Confirmar: LLM recebe "[Áudio]: (transcrição desativada)" para cada áudio
+- [ ] Confirmar: bolha do lead mostra player sem transcrição
