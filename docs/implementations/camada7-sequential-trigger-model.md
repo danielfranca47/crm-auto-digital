@@ -102,8 +102,7 @@ Requer mudança no modelo de dados (`branch_yes`/`branch_no` passam a ser listas
 > _Preencher após testar no playground ou com lead real._
 
 **Fase 1 + 2 (backend sequencial + frontend visual) — commit `50f38f9`:**
-- [ ] Testado
-- Resultado: _(preencher)_
+- [x] Testado — confirmado em testes successivos das Fases 7–9
 
 **Comportamento esperado ao testar:**
 1. Configurar fase Apresentação com: `[phase_trigger com orientação]` → `[mensagem fixa]` → `[midia áudio]`
@@ -112,7 +111,7 @@ Requer mudança no modelo de dados (`branch_yes`/`branch_no` passam a ser listas
 4. Verificar agrupamento visual no editor da Camada 7
 
 **Notas gerais / comportamentos inesperados observados:**
-_(preencher)_
+- Bugs adicionais encontrados ao longo dos testes (ordem media/texto, re-disparo do phase_trigger) — corrigidos nas Fases 7–9.
 
 ---
 
@@ -497,9 +496,9 @@ Quando `phase_trigger` dispara → adiciona `{type: "mark_phase_triggered", phas
 | `frontend-crm/src/pages/Playground.tsx` | `revealAutoMessages` com suporte a media; `resolveAutoItems()`; call sites actualizadas |
 
 ### Verificação Fase 8
-- [ ] ~~Playground: transition qual → apres → confirmar ordem correcta: LLM → "Olá..." → 🎵 áudio → "Gostou?"~~ → **ordem esperada estava errada** — ver Fase 9
-- [ ] Enviar 2ª mensagem em apresentação → `auto_items` vazio (flag `["p2"]` impede re-disparo)
-- [ ] Lead avança para agendamento e volta para apresentação → trigger NÃO re-dispara
+- [x] ~~Playground: transition qual → apres → confirmar ordem correcta: LLM → "Olá..." → 🎵 áudio → "Gostou?"~~ → **ordem esperada estava errada** — ver Fase 9
+- [x] Enviar 2ª mensagem em apresentação → `auto_items` vazio (flag `["p2"]` impede re-disparo) — **confirmado 27/05/2026**: após entrar em `apresentation`, as mensagens seguintes do lead não repetiram os auto-itens
+- [x] Lead avança para agendamento e volta para apresentação → trigger NÃO re-dispara — **confirmado 27/05/2026**: lead foi para `agendamento`, perguntou sobre CRM (roteado de volta a `apresentation`), auto-mensagens não repetiram
 - [ ] WhatsApp real: media e mensagens enviados em jobs separados na ordem correcta
 - [ ] Verificar coluna `phases_triggered` populada no DB após primeira execução
 
@@ -614,11 +613,11 @@ No WhatsApp real, a mensagem LLM era enviada por `backend-executors` **directame
 
 ### Verificação Fase 9
 
-Configuração de teste: Fase Apresentação com `PHASE TRIGGER → MENSAGEM "vou te enviar o áudio" → MIDIA [áudio] → MENSAGEM "Gostou?"`
+Configuração de teste: Fase Apresentação com `PHASE TRIGGER → MENSAGEM "Olá, aqui estão os detalhes" → MIDIA [myaudio] → MENSAGEM "Gostou?"` — agente Sofia / AutoSell (`sdr_scheduler`), lead 146, playground 27/05/2026.
 
-- [ ] Playground: transition qual → apres → ordem correcta: "vou te enviar o áudio" (violeta) → 🎵 (violeta) → "Gostou?" (violeta) → resposta LLM (normal)
-- [ ] Resposta do LLM após o trigger complementa sem repetir o que foi enviado automaticamente
-- [ ] 2ª mensagem em apresentação: `auto_items` vazio, apenas LLM responde normalmente
+- [x] Playground: transition qual → apres → ordem correcta: "Olá, aqui estão os detalhes" (violeta) → 🎵 myaudio (violeta) → "Gostou?" (violeta) → resposta LLM (normal) — **confirmado 27/05/2026**
+- [x] Resposta do LLM após o trigger complementa sem repetir o que foi enviado automaticamente — **confirmado 27/05/2026**: LLM disse "Entendi que você está lidando com desafios na parte de tabela de preços" + proposta de conversa, sem repetir o material enviado
+- [x] 2ª mensagem em apresentação: `auto_items` vazio, apenas LLM responde normalmente — **confirmado 27/05/2026**: lead perguntou sobre CRM depois de ir a `agendamento` e voltar a `apresentation`; apenas resposta LLM, sem auto-mensagens
 - [ ] `kw_trigger`/`intent_trigger` → ordem mantida: LLM primeiro, depois auto (sem regressão)
 
 ---
