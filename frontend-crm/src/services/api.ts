@@ -1249,6 +1249,7 @@ export const api = {
         warming_session_preview:pack.warming_session_preview?? DEFAULT_AGENT_CONFIG.warming_session_preview,
 
         // Camada 3
+        audio_transcription_enabled: (profile as any)?.audio_transcription_enabled ?? false,
         media_fallback:     pack.media_fallback     ?? DEFAULT_AGENT_CONFIG.media_fallback,
         media_fallback_msg: pack.media_fallback_msg ?? DEFAULT_AGENT_CONFIG.media_fallback_msg,
         opt_out_keywords:   pack.opt_out_keywords   ?? DEFAULT_AGENT_CONFIG.opt_out_keywords,
@@ -1422,6 +1423,7 @@ export const api = {
         reply_delay_min_seconds:       config.reply_delay_min_seconds,
         reply_delay_max_seconds:       config.reply_delay_max_seconds,
         multi_message_buffer_seconds:  config.multi_message_buffer_seconds,
+        audio_transcription_enabled:   config.audio_transcription_enabled,
         availability_mode:             config.availability_mode,
         availability_schedule:         config.availability_schedule,
         offer_pack,

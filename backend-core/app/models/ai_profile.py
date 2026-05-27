@@ -66,6 +66,7 @@ class AIProfile(Base):
     multi_message_buffer_seconds = Column(Integer, nullable=True, server_default="8")
     custom_variables = Column(JSON, nullable=True)
     enabled_extensions = Column(JSON, nullable=True)
+    audio_transcription_enabled = Column(Boolean, default=False, nullable=False, server_default="0")
     sales_flow = Column(JSON, nullable=True)
     generated_prompt_parts = Column(JSON, nullable=True)
     prompt_parts_generated_at = Column(DateTime, nullable=True)

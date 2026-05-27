@@ -11,8 +11,9 @@ from typing import Any, Dict, Optional
 from fastapi import HTTPException
 from pydantic import BaseModel, ConfigDict, Field
 
-from core_client import fetch_core_whatsapp_connection_resolve
+from core_client import fetch_core_ai_profile_resolve, fetch_core_whatsapp_connection_resolve
 from database import get_connection
+from services.audio_transcription import is_audio_type, transcribe_audio_from_url
 from services.jobs_service import (
     TYPE_WHATSAPP_INBOUND,
     create_job,
@@ -87,6 +88,8 @@ class InboundWebhookPayload(BaseModel):
     event_id: Optional[str] = Field(None, alias="event_id")
     timestamp: Optional[Any] = Field(None, alias="timestamp")
     provider: Optional[str] = None
+    message_type: Optional[str] = None
+    media_url: Optional[str] = None
 
     model_config = ConfigDict(extra="allow")
 
@@ -181,13 +184,76 @@ def build_job_payload(
     }
 
 
+def _apply_media_fallback(
+    user_id: int,
+    instance_id: str,
+    ai_profile: Dict[str, Any],
+    phone: str,
+    external_event_id: str,
+) -> Dict[str, Any]:
+    """
+    Aplica o comportamento configurado em offer_pack.media_fallback quando o lead
+    envia uma mídia não processável (áudio sem transcrição, vídeo, figurinha, etc.).
+    """
+    offer_pack = ai_profile.get("offer_pack") or {}
+    if isinstance(offer_pack, str):
+        import json as _json
+        try:
+            offer_pack = _json.loads(offer_pack) or {}
+        except Exception:
+            offer_pack = {}
+
+    behavior = (offer_pack.get("media_fallback") or "ignorar").lower()
+    msg = offer_pack.get("media_fallback_msg") or ""
+
+    logger.info(
+        "[media_fallback] user_id=%s behavior=%s instance=%s",
+        user_id, behavior, instance_id,
+    )
+
+    if behavior == "ignorar":
+        return {"status": "ignored", "reason": "media_fallback_ignore"}
+
+    # "continuar" ou "pausar": enviar mensagem ao lead
+    if msg:
+        from services.jobs_service import TYPE_WHATSAPP_SEND
+        job_payload = {
+            "user_id": user_id,
+            "instance_id": instance_id,
+            "phone": phone,
+            "message": msg,
+            "message_type": "text",
+        }
+        try:
+            create_job(
+                job_type=TYPE_WHATSAPP_SEND,
+                payload=job_payload,
+                user_id=user_id,
+            )
+        except Exception as _exc:
+            logger.error("[media_fallback] falha ao criar job de resposta: %s", _exc)
+
+    if behavior == "pausar":
+        with get_connection() as _conn:
+            _conn.execute(
+                "UPDATE leads SET bot_disabled = 1 WHERE phone = ? AND user_id = ?",
+                (phone, user_id),
+            )
+            _conn.commit()
+
+    return {"status": "ok", "reason": f"media_fallback_{behavior}"}
+
+
 def handle_inbound(payload: Dict[str, Any]) -> Dict[str, Any]:
     if payload.get("is_group", False):
         return {"status": "ignored", "reason": "group_message"}
 
     parsed = InboundWebhookPayload(**payload)
     message_text = parsed.resolved_message_text()
-    if not message_text:
+    incoming_audio = is_audio_type(parsed.message_type)
+
+    # Texto vazio só é permitido para áudio (será transcrito após resolução do usuário)
+    if not message_text and not incoming_audio:
         raise HTTPException(status_code=400, detail="message_text obrigatório")
 
     external_event_id = parsed.resolved_event_id()
@@ -222,6 +288,52 @@ def handle_inbound(payload: Dict[str, Any]) -> Dict[str, Any]:
 
         provider = connection.get("provider") or parsed.provider or "uazapi"
         user_id = int(connection["user_id"])
+
+    # ── Tratamento de áudio e mídia não-texto ──────────────────────────────────
+    _AUDIO_TYPES = {"audio", "ptt", "myaudio", "audiomessage", "pttmessage"}
+    _INVALID_MEDIA_TYPES = {"video", "image", "sticker", "reaction", "document"}
+
+    if incoming_audio or (parsed.message_type and parsed.message_type.lower() in _INVALID_MEDIA_TYPES):
+        _media_type = (parsed.message_type or "").lower()
+        _is_audio = _media_type in _AUDIO_TYPES or incoming_audio
+
+        if _is_audio:
+            # Buscar AI Profile para verificar flag de transcrição
+            _ai_profile_media: Dict[str, Any] = {}
+            try:
+                _ai_profile_media = fetch_core_ai_profile_resolve(user_id) or {}
+            except Exception as _exc:
+                logger.warning("[inbound_audio] falha ao buscar ai_profile user_id=%s: %s", user_id, _exc)
+
+            if _ai_profile_media.get("audio_transcription_enabled"):
+                # Transcrever áudio e usar como message_text
+                _transcription = transcribe_audio_from_url(parsed.media_url or "")
+                if _transcription:
+                    message_text = f"[Áudio]: {_transcription}"
+                    logger.info(
+                        "[inbound_audio] transcrição concluída user_id=%s chars=%s",
+                        user_id, len(_transcription),
+                    )
+                else:
+                    logger.warning(
+                        "[inbound_audio] transcrição falhou user_id=%s media_url=%s — aplicando media_fallback",
+                        user_id, parsed.media_url,
+                    )
+                    return _apply_media_fallback(user_id, parsed.instance_id, _ai_profile_media, phone_norm, external_event_id)
+            else:
+                return _apply_media_fallback(user_id, parsed.instance_id, _ai_profile_media, phone_norm, external_event_id)
+        else:
+            # Vídeo, figurinha, reação, documento
+            _ai_profile_media = {}
+            try:
+                _ai_profile_media = fetch_core_ai_profile_resolve(user_id) or {}
+            except Exception as _exc:
+                logger.warning("[inbound_media] falha ao buscar ai_profile user_id=%s: %s", user_id, _exc)
+            return _apply_media_fallback(user_id, parsed.instance_id, _ai_profile_media, phone_norm, external_event_id)
+
+    if not message_text:
+        raise HTTPException(status_code=400, detail="message_text vazio após processamento de mídia")
+    # ──────────────────────────────────────────────────────────────────────────
 
     received_at = parsed.timestamp or datetime.utcnow().isoformat()
     received_iso = str(received_at).replace(" ", "T")

@@ -197,6 +197,7 @@ class AIProfileBase(BaseModel):
     reply_delay_min_seconds: Optional[int] = 0
     reply_delay_max_seconds: Optional[int] = 0
     multi_message_buffer_seconds: Optional[int] = 8
+    audio_transcription_enabled: bool = False
     sales_flow: Optional[dict] = None
 
 
@@ -256,6 +257,7 @@ class AIProfileUpdate(BaseModel):
     reply_delay_min_seconds: Optional[int] = None
     reply_delay_max_seconds: Optional[int] = None
     multi_message_buffer_seconds: Optional[int] = None
+    audio_transcription_enabled: Optional[bool] = None
     sales_flow: Optional[dict] = None
 
 

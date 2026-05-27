@@ -252,15 +252,25 @@ def whatsapp_uazapi_webhook(
         )
         return {"status": "ignored", "reason": "group_message"}
 
-    if message_type and message_type != "text":
-        return {"status": "ignored", "reason": "not_text"}
-    if not message_text:
+    # Texto vazio só é permitido para mensagens de áudio (serão transcritas no handler)
+    normalized_type = _normalize_spy_message_type(message_type)
+    if not message_text and normalized_type != "audio":
         return {"status": "ignored", "reason": "missing_text"}
     if not instance_id or not sender or not message_id:
         detail = "Payload Uazapi incompleto"
         if not sender:
             detail = "Payload Uazapi incompleto (sender inválido)"
         raise HTTPException(status_code=400, detail=detail)
+
+    # Extrai URL de mídia do payload (necessário para áudio)
+    media_url = (
+        data.get("fileURL")
+        or data.get("mediaUrl")
+        or data.get("media_url")
+        or message.get("fileURL")
+        or message.get("mediaUrl")
+        or message.get("media_url")
+    )
 
     inbound_payload = {
         "instance_id": instance_id,
@@ -270,6 +280,8 @@ def whatsapp_uazapi_webhook(
         "timestamp": message.get("messageTimestamp") or data.get("messageTimestamp"),
         "provider": "uazapi",
         "is_group": False,
+        "message_type": normalized_type,
+        "media_url": media_url,
     }
 
     return handle_inbound(inbound_payload)

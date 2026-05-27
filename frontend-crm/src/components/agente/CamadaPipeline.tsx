@@ -162,7 +162,7 @@ function DrawerMidia({ config, onSave, onClose }: {
   const [msg, setMsg] = useState(config.media_fallback_msg);
   const variables = buildVariableList(config.custom_variables || {});
   return (
-    <DrawerBase title="Mídia inválida" sub="O que fazer quando o lead envia áudio, vídeo, figurinha ou reação" onClose={onClose} onSave={() => onSave({ media_fallback: fallback, media_fallback_msg: msg })}>
+    <DrawerBase title="Mídia inválida" sub="O que fazer quando o lead envia vídeo, figurinha, reação ou áudio sem transcrição ativa" onClose={onClose} onSave={() => onSave({ media_fallback: fallback, media_fallback_msg: msg })}>
       <div className="o-field">
         <label className="o-field-label">Comportamento</label>
         <select className="o-select" value={fallback} onChange={e => setFallback(e.target.value)}>
@@ -528,11 +528,28 @@ export function CamadaPipeline({ config, onUpdate, phoneNumber }: CamadaPipeline
         )}
       </div>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 14, marginBottom: 24 }}>
+        <div className="o-edit-card" style={{ display: 'flex', flexDirection: 'column', justifyContent: 'space-between', gap: 10 }}>
+          <div>
+            <div className="font-mono-orion" style={{ fontSize: 8, letterSpacing: 2, textTransform: 'uppercase', color: 'var(--o-dim)', marginBottom: 6 }}>Receber áudio</div>
+            <div style={{ fontSize: 13, color: 'var(--o-text)', marginBottom: 4 }}>
+              {config.audio_transcription_enabled ? 'Transcrição ativa' : 'Desativado'}
+            </div>
+            <div style={{ fontSize: 11, color: 'var(--o-sub)', fontWeight: 300, marginBottom: 8 }}>
+              Transcreve o áudio do lead via IA e responde normalmente. Se desativado, segue Mídia inválida.
+            </div>
+          </div>
+          <ToggleRow
+            label="Ativar transcrição de áudio"
+            desc="Usa Whisper (OpenAI) — requer OPENAI_API_KEY no servidor"
+            value={config.audio_transcription_enabled ?? false}
+            onChange={v => onUpdate({ audio_transcription_enabled: v })}
+          />
+        </div>
         <EditCard
-          label="Mídia inválida" sub="Áudio, vídeo, figurinha ou reação"
+          label="Mídia inválida" sub="Vídeo, figurinha, reação e áudio sem transcrição"
           value={MEDIA_FALLBACK_LABELS[config.media_fallback] || config.media_fallback || '—'}
           onClick={() => setDrawer('midia')} status={mediaConfigured ? 'ok' : 'warn'}
-          help="O que fazer quando o lead envia mídia não processável (áudio, vídeo, figurinha, reação): continuar o fluxo normalmente, pausar o bot ou ignorar silenciosamente."
+          help="O que fazer quando o lead envia mídia não processável. Áudio com 'Receber áudio' ativo é transcrito e não cai neste fluxo."
         />
         <EditCard
           label="Opt-out por palavra-chave" sub="STOP · PARAR · SAIR · CANCELAR"

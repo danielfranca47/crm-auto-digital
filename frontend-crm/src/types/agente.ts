@@ -267,6 +267,7 @@ export interface AgentConfig {
   qualification_required_fields: string[] | null;
 
   // ── Camada 3 — Pipeline ──────────────────────────────────
+  audio_transcription_enabled: boolean;
   media_fallback: string;
   media_fallback_msg: string;
   opt_out_keywords: string[];
@@ -363,6 +364,7 @@ export const DEFAULT_AGENT_CONFIG: AgentConfig = {
   qualification_fields: [],
   qualification_required_fields: null,
 
+  audio_transcription_enabled: false,
   media_fallback: 'continuar',
   media_fallback_msg: 'Oi! Não consegui abrir o que você enviou. Pode me responder em texto? Assim consigo te ajudar melhor 😊',
   opt_out_keywords: ['PARAR', 'STOP', 'SAIR', 'CANCELAR', 'NÃO QUERO'],
