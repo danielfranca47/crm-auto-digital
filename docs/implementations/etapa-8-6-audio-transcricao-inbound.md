@@ -1,7 +1,7 @@
 # Etapa 8-6: Recebimento de Áudio e Transcrição para o LLM
 
 **Branch:** `etapa-8-6-audio-texto`  
-**Status:** Todas as fases do playground validadas (27/05/2026) — pendente: validação no fluxo real WhatsApp (Cenários 1–8)
+**Status:** Todos os cenários do playground validados (28/05/2026) — pendente: validação no fluxo real WhatsApp (Cenários 1–8)
 
 ---
 
@@ -234,14 +234,17 @@ Nenhum novo arquivo — tudo integrado nos existentes.
 - **Validado em:** 27/05/2026 — playground respondendo corretamente ao conteúdo transcrito
 
 #### ✅ Cenário P2 — Toggle desligado, media_fallback = "continuar"
-- [ ] Desligar toggle; configurar Mídia inválida como "Responder e continuar"
-- [ ] Gravar e enviar áudio no playground
-- [ ] Confirmar: bot responde com a `media_fallback_msg` configurada
+- [x] Desligar toggle; configurar Mídia inválida como "Responder e continuar"
+- [x] Gravar e enviar áudio no playground
+- [x] Confirmar: bot responde com a `media_fallback_msg` configurada
+- **Validado em:** 28/05/2026 — bot respondeu com a mensagem configurada; trace `audio_disabled`
 
 #### ✅ Cenário P3 — Toggle desligado, media_fallback = "ignorar"
-- [ ] Desligar toggle; configurar Mídia inválida como "Ignorar"
-- [ ] Gravar e enviar áudio
-- [ ] Confirmar: bot responde com mensagem informando que áudio não é aceito
+- [x] Desligar toggle; configurar Mídia inválida como "Ignorar"
+- [x] Gravar e enviar áudio
+- [x] Confirmar: playground exibe mensagem indicando que áudio não é aceito
+- **Validado em:** 28/05/2026 — playground respondeu "Áudio não aceito — ative 'Receber áudio' no AI Profile para testar esta funcionalidade." com trace `audio_disabled`
+- **Nota:** essa mensagem é exclusiva do playground. No WhatsApp real com `media_fallback = "ignorar"`, o backend descarta o áudio silenciosamente — nenhuma mensagem é enviada ao lead.
 
 #### ✅ Cenário P4 — Regressão: marcador `{áudio}` ainda funciona
 - [x] Digitar `{áudio}` e enviar
@@ -256,8 +259,9 @@ Nenhum novo arquivo — tudo integrado nos existentes.
 - **Validado em:** 27/05/2026 — "olá, me chamo Daniel" + "tenho interesse na vossa plataforma" enviadas em lote; bot respondeu em modo qualification absorvendo as duas mensagens
 
 #### ✅ Cenário P6 — Permissão de microfone negada
-- [ ] Bloquear microfone no browser → clicar Mic
-- [ ] Confirmar: erro é tratado graciosamente (toast ou mensagem), UI não quebra
+- [x] Bloquear microfone no browser → clicar Mic
+- [x] Confirmar: erro é tratado graciosamente (toast ou mensagem), UI não quebra
+- **Validado em:** 28/05/2026 — alerta "Permissão de microfone negada. Verifique as configurações do browser." exibido; UI estável
 
 ---
 
@@ -319,9 +323,10 @@ PlaygroundFeedback.tsx exportMarkdown: para isAudioMessage → escreve 🎙️ [
 - **Validado em:** 27/05/2026 — export gerado com transcrição completa incluída
 
 #### ✅ Cenário P9 — Áudio sem transcrição (toggle OFF)
-- [ ] Desligar toggle; gravar e enviar áudio
-- [ ] Confirmar: bolha do lead mostra player sem texto transcrito
-- [ ] Confirmar: export mostra `🎙️ [Áudio gravado]` sem linha de transcrição
+- [x] Desligar toggle; gravar e enviar áudio
+- [x] Confirmar: bolha do lead mostra player sem texto transcrito
+- [x] Confirmar: export mostra `🎙️ [Áudio gravado]` sem linha de transcrição
+- **Validado em:** 28/05/2026 — UI sem texto de transcrição abaixo do player; export mostra `🎙️ _[Áudio gravado]_` sem linha `**Transcrição:**`
 
 ---
 
