@@ -696,11 +696,11 @@ O `no_reply_trigger` é **actualmente um placeholder de UI** — não é avaliad
 - [ ] `phases_triggered` populado no DB após a primeira execução real
 
 **fire_once — kw_trigger:**
-- [ ] Configurar bloco `kw_trigger` com keyword "preço" e `fire_once=True`
-- [ ] Enviar "qual é o preço?" → bloco dispara, `triggers_fired` regista o block_id
-- [ ] Enviar "preço" novamente → bloco NÃO dispara
+- [x] Configurar bloco `kw_trigger` com keyword "preço" e `fire_once=True`
+- [x] Enviar "qual é o preço?" → bloco dispara, `triggers_fired` regista o block_id
+- [x] Enviar "preço" novamente → bloco NÃO dispara
 
 **fire_once — intent_trigger:**
-- [ ] Configurar bloco `intent_trigger "demonstrar hesitação"` com `fire_once=True`
-- [ ] Lead expressa hesitação → bloco dispara uma vez
-- [ ] Lead expressa hesitação novamente → NÃO dispara
+- [x] Configurar bloco `intent_trigger "demonstrar hesitação"` com `fire_once=True`
+- [x] Lead expressa hesitação → bloco dispara uma vez
+- [x] Lead expressa hesitação novamente → NÃO dispara
