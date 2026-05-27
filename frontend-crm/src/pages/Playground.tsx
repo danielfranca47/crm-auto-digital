@@ -335,7 +335,13 @@ export default function Playground() {
       setLoading(true);
       try {
         // 1. Resolve cada item: texto mantém-se, áudio é uploaded + transcrito
-        const resolved: { text: string; audioUrl?: string; transcription?: string }[] = [];
+        const resolved: {
+          text: string;
+          audioUrl?: string;
+          transcription?: string;
+          filename?: string;
+          audioEnabled?: boolean;
+        }[] = [];
 
         for (const item of items) {
           if (item.type === "text") {
@@ -343,11 +349,17 @@ export default function Playground() {
           } else {
             const { filename, audio_url } = await api.playground.uploadAudio(item.blob);
             const audioPlayerUrl = `${API_BASE}${audio_url.replace(/^\/api/, "")}`;
-            const { transcription } = await api.playground.transcribeAudio(filename, session.aiProfileId);
+            const { transcription, audio_enabled } = await api.playground.transcribeAudio(filename, session.aiProfileId);
             const effectiveText = transcription
               ? `[Áudio]: ${transcription}`
               : "[Áudio]: (transcrição desativada ou falhou)";
-            resolved.push({ text: effectiveText, audioUrl: audioPlayerUrl, transcription: transcription ?? undefined });
+            resolved.push({
+              text: effectiveText,
+              audioUrl: audioPlayerUrl,
+              transcription: transcription ?? undefined,
+              filename,
+              audioEnabled: audio_enabled,
+            });
           }
         }
 
@@ -364,15 +376,25 @@ export default function Playground() {
         }));
         setMessages((prev) => [...prev, ...leadMessages]);
 
-        // 3. Combina em mensagem única para o LLM
-        const combined = resolved.map((r) => r.text).join("\n");
+        // 3. Se o batch contém áudio com toggle OFF → usar path de media_fallback
+        //    (igual ao fluxo individual), caso contrário combinar em texto para o LLM
+        const firstDisabledAudio = resolved.find((r) => r.audioUrl && r.audioEnabled === false);
 
-        const res = await api.playground.chat({
-          ai_profile_id: session.aiProfileId,
-          message: combined,
-          lead_id: session.leadId,
-          scenario_type: session.scenarioType,
-        });
+        const res = await (firstDisabledAudio
+          ? api.playground.chat({
+              ai_profile_id: session.aiProfileId,
+              message: "",
+              lead_id: session.leadId,
+              scenario_type: session.scenarioType,
+              message_type: "audio",
+              audio_filename: firstDisabledAudio.filename,
+            })
+          : api.playground.chat({
+              ai_profile_id: session.aiProfileId,
+              message: resolved.map((r) => r.text).join("\n"),
+              lead_id: session.leadId,
+              scenario_type: session.scenarioType,
+            }));
 
         if (!session.leadId) {
           setSession((s) => s ? { ...s, leadId: res.lead_id } : s);
