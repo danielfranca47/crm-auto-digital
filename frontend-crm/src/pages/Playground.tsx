@@ -6,7 +6,7 @@ import { RefreshCw, ArrowDownToLine, ArrowUpFromLine } from "lucide-react";
 import { api, type PlaygroundChatResponse, type PlaygroundAutoItem } from "@/services/api";
 import { API_BASE } from "@/lib/api-client";
 import { PlaygroundConfigModal, type PlaygroundSession } from "@/components/playground/PlaygroundConfigModal";
-import { PlaygroundChat } from "@/components/playground/PlaygroundChat";
+import { PlaygroundChat, type BatchItem } from "@/components/playground/PlaygroundChat";
 import { PlaygroundFeedback, type FeedbackItem, type FeedbackTag } from "@/components/playground/PlaygroundFeedback";
 import { type ChatMessage, type RatingValue } from "@/components/playground/MessageBubble";
 import { type AgentReportEntry } from "@/components/playground/FeedbackAssistant";
@@ -326,6 +326,82 @@ export default function Playground() {
     [session]
   );
 
+  // ── Enviar lote misto (texto + áudio) ────────────────────────────────────
+
+  const handleSendBatch = useCallback(
+    async (items: BatchItem[]) => {
+      if (!session) return;
+
+      setLoading(true);
+      try {
+        // 1. Resolve cada item: texto mantém-se, áudio é uploaded + transcrito
+        const resolved: { text: string; audioUrl?: string; transcription?: string }[] = [];
+
+        for (const item of items) {
+          if (item.type === "text") {
+            resolved.push({ text: item.content });
+          } else {
+            const { filename, audio_url } = await api.playground.uploadAudio(item.blob);
+            const audioPlayerUrl = `${API_BASE}${audio_url.replace(/^\/api/, "")}`;
+            const { transcription } = await api.playground.transcribeAudio(filename, session.aiProfileId);
+            const effectiveText = transcription
+              ? `[Áudio]: ${transcription}`
+              : "[Áudio]: (transcrição desativada ou falhou)";
+            resolved.push({ text: effectiveText, audioUrl: audioPlayerUrl, transcription: transcription ?? undefined });
+          }
+        }
+
+        // 2. Adiciona bolha do lead por item
+        const leadMessages: ChatMessage[] = resolved.map((r) => ({
+          id: crypto.randomUUID(),
+          role: "lead",
+          text: r.audioUrl ? "[Áudio gravado]" : r.text,
+          isAudioMessage: !!r.audioUrl,
+          audioUrl: r.audioUrl,
+          transcription: r.transcription,
+          timestamp: new Date().toISOString(),
+          selectedForFeedback: false,
+        }));
+        setMessages((prev) => [...prev, ...leadMessages]);
+
+        // 3. Combina em mensagem única para o LLM
+        const combined = resolved.map((r) => r.text).join("\n");
+
+        const res = await api.playground.chat({
+          ai_profile_id: session.aiProfileId,
+          message: combined,
+          lead_id: session.leadId,
+          scenario_type: session.scenarioType,
+        });
+
+        if (!session.leadId) {
+          setSession((s) => s ? { ...s, leadId: res.lead_id } : s);
+        }
+
+        const parts = res.message_parts?.length ? res.message_parts : [res.message_to_send];
+        const autoItems = resolveAutoItems(res);
+        if (res.suppress_llm_response) {
+          if (autoItems.length) await revealAutoMessages(autoItems, setMessages, setLoading);
+        } else if (res.phase_trigger_fired && autoItems.length) {
+          await revealAutoMessages(autoItems, setMessages, setLoading);
+          setMessages((prev) => [...prev, buildBotMessage(parts[0], res, { isFirst: true, totalParts: parts.length })]);
+          if (parts.length > 1) await revealExtraParts(parts.slice(1), setMessages, setLoading);
+        } else {
+          setMessages((prev) => [...prev, buildBotMessage(parts[0], res, { isFirst: true, totalParts: parts.length })]);
+          if (parts.length > 1) await revealExtraParts(parts.slice(1), setMessages, setLoading);
+          if (autoItems.length) await revealAutoMessages(autoItems, setMessages, setLoading);
+        }
+        appendPhaseAdvances(res.phase_advances ?? [], setMessages);
+      } catch (err: unknown) {
+        const msg = err instanceof Error ? err.message : "Erro ao enviar lote";
+        toast({ title: "Erro", description: msg, variant: "destructive" });
+      } finally {
+        setLoading(false);
+      }
+    },
+    [session]
+  );
+
   // ── Handlers de feedback ──────────────────────────────────────────────────
 
   const handleToggleFeedback = useCallback((messageId: string) => {
@@ -510,6 +586,7 @@ export default function Playground() {
                   audioEnabled={session.profileSnapshot.audio_transcription_enabled ?? false}
                   onSend={handleSend}
                   onSendAudio={handleSendAudio}
+                  onSendBatch={handleSendBatch}
                   onToggleFeedback={handleToggleFeedback}
                   onRate={handleRate}
                 />

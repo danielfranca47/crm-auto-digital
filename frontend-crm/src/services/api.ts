@@ -1481,6 +1481,15 @@ export const api = {
       );
     },
 
+    transcribeAudio: async (
+      filename: string,
+      aiProfileId: number,
+    ): Promise<{ transcription: string | null; audio_enabled: boolean }> =>
+      apiClient.post<{ transcription: string | null; audio_enabled: boolean }>(
+        `/playground/audio/${filename}/transcribe`,
+        { ai_profile_id: aiProfileId },
+      ),
+
     feedbackAssist: async (payload: FeedbackAssistRequest) =>
       apiClient.post<FeedbackAssistResponse>("/playground/feedback-assist", payload),
 

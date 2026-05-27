@@ -430,6 +430,28 @@ async def serve_playground_audio(
     return FileResponse(str(path), media_type="audio/ogg")
 
 
+class TranscribeRequest(BaseModel):
+    ai_profile_id: int
+
+
+@router.post("/audio/{filename}/transcribe")
+def transcribe_playground_audio(
+    filename: str,
+    body: TranscribeRequest,
+    current_user: CurrentUser = Depends(require_crm_access),
+):
+    """Transcreve um áudio do playground sem chamar o LLM — usado pelo modo lote para obter
+    o texto de cada áudio antes de combinar numa única chamada ao decision engine."""
+    ai_profile = fetch_core_ai_profile_by_id(body.ai_profile_id, current_user.id)
+    if not ai_profile.get("audio_transcription_enabled"):
+        return {"transcription": None, "audio_enabled": False}
+    audio_path = str(TEMP_AUDIO_DIR / filename)
+    if not Path(audio_path).exists():
+        raise HTTPException(status_code=404, detail="Áudio não encontrado")
+    transcription = transcribe_audio_from_path(audio_path)
+    return {"transcription": transcription, "audio_enabled": True}
+
+
 @router.post("/chat", response_model=PlaygroundChatResponse)
 def playground_chat(
     body: PlaygroundChatRequest,

@@ -4,6 +4,14 @@ import { Textarea } from "@/components/ui/textarea";
 import { Loader2, Send, Layers, X, Mic, Square } from "lucide-react";
 import { MessageBubble, type ChatMessage, type RatingValue } from "./MessageBubble";
 
+// ── Tipo de item no lote ────────────────────────────────────────────────────
+
+export type BatchItem =
+  | { type: "text"; content: string }
+  | { type: "audio"; blob: Blob; objectUrl: string };
+
+// ── Props ───────────────────────────────────────────────────────────────────
+
 interface PlaygroundChatProps {
   messages: ChatMessage[];
   loading: boolean;
@@ -11,6 +19,7 @@ interface PlaygroundChatProps {
   audioEnabled?: boolean;
   onSend: (text: string) => void;
   onSendAudio?: (blob: Blob) => void;
+  onSendBatch?: (items: BatchItem[]) => void;
   onToggleFeedback: (id: string) => void;
   onRate: (id: string, rating: RatingValue, comment: string) => void;
 }
@@ -22,12 +31,13 @@ export function PlaygroundChat({
   audioEnabled = false,
   onSend,
   onSendAudio,
+  onSendBatch,
   onToggleFeedback,
   onRate,
 }: PlaygroundChatProps) {
   const [input, setInput] = useState("");
   const [batchMode, setBatchMode] = useState(false);
-  const [pendingBatch, setPendingBatch] = useState<string[]>([]);
+  const [pendingBatch, setPendingBatch] = useState<BatchItem[]>([]);
   const [isRecording, setIsRecording] = useState(false);
   const [recordingSeconds, setRecordingSeconds] = useState(0);
   const [pendingAudio, setPendingAudio] = useState<{ blob: Blob; objectUrl: string } | null>(null);
@@ -47,6 +57,8 @@ export function PlaygroundChat({
     };
   }, []);
 
+  // ── Texto ──────────────────────────────────────────────────────────────────
+
   function handleSend() {
     const text = input.trim();
     if (!text || loading) return;
@@ -58,18 +70,31 @@ export function PlaygroundChat({
     const text = input.trim();
     if (!text || loading) return;
     setInput("");
-    setPendingBatch((prev) => [...prev, text]);
+    setPendingBatch((prev) => [...prev, { type: "text", content: text }]);
   }
 
   function handleSendBatch() {
     if (pendingBatch.length === 0 || loading) return;
-    const combined = pendingBatch.join("\n");
+    const items = [...pendingBatch];
     setPendingBatch([]);
-    onSend(combined);
+    if (onSendBatch) {
+      onSendBatch(items);
+    } else {
+      // fallback: envia apenas texto (ignora áudios pendentes)
+      const combined = items
+        .filter((i): i is Extract<BatchItem, { type: "text" }> => i.type === "text")
+        .map((i) => i.content)
+        .join("\n");
+      if (combined) onSend(combined);
+    }
   }
 
   function handleRemoveFromBatch(index: number) {
-    setPendingBatch((prev) => prev.filter((_, i) => i !== index));
+    setPendingBatch((prev) => {
+      const item = prev[index];
+      if (item.type === "audio") URL.revokeObjectURL(item.objectUrl);
+      return prev.filter((_, i) => i !== index);
+    });
   }
 
   function handleKeyDown(e: KeyboardEvent<HTMLTextAreaElement>) {
@@ -85,8 +110,14 @@ export function PlaygroundChat({
 
   function toggleBatchMode() {
     setBatchMode((v) => !v);
-    setPendingBatch([]);
+    // Limpa lote ao desativar (revoga object URLs de áudios)
+    setPendingBatch((prev) => {
+      prev.forEach((item) => { if (item.type === "audio") URL.revokeObjectURL(item.objectUrl); });
+      return [];
+    });
   }
+
+  // ── Áudio individual ───────────────────────────────────────────────────────
 
   async function startRecording() {
     if (pendingAudio) cancelAudio();
@@ -136,8 +167,21 @@ export function PlaygroundChat({
     onSendAudio?.(blob);
   }
 
+  // ── Áudio → lote ──────────────────────────────────────────────────────────
+
+  function addAudioToBatch() {
+    if (!pendingAudio) return;
+    // Transfere o blob para o lote — o objectUrl passa a ser gerido pelo lote
+    const { blob, objectUrl } = pendingAudio;
+    setPendingAudio(null); // não revogar — será usado ao enviar
+    setPendingBatch((prev) => [...prev, { type: "audio", blob, objectUrl }]);
+  }
+
+  // ── Utils ──────────────────────────────────────────────────────────────────
+
   const isMediaMarker = /^\{(áudio|audio|imagem|vídeo|video|documento)\}$/i.test(input.trim());
   const fmtSeconds = (s: number) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
+  const batchAudioCount = pendingBatch.filter((i) => i.type === "audio").length;
 
   return (
     <div className="flex flex-col h-full">
@@ -180,9 +224,21 @@ export function PlaygroundChat({
           <div className="flex items-center gap-2 px-2 py-1.5 bg-muted rounded-lg border">
             <Mic className="h-4 w-4 text-primary shrink-0" />
             <audio controls src={pendingAudio.objectUrl} className="h-8 flex-1 min-w-0" />
-            <Button size="sm" onClick={sendPendingAudio} disabled={loading} className="shrink-0 h-8 text-xs">
-              {loading ? <Loader2 className="h-3 w-3 animate-spin" /> : "Enviar"}
-            </Button>
+            {batchMode ? (
+              <Button
+                size="sm"
+                onClick={addAudioToBatch}
+                disabled={loading}
+                className="shrink-0 h-8 text-xs gap-1"
+              >
+                <Layers className="h-3 w-3" />
+                Adicionar ao lote
+              </Button>
+            ) : (
+              <Button size="sm" onClick={sendPendingAudio} disabled={loading} className="shrink-0 h-8 text-xs">
+                {loading ? <Loader2 className="h-3 w-3 animate-spin" /> : "Enviar"}
+              </Button>
+            )}
             <Button size="icon" variant="ghost" onClick={cancelAudio} className="shrink-0 h-8 w-8">
               <X className="h-3.5 w-3.5" />
             </Button>
@@ -200,15 +256,22 @@ export function PlaygroundChat({
         {/* Fila do lote */}
         {batchMode && pendingBatch.length > 0 && (
           <div className="flex flex-wrap gap-1.5 pb-1">
-            {pendingBatch.map((msg, i) => (
+            {pendingBatch.map((item, i) => (
               <div
                 key={i}
-                className="flex items-center gap-1 bg-muted rounded-full pl-3 pr-1.5 py-1 text-xs text-foreground max-w-[240px]"
+                className="flex items-center gap-1 bg-muted rounded-full pl-2.5 pr-1.5 py-1 text-xs text-foreground max-w-[240px]"
               >
-                <span className="truncate">{msg}</span>
+                {item.type === "audio" ? (
+                  <>
+                    <Mic className="h-3 w-3 shrink-0 text-primary" />
+                    <span className="truncate">Áudio</span>
+                  </>
+                ) : (
+                  <span className="truncate">{item.content}</span>
+                )}
                 <button
                   onClick={() => handleRemoveFromBatch(i)}
-                  className="shrink-0 text-muted-foreground hover:text-foreground transition-colors"
+                  className="shrink-0 text-muted-foreground hover:text-foreground transition-colors ml-0.5"
                   disabled={loading}
                 >
                   <X className="h-3 w-3" />
@@ -289,9 +352,19 @@ export function PlaygroundChat({
 
         {/* Hints */}
         {batchMode ? (
-          <p className="text-xs text-primary font-medium px-1">
-            Modo lote ativo — simula absorção de mensagens consecutivas. Adicione mensagens e clique "Enviar lote".
-          </p>
+          pendingAudio ? (
+            <p className="text-xs text-primary font-medium px-1">
+              Áudio gravado — clique <strong>Adicionar ao lote</strong> para incluir ou <strong>✕</strong> para cancelar. Pode gravar mais áudios após adicionar.
+            </p>
+          ) : batchAudioCount > 0 ? (
+            <p className="text-xs text-primary font-medium px-1">
+              Modo lote ativo — {batchAudioCount} áudio{batchAudioCount > 1 ? "s" : ""} no lote. Adicione mais mensagens ou clique "Enviar lote".
+            </p>
+          ) : (
+            <p className="text-xs text-primary font-medium px-1">
+              Modo lote ativo — simula absorção de mensagens consecutivas. Adicione mensagens e clique "Enviar lote".
+            </p>
+          )
         ) : isRecording ? (
           <p className="text-xs text-red-500 px-1">
             Gravando áudio… clique <strong>Stop</strong> para parar e pré-visualizar.
@@ -313,8 +386,8 @@ export function PlaygroundChat({
             Dica: escreva <code className="bg-muted px-1 rounded">{"{áudio}"}</code>,{" "}
             <code className="bg-muted px-1 rounded">{"{imagem}"}</code> ou{" "}
             <code className="bg-muted px-1 rounded">{"{vídeo}"}</code> para simular envio de mídia,
-            ou use o microfone para gravar um áudio real.
-            Use <code className="bg-muted px-1 rounded"><Layers className="inline h-3 w-3" /></code> para simular múltiplas mensagens antes da resposta.
+            ou use o microfone para gravar. Em modo lote pode misturar texto e áudios.
+            Use <code className="bg-muted px-1 rounded"><Layers className="inline h-3 w-3" /></code> para ativar o lote.
           </p>
         )}
       </div>
