@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, KeyboardEvent } from "react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { Loader2, Send } from "lucide-react";
+import { Loader2, Send, Layers, X } from "lucide-react";
 import { MessageBubble, type ChatMessage, type RatingValue } from "./MessageBubble";
 
 interface PlaygroundChatProps {
@@ -22,9 +22,10 @@ export function PlaygroundChat({
   onRate,
 }: PlaygroundChatProps) {
   const [input, setInput] = useState("");
+  const [batchMode, setBatchMode] = useState(false);
+  const [pendingBatch, setPendingBatch] = useState<string[]>([]);
   const bottomRef = useRef<HTMLDivElement>(null);
 
-  // Scroll automático para o fim quando chega nova mensagem
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
@@ -36,14 +37,40 @@ export function PlaygroundChat({
     onSend(text);
   }
 
+  function handleAddToBatch() {
+    const text = input.trim();
+    if (!text || loading) return;
+    setInput("");
+    setPendingBatch((prev) => [...prev, text]);
+  }
+
+  function handleSendBatch() {
+    if (pendingBatch.length === 0 || loading) return;
+    const combined = pendingBatch.join("\n");
+    setPendingBatch([]);
+    onSend(combined);
+  }
+
+  function handleRemoveFromBatch(index: number) {
+    setPendingBatch((prev) => prev.filter((_, i) => i !== index));
+  }
+
   function handleKeyDown(e: KeyboardEvent<HTMLTextAreaElement>) {
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
-      handleSend();
+      if (batchMode) {
+        handleAddToBatch();
+      } else {
+        handleSend();
+      }
     }
   }
 
-  // Detecta se o input contém um marcador de mídia para mostrar hint
+  function toggleBatchMode() {
+    setBatchMode((v) => !v);
+    setPendingBatch([]);
+  }
+
   const isMediaMarker = /^\{(áudio|audio|imagem|vídeo|video|documento)\}$/i.test(input.trim());
 
   return (
@@ -82,13 +109,36 @@ export function PlaygroundChat({
 
       {/* Input */}
       <div className="border-t p-3 flex flex-col gap-1.5 bg-background">
+        {/* Fila do lote */}
+        {batchMode && pendingBatch.length > 0 && (
+          <div className="flex flex-wrap gap-1.5 pb-1">
+            {pendingBatch.map((msg, i) => (
+              <div
+                key={i}
+                className="flex items-center gap-1 bg-muted rounded-full pl-3 pr-1.5 py-1 text-xs text-foreground max-w-[240px]"
+              >
+                <span className="truncate">{msg}</span>
+                <button
+                  onClick={() => handleRemoveFromBatch(i)}
+                  className="shrink-0 text-muted-foreground hover:text-foreground transition-colors"
+                  disabled={loading}
+                >
+                  <X className="h-3 w-3" />
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+
         <div className="flex gap-2 items-end">
           <Textarea
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={handleKeyDown}
             placeholder={
-              scenarioType === "outbound"
+              batchMode
+                ? "Adicione mensagens ao lote… (Enter adiciona, Shift+Enter nova linha)"
+                : scenarioType === "outbound"
                 ? "Responda como se fosse o lead… (Enter para enviar, Shift+Enter para nova linha)"
                 : "Digite como se fosse o lead… (Enter para enviar, Shift+Enter para nova linha)"
             }
@@ -96,22 +146,52 @@ export function PlaygroundChat({
             className="flex-1 resize-none text-sm min-h-[44px] max-h-32"
             disabled={loading}
           />
+
+          {/* Toggle modo lote */}
           <Button
-            onClick={handleSend}
-            disabled={!input.trim() || loading}
+            onClick={toggleBatchMode}
+            variant={batchMode ? "default" : "outline"}
             size="icon"
             className="shrink-0 h-[44px] w-[44px]"
+            title={batchMode ? "Desativar modo lote" : "Ativar modo lote — simula absorção de mensagens consecutivas"}
           >
-            {loading ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
-            ) : (
-              <Send className="h-4 w-4" />
-            )}
+            <Layers className="h-4 w-4" />
           </Button>
+
+          {batchMode ? (
+            <Button
+              onClick={handleSendBatch}
+              disabled={pendingBatch.length === 0 || loading}
+              className="shrink-0 h-[44px] px-3 text-xs"
+            >
+              {loading ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                `Enviar lote${pendingBatch.length > 0 ? ` (${pendingBatch.length})` : ""}`
+              )}
+            </Button>
+          ) : (
+            <Button
+              onClick={handleSend}
+              disabled={!input.trim() || loading}
+              size="icon"
+              className="shrink-0 h-[44px] w-[44px]"
+            >
+              {loading ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Send className="h-4 w-4" />
+              )}
+            </Button>
+          )}
         </div>
 
-        {/* Hint de marcadores de mídia */}
-        {isMediaMarker ? (
+        {/* Hints */}
+        {batchMode ? (
+          <p className="text-xs text-primary font-medium px-1">
+            Modo lote ativo — simula absorção de mensagens consecutivas. Adicione mensagens e clique "Enviar lote".
+          </p>
+        ) : isMediaMarker ? (
           <p className="text-xs text-primary font-medium px-1">
             Mídia simulada — será exibida como card no chat
           </p>
@@ -119,7 +199,8 @@ export function PlaygroundChat({
           <p className="text-xs text-muted-foreground px-1">
             Dica: escreva <code className="bg-muted px-1 rounded">{"{áudio}"}</code>,{" "}
             <code className="bg-muted px-1 rounded">{"{imagem}"}</code> ou{" "}
-            <code className="bg-muted px-1 rounded">{"{vídeo}"}</code> para simular envio de mídia
+            <code className="bg-muted px-1 rounded">{"{vídeo}"}</code> para simular envio de mídia.
+            Use <code className="bg-muted px-1 rounded"><Layers className="inline h-3 w-3" /></code> para simular múltiplas mensagens antes da resposta.
           </p>
         )}
       </div>

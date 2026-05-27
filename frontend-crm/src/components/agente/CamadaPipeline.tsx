@@ -55,7 +55,15 @@ function DrawerDelayResposta({ config, onSave, onClose }: {
 
   const fmtFirst = (v: number) => v === 0 ? 'imediato' : v < 60 ? `${v}s` : `${Math.round(v / 60)}min`;
   const fmtReply = (v: number) => v === 0 ? 'imediato' : `${v}s`;
-  const fmtBuf   = (v: number) => v === 0 ? 'Desabilitado' : `${v}s`;
+  const fmtBuf = (v: number) => {
+    if (v === 0) return 'Desabilitado';
+    if (v < 60) return `${v}s`;
+    const h = Math.floor(v / 3600);
+    const m = Math.floor((v % 3600) / 60);
+    const s = v % 60;
+    if (h > 0) return m === 0 ? `${h}h` : `${h}h ${m}min`;
+    return s === 0 ? `${m}min` : `${m}min ${s}s`;
+  };
 
   return (
     <DrawerBase title="Delay de resposta" sub="Simula tempo de leitura e digitação humana — aumenta taxa de abertura" onClose={onClose}
@@ -68,7 +76,7 @@ function DrawerDelayResposta({ config, onSave, onClose }: {
           acumulando todas as mensagens em uma única resposta. Evita respostas fragmentadas e dá uma sensação mais natural.
           Defina 0 para desabilitar.
         </div>
-        <SliderField label={fmtBuf(bufSecs)} value={bufSecs} min={0} max={30} step={1} format={fmtBuf} onChange={setBufSecs} />
+        <SliderField label={fmtBuf(bufSecs)} value={bufSecs} min={0} max={7200} step={30} format={fmtBuf} onChange={setBufSecs} />
       </div>
 
       <div className="o-field" style={{ marginTop: 8 }}>
@@ -464,9 +472,15 @@ export function CamadaPipeline({ config, onUpdate, phoneNumber }: CamadaPipeline
   const delayReplyLabel = config.reply_delay_max_seconds > 0
     ? `${config.reply_delay_min_seconds}–${config.reply_delay_max_seconds}s`
     : 'Imediato';
-  const bufferLabel = (config.multi_message_buffer_seconds ?? 0) > 0
-    ? `buffer ${config.multi_message_buffer_seconds}s`
-    : 'buffer off';
+  const fmtBufLabel = (v: number) => {
+    if (!v || v <= 0) return 'buffer off';
+    if (v < 60) return `buffer ${v}s`;
+    const h = Math.floor(v / 3600);
+    const m = Math.floor((v % 3600) / 60);
+    if (h > 0) return m === 0 ? `buffer ${h}h` : `buffer ${h}h ${m}min`;
+    return `buffer ${m}min`;
+  };
+  const bufferLabel = fmtBufLabel(config.multi_message_buffer_seconds ?? 0);
   const availabilityLabel = config.availability_mode === 'business_hours'
     ? 'Seg–Sex · 09–18h'
     : config.availability_mode === 'custom'
