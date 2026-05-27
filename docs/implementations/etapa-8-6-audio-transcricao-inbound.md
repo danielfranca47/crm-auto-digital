@@ -436,5 +436,11 @@ Clicar "Enviar lote (N)"
 
 #### ✅ Cenário P14 — Toggle OFF com áudio em lote
 - [ ] Desligar `audio_transcription_enabled`; activar batch; gravar e adicionar ao lote; enviar
-- [ ] Confirmar: LLM recebe "[Áudio]: (transcrição desativada)" para cada áudio
+- [ ] Confirmar: bot responde com a `media_fallback_msg` configurada (igual ao fluxo individual)
 - [ ] Confirmar: bolha do lead mostra player sem transcrição
+
+> **Bug corrigido em 27/05/2026 (commit `c0f7f44`):** no teste inicial, o batch com toggle OFF enviava
+> o texto `"[Áudio]: (transcrição desativada ou falhou)"` directamente ao LLM como mensagem normal,
+> ignorando o `audio_enabled: false` devolvido pelo endpoint `/transcribe`. O LLM processava o texto
+> e respondia normalmente. Correcção: `handleSendBatch` agora captura `audio_enabled`; quando OFF,
+> roteia com `message_type: "audio"` + `audio_filename` para acionar `media_fallback` no backend.
