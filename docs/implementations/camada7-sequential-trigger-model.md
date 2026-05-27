@@ -618,7 +618,7 @@ Configuração de teste: Fase Apresentação com `PHASE TRIGGER → MENSAGEM "Ol
 - [x] Playground: transition qual → apres → ordem correcta: "Olá, aqui estão os detalhes" (violeta) → 🎵 myaudio (violeta) → "Gostou?" (violeta) → resposta LLM (normal) — **confirmado 27/05/2026**
 - [x] Resposta do LLM após o trigger complementa sem repetir o que foi enviado automaticamente — **confirmado 27/05/2026**: LLM disse "Entendi que você está lidando com desafios na parte de tabela de preços" + proposta de conversa, sem repetir o material enviado
 - [x] 2ª mensagem em apresentação: `auto_items` vazio, apenas LLM responde normalmente — **confirmado 27/05/2026**: lead perguntou sobre CRM depois de ir a `agendamento` e voltar a `apresentation`; apenas resposta LLM, sem auto-mensagens
-- [ ] `kw_trigger`/`intent_trigger` → ordem mantida: LLM primeiro, depois auto (sem regressão)
+
 
 ---
 
