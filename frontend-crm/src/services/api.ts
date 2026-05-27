@@ -181,6 +181,7 @@ export type PlaygroundChatResponse = {
   phase_advances?: string[];
   phase_trigger_fired?: boolean;
   suppress_llm_response?: boolean;
+  transcription?: string | null;
 };
 
 // ── Playground FeedbackAssist ────────────────────────────────────────────────

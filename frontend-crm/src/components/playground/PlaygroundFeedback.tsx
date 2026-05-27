@@ -114,7 +114,12 @@ export function PlaygroundFeedback({
 
       lines.push(`${who} ${time}`);
 
-      if (leadMediaMatch) {
+      if (msg.isAudioMessage) {
+        lines.push(`> 🎙️ _[Áudio gravado]_`);
+        if (msg.transcription) {
+          lines.push(`> **Transcrição:** "${msg.transcription}"`);
+        }
+      } else if (leadMediaMatch) {
         const type = leadMediaMatch[1].toLowerCase().replace("á", "a").replace("é", "e").replace("í", "i");
         lines.push(`> _[Lead enviou: ${type}]_`);
       } else {

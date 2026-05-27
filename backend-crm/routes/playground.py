@@ -168,6 +168,7 @@ class PlaygroundChatResponse(BaseModel):
     phase_advances: List[str] = Field(default_factory=list)  # Labels de fases avançadas por blocos 'avancar_fase'
     phase_trigger_fired: bool = False                         # True quando phase_trigger disparou → frontend inverte ordem (auto antes do LLM)
     suppress_llm_response: bool = False                       # True quando trigger disparou com flag — frontend omite turno da LLM
+    transcription: Optional[str] = None                      # Texto transcrito quando message_type=audio; None nos outros casos
 
 
 # ---------------------------------------------------------------------------
@@ -491,6 +492,7 @@ def playground_chat(
 
     # ── Passo 3b: Áudio ou mensagem de texto inbound ─────────────────────────
     effective_message = body.message
+    _audio_transcription: Optional[str] = None  # devolvido na resposta para exibição no frontend
 
     if body.message_type == "audio" and body.audio_filename:
         audio_path = str(TEMP_AUDIO_DIR / body.audio_filename)
@@ -499,6 +501,7 @@ def playground_chat(
         if audio_enabled:
             transcription = transcribe_audio_from_path(audio_path)
             if transcription:
+                _audio_transcription = transcription
                 effective_message = f"[Áudio]: {transcription}"
             else:
                 # falha de transcrição — simular media_fallback
@@ -678,6 +681,7 @@ def playground_chat(
         phase_advances=phase_advances,
         phase_trigger_fired=phase_trigger_fired,
         suppress_llm_response=bool(decision.get("suppress_llm_response")),
+        transcription=_audio_transcription,
     )
 
 

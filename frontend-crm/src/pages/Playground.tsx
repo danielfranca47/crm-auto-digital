@@ -293,6 +293,15 @@ export default function Playground() {
           setSession((s) => s ? { ...s, leadId: res.lead_id } : s);
         }
 
+        // Atualiza bolha do lead com transcrição (se o backend conseguiu transcrever)
+        if (res.transcription) {
+          setMessages((prev) =>
+            prev.map((m) =>
+              m.id === leadMsgId ? { ...m, transcription: res.transcription ?? undefined } : m
+            )
+          );
+        }
+
         const parts = res.message_parts?.length ? res.message_parts : [res.message_to_send];
         const autoItems = resolveAutoItems(res);
         if (res.suppress_llm_response) {

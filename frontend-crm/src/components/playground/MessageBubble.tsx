@@ -21,6 +21,7 @@ export interface ChatMessage {
   isPhaseAdvance?: boolean;
   isAudioMessage?: boolean;
   audioUrl?: string;
+  transcription?: string;
   decisionTrace?: PlaygroundDecisionTrace;
   motherRoute?: string | null;
   confidence?: number;
@@ -288,6 +289,11 @@ export function MessageBubble({ message, onToggleFeedback, onRate }: MessageBubb
                 </div>
                 {message.audioUrl ? (
                   <audio controls src={message.audioUrl} className="max-w-[200px] h-8" />
+                ) : null}
+                {message.transcription ? (
+                  <p className="text-xs opacity-80 italic mt-0.5">
+                    "{message.transcription}"
+                  </p>
                 ) : null}
               </div>
             ) : leadMediaType ? (

@@ -1,7 +1,7 @@
 # Etapa 8-6: Recebimento de Áudio e Transcrição para o LLM
 
 **Branch:** `etapa-8-6-audio-texto`  
-**Status:** Em implementação — Fase 2 (Playground) em andamento
+**Status:** Em implementação — Fase 3 (Transcrição visível) em andamento
 
 ---
 
@@ -224,13 +224,14 @@ Nenhum novo arquivo — tudo integrado nos existentes.
 ### Checks de Validação — Fase 2
 
 #### ✅ Cenário P1 — Toggle ligado, gravação no playground
-- [ ] Ligar `audio_transcription_enabled` no AI Profile
-- [ ] Clicar no botão de microfone no playground
-- [ ] Falar e clicar parar
-- [ ] Confirmar: preview player aparece com o áudio gravado
-- [ ] Clicar "Enviar"
-- [ ] Confirmar: lead bubble mostra player de áudio reproduzível
-- [ ] Confirmar: bot responde ao conteúdo do áudio transcrito
+- [x] Ligar `audio_transcription_enabled` no AI Profile
+- [x] Clicar no botão de microfone no playground
+- [x] Falar e clicar parar
+- [x] Confirmar: preview player aparece com o áudio gravado
+- [x] Clicar "Enviar"
+- [x] Confirmar: lead bubble mostra player de áudio reproduzível
+- [x] Confirmar: bot responde ao conteúdo do áudio transcrito
+- **Validado em:** 27/05/2026 — playground respondendo corretamente ao conteúdo transcrito
 
 #### ✅ Cenário P2 — Toggle desligado, media_fallback = "continuar"
 - [ ] Desligar toggle; configurar Mídia inválida como "Responder e continuar"
@@ -253,3 +254,65 @@ Nenhum novo arquivo — tudo integrado nos existentes.
 #### ✅ Cenário P6 — Permissão de microfone negada
 - [ ] Bloquear microfone no browser → clicar Mic
 - [ ] Confirmar: erro é tratado graciosamente (toast ou mensagem), UI não quebra
+
+---
+
+## Fase 3 — Transcrição Visível na UI e no Export
+
+### Motivação
+
+Ao validar a Fase 2 em playground (27/05/2026), o bot respondia corretamente ao conteúdo transcrito, mas o operador não conseguia ver qual foi o texto transcrito — a bolha do lead mostrava apenas o player de áudio e o texto fixo "Áudio gravado". O export em Markdown também omitia a transcrição, tornando os registos de sessão incompletos para fins de auditoria e fine-tuning.
+
+### Problemas Identificados
+
+1. **Transcrição invisível na UI:** `MessageBubble.tsx` não recebia nem renderizava o texto transcrito.
+2. **`PlaygroundChatResponse` não devolvia a transcrição:** O backend transcrevia e usava o texto internamente (`effective_message`), mas não incluía o valor na resposta HTTP.
+3. **Export em Markdown incompleto:** A função `exportMarkdown()` em `PlaygroundFeedback.tsx` tratava mensagens de áudio gravado como texto genérico, sem indicar que eram áudio nem incluir transcrição.
+
+### Abordagem
+
+```
+Backend: PlaygroundChatResponse.transcription = texto transcrito (ou null)
+  ↓
+Playground.tsx handleSendAudio: após resposta, atualiza bolha do lead com transcription
+  ↓
+MessageBubble.tsx: se message.transcription → mostra em itálico abaixo do player
+  ↓
+PlaygroundFeedback.tsx exportMarkdown: para isAudioMessage → escreve 🎙️ [Áudio gravado]
+                                         + se transcription → escreve **Transcrição:** "..."
+```
+
+### Arquivos modificados (Fase 3)
+
+| Arquivo | O que muda |
+|---|---|
+| `backend-crm/routes/playground.py` | `PlaygroundChatResponse` ganha `transcription: Optional[str] = None`; passado no return final quando `_audio_transcription` não é None |
+| `frontend-crm/src/services/api.ts` | `PlaygroundChatResponse` ganha `transcription?: string \| null` |
+| `frontend-crm/src/components/playground/MessageBubble.tsx` | `ChatMessage` ganha `transcription?: string`; renderiza em itálico abaixo do `<audio>` quando presente |
+| `frontend-crm/src/pages/Playground.tsx` | `handleSendAudio` actualiza a bolha do lead via `setMessages` com `transcription` vinda da resposta |
+| `frontend-crm/src/components/playground/PlaygroundFeedback.tsx` | `exportMarkdown` distingue `isAudioMessage` dos outros tipos e inclui a transcrição quando disponível |
+
+### Comportamento resultante
+
+- **Toggle ON + transcrição bem-sucedida:** player de áudio + texto transcrito em itálico abaixo; export inclui transcrição
+- **Toggle ON + falha de transcrição:** player de áudio sem texto (transcrição = null); export indica áudio sem transcrição
+- **Toggle OFF:** bolha só com player (sem transcrição — o bot retorna media_fallback sem transcrever); export indica 🎙️ [Áudio gravado] sem transcrição
+- **Marcador `{áudio}` de texto:** inalterado — sem player, sem upload, sem transcrição
+
+### Checks de Validação — Fase 3
+
+#### ✅ Cenário P7 — Transcrição visível na bolha
+- [ ] Ligar `audio_transcription_enabled`
+- [ ] Gravar e enviar áudio no playground
+- [ ] Confirmar: abaixo do player aparece o texto transcrito em itálico
+- [ ] Confirmar: bot responde ao conteúdo transcrito
+
+#### ✅ Cenário P8 — Transcrição no export
+- [ ] Após sessão com áudio transcrito, exportar Markdown
+- [ ] Confirmar: entrada do lead mostra `🎙️ [Áudio gravado]` + `**Transcrição:** "..."`
+- [ ] Confirmar: entradas de texto continuam sem alteração (sem regressão)
+
+#### ✅ Cenário P9 — Áudio sem transcrição (toggle OFF)
+- [ ] Desligar toggle; gravar e enviar áudio
+- [ ] Confirmar: bolha do lead mostra player sem texto transcrito
+- [ ] Confirmar: export mostra `🎙️ [Áudio gravado]` sem linha de transcrição
