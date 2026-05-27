@@ -704,3 +704,48 @@ O `no_reply_trigger` é **actualmente um placeholder de UI** — não é avaliad
 - [x] Configurar bloco `intent_trigger "demonstrar hesitação"` com `fire_once=True`
 - [x] Lead expressa hesitação → bloco dispara uma vez
 - [x] Lead expressa hesitação novamente → NÃO dispara
+
+---
+
+## Fase 11 — Suprimir resposta da LLM por gatilho (`suppress_llm_response`)
+
+### Motivação
+
+Quando um `kw_trigger` ou `intent_trigger` dispara e executa mensagens automáticas via `mensagem`/`midia`, a LLM filha responde na sequência com um texto gerado — muitas vezes desconexa com as ações já enviadas. O utilizador precisa de poder marcar um gatilho com "Não chamar a LLM" para que apenas as ações do bloco sejam executadas, sem resposta adicional do bot.
+
+### Comportamento
+
+Quando `suppress_llm_response=True` num bloco de gatilho e esse gatilho dispara:
+- As ações de envio (`mensagem`, `midia`) do bloco são executadas normalmente
+- A LLM filha **não envia resposta**
+- `next_action` é forçado para `"ignore"` no `DecisionOutput`
+
+> **Nota:** a LLM filha é tecnicamente chamada (o child prompt é construído), mas a resposta gerada é descartada. Trade-off consciente para minimizar a complexidade da alteração.
+
+### Ficheiros alterados
+
+| Ficheiro | Mudança |
+|---|---|
+| `frontend-crm/src/types/agente.ts` | `suppress_llm_response?: boolean` em `SalesFlowBlock` |
+| `frontend-crm/src/components/agente/CamadaFluxoVenda.tsx` | Checkbox "Não chamar a LLM" no BlockForm de `kw_trigger`, `intent_trigger` e `phase_trigger` |
+| `backend-executors/app/schemas/decision.py` | `suppress_llm_response: bool = False` em `DecisionOutput` |
+| `backend-executors/app/services/decision_engine.py` | `_evaluate_sales_flow_phases()`: inicializa `suppress_llm_response=False`; quando trigger dispara com o flag → `result["suppress_llm_response"] = True`. Em `decide()`: após recolher `_phases_result`, se `suppress_llm_response=True` → `decision.next_action="ignore"`, `decision.message_text=""` |
+| `backend-executors/app/runners/whatsapp.py` | Bloco `if decision.next_action == "ignore"` estendido: se `suppress_llm_response=True` → despacha `_send_actions` e `_state_actions` antes de completar o job com status `skipped_suppress_llm` |
+
+### Playground
+
+Sem alterações. O playground processa `system_actions` de forma incondicional (independente de `next_action`). Com `message_text=""`, a mensagem da LLM simplesmente não aparece, e as mensagens automáticas continuam a surgir via `auto_messages`.
+
+### Verificação Fase 11
+
+**suppress_llm_response — kw_trigger:**
+- [ ] Configurar `kw_trigger("preço") → mensagem("Preço: X") + suppress_llm=true`
+- [ ] No playground, enviar "qual é o preço?" → mensagem automática "Preço: X" aparece, sem resposta LLM
+- [ ] `next_action=ignore` visível no trace do playground
+
+**suppress_llm_response — intent_trigger:**
+- [ ] Configurar `intent_trigger("demonstrar hesitação") → mensagem("Usamos ROI") + suppress_llm=true`
+- [ ] Lead hesita → mensagem automática aparece, sem resposta LLM
+
+**Regressão:**
+- [ ] Bloco sem `suppress_llm_response` (ou `false`) → comportamento anterior inalterado

@@ -776,7 +776,15 @@ def execute_job(job_id: str, logger: logging.Logger) -> int:
     )
 
     if decision.next_action == "ignore":
-        result_payload["outbound_status"] = "skipped_ignore"
+        if getattr(decision, "suppress_llm_response", False):
+            # Gatilho com suppress_llm_response=True: despachar ações do Fluxo de Venda sem enviar resposta LLM
+            for _sa in _send_actions:
+                _send_sales_flow_action(_sa, provider, instance_id, phone, ctx_logger)
+            if _state_actions:
+                result_payload["system_actions"] = _state_actions
+            result_payload["outbound_status"] = "skipped_suppress_llm"
+        else:
+            result_payload["outbound_status"] = "skipped_ignore"
         try:
             crm_client.complete_job(job_id, result=result_payload)
         except crm_client.CRMClientError as exc:
@@ -789,7 +797,7 @@ def execute_job(job_id: str, logger: logging.Logger) -> int:
                 error_type=exc.error_type,
             )
             return _fail_job(job_id, ctx_logger, exec_error, attempt)
-        ctx_logger.info("event=job_completed status=skipped_ignore", extra={"phase": "complete"})
+        ctx_logger.info("event=job_completed status=%s", result_payload["outbound_status"], extra={"phase": "complete"})
         return 0
 
     if outbound_body is None or outbound_body == "":

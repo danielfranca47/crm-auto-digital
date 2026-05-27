@@ -336,7 +336,7 @@ def _evaluate_sales_flow_phases(
       pre_send_media     — mídias a enviar diretamente (blocos midia com media_url explícito)
       system_actions     — ações a executar pelo executor (mensagem, avancar_fase, webhook, espera)
     """
-    result: Dict[str, Any] = {"prompt_injections": [], "pre_send_media": [], "system_actions": []}
+    result: Dict[str, Any] = {"prompt_injections": [], "pre_send_media": [], "system_actions": [], "suppress_llm_response": False}
 
     ai_profile = context.get("ai_profile") or {}
     if (ai_profile.get("response_style") or "passive").strip().lower() != "active":
@@ -433,6 +433,9 @@ def _evaluate_sales_flow_phases(
                 if fired and _fire_once and _block_id:
                     result["system_actions"].append({"type": "mark_trigger_fired", "block_id": _block_id})
             # no_reply_trigger é gerido pelo followup_state — não avaliado aqui
+
+            if fired and block.get("suppress_llm_response"):
+                result["suppress_llm_response"] = True
 
             last_trigger_active = fired
 
@@ -3939,6 +3942,11 @@ def compose_decision_output(
         _sys = list(decision.system_actions or [])
         _sys.append({"type": "mark_phase_triggered", "phase_id": _effective_phase_id})
         decision.system_actions = _sys
+    # Se algum trigger activo tinha suppress_llm_response=True, suprimir a resposta da LLM filha
+    if _phases_result.get("suppress_llm_response"):
+        decision.suppress_llm_response = True
+        decision.next_action = "ignore"
+        decision.message_text = ""
 
     return decision
 

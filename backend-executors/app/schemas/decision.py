@@ -21,6 +21,8 @@ class DecisionOutput(BaseModel):
     pre_send_media: Optional[Union[List[dict], dict]] = None
     # Ações diretas do Fluxo de Venda (sistema de fases): mensagem fixa, avançar fase, webhook, espera
     system_actions: Optional[List[dict]] = None
+    # Se True, a resposta da LLM filha foi suprimida pelo Fluxo de Venda (suppress_llm_response no bloco)
+    suppress_llm_response: bool = False
 
     @field_validator("questions", mode="after")
     @classmethod

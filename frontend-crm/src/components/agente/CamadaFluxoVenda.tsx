@@ -170,14 +170,30 @@ function BlockForm({ block, setBlock, knowledgeItems }: {
               Disparar apenas uma vez por lead
             </label>
           </div>
+          <div className="o-field" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <input type="checkbox" id="kw-suppress-llm" checked={!!block.suppress_llm_response}
+              onChange={e => set('suppress_llm_response', e.target.checked)} style={{ cursor: 'pointer' }} />
+            <label htmlFor="kw-suppress-llm" style={{ cursor: 'pointer', fontSize: 12.5 }}>
+              Não chamar a LLM — enviar apenas as ações automáticas deste gatilho
+            </label>
+          </div>
         </>
       );
 
     case 'phase_trigger':
       return (
-        <div style={{ fontSize: 12.5, color: 'var(--o-sub)', padding: '8px 0', lineHeight: 1.6 }}>
-          Este gatilho dispara automaticamente quando o lead entra nesta fase. Não requer configuração adicional.
-        </div>
+        <>
+          <div style={{ fontSize: 12.5, color: 'var(--o-sub)', padding: '8px 0', lineHeight: 1.6 }}>
+            Este gatilho dispara automaticamente quando o lead entra nesta fase. Não requer configuração adicional.
+          </div>
+          <div className="o-field" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <input type="checkbox" id="phase-suppress-llm" checked={!!block.suppress_llm_response}
+              onChange={e => set('suppress_llm_response', e.target.checked)} style={{ cursor: 'pointer' }} />
+            <label htmlFor="phase-suppress-llm" style={{ cursor: 'pointer', fontSize: 12.5 }}>
+              Não chamar a LLM — enviar apenas as ações automáticas deste gatilho
+            </label>
+          </div>
+        </>
       );
 
     case 'no_reply_trigger':
@@ -221,6 +237,13 @@ function BlockForm({ block, setBlock, knowledgeItems }: {
               onChange={e => set('fire_once', e.target.checked)} style={{ cursor: 'pointer' }} />
             <label htmlFor="intent-fire-once" style={{ cursor: 'pointer', fontSize: 12.5 }}>
               Disparar apenas uma vez por lead
+            </label>
+          </div>
+          <div className="o-field" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <input type="checkbox" id="intent-suppress-llm" checked={!!block.suppress_llm_response}
+              onChange={e => set('suppress_llm_response', e.target.checked)} style={{ cursor: 'pointer' }} />
+            <label htmlFor="intent-suppress-llm" style={{ cursor: 'pointer', fontSize: 12.5 }}>
+              Não chamar a LLM — enviar apenas as ações automáticas deste gatilho
             </label>
           </div>
         </>

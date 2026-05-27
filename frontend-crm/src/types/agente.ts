@@ -71,6 +71,7 @@ export interface SalesFlowBlock {
   wait_value?: string;
   wait_unit?: string;
   fire_once?: boolean;
+  suppress_llm_response?: boolean;
   // actions
   content?: string;
   priority?: string;
