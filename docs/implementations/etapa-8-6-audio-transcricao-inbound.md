@@ -244,12 +244,16 @@ Nenhum novo arquivo — tudo integrado nos existentes.
 - [ ] Confirmar: bot responde com mensagem informando que áudio não é aceito
 
 #### ✅ Cenário P4 — Regressão: marcador `{áudio}` ainda funciona
-- [ ] Digitar `{áudio}` e enviar
-- [ ] Confirmar: card simulado aparece (sem player, sem upload) — sem regressão
+- [x] Digitar `{áudio}` e enviar
+- [x] Confirmar: card simulado aparece (sem player, sem upload) — sem regressão
+- [x] Confirmar: hint "Mídia simulada — será exibida como card no chat" aparece ao digitar
+- **Validado em:** 27/05/2026 — bolha do lead mostra "Áudio simulado" sem player; bot respondeu normalmente (recepcao 90%)
 
 #### ✅ Cenário P5 — Modo lote com texto
-- [ ] Adicionar mensagens de texto ao modo lote e enviar
-- [ ] Confirmar: comportamento inalterado
+- [x] Adicionar 2 mensagens de texto ao modo lote e enviar
+- [x] Confirmar: duas bolhas do lead aparecem separadas no chat
+- [x] Confirmar: bot absorve ambas como contexto único e responde uma vez
+- **Validado em:** 27/05/2026 — "olá, me chamo Daniel" + "tenho interesse na vossa plataforma" enviadas em lote; bot respondeu em modo qualification absorvendo as duas mensagens
 
 #### ✅ Cenário P6 — Permissão de microfone negada
 - [ ] Bloquear microfone no browser → clicar Mic
