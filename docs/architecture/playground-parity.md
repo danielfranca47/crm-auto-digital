@@ -130,6 +130,9 @@ Além da paridade de contexto LLM, o playground expõe campos de preview que sim
 |-------|-----------|-----------------|
 | `simulated_delay_seconds` | Delay antes de responder (sorteado entre min/max do AI Profile) | `scheduled_at` do job em `inbound_handler.py` |
 | `typing_seconds` | Duração do "Digitando..." exibido no WhatsApp | Campo `delay` enviado à UazAPI via `whatsapp_send.py` |
+| `auto_items` | Lista ordenada de itens automáticos do Fluxo de Venda: `{type:"text", content}` ou `{type:"media", media_url, media_type}` | `_send_actions` despachados pelo runner via `_send_sales_flow_action()` |
+| `phase_trigger_fired` | `bool` — quando `True`, frontend exibe `auto_items` **antes** da resposta LLM | Runner envia `_send_actions` antes da mensagem LLM quando `phase_trigger` disparou |
+| `suppress_llm_response` | `bool` — quando `True`, frontend omite o turno da LLM por completo (sem bolha vazia) | Runner completa job com `skipped_suppress_llm` sem enviar mensagem LLM |
 
 ### Fórmula do typing indicator
 

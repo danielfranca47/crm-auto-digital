@@ -55,10 +55,10 @@ O builder adapta a UI e o executor filtra os blocos com base no `agent_mode` do 
 
 | `typeId` | Nome | Comportamento em runtime |
 |---|---|---|
-| `kw_trigger` | Palavra-chave | Activa se a mensagem do lead contém a(s) keyword(s) definidas |
-| `phase_trigger` | Entrada na fase | Activa sempre que a fase for a rota resolvida (sem condição de mensagem) |
-| `no_reply_trigger` | Sem resposta | Activa quando o lead não respondeu por N unidades de tempo (`wait_value` + `wait_unit`) |
-| `intent_trigger` | Intenção detectada | Activa se o intent da mensagem bate com o campo `intent` (ex: `"pergunta_preco"`) |
+| `kw_trigger` | Palavra-chave | Activa se a mensagem do lead contém a(s) keyword(s) definidas. Suporta `fire_once` (ver abaixo). |
+| `phase_trigger` | Entrada na fase | Activa **uma única vez por lead** — na primeira mensagem que chega à fase. Rastreado por `leads.phases_triggered` (JSON array de phase IDs disparados). Quando dispara, injeta contexto no `prompt_injections` e emite `mark_phase_triggered`. |
+| `no_reply_trigger` | Sem resposta | Placeholder de UI. Não avaliado em runtime. |
+| `intent_trigger` | Intenção detectada | A LLM Mãe recebe secção `[DETECÇÃO DE INTENÇÃO]` condicional se a fase tiver blocos deste tipo. Retorna `detected_intents: list[str]`. O bloco dispara se `intent_label in detected_intents`. Suporta `fire_once` (ver abaixo). |
 
 ### Ações (executadas quando o trigger bate)
 
@@ -66,9 +66,11 @@ O builder adapta a UI e o executor filtra os blocos com base no `agent_mode` do 
 |---|---|---|
 | `orientacao` | Orientação ao LLM | Texto injectado como instrução adicional no prompt filho da fase |
 | `mensagem` | Mensagem fixa | Texto enviado como `system_actions[{type: "send_message", content}]` |
-| `midia` | Mídia | Item de `knowledge_media` enviado como `pre_send_media` antes da mensagem |
+| `midia` | Mídia | Enviado como `system_actions[{type: "send_media", media_url, media_type}]`, na sequência configurada entre outros blocos. |
 | `avancar_fase` | Avançar fase | Dispara `system_actions[{type: "advance_phase", target_phase}]` → move lead no Kanban |
 | `webhook` | Webhook | Destinado a disparar chamada HTTP externa (execução futura) |
+
+> Quando `phase_trigger` dispara, blocos `mensagem` e `midia` subsequentes também adicionam o conteúdo enviado a `prompt_injections`, para que o LLM filho saiba o que foi enviado automaticamente e possa complementar sem repetir.
 
 ### Lógica
 
@@ -81,32 +83,81 @@ O builder adapta a UI e o executor filtra os blocos com base no `agent_mode` do 
 
 ---
 
+## Flags opcionais em blocos de trigger
+
+### `fire_once` (`kw_trigger`, `intent_trigger`)
+
+Quando `fire_once: true`, o bloco dispara apenas **uma vez por lead**:
+- Ao disparar, emite `{type: "mark_trigger_fired", block_id}` nos `system_actions`
+- CRM (playground e executor) faz append do `block_id` em `leads.triggers_fired` (JSON array)
+- Em disparos seguintes: `already_fired = block_id ∈ triggers_fired` → `fired = False`
+
+**DB:** coluna `leads.triggers_fired TEXT NULL` (adicionada em `backend-crm/database.py` via `ensure_column`).
+
+### `suppress_llm_response` (`kw_trigger`, `intent_trigger`, `phase_trigger`)
+
+Quando `suppress_llm_response: true` e o trigger dispara:
+- As ações automáticas (`mensagem`, `midia`) são executadas normalmente
+- O `decision_engine` força `next_action = "ignore"` e `message_text = ""`
+- **Playground:** frontend omite o turno da LLM; exibe apenas os `auto_items`
+- **WhatsApp real:** runner despacha `_send_actions` sincronamente, completa job com `skipped_suppress_llm` (sem enviar mensagem LLM)
+
+---
+
 ## Fluxo de execução (backend)
 
+### Modelo sequencial de trigger (`_evaluate_sales_flow_phases`)
+
+Os blocos de uma fase são avaliados em sequência. Um flag `last_trigger_active` propaga a decisão do último trigger para os blocos de ação seguintes:
+
 ```
-decision_engine.decide(context)
-  → LLM Mãe → route_to (ex: "apresentation")
-  → _evaluate_sales_flow_phases(context, effective_route_to, message_text)
-      → _ROUTE_TO_PHASE_ID["apresentation"] → "p2"
-      → itera sobre phases[] do sales_flow do AI Profile
-      → para a fase "p2": itera sobre blocks[]
-          → avalia trigger de cada bloco (kw, phase, no_reply, intent)
-          → se trigger bate:
-              orientacao  → adiciona a prompt_injections[]
-              mensagem    → adiciona a system_actions[{type:"send_message"}]
-              midia       → adiciona a pre_send_media[]
-              avancar_fase → adiciona a system_actions[{type:"advance_phase"}]
-      → retorna {prompt_injections, pre_send_media, system_actions}
-  → injeta prompt_injections no prompt filho
-  → LLM Filha → ChildResult
-  → compose_decision_output(...)
-      → DecisionOutput.pre_send_media = [sales_flow_media] + [media_from_child]
-      → DecisionOutput.system_actions = [...]
+last_trigger_active = True   # default: ações sem trigger explícito sempre disparam
+
+para cada block em fase.blocks:
+    se block é trigger (kw/phase/intent/no_reply):
+        fired = avaliar_trigger(block, context)
+        last_trigger_active = fired
+        se fired e block.suppress_llm_response:
+            result["suppress_llm_response"] = True
+    se block é ação (orientacao/mensagem/midia/avancar_fase):
+        se last_trigger_active:
+            executar_ação(block, result)
 ```
 
-**Resultado em `DecisionOutput`:**
-- `pre_send_media` — lista de dicts com `{media_type, url, caption, ...}` a enviar antes do texto
-- `system_actions` — lista de dicts com `{type, ...}` a executar pelo executor do CRM
+**Avaliação por tipo de trigger:**
+
+| Trigger | Condição de `fired = True` |
+|---|---|
+| `phase_trigger` | `is_phase_entry = True` — derivado de `lead.category != effective_route_to` **E** `phase_id ∉ leads.phases_triggered` |
+| `kw_trigger` | Keyword match na mensagem + `fire_once` check (`block_id ∉ leads.triggers_fired` se `fire_once=True`) |
+| `intent_trigger` | `intent_label in detected_intents` (da LLM Mãe) + `fire_once` check |
+| `no_reply_trigger` | Nunca (placeholder) |
+
+**Destino das ações:**
+
+| Ação | Destino |
+|---|---|
+| `orientacao` | `result["prompt_injections"]` → injectado no prompt filho |
+| `mensagem` | `result["system_actions"][{type:"send_message", content}]` |
+| `midia` | `result["system_actions"][{type:"send_media", media_url, media_type}]` |
+| `avancar_fase` | `result["system_actions"][{type:"advance_phase", target_phase}]` |
+
+**Contexto para o LLM filho (quando `phase_trigger` dispara):**
+
+O engine adiciona um preamble a `prompt_injections` seguido das mensagens/mídias automáticas enviadas. O LLM filho recebe o contexto do que foi enviado e deve complementar — não repetir.
+
+**Supressão da LLM (`suppress_llm_response`):**
+
+Se `result["suppress_llm_response"] = True`, `compose_decision_output()` força `next_action = "ignore"` e `message_text = ""`. As `system_actions` são preservadas e despachadas normalmente.
+
+### Ordem de exibição / envio
+
+| Cenário | Ordem |
+|---|---|
+| `phase_trigger` disparou | Auto-mensagens → LLM |
+| `kw_trigger` ou `intent_trigger` disparou (sem `suppress_llm_response`) | LLM → Auto-mensagens |
+| `suppress_llm_response = True` | Apenas auto-mensagens (LLM omitido) |
+| Nenhum trigger activo | Apenas LLM |
 
 ---
 
@@ -128,7 +179,28 @@ _PHASE_ID_TO_CATEGORY = {
 | `action.type` | O que faz |
 |---|---|
 | `send_message` | Cria job `whatsapp.send.local` com o texto do campo `content` |
+| `send_media` | Cria job `whatsapp.send.local` com `media_url` e `media_type` |
 | `advance_phase` | Resolve `target_phase` via `_PHASE_ID_TO_CATEGORY` → chama `apply_suggested_category()` |
+| `mark_phase_triggered` | Append do `phase_id` em `leads.phases_triggered` |
+| `mark_trigger_fired` | Append do `block_id` em `leads.triggers_fired` |
+
+---
+
+## WhatsApp real — runner (`whatsapp.py`)
+
+Após `decision_engine.decide()`, o runner classifica as `system_actions` em dois grupos:
+
+```python
+_send_actions  = [a for a in system_actions if a["type"] in ("send_message", "send_media")]
+_state_actions = [a for a in system_actions if a["type"] not in ("send_message", "send_media")]
+```
+
+- **`_send_actions`** são despachados sincronamente via `_send_sales_flow_action()` (chamada directa à API do WhatsApp), antes ou depois da mensagem LLM consoante `phase_trigger_fired`.
+- **`_state_actions`** são passados ao CRM no `result_payload["system_actions"]` para persistência (executor.py os processa via `_dispatch_system_actions()`).
+
+Comportamento especial quando `suppress_llm_response=True`:
+- `_send_actions` são despachados normalmente (sem mensagem LLM)
+- Job completa com `outbound_status = "skipped_suppress_llm"`
 
 ---
 
@@ -159,6 +231,15 @@ O Fluxo de Venda é salvo no campo `sales_flow` da tabela `ai_profiles` (backend
 ```
 
 O campo é lido pelo orchestrator do CRM e inserido no `ContextBundle` via `enrich_context_bundle()`, chegando ao executor no `context.ai_profile.sales_flow`.
+
+**Colunas adicionais em `leads` (backend-crm):**
+
+| Coluna | Tipo | Descrição |
+|---|---|---|
+| `phases_triggered` | `TEXT NULL` | JSON array de phase IDs disparados por este lead (ex: `["p2", "p3a"]`) |
+| `triggers_fired` | `TEXT NULL` | JSON array de block IDs disparados com `fire_once` (ex: `["uuid1", "uuid2"]`) |
+
+Ambas adicionadas via `ensure_column()` em `backend-crm/database.py`.
 
 ---
 

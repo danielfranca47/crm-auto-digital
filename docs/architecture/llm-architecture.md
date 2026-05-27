@@ -49,6 +49,7 @@ whatsapp_worker
 | `perceived_category` | mesmos valores + null | Categoria percebida |
 | `confidence` | 0..1 | Confiança da decisão |
 | `reason` | string | Justificativa textual |
+| `detected_intents` | `list[str]` | Intenções detectadas na mensagem do lead. Presente apenas quando a fase activa tem blocos `intent_trigger`; caso contrário `[]`. Usado por `_evaluate_sales_flow_phases()` para avaliar `intent_trigger`. |
 
 ### ChildResult (saída da LLM Filha)
 | Campo | Tipo | Descrição |
@@ -70,8 +71,9 @@ Campos adicionados pelo Fluxo de Venda (Camada 7):
 
 | Campo | Tipo | Descrição |
 |---|---|---|
-| `pre_send_media` | `list[dict]\|dict\|null` | Mídias enviadas antes da mensagem de texto (blocos `midia` do Fluxo de Venda ou `media_keys_to_send` da filha de apresentação) |
-| `system_actions` | `list[dict]\|null` | Ações do Fluxo de Venda: `{type: "send_message", content}` e `{type: "advance_phase", target_phase}` |
+| `pre_send_media` | `list[dict]\|null` | Mídias de `media_keys_to_send` da filha de apresentação. Blocos `midia` do Fluxo de Venda vão para `system_actions` (não para este campo). |
+| `system_actions` | `list[dict]\|null` | Ações do Fluxo de Venda: `send_message`, `send_media`, `advance_phase`, `mark_phase_triggered`, `mark_trigger_fired` |
+| `suppress_llm_response` | `bool` | `True` quando um trigger com o flag disparou. Força `next_action="ignore"` e `message_text=""`. Ações automáticas são executadas normalmente. |
 
 ---
 
