@@ -32,6 +32,45 @@ def is_audio_type(message_type: str | None) -> bool:
     return (message_type or "").lower().strip() in _AUDIO_MESSAGE_TYPES
 
 
+def transcribe_audio_from_path(file_path: str, language: str = "pt") -> str | None:
+    """
+    Transcreve áudio a partir de um caminho local via OpenAI Whisper.
+    Usado pelo playground (evita round-trip HTTP ao contrário de transcribe_audio_from_url).
+    Retorna o texto transcrito ou None em caso de falha.
+    """
+    if not _OPENAI_API_KEY:
+        logger.warning("[audio_transcription] OPENAI_API_KEY não configurada — transcrição impossível")
+        return None
+
+    if not file_path or not os.path.exists(file_path):
+        logger.warning("[audio_transcription] file_path inválido ou não encontrado: %s", file_path)
+        return None
+
+    ext = os.path.splitext(file_path)[1].lstrip(".") or "ogg"
+    content_type = f"audio/{ext}"
+
+    try:
+        with open(file_path, "rb") as audio_file:
+            with httpx.Client(timeout=120) as client:
+                resp = client.post(
+                    "https://api.openai.com/v1/audio/transcriptions",
+                    headers={"Authorization": f"Bearer {_OPENAI_API_KEY}"},
+                    data={"model": "whisper-1", "language": language},
+                    files={"file": (f"audio.{ext}", audio_file, content_type)},
+                )
+                resp.raise_for_status()
+                result = resp.json()
+                text = result.get("text", "").strip()
+                if not text:
+                    logger.warning("[audio_transcription] Whisper retornou texto vazio path=%s", file_path)
+                    return None
+                logger.info("[audio_transcription] transcrição concluída chars=%s", len(text))
+                return text
+    except Exception as exc:
+        logger.error("[audio_transcription] erro na transcrição Whisper path=%s: %s", file_path, exc)
+        return None
+
+
 def transcribe_audio_from_url(media_url: str, language: str = "pt") -> str | None:
     """
     Baixa o áudio de media_url e transcreve via OpenAI Whisper.

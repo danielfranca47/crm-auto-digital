@@ -14,18 +14,22 @@ from __future__ import annotations
 
 import logging
 import os
+import shutil
 import sqlite3
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import Any, Dict, List, Literal, Optional
 from uuid import uuid4
 
 import json
 
 import httpx
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
+from fastapi.responses import FileResponse
 from pydantic import BaseModel, ConfigDict, Field
 
 from core_client import fetch_core_ai_profile, fetch_core_ai_profile_by_id
+from services.audio_transcription import transcribe_audio_from_path
 from services.humanization import compute_reply_delay, compute_typing_ms, split_by_punctuation
 from database import get_connection
 from security_core import CurrentUser, require_crm_access
@@ -35,6 +39,9 @@ from services.qualification_state import get_qualification_state
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/playground", tags=["Playground"])
+
+TEMP_AUDIO_DIR = Path("temp_audio")
+TEMP_AUDIO_DIR.mkdir(exist_ok=True)
 
 # ---------------------------------------------------------------------------
 # Configuração do executors
@@ -66,11 +73,13 @@ def _get_service_token() -> str:
 
 class PlaygroundChatRequest(BaseModel):
     ai_profile_id: int = Field(..., description="ID do AiProfile no backend-core")
-    message: str = Field("", description="Mensagem simulada do lead (vazio apenas em is_opener=True)")
+    message: str = Field("", description="Mensagem simulada do lead (vazio apenas em is_opener=True ou message_type=audio)")
     lead_id: Optional[int] = Field(None, description="ID do lead sandbox existente; null cria um novo")
     reset: bool = Field(False, description="Se true, limpa histórico e qualification_state antes de processar")
     scenario_type: Literal["inbound", "outbound"] = Field("inbound", description="Tipo de cenário: inbound (lead inicia) ou outbound (bot inicia)")
     is_opener: bool = Field(False, description="Se true e scenario_type=outbound, retorna a mensagem de abertura outbound sem processar mensagem do lead")
+    message_type: Optional[str] = Field(None, description="Tipo da mensagem — 'audio' quando gravado no playground")
+    audio_filename: Optional[str] = Field(None, description="Nome do ficheiro em temp_audio/ retornado pelo endpoint upload-audio")
 
 
 class MotherDecision(BaseModel):
@@ -394,6 +403,32 @@ def _build_decision_trace(
 # Endpoint principal
 # ---------------------------------------------------------------------------
 
+@router.post("/upload-audio")
+async def upload_playground_audio(
+    audio: UploadFile = File(...),
+    current_user: CurrentUser = Depends(require_crm_access),
+):
+    """Recebe um ficheiro de áudio gravado no playground e guarda-o temporariamente."""
+    ext = Path(audio.filename or "audio.ogg").suffix or ".ogg"
+    filename = f"{uuid4().hex}{ext}"
+    dest = TEMP_AUDIO_DIR / filename
+    with dest.open("wb") as f:
+        shutil.copyfileobj(audio.file, f)
+    return {"filename": filename, "audio_url": f"/api/playground/audio/{filename}"}
+
+
+@router.get("/audio/{filename}")
+async def serve_playground_audio(
+    filename: str,
+    current_user: CurrentUser = Depends(require_crm_access),
+):
+    """Serve um ficheiro de áudio guardado temporariamente para reprodução no browser."""
+    path = TEMP_AUDIO_DIR / filename
+    if not path.exists():
+        raise HTTPException(status_code=404, detail="Áudio não encontrado")
+    return FileResponse(str(path), media_type="audio/ogg")
+
+
 @router.post("/chat", response_model=PlaygroundChatResponse)
 def playground_chat(
     body: PlaygroundChatRequest,
@@ -454,10 +489,69 @@ def playground_chat(
             ),
         )
 
-    # ── Passo 3b: Guarda mensagem inbound ────────────────────────────────────
-    if not body.message:
+    # ── Passo 3b: Áudio ou mensagem de texto inbound ─────────────────────────
+    effective_message = body.message
+
+    if body.message_type == "audio" and body.audio_filename:
+        audio_path = str(TEMP_AUDIO_DIR / body.audio_filename)
+        audio_enabled = bool(ai_profile.get("audio_transcription_enabled"))
+
+        if audio_enabled:
+            transcription = transcribe_audio_from_path(audio_path)
+            if transcription:
+                effective_message = f"[Áudio]: {transcription}"
+            else:
+                # falha de transcrição — simular media_fallback
+                offer_pack = ai_profile.get("offer_pack") or {}
+                fallback_msg = offer_pack.get("media_fallback_msg") or "Não consegui processar o áudio. Por favor, tente novamente."
+                _insert_message(lead_id, "[Áudio]: (falha na transcrição)", "inbound")
+                return PlaygroundChatResponse(
+                    lead_id=lead_id,
+                    message_to_send=fallback_msg,
+                    next_action="none",
+                    lead_state=LeadState(category="qualification"),
+                    decision_trace=DecisionTrace(
+                        agent_mode=ai_profile.get("agent_mode"),
+                        presentation_variant=ai_profile.get("presentation_variant"),
+                        mother_route="audio_transcription_failed",
+                        effective_route="audio_transcription_failed",
+                        ai_profile_id=body.ai_profile_id,
+                        lead_id=lead_id,
+                        lead_is_sandbox=True,
+                        timestamp=datetime.now(timezone.utc).isoformat(),
+                    ),
+                )
+        else:
+            # toggle desligado — simular comportamento de media_fallback
+            offer_pack = ai_profile.get("offer_pack") or {}
+            behavior = (offer_pack.get("media_fallback") or "ignorar").lower()
+            msg_map = {
+                "continuar": offer_pack.get("media_fallback_msg") or "Não consigo processar áudios. Por favor, envie uma mensagem de texto.",
+                "pausar": (offer_pack.get("media_fallback_msg") or "Não consigo processar áudios."),
+                "ignorar": "Áudio não aceito — ative 'Receber áudio' no AI Profile para testar esta funcionalidade.",
+            }
+            fallback_msg = msg_map.get(behavior, msg_map["ignorar"])
+            _insert_message(lead_id, "[Áudio]: (transcrição desativada)", "inbound")
+            return PlaygroundChatResponse(
+                lead_id=lead_id,
+                message_to_send=fallback_msg,
+                next_action="none",
+                lead_state=LeadState(category="qualification"),
+                decision_trace=DecisionTrace(
+                    agent_mode=ai_profile.get("agent_mode"),
+                    presentation_variant=ai_profile.get("presentation_variant"),
+                    mother_route="audio_disabled",
+                    effective_route="audio_disabled",
+                    ai_profile_id=body.ai_profile_id,
+                    lead_id=lead_id,
+                    lead_is_sandbox=True,
+                    timestamp=datetime.now(timezone.utc).isoformat(),
+                ),
+            )
+
+    if not effective_message:
         raise HTTPException(status_code=422, detail="message é obrigatório quando is_opener=False")
-    _insert_message(lead_id, body.message, "inbound")
+    _insert_message(lead_id, effective_message, "inbound")
 
     # ── Delay simulado (paridade com WhatsApp real) ───────────────────────────
     with get_connection() as _conn_pg:
@@ -473,7 +567,7 @@ def playground_chat(
         user_id=user_id,
         ai_profile=ai_profile,
         lead_id=lead_id,
-        message_text=body.message,
+        message_text=effective_message,
         scenario_type=body.scenario_type,
     )
 

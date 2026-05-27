@@ -4,6 +4,7 @@ import { Badge } from "@/components/ui/badge";
 import { toast } from "@/hooks/use-toast";
 import { RefreshCw, ArrowDownToLine, ArrowUpFromLine } from "lucide-react";
 import { api, type PlaygroundChatResponse, type PlaygroundAutoItem } from "@/services/api";
+import { API_BASE } from "@/lib/api-client";
 import { PlaygroundConfigModal, type PlaygroundSession } from "@/components/playground/PlaygroundConfigModal";
 import { PlaygroundChat } from "@/components/playground/PlaygroundChat";
 import { PlaygroundFeedback, type FeedbackItem, type FeedbackTag } from "@/components/playground/PlaygroundFeedback";
@@ -253,6 +254,69 @@ export default function Playground() {
     [session]
   );
 
+  // ── Enviar áudio gravado no playground ────────────────────────────────────
+
+  const handleSendAudio = useCallback(
+    async (blob: Blob) => {
+      if (!session) return;
+
+      setLoading(true);
+      try {
+        const { filename, audio_url } = await api.playground.uploadAudio(blob);
+        const audioPlayerUrl = `${API_BASE}${audio_url.replace(/^\/api/, "")}`;
+
+        // Bolha do lead com player reproduzível
+        const leadMsgId = crypto.randomUUID();
+        setMessages((prev) => [
+          ...prev,
+          {
+            id: leadMsgId,
+            role: "lead",
+            text: "[Áudio gravado]",
+            isAudioMessage: true,
+            audioUrl: audioPlayerUrl,
+            timestamp: new Date().toISOString(),
+            selectedForFeedback: false,
+          },
+        ]);
+
+        const res = await api.playground.chat({
+          ai_profile_id: session.aiProfileId,
+          message: "",
+          lead_id: session.leadId,
+          scenario_type: session.scenarioType,
+          message_type: "audio",
+          audio_filename: filename,
+        });
+
+        if (!session.leadId) {
+          setSession((s) => s ? { ...s, leadId: res.lead_id } : s);
+        }
+
+        const parts = res.message_parts?.length ? res.message_parts : [res.message_to_send];
+        const autoItems = resolveAutoItems(res);
+        if (res.suppress_llm_response) {
+          if (autoItems.length) await revealAutoMessages(autoItems, setMessages, setLoading);
+        } else if (res.phase_trigger_fired && autoItems.length) {
+          await revealAutoMessages(autoItems, setMessages, setLoading);
+          setMessages((prev) => [...prev, buildBotMessage(parts[0], res, { isFirst: true, totalParts: parts.length })]);
+          if (parts.length > 1) await revealExtraParts(parts.slice(1), setMessages, setLoading);
+        } else {
+          setMessages((prev) => [...prev, buildBotMessage(parts[0], res, { isFirst: true, totalParts: parts.length })]);
+          if (parts.length > 1) await revealExtraParts(parts.slice(1), setMessages, setLoading);
+          if (autoItems.length) await revealAutoMessages(autoItems, setMessages, setLoading);
+        }
+        appendPhaseAdvances(res.phase_advances ?? [], setMessages);
+      } catch (err: unknown) {
+        const msg = err instanceof Error ? err.message : "Erro ao enviar áudio";
+        toast({ title: "Erro", description: msg, variant: "destructive" });
+      } finally {
+        setLoading(false);
+      }
+    },
+    [session]
+  );
+
   // ── Handlers de feedback ──────────────────────────────────────────────────
 
   const handleToggleFeedback = useCallback((messageId: string) => {
@@ -434,7 +498,9 @@ export default function Playground() {
                   messages={messages}
                   loading={loading}
                   scenarioType={session.scenarioType}
+                  audioEnabled={session.profileSnapshot.audio_transcription_enabled ?? false}
                   onSend={handleSend}
+                  onSendAudio={handleSendAudio}
                   onToggleFeedback={handleToggleFeedback}
                   onRate={handleRate}
                 />

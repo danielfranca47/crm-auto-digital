@@ -19,6 +19,8 @@ export interface ChatMessage {
   timestamp: string;
   isAutoMessage?: boolean;
   isPhaseAdvance?: boolean;
+  isAudioMessage?: boolean;
+  audioUrl?: string;
   decisionTrace?: PlaygroundDecisionTrace;
   motherRoute?: string | null;
   confidence?: number;
@@ -277,8 +279,18 @@ export function MessageBubble({ message, onToggleFeedback, onRate }: MessageBubb
               </div>
             )}
 
-            {/* Conteúdo da mensagem — card de mídia para lead, texto para os demais */}
-            {leadMediaType ? (
+            {/* Conteúdo da mensagem — player real, card simulado ou texto */}
+            {isLead && message.isAudioMessage ? (
+              <div className="flex flex-col gap-1">
+                <div className="flex items-center gap-1.5 text-xs opacity-75">
+                  <Mic className="h-3.5 w-3.5" />
+                  <span>Áudio gravado</span>
+                </div>
+                {message.audioUrl ? (
+                  <audio controls src={message.audioUrl} className="max-w-[200px] h-8" />
+                ) : null}
+              </div>
+            ) : leadMediaType ? (
               <MediaCard type={leadMediaType} url="#" />
             ) : (
               message.text

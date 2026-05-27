@@ -1,7 +1,7 @@
 # Etapa 8-6: Recebimento de Áudio e Transcrição para o LLM
 
 **Branch:** `etapa-8-6-audio-texto`  
-**Status:** Em implementação
+**Status:** Em implementação — Fase 2 (Playground) em andamento
 
 ---
 
@@ -157,3 +157,99 @@ Nenhuma nova variável necessária. `OPENAI_API_KEY` já usada pelo Spy Agent de
 - **Idioma Whisper:** Padrão `"pt"`. Se o sistema for usado em outros idiomas, avaliar tornar configurável via AI Profile ou detectar automaticamente.
 - **Timeout de transcrição:** Áudios longos podem exceder o timeout do webhook. Monitorar p99 de latência após deploy e ajustar se necessário (opção: mover para job assíncrono).
 - **Custo OpenAI:** Whisper é cobrado por minuto de áudio. Monitorar usage após ativação em produção.
+
+---
+
+## Fase 2 — Gravação de Áudio no Playground
+
+### Motivação
+
+A Fase 1 implementou o fluxo real WhatsApp → transcrição → LLM. No entanto, testar esta funcionalidade exigia ter um número WhatsApp conectado e enviar um PTT real. O playground — principal ferramenta de testes do operador — não suportava gravação de áudio: o marcador `{áudio}` apenas simulava um card visual sem transcrição real.
+
+O objetivo desta fase é permitir que o operador grave um áudio diretamente no playground, exatamente como um lead faria no WhatsApp, e valide o comportamento do agente em ambos os casos (toggle ligado e desligado).
+
+### Problemas Identificados (antes da Fase 2)
+
+1. **Sem gravação real no playground:** `PlaygroundChat.tsx` só aceitava text markers `{áudio}` — card visual simulado, sem upload nem transcrição.
+2. **`PlaygroundChatRequest` sem suporte a áudio:** O endpoint `/api/playground/chat` só processava `message: string`, sem `message_type` ou referência a arquivo de áudio.
+3. **`transcribe_audio_from_url()` dependia de URL pública:** Não se aplicava ao playground onde o arquivo existe localmente no servidor.
+
+### Abordagem
+
+```
+Operador clica Mic → MediaRecorder grava áudio no browser
+→ Para gravação → Blob criado → preview player mostrado
+→ Clica "Enviar"
+  → POST /api/playground/upload-audio → salva em temp_audio/ → {filename, audio_url}
+  → Lead bubble adicionada com <audio> player reproduzível
+  → POST /api/playground/chat {message_type:"audio", audio_filename:filename}
+    → backend: check audio_transcription_enabled
+      ├─ TRUE  → transcribe_audio_from_path() → effective_message="[Áudio]: ..."
+      │          → fluxo normal do LLM → bot responde ao conteúdo
+      └─ FALSE → simular media_fallback → retorna mensagem configurada no AI Profile
+```
+
+### Novos arquivos (Fase 2)
+
+Nenhum novo arquivo — tudo integrado nos existentes.
+
+### Arquivos modificados (Fase 2)
+
+| Arquivo | O que muda |
+|---|---|
+| `backend-crm/services/audio_transcription.py` | Adiciona `transcribe_audio_from_path(file_path)` — lê do disco, sem HTTP |
+| `backend-crm/routes/playground.py` | Endpoints `POST /upload-audio` e `GET /audio/{filename}`; extensão de `PlaygroundChatRequest`; lógica de transcrição/fallback no chat handler |
+| `frontend-crm/src/services/api.ts` | Tipos estendidos + `uploadPlaygroundAudio()` |
+| `frontend-crm/src/components/playground/PlaygroundChat.tsx` | Botão microfone, MediaRecorder, preview player, props `onSendAudio` e `audioEnabled` |
+| `frontend-crm/src/pages/Playground.tsx` | Callback `handleSendAudio` — coordena upload + chat |
+| `frontend-crm/src/components/playground/MessageBubble.tsx` | Player `<audio>` na bolha do lead quando `isAudioMessage=true` |
+
+### Detalhes técnicos
+
+**`transcribe_audio_from_path()`**
+- Lê bytes do disco diretamente (sem round-trip HTTP)
+- Compartilha lógica Whisper com `transcribe_audio_from_url()`
+- Usado exclusivamente pelo playground (inbound real usa a versão com URL)
+
+**Armazenamento temporário**
+- Arquivos salvos em `backend-crm/temp_audio/` (criado automaticamente na startup)
+- Servidos via `GET /api/playground/audio/{filename}` com `FileResponse`
+- Sem cleanup automático (MVP) — pode ser adicionado com TTL em versão futura
+
+**Parity com fluxo real**
+- Mesma flag `audio_transcription_enabled` consultada
+- Mesmo comportamento de `media_fallback` quando toggle desligado
+- Mesmo prefixo `"[Áudio]: "` no texto enviado ao LLM
+
+### Checks de Validação — Fase 2
+
+#### ✅ Cenário P1 — Toggle ligado, gravação no playground
+- [ ] Ligar `audio_transcription_enabled` no AI Profile
+- [ ] Clicar no botão de microfone no playground
+- [ ] Falar e clicar parar
+- [ ] Confirmar: preview player aparece com o áudio gravado
+- [ ] Clicar "Enviar"
+- [ ] Confirmar: lead bubble mostra player de áudio reproduzível
+- [ ] Confirmar: bot responde ao conteúdo do áudio transcrito
+
+#### ✅ Cenário P2 — Toggle desligado, media_fallback = "continuar"
+- [ ] Desligar toggle; configurar Mídia inválida como "Responder e continuar"
+- [ ] Gravar e enviar áudio no playground
+- [ ] Confirmar: bot responde com a `media_fallback_msg` configurada
+
+#### ✅ Cenário P3 — Toggle desligado, media_fallback = "ignorar"
+- [ ] Desligar toggle; configurar Mídia inválida como "Ignorar"
+- [ ] Gravar e enviar áudio
+- [ ] Confirmar: bot responde com mensagem informando que áudio não é aceito
+
+#### ✅ Cenário P4 — Regressão: marcador `{áudio}` ainda funciona
+- [ ] Digitar `{áudio}` e enviar
+- [ ] Confirmar: card simulado aparece (sem player, sem upload) — sem regressão
+
+#### ✅ Cenário P5 — Modo lote com texto
+- [ ] Adicionar mensagens de texto ao modo lote e enviar
+- [ ] Confirmar: comportamento inalterado
+
+#### ✅ Cenário P6 — Permissão de microfone negada
+- [ ] Bloquear microfone no browser → clicar Mic
+- [ ] Confirmar: erro é tratado graciosamente (toast ou mensagem), UI não quebra

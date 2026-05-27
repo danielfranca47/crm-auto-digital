@@ -28,6 +28,7 @@ export interface PlaygroundSession {
     qualification_required_fields?: string[] | null;
     custom_instructions?: string | null;
     brand_name?: string | null;
+    audio_transcription_enabled?: boolean;
   };
 }
 
@@ -74,6 +75,7 @@ export function PlaygroundConfigModal({ open, onStart }: PlaygroundConfigModalPr
         qualification_required_fields: profile.qualification_required_fields,
         custom_instructions: profile.custom_instructions,
         brand_name: profile.brand_name,
+        audio_transcription_enabled: (profile as any).audio_transcription_enabled ?? false,
       },
     });
   }

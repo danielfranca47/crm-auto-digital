@@ -1466,8 +1466,19 @@ export const api = {
       reset?: boolean;
       scenario_type?: "inbound" | "outbound";
       is_opener?: boolean;
+      message_type?: string;
+      audio_filename?: string;
     }) =>
       apiClient.post<PlaygroundChatResponse>("/playground/chat", payload),
+
+    uploadAudio: async (blob: Blob): Promise<{ filename: string; audio_url: string }> => {
+      const form = new FormData();
+      form.append("audio", blob, "recording.ogg");
+      return apiClient.post<{ filename: string; audio_url: string }>(
+        "/playground/upload-audio",
+        form,
+      );
+    },
 
     feedbackAssist: async (payload: FeedbackAssistRequest) =>
       apiClient.post<FeedbackAssistResponse>("/playground/feedback-assist", payload),
