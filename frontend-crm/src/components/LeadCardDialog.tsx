@@ -15,6 +15,16 @@ import {
   ExternalLink,
 } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "./ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "./ui/alert-dialog";
 import { Badge } from "./ui/badge";
 import { Button } from "./ui/button";
 import { Textarea } from "./ui/textarea";
@@ -251,6 +261,10 @@ function LeadCardDialogBody({
   const [isScheduleDialogOpen, setIsScheduleDialogOpen] = useState(false);
   const [appointmentToEdit, setAppointmentToEdit] = useState<Appointment | null>(null);
   const [rescheduleOutcomeId, setRescheduleOutcomeId] = useState<string | null>(null);
+  const [showDisableModal, setShowDisableModal] = useState(false);
+  const [showReactivateWarningModal, setShowReactivateWarningModal] = useState(false);
+  const [disableAware, setDisableAware] = useState(false);
+  const [reactivateAware, setReactivateAware] = useState(false);
 
   // Carrega compromissos do lead (rota: GET /leads/{id}/appointments)
   const leadId = lead?.id;
@@ -424,7 +438,34 @@ function LeadCardDialogBody({
     }
   };
 
+  const handleDisableBot = async () => {
+    try {
+      await api.setLeadBotDisabled(lead.id, { disabled: true, reason: "manual_disable" });
+      setEditedLead((prev) =>
+        prev ? { ...prev, bot_disabled: true, bot_disabled_reason: "manual_disable" } : prev
+      );
+      onUpdateLead?.(lead.id, {
+        bot_disabled: true,
+        bot_disabled_reason: "manual_disable",
+      } as Partial<Lead>);
+      toast({ title: "Bot desativado para este lead" });
+    } catch (error: any) {
+      toast({
+        title: "Erro ao desativar bot",
+        description: error?.message ?? "Não foi possível desativar o bot.",
+        variant: "destructive",
+      });
+    } finally {
+      setShowDisableModal(false);
+      setDisableAware(false);
+    }
+  };
+
   const handleReactivateBot = async () => {
+    if (currentLead.bot_disabled_reason === "manual_disable" && !showReactivateWarningModal) {
+      setShowReactivateWarningModal(true);
+      return;
+    }
     try {
       await api.setLeadBotDisabled(lead.id, {
         disabled: false,
@@ -444,6 +485,9 @@ function LeadCardDialogBody({
         description: error?.message ?? "Não foi possível reativar o bot.",
         variant: "destructive",
       });
+    } finally {
+      setShowReactivateWarningModal(false);
+      setReactivateAware(false);
     }
   };
 
@@ -453,6 +497,7 @@ function LeadCardDialogBody({
     if (nextMeetingAppointment) return "Reunião agendada";
     const rawReason = (currentLead.bot_disabled_reason || "").trim();
     if (rawReason === "category_closing") return "Closing (humano assume)";
+    if (rawReason === "manual_disable") return "Desativado manualmente";
     if (rawReason) return rawReason;
     if (currentLead.category === "closing") return "Closing (humano assume)";
     return "Motivo indisponível";
@@ -516,6 +561,11 @@ function LeadCardDialogBody({
             </div>
           </div>
           <div className="flex gap-2">
+            {!currentLead.bot_disabled && (
+              <Button variant="outline" size="sm" onClick={() => setShowDisableModal(true)}>
+                Desativar bot
+              </Button>
+            )}
             <Button variant="destructive" size="sm" onClick={() => void handleDeleteLead()}>
               Excluir
             </Button>
@@ -1076,6 +1126,100 @@ function LeadCardDialogBody({
         onSuccess={handleAppointmentSuccess}
       />
       )}
+
+      <AlertDialog open={showDisableModal} onOpenChange={setShowDisableModal}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Desativar bot para este lead?</AlertDialogTitle>
+            <AlertDialogDescription asChild>
+              <div className="space-y-3">
+                <p>
+                  Ao desativar, o agente deixará de responder a este lead. Ao reativar, o agente
+                  provavelmente <strong>não terá contexto suficiente</strong> para retomar a venda
+                  de onde parou.
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  Recomendamos reativar apenas em situações de follow-up, fornecendo contexto claro
+                  sobre onde a conversa parou.
+                </p>
+                <label className="flex items-center gap-2 cursor-pointer pt-1">
+                  <input
+                    type="checkbox"
+                    checked={disableAware}
+                    onChange={(e) => setDisableAware(e.target.checked)}
+                  />
+                  <span className="text-sm">
+                    Estou ciente que o agente pode perder o contexto ao reativar
+                  </span>
+                </label>
+              </div>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel
+              onClick={() => {
+                setShowDisableModal(false);
+                setDisableAware(false);
+              }}
+            >
+              Cancelar
+            </AlertDialogCancel>
+            <AlertDialogAction
+              disabled={!disableAware}
+              onClick={() => void handleDisableBot()}
+            >
+              Desativar
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog open={showReactivateWarningModal} onOpenChange={setShowReactivateWarningModal}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Reativar bot para este lead?</AlertDialogTitle>
+            <AlertDialogDescription asChild>
+              <div className="space-y-3">
+                <p>
+                  Você está reativando o bot após uma <strong>pausa manual</strong>. O agente
+                  provavelmente não tem contexto suficiente para retomar a venda de onde parou.
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  Recomendamos reativar apenas para follow-up. Antes de reativar, forneça contexto
+                  no campo de instruções do follow-up sobre onde a venda parou e o que o agente
+                  deve fazer.
+                </p>
+                <label className="flex items-center gap-2 cursor-pointer pt-1">
+                  <input
+                    type="checkbox"
+                    checked={reactivateAware}
+                    onChange={(e) => setReactivateAware(e.target.checked)}
+                  />
+                  <span className="text-sm">
+                    Estou ciente que o agente pode não ter contexto da conversa anterior
+                  </span>
+                </label>
+              </div>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel
+              onClick={() => {
+                setShowReactivateWarningModal(false);
+                setReactivateAware(false);
+              }}
+            >
+              Cancelar
+            </AlertDialogCancel>
+            <AlertDialogAction
+              disabled={!reactivateAware}
+              onClick={() => void handleReactivateBot()}
+            >
+              Reativar mesmo assim
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </DialogContent>
   );
 }
