@@ -131,7 +131,7 @@ def can_advance_from_qualification(conn, lead_id: int, user_id: int) -> Tuple[bo
     _4P_KEYS = {"decision_role", "urgency", "budget_or_price_acceptance", "availability_window"}
     _qfields = ai_profile.get("qualification_fields") or []
     _configured_keys = {f["key"] for f in _qfields if isinstance(f, dict) and "key" in f}
-    if _configured_keys and not (_configured_keys & _4P_KEYS):
+    if not _configured_keys or not (_configured_keys & _4P_KEYS):
         return True, []
 
     if total_score < threshold_int:
