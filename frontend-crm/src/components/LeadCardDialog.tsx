@@ -292,7 +292,7 @@ function LeadCardDialogBody({
     if (!lead?.id) return;
     void Promise.all([
       api.getLeadQualificationFields(Number(lead.id)),
-      api.getAiProfileMe(),
+      api.core.getAiProfileMe(),
     ]).then(([qRes, profileRes]) => {
       setQualifFields((qRes as any)?.fields ?? {});
       setAiQualFields((profileRes as any)?.qualification_fields ?? []);
