@@ -584,6 +584,10 @@ export const api = {
     return apiClient.patch(`/leads/${leadId}/qualification-fields`, { fields });
   },
 
+  getLeadQualificationFields: async (leadId: number) => {
+    return apiClient.get<{ fields: Record<string, string> }>(`/leads/${leadId}/qualification-fields`);
+  },
+
   startFollowup: async (payload: {
     lead_id: string | number;
     agent_type: "agent_1" | "agent_3";

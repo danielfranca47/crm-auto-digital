@@ -692,6 +692,37 @@ def patch_lead_qualification_fields(
         conn.close()
 
 
+@router.get("/{lead_id}/qualification-fields")
+def get_lead_qualification_fields(
+    lead_id: int,
+    current_user: CurrentUser = Depends(require_crm_access),
+):
+    conn = get_connection()
+    try:
+        row = conn.execute(
+            "SELECT id FROM leads WHERE id = ? AND user_id = ?",
+            (lead_id, current_user.id),
+        ).fetchone()
+        if row is None:
+            raise HTTPException(status_code=404, detail="Lead não encontrado")
+        state = conn.execute(
+            "SELECT data_json FROM lead_qualification_state WHERE lead_id = ?",
+            (lead_id,),
+        ).fetchone()
+        if not state:
+            return {"fields": {}}
+        import json as _json
+        raw = state["data_json"]
+        fields = _json.loads(raw) if isinstance(raw, str) else (raw or {})
+        return {"fields": fields}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        conn.close()
+
+
 @router.get("/followups/active")
 def list_active_followups(current_user: CurrentUser = Depends(require_crm_access)):
     """Lista leads em follow-up não encerrado, ordenados por próximo envio."""

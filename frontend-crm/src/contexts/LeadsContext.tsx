@@ -4,6 +4,7 @@ import { ProspectionLead, ProspectionColumn, ProspectionMethod } from '@/types/p
 import { KANBAN_COLUMNS, ARCHIVED_COLUMNS } from '@/data/mockData';
 import { api } from '../services/api';
 import { useApiErrorHandler } from '@/hooks/useApiErrorHandler';
+import { useToast } from '@/hooks/use-toast';
 
 export type AddLeadResult =
   | { kind: 'created'; leadId: string }
@@ -148,6 +149,7 @@ function toProspectionLead(l: Lead): ProspectionLead {
 
 export function LeadsProvider({ children }: LeadsProviderProps) {
   const { handleError } = useApiErrorHandler();
+  const { toast } = useToast();
   const [columns, setColumns] = useState<KanbanColumn[]>([]);
   const [archivedColumns, setArchivedColumns] = useState<KanbanColumn[]>([]);
   const [prospectionColumns, setProspectionColumns] = useState<ProspectionColumn[]>([
@@ -299,7 +301,16 @@ export function LeadsProvider({ children }: LeadsProviderProps) {
       // Reverte o estado local para evitar inconsistência com o backend
       setColumns(previousColumns);
       setArchivedColumns(previousArchivedColumns);
-      handleError(error, { fallbackMessage: 'Não foi possível mover o lead.' });
+      const detail = (error as any)?.data?.detail;
+      if (detail?.error === 'qualification_incomplete') {
+        toast({
+          title: 'Qualificação incompleta',
+          description: 'Abra o card do lead e preencha os Critérios de Qualificação antes de avançar.',
+          variant: 'destructive',
+        });
+      } else {
+        handleError(error, { fallbackMessage: 'Não foi possível mover o lead.' });
+      }
       return;
     }
 

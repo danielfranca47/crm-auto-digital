@@ -1,4 +1,5 @@
 import { Lead, LeadStatus, Appointment } from "../types/crm";
+import { QualificationField } from "../types/agente";
 import {
   Calendar,
   Building2,
@@ -13,6 +14,7 @@ import {
   AlertTriangle,
   Zap,
   ExternalLink,
+  ClipboardCheck,
 } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "./ui/dialog";
 import {
@@ -50,7 +52,7 @@ interface LeadCardDialogProps {
 
 //TODO Estava dando erros aqui, com nomes de colunas antigas. Ajustei conforme as atuais.
 /** Cores/labels de status (alinhado com mockData.ts) */
-//Ela era basicamente a “tabela de tradução” dos status do lead – o dicionário que dizia: qual nome amigável mostrar na telaqual cor usar em cada statusE isso era usado dentro do componente LeadCardDialog para montar aquele selo colorido (badge/pílula) que aparece no card do lead.
+//Ela era basicamente a "tabela de tradução" dos status do lead – o dicionário que dizia: qual nome amigável mostrar na telaqual cor usar em cada statusE isso era usado dentro do componente LeadCardDialog para montar aquele selo colorido (badge/pílula) que aparece no card do lead.
 const statusColors: Record<LeadStatus, string> = {
   "to-prospect": "bg-gray-500",        // À Prospectar
   "qualification": "bg-sky-500",       // Qualificação
@@ -265,6 +267,10 @@ function LeadCardDialogBody({
   const [showReactivateWarningModal, setShowReactivateWarningModal] = useState(false);
   const [disableAware, setDisableAware] = useState(false);
   const [reactivateAware, setReactivateAware] = useState(false);
+  const [qualifFields, setQualifFields] = useState<Record<string, string>>({});
+  const [aiQualFields, setAiQualFields] = useState<QualificationField[]>([]);
+  const [isEditingQualif, setIsEditingQualif] = useState(false);
+  const [editingQualif, setEditingQualif] = useState<Record<string, string>>({});
 
   // Carrega compromissos do lead (rota: GET /leads/{id}/appointments)
   const leadId = lead?.id;
@@ -280,6 +286,18 @@ function LeadCardDialogBody({
   useEffect(() => {
     refetchAppointments();
   }, [refetchAppointments]);
+
+  // Carga dos critérios de qualificação e campos do AI Profile
+  useEffect(() => {
+    if (!lead?.id) return;
+    void Promise.all([
+      api.getLeadQualificationFields(Number(lead.id)),
+      api.getAiProfileMe(),
+    ]).then(([qRes, profileRes]) => {
+      setQualifFields((qRes as any)?.fields ?? {});
+      setAiQualFields((profileRes as any)?.qualification_fields ?? []);
+    });
+  }, [lead?.id]);
 
   // Mensagens WhatsApp para histórico de follow-up
   const { data: messagesData } = useQuery({
@@ -513,9 +531,25 @@ function LeadCardDialogBody({
     if (!appointmentId) return null;
 
     const appt = appointments.find(a => a.id === appointmentId) ?? null;
-    // se o compromisso foi cancelado, não consideramos como “próxima ação”
+    // se o compromisso foi cancelado, não consideramos como "próxima ação"
     return appt && appt.status !== "canceled" ? appt : null;
   }, [appointments, currentLead.nextScheduledAction?.id]);
+
+  const qualifPendingCount = useMemo(() => {
+    const required = aiQualFields.filter(f => f.mode === "required").map(f => f.key);
+    return required.filter(k => !qualifFields[k]?.trim()).length;
+  }, [aiQualFields, qualifFields]);
+
+  const handleSaveQualification = async () => {
+    try {
+      await api.patchLeadQualificationFields(Number(lead!.id), editingQualif);
+      setQualifFields(editingQualif);
+      setIsEditingQualif(false);
+      toast({ title: "Qualificação atualizada" });
+    } catch (error: any) {
+      toast({ title: "Erro ao salvar qualificação", description: error?.message, variant: "destructive" });
+    }
+  };
 
   const handleSetOutcome = async (
     appointment: Appointment,
@@ -753,6 +787,67 @@ function LeadCardDialogBody({
                 </p>
               )}
             </div>
+
+            {/* Critérios de Qualificação */}
+            {aiQualFields.length > 0 && (
+              <div className="space-y-3 border border-border rounded-lg p-4">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <ClipboardCheck className="h-4 w-4 text-muted-foreground" />
+                    <span className="text-sm font-medium">Critérios de Qualificação</span>
+                    {qualifPendingCount > 0 ? (
+                      <Badge variant="destructive" className="text-xs">
+                        {qualifPendingCount} pendente{qualifPendingCount > 1 ? "s" : ""}
+                      </Badge>
+                    ) : (
+                      <Badge className="text-xs bg-green-600 text-white hover:bg-green-600">Completo</Badge>
+                    )}
+                  </div>
+                  {!isEditingQualif ? (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => { setIsEditingQualif(true); setEditingQualif({ ...qualifFields }); }}
+                    >
+                      Editar
+                    </Button>
+                  ) : (
+                    <div className="flex gap-2">
+                      <Button size="sm" variant="outline" onClick={() => setIsEditingQualif(false)}>
+                        Cancelar
+                      </Button>
+                      <Button size="sm" onClick={() => void handleSaveQualification()}>
+                        Salvar
+                      </Button>
+                    </div>
+                  )}
+                </div>
+                <div className="space-y-3">
+                  {aiQualFields.map(field => (
+                    <div key={field.key}>
+                      <p className="text-xs text-muted-foreground mb-1">
+                        {field.label}
+                        {field.mode === "required" && <span className="text-destructive ml-1">*</span>}
+                      </p>
+                      {isEditingQualif ? (
+                        <Input
+                          value={editingQualif[field.key] ?? ""}
+                          onChange={e => setEditingQualif(prev => ({ ...prev, [field.key]: e.target.value }))}
+                          placeholder={field.question ?? `Preencher ${field.label.toLowerCase()}...`}
+                          className="h-8 text-sm"
+                        />
+                      ) : (
+                        <p className="text-sm">
+                          {qualifFields[field.key]?.trim()
+                            ? qualifFields[field.key]
+                            : <span className="text-muted-foreground italic">Não preenchido</span>}
+                        </p>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
 
             <div className="space-y-2">
               <Label htmlFor="observations" className="text-sm font-medium">
