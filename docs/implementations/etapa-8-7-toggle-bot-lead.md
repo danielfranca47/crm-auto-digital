@@ -1,7 +1,7 @@
 # Toggle Bot por Lead Individual
 
 **Branch:** `etapa-8-6-audio-texto`
-**Status:** P1–P5 validados em 28/05/2026 — pendente: P6 (category_closing, requer lead em closing)
+**Status:** Todos os cenários validados (28/05/2026)
 
 ---
 
@@ -107,8 +107,9 @@ A distinção no modal de reativação é feita por `bot_disabled_reason === "ma
 - **Validado em:** 28/05/2026 — todas as condições confirmadas, sem toast de erro
 
 ### Cenário P6 — Reativação após category_closing sem modal adicional
-- [ ] Com lead `bot_disabled=true, reason="category_closing"`, clicar "Reativar bot"
-- [ ] Confirmar que reativa diretamente (sem modal de aviso pós-manual)
+- [x] Com lead `bot_disabled=true, reason="category_closing"`, clicar "Reativar bot"
+- [x] Confirmar que reativa diretamente (sem modal de aviso pós-manual)
+- **Validado em:** 28/05/2026 — lead 159 com reason="category_closing" reativou diretamente, toast "Bot reativado" exibido, nenhum modal intermediário
 
 ---
 
