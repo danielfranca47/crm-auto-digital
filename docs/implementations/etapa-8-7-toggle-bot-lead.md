@@ -1,7 +1,7 @@
 # Toggle Bot por Lead Individual
 
 **Branch:** `etapa-8-6-audio-texto`
-**Status:** Em andamento
+**Status:** P1–P5 validados em 28/05/2026 — pendente: P6 (category_closing, requer lead em closing)
 
 ---
 
@@ -68,34 +68,45 @@ A distinção no modal de reativação é feita por `bot_disabled_reason === "ma
 | # | Commit | O que foi implementado |
 |---|---|---|
 | 1 | `dd080c8` | Import AlertDialog, estados, handleDisableBot, handleReactivateBot com modal, botão header, 2 AlertDialogs, label manual_disable |
+| 2 | `d6c97a0` | Fix: excluir bot_disabled/bot_disabled_reason do PATCH no LeadsContext (evita erro "Nenhum dado enviado para atualização") |
 
 ---
 
 ## Checks de Validação
 
 ### Cenário P1 — Botão aparece quando bot está ativo
-- [ ] Abrir card de um lead com `bot_disabled=false`
-- [ ] Confirmar que botão "Desativar bot" aparece no header (ao lado de Excluir)
+- [x] Abrir card de um lead com `bot_disabled=false`
+- [x] Confirmar que botão "Desativar bot" aparece no header (ao lado de Excluir)
+- **Validado em:** 28/05/2026 — botão "Desativar bot" visível no header junto a Excluir/Editar
 
 ### Cenário P2 — Modal de desativação com checkbox obrigatório
-- [ ] Clicar em "Desativar bot"
-- [ ] Confirmar que modal abre com texto de aviso
-- [ ] Confirmar que botão "Desativar" fica desabilitado sem marcar o checkbox
-- [ ] Marcar checkbox e confirmar que botão fica habilitado
+- [x] Clicar em "Desativar bot"
+- [x] Confirmar que modal abre com texto de aviso
+- [x] Confirmar que botão "Desativar" fica desabilitado sem marcar o checkbox
+- [x] Marcar checkbox e confirmar que botão fica habilitado
+- **Validado em:** 28/05/2026 — modal abriu, botão disabled antes do checkbox, habilitado após marcar
 
 ### Cenário P3 — Desativação confirma e atualiza UI
-- [ ] Com checkbox marcado, clicar "Desativar"
-- [ ] Confirmar: badge "Agente desativado" aparece no header do card
-- [ ] Confirmar: motivo "Desativado manualmente" exibido no alert block
-- [ ] Confirmar: botão "Desativar bot" desaparece do header
+- [x] Com checkbox marcado, clicar "Desativar"
+- [x] Confirmar: badge "Agente desativado" aparece no header do card
+- [x] Confirmar: motivo "Desativado manualmente" exibido no alert block
+- [x] Confirmar: botão "Desativar bot" desaparece do header
+- **Validado em:** 28/05/2026 — toast "Bot desativado para este lead", badge e motivo corretos, botão sumiu
 
 ### Cenário P4 — Modal de reativação após pausa manual
-- [ ] Com lead `bot_disabled=true, reason="manual_disable"`, clicar "Reativar bot"
-- [ ] Confirmar que modal de aviso abre com texto sobre pausa manual
-- [ ] Confirmar que botão "Reativar mesmo assim" fica desabilitado sem checkbox
-- [ ] Marcar checkbox, clicar confirmar → bot reativado
+- [x] Com lead `bot_disabled=true, reason="manual_disable"`, clicar "Reativar bot"
+- [x] Confirmar que modal de aviso abre com texto sobre pausa manual
+- [x] Confirmar que botão "Reativar mesmo assim" fica desabilitado sem checkbox
+- [x] Marcar checkbox, clicar confirmar → bot reativado
+- **Validado em:** 28/05/2026 — modal abriu com texto correto, botão disabled, reativação ok
 
-### Cenário P5 — Reativação após category_closing sem modal adicional
+### Cenário P5 — Reativação confirma e limpa UI
+- [x] Confirmar: toast "Bot reativado" aparece
+- [x] Confirmar: badge "Agente desativado" some
+- [x] Confirmar: botão "Desativar bot" volta no header
+- **Validado em:** 28/05/2026 — todas as condições confirmadas, sem toast de erro
+
+### Cenário P6 — Reativação após category_closing sem modal adicional
 - [ ] Com lead `bot_disabled=true, reason="category_closing"`, clicar "Reativar bot"
 - [ ] Confirmar que reativa diretamente (sem modal de aviso pós-manual)
 
