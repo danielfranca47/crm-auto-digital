@@ -13,7 +13,53 @@ O utilizador pediu para melhorar algo no sistema. Pode ter dito coisas como:
 - "Quero adicionar a funcionalidade X"
 - "Tem um bug em X que causa Y"
 
-Antes de escrever qualquer código, crie o arquivo de implementação conforme este guia.
+Antes de escrever qualquer código, siga os passos abaixo em ordem.
+
+---
+
+## Passo 0 — Diagnóstico em Plan Mode (obrigatório)
+
+**Antes de criar o arquivo ou tocar no código**, entrar em Plan Mode e responder três perguntas:
+
+### 1. Essa funcionalidade já existe?
+
+Ler os arquivos relevantes do sistema (rotas, serviços, frontend) e verificar se o comportamento pedido já está implementado total ou parcialmente. Citar os arquivos e linhas onde encontrou (ou não encontrou).
+
+### 2. Se não existe, o que precisa ser construído?
+
+Identificar os pontos de entrada e saída da mudança:
+- Qual arquivo recebe a mudança primeiro?
+- Quais serviços/rotas precisam ser alterados?
+- Há impacto em banco de dados (nova coluna, nova tabela)?
+- Há impacto no frontend?
+
+### 3. Quais são os riscos e dependências?
+
+- A mudança pode quebrar algo que já funciona? Onde?
+- Há dependência de outra feature que ainda não existe?
+- Há trade-offs relevantes que o utilizador deve conhecer antes de decidir?
+
+**Formato do plano no Plan Mode:**
+
+```
+## Diagnóstico
+
+### Já existe?
+<Sim / Parcialmente / Não> — <explicação com arquivos e linhas>
+
+### O que precisa ser construído
+<Lista das mudanças necessárias, agrupadas por camada: backend-core / backend-crm / backend-executors / frontend>
+
+### Riscos e dependências
+<Lista de riscos. "Nenhum" é uma resposta válida se for o caso.>
+
+### Proposta de fases
+Fase 1 — <nome> — <objetivo em uma frase>
+Fase 2 — <nome> — <objetivo em uma frase>
+...
+```
+
+**Aguardar aprovação do utilizador antes de avançar.** O utilizador pode ajustar escopo, descartar fases ou pedir mais investigação.
 
 ---
 
@@ -193,16 +239,26 @@ Alterar o cabeçalho de status:
 ## Exemplo de sequência de trabalho
 
 ```
-Utilizador: "Gostaria de melhorar X porque Y e Z"
+Utilizador: "Gostaria de melhorar X porque Y e Z.
+             Leia o guia de implementação e siga o processo."
 
 Claude:
-  1. Lê este guia
-  2. Cria docs/implementations/<nome>.md com Motivação + Problemas + Abordagem + Plano
-  3. Apresenta o plano ao utilizador antes de escrever código
-  4. Aguarda confirmação (ou ajustes)
-  5. Implementa Fase 1
-  6. Atualiza o arquivo: adiciona commits + marca checks validados
-  7. Repete para fases seguintes
+  1. Lê este guia (_guia-documentar-implementacao.md)
+  2. Entra em Plan Mode
+  3. Lê os arquivos relevantes do sistema
+  4. Produz o diagnóstico (já existe? / o que construir / riscos / fases propostas)
+  5. Aguarda aprovação ou ajustes do utilizador
+
+Utilizador: "Ok, avança" / "Ajuste a Fase 2 para incluir também X"
+
+Claude:
+  6. Sai do Plan Mode
+  7. Cria docs/implementations/<nome>.md com as seções do template preenchidas
+  8. Implementa Fase 1
+  9. Atualiza o arquivo: adiciona commits + marca checks validados
+  10. Repete para fases seguintes
 ```
+
+**Nota:** o arquivo de implementação só é criado após o plan ser aprovado — não antes. O Plan Mode é o rascunho; o arquivo `.md` é o contrato formal que acompanha o código.
 
 O arquivo de implementação é o **contrato vivo** entre o utilizador e o Claude durante o desenvolvimento da feature.
