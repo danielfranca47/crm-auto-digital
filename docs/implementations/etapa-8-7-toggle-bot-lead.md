@@ -67,7 +67,7 @@ A distinção no modal de reativação é feita por `bot_disabled_reason === "ma
 
 | # | Commit | O que foi implementado |
 |---|---|---|
-| 1 | — | — |
+| 1 | `dd080c8` | Import AlertDialog, estados, handleDisableBot, handleReactivateBot com modal, botão header, 2 AlertDialogs, label manual_disable |
 
 ---
 
