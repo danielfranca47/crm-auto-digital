@@ -247,7 +247,7 @@ export function LeadsProvider({ children }: LeadsProviderProps) {
 
     // Atualiza no back
     try {
-      const { nextScheduledAction: _ignore, ...payload } = updates as Partial<Lead> & {
+      const { nextScheduledAction: _ignore, bot_disabled: _bd, bot_disabled_reason: _bdr, ...payload } = updates as Partial<Lead> & {
         nextScheduledAction?: Lead['nextScheduledAction'];
       };
       if (Object.keys(payload).length === 0) {
