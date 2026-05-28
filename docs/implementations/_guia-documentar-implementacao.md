@@ -236,6 +236,35 @@ Alterar o cabeçalho de status:
 
 ---
 
+## Ciclo de vida de uma fase
+
+As fases **não são planejadas todas de uma vez**. Cada fase nasce de uma necessidade concreta: o feedback inicial do utilizador, ou o resultado dos testes da fase anterior.
+
+```
+Utilizador reporta problema/melhoria
+  → Claude: Plan Mode (diagnóstico + plano da Fase 1)
+  → Utilizador aprova
+  → Claude: cria o arquivo .md + implementa Fase 1 + commit
+  → Claude: preenche checks no arquivo e aguarda testes
+
+Utilizador faz os testes e reporta resultados
+  → Claude: marca os checks validados no arquivo
+
+  Caminho A — tudo ok, sem mais necessidades
+    → Trabalho encerrado. Status atualizado para concluído.
+
+  Caminho B — teste revelou problema ou nova melhoria necessária
+    → Claude: Plan Mode novamente (diagnóstico da nova necessidade)
+    → Utilizador aprova
+    → Claude: adiciona Fase 2 ao mesmo arquivo + implementa + commit
+    → Claude: preenche checks da Fase 1 (se o utilizador relatou) + cria checks da Fase 2
+    → Ciclo se repete
+```
+
+**Regra:** cada fase tem exatamente um commit associado. O hash do commit é registrado no arquivo assim que é criado.
+
+---
+
 ## Exemplo de sequência de trabalho
 
 ```
@@ -246,19 +275,35 @@ Claude:
   1. Lê este guia (_guia-documentar-implementacao.md)
   2. Entra em Plan Mode
   3. Lê os arquivos relevantes do sistema
-  4. Produz o diagnóstico (já existe? / o que construir / riscos / fases propostas)
+  4. Produz diagnóstico (já existe? / o que construir / riscos / plano da Fase 1)
   5. Aguarda aprovação ou ajustes do utilizador
 
-Utilizador: "Ok, avança" / "Ajuste a Fase 2 para incluir também X"
+Utilizador: "Ok, avança."
 
 Claude:
   6. Sai do Plan Mode
-  7. Cria docs/implementations/<nome>.md com as seções do template preenchidas
+  7. Cria docs/implementations/<nome>.md com o template preenchido (Fase 1)
   8. Implementa Fase 1
-  9. Atualiza o arquivo: adiciona commits + marca checks validados
-  10. Repete para fases seguintes
+  9. Faz commit e registra o hash no arquivo
+  10. Preenche os checks pendentes e aguarda o utilizador testar
+
+Utilizador: "Testei — P1 e P2 ok, mas P3 tem um comportamento estranho: X"
+
+Claude:
+  11. Marca [x] em P1 e P2 com a data
+  12. Entra em Plan Mode novamente para diagnosticar o problema de P3
+  13. Propõe Fase 2
+
+Utilizador: "Aprovado."
+
+Claude:
+  14. Adiciona seção Fase 2 ao mesmo arquivo
+  15. Implementa + commit + registra hash
+  16. Cria checks da Fase 2 e aguarda novos testes
+
+... e assim por diante até o utilizador encerrar.
 ```
 
-**Nota:** o arquivo de implementação só é criado após o plan ser aprovado — não antes. O Plan Mode é o rascunho; o arquivo `.md` é o contrato formal que acompanha o código.
+**Nota:** o arquivo `.md` só é criado após o primeiro plan ser aprovado. O Plan Mode é o rascunho; o arquivo é o contrato formal que acompanha o código.
 
 O arquivo de implementação é o **contrato vivo** entre o utilizador e o Claude durante o desenvolvimento da feature.
