@@ -272,6 +272,10 @@ export function LeadsProvider({ children }: LeadsProviderProps) {
     const lastMovement = new Date();
     const updatedLead = { ...lead, category: newCategory, lastMovement };
 
+    // Snapshot para revert em caso de erro
+    const previousColumns = columns;
+    const previousArchivedColumns = archivedColumns;
+
     // Atualiza colunas principais (CRM)
     setColumns((prev) =>
       prev.map((column) => {
@@ -292,7 +296,11 @@ export function LeadsProvider({ children }: LeadsProviderProps) {
     try {
       await api.updateLead(leadId, { category: newCategory, lastMovement });
     } catch (error) {
+      // Reverte o estado local para evitar inconsistência com o backend
+      setColumns(previousColumns);
+      setArchivedColumns(previousArchivedColumns);
       handleError(error, { fallbackMessage: 'Não foi possível mover o lead.' });
+      return;
     }
 
     // Sincroniza prospecção
