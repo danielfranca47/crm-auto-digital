@@ -1,6 +1,6 @@
 import logging
 import os
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 import httpx
 from fastapi import Depends, HTTPException
@@ -517,6 +517,25 @@ def fetch_core_whatsapp_connection_resolve(instance_id: str) -> Dict[str, Any]:
     if not isinstance(data, dict) or "user_id" not in data:
         raise HTTPException(status_code=502, detail="Resposta inesperada do backend-core")
     return data
+
+
+def fetch_core_whatsapp_token(instance_id: str) -> Optional[str]:
+    """Resolve o instance_token (decriptado) de uma conexão WhatsApp pelo instance_id.
+    Retorna None se a instância não existir ou não tiver token."""
+    if not instance_id:
+        return None
+    base = _get_core_base()
+    url = f"{base}/whatsapp-connections/resolve-token"
+    headers = _service_headers()
+    try:
+        with httpx.Client(timeout=10) as client:
+            resp = client.get(url, params={"instance_id": instance_id}, headers=headers)
+    except httpx.RequestError:
+        return None
+    if resp.status_code != 200:
+        return None
+    data = resp.json()
+    return data.get("instance_token") if isinstance(data, dict) else None
 
 
 def fetch_core_whatsapp_connection_by_user(user_id: int) -> Dict[str, Any]:

@@ -15,6 +15,7 @@ import httpx
 logger = logging.getLogger(__name__)
 
 _OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
+_UAZAPI_BASE_URL = os.getenv("UAZAPI_BASE_URL", "https://free.uazapi.com").rstrip("/")
 
 _CONTENT_TYPE_EXT = {
     "audio/ogg": ".ogg",
@@ -30,6 +31,36 @@ _AUDIO_MESSAGE_TYPES = {"audio", "ptt", "myaudio", "audiomessage", "pttmessage"}
 
 def is_audio_type(message_type: str | None) -> bool:
     return (message_type or "").lower().strip() in _AUDIO_MESSAGE_TYPES
+
+
+def download_audio_url_from_uazapi(instance_token: str, message_id: str) -> str | None:
+    """Chama POST {uazapi}/message/download para obter a URL pública do áudio de um PTT recebido.
+    A UazAPI não inclui fileURL no webhook de PTT — esta chamada é necessária antes da transcrição.
+    Retorna a fileURL ou None em caso de falha.
+    """
+    if not instance_token or not message_id:
+        logger.warning("[uazapi_download] token ou message_id ausente")
+        return None
+
+    url = f"{_UAZAPI_BASE_URL}/message/download"
+    try:
+        with httpx.Client(timeout=30) as client:
+            resp = client.post(
+                url,
+                headers={"token": instance_token},
+                json={"id": message_id, "return_link": True, "generate_mp3": True},
+            )
+            resp.raise_for_status()
+            data = resp.json()
+            file_url = data.get("fileURL") or data.get("url")
+            if file_url:
+                logger.info("[uazapi_download] fileURL obtido message_id=%s", message_id)
+                return file_url
+            logger.warning("[uazapi_download] resposta sem fileURL message_id=%s data=%s", message_id, str(data)[:200])
+            return None
+    except Exception as exc:
+        logger.error("[uazapi_download] falha message_id=%s: %s", message_id, exc)
+        return None
 
 
 def transcribe_audio_from_path(file_path: str, language: str = "pt") -> str | None:

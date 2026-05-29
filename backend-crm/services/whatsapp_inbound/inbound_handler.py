@@ -11,9 +11,9 @@ from typing import Any, Dict, Optional
 from fastapi import HTTPException
 from pydantic import BaseModel, ConfigDict, Field
 
-from core_client import fetch_core_ai_profile_resolve, fetch_core_whatsapp_connection_resolve
+from core_client import fetch_core_ai_profile_resolve, fetch_core_whatsapp_connection_resolve, fetch_core_whatsapp_token
 from database import get_connection
-from services.audio_transcription import is_audio_type, transcribe_audio_from_url
+from services.audio_transcription import is_audio_type, transcribe_audio_from_url, download_audio_url_from_uazapi
 from services.jobs_service import (
     TYPE_WHATSAPP_INBOUND,
     create_job,
@@ -306,8 +306,19 @@ def handle_inbound(payload: Dict[str, Any]) -> Dict[str, Any]:
                 logger.warning("[inbound_audio] falha ao buscar ai_profile user_id=%s: %s", user_id, _exc)
 
             if _ai_profile_media.get("audio_transcription_enabled"):
+                # UazAPI não inclui fileURL no webhook de PTT — fazer download separado quando necessário
+                _audio_url = parsed.media_url or ""
+                if not _audio_url and external_event_id:
+                    logger.info(
+                        "[inbound_audio] media_url ausente — tentando download via UazAPI message_id=%s",
+                        external_event_id,
+                    )
+                    _instance_token = fetch_core_whatsapp_token(parsed.instance_id)
+                    if _instance_token:
+                        _audio_url = download_audio_url_from_uazapi(_instance_token, external_event_id) or ""
+
                 # Transcrever áudio e usar como message_text
-                _transcription = transcribe_audio_from_url(parsed.media_url or "")
+                _transcription = transcribe_audio_from_url(_audio_url)
                 if _transcription:
                     message_text = f"[Áudio]: {_transcription}"
                     logger.info(
@@ -316,8 +327,8 @@ def handle_inbound(payload: Dict[str, Any]) -> Dict[str, Any]:
                     )
                 else:
                     logger.warning(
-                        "[inbound_audio] transcrição falhou user_id=%s media_url=%s — aplicando media_fallback",
-                        user_id, parsed.media_url,
+                        "[inbound_audio] transcrição falhou user_id=%s audio_url=%s — aplicando media_fallback",
+                        user_id, _audio_url,
                     )
                     return _apply_media_fallback(user_id, parsed.instance_id, _ai_profile_media, phone_norm, external_event_id)
             else:

@@ -454,3 +454,39 @@ Clicar "Enviar lote (N)"
 > ignorando o `audio_enabled: false` devolvido pelo endpoint `/transcribe`. O LLM processava o texto
 > e respondia normalmente. Correcção: `handleSendBatch` agora captura `audio_enabled`; quando OFF,
 > roteia com `message_type: "audio"` + `audio_filename` para acionar `media_fallback` no backend.
+
+---
+
+## Fase 5 — Diagnóstico + Fix: UazAPI não envia `fileURL` no webhook de PTT (29/05/2026)
+
+### Problema identificado durante teste real WhatsApp (Cenário C1)
+
+Durante o teste do Cenário C1 (toggle ligado, PTT enviado via WhatsApp real), nenhum `inbound_event` foi criado e o bot não respondeu. Investigação revelou que a **UazAPI não inclui `fileURL` no payload do webhook de PTT/áudio**. O campo só existe no schema `Message` para mensagens enviadas via API (`/send/media`), não para mensagens recebidas via webhook.
+
+O flow com o bug:
+1. Webhook PTT chega com `messageType: "ptt"` mas sem `fileURL` → `media_url = None`
+2. `transcribe_audio_from_url("")` falha imediatamente
+3. `_apply_media_fallback` chamado → `behavior="ignorar"` → descarte silencioso
+4. `insert_inbound_event` nunca chamado → sem trace no DB
+
+**Causa raiz confirmada via documentação UazAPI**: endpoint separado `POST /message/download` com `{"id": message_id, "return_link": true}` é necessário para obter a URL pública do áudio.
+
+### Correção
+
+| Arquivo | Mudança |
+|---|---|
+| `backend-crm/core_client.py` | Nova função `fetch_core_whatsapp_token(instance_id)` — chama `GET /whatsapp-connections/resolve-token` para obter o `instance_token` descriptografado |
+| `backend-crm/services/audio_transcription.py` | Nova função `download_audio_url_from_uazapi(instance_token, message_id)` — chama `POST {UAZAPI_BASE_URL}/message/download` e retorna `fileURL`; `_UAZAPI_BASE_URL` lido de env |
+| `backend-crm/services/whatsapp_inbound/inbound_handler.py` | Bloco de transcrição: quando `media_url` vazio e `incoming_audio=True`, resolve o token da instância e chama `download_audio_url_from_uazapi` antes de transcrever |
+| `backend-crm/.env` | `UAZAPI_BASE_URL=https://free.uazapi.com` adicionado |
+
+### Checks de Validação — Fase 5
+
+#### Cenário C1 (repetir após fix)
+- [ ] Reiniciar `backend-crm` com a nova variável `UAZAPI_BASE_URL`
+- [ ] Enviar PTT via WhatsApp real para o número do bot
+- [ ] Confirmar nos logs: `[inbound_audio] media_url ausente — tentando download via UazAPI message_id=...`
+- [ ] Confirmar nos logs: `[uazapi_download] fileURL obtido message_id=...`
+- [ ] Confirmar nos logs: `[inbound_audio] transcrição concluída`
+- [ ] Confirmar: `inbound_event` criado no DB
+- [ ] Confirmar: bot responde ao conteúdo do áudio transcrito
