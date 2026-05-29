@@ -948,44 +948,73 @@ def execute_job(job_id: str, logger: logging.Logger) -> int:
 
         ctx_logger.info("event=core_send_request url=/whatsapp/send", extra={"phase": "core_send"})
         _delay_ms = min(max(len(outbound_body) * 40, 1000), 8000)
-        try:
-            core_response = core_client.send_whatsapp_message(
-                {
-                    "provider": provider,
-                    "instance_id": instance_id,
-                    "number": phone,
-                    "text": outbound_body,
-                    "delay_ms": _delay_ms,
-                }
-            )
-        except core_client.CoreClientError as exc:
-            detail = exc.response_body or ""
-            ctx_logger.info(
-                "event=core_send_error status=%s detail=%s",
-                exc.status_code,
-                detail,
-                extra={"phase": "core_send"},
-            )
-            message = str(exc)
-            retryable = _is_retryable_error(exc.status_code, exc.error_type)
-            if exc.status_code == 401:
-                message = "Core service token inválido ou ausente"
-                retryable = False
-            elif exc.status_code == 403:
-                if "connection inactive" in detail.lower():
-                    message = "WhatsApp connection inactive (instância não está ativa)"
-                else:
-                    message = "Acesso negado pelo Core"
-                retryable = False
-            exec_error = ExecutionError(
-                message,
-                phase="core_send",
-                service="core",
-                http_status=exc.status_code,
-                retryable=retryable,
-                error_type=exc.error_type,
-            )
-            return _fail_job(job_id, ctx_logger, exec_error, attempt)
+        _MAX_SEND_FALLBACKS = 2
+        _send_fallback_attempt = 0
+        core_response = None
+        while True:
+            try:
+                core_response = core_client.send_whatsapp_message(
+                    {
+                        "provider": provider,
+                        "instance_id": instance_id,
+                        "number": phone,
+                        "text": outbound_body,
+                        "delay_ms": _delay_ms,
+                    }
+                )
+                break  # envio bem-sucedido
+            except core_client.CoreClientError as exc:
+                detail = exc.response_body or ""
+                _is_conn_not_found = (
+                    exc.status_code == 404
+                    and "connection not found" in detail.lower()
+                )
+                if _is_conn_not_found and _send_fallback_attempt < _MAX_SEND_FALLBACKS:
+                    _send_fallback_attempt += 1
+                    ctx_logger.info(
+                        "event=core_send_instance_fallback attempt=%d original_instance=%s",
+                        _send_fallback_attempt,
+                        instance_id,
+                        extra={"phase": "core_send"},
+                    )
+                    try:
+                        _active_conn = core_client.get_active_whatsapp_connection(user_id)
+                        instance_id = _active_conn.get("instance_id") or instance_id
+                        provider = _active_conn.get("provider") or provider
+                    except core_client.CoreClientError as _conn_exc:
+                        ctx_logger.info(
+                            "event=core_send_fallback_resolve_error err=%s",
+                            _conn_exc,
+                            extra={"phase": "core_send"},
+                        )
+                    continue
+                # erro não recuperável ou fallbacks esgotados
+                ctx_logger.info(
+                    "event=core_send_error status=%s detail=%s",
+                    exc.status_code,
+                    detail,
+                    extra={"phase": "core_send"},
+                )
+                message = str(exc)
+                retryable = _is_retryable_error(exc.status_code, exc.error_type)
+                if exc.status_code == 401:
+                    message = "Core service token inválido ou ausente"
+                    retryable = False
+                elif exc.status_code == 403:
+                    if "connection inactive" in detail.lower():
+                        message = "WhatsApp connection inactive (instância não está ativa)"
+                    else:
+                        message = "Acesso negado pelo Core"
+                    retryable = False
+                exec_error = ExecutionError(
+                    message,
+                    phase="core_send",
+                    service="core",
+                    http_status=exc.status_code,
+                    retryable=retryable,
+                    error_type=exc.error_type,
+                )
+                return _fail_job(job_id, ctx_logger, exec_error, attempt)
 
         provider_message_id = core_response.get("provider_message_id")
         result_payload["provider_message_id"] = provider_message_id
