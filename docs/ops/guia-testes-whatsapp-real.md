@@ -25,7 +25,7 @@ Antes de iniciar qualquer teste:
 - [ ] `backend-core` rodando na porta 8001
 - [ ] `backend-crm` rodando na porta 8000
 - [ ] `backend-executors` rodando na porta 8002
-- [ ] `frontend-crm` rodando (porta 8080 ou 5173)
+- [ ] `frontend-crm` rodando (porta 5173)
 - [ ] Variáveis de ambiente configuradas: `OPENAI_API_KEY`, `CRM_PUBLIC_BASE_URL`, `CRM_WEBHOOK_SECRET`
 - [ ] Número WhatsApp de teste disponível para receber mensagens (número do lead de teste)
 
@@ -45,10 +45,10 @@ Sem uma conexão WhatsApp funcional, todos os testes reais subsequentes são imp
 
 | # | Descrição | Exige participação | Validado |
 |---|---|---|---|
-| P1 | QR code exibido ao clicar "Reconectar QR" na aba Conexão do número | Não | [ ] |
-| P2 | Conexão detectada automaticamente após scan (polling 3s) | ⚠️ Escanear QR | [ ] |
-| P3 | QR expira após 90s sem scan → botão "Novo QR code" aparece e gera novo QR | Não | [ ] |
-| P4 | `CRM_PUBLIC_BASE_URL` ausente → QR ainda aparece (webhook falha com warning) | Não | [ ] |
+| P1 | QR code exibido ao clicar "Reconectar QR" na aba Conexão do número | Não | [x] 29/05/2026 |
+| P2 | Conexão detectada automaticamente após scan (polling 3s) | ⚠️ Escanear QR | [x] 29/05/2026 |
+| P3 | QR expira após 90s sem scan → botão "Novo QR code" aparece e gera novo QR | Não | ⏭️ Pulado |
+| P4 | `CRM_PUBLIC_BASE_URL` ausente → QR ainda aparece (webhook falha com warning) | Não | ⏭️ Pulado |
 
 **Condição de avanço:** P1 e P2 validados. P3 e P4 são secundários mas recomendados.
 
