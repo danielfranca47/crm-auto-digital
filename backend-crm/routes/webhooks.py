@@ -187,7 +187,13 @@ def whatsapp_uazapi_webhook(
     sender = _resolve_sender_e164()
     message_id = data.get("messageId") or data.get("id") or message.get("messageid") or message.get("id")
     message_type = data.get("messageType") or message.get("type") or message.get("messageType")
-    message_text = data.get("text") or message.get("text") or message.get("content")
+    # content pode ser dict para PTT/mídia (ex: {'PTT': True, 'URL': '...'}); usar só se for string
+    _raw_content = message.get("content")
+    message_text = (
+        data.get("text")
+        or message.get("text")
+        or (_raw_content if isinstance(_raw_content, str) else None)
+    )
     from_me = data.get("fromMe") is True or message.get("fromMe") is True
 
     logger.info(
@@ -208,14 +214,16 @@ def whatsapp_uazapi_webhook(
         is_group = is_group_message_payload(payload)
         if not is_group:
             # UazAPI schema Message usa "fileURL" para URL de mídia.
-            # Fallbacks para variações de nomenclatura históricas.
+            # Para PTT, a URL está em message.content.URL
             media_url = (
-                data.get("fileURL")      # campo canônico no schema Message da UazAPI
+                data.get("fileURL")
                 or data.get("mediaUrl")
                 or data.get("media_url")
                 or message.get("fileURL")
                 or message.get("mediaUrl")
                 or message.get("media_url")
+                or _content_obj.get("URL")
+                or _content_obj.get("url")
             )
             # Para fromMe, usa _resolve_spy_sender_e164 que tenta remoteJid como fallback,
             # garantindo que imagem/vídeo enviados pelo vendedor sejam agrupados pelo lead.
@@ -263,6 +271,8 @@ def whatsapp_uazapi_webhook(
         raise HTTPException(status_code=400, detail=detail)
 
     # Extrai URL de mídia do payload (necessário para áudio)
+    # Para PTT, a URL está em message.content.URL (não em fileURL)
+    _content_obj = _raw_content if isinstance(_raw_content, dict) else {}
     media_url = (
         data.get("fileURL")
         or data.get("mediaUrl")
@@ -270,6 +280,8 @@ def whatsapp_uazapi_webhook(
         or message.get("fileURL")
         or message.get("mediaUrl")
         or message.get("media_url")
+        or _content_obj.get("URL")
+        or _content_obj.get("url")
     )
 
     inbound_payload = {

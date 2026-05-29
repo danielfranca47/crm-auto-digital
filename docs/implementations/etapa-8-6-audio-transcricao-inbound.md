@@ -490,3 +490,41 @@ O flow com o bug:
 - [ ] Confirmar nos logs: `[inbound_audio] transcrição concluída`
 - [ ] Confirmar: `inbound_event` criado no DB
 - [ ] Confirmar: bot responde ao conteúdo do áudio transcrito
+
+---
+
+## Fase 6 — Diagnóstico + Fix: PTT causa 500 por `message.content` ser dict (30/05/2026)
+
+### Problema identificado
+
+Ao analisar os erros do webhook na UazAPI (`GET /webhook/errors`), confirmou-se que os webhooks de PTT CHEGAM ao servidor (4 erros registados), mas o servidor retorna **500 Internal Server Error** consistentemente para todos os áudios.
+
+**Causa raiz:** Para mensagens de áudio (PTT), a UazAPI envia o campo `message.content` como um **dict** com metadados do áudio:
+```json
+{"PTT": true, "URL": "https://mmg.whatsapp.net/...", "directPath": "...", "mimetype": "audio/ogg; codecs=opus", ...}
+```
+
+O webhook handler fazia:
+```python
+message_text = data.get("text") or message.get("text") or message.get("content")
+```
+
+Como `message.get("text")` é `""` (falsy), o handler usava `message.get("content")` = o dict acima como `message_text`. Isso causava um erro de validação Pydantic ao criar `InboundWebhookPayload` → 500.
+
+**Descoberta adicional:** A URL do áudio (`content.URL = "https://mmg.whatsapp.net/..."`) já está disponível no próprio payload do webhook — dispensando a chamada ao endpoint `/message/download` implementada na Fase 5 para os casos normais.
+
+### Correção
+
+| Arquivo | Mudança |
+|---|---|
+| `backend-crm/routes/webhooks.py` | `message_text`: só usa `content` se for string (ignora se for dict); `media_url`: extrai `content.URL` / `content.url` para PTT/áudio |
+
+### Checks de Validação — Fase 6
+
+#### Cenário C1 (repetir após fix Fase 6)
+- [ ] Reiniciar `backend-crm`
+- [ ] Enviar PTT via WhatsApp real
+- [ ] Confirmar: **sem 500** nos logs do backend-crm (POST ao webhook retorna 200)
+- [ ] Confirmar: `inbound_event` criado no DB
+- [ ] Confirmar: `media_url` populado com URL `mmg.whatsapp.net` no job payload
+- [ ] Confirmar: bot responde ao conteúdo do áudio transcrito
