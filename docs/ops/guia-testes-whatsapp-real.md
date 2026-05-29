@@ -90,7 +90,7 @@ Teste simples e de curta duração. Valida a paridade de comportamento entre pla
 
 | # | Descrição | Exige participação | Validado |
 |---|---|---|---|
-| W1 | Configurar `multi_message_buffer_seconds = 30`; lead envia 3 mensagens em < 30s; bot responde **uma única vez** com contexto das 3 mensagens acumuladas | ⚠️ Lead envia 3 mensagens rapidamente | [ ] |
+| W1 | Configurar `multi_message_buffer_seconds = 30`; lead envia 3 mensagens em < 30s; bot responde **uma única vez** com contexto das 3 mensagens acumuladas | ⚠️ Lead envia 3 mensagens rapidamente | [x] 29/05/2026 — 3 msgs em 7s → 1 job criado → 1 resposta "Qual é o faturamento anual?" absorvendo contexto e-commerce |
 
 **Condição de avanço:** W1 validado.
 
