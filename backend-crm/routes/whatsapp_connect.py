@@ -255,7 +255,16 @@ def connect_whatsapp(current_user: CurrentUser = Depends(require_crm_access)):
         bool(jid),
         instance_status,
     )
-    _set_whatsapp_webhook(user_id=current_user.id, instance_id=instance_id, request_id=request_id)
+    try:
+        _set_whatsapp_webhook(user_id=current_user.id, instance_id=instance_id, request_id=request_id)
+    except Exception as exc:
+        logger.warning(
+            "whatsapp webhook setup failed (non-blocking) user_id=%s instance_id=%s request_id=%s error=%s",
+            current_user.id,
+            instance_id,
+            request_id,
+            exc,
+        )
 
     return ConnectResponse(instance_id=instance_id, status=status_value, qr=qr, raw=raw)
 
@@ -334,7 +343,16 @@ def refresh_qr(current_user: CurrentUser = Depends(require_crm_access)):
         request_id,
     )
     raw = connect_core_whatsapp_instance(current_user.id, instance_id)
-    _set_whatsapp_webhook(user_id=current_user.id, instance_id=instance_id, request_id=request_id)
+    try:
+        _set_whatsapp_webhook(user_id=current_user.id, instance_id=instance_id, request_id=request_id)
+    except Exception as exc:
+        logger.warning(
+            "whatsapp qr refresh webhook failed (non-blocking) user_id=%s instance_id=%s request_id=%s error=%s",
+            current_user.id,
+            instance_id,
+            request_id,
+            exc,
+        )
     status_value = _normalize_status(raw)
     qr = _extract_qr(raw)
     logged_in, connected, jid, instance_status = _extract_status_flags(raw)
