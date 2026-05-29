@@ -190,6 +190,7 @@ def reconcile_due_followups(*, limit: int = 100, dry_run: bool = False) -> Dict[
     enqueued = 0
     skipped_duplicate = 0
     skipped_dry_run = 0
+    skipped_circuit_breaker = 0
     items: List[Dict[str, Any]] = []
 
     with get_connection() as conn:
@@ -210,7 +211,7 @@ def reconcile_due_followups(*, limit: int = 100, dry_run: bool = False) -> Dict[
 
             existing_guard = cur.execute(
                 """
-                SELECT g.id AS guard_id, g.job_id, j.status AS job_status
+                SELECT g.id AS guard_id, g.job_id, j.status AS job_status, j.error AS job_error
                   FROM followup_reconcile_guard g
              LEFT JOIN jobs j ON j.id = g.job_id
                  WHERE g.lead_id = ?
@@ -221,6 +222,61 @@ def reconcile_due_followups(*, limit: int = 100, dry_run: bool = False) -> Dict[
             ).fetchone()
 
             if existing_guard and str(existing_guard["job_status"] or "").lower() == "failed":
+                # Determina se a falha é retryable para aplicar circuit breaker
+                _is_retryable = True
+                try:
+                    _err_raw = existing_guard["job_error"] or ""
+                    if _err_raw:
+                        _err_obj = json.loads(_err_raw)
+                        _is_retryable = bool(_err_obj.get("details", {}).get("retryable", True))
+                except Exception:
+                    pass
+
+                if not _is_retryable:
+                    # Falha definitiva: aplica cooldown de 24h para evitar loop infinito
+                    _cooldown_hours = 24
+                    _next_retry_at = (
+                        datetime.now(timezone.utc) + timedelta(hours=_cooldown_hours)
+                    ).replace(microsecond=0).isoformat()
+                    cur.execute(
+                        "DELETE FROM followup_reconcile_guard WHERE id = ?",
+                        (existing_guard["guard_id"],),
+                    )
+                    cur.execute(
+                        """
+                        UPDATE leads
+                           SET next_followup_at = ?,
+                               lastMovement = CURRENT_TIMESTAMP
+                         WHERE id = ?
+                        """,
+                        (_next_retry_at, lead_id),
+                    )
+                    cur.execute(
+                        """
+                        INSERT INTO prospection_logs (lead_id, channel, message_id, action, notes, user_id)
+                        VALUES (?, NULL, NULL, 'followup_circuit_breaker', ?, ?)
+                        """,
+                        (
+                            lead_id,
+                            _json_dumps({
+                                "reason": "non_retryable_failure",
+                                "failed_job_id": existing_guard["job_id"],
+                                "cooldown_hours": _cooldown_hours,
+                                "next_retry_at": _next_retry_at,
+                            }),
+                            user_id,
+                        ),
+                    )
+                    logger.info(
+                        "followup.reconcile_circuit_breaker lead_id=%s user_id=%s failed_job_id=%s next_retry_at=%s",
+                        lead_id,
+                        user_id,
+                        existing_guard["job_id"],
+                        _next_retry_at,
+                    )
+                    skipped_circuit_breaker += 1
+                    continue  # não re-enfileira para este lead
+
                 cur.execute(
                     "DELETE FROM followup_reconcile_guard WHERE id = ?",
                     (existing_guard["guard_id"],),
@@ -347,6 +403,7 @@ def reconcile_due_followups(*, limit: int = 100, dry_run: bool = False) -> Dict[
         "skipped_duplicate": skipped_duplicate,
         "skipped_dry_run": skipped_dry_run,
         "skipped_outside_window": skipped_outside_window,
+        "skipped_circuit_breaker": skipped_circuit_breaker,
         "job_type": TYPE_FOLLOWUP_TICK,
         "items": items,
     }

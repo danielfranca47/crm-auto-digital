@@ -62,11 +62,12 @@ async def _reconciler_loop() -> None:
             result = await asyncio.to_thread(reconcile_due_followups)
             if result["eligible"] > 0 or result["enqueued"] > 0:
                 logger.info(
-                    "[reconciler] scanned=%d eligible=%d enqueued=%d skipped_duplicate=%d",
+                    "[reconciler] scanned=%d eligible=%d enqueued=%d skipped_duplicate=%d skipped_circuit_breaker=%d",
                     result["scanned"],
                     result["eligible"],
                     result["enqueued"],
                     result["skipped_duplicate"],
+                    result.get("skipped_circuit_breaker", 0),
                 )
             else:
                 logger.debug("[reconciler] nenhum follow-up vencido — scanned=%d", result["scanned"])
