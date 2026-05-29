@@ -110,8 +110,8 @@ Todos os cenários de UI foram validados em playground (28/05/2026). Aqui o obje
 
 | # | Descrição | Exige participação | Validado |
 |---|---|---|---|
-| W1 | Desativar bot para lead via UI (checkbox confirmado) → lead envia mensagem real → bot **não responde** (job não é criado ou é descartado no guardrail) | ⚠️ Lead envia mensagem | [ ] |
-| W2 | Reativar bot via UI → lead envia mensagem → bot responde normalmente | ⚠️ Lead envia mensagem | [ ] |
+| W1 | Desativar bot para lead via UI (checkbox confirmado) → lead envia mensagem real → bot **não responde** (job não é criado ou é descartado no guardrail) | ⚠️ Lead envia mensagem | [x] 29/05/2026 — inbound_handler retornou `skipped/bot_disabled` sem criar job, nenhum outbound gerado |
+| W2 | Reativar bot via UI → lead envia mensagem → bot responde normalmente | ⚠️ Lead envia mensagem | [x] 29/05/2026 — job 388 criado, outbound 264 sent, bot respondeu next qualification question |
 
 **Condição de avanço:** W1 e W2 validados.
 
