@@ -174,9 +174,9 @@ def get_next_job_internal(
             SELECT * FROM jobs
              WHERE status=?
                AND type IN ({placeholders})
-               AND COALESCE(scheduled_at, CURRENT_TIMESTAMP) <= CURRENT_TIMESTAMP
+               AND COALESCE(datetime(scheduled_at), CURRENT_TIMESTAMP) <= CURRENT_TIMESTAMP
                AND attempts < ?
-             ORDER BY priority DESC, scheduled_at ASC, created_at ASC, id ASC
+             ORDER BY priority DESC, COALESCE(datetime(scheduled_at), created_at) ASC, created_at ASC, id ASC
              LIMIT ?
             """,
             params,
