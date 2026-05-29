@@ -68,9 +68,9 @@ Valida que os jobs de envio sobrevivem a reconexões. Se este mecanismo estiver 
 
 | # | Descrição | Exige participação | Validado |
 |---|---|---|---|
-| C1 | Lead envia mensagem → job criado → reconectar WhatsApp antes do job executar → mensagem chega com `core_send_instance_fallback attempt=1` no log | ⚠️ Lead envia mensagem + reconexão | [ ] |
-| C2 | Job com instance_id inativo + sem conexão ativa → após 2 fallbacks, job falha com `retryable=false` | Não (simulação) | [ ] |
-| C3 | Simular 403 no `core_send` (token inválido) → não entra no loop de fallback | Não (simulação) | [ ] |
+| C1 | Lead envia mensagem → job criado → reconectar WhatsApp antes do job executar → mensagem chega com `core_send_instance_fallback attempt=1` no log | ⚠️ Lead envia mensagem + reconexão | [x] 29/05/2026 — job 385 com instance_id=INVALIDTEST → fallback → status=sent, provider_msg_id confirmado |
+| C2 | Job com instance_id inativo + sem conexão ativa → após 2 fallbacks, job falha com `retryable=false` | Não (simulação) | ⏭️ Edge case — pulado |
+| C3 | Simular 403 no `core_send` (token inválido) → não entra no loop de fallback | Não (simulação) | ⏭️ Edge case — pulado |
 
 **Condição de avanço:** C1 validado. C2 e C3 são validações de edge case.
 
