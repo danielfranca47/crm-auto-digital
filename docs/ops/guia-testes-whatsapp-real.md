@@ -16,6 +16,22 @@
 4. Após corrigir, revalide o cenário que falhou antes de avançar para o próximo grupo.
 5. Grupos que exigem a participação do usuário estão marcados com `⚠️ Requer usuário`.
 
+### Verificação obrigatória antes de pedir mensagem ao usuário
+
+**Antes de solicitar ao usuário que envie qualquer mensagem do número do lead**, verificar se a instância WhatsApp está conectada:
+
+```python
+# Checar status da conexão no core.db
+SELECT instance_id, status FROM whatsapp_connections WHERE user_id = 4 ORDER BY id DESC LIMIT 1;
+```
+
+Ou navegar em **AI Profile → aba CONEXÃO** e confirmar que o status é **CONECTADO** e a sessão está **Ativa**.
+
+- Se **CONECTADO** → prosseguir com o teste.
+- Se **DESCONECTADO** → avisar o usuário: *"A instância WhatsApp está desconectada. Por favor clique em 'Reconectar QR' e escaneie o QR com o WhatsApp do bot para restabelecer a sessão antes de continuar."*
+
+> **Motivo:** A API gratuita UazAPI expira periodicamente; reinícios do backend-crm também podem quebrar a sessão. Se o webhook não receber mensagens, o teste falha silenciosamente sem erro óbvio.
+
 ---
 
 ## Pré-requisitos gerais
