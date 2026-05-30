@@ -80,6 +80,9 @@ Se não houver código de etapa claro, usar um slug descritivo direto:
 
 ## Passo 2 — Estrutura do arquivo a criar
 
+> **Exemplo concreto preenchido:** [`_template-implementacao.md`](_template-implementacao.md)
+> Leia-o antes de criar o seu arquivo — mostra como fica na prática cada secção descrita abaixo.
+
 Copie e preencha o template abaixo. As seções marcadas com `(*)` são obrigatórias. As demais são opcionais conforme a complexidade da feature.
 
 ```markdown
@@ -222,6 +225,13 @@ Alterar o cabeçalho de status:
 ```markdown
 **Status:** Todos os cenários validados (DD/MM/AAAA) — pendente: <o que ainda falta, se houver>
 ```
+
+Após todos os checks obrigatórios validados, executar o processo de graduação:
+
+> **→ Seguir [`_processo-graduacao-implementacao.md`](_processo-graduacao-implementacao.md)**
+>
+> Esse processo garante que o conteúdo arquitecturalmente relevante é migrado para
+> `docs/architecture/` antes de o arquivo de implementação ser removido.
 
 ---
 
