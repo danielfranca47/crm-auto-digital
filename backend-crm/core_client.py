@@ -538,6 +538,27 @@ def fetch_core_whatsapp_token(instance_id: str) -> Optional[str]:
     return data.get("instance_token") if isinstance(data, dict) else None
 
 
+def send_whatsapp_direct(instance_id: str, phone: str, text: str) -> bool:
+    """Envia uma mensagem WhatsApp directamente via backend-core (sem job queue).
+    Usado pelo _apply_media_fallback e outros envios imediatos do CRM.
+    Retorna True se enviado com sucesso, False em caso de falha."""
+    if not instance_id or not phone or not text:
+        return False
+    base = _get_core_base()
+    url = f"{base}/whatsapp/send"
+    headers = _service_headers()
+    try:
+        with httpx.Client(timeout=20) as client:
+            resp = client.post(url, headers=headers, json={
+                "instance_id": instance_id,
+                "number": phone,
+                "text": text,
+            })
+        return resp.status_code < 300
+    except Exception:
+        return False
+
+
 def fetch_core_whatsapp_connection_by_user(user_id: int) -> Dict[str, Any]:
     """Consulta o core para resolver a conexão WhatsApp atual pelo user_id."""
 

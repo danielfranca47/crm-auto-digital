@@ -11,7 +11,7 @@ from typing import Any, Dict, Optional
 from fastapi import HTTPException
 from pydantic import BaseModel, ConfigDict, Field
 
-from core_client import fetch_core_ai_profile_resolve, fetch_core_whatsapp_connection_resolve, fetch_core_whatsapp_token
+from core_client import fetch_core_ai_profile_resolve, fetch_core_whatsapp_connection_resolve, fetch_core_whatsapp_token, send_whatsapp_direct
 from database import get_connection
 from services.audio_transcription import is_audio_type, transcribe_audio_from_url, download_audio_url_from_uazapi
 from services.jobs_service import (
