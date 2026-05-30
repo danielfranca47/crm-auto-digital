@@ -327,10 +327,10 @@ Campo `detected_intents` é `list[str]`, padrão `[]` quando não há `intent_tr
   - 4 call sites atualizados para passar `mother_decision.detected_intents`
 
 ### Verificação
-- [ ] Configurar `intent_trigger "demonstrar hesitação" → midia` numa fase
-- [ ] Enviar mensagem neutra no playground → mídia **não** deve ser enviada
-- [ ] Enviar mensagem com hesitação ("não sei se vale...") → mídia **deve** ser enviada
-- [ ] Fase sem `intent_trigger` → prompt da mãe não inclui secção de detecção
+- [x] Configurar `intent_trigger "demonstrar hesitação" → mensagem` numa fase
+- [x] Enviar mensagem neutra no playground → mensagem **não** deve ser enviada — **30/05/2026**: lead #161, "Olá, bom dia!" → route=recepcao, trigger NÃO disparou
+- [x] Enviar mensagem com hesitação ("não sei se vale...") → mensagem **deve** ser enviada — **30/05/2026**: "[TESTE intent_trigger fire_once] Hesitação detectada!" enviado como Fluxo de Venda, suppress_llm_response aplicado
+- [x] Fase sem `intent_trigger` → prompt da mãe não inclui secção de detecção — **30/05/2026**: lead 161 em `apresentation` (p2 sem intent_trigger), trace sem campo `detected_intents`
 
 ---
 
@@ -499,8 +499,8 @@ Quando `phase_trigger` dispara → adiciona `{type: "mark_phase_triggered", phas
 - [x] ~~Playground: transition qual → apres → confirmar ordem correcta: LLM → "Olá..." → 🎵 áudio → "Gostou?"~~ → **ordem esperada estava errada** — ver Fase 9
 - [x] Enviar 2ª mensagem em apresentação → `auto_items` vazio (flag `["p2"]` impede re-disparo) — **confirmado 27/05/2026**: após entrar em `apresentation`, as mensagens seguintes do lead não repetiram os auto-itens
 - [x] Lead avança para agendamento e volta para apresentação → trigger NÃO re-dispara — **confirmado 27/05/2026**: lead foi para `agendamento`, perguntou sobre CRM (roteado de volta a `apresentation`), auto-mensagens não repetiram
-- [ ] WhatsApp real: media e mensagens enviados em jobs separados na ordem correcta
-- [ ] Verificar coluna `phases_triggered` populada no DB após primeira execução
+- [x] WhatsApp real: mensagens automáticas chegam **antes** da resposta LLM — **30/05/2026**: "Olá, aqui estão os detalhes" + "Gostou?" chegaram às 14:57 ANTES da resposta LLM
+- [x] Verificar coluna `phases_triggered` populada no DB após primeira execução — **30/05/2026**: `phases_triggered=["p2"]` confirmado no DB após primeira entrada em apresentação
 
 ---
 
@@ -692,18 +692,18 @@ O `no_reply_trigger` é **actualmente um placeholder de UI** — não é avaliad
 ### Verificação Fase 10
 
 **WhatsApp real — fase com phase_trigger:**
-- [ ] Enviar mensagem real via WhatsApp para lead em qualificação → entra em apresentação → mensagens automáticas chegam **antes** da resposta LLM
-- [ ] `phases_triggered` populado no DB após a primeira execução real
+- [x] Enviar mensagem real via WhatsApp para lead em qualificação → entra em apresentação → mensagens automáticas chegam **antes** da resposta LLM — **30/05/2026**: "Olá, aqui estão os detalhes" + "Gostou?" chegaram ANTES da resposta LLM (W1)
+- [x] `phases_triggered` populado no DB após a primeira execução real — **30/05/2026**: `phases_triggered=["p2"]` confirmado após primeira entrada real em apresentação (W2)
 
 **fire_once — kw_trigger:**
 - [x] Configurar bloco `kw_trigger` com keyword "preço" e `fire_once=True`
-- [x] Enviar "qual é o preço?" → bloco dispara, `triggers_fired` regista o block_id
-- [x] Enviar "preço" novamente → bloco NÃO dispara
+- [x] Enviar "qual é o preço?" → bloco dispara, `triggers_fired` regista o block_id — **30/05/2026**: `triggers_fired=["daa882f1..."]` confirmado no DB
+- [x] Enviar "preço" novamente → bloco NÃO dispara — **30/05/2026**: `triggers_fired` permaneceu com 1 ID, `system_actions=[]` no job seguinte (W4)
 
 **fire_once — intent_trigger:**
 - [x] Configurar bloco `intent_trigger "demonstrar hesitação"` com `fire_once=True`
-- [x] Lead expressa hesitação → bloco dispara uma vez
-- [x] Lead expressa hesitação novamente → NÃO dispara
+- [x] Lead expressa hesitação → bloco dispara uma vez — **30/05/2026**: "[TESTE intent_trigger fire_once] Hesitação detectada!" enviado, `triggers_fired=["1698bd63..."]` (W5)
+- [x] Lead expressa hesitação novamente → NÃO dispara — **30/05/2026**: 3ª mensagem hesitante → bot respondeu qualificação normal sem re-disparar (W5)
 
 ---
 

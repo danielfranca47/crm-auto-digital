@@ -113,6 +113,20 @@ A distinção no modal de reativação é feita por `bot_disabled_reason === "ma
 
 ---
 
+---
+
+## Validação WhatsApp Real (29/05/2026)
+
+### Cenário W1 — Bot desativado não responde no WhatsApp real
+- [x] Desativar bot para lead via UI → lead envia mensagem real → bot não responde
+- **Validado em:** 29/05/2026 — `inbound_handler` retornou `skipped/bot_disabled` sem criar job; zero outbound events gerados
+
+### Cenário W2 — Reativação funciona no WhatsApp real
+- [x] Reativar bot via UI → lead envia mensagem → bot responde normalmente
+- **Validado em:** 29/05/2026 — job 388 criado, outbound 264 enviado com status=sent, bot respondeu com próxima pergunta de qualificação
+
+---
+
 ## Ajustes Possíveis Pós-Implementação
 
 - Por ora, o botão "Desativar bot" aparece em qualquer fase do funil. Poderia ser ocultado em certas categorias (ex: `archived`) se necessário no futuro.

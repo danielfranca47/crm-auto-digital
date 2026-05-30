@@ -52,10 +52,10 @@ Toggle "Modo lote" na barra de input do playground:
 8. ✅ Clicar X em um chip para remover e confirmar que fica apenas os restantes
 9. ✅ Desativar modo lote → Enter volta a enviar imediatamente
 
-### Paridade WhatsApp real vs. playground (buffer) — ⏳ Pendente
+### Paridade WhatsApp real vs. playground (buffer) — ✅ Validado em 29/05/2026
 
-- ⏳ Configurar `multi_message_buffer_seconds = 30` no AI Profile
-- ⏳ WhatsApp real: enviar 3 mensagens em < 30s → bot deve responder 1 vez com contexto acumulado
+- ✅ Configurar `multi_message_buffer_seconds = 30` no AI Profile
+- ✅ WhatsApp real: 3 mensagens enviadas em 7s → 1 único job criado → bot respondeu 1 vez com contexto acumulado ("Qual é o faturamento anual da empresa?")
 - ✅ Playground (modo lote): escrever 3 mensagens, enviar lote → bot recebe contexto equivalente
 
 ## Arquivos alterados
