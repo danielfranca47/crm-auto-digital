@@ -16,28 +16,23 @@ class UazapiTimeoutError(UazapiClientError):
     pass
 
 
-_MEDIA_TYPE_TO_ENDPOINT: Dict[str, str] = {
-    "image": "send/image",
-    "video": "send/video",
-    "audio": "send/audio",
-    "document": "send/document",
-    "myaudio": "send/myaudio",  # Mensagem de voz — aparece como bolha PTT no WhatsApp
-    "ptt": "send/ptt",
-}
-
-
 async def send_media(
     *, base_url: str, token: str, number: str, media_url: str, media_type: str, caption: str = "", delay_ms: int = 0
 ) -> Dict[str, Any]:
+    # UazAPI v2: endpoint unificado /send/media com campo type e file (não url)
+    # Tipos suportados: image, video, videoplay, document, audio, myaudio, ptt, ptv, sticker
     base = base_url.rstrip("/")
     if not base:
         raise UazapiClientError("UAZAPI_BASE_URL is not configured")
-    endpoint = _MEDIA_TYPE_TO_ENDPOINT.get(media_type.lower(), "send/image")
-    url = f"{base}/{endpoint}"
+    url = f"{base}/send/media"
     headers = {"token": token, "Content-Type": "application/json"}
-    payload: Dict[str, Any] = {"number": number, "url": media_url}
+    payload: Dict[str, Any] = {
+        "number": number,
+        "type": media_type.lower(),
+        "file": media_url,
+    }
     if caption:
-        payload["caption"] = caption
+        payload["text"] = caption  # campo 'text' (não 'caption') na UazAPI v2
     if delay_ms > 0:
         payload["delay"] = delay_ms
 
