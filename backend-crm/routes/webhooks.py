@@ -113,14 +113,8 @@ def whatsapp_uazapi_webhook(
     data = payload.get("data") if isinstance(payload.get("data"), dict) else {}
     message = payload.get("message") if isinstance(payload.get("message"), dict) else {}
 
-    # DEBUG TEMPORÁRIO — remover após validar transcrição PTT
-    import json as _json
-    _raw_mtype = (data.get("messageType") or message.get("type") or message.get("messageType") or "")
-    print(f"[DEBUG_WEBHOOK] event={event} mtype={_raw_mtype} instance={instance_id} from_me={payload.get('message', {}).get('fromMe')}")
-    if _raw_mtype.lower() in ("audiomessage", "ptt", "audio", "audiomsg"):
-        print(f"[DEBUG_PTT] message keys={list(message.keys())}")
-        print(f"[DEBUG_PTT] content={str(message.get('content'))[:300]}")
-        print(f"[DEBUG_PTT] sender_pn={message.get('sender_pn')} messageid={message.get('messageid')}")
+    # DEBUG TEMPORÁRIO — remover após validar C7
+    print(f"[DEBUG] mtype_raw={message.get('messageType')} mediaType={message.get('mediaType')} sender_pn={message.get('sender_pn')} chat_phone={payload.get('chat',{}).get('phone')} messageid={message.get('messageid')}")
 
     def _resolve_sender_e164() -> str:
         chat = payload.get("chat") if isinstance(payload.get("chat"), dict) else {}
