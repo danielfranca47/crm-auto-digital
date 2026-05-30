@@ -113,8 +113,6 @@ def whatsapp_uazapi_webhook(
     data = payload.get("data") if isinstance(payload.get("data"), dict) else {}
     message = payload.get("message") if isinstance(payload.get("message"), dict) else {}
 
-    # DEBUG TEMPORÁRIO — remover após validar C7
-    print(f"[DEBUG] mtype_raw={message.get('messageType')} mediaType={message.get('mediaType')} sender_pn={message.get('sender_pn')} chat_phone={payload.get('chat',{}).get('phone')} messageid={message.get('messageid')}")
 
     def _resolve_sender_e164() -> str:
         chat = payload.get("chat") if isinstance(payload.get("chat"), dict) else {}

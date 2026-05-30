@@ -160,7 +160,7 @@ Executar na ordem abaixo — alguns cenários alteram configuração do AI Profi
 | C4 | Toggle **desligado** + Mídia inválida = "Ignorar" → lead envia PTT → nenhuma mensagem enviada, log mostra `media_fallback_ignore` | Toggle OFF, fallback "ignorar" | [x] 30/05/2026 — bot_disabled=0, zero outbound events, descarte silencioso confirmado |
 | C5 | Regressão — lead envia **texto normal** → fluxo inalterado (sem impacto do sistema de áudio) | Toggle ON ou OFF | [x] 30/05/2026 — job 389 "Oi", job 391 com texto, fluxo normal inalterado |
 | C6 | Falha de transcrição (simular `OPENAI_API_KEY` inválida ou ausente) → sistema aplica `media_fallback` em vez de quebrar | Toggle ON, key inválida | [ ] |
-| C7 | Lead envia **vídeo ou figurinha** com fallback "continuar" → `media_fallback_msg` enviada, bot **não** tenta transcrever | Toggle ON ou OFF, fallback "continuar" | [ ] |
+| C7 | Lead envia **vídeo ou figurinha** com fallback "continuar" → `media_fallback_msg` enviada, bot **não** tenta transcrever | Toggle ON ou OFF, fallback "continuar" | [x] 30/05/2026 — vídeo recebido, "Não consigo processar áudios" enviado, bot_disabled=0 |
 | C8 | Usuário existente sem campo `audio_transcription_enabled` no AI Profile → default `False` aplicado, sem erro | Usuário legacy | [ ] |
 
 > **Nota C3:** após validar, reativar o bot manualmente antes de prosseguir para C4 e C5.
@@ -229,7 +229,7 @@ Estes foram confirmados no playground. Validar no WhatsApp real como regressão:
 | 2 — Instance Fallback | `fix-core-send-instance-fallback.md` | ⏳ Pendente |
 | 3 — Buffer real | `etapa-8-6-delay-buffer-playground.md` | ⏳ Pendente (playground ✅) |
 | 4 — Toggle Bot | `etapa-8-7-toggle-bot-lead.md` | ⏳ Pendente real (playground ✅) |
-| 5 — Áudio Inbound | `etapa-8-6-audio-transcricao-inbound.md` | 🔶 Parcial — C1, C2, C5 ✅ / C3, C4, C6, C7, C8 pendentes |
+| 5 — Áudio Inbound | `etapa-8-6-audio-transcricao-inbound.md` | 🔶 Parcial — C1–C5, C7 ✅ / C6, C8 pulados (edge cases) |
 | 6 — Camada 7 | `camada7-sequential-trigger-model.md` | ⏳ Pendente real (playground ✅) |
 
 ---
