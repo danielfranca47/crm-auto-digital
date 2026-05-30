@@ -195,7 +195,16 @@ def whatsapp_uazapi_webhook(
 
     sender = _resolve_sender_e164()
     message_id = data.get("messageId") or data.get("id") or message.get("messageid") or message.get("id")
-    message_type = data.get("messageType") or message.get("type") or message.get("messageType")
+    # messageType="media" é genérico em algumas versões da UazAPI; usar mediaType para o tipo real
+    _raw_mt = (
+        data.get("messageType")
+        or message.get("type")
+        or message.get("messageType")
+    )
+    # "media" é um wrapper genérico — preferir mediaType ("ptt", "image", "video", etc.)
+    if (_raw_mt or "").lower() == "media":
+        _raw_mt = message.get("mediaType") or _raw_mt
+    message_type = _raw_mt
     # content pode ser dict para PTT/mídia (ex: {'PTT': True, 'URL': '...'}); usar só se for string
     _raw_content = message.get("content")
     message_text = (
