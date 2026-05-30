@@ -278,9 +278,11 @@ def whatsapp_uazapi_webhook(
         )
         return {"status": "ignored", "reason": "group_message"}
 
-    # Texto vazio só é permitido para mensagens de áudio (serão transcritas no handler)
+    # Texto vazio é permitido para áudio (transcrição) e mídia inválida (vídeo, imagem, sticker, etc.)
+    # Ambos são tratados pelo inbound_handler via _apply_media_fallback
     normalized_type = _normalize_spy_message_type(message_type)
-    if not message_text and normalized_type != "audio":
+    _MEDIA_NO_TEXT_TYPES = {"audio", "video", "image", "sticker", "reaction", "document"}
+    if not message_text and normalized_type not in _MEDIA_NO_TEXT_TYPES:
         return {"status": "ignored", "reason": "missing_text"}
     if not instance_id or not sender or not message_id:
         detail = "Payload Uazapi incompleto"
