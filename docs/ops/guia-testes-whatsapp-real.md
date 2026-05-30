@@ -154,11 +154,11 @@ Executar na ordem abaixo — alguns cenários alteram configuração do AI Profi
 
 | # | Descrição | Configuração necessária | Validado |
 |---|---|---|---|
-| C1 | Toggle áudio **ligado** → lead envia PTT → bot transcreve e responde ao conteúdo | Toggle ON | [ ] |
-| C2 | Toggle **desligado** + Mídia inválida = "Responder e continuar" → lead envia PTT → bot responde com `media_fallback_msg`, bot não desabilitado | Toggle OFF, fallback "continuar" | [ ] |
+| C1 | Toggle áudio **ligado** → lead envia PTT → bot transcreve e responde ao conteúdo | Toggle ON | [x] 30/05/2026 — inbound_event 274, job 391 `[Áudio]: E aí`, bot respondeu ao conteúdo transcrito |
+| C2 | Toggle **desligado** + Mídia inválida = "Responder e continuar" → lead envia PTT → bot responde com `media_fallback_msg`, bot não desabilitado | Toggle OFF, fallback "continuar" | [x] 30/05/2026 — envio directo via send_whatsapp_direct (sem job queue), confirmado pelo utilizador |
 | C3 | Toggle **desligado** + Mídia inválida = "Responder e pausar" → lead envia PTT → `media_fallback_msg` enviada + bot desabilitado para o lead | Toggle OFF, fallback "pausar" | [ ] |
 | C4 | Toggle **desligado** + Mídia inválida = "Ignorar" → lead envia PTT → nenhuma mensagem enviada, log mostra `media_fallback_ignore` | Toggle OFF, fallback "ignorar" | [ ] |
-| C5 | Regressão — lead envia **texto normal** → fluxo inalterado (sem impacto do sistema de áudio) | Toggle ON ou OFF | [ ] |
+| C5 | Regressão — lead envia **texto normal** → fluxo inalterado (sem impacto do sistema de áudio) | Toggle ON ou OFF | [x] 30/05/2026 — job 389 "Oi", job 391 com texto, fluxo normal inalterado |
 | C6 | Falha de transcrição (simular `OPENAI_API_KEY` inválida ou ausente) → sistema aplica `media_fallback` em vez de quebrar | Toggle ON, key inválida | [ ] |
 | C7 | Lead envia **vídeo ou figurinha** com fallback "continuar" → `media_fallback_msg` enviada, bot **não** tenta transcrever | Toggle ON ou OFF, fallback "continuar" | [ ] |
 | C8 | Usuário existente sem campo `audio_transcription_enabled` no AI Profile → default `False` aplicado, sem erro | Usuário legacy | [ ] |
@@ -229,7 +229,7 @@ Estes foram confirmados no playground. Validar no WhatsApp real como regressão:
 | 2 — Instance Fallback | `fix-core-send-instance-fallback.md` | ⏳ Pendente |
 | 3 — Buffer real | `etapa-8-6-delay-buffer-playground.md` | ⏳ Pendente (playground ✅) |
 | 4 — Toggle Bot | `etapa-8-7-toggle-bot-lead.md` | ⏳ Pendente real (playground ✅) |
-| 5 — Áudio Inbound | `etapa-8-6-audio-transcricao-inbound.md` | ⏳ Pendente (playground ✅) |
+| 5 — Áudio Inbound | `etapa-8-6-audio-transcricao-inbound.md` | 🔶 Parcial — C1, C2, C5 ✅ / C3, C4, C6, C7, C8 pendentes |
 | 6 — Camada 7 | `camada7-sequential-trigger-model.md` | ⏳ Pendente real (playground ✅) |
 
 ---
