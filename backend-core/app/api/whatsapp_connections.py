@@ -217,7 +217,7 @@ async def resolve_connection_token(
     if not connection:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Connection not found")
 
-    if connection.status != "active":
+    if service.normalize_connection_status_for_crm(connection.status) != "active":
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Connection inactive")
 
     if not connection.instance_token_encrypted:
