@@ -214,24 +214,15 @@ def _apply_media_fallback(
     if behavior == "ignorar":
         return {"status": "ignored", "reason": "media_fallback_ignore"}
 
-    # "continuar" ou "pausar": enviar mensagem ao lead
+    # "continuar" ou "pausar": enviar mensagem ao lead directamente (sem job queue)
+    # whatsapp.send.local é processado pelo agent-local, não pelo executor — usar envio directo
     if msg:
-        from services.jobs_service import TYPE_WHATSAPP_SEND
-        job_payload = {
-            "user_id": user_id,
-            "instance_id": instance_id,
-            "phone": phone,
-            "message": msg,
-            "message_type": "text",
-        }
         try:
-            create_job(
-                job_type=TYPE_WHATSAPP_SEND,
-                payload=job_payload,
-                user_id=user_id,
-            )
+            sent = send_whatsapp_direct(instance_id, phone, msg)
+            if not sent:
+                logger.warning("[media_fallback] falha no envio directo user_id=%s phone=%s", user_id, phone)
         except Exception as _exc:
-            logger.error("[media_fallback] falha ao criar job de resposta: %s", _exc)
+            logger.error("[media_fallback] excepção no envio directo: %s", _exc)
 
     if behavior == "pausar":
         with get_connection() as _conn:
