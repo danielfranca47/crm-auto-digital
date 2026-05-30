@@ -52,8 +52,22 @@ Lead responde pergunta de qualificação
 | Arquivo | O que muda |
 |---|---|
 | `frontend-crm/src/types/agente.ts` | `qualify_if?: string` e `disqualify_if?: string` em `QualificationField` |
-| `frontend-crm/src/components/agente/CamadaQualificacao.tsx` | `DrawerCampo`: secção "Configurações avançadas" colapsível com 2 textareas |
-| `backend-executors/app/services/decision_engine.py` | `_build_qualification_fields_block()`: incluir qualify_if/disqualify_if; `_build_child_prompt_qualification()`: instrução de reação natural |
+| `frontend-crm/src/components/agente/CamadaQualificacao.tsx` | `DrawerCampo`: componente `AdvancedCriteria` colapsível com 2 textareas para os critérios |
+| `backend-executors/app/services/decision_engine.py` | `_build_qualification_fields_block()`: inclui qualify_if/disqualify_if no bloco; `_build_child_prompt_qualification()`: instrução `_natural_reaction_block` |
+
+### Commits Fase 1
+
+| # | Commit | O que foi implementado |
+|---|---|---|
+| 1 | `ff32a7b` | Fases 1 e 2 em conjunto (critérios + reação natural + abertura de qualificação) |
+
+**Detalhes do commit `ff32a7b`:**
+- `frontend-crm/src/types/agente.ts` — qualify_if/disqualify_if em QualificationField; qual_opener em SalesFlowBlock
+- `frontend-crm/src/components/agente/CamadaQualificacao.tsx` — componente AdvancedCriteria no DrawerCampo
+- `frontend-crm/src/components/agente/CamadaFluxoVenda.tsx` — QualOpenerBanner, QualOpenerCard, extraHeader em PhaseSection, lógica no loop p1
+- `backend-executors/app/services/decision_engine.py` — qualify_if/disqualify_if em _build_qualification_fields_block; _natural_reaction_block e _qual_opener_injection em _build_child_prompt_qualification
+
+---
 
 ### Fase 2 — Abertura de Qualificação no Fluxo de Venda
 
@@ -62,8 +76,14 @@ Lead responde pergunta de qualificação
 | Arquivo | O que muda |
 |---|---|
 | `frontend-crm/src/types/agente.ts` | `qual_opener?: boolean` em `SalesFlowBlock` |
-| `frontend-crm/src/components/agente/CamadaFluxoVenda.tsx` | Fase p1: detectar bloco `qual_opener:true`; mostrar com label "Abertura de Qualificação"; banner de sugestão quando ausente e há campos ativos |
-| `backend-executors/app/services/decision_engine.py` | `_build_child_prompt_qualification()`: detectar bloco `qual_opener:true` em p1; injetar apenas quando `asked_questions_json` vazio |
+| `frontend-crm/src/components/agente/CamadaFluxoVenda.tsx` | Fase p1: `QualOpenerBanner` quando ausente; `QualOpenerCard` quando presente (editável/removível) |
+| `backend-executors/app/services/decision_engine.py` | `_build_child_prompt_qualification()`: detecta `qual_opener:true` em p1 + injeta apenas quando `asked_questions_json` vazio |
+
+### Commits Fase 2
+
+| # | Commit | O que foi implementado |
+|---|---|---|
+| 1 | `ff32a7b` | Ver Fase 1 — mesmo commit |
 
 ---
 
