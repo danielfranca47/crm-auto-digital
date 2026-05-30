@@ -243,8 +243,12 @@ def handle_inbound(payload: Dict[str, Any]) -> Dict[str, Any]:
     message_text = parsed.resolved_message_text()
     incoming_audio = is_audio_type(parsed.message_type)
 
-    # Texto vazio só é permitido para áudio (será transcrito após resolução do usuário)
-    if not message_text and not incoming_audio:
+    # Texto vazio é permitido para áudio (transcrição) e mídia inválida (vídeo, imagem, sticker)
+    _incoming_invalid_media = (parsed.message_type or "").lower() in {
+        "video", "image", "sticker", "reaction", "document",
+        "videomessage", "imagemessage", "stickermessage",
+    }
+    if not message_text and not incoming_audio and not _incoming_invalid_media:
         raise HTTPException(status_code=400, detail="message_text obrigatório")
 
     external_event_id = parsed.resolved_event_id()
