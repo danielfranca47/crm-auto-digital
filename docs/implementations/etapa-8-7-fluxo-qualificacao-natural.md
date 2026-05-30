@@ -1,7 +1,7 @@
 # Fluxo de Qualificação Natural — Abertura + Reação Contextual + Critérios
 
 **Branch:** `etapa-8-7-fluxo-qualificacao-natural`
-**Status:** Em andamento
+**Status:** P1 e P2 validados (31/05/2026) — pendente: P3 e P4 (teste em playground com backend ativo)
 
 ---
 
@@ -90,23 +90,26 @@ Lead responde pergunta de qualificação
 ## Checks de Validação
 
 ### Cenário P1 — Critérios aparecem no editor de campo
-- [ ] Abrir CamadaQualificacao → clicar num campo → abrir DrawerCampo
-- [ ] Confirmar: secção "Configurações avançadas" aparece (colapsível)
-- [ ] Preencher "Qualificar se" e "Não qualificar se" → Salvar
-- [ ] Confirmar: campos persistem ao reabrir o drawer
+- [x] Abrir CamadaQualificacao → clicar num campo → abrir DrawerCampo
+- [x] Confirmar: secção "Configurações avançadas" aparece (colapsível)
+- [x] Preencher "Qualificar se" e "Não qualificar se" → Salvar
+- [x] Confirmar: campos persistem ao reabrir o drawer
+- **Validado em:** 31/05/2026 — DrawerCampo do campo "Decisor" (Filtro 1 SDR) mostrou secção "CONFIGURAÇÕES AVANÇADAS" colapsível. Badge "configurado" aparece ao preencher os campos. Após SALVAR CAMADA 2, reabrir o drawer confirma badge "configurado" persistido no servidor.
 
 ### Cenário P2 — Bloco de abertura aparece e é editável no Fluxo de Venda
-- [ ] Configurar pelo menos 1 campo ativo em qualification_fields
-- [ ] Abrir Fluxo de Venda → fase p1
-- [ ] Confirmar: banner "Adicionar instrução de abertura" aparece
-- [ ] Clicar → bloco é criado com texto padrão e label "Abertura de Qualificação"
-- [ ] Editar texto → Salvar → confirmar que persiste
+- [x] Configurar pelo menos 1 campo ativo em qualification_fields
+- [x] Abrir Fluxo de Venda → fase p1
+- [x] Confirmar: banner "Adicionar instrução de abertura" aparece
+- [x] Clicar → bloco é criado com texto padrão e label "Abertura de Qualificação"
+- [x] Editar texto → Salvar → confirmar que persiste
+- **Validado em:** 31/05/2026 — Agente Sofia (8 campos ativos). Fase 1 mostrou banner "Sem instrução de abertura configurada". "+ ADICIONAR ABERTURA" criou QualOpenerCard com label "ABERTURA DE QUALIFICAÇÃO", badges "automática · 1ª mensagem" e texto padrão. EDITAR abriu textarea inline. Após salvar, bloco persiste (total: 13 blocos configurados).
 
 ### Cenário P3 — Playground: abertura disparada apenas na primeira mensagem
 - [ ] Qualification_fields com 1+ campos ativos + bloco de abertura configurado
 - [ ] Playground → enviar primeira mensagem
 - [ ] Confirmar: resposta inclui abertura amigável antes da primeira pergunta
 - [ ] Enviar segunda mensagem → confirmar: abertura NÃO repete
+- **Pendente:** requer teste com backend em execução e playground ativo.
 
 ### Cenário P4 — Playground: reação contextual após cada resposta
 - [ ] Qualification_fields com qualify_if/disqualify_if em pelo menos 1 campo
@@ -114,11 +117,13 @@ Lead responde pergunta de qualificação
 - [ ] Confirmar: bot faz comentário de conexão antes da próxima pergunta
 - [ ] Responder com valor fora do critério
 - [ ] Confirmar: bot mostra compreensão breve antes de avançar
+- **Pendente:** requer teste com backend em execução e playground ativo.
 
 ### Cenário P5 — Sem qualification_fields ativos: funcionalidades não aparecem
-- [ ] Agente SEM qualification_fields (ou todos mode: 'off')
-- [ ] Confirmar: Fluxo de Venda p1 não exibe banner de abertura
-- [ ] Confirmar: Playground — bot não tem abertura especial nem instrução de reação
+- [⏭️] Agente SEM qualification_fields (ou todos mode: 'off')
+- [⏭️] Confirmar: Fluxo de Venda p1 não exibe banner de abertura
+- [⏭️] Confirmar: Playground — bot não tem abertura especial nem instrução de reação
+- **Pulado:** verificado por leitura de código — condição `hasActiveQualFields` (frontend) e `_has_active_qual_fields` (backend) são `false` quando não há campos ativos; ambos os blocos UI e prompt ficam inativos.
 
 ---
 
