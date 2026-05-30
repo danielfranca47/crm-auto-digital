@@ -98,6 +98,8 @@ Aliases aceitos: `whatsapp_send`, `maps_search_fallback`, `maps_enrich_fallback`
 | `handoff_custom_text` | string\|null | Mensagem enviada ao lead no handoff |
 | `requires_handoff` | boolean | Se o fluxo sempre exige handoff ao final |
 | `human_in_loop` | boolean | Se humano deve aprovar mensagens antes do envio |
+| `audio_transcription_enabled` | boolean | Se o agente transcreve áudios PTT via Whisper (padrão: `false`) |
+| `offer_pack` | object\|null | JSON com configurações de oferta e comportamento de mídia (ver abaixo) |
 
 ### Enums
 
@@ -126,9 +128,37 @@ Aliases aceitos: `whatsapp_send`, `maps_search_fallback`, `maps_enrich_fallback`
 
 **`handoff_policy`**: `"disable_bot"`, `"keep_active_notify"`, `"ignore"`
 
+### Campos do `offer_pack` (subobject)
+
+| Campo | Descrição |
+|---|---|
+| `media_fallback` | Comportamento quando chega mídia inválida ou áudio com toggle OFF: `"ignorar"` (padrão), `"continuar"`, `"pausar"` |
+| `media_fallback_msg` | Mensagem enviada ao lead quando `media_fallback = "continuar"` ou `"pausar"` |
+| `multi_message_buffer_seconds` | Janela de absorção de mensagens consecutivas em segundos (0 = desligado) |
+
 ### Atualização parcial
 
 `PUT /ai-profiles/me` aceita atualização parcial (`exclude_unset=True`). Só campos presentes no body são alterados.
+
+---
+
+## Toggle de Bot por Lead
+
+O flag `bot_disabled` na tabela `leads` (backend-crm) permite desactivar o agente para um lead individual sem afectar os outros.
+
+| Campo | Tipo | Descrição |
+|---|---|---|
+| `bot_disabled` | `INTEGER` (0/1) | `1` = agente desactivado para este lead |
+| `bot_disabled_reason` | `TEXT NULL` | Motivo: `"manual_disable"`, `"category_closing"`, `"media_fallback"` |
+
+**Fontes de desactivação:**
+- **Manual:** utilizador clica "Desativar bot" no `LeadCardDialog`; confirma modal com checkbox
+- **Automático (closing):** `lead_category_policy.py` desactiva o bot ao entrar em `closing` (apenas para `agent_mode=agenda`)
+- **Automático (media_fallback):** quando `media_fallback="pausar"` e chega mensagem de mídia inválida
+
+**Reactivação:** botão "Reativar bot" no alert block do `LeadCardDialog`. Quando `bot_disabled_reason="manual_disable"`, exibe modal de aviso adicional.
+
+**Verificação no guardrail:** `inbound_handler.py` verifica `lead.bot_disabled` antes de qualquer processamento — `bot_disabled=1` resulta em `{"status": "ignored", "reason": "bot_disabled"}` sem criar job.
 
 ---
 

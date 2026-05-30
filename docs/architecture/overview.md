@@ -1,0 +1,97 @@
+# Mapa Geral de Arquitectura
+
+Guia de navegação para os documentos de arquitectura. Use este ficheiro para
+decidir qual doc ler antes de trabalhar numa área, e se deve actualizar um
+existente ou criar um novo.
+
+---
+
+## Documentos existentes e áreas cobertas
+
+| Documento | Área | Actualizar quando... |
+|---|---|---|
+| [`sales-flow.md`](sales-flow.md) | Camada 7 — Fluxo de Venda: fases (p0–p5), blocos tipados, triggers (phase/kw/intent), fire_once, suppress_llm_response, dispatch de system_actions | Novo tipo de bloco, novo flag de trigger, mudança no modelo sequencial, novo destino de acção |
+| [`llm-architecture.md`](llm-architecture.md) | Motor de decisão: LLM Mãe, LLM Filhas, contratos (MotherDecision, ChildResult, DecisionOutput), guardrails, fluxo de execução | Novo campo nos contratos, nova LLM Filha, novo guardrail, mudança no `compose_decision_output` |
+| [`webhooks.md`](webhooks.md) | Pipeline inbound WhatsApp: webhook UazAPI, filtro de grupos, normalização de messageType, áudio/mídia, bot_disabled, buffer, ContextBundle | Novo tipo de mensagem suportado, novo comportamento de fallback de mídia, nova fonte de `bot_disabled`, mudança no buffer |
+| [`pipeline-phases.md`](pipeline-phases.md) | Fases de qualificação, apresentação e fechamento por agent_mode; campos do AI Profile que chegam ao LLM; guardrails anti-loop; hardcodes | Novos campos obrigatórios de qualificação, novo behavior por agent_mode, novo guardrail de fase |
+| [`agents.md`](agents.md) | AI Profile (schema, campos, enums, offer_pack) e Agentes Locais (tabela, endpoints, job types, fila); toggle bot por lead | Novo campo no AI Profile, novo agent_mode/template_key, novo job type, novo motivo de `bot_disabled` |
+| [`followup.md`](followup.md) | Arquitetura de follow-up: estados (idle/scheduled/paused/completed), reconciliador, circuit breaker, jobs tick, modal de transição | Mudança na máquina de estados, novo tipo de tick, nova lógica de reconciliação/circuit breaker |
+| [`playground-parity.md`](playground-parity.md) | Paridade Playground ↔ WhatsApp real: `enrich_context_bundle`, campos do ContextBundle, campos da `PlaygroundChatResponse` | Novo campo no ContextBundle que afecta o LLM, novo campo na resposta do playground |
+| [`admin-agents-contract.md`](admin-agents-contract.md) | Contrato AdminAgents frontend ↔ backend: campos expostos em `GET /admin/agents/overview` e `GET /admin/agents/users/{id}` | Novo campo no AI Profile que deve ser exibido no painel admin |
+
+---
+
+## Mapa de componentes → documentos
+
+```
+WhatsApp → UazAPI webhook
+  └─ webhooks.md           ← filtro de grupo, áudio, media_fallback, buffer
+       └─ inbound_handler
+            └─ guardrail   ← bot_disabled (agents.md)
+            └─ orchestrator (ContextBundle)
+                 └─ playground-parity.md
+
+decision_engine.decide()
+  ├─ LLM Mãe + Filhas      ← llm-architecture.md
+  └─ _evaluate_sales_flow_phases
+       └─ sales-flow.md    ← blocos, triggers, fire_once, dispatch
+
+Pipeline de fases
+  └─ pipeline-phases.md    ← qualification, presentation, closing por agent_mode
+
+AI Profile / Agentes
+  └─ agents.md             ← schema, offer_pack, bot toggle, agentes locais
+
+Follow-up
+  └─ followup.md           ← estados, reconciliador, circuit breaker
+
+Painel Admin
+  └─ admin-agents-contract.md
+```
+
+---
+
+## Decisão rápida: actualizar existente vs criar novo
+
+### Actualizar doc existente
+
+A maioria das features altera áreas já documentadas. Antes de criar um ficheiro novo, verificar se encaixa num existente:
+
+| A mudança afecta... | Documento a actualizar |
+|---|---|
+| Novo bloco/trigger/flag no Fluxo de Venda | `sales-flow.md` |
+| Novo campo em MotherDecision, ChildResult ou DecisionOutput | `llm-architecture.md` |
+| Nova LLM Filha ou guardrail de decisão | `llm-architecture.md` |
+| Novo tipo de mensagem WhatsApp suportado | `webhooks.md` |
+| Mudança no comportamento de áudio ou mídia inválida | `webhooks.md` |
+| Novo campo no AI Profile | `agents.md` |
+| Novo motivo para `bot_disabled` | `agents.md` + `webhooks.md` |
+| Novos campos obrigatórios de qualificação | `pipeline-phases.md` |
+| Novo comportamento por `agent_mode` | `pipeline-phases.md` |
+| Campo novo no ContextBundle que afecta o LLM | `playground-parity.md` |
+| Campo novo na `PlaygroundChatResponse` | `playground-parity.md` |
+| Mudança no reconciliador de follow-up | `followup.md` |
+| Novo campo no overview ou detalhe de utilizador do painel admin | `admin-agents-contract.md` |
+
+### Criar novo documento
+
+Criar `docs/architecture/<nome>.md` quando a feature:
+- Introduz uma área de responsabilidade **sem doc existente** (ex.: novo serviço, novo domínio de negócio)
+- É grande o suficiente para não caber como secção num doc existente (regra prática: >3 conceitos distintos, >5 arquivos de código envolvidos)
+- Tem comportamento não-trivial que futuros contribuidores precisarão de entender antes de alterar
+
+**Exemplos que justificariam um novo doc:**
+- Sistema de billing/pagamentos
+- Pipeline de prospecção com IA (novo serviço)
+- Autenticação multi-tenant (se arquitectura mudar significativamente)
+- Integração com CRM externo (novo domínio)
+
+---
+
+## Regra de manutenção
+
+Os docs de arquitectura são um **espelho do código actual** — enxutos e confiáveis.
+
+- Reescrever a secção afectada (não acrescentar parágrafos de "antes era X, agora é Y")
+- Sem histórico de implementação — isso pertence ao `docs/implementations/`
+- Verificar antes de cada commit se a mudança afecta uma área documentada aqui

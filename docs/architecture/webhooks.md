@@ -59,9 +59,75 @@ uazapi webhook ignored group_message instance=%s sender=%s message_id=%s
 **Arquivo:** `backend-crm/services/whatsapp_inbound/guardrail.py`
 
 Verifica se o sistema deve processar a mensagem:
-- `bot_disabled = 1` → ignora
+- `bot_disabled = 1` → ignora (`{"status": "ignored", "reason": "bot_disabled"}`, nenhum job criado)
 - Lead em categoria não-atendível → ignora
 - Promoção inicial de inbound: `to-prospect`/`in-progress` → `qualification`
+
+O flag `bot_disabled` é gerido por lead individual. Fontes de desactivação: manual (UI), `media_fallback="pausar"`, entrada em `closing` com `agent_mode=agenda`.
+
+---
+
+## Tratamento de Mensagens de Áudio e Mídia
+
+**Arquivo:** `backend-crm/services/whatsapp_inbound/inbound_handler.py`
+
+### Normalização de messageType
+
+A UazAPI envia diferentes valores em `messageType` dependendo da versão/instância:
+
+| `messageType` recebido | Tipo normalizado | Tratamento |
+|---|---|---|
+| `"ptt"`, `"AudioMessage"`, `"audio"` | `audio` | Transcrição ou `media_fallback` |
+| `"media"` com `mediaType="ptt"` | `audio` | Idem |
+| `"VideoMessage"`, `"video"`, `"videomessage"` | `video` | `media_fallback` |
+| `"ImageMessage"`, `"image"`, `"imagemessage"` | `image` | `media_fallback` |
+| `"StickerMessage"`, `"sticker"` | `sticker` | `media_fallback` |
+| `"reaction"` | `reaction` | `media_fallback` |
+| `"text"`, `"chat"` | `text` | Fluxo normal |
+| `"media"` com `mediaType="text"` | `text` | Fluxo normal |
+
+> Quando `messageType = "media"`, o handler usa `message.mediaType` para determinar o tipo real.
+
+### Filtro de mensagem sem texto
+
+Mensagens com `message_text = ""` são descartadas, **excepto** para tipos de mídia que não exigem texto:
+
+```python
+_MEDIA_NO_TEXT_TYPES = {"audio", "video", "image", "sticker", "reaction", "document"}
+```
+
+Tipos fora deste conjunto sem `message_text` retornam `{"status": "ignored", "reason": "missing_text"}`.
+
+### Pipeline de áudio (`audio_transcription_enabled = True`)
+
+```
+PTT/AudioMessage recebido
+  → resolve instance_token via GET /whatsapp-connections/resolve-token
+  → POST {UAZAPI_BASE_URL}/message/download {id: message_id, return_link: true}
+      ← URL pública do áudio (mmg.whatsapp.net requer auth de sessão WhatsApp;
+         UazAPI fornece URL temporária através da sessão activa)
+  → transcribe_audio_from_url(url) via OpenAI Whisper
+      ← message_text = "[Áudio]: {transcrição}"
+  → continua fluxo normal (job criado, LLM responde ao conteúdo transcrito)
+```
+
+**Variáveis de ambiente necessárias:**
+- `OPENAI_API_KEY` — chamadas ao Whisper
+- `UAZAPI_BASE_URL` — endpoint da UazAPI (ex.: `https://free.uazapi.com`)
+
+### Comportamento de media_fallback
+
+Aplicado quando: `audio_transcription_enabled = False` com áudio, ou mensagem de mídia inválida (vídeo, imagem, sticker, etc.).
+
+Controlado pelo campo `offer_pack.media_fallback` no AI Profile do utilizador:
+
+| `media_fallback` | Comportamento |
+|---|---|
+| `"ignorar"` (padrão) | Descarte silencioso — nenhuma mensagem ao lead, nenhum job criado |
+| `"continuar"` | Envia `offer_pack.media_fallback_msg` via `send_whatsapp_direct()`. Bot continua ativo. |
+| `"pausar"` | Envia `offer_pack.media_fallback_msg`. Define `bot_disabled=1` para este lead. |
+
+> **Envio directo:** `_apply_media_fallback()` usa `send_whatsapp_direct()` (chamada síncrona ao core-api, não via fila de jobs) para evitar que um job `whatsapp.send.local` fique pendente sem ser processado pelo executor.
 
 ---
 
@@ -80,12 +146,22 @@ Para garantir paridade com o Playground, todo campo novo que afeta o LLM deve se
 
 ---
 
+## Multi-message buffer
+
+Configurado em `offer_pack.multi_message_buffer_seconds` (ou `multi_message_buffer_seconds`) no AI Profile.
+
+Quando `> 0`, o primeiro job inbound é criado com `scheduled_at = agora + buffer_seconds`. Mensagens subsequentes que chegam antes de `scheduled_at` são absorvidas e concatenadas no payload do mesmo job (a mensagem anterior é actualizada). O resultado é que o LLM recebe o contexto combinado de todas as mensagens do "lote real" de uma só vez.
+
+---
+
 ## Arquivos críticos
 
 | Arquivo | Responsabilidade |
 |---|---|
 | `backend-crm/routes/webhooks.py` | Endpoint `/webhooks/whatsapp/uazapi` e filtro de grupo |
-| `backend-crm/services/whatsapp_inbound/inbound_handler.py` | Recebe evento, monta bundle base, enfileira job |
-| `backend-crm/services/whatsapp_inbound/guardrail.py` | Decide se deve processar a mensagem |
+| `backend-crm/services/whatsapp_inbound/inbound_handler.py` | Recebe evento, normaliza tipo, áudio, media_fallback, enfileira job |
+| `backend-crm/services/whatsapp_inbound/guardrail.py` | Decide se deve processar (bot_disabled, categoria, etc.) |
+| `backend-crm/services/audio_transcription.py` | Transcrição via Whisper (`transcribe_audio_from_url`) |
+| `backend-crm/core_client.py` | `fetch_core_whatsapp_token()`, `send_whatsapp_direct()` |
 | `backend-crm/services/ai_orchestrator/orchestrator.py` | Monta e enriquece ContextBundle |
 | `backend-crm/services/jobs_service.py` | Cria job `whatsapp.inbound.n8n` na fila |
