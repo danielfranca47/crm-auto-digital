@@ -281,7 +281,7 @@ Estes foram confirmados no playground. Validar no WhatsApp real como regressão:
 | 3 — Buffer real | `etapa-8-6-delay-buffer-playground.md` | ⏳ Pendente (playground ✅) |
 | 4 — Toggle Bot | `etapa-8-7-toggle-bot-lead.md` | ⏳ Pendente real (playground ✅) |
 | 5 — Áudio Inbound | `etapa-8-6-audio-transcricao-inbound.md` | ✅ C1–C5, C7 validados / C6, C8 pulados (edge cases) |
-| 6 — Camada 7 | `camada7-sequential-trigger-model.md` | ✅ W1, W2, W3 validados / W4, W5 (fire_once) e P1–P3 (intent_trigger) pendentes |
+| 6 — Camada 7 | `camada7-sequential-trigger-model.md` | ✅ W1, W2, W3 + MÍDIA áudio validados / W4, W5 (fire_once) e P1–P3 (intent_trigger) pendentes |
 
 ---
 
