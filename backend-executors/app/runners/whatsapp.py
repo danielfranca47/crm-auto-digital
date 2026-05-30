@@ -733,6 +733,26 @@ def execute_job(job_id: str, logger: logging.Logger) -> int:
         decision.reason,
         extra={"phase": "decision"},
     )
+
+    # Retry automático em caso de falha LLM — evita handoff imediato
+    # Usa o mecanismo de retry existente (max 3 tentativas, backoff 60s/180s)
+    if decision.reason == "llm_failure" and (attempt is None or attempt < JOB_MAX_ATTEMPTS):
+        ctx_logger.info(
+            "event=llm_failure_retry attempt=%s max=%s — agendando retry em vez de handoff",
+            attempt, JOB_MAX_ATTEMPTS,
+            extra={"phase": "decision"},
+        )
+        return _fail_job(
+            job_id, ctx_logger,
+            ExecutionError(
+                "LLM falhou — retry automático",
+                phase="decision",
+                service="llm",
+                retryable=True,
+                error_type="llm_failure",
+            ),
+            attempt,
+        )
     meeting_scheduler.handle_meeting_scheduled(context, decision, logger=ctx_logger)
     _enforce_checkout_link_guardrail(decision=decision, context=context)
     _enforce_checkout_link_guardrail_legacy(decision=decision, context=context)
