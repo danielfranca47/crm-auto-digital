@@ -500,16 +500,18 @@ function BlockForm({ block, setBlock, knowledgeItems }: {
 
 // ─── BlockModal ───────────────────────────────────────────────
 
-function BlockModal({ phaseId, initial, knowledgeItems, onSave, onClose }: {
+function BlockModal({ phaseId, initial, knowledgeItems, onSave, onClose, groupMode = false }: {
   phaseId: SalesFlowPhaseId;
   initial: SalesFlowBlock | null;
   knowledgeItems: KnowledgeItem[];
   onSave: (b: SalesFlowBlock) => void;
   onClose: () => void;
+  groupMode?: boolean;  // quando true: adicionar acção/lógica a gatilho existente (sem tab de Gatilho)
 }) {
   const isEdit = !!initial;
   const [activeCat, setActiveCat] = useState<'trigger' | 'action' | 'logic'>(
-    initial ? (SALES_FLOW_BLOCK_CATEGORIES.find(c => c.types.includes(initial.typeId))?.id ?? 'action') : 'trigger'
+    groupMode ? 'action'
+    : initial ? (SALES_FLOW_BLOCK_CATEGORIES.find(c => c.types.includes(initial.typeId))?.id ?? 'action') : 'trigger'
   );
   const [selectedTypeId, setSelectedTypeId] = useState<SalesFlowBlockTypeId | null>(initial?.typeId ?? null);
   const [block, setBlock] = useState<SalesFlowBlock>(initial ?? { id: crypto.randomUUID(), typeId: 'phase_trigger' });
@@ -539,7 +541,7 @@ function BlockModal({ phaseId, initial, knowledgeItems, onSave, onClose }: {
         <div style={{ padding: '20px 20px 0', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <div>
             <div style={{ fontSize: 15, fontWeight: 600, color: 'var(--o-text)' }}>
-              {isEdit ? 'Editar bloco' : 'Adicionar bloco'}
+              {isEdit ? 'Editar bloco' : groupMode ? 'Adicionar ao gatilho' : 'Adicionar bloco'}
             </div>
             <div style={{ fontSize: 11.5, color: 'var(--o-sub)', marginTop: 2 }}>
               {phaseName} — {SALES_FLOW_PHASE_ID_LABELS[phaseId]}
@@ -549,9 +551,9 @@ function BlockModal({ phaseId, initial, knowledgeItems, onSave, onClose }: {
         </div>
 
         <div style={{ padding: '16px 20px', display: 'flex', flexDirection: 'column', gap: 16 }}>
-          {/* Category tabs */}
+          {/* Category tabs — ocultar Gatilho em groupMode */}
           <div style={{ display: 'flex', gap: 6 }}>
-            {SALES_FLOW_BLOCK_CATEGORIES.map(cat => {
+            {SALES_FLOW_BLOCK_CATEGORIES.filter(cat => !(groupMode && cat.id === 'trigger')).map(cat => {
               const isActive = cat.id === activeCat;
               const catColors: Record<string, string> = { trigger: '#fbbf24', action: '#6ee7b7', logic: '#fb923c' };
               return (
@@ -898,11 +900,12 @@ function RuleBuilderModal({ phaseId, knowledgeItems, onSave, onClose }: {
 
 // ─── PhaseSection ─────────────────────────────────────────────
 
-function PhaseSection({ phase, onAddBlock, onEditBlock, onRemoveBlock, isActive = true }: {
+function PhaseSection({ phase, onAddBlock, onEditBlock, onRemoveBlock, onAddToGroup, isActive = true }: {
   phase: SalesFlowPhaseData;
   onAddBlock: (phaseId: SalesFlowPhaseId) => void;
   onEditBlock: (phaseId: SalesFlowPhaseId, blockId: string) => void;
   onRemoveBlock: (phaseId: SalesFlowPhaseId, blockId: string) => void;
+  onAddToGroup?: (phaseId: SalesFlowPhaseId, afterBlockId: string) => void;
   isActive?: boolean;
 }) {
   const [expanded, setExpanded] = useState(false);
@@ -1002,7 +1005,7 @@ function PhaseSection({ phase, onAddBlock, onEditBlock, onRemoveBlock, isActive 
                 ) : null}
 
                 {/* Ações — indentadas com linha vertical */}
-                {group.actions.length > 0 && (
+                {(group.actions.length > 0 || group.trigger) && (
                   <div style={{ display: 'flex', marginTop: 4 }}>
                     <div style={{
                       width: 2, flexShrink: 0, borderRadius: 2,
@@ -1011,6 +1014,24 @@ function PhaseSection({ phase, onAddBlock, onEditBlock, onRemoveBlock, isActive 
                     }} />
                     <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 4 }}>
                       {group.actions.map(b => <BlockRow key={b.id} block={b} />)}
+                      {/* Botão + para adicionar acção/lógica directamente ao gatilho */}
+                      {group.trigger && onAddToGroup && (
+                        <button
+                          onClick={() => {
+                            const lastBlock = group.actions.length > 0
+                              ? group.actions[group.actions.length - 1]
+                              : group.trigger!;
+                            onAddToGroup(id, lastBlock.id);
+                          }}
+                          style={{
+                            alignSelf: 'flex-start', background: 'none', border: `1px dashed ${BLOCK_META[group.trigger.typeId].color}55`,
+                            color: BLOCK_META[group.trigger.typeId].color, borderRadius: 6,
+                            cursor: 'pointer', fontSize: 11, padding: '3px 10px', marginTop: 2,
+                            display: 'flex', alignItems: 'center', gap: 4,
+                          }}>
+                          <span style={{ fontSize: 13, lineHeight: 1 }}>+</span> ação / lógica
+                        </button>
+                      )}
                     </div>
                   </div>
                 )}
@@ -1044,6 +1065,7 @@ export function CamadaFluxoVenda({ config, onUpdate }: Props) {
                            ?? SALES_FLOW_PHASES_BY_AGENT_MODE['agenda'];
   const [modal, setModal] = useState<{ phaseId: SalesFlowPhaseId; blockId: string | null } | null>(null);
   const [ruleBuilderPhaseId, setRuleBuilderPhaseId] = useState<SalesFlowPhaseId | null>(null);
+  const [addToGroup, setAddToGroup] = useState<{ phaseId: SalesFlowPhaseId; afterBlockId: string } | null>(null);
   const [knowledgeItems, setKnowledgeItems] = useState<KnowledgeItem[]>([]);
 
   useEffect(() => {
@@ -1093,6 +1115,20 @@ export function CamadaFluxoVenda({ config, onUpdate }: Props) {
     setModal(null);
   }
 
+  function saveGroupBlock(block: SalesFlowBlock) {
+    if (!addToGroup) return;
+    const { phaseId, afterBlockId } = addToGroup;
+    updateFlow(phases.map(p => {
+      if (p.id !== phaseId) return p;
+      const idx = p.blocks.findIndex(b => b.id === afterBlockId);
+      const inserted = idx === -1
+        ? [...p.blocks, block]
+        : [...p.blocks.slice(0, idx + 1), block, ...p.blocks.slice(idx + 1)];
+      return { ...p, blocks: inserted };
+    }));
+    setAddToGroup(null);
+  }
+
   const modalPhase = modal ? phases.find(p => p.id === modal.phaseId) : null;
   const modalInitial = modal?.blockId && modalPhase
     ? (modalPhase.blocks.find(b => b.id === modal.blockId) ?? null)
@@ -1110,6 +1146,16 @@ export function CamadaFluxoVenda({ config, onUpdate }: Props) {
           knowledgeItems={knowledgeItems}
           onSave={saveBlock}
           onClose={() => setModal(null)}
+        />
+      )}
+      {addToGroup && (
+        <BlockModal
+          phaseId={addToGroup.phaseId}
+          initial={null}
+          knowledgeItems={knowledgeItems}
+          onSave={saveGroupBlock}
+          onClose={() => setAddToGroup(null)}
+          groupMode
         />
       )}
       {ruleBuilderPhaseId && (
@@ -1147,6 +1193,7 @@ export function CamadaFluxoVenda({ config, onUpdate }: Props) {
           return (
             <PhaseSection key={id} phase={phase}
               onAddBlock={openAdd} onEditBlock={openEdit} onRemoveBlock={removeBlock}
+              onAddToGroup={(phaseId, afterBlockId) => setAddToGroup({ phaseId, afterBlockId })}
               isActive={activePhasesForMode.includes(id)} />
           );
         })}
@@ -1163,13 +1210,15 @@ export function CamadaFluxoVenda({ config, onUpdate }: Props) {
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
             <PhaseSection phase={phases.find(p => p.id === 'p3a')!}
-              onAddBlock={openAdd} onEditBlock={openEdit} onRemoveBlock={removeBlock} />
+              onAddBlock={openAdd} onEditBlock={openEdit} onRemoveBlock={removeBlock}
+              onAddToGroup={(phaseId, afterBlockId) => setAddToGroup({ phaseId, afterBlockId })} />
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 14px' }}>
               <div style={{ width: 2, height: 24, background: 'var(--o-b1)', marginLeft: 12 }} />
               <span style={{ fontSize: 10.5, color: 'var(--o-sub)', fontWeight: 300 }}>→ confirma data e hora</span>
             </div>
             <PhaseSection phase={phases.find(p => p.id === 'p3b')!}
-              onAddBlock={openAdd} onEditBlock={openEdit} onRemoveBlock={removeBlock} />
+              onAddBlock={openAdd} onEditBlock={openEdit} onRemoveBlock={removeBlock}
+              onAddToGroup={(phaseId, afterBlockId) => setAddToGroup({ phaseId, afterBlockId })} />
           </div>
         </div>
       )}
@@ -1181,6 +1230,7 @@ export function CamadaFluxoVenda({ config, onUpdate }: Props) {
           return (
             <PhaseSection key={id} phase={phase}
               onAddBlock={openAdd} onEditBlock={openEdit} onRemoveBlock={removeBlock}
+              onAddToGroup={(phaseId, afterBlockId) => setAddToGroup({ phaseId, afterBlockId })}
               isActive={activePhasesForMode.includes(id)} />
           );
         })}
