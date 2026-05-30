@@ -306,16 +306,25 @@ def handle_inbound(payload: Dict[str, Any]) -> Dict[str, Any]:
                 logger.warning("[inbound_audio] falha ao buscar ai_profile user_id=%s: %s", user_id, _exc)
 
             if _ai_profile_media.get("audio_transcription_enabled"):
-                # UazAPI não inclui fileURL no webhook de PTT — fazer download separado quando necessário
-                _audio_url = parsed.media_url or ""
-                if not _audio_url and external_event_id:
+                # mmg.whatsapp.net (URL do webhook) requer autenticação da sessão WhatsApp.
+                # Sempre usar UazAPI /message/download para obter URL pública acessível pelo Whisper.
+                _audio_url = ""
+                if external_event_id:
                     logger.info(
-                        "[inbound_audio] media_url ausente — tentando download via UazAPI message_id=%s",
+                        "[inbound_audio] obtendo URL pública via UazAPI download message_id=%s",
                         external_event_id,
                     )
                     _instance_token = fetch_core_whatsapp_token(parsed.instance_id)
                     if _instance_token:
                         _audio_url = download_audio_url_from_uazapi(_instance_token, external_event_id) or ""
+                # Fallback: usar media_url do webhook (pode falhar se mmg.whatsapp.net exigir auth)
+                if not _audio_url:
+                    _audio_url = parsed.media_url or ""
+                    if _audio_url:
+                        logger.warning(
+                            "[inbound_audio] usando media_url direto (download UazAPI falhou) message_id=%s",
+                            external_event_id,
+                        )
 
                 # Transcrever áudio e usar como message_text
                 _transcription = transcribe_audio_from_url(_audio_url)
