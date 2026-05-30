@@ -49,6 +49,9 @@ Todas as variáveis abaixo são persistidas no modelo `AIProfile` do `backend-co
 | `operator_whatsapp` | string | Número WhatsApp do operador para receber briefings |
 | `calendar_integration` | `"none" \| "google" \| "hubspot"` | Integração de calendário |
 | `timezone` | string | Fuso horário para ISO datetime do agendamento |
+| `qualification_fields` | `list[QualificationField]` | Campos configurados via UI (substitui `qualification_required_fields` quando presente); cada campo tem `key`, `label`, `question`, `passive_hint`, `mode` (`required\|optional\|off`) e `group` (`f1\|f2\|f3` — filtragem SDR) |
+| `response_style` | `"active" \| "passive"` | Modo de coleta: `active` pergunta proativamente um campo por turno; `passive` infere silenciosamente da conversa sem fazer perguntas abertas |
+| `sales_flow` | JSON | Fluxo de Venda — fases (p1–p5) com blocos tipados (orientação, mídia, intenção, gatilho) e/ou nodes legados; avaliado em `_evaluate_sales_flow_phases()` |
 
 ---
 
@@ -76,12 +79,18 @@ service_interest | availability_window | location_preference | price_acceptance
 ```
 _(Se `agent_mode` for `consultivo`, acrescentam-se: `urgency`, `decision_role`, `constraints`, `budget_or_price_acceptance` — total de 6 campos)_
 
+> **Prioridade de campos:** quando `qualification_fields` estiver configurado via UI, ele substitui a lista hardcoded acima — os campos `required` do `qualification_fields` tornam-se os `required_fields` efetivos. A lista padrão do modo só é usada como fallback quando `qualification_fields` não estiver definido.
+
+> **SDR — Grupos de filtragem (f1/f2/f3):** cada campo em `qualification_fields` pode ter `group: "f1" | "f2" | "f3"`, mapeando para Fit, Dor e Fechamento. Os grupos organizam a ordem de coleta no prompt.
+
 **Regras e filtros:**
 - A Mãe é forçada a rotear para `qualification` enquanto existirem `missing_fields`.
 - A Filha só pode fazer **1 pergunta por turno** (`current_field`).
 - A Filha não repete perguntas já feitas para o mesmo campo (histórico `asked_questions_json`, últimas 2 por campo, máx 20 total).
 - A Filha nunca agenda reunião dentro da rota de qualificação (exceto se o lead pedir explicitamente).
 - O campo `qualification_score_threshold` (padrão `6/12`) controla se o score 4P é suficiente para avançar.
+- **`response_style=active`:** bot pergunta proativamente um campo por turno (comportamento padrão descrito acima).
+- **`response_style=passive`:** bot infere campos silenciosamente da conversa; `should_ask=false` na esmagadora maioria dos turnos; única exceção é pergunta de fechamento binária (ex: "Segunda às 15h ou 17h — qual prefere?").
 
 **Score 4P (calculado em `qualification_state.py`):**
 | Dimensão | Campo | Critério máx (3 pts) |

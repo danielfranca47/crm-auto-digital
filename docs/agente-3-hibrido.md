@@ -52,6 +52,9 @@ Todas as variáveis abaixo são persistidas no modelo `AIProfile` do `backend-co
 | `operator_whatsapp` | string | WhatsApp do profissional para receber briefings |
 | `calendar_integration` | `"none" \| "google" \| "hubspot"` | Integração de calendário |
 | `timezone` | string | Fuso horário para ISO datetime do agendamento |
+| `qualification_fields` | `list[QualificationField]` | Campos configurados via UI (substitui `qualification_required_fields` quando presente); cada campo tem `key`, `label`, `question`, `passive_hint`, `mode` (`required\|optional\|off`) |
+| `response_style` | `"active" \| "passive"` | Modo de coleta: `active` pergunta proativamente (um campo por turno); `passive` infere silenciosamente |
+| `sales_flow` | JSON | Fluxo de Venda — fases (p1–p5) com blocos tipados e/ou nodes legados |
 
 ### Defaults de aquecimento (quando não customizados pelo usuário)
 
@@ -104,6 +107,8 @@ service_interest | availability_window | location_preference | price_acceptance
 - Evita repetir perguntas já feitas para o mesmo campo (histórico `asked_questions_json`).
 - Tom: `"pessoal e próximo, como assistente do próprio profissional — nunca SDR agressivo"`.
 - `max_chars=400` — respostas um pouco mais ricas que o SDR padrão.
+- Quando `qualification_fields` estiver configurado via UI, substitui a lista padrão de 4 campos.
+- `response_style=active` (default): pergunta proativamente um campo por turno. `response_style=passive`: infere silenciosamente; proíbe perguntas abertas.
 
 **Score 4P (calculado em `qualification_state.py`):**
 | Dimensão | Campo | Critério máx (3 pts) |

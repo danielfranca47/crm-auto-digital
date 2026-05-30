@@ -41,6 +41,9 @@ Todas as variáveis abaixo são persistidas no modelo `AIProfile` do `backend-co
 | `nurture_vs_discard_rule` | `"discard" \| "nurture"` | O que fazer com leads de baixo score |
 | `payment_gateway` | `"stripe" \| "whatsapp_pay"` | Gateway de pagamento integrado |
 | `timezone` | string | Fuso horário do negócio |
+| `qualification_fields` | `list[QualificationField]` | Campos configurados via UI (substitui `qualification_required_fields` quando presente); cada campo tem `key`, `label`, `question`, `passive_hint`, `mode` (`required\|optional\|off`) |
+| `response_style` | `"active" \| "passive"` | Modo de coleta: `active` pergunta proativamente; `passive` infere silenciosamente |
+| `sales_flow` | JSON | Fluxo de Venda — fases (p1–p5) com blocos tipados e/ou nodes legados |
 
 ### Estrutura do `offer_pack` (JSON)
 
@@ -106,6 +109,8 @@ service_interest | availability_window | price_acceptance
 - Com apenas 3 campos, o closer qualifica mais rápido que os outros agentes.
 - Guardrail de fechamento: `price_acceptance="yes"` E `intent_level="medium|high"` são obrigatórios para avançar para `closing` — se ausentes, retorna para `qualification`.
 - O playbook `closer_agressivo` usa tom `"direct"` com `max_chars=350`.
+- Quando `qualification_fields` estiver configurado via UI, substitui a lista padrão de 3 campos.
+- `response_style=active` (default): pergunta proativamente. `response_style=passive`: infere silenciosamente.
 
 **Score 4P (calculado em `qualification_state.py`):**
 | Dimensão | Campo | Critério máx (3 pts) |

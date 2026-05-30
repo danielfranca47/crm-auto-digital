@@ -898,15 +898,122 @@ function RuleBuilderModal({ phaseId, knowledgeItems, onSave, onClose }: {
   );
 }
 
+// ─── Abertura de Qualificação ─────────────────────────────────
+
+function QualOpenerBanner({ onAdd }: { onAdd: () => void }) {
+  return (
+    <div style={{
+      display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+      padding: '10px 14px', borderRadius: 8, marginBottom: 4,
+      background: 'color-mix(in srgb, #38bdf8 6%, transparent)',
+      border: '1px dashed color-mix(in srgb, #38bdf8 40%, transparent)',
+    }}>
+      <div>
+        <div style={{ fontSize: 12, color: 'var(--o-text)', fontWeight: 500 }}>
+          Sem instrução de abertura configurada
+        </div>
+        <div style={{ fontSize: 11, color: 'var(--o-sub)', marginTop: 2 }}>
+          Com filtros de qualificação ativos, um opener amigável torna a conversa mais natural.
+        </div>
+      </div>
+      <button
+        className="o-btn o-btn-primary"
+        style={{ fontSize: 11, padding: '4px 12px', flexShrink: 0, marginLeft: 12 }}
+        onClick={onAdd}
+      >
+        + Adicionar abertura
+      </button>
+    </div>
+  );
+}
+
+function QualOpenerCard({ block, onEdit, onRemove }: {
+  block: SalesFlowBlock;
+  onEdit: (content: string) => void;
+  onRemove: () => void;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(block.content ?? '');
+
+  function handleSave() {
+    onEdit(draft.trim());
+    setEditing(false);
+  }
+
+  return (
+    <div style={{
+      borderRadius: 8, border: '1.5px solid color-mix(in srgb, #38bdf8 35%, transparent)',
+      background: 'color-mix(in srgb, #38bdf8 6%, transparent)',
+      padding: '10px 14px', marginBottom: 4,
+    }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <span style={{
+            fontSize: 9.5, fontWeight: 700, letterSpacing: '1.5px', textTransform: 'uppercase',
+            color: '#38bdf8', fontFamily: 'monospace',
+          }}>Abertura de Qualificação</span>
+          <span style={{
+            fontSize: 9.5, padding: '1px 6px', borderRadius: 4,
+            background: 'color-mix(in srgb, #38bdf8 15%, transparent)', color: '#38bdf8',
+          }}>automática · 1ª mensagem</span>
+        </div>
+        <div style={{ display: 'flex', gap: 6 }}>
+          {!editing && (
+            <button
+              className="o-btn"
+              style={{ fontSize: 11, padding: '3px 10px' }}
+              onClick={() => { setDraft(block.content ?? ''); setEditing(true); }}
+            >
+              Editar
+            </button>
+          )}
+          <button
+            className="o-btn"
+            style={{ fontSize: 11, padding: '3px 10px', color: 'var(--o-warn)', borderColor: 'var(--o-warn)' }}
+            onClick={onRemove}
+          >
+            Remover
+          </button>
+        </div>
+      </div>
+      {editing ? (
+        <>
+          <textarea
+            className="o-textarea"
+            rows={4}
+            value={draft}
+            onChange={e => setDraft(e.target.value)}
+            style={{ width: '100%', fontSize: 12, resize: 'vertical', marginBottom: 8 }}
+            autoFocus
+          />
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button className="o-btn o-btn-primary" style={{ fontSize: 11, padding: '4px 12px' }} onClick={handleSave}>
+              Salvar
+            </button>
+            <button className="o-btn" style={{ fontSize: 11, padding: '4px 10px' }} onClick={() => setEditing(false)}>
+              Cancelar
+            </button>
+          </div>
+        </>
+      ) : (
+        <div style={{ fontSize: 12, color: 'var(--o-sub)', lineHeight: 1.5, whiteSpace: 'pre-wrap' }}>
+          {block.content || '(instrução vazia)'}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── PhaseSection ─────────────────────────────────────────────
 
-function PhaseSection({ phase, onAddBlock, onEditBlock, onRemoveBlock, onAddToGroup, isActive = true }: {
+function PhaseSection({ phase, onAddBlock, onEditBlock, onRemoveBlock, onAddToGroup, isActive = true, extraHeader }: {
   phase: SalesFlowPhaseData;
   onAddBlock: (phaseId: SalesFlowPhaseId) => void;
   onEditBlock: (phaseId: SalesFlowPhaseId, blockId: string) => void;
   onRemoveBlock: (phaseId: SalesFlowPhaseId, blockId: string) => void;
   onAddToGroup?: (phaseId: SalesFlowPhaseId, afterBlockId: string) => void;
   isActive?: boolean;
+  extraHeader?: React.ReactNode;
 }) {
   const [expanded, setExpanded] = useState(false);
   const { id, blocks } = phase;
@@ -948,6 +1055,7 @@ function PhaseSection({ phase, onAddBlock, onEditBlock, onRemoveBlock, onAddToGr
       {/* Body */}
       {expanded && (
         <div style={{ borderTop: `1px solid ${color}20`, padding: '12px 14px', display: 'flex', flexDirection: 'column', gap: 8 }}>
+          {extraHeader}
           {/* Block list — agrupado por gatilho */}
           {(() => {
             const TRIGGER_IDS = new Set(['phase_trigger', 'kw_trigger', 'no_reply_trigger', 'intent_trigger']);
@@ -1068,6 +1176,10 @@ export function CamadaFluxoVenda({ config, onUpdate }: Props) {
   const [addToGroup, setAddToGroup] = useState<{ phaseId: SalesFlowPhaseId; afterBlockId: string } | null>(null);
   const [knowledgeItems, setKnowledgeItems] = useState<KnowledgeItem[]>([]);
 
+  const hasActiveQualFields = (config.qualification_fields ?? []).some(
+    f => f.mode === 'required' || f.mode === 'optional'
+  );
+
   useEffect(() => {
     api.crm.getKnowledgeList()
       .then(setKnowledgeItems)
@@ -1090,6 +1202,38 @@ export function CamadaFluxoVenda({ config, onUpdate }: Props) {
   function removeBlock(phaseId: SalesFlowPhaseId, blockId: string) {
     updateFlow(phases.map(p =>
       p.id === phaseId ? { ...p, blocks: p.blocks.filter(b => b.id !== blockId) } : p
+    ));
+  }
+
+  const QUAL_OPENER_DEFAULT_TEXT =
+    'Antes de iniciar as perguntas de qualificação, apresenta-te brevemente se ainda não o fizeste ' +
+    'e pede permissão para fazer algumas perguntas: algo como "Posso te fazer algumas perguntas ' +
+    'rápidas antes de avançar?" — adapta ao tom de voz e ao contexto da conversa.';
+
+  function addQualOpener() {
+    const block: SalesFlowBlock = {
+      id: `qual_opener_${Date.now()}`,
+      typeId: 'orientacao',
+      qual_opener: true,
+      content: QUAL_OPENER_DEFAULT_TEXT,
+      priority: 'high',
+    };
+    updateFlow(phases.map(p =>
+      p.id === 'p1' ? { ...p, blocks: [block, ...p.blocks] } : p
+    ));
+  }
+
+  function removeQualOpener(blockId: string) {
+    updateFlow(phases.map(p =>
+      p.id === 'p1' ? { ...p, blocks: p.blocks.filter(b => b.id !== blockId) } : p
+    ));
+  }
+
+  function editQualOpener(blockId: string, newContent: string) {
+    updateFlow(phases.map(p =>
+      p.id === 'p1'
+        ? { ...p, blocks: p.blocks.map(b => b.id === blockId ? { ...b, content: newContent } : b) }
+        : p
     ));
   }
 
@@ -1190,11 +1334,29 @@ export function CamadaFluxoVenda({ config, onUpdate }: Props) {
       <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 8 }}>
         {(['p0', 'p1', 'p2'] as SalesFlowPhaseId[]).map(id => {
           const phase = phases.find(p => p.id === id)!;
+          let extraHeader: React.ReactNode = null;
+          if (id === 'p1' && hasActiveQualFields) {
+            const openerBlock = phase.blocks.find(b => b.qual_opener);
+            if (openerBlock) {
+              extraHeader = (
+                <QualOpenerCard
+                  block={openerBlock}
+                  onEdit={(content) => editQualOpener(openerBlock.id, content)}
+                  onRemove={() => removeQualOpener(openerBlock.id)}
+                />
+              );
+            } else {
+              extraHeader = (
+                <QualOpenerBanner onAdd={addQualOpener} />
+              );
+            }
+          }
           return (
             <PhaseSection key={id} phase={phase}
               onAddBlock={openAdd} onEditBlock={openEdit} onRemoveBlock={removeBlock}
               onAddToGroup={(phaseId, afterBlockId) => setAddToGroup({ phaseId, afterBlockId })}
-              isActive={activePhasesForMode.includes(id)} />
+              isActive={activePhasesForMode.includes(id)}
+              extraHeader={extraHeader} />
           );
         })}
       </div>

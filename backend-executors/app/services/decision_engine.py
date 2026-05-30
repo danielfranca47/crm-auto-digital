@@ -688,11 +688,17 @@ def _build_qualification_fields_block(ai_profile: Dict[str, Any], response_style
                 label = f.get("label") or f.get("key", "")
                 question = f.get("question", "")
                 hint = f.get("passive_hint", "")
+                qualify_if = f.get("qualify_if", "")
+                disqualify_if = f.get("disqualify_if", "")
                 line = f"- {label} (key: {f.get('key', '')})"
                 if question:
                     line += f': pergunta → "{question}"'
                 if hint:
                     line += f' | inferir: "{hint}"'
+                if qualify_if:
+                    line += f' | qualificar se: "{qualify_if}"'
+                if disqualify_if:
+                    line += f' | não qualificar se: "{disqualify_if}"'
                 block += line + "\n"
         if optional_fields:
             block += "DESEJÁVEIS — capturar se surgir oportunidade natural:\n"
@@ -700,11 +706,17 @@ def _build_qualification_fields_block(ai_profile: Dict[str, Any], response_style
                 label = f.get("label") or f.get("key", "")
                 question = f.get("question", "")
                 hint = f.get("passive_hint", "")
+                qualify_if = f.get("qualify_if", "")
+                disqualify_if = f.get("disqualify_if", "")
                 line = f"- {label} (key: {f.get('key', '')})"
                 if question:
                     line += f': pergunta → "{question}"'
                 if hint:
                     line += f' | inferir: "{hint}"'
+                if qualify_if:
+                    line += f' | qualificar se: "{qualify_if}"'
+                if disqualify_if:
+                    line += f' | não qualificar se: "{disqualify_if}"'
                 block += line + "\n"
         return block
 
@@ -2073,6 +2085,49 @@ def _build_child_prompt_qualification(
     _mother_hint = (mother_decision.next_action_hint or "").strip().lower()
     _passive_reply_now = response_style == "passive" and _mother_hint == "reply"
 
+    _has_active_qual_fields = any(
+        isinstance(f, dict) and f.get("mode") in ("required", "optional")
+        for f in (ai_profile.get("qualification_fields") or [])
+    )
+    _natural_reaction_block = (
+        "\nREAÇÃO NATURAL (obrigatória entre respostas e perguntas):\n"
+        "Quando o histórico mostra que o lead acabou de responder a uma pergunta de qualificação, "
+        "ANTES de fazer a próxima pergunta inclui um breve comentário contextual (1-2 frases curtas):\n"
+        "- Resposta corresponde ao critério 'qualificar se' do campo → usa tom de conexão "
+        "(ex: 'Perfeito.', 'Faz sentido!', 'Ótimo, faz todo o sentido.').\n"
+        "- Resposta não corresponde ao critério 'não qualificar se' → usa compreensão breve "
+        "(ex: 'Entendi.', 'Certo.', 'Obrigado por partilhar.').\n"
+        "- Sem critério definido para o campo → reage naturalmente ao que o lead disse.\n"
+        "Nunca pula de pergunta para pergunta sem reconhecer o que o lead disse primeiro.\n"
+        if response_style == "active" and _has_active_qual_fields
+        else ""
+    )
+
+    # Detectar bloco de abertura de qualificação (qual_opener) na fase p1 do sales_flow
+    _asked_questions_all = mode_contract.get("asked_questions_json") or []
+    _qual_opener_content: Optional[str] = None
+    if response_style == "active" and _has_active_qual_fields and not _asked_questions_all:
+        _sales_flow = ai_profile.get("sales_flow") or {}
+        _p1_phase = next(
+            (p for p in (_sales_flow.get("phases") or []) if isinstance(p, dict) and p.get("id") == "p1"),
+            None,
+        )
+        if _p1_phase:
+            _opener_block = next(
+                (b for b in (_p1_phase.get("blocks") or []) if isinstance(b, dict) and b.get("qual_opener")),
+                None,
+            )
+            if _opener_block:
+                _qual_opener_content = str(_opener_block.get("content") or "").strip() or None
+
+    _qual_opener_injection = (
+        f"\nINSTRUÇÃO DE ABERTURA DE QUALIFICAÇÃO (obrigatória — somente neste turno, antes da primeira pergunta):\n"
+        f"{_qual_opener_content}\n"
+        f"Depois da abertura, inclui a primeira pergunta de qualificação na mesma mensagem.\n\n"
+        if _qual_opener_content
+        else ""
+    )
+
     _media_intro_note = ""  # qualificação nunca envia knowledge_media
 
     # ESCOPO e RECUSAS condicionais ao response_style.
@@ -2141,7 +2196,7 @@ def _build_child_prompt_qualification(
         else ""
     )
 
-    _qual_prompt = f"""{_first_contact_opener_header}{_passive_header}{_build_daughter_identity_block(context, "qualification")}
+    _qual_prompt = f"""{_first_contact_opener_header}{_qual_opener_injection}{_passive_header}{_build_daughter_identity_block(context, "qualification")}
 {_build_agent_role_block(agent_mode_normalized, "qualification", ai_profile)}
 PAPEL: Coletar campos de qualificação do lead, um por vez, através de perguntas naturais e contextuais.
 ESCOPO: {_escopo_line}{_media_intro_note}
@@ -2168,7 +2223,7 @@ Regras:
   Nunca coloque 2 ou mais perguntas numa mesma resposta (nem com "e também", "além disso", listas, etc.).
   Se precisar de múltiplos campos, pergunte UM por vez, em rodadas separadas.
   Puxe gancho da última resposta do lead para formular a próxima pergunta de forma natural.
-- Quando should_ask=true, field deve ser EXATAMENTE o current_field.
+{_natural_reaction_block}- Quando should_ask=true, field deve ser EXATAMENTE o current_field.
 - Quando should_ask=true, question_text não pode ser vazio.
 - Evite repetir frases de asked_questions_for_current_field; reformule.
 - Se current_field já tiver sido preenchido, retorne should_ask=false, field=null, question_text="".

@@ -10,6 +10,8 @@ export interface QualificationField {
   passive_hint?: string;          // Dica para modo passivo: "Inferir se lead mencionar horário"
   closing_question?: string;      // Pergunta estratégica de fechamento — alternativa binária ou confirmação
   allow_closing_question?: boolean; // Habilita closing_question para este campo
+  qualify_if?: string;            // Critério avançado: descreve o que é uma resposta que qualifica o lead
+  disqualify_if?: string;         // Critério avançado: descreve o que é uma resposta que não qualifica
   mode: 'required' | 'optional' | 'off';
   group?: 'f1' | 'f2' | 'f3';   // APENAS para SDR — filtro ao qual este campo pertence
 }
@@ -64,6 +66,7 @@ export type SalesFlowPhaseId = 'p0' | 'p1' | 'p2' | 'p3a' | 'p3b' | 'p4' | 'p5';
 export interface SalesFlowBlock {
   id: string;
   typeId: SalesFlowBlockTypeId;
+  qual_opener?: boolean;          // true = bloco de abertura de qualificação (injetado antes da 1ª pergunta)
   // triggers
   keywords?: string;
   match?: string;

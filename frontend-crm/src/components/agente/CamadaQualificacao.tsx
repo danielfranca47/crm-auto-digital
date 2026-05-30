@@ -382,6 +382,9 @@ function DrawerCampo({ field, isSdr, onSave, onClose, onRemove }: {
           </div>
         </div>
 
+        {/* Advanced criteria */}
+        <AdvancedCriteria local={local} up={up} />
+
         {/* Remove custom field */}
         {onRemove && (
           <div style={{ borderTop: '1px solid var(--o-b2)', paddingTop: 12 }}>
@@ -398,6 +401,77 @@ function DrawerCampo({ field, isSdr, onSave, onClose, onRemove }: {
         )}
       </div>
     </DrawerBase>
+  );
+}
+
+// ─── Critérios avançados de qualificação ─────────────────────
+
+function AdvancedCriteria({ local, up }: {
+  local: QualificationField;
+  up: <K extends keyof QualificationField>(key: K, val: QualificationField[K]) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const hasCriteria = !!(local.qualify_if || local.disqualify_if);
+
+  return (
+    <div style={{ borderTop: '1px solid var(--o-b2)', paddingTop: 12 }}>
+      <button
+        onClick={() => setOpen(v => !v)}
+        style={{
+          display: 'flex', alignItems: 'center', gap: 8, background: 'transparent',
+          border: 'none', cursor: 'pointer', padding: 0, width: '100%',
+        }}
+      >
+        <span style={{ fontSize: 10, color: 'var(--o-dim)', letterSpacing: 1.5, textTransform: 'uppercase', flex: 1, textAlign: 'left' }}>
+          Configurações avançadas
+        </span>
+        {hasCriteria && (
+          <span style={{ fontSize: 9.5, color: 'var(--o-purple)', fontWeight: 600, letterSpacing: 0.5 }}>
+            configurado
+          </span>
+        )}
+        <span style={{ fontSize: 13, color: 'var(--o-dim)', transform: open ? 'rotate(180deg)' : 'none', transition: 'transform .2s' }}>
+          ▾
+        </span>
+      </button>
+
+      {open && (
+        <div style={{ marginTop: 12, display: 'flex', flexDirection: 'column', gap: 12 }}>
+          <div style={{ fontSize: 11, color: 'var(--o-dim)', lineHeight: 1.5 }}>
+            Critérios opcionais que orientam o agente a reagir naturalmente a cada resposta —
+            com conexão se dentro do critério, ou com compreensão breve se fora.
+          </div>
+
+          <div className="o-field">
+            <label className="o-field-label">Qualificar se</label>
+            <div className="o-field-hint">
+              Descreve o que é uma resposta que qualifica este campo. Ex: "Lead é sócio, CEO, CFO ou diretor".
+            </div>
+            <SuggestTextarea
+              className="o-textarea"
+              rows={2}
+              value={local.qualify_if ?? ''}
+              onChange={e => up('qualify_if', e.target.value)}
+              placeholder="Ex: Lead menciona cargo de decisão (sócio, CEO, CFO, diretor, gerente)"
+            />
+          </div>
+
+          <div className="o-field">
+            <label className="o-field-label">Não qualificar se</label>
+            <div className="o-field-hint">
+              Descreve o que é uma resposta que não qualifica. Ex: "Lead é colaborador sem poder de decisão".
+            </div>
+            <SuggestTextarea
+              className="o-textarea"
+              rows={2}
+              value={local.disqualify_if ?? ''}
+              onChange={e => up('disqualify_if', e.target.value)}
+              placeholder="Ex: Lead menciona que precisará consultar outra pessoa para decidir"
+            />
+          </div>
+        </div>
+      )}
+    </div>
   );
 }
 
