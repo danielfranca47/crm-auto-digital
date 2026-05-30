@@ -1,8 +1,59 @@
 # Guia de Testes — WhatsApp Real (pós-implementações etapa 8.6 / 8.7)
 
-**Última atualização:** 29/05/2026  
+**Última atualização:** 30/05/2026  
 **Lido por:** Claude Code (MCP)  
 **Objetivo:** validar no WhatsApp real todas as implementações feitas nas etapas 8.6 e 8.7, na ordem correta de dependências.
+
+---
+
+## ▶ Estado actual e próximos passos (30/05/2026, 02:38)
+
+**Grupos 1–5 concluídos.** O próximo a executar é o **Grupo 6 (Camada 7)**.
+
+### Contexto da sessão anterior
+
+- `user_id=4` (email user2@example.com)
+- Agente: **Sofia** (`sdr_padrao`), empresa AutoSell
+- Número do bot: **+351 935 313 591** (conectado via QR, API gratuita UazAPI expira ~30min)
+- Número do lead de teste: **+5547992163692**
+- Lead activo: **ID 160** (`category=qualification`, `bot_disabled=0`, `phases_triggered=NULL`)
+- A API UazAPI é a tier gratuita: expira periodicamente. **Sempre verificar conexão antes de pedir mensagens.**
+
+### Bugs descobertos e corrigidos durante os testes (branch `etapa-8-6-desabilitar-bot-lead`)
+
+| Fix | Ficheiros |
+|---|---|
+| PTT webhook → 500 (message.content era dict) | `routes/webhooks.py` |
+| messageType="media" não reconhecido como PTT | `routes/webhooks.py` |
+| resolve-token rejeita status "connected" | `backend-core/app/api/whatsapp_connections.py` |
+| mmg.whatsapp.net requer auth → usar UazAPI download | `services/whatsapp_inbound/inbound_handler.py` |
+| media_fallback usava whatsapp.send.local (não processado) | `inbound_handler.py` + `core_client.py` |
+| Vídeo/imagem ignorado por missing_text | `routes/webhooks.py` + `inbound_handler.py` |
+
+### O que fazer no início da próxima sessão (antes do Grupo 6)
+
+1. **Verificar conexão WhatsApp** (seguir protocolo da secção "Verificação obrigatória")
+2. **Configurar Fluxo de Venda** no AI Profile → ⑦ FLUXO DE VENDA:
+   - Fase **Apresentação (p2)**: adicionar regra `[PHASE TRIGGER → MENSAGEM "Olá, aqui está o material de apresentação!" → MENSAGEM "Gostou do que viu?"]`
+   - Sem necessidade de áudio/mídia para o teste mínimo
+3. **Limpar o lead 160** para recomeçar a qualificação do zero:
+   ```python
+   python -c "
+   import sqlite3, json
+   conn = sqlite3.connect('backend-crm/database/crm.db')
+   conn.row_factory = sqlite3.Row
+   cur = conn.cursor()
+   for t in ['messages','lead_qualification_state','orion_conversations','notifications','outbound_events','prospection_logs']:
+       cur.execute(f'DELETE FROM {t} WHERE lead_id=160')
+   cur.execute('UPDATE leads SET category=\"qualification\", bot_disabled=0, bot_disabled_reason=NULL, phases_triggered=NULL, triggers_fired=NULL WHERE id=160')
+   conn.commit()
+   print('Lead 160 limpo')
+   conn.close()
+   "
+   ```
+4. **Iniciar o teste W1** — lead envia mensagens para completar a qualificação → transitar para Apresentação → verificar ordem das mensagens automáticas
+
+---
 
 ---
 
@@ -229,8 +280,8 @@ Estes foram confirmados no playground. Validar no WhatsApp real como regressão:
 | 2 — Instance Fallback | `fix-core-send-instance-fallback.md` | ⏳ Pendente |
 | 3 — Buffer real | `etapa-8-6-delay-buffer-playground.md` | ⏳ Pendente (playground ✅) |
 | 4 — Toggle Bot | `etapa-8-7-toggle-bot-lead.md` | ⏳ Pendente real (playground ✅) |
-| 5 — Áudio Inbound | `etapa-8-6-audio-transcricao-inbound.md` | 🔶 Parcial — C1–C5, C7 ✅ / C6, C8 pulados (edge cases) |
-| 6 — Camada 7 | `camada7-sequential-trigger-model.md` | ⏳ Pendente real (playground ✅) |
+| 5 — Áudio Inbound | `etapa-8-6-audio-transcricao-inbound.md` | ✅ C1–C5, C7 validados / C6, C8 pulados (edge cases) |
+| 6 — Camada 7 | `camada7-sequential-trigger-model.md` | ⏳ Próximo — requer config Fluxo de Venda (ver secção "Estado actual") |
 
 ---
 
