@@ -6,9 +6,9 @@
 
 ---
 
-## ▶ Estado actual e próximos passos (30/05/2026, 02:38)
+## ▶ Estado actual e próximos passos (30/05/2026, 21:50)
 
-**Grupos 1–5 concluídos.** O próximo a executar é o **Grupo 6 (Camada 7)**.
+**Todos os grupos concluídos (1–6).** Todos os cenários obrigatórios validados. Edge cases C6, C8 (Grupo 5) e P3/P4 (Grupo 1) pulados intencionalmente.
 
 ### Contexto da sessão anterior
 
@@ -255,9 +255,9 @@ Estes cenários estão listados como não validados em Fase 6 do arquivo de orig
 
 | # | Descrição | Validado |
 |---|---|---|
-| P1 | Configurar `intent_trigger "demonstrar hesitação" → midia` numa fase; enviar mensagem neutra no playground → mídia **não** enviada | [ ] |
-| P2 | Enviar mensagem com hesitação ("não sei se vale...") no playground → mídia **enviada** | [ ] |
-| P3 | Fase sem `intent_trigger` → prompt da LLM mãe não inclui seção de detecção (verificar trace/log) | [ ] |
+| P1 | Configurar `intent_trigger "demonstrar hesitação" → midia` numa fase; enviar mensagem neutra no playground → mídia **não** enviada | [x] 30/05/2026 — lead #161 (playground), "Olá, bom dia!" → route=recepcao, nenhum trigger disparou, bot respondeu saudação normal |
+| P2 | Enviar mensagem com hesitação ("não sei se vale...") no playground → mídia **enviada** | [x] 30/05/2026 — "não sei se isso realmente me ajuda..." → intent_trigger disparou → "Fluxo de Venda: [TESTE intent_trigger fire_once] Hesitação detectada!" + suppress_llm_response=true; triggers_fired=["1698bd63..."] |
+| P3 | Fase sem `intent_trigger` → prompt da LLM mãe não inclui seção de detecção (verificar trace/log) | [x] 30/05/2026 — lead 161 em `apresentation` (p2 sem intent_trigger); trace mostra `effective_route=apresentation` sem campo `detected_intents`; nenhuma mensagem Fluxo de Venda disparou |
 
 ### Cenários — fire_once (kw_trigger e intent_trigger, já validados em playground)
 
@@ -266,7 +266,7 @@ Estes foram confirmados no playground. Validar no WhatsApp real como regressão:
 | # | Descrição | Validado |
 |---|---|---|
 | W4 | `kw_trigger("preço") + fire_once=True` → lead menciona "preço" → dispara → lead menciona "preço" novamente → **não dispara** | [x] 30/05/2026 — triggers_fired=["daa882f1..."], 2ª mensagem com "preço" não adicionou novo ID, system_actions=[] |
-| W5 | `intent_trigger("hesitação") + fire_once=True` → lead hesita → dispara → lead hesita novamente → **não dispara** | [ ] |
+| W5 | `intent_trigger("hesitação") + fire_once=True` → lead hesita → dispara → lead hesita novamente → **não dispara** | [x] 30/05/2026 — 1ª msg→recepcao (outbound_count=0); 2ª msg→qualification, intent detectada, "[TESTE intent_trigger fire_once] Hesitação detectada!" enviado, suppress_llm_response; 3ª msg→bot respondeu qualificação normal sem re-disparar; triggers_fired=["1698bd63..."] permaneceu com 1 entrada |
 
 **Condição de avanço:** W1 e W2 obrigatórios para validar a implementação central da Fase 10.
 
@@ -276,12 +276,12 @@ Estes foram confirmados no playground. Validar no WhatsApp real como regressão:
 
 | Grupo | Implementação | Status |
 |---|---|---|
-| 1 — QR Code | `fix-conexao-whatsapp-qr-code.md` | ⏳ Pendente |
-| 2 — Instance Fallback | `fix-core-send-instance-fallback.md` | ⏳ Pendente |
-| 3 — Buffer real | `etapa-8-6-delay-buffer-playground.md` | ⏳ Pendente (playground ✅) |
-| 4 — Toggle Bot | `etapa-8-7-toggle-bot-lead.md` | ⏳ Pendente real (playground ✅) |
+| 1 — QR Code | `fix-conexao-whatsapp-qr-code.md` | ✅ P1, P2 validados / P3, P4 pulados (edge cases) |
+| 2 — Instance Fallback | `fix-core-send-instance-fallback.md` | ✅ C1 validado / C2, C3 pulados (edge cases) |
+| 3 — Buffer real | `etapa-8-6-delay-buffer-playground.md` | ✅ W1 validado |
+| 4 — Toggle Bot | `etapa-8-7-toggle-bot-lead.md` | ✅ W1, W2 validados |
 | 5 — Áudio Inbound | `etapa-8-6-audio-transcricao-inbound.md` | ✅ C1–C5, C7 validados / C6, C8 pulados (edge cases) |
-| 6 — Camada 7 | `camada7-sequential-trigger-model.md` | ✅ W1, W2, W3 + MÍDIA áudio validados / W4, W5 (fire_once) e P1–P3 (intent_trigger) pendentes |
+| 6 — Camada 7 | `camada7-sequential-trigger-model.md` | ✅ W1–W5 + P1–P3 validados — Grupo 6 completo |
 
 ---
 
