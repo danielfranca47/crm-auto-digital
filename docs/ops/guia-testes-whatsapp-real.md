@@ -245,9 +245,9 @@ Configurar no AI Profile do agente (ex.: `sdr_scheduler`):
 
 | # | Descrição | Validado |
 |---|---|---|
-| W1 | Lead entra em qualificação → completa qualificação → transita para Apresentação → confirmar no WhatsApp real: mensagens automáticas chegam **antes** da resposta LLM (não depois) | [ ] |
-| W2 | Verificar no DB: coluna `leads.phases_triggered` contém `["p2"]` após a primeira execução real | [ ] |
-| W3 | 2ª mensagem do lead já em Apresentação → auto-mensagens **não repetem** (flag `phases_triggered` impede re-disparo) | [ ] |
+| W1 | Lead entra em qualificação → completa qualificação → transita para Apresentação → confirmar no WhatsApp real: mensagens automáticas chegam **antes** da resposta LLM (não depois) | [x] 30/05/2026 — "Olá, aqui estão os detalhes" + "Gostou?" às 14:57 ANTES da resposta LLM |
+| W2 | Verificar no DB: coluna `leads.phases_triggered` contém `["p2"]` após a primeira execução real | [x] 30/05/2026 — phases_triggered=["p2"] confirmado, category=pre-agendamento |
+| W3 | 2ª mensagem do lead já em Apresentação → auto-mensagens **não repetem** (flag `phases_triggered` impede re-disparo) | [x] 30/05/2026 — "Gostei muito!" enviada, bot respondeu só LLM (sem repetir "Olá, aqui estão os detalhes"), phases_triggered permaneceu ["p2"] |
 
 ### Cenários — Phase 6 (intent_trigger real, playground pendente)
 
@@ -281,7 +281,7 @@ Estes foram confirmados no playground. Validar no WhatsApp real como regressão:
 | 3 — Buffer real | `etapa-8-6-delay-buffer-playground.md` | ⏳ Pendente (playground ✅) |
 | 4 — Toggle Bot | `etapa-8-7-toggle-bot-lead.md` | ⏳ Pendente real (playground ✅) |
 | 5 — Áudio Inbound | `etapa-8-6-audio-transcricao-inbound.md` | ✅ C1–C5, C7 validados / C6, C8 pulados (edge cases) |
-| 6 — Camada 7 | `camada7-sequential-trigger-model.md` | ⏳ Próximo — requer config Fluxo de Venda (ver secção "Estado actual") |
+| 6 — Camada 7 | `camada7-sequential-trigger-model.md` | ✅ W1, W2, W3 validados / W4, W5 (fire_once) e P1–P3 (intent_trigger) pendentes |
 
 ---
 
