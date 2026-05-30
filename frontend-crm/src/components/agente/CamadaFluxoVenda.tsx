@@ -136,6 +136,24 @@ function BlockForm({ block, setBlock, knowledgeItems }: {
     setBlock({ ...block, [k]: v });
   }
 
+  const [mediaUploading, setMediaUploading] = useState(false);
+  const [mediaUploadError, setMediaUploadError] = useState('');
+
+  async function handleMediaUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setMediaUploading(true);
+    setMediaUploadError('');
+    try {
+      const result = await api.crm.uploadFluxoMedia(file);
+      setBlock({ ...block, media_item_id: undefined, media_url: result.media_url, media_type: result.media_type as SalesFlowBlock['media_type'] });
+    } catch {
+      setMediaUploadError('Erro ao carregar ficheiro. Tente novamente.');
+    } finally {
+      setMediaUploading(false);
+    }
+  }
+
   const allMedia = useMemo(() => {
     const items: { item: KnowledgeItem; media: KnowledgeMediaItem }[] = [];
     for (const ki of knowledgeItems) {
@@ -290,46 +308,97 @@ function BlockForm({ block, setBlock, knowledgeItems }: {
         </>
       );
 
-    case 'midia':
+    case 'midia': {
+      const hasDirectUpload = block.media_url && !block.media_item_id;
       return (
         <>
+          {/* ── Upload directo ───────────────────────────────── */}
           <div className="o-field">
-            <label className="o-field-label">Selecione o ficheiro *</label>
-            <div className="o-field-hint">Escolha um ficheiro da base de conhecimento.</div>
-            {allMedia.length === 0 ? (
-              <div style={{ fontSize: 12, color: 'var(--o-sub)', padding: '8px 0' }}>
-                Nenhum ficheiro encontrado na base de conhecimento.
-              </div>
-            ) : (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 6, maxHeight: 240, overflowY: 'auto' }}>
-                {allMedia.map(({ item, media }) => {
-                  const selected = block.media_item_id === media.id;
-                  return (
-                    <div key={media.id}
-                      onClick={() => setBlock({ ...block, media_item_id: media.id, media_url: media.media_url, media_type: media.media_type })}
-                      style={{
-                        display: 'flex', gap: 10, alignItems: 'center', padding: '8px 10px',
-                        borderRadius: 8, cursor: 'pointer',
-                        border: `1.5px solid ${selected ? 'var(--o-active)' : 'var(--o-b1)'}`,
-                        background: selected ? 'color-mix(in srgb, var(--o-active) 8%, transparent)' : 'var(--o-bg2)',
-                        transition: 'all .15s',
-                      }}>
-                      <MediaPreviewChip media={media} />
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: 2, minWidth: 0 }}>
-                        <span style={{ fontSize: 12.5, fontWeight: 500, color: 'var(--o-text)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                          {item.title || 'Sem título'}
-                        </span>
-                        <span style={{ fontSize: 11, color: 'var(--o-sub)' }}>
-                          {media.media_type} · {item.category || 'sem categoria'}
-                        </span>
-                      </div>
-                      {selected && <span style={{ marginLeft: 'auto', fontSize: 16, color: 'var(--o-active)' }}>✓</span>}
-                    </div>
-                  );
-                })}
+            <label className="o-field-label">Upload de ficheiro</label>
+            <div className="o-field-hint">Imagem, vídeo, áudio (mp3/ogg) ou PDF.</div>
+
+            {mediaUploading && (
+              <div style={{ fontSize: 12, color: 'var(--o-sub)', padding: '6px 0' }}>A carregar...</div>
+            )}
+
+            {hasDirectUpload && !mediaUploading && (
+              <div style={{
+                display: 'flex', gap: 8, alignItems: 'center', padding: '8px 10px',
+                borderRadius: 8, border: '1.5px solid var(--o-active)',
+                background: 'color-mix(in srgb, var(--o-active) 8%, transparent)',
+              }}>
+                <MediaPreviewChip media={{ media_url: block.media_url!, media_type: block.media_type || 'image' }} />
+                <span style={{ fontSize: 12, color: 'var(--o-text)', flex: 1 }}>
+                  {block.media_type} · carregado
+                </span>
+                <button
+                  onClick={() => setBlock({ ...block, media_url: undefined, media_type: undefined })}
+                  style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--o-sub)', fontSize: 14 }}
+                  title="Remover ficheiro">✕</button>
               </div>
             )}
+
+            {!hasDirectUpload && !mediaUploading && (
+              <label style={{
+                display: 'inline-flex', alignItems: 'center', gap: 6, cursor: 'pointer',
+                padding: '6px 12px', borderRadius: 8, fontSize: 13,
+                border: '1.5px dashed var(--o-b1)', color: 'var(--o-sub)',
+                transition: 'all .15s',
+              }}>
+                📎 Escolher ficheiro
+                <input type="file" hidden
+                  accept=".jpg,.jpeg,.png,.webp,.gif,.mp4,.pdf,.mp3,.ogg,.opus"
+                  onChange={handleMediaUpload} />
+              </label>
+            )}
+
+            {mediaUploadError && (
+              <div style={{ fontSize: 11, color: 'var(--o-error)', marginTop: 4 }}>{mediaUploadError}</div>
+            )}
           </div>
+
+          {/* ── Ou seleccionar da base de conhecimento ───────── */}
+          {!hasDirectUpload && (
+            <div className="o-field">
+              <div style={{ fontSize: 11, color: 'var(--o-sub)', textAlign: 'center', margin: '2px 0 6px' }}>
+                — ou seleccione da base de conhecimento —
+              </div>
+              {allMedia.length === 0 ? (
+                <div style={{ fontSize: 12, color: 'var(--o-sub)', padding: '4px 0' }}>
+                  Nenhum ficheiro na base de conhecimento.
+                </div>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 6, maxHeight: 200, overflowY: 'auto' }}>
+                  {allMedia.map(({ item, media }) => {
+                    const selected = block.media_item_id === media.id;
+                    return (
+                      <div key={media.id}
+                        onClick={() => setBlock({ ...block, media_item_id: media.id, media_url: media.media_url, media_type: media.media_type })}
+                        style={{
+                          display: 'flex', gap: 10, alignItems: 'center', padding: '8px 10px',
+                          borderRadius: 8, cursor: 'pointer',
+                          border: `1.5px solid ${selected ? 'var(--o-active)' : 'var(--o-b1)'}`,
+                          background: selected ? 'color-mix(in srgb, var(--o-active) 8%, transparent)' : 'var(--o-bg2)',
+                          transition: 'all .15s',
+                        }}>
+                        <MediaPreviewChip media={media} />
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 2, minWidth: 0 }}>
+                          <span style={{ fontSize: 12.5, fontWeight: 500, color: 'var(--o-text)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                            {item.title || 'Sem título'}
+                          </span>
+                          <span style={{ fontSize: 11, color: 'var(--o-sub)' }}>
+                            {media.media_type} · {item.category || 'sem categoria'}
+                          </span>
+                        </div>
+                        {selected && <span style={{ marginLeft: 'auto', fontSize: 16, color: 'var(--o-active)' }}>✓</span>}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          )}
+
           <div className="o-field">
             <label className="o-field-label">Legenda (opcional)</label>
             <input className="o-input" placeholder="Texto que acompanha o envio"
@@ -337,6 +406,7 @@ function BlockForm({ block, setBlock, knowledgeItems }: {
           </div>
         </>
       );
+    }
 
     case 'avancar_fase':
       return (

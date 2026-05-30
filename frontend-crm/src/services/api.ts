@@ -1177,6 +1177,11 @@ export const api = {
       apiClient.delete(`/knowledge/${itemId}/media/${mediaId}`),
     reorderKnowledgeMedia: async (itemId: number, items: Array<{ id: number; send_order: number }>) =>
       apiClient.put(`/knowledge/${itemId}/media/reorder`, { items }),
+    uploadFluxoMedia: async (file: File): Promise<{ media_url: string; media_type: string }> => {
+      const formData = new FormData();
+      formData.append("file", file);
+      return apiClient.post(`/knowledge/upload-fluxo-media`, formData);
+    },
     // Business Info
     getBusinessInfo: async () => apiClient.get<BusinessInfoField[]>(`/knowledge/business-info`),
     updateBusinessInfoField: async (id: number, payload: { label?: string; value?: string | null; enabled?: number; sort_order?: number }) =>

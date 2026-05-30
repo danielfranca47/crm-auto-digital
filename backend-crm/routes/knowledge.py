@@ -592,6 +592,35 @@ async def upload_audio(
         conn.close()
 
 
+@router.post("/upload-fluxo-media")
+async def upload_fluxo_media(
+    file: UploadFile = File(...), current_user: CurrentUser = Depends(require_crm_access)
+):
+    """Upload de mídia standalone para uso directo no Fluxo de Venda.
+    Não cria knowledge_item — devolve apenas a URL pública e o tipo de mídia."""
+    filename = file.filename or "media"
+    ext = Path(filename).suffix.lower()
+    if ext not in ALLOWED_MEDIA_EXTENSIONS:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Formato não suportado. Aceitos: {', '.join(sorted(ALLOWED_MEDIA_EXTENSIONS))}",
+        )
+
+    uid = uuid.uuid4().hex
+    dest = MEDIA_BASE / f"{uid}{ext}"
+    try:
+        content = await file.read()
+        dest.write_bytes(content)
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Falha ao salvar ficheiro: {exc}")
+
+    public_base = os.getenv("CRM_PUBLIC_BASE_URL", "").rstrip("/")
+    media_url = f"{public_base}/static/knowledge-media/{uid}{ext}"
+    media_type = _ext_to_media_type(ext)
+
+    return {"media_url": media_url, "media_type": media_type}
+
+
 # ─── Endpoints de mídia (legado — retrocompatibilidade) ──────────────────────
 
 @router.post("/{item_id}/upload-media", response_model=KnowledgeItemOut)
