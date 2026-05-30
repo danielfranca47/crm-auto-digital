@@ -265,7 +265,7 @@ Estes foram confirmados no playground. Validar no WhatsApp real como regressão:
 
 | # | Descrição | Validado |
 |---|---|---|
-| W4 | `kw_trigger("preço") + fire_once=True` → lead menciona "preço" → dispara → lead menciona "preço" novamente → **não dispara** | [ ] |
+| W4 | `kw_trigger("preço") + fire_once=True` → lead menciona "preço" → dispara → lead menciona "preço" novamente → **não dispara** | [x] 30/05/2026 — triggers_fired=["daa882f1..."], 2ª mensagem com "preço" não adicionou novo ID, system_actions=[] |
 | W5 | `intent_trigger("hesitação") + fire_once=True` → lead hesita → dispara → lead hesita novamente → **não dispara** | [ ] |
 
 **Condição de avanço:** W1 e W2 obrigatórios para validar a implementação central da Fase 10.
