@@ -1206,9 +1206,9 @@ export function CamadaFluxoVenda({ config, onUpdate }: Props) {
   }
 
   const QUAL_OPENER_DEFAULT_TEXT =
-    'Antes de iniciar as perguntas de qualificação, apresenta-te brevemente se ainda não o fizeste ' +
-    'e pede permissão para fazer algumas perguntas: algo como "Posso te fazer algumas perguntas ' +
-    'rápidas antes de avançar?" — adapta ao tom de voz e ao contexto da conversa.';
+    'Antes de fazer as primeiras perguntas de qualificação, pede permissão ao lead de forma natural, ' +
+    'sem repetir saudações já feitas: algo como "Posso te fazer algumas perguntas rápidas para perceber ' +
+    'como podemos ajudar melhor?" — adapta ao tom de voz e ao contexto da conversa.';
 
   function addQualOpener() {
     const block: SalesFlowBlock = {
