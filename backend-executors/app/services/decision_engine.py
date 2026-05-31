@@ -2121,9 +2121,10 @@ def _build_child_prompt_qualification(
                 _qual_opener_content = str(_opener_block.get("content") or "").strip() or None
 
     _qual_opener_injection = (
-        f"\nINSTRUÇÃO DE ABERTURA DE QUALIFICAÇÃO (obrigatória — somente neste turno, antes da primeira pergunta):\n"
+        f"\nINSTRUÇÃO DE ABERTURA OBRIGATÓRIA (somente neste turno — é a primeira pergunta desta sessão):\n"
         f"{_qual_opener_content}\n"
-        f"Depois da abertura, inclui a primeira pergunta de qualificação na mesma mensagem.\n\n"
+        f"IMPORTANTE: em message_text coloca a abertura + a primeira pergunta de qualificação juntos (numa resposta fluida). "
+        f"Não comeces directamente pela pergunta sem a abertura.\n"
         if _qual_opener_content
         else ""
     )
@@ -2196,7 +2197,7 @@ def _build_child_prompt_qualification(
         else ""
     )
 
-    _qual_prompt = f"""{_first_contact_opener_header}{_qual_opener_injection}{_passive_header}{_build_daughter_identity_block(context, "qualification")}
+    _qual_prompt = f"""{_first_contact_opener_header}{_passive_header}{_build_daughter_identity_block(context, "qualification")}
 {_build_agent_role_block(agent_mode_normalized, "qualification", ai_profile)}
 PAPEL: Coletar campos de qualificação do lead, um por vez, através de perguntas naturais e contextuais.
 ESCOPO: {_escopo_line}{_media_intro_note}
@@ -2249,7 +2250,7 @@ PROIBIÇÕES (violar qualquer uma é crítico):
 {_build_validation_block(playbook_summary["max_chars"])}
 ROTA MÃE: {mother_decision.route_to} (confidence={mother_decision.confidence})
 Motivo MÃE: {mother_decision.reason}
-
+{_qual_opener_injection}
 CONTEXTO:
 - lead: {json.dumps(lead_summary, ensure_ascii=False)}
 - ai_profile: {json.dumps(ai_summary, ensure_ascii=False)}
