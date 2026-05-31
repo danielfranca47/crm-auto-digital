@@ -1,3 +1,5 @@
+> **Status: CONCLUÍDO** — Todos os itens desta fase foram implementados. Arquivo mantido como registro histórico.
+
 O objetivo é ter novas funcionalidades que agreguem na humanização de comportamento do agente.
 
 Fase 1 - Melhorias básicas

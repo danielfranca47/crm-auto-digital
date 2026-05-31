@@ -1,6 +1,10 @@
 # Motor de Follow-Up — Roadmap MVP
 
-## Estado atual (o que já existe)
+> **Status: PARCIALMENTE IMPLEMENTADO**
+> Motor funcional e configurações concluídos. Etapas de UX (4–6) pendentes.
+> **Pendências sujeitas a reavaliação** — decidir se ainda são necessárias antes de implementar.
+
+## O que já existe e funciona
 
 - Transição assistida para follow-up: `POST /api/leads/start-followup` ✅
 - Persistência de `followup_contract` no lead ✅
@@ -8,63 +12,48 @@
 - Retry/backoff/polling/claim em jobs ✅
 - LLM Filha de follow-up no decision engine ✅
 - Reconciliador periódico como asyncio loop no lifespan do backend-crm ✅
+- Colunas espelho `followup_status` e `next_followup_at` na tabela `leads` ✅
+- Índice sobre `(followup_status, next_followup_at, bot_disabled, user_id)` ✅
+- Configurações expostas no AI Profile: `followup_max_attempts`, `followup_first_offset`, `followup_cadence` ✅
+- Playbook `hybrid_scheduler` com regras próprias em `ai_playbooks/__init__.py` ✅
 
 > **Regra:** toda etapa nova deve integrar com esses componentes, não recriá-los.
 
 ---
 
-## Etapas pendentes de implementação
+## Etapas concluídas
 
-### Etapa 0 — Contrato operacional canônico
+### Etapa 0 — Contrato operacional canônico ✅
 
-**Objetivo:** padronizar o `followup_contract` para suportar scheduler, rastreabilidade e exibição no card.
-
-**O que fazer:**
-- Garantir que todos os campos obrigatórios estejam sempre presentes: `status`, `attempts`, `max_attempts`, `next_followup_at`, `last_followup_at`, `stop_reason`, `followup_variant`, `version`
-- Compatibilidade de leitura com contratos anteriores
-
-**Critério de aceite:** todo lead iniciado em follow-up sai do endpoint com contrato completo.
+Campos obrigatórios sempre presentes: `status`, `attempts`, `max_attempts`, `next_followup_at`, `last_followup_at`, `stop_reason`, `followup_variant`, `version`. Compatibilidade de leitura com contratos anteriores garantida.
 
 ---
 
-### Etapa 1 — Base de consulta indexada para vencimentos
+### Etapa 1 — Base de consulta indexada para vencimentos ✅
 
-**Objetivo:** consulta eficiente e segura de follow-ups vencidos.
-
-**O que fazer:**
-- Adicionar colunas operacionais no `lead` como espelho do contrato: `followup_status`, `next_followup_at`
-- Criar índice para varredura periódica (`followup_status`, `next_followup_at`, `bot_disabled`, `user_id`)
-- Sincronizar escrita entre `followup_contract` (JSON) e colunas espelho
-
-**Critério de aceite:** query de vencidos retorna somente `status=active` e `next_followup_at <= now`, sem parsing pesado de JSON.
+Colunas `followup_status` e `next_followup_at` adicionadas como espelho do contrato JSON.
+Índice criado para varredura periódica eficiente.
 
 ---
 
-### Etapa 2 — Validar idempotência do reconciliador
+### Etapa 2 — Idempotência do reconciliador ✅
 
-**Objetivo:** confirmar que o reconciliador (já em execução) não gera jobs duplicados sob carga.
-
-**O que validar:**
-- Sem geração duplicada de job para o mesmo lead/vencimento
-- Execuções concorrentes permanecem idempotentes (via `followup_reconcile_guard`)
-- Logs operacionais registram detecção e enqueue
+Reconciliador não gera jobs duplicados sob carga. Execuções concorrentes protegidas via `followup_reconcile_guard`. Cobertura de testes presente.
 
 ---
 
-### Etapa 3 — Stop conditions e interrupção por inbound
+### Etapa 3 — Stop conditions e interrupção por inbound ✅
 
-**Objetivo:** impedir conflitos de automação durante conversa ativa.
-
-**O que fazer:**
-- Garantir fonte única de stop conditions: `inbound_reply`, `deal_closed`, `explicit_rejection`, `handoff_human`, `max_attempts_reached`
-- Após envio automático: `attempts++`, recalcular `next_followup_at` ou encerrar
-- `stop_reason` e `status` auditáveis
-
-**Critério de aceite:** nenhuma mensagem automática é enviada para lead já interrompido/encerrado.
+Stop conditions: `inbound_reply`, `deal_closed`, `explicit_rejection`, `handoff_human`, `max_attempts_reached`.
+Após envio automático: `attempts++`, recálculo de `next_followup_at` ou encerramento. `stop_reason` auditável.
 
 ---
 
-### Etapa 4 — Estados visíveis de UX no card do lead
+## Etapas pendentes (sujeitas a reavaliação)
+
+> As etapas abaixo foram planejadas mas não implementadas. Avaliar se ainda fazem sentido no contexto atual do produto antes de prosseguir.
+
+### Etapa 4 — Estados visíveis de UX no card do lead ❌
 
 **Objetivo:** feedback imediato ao operador após transição.
 
@@ -79,7 +68,7 @@
 
 ---
 
-### Etapa 5 — Visualização do plano no card do lead
+### Etapa 5 — Visualização do plano no card do lead ❌
 
 **Objetivo:** exibir prévia útil da cadência planejada.
 
@@ -92,7 +81,7 @@
 
 ---
 
-### Etapa 6 — Contrato de contexto para o modal (endpoint de leitura)
+### Etapa 6 — Contrato de contexto para o modal (endpoint de leitura) ❌
 
 **Rota proposta:** `GET /api/leads/{lead_id}/followup-transition-context`
 
@@ -121,7 +110,7 @@
 
 ---
 
-### Etapa futura — Planejador inteligente (planner)
+### Etapa futura — Planejador inteligente (planner) ❌
 
 Módulo opcional e desacoplado do scheduler MVP:
 - Analisa contexto ampliado do lead
@@ -130,21 +119,3 @@ Módulo opcional e desacoplado do scheduler MVP:
 - Alimenta contexto adicional da LLM Filha
 
 **Motor MVP deve funcionar integralmente sem o planner.**
-
----
-
-## Configurações a expor (atualmente hardcoded)
-
-| Configuração | Localização atual | Campo proposto no AI Profile |
-|---|---|---|
-| Primeiro offset de follow-up (30min / 2h) | `backend-crm/routes/leads.py` | `followup_first_offset_minutes` |
-| Max attempts (4 / 3) | `backend-crm/routes/leads.py` | `followup_max_attempts` |
-| Intervalos entre tentativas | `backend-crm/services/followup_state.py` | `followup_intervals_hours` |
-
----
-
-## Playbook específico para Agent 3 (hybrid_scheduler)
-
-**Problema atual:** `template_key = hybrid_scheduler` cai no fallback `sdr_padrao` em `backend-crm/services/ai_playbooks/__init__.py`.
-
-**O que criar:** playbook `hybrid_scheduler` com regras de agendamento, remarcação e sessões específicas do Agent 3.

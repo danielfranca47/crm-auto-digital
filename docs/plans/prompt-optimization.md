@@ -1,68 +1,54 @@
 # Otimização de Prompts das LLMs Filhas
 
-## Contexto
-
-Análise baseada em boas práticas de engenharia de prompt (estrutura ROLE → TASK → SPECS → NOTES). O sistema já usa uma arquitetura Mãe+Filha sólida, mas os prompts das Filhas têm oportunidades de melhoria.
-
----
+> **Status: MAIORIA IMPLEMENTADA**
+> Itens 1, 2 e 3 concluídos. Item 4 parcialmente implementado.
+> **Pendência sujeita a reavaliação** — decidir se a instrução completa de variação de abertura ainda é necessária.
 
 ## O que está bem (não mudar)
 
 1. **Separação de responsabilidade**: Mãe decide rota; Filha gera texto. Sem conflito de instrução.
-2. **Few-shot examples na Qualification**: `training_examples_block` com 11 casos cobertos incluindo negativos.
+2. **Few-shot examples na Qualification**: `training_examples_block` com casos cobertos incluindo negativos.
 3. **Notes no final**: `_ESCAPE_HATCH_BLOCK` e `_build_validation_block` posicionados no final (LLMs priorizam início e fim do prompt).
 4. **7 proibições explícitas na Qualification**: nunca inventar, nunca urgência artificial, etc.
 
 ---
 
-## Oportunidades de melhoria
+## Itens implementados
 
-### 1. System prompt das Filhas é genérico
+### 1. System prompt das Filhas é específico por fase ✅
 
-Atualmente: "Você é a FILHA X e deve responder SOMENTE JSON".
-
-**Proposta:** adicionar ao system prompt de cada Filha:
-- Objetivo comercial da fase
-- Tom de voz esperado
-- Regra mais crítica dessa fase
-
-Exemplo para Closing: *"Você é uma especialista em fechamento de vendas para WhatsApp. Seu único objetivo é confirmar a decisão de compra dos leads. Nunca envie links antes de confirmar interesse. Retorne SOMENTE JSON."*
-
-**Atenção:** o system prompt pode precisar variar por tipo de agente (Agent 1, 2, 3), já que cada um tem objetivos diferentes.
+`FILHA FOLLOW-UP` e `FILHA CLOSING` têm system prompts especializados com objetivo comercial da fase. A variação por tipo de agente (`agent_mode_normalized`) é injetada no contexto do prompt de cada filha.
 
 ---
 
-### 2. custom_instructions injetado no meio do prompt
+### 2. custom_instructions posicionado no final ✅
 
-O bloco `custom_instructions` tem "prioridade máxima" mas é inserido no meio do prompt. LLMs priorizam início e fim.
-
-**Proposta:** mover `custom_instructions_block` para o **final** de cada prompt Filha — junto com `_build_validation_block`. Isso garante que as instruções do operador sejam as últimas que o modelo vê.
+`_build_custom_instructions_block` está no final de todos os prompts de fase (qualification, apresentation, follow-up, closing), garantindo que as instruções do operador sejam processadas com prioridade.
 
 ---
 
-### 3. Follow-up e Closing sem few-shot examples
+### 3. Follow-up e Closing com few-shot examples ✅
 
-Qualification tem `training_examples`. Apresentação tem 2 exemplos de sales. Follow-up e Closing não têm exemplos próprios — apenas regras descritivas.
-
-**Proposta:**
-- Criar estrutura de exemplos por fase e por tipo de agente
-- Expor na UI de treinamento do AI Profile para que usuários possam customizar
-- Garantir que exemplos de todas as fases apareçam nos prompts das Filhas correspondentes
+`_build_training_examples_block` é chamado para todas as fases: `qualification`, `apresentation`, `followup`, `closing`. Os exemplos são lidos de `context.training_examples` (populado pelo AI Profile).
 
 ---
 
-### 4. Falta instrução de variação de resposta
+## Item pendente (sujeito a reavaliação)
 
-O `_build_tone_block()` já proíbe bullet points, markdown e CAPS. Mas não instrui variação de abertura.
+### 4. Instrução de variação de resposta ⚠️ Parcial
 
-**Proposta:** adicionar ao tone_block: *"Nunca comece duas mensagens consecutivas com a mesma palavra ou estrutura. Consulte o histórico e varie o padrão de abertura."*
+O `_build_tone_block()` atualmente inclui: *"não comece com 'Olá, tudo bem?' genérico se já houve conversa anterior"*.
+
+**O que falta:** instrução explícita de variação de estrutura de abertura entre mensagens consecutivas — proposta original: *"Nunca comece duas mensagens consecutivas com a mesma palavra ou estrutura. Consulte o histórico e varie o padrão de abertura."*
+
+**Arquivo afetado:** `backend-executors/app/services/decision_engine.py` — função `_build_tone_block()`
 
 ---
 
-## Arquivos afetados
+## Arquivos de referência
 
-| Arquivo | O que mudar |
+| Arquivo | O que contém |
 |---|---|
-| `backend-executors/app/services/decision_engine.py` | System prompts das Filhas, posicionamento de custom_instructions, instrução de variação |
-| `backend-crm/services/ai_orchestrator/orchestrator.py` | Injeção de examples por fase no ContextBundle |
-| `frontend-crm/src/pages/AiProfile.tsx` | UI para treinamento de exemplos por fase |
+| `backend-executors/app/services/decision_engine.py` | System prompts das Filhas, posicionamento de custom_instructions, tone_block |
+| `backend-crm/services/ai_orchestrator/orchestrator.py` | Injeção de training_examples no ContextBundle |
+| `frontend-crm/src/pages/AiProfile.tsx` | UI de configuração do AI Profile |

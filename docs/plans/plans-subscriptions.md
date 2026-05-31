@@ -1,12 +1,16 @@
 # Planos e Modelo de Negócio — AutoDigital
 
+> **Status: PARCIALMENTE IMPLEMENTADO**
+> Sistema de planos e limites de consumo existe com arquitetura própria (via `PlanLimits`). O gate de funcionalidades por plano (`follow_up_enabled`, `playground_enabled`, `max_instances`) **não foi implementado**.
+> **Pendências sujeitas a reavaliação** — decidir se o bloqueio de features por plano ainda é prioridade.
+
 ## Modelo de cobrança
 
 **Híbrido (plano + consumo):** cada plano inclui uma franquia fixa de conversas IA por mês. Conversas além da franquia são cobradas individualmente.
 
 **Infraestrutura WhatsApp:** Uazapi (API não oficial) — ~R$79/mês por instância. Sem taxa por mensagem da Meta.
 
-**Custo médio estimado por conversa IA:** ~R$0,06 (modelo Sonnet). Esses numeros podem ser diferente  
+**Custo médio estimado por conversa IA:** ~R$0,06 (modelo Sonnet). Esses números podem ser diferentes.
 
 **Agentes disponíveis em todos os planos** — SDR, Closer, Hybrid. Não é limitação de plano, é escolha estratégica.
 
@@ -66,48 +70,42 @@ Público: negócios que validaram e querem a experiência completa.
 
 ---
 
-## Definições técnicas para implementação
+## Estado atual da implementação
 
-### O que conta como "conversa IA"
-- Agente gera e envia pelo menos 1 resposta
-- Janela de sessão sugerida: 24h (novo contato após 24h de inatividade = nova conversa)
+### O que existe ✅
 
-### Modelo de dados sugerido (`subscription`/`user_plan`)
-```
-- user_id (FK)
-- plan_slug: "start" | "growth" | "scale" | "enterprise"
-- status: "active" | "past_due" | "cancelled" | "trialing"
-- max_conversations_month: 250 | 500 | 1500 | 5000
-- max_contacts: 500 | 1500 | 5000 | 15000
-- max_instances: 1 | 1 | 3 | 5
-- follow_up_enabled: false | true | true | true
-- playground_enabled: false | true | true | true
-- advanced_analytics: false | true | true | true
-- overage_price_per_conversation: 0.60 | 0.50 | 0.40 | 0.30
-- current_month_conversations: int
-- current_contacts_count: int
-- billing_cycle_start: date
-```
+O backend-core tem um sistema de planos via `Plan` + `PlanLimits` + `Subscription`. O endpoint `GET /me/entitlements` retorna `UserLimits` com:
+- `max_ia_conversas_monthly` — franquia de conversas IA
+- `max_leads` — limite de contatos
+- `max_whatsapp_send_daily` — limite de envios diários
+- `max_prospec_monthly` — limite de prospecções
 
-### Controle de funcionalidades por plano
+O backend-crm consome esses limites para controle de consumo de conversas e leads.
 
-| Funcionalidade | Start | Growth | Scale | Enterprise |
-|---|---|---|---|---|
-| Conversa IA | ✅ | ✅ | ✅ | ✅ |
-| Qualificação F1/F2/F3 | ✅ | ✅ | ✅ | ✅ |
-| Follow-up automatizado | ❌ | ✅ | ✅ | ✅ |
-| Playground | ❌ | ✅ | ✅ | ✅ |
-| Dashboard completo + analytics | ❌ | ✅ | ✅ | ✅ |
-| Multi-instância | ❌ | ❌ | ✅ | ✅ |
+### O que não existe ❌ (pendente e sujeito a reavaliação)
 
-### Comportamento ao atingir limites
-- **Contatos:** alerta em 80% → ao atingir 100%, novas mensagens de números desconhecidos não criam contato novo
-- **Conversas:** processadas normalmente ao ultrapassar, mas registradas como excedente para cobrança no fim do ciclo
+O modelo `Subscription` não possui campos de feature-gate. Os seguintes bloqueios **não estão implementados**:
+
+| Feature | Status |
+|---|---|
+| `follow_up_enabled` por plano | ❌ Qualquer usuário pode usar follow-up independente do plano |
+| `playground_enabled` por plano | ❌ Qualquer usuário pode usar o playground |
+| `max_instances` (multi-instância) | ❌ Não existe controle de número de instâncias por plano |
+| Middleware de verificação de feature por plano | ❌ Não existe |
 
 ---
 
-## Prioridades de implementação
+## Definições técnicas para implementação futura
 
-1. Criar tabela `subscription` com os campos acima
-2. Middleware de verificação de limites em: agente (conversas), criação de contato, follow-up, playground
+### O que contaria como "conversa IA"
+- Agente gera e envia pelo menos 1 resposta
+- Janela de sessão sugerida: 24h (novo contato após 24h de inatividade = nova conversa)
+
+### Comportamento ao atingir limites (proposto)
+- **Contatos:** alerta em 80% → ao atingir 100%, novas mensagens de números desconhecidos não criam contato novo
+- **Conversas:** processadas normalmente ao ultrapassar, mas registradas como excedente para cobrança no fim do ciclo
+
+### Prioridades de implementação (quando retomar)
+1. Adicionar campos de feature-gate ao modelo de `PlanLimits` (`follow_up_enabled`, `playground_enabled`, `max_instances`)
+2. Middleware de verificação nos endpoints: `POST /api/leads/start-followup`, `POST /api/playground/chat`, criação de instâncias WhatsApp
 3. Dashboard de uso: conversas usadas vs franquia, contatos usados vs limite, alertas em 80%, CTAs de upgrade

@@ -1,5 +1,7 @@
 # Evolução do Decision Contract (backward compatible)
 
+> **Status: CONCLUÍDO** — Todos os itens foram implementados: campos opcionais em `MotherDecision`, normalização de `agent_mode`, dual-read de `meeting_scheduled`, `FILHA FOLLOW-UP` e `FILHA CLOSING` especializadas, campos de observabilidade no `decision_trace`. Arquivo mantido como registro histórico.
+
 ## Contexto
 
 O contrato atual da LLM Mãe tem 4 campos obrigatórios. Esta proposta adiciona campos opcionais sem quebrar o legado, usando dual-read para compatibilidade.
