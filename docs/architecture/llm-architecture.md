@@ -43,6 +43,9 @@ whatsapp_worker
 ## Contratos
 
 ### MotherDecision (saída da LLM Mãe)
+
+**Campos obrigatórios:**
+
 | Campo | Tipo | Descrição |
 |---|---|---|
 | `route_to` | `qualification\|apresentation\|follow-up\|closing` | Rota decidida |
@@ -50,6 +53,14 @@ whatsapp_worker
 | `confidence` | 0..1 | Confiança da decisão |
 | `reason` | string | Justificativa textual |
 | `detected_intents` | `list[str]` | Intenções detectadas na mensagem do lead. Presente apenas quando a fase activa tem blocos `intent_trigger`; caso contrário `[]`. Usado por `_evaluate_sales_flow_phases()` para avaliar `intent_trigger`. |
+
+**Campos opcionais (backward compatible):**
+
+| Campo | Tipo | Descrição |
+|---|---|---|
+| `signals` | dict\|null | Sinais estruturados: `meeting_scheduled` (bool), `intent_level` (`low\|medium\|high`), `urgency_level` (`low\|medium\|high`), `price_acceptance` (`no\|unsure\|yes`) |
+| `next_action_hint` | `reply\|ask_qualification\|handoff\|ignore\|greet\|null` | Sugestão de próxima ação ao pipeline |
+| `objective` | string\|null | Objetivo da resposta atual (informativo) |
 
 ### ChildResult (saída da LLM Filha)
 | Campo | Tipo | Descrição |
@@ -63,6 +74,37 @@ whatsapp_worker
 | `signals_structured` | dict\|null | Sinais estruturados (meeting_proposed, checkout_sent, etc.) |
 | `media_keys_to_send` | list[string]\|null | Chaves de `knowledge_media` cujas mídias a filha decidiu anexar neste turno. Só populado na filha de apresentação. Fallback estrito: `null`/`[]` → nenhuma mídia anexada. |
 | `confidence` | 0..1 | Confiança da resposta |
+
+### Normalização de agent_mode
+
+O executor normaliza o `agent_mode` do AI Profile para um valor canônico antes de qualquer decisão:
+
+| Valor recebido | Normalizado (`agent_mode_normalized`) |
+|---|---|
+| `consultivo` | `consultivo` |
+| `agenda` | `agenda` |
+| `direto` | `direto` |
+| `closer` | `direto` |
+| `sdr_scheduler` | `agenda` |
+
+### Dual-read de meeting_scheduled
+
+Para compatibilidade com o contrato legado, o executor segue esta ordem:
+1. Lê `mother_decision.signals.meeting_scheduled` (bool estruturado — novo)
+2. Se ausente: fallback para substring `"meeting_scheduled"` em `mother_decision.reason` (legado)
+
+Resultado publicado em `decision_trace.meeting_scheduled`.
+
+### decision_trace — campos de observabilidade
+
+Campos adicionados ao `decision_trace` que acompanham o `DecisionOutput`:
+
+| Campo | Descrição |
+|---|---|
+| `agent_mode_normalized` | Modo normalizado final (`consultivo`, `agenda`, `direto`) |
+| `next_action_hint` | Valor retornado pela Mãe, se presente |
+| `mother_signals` | Resumo de `signals` da Mãe (intent_level, urgency_level, price_acceptance, etc.) |
+| `meeting_scheduled` | Resultado do dual-read |
 
 ### DecisionOutput (saída final do executor)
 Combinação de MotherDecision + ChildResult + guardrails + Fluxo de Venda, enviado ao CRM via `complete_job`.
@@ -97,11 +139,31 @@ Campos adicionados pelo Fluxo de Venda (Camada 7):
 - Instrução prioritária: usar `followup_contract_signals` como fonte principal
 - Passa `tone_of_voice`, `custom_instructions`, `offer_description`, `goals`, `niche`, `identity_mode`
 
+### Filha Closing (`_build_child_prompt_closing`)
+- Instrução: confirmar decisão de compra, nunca enviar links antes de confirmar interesse
+- Postura ajustada por `agent_mode_normalized` (direto vs consultivo)
+- Recebe `offer_pack_summary`, `anchor_price`, `guarantee_text` se disponíveis
+
 ### Filha Genérica (`_build_child_prompt`)
-- Usada para rotas `closing` e como fallback
-- Recebe contexto completo mas sem instrução especializada
+- Fallback para rotas não cobertas pelas filhas especializadas
+- Recebe contexto completo mas sem instrução especializada de fase
 
 ---
+
+## Estrutura de prompt das Filhas
+
+Todos os prompts de Filha seguem a mesma ordem de blocos no final:
+
+```
+...contexto de fase (regras, histórico, qualificação, playbook)...
+_build_training_examples_block(phase)   ← few-shot por fase (qualification/apresentation/followup/closing)
+_build_custom_instructions_block()      ← custom_instructions do operador (último = maior peso)
+_build_validation_block(max_chars)      ← formato de saída JSON + limite de caracteres
+```
+
+**Regra de posicionamento:** LLMs priorizam início e fim do prompt. `custom_instructions` fica no final para garantir que as instruções do operador sobreponham os defaults do playbook. Os few-shot examples ficam imediatamente antes para servir de referência próxima ao output.
+
+**`_build_training_examples_block(phase)`** — lê `context.training_examples[phase]` (populado pelo AI Profile). Se não configurado, o bloco é omitido. Fases cobertas: `qualification`, `apresentation`, `followup`, `closing`.
 
 ## Guardrails de estágio
 
@@ -116,6 +178,16 @@ Existem duas camadas de guardrails:
 - Valida categoria contra `LEAD_CATEGORIES_SET`
 - Exige sinal inbound para persistir mudança
 - Aplica side effect ao entrar em closing (`apply_closing_bot_disable_side_effect`)
+
+---
+
+## Regras de automação do meeting scheduler por agent_mode
+
+| `agent_mode_normalized` | Comportamento |
+|---|---|
+| `consultivo` | Não dispara criação automática de appointment — fluxo com human-in-loop ou handoff |
+| `agenda` | Dispara automação quando `decision_trace.meeting_scheduled=true` |
+| `direto` | Não participa da automação de agendamento |
 
 ---
 
