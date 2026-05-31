@@ -99,6 +99,9 @@ Aliases aceitos: `whatsapp_send`, `maps_search_fallback`, `maps_enrich_fallback`
 | `requires_handoff` | boolean | Se o fluxo sempre exige handoff ao final |
 | `human_in_loop` | boolean | Se humano deve aprovar mensagens antes do envio |
 | `audio_transcription_enabled` | boolean | Se o agente transcreve áudios PTT via Whisper (padrão: `false`) |
+| `response_style` | string | `"active"` (pergunta proativamente) ou `"passive"` (infere silenciosamente) |
+| `qualification_fields` | list\|null | Campos de qualificação configurados via UI — substitui os defaults hardcoded quando presente. Cada entrada: `{key, label, question, passive_hint, mode, group?, qualify_if?, disqualify_if?}` |
+| `sales_flow` | object\|null | Fluxo de Venda — `{enabled, phases: [{id, blocks[]}]}`. Ver [`sales-flow.md`](sales-flow.md) |
 | `offer_pack` | object\|null | JSON com configurações de oferta e comportamento de mídia (ver abaixo) |
 
 ### Enums

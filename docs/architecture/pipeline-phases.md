@@ -61,8 +61,18 @@ Prompt construído em `backend-executors/app/services/decision_engine.py`:
 ### LLM Filha de Qualification
 
 - Prompt: `_build_child_prompt_qualification` em `decision_engine.py`
-- Instrução: gerar 1–2 perguntas objetivas; não agendar reunião; usar `tone_of_voice`, `brand_name`, `niche`
-- Perguntas de qualificação são hardcoded em `backend-crm/services/ai_playbooks/__init__.py` (não configuráveis pelo usuário)
+- Instrução: gerar 1 pergunta por turno; não agendar reunião; usar `tone_of_voice`, `brand_name`, `niche`
+- **Perguntas configuráveis via `qualification_fields`** — quando presentes no AI Profile, substituem os defaults hardcoded. Cada campo tem `question` (pergunta direta), `passive_hint` (captura silenciosa), `qualify_if` e `disqualify_if` (critérios opcionais de qualificação/desqualificação)
+- **Abertura de qualificação (`qual_opener`):** bloco especial de tipo `orientacao` com flag `qual_opener: true` na fase p1 do `sales_flow`. Quando presente e `asked_questions_json` está vazio, injeta instrução de abertura antes da primeira pergunta (ex: "Posso te fazer algumas perguntas rápidas?"). Condição de activação: `qualification_fields` com pelo menos 1 campo ativo + `response_style="active"` + primeira mensagem da fase
+- **Reação contextual (`_natural_reaction_block`):** instrução injectada quando `response_style="active"` e há `qualification_fields` activos — orienta o LLM a comentar brevemente sobre a resposta do lead antes de avançar para a próxima pergunta, usando `qualify_if`/`disqualify_if` para calibrar o tom (conexão vs. compreensão breve)
+
+### Edição manual da qualificação
+
+A secção "Critérios de Qualificação" no `LeadCardDialog` permite editar manualmente os campos de qualificação capturados pela IA:
+- **Fonte:** `GET /api/leads/{lead_id}/qualification-fields` — lê `lead_qualification_state.data_json`
+- **Edição:** `PATCH /api/leads/{lead_id}/qualification-fields` — atualiza campos individualmente
+- Badge "X pendentes" (vermelho) indica `required_fields` sem valor; badge "Completo" (verde) quando todos preenchidos
+- A secção renderiza apenas quando o AI Profile tem `qualification_fields` configurados
 
 ---
 
@@ -138,7 +148,7 @@ Ver [`docs/architecture/sales-flow.md`](sales-flow.md) para detalhes completos s
 
 | Hardcode | Localização |
 |---|---|
-| Perguntas de qualificação | `backend-crm/services/ai_playbooks/__init__.py` |
+| Perguntas de qualificação (fallback sem `qualification_fields`) | `backend-crm/services/ai_playbooks/__init__.py` |
 | Overrides de comportamento por `agent_mode` (`max_chars`, `qualification_depth`) | `backend-crm/services/ai_orchestrator/orchestrator.py` |
 | Estratégia de cart recovery (Agent 2) | `backend-crm/services/ai_playbooks/__init__.py` |
 | Estratégia de follow-up pós-sessão por outcome (Agent 3) | `backend-crm/services/ai_playbooks/__init__.py` |
@@ -153,5 +163,5 @@ Ver [`docs/architecture/sales-flow.md`](sales-flow.md) para detalhes completos s
 | `backend-crm/services/ai_playbooks/__init__.py` | Playbooks e hardcodes por template |
 | `backend-crm/services/ai_orchestrator/orchestrator.py` | Monta ContextBundle, aplica overrides por mode |
 | `backend-executors/app/services/decision_engine.py` | Motor de decisão, prompts das filhas, guardrails anti-loop |
-| `backend-crm/routes/leads.py` | Guardrail HTTP 409 por qualificação incompleta |
+| `backend-crm/routes/leads.py` | Guardrail HTTP 400/409 por qualificação incompleta; `GET /{lead_id}/qualification-fields` e `PATCH /{lead_id}/qualification-fields` |
 | `backend-crm/services/lead_category_policy.py` | Side-effects de mudança de categoria |

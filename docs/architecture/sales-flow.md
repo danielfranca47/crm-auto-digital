@@ -60,6 +60,18 @@ O builder adapta a UI e o executor filtra os blocos com base no `agent_mode` do 
 | `no_reply_trigger` | Sem resposta | Placeholder de UI. Não avaliado em runtime. |
 | `intent_trigger` | Intenção detectada | A LLM Mãe recebe secção `[DETECÇÃO DE INTENÇÃO]` condicional se a fase tiver blocos deste tipo. Retorna `detected_intents: list[str]`. O bloco dispara se `intent_label in detected_intents`. Suporta `fire_once` (ver abaixo). |
 
+### Flag especial de bloco: `qual_opener`
+
+Blocos do tipo `orientacao` na fase p1 podem ter o flag `qual_opener: true`. Identifica o bloco como **abertura de qualificação** — uma instrução que pede permissão ao lead antes das perguntas de qualificação.
+
+**Comportamento em runtime:** detectado em `_build_child_prompt_qualification()` e injectado no prompt apenas quando `asked_questions_json` está vazio (primeira mensagem da fase de qualificação) e `qualification_fields` tem pelo menos 1 campo ativo. Não repete em turnos seguintes.
+
+**No frontend:** na fase p1 do builder (`CamadaFluxoVenda.tsx`), quando `qualification_fields` tem campos ativos:
+- Se não existe bloco `qual_opener` → banner "Sem instrução de abertura configurada" com botão "+ Adicionar abertura"
+- Se existe → `QualOpenerCard` com label "Abertura de Qualificação", badge "automática · 1ª mensagem", botões "Editar" e "Remover"
+
+**Texto padrão gerado:** "Antes de fazer as primeiras perguntas de qualificação, pede permissão ao lead de forma natural, sem repetir saudações já feitas: algo como 'Posso te fazer algumas perguntas rápidas para perceber como podemos ajudar melhor?' — adapta ao tom de voz e ao contexto da conversa."
+
 ### Ações (executadas quando o trigger bate)
 
 | `typeId` | Nome | Comportamento em runtime |
