@@ -103,6 +103,11 @@ Aliases aceitos: `whatsapp_send`, `maps_search_fallback`, `maps_enrich_fallback`
 | `qualification_fields` | list\|null | Campos de qualificação configurados via UI — substitui os defaults hardcoded quando presente. Cada entrada: `{key, label, question, passive_hint, mode, group?, qualify_if?, disqualify_if?}` |
 | `sales_flow` | object\|null | Fluxo de Venda — `{enabled, phases: [{id, blocks[]}]}`. Ver [`sales-flow.md`](sales-flow.md) |
 | `offer_pack` | object\|null | JSON com configurações de oferta e comportamento de mídia (ver abaixo) |
+| `first_reply_delay_min_seconds` | integer\|null | Delay mínimo (s) antes de responder à **primeira** mensagem de um lead (padrão: `0` = sem delay) |
+| `first_reply_delay_max_seconds` | integer\|null | Delay máximo (s) antes da primeira resposta; o valor real é sorteado entre min e max (padrão: `0`) |
+| `reply_delay_min_seconds` | integer\|null | Delay mínimo (s) antes de respostas a mensagens subsequentes (padrão: `0`) |
+| `reply_delay_max_seconds` | integer\|null | Delay máximo (s) para mensagens subsequentes (padrão: `0`) |
+| `availability_mode` | string (enum) | Janela de horário de trabalho do agente (padrão: `"24h"`) |
 
 ### Enums
 
@@ -130,6 +135,8 @@ Aliases aceitos: `whatsapp_send`, `maps_search_fallback`, `maps_enrich_fallback`
 **`identity_mode`**: `"human_agent"`, `"virtual_assistant"`, `"user_clone"`
 
 **`handoff_policy`**: `"disable_bot"`, `"keep_active_notify"`, `"ignore"`
+
+**`availability_mode`**: `"24h"` (sem restrição), `"business_hours"` (Seg–Sex 09h–18h no `timezone` do perfil), `"custom"` (grade de dias/horas configurada na UI)
 
 ### Campos do `offer_pack` (subobject)
 

@@ -18,6 +18,7 @@ existente ou criar um novo.
 | [`followup.md`](followup.md) | Arquitetura de follow-up: estados (idle/scheduled/paused/completed), reconciliador, circuit breaker, jobs tick, modal de transição | Mudança na máquina de estados, novo tipo de tick, nova lógica de reconciliação/circuit breaker |
 | [`playground-parity.md`](playground-parity.md) | Paridade Playground ↔ WhatsApp real: `enrich_context_bundle`, campos do ContextBundle, campos da `PlaygroundChatResponse` | Novo campo no ContextBundle que afecta o LLM, novo campo na resposta do playground |
 | [`admin-agents-contract.md`](admin-agents-contract.md) | Contrato AdminAgents frontend ↔ backend: campos expostos em `GET /admin/agents/overview` e `GET /admin/agents/users/{id}` | Novo campo no AI Profile que deve ser exibido no painel admin |
+| [`humanization.md`](humanization.md) | Humanização comportamental: delay de resposta, typing indicator, quebra de mensagem por pontuação, janela de horário, áudio de voz (myaudio/ptt) | Mudança no cálculo de delay, novo campo de availability, novo tipo de mídia, mudança no split de mensagens |
 
 ---
 
@@ -59,6 +60,7 @@ A maioria das features altera áreas já documentadas. Antes de criar um ficheir
 
 | A mudança afecta... | Documento a actualizar |
 |---|---|
+| Delay de resposta, typing indicator, quebra de mensagem, janela de horário, myaudio | `humanization.md` |
 | Novo bloco/trigger/flag no Fluxo de Venda | `sales-flow.md` |
 | Novo campo em MotherDecision, ChildResult ou DecisionOutput | `llm-architecture.md` |
 | Nova LLM Filha ou guardrail de decisão | `llm-architecture.md` |

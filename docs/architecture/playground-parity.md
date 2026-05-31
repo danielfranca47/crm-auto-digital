@@ -133,6 +133,8 @@ Além da paridade de contexto LLM, o playground expõe campos de preview que sim
 | `auto_items` | Lista ordenada de itens automáticos do Fluxo de Venda: `{type:"text", content}` ou `{type:"media", media_url, media_type}` | `_send_actions` despachados pelo runner via `_send_sales_flow_action()` |
 | `phase_trigger_fired` | `bool` — quando `True`, frontend exibe `auto_items` **antes** da resposta LLM | Runner envia `_send_actions` antes da mensagem LLM quando `phase_trigger` disparou |
 | `suppress_llm_response` | `bool` — quando `True`, frontend omite o turno da LLM por completo (sem bolha vazia) | Runner completa job com `skipped_suppress_llm` sem enviar mensagem LLM |
+| `message_parts` | `List[str]` — como a resposta LLM seria dividida em bolhas por pontuação | Executor chama `_split_message_by_punctuation()` e envia cada parte com delay próprio |
+| `audio_previews` | `List[str]` — URLs dos `myaudio`/`ptt` da base de conhecimento que seriam enviados como voz | Executor envia `pre_send_media` com `type=myaudio` e `delay_ms=3000` antes de cada um |
 
 ### Fórmula do typing indicator
 
