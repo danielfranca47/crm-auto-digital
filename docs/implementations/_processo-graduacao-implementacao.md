@@ -95,6 +95,7 @@ Se `docs/implementations/_template-implementacao.md` não existir ou estiver
 desactualizado em relação à estrutura do arquivo que está sendo graduado,
 actualizá-lo para reflectir um exemplo realista do padrão actual.
 
+
 ---
 
 ## Passo 6 — Deletar o arquivo de implementação
