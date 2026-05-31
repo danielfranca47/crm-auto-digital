@@ -1,7 +1,7 @@
 # Fluxo de Qualificação Natural — Abertura + Reação Contextual + Critérios
 
 **Branch:** `etapa-8-7-fluxo-qualificacao-natural`
-**Status:** P1 e P2 validados (31/05/2026) — pendente: P3 e P4 (teste em playground com backend ativo)
+**Status:** P1, P2 e P3 validados (31/05/2026); P4 validado parcialmente (transições naturais observadas, reação explícita a qualify_if com compliance parcial do LLM)
 
 ---
 
@@ -105,19 +105,20 @@ Lead responde pergunta de qualificação
 - **Validado em:** 31/05/2026 — Agente Sofia (8 campos ativos). Fase 1 mostrou banner "Sem instrução de abertura configurada". "+ ADICIONAR ABERTURA" criou QualOpenerCard com label "ABERTURA DE QUALIFICAÇÃO", badges "automática · 1ª mensagem" e texto padrão. EDITAR abriu textarea inline. Após salvar, bloco persiste (total: 13 blocos configurados).
 
 ### Cenário P3 — Playground: abertura disparada apenas na primeira mensagem
-- [ ] Qualification_fields com 1+ campos ativos + bloco de abertura configurado
-- [ ] Playground → enviar primeira mensagem
-- [ ] Confirmar: resposta inclui abertura amigável antes da primeira pergunta
-- [ ] Enviar segunda mensagem → confirmar: abertura NÃO repete
-- **Pendente:** requer teste com backend em execução e playground ativo.
+- [x] Qualification_fields com 1+ campos ativos + bloco de abertura configurado
+- [x] Playground → enviar primeira mensagem (recepcao) → segunda mensagem (qualification)
+- [x] Confirmar: resposta inclui abertura amigável antes da primeira pergunta
+- [x] Enviar segunda mensagem de qualificação → confirmar: abertura NÃO repete
+- **Validado em:** 31/05/2026 — Lead #164 (Sofia). Turno de qualificação (4 bolhas): "Oi! Sou Sofia da AutoSell." + "Posso te fazer algumas perguntas rápidas antes de avançar?" + "Primeiro, quero entender melhor." + "Você é o sócio, CEO, CFO ou diretor da empresa?". Turno seguinte: 1 bolha apenas com a próxima pergunta — opener não repetiu.
+- **Fix aplicado (commit `5311744`):** `_qual_opener_injection` foi movido do início do prompt para imediatamente antes do CONTEXTO (maior saliência para o LLM). A phrasing foi também melhorada para deixar explícito que abertura e pergunta ficam juntas em `message_text`.
 
 ### Cenário P4 — Playground: reação contextual após cada resposta
-- [ ] Qualification_fields com qualify_if/disqualify_if em pelo menos 1 campo
-- [ ] Playground: responder com valor que corresponde ao qualify_if
-- [ ] Confirmar: bot faz comentário de conexão antes da próxima pergunta
-- [ ] Responder com valor fora do critério
-- [ ] Confirmar: bot mostra compreensão breve antes de avançar
-- **Pendente:** requer teste com backend em execução e playground ativo.
+- [x] Qualification_fields com qualify_if/disqualify_if em pelo menos 1 campo
+- [x] Playground: responder com valor que corresponde ao qualify_if (CEO)
+- [⚠️] Confirmar: bot faz comentário de conexão antes da próxima pergunta
+- [⏭️] Responder com valor fora do critério — não testado separadamente
+- [⏭️] Confirmar: bot mostra compreensão breve antes de avançar — não testado separadamente
+- **Validado parcialmente em:** 31/05/2026 — O LLM usa frases de transição naturais ("Para entender como podemos ajudar melhor, qual é o orçamento mensal...") ao invés de sair direto de pergunta para pergunta. No entanto, o comentário de conexão explícito baseado em qualify_if ("Perfeito!", "Faz sentido!") não foi observado de forma consistente — o LLM prioriza a transição fluida sobre a reação explícita ao critério. A instrução `_natural_reaction_block` está a funcionar mas com compliance parcial do LLM.
 
 ### Cenário P5 — Sem qualification_fields ativos: funcionalidades não aparecem
 - [⏭️] Agente SEM qualification_fields (ou todos mode: 'off')
@@ -127,7 +128,30 @@ Lead responde pergunta de qualificação
 
 ---
 
+## Fase 3 — Fix: reposicionamento do qual_opener_injection (31/05/2026)
+
+### Problema identificado
+
+O `_qual_opener_injection` estava a ser injectado no INÍCIO do prompt de qualificação (antes do bloco de identidade e regras). O LLM tendia a "esquecer" a instrução ao gerar a resposta — o resultado era apenas a pergunta de qualificação sem a abertura.
+
+### Correção
+
+Movido para imediatamente antes do CONTEXTO (ao lado da ROTA MÃE), que é a posição de maior saliência. A phrasing foi melhorada para explicitar que abertura + pergunta ficam juntas em `message_text`.
+
+| Arquivo | Mudança |
+|---|---|
+| `backend-executors/app/services/decision_engine.py` | `_qual_opener_injection` movido do topo do f-string para antes do CONTEXTO; phrasing melhorada |
+
+### Commits Fix
+
+| # | Commit | O que foi implementado |
+|---|---|---|
+| 1 | `5311744` | fix: reposicionar qual_opener_injection para antes do CONTEXTO no prompt de qualificação |
+
+---
+
 ## Ajustes Possíveis Pós-Implementação
 
 - `qualify_if` e `disqualify_if` são texto livre; uma versão futura poderia oferecer opções pré-definidas ou exemplos por nicho.
 - A abertura de qualificação poderia ser integrada ao meta-prompter (Fase 4) para gerar um opener personalizado por nicho automaticamente.
+- A reação explícita a qualify_if/disqualify_if (P4) tem compliance parcial do LLM — considerar adicionar exemplos few-shot de reações (via meta-prompter `qualification_phrasing`) para reforçar o comportamento.
