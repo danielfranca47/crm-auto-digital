@@ -123,6 +123,13 @@ O loop executa `reconcile_due_followups()` periodicamente:
 3. Cria job do tipo `whatsapp.followup.tick`
 4. Registra guard para evitar duplicação
 
+**Circuit breaker (falhas non-retryable):**
+Quando o guard aponta para um job `failed`, o reconciliador lê o campo `j.error` para determinar se a falha é retryable:
+- `retryable: true` ou indeterminado → deleta guard e re-enfileira normalmente
+- `retryable: false` → **circuit breaker**: deleta guard, avança `next_followup_at` em 24h, regista `action='followup_circuit_breaker'` em `prospection_logs`, e continua sem criar novo job
+
+Este mecanismo previne loops infinitos de re-enqueue quando a causa de falha é definitiva (ex.: conexão WhatsApp inativa). Após 24h, o lead volta à janela elegível — se a causa persistir, outro cooldown de 24h é aplicado automaticamente (auto-throttle).
+
 ---
 
 ### 5. Execução pelo backend-executors
