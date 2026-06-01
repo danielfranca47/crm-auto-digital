@@ -193,6 +193,55 @@ export default function Playground() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [session?.aiProfileId, session?.scenarioType]);
 
+  // ── Follow-up: dispara tick automático ao iniciar sessão (sem mensagem do lead) ──
+  useEffect(() => {
+    if (!session || session.scenarioType !== "followup" || messages.length > 0) return;
+    let cancelled = false;
+
+    async function fireFollowupTick() {
+      if (!session) return;
+      setLoading(true);
+      try {
+        const res = await api.playground.chat({
+          ai_profile_id: session.aiProfileId,
+          message: "",
+          lead_id: null,
+          scenario_type: "followup",
+          ...(session.followupContext ? { followup_context: session.followupContext as Record<string, unknown> } : {}),
+        });
+
+        if (cancelled) return;
+
+        setSession((s) => s ? { ...s, leadId: res.lead_id } : s);
+
+        const parts = res.message_parts?.length ? res.message_parts : [res.message_to_send];
+        const autoItems0 = resolveAutoItems(res);
+        if (res.suppress_llm_response) {
+          if (autoItems0.length) await revealAutoMessages(autoItems0, setMessages, setLoading);
+        } else if (res.phase_trigger_fired && autoItems0.length) {
+          await revealAutoMessages(autoItems0, setMessages, setLoading);
+          setMessages((prev) => [...prev, buildBotMessage(parts[0], res, { isFirst: true, totalParts: parts.length })]);
+          if (parts.length > 1) await revealExtraParts(parts.slice(1), setMessages, setLoading);
+        } else {
+          setMessages([buildBotMessage(parts[0], res, { isFirst: true, totalParts: parts.length })]);
+          if (parts.length > 1) await revealExtraParts(parts.slice(1), setMessages, setLoading);
+          if (autoItems0.length) await revealAutoMessages(autoItems0, setMessages, setLoading);
+        }
+        appendPhaseAdvances(res.phase_advances ?? [], setMessages);
+      } catch (err: unknown) {
+        if (cancelled) return;
+        const msg = err instanceof Error ? err.message : "Erro ao disparar tick de follow-up";
+        toast({ title: "Erro", description: msg, variant: "destructive" });
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    }
+
+    fireFollowupTick();
+    return () => { cancelled = true; };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [session?.aiProfileId, session?.scenarioType]);
+
   // ── Enviar mensagem ────────────────────────────────────────────────────────
 
   const handleSend = useCallback(
