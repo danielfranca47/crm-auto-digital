@@ -19,59 +19,12 @@ O agente define a **estrutura** (fases, guardrails, fluxo de decisão). O operad
 ## Prioridade Alta
 
 > Resolve gaps onde `custom_instructions` global é claramente insuficiente por precisar de ser fase-específico. Impacto directo na qualidade das mensagens dos agentes.
+>
+> **Nota:** os campos de follow-up (`followup_sdr_instructions`, `followup_recovery_instructions`, `followup_postsession_instructions`) estão documentados e em curso em `pipeline-configurable-fields.md`.
 
 ---
 
-### 1. `followup_sdr_instructions` *(Agent 1 — sdr_scheduler)*
-
-**O problema:** a instrução hardcoded do follow-up do Agent 1 é genérica para qualquer negócio:
-> *"Follow-up consultivo pós-reunião; reforçar valor, síntese do contexto e próximo passo comercial."*
-
-O LLM já recebe `outcome` (hot/warm/cold), `followup_goal` (advance_closing/nurture/reschedule) e `attempts` como contexto dinâmico. O que falta é a instrução de negócio específica do operador para complementar esse contexto.
-
-**O que o operador pode precisar expressar:**
-> "Nunca menciones preço no follow-up — o fechamento de valor é papel do humano. Quando o lead estiver morno, referencia sempre o caso de sucesso do cliente X. Se for lead frio, pergunta directamente o que está a travar, sem enrolar."
-
-**Onde injectar:** prompt `_build_child_followup_prompt()` em `decision_engine.py`, na variante `sdr_scheduler`.
-
-**Arquivos afectados:**
-- `backend-core/app/models/ai_profile.py` — novo campo
-- `backend-core/app/db.py` — migration idempotente
-- `backend-crm/services/ai_orchestrator/orchestrator.py` — incluir no ContextBundle
-- `backend-executors/app/services/decision_engine.py` — injectar no prompt de follow-up
-- `frontend-crm/src/pages/AiProfile.tsx` — textarea na secção de Follow-Up do Agent 1
-
----
-
-### 2. `followup_recovery_instructions` *(Agent 2 — cart_recovery)*
-
-**O problema:** a estratégia de cart recovery tem 3 tentativas com instruções fixas (lembrete neutro → benefício + objeção → urgência). O operador não consegue personalizar o conteúdo para o seu nicho.
-
-O LLM já recebe `attempts` (1, 2 ou 3) como contexto — o operador pode escrever instruções condicionais por tentativa em texto livre se quiser, ou instruções gerais que se aplicam a todas.
-
-**O que o operador pode precisar expressar:**
-> "Na 1ª mensagem menciona sempre que o link expira em 48h. Na 2ª, inclui o depoimento do cliente Y. Na 3ª, oferece o bónus extra X como incentivo final — nunca baixa o preço."
-
-**Onde injectar:** prompt de follow-up quando `followup_variant = "cart_recovery"` em `decision_engine.py`.
-
-**Arquivos afectados:** mesmos que `followup_sdr_instructions`.
-
----
-
-### 3. `followup_postsession_instructions` *(Agent 3 — hybrid_scheduler)*
-
-**O problema:** o follow-up pós-sessão do Agent 3 tem instruções fixas por outcome (`interested_not_closed`, `reschedule_needed`, `converted`). O LLM já recebe o `outcome` capturado no modal — o que falta é contexto de negócio específico do operador.
-
-**O que o operador pode precisar expressar:**
-> "Quando o lead está interessado mas não fechou, menciona sempre que a próxima turma começa no dia 15 e que as vagas são limitadas. Quando precisa remarcar, oferece apenas 2ª ou 4ª de tarde — esses são os meus horários disponíveis."
-
-**Onde injectar:** prompt quando `followup_variant = "hybrid_scheduler"` ou `"hybrid_scheduler_followup"`.
-
-**Arquivos afectados:** mesmos que `followup_sdr_instructions`.
-
----
-
-### 4. `presentation_instructions` *(Agent 1 e Agent 3)*
+### 1. `presentation_instructions` *(Agent 1 e Agent 3)*
 
 **O problema:** o prompt da Filha de apresentação instrui o bot a propor e confirmar horários, mas não sabe nada sobre como o operador quer que as reuniões sejam propostas.
 
@@ -163,9 +116,7 @@ O LLM já recebe `attempts` (1, 2 ou 3) como contexto — o operador pode escrev
 
 | Campo | Fase | Agentes | Prioridade |
 |---|---|---|---|
-| `followup_sdr_instructions` | Follow-up | Agent 1 | 🔴 Alta |
-| `followup_recovery_instructions` | Follow-up | Agent 2 | 🔴 Alta |
-| `followup_postsession_instructions` | Follow-up | Agent 3 | 🔴 Alta |
+| `followup_*_instructions` | Follow-up | Todos | → migrado para `pipeline-configurable-fields.md` |
 | `presentation_instructions` | Apresentação | Agent 1, Agent 3 | 🔴 Alta |
 | `objection_handling_instructions` | Todas | Todos | 🔴 Alta |
 | `disqualification_response` | Qualificação | Todos | 🟡 Média |
