@@ -1,7 +1,7 @@
 # Admin Painel — Informações Completas de Usuários
 
-**Branch:** `etapa-8-7-fluxo-qualificacao-natural`
-**Status:** Em andamento
+**Branch:** `etapa-9-planos-limites`
+**Status:** Em andamento — checks A1 e regressão validados; A2/A3 pendentes de dados de teste
 
 ---
 
@@ -77,27 +77,35 @@ Frontend AdminUsers
 | # | Commit | O que foi implementado |
 |---|---|---|
 | 1 | `927b415` | frontend: AdminUsers tabela rica com plano, datas, status |
+| 2 | `de7e01b` | fix: grid `1fr` colapsava para 36px — corrigido para `minmax(0,1fr)` |
 
 **Detalhes do commit `927b415`:**
 - `frontend-admin/src/services/api.ts` — tipo `AdminUser` com 5 campos novos
 - `frontend-admin/src/pages/AdminUsers.tsx` — tabela 6 colunas; badge de plano colorido por tier; busca por nome
+
+**Detalhes do commit `de7e01b`:**
+- `frontend-admin/src/pages/AdminUsers.tsx` — grid template `1fr` → `minmax(0,1fr)`, colunas fixas reduzidas de `[1fr_140px_90px_110px_110px_100px]` para `[minmax(0,1fr)_105px_75px_95px_95px_80px]`
 
 ---
 
 ## Checks de Validação
 
 ### Cenário A1 — Usuário com assinatura ativa aparece com plano
-- [ ] Abrir AdminUsers
-- [ ] Confirmar: coluna "Plano" mostra nome do plano (ex.: "Growth")
-- [ ] Confirmar: "Membro desde" mostra a data de criação da conta
+- [x] Abrir AdminUsers
+- [x] Confirmar: coluna "Plano" mostra nome do plano (CRM Pro / CRM Free)
+- [x] Confirmar: "Membro desde" mostra a data de criação da conta
+- **Validado em:** 01/06/2026 — 4 utilizadores visíveis, badges CRM Pro/CRM Free, datas corretas; busca por email filtra para 1 resultado; modal de extensões + save funcionam
+- **Fix detectado:** grid `1fr` colapsava para 36px — corrigido para `minmax(0,1fr)` + colunas fixas reduzidas (`de7e01b`)
 
 ### Cenário A2 — Usuário sem assinatura ativa
-- [ ] Confirmar: coluna "Plano" mostra "—" ou badge "Sem plano"
-- [ ] Confirmar: não causa erro na listagem
+- [⏭️] Confirmar: coluna "Plano" mostra "Sem plano"
+- [⏭️] Confirmar: não causa erro na listagem
+- **Motivo skip:** todos os utilizadores de teste têm assinatura ativa; código cobre o caminho com `if sub and sub.plan else None` (backend) + `?? "Sem plano"` (frontend)
 
 ### Cenário A3 — Campo `name` persiste e aparece
-- [ ] Criar user com nome via endpoint (etapa-9-2) ou editar diretamente
-- [ ] Confirmar: nome aparece na tabela do admin
+- [⏭️] Criar user com nome via endpoint (etapa-9-2) ou editar diretamente
+- [⏭️] Confirmar: nome aparece na tabela do admin
+- **Motivo skip:** campo `name` só será preenchido após etapa-9-2 (criação de conta); validar em conjunto
 
 ---
 
