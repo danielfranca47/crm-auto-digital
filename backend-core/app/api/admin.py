@@ -1,4 +1,4 @@
-from datetime import timedelta
+from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -32,7 +32,13 @@ class UserAdminOut(BaseModel):
     id: int
     email: str
     name: Optional[str] = None
+    status: str
+    created_at: datetime
     enabled_extensions: Optional[List[str]] = None
+    plan_name: Optional[str] = None
+    plan_code: Optional[str] = None
+    subscription_status: Optional[str] = None
+    subscription_period_end: Optional[datetime] = None
 
     class Config:
         orm_mode = True
@@ -85,17 +91,33 @@ async def admin_list_users(
 ):
     query = db.query(models.User)
     if search:
-        query = query.filter(models.User.email.ilike(f"%{search}%"))
+        query = query.filter(
+            models.User.email.ilike(f"%{search}%") | models.User.name.ilike(f"%{search}%")
+        )
     users = query.order_by(models.User.id).limit(200).all()
 
     result = []
     for u in users:
         profile = db.query(models.AIProfile).filter(models.AIProfile.user_id == u.id).first()
+        sub = (
+            db.query(models.Subscription)
+            .filter(
+                models.Subscription.user_id == u.id,
+                models.Subscription.status == "active",
+            )
+            .first()
+        )
         result.append(UserAdminOut(
             id=u.id,
             email=u.email,
-            name=getattr(u, "name", None),
+            name=u.name,
+            status=u.status,
+            created_at=u.created_at,
             enabled_extensions=profile.enabled_extensions if profile else None,
+            plan_name=sub.plan.name if sub and sub.plan else None,
+            plan_code=sub.plan.code if sub and sub.plan else None,
+            subscription_status=sub.status if sub else None,
+            subscription_period_end=sub.current_period_end if sub else None,
         ))
     return result
 

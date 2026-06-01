@@ -20,6 +20,28 @@ def get_db():
         db.close()
 
 
+def ensure_user_columns() -> None:
+    """Add optional columns to the users table without requiring full migrations."""
+    with engine.begin() as conn:
+        if engine.dialect.name == "sqlite":
+            result = conn.execute(text("PRAGMA table_info(users)"))
+            existing = {row[1] for row in result.fetchall()}
+            if "name" not in existing:
+                conn.execute(text("ALTER TABLE users ADD COLUMN name TEXT"))
+                print("✅ coluna adicionada em users: name")
+        else:
+            result = conn.execute(
+                text(
+                    "SELECT column_name FROM information_schema.columns "
+                    "WHERE table_name = 'users'"
+                )
+            )
+            existing = {row[0] for row in result.fetchall()}
+            if "name" not in existing:
+                conn.execute(text("ALTER TABLE users ADD COLUMN name VARCHAR"))
+                print("✅ coluna adicionada em users: name")
+
+
 def ensure_whatsapp_connections_table() -> None:
     """Ensure whatsapp_connections exists without requiring migrations."""
 
