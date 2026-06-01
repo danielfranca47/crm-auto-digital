@@ -219,6 +219,7 @@ export default function Playground() {
           message: text,
           lead_id: session.leadId,
           scenario_type: session.scenarioType,
+          ...(session.followupContext ? { followup_context: session.followupContext as Record<string, unknown> } : {}),
         });
 
         // Atualiza o lead_id na sessão (na primeira mensagem vem o id criado)
@@ -287,6 +288,7 @@ export default function Playground() {
           scenario_type: session.scenarioType,
           message_type: "audio",
           audio_filename: filename,
+          ...(session.followupContext ? { followup_context: session.followupContext as Record<string, unknown> } : {}),
         });
 
         if (!session.leadId) {
@@ -380,6 +382,7 @@ export default function Playground() {
         //    (igual ao fluxo individual), caso contrário combinar em texto para o LLM
         const firstDisabledAudio = resolved.find((r) => r.audioUrl && r.audioEnabled === false);
 
+        const _fuCtx = session.followupContext ? { followup_context: session.followupContext as Record<string, unknown> } : {};
         const res = await (firstDisabledAudio
           ? api.playground.chat({
               ai_profile_id: session.aiProfileId,
@@ -388,12 +391,14 @@ export default function Playground() {
               scenario_type: session.scenarioType,
               message_type: "audio",
               audio_filename: firstDisabledAudio.filename,
+              ..._fuCtx,
             })
           : api.playground.chat({
               ai_profile_id: session.aiProfileId,
               message: resolved.map((r) => r.text).join("\n"),
               lead_id: session.leadId,
               scenario_type: session.scenarioType,
+              ..._fuCtx,
             }));
 
         if (!session.leadId) {
@@ -559,15 +564,21 @@ export default function Playground() {
                 className={`text-xs shrink-0 gap-1 ${
                   session.scenarioType === "outbound"
                     ? "border-amber-500/50 text-amber-600"
+                    : session.scenarioType === "followup"
+                    ? "border-violet-500/50 text-violet-600"
                     : "border-blue-500/50 text-blue-600"
                 }`}
               >
                 {session.scenarioType === "outbound" ? (
                   <ArrowUpFromLine className="h-3 w-3" />
+                ) : session.scenarioType === "followup" ? (
+                  <RefreshCw className="h-3 w-3" />
                 ) : (
                   <ArrowDownToLine className="h-3 w-3" />
                 )}
-                {session.scenarioType}
+                {session.scenarioType === "followup"
+                  ? `follow-up · ${(session.followupContext as any)?.followup_variant ?? "sdr"}`
+                  : session.scenarioType}
               </Badge>
               {session.leadId && (
                 <Badge variant="outline" className="text-xs shrink-0">

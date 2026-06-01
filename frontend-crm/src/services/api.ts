@@ -1480,7 +1480,8 @@ export const api = {
       message: string;
       lead_id?: number | null;
       reset?: boolean;
-      scenario_type?: "inbound" | "outbound";
+      scenario_type?: "inbound" | "outbound" | "followup";
+      followup_context?: Record<string, unknown> | null;
       is_opener?: boolean;
       message_type?: string;
       audio_filename?: string;

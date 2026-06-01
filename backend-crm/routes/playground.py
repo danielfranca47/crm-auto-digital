@@ -76,7 +76,8 @@ class PlaygroundChatRequest(BaseModel):
     message: str = Field("", description="Mensagem simulada do lead (vazio apenas em is_opener=True ou message_type=audio)")
     lead_id: Optional[int] = Field(None, description="ID do lead sandbox existente; null cria um novo")
     reset: bool = Field(False, description="Se true, limpa histórico e qualification_state antes de processar")
-    scenario_type: Literal["inbound", "outbound"] = Field("inbound", description="Tipo de cenário: inbound (lead inicia) ou outbound (bot inicia)")
+    scenario_type: Literal["inbound", "outbound", "followup"] = Field("inbound", description="Tipo de cenário: inbound, outbound ou followup (simula tick de follow-up com followup_context injectado)")
+    followup_context: Optional[Dict[str, Any]] = Field(None, description="Contexto sintético de follow-up para scenario_type=followup. Campos: followup_variant, followup_outcome, followup_goal, followup_attempts, followup_max_attempts, followup_meeting_happened, followup_proposal_sent")
     is_opener: bool = Field(False, description="Se true e scenario_type=outbound, retorna a mensagem de abertura outbound sem processar mensagem do lead")
     message_type: Optional[str] = Field(None, description="Tipo da mensagem — 'audio' quando gravado no playground")
     audio_filename: Optional[str] = Field(None, description="Nome do ficheiro em temp_audio/ retornado pelo endpoint upload-audio")
@@ -594,6 +595,7 @@ def playground_chat(
         lead_id=lead_id,
         message_text=effective_message,
         scenario_type=body.scenario_type,
+        followup_context=body.followup_context if body.scenario_type == "followup" else None,
     )
 
     # Serializa para dict (compatível com decision_engine.decide(context: Dict))

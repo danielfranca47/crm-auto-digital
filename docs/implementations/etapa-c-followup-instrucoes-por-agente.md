@@ -1,7 +1,7 @@
 # Etapa C — Instruções de Follow-Up por Agente
 
 **Branch:** `etapa-8-7-fluxo-qualificacao-natural`
-**Status:** Todos os cenários validados (01/06/2026) — pendente: P2 validado em produção com lead real em follow-up; P5 Agent 2/3 validados visualmente quando perfil for alterado
+**Status:** Em andamento — Fase 4 adicionada (playground follow-up)
 
 ---
 
@@ -62,6 +62,46 @@ Ordem de blocos no prompt de follow-up:
 - [x] PUT via UI (Salvar Camada 3) com `followup_sdr_instructions` preenchido → 200
 - [x] GET `/ai-profiles/me` devolve `followup_sdr_instructions: "Nunca menciones preço…"`, `followup_recovery_instructions: null`, `followup_postsession_instructions: null`
 - **Validado em:** 01/06/2026 — API core devolveu o campo correctamente após save via UI
+
+---
+
+## Fase 4 — Playground: modo de simulação de follow-up (01/06/2026)
+
+### Problema identificado
+
+O playground cria sempre um contexto fresco sem `followup_contract` — `followup_variant` fica vazio e `_variant_operator_block` nunca é injectado. O operador não tem forma de testar as instruções de follow-up na simulação.
+
+### Solução
+
+Novo tipo de cenário `"followup"` no playground. O operador configura: variante (auto-detectada do `template_key`), outcome do lead, objectivo do follow-up, e tentativa actual. O backend injeta um `followup_context` sintético no metadata do ContextBundle e define `lead.category = "follow-up"` em memória — sem persistência no DB.
+
+```
+PlaygroundConfigModal: botão "Follow-up" + painel de configuração
+  → PlaygroundSession.followupContext (variante, outcome, goal, attempts)
+  → api.playground.chat({ followup_context: {...} })
+  → backend: injecta no metadata["followup_context"]
+             define lead["category"] = "follow-up" (apenas no bundle)
+  → decision_engine: vê lead em follow-up, rota para follow-up
+  → _build_child_prompt_follow_up(): lê followup_variant → _variant_operator_block injectado ✓
+```
+
+### Arquivos alterados
+
+| Arquivo | O que muda |
+|---|---|
+| `backend-crm/routes/playground.py` | `scenario_type` aceita `"followup"`; novo campo `followup_context: Optional[dict]` |
+| `backend-crm/services/ai_orchestrator/orchestrator.py` | `build_context_bundle_for_playground()` aceita `followup_context`; injeta no metadata e define `lead.category` |
+| `frontend-crm/src/components/playground/PlaygroundConfigModal.tsx` | Novo botão "Follow-up" + painel de config (outcome, goal, attempts); `followupContext` em `PlaygroundSession` |
+| `frontend-crm/src/services/api.ts` | `followup_context?` no payload de `playground.chat()` |
+| `frontend-crm/src/pages/Playground.tsx` | Passa `followup_context` em todos os `api.playground.chat()` quando `scenarioType === "followup"` |
+
+### Commits Fase 4
+
+| # | Commit | O que foi implementado |
+|---|---|---|
+| 1 | *(pendente)* | Playground: modo follow-up — backend + frontend |
+
+---
 
 ### Cenário P2 — Bloco aparece no prompt (lead real em follow-up)
 - [ ] Lead real na coluna follow-up com `followup_contract` activo

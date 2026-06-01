@@ -582,6 +582,7 @@ def build_context_bundle_for_playground(
     lead_id: int,
     message_text: str,
     scenario_type: str = "inbound",
+    followup_context: Optional[Dict[str, Any]] = None,
 ) -> ContextBundle:
     """
     Constrói um ContextBundle para o playground, sem InboundEvent nem WhatsApp.
@@ -624,9 +625,11 @@ def build_context_bundle_for_playground(
     _lead_origin_label = (
         "OUTBOUND (bot abordou o lead ativamente) — PLAYGROUND"
         if scenario_type == "outbound"
+        else "FOLLOW-UP (simulação de tick automático) — PLAYGROUND"
+        if scenario_type == "followup"
         else "INBOUND (lead veio te procurar) — PLAYGROUND"
     )
-    metadata = {
+    metadata: Dict[str, Any] = {
         "channel": "playground",
         "inbound_message_text": message_text,
         "received_at": datetime.utcnow().isoformat(),
@@ -636,6 +639,13 @@ def build_context_bundle_for_playground(
         "lead_origin": scenario_type,
         "lead_origin_label": _lead_origin_label,
     }
+
+    # Quando scenario_type=followup, injeta followup_context sintético e força categoria
+    if followup_context and scenario_type == "followup":
+        metadata["followup_context"] = followup_context
+        if lead:
+            lead = dict(lead)
+            lead["category"] = "follow-up"
 
     bundle = ContextBundle(
         user_id=user_id,
