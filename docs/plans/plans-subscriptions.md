@@ -109,3 +109,89 @@ O modelo `Subscription` não possui campos de feature-gate. Os seguintes bloquei
 1. Adicionar campos de feature-gate ao modelo de `PlanLimits` (`follow_up_enabled`, `playground_enabled`, `max_instances`)
 2. Middleware de verificação nos endpoints: `POST /api/leads/start-followup`, `POST /api/playground/chat`, criação de instâncias WhatsApp
 3. Dashboard de uso: conversas usadas vs franquia, contatos usados vs limite, alertas em 80%, CTAs de upgrade
+
+---
+
+## Definições Pendentes — Perguntas para o Fundador
+
+> Responde directamente abaixo de cada pergunta. Quando estiver completo, usamos estas respostas para actualizar o seed de planos e implementar os feature-gates.
+
+---
+
+### A — Estrutura de planos
+
+**A1.** Quais planos vais lançar na Fase 1? Mantens os nomes Start e Growth, ou preferes outros?
+> _Resposta:_
+
+**A2.** Os preços R$97 (Start) e R$197 (Growth) estão confirmados, ou vão mudar?
+> _Resposta:_
+
+**A3.** Vais oferecer cobrança anual com desconto? Se sim, qual percentagem?
+> _Resposta:_
+
+**A4.** Existe período de teste gratuito (trial)? Se sim, quantos dias e com que limites?
+> _Resposta:_
+
+---
+
+### B — Limites por plano
+
+**B1.** Quantos leads (contatos no CRM) cada plano suporta?
+> Start: ___ / Growth: ___
+
+**B2.** Quantas conversas IA por mês cada plano inclui na franquia?
+> Start: ___ / Growth: ___
+
+**B3.** O plano Start inclui follow-up automatizado? (Actualmente proposto: ❌ Start, ✅ Growth)
+> _Resposta:_
+
+**B4.** O plano Start inclui acesso ao Playground de testes? (Actualmente proposto: ❌ Start, ✅ Growth)
+> _Resposta:_
+
+**B5.** Quantas instâncias WhatsApp cada plano permite? (Actualmente proposto: 1 em ambos)
+> Start: ___ / Growth: ___
+
+---
+
+### C — Excedentes e bloqueios
+
+**C1.** Quando o utilizador ultrapassa o limite de conversas IA, o que acontece?
+- [ ] Bloqueia até renovar o ciclo
+- [ ] Cobra excedente automaticamente (R$___ por conversa)
+- [ ] Envia alerta e aguarda decisão do utilizador
+> _Resposta:_
+
+**C2.** Quando o utilizador atinge o limite de leads, o que acontece?
+- [ ] Bloqueia criação de novos leads
+- [ ] Bloqueia só a IA em novos leads (leads existentes continuam)
+- [ ] Apenas alerta, não bloqueia
+> _Resposta:_
+
+**C3.** Queres cobrar excedente automaticamente (requer integração de pagamento) ou prefereres gerir manualmente por agora?
+> _Resposta:_
+
+---
+
+### D — Gestão de assinaturas
+
+**D1.** Como vais atribuir planos aos utilizadores agora (antes de ter checkout automático)?
+- [ ] Tu atribuis manualmente pelo painel admin
+- [ ] O utilizador paga e tu activas manualmente
+- [ ] Integração com Stripe/Kirvano/Hotmart (qual?)
+> _Resposta:_
+
+**D2.** Queres um endpoint/botão no painel admin para atribuir/mudar plano de um utilizador com um clique?
+> _Resposta:_
+
+**D3.** Os teus utilizadores de teste internos (tua conta, contas de demo) devem ter um plano especial sem limites?
+> _Resposta:_
+
+---
+
+### E — Fase 2 (multi-instância)
+
+**E1.** A Fase 2 (planos Scale e Enterprise com múltiplas instâncias) é uma prioridade próxima ou pode aguardar?
+> _Resposta:_
+
+**E2.** Os preços R$397 (Scale) e R$697 (Enterprise) estão confirmados?
+> _Resposta:_
