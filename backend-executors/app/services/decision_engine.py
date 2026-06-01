@@ -2834,6 +2834,9 @@ def _build_child_prompt_follow_up(
     variant_rule = ""
     if followup_variant == "sdr_scheduler":
         variant_rule = (
+            "- ABERTURA OBRIGATÓRIA: começa sempre com uma saudação breve e calorosa, contextual à conversa anterior "
+            "(ex: 'Oi [nome]!' ou referência ao que foi discutido). NUNCA abre directamente com pitch ou proposta — "
+            "a saudação vem PRIMEIRO, numa frase curta separada.\n"
             "- Variante sdr_scheduler: follow-up consultivo pós-reunião; "
             "reforçar valor, síntese do contexto e próximo passo comercial.\n"
         )
@@ -2855,7 +2858,15 @@ def _build_child_prompt_follow_up(
                 "Tentativa 3 — urgência máxima: a oferta expira hoje. "
                 "CTA direto para o link de pagamento. Não reabra qualificação."
             )
+        # Tentativa 1 deve ter abertura calorosa; 2 e 3 podem ser mais directas
+        cart_opening = (
+            "- ABERTURA OBRIGATÓRIA: começa com uma saudação breve e amigável antes do conteúdo "
+            "(ex: 'Oi [nome]! Passando para dar um retorno'). NUNCA abre directamente com pitch.\n"
+            if next_attempt <= 1 else
+            "- Tom directo sem saudação extensa — a mensagem pode abrir directamente no contexto.\n"
+        )
         variant_rule = (
+            f"{cart_opening}"
             "- Variante cart_recovery (carrinho abandonado, Agent 2): "
             "recuperar pagamento pendente após link enviado. Mensagens curtas (máx 280 chars).\n"
             f"- Instrução para tentativa {next_attempt}/3: {attempt_instruction}\n"
@@ -2882,6 +2893,9 @@ def _build_child_prompt_follow_up(
                 "Priorizar recuperação de no-show, confirmação de presença e reengajamento."
             )
         variant_rule = (
+            "- ABERTURA OBRIGATÓRIA: começa sempre com uma saudação pessoal e calorosa, como assistente "
+            "do próprio profissional (ex: 'Oi [nome]! Tudo bem?'). A saudação vem PRIMEIRO, "
+            "numa frase curta separada, antes de qualquer conteúdo sobre a sessão.\n"
             "- Variante hybrid_scheduler (coaches/terapeutas/consultores solo): "
             "tom pessoal e próximo, como assistente do próprio profissional — nunca SDR agressivo.\n"
             f"- Regra por outcome ({outcome or 'indefinido'}): {outcome_instruction}\n"

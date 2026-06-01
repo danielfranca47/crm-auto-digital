@@ -1,7 +1,7 @@
 # Etapa C — Instruções de Follow-Up por Agente
 
 **Branch:** `etapa-8-7-fluxo-qualificacao-natural`
-**Status:** Todos os cenários validados (01/06/2026)
+**Status:** Em andamento — Fase 5 adicionada (abertura calorosa por defeito)
 
 ---
 
@@ -53,6 +53,30 @@ Ordem de blocos no prompt de follow-up:
 | # | Commit | O que foi implementado |
 |---|---|---|
 | 1 | `35f6d40` | Todas as fases: modelo, migration, API, executor, frontend (tipos, api.ts, CamadaPipeline) |
+
+---
+
+---
+
+## Fase 5 — Abertura calorosa por defeito em todos os agentes (01/06/2026)
+
+### Problema identificado
+
+O `_build_tone_block()` tem a instrução *"nunca comece com 'Olá, tudo bem?' genérico"*, que os LLMs interpretam como "sem saudação". O resultado: mensagens de follow-up que vão directamente ao pitch sem qualquer abertura, soando frias independentemente do `tone_of_voice` configurado.
+
+### Correcção
+
+Adicionar instrução de abertura calorosa e contextual a cada `variant_rule` em `_build_child_prompt_follow_up()`, para todos os agentes. A instrução especifica uma saudação breve e contextual — não genérica — antes de qualquer conteúdo comercial.
+
+| Arquivo | O que muda |
+|---|---|
+| `backend-executors/app/services/decision_engine.py` | `variant_rule` de `sdr_scheduler`, `cart_recovery` (tentativa 1) e `hybrid_scheduler` recebem instrução de abertura calorosa |
+
+### Commits Fase 5
+
+| # | Commit | O que foi implementado |
+|---|---|---|
+| 1 | *(pendente)* | Abertura calorosa por defeito nos 3 agentes |
 
 ---
 
