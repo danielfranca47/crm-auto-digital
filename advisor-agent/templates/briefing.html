@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Briefing do Dia — CRM Advisor</title>
+  <style>
+    :root {
+      --bg: #0f1117; --bg2: #1a1d27; --bg3: #232635; --border: #2e3247;
+      --accent: #6c63ff; --accent2: #4ade80; --warn: #f59e0b; --danger: #f87171;
+      --text: #e2e8f0; --text2: #94a3b8; --text3: #64748b; --radius: 10px;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { background: var(--bg); color: var(--text); font-family: 'Segoe UI', system-ui, sans-serif; font-size: 15px; line-height: 1.6; }
+
+    header {
+      background: var(--bg2); border-bottom: 1px solid var(--border);
+      padding: 16px 32px; display: flex; align-items: center; justify-content: space-between;
+    }
+    .logo { font-size: 18px; font-weight: 700; color: var(--accent); }
+    .logo span { color: var(--text2); font-weight: 400; font-size: 13px; margin-left: 10px; }
+    .nav-link {
+      color: var(--text2); text-decoration: none; font-size: 13px;
+      padding: 6px 14px; border: 1px solid var(--border); border-radius: 6px;
+      transition: border-color .2s;
+    }
+    .nav-link:hover { border-color: var(--accent); color: var(--text); }
+
+    main { max-width: 720px; margin: 48px auto; padding: 0 20px; }
+
+    .date-badge {
+      display: inline-block; background: var(--bg3); border: 1px solid var(--border);
+      border-radius: 6px; padding: 4px 14px; font-size: 13px; color: var(--text2);
+      margin-bottom: 32px;
+    }
+
+    .section { margin-bottom: 32px; }
+    .section-title {
+      font-size: 11px; text-transform: uppercase; letter-spacing: 1.2px;
+      color: var(--text3); font-weight: 600; margin-bottom: 14px;
+    }
+
+    /* Focus items */
+    .focus-item {
+      background: var(--bg2); border: 1px solid var(--border); border-radius: var(--radius);
+      padding: 18px 20px; margin-bottom: 12px; display: flex; gap: 16px;
+    }
+    .rank {
+      width: 32px; height: 32px; border-radius: 50%; background: var(--accent);
+      color: #fff; display: flex; align-items: center; justify-content: center;
+      font-weight: 700; font-size: 14px; flex-shrink: 0;
+    }
+    .focus-task { font-size: 15px; font-weight: 600; color: var(--text); }
+    .focus-why  { font-size: 13px; color: var(--text2); margin-top: 4px; }
+
+    /* Pending */
+    .pending-list { list-style: none; }
+    .pending-list li {
+      padding: 10px 16px; background: var(--bg2); border: 1px solid var(--border);
+      border-radius: 6px; margin-bottom: 8px; color: var(--text2); font-size: 14px;
+      display: flex; align-items: center; gap: 10px;
+    }
+    .pending-list li::before { content: "↩"; color: var(--warn); font-size: 14px; }
+
+    /* Watch out */
+    .watch-item {
+      background: #1c1712; border: 1px solid #4b3a1a; border-radius: 6px;
+      padding: 12px 16px; margin-bottom: 8px; color: var(--warn); font-size: 14px;
+      display: flex; gap: 10px; align-items: flex-start;
+    }
+    .watch-item::before { content: "⚠"; flex-shrink: 0; }
+
+    /* Motivation */
+    .motivation-card {
+      background: linear-gradient(135deg, #1e1b4b 0%, #1a1d27 100%);
+      border: 1px solid #3b3568; border-radius: var(--radius);
+      padding: 20px 24px; color: var(--text); font-size: 15px;
+      font-style: italic; line-height: 1.7;
+    }
+    .motivation-card::before { content: "💡 "; font-style: normal; }
+
+    /* Loading / error */
+    .loading-card {
+      background: var(--bg2); border: 1px solid var(--border); border-radius: var(--radius);
+      padding: 32px; text-align: center; color: var(--text2);
+    }
+    .spinner {
+      display: inline-block; width: 28px; height: 28px; border: 3px solid var(--border);
+      border-top-color: var(--accent); border-radius: 50%; animation: spin .8s linear infinite;
+      margin-bottom: 16px;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    .error-card {
+      background: #1c1010; border: 1px solid #5b2020; border-radius: var(--radius);
+      padding: 20px; color: var(--danger); font-size: 14px;
+    }
+
+    .empty-state { color: var(--text3); font-size: 14px; font-style: italic; }
+  </style>
+</head>
+<body>
+
+<header>
+  <div>
+    <span class="logo">CRM Advisor <span>briefing do dia</span></span>
+  </div>
+  <a href="/" class="nav-link">← Dashboard completo</a>
+</header>
+
+<main>
+
+  <div class="date-badge">{{ now }}</div>
+
+  {% if error %}
+  <div class="error-card">
+    <strong>Erro ao gerar briefing:</strong> {{ error }}<br>
+    <small>Verifica se o Claude Code está autenticado e há ligação à internet.</small>
+  </div>
+
+  {% elif not briefing %}
+  <div class="loading-card">
+    <div class="spinner"></div>
+    <div>A gerar o briefing…</div>
+    <div style="font-size:13px;margin-top:8px;color:var(--text3)">Aguarda 20-60 segundos</div>
+  </div>
+
+  {% else %}
+
+  <!-- Foco do dia -->
+  <div class="section">
+    <div class="section-title">Foco de hoje</div>
+    {% if briefing.get('focus_today') %}
+      {% for item in briefing['focus_today'] %}
+      <div class="focus-item">
+        <div class="rank">{{ item.get('rank', loop.index) }}</div>
+        <div>
+          <div class="focus-task">{{ item.get('task', '') }}</div>
+          <div class="focus-why">{{ item.get('why', '') }}</div>
+        </div>
+      </div>
+      {% endfor %}
+    {% else %}
+      <div class="empty-state">Sem sugestões de foco disponíveis.</div>
+    {% endif %}
+  </div>
+
+  <!-- Pendente de ontem -->
+  {% if briefing.get('pending_from_yesterday') %}
+  <div class="section">
+    <div class="section-title">Pendente de ontem</div>
+    <ul class="pending-list">
+      {% for item in briefing['pending_from_yesterday'] %}
+      <li>{{ item }}</li>
+      {% endfor %}
+    </ul>
+  </div>
+  {% endif %}
+
+  <!-- Atenção -->
+  {% if briefing.get('watch_out') %}
+  <div class="section">
+    <div class="section-title">Atenção</div>
+    {% for item in briefing['watch_out'] %}
+    <div class="watch-item">{{ item }}</div>
+    {% endfor %}
+  </div>
+  {% endif %}
+
+  <!-- Motivação -->
+  {% if briefing.get('motivation') %}
+  <div class="section">
+    <div class="motivation-card">{{ briefing['motivation'] }}</div>
+  </div>
+  {% endif %}
+
+  {% endif %}
+
+</main>
+
+</body>
+</html>

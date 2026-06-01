@@ -1,7 +1,9 @@
 import logging
 import os
 import sys
+import threading
 from contextlib import asynccontextmanager
+from datetime import datetime
 from pathlib import Path
 
 from apscheduler.schedulers.background import BackgroundScheduler
@@ -12,10 +14,13 @@ from fastapi.templating import Jinja2Templates
 
 load_dotenv(Path(__file__).parent / ".env")
 
-# Readers/services are in subdirectories — add parent to path
 sys.path.insert(0, str(Path(__file__).parent))
 
-from services import analyzer, cache  # noqa: E402
+from services import analyzer, cache, history  # noqa: E402
+from services import metrics as metrics_svc    # noqa: E402
+from services import pattern_detector          # noqa: E402
+from readers.transcript_reader import get_recent_sessions  # noqa: E402
+from readers.session_parser import summarize_session       # noqa: E402
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 log = logging.getLogger("advisor")
@@ -23,8 +28,8 @@ log = logging.getLogger("advisor")
 templates = Jinja2Templates(directory=str(Path(__file__).parent / "templates"))
 
 _scheduler = BackgroundScheduler()
-
 _is_running = False
+_briefing_running = False
 
 
 def _run_analysis():
@@ -34,10 +39,11 @@ def _run_analysis():
         return
     _is_running = True
     try:
-        log.info("Starting daily analysis...")
+        log.info("Starting analysis...")
         report = analyzer.run_analysis()
         cache.save(report)
-        log.info("Analysis complete and cached.")
+        history.save(report)
+        log.info("Analysis complete.")
     except Exception as e:
         log.error(f"Analysis failed: {e}")
     finally:
@@ -46,26 +52,30 @@ def _run_analysis():
 
 def _maybe_run_on_startup():
     if cache.is_stale():
-        log.info("Cache is stale or missing — running analysis on startup.")
+        log.info("Cache stale — running analysis on startup.")
         _run_analysis()
     else:
-        log.info("Cache is fresh, skipping startup analysis.")
+        log.info("Cache fresh, skipping startup analysis.")
+
+
+def _compute_dashboard_extras():
+    """Return metrics + alerts without calling Claude."""
+    sessions_raw = get_recent_sessions(days=7)
+    met = metrics_svc.compute(sessions_raw)
+    past = history.load_recent(n=4)
+    alerts = pattern_detector.detect(sessions_raw, met, past)
+    return met, alerts
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Schedule daily analysis
     daily_time = os.getenv("DAILY_ANALYSIS_TIME", "08:00")
     hour, minute = map(int, daily_time.split(":"))
     _scheduler.add_job(_run_analysis, "cron", hour=hour, minute=minute, id="daily")
     _scheduler.start()
 
-    import threading
-    t = threading.Thread(target=_maybe_run_on_startup, daemon=True)
-    t.start()
-
+    threading.Thread(target=_maybe_run_on_startup, daemon=True).start()
     yield
-
     _scheduler.shutdown(wait=False)
 
 
@@ -75,23 +85,49 @@ app = FastAPI(title="CRM Advisor", lifespan=lifespan)
 @app.get("/", response_class=HTMLResponse)
 async def dashboard(request: Request):
     report = cache.load()
+    met, alerts = _compute_dashboard_extras()
     status = "loading" if _is_running else ("ready" if report else "empty")
-    return templates.TemplateResponse(
-        "index.html",
-        {"request": request, "report": report, "status": status, "is_running": _is_running},
-    )
+    return templates.TemplateResponse("index.html", {
+        "request": request,
+        "report": report,
+        "status": status,
+        "is_running": _is_running,
+        "metrics": met,
+        "alerts": alerts,
+    })
 
 
 @app.post("/refresh")
 async def refresh():
     if _is_running:
         return JSONResponse({"ok": False, "message": "Análise já em curso, aguarda."})
-
-    import threading
-    t = threading.Thread(target=_run_analysis, daemon=True)
-    t.start()
-
+    threading.Thread(target=_run_analysis, daemon=True).start()
     return RedirectResponse("/", status_code=303)
+
+
+@app.get("/briefing", response_class=HTMLResponse)
+async def briefing_page(request: Request):
+    """Página de briefing de arranque de dia — gerada a pedido."""
+    global _briefing_running
+    briefing_data = None
+    error = None
+
+    if not _briefing_running:
+        _briefing_running = True
+        try:
+            briefing_data = analyzer.run_briefing()
+        except Exception as e:
+            error = str(e)
+            log.error(f"Briefing failed: {e}")
+        finally:
+            _briefing_running = False
+
+    return templates.TemplateResponse("briefing.html", {
+        "request": request,
+        "briefing": briefing_data,
+        "error": error,
+        "now": datetime.now().strftime("%A, %d de %B de %Y"),
+    })
 
 
 @app.get("/api/report")
@@ -100,6 +136,12 @@ async def api_report():
     if not report:
         return JSONResponse({"ok": False, "message": "Sem análise disponível."}, status_code=404)
     return JSONResponse({"ok": True, "report": report})
+
+
+@app.get("/api/metrics")
+async def api_metrics():
+    met, alerts = _compute_dashboard_extras()
+    return JSONResponse({"ok": True, "metrics": met, "alerts": alerts})
 
 
 @app.get("/api/status")
