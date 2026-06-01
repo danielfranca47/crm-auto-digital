@@ -1,7 +1,7 @@
 # Etapa C — Instruções de Follow-Up por Agente
 
 **Branch:** `etapa-8-7-fluxo-qualificacao-natural`
-**Status:** Fases 1–5 concluídas. Fases 6–8 planeadas — aguardam aprovação.
+**Status:** Fases 1–8 implementadas — aguardam validação das Fases 6–8.
 
 ---
 
@@ -77,6 +77,16 @@ Adicionar instrução de abertura calorosa e contextual a cada `variant_rule` em
 | # | Commit | O que foi implementado |
 |---|---|---|
 | 1 | `a201613` | Abertura calorosa por defeito nos 3 agentes |
+
+---
+
+## Fases 6, 7 e 8 — Implementadas
+
+### Commits
+
+| # | Commit | O que foi implementado |
+|---|---|---|
+| 1 | `a70eab5` | Fases 6-8: followup_goal_instructions + cart_recovery_attempt_instructions + followup_outcome_instructions |
 
 ---
 
