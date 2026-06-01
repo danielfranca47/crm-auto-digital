@@ -17,6 +17,13 @@ class Settings(BaseSettings):
     CRM_PUBLIC_BASE_URL: Optional[str] = None
     EXECUTORS_BASE_URL: Optional[str] = None
     ADMIN_SECRET: Optional[str] = None
+    # Email SMTP
+    SMTP_HOST: Optional[str] = None
+    SMTP_PORT: int = 587
+    SMTP_USER: Optional[str] = None
+    SMTP_PASS: Optional[str] = None
+    SMTP_FROM: Optional[str] = None
+    SMTP_TLS: bool = True
 
     class Config:
         env_file = ".env"
