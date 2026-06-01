@@ -102,7 +102,6 @@ const plans = [
       '1.000 conversas/mês',
       '1 WhatsApp conectado',
       'CRM com pipeline Kanban',
-      'Follow-up automático',
       'Envio de áudio personalizado',
       'Envio de imagens e vídeos',
       'Suporte por chat',
