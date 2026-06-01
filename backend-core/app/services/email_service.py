@@ -32,7 +32,7 @@ def render_welcome_email(name: Optional[str], temp_password: str, login_url: str
 <!DOCTYPE html>
 <html>
 <body style="font-family:sans-serif;color:#1e293b;max-width:520px;margin:0 auto;padding:24px">
-  <h2 style="color:#0284c7">Bem-vindo ao AutoDigital CRM</h2>
+  <h2 style="color:#0284c7">Bem-vindo ao Digital Pro</h2>
   <p>Olá, <strong>{display}</strong>.</p>
   <p>A sua conta foi criada. Use as credenciais abaixo para entrar:</p>
   <div style="background:#f1f5f9;border-radius:8px;padding:16px 20px;margin:16px 0">
@@ -46,7 +46,7 @@ def render_welcome_email(name: Optional[str], temp_password: str, login_url: str
 </html>
 """
     text = (
-        f"Bem-vindo ao AutoDigital CRM\n\n"
+        f"Bem-vindo ao Digital Pro\n\n"
         f"Olá, {display}.\n\n"
         f"A sua conta foi criada.\n"
         f"Senha temporária: {temp_password}\n\n"
@@ -61,7 +61,7 @@ def render_reset_email(reset_url: str) -> tuple[str, str]:
 <!DOCTYPE html>
 <html>
 <body style="font-family:sans-serif;color:#1e293b;max-width:520px;margin:0 auto;padding:24px">
-  <h2 style="color:#0284c7">Recuperação de senha — AutoDigital CRM</h2>
+  <h2 style="color:#0284c7">Recuperação de senha — Digital Pro</h2>
   <p>Recebemos um pedido de recuperação de senha para a sua conta.</p>
   <p>Clique no botão abaixo para definir uma nova senha. O link expira em <strong>2 horas</strong>.</p>
   <p style="margin:24px 0">
@@ -77,7 +77,7 @@ def render_reset_email(reset_url: str) -> tuple[str, str]:
 </html>
 """
     text = (
-        f"Recuperação de senha — AutoDigital CRM\n\n"
+        f"Recuperação de senha — Digital Pro\n\n"
         f"Recebemos um pedido de recuperação de senha.\n\n"
         f"Aceda ao link abaixo para definir uma nova senha (expira em 2 horas):\n"
         f"{reset_url}\n\n"
