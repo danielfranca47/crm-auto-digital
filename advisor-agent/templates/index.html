@@ -127,6 +127,53 @@
     .file-name { color: var(--text2); font-family: monospace; font-size: 12px; word-break: break-all; }
     .file-count { color: var(--text3); flex-shrink: 0; margin-left: 12px; }
     .file-count.hot { color: var(--warn); font-weight: 700; }
+
+    /* Quota bar */
+    .quota-bar-wrap {
+      background: var(--bg2); border: 1px solid var(--border); border-radius: var(--radius);
+      padding: 16px 20px; margin-bottom: 20px;
+      display: flex; align-items: center; gap: 20px; flex-wrap: wrap;
+    }
+    .quota-bar-wrap.at-limit { border-color: #4b3a1a; background: #1c1712; }
+    .quota-label { font-size: 13px; color: var(--text2); white-space: nowrap; flex-shrink: 0; }
+    .quota-label strong { color: var(--text); }
+    .quota-track { flex: 1; min-width: 120px; background: var(--bg3); border-radius: 4px; height: 8px; }
+    .quota-fill  { height: 8px; border-radius: 4px; transition: width .4s; }
+    .quota-fill.ok      { background: var(--accent2); }
+    .quota-fill.warning { background: var(--warn); }
+    .quota-fill.full    { background: var(--danger); }
+    .quota-reset { font-size: 12px; color: var(--text3); white-space: nowrap; }
+    .settings-toggle {
+      background: none; border: 1px solid var(--border); border-radius: 6px;
+      color: var(--text3); font-size: 12px; padding: 4px 10px; cursor: pointer;
+      margin-left: auto; white-space: nowrap; transition: border-color .2s, color .2s;
+    }
+    .settings-toggle:hover { border-color: var(--accent); color: var(--text); }
+
+    /* Settings panel */
+    .settings-panel {
+      display: none; background: var(--bg2); border: 1px solid var(--border);
+      border-radius: var(--radius); padding: 20px 24px; margin-bottom: 20px;
+    }
+    .settings-panel.open { display: block; }
+    .settings-panel .card-title { margin-bottom: 16px; }
+    .settings-row { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+    .settings-label { font-size: 14px; color: var(--text2); }
+    .settings-input {
+      width: 80px; background: var(--bg3); border: 1px solid var(--border);
+      border-radius: 6px; color: var(--text); font-size: 15px; font-weight: 700;
+      padding: 6px 10px; text-align: center; outline: none;
+    }
+    .settings-input:focus { border-color: var(--accent); }
+    .settings-hint { font-size: 12px; color: var(--text3); }
+    .save-btn {
+      background: var(--accent); color: #fff; border: none; border-radius: 6px;
+      padding: 7px 20px; font-size: 13px; font-weight: 600; cursor: pointer; transition: opacity .2s;
+    }
+    .save-btn:hover { opacity: .85; }
+
+    /* Quota block banner */
+    .banner.blocked { background: #1c1712; border: 1px solid #5b3010; color: var(--warn); }
   </style>
 </head>
 <body>
@@ -145,10 +192,11 @@
       {% endif %}
     </div>
     <div class="header-actions">
-      <a href="/briefing" class="btn btn-secondary">Briefing do dia →</a>
+      <a href="/briefing" class="btn btn-secondary" {% if not can_run %}style="opacity:.4;pointer-events:none"{% endif %}>Briefing do dia →</a>
       <form method="POST" action="/refresh" style="margin:0">
-        <button class="btn btn-primary" {% if is_running %}disabled{% endif %}>
-          {% if is_running %}Analisando…{% else %}Actualizar Agora{% endif %}
+        <button class="btn btn-primary" {% if is_running or not can_run %}disabled{% endif %}
+                title="{% if not can_run %}Limite semanal atingido{% endif %}">
+          {% if is_running %}Analisando…{% elif not can_run %}Limite atingido{% else %}Actualizar Agora{% endif %}
         </button>
       </form>
     </div>
@@ -163,6 +211,47 @@
 
   {% if not report and not is_running %}
   <div class="banner empty">⚠️ Sem análise em cache. Clica em <strong>Actualizar Agora</strong> para gerar a primeira.</div>
+  {% endif %}
+
+  {% if not can_run and not is_running %}
+  <div class="banner blocked">
+    🚫 Limite semanal atingido ({{ quota.used_this_week }}/{{ quota.max_calls_per_week }} chamadas).
+    Repõe em <strong>{{ quota.week_reset_date }}</strong> — ou ajusta o limite abaixo.
+  </div>
+  {% endif %}
+
+  <!-- Barra de quota -->
+  {% if quota %}
+  {% set pct = quota.percent_used %}
+  <div class="quota-bar-wrap {% if quota.at_limit %}at-limit{% endif %}">
+    <div class="quota-label">
+      Chamadas Claude esta semana:
+      <strong>{{ quota.used_this_week }}/{{ quota.max_calls_per_week }}</strong>
+    </div>
+    <div class="quota-track">
+      <div class="quota-fill {% if pct >= 100 %}full{% elif pct >= 70 %}warning{% else %}ok{% endif %}"
+           style="width: {{ [pct, 100] | min }}%"></div>
+    </div>
+    <div class="quota-reset">Repõe {{ quota.week_reset_date }}</div>
+    <button class="settings-toggle" onclick="toggleSettings()">⚙ Definições</button>
+  </div>
+
+  <!-- Painel de definições (oculto por defeito) -->
+  <div class="settings-panel" id="settingsPanel">
+    <div class="card-title">Definições de quota</div>
+    <form method="POST" action="/settings">
+      <div class="settings-row">
+        <span class="settings-label">Máximo de chamadas por semana:</span>
+        <input class="settings-input" type="number" name="max_calls_per_week"
+               min="1" max="20" value="{{ quota.max_calls_per_week }}" required/>
+        <button class="save-btn" type="submit">Guardar</button>
+      </div>
+    </form>
+    <div class="settings-hint" style="margin-top:12px">
+      Cada análise completa = 1 chamada &nbsp;·&nbsp; Cada briefing = 1 chamada &nbsp;·&nbsp;
+      Mín: 1 &nbsp;·&nbsp; Máx: 20 &nbsp;·&nbsp; Repõe toda segunda-feira
+    </div>
+  </div>
   {% endif %}
 
   <!-- Alertas de padrões -->
@@ -328,6 +417,13 @@
 {% if is_running %}
 <script>setTimeout(() => location.reload(), 10000);</script>
 {% endif %}
+
+<script>
+function toggleSettings() {
+  var panel = document.getElementById('settingsPanel');
+  panel.classList.toggle('open');
+}
+</script>
 
 </body>
 </html>
