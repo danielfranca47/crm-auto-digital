@@ -1,7 +1,7 @@
 # Etapa C — Instruções de Follow-Up por Agente
 
 **Branch:** `etapa-8-7-fluxo-qualificacao-natural`
-**Status:** Todos os cenários validados (01/06/2026) — P5 Agent 2/3 pendentes de confirmação visual manual
+**Status:** Todos os cenários validados (01/06/2026)
 
 ---
 
@@ -100,6 +100,9 @@ PlaygroundConfigModal: botão "Follow-up" + painel de configuração
 | # | Commit | O que foi implementado |
 |---|---|---|
 | 1 | `a0d411d` | Playground: modo follow-up — backend + frontend |
+| 2 | `c3f18ba` | fix: auto-fire tick ao iniciar sessão (sem mensagem do lead) |
+| 3 | `494ea17` | fix: hint contextual no backend para LLM Mãe rotear para follow-up |
+| 4 | `50876d2` | fix: hint mais contextual (outcome + meeting_happened) |
 
 ---
 
