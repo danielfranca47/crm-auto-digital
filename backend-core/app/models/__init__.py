@@ -7,6 +7,7 @@ from .user_addon import UserAddon
 from .usage_counter import UsageCounter
 from .ai_profile import AIProfile
 from .whatsapp_connection import WhatsappConnection
+from .password_reset_token import PasswordResetToken
 
 __all__ = [
     "User",
@@ -18,4 +19,5 @@ __all__ = [
     "UsageCounter",
     "AIProfile",
     "WhatsappConnection",
+    "PasswordResetToken",
 ]

@@ -1,3 +1,4 @@
+import secrets
 from datetime import datetime, timedelta
 from typing import Optional
 
@@ -21,6 +22,7 @@ security = HTTPBearer()
 class UserCreate(BaseModel):
     email: EmailStr
     password: str
+    name: Optional[str] = None
 
 
 class UserLogin(BaseModel):
@@ -95,6 +97,7 @@ async def register(user_in: UserCreate, db: Session = Depends(get_db)):
     new_user = models.User(
         email=user_in.email,
         password_hash=get_password_hash(user_in.password),
+        name=user_in.name,
     )
     db.add(new_user)
     db.commit()
@@ -112,3 +115,97 @@ async def login(user_in: UserLogin, db: Session = Depends(get_db)):
         data={"sub": str(user.id), "email": user.email},
     )
     return {"access_token": access_token, "token_type": "bearer"}
+
+
+# ── Password reset ────────────────────────────────────────────────────────────
+
+class ForgotPasswordRequest(BaseModel):
+    email: EmailStr
+
+
+class ResetPasswordRequest(BaseModel):
+    token: str
+    new_password: str
+
+
+class ChangePasswordRequest(BaseModel):
+    current_password: str
+    new_password: str
+
+
+RESET_TOKEN_TTL_HOURS = 2
+
+
+@router.post("/forgot-password", status_code=status.HTTP_200_OK)
+async def forgot_password(body: ForgotPasswordRequest, db: Session = Depends(get_db)):
+    """Envia email com link de recuperação. Sempre retorna 200 para não revelar se o email existe."""
+    user = db.query(models.User).filter(models.User.email == body.email).first()
+    if not user:
+        return {"ok": True}
+
+    # Invalidar tokens anteriores não usados para este utilizador
+    db.query(models.PasswordResetToken).filter(
+        models.PasswordResetToken.user_id == user.id,
+        models.PasswordResetToken.used_at == None,  # noqa: E711
+    ).delete()
+
+    token_value = secrets.token_urlsafe(32)
+    expires = datetime.utcnow() + timedelta(hours=RESET_TOKEN_TTL_HOURS)
+    token = models.PasswordResetToken(
+        user_id=user.id,
+        token=token_value,
+        expires_at=expires,
+    )
+    db.add(token)
+    db.commit()
+
+    try:
+        from app.services.email_service import render_reset_email, send_email
+        base_url = (settings.CRM_PUBLIC_BASE_URL or "http://localhost:8080").rstrip("/")
+        reset_url = f"{base_url}/reset-password?token={token_value}"
+        html, text = render_reset_email(reset_url)
+        send_email(to=user.email, subject="Recuperação de senha — AutoDigital CRM", html=html, text=text)
+    except Exception as exc:
+        # Não falha a request se o email não conseguir enviar — o token já foi criado
+        import logging
+        logging.getLogger(__name__).error("Erro ao enviar email de reset: %s", exc)
+
+    return {"ok": True}
+
+
+@router.post("/reset-password", status_code=status.HTTP_200_OK)
+async def reset_password(body: ResetPasswordRequest, db: Session = Depends(get_db)):
+    token = db.query(models.PasswordResetToken).filter(
+        models.PasswordResetToken.token == body.token,
+    ).first()
+
+    if not token or token.used_at is not None or token.expires_at < datetime.utcnow():
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Link expirado ou inválido",
+        )
+
+    user = db.query(models.User).filter(models.User.id == token.user_id).first()
+    if not user:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Utilizador não encontrado")
+
+    user.password_hash = get_password_hash(body.new_password)
+    token.used_at = datetime.utcnow()
+    db.commit()
+    return {"ok": True}
+
+
+@router.post("/change-password", status_code=status.HTTP_200_OK)
+async def change_password(
+    body: ChangePasswordRequest,
+    current_user: models.User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    if not verify_password(body.current_password, current_user.password_hash):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Senha atual incorreta",
+        )
+    current_user.password_hash = get_password_hash(body.new_password)
+    db.commit()
+    return {"ok": True}
