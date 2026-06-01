@@ -261,6 +261,53 @@ O guardrail está no backend em ambos os pontos de entrada (`start-followup` e K
 
 ---
 
+## Personalização das Mensagens de Follow-Up
+
+O prompt da Filha Follow-up (`_build_child_prompt_follow_up()` em `decision_engine.py`) tem 3 camadas de personalização por variante, em ordem de prioridade crescente:
+
+```
+[ABERTURA OBRIGATÓRIA — saudação calorosa e contextual]   ← hardcoded, default
+[instrução hardcoded da variante]
+[_goal_rule — por followup_goal, se configurado]           ← AI Profile
+[_variant_operator_block — texto livre do operador]        ← AI Profile
+[regras gerais de modo]
+...
+[custom_instructions — global]                             ← AI Profile
+```
+
+### Abertura calorosa (default para todos os agentes)
+
+Todos os `variant_rule` têm instrução `ABERTURA OBRIGATÓRIA` que força uma saudação contextual antes de qualquer conteúdo comercial. `sdr_scheduler` e `hybrid_scheduler` sempre abrem com saudação; `cart_recovery` tentativa 1 abre com saudação, tentativas 2 e 3 são directas (urgência justifica).
+
+### Campos configuráveis do AI Profile por variante
+
+| Campo | Variante | O que faz |
+|---|---|---|
+| `followup_sdr_instructions` | `sdr_scheduler` | Texto livre injectado após a instrução hardcoded da variante |
+| `followup_recovery_instructions` | `cart_recovery` | Texto livre injectado após a instrução hardcoded da variante |
+| `followup_postsession_instructions` | `hybrid_scheduler` | Texto livre injectado após a instrução hardcoded da variante |
+| `followup_goal_instructions` | `sdr_scheduler` | Dict por `followup_goal` — instrução específica para o goal activo |
+| `cart_recovery_attempt_instructions` | `cart_recovery` | Lista de 3 strings — sobrescreve instrução hardcoded da tentativa correspondente |
+| `followup_outcome_instructions` | `hybrid_scheduler` | Dict por `outcome` — sobrescreve instrução hardcoded do outcome correspondente |
+
+**Fallback:** quando o campo não está configurado ou a chave não existe, o comportamento hardcoded é mantido inalterado.
+
+### Instruções hardcoded por variante (defaults)
+
+**`sdr_scheduler`:** follow-up consultivo pós-reunião — reforçar valor, síntese do contexto, próximo passo.
+
+**`cart_recovery` por tentativa:**
+- T1: lembrete neutro — pedido reservado, sem pressão
+- T2: benefício + objeção mais comum do nicho
+- T3: urgência máxima — oferta expira, CTA directo
+
+**`hybrid_scheduler` por outcome:**
+- `interested_not_closed`: retomar contexto, remover objeção, propor nova data
+- `reschedule_needed`: oferecer 2-3 horários, pergunta fechada
+- `converted`: onboarding/boas-vindas, confirmar próximo passo
+
+---
+
 ## Arquivos críticos
 
 | Arquivo | Responsabilidade |

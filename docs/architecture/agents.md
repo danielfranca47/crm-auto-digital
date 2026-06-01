@@ -118,6 +118,12 @@ Aliases aceitos: `whatsapp_send`, `maps_search_fallback`, `maps_enrich_fallback`
 | `reply_delay_min_seconds` | integer\|null | Delay mínimo (s) antes de respostas a mensagens subsequentes (padrão: `0`) |
 | `reply_delay_max_seconds` | integer\|null | Delay máximo (s) para mensagens subsequentes (padrão: `0`) |
 | `availability_mode` | string (enum) | Janela de horário de trabalho do agente (padrão: `"24h"`) |
+| `followup_sdr_instructions` | string\|null | Instrução de texto livre injectada no prompt de follow-up quando `followup_variant=sdr_scheduler`. Sobrescreve as regras genéricas da variante com contexto específico do negócio |
+| `followup_recovery_instructions` | string\|null | Instrução de texto livre para follow-up de cart recovery (`followup_variant=cart_recovery`) |
+| `followup_postsession_instructions` | string\|null | Instrução de texto livre para follow-up pós-sessão (`followup_variant=hybrid_scheduler`) |
+| `followup_goal_instructions` | object\|null | Dict por `followup_goal` para Agent 1 — ex: `{"advance_closing": "...", "nurture": "..."}`. Chaves opcionais; usa default da variante se ausente |
+| `cart_recovery_attempt_instructions` | list[str\|null]\|null | Lista de 3 strings para Agent 2 — uma instrução por tentativa (1, 2, 3). Posição `null` mantém o default |
+| `followup_outcome_instructions` | object\|null | Dict por `outcome` para Agent 3 — ex: `{"interested_not_closed": "...", "reschedule_needed": "..."}`. Chaves opcionais; usa default se ausente |
 
 ### Enums
 

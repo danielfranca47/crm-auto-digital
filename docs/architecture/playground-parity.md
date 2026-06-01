@@ -109,6 +109,40 @@ Esta é a **única fonte de enriquecimento**. Qualquer campo novo que afete o co
 
 ---
 
+## Modo Follow-Up no Playground
+
+O playground suporta um terceiro tipo de cenário (`scenario_type = "followup"`) que simula um tick automático de follow-up sem precisar de um lead real com `followup_contract`.
+
+### Como funciona
+
+O operador configura no `PlaygroundConfigModal`:
+- **Variante** — auto-detectada do `template_key` (`sdr_scheduler`, `cart_recovery`, `hybrid_scheduler`)
+- **Outcome** — como o lead saiu da reunião (hot/warm/cold/lost ou outcomes do hybrid)
+- **Goal** — objectivo do follow-up (advance_closing, nurture, reschedule_conversation)
+- **Tentativa** — qual tentativa simular (1, 2 ou 3)
+- **Reunião aconteceu** — bool
+
+O payload enviado inclui `followup_context` com estes campos. O backend (`build_context_bundle_for_playground()` em `orchestrator.py`) injeta o contexto sintético em `metadata["followup_context"]` e define `lead.category = "follow-up"` **apenas em memória** — sem persistir no DB.
+
+O tick dispara automaticamente ao abrir a sessão (sem mensagem do lead), simulando o comportamento real do reconciliador.
+
+### Paridade com o fluxo real
+
+| Comportamento | Real | Playground (followup) |
+|---|---|---|
+| Disparar tick | Reconciliador detecta `next_followup_at <= now` | Auto-fire ao iniciar sessão |
+| `followup_context` | Vem do `followup_contract` do lead | Injectado sinteticamente via `followup_context` |
+| `lead.category` | Persistido no DB como `"follow-up"` | Definido em memória no bundle |
+| Mensagem do lead | Não existe — o bot envia proactivamente | Hint de tick injectado como `effective_message` |
+
+**Ficheiros chave:**
+- `backend-crm/routes/playground.py` — `scenario_type: "followup"`, campo `followup_context`, hint de tick
+- `backend-crm/services/ai_orchestrator/orchestrator.py` — `build_context_bundle_for_playground()` aceita `followup_context`
+- `frontend-crm/src/components/playground/PlaygroundConfigModal.tsx` — botão "Follow-up" + painel de configuração
+- `frontend-crm/src/pages/Playground.tsx` — auto-fire via `useEffect` ao iniciar sessão followup
+
+---
+
 ## Arquivos Críticos
 
 | Arquivo | Responsabilidade |
