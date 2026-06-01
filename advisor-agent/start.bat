@@ -1,11 +1,14 @@
 @echo off
 cd /d "%~dp0"
 
-:: Verifica se claude esta disponivel no PATH
-where claude >nul 2>&1
+:: Garante que o npm global (onde o Claude Code esta instalado) esta no PATH
+set PATH=%APPDATA%\npm;%PATH%
+
+:: Verifica se claude esta disponivel
+where claude.cmd >nul 2>&1
 if errorlevel 1 (
-    echo [ERRO] Comando 'claude' nao encontrado.
-    echo Garante que o Claude Code esta instalado. Abre um novo terminal apos instalar.
+    echo [ERRO] Claude Code nao encontrado em %APPDATA%\npm
+    echo Garante que o Claude Code esta instalado: https://claude.ai/download
     pause
     exit /b 1
 )

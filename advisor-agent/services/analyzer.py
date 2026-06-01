@@ -177,7 +177,26 @@ focus_today deve ter 2-3 itens concretos e específicos para o projecto, não ge
 
 # --- Chamada ao Claude CLI ---
 
+def _claude_cmd() -> str:
+    """Retorna o executável correcto do Claude consoante o OS."""
+    import sys, shutil
+    # No Windows o npm instala claude.cmd — usar esse em vez de 'claude'
+    if sys.platform == "win32":
+        cmd = shutil.which("claude.cmd") or shutil.which("claude")
+    else:
+        cmd = shutil.which("claude")
+    if not cmd:
+        raise RuntimeError(
+            "Comando 'claude' não encontrado no PATH. "
+            "Garante que o Claude Code está instalado e que o npm global está no PATH. "
+            "Tenta fechar e reabrir o terminal."
+        )
+    return cmd
+
+
 def _call_claude(prompt: str) -> str:
+    cmd = _claude_cmd()
+
     with tempfile.NamedTemporaryFile(
         mode="w", suffix=".txt", delete=False, encoding="utf-8"
     ) as f:
@@ -187,7 +206,7 @@ def _call_claude(prompt: str) -> str:
     try:
         with open(tmp_path, "r", encoding="utf-8") as stdin_f:
             result = subprocess.run(
-                ["claude", "--print"],
+                [cmd, "--print"],
                 stdin=stdin_f,
                 capture_output=True,
                 text=True,
