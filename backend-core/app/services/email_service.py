@@ -41,7 +41,7 @@ def render_welcome_email(name: Optional[str], temp_password: str, login_url: str
   <p>Aceda em: <a href="{login_url}" style="color:#0284c7">{login_url}</a></p>
   <p style="color:#64748b;font-size:0.875em">Pode alterar a senha depois de entrar.</p>
   <hr style="border:none;border-top:1px solid #e2e8f0;margin:24px 0">
-  <p style="color:#94a3b8;font-size:0.75em">AutoDigital — CRM com IA para vendas via WhatsApp</p>
+  <p style="color:#94a3b8;font-size:0.75em">Digital Pro — CRM com IA para vendas via WhatsApp</p>
 </body>
 </html>
 """
@@ -72,7 +72,7 @@ def render_reset_email(reset_url: str) -> tuple[str, str]:
   </p>
   <p style="color:#64748b;font-size:0.875em">Se não foi você a pedir, ignore este email — a sua senha não será alterada.</p>
   <hr style="border:none;border-top:1px solid #e2e8f0;margin:24px 0">
-  <p style="color:#94a3b8;font-size:0.75em">AutoDigital — CRM com IA para vendas via WhatsApp</p>
+  <p style="color:#94a3b8;font-size:0.75em">Digital Pro — CRM com IA para vendas via WhatsApp</p>
 </body>
 </html>
 """
