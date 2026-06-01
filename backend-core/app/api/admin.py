@@ -48,6 +48,11 @@ class ExtensionsUpdate(BaseModel):
     enabled_extensions: List[str]
 
 
+class CreateUserRequest(BaseModel):
+    email: str
+    name: Optional[str] = None
+
+
 @router.post("/login", response_model=AdminToken)
 async def admin_login(body: AdminLoginRequest):
     if not settings.ADMIN_SECRET:
@@ -236,3 +241,55 @@ async def admin_reconnect_instance(
         return {"ok": True, "result": redact_instance_token(result)}
     except Exception as exc:
         return {"ok": False, "error": str(exc)}
+
+
+@router.post("/users", status_code=status.HTTP_201_CREATED)
+async def admin_create_user(
+    body: CreateUserRequest,
+    db: Session = Depends(get_db),
+    _: dict = Depends(require_admin),
+) -> Dict[str, Any]:
+    """Admin cria conta para um cliente. Gera senha temporária e envia por email."""
+    import secrets as _secrets
+    from app.api.auth import get_password_hash
+
+    existing = db.query(models.User).filter(models.User.email == body.email).first()
+    if existing:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Email já registado")
+
+    # Gera senha temporária legível (ex.: xK9mP2aQ)
+    alphabet = "abcdefghjkmnpqrstuvwxyzABCDEFGHJKMNPQRSTUVWXYZ23456789"
+    temp_password = "".join(_secrets.choice(alphabet) for _ in range(8))
+
+    new_user = models.User(
+        email=body.email,
+        name=body.name,
+        password_hash=get_password_hash(temp_password),
+    )
+    db.add(new_user)
+    db.commit()
+    db.refresh(new_user)
+
+    email_sent = False
+    try:
+        from app.services.email_service import render_welcome_email, send_email
+        base_url = (settings.CRM_PUBLIC_BASE_URL or "http://localhost:8080").rstrip("/")
+        login_url = f"{base_url}/login"
+        html, text = render_welcome_email(body.name, temp_password, login_url)
+        send_email(
+            to=body.email,
+            subject="Bem-vindo ao AutoDigital CRM — acesso criado",
+            html=html,
+            text=text,
+        )
+        email_sent = True
+    except Exception as exc:
+        import logging
+        logging.getLogger(__name__).error("Erro ao enviar email de boas-vindas: %s", exc)
+
+    return {
+        "ok": True,
+        "user_id": new_user.id,
+        "email": new_user.email,
+        "email_sent": email_sent,
+    }

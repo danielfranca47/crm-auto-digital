@@ -5,7 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { api } from "@/services/api";
 import { useToast } from "@/hooks/use-toast";
-import { Search, X, User } from "lucide-react";
+import { Search, X, User, UserPlus } from "lucide-react";
 import type { AdminUser } from "@/services/api";
 
 const AVAILABLE_EXTENSIONS = [
@@ -40,6 +40,11 @@ export default function AdminUsers() {
   const [modalUser, setModalUser] = useState<AdminUser | null>(null);
   const [editExtensions, setEditExtensions] = useState<string[]>([]);
   const [isSaving, setIsSaving] = useState(false);
+
+  const [createModal, setCreateModal] = useState(false);
+  const [newEmail, setNewEmail] = useState("");
+  const [newName, setNewName] = useState("");
+  const [isCreating, setIsCreating] = useState(false);
 
   const loadUsers = useCallback(async () => {
     setIsLoading(true);
@@ -96,9 +101,45 @@ export default function AdminUsers() {
     }
   };
 
+  const handleCreateUser = async () => {
+    if (!newEmail) return;
+    setIsCreating(true);
+    try {
+      const res = await api.createUser(newEmail, newName || undefined);
+      toast({
+        title: "Conta criada",
+        description: res.email_sent
+          ? `Email de boas-vindas enviado para ${res.email}.`
+          : `Conta criada para ${res.email}. Email não enviado (SMTP não configurado).`,
+      });
+      setCreateModal(false);
+      setNewEmail("");
+      setNewName("");
+      loadUsers();
+    } catch (err: unknown) {
+      toast({
+        title: "Erro ao criar conta",
+        description: err instanceof Error ? err.message : "Erro desconhecido",
+        variant: "destructive",
+      });
+    } finally {
+      setIsCreating(false);
+    }
+  };
+
   return (
     <div className="p-6 max-w-5xl">
-      <h1 className="text-xl font-semibold text-slate-200 mb-1">Usuários</h1>
+      <div className="flex items-center justify-between mb-1">
+        <h1 className="text-xl font-semibold text-slate-200">Usuários</h1>
+        <Button
+          size="sm"
+          onClick={() => setCreateModal(true)}
+          className="bg-indigo-600 hover:bg-indigo-500 text-white flex items-center gap-1.5"
+        >
+          <UserPlus size={14} />
+          Criar conta
+        </Button>
+      </div>
       <p className="text-slate-500 text-sm mb-5">Gestão de clientes, planos e extensões ativas.</p>
 
       <div className="flex gap-3 mb-5">
@@ -214,6 +255,66 @@ export default function AdminUsers() {
           </div>
         </CardContent>
       </Card>
+
+      {/* Create user modal */}
+      {createModal && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60"
+          onClick={() => setCreateModal(false)}
+        >
+          <div
+            className="bg-slate-800 border border-slate-700 rounded-xl shadow-xl p-6 max-w-sm mx-4 w-full"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-start justify-between mb-4">
+              <h3 className="font-semibold text-slate-200">Criar conta</h3>
+              <button onClick={() => setCreateModal(false)} className="text-slate-500 hover:text-slate-300">
+                <X size={16} />
+              </button>
+            </div>
+
+            <div className="space-y-3 mb-5">
+              <div>
+                <label className="block text-xs font-medium text-slate-400 mb-1">Nome (opcional)</label>
+                <Input
+                  placeholder="Nome do cliente"
+                  value={newName}
+                  onChange={(e) => setNewName(e.target.value)}
+                  className="bg-slate-700 border-slate-600 text-slate-200 placeholder:text-slate-500"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-slate-400 mb-1">Email *</label>
+                <Input
+                  type="email"
+                  placeholder="cliente@email.com"
+                  value={newEmail}
+                  onChange={(e) => setNewEmail(e.target.value)}
+                  onKeyDown={(e) => e.key === "Enter" && handleCreateUser()}
+                  className="bg-slate-700 border-slate-600 text-slate-200 placeholder:text-slate-500"
+                />
+              </div>
+            </div>
+
+            <div className="flex gap-2">
+              <Button
+                className="flex-1 bg-indigo-600 hover:bg-indigo-500 text-white"
+                onClick={handleCreateUser}
+                disabled={isCreating || !newEmail}
+              >
+                {isCreating ? "Criando…" : "Criar e enviar email"}
+              </Button>
+              <Button
+                variant="outline"
+                onClick={() => setCreateModal(false)}
+                className="border-slate-600 text-slate-300 hover:bg-slate-700"
+              >
+                Cancelar
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Extensions modal */}
       {modalUser && (

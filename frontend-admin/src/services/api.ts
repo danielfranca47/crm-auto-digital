@@ -179,6 +179,12 @@ export const api = {
       { enabled_extensions: extensions }
     ),
 
+  createUser: (email: string, name?: string) =>
+    corePost<{ ok: boolean; user_id: number; email: string; email_sent: boolean }>(
+      "/admin/users",
+      { email, ...(name ? { name } : {}) }
+    ),
+
   listInstances: () => coreGet<AdminInstance[]>("/admin/instances"),
 
   reconnectInstance: (instanceId: string) =>
