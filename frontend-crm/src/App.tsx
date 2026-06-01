@@ -37,6 +37,9 @@ import AdminFinancial from "./pages/SaaSAdmin/AdminFinancial";
 import AdminSettings from "./pages/SaaSAdmin/AdminSettings";
 import TestContext from "./tests/TestContext";
 import Login from "./pages/Login"; // tem que estar exatamente assim
+import ForgotPassword from "./pages/ForgotPassword";
+import ResetPassword from "./pages/ResetPassword";
+import Register from "./pages/Register";
 import { useEffect, useState } from "react";
 import { api } from "./services/api";
 import { useApiErrorHandler } from "./hooks/useApiErrorHandler";
@@ -102,8 +105,11 @@ const App = () => (
               <Sonner />
 
               <Routes>
-                {/* Rota pública */}
+                {/* Rotas públicas */}
                 <Route path="/login" element={<Login />} />
+                <Route path="/register" element={<Register />} />
+                <Route path="/forgot-password" element={<ForgotPassword />} />
+                <Route path="/reset-password" element={<ResetPassword />} />
 
                 {/* Rotas privadas com layout do app (sidebar) */}
                 <Route

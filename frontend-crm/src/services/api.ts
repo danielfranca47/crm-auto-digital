@@ -952,6 +952,32 @@ export const api = {
       clearAuthToken();
       return { ok: true };
     },
+
+    forgotPassword: async (email: string) => {
+      return apiClient.post<{ ok: boolean }>(`${AUTH_BASE}/forgot-password`, { email });
+    },
+
+    resetPassword: async (token: string, newPassword: string) => {
+      return apiClient.post<{ ok: boolean }>(`${AUTH_BASE}/reset-password`, {
+        token,
+        new_password: newPassword,
+      });
+    },
+
+    changePassword: async (currentPassword: string, newPassword: string) => {
+      return apiClient.post<{ ok: boolean }>(`${AUTH_BASE}/change-password`, {
+        current_password: currentPassword,
+        new_password: newPassword,
+      });
+    },
+
+    register: async (email: string, password: string, name?: string) => {
+      return apiClient.post<{ id: number; email: string }>(`${AUTH_BASE}/register`, {
+        email,
+        password,
+        ...(name ? { name } : {}),
+      });
+    },
   },
 
   core: {
