@@ -3,7 +3,9 @@ import { Lead, KanbanColumn, NewLeadForm, LeadStatus, LeadAppointment } from '@/
 import { ProspectionLead, ProspectionColumn, ProspectionMethod } from '@/types/prospection';
 import { KANBAN_COLUMNS, ARCHIVED_COLUMNS } from '@/data/mockData';
 import { api } from '../services/api';
+import { readAuthToken } from '../lib/auth-token';
 import { useApiErrorHandler } from '@/hooks/useApiErrorHandler';
+import { ApiError } from '@/lib/api-client';
 import { useToast } from '@/hooks/use-toast';
 
 export type AddLeadResult =
@@ -223,6 +225,9 @@ export function LeadsProvider({ children }: LeadsProviderProps) {
         })
       );
     } catch (error) {
+      if (error instanceof ApiError && (error.status === 401 || error.status === 403)) {
+        return; // auth errors são tratados pelo Protected — não redirecionar daqui
+      }
       const result = handleError(error, {
         silent: true,
         fallbackMessage: 'Não foi possível carregar os leads.',
@@ -231,9 +236,9 @@ export function LeadsProvider({ children }: LeadsProviderProps) {
     }
   };
 
-  // carregamento inicial
+  // carregamento inicial — só dispara se existir token (evita redirect para /login em rotas públicas)
   useEffect(() => {
-    reloadAllLeads();
+    if (readAuthToken()) reloadAllLeads();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
