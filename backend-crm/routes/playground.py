@@ -575,6 +575,10 @@ def playground_chat(
                 ),
             )
 
+    # Follow-up tick: mensagem vazia é legítima — o bot deve disparar proactivamente sem inbound do lead
+    if not effective_message and body.scenario_type == "followup":
+        effective_message = "[TICK AUTOMÁTICO DE FOLLOW-UP — gera mensagem de reengajamento conforme contexto do follow-up]"
+
     if not effective_message:
         raise HTTPException(status_code=422, detail="message é obrigatório quando is_opener=False")
     _insert_message(lead_id, effective_message, "inbound")
