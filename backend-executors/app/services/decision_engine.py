@@ -2887,6 +2887,22 @@ def _build_child_prompt_follow_up(
             f"- Regra por outcome ({outcome or 'indefinido'}): {outcome_instruction}\n"
         )
 
+    # Instrução específica do operador para esta variante (personalização de negócio)
+    _followup_variant_instr_key = {
+        "sdr_scheduler":    "followup_sdr_instructions",
+        "cart_recovery":    "followup_recovery_instructions",
+        "hybrid_scheduler": "followup_postsession_instructions",
+    }.get(followup_variant)
+    _variant_operator_block = ""
+    if _followup_variant_instr_key:
+        _instr = (ai_profile.get(_followup_variant_instr_key) or "").strip()
+        if _instr:
+            _variant_operator_block = (
+                "INSTRUÇÕES DO OPERADOR PARA ESTE FOLLOW-UP"
+                " (personalização do negócio — respeitar acima das regras genéricas):\n"
+                f"{_instr}\n"
+            )
+
     history_text = _format_history(history)
     mode_contract = _build_mode_contract_context(context, mother_decision)
     agent_mode_normalized = mode_contract["agent_mode_normalized"]
@@ -3002,6 +3018,7 @@ def _build_child_prompt_follow_up(
         "- agenda: foco em no-show/reagendar/confirmar presença e reforçar próximos passos.\n"
         "- direto: tratar objeções e conduzir CTA para pagamento de forma objetiva.\n"
         f"{variant_rule}"
+        f"{_variant_operator_block}"
         "- Use tone_of_voice, brand_name e niche quando disponíveis.\n"
         "- Respeite playbook.max_chars se existir (senão, resposta curta).\n"
         "- recommended_next_category pode ser follow-up, closing ou null.\n"

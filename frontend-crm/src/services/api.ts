@@ -1295,6 +1295,9 @@ export const api = {
         followup_first_offset:  pack.followup_first_offset  ?? DEFAULT_AGENT_CONFIG.followup_first_offset,
         followup_cadence:       pack.followup_cadence       ?? DEFAULT_AGENT_CONFIG.followup_cadence,
         followup_allowed_hours: pack.followup_allowed_hours ?? DEFAULT_AGENT_CONFIG.followup_allowed_hours,
+        followup_sdr_instructions:        (profile as any)?.followup_sdr_instructions        ?? null,
+        followup_recovery_instructions:   (profile as any)?.followup_recovery_instructions   ?? null,
+        followup_postsession_instructions:(profile as any)?.followup_postsession_instructions ?? null,
 
         // Apresentação e agendamento
         // presentation_variant (backend) → appointment_mode (frontend): scheduler=exploratory, sales=commercial
@@ -1436,6 +1439,9 @@ export const api = {
         audio_transcription_enabled:   config.audio_transcription_enabled,
         availability_mode:             config.availability_mode,
         availability_schedule:         config.availability_schedule,
+        followup_sdr_instructions:        config.followup_sdr_instructions,
+        followup_recovery_instructions:   config.followup_recovery_instructions,
+        followup_postsession_instructions:config.followup_postsession_instructions,
         offer_pack,
         sales_flow:                    config.sales_flow,
       });

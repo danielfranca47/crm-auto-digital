@@ -450,7 +450,52 @@ function DrawerFollowupAvancado({ config, onSave, onClose }: {
   );
 }
 
-type DrawerKey = 'followup' | 'followup_avancado' | 'limite' | 'intervalo' | 'midia' | 'delay_resposta' | 'horario_trabalho' | null;
+function DrawerFollowUpInstructions({
+  config, onSave, onClose,
+}: {
+  config: AgentConfig; onSave: (v: Partial<AgentConfig>) => void; onClose: () => void;
+}) {
+  const isCloser = config.template_key?.includes('closer');
+  const isHybrid = config.template_key?.includes('hybrid');
+  const fieldKey = isCloser
+    ? 'followup_recovery_instructions'
+    : isHybrid
+    ? 'followup_postsession_instructions'
+    : 'followup_sdr_instructions';
+  const title = isCloser
+    ? 'Instrução de recuperação de carrinho'
+    : isHybrid
+    ? 'Instrução de follow-up pós-sessão'
+    : 'Instrução de follow-up pós-reunião';
+  const hint = isCloser
+    ? 'Personaliza o que o bot diz nas mensagens de recuperação de carrinho (Agent 2). O bot já sabe em que tentativa está — podes referenciar isso.'
+    : isHybrid
+    ? 'Personaliza o que o bot diz após cada tipo de sessão (interessado mas não fechou, remarcação, convertido). O bot já conhece o outcome.'
+    : 'Personaliza o que o bot diz nas mensagens de follow-up pós-reunião (Agent 1). O bot já conhece o outcome (quente/morno/frio) e o objetivo escolhido.';
+  const [value, setValue] = useState<string>(config[fieldKey] ?? '');
+  return (
+    <DrawerBase title={title} sub="Personalização do negócio — injectada antes das regras genéricas" onClose={onClose}
+      onSave={() => onSave({ [fieldKey]: value || null } as Partial<AgentConfig>)}>
+      <div className="o-field">
+        <label className="o-field-label">{title}</label>
+        <div className="o-field-hint">{hint}</div>
+        <textarea
+          className="o-input"
+          rows={6}
+          value={value}
+          onChange={e => setValue(e.target.value)}
+          placeholder="Ex.: Nunca menciones preço — isso é papel do humano. Quando o lead estiver morno, referencia o caso do cliente X..."
+          style={{ resize: 'vertical' }}
+        />
+        <div style={{ fontSize: 10, color: 'var(--o-sub)', marginTop: 4 }}>
+          Deixar vazio usa o comportamento padrão do agente.
+        </div>
+      </div>
+    </DrawerBase>
+  );
+}
+
+type DrawerKey = 'followup' | 'followup_avancado' | 'followup_instrucoes' | 'limite' | 'intervalo' | 'midia' | 'delay_resposta' | 'horario_trabalho' | null;
 type ModalKey  = 'optout' | 'lgpd' | 'reativacao' | null;
 
 export function CamadaPipeline({ config, onUpdate, phoneNumber }: CamadaPipelineProps) {
@@ -464,6 +509,19 @@ export function CamadaPipeline({ config, onUpdate, phoneNumber }: CamadaPipeline
   const followupConfigured = config.followup_h1 > 0;
 
   const fu1Label = `${config.followup_h1}h · ${Math.round(config.followup_h2 / 24)}d · ${Math.round(config.followup_h3 / 24)}d`;
+
+  const _isCloserAgent = config.template_key?.includes('closer');
+  const _isHybridAgent = config.template_key?.includes('hybrid');
+  const _fuInstrValue = _isCloserAgent
+    ? config.followup_recovery_instructions
+    : _isHybridAgent
+    ? config.followup_postsession_instructions
+    : config.followup_sdr_instructions;
+  const _fuInstrLabel = _isCloserAgent
+    ? 'Recuperação de carrinho'
+    : _isHybridAgent
+    ? 'Pós-sessão'
+    : 'Pós-reunião';
 
   const fmtDelayFirst = (v: number) => v === 0 ? 'imediato' : v < 60 ? `${v}s` : `${Math.round(v / 60)}min`;
   const delayFirstLabel = config.first_reply_delay_max_seconds > 0
@@ -587,6 +645,14 @@ export function CamadaPipeline({ config, onUpdate, phoneNumber }: CamadaPipeline
           onClick={() => setDrawer('followup_avancado')} status="ok"
           help="Parâmetros avançados: máximo de tentativas (após isso o lead é arquivado), horário permitido de envio e cadência personalizada em minutos."
         />
+        <EditCard
+          label={`Instrução de follow-up · ${_fuInstrLabel}`}
+          sub="Personalização do negócio para as mensagens automáticas"
+          value={_fuInstrValue ? _fuInstrValue.slice(0, 60) + (_fuInstrValue.length > 60 ? '…' : '') : 'Não configurado (usa padrão do agente)'}
+          onClick={() => setDrawer('followup_instrucoes')}
+          status={_fuInstrValue ? 'ok' : undefined}
+          help="Instrução de texto livre injectada no prompt de follow-up — permite personalizar o que o bot diz com base no contexto real do teu negócio."
+        />
       </div>
 
       {/* Seção 3: Reativação */}
@@ -611,8 +677,9 @@ export function CamadaPipeline({ config, onUpdate, phoneNumber }: CamadaPipeline
       </div>
 
       {/* Drawers */}
-      {drawer === 'followup'          && <DrawerFollowup          config={config} onClose={() => setDrawer(null)} onSave={v => { onUpdate(v); setDrawer(null); }} />}
-      {drawer === 'followup_avancado' && <DrawerFollowupAvancado  config={config} onClose={() => setDrawer(null)} onSave={v => { onUpdate(v); setDrawer(null); }} />}
+      {drawer === 'followup'            && <DrawerFollowup            config={config} onClose={() => setDrawer(null)} onSave={v => { onUpdate(v); setDrawer(null); }} />}
+      {drawer === 'followup_avancado'   && <DrawerFollowupAvancado    config={config} onClose={() => setDrawer(null)} onSave={v => { onUpdate(v); setDrawer(null); }} />}
+      {drawer === 'followup_instrucoes' && <DrawerFollowUpInstructions config={config} onClose={() => setDrawer(null)} onSave={v => { onUpdate(v); setDrawer(null); }} />}
       {drawer === 'limite'            && <DrawerLimite    value={config.daily_limit} onClose={() => setDrawer(null)} onSave={v => { onUpdate({ daily_limit: v }); setDrawer(null); }} />}
       {drawer === 'intervalo'         && <DrawerIntervalo config={config} onClose={() => setDrawer(null)} onSave={v => { onUpdate(v); setDrawer(null); }} />}
       {drawer === 'midia'             && <DrawerMidia           config={config} onClose={() => setDrawer(null)} onSave={v => { onUpdate(v); setDrawer(null); }} />}

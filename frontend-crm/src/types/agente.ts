@@ -299,6 +299,9 @@ export interface AgentConfig {
   followup_first_offset: number;
   followup_cadence: string;
   followup_allowed_hours: string;
+  followup_sdr_instructions: string | null;
+  followup_recovery_instructions: string | null;
+  followup_postsession_instructions: string | null;
 
   // ── Apresentação e agendamento ───────────────────────────
   appointment_mode: 'commercial' | 'exploratory';
@@ -395,6 +398,9 @@ export const DEFAULT_AGENT_CONFIG: AgentConfig = {
   followup_first_offset: 60,
   followup_cadence: '60,1440,4320',
   followup_allowed_hours: '08:00-20:00',
+  followup_sdr_instructions: null,
+  followup_recovery_instructions: null,
+  followup_postsession_instructions: null,
 
   appointment_mode: 'exploratory',
   appointment_reminder_h1: 24,

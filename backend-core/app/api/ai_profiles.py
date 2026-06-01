@@ -172,6 +172,9 @@ class AIProfileBase(BaseModel):
     followup_allowed_hours: Optional[str] = None
     origin_inbound_opener: Optional[str] = None
     origin_outbound_opener: Optional[str] = None
+    followup_sdr_instructions: Optional[str] = None
+    followup_recovery_instructions: Optional[str] = None
+    followup_postsession_instructions: Optional[str] = None
     objection_common: Optional[str] = None
     qualification_score_threshold: Optional[int] = None
     nurture_vs_discard_rule: Optional[str] = None
@@ -232,6 +235,9 @@ class AIProfileUpdate(BaseModel):
     followup_allowed_hours: Optional[str] = None
     origin_inbound_opener: Optional[str] = None
     origin_outbound_opener: Optional[str] = None
+    followup_sdr_instructions: Optional[str] = None
+    followup_recovery_instructions: Optional[str] = None
+    followup_postsession_instructions: Optional[str] = None
     objection_common: Optional[str] = None
     qualification_score_threshold: Optional[int] = None
     nurture_vs_discard_rule: Optional[str] = None
