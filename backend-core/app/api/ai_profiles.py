@@ -176,7 +176,7 @@ class AIProfileBase(BaseModel):
     followup_recovery_instructions: Optional[str] = None
     followup_postsession_instructions: Optional[str] = None
     followup_goal_instructions: Optional[dict] = None
-    cart_recovery_attempt_instructions: Optional[List[str]] = None
+    cart_recovery_attempt_instructions: Optional[List[Optional[str]]] = None
     followup_outcome_instructions: Optional[dict] = None
     objection_common: Optional[str] = None
     qualification_score_threshold: Optional[int] = None
@@ -242,7 +242,7 @@ class AIProfileUpdate(BaseModel):
     followup_recovery_instructions: Optional[str] = None
     followup_postsession_instructions: Optional[str] = None
     followup_goal_instructions: Optional[dict] = None
-    cart_recovery_attempt_instructions: Optional[List[str]] = None
+    cart_recovery_attempt_instructions: Optional[List[Optional[str]]] = None
     followup_outcome_instructions: Optional[dict] = None
     objection_common: Optional[str] = None
     qualification_score_threshold: Optional[int] = None

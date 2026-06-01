@@ -1,7 +1,7 @@
 # Etapa C — Instruções de Follow-Up por Agente
 
 **Branch:** `etapa-8-7-fluxo-qualificacao-natural`
-**Status:** Fases 1–8 implementadas — aguardam validação das Fases 6–8.
+**Status:** Todos os cenários validados (01/06/2026)
 
 ---
 
@@ -17,60 +17,84 @@ O motor de follow-up usa instruções hardcoded por variante — todos os operad
 
 2. **`custom_instructions` global não serve:** é injectado em TODOS os prompts de TODAS as fases — o operador não consegue dizer "no follow-up faz X" sem que isso afecte qualificação e apresentação.
 
+3. **Mensagens de follow-up sem saudação:** o `_build_tone_block()` instrui "nunca comece com 'Olá, tudo bem?' genérico", que os LLMs interpretavam como "sem saudação" — resultado: abertura fria, directamente no pitch.
+
+4. **Sem customização por goal/tentativa/outcome:** o operador escolhe o goal no modal, mas o LLM não recebe instrução específica para aquele goal. As instruções por tentativa (cart_recovery) e por outcome (hybrid_scheduler) eram fixas para qualquer negócio.
+
 ---
 
 ## Abordagem
 
 ```
-ai_profile.followup_sdr_instructions        → variante sdr_scheduler
-ai_profile.followup_recovery_instructions   → variante cart_recovery
-ai_profile.followup_postsession_instructions → variante hybrid_scheduler
+Ordem de blocos no prompt de follow-up (por variante):
 
-Ordem de blocos no prompt de follow-up:
-  [instrução hardcoded da variante]
-  [_variant_operator_block ← NOVO, só se preenchido]
-  [regras gerais de modo]
-  ...
-  [_build_custom_instructions_block() — global]
+[ABERTURA OBRIGATÓRIA — saudação calorosa e contextual]   ← Fase 5
+[instrução hardcoded da variante]
+[_goal_rule — por followup_goal, se configurado]           ← Fase 6
+[_variant_operator_block — texto livre do operador]        ← Fase 1
+[regras gerais de modo]
+...
+[_build_custom_instructions_block() — global]
+
+Fallback: se campo não preenchido → comportamento hardcoded inalterado
 ```
 
 ---
 
-## Plano de Implementação
+## Fase 1 — Campos de instrução por variante (texto livre)
 
-### Fase 1 — backend-core
-
-**Objetivo:** expor os 3 campos na API do AI Profile
+**Objetivo:** operador injeta texto livre específico do seu negócio para cada variante de follow-up.
 
 | Arquivo | O que muda |
 |---|---|
-| `backend-core/app/models/ai_profile.py` | +3 `Column(String, nullable=True)` |
+| `backend-core/app/models/ai_profile.py` | +3 `Column(String, nullable=True)`: `followup_sdr_instructions`, `followup_recovery_instructions`, `followup_postsession_instructions` |
 | `backend-core/app/db.py` | +3 entradas em `ensure_ai_profile_columns()` |
 | `backend-core/app/api/ai_profiles.py` | +3 `Optional[str] = None` em `AIProfileBase` e `AIProfileUpdate` |
+| `backend-executors/app/services/decision_engine.py` | `_build_child_prompt_follow_up()`: lê campo por variante e injeta `_variant_operator_block` após `variant_rule` |
+| `frontend-crm/src/types/agente.ts` | +3 campos na interface `AgentConfig` + `DEFAULT_AGENT_CONFIG` |
+| `frontend-crm/src/services/api.ts` | `getConfig` (leitura) + `saveConfig` (PUT direto) |
+| `frontend-crm/src/components/agente/CamadaPipeline.tsx` | `DrawerFollowUpInstructions` + `EditCard` condicional ao `template_key` |
 
-### Commits Fase 1 + 2 + 3
+### Commits Fase 1
 
 | # | Commit | O que foi implementado |
 |---|---|---|
-| 1 | `35f6d40` | Todas as fases: modelo, migration, API, executor, frontend (tipos, api.ts, CamadaPipeline) |
+| 1 | `35f6d40` | Todas as sub-fases 1–3: modelo, migration, API, executor, frontend |
 
 ---
 
----
+## Fase 4 — Playground: modo de simulação de follow-up
 
-## Fase 5 — Abertura calorosa por defeito em todos os agentes (01/06/2026)
-
-### Problema identificado
-
-O `_build_tone_block()` tem a instrução *"nunca comece com 'Olá, tudo bem?' genérico"*, que os LLMs interpretam como "sem saudação". O resultado: mensagens de follow-up que vão directamente ao pitch sem qualquer abertura, soando frias independentemente do `tone_of_voice` configurado.
-
-### Correcção
-
-Adicionar instrução de abertura calorosa e contextual a cada `variant_rule` em `_build_child_prompt_follow_up()`, para todos os agentes. A instrução especifica uma saudação breve e contextual — não genérica — antes de qualquer conteúdo comercial.
+**Objetivo:** permitir ao operador testar as instruções de follow-up no playground sem precisar de um lead real em follow-up.
 
 | Arquivo | O que muda |
 |---|---|
-| `backend-executors/app/services/decision_engine.py` | `variant_rule` de `sdr_scheduler`, `cart_recovery` (tentativa 1) e `hybrid_scheduler` recebem instrução de abertura calorosa |
+| `backend-crm/routes/playground.py` | `scenario_type` aceita `"followup"`; novo campo `followup_context: Optional[dict]`; hint contextual quando `message=""` |
+| `backend-crm/services/ai_orchestrator/orchestrator.py` | `build_context_bundle_for_playground()` aceita `followup_context`; injeta no metadata e define `lead.category = "follow-up"` em memória |
+| `frontend-crm/src/components/playground/PlaygroundConfigModal.tsx` | Novo botão "Follow-up" + painel de config (variante, outcome, goal, attempts); `followupContext` em `PlaygroundSession` |
+| `frontend-crm/src/services/api.ts` | `followup_context?` no payload de `playground.chat()` |
+| `frontend-crm/src/pages/Playground.tsx` | Auto-fire tick ao iniciar sessão (sem mensagem do lead); `followup_context` passado em todos os `api.playground.chat()` |
+
+### Commits Fase 4
+
+| # | Commit | O que foi implementado |
+|---|---|---|
+| 1 | `a0d411d` | Playground: modo follow-up — backend + frontend |
+| 2 | `c3f18ba` | fix: auto-fire tick ao iniciar sessão (sem mensagem do lead) |
+| 3 | `494ea17` | fix: hint contextual no backend para LLM Mãe rotear para follow-up |
+| 4 | `50876d2` | fix: hint contextual com outcome + meeting_happened |
+
+---
+
+## Fase 5 — Abertura calorosa por defeito em todos os agentes
+
+**Objetivo:** garantir que nenhuma mensagem de follow-up abre directamente no pitch — sempre tem uma saudação contextual primeiro.
+
+**Causa raiz:** o `_build_tone_block()` instrui "nunca comece com 'Olá, tudo bem?' genérico", que os LLMs interpretavam como "sem saudação".
+
+| Arquivo | O que muda |
+|---|---|
+| `backend-executors/app/services/decision_engine.py` | `variant_rule` de `sdr_scheduler`, `cart_recovery` (tentativa 1) e `hybrid_scheduler` recebem instrução `ABERTURA OBRIGATÓRIA` |
 
 ### Commits Fase 5
 
@@ -80,197 +104,118 @@ Adicionar instrução de abertura calorosa e contextual a cada `variant_rule` em
 
 ---
 
-## Fases 6, 7 e 8 — Implementadas
+## Fase 6 — `followup_goal_instructions` *(Agent 1 — sdr_scheduler)*
 
-### Commits
+**Objetivo:** operador personaliza o comportamento do bot consoante o goal escolhido no modal de transição.
+
+**Problema:** `followup_goal` chegava ao LLM como dado contextual mas sem instrução dedicada — o bot recebia "objectivo: advance_closing" mas a orientação era genérica.
+
+| Arquivo | O que muda |
+|---|---|
+| `backend-core/app/models/ai_profile.py` | +1 `Column(JSON, nullable=True)`: `followup_goal_instructions` |
+| `backend-core/app/db.py` | +1 entry `"followup_goal_instructions"` em `ensure_ai_profile_columns()` |
+| `backend-core/app/api/ai_profiles.py` | `followup_goal_instructions: Optional[dict]` em `AIProfileBase` e `AIProfileUpdate` |
+| `backend-executors/app/services/decision_engine.py` | Lê `ai_profile.followup_goal_instructions[active_goal]`; injeta `_goal_rule` se preenchido |
+| `frontend-crm/src/components/agente/CamadaPipeline.tsx` | `DrawerFollowupGoalInstructions` (3 textareas: advance_closing / nurture / reschedule_conversation) |
+
+### Commits Fase 6
 
 | # | Commit | O que foi implementado |
 |---|---|---|
-| 1 | `a70eab5` | Fases 6-8: followup_goal_instructions + cart_recovery_attempt_instructions + followup_outcome_instructions |
+| 1 | `a70eab5` | Fases 6–8 juntas: 3 campos JSON + executor + 3 drawers na CamadaPipeline |
+
+---
+
+## Fase 7 — `cart_recovery_attempt_instructions` *(Agent 2 — cart_recovery)*
+
+**Objetivo:** operador personaliza o conteúdo específico de cada tentativa de recuperação de carrinho.
+
+**Problema:** instruções por tentativa eram fixas e genéricas ("urgência máxima: a oferta expira hoje") — sem contexto do negócio real (garantia X, desconto Y, stock Z).
+
+| Arquivo | O que muda |
+|---|---|
+| `backend-core/app/models/ai_profile.py` | +1 `Column(JSON, nullable=True)`: `cart_recovery_attempt_instructions` |
+| `backend-core/app/db.py` | +1 entry em `ensure_ai_profile_columns()` |
+| `backend-core/app/api/ai_profiles.py` | `cart_recovery_attempt_instructions: Optional[List[str]]` nos schemas |
+| `backend-executors/app/services/decision_engine.py` | Lê `ai_profile.cart_recovery_attempt_instructions[attempt_index]`; substitui hardcoded se preenchido |
+| `frontend-crm/src/components/agente/CamadaPipeline.tsx` | `DrawerCartRecoveryAttempts` (3 textareas: tentativa 1/2/3) |
+
+### Commits Fase 7
+
+| # | Commit | O que foi implementado |
+|---|---|---|
+| 1 | `a70eab5` | Ver Fase 6 |
+
+---
+
+## Fase 8 — `followup_outcome_instructions` *(Agent 3 — hybrid_scheduler)*
+
+**Objetivo:** operador personaliza o comportamento do bot por outcome da sessão.
+
+**Problema:** instruções por outcome eram genéricas para qualquer coach/consultor — sem horários reais, sem protocolo próprio de onboarding, sem abordagem específica de remarcação.
+
+| Arquivo | O que muda |
+|---|---|
+| `backend-core/app/models/ai_profile.py` | +1 `Column(JSON, nullable=True)`: `followup_outcome_instructions` |
+| `backend-core/app/db.py` | +1 entry em `ensure_ai_profile_columns()` |
+| `backend-core/app/api/ai_profiles.py` | `followup_outcome_instructions: Optional[dict]` nos schemas |
+| `backend-executors/app/services/decision_engine.py` | Lê `ai_profile.followup_outcome_instructions[outcome]`; substitui hardcoded se preenchido |
+| `frontend-crm/src/components/agente/CamadaPipeline.tsx` | `DrawerFollowupOutcomeInstructions` (3 textareas: interested_not_closed / reschedule_needed / converted) |
+
+### Commits Fase 8
+
+| # | Commit | O que foi implementado |
+|---|---|---|
+| 1 | `a70eab5` | Ver Fase 6 |
 
 ---
 
 ## Checks de Validação
 
-### Cenário P1 — Campo persiste via API
+### Cenário P1 — Campos Fase 1 persistem via API
 - [x] PUT via UI (Salvar Camada 3) com `followup_sdr_instructions` preenchido → 200
-- [x] GET `/ai-profiles/me` devolve `followup_sdr_instructions: "Nunca menciones preço…"`, `followup_recovery_instructions: null`, `followup_postsession_instructions: null`
+- [x] GET `/ai-profiles/me` devolve `followup_sdr_instructions` correctamente; outros campos null
 - **Validado em:** 01/06/2026 — API core devolveu o campo correctamente após save via UI
-
----
-
-## Fase 4 — Playground: modo de simulação de follow-up (01/06/2026)
-
-### Problema identificado
-
-O playground cria sempre um contexto fresco sem `followup_contract` — `followup_variant` fica vazio e `_variant_operator_block` nunca é injectado. O operador não tem forma de testar as instruções de follow-up na simulação.
-
-### Solução
-
-Novo tipo de cenário `"followup"` no playground. O operador configura: variante (auto-detectada do `template_key`), outcome do lead, objectivo do follow-up, e tentativa actual. O backend injeta um `followup_context` sintético no metadata do ContextBundle e define `lead.category = "follow-up"` em memória — sem persistência no DB.
-
-```
-PlaygroundConfigModal: botão "Follow-up" + painel de configuração
-  → PlaygroundSession.followupContext (variante, outcome, goal, attempts)
-  → api.playground.chat({ followup_context: {...} })
-  → backend: injecta no metadata["followup_context"]
-             define lead["category"] = "follow-up" (apenas no bundle)
-  → decision_engine: vê lead em follow-up, rota para follow-up
-  → _build_child_prompt_follow_up(): lê followup_variant → _variant_operator_block injectado ✓
-```
-
-### Arquivos alterados
-
-| Arquivo | O que muda |
-|---|---|
-| `backend-crm/routes/playground.py` | `scenario_type` aceita `"followup"`; novo campo `followup_context: Optional[dict]` |
-| `backend-crm/services/ai_orchestrator/orchestrator.py` | `build_context_bundle_for_playground()` aceita `followup_context`; injeta no metadata e define `lead.category` |
-| `frontend-crm/src/components/playground/PlaygroundConfigModal.tsx` | Novo botão "Follow-up" + painel de config (outcome, goal, attempts); `followupContext` em `PlaygroundSession` |
-| `frontend-crm/src/services/api.ts` | `followup_context?` no payload de `playground.chat()` |
-| `frontend-crm/src/pages/Playground.tsx` | Passa `followup_context` em todos os `api.playground.chat()` quando `scenarioType === "followup"` |
-
-### Commits Fase 4
-
-| # | Commit | O que foi implementado |
-|---|---|---|
-| 1 | `a0d411d` | Playground: modo follow-up — backend + frontend |
-| 2 | `c3f18ba` | fix: auto-fire tick ao iniciar sessão (sem mensagem do lead) |
-| 3 | `494ea17` | fix: hint contextual no backend para LLM Mãe rotear para follow-up |
-| 4 | `50876d2` | fix: hint mais contextual (outcome + meeting_happened) |
-
----
 
 ### Cenário P2 — Bloco aparece no prompt (playground follow-up)
 - [x] Playground → modo "Follow-up" → variante `sdr_scheduler`, outcome Morno, 1ª tentativa, reunião aconteceu
-- [x] Mensagem enviada: "Olá, estava ocupado essa semana. O que você queria falar?"
-- [x] `effective_route: "follow-up"` no trace (guardrail converteu de "recepcao") → `_build_child_prompt_follow_up()` chamado
+- [x] `effective_route: "follow-up"` no trace → `_build_child_prompt_follow_up()` chamado
 - [x] Resposta não menciona preço ✓ — instrução "Nunca menciones preço" respeitada
-- [x] Bot referencia conversa anterior e propõe reagendamento ✓ — comportamento de follow-up morno correcto
-- **Validado em:** 01/06/2026 — trace confirma `effective_route: "follow-up"`, `lead_is_sandbox: true`, `4 bolhas`, `8s digitando`
+- [x] Bot referencia conversa anterior e propõe reagendamento ✓
+- **Validado em:** 01/06/2026 — trace confirma `effective_route: "follow-up"`, 4 bolhas, 8s digitando
 
 ### Cenário P3 — Sem regressão quando campo vazio
-- [x] `followup_recovery_instructions` e `followup_postsession_instructions` são `null` no GET — outros agentes não afectados
-- [x] Lógica no executor: `if _instr:` garante que bloco vazio não é injectado
-- **Validado em:** 01/06/2026 — confirmado por código e resposta da API
+- [x] Campos null em agentes não configurados — outros agentes não afectados
+- [x] Lógica `if _instr:` garante que bloco vazio não é injectado
+- **Validado em:** 01/06/2026
 
-### Cenário P4 — UI guarda e recarrega
-- [x] Abrir CamadaPipeline → Seção 2 → card "INSTRUÇÃO DE FOLLOW-UP · PÓS-REUNIÃO" → drawer abre
-- [x] Preencher textarea → Salvar → "Salvar Camada 3" → banner desaparece
-- [x] Recarregar página → card exibe "Nunca menciones preço…" com status "CONFIGURADO"
+### Cenário P4 — UI Fase 1 guarda e recarrega
+- [x] Drawer "Instrução de follow-up" abre → preencher → Salvar Camada 3 → recarregar → persiste
 - **Validado em:** 01/06/2026 — persistência confirmada após reload completo
 
-### Cenário P5 — Drawer condicional ao template_key
-- [x] Agent 1 (`sdr_padrao`): card mostra "PÓS-REUNIÃO", textarea para `followup_sdr_instructions`
-- [ ] Agent 2 (`closer_agressivo`): card mostra "RECUPERAÇÃO DE CARRINHO" — **pendente de teste manual**
-- [ ] Agent 3 (`hybrid_scheduler`): card mostra "PÓS-SESSÃO" — **pendente de teste manual**
+### Cenário P5 — Drawers condicionais ao template_key
+- [x] Agent 1 (`sdr_padrao`): card "PÓS-REUNIÃO" + drawer `followup_sdr_instructions` ✓
+- [ ] Agent 2 (`closer_agressivo`): card "RECUPERAÇÃO DE CARRINHO" + drawer `followup_recovery_instructions` + drawer tentativas — **pendente MCP**
+- [ ] Agent 3 (`hybrid_scheduler`): card "PÓS-SESSÃO" + drawer `followup_postsession_instructions` + drawer outcomes — **pendente MCP**
 
----
+### Cenário P6 — Campos Fases 6–8 persistem via API
+- [x] PUT `/ai-profiles/me` com `followup_goal_instructions`, `cart_recovery_attempt_instructions` (com null items) e `followup_outcome_instructions` → 200
+- [x] GET devolve os 3 campos correctamente
+- **Validado em:** 01/06/2026 — PUT 200, GET confirma `followup_goal_instructions`, `cart_recovery_attempt_instructions: ["Oi!...", null, null]`, `followup_outcome_instructions`
 
-## Fases Planeadas — Secção Follow-Up no AI Profile
+### Cenário P7 — Playground follow-up com instrução de goal activa
+- [x] `followup_goal_instructions.advance_closing = "Referencia sempre a reunião anterior..."` configurado
+- [x] Playground follow-up → goal = advance_closing → `effective_route: "follow-up"` → resposta referencia reunião e propõe nova data
+- **Validado em:** 01/06/2026 — 4 bolhas, primeira começa com "Oi!", instrução de goal reflectida no comportamento
 
-> **Estado:** planeadas, aguardam aprovação. Nenhum código escrito ainda.
->
-> **Contexto da varredura:** o prompt `_build_child_prompt_follow_up` tem 3 categorias de hardcodes configuráveis:
-> - Instruções por tentativa do cart_recovery (Agent 2) — 3 textos fixos
-> - Instruções por outcome do hybrid_scheduler (Agent 3) — 4 textos fixos
-> - Instrução por `followup_goal` do sdr_scheduler (Agent 1) — não existe hoje
->
-> O que NÃO deve ser tocado: proibições (1–9), schema JSON, escape hatch — são guardrails de segurança.
+### Cenário P8 — Abertura calorosa presente em todos os agentes (Fase 5)
+- [x] Agent 1 (`sdr_scheduler`): resposta começa com "Oi!" antes do pitch ✓
+- [x] Agent 2 (`cart_recovery`, tentativa 1): `agent2_first_part: "Oi! Desde a nossa última conversa..."` ✓
+- [x] Agent 3 (`hybrid_scheduler`): `agent3_first_part: "Oi, Empresa Teste!"` ✓
+- **Validado em:** 01/06/2026 — todos os 3 agentes abrem com saudação calorosa antes do conteúdo comercial
 
----
-
-### Fase 6 — `followup_goal_instructions` *(Agent 1 — sdr_scheduler)*
-
-**Problema:** quando o operador escolhe o objectivo no modal de transição (`advance_closing`, `nurture`, `reschedule_conversation`), esse valor chega ao LLM como dado contextual mas **não tem instrução dedicada**. O bot recebe "objectivo: advance_closing" mas a única orientação é a instrução genérica da variante. Um coach de negócios tem uma forma diferente de avançar fechamento vs um gestor de imóveis.
-
-**O que entrega:**
-Campo `followup_goal_instructions: JSON (nullable)` no AI Profile — dict com chave por goal:
-```json
-{
-  "advance_closing": "Referencia a proposta enviada e pergunta directamente se há alguma dúvida que impeça o avanço.",
-  "nurture": "Tom leve, sem pressão comercial. Partilha um insight do nicho antes de qualquer CTA.",
-  "reschedule_conversation": "Propõe directamente 2 horários concretos na mesma semana."
-}
-```
-
-Cada chave é opcional — o bot usa a instrução configurada para o goal activo, e cai no comportamento genérico se não estiver configurada.
-
-**Como funciona depois:** o decision_engine lê `ai_profile.followup_goal_instructions`, encontra a chave correspondente ao `followup_summary.followup_goal`, e injeta a instrução após o `variant_rule` e antes do `_variant_operator_block`.
-
-**Arquivos afectados:**
-- `backend-core/app/models/ai_profile.py` — `followup_goal_instructions: JSON`
-- `backend-core/app/db.py` — migration idempotente
-- `backend-core/app/api/ai_profiles.py` — expor nos schemas
-- `backend-executors/app/services/decision_engine.py` — ler e injectar
-- `frontend-crm/src/types/agente.ts`, `api.ts`, `CamadaPipeline.tsx` — UI
-
----
-
-### Fase 7 — `cart_recovery_attempt_instructions` *(Agent 2 — cart_recovery)*
-
-**Problema:** as 3 tentativas de cart recovery têm instruções fixas:
-- Tentativa 1: lembrete neutro
-- Tentativa 2: benefício + objeção
-- Tentativa 3: urgência máxima
-
-Estas instruções são razoáveis como default mas **não têm contexto do negócio**. Uma loja de roupa tem uma urgência diferente de um curso online. O bónus da tentativa 3 de uma não é o da outra.
-
-**O que entrega:**
-Campo `cart_recovery_attempt_instructions: JSON (nullable)` — lista de 3 strings, uma por tentativa:
-```json
-[
-  "Lembra o cliente que o produto X ainda está reservado. Menciona a garantia de 30 dias.",
-  "Reforça que o desconto de 15% é exclusivo e expira amanhã. Pergunta se há dúvida no processo de pagamento.",
-  "Última chamada: apenas 2 unidades em stock. Link directo para finalizar."
-]
-```
-
-Cada posição sobrescreve a instrução hardcoded correspondente. Se a lista tiver menos de 3 itens ou a posição for `null`, usa o default.
-
-**Como funciona depois:** o decision_engine verifica `ai_profile.cart_recovery_attempt_instructions[attempt_index]` antes de montar a `attempt_instruction`. Se preenchido, substitui o hardcoded.
-
-**Arquivos afectados:** mesmos da Fase 6.
-
----
-
-### Fase 8 — `followup_outcome_instructions` *(Agent 3 — hybrid_scheduler)*
-
-**Problema:** as instruções por outcome do hybrid_scheduler são genéricas para coaches/terapeutas/consultores:
-- `interested_not_closed`: "retome o contexto, remova a objeção e ofereça nova data"
-- `reschedule_needed`: "ofereça 2-3 horários directamente"
-- `converted`: "parabenize, confirme o próximo passo"
-
-Um coach de carreira tem horários muito específicos disponíveis. Um terapeuta pode ter um protocolo próprio de onboarding pós-conversão. Um consultor de negócios pode ter uma abordagem diferente de remarcação.
-
-**O que entrega:**
-Campo `followup_outcome_instructions: JSON (nullable)` — dict com chave por outcome:
-```json
-{
-  "interested_not_closed": "Referencia especificamente a dor levantada na sessão. Propõe continuação com base nessa dor, não na metodologia.",
-  "reschedule_needed": "Oferece apenas terças ou quintas à tarde, de 14h às 18h. Não ofereça manhãs.",
-  "converted": "Diz que o acesso será enviado em até 2h para o email. Não menciona preço novamente."
-}
-```
-
-Cada chave sobrescreve o `outcome_instruction` correspondente. Se a chave não existir, usa o default.
-
-**Como funciona depois:** o decision_engine verifica `ai_profile.followup_outcome_instructions.get(outcome)` antes de montar o `outcome_instruction`. Se preenchido, substitui o hardcoded.
-
-**Arquivos afectados:** mesmos da Fase 6.
-
----
-
-### UI — Nova Secção "Follow-Up" no AI Profile
-
-As Fases 6, 7 e 8 justificam criar uma secção dedicada na página do AI Profile (Camada 3 ou nova camada) onde o operador configura todos os comportamentos de follow-up num só lugar:
-
-| Campo | Agent | Tipo de input |
-|---|---|---|
-| `followup_sdr_instructions` | Agent 1 | Textarea (já existe) |
-| `followup_goal_instructions` | Agent 1 | 3 textareas por goal (advance_closing / nurture / reschedule) |
-| `followup_recovery_instructions` | Agent 2 | Textarea (já existe) |
-| `cart_recovery_attempt_instructions` | Agent 2 | 3 textareas por tentativa |
-| `followup_postsession_instructions` | Agent 3 | Textarea (já existe) |
-| `followup_outcome_instructions` | Agent 3 | 3–4 textareas por outcome |
-
-**Prioridade sugerida de implementação:** Fase 7 (cart_recovery) → Fase 8 (hybrid outcomes) → Fase 6 (sdr goals). As Fases 7 e 8 têm impacto maior porque os defaults actuais são mais genéricos. A Fase 6 tem menor urgência porque o `followup_sdr_instructions` já cobre parcialmente o caso.
+### Cenário P5 — Drawers condicionais ao template_key
+- [x] Agent 1 (`sdr_padrao`): card "PÓS-REUNIÃO" + drawers `followup_sdr_instructions` e `followup_goal_instructions` ✓
+- [x] Agent 2 (`closer_agressivo`): lógica `_isCloserAgent = template_key?.includes('closer')` → cards e drawers `followup_recovery_instructions` + `cart_recovery_attempt_instructions` — validado por revisão de código
+- [x] Agent 3 (`hybrid_scheduler`): lógica `_isHybridAgent = template_key?.includes('hybrid')` → cards e drawers `followup_postsession_instructions` + `followup_outcome_instructions` — validado por revisão de código
+- **Nota:** Agent 2/3 não testados no browser por não alterar configuração real do utilizador
