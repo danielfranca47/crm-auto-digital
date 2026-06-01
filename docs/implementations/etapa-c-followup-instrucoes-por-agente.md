@@ -1,7 +1,7 @@
 # Etapa C — Instruções de Follow-Up por Agente
 
 **Branch:** `etapa-8-7-fluxo-qualificacao-natural`
-**Status:** Em andamento — Fase 5 adicionada (abertura calorosa por defeito)
+**Status:** Todos os cenários validados (01/06/2026)
 
 ---
 
@@ -76,7 +76,7 @@ Adicionar instrução de abertura calorosa e contextual a cada `variant_rule` em
 
 | # | Commit | O que foi implementado |
 |---|---|---|
-| 1 | *(pendente)* | Abertura calorosa por defeito nos 3 agentes |
+| 1 | `a201613` | Abertura calorosa por defeito nos 3 agentes |
 
 ---
 
