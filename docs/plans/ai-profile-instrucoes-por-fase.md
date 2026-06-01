@@ -1,8 +1,8 @@
 # AI Profile — Instruções por Fase (Personalização de Negócio)
 
 > **Status: PLANEADO — não iniciado**
-> Separado de `pipeline-configurable-fields.md` por ser um domínio próprio.
-> Foco: campos de texto livre que permitem ao operador injectar o contexto do seu negócio em fases específicas do agente, sem afectar as outras.
+> Os três campos de follow-up (`followup_sdr_instructions`, `followup_recovery_instructions`, `followup_postsession_instructions`) foram migrados para `pipeline-configurable-fields.md` — são a prioridade actual.
+> Este arquivo cobre os restantes gaps por fase.
 
 ---
 
