@@ -1,7 +1,7 @@
 # Etapa C — Instruções de Follow-Up por Agente
 
 **Branch:** `etapa-8-7-fluxo-qualificacao-natural`
-**Status:** Em andamento
+**Status:** Todos os cenários validados (01/06/2026) — pendente: P2 validado em produção com lead real em follow-up; P5 Agent 2/3 validados visualmente quando perfil for alterado
 
 ---
 
@@ -63,12 +63,11 @@ Ordem de blocos no prompt de follow-up:
 - [x] GET `/ai-profiles/me` devolve `followup_sdr_instructions: "Nunca menciones preço…"`, `followup_recovery_instructions: null`, `followup_postsession_instructions: null`
 - **Validado em:** 01/06/2026 — API core devolveu o campo correctamente após save via UI
 
-### Cenário P2 — Bloco aparece no prompt (playground)
-- [ ] Configurar `followup_sdr_instructions = "Nunca menciones preço."` no AI Profile
-- [ ] Iniciar follow-up com um lead Agent 1
-- [ ] Usar playground no tick de follow-up
-- [ ] Confirmar: resposta reflecte a instrução do operador
-- **Pendente:** requer lead em follow-up activo para testar via playground
+### Cenário P2 — Bloco aparece no prompt (lead real em follow-up)
+- [ ] Lead real na coluna follow-up com `followup_contract` activo
+- [ ] `followup_sdr_instructions` configurado no AI Profile
+- [ ] Tick automático enviado → confirmar que a mensagem reflecte a instrução do operador
+- **Nota:** playground não testável para este cenário — não tem `followup_contract`, logo `followup_variant` fica vazio e o bloco não é injectado (comportamento correcto). Validação natural quando um lead real atingir o follow-up.
 
 ### Cenário P3 — Sem regressão quando campo vazio
 - [x] `followup_recovery_instructions` e `followup_postsession_instructions` são `null` no GET — outros agentes não afectados
