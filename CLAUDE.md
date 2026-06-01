@@ -353,3 +353,54 @@ Antes de criar o commit, verificar se alguma alteração afeta uma área documen
 - Se a funcionalidade for nova e não existir doc correspondente, criar `docs/architecture/<nome>.md`
 
 O objetivo dos docs de arquitetura é ser um espelho do código atual — enxuto e confiável.
+
+---
+
+## Workflow de Implementação de Features
+
+Todo pedido de nova funcionalidade ou correção não-trivial segue este ciclo obrigatório. Os arquivos guia estão em `docs/implementations/`.
+
+### Ciclo de vida
+
+```
+1. Plan Mode (obrigatório antes de qualquer código)
+   → ler _guia-documentar-implementacao.md
+   → diagnóstico: já existe? o que construir? riscos?
+   → aguardar aprovação do utilizador
+
+2. Criar arquivo docs/implementations/<etapa>-<slug>.md
+   → preencher com template de _template-implementacao.md
+   → só criado APÓS aprovação do plano
+
+3. Implementar fase a fase
+   → cada fase = 1 commit
+   → registar hash do commit no arquivo .md imediatamente após o commit
+
+4. Aguardar testes do utilizador
+   → o utilizador executa os checks de validação do arquivo .md
+   → marcar [x] nos checks validados com data
+   → se teste revelar problema: nova fase no mesmo arquivo (Plan Mode novamente)
+
+5. Graduação (só quando TODOS os checks estão [x])
+   → seguir _processo-graduacao-implementacao.md
+   → migrar informação arquitectural relevante para docs/architecture/
+   → git rm do arquivo de implementação
+   → commit único de graduação
+```
+
+### Regras críticas
+
+- **Nunca avançar para código sem plano aprovado.** Plan Mode não é opcional.
+- **Nunca graduar com checks `[ ]` em aberto.** Checks marcados `[⏭️]` (pulados justificados) são permitidos.
+- **O arquivo .md é o contrato vivo da feature** — deve reflectir sempre o estado real da implementação.
+- **Cada fase tem exactamente 1 commit.** O hash é registado no .md logo após o commit.
+- Um arquivo de implementação com `Status: Em andamento` significa que há testes pendentes — não iniciar nova etapa sobreposta sem validar primeiro.
+
+### Arquivos de referência
+
+| Arquivo | Propósito |
+|---|---|
+| [`docs/implementations/_guia-documentar-implementacao.md`](docs/implementations/_guia-documentar-implementacao.md) | Processo completo passo a passo |
+| [`docs/implementations/_template-implementacao.md`](docs/implementations/_template-implementacao.md) | Template concreto preenchido |
+| [`docs/implementations/_processo-graduacao-implementacao.md`](docs/implementations/_processo-graduacao-implementacao.md) | Como graduar para docs/architecture/ |
+
