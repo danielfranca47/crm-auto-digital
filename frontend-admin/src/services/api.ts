@@ -70,7 +70,13 @@ export type AdminUser = {
   id: number;
   email: string;
   name?: string;
+  status: string;
+  created_at: string;
   enabled_extensions?: string[];
+  plan_name?: string;
+  plan_code?: string;
+  subscription_status?: string;
+  subscription_period_end?: string;
 };
 
 export type AdminInstance = {

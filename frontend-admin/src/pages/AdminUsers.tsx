@@ -5,7 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { api } from "@/services/api";
 import { useToast } from "@/hooks/use-toast";
-import { Search, X } from "lucide-react";
+import { Search, X, User } from "lucide-react";
 import type { AdminUser } from "@/services/api";
 
 const AVAILABLE_EXTENSIONS = [
@@ -14,6 +14,23 @@ const AVAILABLE_EXTENSIONS = [
   { id: "linkedin_company", label: "LinkedIn Empresa" },
   { id: "google_reviews", label: "Avaliações Google" },
 ];
+
+const PLAN_BADGE_CLASSES: Record<string, string> = {
+  start: "bg-slate-700/60 text-slate-300 border-slate-600",
+  growth: "bg-indigo-900/50 text-indigo-300 border-indigo-700/50",
+  scale: "bg-violet-900/50 text-violet-300 border-violet-700/50",
+  enterprise: "bg-amber-900/50 text-amber-300 border-amber-700/50",
+};
+
+function planBadgeClass(code?: string): string {
+  if (!code) return "bg-slate-700/40 text-slate-500 border-slate-700";
+  return PLAN_BADGE_CLASSES[code.toLowerCase()] ?? "bg-slate-700/60 text-slate-300 border-slate-600";
+}
+
+function fmtDate(iso?: string | null): string {
+  if (!iso) return "—";
+  return new Date(iso).toLocaleDateString("pt-PT", { day: "2-digit", month: "short", year: "numeric" });
+}
 
 export default function AdminUsers() {
   const { toast } = useToast();
@@ -80,15 +97,15 @@ export default function AdminUsers() {
   };
 
   return (
-    <div className="p-6 max-w-4xl">
+    <div className="p-6 max-w-5xl">
       <h1 className="text-xl font-semibold text-slate-200 mb-1">Usuários</h1>
-      <p className="text-slate-500 text-sm mb-5">Gestão de clientes e extensões ativas.</p>
+      <p className="text-slate-500 text-sm mb-5">Gestão de clientes, planos e extensões ativas.</p>
 
       <div className="flex gap-3 mb-5">
         <div className="relative flex-1 max-w-sm">
           <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
           <Input
-            placeholder="Buscar por email…"
+            placeholder="Buscar por email ou nome…"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && loadUsers()}
@@ -112,37 +129,83 @@ export default function AdminUsers() {
           </CardTitle>
         </CardHeader>
         <CardContent className="p-0">
+          {/* Table header */}
+          <div className="hidden md:grid grid-cols-[1fr_140px_90px_110px_110px_100px] gap-x-3 px-5 py-2 border-b border-slate-700/60 text-xs font-medium text-slate-500 uppercase tracking-wide">
+            <span>Usuário</span>
+            <span>Plano</span>
+            <span>Status</span>
+            <span>Membro desde</span>
+            <span>Período até</span>
+            <span />
+          </div>
+
           <div className="divide-y divide-slate-700/60">
             {users.map((user) => (
-              <div key={user.id} className="flex items-center justify-between px-5 py-3">
-                <div className="min-w-0">
-                  <p className="text-sm font-medium text-slate-200 truncate">{user.email}</p>
-                  <div className="flex flex-wrap gap-1 mt-1">
-                    {user.enabled_extensions?.length ? (
-                      user.enabled_extensions.map((ext) => (
-                        <Badge
-                          key={ext}
-                          variant="secondary"
-                          className="text-xs bg-indigo-900/50 text-indigo-300 border-indigo-700/50"
-                        >
-                          {AVAILABLE_EXTENSIONS.find((e) => e.id === ext)?.label ?? ext}
-                        </Badge>
-                      ))
-                    ) : (
-                      <span className="text-xs text-slate-600">Sem extensões ativas</span>
+              <div
+                key={user.id}
+                className="grid grid-cols-1 md:grid-cols-[1fr_140px_90px_110px_110px_100px] gap-x-3 gap-y-1 items-center px-5 py-3"
+              >
+                {/* Name / email */}
+                <div className="min-w-0 flex items-center gap-2">
+                  <div className="shrink-0 w-7 h-7 rounded-full bg-slate-700 flex items-center justify-center">
+                    <User size={13} className="text-slate-400" />
+                  </div>
+                  <div className="min-w-0">
+                    {user.name && (
+                      <p className="text-sm font-medium text-slate-200 truncate">{user.name}</p>
                     )}
+                    <p className={`text-xs truncate ${user.name ? "text-slate-500" : "text-sm font-medium text-slate-200"}`}>
+                      {user.email}
+                    </p>
                   </div>
                 </div>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={() => openModal(user)}
-                  className="ml-3 shrink-0 border-slate-600 text-slate-300 hover:bg-slate-700"
-                >
-                  Gerenciar
-                </Button>
+
+                {/* Plan */}
+                <div className="flex items-center">
+                  <Badge
+                    variant="outline"
+                    className={`text-xs ${planBadgeClass(user.plan_code)}`}
+                  >
+                    {user.plan_name ?? "Sem plano"}
+                  </Badge>
+                </div>
+
+                {/* Status */}
+                <div className="flex items-center">
+                  <Badge
+                    variant="outline"
+                    className={`text-xs ${
+                      user.status === "active"
+                        ? "bg-emerald-900/40 text-emerald-400 border-emerald-700/50"
+                        : "bg-red-900/40 text-red-400 border-red-700/50"
+                    }`}
+                  >
+                    {user.status === "active" ? "Ativo" : user.status}
+                  </Badge>
+                </div>
+
+                {/* Member since */}
+                <span className="text-xs text-slate-400">{fmtDate(user.created_at)}</span>
+
+                {/* Period end */}
+                <span className="text-xs text-slate-400">
+                  {user.subscription_period_end ? fmtDate(user.subscription_period_end) : "—"}
+                </span>
+
+                {/* Actions */}
+                <div className="flex items-center">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => openModal(user)}
+                    className="text-xs border-slate-600 text-slate-300 hover:bg-slate-700"
+                  >
+                    Extensões
+                  </Button>
+                </div>
               </div>
             ))}
+
             {users.length === 0 && !isLoading && (
               <p className="px-5 py-10 text-center text-sm text-slate-500">
                 Nenhum usuário encontrado.
@@ -152,6 +215,7 @@ export default function AdminUsers() {
         </CardContent>
       </Card>
 
+      {/* Extensions modal */}
       {modalUser && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/60"
@@ -164,7 +228,9 @@ export default function AdminUsers() {
             <div className="flex items-start justify-between mb-4">
               <div>
                 <h3 className="font-semibold text-slate-200">Extensões</h3>
-                <p className="text-xs text-slate-400 mt-0.5 truncate max-w-[220px]">{modalUser.email}</p>
+                <p className="text-xs text-slate-400 mt-0.5 truncate max-w-[220px]">
+                  {modalUser.name ? `${modalUser.name} · ` : ""}{modalUser.email}
+                </p>
               </div>
               <button onClick={() => setModalUser(null)} className="text-slate-500 hover:text-slate-300">
                 <X size={16} />
