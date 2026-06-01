@@ -302,6 +302,9 @@ export interface AgentConfig {
   followup_sdr_instructions: string | null;
   followup_recovery_instructions: string | null;
   followup_postsession_instructions: string | null;
+  followup_goal_instructions: Record<string, string> | null;
+  cart_recovery_attempt_instructions: [string | null, string | null, string | null] | null;
+  followup_outcome_instructions: Record<string, string> | null;
 
   // ── Apresentação e agendamento ───────────────────────────
   appointment_mode: 'commercial' | 'exploratory';
@@ -401,6 +404,9 @@ export const DEFAULT_AGENT_CONFIG: AgentConfig = {
   followup_sdr_instructions: null,
   followup_recovery_instructions: null,
   followup_postsession_instructions: null,
+  followup_goal_instructions: null,
+  cart_recovery_attempt_instructions: null,
+  followup_outcome_instructions: null,
 
   appointment_mode: 'exploratory',
   appointment_reminder_h1: 24,

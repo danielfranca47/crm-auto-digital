@@ -2833,17 +2833,33 @@ def _build_child_prompt_follow_up(
     followup_variant = str(followup_summary.get("followup_variant") or "").strip().lower()
     variant_rule = ""
     if followup_variant == "sdr_scheduler":
+        # Fase 6 — instrução por followup_goal configurada pelo operador
+        _active_goal = str(followup_summary.get("followup_goal") or "").strip().lower()
+        _goal_instrs = ai_profile.get("followup_goal_instructions") or {}
+        _goal_custom = ((_goal_instrs.get(_active_goal) or "") if isinstance(_goal_instrs, dict) else "").strip()
+        _goal_rule = (
+            f"- Instrução para goal '{_active_goal}' (personalização do operador): {_goal_custom}\n"
+            if _goal_custom else ""
+        )
         variant_rule = (
             "- ABERTURA OBRIGATÓRIA: começa sempre com uma saudação breve e calorosa, contextual à conversa anterior "
             "(ex: 'Oi [nome]!' ou referência ao que foi discutido). NUNCA abre directamente com pitch ou proposta — "
             "a saudação vem PRIMEIRO, numa frase curta separada.\n"
             "- Variante sdr_scheduler: follow-up consultivo pós-reunião; "
             "reforçar valor, síntese do contexto e próximo passo comercial.\n"
+            + _goal_rule
         )
     elif followup_variant == "cart_recovery":
         attempts_done = int(followup_summary.get("attempts") or 0)
         next_attempt = attempts_done + 1
-        if next_attempt <= 1:
+        # Fase 7 — instrução por tentativa configurada pelo operador (sobrescreve default)
+        _cart_custom_list = ai_profile.get("cart_recovery_attempt_instructions")
+        _cart_custom = ""
+        if isinstance(_cart_custom_list, list) and len(_cart_custom_list) >= next_attempt:
+            _cart_custom = (_cart_custom_list[next_attempt - 1] or "").strip()
+        if _cart_custom:
+            attempt_instruction = _cart_custom
+        elif next_attempt <= 1:
             attempt_instruction = (
                 "Tentativa 1 — lembrete neutro: o pedido está reservado e o link ainda está disponível. "
                 "Sem pressão — apenas informa e pergunta se há dúvida que impeça o pagamento."
@@ -2858,7 +2874,6 @@ def _build_child_prompt_follow_up(
                 "Tentativa 3 — urgência máxima: a oferta expira hoje. "
                 "CTA direto para o link de pagamento. Não reabra qualificação."
             )
-        # Tentativa 1 deve ter abertura calorosa; 2 e 3 podem ser mais directas
         cart_opening = (
             "- ABERTURA OBRIGATÓRIA: começa com uma saudação breve e amigável antes do conteúdo "
             "(ex: 'Oi [nome]! Passando para dar um retorno'). NUNCA abre directamente com pitch.\n"
@@ -2873,7 +2888,12 @@ def _build_child_prompt_follow_up(
         )
     elif followup_variant == "hybrid_scheduler":
         outcome = str(followup_summary.get("outcome") or "").strip().lower()
-        if outcome == "interested_not_closed":
+        # Fase 8 — instrução por outcome configurada pelo operador (sobrescreve default)
+        _outcome_instrs = ai_profile.get("followup_outcome_instructions") or {}
+        _outcome_custom = ((_outcome_instrs.get(outcome) or "") if isinstance(_outcome_instrs, dict) else "").strip()
+        if _outcome_custom:
+            outcome_instruction = _outcome_custom
+        elif outcome == "interested_not_closed":
             outcome_instruction = (
                 "Tom de continuidade: retome o contexto da sessão anterior, "
                 "remova a objeção específica que foi levantada e ofereça nova data concreta para avançar."

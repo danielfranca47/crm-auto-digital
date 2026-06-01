@@ -450,6 +450,113 @@ function DrawerFollowupAvancado({ config, onSave, onClose }: {
   );
 }
 
+// ─── Drawer: Follow-up goal instructions (Agent 1) ───────────────────────────
+function DrawerFollowupGoalInstructions({
+  config, onSave, onClose,
+}: { config: AgentConfig; onSave: (v: Partial<AgentConfig>) => void; onClose: () => void }) {
+  const goals = [
+    { key: 'advance_closing', label: 'Avançar fechamento', hint: 'Lead saiu quente/morno e o objectivo é fechar.' },
+    { key: 'nurture', label: 'Nutrir relacionamento', hint: 'Lead precisa de mais tempo — sem pressão comercial.' },
+    { key: 'reschedule_conversation', label: 'Reagendar conversa', hint: 'Reunião não aconteceu ou lead pediu recontacto.' },
+  ] as const;
+  const init = config.followup_goal_instructions ?? {};
+  const [vals, setVals] = useState<Record<string, string>>({
+    advance_closing: init.advance_closing ?? '',
+    nurture: init.nurture ?? '',
+    reschedule_conversation: init.reschedule_conversation ?? '',
+  });
+  function handleSave() {
+    const result: Record<string, string> = {};
+    for (const { key } of goals) { if (vals[key].trim()) result[key] = vals[key].trim(); }
+    onSave({ followup_goal_instructions: Object.keys(result).length ? result : null });
+  }
+  return (
+    <DrawerBase title="Instrução por objectivo de follow-up" sub="Agent 1 — personaliza a abordagem consoante o goal escolhido no modal de transição" onClose={onClose} onSave={handleSave}>
+      {goals.map(({ key, label, hint }) => (
+        <div key={key} className="o-field">
+          <label className="o-field-label">{label}</label>
+          <div className="o-field-hint">{hint}</div>
+          <textarea className="o-input" rows={3} style={{ resize: 'vertical' }}
+            value={vals[key]} onChange={e => setVals(v => ({ ...v, [key]: e.target.value }))}
+            placeholder="Deixar vazio usa o comportamento padrão do agente."
+          />
+        </div>
+      ))}
+    </DrawerBase>
+  );
+}
+
+// ─── Drawer: Cart recovery attempt instructions (Agent 2) ─────────────────────
+function DrawerCartRecoveryAttempts({
+  config, onSave, onClose,
+}: { config: AgentConfig; onSave: (v: Partial<AgentConfig>) => void; onClose: () => void }) {
+  const defaults = [
+    { label: '1ª tentativa', hint: 'Default: lembrete neutro — pedido reservado, sem pressão.' },
+    { label: '2ª tentativa', hint: 'Default: reforçar benefício + antecipar objeção mais comum.' },
+    { label: '3ª tentativa', hint: 'Default: urgência máxima — oferta expira hoje, CTA directo.' },
+  ];
+  const init = config.cart_recovery_attempt_instructions ?? [null, null, null];
+  const [vals, setVals] = useState<[string, string, string]>([
+    init[0] ?? '', init[1] ?? '', init[2] ?? '',
+  ]);
+  function handleSave() {
+    const result: [string | null, string | null, string | null] = [
+      vals[0].trim() || null, vals[1].trim() || null, vals[2].trim() || null,
+    ];
+    onSave({ cart_recovery_attempt_instructions: result.some(Boolean) ? result : null });
+  }
+  return (
+    <DrawerBase title="Instrução por tentativa — recuperação de carrinho" sub="Agent 2 — personaliza o que o bot diz em cada tentativa de recuperação" onClose={onClose} onSave={handleSave}>
+      {defaults.map(({ label, hint }, i) => (
+        <div key={i} className="o-field">
+          <label className="o-field-label">{label}</label>
+          <div className="o-field-hint">{hint}</div>
+          <textarea className="o-input" rows={3} style={{ resize: 'vertical' }}
+            value={vals[i]} onChange={e => setVals(prev => { const n = [...prev] as [string,string,string]; n[i] = e.target.value; return n; })}
+            placeholder="Deixar vazio usa o comportamento padrão do agente."
+          />
+        </div>
+      ))}
+    </DrawerBase>
+  );
+}
+
+// ─── Drawer: Follow-up outcome instructions (Agent 3) ─────────────────────────
+function DrawerFollowupOutcomeInstructions({
+  config, onSave, onClose,
+}: { config: AgentConfig; onSave: (v: Partial<AgentConfig>) => void; onClose: () => void }) {
+  const outcomes = [
+    { key: 'interested_not_closed', label: 'Interessado, mas não fechou', hint: 'Default: retomar contexto, remover objeção, propor nova data.' },
+    { key: 'reschedule_needed', label: 'Precisa remarcar', hint: 'Default: oferecer 2-3 horários directamente, pergunta fechada.' },
+    { key: 'converted', label: 'Convertido', hint: 'Default: boas-vindas, confirmar próximo passo, link de pagamento.' },
+  ] as const;
+  const init = config.followup_outcome_instructions ?? {};
+  const [vals, setVals] = useState<Record<string, string>>({
+    interested_not_closed: init.interested_not_closed ?? '',
+    reschedule_needed: init.reschedule_needed ?? '',
+    converted: init.converted ?? '',
+  });
+  function handleSave() {
+    const result: Record<string, string> = {};
+    for (const { key } of outcomes) { if (vals[key].trim()) result[key] = vals[key].trim(); }
+    onSave({ followup_outcome_instructions: Object.keys(result).length ? result : null });
+  }
+  return (
+    <DrawerBase title="Instrução por outcome da sessão" sub="Agent 3 — personaliza o que o bot diz consoante como terminou a sessão/reunião" onClose={onClose} onSave={handleSave}>
+      {outcomes.map(({ key, label, hint }) => (
+        <div key={key} className="o-field">
+          <label className="o-field-label">{label}</label>
+          <div className="o-field-hint">{hint}</div>
+          <textarea className="o-input" rows={3} style={{ resize: 'vertical' }}
+            value={vals[key]} onChange={e => setVals(v => ({ ...v, [key]: e.target.value }))}
+            placeholder="Deixar vazio usa o comportamento padrão do agente."
+          />
+        </div>
+      ))}
+    </DrawerBase>
+  );
+}
+
 function DrawerFollowUpInstructions({
   config, onSave, onClose,
 }: {
@@ -495,7 +602,7 @@ function DrawerFollowUpInstructions({
   );
 }
 
-type DrawerKey = 'followup' | 'followup_avancado' | 'followup_instrucoes' | 'limite' | 'intervalo' | 'midia' | 'delay_resposta' | 'horario_trabalho' | null;
+type DrawerKey = 'followup' | 'followup_avancado' | 'followup_instrucoes' | 'followup_goal_instrs' | 'cart_recovery_attempts' | 'followup_outcome_instrs' | 'limite' | 'intervalo' | 'midia' | 'delay_resposta' | 'horario_trabalho' | null;
 type ModalKey  = 'optout' | 'lgpd' | 'reativacao' | null;
 
 export function CamadaPipeline({ config, onUpdate, phoneNumber }: CamadaPipelineProps) {
@@ -653,6 +760,45 @@ export function CamadaPipeline({ config, onUpdate, phoneNumber }: CamadaPipeline
           status={_fuInstrValue ? 'ok' : undefined}
           help="Instrução de texto livre injectada no prompt de follow-up — permite personalizar o que o bot diz com base no contexto real do teu negócio."
         />
+        {/* Fase 6 — goal instructions (Agent 1) */}
+        {!_isCloserAgent && !_isHybridAgent && (
+          <EditCard
+            label="Instrução por objectivo · Pós-reunião"
+            sub="Personaliza a abordagem consoante o goal escolhido no modal"
+            value={config.followup_goal_instructions
+              ? `${Object.keys(config.followup_goal_instructions).length} goal(s) configurado(s)`
+              : 'Não configurado (usa padrão do agente)'}
+            onClick={() => setDrawer('followup_goal_instrs')}
+            status={config.followup_goal_instructions ? 'ok' : undefined}
+            help="Define o que o bot deve fazer especificamente para cada objectivo: avançar fechamento, nutrir ou reagendar. Sobrescreve o comportamento genérico da variante."
+          />
+        )}
+        {/* Fase 7 — attempt instructions (Agent 2) */}
+        {_isCloserAgent && (
+          <EditCard
+            label="Instrução por tentativa · Carrinho"
+            sub="Personaliza o conteúdo de cada tentativa de recuperação"
+            value={config.cart_recovery_attempt_instructions?.some(Boolean)
+              ? `${config.cart_recovery_attempt_instructions.filter(Boolean).length} tentativa(s) personalizada(s)`
+              : 'Não configurado (usa padrão do agente)'}
+            onClick={() => setDrawer('cart_recovery_attempts')}
+            status={config.cart_recovery_attempt_instructions?.some(Boolean) ? 'ok' : undefined}
+            help="Personaliza o que o bot diz em cada uma das 3 tentativas de recuperação de carrinho: 1ª lembrete, 2ª benefício/objeção, 3ª urgência. Usa os activos reais do teu negócio."
+          />
+        )}
+        {/* Fase 8 — outcome instructions (Agent 3) */}
+        {_isHybridAgent && (
+          <EditCard
+            label="Instrução por outcome · Pós-sessão"
+            sub="Personaliza a abordagem consoante como terminou a sessão"
+            value={config.followup_outcome_instructions
+              ? `${Object.keys(config.followup_outcome_instructions).length} outcome(s) configurado(s)`
+              : 'Não configurado (usa padrão do agente)'}
+            onClick={() => setDrawer('followup_outcome_instrs')}
+            status={config.followup_outcome_instructions ? 'ok' : undefined}
+            help="Define instruções específicas para cada resultado de sessão: interessado mas não fechou, precisa remarcar, ou convertido. Sobrescreve os defaults genéricos do agente."
+          />
+        )}
       </div>
 
       {/* Seção 3: Reativação */}
@@ -679,7 +825,10 @@ export function CamadaPipeline({ config, onUpdate, phoneNumber }: CamadaPipeline
       {/* Drawers */}
       {drawer === 'followup'            && <DrawerFollowup            config={config} onClose={() => setDrawer(null)} onSave={v => { onUpdate(v); setDrawer(null); }} />}
       {drawer === 'followup_avancado'   && <DrawerFollowupAvancado    config={config} onClose={() => setDrawer(null)} onSave={v => { onUpdate(v); setDrawer(null); }} />}
-      {drawer === 'followup_instrucoes' && <DrawerFollowUpInstructions config={config} onClose={() => setDrawer(null)} onSave={v => { onUpdate(v); setDrawer(null); }} />}
+      {drawer === 'followup_instrucoes'    && <DrawerFollowUpInstructions        config={config} onClose={() => setDrawer(null)} onSave={v => { onUpdate(v); setDrawer(null); }} />}
+      {drawer === 'followup_goal_instrs'  && <DrawerFollowupGoalInstructions    config={config} onClose={() => setDrawer(null)} onSave={v => { onUpdate(v); setDrawer(null); }} />}
+      {drawer === 'cart_recovery_attempts'&& <DrawerCartRecoveryAttempts        config={config} onClose={() => setDrawer(null)} onSave={v => { onUpdate(v); setDrawer(null); }} />}
+      {drawer === 'followup_outcome_instrs'&&<DrawerFollowupOutcomeInstructions config={config} onClose={() => setDrawer(null)} onSave={v => { onUpdate(v); setDrawer(null); }} />}
       {drawer === 'limite'            && <DrawerLimite    value={config.daily_limit} onClose={() => setDrawer(null)} onSave={v => { onUpdate({ daily_limit: v }); setDrawer(null); }} />}
       {drawer === 'intervalo'         && <DrawerIntervalo config={config} onClose={() => setDrawer(null)} onSave={v => { onUpdate(v); setDrawer(null); }} />}
       {drawer === 'midia'             && <DrawerMidia           config={config} onClose={() => setDrawer(null)} onSave={v => { onUpdate(v); setDrawer(null); }} />}
