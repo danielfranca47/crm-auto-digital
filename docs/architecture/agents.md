@@ -103,6 +103,16 @@ Aliases aceitos: `whatsapp_send`, `maps_search_fallback`, `maps_enrich_fallback`
 | `qualification_fields` | list\|null | Campos de qualificação configurados via UI — substitui os defaults hardcoded quando presente. Cada entrada: `{key, label, question, passive_hint, mode, group?, qualify_if?, disqualify_if?}` |
 | `sales_flow` | object\|null | Fluxo de Venda — `{enabled, phases: [{id, blocks[]}]}`. Ver [`sales-flow.md`](sales-flow.md) |
 | `offer_pack` | object\|null | JSON com configurações de oferta e comportamento de mídia (ver abaixo) |
+| `origin_inbound_opener` | string\|null | Instrução de tom/abertura injectada no prompt quando `lead_origin=inbound` (lead veio ter com o operador) |
+| `origin_outbound_opener` | string\|null | Instrução de tom/abertura injectada no prompt quando `lead_origin=outbound` (lead foi prospectado) |
+| `appointment_reminder_offsets` | list[int]\|null | Offsets em minutos relativos ao início do appointment para enviar lembretes (ex: `[-1440, -60]` = 24h e 1h antes). Default por template se ausente |
+| `briefing_enabled` | boolean\|null | Activa dossiê pré-reunião enviado ao operador (padrão: `true`) |
+| `briefing_channel` | string\|null | Canal de envio do dossiê (padrão: `"whatsapp"`) |
+| `briefing_lead_time` | integer\|null | Minutos de antecedência para enviar o dossiê (padrão: `120`) |
+| `operator_whatsapp` | string\|null | Número WhatsApp do operador — destino do dossiê e dos alertas de sinal de compra |
+| `buying_signal_keywords` | list[str]\|null | Keywords que detectam intenção de compra no inbound (ex: `["quanto custa", "como assino"]`). Detecção case-insensitive via substring |
+| `payment_gateway` | string\|null | Identificador do gateway de pagamento (ex: `"hotmart"`, `"stripe"`) — compõe a URL do webhook |
+| `payment_webhook_secret` | string\|null | Token de autenticação do webhook de pagamento |
 | `first_reply_delay_min_seconds` | integer\|null | Delay mínimo (s) antes de responder à **primeira** mensagem de um lead (padrão: `0` = sem delay) |
 | `first_reply_delay_max_seconds` | integer\|null | Delay máximo (s) antes da primeira resposta; o valor real é sorteado entre min e max (padrão: `0`) |
 | `reply_delay_min_seconds` | integer\|null | Delay mínimo (s) antes de respostas a mensagens subsequentes (padrão: `0`) |
@@ -145,10 +155,84 @@ Aliases aceitos: `whatsapp_send`, `maps_search_fallback`, `maps_enrich_fallback`
 | `media_fallback` | Comportamento quando chega mídia inválida ou áudio com toggle OFF: `"ignorar"` (padrão), `"continuar"`, `"pausar"` |
 | `media_fallback_msg` | Mensagem enviada ao lead quando `media_fallback = "continuar"` ou `"pausar"` |
 | `multi_message_buffer_seconds` | Janela de absorção de mensagens consecutivas em segundos (0 = desligado) |
+| `anchor_price` | Preço âncora injectado no pitch de apresentação — ex: `"R$997"` → bot usa "De R$997 por apenas R$X" |
+| `guarantee_text` | Garantia injectada na mensagem de apresentação — ex: `"7 dias de garantia"` |
 
 ### Atualização parcial
 
 `PUT /ai-profiles/me` aceita atualização parcial (`exclude_unset=True`). Só campos presentes no body são alterados.
+
+---
+
+## Lembretes de Appointment
+
+Quando um appointment é criado, `_schedule_reminder_jobs()` em `appointments.py` cria jobs `whatsapp.appointment.reminder` agendados para cada offset configurado.
+
+- Se `appointment_reminder_offsets` estiver preenchido no AI Profile, usa esses valores
+- Caso contrário, usa defaults por `template_key` (Agent 1: `-1440` e `-60` minutos = 24h e 1h antes)
+- Jobs com `send_at <= now` são silenciosamente ignorados (appointment já passou)
+
+---
+
+## Dossiê Pré-Reunião (Briefing)
+
+Quando `briefing_enabled ≠ false`, `_schedule_briefing_job()` em `appointments.py` cria um job `whatsapp.appointment.briefing` agendado para `appointment_start_at - briefing_lead_time` minutos.
+
+O job é processado por `briefing_service.py`, que monta e envia para `operator_whatsapp` um dossiê com:
+- Dados do lead (nome, empresa, canal, origem)
+- Scores de qualificação BANT (poder de decisão, urgência, orçamento, prazo) em formato visual `█░░`
+- Últimas 10 mensagens da conversa
+- Detalhes do appointment (título, horário)
+
+**Arquivos:** `backend-crm/services/briefing_service.py`, `backend-crm/routes/appointments.py`
+
+---
+
+## Sinais de Compra
+
+Quando `buying_signal_keywords` está configurado no AI Profile, o decision engine verifica cada mensagem inbound contra a lista (substring case-insensitive via `_detect_buying_signals()`).
+
+Ao detectar uma keyword:
+- `crm_client.create_buying_signal_notification(lead_id)` notifica o CRM
+- `decision_trace.buying_signal_detected = True` para observabilidade
+
+**Arquivo:** `backend-executors/app/services/decision_engine.py`
+
+---
+
+## Webhook de Pagamento
+
+Configura a recepção de eventos de pagamento confirmado de gateways externos.
+
+**URL gerada** (property `payment_webhook_url` em `ai_profile.py`):
+```
+{CRM_PUBLIC_BASE_URL}/webhooks/payment/{payment_gateway}?token={payment_webhook_secret}
+```
+
+**Ao receber evento confirmado** (`POST /webhooks/payment/{gateway}` em `webhooks.py`):
+1. Autentica via `payment_webhook_secret` (header `X-Webhook-Secret` ou query `?token=`)
+2. Identifica o lead por email ou telefone
+3. Move lead para `"client-list"`
+4. Para cart recovery activo
+5. Enfileira mensagem de boas-vindas
+
+**Arquivo:** `backend-crm/routes/webhooks.py`
+
+---
+
+## Contexto Inbound/Outbound no LLM
+
+O orchestrator calcula `lead_origin` a partir do campo `lead.origin`:
+- Origens `"whatsapp"`, `"inbound"`, `"manual"`, `"planilha"` ou vazio → `"inbound"`
+- Qualquer outro valor (ex.: `"prospeccao"`) → `"outbound"`
+
+O decision engine selecciona o opener correspondente do AI Profile:
+- `lead_origin=outbound` → usa `origin_outbound_opener`
+- `lead_origin=inbound` → usa `origin_inbound_opener`
+
+O opener é injectado no início do prompt de cada Filha para calibrar o tom de abertura (ex.: "Este lead foi prospectado — aborda de forma mais consultiva").
+
+**Arquivos:** `backend-crm/services/ai_orchestrator/orchestrator.py`, `backend-executors/app/services/decision_engine.py`
 
 ---
 

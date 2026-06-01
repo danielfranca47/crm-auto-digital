@@ -28,6 +28,8 @@ Prompt construído em `backend-executors/app/services/decision_engine.py`:
 | `followup_cadence` | ⚠️ | Usado no followup_state, não no prompt de qualificação/apresentação |
 | `hybrid_flow_style` | ⚠️ | Campo existe, execução parcial no decision_engine |
 | `qualification_questions` | ❌ | Não existe — hardcoded em `ai_playbooks/__init__.py` |
+| `lead_origin` (computado) | ✅ | Calculado no orchestrator a partir de `lead.origin`; `"inbound"` ou `"outbound"` |
+| `origin_inbound_opener` / `origin_outbound_opener` | ✅ | Injectado no início do prompt das Filhas consoante `lead_origin` |
 
 ---
 

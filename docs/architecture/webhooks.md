@@ -154,6 +154,25 @@ Quando `> 0`, o primeiro job inbound é criado com `scheduled_at = agora + buffe
 
 ---
 
+## Webhook de Pagamento
+
+**Rota:** `POST /webhooks/payment/{gateway}`
+**Arquivo:** `backend-crm/routes/webhooks.py`
+
+Recebe eventos de pagamento confirmado de gateways externos (ex.: Hotmart, Stripe). Cada utilizador tem a sua própria URL com token único — ver secção "Webhook de Pagamento" em [`agents.md`](agents.md).
+
+**Autenticação:** token em `X-Webhook-Secret` (header) ou `?token=` (query string), comparado com `payment_webhook_secret` do AI Profile.
+
+**Ao confirmar pagamento:**
+1. Identifica o lead por email ou telefone no payload
+2. Move lead para `"client-list"`
+3. Para cart recovery activo
+4. Enfileira mensagem de boas-vindas via job `whatsapp.send.local`
+
+Se nenhum lead for encontrado, regista log `payment_webhook unmatched` e retorna 200 (não expõe informação ao gateway externo).
+
+---
+
 ## Arquivos críticos
 
 | Arquivo | Responsabilidade |
