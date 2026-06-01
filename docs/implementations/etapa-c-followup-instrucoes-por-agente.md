@@ -1,7 +1,7 @@
 # Etapa C — Instruções de Follow-Up por Agente
 
 **Branch:** `etapa-8-7-fluxo-qualificacao-natural`
-**Status:** Em andamento — Fase 4 adicionada (playground follow-up)
+**Status:** Todos os cenários validados (01/06/2026) — P5 Agent 2/3 pendentes de confirmação visual manual
 
 ---
 
@@ -103,11 +103,13 @@ PlaygroundConfigModal: botão "Follow-up" + painel de configuração
 
 ---
 
-### Cenário P2 — Bloco aparece no prompt (lead real em follow-up)
-- [ ] Lead real na coluna follow-up com `followup_contract` activo
-- [ ] `followup_sdr_instructions` configurado no AI Profile
-- [ ] Tick automático enviado → confirmar que a mensagem reflecte a instrução do operador
-- **Nota:** playground não testável para este cenário — não tem `followup_contract`, logo `followup_variant` fica vazio e o bloco não é injectado (comportamento correcto). Validação natural quando um lead real atingir o follow-up.
+### Cenário P2 — Bloco aparece no prompt (playground follow-up)
+- [x] Playground → modo "Follow-up" → variante `sdr_scheduler`, outcome Morno, 1ª tentativa, reunião aconteceu
+- [x] Mensagem enviada: "Olá, estava ocupado essa semana. O que você queria falar?"
+- [x] `effective_route: "follow-up"` no trace (guardrail converteu de "recepcao") → `_build_child_prompt_follow_up()` chamado
+- [x] Resposta não menciona preço ✓ — instrução "Nunca menciones preço" respeitada
+- [x] Bot referencia conversa anterior e propõe reagendamento ✓ — comportamento de follow-up morno correcto
+- **Validado em:** 01/06/2026 — trace confirma `effective_route: "follow-up"`, `lead_is_sandbox: true`, `4 bolhas`, `8s digitando`
 
 ### Cenário P3 — Sem regressão quando campo vazio
 - [x] `followup_recovery_instructions` e `followup_postsession_instructions` são `null` no GET — outros agentes não afectados
