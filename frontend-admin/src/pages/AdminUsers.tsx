@@ -130,7 +130,7 @@ export default function AdminUsers() {
         </CardHeader>
         <CardContent className="p-0">
           {/* Table header */}
-          <div className="hidden md:grid grid-cols-[1fr_140px_90px_110px_110px_100px] gap-x-3 px-5 py-2 border-b border-slate-700/60 text-xs font-medium text-slate-500 uppercase tracking-wide">
+          <div className="hidden md:grid grid-cols-[minmax(0,1fr)_105px_75px_95px_95px_80px] gap-x-3 px-5 py-2 border-b border-slate-700/60 text-xs font-medium text-slate-500 uppercase tracking-wide">
             <span>Usuário</span>
             <span>Plano</span>
             <span>Status</span>
@@ -143,7 +143,7 @@ export default function AdminUsers() {
             {users.map((user) => (
               <div
                 key={user.id}
-                className="grid grid-cols-1 md:grid-cols-[1fr_140px_90px_110px_110px_100px] gap-x-3 gap-y-1 items-center px-5 py-3"
+                className="grid grid-cols-1 md:grid-cols-[minmax(0,1fr)_105px_75px_95px_95px_80px] gap-x-3 gap-y-1 items-center px-5 py-3"
               >
                 {/* Name / email */}
                 <div className="min-w-0 flex items-center gap-2">
