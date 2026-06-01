@@ -24,6 +24,8 @@ class Settings(BaseSettings):
     SMTP_PASS: Optional[str] = None
     SMTP_FROM: Optional[str] = None
     SMTP_TLS: bool = True
+    # URL público do frontend-crm (usado em links de email — reset de senha, boas-vindas)
+    CRM_FRONTEND_URL: Optional[str] = None
 
     class Config:
         env_file = ".env"

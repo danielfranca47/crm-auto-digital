@@ -273,7 +273,7 @@ async def admin_create_user(
     email_sent = False
     try:
         from app.services.email_service import render_welcome_email, send_email
-        base_url = (settings.CRM_PUBLIC_BASE_URL or "http://localhost:8080").rstrip("/")
+        base_url = (settings.CRM_FRONTEND_URL or "http://localhost:8080").rstrip("/")
         login_url = f"{base_url}/login"
         html, text = render_welcome_email(body.name, temp_password, login_url)
         send_email(

@@ -161,7 +161,7 @@ async def forgot_password(body: ForgotPasswordRequest, db: Session = Depends(get
 
     try:
         from app.services.email_service import render_reset_email, send_email
-        base_url = (settings.CRM_PUBLIC_BASE_URL or "http://localhost:8080").rstrip("/")
+        base_url = (settings.CRM_FRONTEND_URL or "http://localhost:8080").rstrip("/")
         reset_url = f"{base_url}/reset-password?token={token_value}"
         html, text = render_reset_email(reset_url)
         send_email(to=user.email, subject="Recuperação de senha — AutoDigital CRM", html=html, text=text)
