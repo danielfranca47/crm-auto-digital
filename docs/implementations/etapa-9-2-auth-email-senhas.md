@@ -1,7 +1,7 @@
 # Auth — Email SMTP + Criação de Conta + Recuperação de Senha
 
-**Branch:** `etapa-8-7-fluxo-qualificacao-natural`
-**Status:** Em andamento
+**Branch:** `etapa-9-planos-limites`
+**Status:** Em andamento — implementação completa, aguarda testes
 
 ---
 
@@ -80,6 +80,19 @@ Fluxo alteração de senha (utilizador logado):
 | `frontend-crm/src/pages/Login.tsx` | Link "Esqueci a senha" → `/forgot-password` |
 | `frontend-crm/src/App.tsx` | Rotas públicas `/forgot-password` e `/reset-password` |
 
+### Commits Fase 1
+
+| # | Commit | O que foi implementado |
+|---|---|---|
+| 1 | `0dfb5ad` | config SMTP + email_service.py com send_email, render_welcome_email, render_reset_email |
+
+### Commits Fase 2
+
+| # | Commit | O que foi implementado |
+|---|---|---|
+| 1 | `e4b0fcf` | backend: PasswordResetToken model + forgot/reset/change-password endpoints |
+| 2 | `d3e74ff` | frontend-crm: ForgotPassword, ResetPassword, Register pages + Login actualizado |
+
 ### Fase 3 — Criação de conta: admin + auto-registo
 
 **Objetivo:** admin cria contas pelo painel; clientes podem auto-registar-se.
@@ -93,6 +106,12 @@ Fluxo alteração de senha (utilizador logado):
 | `frontend-crm/src/pages/Register.tsx` | Nova. Email + nome + senha + confirmar senha. Após sucesso → /login |
 | `frontend-crm/src/App.tsx` | Rota pública `/register` |
 | `frontend-crm/src/pages/Login.tsx` | Link "Não tem conta? Criar conta" → `/register` |
+
+### Commits Fase 3
+
+| # | Commit | O que foi implementado |
+|---|---|---|
+| 1 | `f9a1290` | POST /admin/users + modal "Criar conta" no AdminUsers |
 
 ---
 
