@@ -99,7 +99,7 @@ PlaygroundConfigModal: botão "Follow-up" + painel de configuração
 
 | # | Commit | O que foi implementado |
 |---|---|---|
-| 1 | *(pendente)* | Playground: modo follow-up — backend + frontend |
+| 1 | `a0d411d` | Playground: modo follow-up — backend + frontend |
 
 ---
 
