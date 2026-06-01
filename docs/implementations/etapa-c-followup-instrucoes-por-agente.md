@@ -59,24 +59,29 @@ Ordem de blocos no prompt de follow-up:
 ## Checks de Validação
 
 ### Cenário P1 — Campo persiste via API
-- [ ] PUT `/ai-profiles/me` com `followup_sdr_instructions: "teste"` → 200
-- [ ] GET `/ai-profiles/me` devolve `followup_sdr_instructions: "teste"`
+- [x] PUT via UI (Salvar Camada 3) com `followup_sdr_instructions` preenchido → 200
+- [x] GET `/ai-profiles/me` devolve `followup_sdr_instructions: "Nunca menciones preço…"`, `followup_recovery_instructions: null`, `followup_postsession_instructions: null`
+- **Validado em:** 01/06/2026 — API core devolveu o campo correctamente após save via UI
 
 ### Cenário P2 — Bloco aparece no prompt (playground)
 - [ ] Configurar `followup_sdr_instructions = "Nunca menciones preço."` no AI Profile
 - [ ] Iniciar follow-up com um lead Agent 1
 - [ ] Usar playground no tick de follow-up
 - [ ] Confirmar: resposta reflecte a instrução do operador
+- **Pendente:** requer lead em follow-up activo para testar via playground
 
 ### Cenário P3 — Sem regressão quando campo vazio
-- [ ] Lead com campo não preenchido → comportamento idêntico ao actual
-- [ ] Confirmar: `_variant_operator_block` ausente no prompt
+- [x] `followup_recovery_instructions` e `followup_postsession_instructions` são `null` no GET — outros agentes não afectados
+- [x] Lógica no executor: `if _instr:` garante que bloco vazio não é injectado
+- **Validado em:** 01/06/2026 — confirmado por código e resposta da API
 
 ### Cenário P4 — UI guarda e recarrega
-- [ ] Abrir CamadaPipeline → secção Follow-Up → drawer "Instrução de follow-up"
-- [ ] Preencher → Salvar → recarregar página → campo persiste
+- [x] Abrir CamadaPipeline → Seção 2 → card "INSTRUÇÃO DE FOLLOW-UP · PÓS-REUNIÃO" → drawer abre
+- [x] Preencher textarea → Salvar → "Salvar Camada 3" → banner desaparece
+- [x] Recarregar página → card exibe "Nunca menciones preço…" com status "CONFIGURADO"
+- **Validado em:** 01/06/2026 — persistência confirmada após reload completo
 
 ### Cenário P5 — Drawer condicional ao template_key
-- [ ] Agent 1: aparece textarea para `followup_sdr_instructions`
-- [ ] Agent 2: aparece textarea para `followup_recovery_instructions`
-- [ ] Agent 3: aparece textarea para `followup_postsession_instructions`
+- [x] Agent 1 (`sdr_padrao`): card mostra "PÓS-REUNIÃO", textarea para `followup_sdr_instructions`
+- [ ] Agent 2 (`closer_agressivo`): card mostra "RECUPERAÇÃO DE CARRINHO" — **pendente de teste manual**
+- [ ] Agent 3 (`hybrid_scheduler`): card mostra "PÓS-SESSÃO" — **pendente de teste manual**
