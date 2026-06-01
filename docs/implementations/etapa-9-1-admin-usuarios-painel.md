@@ -60,6 +60,28 @@ Frontend AdminUsers
 | `frontend-admin/src/services/api.ts` | Atualizar tipo `AdminUser` com novos campos |
 | `frontend-admin/src/pages/AdminUsers.tsx` | Tabela: nome/email, plano (badge colorido por plano), status (badge), membro desde, período de assinatura |
 
+### Commits Fase 1
+
+| # | Commit | O que foi implementado |
+|---|---|---|
+| 1 | `2c1e662` | backend: coluna name + ensure_user_columns + endpoint enriquecido |
+
+**Detalhes do commit `2c1e662`:**
+- `backend-core/app/models/user.py` — coluna `name` adicionada ao model
+- `backend-core/app/db.py` — `ensure_user_columns()` com ALTER TABLE idempotente para SQLite/PG
+- `backend-core/app/main.py` — `ensure_user_columns()` chamado no startup
+- `backend-core/app/api/admin.py` — `UserAdminOut` com 6 campos novos; query faz lookup de Subscription + Plan por user
+
+### Commits Fase 2
+
+| # | Commit | O que foi implementado |
+|---|---|---|
+| 1 | `927b415` | frontend: AdminUsers tabela rica com plano, datas, status |
+
+**Detalhes do commit `927b415`:**
+- `frontend-admin/src/services/api.ts` — tipo `AdminUser` com 5 campos novos
+- `frontend-admin/src/pages/AdminUsers.tsx` — tabela 6 colunas; badge de plano colorido por tier; busca por nome
+
 ---
 
 ## Checks de Validação
