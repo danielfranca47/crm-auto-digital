@@ -11,6 +11,7 @@ import ProfessionalWebsites from "./pages/ProfessionalWebsites";
 import SchedulingDemo from "./pages/SchedulingDemo";
 import AIWhatsAppAutomation from "./pages/AIWhatsAppAutomation";
 import ComingSoon from "./pages/ComingSoon";
+import CRMLanding from "./pages/CRMLanding";
 import SEOHead from "./components/SEOHead";
 
 const queryClient = new QueryClient();
@@ -46,7 +47,10 @@ const App = () => (
         <Routes>
           {/* Redirect root to default language */}
           <Route path="/" element={<Navigate to="/en" replace />} />
-          
+
+          {/* Landing page do produto CRM — definida ANTES de /:lang para evitar conflito */}
+          <Route path="/crm" element={<CRMLanding />} />
+
           {/* Language-specific routes */}
           <Route path="/:lang" element={
             <LanguageRoute>
