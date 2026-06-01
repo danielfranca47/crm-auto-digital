@@ -36,7 +36,9 @@ agent-local         local  ← agente Python local de prospecção/scraping
 | `app/models/user.py` | Model ORM User |
 | `app/models/ai_profile.py` | Model ORM AI Profile (inclui `sales_flow`, `audio_transcription_enabled`) |
 | `app/models/whatsapp_connection.py` | Model ORM WhatsApp connection/instance |
-| `app/api/auth.py` | Login, JWT, `/users/me` |
+| `app/api/auth.py` | Login, JWT, `/users/me`, forgot/reset/change-password |
+| `app/models/password_reset_token.py` | Tokens de reset de senha (TTL 2h) |
+| `app/services/email_service.py` | Envio SMTP via Resend; templates welcome + reset |
 | `app/api/ai_profiles.py` | CRUD `/ai-profiles/me` |
 | `app/api/whatsapp_connections.py` | Conexão QR, `/resolve-token`, `/resolve-by-user` |
 | `app/api/whatsapp_send.py` | Endpoint `/whatsapp/send` (despacha para UazAPI) |
@@ -47,6 +49,7 @@ agent-local         local  ← agente Python local de prospecção/scraping
 ### Integrações externas
 
 - **UazAPI** — broker WhatsApp Web; endpoints `/send/text`, `/send/media`, `/message/download`, `/qr`
+- **Resend** — SMTP relay para email transacional; domínio verificado `danielfranca.pt`; `SMTP_USER=resend`, `SMTP_PASS=<api_key>`
 
 ---
 

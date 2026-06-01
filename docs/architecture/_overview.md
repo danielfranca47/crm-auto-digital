@@ -19,6 +19,7 @@ existente ou criar um novo.
 | [`playground-parity.md`](playground-parity.md) | Paridade Playground ↔ WhatsApp real: `enrich_context_bundle`, campos do ContextBundle, campos da `PlaygroundChatResponse` | Novo campo no ContextBundle que afecta o LLM, novo campo na resposta do playground |
 | [`admin-agents-contract.md`](admin-agents-contract.md) | Contrato AdminAgents frontend ↔ backend: campos expostos em `GET /admin/agents/overview` e `GET /admin/agents/users/{id}` | Novo campo no AI Profile que deve ser exibido no painel admin |
 | [`humanization.md`](humanization.md) | Humanização comportamental: delay de resposta, typing indicator, quebra de mensagem por pontuação, janela de horário, áudio de voz (myaudio/ptt) | Mudança no cálculo de delay, novo campo de availability, novo tipo de mídia, mudança no split de mensagens |
+| [`auth-email.md`](auth-email.md) | Auth e gestão de utilizadores: endpoints de register/login/forgot-password/reset/change-password, modelo User (campos), PasswordResetToken, email SMTP via Resend, rotas públicas frontend-crm, painel admin de utilizadores | Novo endpoint de auth, mudança no modelo User, novo campo de config SMTP, novo template de email, nova rota pública |
 
 ---
 
@@ -60,6 +61,7 @@ A maioria das features altera áreas já documentadas. Antes de criar um ficheir
 
 | A mudança afecta... | Documento a actualizar |
 |---|---|
+| Auth endpoints, User model, password reset, email service, rotas públicas do frontend-crm | `auth-email.md` |
 | Delay de resposta, typing indicator, quebra de mensagem, janela de horário, myaudio | `humanization.md` |
 | Novo bloco/trigger/flag no Fluxo de Venda | `sales-flow.md` |
 | Novo campo em MotherDecision, ChildResult ou DecisionOutput | `llm-architecture.md` |
