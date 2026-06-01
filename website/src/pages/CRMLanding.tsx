@@ -199,58 +199,76 @@ export default function CRMLanding() {
 
       {/* ── HERO ── */}
       <section id="home" className="relative min-h-screen flex items-center hero-gradient pt-16 overflow-hidden">
-        {/* ambient glow */}
-        <div className="absolute top-1/3 left-1/2 -translate-x-1/2 w-[700px] h-[500px] rounded-full pointer-events-none"
-          style={{ background: 'radial-gradient(ellipse, rgba(77,212,255,0.08) 0%, transparent 70%)' }} />
+        {/* ambient glow — posicionado atrás da imagem */}
+        <div className="absolute top-1/3 right-0 w-[600px] h-[600px] rounded-full pointer-events-none"
+          style={{ background: 'radial-gradient(ellipse, rgba(77,212,255,0.07) 0%, transparent 70%)' }} />
 
-        <div className="container mx-auto px-4 lg:px-8 py-24">
-          <div className="max-w-4xl mx-auto text-center">
+        <div className="container mx-auto px-4 lg:px-8 py-20">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 items-center">
 
-            {/* badge */}
-            <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full border text-sm font-medium mb-7 animate-fade-in"
-              style={{ background: 'rgba(77,212,255,0.1)', borderColor: 'rgba(77,212,255,0.3)', color: '#4DD4FF' }}>
-              <Bot className="w-4 h-4" />
-              IA + CRM + Follow-up — tudo num só lugar
+            {/* ── COLUNA ESQUERDA: texto ── */}
+            <div className="flex flex-col items-start">
+
+              {/* badge */}
+              <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full border text-sm font-medium mb-7 animate-fade-in"
+                style={{ background: 'rgba(77,212,255,0.1)', borderColor: 'rgba(77,212,255,0.3)', color: '#4DD4FF' }}>
+                <Bot className="w-4 h-4" />
+                IA + CRM + Follow-up — tudo num só lugar
+              </div>
+
+              {/* H1 */}
+              <h1 className="text-hero mb-6 animate-fade-in animate-delay-100">
+                A IA que não só responde —{' '}
+                <span className="bg-gradient-to-r from-accent to-primary bg-clip-text text-transparent">
+                  ela acompanha o lead até fechar.
+                </span>
+              </h1>
+
+              {/* sub */}
+              <p className="text-xl text-muted-foreground mb-10 max-w-xl leading-relaxed animate-fade-in animate-delay-200">
+                Atendimento automático no WhatsApp com CRM nativo, follow-up inteligente e recuperação de vendas. Tudo no mesmo lugar, sem ferramenta extra.
+              </p>
+
+              {/* CTAs */}
+              <div className="flex flex-col sm:flex-row gap-4 mb-14 animate-fade-in animate-delay-300">
+                <a href="#planos" className="btn-hero flex items-center justify-center gap-2">
+                  Começar grátis <ArrowRight className="w-4 h-4" />
+                </a>
+                <a href="#como-funciona"
+                  className="flex items-center justify-center gap-2 px-8 py-4 rounded-xl font-semibold border border-white/20 hover:bg-white/10 transition-smooth">
+                  <Play className="w-4 h-4" /> Ver como funciona
+                </a>
+              </div>
+
+              {/* stats */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-6 animate-fade-in animate-delay-400">
+                {[
+                  { value: '10k+', label: 'Leads qualificados' },
+                  { value: '94%',  label: 'Taxa de resposta'   },
+                  { value: '3×',   label: 'Mais conversões'    },
+                  { value: '24/7', label: 'Atendimento ativo'  },
+                ].map(s => (
+                  <div key={s.label}>
+                    <div className="text-2xl font-extrabold text-accent">{s.value}</div>
+                    <div className="text-xs text-muted-foreground mt-0.5">{s.label}</div>
+                  </div>
+                ))}
+              </div>
             </div>
 
-            {/* H1 */}
-            <h1 className="text-hero mb-6 animate-fade-in animate-delay-100">
-              A IA que não só responde —{' '}
-              <span className="bg-gradient-to-r from-accent to-primary bg-clip-text text-transparent">
-                ela acompanha o lead até fechar.
-              </span>
-            </h1>
-
-            {/* sub */}
-            <p className="text-xl text-muted-foreground mb-10 max-w-2xl mx-auto leading-relaxed animate-fade-in animate-delay-200">
-              Atendimento automático no WhatsApp com CRM nativo, follow-up inteligente e recuperação de vendas. Tudo no mesmo lugar, sem ferramenta extra.
-            </p>
-
-            {/* CTAs */}
-            <div className="flex flex-col sm:flex-row gap-4 justify-center mb-16 animate-fade-in animate-delay-300">
-              <a href="#planos" className="btn-hero flex items-center justify-center gap-2">
-                Começar grátis <ArrowRight className="w-4 h-4" />
-              </a>
-              <a href="#como-funciona"
-                className="flex items-center justify-center gap-2 px-8 py-4 rounded-xl font-semibold border border-white/20 hover:bg-white/10 transition-smooth">
-                <Play className="w-4 h-4" /> Ver como funciona
-              </a>
+            {/* ── COLUNA DIREITA: mascote ── */}
+            <div className="relative flex justify-center lg:justify-end animate-fade-in animate-delay-200">
+              {/* glow por baixo da imagem */}
+              <div className="absolute bottom-0 left-1/2 -translate-x-1/2 w-72 h-72 rounded-full pointer-events-none"
+                style={{ background: 'radial-gradient(circle, rgba(77,212,255,0.15) 0%, transparent 70%)', filter: 'blur(40px)' }} />
+              <img
+                src="/hero-mascot.png"
+                alt="IA assistente de vendas"
+                className="relative z-10 w-full max-w-sm lg:max-w-md xl:max-w-lg object-contain drop-shadow-2xl"
+                style={{ filter: 'drop-shadow(0 0 40px rgba(77,212,255,0.25))' }}
+              />
             </div>
 
-            {/* stats */}
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-6 animate-fade-in animate-delay-400">
-              {[
-                { value: '10k+', label: 'Leads qualificados' },
-                { value: '94%',  label: 'Taxa de resposta'   },
-                { value: '3×',   label: 'Mais conversões'    },
-                { value: '24/7', label: 'Atendimento ativo'  },
-              ].map(s => (
-                <div key={s.label} className="text-center">
-                  <div className="text-3xl font-extrabold text-accent">{s.value}</div>
-                  <div className="text-sm text-muted-foreground mt-1">{s.label}</div>
-                </div>
-              ))}
-            </div>
           </div>
         </div>
 
