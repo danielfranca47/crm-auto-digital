@@ -1,20 +1,24 @@
 """
-Calls Claude API with session summaries + project context and returns a
-structured advisor report as a dict.
+Calls Claude via `claude --print` subprocess (Claude Code CLI) so it uses
+the user's existing Claude subscription — no separate API key needed.
 """
 import json
+import logging
+import subprocess
+import sys
+import tempfile
 import os
 from datetime import datetime
 from typing import Dict, Any, List
-
-import anthropic
 
 from readers.transcript_reader import get_recent_sessions
 from readers.session_parser import summarize_session
 from readers.project_reader import get_project_context
 
-MODEL = "claude-sonnet-4-6"
 DAYS_LOOKBACK = 7
+TIMEOUT_SECONDS = 180
+
+log = logging.getLogger("advisor.analyzer")
 
 
 def run_analysis() -> Dict[str, Any]:
@@ -26,15 +30,7 @@ def run_analysis() -> Dict[str, Any]:
         return _empty_report("Nenhuma sessão encontrada nos últimos 7 dias.")
 
     prompt = _build_prompt(summaries, project_ctx)
-
-    client = anthropic.Anthropic(api_key=os.environ["ANTHROPIC_API_KEY"])
-    message = client.messages.create(
-        model=MODEL,
-        max_tokens=4096,
-        messages=[{"role": "user", "content": prompt}],
-    )
-
-    raw = message.content[0].text.strip()
+    raw = _call_claude(prompt)
     return _parse_response(raw, summaries)
 
 
@@ -86,6 +82,44 @@ Gere um relatório de consultor em JSON **válido** com exactamente esta estrutu
 
 Responda APENAS com o JSON. Sem texto antes ou depois.
 """
+
+
+def _call_claude(prompt: str) -> str:
+    """Run `claude --print` with the prompt via stdin. Uses Claude Code credentials."""
+    # Write prompt to a temp file to avoid Windows arg-length limits
+    with tempfile.NamedTemporaryFile(
+        mode="w", suffix=".txt", delete=False, encoding="utf-8"
+    ) as f:
+        f.write(prompt)
+        tmp_path = f.name
+
+    try:
+        # claude --print reads from stdin and outputs only the LLM response
+        cmd = ["claude", "--print"]
+        with open(tmp_path, "r", encoding="utf-8") as stdin_f:
+            result = subprocess.run(
+                cmd,
+                stdin=stdin_f,
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                timeout=TIMEOUT_SECONDS,
+            )
+
+        if result.returncode != 0:
+            err = result.stderr.strip()[:500]
+            log.error(f"claude --print exited with code {result.returncode}: {err}")
+            raise RuntimeError(f"claude CLI error: {err}")
+
+        return result.stdout.strip()
+
+    except FileNotFoundError:
+        raise RuntimeError(
+            "Comando 'claude' não encontrado. Garante que o Claude Code está instalado "
+            "e no PATH. Tenta abrir um novo terminal após a instalação."
+        )
+    finally:
+        os.unlink(tmp_path)
 
 
 def _parse_response(raw: str, summaries: List[Dict]) -> Dict[str, Any]:

@@ -1,12 +1,19 @@
 @echo off
 cd /d "%~dp0"
 
-:: Verifica se .env existe
-if not exist ".env" (
-    echo [ERRO] Ficheiro .env nao encontrado.
-    echo Copia .env.example para .env e preenche a ANTHROPIC_API_KEY.
+:: Verifica se claude esta disponivel no PATH
+where claude >nul 2>&1
+if errorlevel 1 (
+    echo [ERRO] Comando 'claude' nao encontrado.
+    echo Garante que o Claude Code esta instalado. Abre um novo terminal apos instalar.
     pause
     exit /b 1
+)
+
+:: Cria .env a partir do exemplo se nao existir
+if not exist ".env" (
+    copy .env.example .env >nul
+    echo [ADVISOR] .env criado a partir do .env.example
 )
 
 :: Cria virtualenv se nao existir
