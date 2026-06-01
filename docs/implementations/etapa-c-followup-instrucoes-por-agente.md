@@ -48,45 +48,11 @@ Ordem de blocos no prompt de follow-up:
 | `backend-core/app/db.py` | +3 entradas em `ensure_ai_profile_columns()` |
 | `backend-core/app/api/ai_profiles.py` | +3 `Optional[str] = None` em `AIProfileBase` e `AIProfileUpdate` |
 
-### Commits Fase 1
+### Commits Fase 1 + 2 + 3
 
 | # | Commit | O que foi implementado |
 |---|---|---|
-| 1 | *(pendente)* | backend-core: 3 campos no modelo, migration e API |
-
----
-
-### Fase 2 — backend-executors
-
-**Objetivo:** injectar o bloco do operador no prompt de follow-up
-
-| Arquivo | O que muda |
-|---|---|
-| `backend-executors/app/services/decision_engine.py` | `_build_child_prompt_follow_up()`: leitura dos 3 campos + injeção após `variant_rule` |
-
-### Commits Fase 2
-
-| # | Commit | O que foi implementado |
-|---|---|---|
-| 1 | *(pendente)* | executor: leitura + injeção de `_variant_operator_block` |
-
----
-
-### Fase 3 — frontend
-
-**Objetivo:** expor os campos na UI do AI Profile (CamadaPipeline)
-
-| Arquivo | O que muda |
-|---|---|
-| `frontend-crm/src/types/agente.ts` | +3 campos na interface `AgentConfig` + `DEFAULT_AGENT_CONFIG` |
-| `frontend-crm/src/services/api.ts` | `getConfig` (leitura do profile) + `saveConfig` (escrita no PUT) |
-| `frontend-crm/src/components/agente/CamadaPipeline.tsx` | `DrawerFollowUpInstructions` + `EditCard` condicional ao `template_key` |
-
-### Commits Fase 3
-
-| # | Commit | O que foi implementado |
-|---|---|---|
-| 1 | *(pendente)* | frontend: tipos, api.ts, CamadaPipeline |
+| 1 | `35f6d40` | Todas as fases: modelo, migration, API, executor, frontend (tipos, api.ts, CamadaPipeline) |
 
 ---
 
