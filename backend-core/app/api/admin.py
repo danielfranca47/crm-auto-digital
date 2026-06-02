@@ -1,4 +1,5 @@
 from datetime import datetime, timedelta
+from math import ceil
 from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -51,6 +52,12 @@ class ExtensionsUpdate(BaseModel):
 class CreateUserRequest(BaseModel):
     email: str
     name: Optional[str] = None
+
+
+class AssignPlanRequest(BaseModel):
+    plan_code: str
+    months: int = 1
+    is_trial: bool = False
 
 
 @router.post("/login", response_model=AdminToken)
@@ -292,4 +299,53 @@ async def admin_create_user(
         "user_id": new_user.id,
         "email": new_user.email,
         "email_sent": email_sent,
+    }
+
+
+@router.post("/users/{user_id}/subscription", status_code=status.HTTP_200_OK)
+async def admin_assign_plan(
+    user_id: int,
+    body: AssignPlanRequest,
+    db: Session = Depends(get_db),
+    _: dict = Depends(require_admin),
+) -> Dict[str, Any]:
+    """Atribui ou substitui o plano de um utilizador. Cancela subscription activa existente."""
+    user = db.query(models.User).filter(models.User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Utilizador não encontrado")
+
+    plan = db.query(models.Plan).filter(models.Plan.code == body.plan_code).first()
+    if not plan:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Plano '{body.plan_code}' não encontrado")
+
+    # Cancela subscriptions activas existentes
+    db.query(models.Subscription).filter(
+        models.Subscription.user_id == user_id,
+        models.Subscription.status == "active",
+    ).update({"status": "cancelled"})
+
+    now = datetime.utcnow()
+    days = 7 if body.is_trial else 30 * body.months
+    period_end = now + timedelta(days=days)
+
+    sub = models.Subscription(
+        user_id=user_id,
+        product_id=plan.product_id,
+        plan_id=plan.id,
+        status="active",
+        current_period_start=now,
+        current_period_end=period_end,
+        trial_ends_at=period_end if body.is_trial else None,
+    )
+    db.add(sub)
+    db.commit()
+    db.refresh(sub)
+
+    return {
+        "ok": True,
+        "subscription_id": sub.id,
+        "plan_code": plan.code,
+        "plan_name": plan.name,
+        "is_trial": body.is_trial,
+        "current_period_end": period_end.isoformat(),
     }
