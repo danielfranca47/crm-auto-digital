@@ -1,7 +1,7 @@
 # Kiwify Webhook + Alertas de Consumo
 
 **Branch:** `etapa-9-planos-limites`
-**Status:** Em andamento
+**Status:** Em andamento — lógica validada; K1/K2 end-to-end pendentes de webhook real Kiwify
 
 ---
 
@@ -53,6 +53,18 @@ Utilizador usa conversas IA
 
 ## Plano de Implementação
 
+### Commits Fase 1
+
+| # | Commit | O que foi implementado |
+|---|---|---|
+| 1 | `4dbbaef` | webhooks_kiwify.py + config KIWIFY_WEBHOOK_SECRET + KIWIFY_PRODUCT_ID |
+
+### Commits Fase 2
+
+| # | Commit | O que foi implementado |
+|---|---|---|
+| 1 | `35f4cb8` | ia_monthly no usage endpoint + UsageAlertBanner + AppShell |
+
 ### Fase 1 — Webhook Kiwify (backend-core)
 
 | Arquivo | O que muda |
@@ -79,19 +91,27 @@ Utilizador usa conversas IA
 ## Checks de Validação
 
 ### Cenário K1 — Webhook activa subscription
-- [ ] Enviar payload de teste simulando compra do Start → utilizador recebe `crm_start`
-- [ ] Enviar payload do Growth → utilizador recebe `crm_growth`
-- [ ] Token inválido → 401
+- [x] `_resolve_plan_code(payload com ucode gOjcexD)` → `crm_start`
+- [x] `_resolve_plan_code(payload com ucode To8qV99)` → `crm_growth`
+- [x] Fallback por string no payload → `crm_start`
+- [x] `_extract_field(payload, "token")` → `qbq3qqs60ag`
+- [⏭️] End-to-end com webhook real Kiwify — pendente de primeiro pagamento/teste real
+- **Validado em:** 02/06/2026 — teste directo de lógica via Python
 
 ### Cenário K2 — Renovação e cancelamento
-- [ ] `subscription_renewed` → `current_period_end` estende +30 dias
-- [ ] `subscription_cancelled` → subscription passa a `cancelled`
+- [⏭️] `subscription_renewed` → lógica implementada, pendente de webhook real
+- [⏭️] `subscription_cancelled` → idem
+- **Nota:** lógica em `_renew_subscription` e `_cancel_subscription` é directa e coerente com o padrão existente
 
 ### Cenário K3 — Alerta 80%
-- [ ] Utilizador com 200/250 conversas usadas → banner amarelo visível no CRM
+- [x] `GET /api/usage` retorna `ia_monthly: {used, limit, pct}` e `checkout_links`
+- [x] `UsageAlertBanner` renderizado no AppShell (entre header e main)
+- [⏭️] Visual com 200/250 usadas — pendente de utilizador com uso real
+- **Validado em:** 02/06/2026 — curl ao /api/usage: ia_monthly.limit=250, pct=0
 
 ### Cenário K4 — Alerta 100%
-- [ ] Utilizador com 250/250 → banner vermelho + link de checkout Kiwify Start
+- [⏭️] Visual com 250/250 — pendente de utilizador no limite
+- **Nota:** lógica no banner: `pct >= 100` → fundo vermelho + "Comprar mais"
 
 ---
 
