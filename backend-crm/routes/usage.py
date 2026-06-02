@@ -69,6 +69,20 @@ def build_usage_payload(
             "remaining": _calculate_remaining(limit_value, used),
         }
 
+    # Conversas IA mensais
+    ia_limit = _get_limit_value(limits, "max_ia_conversas_monthly")
+    ia_used = rate_limit_service._get_monthly_usage(
+        conn=conn, user_id=user_id, limit_key="max_ia_conversas_monthly"
+    )
+    ia_remaining = _calculate_remaining(ia_limit, ia_used)
+    ia_pct = round((ia_used / ia_limit) * 100) if ia_limit else None
+
+    # Links de checkout Kiwify para CTAs de upgrade
+    checkout_links = {
+        "crm_start": "https://pay.kiwify.com.br/gOjcexD",
+        "crm_growth": "https://pay.kiwify.com.br/To8qV99",
+    }
+
     return {
         "leads": {
             "total": leads_total,
@@ -86,6 +100,13 @@ def build_usage_payload(
             "remaining": copy_remaining,
         },
         "daily": daily_usage,
+        "ia_monthly": {
+            "used": ia_used,
+            "limit": ia_limit,
+            "remaining": ia_remaining,
+            "pct": ia_pct,
+        },
+        "checkout_links": checkout_links,
     }
 
 

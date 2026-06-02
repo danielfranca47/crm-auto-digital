@@ -43,6 +43,7 @@ import Register from "./pages/Register";
 import { useEffect, useState } from "react";
 import { api } from "./services/api";
 import { useApiErrorHandler } from "./hooks/useApiErrorHandler";
+import UsageAlertBanner from "./components/UsageAlertBanner";
 
 const queryClient = new QueryClient();
 
@@ -85,6 +86,7 @@ function AppShell() {
             <SidebarTrigger className="ml-2" />
           </header>
 
+          <UsageAlertBanner />
           <main className="flex-1">
             <Outlet />
           </main>
