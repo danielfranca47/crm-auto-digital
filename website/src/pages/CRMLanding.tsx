@@ -12,92 +12,92 @@ const sectors = [
   {
     label: 'Infoprodutos', icon: '📚',
     description:
-      'Recupere alunos que abandonaram o checkout, qualifique leads de cursos e envie provas sociais automaticamente. A IA conduz o lead do anúncio ao pagamento sem você tocar.',
+      'A Lara recupera alunos que abandonaram o checkout, qualifica leads de cursos e envia provas sociais automaticamente. Ela conduz o lead do anúncio ao pagamento — sem você tocar.',
   },
   {
     label: 'Serviços', icon: '🛠️',
     description:
-      'Agenda consultas, confirma horários e faz follow-up de clientes que pediram orçamento mas não responderam. Nunca perde um agendamento.',
+      'A Lara agenda consultas, confirma horários e faz follow-up de clientes que pediram orçamento mas sumiram. Ela nunca deixa um agendamento escapar.',
   },
   {
     label: 'E-commerce', icon: '🛒',
     description:
-      'Recupera carrinhos abandonados, envia rastreamento de pedido e responde dúvidas com imagens e vídeos do produto automaticamente.',
+      'A Lara recupera carrinhos abandonados, envia rastreamento de pedido e responde dúvidas com fotos e vídeos do produto — tudo no automático.',
   },
   {
     label: 'Saúde & Estética', icon: '💆',
     description:
-      'Triagem, agendamento, confirmação e follow-up pós-consulta. Reduz faltas e mantém a agenda sempre cheia sem recepcionista.',
+      'Triagem, agendamento, confirmação e follow-up pós-consulta. A Lara reduz faltas e mantém sua agenda sempre cheia — sem precisar de recepcionista.',
   },
   {
     label: 'Imóveis', icon: '🏠',
     description:
-      'Qualifica compradores com perguntas estratégicas, envia fotos de imóveis automaticamente e agenda visitas — entregando leads quentes ao corretor.',
+      'A Lara qualifica compradores com perguntas estratégicas, envia fotos automaticamente e agenda visitas — entregando apenas leads quentes pro corretor fechar.',
   },
   {
     label: 'Educação', icon: '🎓',
     description:
-      'Matrículas, cobranças, dúvidas de alunos e lembretes de aula automatizados. A IA atua como assistente acadêmico 24h.',
+      'Matrículas, cobranças, dúvidas de alunos e lembretes de aula. A Lara atua como assistente acadêmica disponível 24h, sem custo de equipe.',
   },
 ];
 
 const steps = [
   { num: '01', title: 'Conecte seu WhatsApp', desc: 'Via QR Code em segundos. Sem código, sem técnico.' },
-  { num: '02', title: 'Configure seu perfil de IA', desc: 'Defina o modo de venda e carregue informações do seu negócio.' },
-  { num: '03', title: 'Leads entram no funil', desc: 'Importe contatos ou receba leads direto do WhatsApp automaticamente.' },
-  { num: '04', title: 'A IA qualifica e conversa', desc: 'Faz perguntas certas, identifica intenção e avança o lead no pipeline.' },
-  { num: '05', title: 'Follow-up automático', desc: 'Quem não respondeu recebe acompanhamento no momento ideal.' },
-  { num: '06', title: 'Você fecha as vendas quentes', desc: 'Receba apenas os leads prontos para fechar. A IA já fez o trabalho pesado.' },
+  { num: '02', title: 'Apresente seu negócio à Lara', desc: 'Ela aprende sobre sua empresa, seus produtos e como você gosta de atender.' },
+  { num: '03', title: 'Leads entram no funil', desc: 'Importe contatos ou receba leads direto do WhatsApp — a Lara assume na hora.' },
+  { num: '04', title: 'A Lara qualifica e conversa', desc: 'Faz as perguntas certas, identifica intenção de compra e avança o lead no pipeline.' },
+  { num: '05', title: 'A Lara faz o follow-up', desc: 'Quem não respondeu? A Lara retoma no momento certo, sem parecer chato.' },
+  { num: '06', title: 'Você fecha as vendas quentes', desc: 'Receba apenas os leads prontos para fechar. A Lara já fez o trabalho pesado.' },
 ];
 
 const features = [
-  { Icon: MessageSquare, title: 'Atendimento 24/7', desc: 'Responde dúvidas, status, políticas e suporte sem você estar presente.' },
-  { Icon: Kanban,        title: 'CRM com Pipeline Kanban', desc: 'Visualize cada lead no funil. Mova, filtre e acompanhe em tempo real.' },
-  { Icon: BellRing,      title: 'Follow-up Automático', desc: 'A IA retoma conversas paradas no momento certo, sem parecer spam.' },
-  { Icon: Users,         title: 'Qualificação de Leads', desc: 'Identifica intenção de compra e entrega apenas oportunidades quentes.' },
-  { Icon: Volume2,       title: 'Áudio Personalizado', desc: 'Grave uma vez. O sistema envia como mensagem de voz nova para cada cliente.' },
-  { Icon: ImageIcon,     title: 'Imagens e Vídeos', desc: 'Envio automático de catálogos, provas sociais e materiais de venda.' },
-  { Icon: BarChart2,     title: 'Modos de Venda', desc: 'Consultivo, agendamento ou direto — configure para o seu negócio.' },
-  { Icon: Plug,          title: 'Integrações via API', desc: 'Hotmart, Kiwify e mais — conecte as ferramentas que você já usa. (Em breve)' },
+  { Icon: MessageSquare, title: 'Atendimento 24/7', desc: 'A Lara responde dúvidas, status e suporte enquanto você dorme — sem perder nenhum lead.' },
+  { Icon: Kanban,        title: 'CRM com Pipeline Kanban', desc: 'Visualize onde está cada lead no funil. Mova, filtre e acompanhe em tempo real.' },
+  { Icon: BellRing,      title: 'Follow-up que nunca esquece', desc: 'A Lara retoma conversas paradas no momento certo, sem parecer spam.' },
+  { Icon: Users,         title: 'Qualificação de Leads', desc: 'A Lara identifica intenção de compra e entrega apenas oportunidades quentes.' },
+  { Icon: Volume2,       title: 'Áudio na Voz da Lara', desc: 'Grave uma vez. A Lara envia como mensagem de voz nova para cada cliente.' },
+  { Icon: ImageIcon,     title: 'Imagens e Vídeos', desc: 'A Lara envia catálogos, provas sociais e materiais de venda automaticamente.' },
+  { Icon: BarChart2,     title: 'Modos de Venda', desc: 'Consultivo, agendamento ou direto — configure o jeito que a Lara deve vender.' },
+  { Icon: Plug,          title: 'Integrações via API', desc: 'Hotmart, Kiwify e mais — a Lara conectada com as ferramentas que você já usa. (Em breve)' },
 ];
 
 const differentials = [
   {
-    Icon: Kanban, tag: 'Exclusivo', title: 'CRM nativo embutido',
-    desc: 'Todos os seus leads organizados em um pipeline visual. Veja em qual etapa cada cliente está, o histórico completo da conversa e qual é a próxima ação — sem integrar ferramenta externa.',
+    Icon: Kanban, tag: 'Exclusivo', title: 'CRM nativo — tudo num lugar só',
+    desc: 'Todos os seus leads organizados em um pipeline visual. Veja em qual etapa cada cliente está, o histórico completo da conversa e qual é a próxima ação — sem abrir outra ferramenta.',
   },
   {
-    Icon: BellRing, tag: 'Diferencial', title: 'Follow-up que nunca esquece',
-    desc: 'Se o lead não respondeu, o sistema retoma automaticamente no melhor momento. Recupere vendas que pareciam perdidas sem você fazer absolutamente nada.',
+    Icon: BellRing, tag: 'Diferencial', title: 'A Lara nunca esquece um follow-up',
+    desc: 'Se o lead não respondeu, a Lara retoma automaticamente no melhor momento. Ela recupera vendas que pareciam perdidas — sem você fazer absolutamente nada.',
   },
   {
     Icon: Volume2, tag: 'Único', title: 'Áudio como se fosse na hora',
-    desc: 'Grave seu áudio uma vez. O sistema envia para cada cliente como mensagem de voz nova — humanizando o atendimento. Voz clonada em tempo real disponível no plano Growth.',
+    desc: 'Grave seu áudio uma vez. A Lara envia para cada cliente como mensagem de voz nova, humanizando o atendimento. Voz clonada em tempo real disponível no plano Growth.',
   },
   {
-    Icon: BarChart2, tag: 'Flexível', title: 'Modos de venda configuráveis',
-    desc: 'Consultivo (aprofunda qualificação), agendamento (marca reunião) ou direto (vai reto ao fechamento). Configure o jeito que o seu negócio vende.',
+    Icon: BarChart2, tag: 'Flexível', title: 'A Lara vende do seu jeito',
+    desc: 'Consultivo (aprofunda qualificação), agendamento (foca em marcar reunião) ou direto (vai reto ao fechamento). Você define a estratégia, a Lara executa.',
   },
 ];
 
 const testimonials = [
   {
     name: 'Fernanda Costa', role: 'Proprietária de Clínica Estética', stars: 5,
-    text: 'Antes eu perdia leads por não responder rápido. Hoje a IA responde, agenda e faz follow-up sozinha. Minha taxa de fechamento dobrou em 45 dias.',
+    text: 'A Lara responde, agenda e faz follow-up sozinha. Antes eu perdia leads por demorar a responder — hoje minha taxa de fechamento dobrou em 45 dias.',
   },
   {
     name: 'Ricardo Mendes', role: 'CEO de E-commerce', stars: 5,
-    text: 'O CRM embutido mudou tudo. Antes meus leads ficavam perdidos no WhatsApp. Agora tenho um pipeline visual e sei exatamente o que está acontecendo.',
+    text: 'O CRM embutido mudou tudo. Antes meus leads ficavam perdidos no WhatsApp. Agora a Lara organiza tudo no pipeline e eu sei exatamente o que está acontecendo.',
   },
   {
     name: 'Camila Rocha', role: 'Personal Trainer', stars: 5,
-    text: 'O follow-up automático recuperou 3 alunos que eu tinha "perdido". Foram vendas que nunca teriam acontecido sem o sistema.',
+    text: 'A Lara recuperou 3 alunos que eu tinha "perdido". Ela fez o follow-up no momento certo — foram vendas que nunca teriam acontecido sem ela.',
   },
 ];
 
 const plans = [
   {
-    name: 'Starter', price: '197', highlight: false,
+    name: 'Lara Starter', price: '197', highlight: false,
     features: [
       '1.000 conversas/mês',
       '1 WhatsApp conectado',
@@ -106,10 +106,10 @@ const plans = [
       'Envio de imagens e vídeos',
       'Suporte por chat',
     ],
-    cta: 'Começar grátis',
+    cta: 'Conhecer a Lara',
   },
   {
-    name: 'Growth', price: '397', highlight: true, badge: 'MAIS POPULAR',
+    name: 'Lara Growth', price: '397', highlight: true, badge: 'MAIS POPULAR',
     features: [
       'Conversas ilimitadas',
       '1 WhatsApp conectado',
@@ -121,10 +121,10 @@ const plans = [
       'Prospecção automática',
       'Suporte prioritário',
     ],
-    cta: 'Começar grátis',
+    cta: 'Conhecer a Lara',
   },
   {
-    name: 'Scale', price: '997', highlight: false,
+    name: 'Lara Scale', price: '997', highlight: false,
     features: [
       'Conversas ilimitadas',
       'Até 3 WhatsApps',
@@ -152,11 +152,11 @@ const comparisonRows = [
 ];
 
 const faqs = [
-  { q: 'Preciso de WhatsApp Business API?', a: 'Não obrigatoriamente. Você pode começar com o WhatsApp Business comum via QR Code. A API oficial fica disponível para volumes maiores.' },
-  { q: 'Quanto tempo leva para configurar?', a: 'Em menos de 30 minutos você já tem a IA atendendo. Basta conectar o WhatsApp, preencher as informações do seu negócio e ativar.' },
-  { q: 'A IA soa natural ou parece robô?', a: 'A IA é configurada com a personalidade da sua marca. Você controla o tom, as respostas e o fluxo de conversa para soar exatamente como você quer.' },
-  { q: 'O que acontece quando o lead precisa de humano?', a: 'A IA transfere automaticamente com o contexto completo da conversa. O atendente humano já sabe tudo que foi discutido.' },
-  { q: 'Funciona para qualquer tipo de negócio?', a: 'Sim. Temos configurações otimizadas para infoprodutos, serviços, e-commerce, saúde, imóveis, educação e muito mais.' },
+  { q: 'A Lara precisa de WhatsApp Business API?', a: 'Não obrigatoriamente. Você começa com o WhatsApp Business comum via QR Code. A API oficial fica disponível para volumes maiores.' },
+  { q: 'Quanto tempo para a Lara estar ativa?', a: 'Em menos de 30 minutos a Lara já está atendendo. Conecte o WhatsApp, apresente seu negócio a ela e ative.' },
+  { q: 'A Lara soa natural ou parece robô?', a: 'A Lara é configurada com a personalidade da sua marca. Você controla o tom, as respostas e o fluxo — ela soa como alguém da sua equipe.' },
+  { q: 'O que acontece quando o cliente precisa de humano?', a: 'A Lara transfere automaticamente com o contexto completo da conversa. Quem assumir já sabe tudo que foi discutido.' },
+  { q: 'A Lara funciona para qualquer tipo de negócio?', a: 'Sim. Infoprodutos, serviços, e-commerce, saúde, imóveis, educação — a Lara se adapta ao seu setor.' },
   { q: 'Posso cancelar quando quiser?', a: 'Sim. Sem fidelidade, sem multa. Cancele com 1 clique a qualquer momento.' },
 ];
 
@@ -224,26 +224,26 @@ export default function CRMLanding() {
             <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full border text-sm font-medium mb-7 animate-fade-in"
               style={{ background: 'rgba(77,212,255,0.1)', borderColor: 'rgba(77,212,255,0.3)', color: '#4DD4FF' }}>
               <Bot className="w-4 h-4" />
-              IA + CRM + Follow-up — tudo num só lugar
+              Conheça a Lara — IA + CRM + Follow-up
             </div>
 
             {/* H1 */}
             <h1 className="text-hero mb-6 animate-fade-in animate-delay-100">
-              A IA que não só responde —{' '}
+              A Lara cuida dos seus leads{' '}
               <span className="bg-gradient-to-r from-accent to-primary bg-clip-text text-transparent">
-                ela acompanha o lead até fechar.
+                enquanto você faz o resto.
               </span>
             </h1>
 
             {/* sub */}
             <p className="text-xl text-muted-foreground mb-10 max-w-lg leading-relaxed animate-fade-in animate-delay-200">
-              Atendimento automático no WhatsApp com CRM nativo, follow-up inteligente e recuperação de vendas. Tudo no mesmo lugar, sem ferramenta extra.
+              A Lara atende, qualifica e faz follow-up pelo WhatsApp — com CRM nativo e recuperação de vendas. Tudo no mesmo lugar, sem ferramenta extra.
             </p>
 
             {/* CTAs */}
             <div className="flex flex-col sm:flex-row gap-4 mb-14 animate-fade-in animate-delay-300">
               <a href="#planos" className="btn-hero flex items-center justify-center gap-2">
-                Começar grátis <ArrowRight className="w-4 h-4" />
+                Conhecer a Lara <ArrowRight className="w-4 h-4" />
               </a>
               <a href="#como-funciona"
                 className="flex items-center justify-center gap-2 px-8 py-4 rounded-xl font-semibold border border-white/20 hover:bg-white/10 transition-smooth">
@@ -278,7 +278,7 @@ export default function CRMLanding() {
       <section className="py-8 border-y border-border bg-card/40">
         <div className="container mx-auto px-4 lg:px-8">
           <p className="text-center text-xs text-muted-foreground mb-5 uppercase tracking-widest font-semibold">
-            + DE 10.000 EMPRESAS JÁ AUTOMATIZARAM SEU WHATSAPP
+            + DE 10.000 EMPRESAS JÁ TÊM UMA LARA ATENDENDO PARA ELAS
           </p>
           <div className="flex flex-wrap justify-center items-center gap-6 opacity-50">
             {['Infoprodutos', 'E-commerce', 'Saúde', 'Imóveis', 'Educação', 'Serviços', 'Beleza'].map(s => (
@@ -296,7 +296,7 @@ export default function CRMLanding() {
         <div className="container mx-auto max-w-5xl">
           <div className="text-center mb-12">
             <span className="text-accent text-sm font-semibold uppercase tracking-widest">Qualquer setor</span>
-            <h2 className="text-heading mt-2">Se você vende pelo WhatsApp, a IA trabalha por você</h2>
+            <h2 className="text-heading mt-2">Se você vende pelo WhatsApp, a Lara trabalha por você</h2>
           </div>
 
           <div className="flex flex-wrap justify-center gap-2 mb-10">
@@ -327,8 +327,8 @@ export default function CRMLanding() {
         <div className="container mx-auto max-w-5xl">
           <div className="text-center mb-14">
             <span className="text-accent text-sm font-semibold uppercase tracking-widest">Simples assim</span>
-            <h2 className="text-heading mt-2">Do primeiro contato ao fechamento — no automático</h2>
-            <p className="text-muted-foreground mt-3">Configure uma vez. A IA trabalha para sempre.</p>
+            <h2 className="text-heading mt-2">Do primeiro contato ao fechamento — a Lara no comando</h2>
+            <p className="text-muted-foreground mt-3">Configure uma vez. A Lara trabalha para sempre.</p>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -359,10 +359,10 @@ export default function CRMLanding() {
       <section id="funcionalidades" className="py-20 px-4">
         <div className="container mx-auto max-w-6xl">
           <div className="text-center mb-14">
-            <span className="text-accent text-sm font-semibold uppercase tracking-widest">⚡ Principais Funções</span>
-            <h2 className="text-heading mt-2">Tudo que a IA faz no WhatsApp</h2>
+            <span className="text-accent text-sm font-semibold uppercase tracking-widest">⚡ O que a Lara faz</span>
+            <h2 className="text-heading mt-2">Tudo que a Lara faz pelo seu negócio</h2>
             <p className="text-muted-foreground mt-3 max-w-xl mx-auto">
-              Automatize atendimento, vendas e operações com inteligência artificial que trabalha 24/7.
+              A Lara atende, vende e acompanha leads 24/7 — enquanto você foca no que realmente importa.
             </p>
           </div>
 
@@ -385,9 +385,9 @@ export default function CRMLanding() {
         <div className="container mx-auto max-w-5xl">
           <div className="text-center mb-14">
             <span className="text-accent text-sm font-semibold uppercase tracking-widest">O diferencial</span>
-            <h2 className="text-heading mt-2">Não é só um chatbot. É seu time de vendas completo.</h2>
+            <h2 className="text-heading mt-2">A Lara não é só um chatbot. É sua melhor vendedora.</h2>
             <p className="text-muted-foreground mt-3 max-w-xl mx-auto">
-              Outros chatbots respondem mensagens. O DigitalPro gerencia o processo de venda de ponta a ponta.
+              Outros bots respondem mensagens. A Lara gerencia o processo de venda de ponta a ponta — e nunca esquece um follow-up.
             </p>
           </div>
 
@@ -427,15 +427,15 @@ export default function CRMLanding() {
               style={{ background: 'radial-gradient(ellipse at 50% 0%, rgba(77,212,255,0.06), transparent 70%)' }} />
 
             <div className="relative">
-              <span className="text-accent text-sm font-semibold uppercase tracking-widest">✦ Áudio Personalizado</span>
+              <span className="text-accent text-sm font-semibold uppercase tracking-widest">✦ A Voz da Lara</span>
               <h2 className="text-heading mt-3 mb-4">
-                Sua voz no atendimento —{' '}
+                A Lara fala com cada cliente{' '}
                 <span className="bg-gradient-to-r from-accent to-primary bg-clip-text text-transparent">
-                  sem precisar estar lá.
+                  como se fosse na hora.
                 </span>
               </h2>
               <p className="text-muted-foreground max-w-xl mx-auto mb-10 leading-relaxed">
-                Grave seus áudios uma vez. A IA envia para cada cliente como se fosse uma mensagem nova, no momento certo da conversa — humanizando o atendimento de forma única.
+                Grave seu áudio uma vez. A Lara envia para cada cliente como mensagem de voz nova, no momento certo da conversa — humanizando o atendimento sem você precisar estar lá.
               </p>
 
               {/* audio mock */}
@@ -477,8 +477,8 @@ export default function CRMLanding() {
               </div>
 
               <p className="text-xs text-muted-foreground mt-8">
-                ✦ Voz clonada em tempo real disponível a partir do{' '}
-                <strong style={{ color: '#4DD4FF' }}>Plano Growth</strong>
+                ✦ Voz clonada da Lara em tempo real disponível a partir do{' '}
+                <strong style={{ color: '#4DD4FF' }}>Lara Growth</strong>
               </p>
             </div>
           </div>
@@ -499,9 +499,9 @@ export default function CRMLanding() {
                 <tr className="border-b border-border">
                   <th className="text-left px-6 py-4 text-muted-foreground font-medium">Funcionalidade</th>
                   <th className="px-6 py-4 text-center">
-                    <span className="font-bold text-accent">DigitalPro</span>
+                    <span className="font-bold text-accent">Lara</span>
                   </th>
-                  <th className="px-6 py-4 text-center text-muted-foreground">Chatbot comum</th>
+                  <th className="px-6 py-4 text-center text-muted-foreground">Bot genérico</th>
                 </tr>
               </thead>
               <tbody>
@@ -531,9 +531,9 @@ export default function CRMLanding() {
         <div className="container mx-auto max-w-5xl">
           <div className="text-center mb-14">
             <span className="text-accent text-sm font-semibold uppercase tracking-widest">Suporte completo</span>
-            <h2 className="text-heading mt-2">Não fica sozinho na ativação</h2>
+            <h2 className="text-heading mt-2">A Lara não vem sozinha — você tem suporte real</h2>
             <p className="text-muted-foreground mt-3 max-w-xl mx-auto">
-              Da primeira configuração ao dia a dia, você tem acompanhamento real.
+              Da primeira configuração ao dia a dia, tem alguém do lado pra te ajudar a tirar o máximo da Lara.
             </p>
           </div>
 
@@ -561,7 +561,7 @@ export default function CRMLanding() {
         <div className="container mx-auto max-w-5xl">
           <div className="text-center mb-14">
             <span className="text-accent text-sm font-semibold uppercase tracking-widest">✦ Prova Social</span>
-            <h2 className="text-heading mt-2">O que dizem nossos clientes</h2>
+            <h2 className="text-heading mt-2">O que dizem quem já tem a Lara</h2>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -592,8 +592,8 @@ export default function CRMLanding() {
       <section id="planos" className="py-20 px-4">
         <div className="container mx-auto max-w-5xl">
           <div className="text-center mb-14">
-            <span className="text-accent text-sm font-semibold uppercase tracking-widest">✦ Preços</span>
-            <h2 className="text-heading mt-2">Escolha o plano e comece a vender hoje</h2>
+            <span className="text-accent text-sm font-semibold uppercase tracking-widest">✦ Planos da Lara</span>
+            <h2 className="text-heading mt-2">Escolha o plano e a Lara começa hoje</h2>
             <p className="text-muted-foreground mt-3">Sem fidelidade. Cancele quando quiser.</p>
           </div>
 
@@ -674,17 +674,17 @@ export default function CRMLanding() {
 
         <div className="container mx-auto max-w-3xl text-center relative">
           <h2 className="text-heading mb-4">
-            O seu concorrente já está{' '}
+            Seu concorrente já tem uma Lara.{' '}
             <span className="bg-gradient-to-r from-accent to-primary bg-clip-text text-transparent">
-              automatizando o WhatsApp.
+              E você?
             </span>
           </h2>
           <p className="text-muted-foreground text-lg mb-10 max-w-xl mx-auto leading-relaxed">
-            A diferença entre eles e você não é o produto — é quem acompanha o lead até o fechamento. Comece hoje.
+            A Lara atende quando você não pode, faz follow-up quando você esquece e recupera vendas que você daria como perdidas. Comece hoje.
           </p>
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
             <a href="#planos" className="btn-hero flex items-center justify-center gap-2 text-lg px-10 py-5">
-              Começar grátis agora <ArrowRight className="w-5 h-5" />
+              Conhecer a Lara agora <ArrowRight className="w-5 h-5" />
             </a>
             <a href="#" className="flex items-center justify-center gap-2 px-8 py-5 rounded-xl font-semibold border border-white/20 hover:bg-white/10 transition-smooth">
               <MessageSquare className="w-4 h-4" /> Falar no WhatsApp
@@ -709,7 +709,7 @@ export default function CRMLanding() {
                 <span className="text-xl font-bold">DigitalPro</span>
               </div>
               <p className="text-primary-foreground/70 text-sm leading-relaxed max-w-xs">
-                IA + CRM + Follow-up automático para vendas pelo WhatsApp. Feito para quem quer crescer sem depender de uma equipe grande.
+                A Lara é a IA da DigitalPro que atende, qualifica e faz follow-up pelo WhatsApp — para quem quer vender mais sem depender de uma equipe grande.
               </p>
             </div>
 
