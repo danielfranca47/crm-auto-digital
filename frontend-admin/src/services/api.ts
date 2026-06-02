@@ -79,6 +79,13 @@ export type AdminUser = {
   subscription_period_end?: string;
 };
 
+export type CrmPlan = {
+  code: string;
+  name: string;
+  billing_period: string;
+  product_code: string;
+};
+
 export type AdminInstance = {
   id: number;
   instance_id: string;
@@ -183,6 +190,14 @@ export const api = {
     corePost<{ ok: boolean; user_id: number; email: string; email_sent: boolean }>(
       "/admin/users",
       { email, ...(name ? { name } : {}) }
+    ),
+
+  listCrmPlans: () => coreGet<CrmPlan[]>("/plans?product_code=crm"),
+
+  assignPlan: (userId: number, planCode: string, months: number, isTrial: boolean) =>
+    corePost<{ ok: boolean; plan_name: string; current_period_end: string }>(
+      `/admin/users/${userId}/subscription`,
+      { plan_code: planCode, months, is_trial: isTrial }
     ),
 
   listInstances: () => coreGet<AdminInstance[]>("/admin/instances"),

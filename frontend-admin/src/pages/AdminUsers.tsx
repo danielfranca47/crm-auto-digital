@@ -6,7 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { api } from "@/services/api";
 import { useToast } from "@/hooks/use-toast";
 import { Search, X, User, UserPlus } from "lucide-react";
-import type { AdminUser } from "@/services/api";
+import type { AdminUser, CrmPlan } from "@/services/api";
 
 const AVAILABLE_EXTENSIONS = [
   { id: "website_audit", label: "Auditoria de Site" },
@@ -45,6 +45,13 @@ export default function AdminUsers() {
   const [newEmail, setNewEmail] = useState("");
   const [newName, setNewName] = useState("");
   const [isCreating, setIsCreating] = useState(false);
+
+  const [planModal, setPlanModal] = useState<AdminUser | null>(null);
+  const [plans, setPlans] = useState<CrmPlan[]>([]);
+  const [selectedPlan, setSelectedPlan] = useState("");
+  const [planMonths, setPlanMonths] = useState(1);
+  const [isTrial, setIsTrial] = useState(false);
+  const [isAssigning, setIsAssigning] = useState(false);
 
   const loadUsers = useCallback(async () => {
     setIsLoading(true);
@@ -98,6 +105,44 @@ export default function AdminUsers() {
       });
     } finally {
       setIsSaving(false);
+    }
+  };
+
+  const openPlanModal = async (user: AdminUser) => {
+    setPlanModal(user);
+    setSelectedPlan(user.plan_code ?? "");
+    setPlanMonths(1);
+    setIsTrial(false);
+    if (plans.length === 0) {
+      try {
+        const data = await api.listCrmPlans();
+        setPlans(data);
+        if (!user.plan_code && data.length > 0) setSelectedPlan(data[0].code);
+      } catch {
+        toast({ title: "Erro ao carregar planos", variant: "destructive" });
+      }
+    }
+  };
+
+  const handleAssignPlan = async () => {
+    if (!planModal || !selectedPlan) return;
+    setIsAssigning(true);
+    try {
+      const res = await api.assignPlan(planModal.id, selectedPlan, planMonths, isTrial);
+      toast({
+        title: "Plano atribuído",
+        description: `${planModal.email} → ${res.plan_name}${isTrial ? " (trial 7 dias)" : ""}`,
+      });
+      setPlanModal(null);
+      loadUsers();
+    } catch (err: unknown) {
+      toast({
+        title: "Erro ao atribuir plano",
+        description: err instanceof Error ? err.message : "Erro desconhecido",
+        variant: "destructive",
+      });
+    } finally {
+      setIsAssigning(false);
     }
   };
 
@@ -234,14 +279,22 @@ export default function AdminUsers() {
                 </span>
 
                 {/* Actions */}
-                <div className="flex items-center">
+                <div className="flex items-center gap-1">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => openPlanModal(user)}
+                    className="text-xs border-indigo-700/50 text-indigo-300 hover:bg-indigo-900/40"
+                  >
+                    Plano
+                  </Button>
                   <Button
                     size="sm"
                     variant="outline"
                     onClick={() => openModal(user)}
                     className="text-xs border-slate-600 text-slate-300 hover:bg-slate-700"
                   >
-                    Extensões
+                    Ext.
                   </Button>
                 </div>
               </div>
