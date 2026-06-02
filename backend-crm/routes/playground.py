@@ -474,6 +474,14 @@ def playground_chat(
     """
     user_id = current_user.id
 
+    # ── Gate de plano: limite mensal de playground ───────────────────────────
+    from services.plan_gates import check_playground_limit
+    _gate_conn = get_connection()
+    try:
+        check_playground_limit(user_id, current_user.entitlements, _gate_conn)
+    finally:
+        _gate_conn.close()
+
     # ── Passo 4: Fetch AI Profile (valida propriedade) ──────────────────────
     ai_profile = fetch_core_ai_profile_by_id(body.ai_profile_id, user_id)
 
