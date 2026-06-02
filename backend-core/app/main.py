@@ -8,6 +8,8 @@ from app.seed import seed_initial_data
 
 app = FastAPI(title="CRM AutoDigital Core")
 
+_scheduler = None
+
 origins = [
     "http://localhost:5173",
     "http://localhost:5174",
@@ -27,6 +29,7 @@ app.add_middleware(
 
 @app.on_event("startup")
 def on_startup() -> None:
+    global _scheduler
     ensure_user_columns()
     ensure_plan_limits_columns()
     ensure_subscription_columns()
@@ -38,6 +41,26 @@ def on_startup() -> None:
         seed_initial_data(db)
     finally:
         db.close()
+
+    try:
+        from apscheduler.schedulers.background import BackgroundScheduler
+        from apscheduler.triggers.cron import CronTrigger
+        from app.jobs.subscription_jobs import run_daily_subscription_jobs
+
+        _scheduler = BackgroundScheduler(timezone="UTC")
+        _scheduler.add_job(run_daily_subscription_jobs, CronTrigger(hour=9, minute=0))
+        _scheduler.start()
+        import logging
+        logging.getLogger(__name__).info("APScheduler iniciado — job diário às 09:00 UTC")
+    except Exception as exc:
+        import logging
+        logging.getLogger(__name__).error("Falha ao iniciar APScheduler: %s", exc)
+
+
+@app.on_event("shutdown")
+def on_shutdown() -> None:
+    if _scheduler is not None:
+        _scheduler.shutdown(wait=False)
 
 
 app.include_router(api_router)

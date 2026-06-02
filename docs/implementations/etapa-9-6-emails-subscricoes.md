@@ -56,6 +56,12 @@ Emails são sempre **não-bloqueantes** (try/except) — falha de SMTP não afec
 | `backend-core/app/api/admin.py` | Email após assign_plan: trial → render_trial_started, senão → render_subscription_activated |
 | `backend-core/app/api/auth.py` | Email welcome no register + corrigir sujeito do reset |
 
+### Commits Fase 1
+
+| # | Commit | O que foi implementado |
+|---|---|---|
+| 1 | `7c828d7` | Templates de email + chamadas event-driven em todos os endpoints de subscription |
+
 ### Fase 2 — Job de expiração automática
 
 **Objetivo:** subscriptions expiradas passam para `"expired"` e o cliente é avisado 3 dias antes.

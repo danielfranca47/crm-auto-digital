@@ -46,7 +46,7 @@ def ensure_plan_limits_columns() -> None:
 
 
 def ensure_subscription_columns() -> None:
-    """Add trial_ends_at to subscriptions without requiring migrations."""
+    """Add trial_ends_at and expiry_warning_sent to subscriptions without requiring migrations."""
     with engine.begin() as conn:
         if engine.dialect.name == "sqlite":
             result = conn.execute(text("PRAGMA table_info(subscriptions)"))
@@ -54,11 +54,16 @@ def ensure_subscription_columns() -> None:
             if "trial_ends_at" not in existing:
                 conn.execute(text("ALTER TABLE subscriptions ADD COLUMN trial_ends_at DATETIME"))
                 print("✅ coluna adicionada em subscriptions: trial_ends_at")
+            if "expiry_warning_sent" not in existing:
+                conn.execute(text("ALTER TABLE subscriptions ADD COLUMN expiry_warning_sent INTEGER NOT NULL DEFAULT 0"))
+                print("✅ coluna adicionada em subscriptions: expiry_warning_sent")
         else:
             result = conn.execute(text("SELECT column_name FROM information_schema.columns WHERE table_name='subscriptions'"))
             existing = {row[0] for row in result.fetchall()}
             if "trial_ends_at" not in existing:
                 conn.execute(text("ALTER TABLE subscriptions ADD COLUMN trial_ends_at TIMESTAMP"))
+            if "expiry_warning_sent" not in existing:
+                conn.execute(text("ALTER TABLE subscriptions ADD COLUMN expiry_warning_sent BOOLEAN NOT NULL DEFAULT FALSE"))
 
 
 def ensure_user_columns() -> None:

@@ -4,6 +4,7 @@ from .admin import router as admin_router
 from .auth import router as auth_router
 from .users import router as users_router
 from .catalog import router as catalog_router
+from .cron import router as cron_router
 from .subscriptions import router as subscriptions_router
 from .ai_profiles import router as ai_profiles_router
 from .whatsapp_connections import router as whatsapp_connections_router
@@ -13,6 +14,7 @@ from .webhooks_kiwify import router as webhooks_kiwify_router
 
 api_router = APIRouter()
 api_router.include_router(admin_router)
+api_router.include_router(cron_router)
 api_router.include_router(webhooks_kiwify_router)
 api_router.include_router(auth_router)
 api_router.include_router(users_router)
