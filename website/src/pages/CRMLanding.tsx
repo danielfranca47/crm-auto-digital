@@ -198,82 +198,78 @@ export default function CRMLanding() {
       </header>
 
       {/* ── HERO ── */}
-      <section id="home" className="relative min-h-screen flex items-center hero-gradient pt-16 overflow-hidden">
-        {/* ambient glow — posicionado atrás da imagem */}
-        <div className="absolute top-1/3 right-0 w-[600px] h-[600px] rounded-full pointer-events-none"
-          style={{ background: 'radial-gradient(ellipse, rgba(77,212,255,0.07) 0%, transparent 70%)' }} />
+      <section
+        id="home"
+        className="relative min-h-screen flex items-center pt-16 overflow-hidden"
+        style={{
+          backgroundImage: 'url(/hero-mascot.jpeg)',
+          backgroundSize: 'cover',
+          backgroundPosition: 'center right',
+          backgroundRepeat: 'no-repeat',
+        }}
+      >
+        {/* overlay gradiente — escurece da esquerda para a direita para o texto ser legível */}
+        <div className="absolute inset-0 pointer-events-none"
+          style={{
+            background: 'linear-gradient(to right, #0D0A17 30%, rgba(13,10,23,0.85) 55%, rgba(13,10,23,0.2) 100%)',
+          }} />
+        {/* overlay gradiente — escurece base da secção */}
+        <div className="absolute bottom-0 inset-x-0 h-32 pointer-events-none"
+          style={{ background: 'linear-gradient(to top, #0D0A17, transparent)' }} />
 
-        <div className="container mx-auto px-4 lg:px-8 py-20">
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 items-center">
+        <div className="container mx-auto px-4 lg:px-8 py-20 relative z-10">
+          <div className="max-w-xl">
 
-            {/* ── COLUNA ESQUERDA: texto ── */}
-            <div className="flex flex-col items-start">
-
-              {/* badge */}
-              <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full border text-sm font-medium mb-7 animate-fade-in"
-                style={{ background: 'rgba(77,212,255,0.1)', borderColor: 'rgba(77,212,255,0.3)', color: '#4DD4FF' }}>
-                <Bot className="w-4 h-4" />
-                IA + CRM + Follow-up — tudo num só lugar
-              </div>
-
-              {/* H1 */}
-              <h1 className="text-hero mb-6 animate-fade-in animate-delay-100">
-                A IA que não só responde —{' '}
-                <span className="bg-gradient-to-r from-accent to-primary bg-clip-text text-transparent">
-                  ela acompanha o lead até fechar.
-                </span>
-              </h1>
-
-              {/* sub */}
-              <p className="text-xl text-muted-foreground mb-10 max-w-xl leading-relaxed animate-fade-in animate-delay-200">
-                Atendimento automático no WhatsApp com CRM nativo, follow-up inteligente e recuperação de vendas. Tudo no mesmo lugar, sem ferramenta extra.
-              </p>
-
-              {/* CTAs */}
-              <div className="flex flex-col sm:flex-row gap-4 mb-14 animate-fade-in animate-delay-300">
-                <a href="#planos" className="btn-hero flex items-center justify-center gap-2">
-                  Começar grátis <ArrowRight className="w-4 h-4" />
-                </a>
-                <a href="#como-funciona"
-                  className="flex items-center justify-center gap-2 px-8 py-4 rounded-xl font-semibold border border-white/20 hover:bg-white/10 transition-smooth">
-                  <Play className="w-4 h-4" /> Ver como funciona
-                </a>
-              </div>
-
-              {/* stats */}
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-6 animate-fade-in animate-delay-400">
-                {[
-                  { value: '10k+', label: 'Leads qualificados' },
-                  { value: '94%',  label: 'Taxa de resposta'   },
-                  { value: '3×',   label: 'Mais conversões'    },
-                  { value: '24/7', label: 'Atendimento ativo'  },
-                ].map(s => (
-                  <div key={s.label}>
-                    <div className="text-2xl font-extrabold text-accent">{s.value}</div>
-                    <div className="text-xs text-muted-foreground mt-0.5">{s.label}</div>
-                  </div>
-                ))}
-              </div>
+            {/* badge */}
+            <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full border text-sm font-medium mb-7 animate-fade-in"
+              style={{ background: 'rgba(77,212,255,0.1)', borderColor: 'rgba(77,212,255,0.3)', color: '#4DD4FF' }}>
+              <Bot className="w-4 h-4" />
+              IA + CRM + Follow-up — tudo num só lugar
             </div>
 
-            {/* ── COLUNA DIREITA: mascote ── */}
-            <div className="relative flex justify-center lg:justify-end animate-fade-in animate-delay-200">
-              {/* glow por baixo da imagem */}
-              <div className="absolute bottom-0 left-1/2 -translate-x-1/2 w-72 h-72 rounded-full pointer-events-none"
-                style={{ background: 'radial-gradient(circle, rgba(77,212,255,0.15) 0%, transparent 70%)', filter: 'blur(40px)' }} />
-              <img
-                src="/hero-mascot.png"
-                alt="IA assistente de vendas"
-                className="relative z-10 w-full max-w-sm lg:max-w-md xl:max-w-lg object-contain drop-shadow-2xl"
-                style={{ filter: 'drop-shadow(0 0 40px rgba(77,212,255,0.25))' }}
-              />
+            {/* H1 */}
+            <h1 className="text-hero mb-6 animate-fade-in animate-delay-100">
+              A IA que não só responde —{' '}
+              <span className="bg-gradient-to-r from-accent to-primary bg-clip-text text-transparent">
+                ela acompanha o lead até fechar.
+              </span>
+            </h1>
+
+            {/* sub */}
+            <p className="text-xl text-muted-foreground mb-10 max-w-lg leading-relaxed animate-fade-in animate-delay-200">
+              Atendimento automático no WhatsApp com CRM nativo, follow-up inteligente e recuperação de vendas. Tudo no mesmo lugar, sem ferramenta extra.
+            </p>
+
+            {/* CTAs */}
+            <div className="flex flex-col sm:flex-row gap-4 mb-14 animate-fade-in animate-delay-300">
+              <a href="#planos" className="btn-hero flex items-center justify-center gap-2">
+                Começar grátis <ArrowRight className="w-4 h-4" />
+              </a>
+              <a href="#como-funciona"
+                className="flex items-center justify-center gap-2 px-8 py-4 rounded-xl font-semibold border border-white/20 hover:bg-white/10 transition-smooth">
+                <Play className="w-4 h-4" /> Ver como funciona
+              </a>
             </div>
 
+            {/* stats */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-6 animate-fade-in animate-delay-400">
+              {[
+                { value: '10k+', label: 'Leads qualificados' },
+                { value: '94%',  label: 'Taxa de resposta'   },
+                { value: '3×',   label: 'Mais conversões'    },
+                { value: '24/7', label: 'Atendimento ativo'  },
+              ].map(s => (
+                <div key={s.label}>
+                  <div className="text-2xl font-extrabold text-accent">{s.value}</div>
+                  <div className="text-xs text-muted-foreground mt-0.5">{s.label}</div>
+                </div>
+              ))}
+            </div>
           </div>
         </div>
 
         {/* scroll hint */}
-        <div className="absolute bottom-8 inset-x-0 flex justify-center animate-bounce text-muted-foreground">
+        <div className="absolute bottom-8 inset-x-0 flex justify-center animate-bounce text-muted-foreground z-10">
           <ChevronDown className="w-5 h-5" />
         </div>
       </section>
