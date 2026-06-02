@@ -97,7 +97,7 @@ const testimonials = [
 
 const plans = [
   {
-    name: 'Lara Starter', price: '197', highlight: false,
+    name: 'Starter', price: '197', highlight: false,
     features: [
       '1.000 conversas/mês',
       '1 WhatsApp conectado',
@@ -109,7 +109,7 @@ const plans = [
     cta: 'Conhecer a Lara',
   },
   {
-    name: 'Lara Growth', price: '397', highlight: true, badge: 'MAIS POPULAR',
+    name: 'Growth', price: '397', highlight: true, badge: 'MAIS POPULAR',
     features: [
       'Conversas ilimitadas',
       '1 WhatsApp conectado',
@@ -124,7 +124,7 @@ const plans = [
     cta: 'Conhecer a Lara',
   },
   {
-    name: 'Lara Scale', price: '997', highlight: false,
+    name: 'Scale', price: '997', highlight: false,
     features: [
       'Conversas ilimitadas',
       'Até 3 WhatsApps',
@@ -674,9 +674,9 @@ export default function CRMLanding() {
 
         <div className="container mx-auto max-w-3xl text-center relative">
           <h2 className="text-heading mb-4">
-            Seu concorrente já tem uma Lara.{' '}
+            O seu concorrente já está{' '}
             <span className="bg-gradient-to-r from-accent to-primary bg-clip-text text-transparent">
-              E você?
+              automatizando o WhatsApp.
             </span>
           </h2>
           <p className="text-muted-foreground text-lg mb-10 max-w-xl mx-auto leading-relaxed">
