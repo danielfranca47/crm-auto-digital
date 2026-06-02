@@ -143,6 +143,56 @@ Rotas fora do wrapper `Protected` (sem verificação de auth):
 
 **Endpoint:** `GET /admin/users` — `backend-core/app/api/admin.py`
 
-Retorna por utilizador: `id`, `email`, `name`, `status`, `created_at`, `plan_name`, `plan_code`, `subscription_status`, `subscription_period_end`, `enabled_extensions`.
+Retorna por utilizador: `id`, `email`, `name`, `status`, `created_at`, `plan_name`, `plan_code`, `subscription_status`, `subscription_period_start`, `subscription_period_end`, `subscription_is_trial`, `enabled_extensions`.
 
-**Frontend:** `frontend-admin/src/pages/AdminUsers.tsx` — tabela com colunas: usuário (nome+email), plano (badge por tier), status, membro desde, período até. Botão "Criar conta" abre modal com campos email + nome.
+**Frontend:** `frontend-admin/src/pages/AdminUsers.tsx` — tabela com colunas: usuário (nome+email), plano (badge por tier + badge Trial), status, início de subscrição, data de expiração. Botão "Criar conta" abre modal email + nome. Botão "Plano" abre modal para atribuir/alterar plano com duração e opção trial.
+
+**Endpoint atribuir plano:** `POST /admin/users/{user_id}/subscription`
+- Cancela subscription activa existente (`status=cancelled`)
+- Cria nova com `period_end = now + 30*months dias` (ou 7 dias se `is_trial=true`)
+- Se trial: `trial_ends_at = period_end`
+- Aceita: `{ plan_code, months (default 1), is_trial (default false) }`
+
+---
+
+## Painel Admin — Planos
+
+**Endpoint:** `GET /admin/plans` — `backend-core/app/api/admin.py`
+
+Retorna planos CRM activos com limites completos: `plan_code`, `plan_name`, `max_leads`, `max_ia_conversas_monthly`, `max_whatsapp_send_daily`, `follow_up_enabled`, `playground_monthly_limit`, `max_agents_local`.
+
+**Frontend:** `frontend-admin/src/pages/AdminPlans.tsx` — tabela de comparação planos comerciais vs legados; rota `/planos` na sidebar.
+
+---
+
+## Modelo Subscription — Campos relevantes
+
+**Tabela:** `subscriptions` (backend-core)
+
+| Campo | Tipo | Notas |
+|---|---|---|
+| `status` | String | `"active"` / `"cancelled"` |
+| `current_period_start` | DateTime | Início do período actual |
+| `current_period_end` | DateTime nullable | Expiração do período |
+| `trial_ends_at` | DateTime nullable | Preenchido quando `is_trial=true`; `None` = não é trial |
+
+`trial_ends_at` adicionado via `ensure_subscription_columns()` em `app/db.py`.
+
+---
+
+## Modelo PlanLimits — Feature-gates
+
+Colunas adicionadas via `ensure_plan_limits_columns()`:
+
+| Campo | Tipo | Default | Descrição |
+|---|---|---|---|
+| `follow_up_enabled` | Boolean | `True` | Se False, bloqueia follow-up automático (etapa-9-4) |
+| `playground_monthly_limit` | Integer nullable | `None` | `None` = ilimitado; `5` = 5 testes/mês no Start |
+
+**Planos comerciais activos:**
+
+| Plano | Código | Leads | Conv. IA | WA/dia | Follow-up | Playground |
+|---|---|---|---|---|---|---|
+| Start | `crm_start` | 500 | 250 | 50 | ❌ | 5/mês |
+| Growth | `crm_growth` | 1500 | 500 | 100 | ✅ | ∞ |
+| Interno | `crm_internal` | ∞ | ∞ | ∞ | ✅ | ∞ |
