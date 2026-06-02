@@ -62,6 +62,12 @@ Emails são sempre **não-bloqueantes** (try/except) — falha de SMTP não afec
 |---|---|---|
 | 1 | `7c828d7` | Templates de email + chamadas event-driven em todos os endpoints de subscription |
 
+### Commits Fase 2
+
+| # | Commit | O que foi implementado |
+|---|---|---|
+| 1 | `82f324e` | expiry_warning_sent no modelo, APScheduler, job diário, cron endpoint |
+
 ### Fase 2 — Job de expiração automática
 
 **Objetivo:** subscriptions expiradas passam para `"expired"` e o cliente é avisado 3 dias antes.
