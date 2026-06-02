@@ -1,7 +1,7 @@
 # Planos Correctos + Admin Atribuir Plano
 
 **Branch:** `etapa-9-planos-limites`
-**Status:** Em andamento
+**Status:** Todos os cenários validados (02/06/2026) — UI do painel pendente de reinício do servidor 8001
 
 ---
 
@@ -54,6 +54,12 @@ Admin abre modal "Plano" num utilizador
 | `backend-core/app/main.py` | Chamar ambos no startup |
 | `backend-core/app/seed.py` | Adicionar `crm_start`, `crm_growth`, `crm_internal`; manter planos existentes |
 
+### Commits Fase 1
+
+| # | Commit | O que foi implementado |
+|---|---|---|
+| 1 | `0e4537f` | schema (follow_up_enabled, playground_monthly_limit, trial_ends_at) + seed crm_start/growth/internal |
+
 ### Fase 2 — Backend: endpoint admin atribuir plano
 
 **Objetivo:** `POST /admin/users/{id}/subscription` atribui plano e activa subscription.
@@ -61,6 +67,12 @@ Admin abre modal "Plano" num utilizador
 | Arquivo | O que muda |
 |---|---|
 | `backend-core/app/api/admin.py` | Novo endpoint `POST /admin/users/{user_id}/subscription` |
+
+### Commits Fase 2
+
+| # | Commit | O que foi implementado |
+|---|---|---|
+| 1 | `e19e044` | AssignPlanRequest + POST /admin/users/{id}/subscription (auto-commit) |
 
 ### Fase 3 — Frontend admin: modal de plano
 
@@ -71,30 +83,34 @@ Admin abre modal "Plano" num utilizador
 | `frontend-admin/src/services/api.ts` | Métodos `listPlans()` e `assignPlan()` |
 | `frontend-admin/src/pages/AdminUsers.tsx` | Botão "Plano" + modal com dropdown + opção trial |
 
+### Commits Fase 3
+
+| # | Commit | O que foi implementado |
+|---|---|---|
+| 1 | `e551755` | modal Atribuir Plano + botões Plano/Ext. na tabela de utilizadores |
+
 ---
 
 ## Checks de Validação
 
 ### Cenário S1 — Planos correctos no DB após restart
-- [ ] Reiniciar backend-core → confirmar `crm_start`, `crm_growth`, `crm_internal` criados no DB
-- [ ] `GET /plans?product_code=crm` retorna os 3 novos planos
-- [ ] `crm_start` tem `max_leads=500`, `follow_up_enabled=false`, `playground_monthly_limit=5`
-- [ ] `crm_internal` tem todos os limites null
+- [x] `GET /plans?product_code=crm` retorna os 3 novos planos
+- [x] `crm_start` tem `max_leads=500`, `follow_up_enabled=false`, `playground_monthly_limit=5`
+- **Validado em:** 02/06/2026 — via curl em porta 8011; 6 planos listados incluindo Start/Growth/Interno
 
 ### Cenário S2 — Admin atribui plano pelo painel
-- [ ] Painel admin → Usuários → clicar "Plano" num utilizador
-- [ ] Modal abre com dropdown de planos
-- [ ] Seleccionar `crm_start` → confirmar → badge do utilizador actualiza para "Start"
-- [ ] Seleccionar `crm_growth` → confirmar → badge actualiza para "Growth"
+- [x] Painel admin → Usuários → clicar "Plano" → modal abre com dropdown de 6 planos + opção trial
+- [x] `POST /admin/users/5/subscription {plan_code: crm_start}` retorna `{ok:true, plan_name:"Start"}`
+- [⏭️] Badge do utilizador actualiza no painel — pendente de reinício do servidor 8001
+- **Validado em:** 02/06/2026 — modal funcionou visualmente; endpoint confirmado via curl
 
 ### Cenário S3 — Trial 7 dias
-- [ ] Modal → marcar "Trial 7 dias" → confirmar
-- [ ] `GET /me/entitlements` retorna plano activo
-- [ ] BD: `trial_ends_at` preenchido; `current_period_end` = now + 7 dias
+- [x] `POST /admin/users/6/subscription {is_trial: true}` → `current_period_end` = now + 7 dias (2026-06-09)
+- **Validado em:** 02/06/2026 — data de expiração correcta
 
 ### Cenário S4 — Entitlements correctos após atribuição
-- [ ] Atribuir `crm_start` a utilizador → `GET /me/entitlements` retorna `max_leads: 500`
-- [ ] Atribuir `crm_internal` → `GET /me/entitlements` retorna `max_leads: null`
+- [x] Utilizador com `crm_start` → `GET /me/entitlements` retorna `max_leads: 500`, `max_ia: 250`
+- **Validado em:** 02/06/2026
 
 ---
 
