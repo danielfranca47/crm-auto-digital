@@ -164,21 +164,22 @@ async def kiwify_webhook(request: Request, signature: Optional[str] = None) -> D
     except Exception:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Payload inválido")
 
-    logger.info("Kiwify webhook recebido: %s", payload)
-    logger.info("Kiwify webhook signature header: %s", signature)
+    # DIAGNÓSTICO — print forçado para stdout
+    print(f"[KIWIFY] payload: {payload}", flush=True)
+    print(f"[KIWIFY] signature query: {signature}", flush=True)
+    print(f"[KIWIFY] body_len: {len(raw_body)}", flush=True)
 
-    # ── Validação HMAC-SHA1 via ?signature= ──────────────────────────────────
-    # DIAGNÓSTICO: loga sempre o expected e o received para confirmar o algoritmo
-    if settings.KIWIFY_WEBHOOK_SECRET and signature:
+    # Calcula HMAC-SHA1 para diagnóstico
+    if settings.KIWIFY_WEBHOOK_SECRET:
         expected = hmac_lib.new(
             settings.KIWIFY_WEBHOOK_SECRET.encode("utf-8"),
             raw_body,
             hashlib.sha1,
         ).hexdigest()
-        logger.info("Kiwify HMAC diagnóstico — expected=%s received=%s match=%s body_len=%d",
-                    expected, signature, expected == signature, len(raw_body))
-        # TODO: reactivar após confirmar algoritmo correcto
-        # if not hmac_lib.compare_digest(expected, signature):
+        match = (expected == signature) if signature else False
+        print(f"[KIWIFY] HMAC expected={expected} received={signature} match={match}", flush=True)
+        # Validação comentada temporariamente para diagnóstico
+        # if not match:
         #     raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Token inválido")
 
     # ── Identificar evento ────────────────────────────────────────────────────
