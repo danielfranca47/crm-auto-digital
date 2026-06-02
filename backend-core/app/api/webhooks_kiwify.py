@@ -148,28 +148,37 @@ def _cancel_subscription(user: models.User, plan_code: str, db: Session) -> None
 
 
 @router.post("/kiwify")
-async def kiwify_webhook(request: Request) -> Dict[str, Any]:
+async def kiwify_webhook(request: Request, signature: Optional[str] = None) -> Dict[str, Any]:
     """
     Recebe eventos de pagamento do Kiwify e activa/renova/cancela subscriptions.
-    Validação: compara token no payload com KIWIFY_WEBHOOK_SECRET.
+    Validação: HMAC-SHA1 via query param ?signature= usando KIWIFY_WEBHOOK_SECRET como chave.
     """
+    import hashlib
+    import hmac as hmac_lib
+
+    raw_body = await request.body()
+
+    # Loga o payload completo para diagnóstico
     try:
-        payload: Dict[str, Any] = await request.json()
+        payload: Dict[str, Any] = __import__("json").loads(raw_body)
     except Exception:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Payload inválido")
 
-    # Loga o payload completo na primeira integração para diagnóstico
     logger.info("Kiwify webhook recebido: %s", payload)
+    logger.info("Kiwify webhook signature header: %s", signature)
 
-    # ── Validação do token ────────────────────────────────────────────────────
+    # ── Validação HMAC-SHA1 via ?signature= ──────────────────────────────────
     if settings.KIWIFY_WEBHOOK_SECRET:
-        token = (
-            _extract_field(payload, "token")
-            or request.headers.get("x-kiwify-token", "")
-            or request.headers.get("x-webhook-token", "")
-        )
-        if token != settings.KIWIFY_WEBHOOK_SECRET:
-            logger.warning("Kiwify webhook: token inválido recebido")
+        if not signature:
+            logger.warning("Kiwify webhook: signature ausente")
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Token inválido")
+        expected = hmac_lib.new(
+            settings.KIWIFY_WEBHOOK_SECRET.encode("utf-8"),
+            raw_body,
+            hashlib.sha1,
+        ).hexdigest()
+        if not hmac_lib.compare_digest(expected, signature):
+            logger.warning("Kiwify webhook: signature inválida. esperada=%s recebida=%s", expected, signature)
             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Token inválido")
 
     # ── Identificar evento ────────────────────────────────────────────────────
