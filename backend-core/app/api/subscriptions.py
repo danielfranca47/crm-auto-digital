@@ -44,6 +44,8 @@ class UserLimits(BaseModel):
     max_maps_enrich_daily: Optional[int]
     require_agent_local_activation_fee: bool
     ia_memory_advanced: bool
+    follow_up_enabled: bool = True
+    playground_monthly_limit: Optional[int] = None
 
 
 class ProductEntitlement(BaseModel):
@@ -92,6 +94,8 @@ def _calculate_limits(current_user: models.User, db: Session) -> UserLimits:
     }
     require_agent_local_activation_fee = False
     ia_memory_advanced = False
+    follow_up_enabled = True  # default True — planos legados não têm o campo
+    playground_monthly_limit: Optional[int] = None  # None = ilimitado
 
     for sub in active_subscriptions:
         plan_limit = plan_limits_by_plan.get(sub.plan_id)
@@ -102,6 +106,13 @@ def _calculate_limits(current_user: models.User, db: Session) -> UserLimits:
             require_agent_local_activation_fee or plan_limit.require_agent_local_activation_fee
         )
         ia_memory_advanced = ia_memory_advanced or plan_limit.ia_memory_advanced
+        # follow_up_enabled: False se qualquer plano activo o desactivar
+        if not getattr(plan_limit, "follow_up_enabled", True):
+            follow_up_enabled = False
+        # playground_monthly_limit: usar o menor limite definido (None = ilimitado)
+        plm = getattr(plan_limit, "playground_monthly_limit", None)
+        if plm is not None:
+            playground_monthly_limit = plm if playground_monthly_limit is None else min(playground_monthly_limit, plm)
 
     user_addons = db.query(models.UserAddon).filter(models.UserAddon.user_id == current_user.id).all()
     for addon in user_addons:
@@ -116,6 +127,8 @@ def _calculate_limits(current_user: models.User, db: Session) -> UserLimits:
         **totals,
         require_agent_local_activation_fee=require_agent_local_activation_fee,
         ia_memory_advanced=ia_memory_advanced,
+        follow_up_enabled=follow_up_enabled,
+        playground_monthly_limit=playground_monthly_limit,
     )
 
 
