@@ -21,10 +21,14 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/webhooks", tags=["webhooks"])
 
 # Mapeamento: nome do plano Kiwify (Subscription.plan.name) → código do plano CRM
-# Corresponde aos nomes definidos no painel Kiwify do produto "Lara AI - Digital Pro"
+# Nomes confirmados no painel Kiwify do produto "Lara AI - Digital Pro"
 PLAN_NAME_TO_CODE: Dict[str, str] = {
+    "Plano Start": "crm_start",    # R$97/mês
+    "Plano Growth": "crm_growth",  # R$197/mês
+    # Fallback sem prefixo
     "Start": "crm_start",
     "Growth": "crm_growth",
+    # Plano Scale ainda não mapeado (preço a definir)
 }
 
 # Mantido para fallback via string no payload (link identifiers)
