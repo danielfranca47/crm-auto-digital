@@ -489,6 +489,9 @@ def start_followup_transition(
     payload: StartFollowupPayload,
     current_user: CurrentUser = Depends(require_crm_access),
 ):
+    from services.plan_gates import check_follow_up_enabled
+    check_follow_up_enabled(current_user.entitlements)
+
     conn = get_connection()
     cursor = conn.cursor()
     try:
