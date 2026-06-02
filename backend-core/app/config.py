@@ -26,6 +26,9 @@ class Settings(BaseSettings):
     SMTP_TLS: bool = True
     # URL público do frontend-crm (usado em links de email — reset de senha, boas-vindas)
     CRM_FRONTEND_URL: Optional[str] = None
+    # Kiwify
+    KIWIFY_WEBHOOK_SECRET: Optional[str] = None
+    KIWIFY_PRODUCT_ID: Optional[str] = None
 
     class Config:
         env_file = ".env"
