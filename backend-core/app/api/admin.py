@@ -39,7 +39,9 @@ class UserAdminOut(BaseModel):
     plan_name: Optional[str] = None
     plan_code: Optional[str] = None
     subscription_status: Optional[str] = None
+    subscription_period_start: Optional[datetime] = None
     subscription_period_end: Optional[datetime] = None
+    subscription_is_trial: Optional[bool] = None
 
     class Config:
         orm_mode = True
@@ -58,6 +60,17 @@ class AssignPlanRequest(BaseModel):
     plan_code: str
     months: int = 1
     is_trial: bool = False
+
+
+class PlanLimitsOut(BaseModel):
+    plan_code: str
+    plan_name: str
+    max_leads: Optional[int]
+    max_ia_conversas_monthly: Optional[int]
+    max_whatsapp_send_daily: Optional[int]
+    follow_up_enabled: Optional[bool]
+    playground_monthly_limit: Optional[int]
+    max_agents_local: Optional[int]
 
 
 @router.post("/login", response_model=AdminToken)
@@ -129,7 +142,9 @@ async def admin_list_users(
             plan_name=sub.plan.name if sub and sub.plan else None,
             plan_code=sub.plan.code if sub and sub.plan else None,
             subscription_status=sub.status if sub else None,
+            subscription_period_start=sub.current_period_start if sub else None,
             subscription_period_end=sub.current_period_end if sub else None,
+            subscription_is_trial=sub.trial_ends_at is not None if sub else None,
         ))
     return result
 
@@ -300,6 +315,34 @@ async def admin_create_user(
         "email": new_user.email,
         "email_sent": email_sent,
     }
+
+
+@router.get("/plans", response_model=List[PlanLimitsOut])
+async def admin_list_plans(
+    db: Session = Depends(get_db),
+    _: dict = Depends(require_admin),
+) -> List[PlanLimitsOut]:
+    """Lista todos os planos CRM com os seus limites."""
+    plans = (
+        db.query(models.Plan)
+        .join(models.Product)
+        .filter(models.Plan.is_active.is_(True), models.Product.code == "crm")
+        .all()
+    )
+    result = []
+    for plan in plans:
+        limits = db.query(models.PlanLimits).filter(models.PlanLimits.plan_id == plan.id).first()
+        result.append(PlanLimitsOut(
+            plan_code=plan.code,
+            plan_name=plan.name,
+            max_leads=limits.max_leads if limits else None,
+            max_ia_conversas_monthly=limits.max_ia_conversas_monthly if limits else None,
+            max_whatsapp_send_daily=limits.max_whatsapp_send_daily if limits else None,
+            follow_up_enabled=getattr(limits, "follow_up_enabled", None) if limits else None,
+            playground_monthly_limit=getattr(limits, "playground_monthly_limit", None) if limits else None,
+            max_agents_local=limits.max_agents_local if limits else None,
+        ))
+    return result
 
 
 @router.post("/users/{user_id}/subscription", status_code=status.HTTP_200_OK)

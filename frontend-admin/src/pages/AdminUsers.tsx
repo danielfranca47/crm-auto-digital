@@ -220,8 +220,8 @@ export default function AdminUsers() {
             <span>Usuário</span>
             <span>Plano</span>
             <span>Status</span>
-            <span>Membro desde</span>
-            <span>Período até</span>
+            <span title="Início da assinatura">Início sub.</span>
+            <span title="Data de expiração da assinatura">Expira</span>
             <span />
           </div>
 
@@ -247,13 +247,18 @@ export default function AdminUsers() {
                 </div>
 
                 {/* Plan */}
-                <div className="flex items-center">
+                <div className="flex items-center gap-1 flex-wrap">
                   <Badge
                     variant="outline"
                     className={`text-xs ${planBadgeClass(user.plan_code)}`}
                   >
                     {user.plan_name ?? "Sem plano"}
                   </Badge>
+                  {user.subscription_is_trial && (
+                    <Badge variant="outline" className="text-xs bg-amber-900/40 text-amber-400 border-amber-700/50">
+                      Trial
+                    </Badge>
+                  )}
                 </div>
 
                 {/* Status */}
@@ -270,11 +275,13 @@ export default function AdminUsers() {
                   </Badge>
                 </div>
 
-                {/* Member since */}
-                <span className="text-xs text-slate-400">{fmtDate(user.created_at)}</span>
+                {/* Subscription start */}
+                <span className="text-xs text-slate-400" title={user.created_at ? `Conta criada: ${fmtDate(user.created_at)}` : ""}>
+                  {user.subscription_period_start ? fmtDate(user.subscription_period_start) : "—"}
+                </span>
 
-                {/* Period end */}
-                <span className="text-xs text-slate-400">
+                {/* Expiry */}
+                <span className={`text-xs ${user.subscription_period_end ? "text-slate-400" : "text-slate-600"}`}>
                   {user.subscription_period_end ? fmtDate(user.subscription_period_end) : "—"}
                 </span>
 

@@ -9,12 +9,14 @@ import {
   DollarSign,
   Settings,
   LogOut,
+  Layers,
 } from "lucide-react";
 
 const NAV_ITEMS = [
   { to: "/", label: "Dashboard", icon: LayoutDashboard, end: true },
   { to: "/instancias", label: "Instâncias", icon: Wifi },
   { to: "/usuarios", label: "Usuários", icon: Users },
+  { to: "/planos", label: "Planos", icon: Layers },
   { to: "/agentes", label: "Agentes e Prompts", icon: Bot },
   { to: "/crescimento", label: "Crescimento", icon: TrendingUp },
   { to: "/financeiro", label: "Financeiro", icon: DollarSign },

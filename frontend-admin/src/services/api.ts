@@ -76,7 +76,9 @@ export type AdminUser = {
   plan_name?: string;
   plan_code?: string;
   subscription_status?: string;
+  subscription_period_start?: string;
   subscription_period_end?: string;
+  subscription_is_trial?: boolean;
 };
 
 export type CrmPlan = {
@@ -84,6 +86,17 @@ export type CrmPlan = {
   name: string;
   billing_period: string;
   product_code: string;
+};
+
+export type PlanLimits = {
+  plan_code: string;
+  plan_name: string;
+  max_leads: number | null;
+  max_ia_conversas_monthly: number | null;
+  max_whatsapp_send_daily: number | null;
+  follow_up_enabled: boolean | null;
+  playground_monthly_limit: number | null;
+  max_agents_local: number | null;
 };
 
 export type AdminInstance = {
@@ -199,6 +212,8 @@ export const api = {
       `/admin/users/${userId}/subscription`,
       { plan_code: planCode, months, is_trial: isTrial }
     ),
+
+  adminListPlans: () => coreGet<PlanLimits[]>("/admin/plans"),
 
   listInstances: () => coreGet<AdminInstance[]>("/admin/instances"),
 
