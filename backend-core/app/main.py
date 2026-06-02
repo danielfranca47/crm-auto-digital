@@ -2,7 +2,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.api import api_router
-from app.db import Base, SessionLocal, engine, ensure_ai_profile_columns, ensure_user_columns, ensure_whatsapp_connections_table
+from app.db import Base, SessionLocal, engine, ensure_ai_profile_columns, ensure_plan_limits_columns, ensure_subscription_columns, ensure_user_columns, ensure_whatsapp_connections_table
 import app.models  # noqa: F401
 from app.seed import seed_initial_data
 
@@ -28,6 +28,8 @@ app.add_middleware(
 @app.on_event("startup")
 def on_startup() -> None:
     ensure_user_columns()
+    ensure_plan_limits_columns()
+    ensure_subscription_columns()
     ensure_whatsapp_connections_table()
     ensure_ai_profile_columns()
     Base.metadata.create_all(bind=engine)

@@ -23,6 +23,8 @@ class PlanLimits(Base):
     max_maps_enrich_daily = Column(Integer, nullable=True)
     require_agent_local_activation_fee = Column(Boolean, default=False, nullable=False)
     ia_memory_advanced = Column(Boolean, default=False, nullable=False)
+    follow_up_enabled = Column(Boolean, default=True, nullable=False)
+    playground_monthly_limit = Column(Integer, nullable=True)
     created_at = Column(DateTime, server_default=func.now(), nullable=False, default=datetime.utcnow)
 
     plan = relationship("Plan", back_populates="limits")

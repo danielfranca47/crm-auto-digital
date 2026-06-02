@@ -16,6 +16,7 @@ class Subscription(Base):
     status = Column(String, default="active", nullable=False)
     current_period_start = Column(DateTime, server_default=func.now(), nullable=False, default=datetime.utcnow)
     current_period_end = Column(DateTime, nullable=True)
+    trial_ends_at = Column(DateTime, nullable=True)
     created_at = Column(DateTime, server_default=func.now(), nullable=False, default=datetime.utcnow)
 
     user = relationship("User", back_populates="subscriptions")

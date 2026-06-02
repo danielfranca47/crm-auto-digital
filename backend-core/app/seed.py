@@ -76,11 +76,16 @@ def seed_initial_data(db: Session) -> None:
     ]
 
     plans_seed: List[Dict] = [
+        # Planos legados — mantidos para não quebrar assinaturas existentes
         {"product_code": "crm", "code": "crm_free", "name": "CRM Free"},
         {"product_code": "crm", "code": "crm_basic", "name": "CRM Basic"},
         {"product_code": "crm", "code": "crm_pro", "name": "CRM Pro"},
         {"product_code": "conversational_ai", "code": "conversational_ai_basic", "name": "Conversational AI Basic"},
         {"product_code": "conversational_ai", "code": "conversational_ai_pro", "name": "Conversational AI Pro"},
+        # Planos comerciais Digital Pro
+        {"product_code": "crm", "code": "crm_start", "name": "Start"},
+        {"product_code": "crm", "code": "crm_growth", "name": "Growth"},
+        {"product_code": "crm", "code": "crm_internal", "name": "Interno"},
     ]
 
     limits_seed: Dict[str, Dict] = {
@@ -158,6 +163,58 @@ def seed_initial_data(db: Session) -> None:
             "max_maps_enrich_daily": None,
             "require_agent_local_activation_fee": False,
             "ia_memory_advanced": True,
+        },
+        # Planos comerciais Digital Pro
+        "crm_start": {
+            "max_leads": 500,
+            "max_agents_local": 1,
+            "max_pesquisa_selenium_daily": None,
+            "max_pesquisa_turbo_monthly": None,
+            "max_prospec_monthly": None,
+            "max_copy_generation_monthly": None,
+            "max_ia_conversas_monthly": 250,
+            "max_whatsapp_send_daily": 50,
+            "max_prospects_daily": None,
+            "max_maps_search_daily": None,
+            "max_maps_enrich_daily": None,
+            "require_agent_local_activation_fee": False,
+            "ia_memory_advanced": False,
+            "follow_up_enabled": False,
+            "playground_monthly_limit": 5,
+        },
+        "crm_growth": {
+            "max_leads": 1500,
+            "max_agents_local": 1,
+            "max_pesquisa_selenium_daily": None,
+            "max_pesquisa_turbo_monthly": None,
+            "max_prospec_monthly": None,
+            "max_copy_generation_monthly": None,
+            "max_ia_conversas_monthly": 500,
+            "max_whatsapp_send_daily": 100,
+            "max_prospects_daily": None,
+            "max_maps_search_daily": None,
+            "max_maps_enrich_daily": None,
+            "require_agent_local_activation_fee": False,
+            "ia_memory_advanced": False,
+            "follow_up_enabled": True,
+            "playground_monthly_limit": None,
+        },
+        "crm_internal": {
+            "max_leads": None,
+            "max_agents_local": None,
+            "max_pesquisa_selenium_daily": None,
+            "max_pesquisa_turbo_monthly": None,
+            "max_prospec_monthly": None,
+            "max_copy_generation_monthly": None,
+            "max_ia_conversas_monthly": None,
+            "max_whatsapp_send_daily": None,
+            "max_prospects_daily": None,
+            "max_maps_search_daily": None,
+            "max_maps_enrich_daily": None,
+            "require_agent_local_activation_fee": False,
+            "ia_memory_advanced": True,
+            "follow_up_enabled": True,
+            "playground_monthly_limit": None,
         },
     }
 

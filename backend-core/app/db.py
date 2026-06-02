@@ -20,6 +20,47 @@ def get_db():
         db.close()
 
 
+def ensure_plan_limits_columns() -> None:
+    """Add feature-gate columns to plan_limits without requiring migrations."""
+    cols = {"follow_up_enabled": ("INTEGER", "BOOLEAN", "1"), "playground_monthly_limit": ("INTEGER", "INTEGER", None)}
+    with engine.begin() as conn:
+        if engine.dialect.name == "sqlite":
+            result = conn.execute(text("PRAGMA table_info(plan_limits)"))
+            existing = {row[1] for row in result.fetchall()}
+            for col, (sqlite_type, _, default) in cols.items():
+                if col not in existing:
+                    sql = f"ALTER TABLE plan_limits ADD COLUMN {col} {sqlite_type}"
+                    if default is not None:
+                        sql += f" DEFAULT {default}"
+                    conn.execute(text(sql))
+                    print(f"✅ coluna adicionada em plan_limits: {col}")
+        else:
+            result = conn.execute(text("SELECT column_name FROM information_schema.columns WHERE table_name='plan_limits'"))
+            existing = {row[0] for row in result.fetchall()}
+            for col, (_, pg_type, default) in cols.items():
+                if col not in existing:
+                    sql = f"ALTER TABLE plan_limits ADD COLUMN {col} {pg_type}"
+                    if default is not None:
+                        sql += f" DEFAULT {default}"
+                    conn.execute(text(sql))
+
+
+def ensure_subscription_columns() -> None:
+    """Add trial_ends_at to subscriptions without requiring migrations."""
+    with engine.begin() as conn:
+        if engine.dialect.name == "sqlite":
+            result = conn.execute(text("PRAGMA table_info(subscriptions)"))
+            existing = {row[1] for row in result.fetchall()}
+            if "trial_ends_at" not in existing:
+                conn.execute(text("ALTER TABLE subscriptions ADD COLUMN trial_ends_at DATETIME"))
+                print("✅ coluna adicionada em subscriptions: trial_ends_at")
+        else:
+            result = conn.execute(text("SELECT column_name FROM information_schema.columns WHERE table_name='subscriptions'"))
+            existing = {row[0] for row in result.fetchall()}
+            if "trial_ends_at" not in existing:
+                conn.execute(text("ALTER TABLE subscriptions ADD COLUMN trial_ends_at TIMESTAMP"))
+
+
 def ensure_user_columns() -> None:
     """Add optional columns to the users table without requiring full migrations."""
     with engine.begin() as conn:
