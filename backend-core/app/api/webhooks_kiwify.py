@@ -110,17 +110,26 @@ def _activate_subscription(user: models.User, plan_code: str, db: Session, month
     ).update({"status": "cancelled"})
 
     now = datetime.utcnow()
+    period_end = now + timedelta(days=30 * months)
     sub = models.Subscription(
         user_id=user.id,
         product_id=plan.product_id,
         plan_id=plan.id,
         status="active",
         current_period_start=now,
-        current_period_end=now + timedelta(days=30 * months),
+        current_period_end=period_end,
     )
     db.add(sub)
     db.commit()
     logger.info("Subscription activada: user_id=%s plan=%s", user.id, plan_code)
+
+    try:
+        from app.services.email_service import render_subscription_activated_email, send_email
+        login_url = (settings.CRM_FRONTEND_URL or "https://crmapp.danielfranca.pt").rstrip("/") + "/login"
+        html, text = render_subscription_activated_email(user.name, plan.name, period_end, login_url)
+        send_email(to=user.email, subject="Plano activado — Digital Pro", html=html, text=text)
+    except Exception as exc:
+        logger.warning("Email de activação não enviado: %s", exc)
 
 
 def _renew_subscription(user: models.User, plan_code: str, db: Session) -> None:
@@ -141,6 +150,13 @@ def _renew_subscription(user: models.User, plan_code: str, db: Session) -> None:
         sub.current_period_end = base + timedelta(days=30)
         db.commit()
         logger.info("Subscription renovada: user_id=%s plan=%s new_end=%s", user.id, plan_code, sub.current_period_end)
+
+        try:
+            from app.services.email_service import render_subscription_renewed_email, send_email
+            html, text = render_subscription_renewed_email(user.name, plan.name, sub.current_period_end)
+            send_email(to=user.email, subject="Plano renovado — Digital Pro", html=html, text=text)
+        except Exception as exc:
+            logger.warning("Email de renovação não enviado: %s", exc)
     else:
         # Não existe activa — activa nova
         _activate_subscription(user, plan_code, db, months=1)
@@ -158,6 +174,13 @@ def _cancel_subscription(user: models.User, plan_code: str, db: Session) -> None
     ).update({"status": "cancelled"})
     db.commit()
     logger.info("Subscription cancelada: user_id=%s plan=%s", user.id, plan_code)
+
+    try:
+        from app.services.email_service import render_subscription_cancelled_email, send_email
+        html, text = render_subscription_cancelled_email(user.name, plan.name)
+        send_email(to=user.email, subject="Subscrição cancelada — Digital Pro", html=html, text=text)
+    except Exception as exc:
+        logger.warning("Email de cancelamento não enviado: %s", exc)
 
 
 @router.post("/kiwify")

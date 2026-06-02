@@ -384,6 +384,24 @@ async def admin_assign_plan(
     db.commit()
     db.refresh(sub)
 
+    try:
+        from app.services.email_service import (
+            render_subscription_activated_email,
+            render_trial_started_email,
+            send_email,
+        )
+        from app.config import settings as _s
+        login_url = (_s.CRM_FRONTEND_URL or "https://crmapp.danielfranca.pt").rstrip("/") + "/login"
+        if body.is_trial:
+            html, text = render_trial_started_email(user.name, plan.name, period_end, login_url)
+            send_email(to=user.email, subject="Trial iniciado — Digital Pro", html=html, text=text)
+        else:
+            html, text = render_subscription_activated_email(user.name, plan.name, period_end, login_url)
+            send_email(to=user.email, subject="Plano activado — Digital Pro", html=html, text=text)
+    except Exception as exc:
+        import logging as _log
+        _log.getLogger(__name__).warning("Email de plano não enviado: %s", exc)
+
     return {
         "ok": True,
         "subscription_id": sub.id,

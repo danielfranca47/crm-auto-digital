@@ -102,6 +102,16 @@ async def register(user_in: UserCreate, db: Session = Depends(get_db)):
     db.add(new_user)
     db.commit()
     db.refresh(new_user)
+
+    try:
+        from app.services.email_service import render_register_welcome_email, send_email
+        login_url = (settings.CRM_FRONTEND_URL or "https://crmapp.danielfranca.pt").rstrip("/") + "/login"
+        html, text = render_register_welcome_email(new_user.name, login_url)
+        send_email(to=new_user.email, subject="Bem-vindo ao Digital Pro", html=html, text=text)
+    except Exception as exc:
+        import logging as _log
+        _log.getLogger(__name__).warning("Email de boas-vindas não enviado: %s", exc)
+
     return new_user
 
 
@@ -164,7 +174,7 @@ async def forgot_password(body: ForgotPasswordRequest, db: Session = Depends(get
         base_url = (settings.CRM_FRONTEND_URL or "http://localhost:8080").rstrip("/")
         reset_url = f"{base_url}/reset-password?token={token_value}"
         html, text = render_reset_email(reset_url)
-        send_email(to=user.email, subject="Recuperação de senha — AutoDigital CRM", html=html, text=text)
+        send_email(to=user.email, subject="Recuperação de senha — Digital Pro", html=html, text=text)
     except Exception as exc:
         # Não falha a request se o email não conseguir enviar — o token já foi criado
         import logging
