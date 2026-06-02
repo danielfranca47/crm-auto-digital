@@ -204,4 +204,4 @@ sim, existirá de 7 dias, mas esse benefício eu só irei liberar para leads sel
 > _Resposta:_pode aguardar. Primeiro vou ter de desenvolver o recurso de clonagem de voz e compatibilidade com api oficial da meta.
 
 **E2.** Os preços R$397 (Scale) e R$697 (Enterprise) estão confirmados?
-> _Resposta:_sim
+> _Resposta:_plano scale sim. O plano enterprise não vou colocar preço, será necessário colocar sob orçamento. Pois será variável para diferentes tipos de necessidades de empresas.
