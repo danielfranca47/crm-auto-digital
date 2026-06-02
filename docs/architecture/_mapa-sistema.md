@@ -50,6 +50,7 @@ agent-local         local  ← agente Python local de prospecção/scraping
 
 - **UazAPI** — broker WhatsApp Web; endpoints `/send/text`, `/send/media`, `/message/download`, `/qr`
 - **Resend** — SMTP relay para email transacional; domínio verificado `danielfranca.pt`; `SMTP_USER=resend`, `SMTP_PASS=<api_key>`
+- **Kiwify** — plataforma de pagamentos; webhook `POST /webhooks/kiwify` activa subscriptions; HMAC-SHA1 via `?signature=`
 
 ---
 

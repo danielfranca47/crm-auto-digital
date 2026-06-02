@@ -165,6 +165,52 @@ Retorna planos CRM activos com limites completos: `plan_code`, `plan_name`, `max
 
 ---
 
+## Webhook Kiwify — Activação automática de subscriptions
+
+**Endpoint:** `POST /webhooks/kiwify` — `backend-core/app/api/webhooks_kiwify.py`
+
+Recebe eventos de pagamento do Kiwify e cria/renova/cancela subscriptions automaticamente.
+
+**Validação:** HMAC-SHA1 do corpo raw com `KIWIFY_WEBHOOK_SECRET` como chave; assinatura enviada em `?signature=<hex>`.
+
+**Campos do payload Kiwify relevantes:**
+
+| Campo | Valor exemplo | Uso |
+|---|---|---|
+| `webhook_event_type` | `"order_approved"` | Tipo de evento |
+| `Customer.email` | `"cliente@email.com"` | Identifica o utilizador no sistema |
+| `Subscription.plan.name` | `"Plano Start"` | Determina o plano a activar |
+
+**Mapeamento de planos:**
+
+| Nome Kiwify | Plano CRM | Duração |
+|---|---|---|
+| `Plano Start` | `crm_start` | 30 dias |
+| `Plano Growth` | `crm_growth` | 30 dias |
+
+**Eventos tratados:**
+- `order_approved` → activa subscription (cancela activa existente, cria nova)
+- `subscription_renewed` → estende `current_period_end` em +30 dias
+- `order_refunded` / `subscription_cancelled` → cancela subscription activa
+
+**Config `.env` (backend-core):**
+```
+KIWIFY_WEBHOOK_SECRET=<token do painel Kiwify>
+KIWIFY_PRODUCT_ID=<id do produto>
+```
+
+---
+
+## Alertas de consumo (frontend-crm)
+
+`GET /api/usage` (backend-crm) inclui `ia_monthly: { used, limit, pct }` e `checkout_links` com URLs de checkout Kiwify.
+
+`UsageAlertBanner` em `frontend-crm/src/components/UsageAlertBanner.tsx` aparece no AppShell:
+- `pct >= 80` → banner amarelo com link de upgrade
+- `pct >= 100` → banner vermelho + "Comprar mais"
+
+---
+
 ## Modelo Subscription — Campos relevantes
 
 **Tabela:** `subscriptions` (backend-core)
