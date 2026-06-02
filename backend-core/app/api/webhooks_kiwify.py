@@ -20,7 +20,14 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/webhooks", tags=["webhooks"])
 
-# Mapeamento fixo: identificador do link Kiwify → código do plano CRM
+# Mapeamento: nome do plano Kiwify (Subscription.plan.name) → código do plano CRM
+# Corresponde aos nomes definidos no painel Kiwify do produto "Lara AI - Digital Pro"
+PLAN_NAME_TO_CODE: Dict[str, str] = {
+    "Start": "crm_start",
+    "Growth": "crm_growth",
+}
+
+# Mantido para fallback via string no payload (link identifiers)
 OFFER_TO_PLAN: Dict[str, str] = {
     "gOjcexD": "crm_start",
     "To8qV99": "crm_growth",
@@ -61,25 +68,27 @@ def _extract_field(payload: Dict[str, Any], *paths: str) -> Optional[str]:
 def _resolve_plan_code(payload: Dict[str, Any]) -> Optional[str]:
     """
     Determina o plan_code a partir do payload Kiwify.
-    Tenta múltiplas localizações onde o identificador da oferta pode aparecer.
+    Estrutura real confirmada: Subscription.plan.name contém o nome do plano.
     """
-    # Tenta encontrar o identificador da oferta em campos conhecidos
-    candidates = [
-        _extract_field(payload, "data.product.ucode", "data.order.ucode",
-                       "data.subscription.plan.id", "data.plan.id",
-                       "data.offer.id", "offer_id", "plan_id"),
-    ]
+    # Método principal: Subscription.plan.name (formato real confirmado por teste)
+    sub = payload.get("Subscription") or {}
+    plan = sub.get("plan") or {}
+    plan_name = plan.get("name", "").strip()
+    if plan_name in PLAN_NAME_TO_CODE:
+        return PLAN_NAME_TO_CODE[plan_name]
 
-    for candidate in candidates:
-        if candidate and candidate in OFFER_TO_PLAN:
-            return OFFER_TO_PLAN[candidate]
+    # Fallback: campos alternativos
+    alt = _extract_field(payload, "data.subscription.plan.name", "data.plan.name", "plan_name")
+    if alt and alt in PLAN_NAME_TO_CODE:
+        return PLAN_NAME_TO_CODE[alt]
 
-    # Fallback: verifica se algum valor no payload corresponde a uma oferta conhecida
+    # Último fallback: link identifiers no corpo do payload
     payload_str = str(payload)
     for offer_id, plan_code in OFFER_TO_PLAN.items():
         if offer_id in payload_str:
             return plan_code
 
+    logger.warning("Kiwify: plano não mapeado. plan_name='%s' payload=%s", plan_name, payload)
     return None
 
 
@@ -164,27 +173,28 @@ async def kiwify_webhook(request: Request, signature: Optional[str] = None) -> D
     except Exception:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Payload inválido")
 
-    # DIAGNÓSTICO — print forçado para stdout
-    print(f"[KIWIFY] payload: {payload}", flush=True)
-    print(f"[KIWIFY] signature query: {signature}", flush=True)
-    print(f"[KIWIFY] body_len: {len(raw_body)}", flush=True)
+    logger.info("Kiwify webhook recebido | event=%s | body_len=%d",
+                payload.get("webhook_event_type", "?"), len(raw_body))
 
-    # Calcula HMAC-SHA1 para diagnóstico
+    # ── Validação HMAC-SHA1 via ?signature= ──────────────────────────────────
     if settings.KIWIFY_WEBHOOK_SECRET:
+        if not signature:
+            logger.warning("Kiwify webhook: signature ausente na query string")
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Token inválido")
         expected = hmac_lib.new(
             settings.KIWIFY_WEBHOOK_SECRET.encode("utf-8"),
             raw_body,
             hashlib.sha1,
         ).hexdigest()
-        match = (expected == signature) if signature else False
-        print(f"[KIWIFY] HMAC expected={expected} received={signature} match={match}", flush=True)
-        # Validação comentada temporariamente para diagnóstico
-        # if not match:
-        #     raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Token inválido")
+        if not hmac_lib.compare_digest(expected, signature):
+            logger.warning("Kiwify webhook: HMAC inválido")
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Token inválido")
 
     # ── Identificar evento ────────────────────────────────────────────────────
+    # Campo real confirmado: webhook_event_type
     event = (
-        _extract_field(payload, "event", "type", "data.order.status")
+        payload.get("webhook_event_type")
+        or _extract_field(payload, "event", "type", "data.order.status")
         or ""
     ).lower().replace(" ", "_")
 
@@ -193,14 +203,13 @@ async def kiwify_webhook(request: Request, signature: Optional[str] = None) -> D
         return {"ok": True, "action": "ignored", "event": event}
 
     # ── Identificar cliente ───────────────────────────────────────────────────
-    email = _extract_field(
-        payload,
-        "data.customer.email",
-        "customer.email",
-        "data.buyer.email",
-        "buyer.email",
-        "email",
+    # Campo real confirmado: Customer.email (C maiúsculo)
+    email = (
+        (payload.get("Customer") or {}).get("email")
+        or _extract_field(payload, "data.customer.email", "customer.email", "email")
     )
+    if email:
+        email = email.strip().lower()
     if not email:
         logger.warning("Kiwify webhook: email não encontrado no payload")
         return {"ok": True, "action": "skipped", "reason": "no_email"}
