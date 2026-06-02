@@ -121,35 +121,45 @@ O modelo `Subscription` não possui campos de feature-gate. Os seguintes bloquei
 ### A — Estrutura de planos
 
 **A1.** Quais planos vais lançar na Fase 1? Mantens os nomes Start e Growth, ou preferes outros?
-> _Resposta:_
+> _Resposta:_sim, os scale e enterprise ficaram disponíveis em breve.
 
 **A2.** Os preços R$97 (Start) e R$197 (Growth) estão confirmados, ou vão mudar?
-> _Resposta:_
+> _Resposta:_ confirmados
 
 **A3.** Vais oferecer cobrança anual com desconto? Se sim, qual percentagem?
-> _Resposta:_
+> _Resposta:_ sim  
+
+Desconto normal para assinatura anual: equivalente a 50 % de desconto nos 2 primeiros meses. na prática no final do período de 12 meses, 1 mes sairá gratis.
+
+Preços das campanhas especiais anuais será: R$ 997 no starter e R$ 1997 no Growth 
+
+
 
 **A4.** Existe período de teste gratuito (trial)? Se sim, quantos dias e com que limites?
 > _Resposta:_
+
+sim, existirá de 7 dias, mas esse benefício eu só irei liberar para leads selecionados que fizerem a call comigo.
 
 ---
 
 ### B — Limites por plano
 
 **B1.** Quantos leads (contatos no CRM) cada plano suporta?
-> Start: ___ / Growth: ___
+> Start: _500__ / Growth: _1500__
+
 
 **B2.** Quantas conversas IA por mês cada plano inclui na franquia?
-> Start: ___ / Growth: ___
+> Start: _250__ / Growth: __500_
 
 **B3.** O plano Start inclui follow-up automatizado? (Actualmente proposto: ❌ Start, ✅ Growth)
-> _Resposta:_
+> _Resposta:_nao
 
 **B4.** O plano Start inclui acesso ao Playground de testes? (Actualmente proposto: ❌ Start, ✅ Growth)
-> _Resposta:_
+> _Resposta:_apenas 5 por mês
++ R$ 1,99 para cada teste extra
 
 **B5.** Quantas instâncias WhatsApp cada plano permite? (Actualmente proposto: 1 em ambos)
-> Start: ___ / Growth: ___
+> Start: _uma__ / Growth: _uma__
 
 ---
 
@@ -157,18 +167,18 @@ O modelo `Subscription` não possui campos de feature-gate. Os seguintes bloquei
 
 **C1.** Quando o utilizador ultrapassa o limite de conversas IA, o que acontece?
 - [ ] Bloqueia até renovar o ciclo
-- [ ] Cobra excedente automaticamente (R$___ por conversa)
-- [ ] Envia alerta e aguarda decisão do utilizador
-> _Resposta:_
+- [] Cobra excedente automaticamente (R$___ por conversa)
+- [x] Envia alerta e aguarda decisão do utilizador
+> _Resposta:_sistema precisa dar o aviso e oferecer link do checkout para comprar mais conversas.
 
 **C2.** Quando o utilizador atinge o limite de leads, o que acontece?
-- [ ] Bloqueia criação de novos leads
+- [x] Bloqueia criação de novos leads
 - [ ] Bloqueia só a IA em novos leads (leads existentes continuam)
 - [ ] Apenas alerta, não bloqueia
-> _Resposta:_
+> _Resposta:_precisa ter um aviso tambem de limites de leads atingido, pedir para ele remover leads ou atualizar seu plano.
 
 **C3.** Queres cobrar excedente automaticamente (requer integração de pagamento) ou prefereres gerir manualmente por agora?
-> _Resposta:_
+> _Resposta:_quero cobrar automático. Estou cogitando utilizar um gateway de pagamento externo como kiwify por enquanto e posteriormente desenvolver algo mais robusto.
 
 ---
 
@@ -177,21 +187,21 @@ O modelo `Subscription` não possui campos de feature-gate. Os seguintes bloquei
 **D1.** Como vais atribuir planos aos utilizadores agora (antes de ter checkout automático)?
 - [ ] Tu atribuis manualmente pelo painel admin
 - [ ] O utilizador paga e tu activas manualmente
-- [ ] Integração com Stripe/Kirvano/Hotmart (qual?)
+- [x] Integração com Stripe/Kirvano/Hotmart (qual?)
 > _Resposta:_
 
 **D2.** Queres um endpoint/botão no painel admin para atribuir/mudar plano de um utilizador com um clique?
-> _Resposta:_
+> _Resposta:_sim
 
 **D3.** Os teus utilizadores de teste internos (tua conta, contas de demo) devem ter um plano especial sem limites?
-> _Resposta:_
+> _Resposta:_sim
 
 ---
 
 ### E — Fase 2 (multi-instância)
 
 **E1.** A Fase 2 (planos Scale e Enterprise com múltiplas instâncias) é uma prioridade próxima ou pode aguardar?
-> _Resposta:_
+> _Resposta:_pode aguardar. Primeiro vou ter de desenvolver o recurso de clonagem de voz e compatibilidade com api oficial da meta.
 
 **E2.** Os preços R$397 (Scale) e R$697 (Enterprise) estão confirmados?
-> _Resposta:_
+> _Resposta:_sim
