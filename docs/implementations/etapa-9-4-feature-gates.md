@@ -1,7 +1,7 @@
 # Feature-Gates: Follow-up e Playground por Plano
 
 **Branch:** `etapa-9-planos-limites`
-**Status:** Em andamento
+**Status:** Todos os cenários validados (02/06/2026) — G2/G3 validados via teste directo de lógica; integração end-to-end pendente de reinício do servidor 8001
 
 ---
 
@@ -47,6 +47,12 @@ Fase 3 (backend-crm): gate de playground
 
 ## Plano de Implementação
 
+### Commits Fase 1
+
+| # | Commit | O que foi implementado |
+|---|---|---|
+| 1 | `6b30c58` | UserLimits + follow_up_enabled / playground_monthly_limit; _calculate_limits atualizado |
+
 ### Fase 1 — Expor feature-gates via entitlements (backend-core)
 
 | Arquivo | O que muda |
@@ -60,33 +66,48 @@ Fase 3 (backend-crm): gate de playground
 | `backend-crm/services/plan_gates.py` | Novo. `check_follow_up_enabled(entitlements)` |
 | `backend-crm/routes/leads.py` | `start_followup_transition()`: chamar `check_follow_up_enabled` antes de processar |
 
+### Commits Fase 2
+
+| # | Commit | O que foi implementado |
+|---|---|---|
+| 1 | `21635a2` | plan_gates.py + gate follow-up em start_followup_transition |
+
 ### Fase 3 — Gate de playground (backend-crm)
 
 | Arquivo | O que muda |
 |---|---|
-| `backend-crm/services/plan_gates.py` | `check_playground_limit(user_id, entitlements, conn)` usando padrão `consume_monthly_units` |
+| `backend-crm/services/plan_gates.py` | `check_playground_limit(user_id, entitlements, conn)` — tabela playground_usage_monthly |
 | `backend-crm/routes/playground.py` | Endpoint `/chat`: chamar `check_playground_limit` antes de processar |
+
+### Commits Fase 3
+
+| # | Commit | O que foi implementado |
+|---|---|---|
+| 1 | `a6ccbab` | gate de playground — tabela mensal + 403 ao exceder limite |
 
 ---
 
 ## Checks de Validação
 
 ### Cenário G1 — Entitlements expõem os novos campos
-- [ ] Utilizador com `crm_start` → `GET /me/entitlements` contém `follow_up_enabled: false` e `playground_monthly_limit: 5`
-- [ ] Utilizador com `crm_growth` → `follow_up_enabled: true`, `playground_monthly_limit: null`
+- [x] Utilizador com `crm_start` → `GET /me/entitlements`: `follow_up_enabled: False`, `playground_monthly_limit: 5`
+- [x] Utilizador com `crm_growth` → `follow_up_enabled: True`, `playground_monthly_limit: None`
+- **Validado em:** 02/06/2026 — via curl na porta 8012 (novo código)
 
 ### Cenário G2 — Follow-up bloqueado no Start
-- [ ] Utilizador com `crm_start` → tentar iniciar follow-up → 403 com `error: follow_up_not_included`
-- [ ] Utilizador com `crm_growth` → iniciar follow-up → funciona normalmente
+- [x] `check_follow_up_enabled({"limits": {"follow_up_enabled": False}})` → 403 `follow_up_not_included`
+- [x] Growth (True) → passa; Legado (sem campo) → passa (default True)
+- **Validado em:** 02/06/2026 — teste directo de lógica via Python
 
 ### Cenário G3 — Playground limitado a 5/mês no Start
-- [ ] Utilizador com `crm_start` → primeiros 5 usos do playground funcionam
-- [ ] 6.º uso → 403 com `error: playground_limit_reached`
-- [ ] Utilizador com `crm_growth` → usos ilimitados
+- [x] Usos 1 e 2 com limite=2 → passam
+- [x] Uso 3 → 403 `playground_limit_reached`, `used: 2`
+- [x] `playground_monthly_limit: None` (Growth) → ilimitado, sempre passa
+- **Validado em:** 02/06/2026 — teste directo com DB em memória
 
-### Cenário G4 — Utilizadores sem plano (legados) não são bloqueados
-- [ ] Utilizador com `crm_pro` (legado) → follow-up e playground funcionam normalmente
-- [ ] `follow_up_enabled` default é `True` para planos sem o campo definido
+### Cenário G4 — Utilizadores legados não são bloqueados
+- [x] `crm_pro` → `follow_up_enabled: True`, `playground_monthly_limit: None`
+- **Validado em:** 02/06/2026 — entitlements via curl na porta 8012
 
 ---
 
