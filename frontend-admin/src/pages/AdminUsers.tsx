@@ -216,7 +216,7 @@ export default function AdminUsers() {
         </CardHeader>
         <CardContent className="p-0">
           {/* Table header */}
-          <div className="hidden md:grid grid-cols-[minmax(0,1fr)_105px_75px_95px_95px_80px] gap-x-3 px-5 py-2 border-b border-slate-700/60 text-xs font-medium text-slate-500 uppercase tracking-wide">
+          <div className="hidden md:grid grid-cols-[minmax(0,1fr)_105px_75px_95px_95px_110px] gap-x-3 px-5 py-2 border-b border-slate-700/60 text-xs font-medium text-slate-500 uppercase tracking-wide">
             <span>Usuário</span>
             <span>Plano</span>
             <span>Status</span>
@@ -229,7 +229,7 @@ export default function AdminUsers() {
             {users.map((user) => (
               <div
                 key={user.id}
-                className="grid grid-cols-1 md:grid-cols-[minmax(0,1fr)_105px_75px_95px_95px_80px] gap-x-3 gap-y-1 items-center px-5 py-3"
+                className="grid grid-cols-1 md:grid-cols-[minmax(0,1fr)_105px_75px_95px_95px_110px] gap-x-3 gap-y-1 items-center px-5 py-3"
               >
                 {/* Name / email */}
                 <div className="min-w-0 flex items-center gap-2">
@@ -308,6 +308,74 @@ export default function AdminUsers() {
           </div>
         </CardContent>
       </Card>
+
+      {/* Assign plan modal */}
+      {planModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60" onClick={() => setPlanModal(null)}>
+          <div className="bg-slate-800 border border-slate-700 rounded-xl shadow-xl p-6 max-w-sm mx-4 w-full" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-start justify-between mb-4">
+              <div>
+                <h3 className="font-semibold text-slate-200">Atribuir plano</h3>
+                <p className="text-xs text-slate-400 mt-0.5 truncate max-w-[220px]">
+                  {planModal.name ? `${planModal.name} · ` : ""}{planModal.email}
+                </p>
+              </div>
+              <button onClick={() => setPlanModal(null)} className="text-slate-500 hover:text-slate-300"><X size={16} /></button>
+            </div>
+
+            <div className="space-y-3 mb-5">
+              <div>
+                <label className="block text-xs font-medium text-slate-400 mb-1">Plano</label>
+                <select
+                  value={selectedPlan}
+                  onChange={(e) => setSelectedPlan(e.target.value)}
+                  className="w-full rounded-lg bg-slate-700 border border-slate-600 text-slate-200 px-3 py-2 text-sm"
+                >
+                  {plans.map((p) => (
+                    <option key={p.code} value={p.code}>{p.name}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-xs font-medium text-slate-400 mb-1">Duração (meses)</label>
+                <input
+                  type="number"
+                  min={1}
+                  max={24}
+                  value={planMonths}
+                  onChange={(e) => setPlanMonths(Number(e.target.value))}
+                  disabled={isTrial}
+                  className="w-full rounded-lg bg-slate-700 border border-slate-600 text-slate-200 px-3 py-2 text-sm disabled:opacity-50"
+                />
+              </div>
+
+              <label className="flex items-center gap-3 cursor-pointer">
+                <input
+                  type="checkbox"
+                  className="h-4 w-4 rounded border-slate-600 accent-indigo-500"
+                  checked={isTrial}
+                  onChange={(e) => setIsTrial(e.target.checked)}
+                />
+                <span className="text-sm text-slate-300">Trial 7 dias</span>
+              </label>
+            </div>
+
+            <div className="flex gap-2">
+              <Button
+                className="flex-1 bg-indigo-600 hover:bg-indigo-500 text-white"
+                onClick={handleAssignPlan}
+                disabled={isAssigning || !selectedPlan}
+              >
+                {isAssigning ? "Atribuindo…" : "Confirmar"}
+              </Button>
+              <Button variant="outline" onClick={() => setPlanModal(null)} className="border-slate-600 text-slate-300 hover:bg-slate-700">
+                Cancelar
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Create user modal */}
       {createModal && (
