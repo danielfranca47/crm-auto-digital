@@ -115,11 +115,14 @@ Kiwify → POST api.danielfranca.pt/webhooks/kiwify?signature=<hmac>
 - [ ] Clicar → abre `https://pay.kiwify.com.br/To8qV99` em nova aba com email pré-preenchido
 
 ### U2 — Webhook activa subscrição (`order_approved`)
-- [ ] Enviar payload simulado (botão "Testar Webhook" no painel Kiwify) com `plan.name: "Plano Growth"` e `Customer.email` de utilizador existente → HTTP 200
-- [ ] `GET /me/entitlements` → `follow_up_enabled: true`, `playground_monthly_limit: null`
+- [x] Payload `order_approved` com `plan.name: "Plano Growth"` e email existente → `{"ok": true, "action": "activated"}`
+- [x] `GET /me/entitlements` → `follow_up_enabled: true`, `playground_monthly_limit: null`, `crm_start` cancelado automaticamente
+- **Validado em:** 03/06/2026 — curl directo com HMAC-SHA1 calculado localmente
 
 ### U3 — Rejeição de signature inválida
-- [ ] Enviar payload sem `?signature=` ou com valor errado → HTTP 401
+- [x] Signature errada → HTTP 401
+- [x] Sem signature → HTTP 401
+- **Validado em:** 03/06/2026
 
 ### U4 — Webhook de cancelamento
 - [ ] Enviar `webhook_event_type: "subscription_canceled"` → subscrição fica `cancelled` no DB
@@ -129,5 +132,6 @@ Kiwify → POST api.danielfranca.pt/webhooks/kiwify?signature=<hmac>
 - [ ] Navegar para `/assinatura?upgraded=1` → Alert verde "Plano activado!" visível
 
 ### U6 — Endpoint interno (smoke test)
-- [ ] `POST localhost:8001/internal/subscriptions/kiwify-event` com `x-service-token` correcto → 200
-- [ ] Com token errado → 401
+- [x] `POST localhost:8001/internal/subscriptions/kiwify-event` com token correcto → `{"ok": true, "action": "activated"}`
+- [x] Com token errado → 401
+- **Validado em:** 03/06/2026
