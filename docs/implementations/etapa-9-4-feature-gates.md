@@ -1,7 +1,7 @@
 # Feature-Gates: Follow-up e Playground por Plano
 
 **Branch:** `etapa-9-planos-limites`
-**Status:** Em andamento — Fases 1–4 validadas; Fases 5–6 a implementar
+**Status:** Em andamento — Fases 1–5 validadas; Fase 6 a implementar
 
 ---
 
@@ -141,7 +141,7 @@ Fase 3 (backend-crm): gate de playground
 
 | # | Commit | O que foi implementado |
 |---|---|---|
-| 1 | — | — |
+| 1 | `b6c947d` | playground_monthly em build_usage_payload — query a playground_usage_monthly + cálculo de remaining |
 
 ---
 
@@ -175,8 +175,9 @@ Depende da Fase 5 (campo `playground_monthly_used` disponível em `/usage`).
 - **Validado em:** 03/06/2026 — POST /api/leads/start-followup → 403 follow_up_not_included confirmado; modal fechou e lead permaneceu em Apresentação
 
 ### Cenário G6 — playground_monthly_used em /usage
-- [ ] `GET /usage` com plano Start após 2 usos → `playground_monthly_used: 2`, `playground_monthly_limit: 5`
-- [ ] `GET /usage` com plano Growth → `playground_monthly_used: N`, `playground_monthly_limit: null`
+- [x] `GET /usage` com plano Start → `playground_monthly: { used: 0, limit: 5, remaining: 5 }`
+- [x] `GET /usage` com plano Growth → `playground_monthly: { used: 0, limit: null, remaining: null }`
+- **Validado em:** 03/06/2026 — curl directo ao backend com user 11 (Start e Growth)
 
 ### Cenário G7 — Badge de quota no Playground
 - [ ] Plano Start (3 de 5 usos) → badge exibe "3 / 5 usos este mês"
