@@ -237,3 +237,123 @@ async def change_password(
         _log.getLogger(__name__).warning("Email de confirmação de senha não enviado: %s", exc)
 
     return {"ok": True}
+
+
+# ── Passwordless (OTP) — agent-local standalone ────────────────────────────────
+
+import logging as _log
+_logger = _log.getLogger(__name__)
+
+OTP_TTL_MINUTES = 15
+
+
+class RequestAccessRequest(BaseModel):
+    email: EmailStr
+
+
+class RegisterPasswordlessRequest(BaseModel):
+    name: str
+    email: EmailStr
+    whatsapp: Optional[str] = None
+    sector: Optional[str] = None
+
+
+class VerifyOtpRequest(BaseModel):
+    email: EmailStr
+    code: str
+
+
+def _generate_and_store_otp(email: str, db: Session) -> str:
+    code = str(secrets.randbelow(900_000) + 100_000)
+    expires_at = datetime.utcnow() + timedelta(minutes=OTP_TTL_MINUTES)
+    db.execute(
+        text("DELETE FROM auth_otps WHERE email = :email AND (used = 1 OR expires_at < :now)"),
+        {"email": email, "now": datetime.utcnow()},
+    )
+    db.execute(
+        text("INSERT INTO auth_otps (email, code, expires_at) VALUES (:email, :code, :expires_at)"),
+        {"email": email, "code": code, "expires_at": expires_at},
+    )
+    db.commit()
+    return code
+
+
+def _send_otp_email(email: str, name, code: str) -> None:
+    from app.services.email_service import render_otp_email, send_email
+    html, txt = render_otp_email(name or email.split("@")[0], code)
+    send_email(to=email, subject=f"{code} e o seu codigo de acesso", html=html, text=txt)
+
+
+@router.post("/request-access")
+async def request_access(body: RequestAccessRequest, db: Session = Depends(get_db)):
+    """Verifica se email existe. Se sim, envia OTP. Se nao, informa para registar."""
+    user = db.query(models.User).filter(models.User.email == body.email).first()
+    if not user:
+        return {"status": "new_user"}
+    try:
+        code = _generate_and_store_otp(body.email, db)
+        _send_otp_email(body.email, user.name, code)
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail=str(exc))
+    except Exception as exc:
+        _logger.error("Erro OTP %s: %s", body.email, exc)
+        raise HTTPException(status_code=503, detail="Erro ao enviar email.")
+    return {"status": "existing_user", "message": f"Codigo enviado para {body.email}"}
+
+
+@router.post("/register-passwordless", status_code=201)
+async def register_passwordless(body: RegisterPasswordlessRequest, db: Session = Depends(get_db)):
+    """Cria conta sem senha e envia OTP."""
+    existing = db.query(models.User).filter(models.User.email == body.email).first()
+    if existing:
+        try:
+            code = _generate_and_store_otp(body.email, db)
+            _send_otp_email(body.email, existing.name, code)
+        except Exception:
+            raise HTTPException(status_code=503, detail="Erro ao enviar email.")
+        return {"status": "ok", "message": f"Codigo enviado para {body.email}"}
+
+    user = models.User(
+        email=body.email,
+        password_hash=get_password_hash(secrets.token_hex(32)),
+        name=body.name,
+    )
+    db.add(user)
+    db.flush()
+    db.execute(
+        text("UPDATE users SET whatsapp = :wh, sector = :sec WHERE id = :id"),
+        {"wh": body.whatsapp, "sec": body.sector, "id": user.id},
+    )
+    db.commit()
+    try:
+        code = _generate_and_store_otp(body.email, db)
+        _send_otp_email(body.email, body.name, code)
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail=str(exc))
+    except Exception as exc:
+        _logger.error("Erro OTP registo %s: %s", body.email, exc)
+        raise HTTPException(status_code=503, detail="Conta criada, mas erro ao enviar email.")
+    return {"status": "ok", "message": f"Conta criada. Codigo enviado para {body.email}"}
+
+
+@router.post("/verify-otp")
+async def verify_otp_endpoint(body: VerifyOtpRequest, db: Session = Depends(get_db)):
+    """Valida OTP e devolve JWT."""
+    now = datetime.utcnow()
+    row = db.execute(
+        text("""
+            SELECT id FROM auth_otps
+            WHERE email = :email AND code = :code AND used = 0 AND expires_at > :now
+            ORDER BY created_at DESC LIMIT 1
+        """),
+        {"email": body.email, "code": body.code, "now": now},
+    ).fetchone()
+    if not row:
+        raise HTTPException(status_code=400, detail="Codigo invalido ou expirado.")
+    db.execute(text("UPDATE auth_otps SET used = 1 WHERE id = :id"), {"id": row[0]})
+    db.commit()
+    user = db.query(models.User).filter(models.User.email == body.email).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="Utilizador nao encontrado.")
+    token = create_access_token(data={"sub": str(user.id), "email": user.email})
+    return {"access_token": token, "token_type": "bearer"}

@@ -350,3 +350,29 @@ def render_subscription_expired_email(
         f"{_FOOTER_TEXT}"
     )
     return html, text
+
+
+def render_otp_email(name: str, code: str) -> tuple:
+    html = f"""
+<!DOCTYPE html>
+<html>
+<body style="font-family:sans-serif;color:#1e293b;max-width:480px;margin:0 auto;padding:24px">
+  <h2 style="color:#0284c7">Gerador de Leads — AutoDigital</h2>
+  <p>Ola, <strong>{name}</strong>.</p>
+  <p>O seu codigo de acesso e:</p>
+  <div style="background:#f1f5f9;border-radius:12px;padding:24px;margin:20px 0;text-align:center">
+    <span style="font-size:2.5em;font-weight:bold;letter-spacing:0.15em;color:#0284c7">{code}</span>
+  </div>
+  <p style="color:#64748b;font-size:0.875em">Este codigo expira em <strong>15 minutos</strong>. Nao partilhes com ninguem.</p>
+  {_FOOTER}
+</body>
+</html>
+"""
+    text = (
+        f"Gerador de Leads — AutoDigital\n\n"
+        f"Ola, {name}.\n\n"
+        f"O seu codigo de acesso e: {code}\n\n"
+        f"Este codigo expira em 15 minutos.\n"
+        f"{_FOOTER_TEXT}"
+    )
+    return html, text

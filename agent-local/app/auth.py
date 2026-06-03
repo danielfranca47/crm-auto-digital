@@ -115,6 +115,81 @@ def check_subscription(token: str) -> dict:
     return {"subscription_status": data.get("subscription_status", "inactive")}
 
 
+# ── Passwordless (OTP) ────────────────────────────────────────────────────────
+
+def request_access(email: str) -> dict:
+    """Verifica se email existe. Retorna {'status': 'existing_user'|'new_user'}."""
+    base = _get_core_url()
+    try:
+        resp = requests.post(
+            f"{base}/auth/request-access",
+            json={"email": email},
+            timeout=15,
+        )
+    except requests.ConnectionError:
+        raise AuthError("Sem ligação ao servidor. Verifique a internet.")
+    except requests.Timeout:
+        raise AuthError("O servidor demorou a responder. Tente novamente.")
+
+    if not resp.ok:
+        detail = resp.json().get("detail", "Erro do servidor.")
+        raise AuthError(detail)
+
+    return resp.json()
+
+
+def register_passwordless(name: str, email: str, whatsapp: str, sector: str) -> dict:
+    """Cria conta sem senha e solicita envio de OTP. Retorna {'status': 'ok'}."""
+    base = _get_core_url()
+    try:
+        resp = requests.post(
+            f"{base}/auth/register-passwordless",
+            json={"name": name, "email": email, "whatsapp": whatsapp or None, "sector": sector or None},
+            timeout=15,
+        )
+    except requests.ConnectionError:
+        raise AuthError("Sem ligação ao servidor.")
+    except requests.Timeout:
+        raise AuthError("Timeout. Tente novamente.")
+
+    if not resp.ok:
+        detail = resp.json().get("detail", "Erro ao criar conta.")
+        raise AuthError(detail)
+
+    return resp.json()
+
+
+def verify_otp(email: str, code: str) -> dict:
+    """Valida OTP e retorna sessão completa (access_token, subscription_status, name, email)."""
+    base = _get_core_url()
+    try:
+        resp = requests.post(
+            f"{base}/auth/verify-otp",
+            json={"email": email, "code": code},
+            timeout=15,
+        )
+    except requests.ConnectionError:
+        raise AuthError("Sem ligação ao servidor.")
+    except requests.Timeout:
+        raise AuthError("Timeout. Tente novamente.")
+
+    if resp.status_code == 400:
+        raise AuthError(resp.json().get("detail", "Código inválido ou expirado."))
+    if not resp.ok:
+        raise AuthError(f"Erro do servidor ({resp.status_code}).")
+
+    token = resp.json()["access_token"]
+    entitlements = check_subscription(token)
+    name = _get_user_name(token, base) or email.split("@")[0]
+
+    return {
+        "access_token": token,
+        "subscription_status": entitlements["subscription_status"],
+        "name": name,
+        "email": email,
+    }
+
+
 def _get_user_name(token: str, base: str) -> Optional[str]:
     try:
         resp = requests.get(

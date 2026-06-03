@@ -21,7 +21,7 @@ class AgentLocalApp(ctk.CTk):
         self._current_frame = None
         self._check_session()
 
-    # ── Navegação ──────────────────────────────────────────────────────────────
+    # ── Sessão ────────────────────────────────────────────────────────────────
 
     def _check_session(self):
         session = load_session()
@@ -29,7 +29,6 @@ class AgentLocalApp(ctk.CTk):
             self.show_login()
             return
 
-        # Tenta atualizar o status de assinatura em background sem bloquear a UI
         import threading
 
         def _refresh():
@@ -39,7 +38,7 @@ class AgentLocalApp(ctk.CTk):
                 session["subscription_status"] = result["subscription_status"]
                 save_session(session)
             except Exception:
-                pass  # Mantém status em cache se o servidor não estiver acessível
+                pass
             finally:
                 self.after(0, lambda: self._route_after_auth(session))
 
@@ -51,13 +50,36 @@ class AgentLocalApp(ctk.CTk):
         else:
             self.show_main(session)
 
-    def show_login(self):
-        from app.ui.login_screen import LoginScreen
-        self._switch(LoginScreen(self, on_login=self._on_auth, on_register=self.show_register))
+    # ── Navegação ─────────────────────────────────────────────────────────────
 
-    def show_register(self):
+    def show_login(self):
+        """Ecrã inicial: campo de email."""
+        from app.ui.login_screen import LoginScreen
+        self._switch(LoginScreen(
+            self,
+            on_existing_user=self.show_otp,
+            on_new_user=self.show_register,
+        ))
+
+    def show_register(self, email: str):
+        """Ecrã de registo: nome, whatsapp, setor."""
         from app.ui.register_screen import RegisterScreen
-        self._switch(RegisterScreen(self, on_register=self._on_auth, on_login=self.show_login))
+        self._switch(RegisterScreen(
+            self,
+            email=email,
+            on_registered=self.show_otp,
+            on_back=self.show_login,
+        ))
+
+    def show_otp(self, email: str):
+        """Ecrã de verificação OTP."""
+        from app.ui.otp_screen import OtpScreen
+        self._switch(OtpScreen(
+            self,
+            email=email,
+            on_verified=self._on_auth,
+            on_back=self.show_login,
+        ))
 
     def show_onboarding(self, session: dict):
         from app.ui.onboarding_screen import OnboardingScreen

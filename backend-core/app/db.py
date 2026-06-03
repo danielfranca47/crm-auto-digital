@@ -236,10 +236,7 @@ def ensure_ai_profile_columns() -> None:
                     text(f"UPDATE ai_profiles SET {name} = :default WHERE {name} IS NULL"),
                     {"default": default},
                 )
-                print(f"✅ backfill ai_profiles.{name} com default")
-
         else:
-            # ✅ NEW: don't crash if ai_profiles doesn't exist yet
             exists = conn.execute(
                 text(
                     """
@@ -288,3 +285,37 @@ def ensure_ai_profile_columns() -> None:
                     text(f"UPDATE ai_profiles SET {name} = :default WHERE {name} IS NULL"),
                     {"default": default},
                 )
+
+
+def ensure_auth_otps_table() -> None:
+    """Create auth_otps table for passwordless login flow."""
+    with engine.begin() as conn:
+        conn.execute(text("""
+            CREATE TABLE IF NOT EXISTS auth_otps (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                email TEXT NOT NULL,
+                code TEXT NOT NULL,
+                expires_at DATETIME NOT NULL,
+                used INTEGER DEFAULT 0,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+            )
+        """))
+
+
+def ensure_user_extra_columns() -> None:
+    """Add whatsapp and sector columns to users (passwordless registration)."""
+    with engine.begin() as conn:
+        if engine.dialect.name == "sqlite":
+            result = conn.execute(text("PRAGMA table_info(users)"))
+            existing = {row[1] for row in result.fetchall()}
+            for col in ("whatsapp", "sector"):
+                if col not in existing:
+                    conn.execute(text(f"ALTER TABLE users ADD COLUMN {col} TEXT"))
+        else:
+            result = conn.execute(text(
+                "SELECT column_name FROM information_schema.columns WHERE table_name='users'"
+            ))
+            existing = {row[0] for row in result.fetchall()}
+            for col in ("whatsapp", "sector"):
+                if col not in existing:
+                    conn.execute(text(f"ALTER TABLE users ADD COLUMN {col} VARCHAR"))
