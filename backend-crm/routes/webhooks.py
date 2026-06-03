@@ -9,7 +9,7 @@ import re
 from datetime import datetime, timedelta
 from typing import Any, Dict, Optional
 
-from fastapi import APIRouter, Header, HTTPException, Query
+from fastapi import APIRouter, Header, HTTPException, Query, Request
 
 from core_client import fetch_core_ai_profile_by_webhook_secret
 from database import get_connection
@@ -571,3 +571,103 @@ def payment_webhook(
 
     logger.info("payment_webhook matched lead_id=%s user_id=%s gateway=%s", lead_id, user_id, gateway)
     return {"status": "ok", "lead_id": lead_id}
+
+
+# ---------------------------------------------------------------------------
+# Webhook Kiwify — activação/cancelamento/renovação de subscriptions
+# ---------------------------------------------------------------------------
+
+# Mapeamento: Subscription.plan.name (Kiwify) → plan_code (nosso DB)
+_KIWIFY_PLAN_MAP: Dict[str, str] = {
+    "Plano Start":  "crm_start",
+    "Plano Growth": "crm_growth",
+    "Plano Scale":  "crm_scale",
+    "Start":        "crm_start",
+    "Growth":       "crm_growth",
+}
+
+_KIWIFY_ACTIVATE_EVENTS = {"order_approved", "order.approved", "purchase_approved"}
+_KIWIFY_RENEW_EVENTS    = {"subscription_renewed", "subscription.renewed"}
+_KIWIFY_CANCEL_EVENTS   = {"subscription_cancelled", "subscription_canceled", "subscription.cancelled",
+                            "order_refunded", "order.refunded"}
+
+
+@router.post("/kiwify")
+async def kiwify_webhook(
+    request: Request,
+    signature: Optional[str] = Query(default=None),
+) -> Dict[str, Any]:
+    """
+    Recebe eventos de pagamento Kiwify e activa/renova/cancela subscriptions via backend-core.
+    Validação: HMAC-SHA1 do body via query param ?signature=
+    """
+    import hashlib
+    import hmac as _hmac
+    import httpx
+
+    raw_body = await request.body()
+
+    # Validação HMAC-SHA1
+    secret = os.environ.get("KIWIFY_WEBHOOK_SECRET", "")
+    if secret:
+        if not signature:
+            raise HTTPException(status_code=401, detail="Signature ausente")
+        expected = _hmac.new(secret.encode(), raw_body, hashlib.sha1).hexdigest()
+        if not _hmac.compare_digest(expected, signature):
+            raise HTTPException(status_code=401, detail="Signature inválida")
+
+    try:
+        payload: Dict[str, Any] = json.loads(raw_body)
+    except Exception:
+        raise HTTPException(status_code=400, detail="Payload inválido")
+
+    event = (payload.get("webhook_event_type") or "").lower().replace(" ", "_")
+    if not event:
+        return {"ok": True, "action": "ignored", "reason": "no_event"}
+
+    # Email do cliente
+    customer = payload.get("Customer") or {}
+    email = (customer.get("email") or "").strip().lower()
+    if not email:
+        logger.warning("kiwify_webhook: email não encontrado no payload")
+        return {"ok": True, "action": "skipped", "reason": "no_email"}
+
+    # Plano
+    sub_info = payload.get("Subscription") or {}
+    plan_info = sub_info.get("plan") or {}
+    plan_name = (plan_info.get("name") or "").strip()
+    plan_code = _KIWIFY_PLAN_MAP.get(plan_name)
+    if not plan_code:
+        logger.warning("kiwify_webhook: plano '%s' não mapeado — ignorado", plan_name)
+        return {"ok": True, "action": "skipped", "reason": "plan_not_mapped", "plan_name": plan_name}
+
+    # Determinar acção
+    if event in _KIWIFY_ACTIVATE_EVENTS:
+        action = "activate"
+    elif event in _KIWIFY_RENEW_EVENTS:
+        action = "renew"
+    elif event in _KIWIFY_CANCEL_EVENTS:
+        action = "cancel"
+    else:
+        logger.info("kiwify_webhook: evento '%s' ignorado", event)
+        return {"ok": True, "action": "ignored", "event": event}
+
+    # Chamar backend-core via endpoint interno
+    core_base = os.environ.get("CORE_API_BASE", "http://localhost:8001").rstrip("/")
+    core_token = os.environ.get("CORE_SERVICE_TOKEN", "")
+    try:
+        async with httpx.AsyncClient(timeout=10) as client:
+            resp = await client.post(
+                f"{core_base}/internal/subscriptions/kiwify-event",
+                json={"email": email, "plan_code": plan_code, "action": action},
+                headers={"x-service-token": core_token},
+            )
+            resp.raise_for_status()
+            result = resp.json()
+    except Exception as exc:
+        logger.error("kiwify_webhook: erro ao chamar core: %s", exc)
+        raise HTTPException(status_code=502, detail="Erro ao processar subscrição")
+
+    logger.info("kiwify_webhook: event=%s email=%s plan=%s action=%s result=%s",
+                event, email, plan_code, action, result.get("action"))
+    return {"ok": True, **result}

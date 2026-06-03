@@ -1,13 +1,17 @@
-from datetime import datetime
-from typing import Dict, List, Optional
+import logging
+from datetime import datetime, timedelta
+from typing import Dict, List, Literal, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, Header, HTTPException, status
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from app import models
+from app.config import settings
 from app.db import get_db
 from .auth import get_current_user
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="", tags=["subscriptions"])
 
@@ -202,6 +206,83 @@ async def create_subscription(
 @router.get("/me/limits", response_model=UserLimits)
 async def get_my_limits(current_user: models.User = Depends(get_current_user), db: Session = Depends(get_db)):
     return _calculate_limits(current_user, db)
+
+
+def _require_service_token(x_service_token: str = Header(None)) -> str:
+    expected = settings.CORE_SERVICE_TOKEN
+    if not expected or x_service_token != expected:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid service token")
+    return x_service_token
+
+
+class KiwifyEventRequest(BaseModel):
+    email: str
+    plan_code: str
+    action: Literal["activate", "cancel", "renew"]
+
+
+@router.post("/internal/subscriptions/kiwify-event", status_code=status.HTTP_200_OK)
+async def kiwify_subscription_event(
+    payload: KiwifyEventRequest,
+    _: str = Depends(_require_service_token),
+    db: Session = Depends(get_db),
+) -> dict:
+    """Endpoint interno — chamado pelo backend-crm ao receber webhook da Kiwify."""
+    email = payload.email.strip().lower()
+    user = db.query(models.User).filter(models.User.email == email).first()
+    if not user:
+        logger.info("kiwify_event: utilizador '%s' não encontrado — ignorado", email)
+        return {"ok": True, "action": "skipped", "reason": "user_not_found"}
+
+    plan = db.query(models.Plan).filter(models.Plan.code == payload.plan_code).first()
+    if not plan:
+        logger.error("kiwify_event: plano '%s' não encontrado", payload.plan_code)
+        return {"ok": True, "action": "skipped", "reason": "plan_not_found"}
+
+    now = datetime.utcnow()
+
+    if payload.action == "cancel":
+        db.query(models.Subscription).filter(
+            models.Subscription.user_id == user.id,
+            models.Subscription.plan_id == plan.id,
+            models.Subscription.status == "active",
+        ).update({"status": "cancelled"})
+        db.commit()
+        logger.info("kiwify_event: subscrição cancelada user=%s plan=%s", user.id, payload.plan_code)
+        return {"ok": True, "action": "cancelled"}
+
+    if payload.action == "renew":
+        sub = db.query(models.Subscription).filter(
+            models.Subscription.user_id == user.id,
+            models.Subscription.plan_id == plan.id,
+            models.Subscription.status == "active",
+        ).first()
+        if sub:
+            base = sub.current_period_end if sub.current_period_end and sub.current_period_end > now else now
+            sub.current_period_end = base + timedelta(days=30)
+            db.commit()
+            logger.info("kiwify_event: subscrição renovada user=%s plan=%s", user.id, payload.plan_code)
+            return {"ok": True, "action": "renewed"}
+        # Se não existe activa, activa nova
+
+    # activate (ou renew sem sub activa)
+    db.query(models.Subscription).filter(
+        models.Subscription.user_id == user.id,
+        models.Subscription.status == "active",
+        models.Subscription.product_id == plan.product_id,
+    ).update({"status": "cancelled"})
+    sub = models.Subscription(
+        user_id=user.id,
+        product_id=plan.product_id,
+        plan_id=plan.id,
+        status="active",
+        current_period_start=now,
+        current_period_end=now + timedelta(days=30),
+    )
+    db.add(sub)
+    db.commit()
+    logger.info("kiwify_event: subscrição activada user=%s plan=%s", user.id, payload.plan_code)
+    return {"ok": True, "action": "activated"}
 
 
 @router.get("/me/entitlements", response_model=EntitlementsResponse)
