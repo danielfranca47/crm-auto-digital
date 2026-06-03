@@ -1,128 +1,91 @@
-"""Ponto de entrada do agente local."""
-
+"""Ponto de entrada do agent-local — app standalone de geração de leads."""
 from __future__ import annotations
 
-import logging
-import sys
-import time
-from typing import Any, Dict
+import customtkinter as ctk
 
-from agent.config import AgentConfig
-from agent.jobs_client import JobsClient
-from agent.maps_research_runner import MapsResearchRunner
-from agent.whatsapp_runner import WhatsAppRunner
+from app.session import load_session, save_session
 
-AGENT_VERSION = "0.1.0"
-
-TYPE_ALIASES = {
-    "whatsapp.send.local": ["whatsapp_send"],
-    "maps.search.local": ["maps_search_fallback"],
-    "maps.enrich.local": ["maps_enrich_fallback"],
-}
+APP_TITLE = "Gerador de Leads — AutoDigital"
+APP_GEOMETRY = "620x720"
 
 
-def normalize_job_type(job_type: str) -> str:
-    jt = (job_type or "").strip()
-    for canonical, aliases in TYPE_ALIASES.items():
-        if jt == canonical or jt in aliases:
-            return canonical
-    return jt
+class AgentLocalApp(ctk.CTk):
+    def __init__(self):
+        super().__init__()
+        self.title(APP_TITLE)
+        self.geometry(APP_GEOMETRY)
+        self.resizable(False, False)
+        ctk.set_appearance_mode("dark")
+        ctk.set_default_color_theme("blue")
 
+        self._current_frame = None
+        self._check_session()
 
-def setup_logging(config: AgentConfig) -> None:
-    log_path = config.log_path
-    handlers = [logging.StreamHandler(sys.stdout)]
-    try:
-        file_handler = logging.FileHandler(log_path, mode="a", encoding="utf-8")
-        handlers.append(file_handler)
-    except OSError:
-        print(f"Não foi possível abrir o arquivo de log em {log_path}, seguindo apenas com stdout.")
+    # ── Navegação ──────────────────────────────────────────────────────────────
 
-    logging.basicConfig(
-        level=logging.INFO,
-        format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
-        handlers=handlers,
-    )
+    def _check_session(self):
+        session = load_session()
+        if not session:
+            self.show_login()
+            return
 
+        # Tenta atualizar o status de assinatura em background sem bloquear a UI
+        import threading
 
-def process_job(
-    job: Dict[str, Any], whatsapp_runner: WhatsAppRunner, maps_runner: MapsResearchRunner
-) -> Dict[str, Any]:
-    job_type = normalize_job_type(job.get("type"))
-    payload = job.get("payload") or {}
-
-    if job_type == "whatsapp.send.local":
-        phone = payload.get("phone")
-        message = payload.get("body")
-        if not phone or not message:
-            raise ValueError("payload de whatsapp_send inválido: phone/body ausentes")
-        return whatsapp_runner.send_whatsapp(phone=phone, message=message)
-
-    if job_type == "maps.search.local":
-        return maps_runner.run_search_fallback(payload)
-
-    if job_type == "maps.enrich.local":
-        return maps_runner.run_enrich_fallback(payload)
-
-    raise ValueError(f"Tipo de job não suportado: {job_type}")
-
-
-def main() -> None:
-    config = AgentConfig.load()
-    job_types = [normalize_job_type(t) for t in (config.job_types or [])]
-    setup_logging(config)
-
-    logger = logging.getLogger("agent")
-    logger.info("Iniciando agente local — backend=%s", config.backend_url)
-
-    client = JobsClient(config)
-    whatsapp_runner = WhatsAppRunner(config)
-    maps_runner = MapsResearchRunner(config)
-
-    try:
-        client.register_agent(capabilities=job_types, version=AGENT_VERSION)
-        logger.info("Agente registrado com ID '%s'", config.agent_id)
-    except Exception as exc:
-        logger.error("Falha ao registrar agente: %s", exc, exc_info=True)
-        time.sleep(config.idle_interval)
-
-    consecutive_errors = 0
-
-    while True:
-        try:
-            job = client.fetch_next_job(job_types)
-            if not job:
-                time.sleep(config.idle_interval)
-                consecutive_errors = 0
-                continue
-
-            job_id = job.get("id")
-            logger.info("Job recebido: id=%s tipo=%s", job_id, job.get("type"))
+        def _refresh():
             try:
-                result = process_job(job, whatsapp_runner, maps_runner)
-                client.report_job(job_id=job_id, status="completed", result=result)
-                logger.info("Job %s concluído com sucesso", job_id)
-                consecutive_errors = 0
-            except Exception as job_exc:  # pragma: no cover - fluxo operacional
-                logger.exception("Erro ao processar job %s: %s", job_id, job_exc)
-                client.report_job(
-                    job_id=job_id,
-                    status="failed",
-                    error=str(job_exc),
-                )
-                consecutive_errors += 1
-                time.sleep(min(30, config.poll_interval * (1 + consecutive_errors)))
-        except KeyboardInterrupt:
-            logger.info("Encerrando agente...")
-            break
-        except Exception as loop_exc:  # pragma: no cover - fluxo operacional
-            consecutive_errors += 1
-            logger.exception("Erro na comunicação com o backend: %s", loop_exc)
-            sleep_time = min(60, config.idle_interval * (1 + consecutive_errors))
-            time.sleep(sleep_time)
+                from app.auth import check_subscription
+                result = check_subscription(session["access_token"])
+                session["subscription_status"] = result["subscription_status"]
+                save_session(session)
+            except Exception:
+                pass  # Mantém status em cache se o servidor não estiver acessível
+            finally:
+                self.after(0, lambda: self._route_after_auth(session))
 
-    whatsapp_runner.close()
-    maps_runner.close()
+        threading.Thread(target=_refresh, daemon=True).start()
+
+    def _route_after_auth(self, session: dict):
+        if not session.get("onboarding_done"):
+            self.show_onboarding(session)
+        else:
+            self.show_main(session)
+
+    def show_login(self):
+        from app.ui.login_screen import LoginScreen
+        self._switch(LoginScreen(self, on_login=self._on_auth, on_register=self.show_register))
+
+    def show_register(self):
+        from app.ui.register_screen import RegisterScreen
+        self._switch(RegisterScreen(self, on_register=self._on_auth, on_login=self.show_login))
+
+    def show_onboarding(self, session: dict):
+        from app.ui.onboarding_screen import OnboardingScreen
+        self._switch(
+            OnboardingScreen(self, session_data=session, on_done=lambda: self.show_main(session))
+        )
+
+    def show_main(self, session: dict):
+        from app.ui.main_screen import MainScreen
+        self._switch(MainScreen(self, session_data=session, on_logout=self.show_login))
+
+    def _on_auth(self, session_data: dict):
+        save_session(session_data)
+        if not session_data.get("onboarding_done"):
+            self.show_onboarding(session_data)
+        else:
+            self.show_main(session_data)
+
+    def _switch(self, new_frame: ctk.CTkFrame):
+        if self._current_frame:
+            self._current_frame.destroy()
+        self._current_frame = new_frame
+        self._current_frame.pack(fill="both", expand=True)
+
+
+def main():
+    app = AgentLocalApp()
+    app.mainloop()
 
 
 if __name__ == "__main__":
