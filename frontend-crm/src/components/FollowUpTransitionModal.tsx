@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import {
   Dialog,
   DialogContent,
@@ -12,6 +13,7 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
+import { ToastAction } from "@/components/ui/toast";
 import { Lead } from "@/types/crm";
 import { api } from "@/services/api";
 import { useToast } from "@/hooks/use-toast";
@@ -29,6 +31,7 @@ interface FollowUpTransitionModalProps {
 
 export function FollowUpTransitionModal({ open, onOpenChange, lead, onSuccess }: FollowUpTransitionModalProps) {
   const { toast } = useToast();
+  const navigate = useNavigate();
   const [meetingHappened, setMeetingHappened] = useState<MeetingHappened | "">("");
   const [outcome, setOutcome] = useState<string>("");
   const [followupGoal, setFollowupGoal] = useState<string>("");
@@ -111,6 +114,15 @@ export function FollowUpTransitionModal({ open, onOpenChange, lead, onSuccess }:
         setMissingFields(detail.missing_fields_detail);
         setQualificationValues({});
         setScoreFailure(!!detail.score_failure);
+        return;
+      }
+      if (detail?.error === "follow_up_not_included") {
+        handleOpenChange(false);
+        toast({
+          title: "Follow-up não incluído no seu plano",
+          description: "Faça upgrade para ativar o follow-up automático.",
+          action: <ToastAction altText="Ver planos" onClick={() => navigate("/assinatura")}>Ver planos</ToastAction>,
+        });
         return;
       }
       toast({
