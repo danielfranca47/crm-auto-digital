@@ -20,6 +20,7 @@ existente ou criar um novo.
 | [`admin-agents-contract.md`](admin-agents-contract.md) | Contrato AdminAgents frontend ↔ backend: campos expostos em `GET /admin/agents/overview` e `GET /admin/agents/users/{id}` | Novo campo no AI Profile que deve ser exibido no painel admin |
 | [`humanization.md`](humanization.md) | Humanização comportamental: delay de resposta, typing indicator, quebra de mensagem por pontuação, janela de horário, áudio de voz (myaudio/ptt) | Mudança no cálculo de delay, novo campo de availability, novo tipo de mídia, mudança no split de mensagens |
 | [`auth-email.md`](auth-email.md) | Auth e gestão de utilizadores: endpoints de register/login/forgot-password/reset/change-password, modelo User (campos), PasswordResetToken, email SMTP via Resend, rotas públicas frontend-crm, painel admin de utilizadores | Novo endpoint de auth, mudança no modelo User, novo campo de config SMTP, novo template de email, nova rota pública |
+| [`plans-limits.md`](plans-limits.md) | Feature gates por plano: `follow_up_enabled`, `playground_monthly_limit` em entitlements; `plan_gates.py`; tabela `playground_usage_monthly`; campo `playground_monthly` em `/usage`; padrão de toast upgrade CTA | Novo campo de limite em `plan_limits`, novo gate numa rota do CRM, novo campo em `/usage` |
 
 ---
 
