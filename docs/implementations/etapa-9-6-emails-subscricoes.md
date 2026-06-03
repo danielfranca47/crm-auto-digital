@@ -1,7 +1,7 @@
 # Emails de Subscrição — Confirmações e Job de Expiração
 
 **Branch:** `etapa-9-planos-limites`
-**Status:** E1 pendente (próxima venda real Kiwify) — E2, E3, E4, E5 validados em 03/06/2026
+**Status:** E1 pendente (próxima venda real Kiwify) — E2, E3, E4, E5, F3-E2, F3-E3 validados em 03/06/2026
 
 ---
 
@@ -140,18 +140,20 @@ Emails são sempre **não-bloqueantes** (try/except) — falha de SMTP não afec
 ### Checks de Validação Fase 3
 
 #### F3-E3 — Email de registo com branding Lara
-- [ ] Conta criada com alias `danielhsfranca+fase3@gmail.com`
-- [ ] Email recebido com assunto **"Bem-vindo ao Digital Pro"** (ou similar)
-- [ ] Corpo menciona **"A Lara está pronta para ti"**
-- [ ] Rodapé diz **"Lara by Digital Pro"** (não "CRM com IA para vendas")
-- [ ] CTA diz **"Começar com a Lara →"**
+- [x] Conta criada com alias `danielhsfranca+fase3@gmail.com`
+- [x] Email recebido com assunto **"Bem-vindo ao Digital Pro"**
+- [x] Corpo menciona **"A Lara está pronta para ti"**
+- [x] Rodapé diz **"Lara by Digital Pro"**
+- [x] CTA diz **"Começar com a Lara →"**
+- **Validado em:** 03/06/2026 — email chegou com branding correcto.
 
 #### F3-E2 — Email de trial com branding Lara
-- [ ] Trial Growth atribuído a `danielhsfranca@gmail.com`
-- [ ] Email recebido com assunto **"Trial iniciado — Digital Pro"** (ou similar)
-- [ ] Corpo menciona **"O teu trial da Lara começou!"**
-- [ ] Rodapé diz **"Lara by Digital Pro"**
-- [ ] CTA diz **"Conhecer a Lara →"**
+- [x] Trial Growth atribuído a `danielhsfranca@gmail.com`
+- [x] Email recebido com assunto **"Trial iniciado — Digital Pro"**
+- [x] Corpo menciona **"O teu trial da Lara começou!"**
+- [x] Rodapé diz **"Lara by Digital Pro"**
+- [x] CTA diz **"Conhecer a Lara →"**
+- **Validado em:** 03/06/2026 — email chegou com branding correcto.
 
 ---
 
