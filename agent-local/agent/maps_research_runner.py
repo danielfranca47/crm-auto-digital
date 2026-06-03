@@ -35,6 +35,13 @@ class MapsResearchRunner:
         options.add_argument("--no-sandbox")
         options.add_argument("--window-size=1280,900")
         options.add_argument("--lang=pt-BR")
+        # Suprime popup "Restaurar páginas?" de sessão anterior crashada
+        options.add_argument("--disable-session-crashed-bubble")
+        options.add_argument("--no-first-run")
+        options.add_argument("--disable-infobars")
+        options.add_experimental_option("excludeSwitches", ["enable-automation"])
+        # Não restaurar sessão anterior
+        options.add_experimental_option("prefs", {"profile.exit_type": "Normal"})
         if self.config.headless:
             options.add_argument("--headless=new")
         if self.config.chrome_binary:
@@ -133,11 +140,23 @@ class MapsResearchRunner:
     def _wait_for_first(self, wait: WebDriverWait, locators, *, clickable: bool = False):
         """Tenta múltiplos seletores e devolve o primeiro que aparecer.
 
-        Usamos para lidar com variações de UI do Maps (ids que mudam, aria-label
-        traduzido etc.). Se nenhum seletor aparecer, propagamos TimeoutException
-        para que o caller trate a falha de maneira visível.
+        Cada seletor tem um timeout curto (3s) para não bloquear os seguintes.
+        O `wait` passado é usado apenas como referência do driver — o timeout
+        real por seletor é fixo em 3s. Após todos os seletores curtos, tenta
+        uma última vez com o timeout total do `wait` passado.
         """
+        driver = wait._driver
+        short_wait = WebDriverWait(driver, 3)
 
+        for by, sel in locators:
+            try:
+                if clickable:
+                    return short_wait.until(EC.element_to_be_clickable((by, sel)))
+                return short_wait.until(EC.presence_of_element_located((by, sel)))
+            except Exception:
+                continue
+
+        # Segunda ronda com o timeout completo (30s) — página pode ainda estar a carregar
         for by, sel in locators:
             try:
                 if clickable:
@@ -145,6 +164,7 @@ class MapsResearchRunner:
                 return wait.until(EC.presence_of_element_located((by, sel)))
             except Exception:
                 continue
+
         raise TimeoutException("Elemento não encontrado para os seletores fornecidos")
 
     def _split_query_term_location(self, query: str):
@@ -173,8 +193,11 @@ class MapsResearchRunner:
             [
                 (By.ID, "searchboxinput"),
                 (By.CSS_SELECTOR, "input#searchboxinput"),
+                (By.CSS_SELECTOR, "input[aria-label*='Pesquise no Google Maps']"),
                 (By.CSS_SELECTOR, "input[aria-label*='Pesquisar no Google Maps']"),
                 (By.CSS_SELECTOR, "input[aria-label*='Search Google Maps']"),
+                (By.CSS_SELECTOR, "input[placeholder*='Pesquis']"),
+                (By.CSS_SELECTOR, "input[placeholder*='Search']"),
             ],
         )
 
