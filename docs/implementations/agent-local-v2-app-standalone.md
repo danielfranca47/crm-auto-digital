@@ -119,25 +119,30 @@ OTP screen → verify_otp(email, code) → JWT → main/onboarding
 | # | Commit | O que foi implementado |
 |---|---|---|
 | 1 | `2293046` | Auth passwordless completo: endpoints OTP backend-core + UI redesign agent-local |
+| 2 | `cc9de6d` | Fix: corrigir acentos no template OTP e assunto do email |
+| 3 | `50a6b22` | Fix: importar `text` do sqlalchemy em auth.py (NameError nos endpoints OTP) |
 
 ### Checks Fase 1b
 
-#### Cenário C1 — Novo utilizador (registo)
+#### Cenário C1 — Novo utilizador (registo) — pendente validação UI
 - [ ] Abrir app → inserir email não registado → sistema mostra formulário de registo
 - [ ] Preencher nome, whatsapp, setor → "Criar conta e receber código"
 - [ ] Confirmar: email recebido com código de 6 dígitos
 - [ ] Inserir código → confirmar: sessão criada, entra no app
 
 #### Cenário C2 — Utilizador existente (login)
-- [ ] Abrir app → inserir email já registado → sistema envia OTP diretamente
-- [ ] Confirmar: ecrã de código aparece (sem formulário de registo)
-- [ ] Inserir código → confirmar: entra no app
+- [x] `POST /auth/request-access` com email registado → `{"status":"existing_user"}` + OTP enviado via Resend
+- [x] `POST /auth/verify-otp` com código correto → JWT gerado (183 chars)
+- [ ] Testar via UI: abrir app, inserir email → ecrã OTP aparece → inserir código → entra no app
+- **Validado em:** 03/06/2026 — API testada; email entregue via `noreply@danielfranca.pt` (Resend); OTP gravado em `auth_otps`
 
 #### Cenário C3 — Código expirado / errado
-- [ ] Inserir código errado → confirmar: mensagem de erro "Código inválido ou expirado"
-- [ ] Aguardar 15min → inserir código antigo → confirmar: erro
+- [x] `POST /auth/verify-otp` com código `000000` → 400 "Código inválido ou expirado"
+- [x] `POST /auth/verify-otp` com código já utilizado → 400 (uso único confirmado)
+- [ ] Testar expiração real (aguardar 15min)
+- **Validado em:** 03/06/2026 — validação de código errado e uso único funcionam corretamente
 
-#### Cenário C4 — Reenvio com countdown
+#### Cenário C4 — Reenvio com countdown — pendente validação UI
 - [ ] No ecrã OTP, clicar "Reenviar código" → confirmar: novo email enviado
 - [ ] Confirmar: botão desabilitado com countdown de 60s
 
