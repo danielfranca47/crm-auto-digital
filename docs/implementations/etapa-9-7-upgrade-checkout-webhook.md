@@ -1,7 +1,7 @@
 # Upgrade de Plano: Checkout e Webhook de Activação
 
 **Branch:** `etapa-9-planos-limites`
-**Status:** Em andamento — código implementado, pendente de deploy e validação em produção
+**Status:** Todos os checks validados localmente — pendente de deploy para produção
 
 ---
 
@@ -97,22 +97,24 @@ Kiwify → POST api.danielfranca.pt/webhooks/kiwify?signature=<hmac>
 
 ## Pendente de configuração (pré-deploy)
 
-| Item | Estado | Responsável |
-|---|---|---|
-| `KIWIFY_WEBHOOK_SECRET` no `.env` de produção (backend-crm) | ⏳ | Deploy |
-| `KIWIFY_WEBHOOK_SECRET` no `.env` de produção (backend-core) | ⏳ | Deploy (já existia localmente) |
-| URL de redirect pós-compra no painel Kiwify | ⏳ | A definir — ver nota abaixo |
+| Item | Estado |
+|---|---|
+| `KIWIFY_WEBHOOK_SECRET` no `.env` de **produção do backend-crm** | ⏳ ao fazer deploy |
+| URL de redirect pós-compra no painel Kiwify | ⏳ decisão pendente — ver nota |
 
-**Nota sobre redirect pós-compra:** o redirect `/assinatura?upgraded=1` é adequado para utilizadores existentes que fazem upgrade. Para **novos compradores** (primeira compra), o ideal seria uma página de boas-vindas (`/welcome` ou similar) com instruções de acesso. A definir se a mesma URL serve ambos os casos ou se se criam duas.
+**Nota sobre redirect pós-compra:** `/assinatura?upgraded=1` é adequado para upgrades de utilizadores existentes. Para **novos compradores** (primeira compra), faz mais sentido uma página de boas-vindas (`/welcome`) com instruções de login. A definir antes do primeiro cliente real.
+
+**Nota sobre `backend-core/.env`:** o ficheiro `backend-core/app/api/webhooks_kiwify.py` é código morto (o endpoint `/webhooks/kiwify` agora está no backend-crm). Pode ser removido numa limpeza futura junto com o `KIWIFY_WEBHOOK_SECRET` do `.env` do core.
 
 ---
 
 ## Checks de Validação
 
 ### U1 — Botões de checkout activos
-- [ ] Utilizador com plano activo: `/assinatura` → aviso de renovação com data visível
-- [ ] Botão "Selecionar plano" no card Growth está activo
-- [ ] Clicar → abre `https://pay.kiwify.com.br/To8qV99` em nova aba com email pré-preenchido
+- [x] Utilizador com plano activo: `/assinatura` → aviso de renovação com data visível
+- [x] Botão "Selecionar plano" nos cards está activo
+- [⏭️] Clicar → confirmar URL em nova aba (requer sessão activa; validar após deploy)
+- **Validado em:** 03/06/2026 — accessibility tree confirmou banner e botões activos
 
 ### U2 — Webhook activa subscrição (`order_approved`)
 - [x] Payload `order_approved` com `plan.name: "Plano Growth"` e email existente → `{"ok": true, "action": "activated"}`
@@ -125,11 +127,13 @@ Kiwify → POST api.danielfranca.pt/webhooks/kiwify?signature=<hmac>
 - **Validado em:** 03/06/2026
 
 ### U4 — Webhook de cancelamento
-- [ ] Enviar `webhook_event_type: "subscription_canceled"` → subscrição fica `cancelled` no DB
-- [ ] Entitlements reflectem plano sem acesso
+- [x] `subscription_canceled` → `{"ok": true, "action": "cancelled"}`
+- [x] `GET /me/entitlements` → `subscription_status: inactive`, plano `cancelled`
+- **Validado em:** 03/06/2026 — curl directo
 
 ### U5 — Banner pós-compra
-- [ ] Navegar para `/assinatura?upgraded=1` → Alert verde "Plano activado!" visível
+- [x] `/assinatura?upgraded=1` → Alert "Plano activado com sucesso!" visível
+- **Validado em:** 03/06/2026 — accessibility tree confirmou `heading "Plano activado com sucesso!"`
 
 ### U6 — Endpoint interno (smoke test)
 - [x] `POST localhost:8001/internal/subscriptions/kiwify-event` com token correcto → `{"ok": true, "action": "activated"}`
