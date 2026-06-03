@@ -300,7 +300,7 @@ async def admin_create_user(
         html, text = render_welcome_email(body.name, temp_password, login_url)
         send_email(
             to=body.email,
-            subject="Bem-vindo ao AutoDigital CRM — acesso criado",
+            subject="Bem-vindo ao Digital Pro — acesso criado",
             html=html,
             text=text,
         )
