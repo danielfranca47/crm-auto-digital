@@ -48,7 +48,7 @@ def on_startup() -> None:
         from app.jobs.subscription_jobs import run_daily_subscription_jobs
 
         _scheduler = BackgroundScheduler(timezone="UTC")
-        _scheduler.add_job(run_daily_subscription_jobs, CronTrigger(hour=9, minute=0))
+        _scheduler.add_job(run_daily_subscription_jobs, CronTrigger(hour=12, minute=0, timezone="UTC"))  # 09:00 Brasília (UTC-3)
         _scheduler.start()
         import logging
         logging.getLogger(__name__).info("APScheduler iniciado — job diário às 09:00 UTC")

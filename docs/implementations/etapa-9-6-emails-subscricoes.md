@@ -199,4 +199,4 @@ Emails são sempre **não-bloqueantes** (try/except) — falha de SMTP não afec
 
 ## Ajustes Possíveis Pós-Implementação
 
-- O job corre a 09:00 UTC; se necessário ajustar `CronTrigger(hour=X)` em `app/main.py`.
+- O job corre às 12:00 UTC (09:00 Brasília). Para ajustar: alterar `CronTrigger(hour=X)` em `app/main.py`.
