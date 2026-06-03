@@ -71,6 +71,12 @@ Primeira abertura → Onboarding wizard
 | `agent-local/app/ui/onboarding_screen.py` | Novo: placeholder (Fase 3 implementa) |
 | `agent-local/requirements.txt` | Adicionar: customtkinter, openpyxl, Pillow |
 
+### Commits Fase 1
+
+| # | Commit | O que foi implementado |
+|---|---|---|
+| 1 | `87bb5f8` | Auth + UI base CustomTkinter (login, registo, sessão, ecrã principal placeholder, onboarding placeholder, endpoint proxy backend-core) |
+
 ### Fase 2 — Google Maps Integration + Export Excel
 
 **Objetivo:** Pesquisa funciona, resultados aparecem, export Excel gerado.
