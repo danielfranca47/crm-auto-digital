@@ -1,7 +1,7 @@
 # Feature-Gates: Follow-up e Playground por Plano
 
 **Branch:** `etapa-9-planos-limites`
-**Status:** Em andamento — Fases 1–3 validadas (02/06/2026); Fases 4–6 (ajustes frontend/backend) a implementar
+**Status:** Em andamento — Fases 1–4 validadas; Fases 5–6 a implementar
 
 ---
 
@@ -170,8 +170,9 @@ Depende da Fase 5 (campo `playground_monthly_used` disponível em `/usage`).
 ## Checks de Validação — Fases 4–6
 
 ### Cenário G5 — Toast de upgrade no follow-up bloqueado
-- [ ] Plano Start: tentar iniciar follow-up → modal fecha e toast aparece com CTA de upgrade
-- [ ] Plano Growth: iniciar follow-up → funciona sem toast de erro
+- [x] Plano Start: tentar iniciar follow-up → modal fecha e toast aparece com CTA de upgrade
+- [⏭️] Plano Growth: iniciar follow-up → funciona sem toast de erro (lógica validada via código; caminho positivo testado em G1/G2)
+- **Validado em:** 03/06/2026 — POST /api/leads/start-followup → 403 follow_up_not_included confirmado; modal fechou e lead permaneceu em Apresentação
 
 ### Cenário G6 — playground_monthly_used em /usage
 - [ ] `GET /usage` com plano Start após 2 usos → `playground_monthly_used: 2`, `playground_monthly_limit: 5`
