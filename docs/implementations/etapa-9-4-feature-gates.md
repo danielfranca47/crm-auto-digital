@@ -1,7 +1,7 @@
 # Feature-Gates: Follow-up e Playground por Plano
 
 **Branch:** `etapa-9-planos-limites`
-**Status:** Em andamento — Fases 1–5 validadas; Fase 6 a implementar
+**Status:** Concluído — Todas as fases (1–6) implementadas e validadas (03/06/2026)
 
 ---
 
@@ -163,7 +163,7 @@ Depende da Fase 5 (campo `playground_monthly_used` disponível em `/usage`).
 
 | # | Commit | O que foi implementado |
 |---|---|---|
-| 1 | — | — |
+| 1 | `a68fff6` | useUsage + badge quota + handlePlaygroundLimitError nos 5 catch blocks de playground.chat |
 
 ---
 
@@ -180,9 +180,10 @@ Depende da Fase 5 (campo `playground_monthly_used` disponível em `/usage`).
 - **Validado em:** 03/06/2026 — curl directo ao backend com user 11 (Start e Growth)
 
 ### Cenário G7 — Badge de quota no Playground
-- [ ] Plano Start (3 de 5 usos) → badge exibe "3 / 5 usos este mês"
-- [ ] Plano Growth → badge exibe "N usos este mês" (sem limite)
-- [ ] Ao exceder o limite → toast específico com CTA de upgrade (não toast genérico de erro)
+- [x] Plano Start (limite 1) → badge exibe "0 / 1 usos este mês"
+- [⏭️] Plano Growth → badge exibe "N usos este mês" — verificado via código (limit: null → sem denominador)
+- [x] Ao exceder o limite → toast "Limite de testes atingido" com botão "Ver planos"
+- **Validado em:** 03/06/2026 — browser MCP; 2ª mensagem → 403 → toast visível em screenshot
 
 ---
 
