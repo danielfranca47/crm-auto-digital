@@ -11,10 +11,12 @@ import { api, CorePlan, EntitlementsResponse } from "@/services/api";
 import {
   AlertCircle,
   ArrowRight,
+  Calendar,
   Check,
   CheckCircle,
   CreditCard,
   ExternalLink,
+  Info,
   Rocket,
 } from "lucide-react";
 
@@ -90,6 +92,12 @@ export default function Assinatura() {
     () => entitlements?.products?.find((product) => product?.product_code === "crm"),
     [entitlements]
   );
+
+  const renewalDate = useMemo(() => {
+    const end = (crmProduct as any)?.current_period_end;
+    if (!end) return null;
+    return new Date(end).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric" });
+  }, [crmProduct]);
 
   // Botões activos se existe pelo menos um URL de checkout ou número WhatsApp configurado
   const contactAvailable = Boolean(
@@ -208,6 +216,12 @@ export default function Assinatura() {
                   </Badge>
                   <span>Produto: CRM</span>
                 </div>
+                {renewalDate && (
+                  <div className="flex items-center gap-1.5 text-sm text-muted-foreground mt-1">
+                    <Calendar className="h-3.5 w-3.5 shrink-0" />
+                    <span>Activo até <strong>{renewalDate}</strong></span>
+                  </div>
+                )}
               </>
             )}
           </CardContent>
@@ -246,6 +260,32 @@ export default function Assinatura() {
           </CardContent>
         </Card>
       </div>
+
+      {crmProduct?.status === "active" && (
+        <Alert className="max-w-3xl border-blue-500/40 bg-blue-500/5">
+          <Info className="h-4 w-4 text-blue-500" />
+          <AlertTitle className="text-blue-700 dark:text-blue-400">Como trocar de plano</AlertTitle>
+          <AlertDescription className="space-y-2 text-sm">
+            <p>
+              A Kiwify não tem troca automática de plano — ao subscrever um plano superior é criada uma
+              nova assinatura independente. Para evitar pagar dois planos em simultâneo:
+            </p>
+            <ol className="list-decimal list-inside space-y-1 text-muted-foreground">
+              <li>
+                Subscreve o novo plano <strong>próximo da data de renovação</strong>
+                {renewalDate ? <> (<strong>{renewalDate}</strong>)</> : ""}.
+              </li>
+              <li>
+                Após a confirmação de pagamento, cancela a assinatura actual pelo link que a Kiwify
+                enviou no teu email de confirmação de compra.
+              </li>
+              <li>
+                O nosso sistema activa o novo plano automaticamente assim que recebe a confirmação.
+              </li>
+            </ol>
+          </AlertDescription>
+        </Alert>
+      )}
 
       <div className="space-y-4" id="planos">
         <div className="flex items-center justify-between gap-2">

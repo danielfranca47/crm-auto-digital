@@ -56,6 +56,7 @@ class ProductEntitlement(BaseModel):
     product_code: str
     status: str
     plan_code: Optional[str]
+    current_period_end: Optional[datetime] = None
 
 
 class EntitlementsResponse(BaseModel):
@@ -311,6 +312,7 @@ async def get_entitlements(current_user: models.User = Depends(get_current_user)
                 product_code=sub.product.code,
                 status=status_value,
                 plan_code=sub.plan.code if sub.plan else None,
+                current_period_end=sub.current_period_end,
             )
         )
 
