@@ -175,6 +175,9 @@ PLAN_NAME_MAP = {
 | # | Commit | O que foi implementado |
 |---|---|---|
 | 1 | `8cfad99` | Banner `?upgraded=1` em `Assinatura.tsx` (mesmo commit da Fase 1) |
+| 2 | `df910ef` | `current_period_end` em entitlements + data de renovação + aviso de sobreposição de plano |
+
+**Nota sobre upgrade de plano (confirmado por pesquisa):** a Kiwify não tem upgrade automático com proration. O fluxo correcto é o utilizador subscrever o novo plano próximo da data de renovação e cancelar o antigo pelo link no email da Kiwify. O nosso sistema (via webhook) activa o novo plano e cancela o anterior internamente quando recebe `order_approved`.
 
 ---
 
