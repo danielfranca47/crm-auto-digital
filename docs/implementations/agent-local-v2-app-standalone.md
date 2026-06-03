@@ -76,6 +76,7 @@ Primeira abertura → Onboarding wizard
 | # | Commit | O que foi implementado |
 |---|---|---|
 | 1 | `87bb5f8` | Auth + UI base CustomTkinter (login, registo, sessão, ecrã principal placeholder, onboarding placeholder, endpoint proxy backend-core) |
+| 2 | `db375af` | Fix: verificar assinatura antes da API key em `/agent/maps-search` (bug detectado nos testes) |
 
 ### Fase 2 — Google Maps Integration + Export Excel
 
