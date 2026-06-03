@@ -29,6 +29,8 @@ class Settings(BaseSettings):
     # Kiwify
     KIWIFY_WEBHOOK_SECRET: Optional[str] = None
     KIWIFY_PRODUCT_ID: Optional[str] = None
+    # Google Maps API (used by agent-local proxy endpoint)
+    GOOGLE_MAPS_API_KEY: Optional[str] = None
 
     class Config:
         env_file = ".env"
