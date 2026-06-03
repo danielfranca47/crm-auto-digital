@@ -1,7 +1,7 @@
 # Feature-Gates: Follow-up e Playground por Plano
 
 **Branch:** `etapa-9-planos-limites`
-**Status:** Todos os cenários validados (02/06/2026) — G2/G3 validados via teste directo de lógica; integração end-to-end pendente de reinício do servidor 8001
+**Status:** Em andamento — Fases 1–3 validadas (02/06/2026); Fases 4–6 (ajustes frontend/backend) a implementar
 
 ---
 
@@ -111,8 +111,79 @@ Fase 3 (backend-crm): gate de playground
 
 ---
 
-## Ajustes Possíveis Pós-Implementação
+## Fase 4 — Frontend: mensagem de upgrade ao tentar follow-up bloqueado
 
-- Frontend-crm: mostrar mensagem de upgrade quando 403 follow_up_not_included
-- Frontend-crm: indicador de usos restantes do playground no mês
-- etapa-9-5 usa alertas quando usos de conversas IA se aproximam do limite
+| Arquivo | O que muda |
+|---|---|
+| `frontend-crm/src/components/FollowUpTransitionModal.tsx` | No bloco `catch` (~linha 108), adicionar handler para `detail?.error === "follow_up_not_included"`: fechar modal e exibir toast com CTA de upgrade para `/assinatura` |
+
+**Comportamento esperado:**
+- Plano Start → modal fecha, toast: "Follow-up não incluído no seu plano" + botão "Ver planos"
+- Plano Growth/legado → fluxo normal, sem alteração
+
+### Commits Fase 4
+
+| # | Commit | O que foi implementado |
+|---|---|---|
+| 1 | — | — |
+
+---
+
+## Fase 5 — Backend: expor playground_monthly_used no /usage
+
+| Arquivo | O que muda |
+|---|---|
+| `backend-crm/routes/usage.py` | Adicionar `playground_monthly_used: int` na resposta — query à tabela `playground_usage_monthly` filtrando por `user_id` e mês corrente |
+
+**Lógica:** `SELECT uses FROM playground_usage_monthly WHERE user_id = ? AND month = ?` (retorna 0 se sem registo).
+
+### Commits Fase 5
+
+| # | Commit | O que foi implementado |
+|---|---|---|
+| 1 | — | — |
+
+---
+
+## Fase 6 — Frontend: indicador de quota do playground + 403 tratado
+
+Depende da Fase 5 (campo `playground_monthly_used` disponível em `/usage`).
+
+| Arquivo | O que muda |
+|---|---|
+| `frontend-crm/src/pages/Playground.tsx` | Mostrar badge "X / Y usos este mês" no cabeçalho. Nos blocos `catch` das chamadas a `/playground/chat`, adicionar handler para `detail?.error === "playground_limit_reached"`: toast com mensagem clara + CTA de upgrade |
+| `frontend-crm/src/services/api.ts` | Adicionar `playground_monthly_used?: number` e `playground_monthly_limit?: number | null` ao tipo `UsageResponse` |
+
+**Comportamento esperado:**
+- Badge mostra "3 / 5 usos este mês" (plano Start com limite 5)
+- Badge mostra "12 usos este mês" (plano Growth, sem limite)
+- Ao atingir o limite: toast "Limite de testes atingido para este mês" + botão "Ver planos"
+
+### Commits Fase 6
+
+| # | Commit | O que foi implementado |
+|---|---|---|
+| 1 | — | — |
+
+---
+
+## Checks de Validação — Fases 4–6
+
+### Cenário G5 — Toast de upgrade no follow-up bloqueado
+- [ ] Plano Start: tentar iniciar follow-up → modal fecha e toast aparece com CTA de upgrade
+- [ ] Plano Growth: iniciar follow-up → funciona sem toast de erro
+
+### Cenário G6 — playground_monthly_used em /usage
+- [ ] `GET /usage` com plano Start após 2 usos → `playground_monthly_used: 2`, `playground_monthly_limit: 5`
+- [ ] `GET /usage` com plano Growth → `playground_monthly_used: N`, `playground_monthly_limit: null`
+
+### Cenário G7 — Badge de quota no Playground
+- [ ] Plano Start (3 de 5 usos) → badge exibe "3 / 5 usos este mês"
+- [ ] Plano Growth → badge exibe "N usos este mês" (sem limite)
+- [ ] Ao exceder o limite → toast específico com CTA de upgrade (não toast genérico de erro)
+
+---
+
+## Notas
+
+- etapa-9-5 usa alertas quando usos de conversas IA se aproximam do limite (padrão semelhante ao badge aqui proposto)
