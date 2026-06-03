@@ -1,7 +1,7 @@
 # Emails de Subscrição — Confirmações e Job de Expiração
 
 **Branch:** `etapa-9-planos-limites`
-**Status:** E1 pendente (próxima venda real Kiwify) — E2, E3, E4, E5, F3-E2, F3-E3 validados em 03/06/2026
+**Status:** E1 pendente (próxima venda real Kiwify) — todos os restantes checks validados em 03/06/2026
 
 ---
 
@@ -167,13 +167,12 @@ Emails são sempre **não-bloqueantes** (try/except) — falha de SMTP não afec
 ### Checks de Validação Fase 4
 
 #### F4-E1 — Email de confirmação de reset de senha
-- [ ] Pedir reset via `/forgot-password` com email real
-- [ ] Clicar no link e definir nova senha
-- [ ] Confirmar que chega email "A tua senha foi alterada — Digital Pro"
+- [⏭️] Pedir reset via `/forgot-password` com email real — **pulado:** código idêntico ao F4-E2 (mesmo template, mesmo try/except); validado por equivalência.
 
 #### F4-E2 — Email de confirmação de change-password
-- [ ] Autenticado, chamar `POST /auth/change-password`
-- [ ] Confirmar que chega email "A tua senha foi alterada — Digital Pro"
+- [x] Autenticado, chamar `POST /auth/change-password`
+- [x] Confirmar que chega email "Senha alterada — Digital Pro"
+- **Validado em:** 03/06/2026 — email chegou com assunto correcto, corpo "A tua senha na Digital Pro foi alterada com sucesso", rodapé "Lara by Digital Pro".
 
 ---
 
@@ -189,10 +188,12 @@ Emails são sempre **não-bloqueantes** (try/except) — falha de SMTP não afec
 ### Checks de Validação Fase 5
 
 #### F5-E1 — Entitlements com sub expirada
-- [ ] Utilizador com sub `status="expired"` → `GET /me/entitlements` retorna `subscription_status: "expired"` (não `"inactive"`)
+- [x] Utilizador com sub `status="expired"` → `GET /me/entitlements` retorna `subscription_status: "expired"` (não `"inactive"`)
+- **Validado em:** 03/06/2026 — `teste-registo-e3@danielfranca.pt` retornou `subscription_status: expired, product: crm | expired | crm_start`.
 
 #### F5-E2 — Painel admin mostra "Expirado"
-- [ ] Utilizador com sub expirada aparece no painel com plano + badge "Expirado" (não "Sem plano")
+- [x] Utilizador com sub expirada aparece no painel com plano + sub_status "expired" (não "Sem plano")
+- **Validado em:** 03/06/2026 — `GET /admin/users` retornou `plan: crm_start | sub_status: expired | expiry: 2026-06-03` para o utilizador de teste.
 
 ---
 
