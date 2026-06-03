@@ -240,8 +240,7 @@ class MapsResearchRunner:
                 pass
 
         # 3. Fallback: usar atalho de teclado '/' do Google Maps para focar a pesquisa
-        # Neste modo, enviamos os caracteres diretamente ao documento
-        logger.warning("Search input não encontrado — usando fallback por teclado ('/')")
+        logger.info("CSS/Shadow DOM não encontraram o input — usando atalho '/' do Maps")
         try:
             WebDriverWait(driver, 10).until(
                 lambda d: "maps.google" in d.current_url or "google.com/maps" in d.current_url
@@ -267,7 +266,8 @@ class MapsResearchRunner:
         raise TimeoutException("Search input não encontrado (DOM normal nem Shadow DOM)")
 
     def _maps_ui_search(self, driver: Chrome, wait: WebDriverWait, location: str | None, term: str):
-        driver.get("https://www.google.com/maps?hl=pt-BR&gl=BR")
+        # Coordenadas neutras (0,0) para não centrar o mapa na localização do utilizador
+        driver.get("https://www.google.com/maps/@0,0,3z?hl=pt-BR&gl=BR")
         time.sleep(2.5)  # aguardar redirect inicial do Google antes de verificar consent
         if "consent.google" in driver.current_url.lower():
             self._handle_google_consent(driver)
