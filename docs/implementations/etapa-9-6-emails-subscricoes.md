@@ -123,11 +123,35 @@ Emails são sempre **não-bloqueantes** (try/except) — falha de SMTP não afec
 
 **Regras de branding aplicadas:**
 - Rodapé: `"Lara by Digital Pro — A tua IA de vendas via WhatsApp"`
-- Activação: "A Lara está activa e pronta para trabalhar para ti"
-- Trial: "O teu trial da Lara começou"
-- Renovação: "A Lara continua activa"
+- Activação: "A Lara está activa!"
+- Trial: "O teu trial da Lara começou!"
+- Renovação: "A Lara continua activa!"
 - Cancelamento/expiração: "O acesso à Lara"
-- Boas-vindas: mencionar a Lara como a IA que vai trabalhar para o cliente
+- Boas-vindas admin: "Bem-vindo à Digital Pro · A Lara está pronta para ti"
+- Boas-vindas registo: "A Lara está pronta para ti"
+- CTAs: "Começar com a Lara →", "Activar a Lara agora →", "Renovar a Lara →", "Reactivar a Lara →"
+
+### Commits Fase 3
+
+| # | Commit | O que foi implementado |
+|---|---|---|
+| 1 | `2d339c9` | Branding Lara em todos os templates + constantes _FOOTER/_FOOTER_TEXT |
+
+### Checks de Validação Fase 3
+
+#### F3-E3 — Email de registo com branding Lara
+- [ ] Conta criada com alias `danielhsfranca+fase3@gmail.com`
+- [ ] Email recebido com assunto **"Bem-vindo ao Digital Pro"** (ou similar)
+- [ ] Corpo menciona **"A Lara está pronta para ti"**
+- [ ] Rodapé diz **"Lara by Digital Pro"** (não "CRM com IA para vendas")
+- [ ] CTA diz **"Começar com a Lara →"**
+
+#### F3-E2 — Email de trial com branding Lara
+- [ ] Trial Growth atribuído a `danielhsfranca@gmail.com`
+- [ ] Email recebido com assunto **"Trial iniciado — Digital Pro"** (ou similar)
+- [ ] Corpo menciona **"O teu trial da Lara começou!"**
+- [ ] Rodapé diz **"Lara by Digital Pro"**
+- [ ] CTA diz **"Conhecer a Lara →"**
 
 ---
 
