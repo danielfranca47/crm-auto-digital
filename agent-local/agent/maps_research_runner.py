@@ -10,6 +10,7 @@ from typing import Any, Dict, List, Optional
 from selenium.common.exceptions import TimeoutException
 from selenium.webdriver import Chrome, ChromeOptions
 from selenium.webdriver.chrome.service import Service
+from selenium.webdriver.common.action_chains import ActionChains
 from selenium.webdriver.common.by import By
 from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.support import expected_conditions as EC
@@ -178,6 +179,93 @@ class MapsResearchRunner:
                 return term, loc
         return query.strip(), None
 
+    # JS que atravessa Shadow DOM recursivamente à procura de um seletor
+    _SHADOW_SEARCH_JS = """
+(function deepFind(root, selector) {
+    var found = root.querySelector(selector);
+    if (found) return found;
+    var all = root.querySelectorAll('*');
+    for (var i = 0; i < all.length; i++) {
+        if (all[i].shadowRoot) {
+            found = deepFind(all[i].shadowRoot, selector);
+            if (found) return found;
+        }
+    }
+    return null;
+})(document, arguments[0]);
+"""
+
+    def _find_in_shadow(self, driver: Chrome, selector: str):
+        """Procura um elemento através de shadow roots via JavaScript."""
+        return driver.execute_script(self._SHADOW_SEARCH_JS, selector)
+
+    def _get_search_input(self, driver: Chrome, wait: WebDriverWait):
+        """
+        Obtém o input de pesquisa do Google Maps.
+        Google Maps usa Shadow DOM — o #searchboxinput não é acessível via seletores CSS normais.
+        Estratégia:
+          1. Tentar CSS normal (compatibilidade com versões antigas)
+          2. Procurar via JavaScript recursivo no Shadow DOM
+          3. Fallback: usar tecla '/' para focar a pesquisa + body como proxy
+        """
+        # ActionChains importado no topo do módulo
+
+        # 1. Tentar CSS normal (pode funcionar em alguns ambientes)
+        for selector in ["#searchboxinput", "input[aria-label*='Pesquis']", "input[aria-label*='Search']"]:
+            try:
+                el = WebDriverWait(driver, 4).until(
+                    EC.presence_of_element_located((By.CSS_SELECTOR, selector))
+                )
+                if el:
+                    return el
+            except Exception:
+                pass
+
+        # 2. Procurar no Shadow DOM via JavaScript
+        for selector in [
+            "#searchboxinput",
+            "input[aria-label*='Pesquise']",
+            "input[aria-label*='Pesquisar']",
+            "input[aria-label*='Search']",
+            "input[placeholder*='Pesquis']",
+            "input[placeholder*='Search']",
+            "input[jsaction*='search']",
+        ]:
+            try:
+                el = self._find_in_shadow(driver, selector)
+                if el:
+                    logger.info("Search input encontrado via Shadow DOM: %s", selector)
+                    return el
+            except Exception:
+                pass
+
+        # 3. Fallback: usar atalho de teclado '/' do Google Maps para focar a pesquisa
+        # Neste modo, enviamos os caracteres diretamente ao documento
+        logger.warning("Search input não encontrado — usando fallback por teclado ('/')")
+        try:
+            WebDriverWait(driver, 10).until(
+                lambda d: "maps.google" in d.current_url or "google.com/maps" in d.current_url
+            )
+            # Clicar no corpo do mapa e usar '/' para activar a pesquisa
+            body = driver.find_element(By.TAG_NAME, "body")
+            body.click()
+            time.sleep(0.5)
+            ActionChains(driver).send_keys("/").perform()
+            time.sleep(1.0)
+            # Após '/', o input activo deverá ser o de pesquisa
+            active = driver.execute_script("return document.activeElement")
+            if active and active.tag_name == "input":
+                return active
+            # Tentar novamente Shadow DOM
+            for selector in ["#searchboxinput", "input[aria-label*='Pesquis']"]:
+                el = self._find_in_shadow(driver, selector)
+                if el:
+                    return el
+        except Exception as e:
+            logger.error("Fallback teclado falhou: %s", e)
+
+        raise TimeoutException("Search input não encontrado (DOM normal nem Shadow DOM)")
+
     def _maps_ui_search(self, driver: Chrome, wait: WebDriverWait, location: str | None, term: str):
         driver.get("https://www.google.com/maps?hl=pt-BR&gl=BR")
         time.sleep(2.5)  # aguardar redirect inicial do Google antes de verificar consent
@@ -188,18 +276,7 @@ class MapsResearchRunner:
                 driver.get("https://www.google.com/maps?hl=pt-BR&gl=BR")
                 time.sleep(2.5)
 
-        search_input = self._wait_for_first(
-            wait,
-            [
-                (By.ID, "searchboxinput"),
-                (By.CSS_SELECTOR, "input#searchboxinput"),
-                (By.CSS_SELECTOR, "input[aria-label*='Pesquise no Google Maps']"),
-                (By.CSS_SELECTOR, "input[aria-label*='Pesquisar no Google Maps']"),
-                (By.CSS_SELECTOR, "input[aria-label*='Search Google Maps']"),
-                (By.CSS_SELECTOR, "input[placeholder*='Pesquis']"),
-                (By.CSS_SELECTOR, "input[placeholder*='Search']"),
-            ],
-        )
+        search_input = self._get_search_input(driver, wait)
 
         try:
             search_btn = self._wait_for_first(
@@ -218,14 +295,27 @@ class MapsResearchRunner:
             search_btn = None
 
         def do_search(text: str):
-            search_input.clear()
-            search_input.click()
-            search_input.send_keys(text)
+            # Repescar o input via '/' a cada chamada para garantir foco correto
+            current_input = self._get_search_input(driver, wait)
+            # Limpar conteúdo existente com Ctrl+A + Delete (funciona em shadow DOM)
+            try:
+                current_input.click()
+                time.sleep(0.2)
+            except Exception:
+                pass
+            ActionChains(driver).key_down(Keys.CONTROL).send_keys("a").key_up(Keys.CONTROL).perform()
+            time.sleep(0.1)
+            ActionChains(driver).send_keys(Keys.DELETE).perform()
+            time.sleep(0.1)
+            current_input.send_keys(text)
 
             if search_btn:
-                search_btn.click()
+                try:
+                    search_btn.click()
+                except Exception:
+                    current_input.send_keys(Keys.ENTER)
             else:
-                search_input.send_keys(Keys.ENTER)
+                current_input.send_keys(Keys.ENTER)
             try:
                 wait.until(
                     lambda d: len(d.find_elements(By.CSS_SELECTOR, "div[role='article']")) >= 1
