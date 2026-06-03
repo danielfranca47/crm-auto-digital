@@ -51,7 +51,9 @@ def on_startup() -> None:
         _scheduler.add_job(run_daily_subscription_jobs, CronTrigger(hour=12, minute=0, timezone="UTC"))  # 09:00 Brasília (UTC-3)
         _scheduler.start()
         import logging
-        logging.getLogger(__name__).info("APScheduler iniciado — job diário às 09:00 UTC")
+        logging.getLogger(__name__).info("APScheduler iniciado — job diário às 12:00 UTC (09:00 Brasília)")
+        # Processar pendentes de quando o servidor estava offline
+        run_daily_subscription_jobs()
     except Exception as exc:
         import logging
         logging.getLogger(__name__).error("Falha ao iniciar APScheduler: %s", exc)
