@@ -276,58 +276,32 @@ class MapsResearchRunner:
                 driver.get("https://www.google.com/maps?hl=pt-BR&gl=BR")
                 time.sleep(2.5)
 
+        # Combinar localização e termo numa única pesquisa — mais fiável do que
+        # duas pesquisas sequenciais (evita mudança de estado do Maps entre chamadas)
+        full_query = f"{term} em {location}" if location else term
         search_input = self._get_search_input(driver, wait)
 
+        # Limpar conteúdo existente com Ctrl+A + Delete (compatível com Shadow DOM)
         try:
-            search_btn = self._wait_for_first(
-                wait,
-                [
-                    (By.ID, "searchbox-searchbutton"),
-                    (By.CSS_SELECTOR, "button#searchbox-searchbutton"),
-                    (By.CSS_SELECTOR, "button[aria-label*='Pesquisar'], button[aria-label*='Search']"),
-                    (By.CSS_SELECTOR, "button[jsaction*='search']"),
-                ],
-                clickable=True,
+            search_input.click()
+            time.sleep(0.2)
+        except Exception:
+            pass
+        ActionChains(driver).key_down(Keys.CONTROL).send_keys("a").key_up(Keys.CONTROL).perform()
+        time.sleep(0.1)
+        ActionChains(driver).send_keys(Keys.DELETE).perform()
+        time.sleep(0.1)
+        search_input.send_keys(full_query)
+        search_input.send_keys(Keys.ENTER)
+
+        try:
+            wait.until(
+                lambda d: len(d.find_elements(By.CSS_SELECTOR, "div[role='article']")) >= 1
+                or d.find_elements(By.CSS_SELECTOR, "div[role='feed']")
             )
-        except TimeoutException:
-            # UI pode ocultar o botão (p. ex., em telas estreitas); Enter no input
-            # ainda dispara a busca.
-            search_btn = None
-
-        def do_search(text: str):
-            # Repescar o input via '/' a cada chamada para garantir foco correto
-            current_input = self._get_search_input(driver, wait)
-            # Limpar conteúdo existente com Ctrl+A + Delete (funciona em shadow DOM)
-            try:
-                current_input.click()
-                time.sleep(0.2)
-            except Exception:
-                pass
-            ActionChains(driver).key_down(Keys.CONTROL).send_keys("a").key_up(Keys.CONTROL).perform()
-            time.sleep(0.1)
-            ActionChains(driver).send_keys(Keys.DELETE).perform()
-            time.sleep(0.1)
-            current_input.send_keys(text)
-
-            if search_btn:
-                try:
-                    search_btn.click()
-                except Exception:
-                    current_input.send_keys(Keys.ENTER)
-            else:
-                current_input.send_keys(Keys.ENTER)
-            try:
-                wait.until(
-                    lambda d: len(d.find_elements(By.CSS_SELECTOR, "div[role='article']")) >= 1
-                    or d.find_elements(By.CSS_SELECTOR, "div[role='feed']")
-                )
-            except Exception:
-                pass
-            time.sleep(0.8)
-
-        if location:
-            do_search(location)
-        do_search(term)
+        except Exception:
+            pass
+        time.sleep(0.8)
 
     def _harvest_cards(self, driver: Chrome, feed, seen: Dict[str, str]):
         scope = feed if feed is not None else driver
