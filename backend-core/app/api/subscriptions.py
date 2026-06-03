@@ -1,4 +1,6 @@
 import logging
+import secrets
+import string
 from datetime import datetime, timedelta
 from typing import Dict, List, Literal, Optional
 
@@ -9,7 +11,8 @@ from sqlalchemy.orm import Session
 from app import models
 from app.config import settings
 from app.db import get_db
-from .auth import get_current_user
+from app.services.email_service import render_welcome_email, send_email
+from .auth import get_current_user, get_password_hash
 
 logger = logging.getLogger(__name__)
 
@@ -231,9 +234,37 @@ async def kiwify_subscription_event(
     """Endpoint interno — chamado pelo backend-crm ao receber webhook da Kiwify."""
     email = payload.email.strip().lower()
     user = db.query(models.User).filter(models.User.email == email).first()
+
+    new_user_created = False
     if not user:
-        logger.info("kiwify_event: utilizador '%s' não encontrado — ignorado", email)
-        return {"ok": True, "action": "skipped", "reason": "user_not_found"}
+        if payload.action != "activate":
+            logger.info("kiwify_event: utilizador '%s' não encontrado — ignorado", email)
+            return {"ok": True, "action": "skipped", "reason": "user_not_found"}
+        # Novo comprador: criar conta automaticamente
+        alphabet = string.ascii_letters + string.digits + "!@#$%"
+        temp_password = "".join(secrets.choice(alphabet) for _ in range(14))
+        user = models.User(
+            email=email,
+            password_hash=get_password_hash(temp_password),
+            name=None,
+            status="active",
+        )
+        db.add(user)
+        db.flush()  # obtém user.id sem commit
+        new_user_created = True
+        logger.info("kiwify_event: novo utilizador criado email=%s id=%s", email, user.id)
+        try:
+            login_url = (settings.CRM_FRONTEND_URL or "https://crmapp.danielfranca.pt").rstrip("/") + "/login"
+            html, text = render_welcome_email(None, temp_password, login_url)
+            send_email(
+                to=email,
+                subject="Bem-vindo à Lara AI — as tuas credenciais de acesso",
+                html=html,
+                text=text,
+            )
+            logger.info("kiwify_event: email de boas-vindas enviado para %s", email)
+        except Exception as exc:
+            logger.error("kiwify_event: falha ao enviar email para %s — %s", email, exc)
 
     plan = db.query(models.Plan).filter(models.Plan.code == payload.plan_code).first()
     if not plan:
@@ -283,7 +314,7 @@ async def kiwify_subscription_event(
     db.add(sub)
     db.commit()
     logger.info("kiwify_event: subscrição activada user=%s plan=%s", user.id, payload.plan_code)
-    return {"ok": True, "action": "activated"}
+    return {"ok": True, "action": "created_and_activated" if new_user_created else "activated"}
 
 
 @router.get("/me/entitlements", response_model=EntitlementsResponse)
