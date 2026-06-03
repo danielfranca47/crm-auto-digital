@@ -145,10 +145,11 @@ OTP screen → verify_otp(email, code) → JWT → main/onboarding
 - **Validado em:** 03/06/2026 — validação de código errado e uso único confirmados via API
 
 #### Cenário C4 — Reenvio com countdown
-- [x] Botão "Reenviar código" visível no ecrã OTP (screenshot C1 e C2 confirmam presença)
-- [x] `POST /auth/request-access` idempotente — gera novo OTP válido (confirmado via API, old OTP marcado `used=0` ainda válido até expirar)
-- [⏭️] Countdown 60s via UI — não capturado em screenshot automatizado; código implementado em `otp_screen.py:_tick_countdown()`
-- **Validado em:** 03/06/2026 — funcionalidade implementada e API confirmada; UI countdown requer teste manual
+- [x] Botão "Reenviar código" visível no ecrã OTP
+- [x] Após clique: botão fica desabilitado com countdown decrescente (60s → 0s)
+- [x] Após 60s: botão volta a ficar ativo com texto "Reenviar código"
+- [x] Novo email enviado com novo código
+- **Validado em:** 03/06/2026 — teste manual; comportamento confirmado pelo utilizador
 
 ### Commits Fase 2
 
@@ -197,6 +198,9 @@ OTP screen → verify_otp(email, code) → JWT → main/onboarding
 - [ ] Login com utilizador não-assinante sem chave configurada
 - [ ] Executar pesquisa
 - [ ] Confirmar: Chrome abre e faz scraping; resultados aparecem
+
+**Bug identificado em 03/06/2026 — commit 8dce5f8:**
+Chrome era posicionado em `--window-position=-32000,-32000` (off-screen); no Windows, elementos DOM de páginas off-screen não renderizam, causando `TimeoutException` em `#searchboxinput`. Corrigido removendo essa flag. Também adicionado `time.sleep(2.5)` após `driver.get()` para aguardar redirect do Google antes de verificar consent. **Retestar após a correção.**
 
 #### Cenário B4 — Export Excel
 - [x] Ficheiro `.xlsx` gerado em `C:/Temp/test_leads_b4.xlsx` (5502 bytes)
