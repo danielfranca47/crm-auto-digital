@@ -216,12 +216,15 @@ async def get_entitlements(current_user: models.User = Depends(get_current_user)
 
     product_entries: List[ProductEntitlement] = []
     has_active = False
+    has_expired = False
     for sub in subscriptions:
         if not sub.product:
             continue
         status_value = sub.status or "inactive"
         if status_value == "active":
             has_active = True
+        elif status_value == "expired":
+            has_expired = True
         product_entries.append(
             ProductEntitlement(
                 product_code=sub.product.code,
@@ -232,8 +235,15 @@ async def get_entitlements(current_user: models.User = Depends(get_current_user)
 
     limits = _calculate_limits(current_user, db)
 
+    if has_active:
+        overall_status = "active"
+    elif has_expired:
+        overall_status = "expired"
+    else:
+        overall_status = "inactive"
+
     return EntitlementsResponse(
-        subscription_status="active" if has_active else "inactive",
+        subscription_status=overall_status,
         products=product_entries,
         limits=limits,
     )

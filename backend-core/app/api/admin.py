@@ -128,8 +128,9 @@ async def admin_list_users(
             db.query(models.Subscription)
             .filter(
                 models.Subscription.user_id == u.id,
-                models.Subscription.status == "active",
+                models.Subscription.status.in_(["active", "expired"]),
             )
+            .order_by(models.Subscription.current_period_end.desc())
             .first()
         )
         result.append(UserAdminOut(
