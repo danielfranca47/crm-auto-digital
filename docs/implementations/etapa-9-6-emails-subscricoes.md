@@ -155,10 +155,47 @@ Emails são sempre **não-bloqueantes** (try/except) — falha de SMTP não afec
 - [x] CTA diz **"Conhecer a Lara →"**
 - **Validado em:** 03/06/2026 — email chegou com branding correcto.
 
+### Fase 4 — Email de confirmação de senha alterada
+
+**Objetivo:** notificar o utilizador por email sempre que a senha é alterada (reset ou mudança directa), como medida de segurança.
+
+| Arquivo | O que muda |
+|---|---|
+| `backend-core/app/services/email_service.py` | Novo template `render_password_changed_email(name)` |
+| `backend-core/app/api/auth.py` | Email após commit em `reset-password` e `change-password` |
+
+### Checks de Validação Fase 4
+
+#### F4-E1 — Email de confirmação de reset de senha
+- [ ] Pedir reset via `/forgot-password` com email real
+- [ ] Clicar no link e definir nova senha
+- [ ] Confirmar que chega email "A tua senha foi alterada — Digital Pro"
+
+#### F4-E2 — Email de confirmação de change-password
+- [ ] Autenticado, chamar `POST /auth/change-password`
+- [ ] Confirmar que chega email "A tua senha foi alterada — Digital Pro"
+
+---
+
+### Fase 5 — Status "expired" distinguido de "inactive"
+
+**Objetivo:** utilizadores com subscrição expirada devem aparecer como `"expired"` (não `"inactive"`) no painel admin e em `GET /me/entitlements`, para distinguir quem nunca teve plano de quem teve e expirou.
+
+| Arquivo | O que muda |
+|---|---|
+| `backend-core/app/api/subscriptions.py` | `subscription_status` retorna `"expired"` se o utilizador tem sub expirada mas não activa |
+| `backend-core/app/api/admin.py` | Listagem de utilizadores mostra plano + status da sub mais recente (incluindo expiradas) |
+
+### Checks de Validação Fase 5
+
+#### F5-E1 — Entitlements com sub expirada
+- [ ] Utilizador com sub `status="expired"` → `GET /me/entitlements` retorna `subscription_status: "expired"` (não `"inactive"`)
+
+#### F5-E2 — Painel admin mostra "Expirado"
+- [ ] Utilizador com sub expirada aparece no painel com plano + badge "Expirado" (não "Sem plano")
+
 ---
 
 ## Ajustes Possíveis Pós-Implementação
 
-- Emails de confirmação de mudança de senha (change-password) ficaram fora de escopo — micro-melhoria futura.
-- O job corre a 09:00 UTC; ajustar fuso se necessário via cron trigger.
-- O status `"expired"` é novo — se houver queries que usam `status != "active"` ou `status == "cancelled"` é preciso rever.
+- O job corre a 09:00 UTC; se necessário ajustar `CronTrigger(hour=X)` em `app/main.py`.

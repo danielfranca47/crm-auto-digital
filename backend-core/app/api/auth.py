@@ -202,6 +202,15 @@ async def reset_password(body: ResetPasswordRequest, db: Session = Depends(get_d
     user.password_hash = get_password_hash(body.new_password)
     token.used_at = datetime.utcnow()
     db.commit()
+
+    try:
+        from app.services.email_service import render_password_changed_email, send_email
+        html, text = render_password_changed_email(user.name)
+        send_email(to=user.email, subject="Senha alterada — Digital Pro", html=html, text=text)
+    except Exception as exc:
+        import logging as _log
+        _log.getLogger(__name__).warning("Email de confirmação de senha não enviado: %s", exc)
+
     return {"ok": True}
 
 
@@ -218,4 +227,13 @@ async def change_password(
         )
     current_user.password_hash = get_password_hash(body.new_password)
     db.commit()
+
+    try:
+        from app.services.email_service import render_password_changed_email, send_email
+        html, text = render_password_changed_email(current_user.name)
+        send_email(to=current_user.email, subject="Senha alterada — Digital Pro", html=html, text=text)
+    except Exception as exc:
+        import logging as _log
+        _log.getLogger(__name__).warning("Email de confirmação de senha não enviado: %s", exc)
+
     return {"ok": True}

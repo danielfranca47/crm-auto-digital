@@ -296,6 +296,30 @@ def render_subscription_expiring_email(
     return html, text
 
 
+def render_password_changed_email(name: Optional[str]) -> tuple[str, str]:
+    display = name or "Cliente"
+    html = f"""
+<!DOCTYPE html>
+<html>
+<body style="font-family:sans-serif;color:#1e293b;max-width:520px;margin:0 auto;padding:24px">
+  <h2 style="color:#0284c7">Senha alterada com sucesso</h2>
+  <p>Olá, <strong>{display}</strong>.</p>
+  <p>A tua senha na <strong>Digital Pro</strong> foi alterada com sucesso.</p>
+  <p style="color:#64748b;font-size:0.875em">Se não foste tu a fazer esta alteração, contacta-nos imediatamente respondendo a este email.</p>
+  {_FOOTER}
+</body>
+</html>
+"""
+    text = (
+        f"Senha alterada com sucesso\n\n"
+        f"Olá, {display}.\n\n"
+        f"A tua senha na Digital Pro foi alterada com sucesso.\n\n"
+        f"Se não foste tu, contacta-nos imediatamente."
+        f"{_FOOTER_TEXT}"
+    )
+    return html, text
+
+
 def render_subscription_expired_email(
     name: Optional[str], plan_name: str, checkout_url: str
 ) -> tuple[str, str]:
