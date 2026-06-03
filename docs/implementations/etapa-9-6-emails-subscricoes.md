@@ -113,6 +113,22 @@ Emails são sempre **não-bloqueantes** (try/except) — falha de SMTP não afec
 - [x] Executar job novamente — retornou `warnings_sent: 0` (sem re-envio)
 - **Validado em:** 03/06/2026 — flag anti-reenvio funciona correctamente.
 
+### Fase 3 — Branding Lara nos templates de email
+
+**Objetivo:** substituir toda a linguagem genérica por branding correcto: **Lara** é a IA, **Digital Pro** é a marca.
+
+| Arquivo | O que muda |
+|---|---|
+| `backend-core/app/services/email_service.py` | Todos os templates actualizados: Lara nomeada nos corpos, rodapé "Lara by Digital Pro", CTAs personalizados |
+
+**Regras de branding aplicadas:**
+- Rodapé: `"Lara by Digital Pro — A tua IA de vendas via WhatsApp"`
+- Activação: "A Lara está activa e pronta para trabalhar para ti"
+- Trial: "O teu trial da Lara começou"
+- Renovação: "A Lara continua activa"
+- Cancelamento/expiração: "O acesso à Lara"
+- Boas-vindas: mencionar a Lara como a IA que vai trabalhar para o cliente
+
 ---
 
 ## Ajustes Possíveis Pós-Implementação
