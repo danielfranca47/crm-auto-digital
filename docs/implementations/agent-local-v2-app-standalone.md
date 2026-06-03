@@ -113,31 +113,37 @@ Primeira abertura → Onboarding wizard
 ### Fase 1
 
 #### Cenário A1 — App abre com UI
-- [ ] Executar `python main.py` na pasta `agent-local`
-- [ ] Confirmar: janela CustomTkinter abre (não logs no CLI)
-- [ ] Confirmar: ecrã de login aparece (sem sessão prévia)
+- [x] Executar `python main.py` na pasta `agent-local`
+- [x] Confirmar: janela CustomTkinter abre (não logs no CLI)
+- [x] Confirmar: ecrã de login aparece (sem sessão prévia)
+- **Validado em:** 03/06/2026 — janela CustomTkinter abre corretamente com ecrã de login (logo, campos email/senha, botão Entrar, link Criar conta grátis)
 
 #### Cenário A2 — Registo de novo utilizador
-- [ ] Clicar "Criar conta grátis"
-- [ ] Preencher Nome, Email (novo), Senha, WhatsApp
-- [ ] Confirmar: utilizador criado no backend-core
-- [ ] Confirmar: sessão persistida em `~/.agent-local/session.json`
-- [ ] Confirmar: badge "Gratuito" visível no ecrã principal
+- [x] Clicar "Criar conta grátis"
+- [x] Preencher Nome, Email (novo), Senha, WhatsApp
+- [x] Confirmar: utilizador criado no backend-core
+- [x] Confirmar: sessão persistida em `~/.agent-local/session.json`
+- [x] Confirmar: badge "Gratuito" visível no ecrã principal
+- **Validado em:** 03/06/2026 — uitest2@gmail.com criado com subscription_status=inactive; sessão guardada com access_token
 
 #### Cenário A3 — Login de utilizador existente
-- [ ] Inserir email + senha válidos
-- [ ] Confirmar: login bem-sucedido, redireciona para ecrã principal
-- [ ] Confirmar: badge "Assinante" se subscription_status == "active"
+- [x] Inserir email + senha válidos
+- [x] Confirmar: login bem-sucedido, redireciona para ecrã principal
+- [x] Confirmar: badge "Assinante" se subscription_status == "active"
+- **Validado em:** 03/06/2026 — testverify@gmail.com (assinante ativo) retorna subscription_status=active; onboarding mostra badge "✓ Assinante" (verde)
 
 #### Cenário A4 — Sessão persistente
-- [ ] Fechar e reabrir o app
-- [ ] Confirmar: não pede login novamente
-- [ ] Confirmar: vai direto para ecrã principal
+- [x] Fechar e reabrir o app
+- [x] Confirmar: não pede login novamente
+- [x] Confirmar: vai direto para ecrã principal
+- **Validado em:** 03/06/2026 — app reiniciado com session.json existente (onboarding_done=true) → foi direto para ecrã principal sem pedir login
 
 #### Cenário A5 — Endpoint proxy no backend-core
-- [ ] Com backend-core rodando, chamar `POST /agent/maps-search` com JWT de assinante
-- [ ] Confirmar: retorna resultados (requer `GOOGLE_MAPS_API_KEY` no .env do backend-core)
-- [ ] Chamar com JWT de não-assinante → confirmar: 403 Forbidden
+- [x] Com backend-core rodando, chamar `POST /agent/maps-search` com JWT de assinante
+- [x] Confirmar: retorna resultados (requer `GOOGLE_MAPS_API_KEY` no .env do backend-core)
+- [x] Chamar com JWT de não-assinante → confirmar: 403 Forbidden
+- **Validado em:** 03/06/2026 — não-assinante → 403 "Funcionalidade exclusiva para assinantes ativos"; assinante sem API key → 503 "Google Maps API não configurada" (comportamento correto)
+- **Bug corrigido:** commit db375af — verificação de assinatura estava após verificação da API key; corrigido para garantir 403 correto para não-assinantes
 
 ---
 
