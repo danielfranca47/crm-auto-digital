@@ -199,8 +199,16 @@ OTP screen → verify_otp(email, code) → JWT → main/onboarding
 - [ ] Executar pesquisa
 - [ ] Confirmar: Chrome abre e faz scraping; resultados aparecem
 
-**Bug identificado em 03/06/2026 — commit 8dce5f8:**
-Chrome era posicionado em `--window-position=-32000,-32000` (off-screen); no Windows, elementos DOM de páginas off-screen não renderizam, causando `TimeoutException` em `#searchboxinput`. Corrigido removendo essa flag. Também adicionado `time.sleep(2.5)` após `driver.get()` para aguardar redirect do Google antes de verificar consent. **Retestar após a correção.**
+- [x] Chrome abre e navega para Google Maps
+- [x] Query "dentista em sao paulo" retornou 10 leads de SP
+- [x] Tabela mostra nome, telefone, website, avaliação
+- **Validado em:** 04/06/2026 — 10 leads encontrados via Selenium fallback (tecla '/')
+
+**Bugs corrigidos durante testes B3 (commits 8dce5f8 → 48f1167):**
+1. Chrome off-screen (`--window-position=-32000,-32000`) não renderizava DOM → removido
+2. Google Maps migrou `#searchboxinput` para Shadow DOM → fallback via tecla `/` + `document.activeElement`
+3. Duas pesquisas sequenciais (location + term) falhavam após "place details" → unificadas numa query
+4. URL inicial centrava no IP do utilizador → corrigido para `@0,0,3z` (neutro, sem exposição de localização)
 
 #### Cenário B4 — Export Excel
 - [x] Ficheiro `.xlsx` gerado em `C:/Temp/test_leads_b4.xlsx` (5502 bytes)
