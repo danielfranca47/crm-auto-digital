@@ -125,7 +125,7 @@ Fase 3 (backend-crm): gate de playground
 
 | # | Commit | O que foi implementado |
 |---|---|---|
-| 1 | — | — |
+| 1 | `7a98d87` | Handler follow_up_not_included no catch de startFollowup — fecha modal + toast com CTA "Ver planos" → /assinatura |
 
 ---
 
