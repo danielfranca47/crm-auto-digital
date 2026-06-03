@@ -53,13 +53,7 @@ def maps_search(
     current_user: models.User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    api_key = settings.GOOGLE_MAPS_API_KEY
-    if not api_key:
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Google Maps API não configurada no servidor",
-        )
-
+    # Verificar assinatura antes de qualquer outro check
     active_sub = (
         db.query(models.Subscription)
         .filter(
@@ -72,6 +66,13 @@ def maps_search(
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Funcionalidade exclusiva para assinantes ativos",
+        )
+
+    api_key = settings.GOOGLE_MAPS_API_KEY
+    if not api_key:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Google Maps API não configurada no servidor",
         )
 
     limit = max(1, min(payload.limit, 60))
