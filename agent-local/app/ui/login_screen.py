@@ -73,7 +73,10 @@ class LoginScreen(ctk.CTkFrame):
         threading.Thread(target=_worker, daemon=True).start()
 
     def _set_loading(self, loading: bool):
-        if loading:
-            self._btn.configure(state="disabled", text="Verificando...")
-        else:
-            self._btn.configure(state="normal", text="Continuar →")
+        try:
+            if loading:
+                self._btn.configure(state="disabled", text="Verificando...")
+            else:
+                self._btn.configure(state="normal", text="Continuar →")
+        except Exception:
+            pass  # widget destruído durante navegação

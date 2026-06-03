@@ -127,18 +127,24 @@ class OtpScreen(ctk.CTkFrame):
         threading.Thread(target=_worker, daemon=True).start()
 
     def _tick_countdown(self):
-        if self._resend_countdown > 0:
-            self._resend_btn.configure(
-                text=f"Reenviar ({self._resend_countdown}s)",
-                state="disabled",
-            )
-            self._resend_countdown -= 1
-            self.after(1000, self._tick_countdown)
-        else:
-            self._resend_btn.configure(text="Reenviar código", state="normal")
+        try:
+            if self._resend_countdown > 0:
+                self._resend_btn.configure(
+                    text=f"Reenviar ({self._resend_countdown}s)",
+                    state="disabled",
+                )
+                self._resend_countdown -= 1
+                self.after(1000, self._tick_countdown)
+            else:
+                self._resend_btn.configure(text="Reenviar código", state="normal")
+        except Exception:
+            pass
 
     def _set_loading(self, loading: bool):
-        if loading:
-            self._btn.configure(state="disabled", text="Verificando...")
-        else:
-            self._btn.configure(state="normal", text="Confirmar acesso")
+        try:
+            if loading:
+                self._btn.configure(state="disabled", text="Verificando...")
+            else:
+                self._btn.configure(state="normal", text="Confirmar acesso")
+        except Exception:
+            pass

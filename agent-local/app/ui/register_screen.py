@@ -112,7 +112,10 @@ class RegisterScreen(ctk.CTkFrame):
         threading.Thread(target=_worker, daemon=True).start()
 
     def _set_loading(self, loading: bool):
-        if loading:
-            self._btn.configure(state="disabled", text="Criando conta...")
-        else:
-            self._btn.configure(state="normal", text="Criar conta e receber código →")
+        try:
+            if loading:
+                self._btn.configure(state="disabled", text="Criando conta...")
+            else:
+                self._btn.configure(state="normal", text="Criar conta e receber código →")
+        except Exception:
+            pass

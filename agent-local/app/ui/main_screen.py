@@ -202,9 +202,12 @@ class MainScreen(ctk.CTkFrame):
             self._progress_frame.pack_forget()
 
     def _reset_search_btn(self):
-        self._searching = False
-        self._search_btn.configure(state="normal", text="🔍  Pesquisar")
-        self._show_progress(False)
+        try:
+            self._searching = False
+            self._search_btn.configure(state="normal", text="🔍  Pesquisar")
+            self._show_progress(False)
+        except Exception:
+            pass
 
     # ── Resultados ────────────────────────────────────────────────────────────
 

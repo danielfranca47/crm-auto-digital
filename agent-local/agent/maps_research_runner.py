@@ -33,10 +33,8 @@ class MapsResearchRunner:
         options.add_argument(f"--user-data-dir={self.config.user_data_dir}")
         options.add_argument("--disable-dev-shm-usage")
         options.add_argument("--no-sandbox")
-        options.add_argument("--window-size=1280,1800")
+        options.add_argument("--window-size=1280,900")
         options.add_argument("--lang=pt-BR")
-        # novo: joga a janela bem pra fora da área visível
-        options.add_argument("--window-position=-32000,-32000")
         if self.config.headless:
             options.add_argument("--headless=new")
         if self.config.chrome_binary:
@@ -162,11 +160,13 @@ class MapsResearchRunner:
 
     def _maps_ui_search(self, driver: Chrome, wait: WebDriverWait, location: str | None, term: str):
         driver.get("https://www.google.com/maps?hl=pt-BR&gl=BR")
+        time.sleep(2.5)  # aguardar redirect inicial do Google antes de verificar consent
         if "consent.google" in driver.current_url.lower():
             self._handle_google_consent(driver)
+            time.sleep(1.5)
             if "consent.google" in driver.current_url.lower():
                 driver.get("https://www.google.com/maps?hl=pt-BR&gl=BR")
-                time.sleep(0.8)
+                time.sleep(2.5)
 
         search_input = self._wait_for_first(
             wait,
