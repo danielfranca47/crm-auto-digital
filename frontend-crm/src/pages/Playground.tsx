@@ -1,7 +1,10 @@
 import { useState, useCallback, useEffect, type Dispatch, type SetStateAction } from "react";
+import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { ToastAction } from "@/components/ui/toast";
 import { toast } from "@/hooks/use-toast";
+import { useUsage } from "@/hooks/useUsage";
 import { RefreshCw, ArrowDownToLine, ArrowUpFromLine } from "lucide-react";
 import { api, type PlaygroundChatResponse, type PlaygroundAutoItem } from "@/services/api";
 import { API_BASE } from "@/lib/api-client";
@@ -122,6 +125,32 @@ function appendPhaseAdvances(
 }
 
 export default function Playground() {
+  const navigate = useNavigate();
+  const { data: usageData, refetch: refetchUsage } = useUsage();
+  const playgroundMonthly = (usageData?.usage as any)?.playground_monthly as
+    | { used: number; limit: number | null; remaining: number | null }
+    | undefined;
+
+  const handlePlaygroundLimitError = useCallback(
+    (err: unknown): boolean => {
+      const detail = (err as any)?.data?.detail;
+      if (detail?.error === "playground_limit_reached") {
+        toast({
+          title: "Limite de testes atingido",
+          description: `Atingiste o limite de ${detail.limit ?? 0} testes no Playground este mês.`,
+          action: (
+            <ToastAction altText="Ver planos" onClick={() => navigate("/assinatura")}>
+              Ver planos
+            </ToastAction>
+          ),
+        });
+        return true;
+      }
+      return false;
+    },
+    [navigate]
+  );
+
   const [session, setSession] = useState<PlaygroundSession | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [feedbacks, setFeedbacks] = useState<FeedbackItem[]>([]);
@@ -181,8 +210,10 @@ export default function Playground() {
         appendPhaseAdvances(res.phase_advances ?? [], setMessages);
       } catch (err: unknown) {
         if (cancelled) return;
-        const msg = err instanceof Error ? err.message : "Erro ao obter abertura outbound";
-        toast({ title: "Erro", description: msg, variant: "destructive" });
+        if (!handlePlaygroundLimitError(err)) {
+          const msg = err instanceof Error ? err.message : "Erro ao obter abertura outbound";
+          toast({ title: "Erro", description: msg, variant: "destructive" });
+        }
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -230,8 +261,10 @@ export default function Playground() {
         appendPhaseAdvances(res.phase_advances ?? [], setMessages);
       } catch (err: unknown) {
         if (cancelled) return;
-        const msg = err instanceof Error ? err.message : "Erro ao disparar tick de follow-up";
-        toast({ title: "Erro", description: msg, variant: "destructive" });
+        if (!handlePlaygroundLimitError(err)) {
+          const msg = err instanceof Error ? err.message : "Erro ao disparar tick de follow-up";
+          toast({ title: "Erro", description: msg, variant: "destructive" });
+        }
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -295,13 +328,15 @@ export default function Playground() {
         }
         appendPhaseAdvances(res.phase_advances ?? [], setMessages);
       } catch (err: unknown) {
-        const msg = err instanceof Error ? err.message : "Erro ao chamar o playground";
-        toast({ title: "Erro", description: msg, variant: "destructive" });
+        if (!handlePlaygroundLimitError(err)) {
+          const msg = err instanceof Error ? err.message : "Erro ao chamar o playground";
+          toast({ title: "Erro", description: msg, variant: "destructive" });
+        }
       } finally {
         setLoading(false);
       }
     },
-    [session]
+    [session, handlePlaygroundLimitError]
   );
 
   // ── Enviar áudio gravado no playground ────────────────────────────────────
@@ -368,13 +403,15 @@ export default function Playground() {
         }
         appendPhaseAdvances(res.phase_advances ?? [], setMessages);
       } catch (err: unknown) {
-        const msg = err instanceof Error ? err.message : "Erro ao enviar áudio";
-        toast({ title: "Erro", description: msg, variant: "destructive" });
+        if (!handlePlaygroundLimitError(err)) {
+          const msg = err instanceof Error ? err.message : "Erro ao enviar áudio";
+          toast({ title: "Erro", description: msg, variant: "destructive" });
+        }
       } finally {
         setLoading(false);
       }
     },
-    [session]
+    [session, handlePlaygroundLimitError]
   );
 
   // ── Enviar lote misto (texto + áudio) ────────────────────────────────────
@@ -469,13 +506,15 @@ export default function Playground() {
         }
         appendPhaseAdvances(res.phase_advances ?? [], setMessages);
       } catch (err: unknown) {
-        const msg = err instanceof Error ? err.message : "Erro ao enviar lote";
-        toast({ title: "Erro", description: msg, variant: "destructive" });
+        if (!handlePlaygroundLimitError(err)) {
+          const msg = err instanceof Error ? err.message : "Erro ao enviar lote";
+          toast({ title: "Erro", description: msg, variant: "destructive" });
+        }
       } finally {
         setLoading(false);
       }
     },
-    [session]
+    [session, handlePlaygroundLimitError]
   );
 
   // ── Handlers de feedback ──────────────────────────────────────────────────
@@ -618,6 +657,7 @@ export default function Playground() {
                     : "border-blue-500/50 text-blue-600"
                 }`}
               >
+
                 {session.scenarioType === "outbound" ? (
                   <ArrowUpFromLine className="h-3 w-3" />
                 ) : session.scenarioType === "followup" ? (
@@ -640,6 +680,20 @@ export default function Playground() {
                 </span>
               )}
             </div>
+            {playgroundMonthly && (
+              <Badge
+                variant="outline"
+                className={`text-xs shrink-0 ${
+                  playgroundMonthly.limit !== null && playgroundMonthly.remaining === 0
+                    ? "border-red-500/50 text-red-500"
+                    : "border-muted-foreground/30 text-muted-foreground"
+                }`}
+              >
+                {playgroundMonthly.limit !== null
+                  ? `${playgroundMonthly.used} / ${playgroundMonthly.limit} usos este mês`
+                  : `${playgroundMonthly.used} usos este mês`}
+              </Badge>
+            )}
             <Button
               variant="outline"
               size="sm"
