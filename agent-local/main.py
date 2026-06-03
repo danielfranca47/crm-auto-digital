@@ -5,7 +5,7 @@ import customtkinter as ctk
 
 from app.session import load_session, save_session
 
-APP_TITLE = "Gerador de Leads — AutoDigital"
+APP_TITLE = "Gerador de Leads — Digital Pro"
 APP_GEOMETRY = "620x720"
 
 

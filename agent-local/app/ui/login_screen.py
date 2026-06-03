@@ -26,7 +26,7 @@ class LoginScreen(ctk.CTkFrame):
             font=ctk.CTkFont(size=22, weight="bold"),
         ).pack()
         ctk.CTkLabel(
-            card, text="AutoDigital Pro",
+            card, text="Digital Pro",
             font=ctk.CTkFont(size=12), text_color="#6B7280",
         ).pack(pady=(2, 32))
 

@@ -25,7 +25,7 @@ class SettingsScreen(ctk.CTkToplevel):
             pady=(24, 4)
         )
         ctk.CTkLabel(
-            self, text="Gerador de Leads — AutoDigital",
+            self, text="Gerador de Leads — Digital Pro",
             font=ctk.CTkFont(size=12), text_color="#6B7280",
         ).pack(pady=(0, 20))
 
