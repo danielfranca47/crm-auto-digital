@@ -31,8 +31,9 @@ Cobre autenticação, ciclo de vida de contas, recuperação de senha e envio de
 | `POST /auth/login` | Público | Devolve JWT Bearer (TTL: `ACCESS_TOKEN_EXPIRE_MINUTES`) |
 | `GET /users/me` | Bearer | Perfil do utilizador autenticado |
 | `POST /auth/forgot-password` | Público | Gera token de reset (TTL 2h), envia email; **sempre retorna 200** |
-| `POST /auth/reset-password` | Público | Valida token, actualiza `password_hash`, marca `used_at` |
-| `POST /auth/change-password` | Bearer | Utilizador autenticado altera a própria senha |
+| `POST /auth/reset-password` | Público | Valida token, actualiza `password_hash`, marca `used_at`; envia email de confirmação |
+| `POST /auth/change-password` | Bearer | Utilizador autenticado altera a própria senha; envia email de confirmação |
+| `POST /auth/register` | Público | Cria conta auto-serve; envia email de boas-vindas "A Lara está pronta para ti" |
 
 ### JWT
 
@@ -104,10 +105,22 @@ Usa `smtplib` (stdlib Python) com STARTTLS. Configuração via `.env`:
 
 **Templates disponíveis:**
 
-- `render_welcome_email(name, temp_password, login_url)` → email de boas-vindas com senha temporária
-- `render_reset_email(reset_url)` → email com botão "Redefinir senha"
+| Função | Trigger | Assunto |
+|---|---|---|
+| `render_welcome_email(name, temp_password, login_url)` | Admin cria conta | "Bem-vindo à Digital Pro — acesso criado" |
+| `render_reset_email(reset_url)` | `forgot-password` | "Recuperação de senha — Digital Pro" |
+| `render_password_changed_email(name)` | `reset-password` / `change-password` | "Senha alterada — Digital Pro" |
+| `render_register_welcome_email(name, login_url)` | `POST /auth/register` | "Bem-vindo ao Digital Pro" |
+| `render_subscription_activated_email(name, plan_name, period_end, login_url)` | Kiwify `order_approved` ou admin atribui plano | "A Lara está activa!" |
+| `render_trial_started_email(name, plan_name, trial_end, login_url)` | Admin atribui trial | "Trial iniciado — Digital Pro" |
+| `render_subscription_renewed_email(name, plan_name, new_end)` | Kiwify `subscription_renewed` | "A Lara continua activa!" |
+| `render_subscription_cancelled_email(name, plan_name)` | Kiwify `order_refunded` / `subscription_cancelled` | "Subscrição cancelada" |
+| `render_subscription_expiring_email(name, plan_name, period_end, checkout_url)` | Job diário — 3 dias antes de expirar | "A Lara para em breve ⚠️" |
+| `render_subscription_expired_email(name, plan_name, checkout_url)` | Job diário — subscription expirada | "A Lara está pausada" |
 
-Rodapé fixo: `"Digital Pro — CRM com IA para vendas via WhatsApp"`
+**Branding:** todos os emails usam rodapé `"Lara by Digital Pro — A tua IA de vendas via WhatsApp"` (constante `_FOOTER` / `_FOOTER_TEXT` em `email_service.py`).
+
+**Padrão não-bloqueante:** todas as chamadas de `send_email()` estão em `try/except` — falha de SMTP nunca faz rollback de operação de negócio.
 
 ---
 
@@ -189,9 +202,9 @@ Recebe eventos de pagamento do Kiwify e cria/renova/cancela subscriptions automa
 | `Plano Growth` | `crm_growth` | 30 dias |
 
 **Eventos tratados:**
-- `order_approved` → activa subscription (cancela activa existente, cria nova)
-- `subscription_renewed` → estende `current_period_end` em +30 dias
-- `order_refunded` / `subscription_cancelled` → cancela subscription activa
+- `order_approved` → activa subscription (cancela activa existente, cria nova) + envia `render_subscription_activated_email`
+- `subscription_renewed` → estende `current_period_end` em +30 dias + envia `render_subscription_renewed_email`
+- `order_refunded` / `subscription_cancelled` → cancela subscription activa + envia `render_subscription_cancelled_email`
 
 **Config `.env` (backend-core):**
 ```
@@ -217,12 +230,50 @@ KIWIFY_PRODUCT_ID=<id do produto>
 
 | Campo | Tipo | Notas |
 |---|---|---|
-| `status` | String | `"active"` / `"cancelled"` |
+| `status` | String | `"active"` / `"cancelled"` / `"expired"` |
 | `current_period_start` | DateTime | Início do período actual |
 | `current_period_end` | DateTime nullable | Expiração do período |
 | `trial_ends_at` | DateTime nullable | Preenchido quando `is_trial=true`; `None` = não é trial |
+| `expiry_warning_sent` | Boolean | `False` por defeito; `True` após job enviar aviso de expiração |
 
-`trial_ends_at` adicionado via `ensure_subscription_columns()` em `app/db.py`.
+**Status `"expired"`:** atribuído pelo job diário quando `current_period_end < now` e `status == "active"`. Distinto de `"cancelled"` (cancelamento activo) e `"inactive"` (nunca teve plano).
+
+`GET /me/entitlements` retorna `subscription_status`:
+- `"active"` — tem sub activa
+- `"expired"` — última sub expirou (não renovada)
+- `"inactive"` — nunca teve sub
+
+`GET /admin/users` mostra plano e status da sub mais recente (activa ou expirada), ordenado por `current_period_end desc`.
+
+Colunas adicionadas via `ensure_subscription_columns()` em `app/db.py`.
+
+---
+
+## Job de Expiração Automática de Subscriptions
+
+**Arquivo:** `backend-core/app/jobs/subscription_jobs.py`
+
+Job diário que processa dois tipos de pendentes:
+
+1. **Subscriptions expiradas** — `status == "active"` e `current_period_end < now` → muda para `"expired"` + envia `render_subscription_expired_email`
+2. **Aviso antecipado** — `status == "active"`, `current_period_end <= now + 3 dias`, `expiry_warning_sent == False` → envia `render_subscription_expiring_email` + marca `expiry_warning_sent = True`
+
+**Scheduler:** `APScheduler BackgroundScheduler` (corre dentro do processo uvicorn)
+- Configurado em `app/main.py` no `@app.on_event("startup")`
+- Schedule: `CronTrigger(hour=12, minute=0, timezone="UTC")` — 09:00 hora de Brasília
+- **Execução no startup:** o job corre uma vez imediatamente ao arrancar o servidor, para recuperar pendentes de quando o servidor esteve offline
+
+**Trigger manual (admin):** `POST /admin/cron/daily` — executa o job e retorna sumário `{ expired, warnings_sent, errors, ran_at }`. Usado para testes e recovery manual.
+
+**Links de checkout por plano** (incluídos nos emails de aviso/expiração):
+
+| Plano | URL |
+|---|---|
+| `crm_start` | `https://pay.kiwify.com.br/gOjcexD` |
+| `crm_growth` | `https://pay.kiwify.com.br/To8qV99` |
+| outros | `{CRM_FRONTEND_URL}/assinatura` (fallback) |
+
+**Nota sobre disponibilidade:** como o scheduler corre dentro do processo, se o servidor estiver offline quando o job devia correr, o job salta esse dia. A execução no startup compensa este comportamento para o contexto de deploy local via tunnel.
 
 ---
 
