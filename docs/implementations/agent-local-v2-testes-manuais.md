@@ -52,6 +52,7 @@ Uma janela com o título **"Gerador de Leads — Digital Pro"** deve aparecer no
 - [x] Contagem decrescente visível (60s → 0s)
 - [x] Botão volta ao normal após 60 segundos
 - [x] Novo email recebido na caixa de entrada
+- **Validado em:** 03/06/2026 — comportamento confirmado pelo utilizador
 
 ---
 
@@ -80,10 +81,10 @@ Uma janela com o título **"Gerador de Leads — Digital Pro"** deve aparecer no
 - Botão **"📥 Exportar Excel"** aparece no cabeçalho da tabela
 
 ### O que confirmar
-- [x] Barra de progresso visível durante a pesquisa
-- [x] Resultados aparecem na tabela com os campos corretos
-- [x] Badge "Modo: Assinante" visível
-- [x] Botão de export aparece
+- [ ] Barra de progresso visível durante a pesquisa
+- [ ] Resultados aparecem na tabela com os campos corretos
+- [ ] Badge "Modo: Assinante — chave API incluída" visível
+- [ ] Botão "📥 Exportar Excel" aparece
 
 ---
 
@@ -108,9 +109,9 @@ Uma janela com o título **"Gerador de Leads — Digital Pro"** deve aparecer no
 - A chave fica guardada para próximas sessões
 
 ### O que confirmar
-- [x] Campo de chave API aparece nas configurações (só visível para não-assinantes)
-- [x] Após guardar, o modo muda para "Chave API própria configurada"
-- [x] Pesquisa retorna resultados
+- [ ] Campo de chave API aparece nas configurações (só visível para não-assinantes)
+- [ ] Após guardar, o modo muda para "Chave API própria configurada"
+- [ ] Pesquisa retorna resultados
 
 ---
 
@@ -142,6 +143,7 @@ Uma janela com o título **"Gerador de Leads — Digital Pro"** deve aparecer no
 - [x] Chrome abre com o Google Maps visível
 - [x] Resultados aparecem na tabela (pelo menos 1 resultado)
 - [x] Chrome fecha sozinho após terminar
+- **Validado em:** 04/06/2026 — nicho="dentista", cidade="sao paulo", limite=10 → 10 leads retornados (Dental Company, IBEM Odontologia, etc.)
 
 ---
 
@@ -170,6 +172,7 @@ Uma janela com o título **"Gerador de Leads — Digital Pro"** deve aparecer no
 - [x] Janela de guardar ficheiro aparece
 - [x] Popup de confirmação "Ficheiro guardado!" aparece após guardar
 - [x] Ficheiro .xlsx abre corretamente no Excel com formatação correta
+- **Validado em:** 04/06/2026 — ficheiro descarregado e dados dos leads visualizados no Excel
 
 ---
 

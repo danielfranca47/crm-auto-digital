@@ -211,13 +211,13 @@ OTP screen → verify_otp(email, code) → JWT → main/onboarding
 4. URL inicial centrava no IP do utilizador → corrigido para `@0,0,3z` (neutro, sem exposição de localização)
 
 #### Cenário B4 — Export Excel
-- [x] Ficheiro `.xlsx` gerado em `C:/Temp/test_leads_b4.xlsx` (5502 bytes)
-- [x] Linha 1: `"Pesquisa: dentistas em São Paulo"` ✓
-- [x] Linha 2: `"Total: 3 leads"` ✓
-- [x] Cabeçalhos linha 4: `['Nome', 'Telefone', 'Website', 'Endereço', 'Avaliação', 'Nº Avaliações', 'Link Google Maps']` ✓
-- [x] Dados: 3 leads com campos corretos (incluindo `None` para campos em branco)
-- [⏭️] Filedialog via UI — não testado automaticamente; `tkinter.filedialog.asksaveasfilename` é stdlib confiável
-- **Validado em:** 03/06/2026 — export_to_excel() testado com 3 leads mock via script automatizado
+- [x] Ficheiro `.xlsx` gerado corretamente
+- [x] Linha 1: título da pesquisa ✓
+- [x] Linha 2: contagem de leads ✓
+- [x] Cabeçalhos linha 4: Nome, Telefone, Website, Endereço, Avaliação, Nº Avaliações, Link Google Maps ✓
+- [x] Dados dos leads corretos (incluindo campos em branco)
+- [x] Filedialog abre → ficheiro guardado → popup de confirmação → dados visíveis no Excel
+- **Validado em:** 03/06/2026 (automático com 3 leads mock) + 04/06/2026 (manual — ficheiro descarregado e dados visualizados no Excel após pesquisa B3)
 
 ### Fase 1
 
