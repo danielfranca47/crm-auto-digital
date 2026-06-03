@@ -180,6 +180,35 @@ PLAN_NAME_MAP = {
 
 ## Checks de Validação
 
+---
+
+### Fase 4 — Correcção arquitectural: webhook no backend-crm
+
+**Problema identificado:** o handler `webhooks_kiwify.py` estava no backend-core (porto 8001, não exposto publicamente). O URL `https://api.danielfranca.pt/webhooks/kiwify` serve o backend-crm (porto 8000).
+
+| Arquivo | O que muda |
+|---|---|
+| `backend-crm/routes/webhooks.py` | `POST /webhooks/kiwify` — valida HMAC-SHA1, mapeia plano, chama core via httpx |
+| `backend-core/app/api/subscriptions.py` | `POST /internal/subscriptions/kiwify-event` — endpoint interno protegido por `x-service-token` |
+| `backend-crm/.env` | `KIWIFY_WEBHOOK_SECRET=<token>` |
+
+**Fluxo:**
+```
+Kiwify → POST api.danielfranca.pt/webhooks/kiwify?signature=<hmac>
+  → backend-crm valida HMAC, mapeia plan.name → plan_code
+  → POST localhost:8001/internal/subscriptions/kiwify-event
+      x-service-token: CORE_SERVICE_TOKEN
+  → backend-core activa/cancela/renova subscription no DB
+```
+
+### Commits Fase 4
+
+| # | Commit | O que foi implementado |
+|---|---|---|
+| 1 | `731bd1b` | /webhooks/kiwify no crm + /internal/subscriptions/kiwify-event no core |
+
+---
+
 ### Cenário U1 — Botões de checkout activos
 - [ ] Plano Start: `/assinatura` → botão "Selecionar plano" no card Growth está activo
 - [ ] Clicar → abre `https://pay.kiwify.com.br/To8qV99` em nova aba
