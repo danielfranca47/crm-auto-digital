@@ -12,8 +12,9 @@ class SettingsScreen(ctk.CTkToplevel):
         super().__init__(master)
         self._session = session_data
         self._on_save = on_save
+        self._key_visible = False
         self.title("Configurações")
-        self.geometry("480x420")
+        self.geometry("480x520")
         self.resizable(False, False)
         self.grab_set()
         self._build()
@@ -27,7 +28,7 @@ class SettingsScreen(ctk.CTkToplevel):
         ctk.CTkLabel(
             self, text="Gerador de Leads — Digital Pro",
             font=ctk.CTkFont(size=12), text_color="#6B7280",
-        ).pack(pady=(0, 20))
+        ).pack(pady=(0, 16))
 
         # Secção: conta
         account_frame = ctk.CTkFrame(self, fg_color="#1E1E2E", corner_radius=12)
@@ -65,16 +66,34 @@ class SettingsScreen(ctk.CTkToplevel):
                 font=ctk.CTkFont(size=11), text_color="#6B7280", justify="left",
             ).pack(anchor="w", padx=16, pady=(0, 8))
 
+            # Campo + botão de mostrar/ocultar na mesma linha
+            entry_row = ctk.CTkFrame(api_frame, fg_color="transparent")
+            entry_row.pack(padx=16, pady=(0, 4), fill="x")
+            entry_row.columnconfigure(0, weight=1)
+
             self._api_key_entry = ctk.CTkEntry(
-                api_frame,
+                entry_row,
                 placeholder_text="AIza...",
                 height=38, corner_radius=8,
-                show="",
+                show="•",
             )
             existing_key = self._session.get("google_maps_api_key", "")
             if existing_key:
                 self._api_key_entry.insert(0, existing_key)
-            self._api_key_entry.pack(padx=16, pady=(0, 8), fill="x")
+            self._api_key_entry.grid(row=0, column=0, sticky="ew", padx=(0, 6))
+
+            self._toggle_btn = ctk.CTkButton(
+                entry_row, text="👁", width=38, height=38,
+                fg_color="#2A2A3E", hover_color="#3A3A5E",
+                command=self._toggle_key_visibility,
+            )
+            self._toggle_btn.grid(row=0, column=1)
+
+            ctk.CTkLabel(
+                api_frame,
+                text="🔒 Guardada localmente — só tu tens acesso",
+                font=ctk.CTkFont(size=10), text_color="#4B5563",
+            ).pack(anchor="w", padx=16, pady=(2, 4))
 
             ctk.CTkLabel(
                 api_frame,
@@ -89,9 +108,9 @@ class SettingsScreen(ctk.CTkToplevel):
                 font=ctk.CTkFont(size=12), text_color="#10B981",
             ).pack(pady=(8, 0))
 
-        # Botões
+        # Botões — sempre visíveis no fundo
         btn_frame = ctk.CTkFrame(self, fg_color="transparent")
-        btn_frame.pack(pady=20, fill="x", padx=24)
+        btn_frame.pack(side="bottom", pady=20, fill="x", padx=24)
 
         ctk.CTkButton(
             btn_frame, text="Cancelar", width=100,
@@ -100,9 +119,15 @@ class SettingsScreen(ctk.CTkToplevel):
         ).pack(side="left")
 
         ctk.CTkButton(
-            btn_frame, text="Guardar", width=100,
+            btn_frame, text="Guardar", width=120, height=38,
+            font=ctk.CTkFont(size=13, weight="bold"),
             command=self._save,
         ).pack(side="right")
+
+    def _toggle_key_visibility(self):
+        self._key_visible = not self._key_visible
+        self._api_key_entry.configure(show="" if self._key_visible else "•")
+        self._toggle_btn.configure(text="🙈" if self._key_visible else "👁")
 
     def _save(self):
         updated = dict(self._session)
