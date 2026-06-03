@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -12,6 +12,7 @@ import {
   AlertCircle,
   ArrowRight,
   Check,
+  CheckCircle,
   CreditCard,
   ExternalLink,
   Rocket,
@@ -19,20 +20,24 @@ import {
 
 const env = import.meta.env;
 
-function buildCheckoutUrl(planCode: string, email?: string | null) {
-  const base = env?.VITE_UPGRADE_CHECKOUT_URL?.trim();
-  if (!base) return null;
+// Mapa de plan_code → URL de checkout Kiwify
+// Pode ser sobreposto por variáveis de ambiente por plano
+const PLAN_CHECKOUT_URLS: Record<string, string> = {
+  crm_start:  env?.VITE_CHECKOUT_URL_CRM_START  || "https://pay.kiwify.com.br/gOjcexD",
+  crm_growth: env?.VITE_CHECKOUT_URL_CRM_GROWTH || "https://pay.kiwify.com.br/To8qV99",
+  crm_scale:  env?.VITE_CHECKOUT_URL_CRM_SCALE  || "https://pay.kiwify.com.br/2mtd25x",
+};
 
+function buildCheckoutUrl(planCode: string, email?: string | null) {
+  const base = PLAN_CHECKOUT_URLS[planCode] || env?.VITE_UPGRADE_CHECKOUT_URL?.trim();
+  if (!base) return null;
+  if (!email) return base;
   try {
     const url = new URL(base);
-    url.searchParams.set("plan", planCode);
-    if (email) url.searchParams.set("email", email);
+    url.searchParams.set("email", email);
     return url.toString();
-  } catch (err) {
-    console.warn("Invalid checkout URL", err);
-    const separator = base.includes("?") ? "&" : "?";
-    const emailParam = email ? `&email=${encodeURIComponent(email)}` : "";
-    return `${base}${separator}plan=${encodeURIComponent(planCode)}${emailParam}`;
+  } catch {
+    return base;
   }
 }
 
@@ -72,6 +77,9 @@ function formatBillingPeriod(billingPeriod?: string | null) {
 export default function Assinatura() {
   const { handleError } = useApiErrorHandler();
   const { toast } = useToast();
+  const [searchParams] = useSearchParams();
+  const upgraded = searchParams.get("upgraded") === "1";
+
   const [plans, setPlans] = useState<CorePlan[]>([]);
   const [entitlements, setEntitlements] = useState<EntitlementsResponse | null>(null);
   const [userEmail, setUserEmail] = useState<string | null>(null);
@@ -83,8 +91,11 @@ export default function Assinatura() {
     [entitlements]
   );
 
+  // Botões activos se existe pelo menos um URL de checkout ou número WhatsApp configurado
   const contactAvailable = Boolean(
-    env?.VITE_UPGRADE_CHECKOUT_URL?.trim() || env?.VITE_WHATSAPP_UPGRADE_NUMBER?.trim()
+    Object.values(PLAN_CHECKOUT_URLS).some(Boolean)
+    || env?.VITE_UPGRADE_CHECKOUT_URL?.trim()
+    || env?.VITE_WHATSAPP_UPGRADE_NUMBER?.trim()
   );
 
   const fetchData = useCallback(async () => {
@@ -148,6 +159,16 @@ export default function Assinatura() {
           Visualize seu plano atual e compare opções disponíveis do CRM.
         </p>
       </div>
+
+      {upgraded && (
+        <Alert className="max-w-3xl border-green-500/50 bg-green-500/10">
+          <CheckCircle className="h-4 w-4 text-green-500" />
+          <AlertTitle className="text-green-600">Plano activado com sucesso!</AlertTitle>
+          <AlertDescription>
+            O teu novo plano já está activo. As funcionalidades foram desbloqueadas — podes fechar esta mensagem e começar a usar.
+          </AlertDescription>
+        </Alert>
+      )}
 
       {error && (
         <Alert variant="destructive" className="max-w-3xl">
