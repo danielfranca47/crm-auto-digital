@@ -281,7 +281,7 @@ def _generate_and_store_otp(email: str, db: Session) -> str:
 def _send_otp_email(email: str, name, code: str) -> None:
     from app.services.email_service import render_otp_email, send_email
     html, txt = render_otp_email(name or email.split("@")[0], code)
-    send_email(to=email, subject=f"{code} e o seu codigo de acesso", html=html, text=txt)
+    send_email(to=email, subject=f"{code} é o seu código de acesso — Gerador de Leads", html=html, text=txt)
 
 
 @router.post("/request-access")
