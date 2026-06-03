@@ -1,3 +1,4 @@
+from datetime import datetime, timezone
 from typing import Any, Dict, Optional
 
 import sqlite3
@@ -77,6 +78,28 @@ def build_usage_payload(
     ia_remaining = _calculate_remaining(ia_limit, ia_used)
     ia_pct = round((ia_used / ia_limit) * 100) if ia_limit else None
 
+    # Playground mensal
+    playground_limit = limits.get("playground_monthly_limit")
+    month_key = datetime.now(timezone.utc).strftime("%Y-%m")
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS playground_usage_monthly (
+            user_id INTEGER NOT NULL,
+            month TEXT NOT NULL,
+            count INTEGER NOT NULL DEFAULT 0,
+            PRIMARY KEY (user_id, month)
+        )
+        """
+    )
+    playground_row = conn.execute(
+        "SELECT count FROM playground_usage_monthly WHERE user_id = ? AND month = ?",
+        (user_id, month_key),
+    ).fetchone()
+    playground_used = int(playground_row["count"]) if playground_row else 0
+    playground_remaining = _calculate_remaining(
+        int(playground_limit) if playground_limit is not None else None, playground_used
+    )
+
     # Links de checkout Kiwify para CTAs de upgrade
     checkout_links = {
         "crm_start": "https://pay.kiwify.com.br/gOjcexD",
@@ -105,6 +128,11 @@ def build_usage_payload(
             "limit": ia_limit,
             "remaining": ia_remaining,
             "pct": ia_pct,
+        },
+        "playground_monthly": {
+            "used": playground_used,
+            "limit": playground_limit,
+            "remaining": playground_remaining,
         },
         "checkout_links": checkout_links,
     }
