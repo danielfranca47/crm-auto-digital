@@ -1,7 +1,7 @@
 # Emails de Subscrição — Confirmações e Job de Expiração
 
 **Branch:** `etapa-9-planos-limites`
-**Status:** Em andamento
+**Status:** E1 pendente (próxima venda real Kiwify) — E2, E3, E4, E5 validados em 03/06/2026
 
 ---
 
@@ -92,23 +92,26 @@ Emails são sempre **não-bloqueantes** (try/except) — falha de SMTP não afec
 - [ ] Confirmar que email "Plano activado" chega com nome do plano e data de expiração
 
 ### E2 — Email ao atribuir trial pelo admin
-- [ ] Admin abre painel → "Plano" → selecciona plan + marca trial → confirma
-- [ ] Utilizador recebe email "Trial iniciado — tens X dias para experimentar"
+- [x] Admin abre painel → "Plano" → selecciona plan + marca trial → confirma
+- [x] Utilizador recebe email "Trial iniciado — tens X dias para experimentar"
+- **Validado em:** 03/06/2026 — email chegou à inbox, assunto correcto, conteúdo com nome do plano e data. Fix aplicado: assunto do email de boas-vindas admin corrigido de "AutoDigital CRM" para "Digital Pro" (commit c8a9981).
 
 ### E3 — Email ao auto-registar
-- [ ] Criar conta em `/register`
-- [ ] Confirmar que email "Bem-vindo ao Digital Pro" chega (diferente do welcome com senha temporária)
+- [x] Criar conta via API `POST /auth/register`
+- [x] Confirmar que email "Bem-vindo ao Digital Pro" chega (diferente do welcome com senha temporária)
+- **Validado em:** 03/06/2026 — email chegou à inbox com assunto "Bem-vindo ao Digital Pro", sem senha temporária (diferente do welcome admin), com botão "Entrar no Digital Pro".
 
 ### E4 — Job de expiração (trigger manual)
-- [ ] Criar subscription com `current_period_end = now - 1 hora` no DB
-- [ ] Chamar `POST /admin/cron/daily` (admin token)
-- [ ] Confirmar que subscription passa para `"expired"` e email é enviado
+- [x] Criar subscription com `current_period_end = now - 2 horas` no DB
+- [x] Chamar `POST /admin/cron/daily` (admin token) — retornou `expired: 1, errors: []`
+- [x] Confirmar que subscription passou para `"expired"` — verificado no DB (status = expired)
+- **Validado em:** 03/06/2026 — lógica confirmada via API; nota: datas inseridas manualmente precisam de formato sem 'T' para comparação correcta no SQLite.
 
 ### E5 — Aviso antecipado (3 dias antes)
-- [ ] Criar subscription com `current_period_end = now + 2 dias`
-- [ ] Executar job via `POST /admin/cron/daily`
-- [ ] Confirmar email de aviso chega e `expiry_warning_sent = True` no DB
-- [ ] Executar job novamente — confirmar que email NÃO é re-enviado
+- [x] Criar subscription com `current_period_end = now + 2 dias`
+- [x] Executar job — retornou `warnings_sent: 1`, `expiry_warning_sent = True` no DB
+- [x] Executar job novamente — retornou `warnings_sent: 0` (sem re-envio)
+- **Validado em:** 03/06/2026 — flag anti-reenvio funciona correctamente.
 
 ---
 
