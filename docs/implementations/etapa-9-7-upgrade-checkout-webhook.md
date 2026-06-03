@@ -1,7 +1,7 @@
 # Upgrade de Plano: Checkout e Webhook de Activação
 
 **Branch:** `etapa-9-planos-limites`
-**Status:** Em andamento
+**Status:** Todos os cenários pendentes de teste em produção — código implementado
 
 ---
 
@@ -117,7 +117,7 @@ Fase 3 — Frontend: banner pós-compra
 
 | # | Commit | O que foi implementado |
 |---|---|---|
-| 1 | — | — |
+| 1 | `8cfad99` | PLAN_CHECKOUT_URLS + buildCheckoutUrl por plano + banner ?upgraded=1 |
 
 ---
 
@@ -156,7 +156,7 @@ PLAN_NAME_MAP = {
 
 | # | Commit | O que foi implementado |
 |---|---|---|
-| 1 | — | — |
+| 1 | (pré-existente) | `webhooks_kiwify.py` + `KIWIFY_WEBHOOK_SECRET` em settings/env — já estava implementado |
 
 ---
 
@@ -174,7 +174,7 @@ PLAN_NAME_MAP = {
 
 | # | Commit | O que foi implementado |
 |---|---|---|
-| 1 | — | — |
+| 1 | `8cfad99` | Banner `?upgraded=1` em `Assinatura.tsx` (mesmo commit da Fase 1) |
 
 ---
 
