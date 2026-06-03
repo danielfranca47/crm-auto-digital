@@ -89,6 +89,58 @@ Primeira abertura → Onboarding wizard
 | `agent-local/app/ui/main_screen.py` | Completar: formulário + barra progresso + tabela + export |
 | `agent-local/app/ui/settings_screen.py` | Novo: configuração de chave API própria |
 
+### Fase 1b — Auth Passwordless (OTP por email)
+
+**Objetivo:** Eliminar senha do fluxo. Utilizador entra com email → recebe código por email → acede.
+
+| Arquivo | O que muda |
+|---|---|
+| `backend-core/app/db.py` | `ensure_auth_otps_table()` + `ensure_user_extra_columns()` (whatsapp, sector) |
+| `backend-core/app/main.py` | Chamar novas funções `ensure_` no startup |
+| `backend-core/app/api/auth.py` | `POST /auth/request-access`, `/register-passwordless`, `/verify-otp` |
+| `backend-core/app/services/email_service.py` | `render_otp_email()` — template de código de acesso |
+| `agent-local/app/auth.py` | `request_access()`, `register_passwordless()`, `verify_otp()` |
+| `agent-local/app/ui/login_screen.py` | Redesign — só campo email, sem senha |
+| `agent-local/app/ui/register_screen.py` | Redesign — nome, whatsapp, setor de atuação (sem senha) |
+| `agent-local/app/ui/otp_screen.py` | Novo — campo 6 dígitos, reenvio com countdown 60s |
+| `agent-local/main.py` | Novo fluxo: email → OTP ou Registo → OTP → auth |
+
+**Fluxo novo:**
+```
+Email screen → request_access(email)
+  ├─ existing_user → OTP screen
+  └─ new_user → Register screen (nome, whatsapp, setor)
+                    └─ register_passwordless() → OTP screen
+OTP screen → verify_otp(email, code) → JWT → main/onboarding
+```
+
+### Commits Fase 1b
+
+| # | Commit | O que foi implementado |
+|---|---|---|
+| 1 | `2293046` | Auth passwordless completo: endpoints OTP backend-core + UI redesign agent-local |
+
+### Checks Fase 1b
+
+#### Cenário C1 — Novo utilizador (registo)
+- [ ] Abrir app → inserir email não registado → sistema mostra formulário de registo
+- [ ] Preencher nome, whatsapp, setor → "Criar conta e receber código"
+- [ ] Confirmar: email recebido com código de 6 dígitos
+- [ ] Inserir código → confirmar: sessão criada, entra no app
+
+#### Cenário C2 — Utilizador existente (login)
+- [ ] Abrir app → inserir email já registado → sistema envia OTP diretamente
+- [ ] Confirmar: ecrã de código aparece (sem formulário de registo)
+- [ ] Inserir código → confirmar: entra no app
+
+#### Cenário C3 — Código expirado / errado
+- [ ] Inserir código errado → confirmar: mensagem de erro "Código inválido ou expirado"
+- [ ] Aguardar 15min → inserir código antigo → confirmar: erro
+
+#### Cenário C4 — Reenvio com countdown
+- [ ] No ecrã OTP, clicar "Reenviar código" → confirmar: novo email enviado
+- [ ] Confirmar: botão desabilitado com countdown de 60s
+
 ### Commits Fase 2
 
 | # | Commit | O que foi implementado |
