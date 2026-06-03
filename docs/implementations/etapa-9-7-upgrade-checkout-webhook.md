@@ -95,6 +95,48 @@ Kiwify → POST api.danielfranca.pt/webhooks/kiwify?signature=<hmac>
 
 ---
 
+### Fase 5 — Backend-core: criar conta e enviar credenciais para novos compradores
+
+**Gap identificado em 03/06/2026:** o endpoint `/internal/subscriptions/kiwify-event` retorna `skipped: user_not_found` quando o email do comprador não existe no sistema. Para novos clientes (primeira compra), nunca é criada conta nem enviado email — o comprador paga mas não consegue aceder.
+
+**Comportamento esperado:**
+```
+order_approved → email desconhecido
+  → criar User com password aleatória (12+ chars, segura)
+  → enviar email "Bem-vindo ao Lara AI" com:
+      - password temporária
+      - link de login directo
+      - primeiros passos
+  → activar subscription
+  → retornar {"action": "created_and_activated"}
+
+order_approved → email já existente (upgrade)
+  → fluxo actual: activar subscription normalmente
+  → retornar {"action": "activated"}
+```
+
+| Arquivo | O que muda |
+|---|---|
+| `backend-core/app/api/subscriptions.py` | `kiwify_subscription_event`: se `user_not_found` → criar `User` com password aleatória segura → activar subscription → enviar email |
+| `backend-core/app/services/email_service.py` | Novo template `render_kiwify_new_customer_email(name, email, temp_password, login_url)` com credenciais e primeiros passos |
+
+**Geração de password segura:**
+```python
+import secrets, string
+alphabet = string.ascii_letters + string.digits + "!@#$%"
+temp_password = ''.join(secrets.choice(alphabet) for _ in range(14))
+```
+
+O utilizador deve ser forçado a alterar a senha no primeiro login (ou pelo menos incentivado pelo email).
+
+### Commits Fase 5
+
+| # | Commit | O que foi implementado |
+|---|---|---|
+| 1 | — | — |
+
+---
+
 ## Pendente de configuração (pré-deploy)
 
 | Item | Estado |
@@ -139,3 +181,16 @@ Kiwify → POST api.danielfranca.pt/webhooks/kiwify?signature=<hmac>
 - [x] `POST localhost:8001/internal/subscriptions/kiwify-event` com token correcto → `{"ok": true, "action": "activated"}`
 - [x] Com token errado → 401
 - **Validado em:** 03/06/2026
+
+### U7 — Novo comprador: conta criada automaticamente (Fase 5)
+- [ ] Webhook `order_approved` com email **não existente** → `{"ok": true, "action": "created_and_activated"}`
+- [ ] Utilizador criado no DB (`users` table) com o email da Kiwify
+- [ ] Email enviado com password temporária e link de login
+- [ ] Subscrição activada para o novo utilizador
+
+### U8 — Login com credenciais recebidas por email (Fase 5)
+- [ ] Fazer `POST /auth/login` com email e password temporária recebida → token JWT válido
+- [ ] `GET /me/entitlements` → plano correcto activo
+
+### U9 — Comprador existente (upgrade) não recebe email de boas-vindas (Fase 5)
+- [ ] Webhook `order_approved` com email **já existente** → `{"ok": true, "action": "activated"}` (sem criação de conta, sem email de credenciais)
