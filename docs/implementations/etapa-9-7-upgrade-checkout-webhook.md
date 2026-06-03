@@ -13,34 +13,89 @@ O utilizador no plano Start que clica em "Ver planos" (vindo de um toast de gate
 
 ---
 
-## Problemas Identificados (estado anterior)
+## Dados Kiwify (recolhidos em 03/06/2026)
 
-1. **`VITE_UPGRADE_CHECKOUT_URL` não configurado (`frontend-crm/.env`):** os botões "Selecionar plano" ficam desabilitados; utilizador não consegue fazer upgrade.
+### Produto
+- **Nome:** Lara AI - Digital Pro
+- **ID:** `2e138970-e434-11f0-92a7-49ac9b9afca8`
 
-2. **Sem webhook de activação (backend-core):** após o pagamento na Kiwify, a subscrição tem de ser actualizada manualmente pelo admin via painel ou API. Não há endpoint `POST /webhooks/kiwify` que receba a confirmação e actualize `subscriptions`.
+### Links de checkout por plano
 
-3. **Links hardcoded no `/usage` (`backend-crm/routes/usage.py:82`):** `checkout_links` com URLs Kiwify hardcoded no payload de usage, sem uso actual no frontend.
+| Plano | URL | Preço | `plan_id` interno (nosso) |
+|---|---|---|---|
+| Plano Start | `https://pay.kiwify.com.br/gOjcexD` | R$ 97/mês | 8 (`crm_start`) |
+| Plano Growth | `https://pay.kiwify.com.br/To8qV99` | R$ 197/mês | 9 (`crm_growth`) |
+| Plano Scale | `https://pay.kiwify.com.br/2mtd25x` | R$ 997/mês | — (não mapeado ainda) |
+| Sales Page | `https://kiwify.app/lr5CF3L` | — | — |
+
+### Webhook já configurado
+- **URL:** `https://api.danielfranca.pt/webhooks/kiwify`
+- **Token (secret):** `<ver .env do backend-core — KIWIFY_WEBHOOK_TOKEN>`
+- **Eventos activos:** Compra aprovada ✅, Assinatura cancelada ✅, Assinatura renovada ✅
+
+### Formato do payload (Kiwify → nosso endpoint)
+
+```json
+{
+  "webhook_event_type": "order_approved",
+  "order_status": "paid",
+  "Customer": {
+    "email": "cliente@exemplo.com",
+    "full_name": "Nome Completo"
+  },
+  "Product": {
+    "product_id": "2e138970-e434-11f0-92a7-49ac9b9afca8",
+    "product_name": "Lara AI - Digital Pro"
+  },
+  "Subscription": {
+    "status": "active",
+    "start_date": "2026-06-03T...",
+    "next_payment": "2026-07-03T...",
+    "plan": {
+      "id": "<uuid-kiwify-interno>",
+      "name": "Plano Start",
+      "frequency": "monthly"
+    }
+  }
+}
+```
+
+### Validação de assinatura
+- A Kiwify envia a assinatura como **query param** na URL: `?signature=<valor>`
+- Algoritmo: `HMAC-SHA1(JSON.stringify(body), token)`
+- Token = valor de `KIWIFY_WEBHOOK_TOKEN` no `.env` do backend-core
+- Comparar o valor recebido em `?signature=` com o calculado localmente
+
+### Mapeamento plano Kiwify → nosso sistema
+Identificar pelo `Subscription.plan.name`:
+
+| `plan.name` (Kiwify) | `plan_id` (nosso DB) | `plan_code` |
+|---|---|---|
+| `"Plano Start"` | 8 | `crm_start` |
+| `"Plano Growth"` | 9 | `crm_growth` |
+| `"Plano Scale"` | — | `crm_scale` (não existe ainda) |
 
 ---
 
 ## Abordagem
 
 ```
-Fase 1 — Frontend: configurar checkout links no .env e activar botões
-  VITE_UPGRADE_CHECKOUT_URL (base) ou links por plano → botões activos
-  Ao clicar: abre checkout externo (Kiwify) em nova aba com ?plan=crm_growth&email=X
+Fase 1 — Frontend: mapeamento directo por plano (sem URL base genérica)
+  Assinatura.tsx: buildCheckoutUrl usa mapeamento planCode → URL fixa Kiwify
+  Botões "Selecionar plano" ficam activos para Start, Growth e Scale
 
-Fase 2 — Backend-core: webhook Kiwify
-  POST /webhooks/kiwify
-    → valida assinatura HMAC (header X-Kiwify-Signature)
-    → identifica utilizador pelo email do evento
-    → actualiza subscriptions (plan_id, status, current_period_end)
-    → retorna 200
+Fase 2 — Backend-core: endpoint de webhook
+  POST /webhooks/kiwify?signature=<hmac>
+    → valida HMAC-SHA1(body, KIWIFY_WEBHOOK_TOKEN)
+    → identifica user por Customer.email
+    → webhook_event_type == "order_approved" → activa/actualiza subscrição
+    → webhook_event_type == "subscription_canceled" → status = inactive
+    → webhook_event_type == "subscription_renewed" → actualiza next_payment
+    → retorna 200 {"status": "ok"}
 
-Fase 3 — Frontend: feedback pós-compra
-  Página /assinatura: detectar query param ?upgraded=1 ou polling de entitlements
-  → mostrar banner "Plano activado! Bem-vindo ao Growth."
-  → remover toasts de gate já exibidos
+Fase 3 — Frontend: banner pós-compra
+  /assinatura?upgraded=1 → banner "Plano activado!"
+  Kiwify redirect URL configurada para https://crmapp.danielfranca.pt/assinatura?upgraded=1
 ```
 
 ---
@@ -49,15 +104,14 @@ Fase 3 — Frontend: feedback pós-compra
 
 ### Fase 1 — Frontend: activar botões de checkout
 
-**Objetivo:** o utilizador consegue clicar em "Selecionar plano" e chega ao checkout correcto.
+**Objetivo:** botões "Selecionar plano" abrem directamente a URL correta da Kiwify por plano.
 
-**Decisão de design:** a `Assinatura.tsx` já suporta `VITE_UPGRADE_CHECKOUT_URL` (URL base com `?plan=` appended) ou `VITE_WHATSAPP_UPGRADE_NUMBER`. Usar a URL base da Kiwify é suficiente para a Fase 1 — não requer código.
+**Decisão:** a `buildCheckoutUrl()` actual constrói a URL com query string — não funciona com a Kiwify (cada plano tem URL própria). Requer ajuste na `Assinatura.tsx`.
 
 | Arquivo | O que muda |
 |---|---|
-| `frontend-crm/.env` | Adicionar `VITE_UPGRADE_CHECKOUT_URL=https://pay.kiwify.com.br/XXXXX` (URL da página de planos ou de um funil) |
-
-> **Nota:** Se a Kiwify tiver uma URL única por plano (não por parâmetro), será necessário alterar `buildCheckoutUrl()` em `Assinatura.tsx` para um mapeamento `planCode → url` em vez de construir a URL por query string.
+| `frontend-crm/src/pages/Assinatura.tsx` | `buildCheckoutUrl()` substituída por mapeamento `planCode → URL` usando as URLs fixas da Kiwify |
+| `frontend-crm/.env` | Adicionar as 3 URLs: `VITE_CHECKOUT_URL_CRM_START`, `VITE_CHECKOUT_URL_CRM_GROWTH`, `VITE_CHECKOUT_URL_CRM_SCALE` |
 
 ### Commits Fase 1
 
@@ -67,38 +121,36 @@ Fase 3 — Frontend: feedback pós-compra
 
 ---
 
-### Fase 2 — Backend-core: webhook Kiwify
+### Fase 2 — Backend-core: endpoint webhook Kiwify
 
-**Objetivo:** receber confirmação de pagamento da Kiwify e activar a subscrição automaticamente.
+**Objetivo:** processar automaticamente compras, cancelamentos e renovações.
 
 | Arquivo | O que muda |
 |---|---|
-| `backend-core/app/api/webhooks_kiwify.py` | Novo. Endpoint `POST /webhooks/kiwify`; validação HMAC; lookup de user por email; upsert em `subscriptions` |
-| `backend-core/app/api/__init__.py` | Registar novo router |
-| `backend-core/.env` | Adicionar `KIWIFY_WEBHOOK_SECRET=<segredo>` |
+| `backend-core/app/api/webhooks_kiwify.py` | Novo. `POST /webhooks/kiwify`; validação HMAC-SHA1; upsert em `subscriptions` |
+| `backend-core/app/api/__init__.py` | Registar novo router (sem prefixo de auth) |
+| `backend-core/.env` | `KIWIFY_WEBHOOK_TOKEN=<token do painel Kiwify Apps → Webhooks>` |
 
-**Mapeamento de eventos Kiwify → plano:**
-
-| Evento Kiwify | Produto/Oferta | `plan_id` |
-|---|---|---|
-| `order_approved` | Oferta Start | 8 (`crm_start`) |
-| `order_approved` | Oferta Growth | 9 (`crm_growth`) |
-| `order_refunded` / `subscription_canceled` | qualquer | status = `inactive` |
-
-**Lógica de upsert:**
+**Lógica do handler:**
 ```python
-# Identificar utilizador pelo email do evento
-user = db.query(User).filter(User.email == event["customer"]["email"]).first()
-if not user:
-    return {"status": "ignored", "reason": "user_not_found"}
+import hmac, hashlib, json
 
-# Upsert na subscrição do produto CRM
-existing = db.query(Subscription).filter(
-    Subscription.user_id == user.id,
-    Subscription.product_id == 1  # product "crm"
-).first()
-# ... actualizar ou criar
+def verify_signature(body_bytes: bytes, token: str, received_sig: str) -> bool:
+    expected = hmac.new(token.encode(), body_bytes, hashlib.sha1).hexdigest()
+    return hmac.compare_digest(expected, received_sig)
+
+# Mapeamento plan.name → plan_id local
+PLAN_NAME_MAP = {
+    "Plano Start":  8,
+    "Plano Growth": 9,
+}
+
+# Evento order_approved → upsert subscription
+# Evento subscription_canceled → status = "inactive"
+# Evento subscription_renewed → actualizar current_period_end
 ```
+
+**Resposta mínima:** `{"status": "ok"}` com HTTP 200 (a Kiwify reenvía até 5x se não receber 2xx).
 
 ### Commits Fase 2
 
@@ -108,15 +160,15 @@ existing = db.query(Subscription).filter(
 
 ---
 
-### Fase 3 — Frontend: feedback pós-compra
+### Fase 3 — Frontend: banner pós-compra
 
-**Objetivo:** ao regressar do checkout, o utilizador recebe confirmação visual de que o plano foi activado.
+**Objetivo:** utilizador que volta do checkout vê confirmação do upgrade.
 
 | Arquivo | O que muda |
 |---|---|
-| `frontend-crm/src/pages/Assinatura.tsx` | Detectar `?upgraded=1` na URL (redirect do checkout) ou refetch de entitlements após foco na janela; mostrar Alert/banner de boas-vindas |
+| `frontend-crm/src/pages/Assinatura.tsx` | Detectar `?upgraded=1` na URL → mostrar Alert de boas-vindas; refetch entitlements |
 
-> A Kiwify permite configurar um URL de redirect após compra — usar `https://<app>/assinatura?upgraded=1`.
+> Configurar no painel Kiwify o URL de redirect após compra: `https://crmapp.danielfranca.pt/assinatura?upgraded=1`
 
 ### Commits Fase 3
 
@@ -128,26 +180,21 @@ existing = db.query(Subscription).filter(
 
 ## Checks de Validação
 
-### Cenário U1 — Botão de checkout activo
-- [ ] Plano Start: entrar em `/assinatura` → botão "Selecionar plano" no card Growth está activo
-- [ ] Clicar → abre Kiwify em nova aba com email pré-preenchido (se configurado)
+### Cenário U1 — Botões de checkout activos
+- [ ] Plano Start: `/assinatura` → botão "Selecionar plano" no card Growth está activo
+- [ ] Clicar → abre `https://pay.kiwify.com.br/To8qV99` em nova aba
 
-### Cenário U2 — Webhook activa subscrição
-- [ ] Enviar evento Kiwify simulado (curl com payload de `order_approved`) → subscrição actualizada em `subscriptions`
-- [ ] Chamar `GET /me/entitlements` após webhook → `follow_up_enabled: true`, `playground_monthly_limit: null`
+### Cenário U2 — Webhook activa subscrição (`order_approved`)
+- [ ] Enviar payload simulado com `webhook_event_type: "order_approved"`, `plan.name: "Plano Growth"`, `Customer.email: <email existente>` e assinatura HMAC válida → 200
+- [ ] `GET /me/entitlements` → `follow_up_enabled: true`, `playground_monthly_limit: null`
 
-### Cenário U3 — Rejeição de webhook inválido
-- [ ] Enviar evento com assinatura HMAC errada → 401
+### Cenário U3 — Rejeição de assinatura inválida
+- [ ] Enviar payload com `?signature=errado` → 401
 
-### Cenário U4 — Banner pós-compra
-- [ ] Navegar para `/assinatura?upgraded=1` → banner "Plano activado!" visível
-- [ ] Entitlements reflectem novo plano sem reload manual
+### Cenário U4 — Webhook de cancelamento
+- [ ] Enviar `webhook_event_type: "subscription_canceled"` → subscrição fica `inactive`
+- [ ] Entitlements reflectem plano sem acesso
 
----
-
-## Questões em aberto (a confirmar antes de implementar)
-
-1. **URL de checkout:** a Kiwify usa uma URL por produto ou há uma página de planos unificada?
-2. **Identificação do plano no evento:** o payload Kiwify inclui o `offer_id` ou apenas o produto? É necessário manter um mapeamento `offer_id → plan_id` no backend-core.
-3. **Segredo do webhook:** onde é configurado no painel Kiwify e como é enviado (header vs query param)?
-4. **Downgrade:** suportado? Kiwify envia evento de cancelamento que pode ser mapeado para `status = inactive`.
+### Cenário U5 — Banner pós-compra
+- [ ] Navegar para `/assinatura?upgraded=1` → Alert "Plano activado!" visível
+- [ ] Entitlements actualizados sem reload manual
