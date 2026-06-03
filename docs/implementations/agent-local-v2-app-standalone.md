@@ -89,6 +89,12 @@ Primeira abertura → Onboarding wizard
 | `agent-local/app/ui/main_screen.py` | Completar: formulário + barra progresso + tabela + export |
 | `agent-local/app/ui/settings_screen.py` | Novo: configuração de chave API própria |
 
+### Commits Fase 2
+
+| # | Commit | O que foi implementado |
+|---|---|---|
+| 1 | `3d500a5` | Google Maps client (3 modos), export Excel, UI principal completa, settings screen |
+
 ### Fase 3 — Onboarding
 
 **Objetivo:** Primeira abertura mostra wizard educativo diferenciado por perfil.
@@ -110,6 +116,32 @@ Primeira abertura → Onboarding wizard
 ---
 
 ## Checks de Validação
+
+### Fase 2
+
+#### Cenário B1 — Pesquisa com assinante (proxy)
+- [ ] Login com assinante ativo
+- [ ] Preencher nicho="dentistas", cidade="São Paulo", limite=10
+- [ ] Confirmar: barra de progresso aparece durante pesquisa
+- [ ] Confirmar: resultados aparecem em tabela (nome, telefone, website, avaliação)
+- [ ] Confirmar: "Modo: Assinante — chave API incluída" no rodapé do formulário
+
+#### Cenário B2 — Pesquisa com não-assinante (chave própria)
+- [ ] Login com utilizador não-assinante
+- [ ] Abrir ⚙ Configurações → inserir chave API do Google Maps → Guardar
+- [ ] Executar pesquisa
+- [ ] Confirmar: resultados retornados via Places API direta
+
+#### Cenário B3 — Pesquisa sem chave (Selenium fallback)
+- [ ] Login com utilizador não-assinante sem chave configurada
+- [ ] Executar pesquisa
+- [ ] Confirmar: Chrome abre e faz scraping; resultados aparecem
+
+#### Cenário B4 — Export Excel
+- [ ] Após pesquisa com resultados, clicar "Exportar Excel"
+- [ ] Confirmar: filedialog abre para escolher destino
+- [ ] Confirmar: ficheiro .xlsx criado com colunas: Nome, Telefone, Website, Endereço, Avaliação, Nº Avaliações, Link Google Maps
+- [ ] Confirmar: linha 1 tem o texto da pesquisa, linha 2 tem a contagem de leads
 
 ### Fase 1
 
