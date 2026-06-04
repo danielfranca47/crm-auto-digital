@@ -99,6 +99,25 @@ O campo `origin` de um lead era definido na criação e nunca atualizado automat
 
 ---
 
+---
+
+### Fix associado — `model='outbound'` em `_persist_whatsapp_message`
+
+**Commit:** `958b88a`
+
+Durante o diagnóstico detectou-se que mensagens enfileiradas via job `whatsapp.send.local` eram persistidas com `model='manual'` em vez de `model='outbound'`. O orchestrator verifica `model == 'outbound'` para calcular `outbound_present` e decidir o fluxo de resposta — com `'manual'` a verificação falhava silenciosamente, fazendo o bot tratar o lead como contato frio mesmo tendo já sido prospectado.
+
+**Corrigido em:** `backend-crm/services/jobs_service.py` — `_persist_whatsapp_message`.
+
+**Teste:** `backend-crm/tests/test_whatsapp_outbound_message_model.py` — 6 casos:
+- `model='outbound'` é persistido em `_persist_whatsapp_message`
+- `_handle_whatsapp_report` seta `origin='outbound'` para leads neutros (`''` ou `'Manual'`)
+- `origin='whatsapp_inbound'` nunca é sobrescrito
+- `origin='outbound'` já existente é idempotente
+- Job com `status=failed` não altera `origin`
+
+---
+
 ## Notas de risco
 
 - `origin='whatsapp_inbound'` nunca é sobrescrito — a condição `OR origin = 'Manual'` não cobre esse valor
