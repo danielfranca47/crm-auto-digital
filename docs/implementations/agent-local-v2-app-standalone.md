@@ -204,21 +204,24 @@ Onboarding — Gratuito (4 passos)
 ### Checks Fase 3
 
 #### Cenário D1 — Onboarding assinante
-- [ ] Fazer login com conta assinante pela primeira vez (limpar `~/.agent-local/session.json` antes)
-- [ ] Confirmar: 3 passos de onboarding (boas-vindas, como pesquisar, como exportar)
-- [ ] Confirmar: indicador de progresso visível (ex: "1 / 3")
-- [ ] Confirmar: botão "← Anterior" desabilitado no passo 1
-- [ ] Confirmar: botão "Começar a pesquisar →" no último passo navega para ecrã principal
+- [x] Fazer login com conta assinante pela primeira vez (limpar `~/.agent-local/session.json` antes)
+- [x] Confirmar: 3 passos de onboarding (boas-vindas, como pesquisar, como exportar)
+- [x] Confirmar: indicador de progresso visível (ex: "1 / 3")
+- [x] Confirmar: botão "← Anterior" desabilitado no passo 1
+- [x] Confirmar: botão "Começar a pesquisar →" no último passo navega para ecrã principal
+- **Validado em:** 04/06/2026 — 3 passos confirmados, UI aprovada pelo utilizador
 
 #### Cenário D2 — Onboarding gratuito com pitch
-- [ ] Fazer login com conta gratuita pela primeira vez
-- [ ] Confirmar: 4 passos (boas-vindas, modo Selenium, upgrade pitch, como começar)
-- [ ] Confirmar: passo de upgrade mostra benefícios do plano pago e link para landing page
-- [ ] Confirmar: link/botão da landing page abre no browser externo
+- [x] Fazer login com conta gratuita pela primeira vez
+- [x] Confirmar: 4 passos (boas-vindas, modo Selenium, upgrade pitch, como começar)
+- [x] Confirmar: passo de upgrade mostra benefícios do plano pago e link para landing page
+- [x] Confirmar: link/botão da landing page abre no browser externo
+- **Validado em:** 04/06/2026 — 4 passos confirmados; URL corrigida para `danielfranca.pt/lara-ia` (fix commit 3e66b04)
 
 #### Cenário D3 — Onboarding não repete
-- [ ] Após completar o onboarding, fechar e reabrir o app
-- [ ] Confirmar: vai direto para ecrã principal (onboarding não aparece de novo)
+- [x] Após completar o onboarding, fechar e reabrir o app
+- [x] Confirmar: vai direto para ecrã principal (onboarding não aparece de novo)
+- **Validado em:** 04/06/2026 — comportamento confirmado pelo utilizador
 
 ### Fase 4 — Empacotamento (.exe)
 
