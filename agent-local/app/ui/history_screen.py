@@ -82,8 +82,9 @@ class HistoryScreen(ctk.CTkToplevel):
         self._loading_label.pack(pady=12)
 
         # Tabela
+        # Tabela — packed imediatamente para que o canvas interno seja criado
         self._table_frame = ctk.CTkScrollableFrame(self, fg_color="#12121F", corner_radius=8)
-        # (será populada após load)
+        self._table_frame.pack(fill="both", expand=True, padx=16, pady=(0, 4))
 
         # Footer
         footer = ctk.CTkFrame(self, fg_color="transparent")
@@ -97,7 +98,13 @@ class HistoryScreen(ctk.CTkToplevel):
 
     def _load(self) -> None:
         self._loading_label.configure(text="A carregar…")
-        self._table_frame.pack_forget()
+        self._loading_label.pack(pady=12)
+        # Limpar tabela enquanto carrega
+        try:
+            for w in self._table_frame.winfo_children():
+                w.destroy()
+        except Exception:
+            pass
         threading.Thread(target=self._fetch, daemon=True).start()
 
     def _fetch(self) -> None:
@@ -116,8 +123,11 @@ class HistoryScreen(ctk.CTkToplevel):
         self._entries = entries
         self._loading_label.pack_forget()
 
-        for w in self._table_frame.winfo_children():
-            w.destroy()
+        try:
+            for w in self._table_frame.winfo_children():
+                w.destroy()
+        except Exception:
+            pass
 
         if not entries:
             ctk.CTkLabel(
@@ -125,7 +135,6 @@ class HistoryScreen(ctk.CTkToplevel):
                 text="Sem registos de prospecção.",
                 font=ctk.CTkFont(size=13), text_color="#6B7280",
             ).pack(pady=20)
-            self._table_frame.pack(fill="both", expand=True, padx=16, pady=(0, 8))
             return
 
         # Cabeçalho
@@ -164,7 +173,7 @@ class HistoryScreen(ctk.CTkToplevel):
                     font=ctk.CTkFont(size=10), text_color=text_color, anchor="w",
                 ).grid(row=0, column=c_idx, sticky="w", padx=(8 if c_idx == 0 else 4, 4), pady=5)
 
-        self._table_frame.pack(fill="both", expand=True, padx=16, pady=(0, 8))
+        # _table_frame já está packed em _build(); não é preciso re-pack
 
     # ── Export CSV ────────────────────────────────────────────────────────────
 
