@@ -182,33 +182,31 @@ OTP screen → verify_otp(email, code) → JWT → main/onboarding
 ### Fase 2
 
 #### Cenário B1 — Pesquisa com assinante (proxy)
-- [ ] Login com assinante ativo
-- [ ] Preencher nicho="dentistas", cidade="São Paulo", limite=10
-- [ ] Confirmar: barra de progresso aparece durante pesquisa
-- [ ] Confirmar: resultados aparecem em tabela (nome, telefone, website, avaliação)
-- [ ] Confirmar: "Modo: Assinante — chave API incluída" no rodapé do formulário
+- [x] Login com assinante ativo (`autodigital157@gmail.com`, plano `crm_growth`)
+- [x] Barra de progresso visível durante pesquisa
+- [x] Resultados aparecem em tabela (nome, telefone, website, avaliação)
+- [x] Badge "Modo: Assinante — chave API incluída" visível
+- [x] Botão "📥 Exportar Excel" aparece
+- **Validado em:** 04/06/2026 — teste manual confirmado pelo utilizador
 
 #### Cenário B2 — Pesquisa com não-assinante (chave própria)
-- [ ] Login com utilizador não-assinante
-- [ ] Abrir ⚙ Configurações → inserir chave API do Google Maps → Guardar
-- [ ] Executar pesquisa
-- [ ] Confirmar: resultados retornados via Places API direta
+- [x] Campo de chave API visível nas ⚙ Configurações (só para não-assinantes)
+- [x] Após guardar, modo muda para "Chave API própria configurada"
+- [x] Pesquisa retorna resultados via Places API direta
+- **Validado em:** 04/06/2026 — teste manual confirmado pelo utilizador
 
 #### Cenário B3 — Pesquisa sem chave (Selenium fallback)
-- [ ] Login com utilizador não-assinante sem chave configurada
-- [ ] Executar pesquisa
-- [ ] Confirmar: Chrome abre e faz scraping; resultados aparecem
-
 - [x] Chrome abre e navega para Google Maps
 - [x] Query "dentista em sao paulo" retornou 10 leads de SP
 - [x] Tabela mostra nome, telefone, website, avaliação
+- [x] Chrome fecha sozinho após terminar
 - **Validado em:** 04/06/2026 — 10 leads encontrados via Selenium fallback (tecla '/')
 
 **Bugs corrigidos durante testes B3 (commits 8dce5f8 → 48f1167):**
 1. Chrome off-screen (`--window-position=-32000,-32000`) não renderizava DOM → removido
 2. Google Maps migrou `#searchboxinput` para Shadow DOM → fallback via tecla `/` + `document.activeElement`
 3. Duas pesquisas sequenciais (location + term) falhavam após "place details" → unificadas numa query
-4. URL inicial centrava no IP do utilizador → corrigido para `@0,0,3z` (neutro, sem exposição de localização)
+4. URL inicial centrava no IP do utilizador → corrigido para `@0,0,3z` (neutro)
 
 #### Cenário B4 — Export Excel
 - [x] Ficheiro `.xlsx` gerado corretamente
