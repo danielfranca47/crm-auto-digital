@@ -31,13 +31,14 @@
 
 ## Perguntas respondidas pelo admin
 
-> *Nenhuma pergunta foi necessária neste sprint — todos os itens tinham contexto suficiente
-> no código e nas docs para priorizar sem decisão do fundador.*
+> **P (experiência): Quando um cliente existente faz upgrade de plano, deve receber
+> email de confirmação automático ou apenas ver o plano actualizado na plataforma?**
+> R (admin, 04/06/2026): "Sim, deve receber email — o cliente precisa de saber que o
+> pagamento foi processado e que o acesso foi activado."
 
-*(Exemplo de resposta registada quando há perguntas:)*
-> **P: O preço do Plano Scale está confirmado para adicionar ao seed?**
-> R (admin, 04/06/2026): "Não confirmado ainda — não criar o produto Kiwify por agora,
-> mas pode criar o seed com os limites técnicos. O webhook de activação pode esperar."
+> **P (estratégia): O Plano Scale vai à venda via Kiwify neste sprint?**
+> R (admin, 04/06/2026): "Não ainda — criar o seed com os limites técnicos, mas não
+> mapear no webhook por agora. O webhook de activação pode esperar o preço ser confirmado."
 
 ---
 
@@ -51,29 +52,34 @@
 **Dependências:** nenhuma
 
 **Contexto:**
-O webhook Kiwify já mapeia `"Plano Scale"` → `crm_scale` em `backend-crm/routes/webhooks.py`
-(linha ~581). No entanto, o plano `crm_scale` não existe na tabela `plans` do banco.
-Resultado prático: cliente paga o Scale, webhook retorna `skipped: plan_not_found`, conta não
-é activada. Nenhum erro visível — vai para logs silenciosamente.
+O webhook Kiwify já está preparado para activar o Plano Scale quando um cliente compra,
+mas o plano `crm_scale` não existe no banco de dados. Resultado prático: cliente paga,
+webhook retorna `skipped: plan_not_found`, conta não é activada. Nenhum erro visível —
+vai para logs silenciosamente.
 
 **Entrega esperada:**
-- Plano `crm_scale` inserido via `seed_initial_data()` em `backend-core/app/db.py`
-- Limites definidos em `plan_limits` (max_leads=5000, max_ia_conversas_monthly=1500, max_instances=3)
-- Documentação em `docs/architecture/plans-limits.md` atualizada
+- Cliente que compra o Plano Scale recebe o plano activo após o webhook processar o evento
+- O plano Scale existe no banco com os limites definidos pelo fundador
+- O webhook de activação não é alterado — já está correcto
 
 **Prompt para o processo de implementations:**
 ```
-Gostaria de implementar o plano crm_scale no banco de dados.
+Gostaria de registar o plano crm_scale no banco de dados do backend-core.
 Actualmente clientes que compram o Plano Scale ficam sem acesso — o webhook Kiwify
-retorna skipped:plan_not_found silenciosamente porque o plano não existe no seed.
+retorna skipped:plan_not_found silenciosamente porque o plano não existe no banco.
 
-Contexto: o seed em backend-core/app/db.py → seed_initial_data() cria os planos
-Start e Growth mas não o crm_scale. O modelo Plan e PlanLimits estão em
-backend-core/app/models/plan.py. O webhook que faz o mapeamento está em
-backend-crm/routes/webhooks.py linha ~581 (PLAN_NAME_TO_CODE).
-Os limites do Scale são: max_leads=5000, max_ia_conversas_monthly=1500,
+Comportamento actual: webhook Kiwify recebe evento de compra do Scale, tenta activar
+o plano crm_scale, não o encontra no banco, retorna skipped. Cliente fica sem acesso.
+Comportamento desejado: plano crm_scale existe no banco com os limites definidos,
+activação automática funciona normalmente ao receber o evento Kiwify.
+
+Os limites confirmados do Scale: max_leads=5000, max_ia_conversas_monthly=1500,
 max_whatsapp_send_daily=200, max_instances=3, follow_up_enabled=True,
 playground_monthly_limit=None.
+
+Área do sistema: backend-core (modelo de planos e inicialização do banco).
+Nota: o webhook de activação não precisa de alteração — o problema está apenas no
+registro do plano.
 
 Leia o guia de implementação e siga o processo.
 ```
@@ -88,35 +94,32 @@ Leia o guia de implementação e siga o processo.
 **Dependências:** nenhuma (independente de P1)
 
 **Contexto:**
-A senha temporária de 14 chars gerada em `backend-core/app/api/subscriptions.py` (linhas ~244–265)
-é enviada em claro por email. Nenhum mecanismo força a troca após o primeiro login.
+Quando um novo cliente compra pelo Kiwify, o sistema gera uma senha temporária aleatória
+e a envia em texto claro por email. Nenhum mecanismo força a troca após o primeiro login.
 O risco: se o email for comprometido, a conta fica vulnerável indefinidamente.
 
-Abordagem preferida (mais simples): usar o fluxo de `forgot-password` já existente —
-em vez de enviar a senha temporária, enviar um link de definição de senha. Isso evita
-adicionar `must_change_password` ao modelo e lógica de guard no frontend.
-
 **Entrega esperada:**
-- Fluxo de criação de conta via Kiwify envia email de "define a tua senha" em vez de senha em claro
-- O utilizador chega à plataforma já com senha definida por si
-- O fluxo de forgot-password não é alterado — é reaproveitado
+- Novo cliente recebe um email que o conduz a definir a própria senha
+- A senha nunca circula em claro por email
+- O acesso à plataforma exige que o utilizador tenha definido a própria senha
 
 **Prompt para o processo de implementations:**
 ```
 Gostaria de corrigir o fluxo de criação de conta via Kiwify para não enviar
 senha temporária em claro por email.
+Actualmente existe risco de segurança: se o email do novo cliente for comprometido,
+a conta fica vulnerável indefinidamente porque a senha nunca precisa ser trocada.
 
-Contexto: em backend-core/app/api/subscriptions.py → kiwify_subscription_event()
-(linhas ~244–265), quando um novo utilizador compra pelo Kiwify, o sistema gera
-uma senha temporária aleatória de 14 chars e a envia por email via
-render_welcome_email em backend-core/app/services/email_service.py.
-Não há nenhum mecanismo que force a troca após o primeiro login.
+Comportamento actual: quando um novo utilizador compra pelo Kiwify, o sistema gera
+uma senha aleatória e a envia por email em texto claro como credencial de acesso.
+Não há mecanismo que force a troca após o primeiro login.
+Comportamento desejado: o novo utilizador recebe um link para definir a própria senha,
+sem senha gerada automaticamente em claro. O acesso à plataforma só funciona após
+a definição da senha pelo próprio utilizador.
 
-A abordagem preferida é reutilizar o fluxo de forgot-password já existente:
-em vez de gerar senha temporária, enviar um link de "define a tua senha" para
-o email do comprador. Assim o utilizador nunca recebe uma senha em claro.
-Verificar primeiro como forgot-password está implementado (backend-core/app/api/auth.py)
-para entender o que pode ser reaproveitado.
+Área do sistema: backend-core (fluxo de criação de conta via webhook Kiwify e
+serviço de email). Verificar se já existe infraestrutura de link de definição de
+senha (ex.: fluxo de recuperação de senha) que possa ser reaproveitada.
 
 Leia o guia de implementação e siga o processo.
 ```
@@ -140,39 +143,34 @@ O campo é nullable com fallback para o comportamento hardcoded — quem não pr
 é afectado.
 
 **Entrega esperada:**
-- 3 campos String nullable no AI Profile (model + migration)
-- Expostos via `AIProfileBase`/`AIProfileUpdate` no backend-core
-- Incluídos no ContextBundle via `enrich_context_bundle()` no orchestrator
-- Injectados no `_build_child_followup_prompt()` do decision_engine por variante
-- Textarea por campo na secção Follow-Up do AI Profile no frontend
+- O operador pode escrever instruções específicas do seu negócio para cada tipo de
+  follow-up (Agent 1, 2, 3) directamente no AI Profile
+- O bot usa essas instruções nas mensagens de follow-up em vez das genéricas
+- Quem não preencher o campo continua a receber o comportamento anterior inalterado
 
 **Prompt para o processo de implementations:**
 ```
-Gostaria de implementar as instruções de follow-up personalizáveis por agente
-no AI Profile (Etapa C de pipeline-configurable-fields).
+Gostaria de implementar campos de instruções de follow-up personalizáveis por agente
+no AI Profile.
+Actualmente todos os operadores recebem as mesmas mensagens de follow-up genéricas,
+independentemente do seu negócio, nicho ou tom.
 
-Contexto: os três tipos de agente (sdr_scheduler, cart_recovery, hybrid_scheduler)
-têm instruções de follow-up hardcoded nos playbooks. O operador não tem como
-personalizar o que o bot diz no follow-up para o seu nicho específico.
+Comportamento actual: os prompts de follow-up para os três tipos de agente
+(sdr_scheduler, cart_recovery, hybrid_scheduler) são instruções genéricas hardcoded
+na plataforma. O operador não tem como personalizar o que o bot diz no follow-up.
+Comportamento desejado: o AI Profile passa a ter um campo de texto livre por tipo
+de agente. Quando preenchido pelo operador, o bot usa essas instruções nas mensagens
+de follow-up. Quando vazio, o comportamento hardcoded é mantido (fallback).
 
-Os três novos campos do AI Profile:
-- followup_sdr_instructions (Agent 1 — sdr_scheduler)
-- followup_recovery_instructions (Agent 2 — cart_recovery)
-- followup_postsession_instructions (Agent 3 — hybrid_scheduler)
+Os três campos a criar:
+- followup_sdr_instructions (Agent 1)
+- followup_recovery_instructions (Agent 2)
+- followup_postsession_instructions (Agent 3)
 
-Todos seguem o mesmo padrão: String nullable, injectado entre a instrução hardcoded
-da variante e o custom_instructions global, com fallback para hardcoded se None.
-
-Arquivos principais:
-- backend-core/app/models/ai_profile.py — 3 novos campos
-- backend-core/app/db.py — 3 migrations ensure_column() idempotentes
-- backend-core/app/api/ai_profiles.py — expor em AIProfileBase e AIProfileUpdate
-- backend-crm/services/ai_orchestrator/orchestrator.py — incluir no ContextBundle
-- backend-executors/app/services/decision_engine.py → _build_child_followup_prompt()
-- frontend-crm/src/pages/AiProfile.tsx — textarea por campo, condicional ao template_key
-
-Documentação de referência completa em docs/plans/pipeline-configurable-fields.md
-seção "Etapa C".
+Área do sistema: backend-core (modelo AI Profile) + backend-crm (orquestrador de IA) +
+backend-executors (decision engine que gera os prompts de follow-up) + frontend-crm
+(página de configuração do AI Profile).
+Documentação de referência completa: docs/plans/pipeline-configurable-fields.md seção C.
 
 Leia o guia de implementação e siga o processo.
 ```

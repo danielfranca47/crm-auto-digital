@@ -59,13 +59,56 @@ Apresentar ao utilizador, **antes de gerar o sprint:**
 
 1. **Tabela de auditoria** — todos os itens com status e observações
 2. **Mapa de dependências** — o que bloqueia o quê
-3. **Perguntas de negócio** — apenas as que não têm resposta no código ou nos docs.
-   Exemplos do tipo de pergunta válida:
-   - "O preço X está confirmado antes de criarmos o seed?"
-   - "A feature Y deve estar disponível em todos os planos ou só Growth+?"
-   - "Qual é a data-alvo para ter Z disponível para clientes?"
+3. **Perguntas ao admin** — apenas quando encontrar uma decisão que só o fundador pode
+   responder. Três categorias:
 
-   Não fazer perguntas que podem ser respondidas lendo o código.
+   ### a) Experiência desejada (utilizador final / plataforma)
+   O que o utilizador deve conseguir fazer e como o sistema deve se comportar naquela situação.
+
+   **FARIA:**
+   - "Quando o lead atinge o limite de leads do plano, o sistema deve bloquear a criação
+     de novos leads imediatamente ou apenas mostrar um aviso e permitir que continue?"
+   - "Na página de boas-vindas para novos compradores, queres um checklist de próximos
+     passos ou simplesmente um botão de acesso com uma frase de instrução?"
+   - "Se o utilizador desactivar o bot manualmente, o follow-up automático deve parar
+     também ou continuar a enviar?"
+
+   **NÃO FARIA:**
+   - "Devo usar redirect 301 ou 302 para a página /welcome?" → decisão técnica, o
+     operacional decide
+   - "O toast de sucesso deve aparecer antes ou depois do redirect?" → detalhe UI sem
+     impacto no comportamento desejado
+
+   ### b) Estratégia de negócio e produto
+   Decisões comerciais, de preço, de acesso por plano, ou de timing de lançamento.
+
+   **FARIA:**
+   - "O Plano Scale vai à venda via Kiwify neste sprint ou apenas na Fase 2?"
+   - "O playground com limite de 5 testes/mês deve aparecer bloqueado no plano Start
+     (com CTA de upgrade visível) ou simplesmente não aparecer para esse plano?"
+   - "O trial de 7 dias é activado automaticamente para qualquer registo ou apenas para
+     leads seleccionados que fizeram call com o fundador?"
+
+   **NÃO FARIA:**
+   - "Devo criar o seed do crm_scale agora mesmo?" → a decisão já está registada nos
+     plans — criar no seed é o que fazer, não é uma pergunta
+   - "Devo usar Kiwify ou Stripe para cobrança de excedentes?" → já decidido nos plans
+
+   ### c) Configurações externas
+   Valores que o Claude não consegue verificar: painel de terceiro, link real, dado não
+   acessível no código.
+
+   **FARIA:**
+   - "Qual é o nome exato do produto no painel Kiwify para o Plano Scale?"
+   - "O redirect pós-compra no Kiwify está configurado para qual URL actualmente?"
+
+   **NÃO FARIA:**
+   - "Qual é o campo plan_code na tabela plans?" → verificável no código
+   - "O email de boas-vindas tem logo da marca?" → verificável no template de email
+
+   ---
+   **Regra geral:** se a dúvida pode ser resolvida lendo o código, os docs/architecture/
+   ou os próprios docs/plans/, não é uma pergunta para o admin.
 
 **Aguardar as respostas antes de avançar para a priorização.**
 
@@ -97,29 +140,53 @@ template `_template-plano-semanal.md`.
 
 ---
 
+## Divisão de responsabilidades: analítico vs. operacional
+
+| | Claude Analítico | Claude Operacional |
+|---|---|---|
+| Responsabilidade | O QUÊ + PORQUÊ + ONDE (nível de serviço) | COMO (arquivos, padrões, abordagem, lógica) |
+| Fonte | docs/plans/ + auditoria de alto nível + admin | Plan Mode com leitura precisa do código |
+| Precisão esperada | Comportamento desejado, serviço envolvido | Arquivo exacto, linha, abordagem técnica |
+
+O analítico **não deve** prescrever:
+- Qual arquivo alterar ou qual linha tocar (pode estar errado após análise de muitos itens)
+- Qual abordagem técnica seguir ("usar o fluxo X em vez do Y")
+- Como estruturar o código, migration ou padrão interno
+- Detalhes de convenção interna que só aparecem relendo o código com foco
+
+Esses pontos são competência do Plan Mode do operacional, que investiga o código
+com o foco de quem está a implementar apenas aquele item.
+
+---
+
 ## Formato do prompt pronto (por item)
 
-Cada item do sprint inclui um prompt auto-contido para o processo de implementations.
-O prompt deve ter:
+O prompt entrega O QUÊ e PORQUÊ com contexto suficiente para o Plan Mode do
+operacional fazer a investigação precisa. Não prescreve o COMO.
 
-1. O pedido em linguagem natural
-2. A motivação em 1 frase (por que agora)
-3. O contexto técnico com arquivos e linhas (não assumir que o Claude de implementations
-   leu o plans/)
-4. A instrução para seguir o processo
+Estrutura:
+1. O pedido em linguagem natural (O QUÊ)
+2. A motivação: por que agora, o que está em risco ou a ganhar (PORQUÊ)
+3. Comportamento actual vs. comportamento desejado
+4. Área do sistema envolvida (serviço/componente, sem prescrever arquivos ou abordagem)
+5. Contexto de produto confirmado pelo admin (se houver)
+6. A instrução para seguir o processo
 
 Modelo:
 ```
 Gostaria de implementar [título].
 [Motivação — por que agora, o que está em risco ou a ganhar.]
 
-Contexto: [resumo do que existe actualmente + o que precisa mudar, com arquivos e linhas].
+Comportamento actual: [o que acontece hoje].
+Comportamento desejado: [o que deve acontecer depois].
+
+Área do sistema: [backend-core / backend-crm / frontend-crm / etc.].
+[Contexto de produto confirmado pelo admin, se relevante.]
 
 Leia o guia de implementação e siga o processo.
 ```
 
-O prompt deve ser **auto-contido** — o Claude de implementations não precisa abrir nenhum
-outro arquivo para ter o contexto necessário para o Plan Mode.
+O operacional vai ao Plan Mode, lê o código com foco naquele item e decide COMO fazer.
 
 ---
 
@@ -154,7 +221,7 @@ Claude:
 Claude apresenta:
   → Tabela de auditoria
   → Mapa de dependências
-  → Perguntas de negócio (se houver)
+  → Perguntas ao admin (experiência desejada / produto / estratégia / externo)
 
 Utilizador responde às perguntas
 
