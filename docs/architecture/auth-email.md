@@ -107,7 +107,7 @@ Usa `smtplib` (stdlib Python) com STARTTLS. Configuração via `.env`:
 
 | Função | Trigger | Assunto |
 |---|---|---|
-| `render_welcome_email(name, temp_password, login_url)` | Admin cria conta | "Bem-vindo à Digital Pro — acesso criado" |
+| `render_welcome_email(name, temp_password, login_url)` | Admin cria conta **ou** Kiwify `order_approved` para email desconhecido | "Bem-vindo à Lara AI — as tuas credenciais de acesso" |
 | `render_reset_email(reset_url)` | `forgot-password` | "Recuperação de senha — Digital Pro" |
 | `render_password_changed_email(name)` | `reset-password` / `change-password` | "Senha alterada — Digital Pro" |
 | `render_register_welcome_email(name, login_url)` | `POST /auth/register` | "Bem-vindo ao Digital Pro" |
@@ -180,11 +180,21 @@ Retorna planos CRM activos com limites completos: `plan_code`, `plan_name`, `max
 
 ## Webhook Kiwify — Activação automática de subscriptions
 
-**Endpoint:** `POST /webhooks/kiwify` — `backend-core/app/api/webhooks_kiwify.py`
+**Fluxo:**
+```
+Kiwify → POST /webhooks/kiwify?signature=<hmac>   (backend-crm)
+  → valida HMAC-SHA1 com KIWIFY_WEBHOOK_SECRET
+  → mapeia Subscription.plan.name → plan_code
+  → POST /internal/subscriptions/kiwify-event      (backend-core, x-service-token)
+      → activa / cancela / renova subscription
+      → se email desconhecido + activate: cria User + envia email de boas-vindas
+```
 
-Recebe eventos de pagamento do Kiwify e cria/renova/cancela subscriptions automaticamente.
+**Arquivos:**
+- `backend-crm/routes/webhooks.py` — valida HMAC, mapeia plano, chama core
+- `backend-core/app/api/subscriptions.py` — `kiwify_subscription_event()`, cria User se necessário
 
-**Validação:** HMAC-SHA1 do corpo raw com `KIWIFY_WEBHOOK_SECRET` como chave; assinatura enviada em `?signature=<hex>`.
+**Validação:** HMAC-SHA1 do body raw; assinatura em `?signature=<hex>`. Sem secret configurado → validação ignorada.
 
 **Campos do payload Kiwify relevantes:**
 
@@ -194,23 +204,31 @@ Recebe eventos de pagamento do Kiwify e cria/renova/cancela subscriptions automa
 | `Customer.email` | `"cliente@email.com"` | Identifica o utilizador no sistema |
 | `Subscription.plan.name` | `"Plano Start"` | Determina o plano a activar |
 
-**Mapeamento de planos:**
+**Mapeamento de planos** (`_KIWIFY_PLAN_MAP` em `webhooks.py`):
 
-| Nome Kiwify | Plano CRM | Duração |
+| Nome Kiwify | Plano CRM |
+|---|---|
+| `"Plano Start"` / `"Start"` | `crm_start` |
+| `"Plano Growth"` / `"Growth"` | `crm_growth` |
+| `"Plano Scale"` | `crm_scale` |
+
+**Sets de eventos:**
+
+| Grupo | Eventos reconhecidos | Acção |
 |---|---|---|
-| `Plano Start` | `crm_start` | 30 dias |
-| `Plano Growth` | `crm_growth` | 30 dias |
+| activate | `order_approved`, `order.approved`, `purchase_approved` | Activa subscription; cancela activa do mesmo produto |
+| renew | `subscription_renewed`, `subscription.renewed` | Estende `current_period_end` +30 dias |
+| cancel | `subscription_cancelled`, `subscription_canceled`, `subscription.cancelled`, `order_refunded`, `order.refunded` | Cancela subscription activa |
 
-**Eventos tratados:**
-- `order_approved` → activa subscription (cancela activa existente, cria nova) + envia `render_subscription_activated_email`
-- `subscription_renewed` → estende `current_period_end` em +30 dias + envia `render_subscription_renewed_email`
-- `order_refunded` / `subscription_cancelled` → cancela subscription activa + envia `render_subscription_cancelled_email`
+**Comportamento `kiwify_subscription_event` (backend-core):**
+- Email existente + activate → cancela sub activa do produto, cria nova (`status=active`, `+30 dias`), retorna `{"action": "activated"}`
+- Email **desconhecido** + activate → cria `User` (senha aleatória 14 chars `ascii+!@#$%`), activa subscription, envia `render_welcome_email`, retorna `{"action": "created_and_activated"}`
+- Email desconhecido + cancel/renew → `{"action": "skipped", "reason": "user_not_found"}`
+- `plan_code` inexistente → `{"action": "skipped", "reason": "plan_not_found"}`
 
-**Config `.env` (backend-core):**
-```
-KIWIFY_WEBHOOK_SECRET=<token do painel Kiwify>
-KIWIFY_PRODUCT_ID=<id do produto>
-```
+**Config `.env`:**
+- `backend-crm/.env`: `KIWIFY_WEBHOOK_SECRET`
+- `backend-core/.env`: `KIWIFY_PRODUCT_ID` (opcional)
 
 ---
 
@@ -242,6 +260,8 @@ KIWIFY_PRODUCT_ID=<id do produto>
 - `"active"` — tem sub activa
 - `"expired"` — última sub expirou (não renovada)
 - `"inactive"` — nunca teve sub
+
+Cada entrada em `products[]` inclui `current_period_end` (nullable ISO datetime) — usada pelo frontend em `Assinatura.tsx` para exibir data de renovação do plano actual.
 
 `GET /admin/users` mostra plano e status da sub mais recente (activa ou expirada), ordenado por `current_period_end desc`.
 

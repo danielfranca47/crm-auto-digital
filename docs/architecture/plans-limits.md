@@ -125,6 +125,28 @@ Implementação: handler no `catch` verifica `error?.data?.detail?.error`, se re
 
 ---
 
+## Página de Assinatura — `frontend-crm/src/pages/Assinatura.tsx`
+
+Ponto de acesso do utilizador para upgrade e visualização do plano actual.
+
+**Checkout URLs por plano** (`PLAN_CHECKOUT_URLS`):
+
+| Plano | URL Kiwify |
+|---|---|
+| `crm_start` | `https://pay.kiwify.com.br/gOjcexD` |
+| `crm_growth` | `https://pay.kiwify.com.br/To8qV99` |
+| `crm_scale` | `https://pay.kiwify.com.br/2mtd25x` |
+
+`buildCheckoutUrl(planCode, userEmail)` constrói a URL com `?email=<encoded>` para pré-preencher o email do comprador no checkout Kiwify.
+
+**Data de renovação:** lida de `entitlements.products[0].current_period_end`. Exibida no card do plano actual como "Renovação: DD/MM/AAAA".
+
+**Aviso de sobreposição:** ao selecionar um plano diferente do actual, exibe alerta explicando que a Kiwify não faz upgrade automático — o utilizador deve subscrever o novo plano e cancelar o anterior.
+
+**Banner pós-compra:** se `?upgraded=1` estiver na URL (parâmetro enviado pelo redirect pós-compra Kiwify), mostra Alert "Plano activado com sucesso!".
+
+---
+
 ## CORS — `backend-core/app/main.py`
 
 As origens `http://127.0.0.1:5173` e `http://127.0.0.1:5174` foram adicionadas à lista `origins` para permitir acesso do frontend em ambiente local (Chrome resolve `localhost` para `::1` mas os backends escutam em `127.0.0.1`).

@@ -50,7 +50,7 @@ agent-local         local  ← agente Python local de prospecção/scraping
 
 - **UazAPI** — broker WhatsApp Web; endpoints `/send/text`, `/send/media`, `/message/download`, `/qr`
 - **Resend** — SMTP relay para email transacional; domínio verificado `danielfranca.pt`; `SMTP_USER=resend`, `SMTP_PASS=<api_key>`
-- **Kiwify** — plataforma de pagamentos; webhook `POST /webhooks/kiwify` activa subscriptions; HMAC-SHA1 via `?signature=`
+- **Kiwify** — plataforma de pagamentos; o webhook entra pelo backend-crm (`POST /webhooks/kiwify`), que valida HMAC-SHA1 e chama `POST /internal/subscriptions/kiwify-event` no backend-core para activar/cancelar subscriptions
 
 ---
 
@@ -262,6 +262,7 @@ Operador escreve mensagem no Playground (frontend-crm)
 | **UazAPI** | backend-core (envio), backend-crm (webhook recepção + download de media) | Broker WhatsApp Web (QR session) |
 | **OpenAI Whisper** | backend-crm (`audio_transcription.py`) | Transcrição de áudio PTT |
 | **LLM (Claude/OpenAI compat.)** | backend-executors (`llm_service.py`) | Decisões Mãe + Filha |
+| **Kiwify** | backend-crm (`routes/webhooks.py`) + backend-core (`api/subscriptions.py`) | Pagamentos SaaS — webhook activa/cancela/renova subscriptions |
 
 ---
 
