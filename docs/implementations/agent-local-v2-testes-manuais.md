@@ -81,10 +81,10 @@ Uma janela com o título **"Gerador de Leads — Digital Pro"** deve aparecer no
 - Botão **"📥 Exportar Excel"** aparece no cabeçalho da tabela
 
 ### O que confirmar
-- [ ] Barra de progresso visível durante a pesquisa
-- [ ] Resultados aparecem na tabela com os campos corretos
-- [ ] Badge "Modo: Assinante — chave API incluída" visível
-- [ ] Botão "📥 Exportar Excel" aparece
+- [x] Barra de progresso visível durante a pesquisa
+- [x] Resultados aparecem na tabela com os campos corretos
+- [x] Badge "Modo: Assinante — chave API incluída" visível
+- [x] Botão "📥 Exportar Excel" aparece
 
 ---
 
@@ -109,9 +109,9 @@ Uma janela com o título **"Gerador de Leads — Digital Pro"** deve aparecer no
 - A chave fica guardada para próximas sessões
 
 ### O que confirmar
-- [ ] Campo de chave API aparece nas configurações (só visível para não-assinantes)
-- [ ] Após guardar, o modo muda para "Chave API própria configurada"
-- [ ] Pesquisa retorna resultados
+- [x] Campo de chave API aparece nas configurações (só visível para não-assinantes)
+- [x] Após guardar, o modo muda para "Chave API própria configurada"
+- [x] Pesquisa retorna resultados
 
 ---
 
