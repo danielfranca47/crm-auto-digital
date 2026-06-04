@@ -1,17 +1,40 @@
-import { useState, useEffect } from "react"
-import { useForm } from "react-hook-form"
-import { zodResolver } from "@hookform/resolvers/zod"
-import { z } from "zod"
+import { useState, useEffect, useCallback } from "react"
 import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
+import { Badge } from "@/components/ui/badge"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Search, Lock, Globe, Linkedin, Instagram, Star, ExternalLink } from "lucide-react"
-import { toast } from "@/hooks/use-toast"
-import { useApiErrorHandler } from "@/hooks/useApiErrorHandler"
+import { RefreshCw, Bot, Lock, Globe, Linkedin, Instagram, Star, ExternalLink } from "lucide-react"
+import { api } from "@/services/api"
 
-import { api, type SearchPayload, type Manifest } from "@/services/api"
+// ── Tipos ──────────────────────────────────────────────────────────────────
+
+type HistoryEntry = {
+  id: number
+  lead_id: number
+  lead_name: string
+  phone: string
+  action: string
+  notes: string
+  created_at: string
+}
+
+const ACTION_LABELS: Record<string, string> = {
+  manual_outbound: "Enviado (manual)",
+  sent: "Enviado",
+  failed: "Falhou",
+  queued: "Enfileirado",
+  copied: "Copy copiado",
+  updated_message: "Mensagem guardada",
+}
+
+const ACTION_COLORS: Record<string, string> = {
+  manual_outbound: "default",
+  sent: "default",
+  failed: "destructive",
+  queued: "secondary",
+}
+
+// ── Extensões (upsell) ─────────────────────────────────────────────────────
 
 type Extension = {
   id: string
@@ -52,273 +75,161 @@ const AVAILABLE_EXTENSIONS: Extension[] = [
   },
 ]
 
-const OWNER_WHATSAPP = "+351912345678" // substituir pelo WhatsApp real do dono
+const OWNER_WHATSAPP = "+351912345678"
 
-const API_BASE =
-  (import.meta as any)?.env?.VITE_API_BASE_URL ?? "http://127.0.0.1:8000"
-
-const pesquisaSchema = z.object({
-  proposta: z.string().min(2, "Descreva a sua proposta"),
-  pais: z.string().min(2, "País deve ter pelo menos 2 caracteres"),
-  provincia: z.string().min(2, "Província/Estado deve ter pelo menos 2 caracteres"),
-  cidade: z.string().min(2, "Cidade deve ter pelo menos 2 caracteres"),
-  bairro: z.string().optional(),
-  setor: z.string().min(2, "Setor deve ter pelo menos 2 caracteres"),
-  quantidade: z.string({ required_error: "Selecione a quantidade" }),
-})
-
-type PesquisaFormData = z.infer<typeof pesquisaSchema>
-
-const propostaSugestoes = ["Site", "Automações", "Tráfego Pago", "Produção de Conteúdo"]
-const quantidades = Array.from({ length: 21 }, (_, i) => i + 5) // 5 a 25
+// ── Componente ──────────────────────────────────────────────────────────────
 
 export default function Pesquisa() {
-  const [isLoading, setIsLoading] = useState(false)
-  const [manifest, setManifest] = useState<Manifest | null>(null)
-  const { handleError } = useApiErrorHandler()
-
+  const [entries, setEntries] = useState<HistoryEntry[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+  const [filter, setFilter] = useState<string>("all")
   const [enabledExtensions, setEnabledExtensions] = useState<string[]>([])
   const [upsellModal, setUpsellModal] = useState<Extension | null>(null)
 
+  // Extensões habilitadas
   useEffect(() => {
     api.core.getAiProfileMe().then((profile: any) => {
       setEnabledExtensions(Array.isArray(profile?.enabled_extensions) ? profile.enabled_extensions : [])
     }).catch(() => {})
   }, [])
 
-  const form = useForm<PesquisaFormData>({
-    resolver: zodResolver(pesquisaSchema),
-    defaultValues: { bairro: "" },
-  })
-
-  const onSubmit = async (data: PesquisaFormData) => {
-    setIsLoading(true)
-    setManifest(null)
-
+  const load = useCallback(async () => {
+    setLoading(true)
+    setError(null)
     try {
-      const payload: SearchPayload = {
-        proposal: data.proposta.trim(),
-        country: data.pais.trim(),
-        state: data.provincia.trim(),
-        city: data.cidade.trim(),
-        neighborhood: (data.bairro || "").trim(),
-        sector: data.setor.trim(),
-        quantity: Math.max(5, Math.min(50, parseInt(data.quantidade, 10) || 20)),
-      }
-
-      const res = await api.pesquisa.executar(payload)
-      const man = res?.manifest as Manifest | undefined
-      if (!man) {
-        throw new Error("Resposta sem manifest.")
-      }
-      setManifest(man)
-
-      toast({
-        title: "Pesquisa solicitada!",
-        description: "Sua automação foi iniciada e já gerou o run_id. Você pode baixar a planilha.",
-      })
-    } catch (error: any) {
-      handleError(error, { fallbackMessage: "Não foi possível executar a pesquisa." })
+      const data = await (api.prospeccao as any).history(200, 0)
+      setEntries(Array.isArray(data) ? data : [])
+    } catch (err: any) {
+      setError("Não foi possível carregar o histórico.")
     } finally {
-      setIsLoading(false)
+      setLoading(false)
     }
-  }
+  }, [])
 
-  const downloadUrl = (kind: "xlsx_validado" | "xlsx" | "csv") =>
-    manifest ? api.pesquisa.downloadUrl(manifest.run_id, kind) : "#"
+  useEffect(() => { load() }, [load])
+
+  const filtered = filter === "all"
+    ? entries
+    : entries.filter(e => {
+        if (filter === "sent") return e.action === "sent" || e.action === "manual_outbound"
+        if (filter === "failed") return e.action === "failed"
+        return true
+      })
+
+  const formatDate = (iso: string) =>
+    iso ? iso.replace("T", " ").slice(0, 16) : "—"
 
   return (
-    <div className="container mx-auto p-6 max-w-3xl">
-      <div className="mb-8">
-        <h1 className="text-3xl font-bold tracking-tight">Pesquisa de Empresas</h1>
+    <div className="container mx-auto p-6 max-w-4xl space-y-8">
+
+      {/* Cabeçalho */}
+      <div>
+        <h1 className="text-3xl font-bold tracking-tight flex items-center gap-2">
+          <Bot className="h-7 w-7 text-primary" />
+          Leads do Agente Local
+        </h1>
         <p className="text-muted-foreground mt-2">
-          Configure os parâmetros para encontrar empresas potenciais através da automação
+          Os leads prospectados via agent-local aparecem aqui automaticamente.
+          Use o app desktop para pesquisar no Google Maps e enviar mensagens de prospecção.
         </p>
       </div>
 
+      {/* Histórico de prospecções */}
       <Card>
         <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Search className="h-5 w-5" />
-            Configurar Pesquisa
-          </CardTitle>
-          <CardDescription>
-            Preencha os campos abaixo para personalizar sua busca automática
-          </CardDescription>
+          <div className="flex items-center justify-between">
+            <CardTitle className="text-base">Histórico de Prospecções</CardTitle>
+            <div className="flex items-center gap-2">
+              <Select value={filter} onValueChange={setFilter}>
+                <SelectTrigger className="w-36 h-8 text-sm">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Todos</SelectItem>
+                  <SelectItem value="sent">Enviados</SelectItem>
+                  <SelectItem value="failed">Falhados</SelectItem>
+                </SelectContent>
+              </Select>
+              <Button size="sm" variant="outline" onClick={load} disabled={loading}>
+                <RefreshCw className={`h-4 w-4 mr-1 ${loading ? "animate-spin" : ""}`} />
+                Actualizar
+              </Button>
+            </div>
+          </div>
         </CardHeader>
         <CardContent>
-          <Form {...form}>
-            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
-              <FormField
-                control={form.control}
-                name="proposta"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Proposta *</FormLabel>
-                    <FormControl>
-                      <>
-                        <Input
-                          placeholder="Ex: Site, Automações, Consultoria Jurídica…"
-                          list="proposta-sugestoes"
-                          {...field}
-                        />
-                        <datalist id="proposta-sugestoes">
-                          {propostaSugestoes.map((s) => (
-                            <option key={s} value={s} />
-                          ))}
-                        </datalist>
-                      </>
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <FormField
-                  control={form.control}
-                  name="pais"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>País *</FormLabel>
-                      <FormControl>
-                        <Input placeholder="Ex: Brasil" {...field} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
-                <FormField
-                  control={form.control}
-                  name="provincia"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Província/Estado *</FormLabel>
-                      <FormControl>
-                        <Input placeholder="Ex: São Paulo" {...field} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <FormField
-                  control={form.control}
-                  name="cidade"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Cidade *</FormLabel>
-                      <FormControl>
-                        <Input placeholder="Ex: São Paulo" {...field} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
-                <FormField
-                  control={form.control}
-                  name="bairro"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Bairro (Opcional)</FormLabel>
-                      <FormControl>
-                        <Input placeholder="Ex: Vila Madalena" {...field} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-              </div>
-
-              <FormField
-                control={form.control}
-                name="setor"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Setor / Empresas *</FormLabel>
-                    <FormControl>
-                      <Input placeholder="Ex: Restaurantes, Tecnologia, Saúde" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
-              <FormField
-                control={form.control}
-                name="quantidade"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Quantidade de Empresas *</FormLabel>
-                    <Select onValueChange={field.onChange} defaultValue={field.value}>
-                      <FormControl>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Selecione a quantidade (5-25)" />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        {quantidades.map((quantidade) => (
-                          <SelectItem key={quantidade} value={quantidade.toString()}>
-                            {quantidade} empresas
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
-              <Button type="submit" className="w-full" size="lg" disabled={isLoading}>
-                {isLoading ? "Processando..." : "Pesquisar por Empresas"}
-              </Button>
-            </form>
-          </Form>
-
-          {manifest && (
-            <div className="mt-6 space-y-3 border-t pt-4">
-              <div className="text-sm text-muted-foreground">
-                <span className="font-medium">Execução concluída.</span>{" "}
-                run_id: <span className="font-mono">{manifest.run_id}</span>
-              </div>
-              <div className="flex flex-wrap gap-2">
-                <Button asChild>
-                  <a href={downloadUrl("xlsx_validado")} target="_blank" rel="noopener noreferrer">
-                    Baixar planilha validada (.xlsx)
-                  </a>
-                </Button>
-                <Button asChild variant="outline">
-                  <a href={downloadUrl("xlsx")} target="_blank" rel="noopener noreferrer">
-                    Baixar XLSX
-                  </a>
-                </Button>
-                <Button asChild variant="outline">
-                  <a href={downloadUrl("csv")} target="_blank" rel="noopener noreferrer">
-                    Baixar CSV
-                  </a>
-                </Button>
-              </div>
-              {manifest.counts && (
-                <div className="text-xs text-muted-foreground">
-                  <div>Encontrados: {manifest.counts.found ?? "-"}</div>
-                  <div>Finais: {manifest.counts.final ?? "-"}</div>
-                  <div>Issues: {manifest.counts.issues ?? "-"}</div>
-                </div>
-              )}
+          {loading && (
+            <p className="text-sm text-muted-foreground text-center py-8">A carregar…</p>
+          )}
+          {!loading && error && (
+            <p className="text-sm text-destructive text-center py-8">{error}</p>
+          )}
+          {!loading && !error && filtered.length === 0 && (
+            <div className="text-center py-12 space-y-2">
+              <Bot className="h-10 w-10 mx-auto text-muted-foreground/40" />
+              <p className="text-sm text-muted-foreground">
+                Sem prospecções registadas ainda.
+              </p>
+              <p className="text-xs text-muted-foreground">
+                Abre o app Gerador de Leads, pesquisa empresas e usa o botão 📱 para prospectar.
+              </p>
+            </div>
+          )}
+          {!loading && !error && filtered.length > 0 && (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b text-muted-foreground text-xs uppercase tracking-wide">
+                    <th className="text-left py-2 pr-4 font-medium">Data/Hora</th>
+                    <th className="text-left py-2 pr-4 font-medium">Lead</th>
+                    <th className="text-left py-2 pr-4 font-medium">Telefone</th>
+                    <th className="text-left py-2 pr-4 font-medium">Estado</th>
+                    <th className="text-left py-2 font-medium">Notas</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filtered.map((entry) => (
+                    <tr key={entry.id} className="border-b last:border-0 hover:bg-muted/30 transition-colors">
+                      <td className="py-2 pr-4 text-muted-foreground whitespace-nowrap">
+                        {formatDate(entry.created_at)}
+                      </td>
+                      <td className="py-2 pr-4 font-medium max-w-[160px] truncate">
+                        {entry.lead_name || "—"}
+                      </td>
+                      <td className="py-2 pr-4 text-muted-foreground font-mono text-xs">
+                        {entry.phone || "—"}
+                      </td>
+                      <td className="py-2 pr-4">
+                        <Badge
+                          variant={
+                            (ACTION_COLORS[entry.action] as any) ?? "secondary"
+                          }
+                          className="text-xs"
+                        >
+                          {ACTION_LABELS[entry.action] ?? entry.action}
+                        </Badge>
+                      </td>
+                      <td className="py-2 text-muted-foreground text-xs max-w-[200px] truncate">
+                        {entry.notes || "—"}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              <p className="text-xs text-muted-foreground mt-3">
+                {filtered.length} registo{filtered.length !== 1 ? "s" : ""}
+              </p>
             </div>
           )}
         </CardContent>
       </Card>
 
-      {/* Seção de Extensões */}
-      <div className="mt-8">
+      {/* Extensões de Pesquisa (upsell) */}
+      <div>
         <h2 className="text-xl font-semibold mb-1">Extensões de Pesquisa</h2>
         <p className="text-sm text-muted-foreground mb-4">
-          Enriquecimentos avançados para sua pesquisa. Extensões desbloqueadas ficam disponíveis automaticamente.
+          Enriquecimentos avançados para o agente local. Extensões desbloqueadas ficam disponíveis automaticamente.
         </p>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           {AVAILABLE_EXTENSIONS.map((ext) => {
@@ -372,7 +283,7 @@ export default function Pesquisa() {
             </div>
             <p className="text-sm text-muted-foreground">{upsellModal.description}</p>
             <p className="text-sm">
-              Esta extensão requer contratação adicional. Entre em contato para ativar na sua conta.
+              Esta extensão requer contratação adicional. Entre em contacto para activar na sua conta.
             </p>
             <div className="flex gap-2">
               <Button

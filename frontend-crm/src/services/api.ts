@@ -911,6 +911,12 @@ export const api = {
         return apiClient.get(`/prospeccao/whatsapp/summary`);
       },
     },
+
+    history: async (limit = 100, offset = 0) => {
+      return apiClient.get(
+        `/prospeccao/history?limit=${limit}&offset=${offset}`
+      );
+    },
   },
 
   // -------- WHATSAPP (QR via Selenium) --------
