@@ -988,6 +988,16 @@ def _handle_whatsapp_report(conn, payload, status, result, error_txt, *, user_id
             decision_trace=decision_trace,
             outcome=outcome,
         )
+        # Confirmar prospecção outbound: só seta se origin ainda estiver neutro
+        _cur = conn.cursor()
+        _cur.execute(
+            """UPDATE leads
+                  SET origin = 'outbound'
+                WHERE id = ?
+                  AND user_id = ?
+                  AND (origin IS NULL OR origin = '' OR origin = 'Manual')""",
+            (lead_id, user_id),
+        )
     elif status == JOB_STATUS_FAILED:
         _log_prospection(
             conn,
