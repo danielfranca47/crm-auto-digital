@@ -141,6 +141,9 @@ Se o arquivo de implementação graduado tinha o campo `**Sprint:**` preenchido:
    ```bash
    git rm docs/plans/<arquivo-de-plans>.md
    ```
+   **Regra obrigatória:** nunca deletar arquivos prefixados com `_` em `docs/plans/`
+   (ex.: `_guia-analise-planos.md`, `_template-plano-semanal.md`). Esses são guias
+   permanentes do processo analítico — só os arquivos de planos concretos são deletados.
 5. Deletar o próprio arquivo de sprint plan:
    ```bash
    git rm docs/plans/plano-sprint-YYYY-MM-DD.md
