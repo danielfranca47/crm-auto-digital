@@ -1,7 +1,7 @@
 # agent-local v2 — App Standalone de Geração de Leads
 
 **Branch:** `etapa-9-planos-limites`
-**Status:** Fase 2 concluída e validada — próxima: Fase 3 (Onboarding)
+**Status:** Fase 6 concluída — aguarda validação (F1–F8); Fase 4 (empacotamento .exe) pendente
 
 ---
 
@@ -234,7 +234,7 @@ Onboarding — Gratuito (4 passos)
 
 ---
 
-### Fase 5 — Prospecção WhatsApp na UI
+### Fase 5 — Prospecção WhatsApp na UI (individual)
 
 **Objetivo:** Botão "📱 Prospectar" em cada resultado da tabela. Abre diálogo com telefone e mensagem. Envia via WhatsApp Web. Assinante: regista lead + outbound no CRM automaticamente. Não-assinante: envio local sem rastreio.
 
@@ -303,7 +303,82 @@ Clica 📱 → preenche telefone + mensagem
 
 ---
 
+### Fase 6 — Prospecção em lote, histórico, conta, copy IA
+
+**Commits:**
+
+| # | Commit | O que foi implementado |
+|---|---|---|
+| 1 | `ec6ff97` | Backend: `POST /api/prospeccao/generate-copy` + `GET /api/prospeccao/history` |
+| 2 | `e73c4fb` | agent-local: lote + histórico + conta + copy IA (44 testes passam) |
+
+**Ficheiros alterados/criados:**
+
+| Arquivo | O que mudou |
+|---|---|
+| `backend-crm/routes/prospeccao.py` | +`generate-copy` (LLM copy para lead avulso) + `history` (JOIN logs+leads) |
+| `agent-local/app/ui/main_screen.py` | Checkboxes por linha, select-all, barra de selecção em lote, botão "📋 Histórico" |
+| `agent-local/app/ui/bulk_prospect_dialog.py` | Novo: diálogo 3 passos com progresso por lead, delay, cancel, sync CRM |
+| `agent-local/app/ui/history_screen.py` | Novo: janela de histórico (log local + CRM), export CSV |
+| `agent-local/app/ui/prospect_dialog.py` | Botão "✨ Gerar com IA" (assinante) — chama `generate-copy` |
+| `agent-local/app/ui/settings_screen.py` | Secção "Conta" com nome/email/badge/nota passwordless |
+| `agent-local/app/session.py` | `append_prospect_log` / `get_prospect_log` (JSONL local) |
+| `agent-local/app/crm_client.py` | `get_prospect_history()` + `generate_copy()` |
+| `agent-local/tests/test_bulk_prospect.py` | 6 testes (loop, cancel, CRM, log) |
+| `agent-local/tests/test_history.py` | 10 testes (JSONL, CRM history, generate_copy) |
+
+### Fase 7 — CRM: Pesquisa → "Leads do Agente"
+
+**Commit:** `db96007`
+
+| Arquivo | O que mudou |
+|---|---|
+| `frontend-crm/src/pages/Pesquisa.tsx` | Formulário de search removido; tabela de histórico de prospecções do agent-local; extensões upsell mantidas |
+| `frontend-crm/src/services/api.ts` | `api.prospeccao.history(limit, offset)` adicionado |
+
+---
+
 ## Checks de Validação
+
+### Fase 6
+
+#### Cenário G1 — Prospecção em lote
+- [ ] Pesquisar → aparecem checkboxes por linha e "☐ Todos" no cabeçalho
+- [ ] Seleccionar 2+ leads → barra azul aparece "N leads seleccionados — 📱 Prospectar todos"
+- [ ] Clicar "Prospectar todos" → `BulkProspectDialog` abre com lista dos leads
+- [ ] Iniciar envio → chips mudam: ⏳ → 📱 → ✓ / ✗ por lead
+- [ ] Delay entre envios respeitado (5s/10s/15s)
+- [ ] Botão "Cancelar" interrompe a fila
+
+#### Cenário G2 — Lote assinante + CRM
+- [ ] Assinante com "Registar no CRM" activo → após envio com sucesso: lead criado + `origin='outbound'`
+- [ ] Resumo final mostra N registados no CRM
+- [ ] `prospection_logs` tem registo `action='manual_outbound'`
+
+#### Cenário G3 — Histórico
+- [ ] Clicar "📋" no header → `HistoryScreen` abre
+- [ ] Após lote: entradas aparecem no histórico (log local)
+- [ ] Assinante: entradas aparecem via CRM (fonte: CRM)
+- [ ] "Exportar CSV" gera ficheiro correcto
+
+#### Cenário G4 — Copy IA (assinante)
+- [ ] Abrir diálogo de prospecção individual como assinante
+- [ ] Botão "✨ Gerar com IA" visível
+- [ ] Clicar → textarea preenchido com mensagem gerada (requer `OPENAI_API_KEY` configurado)
+- [ ] Não-assinante: botão não aparece
+
+#### Cenário G5 — Gestão de conta
+- [ ] Abrir ⚙ Configurações → secção "Conta" mostra nome, email, badge de assinatura
+- [ ] Nota sobre passwordless visível ("Para alterar conta, faz novo login")
+
+### Fase 7
+
+#### Cenário H1 — CRM "Leads do Agente"
+- [ ] Navegar para Pesquisa no CRM → título "Leads do Agente Local" visível
+- [ ] Sem prospecções: ecrã vazio com instrução de uso do app
+- [ ] Após prospecção via agent-local: entradas aparecem na tabela
+- [ ] Filtro "Enviados" / "Falhados" / "Todos" funciona
+- [ ] Extensões de pesquisa (upsell) ainda visíveis no final da página
 
 ### Fase 2
 
@@ -396,10 +471,16 @@ Clica 📱 → preenche telefone + mensagem
 - `agent-local/tests/test_whatsapp_client.py` — 15 testes (singleton, send, templates) sem Selenium real
 - **Total: 25 testes — todos passam**
 
+### Ajustes implementados em Fases 6+7 (commits `ec6ff97`, `e73c4fb`, `db96007`)
+
+- **Prospecção em lote** — checkboxes + `BulkProspectDialog` com progresso, delay, cancel, sync CRM
+- **Histórico de prospecções** — `HistoryScreen` + log local JSONL + `GET /api/prospeccao/history`
+- **Gestão de conta** — settings mostra nome/email/badge/nota passwordless
+- **Copy IA** — `POST /api/prospeccao/generate-copy` + botão "✨ Gerar com IA" no diálogo
+- **CRM Pesquisa → "Leads do Agente"** — tabela de histórico via endpoint; upsell mantido
+- **Testes adicionais** — 44 testes passam (6 bulk + 10 history + 25 anteriores + 3 outros)
+
 ### Gaps restantes
 
 - **Fase 4 (empacotamento .exe)** — `agent-local.spec` e `build.bat` ainda não criados. Próxima fase obrigatória antes de distribuição.
-- **Prospecção em lote** — enviar para vários leads seleccionados com delay configurável entre envios (anti-ban).
-- **Histórico de prospecções na UI** — não há forma de ver envios passados dentro do app; só no CRM.
-- **Reset de senha / gestão de conta** — actualmente só via API directa ou painel web (baixa prioridade com auth passwordless).
 - **Suporte macOS/Linux** — PyInstaller gera binário por plataforma; a Fase 4 será só para Windows por ora.
