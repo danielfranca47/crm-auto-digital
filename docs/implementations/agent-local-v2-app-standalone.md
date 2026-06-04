@@ -1,7 +1,7 @@
 # agent-local v2 — App Standalone de Geração de Leads
 
 **Branch:** `etapa-9-planos-limites`
-**Status:** Em andamento
+**Status:** Fase 2 concluída e validada — próxima: Fase 3 (Onboarding)
 
 ---
 
@@ -157,14 +157,65 @@ OTP screen → verify_otp(email, code) → JWT → main/onboarding
 |---|---|---|
 | 1 | `3d500a5` | Google Maps client (3 modos), export Excel, UI principal completa, settings screen |
 
-### Fase 3 — Onboarding
+### Fase 3 — Onboarding wizard
 
-**Objetivo:** Primeira abertura mostra wizard educativo diferenciado por perfil.
+**Objetivo:** Substituir o placeholder actual por um wizard educativo multi-step, diferenciado por perfil (assinante vs gratuito).
+
+**Estado actual do placeholder** (`agent-local/app/ui/onboarding_screen.py`):
+- Mostra badge + mensagem "em breve" + botão "Continuar →"
+- Marca `onboarding_done=True` na sessão e avança imediatamente para o ecrã principal
+- Não é educativo nem diferenciado
+
+**O que a Fase 3 deve construir:**
+
+```
+Onboarding — Assinante (3 passos)
+  Passo 1: Boas-vindas — "Olá, {nome}! Bem-vindo ao Gerador de Leads."
+  Passo 2: Como pesquisar — demonstração do formulário (nicho, cidade, limite)
+  Passo 3: Como exportar — mostrar o botão Exportar Excel e o que esperar
+
+Onboarding — Gratuito (4 passos)
+  Passo 1: Boas-vindas — "Olá, {nome}! A tua conta gratuita está pronta."
+  Passo 2: Modo Selenium — explicar que usa o Chrome (mais lento, mas funciona)
+  Passo 3: Upgrade pitch — listar benefícios do plano pago; botão → landing page
+  Passo 4: Como começar — formulário de pesquisa
+```
+
+**Requisitos funcionais:**
+- Navegação com botões "← Anterior" / "Próximo →" e indicador de progresso (passo X de Y)
+- No último passo: botão "Começar a pesquisar →" (chama `on_done`)
+- Passo de upgrade (gratuito) deve ter link/botão para a landing page (URL configurável)
+- Ao fechar/concluir: `onboarding_done=True` gravado em `session.json`
+- Deve funcionar bem na janela de 620×720 (não fazer scroll)
+
+**Ficheiros a alterar:**
 
 | Arquivo | O que muda |
 |---|---|
-| `agent-local/app/ui/onboarding_screen.py` | Implementar: wizard multi-step |
-| `agent-local/app/session.py` | Usar flag `onboarding_done` |
+| `agent-local/app/ui/onboarding_screen.py` | Reescrever: wizard multi-step diferenciado |
+| `agent-local/app/session.py` | Já tem `onboarding_done` — sem alteração |
+
+**Instrução para iniciar:**
+Seguir `docs/implementations/_guia-documentar-implementacao.md` — entrar em Plan Mode, ler o placeholder actual em `agent-local/app/ui/onboarding_screen.py`, perceber o fluxo em `agent-local/main.py` (método `show_onboarding`), e propor o design dos passos antes de codificar.
+
+### Checks Fase 3
+
+#### Cenário D1 — Onboarding assinante
+- [ ] Fazer login com conta assinante pela primeira vez (limpar `~/.agent-local/session.json` antes)
+- [ ] Confirmar: 3 passos de onboarding (boas-vindas, como pesquisar, como exportar)
+- [ ] Confirmar: indicador de progresso visível (ex: "1 / 3")
+- [ ] Confirmar: botão "← Anterior" desabilitado no passo 1
+- [ ] Confirmar: botão "Começar a pesquisar →" no último passo navega para ecrã principal
+
+#### Cenário D2 — Onboarding gratuito com pitch
+- [ ] Fazer login com conta gratuita pela primeira vez
+- [ ] Confirmar: 4 passos (boas-vindas, modo Selenium, upgrade pitch, como começar)
+- [ ] Confirmar: passo de upgrade mostra benefícios do plano pago e link para landing page
+- [ ] Confirmar: link/botão da landing page abre no browser externo
+
+#### Cenário D3 — Onboarding não repete
+- [ ] Após completar o onboarding, fechar e reabrir o app
+- [ ] Confirmar: vai direto para ecrã principal (onboarding não aparece de novo)
 
 ### Fase 4 — Empacotamento (.exe)
 
