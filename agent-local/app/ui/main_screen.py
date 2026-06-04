@@ -240,19 +240,22 @@ class MainScreen(ctk.CTkFrame):
                 text_color="#6B7280", font=ctk.CTkFont(size=13),
             ).pack(pady=20)
         else:
+            subscriber = is_subscriber(self._session)
+            # Assinante: 6 colunas (4 dados + 📱 + 💾). Gratuito: 5 (4 dados + 📱)
+            total_cols = 6 if subscriber else 5
+
             # Tabela de resultados
             table_frame = ctk.CTkScrollableFrame(
                 self._results_frame, fg_color="transparent", height=300
             )
             table_frame.pack(padx=16, pady=(0, 12), fill="x")
 
-            # 5 colunas: 4 de dados + 1 para o botão de prospecção
-            cols = ["Nome", "Telefone", "Website", "Avaliação", ""]
             table_frame.columnconfigure([0, 1, 2, 3], weight=1)
-            table_frame.columnconfigure(4, weight=0)
+            for i in range(4, total_cols):
+                table_frame.columnconfigure(i, weight=0)
 
-            # Cabeçalho (4 colunas com texto + 1 vazia)
-            for c_idx, col in enumerate(cols[:4]):
+            # Cabeçalho
+            for c_idx, col in enumerate(["Nome", "Telefone", "Website", "Avaliação"]):
                 ctk.CTkLabel(
                     table_frame, text=col,
                     font=ctk.CTkFont(size=11, weight="bold"),
@@ -263,9 +266,10 @@ class MainScreen(ctk.CTkFrame):
             for r_idx, item in enumerate(results[:60]):
                 row_color = "#1A1A2E" if r_idx % 2 == 0 else "#16162A"
                 row_frame = ctk.CTkFrame(table_frame, fg_color=row_color, corner_radius=6, height=36)
-                row_frame.grid(row=r_idx + 1, column=0, columnspan=5, sticky="ew", pady=1)
+                row_frame.grid(row=r_idx + 1, column=0, columnspan=total_cols, sticky="ew", pady=1)
                 row_frame.grid_columnconfigure([0, 1, 2, 3], weight=1)
-                row_frame.grid_columnconfigure(4, weight=0)
+                for i in range(4, total_cols):
+                    row_frame.grid_columnconfigure(i, weight=0)
                 row_frame.grid_propagate(False)
 
                 values = [
@@ -291,13 +295,61 @@ class MainScreen(ctk.CTkFrame):
                     font=ctk.CTkFont(size=13),
                     corner_radius=6,
                     command=lambda it=item: self._open_prospect_dialog(it),
-                ).grid(row=0, column=4, padx=(2, 8), pady=5)
+                ).grid(row=0, column=4, padx=(2, 4), pady=5)
+
+                # Botão "Guardar no CRM" — só visível para assinantes
+                if subscriber:
+                    ctk.CTkButton(
+                        row_frame,
+                        text="💾",
+                        width=36, height=26,
+                        fg_color="#065F46", hover_color="#047857",
+                        font=ctk.CTkFont(size=13),
+                        corner_radius=6,
+                        command=lambda it=item: self._save_lead_to_crm(it),
+                    ).grid(row=0, column=5, padx=(0, 8), pady=5)
 
         self._results_frame.pack(padx=20, pady=(0, 8), fill="x")
 
     def _open_prospect_dialog(self, lead_data: dict) -> None:
         from app.ui.prospect_dialog import ProspectDialog
         ProspectDialog(self, lead_data=lead_data, session=self._session)
+
+    def _save_lead_to_crm(self, lead_data: dict) -> None:
+        """Guarda lead no CRM sem prospectar (assinante only). Não duplica se phone já existe."""
+        import threading
+
+        def _do() -> None:
+            try:
+                from app.crm_client import create_lead
+                result = create_lead(
+                    self._session,
+                    name=lead_data.get("name", "Lead"),
+                    phone=lead_data.get("phone", ""),
+                    website=lead_data.get("website", ""),
+                    address=lead_data.get("address", ""),
+                )
+                lead_id = result.get("id") or result.get("lead_id")
+                already = result.get("status") == "exists"
+                label = "já existia no CRM" if already else "guardado no CRM"
+                self.after(0, lambda: self._crm_save_popup(f"✓ Lead {label} (#{lead_id})", ok=True))
+            except Exception as exc:
+                self.after(0, lambda e=str(exc): self._crm_save_popup(f"✗ Erro: {e}", ok=False))
+
+        threading.Thread(target=_do, daemon=True).start()
+
+    def _crm_save_popup(self, msg: str, ok: bool) -> None:
+        popup = ctk.CTkToplevel(self)
+        popup.title("Guardar no CRM")
+        popup.geometry("340x130")
+        popup.resizable(False, False)
+        popup.grab_set()
+        color = "#10B981" if ok else "#EF4444"
+        ctk.CTkLabel(
+            popup, text=msg,
+            text_color=color, font=ctk.CTkFont(size=13), wraplength=300,
+        ).pack(pady=(28, 12))
+        ctk.CTkButton(popup, text="OK", width=80, command=popup.destroy).pack()
 
     def _show_error(self, msg: str):
         self._error_label.configure(text=f"⚠  {msg}")

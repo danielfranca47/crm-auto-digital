@@ -33,3 +33,31 @@ def clear_session() -> None:
 
 def is_subscriber(session: dict) -> bool:
     return (session or {}).get("subscription_status") == "active"
+
+
+# ── Templates de mensagem ─────────────────────────────────────────────────────
+
+def get_templates(session: dict) -> list:
+    """Retorna lista de templates: [{'name': str, 'text': str}, ...]"""
+    return list(session.get("message_templates") or [])
+
+
+def save_template(session: dict, name: str, text: str) -> None:
+    """Adiciona ou actualiza template pelo nome. Persiste em session.json."""
+    templates = get_templates(session)
+    for t in templates:
+        if t.get("name") == name:
+            t["text"] = text
+            session["message_templates"] = templates
+            save_session(session)
+            return
+    templates.append({"name": name, "text": text})
+    session["message_templates"] = templates
+    save_session(session)
+
+
+def delete_template(session: dict, name: str) -> None:
+    """Remove template pelo nome. Persiste em session.json."""
+    templates = [t for t in get_templates(session) if t.get("name") != name]
+    session["message_templates"] = templates
+    save_session(session)

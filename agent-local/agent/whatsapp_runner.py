@@ -166,14 +166,19 @@ class WhatsAppRunner:
 
     def _open_chat(self, driver: Chrome, phone_digits: str, text: str) -> Tuple[bool, str]:
         url = f"https://web.whatsapp.com/send?phone={phone_digits}&text={quote(text)}"
-        for attempt in range(2):
+        for attempt in range(3):
             try:
                 logger.info("Abrindo chat %s (tentativa %s)", phone_digits, attempt + 1)
                 driver.get(url)
                 time.sleep(1.2)
 
                 if driver.find_elements(By.CSS_SELECTOR, "[data-ref]"):
-                    logger.warning("Tela de QR detectada (não logado).")
+                    if attempt < 2:
+                        # Aguardar scan do QR (até 120 s) e tentar de novo
+                        logger.warning("Tela de QR detectada. Aguardando scan do utilizador (120s)…")
+                        self._wait_for_qr_if_needed(driver, timeout=120)
+                        time.sleep(1.0)
+                        continue
                     return False, "not_logged"
 
                 self._maybe_click_continue_to_chat(driver)
@@ -185,7 +190,7 @@ class WhatsAppRunner:
                 logger.info("Composer disponível para %s", phone_digits)
                 return True, ""
             except Exception as exc:
-                logger.warning("Falha ao abrir chat (%s/%s): %s", attempt + 1, 2, exc)
+                logger.warning("Falha ao abrir chat (%s/%s): %s", attempt + 1, 3, exc)
                 time.sleep(1.5)
 
         return False, "open_timeout"

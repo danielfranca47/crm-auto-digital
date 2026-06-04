@@ -81,9 +81,38 @@ class ProspectDialog(ctk.CTkToplevel):
         ctk.CTkEntry(c, textvariable=self._phone_var, height=36,
                      corner_radius=8).pack(fill="x", pady=(4, 12))
 
+        # Templates de mensagem
+        from app.session import get_templates
+        templates = get_templates(self._session)
+        if templates:
+            tmpl_row = ctk.CTkFrame(c, fg_color="transparent")
+            tmpl_row.pack(fill="x", pady=(0, 4))
+            ctk.CTkLabel(tmpl_row, text="Template:", font=ctk.CTkFont(size=11),
+                         text_color="#9CA3AF").pack(side="left", padx=(0, 6))
+            tmpl_names = [t["name"] for t in templates]
+            self._tmpl_var = ctk.StringVar(value="— escolher template —")
+            tmpl_menu = ctk.CTkOptionMenu(
+                tmpl_row,
+                values=["— escolher template —"] + tmpl_names,
+                variable=self._tmpl_var,
+                height=28, corner_radius=6,
+                command=self._apply_template,
+            )
+            tmpl_menu.pack(side="left")
+
         # Mensagem
-        ctk.CTkLabel(c, text="Mensagem de prospecção",
-                     font=ctk.CTkFont(size=12)).pack(anchor="w")
+        msg_row = ctk.CTkFrame(c, fg_color="transparent")
+        msg_row.pack(fill="x")
+        ctk.CTkLabel(msg_row, text="Mensagem de prospecção",
+                     font=ctk.CTkFont(size=12)).pack(side="left")
+        ctk.CTkButton(
+            msg_row, text="💾 Guardar template",
+            width=130, height=22,
+            fg_color="transparent", hover_color="#1E1E2E",
+            text_color="#6B7280", font=ctk.CTkFont(size=10),
+            command=self._save_as_template,
+        ).pack(side="right")
+
         self._msg_box = ctk.CTkTextbox(c, height=100, corner_radius=8)
         self._msg_box.insert("1.0", self._DEFAULT_MSG)
         self._msg_box.pack(fill="x", pady=(4, 12))
@@ -116,6 +145,44 @@ class ProspectDialog(ctk.CTkToplevel):
             row, text="Enviar via WhatsApp →",
             command=self._start_send,
         ).pack(side="right")
+
+    # ── Templates ────────────────────────────────────────────────────────────
+
+    def _apply_template(self, name: str) -> None:
+        if name.startswith("—"):
+            return
+        from app.session import get_templates
+        for t in get_templates(self._session):
+            if t.get("name") == name:
+                self._msg_box.delete("1.0", "end")
+                self._msg_box.insert("1.0", t["text"])
+                return
+
+    def _save_as_template(self) -> None:
+        text = self._msg_box.get("1.0", "end").strip()
+        if not text:
+            return
+
+        popup = ctk.CTkToplevel(self)
+        popup.title("Guardar template")
+        popup.geometry("320x150")
+        popup.resizable(False, False)
+        popup.grab_set()
+
+        ctk.CTkLabel(popup, text="Nome do template:",
+                     font=ctk.CTkFont(size=12)).pack(anchor="w", padx=20, pady=(16, 4))
+        name_entry = ctk.CTkEntry(popup, height=34, corner_radius=8)
+        name_entry.pack(fill="x", padx=20, pady=(0, 12))
+
+        def _confirm() -> None:
+            name = name_entry.get().strip()
+            if not name:
+                return
+            from app.session import save_template
+            save_template(self._session, name, text)
+            popup.destroy()
+
+        ctk.CTkButton(popup, text="Guardar", command=_confirm).pack()
 
     # ── Passo 2: Enviando ────────────────────────────────────────────────────
 

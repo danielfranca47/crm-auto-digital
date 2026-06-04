@@ -17,9 +17,18 @@ class AgentLocalApp(ctk.CTk):
         self.resizable(False, False)
         ctk.set_appearance_mode("dark")
         ctk.set_default_color_theme("blue")
+        self.protocol("WM_DELETE_WINDOW", self._on_close)
 
         self._current_frame = None
         self._check_session()
+
+    def _on_close(self) -> None:
+        try:
+            from app.whatsapp_client import close_runner
+            close_runner()
+        except Exception:
+            pass
+        self.destroy()
 
     # ── Sessão ────────────────────────────────────────────────────────────────
 
