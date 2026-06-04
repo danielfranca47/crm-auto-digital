@@ -546,6 +546,7 @@ export const api = {
       observations: string | null;
       priority: number;
       lastMovement: string | Date;
+      prospection_context: string;
     }>
   ) => {
     return apiClient.patch(`/leads/${id}`, {
@@ -566,6 +567,7 @@ export const api = {
                 : patch.lastMovement,
           }
         : {}),
+      ...(patch.prospection_context !== undefined ? { prospection_context: patch.prospection_context } : {}),
     });
   },
 

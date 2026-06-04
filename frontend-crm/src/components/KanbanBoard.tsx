@@ -26,6 +26,7 @@ import { useAppointments, useCancelAppointment } from "@/hooks/useAppointments";
 import { useToast } from "@/hooks/use-toast";
 import { Alert, AlertDescription, AlertTitle } from "./ui/alert";
 import { FollowUpTransitionModal } from "./FollowUpTransitionModal";
+import { ProspectConfirmModal } from "./ProspectConfirmModal";
 import { useNotifications } from "@/hooks/useNotifications";
 
 interface KanbanBoardProps {
@@ -77,6 +78,8 @@ export function KanbanBoard({ onDashboard }: KanbanBoardProps) {
   const [appointmentToEdit, setAppointmentToEdit] = useState<Appointment | null>(null);
   const [followupModalOpen, setFollowupModalOpen] = useState(false);
   const [followupLead, setFollowupLead] = useState<Lead | null>(null);
+  const [prospectModalOpen, setProspectModalOpen] = useState(false);
+  const [prospectLead, setProspectLead] = useState<Lead | null>(null);
   const [profileAgentType, setProfileAgentType] = useState<"agent_1" | "agent_2" | "agent_3" | null>(null);
   const { notifiedLeadIds } = useNotifications();
 
@@ -240,6 +243,18 @@ export function KanbanBoard({ onDashboard }: KanbanBoardProps) {
           : lead
       );
       setFollowupModalOpen(true);
+      return;
+    }
+
+    // Intercepção de prospecção outbound: to-prospect → qualification sem origin confirmado
+    const isProspectTransition =
+      lead.category === "to-prospect" &&
+      targetCategory === "qualification" &&
+      (!lead.origin || lead.origin === "Manual");
+
+    if (isProspectTransition) {
+      setProspectLead(lead);
+      setProspectModalOpen(true);
       return;
     }
 
@@ -564,6 +579,23 @@ export function KanbanBoard({ onDashboard }: KanbanBoardProps) {
             moveLead(followupLead.id, "follow-up" as any);
           }
           setFollowupLead(null);
+        }}
+      />
+
+      <ProspectConfirmModal
+        open={prospectModalOpen}
+        onOpenChange={(open) => {
+          setProspectModalOpen(open);
+          if (!open) setProspectLead(null);
+        }}
+        lead={prospectLead}
+        onSuccess={() => {
+          if (prospectLead) moveLead(prospectLead.id, "qualification" as any);
+          setProspectLead(null);
+        }}
+        onSkip={() => {
+          if (prospectLead) moveLead(prospectLead.id, "qualification" as any);
+          setProspectLead(null);
         }}
       />
     </div>
