@@ -183,7 +183,7 @@ Comportamento desejado: [o que deve acontecer depois].
 Área do sistema: [backend-core / backend-crm / frontend-crm / etc.].
 [Contexto de produto confirmado pelo admin, se relevante.]
 
-Leia o guia de implementação e siga o processo.
+Leia o docs\implementations\_guia-documentar-implementacao.md e siga o processo.
 ```
 
 O operacional vai ao Plan Mode, lê o código com foco naquele item e decide COMO fazer.
