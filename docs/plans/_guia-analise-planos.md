@@ -135,7 +135,7 @@ Justificar brevemente **por que os restantes ficaram de fora** deste sprint.
 Apresentar a proposta de sprint ao utilizador (itens P1/P2/P3 com justificativa de ordem).
 **Aguardar aprovação ou ajuste de escopo antes de criar o arquivo.**
 
-Após aprovação, criar `docs/implementations/plano-sprint-YYYY-MM-DD.md` seguindo o
+Após aprovação, criar `docs/plans/plano-sprint-YYYY-MM-DD.md` seguindo o
 template `_template-plano-semanal.md`.
 
 ---
@@ -192,18 +192,18 @@ O operacional vai ao Plan Mode, lê o código com foco naquele item e decide COM
 
 ## Ciclo de vida dos arquivos docs/plans/*
 
-Após cada item do sprint ser implementado (todos os checks do implementation validados e
-arquivo de implementação graduado):
+A limpeza dos `plans/*` é responsabilidade do **Claude de implementations**, executada
+automaticamente no Passo 6b do processo de graduação — não é tarefa do analítico.
 
-1. Marcar o item como implementado no arquivo `plans/*` correspondente
-2. Quando **todos os itens** de um arquivo `plans/*` estiverem absorvidos → deletar:
-   ```
-   git rm docs/plans/<arquivo>.md
-   ```
-3. Incluir a remoção no commit de graduação da última implementação daquele arquivo
+O sprint plan (`plano-sprint-YYYY-MM-DD.md`) tem duas seções que conduzem este processo:
+- **Tracking de absorção** — o operacional marca cada item ✅ ao graduar a implementação
+- **Manutenção** — lista exatamente quais `plans/*` deletar e sob que condição
 
-Um arquivo `plans/*` com todos os itens absorvidos não tem razão de existir — deletar é
-o comportamento esperado.
+Quando o último item do sprint for graduado e marcado ✅, o operacional executa a
+limpeza do `plans/*` e do próprio sprint plan no mesmo commit de graduação.
+
+O analítico não precisa acompanhar este processo — ele já está delegado ao operacional
+via o sprint plan gerado.
 
 ---
 
@@ -232,19 +232,17 @@ Claude:
 Utilizador: "Aprovado" (ou ajusta escopo)
 
 Claude:
-  7. Cria docs/implementations/plano-sprint-YYYY-MM-DD.md
+  7. Cria docs/plans/plano-sprint-YYYY-MM-DD.md
 
 --- Ciclo de implementations ---
 
 Utilizador copia o prompt pronto do item P1 e inicia implementação:
   → Claude de implementations lê _guia-documentar-implementacao.md
   → Segue o processo normal (Plan Mode → código → commit → validação)
+  → Na graduação: executa Passo 6b — marca P1 ✅ no tracking do sprint plan
+  → Se todos os itens ✅: limpa plans/* e deleta sprint plan no mesmo commit
 
-Após implementations P1 concluída e graduada:
-  → Marcar P1 como absorvido no plans/*
-  → Se plans/* esvaziou → git rm
-
-Repetir para P2, P3.
+Repetir para P2, P3 — o operacional fecha o sprint automaticamente.
 ```
 
 ---

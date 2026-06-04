@@ -177,6 +177,20 @@ Leia o guia de implementação e siga o processo.
 
 ---
 
+## Tracking de absorção
+
+> Atualizado pelo Claude de implementations durante o ciclo de vida do sprint.
+> Cada item é marcado ✅ na graduação da sua implementação. Quando todos estiverem ✅,
+> a limpeza de `docs/plans/*` e deste arquivo é feita no mesmo commit de graduação.
+
+| # | Item | Arquivo de implementação | Status | Commit de graduação |
+|---|---|---|---|---|
+| P1 | Criar plano `crm_scale` no DB | — | ⏳ Pendente | — |
+| P2 | Forçar mudança de senha 1º login | — | ⏳ Pendente | — |
+| P3 | Instruções de follow-up por agente | — | ⏳ Pendente | — |
+
+---
+
 ## Itens fora deste sprint
 
 | Item | Motivo de exclusão |
@@ -188,13 +202,12 @@ Leia o guia de implementação e siga o processo.
 
 ---
 
-## Manutenção dos arquivos docs/plans/* após este sprint
+## Manutenção dos arquivos docs/plans/*
 
-Quando todos os itens do sprint estiverem implementados:
+> Executada automaticamente pelo Claude de implementations no Passo 6b da graduação,
+> quando o Tracking de absorção estiver completo (todos ✅).
 
-| Ação | Condição |
+| Arquivo plans/* | Condição para deletar |
 |---|---|
-| Marcar M1, M3 como ✅ em `kiwify-checkout-melhorias-pos-etapa-9-7.md` | Após cada implementação respectiva |
-| Marcar Etapa C como ✅ em `pipeline-configurable-fields.md` | Após implementação de P3 |
-| `git rm docs/plans/pipeline-configurable-fields.md` | Quando Etapas C for a última pendente — verificar se A, B, D, E, F, G, H, I estão todas absorvidas |
-| `git rm docs/plans/kiwify-checkout-melhorias-pos-etapa-9-7.md` | Apenas quando M1–M6 estiverem todos absorvidos |
+| `kiwify-checkout-melhorias-pos-etapa-9-7.md` | Quando M1, M2, M3, M4, M5, M6 estiverem todos absorvidos |
+| `pipeline-configurable-fields.md` | Quando Etapa C for a última pendente — verificar se A, D, E, F, G, H estão também absorvidas |

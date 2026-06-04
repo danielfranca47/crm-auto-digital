@@ -8,6 +8,7 @@
 
 **Branch:** `etapa-X-Y-slug-descritivo`
 **Status:** Em andamento
+**Sprint:** `docs/plans/plano-sprint-YYYY-MM-DD.md` *(remover linha se não veio de sprint plan)*
 
 ---
 

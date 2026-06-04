@@ -121,10 +121,38 @@ git rm docs/implementations/<nome-do-arquivo>.md
 
 ---
 
+## Passo 6b — Fechar sprint plan (se aplicável)
+
+Se o arquivo de implementação graduado tinha o campo `**Sprint:**` preenchido:
+
+1. Abrir o arquivo de sprint plan indicado em `docs/plans/`
+2. Na seção **"Tracking de absorção"**, actualizar a linha deste item:
+   - Preencher "Arquivo de implementação" com o nome do arquivo graduado
+   - Mudar status de ⏳ para ✅
+   - Registar o hash do commit de graduação na coluna "Commit"
+3. Verificar se **todos os itens** do tracking estão ✅
+
+**Se ainda houver itens ⏳ Pendente:**
+- Salvar as alterações ao sprint plan e incluir no commit de graduação (Passo 7)
+
+**Se todos os itens estiverem ✅** → executar limpeza completa:
+4. Ler a seção "Manutenção" do sprint plan — ela lista exatamente quais `docs/plans/*`
+   deletar e sob que condição. Para cada arquivo com condição satisfeita:
+   ```bash
+   git rm docs/plans/<arquivo-de-plans>.md
+   ```
+5. Deletar o próprio arquivo de sprint plan:
+   ```bash
+   git rm docs/plans/plano-sprint-YYYY-MM-DD.md
+   ```
+6. Incluir tudo no commit de graduação (Passo 7)
+
+---
+
 ## Passo 7 — Commit único
 
 Fazer um único commit com todas as alterações: docs actualizados, docs criados,
-arquivo(s) de implementação removido(s).
+arquivo(s) de implementação removido(s), e limpeza de sprint/plans se aplicável.
 
 Mensagem sugerida:
 ```
@@ -133,6 +161,7 @@ docs: graduar <nome-da-feature> → actualizar architecture
 - <arquivo>.md: <o que foi actualizado>
 - <outro>.md: criado (nova área: <descrição>)
 - Removido: docs/implementations/<arquivo>.md (todos os testes validados)
+- Removido: docs/plans/<arquivo>.md (sprint absorvido)  ← se aplicável
 ```
 
 ---
