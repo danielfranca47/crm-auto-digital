@@ -1018,7 +1018,7 @@ def _persist_whatsapp_message(cur, lead_id: int, body: str) -> Dict[str, Any]:
     cur.execute(
         """
         INSERT INTO messages (lead_id, channel, subject, body, model)
-        VALUES (?, 'whatsapp', NULL, ?, 'manual')
+        VALUES (?, 'whatsapp', NULL, ?, 'outbound')
         """,
         (lead_id, body_txt),
     )
