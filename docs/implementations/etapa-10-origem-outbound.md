@@ -1,7 +1,7 @@
 # etapa-10 — Ciclo de Vida do `origin`: Confirmação de Prospecção Outbound
 
 **Branch:** `etapa-9-planos-limites`
-**Status:** Em andamento — Fase 1 pendente
+**Status:** Fase 3 concluída — aguarda validação
 
 ---
 
@@ -27,7 +27,7 @@ O campo `origin` de um lead era definido na criação e nunca atualizado automat
 
 | # | Commit | O que foi implementado |
 |---|---|---|
-| 1 | `` | fix(jobs): setar origin=outbound ao confirmar job whatsapp.send.local |
+| 1 | `1a5527c` | fix(jobs): setar origin=outbound ao confirmar job whatsapp.send.local |
 
 ### Checks Fase 1
 
@@ -55,7 +55,7 @@ O campo `origin` de um lead era definido na criação e nunca atualizado automat
 
 | # | Commit | O que foi implementado |
 |---|---|---|
-| 1 | `` | feat(leads): PATCH aceita prospection_context e escreve em prospection_logs |
+| 1 | `a9c4bea` | feat(leads): PATCH aceita prospection_context e escreve em prospection_logs |
 
 ### Checks Fase 2
 
@@ -78,7 +78,7 @@ O campo `origin` de um lead era definido na criação e nunca atualizado automat
 
 | # | Commit | O que foi implementado |
 |---|---|---|
-| 1 | `` | feat(kanban): modal de confirmação de prospecção ao mover to-prospect → qualification |
+| 1 | `11657b3` | feat(kanban): modal de confirmação de prospecção ao mover to-prospect → qualification |
 
 ### Checks Fase 3
 
