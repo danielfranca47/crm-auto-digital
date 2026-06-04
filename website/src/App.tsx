@@ -48,8 +48,9 @@ const App = () => (
           {/* Redirect root to default language */}
           <Route path="/" element={<Navigate to="/en" replace />} />
 
-          {/* Landing page do produto CRM — definida ANTES de /:lang para evitar conflito */}
-          <Route path="/crm" element={<CRMLanding />} />
+          {/* Landing page da Lara — definida ANTES de /:lang para evitar conflito */}
+          <Route path="/lara-ia" element={<CRMLanding />} />
+          <Route path="/crm" element={<Navigate to="/lara-ia" replace />} />
 
           {/* Language-specific routes */}
           <Route path="/:lang" element={
