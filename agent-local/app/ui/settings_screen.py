@@ -37,9 +37,15 @@ class SettingsScreen(ctk.CTkToplevel):
         ctk.CTkLabel(account_frame, text="Conta", font=ctk.CTkFont(size=12, weight="bold"),
                      text_color="#9CA3AF").pack(anchor="w", padx=16, pady=(12, 4))
 
+        name = self._session.get("name", "")
         email = self._session.get("email", "—")
+
+        if name and name != email:
+            ctk.CTkLabel(account_frame, text=f"Nome: {name}", font=ctk.CTkFont(size=13)).pack(
+                anchor="w", padx=16, pady=(0, 2)
+            )
         ctk.CTkLabel(account_frame, text=f"Email: {email}", font=ctk.CTkFont(size=13)).pack(
-            anchor="w", padx=16, pady=(0, 4)
+            anchor="w", padx=16, pady=(0, 6)
         )
 
         badge_text = "✓ Assinante" if subscriber else "Gratuito"
@@ -49,6 +55,13 @@ class SettingsScreen(ctk.CTkToplevel):
             fg_color=badge_color, corner_radius=10,
             font=ctk.CTkFont(size=11), text_color="white",
             padx=8, pady=3,
+        ).pack(anchor="w", padx=16, pady=(0, 8))
+
+        ctk.CTkLabel(
+            account_frame,
+            text="Para alterar conta ou recuperar acesso, faz novo login (o sistema envia um código por email).",
+            font=ctk.CTkFont(size=10), text_color="#6B7280",
+            wraplength=390, justify="left",
         ).pack(anchor="w", padx=16, pady=(0, 12))
 
         # Secção: API key (apenas para não-assinantes)

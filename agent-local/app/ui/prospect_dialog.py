@@ -100,7 +100,7 @@ class ProspectDialog(ctk.CTkToplevel):
             )
             tmpl_menu.pack(side="left")
 
-        # Mensagem
+        # Mensagem — linha de título + acções
         msg_row = ctk.CTkFrame(c, fg_color="transparent")
         msg_row.pack(fill="x")
         ctk.CTkLabel(msg_row, text="Mensagem de prospecção",
@@ -112,6 +112,17 @@ class ProspectDialog(ctk.CTkToplevel):
             text_color="#6B7280", font=ctk.CTkFont(size=10),
             command=self._save_as_template,
         ).pack(side="right")
+
+        # Botão "Gerar copy IA" — só para assinantes
+        if self._subscriber:
+            self._ai_btn = ctk.CTkButton(
+                msg_row, text="✨ Gerar com IA",
+                width=120, height=22,
+                fg_color="#312E81", hover_color="#3730A3",
+                text_color="#C7D2FE", font=ctk.CTkFont(size=10),
+                command=self._generate_ai_copy,
+            )
+            self._ai_btn.pack(side="right", padx=(0, 6))
 
         self._msg_box = ctk.CTkTextbox(c, height=100, corner_radius=8)
         self._msg_box.insert("1.0", self._DEFAULT_MSG)
@@ -145,6 +156,50 @@ class ProspectDialog(ctk.CTkToplevel):
             row, text="Enviar via WhatsApp →",
             command=self._start_send,
         ).pack(side="right")
+
+    # ── Copy IA ──────────────────────────────────────────────────────────────
+
+    def _generate_ai_copy(self) -> None:
+        if not hasattr(self, "_ai_btn"):
+            return
+        self._ai_btn.configure(state="disabled", text="A gerar…")
+
+        name = self._lead.get("name", "")
+        sector = self._lead.get("sector", "")
+
+        def _do():
+            try:
+                from app.crm_client import generate_copy
+                text = generate_copy(
+                    self._session,
+                    company_name=name or "Empresa",
+                    sector=sector,
+                    channel="whatsapp",
+                )
+                def _apply():
+                    self._msg_box.delete("1.0", "end")
+                    self._msg_box.insert("1.0", text)
+                    try:
+                        self._ai_btn.configure(state="normal", text="✨ Gerar com IA")
+                    except Exception:
+                        pass
+                self.after(0, _apply)
+            except Exception as exc:
+                def _err(e=str(exc)):
+                    try:
+                        self._ai_btn.configure(state="normal", text="✨ Gerar com IA")
+                    except Exception:
+                        pass
+                    # Mostra toast de erro discreto
+                    lbl = ctk.CTkLabel(
+                        self._body, text=f"⚠ Erro ao gerar: {e[:60]}",
+                        text_color="#EF4444", font=ctk.CTkFont(size=10),
+                    )
+                    lbl.pack(pady=(0, 4))
+                    self.after(4000, lbl.destroy)
+                self.after(0, _err)
+
+        threading.Thread(target=_do, daemon=True).start()
 
     # ── Templates ────────────────────────────────────────────────────────────
 

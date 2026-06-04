@@ -7,6 +7,7 @@ from typing import Optional
 
 _SESSION_DIR = Path.home() / ".agent-local"
 _SESSION_FILE = _SESSION_DIR / "session.json"
+_PROSPECT_LOG = _SESSION_DIR / "prospect_log.jsonl"
 
 
 def load_session() -> Optional[dict]:
@@ -61,3 +62,35 @@ def delete_template(session: dict, name: str) -> None:
     templates = [t for t in get_templates(session) if t.get("name") != name]
     session["message_templates"] = templates
     save_session(session)
+
+
+# ── Log local de prospecções ──────────────────────────────────────────────────
+
+def append_prospect_log(entry: dict) -> None:
+    """Adiciona linha JSONL ao log local: {ts, name, phone, status, reason}."""
+    _SESSION_DIR.mkdir(parents=True, exist_ok=True)
+    line = json.dumps(entry, ensure_ascii=False)
+    try:
+        with _PROSPECT_LOG.open("a", encoding="utf-8") as f:
+            f.write(line + "\n")
+    except Exception:
+        pass
+
+
+def get_prospect_log(limit: int = 100) -> list:
+    """Lê as últimas N linhas do log local (mais recentes primeiro)."""
+    if not _PROSPECT_LOG.exists():
+        return []
+    try:
+        lines = _PROSPECT_LOG.read_text(encoding="utf-8").splitlines()
+        entries = []
+        for line in reversed(lines[-limit * 2:]):
+            try:
+                entries.append(json.loads(line))
+            except Exception:
+                continue
+            if len(entries) >= limit:
+                break
+        return entries
+    except Exception:
+        return []

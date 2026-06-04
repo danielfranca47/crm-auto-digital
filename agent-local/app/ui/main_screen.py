@@ -16,6 +16,10 @@ class MainScreen(ctk.CTkFrame):
         self._on_logout = on_logout
         self._results: List[Dict[str, Any]] = []
         self._searching = False
+        # prospecção em lote
+        self._selected_leads: Dict[str, Dict] = {}   # key = phone|idx, value = item
+        self._row_check_vars: Dict[str, ctk.BooleanVar] = {}
+        self._select_all_var = ctk.BooleanVar(value=False)
         self._build()
 
     def _build(self):
@@ -34,13 +38,21 @@ class MainScreen(ctk.CTkFrame):
             font=ctk.CTkFont(size=15, weight="bold"),
         ).pack(side="left", padx=16, pady=12)
 
-        # Botão configurações (chave API)
+        # Botão configurações
         ctk.CTkButton(
             header, text="⚙", width=36, height=30,
             fg_color="#2A2A3E", hover_color="#3A3A5E",
             font=ctk.CTkFont(size=16),
             command=self._open_settings,
         ).pack(side="right", padx=(4, 12), pady=12)
+
+        # Botão histórico
+        ctk.CTkButton(
+            header, text="📋", width=36, height=30,
+            fg_color="#2A2A3E", hover_color="#3A3A5E",
+            font=ctk.CTkFont(size=16),
+            command=self._open_history,
+        ).pack(side="right", padx=(0, 4), pady=12)
 
         badge_color = "#10B981" if subscriber else "#6B7280"
         badge_text = "✓ Assinante" if subscriber else "Gratuito"
@@ -213,25 +225,57 @@ class MainScreen(ctk.CTkFrame):
 
     def _show_results(self, results: List[Dict]):
         self._results = results
+        self._selected_leads.clear()
+        self._row_check_vars.clear()
+        self._select_all_var.set(False)
 
-        # Limpar frame de resultados
         for w in self._results_frame.winfo_children():
             w.destroy()
 
-        # Header da tabela
-        count_text = f"{len(results)} lead{'s' if len(results) != 1 else ''} encontrado{'s' if len(results) != 1 else ''}"
-        header = ctk.CTkFrame(self._results_frame, fg_color="transparent")
-        header.pack(padx=16, pady=(12, 8), fill="x")
+        subscriber = is_subscriber(self._session)
+        # Layout interno por linha:
+        #   col 0: ☐ checkbox
+        #   col 1-4: dados (Nome, Telefone, Website, Avaliação)
+        #   col 5: 📱
+        #   col 6: 💾 (subscriber only)
+        n_action_cols = 2 if subscriber else 1
+        total_inner_cols = 5 + n_action_cols   # checkbox + 4 dados + acções
 
-        ctk.CTkLabel(header, text=count_text, font=ctk.CTkFont(size=14, weight="bold")).pack(side="left")
+        count_text = f"{len(results)} lead{'s' if len(results) != 1 else ''} encontrado{'s' if len(results) != 1 else ''}"
+        hdr = ctk.CTkFrame(self._results_frame, fg_color="transparent")
+        hdr.pack(padx=16, pady=(12, 4), fill="x")
+
+        ctk.CTkLabel(hdr, text=count_text, font=ctk.CTkFont(size=14, weight="bold")).pack(side="left")
 
         if results:
+            # Botões no header (direita → esquerda)
             ctk.CTkButton(
-                header, text="📥  Exportar Excel",
-                height=34, corner_radius=8,
-                font=ctk.CTkFont(size=12, weight="bold"),
+                hdr, text="📥  Exportar Excel",
+                height=30, corner_radius=8,
+                font=ctk.CTkFont(size=11, weight="bold"),
                 command=self._export_excel,
-            ).pack(side="right")
+            ).pack(side="right", padx=(4, 0))
+
+            # Barra de selecção em lote
+            self._sel_bar = ctk.CTkFrame(self._results_frame, fg_color="#1E3A5F", corner_radius=8)
+            self._sel_label = ctk.CTkLabel(
+                self._sel_bar, text="0 seleccionados",
+                font=ctk.CTkFont(size=12), text_color="#93C5FD",
+            )
+            self._sel_label.pack(side="left", padx=12, pady=8)
+            ctk.CTkButton(
+                self._sel_bar, text="📱 Prospectar seleccionados",
+                height=30, corner_radius=6,
+                font=ctk.CTkFont(size=11, weight="bold"),
+                command=self._prospect_selected,
+            ).pack(side="left", padx=(0, 8), pady=8)
+            ctk.CTkButton(
+                self._sel_bar, text="✕ Limpar",
+                height=30, corner_radius=6,
+                fg_color="#374151", hover_color="#4B5563",
+                font=ctk.CTkFont(size=11),
+                command=self._clear_selection,
+            ).pack(side="left", pady=8)
 
         if not results:
             ctk.CTkLabel(
@@ -240,38 +284,62 @@ class MainScreen(ctk.CTkFrame):
                 text_color="#6B7280", font=ctk.CTkFont(size=13),
             ).pack(pady=20)
         else:
-            subscriber = is_subscriber(self._session)
-            # Assinante: 6 colunas (4 dados + 📱 + 💾). Gratuito: 5 (4 dados + 📱)
-            total_cols = 6 if subscriber else 5
-
-            # Tabela de resultados
             table_frame = ctk.CTkScrollableFrame(
                 self._results_frame, fg_color="transparent", height=300
             )
-            table_frame.pack(padx=16, pady=(0, 12), fill="x")
+            table_frame.pack(padx=16, pady=(4, 12), fill="x")
 
-            table_frame.columnconfigure([0, 1, 2, 3], weight=1)
-            for i in range(4, total_cols):
-                table_frame.columnconfigure(i, weight=0)
+            # Configura apenas 1 coluna no table_frame (row_frames são full-width)
+            table_frame.columnconfigure(0, weight=1)
 
-            # Cabeçalho
+            # Cabeçalho da tabela: select-all + labels
+            hdr_row = ctk.CTkFrame(table_frame, fg_color="transparent")
+            hdr_row.grid(row=0, column=0, sticky="ew", pady=(0, 4))
+            hdr_row.columnconfigure(0, weight=0)
+            for i in range(1, 5):
+                hdr_row.columnconfigure(i, weight=1)
+
+            ctk.CTkCheckBox(
+                hdr_row, text="",
+                variable=self._select_all_var,
+                width=20, height=20,
+                checkbox_width=16, checkbox_height=16,
+                command=self._toggle_all,
+            ).grid(row=0, column=0, padx=(4, 8))
+
             for c_idx, col in enumerate(["Nome", "Telefone", "Website", "Avaliação"]):
                 ctk.CTkLabel(
-                    table_frame, text=col,
+                    hdr_row, text=col,
                     font=ctk.CTkFont(size=11, weight="bold"),
                     text_color="#9CA3AF",
-                ).grid(row=0, column=c_idx, sticky="w", padx=(0, 8), pady=(0, 6))
+                ).grid(row=0, column=c_idx + 1, sticky="w", padx=(0, 8))
 
-            # Linhas
+            # Linhas de dados
             for r_idx, item in enumerate(results[:60]):
+                phone_key = item.get("phone") or f"__idx_{r_idx}"
+                var = ctk.BooleanVar(value=False)
+                self._row_check_vars[phone_key] = var
+
                 row_color = "#1A1A2E" if r_idx % 2 == 0 else "#16162A"
                 row_frame = ctk.CTkFrame(table_frame, fg_color=row_color, corner_radius=6, height=36)
-                row_frame.grid(row=r_idx + 1, column=0, columnspan=total_cols, sticky="ew", pady=1)
-                row_frame.grid_columnconfigure([0, 1, 2, 3], weight=1)
-                for i in range(4, total_cols):
-                    row_frame.grid_columnconfigure(i, weight=0)
+                row_frame.grid(row=r_idx + 1, column=0, sticky="ew", pady=1)
+                row_frame.columnconfigure(0, weight=0)
+                for i in range(1, 5):
+                    row_frame.columnconfigure(i, weight=1)
+                for i in range(5, total_inner_cols):
+                    row_frame.columnconfigure(i, weight=0)
                 row_frame.grid_propagate(False)
 
+                # Checkbox
+                ctk.CTkCheckBox(
+                    row_frame, text="",
+                    variable=var,
+                    width=20, height=20,
+                    checkbox_width=16, checkbox_height=16,
+                    command=lambda pk=phone_key, it=item, v=var: self._on_lead_check(pk, it, v),
+                ).grid(row=0, column=0, padx=(6, 4), pady=8)
+
+                # Dados
                 values = [
                     item.get("name", "") or "",
                     item.get("phone", "") or "",
@@ -281,44 +349,95 @@ class MainScreen(ctk.CTkFrame):
                 for c_idx, val in enumerate(values):
                     ctk.CTkLabel(
                         row_frame,
-                        text=str(val)[:45] + ("…" if len(str(val)) > 45 else ""),
+                        text=str(val)[:40] + ("…" if len(str(val)) > 40 else ""),
                         font=ctk.CTkFont(size=11),
                         anchor="w",
-                    ).grid(row=0, column=c_idx, sticky="w", padx=(8, 4), pady=4)
+                    ).grid(row=0, column=c_idx + 1, sticky="w", padx=(4, 4), pady=4)
 
-                # Botão de prospecção WhatsApp
+                # 📱 Prospectar individual
                 ctk.CTkButton(
                     row_frame,
                     text="📱",
-                    width=36, height=26,
+                    width=32, height=26,
                     fg_color="#1D4ED8", hover_color="#1E40AF",
-                    font=ctk.CTkFont(size=13),
+                    font=ctk.CTkFont(size=12),
                     corner_radius=6,
                     command=lambda it=item: self._open_prospect_dialog(it),
-                ).grid(row=0, column=4, padx=(2, 4), pady=5)
+                ).grid(row=0, column=5, padx=(2, 2), pady=5)
 
-                # Botão "Guardar no CRM" — só visível para assinantes
+                # 💾 Guardar no CRM (assinante only)
                 if subscriber:
                     ctk.CTkButton(
                         row_frame,
                         text="💾",
-                        width=36, height=26,
+                        width=32, height=26,
                         fg_color="#065F46", hover_color="#047857",
-                        font=ctk.CTkFont(size=13),
+                        font=ctk.CTkFont(size=12),
                         corner_radius=6,
                         command=lambda it=item: self._save_lead_to_crm(it),
-                    ).grid(row=0, column=5, padx=(0, 8), pady=5)
+                    ).grid(row=0, column=6, padx=(0, 6), pady=5)
 
         self._results_frame.pack(padx=20, pady=(0, 8), fill="x")
+
+    # ── Selecção em lote ──────────────────────────────────────────────────────
+
+    def _on_lead_check(self, phone_key: str, item: dict, var: ctk.BooleanVar) -> None:
+        if var.get():
+            self._selected_leads[phone_key] = item
+        else:
+            self._selected_leads.pop(phone_key, None)
+        self._refresh_selection_ui()
+
+    def _toggle_all(self) -> None:
+        checked = self._select_all_var.get()
+        for phone_key, var in self._row_check_vars.items():
+            var.set(checked)
+        if checked:
+            for phone_key, var in self._row_check_vars.items():
+                # find item in results
+                for item in self._results:
+                    if (item.get("phone") or f"__idx_{list(self._row_check_vars.keys()).index(phone_key)}") == phone_key:
+                        self._selected_leads[phone_key] = item
+                        break
+        else:
+            self._selected_leads.clear()
+        self._refresh_selection_ui()
+
+    def _clear_selection(self) -> None:
+        self._selected_leads.clear()
+        self._select_all_var.set(False)
+        for var in self._row_check_vars.values():
+            var.set(False)
+        self._refresh_selection_ui()
+
+    def _refresh_selection_ui(self) -> None:
+        n = len(self._selected_leads)
+        if not hasattr(self, "_sel_bar"):
+            return
+        if n > 0:
+            self._sel_label.configure(text=f"{n} lead{'s' if n != 1 else ''} seleccionado{'s' if n != 1 else ''}")
+            self._sel_bar.pack(padx=16, pady=(0, 6), fill="x")
+        else:
+            self._sel_bar.pack_forget()
+
+    def _prospect_selected(self) -> None:
+        if not self._selected_leads:
+            return
+        leads = list(self._selected_leads.values())
+        from app.ui.bulk_prospect_dialog import BulkProspectDialog
+        BulkProspectDialog(self, leads=leads, session=self._session)
+
+    # ── Diálogos ──────────────────────────────────────────────────────────────
 
     def _open_prospect_dialog(self, lead_data: dict) -> None:
         from app.ui.prospect_dialog import ProspectDialog
         ProspectDialog(self, lead_data=lead_data, session=self._session)
 
-    def _save_lead_to_crm(self, lead_data: dict) -> None:
-        """Guarda lead no CRM sem prospectar (assinante only). Não duplica se phone já existe."""
-        import threading
+    def _open_history(self) -> None:
+        from app.ui.history_screen import HistoryScreen
+        HistoryScreen(self, session=self._session)
 
+    def _save_lead_to_crm(self, lead_data: dict) -> None:
         def _do() -> None:
             try:
                 from app.crm_client import create_lead

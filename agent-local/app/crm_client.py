@@ -67,3 +67,41 @@ def log_outbound(session: dict, lead_id: int, message: str) -> None:
         timeout=15,
     )
     resp.raise_for_status()
+
+
+def get_prospect_history(session: dict, limit: int = 100) -> list:
+    """Histórico de prospecções do utilizador (assinantes). Retorna lista de dicts."""
+    resp = requests.get(
+        f"{_base()}/api/prospeccao/history",
+        params={"limit": limit},
+        headers=_auth(session),
+        timeout=15,
+    )
+    resp.raise_for_status()
+    data = resp.json()
+    return data if isinstance(data, list) else []
+
+
+def generate_copy(
+    session: dict,
+    company_name: str,
+    sector: str = "",
+    contact_name: str = "",
+    channel: str = "whatsapp",
+    tone: str = "profissional e próximo",
+) -> str:
+    """Gera copy de prospecção via LLM. Retorna o texto gerado."""
+    resp = requests.post(
+        f"{_base()}/api/prospeccao/generate-copy",
+        json={
+            "company_name": company_name,
+            "sector": sector,
+            "contact_name": contact_name,
+            "channel": channel,
+            "tone": tone,
+        },
+        headers=_auth(session),
+        timeout=30,
+    )
+    resp.raise_for_status()
+    return resp.json().get("message", "")
