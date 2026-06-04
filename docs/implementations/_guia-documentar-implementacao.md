@@ -19,6 +19,10 @@ Antes de escrever qualquer código, siga os passos abaixo em ordem.
 
 ## Passo 0 — Diagnóstico em Plan Mode (obrigatório)
 
+> **Se o pedido vier de um plano de sprint (`plano-sprint-*.md`):** o contexto técnico
+> já está pré-digerido no prompt. Usar esse contexto como ponto de partida para o Plan Mode
+> — não é necessário reler o `docs/plans/*` separadamente.
+
 **Antes de criar o arquivo ou tocar no código**, entrar em Plan Mode e responder três perguntas:
 
 ### 1. Essa funcionalidade já existe?
