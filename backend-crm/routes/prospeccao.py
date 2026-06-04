@@ -48,6 +48,13 @@ class WhatsMarkRequest(BaseModel):
     ok: bool
     notes: Optional[str] = None
 
+class GenerateCopyRequest(BaseModel):
+    company_name: str
+    sector: str = ""
+    contact_name: str = ""
+    channel: str = "whatsapp"
+    tone: str = "profissional e próximo"
+
 # ------------------ HELPERS ------------------
 _ALLOWED_CHANNELS = {"email", "whatsapp", "instagram", "call"}
 
@@ -214,3 +221,97 @@ def whatsapp_summary(current_user: CurrentUser = Depends(require_crm_access)):
     Contadores rápidos para o banner do front.
     """
     return jobs_service.get_whatsapp_summary(user_id=current_user.id)
+
+
+# ======== GERAÇÃO DE COPY IA ========
+
+@router.post("/generate-copy")
+def generate_copy(req: GenerateCopyRequest, current_user: CurrentUser = Depends(require_crm_access)):
+    """
+    Gera mensagem de prospecção via LLM para um lead avulso (sem lead_id).
+    Usado pelo agent-local para pré-preencher a mensagem antes de enviar.
+    """
+    import os
+    logger.info("generate-copy user_id=%s company=%s", current_user.id, req.company_name)
+    api_key = os.getenv("OPENAI_API_KEY")
+    if not api_key:
+        raise HTTPException(status_code=503, detail="Serviço de IA não configurado (OPENAI_API_KEY ausente)")
+
+    try:
+        from openai import OpenAI
+        client = OpenAI(api_key=api_key)
+
+        contact_part = f" para {req.contact_name}" if req.contact_name.strip() else ""
+        sector_part = f" no setor de {req.sector}" if req.sector.strip() else ""
+        channel_label = {"whatsapp": "WhatsApp", "email": "email", "instagram": "Instagram", "call": "chamada"}.get(req.channel, req.channel)
+
+        prompt = (
+            f"Escreve uma mensagem de prospecção via {channel_label} para a empresa {req.company_name}"
+            f"{sector_part}{contact_part}. "
+            f"Tom: {req.tone}. "
+            f"Máximo 3 frases curtas e directas. Não uses saudações genéricas. "
+            f"Apresenta uma proposta de valor clara e termina com uma pergunta ou CTA simples. "
+            f"Responde APENAS com o texto da mensagem, sem explicações adicionais."
+        )
+
+        response = client.chat.completions.create(
+            model=os.getenv("OPENAI_MODEL", "gpt-3.5-turbo"),
+            messages=[{"role": "user", "content": prompt}],
+            max_tokens=250,
+            temperature=0.7,
+        )
+        message = response.choices[0].message.content.strip()
+        return {"message": message}
+
+    except HTTPException:
+        raise
+    except Exception as exc:
+        logger.exception("generate-copy falhou")
+        raise HTTPException(status_code=500, detail=f"Erro ao gerar mensagem: {exc}")
+
+
+# ======== HISTÓRICO DE PROSPECÇÃO ========
+
+@router.get("/history")
+def get_history(
+    limit: int = Query(50, ge=1, le=200),
+    offset: int = Query(0, ge=0),
+    current_user: CurrentUser = Depends(require_crm_access),
+):
+    """
+    Histórico de acções de prospecção do utilizador.
+    JOIN prospection_logs + leads para devolver nome e telefone do lead.
+    Usado pelo agent-local (assinantes) e pela página 'Leads do Agente' no CRM.
+    """
+    with get_connection() as conn:
+        rows = conn.execute(
+            """
+            SELECT
+                pl.id,
+                pl.lead_id,
+                pl.action,
+                pl.notes,
+                pl.createdAt AS created_at,
+                COALESCE(l.companyName, l.contactName, 'Lead') AS lead_name,
+                l.phone
+            FROM prospection_logs pl
+            LEFT JOIN leads l ON l.id = pl.lead_id AND l.user_id = ?
+            WHERE pl.user_id = ?
+            ORDER BY pl.createdAt DESC
+            LIMIT ? OFFSET ?
+            """,
+            (current_user.id, current_user.id, limit, offset),
+        ).fetchall()
+
+    return [
+        {
+            "id": r["id"],
+            "lead_id": r["lead_id"],
+            "lead_name": r["lead_name"] or "Lead",
+            "phone": r["phone"] or "",
+            "action": r["action"],
+            "notes": r["notes"] or "",
+            "created_at": str(r["created_at"]).replace(" ", "T") if r["created_at"] else "",
+        }
+        for r in rows
+    ]
