@@ -234,6 +234,75 @@ Onboarding — Gratuito (4 passos)
 
 ---
 
+### Fase 5 — Prospecção WhatsApp na UI
+
+**Objetivo:** Botão "📱 Prospectar" em cada resultado da tabela. Abre diálogo com telefone e mensagem. Envia via WhatsApp Web. Assinante: regista lead + outbound no CRM automaticamente. Não-assinante: envio local sem rastreio.
+
+| Arquivo | O que muda |
+|---|---|
+| `agent-local/app/crm_client.py` | Novo: `create_lead()` e `log_outbound()` via JWT do utilizador |
+| `agent-local/app/whatsapp_client.py` | Novo: wrapper fino sobre `WhatsAppRunner` sem `AgentConfig` completo |
+| `agent-local/app/ui/prospect_dialog.py` | Novo: diálogo 3 passos (formulário → enviando → resultado) |
+| `agent-local/app/ui/main_screen.py` | Adicionar coluna "📱" por linha de resultado; método `_open_prospect_dialog` |
+
+**Fluxo não-assinante:**
+```
+Clica 📱 → preenche telefone + mensagem
+  → WhatsApp Web (Selenium) envia
+  → Resultado: enviado ✓ / falhou ✗
+  → Badge: "Gratuito — envio local, sem registo no CRM"
+```
+
+**Fluxo assinante:**
+```
+Clica 📱 → preenche telefone + mensagem
+  → WhatsApp Web (Selenium) envia
+  → POST /api/leads (cria lead se não existir, ou usa existente pelo phone)
+  → PATCH /api/leads/{id} (origin=outbound + prospection_context=mensagem)
+  → Resultado: enviado + registado ✓  /  enviado mas CRM falhou ⚠
+  → Badge: "✓ Assinante — envio + registo no CRM"
+```
+
+**Nota de segurança:** usa `BACKEND_URL` do `.env` (já configurado) + JWT da sessão activa. Não requer credenciais de agente.
+
+### Commits Fase 5
+
+| # | Commit | O que foi implementado |
+|---|---|---|
+| 1 | — | feat(agent-local): prospecção WhatsApp na UI com distinção assinante/gratuito |
+
+### Checks Fase 5
+
+#### Cenário F1 — Botão "📱" visível na tabela de resultados
+- [ ] Após pesquisa com resultados, coluna de prospecção aparece em cada linha
+- [ ] Clique abre diálogo com telefone pré-preenchido e mensagem padrão editável
+
+#### Cenário F2 — Envio como não-assinante (sem rastreio)
+- [ ] Login com conta gratuita
+- [ ] Clicar "📱" num resultado → badge "Gratuito — envio local, sem registo no CRM" visível
+- [ ] Clicar "Enviar via WhatsApp →" → Chrome abre, mensagem enviada
+- [ ] Resultado mostra "✅ Mensagem enviada!" sem menção de CRM
+
+#### Cenário F3 — Envio como assinante (com rastreio no CRM)
+- [ ] Login com conta assinante
+- [ ] Clicar "📱" → badge "✓ Assinante — envio + registo no CRM" visível
+- [ ] Enviar → Chrome envia, backend-crm regista lead + outbound
+- [ ] Resultado mostra "✅ Mensagem enviada!" + "✓ Registado no CRM"
+- [ ] `SELECT * FROM leads WHERE phone = ?` confirma lead criado com `origin='outbound'`
+- [ ] `SELECT * FROM prospection_logs WHERE lead_id = ?` confirma registo `action='manual_outbound'`
+
+#### Cenário F4 — Idempotência: lead já existe no CRM
+- [ ] Lead com mesmo telefone já existe no CRM
+- [ ] `POST /api/leads` retorna lead existente (`status='exists'`) sem duplicar
+- [ ] `log_outbound` corre normalmente sobre o lead existente
+
+#### Cenário F5 — Falha no WhatsApp (número inválido)
+- [ ] Telefone sem WhatsApp ou inválido → runner retorna `status='failed'`
+- [ ] Diálogo mostra "❌ Falha no envio" com motivo
+- [ ] Nenhuma chamada ao CRM é feita
+
+---
+
 ## Checks de Validação
 
 ### Fase 2
@@ -313,6 +382,15 @@ Onboarding — Gratuito (4 passos)
 
 ## Ajustes Possíveis Pós-Implementação
 
-- Modo offline: se backend não acessível e sessão existe, usar status em cache (Fase 2+)
-- Reset de senha via app (actualmente só via API direta)
-- Suporte macOS/Linux para o .exe (PyInstaller gera binário por plataforma)
+### Gaps identificados após Fase 5
+
+- **Fase 4 (empacotamento .exe)** — `agent-local.spec` e `build.bat` ainda não criados; app só corre via `python main.py`. Próxima fase obrigatória antes de distribuição.
+- **"Guardar no CRM" sem prospectar** — não existe botão separado para guardar um lead de Maps no CRM sem enviar WhatsApp. O utilizador assinante só regista o lead quando prospecta. Fase 5B: adicionar "💾 Guardar no CRM" por linha.
+- **WhatsApp Web QR Code na UI** — se a sessão do WhatsApp Web expirar (QR a ser exibido), o Chrome abre mas o utilizador não recebe aviso claro na UI do app. Considerar detector de QR + popup de aviso "Faz o scan do QR no Chrome".
+- **Chrome fica aberto após cada envio** — o runner fecha o Chrome no final de cada envio; para prospecção em série (vários leads seguidos), o re-arranque do Chrome é lento. Fase 5C: manter runner activo como singleton enquanto o app estiver aberto.
+- **Templates de mensagem personalizáveis** — actualmente só um template padrão. Considerar biblioteca de templates salvos em `session.json`.
+- **Prospecção em lote** — enviar para vários leads seleccionados com delay configurável entre envios (anti-ban).
+- **Histórico de prospecções na UI** — não há forma de ver envios passados dentro do app; só no CRM.
+- **Modo offline** — se backend-core não acessível e sessão existe, usar status em cache (ex: `subscription_status` da última sessão).
+- **Reset de senha / gestão de conta** — actualmente só via API directa ou painel web.
+- **Suporte macOS/Linux** — PyInstaller gera binário por plataforma; o `.spec` actual será só para Windows.

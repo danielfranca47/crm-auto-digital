@@ -246,12 +246,13 @@ class MainScreen(ctk.CTkFrame):
             )
             table_frame.pack(padx=16, pady=(0, 12), fill="x")
 
-            cols = ["Nome", "Telefone", "Website", "Avaliação"]
-            col_weights = [3, 2, 3, 1]
-            table_frame.columnconfigure(list(range(len(cols))), weight=1)
+            # 5 colunas: 4 de dados + 1 para o botão de prospecção
+            cols = ["Nome", "Telefone", "Website", "Avaliação", ""]
+            table_frame.columnconfigure([0, 1, 2, 3], weight=1)
+            table_frame.columnconfigure(4, weight=0)
 
-            # Cabeçalho
-            for c_idx, (col, _) in enumerate(zip(cols, col_weights)):
+            # Cabeçalho (4 colunas com texto + 1 vazia)
+            for c_idx, col in enumerate(cols[:4]):
                 ctk.CTkLabel(
                     table_frame, text=col,
                     font=ctk.CTkFont(size=11, weight="bold"),
@@ -261,9 +262,10 @@ class MainScreen(ctk.CTkFrame):
             # Linhas
             for r_idx, item in enumerate(results[:60]):
                 row_color = "#1A1A2E" if r_idx % 2 == 0 else "#16162A"
-                row_frame = ctk.CTkFrame(table_frame, fg_color=row_color, corner_radius=6, height=32)
-                row_frame.grid(row=r_idx + 1, column=0, columnspan=4, sticky="ew", pady=1)
-                row_frame.grid_columnconfigure(list(range(len(cols))), weight=1)
+                row_frame = ctk.CTkFrame(table_frame, fg_color=row_color, corner_radius=6, height=36)
+                row_frame.grid(row=r_idx + 1, column=0, columnspan=5, sticky="ew", pady=1)
+                row_frame.grid_columnconfigure([0, 1, 2, 3], weight=1)
+                row_frame.grid_columnconfigure(4, weight=0)
                 row_frame.grid_propagate(False)
 
                 values = [
@@ -280,7 +282,22 @@ class MainScreen(ctk.CTkFrame):
                         anchor="w",
                     ).grid(row=0, column=c_idx, sticky="w", padx=(8, 4), pady=4)
 
+                # Botão de prospecção WhatsApp
+                ctk.CTkButton(
+                    row_frame,
+                    text="📱",
+                    width=36, height=26,
+                    fg_color="#1D4ED8", hover_color="#1E40AF",
+                    font=ctk.CTkFont(size=13),
+                    corner_radius=6,
+                    command=lambda it=item: self._open_prospect_dialog(it),
+                ).grid(row=0, column=4, padx=(2, 8), pady=5)
+
         self._results_frame.pack(padx=20, pady=(0, 8), fill="x")
+
+    def _open_prospect_dialog(self, lead_data: dict) -> None:
+        from app.ui.prospect_dialog import ProspectDialog
+        ProspectDialog(self, lead_data=lead_data, session=self._session)
 
     def _show_error(self, msg: str):
         self._error_label.configure(text=f"⚠  {msg}")
