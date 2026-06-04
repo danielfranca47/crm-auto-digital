@@ -195,8 +195,11 @@ Onboarding — Gratuito (4 passos)
 | `agent-local/app/ui/onboarding_screen.py` | Reescrever: wizard multi-step diferenciado |
 | `agent-local/app/session.py` | Já tem `onboarding_done` — sem alteração |
 
-**Instrução para iniciar:**
-Seguir `docs/implementations/_guia-documentar-implementacao.md` — entrar em Plan Mode, ler o placeholder actual em `agent-local/app/ui/onboarding_screen.py`, perceber o fluxo em `agent-local/main.py` (método `show_onboarding`), e propor o design dos passos antes de codificar.
+### Commits Fase 3
+
+| # | Commit | O que foi implementado |
+|---|---|---|
+| 1 | `ae5ca78` | Onboarding wizard multi-step completo (assinante 3 passos, gratuito 4 passos) |
 
 ### Checks Fase 3
 
