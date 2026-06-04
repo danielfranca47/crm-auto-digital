@@ -1,0 +1,109 @@
+# docs/plans — Como usar
+
+Este diretório é a **camada analítica** do processo de desenvolvimento. Aqui ficam os
+planos de melhorias futuras e os sprints priorizados antes de entrar no ciclo de
+implementação.
+
+---
+
+## Arquivos presentes
+
+| Arquivo | O que é |
+|---|---|
+| `_guia-analise-planos.md` | Instrução interna para o Claude — como conduzir a análise |
+| `_template-plano-semanal.md` | Exemplo preenchido de sprint plan — referência visual |
+| `plano-sprint-YYYY-MM-DD.md` | Sprint plan gerado após análise (criado sob demanda) |
+| `kiwify-checkout-melhorias-*.md` | Melhorias identificadas após a etapa de checkout |
+| `pipeline-configurable-fields.md` | Campos configuráveis do AI Profile ainda a implementar |
+| `plans-subscriptions.md` | Modelo de planos e assinaturas — decisões pendentes |
+| `scale-enterprise-roadmap.md` | Roadmap dos planos Scale e Enterprise |
+| `ai-profile-instrucoes-por-fase.md` | Instruções de IA por fase — a implementar |
+
+Os arquivos sem prefixo `_` são os **planos concretos** — contêm melhorias identificadas
+que ainda não foram implementadas.
+
+---
+
+## Como criar um novo arquivo de planos
+
+Quando identificares melhorias futuras (ao fim de uma implementação, numa sessão de
+análise, ou ao notar um gap no produto), cria um arquivo neste diretório:
+
+**Formato do nome:** `<tema-descritivo>.md`
+
+**Estrutura mínima:**
+
+```markdown
+# Título do tema
+
+> Contexto: de onde veio este documento (ex.: pós-graduação da etapa X).
+
+## M1 — Nome da melhoria
+
+**Prioridade: ALTA / MÉDIA / BAIXA**
+
+[Descrição do problema e do que precisa mudar. Citar arquivos/comportamentos
+relevantes se já souber.]
+```
+
+Não há formato obrigatório rígido — o importante é que cada item seja identificável
+(M1, M2... ou por título) e tenha prioridade declarada.
+
+---
+
+## Como disparar uma análise de sprint
+
+Quando quiseres priorizar o que implementar a seguir, diz ao Claude Code:
+
+> **"Analisa os plans e monta o sprint"**
+
+O Claude vai:
+1. Ler todos os arquivos de planos deste diretório
+2. Verificar o que já existe (ou não) no sistema actual
+3. Mapear dependências entre os itens
+4. Fazer perguntas sobre experiência desejada, produto ou estratégia quando precisar
+   da tua decisão
+5. Propor 2–3 itens priorizados (P1/P2/P3) com justificativa
+6. **Aguardar a tua aprovação** antes de gerar o arquivo de sprint
+
+Após a tua aprovação, é criado `docs/plans/plano-sprint-YYYY-MM-DD.md`.
+
+---
+
+## O que contém um sprint plan
+
+Cada sprint plan tem:
+- **Diagnóstico** — tabela com todos os itens auditados e o estado no sistema
+- **Perguntas respondidas** — decisões de produto/estratégia confirmadas por ti
+- **P1 / P2 / P3** — os itens do sprint, cada um com contexto e prompt pronto
+- **Tracking de absorção** — tabela de progresso, preenchida pelo Claude de implementations
+- **Manutenção** — quais arquivos de planos deletar quando o sprint estiver completo
+
+---
+
+## Como iniciar uma implementação do sprint
+
+Cada item P1/P2/P3 do sprint plan tem um **prompt pronto**. Para iniciar:
+
+1. Abrir o arquivo `plano-sprint-YYYY-MM-DD.md`
+2. Copiar o prompt do item que queres implementar
+3. Colar no Claude Code
+
+O Claude de implementations vai ao Plan Mode, investiga o código e segue o processo
+normal de `docs/implementations/`.
+
+---
+
+## O que acontece com os arquivos após as implementações
+
+O operacional (Claude de implementations) trata da limpeza automaticamente:
+
+- A cada graduação de implementação, marca o item como ✅ no tracking do sprint plan
+- Quando todos os itens do sprint estiverem ✅, deleta os arquivos de planos que
+  ficaram vazios + o próprio sprint plan
+
+**Não precisas de fazer nada manualmente** — o ciclo fecha sozinho ao graduar a última
+implementação do sprint.
+
+Os únicos arquivos que **nunca são deletados** são os prefixados com `_`
+(`_guia-analise-planos.md`, `_template-plano-semanal.md`).
