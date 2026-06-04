@@ -883,6 +883,7 @@ def atualizar_lead_parcial(id: int, lead: LeadUpdate, current_user: CurrentUser 
             else:
                 dados["phone"] = None
         dados.pop("country_code", None)
+        prospection_context = dados.pop("prospection_context", None)
 
         for campo, valor in dados.items():
             if isinstance(valor, datetime):
@@ -902,6 +903,13 @@ def atualizar_lead_parcial(id: int, lead: LeadUpdate, current_user: CurrentUser 
 
         if cursor.rowcount == 0:
             raise HTTPException(status_code=404, detail="Lead não encontrado")
+
+        if prospection_context:
+            cursor.execute(
+                """INSERT INTO prospection_logs (lead_id, user_id, action, notes, created_at)
+                   VALUES (?, ?, 'manual_outbound', ?, CURRENT_TIMESTAMP)""",
+                (id, current_user.id, prospection_context),
+            )
 
         new_category = dados.get("category", old_category)
         apply_closing_bot_disable_side_effect(

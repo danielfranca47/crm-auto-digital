@@ -36,6 +36,7 @@ class LeadUpdate(BaseModel):
     agent_type: Optional[str] = None
     priority: Optional[int] = None
     lastMovement: Optional[datetime] = None
+    prospection_context: Optional[str] = None
 
 
 class StartFollowupPayload(BaseModel):
