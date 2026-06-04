@@ -133,7 +133,7 @@ O utilizador deve ser forçado a alterar a senha no primeiro login (ou pelo meno
 
 | # | Commit | O que foi implementado |
 |---|---|---|
-| 1 | — | — |
+| 1 | `d095bf5` | Criar User com password aleatória + enviar email de credenciais para novos compradores |
 
 ---
 
