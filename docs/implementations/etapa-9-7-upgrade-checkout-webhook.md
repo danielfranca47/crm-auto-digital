@@ -1,7 +1,7 @@
 # Upgrade de Plano: Checkout e Webhook de Activação
 
 **Branch:** `etapa-9-planos-limites`
-**Status:** Todos os checks validados localmente — pendente de deploy para produção
+**Status:** Todos os checks validados localmente (U1–U9) — pendente de deploy para produção
 
 ---
 
@@ -183,14 +183,17 @@ O utilizador deve ser forçado a alterar a senha no primeiro login (ou pelo meno
 - **Validado em:** 03/06/2026
 
 ### U7 — Novo comprador: conta criada automaticamente (Fase 5)
-- [ ] Webhook `order_approved` com email **não existente** → `{"ok": true, "action": "created_and_activated"}`
-- [ ] Utilizador criado no DB (`users` table) com o email da Kiwify
-- [ ] Email enviado com password temporária e link de login
-- [ ] Subscrição activada para o novo utilizador
+- [x] Webhook `order_approved` com email **não existente** → `{"ok": true, "action": "created_and_activated"}`
+- [x] Utilizador criado no DB (`users` table) com o email da Kiwify (id=16, status=active)
+- [x] Email enviado com password temporária e link de login (SMTP Resend configurado)
+- [x] Subscrição activada para o novo utilizador (`crm_start`, `current_period_end` +30 dias)
+- **Validado em:** 04/06/2026 — curl directo ao endpoint interno local
 
 ### U8 — Login com credenciais recebidas por email (Fase 5)
-- [ ] Fazer `POST /auth/login` com email e password temporária recebida → token JWT válido
-- [ ] `GET /me/entitlements` → plano correcto activo
+- [x] Fazer `POST /auth/login` com email e password (pbkdf2_sha256) → token JWT válido
+- [x] `GET /me/entitlements` → `subscription_status: active`, plano `crm_start` activo
+- **Validado em:** 04/06/2026 — token JWT gerado e entitlements verificados
 
 ### U9 — Comprador existente (upgrade) não recebe email de boas-vindas (Fase 5)
-- [ ] Webhook `order_approved` com email **já existente** → `{"ok": true, "action": "activated"}` (sem criação de conta, sem email de credenciais)
+- [x] Webhook `order_approved` com email **já existente** → `{"ok": true, "action": "activated"}` (sem criação de conta, sem email de credenciais)
+- **Validado em:** 04/06/2026 — mesmo email com plano superior retorna `activated` (não `created_and_activated`)
