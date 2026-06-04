@@ -382,15 +382,24 @@ Clica 📱 → preenche telefone + mensagem
 
 ## Ajustes Possíveis Pós-Implementação
 
-### Gaps identificados após Fase 5
+### Ajustes implementados (commit `7079a15`)
 
-- **Fase 4 (empacotamento .exe)** — `agent-local.spec` e `build.bat` ainda não criados; app só corre via `python main.py`. Próxima fase obrigatória antes de distribuição.
-- **"Guardar no CRM" sem prospectar** — não existe botão separado para guardar um lead de Maps no CRM sem enviar WhatsApp. O utilizador assinante só regista o lead quando prospecta. Fase 5B: adicionar "💾 Guardar no CRM" por linha.
-- **WhatsApp Web QR Code na UI** — se a sessão do WhatsApp Web expirar (QR a ser exibido), o Chrome abre mas o utilizador não recebe aviso claro na UI do app. Considerar detector de QR + popup de aviso "Faz o scan do QR no Chrome".
-- **Chrome fica aberto após cada envio** — o runner fecha o Chrome no final de cada envio; para prospecção em série (vários leads seguidos), o re-arranque do Chrome é lento. Fase 5C: manter runner activo como singleton enquanto o app estiver aberto.
-- **Templates de mensagem personalizáveis** — actualmente só um template padrão. Considerar biblioteca de templates salvos em `session.json`.
+- **QR Code WhatsApp Web** — `whatsapp_runner._open_chat` aguarda scan do utilizador (até 120s) em vez de retornar erro imediatamente. Chrome mantém-se aberto para o scan.
+- **Chrome singleton** — `whatsapp_client.py` mantém um runner activo enquanto o app estiver aberto. Chrome não é reiniciado entre envios. `main.py` fecha o singleton no quit via `WM_DELETE_WINDOW`.
+- **"Guardar no CRM" sem prospectar** — botão "💾" por linha (visível só a assinantes). Chama `create_lead()` directamente; popup confirma resultado. Idempotente: usa lead existente se phone duplicado.
+- **Templates de mensagem** — `session.py` expõe `get_templates/save_template/delete_template`. `prospect_dialog.py` mostra selector de templates e botão "💾 Guardar template".
+- **Modo offline** — já funcionava: `_check_session` em `main.py` tem `except Exception: pass` que preserva o `subscription_status` em cache da sessão anterior.
+
+### Testes (commit `7079a15`)
+
+- `agent-local/tests/test_crm_client.py` — 10 testes (`create_lead`, `log_outbound`) com mock de requests
+- `agent-local/tests/test_whatsapp_client.py` — 15 testes (singleton, send, templates) sem Selenium real
+- **Total: 25 testes — todos passam**
+
+### Gaps restantes
+
+- **Fase 4 (empacotamento .exe)** — `agent-local.spec` e `build.bat` ainda não criados. Próxima fase obrigatória antes de distribuição.
 - **Prospecção em lote** — enviar para vários leads seleccionados com delay configurável entre envios (anti-ban).
 - **Histórico de prospecções na UI** — não há forma de ver envios passados dentro do app; só no CRM.
-- **Modo offline** — se backend-core não acessível e sessão existe, usar status em cache (ex: `subscription_status` da última sessão).
-- **Reset de senha / gestão de conta** — actualmente só via API directa ou painel web.
-- **Suporte macOS/Linux** — PyInstaller gera binário por plataforma; o `.spec` actual será só para Windows.
+- **Reset de senha / gestão de conta** — actualmente só via API directa ou painel web (baixa prioridade com auth passwordless).
+- **Suporte macOS/Linux** — PyInstaller gera binário por plataforma; a Fase 4 será só para Windows por ora.
