@@ -269,7 +269,7 @@ Clica 📱 → preenche telefone + mensagem
 
 | # | Commit | O que foi implementado |
 |---|---|---|
-| 1 | — | feat(agent-local): prospecção WhatsApp na UI com distinção assinante/gratuito |
+| 1 | `4f65ac3` | feat(agent-local): prospecção WhatsApp na UI com distinção assinante/gratuito |
 
 ### Checks Fase 5
 
