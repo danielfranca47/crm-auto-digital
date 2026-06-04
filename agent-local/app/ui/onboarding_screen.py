@@ -7,7 +7,7 @@ from typing import Callable, List
 import customtkinter as ctk
 from app.session import is_subscriber, save_session
 
-LANDING_PAGE_URL = "https://digitalprocrm.com"
+LANDING_PAGE_URL = "https://danielfranca.pt/lara-ia"
 
 
 class OnboardingScreen(ctk.CTkFrame):
