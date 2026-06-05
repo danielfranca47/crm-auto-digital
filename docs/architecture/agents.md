@@ -229,8 +229,8 @@ Configura a recepção de eventos de pagamento confirmado de gateways externos.
 ## Contexto Inbound/Outbound no LLM
 
 O orchestrator calcula `lead_origin` a partir do campo `lead.origin`:
-- Origens `"whatsapp"`, `"inbound"`, `"manual"`, `"planilha"` ou vazio → `"inbound"`
-- Qualquer outro valor (ex.: `"prospeccao"`) → `"outbound"`
+- `origin = 'outbound'` → `lead_origin = 'outbound'`
+- Qualquer outro valor (`''`, `'Manual'`, `'whatsapp_inbound'`, etc.) → `lead_origin = 'inbound'`
 
 O decision engine selecciona o opener correspondente do AI Profile:
 - `lead_origin=outbound` → usa `origin_outbound_opener`
@@ -239,6 +239,23 @@ O decision engine selecciona o opener correspondente do AI Profile:
 O opener é injectado no início do prompt de cada Filha para calibrar o tom de abertura (ex.: "Este lead foi prospectado — aborda de forma mais consultiva").
 
 **Arquivos:** `backend-crm/services/ai_orchestrator/orchestrator.py`, `backend-executors/app/services/decision_engine.py`
+
+### Ciclo de vida do campo `origin`
+
+| Origem | Valor inicial | Quando muda para `'outbound'` |
+|---|---|---|
+| Criado manualmente | `''` ou `'Manual'` | Ao confirmar prospecção (ver abaixo) |
+| Criado via Google Maps | `'Manual'` | Ao confirmar prospecção |
+| Inbound WhatsApp | `'whatsapp_inbound'` | Nunca — não é sobrescrito |
+| Já marcado outbound | `'outbound'` | Idempotente — permanece |
+
+**Fontes automáticas de `origin='outbound'`:**
+- Job `whatsapp.send.local` completa com `status=completed` → `jobs_service.py` faz UPDATE `origin='outbound'` no lead (só se `origin` for neutro — não sobrescreve `'whatsapp_inbound'`)
+- Mensagens enviadas pelo agente local são persistidas com `model='outbound'` na tabela `messages`. O orchestrator verifica `outbound_present = any(m.model == 'outbound' for m in history)` para detectar contacto prévio de saída — o valor correcto é obrigatório para que o fluxo funcione
+
+**Fontes manuais de `origin='outbound'`:**
+- `PATCH /api/leads/{id}` com `{ "origin": "outbound", "prospection_context": "texto" }` → actualiza `leads.origin` e insere registo em `prospection_logs` (`action='manual_outbound'`, `notes=texto`)
+- Drag Kanban `to-prospect → qualification` quando `origin` neutro → `ProspectConfirmModal` abre; clicar "Sim" invoca o PATCH acima; clicar "Não" move sem alterar `origin`
 
 ---
 

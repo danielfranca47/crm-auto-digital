@@ -162,7 +162,8 @@ whatsapp_worker (polling)
 | `src/pages/Prospeccao.tsx` | Prospecção de leads |
 | `src/contexts/LeadsContext.tsx` | Estado global do Kanban; `moveLead` com revert optimista |
 | `src/services/api.ts` | Cliente HTTP centralizado para backend-crm e backend-core |
-| `src/components/KanbanBoard.tsx` | Pipeline visual de leads |
+| `src/components/KanbanBoard.tsx` | Pipeline visual de leads; intercepta drag `to-prospect → qualification` para abrir `ProspectConfirmModal` |
+| `src/components/ProspectConfirmModal.tsx` | Modal de confirmação de prospecção (2 passos: sim/não → contexto); invoca PATCH com `prospection_context` |
 | `src/components/LeadCardDialog.tsx` | Modal completo do lead (qualificação, bot toggle, etc.) |
 | `src/components/agente/CamadaFluxoVenda.tsx` | Builder visual da Camada 7 (blocos, triggers, RuleBuilderModal) |
 | `src/components/agente/CamadaPipeline.tsx` | Configuração de pipeline: buffer, delays, agent_mode |
@@ -277,7 +278,7 @@ Operador escreve mensagem no Playground (frontend-crm)
 
 | Tabela | Campos-chave | Descrição |
 |---|---|---|
-| `leads` | `id, user_id, category, bot_disabled, bot_disabled_reason, phases_triggered, triggers_fired` | Lead no pipeline |
+| `leads` | `id, user_id, category, bot_disabled, bot_disabled_reason, phases_triggered, triggers_fired, origin` | Lead no pipeline |
 | `jobs` | `id, type, status, payload, result, scheduled_at, attempts` | Fila de jobs |
 | `messages` | `lead_id, role, content, created_at` | Histórico de conversa |
 | `lead_qualification_state` | `lead_id, data_json` | Campos de qualificação extraídos |
@@ -285,6 +286,7 @@ Operador escreve mensagem no Playground (frontend-crm)
 | `agents` | `id, token, status, capabilities` | Agentes locais registados |
 | `knowledge_items` | `user_id, category, content` | Base de conhecimento do agente |
 | `knowledge_item_media` | `item_id, media_url, media_type` | Mídias associadas ao conhecimento |
+| `prospection_logs` | `lead_id, action, notes, createdAt` | Log de contactos outbound (`action='manual_outbound'`) |
 | `followup_reconcile_guard` | `lead_id, job_id, due_at` | Guard anti-loop do reconciliador |
 
 ---
