@@ -64,6 +64,7 @@ def create_lead(
     payload: Dict[str, Any] = {
         "companyName": name,
         "phone": phone,
+        "country_code": "BR",
         "origin": "Manual",
         "category": "to-prospect",
     }

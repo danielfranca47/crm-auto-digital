@@ -286,6 +286,14 @@ class MainScreen(ctk.CTkFrame):
                           font=ctk.CTkFont(size=11, weight="bold"),
                           command=self._export_excel).pack(side="right", padx=(4, 0))
 
+            if subscriber:
+                ctk.CTkButton(
+                    hdr, text="💾 Guardar todos no CRM", height=28, corner_radius=8,
+                    fg_color="#065F46", hover_color="#047857",
+                    font=ctk.CTkFont(size=11, weight="bold"),
+                    command=self._save_all_to_crm,
+                ).pack(side="right", padx=(4, 0))
+
             # Barra de selecção em lote
             self._sel_bar = ctk.CTkFrame(self._results_frame, fg_color="#1E3A5F", corner_radius=8)
             self._sel_label = ctk.CTkLabel(self._sel_bar, text="0 seleccionados",
@@ -354,16 +362,16 @@ class MainScreen(ctk.CTkFrame):
                                   font=ctk.CTkFont(size=10), anchor="w"
                                   ).grid(row=0, column=c_idx + 1, sticky="w", padx=(2, 4), pady=4)
 
-                ctk.CTkButton(row_frame, text="📱", width=30, height=24,
+                ctk.CTkButton(row_frame, text="📱 WA", width=52, height=24,
                                fg_color="#1D4ED8", hover_color="#1E40AF",
-                               font=ctk.CTkFont(size=11), corner_radius=6,
+                               font=ctk.CTkFont(size=10, weight="bold"), corner_radius=6,
                                command=lambda it=item: self._open_prospect_dialog(it)
                                ).grid(row=0, column=5, padx=(2, 2), pady=5)
 
                 if subscriber:
-                    ctk.CTkButton(row_frame, text="💾", width=30, height=24,
+                    ctk.CTkButton(row_frame, text="💾 CRM", width=58, height=24,
                                    fg_color="#065F46", hover_color="#047857",
-                                   font=ctk.CTkFont(size=11), corner_radius=6,
+                                   font=ctk.CTkFont(size=10, weight="bold"), corner_radius=6,
                                    command=lambda it=item: self._save_lead_to_crm(it)
                                    ).grid(row=0, column=6, padx=(0, 6), pady=5)
 
@@ -444,6 +452,61 @@ class MainScreen(ctk.CTkFrame):
         ctk.CTkLabel(popup, text=msg, text_color="#10B981" if ok else "#EF4444",
                       font=ctk.CTkFont(size=13), wraplength=300).pack(pady=(24, 10))
         ctk.CTkButton(popup, text="OK", width=80, command=popup.destroy).pack()
+
+    def _save_all_to_crm(self) -> None:
+        """Guarda todos os resultados actuais no CRM (assíncrono, com popup de progresso)."""
+        if not self._results:
+            return
+        total = len(self._results)
+
+        popup = ctk.CTkToplevel(self)
+        popup.title("Guardar no CRM")
+        popup.geometry("380x160")
+        popup.resizable(False, False)
+        popup.grab_set()
+
+        lbl = ctk.CTkLabel(
+            popup, text=f"A guardar 0 / {total} leads…",
+            font=ctk.CTkFont(size=12), text_color="#9CA3AF", wraplength=340,
+        )
+        lbl.pack(pady=(28, 8))
+
+        close_btn = ctk.CTkButton(popup, text="Fechar", width=90, command=popup.destroy)
+        close_btn.pack(pady=6)
+
+        def _do():
+            from app.crm_client import create_lead
+            saved = skipped = errors = 0
+            for i, item in enumerate(self._results):
+                try:
+                    result = create_lead(
+                        self._session,
+                        name=item.get("name", "Lead"),
+                        phone=item.get("phone", ""),
+                        website=item.get("website", ""),
+                        address=item.get("address", ""),
+                    )
+                    if result.get("status") == "exists":
+                        skipped += 1
+                    else:
+                        saved += 1
+                except Exception:
+                    errors += 1
+                self.after(0, lambda c=i + 1: lbl.configure(
+                    text=f"A guardar {c} / {total} leads…", text_color="#9CA3AF"))
+
+            parts = []
+            if saved:
+                parts.append(f"✓ {saved} guardado{'s' if saved != 1 else ''}")
+            if skipped:
+                parts.append(f"⟳ {skipped} já existia{'m' if skipped != 1 else ''}")
+            if errors:
+                parts.append(f"✗ {errors} erro{'s' if errors != 1 else ''}")
+            summary = "   ".join(parts) or "Nenhum lead processado"
+            color = "#10B981" if errors == 0 else "#F59E0B"
+            self.after(0, lambda: lbl.configure(text=summary, text_color=color))
+
+        threading.Thread(target=_do, daemon=True).start()
 
     def _show_error(self, msg: str):
         self._error_label.configure(text=f"⚠  {msg}")
