@@ -906,8 +906,8 @@ def atualizar_lead_parcial(id: int, lead: LeadUpdate, current_user: CurrentUser 
 
         if prospection_context:
             cursor.execute(
-                """INSERT INTO prospection_logs (lead_id, user_id, action, notes, created_at)
-                   VALUES (?, ?, 'manual_outbound', ?, CURRENT_TIMESTAMP)""",
+                """INSERT INTO prospection_logs (lead_id, user_id, action, notes)
+                   VALUES (?, ?, 'manual_outbound', ?)""",
                 (id, current_user.id, prospection_context),
             )
 

@@ -1,7 +1,7 @@
 # etapa-10 — Ciclo de Vida do `origin`: Confirmação de Prospecção Outbound
 
 **Branch:** `etapa-9-planos-limites`
-**Status:** Fase 3 concluída — aguarda validação
+**Status:** Todas as fases validadas — pronto para graduação
 
 ---
 
@@ -32,15 +32,17 @@ O campo `origin` de um lead era definido na criação e nunca atualizado automat
 ### Checks Fase 1
 
 #### Cenário E1 — Job WhatsApp confirma outbound
-- [ ] Lead com `origin='Manual'` ou `origin=''` existe
-- [ ] Job `whatsapp.send.local` completa com `status=completed`
-- [ ] `SELECT origin FROM leads WHERE id=?` retorna `'outbound'`
-- [ ] Lead com `origin='whatsapp_inbound'` NÃO é sobrescrito
+- [x] Lead com `origin='Manual'` ou `origin=''` existe
+- [x] Job `whatsapp.send.local` completa com `status=completed`
+- [x] `SELECT origin FROM leads WHERE id=?` retorna `'outbound'`
+- [x] Lead com `origin='whatsapp_inbound'` NÃO é sobrescrito
+- **Validado em:** 05/06/2026 — leads 201 (origin='') e 203 (origin='Manual') actualizados para 'outbound'; lead 204 (origin='whatsapp_inbound') não foi alterado
 
 #### Cenário E2 — Idempotência (lead já outbound)
-- [ ] Lead com `origin='outbound'` já existente
-- [ ] Novo job completa
-- [ ] `origin` permanece `'outbound'` (UPDATE não actua por cause da condição)
+- [x] Lead com `origin='outbound'` já existente
+- [x] Novo job completa
+- [x] `origin` permanece `'outbound'` (UPDATE não actua por cause da condição)
+- **Validado em:** 05/06/2026 — lead 202 (origin='outbound') permaneceu 'outbound' após novo job completado
 
 ---
 
@@ -60,10 +62,12 @@ O campo `origin` de um lead era definido na criação e nunca atualizado automat
 ### Checks Fase 2
 
 #### Cenário E3 — PATCH com prospection_context
-- [ ] `PATCH /api/leads/{id}` com `{ "origin": "outbound", "prospection_context": "Liguei e agendamos reunião" }`
-- [ ] `leads.origin` atualizado para `'outbound'`
-- [ ] `prospection_logs` tem registo `action='manual_outbound'`, `notes='Liguei...'`
-- [ ] Campo `prospection_context` NÃO aparece como coluna em `leads` (não deve dar erro SQL)
+- [x] `PATCH /api/leads/{id}` com `{ "origin": "outbound", "prospection_context": "Liguei e agendamos reunião" }`
+- [x] `leads.origin` atualizado para `'outbound'`
+- [x] `prospection_logs` tem registo `action='manual_outbound'`, `notes='Liguei...'`
+- [x] Campo `prospection_context` NÃO aparece como coluna em `leads` (não deve dar erro SQL)
+- **Validado em:** 05/06/2026 — lead 205: origin='outbound', log id=23715 action='manual_outbound' com notas correctas
+- **Bug corrigido:** `routes/leads.py` linha 909 — INSERT em `prospection_logs` usava `created_at` mas coluna chama-se `createdAt`; corrigido removendo a coluna do INSERT (usa DEFAULT)
 
 ---
 
@@ -83,19 +87,22 @@ O campo `origin` de um lead era definido na criação e nunca atualizado automat
 ### Checks Fase 3
 
 #### Cenário E4 — Modal abre na transição correcta
-- [ ] Lead com `origin=''` ou `'Manual'` na coluna "À Prospectar"
-- [ ] Arrastar para "Qualificação" → modal abre com pergunta "Já prospectou?"
-- [ ] Lead com `origin='outbound'` → move directo sem modal
+- [x] Lead com `origin=''` ou `'Manual'` na coluna "À Prospectar"
+- [x] Arrastar para "Qualificação" → modal abre com pergunta "Já prospectou?"
+- [x] Lead com `origin='outbound'` → move directo sem modal
+- **Validado em:** 05/06/2026 — leads 206 (origin='') e 207 (origin='Manual') abriram modal; lead 205 (origin='outbound') moveu directamente sem modal
 
 #### Cenário E5 — Confirmação de prospecção manual
-- [ ] Clicar "Sim" → campo de contexto aparece (step 2)
-- [ ] Preencher contexto (mín. 10 chars) → Confirmar
-- [ ] Lead move para "Qualificação", `origin='outbound'`, `prospection_logs` tem registo
-- [ ] Botão desabilitado se texto < 10 chars
+- [x] Clicar "Sim" → campo de contexto aparece (step 2)
+- [x] Preencher contexto (mín. 10 chars) → Confirmar
+- [x] Lead move para "Qualificação", `origin='outbound'`, `prospection_logs` tem registo
+- [x] Botão desabilitado se texto < 10 chars
+- **Validado em:** 05/06/2026 — lead 206: category='qualification', origin='outbound'; log id=23726 action='manual_outbound'; aviso "Mínimo de 10 caracteres." confirado; botão disabled com texto curto
 
 #### Cenário E6 — Aguardar inbound
-- [ ] Clicar "Não, a aguardar resposta" → lead move para "Qualificação" sem alterar `origin`
-- [ ] Fechar modal com [X] → lead NÃO move
+- [x] Clicar "Não, a aguardar resposta" → lead move para "Qualificação" sem alterar `origin`
+- [x] Fechar modal com [X] → lead NÃO move
+- **Validado em:** 05/06/2026 — lead 207 "Não": category='qualification', origin='Manual' (não alterado); lead 208 [X]: category='to-prospect', origin='' (não moveu)
 
 ---
 
