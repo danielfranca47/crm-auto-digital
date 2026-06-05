@@ -46,13 +46,18 @@ def _get_runner():
 
 def open_for_login() -> None:
     """
-    Abre o Chrome e navega para WhatsApp Web.
+    Abre o Chrome e navega directamente para WhatsApp Web.
     Se o QR code aparecer, o utilizador faz o scan — o Chrome fica aberto
     (singleton) para ser reutilizado nos envios seguintes.
     """
     runner = _get_runner()
-    runner._ensure_whatsapp_tab()   # navega para web.whatsapp.com
-    logger.info("WhatsApp Web aberto para login")
+    driver = runner._ensure_driver()   # cria/recupera o Chrome
+    # Navegar explicitamente — _ensure_whatsapp_tab só redirige se
+    # ainda não houver janelas abertas; com janelas existentes fica na página actual.
+    current = driver.current_url or ""
+    if "web.whatsapp.com" not in current:
+        driver.get("https://web.whatsapp.com")
+    logger.info("WhatsApp Web aberto para login (url=%s)", driver.current_url)
 
 
 def close_runner() -> None:
