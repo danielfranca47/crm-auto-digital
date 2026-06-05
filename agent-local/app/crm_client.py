@@ -18,6 +18,30 @@ def _auth(session: dict) -> Dict[str, str]:
     return {"Authorization": f"Bearer {session['access_token']}"}
 
 
+def _request(method: str, url: str, session: dict, **kwargs) -> requests.Response:
+    """HTTP request com refresh automático em 401 (access token expirado)."""
+    resp = requests.request(method, url, headers=_auth(session), **kwargs)
+    if resp.status_code != 401:
+        return resp
+
+    refresh_token = session.get("refresh_token")
+    if not refresh_token:
+        return resp
+
+    try:
+        from app.auth import refresh_access_token
+        from app.session import save_session
+        new_token = refresh_access_token(refresh_token)
+        session["access_token"] = new_token
+        save_session(session)
+        logger.info("Access token renovado silenciosamente via refresh token")
+        resp = requests.request(method, url, headers=_auth(session), **kwargs)
+    except Exception as exc:
+        logger.warning("Falha ao renovar token automaticamente: %s", exc)
+
+    return resp
+
+
 def create_lead(
     session: dict,
     *,
@@ -45,12 +69,7 @@ def create_lead(
     if observations:
         payload["observations"] = observations
 
-    resp = requests.post(
-        f"{_base()}/api/leads",
-        json=payload,
-        headers=_auth(session),
-        timeout=15,
-    )
+    resp = _request("POST", f"{_base()}/api/leads", session, json=payload, timeout=15)
     resp.raise_for_status()
     return resp.json()
 
@@ -60,10 +79,9 @@ def log_outbound(session: dict, lead_id: int, message: str) -> None:
     Regista envio outbound no CRM: seta origin=outbound + prospection_context.
     Idempotente — se origin já for outbound, o backend mantém o valor.
     """
-    resp = requests.patch(
-        f"{_base()}/api/leads/{lead_id}",
+    resp = _request(
+        "PATCH", f"{_base()}/api/leads/{lead_id}", session,
         json={"origin": "outbound", "prospection_context": message},
-        headers=_auth(session),
         timeout=15,
     )
     resp.raise_for_status()
@@ -71,10 +89,9 @@ def log_outbound(session: dict, lead_id: int, message: str) -> None:
 
 def get_prospect_history(session: dict, limit: int = 100) -> list:
     """Histórico de prospecções do utilizador (assinantes). Retorna lista de dicts."""
-    resp = requests.get(
-        f"{_base()}/api/prospeccao/history",
+    resp = _request(
+        "GET", f"{_base()}/api/prospeccao/history", session,
         params={"limit": limit},
-        headers=_auth(session),
         timeout=15,
     )
     resp.raise_for_status()
@@ -91,8 +108,8 @@ def generate_copy(
     tone: str = "profissional e próximo",
 ) -> str:
     """Gera copy de prospecção via LLM. Retorna o texto gerado."""
-    resp = requests.post(
-        f"{_base()}/api/prospeccao/generate-copy",
+    resp = _request(
+        "POST", f"{_base()}/api/prospeccao/generate-copy", session,
         json={
             "company_name": company_name,
             "sector": sector,
@@ -100,7 +117,6 @@ def generate_copy(
             "channel": channel,
             "tone": tone,
         },
-        headers=_auth(session),
         timeout=30,
     )
     resp.raise_for_status()

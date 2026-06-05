@@ -178,16 +178,42 @@ def verify_otp(email: str, code: str) -> dict:
     if not resp.ok:
         raise AuthError(f"Erro do servidor ({resp.status_code}).")
 
-    token = resp.json()["access_token"]
+    body = resp.json()
+    token = body["access_token"]
     entitlements = check_subscription(token)
     name = _get_user_name(token, base) or email.split("@")[0]
 
-    return {
+    result = {
         "access_token": token,
         "subscription_status": entitlements["subscription_status"],
         "name": name,
         "email": email,
     }
+    if body.get("refresh_token"):
+        result["refresh_token"] = body["refresh_token"]
+    return result
+
+
+def refresh_access_token(refresh_token: str) -> str:
+    """Troca um refresh token (30d) por um novo access token (24h). Silencioso."""
+    base = _get_core_url()
+    try:
+        resp = requests.post(
+            f"{base}/auth/token/refresh",
+            json={"refresh_token": refresh_token},
+            timeout=15,
+        )
+    except requests.ConnectionError:
+        raise AuthError("Sem ligação ao servidor.")
+    except requests.Timeout:
+        raise AuthError("Timeout ao renovar sessão.")
+
+    if resp.status_code == 401:
+        raise AuthError("Sessão expirada. Faça login novamente.")
+    if not resp.ok:
+        raise AuthError(f"Erro ao renovar sessão ({resp.status_code}).")
+
+    return resp.json()["access_token"]
 
 
 def _get_user_name(token: str, base: str) -> Optional[str]:

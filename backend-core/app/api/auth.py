@@ -46,6 +46,10 @@ class Token(BaseModel):
     token_type: str
 
 
+class RefreshRequest(BaseModel):
+    refresh_token: str
+
+
 def get_password_hash(password: str) -> str:
     return pwd_context.hash(password)
 
@@ -60,6 +64,13 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -
     to_encode.update({"exp": expire, "type": "access"})
     encoded_jwt = jwt.encode(to_encode, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
     return encoded_jwt
+
+
+def create_refresh_token(data: dict, expires_delta: Optional[timedelta] = None) -> str:
+    to_encode = data.copy()
+    expire = datetime.utcnow() + (expires_delta or timedelta(days=30))
+    to_encode.update({"exp": expire, "type": "refresh"})
+    return jwt.encode(to_encode, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
 
 
 async def get_current_user(
@@ -357,4 +368,31 @@ async def verify_otp_endpoint(body: VerifyOtpRequest, db: Session = Depends(get_
     if not user:
         raise HTTPException(status_code=404, detail="Utilizador nao encontrado.")
     token = create_access_token(data={"sub": str(user.id), "email": user.email})
-    return {"access_token": token, "token_type": "bearer"}
+    refresh_token = create_refresh_token(data={"sub": str(user.id), "email": user.email})
+    return {"access_token": token, "refresh_token": refresh_token, "token_type": "bearer"}
+
+
+@router.post("/token/refresh")
+async def token_refresh(body: RefreshRequest, db: Session = Depends(get_db)):
+    """Usa refresh token (30d) para emitir novo access token (24h). Sem re-login."""
+    credentials_exception = HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Refresh token invalido ou expirado.",
+        headers={"WWW-Authenticate": "Bearer"},
+    )
+    try:
+        payload = jwt.decode(body.refresh_token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
+        user_id: str = payload.get("sub")
+        email: str = payload.get("email")
+        token_type: str = payload.get("type")
+        if user_id is None or email is None or token_type != "refresh":
+            raise credentials_exception
+    except JWTError:
+        raise credentials_exception
+
+    user = db.query(models.User).filter(models.User.id == int(user_id)).first()
+    if not user:
+        raise credentials_exception
+
+    new_access = create_access_token(data={"sub": str(user.id), "email": user.email})
+    return {"access_token": new_access, "token_type": "bearer"}
