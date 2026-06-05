@@ -1,7 +1,7 @@
 # agent-local v2 — App Standalone de Geração de Leads
 
 **Branch:** `etapa-9-planos-limites`
-**Status:** Fase 6 concluída — aguarda validação (F1–F8); Fase 4 (empacotamento .exe) pendente
+**Status:** Fase 8 implementada — aguarda validação (F1–H1, I1); Fase 4 (empacotamento .exe) pendente
 
 ---
 
@@ -222,6 +222,43 @@ Onboarding — Gratuito (4 passos)
 - [x] Após completar o onboarding, fechar e reabrir o app
 - [x] Confirmar: vai direto para ecrã principal (onboarding não aparece de novo)
 - **Validado em:** 04/06/2026 — comportamento confirmado pelo utilizador
+
+### Fase 8 — Refresh Token Silencioso
+
+**Objetivo:** Quando o access token (24h TTL) expira, o app renova-o automaticamente usando um refresh token (30d TTL) sem forçar re-login do utilizador.
+
+| Arquivo | O que muda |
+|---|---|
+| `backend-core/app/api/auth.py` | `create_refresh_token()` (30d TTL, `type:"refresh"`); `POST /auth/token/refresh` (aceita refresh token, devolve novo access token); `POST /auth/verify-otp` passa a devolver `refresh_token` |
+| `agent-local/app/auth.py` | `verify_otp()` captura `refresh_token` da resposta; `refresh_access_token(refresh_token)` chama o novo endpoint |
+| `agent-local/app/crm_client.py` | `_request()` helper: em 401 tenta renovar token via `refresh_access_token()`, persiste via `save_session()` e faz retry automático |
+
+**Comportamento:**
+- Na primeira sessão com este código: utilizador faz verify-otp → `session.json` passa a ter `refresh_token`
+- Após 24h: próxima chamada ao CRM retorna 401 → `_request()` chama `/auth/token/refresh` silenciosamente → sessão actualizada → chamada original repetida sem interação do utilizador
+- Sessões antigas sem `refresh_token`: continuam a receber 401 normal (sem crash) — utilizador faz login uma vez para migrar
+
+### Commits Fase 8
+
+| # | Commit | O que foi implementado |
+|---|---|---|
+| 1 | `3cb2246` | feat(auth): refresh token silencioso no agent-local |
+
+### Checks Fase 8
+
+#### Cenário I1 — Token expirado renova automaticamente
+- [ ] Fazer login (verify-otp) → confirmar `session.json` tem `refresh_token`
+- [ ] Simular token expirado: substituir `access_token` em `session.json` por JWT expirado (ou aguardar 24h)
+- [ ] Abrir diálogo "📱 Prospectar" e tentar enviar → CRM sync funciona sem pedir login
+- [ ] Log mostra "Access token renovado silenciosamente via refresh token"
+- [ ] `session.json` tem novo `access_token` (diferente do expirado)
+
+#### Cenário I2 — Refresh token também expirado (forçar re-login)
+- [ ] Substituir ambos os tokens por valores expirados/inválidos em `session.json`
+- [ ] Tentar sync CRM → app mostra erro de autenticação (não crashar)
+- [ ] Utilizador faz login novamente → session renovada
+
+---
 
 ### Fase 4 — Empacotamento (.exe)
 
@@ -484,3 +521,5 @@ Clica 📱 → preenche telefone + mensagem
 
 - **Fase 4 (empacotamento .exe)** — `agent-local.spec` e `build.bat` ainda não criados. Próxima fase obrigatória antes de distribuição.
 - **Suporte macOS/Linux** — PyInstaller gera binário por plataforma; a Fase 4 será só para Windows por ora.
+- **Cenários F1–H1** — checks de validação das Fases 5, 6 e 7 ainda por validar (dependem de teste manual com WhatsApp real).
+- **Cenários I1–I2** — refresh token silencioso (Fase 8) por validar após próximo login completo.
