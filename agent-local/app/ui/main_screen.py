@@ -240,9 +240,12 @@ class MainScreen(ctk.CTkFrame):
 
     def _on_progress(self, current: int, total: int, message: str):
         def _update():
-            pct = (current / total) if total > 0 else 0
-            self._progress_bar.set(min(pct, 1.0))
-            self._progress_label.configure(text=message)
+            try:
+                pct = (current / total) if total > 0 else 0
+                self._progress_bar.set(min(pct, 1.0))
+                self._progress_label.configure(text=message)
+            except Exception:
+                pass
         self.after(0, _update)
 
     def _show_progress(self, visible: bool):
@@ -613,8 +616,18 @@ class MainScreen(ctk.CTkFrame):
 
         self._reload_kanban(kanban_content, subscriber)
 
+    @staticmethod
+    def _widget_alive(w) -> bool:
+        """Retorna True se o widget ainda existe e não foi destruído."""
+        try:
+            return bool(w.winfo_exists())
+        except Exception:
+            return False
+
     def _reload_kanban(self, container: ctk.CTkFrame, subscriber: bool) -> None:
         """Limpa o container de conteúdo e recarrega o Kanban."""
+        if not self._widget_alive(container):
+            return
         for w in list(container.winfo_children()):
             w.destroy()
 
@@ -638,6 +651,8 @@ class MainScreen(ctk.CTkFrame):
 
     def _render_kanban(self, container: ctk.CTkFrame, leads: list) -> None:
         """Renderiza as 3 colunas do Kanban."""
+        if not self._widget_alive(container):
+            return
         for w in list(container.winfo_children()):
             w.destroy()
 
@@ -767,6 +782,8 @@ class MainScreen(ctk.CTkFrame):
             ).pack(side="right")
 
     def _show_kanban_error(self, container: ctk.CTkFrame, msg: str) -> None:
+        if not self._widget_alive(container):
+            return
         for w in list(container.winfo_children()):
             w.destroy()
         ctk.CTkLabel(
@@ -912,43 +929,48 @@ class MainScreen(ctk.CTkFrame):
                 entries = get_prospect_log(200)
 
             def _render():
-                loading_lbl.pack_forget()
-                if not entries:
-                    ctk.CTkLabel(table, text="Sem registos de prospecção.",
-                                  font=ctk.CTkFont(size=12), text_color="#6B7280").pack(pady=20)
-                    return
+                try:
+                    if not self._widget_alive(table):
+                        return
+                    loading_lbl.pack_forget()
+                    if not entries:
+                        ctk.CTkLabel(table, text="Sem registos de prospecção.",
+                                      font=ctk.CTkFont(size=12), text_color="#6B7280").pack(pady=20)
+                        return
 
-                _ACTION_LABELS = {"manual_outbound": "Enviado (manual)", "sent": "Enviado",
-                                   "failed": "Falhou", "queued": "Enfileirado"}
+                    _ACTION_LABELS = {"manual_outbound": "Enviado (manual)", "sent": "Enviado",
+                                       "failed": "Falhou", "queued": "Enfileirado"}
 
-                hdr_row = ctk.CTkFrame(table, fg_color="transparent")
-                hdr_row.pack(fill="x", padx=8, pady=(4, 4))
-                for col in ["Data/Hora", "Nome", "Telefone", "Estado", "Notas"]:
-                    ctk.CTkLabel(hdr_row, text=col, font=ctk.CTkFont(size=10, weight="bold"),
-                                  text_color="#9CA3AF", anchor="w", width=100 if col != "Notas" else 150
-                                  ).pack(side="left", padx=4)
+                    hdr_row = ctk.CTkFrame(table, fg_color="transparent")
+                    hdr_row.pack(fill="x", padx=8, pady=(4, 4))
+                    for col in ["Data/Hora", "Nome", "Telefone", "Estado", "Notas"]:
+                        ctk.CTkLabel(hdr_row, text=col, font=ctk.CTkFont(size=10, weight="bold"),
+                                      text_color="#9CA3AF", anchor="w", width=100 if col != "Notas" else 150
+                                      ).pack(side="left", padx=4)
 
-                for idx, e in enumerate(entries):
-                    ts = (e.get("created_at") or e.get("ts") or "")[:16].replace("T", " ")
-                    name = (e.get("lead_name") or e.get("name") or "—")[:20]
-                    phone = e.get("phone") or "—"
-                    action = e.get("action") or e.get("status") or "—"
-                    notes = (e.get("notes") or e.get("reason") or "—")[:28]
-                    action_label = _ACTION_LABELS.get(action, action)
-                    color = "#EF4444" if "fail" in action.lower() else "#10B981"
+                    for idx, e in enumerate(entries):
+                        ts = (e.get("created_at") or e.get("ts") or "")[:16].replace("T", " ")
+                        name = (e.get("lead_name") or e.get("name") or "—")[:20]
+                        phone = e.get("phone") or "—"
+                        action = e.get("action") or e.get("status") or "—"
+                        notes = (e.get("notes") or e.get("reason") or "—")[:28]
+                        action_label = _ACTION_LABELS.get(action, action)
+                        color = "#EF4444" if "fail" in action.lower() else "#10B981"
 
-                    row = ctk.CTkFrame(table, fg_color="#1A1A2E" if idx % 2 == 0 else "#16162A",
-                                        corner_radius=4)
-                    row.pack(fill="x", padx=8, pady=1)
-                    for val, tc, w in [(ts, "#9CA3AF", 100), (name, "#D1D5DB", 100),
-                                        (phone, "#9CA3AF", 100), (action_label, color, 100),
-                                        (notes, "#9CA3AF", 150)]:
-                        ctk.CTkLabel(row, text=val, font=ctk.CTkFont(size=10),
-                                      text_color=tc, anchor="w", width=w
-                                      ).pack(side="left", padx=(8 if val == ts else 4, 4), pady=5)
+                        row = ctk.CTkFrame(table, fg_color="#1A1A2E" if idx % 2 == 0 else "#16162A",
+                                            corner_radius=4)
+                        row.pack(fill="x", padx=8, pady=1)
+                        for val, tc, w in [(ts, "#9CA3AF", 100), (name, "#D1D5DB", 100),
+                                            (phone, "#9CA3AF", 100), (action_label, color, 100),
+                                            (notes, "#9CA3AF", 150)]:
+                            ctk.CTkLabel(row, text=val, font=ctk.CTkFont(size=10),
+                                          text_color=tc, anchor="w", width=w
+                                          ).pack(side="left", padx=(8 if val == ts else 4, 4), pady=5)
 
-                ctk.CTkLabel(table, text=f"{len(entries)} registos",
-                              font=ctk.CTkFont(size=10), text_color="#6B7280").pack(pady=6)
+                    ctk.CTkLabel(table, text=f"{len(entries)} registos",
+                                  font=ctk.CTkFont(size=10), text_color="#6B7280").pack(pady=6)
+                except Exception:
+                    pass
 
             self.after(0, _render)
 
