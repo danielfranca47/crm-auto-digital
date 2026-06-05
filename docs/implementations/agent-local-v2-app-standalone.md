@@ -588,9 +588,65 @@ Clica 📱 → preenche telefone + mensagem
 
 ---
 
+### Fase 10 — Automação de Prospecção no Kanban
+
+**Objectivo:** Transformar o Kanban de manual para automatizado, replicando o ciclo do `ProspectionBoard` do frontend-crm: seleccionar leads → enfileirar → agente processa → leads movem-se sozinhos.
+
+#### O que é removido do Kanban (substituído pela automação)
+
+| Elemento removido | Substituído por |
+|---|---|
+| Botão **"→ Iniciar"** em cada card | O acto de enfileirar é o "iniciar" — lead move-se para in-progress ao ser enfileirado |
+| Botão **"→ Qualificar"** em cada card | Refluxo automático por polling: `sent` → qualification, `failed` → to-prospect |
+| Botão **📱** nos cards do Kanban (envio Selenium one-by-one) | Checkboxes + enfileiramento em massa via `POST /api/prospeccao/whatsapp/enqueue` |
+
+> **Nota:** o `ProspectDialog` (Selenium) permanece no painel **Pesquisar** para envio pontual de um lead acabado de encontrar. É removido apenas dos cards do Kanban.
+
+#### O que é adicionado
+
+| Elemento | Descrição |
+|---|---|
+| **Barra de estado** (header do Kanban) | Badge WA conectado/desconectado + badge Agente online/offline + contador de pendentes na fila |
+| **Checkboxes nos cards** de "À Prospectar" | Selecção individual + "Seleccionar todos" por coluna |
+| **BulkActions inline** | Painel que aparece ao seleccionar leads: escolha de método (WhatsApp) + botão "Enfileirar" |
+| **Polling + refluxo automático** | Thread leve a cada 5–10s: consulta `/api/prospeccao/whatsapp/recent` e move leads pelas colunas conforme resultados |
+
+#### Ficheiros a alterar
+
+| Arquivo | O que muda |
+|---|---|
+| `agent-local/app/ui/main_screen.py` | Remover `_KANBAN_NEXT` e botões "→ Iniciar"/"→ Qualificar"; remover botão "📱" dos cards do Kanban; adicionar checkboxes nos cards de to-prospect; adicionar barra de estado no header; adicionar painel de BulkActions; adicionar thread de polling com refluxo |
+| `agent-local/app/crm_client.py` | Novo: `enqueue_whatsapp(lead_ids, message)` — `POST /api/prospeccao/whatsapp/enqueue`; novo: `get_recent_results(minutes)` — `GET /api/prospeccao/whatsapp/recent`; novo: `get_agent_overview()` — `GET /api/agents/overview` |
+
+### Checks Fase 10
+
+#### Cenário K1 — Barra de estado
+- [ ] Header do Kanban mostra badge WA (verde "Conectado" / vermelho "Desconectado") actualizado ao abrir
+- [ ] Badge "Agente Online" / "Agente Offline" visível
+- [ ] Contador "Pendentes: N" actualiza por polling
+
+#### Cenário K2 — Selecção e enfileiramento
+- [ ] Cards em "À Prospectar" têm checkbox
+- [ ] Seleccionar 2+ leads → painel BulkActions aparece com contagem
+- [ ] Clicar "Enfileirar" → chama `POST /api/prospeccao/whatsapp/enqueue` com os lead_ids
+- [ ] Leads enfileirados movem-se imediatamente para "Em Andamento"
+
+#### Cenário K3 — Refluxo automático por resultado
+- [ ] Após envio com sucesso (`sent`): lead move-se automaticamente de "Em Andamento" para "Qualificação" (sem clicar)
+- [ ] Após falha (`failed`): lead volta automaticamente de "Em Andamento" para "À Prospectar"
+- [ ] Kanban reflecte o estado real sem precisar de clicar "Actualizar"
+
+#### Cenário K4 — Remoção dos botões manuais
+- [ ] Cards em "À Prospectar" não têm botão "→ Iniciar"
+- [ ] Cards em "Em Andamento" não têm botão "→ Qualificar"
+- [ ] Cards do Kanban não têm botão "📱" (o 📱 continua na tabela de Pesquisar)
+
+---
+
 ### Gaps restantes
 
 - **Fase 4 (empacotamento .exe)** — `agent-local.spec` e `build.bat` ainda não criados. Próxima fase obrigatória antes de distribuição.
 - **Suporte macOS/Linux** — PyInstaller gera binário por plataforma; a Fase 4 será só para Windows por ora.
 - **Cenários F1–H1** — checks de validação das Fases 5, 6 e 7 ainda por validar (dependem de teste manual com WhatsApp real).
 - **Cenários I1–I2** — refresh token silencioso (Fase 8) por validar após próximo login completo.
+- **Cenários J1–J8** — Fase 9 (Kanban manual) por validar. J1 (→ Iniciar, → Qualificar, 📱 no card) será substituído pelos checks K1–K4 da Fase 10.
