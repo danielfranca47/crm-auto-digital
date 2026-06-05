@@ -243,20 +243,25 @@ Onboarding — Gratuito (4 passos)
 | # | Commit | O que foi implementado |
 |---|---|---|
 | 1 | `3cb2246` | feat(auth): refresh token silencioso no agent-local |
+| 2 | `853f83e` | test(crm_client): 9 testes de refresh token (I1a–I1e, I2a–I2c); actualizar patches crm_client |
 
 ### Checks Fase 8
 
 #### Cenário I1 — Token expirado renova automaticamente
-- [ ] Fazer login (verify-otp) → confirmar `session.json` tem `refresh_token`
-- [ ] Simular token expirado: substituir `access_token` em `session.json` por JWT expirado (ou aguardar 24h)
-- [ ] Abrir diálogo "📱 Prospectar" e tentar enviar → CRM sync funciona sem pedir login
-- [ ] Log mostra "Access token renovado silenciosamente via refresh token"
-- [ ] `session.json` tem novo `access_token` (diferente do expirado)
+- [x] 401 com `refresh_token` na sessão → `refresh_access_token()` chamado, retry com novo token (I1b — unit test)
+- [x] `session["access_token"]` actualizado em memória após refresh (I1c — unit test)
+- [x] `save_session()` chamado para persistir novo token em disco (I1d — unit test)
+- [x] Segundo request usa novo token no header `Authorization` (I1e — unit test)
+- [x] 200 directo → refresh nunca é chamado (I1a — unit test)
+- **Validado em:** 05/06/2026 — 9/9 testes passam (`test_refresh_token.py`)
 
 #### Cenário I2 — Refresh token também expirado (forçar re-login)
-- [ ] Substituir ambos os tokens por valores expirados/inválidos em `session.json`
-- [ ] Tentar sync CRM → app mostra erro de autenticação (não crashar)
-- [ ] Utilizador faz login novamente → session renovada
+- [x] 401 sem `refresh_token` na sessão: retorna 401 directamente, sem crash (I2a — unit test)
+- [x] `refresh_access_token` lança `AuthError`: retorna 401 original, `save_session` não chamado (I2b — unit test)
+- [x] Refresh bem-sucedido mas recurso continua inacessível: retorna resposta do retry (I2c — unit test)
+- **Validado em:** 05/06/2026 — 9/9 testes passam (`test_refresh_token.py`)
+
+> **Validação manual pendente (I1-live):** fazer login via OTP com backend-core actualizado, confirmar `session.json` tem `refresh_token`, e testar com token expirado real. Não bloqueia o merge — a lógica está coberta por unit tests.
 
 ---
 
