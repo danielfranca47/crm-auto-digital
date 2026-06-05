@@ -542,7 +542,10 @@ Clica 📱 → preenche telefone + mensagem
 
 | # | Commit | O que foi implementado |
 |---|---|---|
-| 1 | _(a registar)_ | Kanban de prospecção no painel Prospectar do agent-local |
+| 1 | `f043fe1` | Kanban de prospecção no painel Prospectar do agent-local |
+| 2 | `72a3465` | Fix 400 country_code BR; botão "Guardar todos no CRM"; labels "📱 WA" / "💾 CRM" |
+| 3 | `1271c30` | Janela redimensionável (`resizable(True, True)` + `minsize(620, 500)`) |
+| 4 | `6f64e7c` | Fix TclError race condition ao navegar entre painéis durante carregamento |
 
 ### Checks Fase 9
 
@@ -561,6 +564,27 @@ Clica 📱 → preenche telefone + mensagem
 
 #### Cenário J4 — Refresh
 - [ ] Clicar "⟳ Actualizar" → Kanban recarrega do CRM sem sair do painel
+
+#### Cenário J5 — Guardar no CRM (individual)
+- [ ] Clicar "💾 CRM" numa linha da tabela de pesquisa → popup confirma resultado
+- [ ] Telefone no formato `(11) 99999-9999` não gera erro 400 (country_code BR aplicado)
+- [ ] Lead já existente no CRM → popup indica "já existia no CRM" sem duplicar
+
+#### Cenário J6 — Guardar todos no CRM
+- [ ] Após pesquisa como assinante → botão "💾 Guardar todos no CRM" visível no header dos resultados
+- [ ] Clicar → popup mostra "A guardar N / M leads…" com progresso
+- [ ] Ao concluir → popup mostra resumo: "✓ N guardados  ⟳ N já existiam  ✗ N erros"
+- [ ] Leads aparecem em "À Prospectar" no painel Prospectar após actualizar
+
+#### Cenário J7 — Janela redimensionável
+- [ ] Arrastar borda/canto da janela → layout ajusta-se
+- [ ] Maximizar janela → colunas do Kanban expandem proporcionalmente
+- [ ] Reduzir abaixo de 620×500 → janela não encolhe mais (minsize respeitado)
+
+#### Cenário J8 — Estabilidade ao navegar (race condition)
+- [ ] Iniciar pesquisa → navegar para Prospectar antes de terminar → sem crash TclError
+- [ ] Abrir painel Prospectar → navegar para Histórico antes do Kanban carregar → sem crash
+- [ ] Navegar entre painéis rapidamente múltiplas vezes → app mantém-se estável
 
 ---
 
