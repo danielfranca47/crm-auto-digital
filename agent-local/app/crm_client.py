@@ -7,6 +7,9 @@ from typing import Any, Dict
 
 import requests
 
+from app.auth import refresh_access_token
+from app.session import save_session
+
 logger = logging.getLogger(__name__)
 
 
@@ -29,8 +32,6 @@ def _request(method: str, url: str, session: dict, **kwargs) -> requests.Respons
         return resp
 
     try:
-        from app.auth import refresh_access_token
-        from app.session import save_session
         new_token = refresh_access_token(refresh_token)
         session["access_token"] = new_token
         save_session(session)
