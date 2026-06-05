@@ -561,20 +561,21 @@ class MainScreen(ctk.CTkFrame):
                           command=self._prospect_selected).pack(side="right", padx=12, pady=8)
 
     def _open_whatsapp_web(self) -> None:
-        """Abre Chrome com WhatsApp Web para o utilizador fazer login/scan do QR."""
-        self._wa_status_lbl.configure(text="Estado: a abrir Chrome…", text_color="#60A5FA")
+        """Abre Chrome e navega para WhatsApp Web. Se QR aparecer, utilizador faz scan."""
+        self._wa_status_lbl.configure(text="Estado: a abrir Chrome… (pode demorar 10–20s)",
+                                       text_color="#60A5FA")
 
         def _do():
             try:
-                from app.whatsapp_client import _get_runner
-                _get_runner()  # cria runner se não existir
+                from app.whatsapp_client import open_for_login
+                open_for_login()
                 self.after(0, lambda: self._wa_status_lbl.configure(
-                    text="Estado: Chrome aberto — faz login se pedido e volta ao app.",
+                    text="Estado: ✓ Chrome aberto com WhatsApp Web. Se aparecer QR code, faz o scan e volta ao app.",
                     text_color="#10B981",
                 ))
             except Exception as exc:
                 self.after(0, lambda e=str(exc): self._wa_status_lbl.configure(
-                    text=f"Estado: Erro — {e[:60]}",
+                    text=f"Estado: ✗ Erro ao abrir Chrome — {e[:80]}",
                     text_color="#EF4444",
                 ))
 

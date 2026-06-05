@@ -44,6 +44,17 @@ def _get_runner():
     return _runner
 
 
+def open_for_login() -> None:
+    """
+    Abre o Chrome e navega para WhatsApp Web.
+    Se o QR code aparecer, o utilizador faz o scan — o Chrome fica aberto
+    (singleton) para ser reutilizado nos envios seguintes.
+    """
+    runner = _get_runner()
+    runner._ensure_whatsapp_tab()   # navega para web.whatsapp.com
+    logger.info("WhatsApp Web aberto para login")
+
+
 def close_runner() -> None:
     """Fecha o Chrome e liberta o runner. Chamar no quit do app."""
     global _runner
