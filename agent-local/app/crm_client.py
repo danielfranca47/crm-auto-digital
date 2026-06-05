@@ -100,6 +100,25 @@ def get_prospect_history(session: dict, limit: int = 100) -> list:
     return data if isinstance(data, list) else []
 
 
+def get_leads_kanban(session: dict) -> list:
+    """Leads nas categorias de prospecção (to-prospect, in-progress, qualification)."""
+    resp = _request("GET", f"{_base()}/api/leads", session, timeout=20)
+    resp.raise_for_status()
+    all_leads = resp.json() if isinstance(resp.json(), list) else []
+    prospection_cats = {"to-prospect", "in-progress", "qualification"}
+    return [l for l in all_leads if l.get("category") in prospection_cats]
+
+
+def move_lead_category(session: dict, lead_id: int, category: str) -> None:
+    """Move lead para nova categoria (PATCH /api/leads/{id})."""
+    resp = _request(
+        "PATCH", f"{_base()}/api/leads/{lead_id}", session,
+        json={"category": category},
+        timeout=15,
+    )
+    resp.raise_for_status()
+
+
 def generate_copy(
     session: dict,
     company_name: str,

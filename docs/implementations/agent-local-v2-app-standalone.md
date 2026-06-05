@@ -522,6 +522,48 @@ Clica 📱 → preenche telefone + mensagem
 - **CRM Pesquisa → "Leads do Agente"** — tabela de histórico via endpoint; upsell mantido
 - **Testes adicionais** — 44 testes passam (6 bulk + 10 history + 25 anteriores + 3 outros)
 
+### Fase 9 — Kanban de Prospecção no painel Prospectar
+
+**Objectivo:** Substituir as instruções estáticas do painel "Prospectar" por um Kanban de 3 colunas derivado do CRM, equivalente ao `ProspectionBoard` do frontend-crm.
+
+| Arquivo | O que mudou |
+|---|---|
+| `agent-local/app/crm_client.py` | `get_leads_kanban()` — fetch + filtro por categoria; `move_lead_category()` — PATCH de categoria |
+| `agent-local/app/ui/main_screen.py` | `_build_prospectar` reescrito; `_reload_kanban`, `_render_kanban`, `_render_kanban_card`, `_show_kanban_error`, `_build_kanban_non_subscriber`, `_open_whatsapp_web_inline` |
+
+**Comportamento:**
+- Assinante: 3 colunas (À Prospectar / Em Andamento / Qualificação) carregadas do CRM via `GET /api/leads`
+- Cada card mostra nome, telefone, origin e botões "→ Iniciar" / "→ Qualificar" + "📱" para prospectar via WhatsApp
+- Botão "⟳ Actualizar" recarrega o Kanban sem sair do painel
+- Não-assinante: pitch de upgrade + log local dividido em "Enviados" / "Falhados"
+- Leads guardados com 💾 na pesquisa aparecem automaticamente em "À Prospectar"
+
+### Commits Fase 9
+
+| # | Commit | O que foi implementado |
+|---|---|---|
+| 1 | _(a registar)_ | Kanban de prospecção no painel Prospectar do agent-local |
+
+### Checks Fase 9
+
+#### Cenário J1 — Kanban assinante com leads
+- [ ] Abrir painel Prospectar como assinante → 3 colunas aparecem (À Prospectar / Em Andamento / Qualificação)
+- [ ] Leads guardados com 💾 aparecem em "À Prospectar"
+- [ ] Clicar "→ Iniciar" move lead para "Em Andamento" (Kanban actualiza)
+- [ ] Clicar "→ Qualificar" move lead para "Qualificação" (Kanban actualiza)
+- [ ] Botão "📱" abre diálogo de prospecção WhatsApp
+
+#### Cenário J2 — Kanban assinante sem leads
+- [ ] Sem leads nas categorias de prospecção → mensagem "Sem leads nas colunas de prospecção" + instrução de uso
+
+#### Cenário J3 — Kanban não-assinante
+- [ ] Painel Prospectar como gratuito → pitch de upgrade + colunas "Enviados"/"Falhados" do log local
+
+#### Cenário J4 — Refresh
+- [ ] Clicar "⟳ Actualizar" → Kanban recarrega do CRM sem sair do painel
+
+---
+
 ### Gaps restantes
 
 - **Fase 4 (empacotamento .exe)** — `agent-local.spec` e `build.bat` ainda não criados. Próxima fase obrigatória antes de distribuição.

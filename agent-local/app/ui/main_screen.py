@@ -485,100 +485,327 @@ class MainScreen(ctk.CTkFrame):
             self._show_error(f"Erro ao exportar: {exc}")
 
     # ══════════════════════════════════════════════════════════════════════════
-    # PAINEL 2 — PROSPECTAR (WhatsApp + instruções)
+    # PAINEL 2 — PROSPECTAR (Kanban de prospecção)
     # ══════════════════════════════════════════════════════════════════════════
 
+    _KANBAN_COLS = [
+        ("to-prospect",  "À Prospectar",  "#6366f1"),
+        ("in-progress",  "Em Andamento",  "#f59e0b"),
+        ("qualification", "Qualificação", "#22c55e"),
+    ]
+    _KANBAN_NEXT = {
+        "to-prospect": ("in-progress",   "→ Iniciar"),
+        "in-progress": ("qualification", "→ Qualificar"),
+    }
+
     def _build_prospectar(self, parent: ctk.CTkFrame) -> None:
-        body = ctk.CTkScrollableFrame(parent, fg_color=_BG, corner_radius=0)
-        body.pack(fill="both", expand=True)
+        subscriber = is_subscriber(self._session)
 
-        ctk.CTkLabel(body, text="📱  Prospecção via WhatsApp",
-                      font=ctk.CTkFont(size=16, weight="bold")).pack(anchor="w", padx=20, pady=(16, 4))
-        ctk.CTkLabel(body, text="Envia mensagens de prospecção directamente pelo WhatsApp Web.",
-                      font=ctk.CTkFont(size=12), text_color="#9CA3AF", wraplength=420).pack(anchor="w", padx=20, pady=(0, 14))
-
-        # ── Conexão WhatsApp ───────────────────────────────────────────────
-        wa_card = ctk.CTkFrame(body, fg_color=_CARD, corner_radius=12)
-        wa_card.pack(padx=20, fill="x", pady=(0, 12))
-
-        ctk.CTkLabel(wa_card, text="🔗  Conexão WhatsApp Web",
-                      font=ctk.CTkFont(size=13, weight="bold")).pack(anchor="w", padx=16, pady=(12, 6))
-
-        self._wa_status_lbl = ctk.CTkLabel(
-            wa_card, text="Estado: desconhecido",
-            font=ctk.CTkFont(size=11), text_color="#6B7280",
-        )
-        self._wa_status_lbl.pack(anchor="w", padx=16, pady=(0, 8))
-
-        btn_row = ctk.CTkFrame(wa_card, fg_color="transparent")
-        btn_row.pack(padx=16, pady=(0, 14), fill="x")
-
-        ctk.CTkButton(
-            btn_row, text="Abrir WhatsApp Web",
-            height=36, corner_radius=8,
-            command=self._open_whatsapp_web,
-        ).pack(side="left")
+        # ── Header ────────────────────────────────────────────────────────
+        hdr = ctk.CTkFrame(parent, fg_color=_CARD, corner_radius=0, height=50)
+        hdr.pack(fill="x")
+        hdr.pack_propagate(False)
 
         ctk.CTkLabel(
-            btn_row,
-            text="Abre o Chrome com WhatsApp Web. Se aparecer QR code, faz o scan.",
-            font=ctk.CTkFont(size=10), text_color="#6B7280", wraplength=280,
-        ).pack(side="left", padx=12)
+            hdr, text="Pipeline de Prospecção",
+            font=ctk.CTkFont(size=14, weight="bold"),
+        ).pack(side="left", padx=16)
 
-        # ── Como prospectar ───────────────────────────────────────────────
-        how_card = ctk.CTkFrame(body, fg_color=_CARD, corner_radius=12)
-        how_card.pack(padx=20, fill="x", pady=(0, 12))
+        # WhatsApp button (compact)
+        ctk.CTkButton(
+            hdr, text="📱 WhatsApp Web", height=30, corner_radius=6,
+            fg_color="#065F46", hover_color="#047857", font=ctk.CTkFont(size=11),
+            command=self._open_whatsapp_web_inline,
+        ).pack(side="right", padx=4, pady=10)
 
-        ctk.CTkLabel(how_card, text="📋  Como prospectar",
-                      font=ctk.CTkFont(size=13, weight="bold")).pack(anchor="w", padx=16, pady=(12, 8))
+        # ── Área do Kanban ────────────────────────────────────────────────
+        kanban_outer = ctk.CTkFrame(parent, fg_color=_BG, corner_radius=0)
+        kanban_outer.pack(fill="both", expand=True)
 
-        steps = [
-            ("1.", "Vai para 🔍 Pesquisar e faz uma pesquisa de empresas."),
-            ("2.", "Na tabela de resultados, clica ☐ nas linhas que queres prospectar."),
-            ("3.", "Aparece a barra azul em baixo → clica '📱 Prospectar seleccionados'."),
-            ("4.", "Preenche a mensagem, escolhe o delay e clica 'Iniciar'."),
-            ("5.", "O Chrome abre com WhatsApp Web e envia as mensagens automaticamente."),
-        ]
-        for num, text in steps:
-            row = ctk.CTkFrame(how_card, fg_color="transparent")
-            row.pack(fill="x", padx=16, pady=3)
-            ctk.CTkLabel(row, text=num, font=ctk.CTkFont(size=12, weight="bold"),
-                          text_color="#60A5FA", width=24).pack(side="left")
-            ctk.CTkLabel(row, text=text, font=ctk.CTkFont(size=11),
-                          text_color="#D1D5DB", wraplength=360, justify="left").pack(side="left", padx=6)
-
-        ctk.CTkLabel(how_card, text="", height=6).pack()  # spacer
-
-        # ── Acção rápida: prospectar seleccionados ───────────────────────
+        # Acção rápida se há leads seleccionados na pesquisa (fixo, não afectado pelo reload)
         if self._selected_leads:
-            quick = ctk.CTkFrame(body, fg_color="#1E3A5F", corner_radius=12)
-            quick.pack(padx=20, fill="x", pady=(0, 12))
             n = len(self._selected_leads)
-            ctk.CTkLabel(quick, text=f"✓  {n} lead{'s' if n!=1 else ''} seleccionado{'s' if n!=1 else ''} na pesquisa",
-                          font=ctk.CTkFont(size=12), text_color="#93C5FD").pack(side="left", padx=16, pady=10)
-            ctk.CTkButton(quick, text="📱 Prospectar agora →",
-                          height=32, corner_radius=8,
-                          command=self._prospect_selected).pack(side="right", padx=12, pady=8)
+            quick = ctk.CTkFrame(kanban_outer, fg_color="#1E3A5F", corner_radius=10)
+            quick.pack(padx=12, pady=(8, 0), fill="x")
+            ctk.CTkLabel(
+                quick,
+                text=f"✓  {n} lead{'s' if n != 1 else ''} seleccionado{'s' if n != 1 else ''} em Pesquisar",
+                font=ctk.CTkFont(size=11), text_color="#93C5FD",
+            ).pack(side="left", padx=12, pady=8)
+            ctk.CTkButton(
+                quick, text="📱 Prospectar agora →", height=28, corner_radius=6,
+                font=ctk.CTkFont(size=11), command=self._prospect_selected,
+            ).pack(side="right", padx=10, pady=8)
 
-    def _open_whatsapp_web(self) -> None:
-        """Abre Chrome e navega para WhatsApp Web. Se QR aparecer, utilizador faz scan."""
-        self._wa_status_lbl.configure(text="Estado: a abrir Chrome… (pode demorar 10–20s)",
-                                       text_color="#60A5FA")
+        # Frame de conteúdo recarregável (separado da barra de acção rápida)
+        kanban_content = ctk.CTkFrame(kanban_outer, fg_color=_BG, corner_radius=0)
+        kanban_content.pack(fill="both", expand=True)
+
+        # Refresh button — aponta para kanban_content
+        ctk.CTkButton(
+            hdr, text="⟳ Actualizar", height=30, corner_radius=6,
+            fg_color="#2A2A3E", hover_color="#3A3A5E", font=ctk.CTkFont(size=11),
+            command=lambda: self._reload_kanban(kanban_content, subscriber),
+        ).pack(side="right", padx=4, pady=10)
+
+        self._reload_kanban(kanban_content, subscriber)
+
+    def _reload_kanban(self, container: ctk.CTkFrame, subscriber: bool) -> None:
+        """Limpa o container de conteúdo e recarrega o Kanban."""
+        for w in list(container.winfo_children()):
+            w.destroy()
+
+        if not subscriber:
+            self._build_kanban_non_subscriber(container)
+            return
+
+        lbl = ctk.CTkLabel(container, text="A carregar leads…",
+                            font=ctk.CTkFont(size=12), text_color="#9CA3AF")
+        lbl.pack(pady=30)
+
+        def _fetch():
+            try:
+                from app.crm_client import get_leads_kanban
+                leads = get_leads_kanban(self._session)
+                self.after(0, lambda l=leads: self._render_kanban(container, l))
+            except Exception as exc:
+                self.after(0, lambda e=str(exc): self._show_kanban_error(container, e))
+
+        threading.Thread(target=_fetch, daemon=True).start()
+
+    def _render_kanban(self, container: ctk.CTkFrame, leads: list) -> None:
+        """Renderiza as 3 colunas do Kanban."""
+        for w in list(container.winfo_children()):
+            w.destroy()
+
+        if not leads:
+            empty = ctk.CTkFrame(container, fg_color=_CARD, corner_radius=10)
+            empty.pack(padx=12, pady=12, fill="x")
+            ctk.CTkLabel(
+                empty,
+                text="Sem leads nas colunas de prospecção.",
+                font=ctk.CTkFont(size=12), text_color="#6B7280",
+            ).pack(padx=16, pady=(14, 4))
+            ctk.CTkLabel(
+                empty,
+                text="Pesquise empresas em 🔍 Pesquisar e guarde-as no CRM com 💾 — aparecem aqui em 'À Prospectar'.",
+                font=ctk.CTkFont(size=11), text_color="#4B5563", wraplength=460, justify="left",
+            ).pack(padx=16, pady=(0, 14))
+            return
+
+        grid = ctk.CTkFrame(container, fg_color=_BG)
+        grid.pack(fill="both", expand=True, padx=8, pady=8)
+        grid.columnconfigure(0, weight=1)
+        grid.columnconfigure(1, weight=1)
+        grid.columnconfigure(2, weight=1)
+        grid.rowconfigure(0, weight=1)
+
+        for col_idx, (cat_id, cat_label, col_color) in enumerate(self._KANBAN_COLS):
+            col_leads = [l for l in leads if l.get("category") == cat_id]
+
+            col_frame = ctk.CTkFrame(grid, fg_color="#1A1A2E", corner_radius=10)
+            col_frame.grid(row=0, column=col_idx, sticky="nsew", padx=4, pady=4)
+            col_frame.rowconfigure(1, weight=1)
+            col_frame.columnconfigure(0, weight=1)
+
+            # Cabeçalho colorido
+            hdr_f = ctk.CTkFrame(col_frame, fg_color=col_color, corner_radius=8, height=36)
+            hdr_f.grid(row=0, column=0, sticky="ew", padx=6, pady=(6, 3))
+            hdr_f.pack_propagate(False)
+            ctk.CTkLabel(
+                hdr_f,
+                text=f"{cat_label}  ({len(col_leads)})",
+                font=ctk.CTkFont(size=12, weight="bold"),
+                text_color="white",
+            ).pack(expand=True)
+
+            # Área de cards
+            cards_scroll = ctk.CTkScrollableFrame(col_frame, fg_color="transparent")
+            cards_scroll.grid(row=1, column=0, sticky="nsew", padx=4, pady=(0, 6))
+
+            if not col_leads:
+                ctk.CTkLabel(
+                    cards_scroll, text="Sem leads",
+                    font=ctk.CTkFont(size=11), text_color="#374151",
+                ).pack(pady=16)
+            else:
+                for lead in col_leads:
+                    self._render_kanban_card(cards_scroll, lead, cat_id, container)
+
+    def _render_kanban_card(
+        self,
+        parent: ctk.CTkFrame,
+        lead: dict,
+        current_cat: str,
+        kanban_container: ctk.CTkFrame,
+    ) -> None:
+        card = ctk.CTkFrame(parent, fg_color=_CARD, corner_radius=8)
+        card.pack(fill="x", padx=4, pady=3)
+
+        name = (lead.get("companyName") or lead.get("contactName") or "Lead")[:26]
+        phone = lead.get("phone") or "—"
+        lead_id = lead.get("id")
+        origin = lead.get("origin") or ""
+
+        ctk.CTkLabel(
+            card, text=name,
+            font=ctk.CTkFont(size=11, weight="bold"), anchor="w",
+        ).pack(fill="x", padx=8, pady=(6, 1))
+
+        ctk.CTkLabel(
+            card, text=phone,
+            font=ctk.CTkFont(size=10), text_color="#6B7280", anchor="w",
+        ).pack(fill="x", padx=8, pady=(0, 1))
+
+        if origin:
+            ctk.CTkLabel(
+                card, text=f"#{lead_id} · {origin}",
+                font=ctk.CTkFont(size=9), text_color="#374151", anchor="w",
+            ).pack(fill="x", padx=8, pady=(0, 2))
+
+        btn_row = ctk.CTkFrame(card, fg_color="transparent")
+        btn_row.pack(fill="x", padx=8, pady=(2, 6))
+
+        # Avançar para próxima coluna
+        if current_cat in self._KANBAN_NEXT:
+            next_cat, next_label = self._KANBAN_NEXT[current_cat]
+
+            def _advance(lid=lead_id, nc=next_cat, kc=kanban_container):
+                def _do():
+                    try:
+                        from app.crm_client import move_lead_category
+                        move_lead_category(self._session, lid, nc)
+                        sub = is_subscriber(self._session)
+                        self.after(0, lambda: self._reload_kanban(kc, sub))
+                    except Exception:
+                        pass
+                threading.Thread(target=_do, daemon=True).start()
+
+            ctk.CTkButton(
+                btn_row, text=next_label, height=24, corner_radius=6,
+                fg_color="#1D4ED8", hover_color="#1E40AF",
+                font=ctk.CTkFont(size=10),
+                command=_advance,
+            ).pack(side="left")
+
+        # Prospectar via WhatsApp
+        if phone and phone != "—":
+            lead_data = {
+                "name": name,
+                "phone": phone,
+                "website": "",
+                "address": lead.get("observations", ""),
+            }
+            ctk.CTkButton(
+                btn_row, text="📱", width=28, height=24, corner_radius=6,
+                fg_color="#065F46", hover_color="#047857",
+                font=ctk.CTkFont(size=11),
+                command=lambda ld=lead_data: self._open_prospect_dialog(ld),
+            ).pack(side="right")
+
+    def _show_kanban_error(self, container: ctk.CTkFrame, msg: str) -> None:
+        for w in list(container.winfo_children()):
+            w.destroy()
+        ctk.CTkLabel(
+            container,
+            text=f"⚠  Erro ao carregar leads: {msg[:120]}",
+            text_color="#EF4444", font=ctk.CTkFont(size=11), wraplength=440,
+        ).pack(padx=16, pady=20)
+
+    def _build_kanban_non_subscriber(self, container: ctk.CTkFrame) -> None:
+        from app.session import get_prospect_log
+
+        pitch = ctk.CTkFrame(container, fg_color="#1E1B4B", corner_radius=12)
+        pitch.pack(padx=12, pady=(12, 8), fill="x")
+        ctk.CTkLabel(
+            pitch, text="📊  Kanban completo disponível para Assinantes",
+            font=ctk.CTkFont(size=12, weight="bold"), text_color="#A5B4FC",
+        ).pack(padx=16, pady=(12, 3))
+        ctk.CTkLabel(
+            pitch,
+            text="Assine para ver os seus leads nas fases de prospecção com integração CRM.",
+            font=ctk.CTkFont(size=10), text_color="#818CF8", wraplength=420,
+        ).pack(padx=16, pady=(0, 12))
+
+        entries = get_prospect_log(60)
+        if not entries:
+            ctk.CTkLabel(
+                container, text="Sem registos locais de prospecção ainda.",
+                font=ctk.CTkFont(size=11), text_color="#6B7280",
+            ).pack(pady=16)
+            return
+
+        sent = [e for e in entries if e.get("status") not in ("failed", "error")]
+        failed = [e for e in entries if e.get("status") in ("failed", "error")]
+
+        grid = ctk.CTkFrame(container, fg_color=_BG)
+        grid.pack(fill="both", expand=True, padx=8, pady=8)
+        grid.columnconfigure(0, weight=1)
+        grid.columnconfigure(1, weight=1)
+        grid.rowconfigure(0, weight=1)
+
+        for col_idx, (label, color, col_leads) in enumerate([
+            ("Enviados", "#22c55e", sent),
+            ("Falhados", "#ef4444", failed),
+        ]):
+            col_frame = ctk.CTkFrame(grid, fg_color="#1A1A2E", corner_radius=10)
+            col_frame.grid(row=0, column=col_idx, sticky="nsew", padx=4, pady=4)
+            col_frame.rowconfigure(1, weight=1)
+            col_frame.columnconfigure(0, weight=1)
+
+            hdr_f = ctk.CTkFrame(col_frame, fg_color=color, corner_radius=8, height=36)
+            hdr_f.grid(row=0, column=0, sticky="ew", padx=6, pady=(6, 3))
+            hdr_f.pack_propagate(False)
+            ctk.CTkLabel(
+                hdr_f, text=f"{label}  ({len(col_leads)})",
+                font=ctk.CTkFont(size=12, weight="bold"), text_color="white",
+            ).pack(expand=True)
+
+            cards_scroll = ctk.CTkScrollableFrame(col_frame, fg_color="transparent")
+            cards_scroll.grid(row=1, column=0, sticky="nsew", padx=4, pady=(0, 6))
+
+            if not col_leads:
+                ctk.CTkLabel(cards_scroll, text="Sem leads",
+                              font=ctk.CTkFont(size=11), text_color="#374151").pack(pady=16)
+            else:
+                for entry in col_leads:
+                    card = ctk.CTkFrame(cards_scroll, fg_color=_CARD, corner_radius=8)
+                    card.pack(fill="x", padx=4, pady=3)
+                    name = (entry.get("name") or "—")[:26]
+                    phone = entry.get("phone") or "—"
+                    ts = (entry.get("ts") or "")[:16].replace("T", " ")
+                    ctk.CTkLabel(card, text=name,
+                                  font=ctk.CTkFont(size=11, weight="bold"), anchor="w").pack(fill="x", padx=8, pady=(6, 1))
+                    ctk.CTkLabel(card, text=phone,
+                                  font=ctk.CTkFont(size=10), text_color="#6B7280", anchor="w").pack(fill="x", padx=8, pady=(0, 1))
+                    ctk.CTkLabel(card, text=ts,
+                                  font=ctk.CTkFont(size=9), text_color="#374151", anchor="w").pack(fill="x", padx=8, pady=(0, 6))
+
+    def _open_whatsapp_web_inline(self) -> None:
+        """Abre Chrome com WhatsApp Web (botão no header do Kanban)."""
+        popup = ctk.CTkToplevel(self)
+        popup.title("WhatsApp Web")
+        popup.geometry("360x140")
+        popup.resizable(False, False)
+        popup.grab_set()
+
+        lbl = ctk.CTkLabel(popup, text="A abrir Chrome… (10–20s)",
+                            font=ctk.CTkFont(size=12), text_color="#60A5FA")
+        lbl.pack(pady=(24, 8))
 
         def _do():
             try:
                 from app.whatsapp_client import open_for_login
                 open_for_login()
-                self.after(0, lambda: self._wa_status_lbl.configure(
-                    text="Estado: ✓ Chrome aberto com WhatsApp Web. Se aparecer QR code, faz o scan e volta ao app.",
-                    text_color="#10B981",
-                ))
+                self.after(0, lambda: lbl.configure(
+                    text="✓ Chrome aberto. Se aparecer QR code, faz o scan.",
+                    text_color="#10B981"))
             except Exception as exc:
-                self.after(0, lambda e=str(exc): self._wa_status_lbl.configure(
-                    text=f"Estado: ✗ Erro ao abrir Chrome — {e[:80]}",
-                    text_color="#EF4444",
-                ))
+                self.after(0, lambda e=str(exc): lbl.configure(
+                    text=f"✗ Erro: {e[:80]}", text_color="#EF4444"))
 
+        ctk.CTkButton(popup, text="Fechar", width=90,
+                       command=popup.destroy).pack(pady=4)
         threading.Thread(target=_do, daemon=True).start()
 
     # ══════════════════════════════════════════════════════════════════════════
