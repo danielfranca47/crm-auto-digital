@@ -559,13 +559,16 @@ class MainScreen(ctk.CTkFrame):
         ("in-progress",  "Em Andamento",  "#f59e0b"),
         ("qualification", "Qualificação", "#22c55e"),
     ]
-    _KANBAN_NEXT = {
-        "to-prospect": ("in-progress",   "→ Iniciar"),
-        "in-progress": ("qualification", "→ Qualificar"),
-    }
 
     def _build_prospectar(self, parent: ctk.CTkFrame) -> None:
+        import threading as _threading
         subscriber = is_subscriber(self._session)
+
+        # Para o polling anterior se existir
+        if hasattr(self, "_kanban_stop_event") and self._kanban_stop_event is not None:
+            self._kanban_stop_event.set()
+        self._kanban_stop_event = _threading.Event()
+        self._kanban_selected: dict = {}
 
         # ── Header ────────────────────────────────────────────────────────
         hdr = ctk.CTkFrame(parent, fg_color=_CARD, corner_radius=0, height=50)
@@ -577,18 +580,32 @@ class MainScreen(ctk.CTkFrame):
             font=ctk.CTkFont(size=14, weight="bold"),
         ).pack(side="left", padx=16)
 
-        # WhatsApp button (compact)
         ctk.CTkButton(
             hdr, text="📱 WhatsApp Web", height=30, corner_radius=6,
             fg_color="#065F46", hover_color="#047857", font=ctk.CTkFont(size=11),
             command=self._open_whatsapp_web_inline,
         ).pack(side="right", padx=4, pady=10)
 
+        # Badges de estado (agente + pendentes)
+        self._agent_badge_lbl = ctk.CTkLabel(
+            hdr, text="● Agente: —",
+            font=ctk.CTkFont(size=10), text_color="#6B7280",
+            fg_color="#2A2A3E", corner_radius=6, padx=8, pady=2,
+        )
+        self._agent_badge_lbl.pack(side="right", padx=4, pady=14)
+
+        self._pending_badge_lbl = ctk.CTkLabel(
+            hdr, text="Pendentes: —",
+            font=ctk.CTkFont(size=10), text_color="#6B7280",
+            fg_color="#2A2A3E", corner_radius=6, padx=8, pady=2,
+        )
+        self._pending_badge_lbl.pack(side="right", padx=4, pady=14)
+
         # ── Área do Kanban ────────────────────────────────────────────────
         kanban_outer = ctk.CTkFrame(parent, fg_color=_BG, corner_radius=0)
         kanban_outer.pack(fill="both", expand=True)
 
-        # Acção rápida se há leads seleccionados na pesquisa (fixo, não afectado pelo reload)
+        # Acção rápida se há leads seleccionados na pesquisa
         if self._selected_leads:
             n = len(self._selected_leads)
             quick = ctk.CTkFrame(kanban_outer, fg_color="#1E3A5F", corner_radius=10)
@@ -603,9 +620,38 @@ class MainScreen(ctk.CTkFrame):
                 font=ctk.CTkFont(size=11), command=self._prospect_selected,
             ).pack(side="right", padx=10, pady=8)
 
-        # Frame de conteúdo recarregável (separado da barra de acção rápida)
+        # BulkActions (visível quando há leads seleccionados no Kanban)
+        self._bulk_bar = ctk.CTkFrame(kanban_outer, fg_color="#1E3A5F", corner_radius=10)
+        self._bulk_count_lbl = ctk.CTkLabel(
+            self._bulk_bar, text="0 seleccionados",
+            font=ctk.CTkFont(size=11), text_color="#93C5FD",
+        )
+        self._bulk_count_lbl.pack(side="left", padx=10, pady=8)
+
+        self._bulk_msg_entry = ctk.CTkEntry(
+            self._bulk_bar, placeholder_text="Mensagem (opcional — usa mensagem guardada se vazio)",
+            height=28, corner_radius=6, width=340, font=ctk.CTkFont(size=11),
+        )
+        self._bulk_msg_entry.pack(side="left", padx=(0, 6), pady=8)
+
+        ctk.CTkButton(
+            self._bulk_bar, text="📤 Enfileirar", height=28, corner_radius=6,
+            fg_color="#1D4ED8", hover_color="#1E40AF",
+            font=ctk.CTkFont(size=11, weight="bold"),
+            command=self._enqueue_selected_leads,
+        ).pack(side="left", padx=(0, 4), pady=8)
+
+        ctk.CTkButton(
+            self._bulk_bar, text="✕", width=28, height=28, corner_radius=6,
+            fg_color="#374151", hover_color="#4B5563",
+            font=ctk.CTkFont(size=11),
+            command=self._clear_kanban_selection,
+        ).pack(side="left", pady=8)
+
+        # Frame de conteúdo recarregável
         kanban_content = ctk.CTkFrame(kanban_outer, fg_color=_BG, corner_radius=0)
         kanban_content.pack(fill="both", expand=True)
+        self._kanban_content = kanban_content  # referência para enqueue e polling
 
         # Refresh button — aponta para kanban_content
         ctk.CTkButton(
@@ -615,6 +661,9 @@ class MainScreen(ctk.CTkFrame):
         ).pack(side="right", padx=4, pady=10)
 
         self._reload_kanban(kanban_content, subscriber)
+
+        if subscriber:
+            self._start_polling(kanban_content, subscriber, self._kanban_stop_event)
 
     @staticmethod
     def _widget_alive(w) -> bool:
@@ -725,61 +774,213 @@ class MainScreen(ctk.CTkFrame):
         lead_id = lead.get("id")
         origin = lead.get("origin") or ""
 
-        ctk.CTkLabel(
-            card, text=name,
-            font=ctk.CTkFont(size=11, weight="bold"), anchor="w",
-        ).pack(fill="x", padx=8, pady=(6, 1))
+        # Linha de topo: nome + checkbox (só em to-prospect)
+        top_row = ctk.CTkFrame(card, fg_color="transparent")
+        top_row.pack(fill="x", padx=8, pady=(6, 1))
 
+        ctk.CTkLabel(
+            top_row, text=name,
+            font=ctk.CTkFont(size=11, weight="bold"), anchor="w",
+        ).pack(side="left", fill="x", expand=True)
+
+        if current_cat == "to-prospect" and lead_id is not None:
+            var = ctk.BooleanVar(value=lead_id in self._kanban_selected)
+            ctk.CTkCheckBox(
+                top_row, text="", variable=var,
+                width=20, height=20, checkbox_width=16, checkbox_height=16,
+                command=lambda lid=lead_id, v=var: self._on_kanban_check(lid, v),
+            ).pack(side="right")
+
+        phone_pady = (0, 1) if origin else (0, 6)
         ctk.CTkLabel(
             card, text=phone,
             font=ctk.CTkFont(size=10), text_color="#6B7280", anchor="w",
-        ).pack(fill="x", padx=8, pady=(0, 1))
+        ).pack(fill="x", padx=8, pady=phone_pady)
 
         if origin:
             ctk.CTkLabel(
                 card, text=f"#{lead_id} · {origin}",
                 font=ctk.CTkFont(size=9), text_color="#374151", anchor="w",
-            ).pack(fill="x", padx=8, pady=(0, 2))
+            ).pack(fill="x", padx=8, pady=(0, 6))
 
-        btn_row = ctk.CTkFrame(card, fg_color="transparent")
-        btn_row.pack(fill="x", padx=8, pady=(2, 6))
+    # ── Selecção Kanban ────────────────────────────────────────────────────────
 
-        # Avançar para próxima coluna
-        if current_cat in self._KANBAN_NEXT:
-            next_cat, next_label = self._KANBAN_NEXT[current_cat]
+    def _on_kanban_check(self, lead_id: int, var: ctk.BooleanVar) -> None:
+        if var.get():
+            self._kanban_selected[lead_id] = lead_id
+        else:
+            self._kanban_selected.pop(lead_id, None)
+        self._refresh_bulk_bar()
 
-            def _advance(lid=lead_id, nc=next_cat, kc=kanban_container):
-                def _do():
+    def _refresh_bulk_bar(self) -> None:
+        if not hasattr(self, "_bulk_bar") or not self._widget_alive(self._bulk_bar):
+            return
+        n = len(self._kanban_selected)
+        if n > 0:
+            self._bulk_count_lbl.configure(text=f"{n} lead{'s' if n != 1 else ''} seleccionado{'s' if n != 1 else ''}")
+            self._bulk_bar.pack(padx=12, pady=(4, 0), fill="x")
+        else:
+            self._bulk_bar.pack_forget()
+
+    def _clear_kanban_selection(self) -> None:
+        self._kanban_selected.clear()
+        self._refresh_bulk_bar()
+
+    def _enqueue_selected_leads(self) -> None:
+        lead_ids = list(self._kanban_selected.keys())
+        if not lead_ids:
+            return
+        msg = self._bulk_msg_entry.get().strip() if hasattr(self, "_bulk_msg_entry") else ""
+
+        # Feedback visual imediato
+        if hasattr(self, "_bulk_msg_entry"):
+            self._bulk_msg_entry.configure(state="disabled")
+
+        def _do():
+            try:
+                from app.crm_client import enqueue_whatsapp, move_lead_category
+                result = enqueue_whatsapp(self._session, lead_ids, message=msg or None)
+                queued_ids = [q["lead_id"] for q in (result.get("queued") or [])]
+                for lid in queued_ids:
                     try:
-                        from app.crm_client import move_lead_category
-                        move_lead_category(self._session, lid, nc)
-                        sub = is_subscriber(self._session)
-                        self.after(0, lambda: self._reload_kanban(kc, sub))
+                        move_lead_category(self._session, lid, "in-progress")
                     except Exception:
                         pass
-                threading.Thread(target=_do, daemon=True).start()
+                skipped = result.get("skipped") or []
+                n_queued = len(queued_ids)
+                n_skip = len(skipped)
+                parts = []
+                if n_queued:
+                    parts.append(f"✓ {n_queued} enfileirado{'s' if n_queued != 1 else ''}")
+                if n_skip:
+                    parts.append(f"⚠ {n_skip} ignorado{'s' if n_skip != 1 else ''}")
+                summary = "  ".join(parts) or "Nenhum lead enfileirado"
 
-            ctk.CTkButton(
-                btn_row, text=next_label, height=24, corner_radius=6,
-                fg_color="#1D4ED8", hover_color="#1E40AF",
-                font=ctk.CTkFont(size=10),
-                command=_advance,
-            ).pack(side="left")
+                def _after():
+                    try:
+                        if hasattr(self, "_bulk_msg_entry") and self._widget_alive(self._bulk_msg_entry):
+                            self._bulk_msg_entry.configure(state="normal")
+                            self._bulk_msg_entry.delete(0, "end")
+                    except Exception:
+                        pass
+                    self._kanban_selected.clear()
+                    self._refresh_bulk_bar()
+                    self._show_enqueue_toast(summary)
+                    kc = getattr(self, "_kanban_content", None)
+                    if kc and self._widget_alive(kc):
+                        self._reload_kanban(kc, is_subscriber(self._session))
 
-        # Prospectar via WhatsApp
-        if phone and phone != "—":
-            lead_data = {
-                "name": name,
-                "phone": phone,
-                "website": "",
-                "address": lead.get("observations", ""),
-            }
-            ctk.CTkButton(
-                btn_row, text="📱", width=28, height=24, corner_radius=6,
-                fg_color="#065F46", hover_color="#047857",
-                font=ctk.CTkFont(size=11),
-                command=lambda ld=lead_data: self._open_prospect_dialog(ld),
-            ).pack(side="right")
+                self.after(0, _after)
+            except Exception as exc:
+                def _err(e=str(exc)):
+                    try:
+                        if hasattr(self, "_bulk_msg_entry") and self._widget_alive(self._bulk_msg_entry):
+                            self._bulk_msg_entry.configure(state="normal")
+                    except Exception:
+                        pass
+                    self._show_enqueue_toast(f"✗ Erro: {e[:80]}", ok=False)
+                self.after(0, _err)
+
+        threading.Thread(target=_do, daemon=True).start()
+
+    def _show_enqueue_toast(self, msg: str, ok: bool = True) -> None:
+        popup = ctk.CTkToplevel(self)
+        popup.title("Enfileirar")
+        popup.geometry("340x110")
+        popup.resizable(False, False)
+        popup.grab_set()
+        ctk.CTkLabel(popup, text=msg,
+                     text_color="#10B981" if ok else "#EF4444",
+                     font=ctk.CTkFont(size=12), wraplength=300).pack(pady=(24, 10))
+        ctk.CTkButton(popup, text="OK", width=80, command=popup.destroy).pack()
+
+    # ── Polling de automação ───────────────────────────────────────────────────
+
+    def _start_polling(self, container: ctk.CTkFrame, subscriber: bool,
+                       stop_event) -> None:
+        def _loop():
+            seen_ids: set = set()
+            while not stop_event.is_set():
+                stop_event.wait(7)
+                if stop_event.is_set():
+                    break
+                self._poll_tick(container, subscriber, seen_ids, stop_event)
+        threading.Thread(target=_loop, daemon=True).start()
+
+    def _poll_tick(self, container: ctk.CTkFrame, subscriber: bool,
+                   seen_ids: set, stop_event) -> None:
+        if stop_event.is_set():
+            return
+        try:
+            from app.crm_client import get_agent_overview, get_whatsapp_queue_count
+
+            # Actualiza badge de agente
+            try:
+                overview = get_agent_overview(self._session)
+                agents = overview.get("agents") or []
+                online = any(a.get("online") for a in agents)
+                badge_text = "● Agente: Online"
+                badge_color = "#10B981"
+                if not online:
+                    badge_text = "● Agente: Offline"
+                    badge_color = "#6B7280"
+                self.after(0, lambda t=badge_text, c=badge_color: self._update_agent_badge(t, c))
+            except Exception:
+                pass
+
+            # Actualiza badge de pendentes
+            try:
+                count = get_whatsapp_queue_count(self._session)
+                self.after(0, lambda n=count: self._update_pending_badge(n))
+            except Exception:
+                pass
+
+            # Verifica resultados recentes e move leads
+            if stop_event.is_set():
+                return
+            try:
+                from app.crm_client import get_whatsapp_recent, move_lead_category
+                rows = get_whatsapp_recent(self._session, since_secs=120)
+                moved = False
+                for row in rows:
+                    rid = row.get("id")
+                    if rid is None or rid in seen_ids:
+                        continue
+                    seen_ids.add(rid)
+                    lead_id = row.get("lead_id")
+                    status = row.get("status")
+                    if not lead_id:
+                        continue
+                    try:
+                        if status == "sent":
+                            move_lead_category(self._session, lead_id, "qualification")
+                            moved = True
+                        elif status == "failed":
+                            move_lead_category(self._session, lead_id, "to-prospect")
+                            moved = True
+                    except Exception:
+                        pass
+                if moved and not stop_event.is_set():
+                    self.after(0, lambda: self._reload_kanban(container, subscriber)
+                               if self._widget_alive(container) else None)
+            except Exception:
+                pass
+        except Exception:
+            pass
+
+    def _update_agent_badge(self, text: str, color: str) -> None:
+        try:
+            if hasattr(self, "_agent_badge_lbl") and self._widget_alive(self._agent_badge_lbl):
+                self._agent_badge_lbl.configure(text=text, text_color=color)
+        except Exception:
+            pass
+
+    def _update_pending_badge(self, count: int) -> None:
+        try:
+            if hasattr(self, "_pending_badge_lbl") and self._widget_alive(self._pending_badge_lbl):
+                self._pending_badge_lbl.configure(text=f"Pendentes: {count}")
+        except Exception:
+            pass
 
     def _show_kanban_error(self, container: ctk.CTkFrame, msg: str) -> None:
         if not self._widget_alive(container):

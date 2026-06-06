@@ -142,3 +142,47 @@ def generate_copy(
     )
     resp.raise_for_status()
     return resp.json().get("message", "")
+
+
+# ── Automação de prospecção ────────────────────────────────────────────────────
+
+def get_agent_overview(session: dict) -> dict:
+    """Estado dos agentes locais: online/offline e summary de jobs."""
+    resp = _request("GET", f"{_base()}/api/agents/overview", session, timeout=10)
+    resp.raise_for_status()
+    return resp.json()
+
+
+def get_whatsapp_queue_count(session: dict) -> int:
+    """Número de mensagens WhatsApp pendentes na fila do utilizador."""
+    resp = _request(
+        "GET", f"{_base()}/api/prospeccao/whatsapp/queue",
+        session, params={"limit": 50}, timeout=10,
+    )
+    resp.raise_for_status()
+    data = resp.json()
+    return len(data) if isinstance(data, list) else 0
+
+
+def get_whatsapp_recent(session: dict, since_secs: int = 90) -> list:
+    """Resultados recentes de envio WhatsApp (sent/failed) nos últimos N segundos."""
+    resp = _request(
+        "GET", f"{_base()}/api/prospeccao/whatsapp/recent",
+        session, params={"since_secs": since_secs}, timeout=10,
+    )
+    resp.raise_for_status()
+    data = resp.json()
+    return data if isinstance(data, list) else []
+
+
+def enqueue_whatsapp(session: dict, lead_ids: list, message: str = None) -> dict:
+    """Enfileira leads para envio automático de WhatsApp pelo agente."""
+    payload: Dict[str, Any] = {"lead_ids": [int(lid) for lid in lead_ids]}
+    if message:
+        payload["message"] = message
+    resp = _request(
+        "POST", f"{_base()}/api/prospeccao/whatsapp/enqueue",
+        session, json=payload, timeout=15,
+    )
+    resp.raise_for_status()
+    return resp.json()
