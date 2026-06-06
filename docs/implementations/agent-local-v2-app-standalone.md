@@ -592,6 +592,12 @@ Clica 📱 → preenche telefone + mensagem
 
 **Objectivo:** Transformar o Kanban de manual para automatizado, replicando o ciclo do `ProspectionBoard` do frontend-crm: seleccionar leads → enfileirar → agente processa → leads movem-se sozinhos.
 
+### Commits Fase 10
+
+| # | Commit | O que foi implementado |
+|---|---|---|
+| 1 | `2174b3b` | Automação completa: 4 métodos crm_client, checkboxes, BulkActions, badges estado, polling + refluxo |
+
 #### O que é removido do Kanban (substituído pela automação)
 
 | Elemento removido | Substituído por |
