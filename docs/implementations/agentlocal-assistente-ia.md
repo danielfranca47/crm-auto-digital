@@ -95,7 +95,13 @@ de escolha de fonte (upload de ficheiro ou resultados da pesquisa actual).
 | Arquivo | O que muda |
 |---|---|
 | `agent-local/app/ui/main_screen.py` | Adiciona `("assistente-ia", "✨", "Assistente IA")` ao `nav_items`; adiciona `"assistente-ia": self._build_assistente_ia` ao `builders`; implementa `_build_assistente_ia()` com Passo 1 e barra de progresso de upload |
-| `agent-local/app/crm_client.py` | Nova função `upload_file(session, path)` → `POST /uploads` via `multipart/form-data` |
+| `agent-local/app/crm_client.py` | Nova função `upload_file(session, path)` → `POST /uploads` via `multipart/form-data`; stubs `preview_assistente_ia()` e `processar_assistente_ia()` |
+
+### Commits Fase 1
+
+| # | Commit | O que foi implementado |
+|---|---|---|
+| 1 | `2c4bbdd` | Nav item + _build_assistente_ia + upload_file + documento de implementação |
 
 ---
 
@@ -109,6 +115,14 @@ prévia de dedupe com stats e tabela de amostra.
 | `agent-local/app/ui/main_screen.py` | Passo 2: frame de mapeamento com `CTkOptionMenu` por campo; Passo 3: frame de preview com cards de stats e tabela de 10 linhas |
 | `agent-local/app/crm_client.py` | Nova função `preview_assistente_ia(session, upload_id, overwrite, column_map)` → `POST /assistente-ia/preview` |
 
+### Commits Fase 2 + Fase 3
+
+*(Implementadas em conjunto no mesmo bloco de código)*
+
+| # | Commit | O que foi implementado |
+|---|---|---|
+| 1 | `0693c18` | Passos 2-5 completos: mapeamento, preview, opções, resultados |
+
 ---
 
 ### Fase 3 — Opções de processamento + resultados
@@ -120,6 +134,8 @@ idioma) e ecrã de resultados com acesso directo ao painel Prospectar.
 |---|---|
 | `agent-local/app/ui/main_screen.py` | Passo 4: frame de opções com checkboxes e entries; Passo 5: frame de resultados com stats finais e botão "Ver no Prospectar" |
 | `agent-local/app/crm_client.py` | Nova função `processar_assistente_ia(session, upload_id, ...)` → `POST /assistente-ia/processar` |
+
+*(Ver commit `0693c18` acima — implementada em conjunto com a Fase 2)*
 
 ---
 
