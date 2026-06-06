@@ -797,25 +797,381 @@ class MainScreen(ctk.CTkFrame):
             text=f"⚠  Erro no upload: {msg[:80]}", text_color="#EF4444",
         )
 
-    # ── Passos 2-5 (implementados nas fases seguintes) ────────────────────────
+    # ── Passo 2 — Mapeamento de colunas ──────────────────────────────────────
 
     def _ai_build_step2(self, parent: ctk.CTkFrame) -> None:
-        """Passo 2 — Mapeamento de colunas (implementado na Fase 2)."""
+        """Passo 2 — Dropdowns de mapeamento de colunas com auto-detecção."""
         card = ctk.CTkFrame(parent, fg_color=_CARD, corner_radius=12)
         card.pack(padx=16, pady=(10, 0), fill="x")
-        ctk.CTkLabel(
-            card, text="Passo 2 — Mapeamento de colunas",
-            font=ctk.CTkFont(size=12, weight="bold"),
-        ).pack(anchor="w", padx=16, pady=(12, 4))
+
+        ctk.CTkLabel(card, text="Passo 2 — Mapeamento de colunas",
+                     font=ctk.CTkFont(size=12, weight="bold")).pack(anchor="w", padx=16, pady=(12, 4))
         ctk.CTkLabel(
             card,
-            text=f"Colunas detectadas: {', '.join(self._ai_columns) if self._ai_columns else '—'}",
-            font=ctk.CTkFont(size=11), text_color="#9CA3AF", wraplength=500, justify="left",
-        ).pack(anchor="w", padx=16, pady=(0, 6))
-        ctk.CTkLabel(
-            card, text="⏳  Mapeamento e prévia em breve (Fase 2)",
-            font=ctk.CTkFont(size=11), text_color="#6B7280",
-        ).pack(anchor="w", padx=16, pady=(0, 14))
+            text="Indica qual coluna da planilha corresponde a cada campo. Usa '(nenhum)' se o campo não existir.",
+            font=ctk.CTkFont(size=10), text_color="#9CA3AF", wraplength=500,
+        ).pack(anchor="w", padx=16, pady=(0, 8))
+
+        options = ["(nenhum)"] + self._ai_columns
+        fields = [
+            ("empresa",  "Empresa / Nome"),
+            ("contato",  "Contacto / Pessoa"),
+            ("telefone", "Telefone"),
+            ("notas",    "Notas / Sector"),
+        ]
+
+        self._ai_map_vars: dict[str, ctk.StringVar] = {}
+
+        grid = ctk.CTkFrame(card, fg_color="transparent")
+        grid.pack(padx=16, pady=(0, 8), fill="x")
+
+        for row_idx, (field, label) in enumerate(fields):
+            ctk.CTkLabel(grid, text=label, font=ctk.CTkFont(size=11),
+                         width=130, anchor="w").grid(row=row_idx, column=0, sticky="w", pady=3)
+            current = self._ai_column_map.get(field, "(nenhum)")
+            if current not in options:
+                current = "(nenhum)"
+            var = ctk.StringVar(value=current)
+            self._ai_map_vars[field] = var
+            ctk.CTkOptionMenu(
+                grid, values=options, variable=var,
+                width=220, height=32, corner_radius=6,
+                command=lambda val, f=field: self._ai_map_vars[f].set(val),
+            ).grid(row=row_idx, column=1, sticky="w", padx=(8, 0), pady=3)
+
+        # Opção de duplicados
+        ctk.CTkLabel(card, text="Duplicados:", font=ctk.CTkFont(size=11),
+                     text_color="#9CA3AF").pack(anchor="w", padx=16, pady=(4, 2))
+
+        ow_row = ctk.CTkFrame(card, fg_color="transparent")
+        ow_row.pack(anchor="w", padx=16, pady=(0, 10))
+        self._ai_overwrite_var = ctk.StringVar(value="skip")
+        for val, lbl in [("skip", "Pular"), ("update", "Actualizar"), ("duplicate", "Criar mesmo assim")]:
+            ctk.CTkRadioButton(
+                ow_row, text=lbl, variable=self._ai_overwrite_var, value=val,
+                font=ctk.CTkFont(size=11),
+            ).pack(side="left", padx=(0, 12))
+
+        ctk.CTkButton(
+            card, text="✓  Confirmar mapeamento →",
+            height=36, corner_radius=8, font=ctk.CTkFont(size=12, weight="bold"),
+            command=lambda p=parent: self._ai_confirm_mapping(p),
+        ).pack(padx=16, pady=(0, 14))
+
+    def _ai_confirm_mapping(self, parent: ctk.CTkFrame) -> None:
+        """Guarda o mapeamento confirmado e constrói o Passo 3 (preview)."""
+        self._ai_column_map = {
+            field: var.get()
+            for field, var in self._ai_map_vars.items()
+            if var.get() != "(nenhum)"
+        }
+        self._ai_mapping_confirmed = True
+        self._ai_build_step3(parent)
+
+    # ── Passo 3 — Preview / Dedupe ────────────────────────────────────────────
+
+    def _ai_build_step3(self, parent: ctk.CTkFrame) -> None:
+        """Passo 3 — Gera prévia de dedupe e mostra stats + amostra de linhas."""
+        # Remove preview anterior se existir
+        for w in list(parent.winfo_children()):
+            if getattr(w, "_ai_step", None) in (3, 4, 5):
+                w.destroy()
+
+        card = ctk.CTkFrame(parent, fg_color=_CARD, corner_radius=12)
+        card._ai_step = 3
+        card.pack(padx=16, pady=(10, 0), fill="x")
+
+        ctk.CTkLabel(card, text="Passo 3 — Prévia",
+                     font=ctk.CTkFont(size=12, weight="bold")).pack(anchor="w", padx=16, pady=(12, 4))
+
+        prog = ctk.CTkProgressBar(card, height=6, corner_radius=3, mode="indeterminate")
+        prog.pack(padx=16, pady=(0, 4), fill="x")
+        prog.start()
+        prog_lbl = ctk.CTkLabel(card, text="A analisar duplicados…",
+                                 font=ctk.CTkFont(size=11), text_color="#9CA3AF")
+        prog_lbl.pack(anchor="w", padx=16, pady=(0, 10))
+
+        def _worker():
+            try:
+                from app.crm_client import preview_assistente_ia
+                result = preview_assistente_ia(
+                    self._session,
+                    self._ai_upload_id,
+                    self._ai_overwrite_var.get(),
+                    self._ai_column_map,
+                )
+                self.after(0, lambda r=result: self._ai_on_preview_ok(card, prog, prog_lbl, parent, r))
+            except Exception as exc:
+                self.after(0, lambda e=str(exc): self._ai_on_preview_err(prog, prog_lbl, e))
+
+        threading.Thread(target=_worker, daemon=True).start()
+
+    def _ai_on_preview_ok(
+        self,
+        card: ctk.CTkFrame,
+        prog: ctk.CTkProgressBar,
+        prog_lbl: ctk.CTkLabel,
+        parent: ctk.CTkFrame,
+        result: dict,
+    ) -> None:
+        try:
+            prog.stop()
+            prog.pack_forget()
+            prog_lbl.pack_forget()
+        except Exception:
+            pass
+
+        self._ai_preview_stats = result.get("stats") or {}
+        self._ai_preview_rows = result.get("rows") or []
+
+        stats = self._ai_preview_stats
+        stat_items = [
+            ("Total",         stats.get("total", 0),       "#9CA3AF"),
+            ("Criar",         stats.get("pred_create", 0), "#10B981"),
+            ("Actualizar",    stats.get("pred_update", 0), "#F59E0B"),
+            ("Pular",         stats.get("pred_skip", 0),   "#6B7280"),
+        ]
+
+        stats_row = ctk.CTkFrame(card, fg_color="transparent")
+        stats_row.pack(padx=16, pady=(4, 8), fill="x")
+        for label, val, color in stat_items:
+            box = ctk.CTkFrame(stats_row, fg_color="#12121F", corner_radius=8)
+            box.pack(side="left", padx=(0, 6))
+            ctk.CTkLabel(box, text=str(val), font=ctk.CTkFont(size=16, weight="bold"),
+                         text_color=color).pack(padx=12, pady=(6, 1))
+            ctk.CTkLabel(box, text=label, font=ctk.CTkFont(size=9),
+                         text_color="#6B7280").pack(padx=12, pady=(0, 6))
+
+        # Tabela de amostra (10 linhas)
+        if self._ai_preview_rows:
+            ctk.CTkLabel(card, text="Amostra (primeiras 10 linhas):",
+                         font=ctk.CTkFont(size=10), text_color="#6B7280").pack(anchor="w", padx=16, pady=(0, 4))
+
+            tbl = ctk.CTkScrollableFrame(card, fg_color="transparent", height=180)
+            tbl.pack(padx=16, pady=(0, 8), fill="x")
+
+            hdr_row = ctk.CTkFrame(tbl, fg_color="transparent")
+            hdr_row.pack(fill="x", pady=(0, 2))
+            for col_lbl, w in [("Empresa", 180), ("Telefone", 110), ("Acção", 80), ("Dup?", 60)]:
+                ctk.CTkLabel(hdr_row, text=col_lbl, font=ctk.CTkFont(size=9, weight="bold"),
+                             text_color="#9CA3AF", width=w, anchor="w").pack(side="left", padx=2)
+
+            for idx, row in enumerate(self._ai_preview_rows[:10]):
+                action = row.get("pred_action", "?")
+                dup_flags = []
+                if row.get("dup_phone"):
+                    dup_flags.append("☎")
+                if row.get("dup_email"):
+                    dup_flags.append("✉")
+                if row.get("dup_name"):
+                    dup_flags.append("Aa")
+                action_color = {"create": "#10B981", "update": "#F59E0B", "skip": "#6B7280"}.get(action, "#9CA3AF")
+
+                r = ctk.CTkFrame(tbl, fg_color="#1A1A2E" if idx % 2 == 0 else "#16162A", corner_radius=4)
+                r.pack(fill="x", pady=1)
+                empresa = str(row.get("company") or row.get("empresa") or "—")[:28]
+                phone   = str(row.get("phone") or row.get("telefone") or "—")[:14]
+                for val, w, tc in [
+                    (empresa, 180, "#D1D5DB"),
+                    (phone, 110, "#9CA3AF"),
+                    (action, 80, action_color),
+                    (" ".join(dup_flags) or "—", 60, "#EF4444" if dup_flags else "#4B5563"),
+                ]:
+                    ctk.CTkLabel(r, text=val, font=ctk.CTkFont(size=10),
+                                 text_color=tc, width=w, anchor="w").pack(side="left", padx=(4, 2), pady=4)
+
+        # Botão para avançar para Passo 4
+        ctk.CTkButton(
+            card, text="⚙  Configurar e processar →",
+            height=36, corner_radius=8, font=ctk.CTkFont(size=12, weight="bold"),
+            command=lambda p=parent: self._ai_build_step4(p),
+        ).pack(padx=16, pady=(4, 14))
+
+    def _ai_on_preview_err(
+        self, prog: ctk.CTkProgressBar, prog_lbl: ctk.CTkLabel, msg: str,
+    ) -> None:
+        try:
+            prog.stop()
+            prog.pack_forget()
+        except Exception:
+            pass
+        prog_lbl.configure(text=f"⚠  Erro na prévia: {msg[:80]}", text_color="#EF4444")
+
+    # ── Passo 4 — Opções + Processamento ─────────────────────────────────────
+
+    def _ai_build_step4(self, parent: ctk.CTkFrame) -> None:
+        """Passo 4 — Opções de processamento (criar cards, gerar copys, canais, tom)."""
+        # Remove passos 4-5 anteriores se existirem
+        for w in list(parent.winfo_children()):
+            if getattr(w, "_ai_step", None) in (4, 5):
+                w.destroy()
+
+        card = ctk.CTkFrame(parent, fg_color=_CARD, corner_radius=12)
+        card._ai_step = 4
+        card.pack(padx=16, pady=(10, 0), fill="x")
+
+        ctk.CTkLabel(card, text="Passo 4 — Opções de processamento",
+                     font=ctk.CTkFont(size=12, weight="bold")).pack(anchor="w", padx=16, pady=(12, 8))
+
+        # Checkboxes principais
+        self._ai_create_cards_var = ctk.BooleanVar(value=True)
+        self._ai_generate_copys_var = ctk.BooleanVar(value=False)
+
+        chk_row = ctk.CTkFrame(card, fg_color="transparent")
+        chk_row.pack(anchor="w", padx=16, pady=(0, 8))
+        ctk.CTkCheckBox(chk_row, text="Criar cards no CRM",
+                        variable=self._ai_create_cards_var,
+                        font=ctk.CTkFont(size=11)).pack(side="left", padx=(0, 16))
+        ctk.CTkCheckBox(chk_row, text="Gerar copys com IA",
+                        variable=self._ai_generate_copys_var,
+                        font=ctk.CTkFont(size=11)).pack(side="left")
+
+        # Canais (WhatsApp, Email, Instagram)
+        ctk.CTkLabel(card, text="Canais:", font=ctk.CTkFont(size=11),
+                     text_color="#9CA3AF").pack(anchor="w", padx=16, pady=(4, 2))
+        self._ai_ch_whatsapp = ctk.BooleanVar(value=True)
+        self._ai_ch_email = ctk.BooleanVar(value=False)
+        self._ai_ch_instagram = ctk.BooleanVar(value=False)
+        ch_row = ctk.CTkFrame(card, fg_color="transparent")
+        ch_row.pack(anchor="w", padx=16, pady=(0, 8))
+        for lbl, var in [("WhatsApp", self._ai_ch_whatsapp),
+                          ("Email", self._ai_ch_email),
+                          ("Instagram", self._ai_ch_instagram)]:
+            ctk.CTkCheckBox(ch_row, text=lbl, variable=var,
+                             font=ctk.CTkFont(size=11)).pack(side="left", padx=(0, 12))
+
+        # Tom de voz
+        ctk.CTkLabel(card, text="Tom de voz:", font=ctk.CTkFont(size=11),
+                     text_color="#9CA3AF").pack(anchor="w", padx=16, pady=(4, 2))
+        self._ai_tone_entry = ctk.CTkEntry(card, placeholder_text="ex: profissional e próximo",
+                                            height=34, corner_radius=8, font=ctk.CTkFont(size=11))
+        self._ai_tone_entry.insert(0, "profissional e próximo")
+        self._ai_tone_entry.pack(padx=16, pady=(0, 6), fill="x")
+
+        # Idioma
+        ctk.CTkLabel(card, text="Idioma:", font=ctk.CTkFont(size=11),
+                     text_color="#9CA3AF").pack(anchor="w", padx=16, pady=(4, 2))
+        self._ai_lang_entry = ctk.CTkEntry(card, placeholder_text="pt-PT",
+                                            height=34, corner_radius=8, font=ctk.CTkFont(size=11),
+                                            width=120)
+        self._ai_lang_entry.insert(0, "pt-PT")
+        self._ai_lang_entry.pack(anchor="w", padx=16, pady=(0, 10))
+
+        # Botão processar
+        self._ai_process_btn = ctk.CTkButton(
+            card, text="🚀  Confirmar e Processar",
+            height=38, corner_radius=8, font=ctk.CTkFont(size=13, weight="bold"),
+            command=lambda p=parent: self._ai_start_processing(p),
+        )
+        self._ai_process_btn.pack(padx=16, pady=(0, 14))
+
+    def _ai_start_processing(self, parent: ctk.CTkFrame) -> None:
+        """Recolhe opções e executa POST /assistente-ia/processar."""
+        channels = []
+        if self._ai_ch_whatsapp.get():
+            channels.append("whatsapp")
+        if self._ai_ch_email.get():
+            channels.append("email")
+        if self._ai_ch_instagram.get():
+            channels.append("instagram")
+
+        self._ai_process_btn.configure(state="disabled", text="A processar…")
+
+        def _worker():
+            try:
+                from app.crm_client import processar_assistente_ia
+                result = processar_assistente_ia(
+                    self._session,
+                    self._ai_upload_id,
+                    create_cards=self._ai_create_cards_var.get(),
+                    generate_copys=self._ai_generate_copys_var.get(),
+                    channels=channels or ["whatsapp"],
+                    overwrite=self._ai_overwrite_var.get(),
+                    tone=self._ai_tone_entry.get().strip() or "profissional e próximo",
+                    language=self._ai_lang_entry.get().strip() or "pt-PT",
+                    column_map=self._ai_column_map,
+                )
+                self.after(0, lambda r=result: self._ai_on_process_ok(parent, r))
+            except Exception as exc:
+                self.after(0, lambda e=str(exc): self._ai_on_process_err(e))
+
+        threading.Thread(target=_worker, daemon=True).start()
+
+    def _ai_on_process_err(self, msg: str) -> None:
+        try:
+            self._ai_process_btn.configure(state="normal", text="🚀  Confirmar e Processar")
+        except Exception:
+            pass
+        popup = ctk.CTkToplevel(self)
+        popup.title("Erro")
+        popup.geometry("380x130")
+        popup.grab_set()
+        ctk.CTkLabel(popup, text=f"⚠  Erro: {msg[:100]}", text_color="#EF4444",
+                     font=ctk.CTkFont(size=12), wraplength=340).pack(pady=(24, 10))
+        ctk.CTkButton(popup, text="OK", width=80, command=popup.destroy).pack()
+
+    def _ai_on_process_ok(self, parent: ctk.CTkFrame, result: dict) -> None:
+        """Processamento concluído — mostra Passo 5 com resultados."""
+        try:
+            self._ai_process_btn.configure(state="normal", text="🚀  Confirmar e Processar")
+        except Exception:
+            pass
+        self._ai_build_step5(parent, result)
+
+    # ── Passo 5 — Resultados ──────────────────────────────────────────────────
+
+    def _ai_build_step5(self, parent: ctk.CTkFrame, result: dict) -> None:
+        """Passo 5 — Exibe estatísticas finais e botão 'Ver no Prospectar'."""
+        for w in list(parent.winfo_children()):
+            if getattr(w, "_ai_step", None) == 5:
+                w.destroy()
+
+        card = ctk.CTkFrame(parent, fg_color=_CARD, corner_radius=12)
+        card._ai_step = 5
+        card.pack(padx=16, pady=(10, 0), fill="x")
+
+        ctk.CTkLabel(card, text="✅  Processamento concluído",
+                     font=ctk.CTkFont(size=13, weight="bold"), text_color="#10B981",
+                     ).pack(anchor="w", padx=16, pady=(14, 8))
+
+        stats = result.get("stats") or {}
+        stat_items = [
+            ("Criados",     stats.get("created", 0),  "#10B981"),
+            ("Actualizados", stats.get("updated", 0), "#F59E0B"),
+            ("Pulados",     stats.get("skipped", 0),  "#6B7280"),
+            ("Mensagens",   stats.get("messages", 0), "#818CF8"),
+        ]
+        stats_row = ctk.CTkFrame(card, fg_color="transparent")
+        stats_row.pack(padx=16, pady=(0, 10), fill="x")
+        for label, val, color in stat_items:
+            box = ctk.CTkFrame(stats_row, fg_color="#12121F", corner_radius=8)
+            box.pack(side="left", padx=(0, 6))
+            ctk.CTkLabel(box, text=str(val), font=ctk.CTkFont(size=16, weight="bold"),
+                         text_color=color).pack(padx=14, pady=(6, 1))
+            ctk.CTkLabel(box, text=label, font=ctk.CTkFont(size=9),
+                         text_color="#6B7280").pack(padx=14, pady=(0, 6))
+
+        errors = result.get("errors") or []
+        if errors:
+            ctk.CTkLabel(card, text=f"⚠  {len(errors)} erro(s):",
+                         font=ctk.CTkFont(size=10), text_color="#F59E0B").pack(anchor="w", padx=16)
+            for err in errors[:5]:
+                ctk.CTkLabel(card, text=f"  • {str(err)[:80]}",
+                             font=ctk.CTkFont(size=9), text_color="#6B7280").pack(anchor="w", padx=16, pady=1)
+
+        btn_row = ctk.CTkFrame(card, fg_color="transparent")
+        btn_row.pack(padx=16, pady=(8, 14), fill="x")
+        ctk.CTkButton(
+            btn_row, text="📱  Ver no Prospectar",
+            height=36, corner_radius=8, font=ctk.CTkFont(size=12, weight="bold"),
+            command=lambda: self._switch_panel("prospectar"),
+        ).pack(side="left", padx=(0, 8))
+        ctk.CTkButton(
+            btn_row, text="↺  Nova importação",
+            height=36, corner_radius=8, fg_color="#374151", hover_color="#4B5563",
+            font=ctk.CTkFont(size=11),
+            command=lambda: self._switch_panel("assistente-ia"),
+        ).pack(side="left")
 
     # ══════════════════════════════════════════════════════════════════════════
     # PAINEL 3 — PROSPECTAR (Kanban de prospecção)
