@@ -29,6 +29,7 @@ class MainScreen(ctk.CTkFrame):
         self._active_panel = "pesquisa"
         self._panel_frame: Optional[ctk.CTkFrame] = None
         self._nav_btns: Dict[str, ctk.CTkButton] = {}
+        self._kanban_card_vars: Dict[int, ctk.BooleanVar] = {}
         self._build()
 
     # ── Build principal ────────────────────────────────────────────────────
@@ -704,6 +705,7 @@ class MainScreen(ctk.CTkFrame):
             return
         for w in list(container.winfo_children()):
             w.destroy()
+        self._kanban_card_vars = {}
 
         if not leads:
             empty = ctk.CTkFrame(container, fg_color=_CARD, corner_radius=10)
@@ -739,12 +741,29 @@ class MainScreen(ctk.CTkFrame):
             hdr_f = ctk.CTkFrame(col_frame, fg_color=col_color, corner_radius=8, height=36)
             hdr_f.grid(row=0, column=0, sticky="ew", padx=6, pady=(6, 3))
             hdr_f.pack_propagate(False)
-            ctk.CTkLabel(
-                hdr_f,
-                text=f"{cat_label}  ({len(col_leads)})",
-                font=ctk.CTkFont(size=12, weight="bold"),
-                text_color="white",
-            ).pack(expand=True)
+
+            if cat_id == "to-prospect" and col_leads:
+                self._kanban_col_select_all_var = ctk.BooleanVar(value=False)
+                ctk.CTkCheckBox(
+                    hdr_f, text="", variable=self._kanban_col_select_all_var,
+                    width=20, height=20, checkbox_width=16, checkbox_height=16,
+                    fg_color="white", checkmark_color=col_color, border_color="white",
+                    hover_color="#E5E7EB",
+                    command=lambda ls=col_leads: self._toggle_all_kanban(ls),
+                ).pack(side="left", padx=(8, 0))
+                ctk.CTkLabel(
+                    hdr_f,
+                    text=f"{cat_label}  ({len(col_leads)})",
+                    font=ctk.CTkFont(size=12, weight="bold"),
+                    text_color="white",
+                ).pack(side="left", padx=4, expand=True)
+            else:
+                ctk.CTkLabel(
+                    hdr_f,
+                    text=f"{cat_label}  ({len(col_leads)})",
+                    font=ctk.CTkFont(size=12, weight="bold"),
+                    text_color="white",
+                ).pack(expand=True)
 
             # Área de cards
             cards_scroll = ctk.CTkScrollableFrame(col_frame, fg_color="transparent")
@@ -785,6 +804,7 @@ class MainScreen(ctk.CTkFrame):
 
         if current_cat == "to-prospect" and lead_id is not None:
             var = ctk.BooleanVar(value=lead_id in self._kanban_selected)
+            self._kanban_card_vars[lead_id] = var
             ctk.CTkCheckBox(
                 top_row, text="", variable=var,
                 width=20, height=20, checkbox_width=16, checkbox_height=16,
@@ -811,6 +831,40 @@ class MainScreen(ctk.CTkFrame):
         else:
             self._kanban_selected.pop(lead_id, None)
         self._refresh_bulk_bar()
+        self._sync_select_all_var()
+
+    def _toggle_all_kanban(self, col_leads: list) -> None:
+        """Selecciona/deselecciona todos os leads de 'À Prospectar' de uma vez."""
+        select = getattr(self, "_kanban_col_select_all_var", None)
+        if select is None:
+            return
+        checked = select.get()
+        for lead in col_leads:
+            lid = lead.get("id")
+            if lid is None:
+                continue
+            if checked:
+                self._kanban_selected[lid] = lid
+            else:
+                self._kanban_selected.pop(lid, None)
+            card_var = self._kanban_card_vars.get(lid)
+            if card_var is not None:
+                try:
+                    card_var.set(checked)
+                except Exception:
+                    pass
+        self._refresh_bulk_bar()
+
+    def _sync_select_all_var(self) -> None:
+        """Mantém o checkbox de 'seleccionar todos' em sincronia com os cards individuais."""
+        select = getattr(self, "_kanban_col_select_all_var", None)
+        if select is None or not self._kanban_card_vars:
+            return
+        try:
+            all_selected = all(lid in self._kanban_selected for lid in self._kanban_card_vars)
+            select.set(all_selected)
+        except Exception:
+            pass
 
     def _refresh_bulk_bar(self) -> None:
         if not hasattr(self, "_bulk_bar") or not self._widget_alive(self._bulk_bar):
@@ -824,6 +878,17 @@ class MainScreen(ctk.CTkFrame):
 
     def _clear_kanban_selection(self) -> None:
         self._kanban_selected.clear()
+        select = getattr(self, "_kanban_col_select_all_var", None)
+        if select is not None:
+            try:
+                select.set(False)
+            except Exception:
+                pass
+        for var in self._kanban_card_vars.values():
+            try:
+                var.set(False)
+            except Exception:
+                pass
         self._refresh_bulk_bar()
 
     def _enqueue_selected_leads(self) -> None:
