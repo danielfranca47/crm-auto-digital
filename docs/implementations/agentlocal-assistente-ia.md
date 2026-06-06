@@ -141,6 +141,18 @@ idioma) e ecrã de resultados com acesso directo ao painel Prospectar.
 
 ### Fase 4 — Botão "Gerar copy com IA" no painel Pesquisar
 
+*(ver secção de plano acima para contexto completo)*
+
+### Commits Fase 4
+
+| # | Commit | O que foi implementado |
+|---|---|---|
+| 1 | `769987d` | Botão "✨ Gerar copy com IA" em Pesquisar + `_ir_para_assistente_ia()` + fallback discreto no Assistente IA |
+
+---
+
+### Fase 4 — Plano (documentado anteriormente)
+
 **Objetivo:** Eliminar o passo manual de "perceber que existe o botão no Assistente IA"
 — o utilizador vê os resultados da pesquisa e tem um botão directo que o leva ao
 Assistente IA com os dados já carregados.
