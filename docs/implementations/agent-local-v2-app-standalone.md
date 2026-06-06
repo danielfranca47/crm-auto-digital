@@ -633,6 +633,9 @@ Clica 📱 → preenche telefone + mensagem
 
 #### Cenário K2 — Selecção e enfileiramento
 - [ ] Cards em "À Prospectar" têm checkbox
+- [ ] Header da coluna "À Prospectar" tem checkbox "Seleccionar todos" (branco sobre fundo roxo)
+- [ ] Clicar checkbox do header → selecciona todos os cards; clicar de novo → deselecciona todos
+- [ ] Marcar/desmarcar cards individualmente actualiza o estado do checkbox do header (marcado se todos seleccionados, desmarcado se qualquer um desmarcado)
 - [ ] Seleccionar 2+ leads → painel BulkActions aparece com contagem
 - [ ] Clicar "Enfileirar" → chama `POST /api/prospeccao/whatsapp/enqueue` com os lead_ids
 - [ ] Leads enfileirados movem-se imediatamente para "Em Andamento"
