@@ -65,10 +65,11 @@ class MainScreen(ctk.CTkFrame):
 
         # Botões de navegação
         nav_items = [
-            ("pesquisa",   "🔍",  "Pesquisar"),
-            ("prospectar", "📱",  "Prospectar"),
-            ("historico",  "📋",  "Histórico"),
-            ("conta",      "⚙",   "Conta"),
+            ("pesquisa",      "🔍",  "Pesquisar"),
+            ("assistente-ia", "✨",  "Assistente IA"),
+            ("prospectar",    "📱",  "Prospectar"),
+            ("historico",     "📋",  "Histórico"),
+            ("conta",         "⚙",   "Conta"),
         ]
         for panel_id, icon, label in nav_items:
             btn = ctk.CTkButton(
@@ -126,10 +127,11 @@ class MainScreen(ctk.CTkFrame):
         self._panel_frame.pack(fill="both", expand=True)
 
         builders = {
-            "pesquisa":   self._build_pesquisa,
-            "prospectar": self._build_prospectar,
-            "historico":  self._build_historico,
-            "conta":      self._build_conta,
+            "pesquisa":      self._build_pesquisa,
+            "assistente-ia": self._build_assistente_ia,
+            "prospectar":    self._build_prospectar,
+            "historico":     self._build_historico,
+            "conta":         self._build_conta,
         }
         builders[panel_id](self._panel_frame)
 
@@ -552,7 +554,271 @@ class MainScreen(ctk.CTkFrame):
             self._show_error(f"Erro ao exportar: {exc}")
 
     # ══════════════════════════════════════════════════════════════════════════
-    # PAINEL 2 — PROSPECTAR (Kanban de prospecção)
+    # PAINEL 2 — ASSISTENTE IA (upload em lote + geração de copy)
+    # ══════════════════════════════════════════════════════════════════════════
+
+    # Estados internos do painel (redefinidos a cada abertura)
+    _ai_upload_id: str | None = None
+    _ai_columns: list = []
+    _ai_column_map: dict = {}
+    _ai_mapping_confirmed: bool = False
+    _ai_preview_stats: dict = {}
+    _ai_preview_rows: list = []
+
+    # Aliases para auto-detecção de colunas
+    _COL_ALIASES = {
+        "empresa":  ["empresa", "company", "companyname", "company_name", "nome", "name",
+                     "razao_social", "razão_social", "negocio", "negócio"],
+        "contato":  ["contato", "contact", "contactname", "contact_name", "responsavel",
+                     "responsável", "pessoa", "person"],
+        "telefone": ["telefone", "phone", "tel", "celular", "whatsapp", "mobile",
+                     "fone", "numero", "número"],
+        "notas":    ["notas", "notes", "observacao", "observação", "obs", "descricao",
+                     "descrição", "description", "sector", "setor", "segmento"],
+    }
+
+    def _ai_autodetect(self, columns: list) -> dict:
+        """Tenta detectar automaticamente o mapeamento de colunas."""
+        mapping: dict = {}
+        cols_lower = {c.lower().strip(): c for c in columns}
+        for field, aliases in self._COL_ALIASES.items():
+            for alias in aliases:
+                if alias in cols_lower:
+                    mapping[field] = cols_lower[alias]
+                    break
+        return mapping
+
+    def _build_assistente_ia(self, parent: ctk.CTkFrame) -> None:
+        """Painel Assistente IA — fluxo de upload em lote e geração de copy."""
+        from app.session import is_subscriber
+
+        # Reinicializa estado do painel
+        self._ai_upload_id = None
+        self._ai_columns = []
+        self._ai_column_map = {}
+        self._ai_mapping_confirmed = False
+        self._ai_preview_stats = {}
+        self._ai_preview_rows = []
+
+        subscriber = is_subscriber(self._session)
+
+        body = ctk.CTkScrollableFrame(parent, fg_color=_BG, corner_radius=0)
+        body.pack(fill="both", expand=True)
+
+        # ── Header ────────────────────────────────────────────────────────────
+        hdr = ctk.CTkFrame(body, fg_color=_CARD, corner_radius=12)
+        hdr.pack(padx=16, pady=(12, 0), fill="x")
+        ctk.CTkLabel(hdr, text="✨  Assistente IA",
+                     font=ctk.CTkFont(size=15, weight="bold")).pack(anchor="w", padx=16, pady=(14, 2))
+        ctk.CTkLabel(
+            hdr,
+            text="Importa uma planilha ou usa os resultados da pesquisa actual para gerar copys e criar leads no CRM.",
+            font=ctk.CTkFont(size=11), text_color="#9CA3AF", wraplength=520, justify="left",
+        ).pack(anchor="w", padx=16, pady=(0, 14))
+
+        # ── Upsell para não-assinantes ────────────────────────────────────────
+        if not subscriber:
+            pitch = ctk.CTkFrame(body, fg_color="#1E1B4B", corner_radius=12)
+            pitch.pack(padx=16, pady=12, fill="x")
+            ctk.CTkLabel(pitch, text="🔒  Disponível para Assinantes",
+                         font=ctk.CTkFont(size=13, weight="bold"), text_color="#A5B4FC",
+                         ).pack(padx=16, pady=(14, 3))
+            ctk.CTkLabel(
+                pitch,
+                text="Assine para importar planilhas, gerar copys com IA e criar leads automaticamente no CRM.",
+                font=ctk.CTkFont(size=10), text_color="#818CF8", wraplength=440,
+            ).pack(padx=16, pady=(0, 14))
+            return
+
+        # ── PASSO 1: Escolher fonte ───────────────────────────────────────────
+        step1 = ctk.CTkFrame(body, fg_color=_CARD, corner_radius=12)
+        step1.pack(padx=16, pady=(10, 0), fill="x")
+
+        ctk.CTkLabel(step1, text="Passo 1 — Escolher fonte",
+                     font=ctk.CTkFont(size=12, weight="bold")).pack(anchor="w", padx=16, pady=(12, 6))
+
+        btn_row = ctk.CTkFrame(step1, fg_color="transparent")
+        btn_row.pack(padx=16, pady=(0, 10), fill="x")
+
+        self._ai_upload_lbl = ctk.CTkLabel(
+            step1, text="", font=ctk.CTkFont(size=11), text_color="#10B981",
+        )
+
+        # Referência ao body para que os passos seguintes possam ser construídos
+        self._ai_body = body
+
+        ctk.CTkButton(
+            btn_row, text="📂  Escolher ficheiro (XLSX / CSV)",
+            height=38, corner_radius=8, font=ctk.CTkFont(size=12),
+            command=self._ai_pick_file,
+        ).pack(side="left", padx=(0, 8))
+
+        # Botão "usar resultados actuais" só activo se houver pesquisa feita
+        n_results = len(self._results)
+        use_btn = ctk.CTkButton(
+            btn_row,
+            text=f"🔍  Usar pesquisa actual ({n_results} leads)" if n_results else "🔍  Sem pesquisa activa",
+            height=38, corner_radius=8,
+            fg_color="#065F46" if n_results else "#374151",
+            hover_color="#047857" if n_results else "#374151",
+            state="normal" if n_results else "disabled",
+            font=ctk.CTkFont(size=12),
+            command=self._ai_use_search_results,
+        )
+        use_btn.pack(side="left")
+
+        self._ai_upload_lbl.pack(anchor="w", padx=16, pady=(0, 10))
+
+        # Barra de progresso de upload (oculta inicialmente)
+        self._ai_prog_frame = ctk.CTkFrame(body, fg_color=_CARD, corner_radius=12)
+        self._ai_prog_bar = ctk.CTkProgressBar(self._ai_prog_frame, height=8, corner_radius=4,
+                                                mode="indeterminate")
+        self._ai_prog_bar.pack(padx=16, pady=(12, 4), fill="x")
+        self._ai_prog_lbl = ctk.CTkLabel(self._ai_prog_frame, text="A enviar ficheiro…",
+                                          font=ctk.CTkFont(size=11), text_color="#9CA3AF")
+        self._ai_prog_lbl.pack(padx=16, pady=(0, 12))
+
+        # Contentor para os passos 2-5 (construídos dinamicamente)
+        self._ai_steps_frame = ctk.CTkFrame(body, fg_color="transparent", corner_radius=0)
+        self._ai_steps_frame.pack(fill="x", padx=0, pady=0)
+
+    # ── Acções do Passo 1 ─────────────────────────────────────────────────────
+
+    def _ai_pick_file(self) -> None:
+        """Abre filedialog para seleccionar CSV/XLSX e envia para o backend."""
+        from tkinter import filedialog
+        path = filedialog.askopenfilename(
+            title="Escolher planilha",
+            filetypes=[
+                ("Planilha", "*.xlsx *.csv"),
+                ("Excel", "*.xlsx"),
+                ("CSV", "*.csv"),
+                ("Todos", "*.*"),
+            ],
+        )
+        if not path:
+            return
+        import os
+        filename = os.path.basename(path)
+        self._ai_upload_lbl.configure(text=f"📄  {filename} — a enviar…", text_color="#9CA3AF")
+        self._ai_prog_frame.pack(padx=16, pady=(0, 10), fill="x")
+        self._ai_prog_bar.start()
+
+        def _worker():
+            try:
+                from app.crm_client import upload_file
+                result = upload_file(self._session, path)
+                self.after(0, lambda r=result: self._ai_on_upload_ok(r))
+            except Exception as exc:
+                self.after(0, lambda e=str(exc): self._ai_on_upload_err(e))
+
+        threading.Thread(target=_worker, daemon=True).start()
+
+    def _ai_use_search_results(self) -> None:
+        """
+        Converte os resultados actuais da Pesquisa num ficheiro CSV temporário
+        e envia para o backend — evita ao utilizador ter de exportar/reimportar.
+        """
+        if not self._results:
+            return
+        import csv, os, tempfile
+        tmp = tempfile.NamedTemporaryFile(
+            mode="w", suffix=".csv", delete=False,
+            encoding="utf-8-sig", newline="",
+        )
+        writer = csv.DictWriter(tmp, fieldnames=["empresa", "telefone", "website", "endereco"])
+        writer.writeheader()
+        for item in self._results:
+            writer.writerow({
+                "empresa":  item.get("name", ""),
+                "telefone": item.get("phone", ""),
+                "website":  item.get("website", ""),
+                "endereco": item.get("address", ""),
+            })
+        tmp.close()
+        tmp_path = tmp.name
+
+        n = len(self._results)
+        self._ai_upload_lbl.configure(
+            text=f"🔍  {n} resultados da pesquisa — a converter…", text_color="#9CA3AF",
+        )
+        self._ai_prog_frame.pack(padx=16, pady=(0, 10), fill="x")
+        self._ai_prog_bar.start()
+
+        def _worker():
+            try:
+                from app.crm_client import upload_file
+                result = upload_file(self._session, tmp_path)
+                os.unlink(tmp_path)
+                self.after(0, lambda r=result: self._ai_on_upload_ok(r))
+            except Exception as exc:
+                try:
+                    os.unlink(tmp_path)
+                except Exception:
+                    pass
+                self.after(0, lambda e=str(exc): self._ai_on_upload_err(e))
+
+        threading.Thread(target=_worker, daemon=True).start()
+
+    def _ai_on_upload_ok(self, result: dict) -> None:
+        """Upload bem-sucedido: guarda estado e constrói o Passo 2."""
+        try:
+            self._ai_prog_bar.stop()
+            self._ai_prog_frame.pack_forget()
+        except Exception:
+            pass
+
+        self._ai_upload_id = result.get("upload_id") or result.get("id", "")
+        self._ai_columns = result.get("columns") or [
+            k for k in (result.get("sample") or [{}])[0].keys()
+        ] if result.get("sample") else []
+
+        filename = result.get("filename", "ficheiro")
+        self._ai_upload_lbl.configure(
+            text=f"✅  {filename} enviado — {len(self._ai_columns)} colunas detectadas",
+            text_color="#10B981",
+        )
+
+        self._ai_column_map = self._ai_autodetect(self._ai_columns)
+        self._ai_mapping_confirmed = False
+
+        # Limpa passos anteriores e constrói Passo 2
+        for w in self._ai_steps_frame.winfo_children():
+            w.destroy()
+        self._ai_build_step2(self._ai_steps_frame)
+
+    def _ai_on_upload_err(self, msg: str) -> None:
+        try:
+            self._ai_prog_bar.stop()
+            self._ai_prog_frame.pack_forget()
+        except Exception:
+            pass
+        self._ai_upload_lbl.configure(
+            text=f"⚠  Erro no upload: {msg[:80]}", text_color="#EF4444",
+        )
+
+    # ── Passos 2-5 (implementados nas fases seguintes) ────────────────────────
+
+    def _ai_build_step2(self, parent: ctk.CTkFrame) -> None:
+        """Passo 2 — Mapeamento de colunas (implementado na Fase 2)."""
+        card = ctk.CTkFrame(parent, fg_color=_CARD, corner_radius=12)
+        card.pack(padx=16, pady=(10, 0), fill="x")
+        ctk.CTkLabel(
+            card, text="Passo 2 — Mapeamento de colunas",
+            font=ctk.CTkFont(size=12, weight="bold"),
+        ).pack(anchor="w", padx=16, pady=(12, 4))
+        ctk.CTkLabel(
+            card,
+            text=f"Colunas detectadas: {', '.join(self._ai_columns) if self._ai_columns else '—'}",
+            font=ctk.CTkFont(size=11), text_color="#9CA3AF", wraplength=500, justify="left",
+        ).pack(anchor="w", padx=16, pady=(0, 6))
+        ctk.CTkLabel(
+            card, text="⏳  Mapeamento e prévia em breve (Fase 2)",
+            font=ctk.CTkFont(size=11), text_color="#6B7280",
+        ).pack(anchor="w", padx=16, pady=(0, 14))
+
+    # ══════════════════════════════════════════════════════════════════════════
+    # PAINEL 3 — PROSPECTAR (Kanban de prospecção)
     # ══════════════════════════════════════════════════════════════════════════
 
     _KANBAN_COLS = [
@@ -1155,7 +1421,7 @@ class MainScreen(ctk.CTkFrame):
         threading.Thread(target=_do, daemon=True).start()
 
     # ══════════════════════════════════════════════════════════════════════════
-    # PAINEL 3 — HISTÓRICO
+    # PAINEL 4 — HISTÓRICO
     # ══════════════════════════════════════════════════════════════════════════
 
     def _build_historico(self, parent: ctk.CTkFrame) -> None:
@@ -1261,7 +1527,7 @@ class MainScreen(ctk.CTkFrame):
                        fg_color="#2A2A3E", command=_export_csv).pack(side="left")
 
     # ══════════════════════════════════════════════════════════════════════════
-    # PAINEL 4 — CONTA / CONFIGURAÇÕES
+    # PAINEL 5 — CONTA / CONFIGURAÇÕES
     # ══════════════════════════════════════════════════════════════════════════
 
     def _build_conta(self, parent: ctk.CTkFrame) -> None:

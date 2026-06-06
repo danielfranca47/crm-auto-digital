@@ -186,3 +186,77 @@ def enqueue_whatsapp(session: dict, lead_ids: list, message: str = None) -> dict
     )
     resp.raise_for_status()
     return resp.json()
+
+
+# ── Assistente IA (upload em lote + geração de copy) ─────────────────────────
+
+def upload_file(session: dict, file_path: str) -> Dict[str, Any]:
+    """
+    Envia ficheiro CSV/XLSX para o backend-crm.
+    Retorna: { upload_id, filename, ext, columns, sample (lista de dicts) }
+    """
+    with open(file_path, "rb") as fh:
+        name = fh.name.split("\\")[-1].split("/")[-1]
+        resp = _request(
+            "POST", f"{_base()}/api/uploads",
+            session,
+            files={"file": (name, fh)},
+            timeout=60,
+        )
+    resp.raise_for_status()
+    return resp.json()
+
+
+def preview_assistente_ia(
+    session: dict,
+    upload_id: str,
+    overwrite: str,
+    column_map: Dict[str, str],
+) -> Dict[str, Any]:
+    """
+    Analisa duplicados e prevê acções por linha.
+    Retorna: { stats: {total, pred_create, pred_update, pred_skip, ...}, rows: [...] }
+    """
+    resp = _request(
+        "POST", f"{_base()}/api/assistente-ia/preview",
+        session,
+        json={"upload_id": upload_id, "overwrite": overwrite, "column_map": column_map},
+        timeout=30,
+    )
+    resp.raise_for_status()
+    return resp.json()
+
+
+def processar_assistente_ia(
+    session: dict,
+    upload_id: str,
+    *,
+    create_cards: bool = True,
+    generate_copys: bool = False,
+    channels: list | None = None,
+    overwrite: str = "skip",
+    tone: str = "profissional e próximo",
+    language: str = "pt-PT",
+    column_map: Dict[str, str] | None = None,
+) -> Dict[str, Any]:
+    """
+    Processa o upload: cria leads e/ou gera copys via LLM.
+    Retorna: { stats: {created, updated, skipped, messages}, errors: [...] }
+    """
+    resp = _request(
+        "POST", f"{_base()}/api/assistente-ia/processar",
+        session,
+        json={
+            "upload_id": upload_id,
+            "create_cards": create_cards,
+            "generate_copys": generate_copys,
+            "channels": channels or ["whatsapp"],
+            "overwrite": overwrite,
+            "tone": tone,
+            "language": language,
+            "column_map": column_map or {},
+        },
+        timeout=120,
+    )
+    resp.raise_for_status()
+    return resp.json()
