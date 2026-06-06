@@ -139,6 +139,37 @@ idioma) e ecrã de resultados com acesso directo ao painel Prospectar.
 
 ---
 
+### Fase 4 — Botão "Gerar copy com IA" no painel Pesquisar
+
+**Objetivo:** Eliminar o passo manual de "perceber que existe o botão no Assistente IA"
+— o utilizador vê os resultados da pesquisa e tem um botão directo que o leva ao
+Assistente IA com os dados já carregados.
+
+**Problema identificado:** não existe nenhum ponto de entrada visível no painel Pesquisar
+que ligue ao Assistente IA. O utilizador tem de navegar manualmente para o painel
+Assistente IA e descobrir o botão "Usar pesquisa actual". O fluxo não é óbvio.
+
+**O que muda:**
+
+| Arquivo | O que muda |
+|---|---|
+| `agent-local/app/ui/main_screen.py` | Em `_show_results()`: adiciona botão `✨ Gerar copy com IA` no header dos resultados, ao lado de "📥 Excel" e "💾 Guardar todos no CRM"; ao clicar chama `self._switch_panel("assistente-ia")` |
+| `agent-local/app/ui/main_screen.py` | Em `_build_assistente_ia()`: substitui o botão "🔍 Usar pesquisa actual (N leads)" por texto informativo discreto quando há resultados activos — o ponto de entrada passou a ser o botão em Pesquisar |
+
+**Antes / Depois do fluxo:**
+
+```
+ANTES (confuso):
+  Pesquisar → (exportar Excel?) → navegar para Assistente IA
+  → descobrir botão "Usar pesquisa actual" → clicar
+
+DEPOIS (directo):
+  Pesquisar → ver resultados → clicar "✨ Gerar copy com IA"
+  → Assistente IA com resultados já prontos
+```
+
+---
+
 ## Checks de Validação
 
 ### Cenário A1 — Upload de ficheiro CSV/XLSX funciona
@@ -179,6 +210,14 @@ idioma) e ecrã de resultados com acesso directo ao painel Prospectar.
 - [ ] Mapear colunas → gerar prévia → processar (criar cards + gerar copys)
 - [ ] Clicar "Ver no Prospectar" → confirmar leads na coluna "À Prospectar"
 - [ ] Seleccionar leads em massa → enfileirar WhatsApp → confirmar jobs criados
+
+### Cenário A7 — Botão "Gerar copy com IA" no painel Pesquisar (Fase 4)
+
+- [ ] Pesquisar empresas → aguardar resultados aparecerem
+- [ ] Confirmar: botão "✨ Gerar copy com IA" aparece no header dos resultados
+- [ ] Clicar o botão → confirmar que navega directamente para o painel Assistente IA
+- [ ] Confirmar: no Assistente IA o texto informativo mostra "N leads da pesquisa prontos"
+- [ ] Confirmar: clicar "✨ Gerar copy com IA" no Assistente IA inicia o upload automático sem passo extra
 
 ---
 
