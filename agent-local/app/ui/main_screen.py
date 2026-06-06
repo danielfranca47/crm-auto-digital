@@ -294,6 +294,13 @@ class MainScreen(ctk.CTkFrame):
 
             if subscriber:
                 ctk.CTkButton(
+                    hdr, text="✨ Gerar copy com IA", height=28, corner_radius=8,
+                    fg_color="#4F46E5", hover_color="#4338CA",
+                    font=ctk.CTkFont(size=11, weight="bold"),
+                    command=self._ir_para_assistente_ia,
+                ).pack(side="right", padx=(4, 0))
+
+                ctk.CTkButton(
                     hdr, text="💾 Guardar todos no CRM", height=28, corner_radius=8,
                     fg_color="#065F46", hover_color="#047857",
                     font=ctk.CTkFont(size=11, weight="bold"),
@@ -518,6 +525,14 @@ class MainScreen(ctk.CTkFrame):
         self._error_label.configure(text=f"⚠  {msg}")
         self._error_label.pack(padx=16, pady=(0, 8))
 
+    # ── Atalho Pesquisar → Assistente IA ─────────────────────────────────────
+
+    def _ir_para_assistente_ia(self) -> None:
+        """Navega para Assistente IA e auto-inicia o upload dos resultados actuais."""
+        self._switch_panel("assistente-ia")
+        # Painel já construído — disparar upload após tk processar eventos pendentes
+        self.after(80, self._ai_use_search_results)
+
     # ── Export ────────────────────────────────────────────────────────────────
 
     def _export_excel(self):
@@ -653,19 +668,23 @@ class MainScreen(ctk.CTkFrame):
             command=self._ai_pick_file,
         ).pack(side="left", padx=(0, 8))
 
-        # Botão "usar resultados actuais" só activo se houver pesquisa feita
+        # Resultados da pesquisa disponíveis — botão discreto como fallback
+        # (o caminho principal é o botão "✨ Gerar copy com IA" no painel Pesquisar)
         n_results = len(self._results)
-        use_btn = ctk.CTkButton(
-            btn_row,
-            text=f"🔍  Usar pesquisa actual ({n_results} leads)" if n_results else "🔍  Sem pesquisa activa",
-            height=38, corner_radius=8,
-            fg_color="#065F46" if n_results else "#374151",
-            hover_color="#047857" if n_results else "#374151",
-            state="normal" if n_results else "disabled",
-            font=ctk.CTkFont(size=12),
-            command=self._ai_use_search_results,
-        )
-        use_btn.pack(side="left")
+        if n_results:
+            ctk.CTkLabel(
+                btn_row,
+                text=f"  ou  🔍 {n_results} lead{'s' if n_results != 1 else ''} da pesquisa:",
+                font=ctk.CTkFont(size=11), text_color="#6B7280",
+            ).pack(side="left", padx=(8, 0))
+            ctk.CTkButton(
+                btn_row,
+                text="Usar",
+                height=30, corner_radius=6, width=54,
+                fg_color="#374151", hover_color="#4B5563",
+                font=ctk.CTkFont(size=11),
+                command=self._ai_use_search_results,
+            ).pack(side="left", padx=(4, 0))
 
         self._ai_upload_lbl.pack(anchor="w", padx=16, pady=(0, 10))
 
