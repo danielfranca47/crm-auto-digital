@@ -263,6 +263,51 @@ Sem alterações no backend — reutiliza `get_leads_kanban`, `get_lead_messages
 
 ---
 
+## Fase 7 — Prompt de copy ciente do nicho/oferta do utilizador
+
+### Motivação
+
+O utilizador reportou que as copys geradas eram genéricas e desalinhadas com o
+negócio de quem prospecta — para leads de clínicas odontológicas, o texto falava
+de "marketing digital", "parcerias com descontos" ou "limpeza e manutenção de
+equipamentos", e ainda apareciam literalmente os placeholders `[Seu Nome]` /
+`[Sua Empresa]` no resultado final.
+
+### Causa raiz
+
+`POST /api/prospeccao/generate-copy` (`backend-crm/routes/prospeccao.py`) — usado
+pelo agent-local tanto na geração avulsa como no novo fluxo da Fase 6 — usava um
+prompt **estático e genérico**, sem buscar o `ai_profile` do utilizador. O fluxo
+de geração em lote (`automations/assistente_ia/llm.py`) já resolvia isto
+correctamente, montando um bloco `business_ctx` (Empresa/Nicho/Oferta/Público-alvo)
+a partir do `ai_profile` e instruindo a LLM a nunca usar placeholders.
+
+Verificou-se também que não é preciso criar nenhuma tela nova: os campos `niche`,
+`offer_description`, `target_audience` e `brand_name` já são configuráveis pelo
+utilizador em "Configurar Agente de IA" (`AiProfile.tsx` → Camada Identidade), e
+o endpoint `generate-copy` já exige assinatura activa do CRM (`require_crm_access`)
+— logo, qualquer utilizador que consiga gerar copy também consegue preencher o
+seu perfil de IA, sem qualquer bloqueio adicional para não-assinantes.
+
+### O que muda
+
+| Arquivo | O que muda |
+|---|---|
+| `backend-crm/routes/prospeccao.py` | `generate_copy`: busca o `ai_profile` via `fetch_core_ai_profile` (com fallback gracioso para `{}` se o perfil não existir/erro de rede); monta `business_ctx` (Empresa remetente / Nicho / Oferta / Público-alvo) e bloco "Remetente" a partir dos campos `brand_name`, `niche`, `offer_description`, `target_audience`, `name`; injecta esse contexto no prompt junto com instruções para a oferta reflectir o nicho real e nunca usar placeholders `[Seu Nome]`/`[Sua Empresa]` |
+
+Sem novas rotas, modelos ou migrações — reaproveita 100% da infra existente
+(`fetch_core_ai_profile`, campos do `AIProfile`, padrão `business_ctx` já validado
+em `llm.py`). Se o perfil estiver vazio, o prompt cai de volta ao comportamento
+genérico anterior, sem erro.
+
+### Commits Fase 7
+
+| # | Commit | O que foi implementado |
+|---|---|---|
+| 1 | `4b97bd3` | generate-copy passa a buscar ai_profile e a injectar contexto de negócio (nicho/oferta/público/marca) + instrução anti-placeholder no prompt |
+
+---
+
 ## Checks de Validação
 
 ### Cenário A1 — Upload de ficheiro CSV/XLSX funciona
@@ -342,6 +387,18 @@ Sem alterações no backend — reutiliza `get_leads_kanban`, `get_lead_messages
 - [x] Confirmar: progresso "A gerar copys… N/M" actualiza durante o processo — validado em 2026-06-08
 - [x] Confirmar: ao concluir, aparecem stats (`X copy(s) gerada(s) para Y lead(s)`) e prévia das mensagens (reaproveitando o componente da Fase 5) — validado em 2026-06-08
 - [ ] Abrir um dos leads no Kanban → confirmar que a copy gerada aparece no modal de detalhe
+
+### Cenário A12 — Copy reflecte o nicho/oferta do utilizador (Fase 7)
+
+- [ ] Confirmar que o utilizador tem `Nicho de mercado`, `Produto/Serviço` e
+      `Público-alvo` preenchidos em "Configurar Agente de IA" (frontend-crm → AiProfile)
+- [ ] Gerar copy para um lead (fluxo normal ou "Gerar copys para leads sem copy")
+- [ ] Confirmar: o texto reflecte o nicho/oferta reais do utilizador — não temas
+      aleatórios (ex.: "marketing digital", "limpeza de equipamentos") sem relação
+      com o que o utilizador realmente vende
+- [ ] Confirmar: o texto NÃO contém `[Seu Nome]` / `[Sua Empresa]`
+- [ ] Testar também com um utilizador sem perfil de IA preenchido → confirmar que
+      a geração não falha (cai para o comportamento genérico anterior)
 
 ---
 
