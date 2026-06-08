@@ -451,7 +451,7 @@ CRM), a correcção cobre automaticamente todos os fluxos.
 
 | # | Commit | O que foi implementado |
 |---|---|---|
-| 1 | `<pendente>` | fix: pausa aleatória (5-15s) entre parágrafos enviados como mensagens separadas |
+| 1 | `fa6f4aa` | fix: pausa aleatória (5-15s) entre parágrafos enviados como mensagens separadas |
 
 ---
 
