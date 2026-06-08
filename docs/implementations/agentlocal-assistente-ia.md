@@ -203,7 +203,7 @@ não davam acesso ao texto da copy gerada por canal.
 
 | # | Commit | O que foi implementado |
 |---|---|---|
-| 1 | *(pendente)* | get_lead_messages + upsert_lead_message + prévia no Passo 5 + modal de detalhe do lead no Kanban |
+| 1 | `d176fe0` | get_lead_messages + upsert_lead_message + prévia no Passo 5 + modal de detalhe do lead no Kanban |
 
 ---
 
