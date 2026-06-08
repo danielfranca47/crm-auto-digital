@@ -1643,9 +1643,11 @@ class MainScreen(ctk.CTkFrame):
                     )
                     self.after(0, lambda: _on_done(text, None))
                 except LocalCopyError as exc:
-                    self.after(0, lambda: _on_done(None, str(exc)))
+                    msg = str(exc)
+                    self.after(0, lambda m=msg: _on_done(None, m))
                 except Exception as exc:
-                    self.after(0, lambda: _on_done(None, f"Erro ao gerar mensagem: {exc}"))
+                    msg = f"Erro ao gerar mensagem: {exc}"
+                    self.after(0, lambda m=msg: _on_done(None, m))
 
             threading.Thread(target=_worker, daemon=True).start()
 
