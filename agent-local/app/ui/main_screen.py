@@ -2737,6 +2737,7 @@ class MainScreen(ctk.CTkFrame):
             self._bulk_msg_entry.configure(state="disabled")
 
         def _do():
+            import random as _random
             import time as _time
             from app.session import get_local_leads, move_local_lead, upsert_local_lead
             from app.whatsapp_client import send_message
@@ -2773,7 +2774,7 @@ class MainScreen(ctk.CTkFrame):
                     failed += 1
 
                 if i < total - 1:
-                    _time.sleep(10)
+                    _time.sleep(_random.uniform(25, 60))
 
             parts = []
             if sent:

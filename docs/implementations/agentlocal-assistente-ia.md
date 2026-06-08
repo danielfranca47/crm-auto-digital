@@ -396,6 +396,30 @@ envios. Nada deste fluxo passa pelo backend-crm.
 
 ---
 
+## Fase 9.1 — Fix: pausa aleatória entre envios em massa locais
+
+### Problema identificado
+
+Ao validar o envio em massa via "📤 Enfileirar" (Cenário A14), o utilizador
+reparou que `_send_selected_local_leads` aguardava apenas 10 segundos fixos
+entre cada envio sequencial — intervalo curto e previsível de mais para
+WhatsApp Web/Selenium, com risco de o número ser bloqueado por comportamento
+automatizado.
+
+### Correcção
+
+| Arquivo | Mudança |
+|---|---|
+| `agent-local/app/ui/main_screen.py` | `_send_selected_local_leads`: substitui `_time.sleep(10)` por `_time.sleep(_random.uniform(25, 60))` — pausa aleatória entre 25 e 60 segundos a cada envio (excepto o último), reduzindo o padrão previsível de envio |
+
+### Commits Fix
+
+| # | Commit | O que foi implementado |
+|---|---|---|
+| 1 | `<pendente>` | fix: pausa aleatória (25-60s) entre envios em massa locais |
+
+---
+
 ## Fase 10 — Geração de copies em lote local a partir da Pesquisa
 
 ### Motivação
