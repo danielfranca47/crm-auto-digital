@@ -431,7 +431,7 @@ comportamento existente para assinantes.
 
 | # | Commit | O que foi implementado |
 |---|---|---|
-| 1 | _(pendente)_ | botão "✨ Gerar copies (local)" + `_generate_local_copies_for_selected` |
+| 1 | `b0ae7e0` | botão "✨ Gerar copies (local)" + `_generate_local_copies_for_selected` |
 
 ---
 
