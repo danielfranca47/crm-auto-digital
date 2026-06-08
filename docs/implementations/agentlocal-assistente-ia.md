@@ -490,7 +490,7 @@ envios. Nada deste fluxo passa pelo backend-crm.
 
 ### Cenário A13 — Gerador de copy local para não-assinantes (Fase 8)
 
-- [ ] Com uma conta **gratuita** (sem assinatura activa): abrir "⚙ Conta" →
+- [x] Com uma conta **gratuita** (sem assinatura activa): abrir "⚙ Conta" →
       confirmar novo campo "🔑 Chave OpenAI API", inserir uma chave válida,
       guardar, reabrir o painel e confirmar que a chave persiste
 - [ ] Abrir "Assistente IA" → confirmar a nova secção "✨ Gerador de copy (modo
