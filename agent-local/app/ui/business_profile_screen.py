@@ -29,8 +29,8 @@ class BusinessProfileScreen(ctk.CTkToplevel):
         self._entries: dict[str, ctk.CTkEntry] = {}
 
         self.title("Informações de Negócio")
-        self.geometry("480x520")
-        self.resizable(False, False)
+        self.geometry("480x600")
+        self.minsize(480, 460)
         self.grab_set()
         self._build()
 
@@ -44,10 +44,28 @@ class BusinessProfileScreen(ctk.CTkToplevel):
             font=ctk.CTkFont(size=12), text_color="#9CA3AF", justify="center",
         ).pack(pady=(0, 16))
 
+        # Empacota os botões PRIMEIRO e fixos ao fundo — assim ficam sempre
+        # visíveis mesmo que o formulário (scrollable) precise de mais espaço
+        # do que a janela tem disponível.
+        btn_frame = ctk.CTkFrame(self, fg_color="transparent")
+        btn_frame.pack(side="bottom", pady=20, fill="x", padx=24)
+
+        ctk.CTkButton(
+            btn_frame, text="Cancelar", width=100,
+            fg_color="#2A2A3E", hover_color="#3A3A5E",
+            command=self.destroy,
+        ).pack(side="left")
+
+        ctk.CTkButton(
+            btn_frame, text="Guardar", width=120, height=38,
+            font=ctk.CTkFont(size=13, weight="bold"),
+            command=self._save,
+        ).pack(side="right")
+
         profile = self._session.get("local_business_profile") or {}
 
-        form = ctk.CTkFrame(self, fg_color="#1E1E2E", corner_radius=12)
-        form.pack(padx=24, fill="both", expand=True)
+        form = ctk.CTkScrollableFrame(self, fg_color="#1E1E2E", corner_radius=12)
+        form.pack(padx=24, pady=(0, 4), fill="both", expand=True)
 
         for key, label, placeholder in _FIELDS:
             ctk.CTkLabel(form, text=label, font=ctk.CTkFont(size=12, weight="bold"),
@@ -64,21 +82,6 @@ class BusinessProfileScreen(ctk.CTkToplevel):
             text="🔒 Guardadas localmente — só tu tens acesso",
             font=ctk.CTkFont(size=10), text_color="#4B5563",
         ).pack(anchor="w", padx=16, pady=(8, 14))
-
-        btn_frame = ctk.CTkFrame(self, fg_color="transparent")
-        btn_frame.pack(side="bottom", pady=20, fill="x", padx=24)
-
-        ctk.CTkButton(
-            btn_frame, text="Cancelar", width=100,
-            fg_color="#2A2A3E", hover_color="#3A3A5E",
-            command=self.destroy,
-        ).pack(side="left")
-
-        ctk.CTkButton(
-            btn_frame, text="Guardar", width=120, height=38,
-            font=ctk.CTkFont(size=13, weight="bold"),
-            command=self._save,
-        ).pack(side="right")
 
     def _save(self) -> None:
         profile = {key: self._entries[key].get().strip() for key, _, _ in _FIELDS}
