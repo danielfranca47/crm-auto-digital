@@ -329,18 +329,18 @@ Sem alterações no backend — reutiliza `get_leads_kanban`, `get_lead_messages
 
 ### Cenário A10 — Detectar leads sem copy (Fase 6)
 
-- [ ] No painel Assistente IA, clicar "🔄 Gerar copys para leads sem copy"
-- [ ] Confirmar: aparece "A procurar leads sem copy gerada…" e depois a lista
-- [ ] Confirmar: apenas leads do Kanban (to-prospect/in-progress/qualification) **sem** mensagens geradas aparecem na lista
+- [x] No painel Assistente IA, clicar "🔄 Gerar copys para leads sem copy" — validado em 2026-06-08
+- [x] Confirmar: aparece "A procurar leads sem copy gerada…" e depois a lista — validado em 2026-06-08
+- [x] Confirmar: apenas leads do Kanban (to-prospect/in-progress/qualification) **sem** mensagens geradas aparecem na lista — validado em 2026-06-08
 - [ ] Se todos os leads já têm copy, confirmar mensagem "Todos os leads no Kanban já têm copy gerada. 🎉"
 
 ### Cenário A11 — Gerar copys para leads seleccionados (Fase 6)
 
-- [ ] Seleccionar/desseleccionar leads individualmente e via "Seleccionar todos"
-- [ ] Escolher canal(is) (WhatsApp/Email/Instagram) e ajustar tom de voz
-- [ ] Clicar "✨ Gerar copys para seleccionados"
-- [ ] Confirmar: progresso "A gerar copys… N/M" actualiza durante o processo
-- [ ] Confirmar: ao concluir, aparecem stats (`X copy(s) gerada(s) para Y lead(s)`) e prévia das mensagens (reaproveitando o componente da Fase 5)
+- [x] Seleccionar/desseleccionar leads individualmente e via "Seleccionar todos" — validado em 2026-06-08
+- [x] Escolher canal(is) (WhatsApp/Email/Instagram) e ajustar tom de voz — validado em 2026-06-08
+- [x] Clicar "✨ Gerar copys para seleccionados" — validado em 2026-06-08
+- [x] Confirmar: progresso "A gerar copys… N/M" actualiza durante o processo — validado em 2026-06-08
+- [x] Confirmar: ao concluir, aparecem stats (`X copy(s) gerada(s) para Y lead(s)`) e prévia das mensagens (reaproveitando o componente da Fase 5) — validado em 2026-06-08
 - [ ] Abrir um dos leads no Kanban → confirmar que a copy gerada aparece no modal de detalhe
 
 ---
