@@ -420,6 +420,41 @@ automatizado.
 
 ---
 
+## Fase 9.2 — Fix: pausa entre parágrafos enviados ao mesmo número
+
+### Problema identificado
+
+Ao confirmar a Fase 9.1, o utilizador reparou que uma copy com parágrafos
+separados por linha em branco chegava ao destinatário como **3 mensagens
+distintas** (3 balões com o mesmo timestamp), e perguntou se a pausa de
+25-60s também se aplicava aí. Não se aplicava: a causa é que
+`composer.send_keys(text)`, em `_type_and_send`
+(`agent/whatsapp_runner.py`), envia o texto completo de uma vez — e o
+Selenium traduz cada `\n` em tecla **Enter**, que o WhatsApp Web associa a
+"enviar mensagem" (Shift+Enter é que insere quebra de linha). Cada parágrafo
+acaba por ser disparado como mensagem própria, em rajada, sem qualquer
+pausa — um padrão de envio tão ou mais "robótico" que enviar para vários
+números em sequência rápida.
+
+### Correcção
+
+| Arquivo | Mudança |
+|---|---|
+| `agent-local/agent/whatsapp_runner.py` | `_type_and_send` passa a dividir o texto em parágrafos (`_PARAGRAPH_SPLIT_RE` — blocos separados por uma ou mais linhas em branco) e enviar cada um como mensagem própria via novo `_send_single_message` (mesma lógica de digitação/confirmação que existia antes), aguardando uma pausa aleatória `PARAGRAPH_PAUSE_RANGE = (5, 15)` segundos entre parágrafos consecutivos (excepto o último) |
+
+Sem alteração de comportamento para mensagens de um único parágrafo —
+continuam a ser enviadas exactamente como antes. Como `_type_and_send` é o
+motor partilhado por todos os pontos de envio (avulso, em massa, local e do
+CRM), a correcção cobre automaticamente todos os fluxos.
+
+### Commits Fix
+
+| # | Commit | O que foi implementado |
+|---|---|---|
+| 1 | `<pendente>` | fix: pausa aleatória (5-15s) entre parágrafos enviados como mensagens separadas |
+
+---
+
 ## Fase 10 — Geração de copies em lote local a partir da Pesquisa
 
 ### Motivação

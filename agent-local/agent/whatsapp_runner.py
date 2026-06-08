@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 import logging
+import random
+import re
 import time
 from pathlib import Path
 from typing import Dict, Optional, Tuple
@@ -25,6 +27,16 @@ WAIT_SHORT = 10
 WAIT_MED = 25
 WAIT_LONG = 60
 WAIT_AFTER_TYPE = 1.0
+
+# Pausa aleatória (segundos) entre parágrafos enviados como mensagens
+# separadas para o mesmo número — evita rajadas instantâneas que parecem
+# comportamento automatizado aos olhos do WhatsApp.
+PARAGRAPH_PAUSE_RANGE = (5, 15)
+
+# Parágrafos = blocos separados por uma ou mais linhas em branco. Cada um é
+# enviado como mensagem própria (replica o que o Enter do composer já fazia,
+# mas agora com pausa controlada entre envios).
+_PARAGRAPH_SPLIT_RE = re.compile(r"\n\s*\n+")
 
 # --- Seletores herdados do worker antigo ---
 CSS_COMPOSERS = [
@@ -245,6 +257,20 @@ class WhatsAppRunner:
         raise TimeoutException("composer_timeout")
 
     def _type_and_send(self, driver: Chrome, composer, text: str) -> Tuple[bool, str]:
+        paragraphs = [p.strip() for p in _PARAGRAPH_SPLIT_RE.split(text) if p.strip()]
+        if not paragraphs:
+            paragraphs = [text]
+
+        for idx, paragraph in enumerate(paragraphs):
+            ok, detail = self._send_single_message(driver, composer, paragraph)
+            if not ok:
+                return False, detail
+            if idx < len(paragraphs) - 1:
+                time.sleep(random.uniform(*PARAGRAPH_PAUSE_RANGE))
+
+        return True, "sent"
+
+    def _send_single_message(self, driver: Chrome, composer, text: str) -> Tuple[bool, str]:
         try:
             composer.click()
             time.sleep(0.1)
