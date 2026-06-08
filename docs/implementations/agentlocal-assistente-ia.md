@@ -485,26 +485,30 @@ Sem novas rotas nem chamadas a `crm_client` — opera apenas em
 
 - [ ] Fazer uma pesquisa no painel Pesquisar (ex: "dentistas em Lisboa")
 - [ ] Navegar para "Assistente IA"
-- [ ] Confirmar: opção "Usar resultados da pesquisa (N leads)" aparece e está activa
+- [ ] Confirmar: aparece o texto "N lead(s) da pesquisa:" com botão "Usar"
+      activo no Passo 1 (fallback — o ponto de entrada principal é o botão
+      "✨ Gerar copy com IA" em Pesquisar, ver Cenário A7)
 
 ### Cenário A3 — Mapeamento de colunas e preview
 
 - [ ] Após upload, confirmar auto-detecção correcta das colunas
-- [ ] Confirmar manualmente o mapeamento e clicar "Gerar Prévia"
+- [ ] Confirmar manualmente o mapeamento e clicar "✓ Confirmar mapeamento →"
 - [ ] Confirmar: stats de dedupe aparecem (total, criar, actualizar, pular)
 - [ ] Confirmar: tabela de amostra mostra as primeiras 10 linhas
 
 ### Cenário A4 — Processamento com criação de cards
 
-- [ ] Seleccionar "Criar cards no CRM" + "Pular duplicados"
-- [ ] Clicar "Confirmar e Processar"
+- [ ] No Passo 2, escolher "Pular" como opção de duplicados; no Passo 4,
+      manter "Criar cards no CRM" seleccionado
+- [ ] Clicar "🚀 Confirmar e Processar"
 - [ ] Confirmar: leads aparecem no painel Prospectar (coluna "À Prospectar")
 - [ ] Confirmar: stats finais mostram N criados
 
 ### Cenário A5 — Processamento com geração de copy
 
-- [ ] Seleccionar "Criar cards no CRM" + "Gerar copys com IA" + canal WhatsApp
-- [ ] Processar planilha de 5 leads
+- [ ] No Passo 4, manter "Criar cards no CRM" seleccionado, marcar "Gerar
+      copys com IA" (ou apenas marcar o canal WhatsApp — activa-a automaticamente)
+- [ ] Clicar "🚀 Confirmar e Processar" numa planilha de 5 leads
 - [ ] Confirmar: no CRM, os leads têm mensagem gerada disponível no diálogo de prospecção
 
 ### Cenário A6 — Fluxo completo (Pesquisar → Assistente IA → Prospectar)
@@ -519,8 +523,9 @@ Sem novas rotas nem chamadas a `crm_client` — opera apenas em
 - [ ] Pesquisar empresas → aguardar resultados aparecerem
 - [ ] Confirmar: botão "✨ Gerar copy com IA" aparece no header dos resultados
 - [ ] Clicar o botão → confirmar que navega directamente para o painel Assistente IA
-- [ ] Confirmar: no Assistente IA o texto informativo mostra "N leads da pesquisa prontos"
-- [ ] Confirmar: clicar "✨ Gerar copy com IA" no Assistente IA inicia o upload automático sem passo extra
+- [ ] Confirmar: o painel Assistente IA abre e converte/envia automaticamente
+      os resultados da pesquisa (label "N resultados da pesquisa — a
+      converter…" + barra de progresso), sem qualquer clique adicional
 
 ### Cenário A8 — Prévia de mensagens no Passo 5 (Fase 5)
 
@@ -645,8 +650,6 @@ Sem novas rotas nem chamadas a `crm_client` — opera apenas em
 
 ## Ajustes Possíveis Pós-Implementação
 
-- Para utilizadores não-assinantes: bloquear o painel com mensagem de upsell
-  (idêntico ao que já existe no painel Prospectar).
 - Pré-preenchimento do tom de voz a partir do AI Profile do utilizador
   (`GET /ai-profiles/me` no backend-core) pode ser adicionado numa fase posterior.
 - Futuramente: integração directa com os resultados do agent Instagram/Maps
