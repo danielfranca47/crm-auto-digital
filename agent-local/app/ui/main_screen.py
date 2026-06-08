@@ -643,6 +643,8 @@ class MainScreen(ctk.CTkFrame):
                 text="Assine para importar planilhas, gerar copys com IA e criar leads automaticamente no CRM.",
                 font=ctk.CTkFont(size=10), text_color="#818CF8", wraplength=440,
             ).pack(padx=16, pady=(0, 14))
+
+            self._build_free_copy_generator(body)
             return
 
         # ── PASSO 1: Escolher fonte ───────────────────────────────────────────
@@ -1502,6 +1504,152 @@ class MainScreen(ctk.CTkFrame):
                 font=ctk.CTkFont(size=10), text_color="#D1D5DB",
                 anchor="w", justify="left", wraplength=620,
             ).pack(fill="x", padx=10, pady=(0, 8))
+
+    # ── Gerador de copy local (modo gratuito, chave OpenAI própria) ──────────
+    def _build_free_copy_generator(self, body: ctk.CTkFrame) -> None:
+        from app.session import save_session
+        from app.ui.business_profile_screen import BusinessProfileScreen
+
+        card = ctk.CTkFrame(body, fg_color=_CARD, corner_radius=12)
+        card.pack(padx=16, pady=(0, 16), fill="x")
+
+        ctk.CTkLabel(card, text="✨  Gerador de copy (modo gratuito)",
+                     font=ctk.CTkFont(size=13, weight="bold")).pack(anchor="w", padx=16, pady=(14, 2))
+        ctk.CTkLabel(
+            card,
+            text="Gera mensagens de prospecção com a tua própria chave OpenAI — sem precisar de assinatura.",
+            font=ctk.CTkFont(size=11), text_color="#9CA3AF", wraplength=520, justify="left",
+        ).pack(anchor="w", padx=16, pady=(0, 10))
+
+        # ── Indicadores de estado ────────────────────────────────────────────
+        status_row = ctk.CTkFrame(card, fg_color="transparent")
+        status_row.pack(anchor="w", padx=16, pady=(0, 10), fill="x")
+
+        key_lbl = ctk.CTkLabel(status_row, text="", font=ctk.CTkFont(size=11))
+        key_lbl.pack(side="left", padx=(0, 6))
+        ctk.CTkButton(
+            status_row, text="Configurar em ⚙ Conta", height=26, width=140,
+            corner_radius=6, fg_color="#374151", hover_color="#4B5563",
+            font=ctk.CTkFont(size=10), command=lambda: self._switch_panel("conta"),
+        ).pack(side="left", padx=(0, 16))
+
+        profile_lbl = ctk.CTkLabel(status_row, text="", font=ctk.CTkFont(size=11))
+        profile_lbl.pack(side="left", padx=(0, 6))
+
+        def _refresh_status():
+            has_key = bool((self._session.get("openai_api_key") or "").strip())
+            key_lbl.configure(
+                text="🔑 Chave OpenAI: configurada" if has_key else "🔑 Chave OpenAI: não configurada",
+                text_color="#10B981" if has_key else "#F59E0B",
+            )
+            profile = self._session.get("local_business_profile") or {}
+            has_profile = any((profile.get(k) or "").strip() for k in
+                              ("niche", "offer_description", "target_audience", "brand_name"))
+            profile_lbl.configure(
+                text="📋 Perfil de negócio: preenchido" if has_profile else "📋 Perfil de negócio: por preencher",
+                text_color="#10B981" if has_profile else "#F59E0B",
+            )
+
+        def _open_business_profile():
+            def _on_save(_profile):
+                save_session(self._session)
+                _refresh_status()
+            BusinessProfileScreen(self, self._session, on_save=_on_save)
+
+        ctk.CTkButton(
+            status_row, text="Preencher informações de negócio", height=26, width=190,
+            corner_radius=6, fg_color="#374151", hover_color="#4B5563",
+            font=ctk.CTkFont(size=10), command=_open_business_profile,
+        ).pack(side="left")
+
+        _refresh_status()
+
+        # ── Formulário do lead avulso ────────────────────────────────────────
+        form = ctk.CTkFrame(card, fg_color="transparent")
+        form.pack(padx=16, pady=(0, 6), fill="x")
+        form.columnconfigure(0, weight=1)
+        form.columnconfigure(1, weight=1)
+
+        company_entry = ctk.CTkEntry(form, placeholder_text="Nome da empresa do lead", height=36, corner_radius=8)
+        company_entry.grid(row=0, column=0, sticky="ew", padx=(0, 6), pady=4)
+
+        sector_entry = ctk.CTkEntry(form, placeholder_text="Sector (opcional)", height=36, corner_radius=8)
+        sector_entry.grid(row=0, column=1, sticky="ew", padx=(6, 0), pady=4)
+
+        contact_entry = ctk.CTkEntry(form, placeholder_text="Nome do contacto (opcional)", height=36, corner_radius=8)
+        contact_entry.grid(row=1, column=0, sticky="ew", padx=(0, 6), pady=4)
+
+        channel_combo = ctk.CTkComboBox(
+            form, values=["whatsapp", "email", "instagram", "call"],
+            height=36, corner_radius=8,
+        )
+        channel_combo.set("whatsapp")
+        channel_combo.grid(row=1, column=1, sticky="ew", padx=(6, 0), pady=4)
+
+        tone_entry = ctk.CTkEntry(form, placeholder_text="Tom (ex.: profissional e próximo)", height=36, corner_radius=8)
+        tone_entry.grid(row=2, column=0, columnspan=2, sticky="ew", pady=4)
+
+        gen_btn = ctk.CTkButton(card, text="✨  Gerar copy", height=38, corner_radius=8,
+                                font=ctk.CTkFont(size=12))
+        gen_btn.pack(anchor="w", padx=16, pady=(6, 6))
+
+        msg_lbl = ctk.CTkLabel(card, text="", font=ctk.CTkFont(size=11),
+                               text_color="#F59E0B", wraplength=520, justify="left")
+        msg_lbl.pack(anchor="w", padx=16, pady=(0, 4))
+
+        result_frame = ctk.CTkFrame(card, fg_color="#111827", corner_radius=10)
+        result_lbl = ctk.CTkLabel(result_frame, text="", font=ctk.CTkFont(size=11),
+                                  text_color="#D1D5DB", wraplength=520, justify="left", anchor="w")
+        result_lbl.pack(fill="x", padx=12, pady=(10, 4))
+        copy_btn = ctk.CTkButton(
+            result_frame, text="📋 Copiar", width=80, height=26, corner_radius=6,
+            fg_color="#374151", hover_color="#4B5563", font=ctk.CTkFont(size=10),
+            command=lambda: self._copy_text_to_clipboard(result_lbl.cget("text")),
+        )
+        copy_btn.pack(anchor="e", padx=12, pady=(0, 10))
+
+        def _on_done(text: Optional[str], error: Optional[str]) -> None:
+            gen_btn.configure(state="normal", text="✨  Gerar copy")
+            if error:
+                msg_lbl.configure(text=error)
+                result_frame.pack_forget()
+                return
+            msg_lbl.configure(text="")
+            result_lbl.configure(text=text or "")
+            result_frame.pack(padx=16, pady=(0, 14), fill="x")
+
+        def _generate():
+            from app.local_copy import generate_copy_local, LocalCopyError
+
+            company = company_entry.get().strip()
+            if not company:
+                msg_lbl.configure(text="Indica o nome da empresa do lead.")
+                return
+
+            msg_lbl.configure(text="")
+            result_frame.pack_forget()
+            gen_btn.configure(state="disabled", text="A gerar…")
+
+            sector = sector_entry.get().strip()
+            contact = contact_entry.get().strip()
+            channel = channel_combo.get().strip() or "whatsapp"
+            tone = tone_entry.get().strip() or "profissional e próximo"
+
+            def _worker():
+                try:
+                    text = generate_copy_local(
+                        self._session, company_name=company, sector=sector,
+                        contact_name=contact, channel=channel, tone=tone,
+                    )
+                    self.after(0, lambda: _on_done(text, None))
+                except LocalCopyError as exc:
+                    self.after(0, lambda: _on_done(None, str(exc)))
+                except Exception as exc:
+                    self.after(0, lambda: _on_done(None, f"Erro ao gerar mensagem: {exc}"))
+
+            threading.Thread(target=_worker, daemon=True).start()
+
+        gen_btn.configure(command=_generate)
 
     def _copy_text_to_clipboard(self, text: str) -> None:
         try:
@@ -2429,6 +2577,55 @@ class MainScreen(ctk.CTkFrame):
 
             ctk.CTkButton(api_card, text="Guardar chave", height=34,
                            command=_save_key).pack(padx=16, pady=(0, 14))
+
+            # Secção: chave OpenAI API (gerador de copy no modo gratuito)
+            openai_card = ctk.CTkFrame(body, fg_color=_CARD, corner_radius=12)
+            openai_card.pack(padx=20, fill="x", pady=(0, 12))
+
+            ctk.CTkLabel(openai_card, text="🔑  Chave OpenAI API",
+                          font=ctk.CTkFont(size=13, weight="bold")).pack(anchor="w", padx=16, pady=(12, 4))
+            ctk.CTkLabel(openai_card,
+                          text="Necessária para gerar copys com IA no modo gratuito (Assistente IA). "
+                               "A tua chave fica guardada apenas neste computador.",
+                          font=ctk.CTkFont(size=11), text_color="#6B7280", wraplength=380, justify="left"
+                          ).pack(anchor="w", padx=16, pady=(0, 8))
+
+            oai_entry_row = ctk.CTkFrame(openai_card, fg_color="transparent")
+            oai_entry_row.pack(padx=16, pady=(0, 6), fill="x")
+            oai_entry_row.columnconfigure(0, weight=1)
+
+            oai_key_entry = ctk.CTkEntry(oai_entry_row, placeholder_text="sk-...", height=36,
+                                          corner_radius=8, show="•")
+            oai_existing = self._session.get("openai_api_key", "")
+            if oai_existing:
+                oai_key_entry.insert(0, oai_existing)
+            oai_key_entry.grid(row=0, column=0, sticky="ew", padx=(0, 6))
+
+            oai_visible = [False]
+
+            def _oai_toggle():
+                oai_visible[0] = not oai_visible[0]
+                oai_key_entry.configure(show="" if oai_visible[0] else "•")
+                oai_toggle_btn.configure(text="🙈" if oai_visible[0] else "👁")
+
+            oai_toggle_btn = ctk.CTkButton(oai_entry_row, text="👁", width=36, height=36,
+                                            fg_color="#2A2A3E", command=_oai_toggle)
+            oai_toggle_btn.grid(row=0, column=1)
+
+            def _save_oai_key():
+                key = oai_key_entry.get().strip()
+                self._session["openai_api_key"] = key or None
+                from app.session import save_session
+                save_session(self._session)
+                popup = ctk.CTkToplevel(self)
+                popup.title("Guardado")
+                popup.geometry("280x100")
+                popup.grab_set()
+                ctk.CTkLabel(popup, text="✓ Chave guardada", font=ctk.CTkFont(size=13)).pack(pady=24)
+                self.after(1200, popup.destroy)
+
+            ctk.CTkButton(openai_card, text="Guardar chave", height=34,
+                           command=_save_oai_key).pack(padx=16, pady=(0, 14))
         else:
             info = ctk.CTkFrame(body, fg_color=_CARD, corner_radius=12)
             info.pack(padx=20, fill="x", pady=(0, 12))
