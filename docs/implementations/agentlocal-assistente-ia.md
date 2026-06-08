@@ -435,6 +435,44 @@ comportamento existente para assinantes.
 
 ---
 
+## Fase 11 — Eliminar leads do Kanban local de prospecção
+
+### Motivação
+
+Com a geração de copies em lote (Fase 10) e os fluxos de envio (Fase 9), o
+Kanban local "Prospectar" acumula leads sem qualquer forma de remoção — o
+utilizador pediu uma opção de eliminar leads individualmente.
+
+### Abordagem
+
+Nova função `delete_local_lead(session, lead_id)` em `session.py`, clonando o
+padrão de `move_local_lead`/`update_local_lead` (encontra por `id`, filtra a
+lista, persiste com `save_session`). No modal de detalhe do lead
+(`_show_local_lead_detail`), novo botão "🗑 Eliminar lead" no `footer` (estilo
+do botão de eliminar templates, vermelho `#7F1D1D`/`#991B1B`) que abre um
+popup `CTkToplevel` ad-hoc de confirmação ("Eliminar este lead do Kanban
+local? Esta acção não pode ser desfeita." + "Cancelar"/"Eliminar"). Ao
+confirmar, remove o lead, fecha ambos os popups e recarrega o Kanban local
+(`_reload_kanban`).
+
+### O que muda
+
+| Arquivo | O que muda |
+|---|---|
+| `agent-local/app/session.py` | nova função `delete_local_lead(session, lead_id)` — remove o lead da lista `local_leads` pelo `id` e persiste em `session.json` |
+| `agent-local/app/ui/main_screen.py` | `_show_local_lead_detail`: novo botão "🗑 Eliminar lead" no footer + popup de confirmação ad-hoc (`_confirm_delete`); ao confirmar chama `delete_local_lead`, fecha o modal e recarrega o Kanban local via `_reload_kanban` |
+
+Sem novas rotas nem chamadas a `crm_client` — opera apenas em
+`session["local_leads"]`; o Kanban de assinante não é afectado.
+
+### Commits Fase 11
+
+| # | Commit | O que foi implementado |
+|---|---|---|
+| 1 | `3033b8c` | `delete_local_lead` + botão "🗑 Eliminar lead" com popup de confirmação |
+
+---
+
 ## Checks de Validação
 
 ### Cenário A1 — Upload de ficheiro CSV/XLSX funciona
@@ -588,6 +626,20 @@ comportamento existente para assinantes.
       necessidade de assinatura activa)
 - [ ] Repetir com uma conta **assinante** → confirmar que o botão "✨ Gerar
       copy com IA" continua a funcionar como antes (sem alterações)
+
+### Cenário A16 — Eliminar leads do Kanban local de prospecção (Fase 11)
+
+- [ ] Com uma conta **gratuita**: abrir um card no Kanban local "Prospectar" →
+      modal de detalhe → clicar "🗑 Eliminar lead" → confirmar que aparece o
+      popup de confirmação
+- [ ] Clicar "Cancelar" → confirmar que o lead permanece no Kanban e o modal
+      continua aberto
+- [ ] Clicar "🗑 Eliminar" → confirmar que ambos os popups fecham, o card
+      desaparece do Kanban e a contagem da coluna actualiza
+- [ ] Mudar de painel e voltar (ou reabrir a app) → confirmar que o lead
+      eliminado não reaparece (persistência em `session.json`)
+- [ ] Confirmar que nada deste fluxo chama o backend-crm e que o Kanban de
+      assinante não é afectado
 
 ---
 
