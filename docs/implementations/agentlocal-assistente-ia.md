@@ -392,6 +392,7 @@ envios. Nada deste fluxo passa pelo backend-crm.
 | # | Commit | O que foi implementado |
 |---|---|---|
 | 1 | `c8346ec` | armazém local de leads (session.py) + registo mecânico nos fluxos de envio existentes (bulk_prospect_dialog/prospect_dialog) |
+| 2 | `1d35598` | Kanban local de 3 colunas, modal de detalhe (mensagem editável + copy local + reenvio), envio em massa local e ocultação de badges CRM-only para não-assinantes |
 
 ---
 
