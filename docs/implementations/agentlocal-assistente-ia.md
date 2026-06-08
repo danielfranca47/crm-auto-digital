@@ -493,20 +493,20 @@ envios. Nada deste fluxo passa pelo backend-crm.
 - [x] Com uma conta **gratuita** (sem assinatura activa): abrir "⚙ Conta" →
       confirmar novo campo "🔑 Chave OpenAI API", inserir uma chave válida,
       guardar, reabrir o painel e confirmar que a chave persiste
-- [ ] Abrir "Assistente IA" → confirmar a nova secção "✨ Gerador de copy (modo
+- [x] Abrir "Assistente IA" → confirmar a nova secção "✨ Gerador de copy (modo
       gratuito)" logo abaixo do cartão "🔒 Disponível para Assinantes", com os
       indicadores "🔑 Chave OpenAI" e "📋 Perfil de negócio" reflectindo o estado real
-- [ ] Clicar "Preencher informações de negócio" → preencher nicho, oferta,
+- [x] Clicar "Preencher informações de negócio" → preencher nicho, oferta,
       público-alvo e marca → guardar → confirmar que o indicador muda para
       "preenchido" e que reabrir o ecrã mostra os valores guardados
-- [ ] Preencher o formulário do lead avulso (empresa, sector, contacto, canal,
+- [x] Preencher o formulário do lead avulso (empresa, sector, contacto, canal,
       tom) e clicar "✨ Gerar copy" → confirmar que o texto gerado reflecte o
       nicho/oferta configurados, sem placeholders `[Seu Nome]`/`[Sua Empresa]`,
       e que "📋 Copiar" copia o texto para a área de transferência
-- [ ] Remover a chave OpenAI e tentar gerar → confirmar mensagem clara pedindo
+- [x] Remover a chave OpenAI e tentar gerar → confirmar mensagem clara pedindo
       para configurar a chave em "⚙ Conta" (sem crash). Repetir limpando o
       perfil de negócio → confirmar mensagem a pedir o preenchimento do perfil
-- [ ] Confirmar que nada deste fluxo chama o backend-crm (sem erros 403, sem
+- [x] Confirmar que nada deste fluxo chama o backend-crm (sem erros 403, sem
       necessidade de assinatura/CRM activos)
 
 ### Cenário A14 — Kanban de prospecção local para não-assinantes (Fase 9)
