@@ -182,6 +182,31 @@ DEPOIS (directo):
 
 ---
 
+### Fase 5 — Prévia de mensagens geradas (Assistente IA + Prospectar)
+
+**Objetivo:** Permitir ver e editar as copys geradas sem sair do agent-local — antes,
+o utilizador não tinha forma de conferir o texto gerado nem corrigi-lo.
+
+**Problema identificado:** o ecrã de resultados do Assistente IA mostrava apenas
+estatísticas (criados/actualizados/mensagens), e os cards do Kanban em Prospectar
+não davam acesso ao texto da copy gerada por canal.
+
+**O que muda:**
+
+| Arquivo | O que muda |
+|---|---|
+| `agent-local/app/crm_client.py` | Novas funções `get_lead_messages(session, lead_id)` → `GET /api/assistente-ia/messages/{lead_id}`; `upsert_lead_message(session, lead_id, channel, body, ...)` → `POST /api/assistente-ia/messages/upsert` |
+| `agent-local/app/ui/main_screen.py` | `_ai_build_step5`: usa `result["lead_ids"]` para buscar e mostrar prévia scrollável das mensagens geradas, com botão "Copiar" por mensagem |
+| `agent-local/app/ui/main_screen.py` | `_render_kanban_card`: cards tornam-se clicáveis; abre modal `_show_lead_detail` com dados do lead + mensagens por canal, cada uma editável (`CTkTextbox`) com "Copiar" e "Guardar alteração" |
+
+### Commits Fase 5
+
+| # | Commit | O que foi implementado |
+|---|---|---|
+| 1 | *(pendente)* | get_lead_messages + upsert_lead_message + prévia no Passo 5 + modal de detalhe do lead no Kanban |
+
+---
+
 ## Checks de Validação
 
 ### Cenário A1 — Upload de ficheiro CSV/XLSX funciona
@@ -230,6 +255,21 @@ DEPOIS (directo):
 - [ ] Clicar o botão → confirmar que navega directamente para o painel Assistente IA
 - [ ] Confirmar: no Assistente IA o texto informativo mostra "N leads da pesquisa prontos"
 - [ ] Confirmar: clicar "✨ Gerar copy com IA" no Assistente IA inicia o upload automático sem passo extra
+
+### Cenário A8 — Prévia de mensagens no Passo 5 (Fase 5)
+
+- [ ] Processar planilha com "Gerar copys com IA" activo
+- [ ] No Passo 5 (resultados), confirmar: secção "✨ Mensagens geradas — prévia" aparece
+- [ ] Confirmar: lista mostra `Lead #N · Canal` + texto da copy (truncado)
+- [ ] Clicar "📋 Copiar" → confirmar que o texto fica na área de transferência
+
+### Cenário A9 — Detalhe do lead com copy editável no Kanban (Fase 5)
+
+- [ ] No painel Prospectar, clicar num card de lead com copy gerada
+- [ ] Confirmar: modal abre com nome, telefone, origem e mensagens por canal
+- [ ] Editar o texto de uma mensagem → clicar "💾 Guardar alteração"
+- [ ] Reabrir o modal → confirmar que o texto editado persiste
+- [ ] Clicar "📋 Copiar" numa mensagem → confirmar que o texto fica na área de transferência
 
 ---
 

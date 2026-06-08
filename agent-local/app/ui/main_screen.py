@@ -1192,6 +1192,89 @@ class MainScreen(ctk.CTkFrame):
             command=lambda: self._switch_panel("assistente-ia"),
         ).pack(side="left")
 
+        lead_ids = result.get("lead_ids") or []
+        if lead_ids:
+            self._ai_load_messages_preview(card, lead_ids)
+
+    def _ai_load_messages_preview(self, card: ctk.CTkFrame, lead_ids: list) -> None:
+        """Busca e mostra as copys geradas para os leads processados (assíncrono)."""
+        preview_card = ctk.CTkFrame(card, fg_color="#12121F", corner_radius=10)
+        preview_card._ai_step = 5
+        preview_card.pack(padx=16, pady=(0, 14), fill="x")
+
+        ctk.CTkLabel(
+            preview_card, text="✨  Mensagens geradas — prévia",
+            font=ctk.CTkFont(size=12, weight="bold"),
+        ).pack(anchor="w", padx=14, pady=(12, 2))
+
+        loading_lbl = ctk.CTkLabel(
+            preview_card, text="A carregar mensagens…",
+            font=ctk.CTkFont(size=11), text_color="#6B7280",
+        )
+        loading_lbl.pack(anchor="w", padx=14, pady=(0, 12))
+
+        def _worker():
+            from app.crm_client import get_lead_messages
+            entries = []
+            for lid in lead_ids[:30]:
+                try:
+                    msgs = get_lead_messages(self._session, lid)
+                except Exception:
+                    msgs = []
+                for m in msgs:
+                    entries.append((lid, m))
+            self.after(0, lambda e=entries: self._ai_render_messages_preview(preview_card, loading_lbl, e))
+
+        threading.Thread(target=_worker, daemon=True).start()
+
+    def _ai_render_messages_preview(self, preview_card: ctk.CTkFrame, loading_lbl, entries: list) -> None:
+        if not self._widget_alive(preview_card):
+            return
+        loading_lbl.destroy()
+
+        if not entries:
+            ctk.CTkLabel(
+                preview_card, text="Nenhuma mensagem encontrada para os leads processados.",
+                font=ctk.CTkFont(size=11), text_color="#6B7280",
+            ).pack(anchor="w", padx=14, pady=(0, 12))
+            return
+
+        scroll = ctk.CTkScrollableFrame(preview_card, fg_color="transparent", height=260)
+        scroll.pack(fill="x", padx=10, pady=(0, 12))
+
+        _channel_labels = {"whatsapp": "WhatsApp", "email": "Email", "instagram": "Instagram"}
+
+        for lead_id, msg in entries[:30]:
+            row = ctk.CTkFrame(scroll, fg_color=_CARD, corner_radius=8)
+            row.pack(fill="x", padx=4, pady=3)
+
+            hdr = ctk.CTkFrame(row, fg_color="transparent")
+            hdr.pack(fill="x", padx=10, pady=(8, 2))
+            channel_label = _channel_labels.get(msg.get("channel"), msg.get("channel") or "—")
+            ctk.CTkLabel(
+                hdr, text=f"Lead #{lead_id} · {channel_label}",
+                font=ctk.CTkFont(size=10, weight="bold"), text_color="#818CF8",
+            ).pack(side="left")
+            ctk.CTkButton(
+                hdr, text="📋 Copiar", width=70, height=22, corner_radius=6,
+                fg_color="#374151", hover_color="#4B5563", font=ctk.CTkFont(size=9),
+                command=lambda b=msg.get("body") or "": self._copy_text_to_clipboard(b),
+            ).pack(side="right")
+
+            body = (msg.get("body") or "").strip()
+            ctk.CTkLabel(
+                row, text=body[:280] + ("…" if len(body) > 280 else ""),
+                font=ctk.CTkFont(size=10), text_color="#D1D5DB",
+                anchor="w", justify="left", wraplength=620,
+            ).pack(fill="x", padx=10, pady=(0, 8))
+
+    def _copy_text_to_clipboard(self, text: str) -> None:
+        try:
+            self.clipboard_clear()
+            self.clipboard_append(text)
+        except Exception:
+            pass
+
     # ══════════════════════════════════════════════════════════════════════════
     # PAINEL 3 — PROSPECTAR (Kanban de prospecção)
     # ══════════════════════════════════════════════════════════════════════════
@@ -1426,7 +1509,7 @@ class MainScreen(ctk.CTkFrame):
         current_cat: str,
         kanban_container: ctk.CTkFrame,
     ) -> None:
-        card = ctk.CTkFrame(parent, fg_color=_CARD, corner_radius=8)
+        card = ctk.CTkFrame(parent, fg_color=_CARD, corner_radius=8, cursor="hand2")
         card.pack(fill="x", padx=4, pady=3)
 
         name = (lead.get("companyName") or lead.get("contactName") or "Lead")[:26]
@@ -1434,14 +1517,20 @@ class MainScreen(ctk.CTkFrame):
         lead_id = lead.get("id")
         origin = lead.get("origin") or ""
 
+        if lead_id is not None:
+            card.bind("<Button-1>", lambda _e, l=lead: self._show_lead_detail(l))
+
         # Linha de topo: nome + checkbox (só em to-prospect)
         top_row = ctk.CTkFrame(card, fg_color="transparent")
         top_row.pack(fill="x", padx=8, pady=(6, 1))
 
-        ctk.CTkLabel(
+        name_lbl = ctk.CTkLabel(
             top_row, text=name,
             font=ctk.CTkFont(size=11, weight="bold"), anchor="w",
-        ).pack(side="left", fill="x", expand=True)
+        )
+        name_lbl.pack(side="left", fill="x", expand=True)
+        if lead_id is not None:
+            name_lbl.bind("<Button-1>", lambda _e, l=lead: self._show_lead_detail(l))
 
         if current_cat == "to-prospect" and lead_id is not None:
             var = ctk.BooleanVar(value=lead_id in self._kanban_selected)
@@ -1459,10 +1548,128 @@ class MainScreen(ctk.CTkFrame):
         ).pack(fill="x", padx=8, pady=phone_pady)
 
         if origin:
-            ctk.CTkLabel(
+            origin_lbl = ctk.CTkLabel(
                 card, text=f"#{lead_id} · {origin}",
                 font=ctk.CTkFont(size=9), text_color="#374151", anchor="w",
-            ).pack(fill="x", padx=8, pady=(0, 6))
+            )
+            origin_lbl.pack(fill="x", padx=8, pady=(0, 6))
+            if lead_id is not None:
+                origin_lbl.bind("<Button-1>", lambda _e, l=lead: self._show_lead_detail(l))
+
+    # ── Detalhe do lead (modal com mensagens geradas) ──────────────────────────
+
+    def _show_lead_detail(self, lead: dict) -> None:
+        """Abre modal com dados do lead e prévia das copys geradas (editável)."""
+        lead_id = lead.get("id")
+        if lead_id is None:
+            return
+
+        popup = ctk.CTkToplevel(self)
+        popup.title(f"Lead #{lead_id}")
+        popup.geometry("520x520")
+        popup.resizable(True, True)
+        popup.grab_set()
+        popup.focus()
+
+        name = lead.get("companyName") or lead.get("contactName") or "Lead"
+        phone = lead.get("phone") or "—"
+        origin = lead.get("origin") or "—"
+
+        hdr = ctk.CTkFrame(popup, fg_color="#1E1E2E", corner_radius=0, height=64)
+        hdr.pack(fill="x")
+        hdr.pack_propagate(False)
+        ctk.CTkLabel(
+            hdr, text=name, font=ctk.CTkFont(size=14, weight="bold"),
+        ).pack(anchor="w", padx=16, pady=(10, 0))
+        ctk.CTkLabel(
+            hdr, text=f"📞 {phone}   ·   origem: {origin}   ·   #{lead_id}",
+            font=ctk.CTkFont(size=10), text_color="#9CA3AF",
+        ).pack(anchor="w", padx=16, pady=(0, 10))
+
+        ctk.CTkLabel(
+            popup, text="Mensagens geradas",
+            font=ctk.CTkFont(size=12, weight="bold"),
+        ).pack(anchor="w", padx=16, pady=(12, 4))
+
+        body_frame = ctk.CTkScrollableFrame(popup, fg_color="#12121F", corner_radius=8)
+        body_frame.pack(fill="both", expand=True, padx=16, pady=(0, 8))
+
+        loading_lbl = ctk.CTkLabel(
+            body_frame, text="A carregar…",
+            font=ctk.CTkFont(size=12), text_color="#9CA3AF",
+        )
+        loading_lbl.pack(pady=20)
+
+        footer = ctk.CTkFrame(popup, fg_color="transparent")
+        footer.pack(side="bottom", fill="x", pady=8)
+        ctk.CTkButton(footer, text="Fechar", width=100, command=popup.destroy).pack()
+
+        def _worker():
+            try:
+                from app.crm_client import get_lead_messages
+                msgs = get_lead_messages(self._session, lead_id)
+            except Exception:
+                msgs = []
+            self.after(0, lambda m=msgs: self._render_lead_detail_messages(body_frame, loading_lbl, lead_id, m))
+
+        threading.Thread(target=_worker, daemon=True).start()
+
+    def _render_lead_detail_messages(self, body_frame, loading_lbl, lead_id: int, msgs: list) -> None:
+        if not self._widget_alive(body_frame):
+            return
+        loading_lbl.destroy()
+
+        if not msgs:
+            ctk.CTkLabel(
+                body_frame,
+                text="Sem mensagens geradas para este lead.\nGera copys via Assistente IA ou no painel Pesquisar.",
+                font=ctk.CTkFont(size=11), text_color="#6B7280", justify="left",
+            ).pack(pady=20, padx=12)
+            return
+
+        _channel_labels = {"whatsapp": "WhatsApp", "email": "Email", "instagram": "Instagram"}
+
+        for msg in msgs:
+            row = ctk.CTkFrame(body_frame, fg_color=_CARD, corner_radius=8)
+            row.pack(fill="x", padx=6, pady=4)
+
+            hdr = ctk.CTkFrame(row, fg_color="transparent")
+            hdr.pack(fill="x", padx=10, pady=(8, 2))
+            channel_label = _channel_labels.get(msg.get("channel"), msg.get("channel") or "—")
+            ctk.CTkLabel(
+                hdr, text=f"📨 {channel_label}",
+                font=ctk.CTkFont(size=11, weight="bold"), text_color="#818CF8",
+            ).pack(side="left")
+            ctk.CTkButton(
+                hdr, text="📋 Copiar", width=78, height=24, corner_radius=6,
+                fg_color="#374151", hover_color="#4B5563", font=ctk.CTkFont(size=10),
+                command=lambda b=msg.get("body") or "": self._copy_text_to_clipboard(b),
+            ).pack(side="right")
+
+            body_box = ctk.CTkTextbox(row, height=110, corner_radius=6, font=ctk.CTkFont(size=11))
+            body_box.pack(fill="x", padx=10, pady=(0, 6))
+            body_box.insert("1.0", (msg.get("body") or "").strip())
+
+            ctk.CTkButton(
+                row, text="💾 Guardar alteração", width=140, height=26, corner_radius=6,
+                fg_color="#1D4ED8", hover_color="#1E40AF", font=ctk.CTkFont(size=10, weight="bold"),
+                command=lambda mid=msg.get("id"), ch=msg.get("channel"), box=body_box:
+                    self._save_lead_message(lead_id, mid, ch, box),
+            ).pack(anchor="e", padx=10, pady=(0, 8))
+
+    def _save_lead_message(self, lead_id: int, message_id, channel: str, box) -> None:
+        new_body = box.get("1.0", "end").strip()
+        if not new_body:
+            return
+
+        def _worker():
+            try:
+                from app.crm_client import upsert_lead_message
+                upsert_lead_message(self._session, lead_id, channel, new_body, message_id=message_id)
+            except Exception:
+                pass
+
+        threading.Thread(target=_worker, daemon=True).start()
 
     # ── Selecção Kanban ────────────────────────────────────────────────────────
 

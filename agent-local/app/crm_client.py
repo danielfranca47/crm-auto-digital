@@ -227,6 +227,43 @@ def preview_assistente_ia(
     return resp.json()
 
 
+def get_lead_messages(session: dict, lead_id: int) -> list:
+    """
+    Mensagens de prospecção geradas para um lead (por canal).
+    Retorna lista de dicts: { id, channel, subject, body, model, createdAt }
+    """
+    resp = _request(
+        "GET", f"{_base()}/api/assistente-ia/messages/{lead_id}",
+        session, params={"latest": True}, timeout=15,
+    )
+    resp.raise_for_status()
+    data = resp.json()
+    return data.get("messages", []) if isinstance(data, dict) else []
+
+
+def upsert_lead_message(
+    session: dict,
+    lead_id: int,
+    channel: str,
+    body: str,
+    *,
+    message_id: int | None = None,
+    subject: str | None = None,
+) -> Dict[str, Any]:
+    """Cria ou actualiza uma mensagem de prospecção (copy) editada manualmente."""
+    payload: Dict[str, Any] = {"lead_id": lead_id, "channel": channel, "body": body}
+    if message_id is not None:
+        payload["message_id"] = message_id
+    if subject is not None:
+        payload["subject"] = subject
+    resp = _request(
+        "POST", f"{_base()}/api/assistente-ia/messages/upsert", session,
+        json=payload, timeout=15,
+    )
+    resp.raise_for_status()
+    return resp.json()
+
+
 def processar_assistente_ia(
     session: dict,
     upload_id: str,
