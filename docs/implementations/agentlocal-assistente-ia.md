@@ -308,6 +308,49 @@ genérico anterior, sem erro.
 
 ---
 
+## Fase 8 — Gerador de copy local para não-assinantes (chave OpenAI própria)
+
+### Motivação
+
+A Fase 7 corrigiu o prompt para assinantes (que têm `ai_profile` no core e usam o
+`OPENAI_API_KEY` do servidor via `/api/prospeccao/generate-copy`, protegido por
+`require_crm_access`). O utilizador pediu que **não-assinantes também consigam
+gerar copys com IA**, trazendo a sua própria chave OpenAI e preenchendo um mínimo
+de informação de negócio localmente — sem precisar de assinatura/CRM.
+
+### Abordagem
+
+Como `generate-copy` exige assinatura activa, a geração para não-assinantes
+acontece **inteiramente no cliente** (chamada directa à OpenAI com a chave do
+próprio utilizador), reaproveitando:
+- a interface existente do Assistente IA (mesma página, sem painel paralelo)
+- o local onde já se configura a chave Google Maps (página "⚙ Conta") para
+  também guardar a chave OpenAI
+- o padrão `business_ctx` (Empresa/Nicho/Oferta/Público-alvo) e a instrução
+  anti-placeholder validados na Fase 7
+
+### O que muda
+
+| Arquivo | O que muda |
+|---|---|
+| `agent-local/app/ui/main_screen.py` | `_build_conta`: novo cartão "🔑 Chave OpenAI API" (clona o padrão da chave Google Maps — `CTkEntry` mascarado, toggle de visibilidade, "Guardar chave" → `session["openai_api_key"]` + `save_session`); `_build_assistente_ia`: nova secção `_build_free_copy_generator`, mostrada a não-assinantes logo após o cartão de upsell, com indicadores de estado (chave/perfil), formulário de lead avulso, geração assíncrona (thread + `self.after`) e prévia com botão "📋 Copiar" |
+| `agent-local/app/ui/business_profile_screen.py` (novo) | `BusinessProfileScreen` — modal `CTkToplevel` com campos mínimos (`niche`, `offer_description`, `target_audience`, `brand_name`), persistidos em `session["local_business_profile"]` via `save_session` |
+| `agent-local/app/local_copy.py` (novo) | `generate_copy_local` — chama a OpenAI directamente com a chave do utilizador (`session["openai_api_key"]`), monta o mesmo `business_ctx` e instrução anti-placeholder da Fase 7 a partir de `local_business_profile`, e levanta `LocalCopyError` com mensagens accionáveis se faltar chave ou perfil |
+| `agent-local/requirements.txt` | adiciona `openai>=1.0.0` |
+
+Nada disto passa pelo backend-crm — a chamada à LLM acontece localmente, em
+paralelo ao padrão já usado por `prospect_dialog.py` para envio "no modo
+gratuito, sem registo no CRM". A chave e o perfil ficam guardados em texto
+simples em `~/.agent-local/session.json`, mesmo precedente de `google_maps_api_key`.
+
+### Commits Fase 8
+
+| # | Commit | O que foi implementado |
+|---|---|---|
+| 1 | `5cab054` | novo cartão de chave OpenAI em "Conta", `BusinessProfileScreen`, `local_copy.generate_copy_local` e secção "Gerador de copy (modo gratuito)" no painel Assistente IA |
+
+---
+
 ## Checks de Validação
 
 ### Cenário A1 — Upload de ficheiro CSV/XLSX funciona
@@ -399,6 +442,27 @@ genérico anterior, sem erro.
 - [ ] Confirmar: o texto NÃO contém `[Seu Nome]` / `[Sua Empresa]`
 - [ ] Testar também com um utilizador sem perfil de IA preenchido → confirmar que
       a geração não falha (cai para o comportamento genérico anterior)
+
+### Cenário A13 — Gerador de copy local para não-assinantes (Fase 8)
+
+- [ ] Com uma conta **gratuita** (sem assinatura activa): abrir "⚙ Conta" →
+      confirmar novo campo "🔑 Chave OpenAI API", inserir uma chave válida,
+      guardar, reabrir o painel e confirmar que a chave persiste
+- [ ] Abrir "Assistente IA" → confirmar a nova secção "✨ Gerador de copy (modo
+      gratuito)" logo abaixo do cartão "🔒 Disponível para Assinantes", com os
+      indicadores "🔑 Chave OpenAI" e "📋 Perfil de negócio" reflectindo o estado real
+- [ ] Clicar "Preencher informações de negócio" → preencher nicho, oferta,
+      público-alvo e marca → guardar → confirmar que o indicador muda para
+      "preenchido" e que reabrir o ecrã mostra os valores guardados
+- [ ] Preencher o formulário do lead avulso (empresa, sector, contacto, canal,
+      tom) e clicar "✨ Gerar copy" → confirmar que o texto gerado reflecte o
+      nicho/oferta configurados, sem placeholders `[Seu Nome]`/`[Sua Empresa]`,
+      e que "📋 Copiar" copia o texto para a área de transferência
+- [ ] Remover a chave OpenAI e tentar gerar → confirmar mensagem clara pedindo
+      para configurar a chave em "⚙ Conta" (sem crash). Repetir limpando o
+      perfil de negócio → confirmar mensagem a pedir o preenchimento do perfil
+- [ ] Confirmar que nada deste fluxo chama o backend-crm (sem erros 403, sem
+      necessidade de assinatura/CRM activos)
 
 ---
 
