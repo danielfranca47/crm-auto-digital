@@ -207,6 +207,34 @@ não davam acesso ao texto da copy gerada por canal.
 
 ---
 
+## Fase 5.1 — Fix: "Gerar copys com IA" não activava ao seleccionar canal
+
+### Problema identificado
+
+No primeiro teste da Fase 5 (cenário A8), o utilizador pesquisou leads, foi ao
+Assistente IA, marcou o canal "WhatsApp" no Passo 4 e processou — mas a resposta
+voltou com `stats.messages = 0` e a prévia correctamente reportou "nenhuma mensagem
+encontrada". A prévia funcionava bem; o problema era a configuração enviada ao backend.
+
+Causa raiz: "Gerar copys com IA" e os checkboxes de canal são controlos independentes
+no Passo 4 — `_ai_generate_copys_var` por defeito é `False`. O utilizador assumiu que
+seleccionar um canal já activava a geração, sem perceber que precisava de marcar
+também a checkbox principal.
+
+### Correcção
+
+| Arquivo | Mudança |
+|---|---|
+| `agent-local/app/ui/main_screen.py` | `_ai_build_step4`: checkboxes de canal passam a chamar `_ai_sync_generate_copys_with_channels`, que liga `_ai_generate_copys_var` automaticamente sempre que qualquer canal é marcado |
+
+### Commits Fix
+
+| # | Commit | O que foi implementado |
+|---|---|---|
+| 1 | *(pendente)* | fix: marcar canal activa automaticamente "Gerar copys com IA" |
+
+---
+
 ## Checks de Validação
 
 ### Cenário A1 — Upload de ficheiro CSV/XLSX funciona

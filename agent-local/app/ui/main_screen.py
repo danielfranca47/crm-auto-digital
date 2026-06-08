@@ -1057,7 +1057,8 @@ class MainScreen(ctk.CTkFrame):
                           ("Email", self._ai_ch_email),
                           ("Instagram", self._ai_ch_instagram)]:
             ctk.CTkCheckBox(ch_row, text=lbl, variable=var,
-                             font=ctk.CTkFont(size=11)).pack(side="left", padx=(0, 12))
+                             font=ctk.CTkFont(size=11),
+                             command=self._ai_sync_generate_copys_with_channels).pack(side="left", padx=(0, 12))
 
         # Tom de voz
         ctk.CTkLabel(card, text="Tom de voz:", font=ctk.CTkFont(size=11),
@@ -1083,6 +1084,17 @@ class MainScreen(ctk.CTkFrame):
             command=lambda p=parent: self._ai_start_processing(p),
         )
         self._ai_process_btn.pack(padx=16, pady=(0, 14))
+
+    def _ai_sync_generate_copys_with_channels(self) -> None:
+        """Marcar qualquer canal liga automaticamente 'Gerar copys com IA' — evita
+        que o utilizador seleccione um canal sem activar a geração propriamente dita."""
+        any_channel = (
+            self._ai_ch_whatsapp.get()
+            or self._ai_ch_email.get()
+            or self._ai_ch_instagram.get()
+        )
+        if any_channel:
+            self._ai_generate_copys_var.set(True)
 
     def _ai_start_processing(self, parent: ctk.CTkFrame) -> None:
         """Recolhe opções e executa POST /assistente-ia/processar."""
