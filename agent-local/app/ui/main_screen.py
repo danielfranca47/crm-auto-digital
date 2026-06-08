@@ -668,6 +668,13 @@ class MainScreen(ctk.CTkFrame):
             command=self._ai_pick_file,
         ).pack(side="left", padx=(0, 8))
 
+        ctk.CTkButton(
+            btn_row, text="🔄  Gerar copys para leads sem copy",
+            height=38, corner_radius=8, fg_color="#374151", hover_color="#4B5563",
+            font=ctk.CTkFont(size=12),
+            command=self._ai_start_existing_leads_flow,
+        ).pack(side="left", padx=(0, 8))
+
         # Resultados da pesquisa disponíveis — botão discreto como fallback
         # (o caminho principal é o botão "✨ Gerar copy com IA" no painel Pesquisar)
         n_results = len(self._results)
@@ -815,6 +822,222 @@ class MainScreen(ctk.CTkFrame):
         self._ai_upload_lbl.configure(
             text=f"⚠  Erro no upload: {msg[:80]}", text_color="#EF4444",
         )
+
+    # ── Fluxo: gerar copys para leads existentes sem copy ─────────────────────
+
+    def _ai_start_existing_leads_flow(self) -> None:
+        """Busca leads do Kanban sem copy gerada e mostra selector para os processar."""
+        for w in list(self._ai_steps_frame.winfo_children()):
+            w.destroy()
+
+        card = ctk.CTkFrame(self._ai_steps_frame, fg_color=_CARD, corner_radius=12)
+        card._ai_step = "existing"
+        card.pack(padx=16, pady=(10, 0), fill="x")
+
+        title_lbl = ctk.CTkLabel(
+            card, text="🔄  A procurar leads sem copy gerada…",
+            font=ctk.CTkFont(size=12, weight="bold"),
+        )
+        title_lbl.pack(anchor="w", padx=16, pady=(14, 4))
+        loading_lbl = ctk.CTkLabel(
+            card, text="A verificar leads do Kanban — pode demorar alguns segundos…",
+            font=ctk.CTkFont(size=10), text_color="#6B7280",
+        )
+        loading_lbl.pack(anchor="w", padx=16, pady=(0, 14))
+
+        def _worker():
+            from app.crm_client import get_leads_kanban, get_lead_messages
+            try:
+                leads = get_leads_kanban(self._session)
+            except Exception as exc:
+                self.after(0, lambda e=str(exc): self._ai_existing_leads_err(card, loading_lbl, e))
+                return
+
+            without_copy = []
+            for lead in leads:
+                lid = lead.get("id")
+                if lid is None:
+                    continue
+                try:
+                    msgs = get_lead_messages(self._session, lid)
+                except Exception:
+                    msgs = []
+                if not msgs:
+                    without_copy.append(lead)
+
+            self.after(0, lambda lst=without_copy: self._ai_build_existing_leads_picker(card, title_lbl, loading_lbl, lst))
+
+        threading.Thread(target=_worker, daemon=True).start()
+
+    def _ai_existing_leads_err(self, card: ctk.CTkFrame, loading_lbl, msg: str) -> None:
+        if not self._widget_alive(card):
+            return
+        loading_lbl.configure(
+            text=f"⚠  Erro ao carregar leads: {msg[:100]}", text_color="#EF4444",
+        )
+
+    def _ai_build_existing_leads_picker(self, card: ctk.CTkFrame, title_lbl, loading_lbl, leads: list) -> None:
+        if not self._widget_alive(card):
+            return
+        loading_lbl.destroy()
+        title_lbl.configure(text=f"🔄  Leads sem copy gerada — {len(leads)} encontrado(s)")
+
+        if not leads:
+            ctk.CTkLabel(
+                card, text="Todos os leads no Kanban já têm copy gerada. 🎉",
+                font=ctk.CTkFont(size=11), text_color="#6B7280",
+            ).pack(anchor="w", padx=16, pady=(0, 14))
+            return
+
+        self._ai_existing_leads = leads
+        self._ai_existing_vars: dict = {}
+
+        self._ai_existing_select_all_var = ctk.BooleanVar(value=True)
+        ctk.CTkCheckBox(
+            card, text="Seleccionar todos", variable=self._ai_existing_select_all_var,
+            font=ctk.CTkFont(size=11), command=self._ai_toggle_all_existing,
+        ).pack(anchor="w", padx=16, pady=(0, 4))
+
+        list_frame = ctk.CTkScrollableFrame(card, fg_color="#12121F", corner_radius=8, height=180)
+        list_frame.pack(fill="x", padx=16, pady=(0, 10))
+
+        for lead in leads:
+            lid = lead.get("id")
+            name = (lead.get("companyName") or lead.get("contactName") or "Lead")[:40]
+            phone = lead.get("phone") or "—"
+            var = ctk.BooleanVar(value=True)
+            self._ai_existing_vars[lid] = var
+            ctk.CTkCheckBox(
+                list_frame, text=f"{name}  ·  {phone}", variable=var,
+                font=ctk.CTkFont(size=10),
+            ).pack(anchor="w", padx=4, pady=2)
+
+        ctk.CTkLabel(card, text="Canal:", font=ctk.CTkFont(size=11),
+                     text_color="#9CA3AF").pack(anchor="w", padx=16, pady=(4, 2))
+        self._ai_existing_ch_whatsapp = ctk.BooleanVar(value=True)
+        self._ai_existing_ch_email = ctk.BooleanVar(value=False)
+        self._ai_existing_ch_instagram = ctk.BooleanVar(value=False)
+        ch_row = ctk.CTkFrame(card, fg_color="transparent")
+        ch_row.pack(anchor="w", padx=16, pady=(0, 8))
+        for lbl, var in [("WhatsApp", self._ai_existing_ch_whatsapp),
+                          ("Email", self._ai_existing_ch_email),
+                          ("Instagram", self._ai_existing_ch_instagram)]:
+            ctk.CTkCheckBox(ch_row, text=lbl, variable=var,
+                             font=ctk.CTkFont(size=11)).pack(side="left", padx=(0, 12))
+
+        ctk.CTkLabel(card, text="Tom de voz:", font=ctk.CTkFont(size=11),
+                     text_color="#9CA3AF").pack(anchor="w", padx=16, pady=(4, 2))
+        self._ai_existing_tone_entry = ctk.CTkEntry(
+            card, placeholder_text="ex: profissional e próximo",
+            height=34, corner_radius=8, font=ctk.CTkFont(size=11),
+        )
+        self._ai_existing_tone_entry.insert(0, "profissional e próximo")
+        self._ai_existing_tone_entry.pack(padx=16, pady=(0, 10), fill="x")
+
+        self._ai_existing_gen_btn = ctk.CTkButton(
+            card, text="✨  Gerar copys para seleccionados",
+            height=38, corner_radius=8, font=ctk.CTkFont(size=13, weight="bold"),
+            command=lambda c=card: self._ai_generate_copys_for_existing(c),
+        )
+        self._ai_existing_gen_btn.pack(padx=16, pady=(0, 14))
+
+    def _ai_toggle_all_existing(self) -> None:
+        checked = self._ai_existing_select_all_var.get()
+        for var in self._ai_existing_vars.values():
+            try:
+                var.set(checked)
+            except Exception:
+                pass
+
+    def _ai_generate_copys_for_existing(self, card: ctk.CTkFrame) -> None:
+        selected = [lid for lid, var in self._ai_existing_vars.items() if var.get()]
+        if not selected:
+            return
+
+        channels = []
+        if self._ai_existing_ch_whatsapp.get():
+            channels.append("whatsapp")
+        if self._ai_existing_ch_email.get():
+            channels.append("email")
+        if self._ai_existing_ch_instagram.get():
+            channels.append("instagram")
+        channels = channels or ["whatsapp"]
+
+        tone = self._ai_existing_tone_entry.get().strip() or "profissional e próximo"
+        leads_by_id = {l.get("id"): l for l in self._ai_existing_leads}
+
+        self._ai_existing_gen_btn.configure(state="disabled", text="A gerar copys…")
+
+        progress_lbl = ctk.CTkLabel(
+            card, text=f"A gerar copys… 0/{len(selected)}",
+            font=ctk.CTkFont(size=11), text_color="#9CA3AF",
+        )
+        progress_lbl.pack(padx=16, pady=(0, 14))
+
+        def _worker():
+            from app.crm_client import generate_copy, upsert_lead_message
+            n_msgs = 0
+            n_errors = 0
+            generated_ids: list = []
+
+            for idx, lid in enumerate(selected, start=1):
+                lead = leads_by_id.get(lid) or {}
+                company = lead.get("companyName") or lead.get("contactName") or "Empresa"
+                contact = lead.get("contactName") or ""
+
+                self.after(0, lambda i=idx, n=len(selected): self._ai_update_existing_progress(progress_lbl, i, n))
+
+                got_any = False
+                for ch in channels:
+                    try:
+                        body = generate_copy(
+                            self._session, company_name=company, sector="",
+                            contact_name=contact, channel=ch, tone=tone,
+                        )
+                        if body:
+                            upsert_lead_message(self._session, lid, ch, body)
+                            n_msgs += 1
+                            got_any = True
+                    except Exception:
+                        n_errors += 1
+                if got_any:
+                    generated_ids.append(lid)
+
+            result = {
+                "stats": {"leads": len(generated_ids), "messages": n_msgs, "errors": n_errors},
+                "lead_ids": generated_ids,
+            }
+            self.after(0, lambda r=result: self._ai_on_existing_generation_done(card, progress_lbl, r))
+
+        threading.Thread(target=_worker, daemon=True).start()
+
+    def _ai_update_existing_progress(self, progress_lbl, idx: int, total: int) -> None:
+        if self._widget_alive(progress_lbl):
+            progress_lbl.configure(text=f"A gerar copys… {idx}/{total}")
+
+    def _ai_on_existing_generation_done(self, card: ctk.CTkFrame, progress_lbl, result: dict) -> None:
+        try:
+            self._ai_existing_gen_btn.configure(state="normal", text="✨  Gerar copys para seleccionados")
+        except Exception:
+            pass
+        if self._widget_alive(progress_lbl):
+            progress_lbl.destroy()
+
+        stats = result.get("stats") or {}
+        done_card = ctk.CTkFrame(card, fg_color="#12121F", corner_radius=10)
+        done_card.pack(padx=16, pady=(0, 14), fill="x")
+
+        summary = f"✅  {stats.get('messages', 0)} copy(s) gerada(s) para {stats.get('leads', 0)} lead(s)"
+        if stats.get("errors"):
+            summary += f"   ·   ⚠ {stats['errors']} erro(s)"
+        ctk.CTkLabel(
+            done_card, text=summary,
+            font=ctk.CTkFont(size=12, weight="bold"), text_color="#10B981",
+        ).pack(anchor="w", padx=14, pady=(12, 8))
+
+        lead_ids = result.get("lead_ids") or []
+        if lead_ids:
+            self._ai_load_messages_preview(done_card, lead_ids)
 
     # ── Passo 2 — Mapeamento de colunas ──────────────────────────────────────
 
