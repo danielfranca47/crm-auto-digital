@@ -396,6 +396,45 @@ envios. Nada deste fluxo passa pelo backend-crm.
 
 ---
 
+## Fase 10 — Geração de copies em lote local a partir da Pesquisa
+
+### Motivação
+
+Ao validar o Cenário A14, o utilizador reparou que, na página "Pesquisa", os
+assinantes têm dois botões que os não-assinantes não veem — "✨ Gerar copy com
+IA" e "💾 Guardar todos no CRM" (`_show_results`, `if subscriber:`) — ambos
+dependentes do backend-crm. Pediu uma "praticidade" equivalente, sem consultar
+o CRM, com experiência semelhante à do plano pago — fechando o ciclo
+"pesquisar → gerar copy → prospectar" de forma 100% local (custo das chamadas
+OpenAI corre pela chave própria do utilizador).
+
+### Abordagem
+
+Clonado o padrão de progresso em lote já existente em
+`_ai_generate_copys_for_existing` (botão desactivado + label "X/N" actualizado
+via `self.after`, thread daemon, resumo final), mas a gerar com
+`local_copy.generate_copy_local` (Fase 8) e a persistir directamente no
+armazém local (`upsert_local_lead`, Fase 9) — em vez de `generate_copy`/
+`upsert_lead_message` do CRM. Cada copy gerada já cria/actualiza o card
+correspondente no Kanban local em `category="to-prospect"`, pronto a enviar.
+
+### O que muda
+
+| Arquivo | O que muda |
+|---|---|
+| `agent-local/app/ui/main_screen.py` | `_show_results`: novo botão "✨ Gerar copies (local)" (mesma posição/cor do equivalente do assinante, visível só para `not subscriber`); novo `_generate_local_copies_for_selected` — valida chave OpenAI/perfil de negócio antes de iniciar (mensagens accionáveis de `LocalCopyError`), processa no máximo `_LOCAL_COPY_BATCH_LIMIT = 15` leads seleccionados sequencialmente numa thread, gera copy com `generate_copy_local` e cria/actualiza o card via `upsert_local_lead` (`category="to-prospect"`, `customMessage=<texto>`), mostra progresso "X/N", resumo final via `_show_enqueue_toast` e recarrega o Kanban local (`_reload_kanban`) se estiver montado |
+
+Sem novas rotas nem chamadas a `crm_client` — tudo local, sem alterar o
+comportamento existente para assinantes.
+
+### Commits Fase 10
+
+| # | Commit | O que foi implementado |
+|---|---|---|
+| 1 | _(pendente)_ | botão "✨ Gerar copies (local)" + `_generate_local_copies_for_selected` |
+
+---
+
 ## Checks de Validação
 
 ### Cenário A1 — Upload de ficheiro CSV/XLSX funciona
@@ -529,6 +568,26 @@ envios. Nada deste fluxo passa pelo backend-crm.
       necessidade de assinatura activa)
 - [ ] Repetir com uma conta **assinante** → confirmar que o Kanban remoto, o
       polling, os badges e o "Enfileirar" continuam a funcionar como antes
+
+### Cenário A15 — Geração de copies em lote local a partir da Pesquisa (Fase 10)
+
+- [ ] Com uma conta **gratuita** sem chave OpenAI/perfil de negócio configurados:
+      pesquisar, seleccionar leads e clicar "✨ Gerar copies (local)" →
+      confirmar mensagem accionável imediata (chave/perfil em falta), sem
+      disparar chamadas
+- [ ] Configurar chave OpenAI + perfil de negócio (Fase 8), seleccionar alguns
+      leads (ex.: 5) e clicar "✨ Gerar copies (local)" → confirmar progresso
+      "X/N" a actualizar e o botão desactivado durante o processamento
+- [ ] No fim: confirmar o resumo (✓ geradas / ⚠ falhas) e que os leads aparecem
+      no painel "Prospectar", coluna "À Prospectar", já com a mensagem
+      (`customMessage`) preenchida — abrir o card e confirmar que o texto
+      reflecte o nicho/oferta do perfil, sem placeholders `[Seu Nome]`/`[Sua Empresa]`
+- [ ] Seleccionar mais de 15 leads → confirmar que apenas os primeiros 15 são
+      processados e que o resumo indica quantos ficaram de fora
+- [ ] Confirmar que nada deste fluxo chama o backend-crm (sem 403, sem
+      necessidade de assinatura activa)
+- [ ] Repetir com uma conta **assinante** → confirmar que o botão "✨ Gerar
+      copy com IA" continua a funcionar como antes (sem alterações)
 
 ---
 

@@ -285,6 +285,7 @@ class MainScreen(ctk.CTkFrame):
         count_text = f"{len(results)} lead{'s' if len(results) != 1 else ''} encontrado{'s' if len(results) != 1 else ''}"
         hdr = ctk.CTkFrame(self._results_frame, fg_color="transparent")
         hdr.pack(padx=16, pady=(12, 4), fill="x")
+        self._results_hdr = hdr
         ctk.CTkLabel(hdr, text=count_text, font=ctk.CTkFont(size=13, weight="bold")).pack(side="left")
 
         if results:
@@ -299,6 +300,14 @@ class MainScreen(ctk.CTkFrame):
                     font=ctk.CTkFont(size=11, weight="bold"),
                     command=self._ir_para_assistente_ia,
                 ).pack(side="right", padx=(4, 0))
+            else:
+                self._gen_local_copies_btn = ctk.CTkButton(
+                    hdr, text="✨ Gerar copies (local)", height=28, corner_radius=8,
+                    fg_color="#4F46E5", hover_color="#4338CA",
+                    font=ctk.CTkFont(size=11, weight="bold"),
+                    command=self._generate_local_copies_for_selected,
+                )
+                self._gen_local_copies_btn.pack(side="right", padx=(4, 0))
 
                 ctk.CTkButton(
                     hdr, text="💾 Guardar todos no CRM", height=28, corner_radius=8,
@@ -433,6 +442,104 @@ class MainScreen(ctk.CTkFrame):
             return
         from app.ui.bulk_prospect_dialog import BulkProspectDialog
         BulkProspectDialog(self, leads=list(self._selected_leads.values()), session=self._session)
+
+    # ── Geração de copies em lote (local, modo gratuito) ─────────────────────
+
+    _LOCAL_COPY_BATCH_LIMIT = 15
+
+    def _generate_local_copies_for_selected(self) -> None:
+        """Equivalente local de "✨ Gerar copy com IA" — gera copies com a
+        chave OpenAI e o perfil de negócio do utilizador (Fase 8) e já cria/
+        actualiza os cards correspondentes no Kanban local (Fase 9), sem
+        tocar no backend-crm."""
+        if not self._selected_leads:
+            return
+
+        from app.local_copy import generate_copy_local
+        from app.session import upsert_local_lead
+
+        api_key = (self._session.get("openai_api_key") or "").strip()
+        profile = self._session.get("local_business_profile") or {}
+        has_profile = any((profile.get(k) or "").strip() for k in
+                          ("niche", "offer_description", "target_audience", "brand_name"))
+        if not api_key:
+            self._show_enqueue_toast(
+                "Configura a tua chave OpenAI API em ⚙ Conta antes de gerar copies.", ok=False)
+            return
+        if not has_profile:
+            self._show_enqueue_toast(
+                "Preenche as tuas informações de negócio antes de gerar copies "
+                "(nicho, oferta, público-alvo ou marca).", ok=False)
+            return
+
+        all_selected = list(self._selected_leads.values())
+        selected = all_selected[:self._LOCAL_COPY_BATCH_LIMIT]
+        skipped = len(all_selected) - len(selected)
+
+        self._gen_local_copies_btn.configure(state="disabled", text="A gerar…")
+
+        progress_lbl = ctk.CTkLabel(
+            self._results_hdr, text=f"A gerar copies… 0/{len(selected)}",
+            font=ctk.CTkFont(size=11), text_color="#9CA3AF",
+        )
+        progress_lbl.pack(side="left", padx=(12, 0))
+
+        def _update_progress(idx: int, total: int) -> None:
+            if self._widget_alive(progress_lbl):
+                progress_lbl.configure(text=f"A gerar copies… {idx}/{total}")
+
+        def _worker():
+            generated = failed = 0
+
+            for idx, item in enumerate(selected, start=1):
+                self.after(0, lambda i=idx, n=len(selected): _update_progress(i, n))
+
+                phone = item.get("phone") or ""
+                name = item.get("name") or "Empresa"
+                if not phone:
+                    failed += 1
+                    continue
+
+                try:
+                    text = generate_copy_local(
+                        self._session, company_name=name, channel="whatsapp",
+                        tone="profissional e próximo",
+                    )
+                    upsert_local_lead(
+                        self._session,
+                        phone=phone, name=name, category="to-prospect",
+                        website=item.get("website", ""), address=item.get("address", ""),
+                        customMessage=text,
+                    )
+                    generated += 1
+                except Exception:
+                    failed += 1
+
+            def _done():
+                try:
+                    self._gen_local_copies_btn.configure(state="normal", text="✨ Gerar copies (local)")
+                except Exception:
+                    pass
+                if self._widget_alive(progress_lbl):
+                    progress_lbl.destroy()
+
+                parts = []
+                if generated:
+                    parts.append(f"✓ {generated} copy(s) gerada(s)")
+                if failed:
+                    parts.append(f"⚠ {failed} falhou" if failed == 1 else f"⚠ {failed} falharam")
+                if skipped:
+                    parts.append(f"— {skipped} não processado{'s' if skipped != 1 else ''} (limite de {self._LOCAL_COPY_BATCH_LIMIT})")
+                summary = "  ".join(parts) or "Nenhuma copy gerada"
+                self._show_enqueue_toast(summary, ok=bool(generated))
+
+                kc = getattr(self, "_kanban_content", None)
+                if kc and self._widget_alive(kc):
+                    self._reload_kanban(kc, is_subscriber(self._session))
+
+            self.after(0, _done)
+
+        threading.Thread(target=_worker, daemon=True).start()
 
     # ── Diálogos ──────────────────────────────────────────────────────────────
 
