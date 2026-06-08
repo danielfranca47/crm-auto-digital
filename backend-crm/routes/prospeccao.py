@@ -232,6 +232,7 @@ def generate_copy(req: GenerateCopyRequest, current_user: CurrentUser = Depends(
     Usado pelo agent-local para pré-preencher a mensagem antes de enviar.
     """
     import os
+    from core_client import fetch_core_ai_profile
     logger.info("generate-copy user_id=%s company=%s", current_user.id, req.company_name)
     api_key = os.getenv("OPENAI_API_KEY")
     if not api_key:
@@ -245,10 +246,38 @@ def generate_copy(req: GenerateCopyRequest, current_user: CurrentUser = Depends(
         sector_part = f" no setor de {req.sector}" if req.sector.strip() else ""
         channel_label = {"whatsapp": "WhatsApp", "email": "email", "instagram": "Instagram", "call": "chamada"}.get(req.channel, req.channel)
 
+        try:
+            ai_profile = fetch_core_ai_profile(current_user.token or "") or {}
+        except Exception:
+            ai_profile = {}
+
+        ap_name = ai_profile.get("name") or ""
+        ap_brand = ai_profile.get("brand_name") or ""
+        ap_niche = ai_profile.get("niche") or ""
+        ap_offer = ai_profile.get("offer_description") or ""
+        ap_audience = ai_profile.get("target_audience") or ""
+
+        business_ctx = ""
+        if ap_brand or ap_niche or ap_offer or ap_audience:
+            parts = []
+            if ap_brand: parts.append(f"Empresa remetente: {ap_brand}")
+            if ap_niche: parts.append(f"Nicho: {ap_niche}")
+            if ap_offer: parts.append(f"Oferta: {ap_offer}")
+            if ap_audience: parts.append(f"Público-alvo: {ap_audience}")
+            business_ctx = "\n".join(parts) + "\n"
+        sender_part = f"Remetente: Nome={ap_name or '—'}; Empresa={ap_brand or '—'}\n" if (ap_name or ap_brand) else ""
+
         prompt = (
+            f"{business_ctx}"
+            f"{sender_part}"
             f"Escreve uma mensagem de prospecção via {channel_label} para a empresa {req.company_name}"
             f"{sector_part}{contact_part}. "
             f"Tom: {req.tone}. "
+            f"A oferta deve reflectir o nicho e o produto/serviço do remetente acima — "
+            f"não inventes temas genéricos (ex.: marketing digital, limpeza de equipamentos) "
+            f"que não tenham relação com a oferta indicada. "
+            f"NUNCA uses placeholders como [Seu Nome] ou [Sua Empresa]; usa os dados reais do remetente fornecidos "
+            f"ou, na ausência deles, fala apenas em nome da empresa do destinatário sem te apresentares por nome. "
             f"Máximo 3 frases curtas e directas. Não uses saudações genéricas. "
             f"Apresenta uma proposta de valor clara e termina com uma pergunta ou CTA simples. "
             f"Responde APENAS com o texto da mensagem, sem explicações adicionais."
