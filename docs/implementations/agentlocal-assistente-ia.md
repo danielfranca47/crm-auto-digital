@@ -602,9 +602,13 @@ Sem novas rotas nem chamadas a `crm_client` — opera apenas em
       escrever mensagem na barra de acções em massa e clicar "📤 Enfileirar" →
       confirmar envio sequencial local (WhatsApp Web/Selenium), progresso e
       movimento correcto dos cards consoante sucesso/falha
-- [ ] Clicar num card → modal de detalhe → editar e guardar a mensagem, gerar
-      copy com IA local ("✨ Gerar copy"), reenviar individualmente
-      ("📱 Reenviar agora") → confirmar persistência e movimento do card
+- [x] Clicar num card → modal de detalhe → editar a mensagem e clicar
+      "💾 Guardar mensagem" → reabrir o card e confirmar que o texto editado
+      persiste — validado em 2026-06-08
+- [ ] No mesmo modal, gerar copy com IA local ("✨ Gerar copy") → confirmar
+      que o texto gerado substitui correctamente a mensagem
+- [ ] Reenviar individualmente ("📱 Reenviar agora") → confirmar o movimento
+      do card consoante sucesso/falha do envio
 - [ ] Confirmar que os badges "● Agente"/"Pendentes" não aparecem no painel
       Prospectar para não-assinantes
 - [ ] Confirmar que nada deste fluxo chama o backend-crm (sem 403, sem
