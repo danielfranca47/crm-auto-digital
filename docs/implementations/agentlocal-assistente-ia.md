@@ -235,6 +235,34 @@ também a checkbox principal.
 
 ---
 
+## Fase 6 — Gerar copys para leads existentes sem copy
+
+### Motivação
+
+Até aqui, o Assistente IA só conseguia gerar copys a partir de uma nova pesquisa
+ou da importação de uma planilha — leads já criados anteriormente no Kanban de
+Prospectar (sem copy gerada) não podiam ser reaproveitados sem reimportação.
+O utilizador pediu uma forma de gerar copys directamente para esses leads
+existentes, evitando pesquisa duplicada.
+
+### O que muda
+
+| Arquivo | O que muda |
+|---|---|
+| `agent-local/app/ui/main_screen.py` | `_build_assistente_ia`: novo botão "🔄 Gerar copys para leads sem copy" no `btn_row`, ao lado de "Escolher ficheiro" |
+| `agent-local/app/ui/main_screen.py` | Novo fluxo: `_ai_start_existing_leads_flow` (busca leads do Kanban via `get_leads_kanban` e filtra os que `get_lead_messages` devolve vazio), `_ai_existing_leads_err` (erro), `_ai_build_existing_leads_picker` (checklist de leads + canais + tom de voz), `_ai_toggle_all_existing` (seleccionar/desseleccionar todos), `_ai_generate_copys_for_existing` (loop `generate_copy` + `upsert_lead_message` por lead × canal), `_ai_update_existing_progress`, `_ai_on_existing_generation_done` (stats finais + reaproveita `_ai_load_messages_preview` da Fase 5 para mostrar prévia das copys geradas) |
+
+Sem alterações no backend — reutiliza `get_leads_kanban`, `get_lead_messages`,
+`generate_copy` e `upsert_lead_message`, todos já existentes em `crm_client.py`.
+
+### Commits Fase 6
+
+| # | Commit | O que foi implementado |
+|---|---|---|
+| 1 | `7633da8` | Botão + fluxo completo de geração de copys para leads existentes sem copy |
+
+---
+
 ## Checks de Validação
 
 ### Cenário A1 — Upload de ficheiro CSV/XLSX funciona
@@ -298,6 +326,22 @@ também a checkbox principal.
 - [ ] Editar o texto de uma mensagem → clicar "💾 Guardar alteração"
 - [ ] Reabrir o modal → confirmar que o texto editado persiste
 - [ ] Clicar "📋 Copiar" numa mensagem → confirmar que o texto fica na área de transferência
+
+### Cenário A10 — Detectar leads sem copy (Fase 6)
+
+- [ ] No painel Assistente IA, clicar "🔄 Gerar copys para leads sem copy"
+- [ ] Confirmar: aparece "A procurar leads sem copy gerada…" e depois a lista
+- [ ] Confirmar: apenas leads do Kanban (to-prospect/in-progress/qualification) **sem** mensagens geradas aparecem na lista
+- [ ] Se todos os leads já têm copy, confirmar mensagem "Todos os leads no Kanban já têm copy gerada. 🎉"
+
+### Cenário A11 — Gerar copys para leads seleccionados (Fase 6)
+
+- [ ] Seleccionar/desseleccionar leads individualmente e via "Seleccionar todos"
+- [ ] Escolher canal(is) (WhatsApp/Email/Instagram) e ajustar tom de voz
+- [ ] Clicar "✨ Gerar copys para seleccionados"
+- [ ] Confirmar: progresso "A gerar copys… N/M" actualiza durante o processo
+- [ ] Confirmar: ao concluir, aparecem stats (`X copy(s) gerada(s) para Y lead(s)`) e prévia das mensagens (reaproveitando o componente da Fase 5)
+- [ ] Abrir um dos leads no Kanban → confirmar que a copy gerada aparece no modal de detalhe
 
 ---
 
