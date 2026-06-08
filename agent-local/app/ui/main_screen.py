@@ -1694,20 +1694,20 @@ class MainScreen(ctk.CTkFrame):
             command=self._open_whatsapp_web_inline,
         ).pack(side="right", padx=4, pady=10)
 
-        # Badges de estado (agente + pendentes)
+        # Badges de estado (agente + pendentes) — só fazem sentido com fila/agente remoto (CRM)
         self._agent_badge_lbl = ctk.CTkLabel(
             hdr, text="● Agente: —",
             font=ctk.CTkFont(size=10), text_color="#6B7280",
             fg_color="#2A2A3E", corner_radius=6, padx=8, pady=2,
         )
-        self._agent_badge_lbl.pack(side="right", padx=4, pady=14)
-
         self._pending_badge_lbl = ctk.CTkLabel(
             hdr, text="Pendentes: —",
             font=ctk.CTkFont(size=10), text_color="#6B7280",
             fg_color="#2A2A3E", corner_radius=6, padx=8, pady=2,
         )
-        self._pending_badge_lbl.pack(side="right", padx=4, pady=14)
+        if subscriber:
+            self._agent_badge_lbl.pack(side="right", padx=4, pady=14)
+            self._pending_badge_lbl.pack(side="right", padx=4, pady=14)
 
         # ── Área do Kanban ────────────────────────────────────────────────
         kanban_outer = ctk.CTkFrame(parent, fg_color=_BG, corner_radius=0)
@@ -1746,7 +1746,7 @@ class MainScreen(ctk.CTkFrame):
             self._bulk_bar, text="📤 Enfileirar", height=28, corner_radius=6,
             fg_color="#1D4ED8", hover_color="#1E40AF",
             font=ctk.CTkFont(size=11, weight="bold"),
-            command=self._enqueue_selected_leads,
+            command=self._enqueue_selected_leads if subscriber else self._send_selected_local_leads,
         ).pack(side="left", padx=(0, 4), pady=8)
 
         ctk.CTkButton(
@@ -2290,73 +2290,366 @@ class MainScreen(ctk.CTkFrame):
         ).pack(padx=16, pady=20)
 
     def _build_kanban_non_subscriber(self, container: ctk.CTkFrame) -> None:
-        from app.session import get_prospect_log
+        """Kanban local para não-assinantes — espelha o pipeline de assinante,
+        mas alimentado por `session["local_leads"]` e movido mecanicamente
+        consoante o resultado real do envio (sem CRM/polling remoto)."""
+        from app.session import get_local_leads
+        self._render_local_kanban(container, get_local_leads(self._session))
 
-        pitch = ctk.CTkFrame(container, fg_color="#1E1B4B", corner_radius=12)
-        pitch.pack(padx=12, pady=(12, 8), fill="x")
-        ctk.CTkLabel(
-            pitch, text="📊  Kanban completo disponível para Assinantes",
-            font=ctk.CTkFont(size=12, weight="bold"), text_color="#A5B4FC",
-        ).pack(padx=16, pady=(12, 3))
-        ctk.CTkLabel(
-            pitch,
-            text="Assine para ver os seus leads nas fases de prospecção com integração CRM.",
-            font=ctk.CTkFont(size=10), text_color="#818CF8", wraplength=420,
-        ).pack(padx=16, pady=(0, 12))
-
-        entries = get_prospect_log(60)
-        if not entries:
-            ctk.CTkLabel(
-                container, text="Sem registos locais de prospecção ainda.",
-                font=ctk.CTkFont(size=11), text_color="#6B7280",
-            ).pack(pady=16)
+    def _render_local_kanban(self, container: ctk.CTkFrame, leads: list) -> None:
+        """Renderiza as 3 colunas do Kanban local (mesma estrutura visual do remoto)."""
+        if not self._widget_alive(container):
             return
+        for w in list(container.winfo_children()):
+            w.destroy()
+        self._kanban_card_vars = {}
 
-        sent = [e for e in entries if e.get("status") not in ("failed", "error")]
-        failed = [e for e in entries if e.get("status") in ("failed", "error")]
+        if not leads:
+            empty = ctk.CTkFrame(container, fg_color=_CARD, corner_radius=10)
+            empty.pack(padx=12, pady=12, fill="x")
+            ctk.CTkLabel(
+                empty,
+                text="Sem leads no pipeline local de prospecção.",
+                font=ctk.CTkFont(size=12), text_color="#6B7280",
+            ).pack(padx=16, pady=(14, 4))
+            ctk.CTkLabel(
+                empty,
+                text="Prospecte a partir de 🔍 Pesquisar — cada envio entra aqui automaticamente, "
+                     "consoante o resultado: sucesso vai para 'Qualificação', falha volta para 'À Prospectar'.",
+                font=ctk.CTkFont(size=11), text_color="#4B5563", wraplength=460, justify="left",
+            ).pack(padx=16, pady=(0, 14))
+            return
 
         grid = ctk.CTkFrame(container, fg_color=_BG)
         grid.pack(fill="both", expand=True, padx=8, pady=8)
         grid.columnconfigure(0, weight=1)
         grid.columnconfigure(1, weight=1)
+        grid.columnconfigure(2, weight=1)
         grid.rowconfigure(0, weight=1)
 
-        for col_idx, (label, color, col_leads) in enumerate([
-            ("Enviados", "#22c55e", sent),
-            ("Falhados", "#ef4444", failed),
-        ]):
+        for col_idx, (cat_id, cat_label, col_color) in enumerate(self._KANBAN_COLS):
+            col_leads = [l for l in leads if l.get("category") == cat_id]
+
             col_frame = ctk.CTkFrame(grid, fg_color="#1A1A2E", corner_radius=10)
             col_frame.grid(row=0, column=col_idx, sticky="nsew", padx=4, pady=4)
             col_frame.rowconfigure(1, weight=1)
             col_frame.columnconfigure(0, weight=1)
 
-            hdr_f = ctk.CTkFrame(col_frame, fg_color=color, corner_radius=8, height=36)
+            hdr_f = ctk.CTkFrame(col_frame, fg_color=col_color, corner_radius=8, height=36)
             hdr_f.grid(row=0, column=0, sticky="ew", padx=6, pady=(6, 3))
             hdr_f.pack_propagate(False)
-            ctk.CTkLabel(
-                hdr_f, text=f"{label}  ({len(col_leads)})",
-                font=ctk.CTkFont(size=12, weight="bold"), text_color="white",
-            ).pack(expand=True)
+
+            if cat_id == "to-prospect" and col_leads:
+                self._kanban_col_select_all_var = ctk.BooleanVar(value=False)
+                ctk.CTkCheckBox(
+                    hdr_f, text="", variable=self._kanban_col_select_all_var,
+                    width=20, height=20, checkbox_width=16, checkbox_height=16,
+                    fg_color="white", checkmark_color=col_color, border_color="white",
+                    hover_color="#E5E7EB",
+                    command=lambda ls=col_leads: self._toggle_all_kanban(ls),
+                ).pack(side="left", padx=(8, 0))
+                ctk.CTkLabel(
+                    hdr_f,
+                    text=f"{cat_label}  ({len(col_leads)})",
+                    font=ctk.CTkFont(size=12, weight="bold"),
+                    text_color="white",
+                ).pack(side="left", padx=4, expand=True)
+            else:
+                ctk.CTkLabel(
+                    hdr_f,
+                    text=f"{cat_label}  ({len(col_leads)})",
+                    font=ctk.CTkFont(size=12, weight="bold"),
+                    text_color="white",
+                ).pack(expand=True)
 
             cards_scroll = ctk.CTkScrollableFrame(col_frame, fg_color="transparent")
             cards_scroll.grid(row=1, column=0, sticky="nsew", padx=4, pady=(0, 6))
 
             if not col_leads:
-                ctk.CTkLabel(cards_scroll, text="Sem leads",
-                              font=ctk.CTkFont(size=11), text_color="#374151").pack(pady=16)
+                ctk.CTkLabel(
+                    cards_scroll, text="Sem leads",
+                    font=ctk.CTkFont(size=11), text_color="#374151",
+                ).pack(pady=16)
             else:
-                for entry in col_leads:
-                    card = ctk.CTkFrame(cards_scroll, fg_color=_CARD, corner_radius=8)
-                    card.pack(fill="x", padx=4, pady=3)
-                    name = (entry.get("name") or "—")[:26]
-                    phone = entry.get("phone") or "—"
-                    ts = (entry.get("ts") or "")[:16].replace("T", " ")
-                    ctk.CTkLabel(card, text=name,
-                                  font=ctk.CTkFont(size=11, weight="bold"), anchor="w").pack(fill="x", padx=8, pady=(6, 1))
-                    ctk.CTkLabel(card, text=phone,
-                                  font=ctk.CTkFont(size=10), text_color="#6B7280", anchor="w").pack(fill="x", padx=8, pady=(0, 1))
-                    ctk.CTkLabel(card, text=ts,
-                                  font=ctk.CTkFont(size=9), text_color="#374151", anchor="w").pack(fill="x", padx=8, pady=(0, 6))
+                for lead in col_leads:
+                    self._render_local_kanban_card(cards_scroll, lead, cat_id, container)
+
+    def _render_local_kanban_card(
+        self,
+        parent: ctk.CTkFrame,
+        lead: dict,
+        current_cat: str,
+        kanban_container: ctk.CTkFrame,
+    ) -> None:
+        card = ctk.CTkFrame(parent, fg_color=_CARD, corner_radius=8, cursor="hand2")
+        card.pack(fill="x", padx=4, pady=3)
+
+        name = (lead.get("companyName") or "Lead")[:26]
+        phone = lead.get("phone") or "—"
+        lead_id = lead.get("id")
+        origin = lead.get("origin") or "Local"
+
+        card.bind("<Button-1>", lambda _e, l=lead: self._show_local_lead_detail(l))
+
+        top_row = ctk.CTkFrame(card, fg_color="transparent")
+        top_row.pack(fill="x", padx=8, pady=(6, 1))
+
+        name_lbl = ctk.CTkLabel(
+            top_row, text=name,
+            font=ctk.CTkFont(size=11, weight="bold"), anchor="w",
+        )
+        name_lbl.pack(side="left", fill="x", expand=True)
+        name_lbl.bind("<Button-1>", lambda _e, l=lead: self._show_local_lead_detail(l))
+
+        if current_cat == "to-prospect" and lead_id is not None:
+            var = ctk.BooleanVar(value=lead_id in self._kanban_selected)
+            self._kanban_card_vars[lead_id] = var
+            ctk.CTkCheckBox(
+                top_row, text="", variable=var,
+                width=20, height=20, checkbox_width=16, checkbox_height=16,
+                command=lambda lid=lead_id, v=var: self._on_kanban_check(lid, v),
+            ).pack(side="right")
+
+        ctk.CTkLabel(
+            card, text=phone,
+            font=ctk.CTkFont(size=10), text_color="#6B7280", anchor="w",
+        ).pack(fill="x", padx=8, pady=(0, 1))
+
+        origin_lbl = ctk.CTkLabel(
+            card, text=f"#{lead_id} · {origin}",
+            font=ctk.CTkFont(size=9), text_color="#374151", anchor="w",
+        )
+        origin_lbl.pack(fill="x", padx=8, pady=(0, 6))
+        origin_lbl.bind("<Button-1>", lambda _e, l=lead: self._show_local_lead_detail(l))
+
+    # ── Detalhe do lead local (modal com mensagem editável + copy/reenvio) ────
+
+    def _show_local_lead_detail(self, lead: dict) -> None:
+        lead_id = lead.get("id")
+        if lead_id is None:
+            return
+
+        popup = ctk.CTkToplevel(self)
+        popup.title(f"Lead {lead_id}")
+        popup.geometry("520x520")
+        popup.resizable(True, True)
+        popup.grab_set()
+        popup.focus()
+
+        name = lead.get("companyName") or "Lead"
+        phone = lead.get("phone") or "—"
+        cat_label = next((c[1] for c in self._KANBAN_COLS if c[0] == lead.get("category")), "—")
+
+        hdr = ctk.CTkFrame(popup, fg_color="#1E1E2E", corner_radius=0, height=64)
+        hdr.pack(fill="x")
+        hdr.pack_propagate(False)
+        ctk.CTkLabel(
+            hdr, text=name, font=ctk.CTkFont(size=14, weight="bold"),
+        ).pack(anchor="w", padx=16, pady=(10, 0))
+        ctk.CTkLabel(
+            hdr, text=f"📞 {phone}   ·   estágio: {cat_label}   ·   {lead_id}",
+            font=ctk.CTkFont(size=10), text_color="#9CA3AF",
+        ).pack(anchor="w", padx=16, pady=(0, 10))
+
+        ctk.CTkLabel(
+            popup, text="Mensagem",
+            font=ctk.CTkFont(size=12, weight="bold"),
+        ).pack(anchor="w", padx=16, pady=(12, 4))
+
+        msg_box = ctk.CTkTextbox(popup, height=140, corner_radius=8, font=ctk.CTkFont(size=11))
+        msg_box.pack(fill="x", padx=16, pady=(0, 6))
+        msg_box.insert("1.0", lead.get("customMessage") or "")
+
+        status_lbl = ctk.CTkLabel(
+            popup, text="", font=ctk.CTkFont(size=11), text_color="#9CA3AF", wraplength=480, justify="left",
+        )
+        status_lbl.pack(anchor="w", padx=16, pady=(0, 4))
+
+        actions = ctk.CTkFrame(popup, fg_color="transparent")
+        actions.pack(fill="x", padx=16, pady=(0, 6))
+
+        def _save_message() -> None:
+            from app.session import update_local_lead
+            text = msg_box.get("1.0", "end").strip()
+            update_local_lead(self._session, lead_id, customMessage=text)
+            lead["customMessage"] = text
+            status_lbl.configure(text="✓ Mensagem guardada.", text_color="#10B981")
+
+        ctk.CTkButton(
+            actions, text="💾 Guardar mensagem", width=150, height=28, corner_radius=6,
+            fg_color="#1D4ED8", hover_color="#1E40AF", font=ctk.CTkFont(size=11, weight="bold"),
+            command=_save_message,
+        ).pack(side="left")
+
+        ctk.CTkButton(
+            actions, text="📋 Copiar", width=90, height=28, corner_radius=6,
+            fg_color="#374151", hover_color="#4B5563", font=ctk.CTkFont(size=11),
+            command=lambda: self._copy_text_to_clipboard(msg_box.get("1.0", "end").strip()),
+        ).pack(side="left", padx=(6, 0))
+
+        copy_btn = ctk.CTkButton(
+            actions, text="✨ Gerar copy", width=120, height=28, corner_radius=6,
+            fg_color="#7C3AED", hover_color="#6D28D9", font=ctk.CTkFont(size=11, weight="bold"),
+        )
+        copy_btn.pack(side="left", padx=(6, 0))
+
+        resend_btn = ctk.CTkButton(
+            actions, text="📱 Reenviar agora", width=130, height=28, corner_radius=6,
+            fg_color="#065F46", hover_color="#047857", font=ctk.CTkFont(size=11, weight="bold"),
+        )
+        resend_btn.pack(side="right")
+
+        def _generate_copy() -> None:
+            from app.local_copy import generate_copy_local, LocalCopyError
+
+            copy_btn.configure(state="disabled", text="A gerar…")
+            status_lbl.configure(text="")
+
+            def _worker():
+                try:
+                    text = generate_copy_local(self._session, company_name=name)
+                    self.after(0, lambda: _on_copy_done(text, None))
+                except LocalCopyError as exc:
+                    self.after(0, lambda: _on_copy_done(None, str(exc)))
+                except Exception as exc:
+                    self.after(0, lambda: _on_copy_done(None, f"Erro ao gerar mensagem: {exc}"))
+
+            def _on_copy_done(text, error):
+                copy_btn.configure(state="normal", text="✨ Gerar copy")
+                if error:
+                    status_lbl.configure(text=error, text_color="#EF4444")
+                    return
+                msg_box.delete("1.0", "end")
+                msg_box.insert("1.0", text or "")
+                status_lbl.configure(text="✓ Copy gerada — revê e guarda se quiseres usá-la no reenvio.", text_color="#10B981")
+
+            threading.Thread(target=_worker, daemon=True).start()
+
+        copy_btn.configure(command=_generate_copy)
+
+        def _resend() -> None:
+            from app.session import upsert_local_lead
+            from app.whatsapp_client import send_message
+
+            text = msg_box.get("1.0", "end").strip()
+            if not text:
+                status_lbl.configure(text="Escreve uma mensagem antes de reenviar.", text_color="#EF4444")
+                return
+
+            resend_btn.configure(state="disabled", text="A enviar…")
+            status_lbl.configure(text="A enviar via WhatsApp Web…", text_color="#9CA3AF")
+
+            def _worker():
+                result = send_message(phone, text)
+                status = result["status"]
+                upsert_local_lead(
+                    self._session,
+                    phone=phone,
+                    name=name,
+                    category="qualification" if status == "sent" else "to-prospect",
+                    website=lead.get("website", ""),
+                    address=lead.get("address", ""),
+                    customMessage=text,
+                )
+
+                def _done():
+                    resend_btn.configure(state="normal", text="📱 Reenviar agora")
+                    if status == "sent":
+                        status_lbl.configure(text="✓ Enviado — lead movido para 'Qualificação'.", text_color="#10B981")
+                    else:
+                        status_lbl.configure(
+                            text=f"✗ Falhou ({result.get('reason', '—')}) — lead em 'À Prospectar' para nova tentativa.",
+                            text_color="#EF4444",
+                        )
+                    kc = getattr(self, "_kanban_content", None)
+                    if kc and self._widget_alive(kc):
+                        self._reload_kanban(kc, is_subscriber(self._session))
+
+                self.after(0, _done)
+
+            threading.Thread(target=_worker, daemon=True).start()
+
+        resend_btn.configure(command=_resend)
+
+        footer = ctk.CTkFrame(popup, fg_color="transparent")
+        footer.pack(side="bottom", fill="x", pady=8)
+        ctk.CTkButton(footer, text="Fechar", width=100, command=popup.destroy).pack()
+
+    def _send_selected_local_leads(self) -> None:
+        """Equivalente local de `_enqueue_selected_leads` — envia sequencialmente
+        via WhatsApp Web (Selenium) e move cada lead mecanicamente consoante o
+        resultado real do envio (sem CRM)."""
+        lead_ids = list(self._kanban_selected.keys())
+        if not lead_ids:
+            return
+        msg = self._bulk_msg_entry.get().strip() if hasattr(self, "_bulk_msg_entry") else ""
+
+        if hasattr(self, "_bulk_msg_entry"):
+            self._bulk_msg_entry.configure(state="disabled")
+
+        def _do():
+            import time as _time
+            from app.session import get_local_leads, move_local_lead, upsert_local_lead
+            from app.whatsapp_client import send_message
+
+            leads_by_id = {l.get("id"): l for l in get_local_leads(self._session)}
+            sent = failed = 0
+            total = len(lead_ids)
+
+            for i, lid in enumerate(lead_ids):
+                lead = leads_by_id.get(lid)
+                if not lead:
+                    continue
+                phone = lead.get("phone") or ""
+                text = msg or lead.get("customMessage") or ""
+                if not phone or not text:
+                    failed += 1
+                    continue
+
+                move_local_lead(self._session, lid, "in-progress")
+                result = send_message(phone, text)
+                status = result["status"]
+                upsert_local_lead(
+                    self._session,
+                    phone=phone,
+                    name=lead.get("companyName", "Lead"),
+                    category="qualification" if status == "sent" else "to-prospect",
+                    website=lead.get("website", ""),
+                    address=lead.get("address", ""),
+                    customMessage=text,
+                )
+                if status == "sent":
+                    sent += 1
+                else:
+                    failed += 1
+
+                if i < total - 1:
+                    _time.sleep(10)
+
+            parts = []
+            if sent:
+                parts.append(f"✓ {sent} enviado{'s' if sent != 1 else ''}")
+            if failed:
+                parts.append(f"⚠ {failed} falhado{'s' if failed != 1 else ''}")
+            summary = "  ".join(parts) or "Nenhum lead enviado"
+
+            def _after():
+                try:
+                    if hasattr(self, "_bulk_msg_entry") and self._widget_alive(self._bulk_msg_entry):
+                        self._bulk_msg_entry.configure(state="normal")
+                        self._bulk_msg_entry.delete(0, "end")
+                except Exception:
+                    pass
+                self._kanban_selected.clear()
+                self._refresh_bulk_bar()
+                self._show_enqueue_toast(summary)
+                kc = getattr(self, "_kanban_content", None)
+                if kc and self._widget_alive(kc):
+                    self._reload_kanban(kc, is_subscriber(self._session))
+
+            self.after(0, _after)
+
+        threading.Thread(target=_do, daemon=True).start()
 
     def _open_whatsapp_web_inline(self) -> None:
         """Abre Chrome com WhatsApp Web (botão no header do Kanban)."""

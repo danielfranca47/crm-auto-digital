@@ -351,6 +351,50 @@ simples em `~/.agent-local/session.json`, mesmo precedente de `google_maps_api_k
 
 ---
 
+## Fase 9 — Pipeline de prospecção (Kanban) local para não-assinantes
+
+### Motivação
+
+O painel "Prospectar" mostrava aos não-assinantes apenas um aviso de upsell +
+um histórico simplificado em 2 colunas ("Enviados"/"Falhados", lido de
+`prospect_log.jsonl`). O utilizador pediu que a prospecção funcionasse **da
+mesma forma que para assinantes** — Kanban completo de 3 colunas ("À
+Prospectar"/"Em Andamento"/"Qualificação") — com as excepções já estabelecidas
+na Fase 8 (chave OpenAI e perfil de negócio próprios, configurados localmente).
+
+### Abordagem
+
+Análise do Kanban de assinante (`_render_kanban`/`_enqueue_selected_leads`/
+`_poll_tick`) revelou que a movimentação entre colunas é **puramente mecânica**,
+baseada no resultado real do envio — não em qualificação por IA:
+`to-prospect → in-progress` ao enfileirar, depois `in-progress → qualification`
+(sucesso) ou `in-progress → to-prospect` (falha). Como o agent-local já envia
+mensagens localmente via Selenium/WhatsApp Web para ambos os fluxos
+(`whatsapp_client.send_message`) e sabe de imediato se o envio teve sucesso,
+um pipeline local pode mirror essa lógica de forma síncrona, sem CRM nem
+polling remoto.
+
+### O que muda
+
+| Arquivo | O que muda |
+|---|---|
+| `agent-local/app/session.py` | novas funções `get_local_leads`/`upsert_local_lead`/`move_local_lead`/`update_local_lead`, mesmo padrão de `get_templates`/`save_template`, persistidas em `session["local_leads"]` com os mesmos nomes de campo do Kanban remoto (`companyName`/`phone`/`category`/`id`/`origin`/`customMessage`); `upsert_local_lead` é idempotente por telefone |
+| `agent-local/app/ui/bulk_prospect_dialog.py` | `_run_bulk`: para não-assinantes, após cada envio chama `upsert_local_lead` movendo o lead mecanicamente (`sent → qualification`, `failed → to-prospect`) — espelha `_poll_tick` |
+| `agent-local/app/ui/prospect_dialog.py` | `_do_send`: o mesmo registo/movimento mecânico para o envio avulso de não-assinantes |
+| `agent-local/app/ui/main_screen.py` | substitui `_build_kanban_non_subscriber` (aviso de upsell + log 2 colunas) por um Kanban local real de 3 colunas: `_render_local_kanban`/`_render_local_kanban_card` (clonam a estrutura visual e a selecção em massa do Kanban remoto — `_kanban_selected`/`_kanban_card_vars`/`_on_kanban_check`/`_toggle_all_kanban` reaproveitados tal como estão) e `_show_local_lead_detail` (modal com mensagem editável, "✨ Gerar copy" via `local_copy.generate_copy_local` da Fase 8, e "📱 Reenviar agora"); novo `_send_selected_local_leads` (equivalente local de `_enqueue_selected_leads` — envio sequencial via Selenium com movimento mecânico); `_build_prospectar` escolhe entre `_enqueue_selected_leads`/`_send_selected_local_leads` consoante `is_subscriber`, e oculta os badges "Agente"/"Pendentes" (que reflectem fila/agente remoto do CRM) para não-assinantes |
+
+Mantém-se `prospect_log`/`get_prospect_log` intacto como histórico bruto de
+auditoria — o Kanban local é uma camada adicional, alimentada pelos mesmos
+envios. Nada deste fluxo passa pelo backend-crm.
+
+### Commits Fase 9
+
+| # | Commit | O que foi implementado |
+|---|---|---|
+| 1 | `c8346ec` | armazém local de leads (session.py) + registo mecânico nos fluxos de envio existentes (bulk_prospect_dialog/prospect_dialog) |
+
+---
+
 ## Checks de Validação
 
 ### Cenário A1 — Upload de ficheiro CSV/XLSX funciona
@@ -463,6 +507,27 @@ simples em `~/.agent-local/session.json`, mesmo precedente de `google_maps_api_k
       perfil de negócio → confirmar mensagem a pedir o preenchimento do perfil
 - [ ] Confirmar que nada deste fluxo chama o backend-crm (sem erros 403, sem
       necessidade de assinatura/CRM activos)
+
+### Cenário A14 — Kanban de prospecção local para não-assinantes (Fase 9)
+
+- [ ] Com uma conta **gratuita**: ir a "🔍 Pesquisar", seleccionar leads e enviar
+      (avulso ou em massa) → confirmar que cada lead aparece no painel
+      "Prospectar": sucesso em "Qualificação", falha em "À Prospectar"
+- [ ] Confirmar: o aviso de upsell desapareceu e o Kanban mostra as 3 colunas
+      ("À Prospectar"/"Em Andamento"/"Qualificação") com contagens correctas
+- [ ] Em "À Prospectar": seleccionar leads (individual e "seleccionar todos"),
+      escrever mensagem na barra de acções em massa e clicar "📤 Enfileirar" →
+      confirmar envio sequencial local (WhatsApp Web/Selenium), progresso e
+      movimento correcto dos cards consoante sucesso/falha
+- [ ] Clicar num card → modal de detalhe → editar e guardar a mensagem, gerar
+      copy com IA local ("✨ Gerar copy"), reenviar individualmente
+      ("📱 Reenviar agora") → confirmar persistência e movimento do card
+- [ ] Confirmar que os badges "● Agente"/"Pendentes" não aparecem no painel
+      Prospectar para não-assinantes
+- [ ] Confirmar que nada deste fluxo chama o backend-crm (sem 403, sem
+      necessidade de assinatura activa)
+- [ ] Repetir com uma conta **assinante** → confirmar que o Kanban remoto, o
+      polling, os badges e o "Enfileirar" continuam a funcionar como antes
 
 ---
 
