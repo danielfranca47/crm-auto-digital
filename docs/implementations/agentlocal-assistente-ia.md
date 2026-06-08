@@ -416,7 +416,7 @@ automatizado.
 
 | # | Commit | O que foi implementado |
 |---|---|---|
-| 1 | `<pendente>` | fix: pausa aleatória (25-60s) entre envios em massa locais |
+| 1 | `67f61e8` | fix: pausa aleatória (25-60s) entre envios em massa locais |
 
 ---
 
