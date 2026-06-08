@@ -145,6 +145,13 @@ def update_local_lead(session: dict, lead_id: str, **fields) -> None:
             return
 
 
+def delete_local_lead(session: dict, lead_id: str) -> None:
+    """Remove um lead local pelo id. Persiste em session.json."""
+    leads = [lead for lead in get_local_leads(session) if lead.get("id") != lead_id]
+    session["local_leads"] = leads
+    save_session(session)
+
+
 # ── Log local de prospecções ──────────────────────────────────────────────────
 
 def append_prospect_log(entry: dict) -> None:

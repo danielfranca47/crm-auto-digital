@@ -2680,9 +2680,49 @@ class MainScreen(ctk.CTkFrame):
 
         resend_btn.configure(command=_resend)
 
+        def _confirm_delete() -> None:
+            confirm = ctk.CTkToplevel(popup)
+            confirm.title("Eliminar lead")
+            confirm.geometry("340x150")
+            confirm.resizable(False, False)
+            confirm.grab_set()
+
+            ctk.CTkLabel(
+                confirm,
+                text="Eliminar este lead do Kanban local?\nEsta acção não pode ser desfeita.",
+                font=ctk.CTkFont(size=12), wraplength=300, justify="center",
+            ).pack(pady=(24, 16))
+
+            def _do_delete() -> None:
+                from app.session import delete_local_lead
+                delete_local_lead(self._session, lead_id)
+                confirm.destroy()
+                popup.destroy()
+                kc = getattr(self, "_kanban_content", None)
+                if kc and self._widget_alive(kc):
+                    self._reload_kanban(kc, is_subscriber(self._session))
+
+            row = ctk.CTkFrame(confirm, fg_color="transparent")
+            row.pack(pady=(0, 8))
+            ctk.CTkButton(
+                row, text="Cancelar", width=100,
+                fg_color="#374151", hover_color="#4B5563",
+                command=confirm.destroy,
+            ).pack(side="left", padx=(0, 8))
+            ctk.CTkButton(
+                row, text="🗑 Eliminar", width=100,
+                fg_color="#7F1D1D", hover_color="#991B1B",
+                command=_do_delete,
+            ).pack(side="left")
+
         footer = ctk.CTkFrame(popup, fg_color="transparent")
-        footer.pack(side="bottom", fill="x", pady=8)
-        ctk.CTkButton(footer, text="Fechar", width=100, command=popup.destroy).pack()
+        footer.pack(side="bottom", fill="x", padx=16, pady=8)
+        ctk.CTkButton(
+            footer, text="🗑 Eliminar lead", width=130, height=28, corner_radius=6,
+            fg_color="#7F1D1D", hover_color="#991B1B", font=ctk.CTkFont(size=11),
+            command=_confirm_delete,
+        ).pack(side="left")
+        ctk.CTkButton(footer, text="Fechar", width=100, command=popup.destroy).pack(side="right")
 
     def _send_selected_local_leads(self) -> None:
         """Equivalente local de `_enqueue_selected_leads` — envia sequencialmente
