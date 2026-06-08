@@ -300,6 +300,13 @@ class MainScreen(ctk.CTkFrame):
                     font=ctk.CTkFont(size=11, weight="bold"),
                     command=self._ir_para_assistente_ia,
                 ).pack(side="right", padx=(4, 0))
+
+                ctk.CTkButton(
+                    hdr, text="💾 Guardar todos no CRM", height=28, corner_radius=8,
+                    fg_color="#065F46", hover_color="#047857",
+                    font=ctk.CTkFont(size=11, weight="bold"),
+                    command=self._save_all_to_crm,
+                ).pack(side="right", padx=(4, 0))
             else:
                 self._gen_local_copies_btn = ctk.CTkButton(
                     hdr, text="✨ Gerar copies (local)", height=28, corner_radius=8,
@@ -308,13 +315,6 @@ class MainScreen(ctk.CTkFrame):
                     command=self._generate_local_copies_for_selected,
                 )
                 self._gen_local_copies_btn.pack(side="right", padx=(4, 0))
-
-                ctk.CTkButton(
-                    hdr, text="💾 Guardar todos no CRM", height=28, corner_radius=8,
-                    fg_color="#065F46", hover_color="#047857",
-                    font=ctk.CTkFont(size=11, weight="bold"),
-                    command=self._save_all_to_crm,
-                ).pack(side="right", padx=(4, 0))
 
             # Barra de selecção em lote
             self._sel_bar = ctk.CTkFrame(self._results_frame, fg_color="#1E3A5F", corner_radius=8)
