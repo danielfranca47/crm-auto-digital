@@ -231,7 +231,7 @@ também a checkbox principal.
 
 | # | Commit | O que foi implementado |
 |---|---|---|
-| 1 | *(pendente)* | fix: marcar canal activa automaticamente "Gerar copys com IA" |
+| 1 | `5f8071c` | fix: marcar canal activa automaticamente "Gerar copys com IA" |
 
 ---
 
