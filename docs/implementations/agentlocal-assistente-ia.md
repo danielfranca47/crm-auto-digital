@@ -598,10 +598,17 @@ Sem novas rotas nem chamadas a `crm_client` — opera apenas em
       "Prospectar": sucesso em "Qualificação", falha em "À Prospectar"
 - [ ] Confirmar: o aviso de upsell desapareceu e o Kanban mostra as 3 colunas
       ("À Prospectar"/"Em Andamento"/"Qualificação") com contagens correctas
-- [ ] Em "À Prospectar": seleccionar leads (individual e "seleccionar todos"),
-      escrever mensagem na barra de acções em massa e clicar "📤 Enfileirar" →
-      confirmar envio sequencial local (WhatsApp Web/Selenium), progresso e
-      movimento correcto dos cards consoante sucesso/falha
+- [x] Em "À Prospectar": seleccionar um lead individualmente (com mensagem
+      editada/guardada) e clicar "📤 Enfileirar" sem escrever na barra de
+      acções (usa a mensagem guardada) → confirmar que abre o Chrome com
+      WhatsApp Web e envia a mensagem em sequência, preservando as quebras
+      de linha — validado em 2026-06-08
+- [ ] Repetir seleccionando vários leads via "seleccionar todos" e escrevendo
+      uma mensagem na barra de acções em massa → confirmar que essa mensagem
+      substitui a guardada para os leads enviados
+- [ ] Confirmar: indicador de progresso durante o envio sequencial e
+      movimento correcto dos cards consoante sucesso/falha ("Qualificação"
+      vs "À Prospectar")
 - [x] Clicar num card → modal de detalhe → editar a mensagem e clicar
       "💾 Guardar mensagem" → reabrir o card e confirmar que o texto editado
       persiste — validado em 2026-06-08
