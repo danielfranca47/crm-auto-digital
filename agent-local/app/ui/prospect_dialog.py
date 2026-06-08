@@ -355,6 +355,17 @@ class ProspectDialog(ctk.CTkToplevel):
         if result["status"] == "sent" and self._subscriber:
             self._update_status("A registar no CRM…")
             self._do_crm_sync()
+        elif not self._subscriber:
+            from app.session import upsert_local_lead
+            upsert_local_lead(
+                self._session,
+                phone=self._phone_final,
+                name=self._lead.get("name", "Lead"),
+                category="qualification" if result["status"] == "sent" else "to-prospect",
+                website=self._lead.get("website", ""),
+                address=self._lead.get("address", ""),
+                customMessage=self._msg_final,
+            )
 
         self.after(0, self._show_result)
 

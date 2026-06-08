@@ -307,7 +307,7 @@ class BulkProspectDialog(ctk.CTkToplevel):
 
     def _run_bulk(self, message: str, delay: int, save_crm: bool) -> None:
         from app.whatsapp_client import send_message
-        from app.session import append_prospect_log
+        from app.session import append_prospect_log, upsert_local_lead
 
         sent = failed = crm_saved = 0
         total = len(self._leads)
@@ -337,6 +337,17 @@ class BulkProspectDialog(ctk.CTkToplevel):
                 "reason": result.get("reason", ""),
             }
             append_prospect_log(entry)
+
+            if not self._subscriber:
+                upsert_local_lead(
+                    self._session,
+                    phone=phone,
+                    name=lead.get("name", "Lead"),
+                    category="qualification" if status == "sent" else "to-prospect",
+                    website=lead.get("website", ""),
+                    address=lead.get("address", ""),
+                    customMessage=message,
+                )
 
             if status == "sent":
                 sent += 1

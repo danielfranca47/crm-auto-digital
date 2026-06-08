@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
 
@@ -62,6 +63,86 @@ def delete_template(session: dict, name: str) -> None:
     templates = [t for t in get_templates(session) if t.get("name") != name]
     session["message_templates"] = templates
     save_session(session)
+
+
+# ── Kanban local de prospecção (modo gratuito) ───────────────────────────────
+# Espelha o Kanban de assinante (categorias "to-prospect"/"in-progress"/
+# "qualification") usando os mesmos nomes de campo (companyName/phone/category/
+# id/origin) para que os renderers possam tratar leads locais e remotos da
+# mesma forma. Persistido em session["local_leads"].
+
+def get_local_leads(session: dict) -> list:
+    """Retorna lista de leads locais: [{'id', 'companyName', 'phone', 'category', ...}]"""
+    return list(session.get("local_leads") or [])
+
+
+def upsert_local_lead(
+    session: dict,
+    *,
+    phone: str,
+    name: str,
+    category: str,
+    website: str = "",
+    address: str = "",
+    **extra,
+) -> dict:
+    """Cria ou actualiza um lead local pelo telefone (idempotente). Persiste em session.json."""
+    leads = get_local_leads(session)
+    for lead in leads:
+        if lead.get("phone") == phone:
+            lead["companyName"] = name or lead.get("companyName")
+            lead["category"] = category
+            if website:
+                lead["website"] = website
+            if address:
+                lead["address"] = address
+            for key, value in extra.items():
+                if value not in (None, ""):
+                    lead[key] = value
+            session["local_leads"] = leads
+            save_session(session)
+            return lead
+
+    seq = int(session.get("_local_lead_seq") or 0) + 1
+    session["_local_lead_seq"] = seq
+    lead = {
+        "id": f"local-{seq}",
+        "companyName": name or phone,
+        "phone": phone,
+        "category": category,
+        "origin": "Local",
+        "customMessage": "",
+        "website": website,
+        "address": address,
+        "createdAt": datetime.now(timezone.utc).isoformat(),
+    }
+    lead.update({k: v for k, v in extra.items() if v not in (None, "")})
+    leads.append(lead)
+    session["local_leads"] = leads
+    save_session(session)
+    return lead
+
+
+def move_local_lead(session: dict, lead_id: str, category: str) -> None:
+    """Move um lead local para outra categoria. Persiste em session.json."""
+    leads = get_local_leads(session)
+    for lead in leads:
+        if lead.get("id") == lead_id:
+            lead["category"] = category
+            session["local_leads"] = leads
+            save_session(session)
+            return
+
+
+def update_local_lead(session: dict, lead_id: str, **fields) -> None:
+    """Actualiza campos arbitrários de um lead local (ex.: customMessage). Persiste em session.json."""
+    leads = get_local_leads(session)
+    for lead in leads:
+        if lead.get("id") == lead_id:
+            lead.update(fields)
+            session["local_leads"] = leads
+            save_session(session)
+            return
 
 
 # ── Log local de prospecções ──────────────────────────────────────────────────
