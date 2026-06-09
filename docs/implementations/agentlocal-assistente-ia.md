@@ -534,102 +534,18 @@ Sem novas rotas nem chamadas a `crm_client` — opera apenas em
 
 ## Checks de Validação
 
-### Cenário A1 — Upload de ficheiro CSV/XLSX funciona
+> Organizado em duas sessões autónomas. **Sessão 1** não requer backend-crm.
+> **Sessão 2** requer backend-core + backend-crm a correr e subscrição activa.
+> Dentro de cada sessão, os cenários seguem a ordem natural de uso — executa-os
+> em sequência e os resultados de um servem de base ao seguinte.
 
-- [ ] Abrir painel "Assistente IA" no agent-local
-- [ ] Clicar "Escolher ficheiro" → seleccionar um CSV com colunas de empresa e telefone
-- [ ] Confirmar: painel mostra nome do ficheiro + colunas detectadas
+---
 
-### Cenário A2 — Usar resultados da pesquisa actual
+### Sessão 1 — Conta Gratuita (sem backend-crm)
 
-- [ ] Fazer uma pesquisa no painel Pesquisar (ex: "dentistas em Lisboa")
-- [ ] Navegar para "Assistente IA"
-- [ ] Confirmar: aparece o texto "N lead(s) da pesquisa:" com botão "Usar"
-      activo no Passo 1 (fallback — o ponto de entrada principal é o botão
-      "✨ Gerar copy com IA" em Pesquisar, ver Cenário A7)
+**Preparação:** conta sem subscrição · chave OpenAI válida em "⚙ Conta" · perfil de negócio preenchido (nicho, oferta, público-alvo).
 
-### Cenário A3 — Mapeamento de colunas e preview
-
-- [ ] Após upload, confirmar auto-detecção correcta das colunas
-- [ ] Confirmar manualmente o mapeamento e clicar "✓ Confirmar mapeamento →"
-- [ ] Confirmar: stats de dedupe aparecem (total, criar, actualizar, pular)
-- [ ] Confirmar: tabela de amostra mostra as primeiras 10 linhas
-
-### Cenário A4 — Processamento com criação de cards
-
-- [ ] No Passo 2, escolher "Pular" como opção de duplicados; no Passo 4,
-      manter "Criar cards no CRM" seleccionado
-- [ ] Clicar "🚀 Confirmar e Processar"
-- [ ] Confirmar: leads aparecem no painel Prospectar (coluna "À Prospectar")
-- [ ] Confirmar: stats finais mostram N criados
-
-### Cenário A5 — Processamento com geração de copy
-
-- [ ] No Passo 4, manter "Criar cards no CRM" seleccionado, marcar "Gerar
-      copys com IA" (ou apenas marcar o canal WhatsApp — activa-a automaticamente)
-- [ ] Clicar "🚀 Confirmar e Processar" numa planilha de 5 leads
-- [ ] Confirmar: no CRM, os leads têm mensagem gerada disponível no diálogo de prospecção
-
-### Cenário A6 — Fluxo completo (Pesquisar → Assistente IA → Prospectar)
-
-- [ ] Pesquisar empresas → ir para Assistente IA → usar resultados actuais
-- [ ] Mapear colunas → gerar prévia → processar (criar cards + gerar copys)
-- [ ] Clicar "Ver no Prospectar" → confirmar leads na coluna "À Prospectar"
-- [ ] Seleccionar leads em massa → enfileirar WhatsApp → confirmar jobs criados
-
-### Cenário A7 — Botão "Gerar copy com IA" no painel Pesquisar (Fase 4)
-
-- [ ] Pesquisar empresas → aguardar resultados aparecerem
-- [ ] Confirmar: botão "✨ Gerar copy com IA" aparece no header dos resultados
-- [ ] Clicar o botão → confirmar que navega directamente para o painel Assistente IA
-- [ ] Confirmar: o painel Assistente IA abre e converte/envia automaticamente
-      os resultados da pesquisa (label "N resultados da pesquisa — a
-      converter…" + barra de progresso), sem qualquer clique adicional
-
-### Cenário A8 — Prévia de mensagens no Passo 5 (Fase 5)
-
-- [ ] Processar planilha com "Gerar copys com IA" activo
-- [ ] No Passo 5 (resultados), confirmar: secção "✨ Mensagens geradas — prévia" aparece
-- [ ] Confirmar: lista mostra `Lead #N · Canal` + texto da copy (truncado)
-- [ ] Clicar "📋 Copiar" → confirmar que o texto fica na área de transferência
-
-### Cenário A9 — Detalhe do lead com copy editável no Kanban (Fase 5)
-
-- [ ] No painel Prospectar, clicar num card de lead com copy gerada
-- [ ] Confirmar: modal abre com nome, telefone, origem e mensagens por canal
-- [ ] Editar o texto de uma mensagem → clicar "💾 Guardar alteração"
-- [ ] Reabrir o modal → confirmar que o texto editado persiste
-- [ ] Clicar "📋 Copiar" numa mensagem → confirmar que o texto fica na área de transferência
-
-### Cenário A10 — Detectar leads sem copy (Fase 6)
-
-- [x] No painel Assistente IA, clicar "🔄 Gerar copys para leads sem copy" — validado em 2026-06-08
-- [x] Confirmar: aparece "A procurar leads sem copy gerada…" e depois a lista — validado em 2026-06-08
-- [x] Confirmar: apenas leads do Kanban (to-prospect/in-progress/qualification) **sem** mensagens geradas aparecem na lista — validado em 2026-06-08
-- [ ] Se todos os leads já têm copy, confirmar mensagem "Todos os leads no Kanban já têm copy gerada. 🎉"
-
-### Cenário A11 — Gerar copys para leads seleccionados (Fase 6)
-
-- [x] Seleccionar/desseleccionar leads individualmente e via "Seleccionar todos" — validado em 2026-06-08
-- [x] Escolher canal(is) (WhatsApp/Email/Instagram) e ajustar tom de voz — validado em 2026-06-08
-- [x] Clicar "✨ Gerar copys para seleccionados" — validado em 2026-06-08
-- [x] Confirmar: progresso "A gerar copys… N/M" actualiza durante o processo — validado em 2026-06-08
-- [x] Confirmar: ao concluir, aparecem stats (`X copy(s) gerada(s) para Y lead(s)`) e prévia das mensagens (reaproveitando o componente da Fase 5) — validado em 2026-06-08
-- [ ] Abrir um dos leads no Kanban → confirmar que a copy gerada aparece no modal de detalhe
-
-### Cenário A12 — Copy reflecte o nicho/oferta do utilizador (Fase 7)
-
-- [ ] Confirmar que o utilizador tem `Nicho de mercado`, `Produto/Serviço` e
-      `Público-alvo` preenchidos em "Configurar Agente de IA" (frontend-crm → AiProfile)
-- [ ] Gerar copy para um lead (fluxo normal ou "Gerar copys para leads sem copy")
-- [ ] Confirmar: o texto reflecte o nicho/oferta reais do utilizador — não temas
-      aleatórios (ex.: "marketing digital", "limpeza de equipamentos") sem relação
-      com o que o utilizador realmente vende
-- [ ] Confirmar: o texto NÃO contém `[Seu Nome]` / `[Sua Empresa]`
-- [ ] Testar também com um utilizador sem perfil de IA preenchido → confirmar que
-      a geração não falha (cai para o comportamento genérico anterior)
-
-### Cenário A13 — Gerador de copy local para não-assinantes (Fase 8)
+#### A13 — Configuração inicial (chave OpenAI + perfil de negócio) ✅
 
 - [x] Com uma conta **gratuita** (sem assinatura activa): abrir "⚙ Conta" →
       confirmar novo campo "🔑 Chave OpenAI API", inserir uma chave válida,
@@ -650,13 +566,20 @@ Sem novas rotas nem chamadas a `crm_client` — opera apenas em
 - [x] Confirmar que nada deste fluxo chama o backend-crm (sem erros 403, sem
       necessidade de assinatura/CRM activos)
 
-### Cenário A14 — Kanban de prospecção local para não-assinantes (Fase 9)
+#### A14 — Kanban local: Pesquisar → enviar → gerir leads
 
-- [ ] Com uma conta **gratuita**: ir a "🔍 Pesquisar", seleccionar leads e enviar
-      (avulso ou em massa) → confirmar que cada lead aparece no painel
-      "Prospectar": sucesso em "Qualificação", falha em "À Prospectar"
+- [ ] Ir a "🔍 Pesquisar", seleccionar leads e enviar (avulso ou em massa) →
+      confirmar que cada lead aparece no painel "Prospectar": sucesso em
+      "Qualificação", falha em "À Prospectar"
 - [ ] Confirmar: o aviso de upsell desapareceu e o Kanban mostra as 3 colunas
       ("À Prospectar"/"Em Andamento"/"Qualificação") com contagens correctas
+- [ ] Confirmar que os badges "● Agente"/"Pendentes" não aparecem no painel
+      Prospectar para não-assinantes
+- [x] Clicar num card → modal de detalhe → editar a mensagem e clicar
+      "💾 Guardar mensagem" → reabrir o card e confirmar que o texto editado
+      persiste — validado em 2026-06-08
+- [ ] No mesmo modal, gerar copy com IA local ("✨ Gerar copy") → confirmar
+      que o texto gerado substitui correctamente a mensagem
 - [x] Em "À Prospectar": seleccionar um lead individualmente (com mensagem
       editada/guardada) e clicar "📤 Enfileirar" sem escrever na barra de
       acções (usa a mensagem guardada) → confirmar que abre o Chrome com
@@ -668,45 +591,31 @@ Sem novas rotas nem chamadas a `crm_client` — opera apenas em
 - [ ] Confirmar: indicador de progresso durante o envio sequencial e
       movimento correcto dos cards consoante sucesso/falha ("Qualificação"
       vs "À Prospectar")
-- [x] Clicar num card → modal de detalhe → editar a mensagem e clicar
-      "💾 Guardar mensagem" → reabrir o card e confirmar que o texto editado
-      persiste — validado em 2026-06-08
-- [ ] No mesmo modal, gerar copy com IA local ("✨ Gerar copy") → confirmar
-      que o texto gerado substitui correctamente a mensagem
-- [ ] Reenviar individualmente ("📱 Reenviar agora") → confirmar o movimento
-      do card consoante sucesso/falha do envio
-- [ ] Confirmar que os badges "● Agente"/"Pendentes" não aparecem no painel
-      Prospectar para não-assinantes
+- [ ] Reenviar individualmente ("📱 Reenviar agora") a partir do modal de
+      detalhe → confirmar o movimento do card consoante sucesso/falha
 - [ ] Confirmar que nada deste fluxo chama o backend-crm (sem 403, sem
       necessidade de assinatura activa)
-- [ ] Repetir com uma conta **assinante** → confirmar que o Kanban remoto, o
-      polling, os badges e o "Enfileirar" continuam a funcionar como antes
 
-### Cenário A15 — Geração de copies em lote local a partir da Pesquisa (Fase 10)
+#### A15 — Geração de copies em lote a partir da Pesquisa
 
-- [ ] Com uma conta **gratuita** sem chave OpenAI/perfil de negócio configurados:
-      pesquisar, seleccionar leads e clicar "✨ Gerar copies (local)" →
-      confirmar mensagem accionável imediata (chave/perfil em falta), sem
-      disparar chamadas
-- [ ] Configurar chave OpenAI + perfil de negócio (Fase 8), seleccionar alguns
-      leads (ex.: 5) e clicar "✨ Gerar copies (local)" → confirmar progresso
-      "X/N" a actualizar e o botão desactivado durante o processamento
-- [ ] No fim: confirmar o resumo (✓ geradas / ⚠ falhas) e que os leads aparecem
-      no painel "Prospectar", coluna "À Prospectar", já com a mensagem
-      (`customMessage`) preenchida — abrir o card e confirmar que o texto
-      reflecte o nicho/oferta do perfil, sem placeholders `[Seu Nome]`/`[Sua Empresa]`
-- [ ] Seleccionar mais de 15 leads → confirmar que apenas os primeiros 15 são
-      processados e que o resumo indica quantos ficaram de fora
-- [ ] Confirmar que nada deste fluxo chama o backend-crm (sem 403, sem
-      necessidade de assinatura activa)
-- [ ] Repetir com uma conta **assinante** → confirmar que o botão "✨ Gerar
-      copy com IA" continua a funcionar como antes (sem alterações)
+- [ ] Com chave OpenAI/perfil de negócio **não** configurados: pesquisar,
+      seleccionar leads e clicar "✨ Gerar copies (local)" → confirmar
+      mensagem accionável imediata (chave/perfil em falta), sem disparar chamadas
+- [ ] Com chave + perfil configurados: seleccionar 5 leads e clicar
+      "✨ Gerar copies (local)" → confirmar progresso "X/N" a actualizar e
+      botão desactivado durante o processamento
+- [ ] No fim: confirmar o resumo (✓ geradas / ⚠ falhas) e que os leads
+      aparecem no painel "Prospectar" ("À Prospectar") com a mensagem
+      preenchida — abrir o card e confirmar que o texto reflecte o
+      nicho/oferta do perfil, sem placeholders `[Seu Nome]`/`[Sua Empresa]`
+- [ ] Seleccionar mais de 15 leads → confirmar que apenas os primeiros 15
+      são processados e que o resumo indica quantos ficaram de fora
+- [ ] Confirmar que nada deste fluxo chama o backend-crm (sem 403)
 
-### Cenário A16 — Eliminar leads do Kanban local de prospecção (Fase 11)
+#### A16 — Eliminar leads do Kanban local
 
-- [ ] Com uma conta **gratuita**: abrir um card no Kanban local "Prospectar" →
-      modal de detalhe → clicar "🗑 Eliminar lead" → confirmar que aparece o
-      popup de confirmação
+- [ ] Abrir um card no Kanban local "Prospectar" → modal de detalhe →
+      clicar "🗑 Eliminar lead" → confirmar que aparece o popup de confirmação
 - [ ] Clicar "Cancelar" → confirmar que o lead permanece no Kanban e o modal
       continua aberto
 - [ ] Clicar "🗑 Eliminar" → confirmar que ambos os popups fecham, o card
@@ -715,6 +624,108 @@ Sem novas rotas nem chamadas a `crm_client` — opera apenas em
       eliminado não reaparece (persistência em `session.json`)
 - [ ] Confirmar que nada deste fluxo chama o backend-crm e que o Kanban de
       assinante não é afectado
+
+---
+
+### Sessão 2 — Conta Assinante (requer backend-crm)
+
+**Preparação:** conta com subscrição activa · backend-core + backend-crm a correr · ter uma planilha CSV/XLSX com 5–10 leads de teste · perfil de IA preenchido (nicho, oferta, público-alvo) em "Configurar Agente de IA" no frontend-crm.
+
+#### A7 — Entrada via Pesquisar → Assistente IA (ponto de entrada principal)
+
+- [ ] Pesquisar empresas → aguardar resultados aparecerem
+- [ ] Confirmar: botão "✨ Gerar copy com IA" aparece no header dos resultados
+- [ ] Clicar o botão → confirmar que navega directamente para o painel Assistente IA
+- [ ] Confirmar: o painel Assistente IA abre e converte/envia automaticamente
+      os resultados da pesquisa (label "N resultados da pesquisa — a
+      converter…" + barra de progresso), sem qualquer clique adicional
+
+#### A1 — Upload manual de ficheiro CSV/XLSX
+
+- [ ] Abrir painel "Assistente IA" no agent-local
+- [ ] Clicar "Escolher ficheiro" → seleccionar um CSV com colunas de empresa e telefone
+- [ ] Confirmar: painel mostra nome do ficheiro + colunas detectadas
+
+#### A2 — Fallback: Usar resultados de pesquisa dentro do Assistente IA
+
+- [ ] Fazer uma pesquisa no painel Pesquisar (ex: "dentistas em Lisboa")
+- [ ] Navegar para "Assistente IA" directamente pela sidebar (não pelo botão)
+- [ ] Confirmar: aparece o texto "N lead(s) da pesquisa:" com botão "Usar"
+      activo no Passo 1 → clicar "Usar" e confirmar que converte e envia
+      automaticamente
+
+#### A3 — Mapeamento de colunas + preview
+
+- [ ] Após upload (A1 ou A2), confirmar auto-detecção correcta das colunas
+- [ ] Confirmar manualmente o mapeamento e clicar "✓ Confirmar mapeamento →"
+- [ ] Confirmar: stats de dedupe aparecem (total, criar, actualizar, pular)
+- [ ] Confirmar: tabela de amostra mostra as primeiras 10 linhas
+
+#### A4 — Processamento — criar cards sem copy
+
+- [ ] No Passo 2, escolher "Pular" como opção de duplicados; no Passo 4,
+      manter "Criar cards no CRM" seleccionado
+- [ ] Clicar "🚀 Confirmar e Processar"
+- [ ] Confirmar: leads aparecem no painel Prospectar (coluna "À Prospectar")
+- [ ] Confirmar: stats finais mostram N criados
+
+#### A5 + A8 — Processamento com geração de copy + prévia no Passo 5
+
+- [ ] No Passo 4, manter "Criar cards no CRM" seleccionado, marcar "Gerar
+      copys com IA" (ou apenas marcar o canal WhatsApp — activa-a automaticamente)
+- [ ] Clicar "🚀 Confirmar e Processar" numa planilha de 5 leads
+- [ ] Confirmar: no CRM, os leads têm mensagem gerada disponível no diálogo de prospecção
+- [ ] No Passo 5 (resultados), confirmar: secção "✨ Mensagens geradas — prévia" aparece
+- [ ] Confirmar: lista mostra `Lead #N · Canal` + texto da copy (truncado)
+- [ ] Clicar "📋 Copiar" → confirmar que o texto fica na área de transferência
+
+#### A9 — Detalhe do lead com copy editável no Kanban CRM
+
+- [ ] No painel Prospectar, clicar num card de lead com copy gerada
+- [ ] Confirmar: modal abre com nome, telefone, origem e mensagens por canal
+- [ ] Editar o texto de uma mensagem → clicar "💾 Guardar alteração"
+- [ ] Reabrir o modal → confirmar que o texto editado persiste
+- [ ] Clicar "📋 Copiar" numa mensagem → confirmar que o texto fica na área de transferência
+
+#### A12 — Copy ciente do nicho/oferta do utilizador
+
+- [ ] Confirmar que o utilizador tem `Nicho de mercado`, `Produto/Serviço` e
+      `Público-alvo` preenchidos em "Configurar Agente de IA" (frontend-crm → AiProfile)
+- [ ] Gerar copy para um lead (fluxo normal ou "Gerar copys para leads sem copy")
+- [ ] Confirmar: o texto reflecte o nicho/oferta reais do utilizador — não temas
+      aleatórios sem relação com o que o utilizador realmente vende
+- [ ] Confirmar: o texto NÃO contém `[Seu Nome]` / `[Sua Empresa]`
+- [ ] Testar também com um utilizador sem perfil de IA preenchido → confirmar que
+      a geração não falha (cai para o comportamento genérico anterior)
+
+#### A10 + A11 — Gerar copys para leads existentes sem copy
+
+- [x] No painel Assistente IA, clicar "🔄 Gerar copys para leads sem copy" — validado em 2026-06-08
+- [x] Confirmar: aparece "A procurar leads sem copy gerada…" e depois a lista — validado em 2026-06-08
+- [x] Confirmar: apenas leads do Kanban (to-prospect/in-progress/qualification) **sem** mensagens geradas aparecem na lista — validado em 2026-06-08
+- [ ] Se todos os leads já têm copy, confirmar mensagem "Todos os leads no Kanban já têm copy gerada. 🎉"
+- [x] Seleccionar/desseleccionar leads individualmente e via "Seleccionar todos" — validado em 2026-06-08
+- [x] Escolher canal(is) (WhatsApp/Email/Instagram) e ajustar tom de voz — validado em 2026-06-08
+- [x] Clicar "✨ Gerar copys para seleccionados" — validado em 2026-06-08
+- [x] Confirmar: progresso "A gerar copys… N/M" actualiza durante o processo — validado em 2026-06-08
+- [x] Confirmar: ao concluir, aparecem stats (`X copy(s) gerada(s) para Y lead(s)`) e prévia das mensagens — validado em 2026-06-08
+- [ ] Abrir um dos leads no Kanban → confirmar que a copy gerada aparece no modal de detalhe
+
+#### Regressões — confirmar que o fluxo de assinante não foi afectado
+
+- [ ] Repetir A14: com conta **assinante**, confirmar que o Kanban remoto, o
+      polling, os badges "● Agente"/"Pendentes" e o "Enfileirar" (via CRM)
+      continuam a funcionar como antes
+- [ ] Repetir A15: com conta **assinante**, confirmar que o botão "✨ Gerar
+      copy com IA" em Pesquisar continua a funcionar como antes (sem alterações)
+
+#### A6 — Fluxo completo de integração (Pesquisar → Assistente IA → Prospectar)
+
+- [ ] Pesquisar empresas → clicar "✨ Gerar copy com IA" → Assistente IA
+      converte e envia automaticamente
+- [ ] Mapear colunas → gerar prévia → processar (criar cards + gerar copys)
+- [ ] Clicar "Ver no Prospectar" → confirmar leads na coluna "À Prospectar"
+- [ ] Seleccionar leads em massa → enfileirar WhatsApp → confirmar jobs criados
 
 ---
 
