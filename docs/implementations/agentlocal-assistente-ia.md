@@ -556,7 +556,7 @@ Nova secção "🤖 Prompt de Copy" inserida após "🔑 Chave OpenAI API" dentr
 
 | # | Commit | O que foi implementado |
 |---|---|---|
-| 1 | `` | Secção UI "🤖 Prompt de Copy" em Conta + lógica de substituição de variáveis em `generate_copy_local` |
+| 1 | `b37ba84` | Secção UI "🤖 Prompt de Copy" em Conta + lógica de substituição de variáveis em `generate_copy_local` |
 
 ---
 
