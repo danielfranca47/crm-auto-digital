@@ -557,6 +557,33 @@ Nova secção "🤖 Prompt de Copy" inserida após "🔑 Chave OpenAI API" dentr
 | # | Commit | O que foi implementado |
 |---|---|---|
 | 1 | `b37ba84` | Secção UI "🤖 Prompt de Copy" em Conta + lógica de substituição de variáveis em `generate_copy_local` |
+| 2 | `ac01e80` | Secção visível para assinantes + botão "Restaurar padrão" |
+
+---
+
+## Fase 13 — Prompt de Copy Personalizado para Assinantes (backend-crm)
+
+**Objectivo:** propagar `session["local_copy_prompt"]` do agent-local até ao backend-crm para que assinantes também usem o script personalizado ao gerar copies — tanto na geração avulsa (`/api/prospeccao/generate-copy`) como no batch processing (`/api/assistente-ia/processar`).
+
+### O que foi alterado
+
+**`backend-crm/routes/prospeccao.py`** — `GenerateCopyRequest` aceita `custom_prompt_template: str = ""`; se preenchido, substitui variáveis (`[empresa]`, `[nicho]`, `[oferta]`, `[marca]`, `[setor]`, `[contacto]`, `[canal]`, `[tom]`) e usa como script de referência.
+
+**`backend-crm/routes/assistente_ia.py`** — `AssistIAProcessRequest` aceita `custom_prompt_template: str = ""`; passa ao `processor.process()`.
+
+**`backend-crm/automations/assistente_ia/processor.py`** — `process()` recebe e passa `custom_prompt_template` a `llm.generate_for_lead()`.
+
+**`backend-crm/automations/assistente_ia/llm.py`** — `generate_for_lead()` recebe `custom_prompt_template`; se preenchido, faz substituição por canal e usa como script de referência (antes do loop padrão; `return out` antecipado).
+
+**`agent-local/app/crm_client.py`** — `generate_copy()` e `processar_assistente_ia()` aceitam `custom_prompt_template` e incluem-no no body quando não-vazio.
+
+**`agent-local/app/ui/main_screen.py`** — `_ai_generate_copys_for_existing()` e `_ai_start_processing()` passam `session["local_copy_prompt"]` em todas as chamadas ao crm_client.
+
+### Commits Fase 13
+
+| # | Commit | O que foi implementado |
+|---|---|---|
+| 1 | `d7ad0ef` | Propagação de custom_prompt_template por toda a cadeia backend-crm + agent-local |
 
 ---
 
@@ -653,15 +680,23 @@ Nova secção "🤖 Prompt de Copy" inserida após "🔑 Chave OpenAI API" dentr
 - [ ] Confirmar que nada deste fluxo chama o backend-crm e que o Kanban de
       assinante não é afectado
 
-#### A17 — Personalizar o prompt de copy
+#### A17 — Personalizar o prompt de copy (conta gratuita)
 
-- [ ] Abrir ⚙ Conta → confirmar que a secção "🤖 Prompt de Copy" aparece após "🔑 Chave OpenAI API"
-- [ ] Escrever um script de exemplo (ex.: "Olá pessoal da [empresa], sou Daniel e ajudo empresas de [nicho]…") e clicar num chip (ex. `[empresa]`) → confirmar que o texto é inserido no final da caixa
+- [ ] Abrir ⚙ Conta → confirmar que a secção "🤖 Prompt de Copy" aparece (disponível em todos os planos)
+- [ ] Escrever um script (ex.: "Olá pessoal da [empresa], sou Daniel e ajudo empresas de [nicho]…") e clicar num chip (ex. `[empresa]`) → confirmar que o texto é inserido no final da caixa
 - [ ] Clicar "Guardar prompt" → toast "✓ Prompt guardado" aparece e some em ~1,2 s
 - [ ] Mudar de painel e voltar a ⚙ Conta → confirmar que o script persiste (lido de `session.json`)
-- [ ] Gerar copy de um lead no Kanban local → a mensagem gerada deve reflectir o script personalizado com as variáveis substituídas
-- [ ] Limpar a caixa, guardar e gerar novamente → copy deve usar o prompt padrão (sem script de referência)
-- [ ] Confirmar que a secção "🤖 Prompt de Copy" não aparece em modo assinante
+- [ ] Gerar copy de um lead no Kanban local (modo gratuito) → mensagem reflecte o script com variáveis substituídas
+- [ ] Clicar "Restaurar padrão" → toast "✓ Prompt padrão restaurado", caixa limpa
+- [ ] Gerar copy novamente → usa o prompt padrão
+
+#### A17b — Prompt personalizado para assinante (requer backend-crm)
+
+- [ ] Definir script em ⚙ Conta ("Olá [empresa], sou Daniel de [marca]…")
+- [ ] Abrir modal de lead e clicar "Gerar copy" → copy reflecte o script com variáveis substituídas
+- [ ] Usar "Gerar copys para seleccionados" (Assistente IA → leads existentes) → copies reflectem o script
+- [ ] Fazer upload de CSV com "Gerar copys com IA" activo → copies do batch reflectem o script
+- [ ] Limpar o script (Restaurar padrão) e gerar de novo → volta ao comportamento padrão
 
 ---
 
