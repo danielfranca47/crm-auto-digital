@@ -3080,6 +3080,17 @@ class MainScreen(ctk.CTkFrame):
                           ).pack(padx=16, pady=14)
 
         # Secção: prompt de copy personalizado (disponível para todos os planos)
+        _DEFAULT_COPY_PROMPT = (
+            "Escreve uma mensagem de prospecção via [canal] para a empresa [empresa]. "
+            "Tom: [tom]. "
+            "A oferta deve reflectir o [nicho] e a proposta de valor de [oferta] — "
+            "não inventes temas genéricos que não tenham relação com a oferta da [marca]. "
+            "NUNCA uses placeholders como [Seu Nome] ou [Sua Empresa]; usa os dados reais "
+            "do remetente ou fala apenas em nome da empresa do destinatário. "
+            "Máximo 3 frases curtas e directas. Não uses saudações genéricas. "
+            "Apresenta uma proposta de valor clara e termina com uma pergunta ou CTA simples."
+        )
+
         prompt_card = ctk.CTkFrame(body, fg_color=_CARD, corner_radius=12)
         prompt_card.pack(padx=20, fill="x", pady=(0, 12))
 
@@ -3087,16 +3098,15 @@ class MainScreen(ctk.CTkFrame):
                       font=ctk.CTkFont(size=13, weight="bold")).pack(anchor="w", padx=16, pady=(12, 4))
         ctk.CTkLabel(
             prompt_card,
-            text="Escreve um script de referência — a IA gera uma variação personalizada para cada lead.\n"
-                 "Usa as variáveis abaixo. Deixa vazio para usar o prompt padrão.",
+            text="Edita o script abaixo — a IA gera uma variação personalizada para cada lead.\n"
+                 "Usa as variáveis disponíveis. \"Restaurar padrão\" repõe o texto original.",
             font=ctk.CTkFont(size=11), text_color="#6B7280", wraplength=380, justify="left",
         ).pack(anchor="w", padx=16, pady=(0, 8))
 
-        prompt_box = ctk.CTkTextbox(prompt_card, height=120, corner_radius=8, font=ctk.CTkFont(size=12))
+        prompt_box = ctk.CTkTextbox(prompt_card, height=140, corner_radius=8, font=ctk.CTkFont(size=12))
         prompt_box.pack(padx=16, fill="x")
         existing_prompt = self._session.get("local_copy_prompt") or ""
-        if existing_prompt:
-            prompt_box.insert("0.0", existing_prompt)
+        prompt_box.insert("0.0", existing_prompt if existing_prompt else _DEFAULT_COPY_PROMPT)
 
         chips_frame = ctk.CTkFrame(prompt_card, fg_color="transparent")
         chips_frame.pack(anchor="w", padx=16, pady=(6, 4))
@@ -3132,6 +3142,7 @@ class MainScreen(ctk.CTkFrame):
             from app.session import save_session
             save_session(self._session)
             prompt_box.delete("0.0", "end")
+            prompt_box.insert("0.0", _DEFAULT_COPY_PROMPT)
             _toast = ctk.CTkToplevel(self)
             _toast.title("Reposto")
             _toast.geometry("280x100")
