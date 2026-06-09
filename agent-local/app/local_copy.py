@@ -68,20 +68,46 @@ def generate_copy_local(
     if parts:
         business_ctx = "\n".join(parts) + "\n"
 
-    prompt = (
-        f"{business_ctx}"
-        f"Escreve uma mensagem de prospecção via {channel_label} para a empresa {company_name}"
-        f"{sector_part}{contact_part}. "
-        f"Tom: {tone}. "
-        f"A oferta deve reflectir o nicho e o produto/serviço do remetente acima — "
-        f"não inventes temas genéricos (ex.: marketing digital, limpeza de equipamentos) "
-        f"que não tenham relação com a oferta indicada. "
-        f"NUNCA uses placeholders como [Seu Nome] ou [Sua Empresa]; usa os dados reais do remetente fornecidos "
-        f"ou, na ausência deles, fala apenas em nome da empresa do destinatário sem te apresentares por nome. "
-        f"Máximo 3 frases curtas e directas. Não uses saudações genéricas. "
-        f"Apresenta uma proposta de valor clara e termina com uma pergunta ou CTA simples. "
-        f"Responde APENAS com o texto da mensagem, sem explicações adicionais."
-    )
+    custom_template = (session or {}).get("local_copy_prompt") or ""
+    if custom_template.strip():
+        _var_map = {
+            "[empresa]": company_name,
+            "[nome da empresa do lead]": company_name,
+            "[setor]": sector,
+            "[contacto]": contact_name,
+            "[canal]": channel_label,
+            "[tom]": tone,
+            "[nicho]": niche,
+            "[oferta]": offer,
+            "[marca]": brand,
+        }
+        script = custom_template
+        for placeholder, value in _var_map.items():
+            script = script.replace(placeholder, value or "")
+        prompt = (
+            f"Usa este script como referência e gera uma mensagem de prospecção "
+            f"personalizada para a empresa {company_name}. "
+            f"Adapta o tom e os detalhes para soar natural e directo — não copies "
+            f"literalmente, gera uma variação. "
+            f"NUNCA uses placeholders como [Seu Nome] ou [Sua Empresa]. "
+            f"Máximo 3 frases curtas. Responde APENAS com o texto da mensagem.\n\n"
+            f"Script de referência:\n{script}"
+        )
+    else:
+        prompt = (
+            f"{business_ctx}"
+            f"Escreve uma mensagem de prospecção via {channel_label} para a empresa {company_name}"
+            f"{sector_part}{contact_part}. "
+            f"Tom: {tone}. "
+            f"A oferta deve reflectir o nicho e o produto/serviço do remetente acima — "
+            f"não inventes temas genéricos (ex.: marketing digital, limpeza de equipamentos) "
+            f"que não tenham relação com a oferta indicada. "
+            f"NUNCA uses placeholders como [Seu Nome] ou [Sua Empresa]; usa os dados reais do remetente fornecidos "
+            f"ou, na ausência deles, fala apenas em nome da empresa do destinatário sem te apresentares por nome. "
+            f"Máximo 3 frases curtas e directas. Não uses saudações genéricas. "
+            f"Apresenta uma proposta de valor clara e termina com uma pergunta ou CTA simples. "
+            f"Responde APENAS com o texto da mensagem, sem explicações adicionais."
+        )
 
     try:
         response = client.chat.completions.create(

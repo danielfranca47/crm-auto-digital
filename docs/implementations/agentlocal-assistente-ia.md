@@ -532,6 +532,34 @@ Sem novas rotas nem chamadas a `crm_client` — opera apenas em
 
 ---
 
+## Fase 12 — Personalização do Prompt de Copy Local
+
+**Objectivo:** o utilizador pode definir em ⚙ Conta um script de referência com variáveis dinâmicas (`[empresa]`, `[nicho]`, etc.); ao gerar uma copy, as variáveis são substituídas pelos dados reais do lead e o texto resultante é enviado à OpenAI como script de referência — a IA gera uma variação personalizada em vez de usar o prompt genérico.
+
+### O que foi alterado
+
+**`agent-local/app/local_copy.py` — `generate_copy_local`**
+
+Antes de construir `prompt`, verifica `session["local_copy_prompt"]`:
+- Se preenchido: substitui `[empresa]`, `[setor]`, `[contacto]`, `[canal]`, `[tom]`, `[nicho]`, `[oferta]`, `[marca]` pelos valores reais → envia à OpenAI com instrução "usa este script como referência e gera uma variação".
+- Se vazio: usa o prompt padrão original (sem alteração).
+
+**`agent-local/app/ui/main_screen.py` — `_build_conta`**
+
+Nova secção "🤖 Prompt de Copy" inserida após "🔑 Chave OpenAI API" dentro do bloco `if not subscriber:`:
+- `CTkTextbox` de altura 120 para escrever o script
+- Linha de chips clicáveis com cada variável disponível (insere no final da caixa)
+- Botão "Guardar prompt" que persiste `session["local_copy_prompt"]` via `save_session`
+- Toast de confirmação "✓ Prompt guardado"
+
+### Commits Fase 12
+
+| # | Commit | O que foi implementado |
+|---|---|---|
+| 1 | `` | Secção UI "🤖 Prompt de Copy" em Conta + lógica de substituição de variáveis em `generate_copy_local` |
+
+---
+
 ## Checks de Validação
 
 > Organizado em duas sessões autónomas. **Sessão 1** não requer backend-crm.
@@ -568,12 +596,12 @@ Sem novas rotas nem chamadas a `crm_client` — opera apenas em
 
 #### A14 — Kanban local: Pesquisar → enviar → gerir leads
 
-- [ ] Ir a "🔍 Pesquisar", seleccionar leads e enviar (avulso ou em massa) →
+- [x] Ir a "🔍 Pesquisar", seleccionar leads e enviar (avulso ou em massa) →
       confirmar que cada lead aparece no painel "Prospectar": sucesso em
       "Qualificação", falha em "À Prospectar"
-- [ ] Confirmar: o aviso de upsell desapareceu e o Kanban mostra as 3 colunas
+- [x] Confirmar: o aviso de upsell desapareceu e o Kanban mostra as 3 colunas
       ("À Prospectar"/"Em Andamento"/"Qualificação") com contagens correctas
-- [ ] Confirmar que os badges "● Agente"/"Pendentes" não aparecem no painel
+- [x] Confirmar que os badges "● Agente"/"Pendentes" não aparecem no painel
       Prospectar para não-assinantes
 - [x] Clicar num card → modal de detalhe → editar a mensagem e clicar
       "💾 Guardar mensagem" → reabrir o card e confirmar que o texto editado
@@ -624,6 +652,16 @@ Sem novas rotas nem chamadas a `crm_client` — opera apenas em
       eliminado não reaparece (persistência em `session.json`)
 - [ ] Confirmar que nada deste fluxo chama o backend-crm e que o Kanban de
       assinante não é afectado
+
+#### A17 — Personalizar o prompt de copy
+
+- [ ] Abrir ⚙ Conta → confirmar que a secção "🤖 Prompt de Copy" aparece após "🔑 Chave OpenAI API"
+- [ ] Escrever um script de exemplo (ex.: "Olá pessoal da [empresa], sou Daniel e ajudo empresas de [nicho]…") e clicar num chip (ex. `[empresa]`) → confirmar que o texto é inserido no final da caixa
+- [ ] Clicar "Guardar prompt" → toast "✓ Prompt guardado" aparece e some em ~1,2 s
+- [ ] Mudar de painel e voltar a ⚙ Conta → confirmar que o script persiste (lido de `session.json`)
+- [ ] Gerar copy de um lead no Kanban local → a mensagem gerada deve reflectir o script personalizado com as variáveis substituídas
+- [ ] Limpar a caixa, guardar e gerar novamente → copy deve usar o prompt padrão (sem script de referência)
+- [ ] Confirmar que a secção "🤖 Prompt de Copy" não aparece em modo assinante
 
 ---
 
