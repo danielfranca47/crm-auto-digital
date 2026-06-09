@@ -604,7 +604,7 @@ Nova secção "🤖 Prompt de Copy" inserida após "🔑 Chave OpenAI API" dentr
 
 | # | Commit | O que foi implementado |
 |---|---|---|
-| 1 | `` | Secção de edição de dados no modal de lead local |
+| 1 | `a54f5cb` | Secção de edição de dados no modal de lead local |
 
 ---
 
