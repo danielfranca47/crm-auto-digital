@@ -54,6 +54,7 @@ class GenerateCopyRequest(BaseModel):
     contact_name: str = ""
     channel: str = "whatsapp"
     tone: str = "profissional e próximo"
+    custom_prompt_template: str = ""
 
 # ------------------ HELPERS ------------------
 _ALLOWED_CHANNELS = {"email", "whatsapp", "instagram", "call"}
@@ -267,21 +268,46 @@ def generate_copy(req: GenerateCopyRequest, current_user: CurrentUser = Depends(
             business_ctx = "\n".join(parts) + "\n"
         sender_part = f"Remetente: Nome={ap_name or '—'}; Empresa={ap_brand or '—'}\n" if (ap_name or ap_brand) else ""
 
-        prompt = (
-            f"{business_ctx}"
-            f"{sender_part}"
-            f"Escreve uma mensagem de prospecção via {channel_label} para a empresa {req.company_name}"
-            f"{sector_part}{contact_part}. "
-            f"Tom: {req.tone}. "
-            f"A oferta deve reflectir o nicho e o produto/serviço do remetente acima — "
-            f"não inventes temas genéricos (ex.: marketing digital, limpeza de equipamentos) "
-            f"que não tenham relação com a oferta indicada. "
-            f"NUNCA uses placeholders como [Seu Nome] ou [Sua Empresa]; usa os dados reais do remetente fornecidos "
-            f"ou, na ausência deles, fala apenas em nome da empresa do destinatário sem te apresentares por nome. "
-            f"Máximo 3 frases curtas e directas. Não uses saudações genéricas. "
-            f"Apresenta uma proposta de valor clara e termina com uma pergunta ou CTA simples. "
-            f"Responde APENAS com o texto da mensagem, sem explicações adicionais."
-        )
+        if req.custom_prompt_template.strip():
+            _var_map = {
+                "[empresa]": req.company_name,
+                "[nome da empresa do lead]": req.company_name,
+                "[setor]": req.sector,
+                "[contacto]": req.contact_name,
+                "[canal]": channel_label,
+                "[tom]": req.tone,
+                "[nicho]": ap_niche,
+                "[oferta]": ap_offer,
+                "[marca]": ap_brand,
+            }
+            script = req.custom_prompt_template
+            for ph, val in _var_map.items():
+                script = script.replace(ph, val or "")
+            prompt = (
+                f"Usa este script como referência e gera uma mensagem de prospecção "
+                f"personalizada para a empresa {req.company_name}. "
+                f"Adapta o tom e os detalhes para soar natural e directo — não copies "
+                f"literalmente, gera uma variação. "
+                f"NUNCA uses placeholders como [Seu Nome] ou [Sua Empresa]. "
+                f"Máximo 3 frases curtas. Responde APENAS com o texto da mensagem.\n\n"
+                f"Script de referência:\n{script}"
+            )
+        else:
+            prompt = (
+                f"{business_ctx}"
+                f"{sender_part}"
+                f"Escreve uma mensagem de prospecção via {channel_label} para a empresa {req.company_name}"
+                f"{sector_part}{contact_part}. "
+                f"Tom: {req.tone}. "
+                f"A oferta deve reflectir o nicho e o produto/serviço do remetente acima — "
+                f"não inventes temas genéricos (ex.: marketing digital, limpeza de equipamentos) "
+                f"que não tenham relação com a oferta indicada. "
+                f"NUNCA uses placeholders como [Seu Nome] ou [Sua Empresa]; usa os dados reais do remetente fornecidos "
+                f"ou, na ausência deles, fala apenas em nome da empresa do destinatário sem te apresentares por nome. "
+                f"Máximo 3 frases curtas e directas. Não uses saudações genéricas. "
+                f"Apresenta uma proposta de valor clara e termina com uma pergunta ou CTA simples. "
+                f"Responde APENAS com o texto da mensagem, sem explicações adicionais."
+            )
 
         response = client.chat.completions.create(
             model=os.getenv("OPENAI_MODEL", "gpt-3.5-turbo"),

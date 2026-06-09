@@ -127,17 +127,21 @@ def generate_copy(
     contact_name: str = "",
     channel: str = "whatsapp",
     tone: str = "profissional e próximo",
+    custom_prompt_template: str = "",
 ) -> str:
     """Gera copy de prospecção via LLM. Retorna o texto gerado."""
+    body: dict = {
+        "company_name": company_name,
+        "sector": sector,
+        "contact_name": contact_name,
+        "channel": channel,
+        "tone": tone,
+    }
+    if custom_prompt_template:
+        body["custom_prompt_template"] = custom_prompt_template
     resp = _request(
         "POST", f"{_base()}/api/prospeccao/generate-copy", session,
-        json={
-            "company_name": company_name,
-            "sector": sector,
-            "contact_name": contact_name,
-            "channel": channel,
-            "tone": tone,
-        },
+        json=body,
         timeout=30,
     )
     resp.raise_for_status()
@@ -275,24 +279,28 @@ def processar_assistente_ia(
     tone: str = "profissional e próximo",
     language: str = "pt-PT",
     column_map: Dict[str, str] | None = None,
+    custom_prompt_template: str = "",
 ) -> Dict[str, Any]:
     """
     Processa o upload: cria leads e/ou gera copys via LLM.
     Retorna: { stats: {created, updated, skipped, messages}, errors: [...] }
     """
+    body: dict = {
+        "upload_id": upload_id,
+        "create_cards": create_cards,
+        "generate_copys": generate_copys,
+        "channels": channels or ["whatsapp"],
+        "overwrite": overwrite,
+        "tone": tone,
+        "language": language,
+        "column_map": column_map or {},
+    }
+    if custom_prompt_template:
+        body["custom_prompt_template"] = custom_prompt_template
     resp = _request(
         "POST", f"{_base()}/api/assistente-ia/processar",
         session,
-        json={
-            "upload_id": upload_id,
-            "create_cards": create_cards,
-            "generate_copys": generate_copys,
-            "channels": channels or ["whatsapp"],
-            "overwrite": overwrite,
-            "tone": tone,
-            "language": language,
-            "column_map": column_map or {},
-        },
+        json=body,
         timeout=120,
     )
     resp.raise_for_status()

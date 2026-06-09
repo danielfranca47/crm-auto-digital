@@ -36,6 +36,7 @@ class AssistIAProcessRequest(BaseModel):
     tone: Optional[str] = "profissional e próximo"
     language: Optional[str] = "pt-PT"
     column_map: Optional[Dict[str, str]] = None
+    custom_prompt_template: str = ""
 
     @field_validator("channels")
     @classmethod
@@ -101,6 +102,7 @@ def processar(req: AssistIAProcessRequest, current_user: CurrentUser = Depends(r
             entitlements=current_user.entitlements,
             column_map=req.column_map or {},
             ai_profile=ai_profile,
+            custom_prompt_template=req.custom_prompt_template or "",
         )
         return {"ok": True, **result}
     except HTTPException as e:

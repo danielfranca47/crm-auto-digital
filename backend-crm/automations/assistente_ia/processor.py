@@ -236,6 +236,7 @@ class AssistIAProcessor:
         entitlements: Optional[Dict] = None,
         column_map: Optional[Dict[str, str]] = None,
         ai_profile: Optional[Dict] = None,
+        custom_prompt_template: str = "",
     ) -> Dict:
         if not file_path.exists():
             raise AssistIAProcessadorErro("Arquivo de upload não encontrado.")
@@ -393,6 +394,7 @@ class AssistIAProcessor:
                             context=context,
                             sender=sender_ctx,
                             ai_profile=ai_profile,
+                            custom_prompt_template=custom_prompt_template,
                         )
 
                         # render por canal (interpolação + respiro) e salvar

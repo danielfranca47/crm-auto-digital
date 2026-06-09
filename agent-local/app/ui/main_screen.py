@@ -1102,6 +1102,7 @@ class MainScreen(ctk.CTkFrame):
                         body = generate_copy(
                             self._session, company_name=company, sector="",
                             contact_name=contact, channel=ch, tone=tone,
+                            custom_prompt_template=self._session.get("local_copy_prompt") or "",
                         )
                         if body:
                             upsert_lead_message(self._session, lid, ch, body)
@@ -1453,6 +1454,7 @@ class MainScreen(ctk.CTkFrame):
                     tone=self._ai_tone_entry.get().strip() or "profissional e próximo",
                     language=self._ai_lang_entry.get().strip() or "pt-PT",
                     column_map=self._ai_column_map,
+                    custom_prompt_template=self._session.get("local_copy_prompt") or "",
                 )
                 self.after(0, lambda r=result: self._ai_on_process_ok(parent, r))
             except Exception as exc:

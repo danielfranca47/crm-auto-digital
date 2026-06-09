@@ -67,6 +67,7 @@ class LLMClient:
         context: Optional[Dict] = None,
         sender: Optional[Dict] = None,  # dados do remetente (profile)
         ai_profile: Optional[Dict] = None,  # ai_profile com generated_prompt_parts (Tarefa 4.3)
+        custom_prompt_template: str = "",
     ) -> Dict[str, Dict]:
         ctx = context or {}
         ctx_summary = self._ctx_summary(ctx)
@@ -148,6 +149,41 @@ class LLMClient:
             "NUNCA use placeholders como [Seu Nome] ou [Sua Empresa]; use os dados do Remetente fornecidos.\n"
             "Se contactName estiver vazio, cumprimente pela empresa (ex.: 'Olá, A Casa do Porco Bar').\n"
         )
+
+        if custom_prompt_template.strip():
+            _ch_labels = {"whatsapp": "WhatsApp", "email": "email",
+                          "instagram": "Instagram", "call": "chamada"}
+            _var_map = {
+                "[empresa]": lead["companyName"],
+                "[nome da empresa do lead]": lead["companyName"],
+                "[contacto]": lead.get("contactName") or "",
+                "[tom]": tone or "",
+                "[nicho]": ap_niche,
+                "[oferta]": ap_offer,
+                "[marca]": ap_brand,
+            }
+            for ch in channels:
+                _var_map["[canal]"] = _ch_labels.get(ch, ch)
+                script = custom_prompt_template
+                for ph, val in _var_map.items():
+                    script = script.replace(ph, val or "")
+                ch_label = _ch_labels.get(ch, ch)
+                prompt = (
+                    f"Usa este script como referência e gera uma mensagem de prospecção "
+                    f"personalizada para a empresa {lead['companyName']}. "
+                    f"Canal: {ch_label}. Tom: {tone or 'profissional'}. "
+                    f"Língua: {language or 'pt-PT'}. "
+                    f"Adapta ao formato do canal mas mantém a essência do script. "
+                    f"NUNCA uses placeholders como [Seu Nome] ou [Sua Empresa].\n\n"
+                    f"Script de referência:\n{script}"
+                )
+                if ch == "email":
+                    prompt += '\nRetorna como JSON: {"subject":"...","body":"..."}'
+                    data = self._chat_json(prompt, temperature=0.5)
+                    out[ch] = {"subject": data.get("subject", "Assunto"), "body": data.get("body", ""), "model": self.model}
+                else:
+                    out[ch] = {"body": self._chat_text(prompt, temperature=0.5), "model": self.model}
+            return out
 
         for ch in channels:
             if ch == "email":
