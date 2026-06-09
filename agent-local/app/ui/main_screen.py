@@ -3070,62 +3070,80 @@ class MainScreen(ctk.CTkFrame):
             ctk.CTkButton(openai_card, text="Guardar chave", height=34,
                            command=_save_oai_key).pack(padx=16, pady=(0, 14))
 
-            # Secção: prompt de copy personalizado
-            prompt_card = ctk.CTkFrame(body, fg_color=_CARD, corner_radius=12)
-            prompt_card.pack(padx=20, fill="x", pady=(0, 12))
-
-            ctk.CTkLabel(prompt_card, text="🤖  Prompt de Copy",
-                          font=ctk.CTkFont(size=13, weight="bold")).pack(anchor="w", padx=16, pady=(12, 4))
-            ctk.CTkLabel(
-                prompt_card,
-                text="Escreve um script de referência — a IA gera uma variação personalizada para cada lead.\n"
-                     "Usa as variáveis abaixo. Deixa vazio para usar o prompt padrão.",
-                font=ctk.CTkFont(size=11), text_color="#6B7280", wraplength=380, justify="left",
-            ).pack(anchor="w", padx=16, pady=(0, 8))
-
-            prompt_box = ctk.CTkTextbox(prompt_card, height=120, corner_radius=8, font=ctk.CTkFont(size=12))
-            prompt_box.pack(padx=16, fill="x")
-            existing_prompt = self._session.get("local_copy_prompt") or ""
-            if existing_prompt:
-                prompt_box.insert("0.0", existing_prompt)
-
-            chips_frame = ctk.CTkFrame(prompt_card, fg_color="transparent")
-            chips_frame.pack(anchor="w", padx=16, pady=(6, 4))
-
-            _CHIP_VARS = [
-                "[empresa]", "[setor]", "[contacto]", "[canal]",
-                "[tom]", "[nicho]", "[oferta]", "[marca]",
-            ]
-            for _cv in _CHIP_VARS:
-                def _insert_var(_v=_cv):
-                    prompt_box.insert("end", _v)
-                ctk.CTkButton(
-                    chips_frame, text=_cv, height=24, corner_radius=6,
-                    fg_color="#1E3A5F", hover_color="#2563EB",
-                    font=ctk.CTkFont(size=10),
-                    command=_insert_var,
-                ).pack(side="left", padx=(0, 4), pady=2)
-
-            def _save_prompt():
-                text = prompt_box.get("0.0", "end").strip()
-                self._session["local_copy_prompt"] = text
-                from app.session import save_session
-                save_session(self._session)
-                _toast = ctk.CTkToplevel(self)
-                _toast.title("Guardado")
-                _toast.geometry("280x100")
-                _toast.grab_set()
-                ctk.CTkLabel(_toast, text="✓ Prompt guardado", font=ctk.CTkFont(size=13)).pack(pady=24)
-                self.after(1200, _toast.destroy)
-
-            ctk.CTkButton(prompt_card, text="Guardar prompt", height=34,
-                           command=_save_prompt).pack(padx=16, pady=(6, 14))
         else:
             info = ctk.CTkFrame(body, fg_color=_CARD, corner_radius=12)
             info.pack(padx=20, fill="x", pady=(0, 12))
             ctk.CTkLabel(info, text="✓  Chave Google Maps incluída na assinatura",
                           font=ctk.CTkFont(size=12), text_color="#10B981"
                           ).pack(padx=16, pady=14)
+
+        # Secção: prompt de copy personalizado (disponível para todos os planos)
+        prompt_card = ctk.CTkFrame(body, fg_color=_CARD, corner_radius=12)
+        prompt_card.pack(padx=20, fill="x", pady=(0, 12))
+
+        ctk.CTkLabel(prompt_card, text="🤖  Prompt de Copy",
+                      font=ctk.CTkFont(size=13, weight="bold")).pack(anchor="w", padx=16, pady=(12, 4))
+        ctk.CTkLabel(
+            prompt_card,
+            text="Escreve um script de referência — a IA gera uma variação personalizada para cada lead.\n"
+                 "Usa as variáveis abaixo. Deixa vazio para usar o prompt padrão.",
+            font=ctk.CTkFont(size=11), text_color="#6B7280", wraplength=380, justify="left",
+        ).pack(anchor="w", padx=16, pady=(0, 8))
+
+        prompt_box = ctk.CTkTextbox(prompt_card, height=120, corner_radius=8, font=ctk.CTkFont(size=12))
+        prompt_box.pack(padx=16, fill="x")
+        existing_prompt = self._session.get("local_copy_prompt") or ""
+        if existing_prompt:
+            prompt_box.insert("0.0", existing_prompt)
+
+        chips_frame = ctk.CTkFrame(prompt_card, fg_color="transparent")
+        chips_frame.pack(anchor="w", padx=16, pady=(6, 4))
+
+        _CHIP_VARS = [
+            "[empresa]", "[setor]", "[contacto]", "[canal]",
+            "[tom]", "[nicho]", "[oferta]", "[marca]",
+        ]
+        for _cv in _CHIP_VARS:
+            def _insert_var(_v=_cv):
+                prompt_box.insert("end", _v)
+            ctk.CTkButton(
+                chips_frame, text=_cv, height=24, corner_radius=6,
+                fg_color="#1E3A5F", hover_color="#2563EB",
+                font=ctk.CTkFont(size=10),
+                command=_insert_var,
+            ).pack(side="left", padx=(0, 4), pady=2)
+
+        def _save_prompt():
+            text = prompt_box.get("0.0", "end").strip()
+            self._session["local_copy_prompt"] = text
+            from app.session import save_session
+            save_session(self._session)
+            _toast = ctk.CTkToplevel(self)
+            _toast.title("Guardado")
+            _toast.geometry("280x100")
+            _toast.grab_set()
+            ctk.CTkLabel(_toast, text="✓ Prompt guardado", font=ctk.CTkFont(size=13)).pack(pady=24)
+            self.after(1200, _toast.destroy)
+
+        def _restore_prompt():
+            self._session["local_copy_prompt"] = ""
+            from app.session import save_session
+            save_session(self._session)
+            prompt_box.delete("0.0", "end")
+            _toast = ctk.CTkToplevel(self)
+            _toast.title("Reposto")
+            _toast.geometry("280x100")
+            _toast.grab_set()
+            ctk.CTkLabel(_toast, text="✓ Prompt padrão restaurado", font=ctk.CTkFont(size=13)).pack(pady=24)
+            self.after(1200, _toast.destroy)
+
+        prompt_btn_row = ctk.CTkFrame(prompt_card, fg_color="transparent")
+        prompt_btn_row.pack(padx=16, pady=(6, 14), fill="x")
+        ctk.CTkButton(prompt_btn_row, text="Guardar prompt", height=34,
+                       command=_save_prompt).pack(side="left")
+        ctk.CTkButton(prompt_btn_row, text="Restaurar padrão", height=34,
+                       fg_color="#374151", hover_color="#4B5563",
+                       command=_restore_prompt).pack(side="left", padx=(8, 0))
 
         # Templates
         tpl_card = ctk.CTkFrame(body, fg_color=_CARD, corner_radius=12)
