@@ -587,6 +587,27 @@ Nova secção "🤖 Prompt de Copy" inserida após "🔑 Chave OpenAI API" dentr
 
 ---
 
+## Fase 14 — Editar Dados do Lead no Modal de Detalhe (Prospectar)
+
+**Objectivo:** permitir ao utilizador editar `companyName`, `contactName` e `phone` directamente no modal de detalhe de um lead local, sem precisar de sair da sessão "Prospectar".
+
+### O que foi alterado
+
+**`agent-local/app/ui/main_screen.py`** — `_show_local_lead_detail()`:
+- Popup alargado de `520x520` para `520x640`
+- Labels do cabeçalho nomeados (`company_label`, `meta_label`) para actualização em tempo-real
+- Nova secção "Dados do lead" (antes da secção "Mensagem"): 3 `CTkEntry` pré-preenchidos (Empresa, Contacto, Telefone) + botão "💾 Guardar dados" + `status_dados_lbl`
+- Função `_save_lead_data()`: valida que Empresa não está vazio, chama `update_local_lead()`, actualiza o cabeçalho do modal e recarrega o Kanban via `_reload_kanban()`
+- Separador visual `CTkFrame(height=1)` entre as secções "Dados" e "Mensagem"
+
+### Commits Fase 14
+
+| # | Commit | O que foi implementado |
+|---|---|---|
+| 1 | `` | Secção de edição de dados no modal de lead local |
+
+---
+
 ## Checks de Validação
 
 > Organizado em duas sessões autónomas. **Sessão 1** não requer backend-crm.
@@ -650,6 +671,14 @@ Nova secção "🤖 Prompt de Copy" inserida após "🔑 Chave OpenAI API" dentr
       detalhe → confirmar o movimento do card consoante sucesso/falha
 - [x] Confirmar que nada deste fluxo chama o backend-crm (sem 403, sem
       necessidade de assinatura activa) — verificado por código 2026-06-09
+- [ ] **Fase 14 — Editar dados do lead:** clicar num card → modal de detalhe →
+      alterar Empresa, Contacto e Telefone → clicar "💾 Guardar dados" →
+      confirmar "✓ Dados guardados." a verde, cabeçalho do modal actualizado
+      e card no Kanban mostra o novo nome
+- [ ] **Fase 14 — Validação vazio:** tentar guardar com campo "Empresa" vazio →
+      confirmar mensagem de erro a vermelho sem persistir
+- [ ] **Fase 14 — Persistência:** fechar e reabrir a app → confirmar que os
+      valores editados estão em `session.json` e reaparecem no modal
 
 #### A15 — Geração de copies em lote a partir da Pesquisa
 

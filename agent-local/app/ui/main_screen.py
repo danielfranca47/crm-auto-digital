@@ -2542,7 +2542,7 @@ class MainScreen(ctk.CTkFrame):
 
         popup = ctk.CTkToplevel(self)
         popup.title(f"Lead {lead_id}")
-        popup.geometry("520x520")
+        popup.geometry("520x640")
         popup.resizable(True, True)
         popup.grab_set()
         popup.focus()
@@ -2554,13 +2554,81 @@ class MainScreen(ctk.CTkFrame):
         hdr = ctk.CTkFrame(popup, fg_color="#1E1E2E", corner_radius=0, height=64)
         hdr.pack(fill="x")
         hdr.pack_propagate(False)
-        ctk.CTkLabel(
+        company_label = ctk.CTkLabel(
             hdr, text=name, font=ctk.CTkFont(size=14, weight="bold"),
-        ).pack(anchor="w", padx=16, pady=(10, 0))
-        ctk.CTkLabel(
+        )
+        company_label.pack(anchor="w", padx=16, pady=(10, 0))
+        meta_label = ctk.CTkLabel(
             hdr, text=f"📞 {phone}   ·   estágio: {cat_label}   ·   {lead_id}",
             font=ctk.CTkFont(size=10), text_color="#9CA3AF",
-        ).pack(anchor="w", padx=16, pady=(0, 10))
+        )
+        meta_label.pack(anchor="w", padx=16, pady=(0, 10))
+
+        # ── Dados do lead (editáveis) ─────────────────────────────────────────
+        dados_frame = ctk.CTkFrame(popup, fg_color="transparent")
+        dados_frame.pack(fill="x", padx=16, pady=(12, 0))
+
+        ctk.CTkLabel(dados_frame, text="Empresa:", width=70, anchor="w",
+                     font=ctk.CTkFont(size=11)).grid(row=0, column=0, sticky="w", padx=(0, 6))
+        entry_company = ctk.CTkEntry(dados_frame, height=28, font=ctk.CTkFont(size=11))
+        entry_company.insert(0, lead.get("companyName") or "")
+        entry_company.grid(row=0, column=1, sticky="ew")
+
+        ctk.CTkLabel(dados_frame, text="Contacto:", width=70, anchor="w",
+                     font=ctk.CTkFont(size=11)).grid(row=1, column=0, sticky="w", pady=(4, 0), padx=(0, 6))
+        entry_contact = ctk.CTkEntry(dados_frame, height=28, font=ctk.CTkFont(size=11))
+        entry_contact.insert(0, lead.get("contactName") or "")
+        entry_contact.grid(row=1, column=1, sticky="ew", pady=(4, 0))
+
+        ctk.CTkLabel(dados_frame, text="Telefone:", width=70, anchor="w",
+                     font=ctk.CTkFont(size=11)).grid(row=2, column=0, sticky="w", pady=(4, 0), padx=(0, 6))
+        entry_phone = ctk.CTkEntry(dados_frame, height=28, font=ctk.CTkFont(size=11))
+        entry_phone.insert(0, lead.get("phone") or "")
+        entry_phone.grid(row=2, column=1, sticky="ew", pady=(4, 0))
+
+        dados_frame.columnconfigure(1, weight=1)
+
+        dados_btn_row = ctk.CTkFrame(dados_frame, fg_color="transparent")
+        dados_btn_row.grid(row=3, column=0, columnspan=2, sticky="w", pady=(8, 0))
+
+        status_dados_lbl = ctk.CTkLabel(
+            dados_btn_row, text="", font=ctk.CTkFont(size=11), wraplength=300,
+        )
+
+        def _save_lead_data() -> None:
+            from app.session import update_local_lead
+            new_company = entry_company.get().strip()
+            new_contact = entry_contact.get().strip()
+            new_phone_val = entry_phone.get().strip()
+            if not new_company:
+                status_dados_lbl.configure(text="Empresa não pode estar vazio.", text_color="#EF4444")
+                return
+            update_local_lead(
+                self._session, lead_id,
+                companyName=new_company,
+                contactName=new_contact,
+                phone=new_phone_val,
+            )
+            lead["companyName"] = new_company
+            lead["contactName"] = new_contact
+            lead["phone"] = new_phone_val
+            company_label.configure(text=new_company)
+            meta_label.configure(
+                text=f"📞 {new_phone_val or '—'}   ·   estágio: {cat_label}   ·   {lead_id}"
+            )
+            status_dados_lbl.configure(text="✓ Dados guardados.", text_color="#16A34A")
+            kc = getattr(self, "_kanban_content", None)
+            if kc and self._widget_alive(kc):
+                self._reload_kanban(kc, is_subscriber(self._session))
+
+        ctk.CTkButton(
+            dados_btn_row, text="💾 Guardar dados", width=140, height=28, corner_radius=6,
+            fg_color="#1D4ED8", hover_color="#1E40AF", font=ctk.CTkFont(size=11, weight="bold"),
+            command=_save_lead_data,
+        ).pack(side="left")
+        status_dados_lbl.pack(side="left", padx=(10, 0))
+
+        ctk.CTkFrame(popup, height=1, fg_color="#374151").pack(fill="x", padx=16, pady=(10, 0))
 
         ctk.CTkLabel(
             popup, text="Mensagem",
