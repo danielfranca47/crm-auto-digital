@@ -2686,7 +2686,7 @@ class MainScreen(ctk.CTkFrame):
 
             def _worker():
                 try:
-                    text = generate_copy_local(self._session, company_name=name)
+                    text = generate_copy_local(self._session, company_name=lead.get("companyName") or name)
                     self.after(0, lambda: _on_copy_done(text, None))
                 except LocalCopyError as exc:
                     self.after(0, lambda: _on_copy_done(None, str(exc)))
