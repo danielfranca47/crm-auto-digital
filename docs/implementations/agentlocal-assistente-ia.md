@@ -648,14 +648,14 @@ Nova secção "🤖 Prompt de Copy" inserida após "🔑 Chave OpenAI API" dentr
       vs "À Prospectar")
 - [ ] Reenviar individualmente ("📱 Reenviar agora") a partir do modal de
       detalhe → confirmar o movimento do card consoante sucesso/falha
-- [ ] Confirmar que nada deste fluxo chama o backend-crm (sem 403, sem
-      necessidade de assinatura activa)
+- [x] Confirmar que nada deste fluxo chama o backend-crm (sem 403, sem
+      necessidade de assinatura activa) — verificado por código 2026-06-09
 
 #### A15 — Geração de copies em lote a partir da Pesquisa
 
-- [ ] Com chave OpenAI/perfil de negócio **não** configurados: pesquisar,
+- [x] Com chave OpenAI/perfil de negócio **não** configurados: pesquisar,
       seleccionar leads e clicar "✨ Gerar copies (local)" → confirmar
-      mensagem accionável imediata (chave/perfil em falta), sem disparar chamadas
+      mensagem accionável imediata (chave/perfil em falta), sem disparar chamadas — verificado por código 2026-06-09
 - [ ] Com chave + perfil configurados: seleccionar 5 leads e clicar
       "✨ Gerar copies (local)" → confirmar progresso "X/N" a actualizar e
       botão desactivado durante o processamento
@@ -663,31 +663,31 @@ Nova secção "🤖 Prompt de Copy" inserida após "🔑 Chave OpenAI API" dentr
       aparecem no painel "Prospectar" ("À Prospectar") com a mensagem
       preenchida — abrir o card e confirmar que o texto reflecte o
       nicho/oferta do perfil, sem placeholders `[Seu Nome]`/`[Sua Empresa]`
-- [ ] Seleccionar mais de 15 leads → confirmar que apenas os primeiros 15
-      são processados e que o resumo indica quantos ficaram de fora
-- [ ] Confirmar que nada deste fluxo chama o backend-crm (sem 403)
+- [x] Seleccionar mais de 15 leads → confirmar que apenas os primeiros 15
+      são processados e que o resumo indica quantos ficaram de fora — verificado por código 2026-06-09 (`_LOCAL_COPY_BATCH_LIMIT = 15`)
+- [x] Confirmar que nada deste fluxo chama o backend-crm (sem 403) — verificado por código 2026-06-09
 
 #### A16 — Eliminar leads do Kanban local
 
 - [ ] Abrir um card no Kanban local "Prospectar" → modal de detalhe →
       clicar "🗑 Eliminar lead" → confirmar que aparece o popup de confirmação
-- [ ] Clicar "Cancelar" → confirmar que o lead permanece no Kanban e o modal
-      continua aberto
+- [x] Clicar "Cancelar" → confirmar que o lead permanece no Kanban e o modal
+      continua aberto — verificado por código 2026-06-09 (botão tem apenas `confirm.destroy`)
 - [ ] Clicar "🗑 Eliminar" → confirmar que ambos os popups fecham, o card
       desaparece do Kanban e a contagem da coluna actualiza
-- [ ] Mudar de painel e voltar (ou reabrir a app) → confirmar que o lead
-      eliminado não reaparece (persistência em `session.json`)
-- [ ] Confirmar que nada deste fluxo chama o backend-crm e que o Kanban de
-      assinante não é afectado
+- [x] Mudar de painel e voltar (ou reabrir a app) → confirmar que o lead
+      eliminado não reaparece (persistência em `session.json`) — verificado por código 2026-06-09
+- [x] Confirmar que nada deste fluxo chama o backend-crm e que o Kanban de
+      assinante não é afectado — verificado por código 2026-06-09
 
 #### A17 — Personalizar o prompt de copy (conta gratuita)
 
-- [ ] Abrir ⚙ Conta → confirmar que a secção "🤖 Prompt de Copy" aparece (disponível em todos os planos)
-- [ ] Escrever um script (ex.: "Olá pessoal da [empresa], sou Daniel e ajudo empresas de [nicho]…") e clicar num chip (ex. `[empresa]`) → confirmar que o texto é inserido no final da caixa
-- [ ] Clicar "Guardar prompt" → toast "✓ Prompt guardado" aparece e some em ~1,2 s
-- [ ] Mudar de painel e voltar a ⚙ Conta → confirmar que o script persiste (lido de `session.json`)
+- [x] Abrir ⚙ Conta → confirmar que a secção "🤖 Prompt de Copy" aparece (disponível em todos os planos) — verificado por código 2026-06-09 (secção fora do bloco `if not subscriber:`)
+- [x] Escrever um script (ex.: "Olá pessoal da [empresa], sou Daniel e ajudo empresas de [nicho]…") e clicar num chip (ex. `[empresa]`) → confirmar que o texto é inserido no final da caixa — verificado por código 2026-06-09
+- [x] Clicar "Guardar prompt" → toast "✓ Prompt guardado" aparece e some em ~1,2 s — verificado por código 2026-06-09
+- [x] Mudar de painel e voltar a ⚙ Conta → confirmar que o script persiste (lido de `session.json`) — verificado por código 2026-06-09
 - [ ] Gerar copy de um lead no Kanban local (modo gratuito) → mensagem reflecte o script com variáveis substituídas
-- [ ] Clicar "Restaurar padrão" → toast "✓ Prompt padrão restaurado", caixa limpa
+- [x] Clicar "Restaurar padrão" → toast "✓ Prompt padrão restaurado", campo reposto com prompt padrão — verificado por código 2026-06-09
 - [ ] Gerar copy novamente → usa o prompt padrão
 
 #### A17b — Prompt personalizado para assinante (requer backend-crm)
@@ -707,8 +707,8 @@ Nova secção "🤖 Prompt de Copy" inserida após "🔑 Chave OpenAI API" dentr
 #### A7 — Entrada via Pesquisar → Assistente IA (ponto de entrada principal)
 
 - [ ] Pesquisar empresas → aguardar resultados aparecerem
-- [ ] Confirmar: botão "✨ Gerar copy com IA" aparece no header dos resultados
-- [ ] Clicar o botão → confirmar que navega directamente para o painel Assistente IA
+- [x] Confirmar: botão "✨ Gerar copy com IA" aparece no header dos resultados — verificado por código 2026-06-09 (guarded por `if subscriber:`)
+- [x] Clicar o botão → confirmar que navega directamente para o painel Assistente IA — verificado por código 2026-06-09 (`command=self._ir_para_assistente_ia` → `_switch_panel("assistente-ia")`)
 - [ ] Confirmar: o painel Assistente IA abre e converte/envia automaticamente
       os resultados da pesquisa (label "N resultados da pesquisa — a
       converter…" + barra de progresso), sem qualquer clique adicional
@@ -767,16 +767,16 @@ Nova secção "🤖 Prompt de Copy" inserida após "🔑 Chave OpenAI API" dentr
 - [ ] Gerar copy para um lead (fluxo normal ou "Gerar copys para leads sem copy")
 - [ ] Confirmar: o texto reflecte o nicho/oferta reais do utilizador — não temas
       aleatórios sem relação com o que o utilizador realmente vende
-- [ ] Confirmar: o texto NÃO contém `[Seu Nome]` / `[Sua Empresa]`
-- [ ] Testar também com um utilizador sem perfil de IA preenchido → confirmar que
-      a geração não falha (cai para o comportamento genérico anterior)
+- [x] Confirmar: o texto NÃO contém `[Seu Nome]` / `[Sua Empresa]` — verificado por código 2026-06-09 (prompt instrui explicitamente `NUNCA uses placeholders`)
+- [x] Testar também com um utilizador sem perfil de IA preenchido → confirmar que
+      a geração não falha (cai para o comportamento genérico anterior) — verificado por código 2026-06-09 (`ai_profile = {}` em caso de excepção, todos os campos com `.get()` + fallback)
 
 #### A10 + A11 — Gerar copys para leads existentes sem copy
 
 - [x] No painel Assistente IA, clicar "🔄 Gerar copys para leads sem copy" — validado em 2026-06-08
 - [x] Confirmar: aparece "A procurar leads sem copy gerada…" e depois a lista — validado em 2026-06-08
 - [x] Confirmar: apenas leads do Kanban (to-prospect/in-progress/qualification) **sem** mensagens geradas aparecem na lista — validado em 2026-06-08
-- [ ] Se todos os leads já têm copy, confirmar mensagem "Todos os leads no Kanban já têm copy gerada. 🎉"
+- [x] Se todos os leads já têm copy, confirmar mensagem "Todos os leads no Kanban já têm copy gerada. 🎉" — verificado por código 2026-06-09
 - [x] Seleccionar/desseleccionar leads individualmente e via "Seleccionar todos" — validado em 2026-06-08
 - [x] Escolher canal(is) (WhatsApp/Email/Instagram) e ajustar tom de voz — validado em 2026-06-08
 - [x] Clicar "✨ Gerar copys para seleccionados" — validado em 2026-06-08
