@@ -121,7 +121,7 @@ const plans = [
     cta: 'Ativar minha Lara →',
   },
   {
-    name: 'Growth', price: '197', highlight: true, badge: 'MAIS POPULAR', comingSoon: false,
+    name: 'Growth', price: '197', highlight: true, badge: 'RECOMENDADO', comingSoon: false,
     features: [
       '500 conversas IA/mês',
       '1 WhatsApp conectado',
@@ -739,7 +739,7 @@ export default function CRMLanding() {
       </section>
 
       {/* ── SOCIAL PROOF ── */}
-      <section className="py-20 px-4 bg-secondary/30">
+      <section className="py-20 px-4">
         <div className="container mx-auto max-w-4xl">
           <div className="text-center mb-12">
             <span className="text-accent text-sm font-semibold uppercase tracking-widest">✦ Quem já usa a Lara</span>
@@ -896,13 +896,13 @@ export default function CRMLanding() {
 
         <div className="container mx-auto max-w-3xl text-center relative">
           <h2 className="text-heading mb-4">
-            O seu concorrente já está{' '}
+            Enquanto você lê isso,{' '}
             <span className="bg-gradient-to-r from-accent to-primary bg-clip-text text-transparent">
-              automatizando o WhatsApp.
+              um lead seu está esperando resposta.
             </span>
           </h2>
           <p className="text-muted-foreground text-lg mb-10 max-w-xl mx-auto leading-relaxed">
-            A Lara atende quando você não pode, faz follow-up quando você esquece e recupera vendas que você daria como perdidas. Comece hoje.
+            A Lara atenderia ele agora — você ainda não. Comece hoje e nunca mais perca uma venda por falta de resposta.
           </p>
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
             <a href="#planos" className="btn-hero flex items-center justify-center gap-2 text-lg px-10 py-5">
