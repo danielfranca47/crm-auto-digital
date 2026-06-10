@@ -83,7 +83,7 @@ const differentials = [
 const bonuses = [
   {
     num: '01', title: 'Onboarding ao Vivo', value: 'R$297',
-    desc: 'Sessão 1:1 de 1h para configurar a Lara no seu negócio do zero. Você sai com tudo funcionando — atendimento, qualificação e follow-up ativos.',
+    desc: 'Growth: sessão 1:1 de 1h para configurar tudo do zero — você sai com atendimento, qualificação e follow-up ativos. Start: acesso à sessão semanal em grupo com a equipe.',
   },
   {
     num: '02', title: 'Playbook de Scripts Prontos', value: 'R$197',
@@ -568,7 +568,7 @@ export default function CRMLanding() {
             <span className="text-accent text-sm font-semibold uppercase tracking-widest">✦ Bônus incluídos</span>
             <h2 className="text-heading mt-2">Você não contrata só a Lara. Você ganha isso junto.</h2>
             <p className="text-muted-foreground mt-3 max-w-xl mx-auto">
-              Incluídos em todos os planos — para você sair do zero ao resultado no menor tempo possível.
+              Incluídos para acelerar seus primeiros resultados — com variações por plano.
             </p>
           </div>
 
@@ -593,7 +593,7 @@ export default function CRMLanding() {
           </div>
 
           <div className="portfolio-card p-6 border" style={{ borderColor: 'rgba(77,212,255,0.3)' }}>
-            <div className="flex flex-wrap justify-center items-center gap-4 text-sm text-center">
+            <div className="flex flex-wrap justify-center items-center gap-6 text-sm text-center">
               <div>
                 <span className="text-muted-foreground">Total de bônus: </span>
                 <span className="font-bold line-through opacity-40">R$641</span>
@@ -602,10 +602,6 @@ export default function CRMLanding() {
               <div>
                 <span className="text-muted-foreground">Plano Growth: </span>
                 <span className="font-bold text-accent">R$197/mês</span>
-              </div>
-              <div className="text-muted-foreground hidden sm:block">→</div>
-              <div className="font-bold" style={{ color: '#4DD4FF' }}>
-                R$197 parece um negócio óbvio.
               </div>
             </div>
           </div>
@@ -801,7 +797,7 @@ export default function CRMLanding() {
           </div>
 
           <div className="border-t border-primary-foreground/20 pt-6 flex flex-col md:flex-row justify-between items-center gap-4">
-            <p className="text-sm text-primary-foreground/60">© 2025 DigitalPro. Todos os direitos reservados.</p>
+            <p className="text-sm text-primary-foreground/60">© 2026 DigitalPro. Todos os direitos reservados.</p>
             <div className="flex items-center gap-6 text-sm text-primary-foreground/60">
               <a href="#" className="hover:text-accent transition-smooth">Privacidade</a>
               <a href="#" className="hover:text-accent transition-smooth">Termos</a>
