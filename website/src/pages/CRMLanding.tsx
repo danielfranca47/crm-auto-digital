@@ -243,9 +243,9 @@ export default function CRMLanding() {
 
             {/* H1 */}
             <h1 className="text-hero mb-6 animate-fade-in animate-delay-100">
-              Nunca mais perca uma venda{' '}
+              Seus leads qualificados e prontos para fechar —{' '}
               <span className="bg-gradient-to-r from-accent to-primary bg-clip-text text-transparent">
-                por falta de follow-up.
+                sem você responder uma mensagem.
               </span>
             </h1>
 
