@@ -1,9 +1,9 @@
 import { useState } from 'react';
 import {
   ArrowRight, Bot, Zap, Clock, Users, TrendingUp,
-  CheckCircle, MessageSquare, Phone, ChevronDown, Star,
+  CheckCircle, MessageSquare, Phone, ChevronDown,
   BarChart2, BellRing, Volume2, ImageIcon, Plug,
-  Play, Check, X, ChevronRight, ArrowUp, Mail, Kanban,
+  Play, Check, X, ChevronRight, ArrowUp, Mail, Kanban, Shield,
 } from 'lucide-react';
 
 /* ─── Data ──────────────────────────────────────────────────── */
@@ -80,62 +80,77 @@ const differentials = [
   },
 ];
 
-const testimonials = [
+const bonuses = [
   {
-    name: 'Fernanda Costa', role: 'Proprietária de Clínica Estética', stars: 5,
-    text: 'A Lara responde, agenda e faz follow-up sozinha. Antes eu perdia leads por demorar a responder — hoje minha taxa de fechamento dobrou em 45 dias.',
+    num: '01', title: 'Onboarding ao Vivo', value: 'R$297',
+    desc: 'Sessão 1:1 de 1h para configurar a Lara no seu negócio do zero. Você sai com tudo funcionando — atendimento, qualificação e follow-up ativos.',
   },
   {
-    name: 'Ricardo Mendes', role: 'CEO de E-commerce', stars: 5,
-    text: 'O CRM embutido mudou tudo. Antes meus leads ficavam perdidos no WhatsApp. Agora a Lara organiza tudo no pipeline e eu sei exatamente o que está acontecendo.',
+    num: '02', title: 'Playbook de Scripts Prontos', value: 'R$197',
+    desc: '15 scripts testados para qualificação, follow-up e recuperação de carrinho — só copiar e colar na Lara. Funcionam no dia 1.',
   },
   {
-    name: 'Camila Rocha', role: 'Personal Trainer', stars: 5,
-    text: 'A Lara recuperou 3 alunos que eu tinha "perdido". Ela fez o follow-up no momento certo — foram vendas que nunca teriam acontecido sem ela.',
+    num: '03', title: 'Suporte Diário ao Vivo por 30 dias', value: 'R$147',
+    desc: 'Sessão diária às 15h com o time. Tire dúvidas, veja demos e otimize sua Lara em tempo real — sem ficar perdido.',
   },
 ];
 
 const plans = [
   {
-    name: 'Starter', price: '197', highlight: false,
+    name: 'Start', price: '97', highlight: false, badge: null, comingSoon: false,
     features: [
-      '1.000 conversas/mês',
+      '250 conversas IA/mês',
       '1 WhatsApp conectado',
+      'Até 500 contatos no CRM',
       'CRM com pipeline Kanban',
-      'Envio de áudio personalizado',
-      'Envio de imagens e vídeos',
+      'Os 3 tipos de agente',
+      'Qualificação automatizada',
+      'Dashboard básico',
       'Suporte por chat',
     ],
-    cta: 'Conhecer a Lara',
+    footer: 'Excedente: R$0,60/conversa',
+    cta: 'Ativar minha Lara →',
   },
   {
-    name: 'Growth', price: '397', highlight: true, badge: 'MAIS POPULAR',
+    name: 'Growth', price: '197', highlight: true, badge: 'MAIS POPULAR', comingSoon: false,
     features: [
-      'Conversas ilimitadas',
+      '500 conversas IA/mês',
       '1 WhatsApp conectado',
-      'CRM com pipeline Kanban',
-      'Follow-up automático',
-      'Envio de áudio personalizado',
-      'Envio de imagens e vídeos',
-      '✦ Voz clonada em tempo real',
-      'Prospecção automática',
+      'Até 1.500 contatos no CRM',
+      '✦ Follow-up automático',
+      '✦ Playground de testes',
+      '✦ Analytics avançados',
+      'Dashboard completo',
       'Suporte prioritário',
     ],
-    cta: 'Conhecer a Lara',
+    footer: 'Excedente: R$0,50/conversa',
+    cta: 'Ativar minha Lara →',
   },
   {
-    name: 'Scale', price: '997', highlight: false,
+    name: 'Scale', price: '397', highlight: false, badge: 'EM BREVE', comingSoon: true,
     features: [
-      'Conversas ilimitadas',
+      '1.500 conversas IA/mês',
       'Até 3 WhatsApps',
-      'Multi-empresa',
-      'CRM completo + relatórios',
-      'Voz clonada em tempo real',
-      'Prospecção automática avançada',
-      'Integrações via API (em breve)',
-      'Gestor de conta dedicado',
+      'Até 5.000 contatos',
+      'Tudo do Growth',
+      'Suporte prioritário',
+      'Instância adicional: R$99/mês',
     ],
-    cta: 'Falar com consultor',
+    footer: 'Excedente: R$0,40/conversa',
+    cta: 'Entrar na lista →',
+  },
+  {
+    name: 'Enterprise', price: '697', highlight: false, badge: 'EM BREVE', comingSoon: true,
+    features: [
+      '5.000 conversas IA/mês',
+      'Até 5 WhatsApps',
+      'Até 15.000 contatos',
+      'Tudo do Scale',
+      'Onboarding dedicado',
+      'Instância adicional: R$89/mês',
+    ],
+    footer: 'Excedente: R$0,30/conversa',
+    cta: 'Entrar na lista →',
   },
 ];
 
@@ -158,6 +173,7 @@ const faqs = [
   { q: 'O que acontece quando o cliente precisa de humano?', a: 'A Lara transfere automaticamente com o contexto completo da conversa. Quem assumir já sabe tudo que foi discutido.' },
   { q: 'A Lara funciona para qualquer tipo de negócio?', a: 'Sim. Infoprodutos, serviços, e-commerce, saúde, imóveis, educação — a Lara se adapta ao seu setor.' },
   { q: 'Posso cancelar quando quiser?', a: 'Sim. Sem fidelidade, sem multa. Cancele com 1 clique a qualquer momento.' },
+  { q: 'Como funciona a garantia de 30 dias?', a: 'Se em 30 dias a Lara não recuperar pelo menos 1 venda que você daria como perdida, devolvemos 100% do valor. Sem perguntas, sem burocracia — só manda uma mensagem.' },
 ];
 
 const waveformHeights = [3, 5, 7, 4, 6, 8, 3, 5, 7, 4, 6, 3, 5, 8, 4, 6, 5, 3];
@@ -191,7 +207,7 @@ export default function CRMLanding() {
 
             <div className="flex items-center gap-3">
               <a href="#" className="hidden md:inline text-sm text-muted-foreground hover:text-foreground transition-smooth">Entrar</a>
-              <a href="#planos" className="btn-hero text-sm px-5 py-2.5">Começar grátis →</a>
+              <a href="#planos" className="btn-hero text-sm px-5 py-2.5">Ativar agora →</a>
             </div>
           </div>
         </div>
@@ -208,12 +224,10 @@ export default function CRMLanding() {
           backgroundRepeat: 'no-repeat',
         }}
       >
-        {/* overlay gradiente — escurece da esquerda para a direita para o texto ser legível */}
         <div className="absolute inset-0 pointer-events-none"
           style={{
             background: 'linear-gradient(to right, #0D0A17 30%, rgba(13,10,23,0.85) 55%, rgba(13,10,23,0.2) 100%)',
           }} />
-        {/* overlay gradiente — escurece base da secção */}
         <div className="absolute bottom-0 inset-x-0 h-32 pointer-events-none"
           style={{ background: 'linear-gradient(to top, #0D0A17, transparent)' }} />
 
@@ -229,9 +243,9 @@ export default function CRMLanding() {
 
             {/* H1 */}
             <h1 className="text-hero mb-6 animate-fade-in animate-delay-100">
-              A Lara cuida dos seus leads{' '}
+              Nunca mais perca uma venda{' '}
               <span className="bg-gradient-to-r from-accent to-primary bg-clip-text text-transparent">
-                enquanto você faz o resto.
+                por falta de follow-up.
               </span>
             </h1>
 
@@ -243,7 +257,7 @@ export default function CRMLanding() {
             {/* CTAs */}
             <div className="flex flex-col sm:flex-row gap-4 mb-14 animate-fade-in animate-delay-300">
               <a href="#planos" className="btn-hero flex items-center justify-center gap-2">
-                Conhecer a Lara <ArrowRight className="w-4 h-4" />
+                Ativar minha Lara agora <ArrowRight className="w-4 h-4" />
               </a>
               <a href="#como-funciona"
                 className="flex items-center justify-center gap-2 px-8 py-4 rounded-xl font-semibold border border-white/20 hover:bg-white/10 transition-smooth">
@@ -251,24 +265,16 @@ export default function CRMLanding() {
               </a>
             </div>
 
-            {/* stats */}
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-6 animate-fade-in animate-delay-400">
-              {[
-                { value: '10k+', label: 'Leads qualificados' },
-                { value: '94%',  label: 'Taxa de resposta'   },
-                { value: '3×',   label: 'Mais conversões'    },
-                { value: '24/7', label: 'Atendimento ativo'  },
-              ].map(s => (
-                <div key={s.label}>
-                  <div className="text-2xl font-extrabold text-accent">{s.value}</div>
-                  <div className="text-xs text-muted-foreground mt-0.5">{s.label}</div>
-                </div>
-              ))}
+            {/* guarantee badge no hero */}
+            <div className="flex items-center gap-3 animate-fade-in animate-delay-400">
+              <Shield className="w-5 h-5 flex-shrink-0" style={{ color: '#4DD4FF' }} />
+              <span className="text-sm text-muted-foreground">
+                <strong style={{ color: '#4DD4FF' }}>Garantia de 30 dias</strong> — se a Lara não recuperar 1 venda perdida, devolvemos tudo.
+              </span>
             </div>
           </div>
         </div>
 
-        {/* scroll hint */}
         <div className="absolute bottom-8 inset-x-0 flex justify-center animate-bounce text-muted-foreground z-10">
           <ChevronDown className="w-5 h-5" />
         </div>
@@ -278,7 +284,7 @@ export default function CRMLanding() {
       <section className="py-8 border-y border-border bg-card/40">
         <div className="container mx-auto px-4 lg:px-8">
           <p className="text-center text-xs text-muted-foreground mb-5 uppercase tracking-widest font-semibold">
-            + DE 10.000 EMPRESAS JÁ TÊM UMA LARA ATENDENDO PARA ELAS
+            A LARA JÁ TRABALHA EM NEGÓCIOS COMO
           </p>
           <div className="flex flex-wrap justify-center items-center gap-6 opacity-50">
             {['Infoprodutos', 'E-commerce', 'Saúde', 'Imóveis', 'Educação', 'Serviços', 'Beleza'].map(s => (
@@ -316,7 +322,7 @@ export default function CRMLanding() {
             <h3 className="text-xl font-bold mb-3">{sectors[activeSector].label}</h3>
             <p className="text-muted-foreground leading-relaxed">{sectors[activeSector].description}</p>
             <a href="#planos" className="btn-hero inline-flex items-center gap-2 mt-7 text-sm px-6 py-3">
-              Quero automatizar <ArrowRight className="w-4 h-4" />
+              Quero ativar a Lara <ArrowRight className="w-4 h-4" />
             </a>
           </div>
         </div>
@@ -349,7 +355,7 @@ export default function CRMLanding() {
 
           <div className="text-center mt-10">
             <a href="#planos" className="btn-hero inline-flex items-center gap-2">
-              Automatizar meu WhatsApp agora <ArrowRight className="w-4 h-4" />
+              Ativar minha Lara agora <ArrowRight className="w-4 h-4" />
             </a>
           </div>
         </div>
@@ -413,7 +419,7 @@ export default function CRMLanding() {
 
           <div className="text-center mt-10">
             <a href="#planos" className="btn-hero inline-flex items-center gap-2">
-              Quero testar grátis <ArrowRight className="w-4 h-4" />
+              Ativar minha Lara <ArrowRight className="w-4 h-4" />
             </a>
           </div>
         </div>
@@ -438,14 +444,13 @@ export default function CRMLanding() {
                 Grave seu áudio uma vez. A Lara envia para cada cliente como mensagem de voz nova, no momento certo da conversa — humanizando o atendimento sem você precisar estar lá.
               </p>
 
-              {/* audio mock */}
               <div className="flex flex-col sm:flex-row gap-4 justify-center items-center">
                 <div className="portfolio-card px-6 py-4 flex items-center gap-3 w-full sm:w-auto">
                   <div className="w-10 h-10 rounded-full bg-muted flex items-center justify-center flex-shrink-0">
                     <Volume2 className="w-4 h-4 text-muted-foreground" />
                   </div>
                   <div className="text-left">
-                    <div className="text-xs text-muted-foreground mb-1">Áudio gravado pelo você</div>
+                    <div className="text-xs text-muted-foreground mb-1">Áudio gravado por você</div>
                     <div className="flex gap-px items-end" style={{ height: 24 }}>
                       {waveformHeights.map((h, i) => (
                         <div key={i} className="w-1 rounded-full bg-muted-foreground opacity-50"
@@ -477,8 +482,8 @@ export default function CRMLanding() {
               </div>
 
               <p className="text-xs text-muted-foreground mt-8">
-                ✦ Voz clonada da Lara em tempo real disponível a partir do{' '}
-                <strong style={{ color: '#4DD4FF' }}>Lara Growth</strong>
+                ✦ Voz clonada em tempo real disponível a partir do{' '}
+                <strong style={{ color: '#4DD4FF' }}>plano Growth</strong>
               </p>
             </div>
           </div>
@@ -556,55 +561,115 @@ export default function CRMLanding() {
         </div>
       </section>
 
-      {/* ── TESTIMONIALS ── */}
+      {/* ── BONUS STACK ── */}
       <section className="py-20 px-4 bg-secondary/30">
-        <div className="container mx-auto max-w-5xl">
-          <div className="text-center mb-14">
-            <span className="text-accent text-sm font-semibold uppercase tracking-widest">✦ Prova Social</span>
-            <h2 className="text-heading mt-2">O que dizem quem já tem a Lara</h2>
+        <div className="container mx-auto max-w-4xl">
+          <div className="text-center mb-12">
+            <span className="text-accent text-sm font-semibold uppercase tracking-widest">✦ Bônus incluídos</span>
+            <h2 className="text-heading mt-2">Você não contrata só a Lara. Você ganha isso junto.</h2>
+            <p className="text-muted-foreground mt-3 max-w-xl mx-auto">
+              Incluídos em todos os planos — para você sair do zero ao resultado no menor tempo possível.
+            </p>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            {testimonials.map(t => (
-              <div key={t.name} className="portfolio-card flex flex-col">
-                <div className="flex gap-0.5 mb-4">
-                  {Array.from({ length: t.stars }).map((_, i) => (
-                    <Star key={i} className="w-4 h-4 fill-current text-accent" />
-                  ))}
+          <div className="space-y-4 mb-10">
+            {bonuses.map(bonus => (
+              <div key={bonus.num} className="portfolio-card flex items-start gap-5">
+                <div className="text-3xl font-extrabold select-none leading-none flex-shrink-0 pt-1"
+                  style={{ color: '#4DD4FF', opacity: 0.35 }}>
+                  {bonus.num}
                 </div>
-                <p className="text-muted-foreground text-sm leading-relaxed flex-1 italic">"{t.text}"</p>
-                <div className="flex items-center gap-3 mt-5 pt-5 border-t border-border">
-                  <div className="w-9 h-9 rounded-full accent-gradient flex items-center justify-center text-accent-foreground font-bold text-sm flex-shrink-0">
-                    {t.name.charAt(0)}
+                <div className="flex-1">
+                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1 mb-2">
+                    <h3 className="font-bold">✦ {bonus.title}</h3>
+                    <span className="text-sm font-bold flex-shrink-0" style={{ color: '#4DD4FF' }}>
+                      valor: {bonus.value}
+                    </span>
                   </div>
-                  <div>
-                    <div className="font-semibold text-sm">{t.name}</div>
-                    <div className="text-xs text-muted-foreground">{t.role}</div>
-                  </div>
+                  <p className="text-muted-foreground text-sm leading-relaxed">{bonus.desc}</p>
                 </div>
               </div>
             ))}
+          </div>
+
+          <div className="portfolio-card p-6 border" style={{ borderColor: 'rgba(77,212,255,0.3)' }}>
+            <div className="flex flex-wrap justify-center items-center gap-4 text-sm text-center">
+              <div>
+                <span className="text-muted-foreground">Total de bônus: </span>
+                <span className="font-bold line-through opacity-40">R$641</span>
+              </div>
+              <div className="text-muted-foreground hidden sm:block">·</div>
+              <div>
+                <span className="text-muted-foreground">Plano Growth: </span>
+                <span className="font-bold text-accent">R$197/mês</span>
+              </div>
+              <div className="text-muted-foreground hidden sm:block">→</div>
+              <div className="font-bold" style={{ color: '#4DD4FF' }}>
+                R$197 parece um negócio óbvio.
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* ── SOCIAL PROOF ── */}
+      <section className="py-20 px-4">
+        <div className="container mx-auto max-w-3xl text-center">
+          <span className="text-accent text-sm font-semibold uppercase tracking-widest">✦ Fase Beta</span>
+          <h2 className="text-heading mt-2 mb-4">
+            A Lara está sendo testada com os primeiros negócios
+          </h2>
+          <p className="text-muted-foreground max-w-xl mx-auto mb-10 leading-relaxed">
+            Estamos em fase de beta com um grupo selecionado de empreendedores brasileiros. Os primeiros resultados chegam em breve — e há vagas abertas para quem quiser entrar cedo.
+          </p>
+          <div className="portfolio-card p-10 max-w-lg mx-auto">
+            <div className="text-5xl mb-4">🚀</div>
+            <h3 className="font-bold text-lg mb-3">Acesso antecipado disponível</h3>
+            <p className="text-muted-foreground text-sm mb-6 leading-relaxed">
+              Seja um dos primeiros a usar a Lara no seu negócio — com suporte próximo da equipe durante toda a implementação.
+            </p>
+            <a href="#planos" className="btn-hero inline-flex items-center gap-2">
+              Quero acesso antecipado <ArrowRight className="w-4 h-4" />
+            </a>
           </div>
         </div>
       </section>
 
       {/* ── PLANS ── */}
-      <section id="planos" className="py-20 px-4">
-        <div className="container mx-auto max-w-5xl">
-          <div className="text-center mb-14">
+      <section id="planos" className="py-20 px-4 bg-secondary/30">
+        <div className="container mx-auto max-w-6xl">
+          <div className="text-center mb-10">
             <span className="text-accent text-sm font-semibold uppercase tracking-widest">✦ Planos da Lara</span>
             <h2 className="text-heading mt-2">Escolha o plano e a Lara começa hoje</h2>
             <p className="text-muted-foreground mt-3">Sem fidelidade. Cancele quando quiser.</p>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          {/* Guarantee banner */}
+          <div className="portfolio-card p-7 mb-12 text-center relative overflow-hidden border"
+            style={{ borderColor: 'rgba(77,212,255,0.35)' }}>
+            <div className="absolute inset-0 pointer-events-none"
+              style={{ background: 'radial-gradient(ellipse at 50% 0%, rgba(77,212,255,0.05), transparent 70%)' }} />
+            <div className="relative flex flex-col sm:flex-row items-center justify-center gap-4">
+              <Shield className="w-8 h-8 flex-shrink-0" style={{ color: '#4DD4FF' }} />
+              <div className="text-left">
+                <h3 className="font-bold text-base mb-1">Garantia incondicional de 30 dias</h3>
+                <p className="text-muted-foreground text-sm leading-relaxed">
+                  Se em 30 dias a Lara não recuperar pelo menos 1 venda que você daria como perdida — devolvemos tudo. Sem perguntas, sem burocracia.
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
             {plans.map(plan => (
               <div key={plan.name}
-                className={`portfolio-card flex flex-col relative ${plan.highlight ? 'ring-2' : ''}`}
+                className={`portfolio-card flex flex-col relative ${plan.highlight ? 'ring-2' : ''} ${plan.comingSoon ? 'opacity-60' : ''}`}
                 style={plan.highlight ? { '--tw-ring-color': '#4DD4FF' } as React.CSSProperties : {}}>
                 {plan.badge && (
                   <div className="absolute -top-3.5 left-1/2 -translate-x-1/2 text-xs font-bold px-4 py-1 rounded-full whitespace-nowrap"
-                    style={{ background: '#4DD4FF', color: '#0D0A17' }}>
+                    style={plan.comingSoon
+                      ? { background: 'hsl(var(--muted))', color: 'hsl(var(--muted-foreground))' }
+                      : { background: '#4DD4FF', color: '#0D0A17' }}>
                     {plan.badge}
                   </div>
                 )}
@@ -615,6 +680,9 @@ export default function CRMLanding() {
                     <span className="text-4xl font-extrabold text-accent">R${plan.price}</span>
                     <span className="text-muted-foreground text-sm">/mês</span>
                   </div>
+                  {plan.footer && (
+                    <p className="text-xs text-muted-foreground mt-1">{plan.footer}</p>
+                  )}
                 </div>
 
                 <ul className="space-y-3 flex-1 mb-8">
@@ -630,10 +698,12 @@ export default function CRMLanding() {
                 </ul>
 
                 <a href="#"
-                  className={`text-center text-sm ${plan.highlight ? 'btn-hero' : 'btn-primary'}`}>
+                  className={`text-center text-sm ${plan.highlight ? 'btn-hero' : 'btn-primary'} ${plan.comingSoon ? 'pointer-events-none' : ''}`}>
                   {plan.cta}
                 </a>
-                <p className="text-xs text-muted-foreground text-center mt-3">✓ Sem fidelidade • Cancele quando quiser</p>
+                {!plan.comingSoon && (
+                  <p className="text-xs text-muted-foreground text-center mt-3">✓ Sem fidelidade • Cancele quando quiser</p>
+                )}
               </div>
             ))}
           </div>
@@ -641,7 +711,7 @@ export default function CRMLanding() {
       </section>
 
       {/* ── FAQ ── */}
-      <section id="faq" className="py-20 px-4 bg-secondary/30">
+      <section id="faq" className="py-20 px-4">
         <div className="container mx-auto max-w-3xl">
           <div className="text-center mb-12">
             <span className="text-accent text-sm font-semibold uppercase tracking-widest">Dúvidas frequentes</span>
@@ -684,14 +754,14 @@ export default function CRMLanding() {
           </p>
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
             <a href="#planos" className="btn-hero flex items-center justify-center gap-2 text-lg px-10 py-5">
-              Conhecer a Lara agora <ArrowRight className="w-5 h-5" />
+              Ativar minha Lara agora <ArrowRight className="w-5 h-5" />
             </a>
             <a href="#" className="flex items-center justify-center gap-2 px-8 py-5 rounded-xl font-semibold border border-white/20 hover:bg-white/10 transition-smooth">
               <MessageSquare className="w-4 h-4" /> Falar no WhatsApp
             </a>
           </div>
           <p className="text-muted-foreground text-sm mt-6 opacity-70">
-            ✓ Sem cartão de crédito &nbsp;·&nbsp; ✓ Sem fidelidade &nbsp;·&nbsp; ✓ Suporte incluído
+            ✓ Garantia de 30 dias &nbsp;·&nbsp; ✓ Sem fidelidade &nbsp;·&nbsp; ✓ Suporte incluído
           </p>
         </div>
       </section>
@@ -700,7 +770,6 @@ export default function CRMLanding() {
       <footer className="bg-primary text-primary-foreground py-16">
         <div className="container mx-auto px-4 lg:px-8">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-10 mb-12">
-            {/* brand */}
             <div>
               <div className="flex items-center mb-4">
                 <div className="w-10 h-10 rounded-xl accent-gradient flex items-center justify-center mr-3">
@@ -713,7 +782,6 @@ export default function CRMLanding() {
               </p>
             </div>
 
-            {/* links */}
             <div>
               <h4 className="font-semibold mb-4">Produto</h4>
               <ul className="space-y-2 text-sm text-primary-foreground/70">
@@ -723,7 +791,6 @@ export default function CRMLanding() {
               </ul>
             </div>
 
-            {/* contact */}
             <div>
               <h4 className="font-semibold mb-4">Contato</h4>
               <div className="space-y-2 text-sm text-primary-foreground/70">
