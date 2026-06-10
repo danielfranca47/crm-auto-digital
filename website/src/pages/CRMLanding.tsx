@@ -82,16 +82,25 @@ const differentials = [
 
 const bonuses = [
   {
-    num: '01', title: 'Onboarding ao Vivo', value: 'R$297',
-    desc: 'Growth: sessão 1:1 de 1h para configurar tudo do zero — você sai com atendimento, qualificação e follow-up ativos. Start: acesso à sessão semanal em grupo com a equipe.',
+    num: '✦', title: 'Lara 24/7 — IA que atende, qualifica e fecha', value: 'R$997/mês',
+    desc: 'Atendimento automático 24h pelo WhatsApp, qualificação com score, follow-up sequencial e CRM com pipeline Kanban — 500 conversas/mês incluídas. A Lara nunca para.',
+    highlight: true,
   },
   {
-    num: '02', title: 'Playbook de Scripts Prontos', value: 'R$197',
-    desc: '15 scripts testados para qualificação, follow-up e recuperação de carrinho — só copiar e colar na Lara. Funcionam no dia 1.',
+    num: '01', title: 'Ativação ao Vivo 1:1', value: 'R$297',
+    desc: 'Sessão de 1h com o time para sair com tudo configurado e ativo no dia 1 — atendimento, qualificação e follow-up rodando. Start: sessão semanal em grupo.',
+  },
+  {
+    num: '02', title: 'Playbook de 15 Scripts Prontos', value: 'R$197',
+    desc: '15 scripts testados para qualificação, follow-up e recuperação de carrinho — copia, cola na Lara e funciona no dia 1. Zero tempo de criação.',
   },
   {
     num: '03', title: 'Suporte Diário ao Vivo por 30 dias', value: 'R$147',
     desc: 'Sessão diária às 15h com o time. Tire dúvidas, veja demos e otimize sua Lara em tempo real — sem ficar perdido.',
+  },
+  {
+    num: '04', title: 'Playground de Testes', value: 'R$97',
+    desc: 'Simule conversas reais antes de ligar para leads. Teste a Lara, ajuste respostas e ative com confiança — sem risco de erro com cliente de verdade.',
   },
 ];
 
@@ -173,7 +182,7 @@ const faqs = [
   { q: 'O que acontece quando o cliente precisa de humano?', a: 'A Lara transfere automaticamente com o contexto completo da conversa. Quem assumir já sabe tudo que foi discutido.' },
   { q: 'A Lara funciona para qualquer tipo de negócio?', a: 'Sim. Infoprodutos, serviços, e-commerce, saúde, imóveis, educação — a Lara se adapta ao seu setor.' },
   { q: 'Posso cancelar quando quiser?', a: 'Sim. Sem fidelidade, sem multa. Cancele com 1 clique a qualquer momento.' },
-  { q: 'Como funciona a garantia de 30 dias?', a: 'Se em 30 dias a Lara não recuperar pelo menos 1 venda que você daria como perdida, devolvemos 100% do valor. Sem perguntas, sem burocracia — só manda uma mensagem.' },
+  { q: 'Como funciona a garantia de 30 dias?', a: 'É uma garantia dupla. Camada 1 (incondicional): ativou a Lara, usou por 30 dias, não gostou por qualquer motivo — devolvemos 100%. Sem perguntas, só manda uma mensagem. Camada 2 (performance): se você ativar, seguir o onboarding e em 30 dias não recuperar pelo menos 1 venda que daria como perdida, devolvemos o dinheiro E fazemos 1 sessão extra 1:1 de graça para entender o que aconteceu.' },
 ];
 
 const waveformHeights = [3, 5, 7, 4, 6, 8, 3, 5, 7, 4, 6, 3, 5, 8, 4, 6, 5, 3];
@@ -195,7 +204,10 @@ export default function CRMLanding() {
               <div className="w-10 h-10 rounded-xl accent-gradient flex items-center justify-center mr-3">
                 <div className="w-6 h-6 bg-background rounded-sm" />
               </div>
-              <span className="text-xl font-bold">DigitalPro</span>
+              <div>
+                <span className="text-xl font-bold leading-none">Lara</span>
+                <span className="block text-xs text-muted-foreground leading-none -mt-0.5">by DigitalPro</span>
+              </div>
             </a>
 
             <nav className="hidden md:flex items-center space-x-7 text-sm">
@@ -243,9 +255,9 @@ export default function CRMLanding() {
 
             {/* H1 */}
             <h1 className="text-hero mb-6 animate-fade-in animate-delay-100">
-              Seus leads qualificados e prontos para fechar —{' '}
+              Nunca mais perder uma venda por falta de resposta —{' '}
               <span className="bg-gradient-to-r from-accent to-primary bg-clip-text text-transparent">
-                sem você responder uma mensagem.
+                a Lara atende, qualifica e faz follow-up por você, 24h por dia.
               </span>
             </h1>
 
@@ -269,7 +281,7 @@ export default function CRMLanding() {
             <div className="flex items-center gap-3 animate-fade-in animate-delay-400">
               <Shield className="w-5 h-5 flex-shrink-0" style={{ color: '#4DD4FF' }} />
               <span className="text-sm text-muted-foreground">
-                <strong style={{ color: '#4DD4FF' }}>Garantia de 30 dias</strong> — se a Lara não recuperar 1 venda perdida, devolvemos tudo.
+                <strong style={{ color: '#4DD4FF' }}>Garantia incondicional de 30 dias</strong> — usou, não gostou por qualquer motivo, devolvemos tudo. Sem perguntas.
               </span>
             </div>
           </div>
@@ -565,25 +577,32 @@ export default function CRMLanding() {
       <section className="py-20 px-4 bg-secondary/30">
         <div className="container mx-auto max-w-4xl">
           <div className="text-center mb-12">
-            <span className="text-accent text-sm font-semibold uppercase tracking-widest">✦ Bônus incluídos</span>
-            <h2 className="text-heading mt-2">Você não contrata só a Lara. Você ganha isso junto.</h2>
+            <span className="text-accent text-sm font-semibold uppercase tracking-widest">✦ O que você está recebendo</span>
+            <h2 className="text-heading mt-2">Você está investindo R$197/mês.<br />Você está recebendo R$1.735/mês em valor.</h2>
             <p className="text-muted-foreground mt-3 max-w-xl mx-auto">
-              Incluídos para acelerar seus primeiros resultados — com variações por plano.
+              Incluídos no plano Growth — para você sair do zero ao resultado no dia 1.
             </p>
           </div>
 
           <div className="space-y-4 mb-10">
             {bonuses.map(bonus => (
-              <div key={bonus.num} className="portfolio-card flex items-start gap-5">
+              <div key={bonus.num}
+                className="portfolio-card flex items-start gap-5"
+                style={'highlight' in bonus && bonus.highlight
+                  ? { borderColor: 'rgba(77,212,255,0.4)', border: '1px solid', background: 'rgba(77,212,255,0.04)' }
+                  : {}}>
                 <div className="text-3xl font-extrabold select-none leading-none flex-shrink-0 pt-1"
-                  style={{ color: '#4DD4FF', opacity: 0.35 }}>
+                  style={{ color: '#4DD4FF', opacity: 'highlight' in bonus && bonus.highlight ? 0.8 : 0.35 }}>
                   {bonus.num}
                 </div>
                 <div className="flex-1">
                   <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1 mb-2">
-                    <h3 className="font-bold">✦ {bonus.title}</h3>
+                    <h3 className={'highlight' in bonus && bonus.highlight ? 'font-bold text-base' : 'font-bold'}
+                      style={'highlight' in bonus && bonus.highlight ? { color: '#4DD4FF' } : {}}>
+                      {'highlight' in bonus && bonus.highlight ? '' : '✦ '}{bonus.title}
+                    </h3>
                     <span className="text-sm font-bold flex-shrink-0" style={{ color: '#4DD4FF' }}>
-                      valor: {bonus.value}
+                      {'highlight' in bonus && bonus.highlight ? '' : 'valor: '}{bonus.value}
                     </span>
                   </div>
                   <p className="text-muted-foreground text-sm leading-relaxed">{bonus.desc}</p>
@@ -592,41 +611,103 @@ export default function CRMLanding() {
             ))}
           </div>
 
-          <div className="portfolio-card p-6 border" style={{ borderColor: 'rgba(77,212,255,0.3)' }}>
-            <div className="flex flex-wrap justify-center items-center gap-6 text-sm text-center">
-              <div>
-                <span className="text-muted-foreground">Total de bônus: </span>
-                <span className="font-bold line-through opacity-40">R$641</span>
+          <div className="portfolio-card p-6 border" style={{ borderColor: 'rgba(77,212,255,0.4)' }}>
+            <div className="text-center space-y-2">
+              <div className="text-sm text-muted-foreground">
+                Você paga{' '}
+                <span className="font-bold text-accent text-lg">R$197/mês</span>
+                {' '}— apenas{' '}
+                <span className="font-bold" style={{ color: '#4DD4FF' }}>11%</span>
+                {' '}do valor real.
               </div>
-              <div className="text-muted-foreground hidden sm:block">·</div>
-              <div>
-                <span className="text-muted-foreground">Plano Growth: </span>
-                <span className="font-bold text-accent">R$197/mês</span>
+              <div className="text-xs text-muted-foreground">
+                Valor total:{' '}
+                <span className="line-through opacity-50">R$1.735/mês</span>
+                {' '}→ Seu investimento:{' '}
+                <strong className="text-accent">R$197/mês</strong>
+              </div>
+              <div className="text-xs text-muted-foreground mt-2">
+                Garantia incondicional de 30 dias — você entra, usa, e decide. O risco é nosso.
               </div>
             </div>
           </div>
         </div>
       </section>
 
-      {/* ── SOCIAL PROOF ── */}
+      {/* ── LAUNCH ACCESS ── */}
       <section className="py-20 px-4">
         <div className="container mx-auto max-w-3xl text-center">
-          <span className="text-accent text-sm font-semibold uppercase tracking-widest">✦ Fase Beta</span>
+          <span className="text-accent text-sm font-semibold uppercase tracking-widest">✦ Preço de Lançamento</span>
           <h2 className="text-heading mt-2 mb-4">
-            A Lara está sendo testada com os primeiros negócios
+            R$197 é o preço de quem entra agora
           </h2>
           <p className="text-muted-foreground max-w-xl mx-auto mb-10 leading-relaxed">
-            Estamos em fase de beta com um grupo selecionado de empreendedores brasileiros. Os primeiros resultados chegam em breve — e há vagas abertas para quem quiser entrar cedo.
+            Estamos em lançamento com um grupo selecionado de empreendedores brasileiros. Quem entra agora <strong className="text-foreground">trava o preço pelo tempo que ficar</strong> — quando sairmos do lançamento, o Growth sobe para R$247/mês.
           </p>
-          <div className="portfolio-card p-10 max-w-lg mx-auto">
-            <div className="text-5xl mb-4">🚀</div>
-            <h3 className="font-bold text-lg mb-3">Acesso antecipado disponível</h3>
-            <p className="text-muted-foreground text-sm mb-6 leading-relaxed">
-              Seja um dos primeiros a usar a Lara no seu negócio — com suporte próximo da equipe durante toda a implementação.
+          <div className="portfolio-card p-8 max-w-lg mx-auto border" style={{ borderColor: 'rgba(77,212,255,0.35)' }}>
+            <div className="text-4xl mb-4">🔒</div>
+            <h3 className="font-bold text-lg mb-2" style={{ color: '#4DD4FF' }}>Trava o preço de R$197/mês</h3>
+            <p className="text-muted-foreground text-sm mb-3 leading-relaxed">
+              O Onboarding ao Vivo acontece toda semana às terças — <strong className="text-foreground">10 vagas por sessão</strong>. Cada cliente novo recebe uma sessão 1:1. Enquanto houver vaga disponível, o preço de lançamento está garantido.
+            </p>
+            <p className="text-xs text-muted-foreground mb-6 opacity-75">
+              Quando o preço subir, quem já está dentro não paga a diferença.
             </p>
             <a href="#planos" className="btn-hero inline-flex items-center gap-2">
-              Quero acesso antecipado <ArrowRight className="w-4 h-4" />
+              Garantir meu preço de lançamento <ArrowRight className="w-4 h-4" />
             </a>
+          </div>
+        </div>
+      </section>
+
+      {/* ── QUALIFIER ── */}
+      <section className="py-20 px-4">
+        <div className="container mx-auto max-w-4xl">
+          <div className="text-center mb-12">
+            <span className="text-accent text-sm font-semibold uppercase tracking-widest">Seja honesto</span>
+            <h2 className="text-heading mt-2">A Lara é pra você?</h2>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+            <div className="portfolio-card" style={{ borderColor: 'rgba(239,68,68,0.2)', border: '1px solid' }}>
+              <h3 className="font-bold text-base mb-6 flex items-center gap-2 text-destructive">
+                <X className="w-5 h-5" />
+                Isso NÃO é pra você se:
+              </h3>
+              <ul className="space-y-5 text-sm">
+                {[
+                  { cond: 'Você recebe menos de 20 leads por mês no WhatsApp', why: 'A Lara precisa de volume pra mostrar resultado.' },
+                  { cond: 'Você quer um robô que responda igual a FAQ', why: 'Isso qualquer chatbot faz — a Lara é diferente e exige configuração.' },
+                  { cond: 'Você não quer acompanhar os primeiros 7 dias', why: 'A Lara aprende com você. Os primeiros dias definem os resultados do mês.' },
+                ].map(({ cond, why }) => (
+                  <li key={cond}>
+                    <span className="flex items-start gap-2 text-muted-foreground">
+                      <X className="w-4 h-4 text-destructive flex-shrink-0 mt-0.5" />
+                      <span>{cond}</span>
+                    </span>
+                    <span className="block text-xs text-muted-foreground opacity-60 ml-6 mt-1">({why})</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+
+            <div className="portfolio-card" style={{ borderColor: 'rgba(77,212,255,0.35)', border: '1px solid' }}>
+              <h3 className="font-bold text-base mb-6 flex items-center gap-2" style={{ color: '#4DD4FF' }}>
+                <CheckCircle className="w-5 h-5" />
+                Isso É pra você se:
+              </h3>
+              <ul className="space-y-5 text-sm">
+                {[
+                  'Você perde vendas por não responder rápido o suficiente',
+                  'Você já teve leads quentes que "esfriaram" porque esqueceu de dar follow-up',
+                  'Você quer escalar sem contratar mais gente',
+                ].map(item => (
+                  <li key={item} className="flex items-start gap-2">
+                    <Check className="w-4 h-4 flex-shrink-0 mt-0.5" style={{ color: '#4DD4FF' }} />
+                    <span>{item}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
           </div>
         </div>
       </section>
@@ -641,16 +722,24 @@ export default function CRMLanding() {
           </div>
 
           {/* Guarantee banner */}
-          <div className="portfolio-card p-7 mb-12 text-center relative overflow-hidden border"
+          <div className="portfolio-card p-7 mb-12 relative overflow-hidden border"
             style={{ borderColor: 'rgba(77,212,255,0.35)' }}>
             <div className="absolute inset-0 pointer-events-none"
               style={{ background: 'radial-gradient(ellipse at 50% 0%, rgba(77,212,255,0.05), transparent 70%)' }} />
-            <div className="relative flex flex-col sm:flex-row items-center justify-center gap-4">
-              <Shield className="w-8 h-8 flex-shrink-0" style={{ color: '#4DD4FF' }} />
-              <div className="text-left">
-                <h3 className="font-bold text-base mb-1">Garantia incondicional de 30 dias</h3>
-                <p className="text-muted-foreground text-sm leading-relaxed">
-                  Se em 30 dias a Lara não recuperar pelo menos 1 venda que você daria como perdida — devolvemos tudo. Sem perguntas, sem burocracia.
+            <div className="relative">
+              <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 mb-5">
+                <Shield className="w-8 h-8 flex-shrink-0" style={{ color: '#4DD4FF' }} />
+                <div>
+                  <h3 className="font-bold text-base mb-1">Garantia dupla — o risco é 100% nosso</h3>
+                  <p className="text-muted-foreground text-sm leading-relaxed">
+                    <strong className="text-foreground">Camada 1 — Incondicional:</strong> ativou a Lara, usou por 30 dias, não gostou por qualquer motivo — devolvemos 100%. Sem perguntas. Só manda uma mensagem.
+                  </p>
+                </div>
+              </div>
+              <div className="border-t border-border pt-5">
+                <p className="text-sm text-muted-foreground">
+                  <strong className="text-foreground" style={{ color: '#4DD4FF' }}>Camada 2 — Performance:</strong>{' '}
+                  Se você ativar a Lara, seguir o onboarding e em 30 dias não recuperar pelo menos 1 venda que daria como perdida — devolvemos o dinheiro <em>e</em> fazemos 1 sessão extra 1:1 de graça para entender o que aconteceu. Você não pode sair no prejuízo.
                 </p>
               </div>
             </div>
@@ -771,10 +860,13 @@ export default function CRMLanding() {
                 <div className="w-10 h-10 rounded-xl accent-gradient flex items-center justify-center mr-3">
                   <div className="w-6 h-6 bg-primary rounded-sm" />
                 </div>
-                <span className="text-xl font-bold">DigitalPro</span>
+                <div>
+                  <span className="text-xl font-bold leading-none">Lara</span>
+                  <span className="block text-xs text-primary-foreground/50 leading-none -mt-0.5">by DigitalPro</span>
+                </div>
               </div>
               <p className="text-primary-foreground/70 text-sm leading-relaxed max-w-xs">
-                A Lara é a IA da DigitalPro que atende, qualifica e faz follow-up pelo WhatsApp — para quem quer vender mais sem depender de uma equipe grande.
+                A Lara é a IA que atende, qualifica e faz follow-up pelo WhatsApp — para quem quer vender mais sem depender de uma equipe grande.
               </p>
             </div>
 
@@ -797,7 +889,7 @@ export default function CRMLanding() {
           </div>
 
           <div className="border-t border-primary-foreground/20 pt-6 flex flex-col md:flex-row justify-between items-center gap-4">
-            <p className="text-sm text-primary-foreground/60">© 2026 DigitalPro. Todos os direitos reservados.</p>
+            <p className="text-sm text-primary-foreground/60">© 2026 DigitalPro — Lara. Todos os direitos reservados.</p>
             <div className="flex items-center gap-6 text-sm text-primary-foreground/60">
               <a href="#" className="hover:text-accent transition-smooth">Privacidade</a>
               <a href="#" className="hover:text-accent transition-smooth">Termos</a>
