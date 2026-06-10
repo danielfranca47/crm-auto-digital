@@ -172,7 +172,7 @@ const comparisonRows = [
   { label: 'Envio de áudio personalizado',     ours: true,  theirs: false },
   { label: 'Envio de imagens e vídeos',        ours: true,  theirs: false },
   { label: 'Múltiplos modos de venda',         ours: true,  theirs: false },
-  { label: 'Prospecção automática',            ours: true,  theirs: false },
+  { label: 'Playground de testes antes de ativar', ours: true,  theirs: false },
 ];
 
 const faqs = [
@@ -263,7 +263,7 @@ export default function CRMLanding() {
 
             {/* sub */}
             <p className="text-xl text-muted-foreground mb-10 max-w-lg leading-relaxed animate-fade-in animate-delay-200">
-              A Lara atende, qualifica e faz follow-up pelo WhatsApp — com CRM nativo e recuperação de vendas. Tudo no mesmo lugar, sem ferramenta extra.
+              Para empreendedores que vendem pelo WhatsApp e perdem vendas toda semana por demora no atendimento ou falta de follow-up. A Lara resolve — com CRM nativo integrado, sem precisar de ferramenta extra.
             </p>
 
             {/* CTAs */}
@@ -306,6 +306,32 @@ export default function CRMLanding() {
               </span>
             ))}
           </div>
+        </div>
+      </section>
+
+      {/* ── PROBLEM AGITATION ── */}
+      <section className="py-16 px-4">
+        <div className="container mx-auto max-w-3xl">
+          <div className="text-center mb-10">
+            <h2 className="text-2xl font-bold">Reconhece alguma dessas situações?</h2>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-8">
+            {[
+              'Você responde o WhatsApp o dia todo mas ainda perde leads quando está ocupado',
+              'Você sabe que deveria fazer follow-up mas o dia passa e não fez',
+              'Você tem contatos espalhados, não sabe quais são quentes, quais desistiram',
+              'Já tentou um chatbot genérico mas ele parecia robótico e não qualificava',
+            ].map(item => (
+              <div key={item} className="portfolio-card flex items-start gap-3">
+                <div className="w-5 h-5 rounded border-2 flex-shrink-0 mt-0.5"
+                  style={{ borderColor: 'rgba(77,212,255,0.5)' }} />
+                <span className="text-sm text-muted-foreground leading-relaxed">{item}</span>
+              </div>
+            ))}
+          </div>
+          <p className="text-center text-sm font-semibold" style={{ color: '#4DD4FF' }}>
+            Se você se identificou com pelo menos 2: a Lara foi feita pra resolver isso.
+          </p>
         </div>
       </section>
 
@@ -707,6 +733,47 @@ export default function CRMLanding() {
                   </li>
                 ))}
               </ul>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* ── SOCIAL PROOF ── */}
+      <section className="py-20 px-4 bg-secondary/30">
+        <div className="container mx-auto max-w-4xl">
+          <div className="text-center mb-12">
+            <span className="text-accent text-sm font-semibold uppercase tracking-widest">✦ Quem já usa a Lara</span>
+            <h2 className="text-heading mt-2">Resultados reais, de negócios reais</h2>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+            <div className="portfolio-card border" style={{ borderColor: 'rgba(77,212,255,0.25)' }}>
+              <div className="flex items-center gap-1 mb-4">
+                {[1,2,3,4,5].map(i => (
+                  <span key={i} className="text-sm" style={{ color: '#4DD4FF' }}>★</span>
+                ))}
+              </div>
+              <p className="text-sm leading-relaxed mb-5">
+                "A Lara recuperou 3 leads que eu tinha dado como perdidos na primeira semana. Foram R$1.800 que eu não esperava mais."
+              </p>
+              <div className="flex items-center gap-3">
+                <div className="w-9 h-9 rounded-full accent-gradient flex items-center justify-center flex-shrink-0">
+                  <span className="text-sm font-bold text-accent-foreground">M</span>
+                </div>
+                <div>
+                  <div className="text-sm font-semibold">Mariana S.</div>
+                  <div className="text-xs text-muted-foreground">Infoprodutora — São Paulo</div>
+                </div>
+              </div>
+            </div>
+
+            <div className="portfolio-card border border-dashed border-border flex flex-col items-center justify-center text-center py-10 gap-3 opacity-60">
+              <div className="text-3xl">💬</div>
+              <p className="text-sm text-muted-foreground">Mais resultados a caminho.</p>
+              <p className="text-xs text-muted-foreground">Você pode ser o próximo.</p>
+              <a href="#planos" className="text-xs font-semibold mt-1" style={{ color: '#4DD4FF' }}>
+                Quero entrar agora →
+              </a>
             </div>
           </div>
         </div>
