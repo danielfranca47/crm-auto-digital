@@ -155,6 +155,11 @@ whatsapp_worker (polling)
 | Arquivo | Responsabilidade |
 |---|---|
 | `src/pages/Index.tsx` | KanbanBoard principal (pipeline de leads) |
+| `src/pages/Agenda.tsx` | Página de agenda — orquestra as 3 vistas (mensal/semanal/diária) |
+| `src/components/WeekView.tsx` | Vista semanal — CSS grid 7 colunas × 28 slots de 30min |
+| `src/components/DayView.tsx` | Vista diária — CSS grid 1 coluna × 28 slots de 30min |
+| `src/components/ScheduleAppointmentDialog.tsx` | Dialog criar/editar compromisso (slot-click e modo edição) |
+| `src/hooks/useAppointments.ts` | Hooks React Query para CRUD de appointments |
 | `src/pages/Dashboard.tsx` | Métricas e agenda do dia |
 | `src/pages/AiProfile.tsx` | Configuração completa do agente (todas as camadas) |
 | `src/pages/Playground.tsx` | Simulação de conversa; coordena upload de áudio + chat |
@@ -286,6 +291,7 @@ Operador escreve mensagem no Playground (frontend-crm)
 | `agents` | `id, token, status, capabilities` | Agentes locais registados |
 | `knowledge_items` | `user_id, category, content` | Base de conhecimento do agente |
 | `knowledge_item_media` | `item_id, media_url, media_type` | Mídias associadas ao conhecimento |
+| `appointments` | `id, lead_id, title, type, start_at, end_at, status, outcome, google_event_id, source` | Compromissos da agenda; `source='crm'` ou `'google'` |
 | `prospection_logs` | `lead_id, action, notes, createdAt` | Log de contactos outbound (`action='manual_outbound'`) |
 | `followup_reconcile_guard` | `lead_id, job_id, due_at` | Guard anti-loop do reconciliador |
 
