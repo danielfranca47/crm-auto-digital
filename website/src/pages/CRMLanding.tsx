@@ -255,7 +255,7 @@ export default function CRMLanding() {
 
             {/* H1 */}
             <h1 className="text-hero mb-6 animate-fade-in animate-delay-100">
-              Nunca mais perder uma venda por falta de resposta —{' '}
+              Nunca mais perca uma venda por falta de resposta —{' '}
               <span className="bg-gradient-to-r from-accent to-primary bg-clip-text text-transparent">
                 a Lara atende, qualifica e faz follow-up por você, 24h por dia.
               </span>
