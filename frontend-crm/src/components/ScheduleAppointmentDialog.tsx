@@ -144,6 +144,10 @@ export function ScheduleAppointmentDialog({
       const hours = String(start.getHours()).padStart(2, "0");
       const minutes = String(start.getMinutes()).padStart(2, "0");
       setTime(`${hours}:${minutes}`);
+    } else if (initialDate) {
+      const h = String(initialDate.getHours()).padStart(2, "0");
+      const m = String(initialDate.getMinutes()).padStart(2, "0");
+      setTime(`${h}:${m}`);
     } else {
       setTime("09:00");
     }

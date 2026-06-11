@@ -97,25 +97,26 @@ Sem alterações de backend — a API existente (`GET /api/appointments?start=&e
 - [x] Eventos existentes aparecem na coluna e horário correcto — 2026-06-11 (MCP browser; "09:00 Compromisso" na coluna QUINTA 11)
 - [x] Navegar para semana anterior e seguinte com botões ← / → — 2026-06-11 (MCP browser; ← → testados)
 - [x] Botão "Hoje" volta à semana actual — 2026-06-11 (MCP browser)
-- [⏭️] Clicar num slot vazio abre o dialog com data e hora pré-preenchidos — não testado via MCP (limitação: coordenadas de slot CSS grid difíceis de atingir por avaliação de script)
+- [x] Clicar num slot vazio abre o dialog com data e hora pré-preenchidos — 2026-06-11 (browser manual; data correta; hora sempre 09:00 → bug corrigido em `ScheduleAppointmentDialog.tsx`)
 
 ### Cenário 4 — Vista diária
 
 - [x] Timeline hora a hora do dia seleccionado — 2026-06-11 (MCP browser; "Quinta-Feira, 11 De Junho 2026" com slots 07:00–12:00+)
 - [x] Eventos aparecem na faixa de horário correcta — 2026-06-11 (MCP browser; evento visível às 09:00 no DayView)
 - [x] Navegar para dia anterior e seguinte com botões ← / → — 2026-06-11 (MCP browser; mesmos botões do WeekView funcionam)
-- [⏭️] Clicar num slot abre o dialog com data e hora pré-preenchidos — não testado via MCP (mesma limitação de coordenadas)
+- [x] Clicar num slot abre o dialog com data e hora pré-preenchidos — 2026-06-11 (browser manual; mesmo comportamento do WeekView; bug de hora corrigido)
 
 ### Cenário 5 — Criação e edição de compromisso
 
 - [x] Criar compromisso pela vista diária → aparece correctamente em todas as 3 vistas — 2026-06-11 (MCP browser; aparece em Diária, Semanal e Mensal)
-- [⏭️] Clicar num evento existente em WeekView ou DayView → abre em modo edição — não testado via MCP
-- [⏭️] Editar título ou hora → evento actualiza nas 3 vistas — não testado via MCP
+- [x] Clicar num evento existente em WeekView ou DayView → abre em modo edição — 2026-06-11 (browser manual; dialog "Editar compromisso" com dados correctos)
+- [x] Editar título ou hora → evento actualiza nas 3 vistas — 2026-06-11 (browser manual; título não persistia → bug corrigido em `useAppointments.ts`)
 
-### Bugs detectados durante testes (não bloqueantes)
+### Bugs detectados e corrigidos durante testes
 
-- **Título padrão "Compromisso":** o campo Título do dialog não capturou o valor digitado via MCP (React controlled input + eventos sintéticos do type_text não disparam `onChange`). A verificar manualmente se ocorre no browser real do utilizador.
-- **"Lead sem nome":** ao criar o compromisso, o lead selecionado não foi associado corretamente (lead_id nulo). A lista de leads no dialog são botões — a seleção pode requerer duplo clique ou lógica de estado específica. Verificar manualmente.
+- **Hora sempre 09:00 ao clicar slot** (CORRIGIDO): `ScheduleAppointmentDialog.tsx` ignorava a hora de `initialDate` ao criar novo compromisso — `setTime("09:00")` hardcoded. Corrigido para extrair `getHours()/getMinutes()` de `initialDate`.
+- **Título e tipo não persistiam na edição** (CORRIGIDO): `useUpdateAppointment` e `useCreateAppointment` em `useAppointments.ts` não passavam `title` nem `type` para `api.updateAppointment`/`api.createAppointment`. Os campos estão correctamente suportados pelo `api.ts` e pelo backend — só faltavam ser propagados no hook.
+- **"Lead sem nome" nos eventos** (CORRIGIDO em commit b06ead5): `GET /api/appointments` não fazia JOIN com `leads` → `lead_company`/`lead_contact` sempre nulos.
 
 ---
 

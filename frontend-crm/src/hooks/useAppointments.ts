@@ -118,7 +118,9 @@ export function useCreateAppointment() {
       // que aceita apenas { description, startAt, endAt }.
       if (payload.leadId !== undefined && payload.leadId !== null) {
         const res = await api.createAppointment(payload.leadId, {
-          description: payload.description ?? payload.title ?? "",
+          title: payload.title,
+          type: payload.type,
+          description: payload.description,
           startAt: new Date(payload.startTime),
           endAt: payload.endTime ? new Date(payload.endTime) : undefined,
         });
@@ -160,6 +162,8 @@ export function useUpdateAppointment() {
       if (leadId ?? data.leadId) {
         const lid = String(leadId ?? data.leadId!);
         const resp = await api.updateAppointment(lid, id, {
+          title: data.title,
+          type: data.type,
           description: data.description,
           startAt: data.startTime ? new Date(data.startTime) : undefined,
           endAt:
