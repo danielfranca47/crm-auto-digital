@@ -31,6 +31,10 @@ class Settings(BaseSettings):
     KIWIFY_PRODUCT_ID: Optional[str] = None
     # Google Maps API (used by agent-local proxy endpoint)
     GOOGLE_MAPS_API_KEY: Optional[str] = None
+    # Google Calendar OAuth2
+    GOOGLE_CLIENT_ID: Optional[str] = None
+    GOOGLE_CLIENT_SECRET: Optional[str] = None
+    GOOGLE_REDIRECT_URI: Optional[str] = None
 
     class Config:
         env_file = ".env"
