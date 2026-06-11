@@ -64,7 +64,7 @@ Clientes Scale/Enterprise que já têm conexão UazAPI ativa: a migração para 
 **obrigatória** (o plano novo só aceita Meta) ou **opcional** (UazAPI e Meta coexistem
 no mesmo plano)?
 
-> R (admin): _a preencher_
+> R (admin): _Não, só existirá para os planos scale e enterprise a api oficial_
 
 ---
 
@@ -76,7 +76,7 @@ Meta configurado para aquele usuário, o que deve acontecer?
 - (b) Cancela definitivamente o follow-up deste lead (sai da fila)
 - (c) Envia como texto livre mesmo assim e assume o risco de rejeição pela Meta
 
-> R (admin): _a preencher_
+> R (admin): _(b) deve cancelar e mostrar a justificativa para o usuário_
 
 ---
 
@@ -84,7 +84,7 @@ Meta configurado para aquele usuário, o que deve acontecer?
 A conexão via Meta Cloud API ficará disponível **apenas para Scale e Enterprise**, ou
 também para o plano Growth como upgrade opcional?
 
-> R (admin): _a preencher_
+> R (admin): _Somente para os planos Scale e Enterprise_
 
 ---
 
@@ -93,7 +93,7 @@ O custo por mensagem da Meta (marketing ~US$0,025/msg; utility muito menor) ser�
 **absorvido no preço do plano** ou **repassado ao cliente** como excedente adicional ao
 limite de conversas IA?
 
-> R (admin): _a preencher_
+> R (admin): _Repassado ao cliente_
 
 ---
 
@@ -101,7 +101,7 @@ limite de conversas IA?
 O seed `crm_scale` e `crm_enterprise` pode ser entregue **agora** (planos ativáveis no
 painel admin manualmente), mesmo antes de qualquer desenvolvimento na API Meta?
 
-> R (admin): _a preencher_
+> R (admin): _não, a ideia é disponibilizarmos primeiro essa funcionalidade que vai ser a base dele antes de vender_
 
 ---
 
@@ -110,7 +110,7 @@ Já existe um **App criado no Meta for Developers** com WhatsApp Business Platfo
 configurado, ou o processo de criação do App é algo que o admin/cliente precisa fazer
 do zero ao contratar Scale/Enterprise?
 
-> R (admin): _a preencher_
+> R (admin): _eu ainda não realizei nenhuma configuração externa para esta fase. precisarei de instruções. Estava a ler o https://developers.facebook.com/documentation/business-messaging/whatsapp/solution-providers/get-started-for-tech-providers e vi que será um processo longo de verificações por parte da meta mas necessário a se cumprir de outras exigencias. Estou determinado a fazer_
 
 ---
 
