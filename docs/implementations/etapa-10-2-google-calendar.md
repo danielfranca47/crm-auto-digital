@@ -104,6 +104,22 @@ Fase 3 — Google → CRM (pull)
 
 ---
 
+### Commits Fase 2
+
+| # | Commit | O que foi implementado |
+|---|---|---|
+| 1 | `f50a158` | `backend-core/app/config.py` — vars Google OAuth2 |
+| 2 | `ebe99e7` | OAuth backend-core (auth_google.py, db.py, main.py, __init__.py) + serviço push backend-crm (google_calendar_service.py, appointments.py, database.py) + frontend (MinhaConta, api.ts, types/crm.ts, api-client.ts) |
+
+**Notas de implementação (divergências do plano):**
+- `requirements.txt` — **sem alteração**: usamos `httpx` (já instalado) para todas as chamadas Google em vez das libs `google-auth-oauthlib`/`google-api-python-client`. Zero novas dependências.
+- Tabela `users` recebe **5 colunas** (planeadas 4): adicionado `google_email` para mostrar a conta conectada na UI.
+- OAuth usa **HMAC-SHA256 signed state** (sem sessão server-side): o `user_id` é codificado no parâmetro `state` com TTL de 10 min.
+- Adicionados **2 endpoints service-to-service** (`GET/PUT /auth/google/tokens/{user_id}`) para o `backend-crm` ler/actualizar tokens do `backend-core`.
+- `source` e `google_event_id` em `frontend-crm/src/types/crm.ts` adiantados da Fase 3.
+
+---
+
 ## Checks de Validação
 
 ### Fase 2
