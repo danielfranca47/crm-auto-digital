@@ -962,6 +962,8 @@ def init_db() -> None:
         ensure_column(conn, "appointments", "outcome", "outcome TEXT")
         ensure_column(conn, "appointments", "outcome_note", "outcome_note TEXT")
         ensure_column(conn, "appointments", "outcome_at", "outcome_at DATETIME")
+        ensure_column(conn, "appointments", "google_event_id", "google_event_id TEXT")
+        ensure_column(conn, "appointments", "source", "source TEXT NOT NULL DEFAULT 'crm'")
         ensure_column(conn, "lead_qualification_state", "asked_questions_json", "asked_questions_json TEXT DEFAULT '[]'")
         ensure_column(conn, "lead_qualification_state", "last_question_text", "last_question_text TEXT")
         ensure_column(conn, "lead_qualification_state", "power_score", "power_score INTEGER NOT NULL DEFAULT 0")

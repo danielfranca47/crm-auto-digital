@@ -1627,6 +1627,17 @@ export const api = {
     reconnectStatus: () =>
       apiClient.get<{ instance_id: string; status: string }>("/spy-agent/reconnect/status"),
   },
+
+  // -------- GOOGLE CALENDAR --------
+  googleCalendar: {
+    getStatus: () =>
+      coreClient.get<{ connected: boolean; email: string | null }>("/auth/google/calendar/status"),
+    disconnect: () =>
+      coreClient.delete<{ disconnected: boolean }>("/auth/google/calendar"),
+    /** URL para iniciar o fluxo OAuth — abrir directamente no browser (redirect). */
+    connectUrl: () =>
+      coreClient.get<{ url: string }>("/auth/google/calendar/url").then((r) => r.url),
+  },
 };
 
 // ── Spy Agent Types ──────────────────────────────────────────────────────────

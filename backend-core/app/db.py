@@ -319,3 +319,31 @@ def ensure_user_extra_columns() -> None:
             for col in ("whatsapp", "sector"):
                 if col not in existing:
                     conn.execute(text(f"ALTER TABLE users ADD COLUMN {col} VARCHAR"))
+
+
+def ensure_google_calendar_columns() -> None:
+    """Add Google Calendar OAuth columns to users table."""
+    google_cols = [
+        "google_access_token",
+        "google_refresh_token",
+        "google_token_expiry",
+        "google_calendar_id",
+        "google_email",
+    ]
+    with engine.begin() as conn:
+        if engine.dialect.name == "sqlite":
+            result = conn.execute(text("PRAGMA table_info(users)"))
+            existing = {row[1] for row in result.fetchall()}
+            for col in google_cols:
+                if col not in existing:
+                    conn.execute(text(f"ALTER TABLE users ADD COLUMN {col} TEXT"))
+                    print(f"✅ coluna adicionada em users: {col}")
+        else:
+            result = conn.execute(text(
+                "SELECT column_name FROM information_schema.columns WHERE table_name='users'"
+            ))
+            existing = {row[0] for row in result.fetchall()}
+            for col in google_cols:
+                if col not in existing:
+                    conn.execute(text(f"ALTER TABLE users ADD COLUMN {col} VARCHAR"))
+                    print(f"✅ coluna adicionada em users: {col}")

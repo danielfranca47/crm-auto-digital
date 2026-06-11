@@ -194,6 +194,8 @@ export const coreClient = {
       method: "PATCH",
       body,
     }),
+  delete: <T = unknown>(path: string, init?: RequestInit) =>
+    coreRequest<T>(path, { ...init, method: "DELETE" }),
 };
 
 export { API_BASE, CRM_API_BASE, CORE_AUTH_BASE, CORE_BASE };

@@ -2,6 +2,7 @@ from fastapi import APIRouter
 
 from .admin import router as admin_router
 from .auth import router as auth_router
+from .auth_google import router as auth_google_router
 from .users import router as users_router
 from .catalog import router as catalog_router
 from .cron import router as cron_router
@@ -18,6 +19,7 @@ api_router.include_router(admin_router)
 api_router.include_router(cron_router)
 api_router.include_router(webhooks_kiwify_router)
 api_router.include_router(auth_router)
+api_router.include_router(auth_google_router)
 api_router.include_router(users_router)
 api_router.include_router(catalog_router)
 api_router.include_router(subscriptions_router)

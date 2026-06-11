@@ -4,7 +4,11 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useUsage } from "@/hooks/useUsage";
-import { AlertCircle, Gauge, RefreshCw, Sparkles } from "lucide-react";
+import { api } from "@/services/api";
+import { useToast } from "@/hooks/use-toast";
+import { AlertCircle, CalendarDays, CheckCircle2, Gauge, RefreshCw, Sparkles } from "lucide-react";
+import { useCallback, useEffect, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 
 function formatLimitLabel(key: string) {
   return key
@@ -21,6 +25,62 @@ function formatLimitValue(value: number | null | undefined) {
 
 export default function MinhaConta() {
   const { data, loading, error, refetch } = useUsage();
+  const { toast } = useToast();
+  const [searchParams, setSearchParams] = useSearchParams();
+
+  const [gcalStatus, setGcalStatus] = useState<{ connected: boolean; email: string | null } | null>(null);
+  const [gcalLoading, setGcalLoading] = useState(false);
+  const [gcalConnecting, setGcalConnecting] = useState(false);
+
+  const fetchGcalStatus = useCallback(async () => {
+    try {
+      const status = await api.googleCalendar.getStatus();
+      setGcalStatus(status);
+    } catch {
+      // endpoint pode retornar 503 se não configurado — silencioso
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchGcalStatus();
+  }, [fetchGcalStatus]);
+
+  useEffect(() => {
+    const connected = searchParams.get("google_connected");
+    const errParam = searchParams.get("google_error");
+    if (connected === "1") {
+      toast({ title: "Google Calendar conectado com sucesso!" });
+      fetchGcalStatus();
+      setSearchParams({}, { replace: true });
+    } else if (errParam === "1") {
+      toast({ title: "Erro ao conectar Google Calendar", variant: "destructive" });
+      setSearchParams({}, { replace: true });
+    }
+  }, [searchParams, setSearchParams, toast, fetchGcalStatus]);
+
+  async function handleGcalConnect() {
+    setGcalConnecting(true);
+    try {
+      const url = await api.googleCalendar.connectUrl();
+      window.location.href = url;
+    } catch {
+      toast({ title: "Não foi possível iniciar a conexão com o Google", variant: "destructive" });
+      setGcalConnecting(false);
+    }
+  }
+
+  async function handleGcalDisconnect() {
+    setGcalLoading(true);
+    try {
+      await api.googleCalendar.disconnect();
+      setGcalStatus({ connected: false, email: null });
+      toast({ title: "Google Calendar desconectado" });
+    } catch {
+      toast({ title: "Erro ao desconectar", variant: "destructive" });
+    } finally {
+      setGcalLoading(false);
+    }
+  }
   const entitlements = data?.entitlements;
   const crmProduct = entitlements?.products?.find(
     (product) => product?.product_code === "crm"
@@ -125,6 +185,60 @@ export default function MinhaConta() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Google Calendar */}
+      <Card className="max-w-2xl">
+        <CardHeader className="flex flex-row items-start justify-between space-y-0 pb-3">
+          <div>
+            <CardTitle className="flex items-center gap-2 text-xl">
+              <CalendarDays className="h-5 w-5 text-primary" /> Google Calendar
+            </CardTitle>
+            <CardDescription>
+              Sincronize os seus compromissos automaticamente com o Google Agenda.
+            </CardDescription>
+          </div>
+        </CardHeader>
+        <CardContent>
+          {gcalStatus === null ? (
+            <Skeleton className="h-10 w-48" />
+          ) : gcalStatus.connected ? (
+            <div className="flex items-center justify-between gap-4">
+              <div className="flex items-center gap-2">
+                <CheckCircle2 className="h-5 w-5 text-green-500 shrink-0" />
+                <div>
+                  <p className="text-sm font-medium">Conectado</p>
+                  {gcalStatus.email && (
+                    <p className="text-xs text-muted-foreground">{gcalStatus.email}</p>
+                  )}
+                </div>
+              </div>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleGcalDisconnect}
+                disabled={gcalLoading}
+              >
+                {gcalLoading ? "Desconectando…" : "Desconectar"}
+              </Button>
+            </div>
+          ) : (
+            <div className="flex flex-col gap-2">
+              <p className="text-sm text-muted-foreground">
+                Não conectado. Ao conectar, cada novo compromisso criado no CRM será
+                adicionado automaticamente ao seu Google Calendar.
+              </p>
+              <Button
+                size="sm"
+                className="w-fit"
+                onClick={handleGcalConnect}
+                disabled={gcalConnecting}
+              >
+                {gcalConnecting ? "Redirecionando…" : "Conectar Google Calendar"}
+              </Button>
+            </div>
+          )}
+        </CardContent>
+      </Card>
     </div>
   );
 }

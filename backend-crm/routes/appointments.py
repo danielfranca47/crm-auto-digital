@@ -10,6 +10,7 @@ from models import AppointmentCreate, AppointmentOut, AppointmentUpdate, Appoint
 from security_core import CurrentUser, require_crm_access
 from services.appointment_outcomes import apply_outcome
 from services.briefing_service import schedule_briefing_job
+from services.google_calendar_service import delete_event as gcal_delete, push_event as gcal_push, update_event as gcal_update
 from services.jobs_service import TYPE_WHATSAPP_APPOINTMENT_REMINDER, create_job
 
 logger = logging.getLogger(__name__)
@@ -164,7 +165,7 @@ def create_appointment(payload: AppointmentCreate) -> AppointmentOut:
         row = cur.fetchone()
         result = _serialize(row)
 
-        # Agendar jobs de lembrete
+        # Agendar jobs de lembrete + push Google Calendar
         lead_row = cur.execute(
             "SELECT user_id FROM leads WHERE id = ?", (payload.lead_id,)
         ).fetchone()
@@ -183,6 +184,22 @@ def create_appointment(payload: AppointmentCreate) -> AppointmentOut:
                 appointment_id=appointment_id,
                 appointment_start_at=payload.start_at,
             )
+            gcal_event_id = gcal_push(
+                user_id=user_id,
+                appointment={
+                    "title": payload.title,
+                    "description": payload.description,
+                    "start_at": payload.start_at.isoformat(),
+                    "end_at": payload.end_at.isoformat(),
+                    "location": payload.location,
+                },
+            )
+            if gcal_event_id:
+                cur.execute(
+                    "UPDATE appointments SET google_event_id = ? WHERE id = ?",
+                    (gcal_event_id, appointment_id),
+                )
+                conn.commit()
 
         return result
     finally:
@@ -325,6 +342,21 @@ def update_appointment(appointment_id: int, payload: AppointmentUpdate) -> Appoi
         conn.commit()
         cur.execute("SELECT * FROM appointments WHERE id = ?", (appointment_id,))
         updated = cur.fetchone()
+
+        # Sync update to Google Calendar (fail-silent)
+        google_event_id = current.get("google_event_id")
+        if google_event_id:
+            lead_row = cur.execute(
+                "SELECT user_id FROM leads WHERE id = ?", (current["lead_id"],)
+            ).fetchone()
+            if lead_row and lead_row["user_id"]:
+                updated_data = {key: updated[key] for key in updated.keys()}
+                gcal_update(
+                    user_id=lead_row["user_id"],
+                    google_event_id=google_event_id,
+                    appointment=updated_data,
+                )
+
         return _serialize(updated)
     finally:
         conn.close()
@@ -334,7 +366,19 @@ def update_appointment(appointment_id: int, payload: AppointmentUpdate) -> Appoi
 def delete_appointment(appointment_id: int) -> None:
     conn = get_connection()
     try:
-        _get_appointment(conn, appointment_id)
+        row = _get_appointment(conn, appointment_id)
+        appointment = {key: row[key] for key in row.keys()}
+
+        # Delete from Google Calendar before DB delete (fail-silent)
+        google_event_id = appointment.get("google_event_id")
+        if google_event_id:
+            cur = conn.cursor()
+            lead_row = cur.execute(
+                "SELECT user_id FROM leads WHERE id = ?", (appointment["lead_id"],)
+            ).fetchone()
+            if lead_row and lead_row["user_id"]:
+                gcal_delete(user_id=lead_row["user_id"], google_event_id=google_event_id)
+
         cur = conn.cursor()
         cur.execute("DELETE FROM appointments WHERE id = ?", (appointment_id,))
         conn.commit()

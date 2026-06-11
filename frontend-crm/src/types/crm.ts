@@ -16,6 +16,8 @@ export interface Appointment {
   endTime?: string | null;
   leadName?: string | null;
   leadCompany?: string | null;
+  source?: 'crm' | 'google';
+  google_event_id?: string | null;
 }
 
 export interface CreateAppointmentPayload {
