@@ -69,6 +69,14 @@ Sem alterações de backend — a API existente (`GET /api/appointments?start=&e
 
 ---
 
+### Commits Fase 1
+
+| # | Commit | O que foi implementado |
+|---|---|---|
+| 1 | `8233848` | Página Agenda.tsx (rota /agenda, tabs de vista), WeekView.tsx (semanal), DayView.tsx (diária), rota em App.tsx, item na sidebar |
+
+---
+
 ## Checks de Validação
 
 ### Cenário 1 — Navegação à agenda
