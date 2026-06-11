@@ -45,7 +45,8 @@ def _is_token_expired(tokens: dict) -> bool:
         return False
 
 
-def _refresh_access_token(tokens: dict) -> Optional[str]:
+def _refresh_access_token(tokens: dict) -> Optional[tuple]:
+    """Returns (access_token, expiry_iso) or None."""
     refresh_token = tokens.get("refresh_token")
     client_id = tokens.get("client_id")
     client_secret = tokens.get("client_secret")
@@ -63,17 +64,24 @@ def _refresh_access_token(tokens: dict) -> Optional[str]:
             timeout=10.0,
         )
         r.raise_for_status()
-        return r.json().get("access_token")
+        data = r.json()
+        access_token = data.get("access_token")
+        expires_in = int(data.get("expires_in") or 3600)
+        expiry_iso = (
+            datetime.datetime.now(datetime.timezone.utc)
+            + datetime.timedelta(seconds=expires_in)
+        ).isoformat()
+        return (access_token, expiry_iso)
     except Exception as exc:
         logger.warning("google_token_refresh_failed: %s", exc)
         return None
 
 
-def _save_refreshed_token(user_id: int, new_access_token: str) -> None:
+def _save_refreshed_token(user_id: int, new_access_token: str, new_expiry: str) -> None:
     try:
         httpx.put(
             f"{CORE_BASE}/auth/google/tokens/{user_id}",
-            json={"access_token": new_access_token},
+            json={"access_token": new_access_token, "token_expiry": new_expiry},
             headers={"X-Service-Token": SERVICE_TOKEN},
             timeout=5.0,
         )
@@ -83,9 +91,10 @@ def _save_refreshed_token(user_id: int, new_access_token: str) -> None:
 
 def _get_valid_token(user_id: int, tokens: dict) -> Optional[str]:
     if _is_token_expired(tokens):
-        new_token = _refresh_access_token(tokens)
-        if new_token:
-            _save_refreshed_token(user_id, new_token)
+        result = _refresh_access_token(tokens)
+        if result:
+            new_token, new_expiry = result
+            _save_refreshed_token(user_id, new_token, new_expiry)
             return new_token
         return None
     return tokens.get("access_token")
@@ -139,10 +148,11 @@ def push_event(user_id: int, appointment: dict) -> Optional[str]:
             timeout=10.0,
         )
         if r.status_code == 401:
-            new_token = _refresh_access_token(tokens)
-            if not new_token:
+            result = _refresh_access_token(tokens)
+            if not result:
                 return None
-            _save_refreshed_token(user_id, new_token)
+            new_token, new_expiry = result
+            _save_refreshed_token(user_id, new_token, new_expiry)
             r = httpx.post(
                 f"https://www.googleapis.com/calendar/v3/calendars/{calendar_id}/events",
                 json=event,
