@@ -133,6 +133,8 @@ class AppointmentOut(BaseModel):
     location: Optional[str] = None
     created_at: datetime
     updated_at: datetime
+    lead_company: Optional[str] = None
+    lead_contact: Optional[str] = None
 
     # Permite instanciar a partir de objetos/rows (ex.: sqlite3.Row)
     model_config = ConfigDict(from_attributes=True)

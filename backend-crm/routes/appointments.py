@@ -90,22 +90,25 @@ def list_appointments(
         clauses = []
         params: List[object] = []
         if start:
-            clauses.append("end_at >= ?")
+            clauses.append("a.end_at >= ?")
             params.append(start.isoformat())
         if end:
-            clauses.append("start_at <= ?")
+            clauses.append("a.start_at <= ?")
             params.append(end.isoformat())
         if lead_id is not None:
-            clauses.append("lead_id = ?")
+            clauses.append("a.lead_id = ?")
             params.append(lead_id)
         if status is not None:
-            clauses.append("status = ?")
+            clauses.append("a.status = ?")
             params.append(status)
         where = " AND ".join(clauses)
-        query = "SELECT * FROM appointments"
+        query = (
+            "SELECT a.*, l.companyName AS lead_company, l.contactName AS lead_contact "
+            "FROM appointments a LEFT JOIN leads l ON a.lead_id = l.id"
+        )
         if where:
             query += f" WHERE {where}"
-        query += " ORDER BY start_at ASC"
+        query += " ORDER BY a.start_at ASC"
         cur.execute(query, params)
         rows = cur.fetchall()
         return [_serialize(row) for row in rows]
@@ -120,7 +123,9 @@ def list_by_lead(lead_id: int) -> List[AppointmentOut]:
         _ensure_lead_exists(conn, lead_id)
         cur = conn.cursor()
         cur.execute(
-            "SELECT * FROM appointments WHERE lead_id = ? ORDER BY start_at ASC",
+            "SELECT a.*, l.companyName AS lead_company, l.contactName AS lead_contact "
+            "FROM appointments a LEFT JOIN leads l ON a.lead_id = l.id "
+            "WHERE a.lead_id = ? ORDER BY a.start_at ASC",
             (lead_id,),
         )
         rows = cur.fetchall()
