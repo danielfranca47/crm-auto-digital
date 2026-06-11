@@ -129,18 +129,18 @@ def _appointment_to_gcal_event(appointment: dict) -> dict:
 
 def push_event(user_id: int, appointment: dict) -> Optional[str]:
     """Cria evento no Google Calendar. Retorna google_event_id ou None."""
-    tokens = _get_tokens(user_id)
-    if not tokens:
-        return None
-
-    access_token = _get_valid_token(user_id, tokens)
-    if not access_token:
-        return None
-
-    calendar_id = tokens.get("calendar_id") or "primary"
-    event = _appointment_to_gcal_event(appointment)
-
     try:
+        tokens = _get_tokens(user_id)
+        if not tokens:
+            return None
+
+        access_token = _get_valid_token(user_id, tokens)
+        if not access_token:
+            return None
+
+        calendar_id = tokens.get("calendar_id") or "primary"
+        event = _appointment_to_gcal_event(appointment)
+
         r = httpx.post(
             f"https://www.googleapis.com/calendar/v3/calendars/{calendar_id}/events",
             json=event,
@@ -172,19 +172,18 @@ def update_event(user_id: int, google_event_id: str, appointment: dict) -> None:
     """Actualiza evento no Google Calendar."""
     if not google_event_id:
         return
-
-    tokens = _get_tokens(user_id)
-    if not tokens:
-        return
-
-    access_token = _get_valid_token(user_id, tokens)
-    if not access_token:
-        return
-
-    calendar_id = tokens.get("calendar_id") or "primary"
-    event = _appointment_to_gcal_event(appointment)
-
     try:
+        tokens = _get_tokens(user_id)
+        if not tokens:
+            return
+
+        access_token = _get_valid_token(user_id, tokens)
+        if not access_token:
+            return
+
+        calendar_id = tokens.get("calendar_id") or "primary"
+        event = _appointment_to_gcal_event(appointment)
+
         r = httpx.put(
             f"https://www.googleapis.com/calendar/v3/calendars/{calendar_id}/events/{google_event_id}",
             json=event,
@@ -204,18 +203,17 @@ def delete_event(user_id: int, google_event_id: str) -> None:
     """Cancela evento no Google Calendar."""
     if not google_event_id:
         return
-
-    tokens = _get_tokens(user_id)
-    if not tokens:
-        return
-
-    access_token = _get_valid_token(user_id, tokens)
-    if not access_token:
-        return
-
-    calendar_id = tokens.get("calendar_id") or "primary"
-
     try:
+        tokens = _get_tokens(user_id)
+        if not tokens:
+            return
+
+        access_token = _get_valid_token(user_id, tokens)
+        if not access_token:
+            return
+
+        calendar_id = tokens.get("calendar_id") or "primary"
+
         r = httpx.delete(
             f"https://www.googleapis.com/calendar/v3/calendars/{calendar_id}/events/{google_event_id}",
             headers={"Authorization": f"Bearer {access_token}"},
