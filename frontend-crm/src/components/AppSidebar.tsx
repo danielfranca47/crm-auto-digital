@@ -12,8 +12,9 @@ import {
   MessageSquareDot,
   FlaskConical,
   Eye,
+  CalendarDays,
 } from "lucide-react";
-import { NavLink, useLocation, useNavigate } from "react-router-dom";
+import { NavLink, useNavigate } from "react-router-dom";
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { api } from "@/services/api";
@@ -32,6 +33,7 @@ import {
 const items = [
   { title: "Dashboard", url: "/dashboard", icon: BarChart3 },
   { title: "CRM Comercial", url: "/", icon: Users },
+  { title: "Agenda", url: "/agenda", icon: CalendarDays },
   { title: "Follow-ups", url: "/follow-ups", icon: MessageSquareDot },
   { title: "Prospecção", url: "/prospeccao", icon: Search },
   { title: "Assistente IA", url: "/assistente-ia", icon: Bot },
@@ -47,7 +49,6 @@ const accountItems = [
 ];
 
 export function AppSidebar() {
-  const location = useLocation();
   const navigate = useNavigate();
   const [loggingOut, setLoggingOut] = useState(false);
 
