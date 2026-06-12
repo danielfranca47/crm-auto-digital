@@ -42,6 +42,7 @@ app.add_middleware(
 @app.on_event("startup")
 def on_startup() -> None:
     global _scheduler
+    Base.metadata.create_all(bind=engine)
     ensure_user_columns()
     ensure_user_extra_columns()
     ensure_google_calendar_columns()
@@ -50,7 +51,6 @@ def on_startup() -> None:
     ensure_whatsapp_connections_table()
     ensure_ai_profile_columns()
     ensure_auth_otps_table()
-    Base.metadata.create_all(bind=engine)
     db = SessionLocal()
     try:
         seed_initial_data(db)
