@@ -115,6 +115,13 @@ Fase 3 — Google → CRM (pull)
 | 5 | `ee128bc` | Botão "Excluir" no ScheduleAppointmentDialog (modo edição, 2-step confirmation); useDeleteAppointment aceita { id, leadId } para usar DELETE /leads/{leadId}/appointments/{id} com gcal_delete |
 | 6 | `9676684` | Eventos clicáveis na vista mensal e lista do ScheduleView — abre ScheduleAppointmentDialog em modo edição |
 
+### Commits Fase 3
+
+| # | Commit | O que foi implementado |
+|---|---|---|
+| 7 | `b75a5b2` | Backend F3: migração appointments (lead_id nullable + user_id); list_events; POST /api/appointments/google-sync com upsert + cleanup (F3-2) |
+| 8 | `131de98` | Frontend F3: botão "Sincronizar Google" em Agenda.tsx; badge "Google" + somente-leitura em WeekView/DayView/ScheduleView |
+
 **Bugs corrigidos no commit 3:**
 - **CRÍTICO** — gcal_push/update/delete estavam apenas em `routes/appointments.py`; o frontend usa `routes/leads.py` → push nunca disparava
 - `payload.end_at.isoformat()` crashava com AttributeError quando `end_at=None` (linhas 160 e 198 de `routes/appointments.py`)
