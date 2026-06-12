@@ -102,13 +102,11 @@ para qualquer fluxo de produção.
 
 ---
 
-**Passo 1 — In Production sem verificação (imediato, para primeiros clientes)**
+**Passo 1 — In Production sem verificação** — ✅ Concluído em 12/06/2026
 
 Suficiente para os primeiros ~100 clientes pagantes. Clientes vêem aviso "app não
 verificada" mas conseguem prosseguir e a integração funciona normalmente (tokens
-não expiram). Fazer no Google Cloud Console — OAuth consent screen — Status — "In Production".
-
-*Sem código necessário. Sem review do Google. Imediato.*
+não expiram). Feito no Google Cloud Console — OAuth consent screen — Status — "In Production".
 
 ---
 
