@@ -1093,11 +1093,17 @@ def criar_compromisso(lead_id: int, payload: AppointmentCreate, current_user: Cu
         result = _map_appointment_row(row)
 
         # Google Calendar push (fail-silent)
+        lead_row = cursor.execute(
+            "SELECT companyName, contactName FROM leads WHERE id = ?", (lead_id,)
+        ).fetchone()
+        lead_name = (lead_row["companyName"] or lead_row["contactName"]) if lead_row else None
         gcal_event_id = gcal_push(
             user_id=current_user.id,
             appointment={
                 "title": title,
                 "description": payload.description,
+                "type": payload.type,
+                "lead_name": lead_name,
                 "start_at": normalized_start,
                 "end_at": normalized_end,
                 "location": payload.location,
@@ -1195,10 +1201,16 @@ def atualizar_compromisso(lead_id: int, appointment_id: int, payload: Appointmen
 
         # Google Calendar update (fail-silent)
         if original_google_event_id:
+            lead_row = cursor.execute(
+                "SELECT companyName, contactName FROM leads WHERE id = ?", (lead_id,)
+            ).fetchone()
+            lead_name = (lead_row["companyName"] or lead_row["contactName"]) if lead_row else None
+            appointment_dict = dict(row)
+            appointment_dict["lead_name"] = lead_name
             gcal_update(
                 user_id=current_user.id,
                 google_event_id=original_google_event_id,
-                appointment=dict(row),
+                appointment=appointment_dict,
             )
 
         return _map_appointment_row(row)

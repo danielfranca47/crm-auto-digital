@@ -68,6 +68,7 @@ export function ScheduleAppointmentDialog({
   const [type, setType] = useState<AppointmentType>("meeting");
   const [date, setDate] = useState<Date>(initialDate ?? new Date());
   const [time, setTime] = useState("09:00");
+  const [endTime, setEndTime] = useState("10:00");
   const [isDateOpen, setIsDateOpen] = useState(false);
   const appointmentIdToEdit = appointmentToEdit?.id ?? null;
 
@@ -144,12 +145,22 @@ export function ScheduleAppointmentDialog({
       const hours = String(start.getHours()).padStart(2, "0");
       const minutes = String(start.getMinutes()).padStart(2, "0");
       setTime(`${hours}:${minutes}`);
+      if (appointmentToEdit.endTime) {
+        const end = new Date(appointmentToEdit.endTime);
+        setEndTime(`${String(end.getHours()).padStart(2, "0")}:${String(end.getMinutes()).padStart(2, "0")}`);
+      } else {
+        const end = new Date(start.getTime() + 60 * 60 * 1000);
+        setEndTime(`${String(end.getHours()).padStart(2, "0")}:${String(end.getMinutes()).padStart(2, "0")}`);
+      }
     } else if (initialDate) {
       const h = String(initialDate.getHours()).padStart(2, "0");
       const m = String(initialDate.getMinutes()).padStart(2, "0");
       setTime(`${h}:${m}`);
+      const endDate = new Date(initialDate.getTime() + 60 * 60 * 1000);
+      setEndTime(`${String(endDate.getHours()).padStart(2, "0")}:${String(endDate.getMinutes()).padStart(2, "0")}`);
     } else {
       setTime("09:00");
+      setEndTime("10:00");
     }
   }, [open, initialLeadId, initialDate, appointmentToEdit, fixedLeadId]);
 
@@ -162,6 +173,7 @@ export function ScheduleAppointmentDialog({
     setType("meeting");
     setDate(initialDate ?? new Date());
     setTime("09:00");
+    setEndTime("10:00");
     setIsDateOpen(false);
   }, [open, initialLeadId, initialDate]);
 
@@ -200,12 +212,21 @@ export function ScheduleAppointmentDialog({
     const startAt = new Date(date);
     startAt.setHours(hours, minutes, 0, 0);
 
+    const [endHoursStr, endMinutesStr] = endTime.split(":");
+    const endAt = new Date(date);
+    endAt.setHours(Number(endHoursStr), Number(endMinutesStr), 0, 0);
+    // Se hora de fim <= início, soma 1h automaticamente
+    if (endAt <= startAt) {
+      endAt.setTime(startAt.getTime() + 60 * 60 * 1000);
+    }
+
     const payload = {
       leadId: effectiveLeadId,
       title: title || appointmentTypeLabels[type],
       description: description || undefined,
       type,
       startTime: startAt.toISOString(),
+      endTime: endAt.toISOString(),
     };
 
     try {
@@ -302,7 +323,7 @@ export function ScheduleAppointmentDialog({
             )}
           </div>
 
-          {/* Tipo e Hora */}
+          {/* Tipo e Horários */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label htmlFor="type">Tipo</Label>
@@ -327,14 +348,29 @@ export function ScheduleAppointmentDialog({
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="time">Hora</Label>
-              <Input
-                id="time"
-                type="time"
-                value={time}
-                onChange={(event) => setTime(event.target.value)}
-                disabled={isSubmitting}
-              />
+              <Label>Horário</Label>
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <p className="text-xs text-muted-foreground mb-1">Início</p>
+                  <Input
+                    id="time"
+                    type="time"
+                    value={time}
+                    onChange={(event) => setTime(event.target.value)}
+                    disabled={isSubmitting}
+                  />
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground mb-1">Fim</p>
+                  <Input
+                    id="endTime"
+                    type="time"
+                    value={endTime}
+                    onChange={(event) => setEndTime(event.target.value)}
+                    disabled={isSubmitting}
+                  />
+                </div>
+              </div>
             </div>
           </div>
 

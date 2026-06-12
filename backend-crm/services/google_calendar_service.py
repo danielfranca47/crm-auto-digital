@@ -112,6 +112,14 @@ def _to_rfc3339(s: str) -> str:
         return s
 
 
+_TYPE_LABELS: dict = {
+    "meeting": "Reunião",
+    "call": "Ligação",
+    "follow-up": "Follow-up",
+    "presentation": "Apresentação",
+}
+
+
 def _appointment_to_gcal_event(appointment: dict) -> dict:
     start = appointment.get("start_at") or appointment.get("startTime", "")
     end = appointment.get("end_at") or appointment.get("endTime") or start
@@ -120,8 +128,24 @@ def _appointment_to_gcal_event(appointment: dict) -> dict:
         "start": {"dateTime": _to_rfc3339(start), "timeZone": "UTC"},
         "end": {"dateTime": _to_rfc3339(end) or _to_rfc3339(start), "timeZone": "UTC"},
     }
-    if appointment.get("description"):
-        event["description"] = appointment["description"]
+
+    meta_lines = []
+    tipo = appointment.get("type")
+    if tipo:
+        meta_lines.append(f"Tipo: {_TYPE_LABELS.get(tipo, tipo)}")
+    lead_name = appointment.get("lead_name")
+    if lead_name:
+        meta_lines.append(f"Lead: {lead_name}")
+
+    user_desc = (appointment.get("description") or "").strip()
+    parts: list = []
+    if meta_lines:
+        parts.append("\n".join(meta_lines))
+    if user_desc:
+        parts.append(user_desc)
+    if parts:
+        event["description"] = "\n\n".join(parts)
+
     if appointment.get("location"):
         event["location"] = appointment["location"]
     return event
