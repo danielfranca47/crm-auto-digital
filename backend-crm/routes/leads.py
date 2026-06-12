@@ -25,6 +25,7 @@ from services.followup_state import (
     cancel_followup_manually,
     progress_followup_after_auto_send,
 )
+from services.google_calendar_service import delete_event as gcal_delete, push_event as gcal_push, update_event as gcal_update
 from services.jobs_service import TYPE_WHATSAPP_SEND, TYPE_WHATSAPP_FOLLOWUP_PREGENERATE, create_job
 from services.qualification_guardrails import can_advance_from_qualification
 from services.qualification_state import upsert_qualification_state
@@ -1089,7 +1090,27 @@ def criar_compromisso(lead_id: int, payload: AppointmentCreate, current_user: Cu
         # Retorna o registro recém-criado
         cursor.execute("SELECT * FROM appointments WHERE id = ?", (appointment_id,))
         row = cursor.fetchone()
-        return _map_appointment_row(row)
+        result = _map_appointment_row(row)
+
+        # Google Calendar push (fail-silent)
+        gcal_event_id = gcal_push(
+            user_id=current_user.id,
+            appointment={
+                "title": title,
+                "description": payload.description,
+                "start_at": normalized_start,
+                "end_at": normalized_end,
+                "location": payload.location,
+            },
+        )
+        if gcal_event_id:
+            cursor.execute(
+                "UPDATE appointments SET google_event_id = ? WHERE id = ?",
+                (gcal_event_id, appointment_id),
+            )
+            conn.commit()
+
+        return result
 
     except HTTPException:
         raise
@@ -1117,6 +1138,8 @@ def atualizar_compromisso(lead_id: int, appointment_id: int, payload: Appointmen
         row = cursor.fetchone()
         if not row:
             raise HTTPException(status_code=404, detail="Compromisso não encontrado")
+
+        original_google_event_id = dict(row).get("google_event_id")
 
         dados = payload.dict(exclude_unset=True)
         if not dados:
@@ -1169,6 +1192,15 @@ def atualizar_compromisso(lead_id: int, appointment_id: int, payload: Appointmen
 
         cursor.execute("SELECT * FROM appointments WHERE id = ?", (appointment_id,))
         row = cursor.fetchone()
+
+        # Google Calendar update (fail-silent)
+        if original_google_event_id:
+            gcal_update(
+                user_id=current_user.id,
+                google_event_id=original_google_event_id,
+                appointment=dict(row),
+            )
+
         return _map_appointment_row(row)
 
     except HTTPException:
@@ -1186,14 +1218,26 @@ def remover_compromisso(lead_id: int, appointment_id: int, current_user: Current
     cursor = conn.cursor()
     try:
         _require_lead_for_user(conn, lead_id, current_user.id)
+
+        # Lê google_event_id antes de deletar
+        cursor.execute(
+            "SELECT google_event_id FROM appointments WHERE id = ? AND lead_id = ?",
+            (appointment_id, lead_id),
+        )
+        appt_row = cursor.fetchone()
+        if not appt_row:
+            raise HTTPException(status_code=404, detail="Compromisso não encontrado")
+        google_event_id = appt_row["google_event_id"]
+
+        # Google Calendar delete (fail-silent, antes do DELETE no DB)
+        if google_event_id:
+            gcal_delete(user_id=current_user.id, google_event_id=google_event_id)
+
         cursor.execute(
             "DELETE FROM appointments WHERE id = ? AND lead_id = ?",
             (appointment_id, lead_id),
         )
         conn.commit()
-
-        if cursor.rowcount == 0:
-            raise HTTPException(status_code=404, detail="Compromisso não encontrado")
 
         return {"message": "Compromisso removido com sucesso"}
     except HTTPException:

@@ -131,6 +131,8 @@ class AppointmentOut(BaseModel):
     outcome_note: Optional[str] = None
     outcome_at: Optional[datetime] = None
     location: Optional[str] = None
+    google_event_id: Optional[str] = None
+    source: Optional[str] = "crm"
     created_at: datetime
     updated_at: datetime
     lead_company: Optional[str] = None

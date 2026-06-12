@@ -157,7 +157,7 @@ def create_appointment(payload: AppointmentCreate) -> AppointmentOut:
                 payload.description,
                 payload.type,
                 payload.start_at.isoformat(),
-                payload.end_at.isoformat(),
+                (payload.end_at.isoformat() if payload.end_at else payload.start_at.isoformat()),
                 payload.status,
                 payload.location,
                 now_iso,
@@ -195,7 +195,7 @@ def create_appointment(payload: AppointmentCreate) -> AppointmentOut:
                     "title": payload.title,
                     "description": payload.description,
                     "start_at": payload.start_at.isoformat(),
-                    "end_at": payload.end_at.isoformat(),
+                    "end_at": (payload.end_at.isoformat() if payload.end_at else payload.start_at.isoformat()),
                     "location": payload.location,
                 },
             )
