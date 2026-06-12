@@ -120,7 +120,8 @@ class AppointmentUpdate(BaseModel):
 
 class AppointmentOut(BaseModel):
     id: int
-    lead_id: int
+    user_id: Optional[int] = None
+    lead_id: Optional[int] = None
     title: str
     description: Optional[str] = None
     type: Optional[str] = None

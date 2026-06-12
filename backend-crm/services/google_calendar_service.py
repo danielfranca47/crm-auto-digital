@@ -223,6 +223,52 @@ def update_event(user_id: int, google_event_id: str, appointment: dict) -> None:
         logger.warning("google_update_event_error user_id=%s: %s", user_id, exc)
 
 
+def list_events(user_id: int, time_min: str, time_max: str) -> list:
+    """Lista eventos do Google Calendar para o período. Retorna [] em caso de erro."""
+    try:
+        tokens = _get_tokens(user_id)
+        if not tokens:
+            return []
+
+        access_token = _get_valid_token(user_id, tokens)
+        if not access_token:
+            return []
+
+        calendar_id = tokens.get("calendar_id") or "primary"
+        params = {
+            "timeMin": _to_rfc3339(time_min),
+            "timeMax": _to_rfc3339(time_max),
+            "singleEvents": "true",
+            "orderBy": "startTime",
+        }
+
+        r = httpx.get(
+            f"https://www.googleapis.com/calendar/v3/calendars/{calendar_id}/events",
+            params=params,
+            headers={"Authorization": f"Bearer {access_token}"},
+            timeout=10.0,
+        )
+        if r.status_code == 401:
+            result = _refresh_access_token(tokens)
+            if not result:
+                return []
+            new_token, new_expiry = result
+            _save_refreshed_token(user_id, new_token, new_expiry)
+            r = httpx.get(
+                f"https://www.googleapis.com/calendar/v3/calendars/{calendar_id}/events",
+                params=params,
+                headers={"Authorization": f"Bearer {new_token}"},
+                timeout=10.0,
+            )
+        if r.status_code == 200:
+            return r.json().get("items", [])
+        logger.warning("google_list_events_failed user_id=%s status=%s", user_id, r.status_code)
+        return []
+    except Exception as exc:
+        logger.warning("google_list_events_error user_id=%s: %s", user_id, exc)
+        return []
+
+
 def delete_event(user_id: int, google_event_id: str) -> None:
     """Cancela evento no Google Calendar."""
     if not google_event_id:

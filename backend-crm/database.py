@@ -563,6 +563,59 @@ def ensure_appointments_table(conn: sqlite3.Connection) -> None:
     )
 
 
+def _migrate_appointments_lead_nullable(conn: sqlite3.Connection) -> None:
+    """Torna lead_id nullable e adiciona user_id a appointments (para eventos Google sem lead)."""
+    cur = conn.cursor()
+    info = {row["name"]: row for row in cur.execute("PRAGMA table_info(appointments)").fetchall()}
+    lead_col = info.get("lead_id")
+    user_col = info.get("user_id")
+    if lead_col and lead_col["notnull"] == 0 and user_col:
+        return  # já migrado
+    conn.execute("PRAGMA foreign_keys = OFF")
+    conn.execute("""
+        CREATE TABLE appointments_new (
+            id          INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id     INTEGER,
+            lead_id     INTEGER,
+            title       TEXT NOT NULL,
+            description TEXT,
+            type        TEXT,
+            start_at    DATETIME NOT NULL,
+            end_at      DATETIME NOT NULL,
+            status      TEXT NOT NULL DEFAULT 'pending'
+                        CHECK (status IN ('pending','completed','canceled')),
+            location    TEXT,
+            created_at  DATETIME DEFAULT CURRENT_TIMESTAMP,
+            updated_at  DATETIME DEFAULT CURRENT_TIMESTAMP,
+            outcome     TEXT,
+            outcome_note TEXT,
+            outcome_at  DATETIME,
+            google_event_id TEXT,
+            source      TEXT NOT NULL DEFAULT 'crm',
+            FOREIGN KEY (lead_id) REFERENCES leads (id) ON DELETE CASCADE
+        )
+    """)
+    conn.execute("""
+        INSERT INTO appointments_new
+            (id, user_id, lead_id, title, description, type, start_at, end_at, status,
+             location, created_at, updated_at, outcome, outcome_note, outcome_at,
+             google_event_id, source)
+        SELECT a.id, l.user_id, a.lead_id, a.title, a.description, a.type,
+               a.start_at, a.end_at, a.status, a.location, a.created_at, a.updated_at,
+               a.outcome, a.outcome_note, a.outcome_at, a.google_event_id, a.source
+        FROM appointments a
+        LEFT JOIN leads l ON a.lead_id = l.id
+    """)
+    conn.execute("DROP TABLE appointments")
+    conn.execute("ALTER TABLE appointments_new RENAME TO appointments")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_appointments_lead ON appointments(lead_id)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_appointments_time ON appointments(lead_id, start_at, end_at)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_appointments_user ON appointments(user_id, start_at)")
+    conn.execute("PRAGMA foreign_keys = ON")
+    conn.commit()
+    print("✅ appointments migration: lead_id nullable + user_id adicionado")
+
+
 def normalize_datetime_value(value: Optional[Any]) -> Optional[str]:
     """
     Converte valores aceitos (datetime ou string) para ISO 8601 com 'T'.
@@ -964,6 +1017,7 @@ def init_db() -> None:
         ensure_column(conn, "appointments", "outcome_at", "outcome_at DATETIME")
         ensure_column(conn, "appointments", "google_event_id", "google_event_id TEXT")
         ensure_column(conn, "appointments", "source", "source TEXT NOT NULL DEFAULT 'crm'")
+        _migrate_appointments_lead_nullable(conn)
         ensure_column(conn, "lead_qualification_state", "asked_questions_json", "asked_questions_json TEXT DEFAULT '[]'")
         ensure_column(conn, "lead_qualification_state", "last_question_text", "last_question_text TEXT")
         ensure_column(conn, "lead_qualification_state", "power_score", "power_score INTEGER NOT NULL DEFAULT 0")
