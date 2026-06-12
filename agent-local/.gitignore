@@ -26,6 +26,7 @@ agent.log
 # Chrome user data directory (Selenium profile)
 chrome-profile/
 chrome_profile/
+chrome_profiles/
 .chrome-profile/
 agent-local/chrome-profile/
 agent-local/chrome_profile/
