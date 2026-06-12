@@ -132,7 +132,7 @@ Fase 3 — Google → CRM (pull)
 
 #### Cenário F2-1 — Conectar conta Google
 
-- [ ] Clicar "Conectar Google Calendar" em MinhaConta redireciona para a consent screen do Google
+- [x] Clicar "Conectar Google Calendar" em MinhaConta redireciona para a consent screen do Google
 - [x] Após autorizar, regressa ao CRM com a conta conectada ("Conectado como X@gmail.com")
 - [x] Botão "Desconectar" limpa os tokens; status volta a "Não conectado"
 
