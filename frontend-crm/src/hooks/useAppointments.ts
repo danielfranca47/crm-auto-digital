@@ -211,11 +211,18 @@ export function useCancelAppointment() {
 export function useDeleteAppointment() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async (id: string | number) => {
+    mutationFn: async (
+      arg: string | number | { id: string | number; leadId: string | number }
+    ) => {
+      if (typeof arg === "object" && arg !== null && "id" in arg && arg.leadId) {
+        return api.appointments.remove({ id: arg.id, leadId: arg.leadId });
+      }
+      const id = typeof arg === "object" ? arg.id : arg;
       return api.appointments.remove(id);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: appointmentsKeys.all });
+      queryClient.invalidateQueries({ queryKey: leadAppointmentsKeys.byLead("") });
     },
   });
 }

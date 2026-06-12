@@ -17,12 +17,12 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
-import { CalendarIcon, Loader2 } from "lucide-react";
+import { CalendarIcon, Loader2, Trash2 } from "lucide-react";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
-import { useCreateAppointment, useUpdateAppointment } from "@/hooks/useAppointments";
+import { useCreateAppointment, useUpdateAppointment, useDeleteAppointment } from "@/hooks/useAppointments";
 import { AppointmentType, Appointment } from "@/types/crm";
 import { useLeads } from "@/contexts/LeadsContext";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -74,6 +74,8 @@ export function ScheduleAppointmentDialog({
 
   const createMutation = useCreateAppointment();
   const updateMutation = useUpdateAppointment();
+  const deleteMutation = useDeleteAppointment();
+  const [isConfirmingDelete, setIsConfirmingDelete] = useState(false);
 
   // -------- Lista de leads (colunas ativas + arquivadas + fallback do edit) --------
   const allLeads = useMemo(() => {
@@ -175,6 +177,7 @@ export function ScheduleAppointmentDialog({
     setTime("09:00");
     setEndTime("10:00");
     setIsDateOpen(false);
+    setIsConfirmingDelete(false);
   }, [open, initialLeadId, initialDate]);
 
   // Se nada selecionado e tem leads, escolhe o primeiro (apenas quando não está travado)
@@ -184,7 +187,7 @@ export function ScheduleAppointmentDialog({
     }
   }, [fixedLeadId, selectedLeadId, allLeads]);
 
-  const isSubmitting = createMutation.isPending || updateMutation.isPending;
+  const isSubmitting = createMutation.isPending || updateMutation.isPending || deleteMutation.isPending;
 
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -260,6 +263,29 @@ export function ScheduleAppointmentDialog({
       toast({
         title: "Erro ao salvar compromisso",
         description: error?.message ?? "Não foi possível salvar o compromisso.",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!appointmentToEdit) return;
+    if (!isConfirmingDelete) {
+      setIsConfirmingDelete(true);
+      return;
+    }
+    try {
+      const arg = effectiveLeadId
+        ? { id: appointmentToEdit.id, leadId: effectiveLeadId }
+        : appointmentToEdit.id;
+      await deleteMutation.mutateAsync(arg as any);
+      toast({ title: "Compromisso excluído" });
+      onSuccess?.(appointmentToEdit);
+      onOpenChange(false);
+    } catch (error: any) {
+      toast({
+        title: "Erro ao excluir compromisso",
+        description: error?.message ?? "Não foi possível excluir o compromisso.",
         variant: "destructive",
       });
     }
@@ -432,19 +458,45 @@ export function ScheduleAppointmentDialog({
             />
           </div>
 
-          <DialogFooter>
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => onOpenChange(false)}
-              disabled={isSubmitting}
-            >
-              Cancelar
-            </Button>
-            <Button type="submit" disabled={isSubmitting || (!fixedLeadId && allLeads.length === 0)}>
-              {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              {appointmentToEdit ? "Salvar alterações" : "Agendar"}
-            </Button>
+          <DialogFooter className="flex-col sm:flex-row sm:justify-between gap-2">
+            {appointmentToEdit && (
+              <Button
+                type="button"
+                variant={isConfirmingDelete ? "destructive" : "outline"}
+                className={isConfirmingDelete ? "" : "text-destructive border-destructive/40 hover:bg-destructive/10"}
+                onClick={handleDelete}
+                disabled={isSubmitting}
+              >
+                {deleteMutation.isPending ? (
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                ) : (
+                  <Trash2 className="mr-2 h-4 w-4" />
+                )}
+                {isConfirmingDelete ? "Confirmar exclusão" : "Excluir"}
+              </Button>
+            )}
+            <div className="flex gap-2 justify-end">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => {
+                  if (isConfirmingDelete) {
+                    setIsConfirmingDelete(false);
+                  } else {
+                    onOpenChange(false);
+                  }
+                }}
+                disabled={isSubmitting}
+              >
+                {isConfirmingDelete ? "Manter" : "Cancelar"}
+              </Button>
+              {!isConfirmingDelete && (
+                <Button type="submit" disabled={isSubmitting || (!fixedLeadId && allLeads.length === 0)}>
+                  {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                  {appointmentToEdit ? "Salvar alterações" : "Agendar"}
+                </Button>
+              )}
+            </div>
           </DialogFooter>
         </form>
       </DialogContent>
