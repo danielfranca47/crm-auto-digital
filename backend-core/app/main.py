@@ -23,10 +23,11 @@ origins = [
     "http://127.0.0.1:5174",
     "http://127.0.0.1:5175",
     "http://127.0.0.1:5176",
-    # TODO produção — adicionar domínios reais após deploy no Cloudflare Pages:
-    #   frontend-crm  → ex: "https://crm-app.pages.dev" ou "https://app.danielfranca.pt"
-    #   frontend-admin → ex: "https://crm-admin.pages.dev" ou "https://admin.danielfranca.pt"
-    #   website        → ex: "https://crm-website.pages.dev" ou "https://danielfranca.pt"
+    # produção
+    "https://danielfranca.pt",
+    "https://www.danielfranca.pt",
+    "https://crmapp.danielfranca.pt",
+    # TODO frontend-admin: adicionar domínio após deploy (admin.danielfranca.pt ou pages.dev temporário)
 ]
 
 app.add_middleware(
