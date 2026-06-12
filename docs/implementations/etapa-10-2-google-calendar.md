@@ -112,6 +112,8 @@ Fase 3 — Google → CRM (pull)
 | 2 | `ebe99e7` | OAuth backend-core (auth_google.py, db.py, main.py, __init__.py) + serviço push backend-crm (google_calendar_service.py, appointments.py, database.py) + frontend (MinhaConta, api.ts, types/crm.ts, api-client.ts) |
 | 3 | `39cf566` | Correcção de 3 bugs: push/update/delete Google adicionados a routes/leads.py (rota primária do frontend); guard end_at opcional em routes/appointments.py; google_event_id + source adicionados a AppointmentOut |
 | 4 | `a117c2d` | Campo "Hora de fim" no dialog de agendamento (Início/Fim side-by-side, default +1h, guard automático); descrição Google enriquecida com Tipo e Lead; type + lead_name passados em criar/actualizar |
+| 5 | `ee128bc` | Botão "Excluir" no ScheduleAppointmentDialog (modo edição, 2-step confirmation); useDeleteAppointment aceita { id, leadId } para usar DELETE /leads/{leadId}/appointments/{id} com gcal_delete |
+| 6 | `9676684` | Eventos clicáveis na vista mensal e lista do ScheduleView — abre ScheduleAppointmentDialog em modo edição |
 
 **Bugs corrigidos no commit 3:**
 - **CRÍTICO** — gcal_push/update/delete estavam apenas em `routes/appointments.py`; o frontend usa `routes/leads.py` → push nunca disparava
@@ -146,7 +148,7 @@ Fase 3 — Google → CRM (pull)
 
 #### Cenário F2-3 — Resiliência
 
-- [ ] Criar compromisso quando o Google está inacessível: o appointment é criado no CRM normalmente; erro Google é logado mas não bloqueia o utilizador
+- [x] Criar compromisso quando o Google está inacessível: o appointment é criado no CRM normalmente; erro Google é logado mas não bloqueia o utilizador
 
 ---
 
