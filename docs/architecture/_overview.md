@@ -21,7 +21,8 @@ existente ou criar um novo.
 | [`humanization.md`](humanization.md) | Humanização comportamental: delay de resposta, typing indicator, quebra de mensagem por pontuação, janela de horário, áudio de voz (myaudio/ptt) | Mudança no cálculo de delay, novo campo de availability, novo tipo de mídia, mudança no split de mensagens |
 | [`auth-email.md`](auth-email.md) | Auth e gestão de utilizadores: endpoints de register/login/forgot-password/reset/change-password, modelo User (campos), PasswordResetToken, email SMTP via Resend, rotas públicas frontend-crm, painel admin de utilizadores | Novo endpoint de auth, mudança no modelo User, novo campo de config SMTP, novo template de email, nova rota pública |
 | [`plans-limits.md`](plans-limits.md) | Feature gates por plano: `follow_up_enabled`, `playground_monthly_limit` em entitlements; `plan_gates.py`; tabela `playground_usage_monthly`; campo `playground_monthly` em `/usage`; padrão de toast upgrade CTA | Novo campo de limite em `plan_limits`, novo gate numa rota do CRM, novo campo em `/usage` |
-| [`agenda.md`](agenda.md) | Agenda de compromissos: vistas mensal/semanal/diária, posicionamento CSS grid, slot-click, ScheduleAppointmentDialog, API appointments, tabela `appointments`, side-effects de criação | Nova vista ou constante de grid, novo campo em AppointmentOut, mudança na interacção slot-click, novo side-effect de criação |
+| [`agenda.md`](agenda.md) | Agenda de compromissos: vistas mensal/semanal/diária, posicionamento CSS grid, slot-click, ScheduleAppointmentDialog, API appointments, tabela `appointments`, side-effects de criação, eventos Google (badge, somente-leitura, sync) | Nova vista ou constante de grid, novo campo em AppointmentOut, mudança na interacção slot-click, novo side-effect de criação, mudança no comportamento de eventos Google |
+| [`google-calendar.md`](google-calendar.md) | Integração Google Calendar: OAuth2 por utilizador, serviço push/pull (fail-silent), fluxo de tokens, endpoint google-sync, upsert + cleanup | Novo scope OAuth, nova função do serviço, mudança no algoritmo de sync, novo campo mapeado do Google Event |
 
 ---
 
@@ -64,7 +65,10 @@ A maioria das features altera áreas já documentadas. Antes de criar um ficheir
 | A mudança afecta... | Documento a actualizar |
 |---|---|
 | Agenda (vistas, posicionamento, slot-click, ScheduleAppointmentDialog, AppointmentOut) | `agenda.md` |
+| Eventos Google na agenda (badge, somente-leitura, sync button) | `agenda.md` + `google-calendar.md` |
 | Auth endpoints, User model, password reset, email service, rotas públicas do frontend-crm | `auth-email.md` |
+| Google Calendar OAuth (endpoints, tokens, scopes, env vars) | `auth-email.md` + `google-calendar.md` |
+| Google Calendar service (push/pull, retry, mapeamento de campos) | `google-calendar.md` |
 | Delay de resposta, typing indicator, quebra de mensagem, janela de horário, myaudio | `humanization.md` |
 | Novo bloco/trigger/flag no Fluxo de Venda | `sales-flow.md` |
 | Novo campo em MotherDecision, ChildResult ou DecisionOutput | `llm-architecture.md` |

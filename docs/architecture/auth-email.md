@@ -16,8 +16,15 @@ Cobre autenticação, ciclo de vida de contas, recuperação de senha e envio de
 | `name` | String nullable | adicionado via `ensure_user_columns()` |
 | `status` | String | `"active"` por defeito |
 | `created_at` | DateTime | |
+| `google_access_token` | String nullable | Access token OAuth2 Google |
+| `google_refresh_token` | String nullable | Refresh token OAuth2 Google (longa duração) |
+| `google_token_expiry` | String nullable | ISO datetime de expiração do access token |
+| `google_calendar_id` | String nullable | Calendário Google alvo (default `"primary"`) |
+| `google_email` | String nullable | Email da conta Google conectada (exibido na UI) |
 
-`name` é uma coluna adicionada por migração idempotente — `ensure_user_columns()` em `app/db.py` faz `ALTER TABLE` apenas se a coluna não existir. Chamado no startup.
+`name` e as 5 colunas Google são adicionadas por `ensure_user_columns()` em `app/db.py` (migrações idempotentes via `ALTER TABLE`). Chamado no startup.
+
+`GET /users/me` inclui `google_calendar_connected: bool` — `True` quando `google_access_token IS NOT NULL`.
 
 ---
 
@@ -40,6 +47,32 @@ Cobre autenticação, ciclo de vida de contas, recuperação de senha e envio de
 - Algoritmo: `HS256`
 - Payload: `{ sub: user_id, email, type: "access", exp }`
 - Admin tokens: `{ sub: "admin", role: "admin", type: "access" }`
+
+---
+
+## Google Calendar OAuth — backend-core
+
+**Arquivo:** `backend-core/app/api/auth_google.py`
+
+| Endpoint | Auth | Descrição |
+|---|---|---|
+| `GET /auth/google/calendar` | Bearer | Inicia OAuth2 — redireciona para consent screen Google |
+| `GET /auth/google/calendar/callback` | Público (state assinado) | Recebe `code` do Google, troca por tokens, guarda em `users` |
+| `DELETE /auth/google/calendar` | Bearer | Desconecta — limpa os 5 campos Google na tabela `users` |
+| `GET /auth/google/tokens/{user_id}` | `x-service-token` | Service-to-service — backend-crm lê tokens do utilizador |
+| `PUT /auth/google/tokens/{user_id}` | `x-service-token` | Service-to-service — backend-crm persiste token renovado após refresh |
+
+**State assinado:** o parâmetro `state` do OAuth é um JWT HMAC-SHA256 com `{ user_id, exp: now+10min }` — não requer sessão server-side. O callback valida a assinatura e extrai `user_id`.
+
+**Scopes solicitados:** `https://www.googleapis.com/auth/calendar.events`
+
+**Variáveis de ambiente** (`backend-core/.env`):
+
+| Variável | Descrição |
+|---|---|
+| `GOOGLE_CLIENT_ID` | OAuth2 client ID do Google Cloud Console |
+| `GOOGLE_CLIENT_SECRET` | OAuth2 client secret |
+| `GOOGLE_REDIRECT_URI` | URI de callback registada no Google Cloud (`/auth/google/calendar/callback`) |
 
 ---
 

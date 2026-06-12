@@ -120,8 +120,9 @@ function openCreate(day: Date, slotIndex: number) {
 
 | Endpoint | Método | Usado por |
 |---|---|---|
-| `GET /api/appointments?start=&end=` | GET | WeekView, DayView — filtra pelo intervalo da vista |
+| `GET /api/appointments?start=&end=` | GET | WeekView, DayView — filtra pelo intervalo da vista; requer JWT (filtra por `user_id`) |
 | `GET /api/appointments/lead/{id}` | GET | ScheduleView — lista por lead |
+| `POST /api/appointments/google-sync?start=&end=` | POST | Agenda.tsx — importa eventos Google para o período (upsert + cleanup) |
 | `POST /api/leads/{leadId}/appointments` | POST | Criar compromisso |
 | `PATCH /api/leads/{leadId}/appointments/{id}` | PATCH | Editar compromisso |
 | `DELETE /api/leads/{leadId}/appointments/{id}` | DELETE | Remover compromisso |
@@ -131,7 +132,8 @@ function openCreate(day: Date, slotIndex: number) {
 ```python
 class AppointmentOut(BaseModel):
     id: int
-    lead_id: int
+    lead_id: Optional[int]           # None para eventos importados do Google sem lead associado
+    user_id: Optional[int]           # preenchido em eventos Google (lead_id IS NULL)
     title: str
     description: Optional[str]
     type: Optional[str]              # "meeting" | "call" | "follow-up" | "presentation"
@@ -142,6 +144,8 @@ class AppointmentOut(BaseModel):
     outcome_note: Optional[str]
     outcome_at: Optional[datetime]
     location: Optional[str]
+    google_event_id: Optional[str]   # ID do evento no Google Calendar
+    source: str                      # "crm" (default) | "google"
     created_at: datetime
     updated_at: datetime
     lead_company: Optional[str]      # via LEFT JOIN com leads (companyName)
@@ -180,7 +184,8 @@ Todos definidos em `src/hooks/useAppointments.ts`. Mutations invalidam `appointm
 | Campo | Tipo | Descrição |
 |---|---|---|
 | `id` | INTEGER PK | — |
-| `lead_id` | INTEGER FK | Referência a `leads.id` |
+| `lead_id` | INTEGER FK nullable | Referência a `leads.id`; NULL para eventos importados do Google sem lead |
+| `user_id` | INTEGER | Dono do evento; derivado de `leads.user_id` para CRM, direto para eventos Google |
 | `title` | TEXT | Título do compromisso |
 | `description` | TEXT | Notas/detalhes |
 | `type` | TEXT | `meeting` \| `call` \| `follow-up` \| `presentation` |
@@ -195,6 +200,27 @@ Todos definidos em `src/hooks/useAppointments.ts`. Mutations invalidam `appointm
 | `source` | TEXT | `crm` (default) \| `google` |
 | `created_at` | TEXT (ISO) | — |
 | `updated_at` | TEXT (ISO) | — |
+
+**Índices:** `idx_appointments_lead (lead_id)`, `idx_appointments_time (start_at)`, `idx_appointments_user (user_id, start_at)`.
+
+**Filtro de listagem:** `GET /api/appointments` filtra por `user_id` usando: `(lead_id IS NOT NULL AND l.user_id = ?) OR (lead_id IS NULL AND a.user_id = ?)`.
+
+---
+
+## Eventos do Google Calendar na Agenda
+
+Eventos importados via `POST /api/appointments/google-sync` têm `source='google'` e comportamento especial no frontend:
+
+- **Badge "Google"** (azul): visível nas 3 vistas (`ScheduleView`, `WeekView`, `DayView`) via `{isGoogle && <Badge>Google</Badge>}`
+- **Somente-leitura:** `onClick` verifica `if (!isGoogle) openEdit(event)` — eventos Google não abrem o dialog de edição
+- **Cursor:** `isGoogle ? "cursor-default opacity-80" : "cursor-pointer"`
+- **Lead:** `leadName` é `null` para eventos Google — a linha "Lead:" é suprimida na UI
+
+**Botão "Sincronizar Google"** em `Agenda.tsx`: visível apenas quando `googleCalendar.getStatus()` retorna `connected: true`. Ao clicar, chama o endpoint google-sync para o mês corrente e invalida `appointmentsKeys.all` (refetch de todas as vistas).
+
+**Upsert e cleanup (google-sync):**
+- Upsert por `(google_event_id, user_id)` — sincronizar duas vezes não duplica
+- Cleanup automático: apaga `source='google'` do período que já não existem no Google → F3-2 (evento removido do Google desaparece na próxima sync)
 
 ---
 
