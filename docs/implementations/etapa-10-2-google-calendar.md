@@ -110,6 +110,12 @@ Fase 3 — Google → CRM (pull)
 |---|---|---|
 | 1 | `f50a158` | `backend-core/app/config.py` — vars Google OAuth2 |
 | 2 | `ebe99e7` | OAuth backend-core (auth_google.py, db.py, main.py, __init__.py) + serviço push backend-crm (google_calendar_service.py, appointments.py, database.py) + frontend (MinhaConta, api.ts, types/crm.ts, api-client.ts) |
+| 3 | `39cf566` | Correcção de 3 bugs: push/update/delete Google adicionados a routes/leads.py (rota primária do frontend); guard end_at opcional em routes/appointments.py; google_event_id + source adicionados a AppointmentOut |
+
+**Bugs corrigidos no commit 3:**
+- **CRÍTICO** — gcal_push/update/delete estavam apenas em `routes/appointments.py`; o frontend usa `routes/leads.py` → push nunca disparava
+- `payload.end_at.isoformat()` crashava com AttributeError quando `end_at=None` (linhas 160 e 198 de `routes/appointments.py`)
+- `AppointmentOut` em `models.py` não expunha `google_event_id` e `source` (necessários para Fase 3)
 
 **Notas de implementação (divergências do plano):**
 - `requirements.txt` — **sem alteração**: usamos `httpx` (já instalado) para todas as chamadas Google em vez das libs `google-auth-oauthlib`/`google-api-python-client`. Zero novas dependências.
