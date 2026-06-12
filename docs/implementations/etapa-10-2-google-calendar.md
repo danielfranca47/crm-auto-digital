@@ -141,8 +141,8 @@ Fase 3 — Google → CRM (pull)
 
 - [x] Criar um compromisso no CRM → evento aparece no Google Calendar do utilizador com título, data, hora e localização correctos. Sobre localização, essa funcionalidade não está configurada. 
 - [x] Actualizar o horário do compromisso no CRM → evento no Google é actualizado
-- [ ] Cancelar o compromisso no CRM → evento no Google é removido ou marcado como cancelado
-- [ ] Se o utilizador não tem conta Google conectada: criar compromisso funciona normalmente sem erro
+- [x] Cancelar o compromisso no CRM → evento no Google é removido ou marcado como cancelado
+- [x] Se o utilizador não tem conta Google conectada: criar compromisso funciona normalmente sem erro
 
 #### Cenário F2-3 — Resiliência
 
