@@ -27,7 +27,7 @@ origins = [
     "https://danielfranca.pt",
     "https://www.danielfranca.pt",
     "https://crmapp.danielfranca.pt",
-    # TODO frontend-admin: adicionar domínio após deploy (admin.danielfranca.pt ou pages.dev temporário)
+    "https://admin.danielfranca.pt",
 ]
 
 app.add_middleware(
