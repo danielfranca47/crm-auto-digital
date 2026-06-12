@@ -11,15 +11,22 @@ app = FastAPI(title="CRM AutoDigital Core")
 _scheduler = None
 
 origins = [
+    # dev
     "http://localhost:5173",
     "http://localhost:5174",
+    "http://localhost:5175",
     "http://localhost:5176",
     "http://localhost:3000",
     "http://localhost:8080",
     "http://127.0.0.1:8080",
     "http://127.0.0.1:5173",
     "http://127.0.0.1:5174",
+    "http://127.0.0.1:5175",
     "http://127.0.0.1:5176",
+    # TODO produção — adicionar domínios reais após deploy no Cloudflare Pages:
+    #   frontend-crm  → ex: "https://crm-app.pages.dev" ou "https://app.danielfranca.pt"
+    #   frontend-admin → ex: "https://crm-admin.pages.dev" ou "https://admin.danielfranca.pt"
+    #   website        → ex: "https://crm-website.pages.dev" ou "https://danielfranca.pt"
 ]
 
 app.add_middleware(
