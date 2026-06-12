@@ -111,6 +111,7 @@ Fase 3 — Google → CRM (pull)
 | 1 | `f50a158` | `backend-core/app/config.py` — vars Google OAuth2 |
 | 2 | `ebe99e7` | OAuth backend-core (auth_google.py, db.py, main.py, __init__.py) + serviço push backend-crm (google_calendar_service.py, appointments.py, database.py) + frontend (MinhaConta, api.ts, types/crm.ts, api-client.ts) |
 | 3 | `39cf566` | Correcção de 3 bugs: push/update/delete Google adicionados a routes/leads.py (rota primária do frontend); guard end_at opcional em routes/appointments.py; google_event_id + source adicionados a AppointmentOut |
+| 4 | `a117c2d` | Campo "Hora de fim" no dialog de agendamento (Início/Fim side-by-side, default +1h, guard automático); descrição Google enriquecida com Tipo e Lead; type + lead_name passados em criar/actualizar |
 
 **Bugs corrigidos no commit 3:**
 - **CRÍTICO** — gcal_push/update/delete estavam apenas em `routes/appointments.py`; o frontend usa `routes/leads.py` → push nunca disparava
@@ -138,8 +139,8 @@ Fase 3 — Google → CRM (pull)
 
 #### Cenário F2-2 — Push CRM → Google
 
-- [ ] Criar um compromisso no CRM → evento aparece no Google Calendar do utilizador com título, data, hora e localização correctos
-- [ ] Actualizar o horário do compromisso no CRM → evento no Google é actualizado
+- [x] Criar um compromisso no CRM → evento aparece no Google Calendar do utilizador com título, data, hora e localização correctos. Sobre localização, essa funcionalidade não está configurada. 
+- [x] Actualizar o horário do compromisso no CRM → evento no Google é actualizado
 - [ ] Cancelar o compromisso no CRM → evento no Google é removido ou marcado como cancelado
 - [ ] Se o utilizador não tem conta Google conectada: criar compromisso funciona normalmente sem erro
 
