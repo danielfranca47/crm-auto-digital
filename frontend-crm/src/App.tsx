@@ -3,7 +3,7 @@ import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route, Outlet } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Outlet, useNavigate, useSearchParams } from "react-router-dom";
 import Index from "./pages/Index";
 import Dashboard from "./pages/Dashboard";
 import Prospeccao from "./pages/Prospeccao";
@@ -47,6 +47,22 @@ import { useApiErrorHandler } from "./hooks/useApiErrorHandler";
 import UsageAlertBanner from "./components/UsageAlertBanner";
 
 const queryClient = new QueryClient();
+
+/** Intercepts /?google_connected=1 and /?google_error=1 from OAuth callback and navigates to /minha-conta */
+function GoogleAuthHandler() {
+  const [searchParams] = useSearchParams();
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    if (searchParams.get("google_connected") === "1") {
+      navigate("/minha-conta?google_connected=1", { replace: true });
+    } else if (searchParams.get("google_error") === "1") {
+      navigate("/minha-conta?google_error=1", { replace: true });
+    }
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  return null;
+}
 
 /** Wrapper que valida a sessão e redireciona para /login caso não autenticado */
 function Protected({ children }: { children: React.ReactNode }) {
@@ -106,6 +122,7 @@ const App = () => (
             <TooltipProvider>
               <Toaster />
               <Sonner />
+              <GoogleAuthHandler />
 
               <Routes>
                 {/* Rotas públicas */}

@@ -151,12 +151,12 @@ async def oauth_callback(
 
     if error or not code or not state:
         logger.warning("google_oauth_callback_error error=%s", error)
-        return RedirectResponse(url=f"{frontend_url}/minha-conta?google_error=1")
+        return RedirectResponse(url=f"{frontend_url}/?google_error=1")
 
     try:
         user_id = _verify_state(state)
     except HTTPException:
-        return RedirectResponse(url=f"{frontend_url}/minha-conta?google_error=1")
+        return RedirectResponse(url=f"{frontend_url}/?google_error=1")
 
     try:
         async with httpx.AsyncClient(timeout=15.0) as client:
@@ -174,7 +174,7 @@ async def oauth_callback(
             tokens = token_resp.json()
     except Exception as exc:
         logger.error("google_token_exchange_failed user_id=%s error=%s", user_id, exc)
-        return RedirectResponse(url=f"{frontend_url}/minha-conta?google_error=1")
+        return RedirectResponse(url=f"{frontend_url}/?google_error=1")
 
     access_token = tokens.get("access_token")
     refresh_token = tokens.get("refresh_token")
@@ -204,7 +204,7 @@ async def oauth_callback(
         google_email=google_email,
     )
     logger.info("google_calendar_connected user_id=%s email=%s", user_id, google_email)
-    return RedirectResponse(url=f"{frontend_url}/minha-conta?google_connected=1")
+    return RedirectResponse(url=f"{frontend_url}/?google_connected=1")
 
 
 @router.get("/calendar/status")
