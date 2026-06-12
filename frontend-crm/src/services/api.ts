@@ -1637,6 +1637,9 @@ export const api = {
     /** URL para iniciar o fluxo OAuth — abrir directamente no browser (redirect). */
     connectUrl: () =>
       coreClient.get<{ url: string }>("/auth/google/calendar/url").then((r) => r.url),
+    /** Importa eventos do Google Calendar para o período e retorna todos os appointments. */
+    sync: (start: string, end: string) =>
+      apiClient.post<unknown[]>(`/appointments/google-sync?start=${encodeURIComponent(start)}&end=${encodeURIComponent(end)}`),
   },
 };
 

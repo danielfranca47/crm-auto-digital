@@ -52,6 +52,8 @@ function normalizeAppointment(raw: any): Appointment {
         : new Date(end).toISOString(),
     leadName: raw?.lead_contact ?? raw?.leadName ?? null,
     leadCompany: raw?.lead_company ?? raw?.leadCompany ?? null,
+    source: (raw?.source ?? "crm") as "crm" | "google",
+    google_event_id: raw?.google_event_id ?? null,
   };
 }
 

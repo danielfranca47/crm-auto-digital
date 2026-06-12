@@ -15,6 +15,7 @@ import {
 import { ptBR } from "date-fns/locale";
 import { ChevronLeft, ChevronRight, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import { useAppointments } from "@/hooks/useAppointments";
 import { ScheduleAppointmentDialog } from "@/components/ScheduleAppointmentDialog";
 import type { Appointment, AppointmentType } from "@/types/crm";
@@ -226,18 +227,24 @@ export function WeekView() {
                     const top = slotTopPx(start);
                     const height = durationPx(event.startTime, event.endTime);
                     if (top >= TOTAL_HEIGHT || top < 0) return null;
+                    const isGoogle = event.source === "google";
                     return (
                       <div
                         key={event.id}
-                        className={`absolute left-0.5 right-0.5 rounded border text-xs overflow-hidden cursor-pointer z-10 px-1 py-0.5 ${EVENT_COLORS[event.type]}`}
+                        className={`absolute left-0.5 right-0.5 rounded border text-xs overflow-hidden z-10 px-1 py-0.5 ${EVENT_COLORS[event.type]} ${isGoogle ? "cursor-default opacity-80" : "cursor-pointer"}`}
                         style={{ top: top + 1, height: Math.max(height - 2, 22) }}
                         onClick={(e) => {
                           e.stopPropagation();
-                          openEdit(event);
+                          if (!isGoogle) openEdit(event);
                         }}
                       >
-                        <div className="font-semibold truncate leading-tight">
+                        <div className="font-semibold truncate leading-tight flex items-center gap-1">
                           {format(start, "HH:mm")} {event.title}
+                          {isGoogle && (
+                            <Badge className="text-[8px] px-1 py-0 h-3 bg-white/20 text-inherit border-white/30 shrink-0">
+                              Google
+                            </Badge>
+                          )}
                         </div>
                         {height > 40 && event.leadName && (
                           <div className="truncate opacity-80 leading-tight">{event.leadName}</div>

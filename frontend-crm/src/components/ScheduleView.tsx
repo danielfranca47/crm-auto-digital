@@ -154,32 +154,42 @@ export function ScheduleView() {
               </h4>
               {filteredEvents.length > 0 ? (
                 <div className="space-y-2">
-                  {filteredEvents.map((event) => (
-                    <div
-                      key={event.id}
-                      className="p-3 rounded-lg border border-border bg-muted/30 hover:bg-muted/50 transition-smooth cursor-pointer"
-                      onClick={() => openEdit(event)}
-                    >
-                      <div className="flex items-start justify-between">
-                        <div className="space-y-1">
-                          <div className="flex items-center gap-2">
-                            <Badge className={eventTypeColors[event.type]}>
-                              {eventTypeLabels[event.type]}
-                            </Badge>
-                            <span className="text-sm font-medium text-foreground">
-                              {event.time}
-                            </span>
+                  {filteredEvents.map((event) => {
+                    const isGoogle = event.source === "google";
+                    return (
+                      <div
+                        key={event.id}
+                        className={`p-3 rounded-lg border border-border bg-muted/30 hover:bg-muted/50 transition-smooth ${isGoogle ? "cursor-default opacity-80" : "cursor-pointer"}`}
+                        onClick={() => { if (!isGoogle) openEdit(event); }}
+                      >
+                        <div className="flex items-start justify-between">
+                          <div className="space-y-1">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <Badge className={eventTypeColors[event.type]}>
+                                {eventTypeLabels[event.type]}
+                              </Badge>
+                              {isGoogle && (
+                                <Badge className="bg-blue-500/20 text-blue-400 border-blue-500/30 text-[10px] px-1.5 py-0 h-5">
+                                  Google
+                                </Badge>
+                              )}
+                              <span className="text-sm font-medium text-foreground">
+                                {event.time}
+                              </span>
+                            </div>
+                            <p className="text-sm text-foreground font-medium">
+                              {event.label}
+                            </p>
+                            {event.leadName && (
+                              <p className="text-xs text-muted-foreground">
+                                Lead: {event.leadName}
+                              </p>
+                            )}
                           </div>
-                          <p className="text-sm text-foreground font-medium">
-                            {event.label}
-                          </p>
-                          <p className="text-xs text-muted-foreground">
-                            Lead: {event.leadName}
-                          </p>
                         </div>
                       </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               ) : (
                 <p className="text-sm text-muted-foreground text-center py-4">
@@ -190,32 +200,42 @@ export function ScheduleView() {
           </div>
         ) : (
           <div className="space-y-2 max-h-96 overflow-y-auto">
-            {filteredEvents.map((event) => (
-              <div
-                key={event.id}
-                className="p-3 rounded-lg border border-border bg-muted/30 hover:bg-muted/50 transition-smooth cursor-pointer"
-                onClick={() => openEdit(event)}
-              >
-                <div className="flex items-start justify-between">
-                  <div className="space-y-1">
-                    <div className="flex items-center gap-2">
-                      <Badge className={eventTypeColors[event.type]}>
-                        {eventTypeLabels[event.type]}
-                      </Badge>
-                      <span className="text-sm text-muted-foreground">
-                        {format(event.date, "dd/MM")} às {event.time}
-                      </span>
+            {filteredEvents.map((event) => {
+              const isGoogle = event.source === "google";
+              return (
+                <div
+                  key={event.id}
+                  className={`p-3 rounded-lg border border-border bg-muted/30 hover:bg-muted/50 transition-smooth ${isGoogle ? "cursor-default opacity-80" : "cursor-pointer"}`}
+                  onClick={() => { if (!isGoogle) openEdit(event); }}
+                >
+                  <div className="flex items-start justify-between">
+                    <div className="space-y-1">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <Badge className={eventTypeColors[event.type]}>
+                          {eventTypeLabels[event.type]}
+                        </Badge>
+                        {isGoogle && (
+                          <Badge className="bg-blue-500/20 text-blue-400 border-blue-500/30 text-[10px] px-1.5 py-0 h-5">
+                            Google
+                          </Badge>
+                        )}
+                        <span className="text-sm text-muted-foreground">
+                          {format(event.date, "dd/MM")} às {event.time}
+                        </span>
+                      </div>
+                      <p className="text-sm text-foreground font-medium">
+                        {event.label}
+                      </p>
+                      {event.leadName && (
+                        <p className="text-xs text-muted-foreground">
+                          Lead: {event.leadName}
+                        </p>
+                      )}
                     </div>
-                    <p className="text-sm text-foreground font-medium">
-                      {event.label}
-                    </p>
-                    <p className="text-xs text-muted-foreground">
-                      Lead: {event.leadName}
-                    </p>
                   </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
             {filteredEvents.length === 0 && (
               <p className="text-sm text-muted-foreground text-center py-8">
                 Nenhum evento agendado

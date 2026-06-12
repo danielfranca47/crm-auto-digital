@@ -192,14 +192,15 @@ export function DayView() {
               const top = slotTopPx(start);
               const height = durationPx(event.startTime, event.endTime);
               if (top >= TOTAL_HEIGHT || top < 0) return null;
+              const isGoogle = event.source === "google";
               return (
                 <div
                   key={event.id}
-                  className={`absolute left-2 right-2 rounded border text-xs overflow-hidden cursor-pointer z-10 px-2 py-1.5 ${EVENT_COLORS[event.type]}`}
+                  className={`absolute left-2 right-2 rounded border text-xs overflow-hidden z-10 px-2 py-1.5 ${EVENT_COLORS[event.type]} ${isGoogle ? "cursor-default opacity-80" : "cursor-pointer"}`}
                   style={{ top: top + 1, height: Math.max(height - 2, 28) }}
                   onClick={(e) => {
                     e.stopPropagation();
-                    openEdit(event);
+                    if (!isGoogle) openEdit(event);
                   }}
                 >
                   <div className="flex items-center gap-2 flex-wrap">
@@ -213,6 +214,11 @@ export function DayView() {
                     >
                       {TYPE_LABELS[event.type]}
                     </Badge>
+                    {isGoogle && (
+                      <Badge className="text-[10px] px-1 py-0 h-4 bg-white/20 text-inherit border-white/30">
+                        Google
+                      </Badge>
+                    )}
                   </div>
                   {height > 38 && (
                     <div className="font-medium truncate mt-0.5">{event.title}</div>
