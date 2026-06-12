@@ -163,14 +163,14 @@ Fase 3 — Google → CRM (pull)
 
 #### Cenário F3-1 — Sync Google → CRM
 
-- [ ] Clicar "Sincronizar Google" na agenda → eventos do Google Calendar do período visível aparecem na agenda
-- [ ] Eventos do Google têm badge visual distinto ("Google")
-- [ ] Clicar num evento do Google não abre o dialog de edição (somente-leitura)
-- [ ] Sincronizar duas vezes não duplica os eventos (upsert por `google_event_id`)
+- [x] Clicar "Sincronizar Google" na agenda → eventos do Google Calendar do período visível aparecem na agenda
+- [x] Eventos do Google têm badge visual distinto ("Google")
+- [x] Clicar num evento do Google não abre o dialog de edição (somente-leitura)
+- [x] Sincronizar duas vezes não duplica os eventos (upsert por `google_event_id`)
 
 #### Cenário F3-2 — Evento removido do Google
 
-- [ ] Remover um evento do Google Calendar → na próxima sync, o evento desaparece da agenda do CRM
+- [x] Remover um evento do Google Calendar → na próxima sync, o evento desaparece da agenda do CRM
 
 ---
 
