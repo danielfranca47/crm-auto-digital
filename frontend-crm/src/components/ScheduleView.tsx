@@ -35,6 +35,17 @@ export function ScheduleView() {
   const [viewMode, setViewMode] = useState<"calendar" | "list">("calendar");
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
   const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [editingAppointment, setEditingAppointment] = useState<Appointment | null>(null);
+
+  function openEdit(appt: Appointment) {
+    setEditingAppointment(appt);
+    setIsDialogOpen(true);
+  }
+
+  function openNew() {
+    setEditingAppointment(null);
+    setIsDialogOpen(true);
+  }
 
   // 🔧 Passa SEMPRE um intervalo (o mês do dia selecionado)
   const { start, end } = monthRange(selectedDate);
@@ -103,7 +114,7 @@ export function ScheduleView() {
             >
               <List className="w-4 h-4" />
             </Button>
-            <Button size="sm" className="h-8" onClick={() => setIsDialogOpen(true)}>
+            <Button size="sm" className="h-8" onClick={openNew}>
               <Plus className="w-4 h-4 mr-1" />
               Novo
             </Button>
@@ -146,7 +157,8 @@ export function ScheduleView() {
                   {filteredEvents.map((event) => (
                     <div
                       key={event.id}
-                      className="p-3 rounded-lg border border-border bg-muted/30 hover:bg-muted/50 transition-smooth"
+                      className="p-3 rounded-lg border border-border bg-muted/30 hover:bg-muted/50 transition-smooth cursor-pointer"
+                      onClick={() => openEdit(event)}
                     >
                       <div className="flex items-start justify-between">
                         <div className="space-y-1">
@@ -181,7 +193,8 @@ export function ScheduleView() {
             {filteredEvents.map((event) => (
               <div
                 key={event.id}
-                className="p-3 rounded-lg border border-border bg-muted/30 hover:bg-muted/50 transition-smooth"
+                className="p-3 rounded-lg border border-border bg-muted/30 hover:bg-muted/50 transition-smooth cursor-pointer"
+                onClick={() => openEdit(event)}
               >
                 <div className="flex items-start justify-between">
                   <div className="space-y-1">
@@ -213,8 +226,12 @@ export function ScheduleView() {
       </CardContent>
       <ScheduleAppointmentDialog
         open={isDialogOpen}
-        onOpenChange={setIsDialogOpen}
+        onOpenChange={(open) => {
+          setIsDialogOpen(open);
+          if (!open) setEditingAppointment(null);
+        }}
         initialDate={selectedDate}
+        appointmentToEdit={editingAppointment ?? undefined}
         onSuccess={(appointment) => {
           setSelectedDate(new Date(appointment.startTime));
         }}
