@@ -1,0 +1,268 @@
+{
+  "period": "2026-05-10 → 2026-06-01",
+  "session_count": 18,
+  "timeline": [
+    {
+      "date": "2026-05-10",
+      "summary": "Fluxo de Venda (Camada 7) — regras condicionais no AI Profile para modo ativo; seletor visual de mídia",
+      "areas": [
+        "Backend Core",
+        "Backend Executors",
+        "Frontend CRM"
+      ],
+      "branch": "etapa-8-6-implemententacoes-complementares"
+    },
+    {
+      "date": "2026-05-11",
+      "summary": "Suporte a upload de áudio na base de conhecimento; desbloqueio de tipos de ficheiro",
+      "areas": [
+        "Backend CRM",
+        "Frontend CRM"
+      ],
+      "branch": "etapa-8-6-implemententacoes-complementares"
+    },
+    {
+      "date": "2026-05-25",
+      "summary": "Diagnóstico de 502 no playground; investigação de dependência backend-executors",
+      "areas": [
+        "Backend Executors"
+      ],
+      "branch": "etapa-8-6-implemententacoes-complementares"
+    },
+    {
+      "date": "2026-05-25",
+      "summary": "Diagnóstico e correcção da avaliação de triggers na Camada 7 (resolução de mídia em qualquer fase)",
+      "areas": [
+        "Backend Executors"
+      ],
+      "branch": "etapa-8-6-implemententacoes-complementares"
+    },
+    {
+      "date": "2026-05-25",
+      "summary": "Implementação completa da Camada 7 com blocos tipados por fase; integração playground",
+      "areas": [
+        "Backend CRM",
+        "Backend Executors",
+        "Frontend CRM",
+        "Documentação"
+      ],
+      "branch": "etapa-8-6-implemententacoes-complementares"
+    },
+    {
+      "date": "2026-05-26",
+      "summary": "Diagnóstico do estado da filha de qualificação; modelo sequencial de trigger na Camada 7",
+      "areas": [
+        "Backend CRM",
+        "Backend Executors",
+        "Frontend CRM",
+        "Documentação"
+      ],
+      "branch": "etapa-8-6-implemententacoes-complementares"
+    },
+    {
+      "date": "2026-05-27",
+      "summary": "Testes de fire_once (kw_trigger e intent_trigger); validação de persistência de triggers_fired",
+      "areas": [
+        "Backend CRM",
+        "Backend Executors",
+        "Frontend CRM",
+        "Documentação"
+      ],
+      "branch": "etapa-8-6-implemententacoes-complementares"
+    },
+    {
+      "date": "2026-05-27",
+      "summary": "Delay buffer no playground — multi-mensagem antes de gerar resposta; CamadaPipeline atualizada",
+      "areas": [
+        "Frontend CRM",
+        "Documentação"
+      ],
+      "branch": "etapa-8-6-temp-resposta-playground"
+    },
+    {
+      "date": "2026-05-27",
+      "summary": "Recebimento de áudio com transcrição Whisper; toggle por AI Profile; media_fallback backend",
+      "areas": [
+        "Backend CRM",
+        "Backend Core",
+        "Frontend CRM",
+        "Documentação"
+      ],
+      "branch": "etapa-8-6-audio-texto"
+    },
+    {
+      "date": "2026-05-28",
+      "summary": "Estudo da estrutura de docs/implementations; criação de guia de documentação de implementação",
+      "areas": [
+        "Documentação"
+      ],
+      "branch": "etapa-8-6-audio-texto"
+    },
+    {
+      "date": "2026-05-28",
+      "summary": "Toggle bot por lead individual; critérios de qualificação por campo; guardrails mínimos por modo",
+      "areas": [
+        "Backend CRM",
+        "Frontend CRM",
+        "Documentação"
+      ],
+      "branch": "etapa-8-6-desabilitar-bot-lead"
+    },
+    {
+      "date": "2026-05-29",
+      "summary": "Fix QR code WhatsApp — exibição correcta no ConexaoNumero; rota whatsapp_connect corrigida",
+      "areas": [
+        "Backend CRM",
+        "Frontend CRM",
+        "Documentação"
+      ],
+      "branch": "etapa-8-6-desabilitar-bot-lead"
+    },
+    {
+      "date": "2026-05-29",
+      "summary": "Diagnóstico de jobs followup.tick duplicados — análise sem alteração de código",
+      "areas": [
+        "Geral"
+      ],
+      "branch": "etapa-8-6-desabilitar-bot-lead"
+    },
+    {
+      "date": "2026-05-29",
+      "summary": "Fix loop infinito followup.tick; fix core-send instance fallback; job lease e retry corrigidos",
+      "areas": [
+        "Backend CRM",
+        "Backend Executors",
+        "Documentação"
+      ],
+      "branch": "etapa-8-6-desabilitar-bot-lead"
+    },
+    {
+      "date": "2026-05-29",
+      "summary": "Sessão de testes WhatsApp real — guia de testes criado; debugging inbound ao vivo; múltiplos fixes",
+      "areas": [
+        "Backend CRM",
+        "Backend Core",
+        "Backend Executors",
+        "Frontend CRM",
+        "Documentação"
+      ],
+      "branch": "etapa-8-6-desabilitar-bot-lead"
+    },
+    {
+      "date": "2026-05-30",
+      "summary": "Revisão e actualização dos 3 agentes docs; fluxo de qualificação natural — critérios por campo; nova branch",
+      "areas": [
+        "Backend Executors",
+        "Frontend CRM",
+        "Documentação"
+      ],
+      "branch": "etapa-8-7-fluxo-qualificacao-natural"
+    },
+    {
+      "date": "2026-05-31",
+      "summary": "Auditoria de docs/plans — graduação de implementações obsoletas; reorganização de architecture docs",
+      "areas": [
+        "Documentação"
+      ],
+      "branch": "etapa-8-7-fluxo-qualificacao-natural"
+    },
+    {
+      "date": "2026-06-01",
+      "summary": "Criação do advisor-agent — colaborador de desenvolvimento com dashboard web e leitura de sessões",
+      "areas": [
+        "Advisor Agent"
+      ],
+      "branch": "etapa-8-7-fluxo-qualificacao-natural"
+    }
+  ],
+  "assessment": "O período coberto representa um salto qualitativo significativo no projecto. As primeiras sessões (10–25 Mai) foram dominadas por implementação reactiva — funcionalidades a emergir da necessidade imediata (upload de áudio, triggers da Camada 7) — com uma tendência preocupante de ciclos de diagnóstico/fix dentro da mesma sessão, sintoma de falta de testes antes de merging. A partir de 27 de Maio regista-se uma inflexão positiva: a introdução do delay buffer, a transcrição Whisper e o toggle por lead mostram funcionalidades arquitecturalmente bem pensadas com documentação contemporânea.\n\nA sessão de 29 de Maio (3402 mensagens) é o maior sinal de alerta do período: uma única sessão de testes no WhatsApp real tornou-se o maior consumidor de contexto de todo o histórico. O volume sugere que o sistema chegou a produção sem cobertura de testes automatizados suficiente, forçando debugging ao vivo numa sessão extremamente longa e de alto risco. Positivamente, resultou em fixes importantes (loop infinito followup.tick, instance fallback) que estabilizaram a plataforma.\n\nA criação do advisor-agent (1 Jun) e a auditoria de docs/plans (31 Mai) revelam maturidade operacional crescente — o fundador está a construir ferramentas de auto-gestão do projecto em vez de apenas adicionar funcionalidades. A regularidade de commits (137 em 3 semanas) e a disciplina de documentação de implementação são pontos fortes que distinguem este projecto de um típico projecto solo.\n\nO risco central actual é a acumulação de debt em testes — o sistema tem lógica de negócio crítica (followup, qualificação, Camada 7) sem suíte de testes automatizados. Cada nova funcionalidade aumenta a superfície de risco para sessões de debugging ao vivo como a de 29 de Maio.",
+  "strengths": [
+    {
+      "strength": "Disciplina de documentação técnica consistente",
+      "evidence": "Criação do guia _guia-documentar-implementacao.md, 216 ficheiros de documentação modificados, docs de architecture actualizados a cada implementação relevante, e processo formalizado de graduação de docs/implementations para docs/architecture"
+    },
+    {
+      "strength": "Separação clara de responsabilidades arquitecturais",
+      "evidence": "Backend-core (auth/config), backend-crm (lógica CRM/IA), backend-executors (execução assíncrona) mantêm fronteiras respeitadas ao longo de todas as sessões; regras como 'enrich_context_bundle() apenas no orchestrator' documentadas e seguidas"
+    },
+    {
+      "strength": "Velocidade de entrega com commits atómicos e descritivos",
+      "evidence": "137 commits em 3 semanas com mensagens em Conventional Commits, corpos descritivos com ficheiros alterados e motivação — raramente commits misturando áreas não relacionadas"
+    },
+    {
+      "strength": "Capacidade de diagnóstico antes de alterar código",
+      "evidence": "Sessões de 29 Mai (jobs duplicados) e 26 Mai (filha de qualificação) foram explicitamente solicitadas como diagnóstico sem alteração — boa prática de entender antes de modificar"
+    },
+    {
+      "strength": "Auto-gestão do backlog técnico via docs/plans",
+      "evidence": "Auditoria completa dos plans a 31 Mai resultou em identificação e arquivo de planos obsoletos, mantendo o backlog limpo e accionável"
+    }
+  ],
+  "improvements": [
+    {
+      "area": "Testes automatizados",
+      "issue": "Zero cobertura de testes automatizados em lógica crítica de negócio: followup_state, qualification_guardrails, decision_engine. A sessão de 29 Mai (3402 mensagens) é evidência directa do custo operacional desta ausência — debugging ao vivo em produção com WhatsApp real.",
+      "suggestion": "Introduzir pytest para backend-crm e backend-executors começando pelos serviços mais modificados: decision_engine.py (64 modificações), followup_reconciler.py, qualification_guardrails.py. Foco em testes de unidade para funções puras de avaliação de triggers e guardrails. Meta mínima: 10 testes que cubram os cenários críticos de followup e Camada 7 antes de qualquer nova funcionalidade.",
+      "priority": "high"
+    },
+    {
+      "area": "Gestão de sessões de trabalho",
+      "issue": "Sessões excessivamente longas (966, 1124, 1927, 3402 mensagens) indicam falta de decomposição prévia de tarefas. Sessões muito longas degradam a qualidade das decisões no final e aumentam risco de introduzir bugs por fadiga de contexto.",
+      "suggestion": "Adoptar uma regra: cada sessão tem um único objectivo definido em 1-2 frases antes de começar. Se uma sessão de diagnóstico revelar mais de 2 problemas independentes, criar tickets separados e resolver em sessões distintas. Usar o advisor-agent para planning antes de iniciar sessões de implementação.",
+      "priority": "high"
+    },
+    {
+      "area": "Testes em ambiente de staging antes de produção",
+      "issue": "O padrão actual é: implementar → testar no playground → testar no WhatsApp real. Não existe ambiente de staging isolado, resultando em descoberta de bugs críticos directamente em produção (instance fallback, loop followup.tick).",
+      "suggestion": "Criar um segundo número WhatsApp dedicado a testes com uma instância UazAPI separada, mapeada a um user_id de teste no CRM. Nunca usar o número de produção para validação inicial de funcionalidades novas. Documentar esta distinção no guia de testes.",
+      "priority": "high"
+    },
+    {
+      "area": "Paridade Playground ↔ WhatsApp real",
+      "issue": "Apesar de documentada em playground-parity.md, a paridade foi violada múltiplas vezes (follow-up tick, contexto de sessão) exigindo fixes reactivos. O documento existe mas não há mecanismo que force verificação antes de deploy.",
+      "suggestion": "Adicionar um checklist explícito no _guia-documentar-implementacao.md: 'Se a alteração toca orchestrator, playground ou executor, validar paridade nos dois canais antes de fechar a implementação'. Considerar um teste de integração mínimo que simula o mesmo input nos dois caminhos e verifica que o ContextBundle resultante é equivalente.",
+      "priority": "medium"
+    },
+    {
+      "area": "Limites de jobs e monitorização",
+      "issue": "O loop infinito de followup.tick jobs (descoberto a 29 Mai) só foi detectado via análise manual da BD. Não existe alerting ou limite automático de jobs por lead/tipo.",
+      "suggestion": "Implementar um guardrail no jobs_service: ao criar um job do tipo whatsapp.followup.tick para um lead, verificar se já existe um job pending/leased do mesmo tipo para o mesmo lead e skip se existir. Adicionar uma rota admin /admin/jobs/health que expõe contagem de pending jobs por tipo — integrável no AdminDashboard.",
+      "priority": "medium"
+    },
+    {
+      "area": "Advisor Agent — profundidade de análise",
+      "issue": "O advisor-agent foi criado com leitura de sessões e dashboard, mas a sua capacidade analítica está limitada a parsing de dados históricos. Não tem acesso ao estado actual do código nem à BD.",
+      "suggestion": "Evoluir o advisor-agent para incluir um reader do git log filtrado por área (backend-crm, frontend-crm) e um reader simplificado do schema do crm.db. Isso permite que o agente detecte automaticamente quando uma área tem muitas modificações recentes mas sem testes, ou quando uma tabela cresceu em colunas sem documento de arquitectura correspondente.",
+      "priority": "low"
+    }
+  ],
+  "next_priorities": [
+    {
+      "rank": 1,
+      "description": "Escrever testes de unidade para decision_engine.py e followup_reconciler.py cobrindo os 5 cenários mais críticos de cada",
+      "why": "decision_engine.py foi o ficheiro mais modificado do período (64 vezes) e followup_reconciler.py causou o único incidente de produção conhecido (loop infinito). Qualquer nova funcionalidade de Camada 7 ou follow-up sobre código não testado multiplica o risco de regressão. É o maior bloqueador de velocidade sustentável."
+    },
+    {
+      "rank": 2,
+      "description": "Completar e validar o fluxo de qualificação natural (etapa-8-7) — critérios por campo, CamadaQualificacao actualizada, testes no playground para os 3 agentes",
+      "why": "É o trabalho em curso na branch actual. A branch tem apenas commits de documentação e setup desde 30 Mai — a implementação core do fluxo de qualificação natural está incompleta. Fechar esta etapa antes de iniciar nova funcionalidade evita debt de branches abertas."
+    },
+    {
+      "rank": 3,
+      "description": "Implementar guardrail anti-duplicação de jobs followup.tick no jobs_service (verificar pending antes de criar)",
+      "why": "O bug foi corrigido no reconciler mas a causa raiz (criação de jobs sem verificar existência prévia) permanece. Com múltiplos utilizadores na plataforma, o mesmo bug voltará a manifestar-se sob carga, desta vez em produção com dados reais de clientes."
+    },
+    {
+      "rank": 4,
+      "description": "Configurar número WhatsApp de staging dedicado e documentar processo de teste pré-produção",
+      "why": "A sessão mais longa do período (3402 mensagens) foi causada directamente pela ausência de staging. Com o sistema a aproximar-se de produção real com clientes, o custo de um próximo incidente de debugging ao vivo é substancialmente mais alto."
+    },
+    {
+      "rank": 5,
+      "description": "Evoluir advisor-agent com reader de git log por área e detector de tabelas sem documento de arquitectura",
+      "why": "O advisor-agent foi criado mas ainda não tem capacidade de detectar proactivamente áreas de risco (código muito modificado sem testes, tabelas novas sem docs). Com 137 commits em 3 semanas, um detector automático de debt técnico poupa tempo de auditoria manual nas próximas sessões."
+    }
+  ],
+  "generated_at": "2026-06-01T15:43:15.550937",
+  "cached_at": "2026-06-01T15:43:15.612928"
+}

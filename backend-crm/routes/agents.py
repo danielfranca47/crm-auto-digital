@@ -1,0 +1,170 @@
+from typing import List, Optional
+
+from fastapi import APIRouter, Depends, HTTPException, Query
+from pydantic import BaseModel, Field
+
+from services import jobs_service, rate_limit_service
+from security_core import CurrentUser, require_crm_access
+
+router = APIRouter(prefix="/api/agents", tags=["Agents"])
+
+
+class ReportJobRequest(BaseModel):
+    agent_id: str
+    token: str
+    job_id: int
+    status: str
+    result: Optional[dict] = None
+    error: Optional[str] = None
+
+
+class RegisterAgentRequest(BaseModel):
+    agent_id: str = Field(..., description="Identificador único do agente local")
+    token: str = Field(..., description="Token simples de autenticação")
+    name: Optional[str] = Field(None, description="Nome amigável do agente")
+    capabilities: Optional[List[str]] = Field(None, description="Lista de tipos de job suportados")
+    version: Optional[str] = Field(None, description="Versão do agente")
+
+
+class RegisterAgentResponse(BaseModel):
+    ok: bool = True
+    agent: dict
+
+
+class ProvisionAgentRequest(BaseModel):
+    name: Optional[str] = Field(None, description="Nome amigável do agente")
+
+
+class ProvisionAgentResponse(BaseModel):
+    agent_id: str
+    agent_token: str
+    name: Optional[str]
+    user_id: int
+    status: str
+
+
+class AgentOut(BaseModel):
+    agent_id: str = Field(alias="id")
+    name: Optional[str]
+    capabilities: Optional[List[str]] = None
+    status: Optional[str] = None
+    last_seen_at: Optional[str] = None
+    revoked: bool = False
+    online: bool = False
+
+    model_config = {"populate_by_name": True}
+
+
+class ManualWhatsappJobRequest(BaseModel):
+    phone: str = Field(..., description="Número completo com DDI, apenas dígitos")
+    message: str = Field(..., description="Mensagem a ser enviada")
+    lead_id: Optional[int] = Field(None, description="Lead relacionado (opcional)")
+    message_id: Optional[int] = Field(None, description="Mensagem salva relacionada (opcional)")
+
+
+@router.post("/provision", response_model=ProvisionAgentResponse)
+def provision_agent(payload: ProvisionAgentRequest, current_user: CurrentUser = Depends(require_crm_access)):
+    rate_limit_service.ensure_max_agents_local(
+        user_id=current_user.id,
+        entitlements=current_user.entitlements,
+        amount_to_add=1,
+    )
+    return jobs_service.provision_agent(user_id=current_user.id, name=payload.name)
+
+
+@router.get("", response_model=List[AgentOut])
+def list_agents(
+    seconds: int = Query(90, ge=30, le=600, description="Janela para considerar agente online"),
+    current_user: CurrentUser = Depends(require_crm_access),
+):
+    return jobs_service.list_agents(max_age_seconds=seconds, user_id=current_user.id)
+
+
+@router.post("/{agent_id}/revoke", response_model=AgentOut)
+def revoke_agent(agent_id: str, current_user: CurrentUser = Depends(require_crm_access)):
+    return jobs_service.revoke_agent(agent_id=agent_id, user_id=current_user.id)
+
+
+@router.post("/{agent_id}/reprovision")
+def reprovision_agent(agent_id: str, current_user: CurrentUser = Depends(require_crm_access)):
+    agent = jobs_service.reprovision_agent(agent_id=agent_id, user_id=current_user.id)
+    return {
+        "agent_id": agent.get("id"),
+        "agent_token": agent.get("agent_token"),
+        "status": agent.get("status"),
+        "instructions": "Atualize AGENT_ID e AGENT_TOKEN no .env do agent-local e reinicie o processo.",
+    }
+
+
+@router.post("/register", response_model=RegisterAgentResponse)
+def register_agent(payload: RegisterAgentRequest):
+    agent = jobs_service.register_agent(
+        agent_id=payload.agent_id,
+        token=payload.token,
+        name=payload.name,
+        capabilities=payload.capabilities,
+        version=payload.version,
+    )
+    return {"ok": True, "agent": agent}
+
+
+@router.get("/next-job")
+def next_job(
+    agent_id: str = Query(..., description="ID do agente"),
+    token: str = Query(..., description="Token do agente"),
+    types: Optional[str] = Query(None, description="Lista separada por vírgula de tipos aceitos"),
+):
+    accepted_types = [t.strip() for t in types.split(",") if t.strip()] if types else None
+    job = jobs_service.fetch_next_job(
+        agent_id=agent_id,
+        token=token,
+        accepted_types=accepted_types,
+    )
+    return {"job": job}
+
+
+@router.post("/report")
+def report_job(payload: ReportJobRequest):
+    return jobs_service.report_job(
+        agent_id=payload.agent_id,
+        token=payload.token,
+        job_id=payload.job_id,
+        status=payload.status,
+        result=payload.result,
+        error=payload.error,
+    )
+
+
+@router.get("/overview")
+def overview(seconds: int = Query(120, ge=10, le=600, description="Janela para considerar agente online"), current_user: CurrentUser = Depends(require_crm_access)):
+    return jobs_service.get_jobs_overview(seconds=seconds, user_id=current_user.id)
+
+
+@router.get("/jobs/summary")
+def job_summary(current_user: CurrentUser = Depends(require_crm_access)):
+    return jobs_service.get_whatsapp_summary(user_id=current_user.id)
+
+
+@router.post("/jobs/manual-whatsapp")
+def manual_whatsapp_job(payload: ManualWhatsappJobRequest, current_user: CurrentUser = Depends(require_crm_access)):
+    if not payload.phone or not payload.message:
+        raise HTTPException(status_code=400, detail="phone e message são obrigatórios")
+
+    rate_limit_service.ensure_daily_limit(
+        job_type=jobs_service.TYPE_WHATSAPP_SEND,
+        user_id=current_user.id,
+        entitlements=current_user.entitlements,
+    )
+
+    job = jobs_service.create_job(
+        job_type=jobs_service.TYPE_WHATSAPP_SEND,
+        payload={
+            "lead_id": payload.lead_id,
+            "message_id": payload.message_id,
+            "phone": payload.phone,
+            "body": payload.message,
+            "source": "manual",
+        },
+        user_id=current_user.id,
+    )
+    return {"ok": True, "job": job}

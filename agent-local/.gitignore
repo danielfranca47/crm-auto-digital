@@ -1,0 +1,60 @@
+# ============================
+# Agent Local — Git Ignore
+# ============================
+
+# Environment
+.env
+*.env
+!*.env.example
+.env.agent1
+.env.agent2
+
+# Python
+__pycache__/
+*.pyc
+
+# Virtual environments
+.venv/
+venv/
+*/.venv/
+*/venv/
+
+# Logs
+*.log
+agent.log
+
+# Chrome user data directory (Selenium profile)
+chrome-profile/
+chrome_profile/
+.chrome-profile/
+agent-local/chrome-profile/
+agent-local/chrome_profile/
+
+# WebDriver binaries
+chromedriver
+chromedriver.exe
+geckodriver
+geckodriver.exe
+*webdriver*
+*.bin
+
+# Cache and temp
+tmp/
+temp/
+*.tmp
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# SQLite local testing (if ever created)
+*.db
+
+# Editor directories
+.vscode/
+.idea/
+
+
+#arquivos que gerei localmente teste
+chrome_profiles/
+collected_posts.pkl

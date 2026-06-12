@@ -11,6 +11,7 @@ import ProfessionalWebsites from "./pages/ProfessionalWebsites";
 import SchedulingDemo from "./pages/SchedulingDemo";
 import AIWhatsAppAutomation from "./pages/AIWhatsAppAutomation";
 import ComingSoon from "./pages/ComingSoon";
+import CRMLanding from "./pages/CRMLanding";
 import SEOHead from "./components/SEOHead";
 
 const queryClient = new QueryClient();
@@ -46,7 +47,11 @@ const App = () => (
         <Routes>
           {/* Redirect root to default language */}
           <Route path="/" element={<Navigate to="/en" replace />} />
-          
+
+          {/* Landing page da Lara — definida ANTES de /:lang para evitar conflito */}
+          <Route path="/lara-ia" element={<CRMLanding />} />
+          <Route path="/crm" element={<Navigate to="/lara-ia" replace />} />
+
           {/* Language-specific routes */}
           <Route path="/:lang" element={
             <LanguageRoute>

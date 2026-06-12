@@ -1,0 +1,7 @@
+fastapi
+httpx
+uvicorn
+pydantic
+pydantic-settings
+python-dotenv
+dateparser

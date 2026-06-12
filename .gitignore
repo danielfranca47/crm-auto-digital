@@ -1,5 +1,27 @@
-node_modules/
-dist/
-**/.env
-.env.local
+# Python
+__pycache__/
+*.pyc
+
+# Ambiente virtual
+venv/
+
+# Banco local
+database/*.db
+*.db
+
+# Arquivos sensíveis
+.env
 .env.local-backup
+
+
+# Saídas temporárias
+output/
+uploads/
+snapshots/
+whatsapp_profile/
+
+
+#arquivos que gerei localmente teste
+chrome_profiles/
+collected_posts.pkl
+rascunhos.md

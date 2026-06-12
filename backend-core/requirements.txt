@@ -1,0 +1,10 @@
+fastapi
+uvicorn
+python-jose[cryptography]
+passlib
+sqlalchemy
+pydantic<2.0
+email-validator
+python-dotenv
+httpx
+apscheduler>=3.10

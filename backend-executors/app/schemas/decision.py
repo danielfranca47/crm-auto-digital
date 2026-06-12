@@ -1,0 +1,34 @@
+from __future__ import annotations
+
+from typing import List, Literal, Optional, Union
+
+from pydantic import BaseModel, Field, field_validator
+
+
+class DecisionOutput(BaseModel):
+    next_action: Literal["reply", "ask_qualification", "handoff", "ignore"]
+    message_text: str = ""
+    questions: list[str] = Field(default_factory=list)
+    reason: str
+    suggested_category: Optional[str] = None
+    category_reason: Optional[str] = None
+    outcome: Optional[Literal["won", "lost"]] = None
+    kanban_highlight: Optional[Literal["green", "orange"]] = None
+    signals: list[str] = Field(default_factory=list)
+    confidence: Optional[float] = None
+    decision_trace: Optional[dict] = None
+    # Mídia rica: lista de mídias enviadas antes do texto (suporte a múltiplas mídias e idiomas)
+    pre_send_media: Optional[Union[List[dict], dict]] = None
+    # Ações diretas do Fluxo de Venda (sistema de fases): mensagem fixa, avançar fase, webhook, espera
+    system_actions: Optional[List[dict]] = None
+    # Se True, a resposta da LLM filha foi suprimida pelo Fluxo de Venda (suppress_llm_response no bloco)
+    suppress_llm_response: bool = False
+
+    @field_validator("questions", mode="after")
+    @classmethod
+    def normalize_questions(
+        cls, value: list[str], info
+    ) -> list[str]:
+        if info.data.get("next_action") != "ask_qualification":
+            return []
+        return value
