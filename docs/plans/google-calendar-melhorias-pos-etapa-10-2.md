@@ -83,30 +83,50 @@ Para planos Start e Growth: funcionalidade bloqueada com CTA de upgrade visível
 
 ---
 
-### M3 — App Review do Google para produção com utilizadores ilimitados
+### M3 — Publicação do Google OAuth para produção
 
 **Prioridade: ALTA quando o produto entrar em produção real — processo burocrático**
 **Natureza: não é código — é processo no Google Cloud Console**
 
-Actualmente o projecto Google Cloud está em modo "Testing". Apenas contas adicionadas
-manualmente como "Test Users" conseguem conectar o Google Calendar. Qualquer outro
-utilizador recebe aviso "App não verificado" e pode ser bloqueado pelo Google.
+Existem 3 estados possíveis do projecto Google Cloud, com comportamentos diferentes:
 
-**O que é necessário:**
+| Estado | Utilizadores não cadastrados | Refresh token | Adequado para |
+|---|---|---|---|
+| **Testing** (actual) | Bloqueados — não conseguem sequer passar do aviso | Expira em 7 dias | Desenvolvimento/testes internos apenas |
+| **In Production** (sem verificação) | Vêem aviso "app não verificada" mas podem prosseguir | Não expira | Primeiros ~100 clientes |
+| **Verificado pelo Google** | Sem avisos, sem limite | Não expira | Produção a escala |
+
+**⚠️ Problema crítico do modo Testing:** os refresh tokens expiram ao fim de 7 dias.
+Após esse prazo o utilizador tem de re-autorizar manualmente — completamente inadequado
+para qualquer fluxo de produção.
+
+---
+
+**Passo 1 — In Production sem verificação (imediato, para primeiros clientes)**
+
+Suficiente para os primeiros ~100 clientes pagantes. Clientes vêem aviso "app não
+verificada" mas conseguem prosseguir e a integração funciona normalmente (tokens
+não expiram). Fazer no Google Cloud Console — OAuth consent screen — Status — "In Production".
+
+*Sem código necessário. Sem review do Google. Imediato.*
+
+---
+
+**Passo 2 — Verificação completa pelo Google (quando escalar)**
+
+Necessário para eliminar o aviso e ultrapassar o limite de ~100 utilizadores.
+
 1. Privacy policy pública publicada numa URL acessível
 2. Vídeo de demonstração mostrando o uso dos scopes OAuth solicitados
 3. Submissão do formulário de verificação no Google Cloud Console
 4. Aguardar review (tipicamente 1–2 semanas para apps não sensíveis)
 
-**Impacto:** sem este processo, vendas reais do CRM ficam bloqueadas — nenhum cliente
-consegue conectar o Google Calendar sem ser adicionado manualmente como Test User.
-
-**Timing recomendado:** iniciar o processo quando o produto tiver > 1–2 clientes pagantes
-activos (para ter material de demonstração realista).
+**Timing recomendado:** iniciar quando o produto tiver > 1–2 clientes pagantes activos
+(para ter material de demonstração realista para o Passo 2).
 
 **Notas:**
 - Os scopes OAuth solicitados actualmente: `calendar.events` (read/write de eventos).
-- Se M2 for implementado antes do App Review, adicionar `calendar.readonly`
+- Se M2 for implementado antes da verificação, adicionar `calendar.readonly`
   (para listar calendários) ao escopo e incluir no review.
 
 ---
