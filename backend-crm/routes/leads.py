@@ -338,7 +338,7 @@ def _check_conflict(
 # Endpoints
 # ---------------------------
 
-@router.get("/")
+@router.get("")
 def listar_leads(current_user: CurrentUser = Depends(require_crm_access)):
     """
     Lista leads e injeta a próxima ação agendada por lead (compromisso futuro mais próximo).
@@ -382,7 +382,7 @@ def listar_leads(current_user: CurrentUser = Depends(require_crm_access)):
         conn.close()
 
 
-@router.post("/")
+@router.post("")
 def criar_lead(lead: Lead, current_user: CurrentUser = Depends(require_crm_access)):
     conn = get_connection()
     cursor = conn.cursor()
