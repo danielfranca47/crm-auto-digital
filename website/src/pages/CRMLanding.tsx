@@ -46,7 +46,7 @@ const steps = [
   { num: '02', title: 'Apresente seu negócio à Lara', desc: 'Ela aprende sobre sua empresa, seus produtos e como você gosta de atender.' },
   { num: '03', title: 'Leads entram no funil', desc: 'Importe contatos ou receba leads direto do WhatsApp — a Lara assume na hora.' },
   { num: '04', title: 'A Lara qualifica e conversa', desc: 'Faz as perguntas certas, identifica intenção de compra e avança o lead no pipeline.' },
-  { num: '05', title: 'A Lara faz o follow-up', desc: 'Quem não respondeu? A Lara retoma no momento certo, sem parecer chato.' },
+  { num: '05', title: 'A Lara faz o follow-up', desc: 'Quem não respondeu? No Growth, a Lara retoma automaticamente no momento certo — sem parecer chato, sem você tocar.' },
   { num: '06', title: 'Você fecha as vendas quentes', desc: 'Receba apenas os leads prontos para fechar. A Lara já fez o trabalho pesado.' },
 ];
 
@@ -126,6 +126,7 @@ const plans = [
     name: 'Growth', price: '297', highlight: true, badge: 'RECOMENDADO', comingSoon: false,
     description: 'Para quem quer escalar — 100+ leads/mês',
     features: [
+      '✦ Ativação 1:1 + 15 Scripts + 30 dias ao vivo (R$641 em bônus)',
       '500 conversas IA/mês',
       '1 WhatsApp conectado',
       'Até 1.500 contatos no CRM',
@@ -570,6 +571,13 @@ export default function CRMLanding({ lang: _lang = 'pt' }: { lang?: string }) {
                 ))}
               </tbody>
             </table>
+            <div className="px-6 py-4 border-t border-border bg-muted/5">
+              <p className="text-xs text-muted-foreground">
+                ✦ Follow-up automático, Playground e Analytics avançados inclusos no{' '}
+                <strong style={{ color: '#4DD4FF' }}>Growth</strong>.
+                {' '}Start inclui atendimento 24/7 + CRM + qualificação — ideal para quem está estruturando o processo.
+              </p>
+            </div>
           </div>
         </div>
       </section>
