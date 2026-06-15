@@ -68,7 +68,7 @@ const differentials = [
   },
   {
     Icon: BellRing, tag: 'Diferencial', title: 'A Lara nunca esquece um follow-up',
-    desc: 'Se o lead não respondeu, a Lara retoma automaticamente no melhor momento. Ela recupera vendas que pareciam perdidas — sem você fazer absolutamente nada.',
+    desc: 'Se o lead não respondeu, a Lara retoma automaticamente no melhor momento. Ela recupera vendas que pareciam perdidas — sem você fazer absolutamente nada. Incluso no plano Growth.',
   },
   {
     Icon: Volume2, tag: 'Único', title: 'Áudio como se fosse na hora',
