@@ -107,6 +107,7 @@ const bonuses = [
 const plans = [
   {
     name: 'Start', price: '97', highlight: false, badge: null, comingSoon: false,
+    description: 'Para quem está estruturando o processo — 20 a 100 leads/mês',
     features: [
       '250 conversas IA/mês',
       '1 WhatsApp conectado',
@@ -115,13 +116,15 @@ const plans = [
       'Os 3 tipos de agente',
       'Qualificação automatizada',
       'Dashboard básico',
+      '✦ Onboarding em grupo semanal',
       'Suporte por chat',
     ],
-    footer: 'Excedente: R$0,60/conversa',
+    footer: 'Excedente: R$0,60/conversa — upgrade natural para Growth',
     cta: 'Ativar minha Lara →',
   },
   {
-    name: 'Growth', price: '197', highlight: true, badge: 'RECOMENDADO', comingSoon: false,
+    name: 'Growth', price: '297', highlight: true, badge: 'RECOMENDADO', comingSoon: false,
+    description: 'Para quem quer escalar — 100+ leads/mês',
     features: [
       '500 conversas IA/mês',
       '1 WhatsApp conectado',
@@ -137,6 +140,7 @@ const plans = [
   },
   {
     name: 'Scale', price: '397', highlight: false, badge: 'EM BREVE', comingSoon: true,
+    description: '',
     features: [
       '1.500 conversas IA/mês',
       'Até 3 WhatsApps',
@@ -150,6 +154,7 @@ const plans = [
   },
   {
     name: 'Enterprise', price: '697', highlight: false, badge: 'EM BREVE', comingSoon: true,
+    description: '',
     features: [
       '5.000 conversas IA/mês',
       'Até 5 WhatsApps',
@@ -604,7 +609,7 @@ export default function CRMLanding({ lang: _lang = 'pt' }: { lang?: string }) {
         <div className="container mx-auto max-w-4xl">
           <div className="text-center mb-12">
             <span className="text-accent text-sm font-semibold uppercase tracking-widest">✦ O que você está recebendo</span>
-            <h2 className="text-heading mt-2">Você está investindo R$197/mês.<br />Você está recebendo R$1.735/mês em valor.</h2>
+            <h2 className="text-heading mt-2">Você está investindo R$297/mês.<br />Você está recebendo R$1.735/mês em valor.</h2>
             <p className="text-muted-foreground mt-3 max-w-xl mx-auto">
               Incluídos no plano Growth — para você sair do zero ao resultado no dia 1.
             </p>
@@ -641,16 +646,16 @@ export default function CRMLanding({ lang: _lang = 'pt' }: { lang?: string }) {
             <div className="text-center space-y-2">
               <div className="text-sm text-muted-foreground">
                 Você paga{' '}
-                <span className="font-bold text-accent text-lg">R$197/mês</span>
+                <span className="font-bold text-accent text-lg">R$297/mês</span>
                 {' '}— apenas{' '}
-                <span className="font-bold" style={{ color: '#4DD4FF' }}>11%</span>
+                <span className="font-bold" style={{ color: '#4DD4FF' }}>17%</span>
                 {' '}do valor real.
               </div>
               <div className="text-xs text-muted-foreground">
                 Valor total:{' '}
                 <span className="line-through opacity-50">R$1.735/mês</span>
                 {' '}→ Seu investimento:{' '}
-                <strong className="text-accent">R$197/mês</strong>
+                <strong className="text-accent">R$297/mês</strong>
               </div>
               <div className="text-xs text-muted-foreground mt-2">
                 Garantia incondicional de 30 dias — você entra, usa, e decide. O risco é nosso.
@@ -663,24 +668,24 @@ export default function CRMLanding({ lang: _lang = 'pt' }: { lang?: string }) {
       {/* ── LAUNCH ACCESS ── */}
       <section className="py-20 px-4">
         <div className="container mx-auto max-w-3xl text-center">
-          <span className="text-accent text-sm font-semibold uppercase tracking-widest">✦ Preço de Lançamento</span>
+          <span className="text-accent text-sm font-semibold uppercase tracking-widest">✦ Preço de Fundador</span>
           <h2 className="text-heading mt-2 mb-4">
-            R$197 é o preço de quem entra agora
+            R$147/mês pelos 12 primeiros meses — depois R$197
           </h2>
           <p className="text-muted-foreground max-w-xl mx-auto mb-10 leading-relaxed">
-            Estamos em lançamento com um grupo selecionado de empreendedores brasileiros. Quem entra agora <strong className="text-foreground">trava o preço pelo tempo que ficar</strong> — quando sairmos do lançamento, o Growth sobe para R$247/mês.
+            Os primeiros parceiros da Lara entram como <strong className="text-foreground">Fundadores</strong>: R$147/mês pelos 12 primeiros meses. Depois, o preço trava em <strong className="text-foreground">R$197/mês para sempre</strong> — enquanto o Growth para novos clientes sobe para R$297/mês.
           </p>
           <div className="portfolio-card p-8 max-w-lg mx-auto border" style={{ borderColor: 'rgba(77,212,255,0.35)' }}>
             <div className="text-4xl mb-4">🔒</div>
-            <h3 className="font-bold text-lg mb-2" style={{ color: '#4DD4FF' }}>Trava o preço de R$197/mês</h3>
+            <h3 className="font-bold text-lg mb-2" style={{ color: '#4DD4FF' }}>Vaga de Fundador — 5 vagas apenas</h3>
             <p className="text-muted-foreground text-sm mb-3 leading-relaxed">
-              O Onboarding ao Vivo acontece toda semana às terças — <strong className="text-foreground">10 vagas por sessão</strong>. Cada cliente novo recebe uma sessão 1:1. Enquanto houver vaga disponível, o preço de lançamento está garantido.
+              O Onboarding ao Vivo acontece toda semana às terças — <strong className="text-foreground">10 vagas por sessão</strong>. Cada Fundador recebe sessão 1:1 prioritária para sair ativo no dia 1.
             </p>
             <p className="text-xs text-muted-foreground mb-6 opacity-75">
-              Quando o preço subir, quem já está dentro não paga a diferença.
+              Após os 12 meses: R$197/mês para sempre. Novos clientes pagarão R$297/mês.
             </p>
             <a href="#planos" className="btn-hero inline-flex items-center gap-2">
-              Garantir meu preço de lançamento <ArrowRight className="w-4 h-4" />
+              Garantir minha vaga de Fundador <ArrowRight className="w-4 h-4" />
             </a>
           </div>
         </div>
@@ -701,7 +706,7 @@ export default function CRMLanding({ lang: _lang = 'pt' }: { lang?: string }) {
               </h3>
               <ul className="space-y-5 text-sm">
                 {[
-                  { cond: 'Você recebe menos de 20 leads por mês no WhatsApp', why: 'A Lara precisa de volume pra mostrar resultado.' },
+                  { cond: 'Você recebe menos de 20 leads por mês no WhatsApp', why: 'A Lara precisa de volume mínimo pra mostrar resultado — abaixo disso, o ROI não fecha.' },
                   { cond: 'Você quer um robô que responda igual a FAQ', why: 'Isso qualquer chatbot faz — a Lara é diferente e exige configuração.' },
                   { cond: 'Você não quer acompanhar os primeiros 7 dias', why: 'A Lara aprende com você. Os primeiros dias definem os resultados do mês.' },
                 ].map(({ cond, why }) => (
@@ -725,7 +730,8 @@ export default function CRMLanding({ lang: _lang = 'pt' }: { lang?: string }) {
                 {[
                   'Você perde vendas por não responder rápido o suficiente',
                   'Você já teve leads quentes que "esfriaram" porque esqueceu de dar follow-up',
-                  'Você quer escalar sem contratar mais gente',
+                  'Você recebe entre 20 e 100 leads/mês e quer organizar o processo (Start)',
+                  'Você recebe 100+ leads/mês e quer escalar sem contratar mais gente (Growth)',
                 ].map(item => (
                   <li key={item} className="flex items-start gap-2">
                     <Check className="w-4 h-4 flex-shrink-0 mt-0.5" style={{ color: '#4DD4FF' }} />
@@ -786,6 +792,9 @@ export default function CRMLanding({ lang: _lang = 'pt' }: { lang?: string }) {
             <span className="text-accent text-sm font-semibold uppercase tracking-widest">✦ Planos da Lara</span>
             <h2 className="text-heading mt-2">Escolha o plano e a Lara começa hoje</h2>
             <p className="text-muted-foreground mt-3">Sem fidelidade. Cancele quando quiser.</p>
+            <p className="text-sm text-muted-foreground mt-2 opacity-70">
+              20–100 leads/mês? Comece pelo Start. 100+ leads? O Growth é o seu plano.
+            </p>
           </div>
 
           {/* Guarantee banner */}
@@ -828,6 +837,9 @@ export default function CRMLanding({ lang: _lang = 'pt' }: { lang?: string }) {
 
                 <div className="mb-6">
                   <h3 className="text-lg font-bold mb-1">{plan.name}</h3>
+                  {plan.description && (
+                    <p className="text-xs text-muted-foreground mb-3 leading-snug">{plan.description}</p>
+                  )}
                   <div className="flex items-baseline gap-1">
                     <span className="text-4xl font-extrabold text-accent">R${plan.price}</span>
                     <span className="text-muted-foreground text-sm">/mês</span>
