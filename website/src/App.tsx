@@ -7,14 +7,13 @@ import { useTranslation } from "react-i18next";
 import { useEffect } from "react";
 import Index from "./pages/Index";
 import NotFound from "./pages/NotFound";
-import ProfessionalWebsites from "./pages/ProfessionalWebsites";
-import SchedulingDemo from "./pages/SchedulingDemo";
-import AIWhatsAppAutomation from "./pages/AIWhatsAppAutomation";
-import ComingSoon from "./pages/ComingSoon";
 import CRMLanding from "./pages/CRMLanding";
 import SEOHead from "./components/SEOHead";
 
 const queryClient = new QueryClient();
+
+// Slugs que não são códigos de idioma — não devem disparar redirect em LanguageRoute
+const NON_LANG_SLUGS = new Set(['lara-ia', 'lara-ai', 'crm']);
 
 const LanguageRoute = ({ children }: { children: React.ReactNode }) => {
   const { lang } = useParams();
@@ -22,15 +21,15 @@ const LanguageRoute = ({ children }: { children: React.ReactNode }) => {
   const navigate = useNavigate();
 
   useEffect(() => {
+    if (!lang || NON_LANG_SLUGS.has(lang)) return;
+
     const supportedLanguages = ['en', 'pt', 'es'];
-    
-    if (lang && supportedLanguages.includes(lang)) {
+    if (supportedLanguages.includes(lang)) {
       if (i18n.language !== lang) {
         i18n.changeLanguage(lang);
       }
-    } else if (lang) {
-      // Invalid language, redirect to English
-      navigate('/en' + window.location.pathname.replace(`/${lang}`, ''), { replace: true });
+    } else {
+      navigate('/en', { replace: true });
     }
   }, [lang, i18n, navigate]);
 
@@ -45,45 +44,21 @@ const App = () => (
       <Sonner />
       <BrowserRouter>
         <Routes>
-          {/* Redirect root to default language */}
-          <Route path="/" element={<Navigate to="/en" replace />} />
+          {/* Redirect root to PT landing */}
+          <Route path="/" element={<Navigate to="/lara-ia" replace />} />
 
-          {/* Landing page da Lara — definida ANTES de /:lang para evitar conflito */}
+          {/* Landing pages da Lara — estáticas, fora do padrão /:lang */}
           <Route path="/lara-ia" element={<CRMLanding />} />
+          <Route path="/lara-ai" element={<CRMLanding lang="en" />} />
           <Route path="/crm" element={<Navigate to="/lara-ia" replace />} />
 
-          {/* Language-specific routes */}
+          {/* Páginas com prefixo de idioma */}
           <Route path="/:lang" element={
             <LanguageRoute>
               <Index />
             </LanguageRoute>
           } />
-          
-          <Route path="/:lang/professional-websites" element={
-            <LanguageRoute>
-              <ProfessionalWebsites />
-            </LanguageRoute>
-          } />
-          
-          <Route path="/:lang/scheduling-demo" element={
-            <LanguageRoute>
-              <SchedulingDemo />
-            </LanguageRoute>
-          } />
-          
-          <Route path="/:lang/ai-whatsapp-automation" element={
-            <LanguageRoute>
-              <AIWhatsAppAutomation />
-            </LanguageRoute>
-          } />
 
-          <Route path="/:lang/coming-soon" element={
-            <LanguageRoute>
-              <ComingSoon />
-            </LanguageRoute>
-          } />
-          
-          {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
           <Route path="*" element={<NotFound />} />
         </Routes>
       </BrowserRouter>

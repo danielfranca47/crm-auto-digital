@@ -189,7 +189,7 @@ const waveformHeights = [3, 5, 7, 4, 6, 8, 3, 5, 7, 4, 6, 3, 5, 8, 4, 6, 5, 3];
 
 /* ─── Component ─────────────────────────────────────────────── */
 
-export default function CRMLanding() {
+export default function CRMLanding({ lang: _lang = 'pt' }: { lang?: string }) {
   const [activeSector, setActiveSector] = useState(0);
   const [activeFaq, setActiveFaq] = useState<number | null>(null);
 
