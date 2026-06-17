@@ -719,7 +719,7 @@ export default function CRMLandingV2({ lang: _lang = 'pt' }: { lang?: string }) 
               <p className="text-xs text-muted-foreground">
                 ✦ Follow-up automático, Playground e Analytics avançados inclusos no{' '}
                 <strong style={{ color: '#4DD4FF' }}>Growth</strong>.
-                {' '}Start inclui atendimento 24/7 + CRM + qualificação — ideal para quem está estruturando o processo.
+                {' '}Start inclui atendimento 24/7 + CRM + qualificação — ideal para negócios com até 100 leads/mês que querem o sistema rodando antes de escalar.
               </p>
             </div>
           </div>
