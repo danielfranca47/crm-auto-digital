@@ -32,8 +32,23 @@ initial: Primeira letra do nome (ex: "C")
 ### Como coletar:
 1. Identifique 2 clientes ativos com +30 dias de uso
 2. Pergunte: *"Qual o resultado mais concreto que você teve com a Lara nos primeiros 30 dias? Em R$ ou em tempo economizado?"*
-3. Peça permissão para publicar nome e cidade
+3. Peça permissão para publicar nome, cidade e vídeo (se houver)
 4. Passe os textos neste formato para adicionar no array
+
+### Vídeo de depoimento (opcional, mas recomendado)
+
+Se o cliente topar gravar um vídeo curto (30–60s), suba no YouTube e passe o link — o dev incorpora diretamente no card.
+
+**Configurações ao subir no YouTube:**
+- Visibilidade: **Não listado** (`unlisted`) — aparece só para quem tem o link, nunca no feed
+- Resolução: 1080p é suficiente — não precisa de 4K
+- Formato de gravação: MP4/H.264 — qualquer celular moderno já grava assim
+
+**Proporção:**
+- **16:9 horizontal** → layout padrão, funciona melhor em desktop
+- **9:16 vertical** (celular) → funciona, mas avise o dev para adaptar o card
+
+**O que entregar ao dev:** só o link (`https://youtu.be/xxxxxxxxxxx`) junto com os dados de texto — o dev já deixará o array preparado para suportar vídeo opcional por card.
 
 ### Exemplos do formato correto:
 ```
