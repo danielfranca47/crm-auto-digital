@@ -82,7 +82,7 @@ const differentials = [
 
 const bonuses = [
   {
-    num: '✦', title: 'Lara 24/7 — IA que atende, qualifica e fecha', value: 'R$997/mês',
+    num: '✦', title: 'Lara 24/7 — IA que atende, qualifica e fecha', value: 'vs R$3.500+/mês de SDR',
     desc: 'Atendimento automático 24h pelo WhatsApp, qualificação com score, follow-up sequencial e CRM com pipeline Kanban — 500 conversas/mês incluídas. A Lara nunca para.',
     highlight: true,
   },
@@ -748,7 +748,10 @@ export default function CRMLandingV2({ lang: _lang = 'pt' }: { lang?: string }) 
             {/* MUDANÇA 3: h2 atualizado — remove R$297 como preço de compra */}
             <h2 className="text-heading mt-2">
               Campanha Fundador: você investe R$147/mês.<br />
-              Você está recebendo R$1.735/mês em valor.
+              Sua alternativa custaria{' '}
+              <span className="bg-gradient-to-r from-accent to-primary bg-clip-text text-transparent">
+                R$3.500+/mês.
+              </span>
             </h2>
             <p className="text-muted-foreground mt-3 max-w-xl mx-auto">
               Incluídos no plano Growth — para você sair do zero ao resultado no dia 1.
@@ -780,6 +783,68 @@ export default function CRMLandingV2({ lang: _lang = 'pt' }: { lang?: string }) 
                 </div>
               </div>
             ))}
+          </div>
+
+          {/* P1-C — Bloco de comparação de mercado */}
+          <div className="portfolio-card p-6 mb-4">
+            <p className="text-xs font-semibold text-center mb-5 uppercase tracking-widest text-muted-foreground">
+              Sem a Lara, você pagaria:
+            </p>
+            <div className="space-y-0">
+              {[
+                {
+                  label: 'SDR humano (alto ticket)',
+                  sub: 'Sem 24/7. Sem CRM integrado. Tira férias.',
+                  price: 'R$3.500/mês',
+                  highlight: true,
+                },
+                {
+                  label: 'Recepcionista (serviços)',
+                  sub: 'Sem follow-up automático. Sem analytics.',
+                  price: 'R$2.200/mês',
+                  highlight: true,
+                },
+                {
+                  label: 'Chatbot genérico',
+                  sub: 'Sem agente especializado. Sem CRM nativo.',
+                  price: 'R$200+/mês',
+                  highlight: false,
+                },
+                {
+                  label: 'CRM separado (ex: HubSpot básico)',
+                  sub: 'Sem IA. Sem WhatsApp nativo.',
+                  price: 'R$500/mês',
+                  highlight: false,
+                },
+              ].map(({ label, sub, price, highlight }) => (
+                <div
+                  key={label}
+                  className="flex items-start justify-between gap-4 py-3 border-b border-border last:border-0">
+                  <div>
+                    <span className="text-sm text-foreground">{label}</span>
+                    <span className="block text-xs text-muted-foreground opacity-60 mt-0.5">{sub}</span>
+                  </div>
+                  <span
+                    className="text-sm font-bold flex-shrink-0"
+                    style={{ color: highlight ? 'hsl(var(--destructive))' : 'hsl(var(--muted-foreground))' }}>
+                    {price}
+                  </span>
+                </div>
+              ))}
+            </div>
+            <div className="mt-5 pt-4 border-t border-border">
+              <div className="flex items-center justify-between text-sm mb-3">
+                <span className="text-muted-foreground">Total alternativo:</span>
+                <span className="font-bold text-foreground">R$3.500 – R$6.200/mês</span>
+              </div>
+              <div
+                className="text-center text-sm font-semibold py-2 px-4 rounded-lg"
+                style={{ background: 'rgba(77,212,255,0.1)', color: '#4DD4FF' }}>
+                A Lara faz tudo isso por{' '}
+                <strong>R$147/mês</strong>
+                {' '}— menos de R$5/dia.
+              </div>
+            </div>
           </div>
 
           {/* MUDANÇA 3 — card de resumo atualizado para campanha Fundador */}
