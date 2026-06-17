@@ -9,11 +9,44 @@
 
 | Brief | Ajuste | Esforço | Quem | Status |
 |-------|--------|---------|------|--------|
-| **P2-A** | Hero headline — resultado específico + A/B | 30min dev | Dev | 🔴 PENDENTE |
-| **P2-B** | Social proof — remover placeholder + template para 3 depoimentos | Dev + CS | Dev + CS | 🔴 PENDENTE |
-| **P2-C** | Start — reposicionar descrição + corrigir feature agent (pendência P1-B) | 10min dev | Dev | 🔴 PENDENTE |
+| **P2-A** | Hero headline — resultado específico + A/B | 30min dev | Dev | ✅ CONCLUÍDO |
+| **P2-B** | Social proof — remover placeholder + template para 3 depoimentos | Dev + CS | Dev + CS | 🟡 PARCIAL — dev concluído, CS pendente |
+| **P2-C** | Start — reposicionar descrição + corrigir feature agent (pendência P1-B) | 10min dev | Dev | ✅ CONCLUÍDO |
 
-> **Nota:** P2-B é dividida em dois fluxos. A parte dev pode ser feita agora (remover placeholder, implementar template). A parte CS (coletar 2+ depoimentos reais) é ação paralela — não bloqueia o dev.
+> **Nota:** P2-B é dividida em dois fluxos. A parte dev está concluída (placeholder removido, array `testimonials` implementado com grid adaptativo). A parte CS (coletar 2+ depoimentos reais) está pendente — ver seção **PENDÊNCIA P2-B (CS)** abaixo.
+
+---
+
+## ⏳ PENDÊNCIA P2-B (CS) — Ação necessária para concluir
+
+**O array `testimonials` em `CRMLandingV2.tsx` está pronto para receber novos depoimentos. Quando você coletar os textos, basta enviar para o dev adicionar — 5min de trabalho.**
+
+### Formato exigido (cada depoimento):
+```
+quote:   "[Resultado em R$ ou %] [em X dias/semanas]. [Uma frase sobre o que mudou.]"
+name:    "Nome S." (sobrenome abreviado — ex: "Carlos M.")
+role:    "Setor — Cidade" (ex: "E-commerce — Belo Horizonte")
+initial: Primeira letra do nome (ex: "C")
+```
+
+### Como coletar:
+1. Identifique 2 clientes ativos com +30 dias de uso
+2. Pergunte: *"Qual o resultado mais concreto que você teve com a Lara nos primeiros 30 dias? Em R$ ou em tempo economizado?"*
+3. Peça permissão para publicar nome e cidade
+4. Passe os textos neste formato para adicionar no array
+
+### Exemplos do formato correto:
+```
+✅ "Recuperei R$4.200 em vendas perdidas no primeiro mês. A Lara respondeu
+    em 15 segundos leads que eu levaria 2 horas pra chegar."
+    → Carlos M. · E-commerce — Belo Horizonte
+
+✅ "Minha agenda tinha 20% de faltas toda semana. Desde que a Lara confirma
+    as consultas, caiu para menos de 3%."
+    → Dra. Ana P. · Psicóloga — Curitiba
+```
+
+**Impacto:** Perceived Likelihood sobe de 7/10 → 9/10 na Value Equation. É o maior impacto restante no pipeline.
 
 ---
 
