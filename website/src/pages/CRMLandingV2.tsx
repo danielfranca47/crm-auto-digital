@@ -104,6 +104,39 @@ const bonuses = [
   },
 ];
 
+const agents = [
+  {
+    emoji: '🎯',
+    name: 'Agente SDR',
+    badge: 'Alto Ticket',
+    badgeColor: '#F59E0B',
+    sectors: ['Imóveis', 'Consultoria', 'Coaching', 'Assessoria'],
+    outcome: 'Agenda reuniões com leads quentes de alto ticket — enquanto você está em outras reuniões.',
+    anchor: 'SDR humano custa R$3.500/mês. A Lara SDR custa R$297.',
+    detail: 'Qualifica compradores, filtra curiosos e entrega apenas leads prontos para conversar negócio.',
+  },
+  {
+    emoji: '💳',
+    name: 'Agente Closer',
+    badge: 'Baixo Ticket',
+    badgeColor: '#10B981',
+    sectors: ['Infoprodutos', 'E-commerce', 'Lojas Físicas'],
+    outcome: 'Converte do primeiro "oi" até o pagamento — sem você precisar estar online.',
+    anchor: '1 venda extra por mês paga o mês inteiro da Lara.',
+    detail: 'Recupera carrinhos abandonados, converte leads que responderam tarde e faz follow-up de quem sumiu.',
+  },
+  {
+    emoji: '📅',
+    name: 'Agente Híbrido',
+    badge: 'Serviços',
+    badgeColor: '#8B5CF6',
+    sectors: ['Psicólogos', 'Dentistas', 'Terapeutas', 'Clínicas'],
+    outcome: 'Agenda sempre cheia, faltas eliminadas — sem precisar de recepcionista.',
+    anchor: 'Recepcionista custa R$2.200/mês. A Lara Híbrido custa R$297 e trabalha 24/7.',
+    detail: 'Responde dúvidas, confirma sessões com antecedência e faz follow-up de pacientes que sumiram.',
+  },
+];
+
 /* MUDANÇA 1 — Growth: badge + campaignPrice + features com 🔒 */
 const plans = [
   {
@@ -381,6 +414,87 @@ export default function CRMLandingV2({ lang: _lang = 'pt' }: { lang?: string }) 
             <p className="text-muted-foreground leading-relaxed">{sectors[activeSector].description}</p>
             <a href="#planos" className="btn-hero inline-flex items-center gap-2 mt-7 text-sm px-6 py-3">
               Quero ativar a Lara <ArrowRight className="w-4 h-4" />
+            </a>
+          </div>
+        </div>
+      </section>
+
+      {/* ── AGENTS — Os 3 agentes especializados ── */}
+      <section className="py-20 px-4">
+        <div className="container mx-auto max-w-5xl">
+          <div className="text-center mb-12">
+            <span className="text-accent text-sm font-semibold uppercase tracking-widest">
+              Especializado no seu tipo de venda
+            </span>
+            <h2 className="text-heading mt-2">
+              Não é um chatbot genérico.<br />
+              É um agente treinado pro seu negócio.
+            </h2>
+            <p className="text-muted-foreground mt-3 max-w-xl mx-auto">
+              Qual é o seu? Escolha o agente e a Lara já sabe como vender do seu jeito.
+            </p>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            {agents.map((agent) => (
+              <div key={agent.name}
+                className="portfolio-card flex flex-col border"
+                style={{ borderColor: `${agent.badgeColor}33` }}>
+
+                <div className="flex items-center gap-3 mb-4">
+                  <div className="text-4xl">{agent.emoji}</div>
+                  <div>
+                    <div className="font-bold text-base">{agent.name}</div>
+                    <span
+                      className="text-xs px-2 py-0.5 rounded-full font-semibold"
+                      style={{
+                        background: `${agent.badgeColor}22`,
+                        color: agent.badgeColor,
+                      }}>
+                      {agent.badge}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="flex flex-wrap gap-1.5 mb-4">
+                  {agent.sectors.map(s => (
+                    <span key={s}
+                      className="text-xs px-2 py-0.5 rounded-full border text-muted-foreground"
+                      style={{ borderColor: 'hsl(var(--border))' }}>
+                      {s}
+                    </span>
+                  ))}
+                </div>
+
+                <p className="text-sm font-semibold mb-2 leading-snug flex-1">
+                  {agent.outcome}
+                </p>
+
+                <p className="text-xs text-muted-foreground leading-relaxed mb-4">
+                  {agent.detail}
+                </p>
+
+                <div
+                  className="text-xs px-3 py-2 rounded-lg font-medium mt-auto"
+                  style={{
+                    background: `${agent.badgeColor}11`,
+                    color: agent.badgeColor,
+                    borderLeft: `3px solid ${agent.badgeColor}`,
+                  }}>
+                  {agent.anchor}
+                </div>
+              </div>
+            ))}
+          </div>
+
+          <div className="text-center mt-10">
+            <p className="text-sm text-muted-foreground mb-4">
+              Todos os 3 agentes estão incluídos no plano{' '}
+              <strong style={{ color: '#4DD4FF' }}>Growth</strong>.
+              O Start inclui o Agente Closer.
+            </p>
+            <a href="#planos" className="btn-hero inline-flex items-center gap-2">
+              Ver planos e escolher meu agente <ArrowRight className="w-4 h-4" />
             </a>
           </div>
         </div>
