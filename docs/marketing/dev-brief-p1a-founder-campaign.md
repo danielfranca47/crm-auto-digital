@@ -7,93 +7,57 @@
 
 ## HISTÓRICO DE AJUSTES
 
-| Brief | Ajuste | Status | Critérios | Data |
-|-------|--------|--------|-----------|------|
-| P1-A | Eliminar confusão de preço — Campanha Fundador | ✅ CONCLUÍDO | Todos aprovados | 2026-06-17 |
-| **P1-B** | **Adicionar os 3 agentes especializados na landing** | 🔴 PENDENTE | — | — |
+| Brief | Ajuste | Status | Data |
+|-------|--------|--------|------|
+| P1-A | Eliminar confusão de preço — Campanha Fundador | ✅ CONCLUÍDO | 2026-06-17 |
+| **P1-B** | **Seção dos 3 agentes especializados na landing** | ✅ CONCLUÍDO | 2026-06-17 |
 
 ---
 
 ## ✅ P1-A — VALIDAÇÃO COMPLETA
 
-Todas as mudanças do brief anterior foram verificadas em `CRMLandingV2.tsx`:
+Todas as mudanças verificadas em `CRMLandingV2.tsx` — todos os critérios de aceite aprovados.
 
-| Mudança | Implementado | Localização V2 | Status |
-|---------|-------------|----------------|--------|
-| 1A — Badge Growth: `CAMPANHA FUNDADOR` | Sim | linha 128 | ✅ |
-| 1B — Micro-badge `5 vagas restantes` | Sim | linhas 886–890 | ✅ |
-| 1B — Bloco de preço: R$297 tachado + R$147 ativo | Sim | linhas 898–912 | ✅ |
-| 1C — Footer duplo: R$197 travado + R$297 para novos | Sim | linhas 913–921 | ✅ |
-| 1D — Feature `🔒 Preço de Fundador` no topo | Sim | linha 132 | ✅ |
-| 2 — Launch Access vira "O que é Fundador?" | Sim | linhas 697–736 | ✅ |
-| 3 — Card de resumo com R$147 + âncora mercado | Sim | linhas 671–693 | ✅ |
-| 4 — Campaign Bar fixa no topo | Sim | linhas 211–217 | ✅ |
-| 4 — Navbar ajustado para `top-8` | Sim | linha 220 | ✅ |
-| 4 — Hero com `pt-24` para compensar | Sim | linha 251 | ✅ |
-
-**Critérios de aceite P1-A — todos verificados:**
-- [x] Página tem apenas UM preço ativo: R$147/mês
-- [x] R$297 aparece apenas tachado, como âncora
-- [x] R$197 aparece apenas como "preço pós-campanha travado"
-- [x] Launch Access não exibe número de preço isolado
-- [x] Card de bônus não menciona R$297 como preço de compra
-- [x] Campaign Bar visível no topo com CTA para `#planos`
+| Mudança | Localização V2 | Status |
+|---------|----------------|--------|
+| Badge Growth: `CAMPANHA FUNDADOR` | linha 128 | ✅ |
+| Micro-badge `5 vagas restantes` | linhas 886–890 | ✅ |
+| Bloco de preço: R$297 tachado + R$147 ativo | linhas 898–912 | ✅ |
+| Footer duplo: R$197 travado + R$297 para novos | linhas 913–921 | ✅ |
+| Feature `🔒 Preço de Fundador` no topo do Growth | linha 132 | ✅ |
+| Launch Access → "O que é ser Fundador?" | linhas 697–736 | ✅ |
+| Card de bônus com âncora de mercado | linhas 671–693 | ✅ |
+| Campaign Bar fixa + navbar top-8 + hero pt-24 | linhas 211–251 | ✅ |
 
 ---
 
 ---
 
-# Dev Brief — P1-B: Adicionar os 3 Agentes Especializados na Landing
+# Dev Brief — P1-B + P3-B: Agentes na Landing e Agente por Plano
 
-**Agentes:** hormozi-offers (lead) + hormozi-copy
-**Tarefa:** Criar seção dos 3 agentes especializados
-**Arquivo alvo:** `CRMLandingV2.tsx` — SOMENTE adicionar nova seção, sem alterar as existentes
+**Agentes:** hormozi-offers (lead) + hormozi-pricing + hormozi-copy
+**Tarefa:** (1) criar seção dos 3 agentes; (2) corrigir distribuição de agentes por plano
+**Arquivo alvo:** `CRMLandingV2.tsx` — SOMENTE as mudanças listadas abaixo
 **Prioridade:** CRÍTICA
 
 ---
 
 ## CONTEXTO PARA O DEV
 
-A Lara tem 3 agentes IA especializados que são o maior diferencial competitivo do produto:
+Duas mudanças interdependentes que precisam ser feitas juntas para não criar nova inconsistência:
 
-```
-SDR          → imóveis, consultoria, assessoria, coaching (alto ticket)
-Closer       → infoprodutos, e-commerce, lojas físicas (baixo ticket)
-Híbrido      → psicólogos, dentistas, terapeutas (serviços presenciais)
-```
+**Problema 1 (P1-B):** Os 3 agentes especializados (SDR / Closer / Híbrido) são o maior diferencial da Lara e não aparecem em nenhum lugar da landing. O visitante vê "IA que atende" — não vê que existe um agente treinado para o SEU tipo de negócio.
 
-**Problema:** Esses 3 agentes não aparecem em nenhum lugar da landing V2 atual. O visitante vê "IA que atende" — não vê que existe um agente treinado especificamente para o SEU tipo de negócio. Isso elimina o principal argumento de conversão.
+**Problema 2 (P3-B):** O plano Start tem `'Os 3 tipos de agente'` na linha 119 — mas a estratégia de produto define que o Start inclui **apenas o Closer**. Growth e acima têm os 3 agentes. Se P1-B for implementado sem corrigir P3-B, a landing vai contradizer a si mesma.
 
-**Princípio (Hormozi Offers):**
-> "O visitante só paga quando acredita que a solução foi feita para ele. Genérico não converte. Específico converte."
-
-A seção dos agentes transforma "chatbot genérico" em "agente especializado no meu negócio" — aumenta Perceived Likelihood na Value Equation.
+**Princípio (hormozi-offers + hormozi-pricing):**
+> "Específico converte, genérico não. O visitante precisa ver qual agente é o dele — e qual plano tem esse agente."
 
 ---
 
-## ESTRATÉGIA: "Qual é o seu agente?"
+## MUDANÇA 1 — Dados dos agentes (adicionar no topo do arquivo)
 
-A nova seção deve funcionar como um **seletor de identidade**: o visitante lê os 3 agentes e um deles é obviamente ele. Quando o visitante pensa "esse aqui é pra mim", a conversão acontece.
-
-Estrutura visual: 3 cards horizontais lado a lado, cada um com:
-- Emoji + nome do agente
-- Badge com tipo (Alto Ticket / Baixo Ticket / Serviços)
-- Para quem é (setores, em destaque)
-- O que faz (outcome específico, 1 frase)
-- Comparação de mercado (âncora de valor)
-
----
-
-## MUDANÇA — NOVA SEÇÃO DE AGENTES
-
-**Arquivo:** `CRMLandingV2.tsx`
-**Localização:** Inserir a nova seção **APÓS** o bloco `{/* ── SECTOR TABS ── */}` (linha ~387) e **ANTES** de `{/* ── HOW IT WORKS ── */}` (linha ~390).
-
-Ou seja, adicionar entre o fechamento `</section>` dos SECTOR TABS e o `{/* ── HOW IT WORKS ── */}`.
-
----
-
-### 1 — Dados da seção (adicionar junto aos outros arrays no topo, perto da linha 83)
+**Localização:** Inserir o array `agents` após o array `bonuses` (linha ~105), antes da declaração de `plans`.
 
 ```tsx
 const agents = [
@@ -104,8 +68,9 @@ const agents = [
     badgeColor: '#F59E0B',
     sectors: ['Imóveis', 'Consultoria', 'Coaching', 'Assessoria'],
     outcome: 'Agenda reuniões com leads quentes de alto ticket — enquanto você está em outras reuniões.',
+    detail: 'Qualifica compradores, filtra curiosos e entrega apenas leads prontos para fechar negócio.',
     anchor: 'SDR humano custa R$3.500/mês. A Lara SDR custa R$297.',
-    detail: 'Qualifica compradores, filtra curiosos e entrega apenas leads prontos para conversar negócio.',
+    plan: 'Growth',
   },
   {
     emoji: '💳',
@@ -114,25 +79,29 @@ const agents = [
     badgeColor: '#10B981',
     sectors: ['Infoprodutos', 'E-commerce', 'Lojas Físicas'],
     outcome: 'Converte do primeiro "oi" até o pagamento — sem você precisar estar online.',
-    anchor: '1 venda extra por mês paga o mês inteiro da Lara.',
     detail: 'Recupera carrinhos abandonados, converte leads que responderam tarde e faz follow-up de quem sumiu.',
+    anchor: '1 venda extra por mês paga o mês inteiro da Lara.',
+    plan: 'Start e Growth',
   },
   {
     emoji: '📅',
-    name: 'Agente Híbrido',
+    name: 'Agente Híbrido Agendador',
     badge: 'Serviços',
     badgeColor: '#8B5CF6',
     sectors: ['Psicólogos', 'Dentistas', 'Terapeutas', 'Clínicas'],
     outcome: 'Agenda sempre cheia, faltas eliminadas — sem precisar de recepcionista.',
-    anchor: 'Recepcionista custa R$2.200/mês. A Lara Híbrido custa R$297 e trabalha 24/7.',
     detail: 'Responde dúvidas, confirma sessões com antecedência e faz follow-up de pacientes que sumiram.',
+    anchor: 'Recepcionista custa R$2.200/mês. A Lara custa R$297 e trabalha 24/7 — sem faltar, sem 13°.',
+    plan: 'Growth',
   },
 ];
 ```
 
 ---
 
-### 2 — JSX da seção (inserir no return, após o `</section>` do SECTOR TABS)
+## MUDANÇA 2 — Nova seção de agentes (JSX)
+
+**Localização:** Inserir **após** o `</section>` de fechamento do SECTOR TABS (linha ~387) e **antes** do comentário `{/* ── HOW IT WORKS ── */}`.
 
 ```tsx
 {/* ── AGENTS — Os 3 agentes especializados ── */}
@@ -147,13 +116,14 @@ const agents = [
         É um agente treinado pro seu negócio.
       </h2>
       <p className="text-muted-foreground mt-3 max-w-xl mx-auto">
-        Qual é o seu? Escolha o agente e a Lara já sabe como vender do seu jeito.
+        Escolha o agente. A Lara já sabe como vender do seu jeito.
       </p>
     </div>
 
-    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+    <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-10">
       {agents.map((agent) => (
-        <div key={agent.name}
+        <div
+          key={agent.name}
           className="portfolio-card flex flex-col border"
           style={{ borderColor: `${agent.badgeColor}33` }}>
 
@@ -173,10 +143,11 @@ const agents = [
             </div>
           </div>
 
-          {/* Para quem */}
+          {/* Setores */}
           <div className="flex flex-wrap gap-1.5 mb-4">
             {agent.sectors.map(s => (
-              <span key={s}
+              <span
+                key={s}
                 className="text-xs px-2 py-0.5 rounded-full border text-muted-foreground"
                 style={{ borderColor: 'hsl(var(--border))' }}>
                 {s}
@@ -185,18 +156,18 @@ const agents = [
           </div>
 
           {/* Outcome */}
-          <p className="text-sm font-semibold mb-2 leading-snug flex-1">
+          <p className="text-sm font-semibold mb-2 leading-snug">
             {agent.outcome}
           </p>
 
           {/* Detalhe */}
-          <p className="text-xs text-muted-foreground leading-relaxed mb-4">
+          <p className="text-xs text-muted-foreground leading-relaxed mb-4 flex-1">
             {agent.detail}
           </p>
 
           {/* Âncora de valor */}
           <div
-            className="text-xs px-3 py-2 rounded-lg font-medium mt-auto"
+            className="text-xs px-3 py-2 rounded-lg font-medium mb-4"
             style={{
               background: `${agent.badgeColor}11`,
               color: agent.badgeColor,
@@ -204,19 +175,24 @@ const agents = [
             }}>
             {agent.anchor}
           </div>
+
+          {/* Plano */}
+          <div className="text-xs text-muted-foreground text-center mt-auto">
+            {agent.plan.includes('e') ? 'Disponível nos planos ' : 'Disponível no plano '}
+            <strong style={{ color: '#4DD4FF' }}>{agent.plan}</strong>
+          </div>
         </div>
       ))}
     </div>
 
     {/* CTA */}
-    <div className="text-center mt-10">
+    <div className="text-center">
       <p className="text-sm text-muted-foreground mb-4">
-        Todos os 3 agentes estão incluídos no plano{' '}
-        <strong style={{ color: '#4DD4FF' }}>Growth</strong>.
-        O Start inclui o Agente Closer.
+        <strong style={{ color: '#4DD4FF' }}>Agente Closer</strong> disponível no Start e no Growth.{' '}
+        <strong style={{ color: '#4DD4FF' }}>SDR e Híbrido</strong> exclusivos do Growth.
       </p>
       <a href="#planos" className="btn-hero inline-flex items-center gap-2">
-        Ver planos e escolher meu agente <ArrowRight className="w-4 h-4" />
+        Ver planos e ativar meu agente <ArrowRight className="w-4 h-4" />
       </a>
     </div>
   </div>
@@ -225,56 +201,93 @@ const agents = [
 
 ---
 
-## RESUMO DAS MUDANÇAS
+## MUDANÇA 3 — Corrigir distribuição de agentes nos planos (array `plans`)
 
-| # | Onde | O que muda | Impacto |
-|---|------|-----------|---------|
-| 1 | Topo do arquivo, linha ~83 | Adicionar array `agents` com 3 objetos | Dados dos 3 agentes |
-| 2 | Return, após SECTOR TABS (~linha 387) | Inserir `<section>` dos agentes | Nova seção visual |
+Esta mudança resolve a inconsistência: o Start atualmente diz `'Os 3 tipos de agente'` mas a estratégia define que o Start tem apenas o Closer.
+
+### 3A — Plano Start: substituir feature genérica pelo agente correto
+
+**Localização:** Array `plans`, objeto `name: 'Start'`, array `features`, linha ~119.
+
+```
+ATUAL:
+  'Os 3 tipos de agente',
+
+NOVO (substituir):
+  '🤖 Agente Closer — conversão de baixo ticket',
+```
+
+### 3B — Plano Growth: tornar explícito que tem os 3 agentes
+
+**Localização:** Array `plans`, objeto `name: 'Growth'`, array `features`, linha ~132 (logo após o `🔒`).
+
+```
+ATUAL (primeiras features do Growth):
+  '🔒 Preço de Fundador — travado para sempre',
+  '✦ Ativação 1:1 + 15 Scripts + 30 dias ao vivo (R$641 em bônus)',
+
+NOVO (inserir entre as duas):
+  '🔒 Preço de Fundador — travado para sempre',
+  '🤖 SDR + Closer + Híbrido — todos os 3 agentes',
+  '✦ Ativação 1:1 + 15 Scripts + 30 dias ao vivo (R$641 em bônus)',
+```
+
+### 3C — Planos Scale e Enterprise: sem alteração necessária
+
+Scale e Enterprise já têm `'Tudo do Growth'` na lista de features — os 3 agentes estão implícitos. Não alterar.
+
+---
+
+## RESUMO DE TODAS AS MUDANÇAS
+
+| # | Tipo | Localização V2 | O que muda |
+|---|------|----------------|-----------|
+| 1 | Novo array | linha ~105 (após `bonuses`) | Adicionar `const agents = [...]` |
+| 2 | Nova seção JSX | linha ~387 (após SECTOR TABS) | Seção `{/* ── AGENTS ── */}` |
+| 3A | Edição de dado | linha ~119 (Start features) | `'Os 3 tipos de agente'` → `'🤖 Agente Closer — conversão de baixo ticket'` |
+| 3B | Edição de dado | linha ~133 (Growth features) | Inserir `'🤖 SDR + Closer + Híbrido — todos os 3 agentes'` após o `🔒` |
 
 **O que NÃO mudar:**
 - Seção SECTOR TABS — não alterar
 - Features grid — não alterar
-- Plans array — não alterar
-- Qualquer outra seção existente
+- Qualquer outro campo dos planos
+- Lógica de checkout, APIs ou integrações
 
 ---
 
 ## CRITÉRIOS DE ACEITE
 
 ```
-[ ] Seção visível entre SECTOR TABS e HOW IT WORKS
-[ ] 3 cards aparecem corretamente em desktop (grid 3 colunas)
-[ ] 3 cards empilham em mobile (grid 1 coluna)
-[ ] Cada card mostra: emoji, nome, badge colorido, setores, outcome, âncora
-[ ] Cores dos badges são distintas (amarelo/verde/roxo)
-[ ] CTA "Ver planos e escolher meu agente" leva para #planos
-[ ] Nota "Todos os 3 agentes incluídos no Growth" visível
-[ ] Não quebra nenhuma seção existente da página
+[ ] Nova seção aparece entre SECTOR TABS e HOW IT WORKS
+[ ] 3 cards em desktop (grid 3 colunas) — Closer no centro
+[ ] Cards empilham em mobile (grid 1 coluna)
+[ ] Cada card mostra: emoji, nome, badge colorido, setores, outcome, âncora, plano disponível
+[ ] Badges com cores distintas: SDR amarelo / Closer verde / Híbrido roxo
+[ ] CTA leva para #planos e nota explica Closer = Start+Growth / SDR+Híbrido = Growth
+[ ] Start exibe '🤖 Agente Closer — conversão de baixo ticket' (não mais 'Os 3 tipos de agente')
+[ ] Growth exibe '🤖 SDR + Closer + Híbrido — todos os 3 agentes' como 2ª feature
+[ ] Nenhuma outra seção da página foi alterada
 ```
 
 ---
 
-## PRINCÍPIO UTILIZADO (para o dev entender o porquê)
+## PRINCÍPIO UTILIZADO
 
 ```
-ANTES (genérico):
-  "A Lara atende, qualifica e faz follow-up"
-  → O visitante pensa: "é mais um chatbot"
+ANTES (duas inconsistências):
+  Landing: sem menção dos agentes
+  Start:   "Os 3 tipos de agente" → contradiz a estratégia de produto
+  Growth:  agentes não listados explicitamente
 
-DEPOIS (específico):
-  "Agente SDR — para imóveis, consultoria, coaching"
-  "Agenda reuniões com leads de alto ticket — enquanto você está em outras reuniões"
-  "SDR humano custa R$3.500. A Lara custa R$297."
-  → O visitante pensa: "esse aqui foi feito pra mim"
-
-Resultado: Perceived Likelihood sobe de 7/10 → 9/10 na Value Equation.
-Visitante para de comparar com chatbot genérico.
-Passa a comparar com SDR humano / recepcionista.
+DEPOIS (consistência total):
+  Seção de agentes → visitante se identifica com SDR / Closer / Híbrido
+  Start:  "🤖 Agente Closer" → correto, claro, sem prometer o que não entrega
+  Growth: "🤖 SDR + Closer + Híbrido" → diferencial explícito do upgrade
+  CTA da seção: "SDR e Híbrido exclusivos do Growth" → incentiva upgrade orgânico
 ```
 
 ---
 
-*Brief produzido por: hormozi-offers (posicionamento dos agentes) + hormozi-copy (copy)*
+*Brief produzido por: hormozi-offers + hormozi-pricing + hormozi-copy*
 *Revisado por: hormozi-chief*
 *Arquivo: `C:\crm-auto-digital\docs\marketing\dev-brief-p1a-founder-campaign.md`*
