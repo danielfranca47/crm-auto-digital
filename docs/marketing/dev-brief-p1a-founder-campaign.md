@@ -1,318 +1,280 @@
-# Dev Brief — P1-A: Apresentação de Preço Durante Campanha Fundador
-**Agentes:** hormozi-pricing (lead) + hormozi-copy
-**Tarefa:** Eliminar confusão de preço sem encerrar a campanha
-**Arquivo alvo:** `src/pages/CRMLanding.tsx` — SOMENTE LEITURA pelo dev, sem alteração de lógica de negócio
-**Data:** 2026-06-15 | **Prioridade:** CRÍTICA
+# Dev Brief — Offer Pipeline | CRMLandingV2.tsx
+**Agentes:** hormozi-pricing + hormozi-copy + hormozi-offers
+**Arquivo alvo:** `src/pages/CRMLandingV2.tsx`
+**Data atualização:** 2026-06-17
+
+---
+
+## HISTÓRICO DE AJUSTES
+
+| Brief | Ajuste | Status | Critérios | Data |
+|-------|--------|--------|-----------|------|
+| P1-A | Eliminar confusão de preço — Campanha Fundador | ✅ CONCLUÍDO | Todos aprovados | 2026-06-17 |
+| **P1-B** | **Adicionar os 3 agentes especializados na landing** | 🔴 PENDENTE | — | — |
+
+---
+
+## ✅ P1-A — VALIDAÇÃO COMPLETA
+
+Todas as mudanças do brief anterior foram verificadas em `CRMLandingV2.tsx`:
+
+| Mudança | Implementado | Localização V2 | Status |
+|---------|-------------|----------------|--------|
+| 1A — Badge Growth: `CAMPANHA FUNDADOR` | Sim | linha 128 | ✅ |
+| 1B — Micro-badge `5 vagas restantes` | Sim | linhas 886–890 | ✅ |
+| 1B — Bloco de preço: R$297 tachado + R$147 ativo | Sim | linhas 898–912 | ✅ |
+| 1C — Footer duplo: R$197 travado + R$297 para novos | Sim | linhas 913–921 | ✅ |
+| 1D — Feature `🔒 Preço de Fundador` no topo | Sim | linha 132 | ✅ |
+| 2 — Launch Access vira "O que é Fundador?" | Sim | linhas 697–736 | ✅ |
+| 3 — Card de resumo com R$147 + âncora mercado | Sim | linhas 671–693 | ✅ |
+| 4 — Campaign Bar fixa no topo | Sim | linhas 211–217 | ✅ |
+| 4 — Navbar ajustado para `top-8` | Sim | linha 220 | ✅ |
+| 4 — Hero com `pt-24` para compensar | Sim | linha 251 | ✅ |
+
+**Critérios de aceite P1-A — todos verificados:**
+- [x] Página tem apenas UM preço ativo: R$147/mês
+- [x] R$297 aparece apenas tachado, como âncora
+- [x] R$197 aparece apenas como "preço pós-campanha travado"
+- [x] Launch Access não exibe número de preço isolado
+- [x] Card de bônus não menciona R$297 como preço de compra
+- [x] Campaign Bar visível no topo com CTA para `#planos`
+
+---
+
+---
+
+# Dev Brief — P1-B: Adicionar os 3 Agentes Especializados na Landing
+
+**Agentes:** hormozi-offers (lead) + hormozi-copy
+**Tarefa:** Criar seção dos 3 agentes especializados
+**Arquivo alvo:** `CRMLandingV2.tsx` — SOMENTE adicionar nova seção, sem alterar as existentes
+**Prioridade:** CRÍTICA
 
 ---
 
 ## CONTEXTO PARA O DEV
 
-A landing atual mostra **dois preços diferentes para o mesmo produto** em lugares distintos:
+A Lara tem 3 agentes IA especializados que são o maior diferencial competitivo do produto:
 
 ```
-Seção de Planos (linha ~832):       Growth = R$297/mês  ← preço regular
-Seção Launch Access (linha ~677):   Growth = R$147/mês  ← preço de campanha
+SDR          → imóveis, consultoria, assessoria, coaching (alto ticket)
+Closer       → infoprodutos, e-commerce, lojas físicas (baixo ticket)
+Híbrido      → psicólogos, dentistas, terapeutas (serviços presenciais)
 ```
 
-O visitante lê as duas seções e não sabe qual é o preço real. Isso mata a conversão.
+**Problema:** Esses 3 agentes não aparecem em nenhum lugar da landing V2 atual. O visitante vê "IA que atende" — não vê que existe um agente treinado especificamente para o SEU tipo de negócio. Isso elimina o principal argumento de conversão.
 
-**A campanha Fundador está ativa.** Não removemos o preço de fundador — apresentamos ele corretamente.
+**Princípio (Hormozi Offers):**
+> "O visitante só paga quando acredita que a solução foi feita para ele. Genérico não converte. Específico converte."
 
-**Princípio (Hormozi Pricing):**
-> "Mostre o preço maior primeiro como âncora. Revele o preço real como a consequência lógica de agir agora."
+A seção dos agentes transforma "chatbot genérico" em "agente especializado no meu negócio" — aumenta Perceived Likelihood na Value Equation.
 
 ---
 
-## ESTRATÉGIA: "Fundador como Preço Ativo"
+## ESTRATÉGIA: "Qual é o seu agente?"
 
-Transformar o Growth card para mostrar **um único preço com contexto completo**:
-- R$297 aparece apenas como preço tachado (âncora "o que você não vai pagar")
-- R$147 é o preço ativo e visível
-- R$197 aparece apenas como "o que vira depois" — nunca como segundo preço
+A nova seção deve funcionar como um **seletor de identidade**: o visitante lê os 3 agentes e um deles é obviamente ele. Quando o visitante pensa "esse aqui é pra mim", a conversão acontece.
 
-A seção Launch Access é **eliminada como seção de preço** e transformada em seção de escassez/contexto.
-
----
-
-## MUDANÇAS — COMPONENTE A COMPONENTE
+Estrutura visual: 3 cards horizontais lado a lado, cada um com:
+- Emoji + nome do agente
+- Badge com tipo (Alto Ticket / Baixo Ticket / Serviços)
+- Para quem é (setores, em destaque)
+- O que faz (outcome específico, 1 frase)
+- Comparação de mercado (âncora de valor)
 
 ---
 
-### MUDANÇA 1 — Card de Plano Growth
-**Arquivo:** `CRMLanding.tsx`
-**Localização:** Array `plans`, objeto com `name: 'Growth'` (linha ~125)
-**Tipo:** Modificação de dados + lógica de renderização do card
+## MUDANÇA — NOVA SEÇÃO DE AGENTES
 
-#### 1.1 — Badge do card
+**Arquivo:** `CRMLandingV2.tsx`
+**Localização:** Inserir a nova seção **APÓS** o bloco `{/* ── SECTOR TABS ── */}` (linha ~387) e **ANTES** de `{/* ── HOW IT WORKS ── */}` (linha ~390).
 
-```
-ATUAL:    badge: 'RECOMENDADO'
-NOVO:     badge: 'CAMPANHA FUNDADOR'
-```
+Ou seja, adicionar entre o fechamento `</section>` dos SECTOR TABS e o `{/* ── HOW IT WORKS ── */}`.
 
-Cor do badge não muda (mantém fundo `#4DD4FF`, texto `#0D0A17`).
-Adicionar embaixo do badge um segundo micro-badge:
+---
 
-```jsx
-// Abaixo do badge principal, dentro do card (após o título do plano):
-<span className="text-xs px-2 py-0.5 rounded-full font-medium"
-  style={{ background: 'rgba(77,212,255,0.15)', color: '#4DD4FF' }}>
-  5 vagas restantes
-</span>
-```
+### 1 — Dados da seção (adicionar junto aos outros arrays no topo, perto da linha 83)
 
-#### 1.2 — Bloco de preço
-
-```
-ATUAL:
-  R$297/mês
-
-NOVO:
-  [R$297] tachado + pequeno (âncora)
-  R$147  principal (preço ativo)
-  /mês pelos primeiros 12 meses
-```
-
-**JSX sugerido** (substitui o bloco `<div className="flex items-baseline gap-1">` atual):
-
-```jsx
-<div className="mb-1">
-  <span
-    className="text-sm line-through text-muted-foreground opacity-60 mr-1"
-    aria-label="Preço regular">
-    R$297
-  </span>
-  <span className="text-xs text-muted-foreground opacity-60">/mês</span>
-</div>
-<div className="flex items-baseline gap-1">
-  <span className="text-4xl font-extrabold text-accent">R$147</span>
-  <span className="text-muted-foreground text-sm">/mês</span>
-</div>
-<p className="text-xs text-muted-foreground mt-1">
-  pelos primeiros 12 meses
-</p>
-```
-
-#### 1.3 — Nota de rodapé do card (footer)
-
-```
-ATUAL:  'Excedente: R$0,50/conversa'
-
-NOVO (duas linhas):
-  linha 1: 'Depois: R$197/mês para sempre — preço travado'
-  linha 2: 'Novos clientes pagarão R$297/mês · Excedente: R$0,50/conversa'
-```
-
-**JSX sugerido** (substitui o `<p>` do footer atual):
-
-```jsx
-<div className="text-xs text-muted-foreground mt-1 space-y-0.5">
-  <p style={{ color: '#4DD4FF' }} className="font-medium">
-    Depois: R$197/mês para sempre — preço travado
-  </p>
-  <p>
-    Novos clientes pagarão R$297/mês · Excedente: R$0,50/conversa
-  </p>
-</div>
-```
-
-#### 1.4 — Primeira feature do Growth (lista de features)
-
-```
-ATUAL:  '✦ Ativação 1:1 + 15 Scripts + 30 dias ao vivo (R$641 em bônus)'
-
-NOVO (manter, adicionar antes dela):
-  '🔒 Preço de Fundador — travado para sempre'
-```
-
-Inserir como primeiro item da array `features` do Growth:
-
-```js
-'🔒 Preço de Fundador — travado para sempre',
+```tsx
+const agents = [
+  {
+    emoji: '🎯',
+    name: 'Agente SDR',
+    badge: 'Alto Ticket',
+    badgeColor: '#F59E0B',
+    sectors: ['Imóveis', 'Consultoria', 'Coaching', 'Assessoria'],
+    outcome: 'Agenda reuniões com leads quentes de alto ticket — enquanto você está em outras reuniões.',
+    anchor: 'SDR humano custa R$3.500/mês. A Lara SDR custa R$297.',
+    detail: 'Qualifica compradores, filtra curiosos e entrega apenas leads prontos para conversar negócio.',
+  },
+  {
+    emoji: '💳',
+    name: 'Agente Closer',
+    badge: 'Baixo Ticket',
+    badgeColor: '#10B981',
+    sectors: ['Infoprodutos', 'E-commerce', 'Lojas Físicas'],
+    outcome: 'Converte do primeiro "oi" até o pagamento — sem você precisar estar online.',
+    anchor: '1 venda extra por mês paga o mês inteiro da Lara.',
+    detail: 'Recupera carrinhos abandonados, converte leads que responderam tarde e faz follow-up de quem sumiu.',
+  },
+  {
+    emoji: '📅',
+    name: 'Agente Híbrido',
+    badge: 'Serviços',
+    badgeColor: '#8B5CF6',
+    sectors: ['Psicólogos', 'Dentistas', 'Terapeutas', 'Clínicas'],
+    outcome: 'Agenda sempre cheia, faltas eliminadas — sem precisar de recepcionista.',
+    anchor: 'Recepcionista custa R$2.200/mês. A Lara Híbrido custa R$297 e trabalha 24/7.',
+    detail: 'Responde dúvidas, confirma sessões com antecedência e faz follow-up de pacientes que sumiram.',
+  },
+];
 ```
 
 ---
 
-### MUDANÇA 2 — Seção Launch Access
-**Localização:** Seção `{/* ── LAUNCH ACCESS ── */}` (linha ~677)
-**Tipo:** Substituição completa de conteúdo — a seção vira "Por que ser Fundador?"
+### 2 — JSX da seção (inserir no return, após o `</section>` do SECTOR TABS)
 
-A seção deixa de mostrar preço e vira uma **seção de contexto de campanha** que explica o que significa ser Fundador. Nenhum número de preço nesta seção — o preço já foi apresentado no card acima.
+```tsx
+{/* ── AGENTS — Os 3 agentes especializados ── */}
+<section className="py-20 px-4">
+  <div className="container mx-auto max-w-5xl">
+    <div className="text-center mb-12">
+      <span className="text-accent text-sm font-semibold uppercase tracking-widest">
+        Especializado no seu tipo de venda
+      </span>
+      <h2 className="text-heading mt-2">
+        Não é um chatbot genérico.<br />
+        É um agente treinado pro seu negócio.
+      </h2>
+      <p className="text-muted-foreground mt-3 max-w-xl mx-auto">
+        Qual é o seu? Escolha o agente e a Lara já sabe como vender do seu jeito.
+      </p>
+    </div>
 
-**Título novo:**
-```
-ATUAL:  'R$147/mês pelos 12 primeiros meses — depois R$197'
-NOVO:   'O que significa entrar como Fundador?'
-```
+    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+      {agents.map((agent) => (
+        <div key={agent.name}
+          className="portfolio-card flex flex-col border"
+          style={{ borderColor: `${agent.badgeColor}33` }}>
 
-**Parágrafo novo:**
-```
-ATUAL:
-  "Os primeiros parceiros da Lara entram como Fundadores: R$147/mês pelos 12 primeiros
-  meses. Depois, o preço trava em R$197/mês para sempre — enquanto o Growth para novos
-  clientes sobe para R$297/mês."
+          {/* Header */}
+          <div className="flex items-center gap-3 mb-4">
+            <div className="text-4xl">{agent.emoji}</div>
+            <div>
+              <div className="font-bold text-base">{agent.name}</div>
+              <span
+                className="text-xs px-2 py-0.5 rounded-full font-semibold"
+                style={{
+                  background: `${agent.badgeColor}22`,
+                  color: agent.badgeColor,
+                }}>
+                {agent.badge}
+              </span>
+            </div>
+          </div>
 
-NOVO:
-  "Fundadores são os primeiros parceiros da Lara. Você entra antes do lançamento público,
-  com preço menor, e esse preço fica travado para sempre — mesmo quando o Growth subir
-  para R$297/mês para novos clientes.
+          {/* Para quem */}
+          <div className="flex flex-wrap gap-1.5 mb-4">
+            {agent.sectors.map(s => (
+              <span key={s}
+                className="text-xs px-2 py-0.5 rounded-full border text-muted-foreground"
+                style={{ borderColor: 'hsl(var(--border))' }}>
+                {s}
+              </span>
+            ))}
+          </div>
 
-  Você nunca paga mais do que R$197/mês. Para sempre.
-  E os primeiros 12 meses saem por ainda menos."
-```
+          {/* Outcome */}
+          <p className="text-sm font-semibold mb-2 leading-snug flex-1">
+            {agent.outcome}
+          </p>
 
-**Card interno — atualizar textos:**
+          {/* Detalhe */}
+          <p className="text-xs text-muted-foreground leading-relaxed mb-4">
+            {agent.detail}
+          </p>
 
-```
-ATUAL (h3):    'Vaga de Fundador — 5 vagas apenas'
-NOVO (h3):     '5 vagas disponíveis esta semana'
+          {/* Âncora de valor */}
+          <div
+            className="text-xs px-3 py-2 rounded-lg font-medium mt-auto"
+            style={{
+              background: `${agent.badgeColor}11`,
+              color: agent.badgeColor,
+              borderLeft: `3px solid ${agent.badgeColor}`,
+            }}>
+            {agent.anchor}
+          </div>
+        </div>
+      ))}
+    </div>
 
-ATUAL (p1):    'O Onboarding ao Vivo acontece toda semana às terças — 10 vagas por sessão.
-               Cada Fundador recebe sessão 1:1 prioritária para sair ativo no dia 1.'
-NOVO (p1):     'O onboarding ao vivo acontece toda terça — 10 vagas por sessão.
-               Fundadores têm sessão 1:1 prioritária: saem ativos no dia 1, não em semanas.'
-
-ATUAL (p2 — preço):  'Após os 12 meses: R$197/mês para sempre. Novos clientes pagarão R$297/mês.'
-NOVO (p2):     'Depois dos primeiros 12 meses, seu preço trava em R$197/mês — para sempre.
-               Novos clientes que entrarem depois da campanha pagarão R$297/mês.'
-
-ATUAL (badge ✦):   'Preço de Fundador — 5 vagas apenas'
-NOVO (badge ✦):    'Ativo agora — campanha encerra quando as vagas acabarem'
-```
-
----
-
-### MUDANÇA 3 — Seção de Bônus (value stack)
-**Localização:** Seção `{/* ── BONUS STACK ── */}` (linha ~616)
-**Tipo:** Atualização de copy no card de resumo
-
-**Card de resumo no final (o card com a conta "17%"):**
-
-```
-ATUAL:
-  "Você paga R$297/mês — apenas 17% do valor real."
-  "Valor total: R$1.735/mês → Seu investimento: R$297/mês"
-
-NOVO:
-  "Campanha Fundador: você investe R$147/mês pelos primeiros 12 meses."
-  "Depois R$197/mês para sempre. Novos clientes pagam R$297/mês."
-  "Valor entregue: equivalente a R$3.500+/mês de SDR humano ou recepcionista."
-```
-
-**JSX sugerido** (substitui o bloco central do card):
-
-```jsx
-<div className="text-center space-y-2">
-  <div className="text-sm text-muted-foreground">
-    Campanha Fundador: você investe{' '}
-    <span className="font-bold text-accent text-lg">R$147/mês</span>
-    {' '}pelos primeiros 12 meses
+    {/* CTA */}
+    <div className="text-center mt-10">
+      <p className="text-sm text-muted-foreground mb-4">
+        Todos os 3 agentes estão incluídos no plano{' '}
+        <strong style={{ color: '#4DD4FF' }}>Growth</strong>.
+        O Start inclui o Agente Closer.
+      </p>
+      <a href="#planos" className="btn-hero inline-flex items-center gap-2">
+        Ver planos e escolher meu agente <ArrowRight className="w-4 h-4" />
+      </a>
+    </div>
   </div>
-  <div className="text-xs text-muted-foreground">
-    Depois:{' '}
-    <strong style={{ color: '#4DD4FF' }}>R$197/mês para sempre</strong>
-    {' '}— enquanto novos clientes pagarão{' '}
-    <span className="line-through opacity-50">R$297/mês</span>
-  </div>
-  <div className="text-xs text-muted-foreground mt-2">
-    Equivalente a contratar: SDR humano (R$3.500/mês) ou recepcionista (R$2.200/mês).
-    A Lara faz os dois por menos.
-  </div>
-  <div className="text-xs text-muted-foreground mt-2 opacity-70">
-    Garantia incondicional de 30 dias — você entra, usa, e decide. O risco é nosso.
-  </div>
-</div>
+</section>
 ```
-
----
-
-### MUDANÇA 4 — Badge de campanha na Navbar / Hero (opcional, alta conversão)
-**Tipo:** Novo componente — banner de campanha acima do navbar ou dentro do Hero
-**Prioridade:** Recomendado, não bloqueante
-
-Adicionar uma barra fina acima do `<header>` fixo com a campanha ativa:
-
-```jsx
-{/* CAMPAIGN BAR — adicionar ANTES do <header> */}
-<div className="fixed top-0 inset-x-0 z-[60] py-1.5 px-4 text-center text-xs font-semibold"
-  style={{ background: '#4DD4FF', color: '#0D0A17' }}>
-  🔒 Campanha Fundador ativa — 5 vagas a R$147/mês.{' '}
-  <a href="#planos" className="underline font-bold">Garantir minha vaga →</a>
-</div>
-```
-
-Se adicionado, ajustar o `top-0` do `<header>` para `top-8` ou equivalente para não sobrepor.
 
 ---
 
 ## RESUMO DAS MUDANÇAS
 
-| # | Componente | O que muda | Impacto |
-|---|-----------|-----------|---------|
-| 1A | Growth card — badge | `RECOMENDADO` → `CAMPANHA FUNDADOR` | Identifica o plano como campanha |
-| 1B | Growth card — preço | `R$297` → `~~R$297~~ → R$147/mês pelos 12 primeiros meses` | Elimina ambiguidade de preço |
-| 1C | Growth card — footer | Adiciona explicação R$197 pós-campanha | Contexto sem confusão |
-| 1D | Growth card — features | Adiciona `🔒 Preço de Fundador — travado` como 1ª feature | Reforça benefício de entrar agora |
-| 2 | Launch Access section | Remove referência de preço — vira seção "O que é Fundador?" | Elimina o segundo preço da página |
-| 3 | Bonus stack card | Atualiza R$297 para R$147 com contexto de campanha | Consistência em toda a página |
-| 4 | Campaign bar (novo) | Barra fixa no topo com campanha ativa | Visibilidade imediata |
+| # | Onde | O que muda | Impacto |
+|---|------|-----------|---------|
+| 1 | Topo do arquivo, linha ~83 | Adicionar array `agents` com 3 objetos | Dados dos 3 agentes |
+| 2 | Return, após SECTOR TABS (~linha 387) | Inserir `<section>` dos agentes | Nova seção visual |
 
----
-
-## PRINCÍPIO UTILIZADO (para o dev entender o porquê)
-
-```
-ANTES (confuso):
-  Seção A: "Growth = R$297/mês" → RECOMENDADO
-  Seção B: "Fundador = R$147/mês" → seção separada
-
-  Resultado: visitante não sabe qual é o preço real.
-  Pior: parece que R$147 e R$297 são coisas diferentes.
-
-DEPOIS (correto — ancoragem Hormozi):
-  Growth = ~~R$297~~ → R$147/mês (campanha)
-  "Depois R$197/mês para sempre"
-  "Novos clientes pagarão R$297/mês"
-
-  Resultado: visitante entende:
-  1. O preço normal seria R$297
-  2. Agora está em R$147 por ser Fundador
-  3. Vai travar em R$197 para sempre
-  4. Quem entrar depois vai pagar mais
-
-  Uma história. Um preço. Zero confusão.
-```
+**O que NÃO mudar:**
+- Seção SECTOR TABS — não alterar
+- Features grid — não alterar
+- Plans array — não alterar
+- Qualquer outra seção existente
 
 ---
 
 ## CRITÉRIOS DE ACEITE
 
 ```
-[ ] Página inteira tem apenas UM preço numérico ativo: R$147/mês
-[ ] R$297 aparece apenas tachado, como âncora — nunca como preço de compra
-[ ] R$197 aparece apenas como "preço pós-campanha travado" — nunca como opção de compra
-[ ] A seção Launch Access não exibe nenhum número de preço isolado
-[ ] O card de bônus não menciona R$297 como preço de compra
-[ ] Todos os CTAs levam para o Growth com R$147 ativo
-[ ] Mobile: o preço tachado + preço ativo são legíveis em viewport 375px
+[ ] Seção visível entre SECTOR TABS e HOW IT WORKS
+[ ] 3 cards aparecem corretamente em desktop (grid 3 colunas)
+[ ] 3 cards empilham em mobile (grid 1 coluna)
+[ ] Cada card mostra: emoji, nome, badge colorido, setores, outcome, âncora
+[ ] Cores dos badges são distintas (amarelo/verde/roxo)
+[ ] CTA "Ver planos e escolher meu agente" leva para #planos
+[ ] Nota "Todos os 3 agentes incluídos no Growth" visível
+[ ] Não quebra nenhuma seção existente da página
 ```
 
 ---
 
-## O QUE NÃO MUDAR
+## PRINCÍPIO UTILIZADO (para o dev entender o porquê)
 
 ```
-[ ] Lógica de checkout / pagamento — não alterar
-[ ] Planos Start, Scale, Enterprise — não alterar
-[ ] Qualquer integração de API ou backend
-[ ] Estrutura geral da página (ordem das seções)
-[ ] A garantia dupla — não alterar
-[ ] O array de features do Growth (apenas adicionar o item 🔒 no topo)
+ANTES (genérico):
+  "A Lara atende, qualifica e faz follow-up"
+  → O visitante pensa: "é mais um chatbot"
+
+DEPOIS (específico):
+  "Agente SDR — para imóveis, consultoria, coaching"
+  "Agenda reuniões com leads de alto ticket — enquanto você está em outras reuniões"
+  "SDR humano custa R$3.500. A Lara custa R$297."
+  → O visitante pensa: "esse aqui foi feito pra mim"
+
+Resultado: Perceived Likelihood sobe de 7/10 → 9/10 na Value Equation.
+Visitante para de comparar com chatbot genérico.
+Passa a comparar com SDR humano / recepcionista.
 ```
 
 ---
 
-*Brief produzido por: hormozi-pricing (lógica de ancoragem) + hormozi-copy (copy)*
+*Brief produzido por: hormozi-offers (posicionamento dos agentes) + hormozi-copy (copy)*
 *Revisado por: hormozi-chief*
 *Arquivo: `C:\crm-auto-digital\docs\marketing\dev-brief-p1a-founder-campaign.md`*
