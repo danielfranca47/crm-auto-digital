@@ -8,12 +8,13 @@ import { useEffect } from "react";
 import Index from "./pages/Index";
 import NotFound from "./pages/NotFound";
 import CRMLanding from "./pages/CRMLanding";
+import CRMLandingV2 from "./pages/CRMLandingV2";
 import SEOHead from "./components/SEOHead";
 
 const queryClient = new QueryClient();
 
 // Slugs que não são códigos de idioma — não devem disparar redirect em LanguageRoute
-const NON_LANG_SLUGS = new Set(['lara-ia', 'lara-ai', 'crm']);
+const NON_LANG_SLUGS = new Set(['lara-ia', 'lara-ia-v2', 'lara-ai', 'crm']);
 
 const LanguageRoute = ({ children }: { children: React.ReactNode }) => {
   const { lang } = useParams();
@@ -49,6 +50,7 @@ const App = () => (
 
           {/* Landing pages da Lara — estáticas, fora do padrão /:lang */}
           <Route path="/lara-ia" element={<CRMLanding />} />
+          <Route path="/lara-ia-v2" element={<CRMLandingV2 />} />
           <Route path="/lara-ai" element={<CRMLanding lang="en" />} />
           <Route path="/crm" element={<Navigate to="/lara-ia" replace />} />
 
