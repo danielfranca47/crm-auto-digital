@@ -217,28 +217,24 @@ function PainelResumo({
       )}
 
       {/* Fluxo de Venda */}
-      {config.response_style === 'active' && (
-        <>
-          <div className="o-section-hdr" style={{ marginTop: 24 }}>
-            <span className="font-mono-orion" style={{ fontSize: 9, letterSpacing: '2.5px', textTransform: 'uppercase', color: 'var(--o-sub)' }}>
-              Fluxo de Venda · Modo Ativo
-            </span>
-            <span className="font-mono-orion" style={{ fontSize: 8, color: 'var(--o-dim)', border: '1px solid var(--o-b1)', padding: '1px 6px', borderRadius: 2 }}>
-              {config.sales_flow?.enabled ? 'Ativo' : 'Inativo'}
-            </span>
-          </div>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 14, marginTop: 8 }}>
-            <SummaryCard
-              label="Regras configuradas"
-              value={!config.sales_flow || config.sales_flow.nodes.length === 0
-                ? 'Nenhuma regra'
-                : `${config.sales_flow.nodes.filter(n => n.enabled).length} ativa(s) de ${config.sales_flow.nodes.length}`}
-              status={config.sales_flow && config.sales_flow.nodes.length > 0 ? 'ok' : undefined}
-              onClick={() => onNavigate('fluxo')}
-            />
-          </div>
-        </>
-      )}
+      <div className="o-section-hdr" style={{ marginTop: 24 }}>
+        <span className="font-mono-orion" style={{ fontSize: 9, letterSpacing: '2.5px', textTransform: 'uppercase', color: 'var(--o-sub)' }}>
+          Fluxo de Venda
+        </span>
+        <span className="font-mono-orion" style={{ fontSize: 8, color: 'var(--o-dim)', border: '1px solid var(--o-b1)', padding: '1px 6px', borderRadius: 2 }}>
+          {config.sales_flow?.enabled ? 'Ativo' : 'Inativo'}
+        </span>
+      </div>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 14, marginTop: 8 }}>
+        <SummaryCard
+          label="Regras configuradas"
+          value={!config.sales_flow || config.sales_flow.nodes.length === 0
+            ? 'Nenhuma regra'
+            : `${config.sales_flow.nodes.filter(n => n.enabled).length} ativa(s) de ${config.sales_flow.nodes.length}`}
+          status={config.sales_flow && config.sales_flow.nodes.length > 0 ? 'ok' : undefined}
+          onClick={() => onNavigate('fluxo')}
+        />
+      </div>
 
       <div style={{ marginTop: 24, display: 'flex', gap: 10 }}>
         {dirty && (
@@ -425,7 +421,7 @@ export default function AiProfile() {
     },
     ...(isScheduleMode ? [{ id: 'c5' as PanelId, label: '⑤ Apresentação' }] : []),
     ...(isDirectMode   ? [{ id: 'c6' as PanelId, label: '⑥ Oferta' }]      : []),
-    ...(config.response_style === 'active' ? [{ id: 'fluxo' as PanelId, label: '⑦ Fluxo de Venda' }] : []),
+    { id: 'fluxo' as PanelId, label: '⑦ Fluxo de Venda' },
     { id: 'conexao',  label: 'Conexão' },
   ];
 
@@ -673,7 +669,7 @@ export default function AiProfile() {
             </div>
           </div>
         )}
-        {activePanel === 'fluxo' && config.response_style === 'active' && (
+        {activePanel === 'fluxo' && (
           <div className="o-panel o-fade-in">
             {isDirty && (
               <div className="o-draft-banner">
@@ -686,7 +682,7 @@ export default function AiProfile() {
               </div>
             )}
             <div className="font-mono-orion" style={{ fontSize: 9, letterSpacing: 3, textTransform: 'uppercase', marginBottom: 8, color: 'var(--o-warn)' }}>
-              Camada 7 · Modo Ativo
+              Camada 7
             </div>
             <div className="font-display" style={{ fontSize: 28, fontWeight: 400, marginBottom: 6, color: 'var(--o-text)' }}>Fluxo de Venda</div>
             <div style={{ fontSize: 12.5, color: 'var(--o-sub)', fontWeight: 300, marginBottom: 24 }}>

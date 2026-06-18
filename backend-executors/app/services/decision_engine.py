@@ -235,10 +235,6 @@ def _evaluate_sales_flow(
     ou None se nenhum node fizer match (ou fluxo estiver desabilitado).
     """
     ai_profile = context.get("ai_profile") or {}
-    response_style = (ai_profile.get("response_style") or "passive").strip().lower()
-    if response_style != "active":
-        return None
-
     sales_flow = ai_profile.get("sales_flow")
     if not isinstance(sales_flow, dict) or not sales_flow.get("enabled"):
         return None
@@ -339,9 +335,6 @@ def _evaluate_sales_flow_phases(
     result: Dict[str, Any] = {"prompt_injections": [], "pre_send_media": [], "system_actions": [], "suppress_llm_response": False}
 
     ai_profile = context.get("ai_profile") or {}
-    if (ai_profile.get("response_style") or "passive").strip().lower() != "active":
-        return result
-
     sales_flow = ai_profile.get("sales_flow")
     if not isinstance(sales_flow, dict) or not sales_flow.get("enabled"):
         return result
@@ -546,8 +539,6 @@ def _build_sales_flow_phases_block(phases_result: Dict[str, Any]) -> str:
 def _collect_intent_triggers_for_lead_phase(context: Dict[str, Any]) -> List[dict]:
     """Coleta blocos intent_trigger da fase atual do lead para injeção no prompt da mãe."""
     ai_profile = context.get("ai_profile") or {}
-    if (ai_profile.get("response_style") or "passive").strip().lower() != "active":
-        return []
     sales_flow = ai_profile.get("sales_flow")
     if not isinstance(sales_flow, dict) or not sales_flow.get("enabled"):
         return []

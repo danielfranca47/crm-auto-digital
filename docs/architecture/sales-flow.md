@@ -12,6 +12,8 @@ O Fluxo de Venda opera **como uma camada que corre antes do prompt filho** no `d
 
 **Onde é executado:** `backend-executors/app/services/decision_engine.py` → `_evaluate_sales_flow_phases()`.
 
+**Disponibilidade:** o Fluxo de Venda está disponível para qualquer agente, independente de `response_style` (`active` ou `passive`) — o único controlo de on/off é `sales_flow.enabled`. Em modo passivo, o prompt de qualificação tem uma regra absoluta de "zero perguntas abertas" (inferência silenciosa); blocos `orientacao` configurados com instruções que façam perguntas directas podem contradizer essa regra, já que são injectados com prioridade alta. É responsabilidade de quem configura o Fluxo de Venda manter os blocos coerentes com o `response_style` do agente — não há validação automática disso.
+
 ---
 
 ## Fases (p0–p5)
