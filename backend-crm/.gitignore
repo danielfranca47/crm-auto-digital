@@ -10,6 +10,7 @@ database/*.db
 
 # Arquivos sensíveis
 .env
+.env.local
 .env.local-backup
 
 
