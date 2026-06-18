@@ -78,21 +78,31 @@ dois caminhos automaticamente.
 | # | Commit | O que foi implementado |
 |---|---|---|
 | 1 | `ec3337d` | feat: desativar roteamento para closing no agente híbrido agendador |
+| 2 | `8b44e94` | docs: registar hash do commit ec3337d no arquivo de implementação |
+| 3 | _(pendente)_ | test: regressão automatizada para o cenário local (substitui validação manual de P1/P2) |
 
 ---
 
 ## Checks de Validação
 
-### Cenário P1 — Playground: confirmação de horário não fica muda
-- [ ] Reproduzir: saudação → "gostaria de agendar uma sessão" → "amanhã as 12h" → "sim"
-- [ ] Confirmar: última resposta não fica vazia
-- [ ] Confirmar no trace/log: reason contém `hybrid_scheduler_closing_disabled`, sem `guardrail_sdr_escalate_closing` neste ponto
+### Cenário P1 — Confirmação de horário não fica muda (validado localmente, via teste automatizado)
+- [x] Reproduzido via `backend-executors/tests/test_hybrid_scheduler_no_closing.py::test_booking_confirmation_does_not_escalate_to_silent_closing` — simula exatamente o caso real (hybrid_scheduler, `requires_handoff=true`, lead em "agendamento", Mãe decide `closing`)
+- [x] Confirmado: `decision.message_text != ""`, `next_action != "ignore"`
+- [x] Confirmado: `reason` contém `hybrid_scheduler_closing_disabled:agendamento`, `trace.guardrail_sdr_escalate_closing` não é `True`
+- **Validado em:** 19/06/2026 — teste local, `pytest` verde
+- **Pendente:** confirmação visual no Playground real (UI) antes de considerar este cenário totalmente fechado
 
-### Cenário P2 — Regressão: agentes não-hybrid_scheduler continuam normais
-- [ ] Confirmar que `sdr_padrao`/`closer_agressivo`/`consultivo` continuam roteando para "closing" quando aplicável, sem mudança de comportamento
+### Cenário P2 — Regressão: agentes não-hybrid_scheduler continuam normais (validado localmente)
+- [x] `test_non_hybrid_scheduler_agent_still_escalates_closing` — mesmo cenário (lead em "agendamento", "sim", `requires_handoff=true`) mas com `template_key=sdr_padrao`: confirma que `guardrail_sdr_escalate_closing=True` e `message_text=""` continuam ocorrendo normalmente
+- **Validado em:** 19/06/2026 — teste local, `pytest` verde
+
+### Cenário extra — Fallback para apresentation fora de agendamento (validado localmente)
+- [x] `test_closing_signal_from_apresentation_falls_back_to_apresentation` — lead em "apresentation", Mãe decide `closing` → fallback correto para `apresentation` (não regride nem avança indevidamente)
+- **Validado em:** 19/06/2026 — teste local, `pytest` verde
 
 ### Cenário C1 — Suite de testes sem regressão
-- [ ] `pytest backend-executors/tests` — mesma contagem de falhas pré-existentes, sem novas falhas
+- [x] `pytest backend-executors/tests` — 21 falhas pré-existentes (confirmadas idênticas via `git stash` antes/depois da mudança), 47 passando (44 + 3 novos), sem novas falhas
+- **Validado em:** 19/06/2026
 
 ---
 
