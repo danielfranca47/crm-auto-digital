@@ -1,5 +1,22 @@
 # Setup e Desenvolvimento Local
 
+## `.env.local` nunca deve ser commitado (backend-crm)
+
+`backend-crm/app.py` faz `load_dotenv(".env", ...)` seguido de
+`load_dotenv(".env.local", override=True)`. Qualquer variável definida em
+`.env.local` **sobrepõe** o que estiver no ambiente real do processo — incluindo
+variáveis injectadas pelo Railway em produção. Se este ficheiro for commitado no
+git, ele é incluído no build/deploy e passa a sobrepor silenciosamente a
+configuração de produção, sem que apareça nenhum erro nas variáveis do Railway
+(elas continuam a mostrar o valor "correcto" no dashboard — só o processo em
+runtime é que usa outro valor).
+
+`.env.local` está no `.gitignore`. Usar este ficheiro só para overrides pessoais
+de desenvolvimento local (ex.: apontar para serviços locais em portas
+diferentes) — nunca para valores que possam acabar commitados.
+
+---
+
 ## Pré-requisitos
 
 - Python 3.11+ com `venv` por serviço
