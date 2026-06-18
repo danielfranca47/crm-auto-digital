@@ -330,13 +330,35 @@ def _call_executors_decide(context_bundle_dict: Dict[str, Any]) -> Dict[str, Any
         "X-Service-Token": token,
         "Content-Type": "application/json",
     }
+
+    # DEBUG TEMPORÁRIO — investigação de Connection refused (remover após diagnóstico)
+    import socket
+    from urllib.parse import urlparse
+
+    parsed = urlparse(base)
+    debug_port = parsed.port or (443 if parsed.scheme == "https" else 80)
+    try:
+        debug_addrs = [
+            f"{a[4][0]}:{a[4][1]} fam={a[0].name}"
+            for a in socket.getaddrinfo(parsed.hostname, debug_port)
+        ]
+    except Exception as dns_exc:  # noqa: BLE001
+        debug_addrs = [f"DNS_ERROR: {dns_exc!r}"]
+
     try:
         with httpx.Client(timeout=60) as client:
             resp = client.post(url, headers=headers, json={"context_bundle": context_bundle_dict})
     except httpx.RequestError as exc:
+        cause = exc.__cause__
+        cause_errno = getattr(cause, "errno", None)
+        cause_strerror = getattr(cause, "strerror", None)
         raise HTTPException(
             status_code=502,
-            detail=f"Falha ao contactar backend-executors: {exc}",
+            detail=(
+                f"Falha ao contactar backend-executors: {exc} | "
+                f"DEBUG host={parsed.hostname} port={debug_port} resolved={debug_addrs} "
+                f"cause_errno={cause_errno} cause_strerror={cause_strerror} cause_repr={cause!r}"
+            ),
         ) from exc
 
     if resp.status_code == 401:
