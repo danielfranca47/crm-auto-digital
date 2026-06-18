@@ -3496,6 +3496,41 @@ def _enforce_greeting_first(
     return mother_decision
 
 
+def _enforce_hybrid_scheduler_no_closing(
+    mother_decision: MotherDecision,
+    context: Dict[str, Any],
+) -> MotherDecision:
+    """hybrid_scheduler não tem etapa comercial de "closing" — agenda sessões,
+
+    não fecha vendas. Confirmação de horário é interpretada pela Mãe como sinal
+    de fechamento (heurística genérica), mas aqui não existe "venda fechada".
+    Redireciona para a fase de agendamento atual (se já lá) ou apresentation.
+    """
+    ai_profile = context.get("ai_profile") or {}
+    template_key = str(ai_profile.get("template_key") or "").strip().lower()
+    if template_key != "hybrid_scheduler":
+        return mother_decision
+
+    route_is_closing = _normalize_category(mother_decision.route_to) == "closing"
+    perceived_is_closing = _normalize_category(mother_decision.perceived_category) == "closing"
+    if not route_is_closing and not perceived_is_closing:
+        return mother_decision
+
+    lead = context.get("lead") or {}
+    current_category = _normalize_category(lead.get("category"))
+    fallback = current_category if current_category in {"agendamento", "pre-agendamento"} else "apresentation"
+
+    if route_is_closing:
+        mother_decision.route_to = fallback
+    if perceived_is_closing:
+        mother_decision.perceived_category = fallback
+
+    reason = str(mother_decision.reason or "").strip()
+    tag = f"hybrid_scheduler_closing_disabled:{fallback}"
+    mother_decision.reason = f"{reason}|{tag}" if reason else tag
+    return mother_decision
+
+
 _ALLOWED_ADVANCE = {
     "qualification": {"apresentation"},
     "apresentation": {"closing", "follow-up", "pre-agendamento"},
@@ -4096,6 +4131,7 @@ def decide(context: Dict[str, Any], logger: Optional[logging.Logger] = None) -> 
             mode_ctx_forced_route,
         )
         mother_decision = _enforce_greeting_first(mother_decision, context)
+        mother_decision = _enforce_hybrid_scheduler_no_closing(mother_decision, context)
         lead = context.get("lead") or {}
         force_followup_route = _is_followup_tick_context(context)
         route_for_child = "follow-up" if force_followup_route else mother_decision.route_to

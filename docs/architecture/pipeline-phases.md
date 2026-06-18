@@ -126,6 +126,14 @@ A secção "Critérios de Qualificação" no `LeadCardDialog` permite editar man
 
 ### Agent 3 (hybrid_scheduler)
 - Playbook específico ausente: cai no fallback `sdr_padrao` em `ai_playbooks/__init__.py`
+- **"Closing" desativado por design:** este agente agenda sessões recorrentes sem
+  etapa comercial de fechamento — confirmar um horário não é uma venda fechada.
+  `_enforce_hybrid_scheduler_no_closing()` em `decision_engine.py` intercepta a
+  decisão da Mãe antes de `route_for_child`/`_is_sdr_escalate_closing()`: sempre
+  que `route_to`/`perceived_category` seria `"closing"`, redireciona para a
+  categoria atual (se já em `agendamento`/`pre-agendamento`) ou `apresentation`.
+  Reativar "closing" para negociação de pacotes/recorrência em follow-up é
+  melhoria futura, ainda não implementada.
 
 ---
 
