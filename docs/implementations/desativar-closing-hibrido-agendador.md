@@ -77,7 +77,7 @@ dois caminhos automaticamente.
 
 | # | Commit | O que foi implementado |
 |---|---|---|
-| 1 | _(pendente)_ | feat: desativar roteamento para closing no agente híbrido agendador |
+| 1 | `ec3337d` | feat: desativar roteamento para closing no agente híbrido agendador |
 
 ---
 
