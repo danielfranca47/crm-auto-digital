@@ -71,7 +71,7 @@ qualificação, fora do escopo deste pedido.
 
 | # | Commit | O que foi implementado |
 |---|---|---|
-| 1 | _(pendente)_ | feat: disponibilizar Fluxo de Venda para agentes em modo passivo |
+| 1 | `69f1be2` | feat: disponibilizar Fluxo de Venda para agentes em modo passivo (backend + frontend + doc) |
 
 ---
 
