@@ -275,7 +275,45 @@ final — não existe "versão de demonstração" diferente da versão de produ�
 | `followup_allowed_hours` | `offer_pack` | coluna equivalente (`followup_reconciler.py`) | Sem restrição de horário customizada — usa o comportamento padrão. |
 | `qualification_score_threshold` | `offer_pack` | coluna equivalente (`qualification_guardrails.py`) | Fica em `6` (default do sistema). |
 | `objection_common` | — | `meta_prompter.py` (`objections_faq`) | **Não existe campo na UI para este valor** — não há onde digitá-lo em `/ai-profile`. As objeções de paciente listadas na ficha devem ser cobertas via `custom_instructions`, que é editável. |
+| `hybrid_flow_style: offer_then_schedule` | — | coluna equivalente (`orchestrator.py`) | **Não existe campo na UI para este valor** — campo só aparece em tipos internos (`api.ts`) e na tela de admin (somente leitura). A intenção ("responde a pergunta antes de agendar") já é coberta por `response_style: passive`, que é configurável. |
+| `origin_inbound_opener` / `origin_outbound_opener` (abertura de 1º contato) | `offer_pack.origin_*_opener` | coluna equivalente (`decision_engine.py:2363`) | A frase de abertura customizada não é aplicada — o tom de saudação precisa estar descrito dentro de `custom_instructions` para o LLM seguir. |
+| `warming_social_proof` / `warming_session_preview` (script de aquecimento) | `offer_pack` | coluna equivalente (`decision_engine.py:2413`) | Idem — só funciona se o conteúdo estiver dentro de `custom_instructions`. |
+| `handoff_custom_text` (mensagem ao paciente no handoff) | `offer_pack.handoff_custom_text` | coluna equivalente (`orchestrator.py` `_TEMPLATE_FIELDS`) | Sistema usa o texto padrão do template em vez do customizado — aceitável, mas não é o texto que o cliente digitar na tela. |
+| `briefing_enabled` / `briefing_channel` / `briefing_lead_time` / `operator_whatsapp` (Dossiê Pré-Reunião) | `offer_pack` | colunas equivalentes (`briefing_service.py:165-172`, `appointments.py:367-371`) | **O dossiê pré-reunião não funciona configurado só pela UI** — `operator_whatsapp` (destino do envio) nunca chega na coluna real, então `briefing_service.py` não tem para onde mandar. |
+| `buying_signal_keywords` (alerta de sinal de compra) | `offer_pack` | coluna equivalente (`decision_engine.py:4616`) | Notificação de sinal de compra nunca dispara — a lista de keywords configurada na UI nunca chega na coluna lida em runtime. |
+
+**Campos confirmados funcionais pela UI (não sofrem esse problema):** `name`, `brand_name`, `tone_of_voice`, `agent_mode`, `identity_mode`, `template_key`, `handoff_policy`, `requires_handoff`, `human_in_loop`, `timezone`, `response_style`, `niche`, `target_audience`, `offer_description`, `goals`, `custom_instructions`, `qualification_fields`/`qualification_required_fields`, `custom_variables`, `first_reply_delay_*`/`reply_delay_*`/`multi_message_buffer_seconds`, `audio_transcription_enabled`, `availability_mode`/`availability_schedule`, `payment_gateway`, `sales_flow` (Camada 7), e — importante — `followup_sdr_instructions`/`followup_recovery_instructions`/`followup_postsession_instructions`/`followup_goal_instructions`/`cart_recovery_attempt_instructions`/`followup_outcome_instructions` (essas vão direto pro topo do payload, sem passar por `offer_pack`).
+
+**Conclusão prática:** a UI hoje só persiste de forma confiável os campos "estruturais" de identidade/qualificação/tempo de resposta e os blocos de **texto livre** (`custom_instructions` + as instruções de follow-up por variante). Quase tudo que envolve número/lista/boolean nas abas "Pipeline" e "Apresentação" (lembretes, cadência, threshold, briefing, sinais de compra, openers, aquecimento) cai em `offer_pack` e nunca chega no motor. Por isso o agente desta fase concentra o máximo possível dentro de `custom_instructions` e `followup_postsession_instructions` — os únicos lugares de texto livre que realmente chegam ao LLM em runtime.
 
 **Ajuste de expectativa no roteiro de teste:** os Cenários 3 e 4 (recuperação de paciente sumido e pergunta de preço) vão depender inteiramente do que está escrito em `custom_instructions`/`offer_description` — não dos campos estruturados acima. Revisar essas duas respostas no Playground com atenção redobrada, já que não há reforço determinístico do sistema por trás delas nesta versão.
 
 **Se algum dia isso precisar funcionar de verdade:** é uma correção de código (sincronizar `offer_pack` com as colunas de topo em `saveConfig()`/`getConfig()` no frontend ou em `_upsert_ai_profile()` no backend) — fora do escopo desta tarefa, que é só configurar o agente com o que já existe.
+
+---
+
+## 🛠️ PLANO — Agente Demo v1 (apenas com o que a UI já comporta)
+
+**Princípio:** tudo que dependeria de um campo estrutural quebrado foi reescrito como texto dentro de `custom_instructions` (a única superfície de texto livre que sempre chega ao LLM) ou de `followup_postsession_instructions` (o único campo de follow-up que vai direto pro topo do payload para `template_key=hybrid_scheduler`).
+
+| Decisão | Por quê |
+|---|---|
+| `appointment_mode` (frontend) = `exploratory` | É o único valor que produz `presentation_variant = scheduler` no save — o campo que de fato existe e funciona. `commercial` produziria `presentation_variant = sales`, errado para este agente (ele agenda, não fecha venda de produto). |
+| Sem bloco comercial de preço estruturado (Conhecimento) | Já que o gate real (`appointment_mode` de topo) nunca liga, qualquer tabela de preço cadastrada em Conhecimento "comercial" nunca seria lida pelo motor para este template. Preço vai direto em `offer_description` + `custom_instructions`. |
+| Abertura, aquecimento e objeções de paciente — tudo dentro de `custom_instructions` | `origin_inbound_opener`, `warming_social_proof/session_preview` e `objection_common` não persistem via UI. Consolidados em texto livre. |
+| Recuperação de paciente sumido via `followup_postsession_instructions` | É o único campo de follow-up para `hybrid_scheduler` que vai pro topo do payload e funciona de verdade. Cadência exata (`followup_cadence`) fica no default do sistema (+24h, +48h). |
+| Lembrete de sessão: aceitar o default do template (`-24h`, `-2h`) em vez de `-48h`/`-24h` | `appointment_reminder_offsets` não persiste via UI — não há como pedir 48h/24h hoje. -24h/-2h ainda cumpre o objetivo (confirmar antes da sessão). |
+| Sem Dossiê Pré-Reunião nem alerta de sinal de compra configurados | `operator_whatsapp` e `buying_signal_keywords` não persistem via UI — configurar não teria efeito, então foram deixados de fora para não criar falsa expectativa. |
+| `nurture_vs_discard_rule` e `qualification_score_threshold` não configurados | Ficam no default do sistema (`discard`, `6`) — sem efeito prático grave aqui, pois o agente só tem 2 campos de qualificação simples. |
+| `hybrid_flow_style` não configurado | Campo sem UI; a intenção ("responde antes de agendar") já é coberta por `response_style: passive`. |
+| Sales Flow (Camada 7) não usado nesta v1 | Não é necessário para o que está descrito na ficha — fica como possível v2 caso se queira reforço determinístico (ex.: bloco de orientação fixo na fase de Agendamento). |
+
+### Passo a passo para aplicar
+
+1. Acessar `/ai-profile` → botão **"↕ Exportar / Importar"** → aba **Importar**.
+2. Selecionar o arquivo [`agente-demo-contrato.json`](agente-demo-contrato.json).
+3. Confirmar a importação (substitui a configuração atual da conta de demo).
+4. Conferir manualmente os campos que a importação **não** envia (porque vivem fora de `AgentConfig`/foram propositalmente omitidos): nada a fazer aqui — não há ação manual que resolva os campos quebrados.
+5. Rodar o roteiro de teste do Playground (seção acima), já com a expectativa ajustada para os Cenários 3 e 4.
+
+*Arquivo do contrato: [`docs/marketing/comercial/agente-demo-contrato.json`](agente-demo-contrato.json)*
