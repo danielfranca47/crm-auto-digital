@@ -258,3 +258,24 @@ final — não existe "versão de demonstração" diferente da versão de produ�
 *Revisado por: hormozi-chief*
 *Base técnica: `backend-core/app/models/ai_profile.py`, `backend-core/app/api/ai_profiles.py`, `backend-executors/app/services/decision_engine.py`*
 *Arquivo: `C:\crm-auto-digital\docs\marketing\comercial\agente-demo.md`*
+
+---
+
+## ⚠️ NOTA TÉCNICA — Campos que não são configuráveis pela UI atual (`/ai-profile`)
+
+**Decisão do time:** este agente demo será montado usando exclusivamente o que um usuário normal consegue fazer em `/ai-profile` no frontend — sem chamadas diretas à API ou edição de banco. Os campos abaixo, recomendados na ficha técnica, **não têm efeito real quando configurados só pela UI**, porque a tela grava o valor dentro de `offer_pack` (um JSON auxiliar), enquanto o motor de decisão (`decision_engine.py`, `followup_state.py`, `followup_reconciler.py`, `qualification_guardrails.py`, `routes/leads.py`, `routes/appointments.py`) lê a coluna de topo do `ai_profile` — que a UI nunca escreve. Não há atalho de UI para isso hoje; por isso ficam fora desta implementação.
+
+| Campo da ficha | O que a UI grava | O que o motor real lê | Comportamento real (sem o campo) |
+|---|---|---|---|
+| `appointment_mode: commercial` | `offer_pack.appointment_mode` | coluna `appointment_mode` (`decision_engine.py`) | Fica em `"exploratory"` — o bloco de injeção comercial (tabela de preço, objeções, diferenciais, política de pagamento) **nunca é montado**. O Cenário 4 (pergunta de preço) depende só de `offer_description` + `custom_instructions` em texto livre. |
+| `appointment_reminder_offsets: [48h, 24h]` | UI só expõe `appointment_reminder_h1`/`h2` (cosmético, mesmo destino: `offer_pack`) | coluna `appointment_reminder_offsets` (`appointments.py`) | Cai no default do template `hybrid_scheduler`: lembrete em **-24h e -2h**, não -48h/-24h. |
+| `nurture_vs_discard_rule: nurture` | `offer_pack.nurture_vs_discard_rule` | coluna `nurture_vs_discard_rule` (`qualification_guardrails.py`) | Fica em `"discard"` (default do sistema). |
+| `followup_cadence: [24, 72, 168]` | `offer_pack.followup_cadence` | coluna `followup_cadence` (`followup_state.py`) | Usa a cadência padrão da variante `hybrid_scheduler`: +24h após a 1ª tentativa, +48h após a 2ª. |
+| `followup_max_attempts: 3` / `followup_first_offset` | `offer_pack` | colunas equivalentes (`routes/leads.py`) | Usa o default do sistema para a variante. |
+| `followup_allowed_hours` | `offer_pack` | coluna equivalente (`followup_reconciler.py`) | Sem restrição de horário customizada — usa o comportamento padrão. |
+| `qualification_score_threshold` | `offer_pack` | coluna equivalente (`qualification_guardrails.py`) | Fica em `6` (default do sistema). |
+| `objection_common` | — | `meta_prompter.py` (`objections_faq`) | **Não existe campo na UI para este valor** — não há onde digitá-lo em `/ai-profile`. As objeções de paciente listadas na ficha devem ser cobertas via `custom_instructions`, que é editável. |
+
+**Ajuste de expectativa no roteiro de teste:** os Cenários 3 e 4 (recuperação de paciente sumido e pergunta de preço) vão depender inteiramente do que está escrito em `custom_instructions`/`offer_description` — não dos campos estruturados acima. Revisar essas duas respostas no Playground com atenção redobrada, já que não há reforço determinístico do sistema por trás delas nesta versão.
+
+**Se algum dia isso precisar funcionar de verdade:** é uma correção de código (sincronizar `offer_pack` com as colunas de topo em `saveConfig()`/`getConfig()` no frontend ou em `_upsert_ai_profile()` no backend) — fora do escopo desta tarefa, que é só configurar o agente com o que já existe.
