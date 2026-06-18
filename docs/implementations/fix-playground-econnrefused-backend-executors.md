@@ -63,8 +63,10 @@ dual-stack):
 | 4 | privado `:8002` | IPv6 só (`::` / `0:0:0:0:0:0:0:0`) | ⚠️ não testado — quebrou `/health` público, revertido antes de testar |
 | 5 | público HTTPS | dual-stack (IPv4+IPv6) | ❌ Connection refused |
 | 6 | privado `:8002` | dual-stack (IPv4+IPv6) | ❌ Connection refused |
+| 7 | privado `:8002` + Outbound IPv6 ligado no backend-crm | dual-stack (IPv4+IPv6) | ❌ Connection refused |
 
-Nenhuma combinação testada resolveu o problema. A hipótese de IPv4 vs. IPv6 explicava
+Nenhuma combinação testada resolveu o problema. **Combinação ainda não testada:** público +
+Outbound IPv6 ligado (ver Fase 4). A hipótese de IPv4 vs. IPv6 explicava
 parcialmente os sintomas mas o teste #6 (privado + dual-stack) refuta que seja a causa
 única ou principal.
 
@@ -162,16 +164,74 @@ domínio privado, o erro de connection refused **persistiu** (teste #6 da tabela
 
 ---
 
+## Fase 4 — Pesquisa + "Outbound IPv6" + diagnóstico SSH (18/06/2026)
+
+### Pesquisa (Railway Docs / Help Station)
+
+- Confirmado oficialmente: **"Outbound IPv6" vem desligado por padrão**, por serviço
+  (`Settings → Networking → Outbound Networking`). Sem ele, o serviço não consegue iniciar
+  ligações de saída para destinos IPv6.
+- Existe também uma **flag de conta** (`railway.com/account/feature-flags` → "IPv4") que faz
+  a rede privada do Railway também atribuir/suportar endereços IPv4 — alternativa mais
+  simples que não chegou a ser testada.
+- Railway recomenda oficialmente **não** usar o domínio público para comunicação
+  serviço-a-serviço dentro do mesmo projeto — mas isso é uma recomendação de custo/arquitetura,
+  não uma proibição a nível de rede.
+- **Detalhe importante encontrado só depois de aplicar o fix:** a documentação descreve
+  "Outbound Networking" como tráfego para **"destinos externos na internet"** — o que sugere
+  que este toggle pode não se aplicar de todo ao tráfego da rede privada (`*.railway.internal`,
+  via WireGuard mesh), só a chamadas para domínios públicos/externos.
+
+### Tentativa: Ativar "Outbound IPv6" no `backend-crm`
+
+- Utilizador confirmou no dashboard: `backend-crm → Settings → Networking → Outbound IPv6`
+  estava **desligado**; ativado manualmente. `backend-executors` mantido desligado
+  (intencional — é o `backend-crm` quem inicia a chamada, não o `backend-executors`).
+- Como efeito colateral, notado e corrigido nessa mesma sessão: o **Target Port** do domínio
+  público do `backend-executors` ainda apontava para `8080` (porta antiga); atualizado para
+  `8002` manualmente pelo utilizador. Não relacionado à ligação privada (o target port da
+  rede pública não afeta o roteamento da rede privada), mas é uma inconsistência válida que
+  foi corrigida.
+- `backend-crm` redeployado (deployment `0222f8a4`, 18:39:12) com o toggle já activo.
+- **Resultado: erro idêntico persiste** —
+  `Falha ao contactar backend-executors: [Errno 111] Connection refused`.
+- `EXECUTORS_BASE_URL` estava configurado para o **domínio privado** durante este teste
+  (`http://backend-executors.railway.internal:8002`) — combinado com a suspeita da secção
+  anterior (toggle só afecta tráfego "externo"), este teste pode não ter validado a hipótese
+  de todo. **Não testámos ainda: domínio público + Outbound IPv6 activo.**
+
+### Tentativa: Diagnóstico via `railway ssh`
+
+**Objetivo:** entrar directamente no container do `backend-crm` e correr `curl -v`, `nslookup`/
+`getent hosts` contra `backend-executors.railway.internal`, para ver o erro real em vez de
+continuar a testar hipóteses às cegas.
+
+- Gerada chave SSH local (`ed25519`) e registada via `railway ssh keys add` — sucesso.
+- `railway ssh --service backend-crm -- "echo CONNECTED"` **ficou pendurado
+  indefinidamente** (sem erro, sem output, em duas tentativas separadas, >1 min cada) — sem
+  retornar controlo. Abortado manualmente nas duas vezes.
+- **Não foi possível diagnosticar via SSH nesta sessão.** Pode ser limitação do ambiente
+  (falta de PTY no shell não-interactivo usado) ou problema separado de conectividade SSH do
+  Railway. Não investigado a fundo — prioridade foi não bloquear mais tempo nesta via.
+
+---
+
 ## Ajustes Possíveis Pós-Implementação / Próximos Passos
 
-- **Verificar o toggle "Outbound IPv6" no `backend-crm`** (`Settings → Networking`) — pista
-  não verificada que pode explicar por que tanto o domínio público quanto o privado falham
-  da mesma forma.
-- Caso o toggle esteja desligado e ligá-lo não resolva: considerar pedir suporte da Railway
-  diretamente, citando que `GET /health` funciona externamente mas qualquer chamada
-  server-to-server dentro do mesmo projeto (`backend-crm → backend-executors`) recebe
-  `ECONNREFUSED`, independentemente do domínio (público/privado) ou da família de IP usada
-  pelo destino.
+- **Testar a combinação que falta:** `EXECUTORS_BASE_URL` apontado para o domínio
+  **público** do `backend-executors`, com "Outbound IPv6" já activo no `backend-crm`. Esta é
+  a única combinação de domínio × toggle ainda não testada e, segundo a doc do Railway, é a
+  que teoricamente deveria ser afectada pelo toggle.
+- **Tentar a flag de conta "IPv4"** (`railway.com/account/feature-flags`) como alternativa —
+  faria a rede privada aceitar IPv4 directamente, permitindo reverter o hack de dual-stack em
+  `backend-executors/app/dualstack.py` e simplificar tudo.
+- **Retomar o diagnóstico via `railway ssh`** — se conseguir abrir sessão (talvez precise de
+  terminal interativo real, não o shell não-interactivo desta sessão), correr `curl -v` e
+  `getent hosts backend-executors.railway.internal` para obter o erro real em vez de inferir.
+- Caso nenhuma opção de rede resolva: considerar abrir ticket de suporte com a Railway,
+  citando que `GET /health` funciona externamente mas qualquer chamada server-to-server
+  dentro do mesmo projeto recebe `ECONNREFUSED`, independentemente do domínio (público/
+  privado) ou da família de IP do destino.
 - Alternativa de contorno caso a rede do Railway continue bloqueando: mover a lógica de
   `/api/internal/playground/decide` para dentro do próprio `backend-crm` (eliminando a
   chamada de rede entre serviços para este caminho específico) — maior invasão de
