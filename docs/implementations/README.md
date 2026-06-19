@@ -25,8 +25,10 @@ Arquivos em andamento ou recém-completados. Seguem o padrão do template.
 
 | Ficheiro | Status |
 |---|---|
-| `fix-followup-tick-loop-infinito.md` | Em andamento — zero checks validados |
-| `etapa-8-8-criterios-qualificacao.md` | Quase completo — P5 pendente |
+| `agent-local-v2-app-standalone.md` | Fase 8 implementada — aguarda validação; Fase 4 (empacotamento .exe) pendente |
+| `agent-local-v2-testes-manuais.md` | Guia de testes manuais para a app standalone (acompanha o ficheiro acima) |
+| `agentlocal-assistente-ia.md` | Em andamento |
+| `correcao-natural-llm-e-fixes-ui-descobertos.md` | Em andamento — planeado, código ainda não iniciado |
 
 ---
 
