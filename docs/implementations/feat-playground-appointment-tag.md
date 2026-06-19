@@ -116,7 +116,7 @@ repositório, e o fluxo depende de round-trip HTTP cross-service + SQLite real. 
 
 | # | Commit | O que foi implementado |
 |---|---|---|
-| 1 | `<preencher após commit>` | `<preencher após commit>` |
+| 1 | `2ee3a02` | `is_playground`/`source` em meeting_scheduler, crm_client, models, appointments; chamada em playground_internal.py; cleanup em `_reset_sandbox_lead`; `meeting_scheduled` no trace |
 
 ---
 
