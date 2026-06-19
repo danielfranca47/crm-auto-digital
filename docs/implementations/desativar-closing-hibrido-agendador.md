@@ -109,7 +109,8 @@ dois caminhos automaticamente.
 - [x] Confirmado: `decision.message_text != ""`, `next_action != "ignore"`
 - [x] Confirmado: `reason` contém `scheduling_agent_closing_disabled:agendamento`, `trace.guardrail_sdr_escalate_closing` não é `True`
 - **Validado em:** 19/06/2026 — teste local, `pytest` verde (Fase 1 + Fase 2)
-- **Pendente:** confirmação visual no Playground real (UI) antes de considerar este cenário totalmente fechado
+- [x] Confirmado no Playground real (produção, Lara/hybrid_scheduler): conversa completa "ola boa noite" → "gostaria de agendar uma massagem" → "massagem relaxante" → "pode ser amanha as 10h?" → "sim, pode ser as 11h" → "sim, obrigado" fluiu inteira por recepcao/pre-agendamento/agendamento, sem nenhum `mother_route=closing` nem silêncio
+- **Validado em:** 19/06/2026 — sessão de Playground em produção (`playground-2026-06-19_00-11-output.md`)
 
 ### Cenário P2 — Regressão: agentes fora do grupo de agendamento continuam normais (validado localmente)
 - [x] `test_non_scheduling_agent_still_escalates_closing` (agora usando `closer_agressivo`) — confirma que `guardrail_sdr_escalate_closing=True` e `message_text=""` continuam ocorrendo normalmente para templates fora de `_SCHEDULING_AGENT_TEMPLATES`
