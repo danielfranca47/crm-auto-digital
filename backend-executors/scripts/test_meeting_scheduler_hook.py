@@ -77,13 +77,14 @@ class FakeCRMClient:
         return {"status": "ok"}
 
 
-def _build_context(message_text="2024-11-10 15:30"):
+def _build_context(message_text="2024-11-10 15:30", calendar_busy_slots=None):
     return {
         "lead": {"id": 99, "user_id": 10},
         "job": {"id": 123, "payload": {"lead_id": 99, "user_id": 10}},
         "ai_profile": {"agent_mode": "sdr_scheduler", "timezone": "UTC"},
         "metadata": {"inbound_message_text": message_text},
         "history": [],
+        "calendar_busy_slots": calendar_busy_slots,
     }
 
 
@@ -94,6 +95,24 @@ def _build_decision():
         questions=[],
         reason="meeting_scheduled|confirmou horário",
         decision_trace={"meeting_scheduled": True},
+    )
+
+
+def _build_decision_with_candidate(candidate_iso: str):
+    """Usa o sinal estruturado (meeting_datetime_candidate) em vez de texto livre —
+    determinístico, não depende de parsing de data nem do relógio real."""
+    return DecisionOutput(
+        next_action="reply",
+        message_text="ok",
+        questions=[],
+        reason="meeting_scheduled|confirmou horário",
+        decision_trace={
+            "meeting_scheduled": True,
+            "child_signals_structured": {
+                "meeting_proposed": True,
+                "meeting_datetime_candidate": candidate_iso,
+            },
+        },
     )
 
 
@@ -113,17 +132,86 @@ def test_handle_meeting_scheduled_creates_appointment():
 
 
 def test_handle_meeting_scheduled_idempotent():
-    future = (datetime.utcnow() + timedelta(days=2)).isoformat()
-    client = FakeCRMClient(
-        appointments=[{"start_at": future, "type": "meeting", "status": "pending"}]
+    """Lead 99 já tem uma reunião futura (calendar_busy_slots) — não duplica."""
+    future_start = (datetime.now(timezone.utc) + timedelta(days=2)).isoformat()
+    future_end = (datetime.now(timezone.utc) + timedelta(days=2, minutes=30)).isoformat()
+    client = FakeCRMClient()
+    context = _build_context(
+        calendar_busy_slots=[{"lead_id": 99, "start_at": future_start, "end_at": future_end}]
     )
     meeting_scheduler.handle_meeting_scheduled(
-        _build_context(),
-        _build_decision(),
+        context,
+        _build_decision_with_candidate("2099-03-05T17:00:00"),
         client=client,
     )
     assert client.bot_disabled_calls == [(99, True, "meeting_scheduled")]
     assert client.created == []
+
+
+def test_handle_meeting_scheduled_conflict_with_other_lead_blocks_creation():
+    """Outro lead (888) já ocupa o horário proposto — bloqueia e devolve mensagem."""
+    client = FakeCRMClient()
+    context = _build_context(
+        calendar_busy_slots=[
+            {
+                "lead_id": 888,
+                "start_at": "2099-03-05T17:10:00+00:00",
+                "end_at": "2099-03-05T17:40:00+00:00",
+            }
+        ]
+    )
+
+    result = meeting_scheduler.handle_meeting_scheduled(
+        context,
+        _build_decision_with_candidate("2099-03-05T17:00:00"),
+        client=client,
+        now_utc=datetime(2099, 3, 1, tzinfo=timezone.utc),
+    )
+
+    assert result == meeting_scheduler.MEETING_CONFLICT_MESSAGE
+    assert client.created == []
+    assert client.bot_disabled_calls == []
+    assert client.logged == [(99, 10, 123, "conflict_detected")]
+
+
+def test_handle_meeting_scheduled_no_conflict_creates_normally():
+    """calendar_busy_slots presente mas sem sobreposição — cria normalmente."""
+    client = FakeCRMClient()
+    context = _build_context(
+        calendar_busy_slots=[
+            {
+                "lead_id": 888,
+                "start_at": "2099-03-06T09:00:00+00:00",
+                "end_at": "2099-03-06T09:30:00+00:00",
+            }
+        ]
+    )
+
+    result = meeting_scheduler.handle_meeting_scheduled(
+        context,
+        _build_decision_with_candidate("2099-03-05T17:00:00"),
+        client=client,
+        now_utc=datetime(2099, 3, 1, tzinfo=timezone.utc),
+    )
+
+    assert result is None
+    assert len(client.created) == 1
+    assert client.bot_disabled_calls == [(99, True, "meeting_scheduled")]
+
+
+def test_handle_meeting_scheduled_skips_conflict_check_outside_window():
+    """Horário proposto muito além da janela de calendar_busy_slots (30 dias) — não bloqueia."""
+    client = FakeCRMClient()
+    context = _build_context(calendar_busy_slots=[])
+
+    result = meeting_scheduler.handle_meeting_scheduled(
+        context,
+        _build_decision_with_candidate("2099-03-05T17:00:00"),
+        client=client,
+    )
+
+    assert result is None
+    assert len(client.created) == 1
 
 
 def test_has_future_meeting_window():

@@ -753,7 +753,24 @@ def execute_job(job_id: str, logger: logging.Logger) -> int:
             ),
             attempt,
         )
-    meeting_scheduler.handle_meeting_scheduled(context, decision, logger=ctx_logger)
+    _meeting_conflict_message = meeting_scheduler.handle_meeting_scheduled(context, decision, logger=ctx_logger)
+    if _meeting_conflict_message:
+        try:
+            _delay = min(max(len(_meeting_conflict_message) * 40, 800), 6000)
+            core_client.send_whatsapp_message({
+                "provider": provider,
+                "instance_id": instance_id,
+                "number": phone,
+                "text": _meeting_conflict_message,
+                "delay_ms": _delay,
+            })
+            ctx_logger.info("event=meeting_conflict_correction_sent", extra={"phase": "decision"})
+        except core_client.CoreClientError as exc:
+            ctx_logger.warning(
+                "event=meeting_conflict_correction_send_error error=%s",
+                exc,
+                extra={"phase": "decision"},
+            )
     _enforce_checkout_link_guardrail(decision=decision, context=context)
     _enforce_checkout_link_guardrail_legacy(decision=decision, context=context)
 

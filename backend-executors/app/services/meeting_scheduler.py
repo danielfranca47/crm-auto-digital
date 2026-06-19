@@ -14,9 +14,15 @@ except Exception:  # dependency opcional em ambientes sem acesso a pacote
 
 from app.schemas.decision import DecisionOutput
 
-MEETING_WINDOW_DAYS = 7
+MEETING_WINDOW_DAYS = 7  # janela p/ checar se O MESMO lead já tem reunião futura
+CALENDAR_CONFLICT_WINDOW_DAYS = 30  # janela coberta por context["calendar_busy_slots"] (ver orchestrator.py)
 MEETING_TYPES = {"meeting", "presentation"}
 MEETING_STATUSES = {"pending", "scheduled"}
+
+MEETING_CONFLICT_MESSAGE = (
+    "Peço desculpa, esse horário acabou de ficar indisponível. "
+    "Pode escolher outro horário, por favor?"
+)
 
 
 @dataclass(frozen=True)
@@ -343,6 +349,31 @@ def has_future_meeting(appointments: Iterable[Dict[str, Any]], *, now: datetime,
     return False
 
 
+def _has_conflict(
+    busy_slots: Iterable[Dict[str, Any]],
+    start_at: datetime,
+    end_at: datetime,
+    *,
+    exclude_lead_id: Optional[int] = None,
+) -> bool:
+    """Verifica sobreposição entre [start_at, end_at) e os busy_slots do profissional."""
+    start_at = _ensure_aware(start_at, "UTC").astimezone(timezone.utc)
+    end_at = _ensure_aware(end_at, "UTC").astimezone(timezone.utc)
+    for slot in busy_slots:
+        if exclude_lead_id is not None and slot.get("lead_id") == exclude_lead_id:
+            continue
+        try:
+            slot_start = datetime.fromisoformat(str(slot.get("start_at")))
+            slot_end = datetime.fromisoformat(str(slot.get("end_at")))
+        except (ValueError, TypeError):
+            continue
+        slot_start = _ensure_aware(slot_start, "UTC").astimezone(timezone.utc)
+        slot_end = _ensure_aware(slot_end, "UTC").astimezone(timezone.utc)
+        if slot_start < end_at and slot_end > start_at:
+            return True
+    return False
+
+
 def handle_meeting_scheduled(
     context: Dict[str, Any],
     decision: DecisionOutput,
@@ -350,7 +381,14 @@ def handle_meeting_scheduled(
     logger: Optional[logging.Logger] = None,
     client: Any = None,
     now_utc: Optional[datetime] = None,
-) -> None:
+) -> Optional[str]:
+    """Cria o appointment quando a IA confirma um horário.
+
+    Retorna uma mensagem de correção (para o caller enviar ao lead) quando o
+    horário colide com outro compromisso do profissional — nesse caso o
+    appointment NÃO é criado e o bot não é desabilitado. Retorna None em
+    qualquer outro caso (incluindo o caminho feliz de criação normal).
+    """
     if client is None:
         from app.clients import crm_client
 
@@ -358,9 +396,9 @@ def handle_meeting_scheduled(
     now_utc = _ensure_aware(now_utc or datetime.now(timezone.utc), "UTC")
     signal = _extract_meeting_signal(context, decision)
     if signal.agent_mode != "agenda" or not signal.meeting_scheduled:
-        return
+        return None
     if signal.lead_id is None:
-        return
+        return None
 
     if not signal.start_at:
         client.log_meeting_scheduled(
@@ -369,7 +407,7 @@ def handle_meeting_scheduled(
             job_id=signal.job_id,
             reason="missing_start_at",
         )
-        return
+        return None
 
     if logger:
         logger.info(
@@ -379,23 +417,43 @@ def handle_meeting_scheduled(
             signal.job_id,
         )
 
-    start = now_utc.isoformat()
-    end = (now_utc + timedelta(days=MEETING_WINDOW_DAYS)).isoformat()
-    try:
-        appointments = client.list_appointments(
-            start=start,
-            end=end,
-            lead_id=signal.lead_id,
-        )
-    except Exception:
-        appointments = []
+    # calendar_busy_slots vem do ContextBundle (orchestrator.py::_load_calendar_busy_slots),
+    # já escopado ao profissional (user_id) — substitui o antigo client.list_appointments(...)
+    # (que exigia JWT de usuário e sempre falhava com 401 a partir daqui).
+    busy_slots = context.get("calendar_busy_slots") or []
 
-    if has_future_meeting(appointments, now=now_utc, window_days=MEETING_WINDOW_DAYS):
+    same_lead_slots = [slot for slot in busy_slots if slot.get("lead_id") == signal.lead_id]
+    if has_future_meeting(same_lead_slots, now=now_utc, window_days=MEETING_WINDOW_DAYS):
         client.set_lead_bot_disabled(signal.lead_id, True, reason="meeting_scheduled")
-        return
+        return None
+
+    end_dt = signal.start_at + timedelta(minutes=30)
+    window_end = now_utc + timedelta(days=CALENDAR_CONFLICT_WINDOW_DAYS)
+    if signal.start_at > window_end:
+        if logger:
+            logger.info(
+                "event=meeting_conflict_check_skipped reason=outside_window lead_id=%s start_at=%s",
+                signal.lead_id,
+                signal.start_at.isoformat(),
+            )
+    elif _has_conflict(busy_slots, signal.start_at, end_dt, exclude_lead_id=signal.lead_id):
+        if logger:
+            logger.warning(
+                "event=meeting_conflict_detected lead_id=%s user_id=%s job_id=%s start_at=%s",
+                signal.lead_id,
+                signal.user_id,
+                signal.job_id,
+                signal.start_at.isoformat(),
+            )
+        client.log_meeting_scheduled(
+            lead_id=signal.lead_id,
+            user_id=signal.user_id,
+            job_id=signal.job_id,
+            reason="conflict_detected",
+        )
+        return MEETING_CONFLICT_MESSAGE
 
     start_iso = signal.start_at.astimezone(timezone.utc).isoformat().replace("+00:00", "Z")
-    end_dt = signal.start_at + timedelta(minutes=30)
     end_iso = end_dt.astimezone(timezone.utc).isoformat().replace("+00:00", "Z")
     client.create_lead_appointment(
         lead_id=signal.lead_id,
@@ -406,3 +464,4 @@ def handle_meeting_scheduled(
         end_at=end_iso,
     )
     client.set_lead_bot_disabled(signal.lead_id, True, reason="meeting_scheduled")
+    return None
