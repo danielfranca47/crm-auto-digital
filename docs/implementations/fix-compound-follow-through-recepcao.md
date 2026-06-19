@@ -120,30 +120,80 @@ escopo corrigir aqui; mencionar ao utilizador.
 ## Checks de Validação
 
 ### Cenário P1 — Saudação composta com horário firme (Playground)
-- [ ] Playground, perfil hybrid_scheduler, lead novo (reset), enviar:
-      "ola gostaria de agendar uma sessao para amanha as 15 h"
-- [ ] Confirmar trace: `mother_route_to=recepcao`, `effective_route_to=agendamento`
-      (ou `pre-agendamento`/`qualification`, dependendo do que a Mãe percebeu)
-- [ ] Confirmar: a resposta cumprimenta brevemente E trata o pedido na mesma
-      mensagem (não "vou verificar, um momento")
+- [x] Playground, perfil hybrid_scheduler (ai_profile_id=5, conta de teste), lead novo,
+      enviar: "oi, gostaria de agendar uma sessão para amanhã às 15h"
+- [x] Confirmar trace: `mother_route_to=recepcao`, `effective_route_to=agendamento`
+- [x] Confirmar: a resposta trata o pedido de fato (chegou a oferecer horário
+      alternativo por conflito real de agenda — ver Fase 2), não "vou verificar, um momento"
+- **Validado em:** 19/06/2026 — via chamada directa à API (`POST /api/playground/chat`),
+  testes 3x. Na 1ª tentativa revelou o bug descrito na Fase 2 (route ficou em recepcao
+  porque a Mãe usou `perceived_category` em vez de `compound_follow_through`); após a
+  correção da Fase 2, `effective_route_to=agendamento` confirmado.
 
 ### Cenário P2 — Saudação pura continua intacta
-- [ ] Playground, lead novo, enviar apenas "ola"
-- [ ] Confirmar trace: `mother_route_to=recepcao`, `effective_route_to=recepcao`
+- [x] Playground, lead novo, enviar apenas "oi"
+- [x] Confirmar trace: `mother_route_to=recepcao`, `effective_route_to=recepcao`
       (sem override — comportamento prévio preservado)
+- **Validado em:** 19/06/2026 — `signals.meeting_scheduled=false`, resposta é só
+  cumprimento, sem preços/agenda. Cobre também o caso de borda da Fase 2
+  (`perceived_category=qualification` igual à categoria atual do lead → não dispara
+  o fallback).
 
 ### Cenário C1 — Saudação composta no WhatsApp real
 - [ ] Repetir o cenário P1 com um número de teste real
-- [ ] Confirmar mesmo comportamento (paridade Playground/real)
+- **Pendente:** não testado nesta sessão — requer instância WhatsApp de teste conectada.
+  Como o caminho de código (`decision_engine.decide()`) é idêntico para Playground e
+  WhatsApp real (mesmo `decide()`, mesmo `ContextBundle`), o resultado validado em P1
+  tem alta probabilidade de se repetir — mas falta confirmação empírica real.
+
+---
+
+## Fase 2 — Diagnóstico + Correção: `perceived_category` como sinal adicional (19/06/2026)
+
+### Problema identificado
+
+Ao testar o Cenário P1 com uma mensagem real (LLM real, não mockado), a Mãe devolveu
+`route_to="recepcao"` com `perceived_category="agendamento"` — mas **sem** preencher
+`compound_follow_through`. O override da Fase 1 só lia `compound_follow_through`, então
+não disparou: a filha recepção foi chamada, "vazou" a restrição e prometeu agendar sem
+cumprir — exatamente o bug original, ainda reproduzível mesmo com a Fase 1 aplicada.
+
+Causa raiz: o modelo real nem sempre usa o campo que o prompt pede explicitamente
+(`compound_follow_through`) para expressar a saudação composta — por vezes usa
+`perceived_category`, campo que já existe para outro propósito (indicar o estágio
+percebido do lead) e que outras partes do código já líam (`apply_mother_category_guardrails`).
+
+### Correção
+
+Estendido o override da Fase 1: quando `compound_follow_through` está vazio, usar
+`perceived_category` como sinal de fallback — **somente se diferir da categoria atual
+do lead** (`lead.category`). Essa condição é necessária porque o prompt da Mãe instrui
+"mantenha perceived_category = lead.category quando em dúvida" — sem essa restrição, toda
+saudação pura de um lead novo (`lead.category="qualification"` por default) acionaria o
+override incorretamente, porque `perceived_category` viria igual a `"qualification"`.
+Confirmado empiricamente: testei "oi" puro e `perceived=qualification` (igual à categoria
+atual → não dispara); testei a saudação composta e `perceived=agendamento` (diferente de
+`qualification` → dispara).
+
+| Arquivo | Mudança |
+|---|---|
+| `backend-executors/app/services/decision_engine.py` (`decide()`, bloco do override) | Se `compound_follow_through` ausente, calcula `_perceived = mother_decision.perceived_category`; usa como fallback apenas se não-nulo, diferente de `"recepcao"` e `_normalize_category(_perceived) != _normalize_category(lead.category)`. Log inclui `source=compound_follow_through\|perceived_category` para observabilidade. |
+| `backend-executors/tests/test_compound_follow_through_routing.py` | Novo teste `test_perceived_category_fallback_routes_when_compound_follow_through_missing`, reproduzindo o cenário real observado. |
+
+### Commits Fase 2
+
+| # | Commit | O que foi implementado |
+|---|---|---|
+| 1 | `<preencher após commit>` | Fallback via `perceived_category` + teste de regressão |
 
 ---
 
 ## Ajustes Possíveis Pós-Implementação
 
-- Quando `compound_follow_through == "qualification"`, a extração/persistência de
-  campos de qualificação (`decide()`, linhas 4201-4433) não corre neste turno
-  específico, porque esse bloco verifica `mother_decision.route_to == "qualification"`
-  (que permanece `"recepcao"`). Sem impacto prático hoje, porque é sempre a 1ª
-  mensagem do lead — mas se isso se tornar relevante, requer revisitar esses guardrails.
-- Não foi adicionado teste automatizado nesta fase — avaliar conforme uso real do
-  campo `compound_follow_through` em produção.
+- Quando `compound_follow_through == "qualification"` (via qualquer uma das duas fontes),
+  a extração/persistência de campos de qualificação (`decide()`, linhas ~4201-4433) não
+  corre neste turno específico, porque esse bloco verifica `mother_decision.route_to ==
+  "qualification"` (que permanece `"recepcao"`). Sem impacto prático hoje, porque é sempre
+  a 1ª mensagem do lead — mas se isso se tornar relevante, requer revisitar esses guardrails.
+- Cenário C1 (WhatsApp real) continua pendente — repetir quando houver instância de teste
+  conectada.

@@ -4195,22 +4195,40 @@ def decide(context: Dict[str, Any], logger: Optional[logging.Logger] = None) -> 
         anti_loop_rule3_applied = False
         mode_ctx_pre: Optional[dict] = None
 
-        if (
-            not force_followup_route
-            and mother_decision.route_to == "recepcao"
-            and mother_decision.compound_follow_through
-        ):
-            route_for_child = mother_decision.compound_follow_through
-            context["_compound_greeting_pending"] = True
-            if logger:
-                job = context.get("job") or {}
-                payload = job.get("payload") or {}
-                logger.info(
-                    "event=compound_follow_through_route route_override=%s job_id=%s lead_id=%s",
-                    route_for_child,
-                    job.get("id") or payload.get("job_id"),
-                    lead.get("id") or payload.get("lead_id"),
-                )
+        if not force_followup_route and mother_decision.route_to == "recepcao":
+            _compound_signal_source = None
+            _follow_through = mother_decision.compound_follow_through
+            if _follow_through:
+                _compound_signal_source = "compound_follow_through"
+            else:
+                # Fallback: na prática, o modelo às vezes expressa a saudação composta
+                # via perceived_category em vez de compound_follow_through. Só é um sinal
+                # confiável quando DIFERE da categoria atual do lead — caso contrário é
+                # apenas o "mantenha perceived_category = lead.category" do prompt da Mãe
+                # (ex.: saudação pura num lead novo já teria perceived_category=qualification).
+                _perceived = mother_decision.perceived_category
+                _current_cat = _normalize_category(lead.get("category"))
+                if (
+                    _perceived
+                    and _perceived != "recepcao"
+                    and _normalize_category(_perceived) != _current_cat
+                ):
+                    _follow_through = _perceived
+                    _compound_signal_source = "perceived_category"
+
+            if _follow_through:
+                route_for_child = _follow_through
+                context["_compound_greeting_pending"] = True
+                if logger:
+                    job = context.get("job") or {}
+                    payload = job.get("payload") or {}
+                    logger.info(
+                        "event=compound_follow_through_route route_override=%s source=%s job_id=%s lead_id=%s",
+                        route_for_child,
+                        _compound_signal_source,
+                        job.get("id") or payload.get("job_id"),
+                        lead.get("id") or payload.get("lead_id"),
+                    )
 
         if force_followup_route and logger:
             job = context.get("job") or {}

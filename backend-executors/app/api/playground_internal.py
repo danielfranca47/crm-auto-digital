@@ -11,6 +11,7 @@ Não enfileira jobs, não acede ao WhatsApp, não consome quota de conversas.
 """
 from __future__ import annotations
 
+import logging
 import os
 from typing import Any, Dict
 
@@ -23,6 +24,7 @@ from app.schemas.decision import DecisionOutput
 from app.services import decision_engine, meeting_scheduler
 
 router = APIRouter(prefix="/api/internal/playground", tags=["playground-internal"])
+logger = logging.getLogger(__name__)
 
 
 def _require_service_token(
@@ -59,7 +61,7 @@ def playground_decide(
     appointment real tagueado "[Playground]" — mesma lógica de parsing/conflito
     do fluxo WhatsApp real, sem reminders/briefing/push Google Calendar.
     """
-    result = decision_engine.decide(body.context_bundle)
+    result = decision_engine.decide(body.context_bundle, logger=logger)
     conflict_message = meeting_scheduler.handle_meeting_scheduled(
         body.context_bundle, result, client=crm_client, is_playground=True,
     )
