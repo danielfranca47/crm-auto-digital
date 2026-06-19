@@ -1,4 +1,13 @@
 {
+  "permissions": {
+    "allow": [
+      "Bash(./.venv/Scripts/python.exe -m pytest tests/test_agendamento_busy_slots_prompt.py -v)",
+      "Bash(./.venv/Scripts/python.exe -m pytest scripts/test_meeting_scheduler_hook.py -v)",
+      "Bash(./.venv/Scripts/python.exe -m pytest scripts/test_meeting_candidate_e2e.py scripts/test_meeting_scheduler_hook.py -v)",
+      "Bash(./.venv/Scripts/python.exe -m pytest tests/test_meeting_scheduler_structured_candidate.py -v)",
+      "Bash(python -c \"import ast; ast.parse\\(open\\('routes/leads.py', encoding='utf-8'\\).read\\(\\)\\)\")"
+    ]
+  },
   "hooks": {
     "Stop": [
       {
