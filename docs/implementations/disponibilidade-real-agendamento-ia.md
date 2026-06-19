@@ -1,7 +1,7 @@
 # IA consulta disponibilidade real de agenda antes de propor/confirmar horário
 
 **Branch:** `main`
-**Status:** Em andamento
+**Status:** Todos os cenários validados (19/06/2026)
 
 ---
 
@@ -122,18 +122,18 @@ duas foram corrigidas.
 ## Checks de Validação
 
 ### Cenário P1 — IA não inventa disponibilidade (Playground)
-- [ ] Agente `hybrid_scheduler` com um appointment já existente no horário X
-- [ ] Lead pede esse mesmo horário X → IA recusa com base em dados reais (não inventa)
-- **Pendente:** requer teste manual no Playground em produção (igual ao feito para a Fase de closing)
+- [x] Agente `hybrid_scheduler` com um appointment já existente no horário X
+- [x] Lead pede esse mesmo horário X → IA recusa com base em dados reais (não inventa)
+- **Validado em:** 19/06/2026 — local. Criado appointment real (lead "Empresa Teste", 20/06 09:00–10:00 UTC). No Playground, lead pediu "amanhã às 10h"; depois de confirmar, a IA respondeu *"Infelizmente, já temos um compromisso amanhã às 10h. Poderíamos agendar para às 11h ou 14h, ou ainda para outro dia que lhe convier?"* — `effective_route: agendamento`, horários alternativos coerentes com a agenda real (11h livre, 14h livre), sem inventar motivo genérico.
 
 ### Cenário C1 — Conflito real bloqueia criação + correção (WhatsApp real)
-- [ ] Dois leads pedem o mesmo horário em sequência
-- [ ] Segundo lead recebe mensagem de correção automática; appointment não é duplicado
-- **Pendente:** requer teste manual com WhatsApp real (ou simulação de 2 jobs concorrentes)
+- [x] Dois leads pedem o mesmo horário em sequência
+- [x] Segundo lead recebe mensagem de correção automática; appointment não é duplicado
+- **Validado em:** 19/06/2026 — local, via `pytest scripts/test_meeting_scheduler_hook.py`: `test_handle_meeting_scheduled_conflict_with_other_lead_blocks_creation`, `test_handle_meeting_scheduled_no_conflict_creates_normally` e `test_handle_meeting_scheduled_skips_conflict_check_outside_window` passaram. Sem WhatsApp real disponível localmente, esta foi a simulação aceite (sem mocks de rede, exercita `handle_meeting_scheduled` real). `test_handle_meeting_scheduled_creates_appointment` continua a falhar por bug pré-existente não relacionado (data hardcoded antiga), confirmado via `git stash` em sessão anterior.
 
 ### Cenário C2 — Bloqueio manual na UI
-- [ ] Tentar criar dois appointments do mesmo profissional, mesmo horário, leads diferentes → 409
-- **Pendente:** requer teste manual na UI (frontend-crm) em produção
+- [x] Tentar criar dois appointments do mesmo profissional, mesmo horário, leads diferentes → 409
+- **Validado em:** 19/06/2026 — local. Criados 2 leads reais distintos; appointment do lead 1 em 20/06 10:00–11:00; tentativa de criar appointment do lead 2 no mesmo horário via UI (`ScheduleAppointmentDialog`) retornou `409 {"detail":"Já existe um compromisso conflitante para este período."}` — bloqueado antes de persistir, dialog manteve-se aberto para o utilizador escolher outro horário.
 
 ### Cenário C3 — Suite de testes sem regressão
 - [x] `pytest backend-executors/tests` (+ scripts de meeting_scheduler) — 22 falhas pré-existentes (idênticas, confirmadas via git stash), 65 passando, sem novas falhas
@@ -148,3 +148,13 @@ duas foram corrigidas.
   agente numa fase futura.
 - Suporte a múltiplos profissionais por conta (Scale/Enterprise) exigirá revisar
   `_check_conflict` e `calendar_busy_slots` para incluir `professional_id`.
+
+### Bug encontrado durante o teste (fora do escopo desta implementação)
+
+Ao navegar a vista Mensal da Agenda para um dia com o appointment recém-criado,
+o componente `ScheduleView.tsx:55` lançou `Uncaught RangeError: Invalid time
+value`, sem Error Boundary — página fica em branco até reload. Não investigada
+a causa exacta (suspeita: `end_at`/`start_at` nulo ou mal formatado em algum
+evento, possivelmente um dos importados do Google Calendar). Não bloqueia este
+check porque a confirmação foi feita por API directa e pela vista que abriu o
+dialog de criação; recomenda-se diagnosticar numa sessão própria.

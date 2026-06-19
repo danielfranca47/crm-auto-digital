@@ -19,6 +19,7 @@ output/
 uploads/
 snapshots/
 whatsapp_profile/
+local-run.log
 
 
 #arquivos que gerei localmente teste

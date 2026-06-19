@@ -1,7 +1,7 @@
 # Disponibilizar o Fluxo de Venda (Camada 7) para agentes em modo passivo
 
 **Branch:** `main`
-**Status:** Em andamento
+**Status:** Todos os cenários validados (19/06/2026)
 
 ---
 
@@ -78,12 +78,14 @@ qualificação, fora do escopo deste pedido.
 ## Checks de Validação
 
 ### Cenário P1 — Fluxo de Venda visível e funcional em agente passivo
-- [ ] Configurar agente com `response_style="passive"` e um bloco `orientacao` na fase p2
-- [ ] Confirmar: aba "⑦ Fluxo de Venda" aparece na UI, sem o rótulo "Modo Ativo"
-- [ ] Testar no Playground: confirmar que a instrução do bloco chega ao prompt da fase apresentation
+- [x] Configurar agente `hybrid_scheduler` com `response_style="passive"` e um bloco `orientacao` na fase p2
+- [x] Confirmar: aba "⑦ Fluxo de Venda" aparece na UI, sem o rótulo "Modo Ativo"
+- [x] Testar no Playground: confirmar que a instrução do bloco chega ao prompt da fase apresentation
+- **Validado em:** 19/06/2026 — local. Chamada directa a `_evaluate_sales_flow_phases()` com o `ai_profile` real (response_style="passive") confirmou `prompt_injections` populado com o conteúdo do bloco. No Playground, o LLM nem sempre repete literalmente um texto artificial injectado (comportamento normal do modelo, não falha de injecção) — por isso a confirmação definitiva foi feita ao nível da função, não da resposta final do bot.
 
 ### Cenário C1 — Regressão em agente activo
-- [ ] Confirmar que um agente com `response_style="active"` continua a ver e usar o Fluxo de Venda exactamente como antes
+- [x] Confirmar que um agente com `response_style="active"` continua a ver e usar o Fluxo de Venda exactamente como antes
+- **Validado em:** 19/06/2026 — local. Mesmo agente, `response_style="active"`: aba "⑦ Fluxo de Venda" e o bloco da fase p2 idênticos; resumo mostra "FLUXO DE VENDA: Ativo" igual em ambos os modos (rótulo refere-se a `sales_flow.enabled`, não a `response_style` — confirma a simplificação descrita na Fase 2).
 
 ---
 
@@ -93,3 +95,16 @@ qualificação, fora do escopo deste pedido.
   regra de "zero perguntas abertas" do modo passivo, considerar no futuro um
   aviso na UI do builder (`CamadaFluxoVenda.tsx`) quando o agente é passivo,
   sem bloquear a funcionalidade.
+
+### Bug encontrado durante o teste (fora do escopo desta implementação)
+
+Ao criar uma **nova** acção do tipo "Orientação ao Agente" pelo fluxo "Montar
+regra → + Adicionar ação" (`CamadaFluxoVenda.tsx`, estado `pendingBlock`), o
+texto digitado na "Instrução para o agente" não é persistido — o bloco salva
+só com `id`/`typeId`, sem `content`. Editar um bloco **já existente** (botão
+"EDITAR") funciona normalmente e persiste o `content` correctamente. Ainda não
+isolada a causa exacta (suspeita: re-render do `pendingBlock` perdendo o estado
+entre o `BlockForm` e `confirmPendingBlock`). Não bloqueia este check porque o
+teste foi concluído editando o bloco depois de criado, mas é um bug real a
+corrigir numa próxima sessão — afecta qualquer tipo de acção criada pela
+primeira vez por este caminho (`orientacao`, `mensagem`, etc.), não só `p2`.

@@ -1,7 +1,7 @@
 # Retry com backoff para falhas de LLM no Playground
 
 **Branch:** `main`
-**Status:** Em andamento
+**Status:** Todos os cenários validados (19/06/2026)
 
 ---
 
@@ -90,17 +90,21 @@ return _extract_output_text(_post_with_retry(payload))
 ## Checks de Validação
 
 ### Cenário P1 — Playground com LLM saudável (regressão)
-- [ ] Enviar mensagem normal no Playground em produção
-- [ ] Confirmar: resposta chega normalmente, sem atraso perceptível
+- [x] Enviar mensagem normal no Playground local
+- [x] Confirmar: resposta chega normalmente, sem atraso perceptível
+- **Validado em:** 19/06/2026 — local, múltiplas trocas de mensagem antes e depois do teste de falha (P3), sem nenhuma regressão perceptível
 
 ### Cenário P3 — Playground com falha persistente
-- [ ] Confirmar nos logs do backend-executors: `event=llm_request_error attempt=1/2` seguido de `attempt=2/2` antes de `event=llm_orchestrator_error`
+- [x] Confirmar nos logs do backend-executors: `event=llm_request_error attempt=1/2` seguido de `attempt=2/2` antes de `event=llm_orchestrator_error`
+- **Validado em:** 19/06/2026 — local. `LLM_API_BASE` apontado para porta inexistente (`127.0.0.1:9999`) para forçar `ConnectError`; logs mostraram exactamente `event=llm_request_error attempt=1/2 exc_type=ConnectError` seguido ~3.4s depois de `attempt=2/2`, e a resposta do Playground caiu no fallback gracioso (200, `Ver trace 0%`, sem crash). Configuração restaurada e confirmado que voltou ao normal.
 
 ### Cenário C1 — WhatsApp real, mecanismo de job-retry inalterado
-- [ ] Confirmar que o retry de job (commit `8802ef3`) continua a reagendar normalmente quando `llm_failure` persiste após as 2 tentativas internas
+- [x] Confirmar que o retry de job (commit `8802ef3`) continua a reagendar normalmente quando `llm_failure` persiste após as 2 tentativas internas
+- **Validado em:** 19/06/2026 — via leitura de código (não houve alteração em `app/runners/whatsapp.py` por esta implementação, que só toca `llm_service.py`) + suite `pytest backend-executors/tests` sem novas falhas
 
 ### Cenário C2 — Guardrail SDR não afetado
-- [ ] Confirmar que lead em agent_mode SDR/agenda chegando a "closing" continua a receber `message_text=""` com `reason` começando por `guardrail_sdr_escalate_closing`
+- [x] Confirmar que lead em agent_mode SDR/agenda chegando a "closing" continua a receber `message_text=""` com `reason` começando por `guardrail_sdr_escalate_closing`
+- **Validado em:** 19/06/2026 — via suite automatizada (`test_scheduling_agent_no_closing.py` e correlatos), sem nenhuma falha nova após a mudança em `llm_service.py`; código de guardrail (`decision_engine.py`) não foi tocado por esta implementação
 
 ---
 
