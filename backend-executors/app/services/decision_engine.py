@@ -3,9 +3,10 @@ from __future__ import annotations
 import json
 import logging
 import unicodedata
-from datetime import datetime
+from datetime import datetime, timezone as _dt_timezone
 from difflib import SequenceMatcher
 from typing import Any, Dict, List, Optional
+from zoneinfo import ZoneInfo
 
 from app.contracts.qualification_contract import (
     SIGNALS_SCHEMA,
@@ -3324,6 +3325,44 @@ def _build_child_prompt_pre_agendamento(
     return _pre_prompt
 
 
+def _format_busy_slots_block(busy_slots: Optional[List[Dict[str, Any]]], tz_name: Optional[str]) -> str:
+    """Formata calendar_busy_slots (UTC) em texto humano, na timezone do perfil.
+
+    Dados reais (tabela appointments) — usados para a IA não inventar
+    disponibilidade. Em caso de erro de parsing de um item, ele é ignorado
+    silenciosamente (não deve quebrar o prompt por um dado malformado).
+    """
+    if not busy_slots:
+        return ""
+    try:
+        tz = ZoneInfo(str(tz_name)) if tz_name else _dt_timezone.utc
+    except Exception:
+        tz = _dt_timezone.utc
+
+    parsed: list[tuple[datetime, str]] = []
+    for slot in busy_slots:
+        try:
+            start_raw = str(slot.get("start_at") or "")
+            end_raw = str(slot.get("end_at") or "")
+            start_dt = datetime.fromisoformat(start_raw)
+            end_dt = datetime.fromisoformat(end_raw)
+            if start_dt.tzinfo is None:
+                start_dt = start_dt.replace(tzinfo=_dt_timezone.utc)
+            if end_dt.tzinfo is None:
+                end_dt = end_dt.replace(tzinfo=_dt_timezone.utc)
+            start_local = start_dt.astimezone(tz)
+            end_local = end_dt.astimezone(tz)
+            line = f"- {start_local.strftime('%d/%m %H:%M')} até {end_local.strftime('%H:%M')}"
+            parsed.append((start_local, line))
+        except (ValueError, TypeError):
+            continue
+
+    if not parsed:
+        return ""
+    parsed.sort(key=lambda item: item[0])
+    return "\n".join(line for _, line in parsed)
+
+
 def _build_child_prompt_agendamento(
     context: Dict[str, Any],
     message_text: str,
@@ -3358,6 +3397,13 @@ def _build_child_prompt_agendamento(
     mode_contract = _build_mode_contract_context(context, mother_decision)
     agent_mode_normalized = mode_contract["agent_mode_normalized"]
 
+    _busy_lines = _format_busy_slots_block(context.get("calendar_busy_slots"), ai_profile.get("timezone"))
+    _busy_block = (
+        f"HORÁRIOS JÁ OCUPADOS (compromissos reais já marcados — NÃO proponha nem confirme "
+        f"horário que sobreponha estes intervalos):\n{_busy_lines}\n\n"
+        if _busy_lines else ""
+    )
+
     _avail_block = ""
     if availability_schedule:
         _avail_block = (
@@ -3376,6 +3422,7 @@ def _build_child_prompt_agendamento(
         + "Você é o assistente de um CRM de WhatsApp na fase de AGENDAMENTO.\n\n"
         f"FRAMEWORK: Modo {agent_mode_normalized}. Template {playbook_summary['template_key']}.\n\n"
         "OBJETIVO: Confirmar data e horário para o serviço solicitado pelo lead.\n\n"
+        + _busy_block
         + _avail_block
         + "REGRAS OBRIGATÓRIAS:\n"
         "- Foco total em confirmar o horário. NÃO reintroduza temas de venda ou preços.\n"
