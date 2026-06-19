@@ -103,7 +103,7 @@ appointments reais), não uma quebra de paridade a corrigir.
 
 | # | Fase | Commit | O que foi implementado |
 |---|---|---|---|
-| 1 | 1 | _(pendente)_ | feat: calendar_busy_slots no ContextBundle |
+| 1 | 1 | `0eb1682` | feat: calendar_busy_slots no ContextBundle |
 | 2 | 2 | _(pendente)_ | feat: injetar horários ocupados no prompt de agendamento |
 | 3 | 3 | _(pendente)_ | feat: bloquear conflito + mensagem de correção automática |
 | 4 | 3.5 | _(pendente)_ | fix: _check_conflict por profissional, não só por lead |
