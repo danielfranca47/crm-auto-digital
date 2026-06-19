@@ -89,9 +89,17 @@ appointments reais), não uma quebra de paridade a corrigir.
 
 ### Fase 3.5 — Corrigir `_check_conflict` para escopo por profissional
 
+**Descoberta durante a implementação:** existem DUAS implementações paralelas
+de `_check_conflict` — uma em `routes/appointments.py` (endpoint `POST/PUT
+/api/appointments`) e outra, independente, em `routes/leads.py` (endpoint
+`POST/PATCH /api/leads/{id}/appointments` — o usado pelo `ScheduleAppointmentDialog`,
+o fluxo principal da UI). Ambas tinham o mesmo bug (escopo por `lead_id`). As
+duas foram corrigidas.
+
 | Arquivo | O que muda |
 |---|---|
-| `backend-crm/routes/appointments.py` | `_check_conflict()` passa a considerar todos os appointments do `user_id`, não só do mesmo `lead_id` |
+| `backend-crm/routes/appointments.py` | Nova `_resolve_owner_user_id()`; `_check_conflict()` passa a considerar todos os appointments do `user_id`, não só do mesmo `lead_id` |
+| `backend-crm/routes/leads.py` | Mesma correção na implementação paralela (usa `current_user.id` diretamente, endpoint já autenticado) |
 
 ### Fase 4 — Documentação
 
@@ -106,7 +114,7 @@ appointments reais), não uma quebra de paridade a corrigir.
 | 1 | 1 | `0eb1682` | feat: calendar_busy_slots no ContextBundle |
 | 2 | 2 | `8ccae5b` | feat: injetar horários ocupados no prompt de agendamento |
 | 3 | 3 | `8cedbe5` | feat: bloquear conflito + mensagem de correção automática |
-| 4 | 3.5 | _(pendente)_ | fix: _check_conflict por profissional, não só por lead |
+| 4 | 3.5 | `1ceead2` | fix: _check_conflict por profissional, não só por lead |
 | 5 | 4 | _(pendente)_ | docs: atualizar agenda.md |
 
 ---
