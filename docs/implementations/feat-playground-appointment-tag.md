@@ -123,28 +123,65 @@ repositório, e o fluxo depende de round-trip HTTP cross-service + SQLite real. 
 ## Checks de Validação
 
 ### Cenário P1 — Agendamento confirmado no Playground cria appointment tagueado
-- [ ] Playground, perfil hybrid_scheduler (agent_mode=agenda), lead novo, confirmar um
-      horário livre na conversa
-- [ ] Abrir `/agenda` (conta real) e confirmar que aparece `"[Playground] Reunião agendada"`
-      no horário certo
-- [ ] Confirmar que **não** foi criado job de lembrete WhatsApp nem evento no Google Calendar
-      real (se a conta tiver Google conectado)
+- [x] Playground (via API directa, conta de teste, ai_profile_id=5 hybrid_scheduler/agenda),
+      lead novo, mensagem com horário firme
+- [x] `GET /api/appointments` confirma `"[Playground] Reunião agendada"`, `source=playground`,
+      no horário esperado
+- [x] Confirmado nos logs do backend-crm: **sem** `reminder_job_scheduled` e **sem** chamada
+      ao Google Calendar (`gcal_push`) para este appointment — bloco pulado corretamente
+      quando `source=="playground"`
+- **Validado em:** 19/06/2026 — appointment id=21 criado para lead sandbox 257; reminders/
+  briefing/gcal confirmados ausentes no log (`backend-crm/local-run-restart.log`).
 
 ### Cenário P2 — Conflito de horário é respeitado
-- [ ] Criar manualmente um appointment real num horário X
-- [ ] No Playground, levar a IA a confirmar o mesmo horário X
-- [ ] Confirmar: appointment **não** duplicado; mensagem de correção aparece no chat do
-      Playground
+- [x] Horário já ocupado por um appointment de outro lead (criado num teste anterior na
+      mesma sessão)
+- [x] Levei a IA a tentar o mesmo horário num lead sandbox novo
+- [x] Confirmado: appointment **não** duplicado (`handle_meeting_scheduled` detectou
+      `_has_conflict` e logou `conflict_detected` em vez de criar); mensagem de correção
+      apareceu via `system_actions`/`auto_messages` no chat do Playground
+- **Validado em:** 19/06/2026 — a filha de agendamento já tinha oferecido alternativa
+  (14h/16h) por ter `calendar_busy_slots` no prompt; a mensagem de correção fixa do
+  `handle_meeting_scheduled` apareceu como uma 2ª mensagem um pouco redundante com a da
+  filha — comportamento **idêntico ao fluxo WhatsApp real** (mesma limitação já registada
+  em `disponibilidade-real-agendamento-ia.md` → "Ajustes Possíveis"), não uma regressão
+  desta feature.
 
 ### Cenário P3 — Reset do lead sandbox limpa appointments de teste
-- [ ] Repetir P1 (criar um `[Playground]`)
-- [ ] No Playground, fazer reset do lead sandbox
-- [ ] Confirmar na Agenda que o appointment `[Playground]` anterior foi removido
+- [x] Repetido P1 (appointment id=21 criado)
+- [x] Reset do lead sandbox (`reset=true` no mesmo `lead_id`)
+- [x] `GET /api/appointments` confirma que o appointment id=21 foi removido (appointment
+      de outro lead, não-playground, permaneceu intacto)
+- **Validado em:** 19/06/2026
 
 ### Cenário C1 — Fluxo real inalterado
 - [ ] Confirmar agendamento real via WhatsApp (número de teste)
-- [ ] Confirmar que o título continua `"Reunião agendada"` (sem prefixo), lembrete e push
-      Google Calendar continuam a funcionar como antes
+- **Verificado por leitura de código (não testado ao vivo nesta sessão, sem WhatsApp
+  conectado):** `source` só é definido como `"playground"` quando `is_playground=True` é
+  passado explicitamente; o runner real (`runners/whatsapp.py:756`) chama
+  `handle_meeting_scheduled(...)` sem esse parâmetro (default `False`), preservando título
+  `"Reunião agendada"` e os blocos de reminder/briefing/gcal — confirmado também pela suíte
+  `pytest tests/` (21 falhas pré-existentes inalteradas, nenhuma nova) e por
+  `scripts/test_meeting_scheduler_hook.py` (exit code 0, sem alteração de comportamento
+  nos cenários de conflito/sem-conflito/fora-da-janela).
+
+---
+
+## Nota de risco encontrada durante os testes (não corrigida — fora do escopo aprovado)
+
+`decision_trace.meeting_scheduled` vem de `mother_decision.signals.meeting_scheduled` e
+`handle_meeting_scheduled()` age sobre ele **independentemente do `effective_route_to`** —
+ou seja, mesmo quando a resposta real ao lead ainda está em modo recepção (sem confirmar
+nada concretamente), se a Mãe marcar `meeting_scheduled=true`, o sistema tenta criar o
+appointment. Na Fase 1 deste documento isso quase criou um appointment a partir de uma
+resposta de recepção (só não chegou a confirmar porque bateu em conflito real de agenda).
+Depois da Fase 2 do documento A (`fix-compound-follow-through-recepcao.md`), o roteamento
+correto para a filha de agendamento reduz a chance disso acontecer, mas não elimina o
+risco de raiz — esse comportamento é **idêntico ao do fluxo WhatsApp real** (mesma função,
+mesmo critério), logo é um risco pré-existente em produção, não introduzido por esta
+feature. Decisão consciente: não alterar o critério de `meeting_scheduled` nesta sessão,
+por afetar o fluxo real além do escopo aprovado — mencionado ao utilizador para decisão
+futura.
 
 ---
 
@@ -154,3 +191,6 @@ repositório, e o fluxo depende de round-trip HTTP cross-service + SQLite real. 
   acumular ao longo do tempo — pré-existente, não tratado aqui.
 - Poderia-se adicionar um botão "Limpar todos os testes" na UI do Playground para apagar
   todos os leads/appointments `is_playground=1` de uma vez — não pedido nesta iteração.
+- Ver "Nota de risco" acima — possível melhoria futura: só permitir criação de appointment
+  quando `effective_route_to` também indicar confirmação real (ex.: `agendamento`), não só
+  o sinal solto da Mãe.

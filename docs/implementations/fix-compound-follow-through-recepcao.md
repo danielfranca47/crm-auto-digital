@@ -184,7 +184,7 @@ atual → não dispara); testei a saudação composta e `perceived=agendamento` 
 
 | # | Commit | O que foi implementado |
 |---|---|---|
-| 1 | `<preencher após commit>` | Fallback via `perceived_category` + teste de regressão |
+| 1 | `5fa323a` | Fallback via `perceived_category` + teste de regressão |
 
 ---
 
