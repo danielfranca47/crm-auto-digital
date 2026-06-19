@@ -146,6 +146,7 @@ def _mk_conn() -> sqlite3.Connection:
         CREATE TABLE appointments (
             id INTEGER PRIMARY KEY,
             lead_id INTEGER NOT NULL,
+            user_id INTEGER,
             title TEXT,
             description TEXT,
             type TEXT,

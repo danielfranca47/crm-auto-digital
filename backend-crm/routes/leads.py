@@ -292,14 +292,17 @@ def _delete_lead_related_rows(conn, lead_id: int) -> dict[str, int]:
 
 def _check_conflict(
     conn,
-    lead_id: int,
+    user_id: int,
     start_at,
     end_at,
     *,
     ignore_appointment_id: Optional[int] = None,
 ):
     """
-    Normaliza start/end e checa sobreposição com outros compromissos do mesmo lead.
+    Normaliza start/end e checa sobreposição com outros compromissos do mesmo
+    profissional (user_id) — não só do mesmo lead. Cobre tanto appointments
+    criados pelo CRM (lead_id IS NOT NULL, herdam user_id do lead) quanto
+    importados do Google (lead_id IS NULL, user_id próprio).
     Regra: há conflito quando um outro registro tem start < end_do_novo
     E (end ou start se end for nulo) > start_do_novo.
     """
@@ -316,15 +319,15 @@ def _check_conflict(
 
     cur = conn.cursor()
     query = (
-        "SELECT id FROM appointments "
-        "WHERE lead_id = ? "
-        "AND datetime(start_at) < datetime(?) "
-        "AND datetime(COALESCE(end_at, start_at)) > datetime(?)"
+        "SELECT a.id FROM appointments a LEFT JOIN leads l ON a.lead_id = l.id "
+        "WHERE (a.lead_id IS NOT NULL AND l.user_id = ? OR a.lead_id IS NULL AND a.user_id = ?) "
+        "AND datetime(a.start_at) < datetime(?) "
+        "AND datetime(COALESCE(a.end_at, a.start_at)) > datetime(?)"
     )
-    params = [lead_id, end_for_overlap, start_iso]
+    params = [user_id, user_id, end_for_overlap, start_iso]
 
     if ignore_appointment_id is not None:
-        query += " AND id != ?"
+        query += " AND a.id != ?"
         params.append(ignore_appointment_id)
 
     cur.execute(query, params)
@@ -1059,7 +1062,7 @@ def criar_compromisso(lead_id: int, payload: AppointmentCreate, current_user: Cu
         # Checagem de conflito usando os valores já normalizados
         normalized_start, normalized_end = _check_conflict(
             conn,
-            lead_id,
+            current_user.id,
             start_iso,
             end_iso,
         )
@@ -1171,7 +1174,7 @@ def atualizar_compromisso(lead_id: int, appointment_id: int, payload: Appointmen
 
             _check_conflict(
                 conn,
-                lead_id,
+                current_user.id,
                 start_final_iso,
                 end_final_iso,
                 ignore_appointment_id=appointment_id,

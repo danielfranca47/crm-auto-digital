@@ -51,24 +51,47 @@ def _validate_interval(start_at: datetime, end_at: datetime) -> None:
         )
 
 
-def _check_conflict(
-    conn, lead_id: int, start_at: datetime, end_at: datetime, exclude_id: Optional[int] = None
-) -> None:
+def _resolve_owner_user_id(conn, *, lead_id: Optional[int], fallback_user_id: Optional[int] = None) -> Optional[int]:
+    """Resolve o user_id (profissional) responsável por um appointment.
+
+    Appointments com lead_id usam leads.user_id; appointments sem lead
+    (importados do Google) usam o user_id próprio armazenado na linha.
+    """
+    if lead_id is None:
+        return fallback_user_id
     cur = conn.cursor()
-    params = [lead_id, end_at.isoformat(), start_at.isoformat()]
+    cur.execute("SELECT user_id FROM leads WHERE id = ?", (lead_id,))
+    row = cur.fetchone()
+    return row["user_id"] if row else fallback_user_id
+
+
+def _check_conflict(
+    conn, user_id: Optional[int], start_at: datetime, end_at: datetime, exclude_id: Optional[int] = None
+) -> None:
+    """Bloqueia conflito de horário para todo o profissional (user_id), não só o mesmo lead.
+
+    Cobre tanto appointments criados pelo CRM (lead_id IS NOT NULL, herdam
+    user_id do lead) quanto importados do Google (lead_id IS NULL, user_id
+    próprio) — mesmo scoping de list_appointments().
+    """
+    if user_id is None:
+        return
+    cur = conn.cursor()
+    params: List[object] = [user_id, user_id, end_at.isoformat(), start_at.isoformat()]
     query = (
-        "SELECT 1 FROM appointments "
-        "WHERE lead_id = ? AND start_at < ? AND end_at > ?"
+        "SELECT 1 FROM appointments a LEFT JOIN leads l ON a.lead_id = l.id "
+        "WHERE (a.lead_id IS NOT NULL AND l.user_id = ? OR a.lead_id IS NULL AND a.user_id = ?) "
+        "AND a.start_at < ? AND a.end_at > ?"
     )
     if exclude_id is not None:
-        query += " AND id != ?"
+        query += " AND a.id != ?"
         params.append(exclude_id)
 
     cur.execute(query, params)
     if cur.fetchone():
         raise HTTPException(
             status_code=409,
-            detail="Já existe um compromisso para este lead que conflita com o horário informado.",
+            detail="Já existe um compromisso para este profissional que conflita com o horário informado.",
         )
 
 
@@ -225,7 +248,8 @@ def create_appointment(payload: AppointmentCreate) -> AppointmentOut:
     conn = get_connection()
     try:
         _ensure_lead_exists(conn, payload.lead_id)
-        _check_conflict(conn, payload.lead_id, payload.start_at, payload.end_at)
+        owner_user_id = _resolve_owner_user_id(conn, lead_id=payload.lead_id)
+        _check_conflict(conn, owner_user_id, payload.start_at, payload.end_at)
 
         cur = conn.cursor()
         now_iso = datetime.now(timezone.utc).isoformat()  # tz-aware
@@ -399,7 +423,8 @@ def update_appointment(appointment_id: int, payload: AppointmentUpdate) -> Appoi
         if new_lead_id is None:
             new_lead_id = current["lead_id"]
 
-        _check_conflict(conn, new_lead_id, start_at, end_at, exclude_id=appointment_id)
+        owner_user_id = _resolve_owner_user_id(conn, lead_id=new_lead_id, fallback_user_id=current.get("user_id"))
+        _check_conflict(conn, owner_user_id, start_at, end_at, exclude_id=appointment_id)
 
         fields = []
         values = []
