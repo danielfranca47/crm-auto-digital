@@ -115,7 +115,7 @@ duas foram corrigidas.
 | 2 | 2 | `8ccae5b` | feat: injetar horários ocupados no prompt de agendamento |
 | 3 | 3 | `8cedbe5` | feat: bloquear conflito + mensagem de correção automática |
 | 4 | 3.5 | `1ceead2` | fix: _check_conflict por profissional, não só por lead |
-| 5 | 4 | _(pendente)_ | docs: atualizar agenda.md |
+| 5 | 4 | `9cbd175` | docs: atualizar agenda.md |
 
 ---
 
@@ -124,17 +124,21 @@ duas foram corrigidas.
 ### Cenário P1 — IA não inventa disponibilidade (Playground)
 - [ ] Agente `hybrid_scheduler` com um appointment já existente no horário X
 - [ ] Lead pede esse mesmo horário X → IA recusa com base em dados reais (não inventa)
+- **Pendente:** requer teste manual no Playground em produção (igual ao feito para a Fase de closing)
 
 ### Cenário C1 — Conflito real bloqueia criação + correção (WhatsApp real)
 - [ ] Dois leads pedem o mesmo horário em sequência
 - [ ] Segundo lead recebe mensagem de correção automática; appointment não é duplicado
+- **Pendente:** requer teste manual com WhatsApp real (ou simulação de 2 jobs concorrentes)
 
 ### Cenário C2 — Bloqueio manual na UI
 - [ ] Tentar criar dois appointments do mesmo profissional, mesmo horário, leads diferentes → 409
+- **Pendente:** requer teste manual na UI (frontend-crm) em produção
 
 ### Cenário C3 — Suite de testes sem regressão
-- [ ] `pytest backend-executors/tests` — sem novas falhas além das pré-existentes
-- [ ] Testes de `backend-crm/scripts/` relacionados a appointments sem regressão
+- [x] `pytest backend-executors/tests` (+ scripts de meeting_scheduler) — 22 falhas pré-existentes (idênticas, confirmadas via git stash), 65 passando, sem novas falhas
+- [x] `unittest backend-crm/tests` — 15 falhas pré-existentes (idênticas), 132 passando (117 + os testes de orchestrator/decision_engine cobertos no lado executors), sem novas falhas
+- **Validado em:** 19/06/2026
 
 ---
 
