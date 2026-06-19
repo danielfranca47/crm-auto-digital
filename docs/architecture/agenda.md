@@ -228,9 +228,48 @@ Eventos importados via `POST /api/appointments/google-sync` têm `source='google
 
 Ao criar (`POST /api/leads/{id}/appointments` ou via `routes/appointments.py`), o backend:
 
-1. Valida que não há conflito de horário para o mesmo lead (`_check_conflict`)
+1. Valida que não há conflito de horário **para o profissional inteiro** (`_check_conflict`) — não apenas para o mesmo lead. Existem duas implementações paralelas e independentes (uma em cada arquivo, mesma regra): `routes/leads.py::_check_conflict` (usa `current_user.id` diretamente — endpoint já autenticado) e `routes/appointments.py::_check_conflict` (resolve o `user_id` via `_resolve_owner_user_id()`, a partir do `lead_id` ou do `user_id` próprio em appointments importados do Google sem lead). Ambas bloqueiam com `409` se outro appointment do mesmo `user_id` (qualquer lead, ou evento Google) sobrepuser o intervalo — esta é a defesa real contra conflito, pois roda dentro da transacção SQLite no momento exacto do INSERT/UPDATE.
 2. Agenda jobs de lembrete (`whatsapp.appointment_reminder`) com offsets configuráveis por template_key
 3. Agenda job de briefing (`briefing_job`) se `briefing_enabled` não for `False`
 4. Faz push para Google Calendar se o utilizador tiver tokens OAuth2 válidos (`google_calendar_service.push_event`)
 
 `google_event_id` é persistido na linha do appointment quando o push é bem-sucedido. Editar ou cancelar o compromisso actualiza/remove o evento no Google Calendar de forma fail-silent.
+
+---
+
+## `calendar_busy_slots` — a IA consulta disponibilidade real antes de propor/confirmar horário
+
+Antes desta funcionalidade, a Filha de agendamento (`decision_engine.py::_build_child_prompt_agendamento`)
+só recebia o campo de texto livre `ai_profile.availability_schedule` como dica
+geral — não tinha nenhum dado real do que já estava ocupado, e podia inventar
+disponibilidade. A criação do appointment também não checava conflito com
+outros leads do mesmo profissional.
+
+```
+backend-crm (orchestrator.py)
+  enrich_context_bundle() carrega calendar_busy_slots — compromissos reais do
+  profissional (próximos 30 dias, status='pending', inclui CRM + importados
+  do Google) — quando ai_profile.agent_mode == "agenda"
+        ↓ (mesmo ContextBundle — paridade automática Playground + WhatsApp real)
+backend-executors (decision_engine.py)
+  _build_child_prompt_agendamento injeta bloco "HORÁRIOS JÁ OCUPADOS"
+  (convertido para a timezone do perfil) antes do availability_schedule
+        ↓ (só no caminho real, via runners/whatsapp.py — Playground nunca
+           chama handle_meeting_scheduled, por desenho: sandbox não cria
+           appointments reais)
+backend-executors (meeting_scheduler.py + whatsapp.py)
+  handle_meeting_scheduled() checa o horário confirmado pela IA contra
+  calendar_busy_slots: se colidir com outro lead, NÃO cria o appointment, NÃO
+  desabilita o bot, e devolve uma mensagem de correcção que o runner envia ao
+  lead via core_client.send_whatsapp_message(). Fora da janela de 30 dias, a
+  checagem é pulada (loga o evento) e segue o comportamento normal.
+        ↓
+backend-crm (routes/appointments.py + routes/leads.py)
+  _check_conflict (ver secção acima) é a barreira final — roda na transacção
+  do INSERT, cobre também a criação manual via UI e fecha a race condition
+  entre o fetch do ContextBundle e a criação do appointment.
+```
+
+**Função:** `_load_calendar_busy_slots(user_id, window_days=30)` em `backend-crm/services/ai_orchestrator/orchestrator.py` — mesma cláusula de scoping de `routes/appointments.py::list_appointments`.
+
+**Limitação conhecida (MVP):** a mensagem de correcção é texto fixo, não gerada pela LLM. Suporte a múltiplos profissionais por conta (planos Scale/Enterprise, ainda não implementado) exigirá revisar `_check_conflict`/`calendar_busy_slots` para incluir um `professional_id` — hoje o modelo assume um único profissional por conta.
