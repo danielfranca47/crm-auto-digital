@@ -5,7 +5,16 @@
       "Bash(./.venv/Scripts/python.exe -m pytest scripts/test_meeting_scheduler_hook.py -v)",
       "Bash(./.venv/Scripts/python.exe -m pytest scripts/test_meeting_candidate_e2e.py scripts/test_meeting_scheduler_hook.py -v)",
       "Bash(./.venv/Scripts/python.exe -m pytest tests/test_meeting_scheduler_structured_candidate.py -v)",
-      "Bash(python -c \"import ast; ast.parse\\(open\\('routes/leads.py', encoding='utf-8'\\).read\\(\\)\\)\")"
+      "Bash(python -c \"import ast; ast.parse\\(open\\('routes/leads.py', encoding='utf-8'\\).read\\(\\)\\)\")",
+      "Bash(python -m pytest tests/test_compound_follow_through_routing.py tests/test_mother_qualification_route_guardrail.py -v)",
+      "Bash(./.venv/Scripts/python.exe -m pytest tests/test_compound_follow_through_routing.py tests/test_mother_qualification_route_guardrail.py -v)",
+      "Bash(git stash *)",
+      "Bash(./.venv/Scripts/python.exe -m pytest tests/test_mother_qualification_route_guardrail.py -v)",
+      "Bash(./.venv/Scripts/python.exe -m pytest tests/ -v)",
+      "Bash(./.venv/Scripts/python.exe -m pytest tests/)",
+      "Bash(./.venv/Scripts/python.exe -m pytest tests/test_compound_follow_through_routing.py -v)",
+      "Bash(./.venv/Scripts/python.exe -c \"import ast; ast.parse\\(open\\('app/api/playground_internal.py', encoding='utf-8'\\).read\\(\\)\\); ast.parse\\(open\\('app/services/meeting_scheduler.py', encoding='utf-8'\\).read\\(\\)\\); ast.parse\\(open\\('app/clients/crm_client.py', encoding='utf-8'\\).read\\(\\)\\)\")",
+      "Bash(python -c ' *)"
     ]
   },
   "hooks": {
