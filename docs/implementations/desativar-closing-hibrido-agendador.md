@@ -98,7 +98,7 @@ dois caminhos automaticamente.
 
 | # | Commit | O que foi implementado |
 |---|---|---|
-| 1 | _(pendente)_ | feat: generalizar desativação de closing para sdr_padrao |
+| 1 | `a77a312` | feat: generalizar desativação de closing para sdr_padrao |
 
 ---
 
