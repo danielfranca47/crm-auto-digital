@@ -21,18 +21,33 @@ SaaS de CRM com automação de vendas via WhatsApp e IA. Arquitectura multi-serv
 ## Como rodar localmente
 
 > O `backend-crm` depende do `backend-core` estar a correr primeiro.
+>
+> **Cada backend Python precisa do seu próprio `venv`.** Os `requirements.txt` são
+> incompatíveis entre si (ex.: `backend-core` fixa `pydantic<2.0`, `backend-crm`
+> precisa de Pydantic v2). Instalar tudo no Python global causa erros de import
+> (`ImportError: cannot import name 'field_validator'` etc.).
 
 ```bash
-# backend-core
-cd backend-core && pip install -r requirements.txt
+# backend-core (porta 8001)
+cd backend-core
+python -m venv .venv
+.venv\Scripts\activate        # Windows (PowerShell)
+# source .venv/bin/activate   # Linux/Mac
+pip install -r requirements.txt
 uvicorn app.main:app --port 8001
 
-# backend-crm
-cd backend-crm && pip install -r requirements.txt
+# backend-crm (porta 8000) — em outro terminal
+cd backend-crm
+python -m venv .venv
+.venv\Scripts\activate
+pip install -r requirements.txt
 uvicorn app:app --port 8000
 
-# backend-executors
-cd backend-executors && pip install -r requirements.txt
+# backend-executors — em outro terminal
+cd backend-executors
+python -m venv .venv
+.venv\Scripts\activate
+pip install -r requirements.txt
 uvicorn app.main:app --port 8002
 
 # frontend-crm
@@ -44,6 +59,9 @@ cd frontend-admin && npm install && npm run dev
 # website
 cd website && npm install && npm run dev
 ```
+
+Mais detalhes (ordem de inicialização, `.env.local`, agent-local): ver
+[`docs/ops/local-dev.md`](docs/ops/local-dev.md).
 
 ---
 
