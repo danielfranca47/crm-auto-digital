@@ -100,7 +100,7 @@ Teste automatizado novo: `backend-executors/tests/test_compound_follow_through_r
 
 | # | Commit | O que foi implementado |
 |---|---|---|
-| 1 | `<preencher após commit>` | Override de `route_for_child` por `compound_follow_through` + instrução de abertura partilhada + teste |
+| 1 | `1553aa1` | Override de `route_for_child` por `compound_follow_through` + instrução de abertura partilhada + teste |
 
 ---
 
