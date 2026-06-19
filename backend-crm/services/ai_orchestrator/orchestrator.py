@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 import logging
 import sqlite3
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional
 
 from fastapi import HTTPException
@@ -241,6 +241,7 @@ class ContextBundle(BaseModel):
     # Estrutura: { "qualification": { "good": [...], "bad": [...] }, "apresentation": {...}, ... }
     generated_prompt_parts: Optional[Dict[str, Any]] = None
     lead_detected_language: Optional[str] = None
+    calendar_busy_slots: Optional[List[Dict[str, Any]]] = None
 
 
 def build_context_bundle(
@@ -544,6 +545,39 @@ def _load_business_info(user_id: int) -> Optional[str]:
     return "\n".join(biz_lines) if biz_lines else None
 
 
+_CALENDAR_BUSY_SLOTS_WINDOW_DAYS = 30
+
+
+def _load_calendar_busy_slots(user_id: int, window_days: int = _CALENDAR_BUSY_SLOTS_WINDOW_DAYS) -> List[Dict[str, Any]]:
+    """Carrega compromissos reais do profissional para a IA não inventar disponibilidade.
+
+    Mesma cláusula de scoping de routes/appointments.py::list_appointments —
+    cobre tanto appointments criados pelo CRM (lead_id IS NOT NULL, herdam
+    user_id do lead) quanto importados do Google Calendar (lead_id IS NULL,
+    user_id próprio). Manter sincronizado se aquela query mudar.
+    """
+    now = datetime.now(timezone.utc)
+    window_end = now + timedelta(days=window_days)
+    with get_connection() as conn:
+        conn.row_factory = sqlite3.Row
+        cur = conn.cursor()
+        cur.execute(
+            """
+            SELECT a.lead_id, a.start_at, a.end_at
+              FROM appointments a LEFT JOIN leads l ON a.lead_id = l.id
+             WHERE (a.lead_id IS NOT NULL AND l.user_id = ? OR a.lead_id IS NULL AND a.user_id = ?)
+               AND a.status = 'pending'
+               AND a.end_at >= ?
+               AND a.start_at <= ?
+            """,
+            (user_id, user_id, now.isoformat(), window_end.isoformat()),
+        )
+        return [
+            {"lead_id": row["lead_id"], "start_at": row["start_at"], "end_at": row["end_at"]}
+            for row in cur.fetchall()
+        ]
+
+
 def enrich_context_bundle(bundle: ContextBundle, user_id: int) -> ContextBundle:
     """
     Enriquece o ContextBundle com todos os campos extras necessários para o decision_engine.
@@ -570,6 +604,10 @@ def enrich_context_bundle(bundle: ContextBundle, user_id: int) -> ContextBundle:
     if bundle.lead_detected_language is None:
         lang = (bundle.lead or {}).get("detected_language") or "all"
         updates["lead_detected_language"] = lang
+
+    # B5 — calendar_busy_slots (agentes de agenda não devem inventar disponibilidade)
+    if bundle.calendar_busy_slots is None and (bundle.ai_profile or {}).get("agent_mode") == "agenda":
+        updates["calendar_busy_slots"] = _load_calendar_busy_slots(user_id)
 
     if updates:
         bundle = bundle.model_copy(update=updates)
