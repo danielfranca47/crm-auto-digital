@@ -945,6 +945,15 @@ def _build_daughter_identity_block(context: Dict[str, Any], phase: str) -> str:
         "- Cada resposta deve avançar a conversa, não repetir o turno anterior.\n"
     )
 
+    if context.get("_compound_greeting_pending"):
+        block += (
+            "\nABERTURA DE SAUDAÇÃO COMPOSTA:\n"
+            "- Esta é a primeira mensagem do lead e ela combinava uma saudação com o pedido abaixo.\n"
+            "- Abra a sua resposta com um cumprimento breve e caloroso (uma frase) e, na mesma\n"
+            "  mensagem, trate o pedido normalmente — não fragmente em duas respostas nem diga\n"
+            "  algo como 'vou verificar e já te respondo'.\n"
+        )
+
     return block
 
 
@@ -4185,6 +4194,23 @@ def decide(context: Dict[str, Any], logger: Optional[logging.Logger] = None) -> 
         route_for_child = "follow-up" if force_followup_route else mother_decision.route_to
         anti_loop_rule3_applied = False
         mode_ctx_pre: Optional[dict] = None
+
+        if (
+            not force_followup_route
+            and mother_decision.route_to == "recepcao"
+            and mother_decision.compound_follow_through
+        ):
+            route_for_child = mother_decision.compound_follow_through
+            context["_compound_greeting_pending"] = True
+            if logger:
+                job = context.get("job") or {}
+                payload = job.get("payload") or {}
+                logger.info(
+                    "event=compound_follow_through_route route_override=%s job_id=%s lead_id=%s",
+                    route_for_child,
+                    job.get("id") or payload.get("job_id"),
+                    lead.get("id") or payload.get("lead_id"),
+                )
 
         if force_followup_route and logger:
             job = context.get("job") or {}
