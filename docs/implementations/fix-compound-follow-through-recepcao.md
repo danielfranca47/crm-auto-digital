@@ -129,6 +129,10 @@ escopo corrigir aqui; mencionar ao utilizador.
   testes 3x. Na 1ª tentativa revelou o bug descrito na Fase 2 (route ficou em recepcao
   porque a Mãe usou `perceived_category` em vez de `compound_follow_through`); após a
   correção da Fase 2, `effective_route_to=agendamento` confirmado.
+- **Revalidado em:** 20/06/2026, via UI real do Playground (browser, MCP chrome-devtools),
+  com exportação do `.md` da sessão (`playground-2026-06-19_19-41-output.md`, conta de
+  teste). Trace: `mother_route=recepcao, effective=agendamento, confidence=90%`. A filha de
+  agendamento ainda evitou corretamente um horário já ocupado por outro teste (calendar_busy_slots).
 
 ### Cenário P2 — Saudação pura continua intacta
 - [x] Playground, lead novo, enviar apenas "oi"
@@ -138,6 +142,9 @@ escopo corrigir aqui; mencionar ao utilizador.
   cumprimento, sem preços/agenda. Cobre também o caso de borda da Fase 2
   (`perceived_category=qualification` igual à categoria atual do lead → não dispara
   o fallback).
+- **Revalidado em:** 20/06/2026, via UI real do Playground, `.md` exportado
+  (`playground-2026-06-19_19-44-output.md`). Trace: `effective_route=recepcao`,
+  `meeting_scheduled=false`.
 
 ### Cenário C1 — Saudação composta no WhatsApp real
 - [ ] Repetir o cenário P1 com um número de teste real

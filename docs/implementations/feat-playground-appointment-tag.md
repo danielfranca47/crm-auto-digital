@@ -132,6 +132,9 @@ repositório, e o fluxo depende de round-trip HTTP cross-service + SQLite real. 
       quando `source=="playground"`
 - **Validado em:** 19/06/2026 — appointment id=21 criado para lead sandbox 257; reminders/
   briefing/gcal confirmados ausentes no log (`backend-crm/local-run-restart.log`).
+- **Revalidado visualmente em:** 20/06/2026, via UI real (browser, MCP chrome-devtools) —
+  tela `/agenda`, dia 20 de junho mostra `"[Playground] Reunião agendada" · 17:30 · Lead:
+  Empresa Teste`, ao lado de um compromisso real não-relacionado (`source=crm`).
 
 ### Cenário P2 — Conflito de horário é respeitado
 - [x] Horário já ocupado por um appointment de outro lead (criado num teste anterior na
@@ -146,6 +149,13 @@ repositório, e o fluxo depende de round-trip HTTP cross-service + SQLite real. 
   filha — comportamento **idêntico ao fluxo WhatsApp real** (mesma limitação já registada
   em `disponibilidade-real-agendamento-ia.md` → "Ajustes Possíveis"), não uma regressão
   desta feature.
+- **Revalidado em:** 20/06/2026, via UI real do Playground — pedido de horário já ocupado
+  gerou resposta da filha oferecendo alternativa, sem appointment duplicado (confirmado via
+  `GET /api/appointments`). Observação adicional registada em
+  `docs/plans/agentes-agenda-melhorias-futuras.md` (M3): neste teste a IA disse "horário já
+  ocupado, que tal 10h/14h?" no mesmo turno em que o backend já tinha criado e confirmado o
+  appointment original — sinal de que `meeting_scheduled=true` da Mãe nem sempre corresponde
+  ao que a filha efetivamente comunicou ao lead. Não corrigido, por decisão do utilizador.
 
 ### Cenário P3 — Reset do lead sandbox limpa appointments de teste
 - [x] Repetido P1 (appointment id=21 criado)
@@ -153,6 +163,12 @@ repositório, e o fluxo depende de round-trip HTTP cross-service + SQLite real. 
 - [x] `GET /api/appointments` confirma que o appointment id=21 foi removido (appointment
       de outro lead, não-playground, permaneceu intacto)
 - **Validado em:** 19/06/2026
+- **Revalidado visualmente em:** 20/06/2026 — appointment do lead sandbox 268 (criado via
+  UI do Playground, T4) resetado via `reset=true` na mesma API; confirmado na tela
+  `/agenda` que o evento desapareceu do dia 20 de junho, mantendo os outros 2 eventos
+  não-relacionados intactos. Nota: a UI do Playground (`PlaygroundConfigModal.tsx`) não
+  expõe o parâmetro `reset` para reaproveitar o mesmo `lead_id` — "Nova sessão" sempre cria
+  um lead novo; o reset só é alcançável hoje via chamada directa à API.
 
 ### Cenário C1 — Fluxo real inalterado
 - [ ] Confirmar agendamento real via WhatsApp (número de teste)

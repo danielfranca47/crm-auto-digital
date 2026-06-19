@@ -93,3 +93,43 @@ elas exercitarem mais esse caminho.
 **Decisão já tomada pelo utilizador:** não corrigir agora — manter como está e só revisitar
 se este padrão se mostrar frequente em uso real (não é um problema teórico a perseguir
 preventivamente).
+
+**Evidência adicional (teste via browser, 20/06/2026):** reproduzido visualmente no Playground
+— a filha de agendamento respondeu "Infelizmente, a sessão para amanhã às 12h já está ocupada...
+Que tal às 10h ou 14h?" no mesmo turno em que o backend já tinha criado o appointment para as
+12h e desativado o bot (`meeting_scheduled=true` da Mãe). Ou seja, o lead recebe uma mensagem
+que parece negociar um novo horário, mas o sistema já considerou o agendamento original como
+confirmado e encerrado. Reforça a M3 acima — não corrigido, só documentado.
+
+---
+
+## M4 — `next_action_hint` da Mãe pode receber valor fora do enum (ValidationError silencioso)
+
+**Prioridade: BAIXA** (falha transitória, mitigada pelo retry de `llm_service.py`; sem padrão de frequência observado)
+
+**Contexto:** identificado durante a mesma sessão de testes via browser (20/06/2026).
+
+**Estado actual:** `MotherDecision.next_action_hint` (`orchestrator_models.py`) é um `Literal["reply",
+"ask_qualification", "handoff", "ignore", "greet"]`. Em um teste real, a Mãe retornou
+`next_action_hint="confirmar"` — valor fora do enum — causando `pydantic.ValidationError` na
+validação do payload (`decide()`, stage `mother_validate`). O erro é capturado pelo `except
+Exception` genérico de `decide()` e cai no fallback `llm_failure_first_message_suppressed`
+(mensagem vazia, sem nenhum aviso visível ao operador no Playground além do trace com todos os
+campos `null`). Uma nova tentativa (reenviar a mesma intenção) teve sucesso normalmente — o
+modelo não repetiu o valor inválido.
+
+**Risco prático:** baixo impacto unitário (o lead só não recebe resposta nesse turno específico
+e precisa reenviar/aguardar retry), mas é uma classe de erro silenciosa — não há log de nível
+`ERROR`/alerta, só um `WARNING` (`event=llm_orchestrator_error`) que só fica visível se houver
+logger configurado (no Playground, só passa a existir após a mudança feita em
+`playground_internal.py` durante a sessão de testes de `feat-playground-appointment-tag.md`).
+
+**O que precisaria ser construído (se a frequência justificar):**
+- Tornar `next_action_hint` mais tolerante (ex.: normalizar sinônimos como "confirmar" →
+  "reply" antes da validação Pydantic) em vez de falhar a decisão inteira por um campo
+  opcional/informativo
+- Ou: capturar especificamente `pydantic.ValidationError` em `decide()` e tentar uma 2ª chamada
+  à Mãe automaticamente (padrão já usado em `qualification` com `validation_errors`), em vez de
+  cair direto no fallback genérico de falha de LLM
+
+**Decisão:** não corrigir agora — registar para o caso de se tornar um padrão recorrente.
