@@ -18,7 +18,7 @@ implementação.
 | `plans-subscriptions.md` | Modelo de planos e assinaturas — decisões pendentes |
 | `scale-enterprise-roadmap.md` | Roadmap dos planos Scale e Enterprise |
 | `ai-profile-instrucoes-por-fase.md` | Instruções de IA por fase — a implementar |
-| `agentes-agenda-melhorias-futuras.md` | Multi-profissional por conta e closing seletivo para agentes de agendamento |
+| `agentes-agenda-melhorias-futuras.md` | Multi-profissional por conta, closing seletivo e confiabilidade da confirmação de agendamento |
 
 Os arquivos sem prefixo `_` são os **planos concretos** — contêm melhorias identificadas
 que ainda não foram implementadas.

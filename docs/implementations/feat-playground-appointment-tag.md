@@ -183,6 +183,13 @@ feature. Decisão consciente: não alterar o critério de `meeting_scheduled` ne
 por afetar o fluxo real além do escopo aprovado — mencionado ao utilizador para decisão
 futura.
 
+**Decisão do utilizador (19/06/2026):** manter como está por agora. Não é para corrigir
+nesta sessão — só revisitar se este padrão (agendamento "confirmado" sem o lead ter
+confirmado de fato, ou recibo de reserva inconsistente entre as filhas de apresentação e
+agendamento) se mostrar frequente em uso real. Detalhe da causa e possível correção
+registado em [`docs/plans/agentes-agenda-melhorias-futuras.md`](../plans/agentes-agenda-melhorias-futuras.md)
+(seção M3).
+
 ---
 
 ## Ajustes Possíveis Pós-Implementação

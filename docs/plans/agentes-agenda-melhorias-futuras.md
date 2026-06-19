@@ -47,3 +47,49 @@
 - Provavelmente ligado a campanhas de follow-up especificamente (o utilizador mencionou "campanha de follow up") — avaliar se o gatilho deve vir do `followup_state`/`followup_reconciler` em vez do fluxo de mensagem normal
 
 **Risco a não esquecer:** reativar `closing` sem o sinal diferenciado correto reintroduz o bug original (bot mudo ao confirmar uma sessão simples) — qualquer implementação aqui precisa do teste de regressão `test_scheduling_agent_no_closing.py` a continuar verde.
+
+---
+
+## M3 — Confirmação de agendamento sem garantia de que o lead confirmou de fato
+
+**Prioridade: BAIXA** (monitorar frequência em uso real antes de agir — sem caso confirmado de impacto em produção ainda)
+
+**Contexto:** identificado na sessão de testes manuais de 19/06/2026 das implementações
+`fix-compound-follow-through-recepcao.md` e `feat-playground-appointment-tag.md`.
+
+**Estado actual:** a criação do appointment (`meeting_scheduler.handle_meeting_scheduled()`)
+depende inteiramente de `mother_decision.signals.meeting_scheduled`, decidido pela LLM Mãe a
+cada turno, sem nenhum estado persistido entre mensagens (ex.: "proposta enviada, esperando
+confirmação"). O prompt da Mãe já instrui que `meeting_scheduled=true` só deve ser emitido
+quando a mensagem do lead contém confirmação explícita ("fica combinado", "perfeito",
+"fechado", etc.) — mas isto é só instrução de prompt, sem trava de código. Em teste manual
+real (não mockado), a Mãe marcou `meeting_scheduled=true` já na 1ª mensagem do lead, que era
+um pedido inicial ("gostaria de agendar... amanhã às 15h"), sem qualquer confirmação prévia.
+
+Adicionalmente, o "recibo de reserva estruturado" (Fix P8, `decision_engine.py:2599-2621`,
+que devolve ✅ Reservada / Experiência / Horário / Dia / Profissional ao lead) só existe na
+filha de **apresentação** (`presentation_variant=scheduler`) — a filha de **agendamento**
+(usada por `hybrid_scheduler`/`sdr_padrao` nas fases pré-agendamento→agendamento) não tem essa
+mesma estrutura obrigatória, ficando a resposta (proposta vs. confirmação) ao critério livre
+do modelo a cada turno.
+
+**Risco prático:** o sistema pode criar/bloquear um appointment real (e desabilitar o bot)
+baseado numa interpretação de intenção da Mãe, sem o lead ter de fato dito "sim, confirmado" —
+isto já é o comportamento de produção hoje (`runners/whatsapp.py:756` usa a mesma função e
+critério), não foi introduzido pelas duas implementações citadas acima, só ficou visível por
+elas exercitarem mais esse caminho.
+
+**O que precisaria ser construído (se o padrão se confirmar frequente):**
+- Separar "proposta de horário" de "confirmação de horário" como dois sinais distintos (não
+  um único booleano `meeting_scheduled` decidido isoladamente por turno)
+- Possivelmente: só permitir a criação do appointment quando `effective_route_to` também
+  indicar uma resposta de confirmação real (não quando a filha que respondeu foi a de
+  recepção, por exemplo)
+- Estender o "recibo de reserva obrigatório" (Fix P8) também à filha de agendamento, para
+  paridade de comportamento entre apresentação e agendamento
+- Exigir que a filha de agendamento sempre pergunte/aguarde confirmação explícita antes de a
+  Mãe poder marcar `meeting_scheduled=true` no turno seguinte
+
+**Decisão já tomada pelo utilizador:** não corrigir agora — manter como está e só revisitar
+se este padrão se mostrar frequente em uso real (não é um problema teórico a perseguir
+preventivamente).
