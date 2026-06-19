@@ -204,12 +204,30 @@ Renomear a constante Python é seguro. Renomear o **valor string** exige migraç
 
 ---
 
+## Retry com backoff nas chamadas à LLM
+
+`backend-executors/app/services/llm_service.py` — helper partilhado `_post_with_retry()`,
+usado pelas três funções públicas (`generate_mother_route`, `generate_decision_text`,
+`generate_child_result`): até 2 tentativas, com 1s de backoff entre elas, antes de
+propagar a excepção final. Cobre falhas transitórias de rede (`httpx.RequestError`) e
+status HTTP retryable (429/500/502/503/504). Aplica-se tanto ao fluxo real (WhatsApp,
+via fila de jobs) quanto ao Playground (chamada síncrona, sem fila) — antes desta
+camada, o Playground não tinha nenhum retry e qualquer falha transitória caía
+directo no fallback `reason="llm_failure"` (`message_text=""`).
+
+Não interfere com o retry de job da fila (`app/runners/whatsapp.py`, backoff
+60s/180s) — são camadas independentes: o retry de `llm_service.py` é interno a uma
+única chamada HTTP; o retry de job é externo, reagenda o job inteiro quando
+`llm_failure` persiste mesmo após as tentativas internas.
+
+---
+
 ## Arquivos críticos
 
 | Arquivo | Responsabilidade |
 |---|---|
 | `backend-executors/app/services/decision_engine.py` | Motor de decisão, prompts Mãe e Filhas, guardrails, composição |
-| `backend-executors/app/services/llm_service.py` | Chamada HTTP ao LLM (Claude/OpenAI format) |
+| `backend-executors/app/services/llm_service.py` | Chamada HTTP ao LLM (Claude/OpenAI format), retry com backoff |
 | `backend-executors/app/services/orchestrator_models.py` | Schemas MotherDecision, ChildResult |
 | `backend-executors/app/runners/whatsapp.py` | Executa cada job: contexto → decide → envia |
 | `backend-executors/app/services/fast_path.py` | Decisões sem LLM (handoff imediato, bot desabilitado) |
