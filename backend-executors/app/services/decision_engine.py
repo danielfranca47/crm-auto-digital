@@ -3496,19 +3496,20 @@ def _enforce_greeting_first(
     return mother_decision
 
 
-def _enforce_hybrid_scheduler_no_closing(
+def _enforce_scheduling_agent_no_closing(
     mother_decision: MotherDecision,
     context: Dict[str, Any],
 ) -> MotherDecision:
-    """hybrid_scheduler não tem etapa comercial de "closing" — agenda sessões,
+    """Agentes de agendamento (sdr_padrao, hybrid_scheduler) não têm etapa
 
-    não fecha vendas. Confirmação de horário é interpretada pela Mãe como sinal
-    de fechamento (heurística genérica), mas aqui não existe "venda fechada".
-    Redireciona para a fase de agendamento atual (se já lá) ou apresentation.
+    comercial de "closing" — agendam sessões/reuniões, não fecham vendas.
+    Confirmação de horário é interpretada pela Mãe como sinal de fechamento
+    (heurística genérica), mas aqui não existe "venda fechada". Redireciona
+    para a fase de agendamento atual (se já lá) ou apresentation.
     """
     ai_profile = context.get("ai_profile") or {}
     template_key = str(ai_profile.get("template_key") or "").strip().lower()
-    if template_key != "hybrid_scheduler":
+    if template_key not in _SCHEDULING_AGENT_TEMPLATES:
         return mother_decision
 
     route_is_closing = _normalize_category(mother_decision.route_to) == "closing"
@@ -3526,7 +3527,7 @@ def _enforce_hybrid_scheduler_no_closing(
         mother_decision.perceived_category = fallback
 
     reason = str(mother_decision.reason or "").strip()
-    tag = f"hybrid_scheduler_closing_disabled:{fallback}"
+    tag = f"scheduling_agent_closing_disabled:{fallback}"
     mother_decision.reason = f"{reason}|{tag}" if reason else tag
     return mother_decision
 
@@ -3768,9 +3769,9 @@ def compose_decision_output(
     )
 
     template_key = str(ai_profile.get("template_key") or "").strip().lower()
-    if template_key == "hybrid_scheduler" and suggested_category == "closing":
+    if template_key in _SCHEDULING_AGENT_TEMPLATES and suggested_category == "closing":
         suggested_category = "apresentation"
-        reason_add = "guardrail_hybrid_scheduler_no_closing"
+        reason_add = "guardrail_scheduling_agent_no_closing"
         category_reason = f"{category_reason}|{reason_add}" if category_reason else reason_add
 
     if suggested_category in {"pre-agendamento", "agendamento"} and template_key not in _SCHEDULING_AGENT_TEMPLATES:
@@ -4131,7 +4132,7 @@ def decide(context: Dict[str, Any], logger: Optional[logging.Logger] = None) -> 
             mode_ctx_forced_route,
         )
         mother_decision = _enforce_greeting_first(mother_decision, context)
-        mother_decision = _enforce_hybrid_scheduler_no_closing(mother_decision, context)
+        mother_decision = _enforce_scheduling_agent_no_closing(mother_decision, context)
         lead = context.get("lead") or {}
         force_followup_route = _is_followup_tick_context(context)
         route_for_child = "follow-up" if force_followup_route else mother_decision.route_to

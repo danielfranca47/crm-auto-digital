@@ -1,11 +1,13 @@
+import pytest
+
 from app.services import decision_engine
 
 
-def _base_context(category: str, text: str):
+def _base_context(category: str, text: str, template_key: str = "hybrid_scheduler"):
     return {
         "lead": {"id": 3, "category": category},
         "ai_profile": {
-            "template_key": "hybrid_scheduler",
+            "template_key": template_key,
             "agent_mode": "agenda",
             "requires_handoff": True,
         },
@@ -16,11 +18,12 @@ def _base_context(category: str, text: str):
     }
 
 
-def test_booking_confirmation_does_not_escalate_to_silent_closing(monkeypatch):
+@pytest.mark.parametrize("template_key", ["hybrid_scheduler", "sdr_padrao"])
+def test_booking_confirmation_does_not_escalate_to_silent_closing(monkeypatch, template_key):
     """Reproduz o bug real: lead confirma horário ('sim') em agendamento, Mãe
     decide route_to=closing, requires_handoff=true dispararia guardrail_sdr_escalate_closing
-    (bot mudo) se não houvesse o enforcement de hybrid_scheduler."""
-    context = _base_context("agendamento", "sim")
+    (bot mudo) se não houvesse o enforcement de agentes de agendamento."""
+    context = _base_context("agendamento", "sim", template_key=template_key)
 
     monkeypatch.setattr(
         decision_engine.llm_service,
@@ -40,13 +43,14 @@ def test_booking_confirmation_does_not_escalate_to_silent_closing(monkeypatch):
     assert decision.next_action != "ignore"
     assert decision.message_text != ""
     assert trace.get("mother_route_to") == "agendamento"
-    assert "hybrid_scheduler_closing_disabled:agendamento" in (decision.reason or "")
+    assert "scheduling_agent_closing_disabled:agendamento" in (decision.reason or "")
 
 
-def test_closing_signal_from_apresentation_falls_back_to_apresentation(monkeypatch):
+@pytest.mark.parametrize("template_key", ["hybrid_scheduler", "sdr_padrao"])
+def test_closing_signal_from_apresentation_falls_back_to_apresentation(monkeypatch, template_key):
     """Quando ainda não há fase de agendamento ativa (current_category=apresentation),
     o fallback deve ser apresentation, não agendamento."""
-    context = _base_context("apresentation", "quero fechar")
+    context = _base_context("apresentation", "quero fechar", template_key=template_key)
 
     monkeypatch.setattr(
         decision_engine.llm_service,
@@ -64,18 +68,14 @@ def test_closing_signal_from_apresentation_falls_back_to_apresentation(monkeypat
 
     assert trace.get("guardrail_sdr_escalate_closing") is not True
     assert trace.get("mother_route_to") == "apresentation"
-    assert "hybrid_scheduler_closing_disabled:apresentation" in (decision.reason or "")
+    assert "scheduling_agent_closing_disabled:apresentation" in (decision.reason or "")
 
 
-def test_non_hybrid_scheduler_agent_still_escalates_closing(monkeypatch):
-    """Regressão: agentes fora de hybrid_scheduler continuam a escalar/silenciar
-    normalmente quando chegam a closing (comportamento intencional, fora de escopo)."""
-    context = _base_context("agendamento", "sim")
-    context["ai_profile"] = {
-        "template_key": "sdr_padrao",
-        "agent_mode": "agenda",
-        "requires_handoff": True,
-    }
+def test_non_scheduling_agent_still_escalates_closing(monkeypatch):
+    """Regressão: agentes fora de sdr_padrao/hybrid_scheduler (ex.: closer_agressivo,
+    consultor_especialista) continuam a escalar/silenciar normalmente quando chegam
+    a closing (comportamento intencional, fora de escopo)."""
+    context = _base_context("agendamento", "sim", template_key="closer_agressivo")
 
     monkeypatch.setattr(
         decision_engine.llm_service,
