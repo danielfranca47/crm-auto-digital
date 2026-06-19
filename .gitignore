@@ -25,3 +25,6 @@ whatsapp_profile/
 chrome_profiles/
 collected_posts.pkl
 rascunhos.md
+
+# Docs com credenciais de conta de teste - nao versionar
+docs/implementations/checklist-testes-locais-pre-push.md
