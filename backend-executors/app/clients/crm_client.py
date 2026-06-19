@@ -207,6 +207,7 @@ def create_lead_appointment(
     appointment_type: str,
     start_at: str,
     end_at: str | None = None,
+    source: str | None = None,
 ) -> Dict[str, Any]:
     base_url = settings.crm_api_base.rstrip("/")
     url = f"{base_url}/api/appointments"
@@ -219,6 +220,8 @@ def create_lead_appointment(
         "start_at": start_at,
         "end_at": end_at or start_at,
     }
+    if source:
+        payload["source"] = source
     response = _send_request("POST", url, json=payload)
     return _handle_response(response, str(lead_id), for_context=False)
 

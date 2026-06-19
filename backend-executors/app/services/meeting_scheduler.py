@@ -381,6 +381,7 @@ def handle_meeting_scheduled(
     logger: Optional[logging.Logger] = None,
     client: Any = None,
     now_utc: Optional[datetime] = None,
+    is_playground: bool = False,
 ) -> Optional[str]:
     """Cria o appointment quando a IA confirma um horário.
 
@@ -455,13 +456,20 @@ def handle_meeting_scheduled(
 
     start_iso = signal.start_at.astimezone(timezone.utc).isoformat().replace("+00:00", "Z")
     end_iso = end_dt.astimezone(timezone.utc).isoformat().replace("+00:00", "Z")
+    title = "[Playground] Reunião agendada" if is_playground else "Reunião agendada"
+    description = (
+        "Reunião simulada no Playground."
+        if is_playground
+        else "Reunião confirmada pelo SDR Scheduler."
+    )
     client.create_lead_appointment(
         lead_id=signal.lead_id,
-        title="Reunião agendada",
-        description="Reunião confirmada pelo SDR Scheduler.",
+        title=title,
+        description=description,
         appointment_type="meeting",
         start_at=start_iso,
         end_at=end_iso,
+        source="playground" if is_playground else None,
     )
     client.set_lead_bot_disabled(signal.lead_id, True, reason="meeting_scheduled")
     return None

@@ -17,9 +17,10 @@ from typing import Any, Dict
 from fastapi import APIRouter, Depends, Header, HTTPException
 from pydantic import BaseModel
 
+from app.clients import crm_client
 from app.core.config import settings
 from app.schemas.decision import DecisionOutput
-from app.services import decision_engine
+from app.services import decision_engine, meeting_scheduler
 
 router = APIRouter(prefix="/api/internal/playground", tags=["playground-internal"])
 
@@ -53,6 +54,17 @@ def playground_decide(
     Executa o decision engine de forma síncrona para o playground.
     Recebe um context_bundle completo e devolve DecisionOutput.
     Não enfileira jobs — chamada directa ao engine.
+
+    Quando a IA confirma um horário (decision_trace.meeting_scheduled), cria o
+    appointment real tagueado "[Playground]" — mesma lógica de parsing/conflito
+    do fluxo WhatsApp real, sem reminders/briefing/push Google Calendar.
     """
     result = decision_engine.decide(body.context_bundle)
+    conflict_message = meeting_scheduler.handle_meeting_scheduled(
+        body.context_bundle, result, client=crm_client, is_playground=True,
+    )
+    if conflict_message:
+        actions = list(result.system_actions or [])
+        actions.append({"type": "send_message", "content": conflict_message})
+        result.system_actions = actions
     return result

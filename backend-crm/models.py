@@ -102,6 +102,7 @@ class AppointmentCreate(BaseModel):
     end_at: Optional[datetime] = None
     status: AppointmentStatus = "pending"
     location: Optional[str] = None
+    source: Optional[str] = None
 
 
 class AppointmentUpdate(BaseModel):

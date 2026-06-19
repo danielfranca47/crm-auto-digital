@@ -253,11 +253,12 @@ def create_appointment(payload: AppointmentCreate) -> AppointmentOut:
 
         cur = conn.cursor()
         now_iso = datetime.now(timezone.utc).isoformat()  # tz-aware
+        source = payload.source or "crm"
         cur.execute(
             """
             INSERT INTO appointments (
-                lead_id, title, description, type, start_at, end_at, status, location, created_at, updated_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                lead_id, title, description, type, start_at, end_at, status, location, source, created_at, updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 payload.lead_id,
@@ -268,6 +269,7 @@ def create_appointment(payload: AppointmentCreate) -> AppointmentOut:
                 (payload.end_at.isoformat() if payload.end_at else payload.start_at.isoformat()),
                 payload.status,
                 payload.location,
+                source,
                 now_iso,
                 now_iso,
             ),
@@ -278,11 +280,12 @@ def create_appointment(payload: AppointmentCreate) -> AppointmentOut:
         row = cur.fetchone()
         result = _serialize(row)
 
-        # Agendar jobs de lembrete + push Google Calendar
+        # Agendar jobs de lembrete + push Google Calendar — pulado para simulações do
+        # Playground (lead sandbox com telefone fake, não deve poluir o Google Calendar real)
         lead_row = cur.execute(
             "SELECT user_id FROM leads WHERE id = ?", (payload.lead_id,)
         ).fetchone()
-        if lead_row:
+        if lead_row and source != "playground":
             user_id = lead_row["user_id"]
             _schedule_reminder_jobs(
                 lead_id=payload.lead_id,

@@ -138,6 +138,7 @@ class DecisionTrace(BaseModel):
     effective_route: Optional[str] = None
     guardrails_applied: List[str] = Field(default_factory=list)
     category_suggestion_cleared: bool = False
+    meeting_scheduled: Optional[bool] = None
     ai_profile_id: int
     lead_id: int
     lead_is_sandbox: bool = True
@@ -234,9 +235,18 @@ def _create_sandbox_lead(user_id: int, origin: str = "playground") -> int:
 
 
 def _reset_sandbox_lead(lead_id: int, user_id: int) -> None:
-    """Limpa histórico e qualification_state do lead sandbox."""
+    """Limpa histórico, qualification_state e appointments do lead sandbox.
+
+    Sem o DELETE de appointments, compromissos "[Playground]" de testes
+    anteriores acumulam na Agenda real e podem bloquear (409) agendamentos
+    reais futuros no mesmo horário via _check_conflict.
+    """
     with get_connection() as conn:
         cur = conn.cursor()
+        cur.execute(
+            "DELETE FROM appointments WHERE lead_id = ?",
+            (lead_id,),
+        )
         cur.execute(
             "DELETE FROM messages WHERE lead_id = ?",
             (lead_id,),
@@ -394,6 +404,7 @@ def _build_decision_trace(
             trace.get("suggested_category_final") is None
             and decision.get("suggested_category") is None
         ),
+        "meeting_scheduled": trace.get("meeting_scheduled"),
         "ai_profile_id": ai_profile_id,
         "lead_id": lead_id,
         "lead_is_sandbox": True,
