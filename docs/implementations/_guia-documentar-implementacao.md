@@ -193,6 +193,39 @@ Adicionar à seção da fase:
 - `componente.tsx` — o que mudou especificamente
 ```
 
+### Antes de pedir validação ao utilizador
+
+Depois do commit, e **antes** de aguardar o utilizador testar, dois passos
+obrigatórios:
+
+**1. Escrever o relatório da fase em linguagem simples**, no próprio arquivo:
+
+```markdown
+### Relatório da Fase N — o que mudou na prática
+
+**Antes:** <comportamento anterior, sem jargão de código, 1-2 frases>
+**Agora:** <comportamento novo, 1-2 frases>
+**Para validar:** <quais Cenários da secção "Checks de Validação" cobrem esta
+fase — ex.: "Cenário P1 e C1, abaixo">
+```
+
+Obrigatório mesmo em fases pequenas — o tamanho do texto acompanha o tamanho
+da mudança, mas a secção nunca fica de fora. Serve dois propósitos: (a)
+comunicar o impacto real ao utilizador sem jargão, (b) permitir retomar o
+trabalho numa conversa nova ("lê `<arquivo>.md`, secção Fase N, e executa os
+testes do Cenário X") sem reler o histórico do chat — economiza tokens em
+conversas longas ou quando uma fase adicional surge depois de um bug.
+
+**2. Perguntar se quer o teste automatizado agora:**
+
+> "Quer que eu rode os Cenários X agora via browser (MCP chrome-devtools),
+> com você acompanhando?"
+
+- **Se sim:** ver "Testes automatizados via browser (MCP)", abaixo.
+- **Se não, ou sem ambiente local disponível:** aguardar o utilizador testar
+  manualmente e reportar — possivelmente numa conversa nova, usando o
+  relatório da fase (passo 1, acima) como ponto de partida.
+
 ### Quando um cenário de validação é testado
 
 Marcar o checkbox e registrar a data:
@@ -222,6 +255,9 @@ Adicionar uma nova seção no final (não editar o que já estava escrito):
 | ... | ... |
 ```
 
+Esta nova fase segue o mesmo ciclo da secção anterior: commit → relatório da
+fase em linguagem simples → checks → oferecer teste automatizado.
+
 ### Quando a implementação estiver completa
 
 Alterar o cabeçalho de status:
@@ -247,6 +283,25 @@ Após todos os checks obrigatórios validados, executar o processo de graduaçã
 4. **Sem histórico acumulado** no texto corrido. Não escrever "antes fazia X, agora passou a fazer Y" no corpo — isso fica nos commits e na seção de diagnóstico.
 5. **Tabela de arquivos sempre presente** por fase — é o mapa rápido para quem precisa revisar o código.
 6. **Checks de validação realistas.** Cada cenário deve ser executável por alguém sem contexto interno. Incluir o setup necessário.
+7. **Relatório em linguagem simples por fase, escrito antes de pedir validação.** Permite retomar numa conversa nova ("lê o arquivo, secção Fase N") sem reler o histórico do chat — economiza tokens em conversas longas ou quando surge uma fase adicional por bug.
+
+---
+
+## Testes automatizados via browser (MCP)
+
+Quando o utilizador aceitar a oferta de teste automatizado (ver "Antes de
+pedir validação ao utilizador", em Passo 3):
+
+- **Credenciais:** vivem só em `_conta-teste-local.md` (gitignored, preenchido
+  uma única vez). Nunca escrever email/senha de conta de teste no arquivo de
+  implementação, no chat, ou em qualquer arquivo versionado.
+- **Rascunho da sessão:** usar `_sessao-teste-corrente.md` (gitignored,
+  sobrescrito a cada sessão nova) — nunca criar um arquivo
+  `checklist-testes-<slug>.md` por sessão; isso acumula arquivos no disco sem
+  ligação clara a qual implementação pertencem.
+- **Resultado:** transcrever sempre directamente nos checks do arquivo de
+  implementação (`[x]` + data). O rascunho não é fonte de verdade — pode ser
+  descartado depois da transcrição.
 
 ---
 
@@ -259,9 +314,12 @@ Utilizador reporta problema/melhoria
   → Claude: Plan Mode (diagnóstico + plano da Fase 1)
   → Utilizador aprova
   → Claude: cria o arquivo .md + implementa Fase 1 + commit
-  → Claude: preenche checks no arquivo e aguarda testes
+  → Claude: escreve checks + "Relatório da Fase 1" (linguagem simples)
+  → Claude pergunta: "Quer que eu rode os testes agora via browser (MCP)?"
+      ├─ Sim → Claude testa ao vivo, regista resultados nos checks
+      └─ Não → aguarda o utilizador (pode ser numa conversa nova)
 
-Utilizador faz os testes e reporta resultados
+Resultado dos testes (sessão ao vivo ou reportado pelo utilizador)
   → Claude: marca os checks validados no arquivo
 
   Caminho A — tudo ok, sem mais necessidades
@@ -271,7 +329,8 @@ Utilizador faz os testes e reporta resultados
     → Claude: Plan Mode novamente (diagnóstico da nova necessidade)
     → Utilizador aprova
     → Claude: adiciona Fase 2 ao mesmo arquivo + implementa + commit
-    → Claude: preenche checks da Fase 1 (se o utilizador relatou) + cria checks da Fase 2
+    → Claude: escreve checks + "Relatório da Fase 2" da nova fase
+    → Claude pergunta de novo sobre teste automatizado
     → Ciclo se repete
 ```
 
@@ -299,21 +358,26 @@ Claude:
   7. Cria docs/implementations/<nome>.md com o template preenchido (Fase 1)
   8. Implementa Fase 1
   9. Faz commit e registra o hash no arquivo
-  10. Preenche os checks pendentes e aguarda o utilizador testar
+  10. Escreve os checks pendentes + "Relatório da Fase 1" (linguagem simples)
+  11. Pergunta: "Quer que eu rode os testes agora via browser (MCP)?"
 
+Utilizador: "Não, vou testar eu mesmo." (pode ser numa conversa nova depois)
+
+[... eventualmente, na mesma conversa ou numa nova ...]
 Utilizador: "Testei — P1 e P2 ok, mas P3 tem um comportamento estranho: X"
 
 Claude:
-  11. Marca [x] em P1 e P2 com a data
-  12. Entra em Plan Mode novamente para diagnosticar o problema de P3
-  13. Propõe Fase 2
+  12. Marca [x] em P1 e P2 com a data
+  13. Entra em Plan Mode novamente para diagnosticar o problema de P3
+  14. Propõe Fase 2
 
 Utilizador: "Aprovado."
 
 Claude:
-  14. Adiciona seção Fase 2 ao mesmo arquivo
-  15. Implementa + commit + registra hash
-  16. Cria checks da Fase 2 e aguarda novos testes
+  15. Adiciona seção Fase 2 ao mesmo arquivo
+  16. Implementa + commit + registra hash
+  17. Escreve os checks da Fase 2 + "Relatório da Fase 2"
+  18. Pergunta de novo sobre teste automatizado
 
 ... e assim por diante até o utilizador encerrar.
 ```

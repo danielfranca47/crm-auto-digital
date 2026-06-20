@@ -19,6 +19,13 @@ relevante é migrado para `docs/architecture/` e o arquivo é deletado.
 | `_template-implementacao.md` | Exemplo concreto preenchido — como fica um arquivo bem estruturado na prática |
 | `_processo-graduacao-implementacao.md` | O que fazer quando um arquivo está completo: migrar para architecture, deletar, sugerir próximos passos |
 
+### Ficheiros de dados de sessão (gitignored, não são guias)
+
+| Ficheiro | Para que serve |
+|---|---|
+| `_conta-teste-local.md` | Credenciais da conta de teste — preenchido uma única vez, referenciado pelas sessões de teste em vez de repetido |
+| `_sessao-teste-corrente.md` | Rascunho de trabalho de uma sessão de teste automatizado via browser (MCP) — sobrescrito a cada sessão nova, nunca acumula |
+
 ### Ficheiros regulares — implementações activas
 
 Arquivos em andamento ou recém-completados. Seguem o padrão do template.
@@ -39,10 +46,11 @@ Tu describes uma melhoria ou bug
   → Claude: Plan Mode (diagnóstico + plano)
   → Tu aprovares
   → Claude cria o arquivo + implementa + commit
+  → Claude escreve checks + "Relatório da Fase N" (linguagem simples)
+  → Claude pergunta: testar agora via browser (MCP)?
 
-Feature implementada, testes pendentes
-  → Pedes testes → Claude cria guia em docs/ops/
-  → Testes executados → Claude actualiza [x] neste arquivo
+Testes executados (ao vivo ou reportados por ti, mesmo numa conversa nova)
+  → Claude actualiza [x] neste arquivo
 
 Arquivo com todos os checks obrigatórios [x]
   → Claude segue _processo-graduacao-implementacao.md
