@@ -338,7 +338,7 @@ os turnos seguintes.
 
 | # | Commit | O que foi implementado |
 |---|---|---|
-| 1 | _pendente_ | |
+| 1 | `8c39555` | Novo bloco de homologação `effective_route_to=="agendamento"` + teste + documentação |
 
 ### Cenário C3 — revalidação completa (categoria + appointment)
 - [x] Lead novo, Playground: "Oi, gostaria de agendar uma sessão para amanhã às 11h"
