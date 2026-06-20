@@ -16,7 +16,10 @@
       "Bash(./.venv/Scripts/python.exe -c \"import ast; ast.parse\\(open\\('app/api/playground_internal.py', encoding='utf-8'\\).read\\(\\)\\); ast.parse\\(open\\('app/services/meeting_scheduler.py', encoding='utf-8'\\).read\\(\\)\\); ast.parse\\(open\\('app/clients/crm_client.py', encoding='utf-8'\\).read\\(\\)\\)\")",
       "Bash(python -c ' *)",
       "Bash(where python *)",
-      "Bash(py -3 -m pytest --version)"
+      "Bash(py -3 -m pytest --version)",
+      "Bash(./.venv/Scripts/python.exe scripts/test_child_recommended_next_category_micro_adjustment.py)",
+      "Bash(./.venv/Scripts/python.exe -m pytest tests/test_pre_agendamento_recommended_next_category.py tests/test_compound_follow_through_routing.py -v)",
+      "mcp__plugin_chrome-devtools-mcp_chrome-devtools__press_key"
     ]
   },
   "hooks": {
