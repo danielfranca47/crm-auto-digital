@@ -189,7 +189,7 @@ separada à recepção.
 
 | # | Commit | O que foi implementado |
 |---|---|---|
-| 1 | _pendente — commitada junto com a Fase 4_ | |
+| 1 | `a07fd45` | Commitada junto com a Fase 4 — ver detalhes abaixo |
 
 ---
 
@@ -246,7 +246,13 @@ if _greeting_prefix:
 
 | # | Commit | O que foi implementado |
 |---|---|---|
-| 1 | _pendente_ | |
+| 1 | `a07fd45` | Fase 3 (homologação + prompt) e Fase 4 (recepção em 2 chamadas) — 1 único commit |
+
+**Detalhes do commit `a07fd45`:**
+- `backend-executors/app/services/decision_engine.py` — homologação `pre-agendamento→agendamento`; prompt de pré-agendamento reestruturado; reforço na SAUDAÇÃO COMPOSTA da Mãe; chamada separada à recepção + prefixo de saudação; remoção das instruções de abertura embutida
+- `backend-executors/tests/test_pre_agendamento_recommended_next_category.py` — criado
+- `backend-executors/tests/test_compound_follow_through_routing.py` — mock por rota + asserções actualizadas
+- `docs/implementations/fix-compound-follow-through-recepcao.md` — nota de evolução do mecanismo
 
 ---
 
