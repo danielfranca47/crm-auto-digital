@@ -289,6 +289,79 @@ if _greeting_prefix:
 
 ---
 
+## Fase 5 — Diagnóstico + Correção: categoria presa em "apresentation" bloqueava o appointment para sempre (20/06/2026)
+
+### Problema identificado
+
+Ao validar ao vivo o Cenário C3 do M3 (appointment deve ser criado quando o lead já estava
+na fase de agendamento antes da confirmação), descobri que isso **nunca** acontecia no
+caminho onde `effective_route_to` vai direto para `"agendamento"` sem o `lead.category`
+ter passado por `"pre-agendamento"` antes (cenário que a Fase 3D tornou mais comum).
+Reproduzido ao vivo: lead #273, 2 turnos, `meeting_scheduled=true` nos dois,
+`GET /api/leads/273/appointments` → `[]` nos dois. Categoria real no SQLite
+(`backend-crm/database/crm.db`): presa em `"apresentation"`.
+
+Causa raiz: `_ALLOWED_ADVANCE["apresentation"]` (`decision_engine.py:3593-3599`) não inclui
+`"agendamento"` — só `{"closing","follow-up","pre-agendamento"}`. O clamp de salto único de
+`apply_mother_category_guardrails()` bloqueia o salto (`"jump_blocked"`, pois
+`len(allowed_next)=3 != 1`), e nenhum dos 3 elos de homologação existentes cobre
+genericamente "estou efectivamente em agendamento agora, seja qual for a categoria
+anterior". `lead.category` fica preso em `"apresentation"` para sempre — e o gate
+`is_phase_entry` do M3 nunca vê `lead.category` alcançar `"agendamento"`, bloqueando a
+criação real do appointment indefinidamente (não só no turno de entrada, que era o
+trade-off já aceite na Fase 2).
+
+### Correção
+
+| Arquivo | Mudança |
+|---|---|
+| `backend-executors/app/services/decision_engine.py` (`compose_decision_output()`, depois do bloco `pre_agendamento_complete_auto_advance`) | Novo bloco: quando `effective_route_to=="agendamento"` (para `_SCHEDULING_AGENT_TEMPLATES`), `suggested_category="agendamento"` directamente, ignorando o que o clamp de salto único decidiu |
+| `backend-executors/tests/test_pre_agendamento_recommended_next_category.py` | Novo cenário `test_direct_jump_to_agendamento_advances_category_despite_stage_clamp` |
+
+```python
+if (
+    effective_route_to == "agendamento"
+    and template_key in _SCHEDULING_AGENT_TEMPLATES
+):
+    suggested_category = "agendamento"
+    category_reason = (
+        f"{category_reason}|effective_route_agendamento_auto_advance"
+        if category_reason else "effective_route_agendamento_auto_advance"
+    )
+```
+
+O gate `is_phase_entry` do M3 (Fase 2) não foi alterado — continua a bloquear a criação
+real no turno de entrada; esta correcção só desbloqueia a persistência da categoria para
+os turnos seguintes.
+
+### Commits Fase 5
+
+| # | Commit | O que foi implementado |
+|---|---|---|
+| 1 | _pendente_ | |
+
+### Cenário C3 — revalidação completa (categoria + appointment)
+- [x] Lead novo, Playground: "Oi, gostaria de agendar uma sessão para amanhã às 11h"
+      (conflito real de calendário) → IA oferece 09:00/10:00
+- [x] Confirmar via SQLite: `lead.category` já é `"agendamento"` depois do 1º turno (antes
+      da Fase 5 ficava em `"apresentation"`)
+- [x] Responder "pode ser às 9h então, perfeito"
+- [x] Confirmar via log: `lead_current=agendamento`, `guardrail=same_stage`,
+      `POST /api/appointments "201 Created"`, `POST .../bot-disabled "200 OK"`
+- [x] Confirmar via API (`GET /api/leads/{id}/appointments`): appointment criado
+- **Validado em:** 20/06/2026 — via UI real, lead #274, appointment `id=28`
+  (`source="playground"`). `pytest` sem regressões novas (25 pré-existentes / 69 passes).
+
+**Achado separado, fora de escopo (não corrigido):** o `start_at` gravado no appointment
+(`2026-06-21T13:25:53Z`) não corresponde a "9h" pedido — corresponde ao instante em que o
+`decide()` correu. `meeting_scheduler.py` logou `event=meeting_datetime_source
+source=fallback_extract_start_at`, indicando que a extracção heurística de data/hora não
+conseguiu juntar "amanhã" (mencionado num turno anterior) com "9h" (mencionado só na
+mensagem de confirmação) e caiu num fallback impreciso. Pré-existente, não introduzido por
+esta sessão de fixes — registar para investigação futura.
+
+---
+
 ## Ajustes Possíveis Pós-Implementação
 
 - Trade-off aceite: quando o lead confirma um horário na MESMA mensagem em que a Mãe move a

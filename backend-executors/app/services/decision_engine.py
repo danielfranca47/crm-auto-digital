@@ -3888,6 +3888,23 @@ def compose_decision_output(
             if category_reason else f"pre_agendamento_complete_auto_advance:{_pre_complete_next}"
         )
 
+    # Guardrail: effective_route_to já é agendamento (mesmo sem ter passado por
+    # pre-agendamento nesta conversa, ex.: saudação composta com dia/hora específicos já na
+    # 1ª mensagem) → persiste agendamento como categoria. Sem isto, o clamp de salto único
+    # (_ALLOWED_ADVANCE) mantém a categoria em apresentation indefinidamente, e o gate
+    # is_phase_entry do M3 (meeting_scheduler) nunca reconhece turnos seguintes como "já na
+    # fase" — bloqueando a criação real do appointment para sempre, não só no turno de
+    # entrada.
+    if (
+        effective_route_to == "agendamento"
+        and template_key in _SCHEDULING_AGENT_TEMPLATES
+    ):
+        suggested_category = "agendamento"
+        category_reason = (
+            f"{category_reason}|effective_route_agendamento_auto_advance"
+            if category_reason else "effective_route_agendamento_auto_advance"
+        )
+
     outcome, highlight = apply_outcome_guardrails(current_category, child_result)
     if template_key == "hybrid_scheduler":
         outcome = None
