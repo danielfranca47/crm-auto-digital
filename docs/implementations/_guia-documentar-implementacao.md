@@ -216,15 +216,25 @@ trabalho numa conversa nova ("lê `<arquivo>.md`, secção Fase N, e executa os
 testes do Cenário X") sem reler o histórico do chat — economiza tokens em
 conversas longas ou quando uma fase adicional surge depois de um bug.
 
-**2. Perguntar se quer o teste automatizado agora:**
+**2. Perguntar se quer o teste automatizado agora — sempre junto com um prompt de retomada pronto:**
 
 > "Quer que eu rode os Cenários X agora via browser (MCP chrome-devtools),
-> com você acompanhando?"
+> com você acompanhando?
+>
+> Se preferir fazer depois (aqui ou numa conversa nova), pode colar:
+>
+> Lê `<arquivo>.md`, secção "Fase N", e executa os testes dos Cenários X."
+
+O prompt de retomada **nunca fica de fora** — é gerado junto com a pergunta,
+não só quando o utilizador pede. Ele deve ter o nome real do arquivo, o
+número real da fase e os códigos reais dos cenários ainda pendentes (não um
+placeholder genérico), para que o utilizador só precise copiar e colar, sem
+reconstruir nada de memória.
 
 - **Se sim:** ver "Testes automatizados via browser (MCP)", abaixo.
 - **Se não, ou sem ambiente local disponível:** aguardar o utilizador testar
-  manualmente e reportar — possivelmente numa conversa nova, usando o
-  relatório da fase (passo 1, acima) como ponto de partida.
+  manualmente e reportar — usando o prompt de retomada acima, nesta conversa
+  ou numa nova.
 
 ### Quando um cenário de validação é testado
 
@@ -316,8 +326,10 @@ Utilizador reporta problema/melhoria
   → Claude: cria o arquivo .md + implementa Fase 1 + commit
   → Claude: escreve checks + "Relatório da Fase 1" (linguagem simples)
   → Claude pergunta: "Quer que eu rode os testes agora via browser (MCP)?"
+    + prompt de retomada pronto para colar (caso prefira depois)
       ├─ Sim → Claude testa ao vivo, regista resultados nos checks
-      └─ Não → aguarda o utilizador (pode ser numa conversa nova)
+      └─ Não → aguarda o utilizador (pode colar o prompt nesta conversa
+               ou numa nova)
 
 Resultado dos testes (sessão ao vivo ou reportado pelo utilizador)
   → Claude: marca os checks validados no arquivo
@@ -359,9 +371,11 @@ Claude:
   8. Implementa Fase 1
   9. Faz commit e registra o hash no arquivo
   10. Escreve os checks pendentes + "Relatório da Fase 1" (linguagem simples)
-  11. Pergunta: "Quer que eu rode os testes agora via browser (MCP)?"
+  11. Pergunta: "Quer que eu rode os testes agora via browser (MCP)?" +
+      prompt de retomada pronto para colar depois, se preferir
 
-Utilizador: "Não, vou testar eu mesmo." (pode ser numa conversa nova depois)
+Utilizador: "Não, vou testar eu mesmo." (cola o prompt de retomada depois,
+             nesta conversa ou numa nova)
 
 [... eventualmente, na mesma conversa ou numa nova ...]
 Utilizador: "Testei — P1 e P2 ok, mas P3 tem um comportamento estranho: X"
