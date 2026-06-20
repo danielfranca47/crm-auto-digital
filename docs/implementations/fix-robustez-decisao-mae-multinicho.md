@@ -110,6 +110,17 @@ retry/fallback existente, como hoje.
 | `backend-executors/app/services/decision_engine.py` | `compose_decision_output()` — expõe `decision.decision_trace["is_phase_entry"] = _is_phase_entry` junto ao cálculo já existente (~linha 4120) |
 | `backend-executors/app/services/meeting_scheduler.py` | `MeetingSignal` — novo campo `is_phase_entry: bool`; `_extract_meeting_signal()` lê `decision_trace.get("is_phase_entry", False)`; `handle_meeting_scheduled()` — early-return sem side-effects quando `signal.is_phase_entry=True` |
 
+### Commits Fase 2
+
+| # | Commit | O que foi implementado |
+|---|---|---|
+| 1 | `57c8ab2` | M3: gate `is_phase_entry` em `compose_decision_output()` + `handle_meeting_scheduled()` |
+
+**Detalhes do commit `57c8ab2`:**
+- `backend-executors/app/services/decision_engine.py` — `compose_decision_output()` expõe `decision.decision_trace["is_phase_entry"]`
+- `backend-executors/app/services/meeting_scheduler.py` — `MeetingSignal.is_phase_entry`; early-return em `handle_meeting_scheduled()` quando `True`
+- `docs/implementations/fix-robustez-decisao-mae-multinicho.md` — checks C2/C3/C4 marcados
+
 ---
 
 ## Checks de Validação
