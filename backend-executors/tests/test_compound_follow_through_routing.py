@@ -1,9 +1,22 @@
 from app.services import decision_engine
 
 
+def _child_result_by_route(*, greeting_text: str, commercial_payload: str):
+    def _generate(route: str, _prompt: str) -> str:
+        if route == "recepcao":
+            return (
+                f'{{"message_text":"{greeting_text}","should_ask":false,"question_text":"",'
+                '"field":null,"did_complete_phase":false,"confidence":0.95,"signals":[]}'
+            )
+        return commercial_payload
+
+    return _generate
+
+
 def test_compound_follow_through_routes_directly_to_commercial_child(monkeypatch):
-    """Saudação composta (cumprimento + pedido) deve pular a filha recepção e
-    responder já com o conteúdo comercial, em vez de travar prometendo 'verificar'."""
+    """Saudação composta (cumprimento + pedido): a recepção responde primeiro (só o
+    cumprimento, numa chamada dedicada) e a filha comercial trata o pedido na sequência —
+    em vez de travar prometendo 'verificar'."""
     context = {
         "lead": {"category": "qualification"},
         "ai_profile": {"agent_mode": "agenda", "template_key": "hybrid_scheduler"},
@@ -29,10 +42,13 @@ def test_compound_follow_through_routes_directly_to_commercial_child(monkeypatch
     monkeypatch.setattr(
         decision_engine.llm_service,
         "generate_child_result",
-        lambda _route, _prompt: (
-            '{"message_text":"Olá! Temos horário às 15h amanhã, posso confirmar?",'
-            '"did_complete_phase":false,"recommended_next_category":null,"outcome":null,'
-            '"kanban_highlight":null,"signals":[],"confidence":0.8}'
+        _child_result_by_route(
+            greeting_text="Olá! Tudo bem?",
+            commercial_payload=(
+                '{"message_text":"Temos horário às 15h amanhã, posso confirmar?",'
+                '"did_complete_phase":false,"recommended_next_category":null,"outcome":null,'
+                '"kanban_highlight":null,"signals":[],"confidence":0.8}'
+            ),
         ),
     )
 
@@ -42,7 +58,7 @@ def test_compound_follow_through_routes_directly_to_commercial_child(monkeypatch
     assert trace.get("mother_route_to") == "recepcao"
     assert trace.get("effective_route_to") == "apresentation"
     assert trace.get("prompt_function_used") == "_build_child_prompt_apresentation"
-    assert decision.message_text == "Olá! Temos horário às 15h amanhã, posso confirmar?"
+    assert decision.message_text == "Olá! Tudo bem?\n\nTemos horário às 15h amanhã, posso confirmar?"
 
 
 def test_perceived_category_fallback_routes_when_compound_follow_through_missing(monkeypatch):
@@ -75,10 +91,13 @@ def test_perceived_category_fallback_routes_when_compound_follow_through_missing
     monkeypatch.setattr(
         decision_engine.llm_service,
         "generate_child_result",
-        lambda _route, _prompt: (
-            '{"message_text":"Olá! Temos horário às 15h amanhã, posso confirmar?",'
-            '"did_complete_phase":false,"recommended_next_category":null,"outcome":null,'
-            '"kanban_highlight":null,"signals":[],"confidence":0.8}'
+        _child_result_by_route(
+            greeting_text="Olá! Tudo bem?",
+            commercial_payload=(
+                '{"message_text":"Temos horário às 15h amanhã, posso confirmar?",'
+                '"did_complete_phase":false,"recommended_next_category":null,"outcome":null,'
+                '"kanban_highlight":null,"signals":[],"confidence":0.8}'
+            ),
         ),
     )
 
@@ -88,6 +107,7 @@ def test_perceived_category_fallback_routes_when_compound_follow_through_missing
     assert trace.get("mother_route_to") == "recepcao"
     assert trace.get("effective_route_to") == "agendamento"
     assert trace.get("prompt_function_used") == "_build_child_prompt_agendamento"
+    assert decision.message_text == "Olá! Tudo bem?\n\nTemos horário às 15h amanhã, posso confirmar?"
 
 
 def test_pure_greeting_without_compound_follow_through_stays_in_recepcao(monkeypatch):

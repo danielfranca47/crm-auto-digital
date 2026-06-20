@@ -945,15 +945,6 @@ def _build_daughter_identity_block(context: Dict[str, Any], phase: str) -> str:
         "- Cada resposta deve avançar a conversa, não repetir o turno anterior.\n"
     )
 
-    if context.get("_compound_greeting_pending"):
-        block += (
-            "\nABERTURA DE SAUDAÇÃO COMPOSTA:\n"
-            "- Esta é a primeira mensagem do lead e ela combinava uma saudação com o pedido abaixo.\n"
-            "- Abra a sua resposta com um cumprimento breve e caloroso (uma frase) e, na mesma\n"
-            "  mensagem, trate o pedido normalmente — não fragmente em duas respostas nem diga\n"
-            "  algo como 'vou verificar e já te respondo'.\n"
-        )
-
     return block
 
 
@@ -1802,7 +1793,11 @@ def _build_mother_prompt(context: Dict[str, Any], message_text: str) -> str:
         "SAUDAÇÃO COMPOSTA (saudação + pergunta ou pedido embutido):\n"
         "→ route_to = \"recepcao\", compound_follow_through = \"<rota_da_parte_comercial>\", confidence = 0.9\n"
         "  (compound_follow_through usa os mesmos valores de route_to: qualification, apresentation, etc.)\n"
-        "Exemplo: mensagem com cumprimento + pergunta de serviço → recepcao + compound_follow_through=\"qualification\"\n\n"
+        "Exemplo: mensagem com cumprimento + pergunta de serviço → recepcao + compound_follow_through=\"qualification\"\n"
+        "Se a parte comercial for sobre agendamento, aplique a MESMA distinção dia/hora da\n"
+        "PRIORIDADE 2 abaixo ao escolher compound_follow_through: sem dia/hora específicos →\n"
+        "\"pre-agendamento\"; COM dia/hora específicos (ex.: 'amanhã às 15h') → \"agendamento\"\n"
+        "diretamente, nunca \"pre-agendamento\" nesse caso.\n\n"
         "PRIORIDADE 1 (obrigatória — sistema sobrescreve mesmo se você retornar outra):\n"
         "- PRIORIDADE 1A: missing_fields NÃO vazio + mensagem SEM pergunta direta → route_to = \"qualification\"\n"
         "  EXCEÇÃO ABSOLUTA: se greeting_responded = false → PRIORIDADE 0 vence; não aplique esta regra.\n"
@@ -3290,9 +3285,18 @@ def _build_child_prompt_pre_agendamento(
         f"FRAMEWORK: Modo {agent_mode_normalized}. Template {playbook_summary['template_key']}.\n\n"
         "SITUAÇÃO: O lead demonstrou interesse tentativo em marcar uma sessão, mas SEM data confirmada.\n"
         "Ex.: 'quero ir sim, vou tentar semana que vem', 'vou ver pra próxima semana'.\n\n"
-        "OBJETIVO: Capturar um dia estimado e solicitar permissão para enviar uma mensagem de check-in\n"
-        "um dia antes da sessão para confirmar o compromisso.\n\n"
-        "FLUXO DE CONVERSA (siga esta progressão):\n"
+        "ATENÇÃO — VERIFICAR ISTO ANTES DE QUALQUER OUTRA REGRA DESTA FASE:\n"
+        "Se a mensagem do lead já contém um dia E uma hora específicos e objetivos (ex.: 'amanhã\n"
+        "às 14h', 'sexta de manhã às 9h'), esta fase de pré-agendamento NÃO se aplica — não\n"
+        "pergunte mais nada, não peça permissão de check-in, NÃO siga o FLUXO DE CONVERSA abaixo.\n"
+        "Responda confirmando que vai verificar esse horário (1 frase) e devolva:\n"
+        "recommended_next_category='agendamento', did_complete_phase=true.\n"
+        "Só continue com o resto desta fase quando o lead NÃO tiver dado dia+hora específicos.\n\n"
+        "OBJETIVO (quando dia+hora específicos NÃO foram dados): Capturar um dia estimado e\n"
+        "solicitar permissão para enviar uma mensagem de check-in um dia antes da sessão para\n"
+        "confirmar o compromisso.\n\n"
+        "FLUXO DE CONVERSA (siga esta progressão — só quando o caso de dia+hora específicos acima\n"
+        "não se aplicar):\n"
         "1. Se ainda NÃO souber o dia estimado do lead:\n"
         "   → Responda acolhedoramente e pergunte: 'Que dia funcionaria melhor pra você?'\n"
         "2. Se souber o dia estimado MAS ainda não pediu permissão para o check-in:\n"
@@ -3305,8 +3309,6 @@ def _build_child_prompt_pre_agendamento(
         "REGRAS OBRIGATÓRIAS:\n"
         "- Máximo 2-3 frases por resposta.\n"
         "- NÃO repita preços nem faça pitch de venda.\n"
-        "- Se o lead der um dia/hora ESPECÍFICA e objetiva (ex.: 'amanhã às 14h'), use\n"
-        "  recommended_next_category='agendamento' para avançar direto ao agendamento.\n"
         "- checkin_at_iso SOMENTE quando lead confirmar permissão E um dia estiver claro.\n"
         "- Se lead disser 'não' ao check-in → apenas confirme o interesse e encerre educadamente.\n\n"
         + _build_tone_block(ai_profile, playbook)
@@ -3870,6 +3872,22 @@ def compose_decision_output(
             if category_reason else f"apresentation_complete_auto_advance:{_apres_complete_next}"
         )
 
+    # Guardrail: pré-agendamento completo (dia/hora específicos já dados) → avança para
+    # agendamento. Mesmo padrão do bloco de apresentation acima — a Filha já sinaliza
+    # did_complete_phase + recommended_next_category="agendamento", aqui homologamos.
+    _pre_complete_next = str(child_result.recommended_next_category or "").strip().lower()
+    if (
+        effective_route_to == "pre-agendamento"
+        and child_result.did_complete_phase
+        and _pre_complete_next == "agendamento"
+        and template_key in _SCHEDULING_AGENT_TEMPLATES
+    ):
+        suggested_category = _pre_complete_next
+        category_reason = (
+            f"{category_reason}|pre_agendamento_complete_auto_advance:{_pre_complete_next}"
+            if category_reason else f"pre_agendamento_complete_auto_advance:{_pre_complete_next}"
+        )
+
     outcome, highlight = apply_outcome_guardrails(current_category, child_result)
     if template_key == "hybrid_scheduler":
         outcome = None
@@ -4224,7 +4242,6 @@ def decide(context: Dict[str, Any], logger: Optional[logging.Logger] = None) -> 
 
             if _follow_through:
                 route_for_child = _follow_through
-                context["_compound_greeting_pending"] = True
                 if logger:
                     job = context.get("job") or {}
                     payload = job.get("payload") or {}
@@ -4235,6 +4252,20 @@ def decide(context: Dict[str, Any], logger: Optional[logging.Logger] = None) -> 
                         job.get("id") or payload.get("job_id"),
                         lead.get("id") or payload.get("lead_id"),
                     )
+                # Saudação composta: a recepção responde primeiro (só o cumprimento, numa
+                # chamada dedicada e barata) antes da filha comercial tratar o pedido — em
+                # vez de pedir à filha comercial para também abrir com cumprimento (instrução
+                # que não era seguida com confiança suficiente pela LLM). Best-effort: se a
+                # chamada falhar, segue sem a bolha de saudação separada.
+                try:
+                    _greeting_prompt = _build_child_prompt_recepcao(context, message_text, mother_decision)
+                    _greeting_text_raw = llm_service.generate_child_result("recepcao", _greeting_prompt)
+                    _greeting_payload = _extract_json_payload(_greeting_text_raw)
+                    _greeting_text = str((_greeting_payload or {}).get("message_text") or "").strip()
+                    if _greeting_text:
+                        context["_compound_greeting_text"] = _greeting_text
+                except Exception:
+                    pass
 
         if force_followup_route and logger:
             job = context.get("job") or {}
@@ -4603,6 +4634,13 @@ def decide(context: Dict[str, Any], logger: Optional[logging.Logger] = None) -> 
             child_result.question_text = _fallback_question_for_field(fallback_field)
             child_result.message_text = child_result.question_text
             qualification_validation_status = "fallback"
+
+        _greeting_prefix = context.get("_compound_greeting_text")
+        if _greeting_prefix:
+            if child_result.message_text:
+                child_result.message_text = f"{_greeting_prefix}\n\n{child_result.message_text}"
+            if child_result.question_text:
+                child_result.question_text = f"{_greeting_prefix}\n\n{child_result.question_text}"
 
         stage = "compose"
         decision = compose_decision_output(

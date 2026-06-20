@@ -197,6 +197,12 @@ atual → não dispara); testei a saudação composta e `perceived=agendamento` 
 
 ## Ajustes Possíveis Pós-Implementação
 
+- **Mecanismo de abertura evoluído (20/06/2026):** a instrução partilhada "ABERTURA DE
+  SAUDAÇÃO COMPOSTA" (Fase 1, acima) foi removida e substituída por uma chamada LLM
+  separada à filha recepção — a LLM não seguia a instrução embutida com confiança
+  suficiente em testes reais. Ver `fix-robustez-decisao-mae-multinicho.md`, Fase 4. O
+  override de `route_for_child` por `compound_follow_through`/`perceived_category` (Fases 1
+  e 2 deste arquivo) continua válido e inalterado.
 - Quando `compound_follow_through == "qualification"` (via qualquer uma das duas fontes),
   a extração/persistência de campos de qualificação (`decide()`, linhas ~4201-4433) não
   corre neste turno específico, porque esse bloco verifica `mother_decision.route_to ==

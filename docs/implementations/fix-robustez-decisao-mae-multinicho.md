@@ -150,6 +150,139 @@ retry/fallback existente, como hoje.
 
 ---
 
+## Fase 3 — Diagnóstico + Correção: pré-agendamento não avança para agendamento (20/06/2026)
+
+### Problema identificado
+
+Ao validar o Cenário C2 via UI real (Playground, MCP chrome-devtools), um lead novo com
+1ª mensagem "Oi, gostaria de agendar uma sessão para amanhã às 15h" (dia+hora específicos)
+recebeu uma resposta sem sentido: "Posso te mandar uma mensagem amanhã de manhã para
+confirmar a sessão?" — a filha de pré-agendamento tratou um pedido com horário já definido
+como se fosse um interesse tentativo sem data.
+
+Causa raiz dupla:
+1. **Code gap:** `_build_child_prompt_pre_agendamento()` já instrui a filha — "se o lead der
+   dia/hora específica, use `recommended_next_category='agendamento'`" — mas nenhum código
+   lia esse campo quando `effective_route_to=="pre-agendamento"`. O mecanismo de
+   "homologação" existente só cobria `qualification→apresentation` e
+   `apresentation→{pre-agendamento,agendamento,follow-up}`; faltava o elo
+   `pre-agendamento→agendamento`.
+2. **Prompt mal-priorizado:** a secção "FLUXO DE CONVERSA" do mesmo prompt tinha 3 passos
+   pensados para interesse tentativo, com frase-exemplo literal ("Posso te mandar uma
+   mensagem [dia anterior] de manhã...") que dominava a resposta mesmo quando a regra
+   posterior dizia para agir diferente.
+
+### Correção
+
+| Arquivo | Mudança |
+|---|---|
+| `backend-executors/app/services/decision_engine.py` (`compose_decision_output()`) | Novo bloco homologação `pre-agendamento → agendamento`, espelhando o de `apresentation`, logo depois dele |
+| `backend-executors/app/services/decision_engine.py` (`_build_child_prompt_pre_agendamento()`) | Verificação "dia+hora específicos" movida para o TOPO do prompt, como exceção explícita que pula o FLUXO DE CONVERSA tentativo |
+| `backend-executors/app/services/decision_engine.py` (`_build_mother_prompt()`, secção SAUDAÇÃO COMPOSTA) | 1 linha de cross-reference: ao escolher `compound_follow_through` para intenção de agendamento, aplicar a mesma distinção dia/hora da PRIORIDADE 2 (sem data → pre-agendamento; com dia/hora → agendamento direto) |
+| `backend-executors/tests/test_pre_agendamento_recommended_next_category.py` | Novo arquivo, 3 cenários (avança/não avança por incompletude/não avança por categoria fora do schema) |
+
+Nota: tentei também reforçar a instrução de saudação composta dentro deste mesmo prompt
+("LEMBRETE FINAL") — revertido na Fase 4 (ver abaixo), substituído por uma chamada LLM
+separada à recepção.
+
+### Commits Fase 3
+
+| # | Commit | O que foi implementado |
+|---|---|---|
+| 1 | _pendente — commitada junto com a Fase 4_ | |
+
+---
+
+## Fase 4 — Diagnóstico + Correção: recepção responde primeiro em saudação composta (20/06/2026)
+
+### Problema identificado
+
+Revalidando o Cenário C2 após a Fase 3, a resposta melhorou substancialmente (já não dizia
+"vou mandar mensagem amanhã"), mas continuava sem nenhum cumprimento — confirmado pelo
+utilizador via observação directa da sessão no Playground. A instrução "ABERTURA DE
+SAUDAÇÃO COMPOSTA" (injectada no prompt da filha comercial desde
+`fix-compound-follow-through-recepcao.md`) chega de facto ao prompt (confirmado isolando
+`_build_daughter_identity_block()`), mas a LLM não a seguia com confiança suficiente quando
+o resto do prompt (fluxo + exemplo concreto) é mais longo e específico — não era um gap de
+código, era a LLM a ignorar uma instrução entre várias.
+
+Decisão do utilizador (`AskUserQuestion`, 3 opções apresentadas): em vez de reforçar ainda
+mais a mesma instrução (mecanismo já comprovadamente não confiável) ou reverter para o
+comportamento pré-fix (lead precisa mandar 2ª mensagem), optou por **2 chamadas LLM, 2
+bolhas** — a filha recepção responde primeiro (só o cumprimento, prompt já existente e
+restrito), depois a filha comercial trata o pedido.
+
+### Correção
+
+| Arquivo | Mudança |
+|---|---|
+| `backend-executors/app/services/decision_engine.py` (`decide()`, bloco `if _follow_through:`) | Chamada separada e best-effort (`try/except`) a `_build_child_prompt_recepcao()` + `llm_service.generate_child_result("recepcao", ...)`; resultado guardado em `context["_compound_greeting_text"]` |
+| `backend-executors/app/services/decision_engine.py` (`decide()`, antes de `compose_decision_output(...)`) | Se `_compound_greeting_text` existir, prefixa `child_result.message_text`/`question_text` com `"{saudação}\n\n{texto comercial}"` — a divisão em bolhas distintas é feita pelo mecanismo de humanização já existente |
+| `backend-executors/app/services/decision_engine.py` (`_build_daughter_identity_block()`, `_build_child_prompt_pre_agendamento()`) | Removidas as instruções "ABERTURA DE SAUDAÇÃO COMPOSTA" / "LEMBRETE FINAL" — ficaram redundantes e causariam saudação duplicada |
+| `backend-executors/tests/test_compound_follow_through_routing.py` | Mock de `generate_child_result` passa a diferenciar por `route` (1º arg); asserções actualizadas para o texto prefixado |
+
+```python
+# decide() — dentro de `if _follow_through:`, depois de route_for_child = _follow_through
+try:
+    _greeting_prompt = _build_child_prompt_recepcao(context, message_text, mother_decision)
+    _greeting_text_raw = llm_service.generate_child_result("recepcao", _greeting_prompt)
+    _greeting_payload = _extract_json_payload(_greeting_text_raw)
+    _greeting_text = str((_greeting_payload or {}).get("message_text") or "").strip()
+    if _greeting_text:
+        context["_compound_greeting_text"] = _greeting_text
+except Exception:
+    pass
+
+# decide() — antes de compose_decision_output(...)
+_greeting_prefix = context.get("_compound_greeting_text")
+if _greeting_prefix:
+    if child_result.message_text:
+        child_result.message_text = f"{_greeting_prefix}\n\n{child_result.message_text}"
+    if child_result.question_text:
+        child_result.question_text = f"{_greeting_prefix}\n\n{child_result.question_text}"
+```
+
+### Commits Fase 4
+
+| # | Commit | O que foi implementado |
+|---|---|---|
+| 1 | _pendente_ | |
+
+---
+
+## Checks de Validação — Fase 3 + Fase 4
+
+### Cenário P1 — Saudação composta com dia/hora específicos (Playground, revalidação completa)
+- [x] Lead novo, Playground, perfil `hybrid_scheduler`/`agenda` (ai_profile_id=5): "Oi,
+      gostaria de agendar uma sessão para amanhã às 15h"
+- [x] Confirmar: resposta abre com cumprimento real (ex.: "Oi, Empresa Teste! Que bom que
+      você entrou em contato.")
+- [x] Confirmar: NÃO pergunta permissão de check-in nem diz "vou mandar mensagem amanhã" —
+      trata o pedido directamente com horários reais (ex.: "Para amanhã, posso te agendar
+      às 14:00 ou às 17:00")
+- [x] Confirmar via log: apenas 1 `decide()` por mensagem (não 2 turnos)
+- [x] Confirmar via API (`GET /api/leads/{id}/appointments`): nenhum appointment criado
+      neste turno (gate do M3, `is_phase_entry=True`, continua a funcionar)
+- **Validado em:** 20/06/2026 — via UI real (browser, MCP chrome-devtools), lead #271. Log:
+  `compound_follow_through_route route_override=agendamento source=perceived_category`,
+  `prompt_function=_build_child_prompt_agendamento` (Fix D funcionou nesta execução — Mãe
+  escolheu "agendamento" directamente, sem precisar do turno extra de pré-agendamento).
+  `GET /api/leads/271/appointments` → `[]`.
+
+### Cenário P2 — Saudação pura continua sem chamada extra (regressão)
+- [x] Lead novo, Playground, enviar só "oi"
+- [x] Confirmar: cumprimento normal ("Oi, Empresa Teste!"), sem nenhuma chamada extra à
+      recepção (o bloco novo só corre dentro de `if _follow_through:`, que não dispara em
+      saudação pura)
+- **Validado em:** 20/06/2026 — via UI real, lead #272. Trace `recepcao 90% 1 guardrail`.
+
+### Cenário C1 — Regressão da suite existente
+- [x] `pytest tests/ scripts/test_meeting_scheduler_hook.py scripts/test_meeting_candidate_e2e.py scripts/test_structured_meeting_signal_dual_read.py scripts/test_mother_prompt_agent_mode.py -q`
+- **Validado em:** 20/06/2026 — 25 falhas pré-existentes (mesmas da Fase 1/2, não
+  relacionadas) / 68 passes (65 + 3 novos cenários de `test_pre_agendamento_recommended_next_category.py`).
+
+---
+
 ## Ajustes Possíveis Pós-Implementação
 
 - Trade-off aceite: quando o lead confirma um horário na MESMA mensagem em que a Mãe move a
@@ -161,3 +294,12 @@ retry/fallback existente, como hoje.
   de intenção de agendamento (`decision_engine.py:4245-4296`) usa listas de palavras-chave em
   português (`decision_engine.py:3606-3627`) — solução rígida e acoplada a nicho/idioma que não
   foi estendida nem copiada nesta correção.
+- **Custo de 1 chamada LLM extra (Fase 4):** só no turno em que `compound_follow_through`
+  dispara (1ª mensagem composta de um lead) — aceite explicitamente pelo utilizador. Não
+  afecta turnos normais.
+- **Não-determinismo da Mãe na escolha pre-agendamento vs. agendamento (Fase 3D):** o
+  reforço no prompt da Mãe melhora mas não garante 100% das vezes que `compound_follow_through`
+  seja directamente "agendamento" quando dia+hora são específicos — quando a Mãe ainda
+  escolhe "pre-agendamento", a Fase 3A+3B absorvem o caso (a filha de pré-agendamento
+  corrige no mesmo turno e a categoria avança para o turno seguinte), só custando 1 turno
+  extra em vez de resposta incorrecta.
