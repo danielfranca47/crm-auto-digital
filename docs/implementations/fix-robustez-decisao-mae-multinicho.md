@@ -91,6 +91,16 @@ def _coerce_unknown_enum_to_none(cls, value, info):
 `route_to` (obrigatório, sem default seguro) fica fora — continua a falhar e a cair no
 retry/fallback existente, como hoje.
 
+### Commits Fase 1
+
+| # | Commit | O que foi implementado |
+|---|---|---|
+| 1 | `b84ce18` | M4: validador tolerante de enums opcionais em `MotherDecision` |
+
+**Detalhes do commit `b84ce18`:**
+- `backend-executors/app/services/orchestrator_models.py` — `_OPTIONAL_ENUM_FIELDS` + `field_validator(mode="before")` em `MotherDecision`
+- `docs/implementations/fix-robustez-decisao-mae-multinicho.md` — arquivo criado
+
 ### Fase 2 — M3: gate estrutural de confirmação de agendamento
 
 **Objetivo:** só criar appointment real quando o lead já estava nesta fase antes desta mensagem.
