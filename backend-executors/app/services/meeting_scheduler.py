@@ -33,6 +33,7 @@ class MeetingSignal:
     agent_mode: Optional[str]
     meeting_scheduled: bool
     start_at: Optional[datetime]
+    is_phase_entry: bool
 
 
 
@@ -73,6 +74,7 @@ def _extract_meeting_signal(context: Dict[str, Any], decision: DecisionOutput) -
         meeting_scheduled = True
     elif "meeting_scheduled" in (decision.reason or ""):
         meeting_scheduled = True
+    is_phase_entry = bool(decision_trace.get("is_phase_entry", False))
 
     now_utc = _ensure_aware(datetime.now(timezone.utc), "UTC")
     tz_name = ai_profile.get("timezone")
@@ -104,6 +106,7 @@ def _extract_meeting_signal(context: Dict[str, Any], decision: DecisionOutput) -
         agent_mode=agent_mode,
         meeting_scheduled=meeting_scheduled,
         start_at=start_at,
+        is_phase_entry=is_phase_entry,
     )
 
 
@@ -399,6 +402,21 @@ def handle_meeting_scheduled(
     if signal.agent_mode != "agenda" or not signal.meeting_scheduled:
         return None
     if signal.lead_id is None:
+        return None
+
+    if signal.is_phase_entry:
+        # M3: o lead está a tocar esta fase pela primeira vez nesta mensagem — a Mãe pode ter
+        # interpretado um pedido/negociação inicial como confirmação. Não cria appointment nem
+        # desativa o bot agora; a resposta natural da filha (proposta/negociação) segue ao lead
+        # e a confirmação real só passa a poder criar o appointment num turno em que o lead já
+        # estava antes nesta fase.
+        if logger:
+            logger.info(
+                "event=meeting_scheduled_deferred_phase_entry lead_id=%s user_id=%s job_id=%s",
+                signal.lead_id,
+                signal.user_id,
+                signal.job_id,
+            )
         return None
 
     if not signal.start_at:

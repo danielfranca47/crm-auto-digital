@@ -122,17 +122,20 @@ retry/fallback existente, como hoje.
 - **Validado em:** 20/06/2026 — smoke test directo ao schema (`MotherDecision.model_validate`): `next_action_hint="confirmar"` → `None` + log emitido; `next_action_hint="reply"` → mantém `"reply"`; `route_to="lixo"` → `ValidationError` (comportamento inalterado, como esperado).
 
 ### Cenário C2 — M3: appointment não criado na entrada da fase
-- [ ] Lead novo cuja 1ª mensagem já contém dia/hora (ex.: "quero agendar amanhã às 15h") com `meeting_scheduled=true` da Mãe
-- [ ] Confirmar: appointment NÃO é criado neste turno, bot não é desativado
-- [ ] Confirmar: log `event=meeting_scheduled_deferred_phase_entry`
+- [x] Simulado via `handle_meeting_scheduled()` directo: `decision_trace={"meeting_scheduled": True, "is_phase_entry": True}`, lead em `category="qualification"`
+- [x] Confirmar: appointment NÃO é criado neste turno, bot não é desativado (`return None`, sem side-effects)
+- [x] Log emitido: `event=meeting_scheduled_deferred_phase_entry` (confirmado por inspecção do código; não capturado no smoke test por não usar `logger=`)
+- **Validado em:** 20/06/2026 — smoke test directo a `meeting_scheduler.handle_meeting_scheduled()` com `FakeClient`: `client.created == []` e `client.bot_disabled_calls == []`.
+- **Pendente:** validação ponta-a-ponta real (Playground/WhatsApp) com uma 1ª mensagem de lead novo contendo dia/hora — requer o utilizador correr o cenário real.
 
 ### Cenário C3 — M3: appointment criado normalmente quando já estava na fase
-- [ ] Mesmo lead, turno seguinte, já com `lead.category="agendamento"`, `meeting_scheduled=true`
-- [ ] Confirmar: appointment criado, bot desativado (comportamento idêntico ao actual)
+- [x] Mesmo teste directo, agora com `lead.category="agendamento"` e `is_phase_entry=False`
+- [x] Confirmar: appointment criado, bot desativado (comportamento idêntico ao actual)
+- **Validado em:** 20/06/2026 — smoke test directo: `client.created` populado e `client.bot_disabled_calls == [(1, True, "meeting_scheduled")]`.
 
 ### Cenário C4 — Regressão da suite existente
 - [x] `pytest tests/ scripts/test_meeting_scheduler_hook.py scripts/test_meeting_candidate_e2e.py scripts/test_structured_meeting_signal_dual_read.py scripts/test_mother_prompt_agent_mode.py -q` não introduz falhas novas
-- **Validado em:** 20/06/2026 (Fase 1) — 25 falhas / 65 passes antes e depois da mudança de M4 (confirmado via `git stash`/`git stash pop`); as 25 falhas são pré-existentes e não relacionadas (ex.: `FakeCRMClient.create_lead_appointment() got an unexpected keyword argument 'source'` — fixture desatualizada de uma feature anterior, fora do escopo desta correção).
+- **Validado em:** 20/06/2026 (Fase 1 e Fase 2) — 25 falhas / 65 passes antes e depois das duas mudanças (confirmado via `git stash`/`git stash pop` antes da Fase 1; recontagem idêntica após a Fase 2). As 25 falhas são pré-existentes e não relacionadas (ex.: `FakeCRMClient.create_lead_appointment() got an unexpected keyword argument 'source'` — fixture desatualizada de uma feature anterior, fora do escopo desta correção).
 
 ---
 

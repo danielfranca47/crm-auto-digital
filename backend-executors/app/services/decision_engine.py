@@ -4118,6 +4118,12 @@ def compose_decision_output(
         _lead_current_route != effective_route_to
         and (not _effective_phase_id or _effective_phase_id not in _triggered_phases)
     )
+    # Exposto no decision_trace para o meeting_scheduler: gate de M3 (confirmação de
+    # agendamento sem garantia) — só honra meeting_scheduled=true quando o lead já estava
+    # nesta fase antes desta mensagem, agnóstico de qual route_to está em jogo.
+    if decision.decision_trace is None:
+        decision.decision_trace = {}
+    decision.decision_trace["is_phase_entry"] = _is_phase_entry
     _phases_result = _evaluate_sales_flow_phases(
         context, effective_route_to, _extract_message_text(context),
         detected_intents=mother_decision.detected_intents,
