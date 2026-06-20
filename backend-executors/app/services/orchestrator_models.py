@@ -1,8 +1,21 @@
 from __future__ import annotations
 
+import logging
 from typing import Literal, Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
+
+logger = logging.getLogger(__name__)
+
+# Campos opcionais com enum fechado: um valor fora do conjunto degrada para None em vez de
+# derrubar a decisão inteira da Mãe via ValidationError (route_to fica fora de propósito —
+# é obrigatório e não tem default seguro).
+_OPTIONAL_ENUM_FIELDS: dict[str, frozenset[str]] = {
+    "perceived_category": frozenset({"qualification", "apresentation", "pre-agendamento", "agendamento", "follow-up", "closing"}),
+    "agent_mode": frozenset({"consultivo", "agenda", "direto"}),
+    "next_action_hint": frozenset({"reply", "ask_qualification", "handoff", "ignore", "greet"}),
+    "compound_follow_through": frozenset({"qualification", "apresentation", "pre-agendamento", "agendamento", "follow-up", "closing"}),
+}
 
 
 class MotherDecision(BaseModel):
@@ -16,6 +29,21 @@ class MotherDecision(BaseModel):
     next_action_hint: Optional[Literal["reply", "ask_qualification", "handoff", "ignore", "greet"]] = None
     compound_follow_through: Optional[Literal["qualification", "apresentation", "pre-agendamento", "agendamento", "follow-up", "closing"]] = None
     detected_intents: list[str] = Field(default_factory=list)
+
+    @field_validator(*_OPTIONAL_ENUM_FIELDS.keys(), mode="before")
+    @classmethod
+    def _coerce_unknown_enum_to_none(cls, value, info):
+        if value is None:
+            return None
+        allowed = _OPTIONAL_ENUM_FIELDS.get(info.field_name)
+        if allowed is not None and value not in allowed:
+            logger.warning(
+                "event=mother_decision_invalid_enum_coerced field=%s value=%r",
+                info.field_name,
+                value,
+            )
+            return None
+        return value
 
 
 class ChildResult(BaseModel):
