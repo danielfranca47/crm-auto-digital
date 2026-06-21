@@ -297,7 +297,7 @@ Decisão deliberada de não alterar: `docs/architecture/admin-agents-contract.md
 
 | # | Commit | O que foi implementado |
 |---|---|---|
-| 1 | _(pendente — registrar após o commit)_ | Toggle de conta `meeting_management_enabled` — backend-core, 3 gates no backend-crm, UI no frontend-crm, testes |
+| 1 | `329fc05` | Toggle de conta `meeting_management_enabled` — backend-core, 3 gates no backend-crm, UI no frontend-crm, testes |
 
 ### Relatório da Fase 5 — o que mudou na prática
 
