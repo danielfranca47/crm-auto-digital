@@ -29,7 +29,8 @@
       "Bash(curl -s -o /dev/null -w \"%{http_code}\\\\n\" http://localhost:8000/docs --max-time 5)",
       "Bash(curl -s -o /dev/null -w \"%{http_code}\\\\n\" http://localhost:5173/ --max-time 5)",
       "Bash(powershell -Command \"Get-Process python -ErrorAction SilentlyContinue | Select-Object Id,StartTime,Path\")",
-      "mcp__plugin_chrome-devtools-mcp_chrome-devtools__new_page"
+      "mcp__plugin_chrome-devtools-mcp_chrome-devtools__new_page",
+      "Bash(git rm *)"
     ]
   },
   "hooks": {
