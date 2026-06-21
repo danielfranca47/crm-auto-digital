@@ -50,7 +50,11 @@
       "Bash(curl -s -o /dev/null -w \"status backend-core: %{http_code}\\\\n\" --max-time 3 http://localhost:8001/)",
       "Bash(./backend-executors/.venv/Scripts/python.exe -c ' *)",
       "Bash(./.venv/Scripts/python.exe -c ' *)",
-      "Bash(.venv/Scripts/python.exe -c ' *)"
+      "Bash(.venv/Scripts/python.exe -c ' *)",
+      "Bash(python -m pytest tests/test_agendamento_scheduler_structured_signals.py -q)",
+      "Bash(\".venv/Scripts/python.exe\" -m unittest discover -s tests -v)",
+      "Bash(PYTHONIOENCODING=utf-8 \".venv/Scripts/python.exe\" -m unittest discover -s tests)",
+      "Bash(curl -s -o /dev/null -w \"status: %{http_code}\\\\n\" --max-time 3 http://localhost:8000/api/leads)"
     ]
   },
   "hooks": {
