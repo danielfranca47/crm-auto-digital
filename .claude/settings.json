@@ -20,7 +20,16 @@
       "Bash(./.venv/Scripts/python.exe scripts/test_child_recommended_next_category_micro_adjustment.py)",
       "Bash(./.venv/Scripts/python.exe -m pytest tests/test_pre_agendamento_recommended_next_category.py tests/test_compound_follow_through_routing.py -v)",
       "mcp__plugin_chrome-devtools-mcp_chrome-devtools__press_key",
-      "Bash(.venv/Scripts/python.exe -m pytest scripts/test_meeting_scheduler_hook.py -q)"
+      "Bash(.venv/Scripts/python.exe -m pytest scripts/test_meeting_scheduler_hook.py -q)",
+      "Bash(pip show *)",
+      "Bash(\".venv/Scripts/python.exe\" -m uvicorn app.main:app --port 8001)",
+      "Bash(disown)",
+      "Bash(echo \"started backend-core, pid maybe: $!\")",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\\\\n\" http://localhost:8001/docs --max-time 5)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\\\\n\" http://localhost:8000/docs --max-time 5)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\\\\n\" http://localhost:5173/ --max-time 5)",
+      "Bash(powershell -Command \"Get-Process python -ErrorAction SilentlyContinue | Select-Object Id,StartTime,Path\")",
+      "mcp__plugin_chrome-devtools-mcp_chrome-devtools__new_page"
     ]
   },
   "hooks": {
