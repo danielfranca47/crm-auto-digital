@@ -207,8 +207,8 @@ Renomear a constante Python é seguro. Renomear o **valor string** exige migraç
 ## Retry com backoff nas chamadas à LLM
 
 `backend-executors/app/services/llm_service.py` — helper partilhado `_post_with_retry()`,
-usado pelas três funções públicas (`generate_mother_route`, `generate_decision_text`,
-`generate_child_result`): até 2 tentativas, com 1s de backoff entre elas, antes de
+usado pelas quatro funções públicas (`generate_mother_route`, `generate_decision_text`,
+`generate_child_result`, `generate_conflict_message`): até 2 tentativas, com 1s de backoff entre elas, antes de
 propagar a excepção final. Cobre falhas transitórias de rede (`httpx.RequestError`) e
 status HTTP retryable (429/500/502/503/504). Aplica-se tanto ao fluxo real (WhatsApp,
 via fila de jobs) quanto ao Playground (chamada síncrona, sem fila) — antes desta

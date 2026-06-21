@@ -165,6 +165,8 @@ leadName: raw?.lead_contact ?? raw?.leadName ?? null,
 leadCompany: raw?.lead_company ?? raw?.leadCompany ?? null,
 ```
 
+**Datas malformadas:** `normalizeAppointment()` nunca lança excepção mesmo se `start`/`end` vier num formato não conversível (`toIsoOrEmpty()` devolve `""` em vez de chamar `.toISOString()` sobre uma `Date` inválida). `useAppointments()` e `useLeadAppointments()` filtram (`hasValidStart`) qualquer appointment cujo `startTime` não produza uma `Date` válida antes de devolver a lista — um appointment sem data reconhecível é descartado silenciosamente na origem, nunca chega a `ScheduleView`/`WeekView`/`DayView` (que chamam `format()` sem protecção contra `Date` inválida).
+
 ### Hooks React Query
 
 | Hook | Para quê |
@@ -260,7 +262,8 @@ backend-executors (decision_engine.py)
 backend-executors (meeting_scheduler.py + whatsapp.py)
   handle_meeting_scheduled() checa o horário confirmado pela IA contra
   calendar_busy_slots: se colidir com outro lead, NÃO cria o appointment, NÃO
-  desabilita o bot, e devolve uma mensagem de correcção que o runner envia ao
+  desabilita o bot, e devolve uma mensagem de correcção no tom do agente
+  (gerada via _generate_conflict_message(), ver abaixo) que o runner envia ao
   lead via core_client.send_whatsapp_message(). Fora da janela de 30 dias, a
   checagem é pulada (loga o evento) e segue o comportamento normal.
         ↓
@@ -272,4 +275,8 @@ backend-crm (routes/appointments.py + routes/leads.py)
 
 **Função:** `_load_calendar_busy_slots(user_id, window_days=30)` em `backend-crm/services/ai_orchestrator/orchestrator.py` — mesma cláusula de scoping de `routes/appointments.py::list_appointments`.
 
-**Limitação conhecida (MVP):** a mensagem de correcção é texto fixo, não gerada pela LLM. Suporte a múltiplos profissionais por conta (planos Scale/Enterprise, ainda não implementado) exigirá revisar `_check_conflict`/`calendar_busy_slots` para incluir um `professional_id` — hoje o modelo assume um único profissional por conta.
+### Mensagem de correcção de conflito (gerada via LLM)
+
+`_generate_conflict_message(ai_profile, *, logger=None)` em `meeting_scheduler.py` monta um prompt curto em PT usando `tone_of_voice`/`brand_name`/`identity_mode` do AI Profile e chama `llm_service.generate_conflict_message()` (reaproveita o `_post_with_retry()` partilhado — ver `llm-architecture.md`). `handle_meeting_scheduled()` usa `_generate_conflict_message(...) or MEETING_CONFLICT_MESSAGE` — se a geração falhar por qualquer motivo (sem `LLM_API_KEY`, erro de rede, timeout, resposta vazia), cai no texto fixo `MEETING_CONFLICT_MESSAGE` ("Peço desculpa, esse horário acabou de ficar indisponível...") definido em `meeting_scheduler.py`.
+
+**Limitação conhecida (MVP):** suporte a múltiplos profissionais por conta (planos Scale/Enterprise, ainda não implementado) exigirá revisar `_check_conflict`/`calendar_busy_slots` para incluir um `professional_id` — hoje o modelo assume um único profissional por conta.
