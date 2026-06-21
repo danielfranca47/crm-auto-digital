@@ -43,7 +43,13 @@
       "PowerShell(\"done\")",
       "mcp__plugin_chrome-devtools-mcp_chrome-devtools__fill_form",
       "Bash(./.venv/Scripts/python.exe -m pytest tests/test_today_date_with_weekday.py -v)",
-      "Bash(./.venv/Scripts/python.exe -m pytest tests/ scripts/test_meeting_scheduler_hook.py scripts/test_meeting_candidate_e2e.py scripts/test_structured_meeting_signal_dual_read.py scripts/test_mother_prompt_agent_mode.py -q)"
+      "Bash(./.venv/Scripts/python.exe -m pytest tests/ scripts/test_meeting_scheduler_hook.py scripts/test_meeting_candidate_e2e.py scripts/test_structured_meeting_signal_dual_read.py scripts/test_mother_prompt_agent_mode.py -q)",
+      "Bash(./.venv/Scripts/python.exe -m pytest tests/test_scheduling_offer_style.py -v)",
+      "Bash(ls .venv/Scripts/uvicorn.exe)",
+      "Bash(./.venv/Scripts/python.exe -m uvicorn app.main:app --port 8001)",
+      "Bash(curl -s -o /dev/null -w \"status backend-core: %{http_code}\\\\n\" --max-time 3 http://localhost:8001/)",
+      "Bash(./backend-executors/.venv/Scripts/python.exe -c ' *)",
+      "Bash(./.venv/Scripts/python.exe -c ' *)"
     ]
   },
   "hooks": {
