@@ -30,7 +30,9 @@
       "Bash(curl -s -o /dev/null -w \"%{http_code}\\\\n\" http://localhost:5173/ --max-time 5)",
       "Bash(powershell -Command \"Get-Process python -ErrorAction SilentlyContinue | Select-Object Id,StartTime,Path\")",
       "mcp__plugin_chrome-devtools-mcp_chrome-devtools__new_page",
-      "Bash(git rm *)"
+      "Bash(git rm *)",
+      "Bash(awk 'NR>=2271 && NR<=2420 && /timezone/' backend-executors/app/services/decision_engine.py)",
+      "Bash(python -m pytest tests/test_agendamento_scheduler_structured_signals.py tests/test_presentation_scheduler_structured_signals.py tests/test_meeting_scheduler_structured_candidate.py -q)"
     ]
   },
   "hooks": {
