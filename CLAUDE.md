@@ -375,6 +375,10 @@ Todo pedido de nova funcionalidade ou correção não-trivial segue este ciclo o
 3. Implementar fase a fase
    → cada fase = 1 commit
    → registar hash do commit no arquivo .md imediatamente após o commit
+   → escrever relatório da fase em linguagem simples no .md + perguntar se
+     quer teste automatizado agora — sempre acompanhado de um prompt de
+     retomada pronto para colar (ver `_guia-documentar-implementacao.md`,
+     secção "Antes de pedir validação ao utilizador")
 
 4. Aguardar testes do utilizador
    → o utilizador executa os checks de validação do arquivo .md
@@ -394,6 +398,7 @@ Todo pedido de nova funcionalidade ou correção não-trivial segue este ciclo o
 - **Nunca graduar com checks `[ ]` em aberto.** Checks marcados `[⏭️]` (pulados justificados) são permitidos.
 - **O arquivo .md é o contrato vivo da feature** — deve reflectir sempre o estado real da implementação.
 - **Cada fase tem exactamente 1 commit.** O hash é registado no .md logo após o commit.
+- **O commit não é o fim da fase.** Nunca terminar a resposta só com o commit — escrever o relatório em linguagem simples e perguntar sobre teste automatizado (com prompt de retomada pronto) é parte obrigatória do fecho da fase, não um passo opcional do guia.
 - Um arquivo de implementação com `Status: Em andamento` significa que há testes pendentes — não iniciar nova etapa sobreposta sem validar primeiro.
 
 ### Arquivos de referência
