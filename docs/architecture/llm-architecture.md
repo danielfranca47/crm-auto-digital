@@ -25,10 +25,13 @@ whatsapp_worker
           → avalia blocos da fase correspondente
           → retorna {prompt_injections, pre_send_media, system_actions}
       → escolhe prompt filha por route_to (+ injeta prompt_injections):
-          qualification   → _build_child_prompt_qualification
-          apresentation   → _build_child_prompt_apresentation
-          follow-up       → _build_child_followup_prompt
-          closing         → _build_child_prompt (genérica)
+          recepcao         → _build_child_prompt_recepcao
+          qualification    → _build_child_prompt_qualification
+          apresentation    → _build_child_prompt_apresentation
+          pre-agendamento  → _build_child_prompt_pre_agendamento
+          agendamento      → _build_child_prompt_agendamento
+          follow-up        → _build_child_followup_prompt
+          closing          → _build_child_prompt (genérica)
       → llm_service.generate_child_result(route_to, child_prompt)
       → valida ChildResult
       → compose_decision_output(...)
@@ -48,7 +51,7 @@ whatsapp_worker
 
 | Campo | Tipo | Descrição |
 |---|---|---|
-| `route_to` | `qualification\|apresentation\|follow-up\|closing` | Rota decidida |
+| `route_to` | `recepcao\|qualification\|apresentation\|pre-agendamento\|agendamento\|follow-up\|closing` | Rota decidida. `pre-agendamento`/`agendamento` só fazem sentido para templates de agendamento (`_SCHEDULING_AGENT_TEMPLATES` — ver [`pipeline-phases.md`](pipeline-phases.md)). Campo obrigatório, sem tolerância de enum — valor fora da lista levanta `ValidationError` e cai no fallback/retry existente. |
 | `perceived_category` | mesmos valores + null | Categoria percebida |
 | `confidence` | 0..1 | Confiança da decisão |
 | `reason` | string | Justificativa textual |
@@ -61,6 +64,15 @@ whatsapp_worker
 | `signals` | dict\|null | Sinais estruturados: `meeting_scheduled` (bool), `intent_level` (`low\|medium\|high`), `urgency_level` (`low\|medium\|high`), `price_acceptance` (`no\|unsure\|yes`) |
 | `next_action_hint` | `reply\|ask_qualification\|handoff\|ignore\|greet\|null` | Sugestão de próxima ação ao pipeline |
 | `objective` | string\|null | Objetivo da resposta atual (informativo) |
+| `compound_follow_through` | mesmos valores de `route_to` + null | Quando `route_to="recepcao"` mas a mensagem combina saudação com pedido comercial (ex.: "Oi, gostaria de agendar para amanhã às 16h"), indica a rota real da parte comercial. Mãe instruída (prompt, secção SAUDAÇÃO COMPOSTA) a aplicar um checklist dia+hora: ambos presentes → `agendamento` directamente; só um ou nenhum → `pre-agendamento`/`qualification`/etc. conforme o caso. Decisão de uma LLM — não-determinística; quando erra para `pre-agendamento` em vez de `agendamento`, a homologação de categoria (ver [`pipeline-phases.md`](pipeline-phases.md)) absorve o caso no mesmo ou próximo turno. |
+
+**Tolerância de enum (campos opcionais):** valores fora do enum em `next_action_hint`, `agent_mode`, `compound_follow_through` e `perceived_category` são silenciosamente convertidos para `None` por um `field_validator(mode="before")` em `MotherDecision` (`orchestrator_models.py`), em vez de levantar `ValidationError` e derrubar a decisão inteira do turno. Log: `event=mother_decision_invalid_enum_coerced field=<campo> value=<valor>`. `route_to` (obrigatório) fica fora desta tolerância.
+
+### Saudação composta — recepção responde antes da filha comercial
+
+Quando `route_to="recepcao"` e existe `compound_follow_through` (ou, em sua ausência, `perceived_category` difere da categoria actual do lead), `decide()` faz uma **segunda chamada LLM** dedicada — `_build_child_prompt_recepcao()` + `generate_child_result("recepcao", ...)` — só para gerar o cumprimento. O texto resultante é guardado em `context["_compound_greeting_text"]` e prefixado à resposta da filha comercial (`"{saudação}\n\n{texto comercial}"`); a divisão em bolhas distintas no WhatsApp é feita pelo mecanismo de humanização já existente (ver [`humanization.md`](humanization.md)).
+
+Custo: 1 chamada LLM extra, só neste turno específico (primeira mensagem composta de um lead) — não afecta turnos normais. Chamada best-effort (`try/except`): se falhar, a resposta segue sem a bolha de saudação separada.
 
 ### ChildResult (saída da LLM Filha)
 | Campo | Tipo | Descrição |
@@ -133,6 +145,21 @@ Campos adicionados pelo Fluxo de Venda (Camada 7):
 - Closer: mantém postura comercial ao tratar agendamento
 - **Seleção contextual de mídia** (`media_keys_to_send`): o prompt lista as categorias de `knowledge_media` disponíveis e a filha declara quais devem ser anexadas neste turno. Regra: mídia só entra quando o lead pediu explicitamente (preço, pagamento, objeção, etc.). O `decision_engine` usa essa lista para filtrar as mídias enviadas — fallback estrito: se a filha omitir o campo, nenhuma mídia é anexada.
 
+### Filha Recepção (`_build_child_prompt_recepcao`)
+- Instrução restrita: só o cumprimento inicial, sem tratar pedido comercial
+- Usada tanto na saudação pura quanto, numa 2ª chamada dedicada, na saudação composta (ver acima)
+
+### Filha Pré-agendamento (`_build_child_prompt_pre_agendamento`)
+- Só para templates de agendamento (`sdr_padrao`, `hybrid_scheduler`)
+- Detecta intenção tentativa de agendar ("vou ver", "semana que vem") vs. firme (dia+hora específicos)
+- Quando dia+hora específicos: pula o fluxo de negociação tentativa e usa `recommended_next_category="agendamento"` para homologar o avanço de fase no mesmo turno (ver [`pipeline-phases.md`](pipeline-phases.md))
+- Recebe `tabela_de_dias` (lookup de hoje + 14 dias com nome do dia da semana já calculado) em vez de só a data de hoje — evita a LLM ter de calcular aritmética de calendário
+
+### Filha Agendamento (`_build_child_prompt_agendamento`)
+- Confirma o horário pedido contra `calendar_busy_slots`/disponibilidade do AI Profile
+- Devolve `signals_structured.meeting_datetime_candidate` (data/hora exacta combinada, ISO) — consumido por `meeting_scheduler.py` antes de cair no fallback heurístico de extracção por texto (`extract_start_at`, impreciso). Mesmo mecanismo já usado pela filha de Presentation.
+- Recebe `tabela_de_dias` (mesmo lookup acima) e `ai_profile.timezone`
+
 ### Filha Follow-up (`_build_child_followup_prompt`)
 - Monta `followup_summary` com `followup_goal`, `outcome`, `operator_note`, `meeting_happened`, `proposal_sent`
 - Inclui regras por variant (`sdr_scheduler` vs `hybrid_scheduler`)
@@ -173,11 +200,18 @@ Existem duas camadas de guardrails:
 - `apply_mother_category_guardrails` — avanço/retrocesso/jump de etapas
 - `_apply_child_micro_adjustment` — micro avanço sugerido pela filha em qualification
 - `_sanitize_category_decision` — valida categoria permitida no contexto
+- Guardrails anti-loop de qualification (Regra 1/2/3) e homologação de categoria entre fases (`pre-agendamento→agendamento`, `apresentation→agendamento`) — ver [`pipeline-phases.md`](pipeline-phases.md)
 
 **No CRM (`jobs_service.apply_suggested_category`):**
 - Valida categoria contra `LEAD_CATEGORIES_SET`
 - Exige sinal inbound para persistir mudança
 - Aplica side effect ao entrar em closing (`apply_closing_bot_disable_side_effect`)
+
+### Gate de confirmação de agendamento (M3) — `is_phase_entry`
+
+`compose_decision_output()` expõe `decision_trace["is_phase_entry"]` (já calculado para outros fins) ao `DecisionOutput`. `meeting_scheduler._extract_meeting_signal()` lê esse campo para `MeetingSignal.is_phase_entry`; em `handle_meeting_scheduled()`, quando `is_phase_entry=True`, o appointment **não é criado** e o bot **não é desabilitado** neste turno — a resposta normal da filha (proposta/negociação) segue ao lead, e a confirmação real só pode criar o appointment num turno em que o lead já estava antes na fase actual. Evita que uma 1ª mensagem interpretada erradamente pela Mãe como confirmação (`meeting_scheduled=true`) crie um compromisso fantasma. Log: `event=meeting_scheduled_deferred_phase_entry`.
+
+Trade-off aceite: se o lead confirma um horário na MESMA mensagem em que a Mãe avança a categoria para a fase de agendamento, a criação real fica diferida para o turno seguinte.
 
 ---
 

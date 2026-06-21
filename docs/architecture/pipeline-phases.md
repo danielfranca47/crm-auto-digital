@@ -2,7 +2,7 @@
 
 ## Visão geral
 
-O pipeline de vendas tem três fases: **Qualification → Presentation → Closing**. A transição entre fases é controlada por guardrails no `backend-executors` e persistida via `backend-crm`. O comportamento do LLM em cada fase vem de uma "LLM Filha" especializada.
+O pipeline de vendas tem três fases comuns a todos os agentes: **Qualification → Presentation → Closing**. Para os templates de agendamento (`sdr_padrao`, `hybrid_scheduler` — `_SCHEDULING_AGENT_TEMPLATES`), existem duas fases intermédias entre Presentation e Closing: **Pré-agendamento → Agendamento** (e "Closing" fica desactivado por design — ver secção própria abaixo). A transição entre fases é controlada por guardrails no `backend-executors` e persistida via `backend-crm`. O comportamento do LLM em cada fase vem de uma "LLM Filha" especializada.
 
 ---
 
@@ -55,8 +55,8 @@ Prompt construído em `backend-executors/app/services/decision_engine.py`:
 - Gap: sem sanitizer rígido que bloqueie se o LLM "desobedecer" a instrução.
 
 **Regra 3 — após promoção, não volta para qualification**
-- Cobertura: parcial. `decision_trace.qualification_auto_promoted` existe mas não é persistência cross-job.
-- Gap: não há trava explícita no início de `decide()` baseada em categoria atual.
+- Cobertura: completa. No início de `decide()`, quando `mother_decision.route_to=="qualification"` (e não é um tick de follow-up), verifica se a categoria actual do lead já é uma fase posterior (`apresentation`/`pre-agendamento`/`agendamento`/`follow-up`/`closing`) ou se não há `missing_fields` — nesse caso força `route_for_child="apresentation"` independentemente do que a Mãe decidiu (`decision_trace.anti_loop_rule3_applied=True`, log `event=qualification_anti_loop_rule3`).
+- Este mecanismo **não usa palavras-chave/texto livre** — decide só por estado (categoria actual + missing_fields). Um override por palavras-chave em português que partilhava este mesmo bloco condicional (sobrescrevia para `pre-agendamento`/`agendamento` quando o texto batia com uma lista de termos de agendamento) foi removido por ser frágil e acoplado a nicho/idioma — a homologação de categoria (abaixo) já cobre o mesmo caso de forma estrutural.
 
 **Localização:** `backend-executors/app/services/decision_engine.py` — funções `compose_decision_output` e `decide`.
 
@@ -92,6 +92,29 @@ A secção "Critérios de Qualificação" no `LeadCardDialog` permite editar man
 - Prompt: `_build_child_prompt_apresentation` em `decision_engine.py`
 - Instrução: lidar com agendamento (pedir dia/horário, confirmar, reagendar, enviar link)
 - Para SDR: confirma horário e indica que enviará link; para closer: mantém postura de avanço comercial
+
+---
+
+## Pré-agendamento e Agendamento (só `_SCHEDULING_AGENT_TEMPLATES`)
+
+Fases intermédias entre Presentation e Closing, usadas só por `sdr_padrao` e `hybrid_scheduler`. Não existem para outros templates — um lead fora destes templates nunca tem `category` nestes valores.
+
+### Pré-agendamento
+
+- Prompt: `_build_child_prompt_pre_agendamento` em `decision_engine.py`
+- Distingue intenção **tentativa** ("vou ver", "semana que vem" → fica em pré-agendamento, negocia) de intenção **firme** (dia+hora específicos)
+- **Homologação automática para Agendamento:** quando a mensagem do lead já tem dia+hora específicos, a filha devolve `recommended_next_category="agendamento"`. `compose_decision_output()` lê esse campo e avança a categoria do lead directamente para `agendamento` no mesmo turno — sem isto, a filha tratava um pedido com horário já definido como interesse tentativo sem data (resposta sem sentido tipo "posso mandar mensagem amanhã para confirmar?").
+
+### Agendamento
+
+- Prompt: `_build_child_prompt_agendamento` em `decision_engine.py`
+- Confirma o horário pedido contra `calendar_busy_slots` (conflitos reais) e a disponibilidade configurada no AI Profile
+- Devolve `signals_structured.meeting_datetime_candidate` (data/hora exacta da reunião, ISO) — `meeting_scheduler.py` usa este campo como fonte primária (`event=meeting_datetime_source source=structured_candidate`); só cai no fallback heurístico de extracção por texto (`extract_start_at`, que usa o instante de execução como base e é impreciso) quando o candidato estruturado está ausente ou inválido (`event=meeting_datetime_candidate_invalid`)
+- **Homologação directa:** quando `effective_route_to=="agendamento"`, `compose_decision_output()` força `suggested_category="agendamento"` directamente — ignora o clamp de salto único de `apply_mother_category_guardrails()` (que bloquearia, por exemplo, um salto de `apresentation` para `agendamento` sem passar por `pre-agendamento`). Sem isto, a categoria do lead ficava presa na fase anterior mesmo depois de uma confirmação real, e o gate `is_phase_entry` (ver [`llm-architecture.md`](llm-architecture.md)) nunca via a categoria alcançar `agendamento` — bloqueando a criação do appointment indefinidamente.
+
+### Resolução de datas relativas e nomes de dia da semana
+
+Ambas as filhas acima (e a de Presentation) recebem `tabela_de_dias`: uma lista pronta com hoje + os próximos 14 dias, cada um já com a data e o nome do dia da semana calculados (`_calendar_lookup_table_pt()` em `decision_engine.py`). A instrução é "procure a linha correspondente — nunca calcule a data ou o dia da semana por conta própria". Dar só a data de hoje não bastou em teste real (a LLM ainda errava a contagem de dias para nomes de dia da semana, ex.: confirmava "quinta-feira" numa terça-feira real) — eliminar a aritmética do lado da LLM, trocando por uma busca em tabela, resolveu de forma confiável. Limite: cobre até 14 dias à frente; referências mais distantes ("mês que vem") caem de volta no fallback heurístico.
 
 ---
 
@@ -183,3 +206,4 @@ Ver [`docs/architecture/sales-flow.md`](sales-flow.md) para detalhes completos s
 | `backend-executors/app/services/decision_engine.py` | Motor de decisão, prompts das filhas, guardrails anti-loop |
 | `backend-crm/routes/leads.py` | Guardrail HTTP 400/409 por qualificação incompleta; `GET /{lead_id}/qualification-fields` e `PATCH /{lead_id}/qualification-fields` |
 | `backend-crm/services/lead_category_policy.py` | Side-effects de mudança de categoria |
+| `backend-executors/app/services/meeting_scheduler.py` | Criação de appointment a partir de `meeting_scheduled`; gate `is_phase_entry` (M3) |
