@@ -307,7 +307,7 @@ Decisão deliberada de não alterar: `docs/architecture/admin-agents-contract.md
 | # | Commit | O que foi implementado |
 |---|---|---|
 | 1 | `329fc05` | Toggle de conta `meeting_management_enabled` — backend-core, 3 gates no backend-crm, UI no frontend-crm, testes |
-| 2 | _(pendente — registrar após o commit)_ | Correção do bug em `enrich_context_bundle` revelado pelo teste ao vivo do Cenário P2 |
+| 2 | `7a09f62` | Correção do bug em `enrich_context_bundle` revelado pelo teste ao vivo do Cenário P2 |
 
 ### Relatório da Fase 5 — o que mudou na prática
 
