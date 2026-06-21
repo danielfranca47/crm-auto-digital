@@ -380,9 +380,12 @@ Todo pedido de nova funcionalidade ou correção não-trivial segue este ciclo o
      retomada pronto para colar (ver `_guia-documentar-implementacao.md`,
      secção "Antes de pedir validação ao utilizador")
 
-4. Aguardar testes do utilizador
-   → o utilizador executa os checks de validação do arquivo .md
-   → marcar [x] nos checks validados com data
+4. Validar os checks — duas formas possíveis, conforme a resposta no passo 3
+   → Se aceitou teste automatizado: Claude testa ao vivo via browser (MCP),
+     com o utilizador acompanhando, e já marca [x] no arquivo com data
+   → Se não (ou prefere manual): aguardar o utilizador testar e reportar —
+     nesta conversa ou numa nova, usando o prompt de retomada do passo 3 —
+     e então marcar [x] no arquivo com data
    → se teste revelar problema: nova fase no mesmo arquivo (Plan Mode novamente)
 
 5. Graduação (só quando TODOS os checks estão [x])
