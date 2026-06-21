@@ -49,7 +49,8 @@
       "Bash(./.venv/Scripts/python.exe -m uvicorn app.main:app --port 8001)",
       "Bash(curl -s -o /dev/null -w \"status backend-core: %{http_code}\\\\n\" --max-time 3 http://localhost:8001/)",
       "Bash(./backend-executors/.venv/Scripts/python.exe -c ' *)",
-      "Bash(./.venv/Scripts/python.exe -c ' *)"
+      "Bash(./.venv/Scripts/python.exe -c ' *)",
+      "Bash(.venv/Scripts/python.exe -c ' *)"
     ]
   },
   "hooks": {
