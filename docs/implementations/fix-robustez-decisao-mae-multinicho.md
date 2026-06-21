@@ -1,7 +1,7 @@
 # Robustez da decisão da Mãe — enum tolerante (M4) + gate de confirmação de agendamento (M3)
 
 **Branch:** `main`
-**Status:** Em andamento
+**Status:** Todos os cenários validados
 
 ---
 
@@ -419,12 +419,25 @@ real acontece sempre em `agendamento` ou `apresentation`, ambas já cobertas.
 | # | Commit | O que foi implementado |
 |---|---|---|
 | 1 | `b1e9954` | Candidato estruturado de horário na filha de agendamento + normalização + testes |
+| 2 | `fe77413` | Achado da validação ao vivo: `today_date` no contexto das filhas de agendamento e apresentação |
+
+### Achado adicional durante a validação ao vivo: data alucinada sem `today_date`
+
+Ao repetir o cenário do lead #274 no Playground (lead #275), a filha de agendamento devolveu
+`meeting_datetime_candidate="2023-10-11T09:00:00"` — uma data fixa sem relação com "amanhã".
+`meeting_scheduler.py` rejeitou o candidato (`event=meeting_datetime_candidate_invalid
+reason=parse_or_past`) e caiu de volta no fallback heurístico, mascarando a correcção da Fase
+6. Causa: nenhuma das duas filhas (`_build_child_prompt_agendamento`,
+`_build_child_prompt_apresentation`) expunha a data actual no prompt — sem isso, a LLM não
+tem como resolver "amanhã"/"depois de amanhã" para uma data absoluta. `_build_child_prompt_pre_agendamento`
+já fazia isto (`today_date`) para outro campo (`checkin_at_iso`); estendi o mesmo padrão às
+outras duas filhas.
 
 ### Relatório da Fase 6 — o que mudou na prática
 
 **Antes:** quando a confirmação de horário acontecia pelo caminho de agendamento puro (sem passar pela apresentação comercial), a hora gravada internamente no compromisso não correspondia à hora que o cliente realmente combinou — o sistema gravava o instante em que processou a mensagem, não o horário pedido. Isso podia bagunçar a verificação de conflito de horários e a visão real da agenda do profissional.
-**Agora:** essa mesma IA de agendamento passou a anotar a data e hora combinada de forma exacta e estruturada — igual ao que já era feito na IA de apresentação — em vez de depender só do sistema "adivinhar" lendo o texto da conversa.
-**Para validar:** confirmado por testes técnicos directos (Cenário C5). A confirmação visual completa pela tela real (repetir o cenário do lead #274) ainda está pendente — ver checklist abaixo.
+**Agora:** essa mesma IA de agendamento passou a anotar a data e hora combinada de forma exacta e estruturada — igual ao que já era feito na IA de apresentação — em vez de depender só do sistema "adivinhar" lendo o texto da conversa. Na validação ao vivo, a primeira tentativa revelou que a IA não sabia "que dia é hoje" e por isso calculava "amanhã" errado — corrigido dando-lhe essa informação explicitamente, no mesmo turno de testes.
+**Para validar:** confirmado por testes técnicos directos (Cenário C5) e por validação ao vivo completa no Playground (lead #276, ver checklist abaixo).
 
 ---
 
@@ -432,8 +445,9 @@ real acontece sempre em `agendamento` ou `apresentation`, ambas já cobertas.
 
 ### Cenário C5 — Candidato estruturado de horário na filha de agendamento
 - [x] Testes unitários directos (`test_agendamento_scheduler_structured_signals.py`, 4 cenários): candidato presente → normalizado (`meeting_proposed=true`); ausente → defaults (`false`/`null`); template fora de `_SCHEDULING_AGENT_TEMPLATES` → não forçado; prompt contém `meeting_proposed`, `meeting_datetime_candidate` e `ai_profile.timezone`
-- [x] Regressão: `pytest tests/ scripts/test_meeting_scheduler_hook.py scripts/test_meeting_candidate_e2e.py scripts/test_structured_meeting_signal_dual_read.py scripts/test_mother_prompt_agent_mode.py -q` — 25 falhas pré-existentes idênticas (confirmado via `git stash`/`git stash pop` antes/depois da mudança) / 75 passes (71 + 4 novos)
-- [ ] Validação ponta-a-ponta real (Playground/WhatsApp): repetir o cenário do lead #274 — "amanhã às 11h" numa mensagem + confirmação "pode ser às 9h" numa mensagem seguinte — e confirmar via log (`event=meeting_datetime_source source=structured_candidate`) e via `GET /api/leads/{id}/appointments` que o `start_at` gravado corresponde a 9h, não ao instante de execução
+- [x] Regressão: `pytest tests/ scripts/test_meeting_scheduler_hook.py scripts/test_meeting_candidate_e2e.py scripts/test_structured_meeting_signal_dual_read.py scripts/test_mother_prompt_agent_mode.py -q` — 25 falhas pré-existentes idênticas (confirmado via `git stash`/`git stash pop` antes/depois da mudança) / 75 passes (71 + 4 novos), mantido após o commit `fe77413`
+- [x] Validação ponta-a-ponta real (Playground): repetido o cenário do lead #274 — "Oi, gostaria de agendar uma sessão para amanhã às 11h" (conflito real, IA ofereceu 09:00/14:00) + confirmação "pode ser às 9h então, perfeito"
+- **Validado em:** 21/06/2026 — via UI real (Playground, MCP chrome-devtools), lead #276. 1ª tentativa (lead #275, antes do commit `fe77413`) expôs o achado do `today_date` acima. Após a correcção: log `event=meeting_datetime_source source=structured_candidate tz_used=UTC`; resposta da filha `signals_structured={"meeting_proposed":true,"meeting_datetime_candidate":"2026-06-22T09:00:00"}`; `GET /api/leads/276/appointments` → `start_at="2026-06-22T09:00:00+00:00"` (criado em `2026-06-21T14:12:50Z`) — corresponde exactamente a "amanhã às 9h", não ao instante de execução.
 
 ---
 
