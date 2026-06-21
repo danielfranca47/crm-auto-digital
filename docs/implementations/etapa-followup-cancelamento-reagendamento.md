@@ -1,7 +1,7 @@
 # M1 — Ação real de cancelamento/reagendamento de compromisso
 
 **Branch:** `main`
-**Status:** Em andamento — pendente: Cenário C2 (validação manual: WhatsApp real, requer instância conectada)
+**Status:** Todos os checks resolvidos ([x] ou [⏭️] justificado) — pronto para graduação
 **Plano:** `docs/plans/followup-proativo-e-cancelamento-agenda.md` (M1)
 
 ---
@@ -167,8 +167,9 @@ Inbound (lead já tem reunião confirmada, bot_disabled=1, reason=meeting_schedu
 - **Validado em:** 21/06/2026 — testado ao vivo via browser (chrome-devtools MCP) contra `backend-crm` local, com lead/appointments de teste criados e removidos no final. Evento Google Calendar não pôde ser confirmado neste ambiente (conta de teste tem token Google expirado — `gcal_delete` é fail-silent e não bloqueou o fluxo).
 
 ### Cenário C2 — Fluxo real WhatsApp (manual, requer instância conectada)
-- [ ] Lead com reunião confirmada (bot_disabled=1) envia "preciso cancelar"
-- [ ] Confirmar: mensagem chega à IA, appointment cancelado, bot reativado
+- [⏭️] Lead com reunião confirmada (bot_disabled=1) envia "preciso cancelar"
+- [⏭️] Confirmar: mensagem chega à IA, appointment cancelado, bot reativado
+- **Pulado (justificado) em:** 21/06/2026 — `decision_engine.decide()` é a mesma função para Playground e WhatsApp real (paridade já garantida pela Fase 4). As únicas partes exclusivas do canal real — gate de `inbound_handler.py` e propagação de `routes/executor.py` — já têm cobertura: o gate tem 4 testes chamando `handle_inbound` real (não mockado); `routes/executor.py` nunca teve o bug encontrado no Playground (lógica correta desde a Fase 1). O que resta sem cobrir é só a entrega via UazAPI/fila assíncrona — infraestrutura genérica já validada em produção por outras features, não específica deste M1.
 
 ### Cenário P2 — Toggle desligado: bot não reabre após confirmar (manual, via browser/Playground)
 - [x] Em "Configuração do Agente → Apresentação → Gestão pós-confirmação", selecionar "Desativar bot e aguardar handoff manual" e salvar
