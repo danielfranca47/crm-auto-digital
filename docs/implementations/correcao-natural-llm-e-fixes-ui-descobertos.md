@@ -1,7 +1,7 @@
 # Mensagem de correção gerada pela LLM + 2 bugs de UI descobertos em testes
 
 **Branch:** `main`
-**Status:** Em andamento
+**Status:** Todos os cenários validados (21/06/2026)
 
 ---
 
@@ -116,8 +116,15 @@ Fase 3 — useAppointments.ts + ScheduleView.tsx: fallback seguro para datas aus
 
 | Arquivo | O que muda |
 |---|---|
-| `frontend-crm/src/hooks/useAppointments.ts` | `normalizeAppointment()`: fallback de `start` deve ser `null`/`undefined` (não `""`) quando nenhum campo reconhecido está presente, para que a normalização caia no `new Date(...)` em vez de propagar string vazia |
-| `frontend-crm/src/components/ScheduleView.tsx` | `normalized` (useMemo, ~linha 59): ignorar/filtrar appointments cuja `Date` resultante seja inválida (`isNaN(date.getTime())`), em vez de deixar `format()` lançar excepção sem proteção |
+| `frontend-crm/src/hooks/useAppointments.ts` | `normalizeAppointment()`: nova `toIsoOrEmpty()` converte para ISO sem nunca lançar (devolve `""` em vez de deixar `.toISOString()` explodir sobre uma `Date` inválida); `useAppointments()` e `useLeadAppointments()` passam a filtrar (`hasValidStart`) qualquer appointment cujo `startTime` não produza uma `Date` válida, antes de devolver a lista |
+
+**Desvio do plano original:** ao investigar, encontrei o mesmo padrão de crash (`format()` do date-fns sobre uma `Date` inválida, sem proteção) também em `WeekView.tsx:242` (vista Semanal) e `DayView.tsx:208-209` (vista Diária) — não só em `ScheduleView.tsx` (vista Mensal, único caso reportado). Os três componentes consomem a mesma `normalizeAppointment()`. Em vez de duplicar a defesa nos 3 componentes de view (como o plano original previa só para `ScheduleView.tsx`), a correção foi feita uma única vez na origem (`useAppointments.ts`): appointments sem data válida são filtrados antes de chegar a qualquer consumidor do hook (`ScheduleView`, `WeekView`, `DayView`, `Dashboard`, `KanbanBoard`, `ProspectionCardDialog`). Nenhuma alteração foi necessária em `ScheduleView.tsx`.
+
+### Relatório da Fase 3 — o que mudou na prática
+
+**Antes:** um compromisso sem nenhum campo de data reconhecível (`start_at`/`start_time`/`startAt`/`start`) travava por completo a vista Mensal da Agenda (tela em branco, exigia recarregar a página) — e o mesmo aconteceria nas vistas Semanal e Diária, que tinham o mesmo ponto de falha (ainda não reportado).
+**Agora:** esse compromisso é descartado silenciosamente já na busca de dados (`useAppointments.ts`), antes de chegar a qualquer vista. Os demais compromissos do período continuam aparecendo normalmente nas três vistas (Mensal, Semanal, Diária).
+**Validado por:** Cenário C2, abaixo.
 
 ---
 
@@ -137,9 +144,10 @@ Fase 3 — useAppointments.ts + ScheduleView.tsx: fallback seguro para datas aus
 - **Validado em:** 21/06/2026 — ambiente local de pé (`backend-core:8001`, `backend-crm:8000`, `frontend-crm:5173`), conta de `_conta-teste-local.md`. Fluxo testado: "Montar regra" (fase Recepção/p0) → "Sem gatilho" → "+ Adicionar ação" → "Orientação ao Agente" → `fill` do texto `"TESTE FASE2: este texto deve persistir no bloco novo."` no textarea. Verificação em cada etapa: (1) `evaluate_script` confirmou o valor do DOM imediatamente após o `fill`; (2) após "Confirmar ação", o resumo do bloco na tela "Montar regra" já mostrava o texto completo (não "—") — este é o ponto exato onde a sessão anterior relatou a perda; (3) após "Salvar regra", o bloco apareceu na lista da fase com o texto completo; (4) após o "SALVAR" de topo, o `PUT http://127.0.0.1:8001/ai-profiles/me` (`reqid=637`) trazia `content` completo no corpo da requisição e na resposta; (5) reload completo da página (novo `GET /ai-profiles/me`, `reqid=849`) confirmou o `content` persistido no banco. **Conclusão:** o `content` nunca se perdeu em nenhum ponto — a reprodução da sessão de 19/06/2026 foi um falso positivo da automação daquela sessão (provavelmente o método de preenchimento do textarea não disparou o evento que o React rastreia), não um bug real. Bloco de teste removido do agente ao final (sem deixar dado de teste no perfil). Sem alteração de código nesta fase.
 
 ### Cenário C2 — Agenda não crasha com appointment malformado
-- [ ] Simular (ou aguardar ocorrência real) um appointment sem `start_at` reconhecível
-- [ ] Navegar a vista Mensal para o mês/dia correspondente
-- [ ] Confirmar: a página não crasha; o appointment malformado é ignorado ou exibido com um placeholder, mas os demais continuam visíveis
+- [x] Simular (ou aguardar ocorrência real) um appointment sem `start_at` reconhecível
+- [x] Navegar a vista Mensal para o mês/dia correspondente
+- [x] Confirmar: a página não crasha; o appointment malformado é ignorado ou exibido com um placeholder, mas os demais continuam visíveis
+- **Validado em:** 21/06/2026 — `npx tsc --noEmit` sem novos erros. Simulação via Chrome DevTools MCP: `initScript` na navegação para `/agenda` sobrepôs `window.fetch` para, em toda resposta de `GET .../api/appointments`, injectar um item extra sem nenhum campo de data (`{id: 999999, title: "TESTE MALFORMADO SEM DATA", type: "meeting", status: "pending"}`) antes de devolver a resposta ao app — confirmado via `evaluate_script` que o array devolvido passou a ter 10 itens (9 reais + 1 malformado). Resultado nas 3 vistas (Mensal, Semanal, Diária) da página `/agenda`: nenhum erro no console, nenhuma tela em branco, todos os 9 compromissos reais continuaram visíveis (ex.: 4 compromissos do dia 21/06 listados normalmente); o item malformado nunca apareceu em nenhuma vista — filtrado em `useAppointments.ts` antes de chegar a qualquer componente. Nenhum dado de teste foi persistido no backend (a injeção foi puramente no `fetch` do lado do browser).
 
 ---
 
