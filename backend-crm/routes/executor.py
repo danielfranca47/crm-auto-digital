@@ -443,6 +443,7 @@ def whatsapp_execution_context(
 
     if bundle.lead.get("bot_disabled"):
         bundle.metadata["bot_disabled"] = True
+        bundle.metadata["bot_disabled_reason"] = bundle.lead.get("bot_disabled_reason")
 
     bundle.metadata["allowed_lead_categories"] = LEAD_CATEGORIES
 

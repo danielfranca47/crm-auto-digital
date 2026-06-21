@@ -3550,6 +3550,127 @@ def _build_child_prompt_agendamento(
     return _sched_prompt
 
 
+def _build_child_prompt_meeting_management(context: Dict[str, Any], message_text: str) -> str:
+    """Prompt dedicado para mensagens de um lead cujo bot foi desativado por meeting_scheduled.
+
+    Não passa pela Mãe — o lead já tem uma reunião/sessão confirmada e o bot está
+    silenciado para vendas; este prompt só decide se a mensagem pede cancelar/reagendar
+    esse compromisso, ou se deve gerar uma resposta mínima sem reabrir negociação.
+    """
+    lead = context.get("lead") or {}
+    ai_profile = context.get("ai_profile") or {}
+    history = context.get("history") or []
+
+    lead_summary = {
+        "id": lead.get("id"),
+        "name": _safe_get(lead, "contactName", "companyName", "name"),
+    }
+    history_text = _format_history(history)
+    dates_table = _calendar_lookup_table_pt()
+
+    busy_slots = context.get("calendar_busy_slots") or []
+    same_lead_slots = [slot for slot in busy_slots if slot.get("lead_id") == lead.get("id")]
+    _busy_lines = _format_busy_slots_block(same_lead_slots, ai_profile.get("timezone"))
+    _meeting_block = (
+        f"REUNIÃO/SESSÃO JÁ CONFIRMADA (este é o compromisso que o lead pode querer "
+        f"cancelar ou reagendar):\n{_busy_lines}\n\n"
+        if _busy_lines
+        else "REUNIÃO/SESSÃO JÁ CONFIRMADA: não foi possível localizar o horário exato.\n\n"
+    )
+
+    return (
+        _build_daughter_identity_block(context, "agendamento")
+        + "\n\nCONTEXTO: este lead já tem uma reunião/sessão CONFIRMADA. O bot está em modo "
+        "silencioso (não deve vender nem reabrir negociação) — só deve agir quando a mensagem "
+        "for sobre cancelar ou reagendar esse compromisso.\n\n"
+        + _meeting_block
+        + "REGRAS OBRIGATÓRIAS:\n"
+        "- Se a mensagem pedir CANCELAMENTO do compromisso: confirme o cancelamento de forma "
+        "natural e empática, e preencha signals_structured.meeting_cancel_requested=true.\n"
+        "- Se a mensagem pedir REAGENDAMENTO (novo dia/horário, mesmo que tentativo): confirme o "
+        "novo horário e preencha signals_structured.meeting_reschedule_requested=true e "
+        "meeting_datetime_candidate (ISO, use tabela_de_dias para resolver datas relativas — "
+        "NUNCA calcule por conta própria). Se o lead pedir para reagendar mas NÃO disser um "
+        "horário novo, pergunte qual horário prefere e deixe meeting_reschedule_requested=false "
+        "até ele responder com um horário.\n"
+        "- Para qualquer outra mensagem (agradecimento, pergunta solta, etc.): responda de forma "
+        "mínima e cordial (1 frase), SEM propor produtos/serviços, SEM reabrir qualificação ou "
+        "venda, SEM perguntas de follow-up. Não preencha nenhum dos dois sinais acima.\n"
+        "- Nunca mencione internamente termos como 'bot desativado' ou 'sinal estruturado' na "
+        "mensagem ao lead.\n\n"
+        "Retorne SOMENTE JSON válido no schema ChildResult:\n"
+        "{\n"
+        '  "message_text": "resposta para o lead",\n'
+        '  "did_complete_phase": false,\n'
+        '  "recommended_next_category": null,\n'
+        '  "outcome": null,\n'
+        '  "kanban_highlight": null,\n'
+        '  "signals": [],\n'
+        '  "signals_structured": {"meeting_cancel_requested": false, "meeting_reschedule_requested": false, "meeting_datetime_candidate": null},\n'
+        '  "confidence": 0.0\n'
+        "}\n\n"
+        f"Contexto:\n"
+        "- tabela_de_dias (hoje + próximos 14 dias; use para resolver QUALQUER data relativa ou "
+        f"nome de dia da semana, SEM calcular por conta própria):\n{dates_table}\n"
+        f"- lead: {json.dumps(lead_summary, ensure_ascii=False)}\n"
+        f"- history: {history_text}\n"
+        f"- inbound_message_text: {message_text}\n"
+        + _build_custom_instructions_block(ai_profile)
+    )
+
+
+def _decide_post_meeting_management(
+    context: Dict[str, Any], logger: Optional[logging.Logger] = None
+) -> DecisionOutput:
+    """Caminho dedicado para leads com bot_disabled_reason=meeting_scheduled.
+
+    Curto-circuita antes da Mãe (mesmo padrão de fast_path) — não toca na pipeline de
+    vendas. Só decide se a mensagem pede cancelar/reagendar a reunião já confirmada;
+    caso contrário, produz uma resposta mínima sem reabrir negociação. Nunca sugere
+    suggested_category (não move o Kanban).
+    """
+    message_text = _extract_message_text(context)
+    prompt = _build_child_prompt_meeting_management(context, message_text)
+
+    child_result: Optional[ChildResult] = None
+    try:
+        child_text = llm_service.generate_child_result("meeting_management", prompt)
+        child_payload = _extract_json_payload(child_text)
+        child_payload = _normalize_null_strings(child_payload)
+        if child_payload is not None:
+            child_result = ChildResult.model_validate(child_payload)
+    except Exception as exc:
+        if logger:
+            logger.warning(
+                "event=meeting_management_llm_failure exc_type=%s exc=%s",
+                type(exc).__name__,
+                exc,
+            )
+
+    if child_result is None:
+        return DecisionOutput(
+            next_action="ignore",
+            message_text="",
+            questions=[],
+            reason="meeting_management_llm_failure",
+        )
+
+    return DecisionOutput(
+        next_action="reply",
+        message_text=child_result.message_text or "",
+        questions=[],
+        reason="post_meeting_management",
+        signals=child_result.signals,
+        confidence=child_result.confidence,
+        decision_trace={
+            "effective_route_to": "meeting_management",
+            "is_phase_entry": False,
+            "meeting_scheduled": False,
+            "child_signals_structured": child_result.signals_structured or {},
+        },
+    )
+
+
 def _extract_json_payload(text: str) -> Optional[Dict[str, Any]]:
     text = text.strip()
     if not text:
@@ -4190,6 +4311,10 @@ def compose_decision_output(
 def decide(context: Dict[str, Any], logger: Optional[logging.Logger] = None) -> DecisionOutput:
     metadata = context.get("metadata") or {}
     if metadata.get("bot_disabled"):
+        if metadata.get("bot_disabled_reason") == "meeting_scheduled":
+            if logger:
+                logger.info("decision bot_disabled_reason=meeting_scheduled -> post_meeting_management")
+            return _decide_post_meeting_management(context, logger=logger)
         if logger:
             logger.info(
                 "decision bot_disabled next_action=%s reason=%s",

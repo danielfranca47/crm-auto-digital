@@ -111,6 +111,55 @@ def _extract_meeting_signal(context: Dict[str, Any], decision: DecisionOutput) -
     )
 
 
+@dataclass(frozen=True)
+class CancelRescheduleSignal:
+    lead_id: Optional[int]
+    user_id: Optional[int]
+    job_id: Optional[int]
+    cancel_requested: bool
+    reschedule_requested: bool
+    new_start_at: Optional[datetime]
+
+
+def _extract_cancel_reschedule_signal(
+    context: Dict[str, Any], decision: DecisionOutput
+) -> CancelRescheduleSignal:
+    """Lê os sinais de cancelamento/reagendamento produzidos por _decide_post_meeting_management.
+
+    Paralelo a _extract_meeting_signal, mas para o caminho dedicado de gestão pós-confirmação
+    (decision_trace.effective_route_to == "meeting_management") em vez da pipeline Mãe/Filha.
+    """
+    lead = context.get("lead") or {}
+    job = context.get("job") or {}
+    payload = job.get("payload") or {}
+    ai_profile = context.get("ai_profile") or {}
+
+    lead_id = _safe_get(lead, "id") or _safe_get(payload, "lead_id")
+    user_id = _safe_get(lead, "user_id") or _safe_get(payload, "user_id")
+    job_id = _safe_get(job, "id") or _safe_get(payload, "job_id")
+
+    decision_trace = decision.decision_trace or {}
+    structured_signals = decision_trace.get("child_signals_structured") or {}
+    cancel_requested = bool(structured_signals.get("meeting_cancel_requested"))
+    reschedule_requested = bool(structured_signals.get("meeting_reschedule_requested"))
+
+    new_start_at: Optional[datetime] = None
+    if reschedule_requested:
+        now_utc = _ensure_aware(datetime.now(timezone.utc), "UTC")
+        tz_name = ai_profile.get("timezone")
+        candidate_str = structured_signals.get("meeting_datetime_candidate")
+        new_start_at = parse_meeting_candidate(candidate_str, tz_name=tz_name, now_utc=now_utc)
+
+    return CancelRescheduleSignal(
+        lead_id=int(lead_id) if lead_id is not None else None,
+        user_id=int(user_id) if user_id is not None else None,
+        job_id=int(job_id) if job_id is not None else None,
+        cancel_requested=cancel_requested,
+        reschedule_requested=reschedule_requested,
+        new_start_at=new_start_at,
+    )
+
+
 def _resolve_timezone(tz_name: Optional[str]) -> timezone | ZoneInfo:
     if not tz_name:
         return timezone.utc

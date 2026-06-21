@@ -479,9 +479,14 @@ def handle_inbound(payload: Dict[str, Any]) -> Dict[str, Any]:
 
     with get_connection() as _conn_check:
         _bot_row = _conn_check.execute(
-            "SELECT bot_disabled FROM leads WHERE id = ?", (lead_id,)
+            "SELECT bot_disabled, bot_disabled_reason FROM leads WHERE id = ?", (lead_id,)
         ).fetchone()
-        if _bot_row and int(_bot_row["bot_disabled"] or 0) == 1:
+        _bot_disabled_reason = _bot_row["bot_disabled_reason"] if _bot_row else None
+        if (
+            _bot_row
+            and int(_bot_row["bot_disabled"] or 0) == 1
+            and _bot_disabled_reason != "meeting_scheduled"
+        ):
             logger.info(
                 "inbound_bot_disabled_skip lead_id=%s user_id=%s reason=bot_disabled",
                 lead_id,
