@@ -148,8 +148,14 @@ def test_handle_meeting_scheduled_idempotent():
     assert client.created == []
 
 
-def test_handle_meeting_scheduled_conflict_with_other_lead_blocks_creation():
-    """Outro lead (888) já ocupa o horário proposto — bloqueia e devolve mensagem."""
+def test_handle_meeting_scheduled_conflict_with_other_lead_blocks_creation(monkeypatch):
+    """Outro lead (888) já ocupa o horário proposto — bloqueia e devolve fallback fixo
+    quando a geração da mensagem via LLM falha (forçado para o teste ser determinístico,
+    independente de haver LLM_API_KEY real configurada no .env local)."""
+    def _raise(_prompt):
+        raise RuntimeError("forced failure for deterministic test")
+    monkeypatch.setattr(meeting_scheduler.llm_service, "generate_conflict_message", _raise)
+
     client = FakeCRMClient()
     context = _build_context(
         calendar_busy_slots=[
@@ -172,6 +178,63 @@ def test_handle_meeting_scheduled_conflict_with_other_lead_blocks_creation():
     assert client.created == []
     assert client.bot_disabled_calls == []
     assert client.logged == [(99, 10, 123, "conflict_detected")]
+
+
+def test_handle_meeting_scheduled_conflict_uses_llm_generated_message(monkeypatch):
+    """Quando a geração via LLM tem sucesso, a mensagem devolvida é a gerada, não o fallback."""
+    monkeypatch.setattr(
+        meeting_scheduler.llm_service,
+        "generate_conflict_message",
+        lambda _prompt: "Esse horário já foi! Pode me dizer outro horário que funcione?",
+    )
+
+    client = FakeCRMClient()
+    context = _build_context(
+        calendar_busy_slots=[
+            {
+                "lead_id": 888,
+                "start_at": "2099-03-05T17:10:00+00:00",
+                "end_at": "2099-03-05T17:40:00+00:00",
+            }
+        ]
+    )
+
+    result = meeting_scheduler.handle_meeting_scheduled(
+        context,
+        _build_decision_with_candidate("2099-03-05T17:00:00"),
+        client=client,
+        now_utc=datetime(2099, 3, 1, tzinfo=timezone.utc),
+    )
+
+    assert result == "Esse horário já foi! Pode me dizer outro horário que funcione?"
+    assert client.created == []
+
+
+def test_handle_meeting_scheduled_conflict_falls_back_when_llm_returns_empty(monkeypatch):
+    """generate_conflict_message devolve "" (ex.: sem LLM_API_KEY) — cai no fallback fixo."""
+    monkeypatch.setattr(
+        meeting_scheduler.llm_service, "generate_conflict_message", lambda _prompt: "",
+    )
+
+    client = FakeCRMClient()
+    context = _build_context(
+        calendar_busy_slots=[
+            {
+                "lead_id": 888,
+                "start_at": "2099-03-05T17:10:00+00:00",
+                "end_at": "2099-03-05T17:40:00+00:00",
+            }
+        ]
+    )
+
+    result = meeting_scheduler.handle_meeting_scheduled(
+        context,
+        _build_decision_with_candidate("2099-03-05T17:00:00"),
+        client=client,
+        now_utc=datetime(2099, 3, 1, tzinfo=timezone.utc),
+    )
+
+    assert result == meeting_scheduler.MEETING_CONFLICT_MESSAGE
 
 
 def test_handle_meeting_scheduled_no_conflict_creates_normally():

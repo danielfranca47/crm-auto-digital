@@ -150,3 +150,13 @@ def generate_child_result(route: str, prompt: str) -> str:
         "metadata": {"route": route},
     }
     return _extract_output_text(_post_with_retry(payload))
+
+
+def generate_conflict_message(prompt: str) -> str:
+    if not settings.llm_api_key:
+        return ""
+    payload: Dict[str, Any] = {
+        "model": settings.llm_model,
+        "input": prompt,
+    }
+    return _extract_output_text(_post_with_retry(payload))

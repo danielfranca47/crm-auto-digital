@@ -13,6 +13,7 @@ except Exception:  # dependency opcional em ambientes sem acesso a pacote
     search_dates = None
 
 from app.schemas.decision import DecisionOutput
+from app.services import llm_service
 
 MEETING_WINDOW_DAYS = 7  # janela p/ checar se O MESMO lead já tem reunião futura
 CALENDAR_CONFLICT_WINDOW_DAYS = 30  # janela coberta por context["calendar_busy_slots"] (ver orchestrator.py)
@@ -377,6 +378,52 @@ def _has_conflict(
     return False
 
 
+def _generate_conflict_message(
+    ai_profile: Dict[str, Any],
+    *,
+    logger: Optional[logging.Logger] = None,
+) -> Optional[str]:
+    """Tenta gerar a mensagem de conflito no tom do agente via LLM.
+
+    Nunca propaga excepção — qualquer falha (sem API key, erro de rede, timeout,
+    resposta vazia/inválida) devolve None, e o caller cai no fallback fixo.
+    """
+    tone_of_voice = str(ai_profile.get("tone_of_voice") or "profissional").strip()
+    brand_name = str(ai_profile.get("brand_name") or "").strip()
+    identity_mode = str(ai_profile.get("identity_mode") or "").strip()
+
+    if identity_mode == "user_clone" and brand_name:
+        persona_line = f"Fale na primeira pessoa, como se fosse {brand_name}."
+    elif brand_name:
+        persona_line = f"Fale na terceira pessoa, como assistente do/a {brand_name}."
+    else:
+        persona_line = "Fale na terceira pessoa, como assistente do negócio."
+
+    prompt = (
+        "Escreva uma única mensagem curta de WhatsApp em português, avisando o lead que "
+        "o horário que ele acabou de confirmar ficou indisponível (outra pessoa ocupou o "
+        "mesmo horário) e pedindo para ele escolher outro horário.\n"
+        f"Tom de voz: {tone_of_voice}.\n"
+        f"{persona_line}\n"
+        "Regras: no máximo 2 frases curtas. Sem markdown. Peça desculpa de forma natural, "
+        "sem som robótico. Termine convidando o lead a sugerir um novo horário.\n"
+        "Responda apenas com o texto da mensagem, sem aspas, sem explicações."
+    )
+
+    try:
+        generated = llm_service.generate_conflict_message(prompt)
+    except Exception as exc:
+        if logger:
+            logger.warning(
+                "event=conflict_message_generation_failed exc_type=%s exc=%s",
+                type(exc).__name__, exc,
+            )
+        return None
+
+    generated = (generated or "").strip()
+    return generated or None
+
+
 def handle_meeting_scheduled(
     context: Dict[str, Any],
     decision: DecisionOutput,
@@ -470,7 +517,8 @@ def handle_meeting_scheduled(
             job_id=signal.job_id,
             reason="conflict_detected",
         )
-        return MEETING_CONFLICT_MESSAGE
+        ai_profile = context.get("ai_profile") or {}
+        return _generate_conflict_message(ai_profile, logger=logger) or MEETING_CONFLICT_MESSAGE
 
     start_iso = signal.start_at.astimezone(timezone.utc).isoformat().replace("+00:00", "Z")
     end_iso = end_dt.astimezone(timezone.utc).isoformat().replace("+00:00", "Z")
