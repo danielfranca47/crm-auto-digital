@@ -205,13 +205,16 @@ class EnrichContextBundleBotDisabledTest(unittest.TestCase):
         self.assertNotIn("bot_disabled", enriched.metadata)
 
     def test_does_not_propagate_when_meeting_management_disabled(self):
+        """bot_disabled continua True (decide() deve ignorar, não cair na pipeline normal) —
+        só o reason especial "meeting_scheduled" é suprimido."""
         bundle = self._bundle(
             {"bot_disabled": 1, "bot_disabled_reason": "meeting_scheduled"},
             ai_profile={"agent_mode": "agenda", "meeting_management_enabled": False},
         )
         with patch("services.ai_orchestrator.orchestrator.get_connection", return_value=self.conn):
             enriched = enrich_context_bundle(bundle, user_id=1)
-        self.assertNotIn("bot_disabled", enriched.metadata)
+        self.assertTrue(enriched.metadata.get("bot_disabled"))
+        self.assertIsNone(enriched.metadata.get("bot_disabled_reason"))
 
     def test_propagates_when_meeting_management_explicitly_enabled(self):
         bundle = self._bundle(

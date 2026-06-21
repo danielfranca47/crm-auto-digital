@@ -1,7 +1,7 @@
 # M1 — Ação real de cancelamento/reagendamento de compromisso
 
 **Branch:** `main`
-**Status:** Em andamento — pendente: Cenário C2 (validação manual: WhatsApp real, requer instância conectada) e Cenário P2 (validação manual: toggle desligado no Playground)
+**Status:** Em andamento — pendente: Cenário C2 (validação manual: WhatsApp real, requer instância conectada)
 **Plano:** `docs/plans/followup-proativo-e-cancelamento-agenda.md` (M1)
 
 ---
@@ -171,11 +171,12 @@ Inbound (lead já tem reunião confirmada, bot_disabled=1, reason=meeting_schedu
 - [ ] Confirmar: mensagem chega à IA, appointment cancelado, bot reativado
 
 ### Cenário P2 — Toggle desligado: bot não reabre após confirmar (manual, via browser/Playground)
-- [ ] Em "Configuração do Agente → Apresentação → Gestão pós-confirmação", selecionar "Desativar bot e aguardar handoff manual" e salvar
-- [ ] Agendar uma sessão via Playground (mesmo fluxo do Cenário P1)
-- [ ] Pedir cancelamento na mesma sessão
-- [ ] Confirmar: bot não responde sobre o cancelamento (mensagem mínima/genérica ou nenhuma resposta de gestão), appointment continua `pending`, `bot_disabled` permanece `1`/`meeting_scheduled`
-- [ ] Reverter o toggle para "Bot continua disponível" ao final do teste
+- [x] Em "Configuração do Agente → Apresentação → Gestão pós-confirmação", selecionar "Desativar bot e aguardar handoff manual" e salvar
+- [x] Agendar uma sessão via Playground (mesmo fluxo do Cenário P1)
+- [x] Pedir cancelamento na mesma sessão
+- [x] Confirmar: bot não responde sobre o cancelamento (mensagem mínima/genérica ou nenhuma resposta de gestão), appointment continua `pending`, `bot_disabled` permanece `1`/`meeting_scheduled`
+- [x] Reverter o toggle para "Bot continua disponível" ao final do teste
+- **Validado em:** 21/06/2026 — primeira tentativa revelou o bug do `enrich_context_bundle` (bot respondeu normalmente, tratando o pedido de cancelamento como mensagem de venda comum). Corrigido e retestado com sucesso: trace mostrou `mother_route: null`, sem texto de resposta — bot ficou mudo. Lead/appointment de teste (#295) removidos, toggle revertido.
 
 ### Cenário P1 — Playground: agendar, cancelar e reagendar na mesma sessão (manual, via browser)
 - [x] Agendar uma sessão via mensagem inbound no Playground (lead novo, `agent_mode=agenda`)
@@ -284,12 +285,20 @@ Novo campo booleano no AI Profile: **`meeting_management_enabled`** (default `Tr
 | `backend-core/app/api/ai_profiles.py` | `meeting_management_enabled: bool = True` em `AIProfileBase`; `Optional[bool] = None` em `AIProfileUpdate`. |
 | `backend-crm/services/whatsapp_inbound/inbound_handler.py` | Gate de job creation (Fase 1): só deixa passar quando `bot_disabled_reason == "meeting_scheduled"` **e** `meeting_management_enabled` é `True`. Lê do `ai_profile` já resolvido em `_ai_profile_for_delay`, sem fetch extra. |
 | `backend-crm/routes/executor.py` | Propagação de `bot_disabled_reason` para o fluxo real (Fase 1): suprime o reason `"meeting_scheduled"` quando `meeting_management_enabled` é `False` — `decision_engine.decide()` cai automaticamente no branch padrão `BOT_DISABLED_DECISION` (ignore), sem precisar de branch novo. |
-| `backend-crm/services/ai_orchestrator/orchestrator.py::enrich_context_bundle` | Mesma condição aplicada ao bloco "B6" da Fase 4 (paridade Playground). |
+| `backend-crm/services/ai_orchestrator/orchestrator.py::enrich_context_bundle` | Mesma condição aplicada ao bloco "B6" da Fase 4 (paridade Playground) — ver correção abaixo, a versão inicial deste ponto tinha um bug. |
 | `frontend-crm/src/types/agente.ts` | Novo campo `meeting_management_enabled: boolean` em `AgentConfig` e `DEFAULT_AGENT_CONFIG` (`true`). |
 | `frontend-crm/src/services/api.ts` | Mapeamento explícito campo-a-campo em `getConfig`/`saveConfig` (perto de `scheduling_offer_style`). |
 | `frontend-crm/src/components/agente/CamadaApresentacao.tsx` | Nova seção "Gestão pós-confirmação" — `EditCard` + modal de 2 opções ("Bot continua disponível" / "Desativar bot e aguardar handoff manual"), mesmo padrão de `ModalSchedulingOfferStyle`. |
-| `backend-crm/tests/test_calendar_busy_slots.py` | 2 testes novos em `EnrichContextBundleBotDisabledTest` (não propaga quando desligado; propaga quando ligado explicitamente). |
+| `backend-crm/tests/test_calendar_busy_slots.py` | 2 testes novos em `EnrichContextBundleBotDisabledTest` (não propaga o reason especial quando desligado; propaga quando ligado explicitamente). |
 | `backend-crm/tests/test_meeting_management_gate.py` | Novo arquivo, 4 testes — gate de `inbound_handler.py` (skip quando desligado, passa quando ligado, passa por default quando o perfil não tem o campo ainda, e outros `bot_disabled_reason` continuam bloqueados independente do toggle). |
+
+### Correção adicional: bug revelado pelo teste ao vivo do Cenário P2
+
+A primeira versão do bloco "B6" em `enrich_context_bundle` só propagava `bundle.metadata["bot_disabled"]` **dentro** da condição que incluía `meeting_management_enabled` — ou seja, quando o toggle estava desligado, `metadata.bot_disabled` não era setado de forma alguma. Resultado observado ao testar ao vivo no Playground: em vez do bot ficar mudo, `decision_engine.decide()` não encontrava `metadata.bot_disabled=True` e caía na pipeline normal Mãe/Filha — o bot respondia normalmente ao pedido de cancelamento ("Entendi, vamos cancelar a sessão...", "Você gostaria de remarcar para outro dia?"), o oposto do comportamento esperado (e mais permissivo que o handoff manual pretendido).
+
+**Causa raiz:** confundir "suprimir o reason especial `meeting_scheduled`" com "não marcar como desativado". O padrão correto (já usado em `routes/executor.py` desde o início) é: `bot_disabled=True` propaga sempre que o lead está de fato desativado por este motivo — só o `bot_disabled_reason` (o valor `"meeting_scheduled"` especificamente) é que depende do toggle.
+
+**Correção:** `enrich_context_bundle` agora sempre seta `bundle.metadata["bot_disabled"] = True` quando `lead.bot_disabled` e `lead.bot_disabled_reason == "meeting_scheduled"`; o `bot_disabled_reason` no metadata só recebe `"meeting_scheduled"` quando `meeting_management_enabled` é `True` — caso contrário fica `None`, fazendo `decide()` cair em `BOT_DISABLED_DECISION` (ignore), igual ao fluxo real.
 
 Decisão deliberada de não alterar: `docs/architecture/admin-agents-contract.md`/`AdminAgents.tsx` (o contrato só lista campos que afetam estágio/categoria do Kanban — `handoff_policy`, `requires_handoff` e `briefing_enabled` também não estão lá, mesmo precedente); `decision_engine.py::decide()` e `meeting_scheduler.py` (nenhuma mudança necessária — o gate em `executor.py`/`enrich_context_bundle` já resolve, suprimindo o reason antes de chegar ao `decide()`).
 
@@ -298,14 +307,15 @@ Decisão deliberada de não alterar: `docs/architecture/admin-agents-contract.md
 | # | Commit | O que foi implementado |
 |---|---|---|
 | 1 | `329fc05` | Toggle de conta `meeting_management_enabled` — backend-core, 3 gates no backend-crm, UI no frontend-crm, testes |
+| 2 | _(pendente — registrar após o commit)_ | Correção do bug em `enrich_context_bundle` revelado pelo teste ao vivo do Cenário P2 |
 
 ### Relatório da Fase 5 — o que mudou na prática
 
 **Antes:** o comportamento das Fases 1–4 (bot reabre e gerencia cancelamento/reagendamento após confirmar reunião) era fixo para todas as contas — não havia como o usuário optar por manter o bot totalmente mudo após confirmar (handoff manual puro).
 
-**Agora:** em "Configuração do Agente → Apresentação → Gestão pós-confirmação", o usuário escolhe entre as duas opções. Por padrão (contas existentes e novas) o comportamento continua igual ao das Fases 1–4 — nada muda até o usuário desligar explicitamente. Quando desligado, um pedido de cancelamento/remarcação do lead após a reunião confirmada não chega mais à IA — o bot fica mudo para esse lead, exatamente como qualquer outra desativação manual, e só volta a responder se o operador reativar pelo "Reativar bot" no card do lead.
+**Agora:** em "Configuração do Agente → Apresentação → Gestão pós-confirmação", o usuário escolhe entre as duas opções. Por padrão (contas existentes e novas) o comportamento continua igual ao das Fases 1–4 — nada muda até o usuário desligar explicitamente. Quando desligado, um pedido de cancelamento/remarcação do lead após a reunião confirmada não chega mais à IA — o bot fica mudo para esse lead, exatamente como qualquer outra desativação manual, e só volta a responder se o operador reativar pelo "Reativar bot" no card do lead. Esse comportamento (silêncio total quando desligado) só passou a funcionar de verdade depois da correção do bug acima — a primeira versão deixava o bot responder normalmente no Playground.
 
-**Para validar:** `npx tsc --noEmit` sem erros no frontend-crm. 6 testes automatizados novos passando (`test_calendar_busy_slots.py` + `test_meeting_management_gate.py`), mais os 8 testes pré-existentes de `backend-executors/tests/test_meeting_management.py` confirmando que nenhuma mudança foi necessária em `decide()`. Suítes completas de `backend-crm` (147 testes) e `backend-executors` (113 testes) sem regressão — mesmas falhas pré-existentes de antes desta fase, confirmadas via `git stash`/`git stash pop`.
+**Para validar:** `npx tsc --noEmit` sem erros no frontend-crm. 6 testes automatizados novos passando (`test_calendar_busy_slots.py` + `test_meeting_management_gate.py`), mais os 8 testes pré-existentes de `backend-executors/tests/test_meeting_management.py` confirmando que nenhuma mudança foi necessária em `decide()`. Suítes completas de `backend-crm` (147 testes) e `backend-executors` (113 testes) sem regressão — mesmas falhas pré-existentes de antes desta fase, confirmadas via `git stash`/`git stash pop`. Cenário P2 validado ao vivo via Playground (chrome-devtools MCP) com os 3 serviços backend reiniciados para captar a migração — revelou e permitiu corrigir o bug descrito acima; lead/appointments de teste (#294, #295) removidos e o toggle revertido para "Bot continua disponível" ao final.
 
 ## Ajustes Possíveis Pós-Implementação
 
