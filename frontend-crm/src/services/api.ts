@@ -1352,6 +1352,7 @@ export const api = {
         calendar_integration:    pack.calendar_integration    ?? DEFAULT_AGENT_CONFIG.calendar_integration,
         availability_mode:       ((profile as any)?.availability_mode ?? DEFAULT_AGENT_CONFIG.availability_mode) as import('../types/agente').AgentConfig['availability_mode'],
         availability_schedule:   (profile as any)?.availability_schedule ?? DEFAULT_AGENT_CONFIG.availability_schedule,
+        scheduling_offer_style:  ((profile as any)?.scheduling_offer_style ?? DEFAULT_AGENT_CONFIG.scheduling_offer_style) as import('../types/agente').AgentConfig['scheduling_offer_style'],
 
         // Oferta e pagamento
         offer_media_url:      pack.media_url      ?? DEFAULT_AGENT_CONFIG.offer_media_url,
@@ -1476,6 +1477,7 @@ export const api = {
         audio_transcription_enabled:   config.audio_transcription_enabled,
         availability_mode:             config.availability_mode,
         availability_schedule:         config.availability_schedule,
+        scheduling_offer_style:        config.scheduling_offer_style,
         followup_sdr_instructions:             config.followup_sdr_instructions,
         followup_recovery_instructions:        config.followup_recovery_instructions,
         followup_postsession_instructions:     config.followup_postsession_instructions,

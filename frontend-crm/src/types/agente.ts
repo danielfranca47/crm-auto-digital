@@ -317,6 +317,7 @@ export interface AgentConfig {
   calendar_integration: string;
   availability_mode: 'business_hours' | '24h' | 'custom';
   availability_schedule: string;
+  scheduling_offer_style: 'offer_alternatives' | 'confirm_exact';
 
   // ── Oferta e pagamento ───────────────────────────────────
   offer_media_url: string;
@@ -418,6 +419,7 @@ export const DEFAULT_AGENT_CONFIG: AgentConfig = {
   calendar_integration: 'none',
   availability_mode: '24h',
   availability_schedule: '{"mon":"09:00-18:00","tue":"09:00-18:00","wed":"09:00-18:00","thu":"09:00-18:00","fri":"09:00-18:00","sat":"","sun":""}',
+  scheduling_offer_style: 'offer_alternatives',
 
   offer_media_url: '',
   offer_media_type: 'image',
@@ -568,6 +570,11 @@ export const CALENDAR_INTEGRATION_LABELS: Record<string, string> = {
   none:            'Sem integração',
   google_calendar: 'Google Calendar',
   calendly:        'Calendly',
+};
+
+export const SCHEDULING_OFFER_STYLE_LABELS: Record<string, string> = {
+  offer_alternatives: 'Sempre oferecer alternativas',
+  confirm_exact:       'Confirmar horário exato quando disponível',
 };
 
 // ─── Camada 4: Categorias de Conhecimento por Preset ─────────

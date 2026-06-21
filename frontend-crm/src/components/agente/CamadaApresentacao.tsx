@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { FieldHelp } from './FieldHelp';
 import { SuggestInput } from './SuggestField';
 import type { AgentConfig } from '@/types/agente';
-import { CALENDAR_INTEGRATION_LABELS, BRIEFING_CHANNEL_LABELS } from '@/types/agente';
+import { CALENDAR_INTEGRATION_LABELS, BRIEFING_CHANNEL_LABELS, SCHEDULING_OFFER_STYLE_LABELS } from '@/types/agente';
 
 interface CamadaApresentacaoProps {
   config: AgentConfig;
@@ -125,12 +125,36 @@ function ModalCalendario({ value, onSave, onClose }: { value: string; onSave: (v
   );
 }
 
+// ─── Modal: Estilo de oferta de horário ───────────────────────
+function ModalSchedulingOfferStyle({ value, onSave, onClose }: { value: string; onSave: (v: string) => void; onClose: () => void }) {
+  const [local, setLocal] = useState(value);
+  const opts = [
+    {
+      v: 'offer_alternatives',
+      label: 'Sempre oferecer alternativas',
+      desc: 'O agente nunca confirma de imediato o horário exato pedido — propõe sempre 2-3 opções próximas, mesmo que o horário esteja livre. Pode funcionar como gatilho comercial de escassez.',
+    },
+    {
+      v: 'confirm_exact',
+      label: 'Confirmar horário exato quando disponível',
+      desc: 'Se o horário pedido pelo lead estiver livre, o agente confirma diretamente. Só propõe alternativas quando o horário pedido realmente não está disponível.',
+    },
+  ];
+  return (
+    <ModalBase title="Estilo de oferta de horário" sub="Como o agente responde quando o lead pede um horário específico" onClose={onClose} onSave={() => onSave(local)}>
+      {opts.map(o => (
+        <OptCard key={o.v} selected={local === o.v} onClick={() => setLocal(o.v)} label={o.label} desc={o.desc} />
+      ))}
+    </ModalBase>
+  );
+}
+
 // ─────────────────────────────────────────────────────────────
 // Componente principal
 // ─────────────────────────────────────────────────────────────
 
 type DrawerKey = 'lembretes' | 'briefing' | null;
-type ModalKey  = 'calendario' | 'modoOperacao' | null;
+type ModalKey  = 'calendario' | 'modoOperacao' | 'ofertaHorario' | null;
 
 const APPOINTMENT_MODE_LABELS: Record<string, string> = {
   exploratory: 'Agendamento Exploratório',
@@ -147,6 +171,7 @@ export function CamadaApresentacao({ config, onUpdate }: CamadaApresentacaoProps
     ? `${BRIEFING_CHANNEL_LABELS[config.briefing_channel] || config.briefing_channel} · ${config.briefing_lead_time}h antes`
     : 'Desativado';
   const calLabel = CALENDAR_INTEGRATION_LABELS[config.calendar_integration] || 'Sem integração';
+  const offerStyleLabel = SCHEDULING_OFFER_STYLE_LABELS[config.scheduling_offer_style] || 'Sempre oferecer alternativas';
 
   return (
     <>
@@ -232,6 +257,16 @@ export function CamadaApresentacao({ config, onUpdate }: CamadaApresentacaoProps
           onChange={e => onUpdate({ availability_schedule: e.target.value })}
         />
       </div>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 14, marginBottom: 24 }}>
+        <EditCard
+          label="Estilo de oferta de horário"
+          value={offerStyleLabel}
+          sub="Como o agente responde a um horário específico pedido"
+          onClick={() => setModal('ofertaHorario')}
+          status="ok"
+          help="Sempre oferecer alternativas: o agente propõe 2-3 opções mesmo quando o horário pedido está livre (tática de escassez). Confirmar horário exato: o agente confirma direto quando o horário pedido está disponível."
+        />
+      </div>
 
       {/* Seção: Calendário */}
       <div className="o-section-hdr">
@@ -276,6 +311,13 @@ export function CamadaApresentacao({ config, onUpdate }: CamadaApresentacaoProps
           value={config.calendar_integration}
           onClose={() => setModal(null)}
           onSave={v => { onUpdate({ calendar_integration: v }); setModal(null); }}
+        />
+      )}
+      {modal === 'ofertaHorario' && (
+        <ModalSchedulingOfferStyle
+          value={config.scheduling_offer_style || 'offer_alternatives'}
+          onClose={() => setModal(null)}
+          onSave={v => { onUpdate({ scheduling_offer_style: v as 'offer_alternatives' | 'confirm_exact' }); setModal(null); }}
         />
       )}
     </>
