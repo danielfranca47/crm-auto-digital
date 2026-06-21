@@ -196,7 +196,7 @@ próximos horários disponíveis, ou prefere me avisar quando puder remarcar?"
 Quer já ver os horários disponíveis?"
 ```
 
-### Recuperação — paciente sumido (silêncio configurado, ex: 7+ dias sem agendar)
+### Recuperação — paciente sumido (silêncio configurado, ex: 35+ dias sem agendar)
 ```
 "Oi {{nome_paciente}}! Notei que faz um tempo desde sua última sessão.
 Quer que eu veja horários disponíveis pra essa semana?"
