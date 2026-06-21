@@ -149,12 +149,36 @@ function ModalSchedulingOfferStyle({ value, onSave, onClose }: { value: string; 
   );
 }
 
+// ─── Modal: Gestão pós-confirmação (cancelamento/reagendamento) ──
+function ModalMeetingManagement({ value, onSave, onClose }: { value: boolean; onSave: (v: boolean) => void; onClose: () => void }) {
+  const [local, setLocal] = useState(value);
+  const opts = [
+    {
+      v: true,
+      label: 'Bot continua disponível',
+      desc: 'Depois de confirmar a reunião, o bot volta a responder o lead só para cancelar ou reagendar — qualquer outra mensagem recebe uma resposta mínima, sem reabrir venda.',
+    },
+    {
+      v: false,
+      label: 'Desativar bot e aguardar handoff manual',
+      desc: 'Depois de confirmar a reunião, o bot fica mudo para esse lead (mesmo comportamento de uma desativação manual). Um cancelamento ou pedido de remarcação só é atendido se o operador reativar o bot.',
+    },
+  ];
+  return (
+    <ModalBase title="Gestão pós-confirmação" sub="O que o bot faz se o lead pedir para cancelar ou remarcar depois de confirmar a reunião" onClose={onClose} onSave={() => onSave(local)}>
+      {opts.map(o => (
+        <OptCard key={String(o.v)} selected={local === o.v} onClick={() => setLocal(o.v)} label={o.label} desc={o.desc} />
+      ))}
+    </ModalBase>
+  );
+}
+
 // ─────────────────────────────────────────────────────────────
 // Componente principal
 // ─────────────────────────────────────────────────────────────
 
 type DrawerKey = 'lembretes' | 'briefing' | null;
-type ModalKey  = 'calendario' | 'modoOperacao' | 'ofertaHorario' | null;
+type ModalKey  = 'calendario' | 'modoOperacao' | 'ofertaHorario' | 'gestaoPosConfirmacao' | null;
 
 const APPOINTMENT_MODE_LABELS: Record<string, string> = {
   exploratory: 'Agendamento Exploratório',
@@ -172,6 +196,9 @@ export function CamadaApresentacao({ config, onUpdate }: CamadaApresentacaoProps
     : 'Desativado';
   const calLabel = CALENDAR_INTEGRATION_LABELS[config.calendar_integration] || 'Sem integração';
   const offerStyleLabel = SCHEDULING_OFFER_STYLE_LABELS[config.scheduling_offer_style] || 'Sempre oferecer alternativas';
+  const meetingManagementLabel = config.meeting_management_enabled !== false
+    ? 'Bot continua disponível'
+    : 'Desativado (handoff manual)';
 
   return (
     <>
@@ -268,6 +295,23 @@ export function CamadaApresentacao({ config, onUpdate }: CamadaApresentacaoProps
         />
       </div>
 
+      {/* Seção: Gestão pós-confirmação */}
+      <div className="o-section-hdr">
+        <span className="font-mono-orion" style={{ fontSize: 9, letterSpacing: '2.5px', textTransform: 'uppercase', color: 'var(--o-sub)' }}>
+          Gestão pós-confirmação
+        </span>
+      </div>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 14, marginBottom: 24 }}>
+        <EditCard
+          label="Cancelamento e reagendamento"
+          value={meetingManagementLabel}
+          sub="O que o bot faz se o lead pedir mudança após confirmar"
+          onClick={() => setModal('gestaoPosConfirmacao')}
+          status={config.meeting_management_enabled !== false ? 'ok' : 'warn'}
+          help="Bot continua disponível: gerencia cancelamento/reagendamento automaticamente, sem reabrir venda. Desativado: o bot fica mudo após confirmar a reunião e só volta a responder se o operador reativar manualmente."
+        />
+      </div>
+
       {/* Seção: Calendário */}
       <div className="o-section-hdr">
         <span className="font-mono-orion" style={{ fontSize: 9, letterSpacing: '2.5px', textTransform: 'uppercase', color: 'var(--o-sub)' }}>
@@ -318,6 +362,13 @@ export function CamadaApresentacao({ config, onUpdate }: CamadaApresentacaoProps
           value={config.scheduling_offer_style || 'offer_alternatives'}
           onClose={() => setModal(null)}
           onSave={v => { onUpdate({ scheduling_offer_style: v as 'offer_alternatives' | 'confirm_exact' }); setModal(null); }}
+        />
+      )}
+      {modal === 'gestaoPosConfirmacao' && (
+        <ModalMeetingManagement
+          value={config.meeting_management_enabled !== false}
+          onClose={() => setModal(null)}
+          onSave={v => { onUpdate({ meeting_management_enabled: v }); setModal(null); }}
         />
       )}
     </>

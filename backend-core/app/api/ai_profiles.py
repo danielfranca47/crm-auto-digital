@@ -195,6 +195,7 @@ class AIProfileBase(BaseModel):
     scheduling_offer_style: Optional[str] = None
     availability_schedule: Optional[str] = None
     availability_mode: Optional[str] = "24h"
+    meeting_management_enabled: bool = True
     response_style: Optional[ResponseStyle] = ResponseStyle.active
     qualification_required_fields: Optional[List[str]] = None
     qualification_fields: Optional[List[dict]] = None
@@ -262,6 +263,7 @@ class AIProfileUpdate(BaseModel):
     scheduling_offer_style: Optional[str] = None
     availability_schedule: Optional[str] = None
     availability_mode: Optional[str] = None
+    meeting_management_enabled: Optional[bool] = None
     response_style: Optional[ResponseStyle] = None
     qualification_required_fields: Optional[List[str]] = None
     qualification_fields: Optional[List[dict]] = None

@@ -1,7 +1,7 @@
 # M1 — Ação real de cancelamento/reagendamento de compromisso
 
 **Branch:** `main`
-**Status:** Em andamento — pendente: Cenário C2 (validação manual: WhatsApp real, requer instância conectada)
+**Status:** Em andamento — pendente: Cenário C2 (validação manual: WhatsApp real, requer instância conectada) e Cenário P2 (validação manual: toggle desligado no Playground)
 **Plano:** `docs/plans/followup-proativo-e-cancelamento-agenda.md` (M1)
 
 ---
@@ -170,6 +170,13 @@ Inbound (lead já tem reunião confirmada, bot_disabled=1, reason=meeting_schedu
 - [ ] Lead com reunião confirmada (bot_disabled=1) envia "preciso cancelar"
 - [ ] Confirmar: mensagem chega à IA, appointment cancelado, bot reativado
 
+### Cenário P2 — Toggle desligado: bot não reabre após confirmar (manual, via browser/Playground)
+- [ ] Em "Configuração do Agente → Apresentação → Gestão pós-confirmação", selecionar "Desativar bot e aguardar handoff manual" e salvar
+- [ ] Agendar uma sessão via Playground (mesmo fluxo do Cenário P1)
+- [ ] Pedir cancelamento na mesma sessão
+- [ ] Confirmar: bot não responde sobre o cancelamento (mensagem mínima/genérica ou nenhuma resposta de gestão), appointment continua `pending`, `bot_disabled` permanece `1`/`meeting_scheduled`
+- [ ] Reverter o toggle para "Bot continua disponível" ao final do teste
+
 ### Cenário P1 — Playground: agendar, cancelar e reagendar na mesma sessão (manual, via browser)
 - [x] Agendar uma sessão via mensagem inbound no Playground (lead novo, `agent_mode=agenda`)
 - [x] Confirmar: appointment `[Playground]` criado, `bot_disabled=1`/`reason=meeting_scheduled`
@@ -257,6 +264,48 @@ Decisão (confirmada com o utilizador): corrigir a paridade em vez de pular o te
 **Para validar:** Cenário P1 validado ao vivo (ver acima). Suítes automatizadas sem regressão (mesma baseline pré-existente).
 
 ---
+
+## Fase 5 — Toggle de conta: bot fica disponível ou desativa com handoff após confirmar reunião
+
+### Problema identificado
+
+As Fases 1–4 fizeram o bot reabrir e gerir cancelamento/reagendamento de forma **incondicional**, para todas as contas, sempre que `bot_disabled_reason="meeting_scheduled"`. O utilizador pediu uma camada de escolha por conta: cada usuário decide se quer esse comportamento, ou prefere que o bot fique mudo após confirmar a reunião (handoff manual, comportamento anterior ao M1).
+
+Investigação no AI Profile (`backend-core/app/models/ai_profile.py`, `app/api/ai_profiles.py`) não encontrou nenhum campo equivalente. Os candidatos mais próximos (`handoff_policy`, `requires_handoff`) pertencem a um mecanismo diferente — disparam apenas quando a pipeline Mãe/Filha decide `next_action="handoff"` durante qualificação/venda (`backend-executors/app/services/handoff_policy.py`). O gate pós-confirmação de reunião é um curto-circuito separado (mesmo padrão de `fast_path`), então reaproveitar `handoff_policy` misturaria dois conceitos distintos.
+
+### Correção
+
+Novo campo booleano no AI Profile: **`meeting_management_enabled`** (default `True` — obrigatório, não é preferência de produto: o comportamento das Fases 1–4 já está em produção para todas as contas; um default `False` desativaria silenciosamente uma capacidade já existente).
+
+| Arquivo | Mudança |
+|---|---|
+| `backend-core/app/models/ai_profile.py` | Nova coluna `meeting_management_enabled` (Boolean, default `True`). |
+| `backend-core/app/db.py::ensure_ai_profile_columns()` | Nova entrada de migração idempotente, mesmo padrão de `briefing_enabled`. |
+| `backend-core/app/api/ai_profiles.py` | `meeting_management_enabled: bool = True` em `AIProfileBase`; `Optional[bool] = None` em `AIProfileUpdate`. |
+| `backend-crm/services/whatsapp_inbound/inbound_handler.py` | Gate de job creation (Fase 1): só deixa passar quando `bot_disabled_reason == "meeting_scheduled"` **e** `meeting_management_enabled` é `True`. Lê do `ai_profile` já resolvido em `_ai_profile_for_delay`, sem fetch extra. |
+| `backend-crm/routes/executor.py` | Propagação de `bot_disabled_reason` para o fluxo real (Fase 1): suprime o reason `"meeting_scheduled"` quando `meeting_management_enabled` é `False` — `decision_engine.decide()` cai automaticamente no branch padrão `BOT_DISABLED_DECISION` (ignore), sem precisar de branch novo. |
+| `backend-crm/services/ai_orchestrator/orchestrator.py::enrich_context_bundle` | Mesma condição aplicada ao bloco "B6" da Fase 4 (paridade Playground). |
+| `frontend-crm/src/types/agente.ts` | Novo campo `meeting_management_enabled: boolean` em `AgentConfig` e `DEFAULT_AGENT_CONFIG` (`true`). |
+| `frontend-crm/src/services/api.ts` | Mapeamento explícito campo-a-campo em `getConfig`/`saveConfig` (perto de `scheduling_offer_style`). |
+| `frontend-crm/src/components/agente/CamadaApresentacao.tsx` | Nova seção "Gestão pós-confirmação" — `EditCard` + modal de 2 opções ("Bot continua disponível" / "Desativar bot e aguardar handoff manual"), mesmo padrão de `ModalSchedulingOfferStyle`. |
+| `backend-crm/tests/test_calendar_busy_slots.py` | 2 testes novos em `EnrichContextBundleBotDisabledTest` (não propaga quando desligado; propaga quando ligado explicitamente). |
+| `backend-crm/tests/test_meeting_management_gate.py` | Novo arquivo, 4 testes — gate de `inbound_handler.py` (skip quando desligado, passa quando ligado, passa por default quando o perfil não tem o campo ainda, e outros `bot_disabled_reason` continuam bloqueados independente do toggle). |
+
+Decisão deliberada de não alterar: `docs/architecture/admin-agents-contract.md`/`AdminAgents.tsx` (o contrato só lista campos que afetam estágio/categoria do Kanban — `handoff_policy`, `requires_handoff` e `briefing_enabled` também não estão lá, mesmo precedente); `decision_engine.py::decide()` e `meeting_scheduler.py` (nenhuma mudança necessária — o gate em `executor.py`/`enrich_context_bundle` já resolve, suprimindo o reason antes de chegar ao `decide()`).
+
+### Commits Fase 5
+
+| # | Commit | O que foi implementado |
+|---|---|---|
+| 1 | _(pendente — registrar após o commit)_ | Toggle de conta `meeting_management_enabled` — backend-core, 3 gates no backend-crm, UI no frontend-crm, testes |
+
+### Relatório da Fase 5 — o que mudou na prática
+
+**Antes:** o comportamento das Fases 1–4 (bot reabre e gerencia cancelamento/reagendamento após confirmar reunião) era fixo para todas as contas — não havia como o usuário optar por manter o bot totalmente mudo após confirmar (handoff manual puro).
+
+**Agora:** em "Configuração do Agente → Apresentação → Gestão pós-confirmação", o usuário escolhe entre as duas opções. Por padrão (contas existentes e novas) o comportamento continua igual ao das Fases 1–4 — nada muda até o usuário desligar explicitamente. Quando desligado, um pedido de cancelamento/remarcação do lead após a reunião confirmada não chega mais à IA — o bot fica mudo para esse lead, exatamente como qualquer outra desativação manual, e só volta a responder se o operador reativar pelo "Reativar bot" no card do lead.
+
+**Para validar:** `npx tsc --noEmit` sem erros no frontend-crm. 6 testes automatizados novos passando (`test_calendar_busy_slots.py` + `test_meeting_management_gate.py`), mais os 8 testes pré-existentes de `backend-executors/tests/test_meeting_management.py` confirmando que nenhuma mudança foi necessária em `decide()`. Suítes completas de `backend-crm` (147 testes) e `backend-executors` (113 testes) sem regressão — mesmas falhas pré-existentes de antes desta fase, confirmadas via `git stash`/`git stash pop`.
 
 ## Ajustes Possíveis Pós-Implementação
 

@@ -616,7 +616,12 @@ def enrich_context_bundle(bundle: ContextBundle, user_id: int) -> ContextBundle:
     # motivos de bot_disabled (ex.: handoff_requested) continuam não propagados no Playground,
     # propositalmente (ver docs/architecture/agenda.md).
     lead = bundle.lead or {}
-    if lead.get("bot_disabled") and lead.get("bot_disabled_reason") == "meeting_scheduled":
+    _meeting_management_enabled = bool((bundle.ai_profile or {}).get("meeting_management_enabled", True))
+    if (
+        lead.get("bot_disabled")
+        and lead.get("bot_disabled_reason") == "meeting_scheduled"
+        and _meeting_management_enabled
+    ):
         bundle.metadata["bot_disabled"] = True
         bundle.metadata["bot_disabled_reason"] = "meeting_scheduled"
 

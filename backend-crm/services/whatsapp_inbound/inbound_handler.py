@@ -482,10 +482,14 @@ def handle_inbound(payload: Dict[str, Any]) -> Dict[str, Any]:
             "SELECT bot_disabled, bot_disabled_reason FROM leads WHERE id = ?", (lead_id,)
         ).fetchone()
         _bot_disabled_reason = _bot_row["bot_disabled_reason"] if _bot_row else None
+        _meeting_management_enabled = bool((_ai_profile_for_delay or {}).get("meeting_management_enabled", True))
+        _meeting_management_open = (
+            _bot_disabled_reason == "meeting_scheduled" and _meeting_management_enabled
+        )
         if (
             _bot_row
             and int(_bot_row["bot_disabled"] or 0) == 1
-            and _bot_disabled_reason != "meeting_scheduled"
+            and not _meeting_management_open
         ):
             logger.info(
                 "inbound_bot_disabled_skip lead_id=%s user_id=%s reason=bot_disabled",

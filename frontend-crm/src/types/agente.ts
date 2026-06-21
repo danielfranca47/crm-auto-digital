@@ -318,6 +318,7 @@ export interface AgentConfig {
   availability_mode: 'business_hours' | '24h' | 'custom';
   availability_schedule: string;
   scheduling_offer_style: 'offer_alternatives' | 'confirm_exact';
+  meeting_management_enabled: boolean;
 
   // ── Oferta e pagamento ───────────────────────────────────
   offer_media_url: string;
@@ -420,6 +421,7 @@ export const DEFAULT_AGENT_CONFIG: AgentConfig = {
   availability_mode: '24h',
   availability_schedule: '{"mon":"09:00-18:00","tue":"09:00-18:00","wed":"09:00-18:00","thu":"09:00-18:00","fri":"09:00-18:00","sat":"","sun":""}',
   scheduling_offer_style: 'offer_alternatives',
+  meeting_management_enabled: true,
 
   offer_media_url: '',
   offer_media_type: 'image',

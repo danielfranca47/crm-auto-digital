@@ -3,6 +3,7 @@ import sqlite3
 import sys
 import unittest
 from datetime import datetime, timedelta, timezone
+from typing import Optional
 from unittest.mock import patch
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
@@ -174,10 +175,10 @@ class EnrichContextBundleBotDisabledTest(unittest.TestCase):
     def tearDown(self):
         self.conn.close()
 
-    def _bundle(self, lead: dict) -> ContextBundle:
+    def _bundle(self, lead: dict, ai_profile: Optional[dict] = None) -> ContextBundle:
         return ContextBundle(
             user_id=1,
-            ai_profile={"agent_mode": "agenda"},
+            ai_profile=ai_profile if ai_profile is not None else {"agent_mode": "agenda"},
             playbook={},
             lead=lead,
             history=[],
@@ -202,6 +203,25 @@ class EnrichContextBundleBotDisabledTest(unittest.TestCase):
         with patch("services.ai_orchestrator.orchestrator.get_connection", return_value=self.conn):
             enriched = enrich_context_bundle(bundle, user_id=1)
         self.assertNotIn("bot_disabled", enriched.metadata)
+
+    def test_does_not_propagate_when_meeting_management_disabled(self):
+        bundle = self._bundle(
+            {"bot_disabled": 1, "bot_disabled_reason": "meeting_scheduled"},
+            ai_profile={"agent_mode": "agenda", "meeting_management_enabled": False},
+        )
+        with patch("services.ai_orchestrator.orchestrator.get_connection", return_value=self.conn):
+            enriched = enrich_context_bundle(bundle, user_id=1)
+        self.assertNotIn("bot_disabled", enriched.metadata)
+
+    def test_propagates_when_meeting_management_explicitly_enabled(self):
+        bundle = self._bundle(
+            {"bot_disabled": 1, "bot_disabled_reason": "meeting_scheduled"},
+            ai_profile={"agent_mode": "agenda", "meeting_management_enabled": True},
+        )
+        with patch("services.ai_orchestrator.orchestrator.get_connection", return_value=self.conn):
+            enriched = enrich_context_bundle(bundle, user_id=1)
+        self.assertTrue(enriched.metadata.get("bot_disabled"))
+        self.assertEqual(enriched.metadata.get("bot_disabled_reason"), "meeting_scheduled")
 
 
 if __name__ == "__main__":
