@@ -1,7 +1,7 @@
 # M1 — Ação real de cancelamento/reagendamento de compromisso
 
 **Branch:** `main`
-**Status:** Em andamento — pendente: Cenários C1 e C2 (validação manual: UI + WhatsApp real)
+**Status:** Em andamento — pendente: Cenário C2 (validação manual: WhatsApp real)
 **Plano:** `docs/plans/followup-proativo-e-cancelamento-agenda.md` (M1)
 
 ---
@@ -198,7 +198,7 @@ Causa raiz comum aos três: a Fase 2 foi implementada e testada via pytest com m
 
 | # | Commit | O que foi implementado |
 |---|---|---|
-| 1 | _(pendente — ver abaixo)_ | Correção dos 3 gaps encontrados no teste do Cenário C1 |
+| 1 | `e70ecdd` | Correção dos 3 gaps encontrados no teste do Cenário C1 |
 
 ### Relatório da Fase 3 — o que mudou na prática
 
