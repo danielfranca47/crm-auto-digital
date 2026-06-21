@@ -63,6 +63,7 @@ class AIProfile(Base):
     warming_social_proof = Column(String, nullable=True)
     warming_session_preview = Column(String, nullable=True)
     appointment_mode = Column(String, nullable=True, server_default="exploratory")
+    scheduling_offer_style = Column(String, nullable=True, server_default="offer_alternatives")
     availability_schedule = Column(String, nullable=True)
     availability_mode = Column(String, nullable=True, server_default="24h")
     first_reply_delay_min_seconds = Column(Integer, nullable=True, server_default="0")

@@ -192,6 +192,7 @@ class AIProfileBase(BaseModel):
     warming_social_proof: Optional[str] = None
     warming_session_preview: Optional[str] = None
     appointment_mode: Optional[str] = None
+    scheduling_offer_style: Optional[str] = None
     availability_schedule: Optional[str] = None
     availability_mode: Optional[str] = "24h"
     response_style: Optional[ResponseStyle] = ResponseStyle.active
@@ -258,6 +259,7 @@ class AIProfileUpdate(BaseModel):
     warming_social_proof: Optional[str] = None
     warming_session_preview: Optional[str] = None
     appointment_mode: Optional[str] = None
+    scheduling_offer_style: Optional[str] = None
     availability_schedule: Optional[str] = None
     availability_mode: Optional[str] = None
     response_style: Optional[ResponseStyle] = None

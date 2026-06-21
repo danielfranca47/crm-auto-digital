@@ -3456,12 +3456,35 @@ def _build_child_prompt_agendamento(
         if _busy_lines else ""
     )
 
+    scheduling_offer_style = str(ai_profile.get("scheduling_offer_style") or "offer_alternatives").strip().lower()
+
     _avail_block = ""
     if availability_schedule:
+        if scheduling_offer_style == "confirm_exact":
+            _offer_instruction = (
+                "REGRA CRÍTICA — CONFIRMAÇÃO DIRETA (obrigatória, máxima prioridade nesta fase):\n"
+                "Antes de responder, verifique o horário exacto pedido pelo lead contra HORÁRIOS JÁ "
+                "OCUPADOS acima e contra a disponibilidade. NÃO INVENTE conflito que não está "
+                "listado — se o horário pedido não aparece em HORÁRIOS JÁ OCUPADOS e está dentro da "
+                "disponibilidade, ELE ESTÁ LIVRE, mesmo que pareça um horário popular ou que você "
+                "tenha dúvida.\n"
+                "- Horário livre → confirme-o directamente nesta resposta. Não pergunte se quer "
+                "outro horário, não ofereça alternativas, não diga que vai verificar.\n"
+                "- Horário ocupado (aparece em HORÁRIOS JÁ OCUPADOS) ou fora da disponibilidade → "
+                "só então proponha 2-3 alternativas.\n"
+                "Exemplo (horário livre, sem nada em HORÁRIOS JÁ OCUPADOS para esse dia/hora): lead "
+                "pede 'amanhã às 14h' → responda algo como 'Perfeito, fica confirmado amanhã às 14h.' "
+                "— NUNCA 'não temos disponibilidade' ou 'já está ocupado' quando o horário não consta "
+                "na lista de ocupados.\n\n"
+            )
+        else:
+            _offer_instruction = (
+                "Com base na disponibilidade acima, proponha 2-3 horários concretos que se encaixem "
+                "no que o lead solicitou. Use linguagem natural e fluida.\n\n"
+            )
         _avail_block = (
             f"DISPONIBILIDADE DO PROFISSIONAL:\n{availability_schedule}\n\n"
-            "Com base na disponibilidade acima, proponha 2-3 horários concretos que se encaixem "
-            "no que o lead solicitou. Use linguagem natural e fluida.\n\n"
+            + _offer_instruction
         )
     else:
         _avail_block = (
