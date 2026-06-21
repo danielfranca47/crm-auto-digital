@@ -2313,6 +2313,7 @@ def _build_child_prompt_apresentation(
     presentation_variant, presentation_variant_source = _resolve_presentation_variant(context, agent_mode_normalized)
     hybrid_flow_style = _resolve_hybrid_flow_style(context)
     offer_pack_summary = _build_offer_pack_summary(context)
+    today_date = datetime.utcnow().strftime("%Y-%m-%d")
 
     # Fix P9: passive reply antes do agendamento quando a qualificação foi auto-promovida
     # neste mesmo turno e o lead tinha uma pergunta aberta de serviço na mensagem.
@@ -2701,6 +2702,8 @@ def _build_child_prompt_apresentation(
         "  * Se não for contexto de agendamento: meeting_proposed=false e meeting_datetime_candidate=null.\n"
         "  * Preferência: ISO naive no horário local de ai_profile.timezone (ex: 2026-03-05T17:00:00); também aceito offset/Z.\n"
         "  * Nunca assumir timezone fixa; sempre respeitar ai_profile.timezone.\n"
+        "  * Para datas relativas (amanhã, depois de amanhã, sexta que vem, etc.), calcule a partir de today_date "
+        "abaixo — NUNCA invente ou assuma uma data sem usar today_date como referência.\n"
         "  * Em confirmação final do agendamento, inclua 'meeting_scheduled' em signals para compatibilidade.\n"
         "- Em presentation_variant=sales, UM TURNO = UMA AÇÃO: ou CONFIRMAR (sem link) ou ENVIAR LINK (com link).\n"
         "- Formato CONFIRMAR (sem link): descreva oferta e peça confirmação (ex.: 'quer seguir?').\n"
@@ -2769,6 +2772,7 @@ def _build_child_prompt_apresentation(
         f"- commercial_mode_active: {bool(commercial_injection)}\n"
         f"- media_already_sent: {bool(_apres_media_already_sent)}\n"
         f"- extracted_fields: {json.dumps(mode_contract.get('extracted_fields') or {}, ensure_ascii=False)}\n"
+        f"- today_date: {today_date}\n"
         f"- inbound_message_text: {message_text}\n"
         + _build_custom_instructions_block(ai_profile)
         + _build_business_info_block(context)
@@ -3411,6 +3415,7 @@ def _build_child_prompt_agendamento(
     history_text = _format_history(history)
     mode_contract = _build_mode_contract_context(context, mother_decision)
     agent_mode_normalized = mode_contract["agent_mode_normalized"]
+    today_date = datetime.utcnow().strftime("%Y-%m-%d")
 
     _busy_lines = _format_busy_slots_block(context.get("calendar_busy_slots"), ai_profile.get("timezone"))
     _busy_block = (
@@ -3464,8 +3469,11 @@ def _build_child_prompt_agendamento(
         "  * Se estiver pedindo disponibilidade sem horário definido: meeting_proposed=true e meeting_datetime_candidate=null.\n"
         "  * Combine informação de turnos anteriores do history (ex.: dia mencionado antes + hora mencionada agora).\n"
         "  * Preferência: ISO naive no horário local de ai_profile.timezone (ex: 2026-03-05T17:00:00); também aceito offset/Z.\n"
-        "  * Nunca assumir timezone fixa; sempre respeitar ai_profile.timezone.\n\n"
+        "  * Nunca assumir timezone fixa; sempre respeitar ai_profile.timezone.\n"
+        "  * Para datas relativas (amanhã, depois de amanhã, sexta que vem, etc.), calcule a partir de today_date "
+        "abaixo — NUNCA invente ou assuma uma data sem usar today_date como referência.\n\n"
         f"Contexto:\n"
+        f"- today_date: {today_date}\n"
         f"- lead: {json.dumps(lead_summary, ensure_ascii=False)}\n"
         f"- ai_profile: {json.dumps(ai_summary, ensure_ascii=False)}\n"
         f"- history: {history_text}\n"
