@@ -451,6 +451,71 @@ outras duas filhas.
 
 ---
 
+## Fase 7 — Diagnóstico + Correção: nomes de dia da semana (sábado, quinta-feira...) resolvidos para a data errada (21/06/2026)
+
+### Problema identificado
+
+O utilizador perguntou se o sistema também agenda corretamente quando o lead diz um **nome
+de dia da semana** (ex.: "sábado", "quinta-feira") em vez de "amanhã"/"depois de amanhã".
+Validado ao vivo no Playground (lead #277, perfil id=5, hoje=domingo 21/06):
+
+1. Lead pediu "sábado" → perfil não atende sábado (`availability_schedule` real,
+   seg-sex 09:00-18:00) → IA redirecionou corretamente para segunda-feira. Comportamento
+   correto, mas não testa o cálculo de dia da semana (segunda = "amanhã", caso trivial já
+   coberto pela Fase 6).
+2. Lead pediu para trocar para "quinta-feira" → IA confirmou "quinta-feira, 22 de junho" —
+   **22/06/2026 é segunda-feira, não quinta**. `meeting_datetime_candidate` confirmado via
+   rede: `"2026-06-22T09:00:00"`.
+
+Causa raiz: dar à LLM só a data de hoje (`today_date`, da Fase 6) resolve "amanhã" (soma
+trivial de 1 dia), mas não é suficiente para "quinta-feira" — isso exige primeiro descobrir
+em que dia da semana cai hoje e depois contar quantos dias faltam até o dia pedido, uma
+conta que a LLM não faz de forma confiável.
+
+**Primeira tentativa (insuficiente, revertida antes do commit):** adicionar o nome do dia da
+semana junto à data (`"2026-06-21 (domingo)"`). Revalidado ao vivo (lead #278): a IA ainda
+errou — confirmou "quinta-feira" como `2026-06-23T09:30:00` (terça-feira de verdade), não
+`2026-06-25` (quinta real). Saber que hoje é domingo não bastou; ela continuou a errar a
+contagem de dias.
+
+### Correção (definitiva, validada)
+
+| Arquivo | Mudança |
+|---|---|
+| `backend-executors/app/services/decision_engine.py` | Nova função `_calendar_lookup_table_pt(days_ahead=14)`: gera uma tabela com hoje + 14 dias seguintes, cada linha já com a data E o nome do dia da semana calculados (`2026-06-25 (quinta-feira)`). Substitui o helper anterior (`_today_date_with_weekday`) |
+| `backend-executors/app/services/decision_engine.py` (`_build_child_prompt_agendamento`, `_build_child_prompt_apresentation`, `_build_child_prompt_pre_agendamento`) | Passam a injetar a tabela completa (`tabela_de_dias`) em vez de uma única data; instrução reescrita para "procure a linha correspondente na tabela — NUNCA calcule a data ou o dia da semana por conta própria" |
+| `backend-executors/tests/test_today_date_with_weekday.py` | Novo arquivo, 5 cenários: tabela de nomes de dia da semana bate com datas conhecidas; sequência da tabela de 15 dias está correta; os 3 prompts contêm `tabela_de_dias` e a instrução anti-cálculo |
+
+Ideia central: eliminar qualquer aritmética de calendário do lado da LLM. Em vez de pedir
+para ela "calcular" uma data, a tabela já entrega a resposta pronta — ela só precisa
+**localizar a linha** cujo dia da semana bate com o que o lead disse. É uma tarefa de busca,
+não de cálculo, e LLMs são muito mais confiáveis em busca/correspondência do que em
+aritmética de datas.
+
+### Commits Fase 7
+
+| # | Commit | O que foi implementado |
+|---|---|---|
+| 1 | `4b8e1f4` | Tabela de dias (`_calendar_lookup_table_pt`) substituindo o cálculo de data único; testes; validado ao vivo (quinta-feira → 25/06 correto) |
+
+### Relatório da Fase 7 — o que mudou na prática
+
+**Antes:** quando o cliente dizia um nome de dia da semana (ex.: "quinta-feira", "sábado") em vez de "amanhã", a IA podia confirmar a data errada — disse "quinta-feira" mas marcou numa segunda ou terça-feira de verdade, sem o cliente perceber pelo texto da mensagem (que parecia certo).
+**Agora:** a IA recebe uma lista pronta com os próximos 14 dias e o nome de cada um já calculado — ela só precisa achar a linha certa, não fazer conta de calendário sozinha. Testado de novo ao vivo: pedindo "quinta-feira", a sessão foi marcada para 25/06, que é de fato a próxima quinta-feira a partir de hoje (domingo 21/06).
+**Para validar:** confirmado por testes técnicos diretos e por validação ao vivo completa no Playground (Cenário C6, abaixo).
+
+---
+
+## Checks de Validação — Fase 7
+
+### Cenário C6 — Nomes de dia da semana resolvidos corretamente
+- [x] Testes unitários diretos (`test_today_date_with_weekday.py`, 5 cenários): tabela de nomes de dia da semana bate com datas de referência conhecidas; sequência de 15 dias da tabela está correta (data + dia da semana incrementam juntos); os 3 prompts (`agendamento`, `apresentation`, `pre-agendamento`) contêm `tabela_de_dias` e a instrução "NUNCA calcule a data ou o dia da semana por conta própria"
+- [x] Regressão: `pytest tests/ scripts/test_meeting_scheduler_hook.py scripts/test_meeting_candidate_e2e.py scripts/test_structured_meeting_signal_dual_read.py scripts/test_mother_prompt_agent_mode.py -q` — 25 falhas pré-existentes idênticas / 80 passes (75 + 5 novos)
+- [x] Validação ponta-a-ponta real (Playground): lead novo, "Oi, gostaria de agendar uma sessão para quinta-feira às 9h" → 1ª oferta (9h) marcada como ocupada pela IA, ofereceu 10h/11h → confirmado "pode ser 10h então, perfeito"
+- **Validado em:** 21/06/2026 — via UI real (Playground, MCP chrome-devtools), lead #279. Log: `event=meeting_datetime_source source=structured_candidate tz_used=UTC`. Resposta da filha: `signals_structured={"meeting_proposed":true,"meeting_datetime_candidate":"2026-06-25T10:00:00"}`. `GET /api/leads/279/appointments` → `start_at="2026-06-25T10:00:00+00:00"` — 25/06/2026 confirmado como quinta-feira real (hoje, 21/06, é domingo).
+
+---
+
 ## Ajustes Possíveis Pós-Implementação
 
 - Trade-off aceite: quando o lead confirma um horário na MESMA mensagem em que a Mãe move a
@@ -471,3 +536,16 @@ outras duas filhas.
   escolhe "pre-agendamento", a Fase 3A+3B absorvem o caso (a filha de pré-agendamento
   corrige no mesmo turno e a categoria avança para o turno seguinte), só custando 1 turno
   extra em vez de resposta incorrecta.
+- **Resolução de datas (Fase 7) é busca em tabela, não garantia matemática:** a tabela
+  `tabela_de_dias` elimina a aritmética de calendário do lado da LLM, mas a LLM ainda
+  precisa ler a linha certa — mesma classe de risco residual já documentada para a Mãe
+  acima. `days_ahead=14` cobre referências de até 2 semanas (ex.: "semana que vem"); uma
+  referência mais distante ("mês que vem") ficaria fora da tabela e cairia de volta no
+  fallback heurístico impreciso.
+- **Padrão "primeira oferta sempre recusada" observado mas não investigado:** durante a
+  validação da Fase 7, todas as ofertas de horário testadas (leads #276, #278, #279)
+  vieram com a IA recusando o primeiro horário pedido por "conflito" antes de confirmar um
+  segundo — inclusive quando a tabela de `calendar_busy_slots` não mostrava nenhum conflito
+  real para a data correta. Pode ser táctica deliberada de jogo de cintura comercial, ou um
+  efeito colateral de outro mecanismo (não investigado nesta sessão — fora do escopo da
+  resolução de datas).
