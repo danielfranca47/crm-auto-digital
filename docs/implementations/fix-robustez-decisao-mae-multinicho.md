@@ -569,6 +569,76 @@ abstracta → checklist + exemplo concreto contrastando certo vs. errado.
 
 ---
 
+## Fase 9 — Remoção do override por palavras-chave da "Regra 3" (legado, defasado) (21/06/2026)
+
+### Problema identificado
+
+Revisando a secção "Ajustes Possíveis Pós-Implementação" deste documento, o utilizador
+perguntou se havia ali algo "antigo e sensível" já defasado que pudesse ser removido.
+Confirmado por leitura directa do código: a "Regra 3" de intenção de agendamento
+(`decision_engine.py`) era exactamente o tipo de solução que a Motivação deste documento já
+tinha rejeitado — "corrigir... com solução **estrutural**, não **linguística**... qualquer
+correção baseada em texto livre exigiria manutenção infinita por nicho/idioma".
+
+A área (dentro de `decide()`, bloco `if mother_decision.route_to == "qualification" and not
+force_followup_route:`) misturava dois mecanismos distintos:
+- **Override por palavras-chave** (3 listas + 3 funções de detecção): sobrescrevia a rota da
+  Mãe para `pre-agendamento`/`agendamento` quando o texto do lead batia com keywords em
+  português e o lead já estava em `apresentation`/`pre-agendamento`.
+- **Anti-loop estrutural** (sem keywords): evita o bot voltar para `qualification` quando o
+  lead já avançou de fase — mecanismo diferente, continua válido e necessário.
+
+Confirmado (grep nos testes) que nenhum teste exercitava directamente o ramo de
+palavras-chave. Confirmado também por que ficou redundante: as Fases 3, 5, 7 e 8 deste mesmo
+documento já substituíram a função que esse override cumpria por mecanismos estruturais
+(homologação de categoria, tabela de datas, checklist dia+hora no prompt da Mãe) — quando a
+Mãe ainda erra e cai no anti-loop, o lead recebe `route_for_child="apresentation"`, o mesmo
+destino que o anti-loop já dá a qualquer outro caso, e a filha de apresentação avança o lead
+pela sua própria homologação (não baseada em keyword) no mesmo turno ou no seguinte.
+
+### Correção
+
+| Arquivo | Mudança |
+|---|---|
+| `backend-executors/app/services/decision_engine.py` | Removidas as 3 listas de palavras-chave (`_SCHEDULING_TEMPORAL_SIGNALS`, `_SCHEDULING_ACTION_SIGNALS`, `_SOFT_SCHEDULING_SIGNALS`) e as 3 funções de detecção (`_has_scheduling_intent`, `_has_soft_scheduling_intent`, `_has_hard_scheduling_intent`); o bloco `if mother_decision.route_to == "qualification"...` ficou só com o anti-loop estrutural, agora incondicional (deixou de estar dentro de um `if/else` com o ramo de keywords) |
+| `backend-executors/tests/test_qualification_state_loop.py` | Novo cenário `test_rule3_keyword_override_removed_falls_back_to_anti_loop`: confirma que, mesmo com mensagem de keyword forte de agendamento e template de agendamento, o lead em `apresentation` cai no anti-loop estrutural — já não é desviado por pattern matching de texto |
+
+`_SCHEDULING_AGENT_TEMPLATES` foi mantido — é infra partilhada com outros mecanismos (Fases
+5-7), sem relação com as keywords removidas.
+
+**Achado durante a validação:** o teste irmão já existente
+(`test_t3_rule3_blocks_return_to_qualification_when_already_apresentation`) já estava entre as
+falhas pré-existentes desta suite, por motivo não relacionado a esta remoção — usa um fixture
+com `history=[]`, que activa o gate `_enforce_greeting_first` (força `route_to="recepcao"`
+quando `outbound_count==0`), nunca chegando a avaliar o bloco de anti-loop. Confirmado via
+`git stash`/`git stash pop` que esta falha já existia antes da Fase 9. O novo teste desta fase
+usa um fixture com histórico (`outbound`+`inbound`) para evitar esse gate não relacionado e
+exercitar de facto o mecanismo correcto.
+
+### Commits Fase 9
+
+| # | Commit | O que foi implementado |
+|---|---|---|
+| 1 | `_(pendente)_` | Remoção do override por palavras-chave da Regra 3 + teste + documentação |
+
+### Relatório da Fase 9 — o que mudou na prática
+
+**Antes:** existia uma regra antiga que tentava adivinhar se o cliente queria agendar procurando por palavras específicas em português (tipo "marcar", "agendar", nomes de dias) — uma solução frágil, porque só funciona num idioma e quebra fácil com frases diferentes do esperado. Essa regra só entrava em acção como um "plano B" para quando a IA principal (a "Mãe") errava e voltava para a etapa de qualificação mesmo o cliente já estando mais adiante na conversa.
+**Agora:** essa regra antiga foi removida. As correcções já feitas nas fases anteriores deste mesmo documento (a lista de dias, o checklist de dia+hora, as transições automáticas de etapa) já resolvem o mesmo problema de forma mais confiável, sem depender de palavras exactas. A rede de segurança que evita o bot voltar para qualificação continua intacta — só a parte baseada em palavras-chave foi removida.
+**Para validar:** Cenário C8, abaixo.
+
+---
+
+## Checks de Validação — Fase 9
+
+### Cenário C8 — Remoção do override por palavras-chave sem regressão
+- [x] Teste unitário novo (`test_rule3_keyword_override_removed_falls_back_to_anti_loop`): mensagem com keyword forte de agendamento + template de agendamento + lead em `apresentation` → cai no anti-loop estrutural (`route_for_child="apresentation"`, não mais desviado por keyword)
+- [x] Confirmado por leitura directa: nenhum outro ponto do código referenciava as listas/funções removidas; `_SCHEDULING_AGENT_TEMPLATES` permanece intacto (usado por outros mecanismos)
+- [x] Regressão: `pytest tests/ scripts/test_meeting_scheduler_hook.py scripts/test_meeting_candidate_e2e.py scripts/test_structured_meeting_signal_dual_read.py scripts/test_mother_prompt_agent_mode.py scripts/test_mother_prompt_rules.py -q` — 25 falhas pré-existentes idênticas (confirmado via `git stash`/`git stash pop` antes/depois) / 85 passes (84 + 1 novo)
+- **Validado em:** 21/06/2026 — smoke test directo a `decision_engine.decide()` confirmando o comportamento esperado, e suite de regressão completa sem novas falhas.
+
+---
+
 ## Ajustes Possíveis Pós-Implementação
 
 - Trade-off aceite: quando o lead confirma um horário na MESMA mensagem em que a Mãe move a
@@ -576,10 +646,6 @@ abstracta → checklist + exemplo concreto contrastando certo vs. errado.
   diz "perfeito, pode confirmar às 15h" e a Mãe transiciona a categoria nesse mesmo turno), a
   criação do appointment fica diferida para mais um turno. Custa uma troca extra num caso
   legítimo, em troca de eliminar os falsos positivos relatados.
-- Fora de escopo (registado em `docs/plans/agentes-agenda-melhorias-futuras.md`): a "Regra 3"
-  de intenção de agendamento (`decision_engine.py:4245-4296`) usa listas de palavras-chave em
-  português (`decision_engine.py:3606-3627`) — solução rígida e acoplada a nicho/idioma que não
-  foi estendida nem copiada nesta correção.
 - **Custo de 1 chamada LLM extra (Fase 4):** só no turno em que `compound_follow_through`
   dispara (1ª mensagem composta de um lead) — aceite explicitamente pelo utilizador. Não
   afecta turnos normais.

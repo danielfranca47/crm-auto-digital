@@ -3691,87 +3691,6 @@ _STAGE_INDEX = {stage: index for index, stage in enumerate(_STAGE_ORDER)}
 _SCHEDULING_AGENT_TEMPLATES = {"sdr_padrao", "hybrid_scheduler"}
 
 
-_SCHEDULING_TEMPORAL_SIGNALS = {
-    "amanha", "amanhã", "hoje", "semana", "segunda", "terca", "quarta",
-    "quinta", "sexta", "sabado", "domingo", "manha", "tarde", "noite",
-    "horario", "hora", "disponibilidade", "disponivel", "quando",
-    "proximo", "prochain", "próximo", "próxima", "essa semana",
-}
-
-_SCHEDULING_ACTION_SIGNALS = {
-    "agendar", "marcar", "reservar", "confirmar", "combinar",
-    "posso marcar", "quero agendar", "gostaria de agendar",
-    "tem vaga", "tem horario", "tem hora", "vaga disponivel",
-    "como faço para agendar", "como marco",
-}
-
-# Sinais de interesse TENTATIVO — sem data confirmada (→ pre-agendamento)
-_SOFT_SCHEDULING_SIGNALS = {
-    "vou ver", "vou tentar", "quero ir", "pretendo ir", "pensando em",
-    "semana que vem", "proxima semana", "próxima semana", "quero sim",
-    "vou verificar", "vou checar", "deixa eu ver", "gostaria de ir",
-    "quero marcar sim", "vou marcar", "vou tentar marcar", "vou tentar ir",
-    "quero ir sim", "quero ir mas", "quero mas", "tenho interesse",
-}
-
-
-def _has_scheduling_intent(message_text: str, context: Dict[str, Any]) -> bool:
-    """Detecta intenção de agendamento — direta ou implícita.
-
-    Captura tanto pedidos explícitos ("Posso marcar para amanhã?") quanto
-    intenções implícitas ("tem disponibilidade amanhã?", "atende sábado?").
-    """
-    text_norm = _normalize_str(message_text)
-    history = context.get("history") or []
-
-    has_temporal = any(sig in text_norm for sig in _SCHEDULING_TEMPORAL_SIGNALS)
-    has_action = any(sig in text_norm for sig in _SCHEDULING_ACTION_SIGNALS)
-
-    # Sinal forte: verbo de agendamento presente
-    if has_action:
-        return True
-
-    # Sinal temporal + qualquer pergunta ou interesse
-    if has_temporal and ("?" in message_text or len(message_text.split()) <= 8):
-        return True
-
-    # Sinal temporal + histórico de conversa (lead já sabe do serviço)
-    if has_temporal and len(history) >= 2:
-        return True
-
-    return False
-
-
-def _has_soft_scheduling_intent(message_text: str) -> bool:
-    """Detecta interesse TENTATIVO de agendamento, sem data confirmada.
-
-    Ex.: 'vou ver pra semana que vem', 'quero ir sim, vou tentar marcar'.
-    Distingue do interesse firme (dia/hora específicos) para rotear ao pré-agendamento.
-    """
-    text_norm = _normalize_str(message_text)
-    return any(sig in text_norm for sig in _SOFT_SCHEDULING_SIGNALS)
-
-
-def _has_hard_scheduling_intent(message_text: str, context: Dict[str, Any]) -> bool:
-    """Detecta intenção FIRME de agendamento — dia/hora específicos ou verbo de agendar.
-
-    Ex.: 'Amanhã às 14h tem disponível?', 'Posso marcar para sexta de manhã?'.
-    """
-    text_norm = _normalize_str(message_text)
-    has_action = any(sig in text_norm for sig in _SCHEDULING_ACTION_SIGNALS)
-    if has_action:
-        return True
-    has_temporal = any(sig in text_norm for sig in _SCHEDULING_TEMPORAL_SIGNALS)
-    if has_temporal and ("?" in message_text or len(message_text.split()) <= 8):
-        return True
-    history = context.get("history") or []
-    if has_temporal and len(history) >= 2:
-        # Só considera hard se NÃO tiver sinal suave dominando
-        soft = _has_soft_scheduling_intent(message_text)
-        return not soft
-    return False
-
-
 def _is_sdr_escalate_closing(context: Dict[str, Any], mother_decision: MotherDecision) -> bool:
     normalized_mode = _normalize_agent_mode(context, mother_decision)
     if normalized_mode != "agenda":
@@ -4387,71 +4306,24 @@ def decide(context: Dict[str, Any], logger: Optional[logging.Logger] = None) -> 
             missing_pre = list(mode_ctx_pre.get("missing_fields") or [])
             normalized_current_category = _normalize_category(lead.get("category"))
 
-            _tkey_rule3 = str((context.get("ai_profile") or {}).get("template_key") or "").strip().lower()
-            _is_sched_agent_rule3 = _tkey_rule3 in _SCHEDULING_AGENT_TEMPLATES
-            _sched_upper = {"apresentation", "pre-agendamento"}
-            _any_sched_intent = _has_scheduling_intent(message_text, context)
-            _soft_intent = _has_soft_scheduling_intent(message_text)
-            _hard_intent = _has_hard_scheduling_intent(message_text, context)
-
-            if _is_sched_agent_rule3 and normalized_current_category in _sched_upper and _any_sched_intent:
-                job = context.get("job") or {}
-                payload_log = job.get("payload") or {}
-                # Soft intent (sem data confirmada) vindos de apresentation → pré-agendamento
-                if normalized_current_category == "apresentation" and _soft_intent and not _hard_intent:
-                    route_for_child = "pre-agendamento"
-                    if logger:
-                        logger.info(
-                            "event=soft_scheduling_intent_override route_override=%s lead_category=%s "
-                            "job_id=%s lead_id=%s",
-                            route_for_child,
-                            lead.get("category"),
-                            job.get("id") or payload_log.get("job_id"),
-                            lead.get("id") or payload_log.get("lead_id"),
-                        )
-                # Hard intent (dia/hora específica) de apresentation ou pre-agendamento → agendamento
-                elif _hard_intent or normalized_current_category == "pre-agendamento":
-                    route_for_child = "agendamento"
-                    if logger:
-                        logger.info(
-                            "event=scheduling_intent_override route_override=%s lead_category=%s "
-                            "job_id=%s lead_id=%s",
-                            route_for_child,
-                            lead.get("category"),
-                            job.get("id") or payload_log.get("job_id"),
-                            lead.get("id") or payload_log.get("lead_id"),
-                        )
-                else:
-                    # Fallback: qualquer intenção de apresentation sem distinção clara → agendamento
-                    route_for_child = "agendamento"
-                    if logger:
-                        logger.info(
-                            "event=scheduling_intent_override route_override=%s lead_category=%s "
-                            "job_id=%s lead_id=%s",
-                            route_for_child,
-                            lead.get("category"),
-                            job.get("id") or payload_log.get("job_id"),
-                            lead.get("id") or payload_log.get("lead_id"),
-                        )
-            else:
-                is_upper_stage = normalized_current_category in {
-                    "apresentation", "pre-agendamento", "agendamento", "follow-up", "closing"
-                }
-                if is_upper_stage or not missing_pre:
-                    route_for_child = "apresentation"
-                    anti_loop_rule3_applied = True
-                    if logger:
-                        job = context.get("job") or {}
-                        payload = job.get("payload") or {}
-                        logger.info(
-                            "event=qualification_anti_loop_rule3 route_override=%s mother_route_to=%s lead_category=%s "
-                            "job_id=%s lead_id=%s",
-                            route_for_child,
-                            mother_decision.route_to,
-                            lead.get("category"),
-                            job.get("id") or payload.get("job_id"),
-                            lead.get("id") or payload.get("lead_id"),
-                        )
+            is_upper_stage = normalized_current_category in {
+                "apresentation", "pre-agendamento", "agendamento", "follow-up", "closing"
+            }
+            if is_upper_stage or not missing_pre:
+                route_for_child = "apresentation"
+                anti_loop_rule3_applied = True
+                if logger:
+                    job = context.get("job") or {}
+                    payload = job.get("payload") or {}
+                    logger.info(
+                        "event=qualification_anti_loop_rule3 route_override=%s mother_route_to=%s lead_category=%s "
+                        "job_id=%s lead_id=%s",
+                        route_for_child,
+                        mother_decision.route_to,
+                        lead.get("category"),
+                        job.get("id") or payload.get("job_id"),
+                        lead.get("id") or payload.get("lead_id"),
+                    )
 
         if _is_sdr_escalate_closing(context, mother_decision):
             reason = f"guardrail_sdr_escalate_closing|{mother_decision.reason}"

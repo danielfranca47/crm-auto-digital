@@ -332,6 +332,53 @@ def test_t3_rule3_blocks_return_to_qualification_when_already_apresentation(monk
     assert trace.get("anti_loop_rule3_applied") is True
     assert trace.get("effective_route_to") == "apresentation"
     assert decision.next_action == "reply"
+
+
+def test_rule3_keyword_override_removed_falls_back_to_anti_loop(monkeypatch):
+    """O override por palavras-chave (legado) foi removido — mesmo com mensagem
+    contendo keywords fortes de agendamento e template de agendamento, o lead em
+    'apresentation' deve cair no anti-loop estrutural, não mais ser desviado
+    directamente para 'pre-agendamento'/'agendamento' por pattern matching de texto.
+    """
+    context = {
+        "lead": {"id": 11, "user_id": 99, "category": "apresentation"},
+        "ai_profile": {"agent_mode": "agenda", "template_key": "hybrid_scheduler"},
+        "playbook": {"template_key": "hybrid_scheduler"},
+        "metadata": {"inbound_message_text": "Posso marcar para amanhã às 15h?"},
+        "history": [
+            {"model": "outbound", "text": "Oi! Tudo bem?"},
+            {"model": "inbound", "text": "Tudo sim"},
+        ],
+        "job": {"payload": {"lead_id": 11, "user_id": 99}},
+        "qualification_state": {
+            "exists": True,
+            "data_json": {},
+            "attempts_json": {},
+            "last_questioned_field": None,
+        },
+    }
+
+    seen = {"route": None}
+
+    monkeypatch.setattr(
+        decision_engine.llm_service,
+        "generate_mother_route",
+        lambda _prompt: '{"route_to":"qualification","perceived_category":"qualification","confidence":0.9,"reason":"teste"}',
+    )
+
+    def _fake_child(route, _prompt):
+        seen["route"] = route
+        return '{"message_text":"vamos seguir com apresentação","did_complete_phase":false,"recommended_next_category":null,"outcome":null,"kanban_highlight":null,"signals":[],"confidence":0.8}'
+
+    monkeypatch.setattr(decision_engine.llm_service, "generate_child_result", _fake_child)
+
+    decision = decision_engine.decide(context)
+    trace = decision.decision_trace or {}
+
+    assert seen["route"] == "apresentation"
+    assert trace.get("anti_loop_rule3_applied") is True
+    assert trace.get("effective_route_to") == "apresentation"
+    assert decision.next_action == "reply"
     assert decision.message_text
 
 
