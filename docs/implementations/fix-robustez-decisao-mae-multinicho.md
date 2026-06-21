@@ -418,7 +418,7 @@ real acontece sempre em `agendamento` ou `apresentation`, ambas já cobertas.
 
 | # | Commit | O que foi implementado |
 |---|---|---|
-| 1 | _(pendente — registar após o commit)_ | Candidato estruturado de horário na filha de agendamento + normalização + testes |
+| 1 | `b1e9954` | Candidato estruturado de horário na filha de agendamento + normalização + testes |
 
 ### Relatório da Fase 6 — o que mudou na prática
 
