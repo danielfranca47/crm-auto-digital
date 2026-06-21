@@ -619,7 +619,7 @@ exercitar de facto o mecanismo correcto.
 
 | # | Commit | O que foi implementado |
 |---|---|---|
-| 1 | `_(pendente)_` | Remoção do override por palavras-chave da Regra 3 + teste + documentação |
+| 1 | `cdbf365` | Remoção do override por palavras-chave da Regra 3 + teste + documentação |
 
 ### Relatório da Fase 9 — o que mudou na prática
 
