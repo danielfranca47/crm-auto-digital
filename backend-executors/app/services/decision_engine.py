@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 import logging
 import unicodedata
-from datetime import datetime, timezone as _dt_timezone
+from datetime import datetime, timedelta, timezone as _dt_timezone
 from difflib import SequenceMatcher
 from typing import Any, Dict, List, Optional
 from zoneinfo import ZoneInfo
@@ -1054,6 +1054,31 @@ def _compute_system_agent_mode(context: Dict[str, Any]) -> tuple[str, str]:
 def _normalize_agent_mode(context: Dict[str, Any], mother_decision: Optional[MotherDecision] = None) -> str:
     system_mode, _ = _compute_system_agent_mode(context)
     return system_mode
+
+
+_WEEKDAY_NAMES_PT = (
+    "segunda-feira", "terça-feira", "quarta-feira", "quinta-feira",
+    "sexta-feira", "sábado", "domingo",
+)
+
+
+def _calendar_lookup_table_pt(days_ahead: int = 14) -> str:
+    """Tabela com hoje + próximos `days_ahead` dias, cada um com data e dia da semana.
+
+    Só dar à LLM a data de hoje + nome do dia da semana ("2026-06-21
+    (domingo)") não bastou: em teste real, ela ainda errou a contagem ao
+    resolver "quinta-feira" (calculou 2026-06-23, uma terça, em vez de
+    2026-06-25). Com a tabela completa pronta, ela só precisa localizar a
+    linha cujo dia da semana bate com o que o lead disse — sem fazer
+    nenhuma conta de calendário por conta própria.
+    """
+    now = datetime.utcnow()
+    lines = []
+    for offset in range(days_ahead + 1):
+        day = now + timedelta(days=offset)
+        marker = " [hoje]" if offset == 0 else ""
+        lines.append(f"{day.strftime('%Y-%m-%d')} ({_WEEKDAY_NAMES_PT[day.weekday()]}){marker}")
+    return "\n".join(lines)
 
 
 def _get_mother_mode_conflict(context: Dict[str, Any], mother_decision: Optional[MotherDecision]) -> tuple[Optional[str], bool]:
@@ -2313,7 +2338,7 @@ def _build_child_prompt_apresentation(
     presentation_variant, presentation_variant_source = _resolve_presentation_variant(context, agent_mode_normalized)
     hybrid_flow_style = _resolve_hybrid_flow_style(context)
     offer_pack_summary = _build_offer_pack_summary(context)
-    today_date = datetime.utcnow().strftime("%Y-%m-%d")
+    dates_table = _calendar_lookup_table_pt()
 
     # Fix P9: passive reply antes do agendamento quando a qualificação foi auto-promovida
     # neste mesmo turno e o lead tinha uma pergunta aberta de serviço na mensagem.
@@ -2702,8 +2727,9 @@ def _build_child_prompt_apresentation(
         "  * Se não for contexto de agendamento: meeting_proposed=false e meeting_datetime_candidate=null.\n"
         "  * Preferência: ISO naive no horário local de ai_profile.timezone (ex: 2026-03-05T17:00:00); também aceito offset/Z.\n"
         "  * Nunca assumir timezone fixa; sempre respeitar ai_profile.timezone.\n"
-        "  * Para datas relativas (amanhã, depois de amanhã, sexta que vem, etc.), calcule a partir de today_date "
-        "abaixo — NUNCA invente ou assuma uma data sem usar today_date como referência.\n"
+        "  * Para datas relativas (amanhã, depois de amanhã, etc.) ou nomes de dia da semana (sábado, "
+        "quinta-feira, etc.), procure a linha correspondente na tabela_de_dias abaixo e use a data dessa linha — "
+        "NUNCA calcule a data ou o dia da semana por conta própria, esse cálculo não é confiável.\n"
         "  * Em confirmação final do agendamento, inclua 'meeting_scheduled' em signals para compatibilidade.\n"
         "- Em presentation_variant=sales, UM TURNO = UMA AÇÃO: ou CONFIRMAR (sem link) ou ENVIAR LINK (com link).\n"
         "- Formato CONFIRMAR (sem link): descreva oferta e peça confirmação (ex.: 'quer seguir?').\n"
@@ -2772,7 +2798,8 @@ def _build_child_prompt_apresentation(
         f"- commercial_mode_active: {bool(commercial_injection)}\n"
         f"- media_already_sent: {bool(_apres_media_already_sent)}\n"
         f"- extracted_fields: {json.dumps(mode_contract.get('extracted_fields') or {}, ensure_ascii=False)}\n"
-        f"- today_date: {today_date}\n"
+        "- tabela_de_dias (hoje + próximos 14 dias; use para resolver QUALQUER data relativa ou nome de dia "
+        f"da semana, SEM calcular por conta própria):\n{dates_table}\n"
         f"- inbound_message_text: {message_text}\n"
         + _build_custom_instructions_block(ai_profile)
         + _build_business_info_block(context)
@@ -3249,7 +3276,7 @@ def _build_child_prompt_pre_agendamento(
     history_text = _format_history(history)
     mode_contract = _build_mode_contract_context(context, mother_decision)
     agent_mode_normalized = mode_contract["agent_mode_normalized"]
-    today_date = datetime.utcnow().strftime("%Y-%m-%d")
+    dates_table = _calendar_lookup_table_pt()
 
     # Detecta se é o trigger de check-in agendado (mensagem gerada pelo job)
     is_checkin_trigger = message_text.strip() == "preagendamento_checkin_trigger"
@@ -3311,12 +3338,16 @@ def _build_child_prompt_pre_agendamento(
         "     para confirmar a sessão?'\n"
         "3. Se o lead JÁ confirmou o dia E confirmou permissão para o check-in:\n"
         "   → Responda positivamente e sinalize o check-in no campo signals_structured:\n"
-        "     Calcule checkin_at_iso = data do dia ANTERIOR à sessão às 09:00 (use today_date abaixo)\n"
+        "     Calcule checkin_at_iso = data do dia ANTERIOR à sessão às 09:00 (procure a sessão na "
+        "tabela_de_dias abaixo, NUNCA calcule a data por conta própria)\n"
         "     Emita: signals_structured = {\"checkin_at_iso\": \"YYYY-MM-DDTHH:MM:SS\"}\n\n"
         "REGRAS OBRIGATÓRIAS:\n"
         "- Máximo 2-3 frases por resposta.\n"
         "- NÃO repita preços nem faça pitch de venda.\n"
         "- checkin_at_iso SOMENTE quando lead confirmar permissão E um dia estiver claro.\n"
+        "- Para resolver dias estimados ditos pelo lead (ex.: 'sábado', 'sexta que vem'), procure a linha "
+        "correspondente na tabela_de_dias abaixo e use a data dessa linha — NUNCA calcule a data ou o dia da "
+        "semana por conta própria.\n"
         "- Se lead disser 'não' ao check-in → apenas confirme o interesse e encerre educadamente.\n\n"
         + _build_tone_block(ai_profile, playbook)
         + _build_agent_role_block(agent_mode_normalized, "pre-agendamento", ai_profile)
@@ -3332,7 +3363,8 @@ def _build_child_prompt_pre_agendamento(
         '  "confidence": 0.0\n'
         "}\n\n"
         f"Contexto:\n"
-        f"- today_date: {today_date}\n"
+        "- tabela_de_dias (hoje + próximos 14 dias; use para resolver QUALQUER data relativa ou nome de dia "
+        f"da semana, SEM calcular por conta própria):\n{dates_table}\n"
         f"- lead: {json.dumps(lead_summary, ensure_ascii=False)}\n"
         f"- ai_profile: {json.dumps(ai_summary, ensure_ascii=False)}\n"
         f"- history: {history_text}\n"
@@ -3415,7 +3447,7 @@ def _build_child_prompt_agendamento(
     history_text = _format_history(history)
     mode_contract = _build_mode_contract_context(context, mother_decision)
     agent_mode_normalized = mode_contract["agent_mode_normalized"]
-    today_date = datetime.utcnow().strftime("%Y-%m-%d")
+    dates_table = _calendar_lookup_table_pt()
 
     _busy_lines = _format_busy_slots_block(context.get("calendar_busy_slots"), ai_profile.get("timezone"))
     _busy_block = (
@@ -3470,10 +3502,12 @@ def _build_child_prompt_agendamento(
         "  * Combine informação de turnos anteriores do history (ex.: dia mencionado antes + hora mencionada agora).\n"
         "  * Preferência: ISO naive no horário local de ai_profile.timezone (ex: 2026-03-05T17:00:00); também aceito offset/Z.\n"
         "  * Nunca assumir timezone fixa; sempre respeitar ai_profile.timezone.\n"
-        "  * Para datas relativas (amanhã, depois de amanhã, sexta que vem, etc.), calcule a partir de today_date "
-        "abaixo — NUNCA invente ou assuma uma data sem usar today_date como referência.\n\n"
+        "  * Para datas relativas (amanhã, depois de amanhã, etc.) ou nomes de dia da semana (sábado, "
+        "quinta-feira, etc.), procure a linha correspondente na tabela_de_dias abaixo e use a data dessa linha — "
+        "NUNCA calcule a data ou o dia da semana por conta própria, esse cálculo não é confiável.\n\n"
         f"Contexto:\n"
-        f"- today_date: {today_date}\n"
+        "- tabela_de_dias (hoje + próximos 14 dias; use para resolver QUALQUER data relativa ou nome de dia "
+        f"da semana, SEM calcular por conta própria):\n{dates_table}\n"
         f"- lead: {json.dumps(lead_summary, ensure_ascii=False)}\n"
         f"- ai_profile: {json.dumps(ai_summary, ensure_ascii=False)}\n"
         f"- history: {history_text}\n"
