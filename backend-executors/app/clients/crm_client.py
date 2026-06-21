@@ -226,6 +226,26 @@ def create_lead_appointment(
     return _handle_response(response, str(lead_id), for_context=False)
 
 
+def cancel_appointment(appointment_id: int) -> Dict[str, Any]:
+    base_url = settings.crm_api_base.rstrip("/")
+    url = f"{base_url}/api/appointments/{appointment_id}/cancel"
+    response = _send_request("POST", url)
+    return _handle_response(response, str(appointment_id), for_context=False)
+
+
+def reschedule_appointment(
+    appointment_id: int,
+    *,
+    start_at: str,
+    end_at: str,
+) -> Dict[str, Any]:
+    base_url = settings.crm_api_base.rstrip("/")
+    url = f"{base_url}/api/appointments/{appointment_id}"
+    payload: Dict[str, Any] = {"start_at": start_at, "end_at": end_at}
+    response = _send_request("PUT", url, json=payload)
+    return _handle_response(response, str(appointment_id), for_context=False)
+
+
 def log_meeting_scheduled(
     *,
     lead_id: int,

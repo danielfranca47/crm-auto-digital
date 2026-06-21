@@ -563,7 +563,7 @@ def _load_calendar_busy_slots(user_id: int, window_days: int = _CALENDAR_BUSY_SL
         cur = conn.cursor()
         cur.execute(
             """
-            SELECT a.lead_id, a.start_at, a.end_at
+            SELECT a.id, a.lead_id, a.start_at, a.end_at
               FROM appointments a LEFT JOIN leads l ON a.lead_id = l.id
              WHERE (a.lead_id IS NOT NULL AND l.user_id = ? OR a.lead_id IS NULL AND a.user_id = ?)
                AND a.status = 'pending'
@@ -573,7 +573,7 @@ def _load_calendar_busy_slots(user_id: int, window_days: int = _CALENDAR_BUSY_SL
             (user_id, user_id, now.isoformat(), window_end.isoformat()),
         )
         return [
-            {"lead_id": row["lead_id"], "start_at": row["start_at"], "end_at": row["end_at"]}
+            {"id": row["id"], "lead_id": row["lead_id"], "start_at": row["start_at"], "end_at": row["end_at"]}
             for row in cur.fetchall()
         ]
 

@@ -1,3 +1,4 @@
+import json
 import logging
 from datetime import datetime, timedelta, timezone
 from typing import List, Optional
@@ -11,7 +12,11 @@ from security_core import CurrentUser, require_crm_access
 from services.appointment_outcomes import apply_outcome
 from services.briefing_service import schedule_briefing_job
 from services.google_calendar_service import delete_event as gcal_delete, list_events as gcal_list, push_event as gcal_push, update_event as gcal_update
-from services.jobs_service import TYPE_WHATSAPP_APPOINTMENT_REMINDER, create_job
+from services.jobs_service import (
+    TYPE_WHATSAPP_APPOINTMENT_BRIEFING,
+    TYPE_WHATSAPP_APPOINTMENT_REMINDER,
+    create_job,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -459,20 +464,43 @@ def update_appointment(appointment_id: int, payload: AppointmentUpdate) -> Appoi
         conn.commit()
         cur.execute("SELECT * FROM appointments WHERE id = ?", (appointment_id,))
         updated = cur.fetchone()
+        updated_data = {key: updated[key] for key in updated.keys()}
 
-        # Sync update to Google Calendar (fail-silent)
-        google_event_id = current.get("google_event_id")
-        if google_event_id:
+        lead_row = None
+        if current.get("lead_id"):
             lead_row = cur.execute(
                 "SELECT user_id FROM leads WHERE id = ?", (current["lead_id"],)
             ).fetchone()
-            if lead_row and lead_row["user_id"]:
-                updated_data = {key: updated[key] for key in updated.keys()}
-                gcal_update(
-                    user_id=lead_row["user_id"],
-                    google_event_id=google_event_id,
-                    appointment=updated_data,
-                )
+
+        # Sync update to Google Calendar (fail-silent)
+        google_event_id = current.get("google_event_id")
+        if google_event_id and lead_row and lead_row["user_id"]:
+            gcal_update(
+                user_id=lead_row["user_id"],
+                google_event_id=google_event_id,
+                appointment=updated_data,
+            )
+
+        # Horário mudou de fato: lembretes/briefing antigos apontam para o horário velho —
+        # cancelar e re-agendar para o novo start_at (pulado para appointments do Playground,
+        # mesmo critério de create_appointment).
+        time_changed = payload.start_at is not None and updated_data["start_at"] != current["start_at"]
+        if time_changed and lead_row and lead_row["user_id"] and current.get("source") != "playground":
+            _cancel_pending_appointment_jobs(conn, appointment_id)
+            new_start_at = datetime.fromisoformat(updated_data["start_at"])
+            _schedule_reminder_jobs(
+                lead_id=current["lead_id"],
+                user_id=lead_row["user_id"],
+                appointment_id=appointment_id,
+                appointment_title=updated_data["title"],
+                appointment_start_at=new_start_at,
+            )
+            _schedule_briefing_job(
+                lead_id=current["lead_id"],
+                user_id=lead_row["user_id"],
+                appointment_id=appointment_id,
+                appointment_start_at=new_start_at,
+            )
 
         return _serialize(updated)
     finally:
@@ -503,15 +531,55 @@ def delete_appointment(appointment_id: int) -> None:
         conn.close()
 
 
+def _cancel_pending_appointment_jobs(conn, appointment_id: int) -> int:
+    """Cancela jobs pendentes de lembrete/briefing que referenciam este appointment.
+
+    payload é JSON em TEXT (sem coluna própria de appointment_id) — filtra em Python,
+    mesmo padrão já usado em inbound_handler.py, em vez de depender da extensão JSON1.
+    """
+    cur = conn.cursor()
+    cur.execute(
+        "SELECT id, payload FROM jobs WHERE status = 'pending' AND type IN (?, ?)",
+        (TYPE_WHATSAPP_APPOINTMENT_REMINDER, TYPE_WHATSAPP_APPOINTMENT_BRIEFING),
+    )
+    cancelled = 0
+    for row in cur.fetchall():
+        try:
+            job_payload = json.loads(row["payload"] or "{}")
+        except (TypeError, ValueError):
+            continue
+        if job_payload.get("appointment_id") != appointment_id:
+            continue
+        cur.execute(
+            "UPDATE jobs SET status = 'cancelled', updated_at = CURRENT_TIMESTAMP WHERE id = ? AND status = 'pending'",
+            (row["id"],),
+        )
+        cancelled += 1
+    return cancelled
+
+
 def _update_status(appointment_id: int, status: AppointmentStatus) -> AppointmentOut:
     conn = get_connection()
     try:
-        _get_appointment(conn, appointment_id)
+        row = _get_appointment(conn, appointment_id)
+        appointment = {key: row[key] for key in row.keys()}
         cur = conn.cursor()
         cur.execute(
             "UPDATE appointments SET status = ?, updated_at = ? WHERE id = ?",
             (status, datetime.now(timezone.utc).isoformat(), appointment_id),  # tz-aware
         )
+
+        if status == "canceled":
+            _cancel_pending_appointment_jobs(conn, appointment_id)
+            google_event_id = appointment.get("google_event_id")
+            lead_id = appointment.get("lead_id")
+            if google_event_id and lead_id:
+                lead_row = cur.execute(
+                    "SELECT user_id FROM leads WHERE id = ?", (lead_id,)
+                ).fetchone()
+                if lead_row and lead_row["user_id"]:
+                    gcal_delete(user_id=lead_row["user_id"], google_event_id=google_event_id)
+
         conn.commit()
         cur.execute("SELECT * FROM appointments WHERE id = ?", (appointment_id,))
         row = cur.fetchone()

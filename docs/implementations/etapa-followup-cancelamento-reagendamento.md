@@ -78,29 +78,61 @@ Inbound (lead já tem reunião confirmada, bot_disabled=1, reason=meeting_schedu
 | `backend-executors/app/runners/whatsapp.py` | Chamar a nova função ao lado de `handle_meeting_scheduled` |
 | `backend-crm/routes/appointments.py` | `mark_canceled`: cancelar jobs pendentes + apagar evento Google. `update_appointment`: re-agendar jobs quando o horário muda. |
 
+### Commits Fase 1
+
+| # | Commit | O que foi implementado |
+|---|---|---|
+| 1 | `796bcf8` | Gate condicional + LLM dedicada de gestão pós-confirmação + sinais estruturados |
+
+**Detalhes do commit `796bcf8`:**
+- `backend-crm/services/whatsapp_inbound/inbound_handler.py` — gate de `bot_disabled` deixa passar quando `bot_disabled_reason == "meeting_scheduled"`
+- `backend-crm/routes/executor.py` — propaga `bot_disabled_reason` no `ContextBundle.metadata`
+- `backend-executors/app/services/decision_engine.py` — `_decide_post_meeting_management()` + `_build_child_prompt_meeting_management()`; branch novo em `decide()`
+- `backend-executors/app/services/meeting_scheduler.py` — `_extract_cancel_reschedule_signal()` + `CancelRescheduleSignal`
+- `backend-executors/tests/test_meeting_management.py` — 8 testes novos (todos passando)
+
+### Relatório da Fase 1 — o que mudou na prática
+
+**Antes:** depois que uma reunião era confirmada, o bot ficava completamente mudo para aquele lead — mesmo um "preciso cancelar" não chegava a ser processado pela IA no WhatsApp real (só "funcionava" no Playground, que ignora esse bloqueio).
+
+**Agora:** quando o motivo do silêncio é especificamente "reunião confirmada" (não afeta outros motivos, como handoff humano), a mensagem volta a chegar à IA — mas por um caminho separado e mais cauteloso: ele só age se detectar um pedido real de cancelar ou reagendar; qualquer outra mensagem ("obrigada!", uma pergunta solta) recebe uma resposta curta e educada, sem reabrir conversa de venda. Essa decisão (cancelar / reagendar / nem um nem outro) já fica registrada de forma estruturada — falta só a Fase 2 para transformar essa decisão numa ação real no compromisso (cancelar de verdade, mover o horário, etc.).
+
+**Para validar:** não há nada visível na UI ainda nesta fase (é só a camada de deteção) — a validação foi feita via 8 testes automatizados (`backend-executors/tests/test_meeting_management.py`), todos passando, cobrindo: deteção de cancelamento, deteção de reagendamento, mensagem neutra (resposta mínima), outros motivos de `bot_disabled` continuam bloqueados, e fallback quando a LLM falha.
+
 ---
 
 ## Checks de Validação
 
 ### Cenário T1 — Detecção de cancelamento (unitário, sem UI)
-- [ ] Simular `decide()` com `bot_disabled_reason="meeting_scheduled"` e mensagem "preciso cancelar"
-- [ ] Confirmar: `decision_trace.child_signals_structured.meeting_cancel_requested == True`
+- [x] Simular `decide()` com `bot_disabled_reason="meeting_scheduled"` e mensagem "preciso cancelar"
+- [x] Confirmar: `decision_trace.child_signals_structured.meeting_cancel_requested == True`
+- **Validado em:** 21/06/2026 — `test_decide_post_meeting_management_detects_cancel`, passou
 
 ### Cenário T2 — Detecção de reagendamento (unitário)
-- [ ] Simular mensagem "posso remarcar para sexta às 15h?"
-- [ ] Confirmar: `meeting_reschedule_requested == True` e `meeting_datetime_candidate` preenchido
+- [x] Simular mensagem "posso remarcar para sexta às 15h?"
+- [x] Confirmar: `meeting_reschedule_requested == True` e `meeting_datetime_candidate` preenchido
+- **Validado em:** 21/06/2026 — `test_decide_post_meeting_management_detects_reschedule`, passou
 
 ### Cenário T3 — Mensagem neutra não reabre vendas (unitário)
-- [ ] Simular mensagem "obrigada!"
-- [ ] Confirmar: resposta mínima, sem sinais de cancelamento/reagendamento, sem `suggested_category`
+- [x] Simular mensagem "obrigada!"
+- [x] Confirmar: resposta mínima, sem sinais de cancelamento/reagendamento, sem `suggested_category`
+- **Validado em:** 21/06/2026 — `test_decide_post_meeting_management_neutral_message_minimal_reply`, passou
 
 ### Cenário T4 — Cancelamento aplica de verdade (pytest, crm_client mockado)
-- [ ] `handle_meeting_cancel_or_reschedule` com sinal de cancelamento
-- [ ] Confirmar: `cancel_appointment` chamado + `set_lead_bot_disabled(lead_id, False)` chamado
+- [x] `handle_meeting_cancel_or_reschedule` com sinal de cancelamento
+- [x] Confirmar: `cancel_appointment` chamado + `set_lead_bot_disabled(lead_id, False)` chamado
+- **Validado em:** 21/06/2026 — `test_cancel_calls_cancel_appointment_and_reactivates_bot` + `test_cancel_picks_soonest_appointment_when_multiple`, passaram
 
 ### Cenário T5 — Reagendamento aplica de verdade (pytest)
-- [ ] `handle_meeting_cancel_or_reschedule` com sinal de reagendamento + novo horário
-- [ ] Confirmar: `reschedule_appointment` chamado com novo `start_at`/`end_at`; bot permanece desativado
+- [x] `handle_meeting_cancel_or_reschedule` com sinal de reagendamento + novo horário
+- [x] Confirmar: `reschedule_appointment` chamado com novo `start_at`/`end_at`; bot permanece desativado
+- [x] Confirmar: conflito de horário (409) devolve mensagem de correção em vez de aplicar a mudança
+- **Validado em:** 21/06/2026 — `test_reschedule_calls_reschedule_appointment_and_keeps_bot_disabled` + `test_reschedule_conflict_returns_correction_message`, passaram (`backend-executors/tests/test_meeting_cancel_reschedule_action.py`, 6 testes no total)
+
+### Cenário T6 — Limpeza de jobs de lembrete/briefing (pytest, backend-crm)
+- [x] `_cancel_pending_appointment_jobs` cancela jobs `pending` de lembrete/briefing do appointment
+- [x] Confirmar: jobs de outro appointment, já concluídos, ou de outro tipo não são tocados
+- **Validado em:** 21/06/2026 — `backend-crm/tests/test_appointment_job_cleanup.py`, 4 testes, passaram via `python -m unittest`
 
 ### Cenário C1 — Cancelamento manual via UI limpa jobs e Google Calendar (manual)
 - [ ] Criar appointment com lembrete agendado e evento Google

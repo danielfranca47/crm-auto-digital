@@ -754,6 +754,9 @@ def execute_job(job_id: str, logger: logging.Logger) -> int:
             attempt,
         )
     _meeting_conflict_message = meeting_scheduler.handle_meeting_scheduled(context, decision, logger=ctx_logger)
+    _meeting_conflict_message = _meeting_conflict_message or meeting_scheduler.handle_meeting_cancel_or_reschedule(
+        context, decision, logger=ctx_logger
+    )
     if _meeting_conflict_message:
         try:
             _delay = min(max(len(_meeting_conflict_message) * 40, 800), 6000)

@@ -588,3 +588,111 @@ def handle_meeting_scheduled(
     )
     client.set_lead_bot_disabled(signal.lead_id, True, reason="meeting_scheduled")
     return None
+
+
+def handle_meeting_cancel_or_reschedule(
+    context: Dict[str, Any],
+    decision: DecisionOutput,
+    *,
+    logger: Optional[logging.Logger] = None,
+    client: Any = None,
+    now_utc: Optional[datetime] = None,
+) -> Optional[str]:
+    """Aplica de verdade o cancelamento/reagendamento detectado por _decide_post_meeting_management.
+
+    Mesmo contrato de retorno de handle_meeting_scheduled: devolve uma mensagem de correção
+    (para o caller enviar ao lead) quando o reagendamento colide com outro compromisso do
+    profissional — nesse caso o appointment original NÃO é alterado. Retorna None em
+    qualquer outro caso, incluindo o caminho feliz.
+    """
+    if client is None:
+        from app.clients import crm_client
+
+        client = crm_client
+    signal = _extract_cancel_reschedule_signal(context, decision)
+    if signal.lead_id is None:
+        return None
+    if not signal.cancel_requested and not signal.reschedule_requested:
+        return None
+
+    busy_slots = context.get("calendar_busy_slots") or []
+    same_lead_slots = [
+        slot
+        for slot in busy_slots
+        if slot.get("lead_id") == signal.lead_id and slot.get("id") is not None
+    ]
+    if not same_lead_slots:
+        if logger:
+            logger.info(
+                "event=meeting_cancel_reschedule_appointment_not_found lead_id=%s",
+                signal.lead_id,
+            )
+        return None
+
+    same_lead_slots.sort(key=lambda slot: str(slot.get("start_at") or ""))
+    appointment_id = same_lead_slots[0]["id"]
+
+    if signal.cancel_requested:
+        try:
+            client.cancel_appointment(appointment_id)
+        except Exception as exc:
+            if logger:
+                logger.warning(
+                    "event=meeting_cancel_failed appointment_id=%s exc_type=%s exc=%s",
+                    appointment_id,
+                    type(exc).__name__,
+                    exc,
+                )
+            return None
+        client.set_lead_bot_disabled(signal.lead_id, False, reason="meeting_canceled")
+        if logger:
+            logger.info(
+                "event=meeting_canceled appointment_id=%s lead_id=%s",
+                appointment_id,
+                signal.lead_id,
+            )
+        return None
+
+    # signal.reschedule_requested == True a partir daqui
+    if not signal.new_start_at:
+        if logger:
+            logger.info(
+                "event=meeting_reschedule_missing_candidate lead_id=%s",
+                signal.lead_id,
+            )
+        return None
+
+    end_dt = signal.new_start_at + timedelta(minutes=30)
+    start_iso = signal.new_start_at.astimezone(timezone.utc).isoformat().replace("+00:00", "Z")
+    end_iso = end_dt.astimezone(timezone.utc).isoformat().replace("+00:00", "Z")
+    try:
+        client.reschedule_appointment(appointment_id, start_at=start_iso, end_at=end_iso)
+    except Exception as exc:
+        status_code = getattr(exc, "status_code", None)
+        if status_code == 409:
+            if logger:
+                logger.warning(
+                    "event=meeting_reschedule_conflict appointment_id=%s lead_id=%s start_at=%s",
+                    appointment_id,
+                    signal.lead_id,
+                    signal.new_start_at.isoformat(),
+                )
+            ai_profile = context.get("ai_profile") or {}
+            return _generate_conflict_message(ai_profile, logger=logger) or MEETING_CONFLICT_MESSAGE
+        if logger:
+            logger.warning(
+                "event=meeting_reschedule_failed appointment_id=%s exc_type=%s exc=%s",
+                appointment_id,
+                type(exc).__name__,
+                exc,
+            )
+        return None
+
+    if logger:
+        logger.info(
+            "event=meeting_rescheduled appointment_id=%s lead_id=%s start_at=%s",
+            appointment_id,
+            signal.lead_id,
+            signal.new_start_at.isoformat(),
+        )
+    return None
