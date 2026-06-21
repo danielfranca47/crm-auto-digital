@@ -18,6 +18,18 @@ export const leadAppointmentsKeys = {
     ["lead-appointments", String(leadId)] as const,
 };
 
+// Converte para ISO sem nunca lançar — datas não conversíveis caem em "".
+function toIsoOrEmpty(value: unknown): string {
+  if (typeof value === "string") return value;
+  const d = new Date(value as any);
+  return isNaN(d.getTime()) ? "" : d.toISOString();
+}
+
+// Appointment sem data utilizável é descartado pelos hooks abaixo.
+function hasValidStart(a: Appointment): boolean {
+  return !isNaN(new Date(a.startTime).getTime());
+}
+
 // --- Normalização compatível com backend novo e legado ---
 function normalizeAppointment(raw: any): Appointment {
   const start =
@@ -42,14 +54,8 @@ function normalizeAppointment(raw: any): Appointment {
     outcome: raw?.outcome ?? undefined,
     outcome_note: raw?.outcome_note ?? raw?.outcomeNote ?? null,
     outcome_at: raw?.outcome_at ?? raw?.outcomeAt ?? null,
-    startTime:
-      typeof start === "string" ? start : new Date(start).toISOString(),
-    endTime:
-      end === null || end === undefined
-        ? undefined
-        : typeof end === "string"
-        ? end
-        : new Date(end).toISOString(),
+    startTime: toIsoOrEmpty(start),
+    endTime: end === null || end === undefined ? undefined : toIsoOrEmpty(end),
     leadName: raw?.lead_contact ?? raw?.leadName ?? null,
     leadCompany: raw?.lead_company ?? raw?.leadCompany ?? null,
     source: (raw?.source ?? "crm") as "crm" | "google",
@@ -84,7 +90,7 @@ export function useAppointments(
         leadId: filters?.leadId ?? undefined,
       });
       if (!Array.isArray(response)) return [] as Appointment[];
-      return response.map(normalizeAppointment);
+      return response.map(normalizeAppointment).filter(hasValidStart);
     },
     enabled,
     staleTime: 60_000,
@@ -106,7 +112,7 @@ export function useLeadAppointments(
       if (!leadId) return [] as Appointment[];
       const data = await api.getAppointments(leadId);
       const list = Array.isArray(data) ? data : [];
-      return list.map(normalizeAppointment);
+      return list.map(normalizeAppointment).filter(hasValidStart);
     },
     staleTime: 60_000,
   });
