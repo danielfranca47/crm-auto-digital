@@ -157,14 +157,56 @@ Inbound (lead já tem reunião confirmada, bot_disabled=1, reason=meeting_schedu
 - [x] Confirmar: jobs de outro appointment, já concluídos, ou de outro tipo não são tocados
 - **Validado em:** 21/06/2026 — `backend-crm/tests/test_appointment_job_cleanup.py`, 4 testes, passaram via `python -m unittest`
 
-### Cenário C1 — Cancelamento manual via UI limpa jobs e Google Calendar (manual)
-- [ ] Criar appointment com lembrete agendado e evento Google
-- [ ] Cancelar via UI (`mark_canceled`)
-- [ ] Confirmar: job de lembrete cancelado, evento Google removido
+### Cenário C1 — Cancelamento/reagendamento manual via UI limpa jobs (manual, via browser)
+- [x] Criar lead + appointment via UI (Agendar Reunião no card do lead) com horário > 24h no futuro
+- [x] Confirmar: jobs de lembrete/briefing `pending` criados para o appointment
+- [x] Cancelar via UI (botão "Cancelar" no card do lead)
+- [x] Confirmar: appointment `status=canceled`, jobs de lembrete/briefing passam a `completed` (skipped)
+- [x] Reagendar via UI (botão "Reagendar" → editar horário)
+- [x] Confirmar: jobs antigos completados/skipped, novos jobs criados com offsets corretos para o novo horário
+- **Validado em:** 21/06/2026 — testado ao vivo via browser (chrome-devtools MCP) contra `backend-crm` local, com lead/appointments de teste criados e removidos no final. Evento Google Calendar não pôde ser confirmado neste ambiente (conta de teste tem token Google expirado — `gcal_delete` é fail-silent e não bloqueou o fluxo).
 
 ### Cenário C2 — Fluxo real WhatsApp (manual, requer instância conectada)
 - [ ] Lead com reunião confirmada (bot_disabled=1) envia "preciso cancelar"
 - [ ] Confirmar: mensagem chega à IA, appointment cancelado, bot reativado
+
+---
+
+## Fase 3 — Diagnóstico + Correção: gaps revelados pelo teste do Cenário C1 (21/06/2026)
+
+### Problema identificado
+
+O teste ao vivo do Cenário C1 revelou que a Fase 2, apesar de implementada corretamente, **não cobria o caminho realmente usado pela UI**:
+
+1. **Endpoint errado:** o frontend (`useCreateAppointment`/`useCancelAppointment`/`useUpdateAppointment`) sempre que conhece o `leadId` usa as rotas de `routes/leads.py` (`POST/PATCH/DELETE /leads/{lead_id}/appointments/...`) — **não** as de `routes/appointments.py` que a Fase 2 corrigiu. `criar_compromisso` (`routes/leads.py`) nunca agendava jobs de lembrete/briefing; `atualizar_compromisso` fazia `gcal_update` mesmo ao cancelar (em vez de `gcal_delete`) e nunca cancelava/reagendava jobs.
+2. **Status `'cancelled'` não existe:** a tabela `jobs` tem `CHECK (status IN ('pending','in_progress','completed','failed'))` — `UPDATE jobs SET status='cancelled'` (como a Fase 2 escreveu, replicando um padrão já presente em `services/followup_state.py::_cancel_pending_jobs_for_lead`) levanta `IntegrityError` em produção. Só foi detectado ao testar contra o banco real (os testes automatizados da Fase 2 usavam um schema de teste sem o `CHECK`, mascarando o bug).
+3. **Commit ausente:** em `routes/appointments.py::update_appointment` e `routes/leads.py::atualizar_compromisso`, a chamada a `cancel_pending_appointment_jobs(conn, ...)` ocorria *depois* do único `conn.commit()` da função — as mudanças nos jobs nunca eram persistidas antes do `conn.close()`.
+
+Causa raiz comum aos três: a Fase 2 foi implementada e testada via pytest com mocks/schemas simplificados, sem uma passagem ao vivo contra o fluxo real da UI — exatamente o que o Cenário C1 existe para pegar.
+
+### Correção
+
+| Arquivo | Mudança |
+|---|---|
+| `backend-crm/services/jobs_service.py` | `cancel_pending_appointment_jobs` movida para aqui (de `routes/appointments.py`) para ser compartilhada; usa `status='completed'` + `result={"skipped":true,...}` em vez de `'cancelled'`. Nova `schedule_appointment_reminder_jobs` (movida de `routes/appointments.py::_schedule_reminder_jobs`). |
+| `backend-crm/services/briefing_service.py` | Nova `schedule_briefing_job_for_appointment` (wrapper que resolve `briefing_enabled`/`briefing_lead_time` do AI Profile — movida de `routes/appointments.py::_schedule_briefing_job`). |
+| `backend-crm/routes/appointments.py` | Usa as funções compartilhadas acima em vez das cópias locais; `update_appointment` agora faz `conn.commit()` após cancelar/reagendar jobs; `delete_appointment` também cancela jobs pendentes (mesma lacuna, mesma correção). |
+| `backend-crm/routes/leads.py` | **`criar_compromisso`** passa a agendar jobs de lembrete/briefing (faltava por completo). **`atualizar_compromisso`**: ao cancelar, cancela jobs pendentes e usa `gcal_delete` em vez de `gcal_update`; ao reagendar (`start_at` mudou), cancela jobs antigos e cria novos para o novo horário; `conn.commit()` adicionado ao final. **`remover_compromisso`** (DELETE) também cancela jobs pendentes. |
+| `backend-crm/tests/test_appointment_job_cleanup.py` | Schema de teste passa a incluir o `CHECK` real da tabela `jobs` (teria pego o bug do status `'cancelled'`); asserções atualizadas para `status='completed'` + `result`. |
+
+### Commits Fase 3
+
+| # | Commit | O que foi implementado |
+|---|---|---|
+| 1 | _(pendente — ver abaixo)_ | Correção dos 3 gaps encontrados no teste do Cenário C1 |
+
+### Relatório da Fase 3 — o que mudou na prática
+
+**Antes (mesmo depois da Fase 2):** criar um compromisso pela tela do lead (o fluxo que qualquer operador realmente usa) nunca agendava lembrete nem briefing — a Fase 2 só tinha corrigido uma rota alternativa que a UI não chama quando já sabe o lead. Cancelar pela UI quebrava com erro 500 (constraint do banco). Mesmo corrigindo o status, as mudanças nos jobs não ficavam salvas.
+
+**Agora:** criar, cancelar e reagendar um compromisso pela tela do lead (testado ao vivo, ponta a ponta) cria, cancela e recria os lembretes corretamente — confirmado lendo o banco de dados diretamente após cada ação, não só pela resposta da tela.
+
+**Para validar:** Cenário C1 validado ao vivo (ver acima). Suítes automatizadas de `backend-crm` e `backend-executors` continuam sem regressão (mesmas falhas pré-existentes, confirmadas via `git stash` antes/depois).
 
 ---
 
@@ -174,3 +216,4 @@ Inbound (lead já tem reunião confirmada, bot_disabled=1, reason=meeting_schedu
 - Appointment fora da janela de 30 dias de `calendar_busy_slots` não é localizado.
 - Mudança de categoria do lead (Kanban) não é tocada por este fluxo — território do M2.
 - Gap de autenticação pré-existente em `routes/appointments.py` (`create_appointment`/`update_appointment`/`mark_canceled` sem `Depends(require_crm_access)`) não é corrigido aqui.
+- **Achado não corrigido (fora de escopo):** `services/followup_state.py::_cancel_pending_jobs_for_lead` também usa `UPDATE jobs SET status = 'cancelled'`, o mesmo valor fora do `CHECK` constraint que causava o erro 500 corrigido na Fase 3. Isso sugere que `POST /leads/{id}/followup/pause` e `/followup/cancel` podem estar falhando silenciosamente em produção ao tentar cancelar jobs pendentes — não verificado nem corrigido aqui, pois é código de follow-up fora do escopo do M1; vale uma investigação dedicada.

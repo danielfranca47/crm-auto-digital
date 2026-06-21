@@ -1,29 +1,18 @@
-import json
 import logging
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 from typing import List, Optional
 
 from fastapi import APIRouter, HTTPException, Query, Depends
 
-from core_client import fetch_core_ai_profile_resolve
 from database import get_connection
 from models import AppointmentCreate, AppointmentOut, AppointmentUpdate, AppointmentStatus, AppointmentOutcomeUpdate
 from security_core import CurrentUser, require_crm_access
 from services.appointment_outcomes import apply_outcome
-from services.briefing_service import schedule_briefing_job
+from services.briefing_service import schedule_briefing_job_for_appointment
 from services.google_calendar_service import delete_event as gcal_delete, list_events as gcal_list, push_event as gcal_push, update_event as gcal_update
-from services.jobs_service import (
-    TYPE_WHATSAPP_APPOINTMENT_BRIEFING,
-    TYPE_WHATSAPP_APPOINTMENT_REMINDER,
-    create_job,
-)
+from services.jobs_service import cancel_pending_appointment_jobs, schedule_appointment_reminder_jobs
 
 logger = logging.getLogger(__name__)
-
-_REMINDER_DEFAULTS_BY_TEMPLATE = {
-    "hybrid_scheduler": [-1440, -120],  # Agent 3: -24h, -2h
-}
-_REMINDER_DEFAULTS_FALLBACK = [-1440, -60]  # Agent 1 default: -24h, -1h
 
 router = APIRouter(prefix="/api/appointments", tags=["Appointments"])
 
@@ -292,14 +281,14 @@ def create_appointment(payload: AppointmentCreate) -> AppointmentOut:
         ).fetchone()
         if lead_row and source != "playground":
             user_id = lead_row["user_id"]
-            _schedule_reminder_jobs(
+            schedule_appointment_reminder_jobs(
                 lead_id=payload.lead_id,
                 user_id=user_id,
                 appointment_id=appointment_id,
                 appointment_title=payload.title,
                 appointment_start_at=payload.start_at,
             )
-            _schedule_briefing_job(
+            schedule_briefing_job_for_appointment(
                 lead_id=payload.lead_id,
                 user_id=user_id,
                 appointment_id=appointment_id,
@@ -325,89 +314,6 @@ def create_appointment(payload: AppointmentCreate) -> AppointmentOut:
         return result
     finally:
         conn.close()
-
-
-def _schedule_reminder_jobs(
-    *,
-    lead_id: int,
-    user_id: int,
-    appointment_id: int,
-    appointment_title: str,
-    appointment_start_at: datetime,
-) -> None:
-    try:
-        ai_profile = fetch_core_ai_profile_resolve(user_id)
-    except Exception:
-        ai_profile = None
-
-    template_key = (ai_profile or {}).get("template_key") or ""
-    offsets = None
-    if ai_profile:
-        offsets = ai_profile.get("appointment_reminder_offsets")
-    if not offsets:
-        offsets = _REMINDER_DEFAULTS_BY_TEMPLATE.get(template_key, _REMINDER_DEFAULTS_FALLBACK)
-
-    now_utc = datetime.now(timezone.utc)
-    for offset_minutes in offsets:
-        send_at = appointment_start_at + timedelta(minutes=offset_minutes)
-        # Garantir timezone-aware para comparação
-        if send_at.tzinfo is None:
-            send_at = send_at.replace(tzinfo=timezone.utc)
-        if send_at <= now_utc:
-            continue
-        try:
-            create_job(
-                job_type=TYPE_WHATSAPP_APPOINTMENT_REMINDER,
-                payload={
-                    "lead_id": lead_id,
-                    "user_id": user_id,
-                    "appointment_id": appointment_id,
-                    "appointment_title": appointment_title,
-                    "appointment_start_at": appointment_start_at.isoformat(),
-                    "message_text": "appointment_reminder_trigger",
-                },
-                scheduled_at=send_at,
-                user_id=user_id,
-            )
-            logger.info(
-                "reminder_job_scheduled lead_id=%s appointment_id=%s send_at=%s",
-                lead_id,
-                appointment_id,
-                send_at.isoformat(),
-            )
-        except Exception as exc:
-            logger.warning(
-                "reminder_job_schedule_failed lead_id=%s appointment_id=%s error=%s",
-                lead_id,
-                appointment_id,
-                exc,
-            )
-
-
-def _schedule_briefing_job(
-    *,
-    lead_id: int,
-    user_id: int,
-    appointment_id: int,
-    appointment_start_at: datetime,
-) -> None:
-    try:
-        ai_profile = fetch_core_ai_profile_resolve(user_id) or {}
-    except Exception:
-        ai_profile = {}
-
-    briefing_enabled = ai_profile.get("briefing_enabled")
-    if briefing_enabled is False:
-        return
-
-    lead_time = ai_profile.get("briefing_lead_time") or 120
-    schedule_briefing_job(
-        lead_id=lead_id,
-        user_id=user_id,
-        appointment_id=appointment_id,
-        appointment_start_at=appointment_start_at,
-        lead_time_minutes=int(lead_time),
-    )
 
 
 @router.put("/{appointment_id}", response_model=AppointmentOut)
@@ -486,21 +392,22 @@ def update_appointment(appointment_id: int, payload: AppointmentUpdate) -> Appoi
         # mesmo critério de create_appointment).
         time_changed = payload.start_at is not None and updated_data["start_at"] != current["start_at"]
         if time_changed and lead_row and lead_row["user_id"] and current.get("source") != "playground":
-            _cancel_pending_appointment_jobs(conn, appointment_id)
+            cancel_pending_appointment_jobs(conn, appointment_id)
             new_start_at = datetime.fromisoformat(updated_data["start_at"])
-            _schedule_reminder_jobs(
+            schedule_appointment_reminder_jobs(
                 lead_id=current["lead_id"],
                 user_id=lead_row["user_id"],
                 appointment_id=appointment_id,
                 appointment_title=updated_data["title"],
                 appointment_start_at=new_start_at,
             )
-            _schedule_briefing_job(
+            schedule_briefing_job_for_appointment(
                 lead_id=current["lead_id"],
                 user_id=lead_row["user_id"],
                 appointment_id=appointment_id,
                 appointment_start_at=new_start_at,
             )
+            conn.commit()
 
         return _serialize(updated)
     finally:
@@ -524,38 +431,12 @@ def delete_appointment(appointment_id: int) -> None:
             if lead_row and lead_row["user_id"]:
                 gcal_delete(user_id=lead_row["user_id"], google_event_id=google_event_id)
 
+        cancel_pending_appointment_jobs(conn, appointment_id)
         cur = conn.cursor()
         cur.execute("DELETE FROM appointments WHERE id = ?", (appointment_id,))
         conn.commit()
     finally:
         conn.close()
-
-
-def _cancel_pending_appointment_jobs(conn, appointment_id: int) -> int:
-    """Cancela jobs pendentes de lembrete/briefing que referenciam este appointment.
-
-    payload é JSON em TEXT (sem coluna própria de appointment_id) — filtra em Python,
-    mesmo padrão já usado em inbound_handler.py, em vez de depender da extensão JSON1.
-    """
-    cur = conn.cursor()
-    cur.execute(
-        "SELECT id, payload FROM jobs WHERE status = 'pending' AND type IN (?, ?)",
-        (TYPE_WHATSAPP_APPOINTMENT_REMINDER, TYPE_WHATSAPP_APPOINTMENT_BRIEFING),
-    )
-    cancelled = 0
-    for row in cur.fetchall():
-        try:
-            job_payload = json.loads(row["payload"] or "{}")
-        except (TypeError, ValueError):
-            continue
-        if job_payload.get("appointment_id") != appointment_id:
-            continue
-        cur.execute(
-            "UPDATE jobs SET status = 'cancelled', updated_at = CURRENT_TIMESTAMP WHERE id = ? AND status = 'pending'",
-            (row["id"],),
-        )
-        cancelled += 1
-    return cancelled
 
 
 def _update_status(appointment_id: int, status: AppointmentStatus) -> AppointmentOut:
@@ -570,7 +451,7 @@ def _update_status(appointment_id: int, status: AppointmentStatus) -> Appointmen
         )
 
         if status == "canceled":
-            _cancel_pending_appointment_jobs(conn, appointment_id)
+            cancel_pending_appointment_jobs(conn, appointment_id)
             google_event_id = appointment.get("google_event_id")
             lead_id = appointment.get("lead_id")
             if google_event_id and lead_id:

@@ -6,17 +6,21 @@ import unittest
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
-from routes.appointments import _cancel_pending_appointment_jobs
+from services.jobs_service import cancel_pending_appointment_jobs as _cancel_pending_appointment_jobs
 
 
 def _create_schema(conn: sqlite3.Connection) -> None:
+    # Mesmo CHECK constraint da tabela real (database.py::ensure_jobs_table) — não existe
+    # status 'cancelled'; um teste com schema mais permissivo não teria detectado o
+    # IntegrityError que isto causou em produção.
     conn.executescript(
         """
         CREATE TABLE jobs (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             type TEXT NOT NULL,
             payload TEXT,
-            status TEXT NOT NULL DEFAULT 'pending',
+            status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending','in_progress','completed','failed')),
+            result TEXT,
             updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
         );
         """
@@ -55,9 +59,10 @@ class CancelPendingAppointmentJobsTest(unittest.TestCase):
         self.assertEqual(cancelled, 2)
         for job_id in (reminder_id, briefing_id):
             row = self.conn.execute(
-                "SELECT status FROM jobs WHERE id = ?", (job_id,)
+                "SELECT status, result FROM jobs WHERE id = ?", (job_id,)
             ).fetchone()
-            self.assertEqual(row["status"], "cancelled")
+            self.assertEqual(row["status"], "completed")
+            self.assertIn("skipped", row["result"])
 
     def test_does_not_touch_jobs_from_other_appointments(self):
         other_id = self._insert_job(

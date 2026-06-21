@@ -528,6 +528,108 @@ def create_job(
     return job
 
 
+def cancel_pending_appointment_jobs(conn: sqlite3.Connection, appointment_id: int) -> int:
+    """Cancela jobs pendentes de lembrete/briefing que referenciam este appointment.
+
+    payload é JSON em TEXT (sem coluna própria de appointment_id) — filtra em Python
+    em vez de depender da extensão JSON1 do SQLite. Compartilhado por routes/appointments.py
+    e routes/leads.py — os dois pontos de entrada para cancelar/editar um compromisso.
+
+    Não existe status 'cancelled' no CHECK constraint da tabela jobs (apenas pending/
+    in_progress/completed/failed) — usa 'completed' com result.skipped=true em vez de
+    introduzir um valor fora do enum (o worker nunca repesca jobs completed).
+    """
+    cur = conn.cursor()
+    cur.execute(
+        "SELECT id, payload FROM jobs WHERE status = 'pending' AND type IN (?, ?)",
+        (TYPE_WHATSAPP_APPOINTMENT_REMINDER, TYPE_WHATSAPP_APPOINTMENT_BRIEFING),
+    )
+    cancelled = 0
+    skip_result = json.dumps({"skipped": True, "reason": "appointment_cancelled_or_rescheduled"})
+    for row in cur.fetchall():
+        try:
+            job_payload = json.loads(row["payload"] or "{}")
+        except (TypeError, ValueError):
+            continue
+        if job_payload.get("appointment_id") != appointment_id:
+            continue
+        cur.execute(
+            "UPDATE jobs SET status = 'completed', result = ?, updated_at = CURRENT_TIMESTAMP"
+            " WHERE id = ? AND status = 'pending'",
+            (skip_result, row["id"]),
+        )
+        cancelled += 1
+    return cancelled
+
+
+_REMINDER_DEFAULTS_BY_TEMPLATE: Dict[str, List[int]] = {
+    "hybrid_scheduler": [-1440, -120],  # Agent 3: -24h, -2h
+}
+_REMINDER_DEFAULTS_FALLBACK: List[int] = [-1440, -60]  # Agent 1 default: -24h, -1h
+
+
+def schedule_appointment_reminder_jobs(
+    *,
+    lead_id: int,
+    user_id: int,
+    appointment_id: int,
+    appointment_title: str,
+    appointment_start_at: datetime,
+) -> None:
+    """Agenda os jobs de lembrete (whatsapp.appointment.reminder) para um compromisso.
+
+    Compartilhado por routes/appointments.py e routes/leads.py — os dois pontos de
+    entrada para criar/editar um compromisso.
+    """
+    from datetime import timezone as _tz
+    from core_client import fetch_core_ai_profile_resolve
+
+    try:
+        ai_profile = fetch_core_ai_profile_resolve(user_id)
+    except Exception:
+        ai_profile = None
+
+    template_key = (ai_profile or {}).get("template_key") or ""
+    offsets = (ai_profile or {}).get("appointment_reminder_offsets")
+    if not offsets:
+        offsets = _REMINDER_DEFAULTS_BY_TEMPLATE.get(template_key, _REMINDER_DEFAULTS_FALLBACK)
+
+    now_utc = datetime.now(_tz.utc)
+    for offset_minutes in offsets:
+        send_at = appointment_start_at + timedelta(minutes=offset_minutes)
+        if send_at.tzinfo is None:
+            send_at = send_at.replace(tzinfo=_tz.utc)
+        if send_at <= now_utc:
+            continue
+        try:
+            create_job(
+                job_type=TYPE_WHATSAPP_APPOINTMENT_REMINDER,
+                payload={
+                    "lead_id": lead_id,
+                    "user_id": user_id,
+                    "appointment_id": appointment_id,
+                    "appointment_title": appointment_title,
+                    "appointment_start_at": appointment_start_at.isoformat(),
+                    "message_text": "appointment_reminder_trigger",
+                },
+                scheduled_at=send_at,
+                user_id=user_id,
+            )
+            logger.info(
+                "reminder_job_scheduled lead_id=%s appointment_id=%s send_at=%s",
+                lead_id,
+                appointment_id,
+                send_at.isoformat(),
+            )
+        except Exception as exc:
+            logger.warning(
+                "reminder_job_schedule_failed lead_id=%s appointment_id=%s error=%s",
+                lead_id,
+                appointment_id,
+                exc,
+            )
+
+
 def fetch_next_job(
     *,
     agent_id: str,

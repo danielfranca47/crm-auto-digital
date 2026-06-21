@@ -286,3 +286,33 @@ def schedule_briefing_job(
             appointment_id,
             exc,
         )
+
+
+def schedule_briefing_job_for_appointment(
+    *,
+    lead_id: int,
+    user_id: int,
+    appointment_id: int,
+    appointment_start_at: datetime,
+) -> None:
+    """Resolve briefing_enabled/briefing_lead_time do AI Profile e agenda o job.
+
+    Compartilhado por routes/appointments.py e routes/leads.py — os dois pontos de
+    entrada para criar/editar um compromisso.
+    """
+    try:
+        ai_profile = fetch_core_ai_profile_resolve(user_id) or {}
+    except Exception:
+        ai_profile = {}
+
+    if ai_profile.get("briefing_enabled") is False:
+        return
+
+    lead_time = ai_profile.get("briefing_lead_time") or 120
+    schedule_briefing_job(
+        lead_id=lead_id,
+        user_id=user_id,
+        appointment_id=appointment_id,
+        appointment_start_at=appointment_start_at,
+        lead_time_minutes=int(lead_time),
+    )

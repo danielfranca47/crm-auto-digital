@@ -25,8 +25,15 @@ from services.followup_state import (
     cancel_followup_manually,
     progress_followup_after_auto_send,
 )
+from services.briefing_service import schedule_briefing_job_for_appointment
 from services.google_calendar_service import delete_event as gcal_delete, push_event as gcal_push, update_event as gcal_update
-from services.jobs_service import TYPE_WHATSAPP_SEND, TYPE_WHATSAPP_FOLLOWUP_PREGENERATE, create_job
+from services.jobs_service import (
+    TYPE_WHATSAPP_SEND,
+    TYPE_WHATSAPP_FOLLOWUP_PREGENERATE,
+    cancel_pending_appointment_jobs,
+    create_job,
+    schedule_appointment_reminder_jobs,
+)
 from services.qualification_guardrails import can_advance_from_qualification
 from services.qualification_state import upsert_qualification_state
 
@@ -1119,6 +1126,20 @@ def criar_compromisso(lead_id: int, payload: AppointmentCreate, current_user: Cu
             )
             conn.commit()
 
+        schedule_appointment_reminder_jobs(
+            lead_id=lead_id,
+            user_id=current_user.id,
+            appointment_id=appointment_id,
+            appointment_title=title,
+            appointment_start_at=datetime.fromisoformat(normalized_start),
+        )
+        schedule_briefing_job_for_appointment(
+            lead_id=lead_id,
+            user_id=current_user.id,
+            appointment_id=appointment_id,
+            appointment_start_at=datetime.fromisoformat(normalized_start),
+        )
+
         return result
 
     except HTTPException:
@@ -1149,11 +1170,14 @@ def atualizar_compromisso(lead_id: int, appointment_id: int, payload: Appointmen
             raise HTTPException(status_code=404, detail="Compromisso não encontrado")
 
         original_google_event_id = dict(row).get("google_event_id")
+        original_start_at = dict(row).get("start_at")
 
         dados = payload.dict(exclude_unset=True)
         if not dados:
             # nada para atualizar; devolve estado atual mapeado
             return _map_appointment_row(row)
+
+        is_cancel = dados.get("status") == "canceled"
 
         # Se start/end forem alterados, normalizamos valores finais para manter coerência.
         # Regra mínima de hardening: end_at ausente ou menor que start_at -> end_at = start_at.
@@ -1202,20 +1226,49 @@ def atualizar_compromisso(lead_id: int, appointment_id: int, payload: Appointmen
         cursor.execute("SELECT * FROM appointments WHERE id = ?", (appointment_id,))
         row = cursor.fetchone()
 
-        # Google Calendar update (fail-silent)
-        if original_google_event_id:
-            lead_row = cursor.execute(
-                "SELECT companyName, contactName FROM leads WHERE id = ?", (lead_id,)
-            ).fetchone()
-            lead_name = (lead_row["companyName"] or lead_row["contactName"]) if lead_row else None
-            appointment_dict = dict(row)
-            appointment_dict["lead_name"] = lead_name
-            gcal_update(
-                user_id=current_user.id,
-                google_event_id=original_google_event_id,
-                appointment=appointment_dict,
-            )
+        if is_cancel:
+            # Cancelamento: remove o evento do Google Calendar (em vez de só atualizá-lo) e
+            # cancela os jobs de lembrete/briefing pendentes — sem isso, lembretes continuam
+            # sendo enviados para uma sessão já cancelada.
+            cancel_pending_appointment_jobs(conn, appointment_id)
+            if original_google_event_id:
+                gcal_delete(user_id=current_user.id, google_event_id=original_google_event_id)
+        else:
+            # Google Calendar update (fail-silent)
+            if original_google_event_id:
+                lead_row = cursor.execute(
+                    "SELECT companyName, contactName FROM leads WHERE id = ?", (lead_id,)
+                ).fetchone()
+                lead_name = (lead_row["companyName"] or lead_row["contactName"]) if lead_row else None
+                appointment_dict = dict(row)
+                appointment_dict["lead_name"] = lead_name
+                gcal_update(
+                    user_id=current_user.id,
+                    google_event_id=original_google_event_id,
+                    appointment=appointment_dict,
+                )
 
+            # Horário mudou de fato: lembretes/briefing antigos apontam para o horário velho —
+            # cancelar e re-agendar para o novo start_at.
+            updated_start_at = dict(row).get("start_at")
+            if new_start is not None and updated_start_at != original_start_at:
+                cancel_pending_appointment_jobs(conn, appointment_id)
+                new_start_at = datetime.fromisoformat(updated_start_at)
+                schedule_appointment_reminder_jobs(
+                    lead_id=lead_id,
+                    user_id=current_user.id,
+                    appointment_id=appointment_id,
+                    appointment_title=dict(row).get("title") or "",
+                    appointment_start_at=new_start_at,
+                )
+                schedule_briefing_job_for_appointment(
+                    lead_id=lead_id,
+                    user_id=current_user.id,
+                    appointment_id=appointment_id,
+                    appointment_start_at=new_start_at,
+                )
+
+        conn.commit()
         return _map_appointment_row(row)
 
     except HTTPException:
@@ -1248,6 +1301,7 @@ def remover_compromisso(lead_id: int, appointment_id: int, current_user: Current
         if google_event_id:
             gcal_delete(user_id=current_user.id, google_event_id=google_event_id)
 
+        cancel_pending_appointment_jobs(conn, appointment_id)
         cursor.execute(
             "DELETE FROM appointments WHERE id = ? AND lead_id = ?",
             (appointment_id, lead_id),
