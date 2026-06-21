@@ -516,6 +516,59 @@ aritmética de datas.
 
 ---
 
+## Fase 8 — Reforço: saudação composta com dia+hora específicos ainda ia para "pre-agendamento" às vezes (21/06/2026)
+
+### Problema identificado
+
+O utilizador exportou e revisou uma sessão do Playground (lead #281, mensagem "Oi,
+gostaria de agendar uma sessão para amanhã às 16h") onde a 1ª resposta do bot não trouxe
+nenhuma verificação de disponibilidade — só um genérico "vou verificar e te confirmo". O
+trace mostrava `mother_route=recepcao, effective_route=pre-agendamento`, apesar da
+mensagem ter dia ("amanhã") E hora ("16h") específicos.
+
+Causa raiz: a regra já existente em `_build_mother_prompt()` (secção SAUDAÇÃO COMPOSTA,
+introduzida na Fase 3D) já dizia explicitamente "COM dia/hora específicos → agendamento
+diretamente, nunca pre-agendamento" — mas é uma regra abstrata, sem checklist nem exemplo
+do erro a evitar. A Mãe nem sempre a seguiu (mesma classe de não-determinismo já aceite na
+Fase 3D). Reproduzido nos meus próprios testes da Fase 7 (mesma sessão): leads #276, #279,
+#280 (mesmo tipo de mensagem, dia+hora específicos) foram directo para "agendamento"; o
+lead #281 do utilizador foi o único que não foi — 3 de 4 directo (75%) na amostra
+disponível antes desta fase.
+
+### Correção
+
+| Arquivo | Mudança |
+|---|---|
+| `backend-executors/app/services/decision_engine.py` (`_build_mother_prompt()`, secção SAUDAÇÃO COMPOSTA) | Regra reescrita com checklist explícito de 2 perguntas (tem dia? tem hora?) + exemplo CORRETO usando a frase exacta do lead #281 + exemplo ERRADO explicando a consequência (lead precisa confirmar de novo antes do agente checar disponibilidade) |
+| `backend-executors/tests/test_mother_compound_greeting_day_hour_checklist.py` | Novo arquivo, confirma que o checklist e os exemplos estão no prompt da Mãe |
+
+Mesmo padrão de reforço que funcionou na Fase 7 para `scheduling_offer_style`: regra
+abstracta → checklist + exemplo concreto contrastando certo vs. errado.
+
+### Commits Fase 8
+
+| # | Commit | O que foi implementado |
+|---|---|---|
+| 1 | _(pendente)_ | Checklist dia+hora no prompt da Mãe + teste |
+
+### Relatório da Fase 8 — o que mudou na prática
+
+**Antes:** quando o cliente já dizia dia e hora certos na primeira mensagem (ex.: "amanhã às 16h"), o sistema às vezes pulava a etapa de checar disponibilidade de verdade — respondia só "vou verificar e te confirmo", obrigando o cliente a perguntar de novo antes de receber uma resposta real.
+**Agora:** a IA que decide o caminho recebeu uma lista de verificação mais clara e um exemplo prático do que fazer (e do que não fazer) nesse caso específico — reduzindo bastante a frequência desse passo extra desnecessário.
+**Para validar:** Cenário C7, abaixo. Como o comportamento depende de uma IA tomar a mesma decisão de forma consistente, a melhoria é estatística (testada em várias tentativas), não uma garantia de 100% — continua a ser a mesma natureza de risco residual já aceite na Fase 3D.
+
+---
+
+## Checks de Validação — Fase 8
+
+### Cenário C7 — Taxa de acerto da saudação composta com dia+hora específicos
+- [x] Teste unitário directo (`test_mother_compound_greeting_day_hour_checklist.py`): prompt da Mãe contém o checklist e os exemplos
+- [x] Regressão: `pytest tests/ scripts/test_meeting_scheduler_hook.py scripts/test_meeting_candidate_e2e.py scripts/test_structured_meeting_signal_dual_read.py scripts/test_mother_prompt_agent_mode.py scripts/test_mother_prompt_rules.py -q` — 25 falhas pré-existentes idênticas / 84 passes (83 + 1 novo)
+- [x] Validação ao vivo (Playground, 10 leads novos, frases variadas todas com dia+hora específicos): 9 de 10 foram directo para `effective_route=agendamento`; 1 de 10 foi para `pre-agendamento` (mesmo padrão residual, frequência reduzida)
+- **Validado em:** 21/06/2026 — via API do Playground (chamadas directas autenticadas, mesma sessão de browser), leads #282–291. Antes do reforço (amostra da Fase 7, leads #276/#279/#280/#281): 3/4 directo (75%). Depois do reforço: 9/10 directo (90%). Amostra pequena nos dois casos — não é uma medição estatisticamente robusta, mas a direcção é claramente positiva.
+
+---
+
 ## Ajustes Possíveis Pós-Implementação
 
 - Trade-off aceite: quando o lead confirma um horário na MESMA mensagem em que a Mãe move a
@@ -530,9 +583,9 @@ aritmética de datas.
 - **Custo de 1 chamada LLM extra (Fase 4):** só no turno em que `compound_follow_through`
   dispara (1ª mensagem composta de um lead) — aceite explicitamente pelo utilizador. Não
   afecta turnos normais.
-- **Não-determinismo da Mãe na escolha pre-agendamento vs. agendamento (Fase 3D):** o
-  reforço no prompt da Mãe melhora mas não garante 100% das vezes que `compound_follow_through`
-  seja directamente "agendamento" quando dia+hora são específicos — quando a Mãe ainda
+- **Não-determinismo da Mãe na escolha pre-agendamento vs. agendamento (Fase 3D, reforçado na Fase 8):** o
+  reforço no prompt da Mãe melhora (75%→90% directo na amostra testada) mas não garante 100% das vezes que
+  `compound_follow_through` seja directamente "agendamento" quando dia+hora são específicos — quando a Mãe ainda
   escolhe "pre-agendamento", a Fase 3A+3B absorvem o caso (a filha de pré-agendamento
   corrige no mesmo turno e a categoria avança para o turno seguinte), só custando 1 turno
   extra em vez de resposta incorrecta.
