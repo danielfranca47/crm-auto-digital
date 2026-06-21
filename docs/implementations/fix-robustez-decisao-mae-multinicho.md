@@ -549,7 +549,7 @@ abstracta → checklist + exemplo concreto contrastando certo vs. errado.
 
 | # | Commit | O que foi implementado |
 |---|---|---|
-| 1 | _(pendente)_ | Checklist dia+hora no prompt da Mãe + teste |
+| 1 | `87d4dbc` | Checklist dia+hora no prompt da Mãe + teste |
 
 ### Relatório da Fase 8 — o que mudou na prática
 
