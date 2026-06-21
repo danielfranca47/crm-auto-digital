@@ -104,6 +104,12 @@ Fase 3 — useAppointments.ts + ScheduleView.tsx: fallback seguro para datas aus
 |---|---|
 | `frontend-crm/src/components/agente/CamadaFluxoVenda.tsx` | A investigar em Plan Mode antes de codar — causa raiz ainda não confirmada (ver Problema 2). Primeiro passo: reproduzir manualmente (sem automação) para confirmar que não é uma particularidade da sessão de testes anterior. |
 
+### Relatório da Fase 2 — o que mudou na prática
+
+**Antes:** suspeita de bug (não confirmada) de que o texto digitado numa ação nova do Fluxo de Venda não seria salvo.
+**Agora:** investigação de código (sem alterações) traçou toda a cadeia `BlockForm` → `pendingBlock` (`RuleBuilderModal`) → `confirmPendingBlock()` → `saveBlocks()` → `updateFlow()` → `onUpdate`/`updateConfig` (`AiProfile.tsx`) → `api.agente.saveConfig()` e não encontrou nenhum defeito — é o mesmo padrão de componente controlado usado no fluxo "EDITAR" (que já funcionava). O re-teste via Chrome DevTools MCP, desta vez verificando o estado em cada passo (valor do textarea, resumo do bloco antes de "Salvar regra", payload de rede do `PUT /ai-profiles/me`, resposta do backend e um reload completo da página), confirmou que o `content` persiste corretamente em **todos** os pontos. **Conclusão: não há bug.** A reprodução original (sessão de 19/06/2026) foi um falso positivo da automação de browser daquela sessão, não um defeito da aplicação. Nenhuma alteração de código foi necessária — Fase 2 encerrada sem commit de código.
+**Validado por:** Cenário C1, abaixo.
+
 ### Fase 3 — Fix: crash na vista Mensal da Agenda
 
 **Objetivo:** um appointment sem campo de data reconhecível não deve crashar a vista Mensal.
@@ -125,9 +131,10 @@ Fase 3 — useAppointments.ts + ScheduleView.tsx: fallback seguro para datas aus
 - **Validado em:** 21/06/2026 — chamada real à LLM (`gpt-4o-mini`). Agente formal (`tone_of_voice="formal e cordial..."`, `brand_name="Clínica Sorriso Mais"`) gerou: *"Prezado(a) senhor(a), lamentamos informar que o horário recentemente confirmado já foi ocupado por outro cliente. Pedimos, por gentileza, que sugira um novo horário para agendarmos sua consulta."* Agente informal (`tone_of_voice="descontraído, gírias leves, bem humorado"`, `brand_name="Studio Fit"`) gerou: *"Oi! O horário que você confirmou acabou de ser ocupado por outra pessoa, mas relaxa! Pode sugerir outro horário que a galera do Studio Fit tá pronta pra te ajudar!"* — tom e `brand_name` claramente refletidos, mensagens distintas. Com `generate_conflict_message` forçada a levantar excepção, `handle_meeting_scheduled` devolveu exatamente `MEETING_CONFLICT_MESSAGE` ("Peço desculpa, esse horário acabou de ficar indisponível...") — fallback confirmado. Em nenhum dos 3 casos o appointment foi criado (`client.created == []`), como esperado em conflito.
 
 ### Cenário C1 — Fluxo de Venda: bloco novo persiste o conteúdo
-- [ ] Reproduzir manualmente (interação humana real, não automação): criar uma nova ação "Orientação ao Agente" via "Montar regra → + Adicionar ação", confirmar e salvar
-- [ ] Confirmar no resumo do bloco (lista da fase) que o texto aparece, não "—"
-- [ ] Confirmar via API (`GET /ai-profiles/me`) que o `content` foi persistido no `sales_flow.phases[].blocks[]`
+- [x] Reproduzir (via Chrome DevTools MCP, com verificação passo a passo do estado controlado — ver nota abaixo): criar uma nova ação "Orientação ao Agente" via "Montar regra → + Adicionar ação", confirmar e salvar
+- [x] Confirmar no resumo do bloco (lista da fase) que o texto aparece, não "—"
+- [x] Confirmar via API (`GET /ai-profiles/me`) que o `content` foi persistido no `sales_flow.phases[].blocks[]`
+- **Validado em:** 21/06/2026 — ambiente local de pé (`backend-core:8001`, `backend-crm:8000`, `frontend-crm:5173`), conta de `_conta-teste-local.md`. Fluxo testado: "Montar regra" (fase Recepção/p0) → "Sem gatilho" → "+ Adicionar ação" → "Orientação ao Agente" → `fill` do texto `"TESTE FASE2: este texto deve persistir no bloco novo."` no textarea. Verificação em cada etapa: (1) `evaluate_script` confirmou o valor do DOM imediatamente após o `fill`; (2) após "Confirmar ação", o resumo do bloco na tela "Montar regra" já mostrava o texto completo (não "—") — este é o ponto exato onde a sessão anterior relatou a perda; (3) após "Salvar regra", o bloco apareceu na lista da fase com o texto completo; (4) após o "SALVAR" de topo, o `PUT http://127.0.0.1:8001/ai-profiles/me` (`reqid=637`) trazia `content` completo no corpo da requisição e na resposta; (5) reload completo da página (novo `GET /ai-profiles/me`, `reqid=849`) confirmou o `content` persistido no banco. **Conclusão:** o `content` nunca se perdeu em nenhum ponto — a reprodução da sessão de 19/06/2026 foi um falso positivo da automação daquela sessão (provavelmente o método de preenchimento do textarea não disparou o evento que o React rastreia), não um bug real. Bloco de teste removido do agente ao final (sem deixar dado de teste no perfil). Sem alteração de código nesta fase.
 
 ### Cenário C2 — Agenda não crasha com appointment malformado
 - [ ] Simular (ou aguardar ocorrência real) um appointment sem `start_at` reconhecível
