@@ -19,6 +19,7 @@ implementação.
 | `scale-enterprise-roadmap.md` | Roadmap dos planos Scale e Enterprise |
 | `ai-profile-instrucoes-por-fase.md` | Instruções de IA por fase — a implementar |
 | `agentes-agenda-melhorias-futuras.md` | Multi-profissional por conta, closing seletivo e confiabilidade da confirmação de agendamento |
+| `followup-proativo-e-cancelamento-agenda.md` | Cancelamento/reagendamento real de compromisso + disparo automático de follow-up por inatividade (Híbrido Agendador e SDR) |
 
 Os arquivos sem prefixo `_` são os **planos concretos** — contêm melhorias identificadas
 que ainda não foram implementadas.
