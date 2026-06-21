@@ -145,7 +145,7 @@ class AppointmentOut(BaseModel):
     outcome_at: Optional[datetime]
     location: Optional[str]
     google_event_id: Optional[str]   # ID do evento no Google Calendar
-    source: str                      # "crm" (default) | "google"
+    source: str                      # "crm" (default) | "google" | "playground"
     created_at: datetime
     updated_at: datetime
     lead_company: Optional[str]      # via LEFT JOIN com leads (companyName)
@@ -199,7 +199,7 @@ Todos definidos em `src/hooks/useAppointments.ts`. Mutations invalidam `appointm
 | `outcome_at` | TEXT (ISO) | Timestamp do outcome |
 | `location` | TEXT | Local (opcional) |
 | `google_event_id` | TEXT | ID do evento no Google Calendar (null se não sincronizado) |
-| `source` | TEXT | `crm` (default) \| `google` |
+| `source` | TEXT | `crm` (default) \| `google` \| `playground` |
 | `created_at` | TEXT (ISO) | — |
 | `updated_at` | TEXT (ISO) | — |
 
@@ -256,9 +256,9 @@ backend-crm (orchestrator.py)
 backend-executors (decision_engine.py)
   _build_child_prompt_agendamento injeta bloco "HORÁRIOS JÁ OCUPADOS"
   (convertido para a timezone do perfil) antes do availability_schedule
-        ↓ (só no caminho real, via runners/whatsapp.py — Playground nunca
-           chama handle_meeting_scheduled, por desenho: sandbox não cria
-           appointments reais)
+        ↓ (via runners/whatsapp.py no fluxo real, ou via playground_internal.py
+           no Playground — ambos chamam handle_meeting_scheduled; ver secção
+           "Playground cria appointments reais" abaixo)
 backend-executors (meeting_scheduler.py + whatsapp.py)
   handle_meeting_scheduled() checa o horário confirmado pela IA contra
   calendar_busy_slots: se colidir com outro lead, NÃO cria o appointment, NÃO
@@ -280,3 +280,17 @@ backend-crm (routes/appointments.py + routes/leads.py)
 `_generate_conflict_message(ai_profile, *, logger=None)` em `meeting_scheduler.py` monta um prompt curto em PT usando `tone_of_voice`/`brand_name`/`identity_mode` do AI Profile e chama `llm_service.generate_conflict_message()` (reaproveita o `_post_with_retry()` partilhado — ver `llm-architecture.md`). `handle_meeting_scheduled()` usa `_generate_conflict_message(...) or MEETING_CONFLICT_MESSAGE` — se a geração falhar por qualquer motivo (sem `LLM_API_KEY`, erro de rede, timeout, resposta vazia), cai no texto fixo `MEETING_CONFLICT_MESSAGE` ("Peço desculpa, esse horário acabou de ficar indisponível...") definido em `meeting_scheduler.py`.
 
 **Limitação conhecida (MVP):** suporte a múltiplos profissionais por conta (planos Scale/Enterprise, ainda não implementado) exigirá revisar `_check_conflict`/`calendar_busy_slots` para incluir um `professional_id` — hoje o modelo assume um único profissional por conta.
+
+### Playground cria appointments reais (tag `"[Playground]"`)
+
+Quando a IA confirma um agendamento dentro de uma sessão do Playground, `backend-executors/app/api/playground_internal.py` chama `meeting_scheduler.handle_meeting_scheduled(..., is_playground=True)` — o mesmo mecanismo do fluxo real, incluindo a checagem de conflito contra `calendar_busy_slots` — mas com:
+
+- `title = "[Playground] Reunião agendada"`, `description = "Reunião simulada no Playground."`
+- `source = "playground"` no INSERT de `appointments`
+- reminders (`whatsapp.appointment.reminder`), briefing e push para o Google Calendar real do utilizador são pulados — `routes/appointments.py::create_appointment` só dispara esses side-effects quando `source != "playground"`
+
+Conflito de horário é respeitado pela mesma barreira `_check_conflict`: se o horário já estiver ocupado, o appointment não é criado e uma mensagem de correcção é anexada aos `system_actions`/`auto_items` da resposta do Playground, em vez de ser enviada via WhatsApp.
+
+`routes/playground.py::_reset_sandbox_lead` apaga os appointments do lead sandbox antes do reset de mensagens — evita acumular compromissos `[Playground]` na Agenda real entre sessões de teste repetidas no mesmo lead.
+
+O fluxo real (WhatsApp) chama `handle_meeting_scheduled(...)` sem `is_playground` (default `False`), preservando título, side-effects e comportamento inalterados.

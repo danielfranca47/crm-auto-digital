@@ -291,7 +291,7 @@ Operador escreve mensagem no Playground (frontend-crm)
 | `agents` | `id, token, status, capabilities` | Agentes locais registados |
 | `knowledge_items` | `user_id, category, content` | Base de conhecimento do agente |
 | `knowledge_item_media` | `item_id, media_url, media_type` | Mídias associadas ao conhecimento |
-| `appointments` | `id, lead_id, title, type, start_at, end_at, status, outcome, google_event_id, source` | Compromissos da agenda; `source='crm'` ou `'google'` |
+| `appointments` | `id, lead_id, title, type, start_at, end_at, status, outcome, google_event_id, source` | Compromissos da agenda; `source='crm'`, `'google'` ou `'playground'` |
 | `prospection_logs` | `lead_id, action, notes, createdAt` | Log de contactos outbound (`action='manual_outbound'`) |
 | `followup_reconcile_guard` | `lead_id, job_id, due_at` | Guard anti-loop do reconciliador |
 
