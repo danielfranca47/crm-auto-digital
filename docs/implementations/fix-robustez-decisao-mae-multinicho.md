@@ -376,7 +376,64 @@ os turnos seguintes.
 source=fallback_extract_start_at`, indicando que a extracção heurística de data/hora não
 conseguiu juntar "amanhã" (mencionado num turno anterior) com "9h" (mencionado só na
 mensagem de confirmação) e caiu num fallback impreciso. Pré-existente, não introduzido por
-esta sessão de fixes — registar para investigação futura.
+esta sessão de fixes original (Fases 1-5) — corrigido na Fase 6 abaixo.
+
+---
+
+## Fase 6 — Correção: start_at impreciso por falta de candidato estruturado na filha de agendamento (21/06/2026)
+
+### Problema identificado
+
+Reavaliado o achado da Fase 5 a pedido do utilizador: embora a mensagem enviada ao lead
+estivesse correta, o `start_at` gravado internamente no appointment não corresponder à hora
+combinada tem impacto real na gestão da agenda — afeta a verificação de conflito de horário
+(`calendar_busy_slots`) e a visão real da agenda do profissional, não é só um detalhe
+cosmético interno.
+
+Causa raiz confirmada no código actual: o mecanismo que captura a hora exacta combinada de
+forma estruturada (`signals_structured.meeting_datetime_candidate`, lido por
+`meeting_scheduler.py:83-97` antes de cair no fallback heurístico `extract_start_at`) só
+estava implementado na filha de **apresentação** (`_build_child_prompt_apresentation`,
+quando `presentation_variant=scheduler`). A filha de **agendamento**
+(`_build_child_prompt_agendamento`) — usada por `sdr_padrao`/`hybrid_scheduler` no caminho
+`pre-agendamento → agendamento`, exactamente o caminho do lead #274 da Fase 5 — nunca recebeu
+essa instrução; o schema JSON que ela devolve nem incluía `signals_structured`. Já estava
+identificado no item **M3** de `docs/plans/agentes-agenda-melhorias-futuras.md`. O lado
+consumidor (`meeting_scheduler._extract_meeting_signal`) já é agnóstico de rota — não
+precisou de nenhuma mudança.
+
+### Correção
+
+| Arquivo | Mudança |
+|---|---|
+| `backend-executors/app/services/decision_engine.py` (`_build_child_prompt_agendamento`) | Schema JSON de saída passa a incluir `signals_structured` (`meeting_proposed`, `meeting_datetime_candidate`); novo bloco de regras instruindo a filha a combinar informação de turnos anteriores do `history` e respeitar `ai_profile.timezone`; `ai_summary` passa a incluir `timezone` (antes só usado internamente no cálculo de `calendar_busy_slots`, nunca exposto ao prompt) |
+| `backend-executors/app/services/decision_engine.py` (`_normalize_scheduler_child_signals`) | `is_scheduler_context` estendido para também normalizar quando `effective_route_to=="agendamento"` e o perfil for de um template de agendamento (`_SCHEDULING_AGENT_TEMPLATES`) — mesma lógica de default/limpeza já aplicada à apresentação |
+| `backend-executors/tests/test_agendamento_scheduler_structured_signals.py` | Novo arquivo, 4 cenários (espelho de `test_presentation_scheduler_structured_signals.py`): candidato presente, candidato ausente (defaults), template fora de `_SCHEDULING_AGENT_TEMPLATES` (não forçado), prompt contém as novas instruções |
+
+`_build_child_prompt_pre_agendamento` não foi alterado — nesta fase o lead ainda não
+confirmou nada, só decide se avança para `agendamento` (mecanismo da Fase 3). A confirmação
+real acontece sempre em `agendamento` ou `apresentation`, ambas já cobertas.
+
+### Commits Fase 6
+
+| # | Commit | O que foi implementado |
+|---|---|---|
+| 1 | _(pendente — registar após o commit)_ | Candidato estruturado de horário na filha de agendamento + normalização + testes |
+
+### Relatório da Fase 6 — o que mudou na prática
+
+**Antes:** quando a confirmação de horário acontecia pelo caminho de agendamento puro (sem passar pela apresentação comercial), a hora gravada internamente no compromisso não correspondia à hora que o cliente realmente combinou — o sistema gravava o instante em que processou a mensagem, não o horário pedido. Isso podia bagunçar a verificação de conflito de horários e a visão real da agenda do profissional.
+**Agora:** essa mesma IA de agendamento passou a anotar a data e hora combinada de forma exacta e estruturada — igual ao que já era feito na IA de apresentação — em vez de depender só do sistema "adivinhar" lendo o texto da conversa.
+**Para validar:** confirmado por testes técnicos directos (Cenário C5). A confirmação visual completa pela tela real (repetir o cenário do lead #274) ainda está pendente — ver checklist abaixo.
+
+---
+
+## Checks de Validação — Fase 6
+
+### Cenário C5 — Candidato estruturado de horário na filha de agendamento
+- [x] Testes unitários directos (`test_agendamento_scheduler_structured_signals.py`, 4 cenários): candidato presente → normalizado (`meeting_proposed=true`); ausente → defaults (`false`/`null`); template fora de `_SCHEDULING_AGENT_TEMPLATES` → não forçado; prompt contém `meeting_proposed`, `meeting_datetime_candidate` e `ai_profile.timezone`
+- [x] Regressão: `pytest tests/ scripts/test_meeting_scheduler_hook.py scripts/test_meeting_candidate_e2e.py scripts/test_structured_meeting_signal_dual_read.py scripts/test_mother_prompt_agent_mode.py -q` — 25 falhas pré-existentes idênticas (confirmado via `git stash`/`git stash pop` antes/depois da mudança) / 75 passes (71 + 4 novos)
+- [ ] Validação ponta-a-ponta real (Playground/WhatsApp): repetir o cenário do lead #274 — "amanhã às 11h" numa mensagem + confirmação "pode ser às 9h" numa mensagem seguinte — e confirmar via log (`event=meeting_datetime_source source=structured_candidate`) e via `GET /api/leads/{id}/appointments` que o `start_at` gravado corresponde a 9h, não ao instante de execução
 
 ---
 

@@ -1208,6 +1208,9 @@ def _normalize_scheduler_child_signals(
         effective_route_to == "apresentation"
         and presentation_variant == "scheduler"
         and (agent_mode == "agenda" or template_key == "hybrid_scheduler")
+    ) or (
+        effective_route_to == "agendamento"
+        and (agent_mode == "agenda" or template_key in _SCHEDULING_AGENT_TEMPLATES)
     )
     if not is_scheduler_context:
         return raw
@@ -3396,6 +3399,7 @@ def _build_child_prompt_agendamento(
         "tone_of_voice": ai_profile.get("tone_of_voice"),
         "niche": ai_profile.get("niche"),
         "agent_mode": ai_profile.get("agent_mode"),
+        "timezone": ai_profile.get("timezone"),
         "availability_schedule": availability_schedule or None,
         "custom_instructions": ai_profile.get("custom_instructions"),
     }
@@ -3451,8 +3455,16 @@ def _build_child_prompt_agendamento(
         '  "outcome": null,\n'
         '  "kanban_highlight": null,\n'
         '  "signals": [],\n'
+        '  "signals_structured": {"meeting_proposed": false, "meeting_datetime_candidate": null} (opcional),\n'
         '  "confidence": 0.0\n'
         "}\n\n"
+        "REGRAS DE SINALIZAÇÃO ESTRUTURADA (obrigatório):\n"
+        "- SEMPRE preencha signals_structured.meeting_proposed (bool) e meeting_datetime_candidate (ISO ou null).\n"
+        "  * Se houver proposta/confirmação com horário definido: meeting_proposed=true e meeting_datetime_candidate preenchido.\n"
+        "  * Se estiver pedindo disponibilidade sem horário definido: meeting_proposed=true e meeting_datetime_candidate=null.\n"
+        "  * Combine informação de turnos anteriores do history (ex.: dia mencionado antes + hora mencionada agora).\n"
+        "  * Preferência: ISO naive no horário local de ai_profile.timezone (ex: 2026-03-05T17:00:00); também aceito offset/Z.\n"
+        "  * Nunca assumir timezone fixa; sempre respeitar ai_profile.timezone.\n\n"
         f"Contexto:\n"
         f"- lead: {json.dumps(lead_summary, ensure_ascii=False)}\n"
         f"- ai_profile: {json.dumps(ai_summary, ensure_ascii=False)}\n"
