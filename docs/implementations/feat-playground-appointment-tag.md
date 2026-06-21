@@ -118,6 +118,12 @@ repositório, e o fluxo depende de round-trip HTTP cross-service + SQLite real. 
 |---|---|---|
 | 1 | `2ee3a02` | `is_playground`/`source` em meeting_scheduler, crm_client, models, appointments; chamada em playground_internal.py; cleanup em `_reset_sandbox_lead`; `meeting_scheduled` no trace |
 
+### Relatório da Fase 1 — o que mudou na prática
+
+**Antes:** quando a IA confirmava um agendamento durante um teste no Playground, nada acontecia de fato na agenda — não dava para validar o fluxo completo (criação real do compromisso) sem usar o WhatsApp de verdade.
+**Agora:** o Playground cria o compromisso de verdade na agenda da conta, mas com o título marcado `[Playground]` para não ser confundido com um cliente real — e sem disparar lembrete por WhatsApp nem sincronizar com o Google Calendar do utilizador (efeitos que só fazem sentido para um cliente real). Repetir o teste no mesmo lead também limpa esse compromisso automaticamente, sem deixar lixo na agenda.
+**Para validar:** Cenários P1, P2 e P3 (criação tagueada, conflito de horário respeitado, reset limpa o teste). Cenário C1 (fluxo real do WhatsApp continua intacto).
+
 ---
 
 ## Checks de Validação

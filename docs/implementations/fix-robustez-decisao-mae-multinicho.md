@@ -121,6 +121,12 @@ retry/fallback existente, como hoje.
 - `backend-executors/app/services/meeting_scheduler.py` — `MeetingSignal.is_phase_entry`; early-return em `handle_meeting_scheduled()` quando `True`
 - `docs/implementations/fix-robustez-decisao-mae-multinicho.md` — checks C2/C3/C4 marcados
 
+### Relatório das Fases 1+2 — o que mudou na prática
+
+**Antes:** se a IA "Mãe" (a camada que decide o que fazer a cada mensagem) devolvesse um valor inesperado num campo opcional, o sistema travava a decisão inteira daquele turno — o lead simplesmente não recebia resposta, sem nenhum aviso visível do motivo. Além disso, a criação de um compromisso na agenda dependia só de um sinal isolado da Mãe num único turno, sem checar se aquele lead já tinha mesmo passado por uma proposta de horário antes — em teste real, isso quase fez o sistema marcar um compromisso "confirmado" já na primeira mensagem do cliente, antes de qualquer proposta real ter sido feita.
+**Agora:** um valor inesperado num campo opcional já não derruba a resposta — o sistema ignora só aquele campo e segue normalmente. E o compromisso só é criado de verdade quando o lead já estava numa conversa avançada sobre agendamento antes desta mensagem, não na primeira vez que o assunto aparece.
+**Para validar:** confirmado por testes técnicos directos (sem precisar reproduzir pela tela) — Cenários C1 a C4. A confirmação visual completa pela tela real ficou coberta pelas Fases 3+4, abaixo.
+
 ---
 
 ## Checks de Validação
@@ -254,6 +260,12 @@ if _greeting_prefix:
 - `backend-executors/tests/test_compound_follow_through_routing.py` — mock por rota + asserções actualizadas
 - `docs/implementations/fix-compound-follow-through-recepcao.md` — nota de evolução do mecanismo
 
+### Relatório das Fases 3+4 — o que mudou na prática
+
+**Antes:** quando um cliente novo já dizia dia e hora exactos na primeira mensagem (ex.: "quero amanhã às 15h"), a IA respondia de forma sem sentido — perguntando se podia "mandar uma mensagem no dia seguinte para confirmar", em vez de tratar o pedido a sério. E quando a mensagem combinava uma saudação com esse pedido, a IA várias vezes ia direto ao assunto sem cumprimentar o cliente, ficando seca.
+**Agora:** quando o cliente já dá dia e hora certos, a IA trata o pedido de imediato, oferecendo horários reais da agenda. E volta a cumprimentar sempre primeiro — com uma resposta dedicada só para o cumprimento, gerada à parte, antes de tratar o pedido em si, sem duplicar a saudação.
+**Para validar:** Cenário P1 (saudação + pedido com hora certa) e P2 (saudação pura, sem regressão) — confirmado também que isto não criou nenhuma chamada extra à IA fora do caso de saudação composta.
+
 ---
 
 ## Checks de Validação — Fase 3 + Fase 4
@@ -339,6 +351,12 @@ os turnos seguintes.
 | # | Commit | O que foi implementado |
 |---|---|---|
 | 1 | `8c39555` | Novo bloco de homologação `effective_route_to=="agendamento"` + teste + documentação |
+
+### Relatório da Fase 5 — o que mudou na prática
+
+**Antes:** em certos casos, mesmo depois do cliente confirmar claramente um horário ("sim, pode ser às 9h"), o compromisso nunca era de facto criado na agenda — o sistema respondia como se tivesse marcado, mas por uma falha interna no acompanhamento da fase da conversa, o registo do lead nunca avançava para a etapa de agendamento, e por isso o sistema continuava a bloquear a criação real do compromisso para sempre.
+**Agora:** essa falha foi corrigida — uma confirmação real do cliente já resulta sempre num compromisso criado de facto na agenda e no bot a desligar-se correctamente para aquele lead.
+**Para validar:** confirmado pela tela real, ponta-a-ponta (desde a primeira mensagem até o compromisso aparecer na agenda). Achado separado e ainda não corrigido: em certos casos a hora exacta gravada internamente no compromisso não corresponde exactamente à hora que o cliente confirmou (a mensagem ao cliente continua certa — é só um detalhe interno de registo); fica para investigação futura.
 
 ### Cenário C3 — revalidação completa (categoria + appointment)
 - [x] Lead novo, Playground: "Oi, gostaria de agendar uma sessão para amanhã às 11h"

@@ -45,6 +45,26 @@ Fase 3 — useAppointments.ts + ScheduleView.tsx: fallback seguro para datas aus
 
 ---
 
+## Impacto esperado em linguagem simples (pré-implementação)
+
+> **Nenhuma das 3 fases abaixo foi implementada ainda** — isto é uma
+> pré-visualização do impacto esperado quando cada uma for feita, não um
+> registo de mudança já realizada.
+
+**Fase 1 — Mensagem de correção mais natural**
+**Hoje:** quando um horário fica indisponível por um conflito de última hora, a mensagem de desculpas ao cliente é sempre o mesmo texto genérico, igual para todos os agentes, independentemente do tom configurado (formal, informal, etc.).
+**Quando implementado:** essa mensagem passa a ser escrita no tom de cada agente — sem nunca deixar o cliente sem nenhuma resposta, mesmo que a geração falhe (nesse caso, cai no texto genérico actual como reserva).
+
+**Fase 2 — Corrigir perda de texto ao criar uma ação nova no Fluxo de Venda**
+**Hoje:** ao criar uma ação nova (não editar uma já existente) na configuração avançada do agente, o texto digitado pode não ser salvo — o bloco fica vazio sem aviso.
+**Quando corrigido:** o texto digitado numa ação nova fica salvo, igual ao que já acontece ao editar uma ação existente.
+
+**Fase 3 — Agenda não trava com um compromisso malformado**
+**Hoje:** se um compromisso chegar sem uma data reconhecível pelo sistema (caso raro, causa ainda não confirmada), a vista Mensal da Agenda trava por completo, obrigando a recarregar a página.
+**Quando corrigido:** esse compromisso específico é ignorado ou mostrado de forma segura, sem travar a vista para os demais compromissos do mês.
+
+---
+
 ## Plano de Implementação
 
 ### Fase 1 — Mensagem de correção gerada pela LLM

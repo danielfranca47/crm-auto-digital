@@ -102,6 +102,12 @@ Teste automatizado novo: `backend-executors/tests/test_compound_follow_through_r
 |---|---|---|
 | 1 | `1553aa1` | Override de `route_for_child` por `compound_follow_through` + instrução de abertura partilhada + teste |
 
+### Relatório da Fase 1 — o que mudou na prática
+
+**Antes:** quando um cliente novo mandava uma mensagem combinando saudação + pedido (ex.: "oi, gostaria de agendar para amanhã às 15h"), a IA respondia só com a parte de cumprimento, prometia "vou verificar e te aviso" e nunca voltava com a resposta real — a conversa ficava travada até o cliente mandar outra mensagem.
+**Agora:** o sistema reconhece esse tipo de mensagem composta e já direciona para a parte certa (agendamento, preço, etc.) na mesma resposta, sem deixar a promessa no ar.
+**Para validar:** Cenário P1 (saudação composta com horário) e P2 (saudação pura, sem regressão). Cenário C1 (mesmo teste pelo WhatsApp real, não pelo Playground).
+
 ---
 
 ### Nota — débito de testes pré-existente (não corrigido nesta fase)
@@ -192,6 +198,12 @@ atual → não dispara); testei a saudação composta e `perceived=agendamento` 
 | # | Commit | O que foi implementado |
 |---|---|---|
 | 1 | `5fa323a` | Fallback via `perceived_category` + teste de regressão |
+
+### Relatório da Fase 2 — o que mudou na prática
+
+**Antes:** mesmo depois da Fase 1, testes com a IA real mostraram que ela por vezes "esquecia" de usar o campo certo para indicar a saudação composta, usando outro campo (que já existia para outro fim) sem o sistema saber interpretar isso — o mesmo problema da Fase 1 voltava a acontecer em alguns casos.
+**Agora:** o sistema passou a aceitar também esse segundo campo como sinal válido, mas só quando ele realmente indica uma mudança de assunto — evitando disparar o mecanismo à toa numa saudação simples de um cliente novo.
+**Para validar:** mesmo cenário P1/P2 da Fase 1, agora cobrindo também este caso alternativo. Cenário C1 (WhatsApp real) continua na mesma situação da Fase 1 — pendente.
 
 ---
 
