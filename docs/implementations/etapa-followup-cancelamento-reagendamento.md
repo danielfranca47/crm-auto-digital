@@ -1,7 +1,7 @@
 # M1 — Ação real de cancelamento/reagendamento de compromisso
 
 **Branch:** `main`
-**Status:** Em andamento
+**Status:** Em andamento — pendente: Cenários C1 e C2 (validação manual: UI + WhatsApp real)
 **Plano:** `docs/plans/followup-proativo-e-cancelamento-agenda.md` (M1)
 
 ---
@@ -98,6 +98,29 @@ Inbound (lead já tem reunião confirmada, bot_disabled=1, reason=meeting_schedu
 **Agora:** quando o motivo do silêncio é especificamente "reunião confirmada" (não afeta outros motivos, como handoff humano), a mensagem volta a chegar à IA — mas por um caminho separado e mais cauteloso: ele só age se detectar um pedido real de cancelar ou reagendar; qualquer outra mensagem ("obrigada!", uma pergunta solta) recebe uma resposta curta e educada, sem reabrir conversa de venda. Essa decisão (cancelar / reagendar / nem um nem outro) já fica registrada de forma estruturada — falta só a Fase 2 para transformar essa decisão numa ação real no compromisso (cancelar de verdade, mover o horário, etc.).
 
 **Para validar:** não há nada visível na UI ainda nesta fase (é só a camada de deteção) — a validação foi feita via 8 testes automatizados (`backend-executors/tests/test_meeting_management.py`), todos passando, cobrindo: deteção de cancelamento, deteção de reagendamento, mensagem neutra (resposta mínima), outros motivos de `bot_disabled` continuam bloqueados, e fallback quando a LLM falha.
+
+### Commits Fase 2
+
+| # | Commit | O que foi implementado |
+|---|---|---|
+| 1 | `da3aa5d` | Ação real: cancelar/reagendar appointment + limpeza de jobs + Google Calendar |
+
+**Detalhes do commit `da3aa5d`:**
+- `backend-crm/services/ai_orchestrator/orchestrator.py` — `_load_calendar_busy_slots` passa a incluir `a.id`
+- `backend-executors/app/clients/crm_client.py` — `cancel_appointment()`, `reschedule_appointment()`
+- `backend-executors/app/services/meeting_scheduler.py` — `handle_meeting_cancel_or_reschedule()`
+- `backend-executors/app/runners/whatsapp.py` — chama a nova função ao lado de `handle_meeting_scheduled`
+- `backend-crm/routes/appointments.py` — `_cancel_pending_appointment_jobs()`; `mark_canceled` apaga evento Google; `update_appointment` re-agenda jobs quando `start_at` muda
+- `backend-executors/tests/test_meeting_cancel_reschedule_action.py` — 6 testes novos
+- `backend-crm/tests/test_appointment_job_cleanup.py` — 4 testes novos
+
+### Relatório da Fase 2 — o que mudou na prática
+
+**Antes:** mesmo quando a IA detectava (Fase 1) que o lead queria cancelar ou reagendar, nada mudava de fato no sistema — o compromisso continuava `pending`, os lembretes automáticos continuavam agendados para o horário "cancelado", e o evento no Google Calendar do profissional não era tocado.
+
+**Agora:** quando a IA confirma um cancelamento, o compromisso é marcado como cancelado de verdade, os lembretes e o aviso de briefing pendentes são cancelados, o evento correspondente é removido do Google Calendar (se conectado), e o bot volta a responder normalmente a esse lead. Quando é um reagendamento, o mesmo compromisso é atualizado para o novo horário (em vez de criar um segundo, "fantasma"), os lembretes são reagendados para a nova data, e o bot continua em modo de gestão (pronto para outro cancelamento/reagendamento, se precisar). Se o novo horário pedido já estiver ocupado por outro compromisso do profissional, o sistema avisa o lead e não aplica a mudança — em vez de silenciosamente quebrar a agenda. Esta mesma limpeza de lembretes/Google Calendar também passou a valer quando o **operador** cancela ou edita um compromisso manualmente pela UI, não só quando é a IA.
+
+**Para validar:** Cenários T4, T5 e T6 (ação de cancelar/reagendar, conflito de horário, limpeza de jobs) cobertos por 10 testes automatizados — todos passando. Os Cenários C1 (cancelamento manual via UI limpa jobs/Google Calendar) e C2 (fluxo real WhatsApp ponta a ponta) ainda dependem de um ambiente com instância WhatsApp e Google Calendar conectados — ficam para validação manual.
 
 ---
 
