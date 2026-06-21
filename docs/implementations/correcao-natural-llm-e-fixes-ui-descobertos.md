@@ -78,6 +78,24 @@ Fase 3 — useAppointments.ts + ScheduleView.tsx: fallback seguro para datas aus
 
 **Risco a mitigar:** a chamada extra à LLM não pode bloquear ou atrasar significativamente o fluxo de bloqueio do conflito — se falhar (mesmo após retry), usar `MEETING_CONFLICT_MESSAGE` como já acontece hoje. Nunca deixar o lead sem nenhuma mensagem.
 
+### Commits Fase 1
+
+| # | Commit | O que foi implementado |
+|---|---|---|
+| 1 | `a3fffb5` | `generate_conflict_message()` em `llm_service.py`; `_generate_conflict_message()` + call site em `meeting_scheduler.py`; testes ajustado/novos em `test_meeting_scheduler_hook.py` |
+
+**Detalhes do commit `a3fffb5`:**
+- `backend-executors/app/services/llm_service.py` — nova função `generate_conflict_message(prompt)`: texto livre (sem `json_object`), reaproveita `_post_with_retry`/`_extract_output_text`; devolve `""` quando `not settings.llm_api_key` (sinaliza fallback ao caller, sem duplicar a constante de texto fixo)
+- `backend-executors/app/services/meeting_scheduler.py` — import `llm_service`; novo helper `_generate_conflict_message(ai_profile, *, logger=None)` monta prompt curto em PT usando `tone_of_voice`/`brand_name`/`identity_mode`, captura qualquer excepção e devolve `None` em caso de falha; `handle_meeting_scheduled()` no ramo de conflito passa a `return _generate_conflict_message(ai_profile, logger=logger) or MEETING_CONFLICT_MESSAGE`
+- `backend-executors/scripts/test_meeting_scheduler_hook.py` — teste de conflito existente (`test_handle_meeting_scheduled_conflict_with_other_lead_blocks_creation`) ajustado para usar `monkeypatch` e forçar falha da LLM, tornando-o determinístico independente de haver `LLM_API_KEY` real no `.env` local (que existe neste repositório); 2 novos testes: sucesso da geração (mensagem gerada é usada) e resposta vazia (cai no fallback)
+
+### Relatório da Fase 1 — o que mudou na prática
+
+**Antes:** quando um horário ficava indisponível por conflito de última hora, a mensagem de desculpas ao cliente era sempre o mesmo texto genérico, igual para todos os agentes, independentemente do tom configurado.
+**Agora:** essa mensagem passa a ser escrita no tom de cada agente (formal, informal, etc.) via uma chamada rápida à LLM — e se essa chamada falhar por qualquer motivo (sem chave configurada, erro de rede, timeout, resposta vazia), o cliente recebe o texto genérico de sempre, nunca fica sem resposta. Como o Playground chama a mesma função que o WhatsApp real (`handle_meeting_scheduled`), a melhoria vale para os dois.
+**Validado por:** suíte de testes (`pytest scripts/test_meeting_scheduler_hook.py` e `pytest tests/`) — zero regressões novas (21 falhas pré-existentes, já documentadas em `feat-playground-appointment-tag.md`, permaneceram inalteradas; os 4 testes "happy path" deste mesmo script já falhavam antes desta fase por uma lacuna não relacionada do `FakeCRMClient` de teste — não corrigido aqui, fora do escopo).
+**Falta validar:** Cenário P1 completo (mensagem variando por agente e fallback forçado) requer execução manual com 2 agentes reais — ver Checks de Validação abaixo.
+
 ### Fase 2 — Fix: conteúdo perdido ao criar bloco novo no Fluxo de Venda
 
 **Objetivo:** o texto digitado ao criar uma nova ação (`orientacao`, `mensagem`, etc.) pelo fluxo "Montar regra" deve persistir igual ao fluxo de edição de bloco existente.
