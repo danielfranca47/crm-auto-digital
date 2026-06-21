@@ -32,7 +32,16 @@
       "mcp__plugin_chrome-devtools-mcp_chrome-devtools__new_page",
       "Bash(git rm *)",
       "Bash(awk 'NR>=2271 && NR<=2420 && /timezone/' backend-executors/app/services/decision_engine.py)",
-      "Bash(python -m pytest tests/test_agendamento_scheduler_structured_signals.py tests/test_presentation_scheduler_structured_signals.py tests/test_meeting_scheduler_structured_candidate.py -q)"
+      "Bash(python -m pytest tests/test_agendamento_scheduler_structured_signals.py tests/test_presentation_scheduler_structured_signals.py tests/test_meeting_scheduler_structured_candidate.py -q)",
+      "Bash(grep -n \"EXECUTORS_BASE_URL\\\\|CORE_SERVICE_TOKEN\" backend-crm/.env)",
+      "Bash(grep -n \"PORT\\\\|CORE_SERVICE_TOKEN\\\\|CORE_API_BASE\" backend-executors/.env)",
+      "Bash(./.venv/Scripts/uvicorn.exe app.main:app --port 8002)",
+      "Bash(curl -s -o /dev/null -w \"status backend-executors: %{http_code}\\\\n\" --max-time 3 http://localhost:8002/)",
+      "PowerShell(Get-Process -Name \"chrome\" -ErrorAction SilentlyContinue | Select-Object Id, StartTime, @{n='Path';e={$_.Path}} | Format-Table -AutoSize)",
+      "PowerShell(Stop-Process -Id 22472 -Force -ErrorAction SilentlyContinue)",
+      "PowerShell(Get-Process -Id 22472 -ErrorAction SilentlyContinue)",
+      "PowerShell(\"done\")",
+      "mcp__plugin_chrome-devtools-mcp_chrome-devtools__fill_form"
     ]
   },
   "hooks": {
