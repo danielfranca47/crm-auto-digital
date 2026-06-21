@@ -118,10 +118,11 @@ Fase 3 — useAppointments.ts + ScheduleView.tsx: fallback seguro para datas aus
 ## Checks de Validação
 
 ### Cenário P1 — Mensagem de correção varia por agente
-- [ ] Configurar 2 agentes com `tone_of_voice` claramente distintos (ex.: um formal, um informal)
-- [ ] Forçar um conflito de horário para cada um (via script `test_meeting_scheduler_hook.py` ou Playground+criação manual)
-- [ ] Confirmar: a mensagem de correção reflete o tom de cada agente, não é idêntica
-- [ ] Forçar falha da LLM durante o conflito (ex.: `LLM_API_BASE` inválido) e confirmar que o fallback `MEETING_CONFLICT_MESSAGE` ainda é enviado (nunca fica sem mensagem)
+- [x] Configurar 2 agentes com `tone_of_voice` claramente distintos (ex.: um formal, um informal)
+- [x] Forçar um conflito de horário para cada um (via script ad hoc reaproveitando `handle_meeting_scheduled` + `FakeCRMClient`, mesmo padrão de `test_meeting_scheduler_hook.py`, com `LLM_API_KEY` real do `.env` local)
+- [x] Confirmar: a mensagem de correção reflete o tom de cada agente, não é idêntica
+- [x] Forçar falha da LLM durante o conflito e confirmar que o fallback `MEETING_CONFLICT_MESSAGE` ainda é enviado (nunca fica sem mensagem)
+- **Validado em:** 21/06/2026 — chamada real à LLM (`gpt-4o-mini`). Agente formal (`tone_of_voice="formal e cordial..."`, `brand_name="Clínica Sorriso Mais"`) gerou: *"Prezado(a) senhor(a), lamentamos informar que o horário recentemente confirmado já foi ocupado por outro cliente. Pedimos, por gentileza, que sugira um novo horário para agendarmos sua consulta."* Agente informal (`tone_of_voice="descontraído, gírias leves, bem humorado"`, `brand_name="Studio Fit"`) gerou: *"Oi! O horário que você confirmou acabou de ser ocupado por outra pessoa, mas relaxa! Pode sugerir outro horário que a galera do Studio Fit tá pronta pra te ajudar!"* — tom e `brand_name` claramente refletidos, mensagens distintas. Com `generate_conflict_message` forçada a levantar excepção, `handle_meeting_scheduled` devolveu exatamente `MEETING_CONFLICT_MESSAGE` ("Peço desculpa, esse horário acabou de ficar indisponível...") — fallback confirmado. Em nenhum dos 3 casos o appointment foi criado (`client.created == []`), como esperado em conflito.
 
 ### Cenário C1 — Fluxo de Venda: bloco novo persiste o conteúdo
 - [ ] Reproduzir manualmente (interação humana real, não automação): criar uma nova ação "Orientação ao Agente" via "Montar regra → + Adicionar ação", confirmar e salvar
