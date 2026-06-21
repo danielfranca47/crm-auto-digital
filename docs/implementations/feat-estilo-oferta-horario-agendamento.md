@@ -94,7 +94,7 @@ correctamente em teste ao vivo (ver Cenário C1).
 
 | # | Commit | O que foi implementado |
 |---|---|---|
-| 1 | _(pendente)_ | Campo `scheduling_offer_style` (backend-core + backend-executors) + testes |
+| 1 | `c04ea1a` | Campo `scheduling_offer_style` (backend-core + backend-executors) + testes |
 
 ### Relatório da Fase 1 — o que mudou na prática
 
@@ -125,7 +125,7 @@ exploração, não de como o horário é oferecido).
 
 | # | Commit | O que foi implementado |
 |---|---|---|
-| 1 | _(pendente)_ | UI do estilo de oferta de horário (frontend-crm) |
+| 1 | `5087937` | UI do estilo de oferta de horário (frontend-crm) |
 
 ### Relatório da Fase 2 — o que mudou na prática
 
