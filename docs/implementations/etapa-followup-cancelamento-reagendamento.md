@@ -246,7 +246,7 @@ Decisão (confirmada com o utilizador): corrigir a paridade em vez de pular o te
 
 | # | Commit | O que foi implementado |
 |---|---|---|
-| 1 | _(pendente — ver próxima resposta)_ | Paridade Playground + 3 bugs corrigidos |
+| 1 | `ecb4cbb` | Paridade Playground + 3 bugs corrigidos |
 
 ### Relatório da Fase 4 — o que mudou na prática
 
