@@ -74,6 +74,8 @@ Quando `route_to="recepcao"` e existe `compound_follow_through` (ou, em sua aus�
 
 Custo: 1 chamada LLM extra, só neste turno específico (primeira mensagem composta de um lead) — não afecta turnos normais. Chamada best-effort (`try/except`): se falhar, a resposta segue sem a bolha de saudação separada.
 
+**Limite conhecido:** quando a rota comercial efectiva (via `compound_follow_through`/`perceived_category`) é `qualification`, a extracção e persistência de campos de qualificação não corre neste turno — o bloco que dispara essa extracção verifica `mother_decision.route_to == "qualification"`, que permanece `"recepcao"` neste cenário (só `route_for_child` é sobrescrito). Sem impacto prático hoje porque é sempre a primeira mensagem do lead; revisitar se isso se tornar relevante.
+
 ### ChildResult (saída da LLM Filha)
 | Campo | Tipo | Descrição |
 |---|---|---|
