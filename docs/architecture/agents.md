@@ -118,6 +118,7 @@ Aliases aceitos: `whatsapp_send`, `maps_search_fallback`, `maps_enrich_fallback`
 | `reply_delay_min_seconds` | integer\|null | Delay mínimo (s) antes de respostas a mensagens subsequentes (padrão: `0`) |
 | `reply_delay_max_seconds` | integer\|null | Delay máximo (s) para mensagens subsequentes (padrão: `0`) |
 | `availability_mode` | string (enum) | Janela de horário de trabalho do agente (padrão: `"24h"`) |
+| `scheduling_offer_style` | string (enum) | Como a filha de agendamento trata um horário específico pedido pelo lead (padrão: `"offer_alternatives"`) |
 | `followup_sdr_instructions` | string\|null | Instrução de texto livre injectada no prompt de follow-up quando `followup_variant=sdr_scheduler`. Sobrescreve as regras genéricas da variante com contexto específico do negócio |
 | `followup_recovery_instructions` | string\|null | Instrução de texto livre para follow-up de cart recovery (`followup_variant=cart_recovery`) |
 | `followup_postsession_instructions` | string\|null | Instrução de texto livre para follow-up pós-sessão (`followup_variant=hybrid_scheduler`) |
@@ -153,6 +154,8 @@ Aliases aceitos: `whatsapp_send`, `maps_search_fallback`, `maps_enrich_fallback`
 **`handoff_policy`**: `"disable_bot"`, `"keep_active_notify"`, `"ignore"`
 
 **`availability_mode`**: `"24h"` (sem restrição), `"business_hours"` (Seg–Sex 09h–18h no `timezone` do perfil), `"custom"` (grade de dias/horas configurada na UI)
+
+**`scheduling_offer_style`**: `"offer_alternatives"` (padrão — sempre propõe 2-3 horários, mesmo sem conflito real; tática comercial de escassez), `"confirm_exact"` (confirma directamente o horário pedido quando está livre, sem oferecer alternativas)
 
 ### Campos do `offer_pack` (subobject)
 
