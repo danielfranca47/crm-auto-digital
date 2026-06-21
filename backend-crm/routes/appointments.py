@@ -326,16 +326,13 @@ def update_appointment(appointment_id: int, payload: AppointmentUpdate) -> Appoi
         row = _get_appointment(conn, appointment_id)
         current = {key: row[key] for key in row.keys()}
 
-        new_lead_id = payload.lead_id if payload.lead_id is not None else current["lead_id"]
-        if payload.lead_id is not None:
-            _ensure_lead_exists(conn, payload.lead_id)
+        # AppointmentUpdate não inclui lead_id (ver docstring do modelo) — não é alterável
+        # por este endpoint.
+        new_lead_id = current["lead_id"]
 
         start_at = payload.start_at or datetime.fromisoformat(current["start_at"])
         end_at = payload.end_at or datetime.fromisoformat(current["end_at"])
         _validate_interval(start_at, end_at)
-
-        if new_lead_id is None:
-            new_lead_id = current["lead_id"]
 
         owner_user_id = _resolve_owner_user_id(conn, lead_id=new_lead_id, fallback_user_id=current.get("user_id"))
         _check_conflict(conn, owner_user_id, start_at, end_at, exclude_id=appointment_id)
@@ -350,7 +347,6 @@ def update_appointment(appointment_id: int, payload: AppointmentUpdate) -> Appoi
             "end_at": end_at.isoformat() if payload.end_at else None,
             "status": payload.status,
             "location": payload.location,
-            "lead_id": payload.lead_id,
         }
         for column, value in mapping.items():
             if value is not None:

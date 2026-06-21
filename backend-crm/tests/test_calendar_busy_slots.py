@@ -157,5 +157,52 @@ class EnrichContextBundleCalendarTest(unittest.TestCase):
         self.assertIsNone(enriched.calendar_busy_slots)
 
 
+class EnrichContextBundleBotDisabledTest(unittest.TestCase):
+    """Paridade Playground <-> executor real para bot_disabled_reason='meeting_scheduled'.
+
+    O Playground monta o ContextBundle sem passar por routes/executor.py (que seta
+    bot_disabled/bot_disabled_reason no metadata só para o fluxo real) — sem esta
+    propagação em enrich_context_bundle, o Playground nunca exercitaria o caminho de
+    gestão pós-confirmação (_decide_post_meeting_management em decision_engine.py).
+    """
+
+    def setUp(self):
+        self.conn = sqlite3.connect(":memory:")
+        self.conn.row_factory = sqlite3.Row
+        _create_schema(self.conn)
+
+    def tearDown(self):
+        self.conn.close()
+
+    def _bundle(self, lead: dict) -> ContextBundle:
+        return ContextBundle(
+            user_id=1,
+            ai_profile={"agent_mode": "agenda"},
+            playbook={},
+            lead=lead,
+            history=[],
+            metadata={},
+        )
+
+    def test_propagates_when_reason_is_meeting_scheduled(self):
+        bundle = self._bundle({"bot_disabled": 1, "bot_disabled_reason": "meeting_scheduled"})
+        with patch("services.ai_orchestrator.orchestrator.get_connection", return_value=self.conn):
+            enriched = enrich_context_bundle(bundle, user_id=1)
+        self.assertTrue(enriched.metadata.get("bot_disabled"))
+        self.assertEqual(enriched.metadata.get("bot_disabled_reason"), "meeting_scheduled")
+
+    def test_does_not_propagate_for_other_reasons(self):
+        bundle = self._bundle({"bot_disabled": 1, "bot_disabled_reason": "handoff_requested"})
+        with patch("services.ai_orchestrator.orchestrator.get_connection", return_value=self.conn):
+            enriched = enrich_context_bundle(bundle, user_id=1)
+        self.assertNotIn("bot_disabled", enriched.metadata)
+
+    def test_does_not_propagate_when_bot_not_disabled(self):
+        bundle = self._bundle({"bot_disabled": 0, "bot_disabled_reason": None})
+        with patch("services.ai_orchestrator.orchestrator.get_connection", return_value=self.conn):
+            enriched = enrich_context_bundle(bundle, user_id=1)
+        self.assertNotIn("bot_disabled", enriched.metadata)
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -1,7 +1,7 @@
 # M1 — Ação real de cancelamento/reagendamento de compromisso
 
 **Branch:** `main`
-**Status:** Em andamento — pendente: Cenário C2 (validação manual: WhatsApp real)
+**Status:** Em andamento — pendente: Cenário C2 (validação manual: WhatsApp real, requer instância conectada)
 **Plano:** `docs/plans/followup-proativo-e-cancelamento-agenda.md` (M1)
 
 ---
@@ -170,6 +170,15 @@ Inbound (lead já tem reunião confirmada, bot_disabled=1, reason=meeting_schedu
 - [ ] Lead com reunião confirmada (bot_disabled=1) envia "preciso cancelar"
 - [ ] Confirmar: mensagem chega à IA, appointment cancelado, bot reativado
 
+### Cenário P1 — Playground: agendar, cancelar e reagendar na mesma sessão (manual, via browser)
+- [x] Agendar uma sessão via mensagem inbound no Playground (lead novo, `agent_mode=agenda`)
+- [x] Confirmar: appointment `[Playground]` criado, `bot_disabled=1`/`reason=meeting_scheduled`
+- [x] Pedir cancelamento na mesma sessão
+- [x] Confirmar: appointment `status=canceled`, `bot_disabled=0` (reativado)
+- [x] Agendar nova sessão e pedir reagendamento (sem cancelar antes)
+- [x] Confirmar: `start_at`/`end_at` atualizados para o novo horário, `bot_disabled` permanece `1`/`meeting_scheduled`
+- **Validado em:** 21/06/2026 — testado ao vivo via Playground (chrome-devtools MCP), lead sandbox removido no final. Revelou 3 bugs adicionais, corrigidos na Fase 4 (ver abaixo).
+
 ---
 
 ## Fase 3 — Diagnóstico + Correção: gaps revelados pelo teste do Cenário C1 (21/06/2026)
@@ -207,6 +216,45 @@ Causa raiz comum aos três: a Fase 2 foi implementada e testada via pytest com m
 **Agora:** criar, cancelar e reagendar um compromisso pela tela do lead (testado ao vivo, ponta a ponta) cria, cancela e recria os lembretes corretamente — confirmado lendo o banco de dados diretamente após cada ação, não só pela resposta da tela.
 
 **Para validar:** Cenário C1 validado ao vivo (ver acima). Suítes automatizadas de `backend-crm` e `backend-executors` continuam sem regressão (mesmas falhas pré-existentes, confirmadas via `git stash` antes/depois).
+
+---
+
+## Fase 4 — Diagnóstico + Correção: paridade Playground + bugs revelados pelo Cenário P1 (21/06/2026)
+
+### Problema identificado
+
+O utilizador pediu para testar via Playground (lead agendando, pedindo para cancelar e remarcar). Investigação prévia (antes de tentar) revelou que o Playground **não exercitaria o caminho novo**: `build_context_bundle_for_playground`/`enrich_context_bundle` nunca propagava `bot_disabled`/`bot_disabled_reason` no `metadata` — só `routes/executor.py` (fluxo real) fazia isso. Sem essa paridade, `decision_engine.decide()` nunca chamaria `_decide_post_meeting_management()` no Playground.
+
+Decisão (confirmada com o utilizador): corrigir a paridade em vez de pular o teste. Ao corrigir e testar ao vivo, mais 3 bugs apareceram:
+
+1. **`playground_internal.py` nunca chamava `handle_meeting_cancel_or_reschedule`** — só `handle_meeting_scheduled`. O bot respondia "cancelado"/"reagendado" mas nada mudava no banco (mesmo padrão de falso-positivo que todo o M1 existe para eliminar — desta vez no próprio código novo).
+2. **Prompt de `_build_child_prompt_meeting_management` hesitante:** mesmo com dia+horário explícitos na mensagem ("posso mudar para domingo às 11h?"), o LLM às vezes respondia "vou confirmar" sem preencher `meeting_reschedule_requested=true` no mesmo turno — exigindo outro turno para committar, ao contrário do cancelamento (que já era direto).
+3. **`routes/appointments.py::update_appointment` — `AttributeError: 'AppointmentUpdate' object has no attribute 'lead_id'`:** bug pré-existente (não introduzido pelo M1) nunca antes exposto porque nenhum caller real batia neste endpoint sem passar `lead_id` — `crm_client.reschedule_appointment()` foi o primeiro. Causava 500 em todo `PUT /api/appointments/{id}`, ou seja, **todo reagendamento real (via IA) estava silenciosamente falhando** mesmo depois da Fase 3.
+
+### Correção
+
+| Arquivo | Mudança |
+|---|---|
+| `backend-crm/services/ai_orchestrator/orchestrator.py` | `enrich_context_bundle`: propaga `bot_disabled`/`bot_disabled_reason` no `metadata` quando `reason == "meeting_scheduled"` (só este motivo — outros, como `handoff_requested`, continuam não propagados no Playground, propositalmente). |
+| `backend-executors/app/api/playground_internal.py` | Passa a chamar `meeting_scheduler.handle_meeting_cancel_or_reschedule()` ao lado de `handle_meeting_scheduled()`, mesmo padrão de `app/runners/whatsapp.py`. |
+| `backend-executors/app/services/decision_engine.py` | `_build_child_prompt_meeting_management`: instrução de reagendamento reforçada — proíbe respostas hesitantes ("vou confirmar", "um momento") quando dia+horário já foram informados; exige `meeting_reschedule_requested=true` no mesmo turno. |
+| `backend-crm/routes/appointments.py` | `update_appointment`: remove todas as referências a `payload.lead_id` (campo que não existe em `AppointmentUpdate` — `lead_id` não é alterável por este endpoint, por design). |
+| `backend-crm/tests/test_calendar_busy_slots.py` | 3 testes novos para a propagação de `bot_disabled` em `enrich_context_bundle`. |
+| `backend-crm/tests/test_update_appointment_route.py` | 2 testes novos — regressão do `AttributeError`, chamando a rota de verdade (não mockada) com um payload sem `lead_id`. |
+
+### Commits Fase 4
+
+| # | Commit | O que foi implementado |
+|---|---|---|
+| 1 | _(pendente — ver próxima resposta)_ | Paridade Playground + 3 bugs corrigidos |
+
+### Relatório da Fase 4 — o que mudou na prática
+
+**Antes:** o Playground não conseguia testar cancelamento/reagendamento de forma realista — silenciosamente caía no fluxo de vendas normal. Mesmo corrigindo isso, o reagendamento via IA continuava falhando de verdade (erro 500 interno) em qualquer canal — Playground ou WhatsApp real — porque o endpoint que aplica a mudança tinha um bug não relacionado ao M1, nunca antes exposto.
+
+**Agora:** uma sessão completa no Playground — agendar, cancelar (bot reativado), agendar de novo, reagendar (mantendo o bot em modo de gestão) — funciona ponta a ponta, confirmado lendo o banco de dados a cada passo. O reagendamento real (IA confirmando um novo horário para um compromisso já existente) passa a funcionar em qualquer canal, não só no Playground.
+
+**Para validar:** Cenário P1 validado ao vivo (ver acima). Suítes automatizadas sem regressão (mesma baseline pré-existente).
 
 ---
 

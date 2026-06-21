@@ -609,6 +609,17 @@ def enrich_context_bundle(bundle: ContextBundle, user_id: int) -> ContextBundle:
     if bundle.calendar_busy_slots is None and (bundle.ai_profile or {}).get("agent_mode") == "agenda":
         updates["calendar_busy_slots"] = _load_calendar_busy_slots(user_id)
 
+    # B6 — bot_disabled_reason="meeting_scheduled" (paridade Playground ↔ executor real)
+    # routes/executor.py também seta isto para o fluxo real do WhatsApp, mas só para ESTE motivo
+    # específico (decide() em decision_engine.py trata-o como gestão pós-confirmação, não como
+    # silêncio total). Replicado aqui para que o Playground também exercite esse caminho — outros
+    # motivos de bot_disabled (ex.: handoff_requested) continuam não propagados no Playground,
+    # propositalmente (ver docs/architecture/agenda.md).
+    lead = bundle.lead or {}
+    if lead.get("bot_disabled") and lead.get("bot_disabled_reason") == "meeting_scheduled":
+        bundle.metadata["bot_disabled"] = True
+        bundle.metadata["bot_disabled_reason"] = "meeting_scheduled"
+
     if updates:
         bundle = bundle.model_copy(update=updates)
     return bundle

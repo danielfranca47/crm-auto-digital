@@ -60,10 +60,17 @@ def playground_decide(
     Quando a IA confirma um horário (decision_trace.meeting_scheduled), cria o
     appointment real tagueado "[Playground]" — mesma lógica de parsing/conflito
     do fluxo WhatsApp real, sem reminders/briefing/push Google Calendar.
+
+    Quando a IA detecta cancelamento/reagendamento (caminho de gestão pós-confirmação,
+    ver decision_engine.py::_decide_post_meeting_management), aplica a mesma ação real
+    no appointment existente — mesma paridade com app/runners/whatsapp.py.
     """
     result = decision_engine.decide(body.context_bundle, logger=logger)
     conflict_message = meeting_scheduler.handle_meeting_scheduled(
         body.context_bundle, result, client=crm_client, is_playground=True,
+    )
+    conflict_message = conflict_message or meeting_scheduler.handle_meeting_cancel_or_reschedule(
+        body.context_bundle, result, client=crm_client,
     )
     if conflict_message:
         actions = list(result.system_actions or [])
