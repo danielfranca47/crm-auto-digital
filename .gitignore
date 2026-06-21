@@ -28,11 +28,6 @@ chrome_profiles/
 collected_posts.pkl
 rascunhos.md
 
-# Docs com credenciais de conta de teste - nao versionar
-docs/implementations/checklist-testes-locais-pre-push.md
-docs/implementations/checklist-testes-locais-recepcao-e-playground-tag.md
-docs/implementations/checklist-testes-ui-robustez-decisao-mae.md
-
-# Convencao nova (ver _guia-documentar-implementacao.md - Testes automatizados via browser)
+# Docs com credenciais de conta de teste - nao versionar (ver _guia-documentar-implementacao.md - Testes automatizados via browser)
 docs/implementations/_conta-teste-local.md
 docs/implementations/_sessao-teste-corrente.md
