@@ -1,7 +1,10 @@
 # AI Profile como Fonte de Verdade — Campos Configuráveis
 
 > **Status: EM ANDAMENTO**
-> Etapas A, D, E, F, G, H concluídas e documentadas em `docs/architecture/agents.md`.
+> Etapas A, G, H concluídas e documentadas em `docs/architecture/agents.md`.
+> Etapas D, E, F só concluídas do lado do backend — a UI nunca grava no lugar
+> certo, ver correcção de status abaixo. D e E retomadas como M3 em
+> `docs/plans/followup-proativo-e-cancelamento-agenda.md`.
 > Etapa B obsoleta (supersedida por `qualification_fields`).
 > **Etapa C em foco:** instruções de follow-up por agente — próxima implementação.
 > Etapa I abortada por ora — sem prioridade.
@@ -29,13 +32,24 @@ Documentadas em [`docs/architecture/agents.md`](../architecture/agents.md).
 | Etapa | Campo(s) | Agentes |
 |---|---|---|
 | A ✅ | `origin_inbound_opener`, `origin_outbound_opener` | Todos |
-| D ✅ | `appointment_reminder_offsets` | Agent 1, Agent 3 |
-| E ✅ | `briefing_enabled`, `briefing_channel`, `briefing_lead_time`, `operator_whatsapp` | Agent 1, Agent 3 |
-| F ✅ | `buying_signal_keywords` | Agent 1 |
+| D ⚠️ | `appointment_reminder_offsets` — backend pronto, **UI nunca grava na coluna certa** (ver abaixo) | Agent 1, Agent 3 |
+| E ⚠️ | `briefing_enabled`, `briefing_channel`, `briefing_lead_time`, `operator_whatsapp` — backend pronto, **UI nunca grava na coluna certa** | Agent 1, Agent 3 |
+| F ⚠️ | `buying_signal_keywords` — backend pronto, **UI nunca grava na coluna certa** | Agent 1 |
 | G ✅ | `offer_pack.anchor_price`, `offer_pack.guarantee_text` | Agent 2 |
 | H ✅ | `payment_gateway`, `payment_webhook_secret` | Agent 2 |
 | B ~~❌~~ | OBSOLETA — supersedida por `qualification_fields` já implementado | — |
 | I ~~❌~~ | ABORTADA — domínio de OAuth/calendário sem prioridade actual | — |
+
+> **Correcção de status (achado posterior):** as Etapas D, E e F foram marcadas ✅
+> quando só o lado do backend (coluna no modelo, aceite pela API) estava pronto. Uma
+> investigação posterior (`docs/marketing/comercial/agente-demo.md`, secção "NOTA
+> TÉCNICA") confirmou em código que `frontend-crm/src/services/api.ts` e
+> `src/types/agente.ts` leem/escrevem estes campos dentro de `offer_pack`, nunca nas
+> colunas de topo que o motor real lê — a UI nunca foi corrigida. A correcção dos
+> campos relacionados a follow-up/agenda (`appointment_reminder_offsets`, campos de
+> briefing) está registada como M3 em
+> `docs/plans/followup-proativo-e-cancelamento-agenda.md`. `buying_signal_keywords`
+> fica fora desse escopo (não é follow-up/agenda) — sem plano próprio ainda.
 
 ---
 
