@@ -1,50 +1,19 @@
-# Follow-up Proativo e Ações Reais de Agenda — Híbrido Agendador e SDR
+# Follow-up Proativo — Disparo Automático por Inatividade (Híbrido Agendador e SDR)
 
 > Contexto: identificado ao validar o roteiro de teste do agente demo
 > (`docs/marketing/comercial/agente-demo.md`, secção "Roteiro de Teste no Playground")
-> contra o estado real do código. Os Cenários 2 (cancelamento) e 3 (recuperação de
-> paciente/lead inativo) "passam" no roteiro porque testam só a resposta textual da
-> IA — mas a ação real por trás da resposta não existe ou não é automática.
+> contra o estado real do código. O Cenário 3 (recuperação de paciente/lead inativo)
+> "passa" no roteiro porque testa só a resposta textual da IA — mas o disparo
+> automático do follow-up não existe, depende do operador arrastar o card manualmente.
 >
-> Meta: ter a base destes dois itens incorporada para que o Híbrido Agendador
+> Meta: ter a base deste item incorporada para que o Híbrido Agendador
 > (ex.: massoterapia — pacientes recorrentes) e o SDR (ex.: leads frios) consigam
 > performar de verdade como demonstrado, não só conversar como se performassem.
-
----
-
-## M1 — Ação real de cancelamento/reagendamento de compromisso
-
-**Prioridade: ALTA**
-
-**Estado actual:** `backend-executors/app/services/meeting_scheduler.py` só implementa
-`handle_meeting_scheduled()` — criação de um novo appointment. Não existe nenhum
-equivalente para cancelamento ou reagendamento. Quando o lead/paciente pede para
-cancelar, a LLM responde no tom certo (reconhece, oferece reagendar — instrução de
-`custom_instructions`), mas isso é só texto: o appointment original continua
-`status="pending"` no banco, intocado. Se o lead aceitar um novo horário, o sistema
-trata isso como uma nova marcação (`handle_meeting_scheduled` de novo) — o resultado
-prático é dois appointments na agenda (o antigo "fantasma" + o novo), em vez de um só
-atualizado.
-
-**Risco concreto:**
-- Lembretes (`whatsapp.appointment.reminder`) continuam agendados para a sessão
-  "cancelada" porque nada marca o appointment como `canceled`.
-- Push para o Google Calendar do utilizador (quando conectado) nunca remove/atualiza
-  o evento original.
-- Se o novo horário pedido coincidir com o horário que o operador esperava estar
-  livre (porque a sessão antiga "ainda existe" para o sistema), pode gerar bloqueio
-  de conflito (`409`) indevido em agendamentos futuros.
-
-**Afecta:** qualquer agente em `agent_mode=agenda` com agendamento real ativo —
-Híbrido Agendador (`hybrid_scheduler`) e SDR em modo agendamento (`sdr_padrao`).
-
-**O que precisaria existir (a confirmar em Plan Mode na implementação):**
-- Um sinal estruturado equivalente a `meeting_scheduled` para intenção de
-  cancelamento/reagendamento, que a Mãe/Filha de agendamento consiga emitir.
-- Uma ação correspondente no executor que efetivamente atualize o appointment
-  original (`status="canceled"` ou um novo `start_at` no mesmo registo) em vez de
-  apenas criar um novo — `routes/appointments.py` já tem os campos de `status`/
-  `outcome` para isto, falta a ponte entre o sinal da IA e essa atualização real.
+>
+> Nota: o item original deste documento sobre cancelamento/reagendamento real de
+> compromisso (M1) já foi implementado e graduado para `docs/architecture/agenda.md`
+> e `docs/architecture/agents.md` — itens deixados de fora dessa implementação estão
+> em `docs/plans/cancelamento-reagendamento-melhorias-futuras.md`.
 
 ---
 
@@ -99,8 +68,7 @@ mas bloqueiam a priorização em sprint):**
 
 - Diferente de `agentes-agenda-melhorias-futuras.md` (M3) — aquele item é sobre a
   **confiabilidade da decisão** de `meeting_scheduled` (a Mãe marcar confirmação sem
-  o lead ter confirmado de fato); este documento é sobre **ações que faltam por
-  completo** no backend (cancelar/reagendar) e sobre **quem inicia** o follow-up
-  (M2), não sobre se a IA decide certo.
+  o lead ter confirmado de fato); este documento é sobre **quem inicia** o
+  follow-up, não sobre se a IA decide certo.
 - `docs/architecture/followup.md` documenta o mecanismo atual (reconciliador,
   estados, cart recovery) que M2 estende.
