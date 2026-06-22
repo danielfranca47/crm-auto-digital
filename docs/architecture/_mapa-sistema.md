@@ -87,7 +87,8 @@ agent-local         local  ← agente Python local de prospecção/scraping
 | `services/followup_state.py` | Máquina de estado de follow-up; agenda próximo envio |
 | `services/followup_reconciler.py` | Reconcilia follow-ups pendentes; circuit breaker (24h cooldown) |
 | `services/lead_category_policy.py` | Side-effects de mudança de categoria (ex.: closing → desactiva bot) |
-| `services/jobs_service.py` | Fila de jobs: create, claim (lease), complete, fail, backoff |
+| `services/jobs_service.py` | Fila de jobs: create, claim (lease), complete, fail, backoff; agenda/cancela jobs de lembrete/briefing de appointment |
+| `services/briefing_service.py` | Agenda o job de dossiê pré-reunião (`schedule_briefing_job_for_appointment`), resolve `briefing_enabled`/`briefing_lead_time` do AI Profile |
 | `services/agent_type.py` | Resolve tipo de agente (`agent_1`, `agent_3`) do lead |
 | `core_client.py` | Chamadas server-to-server ao backend-core: AI Profile, token WhatsApp, envio directo |
 | `database.py` | `get_connection()`, `ensure_column()`, `init_db()` — schema SQLite |
@@ -121,7 +122,7 @@ chama o LLM (Mãe + Filha) e envia a resposta ao WhatsApp.
 | `app/services/llm_service.py` | Chamada HTTP ao LLM (Claude/OpenAI format) |
 | `app/services/fast_path.py` | Decisões sem LLM (handoff imediato, bot desabilitado) |
 | `app/services/handoff_policy.py` | Política de handoff humano |
-| `app/services/meeting_scheduler.py` | Agendamento de reuniões pós-decisão |
+| `app/services/meeting_scheduler.py` | Agendamento, cancelamento e reagendamento de reuniões pós-decisão |
 | `app/clients/core_client.py` | Chamadas ao backend-core: contexto de execução, envio de mensagem, fallback de instância |
 | `app/clients/crm_client.py` | Chamadas ao backend-crm: completar/falhar job, reportar resultado |
 | `app/contracts/qualification_contract.py` | Extracção de campos de qualificação por regex/heurística |

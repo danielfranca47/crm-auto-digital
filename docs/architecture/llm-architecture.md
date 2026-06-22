@@ -179,6 +179,33 @@ Campos adicionados pelo Fluxo de Venda (Camada 7):
 
 ---
 
+## Gestão pós-confirmação de reunião — atalho dedicado (bypassa a Mãe)
+
+Quando `metadata.bot_disabled_reason == "meeting_scheduled"` (lead já confirmou uma reunião — ver "Toggle de Bot por Lead" em [`agents.md`](agents.md)), `decide()` não entra na pipeline Mãe/Filha normal. Em vez disso, antes de qualquer outra lógica:
+
+```python
+def decide(context, logger=None):
+    metadata = context.get("metadata") or {}
+    if metadata.get("bot_disabled"):
+        if metadata.get("bot_disabled_reason") == "meeting_scheduled":
+            return _decide_post_meeting_management(context, logger=logger)
+        return BOT_DISABLED_DECISION   # next_action="ignore"
+```
+
+`_decide_post_meeting_management()` (`decision_engine.py`) é um caminho dedicado e mínimo, mesmo padrão de `fast_path.py` — não toca em guardrails de categoria/qualificação nem na máquina de fases. Faz **uma única chamada LLM** via `_build_child_prompt_meeting_management()`, que decide entre três resultados:
+
+- **Cancelamento** — `signals_structured.meeting_cancel_requested = true`
+- **Reagendamento** — `signals_structured.meeting_reschedule_requested = true` + `meeting_datetime_candidate` (data/hora candidata, ISO, mesmo mecanismo de extração da Filha Agendamento)
+- **Nenhum dos dois** — resposta mínima e cordial, sem reabrir negociação de venda. Nunca define `suggested_category` (não move o Kanban).
+
+A prompt instrui explicitamente: se dia+horário já foram informados pelo lead num pedido de reagendamento, committar `meeting_reschedule_requested=true` no mesmo turno — evita uma resposta hesitante ("vou confirmar") que exigiria outro turno.
+
+**Consumo do sinal:** `meeting_scheduler._extract_cancel_reschedule_signal()` lê `decision_trace.child_signals_structured` (paralelo a `_extract_meeting_signal()`) e `handle_meeting_cancel_or_reschedule()` aplica a ação real no appointment — ver [`agenda.md`](agenda.md).
+
+**Limite conhecido:** este caminho não escala para atendimento humano — um pedido explícito de handoff dentro desta janela cai no balde "nenhum dos dois" (resposta mínima), não chama `handoff_policy`/`fast_path`. Ver `docs/plans/cancelamento-reagendamento-melhorias-futuras.md`.
+
+---
+
 ## Estrutura de prompt das Filhas
 
 Todos os prompts de Filha seguem a mesma ordem de blocos no final:

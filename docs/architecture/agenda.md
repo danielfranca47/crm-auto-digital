@@ -226,16 +226,24 @@ Eventos importados via `POST /api/appointments/google-sync` têm `source='google
 
 ---
 
-## Side-effects de criar/editar um compromisso (backend)
+## Side-effects de criar/editar/cancelar um compromisso (backend)
 
-Ao criar (`POST /api/leads/{id}/appointments` ou via `routes/appointments.py`), o backend:
+**Ao criar** (`POST /api/leads/{id}/appointments` ou via `routes/appointments.py`), o backend:
 
 1. Valida que não há conflito de horário **para o profissional inteiro** (`_check_conflict`) — não apenas para o mesmo lead. Existem duas implementações paralelas e independentes (uma em cada arquivo, mesma regra): `routes/leads.py::_check_conflict` (usa `current_user.id` diretamente — endpoint já autenticado) e `routes/appointments.py::_check_conflict` (resolve o `user_id` via `_resolve_owner_user_id()`, a partir do `lead_id` ou do `user_id` próprio em appointments importados do Google sem lead). Ambas bloqueiam com `409` se outro appointment do mesmo `user_id` (qualquer lead, ou evento Google) sobrepuser o intervalo — esta é a defesa real contra conflito, pois roda dentro da transacção SQLite no momento exacto do INSERT/UPDATE.
-2. Agenda jobs de lembrete (`whatsapp.appointment_reminder`) com offsets configuráveis por template_key
-3. Agenda job de briefing (`briefing_job`) se `briefing_enabled` não for `False`
+2. Agenda jobs de lembrete (`whatsapp.appointment.reminder`, `jobs_service.schedule_appointment_reminder_jobs()`) com offsets configuráveis por `appointment_reminder_offsets` do AI Profile (default por `template_key`)
+3. Agenda job de briefing (`whatsapp.appointment.briefing`, `briefing_service.schedule_briefing_job_for_appointment()`) se `briefing_enabled` não for `False`
 4. Faz push para Google Calendar se o utilizador tiver tokens OAuth2 válidos (`google_calendar_service.push_event`)
 
-`google_event_id` é persistido na linha do appointment quando o push é bem-sucedido. Editar ou cancelar o compromisso actualiza/remove o evento no Google Calendar de forma fail-silent.
+`google_event_id` é persistido na linha do appointment quando o push é bem-sucedido. Os passos 2–4 são pulados para appointments com `source="playground"`.
+
+**Ao cancelar** (`POST /{id}/cancel`, ou `DELETE /{id}`, ou o equivalente em `routes/leads.py`):
+1. `jobs_service.cancel_pending_appointment_jobs(conn, appointment_id)` — cancela os jobs `pending` de lembrete/briefing deste appointment. Não existe status `'cancelled'` no `CHECK` constraint da tabela `jobs` (só `pending`/`in_progress`/`completed`/`failed`) — a função usa `status='completed'` com `result={"skipped": true, ...}` em vez de um valor fora do enum.
+2. Remove o evento do Google Calendar (`gcal_delete`, fail-silent) se `google_event_id` estiver presente.
+
+**Ao reagendar** (`PUT /{id}` ou `PATCH` equivalente em `routes/leads.py`, quando `start_at` muda de fato): cancela os jobs de lembrete/briefing antigos (mesmo mecanismo do cancelamento) e cria novos para o novo horário; sincroniza o evento no Google Calendar via `gcal_update` (fail-silent).
+
+Estas três funções (`cancel_pending_appointment_jobs`, `schedule_appointment_reminder_jobs`, `schedule_briefing_job_for_appointment`) vivem em `backend-crm/services/jobs_service.py`/`services/briefing_service.py` e são compartilhadas pelos dois pontos de entrada de appointment (`routes/appointments.py` e `routes/leads.py`) — garante que criar/cancelar/reagendar tem o mesmo efeito independentemente de qual rota o caller usa.
 
 ---
 
@@ -294,3 +302,22 @@ Conflito de horário é respeitado pela mesma barreira `_check_conflict`: se o h
 `routes/playground.py::_reset_sandbox_lead` apaga os appointments do lead sandbox antes do reset de mensagens — evita acumular compromissos `[Playground]` na Agenda real entre sessões de teste repetidas no mesmo lead.
 
 O fluxo real (WhatsApp) chama `handle_meeting_scheduled(...)` sem `is_playground` (default `False`), preservando título, side-effects e comportamento inalterados.
+
+---
+
+## Cancelamento e reagendamento via IA
+
+Quando o lead pede para cancelar ou remarcar uma reunião já confirmada (`bot_disabled_reason="meeting_scheduled"`, ver [`agents.md`](agents.md) e [`llm-architecture.md`](llm-architecture.md)), a ação real no appointment é aplicada por `meeting_scheduler.handle_meeting_cancel_or_reschedule()` (`backend-executors/app/services/meeting_scheduler.py`), chamada ao lado de `handle_meeting_scheduled()` tanto em `app/runners/whatsapp.py` (fluxo real) quanto em `app/api/playground_internal.py` (Playground).
+
+**Localização do appointment:** filtra `context["calendar_busy_slots"]` pelo `lead_id`, ordena por `start_at` e usa o mais próximo. Mesma limitação de janela do `calendar_busy_slots` (30 dias) — reuniões mais distantes não são encontradas.
+
+| Sinal | Ação | Efeito no bot |
+|---|---|---|
+| `meeting_cancel_requested` | `crm_client.cancel_appointment(appointment_id)` → `POST /api/appointments/{id}/cancel` | `set_lead_bot_disabled(lead_id, False)` — bot reactivado, volta ao fluxo normal |
+| `meeting_reschedule_requested` + `meeting_datetime_candidate` válido | `crm_client.reschedule_appointment(appointment_id, start_at=..., end_at=...)` → `PUT /api/appointments/{id}` | Bot permanece desactivado, `bot_disabled_reason` inalterado — continua em modo de gestão pós-confirmação |
+
+Ambas as chamadas passam por `routes/appointments.py` (não pelas rotas de `routes/leads.py`), aplicando automaticamente a limpeza/recriação de jobs e a sincronização com o Google Calendar descritas na secção anterior.
+
+**Conflito de horário no reagendamento:** se o novo horário colidir com outro appointment do mesmo profissional (`409` de `_check_conflict`), o appointment original **não é alterado** — a função devolve uma mensagem de correcção (mesmo padrão de `_generate_conflict_message()`/`MEETING_CONFLICT_MESSAGE` usado em `handle_meeting_scheduled()`) para o caller enviar ao lead.
+
+**Sem sinal de cancelamento/reagendamento:** `handle_meeting_cancel_or_reschedule()` é no-op — não faz nenhuma chamada.

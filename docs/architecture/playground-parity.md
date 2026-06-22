@@ -66,6 +66,8 @@ Esta é a **única fonte de enriquecimento**. Qualquer campo novo que afete o co
 | B2  | `knowledge_items["business_info"]` | `_load_business_info(user_id)` |
 | B3  | `generated_prompt_parts` | Elevado de `ai_profile["generated_prompt_parts"]` para raiz do bundle |
 | B4  | `lead_detected_language` | Elevado de `lead["detected_language"]`, fallback `"all"` |
+| B5  | `calendar_busy_slots` | `_load_calendar_busy_slots(user_id)` — só quando `ai_profile.agent_mode == "agenda"` e o bundle ainda não o tem. Ver [`agenda.md`](agenda.md) |
+| B6  | `metadata["bot_disabled"]` / `metadata["bot_disabled_reason"]` | Propaga quando `lead.bot_disabled` e `lead.bot_disabled_reason == "meeting_scheduled"`. `bot_disabled` propaga sempre nesse caso; o reason só recebe `"meeting_scheduled"` quando `ai_profile.meeting_management_enabled` é `True` — senão fica `None`, levando `decide()` a tratar como desactivado padrão (ignore). Outros motivos de `bot_disabled` (ex.: `handoff_requested`) **não** são propagados aqui, propositalmente — `routes/executor.py` faz essa propagação para o fluxo real de forma equivalente (ver `agents.md`, secção "Gestão pós-confirmação") |
 
 ---
 
@@ -84,6 +86,8 @@ Esta é a **única fonte de enriquecimento**. Qualquer campo novo que afete o co
 | `business_info` | — | — | **Sim (B2, injetado em knowledge_items)** |
 | `generated_prompt_parts` | — | — | **Sim (B3)** |
 | `lead_detected_language` | — | — | **Sim (B4)** |
+| `calendar_busy_slots` | — | — | **Sim (B5)** |
+| `metadata.bot_disabled`/`bot_disabled_reason` | — | `routes/executor.py` seta diretamente (fora de `enrich_context_bundle`) | **Sim no Playground (B6, só para `reason="meeting_scheduled"`)** |
 
 ---
 

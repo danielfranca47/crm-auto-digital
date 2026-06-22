@@ -59,11 +59,11 @@ uazapi webhook ignored group_message instance=%s sender=%s message_id=%s
 **Arquivo:** `backend-crm/services/whatsapp_inbound/guardrail.py`
 
 Verifica se o sistema deve processar a mensagem:
-- `bot_disabled = 1` → ignora (`{"status": "ignored", "reason": "bot_disabled"}`, nenhum job criado)
+- `bot_disabled = 1` → ignora (`{"status": "ignored"/"skipped", "reason": "bot_disabled"}`, nenhum job criado) — **exceto** quando `bot_disabled_reason = "meeting_scheduled"` e o AI Profile tem `meeting_management_enabled = True` (padrão): nesse caso o job é criado normalmente, e `decision_engine.decide()` usa um caminho dedicado de gestão pós-confirmação em vez do bloqueio padrão. Ver "Toggle de Bot por Lead" em [`agents.md`](agents.md).
 - Lead em categoria não-atendível → ignora
 - Promoção inicial de inbound: `to-prospect`/`in-progress` → `qualification`
 
-O flag `bot_disabled` é gerido por lead individual. Fontes de desactivação: manual (UI), `media_fallback="pausar"`, entrada em `closing` com `agent_mode=agenda`.
+O flag `bot_disabled` é gerido por lead individual. Fontes de desactivação: manual (UI), `media_fallback="pausar"`, entrada em `closing` com `agent_mode=agenda`, confirmação de reunião (`agent_mode=agenda`).
 
 ---
 

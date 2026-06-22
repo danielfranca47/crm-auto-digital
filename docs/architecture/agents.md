@@ -119,6 +119,7 @@ Aliases aceitos: `whatsapp_send`, `maps_search_fallback`, `maps_enrich_fallback`
 | `reply_delay_max_seconds` | integer\|null | Delay máximo (s) para mensagens subsequentes (padrão: `0`) |
 | `availability_mode` | string (enum) | Janela de horário de trabalho do agente (padrão: `"24h"`) |
 | `scheduling_offer_style` | string (enum) | Como a filha de agendamento trata um horário específico pedido pelo lead (padrão: `"offer_alternatives"`) |
+| `meeting_management_enabled` | boolean | Se `True` (padrão), o bot reabre e gere cancelamento/reagendamento sozinho quando o lead pede mudança após confirmar uma reunião. Se `False`, o bot fica desactivado nessa janela, exigindo reactivação manual do operador. Ver secção "Toggle de Bot por Lead" |
 | `followup_sdr_instructions` | string\|null | Instrução de texto livre injectada no prompt de follow-up quando `followup_variant=sdr_scheduler`. Sobrescreve as regras genéricas da variante com contexto específico do negócio |
 | `followup_recovery_instructions` | string\|null | Instrução de texto livre para follow-up de cart recovery (`followup_variant=cart_recovery`) |
 | `followup_postsession_instructions` | string\|null | Instrução de texto livre para follow-up pós-sessão (`followup_variant=hybrid_scheduler`) |
@@ -269,16 +270,33 @@ O flag `bot_disabled` na tabela `leads` (backend-crm) permite desactivar o agent
 | Campo | Tipo | Descrição |
 |---|---|---|
 | `bot_disabled` | `INTEGER` (0/1) | `1` = agente desactivado para este lead |
-| `bot_disabled_reason` | `TEXT NULL` | Motivo: `"manual_disable"`, `"category_closing"`, `"media_fallback"` |
+| `bot_disabled_reason` | `TEXT NULL` | Motivo: `"manual_disable"`, `"category_closing"`, `"media_fallback"`, `"meeting_scheduled"` |
 
 **Fontes de desactivação:**
 - **Manual:** utilizador clica "Desativar bot" no `LeadCardDialog`; confirma modal com checkbox
 - **Automático (closing):** `lead_category_policy.py` desactiva o bot ao entrar em `closing` (apenas para `agent_mode=agenda`)
 - **Automático (media_fallback):** quando `media_fallback="pausar"` e chega mensagem de mídia inválida
+- **Automático (reunião confirmada):** `meeting_scheduler.handle_meeting_scheduled()` desactiva o bot ao confirmar uma reunião (`agent_mode=agenda`) — ver "Gestão pós-confirmação" abaixo
 
-**Reactivação:** botão "Reativar bot" no alert block do `LeadCardDialog`. Quando `bot_disabled_reason="manual_disable"`, exibe modal de aviso adicional.
+**Reactivação:** botão "Reativar bot" no alert block do `LeadCardDialog`. Quando `bot_disabled_reason="manual_disable"`, exibe modal de aviso adicional. Para `bot_disabled_reason="meeting_scheduled"`, a reactivação também acontece automaticamente quando o lead cancela a reunião pela IA (ver abaixo).
 
-**Verificação no guardrail:** `inbound_handler.py` verifica `lead.bot_disabled` antes de qualquer processamento — `bot_disabled=1` resulta em `{"status": "ignored", "reason": "bot_disabled"}` sem criar job.
+**Verificação no guardrail:** `inbound_handler.py` verifica `lead.bot_disabled` antes de qualquer processamento. Para a maioria dos motivos, `bot_disabled=1` resulta em `{"status": "ignored"/"skipped", "reason": "bot_disabled"}` sem criar job. O motivo `"meeting_scheduled"` é tratado de forma condicional — ver abaixo.
+
+### Gestão pós-confirmação (`bot_disabled_reason="meeting_scheduled"`)
+
+Depois que uma reunião é confirmada, o comportamento do bot para esse lead depende do campo `meeting_management_enabled` do AI Profile:
+
+| `meeting_management_enabled` | Comportamento |
+|---|---|
+| `True` (padrão) | O gate de `inbound_handler.py` deixa passar mensagens desse lead (cria job normalmente). `decision_engine.decide()` (backend-executors), em vez de cair no `BOT_DISABLED_DECISION` padrão, chama `_decide_post_meeting_management()` — um caminho dedicado e mínimo que decide apenas entre cancelar, reagendar, ou responder de forma mínima sem reabrir venda. Ver [`llm-architecture.md`](llm-architecture.md). |
+| `False` | Mesmo comportamento de qualquer outro `bot_disabled_reason`: o gate bloqueia a criação de job, o bot fica mudo, e só volta a responder se o operador reactivar manualmente. |
+
+A acção real de cancelar/reagendar o appointment (`meeting_scheduler.handle_meeting_cancel_or_reschedule()`) está documentada em [`agenda.md`](agenda.md).
+
+**Pontos onde o toggle é lido** (mesmo valor, três gates independentes — todos tratam ausência do campo como `True`):
+- `backend-crm/services/whatsapp_inbound/inbound_handler.py` — gate de criação de job (fluxo real)
+- `backend-crm/routes/executor.py` — propagação de `bot_disabled_reason` no `ContextBundle.metadata` (fluxo real)
+- `backend-crm/services/ai_orchestrator/orchestrator.py::enrich_context_bundle` — mesma propagação para o Playground (ver [`playground-parity.md`](playground-parity.md))
 
 ---
 
