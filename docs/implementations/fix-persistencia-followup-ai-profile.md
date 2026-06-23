@@ -200,25 +200,72 @@ plataforma.
 
 ---
 
+## Fase 3 — Diagnóstico + Correção: `followup_cadence` precisava de conversão (23/06/2026)
+
+### Problema identificado
+
+Ao testar a Fase 1 ao vivo no browser (Cenário P1), salvar a Camada 3 deu erro 422:
+`{"detail":[{"loc":["body","followup_cadence"],"msg":"value is not a valid list","type":"type_error.list"}]}`.
+
+Causa raiz: `followup_cadence` é `string` no frontend (editado como texto livre
+"60,1440,4320" em `CamadaPipeline.tsx`), mas o backend exige `Optional[List[int]]`
+(`backend-core/app/api/ai_profiles.py:169`). Antes da Fase 1, este campo vivia dentro de
+`offer_pack` (JSON solto, sem validação Pydantic por chave) — por isso o mismatch de tipo
+nunca disparava erro; ao mover para a coluna de topo (validada por Pydantic), o mismatch
+ficou visível. Confirmado que nenhum outro campo das Fases 1/2 tinha o mesmo problema (a
+resposta 422 trouxe só este erro — Pydantic reporta todos os erros de validação de uma
+vez, não só o primeiro).
+
+### Correção
+
+Mesma lógica de conversão da Fase 2, aplicada a `followup_cadence`:
+`getConfig()` junta o array com `.join(',')`; `saveConfig()` faz `.split(',').map(Number)`
+filtrando valores inválidos, enviando `null` se o resultado for vazio.
+
+| Arquivo | Mudança |
+|---|---|
+| `frontend-crm/src/services/api.ts` | `getConfig()`/`saveConfig()` de `followup_cadence` convertidos entre string (UI) e `number[]` (backend) |
+
+### Commits Fase 3
+
+| # | Commit | O que foi implementado |
+|---|---|---|
+| 1 | `pendente` | Converte `followup_cadence` entre string (UI) e list[int] (backend) |
+
+---
+
 ## Checks de Validação
 
 ### Cenário P1 — Campos de mapeamento directo persistem
-- [ ] Abrir `/ai-profile`, preencher `briefing_lead_time` e `operator_whatsapp` com
-  valores diferentes do default
-- [ ] Salvar, recarregar a página
-- [ ] Confirmar: os valores preenchidos continuam aparecendo (não voltaram ao default)
-- [ ] Inspecionar `GET /ai-profiles/me` (Network tab) e confirmar que os valores estão
+- [x] Abrir `/ai-profile`, preencher `followup_cadence`, `followup_allowed_hours` (Camada
+  3 → Follow-up avançado) com valores diferentes do default
+- [x] Salvar, recarregar a página
+- [x] Confirmar: os valores preenchidos continuam aparecendo (não voltaram ao default)
+- [x] Inspecionar `GET /ai-profiles/me` (Network tab) e confirmar que os valores estão
   nas colunas de topo da resposta, não dentro de `offer_pack`
+- **Validado em:** 23/06/2026 — `followup_cadence: [120,2880,5760]`,
+  `followup_allowed_hours: "09:00-18:00"` confirmados no payload de resposta, fora de
+  `offer_pack`; persistiram após reload da página.
 
 ### Cenário P2 — `appointment_reminder_offsets` convertido correctamente
-- [ ] Configurar lembretes para 48h e 6h (diferente do default 24h/2h) e salvar
-- [ ] Recarregar a página — confirmar que a tela mostra 48/6, não voltou a 24/2
-- [ ] Inspecionar `GET /ai-profiles/me` e confirmar `appointment_reminder_offsets: [-2880, -360]`
+- [x] Configurar lembretes para 48h e 6h (diferente do default 24h/2h) e salvar
+- [x] Recarregar a página — confirmar que a tela mostra 48/6, não voltou a 24/2
+- [x] Inspecionar `GET /ai-profiles/me` e confirmar `appointment_reminder_offsets: [-2880, -360]`
+- **Validado em:** 23/06/2026 — payload de resposta confirmou
+  `"appointment_reminder_offsets":[-2880,-360]`; tela mostrou "48h e 6h antes" após
+  reload. Também validado `operator_whatsapp: "+5511988887777"` persistindo fora de
+  `offer_pack`.
 
 ### Cenário C1 — Lembrete real reflecte o valor configurado
-- [ ] Com 48h/6h configurado, criar um compromisso de teste
-- [ ] Confirmar na tabela `jobs` que os jobs `whatsapp.appointment.reminder` criados têm
+- [x] Com 48h/6h configurado, criar um compromisso de teste
+- [x] Confirmar na tabela `jobs` que os jobs `whatsapp.appointment.reminder` criados têm
   `scheduled_at` em 48h e 6h antes do compromisso, não 24h/2h (default do template)
+- **Validado em:** 23/06/2026 — compromisso de teste criado via `POST /api/appointments`
+  (lead 209, `start_at=2026-06-28T00:59:49Z`). Jobs gerados:
+  `scheduled_at=2026-06-26T00:59:49Z` (exactamente 48h antes) e
+  `scheduled_at=2026-06-27T18:59:49Z` (exactamente 6h antes) — confirma a cadeia completa
+  UI → coluna do AI Profile → `schedule_appointment_reminder_jobs()` → job real.
+  Compromisso e jobs de teste removidos após validação.
 
 ---
 

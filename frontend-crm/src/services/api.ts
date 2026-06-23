@@ -1327,7 +1327,7 @@ export const api = {
         // Camada 3 — Follow-up avançado
         followup_max_attempts:  (profile as any)?.followup_max_attempts  ?? DEFAULT_AGENT_CONFIG.followup_max_attempts,
         followup_first_offset:  (profile as any)?.followup_first_offset  ?? DEFAULT_AGENT_CONFIG.followup_first_offset,
-        followup_cadence:       (profile as any)?.followup_cadence       ?? DEFAULT_AGENT_CONFIG.followup_cadence,
+        followup_cadence:       Array.isArray((profile as any)?.followup_cadence) ? (profile as any).followup_cadence.join(',') : DEFAULT_AGENT_CONFIG.followup_cadence,
         followup_allowed_hours: (profile as any)?.followup_allowed_hours ?? DEFAULT_AGENT_CONFIG.followup_allowed_hours,
         followup_sdr_instructions:              (profile as any)?.followup_sdr_instructions              ?? null,
         followup_recovery_instructions:         (profile as any)?.followup_recovery_instructions         ?? null,
@@ -1476,7 +1476,13 @@ export const api = {
         nurture_vs_discard_rule:       config.nurture_vs_discard_rule,
         followup_max_attempts:         config.followup_max_attempts,
         followup_first_offset:         config.followup_first_offset,
-        followup_cadence:              config.followup_cadence,
+        followup_cadence:              (() => {
+          const parsed = config.followup_cadence
+            .split(',')
+            .map((s) => parseInt(s.trim(), 10))
+            .filter((n) => !isNaN(n));
+          return parsed.length > 0 ? parsed : null;
+        })(),
         followup_allowed_hours:        config.followup_allowed_hours,
         briefing_enabled:              config.briefing_enabled,
         briefing_channel:              config.briefing_channel,
