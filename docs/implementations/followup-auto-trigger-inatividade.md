@@ -86,6 +86,30 @@ tom/cadência mais suaves ainda não foram fechadas.
 (hybrid_scheduler) — valores que já existem como opção válida no modal manual
 ("reunião não aconteceu"), sem precisar de novo estado no `decision_engine`.
 
+### Commits Fase 1
+
+| # | Commit | O que foi implementado |
+|---|---|---|
+| 1 | `5aaf0f2` | backend (colunas + scan + gatilho) + frontend (toggle + marca de origem) |
+
+### Relatório da Fase 1 — o que mudou na prática
+
+**Antes:** o follow-up de um lead em "Apresentação" só começava se o operador
+lembrasse de arrastar o card manualmente para a coluna "Follow-up" e preencher o
+formulário. Se ele esquecesse, o lead simplesmente ficava parado ali, sem ninguém
+tentar recuperar a conversa.
+
+**Agora:** existe um interruptor novo no Perfil de IA ("Follow-up automático", na
+Camada 3) que, quando ligado, faz o sistema reparar sozinho quando um lead fica
+calado em "Apresentação" por X dias (configurável) e iniciar o follow-up por conta
+própria — sem o operador precisar fazer nada. Continua desligado por padrão, então
+nenhuma conta existente é afetada até o operador decidir ativar. Quando o disparo é
+automático, a Central de Follow-ups mostra uma marca "auto" ao lado do nome do lead,
+e a tela de detalhe mostra "Origem: Automático (inatividade)" — para diferenciar do
+que foi iniciado manualmente.
+
+**Para validar:** Cenários P1 a P4, abaixo.
+
 ---
 
 ## Checks de Validação
