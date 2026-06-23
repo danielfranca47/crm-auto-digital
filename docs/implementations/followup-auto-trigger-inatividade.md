@@ -1,10 +1,9 @@
 # Follow-up automático por inatividade (M2)
 
 **Branch:** `main`
-**Status:** Fases 1–3 validadas em 23/06/2026. Fase 4a (check-in automático de
-`client-list` — backend completo) implementada e validada via SQL/curl em
-23/06/2026. Falta Fase 4b (UI: toggle + dias + instruções, validação end-to-end via
-browser).
+**Status:** Todos os cenários validados (23/06/2026). M2 completo — Fases 1–3
+(disparo automático em apresentation/agendamento) e Fase 4 (4a backend + 4b UI, check-in
+de cliente inativo em client-list) implementadas e testadas.
 **Plano:** `docs/plans/followup-proativo-e-cancelamento-agenda.md` (M2)
 
 ---
@@ -354,13 +353,88 @@ ver abaixo); Cenário P-checkin-UI (Fase 4b, pendente — depende da UI).
   removidos após validação (lead, appointment, jobs, prospection_logs, guard); toggle do
   AI Profile revertido a `Desativado`/`30 dias`.
 
-### Cenário P-checkin-UI — Fase 4b (pendente)
-- [ ] Toggle "Check-in automático de clientes" visível e funcional na UI
+## Fase 4b — UI (toggle + dias + instruções) + validação end-to-end (23/06/2026)
+
+### Implementação
+
+| Arquivo | Mudança |
+|---|---|
+| `frontend-crm/src/types/agente.ts` | 3 campos novos em `AgentConfig` + `DEFAULT_AGENT_CONFIG`: `followup_checkin_auto_trigger_enabled`, `followup_checkin_inactivity_days`, `followup_checkin_instructions` |
+| `frontend-crm/src/services/api.ts` | `getConfig()`/`saveConfig()` — os 3 campos como coluna de topo (nunca `offer_pack`), mesmo padrão das Fases 1–3 |
+| `frontend-crm/src/components/agente/CamadaPipeline.tsx` | novo `DrawerFollowupCheckin` (toggle + slider 7–90 dias + textarea de instrução) e novo `EditCard` "Check-in automático de clientes" na Seção 2, ao lado de "Follow-up automático", ambos restritos a `!_isCloserAgent` (Agent 2 fora, conforme diagnóstico) |
+
+Nenhuma mudança em `FollowUpCenter.tsx`/`FollowUpEdit.tsx` — a marca "AUTO"/"Origem:
+Automático (inatividade)" já é genérica por `trigger==="auto_inactivity"`.
+
+### Descoberta durante o teste: drawer salva só localmente, precisa do "SALVAR CAMADA 3"
+
+Primeira tentativa de validar a persistência falhou silenciosamente: cliquei no
+"SALVAR" do drawer, recarreguei a página, e o toggle tinha voltado a `Desativado`.
+Causa: o "SALVAR" do drawer só chama `onUpdate(v)` (actualiza o estado local do
+formulário, `dirty=true`) — quem persiste de facto no backend é o botão de nível de
+página "SALVAR CAMADA 3" (`api.agente.saveConfig(config)`), que só aparece quando há
+alterações pendentes. Não é um bug — é o mesmo comportamento de todos os outros campos
+desta camada (confirmado lendo `AiProfile.tsx`) — só não tinha sido óbvio no fluxo de
+teste. Refeito o teste clicando os dois "Salvar" em sequência → persistiu correctamente.
+
+### Risco identificado e contido durante o teste: worker genérico processa fila partilhada
+
+Para validar o tom da mensagem end-to-end, subi o `backend-executors` e o seu worker
+(`app/workers/whatsapp_worker.py`) — processo separado, não fazia parte do setup das
+Fases 1–3. O worker faz polling da fila **partilhada** de jobs (`GET
+/internal/jobs/next`, sem filtro por utilizador) e, em segundos, reclamou um job
+`whatsapp.followup.tick` de um lead **real, de outro utilizador** (`lead_id=27,
+user_id=1`, não relacionado a este teste). Como esse job já estava marcado `failed`
+antes (erro de contexto, `retryable: false`), falhou de novo sem enviar nada — confirmei
+directamente na tabela `messages` que nenhuma mensagem outbound foi criada na janela —
+mas o risco real era haver um lead nessa fila com contexto válido e instância WhatsApp
+ligada, o que teria despachado uma mensagem real para um número real, sem relação com
+este teste.
+
+**Acção:** parei os dois processos do worker (havia uma instância já a correr de testes
+anteriores na sessão, mais a que acabei de iniciar) imediatamente após detectar o
+`job_found` de um lead alheio, e não voltei a correr o worker genérico. Para validar o
+tom da mensagem do `client_checkin`, usei um caminho mais contido: construí um
+`context` sintético (mesmo formato de `_inject_followup_contract_context`,
+`backend-executors/app/runners/whatsapp.py:98`) e chamei
+`decision_engine._build_child_prompt_follow_up()` directamente — sem fila, sem job, sem
+chamada à UazAPI. Confirmei o bloco hardcoded da variante e a instrução do operador
+correctos no prompt, e depois chamei `llm_service.generate_child_result()` com esse
+prompt para obter uma mensagem real gerada pelo LLM (chamada benigna, sem envio de
+WhatsApp) — resultado: tom de check-in correcto, sem pressão de venda, mencionando a
+sessão de massoterapia conforme a instrução personalizada configurada.
+
+### Relatório da Fase 4b — o que mudou na prática
+
+**Antes:** o check-in automático de clientes só podia ser activado via chamada directa
+à API (como fiz nos testes da Fase 4a) — não havia nenhum lugar na interface para isso.
+
+**Agora:** existe um card "Check-in automático de clientes" na Camada 3 (Pipeline),
+visível para Agent 1/3 (oculto para Agent 2), com toggle, slider de dias (7–90) e um
+campo de texto livre para o operador personalizar o tom da mensagem. Tudo persiste
+correctamente após reload.
+
+**Para validar:** Cenário P-checkin-UI, abaixo.
+
+### Commits Fase 4b
+
+| # | Commit | O que foi implementado |
+|---|---|---|
+| 1 | `5723d81` | UI (toggle + dias + instruções) + validação end-to-end |
+
+### Cenário P-checkin-UI — Fase 4b
+- [x] Toggle "Check-in automático de clientes" visível e funcional na UI
       (`CamadaPipeline.tsx`), persistência confirmada após reload
-- [ ] Campo de instruções (`followup_checkin_instructions`) salva e é respeitado pelo
+- [x] Campo de instruções (`followup_checkin_instructions`) salva e é respeitado pelo
       prompt
-- [ ] Lead real em `client-list` com inactividade simulada → mensagem enviada com tom de
-      check-in (sem pressão de venda), visível no histórico do lead
+- [x] Mensagem gerada com tom de check-in (sem pressão de venda), mencionando a
+      personalização do operador — validado via prompt + LLM directos, não via envio
+      real de WhatsApp (ver nota de risco acima)
+- **Validado em:** 23/06/2026 — toggle ligado/dias=7/instrução preenchida via UI
+  (browser, chrome-devtools MCP), persistência confirmada após reload da página e
+  reabertura do drawer. Nenhum lead real de `client-list` da conta de teste foi afectado
+  (confirmado: zero leads em `client-list` para o `user_id` de teste). Toggle revertido
+  a `Desativado`/`30 dias`/instrução vazia após o teste.
 
 ---
 
@@ -378,3 +452,9 @@ ver abaixo); Cenário P-checkin-UI (Fase 4b, pendente — depende da UI).
 - Agent 2 (`closer_agressivo`) fica fora do check-in automático de `client-list` —
   bot não passa pelo mesmo side-effect de desativação, exigiria lógica de repouso
   própria.
+- O worker `whatsapp_worker.py` faz polling de uma fila **partilhada entre todos os
+  utilizadores** sem nenhum isolamento — qualquer ambiente local que o ligue processa
+  jobs reais de qualquer conta presente no banco, não só os de teste (ver nota de risco
+  na Fase 4b). Vale considerar, fora do escopo do M2, um modo de teste/sandbox para o
+  worker (ex.: filtro por `user_id` ou flag de ambiente) antes de o usar livremente em
+  testes locais com banco partilhado.
