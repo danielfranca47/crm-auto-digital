@@ -55,7 +55,11 @@
       "Bash(\".venv/Scripts/python.exe\" -m unittest discover -s tests -v)",
       "Bash(PYTHONIOENCODING=utf-8 \".venv/Scripts/python.exe\" -m unittest discover -s tests)",
       "Bash(curl -s -o /dev/null -w \"status: %{http_code}\\\\n\" --max-time 3 http://localhost:8000/api/leads)",
-      "Bash(taskkill //PID 32692 //T //F)"
+      "Bash(taskkill //PID 32692 //T //F)",
+      "Bash(curl -s -o /dev/null -w \"core:%{http_code}\\\\n\" http://localhost:8001/docs)",
+      "Bash(curl -s -o /dev/null -w \"crm:%{http_code}\\\\n\" http://localhost:8000/docs)",
+      "Bash(curl -s -o /dev/null -w \"frontend:%{http_code}\\\\n\" http://localhost:8080/)",
+      "Bash(curl -s -o /dev/null -w \"frontend5173:%{http_code}\\\\n\" http://localhost:5173/)"
     ]
   },
   "hooks": {
