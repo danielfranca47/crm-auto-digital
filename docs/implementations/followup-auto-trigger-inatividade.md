@@ -148,7 +148,7 @@ foi essa fase ser coberta pelo followup_state, mas isso nunca foi conectado.
 
 | # | Commit | O que foi implementado |
 |---|---|---|
-| 1 | _(pendente — registar após o commit)_ | amplia elegibilidade do scan para incluir `agendamento` |
+| 1 | `a2f5625` | amplia elegibilidade do scan para incluir `agendamento` |
 
 ---
 
