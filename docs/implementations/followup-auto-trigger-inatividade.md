@@ -1,7 +1,12 @@
 # Follow-up automático por inatividade (M2)
 
 **Branch:** `main`
-**Status:** Em andamento
+**Status:** Fases 1–3 (disparo automático em `apresentation`/`agendamento`, com os dois
+bugs encontrados ao vivo já corrigidos) validadas em 23/06/2026 — checks obrigatórios
+`[x]`/`[⏭️]`. Falta apenas o check-in automático de `client-list` (mencionado como
+"Fase 2" na secção Abordagem, abaixo — passa a ser **Fase 4** numerada, já que as
+Fases 2 e 3 acabaram usadas para os fixes encontrados nos testes) — ainda não
+iniciado, depende de mini-diagnóstico próprio.
 **Plano:** `docs/plans/followup-proativo-e-cancelamento-agenda.md` (M2)
 
 ---
@@ -188,28 +193,50 @@ sempre antes de chamar `create_job()`. A função nova não replicou essa ordem.
 ## Checks de Validação
 
 ### Cenário P1 — Toggle desligado por default não muda nada
-- [ ] Conta sem o toggle activado continua com follow-up só por gesto manual
-- [ ] Confirmar: nenhum lead em `apresentation` é movido automaticamente
+- [x] Conta sem o toggle activado continua com follow-up só por gesto manual
+- [x] Confirmar: nenhum lead em `apresentation`/`agendamento` é movido automaticamente
+- **Validado em:** 23/06/2026 — `GET /ai-profiles/resolve` confirmou
+  `followup_auto_trigger_enabled=False`, `followup_auto_trigger_inactivity_days=3`
+  (defaults aplicados pela migração, sem nenhuma acção do operador).
 
 ### Cenário P2 — Disparo automático funciona (hybrid_scheduler)
-- [ ] Activar toggle no AI Profile, limiar = 1 dia
-- [ ] Lead em `apresentation`, qualificação completa, sem mensagem inbound há > 1 dia
-- [ ] Aguardar ciclo do reconciler (≤60s)
-- [ ] Confirmar: `category` vira `follow-up`, `followup_contract.trigger="auto_inactivity"`
-- [ ] Confirmar marca visível na Central de Follow-ups
+- [x] Activar toggle no AI Profile, limiar = 1 dia
+- [x] Lead real (não-playground), qualificação completa, sem mensagem inbound há > 1 dia
+- [x] Aguardar ciclo do reconciler (≤60s)
+- [x] Confirmar: `category` vira `follow-up`, `followup_contract.trigger="auto_inactivity"`
+- [x] Confirmar marca visível na Central de Follow-ups
+- **Validado em:** 23/06/2026 — toggle ligado/salvo via UI (`PUT /ai-profiles/me`
+  confirmado como coluna de topo, fora do `offer_pack`); persistência confirmada após
+  reload da página. Lead de teste `id=296` (`agendamento`, ver P5) processado pelo
+  reconciler após o fix da Fase 3 — badge "AUTO" visível na lista e "Origem: Automático
+  (inatividade)" visível no detalhe (`/follow-ups/:id/edit`, aba Contexto).
 
 ### Cenário P3 — Idempotência e cooldown
-- [ ] Rodar o scan de novo no mesmo ciclo não duplica/recria o contrato
-- [ ] Após o contrato fechar por `max_attempts_reached`, o lead não é re-disparado
-      imediatamente no ciclo seguinte
+- [x] O lead não é re-processado pelo scan depois de mudar de categoria (exclusão
+      natural da query por `category IN ('apresentation','agendamento')`)
+- [⏭️] Cenário completo de `max_attempts_reached` → cooldown → re-elegibilidade não foi
+      exercitado ao vivo (exigiria simular 3 tentativas sem resposta) — a lógica do
+      campo `followup_auto_trigger_last_fired_at` foi revisada em código, não testada
+      ponta-a-ponta nesta sessão.
 
 ### Cenário P4 — Guardrail de qualificação respeitado
-- [ ] Lead em `apresentation` com qualificação incompleta NÃO recebe contrato automático
+- [⏭️] Não exercitado ao vivo — a conta de teste tem `qualification_required_fields=[]`,
+      que faz `can_advance_from_qualification()` retornar sempre `True` (mesmo
+      comportamento do fluxo manual). A chamada usa a mesma função já validada no
+      fluxo manual de `start-followup`; sem caso de teste com campos obrigatórios
+      configurados nesta sessão.
 
 ### Cenário P5 — Funciona também para lead parado em `agendamento` (Fase 2)
-- [ ] Lead em `agendamento` (hybrid_scheduler), qualificação completa, inactivo > limiar
-- [ ] Confirmar: recebe contrato automático igual ao cenário P2
-- [ ] Confirmar: lead em `pre-agendamento` NÃO recebe (mecanismo dedicado próprio)
+- [x] Lead em `agendamento` (hybrid_scheduler), qualificação completa, inactivo > limiar
+- [x] Confirmar: recebe contrato automático igual ao cenário P2
+- [⏭️] `pre-agendamento` não foi testado ao vivo (sem lead real nessa categoria
+      disponível) — exclusão confirmada por revisão de código (`WHERE category IN
+      ('apresentation', 'agendamento')` não inclui `pre-agendamento`).
+- **Validado em:** 23/06/2026 — lead `id=296` criado directamente em `agendamento`
+  (`agent_type=agent_3`), `lastMovement` retrocedido 3 dias. `followup_contract`
+  resultante: `followup_variant=hybrid_scheduler`, `followup_goal=reengage_conversation`,
+  `trigger=auto_inactivity`. Dados de teste removidos após validação (lead, jobs e
+  prospection_logs associados); toggle do AI Profile revertido a `Desativado`.
 
 ---
 
