@@ -38,7 +38,11 @@ from routes import (
 )
 from routes import public
 from routes import admin_agents
-from services.followup_reconciler import reconcile_due_followups, scan_inactive_leads_for_auto_followup
+from services.followup_reconciler import (
+    reconcile_due_followups,
+    scan_inactive_clients_for_checkin,
+    scan_inactive_leads_for_auto_followup,
+)
 from services.spy_agent.observation_reconciler import reconcile_expired_observations
 from services.spy_agent.spy_media_worker import process_pending_spy_media_jobs
 
@@ -78,6 +82,14 @@ async def _reconciler_loop() -> None:
                     "[reconciler] auto_inactivity scanned=%d started=%d",
                     auto_result["scanned"],
                     auto_result["started"],
+                )
+
+            checkin_result = await asyncio.to_thread(scan_inactive_clients_for_checkin)
+            if checkin_result["started"] > 0:
+                logger.info(
+                    "[reconciler] client_checkin scanned=%d started=%d",
+                    checkin_result["scanned"],
+                    checkin_result["started"],
                 )
         except Exception as exc:
             logger.error("[reconciler] erro inesperado: %s", exc, exc_info=True)

@@ -29,6 +29,10 @@ _FOLLOWUP_SEND_NEXT_SCHEDULE = {
         1: timedelta(minutes=1440),
         2: timedelta(minutes=2880),
     },
+    # client_checkin: cadência suave (sem pressão de venda) — só 1 reenvio (max_attempts=2)
+    "client_checkin": {
+        1: timedelta(days=3),
+    },
 }
 
 
@@ -113,6 +117,34 @@ def _load_lead_followup_row(conn, *, lead_id: int):
     ).fetchone()
 
 
+def _maybe_redisable_bot_after_checkin_close(conn, *, lead_id: int, variant: str) -> None:
+    """Cliente em `client-list` deve voltar ao repouso (bot desligado) quando o
+    check-in automático terminar sem conversa activa. Não chamar para
+    STOP_INBOUND_REPLY/STOP_HANDOFF_HUMAN (há conversa em curso, ou bot já estava
+    desligado) — só para encerramentos definitivos (max_attempts, cancelamento, etc.).
+    Não se aplica a outras variantes, cujo repouso esperado é bot ligado.
+    """
+    if variant != "client_checkin":
+        return
+    row = conn.execute(
+        "SELECT category, bot_disabled FROM leads WHERE id = ?", (lead_id,)
+    ).fetchone()
+    if not row or str(row["category"] or "").strip().lower() != "client-list":
+        return
+    if int(row["bot_disabled"] or 0) == 1:
+        return
+    conn.execute(
+        """
+        UPDATE leads
+           SET bot_disabled = 1,
+               bot_disabled_reason = 'category_checkin_closed',
+               lastMovement = CURRENT_TIMESTAMP
+         WHERE id = ?
+        """,
+        (lead_id,),
+    )
+
+
 def stop_followup(
     conn,
     *,
@@ -136,6 +168,11 @@ def stop_followup(
     contract["next_followup_at"] = None
 
     _write_followup(conn, lead_id=lead_id, contract=contract, status=status, next_followup_at=None)
+
+    if stop_reason not in (STOP_INBOUND_REPLY, STOP_HANDOFF_HUMAN):
+        _maybe_redisable_bot_after_checkin_close(
+            conn, lead_id=lead_id, variant=str(contract.get("followup_variant") or "").strip().lower()
+        )
 
     effective_user_id = user_id if user_id is not None else row["user_id"]
     notes = {"stop_reason": stop_reason, "status": status}
@@ -243,6 +280,7 @@ def progress_followup_after_auto_send(
         contract["stop_reason"] = STOP_MAX_ATTEMPTS_REACHED
         contract["next_followup_at"] = None
         _write_followup(conn, lead_id=lead_id, contract=contract, status="closed", next_followup_at=None)
+        _maybe_redisable_bot_after_checkin_close(conn, lead_id=lead_id, variant=variant)
         conn.execute(
             """
             INSERT INTO prospection_logs (lead_id, channel, message_id, action, notes, user_id)
@@ -468,6 +506,76 @@ def start_followup_for_inactivity(
     return {"started": True, "next_followup_at": first_followup_at, "followup_variant": variant}
 
 
+_CLIENT_CHECKIN_MAX_ATTEMPTS = 2
+_CLIENT_CHECKIN_FIRST_OFFSET_MINUTES = 30
+
+
+def start_client_checkin_followup(conn, *, lead_id: int, user_id: int) -> Dict[str, Any]:
+    """Inicia check-in automático para cliente inactivo em `client-list` (pós-venda).
+
+    Ao contrário de start_followup_for_inactivity, NÃO move `category` para
+    `follow-up` — o cliente permanece em `client-list` (evita confundir o Kanban de
+    vendas com um cliente já convertido). O bot é reativado aqui porque o repouso
+    normal de `client-list` é bot desligado (ver apply_closing_bot_disable_side_effect);
+    a reversão de volta ocorre em _maybe_redisable_bot_after_checkin_close quando o
+    contrato fechar sem conversa activa.
+    """
+    row = _load_lead_followup_row(conn, lead_id=lead_id)
+    if not row:
+        return {"started": False, "reason": "lead_not_found"}
+
+    existing = _parse_contract(row["followup_contract"])
+    if existing and str(existing.get("status") or "").lower() in {"active", "scheduled"}:
+        return {"started": False, "reason": "contract_already_active"}
+
+    now = _now_utc()
+    first_followup_at = (now + timedelta(minutes=_CLIENT_CHECKIN_FIRST_OFFSET_MINUTES)).isoformat()
+
+    contract: Dict[str, Any] = {
+        "phase": "follow-up",
+        "version": 1,
+        "followup_variant": "client_checkin",
+        "trigger": "auto_inactivity",
+        "status": "active",
+        "attempts": 0,
+        "max_attempts": _CLIENT_CHECKIN_MAX_ATTEMPTS,
+        "next_followup_at": first_followup_at,
+        "last_followup_at": None,
+        "stop_reason": None,
+        "meeting_or_session_happened": None,
+        "outcome": None,
+        "proposal_sent": False,
+        "followup_goal": "checkin",
+        "operator_note": None,
+        "created_at": now.isoformat(),
+    }
+
+    conn.execute(
+        """
+        UPDATE leads
+           SET bot_disabled = 0,
+               bot_disabled_reason = NULL,
+               followup_contract = ?,
+               followup_status = 'active',
+               next_followup_at = ?,
+               followup_auto_trigger_last_fired_at = CURRENT_TIMESTAMP,
+               lastMovement = CURRENT_TIMESTAMP
+         WHERE id = ?
+        """,
+        (_json_dumps(contract), first_followup_at, lead_id),
+    )
+    conn.execute(
+        """
+        INSERT INTO prospection_logs (lead_id, channel, message_id, action, notes, user_id)
+        VALUES (?, NULL, NULL, 'followup_started_client_checkin', ?, ?)
+        """,
+        (lead_id, _json_dumps(contract), user_id),
+    )
+    # create_job() abre a própria conexão — chamar só depois do commit do caller
+    # (mesma lição da Fase 3 do M2 — ver scan_inactive_leads_for_auto_followup).
+    return {"started": True, "next_followup_at": first_followup_at, "followup_variant": "client_checkin"}
+
+
 def _cancel_pending_jobs_for_lead(conn, *, lead_id: int) -> int:
     """Cancela jobs pendentes de follow-up para o lead via guard table. Retorna count."""
     rows = conn.execute(
@@ -622,6 +730,9 @@ def cancel_followup_manually(
     contract["next_followup_at"] = None
 
     _write_followup(conn, lead_id=lead_id, contract=contract, status="closed", next_followup_at=None)
+    _maybe_redisable_bot_after_checkin_close(
+        conn, lead_id=lead_id, variant=str(contract.get("followup_variant") or "").strip().lower()
+    )
     conn.execute(
         """
         INSERT INTO prospection_logs (lead_id, channel, message_id, action, notes, user_id)

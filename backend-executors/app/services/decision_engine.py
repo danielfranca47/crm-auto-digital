@@ -2959,12 +2959,28 @@ def _build_child_prompt_follow_up(
             "tom pessoal e próximo, como assistente do próprio profissional — nunca SDR agressivo.\n"
             f"- Regra por outcome ({outcome or 'indefinido'}): {outcome_instruction}\n"
         )
+    elif followup_variant == "client_checkin":
+        variant_rule = (
+            "- ABERTURA OBRIGATÓRIA: começa com uma saudação calorosa de quem já é cliente "
+            "(ex: 'Oi [nome]! Tudo bem? Faz um tempo que não nos falamos.'). A saudação vem "
+            "PRIMEIRO, numa frase curta separada.\n"
+            "- Variante client_checkin (cliente já convertido, em client-list): este é um "
+            "check-in de relacionamento pós-venda, NÃO uma tentativa de venda nova. "
+            "Objetivo único: perguntar como está, e se quer agendar a próxima sessão/compra.\n"
+            "- Tom sem pressão: agradeça por ser cliente, demonstre cuidado genuíno. "
+            "Nunca use urgência, desconto ou escassez artificial.\n"
+            "- Se o cliente topar agendar, proponha 2-3 horários directamente na mensagem "
+            "(sem mudar de categoria — a confirmação final fica para o operador/agenda); "
+            "se recusar ou ficar em silêncio, apenas registre e encerre educadamente.\n"
+            "- NUNCA reabra qualificação antiga nem trate como lead novo.\n"
+        )
 
     # Instrução específica do operador para esta variante (personalização de negócio)
     _followup_variant_instr_key = {
         "sdr_scheduler":    "followup_sdr_instructions",
         "cart_recovery":    "followup_recovery_instructions",
         "hybrid_scheduler": "followup_postsession_instructions",
+        "client_checkin":   "followup_checkin_instructions",
     }.get(followup_variant)
     _variant_operator_block = ""
     if _followup_variant_instr_key:

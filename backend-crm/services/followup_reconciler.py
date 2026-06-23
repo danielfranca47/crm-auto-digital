@@ -90,7 +90,8 @@ def reconcile_due_followups(*, limit: int = 100, dry_run: bool = False) -> Dict[
       - followup_status = 'active'
       - next_followup_at <= now
       - bot_disabled = 0
-      - category = 'follow-up'
+      - category IN ('follow-up', 'client-list') — client-list cobre o check-in
+        automático de cliente inactivo (Fase 4 do M2), que não move a categoria
 
     Se o AI Profile do usuário definir followup_allowed_hours ('HH:MM-HH:MM'),
     o reconciliador adia next_followup_at para o início da próxima janela permitida
@@ -105,7 +106,7 @@ def reconcile_due_followups(*, limit: int = 100, dry_run: bool = False) -> Dict[
               FROM leads
              WHERE followup_status = 'active'
                AND COALESCE(bot_disabled, 0) = 0
-               AND category = 'follow-up'
+               AND category IN ('follow-up', 'client-list')
                AND next_followup_at IS NOT NULL
                AND datetime(next_followup_at) <= CURRENT_TIMESTAMP
              ORDER BY datetime(next_followup_at) ASC, id ASC
@@ -532,6 +533,121 @@ def scan_inactive_leads_for_auto_followup(*, limit: int = 100) -> Dict[str, Any]
                     lead_id,
                     user_id,
                     result.get("followup_variant"),
+                )
+            else:
+                conn.rollback()
+
+    return {"scanned": len(rows), "started": started, "items": items}
+
+
+def scan_inactive_clients_for_checkin(*, limit: int = 100) -> Dict[str, Any]:
+    """
+    Detecta clientes inactivos em `client-list` e inicia check-in automático (Fase 4).
+
+    Elegibilidade:
+      - category = 'client-list', is_playground = 0, agent_type in (agent_1, agent_3)
+      - sem contrato de follow-up activo/scheduled
+      - AI Profile do usuário com followup_checkin_auto_trigger_enabled = true
+      - inatividade (última sessão não cancelada, fallback msg inbound, fallback
+        lastMovement) >= followup_checkin_inactivity_days
+      - fora do cooldown (followup_auto_trigger_last_fired_at — mesmo campo das
+        Fases 1-3; client-list e apresentation/agendamento são mutuamente exclusivos
+        para o mesmo lead, sem conflito de uso)
+
+    Diferente de scan_inactive_leads_for_auto_followup: sem filtro de bot_disabled
+    (cliente em client-list normalmente já está com bot desligado — ver
+    apply_closing_bot_disable_side_effect) e sem guardrail de qualificação (o cliente
+    já comprou, qualificação não se aplica).
+    """
+    from services.followup_state import start_client_checkin_followup
+    from services.jobs_service import TYPE_WHATSAPP_FOLLOWUP_PREGENERATE, create_job
+
+    with get_connection() as read_conn:
+        rows = read_conn.execute(
+            """
+            SELECT id, user_id, agent_type, lastMovement, followup_auto_trigger_last_fired_at
+              FROM leads
+             WHERE category = 'client-list'
+               AND COALESCE(is_playground, 0) = 0
+               AND agent_type IN ('agent_1', 'agent_3')
+               AND (followup_status IS NULL OR followup_status NOT IN ('active', 'scheduled'))
+             ORDER BY id ASC
+             LIMIT ?
+            """,
+            (limit,),
+        ).fetchall()
+
+    if not rows:
+        return {"scanned": 0, "started": 0, "items": []}
+
+    user_ids = {row["user_id"] for row in rows}
+    profile_cache = _fetch_profile_cache(user_ids)
+    now_utc = datetime.now(timezone.utc)
+
+    started = 0
+    items: List[Dict[str, Any]] = []
+
+    for row in rows:
+        lead_id = int(row["id"])
+        user_id = row["user_id"]
+        profile = profile_cache.get(user_id) or {}
+
+        if not profile.get("followup_checkin_auto_trigger_enabled"):
+            continue
+
+        try:
+            inactivity_days = int(profile.get("followup_checkin_inactivity_days") or 30)
+        except (TypeError, ValueError):
+            inactivity_days = 30
+        threshold = timedelta(days=max(inactivity_days, 1))
+
+        last_fired_at = _parse_naive_utc(row["followup_auto_trigger_last_fired_at"])
+        if last_fired_at and now_utc - last_fired_at < threshold:
+            continue  # cooldown ainda activo
+
+        with get_connection() as conn:
+            last_session_row = conn.execute(
+                """
+                SELECT MAX(start_at) AS last_at FROM appointments
+                 WHERE lead_id = ? AND status != 'canceled' AND datetime(start_at) <= CURRENT_TIMESTAMP
+                """,
+                (lead_id,),
+            ).fetchone()
+            last_inbound_row = conn.execute(
+                """
+                SELECT MAX(createdAt) AS last_at FROM messages
+                 WHERE lead_id = ? AND channel = 'whatsapp' AND model = 'inbound'
+                """,
+                (lead_id,),
+            ).fetchone()
+        last_session_at = _parse_naive_utc(last_session_row["last_at"] if last_session_row else None)
+        last_inbound_at = _parse_naive_utc(last_inbound_row["last_at"] if last_inbound_row else None)
+        last_movement_at = _parse_naive_utc(row["lastMovement"])
+
+        candidates = [d for d in (last_session_at, last_inbound_at, last_movement_at) if d]
+        if not candidates:
+            continue  # sem nenhum sinal de actividade — não dá para avaliar inactividade
+        last_activity_at = max(candidates)
+        if now_utc - last_activity_at < threshold:
+            continue  # ainda não está inactivo o suficiente
+
+        with get_connection() as conn:
+            result = start_client_checkin_followup(conn, lead_id=lead_id, user_id=user_id)
+            if result.get("started"):
+                conn.commit()
+                # create_job() abre a própria conexão — só depois do commit acima,
+                # senão a transação ainda aberta causa "database is locked" (Fase 3).
+                create_job(
+                    job_type=TYPE_WHATSAPP_FOLLOWUP_PREGENERATE,
+                    payload={"lead_id": lead_id, "user_id": user_id},
+                    user_id=user_id,
+                )
+                started += 1
+                items.append({"lead_id": lead_id, "user_id": user_id, "followup_variant": "client_checkin"})
+                logger.info(
+                    "followup.client_checkin_started lead_id=%s user_id=%s",
+                    lead_id,
+                    user_id,
                 )
             else:
                 conn.rollback()
