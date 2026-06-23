@@ -1343,8 +1343,14 @@ export const api = {
           (profile as any)?.presentation_variant === 'scheduler' ? 'exploratory' :
           (profile as any)?.appointment_mode ?? pack.appointment_mode ?? DEFAULT_AGENT_CONFIG.appointment_mode
         ) as 'commercial' | 'exploratory',
-        appointment_reminder_h1: pack.appointment_reminder_h1 ?? DEFAULT_AGENT_CONFIG.appointment_reminder_h1,
-        appointment_reminder_h2: pack.appointment_reminder_h2 ?? DEFAULT_AGENT_CONFIG.appointment_reminder_h2,
+        appointment_reminder_h1: (() => {
+          const offsets = (profile as any)?.appointment_reminder_offsets as number[] | null | undefined;
+          return offsets?.[0] != null ? Math.round(Math.abs(offsets[0]) / 60) : DEFAULT_AGENT_CONFIG.appointment_reminder_h1;
+        })(),
+        appointment_reminder_h2: (() => {
+          const offsets = (profile as any)?.appointment_reminder_offsets as number[] | null | undefined;
+          return offsets?.[1] != null ? Math.round(Math.abs(offsets[1]) / 60) : DEFAULT_AGENT_CONFIG.appointment_reminder_h2;
+        })(),
         briefing_enabled:        (profile as any)?.briefing_enabled        ?? DEFAULT_AGENT_CONFIG.briefing_enabled,
         briefing_channel:        (profile as any)?.briefing_channel        ?? DEFAULT_AGENT_CONFIG.briefing_channel,
         briefing_lead_time:      (profile as any)?.briefing_lead_time      ?? DEFAULT_AGENT_CONFIG.briefing_lead_time,
@@ -1419,8 +1425,6 @@ export const api = {
 
         // Apresentação e agendamento
         appointment_mode:        config.appointment_mode,
-        appointment_reminder_h1: config.appointment_reminder_h1,
-        appointment_reminder_h2: config.appointment_reminder_h2,
         calendar_integration:    config.calendar_integration,
 
         // Oferta e pagamento
@@ -1478,6 +1482,10 @@ export const api = {
         briefing_channel:              config.briefing_channel,
         briefing_lead_time:            config.briefing_lead_time,
         operator_whatsapp:             config.operator_whatsapp,
+        appointment_reminder_offsets: [
+          -(config.appointment_reminder_h1 * 60),
+          -(config.appointment_reminder_h2 * 60),
+        ],
         followup_sdr_instructions:             config.followup_sdr_instructions,
         followup_recovery_instructions:        config.followup_recovery_instructions,
         followup_postsession_instructions:     config.followup_postsession_instructions,
