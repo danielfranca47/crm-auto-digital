@@ -3,7 +3,7 @@
 > **Status: EM ANDAMENTO**
 > Etapas A, G, H concluídas e documentadas em `docs/architecture/agents.md`.
 > Etapas D, E, F só concluídas do lado do backend — a UI nunca grava no lugar
-> certo, ver correcção de status abaixo. D e E retomadas como M3 em
+> certo, ver correcção de status abaixo. D e E retomadas como M1 em
 > `docs/plans/followup-proativo-e-cancelamento-agenda.md`.
 > Etapa B obsoleta (supersedida por `qualification_fields`).
 > **Etapa C em foco:** instruções de follow-up por agente — próxima implementação.
@@ -47,7 +47,7 @@ Documentadas em [`docs/architecture/agents.md`](../architecture/agents.md).
 > `src/types/agente.ts` leem/escrevem estes campos dentro de `offer_pack`, nunca nas
 > colunas de topo que o motor real lê — a UI nunca foi corrigida. A correcção dos
 > campos relacionados a follow-up/agenda (`appointment_reminder_offsets`, campos de
-> briefing) está registada como M3 em
+> briefing) está registada como M1 em
 > `docs/plans/followup-proativo-e-cancelamento-agenda.md`. `buying_signal_keywords`
 > fica fora desse escopo (não é follow-up/agenda) — sem plano próprio ainda.
 
