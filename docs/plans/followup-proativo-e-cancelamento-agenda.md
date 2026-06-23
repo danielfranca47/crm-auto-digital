@@ -27,8 +27,9 @@
 > registados em `docs/plans/pipeline-configurable-fields.md` (Etapa J e nota de dados
 > legados). M2 e M3 abaixo mantêm a numeração original — o "M1" em falta é intencional.
 
-**Estado:** M2 e M3 já podem avançar — a base de persistência que os bloqueava está
-corrigida e validada.
+**Estado:** M2 implementado e testado (`docs/implementations/followup-auto-trigger-inatividade.md`,
+Fases 1–4b) — pendente apenas o passo de graduação (migrar para `docs/architecture/`
+e remover o arquivo de implementação). M3 ainda não iniciado — pode avançar.
 
 > ⚠️ **Lembrete de manutenção — repetir ao finalizar M2 e M3:** ao graduar cada um
 > destes itens, voltar a `docs/marketing/comercial/agente-demo.md`, secção "NOTA
@@ -126,6 +127,16 @@ cada coisa está, sem visão de conjunto do que controla o follow-up.
 viver dentro da página `/ai-profile` (nova secção/aba), ou faz mais sentido
 aproveitar a Central de Follow-ups já existente como o lugar de configuração
 também, em vez de duplicar a superfície de UI?
+
+**Nota (adicionada após a implementação do M2, Fases 1–4b):** em palavras simples —
+o M2 já nasceu seguindo esta recomendação: os campos novos (toggle/dias de
+"Follow-up automático" e de "Check-in automático de clientes") foram colocados numa
+caixinha própria e isolada na tela, de propósito, em vez de soltos entre os campos
+antigos — exactamente para serem absorvidos por este M3 quando ele avançar. Nada a
+decidir agora; só confirmar, ao desenhar o M3, que esses dois cards entram na auditoria
+do passo 1. Ver `docs/implementations/followup-auto-trigger-inatividade.md` (Fases
+1–4b) e `docs/plans/followup-auto-trigger-melhorias-futuras.md` para os itens que
+ficaram fora do M2.
 
 ---
 

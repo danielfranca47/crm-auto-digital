@@ -21,6 +21,7 @@ implementação.
 | `agentes-agenda-melhorias-futuras.md` | Multi-profissional por conta, closing seletivo e confiabilidade da confirmação de agendamento |
 | `followup-proativo-e-cancelamento-agenda.md` | Disparo automático de follow-up por inatividade e camada dedicada no AI Profile (Híbrido Agendador e SDR) |
 | `cancelamento-reagendamento-melhorias-futuras.md` | Itens deixados de fora do M1 de cancelamento/reagendamento já graduado: handoff humano na janela pós-confirmação, janela de 30 dias, gap de autenticação, bug de status duplicado em follow-up |
+| `followup-auto-trigger-melhorias-futuras.md` | Itens deixados de fora do M2 (disparo automático/check-in de inatividade): falso-positivo de actividade, bug de trava do banco em `progress_followup_after_auto_send`, Agent 2 fora do check-in, worker sem isolamento de conta em testes locais |
 
 Os arquivos sem prefixo `_` são os **planos concretos** — contêm melhorias identificadas
 que ainda não foram implementadas.
