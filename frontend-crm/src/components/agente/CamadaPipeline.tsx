@@ -471,6 +471,40 @@ function DrawerFollowupAutomatico({ config, onSave, onClose }: {
   );
 }
 
+// ─── Drawer: Check-in automático de clientes (client-list) ────────────────
+function DrawerFollowupCheckin({ config, onSave, onClose }: {
+  config: AgentConfig; onSave: (v: Partial<AgentConfig>) => void; onClose: () => void;
+}) {
+  const [enabled, setEnabled] = useState(config.followup_checkin_auto_trigger_enabled);
+  const [days, setDays] = useState(config.followup_checkin_inactivity_days);
+  const [instructions, setInstructions] = useState(config.followup_checkin_instructions ?? '');
+
+  return (
+    <DrawerBase title="Check-in automático de clientes" sub="Envia um check-in sem pressão de venda quando um cliente (Lista de Clientes) fica inactivo" onClose={onClose}
+      onSave={() => onSave({
+        followup_checkin_auto_trigger_enabled: enabled,
+        followup_checkin_inactivity_days: days,
+        followup_checkin_instructions: instructions.trim() || null,
+      })}>
+      <ToggleRow
+        label="Ativar check-in automático"
+        desc="Sem isto, clientes que já compraram (Lista de Clientes) nunca recebem contacto automático depois disso"
+        value={enabled}
+        onChange={setEnabled}
+      />
+      <SliderField label="Dias de inactividade antes de disparar" value={days} min={7} max={90} step={1} format={v => `${v} dia${v === 1 ? '' : 's'}`} onChange={setDays} />
+      <div className="o-field">
+        <label className="o-field-label">Instrução personalizada (opcional)</label>
+        <div className="o-field-hint">Deixar vazio usa o tom padrão: agradecer por ser cliente, sem pressão de venda, perguntar se quer agendar a próxima sessão.</div>
+        <textarea className="o-input" rows={3} style={{ resize: 'vertical' }}
+          value={instructions} onChange={e => setInstructions(e.target.value)}
+          placeholder="Ex.: mencionar sempre o nome do serviço/pacote que o cliente comprou."
+        />
+      </div>
+    </DrawerBase>
+  );
+}
+
 // ─── Drawer: Follow-up goal instructions (Agent 1) ───────────────────────────
 function DrawerFollowupGoalInstructions({
   config, onSave, onClose,
@@ -623,7 +657,7 @@ function DrawerFollowUpInstructions({
   );
 }
 
-type DrawerKey = 'followup' | 'followup_avancado' | 'followup_auto' | 'followup_instrucoes' | 'followup_goal_instrs' | 'cart_recovery_attempts' | 'followup_outcome_instrs' | 'limite' | 'intervalo' | 'midia' | 'delay_resposta' | 'horario_trabalho' | null;
+type DrawerKey = 'followup' | 'followup_avancado' | 'followup_auto' | 'followup_checkin' | 'followup_instrucoes' | 'followup_goal_instrs' | 'cart_recovery_attempts' | 'followup_outcome_instrs' | 'limite' | 'intervalo' | 'midia' | 'delay_resposta' | 'horario_trabalho' | null;
 type ModalKey  = 'optout' | 'lgpd' | 'reativacao' | null;
 
 export function CamadaPipeline({ config, onUpdate, phoneNumber }: CamadaPipelineProps) {
@@ -783,6 +817,16 @@ export function CamadaPipeline({ config, onUpdate, phoneNumber }: CamadaPipeline
             help="Quando ativo, o sistema cria o follow-up automaticamente para leads de Apresentação sem resposta há N dias — sem depender do operador arrastar o card."
           />
         )}
+        {!_isCloserAgent && (
+          <EditCard
+            label="Check-in automático de clientes"
+            sub="Reengaja clientes (Lista de Clientes) inactivos, sem pressão de venda"
+            value={config.followup_checkin_auto_trigger_enabled ? `Ativo · ${config.followup_checkin_inactivity_days} dia(s)` : 'Desativado'}
+            onClick={() => setDrawer('followup_checkin')}
+            status={config.followup_checkin_auto_trigger_enabled ? 'ok' : undefined}
+            help="Quando ativo, o sistema envia um check-in automático para clientes já convertidos (Lista de Clientes) sem sessão/contacto há N dias — tom de relacionamento, nunca de venda nova."
+          />
+        )}
         <EditCard
           label={`Instrução de follow-up · ${_fuInstrLabel}`}
           sub="Personalização do negócio para as mensagens automáticas"
@@ -857,6 +901,7 @@ export function CamadaPipeline({ config, onUpdate, phoneNumber }: CamadaPipeline
       {drawer === 'followup'            && <DrawerFollowup            config={config} onClose={() => setDrawer(null)} onSave={v => { onUpdate(v); setDrawer(null); }} />}
       {drawer === 'followup_avancado'   && <DrawerFollowupAvancado    config={config} onClose={() => setDrawer(null)} onSave={v => { onUpdate(v); setDrawer(null); }} />}
       {drawer === 'followup_auto'       && <DrawerFollowupAutomatico  config={config} onClose={() => setDrawer(null)} onSave={v => { onUpdate(v); setDrawer(null); }} />}
+      {drawer === 'followup_checkin'    && <DrawerFollowupCheckin     config={config} onClose={() => setDrawer(null)} onSave={v => { onUpdate(v); setDrawer(null); }} />}
       {drawer === 'followup_instrucoes'    && <DrawerFollowUpInstructions        config={config} onClose={() => setDrawer(null)} onSave={v => { onUpdate(v); setDrawer(null); }} />}
       {drawer === 'followup_goal_instrs'  && <DrawerFollowupGoalInstructions    config={config} onClose={() => setDrawer(null)} onSave={v => { onUpdate(v); setDrawer(null); }} />}
       {drawer === 'cart_recovery_attempts'&& <DrawerCartRecoveryAttempts        config={config} onClose={() => setDrawer(null)} onSave={v => { onUpdate(v); setDrawer(null); }} />}

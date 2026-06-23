@@ -301,9 +301,12 @@ export interface AgentConfig {
   followup_allowed_hours: string;
   followup_auto_trigger_enabled: boolean;
   followup_auto_trigger_inactivity_days: number;
+  followup_checkin_auto_trigger_enabled: boolean;
+  followup_checkin_inactivity_days: number;
   followup_sdr_instructions: string | null;
   followup_recovery_instructions: string | null;
   followup_postsession_instructions: string | null;
+  followup_checkin_instructions: string | null;
   followup_goal_instructions: Record<string, string> | null;
   cart_recovery_attempt_instructions: [string | null, string | null, string | null] | null;
   followup_outcome_instructions: Record<string, string> | null;
@@ -407,9 +410,12 @@ export const DEFAULT_AGENT_CONFIG: AgentConfig = {
   followup_allowed_hours: '08:00-20:00',
   followup_auto_trigger_enabled: false,
   followup_auto_trigger_inactivity_days: 3,
+  followup_checkin_auto_trigger_enabled: false,
+  followup_checkin_inactivity_days: 30,
   followup_sdr_instructions: null,
   followup_recovery_instructions: null,
   followup_postsession_instructions: null,
+  followup_checkin_instructions: null,
   followup_goal_instructions: null,
   cart_recovery_attempt_instructions: null,
   followup_outcome_instructions: null,
