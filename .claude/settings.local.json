@@ -17,7 +17,8 @@
       "Bash(.venv/Scripts/python -c \":*)",
       "Bash(find /c/crm-auto-digital/backend-core -name \"*.pyc\" -path \"*/ai_profiles*\" -delete)",
       "Bash(find /c/crm-auto-digital/backend-core -name \"__pycache__\" -path \"*/api/*\" -exec rm -rf {} +)",
-      "Bash(grep -rn EXECUTORS_BASE_URL /c/crm-auto-digital/backend-crm/ --include=*.env*)"
+      "Bash(grep -rn EXECUTORS_BASE_URL /c/crm-auto-digital/backend-crm/ --include=*.env*)",
+      "Bash(PYTHONIOENCODING=utf-8 PYTHONUTF8=1 ./.venv/Scripts/python.exe -c \"import services.followup_reconciler; print\\('ok'\\)\")"
     ]
   }
 }
