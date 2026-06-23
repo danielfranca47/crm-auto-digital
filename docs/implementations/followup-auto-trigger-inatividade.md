@@ -181,7 +181,7 @@ sempre antes de chamar `create_job()`. A função nova não replicou essa ordem.
 
 | # | Commit | O que foi implementado |
 |---|---|---|
-| 1 | _(pendente — registar após o commit)_ | corrige ordem commit→create_job no disparo automático |
+| 1 | `9689fb1` | corrige ordem commit→create_job no disparo automático |
 
 ---
 
