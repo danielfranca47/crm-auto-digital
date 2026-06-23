@@ -1,12 +1,10 @@
 # Follow-up automático por inatividade (M2)
 
 **Branch:** `main`
-**Status:** Fases 1–3 (disparo automático em `apresentation`/`agendamento`, com os dois
-bugs encontrados ao vivo já corrigidos) validadas em 23/06/2026 — checks obrigatórios
-`[x]`/`[⏭️]`. Falta apenas o check-in automático de `client-list` (mencionado como
-"Fase 2" na secção Abordagem, abaixo — passa a ser **Fase 4** numerada, já que as
-Fases 2 e 3 acabaram usadas para os fixes encontrados nos testes) — ainda não
-iniciado, depende de mini-diagnóstico próprio.
+**Status:** Fases 1–3 validadas em 23/06/2026. Fase 4a (check-in automático de
+`client-list` — backend completo) implementada e validada via SQL/curl em
+23/06/2026. Falta Fase 4b (UI: toggle + dias + instruções, validação end-to-end via
+browser).
 **Plano:** `docs/plans/followup-proativo-e-cancelamento-agenda.md` (M2)
 
 ---
@@ -261,13 +259,122 @@ lock. Dados de teste removidos após a verificação.
 
 ---
 
+## Fase 4a — Check-in automático de cliente inativo em `client-list` (23/06/2026)
+
+### Diagnóstico (resumo — plano completo no histórico de Plan Mode da sessão)
+
+Mini-diagnóstico levantou 3 riscos novos em relação às Fases 1–3:
+
+1. **`bot_disabled` fica em 1 ao entrar em `client-list`** (herdado de `closing` via
+   `apply_closing_bot_disable_side_effect`, `lead_category_policy.py:8`) e nada o
+   revertia de volta — diferente de `apresentation`/`agendamento`, onde o bot já está
+   ligado. Era preciso reativar ao iniciar o check-in **e** desligar de novo ao fechar
+   (comportamento novo, nenhuma fase anterior precisou disso).
+2. **Sinal de inatividade** não pode ser só mensagem inbound — o sinal certo para
+   "cliente recorrente parado" é a última sessão (`appointments.start_at`, excluindo
+   `status='canceled'`; não depender de `status='completed'`, que não é marcado de
+   forma confiável).
+3. **Guardrail de qualificação não se aplica** — o cliente já comprou.
+
+Decisão de escopo: restrito a `agent_1`/`agent_3` (mesmo público das Fases 1–3); Agent 2
+(`closer_agressivo`) fica fora — seu bot não passa pelo mesmo side-effect de
+`closing`/`bot_disabled`, exigiria lógica de repouso diferente. Variante única
+`client_checkin` para os dois agentes (tom pós-venda não depende do agente que vendeu).
+`category` permanece `client-list` ao iniciar o contrato (ao contrário das Fases 1–3,
+que migram para `follow-up`) — evita confundir o Kanban com um cliente já convertido
+"voltando" para a coluna de vendas.
+
+### Implementação
+
+| Arquivo | Mudança |
+|---|---|
+| `backend-core/app/models/ai_profile.py`, `app/db.py`, `app/api/ai_profiles.py` | 3 campos novos: `followup_checkin_auto_trigger_enabled` (bool, default false), `followup_checkin_inactivity_days` (int, default 30), `followup_checkin_instructions` (texto livre) |
+| `backend-crm/services/followup_state.py` | `_FOLLOWUP_SEND_NEXT_SCHEDULE["client_checkin"]` (cadência +3 dias); nova `start_client_checkin_followup()` (`max_attempts=2`, `followup_goal="checkin"`, reativa bot, **não** migra `category`); novo `_maybe_redisable_bot_after_checkin_close()` — desliga o bot de novo (`bot_disabled_reason='category_checkin_closed'`) só quando a variante é `client_checkin` e o lead ainda está em `client-list`; chamado em `stop_followup()` (exceto `inbound_reply`/`handoff_human` — há conversa em curso ou bot já desligado) e no branch `max_attempts_reached` de `progress_followup_after_auto_send()`; também ligado em `cancel_followup_manually()`, que não passava por `stop_followup()` |
+| `backend-crm/services/followup_reconciler.py` | nova `scan_inactive_clients_for_checkin()` — elegibilidade: `category='client-list'`, `agent_type IN (agent_1, agent_3)`, sem filtro de `bot_disabled` (client-list normalmente já está desligado), sem guardrail de qualificação, sinal = `MAX(última sessão não cancelada, última msg inbound, lastMovement)`; `reconcile_due_followups()`: filtro `category = 'follow-up'` → `category IN ('follow-up', 'client-list')` (senão os ticks do contrato em `client-list` nunca seriam enfileirados) |
+| `backend-crm/app.py` | `_reconciler_loop()` chama a nova função a cada ciclo, junto às outras duas |
+| `backend-executors/app/services/decision_engine.py` | novo branch `client_checkin` em `_build_child_prompt_follow_up()` — tom de check-in pós-venda sem pressão de venda, proíbe reabrir qualificação; nova entrada `"client_checkin": "followup_checkin_instructions"` em `_followup_variant_instr_key` |
+
+### Bug pré-existente encontrado (não corrigido nesta fase — fora de escopo)
+
+Ao testar o fechamento por `max_attempts_reached`, descobri que
+`progress_followup_after_auto_send()` (`followup_state.py`) tem o **mesmo problema da
+Fase 3** (`create_job()` chamado antes do `conn.commit()` do chamador) no branch de
+progresso normal (não no de `max_attempts_reached`, que não chama `create_job`) — mas
+esse bug é **pré-existente e afeta todas as variantes** (`sdr_scheduler`,
+`hybrid_scheduler`, `cart_recovery`), não algo introduzido nesta fase. Diferente do bug
+da Fase 3 (que eu controlava integralmente dentro de `followup_reconciler.py`), aqui
+`create_job()` está dentro de uma função chamada **no meio** da transação do chamador
+(`routes/executor.py:1257`, `routes/leads.py:1613`) — mover o commit exigiria alterar os
+2 call sites, fora do escopo do mini-diagnóstico desta fase. Contornei o teste
+pré-configurando `attempts=1` via SQL antes da chamada final (evita o branch que chama
+`create_job`). Registrado aqui para não se perder — candidato a uma fase de correção
+dedicada, fora do M2.
+
+### Commits Fase 4a
+
+| # | Commit | O que foi implementado |
+|---|---|---|
+| 1 | `720fb98` | schema (3 campos) + variante `client_checkin` + scan dedicado + redisable de bot + branch no decision_engine |
+
+### Relatório da Fase 4a — o que mudou na prática
+
+**Antes:** um cliente que já tinha comprado (`client-list`) nunca recebia nenhum
+contacto automático depois disso — mesmo parando de agendar sessões por meses, nada no
+sistema notava ou agia.
+
+**Agora:** existe um interruptor novo no Perfil de IA ("Check-in automático de
+clientes") que, quando ligado, faz o sistema enviar uma mensagem de check-in (sem
+pressão de venda, tom de "há quanto tempo, quer agendar a próxima sessão?") quando um
+cliente fica sem sessão/contacto por X dias (configurável, default 30). O bot — que
+normalmente fica desligado para clientes já convertidos — é reativado só durante esse
+check-in, e volta a desligar automaticamente se o cliente não responder em até 2
+tentativas. Continua desligado por padrão; zero impacto em contas existentes até o
+operador activar.
+
+**Para validar:** Cenário P-checkin (Fase 4a, validado ao vivo via SQL/curl direto —
+ver abaixo); Cenário P-checkin-UI (Fase 4b, pendente — depende da UI).
+
+### Cenário P-checkin — Disparo, fechamento e re-bloqueio do bot (Fase 4a)
+- [x] Lead em `category='client-list'`, `agent_type='agent_3'`, `bot_disabled=1`
+      (estado real pós-closing), com appointment `status='pending'` há 5 dias
+- [x] Activar `followup_checkin_auto_trigger_enabled=true`,
+      `followup_checkin_inactivity_days=1` via PATCH no AI Profile
+- [x] Confirmar: o próprio `_reconciler_loop()` do servidor (rodando em background)
+      detectou e iniciou o contrato sozinho, sem chamada manual — confirma a integração
+      ponta-a-ponta no loop
+- [x] Confirmar contrato: `followup_variant="client_checkin"`, `followup_goal="checkin"`,
+      `max_attempts=2`, `trigger="auto_inactivity"`, `category` permanece `client-list`,
+      `bot_disabled=0` (reativado)
+- [x] Confirmar job `whatsapp.followup.pregenerate` criado
+- [x] Confirmar `reconcile_due_followups()` agora também processa `category='client-list'`
+      — `next_followup_at` retrocedido manualmente, `enqueued=1` no resultado
+- [x] Simular fechamento por `max_attempts_reached` → `bot_disabled` volta a `1` com
+      `bot_disabled_reason='category_checkin_closed'`, `category` continua `client-list`
+- **Validado em:** 23/06/2026 — lead de teste `id=298` (user_id=15). Dados de teste
+  removidos após validação (lead, appointment, jobs, prospection_logs, guard); toggle do
+  AI Profile revertido a `Desativado`/`30 dias`.
+
+### Cenário P-checkin-UI — Fase 4b (pendente)
+- [ ] Toggle "Check-in automático de clientes" visível e funcional na UI
+      (`CamadaPipeline.tsx`), persistência confirmada após reload
+- [ ] Campo de instruções (`followup_checkin_instructions`) salva e é respeitado pelo
+      prompt
+- [ ] Lead real em `client-list` com inactividade simulada → mensagem enviada com tom de
+      check-in (sem pressão de venda), visível no histórico do lead
+
+---
+
 ## Ajustes Possíveis Pós-Implementação
 
-- Fase 2 (check-in `client-list`) ainda não tem variante de contrato, cadência nem
-  instrução hardcoded definidas — entra com mini-diagnóstico próprio.
 - Sinal de inatividade usa `lastMovement` como fallback quando não há mensagem inbound
   registada — pode ser tocado por edição manual do operador no card (risco baixo, mas
   documentado).
-- Campos novos nascem numa secção isolada da UI ("Follow-up automático"), propositalmente
-  não integrados aos campos antigos — pensados para serem absorvidos pelo M3 (camada
-  dedicada) quando esse item avançar.
+- Campos novos nascem numa secção isolada da UI ("Follow-up automático"/"Check-in
+  automático de clientes"), propositalmente não integrados aos campos antigos —
+  pensados para serem absorvidos pelo M3 (camada dedicada) quando esse item avançar.
+- Bug pré-existente em `progress_followup_after_auto_send()` (create_job antes do
+  commit do chamador, ver Fase 4a) — afeta todas as variantes em produção sob
+  concorrência; não corrigido nesta fase, candidato a fase dedicada.
+- Agent 2 (`closer_agressivo`) fica fora do check-in automático de `client-list` —
+  bot não passa pelo mesmo side-effect de desativação, exigiria lógica de repouso
+  própria.
