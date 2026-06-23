@@ -1,7 +1,7 @@
 # Fix: Persistência de campos de follow-up/agenda no AI Profile
 
 **Branch:** `main`
-**Status:** Em andamento
+**Status:** Todos os cenários validados (23/06/2026)
 **Origem:** `docs/plans/followup-proativo-e-cancelamento-agenda.md` (M1, prioridade ALTA)
 
 ---
@@ -230,7 +230,7 @@ filtrando valores inválidos, enviando `null` se o resultado for vazio.
 
 | # | Commit | O que foi implementado |
 |---|---|---|
-| 1 | `pendente` | Converte `followup_cadence` entre string (UI) e list[int] (backend) |
+| 1 | `5b1e329` | Converte `followup_cadence` entre string (UI) e list[int] (backend) |
 
 ---
 
