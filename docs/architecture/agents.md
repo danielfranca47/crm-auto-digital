@@ -172,6 +172,28 @@ Aliases aceitos: `whatsapp_send`, `maps_search_fallback`, `maps_enrich_fallback`
 
 `PUT /ai-profiles/me` aceita atualização parcial (`exclude_unset=True`). Só campos presentes no body são alterados.
 
+### Persistência via `frontend-crm` — coluna de topo vs. `offer_pack`
+
+`offer_pack` não é validado campo a campo pelo backend (é um `dict` livre) — qualquer
+chave gravada lá dentro é aceita silenciosamente, mesmo que exista uma coluna de topo
+com o mesmo significado. Isso já causou bug real: `getConfig()`/`saveConfig()` em
+`frontend-crm/src/services/api.ts` liam/escreviam `followup_cadence`,
+`followup_max_attempts`, `followup_first_offset`, `followup_allowed_hours`,
+`nurture_vs_discard_rule`, `briefing_enabled`/`briefing_channel`/`briefing_lead_time`,
+`operator_whatsapp` e `appointment_reminder_offsets` dentro de `offer_pack`, enquanto o
+motor real (`followup_state.py`, `jobs_service.py`, `briefing_service.py`,
+`decision_engine.py`) sempre leu das colunas de topo — o operador configurava pela UI
+sem qualquer erro, mas o valor nunca chegava ao motor.
+
+**Regra ao adicionar/expor um novo campo na UI de `/ai-profile`:** se o campo já existe
+como coluna de topo do AI Profile (tabela acima), `getConfig()` deve ler de
+`(profile as any)?.<campo>` e `saveConfig()` deve enviá-lo como chave de topo no payload
+do `PUT` — nunca dentro do objecto `offer_pack`. `offer_pack` é só para os campos que
+genuinamente não têm coluna própria (ver "Campos do `offer_pack`" acima).
+
+`qualification_score_threshold` e `buying_signal_keywords` ainda têm este bug — ver
+`docs/plans/pipeline-configurable-fields.md`, Etapa J.
+
 ---
 
 ## Lembretes de Appointment
