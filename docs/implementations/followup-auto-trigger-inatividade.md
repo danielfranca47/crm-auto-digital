@@ -152,6 +152,39 @@ foi essa fase ser coberta pelo followup_state, mas isso nunca foi conectado.
 
 ---
 
+## Fase 3 — Diagnóstico + Correção: `database is locked` no disparo automático (23/06/2026)
+
+### Problema identificado
+
+No primeiro teste ao vivo (lead real `id=296`, `agendamento`, inatividade simulada de 3
+dias, toggle ligado em 1 dia), o reconciler detectou o lead correctamente mas falhou
+repetidamente (18 ciclos consecutivos) com `sqlite3.OperationalError: database is
+locked` ao tentar criar o job de pré-geração da mensagem. A transacção do lead era
+revertida automaticamente (rollback do `with get_connection() as conn`), então não
+houve corrupção de dados — só o disparo nunca completava.
+
+Causa raiz: `start_followup_for_inactivity()` chamava `create_job()` **antes** do
+`conn.commit()` do chamador (`scan_inactive_leads_for_auto_followup`). `create_job()`
+abre a sua própria conexão SQLite para inserir na tabela `jobs` — com a transacção do
+`UPDATE leads` ainda aberta (lock de escrita), a segunda conexão não conseguia escrever.
+O padrão correcto já existia em `start_followup_transition` (`leads.py`): `conn.commit()`
+sempre antes de chamar `create_job()`. A função nova não replicou essa ordem.
+
+### Correção
+
+| Arquivo | Mudança |
+|---|---|
+| `backend-crm/services/followup_state.py` | `start_followup_for_inactivity()`: removida a chamada a `create_job()` |
+| `backend-crm/services/followup_reconciler.py` | `scan_inactive_leads_for_auto_followup()`: `create_job()` movido para depois do `conn.commit()` |
+
+### Commits Fase 3
+
+| # | Commit | O que foi implementado |
+|---|---|---|
+| 1 | _(pendente — registar após o commit)_ | corrige ordem commit→create_job no disparo automático |
+
+---
+
 ## Checks de Validação
 
 ### Cenário P1 — Toggle desligado por default não muda nada

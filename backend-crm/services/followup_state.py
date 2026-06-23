@@ -463,11 +463,8 @@ def start_followup_for_inactivity(
         """,
         (lead_id, _json_dumps(contract), user_id),
     )
-    create_job(
-        job_type=TYPE_WHATSAPP_FOLLOWUP_PREGENERATE,
-        payload={"lead_id": lead_id, "user_id": user_id},
-        user_id=user_id,
-    )
+    # create_job() abre a própria conexão — chamar só depois do commit do caller,
+    # senão a transação ainda aberta deste UPDATE causa "database is locked".
     return {"started": True, "next_followup_at": first_followup_at, "followup_variant": variant}
 
 

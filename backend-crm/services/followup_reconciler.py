@@ -438,6 +438,7 @@ def scan_inactive_leads_for_auto_followup(*, limit: int = 100) -> Dict[str, Any]
     """
     from services.qualification_guardrails import can_advance_from_qualification
     from services.followup_state import start_followup_for_inactivity, resolve_auto_inactivity_variant
+    from services.jobs_service import TYPE_WHATSAPP_FOLLOWUP_PREGENERATE, create_job
 
     with get_connection() as read_conn:
         rows = read_conn.execute(
@@ -515,6 +516,13 @@ def scan_inactive_leads_for_auto_followup(*, limit: int = 100) -> Dict[str, Any]
             )
             if result.get("started"):
                 conn.commit()
+                # create_job() abre a própria conexão — só depois do commit acima,
+                # senão a transação ainda aberta causa "database is locked".
+                create_job(
+                    job_type=TYPE_WHATSAPP_FOLLOWUP_PREGENERATE,
+                    payload={"lead_id": lead_id, "user_id": user_id},
+                    user_id=user_id,
+                )
                 started += 1
                 items.append(
                     {"lead_id": lead_id, "user_id": user_id, "followup_variant": result.get("followup_variant")}
