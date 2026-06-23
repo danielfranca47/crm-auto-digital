@@ -425,7 +425,9 @@ def scan_inactive_leads_for_auto_followup(*, limit: int = 100) -> Dict[str, Any]
     Detecta leads silenciosos em `apresentation` e inicia follow-up automaticamente.
 
     Elegibilidade:
-      - category = 'apresentation', bot_disabled = 0, is_playground = 0
+      - category IN ('apresentation', 'agendamento'), bot_disabled = 0, is_playground = 0
+        ('pre-agendamento' fica de fora: já tem check-in automático dedicado via
+        _schedule_preagendamento_checkin em routes/executor.py)
       - sem contrato de follow-up activo/scheduled
       - AI Profile do usuário com followup_auto_trigger_enabled = true
       - inatividade (última msg inbound, fallback lastMovement) >=
@@ -442,7 +444,7 @@ def scan_inactive_leads_for_auto_followup(*, limit: int = 100) -> Dict[str, Any]
             """
             SELECT id, user_id, agent_type, lastMovement, followup_auto_trigger_last_fired_at
               FROM leads
-             WHERE category = 'apresentation'
+             WHERE category IN ('apresentation', 'agendamento')
                AND COALESCE(bot_disabled, 0) = 0
                AND COALESCE(is_playground, 0) = 0
                AND (followup_status IS NULL OR followup_status NOT IN ('active', 'scheduled'))

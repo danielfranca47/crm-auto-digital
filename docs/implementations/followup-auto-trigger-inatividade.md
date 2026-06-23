@@ -112,6 +112,46 @@ que foi iniciado manualmente.
 
 ---
 
+## Fase 2 — Diagnóstico + Correção: faltava cobrir `agendamento` (23/06/2026)
+
+### Problema identificado
+
+Antes de iniciar o teste ao vivo, inspecionei os leads reais da conta de teste
+(`template_key=hybrid_scheduler`, `agent_mode=agenda`) e descobri que o pipeline tem
+dois estágios entre `apresentation` e `follow-up` que a Fase 1 não cobria:
+`pre-agendamento` (fase `p3a`) e `agendamento` (fase `p3b`) — só activos para o grupo
+`agenda` (`sales-flow.md`). Praticamente todos os leads reais da conta de teste
+estavam parados em `agendamento`, não em `apresentation` — exactamente o cenário de
+"paciente que parou de responder no meio do agendamento" que o M2 deveria cobrir para
+o Híbrido Agendador.
+
+Causa raiz: a Fase 1 assumiu (com base no fluxo manual de `start-followup`, que só
+permite a transição a partir de `apresentation`) que esse era o único estágio
+"silenciável" antes do follow-up — sem saber da existência de `pre-agendamento`/
+`agendamento`.
+
+Investigação adicional: `pre-agendamento` já tem mecanismo de recuperação automática
+próprio — `_schedule_preagendamento_checkin()` (`backend-crm/routes/executor.py`),
+disparado por um sinal estruturado do LLM filho. `agendamento`, por outro lado, não
+tem nenhum mecanismo de recuperação — o comentário em
+`backend-executors/app/services/decision_engine.py:429` ("no_reply_trigger é gerido
+pelo followup_state — não avaliado aqui") confirma que a intenção do sistema sempre
+foi essa fase ser coberta pelo followup_state, mas isso nunca foi conectado.
+
+### Correção
+
+| Arquivo | Mudança |
+|---|---|
+| `backend-crm/services/followup_reconciler.py` | `scan_inactive_leads_for_auto_followup()`: `WHERE category = 'apresentation'` → `WHERE category IN ('apresentation', 'agendamento')`. `pre-agendamento` fica de fora (mecanismo dedicado já existe). |
+
+### Commits Fase 2
+
+| # | Commit | O que foi implementado |
+|---|---|---|
+| 1 | _(pendente — registar após o commit)_ | amplia elegibilidade do scan para incluir `agendamento` |
+
+---
+
 ## Checks de Validação
 
 ### Cenário P1 — Toggle desligado por default não muda nada
@@ -132,6 +172,11 @@ que foi iniciado manualmente.
 
 ### Cenário P4 — Guardrail de qualificação respeitado
 - [ ] Lead em `apresentation` com qualificação incompleta NÃO recebe contrato automático
+
+### Cenário P5 — Funciona também para lead parado em `agendamento` (Fase 2)
+- [ ] Lead em `agendamento` (hybrid_scheduler), qualificação completa, inactivo > limiar
+- [ ] Confirmar: recebe contrato automático igual ao cenário P2
+- [ ] Confirmar: lead em `pre-agendamento` NÃO recebe (mecanismo dedicado próprio)
 
 ---
 
