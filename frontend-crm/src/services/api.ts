@@ -1319,16 +1319,16 @@ export const api = {
 
         // Camada 2 — Qualificação avançada
         qualification_score_threshold: pack.qualification_score_threshold ?? DEFAULT_AGENT_CONFIG.qualification_score_threshold,
-        nurture_vs_discard_rule:        pack.nurture_vs_discard_rule        ?? DEFAULT_AGENT_CONFIG.nurture_vs_discard_rule,
+        nurture_vs_discard_rule:        (profile as any)?.nurture_vs_discard_rule        ?? DEFAULT_AGENT_CONFIG.nurture_vs_discard_rule,
         buying_signal_keywords:         pack.buying_signal_keywords         ?? DEFAULT_AGENT_CONFIG.buying_signal_keywords,
         qualification_fields:           (profile as any)?.qualification_fields ?? DEFAULT_AGENT_CONFIG.qualification_fields,
         qualification_required_fields:  (profile as any)?.qualification_required_fields ?? pack.qualification_required_fields ?? DEFAULT_AGENT_CONFIG.qualification_required_fields,
 
         // Camada 3 — Follow-up avançado
-        followup_max_attempts:  pack.followup_max_attempts  ?? DEFAULT_AGENT_CONFIG.followup_max_attempts,
-        followup_first_offset:  pack.followup_first_offset  ?? DEFAULT_AGENT_CONFIG.followup_first_offset,
-        followup_cadence:       pack.followup_cadence       ?? DEFAULT_AGENT_CONFIG.followup_cadence,
-        followup_allowed_hours: pack.followup_allowed_hours ?? DEFAULT_AGENT_CONFIG.followup_allowed_hours,
+        followup_max_attempts:  (profile as any)?.followup_max_attempts  ?? DEFAULT_AGENT_CONFIG.followup_max_attempts,
+        followup_first_offset:  (profile as any)?.followup_first_offset  ?? DEFAULT_AGENT_CONFIG.followup_first_offset,
+        followup_cadence:       (profile as any)?.followup_cadence       ?? DEFAULT_AGENT_CONFIG.followup_cadence,
+        followup_allowed_hours: (profile as any)?.followup_allowed_hours ?? DEFAULT_AGENT_CONFIG.followup_allowed_hours,
         followup_sdr_instructions:              (profile as any)?.followup_sdr_instructions              ?? null,
         followup_recovery_instructions:         (profile as any)?.followup_recovery_instructions         ?? null,
         followup_postsession_instructions:      (profile as any)?.followup_postsession_instructions      ?? null,
@@ -1345,10 +1345,10 @@ export const api = {
         ) as 'commercial' | 'exploratory',
         appointment_reminder_h1: pack.appointment_reminder_h1 ?? DEFAULT_AGENT_CONFIG.appointment_reminder_h1,
         appointment_reminder_h2: pack.appointment_reminder_h2 ?? DEFAULT_AGENT_CONFIG.appointment_reminder_h2,
-        briefing_enabled:        pack.briefing_enabled        ?? DEFAULT_AGENT_CONFIG.briefing_enabled,
-        briefing_channel:        pack.briefing_channel        ?? DEFAULT_AGENT_CONFIG.briefing_channel,
-        briefing_lead_time:      pack.briefing_lead_time      ?? DEFAULT_AGENT_CONFIG.briefing_lead_time,
-        operator_whatsapp:       pack.operator_whatsapp       ?? DEFAULT_AGENT_CONFIG.operator_whatsapp,
+        briefing_enabled:        (profile as any)?.briefing_enabled        ?? DEFAULT_AGENT_CONFIG.briefing_enabled,
+        briefing_channel:        (profile as any)?.briefing_channel        ?? DEFAULT_AGENT_CONFIG.briefing_channel,
+        briefing_lead_time:      (profile as any)?.briefing_lead_time      ?? DEFAULT_AGENT_CONFIG.briefing_lead_time,
+        operator_whatsapp:       (profile as any)?.operator_whatsapp       ?? DEFAULT_AGENT_CONFIG.operator_whatsapp,
         calendar_integration:    pack.calendar_integration    ?? DEFAULT_AGENT_CONFIG.calendar_integration,
         availability_mode:       ((profile as any)?.availability_mode ?? DEFAULT_AGENT_CONFIG.availability_mode) as import('../types/agente').AgentConfig['availability_mode'],
         availability_schedule:   (profile as any)?.availability_schedule ?? DEFAULT_AGENT_CONFIG.availability_schedule,
@@ -1395,7 +1395,6 @@ export const api = {
 
         // Camada 2 — Qualificação avançada
         qualification_score_threshold: config.qualification_score_threshold,
-        nurture_vs_discard_rule:        config.nurture_vs_discard_rule,
         buying_signal_keywords:         config.buying_signal_keywords,
         qualification_required_fields:  config.qualification_required_fields,
 
@@ -1418,20 +1417,10 @@ export const api = {
         interval_min:        config.interval_min,
         interval_max:        config.interval_max,
 
-        // Camada 3 — Follow-up avançado
-        followup_max_attempts:  config.followup_max_attempts,
-        followup_first_offset:  config.followup_first_offset,
-        followup_cadence:       config.followup_cadence,
-        followup_allowed_hours: config.followup_allowed_hours,
-
         // Apresentação e agendamento
         appointment_mode:        config.appointment_mode,
         appointment_reminder_h1: config.appointment_reminder_h1,
         appointment_reminder_h2: config.appointment_reminder_h2,
-        briefing_enabled:        config.briefing_enabled,
-        briefing_channel:        config.briefing_channel,
-        briefing_lead_time:      config.briefing_lead_time,
-        operator_whatsapp:       config.operator_whatsapp,
         calendar_integration:    config.calendar_integration,
 
         // Oferta e pagamento
@@ -1480,6 +1469,15 @@ export const api = {
         availability_schedule:         config.availability_schedule,
         scheduling_offer_style:        config.scheduling_offer_style,
         meeting_management_enabled:    config.meeting_management_enabled,
+        nurture_vs_discard_rule:       config.nurture_vs_discard_rule,
+        followup_max_attempts:         config.followup_max_attempts,
+        followup_first_offset:         config.followup_first_offset,
+        followup_cadence:              config.followup_cadence,
+        followup_allowed_hours:        config.followup_allowed_hours,
+        briefing_enabled:              config.briefing_enabled,
+        briefing_channel:              config.briefing_channel,
+        briefing_lead_time:            config.briefing_lead_time,
+        operator_whatsapp:             config.operator_whatsapp,
         followup_sdr_instructions:             config.followup_sdr_instructions,
         followup_recovery_instructions:        config.followup_recovery_instructions,
         followup_postsession_instructions:     config.followup_postsession_instructions,
