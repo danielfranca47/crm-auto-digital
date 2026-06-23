@@ -112,6 +112,34 @@ await coreClient.put('/ai-profiles/me', {
 });
 ```
 
+### Commits Fase 1
+
+| # | Commit | O que foi implementado |
+|---|---|---|
+| 1 | `9ec9479` | Corrige os 9 campos de mapeamento directo em `api.ts` |
+
+**Detalhes do commit `9ec9479`:**
+- `frontend-crm/src/services/api.ts` — `getConfig()`: os 9 campos passam a ler de
+  `(profile as any)?.<campo>` em vez de `pack.<campo>`. `saveConfig()`: os 9 campos
+  removidos do objecto literal `offer_pack` e adicionados como chaves de topo no
+  payload de `coreClient.put('/ai-profiles/me', {...})`.
+
+### Relatório da Fase 1 — o que mudou na prática
+
+**Antes:** quando o operador configurava quantas tentativas de follow-up fazer, o
+intervalo entre tentativas, o número de WhatsApp do dossiê pré-reunião ou os dados do
+dossiê, a tela salvava sem erro — mas nada disso chegava ao motor que de facto envia as
+mensagens. O sistema sempre usava os valores padrão da plataforma, silenciosamente.
+
+**Agora:** esses 9 campos (cadência e tentativas de follow-up, janela de horário
+permitida, regra de nutrir-vs-descartar lead frio, e os 4 campos do dossiê
+pré-reunião/WhatsApp do operador) são gravados no lugar certo e o motor passa a usá-los
+de verdade.
+
+**Para validar:** Cenário P1, abaixo.
+
+---
+
 ### Fase 2 — Corrigir `appointment_reminder_offsets` (conversão horas ↔ minutos)
 
 **Objetivo:** fazer os campos de UI `appointment_reminder_h1`/`h2` (horas positivas)
@@ -144,6 +172,31 @@ appointment_reminder_offsets: [
   -(config.appointment_reminder_h2 * 60),
 ],
 ```
+
+### Commits Fase 2
+
+| # | Commit | O que foi implementado |
+|---|---|---|
+| 1 | `180e583` | Converte `appointment_reminder_offsets` entre UI (horas) e backend (minutos) |
+
+**Detalhes do commit `180e583`:**
+- `frontend-crm/src/services/api.ts` — `getConfig()`: `appointment_reminder_h1`/`h2`
+  passam a ser derivados de `(profile as any)?.appointment_reminder_offsets`.
+  `saveConfig()`: `appointment_reminder_h1`/`h2` removidos de `offer_pack`;
+  `appointment_reminder_offsets` (convertido para minutos negativos) enviado como chave
+  de topo.
+
+### Relatório da Fase 2 — o que mudou na prática
+
+**Antes:** o campo de "lembrete X horas antes" da sessão sempre mostrava e gravava
+24h/2h (o padrão do sistema), independente do que o operador digitasse — porque a tela
+gravava num lugar que o motor de envio de lembretes nunca lia.
+
+**Agora:** o valor digitado pelo operador é convertido e gravado no lugar certo — o
+lembrete real enviado por WhatsApp passa a respeitar a configuração, não só o padrão da
+plataforma.
+
+**Para validar:** Cenário P2 e C1, abaixo.
 
 ---
 
