@@ -174,6 +174,7 @@ function ContextPanel({ contract }: { contract: FollowUpContract | null }) {
     { key: "Reunião ocorreu", val: contract.meeting_or_session_happened === "yes" ? "Sim" : contract.meeting_or_session_happened ? "Não" : "—" },
     { key: "Resultado", val: contract.outcome ?? "—" },
     { key: "Variant", val: contract.followup_variant ?? "—" },
+    { key: "Origem", val: contract.trigger === "auto_inactivity" ? "Automático (inatividade)" : "Manual" },
   ];
 
   return (

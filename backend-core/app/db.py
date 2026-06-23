@@ -149,6 +149,8 @@ def ensure_ai_profile_columns() -> None:
         "followup_max_attempts": {"default": None, "sqlite_type": "INTEGER", "pg_type": "INTEGER"},
         "followup_first_offset": {"default": None, "sqlite_type": "INTEGER", "pg_type": "INTEGER"},
         "followup_allowed_hours": {"default": None, "sqlite_type": "TEXT", "pg_type": "VARCHAR"},
+        "followup_auto_trigger_enabled": {"default": False, "sqlite_type": "INTEGER", "pg_type": "BOOLEAN"},
+        "followup_auto_trigger_inactivity_days": {"default": 3, "sqlite_type": "INTEGER", "pg_type": "INTEGER"},
         "origin_inbound_opener": {"default": None, "sqlite_type": "TEXT", "pg_type": "TEXT"},
         "origin_outbound_opener": {"default": None, "sqlite_type": "TEXT", "pg_type": "TEXT"},
         "followup_sdr_instructions":              {"default": None, "sqlite_type": "TEXT", "pg_type": "TEXT"},

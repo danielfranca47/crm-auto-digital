@@ -509,7 +509,17 @@ function FollowUpRow({
           {(lead.companyName ?? "?").slice(0, 2).toUpperCase()}
         </div>
         <div className="min-w-0">
-          <p className="text-sm font-medium truncate">{lead.companyName}</p>
+          <p className="text-sm font-medium truncate flex items-center gap-1.5">
+            <span className="truncate">{lead.companyName}</span>
+            {contract?.trigger === "auto_inactivity" && (
+              <span
+                className="text-[9px] font-mono uppercase px-1 py-0.5 rounded border shrink-0 text-blue-600 bg-blue-50 border-blue-200"
+                title="Iniciado automaticamente por inatividade"
+              >
+                auto
+              </span>
+            )}
+          </p>
           <p className="text-xs text-muted-foreground truncate">{lead.contactName ?? "—"}</p>
         </div>
       </div>

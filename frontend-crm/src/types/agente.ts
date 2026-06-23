@@ -299,6 +299,8 @@ export interface AgentConfig {
   followup_first_offset: number;
   followup_cadence: string;
   followup_allowed_hours: string;
+  followup_auto_trigger_enabled: boolean;
+  followup_auto_trigger_inactivity_days: number;
   followup_sdr_instructions: string | null;
   followup_recovery_instructions: string | null;
   followup_postsession_instructions: string | null;
@@ -403,6 +405,8 @@ export const DEFAULT_AGENT_CONFIG: AgentConfig = {
   followup_first_offset: 60,
   followup_cadence: '60,1440,4320',
   followup_allowed_hours: '08:00-20:00',
+  followup_auto_trigger_enabled: false,
+  followup_auto_trigger_inactivity_days: 3,
   followup_sdr_instructions: null,
   followup_recovery_instructions: null,
   followup_postsession_instructions: null,

@@ -373,6 +373,104 @@ def start_cart_recovery_followup(
     return {"started": True, "next_followup_at": first_followup_at}
 
 
+_AUTO_INACTIVITY_VARIANT_BY_AGENT_TYPE = {
+    "agent_1": "sdr_scheduler",
+    "agent_3": "hybrid_scheduler",
+}
+_AUTO_INACTIVITY_MAX_ATTEMPTS_BY_VARIANT = {
+    "sdr_scheduler": 4,
+    "hybrid_scheduler": 3,
+}
+_AUTO_INACTIVITY_GOAL_BY_VARIANT = {
+    "sdr_scheduler": "reengage",
+    "hybrid_scheduler": "reengage_conversation",
+}
+_AUTO_INACTIVITY_FIRST_OFFSET_MINUTES = 30
+
+
+def resolve_auto_inactivity_variant(agent_type: Optional[str]) -> Optional[str]:
+    return _AUTO_INACTIVITY_VARIANT_BY_AGENT_TYPE.get(str(agent_type or "").strip().lower())
+
+
+def start_followup_for_inactivity(
+    conn,
+    *,
+    lead_id: int,
+    user_id: int,
+    agent_type: Optional[str],
+) -> Dict[str, Any]:
+    """Inicia follow-up automaticamente para lead silencioso em `apresentation`.
+
+    Mesmo formato de contrato de start_followup_transition (leads.py), mas sem input
+    do operador — usa defaults neutros ("reengage") e trigger="auto_inactivity" para
+    distinguir do gesto manual na Central de Follow-ups.
+    """
+    row = _load_lead_followup_row(conn, lead_id=lead_id)
+    if not row:
+        return {"started": False, "reason": "lead_not_found"}
+
+    existing = _parse_contract(row["followup_contract"])
+    if existing and str(existing.get("status") or "").lower() in {"active", "scheduled"}:
+        return {"started": False, "reason": "contract_already_active"}
+
+    variant = resolve_auto_inactivity_variant(agent_type)
+    if not variant:
+        return {"started": False, "reason": "agent_type_not_eligible"}
+
+    now = _now_utc()
+    first_followup_at = (now + timedelta(minutes=_AUTO_INACTIVITY_FIRST_OFFSET_MINUTES)).isoformat()
+    max_attempts = _AUTO_INACTIVITY_MAX_ATTEMPTS_BY_VARIANT.get(variant, 3)
+    goal = _AUTO_INACTIVITY_GOAL_BY_VARIANT.get(variant)
+
+    contract: Dict[str, Any] = {
+        "phase": "follow-up",
+        "version": 1,
+        "followup_variant": variant,
+        "trigger": "auto_inactivity",
+        "status": "active",
+        "attempts": 0,
+        "max_attempts": max_attempts,
+        "next_followup_at": first_followup_at,
+        "last_followup_at": None,
+        "stop_reason": None,
+        "meeting_or_session_happened": None,
+        "outcome": None,
+        "proposal_sent": False,
+        "followup_goal": goal,
+        "operator_note": None,
+        "created_at": now.isoformat(),
+    }
+
+    conn.execute(
+        """
+        UPDATE leads
+           SET category = 'follow-up',
+               bot_disabled = 0,
+               bot_disabled_reason = NULL,
+               followup_contract = ?,
+               followup_status = 'active',
+               next_followup_at = ?,
+               followup_auto_trigger_last_fired_at = CURRENT_TIMESTAMP,
+               lastMovement = CURRENT_TIMESTAMP
+         WHERE id = ?
+        """,
+        (_json_dumps(contract), first_followup_at, lead_id),
+    )
+    conn.execute(
+        """
+        INSERT INTO prospection_logs (lead_id, channel, message_id, action, notes, user_id)
+        VALUES (?, NULL, NULL, 'followup_started_auto_inactivity', ?, ?)
+        """,
+        (lead_id, _json_dumps(contract), user_id),
+    )
+    create_job(
+        job_type=TYPE_WHATSAPP_FOLLOWUP_PREGENERATE,
+        payload={"lead_id": lead_id, "user_id": user_id},
+        user_id=user_id,
+    )
+    return {"started": True, "next_followup_at": first_followup_at, "followup_variant": variant}
+
+
 def _cancel_pending_jobs_for_lead(conn, *, lead_id: int) -> int:
     """Cancela jobs pendentes de follow-up para o lead via guard table. Retorna count."""
     rows = conn.execute(

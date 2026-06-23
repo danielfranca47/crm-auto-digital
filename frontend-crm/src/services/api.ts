@@ -239,6 +239,7 @@ export type FollowUpContract = {
   attempts: number;
   max_attempts: number;
   followup_variant?: string | null;
+  trigger?: string | null;
   next_followup_at: string | null;
   last_followup_at?: string | null;
   stop_reason?: string | null;
@@ -1329,6 +1330,8 @@ export const api = {
         followup_first_offset:  (profile as any)?.followup_first_offset  ?? DEFAULT_AGENT_CONFIG.followup_first_offset,
         followup_cadence:       Array.isArray((profile as any)?.followup_cadence) ? (profile as any).followup_cadence.join(',') : DEFAULT_AGENT_CONFIG.followup_cadence,
         followup_allowed_hours: (profile as any)?.followup_allowed_hours ?? DEFAULT_AGENT_CONFIG.followup_allowed_hours,
+        followup_auto_trigger_enabled: (profile as any)?.followup_auto_trigger_enabled ?? DEFAULT_AGENT_CONFIG.followup_auto_trigger_enabled,
+        followup_auto_trigger_inactivity_days: (profile as any)?.followup_auto_trigger_inactivity_days ?? DEFAULT_AGENT_CONFIG.followup_auto_trigger_inactivity_days,
         followup_sdr_instructions:              (profile as any)?.followup_sdr_instructions              ?? null,
         followup_recovery_instructions:         (profile as any)?.followup_recovery_instructions         ?? null,
         followup_postsession_instructions:      (profile as any)?.followup_postsession_instructions      ?? null,
@@ -1484,6 +1487,8 @@ export const api = {
           return parsed.length > 0 ? parsed : null;
         })(),
         followup_allowed_hours:        config.followup_allowed_hours,
+        followup_auto_trigger_enabled:          config.followup_auto_trigger_enabled,
+        followup_auto_trigger_inactivity_days:  config.followup_auto_trigger_inactivity_days,
         briefing_enabled:              config.briefing_enabled,
         briefing_channel:              config.briefing_channel,
         briefing_lead_time:            config.briefing_lead_time,

@@ -450,6 +450,27 @@ function DrawerFollowupAvancado({ config, onSave, onClose }: {
   );
 }
 
+// ─── Drawer: Follow-up automático (gatilho por inatividade) ───────────────
+function DrawerFollowupAutomatico({ config, onSave, onClose }: {
+  config: AgentConfig; onSave: (v: Partial<AgentConfig>) => void; onClose: () => void;
+}) {
+  const [enabled, setEnabled] = useState(config.followup_auto_trigger_enabled);
+  const [days, setDays] = useState(config.followup_auto_trigger_inactivity_days);
+
+  return (
+    <DrawerBase title="Follow-up automático" sub="Inicia o follow-up sozinho quando o lead fica em silêncio" onClose={onClose}
+      onSave={() => onSave({ followup_auto_trigger_enabled: enabled, followup_auto_trigger_inactivity_days: days })}>
+      <ToggleRow
+        label="Ativar disparo automático"
+        desc="Sem isto, o follow-up só começa quando você arrasta o card manualmente para a coluna Follow-up"
+        value={enabled}
+        onChange={setEnabled}
+      />
+      <SliderField label="Dias de silêncio antes de disparar" value={days} min={1} max={14} step={1} format={v => `${v} dia${v === 1 ? '' : 's'}`} onChange={setDays} />
+    </DrawerBase>
+  );
+}
+
 // ─── Drawer: Follow-up goal instructions (Agent 1) ───────────────────────────
 function DrawerFollowupGoalInstructions({
   config, onSave, onClose,
@@ -602,7 +623,7 @@ function DrawerFollowUpInstructions({
   );
 }
 
-type DrawerKey = 'followup' | 'followup_avancado' | 'followup_instrucoes' | 'followup_goal_instrs' | 'cart_recovery_attempts' | 'followup_outcome_instrs' | 'limite' | 'intervalo' | 'midia' | 'delay_resposta' | 'horario_trabalho' | null;
+type DrawerKey = 'followup' | 'followup_avancado' | 'followup_auto' | 'followup_instrucoes' | 'followup_goal_instrs' | 'cart_recovery_attempts' | 'followup_outcome_instrs' | 'limite' | 'intervalo' | 'midia' | 'delay_resposta' | 'horario_trabalho' | null;
 type ModalKey  = 'optout' | 'lgpd' | 'reativacao' | null;
 
 export function CamadaPipeline({ config, onUpdate, phoneNumber }: CamadaPipelineProps) {
@@ -752,6 +773,16 @@ export function CamadaPipeline({ config, onUpdate, phoneNumber }: CamadaPipeline
           onClick={() => setDrawer('followup_avancado')} status="ok"
           help="Parâmetros avançados: máximo de tentativas (após isso o lead é arquivado), horário permitido de envio e cadência personalizada em minutos."
         />
+        {!_isCloserAgent && (
+          <EditCard
+            label="Follow-up automático"
+            sub="Dispara sozinho quando o lead fica em silêncio em Apresentação"
+            value={config.followup_auto_trigger_enabled ? `Ativo · ${config.followup_auto_trigger_inactivity_days} dia(s)` : 'Desativado'}
+            onClick={() => setDrawer('followup_auto')}
+            status={config.followup_auto_trigger_enabled ? 'ok' : undefined}
+            help="Quando ativo, o sistema cria o follow-up automaticamente para leads de Apresentação sem resposta há N dias — sem depender do operador arrastar o card."
+          />
+        )}
         <EditCard
           label={`Instrução de follow-up · ${_fuInstrLabel}`}
           sub="Personalização do negócio para as mensagens automáticas"
@@ -825,6 +856,7 @@ export function CamadaPipeline({ config, onUpdate, phoneNumber }: CamadaPipeline
       {/* Drawers */}
       {drawer === 'followup'            && <DrawerFollowup            config={config} onClose={() => setDrawer(null)} onSave={v => { onUpdate(v); setDrawer(null); }} />}
       {drawer === 'followup_avancado'   && <DrawerFollowupAvancado    config={config} onClose={() => setDrawer(null)} onSave={v => { onUpdate(v); setDrawer(null); }} />}
+      {drawer === 'followup_auto'       && <DrawerFollowupAutomatico  config={config} onClose={() => setDrawer(null)} onSave={v => { onUpdate(v); setDrawer(null); }} />}
       {drawer === 'followup_instrucoes'    && <DrawerFollowUpInstructions        config={config} onClose={() => setDrawer(null)} onSave={v => { onUpdate(v); setDrawer(null); }} />}
       {drawer === 'followup_goal_instrs'  && <DrawerFollowupGoalInstructions    config={config} onClose={() => setDrawer(null)} onSave={v => { onUpdate(v); setDrawer(null); }} />}
       {drawer === 'cart_recovery_attempts'&& <DrawerCartRecoveryAttempts        config={config} onClose={() => setDrawer(null)} onSave={v => { onUpdate(v); setDrawer(null); }} />}

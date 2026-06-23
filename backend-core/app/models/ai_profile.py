@@ -38,6 +38,8 @@ class AIProfile(Base):
     followup_max_attempts = Column(Integer, nullable=True)
     followup_first_offset = Column(Integer, nullable=True)
     followup_allowed_hours = Column(String, nullable=True)
+    followup_auto_trigger_enabled = Column(Boolean, nullable=True, default=False)
+    followup_auto_trigger_inactivity_days = Column(Integer, nullable=True, server_default="3")
     origin_inbound_opener = Column(String, nullable=True)
     origin_outbound_opener = Column(String, nullable=True)
     followup_sdr_instructions = Column(String, nullable=True)

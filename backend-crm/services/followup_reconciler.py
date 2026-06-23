@@ -53,6 +53,17 @@ def _next_window_start_iso(now_utc: datetime, start_h: int, start_m: int) -> str
     return candidate.isoformat()
 
 
+def _parse_naive_utc(value: Optional[str]) -> Optional[datetime]:
+    """Parse timestamp do SQLite ('YYYY-MM-DD HH:MM:SS') para datetime UTC-aware."""
+    if not value:
+        return None
+    try:
+        dt = datetime.fromisoformat(str(value).replace(" ", "T"))
+    except ValueError:
+        return None
+    return dt if dt.tzinfo else dt.replace(tzinfo=timezone.utc)
+
+
 def _fetch_profile_cache(user_ids: set) -> Dict[int, Dict[str, Any]]:
     """Fetch AI profiles for a set of user_ids via HTTP; returns a cache dict."""
     try:
@@ -407,3 +418,112 @@ def reconcile_due_followups(*, limit: int = 100, dry_run: bool = False) -> Dict[
         "job_type": TYPE_FOLLOWUP_TICK,
         "items": items,
     }
+
+
+def scan_inactive_leads_for_auto_followup(*, limit: int = 100) -> Dict[str, Any]:
+    """
+    Detecta leads silenciosos em `apresentation` e inicia follow-up automaticamente.
+
+    Elegibilidade:
+      - category = 'apresentation', bot_disabled = 0, is_playground = 0
+      - sem contrato de follow-up activo/scheduled
+      - AI Profile do usuário com followup_auto_trigger_enabled = true
+      - inatividade (última msg inbound, fallback lastMovement) >=
+        followup_auto_trigger_inactivity_days
+      - qualificação completa (mesmo guardrail do start-followup manual)
+      - agent_type elegível (agent_1/agent_3)
+      - fora do cooldown (followup_auto_trigger_last_fired_at)
+    """
+    from services.qualification_guardrails import can_advance_from_qualification
+    from services.followup_state import start_followup_for_inactivity, resolve_auto_inactivity_variant
+
+    with get_connection() as read_conn:
+        rows = read_conn.execute(
+            """
+            SELECT id, user_id, agent_type, lastMovement, followup_auto_trigger_last_fired_at
+              FROM leads
+             WHERE category = 'apresentation'
+               AND COALESCE(bot_disabled, 0) = 0
+               AND COALESCE(is_playground, 0) = 0
+               AND (followup_status IS NULL OR followup_status NOT IN ('active', 'scheduled'))
+             ORDER BY id ASC
+             LIMIT ?
+            """,
+            (limit,),
+        ).fetchall()
+
+    if not rows:
+        return {"scanned": 0, "started": 0, "items": []}
+
+    user_ids = {row["user_id"] for row in rows}
+    profile_cache = _fetch_profile_cache(user_ids)
+    now_utc = datetime.now(timezone.utc)
+
+    started = 0
+    items: List[Dict[str, Any]] = []
+
+    for row in rows:
+        lead_id = int(row["id"])
+        user_id = row["user_id"]
+        profile = profile_cache.get(user_id) or {}
+
+        if not profile.get("followup_auto_trigger_enabled"):
+            continue
+
+        variant = resolve_auto_inactivity_variant(row["agent_type"])
+        if not variant:
+            continue
+
+        try:
+            inactivity_days = int(profile.get("followup_auto_trigger_inactivity_days") or 3)
+        except (TypeError, ValueError):
+            inactivity_days = 3
+        threshold = timedelta(days=max(inactivity_days, 1))
+
+        last_fired_at = _parse_naive_utc(row["followup_auto_trigger_last_fired_at"])
+        if last_fired_at and now_utc - last_fired_at < threshold:
+            continue  # cooldown ainda activo
+
+        with get_connection() as conn:
+            last_inbound_row = conn.execute(
+                """
+                SELECT MAX(createdAt) AS last_at FROM messages
+                 WHERE lead_id = ? AND channel = 'whatsapp' AND model = 'inbound'
+                """,
+                (lead_id,),
+            ).fetchone()
+        last_inbound_at = _parse_naive_utc(last_inbound_row["last_at"] if last_inbound_row else None)
+        last_movement_at = _parse_naive_utc(row["lastMovement"])
+
+        candidates = [d for d in (last_inbound_at, last_movement_at) if d]
+        if not candidates:
+            continue  # sem nenhum sinal de actividade — não dá para avaliar inactividade
+        last_activity_at = max(candidates)
+        if now_utc - last_activity_at < threshold:
+            continue  # ainda não está inactivo o suficiente
+
+        with get_connection() as conn:
+            can_advance, _missing = can_advance_from_qualification(conn, lead_id, user_id)
+            if not can_advance:
+                conn.rollback()
+                continue
+
+            result = start_followup_for_inactivity(
+                conn, lead_id=lead_id, user_id=user_id, agent_type=row["agent_type"]
+            )
+            if result.get("started"):
+                conn.commit()
+                started += 1
+                items.append(
+                    {"lead_id": lead_id, "user_id": user_id, "followup_variant": result.get("followup_variant")}
+                )
+                logger.info(
+                    "followup.auto_inactivity_started lead_id=%s user_id=%s variant=%s",
+                    lead_id,
+                    user_id,
+                    result.get("followup_variant"),
+                )
+            else:
+                conn.rollback()
+
+    return {"scanned": len(rows), "started": started, "items": items}

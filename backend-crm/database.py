@@ -1011,6 +1011,7 @@ def init_db() -> None:
         ensure_column(conn, "leads", "followup_contract", "followup_contract TEXT")
         ensure_column(conn, "leads", "followup_status", "followup_status TEXT")
         ensure_column(conn, "leads", "next_followup_at", "next_followup_at DATETIME")
+        ensure_column(conn, "leads", "followup_auto_trigger_last_fired_at", "followup_auto_trigger_last_fired_at DATETIME")
         ensure_column(conn, "prospection_logs", "user_id", "INTEGER")
         ensure_column(conn, "appointments", "outcome", "outcome TEXT")
         ensure_column(conn, "appointments", "outcome_note", "outcome_note TEXT")

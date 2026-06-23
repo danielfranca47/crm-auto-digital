@@ -170,6 +170,8 @@ class AIProfileBase(BaseModel):
     followup_max_attempts: Optional[int] = None
     followup_first_offset: Optional[int] = None
     followup_allowed_hours: Optional[str] = None
+    followup_auto_trigger_enabled: Optional[bool] = False
+    followup_auto_trigger_inactivity_days: Optional[int] = 3
     origin_inbound_opener: Optional[str] = None
     origin_outbound_opener: Optional[str] = None
     followup_sdr_instructions: Optional[str] = None
@@ -238,6 +240,8 @@ class AIProfileUpdate(BaseModel):
     followup_max_attempts: Optional[int] = None
     followup_first_offset: Optional[int] = None
     followup_allowed_hours: Optional[str] = None
+    followup_auto_trigger_enabled: Optional[bool] = None
+    followup_auto_trigger_inactivity_days: Optional[int] = None
     origin_inbound_opener: Optional[str] = None
     origin_outbound_opener: Optional[str] = None
     followup_sdr_instructions: Optional[str] = None
