@@ -30,6 +30,18 @@
 **Estado:** M2 e M3 já podem avançar — a base de persistência que os bloqueava está
 corrigida e validada.
 
+> ⚠️ **Lembrete de manutenção — repetir ao finalizar M2 e M3:** ao graduar cada um
+> destes itens, voltar a `docs/marketing/comercial/agente-demo.md`, secção "NOTA
+> TÉCNICA"/"PLANO — Agente Demo v1", e verificar se o que mudou afecta o que está
+> documentado lá (igual foi feito ao graduar o "M1" de persistência — ver tabela
+> "✅ Campos corrigidos" e as notas "⚠️ revisitável" nessa secção). Especificamente:
+> - **M2 (disparo automático):** quando implementado, o Cenário 3 do roteiro de teste
+>   deixa de depender só de `custom_instructions` — actualizar a frase final de
+>   "Ajuste de expectativa no roteiro de teste" nesse documento.
+> - **M3 (camada dedicada):** se mudar onde os campos de follow-up vivem na UI, o
+>   "Passo a passo para aplicar" (import do `agente-demo-contrato.json`) pode precisar
+>   de ajuste.
+
 ---
 
 ## M2 — Disparo automático de follow-up por inatividade (sem depender do operador arrastar o card)
