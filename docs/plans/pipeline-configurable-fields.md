@@ -1,10 +1,9 @@
 # AI Profile como Fonte de Verdade — Campos Configuráveis
 
 > **Status: EM ANDAMENTO**
-> Etapas A, G, H concluídas e documentadas em `docs/architecture/agents.md`.
-> Etapas D, E, F só concluídas do lado do backend — a UI nunca grava no lugar
-> certo, ver correcção de status abaixo. D e E retomadas como M1 em
-> `docs/plans/followup-proativo-e-cancelamento-agenda.md`.
+> Etapas A, D, E, G, H concluídas e documentadas em `docs/architecture/agents.md`.
+> Etapa F (`buying_signal_keywords`) só concluída do lado do backend — a UI nunca
+> grava no lugar certo. Etapa J (nova) regista esse e outro campo com o mesmo bug.
 > Etapa B obsoleta (supersedida por `qualification_fields`).
 > **Etapa C em foco:** instruções de follow-up por agente — próxima implementação.
 > Etapa I abortada por ora — sem prioridade.
@@ -32,24 +31,29 @@ Documentadas em [`docs/architecture/agents.md`](../architecture/agents.md).
 | Etapa | Campo(s) | Agentes |
 |---|---|---|
 | A ✅ | `origin_inbound_opener`, `origin_outbound_opener` | Todos |
-| D ⚠️ | `appointment_reminder_offsets` — backend pronto, **UI nunca grava na coluna certa** (ver abaixo) | Agent 1, Agent 3 |
-| E ⚠️ | `briefing_enabled`, `briefing_channel`, `briefing_lead_time`, `operator_whatsapp` — backend pronto, **UI nunca grava na coluna certa** | Agent 1, Agent 3 |
-| F ⚠️ | `buying_signal_keywords` — backend pronto, **UI nunca grava na coluna certa** | Agent 1 |
+| D ✅ | `appointment_reminder_offsets` | Agent 1, Agent 3 |
+| E ✅ | `briefing_enabled`, `briefing_channel`, `briefing_lead_time`, `operator_whatsapp` | Agent 1, Agent 3 |
+| F ⚠️ | `buying_signal_keywords` — backend pronto, **UI nunca grava na coluna certa** (ver Etapa J) | Agent 1 |
 | G ✅ | `offer_pack.anchor_price`, `offer_pack.guarantee_text` | Agent 2 |
 | H ✅ | `payment_gateway`, `payment_webhook_secret` | Agent 2 |
 | B ~~❌~~ | OBSOLETA — supersedida por `qualification_fields` já implementado | — |
 | I ~~❌~~ | ABORTADA — domínio de OAuth/calendário sem prioridade actual | — |
 
-> **Correcção de status (achado posterior):** as Etapas D, E e F foram marcadas ✅
-> quando só o lado do backend (coluna no modelo, aceite pela API) estava pronto. Uma
-> investigação posterior (`docs/marketing/comercial/agente-demo.md`, secção "NOTA
-> TÉCNICA") confirmou em código que `frontend-crm/src/services/api.ts` e
-> `src/types/agente.ts` leem/escrevem estes campos dentro de `offer_pack`, nunca nas
-> colunas de topo que o motor real lê — a UI nunca foi corrigida. A correcção dos
-> campos relacionados a follow-up/agenda (`appointment_reminder_offsets`, campos de
-> briefing) está registada como M1 em
-> `docs/plans/followup-proativo-e-cancelamento-agenda.md`. `buying_signal_keywords`
-> fica fora desse escopo (não é follow-up/agenda) — sem plano próprio ainda.
+> **Correcção de status:** as Etapas D, E e F foram originalmente marcadas ✅ quando só
+> o lado do backend (coluna no modelo, aceite pela API) estava pronto. Uma investigação
+> posterior (`docs/marketing/comercial/agente-demo.md`, secção "NOTA TÉCNICA") confirmou
+> em código que `frontend-crm/src/services/api.ts` e `src/types/agente.ts` liam/
+> escreviam estes campos dentro de `offer_pack`, nunca nas colunas de topo que o motor
+> real lê. D e E (campos de follow-up/agenda) foram corrigidas e graduadas — ver
+> `docs/architecture/agents.md`. F (`buying_signal_keywords`, fora do domínio
+> follow-up/agenda) continua com o bug — ver Etapa J abaixo.
+>
+> **Nota sobre dados legados:** qualquer conta que tivesse preenchido os campos de D/E
+> pela UI antes da correcção tem o valor só em `offer_pack` (nunca teve efeito real). Ao
+> abrir a tela depois da correcção, esses campos voltam ao valor padrão sem aviso — não
+> há perda de dado funcional (o valor nunca funcionou), mas pode confundir quem
+> preencheu antes. Não há acção pendente — registado aqui para referência caso apareça
+> um relato de "configurei isso e desapareceu".
 
 ---
 
@@ -235,6 +239,31 @@ O operador pode usar o `attempts` como referência nas suas instruções se quis
 
 ---
 
+## Etapa J — Sincronizar campos fora do domínio follow-up/agenda (mesmo bug da Etapa D/E)
+
+> **Estado: A IMPLEMENTAR — prioridade BAIXA** (sem caso de uso reportado em produção)
+
+**O que é:** `qualification_score_threshold` e `buying_signal_keywords` têm exactamente
+o mesmo bug que as Etapas D/E tinham — `frontend-crm/src/services/api.ts` lê/escreve
+estes dois campos de dentro de `offer_pack` em `getConfig()`/`saveConfig()`, em vez das
+colunas de topo do AI Profile (`qualification_guardrails.py` lê
+`qualification_score_threshold`; `decision_engine.py` lê `buying_signal_keywords`).
+Ficaram fora do escopo da correcção das Etapas D/E porque não são campos de
+follow-up/agenda.
+
+**Risco concreto:**
+- `qualification_score_threshold`: o threshold configurado pelo operador nunca chega ao
+  guardrail de qualificação — fica sempre no default (`6`).
+- `buying_signal_keywords`: a lista de keywords configurada nunca chega ao motor —
+  notificação de sinal de compra nunca dispara para keywords customizadas.
+
+**O que precisaria existir:** mesmo padrão de correcção das Etapas D/E — trocar
+`pack.<campo>` por `(profile as any)?.<campo>` em `getConfig()`, e mover os dois campos
+de dentro do objecto `offer_pack` para chave de topo no payload de `saveConfig()`.
+Nenhuma mudança de backend necessária (colunas já existem e são aceites pela API).
+
+---
+
 ## Tabela de campos
 
 | Campo | Tipo | Status |
@@ -244,8 +273,9 @@ O operador pode usar o `attempts` como referência nas suas instruções se quis
 | `qualification_fields` | JSON (list[object]) | ✅ Implementado |
 | `appointment_reminder_offsets` | JSON (list[int]) | ✅ Implementado |
 | `briefing_enabled` / `briefing_lead_time` / `operator_whatsapp` | Boolean/Int/String | ✅ Implementado |
-| `buying_signal_keywords` | JSON (list[str]) | ✅ Implementado |
 | `payment_gateway` / `payment_webhook_secret` | String | ✅ Implementado |
+| `qualification_score_threshold` | Int | ⚠️ Backend pronto, UI não persiste (Etapa J) |
+| `buying_signal_keywords` | JSON (list[str]) | ⚠️ Backend pronto, UI não persiste (Etapa J) |
 | `followup_sdr_instructions` | String | 🔴 A implementar (Agent 1) |
 | `followup_recovery_instructions` | String | 🔴 A implementar (Agent 2) |
 | `followup_postsession_instructions` | String | 🔴 A implementar (Agent 3) |

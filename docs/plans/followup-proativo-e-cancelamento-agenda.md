@@ -1,4 +1,4 @@
-# Follow-up Proativo — Persistência de Configuração, Disparo Automático e Camada Dedicada no AI Profile
+# Follow-up Proativo — Disparo Automático e Camada Dedicada no AI Profile
 
 > Contexto: identificado ao validar o roteiro de teste do agente demo
 > (`docs/marketing/comercial/agente-demo.md`, secção "Roteiro de Teste no Playground")
@@ -17,73 +17,18 @@
 > comportamentos *persiste no lugar certo* e que ela vive num lugar único e coerente do
 > AI Profile em vez de espalhada.
 >
-> Nota: o item original deste documento sobre cancelamento/reagendamento real de
-> compromisso (M1 antigo) já foi implementado e graduado para `docs/architecture/agenda.md`
-> e `docs/architecture/agents.md` — itens deixados de fora dessa implementação estão
-> em `docs/plans/cancelamento-reagendamento-melhorias-futuras.md`. A numeração abaixo foi
-> reorganizada por ordem de execução (não por ordem de descoberta) e reaproveita o "M1"
-> deixado livre por essa graduação.
+> Nota: este documento já passou por duas graduações de "M1". A primeira
+> (cancelamento/reagendamento real de compromisso) foi implementada e graduada para
+> `docs/architecture/agenda.md` e `docs/architecture/agents.md` — itens deixados de
+> fora estão em `docs/plans/cancelamento-reagendamento-melhorias-futuras.md`. A segunda
+> (sincronizar a tela do AI Profile com as colunas reais lidas pelo motor, para os
+> campos de follow-up/agenda) também foi implementada e graduada para
+> `docs/architecture/agents.md` — os dois ajustes que sobraram dessa correcção foram
+> registados em `docs/plans/pipeline-configurable-fields.md` (Etapa J e nota de dados
+> legados). M2 e M3 abaixo mantêm a numeração original — o "M1" em falta é intencional.
 
-**Ordem de execução:** M1 primeiro — M2 e M3 dependem dele para ter qualquer efeito
-real. Construir o gatilho automático (M2) ou reorganizar a UI (M3) sobre uma gravação
-que cai no lugar errado só reproduz o mesmo bug em campos novos.
-
----
-
-## M1 — Sincronizar a tela do AI Profile com as colunas reais lidas pelo motor (campos de follow-up/agenda)
-
-**Prioridade: ALTA** — bloqueia o M2 e o M3 terem qualquer efeito real.
-
-**Estado actual:** confirmado em código (`frontend-crm/src/services/api.ts`,
-`getConfig()`/`saveConfig()`, e `src/types/agente.ts:196` — comentário "Campos da
-Camada 2 e 3 estendidos — armazenados em offer_pack") que os seguintes campos
-relacionados a follow-up/agenda são lidos e gravados dentro do JSON auxiliar
-`offer_pack`, e **não** nas colunas de topo do AI Profile que o motor real
-(`backend-crm/services/followup_state.py`, `jobs_service.py`,
-`backend-executors/app/services/decision_engine.py`,
-`backend-crm/services/briefing_service.py`, `routes/appointments.py`) efetivamente
-lê em runtime:
-
-| Campo | UI grava em | Motor lê de |
-|---|---|---|
-| `followup_cadence` | `offer_pack.followup_cadence` | coluna `followup_cadence` |
-| `followup_max_attempts` | `offer_pack.followup_max_attempts` | coluna `followup_max_attempts` |
-| `appointment_reminder_offsets` | `offer_pack.appointment_reminder_h1`/`h2` (campos cosméticos diferentes) | coluna `appointment_reminder_offsets` |
-| `briefing_enabled` / `briefing_channel` / `briefing_lead_time` | `offer_pack.*` | colunas equivalentes |
-| `operator_whatsapp` | `offer_pack.operator_whatsapp` | coluna `operator_whatsapp` |
-| `nurture_vs_discard_rule` | `offer_pack.nurture_vs_discard_rule` | coluna `nurture_vs_discard_rule` |
-
-**Discrepância encontrada com outro plano:** `docs/plans/pipeline-configurable-fields.md`
-marca as Etapas D (`appointment_reminder_offsets`), E (campos de briefing) e F
-(`buying_signal_keywords`) como "✅ Implementado" — o que é verdade só do lado do
-backend (coluna existe, API aceita). A tela nunca foi corrigida para escrever nesse
-lugar; o status desse documento foi corrigido para reflectir isto (ver secção
-"Relação com outros planos" abaixo).
-
-**Risco concreto:** o operador preenche o campo na UI, salva, a tela não mostra erro
-nenhum — mas o valor nunca chega ao motor. É um bug silencioso: parece que funcionou,
-nunca funcionou. Qualquer campo novo do M2/M3 corre o mesmo risco se for implementado
-seguindo o padrão actual do `AiProfile.tsx`.
-
-**O que precisaria existir:**
-- Corrigir `getConfig()`/`saveConfig()` em `api.ts` (e os tipos em `agente.ts`) para
-  ler/escrever estes campos nas colunas de topo do AI Profile — são os mesmos nomes
-  que o backend já aceita via `PUT /ai-profiles/me`, só o destino na tela está errado.
-- Decidir se a correcção é feita de uma vez para todos os campos desta tabela (
-  recomendado, já que é o mesmo padrão de bug repetido) ou campo a campo.
-- **Validação end-to-end por campo corrigido:** preencher na UI → recarregar a
-  página e confirmar que o valor persiste → confirmar no código/log que o motor real
-  usa o valor (não o default). Sem este passo o bug pode "parecer" corrigido na tela
-  sem de facto chegar ao motor.
-
-**Fora de escopo deste documento:** o mesmo bug afecta campos fora do domínio de
-follow-up/agenda — `qualification_score_threshold`, `objection_common`,
-`hybrid_flow_style`, `origin_inbound_opener`/`origin_outbound_opener`,
-`warming_social_proof`/`warming_session_preview`, `handoff_custom_text`,
-`buying_signal_keywords` (ver tabela completa em
-`docs/marketing/comercial/agente-demo.md`, secção "NOTA TÉCNICA"). Esses ficam fora
-da prioridade deste plano — registar como item próprio se for decidido corrigi-los
-todos de uma vez.
+**Estado:** M2 e M3 já podem avançar — a base de persistência que os bloqueava está
+corrigida e validada.
 
 ---
 
@@ -148,8 +93,7 @@ mas bloqueiam a priorização em sprint):**
 
 ## M3 — Camada dedicada de Follow-up no AI Profile
 
-**Prioridade: MÉDIA** — depende do M1 para ter efeito real (não adianta reorganizar
-a UI se a gravação continuar quebrada), mas o desenho pode ser feito em paralelo.
+**Prioridade: MÉDIA**
 
 **Estado actual:** a configuração de follow-up está hoje espalhada por abas
 diferentes do AI Profile (Pipeline, Apresentação) sem um lugar único que reúna tudo
@@ -178,12 +122,10 @@ também, em vez de duplicar a superfície de UI?
 - Diferente de `agentes-agenda-melhorias-futuras.md` (M3) — aquele item é sobre a
   **confiabilidade da decisão** de `meeting_scheduled` (a Mãe marcar confirmação sem
   o lead ter confirmado de fato); este documento é sobre **quem inicia** o
-  follow-up e **onde a configuração é gravada**, não sobre se a IA decide certo.
-- `docs/plans/pipeline-configurable-fields.md` — status das Etapas D, E e F
-  corrigido de "✅ Implementado" para reflectir que a UI nunca grava no lugar
-  certo (ver M1 acima); a correcção desses três campos passa a ser tratada aqui.
+  follow-up, não sobre se a IA decide certo.
+- `docs/plans/pipeline-configurable-fields.md` — as Etapas D e E (campos de
+  follow-up/agenda) já reflectem o fix graduado; a Etapa J (nova) trata os campos
+  fora desse domínio (`qualification_score_threshold`, `buying_signal_keywords`) que
+  têm o mesmo bug e ficaram fora do escopo desta correcção.
 - `docs/architecture/followup.md` documenta o mecanismo atual (reconciliador,
   estados, cart recovery) que M2 estende.
-- `docs/marketing/comercial/agente-demo.md`, secção "NOTA TÉCNICA", lista a versão
-  completa do bug de persistência (inclui campos fora do escopo de follow-up/agenda,
-  ver M1 acima).
