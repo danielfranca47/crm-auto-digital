@@ -143,6 +143,16 @@ tem nenhum mecanismo de recuperação — o comentário em
 pelo followup_state — não avaliado aqui") confirma que a intenção do sistema sempre
 foi essa fase ser coberta pelo followup_state, mas isso nunca foi conectado.
 
+**Não é exclusivo do Híbrido Agendador.** As fases `p3a`/`p3b` ficam activas para
+qualquer perfil com `agent_mode` no grupo "agenda" (`agent_mode in {"agenda",
+"sdr_scheduler"}`), independente do `template_key`/`agent_type` —
+`backend-executors/app/services/decision_engine.py:3817` lista
+`_SCHEDULING_AGENT_TEMPLATES = {"sdr_padrao", "hybrid_scheduler"}` explicitamente.
+O SDR (`sdr_padrao`, `agent_type=agent_1`) também entra em `agendamento`, com o mesmo
+risco de ficar parado lá sem recuperação. A correcção desta fase não tem nenhum
+`if agent_type == ...` — é a mesma query para qualquer lead, então já cobre o SDR
+sem mudança adicional (confirmado empiricamente, ver nota na Fase 3).
+
 ### Correção
 
 | Arquivo | Mudança |
@@ -181,6 +191,17 @@ sempre antes de chamar `create_job()`. A função nova não replicou essa ordem.
 |---|---|
 | `backend-crm/services/followup_state.py` | `start_followup_for_inactivity()`: removida a chamada a `create_job()` |
 | `backend-crm/services/followup_reconciler.py` | `scan_inactive_leads_for_auto_followup()`: `create_job()` movido para depois do `conn.commit()` |
+
+Nenhuma das duas correcções (Fase 2 e Fase 3) tem `if agent_type`/`if followup_variant`
+— são o mesmo caminho de código para qualquer lead elegível. Confirmado directamente
+após o fechamento da Fase 3 (23/06/2026): lead real `id=297`, `agent_type=agent_1`,
+`category=agendamento`, mesma inactividade simulada. `scan_inactive_leads_for_auto_followup()`
+chamado directamente (sem esperar o ciclo do reconciler) → `{"scanned": 3, "started": 1,
+"items": [{"lead_id": 297, "followup_variant": "sdr_scheduler"}]}`. Contrato resultante:
+`followup_variant="sdr_scheduler"`, `followup_goal="reengage"` (default correcto do SDR,
+distinto do `reengage_conversation` do híbrido), `max_attempts=4` (default do
+`sdr_scheduler`, vs. `3` do `hybrid_scheduler`), `trigger="auto_inactivity"`, sem erro de
+lock. Dados de teste removidos após a verificação.
 
 ### Commits Fase 3
 
