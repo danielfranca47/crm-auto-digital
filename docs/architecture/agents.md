@@ -126,6 +126,11 @@ Aliases aceitos: `whatsapp_send`, `maps_search_fallback`, `maps_enrich_fallback`
 | `followup_goal_instructions` | object\|null | Dict por `followup_goal` para Agent 1 — ex: `{"advance_closing": "...", "nurture": "..."}`. Chaves opcionais; usa default da variante se ausente |
 | `cart_recovery_attempt_instructions` | list[str\|null]\|null | Lista de 3 strings para Agent 2 — uma instrução por tentativa (1, 2, 3). Posição `null` mantém o default |
 | `followup_outcome_instructions` | object\|null | Dict por `outcome` para Agent 3 — ex: `{"interested_not_closed": "...", "reschedule_needed": "..."}`. Chaves opcionais; usa default se ausente |
+| `followup_auto_trigger_enabled` | boolean | Liga o disparo automático de follow-up para leads silenciosos em `apresentation`/`agendamento`, sem o operador arrastar o card (padrão: `false`). Restrito a `agent_1`/`agent_3`. Ver [`followup.md`](followup.md) |
+| `followup_auto_trigger_inactivity_days` | integer | Dias de inatividade (última msg inbound / `lastMovement`) para disparar o follow-up automático (padrão: `3`) |
+| `followup_checkin_auto_trigger_enabled` | boolean | Liga o check-in automático de cliente inativo em `client-list` (padrão: `false`). Restrito a `agent_1`/`agent_3` — Agent 2 fora. Ver [`followup.md`](followup.md) |
+| `followup_checkin_inactivity_days` | integer | Dias de inatividade (última sessão/msg) para disparar o check-in automático (padrão: `30`) |
+| `followup_checkin_instructions` | string\|null | Instrução de texto livre injectada no prompt de follow-up quando `followup_variant=client_checkin` |
 
 ### Enums
 
@@ -292,15 +297,16 @@ O flag `bot_disabled` na tabela `leads` (backend-crm) permite desactivar o agent
 | Campo | Tipo | Descrição |
 |---|---|---|
 | `bot_disabled` | `INTEGER` (0/1) | `1` = agente desactivado para este lead |
-| `bot_disabled_reason` | `TEXT NULL` | Motivo: `"manual_disable"`, `"category_closing"`, `"media_fallback"`, `"meeting_scheduled"` |
+| `bot_disabled_reason` | `TEXT NULL` | Motivo: `"manual_disable"`, `"category_closing"`, `"media_fallback"`, `"meeting_scheduled"`, `"category_checkin_closed"` |
 
 **Fontes de desactivação:**
 - **Manual:** utilizador clica "Desativar bot" no `LeadCardDialog`; confirma modal com checkbox
 - **Automático (closing):** `lead_category_policy.py` desactiva o bot ao entrar em `closing` (apenas para `agent_mode=agenda`)
 - **Automático (media_fallback):** quando `media_fallback="pausar"` e chega mensagem de mídia inválida
 - **Automático (reunião confirmada):** `meeting_scheduler.handle_meeting_scheduled()` desactiva o bot ao confirmar uma reunião (`agent_mode=agenda`) — ver "Gestão pós-confirmação" abaixo
+- **Automático (fechamento de check-in):** `_maybe_redisable_bot_after_checkin_close()` desactiva o bot de novo (`bot_disabled_reason="category_checkin_closed"`) quando o check-in automático de cliente inativo (`followup_variant=client_checkin`) termina sem conversa activa — só se o lead ainda estiver em `client-list`. Ver [`followup.md`](followup.md)
 
-**Reactivação:** botão "Reativar bot" no alert block do `LeadCardDialog`. Quando `bot_disabled_reason="manual_disable"`, exibe modal de aviso adicional. Para `bot_disabled_reason="meeting_scheduled"`, a reactivação também acontece automaticamente quando o lead cancela a reunião pela IA (ver abaixo).
+**Reactivação:** botão "Reativar bot" no alert block do `LeadCardDialog`. Quando `bot_disabled_reason="manual_disable"`, exibe modal de aviso adicional. Para `bot_disabled_reason="meeting_scheduled"`, a reactivação também acontece automaticamente quando o lead cancela a reunião pela IA (ver abaixo). Para clientes em `client-list` (repouso normal: bot desligado), o check-in automático reactiva o bot sozinho ao iniciar (`start_client_checkin_followup()`) e desactiva de novo ao fechar — ver [`followup.md`](followup.md).
 
 **Verificação no guardrail:** `inbound_handler.py` verifica `lead.bot_disabled` antes de qualquer processamento. Para a maioria dos motivos, `bot_disabled=1` resulta em `{"status": "ignored"/"skipped", "reason": "bot_disabled"}` sem criar job. O motivo `"meeting_scheduled"` é tratado de forma condicional — ver abaixo.
 

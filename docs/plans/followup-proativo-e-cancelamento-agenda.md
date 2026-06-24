@@ -27,18 +27,17 @@
 > registados em `docs/plans/pipeline-configurable-fields.md` (Etapa J e nota de dados
 > legados). M2 e M3 abaixo mantêm a numeração original — o "M1" em falta é intencional.
 
-**Estado:** M2 implementado e testado (`docs/implementations/followup-auto-trigger-inatividade.md`,
-Fases 1–4b) — pendente apenas o passo de graduação (migrar para `docs/architecture/`
-e remover o arquivo de implementação). M3 ainda não iniciado — pode avançar.
+**Estado:** M2 implementado, testado e graduado para `docs/architecture/followup.md` e
+`docs/architecture/agents.md` (arquivo de implementação removido). Itens deixados de
+fora estão em `docs/plans/followup-auto-trigger-melhorias-futuras.md`. M3 ainda não
+iniciado — pode avançar.
 
-> ⚠️ **Lembrete de manutenção — repetir ao finalizar M2 e M3:** ao graduar cada um
-> destes itens, voltar a `docs/marketing/comercial/agente-demo.md`, secção "NOTA
-> TÉCNICA"/"PLANO — Agente Demo v1", e verificar se o que mudou afecta o que está
-> documentado lá (igual foi feito ao graduar o "M1" de persistência — ver tabela
-> "✅ Campos corrigidos" e as notas "⚠️ revisitável" nessa secção). Especificamente:
-> - **M2 (disparo automático):** quando implementado, o Cenário 3 do roteiro de teste
->   deixa de depender só de `custom_instructions` — actualizar a frase final de
->   "Ajuste de expectativa no roteiro de teste" nesse documento.
+> ⚠️ **Lembrete de manutenção — repetir ao finalizar M3:** ao graduar este item, voltar
+> a `docs/marketing/comercial/agente-demo.md`, secção "NOTA TÉCNICA"/"PLANO — Agente
+> Demo v1", e verificar se o que mudou afecta o que está documentado lá (igual foi
+> feito ao graduar o "M1" de persistência e o M2 — ver tabela "✅ Campos corrigidos",
+> as notas "⚠️ revisitável" e a frase final de "Ajuste de expectativa no roteiro de
+> teste" nessa secção). Especificamente:
 > - **M3 (camada dedicada):** se mudar onde os campos de follow-up vivem na UI, o
 >   "Passo a passo para aplicar" (import do `agente-demo-contrato.json`) pode precisar
 >   de ajuste.

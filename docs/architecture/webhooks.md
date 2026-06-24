@@ -63,7 +63,7 @@ Verifica se o sistema deve processar a mensagem:
 - Lead em categoria não-atendível → ignora
 - Promoção inicial de inbound: `to-prospect`/`in-progress` → `qualification`
 
-O flag `bot_disabled` é gerido por lead individual. Fontes de desactivação: manual (UI), `media_fallback="pausar"`, entrada em `closing` com `agent_mode=agenda`, confirmação de reunião (`agent_mode=agenda`).
+O flag `bot_disabled` é gerido por lead individual. Fontes de desactivação: manual (UI), `media_fallback="pausar"`, entrada em `closing` com `agent_mode=agenda`, confirmação de reunião (`agent_mode=agenda`), fechamento do check-in automático de cliente inativo (`category_checkin_closed`, ver [`followup.md`](followup.md)).
 
 ---
 

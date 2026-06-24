@@ -82,6 +82,7 @@ Validações:
   "phase": "follow-up",
   "version": 1,
   "followup_variant": "sdr_scheduler",
+  "trigger": "manual_crm_transition",
   "status": "active",
   "attempts": 0,
   "max_attempts": 4,
@@ -95,6 +96,8 @@ Validações:
   "operator_note": "..."
 }
 ```
+
+**`trigger`:** `"manual_crm_transition"` (gesto manual, Kanban → modal) ou `"auto_inactivity"` (disparo automático — ver "Disparo Automático por Inatividade" e "Check-in Automático de Cliente Inativo" abaixo). A Central de Follow-ups (`FollowUpCenter.tsx`) e o detalhe (`FollowUpEdit.tsx`) exibem badge "AUTO"/"Origem: Automático (inatividade)" quando `trigger === "auto_inactivity"`.
 
 **Configuração via AI Profile** (substitui hardcodes quando presente):
 - `followup_max_attempts` — sobrescreve o default por variante
@@ -127,8 +130,16 @@ Após `start-followup`, é criado um job `whatsapp.followup.pregenerate` para pr
 **Arquivo:** `backend-crm/services/followup_reconciler.py`
 **Iniciado em:** `backend-crm/app.py` — `_reconciler_loop()` como asyncio task no lifespan
 
-O loop executa `reconcile_due_followups()` periodicamente:
-1. Busca leads com `followup_status='active'` e `next_followup_at <= agora`
+A cada ciclo, o loop chama em sequência: `reconcile_due_followups()` (ticks de contratos
+já activos — abaixo), `scan_inactive_leads_for_auto_followup()` e
+`scan_inactive_clients_for_checkin()` (criação automática de novos contratos por
+inatividade — ver "Disparo Automático por Inatividade" e "Check-in Automático de
+Cliente Inativo" mais abaixo).
+
+`reconcile_due_followups()`:
+1. Busca leads com `followup_status='active'`, `next_followup_at <= agora` e
+   `category IN ('follow-up', 'client-list')` — `client-list` cobre o check-in
+   automático de cliente inactivo, que não move a categoria
 2. Para cada lead vencido, verifica `followup_reconcile_guard` (idempotência por `(lead_id, due_at)`)
 3. Cria job do tipo `whatsapp.followup.tick`
 4. Registra guard para evitar duplicação
@@ -169,6 +180,7 @@ Para job `whatsapp.followup.tick`:
 | `sdr_scheduler` | +24h | +3 dias | +7 dias |
 | `hybrid_scheduler` | +24h | +48h | — (max=3) |
 | `cart_recovery` | +24h | +48h | — (max=3) |
+| `client_checkin` | +3 dias | — (max=2) | — |
 
 ---
 
@@ -185,6 +197,11 @@ Para job `whatsapp.followup.tick`:
 | `max_attempts_reached` | Tentativas atingiram `max_attempts` | `closed` |
 | `manual_cancel` | Operador cancelou via UI | `closed` |
 
+**Nota — `client_checkin`:** ao fechar por qualquer `stop_reason` exceto `inbound_reply`/
+`handoff_human`, `_maybe_redisable_bot_after_checkin_close()` desactiva o bot de novo
+(`bot_disabled_reason="category_checkin_closed"`) se o lead ainda estiver em
+`client-list` — ver "Check-in Automático de Cliente Inativo" abaixo.
+
 ---
 
 ## Cart Recovery (Agent 2)
@@ -198,6 +215,90 @@ Iniciado automaticamente quando o bot envia link de pagamento (Agent 2 — close
 - `max_attempts`: 3
 - `followup_goal`: `cart_recovery`
 - Não inicia se já existe contrato com `status=active`
+
+---
+
+## Disparo Automático por Inatividade (Agent 1/3)
+
+Além do gesto manual (Kanban → modal), um lead silencioso em `apresentation` ou
+`agendamento` pode iniciar um `followup_contract` por conta própria, sem ação do
+operador. `pre-agendamento` fica fora — já tem recuperação dedicada via
+`_schedule_preagendamento_checkin()` (`backend-crm/routes/executor.py`), disparada por
+um sinal estruturado do LLM filho.
+
+**Configuração no AI Profile** (ver [`agents.md`](agents.md)):
+| Campo | Default | Descrição |
+|---|---|---|
+| `followup_auto_trigger_enabled` | `false` | Liga o disparo automático |
+| `followup_auto_trigger_inactivity_days` | `3` | Dias de inatividade para disparar |
+
+**Função:** `scan_inactive_leads_for_auto_followup()` (`followup_reconciler.py`), chamada a cada ciclo do `_reconciler_loop()`.
+
+**Elegibilidade:**
+- `category IN ('apresentation', 'agendamento')`, `bot_disabled = 0`, `is_playground = 0`
+- Sem contrato de follow-up `active`/`scheduled`
+- `agent_type` elegível: `agent_1 → sdr_scheduler`, `agent_3 → hybrid_scheduler` (`resolve_auto_inactivity_variant()`)
+- Sinal de inatividade = `MAX(última mensagem inbound, leads.lastMovement)` ≥ `followup_auto_trigger_inactivity_days`
+- Qualificação completa (mesmo guardrail do `start-followup` manual, `can_advance_from_qualification()`)
+- Fora do cooldown: `leads.followup_auto_trigger_last_fired_at` (DATETIME) — evita re-disparo repetido sobre o mesmo lead
+
+**`start_followup_for_inactivity()`** (`followup_state.py`): cria o contrato com
+`trigger="auto_inactivity"` e defaults neutros (`meeting_or_session_happened=None`,
+`outcome=None`, `proposal_sent=False`); `followup_goal` por variante: `"reengage"`
+(`sdr_scheduler`), `"reengage_conversation"` (`hybrid_scheduler`); `max_attempts` por
+variante: `4` (`sdr_scheduler`), `3` (`hybrid_scheduler`); offset do primeiro envio: 30
+min. Move `category` para `follow-up` e reativa o bot, igual ao fluxo manual.
+
+**Ordem commit → create_job:** o *scan* chama `create_job()` (fila `pregenerate`) sempre
+depois do `conn.commit()` da própria transação — `create_job()` abre a sua própria
+conexão SQLite, e chamá-lo antes do commit causa `database is locked`.
+
+---
+
+## Check-in Automático de Cliente Inativo (`client_checkin`)
+
+Cliente já convertido (`category='client-list'`) sem sessão/contacto há N dias recebe
+um check-in automático de relacionamento pós-venda — sem pressão de venda, sem reabrir
+qualificação. Restrito a `agent_1`/`agent_3`; Agent 2 (`closer_agressivo`) fica fora —
+seu bot não passa pelo mesmo side-effect de desactivação ao entrar em `closing`/
+`client-list` (ver [`agents.md`](agents.md), "Toggle de Bot por Lead").
+
+**Configuração no AI Profile** (ver [`agents.md`](agents.md)):
+| Campo | Default | Descrição |
+|---|---|---|
+| `followup_checkin_auto_trigger_enabled` | `false` | Liga o check-in automático |
+| `followup_checkin_inactivity_days` | `30` | Dias de inatividade para disparar |
+| `followup_checkin_instructions` | `null` | Texto livre injectado no prompt da variante `client_checkin` |
+
+**Função:** `scan_inactive_clients_for_checkin()` (`followup_reconciler.py`), chamada a cada ciclo do `_reconciler_loop()`.
+
+**Elegibilidade:**
+- `category = 'client-list'`, `is_playground = 0`, `agent_type IN ('agent_1', 'agent_3')`
+- Sem contrato de follow-up `active`/`scheduled`
+- Sinal de inatividade = `MAX(última appointment.start_at não cancelada, última mensagem inbound, leads.lastMovement)` ≥ `followup_checkin_inactivity_days`
+- Fora do cooldown: mesma coluna `leads.followup_auto_trigger_last_fired_at` do disparo
+  acima (`client-list` e `apresentation`/`agendamento` são mutuamente exclusivos para o
+  mesmo lead, sem conflito de uso)
+- **Sem** filtro de `bot_disabled` (cliente em `client-list` normalmente já está
+  desligado) e **sem** guardrail de qualificação (o cliente já comprou)
+
+**`start_client_checkin_followup()`** (`followup_state.py`): cria o contrato com
+`followup_variant="client_checkin"`, `followup_goal="checkin"`, `max_attempts=2`,
+`trigger="auto_inactivity"`, offset do primeiro envio 30 min. **Não** move `category`
+(permanece `client-list` — evita confundir o Kanban de vendas com um cliente já
+convertido "voltando"). Reativa o bot (`bot_disabled=0`, `bot_disabled_reason=NULL`)
+porque o repouso normal de `client-list` é bot desligado.
+
+**Re-desativação ao encerrar:** `_maybe_redisable_bot_after_checkin_close()` devolve o
+bot a `bot_disabled=1`/`bot_disabled_reason="category_checkin_closed"` quando o
+contrato fecha sem conversa activa e o lead ainda está em `client-list`. Chamado em
+`stop_followup()` (para todo `stop_reason` exceto `inbound_reply`/`handoff_human`), no
+branch `max_attempts_reached` de `progress_followup_after_auto_send()`, e em
+`cancel_followup_manually()`.
+
+**Personalização do prompt:** branch dedicado `client_checkin` em
+`_build_child_prompt_follow_up()` (`decision_engine.py`) — ver "Personalização das
+Mensagens de Follow-Up" abaixo.
 
 ---
 
@@ -289,6 +390,7 @@ Todos os `variant_rule` têm instrução `ABERTURA OBRIGATÓRIA` que força uma 
 | `followup_goal_instructions` | `sdr_scheduler` | Dict por `followup_goal` — instrução específica para o goal activo |
 | `cart_recovery_attempt_instructions` | `cart_recovery` | Lista de 3 strings — sobrescreve instrução hardcoded da tentativa correspondente |
 | `followup_outcome_instructions` | `hybrid_scheduler` | Dict por `outcome` — sobrescreve instrução hardcoded do outcome correspondente |
+| `followup_checkin_instructions` | `client_checkin` | Texto livre injectado após a instrução hardcoded da variante |
 
 **Fallback:** quando o campo não está configurado ou a chave não existe, o comportamento hardcoded é mantido inalterado.
 
@@ -306,6 +408,11 @@ Todos os `variant_rule` têm instrução `ABERTURA OBRIGATÓRIA` que força uma 
 - `reschedule_needed`: oferecer 2-3 horários, pergunta fechada
 - `converted`: onboarding/boas-vindas, confirmar próximo passo
 
+**`client_checkin`:** check-in de relacionamento pós-venda — abertura calorosa de quem
+já é cliente, sem pressão de venda; objetivo único é perguntar como está e propor
+agendar a próxima sessão (2-3 horários directos na mensagem, sem mudar de categoria);
+nunca reabre qualificação antiga nem trata como lead novo.
+
 ---
 
 ## Arquivos críticos
@@ -318,8 +425,8 @@ Todos os `variant_rule` têm instrução `ABERTURA OBRIGATÓRIA` que força uma 
 | `frontend-crm/src/pages/FollowUpCenter.tsx` | Central de Follow-up: lista, stats, acções |
 | `frontend-crm/src/pages/FollowUpEdit.tsx` | Detalhe por lead: countdown, mapa de sequência |
 | `backend-crm/routes/leads.py` | Endpoints: `start-followup`, pause, resume, cancel, active, stats, qualification-fields |
-| `backend-crm/services/followup_state.py` | Máquina de estado: start, stop, pause, resume, cancel, progress, cart_recovery |
-| `backend-crm/services/followup_reconciler.py` | Detecta vencimentos, guard de idempotência, circuit breaker, janela de horário |
+| `backend-crm/services/followup_state.py` | Máquina de estado: start, stop, pause, resume, cancel, progress, cart_recovery, auto_inactivity, client_checkin |
+| `backend-crm/services/followup_reconciler.py` | Detecta vencimentos, guard de idempotência, circuit breaker, janela de horário, disparo automático de novos contratos (inatividade/check-in) |
 | `backend-crm/app.py` | `_reconciler_loop()` — loop asyncio no lifespan |
 | `backend-crm/services/followup_channel_context.py` | Resolve instance_id/phone para o tick |
 | `backend-crm/services/agent_type.py` | Mapeamento template_key → agent_type |
