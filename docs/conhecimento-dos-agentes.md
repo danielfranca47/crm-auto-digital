@@ -1,7 +1,7 @@
 # Conhecimento dos Agentes — Referência Oficial
 
 > **Atualizado em:** 2026-03-28 (sub-modo comercial Agente 03 implementado)
-> **Escopo:** Camada 4 (Conhecimento) do `AgenteConfiguracao.tsx`
+> **Escopo:** Camada 4 (Conhecimento) do `AiProfile.tsx`
 > **Status:** Estrutura implementada e em produção
 
 ---
@@ -151,7 +151,7 @@ O componente `CamadaConhecimento` recebe `agentConfig` como prop opcional. Quand
 
 **Prop adicionada:**
 ```tsx
-// AgenteConfiguracao.tsx
+// AiProfile.tsx
 <CamadaConhecimento templateKey={config.template_key} agentConfig={config} />
 ```
 
@@ -263,7 +263,7 @@ O `decision_engine` detecta `appointment_mode == 'commercial'` e injeta o bloco 
 | [frontend-crm/src/types/agente.ts](../frontend-crm/src/types/agente.ts) | `KnowledgeCategory`, `KNOWLEDGE_CATEGORIES_BY_TEMPLATE` — fonte de verdade das categorias por template |
 | [frontend-crm/src/components/agente/CamadaConhecimento.tsx](../frontend-crm/src/components/agente/CamadaConhecimento.tsx) | Componente principal da Camada 4: score de prontidão, badge temporal, personalização de hints |
 | [frontend-crm/src/components/agente/CamadaConhecimentoWizard.tsx](../frontend-crm/src/components/agente/CamadaConhecimentoWizard.tsx) | Wizard de onboarding para primeira configuração |
-| [frontend-crm/src/pages/AgenteConfiguracao.tsx](../frontend-crm/src/pages/AgenteConfiguracao.tsx) | Orquestrador — passa `templateKey` e `agentConfig` para `CamadaConhecimento` |
+| [frontend-crm/src/pages/AiProfile.tsx](../frontend-crm/src/pages/AiProfile.tsx) | Orquestrador — passa `templateKey` e `agentConfig` para `CamadaConhecimento` |
 | [frontend-crm/src/pages/TiposAgentes.tsx](../frontend-crm/src/pages/TiposAgentes.tsx) | Definição dos arquétipos de agente (`AGENTS` array) |
 | [backend-crm/routes/knowledge.py](../backend-crm/routes/knowledge.py) | API CRUD de itens de conhecimento |
 | [backend-crm/routes/executor.py](../backend-crm/routes/executor.py) | Inclui `knowledge_items` no contexto de execução enviado ao `decision_engine` |
