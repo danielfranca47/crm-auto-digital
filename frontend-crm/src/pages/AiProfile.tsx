@@ -414,7 +414,7 @@ function PainelCamadaFollowup({ config, onUpdate, onBack, onSave, saving, dirty 
       </div>
       <div className="font-display" style={{ fontSize: 28, fontWeight: 400, marginBottom: 6, color: 'var(--o-text)' }}>Follow-up</div>
       <div style={{ fontSize: 12.5, color: 'var(--o-sub)', fontWeight: 300, marginBottom: 24 }}>
-        Cadência, disparo automático e instruções de conteúdo para as mensagens de follow-up.
+        Lembrete de reunião, cadência, disparo automático e instruções de conteúdo para as mensagens de follow-up.
       </div>
       <CamadaFollowup config={config} onUpdate={onUpdate} />
       <div style={{ display: 'flex', gap: 10, marginTop: 24 }}>
@@ -679,7 +679,7 @@ export default function AiProfile() {
             </div>
             <div className="font-display" style={{ fontSize: 28, fontWeight: 400, marginBottom: 6, color: 'var(--o-text)' }}>Apresentação e agendamento</div>
             <div style={{ fontSize: 12.5, color: 'var(--o-sub)', fontWeight: 300, marginBottom: 24 }}>
-              Lembretes de reunião, dossiê pré-reunião e integração de calendário.
+              Dossiê pré-reunião, disponibilidade de horários e integração de calendário.
             </div>
             <CamadaApresentacao config={config} onUpdate={updateConfig} />
             <div style={{ display: 'flex', gap: 10, marginTop: 24 }}>
