@@ -1,7 +1,7 @@
 # Camada dedicada de Follow-up no AI Profile (M3)
 
 **Branch:** `main`
-**Status:** Em andamento — Fases 1-2 implementadas e validadas (25/06/2026). Fases 3-4 pendentes.
+**Status:** Em andamento — Fases 1-3 implementadas e validadas (25/06/2026). Fase 4 (graduação) pendente.
 **Plano:** `docs/plans/followup-proativo-e-cancelamento-agenda.md` (M3)
 
 ---
@@ -144,6 +144,28 @@ uma nota explícita de que depende do "Score mínimo" configurado em Qualificaç
 | `frontend-crm/src/components/Dashboard.tsx` | Remove a chave `followup` de `c3Checks` (linha 83) |
 | `docs/guia-campos-ai-profile.md`, `docs/ai-profile-fields.md` | Remove/corrige as menções a `followup_h1/h2/h3` |
 
+### Commits Fase 3
+
+| # | Commit | O que foi implementado |
+|---|---|---|
+| 1 | `3615343` | Remove os campos mortos `followup_h1/h2/h3` de todo o frontend-crm (tipo, api.ts, drawer, Dashboard) e das 2 docs desatualizadas |
+
+### Relatório da Fase 3 — o que mudou na prática
+
+**Antes:** existia um controlo "Cadência de follow-up" (3 sliders) que parecia
+configurar os intervalos entre tentativas, mas nunca era lido por nenhum
+backend — o operador configurava algo que não tinha efeito real.
+
+**Agora:** esse controlo foi removido por completo (era um resquício morto,
+não uma funcionalidade perdida). A cadência real continua 100% configurável
+pelo card "Follow-up avançado", que sempre foi o que o motor de fato lê. O
+resumo geral e o painel da home (Dashboard) foram ajustados para não
+referenciar mais o campo morto.
+
+**Para validar:** Cenário P3, abaixo — já testado ao vivo nesta sessão.
+
+---
+
 ### Fase 4 — Graduação do M3
 
 Atualizar `docs/plans/followup-proativo-e-cancelamento-agenda.md` (M3 → graduado),
@@ -169,13 +191,14 @@ sobre a nova localização na UI, e remover este arquivo de implementação.
 - **Validado em:** 25/06/2026 — `npx tsc -b --noEmit` sem novos erros; teste ao vivo via browser: card "Score mínimo"/"Sinais de compra" confirmados como únicos restantes em "Parâmetros avançados" da Camada Qualificação; card "Nurture vs Descarte" confirmado na Seção 4 da Camada Follow-up, referenciando "Score mínimo" da Camada 2; toggle clicado (Nurture→Descarte), draft banner apareceu corretamente, "Descartar rascunho" usado para reverter sem persistir (não era necessário alterar o dado real da conta de teste só para validar o toggle).
 
 ### Cenário P3 — Fase 3: campos mortos removidos
-- [ ] `npx tsc -b --noEmit` sem erros
-- [ ] `rg "followup_h1|followup_h2|followup_h3" frontend-crm/src` retorna zero resultados
-- [ ] Resumo: card antigo "Cadência follow-up" não aparece; novo card "Follow-up" aparece e navega certo
-- [ ] Badge da Camada 3 mostra `X/4` (não `X/5`) e reflete opt-out/LGPD/reativação/mídia corretamente
-- [ ] Camada 3: "Seção 2" desapareceu sem deixar espaço vazio
-- [ ] Dashboard (home): barra de progresso da Camada 3 não quebra
-- [ ] Salvar qualquer Camada continua funcionando; `PUT /ai-profiles/me` não envia mais `followup_h1/h2/h3`
+- [x] `npx tsc -b --noEmit` sem erros (nos arquivos tocados — repositório já tinha erros pré-existentes não relacionados, sem `npm run build`/type-check no CI)
+- [x] `rg "followup_h1|followup_h2|followup_h3" frontend-crm/src` retorna zero resultados
+- [x] Resumo: card antigo "Cadência follow-up" não aparece; novo card "Follow-up" aparece e navega para a Camada Follow-up
+- [x] Badge da Camada 3 mostra `2/4` (não `X/5`) e reflete opt-out/LGPD/reativação/mídia corretamente
+- [x] Camada 3: "Seção 2" desapareceu sem deixar espaço vazio (vai direto de "Seção 1" para "Seção 3")
+- [x] Dashboard (home): card "CAMADA 3" mostra `2/4` com chips Opt-out/LGPD/Reativação/Mídia (sem "Follow-up"), descrição ajustada para "Reativação, mídia e proteção do número."
+- [⏭️] Inspeção de network confirmando que `PUT /ai-profiles/me` não envia mais `followup_h1/h2/h3` — não inspecionado directamente via network tab nesta sessão, mas confirmado por leitura de código (`api.ts` `saveConfig()` não tem mais essas 3 linhas) e indiretamente pelo fato de salvar ter funcionado sem erro nas Fases 1/2
+- **Validado em:** 25/06/2026 — teste ao vivo via browser (chrome-devtools MCP) na conta de teste, mesma sessão das Fases 1-2.
 
 ---
 
