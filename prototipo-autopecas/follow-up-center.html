@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Follow-ups · Lara AutoPeças</title>
+<link rel="stylesheet" href="assets/css/theme.css" />
+<link rel="stylesheet" href="assets/css/sidebar.css" />
+<link rel="stylesheet" href="assets/css/components.css" />
+</head>
+<body data-page="followup">
+<div class="app-shell">
+
+  <aside class="sidebar">
+    <div class="sidebar-brand">
+      <div class="logo-mark"><span class="icon" data-icon="wrench" style="font-size:15px"></span></div>
+      <div class="logo-text"><strong>Lara · Auto Peças Silva</strong><span>CRM + IA via WhatsApp</span></div>
+    </div>
+    <div class="sidebar-scroll">
+      <div class="sidebar-group">
+        <div class="sidebar-group-label">Navegação</div>
+        <ul class="sidebar-menu">
+          <li><a class="sidebar-link" data-page="dashboard" href="index.html"><span class="icon" data-icon="bar-chart"></span><span>Dashboard</span></a></li>
+          <li><a class="sidebar-link" data-page="clientes" href="clientes.html"><span class="icon" data-icon="users"></span><span>Clientes</span></a></li>
+          <li><a class="sidebar-link" data-page="agenda" href="agenda.html"><span class="icon" data-icon="calendar-days"></span><span>Agenda</span></a></li>
+          <li><a class="sidebar-link" data-page="recompra" href="regua-recompra.html"><span class="icon" data-icon="repeat"></span><span>Régua de Recompra</span><span class="nav-badge">8</span></a></li>
+          <li><a class="sidebar-link" data-page="followup" href="follow-up-center.html"><span class="icon" data-icon="message-square-dot"></span><span>Follow-ups</span></a></li>
+          <li><a class="sidebar-link" data-page="playground" href="playground.html"><span class="icon" data-icon="flask-conical"></span><span>Playground IA</span></a></li>
+        </ul>
+      </div>
+      <div class="sidebar-group">
+        <div class="sidebar-group-label">Cliente final</div>
+        <ul class="sidebar-menu">
+          <li><a class="sidebar-link" data-page="whatsapp" href="whatsapp-cliente.html"><span class="icon" data-icon="message-circle"></span><span>Simulação WhatsApp</span></a></li>
+        </ul>
+      </div>
+      <div class="sidebar-group">
+        <div class="sidebar-group-label">Conta</div>
+        <ul class="sidebar-menu">
+          <li><a class="sidebar-link" data-page="ai-profile" href="ai-profile.html"><span class="icon" data-icon="sparkles"></span><span>Identidade da Lara</span></a></li>
+          <li><a class="sidebar-link" href="#"><span class="icon" data-icon="log-out"></span><span>Sair</span></a></li>
+        </ul>
+      </div>
+    </div>
+    <div class="sidebar-footer">
+      <div class="avatar">RS</div>
+      <div class="who"><strong>Auto Peças Silva</strong><span>Plano Profissional</span></div>
+    </div>
+  </aside>
+
+  <div class="app-main">
+    <div class="app-topbar">
+      <button class="btn btn-ghost btn-icon" data-sidebar-toggle aria-label="Menu"><span class="icon" data-icon="menu"></span></button>
+      <div style="flex:1"></div>
+      <button class="btn btn-ghost btn-icon" data-theme-toggle aria-label="Tema"><span class="icon" data-icon="moon"></span></button>
+    </div>
+
+    <div class="app-content">
+      <div class="crm-header">
+        <div>
+          <h1 style="font-size:20px;">Follow-ups</h1>
+          <p class="u-muted u-text-sm" style="margin:2px 0 0;">Temperatura de cada cliente em follow-up automático — a Lara prioriza quem está mais perto de comprar.</p>
+        </div>
+      </div>
+
+      <div class="page-body u-flex-col u-gap-4" style="display:flex;">
+
+        <!-- QUENTE -->
+        <div class="card" style="border-left:3px solid #e87860;">
+          <div class="card-header u-flex u-items-center u-gap-2" style="display:flex; padding-bottom:12px;">
+            <h2 class="card-title">🔥 Quente</h2><span class="u-muted u-text-xs">pediu orçamento hoje</span>
+          </div>
+          <div class="card-content" style="padding-top:0;">
+            <table class="data-table">
+              <thead><tr><th>Cliente</th><th>Motivo</th><th>Tentativas</th><th>Próxima ação</th><th></th></tr></thead>
+              <tbody>
+                <tr>
+                  <td><strong>Eduardo Martins</strong><div class="u-muted u-text-xs">Toyota Corolla 2018</div></td>
+                  <td>Orçamento de filtro + óleo enviado hoje 10h22</td>
+                  <td><div class="fu-dots"><span class="fu-dot" style="background:#e87860;"></span><span class="fu-dot" style="background:rgba(232,120,96,.25);"></span><span class="fu-dot" style="background:rgba(232,120,96,.25);"></span></div></td>
+                  <td class="u-text-xs">Cobrar resposta em 2h se silêncio</td>
+                  <td><button class="btn btn-sm btn-outline">Ver conversa</button></td>
+                </tr>
+                <tr>
+                  <td><strong>Vanessa Oliveira</strong><div class="u-muted u-text-xs">Jeep Renegade 2020</div></td>
+                  <td>Orçamento de pastilha enviado hoje 14h05</td>
+                  <td><div class="fu-dots"><span class="fu-dot" style="background:rgba(232,120,96,.25);"></span><span class="fu-dot" style="background:rgba(232,120,96,.25);"></span><span class="fu-dot" style="background:rgba(232,120,96,.25);"></span></div></td>
+                  <td class="u-text-xs">1ª cobrança agora</td>
+                  <td><button class="btn btn-sm btn-outline">Ver conversa</button></td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- MORNO -->
+        <div class="card" style="border-left:3px solid #e8b84b;">
+          <div class="card-header u-flex u-items-center u-gap-2" style="display:flex; padding-bottom:12px;">
+            <h2 class="card-title">🌡 Morno</h2><span class="u-muted u-text-xs">comprou há 30–60 dias</span>
+          </div>
+          <div class="card-content" style="padding-top:0;">
+            <table class="data-table">
+              <thead><tr><th>Cliente</th><th>Motivo</th><th>Tentativas</th><th>Próxima ação</th><th></th></tr></thead>
+              <tbody>
+                <tr>
+                  <td><strong>Beatriz Ramos</strong><div class="u-muted u-text-xs">VW Polo 2022</div></td>
+                  <td>Comprou filtro de óleo há 38 dias</td>
+                  <td><div class="fu-dots"><span class="fu-dot" style="background:#e8b84b;"></span><span class="fu-dot" style="background:rgba(232,184,75,.25);"></span></div></td>
+                  <td class="u-text-xs">Nutrir relacionamento em 5 dias</td>
+                  <td><button class="btn btn-sm btn-outline">Ver conversa</button></td>
+                </tr>
+                <tr>
+                  <td><strong>Rafael Costa</strong><div class="u-muted u-text-xs">Chevrolet Onix 2020</div></td>
+                  <td>Comprou amortecedor há 45 dias</td>
+                  <td><div class="fu-dots"><span class="fu-dot" style="background:rgba(232,184,75,.25);"></span><span class="fu-dot" style="background:rgba(232,184,75,.25);"></span></div></td>
+                  <td class="u-text-xs">Nutrir relacionamento em 12 dias</td>
+                  <td><button class="btn btn-sm btn-outline">Ver conversa</button></td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- FRIO -->
+        <div class="card" style="border-left:3px solid #6898e8;">
+          <div class="card-header u-flex u-items-center u-gap-2" style="display:flex; padding-bottom:12px;">
+            <h2 class="card-title">❄ Frio</h2><span class="u-muted u-text-xs">+90 dias sem comprar</span>
+          </div>
+          <div class="card-content" style="padding-top:0;">
+            <table class="data-table">
+              <thead><tr><th>Cliente</th><th>Motivo</th><th>Tentativas</th><th>Próxima ação</th><th></th></tr></thead>
+              <tbody>
+                <tr>
+                  <td><strong>Ana Paula Ribeiro</strong><div class="u-muted u-text-xs">Chevrolet Celta 2012</div></td>
+                  <td>Última compra há 145 dias</td>
+                  <td><div class="fu-dots"><span class="fu-dot" style="background:#6898e8;"></span><span class="fu-dot" style="background:#6898e8;"></span></div></td>
+                  <td class="u-text-xs">Esgotado — sugerir contato humano</td>
+                  <td><button class="btn btn-sm btn-outline">Ver conversa</button></td>
+                </tr>
+                <tr>
+                  <td><strong>Sérgio Nogueira</strong><div class="u-muted u-text-xs">VW Voyage 2016</div></td>
+                  <td>Última compra há 210 dias</td>
+                  <td><div class="fu-dots"><span class="fu-dot" style="background:#6898e8;"></span><span class="fu-dot" style="background:#6898e8;"></span></div></td>
+                  <td class="u-text-xs">Campanha de reativação trimestral</td>
+                  <td><button class="btn btn-sm btn-outline">Ver conversa</button></td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- RECOMPRA -->
+        <div class="card" style="border-left:3px solid #52C4A0;">
+          <div class="card-header u-flex u-items-center u-gap-2" style="display:flex; padding-bottom:12px;">
+            <h2 class="card-title">🔁 Recompra</h2><span class="u-muted u-text-xs">alerta de ciclo de peça vencendo</span>
+            <a href="regua-recompra.html" class="btn btn-sm btn-outline" style="margin-left:auto;">Ver régua completa</a>
+          </div>
+          <div class="card-content" style="padding-top:0;">
+            <table class="data-table">
+              <thead><tr><th>Cliente</th><th>Motivo</th><th>Tentativas</th><th>Próxima ação</th><th></th></tr></thead>
+              <tbody>
+                <tr>
+                  <td><strong>Patrícia Lima</strong><div class="u-muted u-text-xs">VW Gol 2017</div></td>
+                  <td>Bateria vencida há 97 dias</td>
+                  <td><div class="fu-dots"><span class="fu-dot" style="background:#52C4A0;"></span><span class="fu-dot" style="background:#52C4A0;"></span><span class="fu-dot" style="background:#52C4A0;"></span></div></td>
+                  <td class="u-text-xs">Esgotado — sugerir contato humano</td>
+                  <td><button class="btn btn-sm btn-outline">Ver conversa</button></td>
+                </tr>
+                <tr>
+                  <td><strong>Marcos Andrade</strong><div class="u-muted u-text-xs">Fiat Strada 2021</div></td>
+                  <td>Pastilha de freio vencida há 17 dias</td>
+                  <td><div class="fu-dots"><span class="fu-dot" style="background:#52C4A0;"></span><span class="fu-dot" style="background:rgba(82,196,160,.25);"></span><span class="fu-dot" style="background:rgba(82,196,160,.25);"></span></div></td>
+                  <td class="u-text-xs">2º disparo em 3 dias</td>
+                  <td><button class="btn btn-sm btn-outline">Ver conversa</button></td>
+                </tr>
+                <tr>
+                  <td><strong>João Silva</strong><div class="u-muted u-text-xs">Honda Civic 2019</div></td>
+                  <td>Filtro de óleo vence em 20 dias</td>
+                  <td><div class="fu-dots"><span class="fu-dot" style="background:rgba(82,196,160,.25);"></span></div></td>
+                  <td class="u-text-xs">1º disparo em 5 dias</td>
+                  <td><button class="btn btn-sm btn-outline">Ver conversa</button></td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="assets/js/icons.js"></script>
+<script src="assets/js/app.js"></script>
+</body>
+</html>

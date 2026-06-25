@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Playground IA · Lara AutoPeças</title>
+<link rel="stylesheet" href="assets/css/theme.css" />
+<link rel="stylesheet" href="assets/css/sidebar.css" />
+<link rel="stylesheet" href="assets/css/components.css" />
+</head>
+<body data-page="playground">
+<div class="app-shell">
+
+  <aside class="sidebar">
+    <div class="sidebar-brand">
+      <div class="logo-mark"><span class="icon" data-icon="wrench" style="font-size:15px"></span></div>
+      <div class="logo-text"><strong>Lara · Auto Peças Silva</strong><span>CRM + IA via WhatsApp</span></div>
+    </div>
+    <div class="sidebar-scroll">
+      <div class="sidebar-group">
+        <div class="sidebar-group-label">Navegação</div>
+        <ul class="sidebar-menu">
+          <li><a class="sidebar-link" data-page="dashboard" href="index.html"><span class="icon" data-icon="bar-chart"></span><span>Dashboard</span></a></li>
+          <li><a class="sidebar-link" data-page="clientes" href="clientes.html"><span class="icon" data-icon="users"></span><span>Clientes</span></a></li>
+          <li><a class="sidebar-link" data-page="agenda" href="agenda.html"><span class="icon" data-icon="calendar-days"></span><span>Agenda</span></a></li>
+          <li><a class="sidebar-link" data-page="recompra" href="regua-recompra.html"><span class="icon" data-icon="repeat"></span><span>Régua de Recompra</span><span class="nav-badge">8</span></a></li>
+          <li><a class="sidebar-link" data-page="followup" href="follow-up-center.html"><span class="icon" data-icon="message-square-dot"></span><span>Follow-ups</span></a></li>
+          <li><a class="sidebar-link" data-page="playground" href="playground.html"><span class="icon" data-icon="flask-conical"></span><span>Playground IA</span></a></li>
+        </ul>
+      </div>
+      <div class="sidebar-group">
+        <div class="sidebar-group-label">Cliente final</div>
+        <ul class="sidebar-menu">
+          <li><a class="sidebar-link" data-page="whatsapp" href="whatsapp-cliente.html"><span class="icon" data-icon="message-circle"></span><span>Simulação WhatsApp</span></a></li>
+        </ul>
+      </div>
+      <div class="sidebar-group">
+        <div class="sidebar-group-label">Conta</div>
+        <ul class="sidebar-menu">
+          <li><a class="sidebar-link" data-page="ai-profile" href="ai-profile.html"><span class="icon" data-icon="sparkles"></span><span>Identidade da Lara</span></a></li>
+          <li><a class="sidebar-link" href="#"><span class="icon" data-icon="log-out"></span><span>Sair</span></a></li>
+        </ul>
+      </div>
+    </div>
+    <div class="sidebar-footer">
+      <div class="avatar">RS</div>
+      <div class="who"><strong>Auto Peças Silva</strong><span>Plano Profissional</span></div>
+    </div>
+  </aside>
+
+  <div class="app-main">
+    <div class="app-topbar">
+      <button class="btn btn-ghost btn-icon" data-sidebar-toggle aria-label="Menu"><span class="icon" data-icon="menu"></span></button>
+      <div style="flex:1"></div>
+      <button class="btn btn-ghost btn-icon" data-theme-toggle aria-label="Tema"><span class="icon" data-icon="moon"></span></button>
+    </div>
+
+    <div class="app-content">
+      <div class="crm-header">
+        <div>
+          <h1 style="font-size:20px;">Playground IA</h1>
+          <p class="u-muted u-text-sm" style="margin:2px 0 0;">Simule conversas como se fosse o cliente, sem usar o WhatsApp real. Cenário: João Silva pedindo pastilha de freio para o Civic 2019.</p>
+        </div>
+        <div class="u-flex u-gap-2" style="display:flex;">
+          <span class="badge badge-outline">Agente: Lara · Consultivo</span>
+          <button class="btn btn-outline" onclick="replayConversation()"><span class="icon" data-icon="refresh-cw" style="font-size:12px;"></span> Reiniciar simulação</button>
+        </div>
+      </div>
+
+      <div class="page-body">
+        <div class="chat-panel">
+          <div class="chat-messages" id="chat-messages"></div>
+
+          <div class="chat-input-area">
+            <textarea placeholder="Digite como se fosse o cliente… (Enter para enviar)"></textarea>
+            <button class="btn btn-outline btn-icon" title="Gravar áudio"><span class="icon" data-icon="mic"></span></button>
+            <button class="btn btn-outline btn-icon" title="Modo lote"><span class="icon" data-icon="layers"></span></button>
+            <button class="btn btn-primary btn-icon" title="Enviar" onclick="replayConversation()"><span class="icon" data-icon="send"></span></button>
+          </div>
+        </div>
+        <p class="chat-hint">Dica: clique em "Reiniciar simulação" para ver a Lara respondendo em tempo real, como aconteceria no WhatsApp.</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="assets/js/icons.js"></script>
+<script src="assets/js/app.js"></script>
+<script>
+const CONVERSATION = [
+  { from: 'client', text: 'Boa tarde! Vocês tem pastilha de freio pro meu Civic?' },
+  { from: 'bot', text: 'Boa tarde, João! 😊 Localizei seu Honda Civic 2019 (placa BRA2E19) aqui no sistema. É a pastilha dianteira ou traseira?' },
+  { from: 'client', text: 'Dianteira, tá fazendo um barulhinho estranho' },
+  { from: 'bot', text: 'Entendi! Pelo seu histórico, a última troca de pastilha foi em 22/08/2025 — já tá no tempo mesmo. Temos a pastilha dianteira original em estoque: R$ 245,00, com instalação incluída. Quer que eu já separe e agende a instalação?', rating: 'boa' },
+  { from: 'client', text: 'Quanto tempo demora a instalação?' },
+  { from: 'bot', text: 'Rapidinho, cerca de 40 minutos. Tenho horário hoje às 16h30 ou amanhã de manhã às 9h. Qual fica melhor pra você?' },
+  { from: 'client', text: 'Pode ser hoje às 16h30' },
+  { from: 'bot', text: 'Perfeito! Agendado pra hoje, 16h30, troca de pastilha dianteira no seu Civic. Te aviso quando tiver tudo pronto. Você ganhou +25 pontos de fidelidade nessa compra 🎉', rating: 'excelente' },
+];
+
+const RATINGS = [
+  { value: 'ruim', label: 'Ruim', icon: 'thumbs-down' },
+  { value: 'regular', label: 'Regular', icon: 'minus' },
+  { value: 'boa', label: 'Boa', icon: 'thumbs-up' },
+  { value: 'excelente', label: 'Excelente', icon: 'star' },
+];
+
+function ratingRowHtml(selected) {
+  return '<div class="rating-row">' + RATINGS.map(r =>
+    `<button class="rating-btn ${r.value === selected ? 'selected ' + r.value : ''}" disabled><span class="icon" data-icon="${r.icon}" style="font-size:10px;"></span>${r.label}</button>`
+  ).join('') + '</div>';
+}
+
+function renderAll() {
+  const box = document.getElementById('chat-messages');
+  box.innerHTML = '';
+  CONVERSATION.forEach(m => {
+    box.insertAdjacentHTML('beforeend', `<div class="msg-row from-${m.from}"><div class="bubble ${m.from === 'client' ? 'client' : 'bot'}">${m.text}</div></div>`);
+    if (m.from === 'bot' && m.rating) box.insertAdjacentHTML('beforeend', ratingRowHtml(m.rating));
+  });
+  renderIcons(box);
+  box.scrollTop = box.scrollHeight;
+}
+
+function replayConversation() {
+  const box = document.getElementById('chat-messages');
+  box.innerHTML = '';
+  let i = 0;
+  function step() {
+    if (i >= CONVERSATION.length) return;
+    const m = CONVERSATION[i];
+    if (m.from === 'bot') {
+      const typing = document.createElement('div');
+      typing.className = 'msg-row from-bot';
+      typing.innerHTML = '<div class="bubble bot"><span class="typing-dots"><span></span><span></span><span></span></span></div>';
+      box.appendChild(typing);
+      box.scrollTop = box.scrollHeight;
+      setTimeout(() => {
+        typing.querySelector('.bubble').textContent = m.text;
+        if (m.rating) box.insertAdjacentHTML('beforeend', ratingRowHtml(m.rating));
+        renderIcons(box);
+        box.scrollTop = box.scrollHeight;
+        i++; setTimeout(step, 500);
+      }, 900);
+    } else {
+      box.insertAdjacentHTML('beforeend', `<div class="msg-row from-client"><div class="bubble client">${m.text}</div></div>`);
+      box.scrollTop = box.scrollHeight;
+      i++; setTimeout(step, 600);
+    }
+  }
+  step();
+}
+
+renderAll();
+</script>
+</body>
+</html>

@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Identidade da Lara · AutoPeças</title>
+<link rel="stylesheet" href="assets/css/theme.css" />
+<link rel="stylesheet" href="assets/css/orion.css" />
+</head>
+<body data-page="ai-profile">
+<div class="orion-shell">
+
+  <div class="o-topbar">
+    <a href="index.html" class="o-btn"><span class="icon" data-icon="arrow-left" style="font-size:11px;"></span> Voltar</a>
+    <div class="o-brand" style="margin-left:18px;"><span class="dot"></span> Lara <span style="color:var(--o-dim); font-size:12px; margin-left:4px;">· Auto Peças Silva</span></div>
+    <div style="flex:1;"></div>
+    <button class="o-btn">↕ Exportar / Importar</button>
+  </div>
+
+  <div class="o-subnav">
+    <div class="o-subnav-item o-active" data-tab="resumo">Resumo</div>
+    <div class="o-subnav-sep"></div>
+    <div class="o-subnav-item" data-tab="identidade">Camada 1 · Identidade</div>
+    <div class="o-subnav-item" data-tab="conhecimento">Camada 2 · Conhecimento</div>
+    <div class="o-subnav-item" data-tab="pipeline">Camada 3 · Pipeline</div>
+  </div>
+
+  <div class="o-content">
+    <div class="o-panel">
+
+      <!-- RESUMO -->
+      <div class="o-tab-panel" id="tab-resumo">
+        <div class="o-alert o-alert-info" style="margin-bottom:24px;">
+          <span class="icon" data-icon="sparkles" style="font-size:14px;"></span>
+          <span>A Lara está configurada como agente <strong>Consultivo</strong> para o nicho de autopeças — ela identifica o veículo do cliente antes de recomendar qualquer peça.</span>
+        </div>
+
+        <div class="o-section-hdr"><span class="font-display" style="font-size:18px;">Estado da configuração</span></div>
+        <div style="display:grid; grid-template-columns:repeat(3,1fr); gap:16px;" class="o-grid-resp">
+          <a class="o-layer-card o-layer-l1" data-tab-link="identidade">
+            <p class="o-badge o-badge-ok">Camada 1</p>
+            <p style="font-weight:600; margin:10px 0 4px; font-family:'Playfair Display',serif;">Identidade e estratégia</p>
+            <p style="font-size:12px; color:var(--o-sub);">Quem é a Lara, como fala e como atende.</p>
+            <p class="font-mono-orion" style="font-size:10px; color:var(--o-active); margin-top:10px;">COMPLETA · 5/5</p>
+          </a>
+          <a class="o-layer-card o-layer-l2" data-tab-link="conhecimento">
+            <p class="o-badge o-badge-warn">Camada 2</p>
+            <p style="font-weight:600; margin:10px 0 4px; font-family:'Playfair Display',serif;">Conhecimento de peças</p>
+            <p style="font-size:12px; color:var(--o-sub);">Catálogo, ciclos de recompra e política de troca.</p>
+            <p class="font-mono-orion" style="font-size:10px; color:var(--o-warn); margin-top:10px;">83% · 5/6</p>
+          </a>
+          <a class="o-layer-card o-layer-l3" data-tab-link="pipeline">
+            <p class="o-badge" style="background:var(--o-mp-dim); color:var(--o-purple); border:1px solid var(--o-mp-b);">Camada 3</p>
+            <p style="font-weight:600; margin:10px 0 4px; font-family:'Playfair Display',serif;">Pipeline e recompra</p>
+            <p style="font-size:12px; color:var(--o-sub);">Régua automática, reativação e proteção do número.</p>
+            <p class="font-mono-orion" style="font-size:10px; color:var(--o-purple); margin-top:10px;">OK · 4/4</p>
+          </a>
+        </div>
+      </div>
+
+      <!-- IDENTIDADE -->
+      <div class="o-tab-panel" id="tab-identidade" style="display:none;">
+        <div class="o-section-hdr"><span class="font-display" style="font-size:18px;">Identidade e estratégia</span></div>
+        <div style="display:grid; grid-template-columns:repeat(2,1fr); gap:14px;" class="o-grid-resp">
+          <div class="o-edit-card" onclick="openDrawer('nome')">
+            <p class="font-mono-orion" style="font-size:9px; color:var(--o-sub);">NOME DO AGENTE</p>
+            <p style="font-weight:600; margin-top:4px;">Lara</p>
+            <span class="o-edit-arrow">→</span>
+          </div>
+          <div class="o-edit-card">
+            <p class="font-mono-orion" style="font-size:9px; color:var(--o-sub);">EMPRESA</p>
+            <p style="font-weight:600; margin-top:4px;">Auto Peças Silva</p>
+            <span class="o-edit-arrow">→</span>
+          </div>
+          <div class="o-edit-card">
+            <p class="font-mono-orion" style="font-size:9px; color:var(--o-sub);">NICHO</p>
+            <p style="font-weight:600; margin-top:4px;">Autopeças — varejo independente (peças, manutenção preventiva e recompra)</p>
+            <span class="o-edit-arrow">→</span>
+          </div>
+          <div class="o-edit-card">
+            <p class="font-mono-orion" style="font-size:9px; color:var(--o-sub);">TIPO DE AGENTE</p>
+            <p style="font-weight:600; margin-top:4px;">Consultivo</p>
+            <span class="o-edit-arrow">→</span>
+          </div>
+          <div class="o-edit-card">
+            <p class="font-mono-orion" style="font-size:9px; color:var(--o-sub);">MODO DE IDENTIDADE</p>
+            <p style="font-weight:600; margin-top:4px;">Agente humano</p>
+            <span class="o-edit-arrow">→</span>
+          </div>
+          <div class="o-edit-card">
+            <p class="font-mono-orion" style="font-size:9px; color:var(--o-sub);">FUSO HORÁRIO</p>
+            <p style="font-weight:600; margin-top:4px;">América/São Paulo (BRT, UTC−3)</p>
+            <span class="o-edit-arrow">→</span>
+          </div>
+          <div class="o-edit-card" onclick="openDrawer('tom')" style="grid-column:1/-1;">
+            <p class="font-mono-orion" style="font-size:9px; color:var(--o-sub);">TOM DE VOZ</p>
+            <p style="font-weight:600; margin-top:4px;">Direta, prestativa e técnica sem ser fria — como um balconista de confiança que conhece o carro do cliente.</p>
+            <span class="o-edit-arrow">→</span>
+          </div>
+          <div class="o-edit-card" style="grid-column:1/-1;">
+            <p class="font-mono-orion" style="font-size:9px; color:var(--o-sub);">PRIORIDADES DO ATENDIMENTO</p>
+            <p style="margin-top:6px; font-size:13px; line-height:1.7;">1. Identificar o veículo do cliente (placa ou marca/modelo/ano) antes de recomendar peça<br />2. Confirmar disponibilidade e preço antes de fechar<br />3. Sempre oferecer agendar a instalação na mesma conversa<br />4. Avisar sobre pontos de fidelidade ganhos na compra</p>
+            <span class="o-edit-arrow">→</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- CONHECIMENTO -->
+      <div class="o-tab-panel" id="tab-conhecimento" style="display:none;">
+        <div class="o-section-hdr"><span class="font-display" style="font-size:18px;">Conhecimento de peças</span></div>
+
+        <div class="o-card" style="margin-bottom:16px;">
+          <div class="o-card-header"><span class="font-mono-orion" style="font-size:10px;">MARCAS ATENDIDAS</span></div>
+          <div class="o-card-body" style="display:flex; flex-wrap:wrap; gap:8px;">
+            <span class="o-chip o-chip-active">Honda</span><span class="o-chip o-chip-active">Toyota</span><span class="o-chip o-chip-active">Volkswagen</span>
+            <span class="o-chip o-chip-active">Fiat</span><span class="o-chip o-chip-active">Chevrolet</span><span class="o-chip o-chip-active">Hyundai</span>
+            <span class="o-chip o-chip-active">Renault</span><span class="o-chip o-chip-active">Jeep</span><span class="o-chip o-chip-active">Ford</span>
+          </div>
+        </div>
+
+        <div class="o-card" style="margin-bottom:16px;">
+          <div class="o-card-header"><span class="font-mono-orion" style="font-size:10px;">CICLOS DE RECOMPRA POR PEÇA</span><span style="color:var(--o-dim); font-size:11px;">alimenta a Régua de Recompra</span></div>
+          <div class="o-card-body" style="padding:0;">
+            <table style="width:100%; border-collapse:collapse; font-size:12.5px;">
+              <thead><tr style="border-bottom:1px solid var(--o-b0);"><th style="text-align:left; padding:10px 18px; color:var(--o-sub); font-weight:500;">Peça</th><th style="text-align:left; padding:10px 18px; color:var(--o-sub); font-weight:500;">Ciclo estimado</th></tr></thead>
+              <tbody>
+                <tr style="border-bottom:1px solid var(--o-b0);"><td style="padding:9px 18px;">Filtro de óleo</td><td style="padding:9px 18px;">6 meses</td></tr>
+                <tr style="border-bottom:1px solid var(--o-b0);"><td style="padding:9px 18px;">Pastilha de freio</td><td style="padding:9px 18px;">12 meses</td></tr>
+                <tr style="border-bottom:1px solid var(--o-b0);"><td style="padding:9px 18px;">Bateria</td><td style="padding:9px 18px;">36 meses</td></tr>
+                <tr style="border-bottom:1px solid var(--o-b0);"><td style="padding:9px 18px;">Amortecedor</td><td style="padding:9px 18px;">48 meses</td></tr>
+                <tr><td style="padding:9px 18px;">Correia dentada</td><td style="padding:9px 18px;">48 meses</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="o-card">
+          <div class="o-card-header"><span class="font-mono-orion" style="font-size:10px;">POLÍTICA DE TROCA</span></div>
+          <div class="o-card-body" style="font-size:13px; line-height:1.7; color:var(--o-text);">
+            Peças com defeito de fabricação podem ser trocadas em até 90 dias, com nota fiscal e peça em mãos. Instalação feita pela própria loja tem garantia de 6 meses sobre o serviço. Peças elétricas (bateria, sensores) não têm troca por arrependimento, apenas por defeito comprovado.
+          </div>
+        </div>
+      </div>
+
+      <!-- PIPELINE -->
+      <div class="o-tab-panel" id="tab-pipeline" style="display:none;">
+        <div class="o-section-hdr"><span class="font-display" style="font-size:18px;">Pipeline e recompra</span></div>
+
+        <div class="o-toggle-row">
+          <div><strong style="font-size:13px;">Régua de recompra automática</strong><div style="font-size:11.5px; color:var(--o-dim);">Dispara lembrete de WhatsApp quando o ciclo da peça está vencendo</div></div>
+          <div class="o-toggle on"></div>
+        </div>
+        <div class="o-toggle-row">
+          <div><strong style="font-size:13px;">Reativação de clientes frios</strong><div style="font-size:11.5px; color:var(--o-dim);">Campanha trimestral para clientes sem comprar há mais de 90 dias</div></div>
+          <div class="o-toggle on"></div>
+        </div>
+        <div class="o-toggle-row">
+          <div><strong style="font-size:13px;">Proteção do número (mídia)</strong><div style="font-size:11.5px; color:var(--o-dim);">Limita envio de imagens/áudio em excesso para evitar bloqueio do WhatsApp</div></div>
+          <div class="o-toggle on"></div>
+        </div>
+
+        <div class="o-field" style="margin-top:24px;">
+          <label class="o-field-label">Palavras de opt-out</label>
+          <div class="o-field-hint">Se o cliente enviar uma dessas palavras, a Lara para os disparos automáticos imediatamente.</div>
+          <div class="o-tag-wrap">
+            <span class="o-kw-tag">PARAR</span>
+            <span class="o-kw-tag">SAIR</span>
+            <span class="o-kw-tag">CANCELAR</span>
+            <span class="o-kw-tag">NÃO QUERO MAIS</span>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- Drawer: Nome do agente -->
+  <div class="o-drawer-overlay" id="overlay-nome" onclick="closeDrawer('nome')"></div>
+  <div class="o-drawer" id="drawer-nome">
+    <div class="o-drawer-header">
+      <div><strong style="font-size:14px;">Nome do agente</strong><div style="font-size:11.5px; color:var(--o-dim); margin-top:2px;">Como o agente se apresenta ao cliente</div></div>
+      <button class="o-close-btn" onclick="closeDrawer('nome')">×</button>
+    </div>
+    <div class="o-drawer-body">
+      <div class="o-field">
+        <label class="o-field-label">Nome</label>
+        <div class="o-field-hint">Este nome aparecerá em todas as mensagens enviadas.</div>
+        <input class="o-input" value="Lara" maxlength="40" />
+        <div class="o-char-count">4/40</div>
+      </div>
+    </div>
+    <div class="o-drawer-footer">
+      <button class="o-btn" onclick="closeDrawer('nome')">Cancelar</button>
+      <button class="o-btn o-btn-primary" onclick="closeDrawer('nome')">Salvar</button>
+    </div>
+  </div>
+
+  <!-- Drawer: Tom de voz -->
+  <div class="o-drawer-overlay" id="overlay-tom" onclick="closeDrawer('tom')"></div>
+  <div class="o-drawer" id="drawer-tom">
+    <div class="o-drawer-header">
+      <div><strong style="font-size:14px;">Tom de voz</strong><div style="font-size:11.5px; color:var(--o-dim); margin-top:2px;">Como a Lara fala com o cliente</div></div>
+      <button class="o-close-btn" onclick="closeDrawer('tom')">×</button>
+    </div>
+    <div class="o-drawer-body">
+      <div class="o-field">
+        <label class="o-field-label">Descrição do tom</label>
+        <textarea class="o-textarea" style="min-height:160px;">Direta, prestativa e técnica sem ser fria — como um balconista de confiança que conhece o carro do cliente. Frases curtas, vocabulário simples, no máximo 1 emoji por mensagem.</textarea>
+        <div class="o-char-count">182/400</div>
+      </div>
+    </div>
+    <div class="o-drawer-footer">
+      <button class="o-btn" onclick="closeDrawer('tom')">Cancelar</button>
+      <button class="o-btn o-btn-primary" onclick="closeDrawer('tom')">Salvar</button>
+    </div>
+  </div>
+
+</div>
+
+<script src="assets/js/icons.js"></script>
+<script>
+document.querySelectorAll('.o-subnav-item').forEach((item) => {
+  item.addEventListener('click', () => switchTab(item.dataset.tab));
+});
+document.querySelectorAll('[data-tab-link]').forEach((item) => {
+  item.addEventListener('click', () => switchTab(item.dataset.tabLink));
+});
+function switchTab(tab) {
+  document.querySelectorAll('.o-subnav-item').forEach(i => i.classList.remove('o-active'));
+  document.querySelector(`.o-subnav-item[data-tab="${tab}"]`).classList.add('o-active');
+  document.querySelectorAll('.o-tab-panel').forEach(p => p.style.display = 'none');
+  document.getElementById('tab-' + tab).style.display = 'block';
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+function openDrawer(id) {
+  document.getElementById('overlay-' + id).classList.add('open');
+  document.getElementById('drawer-' + id).classList.add('open');
+}
+function closeDrawer(id) {
+  document.getElementById('overlay-' + id).classList.remove('open');
+  document.getElementById('drawer-' + id).classList.remove('open');
+}
+</script>
+<style>@media (max-width:760px){ .o-grid-resp{ grid-template-columns:1fr !important; } }</style>
+</body>
+</html>

@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Régua de Recompra · Lara AutoPeças</title>
+<link rel="stylesheet" href="assets/css/theme.css" />
+<link rel="stylesheet" href="assets/css/sidebar.css" />
+<link rel="stylesheet" href="assets/css/components.css" />
+</head>
+<body data-page="recompra">
+<div class="app-shell">
+
+  <aside class="sidebar">
+    <div class="sidebar-brand">
+      <div class="logo-mark"><span class="icon" data-icon="wrench" style="font-size:15px"></span></div>
+      <div class="logo-text"><strong>Lara · Auto Peças Silva</strong><span>CRM + IA via WhatsApp</span></div>
+    </div>
+    <div class="sidebar-scroll">
+      <div class="sidebar-group">
+        <div class="sidebar-group-label">Navegação</div>
+        <ul class="sidebar-menu">
+          <li><a class="sidebar-link" data-page="dashboard" href="index.html"><span class="icon" data-icon="bar-chart"></span><span>Dashboard</span></a></li>
+          <li><a class="sidebar-link" data-page="clientes" href="clientes.html"><span class="icon" data-icon="users"></span><span>Clientes</span></a></li>
+          <li><a class="sidebar-link" data-page="agenda" href="agenda.html"><span class="icon" data-icon="calendar-days"></span><span>Agenda</span></a></li>
+          <li><a class="sidebar-link" data-page="recompra" href="regua-recompra.html"><span class="icon" data-icon="repeat"></span><span>Régua de Recompra</span><span class="nav-badge">8</span></a></li>
+          <li><a class="sidebar-link" data-page="followup" href="follow-up-center.html"><span class="icon" data-icon="message-square-dot"></span><span>Follow-ups</span></a></li>
+          <li><a class="sidebar-link" data-page="playground" href="playground.html"><span class="icon" data-icon="flask-conical"></span><span>Playground IA</span></a></li>
+        </ul>
+      </div>
+      <div class="sidebar-group">
+        <div class="sidebar-group-label">Cliente final</div>
+        <ul class="sidebar-menu">
+          <li><a class="sidebar-link" data-page="whatsapp" href="whatsapp-cliente.html"><span class="icon" data-icon="message-circle"></span><span>Simulação WhatsApp</span></a></li>
+        </ul>
+      </div>
+      <div class="sidebar-group">
+        <div class="sidebar-group-label">Conta</div>
+        <ul class="sidebar-menu">
+          <li><a class="sidebar-link" data-page="ai-profile" href="ai-profile.html"><span class="icon" data-icon="sparkles"></span><span>Identidade da Lara</span></a></li>
+          <li><a class="sidebar-link" href="#"><span class="icon" data-icon="log-out"></span><span>Sair</span></a></li>
+        </ul>
+      </div>
+    </div>
+    <div class="sidebar-footer">
+      <div class="avatar">RS</div>
+      <div class="who"><strong>Auto Peças Silva</strong><span>Plano Profissional</span></div>
+    </div>
+  </aside>
+
+  <div class="app-main">
+    <div class="app-topbar">
+      <button class="btn btn-ghost btn-icon" data-sidebar-toggle aria-label="Menu"><span class="icon" data-icon="menu"></span></button>
+      <div style="flex:1"></div>
+      <button class="btn btn-ghost btn-icon" data-theme-toggle aria-label="Tema"><span class="icon" data-icon="moon"></span></button>
+    </div>
+
+    <div class="app-content">
+      <div class="crm-header">
+        <div>
+          <h1 style="font-size:20px;">Régua de Recompra</h1>
+          <p class="u-muted u-text-sm" style="margin:2px 0 0;">A peça que a rede grande sabe vender de novo — e a loja independente não tinha como saber até agora.</p>
+        </div>
+      </div>
+
+      <div class="page-body">
+
+        <div class="stat-grid" style="margin-bottom:18px;">
+          <div class="card stat-card"><div class="card-content"><div class="stat-label">Vencidos</div><div class="stat-value" style="color:hsl(var(--destructive));">3</div><div class="stat-foot">já passaram do ciclo</div></div></div>
+          <div class="card stat-card"><div class="card-content"><div class="stat-label">Esta semana</div><div class="stat-value" style="color:hsl(var(--warning));">3</div><div class="stat-foot">vencem nos próximos 7 dias</div></div></div>
+          <div class="card stat-card"><div class="card-content"><div class="stat-label">Próximos 30 dias</div><div class="stat-value" style="color:hsl(var(--info));">2</div><div class="stat-foot">para programar com antecedência</div></div></div>
+          <div class="card stat-card"><div class="card-content"><div class="stat-label">Receita potencial</div><div class="stat-value">R$ 2.140</div><div class="stat-foot">se todos recomprarem</div></div></div>
+        </div>
+
+        <div class="u-flex u-gap-2" style="display:flex; margin-bottom:14px;">
+          <button class="filter-pill active" data-filter="all" onclick="filterRows('all', this)">Todos (8)</button>
+          <button class="filter-pill" data-filter="vencido" onclick="filterRows('vencido', this)">Vencidos (3)</button>
+          <button class="filter-pill" data-filter="semana" onclick="filterRows('semana', this)">Esta semana (3)</button>
+          <button class="filter-pill" data-filter="mes" onclick="filterRows('mes', this)">Próximos 30 dias (2)</button>
+        </div>
+
+        <div class="card">
+          <div class="card-content" style="overflow-x:auto; padding:0;">
+            <table class="data-table" id="recompra-table">
+              <thead><tr><th>Cliente</th><th>Veículo</th><th>Peça</th><th>Última troca</th><th>Ciclo</th><th>Próxima prevista</th><th>Status</th><th>Ação</th></tr></thead>
+              <tbody>
+
+                <tr data-status="vencido">
+                  <td><strong>Patrícia Lima</strong><div class="u-muted u-text-xs">(11) 98456-1290</div></td>
+                  <td>VW Gol 2017</td><td>Bateria 60Ah</td><td>20/03/2023</td><td>36 meses</td><td>20/03/2026</td>
+                  <td><span class="badge badge-destructive">Vencido há 97d</span></td>
+                  <td><div class="u-flex u-gap-1" style="display:flex;">
+                    <button class="btn btn-sm btn-primary" onclick="openDisparo('Patrícia Lima','Bateria 60Ah')"><span class="icon" data-icon="zap" style="font-size:11px;"></span> Disparar</button>
+                  </div></td>
+                </tr>
+
+                <tr data-status="vencido">
+                  <td><strong>Marcos Andrade</strong><div class="u-muted u-text-xs">(11) 95588-7733</div></td>
+                  <td>Fiat Strada 2021</td><td>Pastilha de freio</td><td>08/06/2025</td><td>12 meses</td><td>08/06/2026</td>
+                  <td><span class="badge badge-destructive">Vencido há 17d</span></td>
+                  <td><button class="btn btn-sm btn-primary" onclick="openDisparo('Marcos Andrade','Pastilha de freio')"><span class="icon" data-icon="zap" style="font-size:11px;"></span> Disparar</button></td>
+                </tr>
+
+                <tr data-status="vencido">
+                  <td><strong>Camila Souza</strong><div class="u-muted u-text-xs">(11) 94477-6612</div></td>
+                  <td>Hyundai HB20 2019</td><td>Filtro de óleo</td><td>18/12/2025</td><td>6 meses</td><td>18/06/2026</td>
+                  <td><span class="badge badge-destructive">Vencido há 7d</span></td>
+                  <td><button class="btn btn-sm btn-primary" onclick="openDisparo('Camila Souza','Filtro de óleo')"><span class="icon" data-icon="zap" style="font-size:11px;"></span> Disparar</button></td>
+                </tr>
+
+                <tr data-status="semana">
+                  <td><strong>Eduardo Martins</strong><div class="u-muted u-text-xs">(11) 97744-2210</div></td>
+                  <td>Toyota Corolla 2018</td><td>Filtro de óleo</td><td>26/12/2025</td><td>6 meses</td><td>26/06/2026</td>
+                  <td><span class="badge badge-warning">Vence amanhã</span></td>
+                  <td><button class="btn btn-sm btn-outline" onclick="openAgendar('Eduardo Martins','Filtro de óleo')"><span class="icon" data-icon="calendar" style="font-size:11px;"></span> Agendar</button></td>
+                </tr>
+
+                <tr data-status="semana">
+                  <td><strong>Sandra Pires</strong><div class="u-muted u-text-xs">(11) 96211-4480</div></td>
+                  <td>Chevrolet Celta 2014</td><td>Filtro de óleo</td><td>28/12/2025</td><td>6 meses</td><td>28/06/2026</td>
+                  <td><span class="badge badge-warning">Vence em 3 dias</span></td>
+                  <td><button class="btn btn-sm btn-outline" onclick="openAgendar('Sandra Pires','Filtro de óleo')"><span class="icon" data-icon="calendar" style="font-size:11px;"></span> Agendar</button></td>
+                </tr>
+
+                <tr data-status="semana">
+                  <td><strong>Vanessa Oliveira</strong><div class="u-muted u-text-xs">(11) 96655-8821</div></td>
+                  <td>Jeep Renegade 2020</td><td>Pastilha de freio</td><td>29/06/2025</td><td>12 meses</td><td>29/06/2026</td>
+                  <td><span class="badge badge-warning">Vence em 4 dias</span></td>
+                  <td><button class="btn btn-sm btn-outline" onclick="openAgendar('Vanessa Oliveira','Pastilha de freio')"><span class="icon" data-icon="calendar" style="font-size:11px;"></span> Agendar</button></td>
+                </tr>
+
+                <tr data-status="mes">
+                  <td><strong>João Silva</strong><div class="u-muted u-text-xs">(11) 98877-6655</div></td>
+                  <td>Honda Civic 2019</td><td>Filtro de óleo</td><td>15/01/2026</td><td>6 meses</td><td>15/07/2026</td>
+                  <td><span class="badge badge-info">Em 20 dias</span></td>
+                  <td><button class="btn btn-sm" style="color:hsl(var(--success)); border-color:hsl(var(--success)/.4);" disabled><span class="icon" data-icon="check-circle" style="font-size:11px;"></span> Já agendado</button></td>
+                </tr>
+
+                <tr data-status="mes">
+                  <td><strong>Igor Tavares</strong><div class="u-muted u-text-xs">(11) 99887-1023</div></td>
+                  <td>VW Saveiro 2018</td><td>Correia dentada</td><td>25/07/2022</td><td>48 meses</td><td>25/07/2026</td>
+                  <td><span class="badge badge-info">Em 30 dias</span></td>
+                  <td><button class="btn btn-sm btn-outline" onclick="openAgendar('Igor Tavares','Correia dentada')"><span class="icon" data-icon="calendar" style="font-size:11px;"></span> Agendar</button></td>
+                </tr>
+
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Modal Disparar agora -->
+<div class="modal-overlay" id="modal-disparo">
+  <div class="modal" style="max-width:420px;">
+    <div class="modal-header"><h2>Disparar lembrete agora</h2><p>Pré-visualização da mensagem que a Lara envia no WhatsApp.</p></div>
+    <div class="modal-body">
+      <div class="card" style="background:#0b141a; border-color:#1f2c34;">
+        <div class="card-content" style="padding:12px;">
+          <div class="wa-bubble out" style="display:inline-block; max-width:100%;" id="disparo-preview">
+            Oi <span id="disparo-nome">Patrícia</span>! Aqui é a Lara, da Auto Peças Silva 🔧 Notei que já passou do tempo da troca de <span id="disparo-peca">bateria</span> do seu carro. Quer que eu separe uma pra você e já agende a instalação?
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn" onclick="closeModal('modal-disparo')">Cancelar</button>
+      <button class="btn btn-primary" onclick="closeModal('modal-disparo')"><span class="icon" data-icon="send" style="font-size:12px;"></span> Enviar agora</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal Agendar disparo -->
+<div class="modal-overlay" id="modal-agendar">
+  <div class="modal" style="max-width:420px;">
+    <div class="modal-header"><h2>Agendar disparo</h2><p>Para <strong id="agendar-nome-peca">—</strong></p></div>
+    <div class="modal-body">
+      <div><label class="field-label">Data e hora do envio</label>
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px;">
+          <input type="date" value="2026-06-26" /><input type="time" value="09:00" />
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn" onclick="closeModal('modal-agendar')">Cancelar</button>
+      <button class="btn btn-primary" onclick="closeModal('modal-agendar')">Confirmar agendamento</button>
+    </div>
+  </div>
+</div>
+
+<script src="assets/js/icons.js"></script>
+<script src="assets/js/app.js"></script>
+<script>
+function filterRows(status, btn) {
+  document.querySelectorAll('.filter-pill').forEach(p => p.classList.remove('active'));
+  btn.classList.add('active');
+  document.querySelectorAll('#recompra-table tbody tr').forEach(tr => {
+    tr.style.display = (status === 'all' || tr.getAttribute('data-status') === status) ? '' : 'none';
+  });
+}
+function openDisparo(nome, peca) {
+  document.getElementById('disparo-nome').textContent = nome.split(' ')[0];
+  document.getElementById('disparo-peca').textContent = peca;
+  openModal('modal-disparo');
+}
+function openAgendar(nome, peca) {
+  document.getElementById('agendar-nome-peca').textContent = nome + ' · ' + peca;
+  openModal('modal-agendar');
+}
+</script>
+</body>
+</html>

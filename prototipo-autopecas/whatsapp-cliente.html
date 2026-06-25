@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Visão do cliente final · Lara AutoPeças</title>
+<link rel="stylesheet" href="assets/css/theme.css" />
+<link rel="stylesheet" href="assets/css/sidebar.css" />
+<link rel="stylesheet" href="assets/css/components.css" />
+</head>
+<body data-page="whatsapp">
+<div class="app-shell">
+
+  <aside class="sidebar">
+    <div class="sidebar-brand">
+      <div class="logo-mark"><span class="icon" data-icon="wrench" style="font-size:15px"></span></div>
+      <div class="logo-text"><strong>Lara · Auto Peças Silva</strong><span>CRM + IA via WhatsApp</span></div>
+    </div>
+    <div class="sidebar-scroll">
+      <div class="sidebar-group">
+        <div class="sidebar-group-label">Navegação</div>
+        <ul class="sidebar-menu">
+          <li><a class="sidebar-link" data-page="dashboard" href="index.html"><span class="icon" data-icon="bar-chart"></span><span>Dashboard</span></a></li>
+          <li><a class="sidebar-link" data-page="clientes" href="clientes.html"><span class="icon" data-icon="users"></span><span>Clientes</span></a></li>
+          <li><a class="sidebar-link" data-page="agenda" href="agenda.html"><span class="icon" data-icon="calendar-days"></span><span>Agenda</span></a></li>
+          <li><a class="sidebar-link" data-page="recompra" href="regua-recompra.html"><span class="icon" data-icon="repeat"></span><span>Régua de Recompra</span><span class="nav-badge">8</span></a></li>
+          <li><a class="sidebar-link" data-page="followup" href="follow-up-center.html"><span class="icon" data-icon="message-square-dot"></span><span>Follow-ups</span></a></li>
+          <li><a class="sidebar-link" data-page="playground" href="playground.html"><span class="icon" data-icon="flask-conical"></span><span>Playground IA</span></a></li>
+        </ul>
+      </div>
+      <div class="sidebar-group">
+        <div class="sidebar-group-label">Cliente final</div>
+        <ul class="sidebar-menu">
+          <li><a class="sidebar-link" data-page="whatsapp" href="whatsapp-cliente.html"><span class="icon" data-icon="message-circle"></span><span>Simulação WhatsApp</span></a></li>
+        </ul>
+      </div>
+      <div class="sidebar-group">
+        <div class="sidebar-group-label">Conta</div>
+        <ul class="sidebar-menu">
+          <li><a class="sidebar-link" data-page="ai-profile" href="ai-profile.html"><span class="icon" data-icon="sparkles"></span><span>Identidade da Lara</span></a></li>
+          <li><a class="sidebar-link" href="#"><span class="icon" data-icon="log-out"></span><span>Sair</span></a></li>
+        </ul>
+      </div>
+    </div>
+    <div class="sidebar-footer">
+      <div class="avatar">RS</div>
+      <div class="who"><strong>Auto Peças Silva</strong><span>Plano Profissional</span></div>
+    </div>
+  </aside>
+
+  <div class="app-main">
+    <div class="app-topbar">
+      <button class="btn btn-ghost btn-icon" data-sidebar-toggle aria-label="Menu"><span class="icon" data-icon="menu"></span></button>
+      <div style="flex:1"></div>
+      <button class="btn btn-ghost btn-icon" data-theme-toggle aria-label="Tema"><span class="icon" data-icon="moon"></span></button>
+    </div>
+
+    <div class="app-content">
+      <div class="crm-header">
+        <div>
+          <h1 style="font-size:20px;">O que o cliente vê</h1>
+          <p class="u-muted u-text-sm" style="margin:2px 0 0;">Tela real do celular do cliente — sem app novo, sem login, só o WhatsApp que ele já usa.</p>
+        </div>
+      </div>
+
+      <div class="page-body" style="display:flex; gap:32px; flex-wrap:wrap; justify-content:center;">
+
+        <div style="max-width:340px; padding-top:24px;">
+          <p class="u-mono u-text-xs u-muted" style="margin-bottom:14px;">POR QUE ISSO FECHA VENDA</p>
+          <div class="u-flex-col u-gap-3" style="display:flex;">
+            <div class="u-flex u-gap-2" style="display:flex; align-items:flex-start;"><span class="icon" data-icon="check-circle" style="color:hsl(var(--success)); margin-top:1px;"></span><span style="font-size:13px;">A Lara manda a mensagem <strong>antes</strong> do cliente precisar — ele nem precisou lembrar de trocar a peça.</span></div>
+            <div class="u-flex u-gap-2" style="display:flex; align-items:flex-start;"><span class="icon" data-icon="check-circle" style="color:hsl(var(--success)); margin-top:1px;"></span><span style="font-size:13px;">Ela já sabe o veículo, a placa e o histórico — o cliente não repete informação nenhuma.</span></div>
+            <div class="u-flex u-gap-2" style="display:flex; align-items:flex-start;"><span class="icon" data-icon="check-circle" style="color:hsl(var(--success)); margin-top:1px;"></span><span style="font-size:13px;">Aproveita pra sugerir uma segunda peça que também está no ciclo — venda casada automática.</span></div>
+            <div class="u-flex u-gap-2" style="display:flex; align-items:flex-start;"><span class="icon" data-icon="check-circle" style="color:hsl(var(--success)); margin-top:1px;"></span><span style="font-size:13px;">Fecha o agendamento dentro da própria conversa — sem ligação, sem atendente disponível.</span></div>
+          </div>
+          <button class="btn btn-outline" style="margin-top:22px;" onclick="replayWA()"><span class="icon" data-icon="refresh-cw" style="font-size:12px;"></span> Reiniciar conversa</button>
+        </div>
+
+        <div class="phone-frame">
+          <div class="phone-screen">
+            <div class="phone-notch"></div>
+            <div class="wa-header">
+              <div class="wa-avatar">AP</div>
+              <div style="flex:1;"><div class="wa-name">Auto Peças Silva</div><div class="wa-status">Lara · assistente virtual · online</div></div>
+              <span class="icon" data-icon="phone" style="color:#8696a0;"></span>
+            </div>
+            <div class="wa-body" id="wa-body"></div>
+            <div class="wa-footer">
+              <div class="wa-input">Mensagem</div>
+              <div class="wa-mic"><span class="icon" data-icon="mic" style="font-size:15px;"></span></div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="assets/js/icons.js"></script>
+<script src="assets/js/app.js"></script>
+<script>
+const WA_CONVO = [
+  { from: 'lara', text: 'Oi João! Aqui é a Lara, da Auto Peças Silva 🔧 Notei que já fazem quase 6 meses desde a troca do filtro de óleo do seu Civic (15/01). Geralmente é hora de trocar de novo — quer que eu já separe um pra você?', time: '08:12' },
+  { from: 'joao', text: 'Oi! Pode ser sim, mas só semana que vem', time: '08:30' },
+  { from: 'lara', text: 'Show! Vou deixar reservado. Aproveitando, já que está chegando: sua pastilha de freio dianteira também está perto do prazo. Quer aproveitar e fazer os dois juntos na mesma visita?', time: '08:31' },
+  { from: 'joao', text: 'Boa ideia, pode ser', time: '08:33' },
+  { from: 'lara', text: 'Perfeito! Separei filtro de óleo + pastilha dianteira pro seu Civic. Qual dia da semana que vem fica melhor pra você: terça ou quinta?', time: '08:33' },
+  { from: 'joao', text: 'Quinta de manhã', time: '08:35' },
+  { from: 'lara', text: 'Combinado! Quinta, 09h, na Auto Peças Silva. Total estimado: R$ 335,00 (peças + instalação). Te mando um lembrete um dia antes 👍', time: '08:35' },
+];
+
+function waBubbleHtml(m) {
+  const side = m.from === 'lara' ? 'in' : 'out';
+  const check = m.from === 'joao' ? '<span style="color:#53bdeb;">✓✓</span>' : '';
+  return `<div class="wa-bubble-row ${side}"><div class="wa-bubble ${side}">${m.text}<span class="wa-time">${m.time} ${check}</span></div></div>`;
+}
+
+function renderWA() {
+  const box = document.getElementById('wa-body');
+  box.innerHTML = WA_CONVO.map(waBubbleHtml).join('');
+  box.scrollTop = box.scrollHeight;
+}
+
+function replayWA() {
+  const box = document.getElementById('wa-body');
+  box.innerHTML = '';
+  let i = 0;
+  function step() {
+    if (i >= WA_CONVO.length) return;
+    const m = WA_CONVO[i];
+    if (m.from === 'lara') {
+      const typing = document.createElement('div');
+      typing.className = 'wa-bubble-row in';
+      typing.innerHTML = '<div class="wa-bubble in"><span class="typing-dots"><span></span><span></span><span></span></span></div>';
+      box.appendChild(typing);
+      box.scrollTop = box.scrollHeight;
+      setTimeout(() => {
+        typing.outerHTML = waBubbleHtml(m);
+        box.scrollTop = box.scrollHeight;
+        i++; setTimeout(step, 500);
+      }, 1000);
+    } else {
+      box.insertAdjacentHTML('beforeend', waBubbleHtml(m));
+      box.scrollTop = box.scrollHeight;
+      i++; setTimeout(step, 700);
+    }
+  }
+  step();
+}
+
+renderWA();
+</script>
+</body>
+</html>
