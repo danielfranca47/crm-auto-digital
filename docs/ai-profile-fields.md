@@ -145,9 +145,6 @@ O `AgentConfig` do frontend mapeia para dois destinos no backend-core:
 | `interval_min` | ✅ Slider · Drawer | `offer_pack` | Metadado / futuro |
 | `interval_max` | ✅ Slider · Drawer | `offer_pack` | Metadado / futuro |
 | `daily_limit` | ✅ Slider · Drawer | `offer_pack` | Metadado / futuro |
-| `followup_h1` | ✅ Slider · Drawer | `offer_pack` | Metadado / futuro |
-| `followup_h2` | ✅ Slider · Drawer | `offer_pack` | Metadado / futuro |
-| `followup_h3` | ✅ Slider · Drawer | `offer_pack` | Metadado / futuro |
 
 ### Camada 3 — Follow-up avançado (novos em 2026-03-27)
 

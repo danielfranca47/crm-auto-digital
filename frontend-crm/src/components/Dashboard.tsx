@@ -80,7 +80,6 @@ function layerProgress(profile: AiProfile | null, agentConfig: AgentConfig | nul
     optOut:        (agentConfig?.opt_out_keywords?.length ?? 0) > 0,
     lgpd:          !!agentConfig?.lgpd_mode,
     reactivation:  !!agentConfig?.reactivation_mode,
-    followup:      (agentConfig?.followup_h1 ?? 0) > 0,
     mediaFallback: !!agentConfig?.media_fallback,
   };
   const c3Done = Object.values(c3Checks).filter(Boolean).length;
@@ -452,7 +451,7 @@ export function Dashboard({
                   <CardContent className="pt-5">
                     <p className="text-xs font-mono uppercase tracking-widest text-muted-foreground mb-1">Camada 3</p>
                     <p className="font-semibold text-foreground mb-1">Pipeline e comportamento</p>
-                    <p className="text-xs text-muted-foreground mb-3">Follow-up, reativação e proteção do número.</p>
+                    <p className="text-xs text-muted-foreground mb-3">Reativação, mídia e proteção do número.</p>
                     <div className="h-1.5 bg-muted rounded-full mb-2">
                       <div className={`h-full rounded-full transition-all ${layers.criticals > 0 ? "bg-destructive" : "bg-purple-500"}`}
                         style={{ width: `${Math.round((layers.c3Done / layers.c3Total) * 100)}%` }} />
@@ -466,7 +465,6 @@ export function Dashboard({
                         { label: "Opt-out",    ok: layers.c3Checks.optOut,       critical: true },
                         { label: "LGPD",       ok: layers.c3Checks.lgpd,         critical: true },
                         { label: "Reativação", ok: layers.c3Checks.reactivation, critical: true },
-                        { label: "Follow-up",  ok: layers.c3Checks.followup,     critical: false },
                         { label: "Mídia",      ok: layers.c3Checks.mediaFallback, critical: false },
                       ].map((t) => (
                         <span key={t.label} className={`text-[10px] font-mono px-1.5 py-0.5 rounded border ${

@@ -75,7 +75,8 @@ function PainelResumo({
     ? config.f1_questions.length + config.f2_questions.length + config.f3_questions.length
     : config.qualification_fields.filter(f => f.mode !== 'off').length;
   const layer2Progress  = Math.min(100, Math.round((layer2Questions / 8) * 100));
-  const layer3Items     = [optoutOk, lgpdOk, reatOk, config.media_fallback, config.followup_h1 > 0].filter(Boolean).length;
+  const layer3Items     = [optoutOk, lgpdOk, reatOk, config.media_fallback].filter(Boolean).length;
+  const followupAutoOn  = config.followup_auto_trigger_enabled || config.followup_checkin_auto_trigger_enabled;
 
   return (
     <div className="o-panel o-fade-in">
@@ -172,7 +173,7 @@ function PainelResumo({
           Camada 3 — Pipeline e comportamento
         </span>
         <span className="font-mono-orion" style={{ fontSize: 8, color: criticals > 0 ? 'var(--o-hot)' : 'var(--o-dim)', border: `1px solid ${criticals > 0 ? 'var(--o-hot-b)' : 'var(--o-b1)'}`, padding: '1px 6px', borderRadius: 2 }}>
-          {layer3Items} / 5 · {criticals > 0 ? `${criticals} críticos` : 'OK'}
+          {layer3Items} / 4 · {criticals > 0 ? `${criticals} críticos` : 'OK'}
         </span>
       </div>
       {criticals > 0 && (
@@ -185,7 +186,6 @@ function PainelResumo({
         <SummaryCard label="Opt-out"         value={optoutOk ? `${config.opt_out_keywords.length} palavras` : 'Não configurado'} status={optoutOk ? 'ok' : 'miss'} onClick={() => onNavigate('c3')} />
         <SummaryCard label="LGPD"            value={LGPD_LABELS[config.lgpd_mode] || 'Não configurado'}                         status={lgpdOk ? 'ok' : 'miss'}   onClick={() => onNavigate('c3')} />
         <SummaryCard label="Reativação"      value={REATIVACAO_LABELS[config.reactivation_mode] || 'Não configurado'}           status={reatOk ? 'ok' : 'miss'}   onClick={() => onNavigate('c3')} />
-        <SummaryCard label="Cadência follow-up" value={`${config.followup_h1}h · ${Math.round(config.followup_h2/24)}d · ${Math.round(config.followup_h3/24)}d`} status="ok" onClick={() => onNavigate('c3')} />
         <SummaryCard label="Mídia inválida"  value={MEDIA_FALLBACK_LABELS[config.media_fallback] || '—'}                         status="ok"                       onClick={() => onNavigate('c3')} />
       </div>
 
@@ -234,6 +234,21 @@ function PainelResumo({
             : `${config.sales_flow.nodes.filter(n => n.enabled).length} ativa(s) de ${config.sales_flow.nodes.length}`}
           status={config.sales_flow && config.sales_flow.nodes.length > 0 ? 'ok' : undefined}
           onClick={() => onNavigate('fluxo')}
+        />
+      </div>
+
+      {/* Follow-up */}
+      <div className="o-section-hdr" style={{ marginTop: 24 }}>
+        <span className="font-mono-orion" style={{ fontSize: 9, letterSpacing: '2.5px', textTransform: 'uppercase', color: 'var(--o-sub)' }}>
+          Follow-up
+        </span>
+      </div>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 14, marginTop: 8 }}>
+        <SummaryCard
+          label="Follow-up"
+          value={followupAutoOn ? 'Disparo automático ativo' : `Manual · máx. ${config.followup_max_attempts} tentativas`}
+          status={followupAutoOn ? 'ok' : undefined}
+          onClick={() => onNavigate('followup')}
         />
       </div>
 

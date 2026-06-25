@@ -109,22 +109,6 @@ function DrawerDelayResposta({ config, onSave, onClose }: {
   );
 }
 
-// ─── Drawer: Follow-up cadência ───────────────────────────────
-function DrawerFollowup({ config, onSave, onClose }: {
-  config: AgentConfig; onSave: (v: Partial<AgentConfig>) => void; onClose: () => void;
-}) {
-  const [h1, setH1] = useState(config.followup_h1);
-  const [h2, setH2] = useState(config.followup_h2);
-  const [h3, setH3] = useState(config.followup_h3);
-  return (
-    <DrawerBase title="Cadência de follow-up" sub="Intervalos entre tentativas — ritmo espaçado protege o número" onClose={onClose} onSave={() => onSave({ followup_h1: h1, followup_h2: h2, followup_h3: h3 })}>
-      <SliderField label="1ª tentativa — após silêncio de" value={h1} min={1} max={72} step={1} format={v => `${v}h`} onChange={setH1} />
-      <SliderField label="2ª tentativa — após mais" value={h2} min={24} max={168} step={24} format={v => `${Math.round(v / 24)}d`} onChange={setH2} />
-      <SliderField label="3ª tentativa — após mais" value={h3} min={48} max={336} step={24} format={v => `${Math.round(v / 24)}d`} onChange={setH3} />
-    </DrawerBase>
-  );
-}
-
 // ─── Drawer: Limite diário ────────────────────────────────────
 function DrawerLimite({ value, onSave, onClose }: { value: number; onSave: (v: number) => void; onClose: () => void }) {
   const [local, setLocal] = useState(value);
@@ -399,7 +383,7 @@ function DrawerHorarioTrabalho({ config, onSave, onClose }: {
 // Componente principal
 // ─────────────────────────────────────────────────────────────
 
-type DrawerKey = 'followup' | 'limite' | 'intervalo' | 'midia' | 'delay_resposta' | 'horario_trabalho' | null;
+type DrawerKey = 'limite' | 'intervalo' | 'midia' | 'delay_resposta' | 'horario_trabalho' | null;
 type ModalKey  = 'optout' | 'lgpd' | 'reativacao' | null;
 
 export function CamadaPipeline({ config, onUpdate, phoneNumber }: CamadaPipelineProps) {
@@ -410,9 +394,6 @@ export function CamadaPipeline({ config, onUpdate, phoneNumber }: CamadaPipeline
   const lgpdConfigured     = !!config.lgpd_mode;
   const reatConfigured     = !!config.reactivation_mode;
   const mediaConfigured    = !!config.media_fallback;
-  const followupConfigured = config.followup_h1 > 0;
-
-  const fu1Label = `${config.followup_h1}h · ${Math.round(config.followup_h2 / 24)}d · ${Math.round(config.followup_h3 / 24)}d`;
 
   const fmtDelayFirst = (v: number) => v === 0 ? 'imediato' : v < 60 ? `${v}s` : `${Math.round(v / 60)}min`;
   const delayFirstLabel = config.first_reply_delay_max_seconds > 0
@@ -516,21 +497,6 @@ export function CamadaPipeline({ config, onUpdate, phoneNumber }: CamadaPipeline
         />
       </div>
 
-      {/* Seção 2: Cadência */}
-      <div className="o-section-hdr">
-        <span className="font-mono-orion" style={{ fontSize: 9, letterSpacing: '2.5px', textTransform: 'uppercase', color: 'var(--o-sub)' }}>
-          Seção 2 · Cadência e follow-up
-        </span>
-      </div>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 14, marginBottom: 24 }}>
-        <EditCard
-          label="Thresholds de follow-up" sub="Cadência espaçada — proteção comportamental"
-          value={fu1Label}
-          onClick={() => setDrawer('followup')} status={followupConfigured ? 'ok' : 'warn'}
-          help="Intervalos da cadência de follow-up após silêncio do lead (1ª, 2ª e 3ª tentativa). Cadências muito curtas parecem spam; muito longas perdem o momento de compra."
-        />
-      </div>
-
       {/* Seção 3: Reativação */}
       <div className="o-section-hdr">
         <span className="font-mono-orion" style={{ fontSize: 9, letterSpacing: '2.5px', textTransform: 'uppercase', color: 'var(--o-sub)' }}>
@@ -553,7 +519,6 @@ export function CamadaPipeline({ config, onUpdate, phoneNumber }: CamadaPipeline
       </div>
 
       {/* Drawers */}
-      {drawer === 'followup'            && <DrawerFollowup            config={config} onClose={() => setDrawer(null)} onSave={v => { onUpdate(v); setDrawer(null); }} />}
       {drawer === 'limite'            && <DrawerLimite    value={config.daily_limit} onClose={() => setDrawer(null)} onSave={v => { onUpdate({ daily_limit: v }); setDrawer(null); }} />}
       {drawer === 'intervalo'         && <DrawerIntervalo config={config} onClose={() => setDrawer(null)} onSave={v => { onUpdate(v); setDrawer(null); }} />}
       {drawer === 'midia'             && <DrawerMidia           config={config} onClose={() => setDrawer(null)} onSave={v => { onUpdate(v); setDrawer(null); }} />}

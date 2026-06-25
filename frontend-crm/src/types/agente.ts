@@ -217,9 +217,6 @@ export interface OfferPackExtra {
   reactivation_msg?: string;
 
   // Camada 3 — Cadência
-  followup_h1?: number;
-  followup_h2?: number;
-  followup_h3?: number;
   daily_limit?: number;
   interval_min?: number;
   interval_max?: number;
@@ -282,9 +279,6 @@ export interface AgentConfig {
   lgpd_msg: string;
   reactivation_mode: string;
   reactivation_msg: string;
-  followup_h1: number;
-  followup_h2: number;
-  followup_h3: number;
   daily_limit: number;
   interval_min: number;
   interval_max: number;
@@ -392,9 +386,6 @@ export const DEFAULT_AGENT_CONFIG: AgentConfig = {
   lgpd_msg: 'Olá! Para continuar, preciso da sua confirmação: você aceita receber mensagens nossas por este canal? Responda SIM para confirmar.',
   reactivation_mode: '',
   reactivation_msg: 'Que bom te ver de volta! Lembro que conversamos antes. O que mudou desde então?',
-  followup_h1: 24,
-  followup_h2: 72,
-  followup_h3: 168,
   daily_limit: 200,
   interval_min: 3,
   interval_max: 8,

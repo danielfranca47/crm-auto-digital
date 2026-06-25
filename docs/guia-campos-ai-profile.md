@@ -292,17 +292,6 @@
 
 ---
 
-### Cadência de follow-up (thresholds)
-| | |
-|---|---|
-| **Variáveis** | `followup_h1` · `followup_h2` · `followup_h3` |
-| **O que é** | Intervalos de tempo (em horas) entre as tentativas de follow-up quando o lead para de responder. |
-| **Onde é usado** | `followup_state.py` — agenda os jobs `whatsapp.followup.tick`. |
-| **Para o Agente 3** | O Agente 3 tem cadência padrão de 24h + 48h (2 tentativas). Configure `followup_h1=24`, `followup_h2=48`. A 3ª tentativa (`followup_h3`) pode ser usada para reativação mais tardia (ex: 7 dias). |
-| **Impacto** | Intervalos muito curtos = risco de ban do número. Muito longos = lead esfria. |
-
----
-
 ### Follow-up avançado
 | | |
 |---|---|
