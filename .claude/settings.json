@@ -61,18 +61,5 @@
       "Bash(curl -s -o /dev/null -w \"frontend:%{http_code}\\\\n\" http://localhost:8080/)",
       "Bash(curl -s -o /dev/null -w \"frontend5173:%{http_code}\\\\n\" http://localhost:5173/)"
     ]
-  },
-  "hooks": {
-    "Stop": [
-      {
-        "matcher": "",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "bash -c 'cd c:/crm-auto-digital && changed=$(git status --porcelain) && if [ -n \"$changed\" ]; then branch=$(git branch --show-current) && git add -A && git commit -m \"chore(auto): alterações pendentes na branch $branch\"; fi'"
-          }
-        ]
-      }
-    ]
   }
 }
