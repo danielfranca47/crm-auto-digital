@@ -4,6 +4,7 @@ import { OrionShell } from '@/components/agente/OrionShell';
 import { CamadaIdentidade } from '@/components/agente/CamadaIdentidade';
 import { CamadaQualificacao } from '@/components/agente/CamadaQualificacao';
 import { CamadaPipeline } from '@/components/agente/CamadaPipeline';
+import { CamadaFollowup } from '@/components/agente/CamadaFollowup';
 import { CamadaConhecimento } from '@/components/agente/CamadaConhecimento';
 import { CamadaApresentacao } from '@/components/agente/CamadaApresentacao';
 import { CamadaOferta } from '@/components/agente/CamadaOferta';
@@ -19,7 +20,7 @@ import { AGENT_MODE_LABELS, IDENTITY_MODE_LABELS, LGPD_LABELS, REATIVACAO_LABELS
 interface KnowledgeSummary { criticalFilled: number; criticalTotal: number; }
 
 // ─── Tipos de painel ─────────────────────────────────────────
-type PanelId = 'overview' | 'c1' | 'c2' | 'c3' | 'c4' | 'c5' | 'c6' | 'fluxo' | 'conexao';
+type PanelId = 'overview' | 'c1' | 'c2' | 'c3' | 'c4' | 'c5' | 'c6' | 'fluxo' | 'followup' | 'conexao';
 
 // ─── CTA Agente Espião ───────────────────────────────────────
 function SpyAgentCTA() {
@@ -377,6 +378,42 @@ function PainelCamada3({ config, onUpdate, onBack, onSave, saving, dirty, phoneN
   );
 }
 
+function PainelCamadaFollowup({ config, onUpdate, onBack, onSave, saving, dirty }: {
+  config: AgentConfig; onUpdate: (p: Partial<AgentConfig>) => void;
+  onBack: () => void; onSave: () => void; saving: boolean; dirty: boolean;
+}) {
+  return (
+    <div className="o-panel o-fade-in">
+      {dirty && (
+        <div className="o-draft-banner">
+          <span>●</span>
+          <span><strong>Editando Follow-up.</strong> Alterações aplicadas apenas em novas conversas.</span>
+          <button className="o-btn o-btn-primary" style={{ marginLeft: 'auto' }} onClick={onSave} disabled={saving}>
+            {saving ? 'Salvando…' : 'Salvar camada'}
+          </button>
+          <button className="o-btn" onClick={onBack}>Cancelar</button>
+        </div>
+      )}
+      <div className="font-mono-orion" style={{ fontSize: 9, letterSpacing: 3, textTransform: 'uppercase', marginBottom: 8, color: 'var(--o-purple)' }}>
+        Camada · Follow-up
+      </div>
+      <div className="font-display" style={{ fontSize: 28, fontWeight: 400, marginBottom: 6, color: 'var(--o-text)' }}>Follow-up</div>
+      <div style={{ fontSize: 12.5, color: 'var(--o-sub)', fontWeight: 300, marginBottom: 24 }}>
+        Cadência, disparo automático e instruções de conteúdo para as mensagens de follow-up.
+      </div>
+      <CamadaFollowup config={config} onUpdate={onUpdate} />
+      <div style={{ display: 'flex', gap: 10, marginTop: 24 }}>
+        {dirty && (
+          <button className="o-btn o-btn-primary" onClick={onSave} disabled={saving}>
+            {saving ? 'Salvando…' : 'Salvar Follow-up'}
+          </button>
+        )}
+        <button className="o-btn" onClick={onBack}>← Voltar</button>
+      </div>
+    </div>
+  );
+}
+
 // ─────────────────────────────────────────────────────────────
 // Página principal
 // ─────────────────────────────────────────────────────────────
@@ -422,6 +459,7 @@ export default function AiProfile() {
     ...(isScheduleMode ? [{ id: 'c5' as PanelId, label: '⑤ Apresentação' }] : []),
     ...(isDirectMode   ? [{ id: 'c6' as PanelId, label: '⑥ Oferta' }]      : []),
     { id: 'fluxo' as PanelId, label: '⑦ Fluxo de Venda' },
+    { id: 'followup' as PanelId, label: '⑧ Follow-up' },
     { id: 'conexao',  label: 'Conexão' },
   ];
 
@@ -698,6 +736,16 @@ export default function AiProfile() {
               <button className="o-btn" onClick={() => navigate('overview')}>← Voltar</button>
             </div>
           </div>
+        )}
+        {activePanel === 'followup' && (
+          <PainelCamadaFollowup
+            config={config}
+            onUpdate={updateConfig}
+            onBack={() => navigate('overview')}
+            onSave={handleSave}
+            saving={saving}
+            dirty={isDirty}
+          />
         )}
         {activePanel === 'conexao' && (
           <div className="o-panel o-fade-in">
