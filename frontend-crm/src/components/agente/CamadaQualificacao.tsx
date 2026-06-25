@@ -1209,15 +1209,6 @@ export function CamadaQualificacao({ config, onUpdate }: CamadaQualificacaoProps
           onClick={() => setDrawer('score')}
           help="Pontuação mínima para o lead avançar no pipeline. Cada campo de qualificação respondido vale 1 ponto. Leads abaixo são descartados ou enviados para nurture."
         />
-        <div className="o-edit-card" onClick={() => onUpdate({ nurture_vs_discard_rule: !config.nurture_vs_discard_rule })}>
-          <div className="font-mono-orion" style={{ fontSize: 8, letterSpacing: 2, textTransform: 'uppercase', color: 'var(--o-dim)', marginBottom: 6, display: 'flex', alignItems: 'center' }}>Nurture vs Descarte <FieldHelp text="Leads abaixo do score mínimo: Nurture — continua recebendo conteúdo e pode avançar depois; Descarte — arquivado imediatamente." /></div>
-          <div style={{ fontSize: 13, color: 'var(--o-text)', marginBottom: 4 }}>{config.nurture_vs_discard_rule ? 'Nurture passivo' : 'Descarte imediato'}</div>
-          <div style={{ fontSize: 11, color: 'var(--o-sub)', fontWeight: 300, marginBottom: 8 }}>Lead abaixo do score</div>
-          <span className={`o-badge ${config.nurture_vs_discard_rule ? 'o-badge-ok' : 'o-badge-warn'}`}>
-            {config.nurture_vs_discard_rule ? 'Nurture ativo' : 'Descarte'}
-          </span>
-          <span className="o-edit-arrow">›</span>
-        </div>
         {showBuyingSignals && (
           <EditCard
             label="Sinais de compra"
