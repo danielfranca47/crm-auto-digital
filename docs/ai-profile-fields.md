@@ -161,7 +161,6 @@ read-only).
 |---|---|---|
 | `briefing_enabled` / `briefing_channel` / `briefing_lead_time` | Coluna direta | |
 | `operator_whatsapp` | Coluna direta | |
-| `appointment_reminder_h1` / `appointment_reminder_h2` | Derivado de `appointment_reminder_offsets` (coluna direta, JSON, em minutos negativos) | |
 | `appointment_mode` | Derivado de `presentation_variant` — ver discrepância acima | |
 | `calendar_integration` | `offer_pack` — ver discrepância acima | |
 | `scheduling_offer_style` | Coluna direta | |
@@ -212,6 +211,7 @@ motor de follow-up).
 | `cart_recovery_attempt_instructions` | Coluna direta (JSON, tupla de 3) | |
 | `followup_outcome_instructions` | Coluna direta (JSON) | |
 | `nurture_vs_discard_rule` | Coluna direta | Movido de Qualificação para aqui no M3 — ver discrepância de tipo acima |
+| `appointment_reminder_h1` / `appointment_reminder_h2` | Derivado de `appointment_reminder_offsets` (coluna direta, JSON, em minutos negativos) | Movido de Apresentação para aqui — UI condicional, só aparece quando `isScheduleMode` (`agent_mode ∉ {direto, closer}`). Envia lembrete fixo ao **lead**, distinto do Dossiê pré-reunião (que vai ao operador e continua em Camada 5) |
 
 Os campos `followup_h1`/`followup_h2`/`followup_h3` existiram até 2026-06-25 e foram removidos:
 nunca foram lidos por nenhum código de backend (gravavam em `offer_pack` sem consumidor).

@@ -22,7 +22,8 @@
       "Bash(curl -s -m 6 -o /dev/null -w \"now -> %{http_code} \\(%{time_total}s\\)\\\\n\" http://127.0.0.1:8000/api/leads/followups/active -H \"Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxNSIsImVtYWlsIjoiYXV0b2RpZ2l0YWwxNTdAZ21haWwuY29tIiwiZXhwIjoxNzgyMjYyMTQ5LCJ0eXBlIjoiYWNjZXNzIn0.dJoE3iyxD73WQGtEvy34MBxwPyIKiHqi4_LBn2OzS48\")",
       "Bash(PYTHONIOENCODING=utf-8 PYTHONUTF8=1 ./.venv/Scripts/python.exe -m uvicorn app.main:app --port 8001)",
       "Bash(curl -s -o /dev/null -w \"core:%{http_code}\\\\n\" http://127.0.0.1:8001/docs)",
-      "Bash(PYTHONIOENCODING=utf-8 PYTHONUTF8=1 ./.venv/Scripts/python.exe -c ' *)"
+      "Bash(PYTHONIOENCODING=utf-8 PYTHONUTF8=1 ./.venv/Scripts/python.exe -c ' *)",
+      "Bash(wmic process *)"
     ]
   }
 }

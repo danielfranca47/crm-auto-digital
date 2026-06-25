@@ -9,24 +9,6 @@ interface CamadaApresentacaoProps {
   onUpdate: (partial: Partial<AgentConfig>) => void;
 }
 
-// ─── Drawer: Lembretes ────────────────────────────────────────
-function DrawerLembretes({ h1, h2, onSave, onClose }: {
-  h1: number; h2: number; onSave: (h1: number, h2: number) => void; onClose: () => void;
-}) {
-  const [localH1, setH1] = useState(h1);
-  const [localH2, setH2] = useState(h2);
-  return (
-    <DrawerBase title="Lembretes de reunião" sub="Mensagens automáticas enviadas antes da reunião agendada" onClose={onClose} onSave={() => onSave(localH1, localH2)}>
-      <SliderField label="1º lembrete — horas antes" value={localH1} min={1} max={72} step={1} format={v => `${v}h antes`} onChange={setH1} />
-      <SliderField label="2º lembrete — horas antes" value={localH2} min={1} max={24} step={1} format={v => `${v}h antes`} onChange={setH2} />
-      <div className="o-alert" style={{ marginTop: 12, padding: '10px 12px', background: 'var(--o-b0)', borderRadius: 4, border: '1px solid var(--o-b1)', display: 'flex', gap: 8, fontSize: 12, color: 'var(--o-sub)' }}>
-        <span style={{ flexShrink: 0 }}>ℹ</span>
-        <span>Os lembretes são enviados pelo WhatsApp conectado ao agente no horário configurado. O fuso horário é o definido na Camada 1.</span>
-      </div>
-    </DrawerBase>
-  );
-}
-
 // ─── Drawer: Dossiê pré-reunião ───────────────────────────────
 function DrawerBriefing({ config, onSave, onClose }: {
   config: AgentConfig; onSave: (v: Partial<AgentConfig>) => void; onClose: () => void;
@@ -177,7 +159,7 @@ function ModalMeetingManagement({ value, onSave, onClose }: { value: boolean; on
 // Componente principal
 // ─────────────────────────────────────────────────────────────
 
-type DrawerKey = 'lembretes' | 'briefing' | null;
+type DrawerKey = 'briefing' | null;
 type ModalKey  = 'calendario' | 'modoOperacao' | 'ofertaHorario' | 'gestaoPosConfirmacao' | null;
 
 const APPOINTMENT_MODE_LABELS: Record<string, string> = {
@@ -189,7 +171,6 @@ export function CamadaApresentacao({ config, onUpdate }: CamadaApresentacaoProps
   const [drawer, setDrawer] = useState<DrawerKey>(null);
   const [modal, setModal]   = useState<ModalKey>(null);
 
-  const lembretes = `${config.appointment_reminder_h1}h e ${config.appointment_reminder_h2}h antes`;
   const apptModeLabel = APPOINTMENT_MODE_LABELS[config.appointment_mode] || 'Agendamento Exploratório';
   const briefingLabel = config.briefing_enabled
     ? `${BRIEFING_CHANNEL_LABELS[config.briefing_channel] || config.briefing_channel} · ${config.briefing_lead_time}h antes`
@@ -216,23 +197,6 @@ export function CamadaApresentacao({ config, onUpdate }: CamadaApresentacaoProps
           onClick={() => setModal('modoOperacao')}
           status="ok"
           help="Exploratório: o lead agenda uma sessão de diagnóstico sem compromisso. Comercial: o agente apresenta preços e trata objeções antes de agendar — maior conversão, maior resistência inicial."
-        />
-      </div>
-
-      {/* Seção: Lembretes */}
-      <div className="o-section-hdr">
-        <span className="font-mono-orion" style={{ fontSize: 9, letterSpacing: '2.5px', textTransform: 'uppercase', color: 'var(--o-sub)' }}>
-          Lembretes de reunião
-        </span>
-      </div>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 14, marginBottom: 24 }}>
-        <EditCard
-          label="Lembretes automáticos"
-          value={lembretes}
-          sub="Mensagens enviadas ao lead antes da reunião"
-          onClick={() => setDrawer('lembretes')}
-          status="ok"
-          help="Mensagens automáticas de lembrete enviadas ao lead via WhatsApp antes da reunião. Reduz no-show significativamente. O fuso horário é o configurado na Camada 1."
         />
       </div>
 
@@ -330,14 +294,6 @@ export function CamadaApresentacao({ config, onUpdate }: CamadaApresentacaoProps
       </div>
 
       {/* Drawers */}
-      {drawer === 'lembretes' && (
-        <DrawerLembretes
-          h1={config.appointment_reminder_h1}
-          h2={config.appointment_reminder_h2}
-          onClose={() => setDrawer(null)}
-          onSave={(h1, h2) => { onUpdate({ appointment_reminder_h1: h1, appointment_reminder_h2: h2 }); setDrawer(null); }}
-        />
-      )}
       {drawer === 'briefing' && (
         <DrawerBriefing config={config} onClose={() => setDrawer(null)} onSave={v => { onUpdate(v); setDrawer(null); }} />
       )}
