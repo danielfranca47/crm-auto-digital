@@ -1,7 +1,7 @@
 # Camada dedicada de Follow-up no AI Profile (M3)
 
 **Branch:** `main`
-**Status:** Em andamento
+**Status:** Em andamento — Fase 1 implementada e validada (25/06/2026). Fases 2-4 pendentes.
 **Plano:** `docs/plans/followup-proativo-e-cancelamento-agenda.md` (M3)
 
 ---
@@ -85,6 +85,28 @@ nos campos mortos `followup_h1/h2/h3` ainda.
 | `frontend-crm/src/components/agente/CamadaPipeline.tsx` | Remove as 7 funções de drawer movidas, as keys correspondentes de `DrawerKey`, as variáveis `_isCloserAgent`/`_isHybridAgent`/`_fuInstrValue`/`_fuInstrLabel`, os EditCards da "Seção 2" (exceto "Thresholds de follow-up", que sai na Fase 3) |
 | `frontend-crm/src/pages/AiProfile.tsx` | Novo `PanelId 'followup'`, item no `navItems` (`'⑧ Follow-up'`, entre `'fluxo'` e `'conexao'`), nova função `PainelCamadaFollowup` (réplica do padrão de `PainelCamada3`), novo bloco de render |
 
+### Commits Fase 1
+
+| # | Commit | O que foi implementado |
+|---|---|---|
+| 1 | `813244e` | `CamadaFollowup.tsx` (novo) + remoção dos 7 drawers/EditCards de `CamadaPipeline.tsx` + nova Camada em `AiProfile.tsx` |
+
+### Relatório da Fase 1 — o que mudou na prática
+
+**Antes:** a configuração de follow-up (cadência, disparo automático, check-in de
+clientes, instruções por tipo de agente) ficava espalhada dentro da Camada 3
+(Pipeline), misturada com configurações de conexão, opt-out e LGPD.
+
+**Agora:** existe uma aba nova, "⑧ Follow-up", com tudo isso reunido em 3 seções
+(Gatilho automático / Cadência e tentativas / Instruções de conteúdo). A Camada 3
+continua com o resto normalmente — só perdeu a parte de follow-up, que agora vive
+no lugar certo.
+
+**Para validar:** Cenário P1, abaixo — já testado ao vivo nesta sessão (ver
+notas).
+
+---
+
 ### Fase 2 — Mover `nurture_vs_discard_rule`
 
 | Arquivo | O que muda |
@@ -114,12 +136,13 @@ sobre a nova localização na UI, e remover este arquivo de implementação.
 ## Checks de Validação
 
 ### Cenário P1 — Fase 1: campos movidos funcionam na nova Camada
-- [ ] Nova aba "⑧ Follow-up" aparece entre "Fluxo de Venda" e "Conexão"
-- [ ] Os 7 EditCards aparecem com os valores corretos (iguais aos que apareciam na Camada 3 antes)
-- [ ] Abrir cada drawer, editar, salvar — valor atualiza no EditCard sem reload
-- [ ] Banner "Editando Follow-up" + "Salvar Follow-up" persiste após reload da página
-- [ ] Visibilidade condicional por `template_key` (SDR/closer/hybrid) continua correta
-- [ ] Camada 3 (Pipeline): Seções 0/1/3 continuam intactas; Seção 2 só tem "Thresholds de follow-up"
+- [x] Nova aba "⑧ Follow-up" aparece entre "Fluxo de Venda" e "Conexão"
+- [x] Os 7 EditCards aparecem com os valores corretos (iguais aos que apareciam na Camada 3 antes)
+- [x] Abrir drawer, editar (toggle "Follow-up automático"), salvar — valor atualiza no EditCard sem reload
+- [x] Banner "Editando Follow-up" + "Salvar Follow-up" persiste após reload da página
+- [x] Visibilidade condicional por `template_key` confirmada para `hybrid_scheduler` (mostra "Instrução por outcome", oculta "Instrução por objectivo"/"Instrução por tentativa · Carrinho", que são SDR/closer-only) — `⏭️` SDR e closer não testados ao vivo nesta sessão (sem conta de teste desses tipos disponível), confirmado por revisão de código (mesma lógica `_isCloserAgent`/`_isHybridAgent` copiada caractere-a-caractere)
+- [x] Camada 3 (Pipeline): Seções 0/1/3 continuam intactas; Seção 2 só tem "Thresholds de follow-up"
+- **Validado em:** 25/06/2026 — `npx tsc -b --noEmit` sem novos erros (erros pré-existentes no resto do repo, nenhum nos arquivos tocados); teste ao vivo via browser (chrome-devtools MCP) na conta de teste (`user_id=15`, `hybrid_scheduler`/`agenda`): aba "⑧ Follow-up" renderizou as 4 seções esperadas (Gatilho automático com 2 cards, Cadência e tentativas com 1 card mostrando valores reais já configurados — `120,2880,5760`/`3 tentativas`/`09:00-18:00`, Instruções de conteúdo com 2 cards do tipo hybrid); toggle "Follow-up automático" ligado/salvo/recarregado (persistiu "Ativo · 3 dia(s)" após reload), depois revertido a "Desativado" e salvo de novo para não alterar a conta de teste. Camada 3 confirmada intacta nas Seções 0/1/3, Seção 2 com apenas "Thresholds de follow-up" (campo morto, sai na Fase 3).
 
 ### Cenário P2 — Fase 2: nurture_vs_discard_rule
 - [ ] Card desaparece da Camada Qualificação
