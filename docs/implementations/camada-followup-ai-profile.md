@@ -1,7 +1,7 @@
 # Camada dedicada de Follow-up no AI Profile (M3)
 
 **Branch:** `main`
-**Status:** Em andamento — Fase 1 implementada e validada (25/06/2026). Fases 2-4 pendentes.
+**Status:** Em andamento — Fases 1-2 implementadas e validadas (25/06/2026). Fases 3-4 pendentes.
 **Plano:** `docs/plans/followup-proativo-e-cancelamento-agenda.md` (M3)
 
 ---
@@ -114,6 +114,25 @@ notas).
 | `frontend-crm/src/components/agente/CamadaFollowup.tsx` | Adiciona Seção 4 "Qualificação e follow-up" com o card "Nurture vs Descarte", `sub`/`help` ajustados para referenciar "Score mínimo" da Camada Qualificação |
 | `frontend-crm/src/components/agente/CamadaQualificacao.tsx` | Remove o card (linhas ~1212-1220) |
 
+### Commits Fase 2
+
+| # | Commit | O que foi implementado |
+|---|---|---|
+| 1 | `3a9b8c9` | Move `nurture_vs_discard_rule` da Camada Qualificação para a Seção 4 da Camada Follow-up |
+
+### Relatório da Fase 2 — o que mudou na prática
+
+**Antes:** a decisão "o que fazer com um lead que não atinge o score mínimo"
+(nutrir ou descartar) ficava na Camada Qualificação, ao lado do campo de score —
+mas é, na prática, um comportamento de follow-up.
+
+**Agora:** o card "Nurture vs Descarte" vive na Seção 4 da Camada Follow-up, com
+uma nota explícita de que depende do "Score mínimo" configurado em Qualificação.
+
+**Para validar:** Cenário P2, abaixo — já testado ao vivo nesta sessão.
+
+---
+
 ### Fase 3 — Remover os campos mortos `followup_h1/h2/h3`
 
 | Arquivo | O que muda |
@@ -145,8 +164,9 @@ sobre a nova localização na UI, e remover este arquivo de implementação.
 - **Validado em:** 25/06/2026 — `npx tsc -b --noEmit` sem novos erros (erros pré-existentes no resto do repo, nenhum nos arquivos tocados); teste ao vivo via browser (chrome-devtools MCP) na conta de teste (`user_id=15`, `hybrid_scheduler`/`agenda`): aba "⑧ Follow-up" renderizou as 4 seções esperadas (Gatilho automático com 2 cards, Cadência e tentativas com 1 card mostrando valores reais já configurados — `120,2880,5760`/`3 tentativas`/`09:00-18:00`, Instruções de conteúdo com 2 cards do tipo hybrid); toggle "Follow-up automático" ligado/salvo/recarregado (persistiu "Ativo · 3 dia(s)" após reload), depois revertido a "Desativado" e salvo de novo para não alterar a conta de teste. Camada 3 confirmada intacta nas Seções 0/1/3, Seção 2 com apenas "Thresholds de follow-up" (campo morto, sai na Fase 3).
 
 ### Cenário P2 — Fase 2: nurture_vs_discard_rule
-- [ ] Card desaparece da Camada Qualificação
-- [ ] Card aparece na Seção 4 da Camada Follow-up, toggle funciona, persiste
+- [x] Card desaparece da Camada Qualificação
+- [x] Card aparece na Seção 4 da Camada Follow-up, toggle funciona, persiste
+- **Validado em:** 25/06/2026 — `npx tsc -b --noEmit` sem novos erros; teste ao vivo via browser: card "Score mínimo"/"Sinais de compra" confirmados como únicos restantes em "Parâmetros avançados" da Camada Qualificação; card "Nurture vs Descarte" confirmado na Seção 4 da Camada Follow-up, referenciando "Score mínimo" da Camada 2; toggle clicado (Nurture→Descarte), draft banner apareceu corretamente, "Descartar rascunho" usado para reverter sem persistir (não era necessário alterar o dado real da conta de teste só para validar o toggle).
 
 ### Cenário P3 — Fase 3: campos mortos removidos
 - [ ] `npx tsc -b --noEmit` sem erros
