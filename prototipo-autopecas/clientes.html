@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Clientes · Lara AutoPeças</title>
+<link rel="stylesheet" href="assets/css/theme.css" />
+<link rel="stylesheet" href="assets/css/sidebar.css" />
+<link rel="stylesheet" href="assets/css/components.css" />
+</head>
+<body data-page="clientes">
+<div class="app-shell">
+
+  <aside class="sidebar">
+    <div class="sidebar-brand">
+      <div class="logo-mark"><span class="icon" data-icon="wrench" style="font-size:15px"></span></div>
+      <div class="logo-text"><strong>Lara · Auto Peças Silva</strong><span>CRM + IA via WhatsApp</span></div>
+    </div>
+    <div class="sidebar-scroll">
+      <div class="sidebar-group">
+        <div class="sidebar-group-label">Navegação</div>
+        <ul class="sidebar-menu">
+          <li><a class="sidebar-link" data-page="dashboard" href="index.html"><span class="icon" data-icon="bar-chart"></span><span>Dashboard</span></a></li>
+          <li><a class="sidebar-link" data-page="clientes" href="clientes.html"><span class="icon" data-icon="users"></span><span>Clientes</span></a></li>
+          <li><a class="sidebar-link" data-page="agenda" href="agenda.html"><span class="icon" data-icon="calendar-days"></span><span>Agenda</span></a></li>
+          <li><a class="sidebar-link" data-page="recompra" href="regua-recompra.html"><span class="icon" data-icon="repeat"></span><span>Régua de Recompra</span><span class="nav-badge">8</span></a></li>
+          <li><a class="sidebar-link" data-page="followup" href="follow-up-center.html"><span class="icon" data-icon="message-square-dot"></span><span>Follow-ups</span></a></li>
+          <li><a class="sidebar-link" data-page="playground" href="playground.html"><span class="icon" data-icon="flask-conical"></span><span>Playground IA</span></a></li>
+        </ul>
+      </div>
+      <div class="sidebar-group">
+        <div class="sidebar-group-label">Cliente final</div>
+        <ul class="sidebar-menu">
+          <li><a class="sidebar-link" data-page="whatsapp" href="whatsapp-cliente.html"><span class="icon" data-icon="message-circle"></span><span>Simulação WhatsApp</span></a></li>
+        </ul>
+      </div>
+      <div class="sidebar-group">
+        <div class="sidebar-group-label">Conta</div>
+        <ul class="sidebar-menu">
+          <li><a class="sidebar-link" data-page="ai-profile" href="ai-profile.html"><span class="icon" data-icon="sparkles"></span><span>Identidade da Lara</span></a></li>
+          <li><a class="sidebar-link" href="#"><span class="icon" data-icon="log-out"></span><span>Sair</span></a></li>
+        </ul>
+      </div>
+    </div>
+    <div class="sidebar-footer">
+      <div class="avatar">RS</div>
+      <div class="who"><strong>Auto Peças Silva</strong><span>Plano Profissional</span></div>
+    </div>
+  </aside>
+
+  <div class="app-main">
+    <div class="app-topbar">
+      <button class="btn btn-ghost btn-icon" data-sidebar-toggle aria-label="Menu"><span class="icon" data-icon="menu"></span></button>
+      <div style="flex:1"></div>
+      <button class="btn btn-ghost btn-icon" data-theme-toggle aria-label="Tema"><span class="icon" data-icon="moon"></span></button>
+    </div>
+
+    <div class="app-content">
+      <div class="crm-header">
+        <h1>Clientes</h1>
+        <div class="u-flex u-gap-2" style="display:flex;">
+          <div style="position:relative;">
+            <input type="search" placeholder="Buscar cliente, telefone ou placa…" style="width:260px; padding-left:32px;" />
+            <span class="icon" data-icon="search" style="position:absolute; left:9px; top:8px; color:hsl(var(--muted-foreground)); font-size:13px;"></span>
+          </div>
+          <button class="btn btn-primary" onclick="openModal('modal-novo-cliente')"><span class="icon" data-icon="plus"></span> Novo cliente</button>
+        </div>
+      </div>
+
+      <div class="page-body">
+        <div class="kanban-wrap">
+
+          <div class="kanban-column">
+            <div class="kanban-column-header"><h3>Novo contato</h3><span class="count" style="background:#4a9eff;">2</span></div>
+            <div class="kanban-cards">
+              <div class="lead-card" onclick="location.href='cliente-detalhe.html'">
+                <div class="lc-top"><div><div class="lc-name">Lucas Fernandes</div><div class="lc-vehicle">Ford Fiesta 2015</div></div><span class="icon wa-btn" data-icon="message-circle"></span></div>
+                <div class="lc-row"><span class="icon" data-icon="phone" style="font-size:11px;"></span> (11) 99021-3344</div>
+                <div class="lc-row">Origem: Google · "Perguntou sobre troca de óleo"</div>
+                <div class="lc-foot"><span class="icon" data-icon="calendar" style="font-size:11px;"></span> há 2 horas</div>
+              </div>
+              <div class="lead-card" onclick="location.href='cliente-detalhe.html'">
+                <div class="lc-top"><div><div class="lc-name">Patrícia Lima</div><div class="lc-vehicle">VW Gol 2017</div></div><span class="icon wa-btn" data-icon="message-circle"></span></div>
+                <div class="lc-row"><span class="icon" data-icon="phone" style="font-size:11px;"></span> (11) 98456-1290</div>
+                <div class="lc-row">Origem: Indicação · "Bateria fraca, pediu orçamento"</div>
+                <div class="lc-foot"><span class="icon" data-icon="calendar" style="font-size:11px;"></span> há 5 horas</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="kanban-column">
+            <div class="kanban-column-header"><h3>Orçamento enviado</h3><span class="count" style="background:#ffc107; color:#1a1a1a;">2</span></div>
+            <div class="kanban-cards">
+              <div class="lead-card" onclick="location.href='cliente-detalhe.html'">
+                <div class="lc-top"><div><div class="lc-name">Eduardo Martins</div><div class="lc-vehicle">Toyota Corolla 2018</div></div><span class="icon wa-btn" data-icon="message-circle"></span></div>
+                <div class="lc-row"><span class="icon" data-icon="phone" style="font-size:11px;"></span> (11) 97744-2210</div>
+                <div class="lc-row">Filtro de óleo + óleo 5W30 — R$ 189,00</div>
+                <div class="fu-mini"><span class="fu-tag" style="background:rgba(232,120,96,.15); color:#e87860;">🔥 Quente</span></div>
+                <div class="lc-foot"><span class="icon" data-icon="calendar" style="font-size:11px;"></span> orçamento hoje</div>
+              </div>
+              <div class="lead-card" onclick="location.href='cliente-detalhe.html'">
+                <div class="lc-top"><div><div class="lc-name">Vanessa Oliveira</div><div class="lc-vehicle">Jeep Renegade 2020</div></div><span class="icon wa-btn" data-icon="message-circle"></span></div>
+                <div class="lc-row"><span class="icon" data-icon="phone" style="font-size:11px;"></span> (11) 96655-8821</div>
+                <div class="lc-row">Pastilha de freio dianteira — R$ 260,00</div>
+                <div class="fu-mini"><span class="fu-tag" style="background:rgba(232,120,96,.15); color:#e87860;">🔥 Quente</span></div>
+                <div class="lc-foot"><span class="icon" data-icon="calendar" style="font-size:11px;"></span> orçamento hoje</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="kanban-column">
+            <div class="kanban-column-header"><h3>Negociação</h3><span class="count" style="background:#9878d8;">2</span></div>
+            <div class="kanban-cards">
+              <div class="lead-card" onclick="location.href='cliente-detalhe.html'">
+                <div class="lc-top"><div><div class="lc-name">Marcos Andrade</div><div class="lc-vehicle">Fiat Strada 2021</div></div><span class="icon wa-btn" data-icon="message-circle"></span></div>
+                <div class="lc-row"><span class="icon" data-icon="phone" style="font-size:11px;"></span> (11) 95588-7733</div>
+                <div class="lc-row">Negociando pastilha + disco, quer desconto</div>
+                <div class="fu-mini"><span class="fu-tag" style="background:rgba(104,152,232,.18); color:#6898e8;">🔁 Recompra vencida</span></div>
+                <div class="lc-foot"><span class="icon" data-icon="calendar" style="font-size:11px;"></span> há 1 dia</div>
+              </div>
+              <div class="lead-card" onclick="location.href='cliente-detalhe.html'">
+                <div class="lc-top"><div><div class="lc-name">Camila Souza</div><div class="lc-vehicle">Hyundai HB20 2019</div></div><span class="icon wa-btn" data-icon="message-circle"></span></div>
+                <div class="lc-row"><span class="icon" data-icon="phone" style="font-size:11px;"></span> (11) 94477-6612</div>
+                <div class="lc-row">Avaliando trocar pneus dianteiros</div>
+                <div class="lc-foot"><span class="icon" data-icon="calendar" style="font-size:11px;"></span> há 3 dias</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="kanban-column">
+            <div class="kanban-column-header"><h3>Venda fechada</h3><span class="count" style="background:#4caf50;">2</span></div>
+            <div class="kanban-cards">
+              <div class="lead-card" onclick="location.href='cliente-detalhe.html'">
+                <div class="lc-top"><div><div class="lc-name">Beatriz Ramos</div><div class="lc-vehicle">VW Polo 2022</div></div><span class="icon wa-btn" data-icon="message-circle"></span></div>
+                <div class="lc-row"><span class="icon" data-icon="phone" style="font-size:11px;"></span> (11) 93366-5510</div>
+                <div class="lc-row">Filtro de óleo — R$ 89,90 · retirada hoje 09h</div>
+                <div class="lc-foot"><span class="icon" data-icon="calendar" style="font-size:11px;"></span> fechado hoje</div>
+              </div>
+              <div class="lead-card" onclick="location.href='cliente-detalhe.html'">
+                <div class="lc-top"><div><div class="lc-name">Rafael Costa</div><div class="lc-vehicle">Chevrolet Onix 2020</div></div><span class="icon wa-btn" data-icon="message-circle"></span></div>
+                <div class="lc-row"><span class="icon" data-icon="phone" style="font-size:11px;"></span> (11) 92255-4471</div>
+                <div class="lc-row">Amortecedor dianteiro (par) — R$ 580,00</div>
+                <div class="lc-foot"><span class="icon" data-icon="calendar" style="font-size:11px;"></span> instalação 11h30</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="kanban-column">
+            <div class="kanban-column-header"><h3>Recompra agendada</h3><span class="count" style="background:#e8b84b; color:#1a1a1a;">2</span></div>
+            <div class="kanban-cards">
+              <div class="lead-card" onclick="location.href='cliente-detalhe.html'">
+                <div class="lc-top"><div><div class="lc-name">João Silva</div><div class="lc-vehicle">Honda Civic 2019 · BRA2E19</div></div><span class="icon wa-btn" data-icon="message-circle"></span></div>
+                <div class="lc-row"><span class="icon" data-icon="phone" style="font-size:11px;"></span> (11) 98877-6655</div>
+                <div class="lc-row">Filtro de óleo + pastilha — retirada 15/07</div>
+                <div class="fu-mini"><span class="fu-tag" style="background:rgba(126,207,184,.18); color:#52C4A0;">Recompra confirmada</span></div>
+                <div class="lc-foot"><span class="icon" data-icon="calendar" style="font-size:11px;"></span> agendado via WhatsApp</div>
+              </div>
+              <div class="lead-card" onclick="location.href='cliente-detalhe.html'">
+                <div class="lc-top"><div><div class="lc-name">Fernanda Diniz</div><div class="lc-vehicle">Renault Kwid 2021</div></div><span class="icon wa-btn" data-icon="message-circle"></span></div>
+                <div class="lc-row"><span class="icon" data-icon="phone" style="font-size:11px;"></span> (11) 91144-2298</div>
+                <div class="lc-row">Pastilha de freio — retirada 02/07</div>
+                <div class="fu-mini"><span class="fu-tag" style="background:rgba(126,207,184,.18); color:#52C4A0;">Recompra confirmada</span></div>
+                <div class="lc-foot"><span class="icon" data-icon="calendar" style="font-size:11px;"></span> agendado via WhatsApp</div>
+              </div>
+            </div>
+          </div>
+
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Modal Novo Cliente -->
+<div class="modal-overlay" id="modal-novo-cliente">
+  <div class="modal">
+    <div class="modal-header"><h2>Novo cliente</h2><p>Cadastre o cliente e, se já souber, o veículo dele.</p></div>
+    <div class="modal-body">
+      <div><label class="field-label">Nome</label><input type="text" placeholder="Ex: João Silva" /></div>
+      <div><label class="field-label">Telefone / WhatsApp</label><input type="tel" placeholder="(11) 90000-0000" /></div>
+      <div><label class="field-label">Origem</label>
+        <select><option>Indicação</option><option>Google</option><option>Instagram</option><option>WhatsApp</option><option>Passou na loja</option></select>
+      </div>
+      <div><label class="field-label">Observação</label><textarea rows="2" placeholder="Ex: interessado em pastilha de freio"></textarea></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn" onclick="closeModal('modal-novo-cliente')">Cancelar</button>
+      <button class="btn btn-primary" onclick="closeModal('modal-novo-cliente')">Salvar cliente</button>
+    </div>
+  </div>
+</div>
+
+<script src="assets/js/icons.js"></script>
+<script src="assets/js/app.js"></script>
+</body>
+</html>

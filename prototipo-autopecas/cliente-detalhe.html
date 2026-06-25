@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>João Silva · Lara AutoPeças</title>
+<link rel="stylesheet" href="assets/css/theme.css" />
+<link rel="stylesheet" href="assets/css/sidebar.css" />
+<link rel="stylesheet" href="assets/css/components.css" />
+</head>
+<body data-page="clientes">
+<div class="app-shell">
+
+  <aside class="sidebar">
+    <div class="sidebar-brand">
+      <div class="logo-mark"><span class="icon" data-icon="wrench" style="font-size:15px"></span></div>
+      <div class="logo-text"><strong>Lara · Auto Peças Silva</strong><span>CRM + IA via WhatsApp</span></div>
+    </div>
+    <div class="sidebar-scroll">
+      <div class="sidebar-group">
+        <div class="sidebar-group-label">Navegação</div>
+        <ul class="sidebar-menu">
+          <li><a class="sidebar-link" data-page="dashboard" href="index.html"><span class="icon" data-icon="bar-chart"></span><span>Dashboard</span></a></li>
+          <li><a class="sidebar-link" data-page="clientes" href="clientes.html"><span class="icon" data-icon="users"></span><span>Clientes</span></a></li>
+          <li><a class="sidebar-link" data-page="agenda" href="agenda.html"><span class="icon" data-icon="calendar-days"></span><span>Agenda</span></a></li>
+          <li><a class="sidebar-link" data-page="recompra" href="regua-recompra.html"><span class="icon" data-icon="repeat"></span><span>Régua de Recompra</span><span class="nav-badge">8</span></a></li>
+          <li><a class="sidebar-link" data-page="followup" href="follow-up-center.html"><span class="icon" data-icon="message-square-dot"></span><span>Follow-ups</span></a></li>
+          <li><a class="sidebar-link" data-page="playground" href="playground.html"><span class="icon" data-icon="flask-conical"></span><span>Playground IA</span></a></li>
+        </ul>
+      </div>
+      <div class="sidebar-group">
+        <div class="sidebar-group-label">Cliente final</div>
+        <ul class="sidebar-menu">
+          <li><a class="sidebar-link" data-page="whatsapp" href="whatsapp-cliente.html"><span class="icon" data-icon="message-circle"></span><span>Simulação WhatsApp</span></a></li>
+        </ul>
+      </div>
+      <div class="sidebar-group">
+        <div class="sidebar-group-label">Conta</div>
+        <ul class="sidebar-menu">
+          <li><a class="sidebar-link" data-page="ai-profile" href="ai-profile.html"><span class="icon" data-icon="sparkles"></span><span>Identidade da Lara</span></a></li>
+          <li><a class="sidebar-link" href="#"><span class="icon" data-icon="log-out"></span><span>Sair</span></a></li>
+        </ul>
+      </div>
+    </div>
+    <div class="sidebar-footer">
+      <div class="avatar">RS</div>
+      <div class="who"><strong>Auto Peças Silva</strong><span>Plano Profissional</span></div>
+    </div>
+  </aside>
+
+  <div class="app-main">
+    <div class="app-topbar">
+      <button class="btn btn-ghost btn-icon" data-sidebar-toggle aria-label="Menu"><span class="icon" data-icon="menu"></span></button>
+      <a href="clientes.html" class="btn btn-ghost btn-sm"><span class="icon" data-icon="arrow-left"></span> Voltar para Clientes</a>
+      <div style="flex:1"></div>
+      <button class="btn btn-ghost btn-icon" data-theme-toggle aria-label="Tema"><span class="icon" data-icon="moon"></span></button>
+    </div>
+
+    <div class="app-content">
+      <div class="crm-header">
+        <div>
+          <h1 style="font-size:20px;">João Silva</h1>
+          <p class="u-muted u-text-sm" style="margin:2px 0 0;">Cliente desde setembro/2023 · Coluna: Recompra agendada</p>
+        </div>
+        <div class="u-flex u-gap-2" style="display:flex;">
+          <span class="loyalty-pill"><span class="icon" data-icon="star" style="font-size:13px;"></span> 340 pontos · Nível Prata</span>
+          <a href="https://wa.me/5511988776655" target="_blank" class="btn btn-outline" style="color:hsl(var(--success)); border-color:hsl(var(--success)/.4);"><span class="icon" data-icon="message-circle"></span> WhatsApp</a>
+        </div>
+      </div>
+
+      <div class="page-body" style="display:grid; grid-template-columns: 1fr 1.4fr; gap:18px;" id="detail-grid">
+
+        <!-- Coluna esquerda: dados do cliente + veículo -->
+        <div class="u-flex-col u-gap-4" style="display:flex;">
+
+          <div class="card">
+            <div class="card-header"><h2 class="card-title">Dados do cliente</h2></div>
+            <div class="card-content u-flex-col u-gap-2" style="display:flex; font-size:13px;">
+              <div class="u-flex u-justify-between" style="display:flex;"><span class="u-muted">Telefone</span><strong>(11) 98877-6655</strong></div>
+              <div class="u-flex u-justify-between" style="display:flex;"><span class="u-muted">Origem</span><strong>Indicação</strong></div>
+              <div class="u-flex u-justify-between" style="display:flex;"><span class="u-muted">Cliente desde</span><strong>09/2023</strong></div>
+              <div class="u-flex u-justify-between" style="display:flex;"><span class="u-muted">Total gasto</span><strong>R$ 1.334,90</strong></div>
+              <div class="u-flex u-justify-between" style="display:flex;"><span class="u-muted">Compras</span><strong>4</strong></div>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-header u-flex u-justify-between u-items-center" style="display:flex; padding-bottom:0;">
+              <h2 class="card-title">Veículo cadastrado</h2>
+              <button class="btn btn-sm" onclick="openModal('modal-veiculo')"><span class="icon" data-icon="plus"></span> Editar</button>
+            </div>
+            <div class="card-content">
+              <div class="vehicle-card">
+                <div class="plate">BRA2E19</div>
+                <div class="vehicle-meta">
+                  <strong>Honda Civic 2019</strong>
+                  <span>Sedan · Flex · Cor: Preto</span>
+                  <span>Km estimada atual: <strong>64.500 km</strong></span>
+                </div>
+              </div>
+              <div class="o-field" style="margin:14px 0 0;">
+                <div class="card" style="background:hsl(var(--primary)/.06); border-color:hsl(var(--primary)/.3);">
+                  <div class="card-content" style="padding:12px 14px; display:flex; gap:10px; align-items:flex-start;">
+                    <span class="icon" data-icon="repeat" style="color:hsl(var(--primary)); margin-top:1px;"></span>
+                    <div style="font-size:12px;"><strong>Próxima recompra prevista: 15/07/2026</strong><br /><span class="u-muted">Filtro de óleo · ciclo de 6 meses desde 15/01/2026</span></div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-header"><h2 class="card-title">Fidelidade</h2></div>
+            <div class="card-content">
+              <div class="u-flex u-justify-between u-items-center" style="display:flex;">
+                <div><strong style="font-size:20px;">340 pts</strong><div class="u-muted u-text-xs">≈ R$ 34,00 em desconto</div></div>
+                <span class="badge badge-warning">Nível Prata</span>
+              </div>
+              <div class="layer-bar" style="margin-top:12px;"><span style="width:68%; background:hsl(var(--warning));"></span></div>
+              <div class="u-muted u-text-xs" style="margin-top:4px;">160 pts até o nível Ouro (resgate de 10%)</div>
+            </div>
+          </div>
+
+        </div>
+
+        <!-- Coluna direita: histórico de peças -->
+        <div class="card">
+          <div class="card-header u-flex u-justify-between u-items-center" style="display:flex; padding-bottom:0;">
+            <h2 class="card-title">Histórico de peças compradas</h2>
+            <button class="btn btn-sm btn-outline" onclick="openModal('modal-nova-compra')"><span class="icon" data-icon="plus"></span> Registrar compra</button>
+          </div>
+          <div class="card-content" style="overflow-x:auto;">
+            <table class="data-table">
+              <thead><tr><th>Data</th><th>Peça</th><th>Km na troca</th><th>Valor</th><th>Ciclo</th><th>Status</th></tr></thead>
+              <tbody>
+                <tr>
+                  <td>15/01/2026</td><td>Filtro de óleo</td><td>62.000 km</td><td>R$ 89,90</td><td>6 meses</td>
+                  <td><span class="badge badge-info">Em 20 dias</span></td>
+                </tr>
+                <tr>
+                  <td>22/08/2025</td><td>Pastilha de freio (dianteira)</td><td>58.200 km</td><td>R$ 245,00</td><td>12 meses</td>
+                  <td><span class="badge badge-success">Agendado p/ hoje 16h30</span></td>
+                </tr>
+                <tr>
+                  <td>14/02/2025</td><td>Bateria 60Ah</td><td>55.000 km</td><td>R$ 420,00</td><td>36 meses</td>
+                  <td><span class="badge badge-outline">Em dia</span></td>
+                </tr>
+                <tr>
+                  <td>30/09/2024</td><td>Amortecedor dianteiro (par)</td><td>51.300 km</td><td>R$ 580,00</td><td>48 meses</td>
+                  <td><span class="badge badge-outline">Em dia</span></td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+</div>
+
+<style>@media (max-width: 1000px) { #detail-grid { grid-template-columns: 1fr !important; } }</style>
+
+<!-- Modal Editar Veículo -->
+<div class="modal-overlay" id="modal-veiculo">
+  <div class="modal">
+    <div class="modal-header"><h2>Veículo do cliente</h2><p>Esses dados ficam vinculados ao contato no WhatsApp.</p></div>
+    <div class="modal-body" style="display:grid; grid-template-columns:1fr 1fr; gap:14px;">
+      <div><label class="field-label">Placa</label><input type="text" value="BRA2E19" /></div>
+      <div><label class="field-label">Ano</label><input type="text" value="2019" /></div>
+      <div><label class="field-label">Marca</label><input type="text" value="Honda" /></div>
+      <div><label class="field-label">Modelo</label><input type="text" value="Civic" /></div>
+      <div><label class="field-label">Cor</label><input type="text" value="Preto" /></div>
+      <div><label class="field-label">Km estimada</label><input type="text" value="64.500" /></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn" onclick="closeModal('modal-veiculo')">Cancelar</button>
+      <button class="btn btn-primary" onclick="closeModal('modal-veiculo')">Salvar veículo</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal Registrar Compra -->
+<div class="modal-overlay" id="modal-nova-compra">
+  <div class="modal">
+    <div class="modal-header"><h2>Registrar compra de peça</h2><p>Isso alimenta automaticamente a régua de recompra.</p></div>
+    <div class="modal-body">
+      <div><label class="field-label">Peça</label><input type="text" placeholder="Ex: Pastilha de freio dianteira" /></div>
+      <div style="display:grid; grid-template-columns:1fr 1fr; gap:14px;">
+        <div><label class="field-label">Valor (R$)</label><input type="text" placeholder="245,00" /></div>
+        <div><label class="field-label">Km na troca</label><input type="text" placeholder="62.000" /></div>
+      </div>
+      <div><label class="field-label">Ciclo estimado de recompra</label>
+        <select><option>3 meses</option><option selected>6 meses</option><option>12 meses</option><option>24 meses</option><option>36 meses</option></select>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn" onclick="closeModal('modal-nova-compra')">Cancelar</button>
+      <button class="btn btn-primary" onclick="closeModal('modal-nova-compra')">Registrar</button>
+    </div>
+  </div>
+</div>
+
+<script src="assets/js/icons.js"></script>
+<script src="assets/js/app.js"></script>
+</body>
+</html>

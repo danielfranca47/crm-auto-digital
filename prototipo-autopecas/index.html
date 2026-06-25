@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Dashboard · Lara AutoPeças</title>
+<link rel="stylesheet" href="assets/css/theme.css" />
+<link rel="stylesheet" href="assets/css/sidebar.css" />
+<link rel="stylesheet" href="assets/css/components.css" />
+</head>
+<body data-page="dashboard">
+<div class="app-shell">
+
+  <aside class="sidebar">
+    <div class="sidebar-brand">
+      <div class="logo-mark"><span class="icon" data-icon="wrench" style="font-size:15px"></span></div>
+      <div class="logo-text"><strong>Lara · Auto Peças Silva</strong><span>CRM + IA via WhatsApp</span></div>
+    </div>
+    <div class="sidebar-scroll">
+      <div class="sidebar-group">
+        <div class="sidebar-group-label">Navegação</div>
+        <ul class="sidebar-menu">
+          <li><a class="sidebar-link" data-page="dashboard" href="index.html"><span class="icon" data-icon="bar-chart"></span><span>Dashboard</span></a></li>
+          <li><a class="sidebar-link" data-page="clientes" href="clientes.html"><span class="icon" data-icon="users"></span><span>Clientes</span></a></li>
+          <li><a class="sidebar-link" data-page="agenda" href="agenda.html"><span class="icon" data-icon="calendar-days"></span><span>Agenda</span></a></li>
+          <li><a class="sidebar-link" data-page="recompra" href="regua-recompra.html"><span class="icon" data-icon="repeat"></span><span>Régua de Recompra</span><span class="nav-badge">8</span></a></li>
+          <li><a class="sidebar-link" data-page="followup" href="follow-up-center.html"><span class="icon" data-icon="message-square-dot"></span><span>Follow-ups</span></a></li>
+          <li><a class="sidebar-link" data-page="playground" href="playground.html"><span class="icon" data-icon="flask-conical"></span><span>Playground IA</span></a></li>
+        </ul>
+      </div>
+      <div class="sidebar-group">
+        <div class="sidebar-group-label">Cliente final</div>
+        <ul class="sidebar-menu">
+          <li><a class="sidebar-link" data-page="whatsapp" href="whatsapp-cliente.html"><span class="icon" data-icon="message-circle"></span><span>Simulação WhatsApp</span></a></li>
+        </ul>
+      </div>
+      <div class="sidebar-group">
+        <div class="sidebar-group-label">Conta</div>
+        <ul class="sidebar-menu">
+          <li><a class="sidebar-link" data-page="ai-profile" href="ai-profile.html"><span class="icon" data-icon="sparkles"></span><span>Identidade da Lara</span></a></li>
+          <li><a class="sidebar-link" href="#"><span class="icon" data-icon="log-out"></span><span>Sair</span></a></li>
+        </ul>
+      </div>
+    </div>
+    <div class="sidebar-footer">
+      <div class="avatar">RS</div>
+      <div class="who"><strong>Auto Peças Silva</strong><span>Plano Profissional</span></div>
+    </div>
+  </aside>
+
+  <div class="app-main">
+    <div class="app-topbar">
+      <button class="btn btn-ghost btn-icon" data-sidebar-toggle aria-label="Menu"><span class="icon" data-icon="menu"></span></button>
+      <div style="flex:1"></div>
+      <button class="btn btn-ghost btn-icon" data-theme-toggle aria-label="Tema"><span class="icon" data-icon="moon"></span></button>
+    </div>
+
+    <div class="app-content">
+      <div class="crm-header">
+        <div>
+          <h1>Dashboard</h1>
+          <p class="u-muted u-text-sm u-mb-0" style="margin:2px 0 0;">Quinta-feira, 25 de junho de 2026</p>
+        </div>
+        <div class="u-flex u-gap-2">
+          <a href="agenda.html" class="btn btn-outline"><span class="icon" data-icon="plus"></span> Nova retirada</a>
+        </div>
+      </div>
+
+      <div class="page-body u-flex-col u-gap-4" style="display:flex;">
+
+        <!-- Banner ligando ao diferencial -->
+        <div class="card" style="border-color: hsl(var(--warning) / .4); background: hsl(var(--warning) / .07);">
+          <div class="card-content u-flex u-items-center u-gap-3" style="display:flex;">
+            <span class="icon" data-icon="repeat" style="color:hsl(var(--warning)); font-size:18px;"></span>
+            <div style="flex:1;">
+              <strong style="font-size:13px;">3 clientes com peça de recompra vencida</strong>
+              <span class="u-muted" style="font-size:12.5px; display:block;">Pastilha de freio, bateria e filtro de óleo passaram do ciclo previsto — a Lara já pode disparar o lembrete.</span>
+            </div>
+            <a href="regua-recompra.html" class="btn btn-sm" style="border-color:hsl(var(--warning)/.5); color:hsl(var(--warning));">Ver régua de recompra →</a>
+          </div>
+        </div>
+
+        <!-- Hero do agente -->
+        <div class="card">
+          <div class="card-content u-flex u-justify-between u-items-center u-gap-3" style="display:flex; flex-wrap:wrap;">
+            <div class="u-flex u-gap-3" style="display:flex;">
+              <span class="icon" data-icon="sparkles" style="color:hsl(var(--primary)); font-size:20px; margin-top:2px;"></span>
+              <div>
+                <p style="font-weight:600; font-size:15px; margin:0;">Lara</p>
+                <p class="u-muted u-text-sm" style="margin:2px 0 0;">Consultivo · Autopeças — varejo independente · Auto Peças Silva</p>
+                <div class="u-flex u-gap-2" style="display:flex; flex-wrap:wrap; margin-top:8px;">
+                  <span class="badge badge-success">✓ Ativa</span>
+                  <span class="badge badge-outline">Consultivo</span>
+                  <span class="badge badge-outline">Agente humano</span>
+                  <span class="badge badge-outline">Tom: direta e prestativa</span>
+                  <span class="badge badge-outline">America/Sao_Paulo</span>
+                </div>
+              </div>
+            </div>
+            <a href="ai-profile.html" class="btn btn-outline btn-sm"><span class="icon" data-icon="external-link"></span> Configurar</a>
+          </div>
+        </div>
+
+        <!-- Stat cards -->
+        <div class="stat-grid">
+          <div class="card stat-card"><div class="card-content">
+            <div class="stat-label">Pedidos hoje</div>
+            <div class="stat-value">8</div>
+            <div class="stat-foot">3 retiradas + 5 atendimentos via WhatsApp</div>
+          </div></div>
+          <div class="card stat-card"><div class="card-content">
+            <div class="stat-label">Recompra prevista esta semana</div>
+            <div class="stat-value">5</div>
+            <div class="stat-foot">clientes com ciclo de peça vencendo</div>
+          </div></div>
+          <div class="card stat-card"><div class="card-content">
+            <div class="stat-label">Receita do mês</div>
+            <div class="stat-value">R$ 18.420</div>
+            <div class="stat-foot">↑ 12% vs. mês anterior</div>
+          </div></div>
+          <div class="card stat-card"><div class="card-content">
+            <div class="stat-label">Ticket médio</div>
+            <div class="stat-value">R$ 187</div>
+            <div class="stat-foot">peças + instalação</div>
+          </div></div>
+        </div>
+
+        <!-- Funil + Peças mais vendidas -->
+        <div style="display:grid; grid-template-columns: 1.2fr 1fr; gap:16px;" class="grid-resp">
+          <div class="card">
+            <div class="card-header"><h2 class="card-title">Funil de clientes</h2></div>
+            <div class="card-content">
+              <div class="funnel-row"><span class="funnel-label">Contato</span><div class="funnel-bar"><span style="width:100%; background:#4a9eff;"></span></div><span class="funnel-count">42</span></div>
+              <div class="funnel-row"><span class="funnel-label">Orçamento</span><div class="funnel-bar"><span style="width:69%; background:#ffc107;"></span></div><span class="funnel-count">29</span></div>
+              <div class="funnel-row"><span class="funnel-label">Negociação</span><div class="funnel-bar"><span style="width:40%; background:#9878d8;"></span></div><span class="funnel-count">17</span></div>
+              <div class="funnel-row"><span class="funnel-label">Venda</span><div class="funnel-bar"><span style="width:26%; background:#4caf50;"></span></div><span class="funnel-count">11</span></div>
+              <div class="funnel-row"><span class="funnel-label">Recompra</span><div class="funnel-bar"><span style="width:19%; background:#e8b84b;"></span></div><span class="funnel-count">8</span></div>
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-header"><h2 class="card-title">Peças mais vendidas (mês)</h2></div>
+            <div class="card-content">
+              <div class="funnel-row"><span class="funnel-label" style="width:120px;">Filtro de óleo</span><div class="funnel-bar"><span style="width:90%; background:hsl(var(--primary));"></span></div><span class="funnel-count">34</span></div>
+              <div class="funnel-row"><span class="funnel-label" style="width:120px;">Pastilha freio</span><div class="funnel-bar"><span style="width:71%; background:hsl(var(--primary));"></span></div><span class="funnel-count">27</span></div>
+              <div class="funnel-row"><span class="funnel-label" style="width:120px;">Bateria</span><div class="funnel-bar"><span style="width:32%; background:hsl(var(--primary));"></span></div><span class="funnel-count">12</span></div>
+              <div class="funnel-row"><span class="funnel-label" style="width:120px;">Correia dentada</span><div class="funnel-bar"><span style="width:24%; background:hsl(var(--primary));"></span></div><span class="funnel-count">9</span></div>
+              <div class="funnel-row"><span class="funnel-label" style="width:120px;">Amortecedor</span><div class="funnel-bar"><span style="width:16%; background:hsl(var(--primary));"></span></div><span class="funnel-count">6</span></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Agenda do dia + recompra preview -->
+        <div style="display:grid; grid-template-columns: 1fr 1fr; gap:16px;" class="grid-resp">
+          <div class="card">
+            <div class="card-header u-flex u-justify-between u-items-center" style="display:flex; padding-bottom:12px;">
+              <h2 class="card-title">📅 Hoje na loja</h2>
+              <a href="agenda.html" class="btn btn-sm btn-outline">Ver agenda</a>
+            </div>
+            <div class="card-content" style="padding-top:0;">
+              <div class="appt-row"><span class="appt-time">09:00</span><div><strong style="font-size:12.5px;">Retirada — Beatriz Ramos</strong><div class="u-muted u-text-xs">Filtro de óleo · VW Polo 2022</div></div></div>
+              <div class="appt-row"><span class="appt-time">11:30</span><div><strong style="font-size:12.5px;">Instalação — Rafael Costa</strong><div class="u-muted u-text-xs">Amortecedor dianteiro · Onix 2020</div></div></div>
+              <div class="appt-row"><span class="appt-time">16:30</span><div><strong style="font-size:12.5px;">Instalação — João Silva</strong><div class="u-muted u-text-xs">Pastilha de freio dianteira · Civic 2019</div></div></div>
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-header u-flex u-justify-between u-items-center" style="display:flex; padding-bottom:12px;">
+              <h2 class="card-title">🔁 Recompra vencendo</h2>
+              <a href="regua-recompra.html" class="btn btn-sm btn-outline">Ver régua</a>
+            </div>
+            <div class="card-content" style="padding-top:0; display:flex; flex-direction:column; gap:8px;">
+              <div class="u-flex u-justify-between u-items-center" style="display:flex;"><span style="font-size:12.5px;">Patrícia Lima · Bateria</span><span class="badge badge-destructive">Vencido há 97d</span></div>
+              <div class="u-flex u-justify-between u-items-center" style="display:flex;"><span style="font-size:12.5px;">Marcos Andrade · Pastilha</span><span class="badge badge-destructive">Vencido há 17d</span></div>
+              <div class="u-flex u-justify-between u-items-center" style="display:flex;"><span style="font-size:12.5px;">Eduardo Martins · Filtro óleo</span><span class="badge badge-warning">Vence amanhã</span></div>
+              <div class="u-flex u-justify-between u-items-center" style="display:flex;"><span style="font-size:12.5px;">João Silva · Filtro óleo</span><span class="badge badge-info">Em 20 dias</span></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Clientes quentes -->
+        <div class="card">
+          <div class="card-header"><h2 class="card-title">Clientes quentes</h2></div>
+          <div class="card-content" style="display:flex; flex-direction:column;">
+            <div class="u-flex u-items-center u-justify-between" style="display:flex; padding:9px 0; border-bottom:1px solid hsl(var(--border));">
+              <div class="u-flex u-items-center u-gap-3" style="display:flex;"><div class="avatar" style="width:28px;height:28px;border-radius:999px;background:hsl(var(--secondary));display:flex;align-items:center;justify-content:center;font-size:10.5px;font-weight:700;">EM</div><div><strong style="font-size:12.5px;">Eduardo Martins</strong><div class="u-muted u-text-xs">Orçamento enviado hoje · Corolla 2018</div></div></div>
+              <span class="badge badge-destructive">🔥 Quente</span>
+            </div>
+            <div class="u-flex u-items-center u-justify-between" style="display:flex; padding:9px 0; border-bottom:1px solid hsl(var(--border));">
+              <div class="u-flex u-items-center u-gap-3" style="display:flex;"><div class="avatar" style="width:28px;height:28px;border-radius:999px;background:hsl(var(--secondary));display:flex;align-items:center;justify-content:center;font-size:10.5px;font-weight:700;">VO</div><div><strong style="font-size:12.5px;">Vanessa Oliveira</strong><div class="u-muted u-text-xs">Orçamento enviado hoje · Renegade 2020</div></div></div>
+              <span class="badge badge-destructive">🔥 Quente</span>
+            </div>
+            <div class="u-flex u-items-center u-justify-between" style="display:flex; padding:9px 0;">
+              <div class="u-flex u-items-center u-gap-3" style="display:flex;"><div class="avatar" style="width:28px;height:28px;border-radius:999px;background:hsl(var(--secondary));display:flex;align-items:center;justify-content:center;font-size:10.5px;font-weight:700;">MA</div><div><strong style="font-size:12.5px;">Marcos Andrade</strong><div class="u-muted u-text-xs">Negociando pastilha + disco · Strada 2021</div></div></div>
+              <span class="badge badge-warning">🌡 Morno</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Estado da configuração -->
+        <div>
+          <p class="u-mono u-text-xs u-muted" style="margin-bottom:10px;">Estado da configuração da Lara</p>
+          <div style="display:grid; grid-template-columns: repeat(3,1fr); gap:16px;" class="grid-resp-3">
+            <a href="ai-profile.html" style="text-decoration:none;">
+              <div class="card layer-card"><div class="card-content">
+                <p class="layer-tag">Camada 1</p>
+                <p style="font-weight:600; margin:2px 0;">Identidade e estratégia</p>
+                <p class="u-muted u-text-xs">Quem é a Lara, como fala e como atende.</p>
+                <div class="layer-bar"><span style="width:100%; background:hsl(var(--success));"></span></div>
+                <div class="u-flex u-justify-between u-mono u-text-xs u-muted" style="display:flex;"><span>Completa</span><span>5/5</span></div>
+              </div></div>
+            </a>
+            <a href="ai-profile.html" style="text-decoration:none;">
+              <div class="card layer-card"><div class="card-content">
+                <p class="layer-tag">Camada 2</p>
+                <p style="font-weight:600; margin:2px 0;">Conhecimento de peças</p>
+                <p class="u-muted u-text-xs">Catálogo, política de troca e marcas atendidas.</p>
+                <div class="layer-bar"><span style="width:83%; background:hsl(var(--warning));"></span></div>
+                <div class="u-flex u-justify-between u-mono u-text-xs u-muted" style="display:flex;"><span>83%</span><span>5/6</span></div>
+              </div></div>
+            </a>
+            <a href="ai-profile.html" style="text-decoration:none;">
+              <div class="card layer-card"><div class="card-content">
+                <p class="layer-tag">Camada 3</p>
+                <p style="font-weight:600; margin:2px 0;">Pipeline e recompra</p>
+                <p class="u-muted u-text-xs">Régua automática, reativação e proteção do número.</p>
+                <div class="layer-bar"><span style="width:100%; background:#9878d8;"></span></div>
+                <div class="u-flex u-justify-between u-mono u-text-xs u-muted" style="display:flex;"><span>OK</span><span>4/4</span></div>
+              </div></div>
+            </a>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+</div>
+
+<style>
+@media (max-width: 900px) {
+  .grid-resp, .grid-resp-3 { grid-template-columns: 1fr !important; }
+}
+</style>
+
+<script src="assets/js/icons.js"></script>
+<script src="assets/js/app.js"></script>
+</body>
+</html>
