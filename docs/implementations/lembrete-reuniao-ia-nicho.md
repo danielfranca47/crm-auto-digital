@@ -78,7 +78,7 @@ dossiê, agenda do operador), fica para uma melhoria futura separada.
 
 | # | Commit | O que foi implementado |
 |---|---|---|
-| 1 | _(preenchido após o commit)_ | |
+| 1 | `4389192` | `generate_appointment_reminder_message` em `llm_service.py` e `meeting_scheduler.py`; conecta em `whatsapp.py:_execute_appointment_reminder_pipeline` com fallback para o template fixo |
 
 ---
 
