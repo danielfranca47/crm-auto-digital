@@ -160,3 +160,13 @@ def generate_conflict_message(prompt: str) -> str:
         "input": prompt,
     }
     return _extract_output_text(_post_with_retry(payload))
+
+
+def generate_appointment_reminder_message(prompt: str) -> str:
+    if not settings.llm_api_key:
+        return ""
+    payload: Dict[str, Any] = {
+        "model": settings.llm_model,
+        "input": prompt,
+    }
+    return _extract_output_text(_post_with_retry(payload))

@@ -473,6 +473,75 @@ def _generate_conflict_message(
     return generated or None
 
 
+def generate_appointment_reminder_message(
+    ai_profile: Dict[str, Any],
+    lead: Dict[str, Any],
+    *,
+    appointment_title: str,
+    time_str: str,
+    logger: Optional[logging.Logger] = None,
+) -> Optional[str]:
+    """Tenta gerar o lembrete de reunião no tom do agente, com vocabulário do
+    nicho do negócio, pedindo confirmação de presença.
+
+    Nunca propaga excepção — qualquer falha (sem API key, erro de rede, timeout,
+    resposta vazia/inválida) devolve None, e o caller cai no fallback fixo.
+    """
+    tone_of_voice = str(ai_profile.get("tone_of_voice") or "profissional").strip()
+    brand_name = str(ai_profile.get("brand_name") or "").strip()
+    identity_mode = str(ai_profile.get("identity_mode") or "").strip()
+    niche = str(ai_profile.get("niche") or "").strip()
+    offer_description = str(ai_profile.get("offer_description") or "").strip()
+    lead_name = str(lead.get("contactName") or lead.get("name") or "").strip()
+
+    if identity_mode == "user_clone" and brand_name:
+        persona_line = f"Fale na primeira pessoa, como se fosse {brand_name}."
+    elif brand_name:
+        persona_line = f"Fale na terceira pessoa, como assistente do/a {brand_name}."
+    else:
+        persona_line = "Fale na terceira pessoa, como assistente do negócio."
+
+    lead_name_line = (
+        lead_name
+        if lead_name
+        else '(desconhecido — NÃO invente nem use placeholder genérico tipo "Cliente"; comece a mensagem sem nome)'
+    )
+
+    prompt = (
+        "Escreva uma única mensagem curta de WhatsApp em português, lembrando o "
+        f"lead de um compromisso agendado para {time_str}, e pedindo que ele "
+        "confirme a presença.\n"
+        f"Tom de voz: {tone_of_voice}.\n"
+        f"{persona_line}\n"
+        f"Nome do lead: {lead_name_line}.\n"
+        f"Nicho do negócio: {niche or '(não especificado)'}.\n"
+        f"Descrição da oferta: {offer_description or '(não especificada)'}.\n"
+        f'Título do compromisso no sistema: "{appointment_title}".\n'
+        "Se esse título for genérico (ex.: 'Reunião agendada') e não combinar com "
+        "o nicho do negócio, troque por um termo adequado (ex.: 'sessão', "
+        "'consulta', 'atendimento', 'encontro') — nunca repita literalmente um "
+        "título que não faça sentido para o nicho. Se o título já for "
+        "específico, pode usá-lo como está.\n"
+        "Regras: no máximo 2 frases curtas. Sem markdown. Termine pedindo "
+        "confirmação de forma natural (ex.: 'Você confirma?'). Tom natural, não "
+        "robótico.\n"
+        "Responda apenas com o texto da mensagem, sem aspas, sem explicações."
+    )
+
+    try:
+        generated = llm_service.generate_appointment_reminder_message(prompt)
+    except Exception as exc:
+        if logger:
+            logger.warning(
+                "event=appointment_reminder_generation_failed exc_type=%s exc=%s",
+                type(exc).__name__, exc,
+            )
+        return None
+
+    generated = (generated or "").strip()
+    return generated or None
+
+
 def handle_meeting_scheduled(
     context: Dict[str, Any],
     decision: DecisionOutput,

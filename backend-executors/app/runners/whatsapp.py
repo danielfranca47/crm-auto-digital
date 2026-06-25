@@ -524,7 +524,15 @@ def _execute_appointment_reminder_pipeline(
         except Exception:
             time_str = "em breve"
 
-        reminder_text = (
+        ai_profile = context.get("ai_profile") or {}
+        generated_text = meeting_scheduler.generate_appointment_reminder_message(
+            ai_profile,
+            lead,
+            appointment_title=title,
+            time_str=time_str,
+            logger=ctx_logger,
+        )
+        reminder_text = generated_text or (
             f"{greeting} Lembrando da sua {title} agendada para {time_str}. "
             "Qualquer dúvida, estou por aqui. Até lá! 😊"
         )
