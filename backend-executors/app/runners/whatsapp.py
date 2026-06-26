@@ -508,7 +508,8 @@ def _execute_appointment_reminder_pipeline(
         instance_id = metadata.get("instance_id") or payload.get("instance_id")
         provider = metadata.get("provider") or payload.get("provider") or "uazapi"
         appointment_id = payload.get("appointment_id")
-        title = payload.get("appointment_title") or "reunião"
+        ai_profile = context.get("ai_profile") or {}
+        title = payload.get("appointment_title") or meeting_scheduler.default_appointment_title(ai_profile)
         start_at_iso = payload.get("appointment_start_at") or ""
         reminder_kind = payload.get("reminder_kind") or "final"
 
@@ -531,7 +532,6 @@ def _execute_appointment_reminder_pipeline(
         except Exception:
             time_str = "em breve"
 
-        ai_profile = context.get("ai_profile") or {}
         generated_text = meeting_scheduler.generate_appointment_reminder_message(
             ai_profile,
             lead,

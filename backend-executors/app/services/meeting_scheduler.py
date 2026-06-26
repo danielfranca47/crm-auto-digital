@@ -570,7 +570,7 @@ _TITLE_BASE_WORD_BY_TEMPLATE: Dict[str, str] = {
 }
 
 
-def _default_appointment_title(ai_profile: Dict[str, Any]) -> str:
+def default_appointment_title(ai_profile: Dict[str, Any]) -> str:
     template_key = str(ai_profile.get("template_key") or "").strip()
     base_word = _TITLE_BASE_WORD_BY_TEMPLATE.get(template_key, "Reunião")
     return f"{base_word} agendada"
@@ -586,14 +586,14 @@ def generate_appointment_title(
     Usado na criação do appointment (handle_meeting_scheduled) — esse título é
     lido depois pelo lembrete, pelo Dossiê pré-reunião e pelo Kanban. Nunca
     propaga excepção — qualquer falha devolve None, e o caller cai no fallback
-    fixo (`_default_appointment_title`).
+    fixo (`default_appointment_title`).
     """
     template_key = str(ai_profile.get("template_key") or "").strip()
     niche = str(ai_profile.get("niche") or "").strip()
     offer_description = str(ai_profile.get("offer_description") or "").strip()
 
     required_word = _TITLE_BASE_WORD_BY_TEMPLATE.get(template_key)
-    default_title = _default_appointment_title(ai_profile)
+    default_title = default_appointment_title(ai_profile)
 
     if required_word:
         word_instruction = (
@@ -747,7 +747,7 @@ def handle_meeting_scheduled(
         title = "[Playground] Reunião agendada"
     else:
         ai_profile = context.get("ai_profile") or {}
-        title = generate_appointment_title(ai_profile, logger=logger) or _default_appointment_title(ai_profile)
+        title = generate_appointment_title(ai_profile, logger=logger) or default_appointment_title(ai_profile)
     description = (
         "Reunião simulada no Playground."
         if is_playground

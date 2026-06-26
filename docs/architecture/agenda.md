@@ -312,8 +312,8 @@ No fluxo real (não-Playground), `handle_meeting_scheduled()` chama
 de gravar sempre `"Reunião agendada"`. Mesmo padrão de `_generate_conflict_message`:
 prompt curto usando `niche`/`offer_description` do AI Profile, pedindo um título de
 2-4 palavras adequado ao nicho. Nunca propaga excepção — qualquer falha cai no
-fallback `_default_appointment_title(ai_profile)`, o agendamento nunca falha por
-causa disso.
+fallback `meeting_scheduler.default_appointment_title(ai_profile)`, o agendamento
+nunca falha por causa disso.
 
 **Palavra-base obrigatória por arquétipo (`template_key`):** `_TITLE_BASE_WORD_BY_TEMPLATE`
 em `meeting_scheduler.py` fixa a palavra que o título tem que conter, independente
@@ -321,11 +321,12 @@ do nicho — `sdr_padrao` (Agente 01 · SDR de Alto Ticket) → "Reunião";
 `hybrid_scheduler` (Agente 03 · Híbrido Agendador) → "Sessão". O prompt instrui a IA
 a usar essa palavra literalmente (podendo complementar com termo do nicho, ex.:
 "Sessão de Massagem", "Reunião Comercial"); se a resposta da IA não contiver a
-palavra exigida (ou a IA falhar), o título cai em `_default_appointment_title()`
-(`"{palavra} agendada"`) — garante o vocabulário certo por tipo de negócio mesmo
-quando a IA não segue a instrução. `template_key` sem entrada no mapa (ex.
-`closer_agressivo`) mantém o comportamento livre, escolhido pela IA conforme o
-nicho, com fallback genérico `"Reunião agendada"`.
+palavra exigida (ou a IA falhar), o título cai em `default_appointment_title()`
+(`"{palavra} agendada"`, função pública — também usada em `whatsapp.py`, ver secção
+seguinte) — garante o vocabulário certo por tipo de negócio mesmo quando a IA não
+segue a instrução. `template_key` sem entrada no mapa (ex. `closer_agressivo`)
+mantém o comportamento livre, escolhido pela IA conforme o nicho, com fallback
+genérico `"Reunião agendada"`.
 
 O Playground continua a usar o título fixo `"[Playground] Reunião agendada"`, sem
 chamar IA extra (sem custo/latência em testes internos).
@@ -379,6 +380,16 @@ genérico "Reunião agendada"): `appointment_phrase = title if title termina em
 "agendada"/"agendado" senão f"{title} agendada"`, usado em
 `f"... Lembrando da sua {appointment_phrase} para {time_str}. Qualquer dúvida,
 estou por aqui. Até lá! 😊"`.
+
+**De onde vem o `title` usado nesse template fixo:** `title = payload.get("appointment_title")
+or meeting_scheduler.default_appointment_title(ai_profile)` — na prática quase sempre vem do
+título real do compromisso (gravado na criação, já respeitando a palavra-base por
+`template_key` da secção anterior), então o template fixo herda automaticamente o
+vocabulário certo (SDR → "Reunião…", Híbrido Agendador → "Sessão…"). Só cai no
+`default_appointment_title(ai_profile)` no caso raro de `appointment_title` vir
+vazio do payload do job — e mesmo nesse caso o resultado já é agent-aware
+("Reunião agendada" / "Sessão agendada"), nunca um literal genérico fixo
+independente do tipo de agente.
 
 ---
 
