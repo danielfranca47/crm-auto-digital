@@ -235,7 +235,7 @@ handle_meeting_scheduled() confirma o agendamento
 
 | # | Commit | O que foi implementado |
 |---|---|---|
-| 1 | _(preenchido após o commit)_ | |
+| 1 | `ec7c428` | `generate_appointment_title_message` em `llm_service.py` e `generate_appointment_title` em `meeting_scheduler.py`; conecta em `handle_meeting_scheduled` (caminho real chama IA, playground continua fixo) |
 
 ### Checks de Validação — Fase 3
 
