@@ -239,10 +239,11 @@ handle_meeting_scheduled() confirma o agendamento
 
 ### Checks de Validação — Fase 3
 
-- [ ] **T1:** Agendar compromisso de teste com `niche` específico (ex.: massoterapia) e confirmar que o título não é "Reunião agendada" genérica
-- [ ] **T2:** Confirmar que Dossiê pré-reunião e Kanban exibem o novo título (herdam automaticamente, sem mudança nesses arquivos)
-- [ ] **T3:** Forçar falha da IA e confirmar fallback "Reunião agendada" — agendamento nunca falha por causa disso
-- [ ] **T4:** Confirmar que o Playground continua com título fixo, sem chamar IA extra
+- [x] **T1:** Chamada real à IA (`generate_appointment_title`, com `LLM_API_KEY` local) testada com 3 nichos distintos: massoterapia → "Consulta de Massagem"; clínica de estética → "Sessão de Beleza"; consultoria jurídica → "Consulta Jurídica Empresarial". Nenhum repetiu "Reunião agendada" genérica
+- [x] **T2:** Confirmado por leitura de código — `briefing_service.py:92` lê `appointment.get("title") or "Reunião"` genericamente; `create_lead_appointment` (`crm_client.py:202-226`) envia `title` como campo simples ao `POST /api/appointments`, sem transformação. Kanban/frontend leem o mesmo campo do banco. Nenhuma mudança necessária nesses arquivos — herdam automaticamente
+- [x] **T3:** Smoke test com `generate_appointment_title_message` forçada a lançar excepção — `handle_meeting_scheduled` ainda cria o appointment, com `title == "Reunião agendada"` (fallback), sem propagar erro
+- [x] **T4:** Smoke test com `is_playground=True` — `generate_appointment_title_message` não é chamada (`mock.assert_not_called()`); título usado é `"[Playground] Reunião agendada"`
+- **Validado em:** 26/06/2026
 
 ---
 
