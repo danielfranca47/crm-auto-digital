@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>João Silva · Lara AutoPeças</title>
+<title>Cliente · Lara AutoPeças</title>
 <link rel="stylesheet" href="assets/css/theme.css" />
 <link rel="stylesheet" href="assets/css/sidebar.css" />
 <link rel="stylesheet" href="assets/css/components.css" />
@@ -53,18 +53,17 @@
       <button class="btn btn-ghost btn-icon" data-sidebar-toggle aria-label="Menu"><span class="icon" data-icon="menu"></span></button>
       <a href="clientes.html" class="btn btn-ghost btn-sm"><span class="icon" data-icon="arrow-left"></span> Voltar para Clientes</a>
       <div style="flex:1"></div>
-      <button class="btn btn-ghost btn-icon" data-theme-toggle aria-label="Tema"><span class="icon" data-icon="moon"></span></button>
     </div>
 
     <div class="app-content">
       <div class="crm-header">
         <div>
-          <h1 style="font-size:20px;">João Silva</h1>
-          <p class="u-muted u-text-sm" style="margin:2px 0 0;">Cliente desde setembro/2023 · Coluna: Recompra agendada</p>
+          <h1 id="cd-title" style="font-size:20px;">—</h1>
+          <p id="cd-subtitle" class="u-muted u-text-sm" style="margin:2px 0 0;">—</p>
         </div>
         <div class="u-flex u-gap-2" style="display:flex;">
-          <span class="loyalty-pill"><span class="icon" data-icon="star" style="font-size:13px;"></span> 340 pontos · Nível Prata</span>
-          <a href="https://wa.me/5511988776655" target="_blank" class="btn btn-outline" style="color:hsl(var(--success)); border-color:hsl(var(--success)/.4);"><span class="icon" data-icon="message-circle"></span> WhatsApp</a>
+          <span class="loyalty-pill"><span class="icon" data-icon="star" style="font-size:13px;"></span> <span id="cd-loyalty-pill">—</span></span>
+          <a id="cd-wa-link" href="#" target="_blank" class="btn btn-outline" style="color:hsl(var(--success)); border-color:hsl(var(--success)/.4);"><span class="icon" data-icon="message-circle"></span> WhatsApp</a>
         </div>
       </div>
 
@@ -76,33 +75,33 @@
           <div class="card">
             <div class="card-header"><h2 class="card-title">Dados do cliente</h2></div>
             <div class="card-content u-flex-col u-gap-2" style="display:flex; font-size:13px;">
-              <div class="u-flex u-justify-between" style="display:flex;"><span class="u-muted">Telefone</span><strong>(11) 98877-6655</strong></div>
-              <div class="u-flex u-justify-between" style="display:flex;"><span class="u-muted">Origem</span><strong>Indicação</strong></div>
-              <div class="u-flex u-justify-between" style="display:flex;"><span class="u-muted">Cliente desde</span><strong>09/2023</strong></div>
-              <div class="u-flex u-justify-between" style="display:flex;"><span class="u-muted">Total gasto</span><strong>R$ 1.334,90</strong></div>
-              <div class="u-flex u-justify-between" style="display:flex;"><span class="u-muted">Compras</span><strong>4</strong></div>
+              <div class="u-flex u-justify-between" style="display:flex;"><span class="u-muted">Telefone</span><strong id="cd-phone">—</strong></div>
+              <div class="u-flex u-justify-between" style="display:flex;"><span class="u-muted">Origem</span><strong id="cd-origin">—</strong></div>
+              <div class="u-flex u-justify-between" style="display:flex;"><span class="u-muted">Cliente desde</span><strong id="cd-since">—</strong></div>
+              <div class="u-flex u-justify-between" style="display:flex;"><span class="u-muted">Total gasto</span><strong id="cd-total">—</strong></div>
+              <div class="u-flex u-justify-between" style="display:flex;"><span class="u-muted">Compras</span><strong id="cd-purchases">—</strong></div>
             </div>
           </div>
 
           <div class="card">
             <div class="card-header u-flex u-justify-between u-items-center" style="display:flex; padding-bottom:0;">
               <h2 class="card-title">Veículo cadastrado</h2>
-              <button class="btn btn-sm" onclick="openModal('modal-veiculo')"><span class="icon" data-icon="plus"></span> Editar</button>
+              <button class="btn btn-sm" onclick="openEditVeiculo()"><span class="icon" data-icon="plus"></span> Editar</button>
             </div>
             <div class="card-content">
               <div class="vehicle-card">
-                <div class="plate">BRA2E19</div>
+                <div class="plate" id="cd-plate">—</div>
                 <div class="vehicle-meta">
-                  <strong>Honda Civic 2019</strong>
-                  <span>Sedan · Flex · Cor: Preto</span>
-                  <span>Km estimada atual: <strong>64.500 km</strong></span>
+                  <strong id="cd-vehicle-title">—</strong>
+                  <span id="cd-vehicle-sub">—</span>
+                  <span>Km estimada atual: <strong id="cd-vehicle-km">—</strong></span>
                 </div>
               </div>
-              <div class="o-field" style="margin:14px 0 0;">
-                <div class="card" style="background:hsl(var(--primary)/.06); border-color:hsl(var(--primary)/.3);">
+              <div id="cd-recompra-wrap" style="margin:14px 0 0;">
+                <div class="card" id="cd-recompra-box">
                   <div class="card-content" style="padding:12px 14px; display:flex; gap:10px; align-items:flex-start;">
-                    <span class="icon" data-icon="repeat" style="color:hsl(var(--primary)); margin-top:1px;"></span>
-                    <div style="font-size:12px;"><strong>Próxima recompra prevista: 15/07/2026</strong><br /><span class="u-muted">Filtro de óleo · ciclo de 6 meses desde 15/01/2026</span></div>
+                    <span class="icon" data-icon="repeat" id="cd-recompra-icon" style="margin-top:1px;"></span>
+                    <div style="font-size:12px;"><strong id="cd-recompra-title">—</strong><br /><span class="u-muted" id="cd-recompra-sub">—</span></div>
                   </div>
                 </div>
               </div>
@@ -113,11 +112,11 @@
             <div class="card-header"><h2 class="card-title">Fidelidade</h2></div>
             <div class="card-content">
               <div class="u-flex u-justify-between u-items-center" style="display:flex;">
-                <div><strong style="font-size:20px;">340 pts</strong><div class="u-muted u-text-xs">≈ R$ 34,00 em desconto</div></div>
-                <span class="badge badge-warning">Nível Prata</span>
+                <div><strong id="cd-points" style="font-size:20px;">—</strong><div class="u-muted u-text-xs" id="cd-points-discount">—</div></div>
+                <span class="badge badge-warning" id="cd-level-badge">—</span>
               </div>
-              <div class="layer-bar" style="margin-top:12px;"><span style="width:68%; background:hsl(var(--warning));"></span></div>
-              <div class="u-muted u-text-xs" style="margin-top:4px;">160 pts até o nível Ouro (resgate de 10%)</div>
+              <div class="layer-bar" style="margin-top:12px;"><span id="cd-loyalty-bar" style="width:0%; background:hsl(var(--warning));"></span></div>
+              <div class="u-muted u-text-xs" id="cd-next-level" style="margin-top:4px;">—</div>
             </div>
           </div>
 
@@ -132,23 +131,8 @@
           <div class="card-content" style="overflow-x:auto;">
             <table class="data-table">
               <thead><tr><th>Data</th><th>Peça</th><th>Km na troca</th><th>Valor</th><th>Ciclo</th><th>Status</th></tr></thead>
-              <tbody>
-                <tr>
-                  <td>15/01/2026</td><td>Filtro de óleo</td><td>62.000 km</td><td>R$ 89,90</td><td>6 meses</td>
-                  <td><span class="badge badge-info">Em 20 dias</span></td>
-                </tr>
-                <tr>
-                  <td>22/08/2025</td><td>Pastilha de freio (dianteira)</td><td>58.200 km</td><td>R$ 245,00</td><td>12 meses</td>
-                  <td><span class="badge badge-success">Agendado p/ hoje 16h30</span></td>
-                </tr>
-                <tr>
-                  <td>14/02/2025</td><td>Bateria 60Ah</td><td>55.000 km</td><td>R$ 420,00</td><td>36 meses</td>
-                  <td><span class="badge badge-outline">Em dia</span></td>
-                </tr>
-                <tr>
-                  <td>30/09/2024</td><td>Amortecedor dianteiro (par)</td><td>51.300 km</td><td>R$ 580,00</td><td>48 meses</td>
-                  <td><span class="badge badge-outline">Em dia</span></td>
-                </tr>
+              <tbody id="cd-history-body">
+                <tr><td colspan="6" class="u-muted">Carregando…</td></tr>
               </tbody>
             </table>
           </div>
@@ -166,12 +150,12 @@
   <div class="modal">
     <div class="modal-header"><h2>Veículo do cliente</h2><p>Esses dados ficam vinculados ao contato no WhatsApp.</p></div>
     <div class="modal-body" style="display:grid; grid-template-columns:1fr 1fr; gap:14px;">
-      <div><label class="field-label">Placa</label><input type="text" value="BRA2E19" /></div>
-      <div><label class="field-label">Ano</label><input type="text" value="2019" /></div>
-      <div><label class="field-label">Marca</label><input type="text" value="Honda" /></div>
-      <div><label class="field-label">Modelo</label><input type="text" value="Civic" /></div>
-      <div><label class="field-label">Cor</label><input type="text" value="Preto" /></div>
-      <div><label class="field-label">Km estimada</label><input type="text" value="64.500" /></div>
+      <div><label class="field-label">Placa</label><input type="text" id="ev-plate" /></div>
+      <div><label class="field-label">Ano</label><input type="text" id="ev-year" /></div>
+      <div><label class="field-label">Marca</label><input type="text" id="ev-brand" /></div>
+      <div><label class="field-label">Modelo</label><input type="text" id="ev-model" /></div>
+      <div><label class="field-label">Cor</label><input type="text" id="ev-color" /></div>
+      <div><label class="field-label">Km estimada</label><input type="text" id="ev-km" /></div>
     </div>
     <div class="modal-footer">
       <button class="btn" onclick="closeModal('modal-veiculo')">Cancelar</button>
@@ -203,5 +187,201 @@
 
 <script src="assets/js/icons.js"></script>
 <script src="assets/js/app.js"></script>
+<script>
+/* ── Base de clientes da demo — chave usada na query string ?cliente= ── */
+const CLIENTES = {
+  joao: {
+    nome: "João Silva", telefone: "(11) 98877-6655", origem: "Indicação",
+    desde: "09/2023", coluna: "Recompra agendada",
+    totalGasto: "R$ 1.334,90", compras: 4,
+    pontos: 340, nivel: "Prata", progresso: 68, proximoNivel: "160 pts até o nível Ouro (resgate de 10%)",
+    veiculo: { placa: "BRA2E19", marca: "Honda", modelo: "Civic", ano: "2019", corpo: "Sedan", combustivel: "Flex", cor: "Preto", km: "64.500 km" },
+    recompra: { titulo: "Próxima recompra prevista: 15/07/2026", sub: "Filtro de óleo · ciclo de 6 meses desde 15/01/2026", vencido: false },
+    historico: [
+      { data: "15/01/2026", peca: "Filtro de óleo", km: "62.000 km", valor: "R$ 89,90", ciclo: "6 meses", status: "Em 20 dias", tipo: "info" },
+      { data: "22/08/2025", peca: "Pastilha de freio (dianteira)", km: "58.200 km", valor: "R$ 245,00", ciclo: "12 meses", status: "Agendado p/ hoje 16h30", tipo: "success" },
+      { data: "14/02/2025", peca: "Bateria 60Ah", km: "55.000 km", valor: "R$ 420,00", ciclo: "36 meses", status: "Em dia", tipo: "outline" },
+      { data: "30/09/2024", peca: "Amortecedor dianteiro (par)", km: "51.300 km", valor: "R$ 580,00", ciclo: "48 meses", status: "Em dia", tipo: "outline" },
+    ],
+  },
+  marcos: {
+    nome: "Marcos Andrade", telefone: "(11) 95588-7733", origem: "Indicação",
+    desde: "03/2024", coluna: "Negociação",
+    totalGasto: "R$ 408,00", compras: 2,
+    pontos: 180, nivel: "Bronze", progresso: 72, proximoNivel: "70 pts até o nível Prata",
+    veiculo: { placa: "STR2A21", marca: "Fiat", modelo: "Strada", ano: "2021", corpo: "Picape cabine dupla", combustivel: "Flex", cor: "Branco", km: "48.200 km" },
+    recompra: { titulo: "Pastilha de freio vencida há 17 dias", sub: "Ciclo de 12 meses desde 08/06/2025 — negociando troca + disco agora", vencido: true },
+    historico: [
+      { data: "08/06/2025", peca: "Pastilha de freio", km: "44.000 km", valor: "R$ 230,00", ciclo: "12 meses", status: "Vencido há 17d", tipo: "destructive" },
+      { data: "15/01/2024", peca: "Filtro de óleo + óleo 5W30", km: "32.000 km", valor: "R$ 178,00", ciclo: "6 meses", status: "Em dia", tipo: "outline" },
+    ],
+  },
+  patricia: {
+    nome: "Patrícia Lima", telefone: "(11) 98456-1290", origem: "Indicação",
+    desde: "03/2023", coluna: "Novo contato",
+    totalGasto: "R$ 380,00", compras: 1,
+    pontos: 38, nivel: "Bronze", progresso: 25, proximoNivel: "112 pts até o nível Prata",
+    veiculo: { placa: "GOL4P17", marca: "Volkswagen", modelo: "Gol", ano: "2017", corpo: "Hatch", combustivel: "Flex", cor: "Cinza", km: "78.000 km" },
+    recompra: { titulo: "Bateria vencida há 97 dias", sub: "Ciclo de 36 meses desde 20/03/2023 — voltou a contatar com bateria fraca", vencido: true },
+    historico: [
+      { data: "20/03/2023", peca: "Bateria 60Ah", km: "65.000 km", valor: "R$ 380,00", ciclo: "36 meses", status: "Vencido há 97d", tipo: "destructive" },
+    ],
+  },
+  lucas: {
+    nome: "Lucas Fernandes", telefone: "(11) 99021-3344", origem: "Google",
+    desde: "—", coluna: "Novo contato",
+    totalGasto: "R$ 0,00", compras: 0,
+    pontos: 0, nivel: "—", progresso: 0, proximoNivel: "Ganha pontos a partir da 1ª compra",
+    veiculo: { placa: "FST5L15", marca: "Ford", modelo: "Fiesta", ano: "2015", corpo: "Hatch", combustivel: "Flex", cor: "Vermelho", km: "95.000 km" },
+    recompra: null,
+    historico: [],
+  },
+  eduardo: {
+    nome: "Eduardo Martins", telefone: "(11) 97744-2210", origem: "WhatsApp",
+    desde: "01/2025", coluna: "Orçamento enviado",
+    totalGasto: "R$ 302,00", compras: 2,
+    pontos: 95, nivel: "Bronze", progresso: 38, proximoNivel: "155 pts até o nível Prata",
+    veiculo: { placa: "COR8E18", marca: "Toyota", modelo: "Corolla", ano: "2018", corpo: "Sedan", combustivel: "Flex", cor: "Prata", km: "71.000 km" },
+    recompra: { titulo: "Filtro de óleo vence amanhã", sub: "Ciclo de 6 meses desde 26/12/2025 — orçamento de filtro + óleo já enviado hoje", vencido: true },
+    historico: [
+      { data: "26/12/2025", peca: "Filtro de óleo", km: "71.000 km", valor: "R$ 92,00", ciclo: "6 meses", status: "Vence amanhã", tipo: "warning" },
+      { data: "28/06/2025", peca: "Pastilha de freio", km: "65.000 km", valor: "R$ 210,00", ciclo: "12 meses", status: "Em dia", tipo: "outline" },
+    ],
+  },
+  vanessa: {
+    nome: "Vanessa Oliveira", telefone: "(11) 96655-8821", origem: "Instagram",
+    desde: "06/2025", coluna: "Orçamento enviado",
+    totalGasto: "R$ 260,00", compras: 1,
+    pontos: 60, nivel: "Bronze", progresso: 24, proximoNivel: "190 pts até o nível Prata",
+    veiculo: { placa: "REN0V20", marca: "Jeep", modelo: "Renegade", ano: "2020", corpo: "SUV", combustivel: "Flex", cor: "Cinza", km: "39.500 km" },
+    recompra: { titulo: "Pastilha de freio vence em 4 dias", sub: "Ciclo de 12 meses desde 29/06/2025 — orçamento já enviado hoje", vencido: false },
+    historico: [
+      { data: "29/06/2025", peca: "Pastilha de freio", km: "33.000 km", valor: "R$ 260,00", ciclo: "12 meses", status: "Vence em 4 dias", tipo: "warning" },
+    ],
+  },
+  camila: {
+    nome: "Camila Souza", telefone: "(11) 94477-6612", origem: "Indicação",
+    desde: "12/2025", coluna: "Negociação",
+    totalGasto: "R$ 85,00", compras: 1,
+    pontos: 42, nivel: "Bronze", progresso: 17, proximoNivel: "208 pts até o nível Prata",
+    veiculo: { placa: "HBZ4C19", marca: "Hyundai", modelo: "HB20", ano: "2019", corpo: "Hatch", combustivel: "Flex", cor: "Branco", km: "53.000 km" },
+    recompra: { titulo: "Filtro de óleo vencido há 7 dias", sub: "Ciclo de 6 meses desde 18/12/2025 — avaliando trocar pneus dianteiros agora", vencido: true },
+    historico: [
+      { data: "18/12/2025", peca: "Filtro de óleo", km: "49.000 km", valor: "R$ 85,00", ciclo: "6 meses", status: "Vencido há 7d", tipo: "destructive" },
+    ],
+  },
+  beatriz: {
+    nome: "Beatriz Ramos", telefone: "(11) 93366-5510", origem: "Google",
+    desde: "06/2026", coluna: "Venda fechada",
+    totalGasto: "R$ 89,90", compras: 1,
+    pontos: 9, nivel: "Bronze", progresso: 4, proximoNivel: "241 pts até o nível Prata",
+    veiculo: { placa: "POL2B22", marca: "Volkswagen", modelo: "Polo", ano: "2022", corpo: "Hatch", combustivel: "Flex", cor: "Azul", km: "18.000 km" },
+    recompra: { titulo: "Próxima recompra prevista: 25/12/2026", sub: "Filtro de óleo · ciclo de 6 meses desde 25/06/2026 (retirada de hoje)", vencido: false },
+    historico: [
+      { data: "25/06/2026", peca: "Filtro de óleo", km: "18.000 km", valor: "R$ 89,90", ciclo: "6 meses", status: "Retirada hoje 09h", tipo: "success" },
+    ],
+  },
+  rafael: {
+    nome: "Rafael Costa", telefone: "(11) 92255-4471", origem: "WhatsApp",
+    desde: "06/2026", coluna: "Venda fechada",
+    totalGasto: "R$ 580,00", compras: 1,
+    pontos: 58, nivel: "Bronze", progresso: 23, proximoNivel: "192 pts até o nível Prata",
+    veiculo: { placa: "ONX5R20", marca: "Chevrolet", modelo: "Onix", ano: "2020", corpo: "Hatch", combustivel: "Flex", cor: "Preto", km: "52.000 km" },
+    recompra: { titulo: "Próxima recompra prevista: 25/06/2030", sub: "Amortecedor dianteiro · ciclo de 48 meses desde 25/06/2026 (instalação hoje)", vencido: false },
+    historico: [
+      { data: "25/06/2026", peca: "Amortecedor dianteiro (par)", km: "52.000 km", valor: "R$ 580,00", ciclo: "48 meses", status: "Instalação hoje 11h30", tipo: "success" },
+    ],
+  },
+  fernanda: {
+    nome: "Fernanda Diniz", telefone: "(11) 91144-2298", origem: "Indicação",
+    desde: "07/2025", coluna: "Recompra agendada",
+    totalGasto: "R$ 235,00", compras: 1,
+    pontos: 47, nivel: "Bronze", progresso: 19, proximoNivel: "203 pts até o nível Prata",
+    veiculo: { placa: "KWI3F21", marca: "Renault", modelo: "Kwid", ano: "2021", corpo: "Hatch", combustivel: "Flex", cor: "Vermelho", km: "31.000 km" },
+    recompra: { titulo: "Pastilha de freio — retirada agendada 02/07/2026", sub: "Ciclo de 12 meses desde 02/07/2025 — confirmado via WhatsApp", vencido: false },
+    historico: [
+      { data: "02/07/2025", peca: "Pastilha de freio", km: "31.000 km", valor: "R$ 235,00", ciclo: "12 meses", status: "Agendado p/ 02/07/2026", tipo: "success" },
+    ],
+  },
+};
+
+function badgeClass(tipo) {
+  return { destructive: "badge-destructive", warning: "badge-warning", success: "badge-success", info: "badge-info", outline: "badge-outline" }[tipo] || "badge-outline";
+}
+
+function renderCliente(slug) {
+  const c = CLIENTES[slug] || CLIENTES.joao;
+
+  document.title = c.nome + " · Lara AutoPeças";
+  document.getElementById("cd-title").textContent = c.nome;
+  document.getElementById("cd-subtitle").textContent = `Cliente desde ${c.desde} · Coluna: ${c.coluna}`;
+  document.getElementById("cd-loyalty-pill").textContent = `${c.pontos} pontos · Nível ${c.nivel}`;
+  document.getElementById("cd-wa-link").href = "https://wa.me/55" + c.telefone.replace(/\D/g, "");
+
+  document.getElementById("cd-phone").textContent = c.telefone;
+  document.getElementById("cd-origin").textContent = c.origem;
+  document.getElementById("cd-since").textContent = c.desde;
+  document.getElementById("cd-total").textContent = c.totalGasto;
+  document.getElementById("cd-purchases").textContent = c.compras;
+
+  const v = c.veiculo;
+  document.getElementById("cd-plate").textContent = v.placa;
+  document.getElementById("cd-vehicle-title").textContent = `${v.marca} ${v.modelo} ${v.ano}`;
+  document.getElementById("cd-vehicle-sub").textContent = `${v.corpo} · ${v.combustivel} · Cor: ${v.cor}`;
+  document.getElementById("cd-vehicle-km").textContent = v.km;
+
+  const recompraWrap = document.getElementById("cd-recompra-wrap");
+  if (c.recompra) {
+    recompraWrap.style.display = "";
+    document.getElementById("cd-recompra-title").textContent = c.recompra.titulo;
+    document.getElementById("cd-recompra-sub").textContent = c.recompra.sub;
+    const box = document.getElementById("cd-recompra-box");
+    const icon = document.getElementById("cd-recompra-icon");
+    if (c.recompra.vencido) {
+      box.style.borderColor = "hsl(var(--destructive)/.4)"; box.style.background = "hsl(var(--destructive)/.06)";
+      icon.style.color = "hsl(var(--destructive))";
+    } else {
+      box.style.borderColor = "hsl(var(--primary)/.3)"; box.style.background = "hsl(var(--primary)/.06)";
+      icon.style.color = "hsl(var(--primary))";
+    }
+  } else {
+    recompraWrap.style.display = "none";
+  }
+
+  document.getElementById("cd-points").textContent = c.pontos + " pts";
+  document.getElementById("cd-points-discount").textContent = c.pontos > 0 ? `≈ R$ ${(c.pontos / 10).toFixed(2).replace(".", ",")} em desconto` : "Sem pontos ainda";
+  document.getElementById("cd-level-badge").textContent = "Nível " + c.nivel;
+  document.getElementById("cd-loyalty-bar").style.width = c.progresso + "%";
+  document.getElementById("cd-next-level").textContent = c.proximoNivel;
+
+  const body = document.getElementById("cd-history-body");
+  if (c.historico.length === 0) {
+    body.innerHTML = '<tr><td colspan="6" class="u-muted">Nenhuma compra registrada ainda — cliente em prospecção.</td></tr>';
+  } else {
+    body.innerHTML = c.historico.map(h => `
+      <tr>
+        <td>${h.data}</td><td>${h.peca}</td><td>${h.km}</td><td>${h.valor}</td><td>${h.ciclo}</td>
+        <td><span class="badge ${badgeClass(h.tipo)}">${h.status}</span></td>
+      </tr>`).join("");
+  }
+
+  renderIcons(document);
+  window._currentCliente = c;
+}
+
+function openEditVeiculo() {
+  const v = window._currentCliente.veiculo;
+  document.getElementById("ev-plate").value = v.placa;
+  document.getElementById("ev-year").value = v.ano;
+  document.getElementById("ev-brand").value = v.marca;
+  document.getElementById("ev-model").value = v.modelo;
+  document.getElementById("ev-color").value = v.cor;
+  document.getElementById("ev-km").value = v.km;
+  openModal("modal-veiculo");
+}
+
+const slugParam = new URLSearchParams(location.search).get("cliente");
+renderCliente(slugParam && CLIENTES[slugParam] ? slugParam : "joao");
+</script>
 </body>
 </html>

@@ -23,7 +23,9 @@
       "Bash(PYTHONIOENCODING=utf-8 PYTHONUTF8=1 ./.venv/Scripts/python.exe -m uvicorn app.main:app --port 8001)",
       "Bash(curl -s -o /dev/null -w \"core:%{http_code}\\\\n\" http://127.0.0.1:8001/docs)",
       "Bash(PYTHONIOENCODING=utf-8 PYTHONUTF8=1 ./.venv/Scripts/python.exe -c ' *)",
-      "Bash(wmic process *)"
+      "Bash(wmic process *)",
+      "Bash(python -c ' *)",
+      "Bash(./.venv/Scripts/python.exe -m pytest tests/test_llm_service_retry.py tests/test_meeting_management.py tests/test_meeting_cancel_reschedule_action.py tests/test_meeting_scheduler_structured_candidate.py -q)"
     ]
   }
 }
