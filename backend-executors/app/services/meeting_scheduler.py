@@ -542,6 +542,48 @@ def generate_appointment_reminder_message(
     return generated or None
 
 
+def generate_appointment_title(
+    ai_profile: Dict[str, Any],
+    *,
+    logger: Optional[logging.Logger] = None,
+) -> Optional[str]:
+    """Tenta gerar um título curto do compromisso adequado ao nicho do negócio.
+
+    Usado na criação do appointment (handle_meeting_scheduled) — esse título é
+    lido depois pelo lembrete, pelo Dossiê pré-reunião e pelo Kanban. Nunca
+    propaga excepção — qualquer falha devolve None, e o caller cai no fallback
+    fixo "Reunião agendada".
+    """
+    niche = str(ai_profile.get("niche") or "").strip()
+    offer_description = str(ai_profile.get("offer_description") or "").strip()
+
+    prompt = (
+        "Gere um título curto (2 a 4 palavras) para um compromisso agendado, "
+        "em português, adequado ao nicho do negócio abaixo. Não use 'reunião' "
+        "se houver um termo mais natural para o nicho (ex.: 'sessão', "
+        "'consulta', 'atendimento').\n"
+        f"Nicho do negócio: {niche or '(não especificado)'}.\n"
+        f"Descrição da oferta: {offer_description or '(não especificada)'}.\n"
+        "Se não houver nicho/oferta específicos o suficiente para diferenciar, "
+        "responda exatamente 'Reunião agendada'.\n"
+        "Responda apenas com o título, sem aspas, sem pontuação final, sem "
+        "explicações."
+    )
+
+    try:
+        generated = llm_service.generate_appointment_title_message(prompt)
+    except Exception as exc:
+        if logger:
+            logger.warning(
+                "event=appointment_title_generation_failed exc_type=%s exc=%s",
+                type(exc).__name__, exc,
+            )
+        return None
+
+    generated = (generated or "").strip()
+    return generated or None
+
+
 def handle_meeting_scheduled(
     context: Dict[str, Any],
     decision: DecisionOutput,
@@ -640,7 +682,11 @@ def handle_meeting_scheduled(
 
     start_iso = signal.start_at.astimezone(timezone.utc).isoformat().replace("+00:00", "Z")
     end_iso = end_dt.astimezone(timezone.utc).isoformat().replace("+00:00", "Z")
-    title = "[Playground] Reunião agendada" if is_playground else "Reunião agendada"
+    if is_playground:
+        title = "[Playground] Reunião agendada"
+    else:
+        ai_profile = context.get("ai_profile") or {}
+        title = generate_appointment_title(ai_profile, logger=logger) or "Reunião agendada"
     description = (
         "Reunião simulada no Playground."
         if is_playground
