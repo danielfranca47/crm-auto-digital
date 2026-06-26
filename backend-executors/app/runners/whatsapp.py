@@ -510,6 +510,7 @@ def _execute_appointment_reminder_pipeline(
         appointment_id = payload.get("appointment_id")
         title = payload.get("appointment_title") or "reunião"
         start_at_iso = payload.get("appointment_start_at") or ""
+        reminder_kind = payload.get("reminder_kind") or "final"
 
         if not phone:
             exec_error = ExecutionError(
@@ -536,6 +537,7 @@ def _execute_appointment_reminder_pipeline(
             lead,
             appointment_title=title,
             time_str=time_str,
+            reminder_kind=reminder_kind,
             logger=ctx_logger,
         )
 

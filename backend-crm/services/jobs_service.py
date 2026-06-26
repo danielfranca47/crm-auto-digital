@@ -620,12 +620,17 @@ def schedule_appointment_reminder_jobs(
         offsets = _REMINDER_DEFAULTS_BY_TEMPLATE.get(template_key, _REMINDER_DEFAULTS_FALLBACK)
 
     now_utc = datetime.now(_tz.utc)
+    # reminder_kind: "final" identifica o offset mais próximo do compromisso (ex.: -2h),
+    # os demais são "early" (ex.: -24h) — usado para diferenciar o tom do lembrete
+    # (aviso leve vs. pedido de confirmação mais direto), sem assumir exatamente 2 offsets.
+    min_abs_offset = min(abs(o) for o in offsets)
     for offset_minutes in offsets:
         send_at = appointment_start_at + timedelta(minutes=offset_minutes)
         if send_at.tzinfo is None:
             send_at = send_at.replace(tzinfo=_tz.utc)
         if send_at <= now_utc:
             continue
+        reminder_kind = "final" if abs(offset_minutes) == min_abs_offset else "early"
         try:
             create_job(
                 job_type=TYPE_WHATSAPP_APPOINTMENT_REMINDER,
@@ -635,6 +640,7 @@ def schedule_appointment_reminder_jobs(
                     "appointment_id": appointment_id,
                     "appointment_title": appointment_title,
                     "appointment_start_at": appointment_start_at.isoformat(),
+                    "reminder_kind": reminder_kind,
                     "message_text": "appointment_reminder_trigger",
                 },
                 scheduled_at=send_at,

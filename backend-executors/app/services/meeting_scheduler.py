@@ -479,10 +479,16 @@ def generate_appointment_reminder_message(
     *,
     appointment_title: str,
     time_str: str,
+    reminder_kind: str = "final",
     logger: Optional[logging.Logger] = None,
 ) -> Optional[str]:
     """Tenta gerar o lembrete de reunião no tom do agente, com vocabulário do
     nicho do negócio, pedindo confirmação de presença.
+
+    `reminder_kind` diferencia o tom: "early" (lembrete mais distante, ex. 24h
+    antes — aviso leve, sem soar urgente) vs. "final" (lembrete mais próximo,
+    ex. 2h antes — pede confirmação de forma mais direta, pois não há mais
+    tempo de remarcar).
 
     Nunca propaga excepção — qualquer falha (sem API key, erro de rede, timeout,
     resposta vazia/inválida) devolve None, e o caller cai no fallback fixo.
@@ -507,10 +513,22 @@ def generate_appointment_reminder_message(
         else '(desconhecido — NÃO invente nem use placeholder genérico tipo "Cliente"; comece a mensagem sem nome)'
     )
 
+    if reminder_kind == "early":
+        confirmation_line = (
+            "Este é o lembrete mais distante (bastante antes do horário) — tom de "
+            "aviso leve, sem soar urgente. Termine convidando o lead a confirmar "
+            "presença ou avisar com antecedência se precisar remarcar."
+        )
+    else:
+        confirmation_line = (
+            "Este é o lembrete final, próximo do horário — peça confirmação de "
+            "presença de forma mais direta (ex.: 'Você confirma?'), já que não há "
+            "mais tempo de remarcar."
+        )
+
     prompt = (
         "Escreva uma única mensagem curta de WhatsApp em português, lembrando o "
-        f"lead de um compromisso agendado para {time_str}, e pedindo que ele "
-        "confirme a presença.\n"
+        f"lead de um compromisso agendado para {time_str}.\n"
         f"Tom de voz: {tone_of_voice}.\n"
         f"{persona_line}\n"
         f"Nome do lead: {lead_name_line}.\n"
@@ -522,8 +540,8 @@ def generate_appointment_reminder_message(
         "'consulta', 'atendimento', 'encontro') — nunca repita literalmente um "
         "título que não faça sentido para o nicho. Se o título já for "
         "específico, pode usá-lo como está.\n"
-        "Regras: no máximo 2 frases curtas. Sem markdown. Termine pedindo "
-        "confirmação de forma natural (ex.: 'Você confirma?'). Tom natural, não "
+        f"{confirmation_line}\n"
+        "Regras: no máximo 2 frases curtas. Sem markdown. Tom natural, não "
         "robótico.\n"
         "Responda apenas com o texto da mensagem, sem aspas, sem explicações."
     )
