@@ -172,9 +172,10 @@ tentativas disponíveis.
 ## Checks de Validação — Fase 2
 
 ### Cenário R1 — Retry agenda corretamente (schedule via job real, ponta a ponta)
-- [ ] Com os 3 backends locais de pé, forçar falha da IA (ex.: API key inválida) num lembrete de teste real
-- [ ] Confirmar no banco (`jobs`) que o job volta para `pending` com `scheduled_at` ~60s no futuro após a 1ª falha, ~180s após a 2ª, ~900s após a 3ª, ~60s após a 4ª
-- **Pendente** — as funções que calculam isso (`max_attempts_for`/`backoff_schedule_for`) já foram validadas isoladamente (ver nota), falta o ciclo completo via job real
+- [x] Script de verificação ponta a ponta contra um banco real (schema completo via `database.init_db()` em diretório temporário, mesmo padrão dos testes existentes): cria um job `whatsapp.appointment.reminder` de verdade, chama `claim_job_internal`/`fail_job_internal` (as rotas reais, não mocks) 5 vezes em sequência
+- [x] Confirmado: `scheduled_at` fica a 60s/180s/900s/60s no futuro após cada uma das 4 primeiras falhas; após a 5ª, job vira `failed` definitivo (na prática nunca acontece — `whatsapp.py` intercepta antes e envia o fallback fixo)
+- [x] Controle: repetido o mesmo ciclo para `whatsapp.followup.tick` (sem override) — continua exatamente 60s/180s/falha definitiva na 3ª, confirmando que outros tipos de job não foram afetados
+- **Validado em:** 26/06/2026
 
 ### Cenário R2 — Última tentativa sempre envia
 - [x] Smoke test direto (`whatsapp._execute_appointment_reminder_pipeline` com IA mockada para falhar) confirma: tentativas 1-4 chamam `_fail_job` (retryable, não envia nada); tentativa 5 não chama `_fail_job`, envia o template fixo. `attempt=None` também trata como última tentativa (mais seguro)
