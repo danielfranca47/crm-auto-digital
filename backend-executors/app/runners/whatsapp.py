@@ -555,8 +555,14 @@ def _execute_appointment_reminder_pipeline(
                 )
                 return _fail_job(job_id, ctx_logger, exec_error, attempt)
 
+        title_clean = title.strip()
+        appointment_phrase = (
+            title_clean
+            if title_clean.lower().endswith(("agendada", "agendado"))
+            else f"{title_clean} agendada"
+        )
         reminder_text = generated_text or (
-            f"{greeting} Lembrando da sua {title} agendada para {time_str}. "
+            f"{greeting} Lembrando da sua {appointment_phrase} para {time_str}. "
             "Qualquer dúvida, estou por aqui. Até lá! 😊"
         )
 

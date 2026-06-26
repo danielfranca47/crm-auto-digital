@@ -360,15 +360,14 @@ consultados em `routes/executor.py` (`fail_job_internal`, `get_next_job_internal
 das constantes globais — outros tipos de job continuam no default global, inalterado.
 
 Na 5ª (última) tentativa — ou quando `attempt is None` — `_execute_appointment_reminder_pipeline`
-não chama mais `_fail_job`: usa o template fixo (`f"... Lembrando da sua {title} agendada
-para {time_str}. Qualquer dúvida, estou por aqui. Até lá! 😊"`) e **envia o lembrete
-de qualquer forma** — a garantia de que o lead nunca deixa de receber o lembrete nunca
-é quebrada, mesmo que a IA falhe em todas as tentativas.
-
-**Limitação conhecida (cosmética):** se `appointment_title` já contiver a palavra
-"agendada" (ex. o fallback "Reunião agendada"), o template fixo duplica
-("...da sua Reunião agendada agendada para..."). Pré-existente, não corrigido nesta
-implementação.
+não chama mais `_fail_job`: usa o template fixo e **envia o lembrete de qualquer
+forma** — a garantia de que o lead nunca deixa de receber o lembrete nunca é
+quebrada, mesmo que a IA falhe em todas as tentativas. O template evita repetir a
+palavra "agendada" quando `appointment_title` já termina com ela (ex. o fallback
+genérico "Reunião agendada"): `appointment_phrase = title if title termina em
+"agendada"/"agendado" senão f"{title} agendada"`, usado em
+`f"... Lembrando da sua {appointment_phrase} para {time_str}. Qualquer dúvida,
+estou por aqui. Até lá! 😊"`.
 
 ---
 
