@@ -165,7 +165,7 @@ tentativas disponíveis.
 
 | # | Commit | O que foi implementado |
 |---|---|---|
-| 1 | _(preenchido após o commit)_ | |
+| 1 | `8f5ea57` | `max_attempts_for`/`backoff_schedule_for` por tipo de job em `jobs_service.py`; aplicados em `fail_job_internal`/`get_next_job_internal`; `whatsapp.py` retry-com-fallback-na-última-tentativa |
 
 ---
 
