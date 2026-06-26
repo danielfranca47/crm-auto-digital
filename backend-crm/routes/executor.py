@@ -28,6 +28,8 @@ from services.jobs_service import (
     JOB_STATUS_IN_PROGRESS,
     JOB_STATUS_PENDING,
     JOB_MAX_ATTEMPTS,
+    backoff_schedule_for,
+    max_attempts_for,
     LEAD_CATEGORIES,
     TYPE_WHATSAPP_FOLLOWUP_TICK,
     TYPE_WHATSAPP_FOLLOWUP_PREGENERATE,
@@ -110,8 +112,8 @@ def _parse_db_datetime(value: Optional[Any]) -> Optional[datetime]:
         return None
 
 
-def _compute_backoff_seconds(attempts: int) -> int:
-    return JOB_BACKOFF_SECONDS.get(attempts, 0)
+def _compute_backoff_seconds(attempts: int, job_type: Optional[str] = None) -> int:
+    return backoff_schedule_for(job_type).get(attempts, 0)
 
 
 def _is_retryable(details: Optional[Dict[str, Any]]) -> bool:
@@ -160,11 +162,18 @@ def get_next_job_internal(
     if not expanded_types:
         raise HTTPException(status_code=400, detail="types inválido")
 
+    # Filtro defensivo/redundante — a aplicação real do limite de tentativas é
+    # feita em fail_job_internal (que já marca o job como failed ao esgotar).
+    # Usamos o máximo entre os tipos pedidos para não excluir tentativas 4/5 de
+    # tipos com override (ex.: whatsapp.appointment.reminder) sem afrouxar a
+    # regra real dos demais tipos.
+    max_attempts_bind = max(max_attempts_for(t) for t in expanded_types)
+
     placeholders = ",".join(["?"] * len(expanded_types))
     params: list[Any] = [
         JOB_STATUS_PENDING,
         *expanded_types,
-        JOB_MAX_ATTEMPTS,
+        max_attempts_bind,
         limit,
     ]
     with get_connection() as conn:
@@ -883,12 +892,13 @@ def fail_job_internal(
             raise HTTPException(status_code=409, detail="Job já finalizado")
 
         attempts = int(row["attempts"] or 0)
+        job_type = row["type"]
         retryable = _is_retryable(details)
         update_stmt = None
         update_params: list[Any] = []
-        if retryable and attempts < JOB_MAX_ATTEMPTS:
+        if retryable and attempts < max_attempts_for(job_type):
             final_status = JOB_STATUS_PENDING
-            backoff_seconds = _compute_backoff_seconds(attempts)
+            backoff_seconds = _compute_backoff_seconds(attempts, job_type)
             schedule_expr = "CURRENT_TIMESTAMP"
             schedule_params: list[Any] = []
             if backoff_seconds > 0:

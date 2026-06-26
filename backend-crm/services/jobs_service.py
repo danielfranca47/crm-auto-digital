@@ -39,6 +39,31 @@ TYPE_MAPS_SEARCH = "maps.search.local"
 TYPE_MAPS_ENRICH = "maps.enrich.local"
 TYPE_SPY_MEDIA_PROCESS = "spy.media.process"
 
+# Override por tipo de job: lembrete de reunião tenta mais vezes que o default
+# global, com uma pausa de 15 min antes da penúltima tentativa — dá tempo de
+# uma falha transitória da IA (rede, rate limit) se resolver antes de aceitar
+# o template fixo como fallback definitivo.
+APPOINTMENT_REMINDER_MAX_ATTEMPTS = 5
+APPOINTMENT_REMINDER_BACKOFF_SECONDS = {1: 60, 2: 180, 3: 900, 4: 60}
+
+_JOB_TYPE_MAX_ATTEMPTS: Dict[str, int] = {
+    TYPE_WHATSAPP_APPOINTMENT_REMINDER: APPOINTMENT_REMINDER_MAX_ATTEMPTS,
+}
+_JOB_TYPE_BACKOFF_SECONDS: Dict[str, Dict[int, int]] = {
+    TYPE_WHATSAPP_APPOINTMENT_REMINDER: APPOINTMENT_REMINDER_BACKOFF_SECONDS,
+}
+
+
+def max_attempts_for(job_type: Optional[str]) -> int:
+    """Limite de tentativas para o tipo de job — default global se não houver override."""
+    return _JOB_TYPE_MAX_ATTEMPTS.get(job_type, JOB_MAX_ATTEMPTS) if job_type else JOB_MAX_ATTEMPTS
+
+
+def backoff_schedule_for(job_type: Optional[str]) -> Dict[int, int]:
+    """Tabela {tentativas: segundos de espera} para o tipo de job — default global se não houver override."""
+    return _JOB_TYPE_BACKOFF_SECONDS.get(job_type, JOB_BACKOFF_SECONDS) if job_type else JOB_BACKOFF_SECONDS
+
+
 _TYPE_ALIASES: Dict[str, List[str]] = {
     TYPE_WHATSAPP_SEND: ["whatsapp_send"],
     TYPE_WHATSAPP_INBOUND: [],

@@ -66,7 +66,7 @@ dossiê, agenda do operador), fica para uma melhoria futura separada.
 
 ## Plano de Implementação
 
-### Fase única — IA no lembrete com fallback fixo
+### Fase 1 — IA no lembrete com fallback fixo
 
 | Arquivo | O que muda |
 |---|---|
@@ -74,7 +74,7 @@ dossiê, agenda do operador), fica para uma melhoria futura separada.
 | `backend-executors/app/services/meeting_scheduler.py` | Nova função pública `generate_appointment_reminder_message(ai_profile, lead, *, appointment_title, time_str, logger)` — monta prompt com tom/nicho/nome, chama `llm_service`, nunca propaga excepção |
 | `backend-executors/app/runners/whatsapp.py` | `_execute_appointment_reminder_pipeline` passa a chamar a função acima antes de montar o `reminder_text` fixo; usa o resultado da IA ou cai no fallback |
 
-### Commits Fase única
+### Commits Fase 1
 
 | # | Commit | O que foi implementado |
 |---|---|---|
@@ -82,7 +82,7 @@ dossiê, agenda do operador), fica para uma melhoria futura separada.
 
 ---
 
-## Checks de Validação
+## Checks de Validação — Fase 1
 
 ### Cenário P1 — Lembrete usa tom/nicho do AI Profile
 - [ ] Configurar AI Profile de teste com `niche` específico (ex.: massoterapia) e `tone_of_voice` customizado
@@ -99,6 +99,91 @@ dossiê, agenda do operador), fica para uma melhoria futura separada.
 - [ ] Simular falha (ex.: API key inválida/ausente temporariamente)
 - [ ] Confirmar: lembrete ainda é enviado, com o template fixo de sempre
 - **Pendente**
+
+---
+
+## Fase 2 — Retry com backoff específico antes do fallback fixo
+
+### Motivação
+
+Hoje, se a geração via IA falha (Fase 1), o sistema cai direto no template fixo
+no **mesmo job/tentativa** — sem dar à IA uma segunda chance. O utilizador pediu
+mais resiliência: tentar gerar via IA várias vezes, espaçadas no tempo, antes de
+aceitar o template fixo como resultado final.
+
+**Decisões confirmadas com o utilizador (AskUserQuestion):**
+- Espaçamento: um único intervalo de 15 min antes da penúltima tentativa; a
+  última tentativa vem logo depois (gap curto), não mais 15 min de espera.
+- Esgotadas as tentativas, o template fixo **ainda é enviado** — nunca deixamos
+  de mandar o lembrete, só perdemos a personalização por IA nessa mensagem.
+
+### Problema técnico identificado durante o desenho
+
+Um `sleep(15 min)` dentro do job travaria o worker inteiro — `whatsapp_worker.py`
+roda um `while True` sequencial, sem concorrência (`app/runners/whatsapp.py`,
+loop em `main()`), processando um job por vez. Qualquer mensagem ou follow-up
+de **qualquer outro lead** ficaria parada atrás desse sleep. Logo, o retry
+precisa de usar a fila de jobs existente (re-agendamento via `scheduled_at`),
+não espera bloqueante.
+
+A fila de jobs (`backend-crm/services/jobs_service.py` +
+`backend-crm/routes/executor.py`) já tem retry com backoff — mas é **global**:
+`JOB_MAX_ATTEMPTS = 3` e `JOB_BACKOFF_SECONDS = {1: 60, 2: 180}`
+(`jobs_service.py:25-26`), usado por todo tipo de job. Em vez de mudar esse
+comportamento para todos os jobs (mensagens, follow-ups, prospecção...), vou
+adicionar um *override* por tipo de job, mantendo o default global intocado
+para os demais.
+
+`attempts` incrementa no momento do `claim` (`routes/executor.py:721`,
+`attempts=attempts + 1`), então o valor de `attempt` recebido em
+`_execute_appointment_reminder_pipeline` já é o número da tentativa atual
+(1, 2, 3...).
+
+### Abordagem
+
+```
+attempt 1 (imediata) → IA falha → retryable → scheduled_at = +60s   → attempt 2
+attempt 2            → IA falha → retryable → scheduled_at = +180s  → attempt 3
+attempt 3            → IA falha → retryable → scheduled_at = +900s  → attempt 4  (15 min)
+attempt 4            → IA falha → retryable → scheduled_at = +60s   → attempt 5
+attempt 5            → IA falha → ÚLTIMA tentativa → usa template fixo, ENVIA, job completa
+```
+
+Em qualquer tentativa em que a IA tiver sucesso, envia o texto gerado e o job
+completa normalmente — o retry só continua enquanto a IA falhar E ainda houver
+tentativas disponíveis.
+
+### Plano de Implementação
+
+| Arquivo | O que muda |
+|---|---|
+| `backend-crm/services/jobs_service.py` | Novas constantes `APPOINTMENT_REMINDER_MAX_ATTEMPTS = 5` e `APPOINTMENT_REMINDER_BACKOFF_SECONDS = {1: 60, 2: 180, 3: 900, 4: 60}`; dicts de override por tipo (`_JOB_TYPE_MAX_ATTEMPTS`, `_JOB_TYPE_BACKOFF_SECONDS`) mapeando `TYPE_WHATSAPP_APPOINTMENT_REMINDER` para os valores acima |
+| `backend-crm/routes/executor.py` | `_compute_backoff_seconds(attempts, job_type=None)` passa a consultar o override antes do default global; `fail_job_internal` passa `job_type=row["type"]` e usa `_max_attempts_for(job_type)` em vez de `JOB_MAX_ATTEMPTS` fixo; `get_next_job_internal` usa `max(JOB_MAX_ATTEMPTS, *overrides aplicáveis)` no bind do filtro `attempts < ?` (filtro é defensivo/redundante — a aplicação real do limite já é feita em `fail_job_internal`; usar o máximo evita excluir tentativas 4/5 do lembrete sem afrouxar a regra real para os outros tipos) |
+| `backend-executors/app/runners/whatsapp.py` | `_execute_appointment_reminder_pipeline`: se a IA falhar e `attempt` for `None` ou `>= APPOINTMENT_REMINDER_MAX_ATTEMPTS` (5) → usa o template fixo e **envia** (não chama `_fail_job`). Se a IA falhar e ainda houver tentativas → `_fail_job(..., retryable=True)`, sem enviar nada nesta execução — o job volta para a fila |
+
+### Commits Fase 2
+
+| # | Commit | O que foi implementado |
+|---|---|---|
+| 1 | _(preenchido após o commit)_ | |
+
+---
+
+## Checks de Validação — Fase 2
+
+### Cenário R1 — Retry agenda corretamente (schedule via job real, ponta a ponta)
+- [ ] Com os 3 backends locais de pé, forçar falha da IA (ex.: API key inválida) num lembrete de teste real
+- [ ] Confirmar no banco (`jobs`) que o job volta para `pending` com `scheduled_at` ~60s no futuro após a 1ª falha, ~180s após a 2ª, ~900s após a 3ª, ~60s após a 4ª
+- **Pendente** — as funções que calculam isso (`max_attempts_for`/`backoff_schedule_for`) já foram validadas isoladamente (ver nota), falta o ciclo completo via job real
+
+### Cenário R2 — Última tentativa sempre envia
+- [x] Smoke test direto (`whatsapp._execute_appointment_reminder_pipeline` com IA mockada para falhar) confirma: tentativas 1-4 chamam `_fail_job` (retryable, não envia nada); tentativa 5 não chama `_fail_job`, envia o template fixo. `attempt=None` também trata como última tentativa (mais seguro)
+- **Validado em:** 26/06/2026
+
+### Cenário R3 — Outros tipos de job não foram afetados
+- [x] Smoke test direto: `max_attempts_for("whatsapp.appointment.reminder")` → 5 / `backoff_schedule_for(...)` → `{1:60,2:180,3:900,4:60}`; `max_attempts_for("whatsapp.followup.tick")`, tipo desconhecido e `None` → todos caem no default global (3 / `{1:60,2:180}`)
+- [x] Suite `tests/` de `backend-crm` (147 testes) e `backend-executors` (31 testes relevantes) sem regressão — mesmos 18 erros pré-existentes em `backend-crm` antes e depois da mudança (confirmado via `git stash`)
+- **Validado em:** 26/06/2026
 
 ---
 

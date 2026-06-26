@@ -16,6 +16,12 @@ TYPE_WHATSAPP_FOLLOWUP_TICK = "whatsapp.followup.tick"
 TYPE_WHATSAPP_FOLLOWUP_PREGENERATE = "whatsapp.followup.pregenerate"
 TYPE_WHATSAPP_APPOINTMENT_REMINDER = "whatsapp.appointment.reminder"
 
+# Mantém sincronizado com APPOINTMENT_REMINDER_MAX_ATTEMPTS em
+# backend-crm/services/jobs_service.py — é quem de fato agenda os retries
+# (backoff 60s/180s/900s/60s); aqui só decidimos se ESTA é a última tentativa
+# antes de aceitar o template fixo como fallback definitivo.
+_APPOINTMENT_REMINDER_MAX_ATTEMPTS = 5
+
 
 class ExecutionError(Exception):
     def __init__(
@@ -532,6 +538,21 @@ def _execute_appointment_reminder_pipeline(
             time_str=time_str,
             logger=ctx_logger,
         )
+
+        if not generated_text:
+            is_last_attempt = attempt is None or attempt >= _APPOINTMENT_REMINDER_MAX_ATTEMPTS
+            if not is_last_attempt:
+                # Ainda há tentativas disponíveis — não envia agora, deixa o job
+                # voltar para a fila (backoff próprio em jobs_service.py, backend-crm)
+                # para a IA tentar gerar de novo mais tarde.
+                exec_error = ExecutionError(
+                    "Falha ao gerar lembrete via IA — tentando novamente",
+                    phase="reminder",
+                    service="llm",
+                    retryable=True,
+                )
+                return _fail_job(job_id, ctx_logger, exec_error, attempt)
+
         reminder_text = generated_text or (
             f"{greeting} Lembrando da sua {title} agendada para {time_str}. "
             "Qualquer dúvida, estou por aqui. Até lá! 😊"
