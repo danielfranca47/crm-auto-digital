@@ -560,6 +560,22 @@ def generate_appointment_reminder_message(
     return generated or None
 
 
+# Palavra-base obrigatória no título por arquétipo de agente (template_key do
+# AI Profile) — garante vocabulário consistente por tipo de negócio mesmo que a
+# IA tente trocar por outro termo: SDR (B2B/alto ticket) usa "Reunião"; Híbrido
+# Agendador (coaches/terapeutas/personal trainers) usa "Sessão".
+_TITLE_BASE_WORD_BY_TEMPLATE: Dict[str, str] = {
+    "sdr_padrao": "Reunião",
+    "hybrid_scheduler": "Sessão",
+}
+
+
+def _default_appointment_title(ai_profile: Dict[str, Any]) -> str:
+    template_key = str(ai_profile.get("template_key") or "").strip()
+    base_word = _TITLE_BASE_WORD_BY_TEMPLATE.get(template_key, "Reunião")
+    return f"{base_word} agendada"
+
+
 def generate_appointment_title(
     ai_profile: Dict[str, Any],
     *,
@@ -570,20 +586,35 @@ def generate_appointment_title(
     Usado na criação do appointment (handle_meeting_scheduled) — esse título é
     lido depois pelo lembrete, pelo Dossiê pré-reunião e pelo Kanban. Nunca
     propaga excepção — qualquer falha devolve None, e o caller cai no fallback
-    fixo "Reunião agendada".
+    fixo (`_default_appointment_title`).
     """
+    template_key = str(ai_profile.get("template_key") or "").strip()
     niche = str(ai_profile.get("niche") or "").strip()
     offer_description = str(ai_profile.get("offer_description") or "").strip()
 
+    required_word = _TITLE_BASE_WORD_BY_TEMPLATE.get(template_key)
+    default_title = _default_appointment_title(ai_profile)
+
+    if required_word:
+        word_instruction = (
+            f"O título TEM que conter literalmente a palavra '{required_word}' — "
+            f"pode complementar com um termo do nicho (ex.: '{required_word} "
+            f"Comercial', '{required_word} de Avaliação'), mas nunca troque essa "
+            "palavra por sinônimo nem a omita."
+        )
+    else:
+        word_instruction = (
+            "Não use 'reunião' se houver um termo mais natural para o nicho "
+            "(ex.: 'sessão', 'consulta', 'atendimento')."
+        )
+
     prompt = (
         "Gere um título curto (2 a 4 palavras) para um compromisso agendado, "
-        "em português, adequado ao nicho do negócio abaixo. Não use 'reunião' "
-        "se houver um termo mais natural para o nicho (ex.: 'sessão', "
-        "'consulta', 'atendimento').\n"
+        f"em português, adequado ao nicho do negócio abaixo. {word_instruction}\n"
         f"Nicho do negócio: {niche or '(não especificado)'}.\n"
         f"Descrição da oferta: {offer_description or '(não especificada)'}.\n"
         "Se não houver nicho/oferta específicos o suficiente para diferenciar, "
-        "responda exatamente 'Reunião agendada'.\n"
+        f"responda exatamente '{default_title}'.\n"
         "Responda apenas com o título, sem aspas, sem pontuação final, sem "
         "explicações."
     )
@@ -599,7 +630,19 @@ def generate_appointment_title(
         return None
 
     generated = (generated or "").strip()
-    return generated or None
+    if not generated:
+        return None
+
+    if required_word and required_word.lower() not in generated.lower():
+        if logger:
+            logger.warning(
+                "event=appointment_title_missing_required_word template_key=%s "
+                "required_word=%s generated=%s",
+                template_key, required_word, generated,
+            )
+        return default_title
+
+    return generated
 
 
 def handle_meeting_scheduled(
@@ -704,7 +747,7 @@ def handle_meeting_scheduled(
         title = "[Playground] Reunião agendada"
     else:
         ai_profile = context.get("ai_profile") or {}
-        title = generate_appointment_title(ai_profile, logger=logger) or "Reunião agendada"
+        title = generate_appointment_title(ai_profile, logger=logger) or _default_appointment_title(ai_profile)
     description = (
         "Reunião simulada no Playground."
         if is_playground

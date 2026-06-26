@@ -311,10 +311,21 @@ No fluxo real (não-Playground), `handle_meeting_scheduled()` chama
 `meeting_scheduler.generate_appointment_title(ai_profile, *, logger=None)` em vez
 de gravar sempre `"Reunião agendada"`. Mesmo padrão de `_generate_conflict_message`:
 prompt curto usando `niche`/`offer_description` do AI Profile, pedindo um título de
-2-4 palavras adequado ao nicho (ex.: "Consulta de Massagem" para massoterapia,
-"Sessão de Beleza" para estética); responde literalmente `"Reunião agendada"` se
-não houver nicho/oferta específicos. Nunca propaga excepção — qualquer falha cai
-no fallback `"Reunião agendada"`, o agendamento nunca falha por causa disso.
+2-4 palavras adequado ao nicho. Nunca propaga excepção — qualquer falha cai no
+fallback `_default_appointment_title(ai_profile)`, o agendamento nunca falha por
+causa disso.
+
+**Palavra-base obrigatória por arquétipo (`template_key`):** `_TITLE_BASE_WORD_BY_TEMPLATE`
+em `meeting_scheduler.py` fixa a palavra que o título tem que conter, independente
+do nicho — `sdr_padrao` (Agente 01 · SDR de Alto Ticket) → "Reunião";
+`hybrid_scheduler` (Agente 03 · Híbrido Agendador) → "Sessão". O prompt instrui a IA
+a usar essa palavra literalmente (podendo complementar com termo do nicho, ex.:
+"Sessão de Massagem", "Reunião Comercial"); se a resposta da IA não contiver a
+palavra exigida (ou a IA falhar), o título cai em `_default_appointment_title()`
+(`"{palavra} agendada"`) — garante o vocabulário certo por tipo de negócio mesmo
+quando a IA não segue a instrução. `template_key` sem entrada no mapa (ex.
+`closer_agressivo`) mantém o comportamento livre, escolhido pela IA conforme o
+nicho, com fallback genérico `"Reunião agendada"`.
 
 O Playground continua a usar o título fixo `"[Playground] Reunião agendada"`, sem
 chamar IA extra (sem custo/latência em testes internos).
