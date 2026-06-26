@@ -231,7 +231,7 @@ Eventos importados via `POST /api/appointments/google-sync` têm `source='google
 **Ao criar** (`POST /api/leads/{id}/appointments` ou via `routes/appointments.py`), o backend:
 
 1. Valida que não há conflito de horário **para o profissional inteiro** (`_check_conflict`) — não apenas para o mesmo lead. Existem duas implementações paralelas e independentes (uma em cada arquivo, mesma regra): `routes/leads.py::_check_conflict` (usa `current_user.id` diretamente — endpoint já autenticado) e `routes/appointments.py::_check_conflict` (resolve o `user_id` via `_resolve_owner_user_id()`, a partir do `lead_id` ou do `user_id` próprio em appointments importados do Google sem lead). Ambas bloqueiam com `409` se outro appointment do mesmo `user_id` (qualquer lead, ou evento Google) sobrepuser o intervalo — esta é a defesa real contra conflito, pois roda dentro da transacção SQLite no momento exacto do INSERT/UPDATE.
-2. Agenda jobs de lembrete (`whatsapp.appointment.reminder`, `jobs_service.schedule_appointment_reminder_jobs()`) com offsets configuráveis por `appointment_reminder_offsets` do AI Profile (default por `template_key`)
+2. Agenda jobs de lembrete (`whatsapp.appointment.reminder`, `jobs_service.schedule_appointment_reminder_jobs()`) com offsets configuráveis por `appointment_reminder_offsets` do AI Profile (default por `template_key`) — cada job recebe um `reminder_kind` (`"early"`/`"final"`, ver secção dedicada abaixo)
 3. Agenda job de briefing (`whatsapp.appointment.briefing`, `briefing_service.schedule_briefing_job_for_appointment()`) se `briefing_enabled` não for `False`
 4. Faz push para Google Calendar se o utilizador tiver tokens OAuth2 válidos (`google_calendar_service.push_event`)
 
@@ -301,7 +301,74 @@ Conflito de horário é respeitado pela mesma barreira `_check_conflict`: se o h
 
 `routes/playground.py::_reset_sandbox_lead` apaga os appointments do lead sandbox antes do reset de mensagens — evita acumular compromissos `[Playground]` na Agenda real entre sessões de teste repetidas no mesmo lead.
 
-O fluxo real (WhatsApp) chama `handle_meeting_scheduled(...)` sem `is_playground` (default `False`), preservando título, side-effects e comportamento inalterados.
+O fluxo real (WhatsApp) chama `handle_meeting_scheduled(...)` sem `is_playground` (default `False`) — side-effects e comportamento de conflito inalterados, mas o título passa por geração via IA (ver secção seguinte) em vez do texto fixo usado no Playground.
+
+---
+
+## Título do compromisso gerado por IA (fluxo real)
+
+No fluxo real (não-Playground), `handle_meeting_scheduled()` chama
+`meeting_scheduler.generate_appointment_title(ai_profile, *, logger=None)` em vez
+de gravar sempre `"Reunião agendada"`. Mesmo padrão de `_generate_conflict_message`:
+prompt curto usando `niche`/`offer_description` do AI Profile, pedindo um título de
+2-4 palavras adequado ao nicho (ex.: "Consulta de Massagem" para massoterapia,
+"Sessão de Beleza" para estética); responde literalmente `"Reunião agendada"` se
+não houver nicho/oferta específicos. Nunca propaga excepção — qualquer falha cai
+no fallback `"Reunião agendada"`, o agendamento nunca falha por causa disso.
+
+O Playground continua a usar o título fixo `"[Playground] Reunião agendada"`, sem
+chamar IA extra (sem custo/latência em testes internos).
+
+Este título é gravado em `appointments.title` e lido sem transformação por todos os
+consumidores: Dossiê pré-reunião (`briefing_service.py`), Kanban, `ScheduleAppointmentDialog`
+e o próprio lembrete de reunião (secção seguinte) — corrigir na origem beneficia
+todos de uma vez.
+
+---
+
+## Lembrete de reunião gerado por IA
+
+O job `whatsapp.appointment.reminder` (`app/runners/whatsapp.py::_execute_appointment_reminder_pipeline`)
+gera o texto do lembrete via `meeting_scheduler.generate_appointment_reminder_message(
+ai_profile, lead, *, appointment_title, time_str, reminder_kind, logger)` em vez de um
+template fixo. O prompt usa `tone_of_voice`/`brand_name`/`identity_mode`/`niche`/
+`offer_description` do AI Profile; troca o título genérico por um termo do nicho
+quando aplicável; nunca inventa o nome do lead quando ausente (`contactName`/`name`
+vazios → instrução explícita de não usar placeholder genérico tipo "Cliente").
+
+**Tom early vs. final:** `jobs_service.schedule_appointment_reminder_jobs()` calcula
+um `reminder_kind` por offset configurado — `"final"` para o offset com menor valor
+absoluto (o mais próximo do compromisso, ex. `-120` = 2h antes), `"early"` para os
+demais (ex. `-1440` = 24h antes) — e grava no payload do job. Não assume exactamente
+2 offsets configurados. O prompt usa esse valor para diferenciar o tom: `"early"`
+pede um aviso leve (convite a confirmar ou avisar com antecedência se for remarcar);
+`"final"` pede confirmação de forma mais directa (não há mais tempo de remarcar).
+
+**Retry com backoff próprio antes do fallback fixo:** se a geração via IA falhar,
+o job não cai direto no template fixo — `whatsapp.appointment.reminder` tem um
+override do retry/backoff global de jobs (`JOB_MAX_ATTEMPTS=3`,
+`JOB_BACKOFF_SECONDS={1:60,2:180}`), definido em `jobs_service.py`:
+
+```python
+APPOINTMENT_REMINDER_MAX_ATTEMPTS = 5
+APPOINTMENT_REMINDER_BACKOFF_SECONDS = {1: 60, 2: 180, 3: 900, 4: 60}  # 15min antes da penúltima tentativa
+```
+
+`_JOB_TYPE_MAX_ATTEMPTS`/`_JOB_TYPE_BACKOFF_SECONDS` mapeiam `TYPE_WHATSAPP_APPOINTMENT_REMINDER`
+para estes valores; `max_attempts_for(job_type)`/`backoff_schedule_for(job_type)` são
+consultados em `routes/executor.py` (`fail_job_internal`, `get_next_job_internal`) em vez
+das constantes globais — outros tipos de job continuam no default global, inalterado.
+
+Na 5ª (última) tentativa — ou quando `attempt is None` — `_execute_appointment_reminder_pipeline`
+não chama mais `_fail_job`: usa o template fixo (`f"... Lembrando da sua {title} agendada
+para {time_str}. Qualquer dúvida, estou por aqui. Até lá! 😊"`) e **envia o lembrete
+de qualquer forma** — a garantia de que o lead nunca deixa de receber o lembrete nunca
+é quebrada, mesmo que a IA falhe em todas as tentativas.
+
+**Limitação conhecida (cosmética):** se `appointment_title` já contiver a palavra
+"agendada" (ex. o fallback "Reunião agendada"), o template fixo duplica
+("...da sua Reunião agendada agendada para..."). Pré-existente, não corrigido nesta
+implementação.
 
 ---
 

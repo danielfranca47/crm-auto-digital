@@ -270,18 +270,29 @@ Renomear a constante Python é seguro. Renomear o **valor string** exige migraç
 ## Retry com backoff nas chamadas à LLM
 
 `backend-executors/app/services/llm_service.py` — helper partilhado `_post_with_retry()`,
-usado pelas quatro funções públicas (`generate_mother_route`, `generate_decision_text`,
-`generate_child_result`, `generate_conflict_message`): até 2 tentativas, com 1s de backoff entre elas, antes de
+usado pelas seis funções públicas (`generate_mother_route`, `generate_decision_text`,
+`generate_child_result`, `generate_conflict_message`, `generate_appointment_reminder_message`,
+`generate_appointment_title_message`): até 2 tentativas, com 1s de backoff entre elas, antes de
 propagar a excepção final. Cobre falhas transitórias de rede (`httpx.RequestError`) e
 status HTTP retryable (429/500/502/503/504). Aplica-se tanto ao fluxo real (WhatsApp,
 via fila de jobs) quanto ao Playground (chamada síncrona, sem fila) — antes desta
 camada, o Playground não tinha nenhum retry e qualquer falha transitória caía
 directo no fallback `reason="llm_failure"` (`message_text=""`).
 
+As últimas quatro (`generate_conflict_message`, `generate_appointment_reminder_message`,
+`generate_appointment_title_message`) devolvem texto puro (sem `text.format=json_object`)
+— usadas para gerar uma única mensagem de WhatsApp, não uma decisão estruturada. Cada
+uma tem uma função-irmã em `meeting_scheduler.py` (`_generate_conflict_message`,
+`generate_appointment_reminder_message`, `generate_appointment_title`) que monta o
+prompt e nunca propaga excepção — qualquer falha (sem `LLM_API_KEY`, erro de rede,
+timeout, resposta vazia) devolve `None` e o caller cai num fallback fixo.
+
 Não interfere com o retry de job da fila (`app/runners/whatsapp.py`, backoff
-60s/180s) — são camadas independentes: o retry de `llm_service.py` é interno a uma
+global 60s/180s) — são camadas independentes: o retry de `llm_service.py` é interno a uma
 única chamada HTTP; o retry de job é externo, reagenda o job inteiro quando
-`llm_failure` persiste mesmo após as tentativas internas.
+`llm_failure` persiste mesmo após as tentativas internas. O job
+`whatsapp.appointment.reminder` tem um override deste backoff global — ver
+[`agenda.md`](agenda.md#lembrete-de-reunião-gerado-por-ia).
 
 ---
 
