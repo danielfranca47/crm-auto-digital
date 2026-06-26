@@ -85,20 +85,22 @@ dossiê, agenda do operador), fica para uma melhoria futura separada.
 ## Checks de Validação — Fase 1
 
 ### Cenário P1 — Lembrete usa tom/nicho do AI Profile
-- [ ] Configurar AI Profile de teste com `niche` específico (ex.: massoterapia) e `tone_of_voice` customizado
-- [ ] Disparar um lembrete (offset próximo) e inspecionar o texto enviado
-- [ ] Confirmar: não repete "reunião" genérica, usa termo do nicho; pede confirmação
-- **Pendente**
+- [x] Chamada real (`LLM_API_KEY` local) a `_execute_appointment_reminder_pipeline` com `niche="massoterapia"`, `tone_of_voice="caloroso e acolhedor"`, lead com nome
+- [x] Texto gerado: *"Oi, Marina! Este é um lembrete carinhoso da sua sessão de massagem relaxante e terapêutica agendada para hoje às 17:00. Você confirma a presença?"*
+- [x] Confirmado: não repete "Reunião agendada" genérica (usa "sessão de massagem"), reflete o tom configurado, pede confirmação
+- **Validado em:** 26/06/2026
 
 ### Cenário P2 — Lead sem nome não gera placeholder
-- [ ] Lead de teste sem `contactName`/`name`
-- [ ] Confirmar: mensagem não inventa nome nem usa "Cliente" genérico
-- **Pendente**
+- [x] Mesmo pipeline, lead sem `contactName`/`name`, `niche="consultoria jurídica"`
+- [x] Texto gerado: *"Lembrete de que está agendada uma consulta no dia 06/03 às 10:00. Por favor, confirme presença ou avise com antecedência se precisar remarcar."*
+- [x] Confirmado: mensagem não inventa nome nem usa "Cliente" genérico — começa sem nome, como instruído no prompt
+- **Validado em:** 26/06/2026
 
 ### Cenário P3 — Fallback funciona se a IA falhar
-- [ ] Simular falha (ex.: API key inválida/ausente temporariamente)
-- [ ] Confirmar: lembrete ainda é enviado, com o template fixo de sempre
-- **Pendente**
+- [x] `generate_appointment_reminder_message` forçada a lançar excepção, com `attempt=5` (última tentativa, ver Fase 2)
+- [x] Confirmado: não chama `_fail_job`; envia o template fixo de sempre — *"Olá, Joana! Lembrando da sua Reunião agendada agendada para 07/03 às 11:00. Qualquer dúvida, estou por aqui. Até lá! 😊"*
+- [x] **Observação (cosmética, pré-existente):** quando o título do compromisso já contém a palavra "agendada" (ex.: "Reunião agendada"), o template fixo duplica ("...da sua Reunião agendada agendada para..."). Bug pré-existente desde antes da Fase 1 (o título sempre foi "Reunião agendada" até a Fase 3) — fora de escopo desta fase, registrado para correção futura se desejado
+- **Validado em:** 26/06/2026
 
 ---
 
