@@ -188,11 +188,114 @@ tentativas disponíveis.
 
 ---
 
+## Fase 3 — Título do compromisso gerado por IA na origem
+
+### Motivação
+
+`meeting_scheduler.py:574` grava sempre `"Reunião agendada"` quando a própria
+IA fecha o agendamento — sem noção de nicho. Esse título não fica só no
+lembrete: é lido também pelo Dossiê pré-reunião (`briefing_service.py:92`,
+`appointment.get("title") or "Reunião"`) e por vários componentes do frontend
+que o operador vê (`KanbanBoard.tsx`, `LeadCardDialog.tsx`,
+`ScheduleAppointmentDialog.tsx`, `ScheduleView.tsx`). Corrigir na origem
+beneficia todos esses lugares de uma vez, não só o lembrete.
+
+**Decisão confirmada com o utilizador (AskUserQuestion):** entre 3 abordagens
+— (a) nova chamada de IA isolada, (b) aproveitar a IA que já responde ao lead
+na fase de apresentação/agendamento (zero latência extra, mas toca um prompt
+grande e crítico usado por todos os agentes), (c) mapeamento simples por
+palavra-chave — o utilizador escolheu **(a)**, aceitando ~1-2s extra no
+momento da confirmação do agendamento em troca de não tocar em nada existente.
+
+### Abordagem
+
+Mesmo padrão já usado duas vezes nesta implementação
+(`_generate_conflict_message`, `generate_appointment_reminder_message`): uma
+função isolada que nunca propaga excepção, com fallback fixo no caller.
+
+```
+handle_meeting_scheduled() confirma o agendamento
+  → is_playground? → título fixo "[Playground] Reunião agendada" (sem IA — simulação interna)
+  → senão → meeting_scheduler.generate_appointment_title(ai_profile, logger=logger)
+       → monta prompt curto pedindo 2-4 palavras adequadas ao nicho
+       → llm_service.generate_appointment_title_message(prompt)  [texto puro, sem JSON]
+       ├─ sucesso → usa o título gerado
+       └─ falha/timeout/vazio → fallback "Reunião agendada" (comportamento atual, nunca quebra o agendamento)
+```
+
+### Plano de Implementação
+
+| Arquivo | O que muda |
+|---|---|
+| `backend-executors/app/services/llm_service.py` | Nova função `generate_appointment_title_message(prompt)` — mesma forma de `generate_conflict_message`/`generate_appointment_reminder_message` |
+| `backend-executors/app/services/meeting_scheduler.py` | Nova função `generate_appointment_title(ai_profile, *, logger=None) -> Optional[str]` — prompt usa `niche`, `offer_description`, `tone_of_voice`/`brand_name`; pede título curto (2-4 palavras); nunca propaga excepção |
+| `backend-executors/app/services/meeting_scheduler.py` (linha ~574, em `handle_meeting_scheduled`) | Playground continua fixo; caso real chama `generate_appointment_title(...)` com fallback `or "Reunião agendada"` |
+
+### Commits Fase 3
+
+| # | Commit | O que foi implementado |
+|---|---|---|
+| 1 | _(preenchido após o commit)_ | |
+
+### Checks de Validação — Fase 3
+
+- [ ] **T1:** Agendar compromisso de teste com `niche` específico (ex.: massoterapia) e confirmar que o título não é "Reunião agendada" genérica
+- [ ] **T2:** Confirmar que Dossiê pré-reunião e Kanban exibem o novo título (herdam automaticamente, sem mudança nesses arquivos)
+- [ ] **T3:** Forçar falha da IA e confirmar fallback "Reunião agendada" — agendamento nunca falha por causa disso
+- [ ] **T4:** Confirmar que o Playground continua com título fixo, sem chamar IA extra
+
+---
+
+## Fase 4 — Diferenciar tom entre lembrete distante (early) e final
+
+### Motivação
+
+Hoje todo lembrete pede confirmação da mesma forma, seja o 1º (mais distante,
+ex. 48h antes) seja o 2º (mais próximo, ex. 2h antes) — simplificação
+deliberada da Fase 1. Um aviso mais leve no distante e um pedido de
+confirmação mais direto no final é mais natural.
+
+### Abordagem
+
+```
+schedule_appointment_reminder_jobs() cria um job por offset configurado
+  → para cada offset: reminder_kind = "final" se abs(offset) == min(abs(o) para todo offset da lista)
+                       senão "early"
+  → inclui "reminder_kind" no payload do job
+
+_execute_appointment_reminder_pipeline (whatsapp.py)
+  → lê payload.get("reminder_kind", "final")  [default seguro]
+  → passa para generate_appointment_reminder_message(..., reminder_kind=reminder_kind)
+       → early: instrução de aviso mais leve, sem soar urgente
+       → final: instrução de pedido de confirmação mais direto (não há mais tempo de remarcar)
+```
+
+`min(abs(o) para todo offset)` identifica o offset mais próximo do compromisso
+de forma robusta, independente da ordem ou de quantos offsets existirem (hoje
+são 2 — `appointment_reminder_h1`/`h2` — mas a lógica não assume exatamente 2).
+
+### Plano de Implementação
+
+| Arquivo | O que muda |
+|---|---|
+| `backend-crm/services/jobs_service.py` | `schedule_appointment_reminder_jobs`: calcula `reminder_kind` por offset e inclui no payload de cada job criado |
+| `backend-executors/app/runners/whatsapp.py` | `_execute_appointment_reminder_pipeline`: lê `reminder_kind` do payload, passa para `generate_appointment_reminder_message` |
+| `backend-executors/app/services/meeting_scheduler.py` | `generate_appointment_reminder_message` ganha parâmetro `reminder_kind: str = "final"`; prompt ajusta a instrução de confirmação conforme o valor |
+
+### Commits Fase 4
+
+| # | Commit | O que foi implementado |
+|---|---|---|
+| 1 | _(preenchido após o commit)_ | |
+
+### Checks de Validação — Fase 4
+
+- [ ] **T5:** Configurar 2 lembretes (48h e 2h) e confirmar nos payloads dos jobs criados: `reminder_kind="early"` para o de 48h, `"final"` para o de 2h
+- [ ] **T6:** Inspecionar o prompt montado (ou testar com IA real) e confirmar que "early" é mais leve/informal e "final" pede confirmação mais direta
+- [ ] **T7:** Com apenas 1 offset configurado, confirmar que recebe `reminder_kind="final"` (trivialmente o mínimo de uma lista de 1)
+
+---
+
 ## Ajustes Possíveis Pós-Implementação
 
-- Corrigir o título do compromisso na origem (`meeting_scheduler.py:574`) para já
-  nascer niche-aware — beneficiaria Kanban, dossiê e agenda do operador, não só
-  o lembrete.
-- Diferenciar tom entre 1º lembrete (mais distante, aviso suave) e 2º (mais
-  próximo, confirmação mais firme) — precisa de metadado novo no payload do job
-  em `jobs_service.schedule_appointment_reminder_jobs`.
+Nenhum identificado além do que já está coberto pelas Fases 3 e 4 acima.
