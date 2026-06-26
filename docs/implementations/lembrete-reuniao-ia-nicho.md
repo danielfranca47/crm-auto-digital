@@ -287,13 +287,14 @@ são 2 — `appointment_reminder_h1`/`h2` — mas a lógica não assume exatamen
 
 | # | Commit | O que foi implementado |
 |---|---|---|
-| 1 | _(preenchido após o commit)_ | |
+| 1 | `0b5669f` | `reminder_kind` calculado em `schedule_appointment_reminder_jobs` (`jobs_service.py`); lido e propagado em `whatsapp.py`; usado no prompt de `generate_appointment_reminder_message` (`meeting_scheduler.py`) para diferenciar tom early/final |
 
 ### Checks de Validação — Fase 4
 
-- [ ] **T5:** Configurar 2 lembretes (48h e 2h) e confirmar nos payloads dos jobs criados: `reminder_kind="early"` para o de 48h, `"final"` para o de 2h
-- [ ] **T6:** Inspecionar o prompt montado (ou testar com IA real) e confirmar que "early" é mais leve/informal e "final" pede confirmação mais direta
-- [ ] **T7:** Com apenas 1 offset configurado, confirmar que recebe `reminder_kind="final"` (trivialmente o mínimo de uma lista de 1)
+- [x] **T5:** Smoke test direto contra banco real (mesmo padrão da Fase 2): com offsets `[-1440, -120]` (24h/2h), os 2 jobs criados recebem `reminder_kind="early"` e `"final"` respectivamente
+- [x] **T6:** Chamada real à IA comparando os dois tons (mesmo `ai_profile`/lead/horário): early → "Se puder, confirme sua presença ou avise com antecedência se precisar remarcar" (tom leve, convite); final → "Você confirma a presença?" (pedido direto)
+- [x] **T7:** Smoke test com offset único `[-60]` — job criado recebe `reminder_kind="final"` (mínimo de uma lista de 1)
+- **Validado em:** 26/06/2026
 
 ---
 
