@@ -1,7 +1,7 @@
 # Duração configurável de sessão no agendamento via IA
 
 **Branch:** `main`
-**Status:** Em andamento
+**Status:** Fase 1 validada via Playground (P1, C2) — pendente apenas C1 (teste real via WhatsApp)
 
 ---
 
@@ -148,17 +148,31 @@ Só começa depois de a Fase 1 ser validada pelo utilizador.
 ## Checks de Validação
 
 ### Cenário P1 — Playground respeita a duração configurada
-- [ ] Configurar `default_session_duration_minutes=60` numa conta de teste
-- [ ] No Playground, pedir um agendamento e confirmar horário
-- [ ] Confirmar via API que `end_at - start_at` = 60 min
+- [x] Configurar `default_session_duration_minutes=60` numa conta de teste
+- [x] No Playground, pedir um agendamento e confirmar horário
+- [x] Confirmar via API que `end_at - start_at` = 60 min
+- **Validado em:** 27/06/2026 — via browser (chrome-devtools MCP), conta de teste
+  (`autodigital157@gmail.com`, AI Profile id=5, `hybrid_scheduler`/`agenda`). Configurado
+  "Duração da sessão" = 60 min em Apresentação. Sessão de Playground (lead #299):
+  "Oi, gostaria de agendar uma sessão para amanhã às 15h" → bot ofereceu 09:00/11:00 →
+  "Pode ser às 11h então, fica confirmado" → "Perfeito, a sessão está agendada para
+  amanhã às 11h." `GET /api/appointments/lead/299` confirmou
+  `start_at=2026-06-28T11:00:00Z`, `end_at=2026-06-28T12:00:00Z` — exatamente 60 min.
 
 ### Cenário C1 — WhatsApp real respeita a duração configurada
 - [ ] Repetir o teste real que o utilizador já fez (agente híbrido agendador)
 - [ ] Confirmar que a duração reflete o valor configurado (não mais 30 min fixo)
+- **Pendente:** requer envio real via WhatsApp (UazAPI) — fora do alcance do browser
+  automatizado; aguardando o utilizador repetir o teste e reportar.
 
 ### Cenário C2 — Reagendamento preserva a duração original
-- [ ] Pedir reagendamento de um compromisso de 60 min para outro horário
-- [ ] Confirmar que a duração se mantém 60 min (não volta a 30)
+- [x] Pedir reagendamento de um compromisso de 60 min para outro horário
+- [x] Confirmar que a duração se mantém 60 min (não volta a 30)
+- **Validado em:** 27/06/2026 — na mesma sessão do Playground (lead #299, appointment
+  id=44), mensagem "Na verdade, preciso remarcar. Pode ser às 14h no mesmo dia?" →
+  "A sessão foi remarcada para amanhã às 14h." `GET /api/appointments/lead/299`
+  confirmou `start_at=2026-06-28T14:00:00Z`, `end_at=2026-06-28T15:00:00Z` — duração
+  de 60 min preservada (não voltou para 30 min).
 
 ---
 
