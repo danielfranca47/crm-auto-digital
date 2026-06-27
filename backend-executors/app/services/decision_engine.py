@@ -2351,9 +2351,14 @@ def _build_child_prompt_apresentation(
 
     # Fix P9: passive reply antes do agendamento quando a qualificação foi auto-promovida
     # neste mesmo turno e o lead tinha uma pergunta aberta de serviço na mensagem.
+    # Inclui route_to=="recepcao": numa saudação composta (1ª mensagem do lead já
+    # qualificada + com pedido de serviço), o _enforce_greeting_first força route_to
+    # para "recepcao" mesmo quando o compound follow-through já promoveu o turno para
+    # apresentation — sem isto, esse caso nunca era reconhecido como "qualificação
+    # recém-concluída" (bug: bloco MODO COMERCIAL não disparava na 1ª mensagem rica).
     _response_style_apres = (ai_profile.get("response_style") or "passive").strip().lower()
     _auto_promoted_from_qual = (
-        mother_decision.route_to == "qualification"
+        mother_decision.route_to in ("qualification", "recepcao")
         and not mode_contract.get("missing_fields")
     )
     _inbound_text_apres = str(metadata.get("inbound_message_text") or "").lower()
@@ -2408,8 +2413,9 @@ def _build_child_prompt_apresentation(
     )
 
     # Estágio de aquecimento (Tarefa 3.8) — Agent 3 (hybrid_scheduler) pós-qualificação.
-    # Trigger: mother_decision.route_to == "qualification" e missing_fields vazio
-    # (qualificação recém-aprovada/auto-promovida para apresentation).
+    # Trigger: _auto_promoted_from_qual (route_to "qualification" OU "recepcao" com
+    # missing_fields vazio — qualificação recém-aprovada/auto-promovida para apresentation,
+    # incluindo a saudação composta da 1ª mensagem).
     # Defaults context-aware: usam o niche do ai_profile para evitar linguagem B2B genérica
     # ("profissional com o seu perfil", "mapear situação", "plano de ação") em nichos B2C.
     _niche_for_defaults = str(ai_profile.get("niche") or "").strip()
@@ -2436,8 +2442,7 @@ def _build_child_prompt_apresentation(
     commercial_injection = ""
     if (
         template_key_for_warming == "hybrid_scheduler"
-        and mother_decision.route_to == "qualification"
-        and not mode_contract.get("missing_fields")
+        and _auto_promoted_from_qual
     ):
         if appointment_mode == "commercial":
             # Modo comercial: apresentar serviços/preços, tratar objeções, fechar compromisso, DEPOIS agendar.
