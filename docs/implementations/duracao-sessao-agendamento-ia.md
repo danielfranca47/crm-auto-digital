@@ -1,7 +1,7 @@
 # Duração configurável de sessão no agendamento via IA
 
 **Branch:** `main`
-**Status:** Fase 1 e Fase 2 validadas via Playground (P1–P4, C2) — pendente apenas C1 (teste real via WhatsApp)
+**Status:** Todos os cenários validados (P1–P4, C2 via Playground; C1 pulado por decisão do utilizador)
 
 ---
 
@@ -195,10 +195,14 @@ opção, a IA pergunta antes de confirmar — não assume.
   `start_at=2026-06-28T11:00:00Z`, `end_at=2026-06-28T12:00:00Z` — exatamente 60 min.
 
 ### Cenário C1 — WhatsApp real respeita a duração configurada
-- [ ] Repetir o teste real que o utilizador já fez (agente híbrido agendador)
-- [ ] Confirmar que a duração reflete o valor configurado (não mais 30 min fixo)
-- **Pendente:** requer envio real via WhatsApp (UazAPI) — fora do alcance do browser
-  automatizado; aguardando o utilizador repetir o teste e reportar.
+- [⏭️] Repetir o teste real que o utilizador já fez (agente híbrido agendador)
+- **Pulado em:** 27/06/2026, por decisão explícita do utilizador. Justificativa:
+  `meeting_scheduler.py` (criação e reagendamento de compromissos) é o mesmo código
+  executado tanto pelo Playground quanto pelo caminho real do WhatsApp — não há
+  branch de lógica diferente entre os dois (ver
+  [`docs/architecture/playground-parity.md`](../architecture/playground-parity.md)).
+  Os Cenários P1/P2/P3/P4/C2 já exercitam esse código com dados reais de criação e
+  reagendamento, cobrindo o mesmo caminho que um teste via WhatsApp real cobriria.
 
 ### Cenário C2 — Reagendamento preserva a duração original
 - [x] Pedir reagendamento de um compromisso de 60 min para outro horário
