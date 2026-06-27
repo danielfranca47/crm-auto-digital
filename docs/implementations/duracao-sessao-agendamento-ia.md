@@ -98,7 +98,33 @@ end_dt = signal.start_at + timedelta(minutes=duration_minutes)
 
 | # | Commit | O que foi implementado |
 |---|---|---|
-| 1 | _(pendente)_ | — |
+| 1 | `e56a8c8` | Coluna `default_session_duration_minutes`, prompt/cálculo de duração no meeting_scheduler, card "Duração da sessão" no frontend |
+
+**Detalhes do commit `e56a8c8`:**
+- `backend-core/app/models/ai_profile.py` — nova coluna `default_session_duration_minutes`
+- `backend-core/app/db.py` — migração idempotente em `ensure_ai_profile_columns()`
+- `backend-core/app/api/ai_profiles.py` — campo em `AIProfileBase` e `AIProfileUpdate`
+- `backend-executors/app/services/meeting_scheduler.py` — `_resolve_default_duration_minutes()`
+  usada na criação; `_original_duration_minutes()` usada no reagendamento para preservar a
+  duração original em vez de reaplicar 30 min
+- `frontend-crm/src/types/agente.ts` — campo `default_session_duration_minutes` em `AgentConfig`
+- `frontend-crm/src/services/api.ts` — mapeamento no fetch/patch do AI Profile
+- `frontend-crm/src/components/agente/CamadaApresentacao.tsx` — card "Duração da sessão" +
+  `ModalSessionDuration` (slider 15–180 min)
+
+### Relatório da Fase 1 — o que mudou na prática
+
+**Antes:** todo agendamento confirmado pela IA (WhatsApp real ou Playground) criava o
+compromisso com exatamente 30 minutos de duração, sempre — não havia nenhuma forma de
+configurar isso, e remarcar um horário também voltava para 30 min mesmo que o compromisso
+original fosse mais longo.
+
+**Agora:** em "Configurar Agente → Apresentação → Disponibilidade de horários → Duração
+da sessão", o profissional define a duração padrão (15 a 180 min). A IA passa a usar esse
+valor ao confirmar um agendamento, e ao remarcar um compromisso existente a duração
+original é preservada (não volta para 30 min).
+
+**Para validar:** Cenários P1, C1 e C2, na seção "Checks de Validação" abaixo.
 
 ---
 
