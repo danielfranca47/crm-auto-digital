@@ -146,6 +146,14 @@ editor estruturado por linha.
   - Confirma que `_load_knowledge_items()` agrega as duas tabelas (uma JSON
     estruturada, uma texto livre legado) e a IA distingue corretamente qual delas o
     lead está pedindo em ambos os sentidos.
+  - **Repetido ao vivo no browser** (Playground real, não só API): lead #306 — "Oi,
+    quero marcar a sessão de hipnoterapia da Ana para amanhã" → bot ofereceu
+    11h20/15h30 → "Pode ser às 11h20 mesmo, fica confirmado" → "A sessão de
+    hipnoterapia com a Ana está confirmada para amanhã, dia 28/06, às 11h20."
+    Conferido visualmente na tela de **Agenda** (vista Semanal): o compromisso
+    aparece no dia 28/06 com bloco de ~50 min, adjacente ao compromisso do lead
+    #304 (mesma duração) — confirma visualmente, na UI real do produto, que a
+    duração foi aplicada corretamente a partir da tabela da Ana.
 
 ### Cenário P2 — UI cria/edita/remove múltiplas tabelas
 - [ ] Criar 2 tabelas estruturadas via UI com nomes diferentes
