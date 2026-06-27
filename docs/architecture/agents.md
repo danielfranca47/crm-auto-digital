@@ -119,6 +119,7 @@ Aliases aceitos: `whatsapp_send`, `maps_search_fallback`, `maps_enrich_fallback`
 | `reply_delay_max_seconds` | integer\|null | Delay máximo (s) para mensagens subsequentes (padrão: `0`) |
 | `availability_mode` | string (enum) | Janela de horário de trabalho do agente (padrão: `"24h"`) |
 | `scheduling_offer_style` | string (enum) | Como a filha de agendamento trata um horário específico pedido pelo lead (padrão: `"offer_alternatives"`) |
+| `default_session_duration_minutes` | integer\|null | Duração (em minutos) usada ao criar um appointment via IA quando não há duração mais específica disponível (padrão: `30`). Ver [`agenda.md`](agenda.md#duração-da-sessão-fixa-vs-por-serviço) |
 | `meeting_management_enabled` | boolean | Se `True` (padrão), o bot reabre e gere cancelamento/reagendamento sozinho quando o lead pede mudança após confirmar uma reunião. Se `False`, o bot fica desactivado nessa janela, exigindo reactivação manual do operador. Ver secção "Toggle de Bot por Lead" |
 | `followup_sdr_instructions` | string\|null | Instrução de texto livre injectada no prompt de follow-up quando `followup_variant=sdr_scheduler`. Sobrescreve as regras genéricas da variante com contexto específico do negócio |
 | `followup_recovery_instructions` | string\|null | Instrução de texto livre para follow-up de cart recovery (`followup_variant=cart_recovery`) |

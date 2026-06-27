@@ -107,6 +107,7 @@ function openCreate(day: Date, slotIndex: number) {
   description: description || undefined,
   type,
   startTime: startAt.toISOString(),
+  endTime: endAt.toISOString(),  // calculado a partir do campo "Hora fim" do form (mín. 1h se ficar <= startAt)
 }
 ```
 
@@ -305,6 +306,55 @@ O fluxo real (WhatsApp) chama `handle_meeting_scheduled(...)` sem `is_playground
 
 ---
 
+## Duração da sessão: fixa vs. por serviço
+
+Todo appointment criado ou reagendado via IA tem uma duração resolvida por
+`meeting_scheduler.py` segundo uma cadeia de prioridade — nunca mais um valor
+fixo de 30 min hardcoded:
+
+```
+1. signal.duration_minutes        ← extraído de signals_structured.meeting_duration_minutes
+                                     (filha de agendamento, só quando a Tabela de
+                                     Serviços e Preços identifica a linha do lead)
+2. default_session_duration_minutes  ← AI Profile (ver agents.md), padrão 30
+3. 30                              ← fallback final, se o AI Profile vier vazio
+```
+
+**Criação** (`handle_meeting_scheduled()`): `duration_minutes = signal.duration_minutes
+or _resolve_default_duration_minutes(ai_profile)`.
+
+**Reagendamento** (`handle_meeting_cancel_or_reschedule()`): a duração original do
+appointment é preservada, **não** recalculada a partir do sinal da IA — remarcar um
+horário não deveria trocar silenciosamente a duração combinada. `duration_minutes =
+_original_duration_minutes(original_slot) or _resolve_default_duration_minutes(ai_profile)`,
+onde `original_slot` vem de `context["calendar_busy_slots"]` filtrado por `lead_id`
+(mesma limitação de janela de 30 dias) e `_original_duration_minutes()` calcula
+`end_at - start_at` do appointment encontrado.
+
+### Múltiplos serviços com durações diferentes (Tabela de Serviços e Preços)
+
+Quando o profissional oferece sessões de duração variável (ex.: 30/60/90 min por
+tipo de serviço), ele cadastra cada linha em **Base de Conhecimento → "Tabela de
+Serviços e Preços"** (categoria `service_pricing_table`, texto livre — uma linha por
+serviço, formato `Nome — duração: preço`, ex.: `Sessão avulsa - 30min: R$120`).
+Disponível em qualquer `appointment_mode` (não exclusiva do modo comercial).
+
+`_build_child_prompt_agendamento()` (`decision_engine.py`) lê
+`context["knowledge_items"]["service_pricing_table"]` (mesma chave já consumida pela
+filha de qualificação no modo comercial) e injeta um bloco "SERVIÇOS E DURAÇÕES
+DISPONÍVEIS" instruindo a IA a identificar a qual linha o lead se refere e preencher
+`signals_structured.meeting_duration_minutes` com a duração (minutos) dessa linha.
+**Regra de ambiguidade:** se houver mais de uma linha e não for possível saber qual o
+lead quer, a IA deve perguntar antes de confirmar — nunca assume uma duração quando
+há ambiguidade real. Sem tabela cadastrada, o bloco não é injetado e a duração cai
+direto no `default_session_duration_minutes` da conta.
+
+**Onde configurar:** "Configurar Agente → Apresentação → Disponibilidade de horários
+→ Duração da sessão" (duração padrão, slider 15–180 min) e "Configurar Agente →
+Base de Conhecimento → Tabela de Serviços e Preços" (durações por serviço).
+
+---
+
 ## Título do compromisso gerado por IA (fluxo real)
 
 No fluxo real (não-Playground), `handle_meeting_scheduled()` chama
@@ -402,7 +452,7 @@ Quando o lead pede para cancelar ou remarcar uma reunião já confirmada (`bot_d
 | Sinal | Ação | Efeito no bot |
 |---|---|---|
 | `meeting_cancel_requested` | `crm_client.cancel_appointment(appointment_id)` → `POST /api/appointments/{id}/cancel` | `set_lead_bot_disabled(lead_id, False)` — bot reactivado, volta ao fluxo normal |
-| `meeting_reschedule_requested` + `meeting_datetime_candidate` válido | `crm_client.reschedule_appointment(appointment_id, start_at=..., end_at=...)` → `PUT /api/appointments/{id}` | Bot permanece desactivado, `bot_disabled_reason` inalterado — continua em modo de gestão pós-confirmação |
+| `meeting_reschedule_requested` + `meeting_datetime_candidate` válido | `crm_client.reschedule_appointment(appointment_id, start_at=..., end_at=...)` → `PUT /api/appointments/{id}` (`end_at` preserva a duração original do appointment — ver "Duração da sessão" acima) | Bot permanece desactivado, `bot_disabled_reason` inalterado — continua em modo de gestão pós-confirmação |
 
 Ambas as chamadas passam por `routes/appointments.py` (não pelas rotas de `routes/leads.py`), aplicando automaticamente a limpeza/recriação de jobs e a sincronização com o Google Calendar descritas na secção anterior.
 

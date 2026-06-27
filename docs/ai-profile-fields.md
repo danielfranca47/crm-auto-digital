@@ -1,6 +1,6 @@
 # AI Profile — Documentação de Campos
 
-> Atualizado em: 2026-06-25
+> Atualizado em: 2026-06-27
 
 ---
 
@@ -166,6 +166,7 @@ read-only).
 | `scheduling_offer_style` | Coluna direta | |
 | `meeting_management_enabled` | Coluna direta | |
 | `availability_schedule` | Coluna direta | Editado aqui como texto livre — ver discrepância acima |
+| `default_session_duration_minutes` | Coluna direta | Card "Duração da sessão" (slider 15–180 min) — usada pela IA ao confirmar agendamento quando não há tabela de serviços com duração mais específica; ver [`agenda.md`](architecture/agenda.md#duração-da-sessão-fixa-vs-por-serviço) |
 
 ### Camada 6 — Oferta (`CamadaOferta.tsx`, condicional: `agent_mode ∈ {direto, closer}`)
 
