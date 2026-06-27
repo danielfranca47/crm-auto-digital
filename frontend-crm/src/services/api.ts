@@ -1340,10 +1340,10 @@ export const api = {
         followup_outcome_instructions:          (profile as any)?.followup_outcome_instructions          ?? null,
 
         // Apresentação e agendamento
-        // presentation_variant (backend) → appointment_mode (frontend): scheduler=exploratory, sales=commercial
+        // appointment_mode é coluna de topo própria (lida pelo decision engine via
+        // ai_profile.get("appointment_mode")) — fallback em offer_pack só para perfis
+        // salvos antes da correção deste bug (valor nunca chegava à coluna de topo)
         appointment_mode:        (
-          (profile as any)?.presentation_variant === 'sales' ? 'commercial' :
-          (profile as any)?.presentation_variant === 'scheduler' ? 'exploratory' :
           (profile as any)?.appointment_mode ?? pack.appointment_mode ?? DEFAULT_AGENT_CONFIG.appointment_mode
         ) as 'commercial' | 'exploratory',
         appointment_reminder_h1: (() => {
@@ -1425,7 +1425,6 @@ export const api = {
         interval_max:        config.interval_max,
 
         // Apresentação e agendamento
-        appointment_mode:        config.appointment_mode,
         calendar_integration:    config.calendar_integration,
 
         // Oferta e pagamento
@@ -1454,7 +1453,8 @@ export const api = {
         timezone:            config.timezone,
         custom_instructions: config.custom_instructions,
         response_style:      config.response_style,
-        // appointment_mode (frontend) → presentation_variant (backend): exploratory=scheduler, commercial=sales
+        appointment_mode:     config.appointment_mode,
+        // presentation_variant acompanha appointment_mode (framing comercial = "sales")
         presentation_variant: config.appointment_mode === 'commercial' ? 'sales' : 'scheduler',
         niche:               config.niche,
         target_audience:     config.target_audience,

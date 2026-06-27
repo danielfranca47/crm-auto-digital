@@ -57,7 +57,7 @@ qualification_score_threshold, buying_signal_keywords, qualification_required_fi
 media_fallback, media_fallback_msg, opt_out_keywords, opt_out_disable, opt_out_notify,
 opt_out_confirm, opt_out_confirm_msg, lgpd_mode, lgpd_msg, reactivation_mode, reactivation_msg,
 daily_limit, interval_min, interval_max,
-appointment_mode, calendar_integration,
+calendar_integration,
 media_url (← offer_media_url), media_type (← offer_media_type), anchor_price (← offer_anchor_price),
 guarantee_text (← offer_guarantee_text), upsell_message (← offer_upsell_message)
 ```
@@ -71,7 +71,6 @@ Todos os demais campos de `AgentConfig` são colunas diretas em `ai_profiles`.
 | `nurture_vs_discard_rule` | Frontend tipa como `boolean` (`AgentConfig`), mas a coluna no backend é `String` (`"nurture"` / `"discard"`, default `"discard"`) e o schema Pydantic em `ai_profiles.py` espera `Optional[str]`. O frontend envia um `true`/`false` JS direto nesse campo — não há conversão boolean↔string visível em `api.ts`. Verificar antes de confiar neste campo em lógica de negócio nova. |
 | `qualification_required_fields` | Campo legado (pré-`qualification_fields`). É escrito **nas duas formas** — como coluna direta e dentro de `offer_pack` — simultaneamente, por compatibilidade durante a transição. |
 | `calendar_integration` | Tem coluna própria em `ai_profiles` (`server_default="none"`), mas o frontend só lê/escreve via `offer_pack.calendar_integration`. A coluna direta parece ser um resquício não usado pelo fluxo atual. |
-| `appointment_mode` | Não é lido diretamente na maioria dos casos — é derivado de `presentation_variant` (coluna direta real): `sales → commercial`, `scheduler → exploratory`. O fallback para coluna/`offer_pack` própria só ocorre se `presentation_variant` não for nenhum dos dois valores conhecidos. |
 | `availability_schedule` | Escrito por **duas UIs diferentes com formatos diferentes**: em Camada 3 · Pipeline (`CamadaPipeline.tsx`) é editado via drawer estruturado dia-a-dia e serializado como JSON (`parseCustomSchedule`/`serializeCustomSchedule`); em Camada 5 · Apresentação (`CamadaApresentacao.tsx`) é editado como texto livre num textarea ("Seg-Sex: 14h, 16h..."). As duas escrevem no mesmo campo string — a última gravação vence. Não investigado a fundo se isso é intencional (conceitos diferentes que acabaram compartilhando o nome do campo) ou um bug de sobreposição. |
 | `payment_webhook_url` | Não é uma coluna — é uma `@property` computada no model (`payment_webhook_url()`), montada a partir de `payment_gateway` + `payment_webhook_secret` + `CRM_PUBLIC_BASE_URL`. |
 
@@ -161,7 +160,7 @@ read-only).
 |---|---|---|
 | `briefing_enabled` / `briefing_channel` / `briefing_lead_time` | Coluna direta | |
 | `operator_whatsapp` | Coluna direta | |
-| `appointment_mode` | Derivado de `presentation_variant` — ver discrepância acima | |
+| `appointment_mode` | Coluna direta | `"exploratory"` (padrão) ou `"commercial"`; ao salvar, `presentation_variant` é atualizado em conjunto (`commercial→sales`, `exploratory→scheduler`) — controla também o bloco "MODO COMERCIAL" da filha de apresentação (`decision_engine.py`). Corrigido em 2026-06-27: até então a UI gravava o valor dentro de `offer_pack` (nunca lido pelo decision engine), tornando o toggle um no-op |
 | `calendar_integration` | `offer_pack` — ver discrepância acima | |
 | `scheduling_offer_style` | Coluna direta | |
 | `meeting_management_enabled` | Coluna direta | |
