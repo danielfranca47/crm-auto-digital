@@ -82,6 +82,26 @@ sejam todos lidos e enxergados pela IA, cada um identificado pelo seu título.
 
 | # | Commit | O que foi implementado |
 |---|---|---|
+| 1 | `661f543` | `_load_knowledge_items()` agrega múltiplas tabelas + instruções de prompt sobre identificar a tabela certa |
+
+**Detalhes do commit `661f543`:**
+- `backend-crm/services/ai_orchestrator/orchestrator.py` — `_MULTI_ITEM_CATEGORIES`,
+  `_render_service_pricing_block()`, `_load_knowledge_items()` agora agrega todos os
+  itens activos de `service_pricing_table`
+- `backend-executors/app/services/decision_engine.py` — instruções actualizadas nos
+  blocos de qualificação comercial e agendamento
+
+### Relatório da Fase 1 — o que mudou na prática
+
+**Antes:** se o profissional criasse uma segunda tabela de serviços (mesma categoria),
+ela era silenciosamente ignorada — só a IA via a tabela mais recente.
+
+**Agora:** todas as tabelas activas da categoria são lidas e enviadas à IA, cada uma
+identificada pelo seu título. A IA identifica primeiro a qual tabela o lead se refere
+(quando há mais de uma) e depois a linha certa dentro dela. Itens antigos (texto livre)
+continuam funcionando exactamente como antes — só ganham um cabeçalho com o título.
+
+**Para validar:** Cenário P1 abaixo (já validado via API + Playground).
 
 ---
 
