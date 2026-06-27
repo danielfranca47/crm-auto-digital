@@ -36,6 +36,7 @@ Arquivos em andamento ou recém-completados. Seguem o padrão do template.
 | `agent-local-v2-testes-manuais.md` | Guia de testes manuais para a app standalone (acompanha o ficheiro acima) |
 | `agentlocal-assistente-ia.md` | Em andamento |
 | `correcao-natural-llm-e-fixes-ui-descobertos.md` | Em andamento — planeado, código ainda não iniciado |
+| `duracao-sessao-agendamento-ia.md` | Fase 1 em implementação; Fase 2 planeada |
 
 ---
 

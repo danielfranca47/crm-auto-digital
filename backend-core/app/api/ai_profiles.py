@@ -198,6 +198,7 @@ class AIProfileBase(BaseModel):
     warming_session_preview: Optional[str] = None
     appointment_mode: Optional[str] = None
     scheduling_offer_style: Optional[str] = None
+    default_session_duration_minutes: Optional[int] = None
     availability_schedule: Optional[str] = None
     availability_mode: Optional[str] = "24h"
     meeting_management_enabled: bool = True
@@ -271,6 +272,7 @@ class AIProfileUpdate(BaseModel):
     warming_session_preview: Optional[str] = None
     appointment_mode: Optional[str] = None
     scheduling_offer_style: Optional[str] = None
+    default_session_duration_minutes: Optional[int] = None
     availability_schedule: Optional[str] = None
     availability_mode: Optional[str] = None
     meeting_management_enabled: Optional[bool] = None

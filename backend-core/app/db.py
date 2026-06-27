@@ -178,6 +178,7 @@ def ensure_ai_profile_columns() -> None:
         "warming_session_preview": {"default": None, "sqlite_type": "TEXT", "pg_type": "TEXT"},
         "appointment_mode": {"default": "exploratory", "sqlite_type": "TEXT", "pg_type": "VARCHAR"},
         "scheduling_offer_style": {"default": "offer_alternatives", "sqlite_type": "TEXT", "pg_type": "VARCHAR"},
+        "default_session_duration_minutes": {"default": 30, "sqlite_type": "INTEGER", "pg_type": "INTEGER"},
         "meeting_management_enabled": {"default": True, "sqlite_type": "INTEGER", "pg_type": "BOOLEAN"},
         "language": {"default": "pt-BR", "sqlite_type": "TEXT", "pg_type": "VARCHAR"},
         "generated_prompt_parts": {"default": None, "sqlite_type": "TEXT", "pg_type": "JSON"},

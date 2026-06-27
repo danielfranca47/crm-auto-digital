@@ -131,6 +131,16 @@ function ModalSchedulingOfferStyle({ value, onSave, onClose }: { value: string; 
   );
 }
 
+// ─── Modal: Duração da sessão ─────────────────────────────────
+function ModalSessionDuration({ value, onSave, onClose }: { value: number; onSave: (v: number) => void; onClose: () => void }) {
+  const [local, setLocal] = useState(value || 30);
+  return (
+    <ModalBase title="Duração da sessão" sub="Tempo bloqueado na agenda quando a IA confirma um agendamento" onClose={onClose} onSave={() => onSave(local)}>
+      <SliderField label="Duração padrão" value={local} min={15} max={180} step={15} format={v => `${v} min`} onChange={setLocal} />
+    </ModalBase>
+  );
+}
+
 // ─── Modal: Gestão pós-confirmação (cancelamento/reagendamento) ──
 function ModalMeetingManagement({ value, onSave, onClose }: { value: boolean; onSave: (v: boolean) => void; onClose: () => void }) {
   const [local, setLocal] = useState(value);
@@ -160,7 +170,7 @@ function ModalMeetingManagement({ value, onSave, onClose }: { value: boolean; on
 // ─────────────────────────────────────────────────────────────
 
 type DrawerKey = 'briefing' | null;
-type ModalKey  = 'calendario' | 'modoOperacao' | 'ofertaHorario' | 'gestaoPosConfirmacao' | null;
+type ModalKey  = 'calendario' | 'modoOperacao' | 'ofertaHorario' | 'duracaoSessao' | 'gestaoPosConfirmacao' | null;
 
 const APPOINTMENT_MODE_LABELS: Record<string, string> = {
   exploratory: 'Agendamento Exploratório',
@@ -177,6 +187,7 @@ export function CamadaApresentacao({ config, onUpdate }: CamadaApresentacaoProps
     : 'Desativado';
   const calLabel = CALENDAR_INTEGRATION_LABELS[config.calendar_integration] || 'Sem integração';
   const offerStyleLabel = SCHEDULING_OFFER_STYLE_LABELS[config.scheduling_offer_style] || 'Sempre oferecer alternativas';
+  const sessionDurationLabel = `${config.default_session_duration_minutes || 30} min`;
   const meetingManagementLabel = config.meeting_management_enabled !== false
     ? 'Bot continua disponível'
     : 'Desativado (handoff manual)';
@@ -257,6 +268,14 @@ export function CamadaApresentacao({ config, onUpdate }: CamadaApresentacaoProps
           status="ok"
           help="Sempre oferecer alternativas: o agente propõe 2-3 opções mesmo quando o horário pedido está livre (tática de escassez). Confirmar horário exato: o agente confirma direto quando o horário pedido está disponível."
         />
+        <EditCard
+          label="Duração da sessão"
+          value={sessionDurationLabel}
+          sub="Tempo bloqueado na agenda por agendamento"
+          onClick={() => setModal('duracaoSessao')}
+          status="ok"
+          help="Tempo padrão reservado na agenda quando a IA confirma um agendamento com o lead. Se o profissional tiver sessões de durações diferentes (ex.: 30/60/90 min), use o valor mais comum aqui — suporte a múltiplas durações por tipo de serviço está planejado."
+        />
       </div>
 
       {/* Seção: Gestão pós-confirmação */}
@@ -318,6 +337,13 @@ export function CamadaApresentacao({ config, onUpdate }: CamadaApresentacaoProps
           value={config.scheduling_offer_style || 'offer_alternatives'}
           onClose={() => setModal(null)}
           onSave={v => { onUpdate({ scheduling_offer_style: v as 'offer_alternatives' | 'confirm_exact' }); setModal(null); }}
+        />
+      )}
+      {modal === 'duracaoSessao' && (
+        <ModalSessionDuration
+          value={config.default_session_duration_minutes || 30}
+          onClose={() => setModal(null)}
+          onSave={v => { onUpdate({ default_session_duration_minutes: v }); setModal(null); }}
         />
       )}
       {modal === 'gestaoPosConfirmacao' && (

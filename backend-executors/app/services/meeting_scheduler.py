@@ -427,6 +427,30 @@ def _has_conflict(
     return False
 
 
+def _resolve_default_duration_minutes(ai_profile: Dict[str, Any]) -> int:
+    """Duração (em minutos) configurada pelo profissional para uma sessão — fallback 30."""
+    try:
+        value = int(ai_profile.get("default_session_duration_minutes") or 30)
+    except (TypeError, ValueError):
+        return 30
+    return value if value > 0 else 30
+
+
+def _original_duration_minutes(slot: Optional[Dict[str, Any]]) -> Optional[int]:
+    """Duração original de um appointment (calendar_busy_slots), se start/end forem válidos."""
+    if not slot:
+        return None
+    try:
+        slot_start = datetime.fromisoformat(str(slot.get("start_at")))
+        slot_end = datetime.fromisoformat(str(slot.get("end_at")))
+    except (ValueError, TypeError):
+        return None
+    slot_start = _ensure_aware(slot_start, "UTC").astimezone(timezone.utc)
+    slot_end = _ensure_aware(slot_end, "UTC").astimezone(timezone.utc)
+    minutes = int((slot_end - slot_start).total_seconds() / 60)
+    return minutes if minutes > 0 else None
+
+
 def _generate_conflict_message(
     ai_profile: Dict[str, Any],
     *,
@@ -714,7 +738,9 @@ def handle_meeting_scheduled(
         client.set_lead_bot_disabled(signal.lead_id, True, reason="meeting_scheduled")
         return None
 
-    end_dt = signal.start_at + timedelta(minutes=30)
+    ai_profile = context.get("ai_profile") or {}
+    duration_minutes = _resolve_default_duration_minutes(ai_profile)
+    end_dt = signal.start_at + timedelta(minutes=duration_minutes)
     window_end = now_utc + timedelta(days=CALENDAR_CONFLICT_WINDOW_DAYS)
     if signal.start_at > window_end:
         if logger:
@@ -738,7 +764,6 @@ def handle_meeting_scheduled(
             job_id=signal.job_id,
             reason="conflict_detected",
         )
-        ai_profile = context.get("ai_profile") or {}
         return _generate_conflict_message(ai_profile, logger=logger) or MEETING_CONFLICT_MESSAGE
 
     start_iso = signal.start_at.astimezone(timezone.utc).isoformat().replace("+00:00", "Z")
@@ -746,7 +771,6 @@ def handle_meeting_scheduled(
     if is_playground:
         title = "[Playground] Reunião agendada"
     else:
-        ai_profile = context.get("ai_profile") or {}
         title = generate_appointment_title(ai_profile, logger=logger) or default_appointment_title(ai_profile)
     description = (
         "Reunião simulada no Playground."
@@ -838,7 +862,11 @@ def handle_meeting_cancel_or_reschedule(
             )
         return None
 
-    end_dt = signal.new_start_at + timedelta(minutes=30)
+    original_slot = same_lead_slots[0]
+    duration_minutes = _original_duration_minutes(original_slot) or _resolve_default_duration_minutes(
+        context.get("ai_profile") or {}
+    )
+    end_dt = signal.new_start_at + timedelta(minutes=duration_minutes)
     start_iso = signal.new_start_at.astimezone(timezone.utc).isoformat().replace("+00:00", "Z")
     end_iso = end_dt.astimezone(timezone.utc).isoformat().replace("+00:00", "Z")
     try:
