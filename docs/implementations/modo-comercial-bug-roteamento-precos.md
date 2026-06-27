@@ -1,7 +1,7 @@
 # Modo Comercial não apresenta tabela de preços (bug de persistência + bug de roteamento)
 
 **Branch:** `main`
-**Status:** Em andamento — Fase 1 concluída e validada; Fase 2 identificada, NÃO investigada/corrigida ainda
+**Status:** Todos os cenários validados (Fase 1 e Fase 2 corrigidas e confirmadas)
 
 ---
 
@@ -57,7 +57,7 @@ Ao fazê-lo, descobri **dois bugs distintos**, em camadas diferentes:
   `appointment_mode: "exploratory"` — inalterado. O toggle era um no-op silencioso
   para o decision engine.
 
-### 2. Bloco "MODO COMERCIAL" não dispara mesmo com `appointment_mode="commercial"` (NÃO CORRIGIDO — Fase 2)
+### 2. Bloco "MODO COMERCIAL" não dispara mesmo com `appointment_mode="commercial"` (CORRIGIDO — Fase 2)
 
 - **Onde:** `backend-executors/app/services/decision_engine.py:2437-2441`
   ```python
@@ -96,28 +96,49 @@ Ao fazê-lo, descobri **dois bugs distintos**, em camadas diferentes:
   literal `"qualification"`) nunca fica verdadeira nesta passagem, então a tabela
   de preços nunca é injetada — o bot ignora o pedido de preço e empurra para
   agendamento.
-- **Hipóteses a investigar (não confirmadas ainda):**
-  a. `"recepcao"` pode ser o rótulo que a Mãe emite quando decide a rota mas o
-     guardrail de "Rule 3" (anti-loop, mencionado por um research agent anterior
-     em `decision_engine.py:4471-4479`) já promoveu o `route_for_child` para
-     `"apresentation"` sem alterar o `mother_decision.route_to` original — ou seja,
-     talvez a condição devesse comparar `effective_route`/`route_for_child` em vez
-     de `mother_decision.route_to`.
-  b. Pode ser que, para este `agent_mode`/playbook, a Mãe **nunca** emite
-     literalmente `"qualification"` como `route_to` — sempre usa `"recepcao"` como
-     sinónimo/rótulo — e o código de `decision_engine.py:2439` ficou desalinhado
-     com uma renomeação anterior (precisa de `git log -p` / `git blame` nessa
-     linha e em torno de `route_to` para confirmar quando/se isso mudou).
-  c. Pode haver mais de um valor possível para `route_to` nesta fase (`"recepcao"`,
-     `"qualification"`, talvez outros) e a condição precisa de cobrir todos, não só
-     um literal.
-- **Por que isto é mais profundo que o bug da Fase 1:** a Fase 1 era um problema
+- **Causa raiz confirmada (via leitura do código, sem alterações às cegas):**
+  Confirmada a hipótese (a) do levantamento original. Sequência exacta:
+  1. `compose_decision_output()` (linha ~4792) já chama
+     `effective_route_override=route_for_child` — ou seja, `effective_route`/
+     `decision_trace` **já estava correcto** (mostrava `"apresentation"`).
+  2. `route_for_child` (linha ~4407) começa como `mother_decision.route_to`, mas
+     pode ser promovido por três caminhos distintos antes do dispatch do prompt
+     da filha (linha ~4671): (i) `mother_decision.route_to=="qualification"` +
+     `missing_fields` vazio → promovido via Rule 3 anti-loop (linha 4471); (ii)
+     `mother_decision.route_to=="recepcao"` + `compound_follow_through` ou
+     `perceived_category` divergente → "saudação composta" (linhas 4411-4457);
+     (iii) a Mãe já devolve `"apresentation"` directamente.
+  3. O dispatch (linha 4671, `elif route_for_child == "apresentation":`) chama
+     `_build_child_prompt_apresentation(context, message_text, mother_decision)` —
+     **sem** receber `route_for_child`. A função só tem acesso ao
+     `mother_decision.route_to` **original** (pré-promoção).
+  4. Dentro dela, o gate do bloco MODO COMERCIAL (`_auto_promoted_from_qual`,
+     linha ~2355) só reconhecia o caminho (i) (`route_to=="qualification"`).
+     No teste com "Carla" (1ª mensagem do lead, rica: nome + interesse + pedido de
+     preço), o `_enforce_greeting_first` (linha 3785) força
+     `mother_decision.route_to="recepcao"` porque `outbound_count==0` (bot nunca
+     respondeu) — isto é o caminho (ii). `route_for_child` é correctamente
+     promovido para `"apresentation"`, mas o gate antigo nunca via isso, porque
+     só olhava para o `route_to` literal, não para o resultado da promoção.
+  5. `_build_mode_contract_context()` (usada para calcular `missing_fields`) não
+     depende de `mother_decision.route_to` — por isso é seguro alargar o gate sem
+     recalcular nada.
+- **Correcção aplicada:** `_auto_promoted_from_qual` passou a aceitar
+  `mother_decision.route_to in ("qualification", "recepcao")` (mantendo a
+  exigência de `missing_fields` vazio). O gate do bloco MODO COMERCIAL
+  (linha ~2442) foi simplificado para reutilizar `_auto_promoted_from_qual`
+  directamente, eliminando a duplicação da mesma condição em dois sítios.
+  Efeito colateral positivo (mesma causa raiz, sem mudança de escopo): o ramo
+  `elif presentation_variant == "scheduler"` / `else` (modo exploratório) do
+  mesmo bloco de aquecimento também passa a disparar nesse cenário de saudação
+  composta — antes também ficava preso pelo mesmo gate, em qualquer modo.
+- **Por que isto era mais profundo que o bug da Fase 1:** a Fase 1 era um problema
   de "o valor certo não chega ao sítio certo" (mecânico, 1 condição de leitura/escrita
-  trocada). Este é um problema de "a condição de negócio está a comparar contra o
-  valor errado" — requer entender o full fluxo de `mother_decision.route_to` vs.
-  `effective_route`/`route_for_child` em `decision_engine.py` antes de decidir a
-  correcção certa (e confirmar que não há mais nenhum sítio que dependa do
-  comportamento actual antes de mudar a condição).
+  trocada). Este era um problema de "a condição de negócio compara contra o valor
+  errado quando há mais de um caminho de promoção de rota" — confirmado por leitura
+  completa do fluxo `mother_decision.route_to` → `route_for_child` →
+  `effective_route_to` antes de tocar no código, em vez de mudar a string de
+  comparação às cegas.
 
 ---
 
@@ -159,6 +180,46 @@ correcção — ver Cenário C1 abaixo.
 
 ---
 
+### Fase 2 — Corrigir o gate do bloco MODO COMERCIAL (aceitar `route_to=="recepcao"`)
+
+**Objetivo:** fazer o bloco de aquecimento/MODO COMERCIAL disparar também quando a
+qualificação foi concluída na própria 1ª mensagem do lead (saudação composta), não
+só quando a Mãe devolve `route_to=="qualification"` literalmente.
+
+| Arquivo | O que mudou |
+|---|---|
+| `backend-executors/app/services/decision_engine.py` | `_build_child_prompt_apresentation()`: `_auto_promoted_from_qual` (linha ~2355) passou a aceitar `mother_decision.route_to in ("qualification", "recepcao")` em vez de só `"qualification"`; gate do bloco MODO COMERCIAL (linha ~2442) simplificado para reutilizar `_auto_promoted_from_qual` em vez de repetir a condição |
+
+### Commits Fase 2
+
+| # | Commit | O que foi implementado |
+|---|---|---|
+| 1 | `dc5aa4b` | `fix(decision-engine): bloco MODO COMERCIAL nao disparava na saudacao composta da 1a mensagem` |
+
+**Detalhes do commit `dc5aa4b`:**
+- `backend-executors/app/services/decision_engine.py` — ver tabela acima
+
+### Relatório da Fase 2 — o que mudou na prática
+
+**Antes:** quando a 1ª mensagem do lead já vinha completa (nome, interesse e pedido
+de preço, tudo numa mensagem só), o `_enforce_greeting_first` forçava a rota interna
+para `"recepcao"` (regra de "sempre saudar primeiro"). A filha de apresentação ainda
+respondia (a promoção para `"apresentation"` continuava a funcionar), mas o bloco que
+injeta a tabela de serviços/preços no prompt nunca via essa promoção — só reconhecia
+o caminho em que a Mãe devolve `"qualification"` directamente. Resultado: o bot
+ignorava o pedido de preço e empurrava direto para agendamento, mesmo com "Compromisso
+Comercial" activo.
+
+**Agora:** o mesmo gate reconhece os dois caminhos que levam à apresentação com
+qualificação completa — `"qualification"` (caminho já existente) e `"recepcao"`
+forçado por saudação composta (caminho novo). Confirmado via API directa
+(`POST /api/playground/chat`) repetindo a mensagem exacta de "Carla" que falhava
+antes — ver Cenário C2 abaixo.
+
+**Para validar:** Cenário C2 abaixo (já validado).
+
+---
+
 ## Checks de Validação
 
 ### Cenário C1 — `appointment_mode` persiste correctamente após a correcção
@@ -175,8 +236,8 @@ correcção — ver Cenário C1 abaixo.
   → "SALVAR ALTERAÇÕES" → "SALVAR APRESENTAÇÃO"; (4) `GET /ai-profiles/me` confirmou
   `appointment_mode: "commercial"`, `presentation_variant: "sales"` — corrigido.
 
-### Cenário C2 — Bot apresenta a tabela de preços quando perguntado genericamente (Fase 2 — NÃO PASSOU)
-- [ ] Com `appointment_mode="commercial"` activo, perguntar genericamente sobre
+### Cenário C2 — Bot apresenta a tabela de preços quando perguntado genericamente (Fase 2 — PASSOU)
+- [x] Com `appointment_mode="commercial"` activo, perguntar genericamente sobre
   serviços/preços (sem pedir agendamento) → bot deve citar a tabela de preços
   cadastrada
 - **Falhou em:** 27/06/2026 — múltiplas tentativas no Playground (leads #308, #309),
@@ -188,15 +249,18 @@ correcção — ver Cenário C1 abaixo.
   nome de serviço ou valor da tabela**. Resposta bruta da API capturada na secção
   "Problemas Identificados" item 2 acima — confirma `mother_decision.route_to:
   "recepcao"` em vez de `"qualification"`, impedindo o bloco comercial de disparar.
-- **Pendente:** diagnosticar e corrigir o bug de roteamento (ver hipóteses na
-  secção "Problemas Identificados" item 2). Requer leitura de
-  `decision_engine.py` em torno de onde `mother_decision.route_to` é definido
-  (provavelmente perto da função que decide `route_for_child`/Rule 3 anti-loop,
-  mencionada por research anterior em `decision_engine.py:4471-4479` e
-  `4599-4611`) antes de propor a correcção certa. **Não tentar corrigir às cegas
-  só mudando a string de comparação** — primeiro confirmar todos os valores
-  possíveis de `route_to` que a Mãe pode emitir nesta fase, e se `effective_route`
-  já existe como alternativa mais correcta para esta condição.
+- **Validado em:** 27/06/2026 — após aplicar a correcção (commit `dc5aa4b`) e
+  reiniciar `backend-executors` (não usa `--reload`), repeti via API
+  (`POST /api/playground/chat`, lead novo #310) a **mensagem exacta** de "Carla"
+  que falhava antes. Resposta: `mother_decision.route_to` continua `"recepcao"`
+  (comportamento correcto — saudação ainda é forçada no 1º contacto) e
+  `decision_trace.effective_route` continua `"apresentation"`, mas agora
+  `message_to_send` cita a tabela real: *"Oferecemos a sessão avulsa de 30min por
+  R$120 e a sessão estendida de 90min por R$220."* — valores exactos do item de
+  conhecimento legado (id=21) cadastrado na feature de múltiplas tabelas. O bot
+  identificou correctamente que "massagem relaxante" mapeia para essa tabela (e não
+  para a tabela "Ana — Hipnoterapia", também cadastrada na conta) e citou nome do
+  serviço + duração + preço antes de propor agendamento — confirma o bug corrigido.
 
 ---
 
@@ -209,9 +273,11 @@ correcção — ver Cenário C1 abaixo.
   exploratório por algum motivo, lembrar de trocar de volta via UI.
 - Servidores locais (backend-core:8001, backend-crm:8000, backend-executors:8002,
   frontend-crm:8080) estavam todos em execução no fim desta sessão.
-- Leads de sandbox criados durante os testes desta fase: #308 (mensagem simples),
-  #309 ("Carla", mensagem rica) — nenhum agendamento real foi confirmado nestes
-  leads (o bot só chegou a perguntar data/horário, sem o lead responder).
+  `backend-executors` foi reiniciado manualmente durante a Fase 2 (não usa
+  `--reload`) para carregar a correcção do commit `dc5aa4b`.
+- Leads de sandbox criados durante os testes: #308/#309 (Fase 2, falha original),
+  #310 (Fase 2, validação pós-correcção, via API) — nenhum agendamento real foi
+  confirmado em nenhum destes leads (apenas perguntas/respostas de preço).
 
 ## Ajustes Possíveis Pós-Implementação
 
