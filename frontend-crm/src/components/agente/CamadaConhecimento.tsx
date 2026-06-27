@@ -10,6 +10,7 @@ import {
 } from '@/types/agente';
 import { CamadaConhecimentoWizard } from './CamadaConhecimentoWizard';
 import { BusinessInfo } from './BusinessInfo';
+import { GuidedMultiTableSection, ModalServiceTable } from './ServicePricingTables';
 
 // ─── Cores de fase do funil ───────────────────────────────────
 const PHASE_COLORS: Record<string, { bg: string; text: string }> = {
@@ -27,7 +28,7 @@ const PHASE_COLORS: Record<string, { bg: string; text: string }> = {
   'Qualificação · Apresentação': { bg: '#1a2640', text: '#60a5fa' },
 };
 
-function PhaseTag({ phase }: { phase: string }) {
+export function PhaseTag({ phase }: { phase: string }) {
   const colors = PHASE_COLORS[phase] || { bg: 'var(--o-b1)', text: 'var(--o-sub)' };
   return (
     <span
@@ -44,7 +45,7 @@ function PhaseTag({ phase }: { phase: string }) {
 }
 
 // ─── Modal base (shared) ──────────────────────────────────────
-function ModalBase({ title, sub, onClose, onSave, children, saveLabel = 'Salvar', wide = false }: {
+export function ModalBase({ title, sub, onClose, onSave, children, saveLabel = 'Salvar', wide = false }: {
   title: string; sub: string; onClose: () => void; onSave?: () => void; children: React.ReactNode; saveLabel?: string; wide?: boolean;
 }) {
   return (
@@ -800,7 +801,7 @@ function FunnelProgressBar({
 }
 
 // ─── Toggle de ativo no funil ─────────────────────────────────
-function FunnelToggle({
+export function FunnelToggle({
   active,
   onChange,
   disabled,
@@ -1036,6 +1037,7 @@ export function CamadaConhecimento({
   const [modalAddExtra, setModalAddExtra] = useState(false);
   const [viewItem, setViewItem]       = useState<KnowledgeItem | null>(null);
   const [editExtra, setEditExtra]     = useState<KnowledgeItem | null>(null);
+  const [serviceTableModal, setServiceTableModal] = useState<{ category: KnowledgeCategory; existingItem: KnowledgeItem | null } | null>(null);
 
   // Categorias brutas (sem personalização) — usadas pelo wizard
   const rawBaseCategories: KnowledgeCategory[] =
@@ -1057,10 +1059,23 @@ export function CamadaConhecimento({
   const guidedCommercialCategories: KnowledgeCategory[] = commercialCategories
     .map(cat => getPersonalizedCategory(cat, agentConfig ?? {}));
 
-  // Mapa de category → item existente
+  // Mapa de category → item existente (primeiro/mais recente — usado por categorias de item único)
   const itemByCategory = new Map<string, KnowledgeItem>();
   for (const item of items) {
     if (item.category) itemByCategory.set(item.category, item);
+  }
+
+  // Mapa de category → todos os itens (usado por categorias allowMultiple), ordenado por criação
+  const itemsGroupedByCategory = new Map<string, KnowledgeItem[]>();
+  for (const item of items) {
+    if (item.category) {
+      const list = itemsGroupedByCategory.get(item.category) ?? [];
+      list.push(item);
+      itemsGroupedByCategory.set(item.category, list);
+    }
+  }
+  for (const list of itemsGroupedByCategory.values()) {
+    list.sort((a, b) => a.created_at.localeCompare(b.created_at));
   }
 
   // Itens "extras" — sem categoria guiada (ou com categoria desconhecida)
@@ -1250,6 +1265,22 @@ export function CamadaConhecimento({
               </div>
             )}
             {filteredGuidedCategories.map(cat => {
+              if (cat.allowMultiple) {
+                return (
+                  <GuidedMultiTableSection
+                    key={cat.key}
+                    category={cat}
+                    items={itemsGroupedByCategory.get(cat.key) ?? []}
+                    onAdd={() => setServiceTableModal({ category: cat, existingItem: null })}
+                    onEdit={item => setServiceTableModal({ category: cat, existingItem: item })}
+                    onDelete={item => handleDelete(item.id)}
+                    onToggleActive={item => handleToggleActive(item)}
+                    activeOverrides={activeOverrides}
+                    deletingId={deleting}
+                    togglingId={togglingId}
+                  />
+                );
+              }
               const item = itemByCategory.get(cat.key) ?? null;
               return (
                 <GuidedSectionCard
@@ -1457,6 +1488,14 @@ export function CamadaConhecimento({
           existingItem={itemByCategory.get(guidedModal.key) ?? null}
           onClose={() => setGuidedModal(null)}
           onSaved={() => { setGuidedModal(null); load(); }}
+        />
+      )}
+      {serviceTableModal && (
+        <ModalServiceTable
+          category={serviceTableModal.category}
+          existingItem={serviceTableModal.existingItem}
+          onClose={() => setServiceTableModal(null)}
+          onSaved={() => { setServiceTableModal(null); load(); }}
         />
       )}
       {modalAddExtra && (

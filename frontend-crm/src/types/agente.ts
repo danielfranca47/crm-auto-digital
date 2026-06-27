@@ -592,6 +592,8 @@ export interface KnowledgeCategory {
   placeholder: string;
   importance: 'critical' | 'recommended' | 'optional';
   when_used?: string;
+  /** Se true, a categoria aceita múltiplos itens (várias "tabelas" nomeadas pelo título) em vez de um único item. */
+  allowMultiple?: boolean;
 }
 
 const CAT_SOCIAL_PROOF_SDR: KnowledgeCategory = {
@@ -894,6 +896,7 @@ const CAT_SERVICE_PRICING_TABLE: KnowledgeCategory = {
   placeholder: 'Sessão avulsa — [duração]: R$ [valor]\nPacote [X] sessões: R$ [valor] (economia de [%])\nPacote [Y] sessões: R$ [valor]\n\nSe houver diferença entre modalidades (ex: presencial vs. online), especifique aqui também.',
   importance: 'critical',
   when_used: 'Apresentação comercial · Agendamento',
+  allowMultiple: true,
 };
 
 const CAT_COMMERCIAL_OBJECTIONS: KnowledgeCategory = {
