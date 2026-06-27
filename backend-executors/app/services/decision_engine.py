@@ -3517,6 +3517,19 @@ def _build_child_prompt_agendamento(
             "Pergunte ao lead qual horário prefere e confirme que vai verificar a agenda.\n\n"
         )
 
+    _pricing_table = str((context.get("knowledge_items") or {}).get("service_pricing_table") or "").strip()
+    _services_block = ""
+    if _pricing_table:
+        _services_block = (
+            f"SERVIÇOS E DURAÇÕES DISPONÍVEIS (cadastrado pelo profissional — cada linha pode ter uma "
+            f"duração diferente):\n{_pricing_table}\n\n"
+            "INSTRUÇÃO: identifique a que serviço/duração o lead se refere (pelo que ele pediu ou pelo "
+            "histórico da conversa) e preencha signals_structured.meeting_duration_minutes com a duração "
+            "(em minutos) dessa linha ao confirmar o horário. Se houver mais de uma opção e não for "
+            "possível saber qual o lead quer, PERGUNTE qual serviço ele deseja antes de confirmar — nunca "
+            "assuma uma duração quando há ambiguidade real.\n\n"
+        )
+
     _sched_prompt = (
         _build_daughter_identity_block(context, "agendamento")
         + "Você é o assistente de um CRM de WhatsApp na fase de AGENDAMENTO.\n\n"
@@ -3524,6 +3537,7 @@ def _build_child_prompt_agendamento(
         "OBJETIVO: Confirmar data e horário para o serviço solicitado pelo lead.\n\n"
         + _busy_block
         + _avail_block
+        + _services_block
         + "REGRAS OBRIGATÓRIAS:\n"
         "- Foco total em confirmar o horário. NÃO reintroduza temas de venda ou preços.\n"
         "- Seja conciso e direto: máximo 2-3 frases.\n"
@@ -3540,7 +3554,7 @@ def _build_child_prompt_agendamento(
         '  "outcome": null,\n'
         '  "kanban_highlight": null,\n'
         '  "signals": [],\n'
-        '  "signals_structured": {"meeting_proposed": false, "meeting_datetime_candidate": null} (opcional),\n'
+        '  "signals_structured": {"meeting_proposed": false, "meeting_datetime_candidate": null, "meeting_duration_minutes": null} (opcional),\n'
         '  "confidence": 0.0\n'
         "}\n\n"
         "REGRAS DE SINALIZAÇÃO ESTRUTURADA (obrigatório):\n"
@@ -3552,7 +3566,10 @@ def _build_child_prompt_agendamento(
         "  * Nunca assumir timezone fixa; sempre respeitar ai_profile.timezone.\n"
         "  * Para datas relativas (amanhã, depois de amanhã, etc.) ou nomes de dia da semana (sábado, "
         "quinta-feira, etc.), procure a linha correspondente na tabela_de_dias abaixo e use a data dessa linha — "
-        "NUNCA calcule a data ou o dia da semana por conta própria, esse cálculo não é confiável.\n\n"
+        "NUNCA calcule a data ou o dia da semana por conta própria, esse cálculo não é confiável.\n"
+        "  * meeting_duration_minutes: preencha (inteiro, em minutos) só quando houver SERVIÇOS E DURAÇÕES "
+        "DISPONÍVEIS configurado acima e você tiver identificado claramente a qual linha o lead se refere; "
+        "deixe null se não houver essa tabela configurada ou se ainda não confirmou qual serviço o lead quer.\n\n"
         f"Contexto:\n"
         "- tabela_de_dias (hoje + próximos 14 dias; use para resolver QUALQUER data relativa ou nome de dia "
         f"da semana, SEM calcular por conta própria):\n{dates_table}\n"

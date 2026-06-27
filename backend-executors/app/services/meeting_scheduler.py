@@ -35,6 +35,7 @@ class MeetingSignal:
     meeting_scheduled: bool
     start_at: Optional[datetime]
     is_phase_entry: bool
+    duration_minutes: Optional[int] = None
 
 
 
@@ -100,6 +101,17 @@ def _extract_meeting_signal(context: Dict[str, Any], decision: DecisionOutput) -
             tz_name=tz_name,
             now_utc=now_utc,
         )
+
+    duration_minutes = None
+    try:
+        raw_duration = structured_signals.get("meeting_duration_minutes")
+        if raw_duration is not None:
+            duration_minutes = int(raw_duration)
+            if duration_minutes <= 0:
+                duration_minutes = None
+    except (TypeError, ValueError):
+        duration_minutes = None
+
     return MeetingSignal(
         lead_id=int(lead_id) if lead_id is not None else None,
         user_id=int(user_id) if user_id is not None else None,
@@ -108,6 +120,7 @@ def _extract_meeting_signal(context: Dict[str, Any], decision: DecisionOutput) -
         meeting_scheduled=meeting_scheduled,
         start_at=start_at,
         is_phase_entry=is_phase_entry,
+        duration_minutes=duration_minutes,
     )
 
 
@@ -739,7 +752,7 @@ def handle_meeting_scheduled(
         return None
 
     ai_profile = context.get("ai_profile") or {}
-    duration_minutes = _resolve_default_duration_minutes(ai_profile)
+    duration_minutes = signal.duration_minutes or _resolve_default_duration_minutes(ai_profile)
     end_dt = signal.start_at + timedelta(minutes=duration_minutes)
     window_end = now_utc + timedelta(days=CALENDAR_CONFLICT_WINDOW_DAYS)
     if signal.start_at > window_end:

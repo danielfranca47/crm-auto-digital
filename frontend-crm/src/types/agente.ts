@@ -889,11 +889,11 @@ const CAT_REFERRAL_SCRIPT: KnowledgeCategory = {
 const CAT_SERVICE_PRICING_TABLE: KnowledgeCategory = {
   key: 'service_pricing_table',
   label: 'Tabela de Serviços e Preços',
-  description: 'Lista de serviços, pacotes e valores que o agente pode apresentar ao lead.',
-  hint: 'Liste todos os serviços e pacotes disponíveis com seus respectivos valores. O agente usará essas informações para apresentar opções ao lead de [PÚBLICO] em [NICHO] e conduzir a escolha de um serviço antes de agendar.',
+  description: 'Lista de serviços, pacotes e valores que o agente pode apresentar ao lead. Se os serviços tiverem durações diferentes, o agente também usa esta lista para agendar com a duração certa.',
+  hint: 'Liste todos os serviços e pacotes disponíveis com seus respectivos valores e duração. O agente usa para apresentar opções ao lead de [PÚBLICO] em [NICHO], conduzir a escolha de um serviço, e bloquear o tempo certo na agenda ao confirmar o horário.',
   placeholder: 'Sessão avulsa — [duração]: R$ [valor]\nPacote [X] sessões: R$ [valor] (economia de [%])\nPacote [Y] sessões: R$ [valor]\n\nSe houver diferença entre modalidades (ex: presencial vs. online), especifique aqui também.',
   importance: 'critical',
-  when_used: 'Apresentação comercial',
+  when_used: 'Apresentação comercial · Agendamento',
 };
 
 const CAT_COMMERCIAL_OBJECTIONS: KnowledgeCategory = {
@@ -946,8 +946,9 @@ const CAT_PRE_COMMITMENT_FAQ: KnowledgeCategory = {
   when_used: 'Apresentação comercial',
 };
 
+// CAT_SERVICE_PRICING_TABLE não entra aqui — já está na lista padrão de hybrid_scheduler
+// (KNOWLEDGE_CATEGORIES_BY_TEMPLATE.hybrid_scheduler), disponível em qualquer appointment_mode.
 export const KNOWLEDGE_CATEGORIES_HYBRID_COMMERCIAL: KnowledgeCategory[] = [
-  CAT_SERVICE_PRICING_TABLE,
   CAT_COMMERCIAL_OBJECTIONS,
   CAT_SERVICE_DIFFERENTIALS,
   CAT_ACTIVE_PROMOTION,
@@ -997,6 +998,7 @@ export const KNOWLEDGE_CATEGORIES_BY_TEMPLATE: Record<string, KnowledgeCategory[
     CAT_WARMING_SCRIPT,
     CAT_PAIN_QUESTIONS,
     CAT_SCHEDULING_POLICY,
+    CAT_SERVICE_PRICING_TABLE,
     CAT_SERVICE_FAQ,
     CAT_POST_SESSION_FOLLOWUP,
     CAT_PRE_SESSION_MATERIAL,
