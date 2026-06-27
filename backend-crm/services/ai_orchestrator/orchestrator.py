@@ -454,20 +454,69 @@ def _load_training_examples(user_id: int, ai_profile_id: int, agent_mode: str | 
     return result
 
 
+_MULTI_ITEM_CATEGORIES = {"service_pricing_table"}
+
+
+def _render_service_pricing_block(title: str, content_text: str) -> str:
+    """Renderiza um item de service_pricing_table como bloco de texto p/ o LLM.
+
+    Itens novos guardam linhas estruturadas como JSON ({"format": "structured_v1",
+    "rows": [...]}); itens legados guardam texto livre. Em qualquer um dos casos o
+    resultado final é só texto, com o título da tabela como cabeçalho.
+    """
+    body = content_text
+    try:
+        parsed = json.loads(content_text)
+    except (TypeError, ValueError):
+        parsed = None
+    if isinstance(parsed, dict) and parsed.get("format") == "structured_v1" and isinstance(parsed.get("rows"), list):
+        lines = []
+        for row in parsed["rows"]:
+            if not isinstance(row, dict):
+                continue
+            nome = str(row.get("nome") or "").strip()
+            if not nome:
+                continue
+            duracao = row.get("duracaoMinutos")
+            preco = str(row.get("preco") or "").strip()
+            descricao = str(row.get("descricao") or "").strip()
+            line = f"{nome} — {duracao}min" if duracao else nome
+            if preco:
+                line += f": {preco}"
+            if descricao:
+                line += f" ({descricao})"
+            lines.append(f"- {line}")
+        body = "\n".join(lines)
+    if not body:
+        return ""
+    return f"## {title}\n{body}" if title else body
+
+
 def _load_knowledge_items(user_id: int) -> Dict[str, str]:
-    """Carrega knowledge items do utilizador agrupados por categoria (primeira entrada por categoria)."""
+    """Carrega knowledge items do utilizador agrupados por categoria.
+
+    Para a maioria das categorias, só a entrada mais recente é usada (1 item por
+    categoria). Categorias em _MULTI_ITEM_CATEGORIES agregam TODOS os itens activos
+    (ex.: várias tabelas de serviços/preços, cada uma identificada pelo seu título)."""
     knowledge_by_category: Dict[str, str] = {}
+    multi_blocks: Dict[str, list] = {}
     with get_connection() as conn:
         conn.row_factory = sqlite3.Row
         cur = conn.cursor()
         cur.execute(
-            "SELECT category, content_text FROM knowledge_items WHERE user_id = ? AND active_in_funnel = 1 ORDER BY updated_at DESC",
+            "SELECT title, category, content_text FROM knowledge_items WHERE user_id = ? AND active_in_funnel = 1 ORDER BY updated_at DESC",
             (user_id,),
         )
         for row in cur.fetchall():
             cat = row["category"] or "uncategorized"
-            if cat not in knowledge_by_category:
+            if cat in _MULTI_ITEM_CATEGORIES:
+                block = _render_service_pricing_block(row["title"] or "", row["content_text"] or "")
+                if block:
+                    multi_blocks.setdefault(cat, []).append(block)
+            elif cat not in knowledge_by_category:
                 knowledge_by_category[cat] = row["content_text"]
+    for cat, blocks in multi_blocks.items():
+        knowledge_by_category[cat] = "\n\n".join(blocks)
     return knowledge_by_category
 
 

@@ -2470,9 +2470,12 @@ def _build_child_prompt_apresentation(
                     "  PROVA SOCIAL: (não configurada — use tom acolhedor e destaque o diferencial do profissional)\n"
                 )
                 + (
-                    f"  TABELA DE SERVIÇOS/PREÇOS (apresentar para contextualizar a oferta):\n"
+                    f"  TABELA DE SERVIÇOS/PREÇOS (apresentar para contextualizar a oferta — pode haver mais "
+                    f"de uma tabela, cada uma com um título próprio, ex. por profissional ou especialidade):\n"
                     f"  {pricing}\n"
-                    f"  INSTRUÇÃO: Apresente com clareza. Nunca invente preços ou condições não listadas.\n"
+                    f"  INSTRUÇÃO: Apresente com clareza. Se houver mais de uma tabela, identifique qual é "
+                    f"relevante para o lead antes de apresentar valores. Nunca invente preços ou condições "
+                    f"não listadas.\n"
                     if pricing else
                     "  TABELA DE SERVIÇOS/PREÇOS: (não configurada — pergunte o interesse antes de citar valores)\n"
                 )
@@ -3521,13 +3524,14 @@ def _build_child_prompt_agendamento(
     _services_block = ""
     if _pricing_table:
         _services_block = (
-            f"SERVIÇOS E DURAÇÕES DISPONÍVEIS (cadastrado pelo profissional — cada linha pode ter uma "
-            f"duração diferente):\n{_pricing_table}\n\n"
-            "INSTRUÇÃO: identifique a que serviço/duração o lead se refere (pelo que ele pediu ou pelo "
-            "histórico da conversa) e preencha signals_structured.meeting_duration_minutes com a duração "
-            "(em minutos) dessa linha ao confirmar o horário. Se houver mais de uma opção e não for "
-            "possível saber qual o lead quer, PERGUNTE qual serviço ele deseja antes de confirmar — nunca "
-            "assuma uma duração quando há ambiguidade real.\n\n"
+            f"SERVIÇOS E DURAÇÕES DISPONÍVEIS (cadastrado pelo profissional — pode haver mais de uma tabela, "
+            f"cada uma com um título próprio, e cada linha pode ter uma duração diferente):\n{_pricing_table}\n\n"
+            "INSTRUÇÃO: se houver mais de uma tabela (títulos diferentes, ex. por profissional ou "
+            "especialidade), identifique primeiro a qual tabela o lead se refere; depois, identifique a que "
+            "serviço/duração ele se refere dentro dela (pelo que ele pediu ou pelo histórico da conversa) e "
+            "preencha signals_structured.meeting_duration_minutes com a duração (em minutos) dessa linha ao "
+            "confirmar o horário. Se houver mais de uma opção (tabela ou linha) e não for possível saber qual "
+            "o lead quer, PERGUNTE antes de confirmar — nunca assuma uma duração quando há ambiguidade real.\n\n"
         )
 
     _sched_prompt = (
