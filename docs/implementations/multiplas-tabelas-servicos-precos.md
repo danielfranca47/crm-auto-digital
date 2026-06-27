@@ -1,7 +1,7 @@
 # Múltiplas tabelas de serviços/preços na Base de Conhecimento
 
 **Branch:** `main`
-**Status:** Em andamento
+**Status:** Todos os cenários validados (P1–P3 via Playground/browser)
 
 ---
 
@@ -120,6 +120,35 @@ editor estruturado por linha.
 
 | # | Commit | O que foi implementado |
 |---|---|---|
+| 1 | `9429e5a` | `allowMultiple` no tipo + `ServicePricingTables.tsx` (novo) + integração em `CamadaConhecimento.tsx` |
+
+**Detalhes do commit `9429e5a`:**
+- `frontend-crm/src/types/agente.ts` — `KnowledgeCategory.allowMultiple`;
+  `CAT_SERVICE_PRICING_TABLE` marcada `allowMultiple: true`
+- `frontend-crm/src/components/agente/ServicePricingTables.tsx` (novo) —
+  `parseServicePricingContent()`/`serializeServicePricingRows()` (JSON
+  `structured_v1`); `GuidedMultiTableSection` (lista de tabelas); `ModalServiceTable`
+  (editor com toggle "Tabela estruturada" / "Texto livre")
+- `frontend-crm/src/components/agente/CamadaConhecimento.tsx` — agrupamento por
+  categoria (`itemsGroupedByCategory`); branch para `allowMultiple` no render;
+  exporta `ModalBase`/`PhaseTag`/`FunnelToggle` para reuso
+
+### Relatório da Fase 2 — o que mudou na prática
+
+**Antes:** a categoria "Tabela de Serviços e Preços" só permitia um item de texto
+livre por conta, editado numa única caixa de texto — sem forma de organizar por
+profissional/tipo de serviço nem de preencher campos separados (nome, duração,
+preço, descrição).
+
+**Agora:** em "Configurar Agente → Conhecimento → Tabela de Serviços e Preços", o
+profissional pode cadastrar **várias tabelas nomeadas** (ex.: "Ana — Hipnoterapia",
+"Fernanda — Estética"), cada uma com **linhas estruturadas** (nome, duração em
+minutos, preço, descrição opcional) preenchidas em campos próprios, em vez de texto
+livre. Tabelas antigas continuam funcionando exactamente como antes — abrem em modo
+"Texto livre" automaticamente, sem conversão forçada. Cada tabela pode ser pausada
+("No funil") ou removida individualmente, sem afectar as outras.
+
+**Para validar:** Cenários P2 e P3 abaixo (já validados via browser).
 
 ---
 
@@ -156,15 +185,36 @@ editor estruturado por linha.
     duração foi aplicada corretamente a partir da tabela da Ana.
 
 ### Cenário P2 — UI cria/edita/remove múltiplas tabelas
-- [ ] Criar 2 tabelas estruturadas via UI com nomes diferentes
-- [ ] Editar uma linha de uma tabela
-- [ ] Remover uma tabela
-- **Pendente**
+- [x] Criar 2 tabelas estruturadas via UI com nomes diferentes
+- [x] Editar uma linha de uma tabela
+- [x] Remover uma tabela
+- **Validado em:** 27/06/2026 — via browser (chrome-devtools MCP), conta de teste,
+  Camada 4 · Conhecimento → "Tabela de Serviços e Preços":
+  - **Criar:** "+ Adicionar tabela" → "Fernanda — Estética" com 1 serviço (Limpeza de
+    pele, 50min, R$150) → card passou de "2" para "3 tabelas cadastradas", preview
+    "1 serviço · 50 min" calculado corretamente a partir do JSON estruturado salvo.
+  - **Editar (adicionar linha):** abri "Ana — Hipnoterapia" para edição → modal abriu
+    em modo "Tabela estruturada" já preenchido (round-trip do JSON: nome, duração,
+    preço, descrição todos corretos) → adicionei 2ª linha ("Sessão de hipnoterapia em
+    dupla", 90min, 70€) → salvei → card atualizou para "2 serviços · 50–90 min".
+    Confirmado fim-a-fim via Playground (lead #307): "quero marcar a sessão de
+    hipnoterapia em dupla da Ana" → IA ofereceu horário e confirmou → 
+    `GET /api/appointments/lead/307`: `15:30Z`–`17:00Z` = **90 min**, exatamente a
+    linha nova adicionada pela UI.
+  - **Remover:** "✕" na tabela "Fernanda — Estética" → `window.confirm` tratado via
+    `handle_dialog` → card voltou para "2 tabelas cadastradas".
+  - **Pausar/reativar (extra, não no plano original mas mesmo mecanismo testado):**
+    toggle "No funil" → "Pausado" aplicado individualmente à tabela da Fernanda sem
+    afetar as outras duas.
 
 ### Cenário P3 — Item legado (texto livre) continua editável
-- [ ] Abrir para edição um item de `service_pricing_table` criado antes desta feature
+- [x] Abrir para edição um item de `service_pricing_table` criado antes desta feature
   (texto livre, não JSON) → deve abrir em modo "Texto livre", sem forçar conversão
-- **Pendente**
+- **Validado em:** 27/06/2026 — "EDITAR" no item legado "Tabela de Serviços e Preços"
+  (id=21, criado na Fase 2 da feature de duração, antes desta feature) abriu o modal
+  com "TEXTO LIVRE" como modo activo e o conteúdo original intacto na textarea — sem
+  nenhuma tentativa de conversão ou parsing forçado para linhas estruturadas. Fechado
+  sem salvar (Cancelar) para não alterar o item original.
 
 ---
 
