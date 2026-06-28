@@ -12,6 +12,7 @@ import { ConexaoNumero } from '@/components/agente/ConexaoNumero';
 import { CamadaFluxoVenda } from '@/components/agente/CamadaFluxoVenda';
 import { AgentExportImportPanel } from '@/components/agente/AgentExportImportPanel';
 import { TooltipProvider } from '@/components/ui/tooltip';
+import { useToast } from '@/hooks/use-toast';
 import { api } from '@/services/api';
 import { DEFAULT_AGENT_CONFIG, KNOWLEDGE_CATEGORIES_BY_TEMPLATE } from '@/types/agente';
 import type { AgentConfig } from '@/types/agente';
@@ -434,6 +435,7 @@ function PainelCamadaFollowup({ config, onUpdate, onBack, onSave, saving, dirty 
 // ─────────────────────────────────────────────────────────────
 
 export default function AiProfile() {
+  const { toast } = useToast();
   const [activePanel, setActivePanel]     = useState<PanelId>('overview');
   const [config, setConfig]               = useState<AgentConfig>(DEFAULT_AGENT_CONFIG);
   const [savedConfig, setSavedConfig]     = useState<AgentConfig>(DEFAULT_AGENT_CONFIG);
@@ -517,8 +519,13 @@ export default function AiProfile() {
     try {
       await api.agente.saveConfig(config);
       setSavedConfig(config);
+      toast({ title: 'Configuração salva' });
     } catch {
-      setError('Erro ao salvar. Tente novamente.');
+      toast({
+        title: 'Erro ao salvar',
+        description: 'Não foi possível salvar a configuração. Tente novamente.',
+        variant: 'destructive',
+      });
     } finally {
       setSaving(false);
     }
