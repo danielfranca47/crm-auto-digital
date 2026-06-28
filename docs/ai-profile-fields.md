@@ -1,6 +1,6 @@
 # AI Profile — Documentação de Campos
 
-> Atualizado em: 2026-06-27
+> Atualizado em: 2026-06-28
 
 ---
 
@@ -37,6 +37,22 @@ O estado global (`AgentConfig`) vive em `AiProfile.tsx` e é passado via props p
 subcomponente (`config` + `onUpdate(partial)`). Nenhum subcomponente chama a API diretamente,
 exceto `CamadaConhecimento` (CRUD próprio de knowledge items) e `ConexaoNumero` (gerencia
 conexão WhatsApp via API própria).
+
+### Salvamento e feedback visual
+
+Um único `handleSave()` (`AiProfile.tsx`) é compartilhado por todos os painéis — chama
+`api.agente.saveConfig(config)` com o objeto `config` completo (não por campo). Qualquer
+modal/drawer de um painel (ex.: `ModalAppointmentMode` em `CamadaApresentacao.tsx`) só altera
+o estado local via `onUpdate(partial)`; a persistência real só ocorre quando o utilizador
+clica no botão "Salvar"/"Salvar <Painel>" do banner "Editando..." (`isDirty=true`).
+
+Feedback via toast (`useToast` de `@/hooks/use-toast`, mesmo padrão usado em outras ~27 telas
+do app): sucesso dispara `toast({ title: "Configuração salva" })`; falha dispara
+`toast({ title: "Erro ao salvar", variant: "destructive" })`. O state `error` (separado) é
+usado **só** para a falha de carregamento inicial (`GET` na montagem do componente) — esse
+caso bloqueia a tela inteira porque genuinamente não há config para mostrar; falha de
+salvamento não bloqueia mais a tela (corrigido em 2026-06-28 — antes, qualquer erro de rede no
+save substituía toda a tela de configuração por um bloco de erro sem retry).
 
 ---
 
