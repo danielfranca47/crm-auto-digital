@@ -93,6 +93,39 @@ A secção "Critérios de Qualificação" no `LeadCardDialog` permite editar man
 - Instrução: lidar com agendamento (pedir dia/horário, confirmar, reagendar, enviar link)
 - Para SDR: confirma horário e indica que enviará link; para closer: mantém postura de avanço comercial
 
+### Estágio de aquecimento e `appointment_mode` (só `hybrid_scheduler`)
+
+Restrito a `template_key="hybrid_scheduler"`. Controlado pelo campo `appointment_mode`
+do AI Profile (coluna de topo — ver [`agents.md`](agents.md)):
+
+- **`"exploratory"`** (padrão): sessão sem compromisso de compra — aquece e propõe
+  a sessão directamente.
+- **`"commercial"`**: injeta um bloco "MODO COMERCIAL" no prompt — prova social,
+  TABELA DE SERVIÇOS/PREÇOS (`knowledge_items["service_pricing_table"]`, pode haver
+  mais de uma tabela), objeções, diferenciais, condição especial e política de
+  pagamento (sempre presencial — nunca link de checkout). Objectivo: obter o
+  compromisso verbal com um serviço/pacote específico antes de propor o agendamento.
+
+**Gate de disparo (`_auto_promoted_from_qual`):** o bloco de aquecimento (comercial
+ou exploratório) só é injectado no turno em que a qualificação é dada como concluída
+e a apresentação é alcançada — não em todos os turnos de apresentation. Dispara
+quando `missing_fields` está vazio **e** `mother_decision.route_to` é um dos dois
+caminhos que levam a essa transição:
+1. `"qualification"` — caminho directo: a Mãe roteou para qualification, mas já não
+   há campos em falta (Regra 3 anti-loop promove para apresentation).
+2. `"recepcao"` — saudação composta: a 1ª mensagem do lead já chega completa (nome +
+   interesse + pedido de serviço), `_enforce_greeting_first()` força `route_to` para
+   `"recepcao"` (saudação é sempre obrigatória no 1º contacto), mas o
+   `compound_follow_through`/`perceived_category` já promoveu `route_for_child` para
+   `"apresentation"` no mesmo turno (ver "Saudação composta" em
+   [`llm-architecture.md`](llm-architecture.md)). Sem este segundo caminho, o bloco
+   de aquecimento nunca disparava nas conversas que se qualificam sozinhas na
+   primeira mensagem — corrigido em 2026-06-28.
+
+Fora desses dois caminhos (ex.: lead já está em apresentation há vários turnos e a
+Mãe devolve `route_to="apresentation"` directamente), o bloco de aquecimento não é
+reinjectado — é um aquecimento de transição única, não recorrente.
+
 ---
 
 ## Pré-agendamento e Agendamento (só `_SCHEDULING_AGENT_TEMPLATES`)

@@ -76,6 +76,8 @@ Custo: 1 chamada LLM extra, só neste turno específico (primeira mensagem compo
 
 **Limite conhecido:** quando a rota comercial efectiva (via `compound_follow_through`/`perceived_category`) é `qualification`, a extracção e persistência de campos de qualificação não corre neste turno — o bloco que dispara essa extracção verifica `mother_decision.route_to == "qualification"`, que permanece `"recepcao"` neste cenário (só `route_for_child` é sobrescrito). Sem impacto prático hoje porque é sempre a primeira mensagem do lead; revisitar se isso se tornar relevante.
 
+**Caso irmão corrigido:** o mesmo padrão (gate que só reconhecia `route_to=="qualification"`, cego ao `route_for_child` promovido via saudação composta) bloqueava o bloco "MODO COMERCIAL" da filha de apresentação quando a rota comercial efectiva era `apresentation` em vez de `qualification` — ou seja, quando a 1ª mensagem do lead já vinha qualificada e pedindo preço/serviço. Corrigido em 2026-06-28 (gate ampliado para aceitar `route_to` em `("qualification", "recepcao")`). Ver [`pipeline-phases.md`](pipeline-phases.md#estágio-de-aquecimento-e-appointment_mode-só-hybrid_scheduler).
+
 ### ChildResult (saída da LLM Filha)
 | Campo | Tipo | Descrição |
 |---|---|---|

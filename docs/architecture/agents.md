@@ -91,6 +91,7 @@ Aliases aceitos: `whatsapp_send`, `maps_search_fallback`, `maps_enrich_fallback`
 | `custom_instructions` | string\|null | Instruções injetadas no system prompt |
 | `agent_mode` | string (enum) | Forma de vender (padrão: `"sdr_scheduler"`) |
 | `presentation_variant` | string\|null | Variante de apresentação |
+| `appointment_mode` | string (enum) | Coluna própria (padrão: `"exploratory"`). Ver enum abaixo e [`pipeline-phases.md`](pipeline-phases.md#presentation) para o efeito no prompt da filha de apresentação |
 | `hybrid_flow_style` | string\|null | Estilo do fluxo híbrido |
 | `offer_pack` | object\|null | JSON de configuração da oferta |
 | `identity_mode` | string (enum) | Modo de identidade (padrão: `"human_agent"`) |
@@ -154,6 +155,8 @@ Aliases aceitos: `whatsapp_send`, `maps_search_fallback`, `maps_enrich_fallback`
 
 **`presentation_variant`**: `"sales"`, `"scheduler"`, `null`
 
+**`appointment_mode`**: `"exploratory"` (padrão — sessão sem compromisso de compra), `"commercial"` (apresenta serviços/preços e busca compromisso antes de agendar — só com efeito para `template_key="hybrid_scheduler"`). Ao salvar via UI, `presentation_variant` é actualizado em conjunto (`commercial→sales`, `exploratory→scheduler`)
+
 **`hybrid_flow_style`**: `"offer_then_schedule"`, `"schedule_then_offer"`, `null`
 
 **`identity_mode`**: `"human_agent"`, `"virtual_assistant"`, `"user_clone"`
@@ -186,7 +189,8 @@ com o mesmo significado. Isso já causou bug real: `getConfig()`/`saveConfig()` 
 `frontend-crm/src/services/api.ts` liam/escreviam `followup_cadence`,
 `followup_max_attempts`, `followup_first_offset`, `followup_allowed_hours`,
 `nurture_vs_discard_rule`, `briefing_enabled`/`briefing_channel`/`briefing_lead_time`,
-`operator_whatsapp` e `appointment_reminder_offsets` dentro de `offer_pack`, enquanto o
+`operator_whatsapp`, `appointment_reminder_offsets` e `appointment_mode` dentro de
+`offer_pack`, enquanto o
 motor real (`followup_state.py`, `jobs_service.py`, `briefing_service.py`,
 `decision_engine.py`) sempre leu das colunas de topo — o operador configurava pela UI
 sem qualquer erro, mas o valor nunca chegava ao motor.

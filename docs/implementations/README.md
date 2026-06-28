@@ -36,7 +36,6 @@ Arquivos em andamento ou recém-completados. Seguem o padrão do template.
 | `agent-local-v2-testes-manuais.md` | Guia de testes manuais para a app standalone (acompanha o ficheiro acima) |
 | `agentlocal-assistente-ia.md` | Em andamento |
 | `correcao-natural-llm-e-fixes-ui-descobertos.md` | Em andamento — planeado, código ainda não iniciado |
-| `modo-comercial-bug-roteamento-precos.md` | Fase 1 (persistência de `appointment_mode`) corrigida e validada; Fase 2 (bug de roteamento — bloco comercial não dispara) identificada, aguardando investigação |
 
 ---
 
