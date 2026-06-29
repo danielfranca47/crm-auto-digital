@@ -31,6 +31,7 @@ diferentes) — nunca para valores que possam acabar commitados.
 
 ```powershell
 cd backend-core
+code -n .
 .\.venv\Scripts\activate
 python -m uvicorn app.main:app --reload --port 8001
 ```
@@ -41,6 +42,7 @@ python -m uvicorn app.main:app --reload --port 8001
 
 ```powershell
 cd backend-crm
+code -n .
 .\.venv\Scripts\activate
 uvicorn app:app --reload --port 8000
 ```
@@ -50,6 +52,7 @@ uvicorn app:app --reload --port 8000
 Em um terminal:
 ```powershell
 cd backend-executors
+code -n .
 .\.venv\Scripts\activate
 uvicorn app.main:app --reload --port 8010 --app-dir .
 ```
@@ -57,6 +60,7 @@ uvicorn app.main:app --reload --port 8010 --app-dir .
 Em outro terminal (worker de processamento de jobs):
 ```powershell
 cd backend-executors
+code -n .
 .\.venv\Scripts\activate
 python -m app.workers.whatsapp_worker
 ```
@@ -75,6 +79,7 @@ JOB_TYPES=whatsapp_send,maps_search_fallback,maps_enrich_fallback
 
 ```powershell
 cd agent-local
+code -n .
 .\.venv\Scripts\activate
 python main.py
 ```
@@ -83,6 +88,7 @@ python main.py
 
 ```powershell
 cd frontend-crm
+code -n .
 npm install
 npm run dev -- --port 8080
 ```
