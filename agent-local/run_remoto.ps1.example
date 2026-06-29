@@ -1,0 +1,12 @@
+# Lançador para apontar o agent-local a um backend-core/backend-crm remoto
+# (ex.: túnel ngrok local, para um tester sem precisar rodar os backends).
+#
+# A tela nova do agent-local (app/main.py) não lê arquivo .env — só
+# variável de ambiente real ou config.json (so para CORE_BASE_URL).
+#
+# Copie este arquivo para run_remoto.ps1 (ja no .gitignore), preencha a
+# URL real e rode-o em vez de "python main.py".
+
+$env:CORE_BASE_URL = "https://SUA-URL-NGROK-AQUI.ngrok-free.dev"
+$env:BACKEND_URL   = "https://SUA-URL-NGROK-AQUI.ngrok-free.dev"
+.\.venv\Scripts\python.exe main.py
