@@ -20,6 +20,7 @@ diferentes) — nunca para valores que possam acabar commitados.
 ## Pré-requisitos
 
 - Python 3.11+ com `venv` por serviço
+- para instalar o ambiente virtual roda python -m venv venv
 - Node.js + npm para os frontends
 - SQLite (incluído no Python)
 
