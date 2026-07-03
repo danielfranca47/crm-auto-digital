@@ -25,7 +25,8 @@
       "Bash(PYTHONIOENCODING=utf-8 PYTHONUTF8=1 ./.venv/Scripts/python.exe -c ' *)",
       "Bash(wmic process *)",
       "Bash(python -c ' *)",
-      "Bash(./.venv/Scripts/python.exe -m pytest tests/test_llm_service_retry.py tests/test_meeting_management.py tests/test_meeting_cancel_reschedule_action.py tests/test_meeting_scheduler_structured_candidate.py -q)"
+      "Bash(./.venv/Scripts/python.exe -m pytest tests/test_llm_service_retry.py tests/test_meeting_management.py tests/test_meeting_cancel_reschedule_action.py tests/test_meeting_scheduler_structured_candidate.py -q)",
+      "Bash(python -m py_compile backend-crm/routes/webhooks.py)"
     ]
   }
 }
