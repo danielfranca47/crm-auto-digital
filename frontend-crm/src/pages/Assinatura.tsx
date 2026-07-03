@@ -24,8 +24,8 @@ const env = import.meta.env;
 
 const CRM_BASE = (env?.VITE_CRM_BASE_URL || env?.VITE_API_BASE_URL || env?.VITE_API_URL || "").replace(/\/+$/, "");
 
-// Mapa de plan_code → URL de checkout Efí (endpoint que gera o link sob demanda, ver Fase 2/3 da
-// migração Kiwify -> Efí em docs/implementations/migracao-gateway-efi-bank.md)
+// Mapa de plan_code → URL de checkout Efí (endpoint que gera o link sob demanda, ver
+// docs/architecture/billing-efi.md)
 // Pode ser sobreposto por variáveis de ambiente por plano
 const PLAN_CHECKOUT_URLS: Record<string, string> = {
   crm_start:  env?.VITE_CHECKOUT_URL_CRM_START  || (CRM_BASE ? `${CRM_BASE}/checkout/efi/start` : ""),

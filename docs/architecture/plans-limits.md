@@ -129,14 +129,10 @@ Implementação: handler no `catch` verifica `error?.data?.detail?.error`, se re
 
 Ponto de acesso do utilizador para upgrade e visualização do plano actual.
 
-**Checkout URLs por plano** (`PLAN_CHECKOUT_URLS`):
-
-| Plano | Endpoint de checkout (Efí, gerado sob demanda) |
-|---|---|
-| `crm_start` | `{VITE_CRM_BASE_URL}/checkout/efi/start` |
-| `crm_growth` | `{VITE_CRM_BASE_URL}/checkout/efi/growth` |
-
-`buildCheckoutUrl(planCode)` retorna o endpoint acima (ou `VITE_UPGRADE_CHECKOUT_URL` como fallback); cada chamada ao endpoint gera um novo link de assinatura Efí (`GET /checkout/efi/{offer_key}`, ver `backend-crm/routes/checkout.py`) e redireciona para a página hospedada da Efí — não há mais pré-preenchimento de `?email=` (o cliente preenche os dados na própria página da Efí).
+**Checkout de upgrade** (`PLAN_CHECKOUT_URLS`, `buildCheckoutUrl(planCode)`): aponta para o
+endpoint de checkout sob demanda da Efí (`{VITE_CRM_BASE_URL}/checkout/efi/{start|growth}`, com
+`VITE_UPGRADE_CHECKOUT_URL` como fallback) — detalhes completos do fluxo em
+[`billing-efi.md`](billing-efi.md).
 
 **Data de renovação:** lida de `entitlements.products[0].current_period_end`. Exibida no card do plano actual como "Renovação: DD/MM/AAAA".
 

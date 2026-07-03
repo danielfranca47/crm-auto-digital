@@ -23,6 +23,7 @@ existente ou criar um novo.
 | [`plans-limits.md`](plans-limits.md) | Feature gates por plano: `follow_up_enabled`, `playground_monthly_limit` em entitlements; `plan_gates.py`; tabela `playground_usage_monthly`; campo `playground_monthly` em `/usage`; padrão de toast upgrade CTA | Novo campo de limite em `plan_limits`, novo gate numa rota do CRM, novo campo em `/usage` |
 | [`agenda.md`](agenda.md) | Agenda de compromissos: vistas mensal/semanal/diária, posicionamento CSS grid, slot-click, ScheduleAppointmentDialog, API appointments, tabela `appointments`, side-effects de criar/cancelar/reagendar, cancelamento/reagendamento via IA, eventos Google (badge, somente-leitura, sync), título e lembrete de reunião gerados por IA (tom/nicho, retry, early vs. final) | Nova vista ou constante de grid, novo campo em AppointmentOut, mudança na interacção slot-click, novo side-effect de criação/cancelamento, mudança no comportamento de eventos Google, mudança no prompt/retry do título ou lembrete via IA |
 | [`google-calendar.md`](google-calendar.md) | Integração Google Calendar: OAuth2 por utilizador, serviço push/pull (fail-silent), fluxo de tokens, endpoint google-sync, upsert + cleanup | Novo scope OAuth, nova função do serviço, mudança no algoritmo de sync, novo campo mapeado do Google Event |
+| [`billing-efi.md`](billing-efi.md) | Gateway de pagamento Efí Bank: checkout sob demanda, cliente OAuth2, webhook de confirmação, activação/renovação/cancelamento de subscriptions, variáveis de ambiente | Nova oferta/plano, mudança no fluxo de checkout ou webhook, novo campo de status Efí, mudança na lógica de `payment_event` |
 
 ---
 
@@ -83,6 +84,7 @@ A maioria das features altera áreas já documentadas. Antes de criar um ficheir
 | Campo novo na `PlaygroundChatResponse` | `playground-parity.md` |
 | Mudança no reconciliador de follow-up | `followup.md` |
 | Novo campo no overview ou detalhe de utilizador do painel admin | `admin-agents-contract.md` |
+| Checkout, webhook Efí, activação/renovação/cancelamento de subscriptions | `billing-efi.md` |
 
 ### Criar novo documento
 

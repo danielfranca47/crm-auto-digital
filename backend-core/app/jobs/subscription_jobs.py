@@ -16,8 +16,8 @@ logger = logging.getLogger(__name__)
 
 FALLBACK_CHECKOUT_URL = (settings.CRM_FRONTEND_URL or "https://crmapp.danielfranca.pt").rstrip("/") + "/assinatura"
 
-# offer_key por plano — usados para montar o link de checkout Efí sob demanda (ver Fase 2/3 da
-# migração Kiwify -> Efí em docs/implementations/migracao-gateway-efi-bank.md)
+# offer_key por plano — usados para montar o link de checkout Efí sob demanda (ver
+# docs/architecture/billing-efi.md)
 _PLAN_OFFER_KEYS: dict[str, str] = {
     "crm_start": "start",
     "crm_growth": "growth",

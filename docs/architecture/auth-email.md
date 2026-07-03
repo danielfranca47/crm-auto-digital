@@ -211,56 +211,19 @@ Retorna planos CRM activos com limites completos: `plan_code`, `plan_name`, `max
 
 ---
 
-## Webhook Efí — Activação automática de subscriptions
+## Gateway de pagamento (Efí)
 
-Gateway de cobrança da assinatura SaaS (substituiu a Kiwify — ver
-`docs/implementations/migracao-gateway-efi-bank.md` para o histórico da migração).
-
-**Checkout:** `GET /checkout/efi/{offer_key}` (backend-crm, `routes/checkout.py`) gera um link de
-assinatura Efí sob demanda (`POST /v1/plan/:id/subscription/one-step/link`) e redireciona
-(`307`) para a página de pagamento hospedada da Efí, onde o cliente preenche nome/CPF/email/
-telefone/cartão.
-
-**Fluxo do webhook:**
-```
-Efí aprova pagamento
-  → POST /webhooks/efi   (backend-crm, form-encoded, campo `notification` = token)
-  → GET /v1/notification/:token → lista de mudanças de status (charge/subscription)
-  → para cada mudança relevante:
-      status "paid"                → acção "renew"  (cobre 1ª activação e renovações)
-      status "canceled"/"expired"  → acção "cancel"
-  → resolve plan_code + email (GET /v1/charge/:id ou /v1/subscription/:id, ver
-    `_resolve_efi_plan_and_email` em `webhooks.py`)
-  → POST /internal/subscriptions/payment-event   (backend-core, x-service-token)
-      → activa / renova / cancela subscription
-      → se email desconhecido + activate/renew: cria User + envia email de boas-vindas
-```
-
-**Arquivos:**
-- `backend-crm/services/efi_client.py` — cliente OAuth2 (token cacheado), `create_plan`, `create_subscription_link`, `resolve_notification`, `get_charge`, `get_subscription`
-- `backend-crm/routes/checkout.py` — endpoint de checkout sob demanda
-- `backend-crm/routes/webhooks.py` — `POST /webhooks/efi`, resolve plano/email, chama o core
-- `backend-core/app/api/subscriptions.py` — `payment_event()`, cria User se necessário
-
-**Nota sobre status:** `approved` (cartão autorizado) ≠ `paid` (liquidação final, dinheiro
-creditado). O webhook só age em `paid` — recomendação oficial da própria Efí para liberar acesso.
-
-**Comportamento `payment_event` (backend-core):**
-- Email existente + activate/renew → cancela sub activa do produto, cria nova (`status=active`, `+30 dias`), retorna `{"action": "activated"}`
-- Email **desconhecido** + activate/renew → cria `User` (senha aleatória 14 chars `ascii+!@#$%`), activa subscription, envia `render_welcome_email`, retorna `{"action": "created_and_activated"}`
-- Email desconhecido + cancel → `{"action": "skipped", "reason": "user_not_found"}`
-- `plan_code` inexistente → `{"action": "skipped", "reason": "plan_not_found"}`
-
-**Config `.env` (backend-crm):**
-- `EFI_CLIENT_ID`, `EFI_CLIENT_SECRET`, `EFI_SANDBOX`
-- `EFI_PLAN_ID_START`, `EFI_PLAN_ID_GROWTH`, `EFI_PLAN_ID_GROWTH_FUNDADOR`
-- `CRM_PUBLIC_BASE_URL` — usado para montar o `notification_url` enviado à Efí (precisa estar acessível publicamente; ver pendência do domínio `api.danielfranca.pt` em `docs/implementations/migracao-gateway-efi-bank.md`, Fase 4)
+A activação/renovação/cancelamento automático de subscriptions é accionada por webhook do gateway
+de pagamento Efí Bank — fluxo completo, cliente HTTP e variáveis de ambiente documentados em
+[`billing-efi.md`](billing-efi.md). Aqui ficam só as tabelas relevantes ao domínio de auth/email
+(User, templates, Subscription).
 
 ---
 
 ## Alertas de consumo (frontend-crm)
 
-`GET /api/usage` (backend-crm) inclui `ia_monthly: { used, limit, pct }` e `checkout_links` com URLs de checkout Efí geradas sob demanda (`{CRM_PUBLIC_BASE_URL}/checkout/efi/{start|growth}`).
+`GET /api/usage` (backend-crm) inclui `ia_monthly: { used, limit, pct }` e `checkout_links` com
+URLs de checkout Efí geradas sob demanda — ver [`billing-efi.md`](billing-efi.md).
 
 `UsageAlertBanner` em `frontend-crm/src/components/UsageAlertBanner.tsx` aparece no AppShell:
 - `pct >= 80` → banner amarelo com link de upgrade
@@ -311,13 +274,10 @@ Job diário que processa dois tipos de pendentes:
 
 **Trigger manual (admin):** `POST /admin/cron/daily` — executa o job e retorna sumário `{ expired, warnings_sent, errors, ran_at }`. Usado para testes e recovery manual.
 
-**Links de checkout por plano** (incluídos nos emails de aviso/expiração, via `_get_checkout_url`):
-
-| Plano | URL |
-|---|---|
-| `crm_start` | `{CRM_PUBLIC_BASE_URL}/checkout/efi/start` |
-| `crm_growth` | `{CRM_PUBLIC_BASE_URL}/checkout/efi/growth` |
-| outros / `CRM_PUBLIC_BASE_URL` não definida | `{CRM_FRONTEND_URL}/assinatura` (fallback) |
+**Links de checkout por plano** (incluídos nos emails de aviso/expiração, via `_get_checkout_url`)
+— apontam para o endpoint de checkout sob demanda da Efí, com fallback para
+`{CRM_FRONTEND_URL}/assinatura`; ver [`billing-efi.md`](billing-efi.md) para a tabela completa de
+ofertas e variáveis de ambiente.
 
 **Nota sobre disponibilidade:** como o scheduler corre dentro do processo, se o servidor estiver offline quando o job devia correr, o job salta esse dia. A execução no startup compensa este comportamento para o contexto de deploy local via tunnel.
 
