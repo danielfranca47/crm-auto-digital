@@ -581,6 +581,8 @@ def payment_webhook(
 _KIWIFY_PLAN_MAP: Dict[str, str] = {
     "Plano Start":  "crm_start",
     "Plano Growth": "crm_growth",
+    "Plano Growth Fundador": "crm_growth",
+    "Growth Fundador": "crm_growth",
     "Plano Scale":  "crm_scale",
     "Start":        "crm_start",
     "Growth":       "crm_growth",
