@@ -49,9 +49,10 @@ const App = () => (
           <Route path="/" element={<Navigate to="/lara-ia" replace />} />
 
           {/* Landing pages da Lara — estáticas, fora do padrão /:lang */}
-          <Route path="/lara-ia" element={<CRMLanding />} />
+          <Route path="/lara-ia" element={<CRMLandingV2 />} />
+          <Route path="/lara-ia-v1" element={<CRMLanding />} />
           <Route path="/lara-ia-v2" element={<CRMLandingV2 />} />
-          <Route path="/lara-ai" element={<CRMLanding lang="en" />} />
+          <Route path="/lara-ai" element={<CRMLandingV2 lang="en" />} />
           <Route path="/crm" element={<Navigate to="/lara-ia" replace />} />
 
           {/* Páginas com prefixo de idioma */}
