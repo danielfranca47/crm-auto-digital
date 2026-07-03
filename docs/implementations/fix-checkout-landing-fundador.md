@@ -1,7 +1,7 @@
 # Fix: Checkout Kiwify na Landing V2 + Produto "Plano Growth Fundador"
 
 **Branch:** `main`
-**Status:** Fase 1 e 2 implementadas — aguardando validação
+**Status:** Cenário P1 validado (03/07/2026) — pendente: Cenário C1 (requer compra real de teste na Kiwify)
 
 ---
 
@@ -98,10 +98,11 @@ novo para isso.
 ## Checks de Validação
 
 ### Cenário P1 — Botões da landing apontam para o link certo
-- [ ] Rodar a landing localmente (`cd website && npm run dev`)
-- [ ] Confirmar `href` do CTA no card Start → `https://pay.kiwify.com.br/gOjcexD`
-- [ ] Confirmar `href` do CTA no card Growth → `https://pay.kiwify.com.br/GAiuZT8`
-- [ ] Confirmar que Scale/Enterprise continuam sem link clicável
+- [x] Rodar a landing localmente (`cd website && npm run dev`)
+- [x] Confirmar `href` do CTA no card Start → `https://pay.kiwify.com.br/gOjcexD`
+- [x] Confirmar `href` do CTA no card Growth → `https://pay.kiwify.com.br/GAiuZT8`
+- [x] Confirmar que Scale/Enterprise continuam sem link clicável
+- **Validado em:** 03/07/2026 — testado via browser (rota `/lara-ia`, servidor local porta 5180). Os 4 CTAs conferidos por script: Start e Growth com `href` correto + `target="_blank"`; Scale e Enterprise com `href="#"` e `pointer-events-none` (bloqueados), como esperado.
 
 ### Cenário C1 — Webhook reconhece o novo produto
 - [ ] Confirmar no código que `_KIWIFY_PLAN_MAP["Plano Growth Fundador"]` resolve para `"crm_growth"`
