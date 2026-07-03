@@ -8,6 +8,11 @@ import {
 
 /* ─── Data ──────────────────────────────────────────────────── */
 
+// backend-crm público — mesma convenção de ENV usada em CtaSection.tsx
+const ENV = import.meta.env as any;
+const API_BASE = (ENV.VITE_PUBLIC_API_BASE ?? ENV.VITE_API_BASE_URL ?? '').replace(/\/+$/, '');
+const checkoutUrl = (offerKey: string) => API_BASE ? `${API_BASE}/checkout/efi/${offerKey}` : undefined;
+
 const sectors = [
   {
     label: 'Infoprodutos', icon: '📚',
@@ -143,7 +148,7 @@ const plans = [
   {
     name: 'Start', price: '97', highlight: false, badge: null, comingSoon: false,
     campaignPrice: undefined as string | undefined,
-    checkoutUrl: undefined as string | undefined, // TODO: apontar para checkout Efí (migração em andamento — Kiwify pausada)
+    checkoutUrl: checkoutUrl('start'),
     description: 'Para negócios com 20–100 leads/mês que querem o sistema rodando antes de escalar.',
     features: [
       '250 conversas IA/mês',
@@ -162,7 +167,7 @@ const plans = [
   {
     name: 'Growth', price: '297', highlight: true, badge: 'CAMPANHA FUNDADOR', comingSoon: false,
     campaignPrice: '147' as string | undefined,
-    checkoutUrl: undefined as string | undefined, // TODO: apontar para checkout Efí (migração em andamento — Kiwify pausada)
+    checkoutUrl: checkoutUrl('growth_fundador'),
     description: 'Para quem quer escalar — 100+ leads/mês',
     features: [
       '🔒 Preço de Fundador — travado para sempre',

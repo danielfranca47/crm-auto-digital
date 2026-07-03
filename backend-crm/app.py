@@ -35,6 +35,7 @@ from routes import (
     notifications,
     playground,
     spy_agent,
+    checkout,
 )
 from routes import public
 from routes import admin_agents
@@ -201,6 +202,7 @@ app.include_router(whatsapp_connect.router)                         # /api/whats
 app.include_router(notifications.router)                            # /api/notifications
 app.include_router(playground.router)                               # /api/playground
 app.include_router(spy_agent.router)                                # /api/spy-agent
+app.include_router(checkout.router)                                 # /checkout/efi/{offer_key}
 app.include_router(admin_agents.router)                             # /admin/agents/*
 # app.include_router(dashboard.router)
 

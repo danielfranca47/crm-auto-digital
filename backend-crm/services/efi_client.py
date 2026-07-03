@@ -79,15 +79,23 @@ async def create_subscription_link(
     value_cents: int,
     notification_url: str,
     custom_id: Optional[str] = None,
+    link_valid_days: int = 30,
 ) -> str:
     """Gera um link de checkout hospedado da Efí para uma nova assinatura do plano informado."""
+    from datetime import date, timedelta
+
     metadata: Dict[str, str] = {"notification_url": notification_url}
     if custom_id:
         metadata["custom_id"] = custom_id
+    expire_at = (date.today() + timedelta(days=link_valid_days)).isoformat()
     body = {
         "items": [{"name": item_name, "value": value_cents, "amount": 1}],
         "metadata": metadata,
-        "settings": {"payment_method": "credit_card"},
+        "settings": {
+            "payment_method": "credit_card",
+            "request_delivery_address": False,
+            "expire_at": expire_at,
+        },
     }
     result = await _request("POST", f"/v1/plan/{plan_id}/subscription/one-step/link", json=body)
     return result["data"]["payment_url"]
