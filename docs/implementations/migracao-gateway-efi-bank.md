@@ -294,12 +294,21 @@ cause isto, e não existe arquivo de configuração de domínio versionado (sem 
 `railway.toml` no repo). **Não é corrigível por código** — requer acção do utilizador em dois
 painéis que o Claude Code não tem acesso:
 
-1. **Railway → projeto do backend-crm → Settings → Domains:** confirmar que
-   `api.danielfranca.pt` ainda aparece listado como domínio customizado ativo/verificado.
-2. **Cloudflare → DNS → registo `api`:** confirmar que o CNAME aponta para o hostname de domínio
-   customizado actual do Railway (pode ter mudado se o serviço foi recriado). Conferir também
-   **SSL/TLS → modo de criptografia** — "Full (strict)" com certificado de origem divergente
-   também causa 502.
+**Causa raiz confirmada pelo utilizador (03/07/2026):** o domínio estava configurado no
+**Cloudflare Zero Trust como um Tunnel** — rota "Published application" apontando para
+`http://localhost:8000`. Isto é resquício de uma fase em que o backend-crm corria localmente
+(testes via tunnel). O backend-crm hoje corre no Railway (já público por si só) — o Tunnel para
+`localhost:8000` não tem mais nada do outro lado, daí o 502.
+
+**Correcção necessária (acção do utilizador nos dashboards):**
+1. **Cloudflare Zero Trust** → apagar/desativar a rota "Published application" de
+   `api.danielfranca.pt` (aponta para o Tunnel antigo, obsoleto).
+2. **Railway → projeto do backend-crm → Settings → Networking/Domains → Add Custom Domain** →
+   adicionar `api.danielfranca.pt`; o Railway fornece um valor de CNAME.
+3. **Cloudflare → DNS (área normal, não Zero Trust)** → criar/editar o registo `api` como CNAME
+   apontando para o valor fornecido pelo Railway no passo 2.
+4. Aguardar propagação e testar `curl https://api.danielfranca.pt/health` — deve deixar de
+   retornar 502.
 
 **Enquanto não for corrigido:** os `notification_url` gerados pelo endpoint de checkout em
 produção apontam para um domínio inacessível pela Efí — pagamentos reais de clientes não vão
