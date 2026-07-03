@@ -1,7 +1,7 @@
 # Migração de Gateway de Pagamento: Kiwify → Efí Bank
 
 **Branch:** `main`
-**Status:** Fases 1 e 2 implementadas e testadas (local + produção) — Cenário C1 validado com ressalva documentada
+**Status:** Fases 1, 2 e 3 implementadas e testadas — Fase 4 (limpeza + fix do domínio) pendente
 
 ---
 
@@ -204,6 +204,60 @@ novo na Efí e abre a página de pagamento hospedada deles, já com o plano e o 
 - [x] Valor exibido na página de pagamento: **R$147,00** — confere com a campanha Fundador
 - **Validado em:** 03/07/2026 — teste ao vivo via browser (chrome-devtools MCP), screenshot
   conferido
+
+---
+
+## Fase 3 — Repontar links restantes (usage.py, subscription_jobs.py, Assinatura.tsx, UsageAlertBanner.tsx)
+
+**Objetivo:** nenhum link `pay.kiwify.com.br` sobrevive fora da Fase 4 (limpeza/docs).
+
+| Arquivo | O que mudou |
+|---|---|
+| `backend-crm/routes/usage.py` | `checkout_links` agora monta `{CRM_PUBLIC_BASE_URL}/checkout/efi/{start\|growth}` em vez dos links Kiwify fixos |
+| `backend-core/app/jobs/subscription_jobs.py` | Remove `PLAN_CHECKOUT_LINKS` fixo; `_get_checkout_url` monta o link via `settings.CRM_PUBLIC_BASE_URL` + `_PLAN_OFFER_KEYS`, com fallback para `/assinatura` se a variável não estiver definida |
+| `frontend-crm/src/pages/Assinatura.tsx` | `PLAN_CHECKOUT_URLS` aponta para o endpoint Efí (`VITE_CRM_BASE_URL`); remove entrada morta `crm_scale`; `buildCheckoutUrl` não tenta mais pré-preencher `?email=` (não aplicável ao checkout hospedado da Efí); texto do aviso "Como trocar de plano" deixa de mencionar "Kiwify" (inclusive a frase que prometia um link de cancelamento por email, que não existe no fluxo Efí — trocado por "contacta o suporte") |
+| `frontend-crm/src/components/UsageAlertBanner.tsx` | **Fix de bug pré-existente:** o ternário sempre resolvia para `CHECKOUT_GROWTH` mesmo com o utilizador já no Growth; agora utilizador em `crm_growth` é direcionado para `/assinatura` (rota interna) em vez de reofertar o mesmo plano; demais casos apontam para o endpoint Efí |
+
+### Commits Fase 3
+
+| # | Commit | O que foi implementado |
+|---|---|---|
+| 1 | `b64e48b` | Repontar usage.py, subscription_jobs.py, Assinatura.tsx, UsageAlertBanner.tsx para Efí |
+
+### Relatório da Fase 3 — o que mudou na prática
+
+**Antes:** clientes já logados que tentassem fazer upgrade de plano (pela tela de Assinatura ou
+pelo banner de limite atingido) ainda caíam nos links antigos da Kiwify — inconsistente com a
+landing pública, que já usava a Efí desde a Fase 2.
+**Agora:** todos os pontos de upgrade dentro do CRM (tela de Assinatura, banner de limite, emails
+automáticos de aviso/expiração) usam o mesmo endpoint de checkout Efí da Fase 2. De brinde,
+corrigi um bug onde um cliente já no plano Growth recebia sempre o mesmo link de upgrade para
+Growth (plano que ele já tem) em vez de ser direcionado para a tela de gestão da conta.
+**Para validar:** Cenários P1–P4, abaixo (todos já verificados nesta sessão).
+
+---
+
+### Cenário P1 — `_get_checkout_url` (subscription_jobs.py) monta o link certo
+- [x] `_get_checkout_url("crm_start")` → `{CRM_PUBLIC_BASE_URL}/checkout/efi/start`
+- [x] `_get_checkout_url("crm_growth")` → `.../checkout/efi/growth`
+- [x] Plano sem mapeamento (`crm_internal`) → cai no fallback `/assinatura`
+- **Validado em:** 03/07/2026 — chamada direta da função via `.venv` local
+
+### Cenário P2 — `usage.py` monta `checkout_links` corretamente
+- [x] Lógica de montagem (`f"{_crm_base}/checkout/efi/start"`) conferida isoladamente
+- **Validado em:** 03/07/2026 — verificação da expressão via script Python
+
+### Cenário P3 — `Assinatura.tsx` abre o checkout Efí real
+- [x] Login como utilizador de teste (`autodigital157@gmail.com`, plano Growth activo)
+- [x] Clique em "Selecionar plano" no card Start abre nova aba
+- [x] Página de pagamento Efí mostra **Plano Start - Lara AI, R$97,00** — confere
+- **Validado em:** 03/07/2026 — teste ao vivo via browser (chrome-devtools MCP), login real,
+  clique real, screenshot conferido
+
+### Cenário P4 — `UsageAlertBanner.tsx` — revisão de código
+- [x] Fix do bug do ternário conferido por leitura de código (banner só aparece com uso real
+  ≥80%, não reproduzido ao vivo por exigir dados de consumo reais no ambiente de teste)
+- **Validado em:** 03/07/2026 — revisão de código
 
 ---
 
