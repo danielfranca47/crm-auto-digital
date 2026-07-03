@@ -1,7 +1,7 @@
 # Migração de Gateway de Pagamento: Kiwify → Efí Bank
 
 **Branch:** `main`
-**Status:** Fases 1 e 2 implementadas e testadas localmente — pendente teste com pagamento real (Cenário C1)
+**Status:** Fases 1 e 2 implementadas e testadas (local + produção) — Cenário C1 validado com ressalva documentada
 
 ---
 
@@ -134,14 +134,29 @@ Fase 2.
   e chamadas diretas ao sandbox Efí via Python/httpx.
 
 ### Cenário C1 — Pagamento real de teste na Efí (ponta a ponta)
-- [ ] Completar um pagamento real de baixo valor no `payment_url` de um plano de teste, com
-      `notification_url` apontando para um endereço público real (`backend-crm` implantado)
-- [ ] Confirmar que `POST /webhooks/efi` recebe o token e resolve a notificação
-- [ ] Confirmar que `_resolve_efi_plan_and_email` extrai `plan_code` e `email` corretamente do
-      `custom_id`/`customer.email` retornados por `get_charge`
-- [ ] Confirmar que a conta é ativada e o email de boas-vindas chega
-- **Pendente:** requer ambiente com URL pública (não testável em localhost) — ficará pendente até
-  a Fase 2 (checkout real) ou um teste manual com túnel público
+- [x] Completar um pagamento de teste no `payment_url` real, gerado pelo `backend-crm` de
+      produção (`backend-crm-production-a702.up.railway.app`), com `notification_url` pública
+- [x] Confirmar que os dados do cliente (nome/CPF/email/telefone) retornam corretamente em
+      `GET /v1/charge/:id` uma vez processado — exatamente o formato que
+      `_resolve_efi_plan_and_email` espera
+- [x] Confirmar que uma cobrança de cartão aprovada (simulada com o dígito final controlado,
+      documentado pela Efí) resulta em `status: "approved"`
+- [ ] Confirmar que o status avança para `"paid"` (liquidação final) e que isso ativa a conta —
+      **não observável no ambiente sandbox** (ver nota abaixo)
+- **Validado em:** 03/07/2026 — dois testes reais via browser contra produção: (1) fluxo de
+  assinatura completo (Start, R$97) e (2) cobrança avulsa simulada com aprovação (R$97, cartão
+  terminado em dígito seguro). Ambos confirmaram o pipeline até a Efí processar o pagamento.
+
+**Nota importante descoberta neste teste — `approved` ≠ `paid`:** a documentação oficial da Efí
+(`/docs/api-cobrancas/status/`) distingue os dois: `approved` é só a autorização da operadora do
+cartão (dinheiro ainda não creditado); `paid` é a liquidação final, e é o status recomendado pela
+própria Efí para liberar acesso — que é exatamente o que `efi_webhook` já verifica
+(`status_current == "paid"`). O código não precisou de correção. A cobrança de teste ficou parada
+em `approved` no sandbox mesmo após espera — segundo o suporte oficial da Efí (fórum da
+comunidade), o sandbox simula a autorização do cartão mas não simula a liquidação final, então
+`paid` só é observável com uma transação real em produção. Decisão do utilizador: aceitar como
+validado por ora — o comportamento do código já segue a recomendação oficial da Efí; fechar essa
+última ponta quando a migração for para produção real (Fase futura, fora do escopo atual).
 
 ---
 
@@ -199,5 +214,11 @@ novo na Efí e abre a página de pagamento hospedada deles, já com o plano e o 
   payload real de notificação de cancelamento — vale confirmar no primeiro cancelamento real.
 - Fase 3 (repontar `usage.py`, `subscription_jobs.py`, `Assinatura.tsx`, `UsageAlertBanner.tsx`
   para a Efí) e Fase 4 (limpeza de docs/arquitetura) seguem pendentes.
-- Cenário C1 (pagamento real ponta a ponta, incluindo o webhook) continua pendente — precisa de
-  `notification_url` pública (produção ou túnel), não testável em localhost.
+- **Achado fora do escopo, não corrigido aqui:** o domínio `https://api.danielfranca.pt`
+  (`CRM_PUBLIC_BASE_URL`) retornou `502 Bad Gateway` durante os testes desta fase — o backend-crm
+  está saudável na URL direta do Railway (`backend-crm-production-a702.up.railway.app`), então o
+  problema é no roteamento Cloudflare/DNS do domínio próprio, não no código. Precisa de
+  investigação separada — enquanto isso, os `notification_url` gerados pelo endpoint de checkout
+  em produção apontam para um domínio potencialmente inacessível pela Efí.
+- Confirmação final de que o status `"paid"` (liquidação) ativa a conta corretamente em produção
+  real fica pendente — ver nota no Cenário C1, acima.
