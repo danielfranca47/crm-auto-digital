@@ -140,14 +140,14 @@ Usa `smtplib` (stdlib Python) com STARTTLS. Configuração via `.env`:
 
 | Função | Trigger | Assunto |
 |---|---|---|
-| `render_welcome_email(name, temp_password, login_url)` | Admin cria conta **ou** Kiwify `order_approved` para email desconhecido | "Bem-vindo à Lara AI — as tuas credenciais de acesso" |
+| `render_welcome_email(name, temp_password, login_url)` | Admin cria conta **ou** webhook Efí (`action=activate`/`renew`) para email desconhecido | "Bem-vindo à Lara AI — as tuas credenciais de acesso" |
 | `render_reset_email(reset_url)` | `forgot-password` | "Recuperação de senha — Digital Pro" |
 | `render_password_changed_email(name)` | `reset-password` / `change-password` | "Senha alterada — Digital Pro" |
 | `render_register_welcome_email(name, login_url)` | `POST /auth/register` | "Bem-vindo ao Digital Pro" |
-| `render_subscription_activated_email(name, plan_name, period_end, login_url)` | Kiwify `order_approved` ou admin atribui plano | "A Lara está activa!" |
+| `render_subscription_activated_email(name, plan_name, period_end, login_url)` | Webhook Efí (`action=activate`) ou admin atribui plano | "A Lara está activa!" |
 | `render_trial_started_email(name, plan_name, trial_end, login_url)` | Admin atribui trial | "Trial iniciado — Digital Pro" |
-| `render_subscription_renewed_email(name, plan_name, new_end)` | Kiwify `subscription_renewed` | "A Lara continua activa!" |
-| `render_subscription_cancelled_email(name, plan_name)` | Kiwify `order_refunded` / `subscription_cancelled` | "Subscrição cancelada" |
+| `render_subscription_renewed_email(name, plan_name, new_end)` | Webhook Efí (`action=renew`) | "A Lara continua activa!" |
+| `render_subscription_cancelled_email(name, plan_name)` | Webhook Efí (`action=cancel`) | "Subscrição cancelada" |
 | `render_subscription_expiring_email(name, plan_name, period_end, checkout_url)` | Job diário — 3 dias antes de expirar | "A Lara para em breve ⚠️" |
 | `render_subscription_expired_email(name, plan_name, checkout_url)` | Job diário — subscription expirada | "A Lara está pausada" |
 
@@ -211,63 +211,56 @@ Retorna planos CRM activos com limites completos: `plan_code`, `plan_name`, `max
 
 ---
 
-## Webhook Kiwify — Activação automática de subscriptions
+## Webhook Efí — Activação automática de subscriptions
 
-**Fluxo:**
+Gateway de cobrança da assinatura SaaS (substituiu a Kiwify — ver
+`docs/implementations/migracao-gateway-efi-bank.md` para o histórico da migração).
+
+**Checkout:** `GET /checkout/efi/{offer_key}` (backend-crm, `routes/checkout.py`) gera um link de
+assinatura Efí sob demanda (`POST /v1/plan/:id/subscription/one-step/link`) e redireciona
+(`307`) para a página de pagamento hospedada da Efí, onde o cliente preenche nome/CPF/email/
+telefone/cartão.
+
+**Fluxo do webhook:**
 ```
-Kiwify → POST /webhooks/kiwify?signature=<hmac>   (backend-crm)
-  → valida HMAC-SHA1 com KIWIFY_WEBHOOK_SECRET
-  → mapeia Subscription.plan.name → plan_code
-  → POST /internal/subscriptions/kiwify-event      (backend-core, x-service-token)
-      → activa / cancela / renova subscription
-      → se email desconhecido + activate: cria User + envia email de boas-vindas
+Efí aprova pagamento
+  → POST /webhooks/efi   (backend-crm, form-encoded, campo `notification` = token)
+  → GET /v1/notification/:token → lista de mudanças de status (charge/subscription)
+  → para cada mudança relevante:
+      status "paid"                → acção "renew"  (cobre 1ª activação e renovações)
+      status "canceled"/"expired"  → acção "cancel"
+  → resolve plan_code + email (GET /v1/charge/:id ou /v1/subscription/:id, ver
+    `_resolve_efi_plan_and_email` em `webhooks.py`)
+  → POST /internal/subscriptions/payment-event   (backend-core, x-service-token)
+      → activa / renova / cancela subscription
+      → se email desconhecido + activate/renew: cria User + envia email de boas-vindas
 ```
 
 **Arquivos:**
-- `backend-crm/routes/webhooks.py` — valida HMAC, mapeia plano, chama core
-- `backend-core/app/api/subscriptions.py` — `kiwify_subscription_event()`, cria User se necessário
+- `backend-crm/services/efi_client.py` — cliente OAuth2 (token cacheado), `create_plan`, `create_subscription_link`, `resolve_notification`, `get_charge`, `get_subscription`
+- `backend-crm/routes/checkout.py` — endpoint de checkout sob demanda
+- `backend-crm/routes/webhooks.py` — `POST /webhooks/efi`, resolve plano/email, chama o core
+- `backend-core/app/api/subscriptions.py` — `payment_event()`, cria User se necessário
 
-**Validação:** HMAC-SHA1 do body raw; assinatura em `?signature=<hex>`. Sem secret configurado → validação ignorada.
+**Nota sobre status:** `approved` (cartão autorizado) ≠ `paid` (liquidação final, dinheiro
+creditado). O webhook só age em `paid` — recomendação oficial da própria Efí para liberar acesso.
 
-**Campos do payload Kiwify relevantes:**
-
-| Campo | Valor exemplo | Uso |
-|---|---|---|
-| `webhook_event_type` | `"order_approved"` | Tipo de evento |
-| `Customer.email` | `"cliente@email.com"` | Identifica o utilizador no sistema |
-| `Subscription.plan.name` | `"Plano Start"` | Determina o plano a activar |
-
-**Mapeamento de planos** (`_KIWIFY_PLAN_MAP` em `webhooks.py`):
-
-| Nome Kiwify | Plano CRM |
-|---|---|
-| `"Plano Start"` / `"Start"` | `crm_start` |
-| `"Plano Growth"` / `"Growth"` | `crm_growth` |
-| `"Plano Scale"` | `crm_scale` |
-
-**Sets de eventos:**
-
-| Grupo | Eventos reconhecidos | Acção |
-|---|---|---|
-| activate | `order_approved`, `order.approved`, `purchase_approved` | Activa subscription; cancela activa do mesmo produto |
-| renew | `subscription_renewed`, `subscription.renewed` | Estende `current_period_end` +30 dias |
-| cancel | `subscription_cancelled`, `subscription_canceled`, `subscription.cancelled`, `order_refunded`, `order.refunded` | Cancela subscription activa |
-
-**Comportamento `kiwify_subscription_event` (backend-core):**
-- Email existente + activate → cancela sub activa do produto, cria nova (`status=active`, `+30 dias`), retorna `{"action": "activated"}`
-- Email **desconhecido** + activate → cria `User` (senha aleatória 14 chars `ascii+!@#$%`), activa subscription, envia `render_welcome_email`, retorna `{"action": "created_and_activated"}`
-- Email desconhecido + cancel/renew → `{"action": "skipped", "reason": "user_not_found"}`
+**Comportamento `payment_event` (backend-core):**
+- Email existente + activate/renew → cancela sub activa do produto, cria nova (`status=active`, `+30 dias`), retorna `{"action": "activated"}`
+- Email **desconhecido** + activate/renew → cria `User` (senha aleatória 14 chars `ascii+!@#$%`), activa subscription, envia `render_welcome_email`, retorna `{"action": "created_and_activated"}`
+- Email desconhecido + cancel → `{"action": "skipped", "reason": "user_not_found"}`
 - `plan_code` inexistente → `{"action": "skipped", "reason": "plan_not_found"}`
 
-**Config `.env`:**
-- `backend-crm/.env`: `KIWIFY_WEBHOOK_SECRET`
-- `backend-core/.env`: `KIWIFY_PRODUCT_ID` (opcional)
+**Config `.env` (backend-crm):**
+- `EFI_CLIENT_ID`, `EFI_CLIENT_SECRET`, `EFI_SANDBOX`
+- `EFI_PLAN_ID_START`, `EFI_PLAN_ID_GROWTH`, `EFI_PLAN_ID_GROWTH_FUNDADOR`
+- `CRM_PUBLIC_BASE_URL` — usado para montar o `notification_url` enviado à Efí (precisa estar acessível publicamente; ver pendência do domínio `api.danielfranca.pt` em `docs/implementations/migracao-gateway-efi-bank.md`, Fase 4)
 
 ---
 
 ## Alertas de consumo (frontend-crm)
 
-`GET /api/usage` (backend-crm) inclui `ia_monthly: { used, limit, pct }` e `checkout_links` com URLs de checkout Kiwify.
+`GET /api/usage` (backend-crm) inclui `ia_monthly: { used, limit, pct }` e `checkout_links` com URLs de checkout Efí geradas sob demanda (`{CRM_PUBLIC_BASE_URL}/checkout/efi/{start|growth}`).
 
 `UsageAlertBanner` em `frontend-crm/src/components/UsageAlertBanner.tsx` aparece no AppShell:
 - `pct >= 80` → banner amarelo com link de upgrade
@@ -318,13 +311,13 @@ Job diário que processa dois tipos de pendentes:
 
 **Trigger manual (admin):** `POST /admin/cron/daily` — executa o job e retorna sumário `{ expired, warnings_sent, errors, ran_at }`. Usado para testes e recovery manual.
 
-**Links de checkout por plano** (incluídos nos emails de aviso/expiração):
+**Links de checkout por plano** (incluídos nos emails de aviso/expiração, via `_get_checkout_url`):
 
 | Plano | URL |
 |---|---|
-| `crm_start` | `https://pay.kiwify.com.br/gOjcexD` |
-| `crm_growth` | `https://pay.kiwify.com.br/To8qV99` |
-| outros | `{CRM_FRONTEND_URL}/assinatura` (fallback) |
+| `crm_start` | `{CRM_PUBLIC_BASE_URL}/checkout/efi/start` |
+| `crm_growth` | `{CRM_PUBLIC_BASE_URL}/checkout/efi/growth` |
+| outros / `CRM_PUBLIC_BASE_URL` não definida | `{CRM_FRONTEND_URL}/assinatura` (fallback) |
 
 **Nota sobre disponibilidade:** como o scheduler corre dentro do processo, se o servidor estiver offline quando o job devia correr, o job salta esse dia. A execução no startup compensa este comportamento para o contexto de deploy local via tunnel.
 

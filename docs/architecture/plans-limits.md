@@ -131,19 +131,18 @@ Ponto de acesso do utilizador para upgrade e visualização do plano actual.
 
 **Checkout URLs por plano** (`PLAN_CHECKOUT_URLS`):
 
-| Plano | URL Kiwify |
+| Plano | Endpoint de checkout (Efí, gerado sob demanda) |
 |---|---|
-| `crm_start` | `https://pay.kiwify.com.br/gOjcexD` |
-| `crm_growth` | `https://pay.kiwify.com.br/To8qV99` |
-| `crm_scale` | `https://pay.kiwify.com.br/2mtd25x` |
+| `crm_start` | `{VITE_CRM_BASE_URL}/checkout/efi/start` |
+| `crm_growth` | `{VITE_CRM_BASE_URL}/checkout/efi/growth` |
 
-`buildCheckoutUrl(planCode, userEmail)` constrói a URL com `?email=<encoded>` para pré-preencher o email do comprador no checkout Kiwify.
+`buildCheckoutUrl(planCode)` retorna o endpoint acima (ou `VITE_UPGRADE_CHECKOUT_URL` como fallback); cada chamada ao endpoint gera um novo link de assinatura Efí (`GET /checkout/efi/{offer_key}`, ver `backend-crm/routes/checkout.py`) e redireciona para a página hospedada da Efí — não há mais pré-preenchimento de `?email=` (o cliente preenche os dados na própria página da Efí).
 
 **Data de renovação:** lida de `entitlements.products[0].current_period_end`. Exibida no card do plano actual como "Renovação: DD/MM/AAAA".
 
-**Aviso de sobreposição:** ao selecionar um plano diferente do actual, exibe alerta explicando que a Kiwify não faz upgrade automático — o utilizador deve subscrever o novo plano e cancelar o anterior.
+**Aviso de sobreposição:** ao selecionar um plano diferente do actual, exibe alerta explicando que a troca de plano não é automática — o utilizador deve subscrever o novo plano e contactar o suporte para cancelar a assinatura actual.
 
-**Banner pós-compra:** se `?upgraded=1` estiver na URL (parâmetro enviado pelo redirect pós-compra Kiwify), mostra Alert "Plano activado com sucesso!".
+**Banner pós-compra:** se `?upgraded=1` estiver na URL, mostra Alert "Plano activado com sucesso!" (parâmetro reservado para um futuro redirect pós-pagamento; o checkout hospedado da Efí ainda não envia este parâmetro automaticamente).
 
 ---
 

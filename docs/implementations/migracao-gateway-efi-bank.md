@@ -1,7 +1,7 @@
 # Migração de Gateway de Pagamento: Kiwify → Efí Bank
 
 **Branch:** `main`
-**Status:** Fases 1, 2 e 3 implementadas e testadas — Fase 4 (limpeza + fix do domínio) pendente
+**Status:** Fases 1, 2 e 3 implementadas e testadas. Fase 4 (limpeza de docs) implementada — fix do domínio `api.danielfranca.pt` diagnosticado e documentado, mas depende de acção do utilizador nos dashboards Railway/Cloudflare (fora do alcance do código)
 
 ---
 
@@ -269,23 +269,101 @@ Growth (plano que ele já tem) em vez de ser direcionado para a tela de gestão 
 - Confirmação final de que o status `"paid"` (liquidação) ativa a conta corretamente em produção
   real fica pendente — ver nota no Cenário C1, acima.
 
-## Fase 4 — Pendências (ainda não iniciada)
+## Fase 4 — Diagnóstico do domínio + limpeza de documentação
 
-**Prioridade ALTA — bloqueia pagamentos reais de clientes:**
-- **Domínio `https://api.danielfranca.pt` (`CRM_PUBLIC_BASE_URL`) fora do ar — `502 Bad Gateway`.**
-  Descoberto durante os testes do Cenário C1. O backend-crm está saudável na URL direta do
-  Railway (`backend-crm-production-a702.up.railway.app`) — o problema é só no roteamento
-  Cloudflare/DNS do domínio próprio, não no código desta migração. **Enquanto não for corrigido,
-  os `notification_url` gerados pelo endpoint de checkout em produção apontam para um domínio
-  inacessível pela Efí — ou seja, pagamentos reais de clientes não vão conseguir notificar o
-  nosso sistema e as contas não serão ativadas automaticamente.** Investigar e corrigir antes de
-  divulgar a campanha Fundador para clientes reais.
+**Objetivo:** diagnosticar o domínio fora do ar (sem poder corrigi-lo — é configuração de
+dashboard, fora do repositório) e actualizar toda a documentação de arquitectura que ainda
+descrevia o fluxo antigo da Kiwify.
 
-**Prioridade normal — limpeza:**
-- Repontar `backend-crm/routes/usage.py`, `backend-core/app/jobs/subscription_jobs.py`,
-  `frontend-crm/src/pages/Assinatura.tsx`, `frontend-crm/src/components/UsageAlertBanner.tsx` —
-  ainda usam links antigos da Kiwify.
-- Remover variáveis de ambiente Kiwify não usadas (produção), arquivar/remover
-  `docs/plans/kiwify-checkout-melhorias-pos-etapa-9-7.md`.
-- Atualizar `docs/architecture/auth-email.md`, `plans-limits.md`, `_mapa-sistema.md` para
-  descrever o fluxo Efí em vez do Kiwify.
+### Diagnóstico do domínio `api.danielfranca.pt` (502 Bad Gateway)
+
+Testado nesta fase com `curl -v`:
+
+- `https://api.danielfranca.pt/health` → `502 Bad Gateway`, página de erro **gerada pelo
+  Cloudflare** (`Server: cloudflare`, header `CF-RAY` presente) — confirma que o Cloudflare não
+  conseguiu obter resposta da origem; não é um erro da nossa aplicação.
+- DNS resolve para IPs do proxy da Cloudflare (`104.21.20.57`, `172.67.191.206`, etc.) — o
+  registo está com proxy (nuvem laranja) ativo, o alvo real (CNAME/origem) fica invisível a
+  partir de fora.
+- `https://backend-crm-production-a702.up.railway.app/openapi.json` → **200 OK**, app saudável.
+  `/health` dá 404 só porque essa rota não existe no backend-crm — não é sinal de problema.
+
+**Conclusão:** a origem (backend-crm no Railway) está saudável. O problema está no roteamento
+entre Cloudflare e Railway para o domínio customizado — não há nada no código do repositório que
+cause isto, e não existe arquivo de configuração de domínio versionado (sem `railway.json`/
+`railway.toml` no repo). **Não é corrigível por código** — requer acção do utilizador em dois
+painéis que o Claude Code não tem acesso:
+
+1. **Railway → projeto do backend-crm → Settings → Domains:** confirmar que
+   `api.danielfranca.pt` ainda aparece listado como domínio customizado ativo/verificado.
+2. **Cloudflare → DNS → registo `api`:** confirmar que o CNAME aponta para o hostname de domínio
+   customizado actual do Railway (pode ter mudado se o serviço foi recriado). Conferir também
+   **SSL/TLS → modo de criptografia** — "Full (strict)" com certificado de origem divergente
+   também causa 502.
+
+**Enquanto não for corrigido:** os `notification_url` gerados pelo endpoint de checkout em
+produção apontam para um domínio inacessível pela Efí — pagamentos reais de clientes não vão
+conseguir notificar o sistema e as contas não serão ativadas automaticamente. **Corrigir antes de
+divulgar a campanha Fundador para clientes reais.**
+
+### Limpeza de documentação
+
+| Arquivo | O que mudou |
+|---|---|
+| `docs/architecture/_mapa-sistema.md` | Integrações externas: Kiwify → Efí Bank (webhook por token em vez de HMAC) |
+| `docs/architecture/plans-limits.md` | Secção de checkout da `Assinatura.tsx`: URLs fixas da Kiwify → endpoint `/checkout/efi/{offer_key}` sob demanda |
+| `docs/architecture/auth-email.md` | Secção "Webhook Kiwify" reescrita como "Webhook Efí" (fluxo completo); tabela de templates de email; links de checkout no job diário e no `/api/usage` |
+| `docs/implementations/fix-checkout-landing-fundador.md` | **Removido** (`git rm`) — documentava a tentativa de ligar a landing à Kiwify, nunca graduado, inteiramente substituído por esta migração |
+
+**Fora do escopo desta fase:** `docs/plans/*` (incluindo `kiwify-checkout-melhorias-pos-etapa-9-7.md`)
+mencionam Kiwify em registos históricos de decisão e itens de backlog de produto (criar plano
+`crm_scale`, página `/welcome`, forçar troca de senha) sem relação com qual gateway usamos —
+`docs/plans/` documenta intenções futuras, não é um espelho do estado actual como
+`docs/architecture/`. O próprio `_guia-analise-planos.md` já define quando arquivar esse plano
+(quando os itens M1-M6 forem absorvidos — ainda não são). Não mexido. O campo `payment_gateway`
+(`hotmart`/`kiwify`/`stripe`/`generico`) em `agente.ts`, `CamadaOferta.tsx`, `api.ts` e
+`webhooks.py` também não foi tocado — é uma feature não relacionada (o gateway que o *cliente
+final* usa para vender os próprios produtos dele). Variáveis de ambiente Kiwify já estavam limpas
+desde a Fase 1 (`.env.example` conferido, nada a remover).
+
+### Commits Fase 4
+
+| # | Commit | O que foi implementado |
+|---|---|---|
+| 1 | *(a registar após o commit)* | Diagnóstico do domínio + limpeza de docs de arquitectura + remoção do doc obsoleto |
+
+### Relatório da Fase 4 — o que mudou na prática
+
+**Antes:** os documentos de arquitectura ainda descreviam o fluxo antigo (webhook HMAC da
+Kiwify, links de checkout fixos) mesmo com o código já 100% migrado para a Efí desde a Fase 3 —
+um novo desenvolvedor lendo `docs/architecture/` teria uma visão desatualizada do sistema. O
+domínio `api.danielfranca.pt` continuava fora do ar sem diagnóstico registado.
+**Agora:** os docs de arquitectura refletem o fluxo Efí real (checkout sob demanda, webhook por
+token). O problema do domínio está diagnosticado com causa raiz identificada (roteamento
+Cloudflare↔Railway, origem saudável) e os 2 pontos exactos que o utilizador precisa de conferir
+nos dashboards — mas a correcção em si não pode ser feita por código.
+**Para validar:** ver Checks abaixo. A validação do domínio depende do utilizador testar
+`curl https://api.danielfranca.pt/health` depois de ajustar Railway/Cloudflare.
+
+---
+
+## Checks de Validação — Fase 4
+
+### Cenário P1 — Docs de arquitectura sem menções à Kiwify (fluxo de billing próprio)
+- [x] `grep -ri kiwify docs/architecture/` → zero resultados
+- **Validado em:** 03/07/2026
+
+### Cenário P2 — Conteúdo das secções editadas confere com o código real
+- [x] `_mapa-sistema.md`, `plans-limits.md`, `auth-email.md` — texto revisado contra
+      `webhooks.py`, `checkout.py`, `efi_client.py`, `Assinatura.tsx` já implementados
+- **Validado em:** 03/07/2026
+
+### Cenário P3 — Doc obsoleto removido
+- [x] `docs/implementations/fix-checkout-landing-fundador.md` removido via `git rm`
+- **Validado em:** 03/07/2026
+
+### Cenário P4 — Domínio `api.danielfranca.pt` volta a responder
+- [ ] `curl https://api.danielfranca.pt/health` deixa de retornar `502` após ajuste do
+      utilizador nos dashboards Railway/Cloudflare (ver pontos de verificação acima)
+- **Pendente** — depende de acção do utilizador fora do repositório; não há mais nada a fazer
+  por código aqui.
