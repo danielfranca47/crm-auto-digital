@@ -574,102 +574,106 @@ def payment_webhook(
 
 
 # ---------------------------------------------------------------------------
-# Webhook Kiwify — activação/cancelamento/renovação de subscriptions
+# Webhook Efí — activação/cancelamento/renovação de subscriptions
 # ---------------------------------------------------------------------------
 
-# Mapeamento: Subscription.plan.name (Kiwify) → plan_code (nosso DB)
-_KIWIFY_PLAN_MAP: Dict[str, str] = {
-    "Plano Start":  "crm_start",
-    "Plano Growth": "crm_growth",
-    "Plano Growth Fundador": "crm_growth",
-    "Growth Fundador": "crm_growth",
-    "Plano Scale":  "crm_scale",
-    "Start":        "crm_start",
-    "Growth":       "crm_growth",
-}
-
-_KIWIFY_ACTIVATE_EVENTS = {"order_approved", "order.approved", "purchase_approved"}
-_KIWIFY_RENEW_EVENTS    = {"subscription_renewed", "subscription.renewed"}
-_KIWIFY_CANCEL_EVENTS   = {"subscription_cancelled", "subscription_canceled", "subscription.cancelled",
-                            "order_refunded", "order.refunded"}
+_EFI_CANCEL_STATUSES = {"canceled", "expired"}
 
 
-@router.post("/kiwify")
-async def kiwify_webhook(
-    request: Request,
-    signature: Optional[str] = Query(default=None),
-) -> Dict[str, Any]:
+async def _resolve_efi_plan_and_email(entry: Dict[str, Any]) -> tuple[Optional[str], Optional[str]]:
+    """A partir de uma entrada de notificação, obtém (plan_code, email) via charge ou subscription."""
+    from services import efi_client
+
+    identifiers = entry.get("identifiers") or {}
+    charge_id = identifiers.get("charge_id")
+    subscription_id = identifiers.get("subscription_id")
+
+    if charge_id:
+        charge = await efi_client.get_charge(charge_id)
+        plan_code = charge.get("custom_id")
+        email = ((charge.get("customer") or {}).get("email") or "").strip().lower()
+        if email:
+            return plan_code, email
+        subscription_id = subscription_id or (charge.get("subscription") or {}).get("subscription_id")
+
+    if subscription_id:
+        sub = await efi_client.get_subscription(subscription_id)
+        plan_code = sub.get("custom_id")
+        history = sub.get("history") or []
+        for item in reversed(history):
+            item_charge_id = item.get("charge_id")
+            if not item_charge_id:
+                continue
+            charge = await efi_client.get_charge(item_charge_id)
+            email = ((charge.get("customer") or {}).get("email") or "").strip().lower()
+            if email:
+                return plan_code, email
+        return plan_code, None
+
+    return None, None
+
+
+@router.post("/efi")
+async def efi_webhook(request: Request) -> Dict[str, Any]:
     """
-    Recebe eventos de pagamento Kiwify e activa/renova/cancela subscriptions via backend-core.
-    Validação: HMAC-SHA1 do body via query param ?signature=
+    Recebe notificação de pagamento da Efí: um token via POST form-encoded
+    (campo `notification`). O token é resolvido em GET /v1/notification/:token
+    para obter as mudanças de status reais — a Efí não envia o payload direto
+    por segurança.
     """
-    import hashlib
-    import hmac as _hmac
     import httpx
+    from services import efi_client
 
-    raw_body = await request.body()
-
-    # Validação HMAC-SHA1
-    secret = os.environ.get("KIWIFY_WEBHOOK_SECRET", "")
-    if secret:
-        if not signature:
-            raise HTTPException(status_code=401, detail="Signature ausente")
-        expected = _hmac.new(secret.encode(), raw_body, hashlib.sha1).hexdigest()
-        if not _hmac.compare_digest(expected, signature):
-            raise HTTPException(status_code=401, detail="Signature inválida")
+    form = await request.form()
+    token = form.get("notification")
+    if not token:
+        logger.warning("efi_webhook: token de notificação ausente no POST")
+        return {"ok": True, "action": "ignored", "reason": "no_token"}
 
     try:
-        payload: Dict[str, Any] = json.loads(raw_body)
-    except Exception:
-        raise HTTPException(status_code=400, detail="Payload inválido")
+        entries = await efi_client.resolve_notification(str(token))
+    except Exception as exc:
+        logger.error("efi_webhook: erro ao resolver notificação: %s", exc)
+        raise HTTPException(status_code=502, detail="Erro ao consultar notificação")
 
-    event = (payload.get("webhook_event_type") or "").lower().replace(" ", "_")
-    if not event:
-        return {"ok": True, "action": "ignored", "reason": "no_event"}
-
-    # Email do cliente
-    customer = payload.get("Customer") or {}
-    email = (customer.get("email") or "").strip().lower()
-    if not email:
-        logger.warning("kiwify_webhook: email não encontrado no payload")
-        return {"ok": True, "action": "skipped", "reason": "no_email"}
-
-    # Plano
-    sub_info = payload.get("Subscription") or {}
-    plan_info = sub_info.get("plan") or {}
-    plan_name = (plan_info.get("name") or "").strip()
-    plan_code = _KIWIFY_PLAN_MAP.get(plan_name)
-    if not plan_code:
-        logger.warning("kiwify_webhook: plano '%s' não mapeado — ignorado", plan_name)
-        return {"ok": True, "action": "skipped", "reason": "plan_not_mapped", "plan_name": plan_name}
-
-    # Determinar acção
-    if event in _KIWIFY_ACTIVATE_EVENTS:
-        action = "activate"
-    elif event in _KIWIFY_RENEW_EVENTS:
-        action = "renew"
-    elif event in _KIWIFY_CANCEL_EVENTS:
-        action = "cancel"
-    else:
-        logger.info("kiwify_webhook: evento '%s' ignorado", event)
-        return {"ok": True, "action": "ignored", "event": event}
-
-    # Chamar backend-core via endpoint interno
     core_base = os.environ.get("CORE_API_BASE", "http://localhost:8001").rstrip("/")
     core_token = os.environ.get("CORE_SERVICE_TOKEN", "")
-    try:
-        async with httpx.AsyncClient(timeout=10) as client:
-            resp = await client.post(
-                f"{core_base}/internal/subscriptions/kiwify-event",
-                json={"email": email, "plan_code": plan_code, "action": action},
-                headers={"x-service-token": core_token},
-            )
-            resp.raise_for_status()
-            result = resp.json()
-    except Exception as exc:
-        logger.error("kiwify_webhook: erro ao chamar core: %s", exc)
-        raise HTTPException(status_code=502, detail="Erro ao processar subscrição")
 
-    logger.info("kiwify_webhook: event=%s email=%s plan=%s action=%s result=%s",
-                event, email, plan_code, action, result.get("action"))
-    return {"ok": True, **result}
+    results = []
+    async with httpx.AsyncClient(timeout=10) as client:
+        for entry in entries:
+            status_current = (entry.get("status") or {}).get("current")
+
+            if status_current in _EFI_CANCEL_STATUSES:
+                action = "cancel"
+            elif status_current == "paid":
+                # Cobre tanto a 1ª activação quanto renovações — o endpoint interno
+                # já estende a subscrição activa existente ou cria uma nova se não houver.
+                action = "renew"
+            else:
+                logger.info("efi_webhook: entrada ignorada status=%s", status_current)
+                continue
+
+            plan_code, email = await _resolve_efi_plan_and_email(entry)
+            if not plan_code or not email:
+                logger.warning("efi_webhook: dados insuficientes entry=%s plan_code=%s email_found=%s",
+                                entry, plan_code, bool(email))
+                continue
+
+            try:
+                resp = await client.post(
+                    f"{core_base}/internal/subscriptions/payment-event",
+                    json={"email": email, "plan_code": plan_code, "action": action},
+                    headers={"x-service-token": core_token},
+                )
+                resp.raise_for_status()
+                result = resp.json()
+            except Exception as exc:
+                logger.error("efi_webhook: erro ao chamar core: %s", exc)
+                continue
+
+            logger.info("efi_webhook: email=%s plan=%s action=%s result=%s",
+                        email, plan_code, action, result.get("action"))
+            results.append(result)
+
+    return {"ok": True, "results": results}

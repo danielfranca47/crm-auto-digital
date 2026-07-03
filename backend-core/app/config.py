@@ -26,9 +26,6 @@ class Settings(BaseSettings):
     SMTP_TLS: bool = True
     # URL público do frontend-crm (usado em links de email — reset de senha, boas-vindas)
     CRM_FRONTEND_URL: Optional[str] = None
-    # Kiwify
-    KIWIFY_WEBHOOK_SECRET: Optional[str] = None
-    KIWIFY_PRODUCT_ID: Optional[str] = None
     # Google Maps API (used by agent-local proxy endpoint)
     GOOGLE_MAPS_API_KEY: Optional[str] = None
     # Google Calendar OAuth2

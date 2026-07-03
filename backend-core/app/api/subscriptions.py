@@ -219,28 +219,29 @@ def _require_service_token(x_service_token: str = Header(None)) -> str:
     return x_service_token
 
 
-class KiwifyEventRequest(BaseModel):
+class PaymentEventRequest(BaseModel):
     email: str
     plan_code: str
     action: Literal["activate", "cancel", "renew"]
 
 
-@router.post("/internal/subscriptions/kiwify-event", status_code=status.HTTP_200_OK)
-async def kiwify_subscription_event(
-    payload: KiwifyEventRequest,
+@router.post("/internal/subscriptions/payment-event", status_code=status.HTTP_200_OK)
+async def payment_event(
+    payload: PaymentEventRequest,
     _: str = Depends(_require_service_token),
     db: Session = Depends(get_db),
 ) -> dict:
-    """Endpoint interno — chamado pelo backend-crm ao receber webhook da Kiwify."""
+    """Endpoint interno — chamado pelo backend-crm ao receber webhook do gateway de pagamento (Efí)."""
     email = payload.email.strip().lower()
     user = db.query(models.User).filter(models.User.email == email).first()
 
     new_user_created = False
     if not user:
-        if payload.action != "activate":
-            logger.info("kiwify_event: utilizador '%s' não encontrado — ignorado", email)
+        if payload.action == "cancel":
+            logger.info("payment_event: utilizador '%s' não encontrado — ignorado", email)
             return {"ok": True, "action": "skipped", "reason": "user_not_found"}
-        # Novo comprador: criar conta automaticamente
+        # Novo comprador (activate OU 1ª cobrança reportada como renew): criar conta automaticamente.
+        # Alguns gateways não distinguem de forma confiável a 1ª cobrança de renovações seguintes.
         alphabet = string.ascii_letters + string.digits + "!@#$%"
         temp_password = "".join(secrets.choice(alphabet) for _ in range(14))
         user = models.User(
@@ -252,7 +253,7 @@ async def kiwify_subscription_event(
         db.add(user)
         db.flush()  # obtém user.id sem commit
         new_user_created = True
-        logger.info("kiwify_event: novo utilizador criado email=%s id=%s", email, user.id)
+        logger.info("payment_event: novo utilizador criado email=%s id=%s", email, user.id)
         try:
             login_url = (settings.CRM_FRONTEND_URL or "https://crmapp.danielfranca.pt").rstrip("/") + "/login"
             html, text = render_welcome_email(None, temp_password, login_url)
@@ -262,13 +263,13 @@ async def kiwify_subscription_event(
                 html=html,
                 text=text,
             )
-            logger.info("kiwify_event: email de boas-vindas enviado para %s", email)
+            logger.info("payment_event: email de boas-vindas enviado para %s", email)
         except Exception as exc:
-            logger.error("kiwify_event: falha ao enviar email para %s — %s", email, exc)
+            logger.error("payment_event: falha ao enviar email para %s — %s", email, exc)
 
     plan = db.query(models.Plan).filter(models.Plan.code == payload.plan_code).first()
     if not plan:
-        logger.error("kiwify_event: plano '%s' não encontrado", payload.plan_code)
+        logger.error("payment_event: plano '%s' não encontrado", payload.plan_code)
         return {"ok": True, "action": "skipped", "reason": "plan_not_found"}
 
     now = datetime.utcnow()
@@ -280,7 +281,7 @@ async def kiwify_subscription_event(
             models.Subscription.status == "active",
         ).update({"status": "cancelled"})
         db.commit()
-        logger.info("kiwify_event: subscrição cancelada user=%s plan=%s", user.id, payload.plan_code)
+        logger.info("payment_event: subscrição cancelada user=%s plan=%s", user.id, payload.plan_code)
         return {"ok": True, "action": "cancelled"}
 
     if payload.action == "renew":
@@ -293,7 +294,7 @@ async def kiwify_subscription_event(
             base = sub.current_period_end if sub.current_period_end and sub.current_period_end > now else now
             sub.current_period_end = base + timedelta(days=30)
             db.commit()
-            logger.info("kiwify_event: subscrição renovada user=%s plan=%s", user.id, payload.plan_code)
+            logger.info("payment_event: subscrição renovada user=%s plan=%s", user.id, payload.plan_code)
             return {"ok": True, "action": "renewed"}
         # Se não existe activa, activa nova
 
@@ -313,7 +314,7 @@ async def kiwify_subscription_event(
     )
     db.add(sub)
     db.commit()
-    logger.info("kiwify_event: subscrição activada user=%s plan=%s", user.id, payload.plan_code)
+    logger.info("payment_event: subscrição activada user=%s plan=%s", user.id, payload.plan_code)
     return {"ok": True, "action": "created_and_activated" if new_user_created else "activated"}
 
 
