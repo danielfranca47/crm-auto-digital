@@ -1,3 +1,4 @@
+import os
 from datetime import datetime, timezone
 from typing import Any, Dict, Optional
 
@@ -100,10 +101,11 @@ def build_usage_payload(
         int(playground_limit) if playground_limit is not None else None, playground_used
     )
 
-    # Links de checkout Kiwify para CTAs de upgrade
+    # Links de checkout (Efí) para CTAs de upgrade — gerados sob demanda em /checkout/efi/{offer}
+    _crm_base = os.environ.get("CRM_PUBLIC_BASE_URL", "").rstrip("/")
     checkout_links = {
-        "crm_start": "https://pay.kiwify.com.br/gOjcexD",
-        "crm_growth": "https://pay.kiwify.com.br/To8qV99",
+        "crm_start": f"{_crm_base}/checkout/efi/start",
+        "crm_growth": f"{_crm_base}/checkout/efi/growth",
     }
 
     return {

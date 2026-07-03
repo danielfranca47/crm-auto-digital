@@ -1,7 +1,8 @@
 import { useUsage } from "@/hooks/useUsage";
 
-const CHECKOUT_START = "https://pay.kiwify.com.br/gOjcexD";
-const CHECKOUT_GROWTH = "https://pay.kiwify.com.br/To8qV99";
+const env = import.meta.env as any;
+const CRM_BASE = (env?.VITE_CRM_BASE_URL || env?.VITE_API_BASE_URL || env?.VITE_API_URL || "").replace(/\/+$/, "");
+const CHECKOUT_GROWTH = CRM_BASE ? `${CRM_BASE}/checkout/efi/growth` : "/assinatura";
 
 export default function UsageAlertBanner() {
   const { data } = useUsage();
@@ -11,11 +12,12 @@ export default function UsageAlertBanner() {
 
   const isFull = ia.pct >= 100;
 
-  // Se já tem Growth (500 conversas), oferece plano Scale (quando existir); caso contrário, oferece Growth
+  // Já no Growth (maior plano vendável hoje) — não há upgrade de conversas IA disponível ainda,
+  // manda para a página de assinatura em vez de reofertar o mesmo plano
   const planCode = data?.entitlements?.products?.find(
     (p) => p.product_code === "crm" && p.status === "active"
   )?.plan_code;
-  const upgradeUrl = planCode === "crm_growth" ? CHECKOUT_GROWTH : CHECKOUT_GROWTH;
+  const upgradeUrl = planCode === "crm_growth" ? "/assinatura" : CHECKOUT_GROWTH;
 
   return (
     <div

@@ -22,25 +22,18 @@ import {
 
 const env = import.meta.env;
 
-// Mapa de plan_code → URL de checkout Kiwify
+const CRM_BASE = (env?.VITE_CRM_BASE_URL || env?.VITE_API_BASE_URL || env?.VITE_API_URL || "").replace(/\/+$/, "");
+
+// Mapa de plan_code → URL de checkout Efí (endpoint que gera o link sob demanda, ver Fase 2/3 da
+// migração Kiwify -> Efí em docs/implementations/migracao-gateway-efi-bank.md)
 // Pode ser sobreposto por variáveis de ambiente por plano
 const PLAN_CHECKOUT_URLS: Record<string, string> = {
-  crm_start:  env?.VITE_CHECKOUT_URL_CRM_START  || "https://pay.kiwify.com.br/gOjcexD",
-  crm_growth: env?.VITE_CHECKOUT_URL_CRM_GROWTH || "https://pay.kiwify.com.br/To8qV99",
-  crm_scale:  env?.VITE_CHECKOUT_URL_CRM_SCALE  || "https://pay.kiwify.com.br/2mtd25x",
+  crm_start:  env?.VITE_CHECKOUT_URL_CRM_START  || (CRM_BASE ? `${CRM_BASE}/checkout/efi/start` : ""),
+  crm_growth: env?.VITE_CHECKOUT_URL_CRM_GROWTH || (CRM_BASE ? `${CRM_BASE}/checkout/efi/growth` : ""),
 };
 
-function buildCheckoutUrl(planCode: string, email?: string | null) {
-  const base = PLAN_CHECKOUT_URLS[planCode] || env?.VITE_UPGRADE_CHECKOUT_URL?.trim();
-  if (!base) return null;
-  if (!email) return base;
-  try {
-    const url = new URL(base);
-    url.searchParams.set("email", email);
-    return url.toString();
-  } catch {
-    return base;
-  }
+function buildCheckoutUrl(planCode: string) {
+  return PLAN_CHECKOUT_URLS[planCode] || env?.VITE_UPGRADE_CHECKOUT_URL?.trim() || null;
 }
 
 function buildWhatsAppUrl(planCode: string, planName?: string, email?: string | null) {
@@ -135,7 +128,7 @@ export default function Assinatura() {
 
   const handleSelectPlan = useCallback(
     (plan: CorePlan) => {
-      const checkoutUrl = buildCheckoutUrl(plan.code, userEmail);
+      const checkoutUrl = buildCheckoutUrl(plan.code);
       const whatsappUrl = buildWhatsAppUrl(plan.code, plan.name ?? plan.code, userEmail);
 
       if (checkoutUrl) {
@@ -267,7 +260,7 @@ export default function Assinatura() {
           <AlertTitle className="text-blue-700 dark:text-blue-400">Como trocar de plano</AlertTitle>
           <AlertDescription className="space-y-2 text-sm">
             <p>
-              A Kiwify não tem troca automática de plano — ao subscrever um plano superior é criada uma
+              A troca de plano não é automática — ao subscrever um plano superior é criada uma
               nova assinatura independente. Para evitar pagar dois planos em simultâneo:
             </p>
             <ol className="list-decimal list-inside space-y-1 text-muted-foreground">
@@ -276,8 +269,8 @@ export default function Assinatura() {
                 {renewalDate ? <> (<strong>{renewalDate}</strong>)</> : ""}.
               </li>
               <li>
-                Após a confirmação de pagamento, cancela a assinatura actual pelo link que a Kiwify
-                enviou no teu email de confirmação de compra.
+                Após a confirmação de pagamento, contacta o suporte para cancelar a assinatura
+                actual.
               </li>
               <li>
                 O nosso sistema activa o novo plano automaticamente assim que recebe a confirmação.

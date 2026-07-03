@@ -14,16 +14,22 @@ from app.config import settings
 
 logger = logging.getLogger(__name__)
 
-# Checkout links por plano (para incluir no email de aviso/expiração)
-PLAN_CHECKOUT_LINKS: dict[str, str] = {
-    "crm_start": "https://pay.kiwify.com.br/gOjcexD",
-    "crm_growth": "https://pay.kiwify.com.br/To8qV99",
-}
 FALLBACK_CHECKOUT_URL = (settings.CRM_FRONTEND_URL or "https://crmapp.danielfranca.pt").rstrip("/") + "/assinatura"
+
+# offer_key por plano — usados para montar o link de checkout Efí sob demanda (ver Fase 2/3 da
+# migração Kiwify -> Efí em docs/implementations/migracao-gateway-efi-bank.md)
+_PLAN_OFFER_KEYS: dict[str, str] = {
+    "crm_start": "start",
+    "crm_growth": "growth",
+}
 
 
 def _get_checkout_url(plan_code: str) -> str:
-    return PLAN_CHECKOUT_LINKS.get(plan_code, FALLBACK_CHECKOUT_URL)
+    offer_key = _PLAN_OFFER_KEYS.get(plan_code)
+    crm_base = (settings.CRM_PUBLIC_BASE_URL or "").rstrip("/")
+    if not offer_key or not crm_base:
+        return FALLBACK_CHECKOUT_URL
+    return f"{crm_base}/checkout/efi/{offer_key}"
 
 
 def run_daily_subscription_jobs() -> dict:
