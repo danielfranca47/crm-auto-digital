@@ -758,37 +758,43 @@ export default function CRMLanding({ lang: _lang = 'pt' }: { lang?: string }) {
           <div className="text-center mb-12">
             <span className="text-accent text-sm font-semibold uppercase tracking-widest">✦ Quem já usa a Lara</span>
             <h2 className="text-heading mt-2">Resultados reais, de negócios reais</h2>
+            <p className="text-muted-foreground mt-3 max-w-lg mx-auto">
+              Veja o que nossos primeiros clientes estão dizendo — nas palavras deles.
+            </p>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
-            <div className="portfolio-card border" style={{ borderColor: 'rgba(77,212,255,0.25)' }}>
-              <div className="flex items-center gap-1 mb-4">
-                {[1,2,3,4,5].map(i => (
-                  <span key={i} className="text-sm" style={{ color: '#4DD4FF' }}>★</span>
-                ))}
-              </div>
-              <p className="text-sm leading-relaxed mb-5">
-                "A Lara recuperou 3 leads que eu tinha dado como perdidos na primeira semana. Foram R$1.800 que eu não esperava mais."
-              </p>
-              <div className="flex items-center gap-3">
-                <div className="w-9 h-9 rounded-full accent-gradient flex items-center justify-center flex-shrink-0">
-                  <span className="text-sm font-bold text-accent-foreground">M</span>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {[
+              { id: 's7yxCmsRv1Q', name: 'Ricardo', role: 'Corretor de Imóveis' },
+              { id: 'Hza0VwrGZqY', name: 'Camila',  role: 'Dona de Clínica de Estética' },
+            ].map(({ id, name, role }) => (
+              <div key={id} className="portfolio-card overflow-hidden p-0">
+                <div className="relative w-full" style={{ paddingBottom: '56.25%' }}>
+                  <iframe
+                    src={`https://www.youtube.com/embed/${id}`}
+                    title={`Depoimento ${name} — ${role}`}
+                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                    allowFullScreen
+                    className="absolute inset-0 w-full h-full"
+                    style={{ border: 'none' }}
+                  />
                 </div>
-                <div>
-                  <div className="text-sm font-semibold">Mariana S.</div>
-                  <div className="text-xs text-muted-foreground">Infoprodutora — São Paulo</div>
+                <div className="px-5 py-4 flex items-center gap-3">
+                  <div className="w-9 h-9 rounded-full accent-gradient flex items-center justify-center flex-shrink-0">
+                    <span className="text-sm font-bold text-accent-foreground">{name[0]}</span>
+                  </div>
+                  <div>
+                    <div className="text-sm font-semibold">{name}</div>
+                    <div className="text-xs text-muted-foreground">{role}</div>
+                  </div>
+                  <div className="ml-auto flex gap-0.5">
+                    {[1,2,3,4,5].map(i => (
+                      <span key={i} className="text-xs" style={{ color: '#4DD4FF' }}>★</span>
+                    ))}
+                  </div>
                 </div>
               </div>
-            </div>
-
-            <div className="portfolio-card border border-dashed border-border flex flex-col items-center justify-center text-center py-10 gap-3 opacity-60">
-              <div className="text-3xl">💬</div>
-              <p className="text-sm text-muted-foreground">Mais resultados a caminho.</p>
-              <p className="text-xs text-muted-foreground">Você pode ser o próximo.</p>
-              <a href="#planos" className="text-xs font-semibold mt-1" style={{ color: '#4DD4FF' }}>
-                Quero entrar agora →
-              </a>
-            </div>
+            ))}
           </div>
         </div>
       </section>
