@@ -143,6 +143,7 @@ const plans = [
   {
     name: 'Start', price: '97', highlight: false, badge: null, comingSoon: false,
     campaignPrice: undefined as string | undefined,
+    checkoutUrl: 'https://pay.kiwify.com.br/gOjcexD' as string | undefined,
     description: 'Para negócios com 20–100 leads/mês que querem o sistema rodando antes de escalar.',
     features: [
       '250 conversas IA/mês',
@@ -161,6 +162,7 @@ const plans = [
   {
     name: 'Growth', price: '297', highlight: true, badge: 'CAMPANHA FUNDADOR', comingSoon: false,
     campaignPrice: '147' as string | undefined,
+    checkoutUrl: 'https://pay.kiwify.com.br/GAiuZT8' as string | undefined,
     description: 'Para quem quer escalar — 100+ leads/mês',
     features: [
       '🔒 Preço de Fundador — travado para sempre',
@@ -180,6 +182,7 @@ const plans = [
   {
     name: 'Scale', price: '397', highlight: false, badge: 'EM BREVE', comingSoon: true,
     campaignPrice: undefined as string | undefined,
+    checkoutUrl: undefined as string | undefined,
     description: '',
     features: [
       '1.500 conversas IA/mês',
@@ -195,6 +198,7 @@ const plans = [
   {
     name: 'Enterprise', price: '697', highlight: false, badge: 'EM BREVE', comingSoon: true,
     campaignPrice: undefined as string | undefined,
+    checkoutUrl: undefined as string | undefined,
     description: '',
     features: [
       '5.000 conversas IA/mês',
@@ -1131,7 +1135,9 @@ export default function CRMLandingV2({ lang: _lang = 'pt' }: { lang?: string }) 
                   ))}
                 </ul>
 
-                <a href="#"
+                <a href={plan.checkoutUrl || '#'}
+                  target={plan.checkoutUrl ? '_blank' : undefined}
+                  rel={plan.checkoutUrl ? 'noopener noreferrer' : undefined}
                   className={`text-center text-sm ${plan.highlight ? 'btn-hero' : 'btn-primary'} ${plan.comingSoon ? 'pointer-events-none' : ''}`}>
                   {plan.cta}
                 </a>
