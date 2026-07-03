@@ -212,13 +212,26 @@ novo na Efí e abre a página de pagamento hospedada deles, já com o plano e o 
 - A extração de `plan_code`/email para o caso de **cancelamento** (`identifiers.subscription_id`
   em vez de `charge_id`) foi implementada com base na documentação, mas nunca validada contra um
   payload real de notificação de cancelamento — vale confirmar no primeiro cancelamento real.
-- Fase 3 (repontar `usage.py`, `subscription_jobs.py`, `Assinatura.tsx`, `UsageAlertBanner.tsx`
-  para a Efí) e Fase 4 (limpeza de docs/arquitetura) seguem pendentes.
-- **Achado fora do escopo, não corrigido aqui:** o domínio `https://api.danielfranca.pt`
-  (`CRM_PUBLIC_BASE_URL`) retornou `502 Bad Gateway` durante os testes desta fase — o backend-crm
-  está saudável na URL direta do Railway (`backend-crm-production-a702.up.railway.app`), então o
-  problema é no roteamento Cloudflare/DNS do domínio próprio, não no código. Precisa de
-  investigação separada — enquanto isso, os `notification_url` gerados pelo endpoint de checkout
-  em produção apontam para um domínio potencialmente inacessível pela Efí.
 - Confirmação final de que o status `"paid"` (liquidação) ativa a conta corretamente em produção
   real fica pendente — ver nota no Cenário C1, acima.
+
+## Fase 4 — Pendências (ainda não iniciada)
+
+**Prioridade ALTA — bloqueia pagamentos reais de clientes:**
+- **Domínio `https://api.danielfranca.pt` (`CRM_PUBLIC_BASE_URL`) fora do ar — `502 Bad Gateway`.**
+  Descoberto durante os testes do Cenário C1. O backend-crm está saudável na URL direta do
+  Railway (`backend-crm-production-a702.up.railway.app`) — o problema é só no roteamento
+  Cloudflare/DNS do domínio próprio, não no código desta migração. **Enquanto não for corrigido,
+  os `notification_url` gerados pelo endpoint de checkout em produção apontam para um domínio
+  inacessível pela Efí — ou seja, pagamentos reais de clientes não vão conseguir notificar o
+  nosso sistema e as contas não serão ativadas automaticamente.** Investigar e corrigir antes de
+  divulgar a campanha Fundador para clientes reais.
+
+**Prioridade normal — limpeza:**
+- Repontar `backend-crm/routes/usage.py`, `backend-core/app/jobs/subscription_jobs.py`,
+  `frontend-crm/src/pages/Assinatura.tsx`, `frontend-crm/src/components/UsageAlertBanner.tsx` —
+  ainda usam links antigos da Kiwify.
+- Remover variáveis de ambiente Kiwify não usadas (produção), arquivar/remover
+  `docs/plans/kiwify-checkout-melhorias-pos-etapa-9-7.md`.
+- Atualizar `docs/architecture/auth-email.md`, `plans-limits.md`, `_mapa-sistema.md` para
+  descrever o fluxo Efí em vez do Kiwify.
