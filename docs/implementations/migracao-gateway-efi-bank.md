@@ -330,7 +330,7 @@ desde a Fase 1 (`.env.example` conferido, nada a remover).
 
 | # | Commit | O que foi implementado |
 |---|---|---|
-| 1 | *(a registar após o commit)* | Diagnóstico do domínio + limpeza de docs de arquitectura + remoção do doc obsoleto |
+| 1 | `6edff1e` | Diagnóstico do domínio + limpeza de docs de arquitectura + remoção do doc obsoleto |
 
 ### Relatório da Fase 4 — o que mudou na prática
 
