@@ -1,7 +1,7 @@
 # Migração de Gateway de Pagamento: Kiwify → Efí Bank
 
 **Branch:** `main`
-**Status:** Fase 1 implementada e testada localmente — pendente teste com pagamento real (Cenário C1)
+**Status:** Fases 1 e 2 implementadas e testadas localmente — pendente teste com pagamento real (Cenário C1)
 
 ---
 
@@ -145,13 +145,59 @@ Fase 2.
 
 ---
 
+## Fase 2 — Checkout sob demanda + religar landing
+
+**Objetivo:** botão da landing gera um link de checkout Efí válido e redireciona o visitante —
+sem precisar de formulário de checkout próprio (ver Abordagem, descoberta da Fase 1).
+
+| Arquivo | O que mudou |
+|---|---|
+| `backend-crm/routes/checkout.py` *(novo)* | `GET /checkout/efi/{offer_key}` — resolve a oferta (`start`/`growth`/`growth_fundador`) num dict com `plan_id` (lido de env var), `item_name`, `value_cents`, `custom_id`; chama `efi_client.create_subscription_link(...)`; responde `307` para o `payment_url`. 404 se a oferta ou o `plan_id` não estiverem configurados |
+| `backend-crm/app.py` | Regista o router `checkout` |
+| `backend-crm/services/efi_client.py` | **Fix** descoberto ao testar: `create_subscription_link` estava sem dois campos que a Efí exige em `settings` (`request_delivery_address`, `expire_at`) — API retornava 400. Corrigido, com `expire_at` calculado a partir de `link_valid_days` (default 30) |
+| `backend-crm/.env`, `.env.example` | `EFI_PLAN_ID_START=70460`, `EFI_PLAN_ID_GROWTH=70461`, `EFI_PLAN_ID_GROWTH_FUNDADOR=70462` (sandbox) |
+| `website/src/pages/CRMLandingV2.tsx` | CTAs de Start/Growth voltam a ter `checkoutUrl`, agora `{VITE_PUBLIC_API_BASE}/checkout/efi/{start\|growth_fundador}` |
+
+### Commits Fase 2
+
+| # | Commit | O que foi implementado |
+|---|---|---|
+| 1 | `f339ef3` | Endpoint de checkout + fix do efi_client + religar CTAs da landing |
+
+### Relatório da Fase 2 — o que mudou na prática
+
+**Antes:** os botões da landing estavam desativados (pausados na Fase 1, por segurança, até a
+Efí estar pronta).
+**Agora:** clicar em "Ativar minha Lara" no Start ou no Growth gera, na hora, um link de checkout
+novo na Efí e abre a página de pagamento hospedada deles, já com o plano e o preço corretos.
+**Para validar:** Cenários P1 e P2, abaixo (ambos já testados e confirmados nesta sessão).
+
+---
+
+## Checks de Validação — Fase 2
+
+### Cenário P1 — Endpoint de checkout gera link válido
+- [x] `GET /checkout/efi/start` (sem seguir redirect) → `307` com `Location` apontando para
+      `pagamento.gerencianet.com.br`/`sejaefi.com.br`
+- [x] Mesmo teste para `growth_fundador` e `growth`
+- [x] Oferta inexistente (`/checkout/efi/nao-existe`) → `404`
+- **Validado em:** 03/07/2026 — `backend-crm` local (porta 8000, `.venv`), curl direto
+
+### Cenário P2 — Botão da landing até a página de pagamento real
+- [x] Landing local (`/lara-ia`) — `href` do CTA Start/Growth aponta para o endpoint de checkout
+- [x] Clique no botão do Growth abre nova aba, redireciona até a página hospedada da Efí
+- [x] Valor exibido na página de pagamento: **R$147,00** — confere com a campanha Fundador
+- **Validado em:** 03/07/2026 — teste ao vivo via browser (chrome-devtools MCP), screenshot
+  conferido
+
+---
+
 ## Ajustes Possíveis Pós-Implementação
 
 - A extração de `plan_code`/email para o caso de **cancelamento** (`identifiers.subscription_id`
   em vez de `charge_id`) foi implementada com base na documentação, mas nunca validada contra um
   payload real de notificação de cancelamento — vale confirmar no primeiro cancelamento real.
-- Fase 2 (tela/endpoint de checkout que gera o `payment_url` sob demanda a partir dos botões da
-  landing) ainda não foi implementada — CTAs da landing seguem desativados (ver commit
-  `fc83138`).
 - Fase 3 (repontar `usage.py`, `subscription_jobs.py`, `Assinatura.tsx`, `UsageAlertBanner.tsx`
   para a Efí) e Fase 4 (limpeza de docs/arquitetura) seguem pendentes.
+- Cenário C1 (pagamento real ponta a ponta, incluindo o webhook) continua pendente — precisa de
+  `notification_url` pública (produção ou túnel), não testável em localhost.
