@@ -581,11 +581,12 @@ _EFI_CANCEL_STATUSES = {"canceled", "expired"}
 
 
 def _split_custom_id(custom_id: Optional[str]) -> tuple[Optional[str], Optional[str]]:
-    """custom_id é gravado como "{plan_code}:{offer_key}" (ver routes/checkout.py). Formato antigo
-    (sem ":", de assinaturas criadas antes desta mudança) devolve origin_offer=None."""
+    """custom_id é gravado como "{plan_code}__{offer_key}" (ver routes/checkout.py — "__" porque a
+    Efí rejeita ":" na validação de custom_id, ^[a-zA-Z0-9_-\\s]+$). Formato antigo (sem "__", de
+    assinaturas criadas antes desta mudança) devolve origin_offer=None."""
     if not custom_id:
         return None, None
-    plan_code, sep, offer_key = custom_id.partition(":")
+    plan_code, sep, offer_key = custom_id.partition("__")
     return plan_code or None, (offer_key or None) if sep else None
 
 
