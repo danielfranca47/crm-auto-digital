@@ -146,6 +146,49 @@ não no plano. Não foi preciso criar nenhum plano novo na Efí — bastou reapr
 
 ---
 
+## Fase 3 — Hotfix: custom_id quebrava todo o checkout em produção
+
+### Problema identificado
+
+Após o push da Fase 1 (commit `28426a4`), **todos os 4 checkouts em produção pararam de
+funcionar** (`start`, `growth`, `growth_founder_renewal`, `growth_fundador` — todos `502`).
+Causa raiz: `custom_id` passou a ser codificado como `"{plan_code}:{offer_key}"` (com `:`), mas a
+Efí valida `custom_id` contra `^[a-zA-Z0-9_-\s]+$` e rejeita `:` com `500 validation_error`.
+Reproduzido com uma chamada directa à API da Efí (sandbox) que devolveu o erro exacto.
+
+**Por que não foi apanhado antes:** a Fase 1 só testou `_split_custom_id` isoladamente (função
+Python pura) — nunca testou o `custom_id` codificado contra a API real da Efí. A verificação da
+Fase 2 (P2/P3 do plano aprovado) também não gerou um link de checkout real, só simulou a função
+localmente.
+
+### Correcção
+
+| Arquivo | Mudança |
+|---|---|
+| `backend-crm/routes/checkout.py` | separador `:` → `__` na construção de `custom_id` |
+| `backend-crm/routes/webhooks.py` | `_split_custom_id` decompõe pelo novo separador `__` |
+
+### Commits Fase 3
+
+| # | Commit | O que foi implementado |
+|---|---|---|
+| 1 | `2b3d230` | hotfix do separador de custom_id |
+
+### Validação
+
+- [x] Reprodução directa do erro via chamada real à API da Efí (sandbox) — confirmado `:` rejeitado, `__` aceite
+- [x] Os 4 offers testados localmente contra o sandbox real da Efí após a correcção — todos `307`
+      com `payment_url` válido
+- [x] Os 4 offers testados **ao vivo em produção** após o deploy — todos `307` com `payment_url`
+      real da Efí (`pagamento.sejaefi.com.br`)
+- **Validado em:** 04/07/2026
+
+**Lição para o futuro:** qualquer mudança em `custom_id` (ou outro campo enviado à Efí) precisa
+de ser testada com uma chamada real à API deles antes do deploy — a validação deles não está
+documentada de forma completa e só aparece ao testar.
+
+---
+
 ## Ajustes Possíveis Pós-Implementação
 
 - Nenhuma mudança no fluxo de cobrança em si nem no email de "expirado" — apenas nos avisos
