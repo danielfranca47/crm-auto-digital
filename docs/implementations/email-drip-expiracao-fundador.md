@@ -142,7 +142,7 @@ não no plano. Não foi preciso criar nenhum plano novo na Efí — bastou reapr
 
 | # | Commit | O que foi implementado |
 |---|---|---|
-| 1 | *(a registar após o commit)* | correção de preço R$297/R$197 + copy + doc |
+| 1 | `0c2dfbf` | correção de preço R$297/R$197 + copy + doc |
 
 ---
 
