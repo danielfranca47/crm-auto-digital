@@ -1,7 +1,9 @@
 # Email de expiração multi-estágio + copy de transição Fundador
 
 **Branch:** `main`
-**Status:** Todos os cenários validados
+**Status:** Fases 1–3 implementadas e testadas (simulação local + sandbox/produção real para o
+checkout) — pendente 1 teste real ponta a ponta (pagamento real → webhook → activação → email)
+antes de graduar (ver Cenário C1 abaixo)
 
 ---
 
@@ -186,6 +188,22 @@ localmente.
 **Lição para o futuro:** qualquer mudança em `custom_id` (ou outro campo enviado à Efí) precisa
 de ser testada com uma chamada real à API deles antes do deploy — a validação deles não está
 documentada de forma completa e só aparece ao testar.
+
+---
+
+## Checks pendentes antes de graduar
+
+### Cenário C1 — Pagamento real ponta a ponta (nunca observado)
+- [ ] Completar um pagamento real (produção, cartão real) de qualquer oferta
+- [ ] Confirmar que a Efí envia a notificação para `/webhooks/efi`
+- [ ] Confirmar que `payment_event` activa a conta e o email de boas-vindas chega de facto
+      (nunca confirmado que o SMTP/Resend envia com sucesso nesta sessão)
+- [ ] Se for o offer `growth_founder_renewal` ou `growth_fundador`: confirmar que
+      `origin_offer` é gravado correctamente na Subscription
+- **Pendente** — o teste anterior (Fase 1 da migração Efí) só chegou a `status: "approved"` no
+  sandbox; a Efí não simula liquidação (`"paid"`) em sandbox, então a activação real nunca foi
+  observada com dados de produção. Recomenda-se 1 compra real de teste (a oferta mais barata,
+  Start R$97) antes de divulgar a campanha amplamente.
 
 ---
 
