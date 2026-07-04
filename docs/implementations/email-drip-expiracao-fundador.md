@@ -77,7 +77,7 @@ no tempo, e a copy explica a transição de preço quando aplicável.
 
 | # | Commit | O que foi implementado |
 |---|---|---|
-| 1 | *(a registar após o commit)* | origin_offer + drip multi-estágio + copy Fundador/Normal |
+| 1 | `28426a4` | origin_offer + drip multi-estágio + copy Fundador/Normal |
 
 ---
 
