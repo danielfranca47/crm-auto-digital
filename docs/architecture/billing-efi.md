@@ -41,11 +41,17 @@ nova assinatura/link na Efí.
 
 **Ofertas (`_offers()`):**
 
-| `offer_key` | `plan_id` (env) | `plan_code` | Valor |
-|---|---|---|---|
-| `start` | `EFI_PLAN_ID_START` | `crm_start` | R$97,00 |
-| `growth` | `EFI_PLAN_ID_GROWTH` | `crm_growth` | R$197,00 |
-| `growth_fundador` | `EFI_PLAN_ID_GROWTH_FUNDADOR` | `crm_growth` | R$147,00 (campanha, landing pública) |
+| `offer_key` | `plan_id` (env) | `plan_code` | Valor | Uso |
+|---|---|---|---|---|
+| `start` | `EFI_PLAN_ID_START` | `crm_start` | R$97,00 | checkout Start |
+| `growth` | `EFI_PLAN_ID_GROWTH` | `crm_growth` | R$297,00 | preço tabelado normal — upgrade dentro do CRM, venda directa |
+| `growth_founder_renewal` | `EFI_PLAN_ID_GROWTH` (mesmo plan_id do `growth`) | `crm_growth` | R$197,00 | condição travada, exclusiva do email de renovação do Fundador |
+| `growth_fundador` | `EFI_PLAN_ID_GROWTH_FUNDADOR` | `crm_growth` | R$147,00 (12x) | campanha, landing pública |
+
+**Nota importante:** o `plan_id` da Efí só define a recorrência (intervalo + nº de repetições) —
+**não** o valor cobrado. Por isso `growth` e `growth_founder_renewal` reaproveitam o mesmo
+`plan_id` (ambos mensais, ilimitados); o preço vem de `value_cents`, definido por oferta em
+`_offers()`. Não é preciso criar um plano novo na Efí para cada preço.
 
 Oferta desconhecida ou sem `plan_id` configurado no ambiente → `404`. Erro ao gerar o link na Efí
 → `502`. Sucesso → `307` para o `payment_url` hospedado da Efí.
@@ -127,10 +133,16 @@ de `current_period_end`, do menos ao mais urgente: **30, 15, 7, 3, 2, 1, 0 dias*
   avisos recomeça no novo período.
 - Copy do email (`render_subscription_expiring_email`, `email_service.py`) varia por:
   - **Tom** (`days_remaining`): calmo (30/15) · atenção (7/3/2) · último aviso (1/0)
-  - **Origem** (`origin_offer == "growth_fundador"`): copy de transição de preço ("a tua condição
-    de fundador está a terminar, o valor passa a R$197/mês") vs. copy informativa genérica ("a tua
-    Lara renova em breve", pensada como rede de segurança para assinaturas normais que já renovam
-    automaticamente via Efí)
+  - **Origem** (`origin_offer == "growth_fundador"`): copy de transição de preço ("trava o teu
+    preço de fundador em R$197/mês para sempre — novos clientes pagam R$297/mês") vs. copy
+    informativa genérica ("a tua Lara renova em breve", pensada como rede de segurança para
+    assinaturas normais que já renovam automaticamente via Efí)
+- **Link de checkout correcto por origem:** `_get_checkout_url(plan_code, origin_offer)` — quando
+  `plan_code == "crm_growth"` e `origin_offer == "growth_fundador"`, usa o offer
+  `growth_founder_renewal` (R$197, condição travada); qualquer outro caso usa `growth` (R$297,
+  preço normal). Aplica-se tanto ao aviso antecipado quanto ao email final de "expirado" — um
+  Fundador que reactive a qualquer momento pelo link do email mantém o preço travado; só voltando
+  a assinar do zero pelo checkout público (sem esse contexto) é que pagaria R$297.
 
 **Nota de design:** o webhook não distingue com certeza "1ª cobrança" de "renovação" — qualquer
 cobrança `paid` gera acção `renew`. `payment_event` já sabia estender uma subscrição activa

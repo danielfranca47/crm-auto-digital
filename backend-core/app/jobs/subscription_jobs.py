@@ -29,8 +29,13 @@ _PLAN_OFFER_KEYS: dict[str, str] = {
 }
 
 
-def _get_checkout_url(plan_code: str) -> str:
-    offer_key = _PLAN_OFFER_KEYS.get(plan_code)
+def _get_checkout_url(plan_code: str, origin_offer: str | None = None) -> str:
+    # Fundador renovando mantém a condição travada (R$197); qualquer outro caso usa o preço
+    # normal do plano (ex.: Growth R$297) — ver docs/architecture/billing-efi.md
+    if plan_code == "crm_growth" and origin_offer == "growth_fundador":
+        offer_key = "growth_founder_renewal"
+    else:
+        offer_key = _PLAN_OFFER_KEYS.get(plan_code)
     crm_base = (settings.CRM_PUBLIC_BASE_URL or "").rstrip("/")
     if not offer_key or not crm_base:
         return FALLBACK_CHECKOUT_URL
@@ -77,7 +82,7 @@ def run_daily_subscription_jobs() -> dict:
                 user = db.query(models.User).filter(models.User.id == sub.user_id).first()
                 plan = db.query(models.Plan).filter(models.Plan.id == sub.plan_id).first()
                 if user and plan:
-                    checkout_url = _get_checkout_url(plan.code)
+                    checkout_url = _get_checkout_url(plan.code, sub.origin_offer)
                     html, text = render_subscription_expired_email(user.name, plan.name, checkout_url)
                     send_email(
                         to=user.email,
@@ -120,7 +125,7 @@ def run_daily_subscription_jobs() -> dict:
                 user = db.query(models.User).filter(models.User.id == sub.user_id).first()
                 plan = db.query(models.Plan).filter(models.Plan.id == sub.plan_id).first()
                 if user and plan:
-                    checkout_url = _get_checkout_url(plan.code)
+                    checkout_url = _get_checkout_url(plan.code, sub.origin_offer)
                     html, text = render_subscription_expiring_email(
                         user.name,
                         plan.name,

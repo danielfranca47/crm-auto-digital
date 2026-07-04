@@ -27,6 +27,15 @@ def _offers() -> Dict[str, Dict[str, Any]]:
         "growth": {
             "plan_id": os.environ.get("EFI_PLAN_ID_GROWTH"),
             "item_name": "Plano Growth - Lara AI",
+            "value_cents": 29700,
+            "plan_code": "crm_growth",
+        },
+        # Reaproveita o mesmo plan_id do "growth" (mesma recorrência: mensal, ilimitado) — o
+        # plan_id da Efí só define a cadência de cobrança, o valor é por link. Exclusivo para o
+        # email de renovação do Fundador (condição travada, ver docs/architecture/billing-efi.md).
+        "growth_founder_renewal": {
+            "plan_id": os.environ.get("EFI_PLAN_ID_GROWTH"),
+            "item_name": "Plano Growth - Lara AI (condição fundador)",
             "value_cents": 19700,
             "plan_code": "crm_growth",
         },

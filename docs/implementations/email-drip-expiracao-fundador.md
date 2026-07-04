@@ -113,9 +113,42 @@ no tempo, e a copy explica a transição de preço quando aplicável.
 
 ---
 
+## Fase 2 — Correcção de preço: R$297 normal vs. R$197 travado do Fundador
+
+### Problema identificado
+
+A landing (`CRMLandingV2.tsx`) promete R$147/mês nos primeiros 12 meses e depois **R$197/mês
+para sempre, preço travado, exclusivo do Fundador** — novos clientes pagam **R$297/mês** (preço
+tabelado normal do Growth). A Fase 1 desta feature usava R$197 tanto para a renovação do Fundador
+quanto para qualquer upgrade normal dentro do CRM (`Assinatura.tsx`, `UsageAlertBanner.tsx`) —
+ou seja, qualquer cliente Start que fizesse upgrade para Growth pagaria R$197 em vez de R$297. A
+copy do email também chamava R$197 de "valor normal", quando é a condição especial travada.
+
+**Achado durante a implementação:** o `plan_id` da Efí só define a recorrência (intervalo +
+repetições) — o valor cobrado é definido por `value_cents` na hora de gerar o link de checkout,
+não no plano. Não foi preciso criar nenhum plano novo na Efí — bastou reaproveitar o `plan_id` do
+"growth" já existente para os dois preços.
+
+### Correcção
+
+| Arquivo | Mudança |
+|---|---|
+| `backend-crm/routes/checkout.py` | oferta `growth` passa a R$297; nova oferta `growth_founder_renewal` (mesmo `plan_id`) a R$197 |
+| `backend-core/app/jobs/subscription_jobs.py` | `_get_checkout_url` ganha `origin_offer`; Fundador → `growth_founder_renewal`, resto → `growth` |
+| `backend-core/app/services/email_service.py` | copy Fundador corrigida: R$197 é "preço travado para sempre", R$297 é o preço de novos clientes |
+| `docs/architecture/billing-efi.md` | tabela de ofertas actualizada + nota sobre plan_id vs. valor |
+
+### Commits Fase 2
+
+| # | Commit | O que foi implementado |
+|---|---|---|
+| 1 | *(a registar após o commit)* | correção de preço R$297/R$197 + copy + doc |
+
+---
+
 ## Ajustes Possíveis Pós-Implementação
 
 - Nenhuma mudança no fluxo de cobrança em si nem no email de "expirado" — apenas nos avisos
-  antecipados.
+  antecipados e no link de checkout usado.
 - Se no futuro existirem mais campanhas com preço promocional temporário, o mesmo mecanismo de
   `origin_offer` serve — só é preciso adicionar a nova copy correspondente.

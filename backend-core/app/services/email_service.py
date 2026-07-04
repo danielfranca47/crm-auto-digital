@@ -298,25 +298,25 @@ def render_subscription_expiring_email(
             heading = "A tua condição de fundador está a chegar ao fim"
             body = (
                 f"Faltam {days_remaining} dias para terminar as tuas 12 mensalidades promocionais de "
-                f"fundador. Para a <strong>Lara</strong> continuar a trabalhar sem interrupções, a partir "
-                f"de <strong>{end_str}</strong> a mensalidade passa a ser o valor normal do plano Growth "
-                f"— R$197/mês, sem prazo de validade."
+                f"fundador. A boa notícia: a partir de <strong>{end_str}</strong>, o teu preço fica "
+                f"<strong>travado para sempre em R$197/mês</strong> — enquanto novos clientes já pagam "
+                f"R$297/mês. Basta confirmar a continuidade para garantir a tua condição."
             )
         elif tier == "urgent":
-            heading = f"Faltam {days_remaining} dias para o fim da tua condição de fundador ⚠️"
+            heading = f"Faltam {days_remaining} dias para garantir o teu preço de fundador travado ⚠️"
             body = (
-                f"A tua condição promocional de fundador termina em <strong>{end_str}</strong>. Depois "
-                f"disso, para a <strong>Lara</strong> continuar activa, é preciso subscrever o Growth ao "
-                f"valor normal (R$197/mês). Não deixes para a última hora."
+                f"A tua condição promocional de fundador termina em <strong>{end_str}</strong>. Confirma "
+                f"agora para travar o teu preço em <strong>R$197/mês para sempre</strong> — novos "
+                f"clientes já pagam R$297/mês. Não deixes para a última hora."
             )
         else:
-            heading = "É hoje! Último dia da tua condição de fundador" if days_remaining == 0 else "É amanhã! A tua condição de fundador termina amanhã"
+            heading = "É hoje! Último dia para travares o teu preço de fundador" if days_remaining == 0 else "É amanhã! Último dia para travares o teu preço de fundador"
             body = (
                 f"{'Hoje termina' if days_remaining == 0 else 'Amanhã termina'} a tua condição de "
-                f"fundador. Se não subscreveres o Growth normal (R$197/mês) até lá, a <strong>Lara</strong> "
-                f"vai pausar o atendimento automático."
+                f"fundador. Confirma agora para travar o teu preço em <strong>R$197/mês para sempre</strong> "
+                f"— se não confirmares, a <strong>Lara</strong> vai pausar o atendimento automático."
             )
-        cta_label = "Continuar com o Growth →"
+        cta_label = "Travar o meu preço de fundador →"
     else:
         color = {"gentle": "#0284c7", "urgent": "#0284c7", "last_call": "#dc2626"}[tier]
         if tier == "gentle":
