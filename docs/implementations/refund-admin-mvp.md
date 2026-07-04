@@ -79,7 +79,7 @@ Admin clica "Reembolsar" (AdminUsers.tsx)
 
 | # | Commit | O que foi implementado |
 |---|---|---|
-| 1 | *(a registar após o commit)* | charge_id persistido + endpoint de reembolso + botão admin |
+| 1 | `729b711` | charge_id persistido + endpoint de reembolso + botão admin |
 
 ---
 
