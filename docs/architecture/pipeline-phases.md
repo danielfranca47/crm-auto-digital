@@ -102,9 +102,10 @@ do AI Profile (coluna de topo — ver [`agents.md`](agents.md)):
   a sessão directamente.
 - **`"commercial"`**: injeta um bloco "MODO COMERCIAL" no prompt — prova social,
   TABELA DE SERVIÇOS/PREÇOS (`knowledge_items["service_pricing_table"]`, pode haver
-  mais de uma tabela), objeções, diferenciais, condição especial e política de
-  pagamento (sempre presencial — nunca link de checkout). Objectivo: obter o
-  compromisso verbal com um serviço/pacote específico antes de propor o agendamento.
+  mais de uma tabela — ver [`knowledge-base.md`](knowledge-base.md)), objeções,
+  diferenciais, condição especial e política de pagamento (sempre presencial — nunca
+  link de checkout). Objectivo: obter o compromisso verbal com um serviço/pacote
+  específico antes de propor o agendamento.
 
 **Gate de disparo (`_auto_promoted_from_qual`):** o bloco de aquecimento (comercial
 ou exploratório) só é injectado no turno em que a qualificação é dada como concluída
