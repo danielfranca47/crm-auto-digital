@@ -3,7 +3,9 @@ Job diário de expiração de subscriptions.
 
 Executado pelo APScheduler às 09:00 UTC:
   1. Subscriptions expiradas (current_period_end < now, status=active) → status="expired" + email
-  2. Subscriptions a expirar em ≤3 dias (expiry_warning_sent=False) → email de aviso + flag sent=True
+  2. Avisos antecipados em vários pontos antes de expirar — 30/15/7/3/2/1/0 dias
+     (`expiry_warning_stage` guarda o estágio mais urgente já enviado; reposto a None a cada
+     renovação em `payment_event`, ver docs/architecture/billing-efi.md)
 """
 import logging
 from datetime import datetime, timedelta
@@ -15,6 +17,9 @@ from app.config import settings
 logger = logging.getLogger(__name__)
 
 FALLBACK_CHECKOUT_URL = (settings.CRM_FRONTEND_URL or "https://crmapp.danielfranca.pt").rstrip("/") + "/assinatura"
+
+# Dias-antes-de-expirar em que um aviso é disparado, do menos ao mais urgente.
+_WARNING_THRESHOLDS = [0, 1, 2, 3, 7, 15, 30]
 
 # offer_key por plano — usados para montar o link de checkout Efí sob demanda (ver
 # docs/architecture/billing-efi.md)
@@ -50,7 +55,7 @@ def run_daily_subscription_jobs() -> dict:
 
     try:
         now = datetime.utcnow()
-        warning_window = now + timedelta(days=3)
+        warning_window = now + timedelta(days=_WARNING_THRESHOLDS[-1])
 
         # ── 1. Cancelar subscriptions expiradas ──────────────────────────────
         expired_subs = (
@@ -85,7 +90,7 @@ def run_daily_subscription_jobs() -> dict:
                 logger.warning(msg)
                 errors.append(msg)
 
-        # ── 2. Aviso antecipado (≤3 dias, não enviado ainda) ─────────────────
+        # ── 2. Avisos antecipados em múltiplos estágios (30/15/7/3/2/1/0 dias) ──
         expiring_subs = (
             db.query(models.Subscription)
             .filter(
@@ -93,13 +98,22 @@ def run_daily_subscription_jobs() -> dict:
                 models.Subscription.current_period_end.isnot(None),
                 models.Subscription.current_period_end > now,
                 models.Subscription.current_period_end <= warning_window,
-                models.Subscription.expiry_warning_sent == False,  # noqa: E712
             )
             .all()
         )
 
         for sub in expiring_subs:
-            sub.expiry_warning_sent = True
+            days_remaining = (sub.current_period_end.date() - now.date()).days
+            if days_remaining < 0:
+                continue  # já expirado — tratado na Parte 1
+
+            applicable = next((t for t in _WARNING_THRESHOLDS if days_remaining <= t), None)
+            if applicable is None:
+                continue
+            if sub.expiry_warning_stage is not None and applicable >= sub.expiry_warning_stage:
+                continue  # já enviámos um aviso igual ou mais urgente para este período
+
+            sub.expiry_warning_stage = applicable
             warning_count += 1
 
             try:
@@ -108,7 +122,12 @@ def run_daily_subscription_jobs() -> dict:
                 if user and plan:
                     checkout_url = _get_checkout_url(plan.code)
                     html, text = render_subscription_expiring_email(
-                        user.name, plan.name, sub.current_period_end, checkout_url
+                        user.name,
+                        plan.name,
+                        sub.current_period_end,
+                        checkout_url,
+                        days_remaining=days_remaining,
+                        is_founder_transition=(sub.origin_offer == "growth_fundador"),
                     )
                     send_email(
                         to=user.email,
@@ -116,7 +135,10 @@ def run_daily_subscription_jobs() -> dict:
                         html=html,
                         text=text,
                     )
-                    logger.info("Aviso de expiração enviado: user_id=%s", sub.user_id)
+                    logger.info(
+                        "Aviso de expiração enviado: user_id=%s stage=%s dias=%s",
+                        sub.user_id, applicable, days_remaining,
+                    )
             except Exception as exc:
                 msg = f"Email aviso user_id={sub.user_id}: {exc}"
                 logger.warning(msg)

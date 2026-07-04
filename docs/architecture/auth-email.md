@@ -265,7 +265,9 @@ Colunas adicionadas via `ensure_subscription_columns()` em `app/db.py`.
 Job diário que processa dois tipos de pendentes:
 
 1. **Subscriptions expiradas** — `status == "active"` e `current_period_end < now` → muda para `"expired"` + envia `render_subscription_expired_email`
-2. **Aviso antecipado** — `status == "active"`, `current_period_end <= now + 3 dias`, `expiry_warning_sent == False` → envia `render_subscription_expiring_email` + marca `expiry_warning_sent = True`
+2. **Avisos antecipados em múltiplos estágios** (30/15/7/3/2/1/0 dias antes) — ver
+   [`billing-efi.md`](billing-efi.md#ciclo-de-vida-de-avisos-de-expiração) para o mecanismo
+   completo (`expiry_warning_stage`, reset na renovação, copy por `origin_offer`)
 
 **Scheduler:** `APScheduler BackgroundScheduler` (corre dentro do processo uvicorn)
 - Configurado em `app/main.py` no `@app.on_event("startup")`

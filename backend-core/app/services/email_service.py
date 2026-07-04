@@ -264,33 +264,110 @@ def render_subscription_cancelled_email(
 
 
 def render_subscription_expiring_email(
-    name: Optional[str], plan_name: str, period_end: datetime, checkout_url: str
+    name: Optional[str],
+    plan_name: str,
+    period_end: datetime,
+    checkout_url: str,
+    days_remaining: int,
+    is_founder_transition: bool = False,
 ) -> tuple[str, str]:
+    """Email de aviso antecipado, disparado em vários pontos antes de `period_end`
+    (30/15/7/3/2/1/0 dias — ver `jobs/subscription_jobs.py`).
+
+    `is_founder_transition=True` é usado quando a assinatura veio da campanha "Growth Fundador"
+    (12 cobranças promocionais) — nesse caso o fim do período é uma transição de preço esperada
+    (o cliente precisa de subscrever o Growth normal para continuar), não uma falha de pagamento.
+    Para assinaturas normais, o tom é informativo — a Efí já cobra automaticamente na maioria dos
+    casos, o link serve como rede de segurança caso o pagamento automático falhe.
+    """
     display = name or "Cliente"
     end_str = period_end.strftime("%d/%m/%Y")
+
+    if days_remaining <= 1:
+        tier = "last_call"
+    elif days_remaining <= 7:
+        tier = "urgent"
+    else:
+        tier = "gentle"
+
+    when = "hoje" if days_remaining == 0 else ("amanhã" if days_remaining == 1 else f"em {days_remaining} dias")
+
+    if is_founder_transition:
+        color = {"gentle": "#0284c7", "urgent": "#d97706", "last_call": "#dc2626"}[tier]
+        if tier == "gentle":
+            heading = "A tua condição de fundador está a chegar ao fim"
+            body = (
+                f"Faltam {days_remaining} dias para terminar as tuas 12 mensalidades promocionais de "
+                f"fundador. Para a <strong>Lara</strong> continuar a trabalhar sem interrupções, a partir "
+                f"de <strong>{end_str}</strong> a mensalidade passa a ser o valor normal do plano Growth "
+                f"— R$197/mês, sem prazo de validade."
+            )
+        elif tier == "urgent":
+            heading = f"Faltam {days_remaining} dias para o fim da tua condição de fundador ⚠️"
+            body = (
+                f"A tua condição promocional de fundador termina em <strong>{end_str}</strong>. Depois "
+                f"disso, para a <strong>Lara</strong> continuar activa, é preciso subscrever o Growth ao "
+                f"valor normal (R$197/mês). Não deixes para a última hora."
+            )
+        else:
+            heading = "É hoje! Último dia da tua condição de fundador" if days_remaining == 0 else "É amanhã! A tua condição de fundador termina amanhã"
+            body = (
+                f"{'Hoje termina' if days_remaining == 0 else 'Amanhã termina'} a tua condição de "
+                f"fundador. Se não subscreveres o Growth normal (R$197/mês) até lá, a <strong>Lara</strong> "
+                f"vai pausar o atendimento automático."
+            )
+        cta_label = "Continuar com o Growth →"
+    else:
+        color = {"gentle": "#0284c7", "urgent": "#0284c7", "last_call": "#dc2626"}[tier]
+        if tier == "gentle":
+            heading = "A tua Lara renova em breve"
+            body = (
+                f"O teu plano <strong>{plan_name}</strong> renova automaticamente {when} "
+                f"(<strong>{end_str}</strong>). Não precisas de fazer nada — mas se quiseres confirmar "
+                f"ou atualizar o pagamento, usa o botão abaixo."
+            )
+            cta_label = "Ver assinatura →"
+        elif tier == "urgent":
+            heading = "A tua Lara renova em breve"
+            body = (
+                f"Faltam {days_remaining} dias para a renovação automática do teu plano "
+                f"<strong>{plan_name}</strong>. Se o pagamento não for aprovado automaticamente, usa o "
+                f"botão abaixo para garantir a continuidade."
+            )
+            cta_label = "Renovar agora →"
+        else:
+            heading = f"A tua Lara pode parar {when} se o pagamento não for confirmado"
+            body = (
+                f"O teu plano <strong>{plan_name}</strong> expira {when}. Se a renovação automática ainda "
+                f"não foi confirmada, garante agora para não teres interrupções."
+            )
+            cta_label = "Renovar agora →"
+
     html = f"""
 <!DOCTYPE html>
 <html>
 <body style="font-family:sans-serif;color:#1e293b;max-width:520px;margin:0 auto;padding:24px">
-  <h2 style="color:#d97706">A Lara para em breve ⚠️</h2>
+  <h2 style="color:{color}">{heading}</h2>
   <p>Olá, <strong>{display}</strong>.</p>
-  <p>O teu plano <strong>{plan_name}</strong> expira em <strong>{end_str}</strong>. Renova agora para a <strong>Lara</strong> continuar a trabalhar para ti sem interrupções.</p>
+  <p>{body}</p>
   <p style="margin:24px 0">
     <a href="{checkout_url}"
-       style="background:#d97706;color:#fff;padding:12px 24px;border-radius:8px;text-decoration:none;font-weight:600">
-      Renovar a Lara →
+       style="background:{color};color:#fff;padding:12px 24px;border-radius:8px;text-decoration:none;font-weight:600">
+      {cta_label}
     </a>
   </p>
   {_FOOTER}
 </body>
 </html>
 """
+    # Versão texto simples: remove as tags <strong> da heading/body já compostos acima
+    body_text = body.replace("<strong>", "").replace("</strong>", "")
+    heading_text = heading.replace("<strong>", "").replace("</strong>", "")
     text = (
-        f"A Lara para em breve\n\n"
+        f"{heading_text}\n\n"
         f"Olá, {display}.\n\n"
-        f"O teu plano {plan_name} expira em {end_str}.\n"
-        f"Renova agora para a Lara continuar a trabalhar para ti.\n\n"
-        f"Renova em: {checkout_url}"
+        f"{body_text}\n\n"
+        f"{cta_label} {checkout_url}"
         f"{_FOOTER_TEXT}"
     )
     return html, text

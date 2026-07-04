@@ -57,6 +57,12 @@ def ensure_subscription_columns() -> None:
             if "expiry_warning_sent" not in existing:
                 conn.execute(text("ALTER TABLE subscriptions ADD COLUMN expiry_warning_sent INTEGER NOT NULL DEFAULT 0"))
                 print("✅ coluna adicionada em subscriptions: expiry_warning_sent")
+            if "expiry_warning_stage" not in existing:
+                conn.execute(text("ALTER TABLE subscriptions ADD COLUMN expiry_warning_stage INTEGER"))
+                print("✅ coluna adicionada em subscriptions: expiry_warning_stage")
+            if "origin_offer" not in existing:
+                conn.execute(text("ALTER TABLE subscriptions ADD COLUMN origin_offer TEXT"))
+                print("✅ coluna adicionada em subscriptions: origin_offer")
         else:
             result = conn.execute(text("SELECT column_name FROM information_schema.columns WHERE table_name='subscriptions'"))
             existing = {row[0] for row in result.fetchall()}
@@ -64,6 +70,10 @@ def ensure_subscription_columns() -> None:
                 conn.execute(text("ALTER TABLE subscriptions ADD COLUMN trial_ends_at TIMESTAMP"))
             if "expiry_warning_sent" not in existing:
                 conn.execute(text("ALTER TABLE subscriptions ADD COLUMN expiry_warning_sent BOOLEAN NOT NULL DEFAULT FALSE"))
+            if "expiry_warning_stage" not in existing:
+                conn.execute(text("ALTER TABLE subscriptions ADD COLUMN expiry_warning_stage INTEGER"))
+            if "origin_offer" not in existing:
+                conn.execute(text("ALTER TABLE subscriptions ADD COLUMN origin_offer VARCHAR"))
 
 
 def ensure_user_columns() -> None:

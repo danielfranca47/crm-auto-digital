@@ -223,6 +223,7 @@ class PaymentEventRequest(BaseModel):
     email: str
     plan_code: str
     action: Literal["activate", "cancel", "renew"]
+    origin_offer: Optional[str] = None
 
 
 @router.post("/internal/subscriptions/payment-event", status_code=status.HTTP_200_OK)
@@ -293,6 +294,11 @@ async def payment_event(
         if sub:
             base = sub.current_period_end if sub.current_period_end and sub.current_period_end > now else now
             sub.current_period_end = base + timedelta(days=30)
+            # Reinicia o ciclo de avisos de expiração para o próximo período. Corrige também um
+            # bug latente: sem este reset, uma sub que já recebeu um aviso nunca mais recebia outro.
+            sub.expiry_warning_stage = None
+            if not sub.origin_offer and payload.origin_offer:
+                sub.origin_offer = payload.origin_offer
             db.commit()
             logger.info("payment_event: subscrição renovada user=%s plan=%s", user.id, payload.plan_code)
             return {"ok": True, "action": "renewed"}
@@ -311,6 +317,7 @@ async def payment_event(
         status="active",
         current_period_start=now,
         current_period_end=now + timedelta(days=30),
+        origin_offer=payload.origin_offer,
     )
     db.add(sub)
     db.commit()

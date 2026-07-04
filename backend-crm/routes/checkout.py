@@ -51,12 +51,15 @@ async def checkout_efi(offer_key: str) -> RedirectResponse:
     notification_url = f"{base_url}/webhooks/efi"
 
     try:
+        # custom_id carrega plan_code + offer_key (separados por ":") para o webhook conseguir
+        # distinguir a origem da assinatura (ex.: campanha "growth_fundador" vs "growth" normal)
+        # — ver docs/architecture/billing-efi.md
         payment_url = await efi_client.create_subscription_link(
             plan_id=int(offer["plan_id"]),
             item_name=offer["item_name"],
             value_cents=offer["value_cents"],
             notification_url=notification_url,
-            custom_id=offer["plan_code"],
+            custom_id=f'{offer["plan_code"]}:{offer_key}',
         )
     except Exception as exc:
         logger.error("checkout_efi: erro ao gerar link para oferta '%s': %s", offer_key, exc)

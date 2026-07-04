@@ -61,6 +61,14 @@ notificar o sistema quando o cliente paga.
 - `backend-crm/routes/usage.py` — `checkout_links` no payload de `GET /api/usage`
 - `backend-core/app/jobs/subscription_jobs.py` — links nos emails de aviso/expiração (`_get_checkout_url`, fallback para `{CRM_FRONTEND_URL}/assinatura` se `CRM_PUBLIC_BASE_URL` não estiver definida)
 
+**`custom_id` — plan_code + origem da oferta:** `create_subscription_link` recebe
+`custom_id=f"{plan_code}:{offer_key}"` (ex.: `"crm_growth:growth_fundador"`, `"crm_growth:growth"`).
+É o único campo comprovado a ida-e-volta pela Efí (`get_charge`/`get_subscription` devolvem-no tal
+qual). O webhook decompõe isto (`_split_custom_id` em `webhooks.py`) para obter `plan_code` e
+`origin_offer` separadamente — `origin_offer` é gravado na `Subscription` e usado para escolher a
+copy do email de aviso de expiração (ver "Ciclo de vida de avisos" abaixo). Formato antigo (sem
+`:`, de assinaturas criadas antes desta convenção) é tratado como `origin_offer=None`.
+
 ---
 
 ## Cliente Efí — `backend-crm/services/efi_client.py`
@@ -89,18 +97,40 @@ expirar.
 `POST /webhooks/efi` recebe form-encoded com o campo `notification` (token). Resolve as mudanças
 via `resolve_notification`, mapeia `status_current` para uma acção (`renew` para `paid`, `cancel`
 para `canceled`/`expired`, ignora o resto), e usa `_resolve_efi_plan_and_email(entry)` para obter
-`plan_code`/email — tenta primeiro `charge_id` (`get_charge`), cai para `subscription_id`
-(`get_subscription` + procura nas cobranças do histórico) quando não há `charge_id` directo (caso
-típico de cancelamento).
+`plan_code`/`origin_offer`/email (via `_split_custom_id`, ver acima) — tenta primeiro `charge_id`
+(`get_charge`), cai para `subscription_id` (`get_subscription` + procura nas cobranças do
+histórico) quando não há `charge_id` directo (caso típico de cancelamento). `origin_offer` é
+incluído no `POST /internal/subscriptions/payment-event`.
 
 ## Activação — `backend-core/app/api/subscriptions.py`
 
-`POST /internal/subscriptions/payment-event` (`x-service-token`), `payment_event()`:
+`POST /internal/subscriptions/payment-event` (`x-service-token`), `payment_event()` — payload
+`{email, plan_code, action, origin_offer}` (`origin_offer` opcional):
 
-- Email existente + `activate`/`renew` → cancela sub activa do produto, cria nova (`status=active`, `+30 dias`), retorna `{"action": "activated"}`
+- Email existente + `activate`/`renew` → cancela sub activa do produto, cria nova (`status=active`, `+30 dias`, `origin_offer=payload.origin_offer`), retorna `{"action": "activated"}`
 - Email **desconhecido** + `activate`/`renew` → cria `User` (senha aleatória 14 chars `ascii+!@#$%`), activa subscription, envia `render_welcome_email`, retorna `{"action": "created_and_activated"}`
 - Email desconhecido + `cancel` → `{"action": "skipped", "reason": "user_not_found"}` (não cria conta à toa)
 - `plan_code` inexistente → `{"action": "skipped", "reason": "plan_not_found"}`
+- Renovação de sub já activa: se `sub.origin_offer` ainda não estiver definido, faz backfill com
+  `payload.origin_offer` (cobre assinaturas activas antes desta convenção existir)
+
+---
+
+## Ciclo de vida de avisos de expiração — `backend-core/app/jobs/subscription_jobs.py`
+
+Job diário (ver `auth-email.md` para o agendamento) manda um aviso em cada um destes pontos antes
+de `current_period_end`, do menos ao mais urgente: **30, 15, 7, 3, 2, 1, 0 dias**.
+
+- `Subscription.expiry_warning_stage` (Integer, nullable) guarda o estágio mais urgente já
+  enviado no período actual — impede reenvio do mesmo estágio ou de um menos urgente.
+- **Reposto a `None` a cada renovação bem-sucedida** (`payment_event`, ramo `renew`) — o ciclo de
+  avisos recomeça no novo período.
+- Copy do email (`render_subscription_expiring_email`, `email_service.py`) varia por:
+  - **Tom** (`days_remaining`): calmo (30/15) · atenção (7/3/2) · último aviso (1/0)
+  - **Origem** (`origin_offer == "growth_fundador"`): copy de transição de preço ("a tua condição
+    de fundador está a terminar, o valor passa a R$197/mês") vs. copy informativa genérica ("a tua
+    Lara renova em breve", pensada como rede de segurança para assinaturas normais que já renovam
+    automaticamente via Efí)
 
 **Nota de design:** o webhook não distingue com certeza "1ª cobrança" de "renovação" — qualquer
 cobrança `paid` gera acção `renew`. `payment_event` já sabia estender uma subscrição activa

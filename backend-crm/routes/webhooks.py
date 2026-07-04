@@ -580,8 +580,17 @@ def payment_webhook(
 _EFI_CANCEL_STATUSES = {"canceled", "expired"}
 
 
-async def _resolve_efi_plan_and_email(entry: Dict[str, Any]) -> tuple[Optional[str], Optional[str]]:
-    """A partir de uma entrada de notificação, obtém (plan_code, email) via charge ou subscription."""
+def _split_custom_id(custom_id: Optional[str]) -> tuple[Optional[str], Optional[str]]:
+    """custom_id é gravado como "{plan_code}:{offer_key}" (ver routes/checkout.py). Formato antigo
+    (sem ":", de assinaturas criadas antes desta mudança) devolve origin_offer=None."""
+    if not custom_id:
+        return None, None
+    plan_code, sep, offer_key = custom_id.partition(":")
+    return plan_code or None, (offer_key or None) if sep else None
+
+
+async def _resolve_efi_plan_and_email(entry: Dict[str, Any]) -> tuple[Optional[str], Optional[str], Optional[str]]:
+    """A partir de uma entrada de notificação, obtém (plan_code, origin_offer, email) via charge ou subscription."""
     from services import efi_client
 
     identifiers = entry.get("identifiers") or {}
@@ -590,15 +599,15 @@ async def _resolve_efi_plan_and_email(entry: Dict[str, Any]) -> tuple[Optional[s
 
     if charge_id:
         charge = await efi_client.get_charge(charge_id)
-        plan_code = charge.get("custom_id")
+        plan_code, origin_offer = _split_custom_id(charge.get("custom_id"))
         email = ((charge.get("customer") or {}).get("email") or "").strip().lower()
         if email:
-            return plan_code, email
+            return plan_code, origin_offer, email
         subscription_id = subscription_id or (charge.get("subscription") or {}).get("subscription_id")
 
     if subscription_id:
         sub = await efi_client.get_subscription(subscription_id)
-        plan_code = sub.get("custom_id")
+        plan_code, origin_offer = _split_custom_id(sub.get("custom_id"))
         history = sub.get("history") or []
         for item in reversed(history):
             item_charge_id = item.get("charge_id")
@@ -607,10 +616,10 @@ async def _resolve_efi_plan_and_email(entry: Dict[str, Any]) -> tuple[Optional[s
             charge = await efi_client.get_charge(item_charge_id)
             email = ((charge.get("customer") or {}).get("email") or "").strip().lower()
             if email:
-                return plan_code, email
-        return plan_code, None
+                return plan_code, origin_offer, email
+        return plan_code, origin_offer, None
 
-    return None, None
+    return None, None, None
 
 
 @router.post("/efi")
@@ -654,7 +663,7 @@ async def efi_webhook(request: Request) -> Dict[str, Any]:
                 logger.info("efi_webhook: entrada ignorada status=%s", status_current)
                 continue
 
-            plan_code, email = await _resolve_efi_plan_and_email(entry)
+            plan_code, origin_offer, email = await _resolve_efi_plan_and_email(entry)
             if not plan_code or not email:
                 logger.warning("efi_webhook: dados insuficientes entry=%s plan_code=%s email_found=%s",
                                 entry, plan_code, bool(email))
@@ -663,7 +672,7 @@ async def efi_webhook(request: Request) -> Dict[str, Any]:
             try:
                 resp = await client.post(
                     f"{core_base}/internal/subscriptions/payment-event",
-                    json={"email": email, "plan_code": plan_code, "action": action},
+                    json={"email": email, "plan_code": plan_code, "action": action, "origin_offer": origin_offer},
                     headers={"x-service-token": core_token},
                 )
                 resp.raise_for_status()
