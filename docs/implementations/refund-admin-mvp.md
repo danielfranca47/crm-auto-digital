@@ -155,7 +155,7 @@ do período actual", mas o cancelamento é sempre imediato (não há período de
 
 | # | Commit | O que foi implementado |
 |---|---|---|
-| 1 | *(a registar após o commit)* | email de cancelamento + correção de copy + docs |
+| 1 | `118c519` | email de cancelamento + correção de copy + docs |
 
 ### Validação
 
