@@ -246,8 +246,7 @@ def render_subscription_cancelled_email(
 <body style="font-family:sans-serif;color:#1e293b;max-width:520px;margin:0 auto;padding:24px">
   <h2 style="color:#dc2626">Subscrição cancelada</h2>
   <p>Olá, <strong>{display}</strong>.</p>
-  <p>A tua subscrição do plano <strong>{plan_name}</strong> foi cancelada.</p>
-  <p>O acesso à <strong>Lara</strong> ficará limitado no final do período actual.</p>
+  <p>A tua subscrição do plano <strong>{plan_name}</strong> foi cancelada e o acesso à <strong>Lara</strong> foi encerrado imediatamente.</p>
   <p style="color:#64748b;font-size:0.875em">Se cancelaste por engano ou mudaste de ideias, podes reactivar a Lara a qualquer momento.</p>
   {_FOOTER}
 </body>
@@ -256,8 +255,7 @@ def render_subscription_cancelled_email(
     text = (
         f"Subscrição cancelada\n\n"
         f"Olá, {display}.\n\n"
-        f"A tua subscrição do plano {plan_name} foi cancelada.\n"
-        f"O acesso à Lara ficará limitado no final do período actual."
+        f"A tua subscrição do plano {plan_name} foi cancelada e o acesso à Lara foi encerrado imediatamente."
         f"{_FOOTER_TEXT}"
     )
     return html, text

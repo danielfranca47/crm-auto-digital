@@ -11,7 +11,11 @@ from sqlalchemy.orm import Session
 from app import models
 from app.config import settings
 from app.db import get_db
-from app.services.email_service import render_welcome_email, send_email
+from app.services.email_service import (
+    render_subscription_cancelled_email,
+    render_welcome_email,
+    send_email,
+)
 from .auth import get_current_user, get_password_hash
 
 logger = logging.getLogger(__name__)
@@ -284,6 +288,17 @@ async def payment_event(
         ).update({"status": "cancelled"})
         db.commit()
         logger.info("payment_event: subscrição cancelada user=%s plan=%s", user.id, payload.plan_code)
+        try:
+            html, text = render_subscription_cancelled_email(user.name, plan.name)
+            send_email(
+                to=user.email,
+                subject="Subscrição cancelada — Digital Pro",
+                html=html,
+                text=text,
+            )
+            logger.info("payment_event: email de cancelamento enviado para %s", user.email)
+        except Exception as exc:
+            logger.error("payment_event: falha ao enviar email de cancelamento para %s — %s", user.email, exc)
         return {"ok": True, "action": "cancelled"}
 
     if payload.action == "renew":

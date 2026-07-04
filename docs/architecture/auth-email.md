@@ -147,7 +147,7 @@ Usa `smtplib` (stdlib Python) com STARTTLS. Configuração via `.env`:
 | `render_subscription_activated_email(name, plan_name, period_end, login_url)` | Webhook Efí (`action=activate`) ou admin atribui plano | "A Lara está activa!" |
 | `render_trial_started_email(name, plan_name, trial_end, login_url)` | Admin atribui trial | "Trial iniciado — Digital Pro" |
 | `render_subscription_renewed_email(name, plan_name, new_end)` | Webhook Efí (`action=renew`) | "A Lara continua activa!" |
-| `render_subscription_cancelled_email(name, plan_name)` | Webhook Efí (`action=cancel`) | "Subscrição cancelada" |
+| `render_subscription_cancelled_email(name, plan_name)` | Qualquer `action=cancel` em `payment_event` — Webhook Efí ou reembolso via admin (`billing-efi.md`) | "Subscrição cancelada" |
 | `render_subscription_expiring_email(name, plan_name, period_end, checkout_url)` | Job diário — 3 dias antes de expirar | "A Lara para em breve ⚠️" |
 | `render_subscription_expired_email(name, plan_name, checkout_url)` | Job diário — subscription expirada | "A Lara está pausada" |
 

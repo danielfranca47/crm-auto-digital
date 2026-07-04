@@ -131,6 +131,46 @@ Admin clica "Reembolsar" (AdminUsers.tsx)
 
 ---
 
+## Fase 2 — Email de confirmação de cancelamento + correção de doc
+
+### Problema identificado
+
+O utilizador perguntou o que acontece depois de um reembolso bem-sucedido. Ao verificar o código,
+`payment_event(action=cancel)` só actualizava a base de dados — **nenhum email era enviado** ao
+cliente confirmando o cancelamento. Além disso, `docs/architecture/auth-email.md` já afirmava
+(incorretamente, herdado da doc original da Kiwify) que `render_subscription_cancelled_email` era
+disparado em `action=cancel` — a função existia em `email_service.py` mas nunca era chamada.
+A própria copy do template também estava desatualizada: dizia "o acesso ficará limitado no final
+do período actual", mas o cancelamento é sempre imediato (não há período de carência no código).
+
+### Correção
+
+| Arquivo | Mudança |
+|---|---|
+| `backend-core/app/services/email_service.py` | copy de `render_subscription_cancelled_email` corrigida para "acesso encerrado imediatamente" |
+| `backend-core/app/api/subscriptions.py` | `payment_event`, ramo `cancel`: chama `render_subscription_cancelled_email` + `send_email` após o commit (mesmo padrão try/except do email de boas-vindas) |
+| `docs/architecture/billing-efi.md`, `auth-email.md` | documentado que `action=cancel` (webhook Efí **ou** reembolso admin) agora envia o email |
+
+### Commits Fase 2
+
+| # | Commit | O que foi implementado |
+|---|---|---|
+| 1 | *(a registar após o commit)* | email de cancelamento + correção de copy + docs |
+
+### Validação
+
+- [x] Email renderizado localmente — copy confirma "encerrado imediatamente" (antes: "no final do
+      período actual", incorreto)
+- [x] `action=cancel` testado ao vivo contra backend-core local (mesmo utilizador de teste da
+      Fase 1) — resposta `{"ok":true,"action":"cancelled"}`; `GET by-email` confirmou a subscrição
+      deixou de estar `active` (cancelamento efectivo)
+- **Nota:** o envio de email em si não foi confirmado visualmente (SMTP real do Resend, sem forma
+  de inspeccionar a caixa de entrada nesta sessão) — mas o código segue exactamente o padrão já
+  comprovado do email de boas-vindas (mesmo `send_email()`, mesmo try/except)
+- **Validado em:** 04/07/2026
+
+---
+
 ## Fora do Escopo — Futuro
 
 - **Reembolso automático dos 7 dias:** agente que lê emails de pedido de reembolso, tenta

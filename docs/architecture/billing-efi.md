@@ -119,6 +119,7 @@ cobrança nova, por isso não é enviado.
 - Email existente + `activate`/`renew` → cancela sub activa do produto, cria nova (`status=active`, `+30 dias`, `origin_offer=payload.origin_offer`), retorna `{"action": "activated"}`
 - Email **desconhecido** + `activate`/`renew` → cria `User` (senha aleatória 14 chars `ascii+!@#$%`), activa subscription, envia `render_welcome_email`, retorna `{"action": "created_and_activated"}`
 - Email desconhecido + `cancel` → `{"action": "skipped", "reason": "user_not_found"}` (não cria conta à toa)
+- Email existente + `cancel` → cancela a sub activa do plano, envia `render_subscription_cancelled_email` ao cliente, retorna `{"action": "cancelled"}`
 - `plan_code` inexistente → `{"action": "skipped", "reason": "plan_not_found"}`
 - Renovação de sub já activa: se `sub.origin_offer` ainda não estiver definido, faz backfill com
   `payload.origin_offer` (cobre assinaturas activas antes desta convenção existir)
@@ -144,13 +145,15 @@ Admin clica "Reembolsar" (frontend-admin, AdminUsers.tsx)
   → POST /admin/billing/refund {email}              (backend-crm, routes/admin_billing.py, JWT admin via require_crm_admin)
       → GET /internal/subscriptions/by-email/{email}      (backend-core) → efi_charge_id
       → efi_client.refund_charge(efi_charge_id)           → POST /v1/charge/card/:id/refund
-      → POST /internal/subscriptions/payment-event (action=cancel)   (backend-core) — cancela o acesso
+      → POST /internal/subscriptions/payment-event (action=cancel)   (backend-core) — cancela o
+        acesso imediatamente e envia render_subscription_cancelled_email ao cliente
       → devolve {ok, refunded, plan_code}
 ```
 
 Sem `efi_charge_id` gravado (assinatura anterior a esta funcionalidade) → `422`, mensagem indica
 reembolso manual no painel da Efí. Erro da Efí (fora da janela, já reembolsado, status inválido)
-→ `502` com a mensagem de erro dela repassada directamente (não uma mensagem genérica).
+→ `502` com a mensagem de erro dela repassada directamente (não uma mensagem genérica) — nesse
+caso `action=cancel` nunca é chamado, a subscrição permanece activa.
 
 **Fora do escopo actual** (ver `docs/implementations/refund-admin-mvp.md`): automação do
 reembolso dos 7 dias via agente de email, fluxo de "chamado" dos 30 dias, reembolso parcial pela
