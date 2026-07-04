@@ -54,7 +54,11 @@ Testes executados (ao vivo ou reportados por ti, mesmo numa conversa nova)
 
 Arquivo com todos os checks obrigatórios [x]
   → Claude segue _processo-graduacao-implementacao.md
-  → Migra para docs/architecture/, deleta este arquivo
+  → Migra para docs/architecture/
+  → Triagem da secção "Ajustes Possíveis" (Passo 5b): pergunta quais são
+    válidos e a prioridade; migra para implementations/ (urgente) ou plans/
+    (não-urgente)
+  → Deleta este arquivo
 ```
 
 ---
@@ -119,7 +123,11 @@ para teres contexto completo.
 - Actualiza o `**Status:**` quando tudo estiver validado
 
 **Ao graduar um arquivo:**
-- Lê `_processo-graduacao-implementacao.md` e segue os 7 passos
+- Lê `_processo-graduacao-implementacao.md` e segue os passos
+- Antes de deletar, faz a triagem obrigatória da secção "Ajustes Possíveis" /
+  "Fora do Escopo" (Passo 5b): pergunta quais itens são válidos e qual a
+  prioridade, e migra os validados para `docs/implementations/` (urgente) ou
+  `docs/plans/` (não-urgente) — nunca descarta esses itens em silêncio
 - Só migra o que é arquitecturalmente relevante (comportamentos, schemas, fluxos)
 - Deixa o histórico de fases no git log
 

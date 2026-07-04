@@ -30,7 +30,12 @@ que ainda não foram implementadas.
 ## Como criar um novo arquivo de planos
 
 Quando identificares melhorias futuras (ao fim de uma implementação, numa sessão de
-análise, ou ao notar um gap no produto), cria um arquivo neste diretório:
+análise, ou ao notar um gap no produto), cria um arquivo neste diretório.
+
+> Se o item veio da secção "Ajustes Possíveis" / "Fora do Escopo" de um arquivo
+> sendo graduado, este arquivo é criado como parte do **Passo 5b** de
+> [`_processo-graduacao-implementacao.md`](../implementations/_processo-graduacao-implementacao.md) —
+> só depois de o utilizador confirmar que o item é válido e não-urgente.
 
 **Formato do nome:** `<tema-descritivo>.md`
 

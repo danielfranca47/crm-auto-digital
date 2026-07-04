@@ -98,6 +98,74 @@ actualizá-lo para reflectir um exemplo realista do padrão actual.
 
 ---
 
+## Passo 5b — Triagem de "Ajustes Possíveis" / "Fora do Escopo"
+
+Antes de deletar o arquivo, verificar se ele tem uma secção final de sugestões
+não implementadas (títulos usados no repo: `## Ajustes Possíveis Pós-Implementação`,
+`## Fora do Escopo — Futuro`, ou equivalente). Se a secção não existir ou estiver
+vazia, saltar este passo e ir directo ao Passo 6.
+
+**Por quê:** esta secção acumula boas sugestões (correções, débito técnico,
+melhorias) que historicamente eram perdidas ao deletar o arquivo na graduação,
+sem nenhuma decisão explícita sobre o que fazer com elas. Este passo obrigatório
+garante que nada é descartado silenciosamente.
+
+### 1. Extrair e listar os itens
+
+Ler a secção e listar cada sugestão como um item numerado (um item por
+parágrafo/bullet; agrupar bullets que descrevem a mesma sugestão).
+
+### 2. Perguntar ao utilizador quais são válidos
+
+Mostrar a lista numerada e perguntar quais itens ainda fazem sentido implementar.
+Aceitar resposta "todos", "nenhum" ou uma lista específica (ex.: "1 e 3").
+
+Itens descartados ficam simplesmente de fora — não precisam de registo em lado
+nenhum.
+
+### 3. Para cada item validado, perguntar a prioridade
+
+Perguntar, item a item (ou em bloco, se o utilizador preferir responder assim):
+
+> "Este item é urgente (implementar já a seguir) ou não-urgente (fica no
+> backlog para um sprint futuro)?"
+
+- **Urgente** → vai para `docs/implementations/` (passo 4 abaixo)
+- **Não-urgente** → vai para `docs/plans/` (passo 5 abaixo) — perguntar também
+  a prioridade declarada ALTA/MÉDIA/BAIXA, usada depois pela análise de sprint
+  (ver [`_guia-analise-planos.md`](../plans/_guia-analise-planos.md))
+
+### 4. Item urgente → criar arquivo em docs/implementations/
+
+Criar um novo arquivo seguindo [`_guia-documentar-implementacao.md`](_guia-documentar-implementacao.md),
+preenchendo o que já se sabe a partir do item original (motivação, contexto,
+arquivos prováveis).
+
+**Isto não substitui o Plan Mode obrigatório.** O novo arquivo nasce com
+`**Status:** Aguardando Plan Mode` — a implementação real só começa depois do
+diagnóstico normal (Passo 0 do guia) ser feito e aprovado pelo utilizador.
+
+Referenciar a origem no campo Motivação: "Este item surgiu como 'Ajuste possível'
+na graduação de `<arquivo-graduado>.md`."
+
+### 5. Item não-urgente → registar em docs/plans/
+
+Seguir a convenção de [`docs/plans/README.md`](../plans/README.md):
+- Se já existir um arquivo `<tema>-melhorias-futuras.md` para a mesma feature
+  (ou uma relacionada), **acrescentar** o item lá como novo `M<n>` com a
+  prioridade ALTA/MÉDIA/BAIXA definida no passo 3.
+- Caso contrário, criar `docs/plans/<slug-da-feature>-melhorias-futuras.md`
+  novo, com o contexto "Itens deixados de fora da implementação
+  `<arquivo-graduado>.md`" e cada item como `M<n>`.
+
+### 6. Confirmar antes de prosseguir
+
+Mostrar ao utilizador um resumo do que foi decidido (item → destino) antes de
+seguir para o Passo 6. Os itens migrados já não precisam de estar na secção
+"Ajustes Possíveis" do arquivo original — ele vai ser deletado no passo seguinte.
+
+---
+
 ## Passo 6 — Deletar o arquivo de implementação
 
 Após confirmar que toda a informação arquitecturalmente relevante está nos docs
@@ -111,7 +179,9 @@ git rm docs/implementations/<nome-do-arquivo>.md
 - Histórico de fases e diagnósticos — pertence ao git log / PR
 - Trechos de código antes/depois — visível no git diff
 - Notas de testes com datas específicas — ficam nos commits
-- "Ajustes Possíveis Pós-Implementação" — viram issues/planos futuros se aplicável
+- "Ajustes Possíveis Pós-Implementação" / "Fora do Escopo" — já tratados no
+  Passo 5b (triados e migrados para `docs/implementations/` ou `docs/plans/`
+  antes de chegar aqui)
 
 **O que SIM precisa de migrar:**
 - Comportamentos e regras de runtime não-óbvios
@@ -193,6 +263,13 @@ Feature "Áudio Inbound + Transcrição" estava completa (`etapa-8-6-audio-trans
   com normalização de messageType, pipeline de transcrição, media_fallback
 - `agents.md`: campo `audio_transcription_enabled`, campos do `offer_pack`,
   secção "Toggle de Bot por Lead"
+
+### Passo 5b — Triagem
+- Arquivo tinha 2 itens em "Ajustes Possíveis": (1) suportar vídeo além de áudio,
+  (2) cache de transcrição para áudios repetidos
+- Utilizador validou os dois; (1) marcado urgente, (2) não-urgente/MÉDIA
+- (1) → novo `docs/implementations/suporte-video-inbound.md` (Aguardando Plan Mode)
+- (2) → adicionado como `M1` em `docs/plans/audio-transcricao-melhorias-futuras.md`
 
 ### Passo 6 — Deletado
 - `docs/implementations/etapa-8-6-audio-transcricao-inbound.md`
