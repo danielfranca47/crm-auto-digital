@@ -1,7 +1,9 @@
 # Reembolso — botão no painel admin (MVP)
 
 **Branch:** `main`
-**Status:** Fase 1 implementada e testada (parcialmente — ver nota no Cenário P1)
+**Status:** Fase 1 implementada e testada ao vivo (browser + sandbox real) — falta apenas
+confirmar um reembolso realmente bem-sucedido, o que só é observável com uma cobrança `paid` em
+produção (ver nota no Cenário P1)
 
 ---
 
@@ -104,18 +106,28 @@ Admin clica "Reembolsar" (AdminUsers.tsx)
       Subscription activa mais recente → Plan), mesmo padrão já usado em `list_my_subscriptions`
 - **Validado em:** 04/07/2026 — revisão de código
 
-### Cenário P4 — Fluxo completo local
-- [x] Revisão de código de `admin_billing.refund_user` — orquestração (`by-email` → `refund_charge`
-      → `payment-event action=cancel`) confirmada correcta por leitura; erro da Efí é capturado e
-      repassado antes de cancelar (não cancela se o reembolso falhar)
-- **Pendente:** execução ao vivo ponta a ponta (não foi possível subir os 2 backends em background
-  nesta sessão); a chamada real à Efí tem a mesma limitação do Cenário P1 (sandbox nunca chega a
-  `paid`)
+### Cenário P4 — Fluxo completo local (testado ao vivo via browser)
+- [x] Criado utilizador de teste real via `payment_event` (email/plan/charge_id conhecido)
+- [x] `GET /internal/subscriptions/by-email` confirmado a devolver o `efi_charge_id` correcto
+- [x] Clique real em "Reembolsar" no painel admin (localhost:5174) → `POST /admin/billing/refund`
+      → `by-email` → `efi_client.refund_charge` → Efí recusa (`invalid_data`, status ≠ `paid`,
+      mesma limitação do sandbox do Cenário P1) → erro repassado, `502`
+- [x] Confirmado por `GET /internal/subscriptions/by-email` **depois** da tentativa: a subscrição
+      continua `status: "active"` — **não cancelou**, porque o reembolso na Efí falhou. Confirma
+      a proteção mais importante do fluxo: só cancela o acesso se o reembolso realmente suceder.
+- **Validado em:** 04/07/2026 — teste ao vivo via browser (chrome-devtools MCP), backend-core
+  (8001) + backend-crm (8000) + frontend-admin (5174) locais, sandbox real da Efí
 
-### Cenário P5 — UI
+### Cenário P5 — UI (testado ao vivo via browser)
 - [x] `npx tsc --noEmit` sem erros após as mudanças em `api.ts`/`AdminUsers.tsx`
-- [x] Revisão visual do JSX do modal de confirmação (mesmo padrão dos modais existentes)
-- **Pendente:** clique real no browser (não testado ao vivo nesta sessão)
+- [x] Login no painel admin, botão "Reembolsar" aparece na lista de utilizadores
+- [x] Clique abre o diálogo de confirmação com o texto de aviso correcto (nome do utilizador,
+      aviso "não pode ser desfeito")
+- [x] Clique em "Reembolsar e cancelar" → botão muda para "Reembolsando…" → toast de erro aparece
+      no canto inferior direito com a mensagem real da Efí — modal permanece aberto (correcto,
+      permite tentar de novo ou cancelar)
+- **Validado em:** 04/07/2026 — teste ao vivo via browser (chrome-devtools MCP), screenshot
+  conferido
 
 ---
 
