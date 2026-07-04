@@ -63,6 +63,9 @@ def ensure_subscription_columns() -> None:
             if "origin_offer" not in existing:
                 conn.execute(text("ALTER TABLE subscriptions ADD COLUMN origin_offer TEXT"))
                 print("✅ coluna adicionada em subscriptions: origin_offer")
+            if "efi_charge_id" not in existing:
+                conn.execute(text("ALTER TABLE subscriptions ADD COLUMN efi_charge_id INTEGER"))
+                print("✅ coluna adicionada em subscriptions: efi_charge_id")
         else:
             result = conn.execute(text("SELECT column_name FROM information_schema.columns WHERE table_name='subscriptions'"))
             existing = {row[0] for row in result.fetchall()}
@@ -74,6 +77,8 @@ def ensure_subscription_columns() -> None:
                 conn.execute(text("ALTER TABLE subscriptions ADD COLUMN expiry_warning_stage INTEGER"))
             if "origin_offer" not in existing:
                 conn.execute(text("ALTER TABLE subscriptions ADD COLUMN origin_offer VARCHAR"))
+            if "efi_charge_id" not in existing:
+                conn.execute(text("ALTER TABLE subscriptions ADD COLUMN efi_charge_id INTEGER"))
 
 
 def ensure_user_columns() -> None:

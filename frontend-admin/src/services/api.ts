@@ -55,6 +55,19 @@ async function crmGet<T>(path: string): Promise<T> {
   return res.json() as Promise<T>;
 }
 
+async function crmPost<T>(path: string, body?: unknown): Promise<T> {
+  const res = await fetch(`${CRM_BASE}${path}`, {
+    method: "POST",
+    headers: adminHeaders(),
+    body: body !== undefined ? JSON.stringify(body) : undefined,
+  });
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error((data as { detail?: string }).detail ?? `HTTP ${res.status}`);
+  }
+  return res.json() as Promise<T>;
+}
+
 // ── Types ─────────────────────────────────────────────────────────────────────
 
 export type AdminStats = {
@@ -211,6 +224,12 @@ export const api = {
     corePost<{ ok: boolean; plan_name: string; current_period_end: string }>(
       `/admin/users/${userId}/subscription`,
       { plan_code: planCode, months, is_trial: isTrial }
+    ),
+
+  refundUser: (email: string) =>
+    crmPost<{ ok: boolean; refunded: boolean; plan_code: string }>(
+      "/admin/billing/refund",
+      { email }
     ),
 
   adminListPlans: () => coreGet<PlanLimits[]>("/admin/plans"),

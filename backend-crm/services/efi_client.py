@@ -117,3 +117,17 @@ async def get_subscription(subscription_id: int) -> Dict[str, Any]:
     """Detalha uma assinatura — custom_id (plan_code) e histórico de cobranças associadas."""
     result = await _request("GET", f"/v1/subscription/{subscription_id}")
     return result["data"]
+
+
+async def refund_charge(charge_id: int, amount_cents: Optional[int] = None) -> Dict[str, Any]:
+    """Reembolsa uma cobrança de cartão de crédito (parcial ou total).
+
+    Regras da Efí: a cobrança precisa estar com status "paid"; reembolso parcial só até 90 dias
+    após o pagamento, total até 360 dias; um reembolso parcial por dia por cobrança; não
+    disponível para vendas em marketplace. `amount_cents=None` → reembolso total.
+    """
+    body: Dict[str, Any] = {}
+    if amount_cents is not None:
+        body["amount"] = amount_cents
+    result = await _request("POST", f"/v1/charge/card/{charge_id}/refund", json=body)
+    return result["data"]

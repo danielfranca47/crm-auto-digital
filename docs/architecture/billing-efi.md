@@ -106,7 +106,10 @@ para `canceled`/`expired`, ignora o resto), e usa `_resolve_efi_plan_and_email(e
 `plan_code`/`origin_offer`/email (via `_split_custom_id`, ver acima) — tenta primeiro `charge_id`
 (`get_charge`), cai para `subscription_id` (`get_subscription` + procura nas cobranças do
 histórico) quando não há `charge_id` directo (caso típico de cancelamento). `origin_offer` é
-incluído no `POST /internal/subscriptions/payment-event`.
+incluído no `POST /internal/subscriptions/payment-event`. Em `activate`/`renew`, o `charge_id` da
+própria notificação (`entry.identifiers.charge_id`) também é incluído no payload — é gravado na
+`Subscription` para permitir reembolso futuro (ver "Reembolso" abaixo). Em `cancel` não há
+cobrança nova, por isso não é enviado.
 
 ## Activação — `backend-core/app/api/subscriptions.py`
 
@@ -119,6 +122,39 @@ incluído no `POST /internal/subscriptions/payment-event`.
 - `plan_code` inexistente → `{"action": "skipped", "reason": "plan_not_found"}`
 - Renovação de sub já activa: se `sub.origin_offer` ainda não estiver definido, faz backfill com
   `payload.origin_offer` (cobre assinaturas activas antes desta convenção existir)
+- `charge_id` (opcional) é gravado/actualizado em `Subscription.efi_charge_id` — sempre a cobrança
+  mais recente, tanto na criação quanto em cada renovação
+
+---
+
+## Reembolso
+
+**Endpoint Efí:** `POST /v1/charge/card/{charge_id}/refund` (`backend-crm/services/efi_client.py`,
+`refund_charge(charge_id, amount_cents=None)`). `amount_cents=None` → reembolso total.
+
+**Restrições da Efí** (rejeitam com erro se violadas):
+- Cobrança tem de estar com status `paid` (não `approved` — ver nota de status acima)
+- Só um pedido de reembolso simultâneo por cobrança; só um reembolso parcial por dia por cobrança
+- Reembolso parcial: até 90 dias após pagamento; reembolso total: até 360 dias
+- Só cartão de crédito, não disponível para vendas em marketplace
+
+**Fluxo (MVP, reembolso total via painel admin):**
+```
+Admin clica "Reembolsar" (frontend-admin, AdminUsers.tsx)
+  → POST /admin/billing/refund {email}              (backend-crm, routes/admin_billing.py, JWT admin via require_crm_admin)
+      → GET /internal/subscriptions/by-email/{email}      (backend-core) → efi_charge_id
+      → efi_client.refund_charge(efi_charge_id)           → POST /v1/charge/card/:id/refund
+      → POST /internal/subscriptions/payment-event (action=cancel)   (backend-core) — cancela o acesso
+      → devolve {ok, refunded, plan_code}
+```
+
+Sem `efi_charge_id` gravado (assinatura anterior a esta funcionalidade) → `422`, mensagem indica
+reembolso manual no painel da Efí. Erro da Efí (fora da janela, já reembolsado, status inválido)
+→ `502` com a mensagem de erro dela repassada directamente (não uma mensagem genérica).
+
+**Fora do escopo actual** (ver `docs/implementations/refund-admin-mvp.md`): automação do
+reembolso dos 7 dias via agente de email, fluxo de "chamado" dos 30 dias, reembolso parcial pela
+UI (a função já suporta, só não é exposta no botão).
 
 ---
 

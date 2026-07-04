@@ -20,6 +20,7 @@ class Subscription(Base):
     expiry_warning_sent = Column(Boolean, default=False, nullable=False)
     expiry_warning_stage = Column(Integer, nullable=True)
     origin_offer = Column(String, nullable=True)
+    efi_charge_id = Column(Integer, nullable=True)
     created_at = Column(DateTime, server_default=func.now(), nullable=False, default=datetime.utcnow)
 
     user = relationship("User", back_populates="subscriptions")

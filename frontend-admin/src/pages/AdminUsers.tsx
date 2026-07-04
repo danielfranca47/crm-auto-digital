@@ -53,6 +53,9 @@ export default function AdminUsers() {
   const [isTrial, setIsTrial] = useState(false);
   const [isAssigning, setIsAssigning] = useState(false);
 
+  const [refundModal, setRefundModal] = useState<AdminUser | null>(null);
+  const [isRefunding, setIsRefunding] = useState(false);
+
   const loadUsers = useCallback(async () => {
     setIsLoading(true);
     try {
@@ -146,6 +149,28 @@ export default function AdminUsers() {
     }
   };
 
+  const handleRefund = async () => {
+    if (!refundModal) return;
+    setIsRefunding(true);
+    try {
+      const res = await api.refundUser(refundModal.email);
+      toast({
+        title: "Reembolso efetuado",
+        description: `${refundModal.email} reembolsado (${res.plan_code}) e acesso cancelado.`,
+      });
+      setRefundModal(null);
+      loadUsers();
+    } catch (err: unknown) {
+      toast({
+        title: "Erro ao reembolsar",
+        description: err instanceof Error ? err.message : "Erro desconhecido",
+        variant: "destructive",
+      });
+    } finally {
+      setIsRefunding(false);
+    }
+  };
+
   const handleCreateUser = async () => {
     if (!newEmail) return;
     setIsCreating(true);
@@ -216,7 +241,7 @@ export default function AdminUsers() {
         </CardHeader>
         <CardContent className="p-0">
           {/* Table header */}
-          <div className="hidden md:grid grid-cols-[minmax(0,1fr)_105px_75px_95px_95px_110px] gap-x-3 px-5 py-2 border-b border-slate-700/60 text-xs font-medium text-slate-500 uppercase tracking-wide">
+          <div className="hidden md:grid grid-cols-[minmax(0,1fr)_105px_75px_95px_95px_190px] gap-x-3 px-5 py-2 border-b border-slate-700/60 text-xs font-medium text-slate-500 uppercase tracking-wide">
             <span>Usuário</span>
             <span>Plano</span>
             <span>Status</span>
@@ -229,7 +254,7 @@ export default function AdminUsers() {
             {users.map((user) => (
               <div
                 key={user.id}
-                className="grid grid-cols-1 md:grid-cols-[minmax(0,1fr)_105px_75px_95px_95px_110px] gap-x-3 gap-y-1 items-center px-5 py-3"
+                className="grid grid-cols-1 md:grid-cols-[minmax(0,1fr)_105px_75px_95px_95px_190px] gap-x-3 gap-y-1 items-center px-5 py-3"
               >
                 {/* Name / email */}
                 <div className="min-w-0 flex items-center gap-2">
@@ -302,6 +327,15 @@ export default function AdminUsers() {
                     className="text-xs border-slate-600 text-slate-300 hover:bg-slate-700"
                   >
                     Ext.
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => setRefundModal(user)}
+                    disabled={user.status !== "active"}
+                    className="text-xs border-red-700/50 text-red-300 hover:bg-red-900/40 disabled:opacity-30"
+                  >
+                    Reembolsar
                   </Button>
                 </div>
               </div>
@@ -377,6 +411,37 @@ export default function AdminUsers() {
                 {isAssigning ? "Atribuindo…" : "Confirmar"}
               </Button>
               <Button variant="outline" onClick={() => setPlanModal(null)} className="border-slate-600 text-slate-300 hover:bg-slate-700">
+                Cancelar
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Refund confirmation modal */}
+      {refundModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60" onClick={() => setRefundModal(null)}>
+          <div className="bg-slate-800 border border-red-800/60 rounded-xl shadow-xl p-6 max-w-sm mx-4 w-full" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-start justify-between mb-4">
+              <h3 className="font-semibold text-slate-200">Confirmar reembolso</h3>
+              <button onClick={() => setRefundModal(null)} className="text-slate-500 hover:text-slate-300"><X size={16} /></button>
+            </div>
+
+            <p className="text-sm text-slate-300 mb-5">
+              Isto vai reembolsar <strong>100%</strong> da última cobrança e{" "}
+              <strong>cancelar o acesso</strong> de <strong>{refundModal.email}</strong> imediatamente.
+              Não pode ser desfeito.
+            </p>
+
+            <div className="flex gap-2">
+              <Button
+                className="flex-1 bg-red-600 hover:bg-red-500 text-white"
+                onClick={handleRefund}
+                disabled={isRefunding}
+              >
+                {isRefunding ? "Reembolsando…" : "Reembolsar e cancelar"}
+              </Button>
+              <Button variant="outline" onClick={() => setRefundModal(null)} className="border-slate-600 text-slate-300 hover:bg-slate-700">
                 Cancelar
               </Button>
             </div>

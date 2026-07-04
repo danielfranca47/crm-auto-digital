@@ -670,10 +670,21 @@ async def efi_webhook(request: Request) -> Dict[str, Any]:
                                 entry, plan_code, bool(email))
                 continue
 
+            # charge_id da própria notificação — guardado para permitir reembolso futuro
+            # (ver docs/architecture/billing-efi.md, secção "Reembolso"). Só relevante em
+            # activate/renew; em cancel não há cobrança nova para guardar.
+            charge_id = (entry.get("identifiers") or {}).get("charge_id") if action != "cancel" else None
+
             try:
                 resp = await client.post(
                     f"{core_base}/internal/subscriptions/payment-event",
-                    json={"email": email, "plan_code": plan_code, "action": action, "origin_offer": origin_offer},
+                    json={
+                        "email": email,
+                        "plan_code": plan_code,
+                        "action": action,
+                        "origin_offer": origin_offer,
+                        "charge_id": charge_id,
+                    },
                     headers={"x-service-token": core_token},
                 )
                 resp.raise_for_status()

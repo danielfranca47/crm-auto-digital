@@ -2,7 +2,7 @@ import logging
 import secrets
 import string
 from datetime import datetime, timedelta
-from typing import Dict, List, Literal, Optional
+from typing import Any, Dict, List, Literal, Optional
 
 from fastapi import APIRouter, Depends, Header, HTTPException, status
 from pydantic import BaseModel
@@ -224,6 +224,7 @@ class PaymentEventRequest(BaseModel):
     plan_code: str
     action: Literal["activate", "cancel", "renew"]
     origin_offer: Optional[str] = None
+    charge_id: Optional[int] = None
 
 
 @router.post("/internal/subscriptions/payment-event", status_code=status.HTTP_200_OK)
@@ -299,6 +300,9 @@ async def payment_event(
             sub.expiry_warning_stage = None
             if not sub.origin_offer and payload.origin_offer:
                 sub.origin_offer = payload.origin_offer
+            # Sempre a cobrança mais recente — é essa que seria reembolsada em caso de pedido.
+            if payload.charge_id:
+                sub.efi_charge_id = payload.charge_id
             db.commit()
             logger.info("payment_event: subscrição renovada user=%s plan=%s", user.id, payload.plan_code)
             return {"ok": True, "action": "renewed"}
@@ -318,11 +322,42 @@ async def payment_event(
         current_period_start=now,
         current_period_end=now + timedelta(days=30),
         origin_offer=payload.origin_offer,
+        efi_charge_id=payload.charge_id,
     )
     db.add(sub)
     db.commit()
     logger.info("payment_event: subscrição activada user=%s plan=%s", user.id, payload.plan_code)
     return {"ok": True, "action": "created_and_activated" if new_user_created else "activated"}
+
+
+@router.get("/internal/subscriptions/by-email/{email}")
+async def get_subscription_by_email(
+    email: str,
+    _: str = Depends(_require_service_token),
+    db: Session = Depends(get_db),
+) -> Dict[str, Any]:
+    """Endpoint interno — usado pelo backend-crm para localizar a assinatura activa mais recente
+    de um utilizador (por email) e o efi_charge_id necessário para acionar um reembolso."""
+    user = db.query(models.User).filter(models.User.email == email.strip().lower()).first()
+    if not user:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Utilizador não encontrado")
+
+    sub = (
+        db.query(models.Subscription)
+        .filter(models.Subscription.user_id == user.id, models.Subscription.status == "active")
+        .order_by(models.Subscription.created_at.desc())
+        .first()
+    )
+    if not sub:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Subscrição activa não encontrada")
+
+    plan = db.query(models.Plan).filter(models.Plan.id == sub.plan_id).first()
+    return {
+        "plan_code": plan.code if plan else None,
+        "status": sub.status,
+        "current_period_end": sub.current_period_end,
+        "efi_charge_id": sub.efi_charge_id,
+    }
 
 
 @router.get("/me/entitlements", response_model=EntitlementsResponse)
