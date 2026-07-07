@@ -1,5 +1,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import { Link } from 'react-router-dom';
+import { Sun, Moon } from 'lucide-react';
+import { useTheme } from '@/contexts/ThemeContext';
 import { OrionShell } from '@/components/agente/OrionShell';
 import { CamadaIdentidade } from '@/components/agente/CamadaIdentidade';
 import { CamadaQualificacao } from '@/components/agente/CamadaQualificacao';
@@ -436,6 +438,7 @@ function PainelCamadaFollowup({ config, onUpdate, onBack, onSave, saving, dirty 
 
 export default function AiProfile() {
   const { toast } = useToast();
+  const { theme, toggleTheme } = useTheme();
   const [activePanel, setActivePanel]     = useState<PanelId>('overview');
   const [config, setConfig]               = useState<AgentConfig>(DEFAULT_AGENT_CONFIG);
   const [savedConfig, setSavedConfig]     = useState<AgentConfig>(DEFAULT_AGENT_CONFIG);
@@ -579,6 +582,14 @@ export default function AiProfile() {
           <span style={{ color: 'var(--o-text)' }}>{config.name || '—'}</span>
         </div>
         <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 12 }}>
+          <button
+            className="o-btn"
+            style={{ fontSize: 8, display: 'flex', alignItems: 'center' }}
+            onClick={toggleTheme}
+            title={theme === 'dark' ? 'Mudar para tema claro' : 'Mudar para tema escuro'}
+          >
+            {theme === 'dark' ? <Sun size={12} /> : <Moon size={12} />}
+          </button>
           <button className="o-btn" style={{ fontSize: 8 }} onClick={() => setShowExportImport(true)}>↕ Exportar / Importar</button>
           <Link to="/agentes-info" className="o-btn" style={{ fontSize: 8 }}>? Entenda os tipos de agentes</Link>
           <Link to="/" className="o-btn" style={{ fontSize: 8 }}>← CRM</Link>
