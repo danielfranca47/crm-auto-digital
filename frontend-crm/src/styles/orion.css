@@ -58,6 +58,52 @@
   overflow-x: hidden;
 }
 
+/* ── Tema claro (ativado quando <html> tem classe .light) ── */
+.light .orion-shell {
+  /* Tokens shadcn/tailwind */
+  --background: 240 33% 98%;
+  --foreground: 240 24% 13%;
+  --card: 0 0% 100%;
+  --card-foreground: 240 24% 13%;
+  --popover: 0 0% 100%;
+  --popover-foreground: 240 24% 13%;
+  --border: 240 15% 88%;
+  --input: 240 15% 94%;
+  --muted: 240 15% 94%;
+  --muted-foreground: 240 10% 40%;
+
+  /* Tokens de cor Orion (hex/rgba — uso direto no CSS) */
+  --o-bg:      #f8f8fc;
+  --o-s1:      #ffffff;
+  --o-s2:      #f1f1f8;
+  --o-s3:      #e8e8f2;
+  --o-b0:      rgba(28,28,46,0.04);
+  --o-b1:      rgba(28,28,46,0.08);
+  --o-b2:      rgba(28,28,46,0.16);
+  --o-text:    #1c1c2e;
+  --o-sub:     #5c5c78;
+  --o-dim:     #a4a4bc;
+
+  --o-active:  #0c6e52;
+  --o-act-dim: rgba(12,110,82,0.10);
+  --o-act-b:   rgba(12,110,82,0.28);
+
+  --o-warn:     #8f6309;
+  --o-warn-dim: rgba(143,99,9,0.10);
+  --o-warn-b:   rgba(143,99,9,0.28);
+
+  --o-hot:      #c1432a;
+  --o-hot-dim:  rgba(193,67,42,0.10);
+  --o-hot-b:    rgba(193,67,42,0.28);
+
+  --o-cold:     #2f5bb8;
+  --o-cold-dim: rgba(47,91,184,0.10);
+
+  --o-purple:   #6a3fb0;
+  --o-mp-dim:   rgba(106,63,176,0.10);
+  --o-mp-b:     rgba(106,63,176,0.28);
+}
+
 /* ── Utilitários de fonte ── */
 .font-display  { font-family: 'Playfair Display', Georgia, serif; }
 .font-mono-orion { font-family: 'DM Mono', monospace; }
