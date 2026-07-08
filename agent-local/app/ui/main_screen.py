@@ -2355,7 +2355,7 @@ class MainScreen(ctk.CTkFrame):
                     if not lead_id:
                         continue
                     try:
-                        if status == "sent":
+                        if status == "completed":
                             move_lead_category(self._session, lead_id, "qualification")
                             moved = True
                         elif status == "failed":
