@@ -1,7 +1,7 @@
 # agent-local v2 — App Standalone de Geração de Leads
 
 **Branch:** `etapa-9-planos-limites`
-**Status:** Fase 8 validada (I1 completo); Fase 5 validada (F1, F3, F4, F5 — 2 bugs encontrados e corrigidos); Fase 6 validada (G1–G5 — 1 bug encontrado e corrigido); K2 (Fase 10) validado antecipadamente; A17b validado (1 bug encontrado e corrigido); aguarda validação (F2, H1, J1–J8, K1, K3, K4)
+**Status:** Fase 8 validada (I1 completo); Fase 5 validada (F1, F3, F4, F5 — 2 bugs encontrados e corrigidos); Fase 6 validada (G1–G5 — 1 bug encontrado e corrigido); Fase 7 validada (H1); K2 (Fase 10) validado antecipadamente; A17b validado (1 bug encontrado e corrigido); aguarda validação (F2, J1–J8, K1, K3, K4)
 
 ---
 
@@ -429,11 +429,11 @@ Clica 📱 → preenche telefone + mensagem
 ### Fase 7
 
 #### Cenário H1 — CRM "Leads do Agente"
-- [ ] Navegar para Pesquisa no CRM → título "Leads do Agente Local" visível
-- [ ] Sem prospecções: ecrã vazio com instrução de uso do app
-- [ ] Após prospecção via agent-local: entradas aparecem na tabela
-- [ ] Filtro "Enviados" / "Falhados" / "Todos" funciona
-- [ ] Extensões de pesquisa (upsell) ainda visíveis no final da página
+- [x] Navegar para Pesquisa no CRM → título "Leads do Agente Local" visível — 08/07/2026
+- [x] Sem prospecções: ecrã vazio com instrução de uso do app — 08/07/2026: testado via filtro "Falhados" (0 resultados) → "Sem prospecções registadas ainda." + "Abre o app Gerador de Leads, pesquisa empresas e usa o botão 📱 para prospectar."
+- [x] Após prospecção via agent-local: entradas aparecem na tabela — 08/07/2026: filtro "Todos" mostra 36 registos, incluindo os criados nos testes F3 e K2 desta sessão (ex.: "Dentista Ipatinga... +5547992163692 Enviado (manual)", "Bicho Mania Pet Shop +10000000001 Enfileirado")
+- [x] Filtro "Enviados" / "Falhados" / "Todos" funciona — 08/07/2026: alternado entre "Todos" (36 registos) e "Falhados" (0 registos, mostra estado vazio) corretamente
+- [x] Extensões de pesquisa (upsell) ainda visíveis no final da página — 08/07/2026: "Auditoria de Site", "Perfil Instagram", "LinkedIn Empresa", "Avaliações Google" visíveis
 
 ### Fase 2
 

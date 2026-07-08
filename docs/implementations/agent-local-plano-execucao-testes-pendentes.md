@@ -72,9 +72,9 @@
 
 > Nota: K2 (Fase 10) foi validado antecipadamente durante o teste de G2 — ver A.7.
 
-### A.5 — Fase 7 (CRM "Leads do Agente")
+### A.5 — Fase 7 (CRM "Leads do Agente") ✅
 *Fonte: `agent-local-v2-app-standalone.md`, Fase 7*
-- [ ] H1
+- [x] H1
 
 ### A.6 — Fase 9 (Kanban manual, assinante)
 *Fonte: `agent-local-v2-app-standalone.md`, Fase 9*
