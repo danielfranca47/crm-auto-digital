@@ -1,7 +1,7 @@
 # agent-local v2 — App Standalone de Geração de Leads
 
 **Branch:** `etapa-9-planos-limites`
-**Status:** Fase 8 validada (I1 completo); Fase 5 validada (F1, F3, F4, F5 — 2 bugs encontrados e corrigidos); Fase 6 validada (G1–G5 — 1 bug encontrado e corrigido); Fase 7 validada (H1); Fase 9 validada (J1, J2, J4–J8 — 2 achados de UI/rede); K2 (Fase 10) validado antecipadamente; A17b validado (1 bug encontrado e corrigido); aguarda validação (F2, K1, K3, K4)
+**Status:** Fase 8 validada (I1 completo); Fase 5 validada (F1, F3, F4, F5 — 2 bugs encontrados e corrigidos); Fase 6 validada (G1–G5 — 1 bug encontrado e corrigido); Fase 7 validada (H1); Fase 9 validada (J1, J2, J4–J8 — 2 achados de UI/rede); Fase 10 validada (K1–K4 — K3 tem bug real não corrigido: refluxo de sucesso nunca dispara; K1 badge WA não existe no código); A17b validado (1 bug encontrado e corrigido); aguarda validação (F2)
 
 ---
 
@@ -650,9 +650,10 @@ Clica 📱 → preenche telefone + mensagem
 ### Checks Fase 10
 
 #### Cenário K1 — Barra de estado
-- [ ] Header do Kanban mostra badge WA (verde "Conectado" / vermelho "Desconectado") actualizado ao abrir
-- [ ] Badge "Agente Online" / "Agente Offline" visível
-- [ ] Contador "Pendentes: N" actualiza por polling
+- [⏭️] Badge WA (verde "Conectado" / vermelho "Desconectado") — **não existe no código.** Confirmado por leitura de `main_screen.py`/`_poll_tick`: o header só constrói dois badges (`_agent_badge_lbl` e `_pending_badge_lbl`) mais o botão "📱 WhatsApp Web" (que só abre o browser, não é indicador de estado). Nunca foi implementado um badge de conexão WA distinto — o item do plano original não corresponde ao que foi construído.
+- [x] Badge "Agente Online" / "Agente Offline" visível — 08/07/2026: confirmado "● Agente: Offline" (correto, nenhum worker/agente de fundo estava registado)
+- [x] Contador "Pendentes: N" actualiza por polling — 08/07/2026: inserido 1 job `pending` directamente na BD; contador subiu de "Pendentes: 0" para "Pendentes: 1" sem clicar em "Actualizar" (via thread de polling a cada 7s); após apagar o job, contador desceu de novo para "0" pelo mesmo mecanismo
+- **Validado em:** 08/07/2026 — via automação `computer-use`, conta assinante `autodigital157`
 
 #### Cenário K2 — Selecção e enfileiramento
 - [x] Cards em "À Prospectar" têm checkbox — 07/07/2026
@@ -666,14 +667,27 @@ Clica 📱 → preenche telefone + mensagem
 **🐛 Achados (ver detalhe completo na nota de G2 acima):** sem guarda contra duplo-clique em "Enfileirar" (cria jobs duplicados); feedback de erro "Read timed out (read timeout=1)" aparece atrasado e de forma enganosa mesmo quando a operação já teve sucesso.
 
 #### Cenário K3 — Refluxo automático por resultado
-- [ ] Após envio com sucesso (`sent`): lead move-se automaticamente de "Em Andamento" para "Qualificação" (sem clicar)
-- [ ] Após falha (`failed`): lead volta automaticamente de "Em Andamento" para "À Prospectar"
-- [ ] Kanban reflecte o estado real sem precisar de clicar "Actualizar"
+- [x] Após falha (`failed`): lead volta automaticamente de "Em Andamento" para "À Prospectar" — 08/07/2026: confirmado, lead de teste moveu-se sozinho para "À Prospectar" (`category` na BD passou de `in-progress` para `to-prospect`) sem clicar em "Actualizar"
+- [❌] Após envio com sucesso (`sent`): lead **não** se move de "Em Andamento" para "Qualificação" — **bug real confirmado**, ver detalhe abaixo
+- [x] Kanban reflecte o estado real sem precisar de clicar "Actualizar" — parcialmente: funciona para o caminho de falha, não para o de sucesso (ver bug)
+
+**🐛 Bug encontrado — refluxo de sucesso nunca dispara (comparação de strings incorrecta):**
+
+`main_screen.py::_poll_tick` (linha ~2358) verifica `if status == "sent":` para mover o lead para `"qualification"`. Mas o endpoint que alimenta este polling (`GET /api/prospeccao/whatsapp/recent`, implementado em `backend-crm/services/jobs_service.py::get_whatsapp_recent`) devolve o valor **literal da coluna `jobs.status`**, que só pode ser `"completed"` ou `"failed"` (`JOB_STATUS_COMPLETED = "completed"`, `JOB_STATUS_FAILED = "failed"` — nunca `"sent"`). Resultado: a condição `status == "sent"` **nunca é verdadeira**, e o ramo de sucesso do refluxo automático está morto — só o ramo de falha funciona, porque `"failed"` coincide por coincidência com o valor real da BD.
+
+**Evidência ao vivo (08/07/2026):** inseridos directamente na BD dois leads sintéticos em `category='in-progress'` mais um job `whatsapp.send.local` cada — um com `status='completed'` (simulando envio bem-sucedido), outro com `status='failed'`. Após ~19s (2+ ciclos de polling de 7s, sem clicar em nada):
+- Lead do job `failed` → `category` mudou correctamente para `to-prospect` ✅
+- Lead do job `completed` → `category` **permaneceu `in-progress`**, nunca chegou a `qualification` ❌ (confirmado por query directa à BD, não só pela UI)
+
+**Impacto real:** num envio real com sucesso, o card fica preso em "Em Andamento" para sempre (a não ser que o utilizador clique manualmente "Actualizar" — mas mesmo assim `_reload_kanban` sozinho não corrige a categoria na BD, só o `_poll_tick`/`move_lead_category` corrige, e esse nunca dispara para o caso de sucesso). O card só sairia de "Em Andamento" através de acção manual do utilizador movendo-o, ou nunca.
+
+**Correcção sugerida (não aplicada nesta sessão, só diagnóstico):** em `main_screen.py::_poll_tick`, trocar `if status == "sent":` por `if status == "completed":` (ou usar as constantes partilhadas em vez de strings soltas), alinhando com o valor real devolvido pelo backend. O mesmo padrão de comparação (`status == "sent"`) aparece também em `bulk_prospect_dialog.py`, `prospect_dialog.py` e mais 2 pontos em `main_screen.py` (linhas 2728, 2836) — mas esses são referentes ao **resultado devolvido directamente pelo `WhatsAppRunner`/`whatsapp_client.py`** (que usa `"sent"` como valor próprio, correcto nesse contexto — ver `whatsapp_client.py:97-99`), não ao valor vindo de `jobs.status` da API. Só o `_poll_tick` (linha 2358) está a comparar a fonte errada.
 
 #### Cenário K4 — Remoção dos botões manuais
-- [ ] Cards em "À Prospectar" não têm botão "→ Iniciar"
-- [ ] Cards em "Em Andamento" não têm botão "→ Qualificar"
-- [ ] Cards do Kanban não têm botão "📱" (o 📱 continua na tabela de Pesquisar)
+- [x] Cards em "À Prospectar" não têm botão "→ Iniciar" — 08/07/2026: confirmado, cards só têm checkbox
+- [x] Cards em "Em Andamento" não têm botão "→ Qualificar" — 08/07/2026: confirmado, cards não têm qualquer elemento interactivo
+- [x] Cards do Kanban não têm botão "📱" — 08/07/2026: confirmado ausente em todas as colunas (o 📱 continua só na tabela de Pesquisar, ver F1)
+- **Validado em:** 08/07/2026 — via automação `computer-use`, observado directamente nos cards durante os testes de J1/K1/K3
 
 ---
 
@@ -683,4 +697,4 @@ Clica 📱 → preenche telefone + mensagem
 - **Cenários F1–H1** — checks de validação das Fases 5, 6 e 7 ainda por validar (dependem de teste manual com WhatsApp real).
 - **Cenários I1–I2** — refresh token silencioso (Fase 8) por validar após próximo login completo.
 - **Cenários J1, J2, J4–J8** — validados 08/07/2026 (ver Checks Fase 9). J3 fica para o Bloco B.
-- **Cenários K1, K3, K4** — Fase 10 por validar (K2 já validado antecipadamente).
+- **Cenários K1, K3, K4** — validados 08/07/2026 (ver Checks Fase 10). K3 revelou um bug real por corrigir (refluxo de sucesso nunca dispara — ver detalhe no cenário). K1 revelou que o badge WA planeado nunca foi implementado.
