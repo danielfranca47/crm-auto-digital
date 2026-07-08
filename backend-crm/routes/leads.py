@@ -87,6 +87,9 @@ def _map_lead_row(row):
 
     lead_dict["nextScheduledAction"] = next_action
 
+    msg_count = lead_dict.pop("msg_count", None)
+    lead_dict["hasMessages"] = bool(msg_count)
+
     # normaliza createdAt/lastMovement se vierem com espaço
     for k in ("createdAt", "lastMovement"):
         if lead_dict.get(k):
@@ -361,7 +364,8 @@ def listar_leads(current_user: CurrentUser = Depends(require_crm_access)):
             """
             SELECT l.*,
                    next_app.start_at AS next_start_at,
-                   next_app.description AS next_description
+                   next_app.description AS next_description,
+                   msg_agg.msg_count AS msg_count
             FROM leads l
             LEFT JOIN (
                 SELECT lead_id, start_at, description
@@ -379,6 +383,12 @@ def listar_leads(current_user: CurrentUser = Depends(require_crm_access)):
                 WHERE rn = 1
             ) AS next_app
             ON next_app.lead_id = l.id
+            LEFT JOIN (
+                SELECT lead_id, COUNT(*) AS msg_count
+                FROM messages
+                GROUP BY lead_id
+            ) AS msg_agg
+            ON msg_agg.lead_id = l.id
             WHERE l.user_id = ?
               AND (l.is_playground IS NULL OR l.is_playground = 0)
             ORDER BY l.createdAt DESC

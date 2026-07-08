@@ -936,6 +936,10 @@ class MainScreen(ctk.CTkFrame):
 
     def _ai_start_existing_leads_flow(self) -> None:
         """Busca leads do Kanban sem copy gerada e mostra selector para os processar."""
+        if getattr(self, "_ai_existing_flow_running", False):
+            return
+        self._ai_existing_flow_running = True
+
         for w in list(self._ai_steps_frame.winfo_children()):
             w.destroy()
 
@@ -955,25 +959,17 @@ class MainScreen(ctk.CTkFrame):
         loading_lbl.pack(anchor="w", padx=16, pady=(0, 14))
 
         def _worker():
-            from app.crm_client import get_leads_kanban, get_lead_messages
+            from app.crm_client import get_leads_kanban
             try:
                 leads = get_leads_kanban(self._session)
             except Exception as exc:
+                self._ai_existing_flow_running = False
                 self.after(0, lambda e=str(exc): self._ai_existing_leads_err(card, loading_lbl, e))
                 return
 
-            without_copy = []
-            for lead in leads:
-                lid = lead.get("id")
-                if lid is None:
-                    continue
-                try:
-                    msgs = get_lead_messages(self._session, lid)
-                except Exception:
-                    msgs = []
-                if not msgs:
-                    without_copy.append(lead)
+            without_copy = [lead for lead in leads if lead.get("id") is not None and not lead.get("hasMessages")]
 
+            self._ai_existing_flow_running = False
             self.after(0, lambda lst=without_copy: self._ai_build_existing_leads_picker(card, title_lbl, loading_lbl, lst))
 
         threading.Thread(target=_worker, daemon=True).start()
@@ -2986,6 +2982,7 @@ class MainScreen(ctk.CTkFrame):
                 except Exception:
                     pass
 
+            self._historico_entries = entries
             self.after(0, _render)
 
         threading.Thread(target=_fetch, daemon=True).start()
@@ -2994,14 +2991,42 @@ class MainScreen(ctk.CTkFrame):
         def _export_csv():
             import csv
             from tkinter import filedialog
-            entries_snap = []  # será preenchido — simplificação: re-fetch
+            entries_snap = getattr(self, "_historico_entries", [])
+            if not entries_snap:
+                return
             path = filedialog.asksaveasfilename(defaultextension=".csv",
                                                  filetypes=[("CSV", "*.csv")],
                                                  initialfile="historico.csv")
             if path:
-                with open(path, "w", newline="", encoding="utf-8-sig") as f:
-                    w = csv.writer(f)
-                    w.writerow(["Data", "Nome", "Telefone", "Estado", "Notas"])
+                try:
+                    with open(path, "w", newline="", encoding="utf-8-sig") as f:
+                        w = csv.writer(f)
+                        w.writerow(["Data/Hora", "Nome", "Telefone", "Estado", "Notas"])
+                        for e in entries_snap:
+                            ts = (e.get("created_at") or e.get("ts") or "")[:16].replace("T", " ")
+                            w.writerow([
+                                ts,
+                                e.get("lead_name") or e.get("name") or "",
+                                e.get("phone") or "",
+                                e.get("action") or e.get("status") or "",
+                                e.get("notes") or e.get("reason") or "",
+                            ])
+                    popup = ctk.CTkToplevel(self)
+                    popup.title("Exportado!")
+                    popup.geometry("320x120")
+                    popup.grab_set()
+                    from pathlib import Path
+                    ctk.CTkLabel(popup, text=f"✅  {Path(path).name}",
+                                 font=ctk.CTkFont(size=13)).pack(pady=(24, 8))
+                    ctk.CTkButton(popup, text="OK", width=80, command=popup.destroy).pack()
+                except Exception as exc:
+                    error_popup = ctk.CTkToplevel(self)
+                    error_popup.title("Erro ao exportar")
+                    error_popup.geometry("360x120")
+                    error_popup.grab_set()
+                    ctk.CTkLabel(error_popup, text=f"⚠ {exc}", font=ctk.CTkFont(size=12),
+                                 wraplength=320).pack(pady=(20, 8))
+                    ctk.CTkButton(error_popup, text="OK", width=80, command=error_popup.destroy).pack()
 
         footer = ctk.CTkFrame(parent, fg_color="transparent")
         footer.pack(side="bottom", fill="x", padx=16, pady=8)

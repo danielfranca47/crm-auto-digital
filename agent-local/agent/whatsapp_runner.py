@@ -193,6 +193,9 @@ class WhatsAppRunner:
                         continue
                     return False, "not_logged"
 
+                if self._detect_invalid_number(driver):
+                    return False, "invalid_number"
+
                 self._maybe_click_continue_to_chat(driver)
 
                 if self._detect_invalid_number(driver):
@@ -207,14 +210,22 @@ class WhatsAppRunner:
 
         return False, "open_timeout"
 
+    _INVALID_NUMBER_PHRASES = (
+        "não está no whatsapp",
+        "nao esta no whatsapp",
+        "is not on whatsapp",
+        "no está en whatsapp",
+    )
+
     def _detect_invalid_number(self, driver: Chrome) -> bool:
+        # WhatsApp Web sinaliza número inválido através de um popup modal
+        # (não um elemento [data-testid='alert'] estável) — procurar a frase
+        # diretamente no texto visível da página é mais robusto a mudanças de DOM.
         try:
-            alerts = driver.find_elements(By.CSS_SELECTOR, "[data-testid='alert']")
-            for alert in alerts:
-                txt = (alert.text or "").strip().lower()
-                if ("número" in txt and "inválid" in txt) or ("invalid" in txt and "number" in txt):
-                    logger.warning("Número inválido detectado pelo WhatsApp Web.")
-                    return True
+            body_text = driver.find_element(By.TAG_NAME, "body").text.strip().lower()
+            if any(phrase in body_text for phrase in self._INVALID_NUMBER_PHRASES):
+                logger.warning("Número inválido detectado pelo WhatsApp Web (popup).")
+                return True
         except Exception:
             return False
         return False

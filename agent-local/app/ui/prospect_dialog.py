@@ -59,6 +59,8 @@ class ProspectDialog(ctk.CTkToplevel):
     def _phone_clean(self, raw: str) -> str:
         for ch in (" ", "-", "(", ")", "."):
             raw = raw.replace(ch, "")
+        if raw and not raw.startswith("+"):
+            raw = "+" + raw
         return raw
 
     # ── Passo 1: Formulário ──────────────────────────────────────────────────
@@ -74,7 +76,7 @@ class ProspectDialog(ctk.CTkToplevel):
         ).pack(anchor="w", pady=(0, 14))
 
         # Telefone
-        ctk.CTkLabel(c, text="Número (com código de país, ex: 351912345678)",
+        ctk.CTkLabel(c, text="Número (com código de país, ex: +351912345678)",
                      font=ctk.CTkFont(size=12)).pack(anchor="w")
         raw_phone = self._phone_clean(self._lead.get("phone") or "")
         self._phone_var = ctk.StringVar(value=raw_phone)
@@ -175,6 +177,7 @@ class ProspectDialog(ctk.CTkToplevel):
                     company_name=name or "Empresa",
                     sector=sector,
                     channel="whatsapp",
+                    custom_prompt_template=self._session.get("local_copy_prompt") or "",
                 )
                 def _apply():
                     self._msg_box.delete("1.0", "end")
@@ -334,7 +337,7 @@ class ProspectDialog(ctk.CTkToplevel):
     # ── Lógica de envio ──────────────────────────────────────────────────────
 
     def _start_send(self) -> None:
-        phone = self._phone_var.get().strip()
+        phone = self._phone_clean(self._phone_var.get().strip())
         message = self._msg_box.get("1.0", "end").strip()
         if not phone or not message:
             return
