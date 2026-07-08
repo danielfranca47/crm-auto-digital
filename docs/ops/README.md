@@ -15,6 +15,7 @@ real, playground, configurações de ambiente).
 | Ficheiro | Para que serve |
 |---|---|
 | `_guia-testes-whatsapp.md` | Processo completo para criar e executar testes WhatsApp real + playground. Usado pelo Claude para criar o arquivo filho de testes. |
+| `_guia-testes-desktop-app.md` | Processo para validar apps desktop nativas (ex.: `agent-local`) que não correm num browser — qual ferramenta de automação usar (`computer-use`) e armadilhas conhecidas. |
 
 ### Ficheiros regulares — trabalho activo
 

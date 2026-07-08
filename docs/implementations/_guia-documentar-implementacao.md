@@ -313,6 +313,15 @@ pedir validação ao utilizador", em Passo 3):
   implementação (`[x]` + data). O rascunho não é fonte de verdade — pode ser
   descartado depois da transcrição.
 
+### Quando o cenário exige uma app desktop (não browser)
+
+Se o teste envolve uma janela desktop nativa que não corre num browser (ex.:
+`agent-local`, uma janela CustomTkinter/Tkinter) — o Chrome DevTools MCP não se
+aplica. Seguir
+[`docs/ops/_guia-testes-desktop-app.md`](../ops/_guia-testes-desktop-app.md):
+usar a ferramenta `computer-use` (não `Windows-MCP`, que se mostrou pouco
+fiável para manter o foco na janela alvo nesta configuração de ambiente).
+
 ---
 
 ## Ciclo de vida de uma fase
