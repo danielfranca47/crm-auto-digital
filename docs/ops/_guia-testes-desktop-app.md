@@ -32,24 +32,56 @@ disponíveis e há uma diferença prática relevante:
 **Recomendação:** para qualquer teste de app desktop, ir directo a `computer-use`
 — não perder tempo a tentar o Windows-MCP primeiro.
 
-**Excepção — janela minimizada:** se `computer-use` (`open_application` +
-`screenshot`) mostrar só o ambiente de trabalho, sem qualquer rasto da janela
-alvo (nem sequer mascarada a preto), a app pode estar **minimizada** em vez de
-ter um problema de foco. `open_application` repetido não a restaura de forma
-fiável (pode inclusive abrir instâncias novas indesejadas de outra app —
-aconteceu com vários "Python 3.13 Module Docs" minimizados a acumularem-se).
-Nesse caso, usar o `Windows-MCP` só para este passo pontual — não para
-interagir com a app, só para a restaurar:
-1. `mcp__Windows-MCP__Snapshot` — confirmar em "Opened Windows" se o estado é
-   `Minimized` (tamanho 0×0)
-2. `mcp__Windows-MCP__Click` no botão da app na barra de tarefas (id da lista
-   de elementos interactivos) — isto restaura a janela para `Normal`
-3. Voltar ao `computer-use` (`screenshot`) para confirmar e continuar a
+### ⚠️ Não repetir `open_application` às cegas — causa raiz confirmada
+
+Se `computer-use` (`open_application` + `screenshot`) mostrar só o ambiente de
+trabalho, sem qualquer rasto da janela alvo (nem sequer mascarada a preto),
+**não voltar a chamar `open_application` várias vezes seguidas à espera que
+"pegue".** Causa raiz confirmada nesta sessão: quando o app pedido no
+`request_access`/`open_application` é o launcher genérico **"Python 3.13
+(64-bit)"** (usado para apps sem atalho próprio, como o `agent-local`), cada
+chamada repetida **não traz a janela existente para a frente** — em vez disso
+abre uma instância nova de `python.exe -m pydoc -b` (um mini-servidor HTTP de
+documentação, cada um numa porta aleatória e num separador de terminal
+próprio). Ao fim de várias tentativas, isto:
+- acumula vários separadores "Python 3.13 Module Docs (64-bit)" no Windows
+  Terminal (um por chamada repetida) — nunca fica só numa tentativa, o padrão
+  observado foi 6-7 acumulados numa única sessão de testes
+- ocupa portas TCP aleatórias desnecessariamente (uma por instância)
+- pode empurrar a janela real da app (`agent-local`) para **minimizada**,
+  ficando invisível tanto no `computer-use` como à primeira vista
+
+**Como diagnosticar antes de repetir a chamada:**
+1. `mcp__Windows-MCP__Snapshot` — olhar para "Opened Windows": se a app alvo
+   aparece como `Minimized` (tamanho 0×0), não é um problema de foco, é só
+   estado de janela.
+2. Se aparecerem vários `Python 3.13 Module Docs (64-bit)`, é sinal de que
+   `open_application` já foi chamado a mais vezes do que devia.
+
+**Como restaurar a janela certa (sem repetir `open_application`):**
+1. `mcp__Windows-MCP__Click` no botão da app na barra de tarefas (id da lista
+   de elementos interactivos) — restaura a janela minimizada para `Normal`
+2. Voltar ao `computer-use` (`screenshot`) para confirmar e continuar a
    interagir normalmente
 
 As duas ferramentas são complementares aqui: `Windows-MCP` só para
 restaurar/inspeccionar estado de janela a alto nível; `computer-use` para toda
 a interacção (cliques, scroll, digitação) dentro da app.
+
+**Como limpar as instâncias `pydoc` acumuladas** (se isto já aconteceu):
+
+```powershell
+# Encontrar todos os processos pydoc -b órfãos
+Get-CimInstance Win32_Process | Where-Object { $_.Name -eq 'python.exe' -and $_.CommandLine -like '*pydoc*' } |
+  Select-Object ProcessId, CommandLine
+
+# Terminar cada um (os separadores de terminal fecham sozinhos, as portas libertam-se sozinhas)
+Stop-Process -Id <PID1>,<PID2>,... -Force
+```
+
+Não é preciso fechar os separadores de terminal manualmente nem libertar as
+portas à parte — ambos acontecem automaticamente assim que o processo
+`pydoc` morre.
 
 ---
 
