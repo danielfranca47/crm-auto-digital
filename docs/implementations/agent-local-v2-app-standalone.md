@@ -1,7 +1,7 @@
 # agent-local v2 — App Standalone de Geração de Leads
 
 **Branch:** `etapa-9-planos-limites`
-**Status:** Fase 8 validada (I1 completo); Fase 5 validada (F1, F3, F4, F5 — 2 bugs encontrados e corrigidos); Fase 6 validada (G1–G5 — 1 bug encontrado e corrigido); Fase 7 validada (H1); Fase 9 validada (J1, J2, J4–J8 — 2 achados de UI/rede); Fase 10 validada (K1–K4 — K3 tem bug real não corrigido: refluxo de sucesso nunca dispara; K1 badge WA não existe no código); A17b validado (1 bug encontrado e corrigido); aguarda validação (F2)
+**Status:** Fase 8 validada (I1 completo); Fase 5 validada (F1, F3, F4, F5 — 2 bugs encontrados e corrigidos); Fase 6 validada (G1–G5 — 1 bug encontrado e corrigido); Fase 7 validada (H1); Fase 9 validada (J1, J2, J4–J8 — 2 achados de UI/rede); Fase 10 validada (K1–K4 — K3 tinha bug real, encontrado e corrigido; K1 badge WA não existe no código); A17b validado (1 bug encontrado e corrigido); aguarda validação (F2)
 
 ---
 
@@ -620,6 +620,7 @@ Clica 📱 → preenche telefone + mensagem
 | # | Commit | O que foi implementado |
 |---|---|---|
 | 1 | `2174b3b` | Automação completa: 4 métodos crm_client, checkboxes, BulkActions, badges estado, polling + refluxo |
+| 2 | `f0a0ba8` | Fix: refluxo automático de sucesso no Kanban nunca disparava (`status=="sent"` → `status=="completed"`) — bug detectado nos testes K3 |
 
 #### O que é removido do Kanban (substituído pela automação)
 
@@ -668,20 +669,22 @@ Clica 📱 → preenche telefone + mensagem
 
 #### Cenário K3 — Refluxo automático por resultado
 - [x] Após falha (`failed`): lead volta automaticamente de "Em Andamento" para "À Prospectar" — 08/07/2026: confirmado, lead de teste moveu-se sozinho para "À Prospectar" (`category` na BD passou de `in-progress` para `to-prospect`) sem clicar em "Actualizar"
-- [❌] Após envio com sucesso (`sent`): lead **não** se move de "Em Andamento" para "Qualificação" — **bug real confirmado**, ver detalhe abaixo
-- [x] Kanban reflecte o estado real sem precisar de clicar "Actualizar" — parcialmente: funciona para o caminho de falha, não para o de sucesso (ver bug)
+- [x] Após envio com sucesso: lead move-se automaticamente de "Em Andamento" para "Qualificação" — 08/07/2026: **bug encontrado e corrigido**, ver detalhe abaixo
+- [x] Kanban reflecte o estado real sem precisar de clicar "Actualizar" — 08/07/2026: confirmado nos dois caminhos após a correcção
 
-**🐛 Bug encontrado — refluxo de sucesso nunca dispara (comparação de strings incorrecta):**
+**🐛 Bug encontrado e corrigido — refluxo de sucesso nunca disparava (comparação de strings incorrecta):**
 
-`main_screen.py::_poll_tick` (linha ~2358) verifica `if status == "sent":` para mover o lead para `"qualification"`. Mas o endpoint que alimenta este polling (`GET /api/prospeccao/whatsapp/recent`, implementado em `backend-crm/services/jobs_service.py::get_whatsapp_recent`) devolve o valor **literal da coluna `jobs.status`**, que só pode ser `"completed"` ou `"failed"` (`JOB_STATUS_COMPLETED = "completed"`, `JOB_STATUS_FAILED = "failed"` — nunca `"sent"`). Resultado: a condição `status == "sent"` **nunca é verdadeira**, e o ramo de sucesso do refluxo automático está morto — só o ramo de falha funciona, porque `"failed"` coincide por coincidência com o valor real da BD.
+`main_screen.py::_poll_tick` (linha ~2358) verificava `if status == "sent":` para mover o lead para `"qualification"`. Mas o endpoint que alimenta este polling (`GET /api/prospeccao/whatsapp/recent`, implementado em `backend-crm/services/jobs_service.py::get_whatsapp_recent`) devolve o valor **literal da coluna `jobs.status`**, que só pode ser `"completed"` ou `"failed"` (`JOB_STATUS_COMPLETED = "completed"`, `JOB_STATUS_FAILED = "failed"` — nunca `"sent"`). Resultado: a condição `status == "sent"` **nunca era verdadeira**, e o ramo de sucesso do refluxo automático estava morto — só o ramo de falha funcionava, porque `"failed"` coincidia por coincidência com o valor real da BD.
 
-**Evidência ao vivo (08/07/2026):** inseridos directamente na BD dois leads sintéticos em `category='in-progress'` mais um job `whatsapp.send.local` cada — um com `status='completed'` (simulando envio bem-sucedido), outro com `status='failed'`. Após ~19s (2+ ciclos de polling de 7s, sem clicar em nada):
+**Evidência ao vivo do bug (08/07/2026, antes da correcção):** inseridos directamente na BD dois leads sintéticos em `category='in-progress'` mais um job `whatsapp.send.local` cada — um com `status='completed'` (simulando envio bem-sucedido), outro com `status='failed'`. Após ~19s (2+ ciclos de polling de 7s, sem clicar em nada):
 - Lead do job `failed` → `category` mudou correctamente para `to-prospect` ✅
 - Lead do job `completed` → `category` **permaneceu `in-progress`**, nunca chegou a `qualification` ❌ (confirmado por query directa à BD, não só pela UI)
 
-**Impacto real:** num envio real com sucesso, o card fica preso em "Em Andamento" para sempre (a não ser que o utilizador clique manualmente "Actualizar" — mas mesmo assim `_reload_kanban` sozinho não corrige a categoria na BD, só o `_poll_tick`/`move_lead_category` corrige, e esse nunca dispara para o caso de sucesso). O card só sairia de "Em Andamento" através de acção manual do utilizador movendo-o, ou nunca.
+**Impacto real (antes da correcção):** num envio real com sucesso, o card ficava preso em "Em Andamento" para sempre — o único caminho que corrige a categoria na BD é o `_poll_tick`/`move_lead_category`, e esse nunca disparava para o caso de sucesso (clicar "Actualizar" sozinho não resolve, só recarrega o que já está na BD).
 
-**Correcção sugerida (não aplicada nesta sessão, só diagnóstico):** em `main_screen.py::_poll_tick`, trocar `if status == "sent":` por `if status == "completed":` (ou usar as constantes partilhadas em vez de strings soltas), alinhando com o valor real devolvido pelo backend. O mesmo padrão de comparação (`status == "sent"`) aparece também em `bulk_prospect_dialog.py`, `prospect_dialog.py` e mais 2 pontos em `main_screen.py` (linhas 2728, 2836) — mas esses são referentes ao **resultado devolvido directamente pelo `WhatsAppRunner`/`whatsapp_client.py`** (que usa `"sent"` como valor próprio, correcto nesse contexto — ver `whatsapp_client.py:97-99`), não ao valor vindo de `jobs.status` da API. Só o `_poll_tick` (linha 2358) está a comparar a fonte errada.
+**Correcção aplicada:** em `main_screen.py::_poll_tick`, `if status == "sent":` → `if status == "completed":`, alinhando com o valor real devolvido pelo backend. O padrão de comparação `status == "sent"` que aparece noutros pontos (`bulk_prospect_dialog.py`, `prospect_dialog.py`, `main_screen.py` linhas 2728/2836) **não foi alterado** — esses referem-se ao resultado devolvido directamente pelo `WhatsAppRunner`/`whatsapp_client.py` (que usa `"sent"` como valor próprio, correcto nesse contexto — ver `whatsapp_client.py:97-99`), uma fonte diferente da API `jobs.status`. Só o `_poll_tick` (linha 2358) comparava a fonte errada.
+
+**Reteste ao vivo pós-correcção (08/07/2026):** repetido o mesmo cenário com um novo lead sintético (`category='in-progress'` + job `status='completed'`). Após ~22s de polling, sem clicar em nada: lead moveu-se correctamente para "Qualificação" na UI, confirmado também por query directa à BD (`category='qualification'`). Dados sintéticos de teste removidos após validação.
 
 #### Cenário K4 — Remoção dos botões manuais
 - [x] Cards em "À Prospectar" não têm botão "→ Iniciar" — 08/07/2026: confirmado, cards só têm checkbox

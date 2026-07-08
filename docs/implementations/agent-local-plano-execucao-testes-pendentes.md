@@ -93,7 +93,7 @@
 *Fonte: `agent-local-v2-app-standalone.md`, Fase 10*
 - [x] K1 — Barra de estado *(achado: badge WA "Conectado/Desconectado" não existe no código)*
 - [x] K2 — Selecção e enfileiramento *(validado antecipadamente durante A.4/G2 — ver ficheiro de origem)*
-- [x] K3 — Refluxo automático por resultado *(🐛 bug real: refluxo de sucesso nunca dispara — ver ficheiro de origem)*
+- [x] K3 — Refluxo automático por resultado *(🐛 bug encontrado e corrigido — commit `f0a0ba8` — ver ficheiro de origem)*
 - [x] K4 — Remoção dos botões manuais
 
 ### A.8 — Prompt de copy personalizado (assinante)
