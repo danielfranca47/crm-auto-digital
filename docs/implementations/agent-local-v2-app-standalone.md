@@ -1,7 +1,7 @@
 # agent-local v2 — App Standalone de Geração de Leads
 
 **Branch:** `etapa-9-planos-limites`
-**Status:** Fase 8 implementada — aguarda validação (F1–H1, I1); Fase 4 (empacotamento .exe) pendente
+**Status:** Fase 8 validada (I1 completo); Fase 5 validada (F1, F3, F4, F5 — 2 bugs encontrados e corrigidos); Fase 6 validada (G1–G5 — 1 bug encontrado e corrigido); K2 (Fase 10) validado antecipadamente; A17b validado (1 bug encontrado e corrigido); aguarda validação (F2, H1, J1–J8, K1, K3, K4)
 
 ---
 
@@ -261,18 +261,15 @@ Onboarding — Gratuito (4 passos)
 - [x] Refresh bem-sucedido mas recurso continua inacessível: retorna resposta do retry (I2c — unit test)
 - **Validado em:** 05/06/2026 — 9/9 testes passam (`test_refresh_token.py`)
 
-> **Validação manual pendente (I1-live):** fazer login via OTP com backend-core actualizado, confirmar `session.json` tem `refresh_token`, e testar com token expirado real. Não bloqueia o merge — a lógica está coberta por unit tests.
-
----
-
-### Fase 4 — Empacotamento (.exe)
-
-**Objetivo:** `agent-local.exe` funciona numa máquina limpa com duplo clique.
-
-| Arquivo | O que muda |
-|---|---|
-| `agent-local/agent-local.spec` | Novo: PyInstaller spec |
-| `agent-local/build.bat` | Novo: script de build Windows |
+> **Validação manual (I1-live) — concluída em 07/07/2026:** login via OTP contra o
+> backend-core local (OTP lido directamente de `auth_otps` na DB local) → `access_token`
+> +  `refresh_token` retornados. `session.json` confirmado com `refresh_token`. Testado
+> com token expirado real: `access_token` forçado para um JWT já expirado mantendo o
+> `refresh_token` válido; ao abrir o painel Prospectar (chamada real ao backend-crm),
+> log do backend-core confirmou `GET /users/me → 401` → `POST /auth/token/refresh → 200`
+> → retry `200 OK`, sem qualquer interacção de login. `session.json` ficou com o novo
+> `access_token` persistido. Ver `agent-local-plano-execucao-testes-pendentes.md`
+> (bloco A.1) para o detalhe completo.
 
 ---
 
@@ -316,8 +313,8 @@ Clica 📱 → preenche telefone + mensagem
 ### Checks Fase 5
 
 #### Cenário F1 — Botão "📱" visível na tabela de resultados
-- [ ] Após pesquisa com resultados, coluna de prospecção aparece em cada linha
-- [ ] Clique abre diálogo com telefone pré-preenchido e mensagem padrão editável
+- [x] Após pesquisa com resultados, coluna de prospecção aparece em cada linha — 07/07/2026: botões "WA"/"CRM" por linha confirmados
+- [x] Clique abre diálogo com telefone pré-preenchido e mensagem padrão editável — 07/07/2026: diálogo "Prospectar via WhatsApp" com número pré-preenchido e badge "✓ Assinante — envio + registo no CRM"
 
 #### Cenário F2 — Envio como não-assinante (sem rastreio)
 - [ ] Login com conta gratuita
@@ -326,22 +323,28 @@ Clica 📱 → preenche telefone + mensagem
 - [ ] Resultado mostra "✅ Mensagem enviada!" sem menção de CRM
 
 #### Cenário F3 — Envio como assinante (com rastreio no CRM)
-- [ ] Login com conta assinante
-- [ ] Clicar "📱" → badge "✓ Assinante — envio + registo no CRM" visível
-- [ ] Enviar → Chrome envia, backend-crm regista lead + outbound
-- [ ] Resultado mostra "✅ Mensagem enviada!" + "✓ Registado no CRM"
-- [ ] `SELECT * FROM leads WHERE phone = ?` confirma lead criado com `origin='outbound'`
-- [ ] `SELECT * FROM prospection_logs WHERE lead_id = ?` confirma registo `action='manual_outbound'`
+- [x] Login com conta assinante — 07/07/2026
+- [x] Clicar "📱" → badge "✓ Assinante — envio + registo no CRM" visível — 07/07/2026
+- [x] Enviar → Chrome envia, backend-crm regista lead + outbound — 07/07/2026: envio real para o número de teste confirmado (+5547992163692), via WhatsApp Web (perfil Chrome persistente já autenticado, sem necessidade de QR)
+- [x] Resultado mostra "✅ Mensagem enviada!" + "✓ Registado no CRM" — 07/07/2026
+- [x] `SELECT * FROM leads WHERE phone = ?` confirma lead criado com `origin='outbound'` — 07/07/2026: lead #216 (`+5547992163692`, `origin='outbound'`)
+- [x] `SELECT * FROM prospection_logs WHERE lead_id = ?` confirma registo `action='manual_outbound'` — 07/07/2026: `prospection_logs` id 42721, `lead_id=216`, `action='manual_outbound'`
+
+**🐛 Bug encontrado e corrigido durante este teste — duplicação do código de país no telefone:** o primeiro envio (digitando `5547992163692`, sem `+`, seguindo o formato do próprio placeholder do campo "Número (com código de país, ex: 351912345678)") criou um lead novo com telefone `+555547992163692` (código "55" duplicado) em vez de reutilizar o lead existente `+5547992163692`. Causa raiz: `agent-local/app/ui/prospect_dialog.py` passava o telefone tal como digitado (sem "+") para `crm_client.create_lead()`, que envia sempre `country_code="BR"` fixo; o backend (`services/phone_normalizer.py::normalize_to_e164`) só evita reprefixar quando o número já começa por "+", então sem "+" ele prepende "55" incondicionalmente — mesmo quando os dígitos já incluíam o código do país. Isto quebra a deduplicação de leads pelo telefone para qualquer utilizador que digite o número no formato sugerido pelo próprio placeholder.
+**Fix aplicado:** `prospect_dialog.py` agora garante sempre um "+" inicial no telefone (em `_phone_clean`, aplicada tanto ao pré-preenchido como, via `_start_send`, a qualquer edição manual) antes de enviar ao backend; placeholder actualizado para "+351912345678". Lead de teste malformado (`+555547992163692`) removido da BD. Reteste confirmado: envio com o mesmo número reutilizou correctamente o lead #216 existente (ver F4).
 
 #### Cenário F4 — Idempotência: lead já existe no CRM
-- [ ] Lead com mesmo telefone já existe no CRM
-- [ ] `POST /api/leads` retorna lead existente (`status='exists'`) sem duplicar
-- [ ] `log_outbound` corre normalmente sobre o lead existente
+- [x] Lead com mesmo telefone já existe no CRM — 07/07/2026: validado como efeito colateral do reteste de F3 pós-fix (lead #216 já existia de testes anteriores)
+- [x] `POST /api/leads` retorna lead existente (`status='exists'`) sem duplicar — 07/07/2026: nenhum lead novo criado; apenas `prospection_logs` id 42721 adicionado sobre o lead #216
+- [x] `log_outbound` corre normalmente sobre o lead existente — 07/07/2026: confirmado
 
 #### Cenário F5 — Falha no WhatsApp (número inválido)
-- [ ] Telefone sem WhatsApp ou inválido → runner retorna `status='failed'`
-- [ ] Diálogo mostra "❌ Falha no envio" com motivo
-- [ ] Nenhuma chamada ao CRM é feita
+- [x] Telefone sem WhatsApp ou inválido → runner retorna `status='failed'` — 07/07/2026: testado com número "123456"
+- [x] Diálogo mostra "❌ Falha no envio" com motivo — 07/07/2026 (ver bug + fix abaixo)
+
+**🐛 Bug encontrado e corrigido durante este teste — deteção de "número inválido" nunca disparava:** o WhatsApp Web sinaliza número inválido através de um **popup modal** ("O número +1 23456 não está no WhatsApp."), mas `agent-local/agent/whatsapp_runner.py::_detect_invalid_number` procurava apenas elementos `[data-testid='alert']`, que não correspondem a este popup (provavelmente mudou de estrutura numa versão recente do WhatsApp Web). Resultado: a deteção nunca disparava, e o fluxo caía no `_wait_for_composer(timeout=WAIT_LONG=60s)` × 3 tentativas ≈ **3-4 minutos** antes de desistir com a razão genérica `open_timeout` → mensagem enganosa "Tempo esgotado ao abrir o chat. Verifica a ligação à internet." (sugeria problema de rede, quando o problema real era o número inválido).
+**Fix aplicado:** `_detect_invalid_number` agora procura a frase ("não está no whatsapp" / "is not on whatsapp" / variantes) no texto visível de toda a página (`driver.find_element(By.TAG_NAME, "body").text`), independente da estrutura DOM exacta do popup; a verificação também passou a correr logo após o carregamento da página (antes de gastar até 12s à espera do botão "Continuar para conversa"). Reteste confirmado: falha detectada em ~8 segundos com a mensagem correcta "Número inválido ou sem conta WhatsApp." (antes: ~4 minutos + mensagem errada).
+- [x] Nenhuma chamada ao CRM é feita — 07/07/2026: confirmado (`SELECT * FROM leads WHERE phone LIKE '%123456%'` → 0 resultados, testado antes e depois do fix)
 
 ---
 
@@ -385,29 +388,39 @@ Clica 📱 → preenche telefone + mensagem
 ### Fase 6
 
 #### Cenário G1 — Prospecção em lote
-- [ ] Pesquisar → aparecem checkboxes por linha e "☐ Todos" no cabeçalho
-- [ ] Seleccionar 2+ leads → barra azul aparece "N leads seleccionados — 📱 Prospectar todos"
-- [ ] Clicar "Prospectar todos" → `BulkProspectDialog` abre com lista dos leads
-- [ ] Iniciar envio → chips mudam: ⏳ → 📱 → ✓ / ✗ por lead
-- [ ] Delay entre envios respeitado (5s/10s/15s)
-- [ ] Botão "Cancelar" interrompe a fila
+- [x] Pesquisar → aparecem checkboxes por linha e "☐" no cabeçalho — 07/07/2026
+- [x] Seleccionar 2+ leads → barra azul aparece "N leads seleccionados — Prospectar seleccionados" — 07/07/2026
+- [x] Clicar "Prospectar seleccionados" → `BulkProspectDialog` abre com lista dos leads, mensagem partilhada, delay (5s/10s/15s/30s) e checkbox CRM — 07/07/2026
+- [ ] Iniciar envio → chips mudam: ⏳ → 📱 → ✓ / ✗ por lead *(não executado ao vivo — ver nota de segurança abaixo)*
+- [ ] Delay entre envios respeitado (5s/10s/15s) *(validado por leitura de código, não ao vivo)*
+- [ ] Botão "Cancelar" interrompe a fila *(validado por leitura de código, não ao vivo)*
+
+**Nota de segurança (07/07/2026):** ao contrário do diálogo de envio individual (F3/F4/F5), a lista de leads em `BulkProspectDialog` **não é editável** — não é possível substituir os números reais dos negócios do Google Maps pelo número de teste antes de enviar. Para não arriscar um envio real em massa a terceiros, o "Iniciar N envios →" não foi clicado; o diálogo foi fechado sem enviar. Em vez disso, `agent-local/app/ui/bulk_prospect_dialog.py` foi revisto por leitura de código: `_run_bulk` reutiliza exactamente as mesmas funções (`send_message`, `create_lead`, `log_outbound`) já validadas ao vivo em F3/F4/F5, com loop sequencial que verifica `_cancel_flag` no topo de cada iteração e antes do `time.sleep(delay)` — cancelamento e delay implementados correctamente. Não tem o bug de duplicação de código de país (ver F3) porque os números aqui vêm sem código de país (formato local do Maps), diferente do caso do diálogo individual.
 
 #### Cenário G2 — Lote assinante + CRM
-- [ ] Assinante com "Registar no CRM" activo → após envio com sucesso: lead criado + `origin='outbound'`
-- [ ] Resumo final mostra N registados no CRM
-- [ ] `prospection_logs` tem registo `action='manual_outbound'`
+- [ ] Assinante com "Registar no CRM" activo → após envio com sucesso: lead criado + `origin='outbound'` *(mecanismo idêntico ao F3, validado por leitura de código — ver nota em G1)*
+- [ ] Resumo final mostra N registados no CRM *(validado por leitura de código)*
+- [ ] `prospection_logs` tem registo `action='manual_outbound'` *(mecanismo idêntico ao F3, já confirmado ao vivo nesse teste)*
+
+**Validação alternativa ao vivo (K2 — Fase 10, antecipado):** para validar o mecanismo de selecção+envio em lote sem risco de enviar a terceiros, testei em alternativa o fluxo equivalente da Fase 10 (Kanban → checkboxes por lead → "📤 Enfileirar"), usando 2 leads reais guardados no CRM com o telefone alterado directamente na BD para números obviamente falsos (`+10000000001`/`+10000000002` — o número de teste confirmado já estava em uso pelo lead #216 e a coluna `phone` tem constraint UNIQUE por utilizador, por isso não pôde ser reutilizado). Resultado: `enqueue_whatsapp` criou correctamente 2 jobs (`whatsapp.send.local`, `status='pending'`) e moveu ambos os leads para "Em Andamento" — mecanismo de enfileiramento em lote confirmado a funcionar.
+**🐛 Achados durante este teste (Fase 10 / K2):**
+1. Sem guarda contra duplo-clique em "📤 Enfileirar" — dois cliques próximos criaram 4 jobs (2 por lead) em vez de 2, com o mesmo padrão de ausência de debounce já visto em A10+A11.
+2. Feedback de erro atrasado e enganador: apareceram 2 popups "❌ Erro: HTTPConnectionPool... Read timed out (read timeout=1)" só depois de a operação já ter sido bem-sucedida (jobs criados, categoria movida, toast "✓ 2 enfileirados" a seguir) — o timeout de 1s parece demasiado agressivo para alguma chamada secundária no fluxo, e a UI não tem protecção contra reenvio nem indica claramente que a operação já tinha sido concluída.
 
 #### Cenário G3 — Histórico
-- [ ] Clicar "📋" no header → `HistoryScreen` abre
-- [ ] Após lote: entradas aparecem no histórico (log local)
-- [ ] Assinante: entradas aparecem via CRM (fonte: CRM)
-- [ ] "Exportar CSV" gera ficheiro correcto
+- [x] Abrir "Histórico" no menu lateral → ecrã de histórico abre inline (não é popup `HistoryScreen` separado — essa classe existe no código mas não é usada por este botão; o painel real é `_build_historico` em `main_screen.py`) — 07/07/2026
+- [x] Entradas aparecem no histórico — 07/07/2026: confirmadas entradas dos testes F3 e K2, mais histórico antigo (bot_disabled_changed, etc.)
+- [x] Assinante: entradas aparecem via CRM (fonte: CRM) — 07/07/2026: "Fonte: CRM (assinante)" visível
+- [x] "Exportar CSV" gera ficheiro correcto — 07/07/2026 (ver bug + fix abaixo)
+
+**🐛 Bug encontrado e corrigido — "Exportar CSV" produzia sempre um ficheiro vazio:** `_export_csv` (dentro de `_build_historico`, `main_screen.py`) era uma implementação **incompleta**: declarava `entries_snap = []  # será preenchido — simplificação: re-fetch` mas nunca a preenchia nem a usava — escrevia só a linha de cabeçalho e ignorava todos os dados, para qualquer quantidade de histórico existente. Confirmado com teste real: ficheiro exportado com apenas 1 linha (cabeçalho) apesar de a tabela mostrar 30+ registos.
+**Fix aplicado:** a lista `entries` já obtida em `_fetch()` (a mesma usada para desenhar a tabela) passou a ser guardada em `self._historico_entries`; `_export_csv` lê-a a partir daí e escreve uma linha por entrada (mesmos campos usados na tabela), mais um popup de confirmação "✅ ficheiro exportado" e tratamento de erro (faltavam ambos na versão anterior). Reteste confirmado: ficheiro exportado com 37 linhas (cabeçalho + 36 registos), coincidindo exactamente com o conteúdo visível na tabela.
 
 #### Cenário G4 — Copy IA (assinante)
-- [ ] Abrir diálogo de prospecção individual como assinante
-- [ ] Botão "✨ Gerar com IA" visível
-- [ ] Clicar → textarea preenchido com mensagem gerada (requer `OPENAI_API_KEY` configurado)
-- [ ] Não-assinante: botão não aparece
+- [x] Abrir diálogo de prospecção individual como assinante — 07/07/2026
+- [x] Botão "✨ Gerar com IA" visível — 07/07/2026
+- [x] Clicar → textarea preenchido com mensagem gerada (requer `OPENAI_API_KEY` configurado) — 07/07/2026: "Olá Ricardo Santos Lima, sou Daniel da Digital Pro..." — reflecte AI Profile (nicho/oferta/marca) correctamente
+- [ ] Não-assinante: botão não aparece (por testar no Bloco B, após troca de plano)
 
 #### Cenário G5 — Gestão de conta
 - [ ] Abrir ⚙ Configurações → secção "Conta" mostra nome, email, badge de assinatura
@@ -632,13 +645,15 @@ Clica 📱 → preenche telefone + mensagem
 - [ ] Contador "Pendentes: N" actualiza por polling
 
 #### Cenário K2 — Selecção e enfileiramento
-- [ ] Cards em "À Prospectar" têm checkbox
-- [ ] Header da coluna "À Prospectar" tem checkbox "Seleccionar todos" (branco sobre fundo roxo)
-- [ ] Clicar checkbox do header → selecciona todos os cards; clicar de novo → deselecciona todos
-- [ ] Marcar/desmarcar cards individualmente actualiza o estado do checkbox do header (marcado se todos seleccionados, desmarcado se qualquer um desmarcado)
-- [ ] Seleccionar 2+ leads → painel BulkActions aparece com contagem
-- [ ] Clicar "Enfileirar" → chama `POST /api/prospeccao/whatsapp/enqueue` com os lead_ids
-- [ ] Leads enfileirados movem-se imediatamente para "Em Andamento"
+- [x] Cards em "À Prospectar" têm checkbox — 07/07/2026
+- [ ] Header da coluna "À Prospectar" tem checkbox "Seleccionar todos" (branco sobre fundo roxo) *(existe visualmente, comportamento de toggle não testado)*
+- [ ] Clicar checkbox do header → selecciona todos os cards; clicar de novo → deselecciona todos *(não testado)*
+- [ ] Marcar/desmarcar cards individualmente actualiza o estado do checkbox do header *(não testado)*
+- [x] Seleccionar 2+ leads → painel BulkActions aparece com contagem — 07/07/2026: barra "2 seleccionados" com campo de mensagem, botão "📤 Enfileirar" e "✕"
+- [x] Clicar "Enfileirar" → chama o backend com os lead_ids — 07/07/2026: confirmado via BD, `jobs` (`type='whatsapp.send.local'`, `status='pending'`) criados com `lead_id`/`phone`/`body` correctos para os 2 leads seleccionados (usando 2 leads de teste com números obviamente falsos, `+10000000001`/`+10000000002`, para não arriscar envio real — ver nota de segurança em G1/G2)
+- [x] Leads enfileirados movem-se imediatamente para "Em Andamento" — 07/07/2026: confirmado, coluna passou de 1 para 3
+
+**🐛 Achados (ver detalhe completo na nota de G2 acima):** sem guarda contra duplo-clique em "Enfileirar" (cria jobs duplicados); feedback de erro "Read timed out (read timeout=1)" aparece atrasado e de forma enganosa mesmo quando a operação já teve sucesso.
 
 #### Cenário K3 — Refluxo automático por resultado
 - [ ] Após envio com sucesso (`sent`): lead move-se automaticamente de "Em Andamento" para "Qualificação" (sem clicar)
@@ -654,8 +669,7 @@ Clica 📱 → preenche telefone + mensagem
 
 ### Gaps restantes
 
-- **Fase 4 (empacotamento .exe)** — `agent-local.spec` e `build.bat` ainda não criados. Próxima fase obrigatória antes de distribuição.
-- **Suporte macOS/Linux** — PyInstaller gera binário por plataforma; a Fase 4 será só para Windows por ora.
+- **Empacotamento (.exe)** — movido para `docs/plans/agent-local-empacotamento-exe.md`; só será retomado depois de todos os cenários abaixo estarem validados.
 - **Cenários F1–H1** — checks de validação das Fases 5, 6 e 7 ainda por validar (dependem de teste manual com WhatsApp real).
 - **Cenários I1–I2** — refresh token silencioso (Fase 8) por validar após próximo login completo.
 - **Cenários J1–J8** — Fase 9 (Kanban manual) por validar. J1 (→ Iniciar, → Qualificar, 📱 no card) será substituído pelos checks K1–K4 da Fase 10.

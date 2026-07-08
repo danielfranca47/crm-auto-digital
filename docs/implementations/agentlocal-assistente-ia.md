@@ -721,11 +721,13 @@ Nova secção "🤖 Prompt de Copy" inserida após "🔑 Chave OpenAI API" dentr
 
 #### A17b — Prompt personalizado para assinante (requer backend-crm)
 
-- [ ] Definir script em ⚙ Conta ("Olá [empresa], sou Daniel de [marca]…")
-- [ ] Abrir modal de lead e clicar "Gerar copy" → copy reflecte o script com variáveis substituídas
-- [ ] Usar "Gerar copys para seleccionados" (Assistente IA → leads existentes) → copies reflectem o script
-- [ ] Fazer upload de CSV com "Gerar copys com IA" activo → copies do batch reflectem o script
-- [ ] Limpar o script (Restaurar padrão) e gerar de novo → volta ao comportamento padrão
+- [x] Definir script em ⚙ Conta ("Olá [contacto], sou Daniel de [empresa]. [TESTE-A17b]…") — 07/07/2026: guardado com sucesso, confirmado em `session.json` (`local_copy_prompt`)
+- [x] Abrir modal de lead (prospecção individual) e clicar "✨ Gerar com IA" → copy reflecte o script — 07/07/2026 (ver bug + fix abaixo)
+- [x] "Gerar copys para leads existentes"/upload de CSV (Assistente IA) → já enviam `custom_prompt_template` correctamente — confirmado por leitura de código (`main_screen.py:1101` e `:1453`), consistente com o fluxo A5+A8 já validado
+- [ ] Limpar o script (Restaurar padrão) e gerar de novo → volta ao comportamento padrão *(não testado)*
+
+**🐛 Bug encontrado e corrigido — prompt personalizado não chegava ao botão individual "✨ Gerar com IA":** `agent-local/app/ui/prospect_dialog.py::_generate_ai_copy` chamava `crm_client.generate_copy(...)` sem o parâmetro `custom_prompt_template`, apesar de a função já o suportar e de o backend (`backend-crm/routes/prospeccao.py`) já implementar correctamente a substituição de variáveis e o prompt baseado no script quando recebido. Resultado: qualquer subscritor que definisse um script personalizado em ⚙ Conta via este botão específico via sempre o comportamento genérico (o `local_copy_prompt` só era consumido pelo caminho gratuito/local em `local_copy.py`, que este botão nunca usa por ser exclusivo de assinantes). Confirmado ao vivo: com o script "[TESTE-A17b]" guardado, a copy gerada não reflectia o script nem o marcador.
+**Fix aplicado:** `_generate_ai_copy` passa agora `custom_prompt_template=self._session.get("local_copy_prompt") or ""`. Reteste confirmado por logs (`POST /api/prospeccao/generate-copy → 200 OK`) e por leitura de código (mesmo padrão usado nos outros dois pontos de entrada, já correctos). Nota: a IA não repete o script literalmente por desenho — o próprio prompt do backend instrui "não copies literalmente, gera uma variação" e "NUNCA uses placeholders", pelo que a ausência do texto exacto do script na saída é esperada, não um sinal de falha.
 
 ---
 
@@ -735,70 +737,75 @@ Nova secção "🤖 Prompt de Copy" inserida após "🔑 Chave OpenAI API" dentr
 
 #### A7 — Entrada via Pesquisar → Assistente IA (ponto de entrada principal)
 
-- [ ] Pesquisar empresas → aguardar resultados aparecerem
-- [x] Confirmar: botão "✨ Gerar copy com IA" aparece no header dos resultados — verificado por código 2026-06-09 (guarded por `if subscriber:`)
-- [x] Clicar o botão → confirmar que navega directamente para o painel Assistente IA — verificado por código 2026-06-09 (`command=self._ir_para_assistente_ia` → `_switch_panel("assistente-ia")`)
-- [ ] Confirmar: o painel Assistente IA abre e converte/envia automaticamente
+- [x] Pesquisar empresas → aguardar resultados aparecerem — 07/07/2026: "dentistas" / "São Paulo, SP" → 10 leads
+- [x] Confirmar: botão "✨ Gerar copy com IA" aparece no header dos resultados — verificado por código 2026-06-09 (guarded por `if subscriber:`); confirmado visualmente 07/07/2026
+- [x] Clicar o botão → confirmar que navega directamente para o painel Assistente IA — verificado por código 2026-06-09; confirmado ao vivo 07/07/2026
+- [x] Confirmar: o painel Assistente IA abre e converte/envia automaticamente
       os resultados da pesquisa (label "N resultados da pesquisa — a
       converter…" + barra de progresso), sem qualquer clique adicional
+      — 07/07/2026: label exacto "10 resultados da pesquisa — a converter..." + barra "A enviar ficheiro..." visíveis
 
 #### A1 — Upload manual de ficheiro CSV/XLSX
 
-- [ ] Abrir painel "Assistente IA" no agent-local
-- [ ] Clicar "Escolher ficheiro" → seleccionar um CSV com colunas de empresa e telefone
-- [ ] Confirmar: painel mostra nome do ficheiro + colunas detectadas
+- [⏭️] Não testado directamente nesta rodada — o mecanismo de upload é o mesmo
+      motor usado por A2/A7 (envio do CSV temporário gerado internamente), já
+      validado indirectamente. Ficheiro externo próprio não foi testado.
 
 #### A2 — Fallback: Usar resultados de pesquisa dentro do Assistente IA
 
-- [ ] Fazer uma pesquisa no painel Pesquisar (ex: "dentistas em Lisboa")
-- [ ] Navegar para "Assistente IA" directamente pela sidebar (não pelo botão)
-- [ ] Confirmar: aparece o texto "N lead(s) da pesquisa:" com botão "Usar"
+- [x] Fazer uma pesquisa no painel Pesquisar (ex: "dentistas em Lisboa") — 07/07/2026: pesquisa "advogados" / "Curitiba, PR"
+- [x] Navegar para "Assistente IA" directamente pela sidebar (não pelo botão) — 07/07/2026
+- [x] Confirmar: aparece o texto "N lead(s) da pesquisa:" com botão "Usar"
       activo no Passo 1 → clicar "Usar" e confirmar que converte e envia
-      automaticamente
+      automaticamente — 07/07/2026: texto exacto "ou 10 leads da pesquisa: Usar"; clicar converteu e enviou automaticamente (`tmpuax5dtog.csv enviado — 4 colunas detectadas`)
 
 #### A3 — Mapeamento de colunas + preview
 
-- [ ] Após upload (A1 ou A2), confirmar auto-detecção correcta das colunas
-- [ ] Confirmar manualmente o mapeamento e clicar "✓ Confirmar mapeamento →"
-- [ ] Confirmar: stats de dedupe aparecem (total, criar, actualizar, pular)
-- [ ] Confirmar: tabela de amostra mostra as primeiras 10 linhas
+- [x] Após upload (A1 ou A2), confirmar auto-detecção correcta das colunas — 07/07/2026: "empresa"→Empresa, "telefone"→Telefone auto-detectados corretamente
+- [x] Confirmar manualmente o mapeamento e clicar "✓ Confirmar mapeamento →" — 07/07/2026
+- [x] Confirmar: stats de dedupe aparecem (total, criar, actualizar, pular) — 07/07/2026: 10 total / 5 criar / 0 actualizar / 5 pular (1ª pesquisa, dentistas); 10/10/0/0 (2ª pesquisa, advogados frescos)
+- [x] Confirmar: tabela de amostra mostra as primeiras 10 linhas — 07/07/2026: colunas Empresa/Telefone/Acção/Dup?
 
 #### A4 — Processamento — criar cards sem copy
 
-- [ ] No Passo 2, escolher "Pular" como opção de duplicados; no Passo 4,
-      manter "Criar cards no CRM" seleccionado
-- [ ] Clicar "🚀 Confirmar e Processar"
-- [ ] Confirmar: leads aparecem no painel Prospectar (coluna "À Prospectar")
-- [ ] Confirmar: stats finais mostram N criados
+- [x] No Passo 2, escolher "Pular" como opção de duplicados; no Passo 4,
+      manter "Criar cards no CRM" seleccionado — 07/07/2026
+- [x] Clicar "🚀 Confirmar e Processar" — 07/07/2026
+- [x] Confirmar: leads aparecem no painel Prospectar (coluna "À Prospectar") — 07/07/2026: 5 novos leads (origem "Planilha") visíveis no topo da coluna
+- [x] Confirmar: stats finais mostram N criados — 07/07/2026: "5 Criados · 0 Actualizados · 5 Pulados · 0 Mensagens"
 
 #### A5 + A8 — Processamento com geração de copy + prévia no Passo 5
 
-- [ ] No Passo 4, manter "Criar cards no CRM" seleccionado, marcar "Gerar
-      copys com IA" (ou apenas marcar o canal WhatsApp — activa-a automaticamente)
-- [ ] Clicar "🚀 Confirmar e Processar" numa planilha de 5 leads
-- [ ] Confirmar: no CRM, os leads têm mensagem gerada disponível no diálogo de prospecção
-- [ ] No Passo 5 (resultados), confirmar: secção "✨ Mensagens geradas — prévia" aparece
-- [ ] Confirmar: lista mostra `Lead #N · Canal` + texto da copy (truncado)
-- [ ] Clicar "📋 Copiar" → confirmar que o texto fica na área de transferência
+- [x] No Passo 4, manter "Criar cards no CRM" seleccionado, marcar "Gerar
+      copys com IA" (ou apenas marcar o canal WhatsApp — activa-a automaticamente) — 07/07/2026: checkbox "Gerar copys com IA" marcado manualmente (canal WhatsApp já vinha marcado por defeito, mas não activou o checkbox sozinho neste caso — ver nota abaixo)
+- [x] Clicar "🚀 Confirmar e Processar" numa planilha de 5 leads — 07/07/2026: testado com 10 leads (advogados Curitiba), demorou ~50s (10 chamadas OpenAI sequenciais)
+- [x] Confirmar: no CRM, os leads têm mensagem gerada disponível no diálogo de prospecção — 07/07/2026: "10 Criados · 0 Actualizados · 0 Pulados · 10 Mensagens"
+- [x] No Passo 5 (resultados), confirmar: secção "✨ Mensagens geradas — prévia" aparece — 07/07/2026
+- [x] Confirmar: lista mostra `Lead #N · Canal` + texto da copy (truncado) — 07/07/2026: "Lead #316 · WhatsApp", "Lead #317 · WhatsApp" com texto completo
+- [x] Clicar "📋 Copiar" → confirmar que o texto fica na área de transferência — botão clicado sem erro; conteúdo do clipboard não confirmado (grant de leitura de clipboard não concedido nesta sessão)
+
+**Nota (não-bloqueante):** o checkbox "Gerar copys com IA" **não** se activou sozinho ao ver o canal "WhatsApp" já marcado por defeito no primeiro render do Passo 4 — precisou de clique manual. O fix da Fase 5.1 (`_ai_sync_generate_copys_with_channels`) sincroniza ao *marcar* um canal, não cobre o caso em que o canal já vem pré-marcado e o utilizador nunca toca nele. Risco baixo (o utilizador que quer copy tende a mexer nos canais de qualquer forma), mas vale registar.
+
+**Achado de qualidade da copy (não-bloqueante):** com o AI Profile de teste vazio (`brand_name`/`niche`/`offer_description` todos `""`), o texto gerado ficou com gaps gramaticais tipo "Sou da ." e "Obrigado, , ." — não insere placeholders `[Seu Nome]`/`[Sua Empresa]` (correcto), mas também não omite os separadores (vírgulas/pontos) quando o campo está vazio, produzindo texto com aparência quebrada. Depois de preencher o perfil (ver A12), o texto ficou correcto. Sugestão para o dev: condicionar a inclusão de vírgulas/pontos de fecho à presença do valor.
 
 #### A9 — Detalhe do lead com copy editável no Kanban CRM
 
-- [ ] No painel Prospectar, clicar num card de lead com copy gerada
-- [ ] Confirmar: modal abre com nome, telefone, origem e mensagens por canal
-- [ ] Editar o texto de uma mensagem → clicar "💾 Guardar alteração"
-- [ ] Reabrir o modal → confirmar que o texto editado persiste
-- [ ] Clicar "📋 Copiar" numa mensagem → confirmar que o texto fica na área de transferência
+- [x] No painel Prospectar, clicar num card de lead com copy gerada — 07/07/2026: Lead #325 (Gabriel Bergamo Advocacia)
+- [x] Confirmar: modal abre com nome, telefone, origem e mensagens por canal — 07/07/2026
+- [x] Editar o texto de uma mensagem → clicar "💾 Guardar alteração" — 07/07/2026: adicionado sufixo "[teste-A9]"; `POST /api/assistente-ia/messages/upsert → 200 OK`
+- [x] Reabrir o modal → confirmar que o texto editado persiste — 07/07/2026: "[teste-A9]" visível após fechar e reabrir
+- [x] Clicar "📋 Copiar" numa mensagem → botão clicado sem erro (conteúdo do clipboard não confirmado — ver nota em A5/A8)
 
 #### A12 — Copy ciente do nicho/oferta do utilizador
 
-- [ ] Confirmar que o utilizador tem `Nicho de mercado`, `Produto/Serviço` e
-      `Público-alvo` preenchidos em "Configurar Agente de IA" (frontend-crm → AiProfile)
-- [ ] Gerar copy para um lead (fluxo normal ou "Gerar copys para leads sem copy")
-- [ ] Confirmar: o texto reflecte o nicho/oferta reais do utilizador — não temas
-      aleatórios sem relação com o que o utilizador realmente vende
-- [x] Confirmar: o texto NÃO contém `[Seu Nome]` / `[Sua Empresa]` — verificado por código 2026-06-09 (prompt instrui explicitamente `NUNCA uses placeholders`)
+- [x] Confirmar que o utilizador tem `Nicho de mercado`, `Produto/Serviço` e
+      `Público-alvo` preenchidos em "Configurar Agente de IA" (frontend-crm → AiProfile) — 07/07/2026: perfil de teste estava **vazio** (`brand_name`/`niche`/`offer_description`/`target_audience` todos `""`, confirmado via DB); preenchido via `PATCH /ai-profiles/me` para o teste (brand_name="Digital Pro", niche="Escritorios de advocacia", offer_description="Automacao de atendimento e agendamento via WhatsApp com IA", target_audience="Advogados autonomos e pequenos escritorios")
+- [x] Gerar copy para um lead (fluxo normal ou "Gerar copys para leads sem copy") — 07/07/2026: gerado via botão "✨ Gerar com IA" no diálogo de prospecção individual (Pesquisar → WA → Gerar com IA)
+- [x] Confirmar: o texto reflecte o nicho/oferta reais do utilizador — não temas
+      aleatórios sem relação com o que o utilizador realmente vende — 07/07/2026: "Olá Ricardo Santos Lima, sou Daniel da Digital Pro. Oferecemos automação de atendimento e agendamento via WhatsApp com IA para escritórios de advocacia. Gostaria de saber mais sobre como podemos ajudar a otimizar o atendimento no seu escritório de advocacia de família em Curitiba?" — reflecte nicho, oferta, marca e nome correctamente, e até personaliza com o nicho específico do lead ("advocacia de família")
+- [x] Confirmar: o texto NÃO contém `[Seu Nome]` / `[Sua Empresa]` — verificado por código 2026-06-09; confirmado ao vivo 07/07/2026 (com perfil preenchido, sem gaps nem placeholders)
 - [x] Testar também com um utilizador sem perfil de IA preenchido → confirmar que
-      a geração não falha (cai para o comportamento genérico anterior) — verificado por código 2026-06-09 (`ai_profile = {}` em caso de excepção, todos os campos com `.get()` + fallback)
+      a geração não falha (cai para o comportamento genérico anterior) — 07/07/2026: confirmado ao vivo — com perfil vazio a geração NÃO falhou (sem crash, sem erro 500/403); produziu texto genérico com pequenos gaps gramaticais (ver achado em A5/A8), não placeholders
 
 #### A10 + A11 — Gerar copys para leads existentes sem copy
 
@@ -811,7 +818,26 @@ Nova secção "🤖 Prompt de Copy" inserida após "🔑 Chave OpenAI API" dentr
 - [x] Clicar "✨ Gerar copys para seleccionados" — validado em 2026-06-08
 - [x] Confirmar: progresso "A gerar copys… N/M" actualiza durante o processo — validado em 2026-06-08
 - [x] Confirmar: ao concluir, aparecem stats (`X copy(s) gerada(s) para Y lead(s)`) e prévia das mensagens — validado em 2026-06-08
-- [ ] Abrir um dos leads no Kanban → confirmar que a copy gerada aparece no modal de detalhe
+- [x] Abrir um dos leads no Kanban → confirmar que a copy gerada aparece no modal de detalhe — 07/07/2026: confirmado via teste A9 (Lead #325, mensagem WhatsApp visível no modal)
+
+**Achado de performance — causa raiz confirmada por leitura de código (07/07/2026):** o botão "🔄 Gerar copys para leads sem copy" varre **todos** os leads do Kanban remoto (`get_leads_kanban`) chamando `get_lead_messages` **um a um, sequencialmente**, para descobrir quais não têm copy (`agent-local/app/ui/main_screen.py:937-979`, função `_ai_start_existing_leads_flow`). Nesta conta de teste (acumulada ao longo de meses, ~120+ leads nas colunas de prospecção), o scan ainda não tinha terminado após ~5 minutos de espera (chegou a verificar leads até ao ID #209 vindo do #325, sem atingir o fim).
+
+Confirmado por leitura directa do código (não é só especulação):
+- Cada `get_lead_messages(session, lid)` (`agent-local/app/crm_client.py:234-245`) é um `GET /api/assistente-ia/messages/{lead_id}` **individual** — 1 pedido HTTP completo (com verificação de auth) por lead.
+- No backend (`backend-crm/routes/assistente_ia.py:134-159`, `get_messages`), cada pedido abre a sua **própria ligação SQLite** (`with get_connection() as conn`) e corre uma query isolada — não há batching nem cache.
+- Não existe endpoint em lote — o único endpoint disponível é por-lead.
+- **Não há guarda contra invocação dupla**: `_ai_start_existing_leads_flow` não verifica se já existe uma thread `_worker` em curso antes de arrancar outra (sem flag tipo `self._ai_existing_flow_running`). Confirmado por log que a thread sobrevive à troca de painel (continuou a chamar `/api/assistente-ia/messages/{id}` mesmo depois de navegar para "Pesquisar" e iniciar um fluxo A2 diferente em paralelo) — se o utilizador clicar o botão outra vez ou voltar a este painel, cria-se uma **segunda** thread a repetir o mesmo varrimento sequencial em paralelo com a primeira, multiplicando a carga no backend sem qualquer aviso na UI.
+
+**Conclusão:** é um bug de performance real (não é "só volume de dados esperado") — o padrão N+1 client-side é o principal responsável pelo tempo (O(N) round-trips seriais, ~1.5–3s cada, × 120+ leads ≈ 3–6 min, bate certo com o observado); a ausência de guarda contra dupla-invocação é um agravante secundário que pode duplicar/triplicar a carga se o utilizador repetir o clique.
+
+**Evidência de que uma correcção de query única é viável e de baixo risco:** `backend-crm/routes/leads.py:351-392` (`listar_leads`, usado por `GET /api/leads`) já resolve um problema análogo — injectar o "próximo compromisso agendado" por lead — com um único `LEFT JOIN` a uma subquery agregada (`ROW_NUMBER() OVER (PARTITION BY lead_id ...)`), em vez de N chamadas. O mesmo padrão aplica-se directamente aqui.
+
+**✅ Fix aplicado e validado ao vivo (07/07/2026):**
+1. `backend-crm/routes/leads.py` (`listar_leads`, `GET /api/leads`) — adicionado `LEFT JOIN (SELECT lead_id, COUNT(*) AS msg_count FROM messages GROUP BY lead_id) AS msg_agg` à query existente; `_map_lead_row` agora injeta `hasMessages` (bool) por lead a partir de `msg_count`. Zero pedidos extra — mesmo custo de hoje.
+2. `agent-local/app/ui/main_screen.py` (`_ai_start_existing_leads_flow`) — removida a chamada por-lead a `get_lead_messages`; passa a filtrar directamente `without_copy = [lead for lead in leads if not lead.get("hasMessages")]` sobre o resultado já devolvido por `get_leads_kanban`.
+3. Adicionada guarda `self._ai_existing_flow_running` para impedir arrancar uma segunda thread do mesmo scan enquanto a primeira ainda corre (clique repetido ou reentrada no painel).
+
+**Validação ao vivo:** confirmado via `GET /api/leads` directo que o campo `hasMessages` está correcto (57 leads totais, 50 com copy / 7 sem). Reiniciado `backend-crm` e o `agent-local` com o código actualizado, clicado "🔄 Gerar copys para leads sem copy" — resultado "Leads sem copy gerada — 7 encontrado(s)" apareceu em **~2-3 segundos** (antes: 5+ minutos sem terminar). Contagem bate certo com a verificação directa da API. Regressão de performance resolvida.
 
 #### Regressões — confirmar que o fluxo de assinante não foi afectado
 

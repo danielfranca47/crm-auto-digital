@@ -32,9 +32,10 @@ Arquivos em andamento ou recém-completados. Seguem o padrão do template.
 
 | Ficheiro | Status |
 |---|---|
-| `agent-local-v2-app-standalone.md` | Fase 8 implementada — aguarda validação; Fase 4 (empacotamento .exe) pendente |
+| `agent-local-v2-app-standalone.md` | Fase 8 implementada — aguarda validação (empacotamento .exe adiado para `docs/plans/`) |
 | `agent-local-v2-testes-manuais.md` | Guia de testes manuais para a app standalone (acompanha o ficheiro acima) |
 | `agentlocal-assistente-ia.md` | Em andamento |
+| `agent-local-plano-execucao-testes-pendentes.md` | Ordem de execução consolidada dos testes pendentes dos dois arquivos acima (Bloco A assinante → troca de plano → Bloco B gratuito); descartável após validado |
 | `correcao-natural-llm-e-fixes-ui-descobertos.md` | Em andamento — planeado, código ainda não iniciado |
 
 ---
