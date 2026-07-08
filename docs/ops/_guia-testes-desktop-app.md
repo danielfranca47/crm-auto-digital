@@ -32,6 +32,25 @@ disponíveis e há uma diferença prática relevante:
 **Recomendação:** para qualquer teste de app desktop, ir directo a `computer-use`
 — não perder tempo a tentar o Windows-MCP primeiro.
 
+**Excepção — janela minimizada:** se `computer-use` (`open_application` +
+`screenshot`) mostrar só o ambiente de trabalho, sem qualquer rasto da janela
+alvo (nem sequer mascarada a preto), a app pode estar **minimizada** em vez de
+ter um problema de foco. `open_application` repetido não a restaura de forma
+fiável (pode inclusive abrir instâncias novas indesejadas de outra app —
+aconteceu com vários "Python 3.13 Module Docs" minimizados a acumularem-se).
+Nesse caso, usar o `Windows-MCP` só para este passo pontual — não para
+interagir com a app, só para a restaurar:
+1. `mcp__Windows-MCP__Snapshot` — confirmar em "Opened Windows" se o estado é
+   `Minimized` (tamanho 0×0)
+2. `mcp__Windows-MCP__Click` no botão da app na barra de tarefas (id da lista
+   de elementos interactivos) — isto restaura a janela para `Normal`
+3. Voltar ao `computer-use` (`screenshot`) para confirmar e continuar a
+   interagir normalmente
+
+As duas ferramentas são complementares aqui: `Windows-MCP` só para
+restaurar/inspeccionar estado de janela a alto nível; `computer-use` para toda
+a interacção (cliques, scroll, digitação) dentro da app.
+
 ---
 
 ## Passo a passo

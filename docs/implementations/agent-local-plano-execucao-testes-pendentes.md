@@ -79,7 +79,7 @@
 ### A.6 — Fase 9 (Kanban manual, assinante)
 *Fonte: `agent-local-v2-app-standalone.md`, Fase 9*
 - [x] J1 — Kanban assinante com leads
-- [⏭️] J2 — Kanban assinante sem leads (pulado — exigiria esvaziar leads reais da conta de teste partilhada, ação destrutiva não autorizada)
+- [x] J2 — Kanban assinante sem leads
 - [x] J4 — Refresh
 - [x] J5 — Guardar no CRM (individual)
 - [x] J6 — Guardar todos no CRM

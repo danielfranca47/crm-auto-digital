@@ -1,7 +1,7 @@
 # agent-local v2 — App Standalone de Geração de Leads
 
 **Branch:** `etapa-9-planos-limites`
-**Status:** Fase 8 validada (I1 completo); Fase 5 validada (F1, F3, F4, F5 — 2 bugs encontrados e corrigidos); Fase 6 validada (G1–G5 — 1 bug encontrado e corrigido); Fase 7 validada (H1); Fase 9 validada (J1, J4–J8 — 2 achados de UI/rede, J2 pulado por ser destrutivo); K2 (Fase 10) validado antecipadamente; A17b validado (1 bug encontrado e corrigido); aguarda validação (F2, K1, K3, K4)
+**Status:** Fase 8 validada (I1 completo); Fase 5 validada (F1, F3, F4, F5 — 2 bugs encontrados e corrigidos); Fase 6 validada (G1–G5 — 1 bug encontrado e corrigido); Fase 7 validada (H1); Fase 9 validada (J1, J2, J4–J8 — 2 achados de UI/rede); K2 (Fase 10) validado antecipadamente; A17b validado (1 bug encontrado e corrigido); aguarda validação (F2, K1, K3, K4)
 
 ---
 
@@ -570,7 +570,9 @@ Clica 📱 → preenche telefone + mensagem
 - **Validado em:** 08/07/2026 — via automação `computer-use` (não Windows-MCP, ver nota de ambiente abaixo). Checkboxes visíveis em cada card de "À Prospectar" (confirma K2). Cards em "Em Andamento"/"Qualificação" sem checkbox, correto.
 
 #### Cenário J2 — Kanban assinante sem leads
-- [⏭️] Pulado — exigiria esvaziar as colunas de prospecção da conta de teste partilhada (74 leads reais de várias sessões de teste), uma ação destrutiva não autorizada. Não há forma não-destrutiva de simular o estado vazio nesta conta.
+- [x] Sem leads nas categorias de prospecção → mensagem "Sem leads nas colunas de prospecção" + instrução de uso — 08/07/2026: confirmado, texto exato: *"Sem leads nas colunas de prospecção." + "Pesquise empresas em 🔍 Pesquisar e guarde-as no CRM com 💾 — aparecem aqui em 'À Prospectar'."*
+- **Setup do estado vazio (autorizado pelo utilizador):** apagados os 88 leads do `user_id=15` (conta `autodigital157`) nas categorias `to-prospect`(74)/`in-progress`(3)/`qualification`(11), directamente na `crm.db`, incluindo linhas relacionadas (73 `messages`, 10 `prospection_logs`, 23 `message_selections`, 3 `appointments`, 2 `jobs`). Categorias fora do Kanban de prospecção (`agendamento`, `apresentation`, `pre-agendamento`) não foram tocadas. Dados reconstituíveis via "Guardar todos no CRM" (ver J6) caso sejam necessários de novo.
+- **Validado em:** 08/07/2026 — via automação `computer-use`, conta assinante `autodigital157`
 
 #### Cenário J3 — Kanban não-assinante
 - [ ] Painel Prospectar como gratuito → pitch de upgrade + colunas "Enviados"/"Falhados" do log local
@@ -680,5 +682,5 @@ Clica 📱 → preenche telefone + mensagem
 - **Empacotamento (.exe)** — movido para `docs/plans/agent-local-empacotamento-exe.md`; só será retomado depois de todos os cenários abaixo estarem validados.
 - **Cenários F1–H1** — checks de validação das Fases 5, 6 e 7 ainda por validar (dependem de teste manual com WhatsApp real).
 - **Cenários I1–I2** — refresh token silencioso (Fase 8) por validar após próximo login completo.
-- **Cenários J1, J4–J8** — validados 08/07/2026 (ver Checks Fase 9). J2 pulado (destrutivo). J3 fica para o Bloco B.
+- **Cenários J1, J2, J4–J8** — validados 08/07/2026 (ver Checks Fase 9). J3 fica para o Bloco B.
 - **Cenários K1, K3, K4** — Fase 10 por validar (K2 já validado antecipadamente).
