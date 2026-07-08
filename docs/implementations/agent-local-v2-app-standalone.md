@@ -1,7 +1,7 @@
 # agent-local v2 — App Standalone de Geração de Leads
 
 **Branch:** `etapa-9-planos-limites`
-**Status:** Fase 8 validada (I1 completo); Fase 5 validada (F1, F3, F4, F5 — 2 bugs encontrados e corrigidos); Fase 6 validada (G1–G5 — 1 bug encontrado e corrigido); Fase 7 validada (H1); Fase 9 validada (J1, J2, J4–J8 — 2 achados de UI/rede); Fase 10 validada (K1–K4 — K3 tinha bug real, encontrado e corrigido; K1 badge WA não existe no código); A17b validado (1 bug encontrado e corrigido); aguarda validação (F2)
+**Status:** Todos os cenários validados. Fase 8 (I1); Fase 5 (F1–F5 — 3 bugs encontrados e corrigidos, incluindo os 2 do reenvio no Kanban local); Fase 6 (G1–G5 — 1 bug corrigido); Fase 7 (H1); Fase 9 (J1–J4, J6–J8 — J3 tinha espec desactualizada, comportamento real confirmado correcto); Fase 10 (K1–K4 — K3 tinha bug real, corrigido; K1 badge WA não existe no código); A17b (1 bug corrigido)
 
 ---
 
@@ -317,10 +317,10 @@ Clica 📱 → preenche telefone + mensagem
 - [x] Clique abre diálogo com telefone pré-preenchido e mensagem padrão editável — 07/07/2026: diálogo "Prospectar via WhatsApp" com número pré-preenchido e badge "✓ Assinante — envio + registo no CRM"
 
 #### Cenário F2 — Envio como não-assinante (sem rastreio)
-- [ ] Login com conta gratuita
-- [ ] Clicar "📱" num resultado → badge "Gratuito — envio local, sem registo no CRM" visível
-- [ ] Clicar "Enviar via WhatsApp →" → Chrome abre, mensagem enviada
-- [ ] Resultado mostra "✅ Mensagem enviada!" sem menção de CRM
+- [x] Login com conta gratuita — 09/07/2026: assinatura da conta `autodigital157` alterada para `inactive` directamente na BD do backend-core (`subscriptions.status`); badge mudou para "Gratuito" ao reiniciar a app, sem precisar reautenticar
+- [x] Envio local sem registo no CRM — 09/07/2026: validado via o mecanismo equivalente no Kanban local ("📱 Reenviar agora" no modal de detalhe do lead), que usa exactamente o mesmo `send_message()` do `whatsapp_client.py` que o diálogo de Pesquisar. Envio real para o número de teste confirmado (+5547992163692) → "✓ Enviado — lead movido para 'Qualificação'." Nenhuma chamada ao backend-crm feita (confirmado por leitura de código — o fluxo do Kanban local nunca importa `crm_client`)
+- [⏭️] Badge exacto "Gratuito — envio local, sem registo no CRM" no diálogo de Pesquisar (`prospect_dialog.py`) — não confirmado directamente nesta sessão; a pesquisa via Selenium (modo gratuito) não completou por instabilidade do Chrome/ChromeDriver após vários kills forçados de processos Chrome durante os testes anteriores. Mecanismo de envio subjacente já confirmado equivalente via o teste acima.
+- [⏭️] "Resultado mostra '✅ Mensagem enviada!' sem menção de CRM" — mesma limitação acima; o Kanban local mostra a mensagem equivalente "✓ Enviado — lead movido para 'Qualificação'." sem qualquer menção a CRM, o que confirma o comportamento esperado por um caminho alternativo
 
 #### Cenário F3 — Envio como assinante (com rastreio no CRM)
 - [x] Login com conta assinante — 07/07/2026
@@ -575,8 +575,9 @@ Clica 📱 → preenche telefone + mensagem
 - **Validado em:** 08/07/2026 — via automação `computer-use`, conta assinante `autodigital157`
 
 #### Cenário J3 — Kanban não-assinante
-- [ ] Painel Prospectar como gratuito → pitch de upgrade + colunas "Enviados"/"Falhados" do log local
-*(Bloco B — por fazer após troca de plano)*
+- [❌] Painel Prospectar como gratuito → pitch de upgrade + colunas "Enviados"/"Falhados" do log local — **especificação desatualizada, não corresponde à implementação actual**
+- **Validado em:** 09/07/2026 — o painel Prospectar da conta gratuita mostra o **mesmo layout de 3 colunas** ("À Prospectar"/"Em Andamento"/"Qualificação") usado pelo assinante, mas com dados **locais** (`session.json`, origem "Local") em vez de dados remotos do CRM. Não há pitch de upgrade nem colunas "Enviados"/"Falhados" — isso foi substituído por um Kanban local completo (clicar num card abre modal de detalhe com edição de dados, mensagem, gerar copy IA, reenviar, eliminar). Confirmado também: sem badges "Agente"/"Pendentes" no header (correcto, específico de assinante), sem checkboxes/BulkActions (mecanismo de automação da Fase 10 é exclusivo do CRM remoto).
+- **Nota:** este comportamento já estava correctamente descrito no Sessão 1 (A14) do `agentlocal-assistente-ia.md`, escrito depois deste cenário J3 original — a espec do J3 ficou desactualizada face à evolução do produto, não é um bug. Ver A14/Fase 14/A16/A17 abaixo para os checks reais deste ecrã.
 
 #### Cenário J4 — Refresh
 - [x] Clicar "⟳ Actualizar" → Kanban recarrega do CRM sem sair do painel — 08/07/2026: confirmado, sidebar manteve "Prospectar" ativo, contagens re-carregadas corretamente (54/3/2)

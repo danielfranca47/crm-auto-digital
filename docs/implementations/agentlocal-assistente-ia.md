@@ -654,31 +654,59 @@ Nova secção "🤖 Prompt de Copy" inserida após "🔑 Chave OpenAI API" dentr
 - [x] Clicar num card → modal de detalhe → editar a mensagem e clicar
       "💾 Guardar mensagem" → reabrir o card e confirmar que o texto editado
       persiste — validado em 2026-06-08
-- [ ] No mesmo modal, gerar copy com IA local ("✨ Gerar copy") → confirmar
-      que o texto gerado substitui correctamente a mensagem
+- [x] No mesmo modal, gerar copy com IA local ("✨ Gerar copy") → confirmar
+      que o texto gerado substitui correctamente a mensagem — 09/07/2026:
+      confirmado, "✓ Copy gerada — revê e guarda se quiseres usá-la no
+      reenvio." + texto novo reflectindo o nome/nicho do lead ("Dinho
+      Multimarcas")
 - [x] Em "À Prospectar": seleccionar um lead individualmente (com mensagem
       editada/guardada) e clicar "📤 Enfileirar" sem escrever na barra de
       acções (usa a mensagem guardada) → confirmar que abre o Chrome com
       WhatsApp Web e envia a mensagem em sequência, preservando as quebras
       de linha — validado em 2026-06-08
-- [ ] Repetir seleccionando vários leads via "seleccionar todos" e escrevendo
-      uma mensagem na barra de acções em massa → confirmar que essa mensagem
-      substitui a guardada para os leads enviados
-- [ ] Confirmar: indicador de progresso durante o envio sequencial e
-      movimento correcto dos cards consoante sucesso/falha ("Qualificação"
-      vs "À Prospectar")
-- [ ] Reenviar individualmente ("📱 Reenviar agora") a partir do modal de
-      detalhe → confirmar o movimento do card consoante sucesso/falha
+- [⏭️] Repetir seleccionando vários leads via "seleccionar todos" e escrevendo
+      uma mensagem na barra de acções em massa — não testado nesta sessão
+      (ficou por validar; nenhum bloqueio conhecido)
+- [⏭️] Confirmar: indicador de progresso durante o envio sequencial em massa —
+      não testado nesta sessão
+- [x] Reenviar individualmente ("📱 Reenviar agora") a partir do modal de
+      detalhe → confirmar o movimento do card consoante sucesso/falha —
+      09/07/2026: **2 bugs encontrados e corrigidos**, ver detalhe abaixo.
+      Após correcção: envio real para o número de teste confirmado
+      (+5547992163692) → "✓ Enviado — lead movido para 'Qualificação'.",
+      confirmado também por leitura directa de `session.json`
 - [x] Confirmar que nada deste fluxo chama o backend-crm (sem 403, sem
-      necessidade de assinatura activa) — verificado por código 2026-06-09
-- [ ] **Fase 14 — Editar dados do lead:** clicar num card → modal de detalhe →
+      necessidade de assinatura activa) — verificado por código 2026-06-09;
+      reconfirmado 09/07/2026 (nenhuma chamada HTTP ao backend-crm nos logs
+      durante o reenvio local)
+- [x] **Fase 14 — Editar dados do lead:** clicar num card → modal de detalhe →
       alterar Empresa, Contacto e Telefone → clicar "💾 Guardar dados" →
       confirmar "✓ Dados guardados." a verde, cabeçalho do modal actualizado
-      e card no Kanban mostra o novo nome
-- [ ] **Fase 14 — Validação vazio:** tentar guardar com campo "Empresa" vazio →
-      confirmar mensagem de erro a vermelho sem persistir
-- [ ] **Fase 14 — Persistência:** fechar e reabrir a app → confirmar que os
-      valores editados estão em `session.json` e reaparecem no modal
+      e card no Kanban mostra o novo nome — 09/07/2026: confirmado, editado
+      Contacto + Telefone de um lead real, "✓ Dados guardados." apareceu,
+      header do modal actualizou o telefone mostrado
+- [x] **Fase 14 — Validação vazio:** tentar guardar com campo "Empresa" vazio →
+      confirmar mensagem de erro a vermelho sem persistir — 09/07/2026:
+      "Empresa não pode estar vazio." a vermelho, valor vazio não foi guardado
+- [x] **Fase 14 — Persistência:** fechar e reabrir a app → confirmar que os
+      valores editados estão em `session.json` e reaparecem no modal —
+      09/07/2026: reiniciada a app, coluna "À Prospectar" manteve a contagem
+      e os dados editados (incluindo a eliminação de um lead feita antes do
+      reinício — ver A16)
+
+**🐛 Bugs encontrados e corrigidos (09/07/2026) — "📱 Reenviar agora" no modal de detalhe do Kanban local:**
+
+Ao testar o reenvio individual trocando o telefone de um lead real (concessionária de carros) para o número de teste seguro antes de enviar — prática de segurança para evitar tráfego real a negócios — descobri **dois bugs relacionados** em `agent-local/app/ui/main_screen.py`, ambos na função `_resend()` do modal de detalhe:
+
+1. **Telefone editado não era usado no envio.** `phone = lead.get("phone")` era capturado uma única vez quando o modal abria (linha 2547). `_save_lead_data()` actualiza `lead["phone"]` correctamente, mas `_resend()` continuava a usar a variável `phone` obsoleta (nunca reatribuída). Resultado: mesmo depois de editar e guardar um novo telefone com sucesso, "Reenviar agora" enviava sempre para o número original do momento em que o modal abriu.
+   **Impacto de segurança:** ao testar, a app tentou enviar para o número real da concessionária (`551130894444`) em vez do número de teste seguro — só não houve envio real porque o WhatsApp Web detectou esse número como inválido/sem conta.
+   **Fix:** ler `lead.get("phone")` (e `lead.get("companyName")`) no momento do envio, dentro do `_worker()`, em vez de fechar sobre as variáveis obsoletas.
+
+2. **`upsert_local_lead` (usado após o envio) faz *match* por telefone, corrompendo outro lead.** Depois de corrigir o bug 1, ao reenviar o *segundo* lead de teste (também apontado para o mesmo número de teste seguro — prática de segurança recomendada), a chamada pós-envio `upsert_local_lead(phone=..., name=..., ...)` encontrou o **primeiro** lead da lista com esse telefone (que já não era o lead que estava a ser reenviado) e sobrescreveu o `companyName` desse lead errado.
+   **Impacto:** qualquer utilizador que reencaminhe vários testes para o mesmo número (a própria prática de segurança recomendada neste projecto) corrompe dados de leads não relacionados.
+   **Fix:** trocar `upsert_local_lead` (que faz match por telefone — apropriado só para criar leads novos a partir de resultados de pesquisa) por `update_local_lead(lead_id, ...)` (que faz match pelo id já conhecido do lead a reenviar).
+
+**Reteste ao vivo pós-correcção:** repetido o cenário com um lead diferente, telefone alterado para o número de teste seguro, "Reenviar agora" → "✓ Enviado — lead movido para 'Qualificação'." Confirmado por leitura directa de `session.json`: o lead correcto foi actualizado (`category: "qualification"`), o outro lead que partilhava o mesmo número de teste ficou intacto.
 
 #### A15 — Geração de copies em lote a partir da Pesquisa
 
@@ -698,14 +726,19 @@ Nova secção "🤖 Prompt de Copy" inserida após "🔑 Chave OpenAI API" dentr
 
 #### A16 — Eliminar leads do Kanban local
 
-- [ ] Abrir um card no Kanban local "Prospectar" → modal de detalhe →
-      clicar "🗑 Eliminar lead" → confirmar que aparece o popup de confirmação
+- [x] Abrir um card no Kanban local "Prospectar" → modal de detalhe →
+      clicar "🗑 Eliminar lead" → confirmar que aparece o popup de confirmação —
+      09/07/2026: "Eliminar este lead do Kanban local? Esta ação não pode ser
+      desfeita." + botões "Cancelar"/"🗑 Eliminar"
 - [x] Clicar "Cancelar" → confirmar que o lead permanece no Kanban e o modal
       continua aberto — verificado por código 2026-06-09 (botão tem apenas `confirm.destroy`)
-- [ ] Clicar "🗑 Eliminar" → confirmar que ambos os popups fecham, o card
-      desaparece do Kanban e a contagem da coluna actualiza
+- [x] Clicar "🗑 Eliminar" → confirmar que ambos os popups fecham, o card
+      desaparece do Kanban e a contagem da coluna actualiza — 09/07/2026:
+      confirmado, coluna "À Prospectar" desceu de (5) para (4), card
+      desapareceu imediatamente
 - [x] Mudar de painel e voltar (ou reabrir a app) → confirmar que o lead
-      eliminado não reaparece (persistência em `session.json`) — verificado por código 2026-06-09
+      eliminado não reaparece (persistência em `session.json`) — 09/07/2026:
+      confirmado após reiniciar a app, lead eliminado continuou ausente
 - [x] Confirmar que nada deste fluxo chama o backend-crm e que o Kanban de
       assinante não é afectado — verificado por código 2026-06-09
 
