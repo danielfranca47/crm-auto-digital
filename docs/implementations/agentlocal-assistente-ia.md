@@ -841,11 +841,26 @@ Confirmado por leitura directa do código (não é só especulação):
 
 #### Regressões — confirmar que o fluxo de assinante não foi afectado
 
-- [ ] Repetir A14: com conta **assinante**, confirmar que o Kanban remoto, o
+- [x] Repetir A14: com conta **assinante**, confirmar que o Kanban remoto, o
       polling, os badges "● Agente"/"Pendentes" e o "Enfileirar" (via CRM)
-      continuam a funcionar como antes
-- [ ] Repetir A15: com conta **assinante**, confirmar que o botão "✨ Gerar
+      continuam a funcionar como antes — 08/07/2026: 2 leads sintéticos (números
+      obviamente falsos `+10000000301`/`+10000000302`, sem risco de envio real)
+      seleccionados no Kanban remoto → mensagem preenchida na barra de acções →
+      "Enfileirar" → popup "✓ 2 enfileirados" → leads moveram-se imediatamente
+      para "Em Andamento", confirmado também por query directa à BD
+      (`category='in-progress'`, 2 jobs `whatsapp.send.local` criados). Badge
+      "Pendentes" actualizou de 0 para 4 (via polling). Sem regressão — mecanismo
+      idêntico ao já validado em K2/G2. Nota: reproduzido de caminho o mesmo bug
+      já conhecido de falta de guarda contra duplo-clique (criou 4 jobs em vez de
+      2, por dois cliques próprios em "Enfileirar" — não é uma regressão nova,
+      é o mesmo achado já registado em G2/K2). Dados sintéticos removidos após o teste.
+- [x] Repetir A15: com conta **assinante**, confirmar que o botão "✨ Gerar
       copy com IA" em Pesquisar continua a funcionar como antes (sem alterações)
+      — 08/07/2026: pesquisa "dentistas"/"Curitiba" (20 leads) → clicar botão →
+      navegou directamente para "Assistente IA" → auto-converteu e enviou
+      ("20 resultados da pesquisa — a converter...") → Passo 2 abriu com
+      mapeamento automático correcto (empresa→Empresa/Nome, telefone→Telefone).
+      Comportamento idêntico ao já validado em A7 (07/07/2026). Sem regressão.
 
 #### A6 — Fluxo completo de integração (Pesquisar → Assistente IA → Prospectar)
 

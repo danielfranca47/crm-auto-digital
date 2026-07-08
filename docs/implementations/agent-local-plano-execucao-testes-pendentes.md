@@ -102,8 +102,8 @@
 
 ### A.9 — Regressões (confirmar assinante não foi afectado)
 *Fonte: `agentlocal-assistente-ia.md`, secção "Regressões"*
-- [ ] Repetir A14 com conta assinante
-- [ ] Repetir A15 com conta assinante
+- [x] Repetir A14 com conta assinante
+- [x] Repetir A15 com conta assinante
 
 ---
 
