@@ -1,7 +1,7 @@
 # agent-local v2 — App Standalone de Geração de Leads
 
 **Branch:** `etapa-9-planos-limites`
-**Status:** Fase 8 validada (I1 completo); Fase 5 validada (F1, F3, F4, F5 — 2 bugs encontrados e corrigidos); Fase 6 validada (G1–G5 — 1 bug encontrado e corrigido); Fase 7 validada (H1); K2 (Fase 10) validado antecipadamente; A17b validado (1 bug encontrado e corrigido); aguarda validação (F2, J1–J8, K1, K3, K4)
+**Status:** Fase 8 validada (I1 completo); Fase 5 validada (F1, F3, F4, F5 — 2 bugs encontrados e corrigidos); Fase 6 validada (G1–G5 — 1 bug encontrado e corrigido); Fase 7 validada (H1); Fase 9 validada (J1, J4–J8 — 2 achados de UI/rede, J2 pulado por ser destrutivo); K2 (Fase 10) validado antecipadamente; A17b validado (1 bug encontrado e corrigido); aguarda validação (F2, K1, K3, K4)
 
 ---
 
@@ -563,41 +563,49 @@ Clica 📱 → preenche telefone + mensagem
 ### Checks Fase 9
 
 #### Cenário J1 — Kanban assinante com leads
-- [ ] Abrir painel Prospectar como assinante → 3 colunas aparecem (À Prospectar / Em Andamento / Qualificação)
-- [ ] Leads guardados com 💾 aparecem em "À Prospectar"
-- [ ] Clicar "→ Iniciar" move lead para "Em Andamento" (Kanban actualiza)
-- [ ] Clicar "→ Qualificar" move lead para "Qualificação" (Kanban actualiza)
-- [ ] Botão "📱" abre diálogo de prospecção WhatsApp
+- [x] Abrir painel Prospectar como assinante → 3 colunas aparecem (À Prospectar / Em Andamento / Qualificação) — 08/07/2026: confirmado ("À Prospectar (54)", "Em Andamento (3)", "Qualificação (2)")
+- [x] Leads guardados aparecem em "À Prospectar" — 08/07/2026: confirmado (leads com origem "Planilha"/"Manual" visíveis)
+- [⏭️] Botões "→ Iniciar" / "→ Qualificar" — não testados: confirmados **ausentes** dos cards, conforme esperado (removidos na Fase 10 — ver K4)
+- [⏭️] Botão "📱" no card do Kanban — confirmado **ausente**, conforme esperado (Fase 10 moveu o envio para checkboxes + enfileiramento; o 📱 individual só existe na tabela de Pesquisar)
+- **Validado em:** 08/07/2026 — via automação `computer-use` (não Windows-MCP, ver nota de ambiente abaixo). Checkboxes visíveis em cada card de "À Prospectar" (confirma K2). Cards em "Em Andamento"/"Qualificação" sem checkbox, correto.
 
 #### Cenário J2 — Kanban assinante sem leads
-- [ ] Sem leads nas categorias de prospecção → mensagem "Sem leads nas colunas de prospecção" + instrução de uso
+- [⏭️] Pulado — exigiria esvaziar as colunas de prospecção da conta de teste partilhada (74 leads reais de várias sessões de teste), uma ação destrutiva não autorizada. Não há forma não-destrutiva de simular o estado vazio nesta conta.
 
 #### Cenário J3 — Kanban não-assinante
 - [ ] Painel Prospectar como gratuito → pitch de upgrade + colunas "Enviados"/"Falhados" do log local
+*(Bloco B — por fazer após troca de plano)*
 
 #### Cenário J4 — Refresh
-- [ ] Clicar "⟳ Actualizar" → Kanban recarrega do CRM sem sair do painel
+- [x] Clicar "⟳ Actualizar" → Kanban recarrega do CRM sem sair do painel — 08/07/2026: confirmado, sidebar manteve "Prospectar" ativo, contagens re-carregadas corretamente (54/3/2)
+- **Nota de performance:** cada refresh demorou ~5-8s a sair do estado "A carregar leads..." — não é bloqueante, mas é perceptível; parece relacionado com o volume de chamadas concorrentes disparadas pelo mesmo clique (ver nota de J8).
 
 #### Cenário J5 — Guardar no CRM (individual)
-- [ ] Clicar "💾 CRM" numa linha da tabela de pesquisa → popup confirma resultado
-- [ ] Telefone no formato `(11) 99999-9999` não gera erro 400 (country_code BR aplicado)
-- [ ] Lead já existente no CRM → popup indica "já existia no CRM" sem duplicar
+- [x] Clicar "💾 CRM" numa linha da tabela de pesquisa → popup "Guardar no CRM" confirma resultado — 08/07/2026: "✓ Lead guardado no CRM (#329)"
+- [x] Lead já existente no CRM → popup indica "já existia no CRM" sem duplicar — 08/07/2026: "✓ Lead já existia no CRM (#329)", clicado 2x no mesmo lead, mesmo ID reutilizado ambas as vezes
+- [⏭️] Formato `(11) 99999-9999` — não testado neste formato exato (leads da pesquisa já vinham com telefone pré-formatado pela API); sem evidência de erro 400 em nenhum dos 20 leads da pesquisa
+- **Validado em:** 08/07/2026 — via automação `computer-use`, conta assinante `autodigital157`
 
 #### Cenário J6 — Guardar todos no CRM
-- [ ] Após pesquisa como assinante → botão "💾 Guardar todos no CRM" visível no header dos resultados
-- [ ] Clicar → popup mostra "A guardar N / M leads…" com progresso
-- [ ] Ao concluir → popup mostra resumo: "✓ N guardados  ⟳ N já existiam  ✗ N erros"
-- [ ] Leads aparecem em "À Prospectar" no painel Prospectar após actualizar
+- [x] Botão "💾 Guardar todos no CRM" visível no header dos resultados — 08/07/2026: confirmado, mas **só aparece com a janela suficientemente larga** — em 793px de largura (tamanho por omissão) o botão fica cortado/invisível; só ficou visível depois de maximizar a janela. Não é um bug de lógica (o botão existe e funciona), mas é um problema de layout responsivo que pode confundir quem usa a janela no tamanho por omissão.
+- [x] Popup mostra progresso "A guardar N / M leads…" — 08/07/2026: confirmado, mas o contador **atualiza com atraso significativo face ao progresso real** — quando o popup mostrava "3/20", o backend já tinha processado 7 pedidos `POST /api/leads` com sucesso (log confirmado). O processo completo de 20 leads demorou **~2 minutos**.
+- [x] Resumo final "✓ N guardados ⟳ N já existiam ✗ N erros" — 08/07/2026: "✓ 16 guardados · ⟳ 1 já existia · ✗ 3 erros"
+- 🐛 **Achado:** os "3 erros" reportados pela UI **não correspondem a erros reais do backend** — confirmei no log do `backend-crm` que **todas** as chamadas `POST /api/leads` desta rodada (20/20) retornaram `200 OK`, nenhuma com erro HTTP. Isto é consistente com o padrão já documentado em G2/K2 (timeout de leitura agressivo no cliente, ex.: "Read timed out, timeout=1") — o pedido tem sucesso no servidor mas o cliente desiste antes de receber a resposta e reporta como erro. Resultado: o resumo final subestima o sucesso real da operação, o que pode levar o utilizador a repetir "Guardar todos" desnecessariamente.
+- [x] Leads aparecem em "À Prospectar" após actualizar — 08/07/2026: confirmado, coluna subiu de 54 para 74 leads, novos leads visíveis com IDs #343–#348
 
 #### Cenário J7 — Janela redimensionável
-- [ ] Arrastar borda/canto da janela → layout ajusta-se
-- [ ] Maximizar janela → colunas do Kanban expandem proporcionalmente
-- [ ] Reduzir abaixo de 620×500 → janela não encolhe mais (minsize respeitado)
+- [x] Maximizar janela → colunas do Kanban expandem proporcionalmente — 08/07/2026: confirmado, layout de 3 colunas + header da barra de estado reflow correto ao maximizar
+- [⏭️] Arrastar borda/canto da janela — não validado de forma fiável: a borda de resize do Tkinter é fina demais para automação por coordenadas (múltiplas tentativas de drag não surtiram efeito); maximizar já exercita o mesmo código de layout responsivo
+- [⏭️] minsize(620×500) — não testado diretamente (consequência da limitação acima); confirmado por leitura de código anterior (commit `1271c30`) que o valor está definido
 
 #### Cenário J8 — Estabilidade ao navegar (race condition)
-- [ ] Iniciar pesquisa → navegar para Prospectar antes de terminar → sem crash TclError
-- [ ] Abrir painel Prospectar → navegar para Histórico antes do Kanban carregar → sem crash
-- [ ] Navegar entre painéis rapidamente múltiplas vezes → app mantém-se estável
+- [x] Iniciar pesquisa → navegar para Prospectar antes de terminar → sem crash TclError — 08/07/2026: confirmado, app manteve-se responsivo
+- [x] Navegar rapidamente entre painéis múltiplas vezes (Prospectar→Pesquisar→Assistente IA→Prospectar→Histórico→Prospectar, 6 cliques em sequência) → sem crash — 08/07/2026: confirmado, app estável, acabou correctamente no último painel clicado
+- **Validado em:** 08/07/2026 — via automação `computer-use`
+
+🐛 **Achados (não são crashes, mas são bugs reais de UI/rede):**
+1. **Glitch visual transitório após pesquisa+troca de painel rápida:** ao navegar para "Prospectar" enquanto uma pesquisa ainda carregava, o Kanban renderizou momentaneamente com nomes de leads em branco, o contador da coluna "Em Andamento" coberto por um retângulo escuro, e a 3ª coluna ("Qualificação") ausente. Auto-corrigiu-se sozinho ~4s depois, sem intervenção. Não é um crash, mas é um estado visualmente inconsistente que um utilizador real veria.
+2. **Timeout real de rede após navegação agressiva:** depois da sequência de 6 cliques rápidos entre painéis, o Kanban acabou por mostrar `⚠ Erro ao carregar leads: HTTPConnectionPool(host='localhost', port=8000): Read timed out. (read timeout=20)`. Confirmado no log do backend que havia múltiplos pedidos concorrentes em voo (leads, agents/overview, whatsapp/queue, whatsapp/recent, prospeccao/history) disparados pelos vários painéis + pollers de fundo, sem debounce nem cancelamento de pedidos obsoletos ao trocar de painel. Recuperou com um clique manual em "Actualizar". Mesmo padrão de falta de debounce já registado em G2/K2/G3.
 
 ---
 
@@ -672,4 +680,5 @@ Clica 📱 → preenche telefone + mensagem
 - **Empacotamento (.exe)** — movido para `docs/plans/agent-local-empacotamento-exe.md`; só será retomado depois de todos os cenários abaixo estarem validados.
 - **Cenários F1–H1** — checks de validação das Fases 5, 6 e 7 ainda por validar (dependem de teste manual com WhatsApp real).
 - **Cenários I1–I2** — refresh token silencioso (Fase 8) por validar após próximo login completo.
-- **Cenários J1–J8** — Fase 9 (Kanban manual) por validar. J1 (→ Iniciar, → Qualificar, 📱 no card) será substituído pelos checks K1–K4 da Fase 10.
+- **Cenários J1, J4–J8** — validados 08/07/2026 (ver Checks Fase 9). J2 pulado (destrutivo). J3 fica para o Bloco B.
+- **Cenários K1, K3, K4** — Fase 10 por validar (K2 já validado antecipadamente).

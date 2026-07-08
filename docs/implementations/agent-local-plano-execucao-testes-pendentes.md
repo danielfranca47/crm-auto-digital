@@ -78,13 +78,13 @@
 
 ### A.6 — Fase 9 (Kanban manual, assinante)
 *Fonte: `agent-local-v2-app-standalone.md`, Fase 9*
-- [ ] J1 — Kanban assinante com leads
-- [ ] J2 — Kanban assinante sem leads
-- [ ] J4 — Refresh
-- [ ] J5 — Guardar no CRM (individual)
-- [ ] J6 — Guardar todos no CRM
-- [ ] J7 — Janela redimensionável
-- [ ] J8 — Estabilidade ao navegar (race condition)
+- [x] J1 — Kanban assinante com leads
+- [⏭️] J2 — Kanban assinante sem leads (pulado — exigiria esvaziar leads reais da conta de teste partilhada, ação destrutiva não autorizada)
+- [x] J4 — Refresh
+- [x] J5 — Guardar no CRM (individual)
+- [x] J6 — Guardar todos no CRM
+- [x] J7 — Janela redimensionável (parcial — ver nota no ficheiro de origem)
+- [x] J8 — Estabilidade ao navegar (race condition)
 
 > Nota: J1 será parcialmente substituído pelos checks K1–K4 (botões "→
 > Iniciar"/"→ Qualificar"/"📱" nos cards do Kanban foram removidos na Fase 10).
