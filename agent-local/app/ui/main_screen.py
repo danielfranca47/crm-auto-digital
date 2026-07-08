@@ -2707,7 +2707,7 @@ class MainScreen(ctk.CTkFrame):
         copy_btn.configure(command=_generate_copy)
 
         def _resend() -> None:
-            from app.session import upsert_local_lead
+            from app.session import update_local_lead
             from app.whatsapp_client import send_message
 
             text = msg_box.get("1.0", "end").strip()
@@ -2719,15 +2719,16 @@ class MainScreen(ctk.CTkFrame):
             status_lbl.configure(text="A enviar via WhatsApp Web…", text_color="#9CA3AF")
 
             def _worker():
-                result = send_message(phone, text)
+                current_phone = lead.get("phone") or phone
+                result = send_message(current_phone, text)
                 status = result["status"]
-                upsert_local_lead(
+                # Actualiza este lead específico por id — upsert_local_lead faz
+                # match por telefone, o que corrompe outro lead se dois leads
+                # partilharem o mesmo número (ex.: mesmo número de teste).
+                update_local_lead(
                     self._session,
-                    phone=phone,
-                    name=name,
+                    lead_id,
                     category="qualification" if status == "sent" else "to-prospect",
-                    website=lead.get("website", ""),
-                    address=lead.get("address", ""),
                     customMessage=text,
                 )
 
