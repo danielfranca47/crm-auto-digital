@@ -864,7 +864,7 @@ function LeadCardDialogBody({
                   rows={3}
                 />
               ) : (
-                <p className="text-sm text-foreground bg-muted p-3 rounded-md">
+                <p className="text-sm text-foreground bg-muted p-3 rounded-md whitespace-pre-wrap">
                   {currentLead.observations || "Nenhuma observação"}
                 </p>
               )}
