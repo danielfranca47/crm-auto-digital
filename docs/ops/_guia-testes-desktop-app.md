@@ -19,6 +19,28 @@ Use este guia quando:
 
 ---
 
+## Preparação — manter o PC acordado durante a sessão
+
+Testes de app desktop costumam ter esperas longas e sem interação directa do
+utilizador (pesquisas Selenium a demorar minutos, diálogos a aguardar
+resposta da IA, etc.). Se o Windows suspender ou o ecrã bloquear a meio, a
+sessão de automação fica presa até alguém desbloquear manualmente.
+
+Antes de começar, correr num terminal dedicado (deixar a correr durante toda
+a sessão de testes, não fechar):
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts\keep_awake.ps1
+```
+
+- Não altera nenhuma definição global de energia — usa `SetThreadExecutionState`
+  do Windows só enquanto o processo estiver vivo.
+- Ao terminar os testes, fechar a janela (`Ctrl+C` ou fechar o terminal) devolve
+  o comportamento normal de suspensão.
+- Ver `scripts/keep_awake.ps1` para o código.
+
+---
+
 ## Ferramenta a usar: `computer-use`, não `Windows-MCP`
 
 Nesta sessão (08/07/2026) testámos as duas ferramentas de automação de desktop
