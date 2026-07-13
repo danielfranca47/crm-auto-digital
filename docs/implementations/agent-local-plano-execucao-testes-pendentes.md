@@ -129,6 +129,6 @@
 *Fonte: `agentlocal-assistente-ia.md`, Sessão 1 (A14–A17)*
 - [x] A14 — Kanban local — 🐛 2 bugs encontrados e corrigidos no reenvio individual (ver ficheiro de origem); envio em massa com mensagem/progresso ainda por testar
 - [x] Fase 14 — Editar dados do lead — completo (editar, validação vazio, persistência)
-- [ ] A15 — Geração de copies em lote a partir da Pesquisa (itens restantes) — não testado nesta sessão
+- [x] A15 — Geração de copies em lote a partir da Pesquisa — completo (progresso, resumo, leads sem placeholders)
 - [x] A16 — Eliminar leads do Kanban local — completo
-- [ ] A17 — Personalizar prompt de copy (itens restantes) — geração reflectindo script custom vs. padrão não testada nesta sessão
+- [x] A17 — Personalizar prompt de copy — completo (script custom vs. padrão confirmados com diferença comportamental clara)

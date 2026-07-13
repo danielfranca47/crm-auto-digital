@@ -713,13 +713,25 @@ Ao testar o reenvio individual trocando o telefone de um lead real (concessioná
 - [x] Com chave OpenAI/perfil de negócio **não** configurados: pesquisar,
       seleccionar leads e clicar "✨ Gerar copies (local)" → confirmar
       mensagem accionável imediata (chave/perfil em falta), sem disparar chamadas — verificado por código 2026-06-09
-- [ ] Com chave + perfil configurados: seleccionar 5 leads e clicar
+- [x] Com chave + perfil configurados: seleccionar 5 leads e clicar
       "✨ Gerar copies (local)" → confirmar progresso "X/N" a actualizar e
-      botão desactivado durante o processamento
-- [ ] No fim: confirmar o resumo (✓ geradas / ⚠ falhas) e que os leads
+      botão desactivado durante o processamento — 13/07/2026: pesquisa
+      "pizzarias"/"Florianópolis, SC" (20 leads, modo Selenium — enriquecimento
+      demorou ~13 min para 20 resultados, nota de performance abaixo), 5
+      seleccionados, "✨ Gerar copies (local)" → header mostrou "A gerar
+      copies... 1/5" a actualizar, botão do header desactivado (cor
+      esmaecida) durante o processamento
+- [x] No fim: confirmar o resumo (✓ geradas / ⚠ falhas) e que os leads
       aparecem no painel "Prospectar" ("À Prospectar") com a mensagem
       preenchida — abrir o card e confirmar que o texto reflecte o
-      nicho/oferta do perfil, sem placeholders `[Seu Nome]`/`[Sua Empresa]`
+      nicho/oferta do perfil, sem placeholders `[Seu Nome]`/`[Sua Empresa]` —
+      13/07/2026: popup "✓ 5 copy(s) gerada(s)"; painel Prospectar "À
+      Prospectar" subiu de 3 para 8; aberto o card "Forneria Piedoro" →
+      mensagem "Olá, Forneria Piedoro! Sabia que a Digital Pro oferece
+      automações de IA para otimizar processos comerciais?..." — reflecte o
+      nome do lead e a marca do remetente (Digital Pro), sem placeholders
+
+**Nota de performance (não-bloqueante):** o enriquecimento de 20 resultados no modo gratuito (Selenium) demorou aproximadamente **13 minutos** (visita sequencial à página de detalhe de cada estabelecimento no Google Maps, uma de cada vez). Não é um bug — é o comportamento esperado do fallback Selenium sem chave Google Maps API própria (já documentado como mais lento que o modo com chave) — mas vale registar como referência de tempo real para futuras sessões de teste: para o modo gratuito, preferir pesquisas com `Limite` mais baixo (ex.: 5-10) para reduzir o tempo de espera.
 - [x] Seleccionar mais de 15 leads → confirmar que apenas os primeiros 15
       são processados e que o resumo indica quantos ficaram de fora — verificado por código 2026-06-09 (`_LOCAL_COPY_BATCH_LIMIT = 15`)
 - [x] Confirmar que nada deste fluxo chama o backend-crm (sem 403) — verificado por código 2026-06-09
@@ -748,9 +760,20 @@ Ao testar o reenvio individual trocando o telefone de um lead real (concessioná
 - [x] Escrever um script (ex.: "Olá pessoal da [empresa], sou Daniel e ajudo empresas de [nicho]…") e clicar num chip (ex. `[empresa]`) → confirmar que o texto é inserido no final da caixa — verificado por código 2026-06-09
 - [x] Clicar "Guardar prompt" → toast "✓ Prompt guardado" aparece e some em ~1,2 s — verificado por código 2026-06-09
 - [x] Mudar de painel e voltar a ⚙ Conta → confirmar que o script persiste (lido de `session.json`) — verificado por código 2026-06-09
-- [ ] Gerar copy de um lead no Kanban local (modo gratuito) → mensagem reflecte o script com variáveis substituídas
-- [x] Clicar "Restaurar padrão" → toast "✓ Prompt padrão restaurado", campo reposto com prompt padrão — verificado por código 2026-06-09
-- [ ] Gerar copy novamente → usa o prompt padrão
+- [x] Gerar copy de um lead no Kanban local (modo gratuito) → mensagem reflecte o script com variáveis substituídas —
+      13/07/2026: com o script "[TESTE-A17b]... sou Daniel de [empresa]..."
+      activo, "Gerar copy" no lead "Prime Multimarcas" produziu "Olá, sou
+      Maria e gostaria de falar sobre como nossa solução de automação pode
+      beneficiar a Prime Multimarcas..." — ecoa a frase específica "solução
+      de automação" do script (variação criativa do nome, por desenho do
+      prompt — "gera uma variação, não copies literalmente")
+- [x] Clicar "Restaurar padrão" → toast "✓ Prompt padrão restaurado", campo reposto com prompt padrão — verificado por código 2026-06-09; reconfirmado ao vivo 13/07/2026
+- [x] Gerar copy novamente → usa o prompt padrão — 13/07/2026: no mesmo
+      lead "Prime Multimarcas", com o prompt padrão restaurado, "Gerar copy"
+      produziu "Olá, Prime Multimarcas! A Digital Pro oferece soluções de
+      automações de IA para otimizar seus processos comerciais..." —
+      estrutura, tom e emoji claramente diferentes da versão com script
+      custom, confirmando a mudança de comportamento
 
 #### A17b — Prompt personalizado para assinante (requer backend-crm)
 
