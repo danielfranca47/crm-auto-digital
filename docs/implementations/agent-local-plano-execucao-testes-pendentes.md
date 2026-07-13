@@ -49,7 +49,7 @@
 - [x] A12 — Copy ciente do nicho/oferta do utilizador
 - [x] A10 + A11 — Gerar copys para leads existentes sem copy
 - [x] A6 (parcial) — Fluxo Pesquisar→AssistenteIA→Prospectar ponta a ponta
-- [ ] A6 (item restante) — Seleccionar leads em massa → enfileirar WhatsApp → confirmar jobs (requer envio real, ver A.7/K2)
+- [x] A6 (item restante) — Seleccionar leads em massa → enfileirar WhatsApp → confirmar jobs — 13/07/2026: validado ao vivo (2 leads com telefone alterado para número de teste/número inválido antes de enfileirar), ver ficheiro de origem
 
 > ✅ Investigação da lentidão em A10+A11 concluída e corrigida (07/07/2026) — causa
 > raiz era N+1 client-side, resolvido com JOIN agregado no backend. Ver nota em

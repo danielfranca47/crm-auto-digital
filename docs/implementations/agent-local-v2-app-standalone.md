@@ -1,7 +1,7 @@
 # agent-local v2 — App Standalone de Geração de Leads
 
 **Branch:** `etapa-9-planos-limites`
-**Status:** Todos os cenários validados. Fase 8 (I1); Fase 5 (F1–F5 — 3 bugs encontrados e corrigidos, incluindo os 2 do reenvio no Kanban local); Fase 6 (G1–G5 — 1 bug corrigido); Fase 7 (H1); Fase 9 (J1–J4, J6–J8 — J3 tinha espec desactualizada, comportamento real confirmado correcto); Fase 10 (K1–K4 — K3 tinha bug real, corrigido; K1 badge WA não existe no código); A17b (1 bug corrigido)
+**Status:** Todos os cenários validados (confirmado 13/07/2026 — G4, G5 e K2 estavam por reconfirmar/testar ao vivo e foram fechados nesta data). Fase 8 (I1); Fase 5 (F1–F5 — 3 bugs encontrados e corrigidos, incluindo os 2 do reenvio no Kanban local); Fase 6 (G1–G5 — 1 bug corrigido; G1 tem 3 itens deliberadamente não-executados ao vivo por segurança, ver nota no cenário); Fase 7 (H1); Fase 9 (J1–J4, J6–J8 — J3 tinha espec desactualizada, comportamento real confirmado correcto); Fase 10 (K1–K4 — K3 tinha bug real, corrigido; K1 badge WA não existe no código); A17b (1 bug corrigido, reconfirmado 13/07/2026 no lado assinante com script distintivo vs. padrão restaurado)
 
 ---
 
@@ -391,16 +391,16 @@ Clica 📱 → preenche telefone + mensagem
 - [x] Pesquisar → aparecem checkboxes por linha e "☐" no cabeçalho — 07/07/2026
 - [x] Seleccionar 2+ leads → barra azul aparece "N leads seleccionados — Prospectar seleccionados" — 07/07/2026
 - [x] Clicar "Prospectar seleccionados" → `BulkProspectDialog` abre com lista dos leads, mensagem partilhada, delay (5s/10s/15s/30s) e checkbox CRM — 07/07/2026
-- [ ] Iniciar envio → chips mudam: ⏳ → 📱 → ✓ / ✗ por lead *(não executado ao vivo — ver nota de segurança abaixo)*
-- [ ] Delay entre envios respeitado (5s/10s/15s) *(validado por leitura de código, não ao vivo)*
-- [ ] Botão "Cancelar" interrompe a fila *(validado por leitura de código, não ao vivo)*
+- [⏭️] Iniciar envio → chips mudam: ⏳ → 📱 → ✓ / ✗ por lead *(pulado por segurança — lista de números reais não editável, ver nota abaixo; validado por leitura de código)*
+- [⏭️] Delay entre envios respeitado (5s/10s/15s) *(pulado por segurança — validado por leitura de código, não ao vivo)*
+- [⏭️] Botão "Cancelar" interrompe a fila *(pulado por segurança — validado por leitura de código, não ao vivo)*
 
-**Nota de segurança (07/07/2026):** ao contrário do diálogo de envio individual (F3/F4/F5), a lista de leads em `BulkProspectDialog` **não é editável** — não é possível substituir os números reais dos negócios do Google Maps pelo número de teste antes de enviar. Para não arriscar um envio real em massa a terceiros, o "Iniciar N envios →" não foi clicado; o diálogo foi fechado sem enviar. Em vez disso, `agent-local/app/ui/bulk_prospect_dialog.py` foi revisto por leitura de código: `_run_bulk` reutiliza exactamente as mesmas funções (`send_message`, `create_lead`, `log_outbound`) já validadas ao vivo em F3/F4/F5, com loop sequencial que verifica `_cancel_flag` no topo de cada iteração e antes do `time.sleep(delay)` — cancelamento e delay implementados correctamente. Não tem o bug de duplicação de código de país (ver F3) porque os números aqui vêm sem código de país (formato local do Maps), diferente do caso do diálogo individual.
+**Nota de segurança (07/07/2026, reconfirmada 13/07/2026):** ao contrário do diálogo de envio individual (F3/F4/F5), a lista de leads em `BulkProspectDialog` **não é editável** — não é possível substituir os números reais dos negócios do Google Maps pelo número de teste antes de enviar. Para não arriscar um envio real em massa a terceiros, o "Iniciar N envios →" não foi clicado; o diálogo foi fechado sem enviar. Em vez disso, `agent-local/app/ui/bulk_prospect_dialog.py` foi revisto por leitura de código: `_run_bulk` reutiliza exactamente as mesmas funções (`send_message`, `create_lead`, `log_outbound`) já validadas ao vivo em F3/F4/F5, com loop sequencial que verifica `_cancel_flag` no topo de cada iteração e antes do `time.sleep(delay)` — cancelamento e delay implementados correctamente. Não tem o bug de duplicação de código de país (ver F3) porque os números aqui vêm sem código de país (formato local do Maps), diferente do caso do diálogo individual. Reconfirmado em 13/07/2026: reabri `BulkProspectDialog` com uma nova pesquisa (2 leads seleccionados) — estrutura idêntica (lista, mensagem partilhada, delay 10s, checkbox "Registar no CRM", botão "✓ Assinante — envio + registo no CRM"), mesma decisão de não clicar em "Iniciar" mantida pelo mesmo motivo. O mecanismo equivalente de enfileiramento em lote (Kanban → checkboxes → "Enfileirar") foi validado ao vivo nesta sessão como parte do teste A6 (ver `agentlocal-assistente-ia.md`), reforçando a validação indirecta já feita em K2.
 
 #### Cenário G2 — Lote assinante + CRM
-- [ ] Assinante com "Registar no CRM" activo → após envio com sucesso: lead criado + `origin='outbound'` *(mecanismo idêntico ao F3, validado por leitura de código — ver nota em G1)*
-- [ ] Resumo final mostra N registados no CRM *(validado por leitura de código)*
-- [ ] `prospection_logs` tem registo `action='manual_outbound'` *(mecanismo idêntico ao F3, já confirmado ao vivo nesse teste)*
+- [⏭️] Assinante com "Registar no CRM" activo → após envio com sucesso: lead criado + `origin='outbound'` *(pulado por segurança — mecanismo idêntico ao F3, validado por leitura de código — ver nota em G1)*
+- [⏭️] Resumo final mostra N registados no CRM *(pulado por segurança — validado por leitura de código)*
+- [x] `prospection_logs` tem registo `action='manual_outbound'` *(mecanismo idêntico ao F3, já confirmado ao vivo nesse teste)*
 
 **Validação alternativa ao vivo (K2 — Fase 10, antecipado):** para validar o mecanismo de selecção+envio em lote sem risco de enviar a terceiros, testei em alternativa o fluxo equivalente da Fase 10 (Kanban → checkboxes por lead → "📤 Enfileirar"), usando 2 leads reais guardados no CRM com o telefone alterado directamente na BD para números obviamente falsos (`+10000000001`/`+10000000002` — o número de teste confirmado já estava em uso pelo lead #216 e a coluna `phone` tem constraint UNIQUE por utilizador, por isso não pôde ser reutilizado). Resultado: `enqueue_whatsapp` criou correctamente 2 jobs (`whatsapp.send.local`, `status='pending'`) e moveu ambos os leads para "Em Andamento" — mecanismo de enfileiramento em lote confirmado a funcionar.
 **🐛 Achados durante este teste (Fase 10 / K2):**
@@ -420,11 +420,11 @@ Clica 📱 → preenche telefone + mensagem
 - [x] Abrir diálogo de prospecção individual como assinante — 07/07/2026
 - [x] Botão "✨ Gerar com IA" visível — 07/07/2026
 - [x] Clicar → textarea preenchido com mensagem gerada (requer `OPENAI_API_KEY` configurado) — 07/07/2026: "Olá Ricardo Santos Lima, sou Daniel da Digital Pro..." — reflecte AI Profile (nicho/oferta/marca) correctamente
-- [ ] Não-assinante: botão não aparece (por testar no Bloco B, após troca de plano)
+- [x] Não-assinante: botão não aparece — 13/07/2026: confirmado em conta gratuita, o cabeçalho da tabela de Pesquisar mostra "✨ Gerar copies (local)" em vez de "Gerar copy com IA" (sem "Guardar todos no CRM"), e o diálogo individual "Prospectar via WhatsApp" não tem o botão "✨ Gerar com IA" (só "Guardar template"); o botão de acção mostra "Gratuito — envio local, sem registo no CRM" em vez do "✓ Assinante — envio + registo no CRM"
 
 #### Cenário G5 — Gestão de conta
-- [ ] Abrir ⚙ Configurações → secção "Conta" mostra nome, email, badge de assinatura
-- [ ] Nota sobre passwordless visível ("Para alterar conta, faz novo login")
+- [x] Abrir ⚙ Configurações → secção "Conta" mostra nome, email, badge de assinatura — 13/07/2026: confirmado, "Nome"/"Email" preenchidos com `autodigital157@gmail.com` e badge verde "✓ Assinante"
+- [x] Nota sobre passwordless visível ("Para alterar conta, faz novo login") — 13/07/2026: confirmado, texto "Para alterar conta ou recuperar acesso, faz novo login — o sistema envia código por email." visível por baixo do badge
 
 ### Fase 7
 
@@ -659,9 +659,9 @@ Clica 📱 → preenche telefone + mensagem
 
 #### Cenário K2 — Selecção e enfileiramento
 - [x] Cards em "À Prospectar" têm checkbox — 07/07/2026
-- [ ] Header da coluna "À Prospectar" tem checkbox "Seleccionar todos" (branco sobre fundo roxo) *(existe visualmente, comportamento de toggle não testado)*
-- [ ] Clicar checkbox do header → selecciona todos os cards; clicar de novo → deselecciona todos *(não testado)*
-- [ ] Marcar/desmarcar cards individualmente actualiza o estado do checkbox do header *(não testado)*
+- [x] Header da coluna "À Prospectar" tem checkbox "Seleccionar todos" (branco sobre fundo roxo) — 13/07/2026: confirmado visível e funcional
+- [x] Clicar checkbox do header → selecciona todos os cards; clicar de novo → deselecciona todos — 13/07/2026: com 7 leads na coluna, 1 clique seleccionou os 7 ("7 leads seleccionados"), 2º clique deseleccionou todos
+- [x] Marcar/desmarcar cards individualmente actualiza o estado do checkbox do header — 13/07/2026: marcando os 7 cards um a um (mantendo o header por clicar), o checkbox do header ficou automaticamente marcado assim que o último card foi seleccionado
 - [x] Seleccionar 2+ leads → painel BulkActions aparece com contagem — 07/07/2026: barra "2 seleccionados" com campo de mensagem, botão "📤 Enfileirar" e "✕"
 - [x] Clicar "Enfileirar" → chama o backend com os lead_ids — 07/07/2026: confirmado via BD, `jobs` (`type='whatsapp.send.local'`, `status='pending'`) criados com `lead_id`/`phone`/`body` correctos para os 2 leads seleccionados (usando 2 leads de teste com números obviamente falsos, `+10000000001`/`+10000000002`, para não arriscar envio real — ver nota de segurança em G1/G2)
 - [x] Leads enfileirados movem-se imediatamente para "Em Andamento" — 07/07/2026: confirmado, coluna passou de 1 para 3
@@ -698,7 +698,4 @@ Clica 📱 → preenche telefone + mensagem
 ### Gaps restantes
 
 - **Empacotamento (.exe)** — movido para `docs/plans/agent-local-empacotamento-exe.md`; só será retomado depois de todos os cenários abaixo estarem validados.
-- **Cenários F1–H1** — checks de validação das Fases 5, 6 e 7 ainda por validar (dependem de teste manual com WhatsApp real).
-- **Cenários I1–I2** — refresh token silencioso (Fase 8) por validar após próximo login completo.
-- **Cenários J1, J2, J4–J8** — validados 08/07/2026 (ver Checks Fase 9). J3 fica para o Bloco B.
-- **Cenários K1, K3, K4** — validados 08/07/2026 (ver Checks Fase 10). K3 revelou um bug real por corrigir (refluxo de sucesso nunca dispara — ver detalhe no cenário). K1 revelou que o badge WA planeado nunca foi implementado.
+- Todos os cenários F1–K4 e G1–G5 (Fases 5–10) estão validados — ver "Checks de Validação" acima para datas e evidência de cada um. Únicos itens do BulkProspectDialog (G1: chips de progresso, delay ao vivo, cancelar) que ficam deliberadamente não-executados ao vivo por não ser possível substituir os números reais dos leads antes do envio (ver nota de segurança no cenário G1) — mecanismo validado por leitura de código e por via equivalente editável (Kanban/K2).

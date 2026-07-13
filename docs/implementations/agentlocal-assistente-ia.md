@@ -1,7 +1,7 @@
 # Assistente IA no Agent-Local — Migração do Fluxo de Prospecção
 
 **Branch:** `etapa-9-planos-limites`
-**Status:** Em andamento
+**Status:** Todos os cenários validados (confirmado 13/07/2026 — A6 e A17b, os últimos itens em aberto, foram fechados nesta data)
 
 ---
 
@@ -780,7 +780,7 @@ Ao testar o reenvio individual trocando o telefone de um lead real (concessioná
 - [x] Definir script em ⚙ Conta ("Olá [contacto], sou Daniel de [empresa]. [TESTE-A17b]…") — 07/07/2026: guardado com sucesso, confirmado em `session.json` (`local_copy_prompt`)
 - [x] Abrir modal de lead (prospecção individual) e clicar "✨ Gerar com IA" → copy reflecte o script — 07/07/2026 (ver bug + fix abaixo)
 - [x] "Gerar copys para leads existentes"/upload de CSV (Assistente IA) → já enviam `custom_prompt_template` correctamente — confirmado por leitura de código (`main_screen.py:1101` e `:1453`), consistente com o fluxo A5+A8 já validado
-- [ ] Limpar o script (Restaurar padrão) e gerar de novo → volta ao comportamento padrão *(não testado)*
+- [x] Limpar o script (Restaurar padrão) e gerar de novo → volta ao comportamento padrão — 13/07/2026: defini um script distintivo em ⚙ Conta (obrigando a frase exacta "pacote exclusivo de automação premiada" e assinatura "Daniel da Digital Pro"), gerei via "✨ Gerar com IA" no lead "Pizzaria Santa Hora" → saída "Olá, aqui é o Pedro da Pizzaria Santa Hora. Estamos oferecendo um pacote exclusivo de automação premiada que pode ajudar..." (ecoou a frase exacta, confirmando o script activo); cliquei "Restaurar padrão" em ⚙ Conta (toast "✓ Prompt padrão restaurado") e gerei de novo no mesmo lead → "Olá, Pizzaria Santa Hora! Sabia que podemos ajudar a automatizar o atendimento e agendamento do seu estabelecimento via WhatsApp com inteligência artificial?..." — sem a frase custom, estrutura e conteúdo claramente diferentes, confirmando a reversão ao prompt padrão
 
 **🐛 Bug encontrado e corrigido — prompt personalizado não chegava ao botão individual "✨ Gerar com IA":** `agent-local/app/ui/prospect_dialog.py::_generate_ai_copy` chamava `crm_client.generate_copy(...)` sem o parâmetro `custom_prompt_template`, apesar de a função já o suportar e de o backend (`backend-crm/routes/prospeccao.py`) já implementar correctamente a substituição de variáveis e o prompt baseado no script quando recebido. Resultado: qualquer subscritor que definisse um script personalizado em ⚙ Conta via este botão específico via sempre o comportamento genérico (o `local_copy_prompt` só era consumido pelo caminho gratuito/local em `local_copy.py`, que este botão nunca usa por ser exclusivo de assinantes). Confirmado ao vivo: com o script "[TESTE-A17b]" guardado, a copy gerada não reflectia o script nem o marcador.
 **Fix aplicado:** `_generate_ai_copy` passa agora `custom_prompt_template=self._session.get("local_copy_prompt") or ""`. Reteste confirmado por logs (`POST /api/prospeccao/generate-copy → 200 OK`) e por leitura de código (mesmo padrão usado nos outros dois pontos de entrada, já correctos). Nota: a IA não repete o script literalmente por desenho — o próprio prompt do backend instrui "não copies literalmente, gera uma variação" e "NUNCA uses placeholders", pelo que a ausência do texto exacto do script na saída é esperada, não um sinal de falha.
@@ -920,11 +920,33 @@ Confirmado por leitura directa do código (não é só especulação):
 
 #### A6 — Fluxo completo de integração (Pesquisar → Assistente IA → Prospectar)
 
-- [ ] Pesquisar empresas → clicar "✨ Gerar copy com IA" → Assistente IA
-      converte e envia automaticamente
-- [ ] Mapear colunas → gerar prévia → processar (criar cards + gerar copys)
-- [ ] Clicar "Ver no Prospectar" → confirmar leads na coluna "À Prospectar"
-- [ ] Seleccionar leads em massa → enfileirar WhatsApp → confirmar jobs criados
+- [x] Pesquisar empresas → clicar "✨ Gerar copy com IA" → Assistente IA
+      converte e envia automaticamente — 13/07/2026: pesquisa "pizzarias"/
+      "Florianópolis, SC" (10 leads, modo assinante), seleccionados todos,
+      "Gerar copy com IA" navegou automaticamente para Assistente IA e mostrou
+      "10 resultados da pesquisa — a converter..." → "tmp....csv enviado — 4
+      colunas detectadas"
+- [x] Mapear colunas → gerar prévia → processar (criar cards + gerar copys) —
+      13/07/2026: mapeamento automático (empresa→Empresa/Nome,
+      telefone→Telefone), Passo 3 mostrou prévia "10 Total / 10 Criar / 0
+      Actualizar / 0 Pular" com amostra correcta; Passo 4 com "Criar cards no
+      CRM" + "Gerar copys com IA" + canal WhatsApp activos → "Configurar e
+      processar" → "Processamento concluído: 9 Criados / 0 Actualizados / 1
+      Pulado (duplicado de teste anterior) / 10 Mensagens"
+- [x] Clicar "Ver no Prospectar" → confirmar leads na coluna "À Prospectar" —
+      13/07/2026: os 9 leads criados apareceram todos na coluna "À Prospectar"
+      do Pipeline de Prospecção
+- [x] Seleccionar leads em massa → enfileirar WhatsApp → confirmar jobs
+      criados — 13/07/2026: por segurança, antes de enfileirar alterei
+      directamente na BD o telefone de 2 dos 9 leads criados — um para o
+      número de teste confirmado (+55 47 99216-3692) e outro para um número
+      claramente inválido (`0000000000`, seguindo o padrão já usado em F5) —
+      e seleccionei apenas esses 2 (checkbox individual, sem usar o "seleccionar
+      todos" para não arriscar os restantes 7 números reais). "Enfileirar" →
+      popup "✓ 2 enfileirados", "Pendentes: 2" no topo, e confirmação directa
+      na BD: 2 jobs `whatsapp.send.local` (`status='pending'`) criados com o
+      `phone`/`body` correctos; os 2 leads moveram-se para "Em Andamento".
+      Fluxo ponta a ponta completo confirmado.
 
 ---
 
