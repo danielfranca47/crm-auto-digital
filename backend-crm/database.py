@@ -616,6 +616,102 @@ def _migrate_appointments_lead_nullable(conn: sqlite3.Connection) -> None:
     print("✅ appointments migration: lead_id nullable + user_id adicionado")
 
 
+def _migrate_leads_company_or_contact(conn: sqlite3.Connection) -> None:
+    """Torna companyName nullable e adiciona CHECK garantindo companyName OU contactName preenchido.
+
+    leads tem 7 tabelas filhas com ON DELETE CASCADE (messages, prospection_logs,
+    lead_outcomes, message_selections, prospection_whatsapp_queue,
+    lead_qualification_state, appointments) e PRAGMA foreign_keys=ON está ativo por
+    padrão em get_connection() — por isso o DROP TABLE precisa acontecer com FK OFF,
+    ou o cascade apagaria essas linhas antes do rename.
+    """
+    cur = conn.cursor()
+    info = {row["name"]: row for row in cur.execute("PRAGMA table_info(leads)").fetchall()}
+    company_col = info.get("companyName")
+    if company_col and company_col["notnull"] == 0:
+        return  # já migrado
+
+    conn.execute("PRAGMA foreign_keys = OFF")
+    conn.execute(
+        """
+        CREATE TABLE leads_new (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER,
+            companyName TEXT,
+            contactName TEXT,
+            phone TEXT,
+            email TEXT,
+            origin TEXT DEFAULT 'Manual',
+            category TEXT DEFAULT 'to-prospect',
+            customMessage TEXT,
+            observations TEXT,
+            potentialValue REAL DEFAULT 0,
+            kanban_highlight TEXT,
+            kanban_highlight_at DATETIME,
+            createdAt DATETIME DEFAULT CURRENT_TIMESTAMP,
+            lastMovement DATETIME DEFAULT CURRENT_TIMESTAMP,
+            priority INTEGER DEFAULT 1,
+            bot_disabled INTEGER NOT NULL DEFAULT 0,
+            bot_disabled_reason TEXT,
+            agent_type TEXT,
+            followup_contract TEXT,
+            followup_status TEXT,
+            next_followup_at DATETIME,
+            followup_auto_trigger_last_fired_at DATETIME,
+            checkout_token TEXT,
+            is_playground INTEGER NOT NULL DEFAULT 0,
+            detected_language TEXT NULL,
+            phases_triggered TEXT NULL,
+            triggers_fired TEXT NULL,
+            CHECK (TRIM(COALESCE(companyName,'')) != '' OR TRIM(COALESCE(contactName,'')) != '')
+        )
+        """
+    )
+    conn.execute(
+        """
+        INSERT INTO leads_new (
+            id, user_id, companyName, contactName, phone, email, origin, category,
+            customMessage, observations, potentialValue, kanban_highlight, kanban_highlight_at,
+            createdAt, lastMovement, priority, bot_disabled, bot_disabled_reason, agent_type,
+            followup_contract, followup_status, next_followup_at, followup_auto_trigger_last_fired_at,
+            checkout_token, is_playground, detected_language, phases_triggered, triggers_fired
+        )
+        SELECT
+            id, user_id, companyName, contactName, phone, email, origin, category,
+            customMessage, observations, potentialValue, kanban_highlight, kanban_highlight_at,
+            createdAt, lastMovement, priority, bot_disabled, bot_disabled_reason, agent_type,
+            followup_contract, followup_status, next_followup_at, followup_auto_trigger_last_fired_at,
+            checkout_token, is_playground, detected_language, phases_triggered, triggers_fired
+        FROM leads
+        """
+    )
+
+    old_count = conn.execute("SELECT COUNT(*) FROM leads").fetchone()[0]
+    new_count = conn.execute("SELECT COUNT(*) FROM leads_new").fetchone()[0]
+    if new_count != old_count:
+        conn.execute("DROP TABLE leads_new")
+        conn.execute("PRAGMA foreign_keys = ON")
+        raise RuntimeError(f"Migração leads abortada: old={old_count} new={new_count}")
+
+    conn.execute("DROP TABLE leads")
+    conn.execute("ALTER TABLE leads_new RENAME TO leads")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_leads_user ON leads(user_id, createdAt);")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_leads_phone ON leads(phone);")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_leads_email ON leads(email);")
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_leads_followup_due "
+        "ON leads(followup_status, next_followup_at, bot_disabled, user_id);"
+    )
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_leads_playground ON leads(user_id, is_playground);")
+    try:
+        conn.execute("CREATE UNIQUE INDEX IF NOT EXISTS ux_leads_user_phone ON leads(user_id, phone);")
+    except sqlite3.IntegrityError:
+        print("⚠️ não foi possível recriar ux_leads_user_phone: dados duplicados existentes")
+    conn.execute("PRAGMA foreign_keys = ON")
+    conn.commit()
+    print("✅ leads migration: companyName nullable + CHECK companyName/contactName")
+
+
 def normalize_datetime_value(value: Optional[Any]) -> Optional[str]:
     """
     Converte valores aceitos (datetime ou string) para ISO 8601 com 'T'.
@@ -1031,6 +1127,7 @@ def init_db() -> None:
         ensure_column(conn, "leads", "detected_language", "detected_language TEXT NULL")
         ensure_column(conn, "leads", "phases_triggered", "phases_triggered TEXT NULL")
         ensure_column(conn, "leads", "triggers_fired", "triggers_fired TEXT NULL")
+        _migrate_leads_company_or_contact(conn)
 
         cur.execute("CREATE INDEX IF NOT EXISTS idx_leads_user ON leads(user_id, createdAt);")
         cur.execute(
