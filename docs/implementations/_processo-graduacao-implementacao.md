@@ -109,6 +109,17 @@ Isto evita perder o histórico de "que versão faz o quê" quando arquitectura
 (sempre a versão actual) e plans/implementations (sempre a próxima versão)
 convivem no repo ao mesmo tempo.
 
+**Empacotamento é sempre a última fase de uma versão.** Se a feature
+distribui um binário/pacote (ex.: agent-local → `.exe` via PyInstaller), o
+M-item de empacotamento vN nasce junto com a triagem do Passo 5b como o
+**último item** do arquivo `docs/plans/<feature>-melhorias-futuras-V(N+1).md`
+— e, assim que o arquivo de implementação de vN atingir
+`Todos os cenários validados`, esse M-item específico já pode ser promovido
+para `docs/implementations/<feature>-vN-empacotamento-<pacote>.md` (Status:
+Aguardando Plan Mode) de imediato, sem esperar o resto do planeamento de
+v(N+1). Ver [`docs/plans/_versionamento-agent-local.md`](../plans/_versionamento-agent-local.md)
+para o exemplo aplicado ao agent-local.
+
 ---
 
 ## Passo 5 — Criar o template preenchido (se não existir)

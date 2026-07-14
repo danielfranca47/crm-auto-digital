@@ -1,12 +1,14 @@
 # Agent-Local — App Desktop de Prospecção
 
 **Versão documentada: v2.** Este doc é o espelho da v2 do agent-local (app
-desktop CustomTkinter com auth, Kanban, Assistente IA e copy IA). Melhorias
-ainda não implementadas (v3) ficam em `docs/plans/agent-local-melhorias-futuras.md`
-e `docs/plans/agent-local-empacotamento-exe.md`. Quando a v3 for implementada e
-graduada, este doc passa a reflectir v3 e a nota acima é actualizada — não
-acumular "v2 vs v3" no corpo do texto, o doc é sempre um espelho da versão
-mais recente já graduada.
+desktop CustomTkinter com auth, Kanban, Assistente IA e copy IA). O
+empacotamento `.exe` da própria v2 está pronto para implementar — ver
+`docs/implementations/agent-local-v2-empacotamento-exe.md`. Melhorias ainda
+não implementadas (v3, incluindo o empacotamento da v3 como última fase) ficam
+em `docs/plans/agent-local-melhorias-futuras-V3.md`. Quando a v3 for
+implementada e graduada, este doc passa a reflectir v3 e a nota acima é
+actualizada — não acumular "v2 vs v3" no corpo do texto, o doc é sempre um
+espelho da versão mais recente já graduada.
 
 App desktop standalone (CustomTkinter) para geração e prospecção de leads via
 Google Maps + WhatsApp, com integração opcional ao backend-crm/backend-core
@@ -148,7 +150,7 @@ cards por:
 
 - **Checkboxes** por card em "À Prospectar" + "Seleccionar todos" no header da coluna
 - **BulkActions inline**: mensagem partilhada + botão "📤 Enfileirar" → `POST /api/prospeccao/whatsapp/enqueue` → cria jobs `whatsapp.send.local` (mesmo job type documentado em [`agents.md`](agents.md#job-types-canônicos)) e move os leads para "Em Andamento" imediatamente
-- **Barra de estado**: badge "Agente Online/Offline" (`GET /api/agents/overview`) + contador "Pendentes: N"; não existe badge de conexão WhatsApp Web (ver `docs/plans/agent-local-melhorias-futuras.md`, M8)
+- **Barra de estado**: badge "Agente Online/Offline" (`GET /api/agents/overview`) + contador "Pendentes: N"; não existe badge de conexão WhatsApp Web (ver `docs/plans/agent-local-melhorias-futuras-V3.md`, M8)
 - **Polling + refluxo automático**: thread a cada 5–10s consulta `GET /api/prospeccao/whatsapp/recent` e move o lead conforme `jobs.status`: `"completed"` → `qualification`; `"failed"` → `to-prospect` de volta
 
 Os jobs enfileirados por este mecanismo são processados pelo worker "Agente
@@ -158,7 +160,7 @@ Online/Offline" poder mostrar offline mesmo com a app aberta.
 
 **Conhecido:** sem guarda contra duplo-clique em "Enfileirar" (cria jobs
 duplicados) e feedback de erro atrasado/enganoso por timeout agressivo no
-cliente — ver `docs/plans/agent-local-melhorias-futuras.md` (M1, M2).
+cliente — ver `docs/plans/agent-local-melhorias-futuras-V3.md` (M1, M2).
 
 ### Não-assinante — Kanban local
 
@@ -218,7 +220,7 @@ Dois caminhos, ambos suportam prompt personalizado por variáveis.
 anti-placeholder (`[Seu Nome]`/`[Sua Empresa]` nunca literais). Se o
 `ai_profile` estiver vazio, cai para o comportamento genérico (sem falhar) —
 mas pode produzir gaps gramaticais nesse caso (ver M7 em
-`docs/plans/agent-local-melhorias-futuras.md`).
+`docs/plans/agent-local-melhorias-futuras-V3.md`).
 
 ### Local (não-assinante) — `local_copy.py::generate_copy_local`
 

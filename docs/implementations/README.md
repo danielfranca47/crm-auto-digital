@@ -33,11 +33,12 @@ Arquivos em andamento ou recém-completados. Seguem o padrão do template.
 | Ficheiro | Status |
 |---|---|
 | `correcao-natural-llm-e-fixes-ui-descobertos.md` | Em andamento — planeado, código ainda não iniciado |
+| `agent-local-v2-empacotamento-exe.md` | Aguardando Plan Mode — última fase do ciclo v2 do agent-local, ver `docs/plans/_versionamento-agent-local.md` |
 
 > `agent-local-v2-app-standalone.md`, `agentlocal-assistente-ia.md`,
 > `agent-local-v2-testes-manuais.md` e `agent-local-plano-execucao-testes-pendentes.md`
 > foram graduados — ver [`docs/architecture/agent-local-app.md`](../architecture/agent-local-app.md)
-> (v2) e [`docs/plans/agent-local-melhorias-futuras.md`](../plans/agent-local-melhorias-futuras.md) (v3).
+> (v2) e [`docs/plans/agent-local-melhorias-futuras-V3.md`](../plans/agent-local-melhorias-futuras-V3.md) (v3).
 
 ---
 

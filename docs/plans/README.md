@@ -12,6 +12,7 @@ implementação.
 |---|---|
 | `_guia-analise-planos.md` | Instrução interna para o Claude — como conduzir a análise |
 | `_template-plano-semanal.md` | Exemplo preenchido de sprint plan — referência visual |
+| `_versionamento-agent-local.md` | Regra do ciclo de versões vN do agent-local (única feature do repo com numeração própria) — empacotamento sempre como última fase de cada versão |
 | `plano-sprint-YYYY-MM-DD.md` | Sprint plan gerado após análise (criado sob demanda) |
 | `kiwify-checkout-melhorias-*.md` | Melhorias identificadas após a etapa de checkout |
 | `pipeline-configurable-fields.md` | Campos configuráveis do AI Profile ainda a implementar |
@@ -21,6 +22,7 @@ implementação.
 | `agentes-agenda-melhorias-futuras.md` | Multi-profissional por conta, closing seletivo e confiabilidade da confirmação de agendamento |
 | `cancelamento-reagendamento-melhorias-futuras.md` | Itens deixados de fora do M1 de cancelamento/reagendamento já graduado: handoff humano na janela pós-confirmação, janela de 30 dias, gap de autenticação, bug de status duplicado em follow-up |
 | `followup-auto-trigger-melhorias-futuras.md` | Itens deixados de fora do M2 (disparo automático/check-in de inatividade): falso-positivo de actividade, bug de trava do banco em `progress_followup_after_auto_send`, Agent 2 fora do check-in, worker sem isolamento de conta em testes locais |
+| `agent-local-melhorias-futuras-V3.md` | Itens deixados de fora da graduação da v2 do agent-local (M1–M9) + M10 "Empacotamento v3", sempre a última fase — ver `_versionamento-agent-local.md` |
 
 Os arquivos sem prefixo `_` são os **planos concretos** — contêm melhorias identificadas
 que ainda não foram implementadas.

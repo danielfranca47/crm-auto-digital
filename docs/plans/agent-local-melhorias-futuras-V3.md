@@ -99,3 +99,16 @@ No painel Assistente IA (Passo 4 — opções de processamento), o campo "Tom de
 voz" é um entry livre em vez de vir pré-preenchido a partir de
 `GET /ai-profiles/me` (backend-core), como já acontece com nicho/oferta na
 geração de copy.
+
+## M10 — Empacotamento v3 (.exe)
+
+**Prioridade: MÉDIA — sempre a última fase do ciclo desta versão**
+
+Ver [`_versionamento-agent-local.md`](_versionamento-agent-local.md): o
+empacotamento PyInstaller é sempre o último item do ciclo de cada versão do
+agent-local — só fica pronto para sair daqui e virar arquivo de
+implementação depois de todos os cenários de teste da v3 (M1–M9 acima, mais
+o que mais for planeado para a v3) estarem validados. Reaproveitar o rascunho
+técnico já usado para a v2 (`docs/implementations/agent-local-v2-empacotamento-exe.md`)
+como ponto de partida — o mecanismo de build não muda entre versões, só o
+conteúdo empacotado.
