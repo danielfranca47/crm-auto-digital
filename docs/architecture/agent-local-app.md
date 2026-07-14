@@ -1,5 +1,13 @@
 # Agent-Local — App Desktop de Prospecção
 
+**Versão documentada: v2.** Este doc é o espelho da v2 do agent-local (app
+desktop CustomTkinter com auth, Kanban, Assistente IA e copy IA). Melhorias
+ainda não implementadas (v3) ficam em `docs/plans/agent-local-melhorias-futuras.md`
+e `docs/plans/agent-local-empacotamento-exe.md`. Quando a v3 for implementada e
+graduada, este doc passa a reflectir v3 e a nota acima é actualizada — não
+acumular "v2 vs v3" no corpo do texto, o doc é sempre um espelho da versão
+mais recente já graduada.
+
 App desktop standalone (CustomTkinter) para geração e prospecção de leads via
 Google Maps + WhatsApp, com integração opcional ao backend-crm/backend-core
 para utilizadores assinantes. Distinto do conceito "Agente Local" (worker de

@@ -1,5 +1,8 @@
 # Empacotamento do agent-local (.exe)
 
+**Versão-alvo: v3.** A v2 do agent-local está documentada em
+[`docs/architecture/agent-local-app.md`](../architecture/agent-local-app.md).
+
 > Contexto: item retirado de `docs/implementations/agent-local-v2-app-standalone.md`
 > (Fase 4). Adiado a pedido do utilizador — não faz sentido empacotar um .exe
 > antes de todos os cenários de teste do app standalone (Fases 5–10) estarem

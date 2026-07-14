@@ -89,6 +89,28 @@ Editar (ou criar) os docs de arquitectura identificados.
 
 ---
 
+## Passo 4b — Versionamento (só para features com versão explícita, ex.: agent-local)
+
+Algumas features usam numeração de versão própria (ex.: "agent-local v2"),
+independente do resto do sistema. Quando a implementação graduada pertence a
+uma dessas features:
+
+- O doc de arquitectura resultante (Passo 3/4) leva uma nota no topo:
+  `**Versão documentada: vN.**` — vN é a versão que acabou de ser graduada.
+  O doc é sempre um espelho da versão mais recente já graduada — nunca
+  acumular texto tipo "na vN-1 era assim, agora é assim" no corpo.
+- Qualquer item que sobrar para `docs/plans/` ou `docs/implementations/`
+  (Passo 5b, ou um novo pedido do utilizador para essa mesma feature) leva
+  `**Versão-alvo: vN+1.**` no topo, com link para o doc de arquitectura vN.
+- Quando essa vN+1 for implementada e graduada por sua vez, o doc de
+  arquitectura passa a dizer `vN+1` e o ciclo repete-se (`vN+2` nos plans).
+
+Isto evita perder o histórico de "que versão faz o quê" quando arquitectura
+(sempre a versão actual) e plans/implementations (sempre a próxima versão)
+convivem no repo ao mesmo tempo.
+
+---
+
 ## Passo 5 — Criar o template preenchido (se não existir)
 
 Se `docs/implementations/_template-implementacao.md` não existir ou estiver

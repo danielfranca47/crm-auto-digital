@@ -1,5 +1,9 @@
 # Agent-Local — Melhorias Futuras
 
+**Versão-alvo: v3.** A v2 do agent-local está documentada em
+[`docs/architecture/agent-local-app.md`](../architecture/agent-local-app.md).
+Os itens abaixo, quando implementados, formam a v3.
+
 > Contexto: itens deixados de fora na graduação de `agent-local-v2-app-standalone.md`
 > e `agentlocal-assistente-ia.md` (ver `docs/architecture/agent-local-app.md` para a
 > arquitectura actual). Nenhum destes itens é bloqueante — todos os cenários de teste
