@@ -25,6 +25,7 @@ existente ou criar um novo.
 | [`google-calendar.md`](google-calendar.md) | Integração Google Calendar: OAuth2 por utilizador, serviço push/pull (fail-silent), fluxo de tokens, endpoint google-sync, upsert + cleanup | Novo scope OAuth, nova função do serviço, mudança no algoritmo de sync, novo campo mapeado do Google Event |
 | [`billing-efi.md`](billing-efi.md) | Gateway de pagamento Efí Bank: checkout sob demanda, cliente OAuth2, webhook de confirmação, activação/renovação/cancelamento de subscriptions, variáveis de ambiente | Nova oferta/plano, mudança no fluxo de checkout ou webhook, novo campo de status Efí, mudança na lógica de `payment_event` |
 | [`knowledge-base.md`](knowledge-base.md) | Base de Conhecimento: categorias guiadas, `knowledge_items`/`knowledge_item_media`, categorias `allowMultiple` (`service_pricing_table`), formato `structured_v1`, agregação para o LLM | Nova categoria guiada, nova categoria `allowMultiple`, mudança no formato estruturado, mudança em `_load_knowledge_items()` |
+| [`agent-local-app.md`](agent-local-app.md) | App desktop agent-local: auth passwordless, pesquisa Google Maps (proxy/chave própria/Selenium), prospecção WhatsApp individual/lote, Kanban remoto (automação Fase 10) e local (não-assinante), painel Assistente IA, geração de copy remota/local, prompt personalizado | Novo ecrã/painel no app, novo modo de pesquisa, mudança no fluxo de prospecção ou Kanban local/remoto, novo campo propagado na geração de copy |
 
 ---
 
@@ -87,6 +88,7 @@ A maioria das features altera áreas já documentadas. Antes de criar um ficheir
 | Novo campo no overview ou detalhe de utilizador do painel admin | `admin-agents-contract.md` |
 | Checkout, webhook Efí, activação/renovação/cancelamento de subscriptions | `billing-efi.md` |
 | Nova categoria da Base de Conhecimento, mudança em `knowledge_items`/agregação para o LLM | `knowledge-base.md` |
+| App desktop agent-local (auth, pesquisa Maps, prospecção WhatsApp, Kanban local/remoto, Assistente IA, copy local/remota) | `agent-local-app.md` |
 
 ### Criar novo documento
 

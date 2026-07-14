@@ -209,11 +209,18 @@ Site de marketing; deploy independente.
 
 ## agent-local
 
-**Stack:** Python standalone com `.venv` próprio
-**Responsabilidade:** agente de prospecção local (scraping Google Maps, envio WhatsApp via Selenium)
-**Config:** `.env`, `.env.agent1`, `.env.agent2`
+**Stack:** Python standalone (CustomTkinter) com `.venv` próprio
+**Responsabilidade:** app desktop de geração/prospecção de leads — auth
+passwordless, pesquisa Google Maps, envio WhatsApp via Selenium (individual e
+em lote), Kanban de prospecção (remoto para assinante, local para gratuito),
+painel Assistente IA, geração de copy (remota via backend-crm ou local via
+OpenAI própria). Ver [`agent-local-app.md`](agent-local-app.md).
+**Config:** `~/.agent-local/session.json` (sessão, chaves, leads locais), `.env` (`BACKEND_URL`)
 
-Consome jobs `whatsapp.send.local` e `maps.*.local` via `GET /api/agents/next-job`.
+Distinto do worker "Agente Local" clássico (`agents.md`) que consome jobs
+`whatsapp.send.local`/`maps.*.local` via `GET /api/agents/next-job` — a
+automação do Kanban (Fase 10) enfileira jobs desse mesmo tipo, mas quem os
+processa é esse worker separado, não a instância do app desktop em si.
 
 ---
 
