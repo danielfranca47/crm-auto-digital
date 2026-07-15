@@ -218,11 +218,16 @@ def google_sync(
 
 
 @router.get("/lead/{lead_id}", response_model=List[AppointmentOut])
-def list_by_lead(lead_id: int) -> List[AppointmentOut]:
+def list_by_lead(
+    lead_id: int,
+    current_user: CurrentUser = Depends(require_crm_access),
+) -> List[AppointmentOut]:
     conn = get_connection()
     try:
-        _ensure_lead_exists(conn, lead_id)
         cur = conn.cursor()
+        cur.execute("SELECT 1 FROM leads WHERE id = ? AND user_id = ?", (lead_id, current_user.id))
+        if not cur.fetchone():
+            raise HTTPException(status_code=404, detail="Lead não encontrado")
         cur.execute(
             "SELECT a.*, l.companyName AS lead_company, l.contactName AS lead_contact "
             "FROM appointments a LEFT JOIN leads l ON a.lead_id = l.id "
@@ -236,13 +241,18 @@ def list_by_lead(lead_id: int) -> List[AppointmentOut]:
 
 
 @router.post("", response_model=AppointmentOut, status_code=201)
-def create_appointment(payload: AppointmentCreate) -> AppointmentOut:
+def create_appointment(
+    payload: AppointmentCreate,
+    current_user: CurrentUser = Depends(require_crm_access),
+) -> AppointmentOut:
     _validate_interval(payload.start_at, payload.end_at)
 
     conn = get_connection()
     try:
         _ensure_lead_exists(conn, payload.lead_id)
         owner_user_id = _resolve_owner_user_id(conn, lead_id=payload.lead_id)
+        if owner_user_id != current_user.id:
+            raise HTTPException(status_code=404, detail="Lead não encontrado")
         _check_conflict(conn, owner_user_id, payload.start_at, payload.end_at)
 
         cur = conn.cursor()
@@ -317,7 +327,11 @@ def create_appointment(payload: AppointmentCreate) -> AppointmentOut:
 
 
 @router.put("/{appointment_id}", response_model=AppointmentOut)
-def update_appointment(appointment_id: int, payload: AppointmentUpdate) -> AppointmentOut:
+def update_appointment(
+    appointment_id: int,
+    payload: AppointmentUpdate,
+    current_user: CurrentUser = Depends(require_crm_access),
+) -> AppointmentOut:
     if payload.start_at and payload.end_at:
         _validate_interval(payload.start_at, payload.end_at)
 
@@ -330,11 +344,14 @@ def update_appointment(appointment_id: int, payload: AppointmentUpdate) -> Appoi
         # por este endpoint.
         new_lead_id = current["lead_id"]
 
+        owner_user_id = _resolve_owner_user_id(conn, lead_id=new_lead_id, fallback_user_id=current.get("user_id"))
+        if owner_user_id != current_user.id:
+            raise HTTPException(status_code=404, detail="Compromisso não encontrado")
+
         start_at = payload.start_at or datetime.fromisoformat(current["start_at"])
         end_at = payload.end_at or datetime.fromisoformat(current["end_at"])
         _validate_interval(start_at, end_at)
 
-        owner_user_id = _resolve_owner_user_id(conn, lead_id=new_lead_id, fallback_user_id=current.get("user_id"))
         _check_conflict(conn, owner_user_id, start_at, end_at, exclude_id=appointment_id)
 
         fields = []
@@ -411,11 +428,20 @@ def update_appointment(appointment_id: int, payload: AppointmentUpdate) -> Appoi
 
 
 @router.delete("/{appointment_id}", status_code=204)
-def delete_appointment(appointment_id: int) -> None:
+def delete_appointment(
+    appointment_id: int,
+    current_user: CurrentUser = Depends(require_crm_access),
+) -> None:
     conn = get_connection()
     try:
         row = _get_appointment(conn, appointment_id)
         appointment = {key: row[key] for key in row.keys()}
+
+        owner_user_id = _resolve_owner_user_id(
+            conn, lead_id=appointment.get("lead_id"), fallback_user_id=appointment.get("user_id")
+        )
+        if owner_user_id != current_user.id:
+            raise HTTPException(status_code=404, detail="Compromisso não encontrado")
 
         # Delete from Google Calendar before DB delete (fail-silent)
         google_event_id = appointment.get("google_event_id")
@@ -435,11 +461,18 @@ def delete_appointment(appointment_id: int) -> None:
         conn.close()
 
 
-def _update_status(appointment_id: int, status: AppointmentStatus) -> AppointmentOut:
+def _update_status(appointment_id: int, status: AppointmentStatus, user_id: int) -> AppointmentOut:
     conn = get_connection()
     try:
         row = _get_appointment(conn, appointment_id)
         appointment = {key: row[key] for key in row.keys()}
+
+        owner_user_id = _resolve_owner_user_id(
+            conn, lead_id=appointment.get("lead_id"), fallback_user_id=appointment.get("user_id")
+        )
+        if owner_user_id != user_id:
+            raise HTTPException(status_code=404, detail="Compromisso não encontrado")
+
         cur = conn.cursor()
         cur.execute(
             "UPDATE appointments SET status = ?, updated_at = ? WHERE id = ?",
@@ -466,13 +499,19 @@ def _update_status(appointment_id: int, status: AppointmentStatus) -> Appointmen
 
 
 @router.post("/{appointment_id}/complete", response_model=AppointmentOut)
-def mark_completed(appointment_id: int) -> AppointmentOut:
-    return _update_status(appointment_id, "completed")
+def mark_completed(
+    appointment_id: int,
+    current_user: CurrentUser = Depends(require_crm_access),
+) -> AppointmentOut:
+    return _update_status(appointment_id, "completed", current_user.id)
 
 
 @router.post("/{appointment_id}/cancel", response_model=AppointmentOut)
-def mark_canceled(appointment_id: int) -> AppointmentOut:
-    return _update_status(appointment_id, "canceled")
+def mark_canceled(
+    appointment_id: int,
+    current_user: CurrentUser = Depends(require_crm_access),
+) -> AppointmentOut:
+    return _update_status(appointment_id, "canceled", current_user.id)
 
 
 @router.post("/{appointment_id}/outcome", response_model=AppointmentOut)

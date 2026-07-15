@@ -9,6 +9,7 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 import routes.appointments as appointments_module
 from models import AppointmentUpdate
+from security_core import CurrentUser
 
 
 def _create_schema(conn: sqlite3.Connection) -> None:
@@ -97,12 +98,13 @@ class UpdateAppointmentRouteTest(unittest.TestCase):
         new_start = datetime.now(timezone.utc) + timedelta(days=3)
         new_end = new_start + timedelta(minutes=30)
         payload = AppointmentUpdate(start_at=new_start, end_at=new_end)
+        current_user = CurrentUser(id=1, email="dono@teste.com")
 
         with patch("routes.appointments.get_connection", return_value=self.conn), \
                 patch("routes.appointments.gcal_update"), \
                 patch("routes.appointments.schedule_appointment_reminder_jobs"), \
                 patch("routes.appointments.schedule_briefing_job_for_appointment"):
-            result = appointments_module.update_appointment(self.appointment_id, payload)
+            result = appointments_module.update_appointment(self.appointment_id, payload, current_user)
 
         self.assertEqual(result.id, self.appointment_id)
         self.assertEqual(result.start_at, new_start)
@@ -110,9 +112,10 @@ class UpdateAppointmentRouteTest(unittest.TestCase):
 
     def test_update_title_only_does_not_raise(self):
         payload = AppointmentUpdate(title="Novo titulo")
+        current_user = CurrentUser(id=1, email="dono@teste.com")
 
         with patch("routes.appointments.get_connection", return_value=self.conn):
-            result = appointments_module.update_appointment(self.appointment_id, payload)
+            result = appointments_module.update_appointment(self.appointment_id, payload, current_user)
 
         self.assertEqual(result.title, "Novo titulo")
 
