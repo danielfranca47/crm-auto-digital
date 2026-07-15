@@ -103,7 +103,7 @@ corrigidas na Fase 1.
 
 | # | Commit | O que foi implementado |
 |---|---|---|
-| 1 | _pendente_ | 11 novos testes de regressão (dono/não-dono) para as 6 rotas de appointments.py |
+| 1 | `acb7a65` | 11 novos testes de regressão (dono/não-dono) para as 6 rotas de appointments.py |
 
 ---
 
