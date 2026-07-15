@@ -5,7 +5,7 @@ from pydantic import BaseSettings, Field
 
 
 class Settings(BaseSettings):
-    SECRET_KEY: str = "changeme"
+    SECRET_KEY: str
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24
     DATABASE_URL: str = "sqlite:///./core.db"

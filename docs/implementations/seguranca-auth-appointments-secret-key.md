@@ -57,7 +57,7 @@ Fase 2 — config.py: remover o default "changeme" do SECRET_KEY, tornando o
 
 | # | Commit | O que foi implementado |
 |---|---|---|
-| 1 | _pendente_ | _pendente_ |
+| 1 | `6aebb6f` | 6 rotas de appointments.py passam a exigir `require_crm_access` + checagem de dono (404 em mismatch); testes ajustados |
 
 ---
 
@@ -71,7 +71,7 @@ Fase 2 — config.py: remover o default "changeme" do SECRET_KEY, tornando o
 
 | # | Commit | O que foi implementado |
 |---|---|---|
-| 1 | _pendente_ | _pendente_ |
+| 1 | _pendente_ | `SECRET_KEY: str = "changeme"` → `SECRET_KEY: str` (obrigatório) |
 
 ---
 
