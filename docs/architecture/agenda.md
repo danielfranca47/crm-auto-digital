@@ -122,7 +122,7 @@ function openCreate(day: Date, slotIndex: number) {
 | Endpoint | Método | Usado por |
 |---|---|---|
 | `GET /api/appointments?start=&end=` | GET | WeekView, DayView — filtra pelo intervalo da vista; requer JWT (filtra por `user_id`) |
-| `GET /api/appointments/lead/{id}` | GET | ScheduleView — lista por lead |
+| `GET /api/appointments/lead/{id}` | GET | ScheduleView — lista por lead; requer JWT (verifica que o lead pertence ao `user_id` do token, 404 caso contrário) |
 | `POST /api/appointments/google-sync?start=&end=` | POST | Agenda.tsx — importa eventos Google para o período (upsert + cleanup) |
 | `POST /api/leads/{leadId}/appointments` | POST | Criar compromisso |
 | `PATCH /api/leads/{leadId}/appointments/{id}` | PATCH | Editar compromisso |
@@ -245,6 +245,8 @@ Eventos importados via `POST /api/appointments/google-sync` têm `source='google
 **Ao reagendar** (`PUT /{id}` ou `PATCH` equivalente em `routes/leads.py`, quando `start_at` muda de fato): cancela os jobs de lembrete/briefing antigos (mesmo mecanismo do cancelamento) e cria novos para o novo horário; sincroniza o evento no Google Calendar via `gcal_update` (fail-silent).
 
 Estas três funções (`cancel_pending_appointment_jobs`, `schedule_appointment_reminder_jobs`, `schedule_briefing_job_for_appointment`) vivem em `backend-crm/services/jobs_service.py`/`services/briefing_service.py` e são compartilhadas pelos dois pontos de entrada de appointment (`routes/appointments.py` e `routes/leads.py`) — garante que criar/cancelar/reagendar tem o mesmo efeito independentemente de qual rota o caller usa.
+
+Todas as rotas de `routes/appointments.py` (`GET /lead/{id}`, `POST`, `PUT/{id}`, `DELETE/{id}`, `POST /{id}/complete`, `POST /{id}/cancel`) exigem `Depends(require_crm_access)` e verificam que o `user_id` resolvido via `_resolve_owner_user_id()` bate com o do token — `404` (não `403`) em caso de mismatch, mesmo padrão de `_require_lead_for_user()` em `routes/leads.py`. Os dois pontos de entrada são chamados directamente pelo frontend (`frontend-crm/src/services/api.ts`), então a paridade de auth entre eles não é opcional.
 
 ---
 

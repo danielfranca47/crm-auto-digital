@@ -47,6 +47,7 @@ Cobre autenticação, ciclo de vida de contas, recuperação de senha e envio de
 - Algoritmo: `HS256`
 - Payload: `{ sub: user_id, email, type: "access", exp }`
 - Admin tokens: `{ sub: "admin", role: "admin", type: "access" }`
+- `SECRET_KEY` (`backend-core/app/config.py`) é campo obrigatório, sem default — `Settings()` levanta `ValidationError` no arranque se a env var não estiver definida, em vez de assinar tokens com um valor fraco conhecido.
 
 ---
 
