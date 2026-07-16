@@ -42,6 +42,15 @@ class WhatsEnqueueRequest(BaseModel):
     # sobre `message` e sobre o que estiver salvo no lead.
     lead_messages: Optional[Dict[int, str]] = None
 
+class EmailEnqueueRequest(BaseModel):
+    lead_ids: List[int]
+    subject: Optional[str] = None
+    # Mesma semântica do WhatsEnqueueRequest: mensagem opcional que vira o corpo
+    # principal (ou override) para todos os leads, com fallback para selection.
+    message: Optional[str] = None
+    lead_messages: Optional[Dict[int, str]] = None
+
+
 class WhatsMarkRequest(BaseModel):
     lead_id: int
     message_id: int
@@ -204,6 +213,33 @@ def whatsapp_queue(limit: int = Query(5, ge=1, le=50), current_user: CurrentUser
 @router.post("/whatsapp/mark")
 def whatsapp_mark(req: WhatsMarkRequest):
     raise HTTPException(status_code=410, detail="Fluxo do worker foi substituído pelo Agente Local")
+
+# ------------------ EMAIL QUEUE (cold outreach) ------------------
+@router.post("/email/enqueue")
+def email_enqueue(req: EmailEnqueueRequest, current_user: CurrentUser = Depends(require_crm_access)):
+    logger.info(
+        "/email/enqueue payload lead_ids=%s message_present=%s lead_messages=%s",
+        req.lead_ids,
+        bool((req.message or "").strip()),
+        list((req.lead_messages or {}).keys()),
+    )
+    try:
+        result = jobs_service.enqueue_email_jobs(
+            req.lead_ids,
+            subject=req.subject,
+            message=(req.message or "").strip() or None,
+            lead_messages=req.lead_messages,
+            user_id=current_user.id,
+            entitlements=current_user.entitlements,
+        )
+        job_ids = [item.get("job_id") for item in result.get("queued", [])]
+        logger.info(
+            "/email/enqueue created jobs ids=%s skipped=%s", job_ids, result.get("skipped")
+        )
+        return {"ok": True, **result}
+    except Exception:
+        logger.exception("/email/enqueue failed")
+        raise HTTPException(status_code=500, detail="Erro ao enfileirar email")
 
 # ======== WHATSAPP: resultados recentes e resumo (somente leitura) ========
 

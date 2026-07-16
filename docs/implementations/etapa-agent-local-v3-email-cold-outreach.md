@@ -90,9 +90,27 @@ inclusive uma dica específica para o caso de Gmail sem senha de app.
 
 | # | Commit | O que foi implementado |
 |---|---|---|
-| 1 | *(pendente — a criar)* | backend-core: colunas SMTP encriptadas + preferência de canal + limite diário |
+| 1 | `a8cf7d0` | backend-core: colunas SMTP encriptadas + preferência de canal + limite diário |
 
 ---
+
+### Relatório da Fase 1 — o que mudou na prática
+
+**Antes:** o sistema não tinha nenhuma forma de guardar uma conta de email do usuário
+nem de saber se ele prefere começar a prospecção por email ou só por WhatsApp.
+
+**Agora:** o backend-core (a base de contas/autenticação) já sabe guardar uma conta
+SMTP (Gmail com senha de app, ou email comercial) de forma segura — a senha é cifrada
+antes de ir para o banco, e só é salva depois de o sistema confirmar que consegue
+mesmo fazer login com aquela credencial. O perfil de IA também já tem o campo de
+preferência de canal (`email primeiro` ou `só WhatsApp`), e o plano do usuário já
+define quantos emails por dia ele pode mandar. **Nada disso tem interface ainda** —
+por enquanto só existe o "motor" no backend; a tela para o usuário mexer nisso é a
+Fase 5 (agent-local).
+
+**Para validar:** Cenários P1 a P5, acima — todos já verificados nesta sessão via
+scripts isolados. O Cenário P6 (conexão com credencial real) fica melhor validado
+junto da Fase 5, quando existir uma tela de fato para o usuário digitar os dados.
 
 ## Checks de Validação
 
@@ -125,6 +143,56 @@ inclusive uma dica específica para o caso de Gmail sem senha de app.
 - **Pendente** — requer credencial real de teste; melhor validado junto da Fase 5 (UI no agent-local), quando há uma tela de fato para inserir os dados
 
 ---
+
+### Fase 2 — backend-crm: fila de jobs de email
+
+**Objetivo:** enfileirar um job de envio de email por lead (mesmo padrão do WhatsApp),
+com limite diário aplicado e leads sem email pulados automaticamente.
+
+| Arquivo | O que muda |
+|---|---|
+| `backend-crm/services/jobs_service.py` | `TYPE_EMAIL_SEND_COLD = "email.send.cold"`; `_persist_email_message()` (mirror de `_persist_whatsapp_message`, com `subject`); nova `enqueue_email_jobs()` (mirror de `enqueue_whatsapp_jobs`) — usa `leads.email` em vez de `phone`, pula lead sem email (`reason: "email_ausente"`) |
+| `backend-crm/services/rate_limit_service.py` | `LIMIT_KEYS_BY_TYPE` ganha `TYPE_EMAIL_SEND_COLD: "max_email_send_daily"` |
+| `backend-crm/routes/prospeccao.py` | Novo `POST /api/prospeccao/email/enqueue` (mirror de `whatsapp/enqueue`) |
+
+**Desvio do plano original (para menos trabalho):** o plano previa alterar o endpoint
+interno `/api/internal/jobs/next` para aceitar `email.send.cold`. Na investigação,
+`get_next_job_internal()` (`backend-crm/routes/executor.py:144`) já é genérico — recebe
+`types` livre por query string, sem allowlist hardcoded — então nenhuma mudança foi
+necessária ali. O mesmo vale para `claim`/`complete`/`fail` (linhas 696/769/870): são
+genéricos por `job_id`, com tratamento especial só para `TYPE_WHATSAPP_INBOUND`
+(irrelevante para email).
+
+**Bug encontrado e corrigido durante o teste:** ao simular o limite diário esgotado
+(`max_email_send_daily=0`), a `HTTPException(429)` levantada por
+`rate_limit_state.ensure_can_consume()` estava sendo capturada pelo `except Exception`
+genérico do laço e virando `{"reason": "erro_interno"}` — um erro opaco, sem indicar que
+o motivo real era o limite do plano. Corrigido com um `except HTTPException` dedicado
+que registra `{"reason": "limite_diario_atingido"}` e continua processando os demais
+leads do lote (mesma filosofia de "skip com motivo claro" já usada para
+`email_ausente`/`sem_mensagem`/`ja_pendente`). **Nota:** o mesmo problema existe hoje em
+`enqueue_whatsapp_jobs` (não foi alterado — fora do escopo desta feature).
+
+### Commits Fase 2
+
+| # | Commit | O que foi implementado |
+|---|---|---|
+| 1 | *(pendente — a criar)* | backend-crm: fila de jobs de email + endpoint de enqueue |
+
+### Relatório da Fase 2 — o que mudou na prática
+
+**Antes:** não existia nenhuma forma de programar o envio de um email a partir do CRM —
+só a fila de WhatsApp existia.
+
+**Agora:** o agent-local (quando a Fase 5 tiver a tela pronta) já pode chamar
+`POST /api/prospeccao/email/enqueue` com uma lista de leads + assunto/corpo, e o sistema
+cria um job de email por lead, pulando automaticamente quem não tem email cadastrado ou
+já tem um envio igual pendente, e respeitando o limite diário do plano do usuário. O
+envio de fato (Fase 3) ainda não existe — o job fica na fila esperando um executor.
+
+**Para validar:** testado nesta sessão via scripts isolados contra o `crm.db` real de
+desenvolvimento (dados de teste criados e revertidos ao final) — caminho feliz, lead sem
+email, duplicata, e limite diário esgotado, todos com o comportamento esperado.
 
 ## Ajustes Possíveis Pós-Implementação
 

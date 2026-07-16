@@ -12,6 +12,7 @@ from services import jobs_service
 
 LIMIT_KEYS_BY_TYPE: Dict[str, str] = {
     jobs_service.TYPE_WHATSAPP_SEND: "max_whatsapp_send_daily",
+    jobs_service.TYPE_EMAIL_SEND_COLD: "max_email_send_daily",
     jobs_service.TYPE_MAPS_SEARCH: "max_maps_search_daily",
     jobs_service.TYPE_MAPS_ENRICH: "max_maps_enrich_daily",
 }

@@ -29,6 +29,7 @@ AGENT_STATUS_ONLINE = "online"
 AGENT_STATUS_OFFLINE = "offline"
 
 TYPE_WHATSAPP_SEND = "whatsapp.send.local"
+TYPE_EMAIL_SEND_COLD = "email.send.cold"
 TYPE_WHATSAPP_INBOUND = "whatsapp.inbound.n8n"
 TYPE_WHATSAPP_FOLLOWUP_TICK = "whatsapp.followup.tick"
 TYPE_WHATSAPP_FOLLOWUP_PREGENERATE = "whatsapp.followup.pregenerate"
@@ -66,6 +67,7 @@ def backoff_schedule_for(job_type: Optional[str]) -> Dict[int, int]:
 
 _TYPE_ALIASES: Dict[str, List[str]] = {
     TYPE_WHATSAPP_SEND: ["whatsapp_send"],
+    TYPE_EMAIL_SEND_COLD: [],
     TYPE_WHATSAPP_INBOUND: [],
     TYPE_WHATSAPP_FOLLOWUP_TICK: [],
     TYPE_WHATSAPP_FOLLOWUP_PREGENERATE: [],
@@ -1168,6 +1170,31 @@ def _persist_whatsapp_message(cur, lead_id: int, body: str) -> Dict[str, Any]:
     return {"id": message_id, "body": body_txt}
 
 
+def _persist_email_message(cur, lead_id: int, subject: Optional[str], body: str) -> Dict[str, Any]:
+    body_txt = (body or "").strip()
+    if not body_txt:
+        raise ValueError("mensagem vazia")
+
+    cur.execute(
+        """
+        INSERT INTO messages (lead_id, channel, subject, body, model)
+        VALUES (?, 'email', ?, ?, 'outbound')
+        """,
+        (lead_id, subject, body_txt),
+    )
+    message_id = int(cur.lastrowid)
+    cur.execute(
+        """
+        INSERT INTO message_selections (lead_id, channel, message_id)
+        VALUES (?, 'email', ?)
+        ON CONFLICT(lead_id, channel)
+        DO UPDATE SET message_id=excluded.message_id, selectedAt=CURRENT_TIMESTAMP
+        """,
+        (lead_id, message_id),
+    )
+    return {"id": message_id, "subject": subject, "body": body_txt}
+
+
 def enqueue_whatsapp_jobs(
     lead_ids: Sequence[int], *, message: Optional[str] = None, lead_messages: Optional[Dict[int, str]] = None, user_id: Optional[int] = None, entitlements: Optional[Dict[str, Any]] = None
 ) -> Dict[str, Any]:
@@ -1344,6 +1371,197 @@ def enqueue_whatsapp_jobs(
                     )
                 except Exception:
                     logger.exception("enqueue_whatsapp_jobs unexpected error lead_id=%s", lead_id)
+                    skipped.append({"lead_id": lead_id, "reason": "erro_interno"})
+                    continue
+
+            conn.commit()
+        finally:
+            rate_limit_state.close()
+
+    return {"queued": queued, "skipped": skipped}
+
+
+def enqueue_email_jobs(
+    lead_ids: Sequence[int],
+    *,
+    subject: Optional[str] = None,
+    message: Optional[str] = None,
+    lead_messages: Optional[Dict[int, str]] = None,
+    user_id: Optional[int] = None,
+    entitlements: Optional[Dict[str, Any]] = None,
+) -> Dict[str, Any]:
+    if not lead_ids:
+        return {"queued": [], "skipped": []}
+
+    queued: List[Dict[str, Any]] = []
+    skipped: List[Dict[str, Any]] = []
+
+    logger.info(
+        "enqueue_email_jobs lead_ids=%s message_present=%s overrides=%s",
+        list(lead_ids),
+        bool((message or "").strip()),
+        list((lead_messages or {}).keys()),
+    )
+
+    from services import rate_limit_service
+
+    with get_connection() as conn:
+        rate_limit_state = rate_limit_service.build_rate_limit_state(
+            job_type=TYPE_EMAIL_SEND_COLD,
+            user_id=user_id,
+            entitlements=entitlements,
+            conn=conn,
+        )
+        try:
+            cur = conn.cursor()
+            email_types = _variants_for_canonical(TYPE_EMAIL_SEND_COLD)
+            type_placeholders = ",".join(["?"] * len(email_types))
+            params_jobs: List[Any] = [*email_types, JOB_STATUS_PENDING, JOB_STATUS_IN_PROGRESS]
+            user_filter = ""
+            if user_id is not None:
+                user_filter = "AND user_id = ?"
+                params_jobs.append(user_id)
+            pending_rows = cur.execute(
+                f"""
+                SELECT id, payload
+                  FROM jobs
+                 WHERE type IN ({type_placeholders})
+                   AND status IN (?, ?)
+                   {user_filter}
+                """,
+                params_jobs,
+            ).fetchall()
+            existing = []
+            for row in pending_rows:
+                payload = _json_loads(row["payload"])
+                if isinstance(payload, dict):
+                    existing.append((row["id"], payload.get("lead_id"), payload.get("message_id")))
+
+            for lead_id in lead_ids:
+                try:
+                    lead_params: List[Any] = [lead_id]
+                    lead_clause = "WHERE id=?"
+                    if user_id is not None:
+                        lead_clause += " AND user_id = ?"
+                        lead_params.append(user_id)
+                    lead = cur.execute(
+                        f"SELECT id, email FROM leads {lead_clause}",
+                        lead_params,
+                    ).fetchone()
+                    if not lead:
+                        reason = "lead_nao_encontrado"
+                        skipped.append({"lead_id": lead_id, "reason": reason})
+                        logger.info("enqueue_email_jobs skip lead_id=%s reason=%s", lead_id, reason)
+                        continue
+
+                    email_addr = (lead["email"] or "").strip()
+                    if not email_addr:
+                        reason = "email_ausente"
+                        skipped.append({"lead_id": lead_id, "reason": reason})
+                        logger.info("enqueue_email_jobs skip lead_id=%s reason=%s", lead_id, reason)
+                        continue
+
+                    override_msg = None
+                    if lead_messages and lead_id in lead_messages:
+                        override_msg = (lead_messages[lead_id] or "").strip() or None
+                    if not override_msg and message:
+                        override_msg = message
+
+                    if override_msg:
+                        msg_row = _persist_email_message(cur, lead_id, subject, override_msg)
+                        logger.info(
+                            "enqueue_email_jobs persisted override message lead_id=%s message_id=%s",
+                            lead_id,
+                            msg_row["id"],
+                        )
+                    else:
+                        msg_row = cur.execute(
+                            """
+                            SELECT m.id, m.subject, m.body
+                              FROM message_selections s
+                              JOIN messages m ON m.id = s.message_id
+                             WHERE s.lead_id=? AND s.channel='email'
+                             ORDER BY s.selectedAt DESC
+                             LIMIT 1
+                            """,
+                            (lead_id,),
+                        ).fetchone()
+                        if not msg_row:
+                            msg_row = cur.execute(
+                                """
+                                SELECT id, subject, body
+                                  FROM messages
+                                 WHERE lead_id=? AND channel='email'
+                                 ORDER BY createdAt DESC
+                                 LIMIT 1
+                                """,
+                                (lead_id,),
+                            ).fetchone()
+                        if not msg_row:
+                            reason = "sem_mensagem"
+                            skipped.append({"lead_id": lead_id, "reason": reason})
+                            logger.info("enqueue_email_jobs skip lead_id=%s reason=%s", lead_id, reason)
+                            continue
+
+                    message_id = int(msg_row["id"])
+                    msg_subject = msg_row["subject"] if "subject" in msg_row.keys() else subject
+                    body = msg_row["body"]
+
+                    already = next(
+                        (row_id for row_id, lid, mid in existing if lid == lead_id and mid == message_id), None
+                    )
+                    if already:
+                        reason = "ja_pendente"
+                        skipped.append({"lead_id": lead_id, "reason": reason, "job_id": already})
+                        logger.info(
+                            "enqueue_email_jobs skip lead_id=%s reason=%s job_id=%s",
+                            lead_id,
+                            reason,
+                            already,
+                        )
+                        continue
+
+                    rate_limit_state.ensure_can_consume()
+
+                    job = _insert_job(
+                        cur,
+                        job_type=TYPE_EMAIL_SEND_COLD,
+                        payload={
+                            "lead_id": lead_id,
+                            "message_id": message_id,
+                            "email": email_addr,
+                            "subject": msg_subject,
+                            "body": body,
+                        },
+                        user_id=user_id,
+                    )
+
+                    _log_prospection(
+                        conn,
+                        lead_id=lead_id,
+                        channel="email",
+                        message_id=message_id,
+                        action="queued",
+                        notes=f"email={email_addr}",
+                        user_id=user_id,
+                    )
+
+                    queued.append({"lead_id": lead_id, "message_id": message_id, "job_id": job["id"]})
+                    logger.info(
+                        "enqueue_email_jobs queued lead_id=%s message_id=%s job_id=%s",
+                        lead_id,
+                        message_id,
+                        job["id"],
+                    )
+                except HTTPException as exc:
+                    # Limite diário atingido (429) não deve virar "erro_interno" opaco —
+                    # os demais leads do lote continuam sendo processados (todos vão
+                    # bater no mesmo limite, mas cada um recebe o motivo correto).
+                    reason = "limite_diario_atingido" if exc.status_code == 429 else "erro_interno"
+                    skipped.append({"lead_id": lead_id, "reason": reason})
+                    logger.info("enqueue_email_jobs skip lead_id=%s reason=%s", lead_id, reason)
+                except Exception:
+                    logger.exception("enqueue_email_jobs unexpected error lead_id=%s", lead_id)
                     skipped.append({"lead_id": lead_id, "reason": "erro_interno"})
                     continue
 
