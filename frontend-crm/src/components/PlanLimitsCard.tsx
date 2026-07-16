@@ -26,6 +26,7 @@ const LABELS: Record<string, string> = {
   max_agents_local: "Agentes locais",
   max_prospects_daily: "Prospects do dia",
   max_whatsapp_send_daily: "Envios WhatsApp do dia",
+  max_email_send_daily: "Envios de email do dia",
   max_maps_search_daily: "Pesquisas no Maps (dia)",
   max_maps_enrich_daily: "Enriquecimentos no Maps (dia)",
   max_copy_generation_monthly: "Copys do mês",
@@ -40,6 +41,7 @@ const FIXED_KEYS = ["max_leads", "max_agents_local"] as const;
 const DAILY_KEYS = [
   "max_prospects_daily",
   "max_whatsapp_send_daily",
+  "max_email_send_daily",
   "max_maps_search_daily",
   "max_maps_enrich_daily",
 ] as const;

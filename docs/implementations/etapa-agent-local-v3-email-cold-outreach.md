@@ -244,7 +244,7 @@ backoff existente do `jobs_service.py` (backend-crm) decidir se tenta de novo.
 
 | # | Commit | O que foi implementado |
 |---|---|---|
-| 1 | *(pendente — a criar)* | backend-executors: runner + worker de envio de email via SMTP |
+| 1 | `da35f28` | backend-executors: runner + worker de envio de email via SMTP |
 
 ### Relatório da Fase 3 — o que mudou na prática
 
@@ -262,6 +262,73 @@ feliz (claim → busca credencial → envia → completa), usuário sem conta co
 falha de autenticação SMTP. Falta testar com um envio real de ponta a ponta (Cenário C1
 abaixo), que fica mais natural de fazer junto da Fase 5, quando existir uma tela de
 verdade para conectar a conta e dar o comando de enviar.
+
+### Fase 4 — frontend-crm: preferência de canal + uso do plano
+
+**Objetivo:** o usuário consegue escolher, na configuração do agente, se o primeiro
+contato frio prioriza email ou fica só WhatsApp, e visualiza quantos emails já usou/
+quantos restam no dia no painel "Uso do Plano".
+
+| Arquivo | O que muda |
+|---|---|
+| `frontend-crm/src/types/agente.ts` | `AgentConfig.cold_outreach_channel`; default `'whatsapp_only'`; novo `COLD_OUTREACH_CHANNEL_LABELS` |
+| `frontend-crm/src/services/api.ts` | `AiProfilePayload.cold_outreach_channel`; `loadConfig()` mapeia o campo vindo do perfil; `saveConfig()` envia no `PUT /ai-profiles/me` |
+| `frontend-crm/src/components/agente/CamadaIdentidade.tsx` | Novo `EditCard` "Canal de 1º contato" na seção "Contexto de abertura" (sem gate por `template_key` — vale para todos os modos); novo `DrawerColdOutreachChannel` (mirror de `DrawerResponseStyle`) com as opções "Somente WhatsApp" / "Email primeiro" |
+| `frontend-crm/src/pages/AiProfile.tsx` | Novo `SummaryCard` "Canal de 1º contato" no painel Resumo |
+| `frontend-crm/src/components/PlanLimitsCard.tsx` | `max_email_send_daily` adicionado a `LABELS` e `DAILY_KEYS` (componente já genérico) |
+| `frontend-crm/src/pages/UsoDoPlano.tsx` | Novo `UsageCard` "Email do dia" (mirror do card de WhatsApp) |
+| `backend-crm/routes/usage.py` | `max_email_send_daily` adicionado a `daily_keys` — sem isso `/api/usage` nunca preenchia `daily.max_email_send_daily` e os cards acima ficariam sempre vazios |
+| `backend-crm/routes/admin_agents.py` | `cold_outreach_channel` incluído nos dois pontos onde o dict do perfil é montado (overview e detalhe do usuário) |
+| `docs/architecture/admin-agents-contract.md` | Nova linha para `cold_outreach_channel` na tabela de campos do AI Profile |
+
+**Decisão técnica:** a UI reaproveita 100% os padrões já existentes —
+`EditCard`/`DrawerBase` (mesmo formato de `DrawerResponseStyle`) para a escolha de canal,
+e `PlanLimitsCard`/`UsageCard` (já genéricos por chave) para o uso diário. Nenhum
+componente novo de estilo foi criado.
+
+**Lacuna da Fase 1 corrigida:** `cold_outreach_channel` afeta o comportamento do agente
+(qual canal a prospecção fria usa) mas não tinha sido registado em
+`admin-agents-contract.md` nem exposto por `GET /admin/agents/users/{user_id}`, como a
+regra obrigatória do CLAUDE.md exige para todo novo campo de `ai_profiles`. Corrigido
+nesta fase — documentado como "Não exibido no painel admin atualmente", mesmo
+tratamento já dado a `sales_flow` (o `AdminAgents.tsx` hoje não tem um drawer genérico de
+campos do profile; criar essa UI ficou fora do escopo desta fase).
+
+**Fora de escopo:** conectar a própria conta SMTP continua sendo a Fase 5 (agent-local)
+— o frontend-crm só expõe a *preferência* de canal, não a conexão da credencial.
+
+### Commits Fase 4
+
+| # | Commit | O que foi implementado |
+|---|---|---|
+| 1 | *(pendente — a criar)* | frontend-crm: seletor de canal de 1º contato + uso diário de email; correção de lacuna do admin-agents-contract |
+
+### Relatório da Fase 4 — o que mudou na prática
+
+**Antes:** o campo de preferência de canal (email primeiro ou só WhatsApp) já existia no
+backend desde a Fase 1, mas não havia nenhuma tela para o usuário escolher — e o painel
+"Uso do Plano" não mostrava o limite diário de emails.
+
+**Agora:** na configuração do agente (Identidade → Contexto de abertura), o usuário
+escolhe "Somente WhatsApp" ou "Email primeiro" para o primeiro contato da prospecção
+fria — com aviso de que "Email primeiro" exige conectar uma conta de email no agente
+local (isso ainda não existe — é a Fase 5). O painel "Uso do Plano" agora mostra quantos
+emails já foram enviados hoje e quantos restam, ao lado do card de WhatsApp.
+
+**Para validar:** Cenários P10 e P11, abaixo.
+
+## Checks de Validação — Fase 4
+
+### Cenário P10 — Preferência de canal persiste
+- [ ] Abrir AiProfile → Identidade, trocar "Canal de 1º contato" para "Email primeiro", salvar
+- [ ] Recarregar a página e confirmar que o valor salvo permanece "Email primeiro"
+- [ ] Trocar de volta para "Somente WhatsApp" e confirmar que também persiste
+- **Pendente** — requer sessão de browser (frontend-crm rodando + backend-core + backend-crm)
+
+### Cenário P11 — Card de uso de email no painel
+- [ ] Abrir "Uso do Plano" e confirmar que aparece o card "Email do dia" com usado/limite/restante
+- [ ] Enfileirar um job de email de teste (`POST /api/prospeccao/email/enqueue`) e confirmar que "usado" incrementa após o próximo carregamento da página
+- **Pendente** — requer sessão de browser + dados de teste
 
 ## Ajustes Possíveis Pós-Implementação
 

@@ -57,6 +57,7 @@ def build_usage_payload(
     daily_keys = [
         "max_prospects_daily",
         "max_whatsapp_send_daily",
+        "max_email_send_daily",
         "max_maps_search_daily",
         "max_maps_enrich_daily",
     ]

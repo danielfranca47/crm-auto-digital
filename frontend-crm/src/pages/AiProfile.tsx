@@ -18,7 +18,7 @@ import { useToast } from '@/hooks/use-toast';
 import { api } from '@/services/api';
 import { DEFAULT_AGENT_CONFIG, KNOWLEDGE_CATEGORIES_BY_TEMPLATE } from '@/types/agente';
 import type { AgentConfig } from '@/types/agente';
-import { AGENT_MODE_LABELS, IDENTITY_MODE_LABELS, LGPD_LABELS, REATIVACAO_LABELS, MEDIA_FALLBACK_LABELS } from '@/types/agente';
+import { AGENT_MODE_LABELS, IDENTITY_MODE_LABELS, LGPD_LABELS, REATIVACAO_LABELS, MEDIA_FALLBACK_LABELS, COLD_OUTREACH_CHANNEL_LABELS } from '@/types/agente';
 
 interface KnowledgeSummary { criticalFilled: number; criticalTotal: number; }
 
@@ -130,6 +130,7 @@ function PainelResumo({
         <SummaryCard label="Tipo de agente"  value={config.template_key || '—'}                       onClick={() => onNavigate('c1')} />
         <SummaryCard label="Modo de identidade" value={IDENTITY_MODE_LABELS[config.identity_mode] || '—'} onClick={() => onNavigate('c1')} />
         <SummaryCard label="Forma de vender" value={AGENT_MODE_LABELS[config.agent_mode] || '—'}     onClick={() => onNavigate('c1')} />
+        <SummaryCard label="Canal de 1º contato" value={COLD_OUTREACH_CHANNEL_LABELS[config.cold_outreach_channel] || '—'} onClick={() => onNavigate('c1')} />
         <SummaryCard label="Perfil gerado"   value={config.custom_instructions ? config.custom_instructions.slice(0, 50) + '…' : 'Não configurado'}
           onClick={() => onNavigate('c1')} italic />
       </div>

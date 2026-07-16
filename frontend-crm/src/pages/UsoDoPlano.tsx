@@ -209,6 +209,14 @@ export default function UsoDoPlano() {
                 remaining={dailyUsage.max_whatsapp_send_daily.remaining}
               />
             ) : null}
+            {dailyUsage?.max_email_send_daily ? (
+              <UsageCard
+                title="Email do dia"
+                used={dailyUsage.max_email_send_daily.used}
+                limit={dailyUsage.max_email_send_daily.limit}
+                remaining={dailyUsage.max_email_send_daily.remaining}
+              />
+            ) : null}
             <UsageCard
               title="Copys do mês"
               used={usage?.copy_monthly?.used}
