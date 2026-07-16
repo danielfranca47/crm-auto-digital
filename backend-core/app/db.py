@@ -22,7 +22,11 @@ def get_db():
 
 def ensure_plan_limits_columns() -> None:
     """Add feature-gate columns to plan_limits without requiring migrations."""
-    cols = {"follow_up_enabled": ("INTEGER", "BOOLEAN", "1"), "playground_monthly_limit": ("INTEGER", "INTEGER", None)}
+    cols = {
+        "follow_up_enabled": ("INTEGER", "BOOLEAN", "1"),
+        "playground_monthly_limit": ("INTEGER", "INTEGER", None),
+        "max_email_send_daily": ("INTEGER", "INTEGER", None),
+    }
     with engine.begin() as conn:
         if engine.dialect.name == "sqlite":
             result = conn.execute(text("PRAGMA table_info(plan_limits)"))
@@ -213,6 +217,7 @@ def ensure_ai_profile_columns() -> None:
         "multi_message_buffer_seconds": {"default": 8, "sqlite_type": "INTEGER", "pg_type": "INTEGER"},
         "sales_flow": {"default": None, "sqlite_type": "TEXT", "pg_type": "JSON"},
         "audio_transcription_enabled": {"default": False, "sqlite_type": "INTEGER", "pg_type": "BOOLEAN"},
+        "cold_outreach_channel": {"default": "whatsapp_only", "sqlite_type": "TEXT", "pg_type": "VARCHAR"},
     }
 
     with engine.begin() as conn:
@@ -367,6 +372,35 @@ def ensure_google_calendar_columns() -> None:
             ))
             existing = {row[0] for row in result.fetchall()}
             for col in google_cols:
+                if col not in existing:
+                    conn.execute(text(f"ALTER TABLE users ADD COLUMN {col} VARCHAR"))
+                    print(f"✅ coluna adicionada em users: {col}")
+
+
+def ensure_smtp_columns() -> None:
+    """Add generic SMTP (cold outreach email) columns to users table."""
+    smtp_cols = [
+        "smtp_host",
+        "smtp_port",
+        "smtp_username",
+        "smtp_password_encrypted",
+        "smtp_from_name",
+        "smtp_verified_at",
+    ]
+    with engine.begin() as conn:
+        if engine.dialect.name == "sqlite":
+            result = conn.execute(text("PRAGMA table_info(users)"))
+            existing = {row[1] for row in result.fetchall()}
+            for col in smtp_cols:
+                if col not in existing:
+                    conn.execute(text(f"ALTER TABLE users ADD COLUMN {col} TEXT"))
+                    print(f"✅ coluna adicionada em users: {col}")
+        else:
+            result = conn.execute(text(
+                "SELECT column_name FROM information_schema.columns WHERE table_name='users'"
+            ))
+            existing = {row[0] for row in result.fetchall()}
+            for col in smtp_cols:
                 if col not in existing:
                     conn.execute(text(f"ALTER TABLE users ADD COLUMN {col} VARCHAR"))
                     print(f"✅ coluna adicionada em users: {col}")

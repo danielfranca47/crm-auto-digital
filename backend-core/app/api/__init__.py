@@ -12,6 +12,7 @@ from .whatsapp_connections import router as whatsapp_connections_router
 from .whatsapp_instances import router as whatsapp_instances_router
 from .whatsapp_send import router as whatsapp_send_router
 from .agent_proxy import router as agent_proxy_router
+from .smtp_accounts import router as smtp_accounts_router
 
 api_router = APIRouter()
 api_router.include_router(admin_router)
@@ -26,5 +27,6 @@ api_router.include_router(whatsapp_connections_router)
 api_router.include_router(whatsapp_instances_router)
 api_router.include_router(whatsapp_send_router)
 api_router.include_router(agent_proxy_router)
+api_router.include_router(smtp_accounts_router)
 
 __all__ = ["api_router"]

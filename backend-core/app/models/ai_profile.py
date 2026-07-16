@@ -81,6 +81,7 @@ class AIProfile(Base):
     custom_variables = Column(JSON, nullable=True)
     enabled_extensions = Column(JSON, nullable=True)
     audio_transcription_enabled = Column(Boolean, default=False, nullable=False, server_default="0")
+    cold_outreach_channel = Column(String, nullable=True, server_default="whatsapp_only")
     sales_flow = Column(JSON, nullable=True)
     generated_prompt_parts = Column(JSON, nullable=True)
     prompt_parts_generated_at = Column(DateTime, nullable=True)

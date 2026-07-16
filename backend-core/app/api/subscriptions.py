@@ -50,6 +50,7 @@ class UserLimits(BaseModel):
     max_copy_generation_monthly: Optional[int]
     max_ia_conversas_monthly: Optional[int]
     max_whatsapp_send_daily: Optional[int]
+    max_email_send_daily: Optional[int]
     max_prospects_daily: Optional[int]
     max_maps_search_daily: Optional[int]
     max_maps_enrich_daily: Optional[int]
@@ -100,6 +101,7 @@ def _calculate_limits(current_user: models.User, db: Session) -> UserLimits:
         "max_copy_generation_monthly": 0,
         "max_ia_conversas_monthly": 0,
         "max_whatsapp_send_daily": 0,
+        "max_email_send_daily": 0,
         "max_prospects_daily": 0,
         "max_maps_search_daily": 0,
         "max_maps_enrich_daily": 0,

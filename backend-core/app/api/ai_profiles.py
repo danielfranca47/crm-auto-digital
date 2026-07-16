@@ -101,6 +101,11 @@ class ResponseStyle(str, Enum):
     passive = "passive"  # agente responde perguntas do cliente antes de qualificar
 
 
+class ColdOutreachChannel(str, Enum):
+    whatsapp_only = "whatsapp_only"
+    email_first = "email_first"
+
+
 _TEMPLATE_OPENERS: dict = {
     "sdr_padrao": {
         "inbound": "Olá! Obrigado por entrar em contato. Me conta o que você está buscando.",
@@ -212,6 +217,7 @@ class AIProfileBase(BaseModel):
     reply_delay_max_seconds: Optional[int] = 0
     multi_message_buffer_seconds: Optional[int] = 8
     audio_transcription_enabled: bool = False
+    cold_outreach_channel: Optional[ColdOutreachChannel] = ColdOutreachChannel.whatsapp_only
     sales_flow: Optional[dict] = None
 
 
@@ -286,6 +292,7 @@ class AIProfileUpdate(BaseModel):
     reply_delay_max_seconds: Optional[int] = None
     multi_message_buffer_seconds: Optional[int] = None
     audio_transcription_enabled: Optional[bool] = None
+    cold_outreach_channel: Optional[ColdOutreachChannel] = None
     sales_flow: Optional[dict] = None
 
 

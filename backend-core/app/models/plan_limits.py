@@ -18,6 +18,7 @@ class PlanLimits(Base):
     max_copy_generation_monthly = Column(Integer, nullable=True)
     max_ia_conversas_monthly = Column(Integer, nullable=True)
     max_whatsapp_send_daily = Column(Integer, nullable=True)
+    max_email_send_daily = Column(Integer, nullable=True)
     max_prospects_daily = Column(Integer, nullable=True)
     max_maps_search_daily = Column(Integer, nullable=True)
     max_maps_enrich_daily = Column(Integer, nullable=True)
@@ -39,6 +40,7 @@ class PlanLimits(Base):
             "max_copy_generation_monthly": self.max_copy_generation_monthly,
             "max_ia_conversas_monthly": self.max_ia_conversas_monthly,
             "max_whatsapp_send_daily": self.max_whatsapp_send_daily,
+            "max_email_send_daily": self.max_email_send_daily,
             "max_prospects_daily": self.max_prospects_daily,
             "max_maps_search_daily": self.max_maps_search_daily,
             "max_maps_enrich_daily": self.max_maps_enrich_daily,
