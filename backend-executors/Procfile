@@ -1,2 +1,3 @@
 web: uvicorn app.main:app --host 0.0.0.0 --port $PORT
 worker: python -m app.workers.whatsapp_worker
+email_worker: python -m app.workers.email_worker

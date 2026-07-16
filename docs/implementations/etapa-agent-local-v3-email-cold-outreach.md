@@ -142,6 +142,28 @@ junto da Fase 5, quando existir uma tela de fato para o usuário digitar os dado
 - [ ] Conectar uma conta de email comercial (cPanel/hosting) e confirmar sucesso
 - **Pendente** — requer credencial real de teste; melhor validado junto da Fase 5 (UI no agent-local), quando há uma tela de fato para inserir os dados
 
+### Cenário P7 — Enfileirar → enviar (fluxo completo simulado)
+- [x] `enqueue_email_jobs` cria job `email.send.cold` com `email`/`subject`/`body` no payload
+- [x] `execute_job` (runner) faz claim, busca credencial via `core_client.get_smtp_credentials(user_id)` — `user_id` vem do próprio job, não do payload — e chama `_send_email` com os parâmetros corretos
+- [x] `complete_job` é chamado com `{"status": "sent", "lead_id", "email"}`
+- **Validado em:** 16/07/2026 — teste isolado com `unittest.mock` (sem rede real)
+
+### Cenário P8 — Usuário sem conta SMTP conectada
+- [x] `core_client.get_smtp_credentials` levanta 404 → job falha com motivo claro
+  ("usuário sem conta de email SMTP conectada"), `retryable=False`
+- **Validado em:** 16/07/2026
+
+### Cenário P9 — Falha de autenticação SMTP
+- [x] `smtplib.SMTPAuthenticationError` → job falha com o erro real do servidor,
+  `retryable=False` (tentar de novo sem o usuário corrigir a senha não adianta)
+- **Validado em:** 16/07/2026
+
+### Cenário C1 — Envio real ponta a ponta (nunca observado)
+- [ ] Conectar uma conta SMTP real (Gmail com senha de app, ou comercial)
+- [ ] Enfileirar um email de teste para um lead com email real
+- [ ] Rodar `python -m app.workers.email_worker` e confirmar recebimento na caixa de entrada
+- **Pendente** — melhor validado junto da Fase 5, quando existir UI para conectar a conta e disparar o envio
+
 ---
 
 ### Fase 2 — backend-crm: fila de jobs de email
@@ -177,7 +199,7 @@ leads do lote (mesma filosofia de "skip com motivo claro" já usada para
 
 | # | Commit | O que foi implementado |
 |---|---|---|
-| 1 | *(pendente — a criar)* | backend-crm: fila de jobs de email + endpoint de enqueue |
+| 1 | `911fe2c` | backend-crm: fila de jobs de email + endpoint de enqueue |
 
 ### Relatório da Fase 2 — o que mudou na prática
 
@@ -193,6 +215,53 @@ envio de fato (Fase 3) ainda não existe — o job fica na fila esperando um exe
 **Para validar:** testado nesta sessão via scripts isolados contra o `crm.db` real de
 desenvolvimento (dados de teste criados e revertidos ao final) — caminho feliz, lead sem
 email, duplicata, e limite diário esgotado, todos com o comportamento esperado.
+
+### Fase 3 — backend-executors: envio real via SMTP
+
+**Objetivo:** um worker assíncrono consome os jobs `email.send.cold` da fila e envia o
+email de verdade, usando a credencial SMTP do próprio usuário.
+
+| Arquivo | O que muda |
+|---|---|
+| `backend-executors/app/clients/core_client.py` | Nova `get_smtp_credentials(user_id)` — chama `GET /users/{user_id}/smtp-credentials` no backend-core |
+| `backend-executors/app/runners/email.py` (novo) | `execute_job()`: claim → lê payload do job (`lead_id`, `email`, `subject`, `body`, `user_id` do próprio job) → busca credencial no core → envia via `smtplib` → `complete_job`/`fail_job` |
+| `backend-executors/app/workers/email_worker.py` (novo) | Loop de polling (mirror de `whatsapp_worker.py`) — consome `email.send.cold` via `crm_client.get_next_job` |
+| `backend-executors/Procfile` | Novo processo `email_worker: python -m app.workers.email_worker` |
+| `docs/ops/local-dev.md` | Instruções para rodar o worker de email localmente |
+
+**Decisão técnica:** o runner de email é deliberadamente muito mais simples que
+`runners/whatsapp.py` — não há LLM nem decision engine envolvidos, porque o
+assunto/corpo do email já foi definido no momento do enqueue (Fase 2). O runner só
+faz claim → SMTP send → complete/fail, sem chamar `execution-context`.
+
+**Erros não-retryable (`fail_job` com `retryable: False`):** payload incompleto,
+usuário sem conta SMTP conectada (404), e falha de autenticação SMTP — nesses três
+casos, tentar de novo automaticamente não resolveria nada; exige ação do usuário.
+Erros de rede/timeout/5xx são marcados `retryable: True`, deixando o
+backoff existente do `jobs_service.py` (backend-crm) decidir se tenta de novo.
+
+### Commits Fase 3
+
+| # | Commit | O que foi implementado |
+|---|---|---|
+| 1 | *(pendente — a criar)* | backend-executors: runner + worker de envio de email via SMTP |
+
+### Relatório da Fase 3 — o que mudou na prática
+
+**Antes:** o job de email ficava parado na fila para sempre — nada o processava.
+
+**Agora:** existe um novo processo (`python -m app.workers.email_worker`, ou o processo
+`email_worker` do Procfile em produção) que fica de olho na fila e, assim que encontra
+um job de email pendente, busca a credencial SMTP do usuário (guardada de forma segura
+no backend-core, Fase 1) e manda o email de verdade. Se o usuário ainda não conectou
+nenhuma conta de email, ou se a senha estiver errada, o job falha com um motivo claro
+em vez de ficar tentando de novo sem parar.
+
+**Para validar:** testado nesta sessão com chamadas de rede simuladas (mock) — caminho
+feliz (claim → busca credencial → envia → completa), usuário sem conta conectada, e
+falha de autenticação SMTP. Falta testar com um envio real de ponta a ponta (Cenário C1
+abaixo), que fica mais natural de fazer junto da Fase 5, quando existir uma tela de
+verdade para conectar a conta e dar o comando de enviar.
 
 ## Ajustes Possíveis Pós-Implementação
 

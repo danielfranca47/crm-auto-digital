@@ -68,6 +68,17 @@ python -m app.workers.whatsapp_worker
 
 > Para execução de jobs, garantir que o usuário tenha uma instância WhatsApp conectada.
 
+Em outro terminal (worker de envio de email de prospecção — cold outreach):
+```powershell
+cd backend-executors
+code -n .
+.\.venv\Scripts\activate
+python -m app.workers.email_worker
+```
+
+> Para execução de jobs, garantir que o usuário tenha conectado uma conta SMTP em
+> `PUT /users/me/smtp` (backend-core).
+
 ### Agent-local
 
 Confirmar `.env` com:

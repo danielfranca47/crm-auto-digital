@@ -62,6 +62,21 @@ def send_whatsapp_message(payload: Dict[str, Any]) -> Dict[str, Any]:
     return _handle_response(response)
 
 
+def get_smtp_credentials(user_id: int) -> Dict[str, Any]:
+    """Busca a credencial SMTP (decriptada) do usuário, para envio de cold outreach por email."""
+    base_url = settings.core_api_base.rstrip("/")
+    url = f"{base_url}/users/{user_id}/smtp-credentials"
+    with httpx.Client(timeout=10.0) as client:
+        try:
+            response = client.get(url, headers=_headers())
+        except httpx.RequestError as exc:
+            raise CoreClientError(
+                f"Erro de rede ao buscar credencial SMTP: {exc}",
+                error_type="network",
+            ) from exc
+    return _handle_response(response)
+
+
 def get_active_whatsapp_connection(user_id: int) -> Dict[str, Any]:
     base_url = settings.core_api_base.rstrip("/")
     url = f"{base_url}/whatsapp-connections/resolve-by-user"
