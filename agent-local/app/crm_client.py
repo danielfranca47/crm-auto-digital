@@ -192,6 +192,21 @@ def enqueue_whatsapp(session: dict, lead_ids: list, message: str = None) -> dict
     return resp.json()
 
 
+def enqueue_email(session: dict, lead_ids: list, subject: str = None, message: str = None) -> dict:
+    """Enfileira leads para envio automático de email pelo agente."""
+    payload: Dict[str, Any] = {"lead_ids": [int(lid) for lid in lead_ids]}
+    if subject:
+        payload["subject"] = subject
+    if message:
+        payload["message"] = message
+    resp = _request(
+        "POST", f"{_base()}/api/prospeccao/email/enqueue",
+        session, json=payload, timeout=15,
+    )
+    resp.raise_for_status()
+    return resp.json()
+
+
 # ── Assistente IA (upload em lote + geração de copy) ─────────────────────────
 
 def upload_file(session: dict, file_path: str) -> Dict[str, Any]:

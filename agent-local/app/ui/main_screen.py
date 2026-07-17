@@ -1849,6 +1849,11 @@ class MainScreen(ctk.CTkFrame):
         )
         self._bulk_msg_entry.pack(side="left", padx=(0, 6), pady=8)
 
+        self._bulk_channel_var = ctk.StringVar(value="whatsapp")
+        for val, lbl in [("whatsapp", "WhatsApp"), ("email", "Email")]:
+            ctk.CTkRadioButton(self._bulk_bar, text=lbl, variable=self._bulk_channel_var, value=val,
+                               font=ctk.CTkFont(size=11)).pack(side="left", padx=(0, 8), pady=8)
+
         ctk.CTkButton(
             self._bulk_bar, text="📤 Enfileirar", height=28, corner_radius=6,
             fg_color="#1D4ED8", hover_color="#1E40AF",
@@ -2234,6 +2239,7 @@ class MainScreen(ctk.CTkFrame):
         if not lead_ids:
             return
         msg = self._bulk_msg_entry.get().strip() if hasattr(self, "_bulk_msg_entry") else ""
+        channel = self._bulk_channel_var.get() if hasattr(self, "_bulk_channel_var") else "whatsapp"
 
         # Feedback visual imediato
         if hasattr(self, "_bulk_msg_entry"):
@@ -2241,8 +2247,11 @@ class MainScreen(ctk.CTkFrame):
 
         def _do():
             try:
-                from app.crm_client import enqueue_whatsapp, move_lead_category
-                result = enqueue_whatsapp(self._session, lead_ids, message=msg or None)
+                from app.crm_client import enqueue_whatsapp, enqueue_email, move_lead_category
+                if channel == "email":
+                    result = enqueue_email(self._session, lead_ids, message=msg or None)
+                else:
+                    result = enqueue_whatsapp(self._session, lead_ids, message=msg or None)
                 queued_ids = [q["lead_id"] for q in (result.get("queued") or [])]
                 for lid in queued_ids:
                     try:

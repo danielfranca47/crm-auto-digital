@@ -377,7 +377,7 @@ desenhada à parte (novo Plan Mode) quando essa fase começar.
 
 | # | Commit | O que foi implementado |
 |---|---|---|
-| 1 | *(pendente — a criar)* | revert: preferência de canal de cold outreach removida do frontend-crm |
+| 1 | `3285d78` | revert: preferência de canal de cold outreach removida do frontend-crm |
 
 ### Relatório da correção — o que mudou na prática
 
@@ -392,6 +392,72 @@ próxima fase, a ser desenhada dentro do agent-local.
 
 **Para validar:** nada de novo a validar aqui além do que já estava pendente (Cenário
 P11) — esta foi uma reversão, não uma feature nova.
+
+### Fase 5 — agent-local: seletor de canal por lote no Enfileirar
+
+**Objetivo:** o usuário escolhe, no momento de "Enfileirar" no Kanban do agent-local,
+se aquele lote específico vai por WhatsApp ou por Email — sem preferência salva,
+conforme decidido na correção acima.
+
+**Nota de renumeração:** a "Fase 5" citada no diagrama original da seção "Abordagem"
+(conectar a conta SMTP) passa a ser **Fase 6** — fase futura, ainda não desenhada. Sem
+uma conta SMTP conectada, os jobs de email enfileirados por esta fase simplesmente
+falham no `email_worker` com motivo claro ("usuário sem conta de email SMTP conectada",
+já coberto pelo Cenário P8 da Fase 3) — não é um bloqueio para lançar o seletor de canal
+antes da conexão SMTP existir.
+
+| Arquivo | O que muda |
+|---|---|
+| `agent-local/app/crm_client.py` | Nova `enqueue_email(session, lead_ids, subject=None, message=None)` — mirror exato de `enqueue_whatsapp`, chama `POST /api/prospeccao/email/enqueue` |
+| `agent-local/app/ui/main_screen.py` | Novo `self._bulk_channel_var` + par de `CTkRadioButton` ("WhatsApp"/"Email") na barra de ações em lote do Kanban; `_enqueue_selected_leads` passa a chamar `enqueue_whatsapp` ou `enqueue_email` conforme o canal escolhido |
+
+**Decisão técnica:** nenhuma mudança de backend foi necessária — `GET /api/leads` já
+devolve `email` por lead (os dicts de `self._kanban_selected` já carregavam esse campo,
+só não era usado), e `enqueue_email_jobs` (Fase 2) já trata mensagem opcional (cai para
+a última mensagem salva do canal `email`) e leads sem email (pula com motivo
+`email_ausente`). A UI só precisava do seletor e da chamada ao endpoint certo — resto do
+fluxo (contagem de enfileirados/ignorados, mover lead para "in-progress", toast de
+resumo) é genérico e não mudou.
+
+**Fora de escopo:** campo de assunto na UI (fica implícito/`None`, mesma simplicidade do
+fluxo de WhatsApp); aviso client-side de "leads sem email" (o backend já pula com motivo
+claro e a UI já mostra "⚠ N ignorados"); o fluxo local/sem CRM (`_send_selected_local_leads`,
+WhatsApp Web via Selenium) não foi tocado — continua exclusivamente WhatsApp, já que não
+passa pela fila nem tem acesso a credencial SMTP.
+
+### Commits Fase 5
+
+| # | Commit | O que foi implementado |
+|---|---|---|
+| 1 | *(pendente — a criar)* | agent-local: seletor de canal (WhatsApp/Email) por lote no Enfileirar |
+
+### Relatório da Fase 5 — o que mudou na prática
+
+**Antes:** o agent-local só conseguia enfileirar prospecção fria por WhatsApp — não
+havia forma de escolher email, mesmo já existindo o endpoint no backend desde a Fase 2.
+
+**Agora:** na tela de Kanban do agent-local, ao selecionar leads e clicar "📤 Enfileirar",
+o usuário escolhe "WhatsApp" ou "Email" para aquele lote. Leads sem email cadastrado são
+ignorados automaticamente (motivo já tratado pelo backend desde a Fase 2). Sem uma conta
+SMTP conectada (Fase 6, ainda não construída), os emails enfileirados vão falhar com
+motivo claro até o usuário conectar uma conta — isso é esperado nesta fase.
+
+**Para validar:** Cenários P12 e P13, abaixo.
+
+## Checks de Validação — Fase 5
+
+### Cenário P12 — Enfileirar por email com leads válidos
+- [ ] No Kanban do agent-local, selecionar leads que já têm email cadastrado
+- [ ] Escolher canal "Email" na barra de ações em lote e clicar "Enfileirar"
+- [ ] Confirmar no resumo que os leads aparecem como enfileirados (não ignorados)
+- [ ] Confirmar no `crm.db` (tabela `jobs`) que os jobs criados são do tipo `email.send.cold`
+- **Pendente** — requer app desktop rodando (`python main.py`, `.venv` do agent-local) + backend-core + backend-crm
+
+### Cenário P13 — Lead sem email é ignorado ao escolher canal Email
+- [ ] Selecionar um lead sem email cadastrado junto de leads com email
+- [ ] Escolher canal "Email" e enfileirar
+- [ ] Confirmar que o resumo mostra "⚠ 1 ignorado" e que o lead sem email não vira job
+- **Pendente** — requer app desktop rodando + dados de teste
 
 ## Ajustes Possíveis Pós-Implementação
 
