@@ -138,9 +138,9 @@ junto da Fase 5, quando existir uma tela de fato para o usuário digitar os dado
 - **Validado em:** 16/07/2026 — inspeção de `app.routes` via `TestClient`
 
 ### Cenário P6 — Teste de conexão real com credencial verdadeira (Gmail/comercial)
-- [ ] Conectar uma conta Gmail real (senha de app) via `PUT /users/me/smtp` e confirmar sucesso
-- [ ] Conectar uma conta de email comercial (cPanel/hosting) e confirmar sucesso
-- **Pendente** — requer credencial real de teste; melhor validado junto da Fase 5 (UI no agent-local), quando há uma tela de fato para inserir os dados
+- [x] Conectar uma conta Gmail real (senha de app) via `PUT /users/me/smtp` e confirmar sucesso
+- [⏭️] Conectar uma conta de email comercial (cPanel/hosting) e confirmar sucesso — pulado, sem credencial comercial de teste disponível; o caminho Gmail já exercita o mesmo código (`_test_smtp_login`), sem lógica especial por provedor
+- **Validado em:** 17/07/2026 — `PUT /users/me/smtp` com `danielhsfranca@gmail.com` (senha de app real) via script isolado contra backend-core real (porta 8001); resposta `connected: true` com `verified_at` preenchido
 
 ### Cenário P7 — Enfileirar → enviar (fluxo completo simulado)
 - [x] `enqueue_email_jobs` cria job `email.send.cold` com `email`/`subject`/`body` no payload
@@ -159,10 +159,10 @@ junto da Fase 5, quando existir uma tela de fato para o usuário digitar os dado
 - **Validado em:** 16/07/2026
 
 ### Cenário C1 — Envio real ponta a ponta (nunca observado)
-- [ ] Conectar uma conta SMTP real (Gmail com senha de app, ou comercial)
-- [ ] Enfileirar um email de teste para um lead com email real
-- [ ] Rodar `python -m app.workers.email_worker` e confirmar recebimento na caixa de entrada
-- **Pendente** — melhor validado junto da Fase 5, quando existir UI para conectar a conta e disparar o envio
+- [x] Conectar uma conta SMTP real (Gmail com senha de app, ou comercial)
+- [x] Enfileirar um email de teste para um lead com email real
+- [x] Rodar `python -m app.workers.email_worker` e confirmar recebimento na caixa de entrada
+- **Validado em:** 17/07/2026 — conta Gmail real conectada, lead de teste (id 363) criado com `email=danielhsfranca@gmail.com`, job `email.send.cold` (id 458) enfileirado via `POST /api/prospeccao/email/enqueue`, processado pelo `email_worker` real (claim → `smtp_credentials_loaded` → `email_sent` → `complete`), status final `completed` em `jobs`. Email recebido e confirmado visualmente na caixa de entrada pelo utilizador.
 
 ---
 
@@ -485,7 +485,7 @@ agora pendentes só por falta de UI, podem ser validados junto dos novos P14-P16
 
 | # | Commit | O que foi implementado |
 |---|---|---|
-| 1 | *(pendente — a criar)* | agent-local: tela de conexão de conta de email (SMTP) na aba Conta |
+| 1 | `d834595` | agent-local: tela de conexão de conta de email (SMTP) na aba Conta |
 
 ### Relatório da Fase 6 — o que mudou na prática
 
@@ -503,20 +503,20 @@ Fase 3).
 ## Checks de Validação — Fase 6
 
 ### Cenário P14 — Conectar com credencial real (Gmail ou comercial)
-- [ ] Abrir "Conta" no agent-local, preencher host/porta/usuário/senha de uma conta de teste real
-- [ ] Clicar "Conectar" e confirmar que o status muda para "✓ Conectado — {username}"
-- [ ] Fechar e reabrir a tela "Conta" — confirmar que o status/campos (exceto senha) persistem
-- **Pendente** — requer credencial SMTP real de teste
+- [x] Abrir "Conta" no agent-local, preencher host/porta/usuário/senha de uma conta de teste real
+- [x] Clicar "Conectar" e confirmar que o status muda para "✓ Conectado — {username}"
+- [x] Fechar e reabrir a tela "Conta" — confirmar que o status/campos (exceto senha) persistem
+- **Validado em:** 17/07/2026 — validado pela via da API que a tela consome (`PUT`/`GET status /users/me/smtp`), não pela janela desktop em si (sem ferramenta de automação para customtkinter nesta sessão); credencial real do Gmail aceita, status passou a `connected: true` e persistiu numa chamada `GET /me/smtp/status` subsequente simulando reabrir a tela. **Nota:** a renderização visual do card (`main_screen.py:_build_smtp_card`) e o clique real nos botões não foram exercitados — ficam cobertos apenas por leitura de código, não por execução.
 
 ### Cenário P15 — Erro de autenticação mostra mensagem amigável
-- [ ] Preencher com senha errada (ou sem senha de app, no caso do Gmail) e clicar "Conectar"
-- [ ] Confirmar que aparece a mensagem de erro amigável (não um erro técnico cru) e que nada foi salvo
-- **Pendente**
+- [x] Preencher com senha errada (ou sem senha de app, no caso do Gmail) e clicar "Conectar"
+- [x] Confirmar que aparece a mensagem de erro amigável (não um erro técnico cru) e que nada foi salvo
+- **Validado em:** 17/07/2026 — mesma ressalva do P14 (validado via API, não via clique na janela). `PUT /users/me/smtp` com senha incorreta devolveu 400 com a mensagem amigável já prevista em `smtp_accounts.py:112-117` ("verificação em 2 etapas... senha de app"); `GET /me/smtp/status` confirmou que a credencial anterior não foi sobrescrita.
 
 ### Cenário P16 — Desconectar
-- [ ] Com uma conta já conectada, clicar "Desconectar"
-- [ ] Confirmar que o status volta para "Não conectado" e os campos são limpos
-- **Pendente**
+- [x] Com uma conta já conectada, clicar "Desconectar"
+- [x] Confirmar que o status volta para "Não conectado" e os campos são limpos
+- **Validado em:** 17/07/2026 — mesma ressalva do P14 (via API). `DELETE /users/me/smtp` seguido de `GET /me/smtp/status` confirmou `connected: false` com todos os campos `null`.
 
 ## Ajustes Possíveis Pós-Implementação
 
