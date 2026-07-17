@@ -216,6 +216,83 @@ def refresh_access_token(refresh_token: str) -> str:
     return resp.json()["access_token"]
 
 
+# ── Conta de email (SMTP) ─────────────────────────────────────────────────────
+
+def get_smtp_status(access_token: str) -> dict:
+    """Consulta o estado da conta SMTP do usuário. Retorna dict com 'connected' e, se
+    conectado, host/port/username/from_name/verified_at."""
+    base = _get_core_url()
+    try:
+        resp = requests.get(
+            f"{base}/users/me/smtp/status",
+            headers={"Authorization": f"Bearer {access_token}"},
+            timeout=15,
+        )
+    except requests.ConnectionError:
+        raise AuthError("Sem ligação ao servidor.")
+    except requests.Timeout:
+        raise AuthError("Timeout ao consultar a conta de email.")
+
+    if resp.status_code == 401:
+        raise AuthError("Sessão expirada. Faça login novamente.")
+    if not resp.ok:
+        raise AuthError(f"Erro ao consultar a conta de email ({resp.status_code}).")
+
+    return resp.json()
+
+
+def save_smtp_account(
+    access_token: str, host: str, port: int, username: str, password: str,
+    from_name: Optional[str] = None,
+) -> dict:
+    """Testa a credencial SMTP e, se válida, guarda-a. Levanta AuthError com a mensagem
+    amigável do backend (ex.: dica de senha de app do Gmail) em caso de falha."""
+    base = _get_core_url()
+    try:
+        resp = requests.put(
+            f"{base}/users/me/smtp",
+            json={"host": host, "port": port, "username": username, "password": password,
+                  "from_name": from_name or None},
+            headers={"Authorization": f"Bearer {access_token}"},
+            timeout=15,
+        )
+    except requests.ConnectionError:
+        raise AuthError("Sem ligação ao servidor.")
+    except requests.Timeout:
+        raise AuthError("O servidor demorou a responder ao testar a conexão SMTP.")
+
+    if resp.status_code == 401:
+        raise AuthError("Sessão expirada. Faça login novamente.")
+    if resp.status_code == 400:
+        raise AuthError(resp.json().get("detail", "Não foi possível conectar com estas credenciais."))
+    if not resp.ok:
+        raise AuthError(f"Erro ao guardar a conta de email ({resp.status_code}).")
+
+    return resp.json()
+
+
+def disconnect_smtp_account(access_token: str) -> dict:
+    """Remove a conta SMTP conectada."""
+    base = _get_core_url()
+    try:
+        resp = requests.delete(
+            f"{base}/users/me/smtp",
+            headers={"Authorization": f"Bearer {access_token}"},
+            timeout=15,
+        )
+    except requests.ConnectionError:
+        raise AuthError("Sem ligação ao servidor.")
+    except requests.Timeout:
+        raise AuthError("Timeout ao desconectar a conta de email.")
+
+    if resp.status_code == 401:
+        raise AuthError("Sessão expirada. Faça login novamente.")
+    if not resp.ok:
+        raise AuthError(f"Erro ao desconectar a conta de email ({resp.status_code}).")
+
+    return resp.json()
+
+
 def _get_user_name(token: str, base: str) -> Optional[str]:
     try:
         resp = requests.get(

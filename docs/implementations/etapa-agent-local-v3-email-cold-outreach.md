@@ -429,7 +429,7 @@ passa pela fila nem tem acesso a credencial SMTP.
 
 | # | Commit | O que foi implementado |
 |---|---|---|
-| 1 | *(pendente — a criar)* | agent-local: seletor de canal (WhatsApp/Email) por lote no Enfileirar |
+| 1 | `c966a8d` | agent-local: seletor de canal (WhatsApp/Email) por lote no Enfileirar |
 
 ### Relatório da Fase 5 — o que mudou na prática
 
@@ -458,6 +458,65 @@ motivo claro até o usuário conectar uma conta — isso é esperado nesta fase.
 - [ ] Escolher canal "Email" e enfileirar
 - [ ] Confirmar que o resumo mostra "⚠ 1 ignorado" e que o lead sem email não vira job
 - **Pendente** — requer app desktop rodando + dados de teste
+
+### Fase 6 — agent-local: conectar conta de email (SMTP)
+
+**Objetivo:** o usuário conecta a própria conta de email (SMTP) direto na tela "Conta" do
+agent-local, sem precisar de scripts nem de acesso ao frontend-crm — fechando a peça que
+faltava para os jobs de email (Fase 5) terem sucesso de verdade.
+
+| Arquivo | O que muda |
+|---|---|
+| `agent-local/app/auth.py` | Três novas funções — `get_smtp_status`, `save_smtp_account`, `disconnect_smtp_account` — mesmo padrão de `check_subscription`/`login` (chamada direta ao backend-core, `AuthError` com mensagem amigável) |
+| `agent-local/app/ui/main_screen.py` | Novo `_build_smtp_card()`, chamado dentro de `_build_conta` logo após o card "A minha conta" — status conectado/desconectado, formulário (host/porta/username/senha/nome do remetente) e botões Conectar/Desconectar |
+
+**Decisão técnica:** nenhuma mudança de backend-core foi necessária — os três endpoints
+(`PUT`/`GET status`/`DELETE /users/me/smtp`) já existiam desde a Fase 1, testados e
+funcionais. O card fica visível para todos os planos (não só assinantes), já que SMTP é
+independente de tier — inclusive usuários do `crm_free` usam esta tela sem nunca abrir o
+frontend-crm. A senha nunca é pré-preenchida (o backend não a devolve); os outros campos
+são pré-preenchidos quando já há uma conta conectada.
+
+**Consequência para checks pendentes:** esta tela finalmente permite testar com uma
+credencial real de ponta a ponta — os Cenários **P6** (Fase 1) e **C1** (Fase 3), até
+agora pendentes só por falta de UI, podem ser validados junto dos novos P14-P16 abaixo.
+
+### Commits Fase 6
+
+| # | Commit | O que foi implementado |
+|---|---|---|
+| 1 | *(pendente — a criar)* | agent-local: tela de conexão de conta de email (SMTP) na aba Conta |
+
+### Relatório da Fase 6 — o que mudou na prática
+
+**Antes:** não havia nenhuma tela para conectar uma conta de email — mesmo com todo o
+backend pronto desde a Fase 1, só dava para testar via script.
+
+**Agora:** na aba "Conta" do agent-local aparece um card "Conta de email (prospecção)"
+com o status atual (conectado/não conectado), um formulário para host/porta/usuário/
+senha/nome do remetente, e botões para conectar (testa o login de verdade antes de
+salvar, com mensagem de erro amigável se falhar) ou desconectar.
+
+**Para validar:** Cenários P14, P15 e P16, abaixo (e, de quebra, P6 da Fase 1 e C1 da
+Fase 3).
+
+## Checks de Validação — Fase 6
+
+### Cenário P14 — Conectar com credencial real (Gmail ou comercial)
+- [ ] Abrir "Conta" no agent-local, preencher host/porta/usuário/senha de uma conta de teste real
+- [ ] Clicar "Conectar" e confirmar que o status muda para "✓ Conectado — {username}"
+- [ ] Fechar e reabrir a tela "Conta" — confirmar que o status/campos (exceto senha) persistem
+- **Pendente** — requer credencial SMTP real de teste
+
+### Cenário P15 — Erro de autenticação mostra mensagem amigável
+- [ ] Preencher com senha errada (ou sem senha de app, no caso do Gmail) e clicar "Conectar"
+- [ ] Confirmar que aparece a mensagem de erro amigável (não um erro técnico cru) e que nada foi salvo
+- **Pendente**
+
+### Cenário P16 — Desconectar
+- [ ] Com uma conta já conectada, clicar "Desconectar"
+- [ ] Confirmar que o status volta para "Não conectado" e os campos são limpos
+- **Pendente**
 
 ## Ajustes Possíveis Pós-Implementação
 

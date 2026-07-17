@@ -3047,6 +3047,177 @@ class MainScreen(ctk.CTkFrame):
     # PAINEL 5 — CONTA / CONFIGURAÇÕES
     # ══════════════════════════════════════════════════════════════════════════
 
+    def _build_smtp_card(self, body: ctk.CTkFrame) -> None:
+        """Card 'Conta de email (SMTP)' — usada como canal de prospecção (Fase 5/6)."""
+        card = ctk.CTkFrame(body, fg_color=_CARD, corner_radius=12)
+        card.pack(padx=20, fill="x", pady=(0, 12))
+
+        ctk.CTkLabel(card, text="📧  Conta de email (prospecção)",
+                      font=ctk.CTkFont(size=13, weight="bold")).pack(anchor="w", padx=16, pady=(12, 4))
+        ctk.CTkLabel(
+            card,
+            text="Conecta uma conta de email para enviar o primeiro contacto por email "
+                 "quando escolheres esse canal ao Enfileirar. Gmail exige verificação em 2 "
+                 "etapas activada e uma senha de app (não a senha normal da conta).",
+            font=ctk.CTkFont(size=11), text_color="#6B7280", wraplength=380, justify="left",
+        ).pack(anchor="w", padx=16, pady=(0, 8))
+
+        status_lbl = ctk.CTkLabel(card, text="Verificando…", fg_color="#2A2A3E", corner_radius=8,
+                                   font=ctk.CTkFont(size=11), text_color="#6B7280", padx=8, pady=3)
+        status_lbl.pack(anchor="w", padx=16, pady=(0, 10))
+
+        fields_row = ctk.CTkFrame(card, fg_color="transparent")
+        fields_row.pack(padx=16, fill="x")
+        fields_row.columnconfigure(0, weight=1)
+        fields_row.columnconfigure(1, weight=1)
+
+        host_entry = ctk.CTkEntry(fields_row, placeholder_text="Host (ex: smtp.gmail.com)", height=36, corner_radius=8)
+        host_entry.grid(row=0, column=0, sticky="ew", padx=(0, 6), pady=4)
+        port_entry = ctk.CTkEntry(fields_row, placeholder_text="Porta", height=36, corner_radius=8)
+        port_entry.insert(0, "587")
+        port_entry.grid(row=0, column=1, sticky="ew", pady=4)
+
+        user_entry = ctk.CTkEntry(card, placeholder_text="Username (ex: seu@gmail.com)", height=36, corner_radius=8)
+        user_entry.pack(padx=16, fill="x", pady=4)
+
+        pwd_row = ctk.CTkFrame(card, fg_color="transparent")
+        pwd_row.pack(padx=16, fill="x", pady=4)
+        pwd_row.columnconfigure(0, weight=1)
+        pwd_entry = ctk.CTkEntry(pwd_row, placeholder_text="Senha (ou senha de app)", height=36,
+                                  corner_radius=8, show="•")
+        pwd_entry.grid(row=0, column=0, sticky="ew", padx=(0, 6))
+        pwd_visible = [False]
+
+        def _pwd_toggle():
+            pwd_visible[0] = not pwd_visible[0]
+            pwd_entry.configure(show="" if pwd_visible[0] else "•")
+            pwd_toggle_btn.configure(text="🙈" if pwd_visible[0] else "👁")
+
+        pwd_toggle_btn = ctk.CTkButton(pwd_row, text="👁", width=36, height=36,
+                                        fg_color="#2A2A3E", command=_pwd_toggle)
+        pwd_toggle_btn.grid(row=0, column=1)
+
+        from_name_entry = ctk.CTkEntry(card, placeholder_text="Nome do remetente (opcional)", height=36, corner_radius=8)
+        from_name_entry.pack(padx=16, fill="x", pady=4)
+
+        error_lbl = ctk.CTkLabel(card, text="", text_color="#EF4444", font=ctk.CTkFont(size=11),
+                                  wraplength=380, justify="left")
+        error_lbl.pack(anchor="w", padx=16, pady=(4, 0))
+
+        btn_row = ctk.CTkFrame(card, fg_color="transparent")
+        btn_row.pack(padx=16, pady=(6, 14), fill="x")
+
+        def _refresh_status():
+            def _do():
+                from app.auth import get_smtp_status, AuthError
+                try:
+                    data = get_smtp_status(self._session["access_token"])
+                except AuthError as exc:
+                    data = None
+                    err = str(exc)
+                else:
+                    err = None
+
+                def _after():
+                    if not self._widget_alive(status_lbl):
+                        return
+                    if err:
+                        status_lbl.configure(text="Erro ao verificar", fg_color="#2A2A3E", text_color="#EF4444")
+                        return
+                    if data and data.get("connected"):
+                        status_lbl.configure(text=f"✓ Conectado — {data.get('username', '')}",
+                                              fg_color="#065F46", text_color="#10B981")
+                        if self._widget_alive(host_entry):
+                            host_entry.delete(0, "end"); host_entry.insert(0, data.get("host") or "")
+                            port_entry.delete(0, "end"); port_entry.insert(0, str(data.get("port") or 587))
+                            user_entry.delete(0, "end"); user_entry.insert(0, data.get("username") or "")
+                            from_name_entry.delete(0, "end"); from_name_entry.insert(0, data.get("from_name") or "")
+                        disconnect_btn.pack(side="left", padx=(8, 0))
+                    else:
+                        status_lbl.configure(text="Não conectado", fg_color="#2A2A3E", text_color="#6B7280")
+                        disconnect_btn.pack_forget()
+                self.after(0, _after)
+            threading.Thread(target=_do, daemon=True).start()
+
+        def _save():
+            host = host_entry.get().strip()
+            username = user_entry.get().strip()
+            password = pwd_entry.get().strip()
+            from_name = from_name_entry.get().strip()
+            try:
+                port = int(port_entry.get().strip() or "587")
+            except ValueError:
+                error_lbl.configure(text="Porta inválida.")
+                return
+            if not host or not username or not password:
+                error_lbl.configure(text="Preenche host, username e senha.")
+                return
+
+            error_lbl.configure(text="")
+            save_btn.configure(state="disabled", text="A testar…")
+
+            def _do():
+                from app.auth import save_smtp_account, AuthError
+                try:
+                    save_smtp_account(self._session["access_token"], host, port, username, password,
+                                       from_name=from_name or None)
+                except AuthError as exc:
+                    err = str(exc)
+                else:
+                    err = None
+
+                def _after():
+                    if not self._widget_alive(save_btn):
+                        return
+                    save_btn.configure(state="normal", text="Conectar")
+                    if err:
+                        error_lbl.configure(text=err)
+                        return
+                    pwd_entry.delete(0, "end")
+                    popup = ctk.CTkToplevel(self)
+                    popup.title("Conectado")
+                    popup.geometry("280x100")
+                    popup.grab_set()
+                    ctk.CTkLabel(popup, text="✓ Conta de email conectada", font=ctk.CTkFont(size=13)).pack(pady=24)
+                    self.after(1200, popup.destroy)
+                    _refresh_status()
+                self.after(0, _after)
+            threading.Thread(target=_do, daemon=True).start()
+
+        def _disconnect():
+            disconnect_btn.configure(state="disabled", text="A desconectar…")
+
+            def _do():
+                from app.auth import disconnect_smtp_account, AuthError
+                try:
+                    disconnect_smtp_account(self._session["access_token"])
+                except AuthError as exc:
+                    err = str(exc)
+                else:
+                    err = None
+
+                def _after():
+                    if not self._widget_alive(disconnect_btn):
+                        return
+                    disconnect_btn.configure(state="normal", text="Desconectar")
+                    if err:
+                        error_lbl.configure(text=err)
+                        return
+                    host_entry.delete(0, "end")
+                    user_entry.delete(0, "end")
+                    from_name_entry.delete(0, "end")
+                    _refresh_status()
+                self.after(0, _after)
+            threading.Thread(target=_do, daemon=True).start()
+
+        save_btn = ctk.CTkButton(btn_row, text="Conectar", height=34, command=_save)
+        save_btn.pack(side="left")
+        disconnect_btn = ctk.CTkButton(btn_row, text="Desconectar", height=34,
+                                        fg_color="#374151", hover_color="#4B5563", command=_disconnect)
+        # visibilidade controlada por _refresh_status (só aparece se já conectado)
+
+        _refresh_status()
+
     def _build_conta(self, parent: ctk.CTkFrame) -> None:
         body = ctk.CTkScrollableFrame(parent, fg_color=_BG, corner_radius=0)
         body.pack(fill="both", expand=True)
@@ -3079,6 +3250,9 @@ class MainScreen(ctk.CTkFrame):
                       text="ℹ️  Para alterar conta ou recuperar acesso, faz novo login — o sistema envia código por email.",
                       font=ctk.CTkFont(size=10), text_color="#6B7280", wraplength=380, justify="left"
                       ).pack(anchor="w", padx=16, pady=(0, 14))
+
+        # Secção: conta de email (SMTP) — usada pela prospecção via canal Email
+        self._build_smtp_card(body)
 
         # Secção: chave API (não-assinante)
         if not subscriber:
