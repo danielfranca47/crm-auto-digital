@@ -238,7 +238,6 @@ export interface AgentConfig {
   timezone: string;
   custom_instructions: string;
   response_style: 'active' | 'passive';
-  cold_outreach_channel: 'whatsapp_only' | 'email_first';
 
   // ── Camada 1 — Contexto de abertura ──────────────────────
   origin_inbound_opener: string;
@@ -353,7 +352,6 @@ export const DEFAULT_AGENT_CONFIG: AgentConfig = {
   timezone: 'America/Sao_Paulo',
   custom_instructions: '',
   response_style: 'active',
-  cold_outreach_channel: 'whatsapp_only',
 
   origin_inbound_opener: '',
   origin_outbound_opener: '',
@@ -493,11 +491,6 @@ export const IDENTITY_MODE_LABELS: Record<string, string> = {
   human_agent:       'Humano do time',
   virtual_assistant: 'Assistente Virtual',
   user_clone:        'Clone do usuário',
-};
-
-export const COLD_OUTREACH_CHANNEL_LABELS: Record<string, string> = {
-  whatsapp_only: 'Somente WhatsApp',
-  email_first:   'Email primeiro',
 };
 
 export const TEMPLATE_KEY_LABELS: Record<string, string> = {

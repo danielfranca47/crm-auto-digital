@@ -6,7 +6,6 @@ import {
   AGENT_MODE_LABELS,
   IDENTITY_MODE_LABELS,
   HANDOFF_LABELS,
-  COLD_OUTREACH_CHANNEL_LABELS,
   AGENT_PRESETS,
   getActivePreset,
 } from '@/types/agente';
@@ -279,46 +278,6 @@ function DrawerResponseStyle({ value, onSave, onClose }: { value: string; onSave
   );
 }
 
-// ─── Drawer: Canal de 1º contato ──────────────────────────────
-function DrawerColdOutreachChannel({ value, onSave, onClose }: { value: string; onSave: (v: string) => void; onClose: () => void }) {
-  const [local, setLocal] = useState(value || 'whatsapp_only');
-  const options = [
-    {
-      v: 'whatsapp_only',
-      label: COLD_OUTREACH_CHANNEL_LABELS.whatsapp_only,
-      desc: 'A prospecção fria continua só por WhatsApp, como hoje.',
-    },
-    {
-      v: 'email_first',
-      label: COLD_OUTREACH_CHANNEL_LABELS.email_first,
-      desc: 'O primeiro contato frio tenta email antes do WhatsApp. Requer conectar uma conta de email (SMTP) no agente local.',
-    },
-  ];
-  return (
-    <DrawerBase title="Canal de 1º contato" sub="Como a prospecção fria aborda o lead pela primeira vez" onClose={onClose} onSave={() => onSave(local)}>
-      {options.map(o => (
-        <div
-          key={o.v}
-          onClick={() => setLocal(o.v)}
-          style={{
-            padding: '12px 14px',
-            borderRadius: 6,
-            border: `1px solid ${local === o.v ? 'var(--o-purple)' : 'var(--o-b1)'}`,
-            background: local === o.v ? 'rgba(139,92,246,0.06)' : 'transparent',
-            cursor: 'pointer',
-            marginBottom: 10,
-          }}
-        >
-          <div style={{ fontWeight: 500, fontSize: 13, color: local === o.v ? 'var(--o-purple)' : 'var(--o-text)', marginBottom: 4 }}>
-            {o.label}
-          </div>
-          <div style={{ fontSize: 12, color: 'var(--o-sub)', lineHeight: 1.4 }}>{o.desc}</div>
-        </div>
-      ))}
-    </DrawerBase>
-  );
-}
-
 // ─── Drawer: Tom ─────────────────────────────────────────────
 function DrawerTom({ value, onSave, onClose }: { value: string; onSave: (v: string) => void; onClose: () => void }) {
   const [local, setLocal] = useState(value);
@@ -388,7 +347,7 @@ function ModalPerfil({ value, name, brand, agentMode, tone, onSave, onClose }: {
 // Componente principal
 // ─────────────────────────────────────────────────────────────
 
-type DrawerKey = 'nome' | 'empresa' | 'nicho' | 'timezone' | 'tom' | 'goals' | 'handoff' | 'inbound_opener' | 'outbound_opener' | 'social_proof' | 'session_preview' | 'response_style' | 'cold_outreach_channel' | 'variaveis' | null;
+type DrawerKey = 'nome' | 'empresa' | 'nicho' | 'timezone' | 'tom' | 'goals' | 'handoff' | 'inbound_opener' | 'outbound_opener' | 'social_proof' | 'session_preview' | 'response_style' | 'variaveis' | null;
 type ModalKey  = 'identidade' | 'perfil' | null;
 
 export function CamadaIdentidade({ config, onUpdate, resumo }: CamadaIdentidadeProps) {
@@ -527,13 +486,6 @@ export function CamadaIdentidade({ config, onUpdate, resumo }: CamadaIdentidadeP
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 14, marginBottom: 24 }}>
             <EditCard
-              label="Canal de 1º contato"
-              value={COLD_OUTREACH_CHANNEL_LABELS[config.cold_outreach_channel] || '—'}
-              sub="Prospecção fria — WhatsApp ou email primeiro"
-              onClick={() => setDrawer('cold_outreach_channel')}
-              help="Define se o primeiro contato frio (prospecção) tenta email antes do WhatsApp. Email primeiro exige conectar uma conta de email (SMTP) no agente local."
-            />
-            <EditCard
               label="Abertura · Inbound"
               value={config.origin_inbound_opener ? config.origin_inbound_opener.slice(0, 50) + '…' : 'Não configurado'}
               sub="Lead entra em contato primeiro"
@@ -662,9 +614,6 @@ export function CamadaIdentidade({ config, onUpdate, resumo }: CamadaIdentidadeP
       )}
       {drawer === 'response_style' && (
         <DrawerResponseStyle value={config.response_style} onClose={() => setDrawer(null)} onSave={v => { onUpdate({ response_style: v as AgentConfig['response_style'] }); setDrawer(null); }} />
-      )}
-      {drawer === 'cold_outreach_channel' && (
-        <DrawerColdOutreachChannel value={config.cold_outreach_channel} onClose={() => setDrawer(null)} onSave={v => { onUpdate({ cold_outreach_channel: v as AgentConfig['cold_outreach_channel'] }); setDrawer(null); }} />
       )}
 
       {/* Modais */}

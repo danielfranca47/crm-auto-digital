@@ -301,7 +301,7 @@ campos do profile; criar essa UI ficou fora do escopo desta fase).
 
 | # | Commit | O que foi implementado |
 |---|---|---|
-| 1 | *(pendente — a criar)* | frontend-crm: seletor de canal de 1º contato + uso diário de email; correção de lacuna do admin-agents-contract |
+| 1 | `e0fea91` | frontend-crm: seletor de canal de 1º contato + uso diário de email; correção de lacuna do admin-agents-contract |
 
 ### Relatório da Fase 4 — o que mudou na prática
 
@@ -320,15 +320,78 @@ emails já foram enviados hoje e quantos restam, ao lado do card de WhatsApp.
 ## Checks de Validação — Fase 4
 
 ### Cenário P10 — Preferência de canal persiste
-- [ ] Abrir AiProfile → Identidade, trocar "Canal de 1º contato" para "Email primeiro", salvar
-- [ ] Recarregar a página e confirmar que o valor salvo permanece "Email primeiro"
-- [ ] Trocar de volta para "Somente WhatsApp" e confirmar que também persiste
-- **Pendente** — requer sessão de browser (frontend-crm rodando + backend-core + backend-crm)
+- **Não aplicável** — a UI foi revertida antes de ser testada (ver "Fase 4 — Correção", abaixo). A escolha de canal deixou de ser uma preferência de perfil salva.
 
 ### Cenário P11 — Card de uso de email no painel
 - [ ] Abrir "Uso do Plano" e confirmar que aparece o card "Email do dia" com usado/limite/restante
 - [ ] Enfileirar um job de email de teste (`POST /api/prospeccao/email/enqueue`) e confirmar que "usado" incrementa após o próximo carregamento da página
 - **Pendente** — requer sessão de browser + dados de teste
+
+## Fase 4 — Correção (17/07/2026): revertida a preferência de canal no frontend-crm
+
+### Problema identificado
+
+Antes de rodar os testes da Fase 4, o utilizador apontou uma falha de arquitetura no
+que foi construído — confirmada ao ler o código:
+
+1. **Usuários gratuitos do agent-local nunca abrem o frontend-crm.** `agent-local/app/auth.py`
+   autentica direto contra o backend-core; o plano `crm_free` existe
+   (`backend-core/app/seed.py`) e nada bloqueia esses usuários de usar o agent-local sem
+   nunca logar na web. O seletor "Canal de 1º contato" criado em `AiProfile.tsx` ficava
+   invisível para eles — o foco do agent-local é justamente prospecção, e é lá que esses
+   usuários vivem.
+2. **O canal já era decidido por chamada, não por preferência de perfil.**
+   `backend-crm/routes/prospeccao.py` já expõe dois endpoints separados —
+   `POST /whatsapp/enqueue` e `POST /email/enqueue` (Fase 2) — e quem escolhe qual chamar
+   é o próprio chamador. Nenhum dos dois lê `cold_outreach_channel`, então a preferência
+   salva no perfil nunca influenciava de fato qual endpoint era chamado.
+3. **A intenção real:** a escolha entre WhatsApp e email para o primeiro contato é
+   por-lote, feita no momento de "Enfileirar" dentro do próprio agent-local — não uma
+   configuração de conta persistida, e não uma tela no CRM web.
+
+### Correção
+
+Revertidas exatamente as partes do commit `e0fea91` relacionadas à preferência de canal
+(4 arquivos, 100% do diff de cada um era sobre isso — restaurado ao estado
+imediatamente anterior ao commit):
+
+| Arquivo | Reversão |
+|---|---|
+| `frontend-crm/src/types/agente.ts` | Removido `cold_outreach_channel` de `AgentConfig`/`DEFAULT_AGENT_CONFIG` e o export `COLD_OUTREACH_CHANNEL_LABELS` |
+| `frontend-crm/src/services/api.ts` | Removido o campo de `AiProfilePayload`, de `loadConfig()` e de `saveConfig()` |
+| `frontend-crm/src/components/agente/CamadaIdentidade.tsx` | Removido `DrawerColdOutreachChannel`, o `EditCard`, a entrada em `DrawerKey` e o bloco de render do drawer |
+| `frontend-crm/src/pages/AiProfile.tsx` | Removido o `SummaryCard` "Canal de 1º contato" |
+
+**Mantido** (não fazia parte do problema apontado — é métrica de consumo do plano,
+independente de onde/como o canal é escolhido):
+- `frontend-crm/src/components/PlanLimitsCard.tsx` + `frontend-crm/src/pages/UsoDoPlano.tsx` (card de uso diário de email)
+- `backend-crm/routes/usage.py` (`max_email_send_daily` em `daily_keys`)
+- `backend-crm/routes/admin_agents.py` + `docs/architecture/admin-agents-contract.md` (a coluna `cold_outreach_channel` continua existindo no schema desde a Fase 1; documentá-la no admin é inofensivo mesmo sem consumidor ativo)
+
+**Decisão para a próxima fase (agent-local, ainda não desenhada):** a escolha de canal
+será por-lote, sem preferência salva — o usuário escolhe WhatsApp ou Email a cada
+"Enfileirar" no agent-local, chamando o endpoint correspondente diretamente. Será
+desenhada à parte (novo Plan Mode) quando essa fase começar.
+
+### Commits da correção
+
+| # | Commit | O que foi implementado |
+|---|---|---|
+| 1 | *(pendente — a criar)* | revert: preferência de canal de cold outreach removida do frontend-crm |
+
+### Relatório da correção — o que mudou na prática
+
+**Antes:** o seletor "Canal de 1º contato" tinha sido adicionado à tela web do CRM
+(AiProfile), mas essa tela nunca é vista por usuários gratuitos do agent-local — que são
+justamente o público que mais usa a prospecção.
+
+**Agora:** esse seletor foi removido. O card de "Uso do Plano" com o limite diário de
+email continua — isso é útil independente de onde a escolha de canal vai morar. A
+escolha de canal de verdade (WhatsApp ou email por lote de prospecção) fica para uma
+próxima fase, a ser desenhada dentro do agent-local.
+
+**Para validar:** nada de novo a validar aqui além do que já estava pendente (Cenário
+P11) — esta foi uma reversão, não uma feature nova.
 
 ## Ajustes Possíveis Pós-Implementação
 

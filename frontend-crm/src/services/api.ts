@@ -92,7 +92,6 @@ export type AiProfilePayload = {
   calendar_integration?: "none" | "google_calendar" | "calendly" | null;
   payment_gateway?: "hotmart" | "kiwify" | "stripe" | "generico" | null;
   response_style?: "active" | "passive" | null;
-  cold_outreach_channel?: "whatsapp_only" | "email_first" | null;
   custom_variables?: Record<string, string> | null;
 };
 
@@ -1274,7 +1273,6 @@ export const api = {
         timezone:          (profile as any)?.timezone          ?? DEFAULT_AGENT_CONFIG.timezone,
         custom_instructions: (profile as any)?.custom_instructions ?? DEFAULT_AGENT_CONFIG.custom_instructions,
         response_style:      ((profile as any)?.response_style ?? DEFAULT_AGENT_CONFIG.response_style) as 'active' | 'passive',
-        cold_outreach_channel: ((profile as any)?.cold_outreach_channel ?? DEFAULT_AGENT_CONFIG.cold_outreach_channel) as 'whatsapp_only' | 'email_first',
 
         // Camada 2
         niche:            (profile as any)?.niche            ?? DEFAULT_AGENT_CONFIG.niche,
@@ -1455,7 +1453,6 @@ export const api = {
         timezone:            config.timezone,
         custom_instructions: config.custom_instructions,
         response_style:      config.response_style,
-        cold_outreach_channel: config.cold_outreach_channel,
         appointment_mode:     config.appointment_mode,
         // presentation_variant acompanha appointment_mode (framing comercial = "sales")
         presentation_variant: config.appointment_mode === 'commercial' ? 'sales' : 'scheduler',
