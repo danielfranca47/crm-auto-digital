@@ -143,7 +143,7 @@ CHECK (TRIM(COALESCE(companyName,'')) != '' OR TRIM(COALESCE(contactName,'')) !=
 
 | # | Commit | O que foi implementado |
 |---|---|---|
-| 3 | `<preencher>` | frontend: `NewLeadModal` exige telefone + (empresa OU contato) em vez dos 3 campos |
+| 3 | `ce48785` | frontend: `NewLeadModal` exige telefone + (empresa OU contato) em vez dos 3 campos |
 
 **Detalhes do commit:**
 - `frontend-crm/src/components/NewLeadModal.tsx` — remove `required` dos campos "Nome" e "Empresa"; novo `canSubmit = phone && (contactName || companyName)` controla o botão "Salvar Lead" e o guard do submit; dica visual ("Preencha ao menos o Nome ou a Empresa") aparece quando os dois estão vazios; ao chamar `api.createLead` diretamente (sem `onSave`), envia `companyName`/`contactName` com `.trim() || null` em vez de string vazia.
