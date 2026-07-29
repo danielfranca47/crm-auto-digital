@@ -27,6 +27,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { Pause, Play, X, Search, AlertCircle, Pencil } from "lucide-react";
+import { leadDisplayName } from "@/utils/leadDisplayName";
 
 // ─── Temperatura ──────────────────────────────────────────────────────────────
 
@@ -159,7 +160,7 @@ function NotificationBanner({ leads, onView }: { leads: FollowUpLead[]; onView: 
       </span>
       <p className="text-sm flex-1">
         <span style={{ color: "#F5694E" }} className="font-semibold">
-          {first.companyName}
+          {leadDisplayName(first)}
         </span>{" "}
         respondeu ao follow-up — bot pausado automaticamente. Ação necessária.
         {autopaused.length > 1 && (
@@ -287,8 +288,12 @@ function LeadDrawer({
       <SheetContent side="right" className="w-[380px] p-0 overflow-y-auto flex flex-col">
         <SheetHeader className="px-5 py-4 border-b flex flex-row items-center gap-3 space-y-0">
           <div className="flex-1 min-w-0">
-            <SheetTitle className="text-sm font-semibold truncate">{lead.companyName}</SheetTitle>
-            {lead.contactName && <p className="text-xs text-muted-foreground truncate">{lead.contactName}</p>}
+            <SheetTitle className="text-sm font-semibold truncate">
+              {lead.companyName || lead.contactName || "Lead sem nome"}
+            </SheetTitle>
+            {lead.contactName && lead.companyName && (
+              <p className="text-xs text-muted-foreground truncate">{lead.contactName}</p>
+            )}
           </div>
           <div
             className="flex items-center gap-1.5 text-xs font-medium px-2 py-1 rounded-full border shrink-0"
@@ -446,7 +451,7 @@ function ConfirmModal({
               <div className="rounded-lg bg-muted/40 px-3 py-2 mb-3 text-sm space-y-1">
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">Lead</span>
-                  <span className="font-medium">{lead.companyName}</span>
+                  <span className="font-medium">{leadDisplayName(lead)}</span>
                 </div>
                 {lead.followup_contract && (
                   <div className="flex justify-between">
@@ -506,11 +511,11 @@ function FollowUpRow({
           className="w-8 h-8 rounded-lg flex items-center justify-center text-xs font-bold shrink-0"
           style={{ background: tempCfg.bg, color: tempCfg.color }}
         >
-          {(lead.companyName ?? "?").slice(0, 2).toUpperCase()}
+          {leadDisplayName(lead) === "Lead sem nome" ? "?" : leadDisplayName(lead).slice(0, 2).toUpperCase()}
         </div>
         <div className="min-w-0">
           <p className="text-sm font-medium truncate flex items-center gap-1.5">
-            <span className="truncate">{lead.companyName}</span>
+            <span className="truncate">{leadDisplayName(lead)}</span>
             {contract?.trigger === "auto_inactivity" && (
               <span
                 className="text-[9px] font-mono uppercase px-1 py-0.5 rounded border shrink-0 text-blue-600 bg-blue-50 border-blue-200"
@@ -703,7 +708,7 @@ export default function FollowUpCenter() {
       const contract = lead.followup_contract;
       const temp = (contract?.outcome ?? "").toLowerCase();
       const agent = lead.agent_type ?? "";
-      const name = (lead.companyName + " " + (lead.contactName ?? "")).toLowerCase();
+      const name = leadDisplayName(lead).toLowerCase();
 
       if (statusFilter !== "all" && status !== statusFilter) return false;
       if (agentFilter  !== "all" && agent !== agentFilter) return false;

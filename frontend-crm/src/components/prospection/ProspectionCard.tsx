@@ -10,6 +10,7 @@ import { ProspectionLead, ProspectionMethod } from '@/types/prospection';
 import { Phone, Mail, MapPin, Calendar, ChevronDown, ChevronUp, Eye } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+import { leadDisplayName } from '@/utils/leadDisplayName';
 
 interface ProspectionCardProps {
   lead: ProspectionLead;
@@ -82,7 +83,7 @@ export function ProspectionCard({
               />
             )}
             <div className="space-y-1">
-              <h4 className="font-medium text-foreground">{lead.companyName} - {lead.contactName}</h4>
+              <h4 className="font-medium text-foreground">{leadDisplayName(lead)}</h4>
               <div className="flex items-center gap-2 text-sm text-muted-foreground">
                 <Phone className="h-3 w-3" />
                 {lead.phone}
