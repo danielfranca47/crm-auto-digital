@@ -23,6 +23,7 @@ import { Button } from "./ui/button";
 import { Archive, AlertCircle, RefreshCw } from "lucide-react";
 import { ScheduleAppointmentDialog } from "./ScheduleAppointmentDialog";
 import { useAppointments, useCancelAppointment } from "@/hooks/useAppointments";
+import { leadDisplayName } from "@/utils/leadDisplayName";
 import { useToast } from "@/hooks/use-toast";
 import { Alert, AlertDescription, AlertTitle } from "./ui/alert";
 import { FollowUpTransitionModal } from "./FollowUpTransitionModal";
@@ -117,8 +118,8 @@ export function KanbanBoard({ onDashboard }: KanbanBoardProps) {
       if (!searchTerm.trim()) return leads;
       const term = searchTerm.toLowerCase();
       return leads.filter((lead) =>
-        lead.contactName.toLowerCase().includes(term) ||
-        lead.companyName.toLowerCase().includes(term) ||
+        (lead.contactName || '').toLowerCase().includes(term) ||
+        (lead.companyName || '').toLowerCase().includes(term) ||
         lead.phone.toLowerCase().includes(term) ||
         lead.origin.toLowerCase().includes(term) ||
         (!!lead.observations && lead.observations.toLowerCase().includes(term))
@@ -456,7 +457,7 @@ export function KanbanBoard({ onDashboard }: KanbanBoardProps) {
               <div className="lead-card p-4 w-72 rotate-1 shadow-2xl cursor-grabbing">
                 <div className="flex justify-between items-start mb-2">
                   <h4 className="font-semibold text-foreground text-sm">
-                    {activeLead.companyName} - {activeLead.contactName}
+                    {leadDisplayName(activeLead)}
                   </h4>
                 </div>
                 <div className="text-xs text-muted-foreground truncate">{activeLead.phone}</div>

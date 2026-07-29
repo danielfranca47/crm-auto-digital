@@ -156,14 +156,19 @@ CHECK (TRIM(COALESCE(companyName,'')) != '' OR TRIM(COALESCE(contactName,'')) !=
 
 **Agora:** o formulário exige telefone sempre, e Nome OU Empresa (pelo menos um). É possível cadastrar um lead manual só com o nome da empresa, só com o nome do contato, ou os dois — mas não com nenhum dos dois (botão continua desabilitado e aparece uma dica). Isso cobre o caso de leads vindos do Google Maps, onde o nome do responsável ainda não é conhecido no momento do cadastro manual.
 
-**Para validar:** ainda não testado ao vivo no navegador nesta sessão — ver Cenários P1, P2, P3 e C3 na seção de Checks abaixo.
+**Para validar:** testado ao vivo no navegador em 2026-07-29 (ver Checks abaixo). Durante o teste, criar um lead só-com-contato expôs que a Fase 6 sozinha não bastava — o card no Kanban mostrava "Empresa sem nome - Ana QA" (placeholder da Fase 5 ainda ativo) e a busca (`KanbanBoard.tsx` filterLeads) faria `.toLowerCase()` em `companyName` sem tratar `null`. Isso puxou a Fase 5 e parte da Fase 7 para o mesmo commit de validação — ver abaixo.
 
-### Fase 7 — Frontend: pontos de exibição sem fallback
+### Fase 5 (concluída) + Fase 7 (parcial) — corrigidas junto da validação da Fase 6
 
-| Arquivo | O que muda |
+| Arquivo | O que mudou |
 |---|---|
-| `frontend-crm/src/utils/leadDisplayName.ts` (novo) | helper `contactName \|\| companyName \|\| "Lead sem nome"` |
-| `LeadCard.tsx`, `KanbanBoard.tsx`, `SearchAutocomplete.tsx`, `ProspectionCard.tsx`, `FollowUpCenter.tsx` | usam o helper |
+| `frontend-crm/src/contexts/LeadsContext.tsx` | `companyName: raw.companyName \|\| ''` (era `\|\| 'Empresa sem nome'`) |
+| `frontend-crm/src/utils/leadDisplayName.ts` (novo) | helper `companyName + contactName` com prioridade `contactName \|\| companyName`, fallback `"Lead sem nome"` |
+| `LeadCard.tsx` | título do card usa `leadDisplayName(lead)` |
+| `KanbanBoard.tsx` | `DragOverlay` usa `leadDisplayName`; filtro de busca (`filterLeads`) passa a tratar `companyName`/`contactName` nulos/vazios (`(lead.companyName \|\| '').toLowerCase()`) |
+| `SearchAutocomplete.tsx` | sugestão de busca usa `leadDisplayName`; comparação do termo tratada com `\|\| ''` |
+
+**Pendente (não corrigido nesta rodada):** `ProspectionCard.tsx` e `FollowUpCenter.tsx` ainda não usam o helper — continuam exibindo só `companyName`/`contactName` isolado sem fallback. Como não fazem parte do fluxo de criação manual testado aqui, ficam para uma fase futura se o mesmo sintoma aparecer lá.
 
 ### Fase 8 — Regressão ponta a ponta
 
@@ -184,20 +189,25 @@ Sem código novo — suíte de testes + roteiro manual completo.
 - [ ] Confirmar lead criado com `contactName = telefone`, `companyName = NULL`
 
 ### Cenário P1 — Novo Lead manual só com contato
-- [ ] Abrir "Novo Lead", preencher telefone + nome do contato, deixar empresa vazia
-- [ ] Salvar com sucesso, aparece no Kanban só com o nome do contato
+- [x] Abrir "Novo Lead", preencher telefone + nome do contato, deixar empresa vazia
+- [x] Salvar com sucesso, aparece no Kanban só com o nome do contato
+- **Validado em:** 2026-07-29 — testado ao vivo (Chrome DevTools MCP) na conta `autodigital157@gmail.com`. Lead "Ana QA" criado (`POST /api/leads` → 200, `companyName: null`, `contactName: "Ana QA"`), card no Kanban mostra "Ana QA" (sem "Empresa sem nome").
 
 ### Cenário P2 — Novo Lead manual só com empresa
-- [ ] Preencher telefone + empresa, deixar nome do contato vazio
-- [ ] Salvar com sucesso
+- [x] Preencher telefone + empresa, deixar nome do contato vazio
+- [x] Salvar com sucesso
+- **Validado em:** 2026-07-29 — lead "Padaria Teste QA" criado (`POST /api/leads` → 200, `companyName: "Padaria Teste QA"`, `contactName: null`), aparece corretamente no Kanban.
 
 ### Cenário P3 — Novo Lead sem nenhum dos dois é bloqueado
-- [ ] Preencher só telefone, tentar salvar
-- [ ] Botão permanece desabilitado / mensagem de erro visível
+- [x] Preencher só telefone, tentar salvar
+- [x] Botão permanece desabilitado / mensagem de erro visível
+- **Validado em:** 2026-07-29 — com Nome e Empresa vazios, "Salvar Lead" aparece `disabled` e a dica "Preencha ao menos o Nome ou a Empresa." é exibida.
 
 ### Cenário C3 — Exibição sem "null"/"undefined"
-- [ ] Kanban, busca, DragOverlay, FollowUp Center com leads só-empresa/só-contato/ambos
-- [ ] Nenhum lugar mostra `"null"` ou `"undefined"`
+- [x] Kanban, busca, DragOverlay com leads só-empresa/só-contato/ambos
+- [ ] FollowUp Center (não coberto nesta rodada — ver Fase 7 parcial acima)
+- [x] Nenhum lugar mostra `"null"` ou `"undefined"`
+- **Validado em:** 2026-07-29 — após o fix de `LeadsContext.tsx`/`leadDisplayName`, cards e sugestões de busca mostram só o nome disponível; busca por "padaria" filtra corretamente sem erro no console.
 
 ---
 

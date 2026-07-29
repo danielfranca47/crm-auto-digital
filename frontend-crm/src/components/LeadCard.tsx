@@ -4,6 +4,7 @@ import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { LeadActionsMenu } from "./LeadActionsMenu";
 import { useNavigate } from "react-router-dom";
+import { leadDisplayName } from "@/utils/leadDisplayName";
 
 const FOLLOWUP_VARIANT_CONFIG: Record<string, { label: string; color: string }> = {
   cart_recovery:    { label: "Carrinho",  color: "#52C4A0" },
@@ -119,7 +120,7 @@ export function LeadCard({
     >
       <div className="flex justify-between items-start mb-3">
         <div className="flex items-center gap-1.5 min-w-0">
-          <h4 className="font-semibold text-foreground text-sm truncate">{lead.companyName} - {lead.contactName}</h4>
+          <h4 className="font-semibold text-foreground text-sm truncate">{leadDisplayName(lead)}</h4>
           {hasReplyNotification && (
             <button
               title="Lead respondeu ao follow-up — ver na Central de Follow-ups"

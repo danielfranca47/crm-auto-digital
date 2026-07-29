@@ -80,7 +80,7 @@ function mapRawLead(raw: any): Lead {
 
   return {
     id: String(raw.id),
-    companyName: raw.companyName || 'Empresa sem nome',
+    companyName: raw.companyName || '',
     contactName: raw.contactName || '',
     phone: raw.phone || '',
     email: raw.email || '',

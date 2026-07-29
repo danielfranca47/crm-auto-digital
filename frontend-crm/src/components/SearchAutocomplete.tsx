@@ -4,6 +4,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "./ui/popover";
 import { Input } from "./ui/input";
 import { Search, Phone, MapPin } from "lucide-react";
 import { Lead, KanbanColumn } from "../types/crm";
+import { leadDisplayName } from "@/utils/leadDisplayName";
 
 interface SearchAutocompleteProps {
   searchTerm: string;
@@ -34,9 +35,9 @@ export function SearchAutocomplete({
 
     allColumns.forEach(column => {
       column.leads.forEach(lead => {
-        const matches = 
-          lead.contactName.toLowerCase().includes(term) ||
-          lead.companyName.toLowerCase().includes(term) ||
+        const matches =
+          (lead.contactName || '').toLowerCase().includes(term) ||
+          (lead.companyName || '').toLowerCase().includes(term) ||
           lead.phone.toLowerCase().includes(term) ||
           lead.origin.toLowerCase().includes(term) ||
           (lead.observations && lead.observations.toLowerCase().includes(term));
@@ -124,7 +125,7 @@ export function SearchAutocomplete({
                       >
                         <div className="flex items-center justify-between w-full">
                           <span className="font-medium text-foreground">
-                            {highlightMatch(lead.contactName, searchTerm)}
+                            {highlightMatch(leadDisplayName(lead), searchTerm)}
                           </span>
                           <div 
                             className="px-2 py-1 rounded-md text-xs font-medium text-white"
