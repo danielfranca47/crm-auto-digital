@@ -201,7 +201,38 @@ Como consequência, `Lead.companyName`/`contactName` nunca chegam como `null` em
 | `KanbanBoard.tsx` | `DragOverlay` usa `leadDisplayName`; filtro de busca (`filterLeads`) passa a tratar `companyName`/`contactName` nulos/vazios (`(lead.companyName \|\| '').toLowerCase()`) |
 | `SearchAutocomplete.tsx` | sugestão de busca usa `leadDisplayName`; comparação do termo tratada com `\|\| ''` |
 
-**Pendente (não corrigido nesta rodada):** `ProspectionCard.tsx` e `FollowUpCenter.tsx` ainda não usam o helper — continuam exibindo só `companyName`/`contactName` isolado sem fallback. Como não fazem parte do fluxo de criação manual testado aqui, ficam para uma fase futura se o mesmo sintoma aparecer lá.
+**Atualização:** `ProspectionCard.tsx` e `FollowUpCenter.tsx` foram corrigidos depois — ver Fase 7 (completa) abaixo.
+
+### Fase 7 (completa) — `ProspectionCard.tsx` e `FollowUpCenter.tsx`
+
+| Arquivo | O que mudou |
+|---|---|
+| `frontend-crm/src/components/prospection/ProspectionCard.tsx` | título do card usa `leadDisplayName(lead)` |
+| `frontend-crm/src/pages/FollowUpCenter.tsx` | 6 pontos corrigidos (ver detalhe abaixo) |
+
+### Commits Fase 7
+
+| # | Commit | O que foi implementado |
+|---|---|---|
+| 6 | `c7b8680` | frontend: `ProspectionCard` e `FollowUpCenter` (6 pontos) usam `leadDisplayName` |
+
+**Detalhes do commit `c7b8680`:**
+
+Diferença importante em relação ao Kanban: `FollowUpCenter.tsx` busca dados direto de `api.followUps.listActive()` (tipo `FollowUpLead`), **sem passar pela normalização de `LeadsContext.mapRawLead`** — ou seja, `companyName` pode chegar como `null` de verdade em runtime aqui (o tipo `FollowUpLead.companyName: string` em `services/api.ts:276` já estava desatualizado antes desta mudança). Os 6 pontos corrigidos:
+1. Banner de "lead respondeu, bot pausado" — usa `leadDisplayName`.
+2. `SheetTitle` do painel de detalhe — cai para `contactName` quando `companyName` é `null`, mas mantém o subtítulo com `contactName` só quando **os dois** existem (preserva o layout título+subtítulo original em vez de simplesmente concatenar como no Kanban).
+3. Modal de confirmação (pausar/retomar/cancelar) — usa `leadDisplayName`.
+4. Avatar de iniciais da linha da tabela — usa `leadDisplayName`, com `"?"` reservado para quando não há nome nenhum (antes caía em `"?"` mesmo quando só `contactName` existia).
+5. Label principal da linha da tabela — usa `leadDisplayName`.
+6. Filtro de busca — usava `lead.companyName + " " + (lead.contactName ?? "")`, que em JS produzia o texto literal `"null Ana"` quando `companyName` era `null` (poluindo a busca, embora não travasse); agora usa `leadDisplayName(lead)`.
+
+### Relatório da Fase 7 (completa) — o que mudou na prática
+
+**Antes:** um lead só-com-contato (ex.: "Ana QA", sem empresa) aparecia com o nome em branco no Kanban de prospecção e na Central de Follow-ups — título vazio, avatar com "?" mesmo tendo nome de contato, e a busca continha o texto literal "null".
+
+**Agora:** esses 7 pontos (1 em `ProspectionCard.tsx` + 6 em `FollowUpCenter.tsx`) mostram o nome disponível (contato ou empresa), com o mesmo helper já validado no Kanban.
+
+**Para validar:** `tsc --noEmit` limpo; página `/follow-ups` testada no navegador sem erros de console. **Não** validado visualmente com um lead real só-com-contato nessa tela — o ambiente de teste não tinha nenhum follow-up ativo no momento (0 follow-ups em andamento). A lógica espelha exatamente o padrão já confirmado ao vivo no Kanban (Fase 6), então o risco residual é baixo, mas fica registrado como validação pendente se quiser confirmação com dado real.
 
 ### Fase 8 — Regressão ponta a ponta
 
@@ -235,7 +266,9 @@ Ou seja: se não veio nome de empresa nenhum (o normal — WhatsApp não manda "
 
 Essa é uma tela diferente do Kanban que foi testado. Ela tem 6 lugares que leem `lead.companyName` direto, sem o tratamento null-safe já aplicado no Kanban (`FollowUpCenter.tsx`, linhas 162, 290, 449, 509, 513, 706). Se um lead só tem `contactName` (o caso que a Fase 6 passou a permitir), essas linhas mostram um espaço em branco ou um avatar com "?" no lugar do nome — não quebra a tela, mas fica visualmente incompleto.
 
-**Por que ficou em aberto:** essa tela não faz parte do cadastro manual — só afetaria um lead sem empresa depois que ele entrasse em follow-up, cenário não exercitado nesta sessão. Preferimos não alterar 6 pontos de código sem confirmar visualmente o problema primeiro, em vez de corrigir "no escuro". Fica para uma fase futura se o mesmo sintoma aparecer lá.
+**Por que ficou em aberto:** essa tela não faz parte do cadastro manual — só afetaria um lead sem empresa depois que ele entrasse em follow-up, cenário não exercitado nesta sessão. Preferimos não alterar 6 pontos de código sem confirmar visualmente o problema primeiro, em vez de corrigir "no escuro".
+
+**Atualização:** corrigido no commit `c7b8680` (Fase 7 completa). Descoberta relevante: aqui `companyName` pode ser `null` de verdade em runtime (diferente do Kanban, que sempre normaliza para `''` via `LeadsContext`) — essa tela busca dados direto da API sem passar por essa normalização.
 
 ---
 
@@ -269,9 +302,9 @@ Essa é uma tela diferente do Kanban que foi testado. Ela tem 6 lugares que leem
 
 ### Cenário C3 — Exibição sem "null"/"undefined"
 - [x] Kanban, busca, DragOverlay com leads só-empresa/só-contato/ambos
-- [ ] FollowUp Center (não coberto nesta rodada — ver Fase 7 parcial acima)
+- [x] FollowUp Center e Prospecção (código corrigido — ver Fase 7 completa; não validado com dado real, ver ressalva abaixo)
 - [x] Nenhum lugar mostra `"null"` ou `"undefined"`
-- **Validado em:** 2026-07-29 — após o fix de `LeadsContext.tsx`/`leadDisplayName`, cards e sugestões de busca mostram só o nome disponível; busca por "padaria" filtra corretamente sem erro no console.
+- **Validado em:** 2026-07-29 — Kanban/busca/DragOverlay testados ao vivo no navegador com dado real. FollowUp Center e ProspectionCard corrigidos com o mesmo helper e `tsc` limpo, mas **sem** um lead real só-com-contato passando por essas telas no momento do teste (0 follow-ups ativos no ambiente) — validação com dado real fica pendente.
 
 ---
 
