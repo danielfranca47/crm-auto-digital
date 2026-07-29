@@ -127,7 +127,7 @@ CHECK (TRIM(COALESCE(companyName,'')) != '' OR TRIM(COALESCE(contactName,'')) !=
 
 | # | Commit | O que foi implementado |
 |---|---|---|
-| 4 | `<preencher>` | backend: `guardrail.py` para de inventar `"WhatsApp inbound"`, contactName cai para o telefone quando não há nome |
+| 4 | `f84641b` | backend: `guardrail.py` para de inventar `"WhatsApp inbound"`, contactName cai para o telefone quando não há nome |
 
 **Detalhes do commit:**
 - `backend-crm/services/whatsapp_inbound/guardrail.py` — `contact_name` ganha um 4º fallback (`phone_norm`) quando `contact_name`/`sender_name`/`name` não vêm no payload; `company` deixa de ter fallback fixo (`"WhatsApp inbound"` removido), fica `None` quando o payload não informa.
