@@ -66,6 +66,24 @@ companyName TEXT,
 CHECK (TRIM(COALESCE(companyName,'')) != '' OR TRIM(COALESCE(contactName,'')) != '')
 ```
 
+### Commits Fase 1
+
+| # | Commit | O que foi implementado |
+|---|---|---|
+| 1 | `a135ccc` | backend: migração de banco (companyName nullable + CHECK companyName/contactName) |
+
+**Detalhes do commit `a135ccc`:**
+- `backend-crm/database.py` — nova função `_migrate_leads_company_or_contact()`, chamada em `init_db()` logo após os `ensure_column` de `leads`. Rebuild de tabela (SQLite não suporta `ALTER COLUMN`), com `PRAGMA foreign_keys = OFF` durante o rebuild (leads tem 7 tabelas filhas com `ON DELETE CASCADE`), checagem de contagem de linhas antes do `DROP TABLE`, e recriação dos 5 índices + a UNIQUE existente.
+- `backend-crm/tests/test_leads_company_or_contact_migration.py` — novo: `init_db()` fresco cria `companyName` nullable com CHECK ativo; idempotência (`init_db()` duas vezes); migração a partir de um schema antigo preserva todas as linhas e valores.
+
+### Relatório da Fase 1 — o que mudou na prática
+
+**Antes:** o banco recusava salvar um lead sem nome de empresa, mesmo que o nome do contato já estivesse preenchido — por isso o sistema inventava nomes falsos como `"WhatsApp inbound"` ou `"Sem nome"` só para conseguir gravar.
+
+**Agora:** o banco aceita um lead com só o nome da empresa, só o nome do contato, ou os dois — mas recusa (com erro) se nenhum dos dois vier preenchido. A migração roda automaticamente na próxima subida do servidor `backend-crm` e preserva todos os leads já existentes sem alterar nenhum dado.
+
+**Para validar:** ainda não há cenário manual nesta fase — a mudança é só de banco, os pontos que criam leads (Fase 3) e o formulário (Fase 6) ainda vão continuar preenchendo `companyName` com placeholder até essas fases seguintes serem implementadas. Validação automatizada: os 3 testes novos e a suíte completa de 129 testes já rodaram sem regressão (os 13 erros pré-existentes na suíte — `on_startup`/Pydantic mock/coluna `origin` em teste isolado — já falhavam antes desta mudança, confirmado via `git stash`).
+
 ### Fase 2 — Pydantic: `Lead.companyName` opcional + validação cruzada
 
 **Objetivo:** `POST /api/leads` aceita omitir `companyName`, mas recusa se nem `companyName` nem `contactName` vierem.
@@ -73,6 +91,24 @@ CHECK (TRIM(COALESCE(companyName,'')) != '' OR TRIM(COALESCE(contactName,'')) !=
 | Arquivo | O que muda |
 |---|---|
 | `backend-crm/models.py` | `Lead.companyName: Optional[str] = None` + `model_validator` cruzado |
+
+### Commits Fase 2
+
+| # | Commit | O que foi implementado |
+|---|---|---|
+| 2 | `<preencher>` | backend: `Lead.companyName` opcional + `model_validator` exigindo companyName OU contactName |
+
+**Detalhes do commit:**
+- `backend-crm/models.py` — `companyName: Optional[str] = None` (era `str` obrigatório); novo `model_validator(mode="after")` que recusa (`ValueError`) quando `companyName` e `contactName` estão ambos vazios/só espaço.
+- `backend-crm/tests/test_lead_model_validation.py` — novo: cobre os dois campos ausentes (falha), ambos só espaço (falha), só empresa (ok), só contato (ok), ambos preenchidos (ok).
+
+### Relatório da Fase 2 — o que mudou na prática
+
+**Antes:** `POST /api/leads` recusava (erro 422) qualquer requisição sem `companyName`, mesmo com `contactName` preenchido — a validação Pydantic barrava antes mesmo de chegar no banco.
+
+**Agora:** a API aceita criar um lead só com `companyName`, só com `contactName`, ou os dois — e recusa (422) apenas quando nenhum dos dois vem preenchido (ou vêm só com espaços).
+
+**Para validar:** mudança só no schema de validação da API — ainda não afeta o formulário manual (`NewLeadModal`, Fase 6) nem os outros pontos de criação (Fase 3). Validação automatizada: 5/5 testes novos passaram; suíte completa rodada sem regressão nova (os erros pré-existentes de `on_startup`/encoding de console continuam os mesmos, não relacionados a este código).
 
 ### Fase 3 — Os 5 pontos de criação de lead param de inventar placeholder
 
@@ -119,9 +155,10 @@ Sem código novo — suíte de testes + roteiro manual completo.
 ## Checks de Validação
 
 ### Cenário C1 — Migração de banco preserva dados e aplica CHECK
-- [ ] Rodar suíte `test_leads_company_or_contact_migration.py`
-- [ ] `INSERT (companyName, contactName) VALUES (NULL, NULL)` falha
-- [ ] `INSERT (companyName, contactName) VALUES (NULL, 'Ana')` funciona
+- [x] Rodar suíte `test_leads_company_or_contact_migration.py`
+- [x] `INSERT (companyName, contactName) VALUES (NULL, NULL)` falha
+- [x] `INSERT (companyName, contactName) VALUES (NULL, 'Ana')` funciona
+- **Validado em:** 2026-07-10 — 3/3 testes passaram (fresh init_db, idempotência, preservação de dados na migração a partir do schema antigo); suíte completa (129 testes) rodada sem regressão nova.
 
 ### Cenário C2 — WhatsApp inbound sem nome usa telefone como fallback
 - [ ] Simular webhook UazAPI sem `senderName` e sem nome anterior

@@ -1,12 +1,12 @@
 from typing import Any, Dict, Optional, List, Literal
 from datetime import datetime
-from pydantic import BaseModel, Field, ConfigDict
+from pydantic import BaseModel, Field, ConfigDict, model_validator
 
 # -----------------------------
 # Leads
 # -----------------------------
 class Lead(BaseModel):
-    companyName: str
+    companyName: Optional[str] = None
     contactName: Optional[str] = None
     phone: Optional[str] = None
     country_code: Optional[str] = None
@@ -21,6 +21,12 @@ class Lead(BaseModel):
 
     # Pydantic v2
     model_config = ConfigDict(populate_by_name=True)
+
+    @model_validator(mode="after")
+    def _require_company_or_contact(self) -> "Lead":
+        if not (self.companyName or "").strip() and not (self.contactName or "").strip():
+            raise ValueError("Informe ao menos o nome da empresa ou o nome do contato")
+        return self
 
 
 class LeadUpdate(BaseModel):
