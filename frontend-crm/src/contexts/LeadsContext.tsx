@@ -360,8 +360,8 @@ export function LeadsProvider({ children }: LeadsProviderProps) {
   const addLead = async (leadData: NewLeadForm): Promise<AddLeadResult> => {
     try {
       const created = await api.createLead({
-        companyName: leadData.companyName,
-        contactName: leadData.contactName ?? null,
+        companyName: leadData.companyName?.trim() || null,
+        contactName: leadData.contactName?.trim() || null,
         phone: leadData.phone ?? null,
         country_code: (leadData.country_code || "BR").toUpperCase(),
         email: leadData.email ?? null,

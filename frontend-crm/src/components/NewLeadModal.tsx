@@ -57,10 +57,14 @@ export function NewLeadModal({ isOpen, onClose, onSave }: NewLeadModalProps) {
   const [loading, setLoading] = useState(false);
   const { handleError } = useApiErrorHandler();
 
+  const hasContactName = Boolean(formData.contactName.trim());
+  const hasCompanyName = Boolean(formData.companyName.trim());
+  const canSubmit = Boolean(formData.phone) && (hasContactName || hasCompanyName);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (!formData.contactName || !formData.phone || !formData.companyName) return;
+    if (!canSubmit) return;
 
     try {
       setLoading(true);
@@ -75,8 +79,8 @@ export function NewLeadModal({ isOpen, onClose, onSave }: NewLeadModalProps) {
         await onSave(payload);
       } else {
         await api.createLead({
-          companyName: payload.companyName,
-          contactName: payload.contactName || null,
+          companyName: payload.companyName.trim() || null,
+          contactName: payload.contactName.trim() || null,
           phone: payload.phone || null,
           country_code: payload.country_code,
           email: null,
@@ -127,30 +131,31 @@ export function NewLeadModal({ isOpen, onClose, onSave }: NewLeadModalProps) {
         <form onSubmit={handleSubmit} className="space-y-6">
           <div className="space-y-2">
             <Label htmlFor="name" className="text-sm font-medium">
-              Nome *
+              Nome
             </Label>
             <Input
               id="name"
               value={formData.contactName}
               onChange={(e) => setFormData((prev) => ({ ...prev, contactName: e.target.value }))}
               placeholder="Nome do contato"
-              required
               className="bg-input border-border"
             />
           </div>
 
           <div className="space-y-2">
             <Label htmlFor="company" className="text-sm font-medium">
-              Empresa *
+              Empresa
             </Label>
             <Input
               id="company"
               value={formData.companyName}
               onChange={(e) => setFormData((prev) => ({ ...prev, companyName: e.target.value }))}
               placeholder="Nome da Empresa"
-              required
               className="bg-input border-border"
             />
+            {!hasContactName && !hasCompanyName && (
+              <p className="text-xs text-muted-foreground">Preencha ao menos o Nome ou a Empresa.</p>
+            )}
           </div>
 
           <div className="space-y-2">
@@ -245,7 +250,7 @@ export function NewLeadModal({ isOpen, onClose, onSave }: NewLeadModalProps) {
             <Button
               type="submit"
               className="gradient-primary text-white flex-1 hover:shadow-glow transition-smooth"
-              disabled={loading || !formData.contactName || !formData.phone || !formData.companyName}
+              disabled={loading || !canSubmit}
             >
               {loading ? "Salvando..." : "Salvar Lead"}
             </Button>

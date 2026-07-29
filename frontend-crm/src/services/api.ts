@@ -509,7 +509,7 @@ export const api = {
   },
   // --- LEADS (CRUD) ---
   createLead: async (payload: {
-    companyName: string;
+    companyName?: string | null;
     contactName?: string | null;
     phone?: string | null;
     country_code?: string | null;

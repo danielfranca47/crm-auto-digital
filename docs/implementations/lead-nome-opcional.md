@@ -96,7 +96,7 @@ CHECK (TRIM(COALESCE(companyName,'')) != '' OR TRIM(COALESCE(contactName,'')) !=
 
 | # | Commit | O que foi implementado |
 |---|---|---|
-| 2 | `<preencher>` | backend: `Lead.companyName` opcional + `model_validator` exigindo companyName OU contactName |
+| 2 | `1a552b8` | backend: `Lead.companyName` opcional + `model_validator` exigindo companyName OU contactName |
 
 **Detalhes do commit:**
 - `backend-crm/models.py` — `companyName: Optional[str] = None` (era `str` obrigatório); novo `model_validator(mode="after")` que recusa (`ValueError`) quando `companyName` e `contactName` estão ambos vazios/só espaço.
@@ -138,6 +138,25 @@ CHECK (TRIM(COALESCE(companyName,'')) != '' OR TRIM(COALESCE(contactName,'')) !=
 | Arquivo | O que muda |
 |---|---|
 | `frontend-crm/src/components/NewLeadModal.tsx` | telefone obrigatório + (empresa OU contato); remove `required` fixo |
+
+### Commits Fase 6
+
+| # | Commit | O que foi implementado |
+|---|---|---|
+| 3 | `<preencher>` | frontend: `NewLeadModal` exige telefone + (empresa OU contato) em vez dos 3 campos |
+
+**Detalhes do commit:**
+- `frontend-crm/src/components/NewLeadModal.tsx` — remove `required` dos campos "Nome" e "Empresa"; novo `canSubmit = phone && (contactName || companyName)` controla o botão "Salvar Lead" e o guard do submit; dica visual ("Preencha ao menos o Nome ou a Empresa") aparece quando os dois estão vazios; ao chamar `api.createLead` diretamente (sem `onSave`), envia `companyName`/`contactName` com `.trim() || null` em vez de string vazia.
+- `frontend-crm/src/services/api.ts` — `createLead({ companyName })` passa a aceitar `string | null | undefined` (era `string` obrigatório), refletindo que o backend não exige mais o campo.
+- `frontend-crm/src/contexts/LeadsContext.tsx` — `addLead` (usado pelo fluxo padrão do Kanban, `onSave` do modal) passa a normalizar `companyName`/`contactName` com `.trim() || null` em vez de mandar string vazia, mesmo comportamento do caminho direto do modal.
+
+### Relatório da Fase 6 — o que mudou na prática
+
+**Antes:** o formulário "Novo Lead" travava o botão "Salvar" e a validação HTML5 (`required`) enquanto Nome e Empresa não estivessem os dois preenchidos — mesmo já sendo possível salvar só um dos dois no backend (Fases 1 e 2).
+
+**Agora:** o formulário exige telefone sempre, e Nome OU Empresa (pelo menos um). É possível cadastrar um lead manual só com o nome da empresa, só com o nome do contato, ou os dois — mas não com nenhum dos dois (botão continua desabilitado e aparece uma dica). Isso cobre o caso de leads vindos do Google Maps, onde o nome do responsável ainda não é conhecido no momento do cadastro manual.
+
+**Para validar:** ainda não testado ao vivo no navegador nesta sessão — ver Cenários P1, P2, P3 e C3 na seção de Checks abaixo.
 
 ### Fase 7 — Frontend: pontos de exibição sem fallback
 
