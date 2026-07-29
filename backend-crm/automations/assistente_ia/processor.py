@@ -120,7 +120,7 @@ def map_row_to_lead(row: pd.Series, column_map: Optional[Dict[str, str]] = None)
                 return str(val).strip()
         return None
 
-    company = _pick("empresa", "companyname", "name", "empresa") or "Sem nome"
+    company = _pick("empresa", "companyname", "name", "empresa")
     contact = _pick("contato", "contactname", "contato", "responsavel")
     email = _pick_first_email(d.get("emails"), _pick("", "email"))
     phone_raw = _pick("telefone", "phone", "phone_site_norm", "telefone")
@@ -145,7 +145,7 @@ def map_row_to_lead(row: pd.Series, column_map: Optional[Dict[str, str]] = None)
     return lead
 
 # ----------------- Dedup & CRUD no banco -----------------
-def find_existing_lead(conn, companyName: str, email: Optional[str], phone: Optional[str], *, user_id: int) -> Optional[int]:
+def find_existing_lead(conn, companyName: Optional[str], email: Optional[str], phone: Optional[str], *, user_id: int) -> Optional[int]:
     cur = conn.cursor()
     if phone:
         cur.execute("SELECT id FROM leads WHERE phone = ? AND user_id = ? LIMIT 1", (phone, user_id))
@@ -155,7 +155,7 @@ def find_existing_lead(conn, companyName: str, email: Optional[str], phone: Opti
         cur.execute("SELECT id FROM leads WHERE email = ? AND user_id = ? LIMIT 1", (email, user_id))
         r = cur.fetchone()
         if r: return r["id"] if isinstance(r, dict) else r[0]
-    if companyName and companyName != "Sem nome":
+    if companyName:
         cur.execute("SELECT id FROM leads WHERE companyName = ? AND user_id = ? LIMIT 1", (companyName, user_id))
         r = cur.fetchone()
         if r: return r["id"] if isinstance(r, dict) else r[0]

@@ -228,7 +228,7 @@ def _create_sandbox_lead(user_id: int, origin: str = "playground") -> int:
             INSERT INTO leads (user_id, companyName, contactName, phone, origin, category, is_playground)
             VALUES (?, ?, ?, ?, ?, ?, 1)
             """,
-            (user_id, "Empresa Teste", None, phone, origin, "qualification"),
+            (user_id, None, "Lead de Teste", phone, origin, "qualification"),
         )
         conn.commit()
         return cur.lastrowid

@@ -2,6 +2,7 @@
 from typing import Any, Optional
 import json
 import logging
+import sqlite3
 from fastapi import APIRouter, HTTPException, Depends
 from datetime import datetime, timedelta, timezone
 
@@ -499,6 +500,11 @@ def criar_lead(lead: Lead, current_user: CurrentUser = Depends(require_crm_acces
 
     except HTTPException:
         raise
+    except sqlite3.IntegrityError:
+        raise HTTPException(
+            status_code=400,
+            detail="Informe ao menos o nome da empresa ou o nome do contato",
+        )
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
     finally:
@@ -951,6 +957,11 @@ def atualizar_lead_parcial(id: int, lead: LeadUpdate, current_user: CurrentUser 
         return {"message": "Lead atualizado com sucesso"}
     except HTTPException:
         raise
+    except sqlite3.IntegrityError:
+        raise HTTPException(
+            status_code=400,
+            detail="Informe ao menos o nome da empresa ou o nome do contato",
+        )
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
     finally:
