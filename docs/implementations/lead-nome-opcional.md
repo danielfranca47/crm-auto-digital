@@ -152,9 +152,13 @@ CHECK (TRIM(COALESCE(companyName,'')) != '' OR TRIM(COALESCE(contactName,'')) !=
 
 ### Fase 4 — Frontend: tipos (`crm.ts`)
 
-| Arquivo | O que muda |
-|---|---|
-| `frontend-crm/src/types/crm.ts` | `Lead.companyName`/`contactName` → `string \| null` |
+**Status: não necessária — decisão registrada em 2026-07-29.**
+
+O plano original previa `Lead.companyName`/`contactName` → `string | null` em `crm.ts`, para acompanhar a Fase 5 usando `??` (nullish coalescing) na exibição. Mas a Fase 5, quando implementada de fato, resolveu de outro jeito: `LeadsContext.tsx` normaliza `null` para `''` já no `mapRawLead` (`companyName: raw.companyName || ''`) — o mesmo padrão que **todos** os outros campos de `Lead` já seguem (`phone`, `email`, `origin`, `observations`, `customMessage` — todos `raw.X || ''`).
+
+Como consequência, `Lead.companyName`/`contactName` nunca chegam como `null` em nenhum componente — `''` já significa "desconhecido" de forma consistente com o resto da interface. Tornar só esses dois campos `string | null` os deixaria como exceção isolada, exigindo null-guard (`?? `ou`|| ''`) em todo consumidor que hoje já assume `string` (`LeadCard.tsx`, `KanbanBoard.tsx`, `SearchAutocomplete.tsx`, `ProspectionCard.tsx`, `FollowUpCenter.tsx`, `LeadCardDialog.tsx`, `Dashboard.tsx`) — puro churn de tipos, sem nenhum ganho de comportamento ou de informação (a distinção "nunca preenchido" vs. "preenchido com vazio" não tem uso nenhum no frontend).
+
+`Lead.companyName`/`contactName` permanecem `string` em `crm.ts`, sem alteração.
 
 ### Fase 5 — Frontend: `LeadsContext.tsx` para de forçar placeholder
 
