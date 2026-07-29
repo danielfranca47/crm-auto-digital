@@ -27,12 +27,13 @@ def _create_tables(conn: sqlite3.Connection) -> None:
         CREATE TABLE leads (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             user_id INTEGER,
-            companyName TEXT NOT NULL,
+            companyName TEXT,
             contactName TEXT,
             phone TEXT,
             origin TEXT DEFAULT 'Manual',
             category TEXT DEFAULT 'to-prospect',
-            lastMovement DATETIME DEFAULT CURRENT_TIMESTAMP
+            lastMovement DATETIME DEFAULT CURRENT_TIMESTAMP,
+            CHECK (TRIM(COALESCE(companyName,'')) != '' OR TRIM(COALESCE(contactName,'')) != '')
         );
 
         CREATE TABLE prospection_logs (
@@ -73,6 +74,21 @@ class InboundGuardrailTest(unittest.TestCase):
             (lead_id, self.user_id),
         ).fetchone()
         self.assertEqual(row["category"], INBOUND_DEFAULT_CATEGORY)
+
+    def test_new_lead_without_name_falls_back_to_phone(self):
+        lead_id, created = find_or_create_lead_by_phone(
+            self.conn,
+            user_id=self.user_id,
+            phone_norm="5511444444444",
+            payload={},
+        )
+        self.assertTrue(created)
+        row = self.conn.execute(
+            "SELECT companyName, contactName FROM leads WHERE id = ? AND user_id = ?",
+            (lead_id, self.user_id),
+        ).fetchone()
+        self.assertIsNone(row["companyName"])
+        self.assertEqual(row["contactName"], "5511444444444")
 
     def test_existing_to_prospect_is_promoted(self):
         cur = self.conn.cursor()

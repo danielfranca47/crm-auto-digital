@@ -24,8 +24,13 @@ def find_or_create_lead_by_phone(
     if existing:
         return int(existing["id"]), False
 
-    contact_name = payload.get("contact_name") or payload.get("sender_name") or payload.get("name")
-    company = payload.get("company") or "WhatsApp inbound"
+    contact_name = (
+        payload.get("contact_name")
+        or payload.get("sender_name")
+        or payload.get("name")
+        or phone_norm
+    )
+    company = payload.get("company")
     try:
         from services.agent_type import resolve_agent_type_for_user
 

@@ -121,6 +121,26 @@ CHECK (TRIM(COALESCE(companyName,'')) != '' OR TRIM(COALESCE(contactName,'')) !=
 | `backend-crm/routes/playground.py` | `companyName=NULL`, `contactName="Lead de Teste"` |
 | `backend-crm/routes/leads.py` (`criar_lead`, `atualizar_lead_parcial`) | `try/except sqlite3.IntegrityError` → 400 |
 
+**Status:** só o item `guardrail.py` (Cenário C2) foi implementado até agora — ver commit abaixo. Os outros 3 itens (`processor.py`, `playground.py`, `routes/leads.py`) continuam pendentes.
+
+### Commits Fase 3 (parcial — WhatsApp inbound)
+
+| # | Commit | O que foi implementado |
+|---|---|---|
+| 4 | `<preencher>` | backend: `guardrail.py` para de inventar `"WhatsApp inbound"`, contactName cai para o telefone quando não há nome |
+
+**Detalhes do commit:**
+- `backend-crm/services/whatsapp_inbound/guardrail.py` — `contact_name` ganha um 4º fallback (`phone_norm`) quando `contact_name`/`sender_name`/`name` não vêm no payload; `company` deixa de ter fallback fixo (`"WhatsApp inbound"` removido), fica `None` quando o payload não informa.
+- `backend-crm/tests/test_inbound_guardrail.py` — schema de teste isolado passa a espelhar a migração real (`companyName` nullable + CHECK, em vez do `NOT NULL` hardcoded); novo teste `test_new_lead_without_name_falls_back_to_phone` cobre payload vazio → `companyName IS NULL`, `contactName = telefone`.
+
+### Relatório da Fase 3 (parcial) — o que mudou na prática
+
+**Antes:** todo lead criado automaticamente por uma mensagem de WhatsApp, sem nome de remetente disponível no payload (o caso comum, já que nenhum código lê `pushName`/`senderName` da UazAPI), nascia com `companyName = "WhatsApp inbound"` — um texto fabricado que podia vazar para o prompt da IA como se fosse o nome real da empresa.
+
+**Agora:** esse mesmo lead nasce com `companyName = NULL` e `contactName = <telefone>` — a IA não recebe mais um nome de empresa inventado, e o CHECK do banco (Fase 1) continua satisfeito porque `contactName` sempre tem pelo menos o telefone.
+
+**Para validar:** automatizado — 6/6 testes em `test_inbound_guardrail.py` passaram (5 antigos + 1 novo); suíte completa sem regressão nova. Não testado ao vivo com um webhook real da UazAPI nesta rodada (ver Cenário C2 abaixo).
+
 ### Fase 4 — Frontend: tipos (`crm.ts`)
 
 | Arquivo | O que muda |
@@ -176,6 +196,36 @@ Sem código novo — suíte de testes + roteiro manual completo.
 
 ---
 
+## Gaps conhecidos (por que ficaram em aberto)
+
+Dois pontos do "Problemas Identificados" (item 3 e parte do item 8) ainda não foram corrigidos porque nenhum dos dois faz parte do fluxo testado nesta rodada (cadastro manual via `NewLeadModal` + exibição no Kanban). São bugs reais, só que em telas/fluxos diferentes — ficam documentados aqui para não se perderem.
+
+### Cenário C2 — Lead criado via WhatsApp inbound
+
+Quando alguém manda mensagem no WhatsApp e ainda não existe lead com aquele telefone, o sistema cria um automaticamente em `backend-crm/services/whatsapp_inbound/guardrail.py:28` (antes da correção):
+
+```python
+company = payload.get("company") or "WhatsApp inbound"
+```
+
+Ou seja: se não veio nome de empresa nenhum (o normal — WhatsApp não manda "empresa"), o sistema **inventava** o texto literal `"WhatsApp inbound"` como se fosse o nome real da empresa do lead — o mesmo tipo de placeholder falso que as Fases 1/2 eliminaram em outros pontos, só que aqui a troca nunca tinha sido feita.
+
+**Por que importa:** esse texto fabricado vaza para o contexto que a IA usa para conversar com o lead (`backend-executors/.../decision_engine.py`, via `_safe_get(lead, "contactName", "companyName", "name")`) — a IA pode "achar" que o nome da empresa é `"WhatsApp inbound"` e citar isso na conversa.
+
+**Causa raiz confirmada:** nenhum caminho do código hoje extrai o nome do remetente do payload real da UazAPI — `routes/webhooks.py` nunca lê campos como `pushName`/`senderName` do webhook. Por isso `payload.get("contact_name")`, `payload.get("sender_name")` e `payload.get("name")` em `guardrail.py` nunca eram preenchidos na prática: todo lead inbound nascia com `contactName = NULL` e `companyName = "WhatsApp inbound"`.
+
+**Por que ficou em aberto até agora:** exigia simular um webhook de WhatsApp chegando (não dá pra testar clicando no navegador como o cadastro manual).
+
+**Atualização:** corrigido — ver Fase 3 (parcial) e Cenário C2 abaixo. Ainda falta validar com um webhook real da UazAPI (só testado por unit test simulando o payload).
+
+### FollowUp Center — tela de acompanhamento de follow-up
+
+Essa é uma tela diferente do Kanban que foi testado. Ela tem 6 lugares que leem `lead.companyName` direto, sem o tratamento null-safe já aplicado no Kanban (`FollowUpCenter.tsx`, linhas 162, 290, 449, 509, 513, 706). Se um lead só tem `contactName` (o caso que a Fase 6 passou a permitir), essas linhas mostram um espaço em branco ou um avatar com "?" no lugar do nome — não quebra a tela, mas fica visualmente incompleto.
+
+**Por que ficou em aberto:** essa tela não faz parte do cadastro manual — só afetaria um lead sem empresa depois que ele entrasse em follow-up, cenário não exercitado nesta sessão. Preferimos não alterar 6 pontos de código sem confirmar visualmente o problema primeiro, em vez de corrigir "no escuro". Fica para uma fase futura se o mesmo sintoma aparecer lá.
+
+---
+
 ## Checks de Validação
 
 ### Cenário C1 — Migração de banco preserva dados e aplica CHECK
@@ -185,8 +235,9 @@ Sem código novo — suíte de testes + roteiro manual completo.
 - **Validado em:** 2026-07-10 — 3/3 testes passaram (fresh init_db, idempotência, preservação de dados na migração a partir do schema antigo); suíte completa (129 testes) rodada sem regressão nova.
 
 ### Cenário C2 — WhatsApp inbound sem nome usa telefone como fallback
-- [ ] Simular webhook UazAPI sem `senderName` e sem nome anterior
-- [ ] Confirmar lead criado com `contactName = telefone`, `companyName = NULL`
+- [x] Simular webhook UazAPI sem `senderName` e sem nome anterior
+- [x] Confirmar lead criado com `contactName = telefone`, `companyName = NULL`
+- **Validado em:** 2026-07-29 — automatizado via `test_new_lead_without_name_falls_back_to_phone` (payload vazio simulando ausência de nome). **Não** testado com um webhook real da UazAPI chegando ponta a ponta — pendente se quiser essa validação adicional.
 
 ### Cenário P1 — Novo Lead manual só com contato
 - [x] Abrir "Novo Lead", preencher telefone + nome do contato, deixar empresa vazia
