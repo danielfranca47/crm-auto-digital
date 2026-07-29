@@ -1,7 +1,7 @@
 # Nome do lead: companyName deixa de ser obrigatório sozinho
 
 **Branch:** `main`
-**Status:** Em andamento
+**Status:** Todos os cenários validados
 
 ---
 
@@ -237,6 +237,11 @@ Diferença importante em relação ao Kanban: `FollowUpCenter.tsx` busca dados d
 ### Fase 8 — Regressão ponta a ponta
 
 Sem código novo — suíte de testes + roteiro manual completo.
+
+**Executado em 2026-07-29:**
+- `python -m unittest discover -s tests -p "test_*.py"` (backend-crm) — 141 testes, 17 erros (mesmos pré-existentes, ambiente — `on_startup`/FastAPI-Starlette e encoding de console, confirmados não relacionados a esta feature ao longo de toda a implementação).
+- `npx tsc --noEmit` (frontend-crm) — limpo, sem erros.
+- Varredura por resíduos dos placeholders antigos (`grep -r "Empresa sem nome\|WhatsApp inbound\"\|Sem nome\"\|Empresa Teste\""`) — só 2 ocorrências, ambas legítimas e não relacionadas: `test_leads_company_or_contact_migration.py` (asserção de que a migração preserva um valor legado de uma linha antiga, comportamento correto) e `services/briefing_service.py:73` (fallback de exibição num dossiê pré-reunião para o operador humano, já fazia `contactName || companyName || "Sem nome"` corretamente antes desta feature — fora do escopo dos 5 pontos de criação identificados na Motivação).
 
 ---
 
