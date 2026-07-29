@@ -121,25 +121,34 @@ CHECK (TRIM(COALESCE(companyName,'')) != '' OR TRIM(COALESCE(contactName,'')) !=
 | `backend-crm/routes/playground.py` | `companyName=NULL`, `contactName="Lead de Teste"` |
 | `backend-crm/routes/leads.py` (`criar_lead`, `atualizar_lead_parcial`) | `try/except sqlite3.IntegrityError` → 400 |
 
-**Status:** só o item `guardrail.py` (Cenário C2) foi implementado até agora — ver commit abaixo. Os outros 3 itens (`processor.py`, `playground.py`, `routes/leads.py`) continuam pendentes.
+**Status:** concluída — os 4 itens implementados (2 commits: `f84641b` para `guardrail.py`, `93eaaa9` para os outros 3).
 
-### Commits Fase 3 (parcial — WhatsApp inbound)
+### Commits Fase 3
 
 | # | Commit | O que foi implementado |
 |---|---|---|
 | 4 | `f84641b` | backend: `guardrail.py` para de inventar `"WhatsApp inbound"`, contactName cai para o telefone quando não há nome |
+| 5 | `93eaaa9` | backend: `processor.py`, `playground.py` param de inventar nome; `routes/leads.py` devolve 400 limpo em vez de 500 cru |
 
-**Detalhes do commit:**
+**Detalhes do commit `f84641b`:**
 - `backend-crm/services/whatsapp_inbound/guardrail.py` — `contact_name` ganha um 4º fallback (`phone_norm`) quando `contact_name`/`sender_name`/`name` não vêm no payload; `company` deixa de ter fallback fixo (`"WhatsApp inbound"` removido), fica `None` quando o payload não informa.
 - `backend-crm/tests/test_inbound_guardrail.py` — schema de teste isolado passa a espelhar a migração real (`companyName` nullable + CHECK, em vez do `NOT NULL` hardcoded); novo teste `test_new_lead_without_name_falls_back_to_phone` cobre payload vazio → `companyName IS NULL`, `contactName = telefone`.
 
-### Relatório da Fase 3 (parcial) — o que mudou na prática
+**Detalhes do commit `93eaaa9`:**
+- `backend-crm/automations/assistente_ia/processor.py` — `map_row_to_lead` para de gravar `"Sem nome"` quando a planilha/Maps não tem coluna de empresa (fica `None`); `find_existing_lead` recebe `companyName: Optional[str]` e a comparação morta `!= "Sem nome"` vira só `if companyName:` (sugestão já registrada em "Ajustes Possíveis" desde a Fase 1).
+- `backend-crm/routes/playground.py` — `_create_sandbox_lead` grava `companyName=NULL`, `contactName="Lead de Teste"` (era `companyName="Empresa Teste"`, `contactName=None`).
+- `backend-crm/routes/leads.py` — `criar_lead` e `atualizar_lead_parcial` capturam `sqlite3.IntegrityError` e devolvem 400 com a mesma mensagem do validador Pydantic (`"Informe ao menos o nome da empresa ou o nome do contato"`), em vez de deixar vazar um 500 com o texto cru do SQLite (`"CHECK constraint failed: leads"`).
+- `backend-crm/tests/test_processor_lead_mapping.py` — novo: cobre `map_row_to_lead` (linha sem nome nenhum, só contato, só empresa) e `find_existing_lead` (`companyName=None` não quebra e não impede match por telefone).
 
-**Antes:** todo lead criado automaticamente por uma mensagem de WhatsApp, sem nome de remetente disponível no payload (o caso comum, já que nenhum código lê `pushName`/`senderName` da UazAPI), nascia com `companyName = "WhatsApp inbound"` — um texto fabricado que podia vazar para o prompt da IA como se fosse o nome real da empresa.
+### Relatório da Fase 3 (completa) — o que mudou na prática
 
-**Agora:** esse mesmo lead nasce com `companyName = NULL` e `contactName = <telefone>` — a IA não recebe mais um nome de empresa inventado, e o CHECK do banco (Fase 1) continua satisfeito porque `contactName` sempre tem pelo menos o telefone.
+**Antes:** 3 pontos diferentes de criação de lead inventavam texto fabricado quando não sabiam o nome — `"WhatsApp inbound"` (mensagem de WhatsApp), `"Sem nome"` (import de planilha/Google Maps) e `"Empresa Teste"` (Playground). Além disso, se uma edição parcial (`PATCH /api/leads/{id}`) zerasse o único nome que um lead tinha, o banco recusava (CHECK da Fase 1) mas o erro chegava ao usuário como **500 Internal Server Error** com o texto cru do SQLite, em vez de uma mensagem compreensível.
 
-**Para validar:** automatizado — 6/6 testes em `test_inbound_guardrail.py` passaram (5 antigos + 1 novo); suíte completa sem regressão nova. Não testado ao vivo com um webhook real da UazAPI nesta rodada (ver Cenário C2 abaixo).
+**Agora:** os 3 pontos de criação gravam `NULL` quando realmente não sabem o nome (o Playground passa a usar `"Lead de Teste"` como `contactName`, já que ali sempre existe um "responsável" fictício da sessão de teste). E uma edição parcial que deixaria o lead sem nenhum nome agora recebe **400 Bad Request** com a mensagem "Informe ao menos o nome da empresa ou o nome do contato" — a mesma frase que já aparece na criação via Pydantic.
+
+**Por que o item de `routes/leads.py` não tem teste automatizado nesta rodada:** ao tentar escrever um teste importando `routes.leads` ou `routes.playground` diretamente, descobri que **qualquer** import desses módulos dispara `routes/__init__.py`, que importa `routes/appointments.py`, que quebra com `TypeError: Router.__init__() got an unexpected keyword argument 'on_startup'` — um descompasso de versão FastAPI/Starlette já preexistente no ambiente (é a mesma causa dos 17 erros que a suíte completa já tinha antes desta tarefa). Isso bloqueia testar esse arquivo especificamente via `unittest`, não é algo introduzido por esta mudança. A correção em si foi validada por revisão manual do código (o `except sqlite3.IntegrityError` está posicionado antes do `except Exception` genérico, então nunca é sombreado). `processor.py` não tem essa dependência (não importa nada de dentro de `routes/`), por isso pôde ganhar teste automatizado normalmente.
+
+**Para validar:** automatizado — `test_inbound_guardrail.py` (6/6) e `test_processor_lead_mapping.py` (5/5, novo) passam; suíte completa (141 testes) sem regressão nova. `routes/leads.py` e `routes/playground.py` não têm teste automatizado (ver explicação acima) — validação manual do fluxo de PATCH e do Playground fica pendente se quiser confirmação ao vivo.
 
 ### Fase 4 — Frontend: tipos (`crm.ts`)
 
@@ -265,4 +274,4 @@ Essa é uma tela diferente do Kanban que foi testado. Ela tem 6 lugares que leem
 ## Ajustes Possíveis Pós-Implementação
 
 - Migrar os demais pontos que já fazem `companyName || contactName` (`LeadCardDialog.tsx`, `ProspectConfirmModal.tsx`, `Dashboard.tsx`, `FollowUpEdit.tsx`) para o helper `leadDisplayName`, por consistência (cosmético, fora do escopo mínimo).
-- `find_existing_lead()` em `processor.py:148` tem comparação morta com `"Sem nome"` que pode ser simplificada (`if companyName:`), não obrigatório.
+- ~~`find_existing_lead()` em `processor.py:148` tem comparação morta com `"Sem nome"`~~ — resolvido no commit `93eaaa9` (Fase 3).
