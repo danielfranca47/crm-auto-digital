@@ -176,6 +176,7 @@ whatsapp_worker (polling)
 | `src/components/playground/PlaygroundChat.tsx` | Input do playground: texto, áudio, modo lote |
 | `src/components/playground/MessageBubble.tsx` | Bolha de mensagem (texto, áudio com player, auto_items) |
 | `src/types/agente.ts` | Tipos: `SalesFlowBlock`, `SalesFlowPhaseId`, `AiProfile`, etc. |
+| `src/utils/leadDisplayName.ts` | Nome de exibição do lead (`contactName` prioritário); ver [`leads-schema.md`](leads-schema.md) |
 
 ---
 
@@ -291,7 +292,7 @@ Operador escreve mensagem no Playground (frontend-crm)
 
 | Tabela | Campos-chave | Descrição |
 |---|---|---|
-| `leads` | `id, user_id, category, bot_disabled, bot_disabled_reason, phases_triggered, triggers_fired, origin` | Lead no pipeline |
+| `leads` | `id, user_id, category, bot_disabled, bot_disabled_reason, phases_triggered, triggers_fired, origin` | Lead no pipeline; `companyName`/`contactName` nullable com CHECK (pelo menos um preenchido) — ver [`leads-schema.md`](leads-schema.md) |
 | `jobs` | `id, type, status, payload, result, scheduled_at, attempts` | Fila de jobs |
 | `messages` | `lead_id, role, content, created_at` | Histórico de conversa |
 | `lead_qualification_state` | `lead_id, data_json` | Campos de qualificação extraídos |

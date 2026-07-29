@@ -18,6 +18,7 @@ existente ou criar um novo.
 | [`followup.md`](followup.md) | Arquitetura de follow-up: estados (idle/scheduled/paused/completed), reconciliador, circuit breaker, jobs tick, modal de transição | Mudança na máquina de estados, novo tipo de tick, nova lógica de reconciliação/circuit breaker |
 | [`playground-parity.md`](playground-parity.md) | Paridade Playground ↔ WhatsApp real: `enrich_context_bundle`, campos do ContextBundle, campos da `PlaygroundChatResponse` | Novo campo no ContextBundle que afecta o LLM, novo campo na resposta do playground |
 | [`admin-agents-contract.md`](admin-agents-contract.md) | Contrato AdminAgents frontend ↔ backend: campos expostos em `GET /admin/agents/overview` e `GET /admin/agents/users/{id}` | Novo campo no AI Profile que deve ser exibido no painel admin |
+| [`leads-schema.md`](leads-schema.md) | Schema de nome do lead: regra "companyName OU contactName obrigatório" (CHECK + Pydantic + form), pontos de criação e seus fallbacks, convenção de exibição `leadDisplayName` | Novo ponto de criação de lead, mudança na regra de nome obrigatório, novo componente de exibição do nome do lead |
 | [`humanization.md`](humanization.md) | Humanização comportamental: delay de resposta, typing indicator, quebra de mensagem por pontuação, janela de horário, áudio de voz (myaudio/ptt) | Mudança no cálculo de delay, novo campo de availability, novo tipo de mídia, mudança no split de mensagens |
 | [`auth-email.md`](auth-email.md) | Auth e gestão de utilizadores: endpoints de register/login/forgot-password/reset/change-password, modelo User (campos), PasswordResetToken, email SMTP via Resend, rotas públicas frontend-crm, painel admin de utilizadores | Novo endpoint de auth, mudança no modelo User, novo campo de config SMTP, novo template de email, nova rota pública |
 | [`plans-limits.md`](plans-limits.md) | Feature gates por plano: `follow_up_enabled`, `playground_monthly_limit` em entitlements; `plan_gates.py`; tabela `playground_usage_monthly`; campo `playground_monthly` em `/usage`; padrão de toast upgrade CTA | Novo campo de limite em `plan_limits`, novo gate numa rota do CRM, novo campo em `/usage` |
@@ -86,6 +87,7 @@ A maioria das features altera áreas já documentadas. Antes de criar um ficheir
 | Campo novo na `PlaygroundChatResponse` | `playground-parity.md` |
 | Mudança no reconciliador de follow-up | `followup.md` |
 | Novo campo no overview ou detalhe de utilizador do painel admin | `admin-agents-contract.md` |
+| Regra de nome obrigatório do lead (companyName/contactName), novo ponto de criação de lead, convenção de exibição `leadDisplayName` | `leads-schema.md` |
 | Checkout, webhook Efí, activação/renovação/cancelamento de subscriptions | `billing-efi.md` |
 | Nova categoria da Base de Conhecimento, mudança em `knowledge_items`/agregação para o LLM | `knowledge-base.md` |
 | App desktop agent-local (auth, pesquisa Maps, prospecção WhatsApp, Kanban local/remoto, Assistente IA, copy local/remota) | `agent-local-app.md` |

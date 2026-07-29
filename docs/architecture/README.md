@@ -30,6 +30,7 @@ Servem para o Claude (e para ti) entenderem uma área antes de trabalhar nela.
 | `followup.md` | Arquitectura de follow-up: estados, reconciliador, circuit breaker |
 | `playground-parity.md` | Paridade Playground ↔ WhatsApp real (ContextBundle) |
 | `admin-agents-contract.md` | Contrato AdminAgents frontend ↔ backend |
+| `leads-schema.md` | Schema de nome do lead (companyName/contactName obrigatório, pontos de criação, exibição) |
 
 ---
 

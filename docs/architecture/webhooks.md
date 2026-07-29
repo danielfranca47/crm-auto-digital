@@ -65,6 +65,10 @@ Verifica se o sistema deve processar a mensagem:
 
 O flag `bot_disabled` é gerido por lead individual. Fontes de desactivação: manual (UI), `media_fallback="pausar"`, entrada em `closing` com `agent_mode=agenda`, confirmação de reunião (`agent_mode=agenda`), fechamento do check-in automático de cliente inativo (`category_checkin_closed`, ver [`followup.md`](followup.md)).
 
+### Criação automática de lead (primeiro contacto)
+
+`find_or_create_lead_by_phone()` (mesmo arquivo) cria o lead quando não existe nenhum com o telefone do remetente. Como nenhum código hoje extrai o nome de exibição do payload da UazAPI (não lê `pushName`/`senderName`), o lead nasce com `contactName = <telefone>` e `companyName = NULL` — nunca com texto fabricado. Ver regra completa de nome obrigatório em [`leads-schema.md`](leads-schema.md).
+
 ---
 
 ## Tratamento de Mensagens de Áudio e Mídia
