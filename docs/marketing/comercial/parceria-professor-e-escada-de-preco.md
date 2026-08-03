@@ -12,74 +12,117 @@
 ### Princípio que rege tudo aqui
 
 ```
-NUNCA pagar comissão recorrente (%) sobre o preço Fundador (R$147).
-Esse preço é travado pra sempre — comissão recorrente sobre ele
-sangra margem por anos e trava você numa estrutura que não dá pra renegociar.
+NUNCA pagar comissão recorrente (%) sobre o preço Fundador (R$197) nem
+sobre qualquer preço travado de entrada — sangra margem por anos e
+trava numa estrutura que não dá pra renegociar. Alternativa validada:
+bounty por marcos pontuais de fidelidade (ver Ação 2), não recorrente.
 
-Separe sempre: (1) ele como CLIENTE, de (2) ele como PARCEIRO.
-São dois acordos diferentes, nunca misturados no mesmo número.
+Pesquisa confirmou: ele quase não atende pacientes — é coordenador de
+instituto, autoridade B2B de 35+ anos remunerada via cachê/docência/
+licenciamento de técnica (não venda direta a consumidor final). Ele
+historicamente CEDE autoridade e DELEGA a operação/venda a terceiros
+(ex.: licencia a técnica Epicrânia pra escolas parceiras operarem).
+Trate-o sempre como conector/distribuidor de autoridade, nunca como
+usuário-praticante ou revendedor operacional.
+
+Separe sempre: (1) ele como CLIENTE eventual (baixa prioridade, não é
+o encaixe real dele), de (2) ele como CONECTOR/PARCEIRO (prioridade
+real). Dois acordos diferentes, nunca misturados no mesmo número.
 ```
 
-### Sequência de ações (não pular etapas)
+### Sequência de fases (não pular etapas)
 
 ```
-[ ] AÇÃO 1 — Founding Patron (fazer JÁ — já está na Fase 1)
-    Ele entra como cliente Fundador (R$147/mês travado).
-    Em troca: usar por 30 dias + depoimento com número real + permissão
-    pra citar o caso publicamente.
-    Sem comissão. Sem contrato. Script já existe no plano tático (Fase 1).
+[ ] FASE 1 — Apresentação Online Gratuita (fazer JÁ)
+    Apresentar a Lara online para a audiência dele (alunos/instituto),
+    sem cachê em nenhuma direção. Troca simples: conteúdo de valor pros
+    alunos, acesso à audiência pra você. Teste de baixo custo dos dois
+    lados — sem isso, não há prova pra justificar as fases seguintes.
 
-[ ] AÇÃO 2 — Bounty Fixo por Indicação (paralelo, informal, oferecer
-    na mesma conversa ou logo depois)
-    "Se você indicar alguém do seu círculo e essa pessoa ficar pelo
-    menos 60 dias ativa, eu te pago R$60 por cliente — valor fixo,
-    não é %, fácil de acompanhar."
-    Não precisa de contrato formal nesse estágio. Track manual (planilha).
+[ ] AÇÃO 2 — Bounty por Marcos de Fidelidade (paralelo, oferecer na
+    mesma conversa)
+    Por aluno indicado que seguir ativo: mês 1 (R$50) → mês 4 (R$70) →
+    mês 6 (R$90) → mês 12 (R$110). Total R$320, teto absoluto — zero
+    pagamentos depois disso. Mais generoso que um bounty único, sem a
+    sangria de uma comissão % recorrente. Não precisa de contrato
+    formal. Track manual (planilha).
 
-[ ] AÇÃO 3 — Parceiro de Conteúdo / Co-instrutor (SÓ depois de ter
-    um resultado real dele, ~30 dias de uso)
-    Esperar prova real primeiro. Então propor:
-    "Você usa a Lara há 30 dias e [resultado real, ex: eliminou X faltas].
-    Que tal eu participar de uma das suas turmas do SENAC ou um workshop
-    seu, mostrando pros seus alunos como profissionalizar o atendimento
-    deles com isso?"
-    Estrutura comercial: se o workshop dele já é pago, negociar cachê
-    de apresentação ou split — nunca tirar isso do preço da Lara.
-    Se for conteúdo gratuito na grade dele, o "pagamento" é o acesso
-    recorrente a leads + a referência institucional dele.
+[ ] FASE 2 — Apresentação Presencial (condicional — só se a Fase 1
+    performar)
+    Cachê pago por VOCÊ a ele — não o contrário. Só faz sentido depois
+    de ter prova de conversão da Fase 1: presencial tem custo logístico
+    real do lado dele (deslocamento, tempo de aula é ativo escasso).
+
+[ ] FASE 3 — Indicação pra Rede de Eventos (não propor ainda — é o
+    ativo de maior alavancagem dele, só depois de prova em Fase 1/2)
+    Ele te indica como palestrante de IA pros organizadores de eventos/
+    congressos/instituições que já o contratam via cachê. Quem paga o
+    cachê é o organizador terceiro — nem ele, nem você. Moeda dele:
+    crédito reputacional + reciprocidade, igual ao padrão de
+    licenciamento que ele já usa. NUNCA propor comissão sobre esse
+    cachê — fora do padrão dele (ele nunca cobrou de quem indica pras
+    escolas parceiras). Se quiser algo tangível: bounty único e pontual
+    por evento fechado através da indicação — não recorrente.
+
+[ ] FASE 4 — Módulo na Formação dele (visão de longo prazo — mencionar
+    de leve, sem pedir compromisso, nunca como item de pauta antes da
+    Fase 3 render resultado)
+    Incorporar um módulo de IA/estruturação de negócio digital/
+    performance em vendas à formação dele — eleva o ticket da formação
+    e institucionaliza a Lara no currículo.
 ```
 
-### Como abrir a conversa (não assuma o que ele quer)
+### Como abrir a conversa (proposta pronta, não pergunta aberta)
 
 ```
-Aplicar Clarify antes de propor qualquer número:
+Ele já sinalizou (por áudio direto) que quer números claros já na
+primeira reunião — não uma pergunta exploratória. Chegar com um menu
+de duas opções prontas, não com "o que faz mais sentido pra você":
 
-"Você comentou que quando estivesse pronto a gente ia definir uma
-proposta. Antes de eu te jogar um número, me conta: o que faria mais
-sentido pra você — alguma forma de comissão por indicação, ou você
-vê mais valor em eu participar de alguma aula ou evento seu mostrando
-isso pros seus alunos?"
+"Antes de qualquer coisa, separei duas formas de a gente trabalhar
+junto: [Fase 1 — apresentação online + bounty por marcos de indicação]
+ou [se preferir algo mais à frente, dá pra pensar numa versão
+presencial]. Me conta, dos dois, qual faz mais sentido pra você
+priorizar agora?"
+
+Isso preserva o Clarify (você ainda pergunta o que ele valoriza), só
+que FECHADO — depois de já ter entregue os números que ele pediu, não
+antes.
+
+Sondagem de decisor (se ele decide sozinho aulas/eventos do instituto):
+embutir na formatação da proposta, não como pergunta separada:
+"Pra eu formatar certo — isso passa só por você ou tem coordenação que
+aprova aulas e convidados externos?"
+
+Interesse pessoal dele em "estrutura digital e IA pra criar braços"
+(sinalizado na 1ª conversa): guardar como inteligência de fundo, não
+anunciar como diagnóstico pronto. Só puxar com pergunta aberta se ele
+mesmo trouxer o assunto: "quando você fala nisso, é mais pra você ou
+pensando em algo tipo a Lara?"
 ```
 
 ### O que NÃO fazer
 
 ```
-✗ Não oferecer % de comissão sobre o preço Fundador
-✗ Não montar revenda/white-label formal agora (sem infraestrutura
-  pra isso no estágio atual — Estágio Improvise)
-✗ Não pular pra Ação 3 (workshop) sem ter prova real de resultado primeiro
+✗ Não oferecer % de comissão recorrente sobre preço travado de entrada
+✗ Não montar lote de revenda de assinaturas — ele delega operação/venda
+  historicamente (padrão de licenciamento da Epicrânia), nunca opera
+  revenda direta. Pedir isso é pedir o papel que ele sempre evitou.
+✗ Não propor comissão % sobre cachê de eventos indicados por ele (Fase 3)
+✗ Não propor Fase 3 (indicação a eventos) ou Fase 4 (módulo de formação)
+  antes de ter prova real de resultado nas Fases 1-2
 ✗ Não aumentar o preço da Lara pra "abrir espaço" pra pagar comissão
 ```
 
 ### Checklist de status (marcar conforme avança)
 
 ```
-[ ] Professor ativado como cliente Fundador
-[ ] Depoimento com número real coletado (30 dias de uso)
-[ ] Conversa de Clarify feita (perguntei o que ele valoriza, não assumi)
-[ ] Bounty fixo proposto e aceito (ou não — registrar a resposta)
-[ ] Proposta de workshop/co-instrutoria apresentada
-[ ] Primeira aparição em turma/evento dele agendada
+[ ] Fase 1 — apresentação online realizada
+[ ] Bounty por marcos proposto e aceito (ou não — registrar a resposta)
+[ ] Sondagem de decisor feita (ele decide sozinho, ou há comitê?)
+[ ] Fase 2 — apresentação presencial realizada (se aplicável)
+[ ] Fase 3 — indicação pra rede de eventos conquistada (se aplicável)
+[ ] Fase 4 — módulo de formação conversado (se aplicável)
 ```
 
 ---
@@ -148,9 +191,10 @@ delegar ainda.
 
 | Situação | O que fazer |
 |----------|-------------|
-| Professor topa ser cliente | Ativar Founding Patron (Ação 1) — sem comissão |
-| Professor pede comissão | Propor bounty fixo R$50-80, nunca % do Fundador |
-| Professor tem resultado real (30+ dias) | Propor Ação 3 (workshop/co-instrutor) |
+| Reunião marcada, ele pede números direto | Levar menu pronto (Fase 1 + bounty por marcos) — sem pergunta aberta |
+| Professor pede comissão | Propor bounty por marcos (R$50/70/90/110), nunca % recorrente |
+| Fase 1 online performou bem | Propor Fase 2 (presencial, cachê pago por você a ele) |
+| Fase 2 provou valor | Só então considerar Fase 3 (indicação pra rede de eventos) |
 | 5ª vaga Fundador fecha | Próximo cliente entra em R$197 automaticamente |
 | 5 conversas seguidas em R$197 sem objeção | Subir pra R$297 imediatamente |
 | Fila de espera de onboarding se forma | Subir preço do degrau atual, não trabalhar mais |
@@ -159,6 +203,6 @@ delegar ainda.
 
 ---
 
-*Consolidado a partir das discussões de parceria comercial e arquitetura de preço.*
-*Agentes-base: hormozi-models (estrutura de parceria) · hormozi-pricing (gatilhos de preço) · hormozi-scale (constraint de entrega) · hormozi-launch (mecanismo de escassez) · hormozi-leads (alavancagem via canal) · hormozi-closer (abordagem de Clarify)*
+*Consolidado a partir das discussões de parceria comercial e arquitetura de preço, revisado após pesquisa de lead (André Nessi) e reunião confirmada com pedido direto de proposta.*
+*Agentes-base: hormozi-models (estrutura de parceria, fases 1-4) · hormozi-pricing (margem, bounty por marcos) · hormozi-scale (constraint de entrega) · hormozi-launch (mecanismo de escassez) · hormozi-leads (alavancagem via canal, priorização da rede de eventos) · hormozi-closer (abordagem de Clarify, sondagem de decisor)*
 *Arquivo: `C:\crm-auto-digital\docs\marketing\comercial\parceria-professor-e-escada-de-preco.md`*

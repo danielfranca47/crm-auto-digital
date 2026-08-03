@@ -5,6 +5,22 @@
 
 > Este é o roteiro de execução real — abra este arquivo antes de mandar a primeira mensagem e use como checklist conforme a conversa avança. Cada etapa tem o script exato e os cenários possíveis de resposta.
 
+### ⚠️ Status real com André Nessi (atualizar aqui, não reescrever o fluxo abaixo)
+
+```
+Etapas 1-3 já aconteceram organicamente: ~2 semanas de follow-up até
+a reunião ser marcada. O professor mandou um ÁUDIO DIRETO pedindo pra
+já separar "o que tenho pra ele, o que dá pra ele ganhar, valores"
+antes da reunião — ele pulou a fase de curiosidade e quer proposta.
+
+Pesquisa confirmou (ver docs de parceria): ele quase não atende
+pacientes — é coordenador de instituto, autoridade B2B remunerada via
+cachê/docência/licenciamento, não infoprodutor. Isso muda a Etapa 4
+(a call vira reunião de proposta, não demo diagnóstica) e a Etapa 7
+(o script de Clarify aberto abaixo foi substituído por um menu
+fechado — ver `parceria-professor-e-escada-de-preco.md`).
+```
+
 ### ⚠️ Contexto real do relacionamento (ler antes de tudo)
 
 ```
@@ -279,16 +295,13 @@ bem também."
 13–15 min Reinforce + Close  → Campanha Fundador, fechar hoje ou na próxima sessão
 ```
 
-**Atenção ao Clarify:** como ele não pediu a plataforma, a primeira pergunta de diagnóstico precisa vir com uma saída honesta, sem pressupor que ele tem a dor:
-```
-"Hoje, como funciona a confirmação de sessão com seus pacientes —
-isso chega a ser um problema pra você, ou seu fluxo já é tranquilo?"
-```
-Se ele disser que não sente o problema na prática (ele dá aula, talvez atenda pouco ou nada presencialmente), reconduzir pro ângulo de autoridade/conteúdo em vez de insistir na dor pessoal — adiantar parte da Etapa 7 não é o ideal, mas vale registrar que o encaixe dele pode ser mais como parceiro de conteúdo do que como usuário intensivo.
+**Atenção ao Clarify — caso André Nessi (ele já pediu números por áudio):** o roteiro acima pressupõe um Clarify aberto e diagnóstico, adequado a um lead que ainda não sabe se sente a dor. Quando o prospect já sinalizou de forma direta que quer proposta e valores (como aconteceu aqui), pular pra um Clarify fechado, dentro de um menu de opções já pronto — ver script atualizado em `parceria-professor-e-escada-de-preco.md`, seção "Como abrir a conversa". Não abra com "isso chega a ser um problema pra você?" nesse caso — ele já disse o que quer ouvir.
 
-Lembrete: não mencionar parceria/indicação/workshop nesta call.
-Essa call é só sobre ele entender o produto e decidir se vira cliente.
-A conversa de parceria é a Etapa 7.
+Confirmado pela pesquisa: ele quase não atende pacientes, é autoridade B2B (cachê/docência/licenciamento). O encaixe real dele é conector/parceiro de conteúdo, não usuário intensivo — reconduzir direto pra esse ângulo, sem tentar vender a dor de "confirmação de sessão" que provavelmente não é dele.
+
+Sondagem de decisor (se ele decide sozinho aulas/eventos do instituto) entra embutida na formatação da proposta, não como pergunta separada — ver script atualizado no documento de parceria.
+
+Lembrete: no caso geral (outros leads massoterapeutas), não mencionar parceria/indicação/workshop na call de demo — isso é Etapa 7. No caso André Nessi, a proposta de parceria já é o assunto da própria reunião marcada.
 
 ---
 
@@ -341,15 +354,19 @@ aprova?"
 *Esta etapa usa a estrutura completa de `parceria-professor-e-escada-de-preco.md` — aqui está só o script de abertura.*
 
 ```
+Versão padrão (lead já é cliente há 30 dias, seguiu o fluxo completo):
 "[Professor], você usa a Lara há 30 dias e [citar resultado real dele].
-Tenho uma ideia — você comentou lá no início que quando estivesse pronto
-a gente ia definir uma proposta. Antes de eu te jogar um número, me
-conta: o que faria mais sentido pra você — alguma forma de comissão
-por indicação, ou você vê mais valor em eu participar de alguma aula
-ou evento seu mostrando isso pros seus alunos?"
+Antes de eu te jogar um número, me conta: o que faria mais sentido pra
+você — alguma forma de comissão por indicação, ou você vê mais valor
+em eu participar de alguma aula ou evento seu mostrando isso pros seus
+alunos?"
 
-A partir da resposta dele, seguir as Ações 2 (bounty fixo) ou 3
-(workshop/co-instrutor) do documento de parceria.
+Versão André Nessi (ele pulou a fase de cliente, já pediu números
+direto por áudio antes da reunião): usar o menu fechado — ver
+`parceria-professor-e-escada-de-preco.md`, seção "Como abrir a
+conversa". Não usar a pergunta aberta acima nesse caso.
+
+A partir da resposta, seguir as Fases 1-4 do documento de parceria.
 ```
 
 ---
