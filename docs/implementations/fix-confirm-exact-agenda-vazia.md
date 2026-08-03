@@ -1,7 +1,7 @@
 # Fix: instrução "confirm_exact" falha quando a agenda está vazia
 
 **Branch:** `main`
-**Status:** Em andamento
+**Status:** Todos os cenários validados (03/08/2026)
 
 ---
 
@@ -117,10 +117,16 @@ confirmar o horário pedido diretamente, sem inventar conflitos.
 ## Checks de Validação
 
 ### Cenário P1 — Playground, confirm_exact, agenda vazia
-- [ ] No Playground, usar um AI Profile com `scheduling_offer_style: confirm_exact` e um lead
+- [x] No Playground, usar um AI Profile com `scheduling_offer_style: confirm_exact` e um lead
   sandbox sem nenhum appointment.
-- [ ] Pedir um horário dentro da disponibilidade (ex.: "consigo às 15h?").
-- [ ] Confirmar: o bot confirma diretamente, sem oferecer alternativas nem dizer que está ocupado.
+- [x] Pedir um horário dentro da disponibilidade (ex.: "consigo às 15h?").
+- [x] Confirmar: o bot confirma diretamente, sem oferecer alternativas nem dizer que está ocupado.
+- **Validado em:** 03/08/2026 (ambiente local, via Chrome DevTools MCP) — perfil "Daniel"
+  (agenda/hybrid_scheduler), lead sandbox #371. Turno 1: saudação. Turno 2: "consigo marcar
+  hoje as 14h?" → bot respondeu "Fica confirmado para hoje às 14h." (sem oferecer
+  alternativas). Turno 3 (mesma fase, confirmação explícita): `POST
+  /api/internal/appointments` retornou `201 Created`; appointment real criado em
+  `database/crm.db` (id=51, `[Playground] Reunião agendada`, status=pending).
 
 ### Cenário C1 — Teste automatizado (pytest)
 - [x] `pytest backend-executors/tests/test_scheduling_offer_style.py` passa, incluindo o novo caso.
@@ -139,8 +145,14 @@ confirmar o horário pedido diretamente, sem inventar conflitos.
   antes da Fase 2, em áreas não relacionadas (qualificação, follow-up, webhook de grupo).
 
 ### Cenário P2 — Cancelamento/reagendamento real (Playground)
-- [ ] Após confirmar um horário (P1), pedir para reagendar ou cancelar.
-- [ ] Confirmar: sem erro 500; appointment atualizado/cancelado reflete na Agenda.
+- [x] Após confirmar um horário (P1), pedir para cancelar.
+- [x] Confirmar: sem erro 500; appointment atualizado/cancelado reflete na Agenda.
+- **Validado em:** 03/08/2026 — pedido de reagendamento ("pode ser às 16h?") recebeu resposta
+  de confirmação sem erro (não chegou a chamar o PUT interno nesse turno — a IA tratou como
+  nova confirmação, questão de roteamento da IA, não do fix de auth). Pedido explícito de
+  cancelamento ("quero cancelar essa sessão") disparou `POST
+  /api/internal/appointments/51/cancel` → `200 OK`; status do appointment #51 mudou de
+  `pending` para `canceled` em `database/crm.db`. Sem 401/500 em nenhum dos casos.
 
 ---
 
@@ -188,7 +200,14 @@ para usuários reais — só a lógica interna foi extraída para reuso, não al
 
 | # | Commit | O que foi implementado |
 |---|---|---|
-| 1 | _(preenchido após o commit)_ | fix: rotear criação/cancelamento/reagendamento de appointment do executor por rota interna com service token |
+| 1 | `d27c2c7` | fix: rotear criação/cancelamento/reagendamento de appointment do executor por rota interna com service token |
+
+**Detalhes do commit `d27c2c7`:**
+- `backend-crm/routes/appointments.py` — extraídas `_create_appointment_row` e `_update_appointment_row`
+- `backend-crm/routes/executor.py` — 3 rotas internas novas (create/update/cancel de appointment)
+- `backend-executors/app/clients/crm_client.py` — 3 URLs trocadas para `/api/internal/appointments...`
+- `backend-crm/tests/test_internal_appointments_routes.py` e
+  `backend-executors/tests/test_crm_client_appointment_urls.py` — novos testes de regressão
 
 ### Relatório da Fase 2 — o que mudou na prática
 
@@ -207,9 +226,104 @@ abaixo.
 
 ---
 
+## Fase 3 — Diagnóstico + Correção: Agenda exibe horário no fuso do navegador (03/08/2026)
+
+### Problema identificado
+
+O usuário reportou (teste em produção): pediu 17h, o bot confirmou 17h, mas a Agenda mostrava
+o compromisso às 21h.
+
+Reproduzi localmente com o AI Profile configurado em `America/Sao_Paulo`: o backend armazenou
+corretamente `20:00:00+00:00` (17h SP = 20h UTC), mas a Agenda exibiu "21:00" — a máquina local
+usada para testar está em "GMT Standard Time" (Lisboa), que em agosto vira UTC+1 (horário de
+verão). `20:00 UTC + 1h = 21:00`.
+
+Causa raiz: `frontend-crm` formata todo horário de appointment com `new Date(...)` +
+`date-fns format(..., "HH:mm")` ou `.getHours()`/`.getMinutes()` nativos — sempre no fuso do
+navegador de quem está a ver a tela, nunca no fuso configurado no AI Profile do negócio.
+Mesmo problema na escrita: `ScheduleAppointmentDialog.tsx` usava `date.setHours(...)` (fuso do
+navegador) antes de converter para UTC ao salvar.
+
+### Correção
+
+| Arquivo | Mudança |
+|---|---|
+| `frontend-crm/package.json` | + `date-fns-tz` |
+| `frontend-crm/src/hooks/useBusinessTimezone.ts` (novo) | Fuso do negócio (`ai_profile.timezone`), fallback pro fuso do navegador quando não configurado |
+| `frontend-crm/src/lib/timezone.ts` (novo) | `formatInBusinessTimezone`, `toBusinessTimezoneDate`, `fromBusinessTimezoneDate` — wrappers sobre `date-fns-tz` |
+| `ScheduleView.tsx`, `WeekView.tsx`, `DayView.tsx`, `Dashboard.tsx` | Horário de compromissos exibido no fuso do negócio |
+| `LeadCardDialog.tsx`, `ProspectionCardDialog.tsx` | Idem, próxima/última reunião do lead |
+| `ScheduleAppointmentDialog.tsx` | Lê e grava o horário no fuso do negócio (editar existente e criar novo) |
+
+### Commits Fase 3
+
+| # | Commit | O que foi implementado |
+|---|---|---|
+| 1 | `b8d1808` | fix: Agenda exibe e salva horario de compromissos no fuso do negocio, nao no do navegador |
+
+**Detalhes do commit `b8d1808`:** ver tabela de arquivos acima — 11 arquivos alterados (9 componentes + 2 novos: hook + utilitário).
+
+### Relatório da Fase 3 — o que mudou na prática
+
+**Antes:** o compromisso ficava salvo certo no banco, mas a Agenda mostrava um horário diferente
+do combinado com o lead sempre que quem estava a olhar a tela estivesse num fuso diferente do
+fuso configurado para o negócio — e, ao editar/criar manualmente pela UI, o horário digitado
+também era interpretado no fuso errado antes de salvar.
+
+**Agora:** a Agenda (lista mensal, semanal, diária, Dashboard, card do lead) sempre mostra o
+horário no fuso configurado no AI Profile do negócio, e o formulário de criar/editar compromisso
+lê e grava horários nesse mesmo fuso — consistente independentemente de onde o usuário estiver
+acessando o sistema. Perfis sem timezone configurado continuam a comportar-se como antes (fuso
+do navegador), sem regressão.
+
+**Para validar:** Cenários P1, P2 e C1, abaixo (todos já testados ao vivo).
+
+---
+
+## Checks de Validação — Fase 3
+
+### Cenário P1 — Reproduzir e confirmar correção (Playground local)
+- [x] Perfil com `timezone: America/Sao_Paulo`, pedir "17h" no Playground, confirmar.
+- [x] Agenda (lista mensal) mostra 17:00.
+- [x] "Editar compromisso" no mesmo evento mostra Início 17:00, Data 3 de agosto.
+- **Validado em:** 03/08/2026 — lead sandbox #373, appointment #53 (`20:00 UTC` no banco).
+  Antes da correção mostrava "21:00"/"4 de agosto"; depois da correção mostra "17:00"/
+  "3 de agosto" em ambos os lugares.
+
+### Cenário P2 — Criar/editar manualmente pela UI
+- [x] Editar um compromisso digitando um novo horário (09:37) no campo "Início".
+- [x] Confirmar: valor bruto salvo no banco corresponde a 09:37 do negócio convertido pra UTC.
+- **Validado em:** 03/08/2026 — appointment #54, digitado "09:37" → salvo como
+  `2026-08-03T12:37:00+00:00` (09:37 SP + 3h = 12:37 UTC, conversão exata).
+
+### Cenário C1 — Sem regressão para perfis sem timezone configurado
+- [x] AI Profile com `timezone` nulo — Agenda mostra o horário no fuso do navegador (sem crash,
+  sem erro no console).
+- **Validado em:** 03/08/2026 — mesmos appointments, `timezone=NULL`: exibidos no fuso do
+  navegador (Europe/London, +1h), idêntico ao comportamento anterior à Fase 3.
+
+---
+
 ## Ajustes Possíveis Pós-Implementação
 
 - Foi observada uma anomalia no trace do teste original (`mother_route=qualification,
   effective=apresentation` para uma pergunta de agendamento no segundo turno). Não foi
   investigada nesta fase por estar fora do escopo pedido pelo usuário — candidato a
   follow-up futuro caso volte a se manifestar.
+- No Cenário P2, um pedido de reagendamento ("pode ser às 16h em vez de 14h?") não disparou
+  `PUT /api/internal/appointments/{id}` (o trace mostrou confiança 0%) — a IA respondeu como
+  se fosse uma nova confirmação, em vez de reconhecer o compromisso já existente e reagendá-lo.
+  A rota interna de reagendamento está pronta e testada (`test_internal_appointments_routes.py`);
+  o gap é na detecção da intenção de reagendamento pela IA/orquestrador, fora do escopo desta
+  Fase — candidato a investigação futura caso o usuário reporte reagendamentos reais não
+  refletindo na Agenda.
+- A Fase 3 corrigiu a **exibição/edição** do horário (hora do dia), mas não os **intervalos de
+  busca** (`start`/`end` enviados ao backend em `Dashboard.tsx` "Reuniões de Hoje",
+  `WeekView.tsx`, `DayView.tsx`, `ScheduleView.tsx`) — esses ainda usam limites de dia/semana/mês
+  no fuso do navegador. Na prática só afeta compromissos muito perto da meia-noite quando o fuso
+  do negócio e o fuso de quem está a ver a Agenda têm uma diferença grande (podem aparecer no
+  dia errado, ou faltar na lista de "hoje"). Não corrigido nesta fase por exigir tocar na lógica
+  de busca de cada view, não só na formatação — candidato a fase futura se isso se manifestar.
+- `KanbanBoard.tsx`/`ProspectionCardDialog.tsx` guardam um `nextAction.date` (badge de "próxima
+  ação" no Kanban) a partir de `new Date(result.startTime)` sem conversão de fuso — não
+  investigado nesta fase; o badge pode não mostrar a data exata dependendo de onde é exibido.
