@@ -12,6 +12,7 @@ import { toBusinessTimezoneDate } from "@/lib/timezone";
 import { Appointment } from "@/types/crm";
 import { Skeleton } from "./ui/skeleton";
 import { ScheduleAppointmentDialog } from "./ScheduleAppointmentDialog";
+import { AppointmentTimeLabel } from "./AppointmentTimeLabel";
 
 const eventTypeColors: Record<Appointment["type"], string> = {
   meeting: "bg-primary text-primary-foreground",
@@ -65,7 +66,6 @@ export function ScheduleView() {
       return {
         ...appointment,
         date,
-        time: format(date, "HH:mm"),
         label: appointment.title || eventTypeLabels[appointment.type],
         leadName:
           appointment.leadName || appointment.leadCompany || "Lead sem nome",
@@ -176,9 +176,10 @@ export function ScheduleView() {
                                   Google
                                 </Badge>
                               )}
-                              <span className="text-sm font-medium text-foreground">
-                                {event.time}
-                              </span>
+                              <AppointmentTimeLabel
+                                startTime={event.startTime}
+                                className="text-sm font-medium text-foreground"
+                              />
                             </div>
                             <p className="text-sm text-foreground font-medium">
                               {event.label}
@@ -223,7 +224,8 @@ export function ScheduleView() {
                           </Badge>
                         )}
                         <span className="text-sm text-muted-foreground">
-                          {format(event.date, "dd/MM")} às {event.time}
+                          {format(event.date, "dd/MM")} às{" "}
+                          <AppointmentTimeLabel startTime={event.startTime} />
                         </span>
                       </div>
                       <p className="text-sm text-foreground font-medium">

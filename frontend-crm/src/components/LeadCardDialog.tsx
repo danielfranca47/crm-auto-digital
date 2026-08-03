@@ -37,6 +37,7 @@ import { useState, useEffect, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { ScheduleAppointmentDialog } from "./ScheduleAppointmentDialog";
+import { AppointmentTimeLabel } from "./AppointmentTimeLabel";
 import { useLeadAppointments, useCancelAppointment } from "@/hooks/useAppointments";
 import { useBusinessTimezone } from "@/hooks/useBusinessTimezone";
 import { useToast } from "@/hooks/use-toast";
@@ -636,7 +637,11 @@ function LeadCardDialogBody({
             </p>
             {nextMeetingAppointment && (
               <p className="text-sm text-foreground">
-                <span className="font-medium">Data:</span> {formatDate(new Date(nextMeetingAppointment.startTime))}
+                <span className="font-medium">Data:</span>{" "}
+                <AppointmentTimeLabel
+                  startTime={nextMeetingAppointment.startTime}
+                  formatStr="dd/MM/yyyy HH:mm"
+                />
               </p>
             )}
             <Button size="sm" variant="outline" onClick={() => void handleReactivateBot()}>
@@ -909,7 +914,10 @@ function LeadCardDialogBody({
                 <div className="space-y-1">
                   <div className="flex items-center gap-2 text-sm font-medium text-foreground">
                     <Calendar className="h-4 w-4" />
-                    {formatDate(new Date(nextScheduledAppointment.startTime))}
+                    <AppointmentTimeLabel
+                      startTime={nextScheduledAppointment.startTime}
+                      formatStr="dd/MM/yyyy HH:mm"
+                    />
                   </div>
                   <p className="text-sm text-muted-foreground">
                     {nextScheduledAppointment.title}
@@ -998,7 +1006,6 @@ function LeadCardDialogBody({
                     <h4 className="text-sm font-semibold text-foreground">Próximos</h4>
                     <div className="space-y-2">
                       {visibleUpcoming.map((appointment) => {
-                        const start = new Date(appointment.startTime);
                         return (
                           <div
                             key={appointment.id}
@@ -1019,7 +1026,10 @@ function LeadCardDialogBody({
                                 )}
                               </div>
                               <span className="text-xs text-muted-foreground">
-                                {formatDate(start)}
+                                <AppointmentTimeLabel
+                                  startTime={appointment.startTime}
+                                  formatStr="dd/MM/yyyy HH:mm"
+                                />
                               </span>
                             </div>
                             <div className="space-y-1">
@@ -1077,8 +1087,6 @@ function LeadCardDialogBody({
                   <h4 className="text-sm font-semibold text-foreground">Histórico</h4>
                   <div className="space-y-2">
                     {pastAppointments.map((appointment) => {
-                      const start = new Date(appointment.startTime);
-
                       // normaliza status para as chaves aceitas nos mapas de UI
                       type UiStatus = keyof typeof appointmentStatusClasses; // "pending" | "completed" | "canceled"
                       const statusStr = String(appointment.status);
@@ -1105,7 +1113,10 @@ function LeadCardDialogBody({
                               )}
                             </div>
                             <span className="text-xs text-muted-foreground">
-                              {formatDate(start)}
+                              <AppointmentTimeLabel
+                                startTime={appointment.startTime}
+                                formatStr="dd/MM/yyyy HH:mm"
+                              />
                             </span>
                           </div>
                           <p className="text-sm text-foreground font-medium">

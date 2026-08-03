@@ -13,12 +13,12 @@ import {
   addMinutes,
 } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { ChevronLeft, ChevronRight, Plus } from "lucide-react";
+import { ChevronLeft, ChevronRight, Plus, Globe } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { useAppointments } from "@/hooks/useAppointments";
-import { useBusinessTimezone } from "@/hooks/useBusinessTimezone";
-import { toBusinessTimezoneDate } from "@/lib/timezone";
+import { useAgendaTimezoneMode } from "@/hooks/useAgendaTimezoneMode";
+import { toBusinessTimezoneDate, getTimezoneCityLabel } from "@/lib/timezone";
 import { ScheduleAppointmentDialog } from "@/components/ScheduleAppointmentDialog";
 import type { Appointment, AppointmentType } from "@/types/crm";
 
@@ -66,19 +66,20 @@ export function WeekView() {
     start: weekStart.toISOString(),
     end: weekEnd.toISOString(),
   });
-  const businessTimezone = useBusinessTimezone();
+  const { mode, toggle, mismatched, activeTimezone, businessTimezone, browserTimezone } =
+    useAgendaTimezoneMode();
 
-  // Indicador de hora actual (no fuso do negócio, mesmo fuso usado para posicionar os eventos)
+  // Indicador de hora actual (no fuso activo — navegador por defeito, ou negócio se alternado)
   useEffect(() => {
     function updateNow() {
-      const now = toBusinessTimezoneDate(new Date(), businessTimezone);
+      const now = toBusinessTimezoneDate(new Date(), activeTimezone);
       const mins = (getHours(now) - START_HOUR) * 60 + getMinutes(now);
       setNowTop(mins >= 0 && mins <= HALF_HOURS * 30 ? (mins / 30) * SLOT_HEIGHT : null);
     }
     updateNow();
     const id = setInterval(updateNow, 60_000);
     return () => clearInterval(id);
-  }, [businessTimezone]);
+  }, [activeTimezone]);
 
   // Slots de 30 min para referência de tempo
   const timeSlots = useMemo(() => {
@@ -125,6 +126,14 @@ export function WeekView() {
           {format(weekStart, "dd MMM", { locale: ptBR })} –{" "}
           {format(weekEnd, "dd MMM yyyy", { locale: ptBR })}
         </span>
+        {mismatched && (
+          <Button variant="outline" size="sm" className="h-8 ml-2" onClick={toggle}>
+            <Globe className="h-4 w-4 mr-1" />
+            {mode === "browser"
+              ? `Ver: ${getTimezoneCityLabel(browserTimezone)}`
+              : `Ver: ${getTimezoneCityLabel(businessTimezone)}`}
+          </Button>
+        )}
         <Button
           size="sm"
           className="ml-auto h-8"
@@ -189,7 +198,7 @@ export function WeekView() {
             {/* Colunas dos dias */}
             {days.map((day) => {
               const dayEvents = appointments.filter((a) =>
-                isSameDay(toBusinessTimezoneDate(a.startTime, businessTimezone), day)
+                isSameDay(toBusinessTimezoneDate(a.startTime, activeTimezone), day)
               );
               const isToday = isSameDay(day, new Date());
 
@@ -226,7 +235,7 @@ export function WeekView() {
 
                   {/* Eventos */}
                   {dayEvents.map((event) => {
-                    const start = toBusinessTimezoneDate(event.startTime, businessTimezone);
+                    const start = toBusinessTimezoneDate(event.startTime, activeTimezone);
                     const top = slotTopPx(start);
                     const height = durationPx(event.startTime, event.endTime);
                     if (top >= TOTAL_HEIGHT || top < 0) return null;

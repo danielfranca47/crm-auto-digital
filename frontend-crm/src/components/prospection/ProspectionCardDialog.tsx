@@ -34,8 +34,7 @@ import { cn } from "@/lib/utils";
 import { api, type LeadMessage } from "@/services/api";
 import { ScheduleAppointmentDialog } from "@/components/ScheduleAppointmentDialog";
 import { useAppointments, useCancelAppointment } from "@/hooks/useAppointments";
-import { useBusinessTimezone } from "@/hooks/useBusinessTimezone";
-import { toBusinessTimezoneDate } from "@/lib/timezone";
+import { AppointmentTimeLabel } from "@/components/AppointmentTimeLabel";
 import { Appointment } from "@/types/crm";
 import { useToast } from "@/hooks/use-toast";
 
@@ -157,7 +156,6 @@ export function ProspectionCardDialog({
   const [lastWa, setLastWa] = useState<LastWaRow | null>(null);
   const [loadingLast, setLoadingLast] = useState(false);
 
-  const businessTimezone = useBusinessTimezone();
   const leadsCtx = useLeads();
   const { updateProspectionLead } = leadsCtx;
   const setLeadNextAction =
@@ -741,7 +739,6 @@ export function ProspectionCardDialog({
                     <h4 className="text-sm font-semibold text-foreground">Próximos</h4>
                     <div className="space-y-2">
                       {upcomingAppointments.map((appointment) => {
-                        const start = toBusinessTimezoneDate(appointment.startTime, businessTimezone);
                         return (
                           <div
                             key={appointment.id}
@@ -757,7 +754,10 @@ export function ProspectionCardDialog({
                                 </Badge>
                               </div>
                               <span className="text-xs text-muted-foreground">
-                                {format(start, "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}
+                                <AppointmentTimeLabel
+                                  startTime={appointment.startTime}
+                                  formatStr="dd/MM/yyyy 'às' HH:mm"
+                                />
                               </span>
                             </div>
                             <div className="space-y-1">
@@ -791,7 +791,6 @@ export function ProspectionCardDialog({
                     <h4 className="text-sm font-semibold text-foreground">Histórico</h4>
                     <div className="space-y-2">
                       {pastAppointments.map((appointment) => {
-                        const start = toBusinessTimezoneDate(appointment.startTime, businessTimezone);
                         return (
                           <div
                             key={appointment.id}
@@ -807,7 +806,10 @@ export function ProspectionCardDialog({
                                 </Badge>
                               </div>
                               <span className="text-xs text-muted-foreground">
-                                {format(start, "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}
+                                <AppointmentTimeLabel
+                                  startTime={appointment.startTime}
+                                  formatStr="dd/MM/yyyy 'às' HH:mm"
+                                />
                               </span>
                             </div>
                             <p className="text-sm text-foreground font-medium">{appointment.title}</p>

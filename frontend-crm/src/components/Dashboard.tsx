@@ -7,8 +7,7 @@ import { ArrowLeft, Sun, Moon, Clock, Plus, RefreshCw, Sparkles, AlertTriangle, 
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { useMemo } from "react";
-import { useBusinessTimezone } from "@/hooks/useBusinessTimezone";
-import { toBusinessTimezoneDate } from "@/lib/timezone";
+import { AppointmentTimeLabel } from "./AppointmentTimeLabel";
 import { useLeads } from "@/contexts/LeadsContext";
 import { Badge } from "./ui/badge";
 import { Skeleton } from "./ui/skeleton";
@@ -124,7 +123,6 @@ export function Dashboard({
 }: DashboardProps) {
   const { theme, toggleTheme } = useTheme();
   const { columns } = useLeads();
-  const businessTimezone = useBusinessTimezone();
 
   const allLeads = useMemo(() => {
     const map = new Map<string, any>();
@@ -349,13 +347,14 @@ export function Dashboard({
                   ) : (
                     <div className="space-y-2">
                       {todayAppointments.map((appt) => {
-                        const time = format(toBusinessTimezoneDate(appt.startTime, businessTimezone), "HH:mm");
                         const label = appt.leadName || appt.leadCompany || "Lead sem nome";
                         return (
                           <div key={appt.id} className="flex items-start space-x-3 p-3 rounded-lg border border-border bg-muted/40">
                             <Badge className={appointmentTypeColors[appt.type]}>{appointmentTypeLabels[appt.type]}</Badge>
                             <div className="flex-1 space-y-1">
-                              <p className="font-medium text-sm text-foreground">{time} - {label}</p>
+                              <p className="font-medium text-sm text-foreground">
+                                <AppointmentTimeLabel startTime={appt.startTime} /> - {label}
+                              </p>
                               <p className="text-xs text-muted-foreground">{appt.title}</p>
                             </div>
                           </div>

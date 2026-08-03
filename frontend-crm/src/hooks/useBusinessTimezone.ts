@@ -1,7 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { api } from "@/services/api";
 
-const browserTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+export const browserTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
 
 /**
  * Fuso horário do negócio (ai_profile.timezone) — usado para exibir e salvar horários de
