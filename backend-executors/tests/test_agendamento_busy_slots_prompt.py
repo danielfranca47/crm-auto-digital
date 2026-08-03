@@ -68,13 +68,15 @@ def test_agendamento_prompt_includes_busy_block_when_present():
     assert "20/06 11:00" in prompt
 
 
-def test_agendamento_prompt_omits_busy_block_when_empty():
+def test_agendamento_prompt_states_agenda_free_when_empty():
     context = _context(calendar_busy_slots=[])
     prompt = decision_engine._build_child_prompt_agendamento(context, "amanha as 11h", _mother())
-    assert "HORÁRIOS JÁ OCUPADOS" not in prompt
+    assert "nenhum compromisso encontrado" in prompt
+    assert "agenda está livre no período consultado" in prompt
 
 
-def test_agendamento_prompt_omits_busy_block_when_absent():
+def test_agendamento_prompt_states_agenda_free_when_absent():
     context = _context(calendar_busy_slots=None)
     prompt = decision_engine._build_child_prompt_agendamento(context, "amanha as 11h", _mother())
-    assert "HORÁRIOS JÁ OCUPADOS" not in prompt
+    assert "nenhum compromisso encontrado" in prompt
+    assert "agenda está livre no período consultado" in prompt

@@ -40,3 +40,11 @@ def test_confirm_exact_instructs_direct_confirmation():
     assert "REGRA CRÍTICA — CONFIRMAÇÃO DIRETA" in prompt
     assert "NÃO INVENTE conflito que não está listado" in prompt
     assert "confirme-o directamente nesta resposta" in prompt
+
+
+def test_confirm_exact_with_empty_calendar_states_agenda_is_free():
+    context = _base_context("confirm_exact")
+    context["calendar_busy_slots"] = []
+    prompt = _build_child_prompt_agendamento(context, "Pode ser às 9h então", _mother())
+    assert "nenhum compromisso encontrado" in prompt
+    assert "a agenda está livre no período consultado" in prompt

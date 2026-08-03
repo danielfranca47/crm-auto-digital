@@ -3486,7 +3486,9 @@ def _build_child_prompt_agendamento(
     _busy_block = (
         f"HORÁRIOS JÁ OCUPADOS (compromissos reais já marcados — NÃO proponha nem confirme "
         f"horário que sobreponha estes intervalos):\n{_busy_lines}\n\n"
-        if _busy_lines else ""
+        if _busy_lines
+        else "HORÁRIOS JÁ OCUPADOS: nenhum compromisso encontrado — a agenda está livre no "
+        "período consultado.\n\n"
     )
 
     scheduling_offer_style = str(ai_profile.get("scheduling_offer_style") or "offer_alternatives").strip().lower()
