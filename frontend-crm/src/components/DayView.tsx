@@ -14,6 +14,8 @@ import { ChevronLeft, ChevronRight, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { useAppointments } from "@/hooks/useAppointments";
+import { useBusinessTimezone } from "@/hooks/useBusinessTimezone";
+import { toBusinessTimezoneDate } from "@/lib/timezone";
 import { ScheduleAppointmentDialog } from "@/components/ScheduleAppointmentDialog";
 import type { Appointment, AppointmentType } from "@/types/crm";
 
@@ -63,22 +65,23 @@ export function DayView() {
     start: dayStart.toISOString(),
     end: dayEnd.toISOString(),
   });
+  const businessTimezone = useBusinessTimezone();
 
-  // Indicador de hora actual
+  // Indicador de hora actual (no fuso do negócio, mesmo fuso usado para posicionar os eventos)
   useEffect(() => {
     function updateNow() {
       if (!isSameDay(selectedDay, new Date())) {
         setNowTop(null);
         return;
       }
-      const now = new Date();
+      const now = toBusinessTimezoneDate(new Date(), businessTimezone);
       const mins = (getHours(now) - START_HOUR) * 60 + getMinutes(now);
       setNowTop(mins >= 0 && mins <= HALF_HOURS * 30 ? (mins / 30) * SLOT_HEIGHT : null);
     }
     updateNow();
     const id = setInterval(updateNow, 60_000);
     return () => clearInterval(id);
-  }, [selectedDay]);
+  }, [selectedDay, businessTimezone]);
 
   const timeSlots = useMemo(() => {
     const base = startOfDay(new Date());
@@ -188,7 +191,7 @@ export function DayView() {
 
             {/* Eventos */}
             {appointments.map((event) => {
-              const start = new Date(event.startTime);
+              const start = toBusinessTimezoneDate(event.startTime, businessTimezone);
               const top = slotTopPx(start);
               const height = durationPx(event.startTime, event.endTime);
               if (top >= TOTAL_HEIGHT || top < 0) return null;
@@ -206,7 +209,8 @@ export function DayView() {
                   <div className="flex items-center gap-2 flex-wrap">
                     <span className="font-semibold text-sm">
                       {format(start, "HH:mm")}
-                      {event.endTime && ` – ${format(new Date(event.endTime), "HH:mm")}`}
+                      {event.endTime &&
+                        ` – ${format(toBusinessTimezoneDate(event.endTime, businessTimezone), "HH:mm")}`}
                     </span>
                     <Badge
                       variant="outline"

@@ -38,6 +38,7 @@ import { useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { ScheduleAppointmentDialog } from "./ScheduleAppointmentDialog";
 import { useLeadAppointments, useCancelAppointment } from "@/hooks/useAppointments";
+import { useBusinessTimezone } from "@/hooks/useBusinessTimezone";
 import { useToast } from "@/hooks/use-toast";
 import { useLeads } from "@/contexts/LeadsContext";
 import { api, FollowUpContract } from "@/services/api";
@@ -260,6 +261,7 @@ function LeadCardDialogBody({
     (() => {});
 
   const cancelAppointment = useCancelAppointment();
+  const businessTimezone = useBusinessTimezone();
   const [isScheduleDialogOpen, setIsScheduleDialogOpen] = useState(false);
   const [appointmentToEdit, setAppointmentToEdit] = useState<Appointment | null>(null);
   const [rescheduleOutcomeId, setRescheduleOutcomeId] = useState<string | null>(null);
@@ -363,6 +365,7 @@ function LeadCardDialogBody({
       year: "numeric",
       hour: "2-digit",
       minute: "2-digit",
+      timeZone: businessTimezone,
     }).format(date);
 
   const handleSave = () => {

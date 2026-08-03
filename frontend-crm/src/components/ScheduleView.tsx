@@ -7,6 +7,8 @@ import { Badge } from "./ui/badge";
 import { format, isSameDay } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { useAppointments } from "@/hooks/useAppointments";
+import { useBusinessTimezone } from "@/hooks/useBusinessTimezone";
+import { toBusinessTimezoneDate } from "@/lib/timezone";
 import { Appointment } from "@/types/crm";
 import { Skeleton } from "./ui/skeleton";
 import { ScheduleAppointmentDialog } from "./ScheduleAppointmentDialog";
@@ -55,10 +57,11 @@ export function ScheduleView() {
     isError,
     refetch,
   } = useAppointments({ start, end });
+  const businessTimezone = useBusinessTimezone();
 
   const normalized = useMemo(() => {
     return appointments.map((appointment) => {
-      const date = new Date(appointment.startTime);
+      const date = toBusinessTimezoneDate(appointment.startTime, businessTimezone);
       return {
         ...appointment,
         date,
@@ -68,7 +71,7 @@ export function ScheduleView() {
           appointment.leadName || appointment.leadCompany || "Lead sem nome",
       };
     });
-  }, [appointments]);
+  }, [appointments, businessTimezone]);
 
   const filteredEvents = useMemo(() => {
     if (viewMode === "calendar") {

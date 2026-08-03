@@ -17,6 +17,8 @@ import { ChevronLeft, ChevronRight, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { useAppointments } from "@/hooks/useAppointments";
+import { useBusinessTimezone } from "@/hooks/useBusinessTimezone";
+import { toBusinessTimezoneDate } from "@/lib/timezone";
 import { ScheduleAppointmentDialog } from "@/components/ScheduleAppointmentDialog";
 import type { Appointment, AppointmentType } from "@/types/crm";
 
@@ -64,18 +66,19 @@ export function WeekView() {
     start: weekStart.toISOString(),
     end: weekEnd.toISOString(),
   });
+  const businessTimezone = useBusinessTimezone();
 
-  // Indicador de hora actual
+  // Indicador de hora actual (no fuso do negócio, mesmo fuso usado para posicionar os eventos)
   useEffect(() => {
     function updateNow() {
-      const now = new Date();
+      const now = toBusinessTimezoneDate(new Date(), businessTimezone);
       const mins = (getHours(now) - START_HOUR) * 60 + getMinutes(now);
       setNowTop(mins >= 0 && mins <= HALF_HOURS * 30 ? (mins / 30) * SLOT_HEIGHT : null);
     }
     updateNow();
     const id = setInterval(updateNow, 60_000);
     return () => clearInterval(id);
-  }, []);
+  }, [businessTimezone]);
 
   // Slots de 30 min para referência de tempo
   const timeSlots = useMemo(() => {
@@ -186,7 +189,7 @@ export function WeekView() {
             {/* Colunas dos dias */}
             {days.map((day) => {
               const dayEvents = appointments.filter((a) =>
-                isSameDay(new Date(a.startTime), day)
+                isSameDay(toBusinessTimezoneDate(a.startTime, businessTimezone), day)
               );
               const isToday = isSameDay(day, new Date());
 
@@ -223,7 +226,7 @@ export function WeekView() {
 
                   {/* Eventos */}
                   {dayEvents.map((event) => {
-                    const start = new Date(event.startTime);
+                    const start = toBusinessTimezoneDate(event.startTime, businessTimezone);
                     const top = slotTopPx(start);
                     const height = durationPx(event.startTime, event.endTime);
                     if (top >= TOTAL_HEIGHT || top < 0) return null;

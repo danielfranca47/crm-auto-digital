@@ -34,6 +34,8 @@ import { cn } from "@/lib/utils";
 import { api, type LeadMessage } from "@/services/api";
 import { ScheduleAppointmentDialog } from "@/components/ScheduleAppointmentDialog";
 import { useAppointments, useCancelAppointment } from "@/hooks/useAppointments";
+import { useBusinessTimezone } from "@/hooks/useBusinessTimezone";
+import { toBusinessTimezoneDate } from "@/lib/timezone";
 import { Appointment } from "@/types/crm";
 import { useToast } from "@/hooks/use-toast";
 
@@ -155,6 +157,7 @@ export function ProspectionCardDialog({
   const [lastWa, setLastWa] = useState<LastWaRow | null>(null);
   const [loadingLast, setLoadingLast] = useState(false);
 
+  const businessTimezone = useBusinessTimezone();
   const leadsCtx = useLeads();
   const { updateProspectionLead } = leadsCtx;
   const setLeadNextAction =
@@ -738,7 +741,7 @@ export function ProspectionCardDialog({
                     <h4 className="text-sm font-semibold text-foreground">Próximos</h4>
                     <div className="space-y-2">
                       {upcomingAppointments.map((appointment) => {
-                        const start = new Date(appointment.startTime);
+                        const start = toBusinessTimezoneDate(appointment.startTime, businessTimezone);
                         return (
                           <div
                             key={appointment.id}
@@ -788,7 +791,7 @@ export function ProspectionCardDialog({
                     <h4 className="text-sm font-semibold text-foreground">Histórico</h4>
                     <div className="space-y-2">
                       {pastAppointments.map((appointment) => {
-                        const start = new Date(appointment.startTime);
+                        const start = toBusinessTimezoneDate(appointment.startTime, businessTimezone);
                         return (
                           <div
                             key={appointment.id}

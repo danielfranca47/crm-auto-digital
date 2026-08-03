@@ -23,6 +23,8 @@ import { ptBR } from "date-fns/locale";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 import { useCreateAppointment, useUpdateAppointment, useDeleteAppointment } from "@/hooks/useAppointments";
+import { useBusinessTimezone } from "@/hooks/useBusinessTimezone";
+import { fromBusinessTimezoneDate, toBusinessTimezoneDate } from "@/lib/timezone";
 import { AppointmentType, Appointment } from "@/types/crm";
 import { useLeads } from "@/contexts/LeadsContext";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -55,6 +57,7 @@ export function ScheduleAppointmentDialog({
   fixedLeadId,
 }: ScheduleAppointmentDialogProps) {
   const { toast } = useToast();
+  const businessTimezone = useBusinessTimezone();
 
   // Contexto de leads (com fallback seguro para setLeadNextAction)
   const leadsCtx = useLeads();
@@ -137,18 +140,24 @@ export function ScheduleAppointmentDialog({
       null;
 
     setSelectedLeadId(resolvedLeadId);
-    setDate(appointmentToEdit ? new Date(appointmentToEdit.startTime) : initialDate ?? new Date());
+    setDate(
+      appointmentToEdit
+        ? toBusinessTimezoneDate(appointmentToEdit.startTime, businessTimezone)
+        : initialDate ?? new Date()
+    );
     setTitle(appointmentToEdit?.title ?? "");
     setDescription(appointmentToEdit?.description ?? "");
     setType(appointmentToEdit?.type ?? "meeting");
 
     if (appointmentToEdit) {
-      const start = new Date(appointmentToEdit.startTime);
+      // Convertido para o fuso do negócio — os campos de hora devem refletir o horário
+      // combinado com o lead, não o fuso de quem está a editar o compromisso.
+      const start = toBusinessTimezoneDate(appointmentToEdit.startTime, businessTimezone);
       const hours = String(start.getHours()).padStart(2, "0");
       const minutes = String(start.getMinutes()).padStart(2, "0");
       setTime(`${hours}:${minutes}`);
       if (appointmentToEdit.endTime) {
-        const end = new Date(appointmentToEdit.endTime);
+        const end = toBusinessTimezoneDate(appointmentToEdit.endTime, businessTimezone);
         setEndTime(`${String(end.getHours()).padStart(2, "0")}:${String(end.getMinutes()).padStart(2, "0")}`);
       } else {
         const end = new Date(start.getTime() + 60 * 60 * 1000);
@@ -164,7 +173,7 @@ export function ScheduleAppointmentDialog({
       setTime("09:00");
       setEndTime("10:00");
     }
-  }, [open, initialLeadId, initialDate, appointmentToEdit, fixedLeadId]);
+  }, [open, initialLeadId, initialDate, appointmentToEdit, fixedLeadId, businessTimezone]);
 
   // Ao fechar, limpa o estado
   useEffect(() => {
@@ -209,15 +218,20 @@ export function ScheduleAppointmentDialog({
       return;
     }
 
+    // `date` + `time`/`endTime` representam o horário de parede no fuso do NEGÓCIO (é isso que
+    // aparece nos campos do formulário) — fromBusinessTimezoneDate converte para o instante UTC
+    // correto, independente do fuso do navegador de quem está a preencher o formulário.
     const [hoursStr, minutesStr] = time.split(":");
     const hours = Number(hoursStr);
     const minutes = Number(minutesStr);
-    const startAt = new Date(date);
-    startAt.setHours(hours, minutes, 0, 0);
+    const startAtLocal = new Date(date);
+    startAtLocal.setHours(hours, minutes, 0, 0);
+    const startAt = fromBusinessTimezoneDate(startAtLocal, businessTimezone);
 
     const [endHoursStr, endMinutesStr] = endTime.split(":");
-    const endAt = new Date(date);
-    endAt.setHours(Number(endHoursStr), Number(endMinutesStr), 0, 0);
+    const endAtLocal = new Date(date);
+    endAtLocal.setHours(Number(endHoursStr), Number(endMinutesStr), 0, 0);
+    const endAt = fromBusinessTimezoneDate(endAtLocal, businessTimezone);
     // Se hora de fim <= início, soma 1h automaticamente
     if (endAt <= startAt) {
       endAt.setTime(startAt.getTime() + 60 * 60 * 1000);
