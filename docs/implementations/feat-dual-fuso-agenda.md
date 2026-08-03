@@ -80,31 +80,59 @@ nada quando os fusos coincidem.
 
 | # | Commit | O que foi implementado |
 |---|---|---|
-| 1 | *(pendente)* | *(pendente)* |
+| 1 | `4ad8f75` | feat: Agenda mostra dois fusos quando fuso do negocio difere do navegador |
+
+**Detalhes do commit `4ad8f75`:** ver tabela de arquivos acima.
+
+### Relatório da Fase 1 — o que mudou na prática
+
+**Antes:** a Agenda mostrava sempre só o horário do fuso do negócio, sem indicar de qual
+fuso é — quem administra uma agenda de um negócio noutro fuso não tinha como saber, só de
+olhar "17:00", se isso é hora local ou hora do negócio. Na grade semanal/diária não havia
+opção nenhuma: era sempre o fuso do negócio.
+
+**Agora:** quando o fuso do negócio é diferente do fuso de quem está a ver a tela, as
+listagens (Agenda, Dashboard, card do lead, Prospecção) mostram os dois horários lado a
+lado com o nome da cidade de cada um (ex. "17:00 (São Paulo) · 21:00 (Lisboa)"). Na grade
+semanal/diária, aparece um botão para alternar entre ver no fuso do navegador (padrão) ou
+no fuso do negócio — a escolha fica guardada entre sessões. Quando os fusos são iguais,
+nada disso aparece — continua exatamente como antes.
+
+**Para validar:** Cenários P1, P2 e C1, abaixo.
 
 ---
 
 ## Checks de Validação
 
 ### Cenário P1 — Listagens mostram os dois fusos quando há mismatch
-- [ ] Com AI Profile de teste em `America/Sao_Paulo` e navegador em Lisboa, abrir Agenda
+- [x] Com AI Profile de teste em `America/Sao_Paulo` e navegador em Lisboa, abrir Agenda
   (modo calendário e modo lista), Dashboard, card de lead com reunião marcada,
-  Prospecção (Próximos/Histórico)
-- [ ] Confirmar: todos mostram os dois horários com nome de cidade (ex. "17:00 (São
-  Paulo) · 21:00 (Lisboa)")
+  Prospecção (Próximos/Histórico) — 04/08/2026
+- [x] Confirmar: todos mostram os dois horários com nome de cidade (ex. "17:00 (São
+  Paulo) · 21:00 (Lisboa)") — 04/08/2026
 
 ### Cenário P2 — Grade com toggle de fuso
-- [ ] Abrir WeekView e DayView — botão de alternância visível
-- [ ] Por defeito, grade e agulha no fuso do navegador (Lisboa)
-- [ ] Clicar no botão → grade e agulha passam para o fuso do negócio (São Paulo);
-  clicar de novo reverte
-- [ ] Recarregar a página → última escolha persistida (localStorage)
+- [x] Abrir WeekView e DayView — botão de alternância visível — 04/08/2026
+- [x] Por defeito, grade e agulha no fuso do navegador (Lisboa) — 04/08/2026
+- [x] Clicar no botão → grade e agulha passam para o fuso do negócio (São Paulo);
+  clicar de novo reverte — 04/08/2026
+- [x] Recarregar a página → última escolha persistida (localStorage) — 04/08/2026
 
 ### Cenário C1 — Sem regressão quando os fusos coincidem
-- [ ] Definir o AI Profile de teste com `timezone` = `Europe/Lisbon` (ou `NULL`)
-- [ ] Confirmar: nenhum rótulo duplo em nenhuma listagem, botão de alternância some do
-  WeekView/DayView — comportamento idêntico ao estado pós-Fase-3
-- [ ] Restaurar o profile para `America/Sao_Paulo`
+- [x] Definir o AI Profile de teste com `timezone` = `Europe/Lisbon` (ou `NULL`) — 04/08/2026
+- [x] Confirmar: nenhum rótulo duplo em nenhuma listagem, botão de alternância some do
+  WeekView/DayView — comportamento idêntico ao estado pós-Fase-3 — 04/08/2026
+- [x] Restaurar o profile para `America/Sao_Paulo` — 04/08/2026
+
+**Validado em:** 04/08/2026 — testado ao vivo via browser (MCP), com fuso do navegador
+emulado para bater com o cenário (o SO local resolve para `Europe/London`, mesmo offset de
+Lisboa em agosto — por isso os rótulos capturados mostram "Londres" em vez de "Lisboa", mas
+o mecanismo de mismatch/label é o mesmo). Compromisso de teste criado no lead "DF FLOW
+BARBERSHOP" (17:00–18:00 América/Sao_Paulo) via `ScheduleAppointmentDialog`, verificado em
+todos os pontos do P1, alternado via toggle nos Cenários P2 (WeekView e DayView, incluindo
+persistência pós-reload), e removido o dual-fuso trocando o timezone do AI Profile de teste
+para `Europe/Lisbon` no Cenário C1 (nenhum rótulo duplo, botão de alternância ausente).
+Compromisso de teste cancelado e AI Profile restaurado para `America/Sao_Paulo` ao final.
 
 ---
 
