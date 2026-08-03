@@ -210,7 +210,7 @@ def create_lead_appointment(
     source: str | None = None,
 ) -> Dict[str, Any]:
     base_url = settings.crm_api_base.rstrip("/")
-    url = f"{base_url}/api/appointments"
+    url = f"{base_url}/api/internal/appointments"
     payload: Dict[str, Any] = {
         "lead_id": lead_id,
         "title": title,
@@ -228,7 +228,7 @@ def create_lead_appointment(
 
 def cancel_appointment(appointment_id: int) -> Dict[str, Any]:
     base_url = settings.crm_api_base.rstrip("/")
-    url = f"{base_url}/api/appointments/{appointment_id}/cancel"
+    url = f"{base_url}/api/internal/appointments/{appointment_id}/cancel"
     response = _send_request("POST", url)
     return _handle_response(response, str(appointment_id), for_context=False)
 
@@ -240,7 +240,7 @@ def reschedule_appointment(
     end_at: str,
 ) -> Dict[str, Any]:
     base_url = settings.crm_api_base.rstrip("/")
-    url = f"{base_url}/api/appointments/{appointment_id}"
+    url = f"{base_url}/api/internal/appointments/{appointment_id}"
     payload: Dict[str, Any] = {"start_at": start_at, "end_at": end_at}
     response = _send_request("PUT", url, json=payload)
     return _handle_response(response, str(appointment_id), for_context=False)

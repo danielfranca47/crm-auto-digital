@@ -240,90 +240,188 @@ def list_by_lead(
         conn.close()
 
 
+def _create_appointment_row(conn, payload: AppointmentCreate, owner_user_id: Optional[int]) -> AppointmentOut:
+    """Lógica de criação de appointment, sem checagem de ownership contra um JWT.
+
+    Compartilhada entre a rota pública (`create_appointment`, que já validou o dono via
+    `current_user`) e a rota interna do executor (`routes/executor.py`, que confia no
+    `lead_id` vindo do backend-executors — ver docs/implementations/fix-confirm-exact-agenda-vazia.md).
+    """
+    _validate_interval(payload.start_at, payload.end_at)
+
+    _check_conflict(conn, owner_user_id, payload.start_at, payload.end_at)
+
+    cur = conn.cursor()
+    now_iso = datetime.now(timezone.utc).isoformat()  # tz-aware
+    source = payload.source or "crm"
+    cur.execute(
+        """
+        INSERT INTO appointments (
+            lead_id, title, description, type, start_at, end_at, status, location, source, created_at, updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """,
+        (
+            payload.lead_id,
+            payload.title,
+            payload.description,
+            payload.type,
+            payload.start_at.isoformat(),
+            (payload.end_at.isoformat() if payload.end_at else payload.start_at.isoformat()),
+            payload.status,
+            payload.location,
+            source,
+            now_iso,
+            now_iso,
+        ),
+    )
+    conn.commit()
+    appointment_id = cur.lastrowid
+    cur.execute("SELECT * FROM appointments WHERE id = ?", (appointment_id,))
+    row = cur.fetchone()
+    result = _serialize(row)
+
+    # Agendar jobs de lembrete + push Google Calendar — pulado para simulações do
+    # Playground (lead sandbox com telefone fake, não deve poluir o Google Calendar real)
+    lead_row = cur.execute(
+        "SELECT user_id FROM leads WHERE id = ?", (payload.lead_id,)
+    ).fetchone()
+    if lead_row and source != "playground":
+        user_id = lead_row["user_id"]
+        schedule_appointment_reminder_jobs(
+            lead_id=payload.lead_id,
+            user_id=user_id,
+            appointment_id=appointment_id,
+            appointment_title=payload.title,
+            appointment_start_at=payload.start_at,
+        )
+        schedule_briefing_job_for_appointment(
+            lead_id=payload.lead_id,
+            user_id=user_id,
+            appointment_id=appointment_id,
+            appointment_start_at=payload.start_at,
+        )
+        gcal_event_id = gcal_push(
+            user_id=user_id,
+            appointment={
+                "title": payload.title,
+                "description": payload.description,
+                "start_at": payload.start_at.isoformat(),
+                "end_at": (payload.end_at.isoformat() if payload.end_at else payload.start_at.isoformat()),
+                "location": payload.location,
+            },
+        )
+        if gcal_event_id:
+            cur.execute(
+                "UPDATE appointments SET google_event_id = ? WHERE id = ?",
+                (gcal_event_id, appointment_id),
+            )
+            conn.commit()
+
+    return result
+
+
 @router.post("", response_model=AppointmentOut, status_code=201)
 def create_appointment(
     payload: AppointmentCreate,
     current_user: CurrentUser = Depends(require_crm_access),
 ) -> AppointmentOut:
-    _validate_interval(payload.start_at, payload.end_at)
-
     conn = get_connection()
     try:
         _ensure_lead_exists(conn, payload.lead_id)
         owner_user_id = _resolve_owner_user_id(conn, lead_id=payload.lead_id)
         if owner_user_id != current_user.id:
             raise HTTPException(status_code=404, detail="Lead não encontrado")
-        _check_conflict(conn, owner_user_id, payload.start_at, payload.end_at)
-
-        cur = conn.cursor()
-        now_iso = datetime.now(timezone.utc).isoformat()  # tz-aware
-        source = payload.source or "crm"
-        cur.execute(
-            """
-            INSERT INTO appointments (
-                lead_id, title, description, type, start_at, end_at, status, location, source, created_at, updated_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """,
-            (
-                payload.lead_id,
-                payload.title,
-                payload.description,
-                payload.type,
-                payload.start_at.isoformat(),
-                (payload.end_at.isoformat() if payload.end_at else payload.start_at.isoformat()),
-                payload.status,
-                payload.location,
-                source,
-                now_iso,
-                now_iso,
-            ),
-        )
-        conn.commit()
-        appointment_id = cur.lastrowid
-        cur.execute("SELECT * FROM appointments WHERE id = ?", (appointment_id,))
-        row = cur.fetchone()
-        result = _serialize(row)
-
-        # Agendar jobs de lembrete + push Google Calendar — pulado para simulações do
-        # Playground (lead sandbox com telefone fake, não deve poluir o Google Calendar real)
-        lead_row = cur.execute(
-            "SELECT user_id FROM leads WHERE id = ?", (payload.lead_id,)
-        ).fetchone()
-        if lead_row and source != "playground":
-            user_id = lead_row["user_id"]
-            schedule_appointment_reminder_jobs(
-                lead_id=payload.lead_id,
-                user_id=user_id,
-                appointment_id=appointment_id,
-                appointment_title=payload.title,
-                appointment_start_at=payload.start_at,
-            )
-            schedule_briefing_job_for_appointment(
-                lead_id=payload.lead_id,
-                user_id=user_id,
-                appointment_id=appointment_id,
-                appointment_start_at=payload.start_at,
-            )
-            gcal_event_id = gcal_push(
-                user_id=user_id,
-                appointment={
-                    "title": payload.title,
-                    "description": payload.description,
-                    "start_at": payload.start_at.isoformat(),
-                    "end_at": (payload.end_at.isoformat() if payload.end_at else payload.start_at.isoformat()),
-                    "location": payload.location,
-                },
-            )
-            if gcal_event_id:
-                cur.execute(
-                    "UPDATE appointments SET google_event_id = ? WHERE id = ?",
-                    (gcal_event_id, appointment_id),
-                )
-                conn.commit()
-
-        return result
+        return _create_appointment_row(conn, payload, owner_user_id)
     finally:
         conn.close()
+
+
+def _update_appointment_row(
+    conn, appointment_id: int, payload: AppointmentUpdate, owner_user_id: Optional[int], current: dict
+) -> AppointmentOut:
+    """Lógica de atualização de appointment, sem checagem de ownership contra um JWT.
+
+    Compartilhada entre a rota pública (`update_appointment`, que já validou o dono via
+    `current_user`) e a rota interna do executor (`routes/executor.py`).
+    """
+    if payload.start_at and payload.end_at:
+        _validate_interval(payload.start_at, payload.end_at)
+
+    start_at = payload.start_at or datetime.fromisoformat(current["start_at"])
+    end_at = payload.end_at or datetime.fromisoformat(current["end_at"])
+    _validate_interval(start_at, end_at)
+
+    _check_conflict(conn, owner_user_id, start_at, end_at, exclude_id=appointment_id)
+
+    fields = []
+    values = []
+    mapping = {
+        "title": payload.title,
+        "description": payload.description,
+        "type": payload.type,
+        "start_at": start_at.isoformat() if payload.start_at else None,
+        "end_at": end_at.isoformat() if payload.end_at else None,
+        "status": payload.status,
+        "location": payload.location,
+    }
+    for column, value in mapping.items():
+        if value is not None:
+            fields.append(f"{column} = ?")
+            values.append(value)
+
+    if not fields:
+        return _serialize(current)
+
+    values.append(datetime.now(timezone.utc).isoformat())  # tz-aware
+    fields.append("updated_at = ?")
+
+    values.append(appointment_id)
+    sql = f"UPDATE appointments SET {', '.join(fields)} WHERE id = ?"
+    cur = conn.cursor()
+    cur.execute(sql, values)
+    conn.commit()
+    cur.execute("SELECT * FROM appointments WHERE id = ?", (appointment_id,))
+    updated = cur.fetchone()
+    updated_data = {key: updated[key] for key in updated.keys()}
+
+    lead_row = None
+    if current.get("lead_id"):
+        lead_row = cur.execute(
+            "SELECT user_id FROM leads WHERE id = ?", (current["lead_id"],)
+        ).fetchone()
+
+    # Sync update to Google Calendar (fail-silent)
+    google_event_id = current.get("google_event_id")
+    if google_event_id and lead_row and lead_row["user_id"]:
+        gcal_update(
+            user_id=lead_row["user_id"],
+            google_event_id=google_event_id,
+            appointment=updated_data,
+        )
+
+    # Horário mudou de fato: lembretes/briefing antigos apontam para o horário velho —
+    # cancelar e re-agendar para o novo start_at (pulado para appointments do Playground,
+    # mesmo critério de create_appointment).
+    time_changed = payload.start_at is not None and updated_data["start_at"] != current["start_at"]
+    if time_changed and lead_row and lead_row["user_id"] and current.get("source") != "playground":
+        cancel_pending_appointment_jobs(conn, appointment_id)
+        new_start_at = datetime.fromisoformat(updated_data["start_at"])
+        schedule_appointment_reminder_jobs(
+            lead_id=current["lead_id"],
+            user_id=lead_row["user_id"],
+            appointment_id=appointment_id,
+            appointment_title=updated_data["title"],
+            appointment_start_at=new_start_at,
+        )
+        schedule_briefing_job_for_appointment(
+            lead_id=current["lead_id"],
+            user_id=lead_row["user_id"],
+            appointment_id=appointment_id,
+            appointment_start_at=new_start_at,
+        )
+        conn.commit()
+
+    return _serialize(updated)
 
 
 @router.put("/{appointment_id}", response_model=AppointmentOut)
@@ -332,9 +430,6 @@ def update_appointment(
     payload: AppointmentUpdate,
     current_user: CurrentUser = Depends(require_crm_access),
 ) -> AppointmentOut:
-    if payload.start_at and payload.end_at:
-        _validate_interval(payload.start_at, payload.end_at)
-
     conn = get_connection()
     try:
         row = _get_appointment(conn, appointment_id)
@@ -348,81 +443,7 @@ def update_appointment(
         if owner_user_id != current_user.id:
             raise HTTPException(status_code=404, detail="Compromisso não encontrado")
 
-        start_at = payload.start_at or datetime.fromisoformat(current["start_at"])
-        end_at = payload.end_at or datetime.fromisoformat(current["end_at"])
-        _validate_interval(start_at, end_at)
-
-        _check_conflict(conn, owner_user_id, start_at, end_at, exclude_id=appointment_id)
-
-        fields = []
-        values = []
-        mapping = {
-            "title": payload.title,
-            "description": payload.description,
-            "type": payload.type,
-            "start_at": start_at.isoformat() if payload.start_at else None,
-            "end_at": end_at.isoformat() if payload.end_at else None,
-            "status": payload.status,
-            "location": payload.location,
-        }
-        for column, value in mapping.items():
-            if value is not None:
-                fields.append(f"{column} = ?")
-                values.append(value)
-
-        if not fields:
-            return _serialize(row)
-
-        values.append(datetime.now(timezone.utc).isoformat())  # tz-aware
-        fields.append("updated_at = ?")
-
-        values.append(appointment_id)
-        sql = f"UPDATE appointments SET {', '.join(fields)} WHERE id = ?"
-        cur = conn.cursor()
-        cur.execute(sql, values)
-        conn.commit()
-        cur.execute("SELECT * FROM appointments WHERE id = ?", (appointment_id,))
-        updated = cur.fetchone()
-        updated_data = {key: updated[key] for key in updated.keys()}
-
-        lead_row = None
-        if current.get("lead_id"):
-            lead_row = cur.execute(
-                "SELECT user_id FROM leads WHERE id = ?", (current["lead_id"],)
-            ).fetchone()
-
-        # Sync update to Google Calendar (fail-silent)
-        google_event_id = current.get("google_event_id")
-        if google_event_id and lead_row and lead_row["user_id"]:
-            gcal_update(
-                user_id=lead_row["user_id"],
-                google_event_id=google_event_id,
-                appointment=updated_data,
-            )
-
-        # Horário mudou de fato: lembretes/briefing antigos apontam para o horário velho —
-        # cancelar e re-agendar para o novo start_at (pulado para appointments do Playground,
-        # mesmo critério de create_appointment).
-        time_changed = payload.start_at is not None and updated_data["start_at"] != current["start_at"]
-        if time_changed and lead_row and lead_row["user_id"] and current.get("source") != "playground":
-            cancel_pending_appointment_jobs(conn, appointment_id)
-            new_start_at = datetime.fromisoformat(updated_data["start_at"])
-            schedule_appointment_reminder_jobs(
-                lead_id=current["lead_id"],
-                user_id=lead_row["user_id"],
-                appointment_id=appointment_id,
-                appointment_title=updated_data["title"],
-                appointment_start_at=new_start_at,
-            )
-            schedule_briefing_job_for_appointment(
-                lead_id=current["lead_id"],
-                user_id=lead_row["user_id"],
-                appointment_id=appointment_id,
-                appointment_start_at=new_start_at,
-            )
-            conn.commit()
-
-        return _serialize(updated)
+        return _update_appointment_row(conn, appointment_id, payload, owner_user_id, current)
     finally:
         conn.close()
 

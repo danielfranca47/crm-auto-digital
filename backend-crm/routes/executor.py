@@ -54,6 +54,8 @@ from services.followup_state import (
     start_cart_recovery_followup,
 )
 from core_client import fetch_core_ai_profile_resolve
+from models import AppointmentCreate, AppointmentOut, AppointmentUpdate
+import routes.appointments as appointments_module
 
 router = APIRouter(prefix="/api", tags=["WhatsApp Executor"])
 
@@ -1052,6 +1054,55 @@ def log_meeting_scheduled(
         )
         conn.commit()
         return {"status": "ok"}
+
+
+@router.post("/internal/appointments", response_model=AppointmentOut, status_code=201)
+def create_appointment_internal(
+    payload: AppointmentCreate,
+    _: str = Depends(_require_service_token),
+) -> AppointmentOut:
+    """Cria appointment em nome do backend-executors (Playground e WhatsApp real).
+
+    Rota irmã de POST /api/appointments (rota pública, exige JWT de usuário via
+    require_crm_access) — o executor só tem X-Service-Token, nunca um JWT de usuário.
+    Confia no lead_id vindo do contexto já resolvido pelo próprio backend-crm.
+    Ver docs/implementations/fix-confirm-exact-agenda-vazia.md, Fase 2.
+    """
+    with get_connection() as conn:
+        appointments_module._ensure_lead_exists(conn, payload.lead_id)
+        owner_user_id = appointments_module._resolve_owner_user_id(conn, lead_id=payload.lead_id)
+        return appointments_module._create_appointment_row(conn, payload, owner_user_id)
+
+
+@router.put("/internal/appointments/{appointment_id}", response_model=AppointmentOut)
+def update_appointment_internal(
+    appointment_id: int,
+    payload: AppointmentUpdate,
+    _: str = Depends(_require_service_token),
+) -> AppointmentOut:
+    """Reagenda um appointment em nome do backend-executors. Ver create_appointment_internal."""
+    with get_connection() as conn:
+        row = appointments_module._get_appointment(conn, appointment_id)
+        current = {key: row[key] for key in row.keys()}
+        owner_user_id = appointments_module._resolve_owner_user_id(
+            conn, lead_id=current.get("lead_id"), fallback_user_id=current.get("user_id")
+        )
+        return appointments_module._update_appointment_row(conn, appointment_id, payload, owner_user_id, current)
+
+
+@router.post("/internal/appointments/{appointment_id}/cancel", response_model=AppointmentOut)
+def cancel_appointment_internal(
+    appointment_id: int,
+    _: str = Depends(_require_service_token),
+) -> AppointmentOut:
+    """Cancela um appointment em nome do backend-executors. Ver create_appointment_internal."""
+    with get_connection() as conn:
+        row = appointments_module._get_appointment(conn, appointment_id)
+        appointment = {key: row[key] for key in row.keys()}
+        owner_user_id = appointments_module._resolve_owner_user_id(
+            conn, lead_id=appointment.get("lead_id"), fallback_user_id=appointment.get("user_id")
+        )
+    return appointments_module._update_status(appointment_id, "canceled", owner_user_id)
 
 
 @router.post("/whatsapp/outbound")
