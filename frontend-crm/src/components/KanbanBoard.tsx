@@ -353,7 +353,7 @@ export function KanbanBoard({ onDashboard }: KanbanBoardProps) {
     }
 
     try {
-      await cancelAppointment.mutateAsync(appointmentId);
+      await cancelAppointment.mutateAsync({ id: appointmentId, leadId: lead.id });
       setLeadNextAction(lead.id, undefined);
       setSelectedLead((prev) => (prev?.id === lead.id ? { ...prev, nextScheduledAction: undefined } : prev));
       toast({ title: "Compromisso cancelado" });
