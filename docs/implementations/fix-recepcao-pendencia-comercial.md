@@ -134,7 +134,7 @@ risca pelo LLM.
 
 | # | Commit | O que foi implementado |
 |---|---|---|
-| 1 | *(a preencher após commit)* | Reforço do prompt da Filha Recepção com identidade + exemplos ✅/❌ |
+| 1 | `acb8703` | Reforço do prompt da Filha Recepção com identidade + exemplos ✅/❌ |
 
 ---
 
