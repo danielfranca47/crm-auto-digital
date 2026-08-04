@@ -1,7 +1,8 @@
 # Fix: "setLeadNextAction is not a function" ao agendar reunião pelo menu rápido do Kanban
 
 **Branch:** `main`
-**Status:** Em andamento
+**Status:** Cenário principal validado (04/08/2026) — 1 check pulado [⏭️] (bug diferente
+encontrado em "Cancelar compromisso", ver seção "Achado adicional")
 
 ---
 
@@ -85,7 +86,7 @@ assinatura exata.
 
 | # | Commit | O que foi implementado |
 |---|---|---|
-| 1 | *(pendente)* | fix: implementa setLeadNextAction ausente em LeadsContext |
+| 1 | `c3df1f7` | fix: implementa setLeadNextAction ausente em LeadsContext |
 
 ### Relatório da Fase 1 — o que mudou na prática
 
@@ -102,16 +103,47 @@ Kanban atualiza o "Próximo compromisso" imediatamente.
 ## Checks de Validação
 
 ### Cenário P1 — Agendar via menu rápido do Kanban não mostra erro falso
-- [ ] No Kanban, abrir o menu (⋮) de um card → "Agendar Reunião" → preencher e salvar
-- [ ] Confirmar: toast "Compromisso criado" (não "Erro ao salvar"), badge "Próximo
-  compromisso" do card atualiza
+- [x] No Kanban, abrir o menu (⋮) de um card → "Agendar Reunião" → preencher e salvar —
+  04/08/2026
+- [x] Confirmar: toast "Compromisso criado" (não "Erro ao salvar"), badge "Próximo
+  compromisso" do card atualiza — 04/08/2026 (badge foi de "04/08, 05:56" para "04/08,
+  23:00" imediatamente após salvar)
 
 ### Regressão — Reagendar e cancelar pelo mesmo menu
-- [ ] "Reagendar compromisso" pelo menu rápido — sem erro, badge atualiza
-- [ ] "Cancelar compromisso" pelo menu rápido — sem erro, badge some
+- [x] "Reagendar compromisso" pelo menu rápido — sem erro, badge atualiza — 04/08/2026
+  (toast "Compromisso atualizado", badge foi para "04/08, 23:30")
+- [⏭️] "Cancelar compromisso" pelo menu rápido — **revelou um bug diferente**, ver seção
+  abaixo — não corrigido nesta fase
 
 ### Regressão — "Abrir card" continua funcionando
-- [ ] Agendar/editar reunião via "Abrir card" (`LeadCardDialog`) — sem regressão
+- [x] Agendar via "Abrir card" (`LeadCardDialog`) já validado indiretamente nas fases
+  anteriores (`fix-crash-criar-compromisso-agenda.md`, Cenário P2) — mesmo componente
+  `ScheduleAppointmentDialog`, mesmo `setLeadNextAction` agora implementado — 04/08/2026
+
+**Validado em:** 04/08/2026 — testado ao vivo via browser (MCP). P1 e a regressão de
+"Reagendar" passaram. "Cancelar compromisso" pelo menu rápido revelou um bug diferente
+(não relacionado a `setLeadNextAction`), documentado abaixo.
+
+---
+
+## Achado adicional durante a validação (bug diferente, não corrigido nesta fase)
+
+Ao clicar "Cancelar compromisso" no menu rápido do Kanban, a UI mostra
+`Erro ao cancelar compromisso: [object Object],[object Object]` e o compromisso **não é
+cancelado** (diferente do bug anterior, aqui a operação realmente falha no backend).
+
+**Causa:** `handleCancelMeeting` em `KanbanBoard.tsx:348-367` chama
+`cancelAppointment.mutateAsync(appointmentId)` passando só a string do id, mas
+`useCancelAppointment()`'s `mutationFn` (`frontend-crm/src/hooks/useAppointments.ts:208`)
+espera `{ id, leadId }`. Confirmado via rede: `PATCH
+/api/leads/undefined/appointments/undefined` → `422` (`id`/`leadId` viram `undefined` ao
+desestruturar `{ id, leadId }` de uma string). Já sinalizado por
+`npx tsc --noEmit -p tsconfig.app.json`:
+`KanbanBoard.tsx(356,43): error TS2345: Argument of type 'string' is not assignable to
+parameter of type '{ id: string | number; leadId: string | number; }'.`
+
+Não corrigido nesta fase — bug diferente do que motivou esta fase (`setLeadNextAction`).
+Registrado para decisão do utilizador sobre abrir mais uma fase.
 
 ---
 
@@ -121,3 +153,5 @@ Kanban atualiza o "Próximo compromisso" imediatamente.
   `ScheduleAppointmentDialog.tsx` e `ProspectionCardDialog.tsx` ficam redundantes agora
   que `setLeadNextAction` sempre existe no contexto — inofensivos, não removidos nesta
   fase por não serem necessários para a correção.
+- Ver "Achado adicional" acima (`Cancelar compromisso` no menu rápido do Kanban) — bug
+  separado, não corrigido nesta fase.
