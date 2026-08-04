@@ -13,7 +13,7 @@ from __future__ import annotations
 
 import logging
 import os
-from typing import Any, Dict
+from typing import Any, Dict, List
 
 from fastapi import APIRouter, Depends, Header, HTTPException
 from pydantic import BaseModel
@@ -66,14 +66,18 @@ def playground_decide(
     no appointment existente — mesma paridade com app/runners/whatsapp.py.
     """
     result = decision_engine.decide(body.context_bundle, logger=logger)
+    events: List[dict] = []
     conflict_message = meeting_scheduler.handle_meeting_scheduled(
-        body.context_bundle, result, client=crm_client, is_playground=True,
+        body.context_bundle, result, client=crm_client, is_playground=True, events=events,
     )
     conflict_message = conflict_message or meeting_scheduler.handle_meeting_cancel_or_reschedule(
-        body.context_bundle, result, client=crm_client,
+        body.context_bundle, result, client=crm_client, events=events,
     )
+    actions = list(result.system_actions or [])
     if conflict_message:
-        actions = list(result.system_actions or [])
         actions.append({"type": "send_message", "content": conflict_message})
+    if events:
+        actions.append({"type": "appointment_event", **events[-1]})
+    if actions:
         result.system_actions = actions
     return result

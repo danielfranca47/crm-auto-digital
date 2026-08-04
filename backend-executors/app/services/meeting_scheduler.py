@@ -4,7 +4,7 @@ import logging
 import re
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
-from typing import Any, Dict, Iterable, Optional
+from typing import Any, Dict, Iterable, List, Optional
 from zoneinfo import ZoneInfo
 
 try:
@@ -690,6 +690,7 @@ def handle_meeting_scheduled(
     client: Any = None,
     now_utc: Optional[datetime] = None,
     is_playground: bool = False,
+    events: Optional[List[dict]] = None,
 ) -> Optional[str]:
     """Cria o appointment quando a IA confirma um horário.
 
@@ -697,6 +698,10 @@ def handle_meeting_scheduled(
     horário colide com outro compromisso do profissional — nesse caso o
     appointment NÃO é criado e o bot não é desabilitado. Retorna None em
     qualquer outro caso (incluindo o caminho feliz de criação normal).
+
+    `events`, quando fornecido, recebe um dict `{"action": "created", "start_at",
+    "end_at"}` no caminho feliz — usado só pelo Playground para exibir um indicador
+    visual do agendamento real; o fluxo real do WhatsApp não passa este parâmetro.
     """
     if client is None:
         from app.clients import crm_client
@@ -800,6 +805,8 @@ def handle_meeting_scheduled(
         source="playground" if is_playground else None,
     )
     client.set_lead_bot_disabled(signal.lead_id, True, reason="meeting_scheduled")
+    if events is not None:
+        events.append({"action": "created", "start_at": start_iso, "end_at": end_iso})
     return None
 
 
@@ -810,6 +817,7 @@ def handle_meeting_cancel_or_reschedule(
     logger: Optional[logging.Logger] = None,
     client: Any = None,
     now_utc: Optional[datetime] = None,
+    events: Optional[List[dict]] = None,
 ) -> Optional[str]:
     """Aplica de verdade o cancelamento/reagendamento detectado por _decide_post_meeting_management.
 
@@ -817,6 +825,9 @@ def handle_meeting_cancel_or_reschedule(
     (para o caller enviar ao lead) quando o reagendamento colide com outro compromisso do
     profissional — nesse caso o appointment original NÃO é alterado. Retorna None em
     qualquer outro caso, incluindo o caminho feliz.
+
+    `events`, mesma semântica de handle_meeting_scheduled — só o Playground passa este
+    parâmetro.
     """
     if client is None:
         from app.clients import crm_client
@@ -864,6 +875,12 @@ def handle_meeting_cancel_or_reschedule(
                 appointment_id,
                 signal.lead_id,
             )
+        if events is not None:
+            events.append({
+                "action": "canceled",
+                "start_at": same_lead_slots[0]["start_at"],
+                "end_at": same_lead_slots[0]["end_at"],
+            })
         return None
 
     # signal.reschedule_requested == True a partir daqui
@@ -912,4 +929,6 @@ def handle_meeting_cancel_or_reschedule(
             signal.lead_id,
             signal.new_start_at.isoformat(),
         )
+    if events is not None:
+        events.append({"action": "rescheduled", "start_at": start_iso, "end_at": end_iso})
     return None
