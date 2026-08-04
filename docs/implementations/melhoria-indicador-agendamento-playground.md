@@ -100,6 +100,33 @@ if events is not None:
 return None
 ```
 
+### Commits Fase 1
+
+| # | Commit | O que foi implementado |
+|---|---|---|
+| 1 | `f551f0b` | feat: propaga evento de agendamento real do Playground (Fase 1 backend) |
+
+**Detalhes do commit `f551f0b`:**
+- `backend-executors/app/services/meeting_scheduler.py` — parâmetro opcional `events` em `handle_meeting_scheduled()`/`handle_meeting_cancel_or_reschedule()`, populado no caminho feliz
+- `backend-executors/app/api/playground_internal.py` — coleta `events` e anexa `appointment_event` a `system_actions`
+- `backend-crm/routes/playground.py` — novo campo `appointment_event` em `PlaygroundChatResponse`, captura nos dois loops de `system_actions`
+- `backend-executors/tests/test_meeting_scheduled_events.py` (novo) + `test_meeting_cancel_reschedule_action.py` (estendido) — cobertura dos 3 caminhos de sucesso + confirmação de que o fluxo real (sem `events=`) não quebra
+
+### Relatório da Fase 1 — o que mudou na prática
+
+**Antes:** quando o Playground criava, reagendava ou cancelava um agendamento real por
+trás da simulação, essa informação não saía do backend — o response só tinha o texto
+da resposta do bot.
+
+**Agora:** o `POST /api/playground/chat` já devolve um campo `appointment_event` (ex.:
+`{"action": "created", "start_at": "...", "end_at": "..."}`) sempre que isso acontece
+de verdade nesse turno. Ainda não há nada visível na tela — essa é a Fase 2.
+
+**Para validar:** ainda não há cenário de UI para testar (a Fase 2 adiciona o chip
+visual). Só é possível confirmar via Cenário C1 (pytest) por enquanto.
+
+---
+
 ### Fase 2 — Frontend: renderizar o chip na conversa
 
 **Objetivo:** o chip aparece na timeline do Playground logo após a confirmação do bot.
@@ -115,7 +142,7 @@ return None
 ## Checks de Validação
 
 ### Cenário C1 — Testes automatizados (pytest)
-- [ ] `pytest backend-executors/tests/test_meeting_scheduler_structured_candidate.py backend-executors/tests/test_meeting_cancel_reschedule_action.py backend-executors/tests/test_meeting_management.py` passa, incluindo novas asserções de `events` (criar/reagendar/cancelar) e confirmação de que chamar sem `events=` (como o `whatsapp.py` real faz) não quebra nada.
+- [x] `pytest backend-executors/tests/test_meeting_scheduled_events.py backend-executors/tests/test_meeting_cancel_reschedule_action.py backend-executors/tests/test_meeting_management.py backend-executors/tests/test_meeting_scheduler_structured_candidate.py` passa — 05/08/2026 (26 testes, incluindo os novos `test_handle_meeting_scheduled_populates_events_when_provided`, `test_handle_meeting_scheduled_without_events_param_does_not_raise`, `test_cancel_populates_events_when_provided`, `test_reschedule_populates_events_when_provided`, `test_conflict_does_not_populate_events`).
 
 ### Cenário P1 — Playground, chip de confirmação
 - [ ] Com `agent_mode="agenda"`, confirmar uma reunião no Playground.
