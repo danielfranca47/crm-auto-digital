@@ -116,6 +116,28 @@ Mecanismo antigo de override em-turno (`compound_follow_through`) é removido po
 
 ---
 
+### Fase 5 — Reforço do prompt da Filha Recepção (backend-executors)
+
+**Objetivo:** corrigir o desvio observado na validação ao vivo dos Cenários P1/P3 (ver
+"Relatório das Fases 1-4" e checks abaixo): a Filha Recepção às vezes respondia
+diretamente ao pedido comercial na 1ª bolha ("Vamos agendar seu horário...", "Nós
+funcionamos de segunda a sábado...") em vez de só cumprimentar e reportar em
+`pending_commercial_text`. O mecanismo de extração/reenfileiramento continuava
+funcionando nesses casos, mas a instrução "apenas cumprimento" não era seguida à
+risca pelo LLM.
+
+| Arquivo | O que muda |
+|---|---|
+| `backend-executors/app/services/decision_engine.py` (`_build_child_prompt_recepcao`) | Reestrutura o texto estático do prompt em seções explícitas: IDENTIDADE, O QUE FAZ, COMO FAZ, EXEMPLOS DO QUE FAZER (✅, 3 exemplos), O QUE NÃO FAZ, EXEMPLOS DE ERRO (❌, 3 exemplos — os 2 primeiros grounded nos desvios reais observados em P1/P3, o 3º é o anti-padrão "vou verificar" que motivou o fix original). Sem mudança de contrato JSON nem da lógica dinâmica de `greeting_instruction` (3 variantes por tipo de lead) — só reorganização e reforço com exemplos. |
+
+### Commits Fase 5
+
+| # | Commit | O que foi implementado |
+|---|---|---|
+| 1 | *(a preencher após commit)* | Reforço do prompt da Filha Recepção com identidade + exemplos ✅/❌ |
+
+---
+
 ### Relatório das Fases 1-4 — o que mudou na prática
 
 **Antes:** quando a 1ª mensagem de um lead já misturava saudação com um pedido comercial
@@ -164,6 +186,16 @@ então a mesma extração resolve os dois casos sem lógica extra.
 
 ### Cenário C1 — WhatsApp real (se viável no momento do teste)
 - [⏭️] (2026-08-04) Não executado — requer envio de mensagem real via WhatsApp a partir de um telefone físico para a instância conectada (`whatsapp_connections.id=2`, `status=connected`), o que não é automatizável neste ambiente de agente. Cenários P1-P4 já validam a lógica ponta-a-ponta do decision engine e do reenfileiramento; C1 cobriria apenas a camada de transporte (job `whatsapp.inbound.n8n` com `source_message_id` prefixado `requeue:`, 2 mensagens outbound distintas via UazAPI). Recomenda-se ao utilizador repetir P1/P2 num número de teste real quando conveniente, usando o mesmo `ai_profile_id` de produção.
+
+### Cenário P1-retest / P3-retest — confirmação do reforço do prompt (Fase 5)
+- [x] (2026-08-04) Repetir P1 num lead novo após a reescrita do prompt
+  - Resultado real (lead_id=380): bolha 1 = "Boa tarde! Agradeço por entrar em contato com a gente. Vou passar sua solicitação adiante." — agora **puro cumprimento**, sem engajar com o horário. `pending_commercial_text` extraído = "gostaria de agendar horário para hoje as 17:30". Bolha 2 = "Posso agendar para hoje às 17:30. Você prefere manter esse horário ou tem outra sugestão em mente? Vou verificar a agenda para confirmar."
+- [x] (2026-08-04) Repetir P3 num lead novo após a reescrita do prompt
+  - Resultado real (lead_id=381): bolha 1 = "Olá! Agradeço seu contato e fico feliz em te receber. Podemos ajudar com suas dúvidas sobre horários." — sem vazar o horário de funcionamento. Bolha 2 = "Estamos disponíveis para atender de segunda a sábado, com horários flexíveis..." tratou a pergunta de verdade.
+  - **Desvio observado em P1/P3 corrigido** nos dois casos com a nova estrutura de prompt (identidade + exemplos ✅/❌).
+- [x] (2026-08-04) Regressão: repetir P2 e P4 num lead novo cada
+  - P2 (lead_id=382): bolha 1 continuou puro cumprimento; `pending_commercial_text` extraído limpo ("qual seria o preco da massagem e horarios disponiveis?"); bolha 2 desta vez preferiu um handoff humano ("Vou te conectar com alguém do time agora") em vez de responder o preço diretamente — variação normal da rota comercial (Mãe/guardrails), não relacionada à Recepção; mecanismo de extração/reenfileiramento continuou íntegro.
+  - P4 (lead_id=383 "Oi", lead_id=384 "Boa tarde"): idêntico ao comportamento anterior — só cumprimento, sem `auto_messages`, sem reenfileiramento. Sem regressão.
 
 ---
 
