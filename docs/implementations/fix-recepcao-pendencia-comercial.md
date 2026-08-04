@@ -89,6 +89,12 @@ Mecanismo antigo de override em-turno (`compound_follow_through`) é removido po
 | `backend-crm/routes/executor.py` | `_dispatch_system_actions` ganha `elif atype == "requeue_pending_message"`: monta payload via `build_job_payload` (reaproveita `instance_id`/`provider`/`phone` do job original) e chama `create_job(job_type=TYPE_WHATSAPP_INBOUND, ...)` |
 | `backend-crm/routes/executor.py` | Chamador (`complete_job_internal`) passa `instance_id`/`provider`/`source_message_id` do `job_payload` original |
 
+### Commits Fase 3
+
+| # | Commit | O que foi implementado |
+|---|---|---|
+| 1 | `6f3778f` | Consumo de `requeue_pending_message` no WhatsApp real (novo job) + testes |
+
 ### Fase 4 — Consumo no Playground (backend-crm)
 
 **Objetivo:** paridade — o operador testando no Playground vê o mesmo comportamento de 2 mensagens que veria no WhatsApp real.
@@ -97,7 +103,10 @@ Mecanismo antigo de override em-turno (`compound_follow_through`) é removido po
 |---|---|
 | `backend-crm/routes/playground.py` | Captura `requeue_pending_message` no loop de `system_actions`; após persistir a mensagem outbound da 1ª decisão, dispara 2ª chamada síncrona a `_call_executors_decide()` com bundle novo; anexa resultado como 2ª bolha |
 | `docs/architecture/playground-parity.md` | Nota sobre 2ª bolha vinda de `requeue_pending_message` |
-| `backend-crm/docs/playground-whatsapp-parity.md` | Nota equivalente |
+
+**Decisão:** sem teste sintético de endpoint para esta fase — `playground_chat` não tem precedente de teste end-to-end no repo (exigiria mockar auth, DB, `httpx` para o executor, AI Profile), e a lógica nova reaproveita helpers já cobertos indiretamente pelas Fases 1-3 (`_call_executors_decide`, `_insert_message`, `_update_lead_category`). Validação real fica a cargo dos Cenários P1-P4 abaixo, ao vivo.
+
+`backend-crm/docs/playground-whatsapp-parity.md` (citado no CLAUDE.md) não existe no repositório — drift de documentação pré-existente, fora do escopo deste fix.
 
 ---
 

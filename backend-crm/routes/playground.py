@@ -645,6 +645,7 @@ def playground_chat(
     auto_messages = []
     auto_items = []
     phase_advances = []
+    _pending_requeue_text: Optional[str] = None
     for action in raw_system_actions:
         atype = action.get("type")
         if atype == "send_message" and action.get("content"):
@@ -669,6 +670,8 @@ def playground_chat(
             _mark_phase_triggered(lead_id, user_id, action["phase_id"])
         elif atype == "mark_trigger_fired" and action.get("block_id"):
             _mark_trigger_fired(lead_id, user_id, action["block_id"])
+        elif atype == "requeue_pending_message" and action.get("message_text"):
+            _pending_requeue_text = str(action["message_text"]).strip()
 
     phase_trigger_fired = any(
         a.get("type") == "mark_phase_triggered" for a in raw_system_actions
@@ -679,6 +682,64 @@ def playground_chat(
         _insert_message(lead_id, message_to_send, "outbound")
     for auto_msg in auto_messages:
         _insert_message(lead_id, auto_msg, "outbound")
+
+    # ── Passo 8b: Pedido comercial pendente — 2ª chamada síncrona ao decision
+    # engine, replicando no Playground o novo job que o WhatsApp real criaria
+    # (ver requeue_pending_message em executor.py). Sem fila/worker aqui: simula
+    # o "próximo ciclo do pipeline" na MESMA request, para o operador ver as
+    # duas bolhas de uma vez. A mensagem outbound da 1ª decisão já foi persistida
+    # acima, então o histórico da 2ª chamada já inclui a saudação.
+    if _pending_requeue_text:
+        _insert_message(lead_id, _pending_requeue_text, "inbound")
+        _bundle2 = build_context_bundle_for_playground(
+            user_id=user_id,
+            ai_profile=ai_profile,
+            lead_id=lead_id,
+            message_text=_pending_requeue_text,
+            scenario_type=body.scenario_type,
+            followup_context=body.followup_context if body.scenario_type == "followup" else None,
+        )
+        _decision2 = _call_executors_decide(_bundle2.model_dump(mode="json"))
+
+        _suggested_category2 = _decision2.get("suggested_category")
+        if _suggested_category2:
+            _update_lead_category(lead_id, user_id, _suggested_category2)
+
+        _message_to_send2 = _decision2.get("message_text") or ""
+        if _message_to_send2:
+            auto_items.append({"type": "text", "content": _message_to_send2})
+            auto_messages.append(_message_to_send2)
+            _insert_message(lead_id, _message_to_send2, "outbound")
+
+        for action2 in (_decision2.get("system_actions") or []):
+            atype2 = action2.get("type")
+            if atype2 == "send_message" and action2.get("content"):
+                auto_messages.append(action2["content"])
+                auto_items.append({"type": "text", "content": action2["content"]})
+                _insert_message(lead_id, action2["content"], "outbound")
+            elif atype2 == "send_media" and action2.get("media_url"):
+                auto_items.append({
+                    "type": "media",
+                    "media_url": action2["media_url"],
+                    "media_type": action2.get("media_type") or "image",
+                })
+            elif atype2 == "advance_phase" and action2.get("target_phase"):
+                _category2 = _PHASE_ID_TO_CATEGORY.get(action2["target_phase"])
+                if _category2:
+                    _update_lead_category(lead_id, user_id, _category2)
+                    _label2 = _PHASE_ID_LABELS.get(action2["target_phase"], action2["target_phase"])
+                    phase_advances.append(f"{_label2} ({action2['target_phase']})")
+            elif atype2 == "mark_phase_triggered" and action2.get("phase_id"):
+                _mark_phase_triggered(lead_id, user_id, action2["phase_id"])
+                phase_trigger_fired = True
+            elif atype2 == "mark_trigger_fired" and action2.get("block_id"):
+                _mark_trigger_fired(lead_id, user_id, action2["block_id"])
+            elif atype2 == "requeue_pending_message":
+                # Não recursiona — ver docs/architecture/llm-architecture.md.
+                logger.warning(
+                    "event=playground_double_requeue_ignored lead_id=%s user_id=%s",
+                    lead_id, user_id,
+                )
 
     # ── Passo 9: Construir Response ──────────────────────────────────────────
     # Re-fetch estado actual do lead e qualification após o engine ter (possivelmente) actualizado
