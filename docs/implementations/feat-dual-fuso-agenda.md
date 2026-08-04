@@ -189,21 +189,51 @@ para `Europe/Lisbon` no Cenário C1 (nenhum rótulo duplo, botão de alternânci
 Compromisso de teste cancelado e AI Profile restaurado para `America/Sao_Paulo` ao final.
 
 ### Cenário P3 — Legenda de fuso no formulário de criar/editar
-- [ ] Com AI Profile de teste em `America/Sao_Paulo` e navegador em Lisboa, abrir "Novo" (em
-  qualquer uma das 3 vistas da Agenda ou no LeadCardDialog) e digitar um horário
-- [ ] Confirmar: legenda aparece abaixo dos campos Início/Fim mostrando a conversão correta
-  para o fuso do navegador, e atualiza ao mudar hora/data
-- [ ] Abrir "Reagendar" num compromisso existente — legenda aparece já preenchida com a
-  conversão do horário atual
+- [x] Com AI Profile de teste em `America/Sao_Paulo` e navegador em Londres (equivalente a
+  Lisboa em agosto), abrir "Novo" na Agenda (ScheduleView) e digitar um horário — 04/08/2026
+- [x] Confirmar: legenda aparece abaixo dos campos Início/Fim mostrando a conversão correta
+  para o fuso do navegador, e atualiza ao mudar hora/data — 04/08/2026
+- [x] Abrir "Reagendar" num compromisso existente — legenda aparece já preenchida com a
+  conversão do horário atual — 04/08/2026
 
 ### Regressão — Sem mudança quando os fusos coincidem
-- [ ] Com AI Profile de teste em `Europe/Lisbon` (fusos iguais), abrir "Novo"/"Reagendar" —
-  confirmar que a legenda não aparece
+- [x] Com AI Profile de teste em `Europe/London` (fusos iguais ao navegador), abrir "Novo" —
+  confirmado que a legenda não aparece (form salta de "Horário" direto para "Data") —
+  04/08/2026
 
 ### Regressão — Gravação continua correta
-- [ ] Criar um compromisso com a legenda visível (fusos diferentes) — confirmar, via
-  listagem (que já mostra dual-fuso), que o horário gravado bate com o fuso do negócio
-  digitado no formulário, não com o fuso do navegador
+- [x] Criar um compromisso com a legenda visível (fusos diferentes) — confirmado, via
+  request `POST /api/leads/{id}/appointments`, que o horário gravado (`start_at` em UTC)
+  bate com o fuso do negócio digitado no formulário (09:30 São Paulo → `12:30:00.000Z`,
+  equivalente a UTC−3), não com o fuso do navegador — 04/08/2026
+
+**Validado em:** 04/08/2026 — testado ao vivo via browser (MCP), mesmo setup do Fase 1
+(fuso do navegador resolvendo para `Europe/London`). Legenda verificada no "Novo" da
+Agenda (ScheduleView) e no "Reagendar" de um compromisso existente, com atualização ao
+digitar novo horário. Regressão de fusos iguais confirmada trocando o AI Profile de teste
+para `Europe/London` e reconfirmando `America/Sao_Paulo` ao final. Gravação correta
+confirmada inspecionando o payload de rede da criação (ver acima). Compromissos de teste
+criados foram excluídos (soft-cancel, mesmo padrão do `Teste dual-fuso` da Fase 1) ao
+final da validação.
+
+**⚠️ Bug pré-existente encontrado durante a validação (fora do escopo desta feature):**
+criar ou editar um compromisso pela Agenda → aba "Mensal" (`ScheduleView.tsx`) trava a
+aplicação inteira com tela branca (`Uncaught RangeError: Invalid time value`, sem error
+boundary, o React desmonta a árvore inteira). Reproduzido de forma consistente (2/2
+tentativas). **Causa raiz:** `useCreateAppointment`/`useUpdateAppointment`
+(`frontend-crm/src/hooks/useAppointments.ts`) chamam `normalizeAppointment(res)` sobre um
+objeto que `api.createAppointment`/`api.updateAppointment` (`services/api.ts`) **já**
+passou por `mapAppointment()` — que devolve a data no campo `startTime` (camelCase).
+`normalizeAppointment()` só reconhece `start_at`/`start_time`/`startAt`/`start`, não
+`startTime`, então o resultado fica com `startTime: ""`. `ScheduleView`'s `onSuccess`
+(`setSelectedDate(new Date(appointment.startTime))`) grava uma Invalid Date em
+`selectedDate`; no próximo render, `monthRange(selectedDate)` chama `.toISOString()` numa
+data inválida e lança a exceção. Confirmado via stack trace capturada em runtime — bug
+já existe desde a reorganização do repositório (commit `a19bdcf`), **não** foi introduzido
+pela Fase 1 nem pela Fase 2 do dual-fuso, e independe do fuso horário (ocorreria também
+com fusos iguais). Precisa de uma fase própria (fora deste arquivo) para corrigir — por
+exemplo, fazer `normalizeAppointment()` também aceitar `raw.startTime`/`raw.endTime`, ou
+não re-normalizar um objeto que `mapAppointment()` já normalizou.
 
 ---
 
