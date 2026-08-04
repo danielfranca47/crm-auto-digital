@@ -74,6 +74,12 @@ Mecanismo antigo de override em-turno (`compound_follow_through`) é removido po
 | `backend-executors/tests/test_compound_follow_through_routing.py` | Removido — substituído por novos testes do comportamento atual |
 | `docs/architecture/llm-architecture.md` | Reescreve seção "Saudação composta" refletindo o novo mecanismo |
 
+### Commits Fase 2
+
+| # | Commit | O que foi implementado |
+|---|---|---|
+| 1 | `3e3bb33` | `requeue_pending_message` + remoção completa do mecanismo antigo (código, testes, docs) |
+
 ### Fase 3 — Consumo no WhatsApp real (backend-crm)
 
 **Objetivo:** a pendência vira um novo job real, processado pelo worker normalmente.

@@ -1,13 +1,17 @@
 from __future__ import annotations
 
 import json
+import logging
 import os
 import sqlite3
+import uuid
 from datetime import datetime, timezone
 from typing import Any, Dict, Optional
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, Response
 from pydantic import BaseModel, Field
+
+logger = logging.getLogger(__name__)
 
 from database import get_connection
 from services.ai_orchestrator import (
@@ -273,6 +277,10 @@ def _dispatch_system_actions(
     phone: str,
     system_actions: list,
     conn,
+    *,
+    instance_id: Optional[str] = None,
+    provider: Optional[str] = None,
+    source_message_id: Optional[str] = None,
 ) -> None:
     from services.jobs_service import TYPE_WHATSAPP_SEND, create_job
     for action in system_actions:
@@ -363,6 +371,40 @@ def _dispatch_system_actions(
                             (json.dumps(existing_tf), lead_id, user_id),
                         )
                         conn.commit()
+
+        elif atype == "requeue_pending_message":
+            pending_text = str(action.get("message_text") or "").strip()
+            if not pending_text:
+                continue
+            if not instance_id or not provider:
+                # Sem instance_id/provider não há como enviar a resposta depois —
+                # loga e descarta em vez de criar um job que nunca vai poder responder.
+                logger.warning(
+                    "event=requeue_pending_message_skipped reason=missing_channel_context "
+                    "lead_id=%s user_id=%s",
+                    lead_id, user_id,
+                )
+                continue
+            from services.whatsapp_inbound.inbound_handler import build_job_payload
+            new_payload = build_job_payload(
+                lead_id=lead_id,
+                user_id=user_id,
+                instance_id=instance_id,
+                provider=provider,
+                phone=phone,
+                message_text=pending_text,
+                external_event_id=f"requeue:{source_message_id or ''}:{uuid.uuid4().hex[:8]}",
+                received_at=datetime.now(timezone.utc).isoformat(),
+            )
+            create_job(
+                job_type=TYPE_WHATSAPP_INBOUND,
+                payload=new_payload,
+                user_id=user_id,
+            )
+            logger.info(
+                "event=requeue_pending_message_created lead_id=%s user_id=%s source_message_id=%s",
+                lead_id, user_id, source_message_id,
+            )
 
 
 def _schedule_preagendamento_checkin(
@@ -858,6 +900,9 @@ def complete_job_internal(
                         phone=_lead_phone,
                         system_actions=_system_actions,
                         conn=conn,
+                        instance_id=job_payload.get("instance_id"),
+                        provider=job_payload.get("provider"),
+                        source_message_id=job_payload.get("message_id"),
                     )
 
         refreshed = cur.execute("SELECT * FROM jobs WHERE id=?", (job_id,)).fetchone()
