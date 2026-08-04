@@ -160,6 +160,12 @@ export type PlaygroundAutoItem =
   | { type: "text"; content: string; source?: string; source_label?: string }
   | { type: "media"; media_url: string; media_type: string };
 
+export type PlaygroundAppointmentEvent = {
+  action: "created" | "rescheduled" | "canceled";
+  start_at: string;
+  end_at: string;
+};
+
 export type PlaygroundChatResponse = {
   lead_id: number;
   message_to_send: string;
@@ -182,6 +188,7 @@ export type PlaygroundChatResponse = {
   phase_trigger_fired?: boolean;
   suppress_llm_response?: boolean;
   transcription?: string | null;
+  appointment_event?: PlaygroundAppointmentEvent | null;
 };
 
 // ── Playground FeedbackAssist ────────────────────────────────────────────────

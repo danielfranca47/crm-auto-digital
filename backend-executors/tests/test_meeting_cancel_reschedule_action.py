@@ -178,3 +178,80 @@ def test_no_matching_appointment_is_noop():
 
     assert result is None
     assert client.cancel_calls == []
+
+
+def test_cancel_populates_events_when_provided():
+    client = FakeCRMClient()
+    context = _context(
+        [_busy_slot(42, 1, "2026-08-10T12:00:00+00:00", "2026-08-10T12:30:00+00:00")]
+    )
+    decision = _decision(
+        {"meeting_cancel_requested": True, "meeting_reschedule_requested": False}
+    )
+    events = []
+
+    meeting_scheduler.handle_meeting_cancel_or_reschedule(
+        context, decision, client=client, events=events
+    )
+
+    assert events == [
+        {
+            "action": "canceled",
+            "start_at": "2026-08-10T12:00:00+00:00",
+            "end_at": "2026-08-10T12:30:00+00:00",
+        }
+    ]
+
+
+def test_reschedule_populates_events_when_provided():
+    client = FakeCRMClient()
+    future = (datetime.now(timezone.utc) + timedelta(days=15)).replace(
+        hour=15, minute=0, second=0, microsecond=0
+    )
+    context = _context(
+        [_busy_slot(42, 1, "2026-08-10T12:00:00+00:00", "2026-08-10T12:30:00+00:00")]
+    )
+    decision = _decision(
+        {
+            "meeting_cancel_requested": False,
+            "meeting_reschedule_requested": True,
+            "meeting_datetime_candidate": future.isoformat(),
+        }
+    )
+    events = []
+
+    meeting_scheduler.handle_meeting_cancel_or_reschedule(
+        context, decision, client=client, events=events
+    )
+
+    assert len(events) == 1
+    assert events[0]["action"] == "rescheduled"
+    assert events[0]["start_at"].endswith("Z")
+    assert events[0]["end_at"].endswith("Z")
+
+
+def test_conflict_does_not_populate_events(monkeypatch):
+    monkeypatch.setattr(
+        meeting_scheduler.llm_service, "generate_conflict_message", lambda _prompt: ""
+    )
+    client = ConflictCRMClient()
+    future = (datetime.now(timezone.utc) + timedelta(days=15)).replace(
+        hour=15, minute=0, second=0, microsecond=0
+    )
+    context = _context(
+        [_busy_slot(42, 1, "2026-08-10T12:00:00+00:00", "2026-08-10T12:30:00+00:00")]
+    )
+    decision = _decision(
+        {
+            "meeting_cancel_requested": False,
+            "meeting_reschedule_requested": True,
+            "meeting_datetime_candidate": future.isoformat(),
+        }
+    )
+    events = []
+
+    meeting_scheduler.handle_meeting_cancel_or_reschedule(
+        context, decision, client=client, events=events
+    )
+
+    assert events == []

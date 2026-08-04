@@ -171,6 +171,7 @@ class PlaygroundChatResponse(BaseModel):
     phase_trigger_fired: bool = False                         # True quando phase_trigger disparou → frontend inverte ordem (auto antes do LLM)
     suppress_llm_response: bool = False                       # True quando trigger disparou com flag — frontend omite turno da LLM
     transcription: Optional[str] = None                      # Texto transcrito quando message_type=audio; None nos outros casos
+    appointment_event: Optional[Dict[str, Any]] = None        # {action: created|rescheduled|canceled, start_at, end_at} — appointment real criado/alterado neste turno
 
 
 # ---------------------------------------------------------------------------
@@ -659,10 +660,17 @@ def playground_chat(
     auto_messages = []
     auto_items = []
     phase_advances = []
+    appointment_event: Optional[Dict[str, Any]] = None
     _pending_requeue_text: Optional[str] = None
     for action in raw_system_actions:
         atype = action.get("type")
-        if atype == "send_message" and action.get("content"):
+        if atype == "appointment_event" and action.get("action"):
+            appointment_event = {
+                "action": action["action"],
+                "start_at": action.get("start_at"),
+                "end_at": action.get("end_at"),
+            }
+        elif atype == "send_message" and action.get("content"):
             auto_messages.append(action["content"])
             auto_items.append({
                 "type": "text",
@@ -743,7 +751,13 @@ def playground_chat(
 
         for action2 in (_decision2.get("system_actions") or []):
             atype2 = action2.get("type")
-            if atype2 == "send_message" and action2.get("content"):
+            if atype2 == "appointment_event" and action2.get("action"):
+                appointment_event = {
+                    "action": action2["action"],
+                    "start_at": action2.get("start_at"),
+                    "end_at": action2.get("end_at"),
+                }
+            elif atype2 == "send_message" and action2.get("content"):
                 auto_messages.append(action2["content"])
                 auto_items.append({
                     "type": "text",
@@ -831,6 +845,7 @@ def playground_chat(
         phase_trigger_fired=phase_trigger_fired,
         suppress_llm_response=bool(decision.get("suppress_llm_response")),
         transcription=_audio_transcription,
+        appointment_event=appointment_event,
     )
 
 

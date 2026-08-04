@@ -369,6 +369,21 @@ Conflito de horário é respeitado pela mesma barreira `_check_conflict`: se o h
 
 O fluxo real (WhatsApp) chama `handle_meeting_scheduled(...)` sem `is_playground` (default `False`) — side-effects e comportamento de conflito inalterados, mas o título passa por geração via IA (ver secção seguinte) em vez do texto fixo usado no Playground.
 
+### Evento estruturado para o frontend do Playground (`appointment_event`)
+
+`handle_meeting_scheduled()` e `handle_meeting_cancel_or_reschedule()` aceitam um
+parâmetro opcional `events: list[dict] | None` (default `None`, nunca passado pelo
+fluxo real — só `playground_internal.py` o fornece) — no caminho feliz de cada
+função, recebe `{"action": "created"|"rescheduled"|"canceled", "start_at", "end_at"}`.
+`playground_internal.py` coleta esses eventos e anexa `{"type": "appointment_event",
+...}` a `result.system_actions` (mesmo canal já usado para a mensagem de conflito);
+`routes/playground.py` extrai isso para o campo `appointment_event` da
+`PlaygroundChatResponse` (ver [`playground-parity.md`](playground-parity.md)). O
+frontend (`MessageBubble.tsx`) renderiza um chip distinto na conversa (📅 criada / 🔄
+reagendada / ❌ cancelada) quando esse campo vem preenchido — a data/hora exibida usa
+o fuso do navegador, não o fuso de negócio do AI Profile (decisão consciente, escopo
+reduzido).
+
 ---
 
 ## Duração da sessão: fixa vs. por serviço

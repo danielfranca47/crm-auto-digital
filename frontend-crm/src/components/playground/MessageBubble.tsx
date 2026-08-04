@@ -3,7 +3,7 @@ import {
   Bookmark, BookmarkCheck, ChevronDown, ChevronUp,
   ThumbsDown, Minus, ThumbsUp, Star, Loader2,
   Headphones, ImageIcon, Video, FileText, Mic,
-  Clock, Keyboard, Layers, Zap,
+  Clock, Keyboard, Layers, Zap, Calendar,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -21,6 +21,9 @@ export interface ChatMessage {
   autoMessageSource?: string;
   autoMessageLabel?: string;
   isPhaseAdvance?: boolean;
+  isAppointmentEvent?: boolean;
+  appointmentEventAction?: "created" | "rescheduled" | "canceled";
+  appointmentEventStartAt?: string;
   isAudioMessage?: boolean;
   audioUrl?: string;
   transcription?: string;
@@ -237,6 +240,30 @@ export function MessageBubble({ message, onToggleFeedback, onRate }: MessageBubb
         <span className="flex items-center gap-1.5 text-xs text-violet-500 bg-violet-50 border border-violet-200 rounded-full px-3 py-1 dark:bg-violet-950 dark:border-violet-800">
           <Zap className="h-3 w-3" />
           Fase avançada → {message.text}
+        </span>
+      </div>
+    );
+  }
+
+  if (message.isAppointmentEvent) {
+    const startLabel = message.appointmentEventStartAt
+      ? new Date(message.appointmentEventStartAt).toLocaleString("pt-BR", {
+          day: "2-digit",
+          month: "2-digit",
+          hour: "2-digit",
+          minute: "2-digit",
+        })
+      : null;
+    const APPOINTMENT_EVENT_LABELS: Record<string, string> = {
+      created: `📅 Reunião confirmada${startLabel ? ` para ${startLabel}` : ""}`,
+      rescheduled: `🔄 Reunião reagendada${startLabel ? ` para ${startLabel}` : ""}`,
+      canceled: "❌ Reunião cancelada",
+    };
+    return (
+      <div className="flex justify-center my-2">
+        <span className="flex items-center gap-1.5 text-xs text-amber-600 bg-amber-50 border border-amber-200 rounded-full px-3 py-1 dark:bg-amber-950 dark:border-amber-800 dark:text-amber-400">
+          <Calendar className="h-3 w-3" />
+          {APPOINTMENT_EVENT_LABELS[message.appointmentEventAction ?? "created"]}
         </span>
       </div>
     );

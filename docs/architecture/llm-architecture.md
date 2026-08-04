@@ -210,7 +210,9 @@ def decide(context, logger=None):
 - **Reagendamento** — `signals_structured.meeting_reschedule_requested = true` + `meeting_datetime_candidate` (data/hora candidata, ISO, mesmo mecanismo de extração da Filha Agendamento)
 - **Nenhum dos dois** — resposta mínima e cordial, sem reabrir negociação de venda. Nunca define `suggested_category` (não move o Kanban).
 
-A prompt instrui explicitamente: se dia+horário já foram informados pelo lead num pedido de reagendamento, committar `meeting_reschedule_requested=true` no mesmo turno — evita uma resposta hesitante ("vou confirmar") que exigiria outro turno.
+A prompt cobre dois padrões de reagendamento, ambos committando `meeting_reschedule_requested=true` no mesmo turno — evita uma resposta hesitante ("vou confirmar") que exigiria outro turno:
+- **Novo dia explícito** — dia e horário informados juntos (ex.: "pode ser domingo às 11h?") — usa a data literal informada pelo lead.
+- **Reagendamento implícito, só horário** — a mensagem propõe apenas um horário diferente do já confirmado, sem mencionar um novo dia (ex.: "pode ser às 16h em vez de 14h?") — assume o **mesmo dia** da reunião já confirmada, combinando essa data (do bloco "REUNIÃO/SESSÃO JÁ CONFIRMADA" injectado no prompt) com o novo horário mencionado.
 
 **Consumo do sinal:** `meeting_scheduler._extract_cancel_reschedule_signal()` lê `decision_trace.child_signals_structured` (paralelo a `_extract_meeting_signal()`) e `handle_meeting_cancel_or_reschedule()` aplica a ação real no appointment — ver [`agenda.md`](agenda.md).
 
