@@ -83,6 +83,29 @@ explícito como reagendamento do compromisso já confirmado, no mesmo dia.
 | `backend-executors/app/services/decision_engine.py` | `_build_child_prompt_meeting_management()` (~linha 3662-3678): nova regra + exemplo para reagendamento implícito (só horário, mesmo dia); reforça a regra existente deixando explícito que ela cobre o caso de um **novo dia** ser mencionado |
 | `backend-executors/tests/test_meeting_management.py` | Estende `test_prompt_includes_meeting_management_instructions` (ou nova asserção) verificando a nova regra no prompt; novo teste `test_decide_post_meeting_management_detects_implicit_same_day_reschedule` (LLM mockado, mesmo padrão dos testes existentes) |
 
+### Commits Fase 1
+
+| # | Commit | O que foi implementado |
+|---|---|---|
+| 1 | `d872e75` | fix: reconhece pedido implicito de reagendamento (so horario, sem dia) |
+
+### Relatório da Fase 1 — o que mudou na prática
+
+**Antes:** depois de confirmar um horário, se o lead pedisse para trocar só a hora
+sem mencionar um novo dia (ex.: "pode ser às 16h em vez de 14h?"), o bot não
+reconhecia isso como um pedido de reagendamento — respondia de forma neutra, como se
+fosse uma pergunta qualquer, e o compromisso real não era alterado.
+
+**Agora:** o mesmo tipo de pedido é reconhecido como reagendamento para o mesmo dia
+da reunião já confirmada — o bot confirma directamente e o compromisso é actualizado
+com o novo horário. Reagendamento com um novo dia explícito, cancelamento e mensagens
+neutras continuam a funcionar exactamente como antes (sem regressão nos testes
+automatizados).
+
+**Para validar:** Cenário C1 (já validado acima) e Cenário P1 + Regressões P2/P3/P4,
+abaixo — estes últimos só podem ser confirmados com o LLM real (Playground), já que
+todos os testes automatizados mockam a resposta do LLM.
+
 ---
 
 ## Checks de Validação
