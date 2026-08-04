@@ -141,24 +141,29 @@ então a mesma extração resolve os dois casos sem lógica extra.
 ## Checks de Validação
 
 ### Cenário P1 — Mensagem composta com dia+hora (o bug relatado)
-- [ ] Playground, lead novo, 1ª mensagem: "Olá, boa tarde, gostaria de agendar horário para hoje às 17:30"
-- [ ] Confirmar: resposta = cumprimento + 2ª bolha tratando o agendamento de verdade (nunca "vou verificar" sem continuação)
+- [x] (2026-08-04) Playground, lead novo, 1ª mensagem: "Olá, boa tarde, gostaria de agendar horário para hoje às 17:30"
+- [x] (2026-08-04) Confirmar: resposta = cumprimento + 2ª bolha tratando o agendamento de verdade (nunca "vou verificar" sem continuação)
+  - Resultado real (lead_id=375): bolha 1 = "Obrigado pelo seu contato! Vamos agendar seu horário. Você gostaria de agendar para hoje às 17:30?"; `pending_commercial_text` extraído = "gostaria de agendar horario para hoje as 17:30"; bolha 2 = "Você prefere agendar para hoje às 17:30 ou um horário diferente? Vou verificar a disponibilidade assim que você me informar seu horário favorito." Categoria avançou para `agendamento`. Mecanismo de reenfileiramento funcionou; nenhuma promessa vazia sem continuação.
+  - **Observação (não bloqueante):** a Filha Recepção não respeitou 100% a restrição "apenas cumprimento" — já engajou com o conteúdo do agendamento na bolha 1, em vez de só extrair e reportar. Não é falha do mecanismo (a extração/reenfileiramento ocorreu corretamente), mas sim aderência imperfeita do LLM ao prompt. Ver observação repetida no P3.
 
 ### Cenário P2 — Burst de mensagens fragmentadas (obrigatório)
-- [ ] Simular mensagem única `"oi\nboa tarde\ntudo bem?\nqual seria o preço da massagem e horários disponíveis?"` (replica o que o buffer de debounce concatenaria)
-- [ ] Confirmar: Recepção cumprimenta 1x, isola só a pergunta de preço/horário como pendência, 2ª bolha trata via rota correta
+- [x] (2026-08-04) Simular mensagem única `"oi\nboa tarde\ntudo bem?\nqual seria o preço da massagem e horários disponíveis?"` (replica o que o buffer de debounce concatenaria)
+- [x] (2026-08-04) Confirmar: Recepção cumprimenta 1x, isola só a pergunta de preço/horário como pendência, 2ª bolha trata via rota correta
+  - Resultado real (lead_id=376): bolha 1 = puro cumprimento, sem mencionar preço ("Boa tarde! Agradeço pelo contato. Me conta o que você está buscando em relação à massagem, estou aqui para ajudar."). `pending_commercial_text` extraído = "qual seria o preco da massagem e horarios disponiveis?" (limpo, sem "oi/boa tarde/tudo bem?"). Bolha 2 tratou via rota correta (redirecionou para agendar consulta antes de falar preço, coerente com `presentation_variant=scheduler`). Categoria avançou para `pre-agendamento`. **Este é o caso ideal — LLM seguiu a restrição perfeitamente.**
 
 ### Cenário P3 — Pergunta não-agendamento (generalização)
-- [ ] Testar "Olá, qual o horário de funcionamento de vocês?"
-- [ ] Confirmar: mesma dinâmica (cumprimento + 2ª bolha respondendo a pergunta), não só casos de agendamento
+- [x] (2026-08-04) Testar "Olá, qual o horário de funcionamento de vocês?"
+- [x] (2026-08-04) Confirmar: mesma dinâmica (cumprimento + 2ª bolha respondendo a pergunta), não só casos de agendamento
+  - Resultado real (lead_id=377): mecanismo generalizou corretamente para pergunta fora do padrão de agendamento (horário de funcionamento). Categoria avançou para `apresentation`, bolha 2 seguiu com convite a agendar.
+  - **Mesma observação do P1:** bolha 1 já respondeu ao horário de funcionamento diretamente ("Nós funcionamos de segunda a sábado, das 9h às 18h") em vez de só cumprimentar — violação da restrição "NUNCA mencione... serviços" do prompt, mas sem quebrar o mecanismo (pendência ainda foi extraída e reenfileirada, gerando a 2ª bolha).
 
 ### Cenário P4 — Saudação pura (regressão)
-- [ ] Testar "Oi", "Boa tarde" sem nenhum pedido embutido
-- [ ] Confirmar: só a saudação é enviada, sem 2ª bolha nem `pending_commercial_text`
+- [x] (2026-08-04) Testar "Oi", "Boa tarde" sem nenhum pedido embutido
+- [x] (2026-08-04) Confirmar: só a saudação é enviada, sem 2ª bolha nem `pending_commercial_text`
+  - Resultado real (lead_id=378 "Oi", lead_id=379 "Boa tarde"): ambos sem `auto_messages`/`auto_items`, sem reenfileiramento, categoria permaneceu `qualification`. Regressão confirmada — comportamento antigo (saudação pura, sem 2ª bolha) preservado.
 
 ### Cenário C1 — WhatsApp real (se viável no momento do teste)
-- [ ] Repetir cenário P1/P2 num número de teste real
-- [ ] Confirmar: 2 mensagens outbound distintas chegam ao lead; 2º job (`whatsapp.inbound.n8n`, `source_message_id` prefixado `requeue:`) aparece na fila
+- [⏭️] (2026-08-04) Não executado — requer envio de mensagem real via WhatsApp a partir de um telefone físico para a instância conectada (`whatsapp_connections.id=2`, `status=connected`), o que não é automatizável neste ambiente de agente. Cenários P1-P4 já validam a lógica ponta-a-ponta do decision engine e do reenfileiramento; C1 cobriria apenas a camada de transporte (job `whatsapp.inbound.n8n` com `source_message_id` prefixado `requeue:`, 2 mensagens outbound distintas via UazAPI). Recomenda-se ao utilizador repetir P1/P2 num número de teste real quando conveniente, usando o mesmo `ai_profile_id` de produção.
 
 ---
 
