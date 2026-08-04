@@ -26,7 +26,12 @@
       "Bash(wmic process *)",
       "Bash(python -c ' *)",
       "Bash(./.venv/Scripts/python.exe -m pytest tests/test_llm_service_retry.py tests/test_meeting_management.py tests/test_meeting_cancel_reschedule_action.py tests/test_meeting_scheduler_structured_candidate.py -q)",
-      "Bash(python -m py_compile backend-crm/routes/webhooks.py)"
+      "Bash(python -m py_compile backend-crm/routes/webhooks.py)",
+      "Bash(./.venv/Scripts/python.exe -m uvicorn app:app --port 8000)",
+      "Bash(disown)",
+      "Bash(powershell -Command \"[System.TimeZoneInfo]::Local.Id\")",
+      "Bash(python -c \"import datetime; print\\(datetime.datetime.utcfromtimestamp\\(1785858313\\)\\)\")",
+      "mcp__plugin_chrome-devtools-mcp_chrome-devtools__press_key"
     ]
   }
 }
