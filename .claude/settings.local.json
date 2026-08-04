@@ -31,7 +31,8 @@
       "Bash(disown)",
       "Bash(powershell -Command \"[System.TimeZoneInfo]::Local.Id\")",
       "Bash(python -c \"import datetime; print\\(datetime.datetime.utcfromtimestamp\\(1785858313\\)\\)\")",
-      "mcp__plugin_chrome-devtools-mcp_chrome-devtools__press_key"
+      "mcp__plugin_chrome-devtools-mcp_chrome-devtools__press_key",
+      "Bash(curl -s -X POST http://localhost:8000/api/playground/chat -H 'Authorization: Bearer __CMDSUB_OUTPUT__' -H 'Content-Type: application/json' -d '{\"ai_profile_id\": 6, \"message\": \"Ola, qual o horario de funcionamento de voces?\", \"lead_id\": null}')"
     ]
   }
 }
