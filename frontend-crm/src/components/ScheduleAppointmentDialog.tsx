@@ -23,8 +23,13 @@ import { ptBR } from "date-fns/locale";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 import { useCreateAppointment, useUpdateAppointment, useDeleteAppointment } from "@/hooks/useAppointments";
-import { useBusinessTimezone } from "@/hooks/useBusinessTimezone";
-import { fromBusinessTimezoneDate, toBusinessTimezoneDate } from "@/lib/timezone";
+import { useBusinessTimezone, browserTimezone } from "@/hooks/useBusinessTimezone";
+import {
+  fromBusinessTimezoneDate,
+  toBusinessTimezoneDate,
+  formatInBusinessTimezone,
+  getTimezoneCityLabel,
+} from "@/lib/timezone";
 import { AppointmentType, Appointment } from "@/types/crm";
 import { useLeads } from "@/contexts/LeadsContext";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -35,6 +40,22 @@ const appointmentTypeLabels: Record<AppointmentType, string> = {
   "follow-up": "Follow-up",
   presentation: "Apresentação",
 };
+
+/**
+ * Combina uma data (campo "Data") com um horário "HH:mm" (campos Início/Fim), interpretando
+ * o resultado como horário de parede no fuso informado — devolve o instante UTC correspondente.
+ * `null` se `timeStr` estiver vazio/incompleto (ex.: enquanto o utilizador ainda está digitando).
+ */
+function combineDateTimeInTimezone(date: Date | undefined, timeStr: string, timeZone: string): Date | null {
+  if (!date || !timeStr) return null;
+  const [hoursStr, minutesStr] = timeStr.split(":");
+  const hours = Number(hoursStr);
+  const minutes = Number(minutesStr);
+  if (Number.isNaN(hours) || Number.isNaN(minutes)) return null;
+  const local = new Date(date);
+  local.setHours(hours, minutes, 0, 0);
+  return fromBusinessTimezoneDate(local, timeZone);
+}
 
 interface ScheduleAppointmentDialogProps {
   open: boolean;
@@ -198,6 +219,20 @@ export function ScheduleAppointmentDialog({
 
   const isSubmitting = createMutation.isPending || updateMutation.isPending || deleteMutation.isPending;
 
+  // Legenda "equivale a HH:mm no seu fuso" — só quando o fuso do negócio difere do navegador
+  // de quem está a preencher o formulário (os campos Início/Fim sempre gravam no fuso do
+  // negócio, ver combineDateTimeInTimezone acima).
+  const timezonePreview = useMemo(() => {
+    if (businessTimezone === browserTimezone) return null;
+    const startAt = combineDateTimeInTimezone(date, time, businessTimezone);
+    const endAt = combineDateTimeInTimezone(date, endTime, businessTimezone);
+    if (!startAt || !endAt) return null;
+    return {
+      start: formatInBusinessTimezone(startAt, "HH:mm", browserTimezone),
+      end: formatInBusinessTimezone(endAt, "HH:mm", browserTimezone),
+    };
+  }, [date, time, endTime, businessTimezone]);
+
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
 
@@ -219,19 +254,10 @@ export function ScheduleAppointmentDialog({
     }
 
     // `date` + `time`/`endTime` representam o horário de parede no fuso do NEGÓCIO (é isso que
-    // aparece nos campos do formulário) — fromBusinessTimezoneDate converte para o instante UTC
+    // aparece nos campos do formulário) — combineDateTimeInTimezone converte para o instante UTC
     // correto, independente do fuso do navegador de quem está a preencher o formulário.
-    const [hoursStr, minutesStr] = time.split(":");
-    const hours = Number(hoursStr);
-    const minutes = Number(minutesStr);
-    const startAtLocal = new Date(date);
-    startAtLocal.setHours(hours, minutes, 0, 0);
-    const startAt = fromBusinessTimezoneDate(startAtLocal, businessTimezone);
-
-    const [endHoursStr, endMinutesStr] = endTime.split(":");
-    const endAtLocal = new Date(date);
-    endAtLocal.setHours(Number(endHoursStr), Number(endMinutesStr), 0, 0);
-    const endAt = fromBusinessTimezoneDate(endAtLocal, businessTimezone);
+    const startAt = combineDateTimeInTimezone(date, time, businessTimezone)!;
+    const endAt = combineDateTimeInTimezone(date, endTime, businessTimezone)!;
     // Se hora de fim <= início, soma 1h automaticamente
     if (endAt <= startAt) {
       endAt.setTime(startAt.getTime() + 60 * 60 * 1000);
@@ -411,6 +437,13 @@ export function ScheduleAppointmentDialog({
                   />
                 </div>
               </div>
+              {timezonePreview && (
+                <p className="text-[11px] text-muted-foreground">
+                  Horário em {getTimezoneCityLabel(businessTimezone)} (fuso do negócio) —
+                  equivale a {timezonePreview.start}–{timezonePreview.end} no seu fuso (
+                  {getTimezoneCityLabel(browserTimezone)})
+                </p>
+              )}
             </div>
           </div>
 
