@@ -119,19 +119,39 @@ todos os testes automatizados mockam a resposta do LLM.
   testes no total).
 
 ### Cenário P1 — Playground, reagendamento implícito (só horário, mesmo dia)
-- [ ] Confirmar uma reunião num horário (ex.: 14h) no Playground.
-- [ ] Enviar "pode ser às 16h em vez de 14h?".
-- [ ] Confirmar: bot confirma o reagendamento diretamente (não pergunta "qual dia?"),
+- [x] Confirmar uma reunião num horário (ex.: 14h) no Playground — 04/08/2026.
+- [x] Enviar "pode ser às 16h em vez de 14h?" — 04/08/2026.
+- [x] Confirmar: bot confirma o reagendamento diretamente (não pergunta "qual dia?"),
   trace mostra `meeting_reschedule_requested=true` e `meeting_datetime_candidate`
-  válido no mesmo dia às 16h, `PUT /api/internal/appointments/{id}` disparado com o
-  novo horário.
+  válido no mesmo dia às 16h — 04/08/2026 (`meeting_datetime_candidate:
+  "2026-08-05T16:00:00"`, mesmo dia da reunião de 14h confirmada antes; resposta:
+  "Seu horário foi ajustado com carinho para amanhã às 16h..."). **Nota:** o
+  `PUT /api/internal/appointments/{id}` não é observável via Playground — essa rota só
+  é chamada pelo backend-executors no pipeline real (webhook → job → executor), que o
+  Playground não exercita; fora do escopo desta fix (não mudou nada em
+  `meeting_scheduler.py`). Ver nota de setup abaixo.
 
 ### Regressão — Reagendamento explícito com novo dia continua a funcionar
-- [ ] "pode ser domingo às 11h?" — confirma directamente, sem regressão.
+- [x] "pode ser domingo às 11h?" — confirma directamente, sem regressão — 04/08/2026
+  (`meeting_reschedule_requested=true`, `meeting_datetime_candidate:
+  "2026-08-09T11:00:00"`, próximo domingo a partir de 04/08/2026 que é terça-feira).
 
 ### Regressão — Cancelamento continua a funcionar
-- [ ] "quero cancelar" — cancela directamente, sem regressão.
+- [x] "quero cancelar" — cancela directamente, sem regressão — 04/08/2026
+  (`meeting_cancel_requested=true`).
 
 ### Regressão — Mensagem neutra continua sem preencher sinais
-- [ ] "muito obrigada!" — resposta mínima, sem `meeting_reschedule_requested`/
-  `meeting_cancel_requested`.
+- [x] "muito obrigada!" — resposta mínima, sem `meeting_reschedule_requested`/
+  `meeting_cancel_requested` — 04/08/2026 (ambos os sinais `false`).
+
+**Nota de setup (P1/P2/P3/P4):** o Playground, por si só, nunca chega ao estado
+`bot_disabled_reason="meeting_scheduled"` — essa flag só é setada pelo pipeline real
+WhatsApp → backend-executors (rota interna `POST /internal/leads/{id}/bot-disabled`,
+autenticada por service token), que o Playground não invoca. Confirmar uma reunião via
+chat do Playground não é suficiente para reproduzir a precondição do Cenário P1 (foi
+testado e o turno seguinte roteou para o child de agendamento normal, não para
+`meeting_management`). Para validar estes 4 cenários, o lead sandbox usado no Playground
+(`lead_id=396`, conta ephemeral `playground.scenario.test@example.com`) foi marcado
+manualmente no banco com `bot_disabled=1, bot_disabled_reason='meeting_scheduled'` +
+um appointment de teste (04/08/2026 → 05/08/2026 14h), reproduzindo a precondição real;
+revertido ao fim dos testes. Ver `docs/architecture/playground-parity.md`, campo B6.
