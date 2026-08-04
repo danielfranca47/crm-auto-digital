@@ -100,6 +100,60 @@ nada disso aparece — continua exatamente como antes.
 
 **Para validar:** Cenários P1, P2 e C1, abaixo.
 
+### Fase 2 — Legenda de fuso no formulário de criar/editar compromisso
+
+**Objetivo:** fechar o ajuste registrado em "Ajustes Possíveis Pós-Implementação" — o
+`ScheduleAppointmentDialog.tsx` continuava salvando sempre no fuso do negócio sem indicar
+isso visualmente, criando risco de desvio silencioso de horário para quem preenche o
+formulário num fuso diferente (ex.: digitar "17h" pensando no próprio relógio, mas o sistema
+interpretar como 17h do negócio — 4h de diferença sem aviso nenhum na tela).
+
+| Arquivo | O que muda |
+|---|---|
+| `frontend-crm/src/components/ScheduleAppointmentDialog.tsx` | Extrai `combineDateTimeInTimezone` (dedup da conversão já usada em `handleSubmit`); `useMemo` calcula o horário digitado convertido para o fuso do navegador; legenda abaixo dos campos Início/Fim, visível só quando `businessTimezone !== browserTimezone` |
+
+```tsx
+// ANTES — campos sem qualquer indicação de fuso
+<Label>Horário</Label>
+<Input id="time" type="time" value={time} onChange={...} />
+<Input id="endTime" type="time" value={endTime} onChange={...} />
+
+// DEPOIS — legenda condicional abaixo dos campos
+{timezonePreview && (
+  <p className="text-[11px] text-muted-foreground">
+    Horário em {getTimezoneCityLabel(businessTimezone)} (fuso do negócio) —
+    equivale a {timezonePreview.start}–{timezonePreview.end} no seu fuso (
+    {getTimezoneCityLabel(browserTimezone)})
+  </p>
+)}
+```
+
+Não altera `handleSubmit` além de reusar o novo helper — payload e comportamento de
+gravação continuam idênticos. Sem mudança quando os fusos coincidem.
+
+### Commits Fase 2
+
+| # | Commit | O que foi implementado |
+|---|---|---|
+| 1 | `a0495be` | feat: mostra legenda de fuso no formulario de agendar/editar compromisso |
+
+**Detalhes do commit `a0495be`:** ver tabela de arquivos acima.
+
+### Relatório da Fase 2 — o que mudou na prática
+
+**Antes:** ao criar ou editar um compromisso, os campos "Início" e "Fim" não diziam em
+nenhum lugar em qual fuso horário aquele valor seria gravado — quem preenche num fuso
+diferente do negócio podia digitar um horário pensando no próprio relógio e o sistema
+gravava outro, sem nenhum aviso.
+
+**Agora:** quando o fuso do negócio é diferente do fuso de quem está a preencher o
+formulário, aparece uma legenda abaixo dos campos de horário mostrando a que horas isso
+equivale no fuso de quem está a ver a tela (ex. "Horário em São Paulo (fuso do negócio) —
+equivale a 21:00–22:00 no seu fuso (Lisboa)"), atualizando conforme a hora/data digitada
+muda. Quando os fusos coincidem, nada muda — formulário idêntico ao de antes.
+
+**Para validar:** Cenário P3 e as regressões abaixo.
+
 ---
 
 ## Checks de Validação
@@ -134,9 +188,30 @@ persistência pós-reload), e removido o dual-fuso trocando o timezone do AI Pro
 para `Europe/Lisbon` no Cenário C1 (nenhum rótulo duplo, botão de alternância ausente).
 Compromisso de teste cancelado e AI Profile restaurado para `America/Sao_Paulo` ao final.
 
+### Cenário P3 — Legenda de fuso no formulário de criar/editar
+- [ ] Com AI Profile de teste em `America/Sao_Paulo` e navegador em Lisboa, abrir "Novo" (em
+  qualquer uma das 3 vistas da Agenda ou no LeadCardDialog) e digitar um horário
+- [ ] Confirmar: legenda aparece abaixo dos campos Início/Fim mostrando a conversão correta
+  para o fuso do navegador, e atualiza ao mudar hora/data
+- [ ] Abrir "Reagendar" num compromisso existente — legenda aparece já preenchida com a
+  conversão do horário atual
+
+### Regressão — Sem mudança quando os fusos coincidem
+- [ ] Com AI Profile de teste em `Europe/Lisbon` (fusos iguais), abrir "Novo"/"Reagendar" —
+  confirmar que a legenda não aparece
+
+### Regressão — Gravação continua correta
+- [ ] Criar um compromisso com a legenda visível (fusos diferentes) — confirmar, via
+  listagem (que já mostra dual-fuso), que o horário gravado bate com o fuso do negócio
+  digitado no formulário, não com o fuso do navegador
+
 ---
 
 ## Ajustes Possíveis Pós-Implementação
 
 - `ScheduleAppointmentDialog.tsx` (form de criar/editar) continua só no fuso do negócio —
   não foi pedido mostrar/editar nos dois fusos no formulário de escrita.
+  **Endereçado na Fase 2:** o formulário continua gravando só no fuso do negócio (decisão
+  mantida), mas agora mostra uma legenda com a conversão para o fuso do navegador — ver
+  Fase 2 acima. Os campos em si continuam não-editáveis nos dois fusos (permanece fora de
+  escopo).
