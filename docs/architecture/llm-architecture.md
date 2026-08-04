@@ -65,7 +65,9 @@ whatsapp_worker
 | `next_action_hint` | `reply\|ask_qualification\|handoff\|ignore\|greet\|null` | Sugestão de próxima ação ao pipeline |
 | `objective` | string\|null | Objetivo da resposta atual (informativo) |
 
-**Tolerância de enum (campos opcionais):** valores fora do enum em `next_action_hint`, `agent_mode` e `perceived_category` são silenciosamente convertidos para `None` por um `field_validator(mode="before")` em `MotherDecision` (`orchestrator_models.py`), em vez de levantar `ValidationError` e derrubar a decisão inteira do turno. Log: `event=mother_decision_invalid_enum_coerced field=<campo> value=<valor>`. `route_to` (obrigatório) fica fora desta tolerância.
+**Tolerância de enum (campos opcionais):** valores fora do enum em `next_action_hint`, `agent_mode` e `perceived_category` são silenciosamente convertidos para `None` por um `field_validator(mode="before")` em `MotherDecision` (`orchestrator_models.py`), em vez de levantar `ValidationError` e derrubar a decisão inteira do turno. Log: `event=mother_decision_invalid_enum_coerced field=<campo> value=<valor>`. `route_to` (obrigatório) fica fora desta tolerância genérica — não tem default seguro para degradar a `None`.
+
+**Alias de `route_to`:** em vez de tolerância genérica, um segundo `field_validator(mode="before")` corrige apenas aliases pontuais conhecidos antes da validação do `Literal` — hoje só `"presentation"` → `"apresentation"` (typo recorrente da LLM, falta o "a-" do enum em PT). Valores fora dos aliases conhecidos continuam a levantar `ValidationError` e caem no fallback normal (`llm_orchestrator_error` → handoff). Log: `event=mother_decision_route_to_alias_coerced value=<valor> normalized=<valor_corrigido>`.
 
 ### Saudação composta — pedido comercial pendente é reenfileirado, não tratado no mesmo turno
 

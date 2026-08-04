@@ -138,6 +138,49 @@ risca pelo LLM.
 
 ---
 
+### Fase 6 — Rótulo real da 2ª bolha no Playground + alias do enum `route_to`
+
+**Objetivo:** testando P1/P3 pela UI do Playground (browser, via MCP), a 2ª bolha
+(resultado da pendência reenfileirada) aparecia sempre rotulada genericamente
+"Fluxo de Venda", mesmo quando era, na maioria dos casos, a resposta real da
+Filha correspondente após a Mãe decidir a rota de verdade (confirmado nos logs
+do executors: `route_to=agendamento` → `_build_child_prompt_agendamento`). O
+utilizador pediu para mostrar a Filha/rota real em vez do rótulo genérico.
+
+Investigando por que às vezes a 2ª bolha era um handoff genérico ("Vou te
+conectar com alguém do time agora"), achei a causa: `MotherDecision.route_to`
+(Pydantic `Literal`, obrigatório, sem tolerância de enum) às vezes vem da LLM
+como `"presentation"` em vez do literal `"apresentation"`, derrubando a
+validação inteira e caindo no fallback de handoff — que também era mostrado,
+incorretamente, como "Fluxo de Venda". Corrigido junto, a pedido do utilizador.
+
+| Arquivo | O que muda |
+|---|---|
+| `backend-executors/app/services/orchestrator_models.py` | Novo `field_validator("route_to", mode="before")` em `MotherDecision`: corrige o alias pontual `"presentation"` → `"apresentation"` antes da validação do `Literal`. Valores desconhecidos continuam a levantar `ValidationError` (comportamento preservado). Log: `event=mother_decision_route_to_alias_coerced`. |
+| `docs/architecture/llm-architecture.md` | Documenta o novo alias de `route_to`, distinto da tolerância genérica de enum já existente para campos opcionais. |
+| `backend-crm/routes/playground.py` | Novo dict `_ROUTE_TO_LABELS`. Cada item de `auto_items` ganha `source`/`source_label`: `"sales_flow"`/"Fluxo de Venda" para blocos `send_message` genuínos; `"child_llm"`/nome da rota real (ex. "Agendamento") para a resposta da 2ª chamada ao decision engine; `"fallback"`/"Handoff (erro de decisão)" quando `_decision2.reason == "llm_failure"`. |
+| `frontend-crm/src/services/api.ts` | `PlaygroundAutoItem` (variante texto) ganha `source?`/`source_label?` opcionais. |
+| `frontend-crm/src/pages/Playground.tsx` | `revealAutoMessages` propaga `autoMessageSource`/`autoMessageLabel` para o `ChatMessage`. |
+| `frontend-crm/src/components/playground/MessageBubble.tsx` | Rótulo passa a usar `message.autoMessageLabel` (fallback "Fluxo de Venda" para sessões antigas sem o campo). 3 cores por fonte: violeta (`sales_flow`, igual antes), teal (`child_llm`, nova), âmbar (`fallback`, nova — chama atenção para erro de decisão). |
+
+**Validação ao vivo:** P1 (lead 393) → `auto_items[0].source_label = "Agendamento"`.
+P3 (lead 394, repetido também na UI via browser) → `auto_items[0].source_label =
+"Apresentação"`, confirmado visualmente com bolha teal na captura de tela. Teste
+unitário direto em `MotherDecision(route_to="presentation", ...)` confirma que o
+alias corrige para `"apresentation"`, e que valores realmente desconhecidos
+continuam a levantar `ValidationError` (comportamento de fallback preservado
+para casos genuinamente não mapeados). Não foi possível reproduzir o typo real
+vindo da LLM nestes testes específicos (é um erro esporádico dela) — validação
+do alias em produção fica oportunística, não bloqueante.
+
+### Commits Fase 6
+
+| # | Commit | O que foi implementado |
+|---|---|---|
+| 1 | *(a preencher após commit)* | Alias route_to (`presentation`→`apresentation`) + rótulo real da 2ª bolha no Playground |
+
+---
+
 ### Relatório das Fases 1-4 — o que mudou na prática
 
 **Antes:** quando a 1ª mensagem de um lead já misturava saudação com um pedido comercial

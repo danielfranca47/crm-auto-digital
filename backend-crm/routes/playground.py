@@ -196,6 +196,20 @@ _PHASE_ID_LABELS = {
     "p5":  "Fechamento",
 }
 
+# route_to → nome amigável, para rotular no Playground qual Filha respondeu de
+# verdade quando a pendência é reenfileirada (ver "Saudação composta" em
+# docs/architecture/llm-architecture.md). Mesmos valores de _PHASE_ID_LABELS,
+# só que indexado por route_to em vez de phase_id.
+_ROUTE_TO_LABELS = {
+    "recepcao": "Recepção",
+    "qualification": "Qualificação",
+    "apresentation": "Apresentação",
+    "pre-agendamento": "Pré-Agendamento",
+    "agendamento": "Agendamento",
+    "follow-up": "Follow Up",
+    "closing": "Fechamento",
+}
+
 # ---------------------------------------------------------------------------
 # Helpers internos
 # ---------------------------------------------------------------------------
@@ -650,7 +664,12 @@ def playground_chat(
         atype = action.get("type")
         if atype == "send_message" and action.get("content"):
             auto_messages.append(action["content"])
-            auto_items.append({"type": "text", "content": action["content"]})
+            auto_items.append({
+                "type": "text",
+                "content": action["content"],
+                "source": "sales_flow",
+                "source_label": "Fluxo de Venda",
+            })
         elif atype == "send_media" and action.get("media_url"):
             auto_items.append({
                 "type": "media",
@@ -707,7 +726,18 @@ def playground_chat(
 
         _message_to_send2 = _decision2.get("message_text") or ""
         if _message_to_send2:
-            auto_items.append({"type": "text", "content": _message_to_send2})
+            if _decision2.get("reason") == "llm_failure":
+                _source2, _source_label2 = "fallback", "Handoff (erro de decisão)"
+            else:
+                _effective_route2 = (_decision2.get("decision_trace") or {}).get("effective_route_to")
+                _source2 = "child_llm"
+                _source_label2 = _ROUTE_TO_LABELS.get(_effective_route2, _effective_route2 or "Bot")
+            auto_items.append({
+                "type": "text",
+                "content": _message_to_send2,
+                "source": _source2,
+                "source_label": _source_label2,
+            })
             auto_messages.append(_message_to_send2)
             _insert_message(lead_id, _message_to_send2, "outbound")
 
@@ -715,7 +745,12 @@ def playground_chat(
             atype2 = action2.get("type")
             if atype2 == "send_message" and action2.get("content"):
                 auto_messages.append(action2["content"])
-                auto_items.append({"type": "text", "content": action2["content"]})
+                auto_items.append({
+                    "type": "text",
+                    "content": action2["content"],
+                    "source": "sales_flow",
+                    "source_label": "Fluxo de Venda",
+                })
                 _insert_message(lead_id, action2["content"], "outbound")
             elif atype2 == "send_media" and action2.get("media_url"):
                 auto_items.append({

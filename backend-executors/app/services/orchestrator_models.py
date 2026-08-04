@@ -16,6 +16,14 @@ _OPTIONAL_ENUM_FIELDS: dict[str, frozenset[str]] = {
     "next_action_hint": frozenset({"reply", "ask_qualification", "handoff", "ignore", "greet"}),
 }
 
+# route_to é obrigatório e não tem default seguro, por isso fica fora do mecanismo
+# de tolerância acima (que degrada para None). Em vez de tolerância genérica, corrige
+# apenas aliases conhecidos e recorrentes da LLM antes da validação do Literal — valores
+# realmente desconhecidos continuam a levantar ValidationError e caem no fallback normal.
+_ROUTE_TO_ALIASES: dict[str, str] = {
+    "presentation": "apresentation",  # typo recorrente: falta o "a-" do enum em PT
+}
+
 
 class MotherDecision(BaseModel):
     route_to: Literal["qualification", "apresentation", "pre-agendamento", "agendamento", "follow-up", "closing", "recepcao"]
@@ -41,6 +49,20 @@ class MotherDecision(BaseModel):
                 value,
             )
             return None
+        return value
+
+    @field_validator("route_to", mode="before")
+    @classmethod
+    def _normalize_route_to_alias(cls, value):
+        if isinstance(value, str):
+            alias_target = _ROUTE_TO_ALIASES.get(value.strip())
+            if alias_target is not None:
+                logger.warning(
+                    "event=mother_decision_route_to_alias_coerced value=%r normalized=%r",
+                    value,
+                    alias_target,
+                )
+                return alias_target
         return value
 
 
