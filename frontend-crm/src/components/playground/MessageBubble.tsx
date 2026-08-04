@@ -18,6 +18,8 @@ export interface ChatMessage {
   text: string;
   timestamp: string;
   isAutoMessage?: boolean;
+  autoMessageSource?: string;
+  autoMessageLabel?: string;
   isPhaseAdvance?: boolean;
   isAudioMessage?: boolean;
   audioUrl?: string;
@@ -203,6 +205,26 @@ function RatingRow({
   );
 }
 
+// ── Estilo por fonte de mensagem automática ───────────────────────────────────
+// "sales_flow" = bloco configurado do Fluxo de Venda; "child_llm" = resposta real
+// da Filha após a Mãe decidir a rota (pendência reenfileirada); "fallback" = erro
+// de decisão que caiu no handoff genérico. Sem source (dados antigos) → sales_flow.
+
+const AUTO_SOURCE_STYLES: Record<string, { text: string; bubble: string }> = {
+  sales_flow: {
+    text: "text-violet-400",
+    bubble: "bg-violet-50 border border-violet-200 text-foreground rounded-tl-sm dark:bg-violet-950 dark:border-violet-800",
+  },
+  child_llm: {
+    text: "text-teal-500",
+    bubble: "bg-teal-50 border border-teal-200 text-foreground rounded-tl-sm dark:bg-teal-950 dark:border-teal-800",
+  },
+  fallback: {
+    text: "text-amber-500",
+    bubble: "bg-amber-50 border border-amber-300 text-foreground rounded-tl-sm dark:bg-amber-950 dark:border-amber-700",
+  },
+};
+
 // ── MessageBubble ─────────────────────────────────────────────────────────────
 
 export function MessageBubble({ message, onToggleFeedback, onRate }: MessageBubbleProps) {
@@ -228,13 +250,17 @@ export function MessageBubble({ message, onToggleFeedback, onRate }: MessageBubb
   // Detecta se a mensagem do lead é um marcador de mídia
   const leadMediaType = isLead ? parseLeadMediaMarker(message.text) : null;
 
+  const autoSource = message.autoMessageSource ?? "sales_flow";
+  const autoLabel = message.autoMessageLabel ?? "Fluxo de Venda";
+  const autoStyle = AUTO_SOURCE_STYLES[autoSource] ?? AUTO_SOURCE_STYLES.sales_flow;
+
   return (
     <div className={`flex ${isLead ? "justify-end" : "justify-start"} mb-3 group`}>
       <div className={`flex flex-col max-w-[75%] ${isLead ? "items-end" : "items-start"}`}>
         {/* Rótulo de quem enviou */}
         <span className="text-xs text-muted-foreground mb-1 px-1 flex items-center gap-1">
           {isLead ? "Lead" : message.isAutoMessage ? (
-            <><Zap className="h-3 w-3 text-violet-400" /><span className="text-violet-400">Fluxo de Venda</span></>
+            <><Zap className={`h-3 w-3 ${autoStyle.text}`} /><span className={autoStyle.text}>{autoLabel}</span></>
           ) : "Bot"}
           {" · "}{time}
         </span>
@@ -265,7 +291,7 @@ export function MessageBubble({ message, onToggleFeedback, onRate }: MessageBubb
               isLead
                 ? "bg-primary text-primary-foreground rounded-tr-sm"
                 : message.isAutoMessage
-                ? "bg-violet-50 border border-violet-200 text-foreground rounded-tl-sm dark:bg-violet-950 dark:border-violet-800"
+                ? autoStyle.bubble
                 : message.selectedForFeedback
                 ? "bg-amber-50 border-2 border-amber-300 text-foreground rounded-tl-sm dark:bg-amber-950 dark:border-amber-600"
                 : "bg-muted text-foreground rounded-tl-sm"

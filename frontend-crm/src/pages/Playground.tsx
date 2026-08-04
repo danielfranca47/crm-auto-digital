@@ -94,6 +94,8 @@ async function revealAutoMessages(
           text: item.content,
           timestamp: new Date().toISOString(),
           isAutoMessage: true,
+          autoMessageSource: item.source,
+          autoMessageLabel: item.source_label,
           selectedForFeedback: false,
         },
       ]);

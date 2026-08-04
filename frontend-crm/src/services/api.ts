@@ -157,7 +157,7 @@ export type PlaygroundPreSendMediaItem = {
 };
 
 export type PlaygroundAutoItem =
-  | { type: "text"; content: string }
+  | { type: "text"; content: string; source?: string; source_label?: string }
   | { type: "media"; media_url: string; media_type: string };
 
 export type PlaygroundChatResponse = {
