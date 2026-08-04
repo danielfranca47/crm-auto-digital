@@ -173,6 +173,7 @@ Além da paridade de contexto LLM, o playground expõe campos de preview que sim
 | `suppress_llm_response` | `bool` — quando `True`, frontend omite o turno da LLM por completo (sem bolha vazia) | Runner completa job com `skipped_suppress_llm` sem enviar mensagem LLM |
 | `message_parts` | `List[str]` — como a resposta LLM seria dividida em bolhas por pontuação | Executor chama `_split_message_by_punctuation()` e envia cada parte com delay próprio |
 | `audio_previews` | `List[str]` — URLs dos `myaudio`/`ptt` da base de conhecimento que seriam enviados como voz | Executor envia `pre_send_media` com `type=myaudio` e `delay_ms=3000` antes de cada um |
+| `appointment_event` | `{action: "created"\|"rescheduled"\|"canceled", start_at, end_at}` ou `null` — preenchido quando o turno criou/reagendou/cancelou de facto um appointment real (ver [`agenda.md`](agenda.md), secção "Playground cria appointments reais"). Frontend renderiza um chip distinto (📅/🔄/❌) na conversa | Nenhum equivalente — no fluxo real a confirmação chega ao lead só como mensagem de texto, não como campo estruturado numa resposta de API |
 
 ### Fórmula do typing indicator
 
