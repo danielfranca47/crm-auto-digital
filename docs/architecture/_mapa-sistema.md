@@ -65,7 +65,7 @@ agent-local         local  ← agente Python local de prospecção/scraping
 |---|---|---|
 | `routes/webhooks.py` | `POST /webhooks/whatsapp/uazapi` | Recebe eventos UazAPI; normaliza messageType; filtra grupos |
 | `routes/leads.py` | `/api/leads/*` | CRUD de leads, movimentação Kanban, qualification-fields |
-| `routes/executor.py` | `/internal/jobs/*` | Endpoint de conclusão de jobs; `_dispatch_system_actions()` |
+| `routes/executor.py` | `/internal/jobs/*`, `/api/internal/appointments/*` | Endpoint de conclusão de jobs; `_dispatch_system_actions()`; rotas de appointment por service-token para o backend-executors |
 | `routes/playground.py` | `/api/playground/*` | Simulação de conversa; upload de áudio |
 | `routes/agents.py` | `/api/agents/*` | Ciclo de vida dos agentes locais |
 | `routes/appointments.py` | `/api/appointments/*` | Agenda e compromissos |

@@ -115,6 +115,40 @@ function openCreate(day: Date, slotIndex: number) {
 
 ---
 
+## Fuso Horário na Agenda
+
+Todo horário de compromisso é exibido e editado no fuso configurado no AI Profile do
+negócio (`ai_profile.timezone`), não no fuso do navegador de quem está a ver a tela —
+resolvido por `useBusinessTimezone()` (`src/hooks/useBusinessTimezone.ts`), que expõe
+`businessTimezone` (do AI Profile, fallback para o fuso do navegador quando não
+configurado) e `browserTimezone`. Utilitários de conversão/formatação em
+`src/lib/timezone.ts` (`formatInBusinessTimezone`, `toBusinessTimezoneDate`,
+`fromBusinessTimezoneDate`, `getTimezoneCityLabel`) — usados nas 3 vistas, no Dashboard
+("Reuniões de Hoje"), no card do lead e na Prospecção.
+
+**Quando o fuso do negócio difere do fuso do navegador:**
+- **Listagens** (Agenda modo lista/calendário, Dashboard, card do lead, Prospecção) —
+  `AppointmentTimeLabel` (`src/components/AppointmentTimeLabel.tsx`) mostra os dois
+  horários lado a lado com o nome da cidade (ex.: "17:00 (São Paulo) · 21:00 (Lisboa)");
+  com fusos iguais mostra só um horário, sem rótulo de cidade.
+- **Grade visual (WeekView/DayView)** — posicionamento dos eventos e a agulha de "hora
+  actual" seguem `useAgendaTimezoneMode()` (`src/hooks/useAgendaTimezoneMode.ts`,
+  persistido em `localStorage` como `agenda_grid_timezone_mode`), com um botão de
+  alternância visível só quando há mismatch. Default `"browser"` — grade no fuso de
+  quem está a ver a tela; alternar para `"business"` mostra no fuso do negócio.
+- **`ScheduleAppointmentDialog`** — grava sempre no fuso do negócio (decisão mantida:
+  os campos não são editáveis nos dois fusos), mas exibe uma legenda abaixo dos campos
+  Início/Fim com a conversão para o fuso do navegador quando há mismatch
+  (`combineDateTimeInTimezone`, calculado via `useMemo`).
+
+**Limitação conhecida:** os intervalos de busca (`start`/`end` enviados ao backend por
+`Dashboard.tsx`, `WeekView.tsx`, `DayView.tsx`, `ScheduleView.tsx`) usam os limites de
+dia/semana/mês no fuso do navegador, não no fuso do negócio — só afecta compromissos
+muito próximos da meia-noite quando a diferença de fuso é grande (podem aparecer no dia
+errado, ou faltar na lista de "hoje").
+
+---
+
 ## API de Compromissos
 
 ### Endpoints usados pelo frontend
@@ -248,6 +282,25 @@ Estas três funções (`cancel_pending_appointment_jobs`, `schedule_appointment_
 
 Todas as rotas de `routes/appointments.py` (`GET /lead/{id}`, `POST`, `PUT/{id}`, `DELETE/{id}`, `POST /{id}/complete`, `POST /{id}/cancel`) exigem `Depends(require_crm_access)` e verificam que o `user_id` resolvido via `_resolve_owner_user_id()` bate com o do token — `404` (não `403`) em caso de mismatch, mesmo padrão de `_require_lead_for_user()` em `routes/leads.py`. Os dois pontos de entrada são chamados directamente pelo frontend (`frontend-crm/src/services/api.ts`), então a paridade de auth entre eles não é opcional.
 
+### Rotas internas para o backend-executors (service token)
+
+O `backend-executors` (Playground e fluxo real via `crm_client.py`) nunca chama as rotas
+públicas `/api/appointments/*` — só tem `X-Service-Token`, nunca um JWT de usuário. Três
+rotas internas dedicadas em `routes/executor.py`, todas `Depends(_require_service_token)`
+(mesmo padrão de `/internal/logs/meeting-scheduled`):
+
+| Rota interna | Equivalente público | Usada por |
+|---|---|---|
+| `POST /api/internal/appointments` | `POST /api/leads/{id}/appointments` | `crm_client.create_lead_appointment` |
+| `PUT /api/internal/appointments/{id}` | `PUT /api/appointments/{id}` | `crm_client.reschedule_appointment` |
+| `POST /api/internal/appointments/{id}/cancel` | `POST /api/appointments/{id}/cancel` | `crm_client.cancel_appointment` |
+
+A lógica de criação/atualização é compartilhada com as rotas públicas via
+`_create_appointment_row`/`_update_appointment_row` (`routes/appointments.py`) — as
+rotas internas resolvem o dono a partir do `lead_id` e chamam essas funções
+directamente, sem checagem de JWT; as rotas públicas continuam exigindo
+`require_crm_access` normalmente para usuários reais.
+
 ---
 
 ## `calendar_busy_slots` — a IA consulta disponibilidade real antes de propor/confirmar horário
@@ -270,6 +323,16 @@ backend-executors (decision_engine.py)
         ↓ (via runners/whatsapp.py no fluxo real, ou via playground_internal.py
            no Playground — ambos chamam handle_meeting_scheduled; ver secção
            "Playground cria appointments reais" abaixo)
+```
+
+**Agenda vazia:** quando não há nenhum compromisso na janela consultada, o bloco não é
+omitido — `_busy_block` declara explicitamente "HORÁRIOS JÁ OCUPADOS: nenhum compromisso
+encontrado — a agenda está livre no período consultado." em vez de virar string vazia.
+Sem essa afirmação positiva, `scheduling_offer_style: confirm_exact` (ver
+[`agents.md`](agents.md)) tendia a recusar horários "redondos" por cautela, mesmo com a
+agenda livre.
+
+```
 backend-executors (meeting_scheduler.py + whatsapp.py)
   handle_meeting_scheduled() checa o horário confirmado pela IA contra
   calendar_busy_slots: se colidir com outro lead, NÃO cria o appointment, NÃO

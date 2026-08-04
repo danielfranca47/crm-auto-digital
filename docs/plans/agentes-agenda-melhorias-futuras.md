@@ -133,3 +133,78 @@ logger configurado (no Playground, só passa a existir após a mudança feita em
   cair direto no fallback genérico de falha de LLM
 
 **Decisão:** não corrigir agora — registar para o caso de se tornar um padrão recorrente.
+
+---
+
+## M5 — App não tem error boundary (risco estrutural, não específico da Agenda)
+
+**Prioridade: MÉDIA** (sem incidente activo, mas qualquer excepção futura não tratada num
+render continua a derrubar a árvore React inteira, sem fallback amigável)
+
+**Contexto:** observado durante a graduação de `fix-crash-criar-compromisso-agenda.md`
+(04/08/2026) — o crash corrigido nessa implementação (tela branca ao criar compromisso)
+só foi visível de forma tão disruptiva porque o `frontend-crm` não tem nenhum React error
+boundary a nível de app.
+
+**Estado actual:** qualquer excepção não capturada durante o render desmonta a árvore React
+inteira — o utilizador perde a tela sem nenhuma mensagem de erro, só recarregando a página
+consegue voltar a usar a aplicação. Isto não é específico da Agenda — é um risco estrutural
+de todo o `frontend-crm`.
+
+**O que precisaria existir:** um error boundary a nível de app (ou por secção principal —
+Agenda, Kanban, etc.) com um fallback amigável ("algo correu mal, recarregar") em vez de
+tela branca.
+
+---
+
+## M6 — Guards defensivos redundantes após o fix de `setLeadNextAction`
+
+**Prioridade: BAIXA** (cosmético, sem risco — os guards são inofensivos)
+
+**Contexto:** observado durante a graduação de `fix-set-lead-next-action-ausente.md`
+(04/08/2026).
+
+**Estado actual:** `LeadCardDialog.tsx`, `ScheduleAppointmentDialog.tsx` e
+`ProspectionCardDialog.tsx` protegem a chamada a `setLeadNextAction` com o fallback
+`(leadsCtx as any)?.setLeadNextAction ?? (() => {})`. Esse fallback deixou de ser
+necessário depois de `setLeadNextAction` passar a existir sempre em `LeadsContext.tsx`
+— mas não foi removido por não ser necessário para a correcção do bug original.
+
+**O que precisaria existir:** remover o fallback `?? (() => {})` nos 3 arquivos, chamando
+`setLeadNextAction` directamente a partir de `useLeads()`.
+
+---
+
+## M7 — Anomalia de trace em pergunta de agendamento (mother_route inconsistente)
+
+**Prioridade: BAIXA** (observada uma única vez, sem padrão confirmado)
+
+**Contexto:** observado durante a validação de `fix-confirm-exact-agenda-vazia.md`
+(03/08/2026).
+
+**Estado actual:** o trace de uma sessão de teste mostrou `mother_route=qualification` com
+`effective=apresentation` para uma pergunta de agendamento no segundo turno — inconsistência
+entre a rota decidida pela Mãe e a rota efectivamente usada. Não foi investigada por estar
+fora do escopo pedido na altura.
+
+**O que precisaria existir:** reproduzir o caso e investigar `compose_decision_output()`
+(`decision_engine.py`) para entender por que `effective_route_to` divergiu de
+`mother_route` nesse turno específico.
+
+---
+
+## M8 — Badge de "próxima ação" no Kanban/Prospecção sem conversão de fuso
+
+**Prioridade: BAIXA** (edge case de exibição, não investigado)
+
+**Contexto:** observado durante a implementação de `fix-crash-criar-compromisso-agenda.md`
+(04/08/2026), correlato ao trabalho de fuso horário de `feat-dual-fuso-agenda.md` (ver
+`docs/architecture/agenda.md`, secção "Fuso Horário na Agenda").
+
+**Estado actual:** `KanbanBoard.tsx`/`ProspectionCardDialog.tsx` constroem o badge de
+"próxima acção" a partir de `new Date(result.startTime)`, sem passar pelos utilitários de
+`useBusinessTimezone()`/`src/lib/timezone.ts` já usados no resto da Agenda — o badge pode
+não mostrar a data/hora exacta dependendo de onde é exibido.
+
+**O que precisaria existir:** aplicar `AppointmentTimeLabel`/`toBusinessTimezoneDate` ao
+badge, consistente com o resto da Agenda.
