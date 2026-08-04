@@ -6,7 +6,7 @@ import { ToastAction } from "@/components/ui/toast";
 import { toast } from "@/hooks/use-toast";
 import { useUsage } from "@/hooks/useUsage";
 import { RefreshCw, ArrowDownToLine, ArrowUpFromLine } from "lucide-react";
-import { api, type PlaygroundChatResponse, type PlaygroundAutoItem } from "@/services/api";
+import { api, type PlaygroundChatResponse, type PlaygroundAutoItem, type PlaygroundAppointmentEvent } from "@/services/api";
 import { API_BASE } from "@/lib/api-client";
 import { PlaygroundConfigModal, type PlaygroundSession } from "@/components/playground/PlaygroundConfigModal";
 import { PlaygroundChat, type BatchItem } from "@/components/playground/PlaygroundChat";
@@ -126,6 +126,26 @@ function appendPhaseAdvances(
   ]);
 }
 
+function appendAppointmentEvent(
+  event: PlaygroundAppointmentEvent | null | undefined,
+  setMessages: Dispatch<SetStateAction<ChatMessage[]>>
+) {
+  if (!event) return;
+  setMessages((prev) => [
+    ...prev,
+    {
+      id: crypto.randomUUID(),
+      role: "bot" as const,
+      text: event.action,
+      timestamp: new Date().toISOString(),
+      isAppointmentEvent: true,
+      appointmentEventAction: event.action,
+      appointmentEventStartAt: event.start_at,
+      selectedForFeedback: false,
+    },
+  ]);
+}
+
 export default function Playground() {
   const navigate = useNavigate();
   const { data: usageData, refetch: refetchUsage } = useUsage();
@@ -210,6 +230,7 @@ export default function Playground() {
           if (autoItems0.length) await revealAutoMessages(autoItems0, setMessages, setLoading);
         }
         appendPhaseAdvances(res.phase_advances ?? [], setMessages);
+        appendAppointmentEvent(res.appointment_event, setMessages);
       } catch (err: unknown) {
         if (cancelled) return;
         if (!handlePlaygroundLimitError(err)) {
@@ -261,6 +282,7 @@ export default function Playground() {
           if (autoItems0.length) await revealAutoMessages(autoItems0, setMessages, setLoading);
         }
         appendPhaseAdvances(res.phase_advances ?? [], setMessages);
+        appendAppointmentEvent(res.appointment_event, setMessages);
       } catch (err: unknown) {
         if (cancelled) return;
         if (!handlePlaygroundLimitError(err)) {
@@ -329,6 +351,7 @@ export default function Playground() {
           if (autoItems.length) await revealAutoMessages(autoItems, setMessages, setLoading);
         }
         appendPhaseAdvances(res.phase_advances ?? [], setMessages);
+        appendAppointmentEvent(res.appointment_event, setMessages);
       } catch (err: unknown) {
         if (!handlePlaygroundLimitError(err)) {
           const msg = err instanceof Error ? err.message : "Erro ao chamar o playground";
@@ -404,6 +427,7 @@ export default function Playground() {
           if (autoItems.length) await revealAutoMessages(autoItems, setMessages, setLoading);
         }
         appendPhaseAdvances(res.phase_advances ?? [], setMessages);
+        appendAppointmentEvent(res.appointment_event, setMessages);
       } catch (err: unknown) {
         if (!handlePlaygroundLimitError(err)) {
           const msg = err instanceof Error ? err.message : "Erro ao enviar áudio";
@@ -507,6 +531,7 @@ export default function Playground() {
           if (autoItems.length) await revealAutoMessages(autoItems, setMessages, setLoading);
         }
         appendPhaseAdvances(res.phase_advances ?? [], setMessages);
+        appendAppointmentEvent(res.appointment_event, setMessages);
       } catch (err: unknown) {
         if (!handlePlaygroundLimitError(err)) {
           const msg = err instanceof Error ? err.message : "Erro ao enviar lote";
