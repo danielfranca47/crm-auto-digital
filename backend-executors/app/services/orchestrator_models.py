@@ -59,3 +59,8 @@ class ChildResult(BaseModel):
     signals_structured: Optional[dict] = None
     media_keys_to_send: Optional[list[str]] = None
     confidence: float = Field(ge=0.0, le=1.0)
+    # Preenchido apenas pela Filha Recepção quando a mensagem do lead mistura saudação
+    # com pedido comercial. Trecho literal (não resumido) do que não é saudação/social,
+    # para reenfileiramento como novo job inbound — ver "Saudação composta" em
+    # docs/architecture/llm-architecture.md.
+    pending_commercial_text: Optional[str] = None

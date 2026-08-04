@@ -1954,6 +1954,22 @@ def _build_child_prompt_recepcao(
 
     lead_name_ctx = f"Nome do lead: {lead_name}." if lead_name else "Nome do lead: desconhecido."
 
+    pending_extraction_instruction = (
+        "EXTRAÇÃO DE PEDIDO PENDENTE (IMPORTANTE):\n"
+        "A \"Mensagem recebida\" abaixo pode ter VÁRIAS LINHAS — o sistema agrupa mensagens "
+        "que o lead enviou em sequência rápida no WhatsApp (dentro de uma janela de poucos "
+        "segundos) num único texto, uma por linha. Leia TODAS as linhas antes de responder.\n"
+        "Se, além da saudação/cortesia, houver QUALQUER pedido, pergunta ou intenção comercial "
+        "(agendar, preço, horário de funcionamento, disponibilidade, serviço, catálogo, etc.) — "
+        "mesmo que fundida na MESMA linha da saudação (ex.: \"Boa tarde, gostaria de agendar às "
+        "17h\") — copie literalmente esse trecho (não resuma, não reescreva, não responda a ele) "
+        "para o campo \"pending_commercial_text\" do JSON de retorno.\n"
+        "Se a mensagem for saudação/social pura, sem nenhum pedido embutido, retorne "
+        "\"pending_commercial_text\": null.\n"
+        "Você é a recepção — NUNCA tente responder, prometer verificar, ou qualificar essa parte "
+        "pendente. Apenas reporte-a no campo indicado; outro turno do sistema vai tratá-la.\n"
+    )
+
     return f"""{identity_block}
 {tone_block}PAPEL: Recepcionista — dar boas-vindas e criar uma primeira impressão calorosa.
 FASE: recepção (saudação).
@@ -1962,6 +1978,7 @@ FASE: recepção (saudação).
 Mensagem recebida: {message_text}
 
 {greeting_instruction}
+{pending_extraction_instruction}
 RESTRIÇÕES ABSOLUTAS:
 - NUNCA mencione preços, tabelas, serviços, imagens, links ou informações de catálogo.
 - NUNCA faça perguntas de qualificação neste turno.
@@ -1975,7 +1992,8 @@ Retorne SOMENTE JSON válido:
   "field": null,
   "did_complete_phase": false,
   "confidence": 0.95,
-  "signals": []
+  "signals": [],
+  "pending_commercial_text": "<trecho literal do pedido comercial, ou null se só houve saudação>"
 }}
 """
 
