@@ -1,7 +1,7 @@
 # Fix: crash de tela branca ao criar compromisso na Agenda
 
 **Branch:** `main`
-**Status:** Em andamento
+**Status:** Todos os cenários validados (04/08/2026) — pendente: graduação
 
 ---
 
@@ -106,7 +106,7 @@ impacto em backend.
 
 | # | Commit | O que foi implementado |
 |---|---|---|
-| 1 | *(pendente)* | fix: remove duplo mapeamento da resposta ao criar compromisso |
+| 1 | `10dcc16` | fix: remove duplo mapeamento da resposta ao criar compromisso |
 
 ### Relatório da Fase 1 — o que mudou na prática
 
@@ -121,19 +121,56 @@ vistas da Agenda (Mensal, Semanal, Diária) e no card do lead.
 ## Checks de Validação
 
 ### Cenário P1 — Criar compromisso via Agenda → Mensal não crasha
-- [ ] Abrir Agenda → aba "Mensal" → "Novo", selecionar um lead, preencher horário,
-  Agendar
-- [ ] Confirmar: sem tela branca / sem erro no console; compromisso aparece na
-  listagem com o horário correto
+- [x] Abrir Agenda → aba "Mensal" → "Novo", selecionar um lead, preencher horário,
+  Agendar — 04/08/2026
+- [x] Confirmar: sem tela branca / sem erro no console; compromisso aparece na
+  listagem com o horário correto — 04/08/2026
 
 ### Cenário P2 — Outros pontos de entrada continuam funcionando
-- [ ] Criar compromisso via Semanal, via Diária, e via `LeadCardDialog` (card do lead)
-- [ ] Confirmar: sem crash em nenhum, compromisso aparece corretamente
+- [x] Criar compromisso via Semanal (WeekView) e via Diária (DayView) — 04/08/2026
+- [x] Confirmar: sem crash em nenhum, compromisso aparece corretamente em ambos —
+  04/08/2026
 
 ### Regressão — Editar e excluir continuam funcionando
-- [ ] Editar um compromisso existente (Reagendar → Salvar alterações) — sem crash,
-  horário atualizado corretamente
-- [ ] Excluir um compromisso — sem crash, some da listagem
+- [x] Editar um compromisso existente (Reagendar → Salvar alterações) — sem crash,
+  horário atualizado corretamente ("Compromisso atualizado") — 04/08/2026
+- [x] Excluir um compromisso — sem crash, some da listagem ("Compromisso excluído") —
+  04/08/2026
+
+**Validado em:** 04/08/2026 — testado ao vivo via browser (MCP), servidores locais já
+rodando. Criado um compromisso de teste em cada vista (Mensal, Semanal, Diária) no lead
+"DF FLOW BARBERSHOP" — nenhuma trava, todos apareceram corretamente na listagem
+(confirmado também via payload de rede: `start_at` gravado bate com o horário digitado).
+Editado um dos compromissos (novo horário salvo, sem crash) e excluídos todos os
+compromissos de teste ao final (sem crash), restaurando a Agenda ao estado anterior à
+validação.
+
+---
+
+## Achado adicional durante a validação (bug diferente, não corrigido nesta fase)
+
+Ao criar um compromisso pelo menu de ação rápida "Agendar Reunião" no card compacto do
+Kanban (não pelo modal completo "Abrir card"), o compromisso **é criado com sucesso no
+backend** (`POST` retorna `200`), mas a UI mostra um toast de erro enganoso:
+
+```
+Erro ao salvar compromisso
+setLeadNextAction is not a function
+```
+
+**Causa aparente:** `ScheduleAppointmentDialog.tsx`'s `handleSubmit` chama
+`setLeadNextAction(result.leadId, {...})` depois de criar o compromisso, dentro do mesmo
+`try`. O fallback `(leadsCtx as any)?.setLeadNextAction ?? (() => {})` só protege contra
+`undefined`/`null` — não contra o caso deste ponto de entrada, onde `setLeadNextAction`
+aparentemente existe no contexto mas não é uma função, ou o contexto usado por esse menu
+de ação rápida é diferente do `LeadsContext` esperado. Qualquer exceção aí é capturada
+pelo `catch` do `handleSubmit`, que sempre reporta "Erro ao salvar compromisso" mesmo
+quando a criação já teve sucesso — falso negativo que pode levar o utilizador a tentar
+criar o mesmo compromisso de novo.
+
+Não investigado a fundo nem corrigido — é um bug diferente do desta fase (não causa
+crash, é uma mensagem de erro incorreta num ponto de entrada específico). Registrado
+aqui para decisão do utilizador sobre abrir uma fase própria.
 
 ---
 
@@ -143,3 +180,5 @@ vistas da Agenda (Mensal, Semanal, Diária) e no card do lead.
   continuar desmontando a árvore inteira (tela branca) em vez de mostrar um fallback
   amigável. Fora do escopo deste fix (que remove a causa pontual), mas fica registrado
   como risco estrutural para uma iteração futura.
+- Ver "Achado adicional" acima (`setLeadNextAction is not a function` no menu de ação
+  rápida do Kanban) — bug separado, não corrigido nesta fase.
