@@ -177,7 +177,8 @@ do alias em produção fica oportunística, não bloqueante.
 
 | # | Commit | O que foi implementado |
 |---|---|---|
-| 1 | *(a preencher após commit)* | Alias route_to (`presentation`→`apresentation`) + rótulo real da 2ª bolha no Playground |
+| 1 | `37d5b12` | Backend: alias route_to (`presentation`→`apresentation`) + `source`/`source_label` em `auto_items` |
+| 2 | `26ce4fa` | Frontend: exibe a Filha/rota real da 2ª bolha (teal) e destaca fallback de erro (âmbar) |
 
 ---
 
