@@ -456,45 +456,6 @@ const normalizeNextScheduledAction = (raw: any) => {
   };
 };
 
-function mapAppointment(raw: any) {
-  const start =
-    raw?.start_at ?? raw?.start_time ?? raw?.startAt ?? raw?.start ?? null;
-  const end = raw?.end_at ?? raw?.end_time ?? raw?.endAt ?? raw?.end ?? null;
-
-  return {
-    id: String(raw?.id ?? ""),
-    leadId:
-      raw?.lead_id != null
-        ? String(raw.lead_id)
-        : raw?.leadId != null
-        ? String(raw.leadId)
-        : null,
-
-    title: raw?.title ?? "Compromisso",
-    description: raw?.description ?? undefined,
-    type: raw?.type ?? "meeting",
-
-    // preserva exatamente o que veio do backend
-    status: raw?.status ?? "pending",
-
-    startTime:
-      typeof start === "string"
-        ? start
-        : start
-        ? new Date(start).toISOString()
-        : "",
-    endTime:
-      end == null
-        ? undefined
-        : typeof end === "string"
-        ? end
-        : new Date(end).toISOString(),
-
-    leadName: raw?.lead_contact ?? raw?.leadName ?? null,
-    leadCompany: raw?.lead_company ?? raw?.leadCompany ?? null,
-  };
-}
-
 export const api = {
   // -------- LEADS --------
   getLeads: async () => {
@@ -756,7 +717,7 @@ export const api = {
           }
         : {}),
     });
-    return mapAppointment(data);
+    return data;
   },
 
   updateAppointment: async (
