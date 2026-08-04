@@ -1,7 +1,7 @@
 # Indicador visual de agendamento real no Playground
 
 **Branch:** `fix/deteccao-intencao-reagendamento-ia`
-**Status:** Em andamento
+**Status:** Todos os cenários validados (05/08/2026) — pronto para graduação
 
 ---
 
@@ -137,6 +137,38 @@ visual). Só é possível confirmar via Cenário C1 (pytest) por enquanto.
 | `frontend-crm/src/components/playground/MessageBubble.tsx` | `ChatMessage`: novos campos opcionais `isAppointmentEvent`, `appointmentEventAction`, `appointmentEventStartAt`. Import de `Calendar` (lucide-react). Novo early-return no render, chip centrado com cor/ícone distintos por acção |
 | `frontend-crm/src/pages/Playground.tsx` | Novo helper `appendAppointmentEvent()` (mesmo padrão de `appendPhaseAdvances`); chamado nos 5 pontos onde esse padrão já se repete |
 
+### Commits Fase 2
+
+| # | Commit | O que foi implementado |
+|---|---|---|
+| 1 | `ec2e60e` | feat: renderiza chip de agendamento real no Playground (Fase 2 frontend) |
+
+**Detalhes do commit `ec2e60e`:**
+- `frontend-crm/src/services/api.ts` — tipo `PlaygroundAppointmentEvent`, campo `appointment_event` em `PlaygroundChatResponse`
+- `frontend-crm/src/components/playground/MessageBubble.tsx` — chip visual (early-return, mesmo padrão de `isPhaseAdvance`), ícone `Calendar`, cor âmbar
+- `frontend-crm/src/pages/Playground.tsx` — `appendAppointmentEvent()` chamado nos 5 call sites existentes
+
+### Relatório da Fase 2 — o que mudou na prática
+
+**Antes:** quando o bot confirmava, reagendava ou cancelava uma reunião de verdade
+durante uma simulação no Playground, a conversa não mostrava nenhuma diferença — parecia
+uma resposta de texto qualquer.
+
+**Agora:** aparece um chip destacado na conversa (📅 "Reunião confirmada para
+`<data/hora>`", 🔄 "Reunião reagendada para `<data/hora>`" ou ❌ "Reunião cancelada")
+sempre que isso acontece de verdade, ajudando quem está a testar a distinguir uma
+confirmação real de uma resposta apenas conversacional. Uma mensagem neutra (sem sinal
+de agendamento) continua sem mostrar nenhum chip.
+
+**Para validar:** Cenários P1, P2, P3 e a Regressão, abaixo — já testados ao vivo via
+browser nesta sessão (ver checks marcados).
+
+**Nota:** a data/hora exibida no chip usa o fuso do browser (`toLocaleString`), não o
+fuso de negócio do AI Profile — decisão consciente para manter o escopo pequeno (ver
+"Formatação de data/hora" no plano aprovado). Numa validação real observou-se
+`start_at` UTC `09:00` a aparecer como `10:00` no chip, por causa do fuso local do
+browser usado no teste — comportamento esperado, não um bug.
+
 ---
 
 ## Checks de Validação
@@ -145,17 +177,22 @@ visual). Só é possível confirmar via Cenário C1 (pytest) por enquanto.
 - [x] `pytest backend-executors/tests/test_meeting_scheduled_events.py backend-executors/tests/test_meeting_cancel_reschedule_action.py backend-executors/tests/test_meeting_management.py backend-executors/tests/test_meeting_scheduler_structured_candidate.py` passa — 05/08/2026 (26 testes, incluindo os novos `test_handle_meeting_scheduled_populates_events_when_provided`, `test_handle_meeting_scheduled_without_events_param_does_not_raise`, `test_cancel_populates_events_when_provided`, `test_reschedule_populates_events_when_provided`, `test_conflict_does_not_populate_events`).
 
 ### Cenário P1 — Playground, chip de confirmação
-- [ ] Com `agent_mode="agenda"`, confirmar uma reunião no Playground.
-- [ ] Confirmar: chip "📅 Reunião confirmada para `<data/hora>`" aparece na timeline.
+- [x] Com `agent_mode="agenda"`, confirmar uma reunião no Playground — 05/08/2026.
+- [x] Confirmar: chip "📅 Reunião confirmada para `<data/hora>`" aparece na timeline —
+  05/08/2026 ("📅 Reunião confirmada para 05/08, 10:00").
 
 ### Cenário P2 — Playground, chip de reagendamento
-- [ ] Pedir reagendamento (implícito ou explícito) de uma reunião já confirmada.
-- [ ] Confirmar: chip "🔄 Reunião reagendada para `<data/hora>`" aparece.
+- [x] Pedir reagendamento (implícito ou explícito) de uma reunião já confirmada —
+  05/08/2026.
+- [x] Confirmar: chip "🔄 Reunião reagendada para `<data/hora>`" aparece — 05/08/2026
+  ("🔄 Reunião reagendada para 05/08, 12:00").
 
 ### Cenário P3 — Playground, chip de cancelamento
-- [ ] Pedir cancelamento de uma reunião já confirmada.
-- [ ] Confirmar: chip "❌ Reunião cancelada" aparece.
+- [x] Pedir cancelamento de uma reunião já confirmada — 05/08/2026.
+- [x] Confirmar: chip "❌ Reunião cancelada" aparece — 05/08/2026.
 
 ### Regressão — Mensagem neutra não produz chip
-- [ ] Enviar mensagem neutra (sem sinal de agendamento) após reunião confirmada.
-- [ ] Confirmar: nenhum chip aparece.
+- [x] Enviar mensagem neutra (sem sinal de agendamento) após reunião confirmada —
+  05/08/2026.
+- [x] Confirmar: nenhum chip aparece — 05/08/2026 (`appointment_event: null` na
+  resposta, nenhum chip renderizado).
