@@ -21,6 +21,7 @@ interface LeadsContextType {
   leadsError: string | null;
 
   updateLead: (leadId: string, updates: Partial<Lead>) => void;
+  setLeadNextAction: (leadId: string, next?: Lead['nextScheduledAction']) => void;
   moveLead: (leadId: string, newCategory: LeadStatus) => void;
   archiveLead: (leadId: string, archiveCategory: LeadStatus) => void;
   addLead: (leadData: NewLeadForm) => Promise<AddLeadResult>;
@@ -269,6 +270,10 @@ export function LeadsProvider({ children }: LeadsProviderProps) {
     if (updates.category) {
       syncProspectionStatus(leadId, updates.category as LeadStatus);
     }
+  };
+
+  const setLeadNextAction = (leadId: string, next?: Lead['nextScheduledAction']) => {
+    updateLead(leadId, { nextScheduledAction: next });
   };
 
   const moveLead = async (leadId: string, newCategory: LeadStatus) => {
@@ -567,6 +572,7 @@ export function LeadsProvider({ children }: LeadsProviderProps) {
     appointmentsByLead,
     leadsError,
     updateLead,
+    setLeadNextAction,
     moveLead,
     archiveLead,
     addLead,
