@@ -55,6 +55,8 @@ def test_prompt_includes_meeting_management_instructions():
     assert "meeting_cancel_requested" in prompt
     assert "meeting_reschedule_requested" in prompt
     assert "REUNIÃO/SESSÃO JÁ CONFIRMADA" in prompt
+    assert "SÓ UM HORÁRIO diferente do já confirmado" in prompt
+    assert "MESMO DIA da reunião já confirmada" in prompt
 
 
 def test_decide_post_meeting_management_detects_cancel(monkeypatch):
@@ -93,6 +95,24 @@ def test_decide_post_meeting_management_detects_reschedule(monkeypatch):
     structured = (decision.decision_trace or {}).get("child_signals_structured") or {}
     assert structured.get("meeting_reschedule_requested") is True
     assert structured.get("meeting_datetime_candidate") == "2026-03-10T15:00:00"
+
+
+def test_decide_post_meeting_management_detects_implicit_same_day_reschedule(monkeypatch):
+    monkeypatch.setattr(
+        llm_service,
+        "generate_child_result",
+        lambda _route, _prompt: _child_payload(
+            meeting_cancel_requested=False,
+            meeting_reschedule_requested=True,
+            meeting_datetime_candidate="2026-03-06T10:00:00",
+        ),
+    )
+    context = _base_context("pode ser às 10h em vez de 9h?")
+    decision = decision_engine.decide(context)
+
+    structured = (decision.decision_trace or {}).get("child_signals_structured") or {}
+    assert structured.get("meeting_reschedule_requested") is True
+    assert structured.get("meeting_datetime_candidate") == "2026-03-06T10:00:00"
 
 
 def test_decide_post_meeting_management_neutral_message_minimal_reply(monkeypatch):
