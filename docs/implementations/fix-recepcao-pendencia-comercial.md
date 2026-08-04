@@ -54,6 +54,12 @@ Mecanismo antigo de override em-turno (`compound_follow_through`) é removido po
 | `backend-executors/app/services/orchestrator_models.py` | `ChildResult` ganha `pending_commercial_text: Optional[str] = None` |
 | `backend-executors/app/services/decision_engine.py` | `_build_child_prompt_recepcao`: nova instrução de extração + campo no JSON de retorno |
 
+### Commits Fase 1
+
+| # | Commit | O que foi implementado |
+|---|---|---|
+| 1 | `7994a20` | `ChildResult.pending_commercial_text` + instrução de extração no prompt da Filha Recepção + testes |
+
 ### Fase 2 — Novo `system_action` + remoção do mecanismo antigo (backend-executors)
 
 **Objetivo:** o pipeline sinaliza a pendência via `system_actions`, e o override em-turno antigo deixa de existir.

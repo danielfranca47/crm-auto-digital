@@ -64,19 +64,26 @@ whatsapp_worker
 | `signals` | dict\|null | Sinais estruturados: `meeting_scheduled` (bool), `intent_level` (`low\|medium\|high`), `urgency_level` (`low\|medium\|high`), `price_acceptance` (`no\|unsure\|yes`) |
 | `next_action_hint` | `reply\|ask_qualification\|handoff\|ignore\|greet\|null` | Sugestão de próxima ação ao pipeline |
 | `objective` | string\|null | Objetivo da resposta atual (informativo) |
-| `compound_follow_through` | mesmos valores de `route_to` + null | Quando `route_to="recepcao"` mas a mensagem combina saudação com pedido comercial (ex.: "Oi, gostaria de agendar para amanhã às 16h"), indica a rota real da parte comercial. Mãe instruída (prompt, secção SAUDAÇÃO COMPOSTA) a aplicar um checklist dia+hora: ambos presentes → `agendamento` directamente; só um ou nenhum → `pre-agendamento`/`qualification`/etc. conforme o caso. Decisão de uma LLM — não-determinística; quando erra para `pre-agendamento` em vez de `agendamento`, a homologação de categoria (ver [`pipeline-phases.md`](pipeline-phases.md)) absorve o caso no mesmo ou próximo turno. |
 
-**Tolerância de enum (campos opcionais):** valores fora do enum em `next_action_hint`, `agent_mode`, `compound_follow_through` e `perceived_category` são silenciosamente convertidos para `None` por um `field_validator(mode="before")` em `MotherDecision` (`orchestrator_models.py`), em vez de levantar `ValidationError` e derrubar a decisão inteira do turno. Log: `event=mother_decision_invalid_enum_coerced field=<campo> value=<valor>`. `route_to` (obrigatório) fica fora desta tolerância.
+**Tolerância de enum (campos opcionais):** valores fora do enum em `next_action_hint`, `agent_mode` e `perceived_category` são silenciosamente convertidos para `None` por um `field_validator(mode="before")` em `MotherDecision` (`orchestrator_models.py`), em vez de levantar `ValidationError` e derrubar a decisão inteira do turno. Log: `event=mother_decision_invalid_enum_coerced field=<campo> value=<valor>`. `route_to` (obrigatório) fica fora desta tolerância.
 
-### Saudação composta — recepção responde antes da filha comercial
+### Saudação composta — pedido comercial pendente é reenfileirado, não tratado no mesmo turno
 
-Quando `route_to="recepcao"` e existe `compound_follow_through` (ou, em sua ausência, `perceived_category` difere da categoria actual do lead), `decide()` faz uma **segunda chamada LLM** dedicada — `_build_child_prompt_recepcao()` + `generate_child_result("recepcao", ...)` — só para gerar o cumprimento. O texto resultante é guardado em `context["_compound_greeting_text"]` e prefixado à resposta da filha comercial (`"{saudação}\n\n{texto comercial}"`); a divisão em bolhas distintas no WhatsApp é feita pelo mecanismo de humanização já existente (ver [`humanization.md`](humanization.md)).
+Quando a 1ª mensagem do lead mistura saudação com pedido comercial (ex.: "Oi, gostaria de agendar para amanhã às 16h", ou um burst de mensagens rápidas concatenadas pelo buffer de debounce — ver [`webhooks.md`](webhooks.md)), `_enforce_greeting_first()` continua a forçar `route_to="recepcao"` nesse turno. Em vez de a Mãe tentar classificar e o código promover `route_for_child` no mesmo turno (mecanismo antigo, removido), a própria **Filha Recepção** — que já lê a mensagem crua no prompt (`_build_child_prompt_recepcao()`) — extrai literalmente qualquer trecho que não seja saudação/social para `ChildResult.pending_commercial_text`.
 
-Custo: 1 chamada LLM extra, só neste turno específico (primeira mensagem composta de um lead) — não afecta turnos normais. Chamada best-effort (`try/except`): se falhar, a resposta segue sem a bolha de saudação separada.
+Se esse campo vier preenchido, `compose_decision_output()` anexa um `system_action` ao `DecisionOutput`:
 
-**Limite conhecido:** quando a rota comercial efectiva (via `compound_follow_through`/`perceived_category`) é `qualification`, a extracção e persistência de campos de qualificação não corre neste turno — o bloco que dispara essa extracção verifica `mother_decision.route_to == "qualification"`, que permanece `"recepcao"` neste cenário (só `route_for_child` é sobrescrito). Sem impacto prático hoje porque é sempre a primeira mensagem do lead; revisitar se isso se tornar relevante.
+```json
+{"type": "requeue_pending_message", "message_text": "<trecho extraído>"}
+```
 
-**Caso irmão corrigido:** o mesmo padrão (gate que só reconhecia `route_to=="qualification"`, cego ao `route_for_child` promovido via saudação composta) bloqueava o bloco "MODO COMERCIAL" da filha de apresentação quando a rota comercial efectiva era `apresentation` em vez de `qualification` — ou seja, quando a 1ª mensagem do lead já vinha qualificada e pedindo preço/serviço. Corrigido em 2026-06-28 (gate ampliado para aceitar `route_to` em `("qualification", "recepcao")`). Ver [`pipeline-phases.md`](pipeline-phases.md#estágio-de-aquecimento-e-appointment_mode-só-hybrid_scheduler).
+O consumo é responsabilidade de quem chama o executor, não do `decide()` (que continua puro):
+- **WhatsApp real** (`backend-crm/routes/executor.py`, `_dispatch_system_actions`): cria um novo job `whatsapp.inbound.n8n` com o texto pendente, reaproveitando `instance_id`/`provider`/`phone` do job original — percorre o pipeline normal no ciclo seguinte do worker.
+- **Playground** (`backend-crm/routes/playground.py`): dispara uma 2ª chamada síncrona a `_call_executors_decide()` dentro da mesma request HTTP, e anexa o resultado como 2ª bolha — replica o comportamento do WhatsApp real sem depender de fila/worker.
+
+Em ambos os casos, o turno seguinte roda a Mãe **sem overrides** — `outbound_count>0` nesse ponto (a saudação já foi enviada), então `_enforce_greeting_first` não força mais `recepcao`, e a rota comercial é decidida normalmente pelas prioridades já existentes no prompt da Mãe.
+
+**Por que o mecanismo antigo foi removido (não mantido como fallback):** dependia de uma decisão de LLM (`compound_follow_through`/divergência de `perceived_category`) competindo com ~7 prioridades no mesmo prompt — não-determinístico, e comprovadamente falho em testes reais (a Mãe não sinalizava, a rota ficava `recepcao` pura, e a Filha Recepção chegava a improvisar promessas vazias como "vou verificar" sem nenhum estado de pendência registrado). O gate cego a `route_for_child` promovido (que motivou o "caso irmão corrigido" em 2026-06-28, no bloco "MODO COMERCIAL" da filha de apresentação — ver [`pipeline-phases.md`](pipeline-phases.md#estágio-de-aquecimento-e-appointment_mode-só-hybrid_scheduler)) deixa de existir como classe de bug, não só a instância corrigida.
 
 ### ChildResult (saída da LLM Filha)
 | Campo | Tipo | Descrição |
@@ -89,6 +96,7 @@ Custo: 1 chamada LLM extra, só neste turno específico (primeira mensagem compo
 | `signals` | list[string] | Sinais detectados |
 | `signals_structured` | dict\|null | Sinais estruturados (meeting_proposed, checkout_sent, etc.) |
 | `media_keys_to_send` | list[string]\|null | Chaves de `knowledge_media` cujas mídias a filha decidiu anexar neste turno. Só populado na filha de apresentação. Fallback estrito: `null`/`[]` → nenhuma mídia anexada. |
+| `pending_commercial_text` | string\|null | Só populado pela Filha Recepção — trecho literal do pedido comercial embutido na saudação, se houver. Ver "Saudação composta" acima. |
 | `confidence` | 0..1 | Confiança da resposta |
 
 ### Normalização de agent_mode
@@ -130,7 +138,7 @@ Campos adicionados pelo Fluxo de Venda (Camada 7):
 | Campo | Tipo | Descrição |
 |---|---|---|
 | `pre_send_media` | `list[dict]\|null` | Mídias de `media_keys_to_send` da filha de apresentação. Blocos `midia` do Fluxo de Venda vão para `system_actions` (não para este campo). |
-| `system_actions` | `list[dict]\|null` | Ações do Fluxo de Venda: `send_message`, `send_media`, `advance_phase`, `mark_phase_triggered`, `mark_trigger_fired` |
+| `system_actions` | `list[dict]\|null` | Ações do Fluxo de Venda: `send_message`, `send_media`, `advance_phase`, `mark_phase_triggered`, `mark_trigger_fired`. Mais `requeue_pending_message` (fora do Fluxo de Venda, ver "Saudação composta" acima). |
 | `suppress_llm_response` | `bool` | `True` quando um trigger com o flag disparou. Força `next_action="ignore"` e `message_text=""`. Ações automáticas são executadas normalmente. |
 
 ---
@@ -151,7 +159,7 @@ Campos adicionados pelo Fluxo de Venda (Camada 7):
 
 ### Filha Recepção (`_build_child_prompt_recepcao`)
 - Instrução restrita: só o cumprimento inicial, sem tratar pedido comercial
-- Usada tanto na saudação pura quanto, numa 2ª chamada dedicada, na saudação composta (ver acima)
+- Extrai qualquer pedido comercial embutido na mensagem para `pending_commercial_text`, sem tentar respondê-lo (ver "Saudação composta" acima)
 
 ### Filha Pré-agendamento (`_build_child_prompt_pre_agendamento`)
 - Só para templates de agendamento (`sdr_padrao`, `hybrid_scheduler`)

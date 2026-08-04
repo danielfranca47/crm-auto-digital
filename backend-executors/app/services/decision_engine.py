@@ -1818,23 +1818,10 @@ def _build_mother_prompt(context: Dict[str, Any], message_text: str) -> str:
         "- Apenas cumprimento temporal ou social, sem pergunta = PRIORIDADE 0\n"
         "- Múltiplos cumprimentos encadeados sem pergunta = PRIORIDADE 0\n"
         "- Cumprimento em qualquer idioma, sem pedido = PRIORIDADE 0\n\n"
-        "SAUDAÇÃO COMPOSTA (saudação + pergunta ou pedido embutido):\n"
-        "→ route_to = \"recepcao\", compound_follow_through = \"<rota_da_parte_comercial>\", confidence = 0.9\n"
-        "  (compound_follow_through usa os mesmos valores de route_to: qualification, apresentation, etc.)\n"
-        "Exemplo: mensagem com cumprimento + pergunta de serviço → recepcao + compound_follow_through=\"qualification\"\n"
-        "REGRA CRÍTICA — dia+hora específicos NUNCA vão para \"pre-agendamento\" (máxima prioridade\n"
-        "nesta decisão, não deixe a saudação distrair do conteúdo comercial):\n"
-        "Se a parte comercial for sobre agendamento, antes de escolher compound_follow_through,\n"
-        "verifique a mensagem do lead com este checklist:\n"
-        "  1. Ela contém um DIA (hoje/amanhã/depois de amanhã/nome de dia da semana/data)?\n"
-        "  2. Ela contém uma HORA (ex.: '15h', 'às três', 'de manhã às 9')?\n"
-        "Se a resposta for SIM às duas → compound_follow_through = \"agendamento\" diretamente,\n"
-        "SEMPRE, mesmo que pareça um pedido inicial/tentativo do lead. Se faltar dia OU faltar\n"
-        "hora → compound_follow_through = \"pre-agendamento\".\n"
-        "Exemplo CORRETO: \"Oi, gostaria de agendar uma sessão para amanhã às 16h\" → tem dia\n"
-        "(amanhã) E hora (16h) → compound_follow_through = \"agendamento\". ERRADO seria escolher\n"
-        "\"pre-agendamento\" aqui — isso obriga o lead a confirmar de novo antes do agente checar\n"
-        "disponibilidade, um passo desnecessário que o checklist acima existe para evitar.\n\n"
+        "SAUDAÇÃO COMPOSTA (saudação + pergunta ou pedido comercial embutido):\n"
+        "→ route_to = \"recepcao\" também vence aqui (mesma regra do guardrail de código acima).\n"
+        "Não tente rotear a parte comercial você mesma — a Filha Recepção é responsável por\n"
+        "extrair esse pedido e o sistema o reencaminha automaticamente num próximo turno.\n\n"
         "PRIORIDADE 1 (obrigatória — sistema sobrescreve mesmo se você retornar outra):\n"
         "- PRIORIDADE 1A: missing_fields NÃO vazio + mensagem SEM pergunta direta → route_to = \"qualification\"\n"
         "  EXCEÇÃO ABSOLUTA: se greeting_responded = false → PRIORIDADE 0 vence; não aplique esta regra.\n"
@@ -4372,6 +4359,18 @@ def compose_decision_output(
         decision.next_action = "ignore"
         decision.message_text = ""
 
+    # Saudação com pedido comercial embutido: a Filha Recepção isolou o trecho não-social
+    # em pending_commercial_text (extração determinística, feita por quem já lê a mensagem
+    # crua — não mais uma decisão da Mãe). Reenfileira como novo job inbound em vez de tentar
+    # tratar tudo no mesmo turno: o próximo ciclo do pipeline roda a Mãe de verdade, sem
+    # overrides de rota. Ver "Saudação composta" em docs/architecture/llm-architecture.md.
+    if effective_route_to == "recepcao":
+        _pending_text = str(getattr(child_result, "pending_commercial_text", None) or "").strip()
+        if _pending_text:
+            _sys = list(decision.system_actions or [])
+            _sys.append({"type": "requeue_pending_message", "message_text": _pending_text})
+            decision.system_actions = _sys
+
     return decision
 
 
@@ -4432,54 +4431,6 @@ def decide(context: Dict[str, Any], logger: Optional[logging.Logger] = None) -> 
         route_for_child = "follow-up" if force_followup_route else mother_decision.route_to
         anti_loop_rule3_applied = False
         mode_ctx_pre: Optional[dict] = None
-
-        if not force_followup_route and mother_decision.route_to == "recepcao":
-            _compound_signal_source = None
-            _follow_through = mother_decision.compound_follow_through
-            if _follow_through:
-                _compound_signal_source = "compound_follow_through"
-            else:
-                # Fallback: na prática, o modelo às vezes expressa a saudação composta
-                # via perceived_category em vez de compound_follow_through. Só é um sinal
-                # confiável quando DIFERE da categoria atual do lead — caso contrário é
-                # apenas o "mantenha perceived_category = lead.category" do prompt da Mãe
-                # (ex.: saudação pura num lead novo já teria perceived_category=qualification).
-                _perceived = mother_decision.perceived_category
-                _current_cat = _normalize_category(lead.get("category"))
-                if (
-                    _perceived
-                    and _perceived != "recepcao"
-                    and _normalize_category(_perceived) != _current_cat
-                ):
-                    _follow_through = _perceived
-                    _compound_signal_source = "perceived_category"
-
-            if _follow_through:
-                route_for_child = _follow_through
-                if logger:
-                    job = context.get("job") or {}
-                    payload = job.get("payload") or {}
-                    logger.info(
-                        "event=compound_follow_through_route route_override=%s source=%s job_id=%s lead_id=%s",
-                        route_for_child,
-                        _compound_signal_source,
-                        job.get("id") or payload.get("job_id"),
-                        lead.get("id") or payload.get("lead_id"),
-                    )
-                # Saudação composta: a recepção responde primeiro (só o cumprimento, numa
-                # chamada dedicada e barata) antes da filha comercial tratar o pedido — em
-                # vez de pedir à filha comercial para também abrir com cumprimento (instrução
-                # que não era seguida com confiança suficiente pela LLM). Best-effort: se a
-                # chamada falhar, segue sem a bolha de saudação separada.
-                try:
-                    _greeting_prompt = _build_child_prompt_recepcao(context, message_text, mother_decision)
-                    _greeting_text_raw = llm_service.generate_child_result("recepcao", _greeting_prompt)
-                    _greeting_payload = _extract_json_payload(_greeting_text_raw)
-                    _greeting_text = str((_greeting_payload or {}).get("message_text") or "").strip()
-                    if _greeting_text:
-                        context["_compound_greeting_text"] = _greeting_text
-                except Exception:
-                    pass
 
         if force_followup_route and logger:
             job = context.get("job") or {}
@@ -4801,13 +4752,6 @@ def decide(context: Dict[str, Any], logger: Optional[logging.Logger] = None) -> 
             child_result.question_text = _fallback_question_for_field(fallback_field)
             child_result.message_text = child_result.question_text
             qualification_validation_status = "fallback"
-
-        _greeting_prefix = context.get("_compound_greeting_text")
-        if _greeting_prefix:
-            if child_result.message_text:
-                child_result.message_text = f"{_greeting_prefix}\n\n{child_result.message_text}"
-            if child_result.question_text:
-                child_result.question_text = f"{_greeting_prefix}\n\n{child_result.question_text}"
 
         stage = "compose"
         decision = compose_decision_output(

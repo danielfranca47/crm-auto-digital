@@ -14,7 +14,6 @@ _OPTIONAL_ENUM_FIELDS: dict[str, frozenset[str]] = {
     "perceived_category": frozenset({"qualification", "apresentation", "pre-agendamento", "agendamento", "follow-up", "closing"}),
     "agent_mode": frozenset({"consultivo", "agenda", "direto"}),
     "next_action_hint": frozenset({"reply", "ask_qualification", "handoff", "ignore", "greet"}),
-    "compound_follow_through": frozenset({"qualification", "apresentation", "pre-agendamento", "agendamento", "follow-up", "closing"}),
 }
 
 
@@ -27,7 +26,6 @@ class MotherDecision(BaseModel):
     signals: Optional[dict] = None
     objective: Optional[str] = None
     next_action_hint: Optional[Literal["reply", "ask_qualification", "handoff", "ignore", "greet"]] = None
-    compound_follow_through: Optional[Literal["qualification", "apresentation", "pre-agendamento", "agendamento", "follow-up", "closing"]] = None
     detected_intents: list[str] = Field(default_factory=list)
 
     @field_validator(*_OPTIONAL_ENUM_FIELDS.keys(), mode="before")

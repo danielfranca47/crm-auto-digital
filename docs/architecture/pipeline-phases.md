@@ -114,14 +114,15 @@ quando `missing_fields` está vazio **e** `mother_decision.route_to` é um dos d
 caminhos que levam a essa transição:
 1. `"qualification"` — caminho directo: a Mãe roteou para qualification, mas já não
    há campos em falta (Regra 3 anti-loop promove para apresentation).
-2. `"recepcao"` — saudação composta: a 1ª mensagem do lead já chega completa (nome +
-   interesse + pedido de serviço), `_enforce_greeting_first()` força `route_to` para
-   `"recepcao"` (saudação é sempre obrigatória no 1º contacto), mas o
-   `compound_follow_through`/`perceived_category` já promoveu `route_for_child` para
-   `"apresentation"` no mesmo turno (ver "Saudação composta" em
-   [`llm-architecture.md`](llm-architecture.md)). Sem este segundo caminho, o bloco
-   de aquecimento nunca disparava nas conversas que se qualificam sozinhas na
-   primeira mensagem — corrigido em 2026-06-28.
+
+Quando a 1ª mensagem do lead já chega completa (nome + interesse + pedido de serviço),
+`_enforce_greeting_first()` força `route_to="recepcao"` nesse turno (saudação é sempre
+obrigatória no 1º contacto) — a Filha Recepção só cumprimenta e extrai o pedido pendente,
+que é reencaminhado como um novo turno (ver "Saudação composta" em
+[`llm-architecture.md`](llm-architecture.md)). O bloco de aquecimento não dispara no turno
+da saudação; dispara no turno seguinte (o pedido reencaminhado), pelo caminho 1 acima, se
+essa mensagem já trouxer campos suficientes para a Mãe rotear `"qualification"` com
+`missing_fields` vazio.
 
 Fora desses dois caminhos (ex.: lead já está em apresentation há vários turnos e a
 Mãe devolve `route_to="apresentation"` directamente), o bloco de aquecimento não é
