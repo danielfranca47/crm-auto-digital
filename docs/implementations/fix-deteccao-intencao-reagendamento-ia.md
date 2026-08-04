@@ -123,35 +123,51 @@ todos os testes automatizados mockam a resposta do LLM.
 - [x] Enviar "pode ser às 16h em vez de 14h?" — 04/08/2026.
 - [x] Confirmar: bot confirma o reagendamento diretamente (não pergunta "qual dia?"),
   trace mostra `meeting_reschedule_requested=true` e `meeting_datetime_candidate`
-  válido no mesmo dia às 16h — 04/08/2026 (`meeting_datetime_candidate:
-  "2026-08-05T16:00:00"`, mesmo dia da reunião de 14h confirmada antes; resposta:
-  "Seu horário foi ajustado com carinho para amanhã às 16h..."). **Nota:** o
-  `PUT /api/internal/appointments/{id}` não é observável via Playground — essa rota só
-  é chamada pelo backend-executors no pipeline real (webhook → job → executor), que o
-  Playground não exercita; fora do escopo desta fix (não mudou nada em
-  `meeting_scheduler.py`). Ver nota de setup abaixo.
+  válido no mesmo dia às 16h, `PUT /api/internal/appointments/{id}` disparado com o
+  novo horário — 04/08/2026 (`meeting_datetime_candidate: "2026-08-05T16:00:00"`;
+  confirmado end-to-end: o appointment real criado pelo Playground (`id=66`, lead
+  sandbox `397`) foi lido do banco **antes** — `start_at=2026-08-05T14:00:00` — e
+  **depois** do turno — `start_at=2026-08-05T16:00:00` — sem nenhuma escrita manual
+  no banco. Ver nota de setup abaixo.
 
 ### Regressão — Reagendamento explícito com novo dia continua a funcionar
 - [x] "pode ser domingo às 11h?" — confirma directamente, sem regressão — 04/08/2026
   (`meeting_reschedule_requested=true`, `meeting_datetime_candidate:
-  "2026-08-09T11:00:00"`, próximo domingo a partir de 04/08/2026 que é terça-feira).
+  "2026-08-09T11:00:00"`, próximo domingo a partir de 04/08/2026 que é terça-feira;
+  appointment real actualizado no banco para o mesmo horário).
 
 ### Regressão — Cancelamento continua a funcionar
 - [x] "quero cancelar" — cancela directamente, sem regressão — 04/08/2026
-  (`meeting_cancel_requested=true`).
+  (`meeting_cancel_requested=true`; appointment real marcado `status='canceled'` no
+  banco e `bot_disabled` revertido a `0` automaticamente).
 
 ### Regressão — Mensagem neutra continua sem preencher sinais
 - [x] "muito obrigada!" — resposta mínima, sem `meeting_reschedule_requested`/
-  `meeting_cancel_requested` — 04/08/2026 (ambos os sinais `false`).
+  `meeting_cancel_requested` — 04/08/2026 (ambos os sinais `false`; testado após
+  reconfirmar uma nova reunião, já que o cancelamento do passo anterior tinha
+  reativado o bot).
 
-**Nota de setup (P1/P2/P3/P4):** o Playground, por si só, nunca chega ao estado
-`bot_disabled_reason="meeting_scheduled"` — essa flag só é setada pelo pipeline real
-WhatsApp → backend-executors (rota interna `POST /internal/leads/{id}/bot-disabled`,
-autenticada por service token), que o Playground não invoca. Confirmar uma reunião via
-chat do Playground não é suficiente para reproduzir a precondição do Cenário P1 (foi
-testado e o turno seguinte roteou para o child de agendamento normal, não para
-`meeting_management`). Para validar estes 4 cenários, o lead sandbox usado no Playground
-(`lead_id=396`, conta ephemeral `playground.scenario.test@example.com`) foi marcado
-manualmente no banco com `bot_disabled=1, bot_disabled_reason='meeting_scheduled'` +
-um appointment de teste (04/08/2026 → 05/08/2026 14h), reproduzindo a precondição real;
-revertido ao fim dos testes. Ver `docs/architecture/playground-parity.md`, campo B6.
+**Nota de setup (P1/P2/P3/P4) — correcção de diagnóstico:** a primeira tentativa de
+validar estes 4 cenários usou o perfil "Agente Teste Handoff" com `agent_mode=
+"consultivo"`. Como `meeting_scheduler.handle_meeting_scheduled()`
+(`backend-executors/app/services/meeting_scheduler.py:707`) só cria appointment real e
+desliga o bot quando `agent_mode == "agenda"`, essa combinação nunca activou o
+mecanismo — levando à conclusão **errada** de que "o Playground nunca chega a
+`bot_disabled_reason=meeting_scheduled`". Não é uma limitação do Playground: o
+mecanismo já existe e é chamado em toda requisição
+(`backend-executors/app/api/playground_internal.py` → `handle_meeting_scheduled(...,
+is_playground=True)` + `handle_meeting_cancel_or_reschedule(...)`), documentado em
+`docs/architecture/agenda.md`, secção "Playground cria appointments reais". Bastou
+trocar temporariamente o `agent_mode` do perfil de teste para `"agenda"` (via UI,
+`/ai-profile` → preset "Agente 03 · Híbrido") para os 4 cenários passarem a criar
+appointment real e desligar o bot sozinhos, sem qualquer escrita manual no banco —
+revertido para `"consultivo"` ao final via a própria API (`PUT /ai-profiles/me`).
+
+---
+
+## Ajustes Possíveis Pós-Implementação
+
+- Durante a revalidação, o Playground não exibe nenhuma indicação visual distinta
+  (ex.: um "system bubble" tipo o que já existe para mudança de categoria) quando um
+  appointment real é criado, reagendado ou cancelado — a confirmação aparece só como
+  texto normal do bot. Melhoria futura possível, fora do escopo desta fix.
