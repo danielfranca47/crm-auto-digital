@@ -108,7 +108,35 @@ Mecanismo antigo de override em-turno (`compound_follow_through`) é removido po
 
 `backend-crm/docs/playground-whatsapp-parity.md` (citado no CLAUDE.md) não existe no repositório — drift de documentação pré-existente, fora do escopo deste fix.
 
+### Commits Fase 4
+
+| # | Commit | O que foi implementado |
+|---|---|---|
+| 1 | `6c9a394` | 2ª chamada síncrona no Playground + docs de paridade |
+
 ---
+
+### Relatório das Fases 1-4 — o que mudou na prática
+
+**Antes:** quando a 1ª mensagem de um lead já misturava saudação com um pedido comercial
+("Olá, boa tarde, gostaria de agendar para hoje às 17:30"), o bot cumprimentava e às vezes
+respondia algo como "certo, vou verificar" — e nunca mais voltava. O pedido do lead se
+perdia, porque a detecção de que havia algo pendente dependia de a IA "Mãe" acertar uma
+classificação no meio de várias regras concorrentes, o que falhava com frequência nos
+testes reais.
+
+**Agora:** a própria recepcionista (IA) lê a mensagem inteira, cumprimenta, e — se sobrar
+algum pedido (agendamento, preço, horário de funcionamento, o que for) — extrai esse
+trecho e o sistema reencaminha automaticamente para o setor certo tratar, como se fosse
+uma nova mensagem do cliente chegando logo em seguida. O cliente recebe duas mensagens:
+o cumprimento, e depois a resposta de verdade ao que ele pediu. Isso funciona tanto no
+WhatsApp real (um novo job é processado pela fila) quanto no Playground de testes (uma
+segunda chamada acontece na mesma resposta, para o operador ver as duas mensagens juntas).
+Também cobre o caso de o lead mandar várias mensagens curtas seguidas ("oi", "boa tarde",
+"tudo bem?", "qual o preço?") — o sistema já agrupava essas mensagens antes de chegar à IA,
+então a mesma extração resolve os dois casos sem lógica extra.
+
+**Para validar:** Cenários P1 a P4 (Playground) e C1 (WhatsApp real, se disponível), abaixo.
 
 ## Checks de Validação
 
