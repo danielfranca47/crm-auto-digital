@@ -8,7 +8,7 @@ import { format, isSameDay } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { useAppointments } from "@/hooks/useAppointments";
 import { useBusinessTimezone } from "@/hooks/useBusinessTimezone";
-import { toBusinessTimezoneDate } from "@/lib/timezone";
+import { toBusinessTimezoneDate, getBusinessRangeBounds } from "@/lib/timezone";
 import { Appointment } from "@/types/crm";
 import { Skeleton } from "./ui/skeleton";
 import { ScheduleAppointmentDialog } from "./ScheduleAppointmentDialog";
@@ -28,9 +28,10 @@ const eventTypeLabels: Record<Appointment["type"], string> = {
   presentation: "Apresentação",
 };
 
-function monthRange(date: Date) {
-  const start = new Date(date.getFullYear(), date.getMonth(), 1, 0, 0, 0, 0);
-  const end = new Date(date.getFullYear(), date.getMonth() + 1, 0, 23, 59, 59, 999);
+function monthRange(date: Date, timeZone: string) {
+  const first = new Date(date.getFullYear(), date.getMonth(), 1);
+  const last = new Date(date.getFullYear(), date.getMonth() + 1, 0);
+  const { start, end } = getBusinessRangeBounds(first, last, timeZone);
   return { start: start.toISOString(), end: end.toISOString() };
 }
 
@@ -50,15 +51,19 @@ export function ScheduleView() {
     setIsDialogOpen(true);
   }
 
+  const businessTimezone = useBusinessTimezone();
+
   // 🔧 Passa SEMPRE um intervalo (o mês do dia selecionado)
-  const { start, end } = monthRange(selectedDate);
+  const { start, end } = useMemo(
+    () => monthRange(selectedDate, businessTimezone),
+    [selectedDate, businessTimezone]
+  );
   const {
     data: appointments = [],
     isLoading,
     isError,
     refetch,
   } = useAppointments({ start, end });
-  const businessTimezone = useBusinessTimezone();
 
   const normalized = useMemo(() => {
     return appointments.map((appointment) => {

@@ -15,7 +15,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { useAppointments } from "@/hooks/useAppointments";
 import { useAgendaTimezoneMode } from "@/hooks/useAgendaTimezoneMode";
-import { toBusinessTimezoneDate, getTimezoneCityLabel } from "@/lib/timezone";
+import { toBusinessTimezoneDate, getBusinessDayBounds, getTimezoneCityLabel } from "@/lib/timezone";
 import { ScheduleAppointmentDialog } from "@/components/ScheduleAppointmentDialog";
 import type { Appointment, AppointmentType } from "@/types/crm";
 
@@ -58,15 +58,18 @@ export function DayView() {
   const [editingAppointment, setEditingAppointment] = useState<Appointment | null>(null);
   const [nowTop, setNowTop] = useState<number | null>(null);
 
-  const dayStart = startOfDay(selectedDay);
-  const dayEnd = new Date(dayStart.getTime() + 24 * 60 * 60 * 1000 - 1);
+  const { mode, toggle, mismatched, activeTimezone, businessTimezone, browserTimezone } =
+    useAgendaTimezoneMode();
+
+  const { start: dayStart, end: dayEnd } = useMemo(
+    () => getBusinessDayBounds(selectedDay, businessTimezone),
+    [selectedDay, businessTimezone]
+  );
 
   const { data: appointments = [], refetch } = useAppointments({
     start: dayStart.toISOString(),
     end: dayEnd.toISOString(),
   });
-  const { mode, toggle, mismatched, activeTimezone, businessTimezone, browserTimezone } =
-    useAgendaTimezoneMode();
 
   // Indicador de hora actual (no fuso activo — navegador por defeito, ou negócio se alternado)
   useEffect(() => {

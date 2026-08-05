@@ -3,6 +3,8 @@ import { useNavigate } from "react-router-dom";
 import { isSameDay } from "date-fns";
 import { Dashboard as DashboardComponent } from "../components/Dashboard";
 import { useAppointments } from "@/hooks/useAppointments";
+import { useBusinessTimezone } from "@/hooks/useBusinessTimezone";
+import { getBusinessDayBounds, toBusinessTimezoneDate } from "@/lib/timezone";
 import { useLeads } from "@/contexts/LeadsContext";
 import { ScheduleAppointmentDialog } from "@/components/ScheduleAppointmentDialog";
 import { useQuery } from "@tanstack/react-query";
@@ -35,13 +37,12 @@ const Dashboard = () => {
   const spyStatus = (spySession as any)?.status;
   const showSpyWidget = spyStatus === "observing" || spyStatus === "analyzing" || spyStatus === "completed";
 
+  const businessTimezone = useBusinessTimezone();
+
   const todayRange = useMemo(() => {
-    const start = new Date();
-    start.setHours(0, 0, 0, 0);
-    const end = new Date();
-    end.setHours(23, 59, 59, 999);
+    const { start, end } = getBusinessDayBounds(new Date(), businessTimezone);
     return { start: start.toISOString(), end: end.toISOString() };
-  }, []);
+  }, [businessTimezone]);
   const { data: appointments = [], isLoading, isError, error, refetch } = useAppointments(todayRange);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
 
@@ -56,13 +57,13 @@ const Dashboard = () => {
   }, [columns, archivedColumns]);
 
   const todayAppointments = useMemo(() => {
-    const today = new Date();
+    const today = toBusinessTimezoneDate(new Date(), businessTimezone);
     return appointments.filter((appointment) => {
-      const start = new Date(appointment.startTime);
+      const start = toBusinessTimezoneDate(appointment.startTime, businessTimezone);
       const belongsToLead = !appointment.leadId || leadIds.has(String(appointment.leadId));
       return belongsToLead && isSameDay(start, today);
     });
-  }, [appointments, leadIds]);
+  }, [appointments, leadIds, businessTimezone]);
 
   return (
     <>

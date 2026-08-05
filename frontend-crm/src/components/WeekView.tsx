@@ -18,7 +18,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { useAppointments } from "@/hooks/useAppointments";
 import { useAgendaTimezoneMode } from "@/hooks/useAgendaTimezoneMode";
-import { toBusinessTimezoneDate, getTimezoneCityLabel } from "@/lib/timezone";
+import { toBusinessTimezoneDate, getBusinessRangeBounds, getTimezoneCityLabel } from "@/lib/timezone";
 import { ScheduleAppointmentDialog } from "@/components/ScheduleAppointmentDialog";
 import type { Appointment, AppointmentType } from "@/types/crm";
 
@@ -62,12 +62,18 @@ export function WeekView() {
     [weekStart, weekEnd]
   );
 
-  const { data: appointments = [], refetch } = useAppointments({
-    start: weekStart.toISOString(),
-    end: weekEnd.toISOString(),
-  });
   const { mode, toggle, mismatched, activeTimezone, businessTimezone, browserTimezone } =
     useAgendaTimezoneMode();
+
+  const queryBounds = useMemo(
+    () => getBusinessRangeBounds(weekStart, weekEnd, businessTimezone),
+    [weekStart, weekEnd, businessTimezone]
+  );
+
+  const { data: appointments = [], refetch } = useAppointments({
+    start: queryBounds.start.toISOString(),
+    end: queryBounds.end.toISOString(),
+  });
 
   // Indicador de hora actual (no fuso activo — navegador por defeito, ou negócio se alternado)
   useEffect(() => {

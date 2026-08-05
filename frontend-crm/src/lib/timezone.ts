@@ -29,6 +29,36 @@ export function fromBusinessTimezoneDate(date: Date, timeZone: string): Date {
   return fromZonedTime(date, timeZone);
 }
 
+/**
+ * Início/fim (00:00:00.000–23:59:59.999) do dia de calendário informado (ano/mês/dia
+ * lidos do Date como estão) no fuso do negócio — usado para montar os limites `start`/
+ * `end` de busca enviados ao backend, em vez do fuso do navegador.
+ */
+export function getBusinessDayBounds(date: Date, timeZone: string): { start: Date; end: Date } {
+  const y = date.getFullYear();
+  const m = date.getMonth();
+  const d = date.getDate();
+  return {
+    start: fromBusinessTimezoneDate(new Date(y, m, d, 0, 0, 0, 0), timeZone),
+    end: fromBusinessTimezoneDate(new Date(y, m, d, 23, 59, 59, 999), timeZone),
+  };
+}
+
+/**
+ * Generaliza `getBusinessDayBounds` para um intervalo (semana/mês): início do primeiro
+ * dia até fim do último dia, no fuso do negócio.
+ */
+export function getBusinessRangeBounds(
+  startDate: Date,
+  endDate: Date,
+  timeZone: string
+): { start: Date; end: Date } {
+  return {
+    start: getBusinessDayBounds(startDate, timeZone).start,
+    end: getBusinessDayBounds(endDate, timeZone).end,
+  };
+}
+
 const KNOWN_CITY_LABELS: Record<string, string> = {
   "America/Sao_Paulo": "São Paulo",
   "America/Manaus": "Manaus",
