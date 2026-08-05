@@ -40,7 +40,10 @@ const Dashboard = () => {
   const businessTimezone = useBusinessTimezone();
 
   const todayRange = useMemo(() => {
-    const { start, end } = getBusinessDayBounds(new Date(), businessTimezone);
+    const { start, end } = getBusinessDayBounds(
+      toBusinessTimezoneDate(new Date(), businessTimezone),
+      businessTimezone
+    );
     return { start: start.toISOString(), end: end.toISOString() };
   }, [businessTimezone]);
   const { data: appointments = [], isLoading, isError, error, refetch } = useAppointments(todayRange);
