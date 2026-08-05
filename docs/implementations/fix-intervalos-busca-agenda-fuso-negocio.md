@@ -76,7 +76,9 @@ export function getBusinessRangeBounds(
 
 ## Plano de Implementação
 
-Fase única (mudança mecânica e homogênea, mesmo padrão replicado):
+Fase única (mudança mecânica e homogênea, mesmo padrão replicado).
+
+**Commit:** `b730b4e` — fix: calcula intervalos de busca da Agenda no fuso do negocio
 
 | Arquivo | Mudança |
 |---|---|
@@ -90,7 +92,7 @@ Fase única (mudança mecânica e homogênea, mesmo padrão replicado):
 
 ## Checks de Validação
 
-- [ ] `npx tsc --noEmit -p .` em `frontend-crm` sem erros
+- [x] `npx tsc --noEmit -p .` em `frontend-crm` sem erros (2026-08-05)
 - [ ] Compromisso perto da meia-noite (fuso do negócio ≠ fuso do navegador) aparece no dia
       correto em: Dashboard ("Reuniões de Hoje"), DayView, WeekView, ScheduleView
 - [ ] Regressão: fuso do navegador == fuso do negócio — nada muda visualmente
