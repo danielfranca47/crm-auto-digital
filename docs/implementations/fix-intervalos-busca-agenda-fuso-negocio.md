@@ -88,11 +88,41 @@ Fase única (mudança mecânica e homogênea, mesmo padrão replicado).
 | `frontend-crm/src/components/ScheduleView.tsx` | `monthRange(date)` ganha parâmetro `timeZone`; usa `getBusinessRangeBounds` internamente; `useBusinessTimezone()` sobe para antes da chamada, memoizada |
 | `frontend-crm/src/pages/Dashboard.tsx` | `todayRange` via `getBusinessDayBounds(new Date(), businessTimezone)`; `todayAppointments` compara via `toBusinessTimezoneDate` em vez de `Date` nativo |
 
+**Commit de correção pós-validação:** `3b2db32` — a validação ao vivo (abaixo) revelou que
+`todayRange` do Dashboard lia ano/mês/dia de `new Date()` sempre no fuso do navegador antes
+de aplicar o fuso do negócio, ficando inconsistente com `todayAppointments` (que já
+comparava correto via `toBusinessTimezoneDate`) exatamente no cenário que o fix deveria
+cobrir. Corrigido envolvendo a chamada com `toBusinessTimezoneDate(new Date(),
+businessTimezone)` antes de `getBusinessDayBounds`.
+
 ---
 
 ## Checks de Validação
 
 - [x] `npx tsc --noEmit -p .` em `frontend-crm` sem erros (2026-08-05)
-- [ ] Compromisso perto da meia-noite (fuso do negócio ≠ fuso do navegador) aparece no dia
-      correto em: Dashboard ("Reuniões de Hoje"), DayView, WeekView, ScheduleView
-- [ ] Regressão: fuso do navegador == fuso do negócio — nada muda visualmente
+- [x] Compromisso perto da meia-noite (fuso do negócio ≠ fuso do navegador) aparece no dia
+      correto em: Dashboard ("Reuniões de Hoje"), DayView, WeekView, ScheduleView (2026-08-05)
+- [x] Regressão: fuso do navegador == fuso do negócio — nada muda visualmente (2026-08-05)
+
+### Relatório da validação ao vivo (browser MCP)
+
+Cenário: fuso do negócio `America/Manaus` (UTC-4) vs fuso do navegador `Europe/London`
+(UTC+1, BST) — no momento do teste já era passada a meia-noite em Londres mas ainda não
+em Manaus, ou seja "hoje" já divergia entre os dois fusos sem precisar simular nada.
+Compromisso de teste criado às 23:30 (fuso do negócio) do dia anterior ao "hoje" do
+navegador.
+
+- Confirmado via inspeção das requisições reais (`list_network_requests`) que os 4 pontos
+  passaram a enviar exatamente a fronteira do dia/semana/mês no fuso do negócio (ex.:
+  WeekView `2026-08-03T04:00:00.000Z`–`2026-08-10T03:59:59.999Z` = semana em `America/Manaus`).
+- Reproduzido o bug original: consultando a API com a fronteira ANTIGA (fuso do navegador)
+  para o "dia 4", o compromisso ficava de fora; com a fronteira NOVA (fuso do negócio), ele
+  aparece corretamente — confirma que o fix resolve o caso relatado (compromisso some da
+  lista do dia certo perto da meia-noite).
+- Durante a validação, encontrado e corrigido o bug do `todayRange` do Dashboard descrito
+  acima (commit `3b2db32`).
+- Regressão: com fuso do negócio ajustado de volta para `Europe/London` (== navegador), a
+  segunda requisição (fallback vs. definitivo) colapsou numa única chamada idêntica à
+  fórmula antiga (`startOfDay`/`setHours` no navegador) — sem mudança de comportamento.
+- Dados de teste (lead e compromisso) e o `ai_profile.timezone` foram revertidos ao estado
+  original ao final.
