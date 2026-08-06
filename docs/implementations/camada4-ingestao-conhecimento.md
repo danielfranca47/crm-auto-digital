@@ -130,17 +130,20 @@ Limites: arquivo ≤10MB, imagem ≤5MB, 6 fontes/lote, 1 job ativo por user (40
 ## Checks de Validação
 
 ### Cenário P1 — Pular o wizard inteiro (Fase 1)
-- [ ] Conta com base de conhecimento vazia → abrir Camada 4 → wizard aparece
-- [ ] No passo 0, clicar "Preencher depois" → cai no painel normal com score "Não funcional" e categorias com botão "Preencher"
-- [ ] Recarregar a página com base ainda vazia → wizard **não** reaparece
+- [x] Conta com base de conhecimento vazia → abrir Camada 4 → wizard aparece
+- [x] No passo 0, clicar "Preencher depois" → cai no painel normal com score "Não funcional" e categorias com botão "Preencher"
+- [x] Recarregar a página com base ainda vazia → wizard **não** reaparece
+- **Validado em:** 06/08/2026 — testado ao vivo via browser (MCP chrome-devtools) na conta de teste (user_id 15). Base zerada removendo os 2 itens pré-existentes (categoria service_pricing_table) para poder exercitar o estado vazio.
 
 ### Cenário P2 — Pular categoria crítica (Fase 1)
-- [ ] Entrar no wizard, avançar até uma categoria crítica
-- [ ] Botão "Pular esta etapa" visível e funcional → avança sem salvar
-- [ ] StepDone mostra contadores coerentes (ex.: 0/N críticas)
+- [x] Entrar no wizard, avançar até uma categoria crítica
+- [x] Botão "Pular esta etapa" visível e funcional → avança sem salvar
+- [x] StepDone mostra contadores coerentes (ex.: 0/N críticas)
+- **Validado em:** 06/08/2026 — em "Seção crítica 1 de 5" (Bio do Profissional), clicado "Pular esta etapa" sem preencher a textarea; avançou para "Seção crítica 2 de 5" (Histórias de Transformação) sem erro e sem salvar item.
 
 ### Cenário P3 — Link "Preencher depois" nos passos intermédios (Fase 1)
-- [ ] Num passo de categoria qualquer, clicar "Preencher depois →" no cabeçalho → sai do wizard para o painel normal
+- [x] Num passo de categoria qualquer, clicar "Preencher depois →" no cabeçalho → sai do wizard para o painel normal
+- **Validado em:** 06/08/2026 — clicado em "Seção crítica 2 de 5"; caiu direto no painel normal (score "Não funcional", categorias com "Preencher →").
 
 *(Checks das Fases 2–4 serão adicionados quando cada fase for implementada.)*
 
