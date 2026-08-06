@@ -2663,6 +2663,71 @@ def _build_child_prompt_apresentation(
                 f"INSTRUÇÃO: Cite apenas quando o lead demonstrar hesitação sobre risco. "
                 f"Nunca invente garantias não configuradas.\n"
             )
+        # Categorias comerciais do hybrid_scheduler (modo commercial) fora do turno único
+        # de warming (commercial_injection vazio aqui): o aquecimento proativo não repete,
+        # mas o conteúdo (preço, objeções, etc.) continua disponível sob demanda — mesmo
+        # padrão "usar APENAS se pedido" já aplicado acima a objections_faq/service_faq.
+        if template_key_for_warming == "hybrid_scheduler" and appointment_mode == "commercial":
+            _pricing_ondemand = knowledge_items.get("service_pricing_table") or ""
+            _objections_ondemand = knowledge_items.get("commercial_objections") or ""
+            _differentials_ondemand = knowledge_items.get("service_differentials") or ""
+            _promotion_ondemand = knowledge_items.get("active_promotion") or ""
+            _payment_ondemand = knowledge_items.get("payment_policy") or ""
+            _faq_commit_ondemand = knowledge_items.get("pre_commitment_faq") or ""
+            if _pricing_ondemand:
+                if "service_pricing_table" in _km_categories:
+                    _apres_knowledge_parts.append(
+                        "TABELA DE SERVIÇOS/PREÇOS: conteúdo disponível em mídia visual "
+                        "(enviada automaticamente quando pedida).\n"
+                        "INSTRUÇÃO CRÍTICA: escreva APENAS uma frase curta de introdução SE o lead "
+                        "pedir preço, valores ou pacotes explicitamente neste turno. Caso contrário, "
+                        "não mencione — a mídia tem prioridade absoluta sobre o texto.\n"
+                    )
+                else:
+                    _apres_knowledge_parts.append(
+                        f"TABELA DE SERVIÇOS/PREÇOS (usar APENAS se o lead pedir preço, valores ou "
+                        f"pacotes explicitamente neste turno):\n"
+                        f"{_pricing_ondemand}\n"
+                        f"INSTRUÇÃO: Se houver pedido explícito, apresente com clareza os valores "
+                        f"exatos. Nunca invente preços ou condições não listadas. Sem pedido explícito, "
+                        f"não mencione.\n"
+                    )
+            if _objections_ondemand:
+                _apres_knowledge_parts.append(
+                    f"OBJEÇÕES COMERCIAIS E RESPOSTAS (usar APENAS quando o lead levantar uma "
+                    f"objeção de preço ou comprometimento):\n"
+                    f"{_objections_ondemand}\n"
+                    f"INSTRUÇÃO: Use a resposta configurada como base, adapte ao tom de voz. "
+                    f"Nunca copie literalmente.\n"
+                )
+            if _differentials_ondemand:
+                _apres_knowledge_parts.append(
+                    f"DIFERENCIAIS DO SERVIÇO (usar APENAS quando o lead comparar com concorrência "
+                    f"ou pedir o diferencial):\n"
+                    f"{_differentials_ondemand}\n"
+                    f"INSTRUÇÃO: Integre naturalmente, não liste como bullet points.\n"
+                )
+            if _promotion_ondemand:
+                _apres_knowledge_parts.append(
+                    f"CONDIÇÃO ESPECIAL VIGENTE (citar apenas se relevante para o lead fechar agora):\n"
+                    f"{_promotion_ondemand}\n"
+                    f"INSTRUÇÃO: Cite apenas se vigente. Nunca crie urgência artificial.\n"
+                )
+            if _payment_ondemand:
+                _apres_knowledge_parts.append(
+                    f"POLÍTICA DE PAGAMENTO PRESENCIAL (usar APENAS se o lead perguntar sobre "
+                    f"formas de pagamento):\n"
+                    f"{_payment_ondemand}\n"
+                    f"INSTRUÇÃO: Reforce que o pagamento é presencial. Nunca envie link de checkout.\n"
+                )
+            if _faq_commit_ondemand:
+                _apres_knowledge_parts.append(
+                    f"FAQ PRÉ-COMPROMISSO (usar APENAS quando o lead fizer uma pergunta diretamente "
+                    f"coberta):\n"
+                    f"{_faq_commit_ondemand}\n"
+                    f"INSTRUÇÃO: Responda com base no FAQ. Se a pergunta não estiver coberta, diga "
+                    f"que vai confirmar com a equipa.\n"
+                )
     standard_knowledge_block = (
         "\nKNOWLEDGE BASE (usar conforme as instruções de cada bloco):\n"
         + "\n".join(_apres_knowledge_parts)
