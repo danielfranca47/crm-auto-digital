@@ -137,10 +137,11 @@ Limites: arquivo ≤10MB, imagem ≤5MB, 6 fontes/lote, 1 job ativo por user (40
 - [x] Após migração: contagens e conteúdo de `knowledge_items` (16) e `knowledge_item_media` (3) idênticos ao backup, `PRAGMA integrity_check` ok, INSERT com `source_type='ai_extracted'` aceito, segunda execução da migração é no-op
 - **Validado em:** 06/08/2026 — comparação linha a linha real vs backup: idênticos.
 
-### Cenário B3 — PDF e imagem reais (Fase 2, pendente de material)
-- [ ] POST com um PDF com camada de texto → fonte `extracted` com `chars > 0`
-- [ ] POST com uma imagem (foto de tabela de preços) → fonte `extracted` via vision (requer `OPENAI_API_KEY`)
-- [ ] PDF escaneado sem texto → fonte `failed` com `reason: sem_texto_extraivel` e job ainda `completed`
+### Cenário B3 — PDF e imagem reais (Fase 2)
+- [x] POST com um PDF com camada de texto → fonte `extracted` com `chars > 0`
+- [x] POST com uma imagem (foto de tabela de preços) → fonte `extracted` via vision (requer `OPENAI_API_KEY`)
+- [x] PDF escaneado sem texto → fonte `failed` com `reason: sem_texto_extraivel` e job ainda `completed`
+- **Validado em:** 06/08/2026 — job 485 (user_id 15): PDF gerado com PyMuPDF (camada de texto real) → `extracted`, 559 chars; foto (JPG com texto renderizado) → `extracted` via vision, 560 chars; PDF "escaneado" (mesma imagem embutida sem camada de texto) → `failed`, `reason: sem_texto_extraivel`; job com as 3 fontes terminou `status: completed`.
 
 ### Fase 3 — Backend: classificação por LLM
 
@@ -168,7 +169,7 @@ Limites: arquivo ≤10MB, imagem ≤5MB, 6 fontes/lote, 1 job ativo por user (40
 
 **Antes:** a esteira de ingestão só extraía o texto dos materiais e guardava o resultado no job — nada aparecia na base de conhecimento.
 **Agora:** depois de extrair, a IA lê os textos e preenche sozinha as categorias da base que os materiais cobrem, gravando cada uma como item normal (marcado como criado por IA, editável como qualquer outro). Categorias que o usuário já preencheu nunca são sobrescritas. O resultado do lote diz o que foi preenchido, o que ficou pendente e o que foi pulado por já existir.
-**Para validar:** Cenários B4 e B5 (já validados) e B6, abaixo.
+**Para validar:** Cenários B4 e B5 (já validados) e B6 (parcialmente validado, ver Fase 4), abaixo.
 
 ### Cenário B4 — Lote classifica e grava (Fase 3)
 - [x] POST com txt de preços + categorias `service_pricing_table` e `transformation_stories` → `covered` contém `service_pricing_table` com `item_id` e preview; `uncovered` contém `transformation_stories`
@@ -209,7 +210,7 @@ Limites: arquivo ≤10MB, imagem ≤5MB, 6 fontes/lote, 1 job ativo por user (40
 
 **Antes:** a esteira de ingestão só existia por API — nenhuma tela permitia enviar materiais.
 **Agora:** no primeiro acesso à Camada 4, depois de confirmar o contexto, aparece o passo "Importar materiais": você adiciona PDF, imagem, planilha, texto e/ou o link do site, descreve cada um ("minha tabela de preços"), e a IA preenche as seções que os materiais cobrirem — o passo a passo continua apenas com as pendentes, cada uma com opção de pular. O mesmo importador fica disponível a qualquer momento pelo botão "✦ Importar materiais" no painel da Camada 4, e os itens criados pela IA aparecem com o selo "✦ IA" (editáveis como qualquer outro).
-**Para validar:** Cenários F1 e F2 (validados) e B3/B6 (pendentes), abaixo.
+**Para validar:** Cenários F1 e F2 (validados), B3 (validado) e B6 (parcialmente validado), abaixo.
 
 ### Cenário F1 — Jornada completa no wizard (Fase 4)
 - [x] Wizard → contexto → passo "Importar materiais" com panel de fontes
@@ -223,9 +224,9 @@ Limites: arquivo ≤10MB, imagem ≤5MB, 6 fontes/lote, 1 job ativo por user (40
 - **Validado em:** 06/08/2026 — ao vivo via browser.
 
 ### Cenário B6 — Conteúdo ingerido chega ao agente *(parcialmente validado)*
-- [x] Itens `ai_extracted` entram no ContextBundle — confirmado executando `_load_knowledge_items(15)`: as 3 categorias ingeridas presentes, incluindo a tabela de preços renderizada
-- [ ] Resposta do playground usa os valores ingeridos — **não conclusivo no teste**: o material de teste (massoterapia) contradiz o nicho do AI Profile da conta de teste (advocacia/automação — "Digital Pro"), e o agente corretamente priorizou o perfil ("não oferecemos sessões de massagem"). Validar com materiais coerentes com o nicho real do perfil.
-- **Registrado em:** 06/08/2026. Os 3 itens de teste incoerentes foram removidos da conta de teste após o registro.
+- [x] Itens `ai_extracted` entram no ContextBundle — confirmado executando `_load_knowledge_items(15)`: as categorias ingeridas presentes, incluindo a tabela de preços renderizada
+- [ ] Resposta do playground usa os valores ingeridos — **ainda não conclusivo, 2ª tentativa com material coerente**: repetido com material alinhado ao nicho real do perfil (job 485 — bio + tabela de preços "Digital Pro" para escritórios de advocacia, ver B3). `_load_knowledge_items(15)` confirmou os dois itens (`professional_bio`, `service_pricing_table`) corretamente carregados. Em 3 turnos de playground (`ai_profile_id=5`, `agent_mode=agenda`, `appointment_mode=commercial`) — incluindo saudação inicial, pedido indireto de preço e pedido direto e insistente ("quanto custa o plano Escritório?") — o agente nunca citou os valores ingeridos (R$ 697 / 1.297 / 2.490), respondendo sempre com deflexão genérica para agendamento (ex.: *"no momento não temos detalhes exatos sobre os preços dos planos"*). Causa provável identificada em `backend-executors/app/services/decision_engine.py:2474-2500`: o bloco "MODO COMERCIAL" que injeta `service_pricing_table` (e demais categorias comerciais) no prompt da filha só é montado quando `_auto_promoted_from_qual` é `True` nesse turno específico (`mother_decision.route_to` igual a `qualification`/`recepcao` E `missing_fields` vazio) — ou seja, apenas no turno de transição da qualificação para apresentação. Em turnos seguintes com `route_to == "apresentation"` (inclusive quando o lead pede preço explicitamente), o bloco não é reconstruído e a filha fica sem acesso ao texto da tabela de preços. Não é um problema da ingestão (o dado chega certo ao ContextBundle) — é um gap pré-existente na injeção de conhecimento comercial do decision_engine, fora do escopo desta feature.
+- **Registrado em:** 06/08/2026. Os 2 itens de teste (job 485) foram removidos da conta de teste após o registro.
 
 ---
 
