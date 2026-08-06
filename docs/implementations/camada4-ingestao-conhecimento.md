@@ -179,11 +179,10 @@ Limites: arquivo ≤10MB, imagem ≤5MB, 6 fontes/lote, 1 job ativo por user (40
 - [x] Segundo lote na mesma categoria → `covered: []`, `skipped_existing: ['service_pricing_table']`, contagem de itens da categoria permanece 1
 - **Validado em:** 06/08/2026 — job 483.
 
-### Cenário B6 — Conteúdo ingerido chega ao agente (Fase 3, pendente)
-- [ ] Conversa no playground pergunta preço → resposta usa os valores do item `ai_extracted`
-- *(Pode ser validado junto com a Fase 4, quando a UI existir. O item 22 de teste foi mantido na conta de teste para isso.)*
+### Cenário B6 — Conteúdo ingerido chega ao agente (Fase 3)
+*(Movido para a secção da Fase 4, onde foi parcialmente validado — ver abaixo.)*
 
-### Fase 4 — Frontend: passo "Importar materiais" *(planeada)*
+### Fase 4 — Frontend: passo "Importar materiais"
 
 **Objetivo:** UI de envio de fontes com descrição, polling do job, resumo do que a IA preencheu; wizard segue só com as pendentes.
 
@@ -192,7 +191,41 @@ Limites: arquivo ≤10MB, imagem ≤5MB, 6 fontes/lote, 1 job ativo por user (40
 | `frontend-crm/src/services/api.ts` | `ingestKnowledge()` + `getKnowledgeIngestStatus()`; tipo `source_type` += `'ai_extracted'` |
 | `frontend-crm/src/components/agente/KnowledgeIngestPanel.tsx` (novo) | Componente compartilhado wizard/painel |
 | `frontend-crm/src/components/agente/CamadaConhecimentoWizard.tsx` | Passo "Importar materiais (opcional)"; categorias pendentes derivadas de `filledKeys` |
-| `frontend-crm/src/components/agente/CamadaConhecimento.tsx` | Botão "Importar materiais" (modal); badge "IA" em itens `ai_extracted` |
+| `frontend-crm/src/components/agente/CamadaConhecimento.tsx` | Botão "Importar materiais" (modal); badge "IA" em itens `ai_extracted`; fix `onExit` recarrega itens |
+
+### Commits Fase 4
+
+| # | Commit | O que foi implementado |
+|---|---|---|
+| 1 | `b8f3644` | Panel de ingestão + passo no wizard + botão/badge no painel + client API |
+
+**Detalhes do commit `b8f3644`:**
+- `KnowledgeIngestPanel.tsx` — lote de arquivos e URLs com descrição por fonte, validação client-side (extensão/tamanho/duplicado), polling 3s até 5min, resumo final (preenchidas com preview / pendentes / já existentes / fontes com falha em linguagem amigável)
+- `CamadaConhecimentoWizard.tsx` — passo "Importar materiais (opcional)" entre contexto e categorias; ao concluir, `wizardCats` congela só as pendentes (as cobertas pela IA saem do fluxo e contam no StepDone); "Preencher manualmente →" mantém o fluxo completo
+- `CamadaConhecimento.tsx` — botão "✦ Importar materiais" no cabeçalho das seções guiadas (modal com o mesmo panel + `load()` ao concluir); badge "✦ IA" em `GuidedSectionCard` para itens `ai_extracted`; **fix descoberto no teste**: `onExit` do wizard não recarregava os itens — sair do wizard logo após a ingestão mostrava o painel desatualizado
+- `api.ts` — `ingestKnowledge(files, meta)` multipart + `getKnowledgeIngestStatus(jobId)` + tipos
+
+### Relatório da Fase 4 — o que mudou na prática
+
+**Antes:** a esteira de ingestão só existia por API — nenhuma tela permitia enviar materiais.
+**Agora:** no primeiro acesso à Camada 4, depois de confirmar o contexto, aparece o passo "Importar materiais": você adiciona PDF, imagem, planilha, texto e/ou o link do site, descreve cada um ("minha tabela de preços"), e a IA preenche as seções que os materiais cobrirem — o passo a passo continua apenas com as pendentes, cada uma com opção de pular. O mesmo importador fica disponível a qualquer momento pelo botão "✦ Importar materiais" no painel da Camada 4, e os itens criados pela IA aparecem com o selo "✦ IA" (editáveis como qualquer outro).
+**Para validar:** Cenários F1 e F2 (validados) e B3/B6 (pendentes), abaixo.
+
+### Cenário F1 — Jornada completa no wizard (Fase 4)
+- [x] Wizard → contexto → passo "Importar materiais" com panel de fontes
+- [x] Upload de `.txt` com bio + preview de sessão + preços e descrição livre → "Processar com IA" → tela de progresso → resumo: 3 preenchidas (Bio do Profissional, Preview da Sessão, Tabela de Serviços e Preços com valores exatos) e 13 pendentes
+- [x] "Continuar →" → wizard segue só com as pendentes ("Seção crítica 1 de 2", total de passos caiu de 16 para 13)
+- **Validado em:** 06/08/2026 — ao vivo via browser (MCP chrome-devtools).
+
+### Cenário F2 — Painel: botão de importar + badge IA (Fase 4)
+- [x] Botão "✦ Importar materiais" visível no cabeçalho das seções guiadas
+- [x] Cards "Bio do Profissional" e "Preview da Sessão" com badge "✦ IA" e conteúdo correto; tabela de preços cadastrada na seção multi-tabela; score subiu para "Funcional básico"
+- **Validado em:** 06/08/2026 — ao vivo via browser.
+
+### Cenário B6 — Conteúdo ingerido chega ao agente *(parcialmente validado)*
+- [x] Itens `ai_extracted` entram no ContextBundle — confirmado executando `_load_knowledge_items(15)`: as 3 categorias ingeridas presentes, incluindo a tabela de preços renderizada
+- [ ] Resposta do playground usa os valores ingeridos — **não conclusivo no teste**: o material de teste (massoterapia) contradiz o nicho do AI Profile da conta de teste (advocacia/automação — "Digital Pro"), e o agente corretamente priorizou o perfil ("não oferecemos sessões de massagem"). Validar com materiais coerentes com o nicho real do perfil.
+- **Registrado em:** 06/08/2026. Os 3 itens de teste incoerentes foram removidos da conta de teste após o registro.
 
 ---
 
