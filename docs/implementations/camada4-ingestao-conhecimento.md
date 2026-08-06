@@ -88,7 +88,7 @@ Decisões registadas:
 
 ---
 
-### Fase 2 — Backend: fundação da ingestão *(planeada)*
+### Fase 2 — Backend: fundação da ingestão
 
 **Objetivo:** aceitar lote de fontes (PDF/imagem/planilha/txt/URL + descrição), enfileirar job interno e extrair texto de cada fonte — ainda sem LLM classificador.
 
@@ -104,6 +104,43 @@ Decisões registadas:
 | `backend-crm/requirements.txt` | `+ pypdf` |
 
 Limites: arquivo ≤10MB, imagem ≤5MB, 6 fontes/lote, 1 job ativo por user (409).
+
+### Commits Fase 2
+
+| # | Commit | O que foi implementado |
+|---|---|---|
+| 1 | `ddbfe15` | Migração do CHECK + extratores por tipo + worker interno + rotas de ingestão |
+
+**Detalhes do commit `ddbfe15`:**
+- `database.py` — `ensure_knowledge_source_type_ai_extracted`: recria `knowledge_items` com CHECK `('manual','file','ai_extracted')` (PRAGMA foreign_keys OFF/ON, idempotente); chamada no `init_db`
+- `models.py` — `KnowledgeItemOut.source_type` aceita `"ai_extracted"`
+- `services/jobs_service.py` — tipo `knowledge.ingest.internal`
+- `services/knowledge_ingest/extractors.py` — `extract_source()`: PDF→pypdf, imagem→gpt-4o-mini vision (base64), txt/csv/xlsx→pandas (compartilhado com `routes/knowledge.py` via `extract_text_from_table_file`), URL→scraper httpx+bs4 (home + até 4 páginas internas relevantes); 15k chars máx/fonte
+- `services/knowledge_ingest/ingest_worker.py` — `process_pending_knowledge_ingest_jobs()`: CAS pending→in_progress, retry até 3, grava `result` `phase="extracted"`
+- `routes/knowledge_ingest.py` — POST multipart (`files` + `meta` JSON) com validação/rejeição por fonte e 409 para lote concorrente; GET de status com texto integral omitido do polling
+- `app.py` — router registrado antes de `knowledge` + `_knowledge_ingest_worker_loop` (10s)
+
+### Relatório da Fase 2 — o que mudou na prática
+
+**Antes:** o backend só sabia extrair texto de arquivos .txt/.csv/.xlsx, num endpoint que criava um item avulso; PDF, imagem e URL de site não tinham como virar texto de conhecimento.
+**Agora:** existe uma "esteira de ingestão": o frontend pode enviar um lote de até 6 fontes (PDF, imagem, planilha, txt e/ou URLs de site), cada uma com uma descrição livre, e um trabalhador em segundo plano extrai o texto de todas — PDF pela camada de texto, imagem por leitura de IA (OCR), site por navegação automática nas páginas relevantes. O resultado fica consultável por uma rota de status. Ainda não preenche as categorias sozinho — isso é a Fase 3 (classificador).
+**Para validar:** Cenários B1 e B2, abaixo.
+
+### Cenário B1 — Lote com txt + URL + extensão inválida (Fase 2)
+- [x] POST `/api/knowledge/ingest` com um `.txt` de preços, uma URL e um `.docx` → responde `job_id`, `accepted: 2` e `rejected` com motivo `extensao_nao_suportada`
+- [x] GET `/api/knowledge/ingest/{job_id}` após o worker rodar → `status: completed`, `result.sources[*].chars > 0` nas duas fontes aceitas
+- [x] GET com id de job de outro tipo → 404
+- **Validado em:** 06/08/2026 — job 481: txt extraiu 222 chars, https://example.com extraiu 172 chars, docx rejeitado no POST.
+
+### Cenário B2 — Migração do banco sem perda (Fase 2)
+- [x] Backup criado antes (`database/crm.db.bak-pre-ai-extracted`)
+- [x] Após migração: contagens e conteúdo de `knowledge_items` (16) e `knowledge_item_media` (3) idênticos ao backup, `PRAGMA integrity_check` ok, INSERT com `source_type='ai_extracted'` aceito, segunda execução da migração é no-op
+- **Validado em:** 06/08/2026 — comparação linha a linha real vs backup: idênticos.
+
+### Cenário B3 — PDF e imagem reais (Fase 2, pendente de material)
+- [ ] POST com um PDF com camada de texto → fonte `extracted` com `chars > 0`
+- [ ] POST com uma imagem (foto de tabela de preços) → fonte `extracted` via vision (requer `OPENAI_API_KEY`)
+- [ ] PDF escaneado sem texto → fonte `failed` com `reason: sem_texto_extraivel` e job ainda `completed`
 
 ### Fase 3 — Backend: classificação por LLM *(planeada)*
 
