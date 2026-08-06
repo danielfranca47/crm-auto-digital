@@ -109,6 +109,36 @@ final dela, quando o gate estiver realmente bloqueando/permitindo lotes.
 | `backend-crm/routes/knowledge_ingest.py` | chamar `ensure_weekly_job_limit(...)` em `create_ingest_batch()`, antes de salvar arquivos e antes do check 409 |
 | `backend-crm/routes/usage.py` | bloco `knowledge_ingest_weekly` em `build_usage_payload()` |
 
+### Commits Fase 2
+
+| # | Commit | O que foi implementado |
+|---|---|---|
+| 1 | `5882765` | Gate semanal de ingestão de conhecimento + exposição em `/api/usage` |
+
+**Detalhes do commit `5882765`:**
+- `rate_limit_service.py` — `LIMIT_KEYS_BY_TYPE_WEEKLY`, `_count_jobs_for_week()` (mirror de `_count_jobs_for_today()` com janela `DATE('now','utc','-6 days','weekday 1')`), `ensure_weekly_job_limit()` (levanta 429 se `uso + 1 > limite`) e `get_weekly_job_usage()` (leitura sem gate)
+- `knowledge_ingest.py` — `create_ingest_batch()` chama o gate logo após validar `MAX_SOURCES_PER_BATCH`, antes de qualquer `dest.write_bytes()` e antes do check 409 de job ativo
+- `usage.py` — novo bloco `knowledge_ingest_weekly` no payload de `/api/usage`, contando direto da tabela `jobs` (mesma fonte do gate)
+
+### Relatório da Fase 2 — o que mudou na prática
+
+**Antes:** um utilizador podia disparar quantos lotes de ingestão de conhecimento quisesse, sem
+nenhum limite de uso — cada lote gera custo de IA (vision + classificação) sem controle por plano.
+**Agora:** cada plano tem uma cota semanal (Start: 3, Growth: 10, Interno: ilimitado). Ao tentar
+criar um lote além da cota, a API responde `429` com a mensagem "Limite semanal atingido para
+ingestão de conhecimento. Atualize seu plano." — antes de qualquer arquivo ser salvo em disco.
+`GET /api/usage` agora mostra quantos lotes já foram usados essa semana e quantos restam.
+**Para validar:** Cenários C1 e C2, abaixo.
+
+Quer que eu rode os Cenários C1 e C2 agora via browser (MCP chrome-devtools), com você
+acompanhando? Isso exige um utilizador de teste com plano `crm_start` (limite 3/semana) para
+forçar o 429 no Cenário C1.
+
+Se preferir fazer depois (aqui ou numa conversa nova), pode colar:
+
+> Lê `docs/implementations/knowledge-ingest-limite-lotes-semanal.md`, secção "Fase 2", e executa
+> os testes dos Cenários C1 e C2.
+
 ### Fase 3 — frontend-crm: tratamento do 429 no painel de ingestão
 
 **Objetivo:** exibir a mensagem real do limite semanal em vez do fallback genérico.
