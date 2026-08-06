@@ -2,9 +2,11 @@
 """
 Ingestão de materiais para a base de conhecimento (Camada 4).
 
-POST /api/knowledge/ingest        — recebe lote de fontes (arquivos + URLs) e enfileira
-                                    o job knowledge.ingest.internal (worker interno).
-GET  /api/knowledge/ingest/{id}   — status do job para polling do frontend.
+POST /api/knowledge/ingest              — recebe lote de fontes (arquivos + URLs) e enfileira
+                                          o job knowledge.ingest.internal (worker interno).
+GET  /api/knowledge/ingest/{id}         — status do job para polling do frontend.
+POST /api/knowledge/ingest/{id}/apply   — grava em knowledge_items as categorias propostas
+                                          que o utilizador aprovou (ver ingest_worker.apply_ingest_review).
 """
 import json
 import logging
@@ -13,6 +15,7 @@ from pathlib import Path
 from typing import Any, Dict, List
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
+from pydantic import BaseModel
 
 from database import get_connection
 from security_core import CurrentUser, require_crm_access
@@ -22,6 +25,7 @@ from services.knowledge_ingest.extractors import (
     IMAGE_EXTENSIONS,
     SUPPORTED_FILE_EXTENSIONS,
 )
+from services.knowledge_ingest.ingest_worker import apply_ingest_review
 
 logger = logging.getLogger(__name__)
 
@@ -209,3 +213,23 @@ async def get_ingest_status(
         "result": _sanitize_result(job.get("result")),
         "error": job.get("error"),
     }
+
+
+class ApplyIngestRequest(BaseModel):
+    approved: List[str] = []
+
+
+@router.post("/{job_id}/apply")
+async def apply_ingest(
+    job_id: int,
+    body: ApplyIngestRequest,
+    current_user: CurrentUser = Depends(require_crm_access),
+):
+    try:
+        result = apply_ingest_review(job_id, current_user.id, body.approved)
+    except LookupError:
+        raise HTTPException(status_code=404, detail="Job de ingestão não encontrado")
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc))
+
+    return {"job_id": job_id, **result}

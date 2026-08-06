@@ -5,16 +5,18 @@ Executado como loop em background no backend-crm (app.py), no mesmo padrão do
 spy_media_worker: SELECT por tipo + CAS pending→in_progress, sem agente externo.
 
 Pipeline por job: extrai o texto de cada fonte do lote → classifica nas
-categorias do template via LLM (classifier.py) → grava knowledge_items com
-source_type='ai_extracted' apenas nas categorias sem item existente do usuário
-→ result final com covered/uncovered/skipped_existing.
+categorias do template via LLM (classifier.py) → propõe o conteúdo por
+categoria em jobs.result (nada é gravado em knowledge_items ainda) → result
+final com proposed/uncovered/skipped_existing. A gravação efetiva só acontece
+via apply_ingest_review(), quando o utilizador aprova as categorias propostas
+(ver POST /api/knowledge/ingest/{job_id}/apply em routes/knowledge_ingest.py).
 """
 from __future__ import annotations
 
 import json
 import logging
 from datetime import datetime, timezone
-from typing import Any, Dict
+from typing import Any, Dict, List
 
 from database import get_connection
 
@@ -108,7 +110,7 @@ def _process_ingest_job(payload: Dict[str, Any]) -> Dict[str, Any]:
 
     existing = _existing_categories(user_id) if user_id else set()
 
-    covered = []
+    proposed = []
     uncovered = []
     skipped_existing = []
     for cat in categories:
@@ -123,16 +125,92 @@ def _process_ingest_job(payload: Dict[str, Any]) -> Dict[str, Any]:
             skipped_existing.append(key)
             continue
         label = cat.get("label") or key
-        item_id = _insert_ai_item(user_id, label, key, entry["content"])
-        covered.append(
+        proposed.append(
             {
                 "category": key,
-                "item_id": item_id,
+                "label": label,
+                "content": entry["content"],
                 "preview": entry["content"][:_PREVIEW_CHARS],
             }
         )
 
-    if any(c["category"] == "objections_faq" for c in covered):
+    # Result final sem o texto integral das fontes (fica leve para polling/auditoria).
+    # Nada é gravado em knowledge_items aqui — "proposed" só vira item real via
+    # apply_ingest_review(), quando o utilizador aprova a categoria.
+    slim_sources = [{k: v for k, v in s.items() if k != "text"} for s in sources]
+    return {
+        "phase": "done",
+        "sources": slim_sources,
+        "proposed": proposed,
+        "applied": [],
+        "uncovered": uncovered,
+        "skipped_existing": skipped_existing,
+    }
+
+
+def apply_ingest_review(job_id: int, user_id: int, approved_keys: List[str]) -> Dict[str, Any]:
+    """
+    Grava em knowledge_items as categorias aprovadas dentre as propostas de um
+    job já concluído (ver POST /api/knowledge/ingest/{job_id}/apply).
+
+    Idempotente: reaplicar uma key já aplicada não duplica o item — volta em
+    "already_applied". Levanta LookupError se o job não existir/não pertencer
+    ao usuário, ValueError se ainda não estiver 'completed'.
+    """
+    conn = get_connection()
+    try:
+        row = conn.execute(
+            "SELECT type, status, result FROM jobs WHERE id = ? AND user_id = ?",
+            (job_id, user_id),
+        ).fetchone()
+        if not row or row["type"] != _TYPE:
+            raise LookupError("job de ingestão não encontrado")
+        if row["status"] != "completed":
+            raise ValueError("job de ingestão ainda não foi concluído")
+
+        result: Dict[str, Any] = json.loads(row["result"] or "{}")
+        proposed = result.get("proposed") or []
+        applied = result.get("applied") or []
+        proposed_by_key = {p.get("category"): p for p in proposed if p.get("category")}
+        applied_keys = {a["category"] for a in applied}
+
+        existing = _existing_categories(user_id)
+
+        applied_now = []
+        already_applied = []
+        now_existing = []
+        for key in dict.fromkeys(approved_keys or []):
+            if key in applied_keys:
+                already_applied.append(key)
+                continue
+            entry = proposed_by_key.get(key)
+            if not entry:
+                continue
+            if key in existing:
+                now_existing.append(key)
+                continue
+            item_id = _insert_ai_item(user_id, entry.get("label") or key, key, entry.get("content") or "")
+            applied_entry = {
+                "category": key,
+                "item_id": item_id,
+                "preview": (entry.get("content") or "")[:_PREVIEW_CHARS],
+            }
+            applied.append(applied_entry)
+            applied_keys.add(key)
+            applied_now.append(applied_entry)
+
+        result["applied"] = applied
+        result["proposed"] = [p for p in proposed if p.get("category") not in applied_keys]
+
+        conn.execute(
+            "UPDATE jobs SET result = ?, updated_at = ? WHERE id = ?",
+            (json.dumps(result, ensure_ascii=False), _now_utc_iso(), job_id),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+    if any(e["category"] == "objections_faq" for e in applied_now):
         try:
             from services.meta_prompter_trigger import trigger_meta_prompter_for_knowledge
 
@@ -140,15 +218,11 @@ def _process_ingest_job(payload: Dict[str, Any]) -> Dict[str, Any]:
         except Exception as exc:
             logger.warning("[knowledge_ingest] meta_prompter trigger falhou user_id=%s: %s", user_id, exc)
 
-    # Result final sem o texto integral das fontes (fica leve para polling/auditoria)
-    slim_sources = [{k: v for k, v in s.items() if k != "text"} for s in sources]
-    return {
-        "phase": "done",
-        "sources": slim_sources,
-        "covered": covered,
-        "uncovered": uncovered,
-        "skipped_existing": skipped_existing,
-    }
+    logger.info(
+        "[knowledge_ingest] apply job_id=%d user_id=%s aplicadas=%d ja_aplicadas=%d ja_existentes=%d",
+        job_id, user_id, len(applied_now), len(already_applied), len(now_existing),
+    )
+    return {"applied": applied_now, "already_applied": already_applied, "now_existing": now_existing}
 
 
 def process_pending_knowledge_ingest_jobs(batch_size: int = _BATCH_SIZE) -> Dict[str, int]:
