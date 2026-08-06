@@ -16,6 +16,7 @@ from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 
 from database import get_connection
 from security_core import CurrentUser, require_crm_access
+from services import rate_limit_service
 from services.jobs_service import TYPE_KNOWLEDGE_INGEST, create_job, get_job
 from services.knowledge_ingest.extractors import (
     IMAGE_EXTENSIONS,
@@ -85,6 +86,13 @@ async def create_ingest_batch(
             status_code=400,
             detail=f"Máximo de {MAX_SOURCES_PER_BATCH} fontes por lote",
         )
+
+    rate_limit_service.ensure_weekly_job_limit(
+        job_type=TYPE_KNOWLEDGE_INGEST,
+        user_id=current_user.id,
+        entitlements=current_user.entitlements,
+        label="ingestão de conhecimento",
+    )
 
     if _has_active_ingest_job(current_user.id):
         raise HTTPException(
