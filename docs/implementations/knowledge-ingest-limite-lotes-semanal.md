@@ -177,6 +177,15 @@ Se preferir fazer depois (aqui ou numa conversa nova), pode colar:
 **Objetivo:** `docs/architecture/plans-limits.md` reflete o novo campo e o novo conceito de
 limite semanal.
 
+### Commits Fase 4
+
+| # | Commit | O que foi implementado |
+|---|---|---|
+| 1 | `ba6bf90` | `docs/architecture/plans-limits.md` documenta o campo, o padrão `LIMIT_KEYS_BY_TYPE_WEEKLY` e a divergência pré-existente `daily_keys`/`limit_usage` |
+
+Fase só de documentação — sem relatório separado (nenhum comportamento novo, só reflete o que já
+foi implementado e reportado nas Fases 1–3).
+
 ---
 
 ## Checks de Validação
