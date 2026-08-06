@@ -71,6 +71,34 @@ seedados por plano.
 | `backend-core/app/api/subscriptions.py` | `UserLimits` + `_calculate_limits()`: somar `knowledge_ingest_weekly_limit` entre subscrições ativas (mesmo tratamento dos `*_daily`) |
 | `backend-core/app/seed.py` | `crm_start: 3`, `crm_growth: 10`, `crm_internal: None` (ilimitado); demais planos: `None` |
 
+### Commits Fase 1
+
+| # | Commit | O que foi implementado |
+|---|---|---|
+| 1 | `3598ff0` | Campo `knowledge_ingest_weekly_limit` em `plan_limits`, entitlements e seed |
+
+**Detalhes do commit `3598ff0`:**
+- `plan_limits.py` — nova coluna `knowledge_ingest_weekly_limit` (Integer, nullable) + incluída em `as_dict()` (nota: essa inclusão também corrige, só para o campo novo, um `KeyError` latente que já existia para `max_email_send_daily`, ausente de `as_dict()` mas presente no dict `totals` de `_calculate_limits()` — bug pré-existente, fora do escopo desta tarefa, não corrigido para os outros campos)
+- `db.py` — coluna adicionada a `ensure_plan_limits_columns()` (migração idempotente via `ALTER TABLE`)
+- `subscriptions.py` — `UserLimits.knowledge_ingest_weekly_limit` + soma no dict `totals` de `_calculate_limits()`
+- `seed.py` — `crm_start: 3`, `crm_growth: 10`, `crm_internal: None` (ilimitado)
+
+### Relatório da Fase 1 — o que mudou na prática
+
+**Antes:** os planos (Start, Growth, Interno) não tinham nenhum campo relacionado a limite de
+ingestão de conhecimento — `GET /me/entitlements` não retornava essa informação.
+**Agora:** cada plano tem um limite semanal configurado (Start: 3, Growth: 10, Interno:
+ilimitado), exposto em `entitlements.limits.knowledge_ingest_weekly_limit`. Isso ainda não
+bloqueia nada — é só a base de dados/config; o bloqueio real entra na Fase 2.
+**Para validar:** nenhum Cenário desta secção cobre só a Fase 1 isoladamente (o comportamento
+observável só aparece com a Fase 2 aplicada). Pode-se opcionalmente confirmar manualmente que
+`GET /me/entitlements` (backend-core, porta 8001) retorna o campo novo com o valor correto por
+plano de teste, mas os Cenários C1/C2/P1 só ficam testáveis depois da Fase 2.
+
+**Nota:** ainda não perguntei sobre teste automatizado porque esta fase isolada não tem
+comportamento observável via browser — vou seguir direto para a Fase 2 e oferecer o teste ao
+final dela, quando o gate estiver realmente bloqueando/permitindo lotes.
+
 ### Fase 2 — backend-crm: conceito de semana + gate
 
 **Objetivo:** bloquear criação de lote além do limite semanal, e expor uso em `/api/usage`.
