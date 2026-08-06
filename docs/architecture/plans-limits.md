@@ -175,6 +175,13 @@ Quando a API retorna 403 com um erro de gate, o frontend fecha o modal/ação e 
 
 Implementação: handler no `catch` verifica `error?.data?.detail?.error`, se reconhecido mostra toast com `ToastAction` e retorna — sem executar o toast genérico de erro.
 
+**Exceção — `KnowledgeIngestPanel.tsx`:** o gate de `knowledge_ingest_weekly_limit` retorna `429`
+com `detail` como string simples (não `{error, message}`), e o painel não segue o padrão de
+toast/CTA — mostra a mensagem do backend inline no próprio painel de erro do componente
+(`startProcessing()` checa `err instanceof ApiError && err.status === 429`). Escolha consciente
+para manter consistência com o painel de erro inline já existente no componente, não um gap a
+corrigir.
+
 ### Badge de quota no Playground
 
 `Playground.tsx` usa `useUsage()` para ler `usage.playground_monthly` e exibe badge na barra superior da sessão:
