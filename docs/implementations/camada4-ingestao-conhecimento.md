@@ -223,10 +223,37 @@ Limites: arquivo ≤10MB, imagem ≤5MB, 6 fontes/lote, 1 job ativo por user (40
 - [x] Cards "Bio do Profissional" e "Preview da Sessão" com badge "✦ IA" e conteúdo correto; tabela de preços cadastrada na seção multi-tabela; score subiu para "Funcional básico"
 - **Validado em:** 06/08/2026 — ao vivo via browser.
 
-### Cenário B6 — Conteúdo ingerido chega ao agente *(parcialmente validado)*
+### Cenário B6 — Conteúdo ingerido chega ao agente
 - [x] Itens `ai_extracted` entram no ContextBundle — confirmado executando `_load_knowledge_items(15)`: as categorias ingeridas presentes, incluindo a tabela de preços renderizada
-- [ ] Resposta do playground usa os valores ingeridos — **ainda não conclusivo, 2ª tentativa com material coerente**: repetido com material alinhado ao nicho real do perfil (job 485 — bio + tabela de preços "Digital Pro" para escritórios de advocacia, ver B3). `_load_knowledge_items(15)` confirmou os dois itens (`professional_bio`, `service_pricing_table`) corretamente carregados. Em 3 turnos de playground (`ai_profile_id=5`, `agent_mode=agenda`, `appointment_mode=commercial`) — incluindo saudação inicial, pedido indireto de preço e pedido direto e insistente ("quanto custa o plano Escritório?") — o agente nunca citou os valores ingeridos (R$ 697 / 1.297 / 2.490), respondendo sempre com deflexão genérica para agendamento (ex.: *"no momento não temos detalhes exatos sobre os preços dos planos"*). Causa provável identificada em `backend-executors/app/services/decision_engine.py:2474-2500`: o bloco "MODO COMERCIAL" que injeta `service_pricing_table` (e demais categorias comerciais) no prompt da filha só é montado quando `_auto_promoted_from_qual` é `True` nesse turno específico (`mother_decision.route_to` igual a `qualification`/`recepcao` E `missing_fields` vazio) — ou seja, apenas no turno de transição da qualificação para apresentação. Em turnos seguintes com `route_to == "apresentation"` (inclusive quando o lead pede preço explicitamente), o bloco não é reconstruído e a filha fica sem acesso ao texto da tabela de preços. Não é um problema da ingestão (o dado chega certo ao ContextBundle) — é um gap pré-existente na injeção de conhecimento comercial do decision_engine, fora do escopo desta feature.
-- **Registrado em:** 06/08/2026. Os 2 itens de teste (job 485) foram removidos da conta de teste após o registro.
+- [x] Resposta do playground usa os valores ingeridos — **corrigido na Fase 5** (ver abaixo). Causa raiz era um gap no `decision_engine.py`, não na ingestão: o bloco "MODO COMERCIAL" só disparava no turno único de transição qualificação→apresentação (`_auto_promoted_from_qual`), deixando a filha sem acesso à tabela de preços em turnos seguintes mesmo com pedido explícito do lead. Corrigido disponibilizando o mesmo conteúdo sob demanda em qualquer turno de apresentação.
+- **Validado em:** 06/08/2026 — job 485 (ver B3) + Fase 5. Playground real: lead 405, turno 2 (`route_to=apresentation`, fora da transição), pergunta "quanto custa o plano Escritório mesmo?" → resposta *"O plano Escritório custa R$ 1.297/mês e inclui qualificação de leads, lembretes automáticos de audiências e até 1.000 conversas mensais"* — valores exatos do material ingerido. Itens de teste removidos da conta após validação.
+
+---
+
+### Fase 5 — Backend: conhecimento comercial disponível sob demanda fora do turno de aquecimento
+
+**Objetivo:** corrigir o gap encontrado ao validar o Cenário B6 — o agente respondia de forma genérica quando o lead pedia preço/objeção/etc. em turnos posteriores ao turno único de aquecimento comercial (`_auto_promoted_from_qual`), mesmo com o material corretamente ingerido na base.
+
+O comportamento de aquecimento único (prova social + apresentação proativa completa uma única vez) é intencional e continua igual — documentado em `docs/architecture/pipeline-phases.md`. O que faltava era o conteúdo (`service_pricing_table`, `commercial_objections`, `service_differentials`, `active_promotion`, `payment_policy`, `pre_commitment_faq`) continuar acessível à IA filha *sob demanda* em qualquer turno de apresentação — mesmo padrão "usar APENAS se pedido" já usado no mesmo prompt para `objections_faq`/`service_faq`.
+
+| Arquivo | O que muda |
+|---|---|
+| `backend-executors/app/services/decision_engine.py` | `_build_child_prompt_apresentation()` — bloco `if not commercial_injection:` passa a incluir as 6 categorias comerciais do `hybrid_scheduler`/`commercial`, cada uma com instrução "usar APENAS se pedido explicitamente neste turno" |
+| `docs/architecture/pipeline-phases.md` | Complementa a secção "Estágio de aquecimento e `appointment_mode`" explicando a disponibilidade sob demanda fora do turno único |
+| `backend-executors/tests/test_apresentation_ondemand_commercial_knowledge.py` (novo) | Cobre: conteúdo disponível fora do turno de promoção; guard não vaza para outros templates/modos; turno de warming único continua intacto |
+
+### Commits Fase 5
+
+| # | Commit | O que foi implementado |
+|---|---|---|
+| 1 | `ce9cc2a` | Disponibilização sob demanda do conhecimento comercial fora do turno de aquecimento |
+
+### Relatório da Fase 5 — o que mudou na prática
+
+**Antes:** o agente só tinha acesso à tabela de preços e demais informações comerciais (objeções, diferenciais, promoção, pagamento, FAQ pré-compromisso) no exato turno em que a qualificação terminava. Se o lead perguntasse o preço de novo dali a duas ou três mensagens, a IA respondia de forma vaga e empurrava para o agendamento, mesmo com o dado certo guardado na base.
+**Agora:** essas mesmas informações continuam disponíveis à IA em qualquer turno da fase de apresentação, com a instrução de só usá-las quando o lead pedir diretamente — a sequência proativa de aquecimento continua acontecendo só uma vez, mas a IA não "esquece" os dados depois disso.
+**Validação real:** suíte de testes do backend-executors sem regressões (as 22 falhas pré-existentes na branch continuam as mesmas antes/depois da mudança — confirmado por comparação); playground real (lead 405) confirmou a citação exata dos valores ingeridos num turno posterior à transição.
+**Para validar:** Cenário B6 (fechado acima).
 
 ---
 
