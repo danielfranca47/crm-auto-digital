@@ -70,6 +70,24 @@ Decisões registadas:
 | `frontend-crm/src/components/agente/CamadaConhecimentoWizard.tsx` | `onSkip` passado sempre (críticas: "Pular esta etapa"); novo prop `onExit`; link "Preencher depois →" junto à barra de progresso + botão secundário no passo 0 |
 | `frontend-crm/src/components/agente/CamadaConhecimento.tsx` | `load()` busca também `api.auth.me()` e guarda `userId`; `wizardDismissed` lido/persistido em localStorage `kb_wizard_dismissed_${userId}`; `onExit`/`onComplete` persistem; `kb_dismissed_sections_*` passa a usar o mesmo `userId` (corrige bug com base vazia) |
 
+### Commits Fase 1
+
+| # | Commit | O que foi implementado |
+|---|---|---|
+| 1 | `11f8626` | Pular em todas as categorias, saída "Preencher depois", dispensa persistida |
+
+**Detalhes do commit `11f8626`:**
+- `CamadaConhecimentoWizard.tsx` — botão de pular passado a todos os passos de categoria (críticas: "Pular esta etapa", recomendadas: "Pular por agora"); novo prop `onExit`; link "Preencher depois →" ao lado do contador de passos (todos os passos exceto conclusão); botão secundário "Preencher depois" no passo 0
+- `CamadaConhecimento.tsx` — `load()` busca `api.auth.me()` em paralelo e guarda `userId` (fallback: `items[0].user_id`); `wizardDismissed` lido de `localStorage kb_wizard_dismissed_${userId}` no load e gravado em `dismissWizard()` (chamado por `onExit` e `onComplete`); `kb_dismissed_sections_*` migrado para o mesmo `userId`
+
+### Relatório da Fase 1 — o que mudou na prática
+
+**Antes:** o wizard da Base de conhecimento obrigava a preencher todas as categorias críticas (sem botão de pular) e não tinha nenhuma saída — a única forma de chegar ao painel era completar o fluxo. Se saísse da página com a base vazia, o wizard recomeçava.
+**Agora:** todas as etapas têm botão de pular, e há "Preencher depois" em qualquer passo (botão no primeiro passo e link no topo nos demais) que leva direto ao painel normal, onde cada categoria pode ser preenchida a qualquer momento. A escolha de "preencher depois" fica memorizada no navegador — o wizard não volta a aparecer.
+**Para validar:** Cenários P1, P2 e P3 (secção "Checks de Validação").
+
+---
+
 ### Fase 2 — Backend: fundação da ingestão *(planeada)*
 
 **Objetivo:** aceitar lote de fontes (PDF/imagem/planilha/txt/URL + descrição), enfileirar job interno e extrair texto de cada fonte — ainda sem LLM classificador.
