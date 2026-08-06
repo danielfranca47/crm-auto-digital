@@ -26,6 +26,7 @@ def ensure_plan_limits_columns() -> None:
         "follow_up_enabled": ("INTEGER", "BOOLEAN", "1"),
         "playground_monthly_limit": ("INTEGER", "INTEGER", None),
         "max_email_send_daily": ("INTEGER", "INTEGER", None),
+        "knowledge_ingest_weekly_limit": ("INTEGER", "INTEGER", None),
     }
     with engine.begin() as conn:
         if engine.dialect.name == "sqlite":

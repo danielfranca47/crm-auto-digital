@@ -54,6 +54,7 @@ class UserLimits(BaseModel):
     max_prospects_daily: Optional[int]
     max_maps_search_daily: Optional[int]
     max_maps_enrich_daily: Optional[int]
+    knowledge_ingest_weekly_limit: Optional[int]
     require_agent_local_activation_fee: bool
     ia_memory_advanced: bool
     follow_up_enabled: bool = True
@@ -105,6 +106,7 @@ def _calculate_limits(current_user: models.User, db: Session) -> UserLimits:
         "max_prospects_daily": 0,
         "max_maps_search_daily": 0,
         "max_maps_enrich_daily": 0,
+        "knowledge_ingest_weekly_limit": 0,
     }
     require_agent_local_activation_fee = False
     ia_memory_advanced = False
