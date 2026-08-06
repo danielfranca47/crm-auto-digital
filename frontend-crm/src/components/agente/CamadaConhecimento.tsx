@@ -9,6 +9,7 @@ import {
   type AgentConfig,
 } from '@/types/agente';
 import { CamadaConhecimentoWizard } from './CamadaConhecimentoWizard';
+import { KnowledgeIngestPanel } from './KnowledgeIngestPanel';
 import { BusinessInfo } from './BusinessInfo';
 import { GuidedMultiTableSection, ModalServiceTable } from './ServicePricingTables';
 
@@ -916,6 +917,18 @@ function GuidedSectionCard({
                   📷{(item?.media_items?.length ?? 0) > 1 ? <sup style={{ fontSize: 8 }}>{item!.media_items.length}</sup> : null}
                 </span>
               )}
+              {item?.source_type === 'ai_extracted' && (
+                <span
+                  className="font-mono-orion"
+                  style={{
+                    fontSize: 7, letterSpacing: 1.5, textTransform: 'uppercase', padding: '1px 5px',
+                    borderRadius: 2, border: '1px solid var(--o-b2)', color: 'var(--o-sub)', flexShrink: 0,
+                  }}
+                  title="Preenchido automaticamente pela IA a partir dos materiais importados — revise e edite à vontade"
+                >
+                  ✦ IA
+                </span>
+              )}
               {showStaleBadge && (
                 <span
                   className="font-mono-orion"
@@ -1036,6 +1049,7 @@ export function CamadaConhecimento({
   // Modais
   const [guidedModal, setGuidedModal] = useState<KnowledgeCategory | null>(null);
   const [modalAddExtra, setModalAddExtra] = useState(false);
+  const [modalIngest, setModalIngest] = useState(false);
   const [viewItem, setViewItem]       = useState<KnowledgeItem | null>(null);
   const [editExtra, setEditExtra]     = useState<KnowledgeItem | null>(null);
   const [serviceTableModal, setServiceTableModal] = useState<{ category: KnowledgeCategory; existingItem: KnowledgeItem | null } | null>(null);
@@ -1220,7 +1234,7 @@ export function CamadaConhecimento({
         rawCategories={rawGuidedCategories}
         agentConfig={agentConfig ?? {}}
         onComplete={() => { dismissWizard(); load(); }}
-        onExit={dismissWizard}
+        onExit={() => { dismissWizard(); load(); }}
       />
     );
   }
@@ -1260,6 +1274,14 @@ export function CamadaConhecimento({
             <span className="font-mono-orion" style={{ fontSize: 9, letterSpacing: '2.5px', textTransform: 'uppercase', color: 'var(--o-sub)' }}>
               Seções sugeridas para este agente
             </span>
+            <button
+              className="o-btn"
+              onClick={() => setModalIngest(true)}
+              style={{ marginLeft: 10, fontSize: 10, padding: '3px 10px' }}
+              title="Enviar PDF, imagem, planilha ou URL — a IA preenche as seções que os materiais cobrirem"
+            >
+              ✦ Importar materiais
+            </button>
             {selectedPhases.size > 0 && (
               <button
                 onClick={() => setSelectedPhases(new Set())}
@@ -1519,6 +1541,24 @@ export function CamadaConhecimento({
           onClose={() => setModalAddExtra(false)}
           onAdded={() => { setModalAddExtra(false); load(); }}
         />
+      )}
+      {modalIngest && (
+        <ModalBase
+          title="Importar materiais"
+          sub="A IA lê PDF, imagem, planilha, texto ou o seu site e preenche as seções que os materiais cobrirem"
+          onClose={() => setModalIngest(false)}
+          wide
+        >
+          <KnowledgeIngestPanel
+            categories={rawGuidedCategories}
+            context={{
+              niche: agentConfig?.niche,
+              audience: agentConfig?.target_audience,
+              offer: agentConfig?.offer_description,
+            }}
+            onFinished={() => { setModalIngest(false); load(); }}
+          />
+        </ModalBase>
       )}
       {viewItem && (
         <ModalView item={viewItem} onClose={() => setViewItem(null)} />
