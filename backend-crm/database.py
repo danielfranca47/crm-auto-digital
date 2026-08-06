@@ -493,6 +493,59 @@ def ensure_knowledge_item_media_myaudio_type(conn: sqlite3.Connection) -> None:
     )
 
 
+def ensure_knowledge_source_type_ai_extracted(conn: sqlite3.Connection) -> None:
+    """Migration: adiciona 'ai_extracted' ao CHECK constraint de knowledge_items.source_type.
+
+    SQLite não suporta ALTER COLUMN — recria a tabela preservando todos os dados.
+    knowledge_item_media referencia knowledge_items com ON DELETE CASCADE e
+    get_connection() liga PRAGMA foreign_keys=ON — o DROP TABLE precisa acontecer
+    com FK OFF ou o cascade apagaria as mídias antes do rename.
+    """
+    cur = conn.cursor()
+    cur.execute("SELECT sql FROM sqlite_master WHERE type='table' AND name='knowledge_items'")
+    row = cur.fetchone()
+    ddl = (row[0] if row else "") or ""
+    if "ai_extracted" in ddl:
+        return  # já migrado
+    conn.execute("PRAGMA foreign_keys = OFF")
+    conn.execute(
+        """
+        CREATE TABLE knowledge_items_new (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL,
+            title TEXT NOT NULL,
+            source_type TEXT NOT NULL CHECK(source_type IN ('manual','file','ai_extracted')),
+            content_text TEXT NOT NULL,
+            file_path TEXT NULL,
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL,
+            category TEXT NULL,
+            active_in_funnel INTEGER NOT NULL DEFAULT 1,
+            media_url TEXT NULL
+        )
+        """
+    )
+    conn.execute(
+        """
+        INSERT INTO knowledge_items_new
+            (id, user_id, title, source_type, content_text, file_path,
+             created_at, updated_at, category, active_in_funnel, media_url)
+        SELECT id, user_id, title, source_type, content_text, file_path,
+               created_at, updated_at, category, active_in_funnel, media_url
+          FROM knowledge_items
+        """
+    )
+    conn.execute("DROP TABLE knowledge_items")
+    conn.execute("ALTER TABLE knowledge_items_new RENAME TO knowledge_items")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_knowledge_user ON knowledge_items(user_id)")
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_knowledge_user_created ON knowledge_items(user_id, created_at)"
+    )
+    conn.execute("PRAGMA foreign_keys = ON")
+    conn.commit()
+    print("✅ knowledge_items migration: source_type aceita 'ai_extracted'")
+
+
 def migrate_knowledge_media_to_table(conn: sqlite3.Connection) -> None:
     """Migração idempotente: copia media_url existente de knowledge_items para knowledge_item_media."""
     cur = conn.cursor()
@@ -1190,6 +1243,7 @@ def init_db() -> None:
         # Migrações
         migrate_knowledge_media_to_table(conn)
         ensure_knowledge_item_media_myaudio_type(conn)
+        ensure_knowledge_source_type_ai_extracted(conn)
         migrate_user_profile(conn)
         migrate_atividades_to_appointments(conn)  # popula appointments a partir do legado (normalizado)
         backfill_appointment_dates(conn)          # garante start/end

@@ -6,7 +6,6 @@ from datetime import datetime
 from pathlib import Path
 
 import httpx
-import pandas as pd
 from fastapi import APIRouter, BackgroundTasks, Depends, File, Form, HTTPException, UploadFile
 
 from core_client import fetch_core_ai_profile_resolve
@@ -23,6 +22,7 @@ from models import (
     KnowledgeUpdate,
 )
 from security_core import CurrentUser, require_crm_access
+from services.knowledge_ingest.extractors import extract_text_from_table_file
 
 logger = logging.getLogger(__name__)
 
@@ -108,25 +108,10 @@ def _row_to_item(row, media_items: list | None = None) -> KnowledgeItemOut:
 
 
 def _extract_text_from_file(fp: Path) -> str:
-    suffix = fp.suffix.lower()
-
-    if suffix == ".txt":
-        try:
-            return fp.read_text(encoding="utf-8")
-        except UnicodeDecodeError:
-            return fp.read_text(encoding="latin-1")
-
-    if suffix == ".csv":
-        df = pd.read_csv(fp)
-        return df.head(200).to_csv(index=False)
-
-    if suffix == ".xlsx":
-        xls = pd.ExcelFile(fp)
-        sheet = "Leads" if "Leads" in xls.sheet_names else xls.sheet_names[0]
-        df = pd.read_excel(xls, sheet_name=sheet)
-        return df.head(200).to_csv(index=False)
-
-    raise HTTPException(status_code=400, detail="Extensão de arquivo não suportada")
+    try:
+        return extract_text_from_table_file(fp)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
 
 
 def _try_delete_media_file(media_url: str) -> None:
