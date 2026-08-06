@@ -1,7 +1,7 @@
 # Ingestão de conhecimento — limite de lotes por semana/plano
 
 **Branch:** `feat/ajuste-configuracao-ai-profile`
-**Status:** Em andamento
+**Status:** Todos os cenários validados (06/08/2026)
 
 ---
 
@@ -191,19 +191,22 @@ foi implementado e reportado nas Fases 1–3).
 ## Checks de Validação
 
 ### Cenário C1 — Limite semanal bloqueia novo lote
-- [ ] Setup: utilizador de teste com plano cujo `knowledge_ingest_weekly_limit` é baixo (ex.: 1)
-- [ ] Ação: disparar lotes de ingestão até exceder o limite da semana
-- [ ] Confirmar: lote extra recebe `429` com mensagem "Limite semanal atingido..."; `GET /api/usage` mostra `knowledge_ingest_weekly.used == limit`
+- [x] Setup: utilizador de teste (`user_id=15`, plano `crm_internal`) com `knowledge_ingest_weekly_limit` baixado temporariamente para 6 (igual ao uso real já registado na semana)
+- [x] Ação: `POST /api/knowledge/ingest` com uma 7ª fonte além do uso já existente
+- [x] Confirmar: recebido `429` com `{"detail":"Limite semanal atingido para ingestão de conhecimento. Atualize seu plano."}`; `GET /api/usage` mostrou `knowledge_ingest_weekly: {used: 6, limit: 6, remaining: 0}`
+- **Validado em:** 06/08/2026 — testado via chamada direta à API (curl) contra os backends locais restartados com o código novo; limite restaurado para `NULL` após o teste
 
 ### Cenário C2 — Plano ilimitado não é bloqueado
-- [ ] Setup: utilizador com plano `crm_internal` (ou legado sem o campo)
-- [ ] Ação: disparar vários lotes na mesma semana
-- [ ] Confirmar: nenhum 429; `knowledge_ingest_weekly.limit` é `null`
+- [x] Setup: utilizador de teste no plano `crm_internal` (`knowledge_ingest_weekly_limit: null`)
+- [x] Ação: `POST /api/knowledge/ingest` com uma fonte real (`https://example.com`), com 5 lotes já registados na semana
+- [x] Confirmar: `200` (`job_id` retornado, sem 429); job processou e completou normalmente (`status: completed`); `GET /api/usage` mostrou `knowledge_ingest_weekly: {used: 5, limit: null, remaining: null}` antes do lote extra
+- **Validado em:** 06/08/2026 — confirmado que o gate ignora a contagem de uso quando o limite é `null`, mesmo com uso real acumulado
 
 ### Cenário P1 — Frontend exibe mensagem do limite semanal
-- [ ] Setup: forçar 429 (limite baixo no plano de teste)
-- [ ] Ação: tentar iniciar processamento no `KnowledgeIngestPanel`
-- [ ] Confirmar: mensagem exibida menciona limite semanal, não o fallback genérico
+- [x] Setup: mesmo limite forçado (6/6) do Cenário C1, testado ao vivo via browser (MCP chrome-devtools) logado como utilizador de teste
+- [x] Ação: aberto "④ CONHECIMENTO" → "✦ IMPORTAR MATERIAIS" no `AiProfile`, adicionada uma fonte URL e clicado em "✦ PROCESSAR COM IA"
+- [x] Confirmar: painel exibiu "Limite semanal atingido para ingestão de conhecimento. Atualize seu plano." (mensagem real do backend, não o fallback genérico "Não foi possível iniciar o processamento...")
+- **Validado em:** 06/08/2026 — confirmado visualmente (screenshot) no `KnowledgeIngestPanel` renderizado em `http://localhost:5173/ai-profile`
 
 ---
 
