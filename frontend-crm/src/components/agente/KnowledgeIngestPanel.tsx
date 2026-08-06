@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { api, type KnowledgeIngestStatus } from '@/services/api';
+import { ApiError } from '@/lib/api-client';
 import type { KnowledgeCategory } from '@/types/agente';
 
 // ─── Constantes (espelham os limites do backend) ──────────────
@@ -135,6 +136,11 @@ export function KnowledgeIngestPanel({
       const created = await api.crm.ingestKnowledge(files, meta);
       pollStatus(created.job_id, Date.now());
     } catch (err) {
+      if (err instanceof ApiError && err.status === 429) {
+        setErrorMsg(err.message || 'Limite semanal de importações atingido. Atualize seu plano.');
+        setPhase('error');
+        return;
+      }
       const detail = (err as { message?: string })?.message ?? '';
       setErrorMsg(
         detail.includes('409') || detail.toLowerCase().includes('andamento')
