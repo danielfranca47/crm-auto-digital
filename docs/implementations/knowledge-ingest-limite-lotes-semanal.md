@@ -147,6 +147,31 @@ Se preferir fazer depois (aqui ou numa conversa nova), pode colar:
 |---|---|
 | `frontend-crm/src/components/agente/KnowledgeIngestPanel.tsx` | `catch` de `startProcessing()`: checar `err instanceof ApiError && err.status === 429`, mostrar `err.message` |
 
+### Commits Fase 3
+
+| # | Commit | O que foi implementado |
+|---|---|---|
+| 1 | `1a77387` | Painel de ingestão mostra a mensagem real do limite semanal em vez do fallback genérico |
+
+**Detalhes do commit `1a77387`:**
+- `KnowledgeIngestPanel.tsx` — `startProcessing()`: novo branch no `catch` para `err instanceof ApiError && err.status === 429`, exibindo `err.message` (a mensagem do backend, ex.: "Limite semanal atingido para ingestão de conhecimento. Atualize seu plano.") no painel de erro inline já existente do componente
+
+### Relatório da Fase 3 — o que mudou na prática
+
+**Antes:** ao atingir o limite semanal, o utilizador via a mensagem genérica "Não foi possível
+iniciar o processamento. Tente novamente." — sem explicar o motivo real.
+**Agora:** a mesma tela mostra a mensagem real do backend, deixando claro que é um limite
+semanal do plano e sugerindo upgrade.
+**Para validar:** Cenário P1, abaixo.
+
+Quer que eu rode o Cenário P1 agora via browser (MCP chrome-devtools), com você acompanhando?
+Isso exige um utilizador de teste com plano `crm_start` (limite 3/semana) já no limite.
+
+Se preferir fazer depois (aqui ou numa conversa nova), pode colar:
+
+> Lê `docs/implementations/knowledge-ingest-limite-lotes-semanal.md`, secção "Fase 3", e executa
+> o teste do Cenário P1.
+
 ### Fase 4 — docs de arquitetura
 
 **Objetivo:** `docs/architecture/plans-limits.md` reflete o novo campo e o novo conceito de
