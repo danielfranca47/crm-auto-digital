@@ -111,20 +111,58 @@ proposed.append({
 Sem mudança na assinatura de `onFinished(coveredKeys)` — passa a receber as keys efetivamente
 aplicadas, então `CamadaConhecimento.tsx` e `CamadaConhecimentoWizard.tsx` não precisam mudar.
 
+### Commits Fase 1
+
+| # | Commit | O que foi implementado |
+|---|---|---|
+| 1 | `f743c3f` | Worker propõe em vez de gravar + endpoint `POST /ingest/{job_id}/apply` |
+
+**Detalhes do commit `f743c3f`:**
+- `ingest_worker.py` — `_process_ingest_job` monta `proposed` (content completo + preview) em vez
+  de gravar via `_insert_ai_item`; nova `apply_ingest_review()` grava as categorias aprovadas,
+  move `proposed → applied` em `jobs.result`, é idempotente e dispara o meta_prompter para
+  `objections_faq` no momento do apply (antes disparava na classificação).
+- `routes/knowledge_ingest.py` — nova rota `POST /api/knowledge/ingest/{job_id}/apply`
+  (`ApplyIngestRequest{approved: [str]}`), mapeando `LookupError→404` e `ValueError→409`.
+
+### Relatório da Fase 1 — o que mudou na prática
+
+**Antes:** assim que a IA terminava de ler os materiais enviados, o conteúdo já entrava
+automaticamente na base de conhecimento — sem chance de revisão antes de ficar visível ao agente.
+**Agora:** a IA processa os materiais e monta uma lista de propostas por categoria, mas nada é
+gravado ainda. Só existe um novo endpoint (`POST /ingest/{job_id}/apply`) para aplicar as
+categorias aprovadas — o painel do frontend ainda não usa esse passo (isso é a Fase 2).
+**Para validar:** Cenários C1 e C2, abaixo.
+
+Validação própria feita durante a implementação (fora do fluxo HTTP real, direto no service):
+criei um job `completed` com duas propostas fabricadas, confirmei que `knowledge_items` continuava
+vazia antes do apply, apliquei uma categoria e confirmei a gravação, reapliquei a mesma categoria e
+confirmei que não duplicou (voltou em `already_applied`), e confirmei `LookupError` para job
+inexistente. Os dados de teste foram criados e removidos do banco local (`database/crm.db`) ao
+final — não sobrou resíduo. Isso cobre a lógica central, mas **não substitui** os Cenários C1/C2
+abaixo, que exercitam as rotas HTTP reais (`POST /ingest`, worker de verdade, `GET /ingest/{id}`).
+
 ---
 
 ## Checks de Validação
 
 ### Cenário C1 — Job propõe sem gravar (Fase 1)
-- [ ] Criar um lote via `POST /api/knowledge/ingest` com ao menos uma fonte válida
-- [ ] Aguardar o worker (loop de 10s) completar o job
-- [ ] `GET /ingest/{id}` mostra `result.proposed` preenchido e `result.applied` vazio
-- [ ] Confirmar que `knowledge_items` **não** recebeu nenhuma linha nova ainda
+- [x] Criar um lote via `POST /api/knowledge/ingest` com ao menos uma fonte válida
+- [x] Aguardar o worker (loop de 10s) completar o job
+- [x] `GET /ingest/{id}` mostra `result.proposed` preenchido e `result.applied` vazio
+- [x] Confirmar que `knowledge_items` **não** recebeu nenhuma linha nova ainda
+- **Validado em:** 06/08/2026 — teste via HTTP real (backend-core + backend-crm locais, conta de
+  teste user_id=15, `_conta-teste-local.md`), lote com um arquivo `.txt` sobre "Perfil da Empresa"
+  (`company_profile`). Job 488 completou no primeiro tick com `proposed` preenchido (conteúdo
+  completo) e `knowledge_items` continuou vazia para o usuário.
 
 ### Cenário C2 — Apply grava e é idempotente (Fase 1)
-- [ ] Chamar `POST /ingest/{id}/apply` com uma categoria de `proposed`
-- [ ] Confirmar que o item foi criado em `knowledge_items` (`source_type='ai_extracted'`)
-- [ ] Repetir a mesma chamada com a mesma key — confirmar que não duplica (retorna em `already_applied`)
+- [x] Chamar `POST /ingest/{id}/apply` com uma categoria de `proposed`
+- [x] Confirmar que o item foi criado em `knowledge_items` (`source_type='ai_extracted'`)
+- [x] Repetir a mesma chamada com a mesma key — confirmar que não duplica (retorna em `already_applied`)
+- **Validado em:** 06/08/2026 — apply do job 488 criou `knowledge_items.id=31`
+  (`category=company_profile, source_type=ai_extracted`); reaplicar a mesma key devolveu
+  `already_applied:["company_profile"]` sem criar segunda linha.
 
 ### Cenário P1 — Revisão no painel (Fase 2)
 - [ ] Abrir "Importar materiais" (wizard ou painel normal), enviar um lote
