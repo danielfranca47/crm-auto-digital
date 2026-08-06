@@ -1,7 +1,7 @@
 # Ingestão de conhecimento — preview aprovável antes de gravar
 
 **Branch:** `feat/ajuste-configuracao-ai-profile`
-**Status:** Em andamento
+**Status:** Todos os cenários validados (06/08/2026)
 
 ---
 
@@ -146,7 +146,7 @@ abaixo, que exercitam as rotas HTTP reais (`POST /ingest`, worker de verdade, `G
 
 | # | Commit | O que foi implementado |
 |---|---|---|
-| 1 | *(a registrar após o commit)* | Painel de ingestão ganha o passo de revisão |
+| 1 | `fec1ade` | Painel de ingestão ganha o passo de revisão |
 
 **Detalhes do commit:**
 - `frontend-crm/src/services/api.ts` — `KnowledgeIngestStatus.result` troca `covered` por
@@ -192,10 +192,18 @@ clica em "Gravar" — só então o conteúdo é escrito na base de conhecimento.
   `already_applied:["company_profile"]` sem criar segunda linha.
 
 ### Cenário P1 — Revisão no painel (Fase 2)
-- [ ] Abrir "Importar materiais" (wizard ou painel normal), enviar um lote
-- [ ] Após o processamento, confirmar que aparece a lista de propostas com conteúdo completo (não só preview)
-- [ ] Desmarcar uma categoria, aplicar as demais
-- [ ] Confirmar que só as categorias marcadas aparecem na base de conhecimento depois
+- [x] Abrir "Importar materiais" (wizard ou painel normal), enviar um lote
+- [x] Após o processamento, confirmar que aparece a lista de propostas com conteúdo completo (não só preview)
+- [x] Desmarcar uma categoria, aplicar as demais
+- [x] Confirmar que só as categorias marcadas aparecem na base de conhecimento depois
+- **Validado em:** 06/08/2026 — via Chrome DevTools MCP, conta de teste user_id=15. Upload de
+  `.txt` com conteúdo de preço + garantia → tela "Revise antes de gravar" mostrou 2 propostas
+  ("Tabela de Serviços e Preços" e "FAQ Pré-Compromisso") com conteúdo completo, ambas marcadas por
+  padrão. Desmarquei "FAQ Pré-Compromisso" e cliquei "✓ Gravar 1 selecionada" → resumo mostrou
+  "Gravadas na base (1)" + "Descartadas nesta revisão: FAQ Pré-Compromisso". Confirmado no painel
+  principal após "Continuar →": Apresentação Comercial passou de 0/6 para 1/6, "Tabela de Serviços
+  e Preços" com o conteúdo gravado, "FAQ Pré-Compromisso" continuou como "PREENCHER →" (não
+  gravado).
 
 ---
 
