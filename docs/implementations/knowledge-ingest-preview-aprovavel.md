@@ -142,6 +142,33 @@ inexistente. Os dados de teste foram criados e removidos do banco local (`databa
 final — não sobrou resíduo. Isso cobre a lógica central, mas **não substitui** os Cenários C1/C2
 abaixo, que exercitam as rotas HTTP reais (`POST /ingest`, worker de verdade, `GET /ingest/{id}`).
 
+### Commits Fase 2
+
+| # | Commit | O que foi implementado |
+|---|---|---|
+| 1 | *(a registrar após o commit)* | Painel de ingestão ganha o passo de revisão |
+
+**Detalhes do commit:**
+- `frontend-crm/src/services/api.ts` — `KnowledgeIngestStatus.result` troca `covered` por
+  `proposed`/`applied`; novos tipos `KnowledgeIngestProposedItem`/`KnowledgeIngestAppliedItem`/
+  `KnowledgeIngestApplyResponse`; nova função `applyKnowledgeIngest(jobId, approved)`.
+- `frontend-crm/src/components/agente/KnowledgeIngestPanel.tsx` — nova fase `'review'` entre
+  `'processing'` e `'done'`: lista os itens `proposed` com conteúdo completo e checkbox (default
+  marcado), botão "Gravar N selecionada(s)" (ou "Continuar sem gravar" se nada marcado). Se
+  `proposed` vier vazio ao completar, pula direto para `'done'`. A tela de resumo (`'done'`) passa
+  a ler de `applyResult.applied` em vez de `status.result.covered`, e ganha uma linha "Descartadas
+  nesta revisão" para as propostas que não foram marcadas.
+
+### Relatório da Fase 2 — o que mudou na prática
+
+**Antes:** o passo de revisão só existia no backend (Fase 1) — o painel de "Importar materiais"
+ainda ia direto do processamento para o resumo final, sem chance de o usuário ver o conteúdo antes
+de ele entrar na base.
+**Agora:** depois que a IA termina de processar, o painel mostra cada seção proposta com o texto
+completo e uma caixa de seleção (todas marcadas por padrão). O usuário desmarca o que não quiser,
+clica em "Gravar" — só então o conteúdo é escrito na base de conhecimento.
+**Para validar:** Cenário P1, abaixo.
+
 ---
 
 ## Checks de Validação

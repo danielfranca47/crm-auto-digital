@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { api, type KnowledgeIngestStatus } from '@/services/api';
+import { api, type KnowledgeIngestApplyResponse, type KnowledgeIngestStatus } from '@/services/api';
 import { ApiError } from '@/lib/api-client';
 import type { KnowledgeCategory } from '@/types/agente';
 
@@ -37,7 +37,7 @@ type LocalSource =
   | { id: number; kind: 'file'; file: File; description: string; error?: string }
   | { id: number; kind: 'url'; url: string; description: string; error?: string };
 
-type Phase = 'edit' | 'processing' | 'done' | 'error';
+type Phase = 'edit' | 'processing' | 'review' | 'done' | 'error';
 
 // ─── Componente ───────────────────────────────────────────────
 
@@ -57,6 +57,10 @@ export function KnowledgeIngestPanel({
   const [phase, setPhase] = useState<Phase>('edit');
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [status, setStatus] = useState<KnowledgeIngestStatus | null>(null);
+  const [approvedKeys, setApprovedKeys] = useState<Set<string>>(new Set());
+  const [applyResult, setApplyResult] = useState<KnowledgeIngestApplyResponse | null>(null);
+  const [applying, setApplying] = useState(false);
+  const [applyError, setApplyError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const nextId = useRef(1);
   const pollRef = useRef<{ timer: ReturnType<typeof setTimeout> | null; cancelled: boolean }>({
@@ -117,6 +121,9 @@ export function KnowledgeIngestPanel({
     if (validSources.length === 0) return;
     setPhase('processing');
     setErrorMsg(null);
+    setApprovedKeys(new Set());
+    setApplyResult(null);
+    setApplyError(null);
     try {
       const files = validSources.filter(s => s.kind === 'file').map(s => (s as { file: File }).file);
       const meta = {
@@ -165,7 +172,14 @@ export function KnowledgeIngestPanel({
         if (poll.cancelled) return;
         if (s.status === 'completed') {
           setStatus(s);
-          setPhase('done');
+          const proposed = s.result?.proposed ?? [];
+          if (proposed.length > 0) {
+            setApprovedKeys(new Set(proposed.map(p => p.category)));
+            setPhase('review');
+          } else {
+            setApplyResult({ job_id: jobId, applied: [], already_applied: [], now_existing: [] });
+            setPhase('done');
+          }
           return;
         }
         if (s.status === 'failed') {
@@ -179,6 +193,30 @@ export function KnowledgeIngestPanel({
       poll.timer = setTimeout(tick, POLL_INTERVAL_MS);
     };
     poll.timer = setTimeout(tick, POLL_INTERVAL_MS);
+  }
+
+  function toggleApproved(category: string) {
+    setApprovedKeys(prev => {
+      const next = new Set(prev);
+      if (next.has(category)) next.delete(category);
+      else next.add(category);
+      return next;
+    });
+  }
+
+  async function confirmApply() {
+    if (!status) return;
+    setApplying(true);
+    setApplyError(null);
+    try {
+      const res = await api.crm.applyKnowledgeIngest(status.job_id, Array.from(approvedKeys));
+      setApplyResult(res);
+      setPhase('done');
+    } catch {
+      setApplyError('Não foi possível gravar as seções selecionadas. Tente novamente.');
+    } finally {
+      setApplying(false);
+    }
   }
 
   // ─── Render: processando ────────────────────────────────────
@@ -211,10 +249,69 @@ export function KnowledgeIngestPanel({
     );
   }
 
+  // ─── Render: revisão ────────────────────────────────────────
+
+  if (phase === 'review' && status?.result) {
+    const proposed = status.result.proposed ?? [];
+
+    return (
+      <div>
+        <div className="font-display" style={{ fontSize: 17, color: 'var(--o-text)', marginBottom: 6 }}>
+          Revise antes de gravar
+        </div>
+        <div style={{ fontSize: 12.5, color: 'var(--o-sub)', lineHeight: 1.6, marginBottom: 14 }}>
+          A IA encontrou conteúdo para estas seções. Desmarque o que não quiser gravar — só as
+          seções marcadas entram na base de conhecimento.
+        </div>
+
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 16 }}>
+          {proposed.map(p => (
+            <label
+              key={p.category}
+              style={{
+                display: 'flex', gap: 10, alignItems: 'flex-start', cursor: 'pointer',
+                padding: '10px 12px', background: 'var(--o-b0)', border: '1px solid var(--o-b1)', borderRadius: 4,
+              }}
+            >
+              <input
+                type="checkbox"
+                checked={approvedKeys.has(p.category)}
+                onChange={() => toggleApproved(p.category)}
+                style={{ marginTop: 3, flexShrink: 0 }}
+              />
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontSize: 12.5, color: 'var(--o-text)', fontWeight: 500, marginBottom: 4 }}>
+                  {p.label}
+                </div>
+                <div style={{ fontSize: 11.5, color: 'var(--o-sub)', lineHeight: 1.5, whiteSpace: 'pre-wrap' }}>
+                  {p.content}
+                </div>
+              </div>
+            </label>
+          ))}
+        </div>
+
+        {applyError && (
+          <div style={{ fontSize: 12, color: 'var(--o-hot)', marginBottom: 12 }}>{applyError}</div>
+        )}
+
+        <button className="o-btn o-btn-primary" onClick={confirmApply} disabled={applying}>
+          {applying
+            ? 'Gravando…'
+            : approvedKeys.size > 0
+              ? `✓ Gravar ${approvedKeys.size} selecionada${approvedKeys.size > 1 ? 's' : ''}`
+              : 'Continuar sem gravar'}
+        </button>
+      </div>
+    );
+  }
+
   // ─── Render: resumo ─────────────────────────────────────────
 
   if (phase === 'done' && status?.result) {
-    const covered = status.result.covered ?? [];
+    const applied = applyResult?.applied ?? [];
+    const appliedKeys = new Set(applied.map(c => c.category));
+    const discarded = (status.result.proposed ?? []).filter(p => !appliedKeys.has(p.category));
     const uncovered = status.result.uncovered ?? [];
     const skipped = status.result.skipped_existing ?? [];
     const failedSources = (status.result.sources ?? []).filter(s => s.status === 'failed');
@@ -225,13 +322,13 @@ export function KnowledgeIngestPanel({
           Resultado da importação
         </div>
 
-        {covered.length > 0 && (
+        {applied.length > 0 && (
           <div style={{ marginBottom: 16 }}>
             <div className="font-mono-orion" style={{ fontSize: 8, letterSpacing: 2, textTransform: 'uppercase', color: 'var(--o-active)', marginBottom: 8 }}>
-              ✓ Preenchidas pela IA ({covered.length})
+              ✓ Gravadas na base ({applied.length})
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-              {covered.map(c => (
+              {applied.map(c => (
                 <div key={c.category} style={{ padding: '8px 12px', background: 'var(--o-b0)', border: '1px solid var(--o-active-b)', borderRadius: 4 }}>
                   <div style={{ fontSize: 12.5, color: 'var(--o-text)', fontWeight: 500 }}>
                     {labelByKey.get(c.category) ?? c.category}
@@ -245,9 +342,15 @@ export function KnowledgeIngestPanel({
           </div>
         )}
 
-        {covered.length === 0 && (
+        {applied.length === 0 && (
           <div style={{ fontSize: 12.5, color: 'var(--o-sub)', marginBottom: 16 }}>
             Os materiais enviados não cobriram nenhuma seção nova da base.
+          </div>
+        )}
+
+        {discarded.length > 0 && (
+          <div style={{ fontSize: 11.5, color: 'var(--o-dim)', marginBottom: 12 }}>
+            Descartadas nesta revisão (não gravadas): {discarded.map(p => p.label).join(', ')}
           </div>
         )}
 
@@ -283,7 +386,7 @@ export function KnowledgeIngestPanel({
 
         <button
           className="o-btn o-btn-primary"
-          onClick={() => onFinished(covered.map(c => c.category))}
+          onClick={() => onFinished(applied.map(c => c.category))}
         >
           Continuar →
         </button>

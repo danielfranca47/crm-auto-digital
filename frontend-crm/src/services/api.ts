@@ -344,6 +344,15 @@ export type KnowledgeIngestCreateResponse = {
   rejected: Array<{ filename?: string; url?: string; reason: string }>;
 };
 
+export type KnowledgeIngestProposedItem = {
+  category: string;
+  label: string;
+  content: string;
+  preview: string;
+};
+
+export type KnowledgeIngestAppliedItem = { category: string; item_id: number; preview: string };
+
 export type KnowledgeIngestStatus = {
   job_id: number;
   status: "pending" | "in_progress" | "completed" | "failed";
@@ -357,11 +366,19 @@ export type KnowledgeIngestStatus = {
       url?: string;
       description?: string;
     }>;
-    covered?: Array<{ category: string; item_id: number; preview: string }>;
+    proposed?: KnowledgeIngestProposedItem[];
+    applied?: KnowledgeIngestAppliedItem[];
     uncovered?: string[];
     skipped_existing?: string[];
   } | null;
   error: string | null;
+};
+
+export type KnowledgeIngestApplyResponse = {
+  job_id: number;
+  applied: KnowledgeIngestAppliedItem[];
+  already_applied: string[];
+  now_existing: string[];
 };
 
 export type BusinessInfoField = {
@@ -1194,6 +1211,8 @@ export const api = {
     },
     getKnowledgeIngestStatus: async (jobId: number) =>
       apiClient.get<KnowledgeIngestStatus>(`/knowledge/ingest/${jobId}`),
+    applyKnowledgeIngest: async (jobId: number, approved: string[]) =>
+      apiClient.post<KnowledgeIngestApplyResponse>(`/knowledge/ingest/${jobId}/apply`, { approved }),
     uploadKnowledgeFile: async (file: File) => {
       const formData = new FormData();
       formData.append("file", file);
