@@ -142,14 +142,46 @@ Limites: arquivo ≤10MB, imagem ≤5MB, 6 fontes/lote, 1 job ativo por user (40
 - [ ] POST com uma imagem (foto de tabela de preços) → fonte `extracted` via vision (requer `OPENAI_API_KEY`)
 - [ ] PDF escaneado sem texto → fonte `failed` com `reason: sem_texto_extraivel` e job ainda `completed`
 
-### Fase 3 — Backend: classificação por LLM *(planeada)*
+### Fase 3 — Backend: classificação por LLM
 
 **Objetivo:** o job classifica os textos extraídos nas categorias do template e grava `knowledge_items` com `source_type='ai_extracted'`, reportando `covered`/`uncovered`/`skipped_existing`.
 
 | Arquivo | O que muda |
 |---|---|
 | `backend-crm/services/knowledge_ingest/classifier.py` (novo) | gpt-4o-mini, JSON por categoria, truncagem 15k/fonte e 60k total |
-| `backend-crm/services/knowledge_ingest/ingest_worker.py` | Classifica + INSERT; dispara meta-prompter se cobrir `objections_faq` (extrair `_trigger_meta_prompter_for_knowledge` para módulo compartilhado) |
+| `backend-crm/services/knowledge_ingest/ingest_worker.py` | Classifica + INSERT; dispara meta-prompter se cobrir `objections_faq` |
+| `backend-crm/services/meta_prompter_trigger.py` (novo) | `trigger_meta_prompter_for_knowledge` extraído de `routes/knowledge.py` para uso compartilhado rota + worker |
+| `backend-crm/routes/knowledge.py` | Importa o trigger do módulo compartilhado (remove duplicação) |
+
+### Commits Fase 3
+
+| # | Commit | O que foi implementado |
+|---|---|---|
+| 1 | `1a0ba53` | Classificador gpt-4o-mini + gravação de itens `ai_extracted` + result covered/uncovered/skipped |
+
+**Detalhes do commit `1a0ba53`:**
+- `classifier.py` — `classify_sources()`: prompt com contexto do negócio + categorias (key/label/description) + fontes numeradas com a descrição do usuário; system prompt proíbe inventar dados; `response_format=json_object`, `temperature=0`, timeout 120s, 60k chars máx; valida keys contra a lista enviada e descarta conteúdo <20 chars
+- `ingest_worker.py` — pipeline completo: extrai → classifica → INSERT `ai_extracted` só em categoria sem item do usuário (nunca sobrescreve) → meta-prompter se cobrir `objections_faq` → result `{phase:"done", sources, covered:[{category,item_id,preview}], uncovered, skipped_existing}` sem texto integral
+- `meta_prompter_trigger.py` — gatilho compartilhado entre a rota de edição manual e o worker
+
+### Relatório da Fase 3 — o que mudou na prática
+
+**Antes:** a esteira de ingestão só extraía o texto dos materiais e guardava o resultado no job — nada aparecia na base de conhecimento.
+**Agora:** depois de extrair, a IA lê os textos e preenche sozinha as categorias da base que os materiais cobrem, gravando cada uma como item normal (marcado como criado por IA, editável como qualquer outro). Categorias que o usuário já preencheu nunca são sobrescritas. O resultado do lote diz o que foi preenchido, o que ficou pendente e o que foi pulado por já existir.
+**Para validar:** Cenários B4 e B5 (já validados) e B6, abaixo.
+
+### Cenário B4 — Lote classifica e grava (Fase 3)
+- [x] POST com txt de preços + categorias `service_pricing_table` e `transformation_stories` → `covered` contém `service_pricing_table` com `item_id` e preview; `uncovered` contém `transformation_stories`
+- [x] Item gravado com `source_type='ai_extracted'`, título = label da categoria, valores preservados (acentuação correta confirmada por codepoints no banco)
+- **Validado em:** 06/08/2026 — job 482, item 22 criado para o user de teste.
+
+### Cenário B5 — Nunca sobrescreve item existente (Fase 3)
+- [x] Segundo lote na mesma categoria → `covered: []`, `skipped_existing: ['service_pricing_table']`, contagem de itens da categoria permanece 1
+- **Validado em:** 06/08/2026 — job 483.
+
+### Cenário B6 — Conteúdo ingerido chega ao agente (Fase 3, pendente)
+- [ ] Conversa no playground pergunta preço → resposta usa os valores do item `ai_extracted`
+- *(Pode ser validado junto com a Fase 4, quando a UI existir. O item 22 de teste foi mantido na conta de teste para isso.)*
 
 ### Fase 4 — Frontend: passo "Importar materiais" *(planeada)*
 
