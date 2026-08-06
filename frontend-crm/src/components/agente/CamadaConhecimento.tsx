@@ -1011,6 +1011,7 @@ export function CamadaConhecimento({
   const [loading, setLoading]         = useState(true);
   const [error, setError]             = useState<string | null>(null);
   const [deleting, setDeleting]       = useState<number | null>(null);
+  const [userId, setUserId]           = useState<number | null>(null);
   const [wizardDismissed, setWizardDismissed] = useState(false);
   const [selectedPhases, setSelectedPhases]   = useState<Set<string>>(new Set());
   const [dismissedKeys, setDismissedKeys]     = useState<Set<string>>(new Set());
@@ -1106,8 +1107,16 @@ export function CamadaConhecimento({
   async function load() {
     setLoading(true);
     try {
-      const data = await api.crm.getKnowledgeList();
+      const [data, me] = await Promise.all([
+        api.crm.getKnowledgeList(),
+        api.auth.me().catch(() => null),
+      ]);
       setItems(data);
+      const uid = me?.id ?? (data.length > 0 ? data[0].user_id : null);
+      setUserId(uid ?? null);
+      if (uid != null) {
+        setWizardDismissed(localStorage.getItem(`kb_wizard_dismissed_${uid}`) === '1');
+      }
       setActiveOverrides(new Map()); // limpar overrides ao recarregar
       setError(null);
     } catch {
@@ -1119,20 +1128,26 @@ export function CamadaConhecimento({
 
   useEffect(() => { load(); }, []);
 
-  // Ler seções ignoradas do localStorage após carregar items
+  function dismissWizard() {
+    if (userId != null) {
+      localStorage.setItem(`kb_wizard_dismissed_${userId}`, '1');
+    }
+    setWizardDismissed(true);
+  }
+
+  // Ler seções ignoradas do localStorage após identificar o usuário
   useEffect(() => {
-    if (items.length === 0) return;
-    const uid = items[0].user_id;
+    if (userId == null) return;
     try {
-      const raw = localStorage.getItem(`kb_dismissed_sections_${uid}`);
+      const raw = localStorage.getItem(`kb_dismissed_sections_${userId}`);
       if (raw) setDismissedKeys(new Set(JSON.parse(raw) as string[]));
     } catch { /* ignore */ }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [items.length > 0 ? items[0].user_id : null]);
+  }, [userId]);
 
   function persistDismissed(next: Set<string>) {
-    if (items.length === 0) return;
-    localStorage.setItem(`kb_dismissed_sections_${items[0].user_id}`, JSON.stringify([...next]));
+    if (userId != null) {
+      localStorage.setItem(`kb_dismissed_sections_${userId}`, JSON.stringify([...next]));
+    }
     setDismissedKeys(next);
   }
 
@@ -1204,7 +1219,8 @@ export function CamadaConhecimento({
       <CamadaConhecimentoWizard
         rawCategories={rawGuidedCategories}
         agentConfig={agentConfig ?? {}}
-        onComplete={() => { setWizardDismissed(true); load(); }}
+        onComplete={() => { dismissWizard(); load(); }}
+        onExit={dismissWizard}
       />
     );
   }

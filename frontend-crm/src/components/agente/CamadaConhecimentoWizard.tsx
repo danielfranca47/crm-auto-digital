@@ -65,11 +65,13 @@ function StepContext({
   audience, setAudience,
   offer, setOffer,
   onContinue,
+  onExit,
 }: {
   niche: string;    setNiche:    (v: string) => void;
   audience: string; setAudience: (v: string) => void;
   offer: string;    setOffer:    (v: string) => void;
   onContinue: () => void;
+  onExit: () => void;
 }) {
   return (
     <div>
@@ -114,13 +116,21 @@ function StepContext({
         />
       </div>
 
-      <button
-        className="o-btn o-btn-primary"
-        style={{ marginTop: 8 }}
-        onClick={onContinue}
-      >
-        Continuar →
-      </button>
+      <div style={{ display: 'flex', gap: 10, marginTop: 8 }}>
+        <button
+          className="o-btn o-btn-primary"
+          onClick={onContinue}
+        >
+          Continuar →
+        </button>
+        <button
+          className="o-btn"
+          onClick={onExit}
+          style={{ color: 'var(--o-sub)' }}
+        >
+          Preencher depois
+        </button>
+      </div>
     </div>
   );
 }
@@ -224,13 +234,13 @@ function StepCategory({
         >
           {saving ? 'Salvando…' : 'Salvar e continuar →'}
         </button>
-        {!isCritical && onSkip && (
+        {onSkip && (
           <button
             className="o-btn"
             onClick={onSkip}
             style={{ color: 'var(--o-sub)' }}
           >
-            Pular por agora
+            {isCritical ? 'Pular esta etapa' : 'Pular por agora'}
           </button>
         )}
       </div>
@@ -339,9 +349,10 @@ export interface WizardProps {
   rawCategories: KnowledgeCategory[];
   agentConfig:   Partial<AgentConfig>;
   onComplete:    () => void;
+  onExit:        () => void;
 }
 
-export function CamadaConhecimentoWizard({ rawCategories, agentConfig, onComplete }: WizardProps) {
+export function CamadaConhecimentoWizard({ rawCategories, agentConfig, onComplete, onExit }: WizardProps) {
   const [niche,    setNiche]    = useState(agentConfig.niche             ?? '');
   const [audience, setAudience] = useState(agentConfig.target_audience  ?? '');
   const [offer,    setOffer]    = useState(agentConfig.offer_description ?? '');
@@ -395,9 +406,24 @@ export function CamadaConhecimentoWizard({ rawCategories, agentConfig, onComplet
           >
             {stepLabel}
           </span>
-          <span className="font-mono-orion" style={{ fontSize: 8, color: 'var(--o-dim)' }}>
-            {step + 1} / {totalSteps}
-          </span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+            {!isDoneStep && (
+              <button
+                onClick={onExit}
+                className="font-mono-orion"
+                style={{
+                  fontSize: 8, letterSpacing: 1.5, textTransform: 'uppercase',
+                  color: 'var(--o-dim)', background: 'none', border: 'none',
+                  cursor: 'pointer', padding: 0, textDecoration: 'underline',
+                }}
+              >
+                Preencher depois →
+              </button>
+            )}
+            <span className="font-mono-orion" style={{ fontSize: 8, color: 'var(--o-dim)' }}>
+              {step + 1} / {totalSteps}
+            </span>
+          </div>
         </div>
         <div style={{ height: 2, background: 'var(--o-b1)', borderRadius: 2 }}>
           <div style={{
@@ -413,6 +439,7 @@ export function CamadaConhecimentoWizard({ rawCategories, agentConfig, onComplet
           audience={audience} setAudience={setAudience}
           offer={offer}       setOffer={setOffer}
           onContinue={() => setStep(1)}
+          onExit={onExit}
         />
       )}
 
@@ -422,7 +449,7 @@ export function CamadaConhecimentoWizard({ rawCategories, agentConfig, onComplet
           category={currentCategory}
           isCritical={!!isCriticalStep}
           onSaved={handleCategorySaved}
-          onSkip={!isCriticalStep ? () => setStep(s => s + 1) : undefined}
+          onSkip={() => setStep(s => s + 1)}
         />
       )}
 
