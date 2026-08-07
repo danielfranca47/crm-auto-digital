@@ -152,9 +152,18 @@ UI (fontes + descrições) → POST /api/knowledge/ingest (multipart: files + me
 `gpt-4o-mini`, `response_format=json_object`, `temperature=0`, timeout 120s, 60k chars totais.
 Prompt inclui contexto do negócio (nicho/público/oferta) + categorias do template (key/label/
 description) + fontes numeradas com a descrição do utilizador. Valida as keys retornadas contra a
-lista enviada e descarta conteúdo com menos de 20 caracteres. Grava sempre texto livre — mesmo para
-`service_pricing_table` (a categoria `allowMultiple` aceita texto livre normalmente, ver secção
-acima; extração direta para `structured_v1` é melhoria futura).
+lista enviada e descarta conteúdo com menos de 20 caracteres.
+
+**`service_pricing_table` nasce estruturada:** quando essa categoria está entre as enviadas, o
+prompt ganha uma regra extra pedindo `"rows"` (lista de `{nome, duracaoMinutos, preco,
+descricao?}`) em vez de `"content"` livre para essa key especificamente. `_serialize_pricing_rows()`
+normaliza a resposta do LLM para o mesmo JSON `structured_v1` que
+`ServicePricingTables.tsx:serializeServicePricingRows()` produz no frontend (linha sem `nome` é
+filtrada, `duracaoMinutos` só aceito se numérico, `descricao` omitida do objeto se vazia) — o item
+criado por `_insert_ai_item()` já abre em modo "Tabela estruturada" na UI, sem conversão manual.
+Se o LLM ignorar a regra e devolver `"content"` (texto livre) em vez de `"rows"`, cai no caminho
+normal de texto livre (mesmo comportamento de antes, sem regressão). As demais categorias
+continuam sempre em texto livre.
 
 **Worker** (`backend-crm/services/knowledge_ingest/ingest_worker.py`,
 `process_pending_knowledge_ingest_jobs()`): loop assíncrono no lifespan de `app.py`

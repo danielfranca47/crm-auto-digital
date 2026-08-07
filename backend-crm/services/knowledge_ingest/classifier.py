@@ -15,7 +15,7 @@ from __future__ import annotations
 import json
 import logging
 import os
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 import httpx
 
@@ -25,6 +25,11 @@ _MODEL = "gpt-4o-mini"
 _TIMEOUT_SECONDS = 120
 _MAX_TOTAL_CHARS = 60_000
 _MIN_CONTENT_CHARS = 20
+
+# service_pricing_table é a única categoria allowMultiple (ver docs/architecture/knowledge-base.md)
+# — pedimos ao LLM linhas estruturadas em vez de texto livre para o item já nascer editável como
+# tabela na UI (ServicePricingTables.tsx), sem exigir conversão manual depois.
+_PRICING_TABLE_KEY = "service_pricing_table"
 
 
 def _build_prompt(
@@ -47,6 +52,16 @@ def _build_prompt(
         description = cat.get("description") or ""
         lines.append(f"- {key} — {label}: {description}")
     lines.append("")
+
+    if any(cat.get("key") == _PRICING_TABLE_KEY for cat in categories):
+        lines.append(
+            f"REGRA ESPECIAL PARA '{_PRICING_TABLE_KEY}': em vez de \"content\" (texto), "
+            'retorne "rows": uma lista com um objeto por serviço/pacote encontrado nas fontes, '
+            'no formato {"nome": "<nome do serviço>", "duracaoMinutos": <número ou null>, '
+            '"preco": "<preço como texto, ex.: \'R$150\'>", "descricao": "<opcional>"}. '
+            "Preserve nomes, preços e durações exactamente como aparecem nas fontes."
+        )
+        lines.append("")
 
     lines.append("FONTES:")
     total = 0
@@ -76,9 +91,45 @@ def _build_prompt(
         "nas fontes. Se as fontes não cobrirem uma categoria, use null para ela. "
         "Não repita o mesmo conteúdo em várias categorias; priorize a mais específica.\n\n"
         "Responda com JSON exatamente neste formato:\n"
-        '{"categories": {"<key da categoria>": {"content": "<texto>", "source_refs": [<índices das fontes usadas>]} ou null}}'
+        '{"categories": {"<key da categoria>": {"content": "<texto>", "source_refs": [<índices>]} '
+        f'ou {{"rows": [...], "source_refs": [...]}} para \'{_PRICING_TABLE_KEY}\' (ver regra '
+        'especial acima) ou null}}'
     )
     return "\n".join(lines)
+
+
+def _serialize_pricing_rows(raw_rows: Any) -> Optional[str]:
+    """
+    Normaliza "rows" devolvido pelo LLM para o mesmo JSON structured_v1 que
+    ServicePricingTables.tsx:serializeServicePricingRows() produz no frontend —
+    mesmo schema, para o item nascer editável como tabela sem conversão manual.
+    Retorna None se raw_rows não for uma lista utilizável (nenhuma linha com nome).
+    """
+    if not isinstance(raw_rows, list):
+        return None
+
+    rows: List[Dict[str, Any]] = []
+    for raw in raw_rows:
+        if not isinstance(raw, dict):
+            continue
+        nome = str(raw.get("nome") or "").strip()
+        if not nome:
+            continue
+        duracao = raw.get("duracaoMinutos")
+        duracao = duracao if isinstance(duracao, (int, float)) and not isinstance(duracao, bool) else None
+        descricao = str(raw.get("descricao") or "").strip()
+        row: Dict[str, Any] = {
+            "nome": nome,
+            "duracaoMinutos": duracao,
+            "preco": str(raw.get("preco") or "").strip(),
+        }
+        if descricao:
+            row["descricao"] = descricao
+        rows.append(row)
+
+    if not rows:
+        return None
+    return json.dumps({"format": "structured_v1", "rows": rows}, ensure_ascii=False)
 
 
 def classify_sources(
@@ -139,11 +190,17 @@ def classify_sources(
     for key, entry in (parsed.get("categories") or {}).items():
         if key not in valid_keys or not isinstance(entry, dict):
             continue
-        content = (entry.get("content") or "").strip()
-        if len(content) < _MIN_CONTENT_CHARS:
-            continue
         refs = entry.get("source_refs")
         refs = [r for r in refs if isinstance(r, int)] if isinstance(refs, list) else []
+
+        content: Optional[str] = None
+        if key == _PRICING_TABLE_KEY:
+            content = _serialize_pricing_rows(entry.get("rows"))
+        if content is None:
+            # categoria normal, ou o LLM ignorou a regra especial de rows — trata como texto livre
+            content = (entry.get("content") or "").strip()
+            if len(content) < _MIN_CONTENT_CHARS:
+                continue
         result[key] = {"content": content, "source_refs": refs}
 
     logger.info(
