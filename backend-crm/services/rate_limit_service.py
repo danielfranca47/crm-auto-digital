@@ -17,6 +17,10 @@ LIMIT_KEYS_BY_TYPE: Dict[str, str] = {
     jobs_service.TYPE_MAPS_ENRICH: "max_maps_enrich_daily",
 }
 
+LIMIT_KEYS_BY_TYPE_WEEKLY: Dict[str, str] = {
+    jobs_service.TYPE_KNOWLEDGE_INGEST: "knowledge_ingest_weekly_limit",
+}
+
 USAGE_TABLE_SQL = """
 CREATE TABLE IF NOT EXISTS limit_usage (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -189,6 +193,87 @@ def _count_jobs_for_today(
         params,
     ).fetchone()
     return int(row["total"]) if row else 0
+
+
+def _count_jobs_for_week(
+    *, conn: sqlite3.Connection, user_id: int, job_types: Sequence[str]
+) -> int:
+    """Conta jobs criados desde a segunda-feira corrente (UTC) até agora."""
+
+    if not job_types:
+        return 0
+
+    placeholders = ",".join(["?"] * len(job_types))
+    params: List[Any] = [user_id, *job_types]
+    row = conn.execute(
+        f"""
+        SELECT COUNT(*) as total
+          FROM jobs
+         WHERE user_id = ?
+           AND type IN ({placeholders})
+           AND DATE(created_at, 'utc') >= DATE('now', 'utc', '-6 days', 'weekday 1')
+        """,
+        params,
+    ).fetchone()
+    return int(row["total"]) if row else 0
+
+
+def ensure_weekly_job_limit(
+    *,
+    job_type: str,
+    user_id: Optional[int],
+    entitlements: Optional[Dict[str, Any]],
+    label: Optional[str] = None,
+) -> None:
+    """
+    Raises HTTPException 429 if creating one more job of ``job_type`` this week
+    (segunda-feira UTC até agora) would exceed the plan's weekly limit.
+    None = ilimitado (não bloqueia). No-op se não houver limite configurado para o tipo.
+    """
+
+    canonical = jobs_service.normalize_job_type(job_type)
+    limit_key = LIMIT_KEYS_BY_TYPE_WEEKLY.get(canonical)
+    limit_value = _extract_limit_value(entitlements, limit_key)
+
+    if user_id is None or limit_value is None:
+        return
+
+    conn = get_connection()
+    try:
+        variants = jobs_service.expand_type_variants(canonical)
+        usage = _count_jobs_for_week(conn=conn, user_id=user_id, job_types=variants)
+        if usage + 1 > limit_value:
+            detail_label = label or canonical
+            raise HTTPException(
+                status_code=429,
+                detail=f"Limite semanal atingido para {detail_label}. Atualize seu plano.",
+            )
+    finally:
+        conn.close()
+
+
+def get_weekly_job_usage(
+    *, job_type: str, user_id: Optional[int], conn: Optional[sqlite3.Connection] = None
+) -> int:
+    """Retorna quantos jobs de ``job_type`` foram criados desde a segunda-feira UTC corrente."""
+
+    if user_id is None:
+        return 0
+
+    canonical = jobs_service.normalize_job_type(job_type)
+    variants = jobs_service.expand_type_variants(canonical)
+
+    owns_conn = False
+    db_conn = conn
+    if db_conn is None:
+        db_conn = get_connection()
+        owns_conn = True
+
+    try:
+        return _count_jobs_for_week(conn=db_conn, user_id=user_id, job_types=variants)
+    finally:
+        if owns_conn and db_conn:
+            db_conn.close()
 
 
 def build_rate_limit_state(

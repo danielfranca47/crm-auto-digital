@@ -316,7 +316,7 @@ export type KnowledgeItem = {
   id: number;
   user_id: number;
   title: string;
-  source_type: "manual" | "file";
+  source_type: "manual" | "file" | "ai_extracted";
   content_text: string;
   file_path?: string | null;
   category?: string | null;
@@ -325,6 +325,66 @@ export type KnowledgeItem = {
   media_items: KnowledgeMediaItem[];
   created_at: string;
   updated_at: string;
+};
+
+export type KnowledgeIngestSourceMeta =
+  | { kind: "file"; filename: string; description?: string }
+  | { kind: "url"; url: string; description?: string };
+
+export type KnowledgeIngestMeta = {
+  sources: KnowledgeIngestSourceMeta[];
+  context: { niche?: string; audience?: string; offer?: string };
+  categories: Array<{ key: string; label: string; description: string; importance: string }>;
+};
+
+export type KnowledgeIngestCreateResponse = {
+  job_id: number;
+  status: string;
+  accepted: number;
+  rejected: Array<{ filename?: string; url?: string; reason: string }>;
+};
+
+export type KnowledgeIngestProposedItem = {
+  category: string;
+  label: string;
+  content: string;
+  preview: string;
+};
+
+export type KnowledgeIngestAppliedItem = { category: string; item_id: number; preview: string };
+
+export type KnowledgeIngestStatus = {
+  job_id: number;
+  status: "pending" | "in_progress" | "completed" | "failed";
+  result: {
+    phase?: string;
+    sources?: Array<{
+      status: "extracted" | "failed";
+      chars: number;
+      reason?: string | null;
+      filename?: string;
+      url?: string;
+      description?: string;
+    }>;
+    proposed?: KnowledgeIngestProposedItem[];
+    applied?: KnowledgeIngestAppliedItem[];
+    uncovered?: string[];
+    skipped_existing?: string[];
+  } | null;
+  error: string | null;
+};
+
+export type KnowledgeIngestApplyResponse = {
+  job_id: number;
+  applied: KnowledgeIngestAppliedItem[];
+  already_applied: string[];
+  now_existing: string[];
+};
+
+export type KnowledgeIngestPendingResponse = {
+  job_id: number | null;
+  status?: KnowledgeIngestStatus["status"];
+  result?: KnowledgeIngestStatus["result"];
 };
 
 export type BusinessInfoField = {
@@ -1149,6 +1209,21 @@ export const api = {
       payload: Partial<{ title: string; content_text: string; category: string | null; active_in_funnel: number }>
     ) => apiClient.put<KnowledgeItem>(`/knowledge/${id}`, payload),
     deleteKnowledge: async (id: number) => apiClient.delete(`/knowledge/${id}`),
+    ingestKnowledge: async (files: File[], meta: KnowledgeIngestMeta) => {
+      const formData = new FormData();
+      for (const f of files) formData.append("files", f);
+      formData.append("meta", JSON.stringify(meta));
+      return apiClient.post<KnowledgeIngestCreateResponse>(`/knowledge/ingest`, formData);
+    },
+    getKnowledgeIngestStatus: async (jobId: number) =>
+      apiClient.get<KnowledgeIngestStatus>(`/knowledge/ingest/${jobId}`),
+    getPendingKnowledgeIngestReview: async () =>
+      apiClient.get<KnowledgeIngestPendingResponse>(`/knowledge/ingest/pending`),
+    applyKnowledgeIngest: async (jobId: number, approved: string[], editedContent?: Record<string, string>) =>
+      apiClient.post<KnowledgeIngestApplyResponse>(`/knowledge/ingest/${jobId}/apply`, {
+        approved,
+        edited_content: editedContent ?? {},
+      }),
     uploadKnowledgeFile: async (file: File) => {
       const formData = new FormData();
       formData.append("file", file);

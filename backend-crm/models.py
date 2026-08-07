@@ -232,7 +232,7 @@ class KnowledgeItemOut(BaseModel):
     id: int
     user_id: int
     title: str
-    source_type: Literal["manual", "file"]
+    source_type: Literal["manual", "file", "ai_extracted"]
     content_text: str
     file_path: Optional[str] = None
     category: Optional[str] = None

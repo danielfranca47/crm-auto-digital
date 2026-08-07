@@ -7,7 +7,7 @@ from fastapi import APIRouter, Depends
 
 from database import get_connection
 from security_core import CurrentUser, require_crm_access
-from services import rate_limit_service
+from services import jobs_service, rate_limit_service
 
 router = APIRouter(prefix="/api/usage", tags=["Usage"])
 
@@ -102,6 +102,14 @@ def build_usage_payload(
         int(playground_limit) if playground_limit is not None else None, playground_used
     )
 
+    # Ingestão de conhecimento semanal — conta direto na tabela jobs (mesma fonte do gate em
+    # routes/knowledge_ingest.py), não em limit_usage (ver nota em docs/architecture/plans-limits.md)
+    knowledge_ingest_limit = _get_limit_value(limits, "knowledge_ingest_weekly_limit")
+    knowledge_ingest_used = rate_limit_service.get_weekly_job_usage(
+        job_type=jobs_service.TYPE_KNOWLEDGE_INGEST, user_id=user_id, conn=conn
+    )
+    knowledge_ingest_remaining = _calculate_remaining(knowledge_ingest_limit, knowledge_ingest_used)
+
     # Links de checkout (Efí) para CTAs de upgrade — gerados sob demanda em /checkout/efi/{offer}
     _crm_base = os.environ.get("CRM_PUBLIC_BASE_URL", "").rstrip("/")
     checkout_links = {
@@ -136,6 +144,11 @@ def build_usage_payload(
             "used": playground_used,
             "limit": playground_limit,
             "remaining": playground_remaining,
+        },
+        "knowledge_ingest_weekly": {
+            "used": knowledge_ingest_used,
+            "limit": knowledge_ingest_limit,
+            "remaining": knowledge_ingest_remaining,
         },
         "checkout_links": checkout_links,
     }

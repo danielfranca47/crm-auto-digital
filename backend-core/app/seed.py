@@ -182,6 +182,7 @@ def seed_initial_data(db: Session) -> None:
             "ia_memory_advanced": False,
             "follow_up_enabled": False,
             "playground_monthly_limit": 5,
+            "knowledge_ingest_weekly_limit": 3,
         },
         "crm_growth": {
             "max_leads": 1500,
@@ -200,6 +201,7 @@ def seed_initial_data(db: Session) -> None:
             "ia_memory_advanced": False,
             "follow_up_enabled": True,
             "playground_monthly_limit": None,
+            "knowledge_ingest_weekly_limit": 10,
         },
         "crm_internal": {
             "max_leads": None,
@@ -218,6 +220,7 @@ def seed_initial_data(db: Session) -> None:
             "ia_memory_advanced": True,
             "follow_up_enabled": True,
             "playground_monthly_limit": None,
+            "knowledge_ingest_weekly_limit": None,
         },
     }
 

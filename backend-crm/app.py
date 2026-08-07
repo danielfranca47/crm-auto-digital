@@ -40,6 +40,7 @@ from routes import (
 from routes import public
 from routes import admin_agents
 from routes import admin_billing
+from routes import knowledge_ingest
 from services.followup_reconciler import (
     reconcile_due_followups,
     scan_inactive_clients_for_checkin,
@@ -47,6 +48,7 @@ from services.followup_reconciler import (
 )
 from services.spy_agent.observation_reconciler import reconcile_expired_observations
 from services.spy_agent.spy_media_worker import process_pending_spy_media_jobs
+from services.knowledge_ingest.ingest_worker import process_pending_knowledge_ingest_jobs
 
 logger = logging.getLogger(__name__)
 
@@ -54,6 +56,7 @@ _RECONCILER_INTERVAL = int(os.getenv("FOLLOWUP_RECONCILER_INTERVAL_SECONDS", "60
 _RECONCILER_STARTUP_DELAY = 5  # segundos de grace period antes da 1ª execução
 _SPY_RECONCILER_INTERVAL = int(os.getenv("SPY_AGENT_RECONCILER_INTERVAL_SECONDS", "60"))
 _SPY_MEDIA_WORKER_INTERVAL = int(os.getenv("SPY_MEDIA_WORKER_INTERVAL_SECONDS", "30"))
+_KNOWLEDGE_INGEST_WORKER_INTERVAL = int(os.getenv("KNOWLEDGE_INGEST_WORKER_INTERVAL_SECONDS", "10"))
 
 
 async def _reconciler_loop() -> None:
@@ -133,15 +136,37 @@ async def _spy_media_worker_loop() -> None:
         await asyncio.sleep(_SPY_MEDIA_WORKER_INTERVAL)
 
 
+async def _knowledge_ingest_worker_loop() -> None:
+    """Processa jobs knowledge.ingest.internal (extração de fontes da base de conhecimento)."""
+    logger.info(
+        "[knowledge_ingest_worker] scheduler iniciado — intervalo=%ds",
+        _KNOWLEDGE_INGEST_WORKER_INTERVAL,
+    )
+    await asyncio.sleep(_RECONCILER_STARTUP_DELAY + 6)  # stagger após os outros
+    while True:
+        try:
+            result = await asyncio.to_thread(process_pending_knowledge_ingest_jobs)
+            if result["processed"] > 0 or result["failed"] > 0:
+                logger.info(
+                    "[knowledge_ingest_worker] processed=%d failed=%d",
+                    result["processed"],
+                    result["failed"],
+                )
+        except Exception as exc:
+            logger.error("[knowledge_ingest_worker] erro inesperado: %s", exc, exc_info=True)
+        await asyncio.sleep(_KNOWLEDGE_INGEST_WORKER_INTERVAL)
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     task = asyncio.create_task(_reconciler_loop())
     spy_task = asyncio.create_task(_spy_reconciler_loop())
     spy_media_task = asyncio.create_task(_spy_media_worker_loop())
+    knowledge_ingest_task = asyncio.create_task(_knowledge_ingest_worker_loop())
     try:
         yield
     finally:
-        for t in (task, spy_task, spy_media_task):
+        for t in (task, spy_task, spy_media_task, knowledge_ingest_task):
             t.cancel()
             try:
                 await t
@@ -195,6 +220,7 @@ app.include_router(profile.router)                                  # prefixo de
 app.include_router(appointments.router)                             # já define prefix="/api/appointments"
 app.include_router(agents.router)                                   # /api/agents
 app.include_router(usage.router)                                    # /api/usage
+app.include_router(knowledge_ingest.router)                         # /api/knowledge/ingest (antes de knowledge p/ evitar sombra de rota)
 app.include_router(knowledge.router)                                # /api/knowledge
 app.include_router(qualification.router)                            # /api/qualification
 app.include_router(webhooks.router)                                 # /webhooks/whatsapp/inbound

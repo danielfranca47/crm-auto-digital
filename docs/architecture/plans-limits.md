@@ -16,6 +16,7 @@ Cada plano (`crm_start`, `crm_growth`, `crm_internal`, etc.) tem uma linha em `p
 |---|---|---|---|
 | `follow_up_enabled` | `INTEGER (0/1)` | `0` | `1` |
 | `playground_monthly_limit` | `INTEGER` ou `NULL` | `5` | `NULL` (ilimitado) |
+| `knowledge_ingest_weekly_limit` | `INTEGER` ou `NULL` | `3` | `10` (`crm_growth`) / `NULL` (`crm_internal`, ilimitado) |
 
 Estes campos são expostos via `GET /me/entitlements` (backend-core) na estrutura `limits`:
 
@@ -23,7 +24,8 @@ Estes campos são expostos via `GET /me/entitlements` (backend-core) na estrutur
 {
   "limits": {
     "follow_up_enabled": false,
-    "playground_monthly_limit": 5
+    "playground_monthly_limit": 5,
+    "knowledge_ingest_weekly_limit": 3
   }
 }
 ```
@@ -68,6 +70,58 @@ Verifica e incrementa a quota mensal do Playground.
 
 ---
 
+## Limites por contagem de jobs — `backend-crm/services/rate_limit_service.py`
+
+Padrão usado para limites cuja unidade é "1 job criado", sem tabela de uso dedicada — a contagem
+é feita direto na tabela `jobs`, filtrando por `type` + `user_id` + janela de tempo.
+
+### Limite diário — `LIMIT_KEYS_BY_TYPE`
+
+```python
+LIMIT_KEYS_BY_TYPE = {
+    TYPE_WHATSAPP_SEND: "max_whatsapp_send_daily",
+    TYPE_EMAIL_SEND_COLD: "max_email_send_daily",
+    TYPE_MAPS_SEARCH: "max_maps_search_daily",
+    TYPE_MAPS_ENRICH: "max_maps_enrich_daily",
+}
+```
+
+`build_rate_limit_state()` / `ensure_daily_limit(job_type, user_id, entitlements)` contam jobs
+desse tipo criados hoje (`_count_jobs_for_today`, `DATE(created_at,'utc') = DATE('now','utc')`) e
+levantam `HTTP 429` se o próximo job excederia o limite.
+
+**Nota — divergência conhecida:** `routes/usage.py::build_usage_payload()` tem uma lista
+`daily_keys` que inclui essas mesmas chaves (`max_whatsapp_send_daily`, `max_maps_search_daily`,
+etc.) e as lê via `_get_daily_usage()` — mas essa função lê da tabela `limit_usage`, que só é
+escrita para `max_prospects_daily` (via `consume_daily_units`/`reserve_daily_units` em
+`automations/search/proposals/site/runner.py`). Para os outros keys da lista, o gate real (na
+criação do job) e o número exibido em `/api/usage` vêm de fontes diferentes — o `/api/usage`
+mostraria `used: 0` sempre para eles. Pré-existente, fora do escopo de qualquer feature que só
+precise do gate funcionando; ao adicionar um novo limite por contagem de job, prefira ler o
+"usado" também da tabela `jobs` (ver exemplo do limite semanal abaixo), não de `limit_usage`.
+
+### Limite semanal — `LIMIT_KEYS_BY_TYPE_WEEKLY`
+
+```python
+LIMIT_KEYS_BY_TYPE_WEEKLY = {
+    TYPE_KNOWLEDGE_INGEST: "knowledge_ingest_weekly_limit",
+}
+```
+
+Mesmo padrão do diário, mas com janela da semana corrente (segunda-feira UTC até agora):
+`_count_jobs_for_week()` usa `DATE(created_at,'utc') >= DATE('now','utc','-6 days','weekday 1')`
+(idioma SQLite para "a segunda-feira mais recente", não é ISO-8601 estrito em bordas de ano —
+mesmo nível de precisão já aceito para `month_utc` no restante do arquivo).
+
+- `ensure_weekly_job_limit(job_type, user_id, entitlements, label=None)` — gate, levanta `429`
+- `get_weekly_job_usage(job_type, user_id, conn=None)` — leitura sem gate, usada por `/api/usage`
+
+**Chamado em:** `routes/knowledge_ingest.py` → `create_ingest_batch()` (antes de salvar arquivos
+em disco e antes do check de job ativo/409) · `routes/usage.py` → bloco `knowledge_ingest_weekly`
+(lê direto de `jobs`, evitando a divergência descrita acima).
+
+---
+
 ## Tabela `playground_usage_monthly` (CRM DB)
 
 ```sql
@@ -94,6 +148,11 @@ CREATE TABLE IF NOT EXISTS playground_usage_monthly (
     "used": 2,
     "limit": 5,
     "remaining": 3
+  },
+  "knowledge_ingest_weekly": {
+    "used": 1,
+    "limit": 3,
+    "remaining": 2
   }
 }
 ```
@@ -115,6 +174,13 @@ Quando a API retorna 403 com um erro de gate, o frontend fecha o modal/ação e 
 | `playground_limit_reached` | `Playground.tsx` | "Limite de testes atingido" |
 
 Implementação: handler no `catch` verifica `error?.data?.detail?.error`, se reconhecido mostra toast com `ToastAction` e retorna — sem executar o toast genérico de erro.
+
+**Exceção — `KnowledgeIngestPanel.tsx`:** o gate de `knowledge_ingest_weekly_limit` retorna `429`
+com `detail` como string simples (não `{error, message}`), e o painel não segue o padrão de
+toast/CTA — mostra a mensagem do backend inline no próprio painel de erro do componente
+(`startProcessing()` checa `err instanceof ApiError && err.status === 429`). Escolha consciente
+para manter consistência com o painel de erro inline já existente no componente, não um gap a
+corrigir.
 
 ### Badge de quota no Playground
 

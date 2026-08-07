@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { api } from '@/services/api';
 import { KNOWLEDGE_IMPORTANCE_LABELS, type KnowledgeCategory, type AgentConfig } from '@/types/agente';
+import { KnowledgeIngestPanel } from './KnowledgeIngestPanel';
 
 // ─── Utilitários ──────────────────────────────────────────────
 
@@ -65,11 +66,13 @@ function StepContext({
   audience, setAudience,
   offer, setOffer,
   onContinue,
+  onExit,
 }: {
   niche: string;    setNiche:    (v: string) => void;
   audience: string; setAudience: (v: string) => void;
   offer: string;    setOffer:    (v: string) => void;
   onContinue: () => void;
+  onExit: () => void;
 }) {
   return (
     <div>
@@ -114,13 +117,60 @@ function StepContext({
         />
       </div>
 
-      <button
-        className="o-btn o-btn-primary"
-        style={{ marginTop: 8 }}
-        onClick={onContinue}
-      >
-        Continuar →
-      </button>
+      <div style={{ display: 'flex', gap: 10, marginTop: 8 }}>
+        <button
+          className="o-btn o-btn-primary"
+          onClick={onContinue}
+        >
+          Continuar →
+        </button>
+        <button
+          className="o-btn"
+          onClick={onExit}
+          style={{ color: 'var(--o-sub)' }}
+        >
+          Preencher depois
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ─── Passo 1: Importar materiais (opcional) ───────────────────
+
+function StepImport({
+  categories,
+  context,
+  onFinished,
+  onManual,
+}: {
+  categories: KnowledgeCategory[];
+  context: { niche?: string; audience?: string; offer?: string };
+  onFinished: (coveredKeys: string[]) => void;
+  onManual: () => void;
+}) {
+  return (
+    <div>
+      <div style={{ marginBottom: 18 }}>
+        <div
+          className="font-display"
+          style={{ fontSize: 18, fontWeight: 400, color: 'var(--o-text)', marginBottom: 8 }}
+        >
+          Importar materiais (opcional)
+        </div>
+        <div style={{ fontSize: 13, color: 'var(--o-sub)', lineHeight: 1.6 }}>
+          Se você tem materiais prontos, a IA preenche a base por você — e o passo a passo
+          continua só com o que ficar pendente. Se preferir, preencha tudo manualmente.
+        </div>
+      </div>
+
+      <KnowledgeIngestPanel categories={categories} context={context} onFinished={onFinished} />
+
+      <div style={{ borderTop: '1px solid var(--o-b1)', marginTop: 20, paddingTop: 14 }}>
+        <button className="o-btn" onClick={onManual} style={{ color: 'var(--o-sub)' }}>
+          Preencher manualmente →
+        </button>
+      </div>
     </div>
   );
 }
@@ -224,13 +274,13 @@ function StepCategory({
         >
           {saving ? 'Salvando…' : 'Salvar e continuar →'}
         </button>
-        {!isCritical && onSkip && (
+        {onSkip && (
           <button
             className="o-btn"
             onClick={onSkip}
             style={{ color: 'var(--o-sub)' }}
           >
-            Pular por agora
+            {isCritical ? 'Pular esta etapa' : 'Pular por agora'}
           </button>
         )}
       </div>
@@ -339,28 +389,34 @@ export interface WizardProps {
   rawCategories: KnowledgeCategory[];
   agentConfig:   Partial<AgentConfig>;
   onComplete:    () => void;
+  onExit:        () => void;
 }
 
-export function CamadaConhecimentoWizard({ rawCategories, agentConfig, onComplete }: WizardProps) {
+export function CamadaConhecimentoWizard({ rawCategories, agentConfig, onComplete, onExit }: WizardProps) {
   const [niche,    setNiche]    = useState(agentConfig.niche             ?? '');
   const [audience, setAudience] = useState(agentConfig.target_audience  ?? '');
   const [offer,    setOffer]    = useState(agentConfig.offer_description ?? '');
 
   const [step,       setStep]       = useState(0);
   const [filledKeys, setFilledKeys] = useState<Set<string>>(new Set());
+  // Categorias que viram passos — congeladas ao sair do passo de importação
+  // (após a IA preencher, só as pendentes continuam no fluxo)
+  const [wizardCats, setWizardCats] = useState<KnowledgeCategory[] | null>(null);
 
   const criticalCats    = rawCategories.filter(c => c.importance === 'critical');
   const recommendedCats = rawCategories.filter(c => c.importance === 'recommended');
   const contentSteps    = [...criticalCats, ...recommendedCats];
-  // Estrutura: passo 0 = contexto | passos 1..N = categorias | passo N+1 = conclusão
-  const totalSteps = 1 + contentSteps.length + 1;
+  const activeCats      = wizardCats ?? contentSteps;
+  // Estrutura: 0 = contexto | 1 = importar materiais | 2..N+1 = categorias | último = conclusão
+  const totalSteps = 2 + activeCats.length + 1;
 
   const isContextStep = step === 0;
+  const isImportStep  = step === 1;
   const isDoneStep    = step === totalSteps - 1;
-  const isContentStep = !isContextStep && !isDoneStep;
+  const isContentStep = !isContextStep && !isImportStep && !isDoneStep;
 
-  const currentCatIdx = step - 1;
-  const currentCatRaw = isContentStep ? contentSteps[currentCatIdx] : null;
+  const currentCatIdx = step - 2;
+  const currentCatRaw = isContentStep ? activeCats[currentCatIdx] : null;
   const currentCategory = currentCatRaw
     ? personalizeCategory(currentCatRaw, niche, audience, offer)
     : null;
@@ -371,18 +427,34 @@ export function CamadaConhecimentoWizard({ rawCategories, agentConfig, onComplet
     setStep(s => s + 1);
   }
 
+  function handleIngestFinished(coveredKeys: string[]) {
+    const covered = new Set(coveredKeys);
+    setFilledKeys(prev => new Set([...prev, ...coveredKeys]));
+    setWizardCats(contentSteps.filter(c => !covered.has(c.key)));
+    setStep(2);
+  }
+
+  function handleManualFill() {
+    setWizardCats(contentSteps);
+    setStep(2);
+  }
+
   // Cálculo de progresso (contexto conta como 0%, conclusão como 100%)
   const progressPercent = totalSteps > 2
     ? Math.round((step / (totalSteps - 1)) * 100)
     : 0;
 
+  const activeCriticals   = activeCats.filter(c => c.importance === 'critical');
+  const activeRecommended = activeCats.filter(c => c.importance === 'recommended');
   const stepLabel = isContextStep
     ? 'Contexto do negócio'
+    : isImportStep
+    ? 'Importar materiais'
     : isDoneStep
     ? 'Concluído'
     : isCriticalStep
-    ? `Seção crítica ${currentCatIdx + 1} de ${criticalCats.length}`
-    : `Seção recomendada ${currentCatIdx - criticalCats.length + 1} de ${recommendedCats.length}`;
+    ? `Seção crítica ${activeCriticals.indexOf(currentCatRaw!) + 1} de ${activeCriticals.length}`
+    : `Seção recomendada ${activeRecommended.indexOf(currentCatRaw!) + 1} de ${activeRecommended.length}`;
 
   return (
     <div style={{ maxWidth: 620 }}>
@@ -395,9 +467,24 @@ export function CamadaConhecimentoWizard({ rawCategories, agentConfig, onComplet
           >
             {stepLabel}
           </span>
-          <span className="font-mono-orion" style={{ fontSize: 8, color: 'var(--o-dim)' }}>
-            {step + 1} / {totalSteps}
-          </span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+            {!isDoneStep && (
+              <button
+                onClick={onExit}
+                className="font-mono-orion"
+                style={{
+                  fontSize: 8, letterSpacing: 1.5, textTransform: 'uppercase',
+                  color: 'var(--o-dim)', background: 'none', border: 'none',
+                  cursor: 'pointer', padding: 0, textDecoration: 'underline',
+                }}
+              >
+                Preencher depois →
+              </button>
+            )}
+            <span className="font-mono-orion" style={{ fontSize: 8, color: 'var(--o-dim)' }}>
+              {step + 1} / {totalSteps}
+            </span>
+          </div>
         </div>
         <div style={{ height: 2, background: 'var(--o-b1)', borderRadius: 2 }}>
           <div style={{
@@ -413,6 +500,16 @@ export function CamadaConhecimentoWizard({ rawCategories, agentConfig, onComplet
           audience={audience} setAudience={setAudience}
           offer={offer}       setOffer={setOffer}
           onContinue={() => setStep(1)}
+          onExit={onExit}
+        />
+      )}
+
+      {isImportStep && (
+        <StepImport
+          categories={rawCategories}
+          context={{ niche, audience, offer }}
+          onFinished={handleIngestFinished}
+          onManual={handleManualFill}
         />
       )}
 
@@ -422,7 +519,7 @@ export function CamadaConhecimentoWizard({ rawCategories, agentConfig, onComplet
           category={currentCategory}
           isCritical={!!isCriticalStep}
           onSaved={handleCategorySaved}
-          onSkip={!isCriticalStep ? () => setStep(s => s + 1) : undefined}
+          onSkip={() => setStep(s => s + 1)}
         />
       )}
 

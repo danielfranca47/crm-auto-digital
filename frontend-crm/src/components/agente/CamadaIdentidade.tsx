@@ -332,11 +332,11 @@ function ModalPerfil({ value, name, brand, agentMode, tone, onSave, onClose }: {
         <textarea
           className="o-textarea"
           style={{ minHeight: 220 }}
-          maxLength={1500}
+          maxLength={10000}
           value={local}
           onChange={e => setLocal(e.target.value)}
         />
-        <div className="o-char-count">{local.length}/1500</div>
+        <div className="o-char-count">{local.length}/10000</div>
       </div>
       <button className="o-btn" onClick={regenerate} style={{ marginTop: 4 }}>↺ Regenerar a partir das configurações</button>
     </ModalBase>

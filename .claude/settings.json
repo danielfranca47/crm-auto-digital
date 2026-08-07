@@ -59,7 +59,32 @@
       "Bash(curl -s -o /dev/null -w \"core:%{http_code}\\\\n\" http://localhost:8001/docs)",
       "Bash(curl -s -o /dev/null -w \"crm:%{http_code}\\\\n\" http://localhost:8000/docs)",
       "Bash(curl -s -o /dev/null -w \"frontend:%{http_code}\\\\n\" http://localhost:8080/)",
-      "Bash(curl -s -o /dev/null -w \"frontend5173:%{http_code}\\\\n\" http://localhost:5173/)"
+      "Bash(curl -s -o /dev/null -w \"frontend5173:%{http_code}\\\\n\" http://localhost:5173/)",
+      "Bash(./.venv/Scripts/python.exe -m pytest *)",
+      "Bash(.venv/Scripts/python.exe -m pytest *)",
+      "Bash(python -m pytest *)",
+      "Bash(npx tsc --noEmit *)",
+      "Bash(tasklist *)",
+      "mcp__plugin_chrome-devtools-mcp_chrome-devtools__take_snapshot",
+      "mcp__plugin_chrome-devtools-mcp_chrome-devtools__take_screenshot",
+      "mcp__plugin_chrome-devtools-mcp_chrome-devtools__wait_for",
+      "mcp__plugin_chrome-devtools-mcp_chrome-devtools__list_network_requests",
+      "mcp__plugin_chrome-devtools-mcp_chrome-devtools__get_network_request",
+      "mcp__plugin_chrome-devtools-mcp_chrome-devtools__list_console_messages",
+      "mcp__plugin_chrome-devtools-mcp_chrome-devtools__list_pages",
+      "mcp__computer-use__screenshot",
+      "mcp__computer-use__wait",
+      "mcp__Windows-MCP__Snapshot",
+      "mcp__claude-in-chrome__find",
+      "mcp__claude-in-chrome__get_page_text",
+      "mcp__computer-use__list_granted_applications",
+      "Bash(curl -s http://localhost:*)",
+      "Bash(curl -s -X POST http://localhost:*)",
+      "Bash(curl -s -X GET http://localhost:*)",
+      "mcp__plugin_chrome-devtools-mcp_chrome-devtools__click",
+      "mcp__plugin_chrome-devtools-mcp_chrome-devtools__fill",
+      "mcp__plugin_chrome-devtools-mcp_chrome-devtools__navigate_page",
+      "mcp__plugin_chrome-devtools-mcp_chrome-devtools__type_text"
     ]
   }
 }

@@ -5,11 +5,8 @@ import uuid
 from datetime import datetime
 from pathlib import Path
 
-import httpx
-import pandas as pd
 from fastapi import APIRouter, BackgroundTasks, Depends, File, Form, HTTPException, UploadFile
 
-from core_client import fetch_core_ai_profile_resolve
 from database import get_connection, seed_business_info_defaults
 from models import (
     BusinessInfoCustomCreate,
@@ -23,33 +20,10 @@ from models import (
     KnowledgeUpdate,
 )
 from security_core import CurrentUser, require_crm_access
+from services.knowledge_ingest.extractors import extract_text_from_table_file
+from services.meta_prompter_trigger import trigger_meta_prompter_for_knowledge as _trigger_meta_prompter_for_knowledge
 
 logger = logging.getLogger(__name__)
-
-
-def _trigger_meta_prompter_for_knowledge(user_id: int) -> None:
-    """Fire-and-forget: regenera os blocos de prompt após edição de objections_faq."""
-    base = os.getenv("EXECUTORS_BASE_URL", "").rstrip("/")
-    token = os.getenv("CORE_SERVICE_TOKEN")
-    if not base or not token:
-        logger.debug("meta_prompter knowledge trigger ignorado: EXECUTORS_BASE_URL ou CORE_SERVICE_TOKEN ausente")
-        return
-    try:
-        ai_profile = fetch_core_ai_profile_resolve(user_id)
-    except Exception as exc:
-        logger.warning("meta_prompter knowledge trigger: falha ao resolver ai_profile user_id=%s: %s", user_id, exc)
-        return
-    if not ai_profile:
-        return
-    url = f"{base}/api/meta-prompter/generate/{user_id}"
-    headers = {"X-Service-Token": token, "Content-Type": "application/json"}
-    try:
-        with httpx.Client(timeout=5.0) as client:
-            resp = client.post(url, headers=headers, json={"ai_profile": ai_profile})
-        if not resp.is_success:
-            logger.warning("meta_prompter knowledge trigger falhou user_id=%s status=%s", user_id, resp.status_code)
-    except Exception as exc:
-        logger.warning("meta_prompter knowledge trigger erro user_id=%s: %s", user_id, exc)
 
 router = APIRouter(prefix="/api/knowledge", tags=["Knowledge"])
 
@@ -108,25 +82,10 @@ def _row_to_item(row, media_items: list | None = None) -> KnowledgeItemOut:
 
 
 def _extract_text_from_file(fp: Path) -> str:
-    suffix = fp.suffix.lower()
-
-    if suffix == ".txt":
-        try:
-            return fp.read_text(encoding="utf-8")
-        except UnicodeDecodeError:
-            return fp.read_text(encoding="latin-1")
-
-    if suffix == ".csv":
-        df = pd.read_csv(fp)
-        return df.head(200).to_csv(index=False)
-
-    if suffix == ".xlsx":
-        xls = pd.ExcelFile(fp)
-        sheet = "Leads" if "Leads" in xls.sheet_names else xls.sheet_names[0]
-        df = pd.read_excel(xls, sheet_name=sheet)
-        return df.head(200).to_csv(index=False)
-
-    raise HTTPException(status_code=400, detail="Extensão de arquivo não suportada")
+    try:
+        return extract_text_from_table_file(fp)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
 
 
 def _try_delete_media_file(media_url: str) -> None:

@@ -26,6 +26,7 @@ class PlanLimits(Base):
     ia_memory_advanced = Column(Boolean, default=False, nullable=False)
     follow_up_enabled = Column(Boolean, default=True, nullable=False)
     playground_monthly_limit = Column(Integer, nullable=True)
+    knowledge_ingest_weekly_limit = Column(Integer, nullable=True)
     created_at = Column(DateTime, server_default=func.now(), nullable=False, default=datetime.utcnow)
 
     plan = relationship("Plan", back_populates="limits")
@@ -44,6 +45,7 @@ class PlanLimits(Base):
             "max_prospects_daily": self.max_prospects_daily,
             "max_maps_search_daily": self.max_maps_search_daily,
             "max_maps_enrich_daily": self.max_maps_enrich_daily,
+            "knowledge_ingest_weekly_limit": self.knowledge_ingest_weekly_limit,
             "require_agent_local_activation_fee": self.require_agent_local_activation_fee,
             "ia_memory_advanced": self.ia_memory_advanced,
         }

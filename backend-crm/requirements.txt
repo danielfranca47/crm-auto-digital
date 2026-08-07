@@ -19,3 +19,4 @@ python-jose[cryptography]
 apscheduler
 jinja2
 aiofiles
+pypdf

@@ -9,6 +9,7 @@ import {
   type AgentConfig,
 } from '@/types/agente';
 import { CamadaConhecimentoWizard } from './CamadaConhecimentoWizard';
+import { KnowledgeIngestPanel } from './KnowledgeIngestPanel';
 import { BusinessInfo } from './BusinessInfo';
 import { GuidedMultiTableSection, ModalServiceTable } from './ServicePricingTables';
 
@@ -916,6 +917,18 @@ function GuidedSectionCard({
                   📷{(item?.media_items?.length ?? 0) > 1 ? <sup style={{ fontSize: 8 }}>{item!.media_items.length}</sup> : null}
                 </span>
               )}
+              {item?.source_type === 'ai_extracted' && (
+                <span
+                  className="font-mono-orion"
+                  style={{
+                    fontSize: 7, letterSpacing: 1.5, textTransform: 'uppercase', padding: '1px 5px',
+                    borderRadius: 2, border: '1px solid var(--o-b2)', color: 'var(--o-sub)', flexShrink: 0,
+                  }}
+                  title="Preenchido automaticamente pela IA a partir dos materiais importados — revise e edite à vontade"
+                >
+                  ✦ IA
+                </span>
+              )}
               {showStaleBadge && (
                 <span
                   className="font-mono-orion"
@@ -1011,6 +1024,7 @@ export function CamadaConhecimento({
   const [loading, setLoading]         = useState(true);
   const [error, setError]             = useState<string | null>(null);
   const [deleting, setDeleting]       = useState<number | null>(null);
+  const [userId, setUserId]           = useState<number | null>(null);
   const [wizardDismissed, setWizardDismissed] = useState(false);
   const [selectedPhases, setSelectedPhases]   = useState<Set<string>>(new Set());
   const [dismissedKeys, setDismissedKeys]     = useState<Set<string>>(new Set());
@@ -1035,6 +1049,7 @@ export function CamadaConhecimento({
   // Modais
   const [guidedModal, setGuidedModal] = useState<KnowledgeCategory | null>(null);
   const [modalAddExtra, setModalAddExtra] = useState(false);
+  const [modalIngest, setModalIngest] = useState(false);
   const [viewItem, setViewItem]       = useState<KnowledgeItem | null>(null);
   const [editExtra, setEditExtra]     = useState<KnowledgeItem | null>(null);
   const [serviceTableModal, setServiceTableModal] = useState<{ category: KnowledgeCategory; existingItem: KnowledgeItem | null } | null>(null);
@@ -1106,8 +1121,16 @@ export function CamadaConhecimento({
   async function load() {
     setLoading(true);
     try {
-      const data = await api.crm.getKnowledgeList();
+      const [data, me] = await Promise.all([
+        api.crm.getKnowledgeList(),
+        api.auth.me().catch(() => null),
+      ]);
       setItems(data);
+      const uid = me?.id ?? (data.length > 0 ? data[0].user_id : null);
+      setUserId(uid ?? null);
+      if (uid != null) {
+        setWizardDismissed(localStorage.getItem(`kb_wizard_dismissed_${uid}`) === '1');
+      }
       setActiveOverrides(new Map()); // limpar overrides ao recarregar
       setError(null);
     } catch {
@@ -1119,20 +1142,26 @@ export function CamadaConhecimento({
 
   useEffect(() => { load(); }, []);
 
-  // Ler seções ignoradas do localStorage após carregar items
+  function dismissWizard() {
+    if (userId != null) {
+      localStorage.setItem(`kb_wizard_dismissed_${userId}`, '1');
+    }
+    setWizardDismissed(true);
+  }
+
+  // Ler seções ignoradas do localStorage após identificar o usuário
   useEffect(() => {
-    if (items.length === 0) return;
-    const uid = items[0].user_id;
+    if (userId == null) return;
     try {
-      const raw = localStorage.getItem(`kb_dismissed_sections_${uid}`);
+      const raw = localStorage.getItem(`kb_dismissed_sections_${userId}`);
       if (raw) setDismissedKeys(new Set(JSON.parse(raw) as string[]));
     } catch { /* ignore */ }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [items.length > 0 ? items[0].user_id : null]);
+  }, [userId]);
 
   function persistDismissed(next: Set<string>) {
-    if (items.length === 0) return;
-    localStorage.setItem(`kb_dismissed_sections_${items[0].user_id}`, JSON.stringify([...next]));
+    if (userId != null) {
+      localStorage.setItem(`kb_dismissed_sections_${userId}`, JSON.stringify([...next]));
+    }
     setDismissedKeys(next);
   }
 
@@ -1204,7 +1233,8 @@ export function CamadaConhecimento({
       <CamadaConhecimentoWizard
         rawCategories={rawGuidedCategories}
         agentConfig={agentConfig ?? {}}
-        onComplete={() => { setWizardDismissed(true); load(); }}
+        onComplete={() => { dismissWizard(); load(); }}
+        onExit={() => { dismissWizard(); load(); }}
       />
     );
   }
@@ -1244,6 +1274,14 @@ export function CamadaConhecimento({
             <span className="font-mono-orion" style={{ fontSize: 9, letterSpacing: '2.5px', textTransform: 'uppercase', color: 'var(--o-sub)' }}>
               Seções sugeridas para este agente
             </span>
+            <button
+              className="o-btn"
+              onClick={() => setModalIngest(true)}
+              style={{ marginLeft: 10, fontSize: 10, padding: '3px 10px' }}
+              title="Enviar PDF, imagem, planilha ou URL — a IA preenche as seções que os materiais cobrirem"
+            >
+              ✦ Importar materiais
+            </button>
             {selectedPhases.size > 0 && (
               <button
                 onClick={() => setSelectedPhases(new Set())}
@@ -1503,6 +1541,24 @@ export function CamadaConhecimento({
           onClose={() => setModalAddExtra(false)}
           onAdded={() => { setModalAddExtra(false); load(); }}
         />
+      )}
+      {modalIngest && (
+        <ModalBase
+          title="Importar materiais"
+          sub="A IA lê PDF, imagem, planilha, texto ou o seu site e preenche as seções que os materiais cobrirem"
+          onClose={() => setModalIngest(false)}
+          wide
+        >
+          <KnowledgeIngestPanel
+            categories={rawGuidedCategories}
+            context={{
+              niche: agentConfig?.niche,
+              audience: agentConfig?.target_audience,
+              offer: agentConfig?.offer_description,
+            }}
+            onFinished={() => { setModalIngest(false); load(); }}
+          />
+        </ModalBase>
       )}
       {viewItem && (
         <ModalView item={viewItem} onClose={() => setViewItem(null)} />
