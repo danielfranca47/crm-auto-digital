@@ -1,7 +1,7 @@
 # Ingestão de conhecimento — extrair service_pricing_table direto em structured_v1
 
 **Branch:** `feat/ajuste-configuracao-ai-profile`
-**Status:** Em andamento
+**Status:** Todos os cenários validados (07/08/2026)
 
 ---
 
@@ -70,23 +70,41 @@ Mudança isolada em `classifier.py` — o resto do pipeline trata `content` como
 
 | # | Commit | O que foi implementado |
 |---|---|---|
-| 1 | *(preencher após commit)* | *(preencher após commit)* |
+| 1 | `2afd04c` | classifier.py: regra especial + _serialize_pricing_rows() + fallback; docs |
+
+### Relatório da Fase 1 — o que mudou na prática
+
+**Antes:** quando a IA lia seus materiais e encontrava uma tabela de preços, o item criado ficava
+travado no modo "Texto livre" — para editar como tabela (linhas de nome/duração/preço), era preciso
+abrir o item, mudar para o modo "Tabela estruturada" e recriar as linhas manualmente.
+
+**Agora:** quando a IA identifica uma tabela de preços nos materiais enviados, ela já organiza os
+serviços em linhas (nome, duração, preço, descrição) — o item nasce direto no modo "Tabela
+estruturada", pronto para editar como tabela sem esse passo extra de conversão.
+
+**Para validar:** Cenários T1 e T2, abaixo — já executados nesta sessão via script (chamada real
+ao classificador + testes determinísticos), sem necessidade de repetir manualmente.
 
 ---
 
 ## Checks de Validação
 
 ### Cenário T1 — classify_sources() emite structured_v1 (chamada real à API)
-- [ ] Script ad-hoc com fonte fabricada (2 serviços fictícios) + categories=[service_pricing_table]
-- [ ] Confirmar que o `content` retornado é JSON válido `{"format": "structured_v1", "rows": [...]}` com os 2 serviços
-- **Pendente**
+- [x] Script ad-hoc com fonte fabricada (2 serviços fictícios) + categories=[service_pricing_table]
+- [x] Confirmar que o `content` retornado é JSON válido `{"format": "structured_v1", "rows": [...]}` com os 2 serviços
+- **Validado em:** 07/08/2026 — chamada real a `classify_sources()` (OpenAI, `gpt-4o-mini`) com
+  fonte fabricada ("Consulta Inicial: 45 min, R$120,00, Avaliação completa..." + "Sessão de
+  Retorno: 30 min, R$80,00"). Retornou `content` = JSON `structured_v1` válido com as 2 linhas,
+  campos corretos (`nome`, `duracaoMinutos`, `preco` exatos; `descricao` presente na 1ª linha,
+  omitida na 2ª por não ter sido informada na fonte).
 
 ### Cenário T2 — _serialize_pricing_rows() isolada (determinístico, sem rede)
-- [ ] Lista vazia → `None`
-- [ ] Linha sem `nome` → filtrada
-- [ ] `descricao` vazia → chave omitida do dict
-- [ ] `duracaoMinutos` não-numérico → normalizado para `None`
-- **Pendente**
+- [x] Lista vazia → `None`
+- [x] Linha sem `nome` → filtrada
+- [x] `descricao` vazia → chave omitida do dict
+- [x] `duracaoMinutos` não-numérico → normalizado para `None`
+- **Validado em:** 07/08/2026 — script Python com 7 asserções cobrindo os 4 casos acima + not-a-list
+  + descrição presente + mistura de linha válida/inválida. Todas passaram.
 
 ---
 
