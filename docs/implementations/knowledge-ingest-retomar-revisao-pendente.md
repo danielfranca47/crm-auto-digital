@@ -68,7 +68,22 @@ existente (`now_existing`), ou descartado por desmarcação.
 
 | # | Commit | O que foi implementado |
 |---|---|---|
-| 1 | *(preencher após commit)* | *(preencher após commit)* |
+| 1 | `942e68b` | backend: fix apply_ingest_review + rota /pending; frontend: fase 'checking' + resume; docs |
+
+### Relatório da Fase 1 — o que mudou na prática
+
+**Antes:** se você fechasse a janela "Importar materiais" depois da IA terminar de analisar seus
+arquivos, mas antes de você revisar e confirmar o que gravar, essa análise ficava perdida — só era
+possível recuperá-la reenviando os mesmos materiais e esperando a IA processar tudo de novo.
+
+**Agora:** ao reabrir "Importar materiais", o painel verifica automaticamente se há uma análise já
+pronta esperando revisão e, se houver, leva você direto para a tela de revisão com o resultado
+que a IA já tinha gerado — sem reprocessar nada. Também corrigi um efeito colateral: antes, mesmo
+depois de você revisar e decidir não gravar algumas seções, essas seções ficavam marcadas como
+"pendentes" para sempre; agora, terminar a revisão (mesmo sem aprovar nada) encerra a pendência de
+verdade.
+
+**Para validar:** Cenários P1, P2 e P3, abaixo.
 
 ---
 
