@@ -25,7 +25,7 @@ from services.knowledge_ingest.extractors import (
     IMAGE_EXTENSIONS,
     SUPPORTED_FILE_EXTENSIONS,
 )
-from services.knowledge_ingest.ingest_worker import apply_ingest_review
+from services.knowledge_ingest.ingest_worker import apply_ingest_review, find_pending_review_job_id
 
 logger = logging.getLogger(__name__)
 
@@ -195,6 +195,26 @@ async def create_ingest_batch(
         "status": job["status"],
         "accepted": len(accepted_sources),
         "rejected": rejected,
+    }
+
+
+@router.get("/pending")
+async def get_pending_ingest_review(
+    current_user: CurrentUser = Depends(require_crm_access),
+):
+    """Último job completed cujo apply nunca foi chamado (revisão ainda pendente)."""
+    job_id = find_pending_review_job_id(current_user.id)
+    if job_id is None:
+        return {"job_id": None}
+
+    job = get_job(job_id, user_id=current_user.id)
+    if not job:
+        return {"job_id": None}
+
+    return {
+        "job_id": job["id"],
+        "status": job["status"],
+        "result": _sanitize_result(job.get("result")),
     }
 
 

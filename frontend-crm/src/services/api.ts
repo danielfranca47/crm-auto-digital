@@ -381,6 +381,12 @@ export type KnowledgeIngestApplyResponse = {
   now_existing: string[];
 };
 
+export type KnowledgeIngestPendingResponse = {
+  job_id: number | null;
+  status?: KnowledgeIngestStatus["status"];
+  result?: KnowledgeIngestStatus["result"];
+};
+
 export type BusinessInfoField = {
   id: number;
   field_key: string;
@@ -1211,6 +1217,8 @@ export const api = {
     },
     getKnowledgeIngestStatus: async (jobId: number) =>
       apiClient.get<KnowledgeIngestStatus>(`/knowledge/ingest/${jobId}`),
+    getPendingKnowledgeIngestReview: async () =>
+      apiClient.get<KnowledgeIngestPendingResponse>(`/knowledge/ingest/pending`),
     applyKnowledgeIngest: async (jobId: number, approved: string[]) =>
       apiClient.post<KnowledgeIngestApplyResponse>(`/knowledge/ingest/${jobId}/apply`, { approved }),
     uploadKnowledgeFile: async (file: File) => {

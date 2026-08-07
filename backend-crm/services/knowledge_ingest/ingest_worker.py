@@ -16,7 +16,7 @@ from __future__ import annotations
 import json
 import logging
 from datetime import datetime, timezone
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 from database import get_connection
 
@@ -199,8 +199,13 @@ def apply_ingest_review(job_id: int, user_id: int, approved_keys: List[str]) -> 
             applied_keys.add(key)
             applied_now.append(applied_entry)
 
+        # Todo o lote apresentado nesta chamada foi decidido: aplicado, já aplicado,
+        # colidiu com item existente (now_existing) ou descartado por desmarcação —
+        # nada fica pendente de revisão depois de um apply, mesmo com 0 aprovados
+        # (ver find_pending_review_job_id, que depende de proposed vazio para saber
+        # que a revisão já foi concluída).
         result["applied"] = applied
-        result["proposed"] = [p for p in proposed if p.get("category") not in applied_keys]
+        result["proposed"] = []
 
         conn.execute(
             "UPDATE jobs SET result = ?, updated_at = ? WHERE id = ?",
@@ -223,6 +228,31 @@ def apply_ingest_review(job_id: int, user_id: int, approved_keys: List[str]) -> 
         job_id, user_id, len(applied_now), len(already_applied), len(now_existing),
     )
     return {"applied": applied_now, "already_applied": already_applied, "now_existing": now_existing}
+
+
+def find_pending_review_job_id(user_id: int) -> Optional[int]:
+    """
+    Último job completed do usuário cujo apply nunca foi chamado (proposed ainda não
+    vazio) — ver POST /api/knowledge/ingest/pending. Mesmo padrão de
+    jobs_service.find_pending_inbound_job.
+    """
+    conn = get_connection()
+    try:
+        row = conn.execute(
+            """
+            SELECT id FROM jobs
+             WHERE user_id = ?
+               AND type = ?
+               AND status = 'completed'
+               AND json_array_length(result, '$.proposed') > 0
+             ORDER BY completed_at DESC, id DESC
+             LIMIT 1
+            """,
+            (user_id, _TYPE),
+        ).fetchone()
+        return int(row["id"]) if row else None
+    finally:
+        conn.close()
 
 
 def process_pending_knowledge_ingest_jobs(batch_size: int = _BATCH_SIZE) -> Dict[str, int]:

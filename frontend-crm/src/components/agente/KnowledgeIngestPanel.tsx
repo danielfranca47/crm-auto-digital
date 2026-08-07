@@ -37,7 +37,7 @@ type LocalSource =
   | { id: number; kind: 'file'; file: File; description: string; error?: string }
   | { id: number; kind: 'url'; url: string; description: string; error?: string };
 
-type Phase = 'edit' | 'processing' | 'review' | 'done' | 'error';
+type Phase = 'checking' | 'edit' | 'processing' | 'review' | 'done' | 'error';
 
 // ─── Componente ───────────────────────────────────────────────
 
@@ -54,7 +54,7 @@ export function KnowledgeIngestPanel({
 }) {
   const [sources, setSources] = useState<LocalSource[]>([]);
   const [urlInput, setUrlInput] = useState('');
-  const [phase, setPhase] = useState<Phase>('edit');
+  const [phase, setPhase] = useState<Phase>('checking');
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [status, setStatus] = useState<KnowledgeIngestStatus | null>(null);
   const [approvedKeys, setApprovedKeys] = useState<Set<string>>(new Set());
@@ -73,6 +73,29 @@ export function KnowledgeIngestPanel({
     return () => {
       poll.cancelled = true;
       if (poll.timer) clearTimeout(poll.timer);
+    };
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const pending = await api.crm.getPendingKnowledgeIngestReview();
+        if (cancelled) return;
+        const proposed = pending.result?.proposed ?? [];
+        if (pending.job_id && proposed.length > 0) {
+          setStatus({ job_id: pending.job_id, status: 'completed', result: pending.result ?? null, error: null });
+          setApprovedKeys(new Set(proposed.map(p => p.category)));
+          setPhase('review');
+          return;
+        }
+      } catch {
+        /* falha ao verificar pendência não deve travar o utilizador — segue para 'edit' */
+      }
+      if (!cancelled) setPhase('edit');
+    })();
+    return () => {
+      cancelled = true;
     };
   }, []);
 
@@ -217,6 +240,16 @@ export function KnowledgeIngestPanel({
     } finally {
       setApplying(false);
     }
+  }
+
+  // ─── Render: verificando revisão pendente ───────────────────
+
+  if (phase === 'checking') {
+    return (
+      <div style={{ textAlign: 'center', padding: '32px 0', fontSize: 12.5, color: 'var(--o-sub)' }}>
+        Carregando…
+      </div>
+    );
   }
 
   // ─── Render: processando ────────────────────────────────────

@@ -120,6 +120,11 @@ UI (fontes + descrições) → POST /api/knowledge/ingest (multipart: files + me
   `extensao_nao_suportada`, `arquivo_muito_grande`, `url_vazia`, etc.), cria o job e retorna
   `{job_id, accepted, rejected}`. Limites: 6 fontes/lote, arquivo ≤10MB, imagem ≤5MB, 1 job
   `pending`/`in_progress` por utilizador por vez (409 se já houver um em andamento).
+- `GET /api/knowledge/ingest/pending` — declarada antes de `GET /{job_id}` para não colidir com o
+  path param. Devolve o último job `completed` do utilizador cujo `apply` nunca foi chamado
+  (`result.proposed` ainda não vazio) via `find_pending_review_job_id()`, ou `{"job_id": null}` se
+  não houver nenhum. Usada por `KnowledgeIngestPanel.tsx` ao montar (ver secção "Retomar revisão
+  pendente" abaixo).
 - `GET /api/knowledge/ingest/{job_id}` — devolve status/result para polling (texto integral das
   fontes omitido do payload via `_sanitize_result`; o conteúdo completo de `proposed` é preservado
   — é o que a UI usa na revisão).
@@ -165,12 +170,22 @@ aplicada é no-op — volta em `already_applied`, sem duplicar o item. Se `objec
 aplicado nesta chamada, dispara `trigger_meta_prompter_for_knowledge()`
 (`backend-crm/services/meta_prompter_trigger.py`, compartilhado com a rota de edição manual).
 
+Ao final da chamada, `result["proposed"]` é sempre esvaziado — todo o lote apresentado nessa leva
+foi decidido (aplicado, já aplicado, colidiu com `now_existing`, ou descartado por desmarcação).
+Chamar `/apply` com `approved=[]` (botão "Continuar sem gravar") também conta como revisão
+concluída. Isso é o que permite `find_pending_review_job_id()` diferenciar "ainda não revisado" de
+"revisado, nada aprovado".
+
 **Nunca sobrescreve:** uma categoria que já tem item do utilizador (de qualquer `source_type`) só
 entra em `skipped_existing` — reingestão só preenche buracos, nunca substitui conteúdo existente. O
 mesmo vale no apply: se a categoria ganhou um item entre o fim do job e a aprovação, o apply
 ignora-a silenciosamente (não sobrescreve).
 
-**Se o utilizador fechar o painel sem revisar:** as propostas não gravadas ficam apenas no
-`jobs.result` do job já `completed` — nada foi escrito em `knowledge_items`, mas também não há hoje
-como retomar essa revisão pendente sem reprocessar o lote (o painel não recarrega o estado de um
-job anterior ao reabrir).
+**Retomar revisão pendente ao reabrir o painel:** `KnowledgeIngestPanel.tsx` é desmontado toda vez
+que o modal "Importar materiais" fecha, o que zeraria o estado local. Para não perder uma revisão
+não concluída, o painel monta na fase `'checking'` e consulta `GET /api/knowledge/ingest/pending`
+antes de decidir a fase inicial: se houver um job `completed` do utilizador com `apply` nunca
+chamado (`result.proposed` não vazio), o painel carrega esse `status`/`result` direto na fase
+`'review'` — sem reprocessar o lote. Caso contrário (ou falha transitória na consulta), segue para
+`'edit'` normalmente. Uma vez que o utilizador conclui a revisão (mesmo sem aprovar nada), o job
+some da lista de pendências — reabrir o painel depois disso volta para `'edit'` limpo.
