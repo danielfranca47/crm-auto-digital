@@ -60,7 +60,19 @@ Tela de revisão: cada proposta ganha um <textarea> editável (valor inicial = p
 
 | # | Commit | O que foi implementado |
 |---|---|---|
-| 1 | *(preencher após commit)* | *(preencher após commit)* |
+| 1 | `5bedd2d` | backend: edited_content em apply_ingest_review + rota; frontend: textarea editável na revisão |
+
+### Relatório da Fase 1 — o que mudou na prática
+
+**Antes:** na tela "Revise antes de gravar", o texto que a IA extraiu aparecia fixo — se um preço
+ou detalhe estivesse errado, a única forma de corrigir era aprovar mesmo assim e editar depois, já
+dentro da base de conhecimento (dois passos, e o item chegava a existir com o erro por um instante).
+
+**Agora:** cada proposta na tela de revisão tem um campo de texto editável. Você pode corrigir o
+conteúdo ali mesmo, antes de gravar — o que for salvo é exatamente o texto que está no campo no
+momento de clicar "Gravar", não mais o texto original da IA.
+
+**Para validar:** Cenários P1, P2 e P3, abaixo.
 
 ---
 
