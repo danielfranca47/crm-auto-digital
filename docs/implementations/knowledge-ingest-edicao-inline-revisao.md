@@ -1,7 +1,7 @@
 # Ingestão de conhecimento — edição inline na tela de revisão
 
-**Branch:** *(a definir)*
-**Status:** Aguardando Plan Mode
+**Branch:** `feat/ajuste-configuracao-ai-profile`
+**Status:** Em andamento
 
 ---
 
@@ -32,8 +32,59 @@ o conteúdo editado é o que é gravado quando a categoria é aprovada.
 
 ---
 
-## Próximos passos
+## Abordagem
 
-Este arquivo nasce como stub — a implementação real só começa depois do diagnóstico normal
-(Plan Mode) ser feito e aprovado pelo utilizador, seguindo
-`docs/implementations/_guia-documentar-implementacao.md`.
+```
+Tela de revisão: cada proposta ganha um <textarea> editável (valor inicial = p.content)
+  → utilizador corrige o texto de 1+ categorias, mantém aprovação via checkbox
+  → "Gravar N selecionada(s)" → POST /apply { approved, edited_content: {categoria: texto atual} }
+    → backend grava o texto editado (não o original do classificador) para as categorias aprovadas
+```
+
+---
+
+## Plano de Implementação
+
+### Fase 1 — Backend + Frontend
+
+**Objetivo:** permitir corrigir o texto de uma proposta na tela de revisão antes de gravar.
+
+| Arquivo | O que muda |
+|---|---|
+| `backend-crm/services/knowledge_ingest/ingest_worker.py` | `apply_ingest_review()` ganha parâmetro `edited_content`; usa o texto editado (com fallback pro original se vazio) ao gravar e no preview retornado |
+| `backend-crm/routes/knowledge_ingest.py` | `ApplyIngestRequest` ganha campo `edited_content: Dict[str, str] = {}`; repassa para `apply_ingest_review()` |
+| `frontend-crm/src/services/api.ts` | `applyKnowledgeIngest()` ganha terceiro parâmetro opcional `editedContent` |
+| `frontend-crm/src/components/agente/KnowledgeIngestPanel.tsx` | Estado `editedContent: Map<string,string>`; fase `'review'` ganha `<textarea className="o-input">` editável fora do `<label>` do checkbox; `confirmApply()` envia o texto atual das categorias aprovadas |
+
+### Commits Fase 1
+
+| # | Commit | O que foi implementado |
+|---|---|---|
+| 1 | *(preencher após commit)* | *(preencher após commit)* |
+
+---
+
+## Checks de Validação
+
+### Cenário P1 — Editar e gravar conteúdo corrigido
+- [ ] Gerar uma proposta na revisão, editar o texto de uma categoria (ex.: corrigir um valor)
+- [ ] Manter aprovada e clicar "Gravar"
+- [ ] Confirmar na Base de Conhecimento que o item gravado tem o texto editado, não o original da IA
+- [ ] Confirmar que a tela "Resultado da importação" mostra o preview editado
+- **Pendente**
+
+### Cenário P2 — Guarda contra conteúdo vazio
+- [ ] Apagar todo o texto de uma categoria aprovada e gravar
+- [ ] Confirmar que o item foi gravado com o texto original (não vazio) — guarda de segurança
+- **Pendente**
+
+### Cenário P3 — Edição em categoria desmarcada é irrelevante
+- [ ] Editar o texto de uma categoria e desmarcar o checkbox antes de gravar
+- [ ] Confirmar que a categoria não é gravada (comportamento normal de descarte, sem efeito da edição)
+- **Pendente**
+
+---
+
+## Ajustes Possíveis Pós-Implementação
+
+*(preencher se surgir algo durante a implementação/validação)*

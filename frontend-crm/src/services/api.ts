@@ -1219,8 +1219,11 @@ export const api = {
       apiClient.get<KnowledgeIngestStatus>(`/knowledge/ingest/${jobId}`),
     getPendingKnowledgeIngestReview: async () =>
       apiClient.get<KnowledgeIngestPendingResponse>(`/knowledge/ingest/pending`),
-    applyKnowledgeIngest: async (jobId: number, approved: string[]) =>
-      apiClient.post<KnowledgeIngestApplyResponse>(`/knowledge/ingest/${jobId}/apply`, { approved }),
+    applyKnowledgeIngest: async (jobId: number, approved: string[], editedContent?: Record<string, string>) =>
+      apiClient.post<KnowledgeIngestApplyResponse>(`/knowledge/ingest/${jobId}/apply`, {
+        approved,
+        edited_content: editedContent ?? {},
+      }),
     uploadKnowledgeFile: async (file: File) => {
       const formData = new FormData();
       formData.append("file", file);

@@ -58,6 +58,7 @@ export function KnowledgeIngestPanel({
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [status, setStatus] = useState<KnowledgeIngestStatus | null>(null);
   const [approvedKeys, setApprovedKeys] = useState<Set<string>>(new Set());
+  const [editedContent, setEditedContent] = useState<Map<string, string>>(new Map());
   const [applyResult, setApplyResult] = useState<KnowledgeIngestApplyResponse | null>(null);
   const [applying, setApplying] = useState(false);
   const [applyError, setApplyError] = useState<string | null>(null);
@@ -232,7 +233,14 @@ export function KnowledgeIngestPanel({
     setApplying(true);
     setApplyError(null);
     try {
-      const res = await api.crm.applyKnowledgeIngest(status.job_id, Array.from(approvedKeys));
+      const proposed = status.result?.proposed ?? [];
+      const contents: Record<string, string> = {};
+      for (const p of proposed) {
+        if (approvedKeys.has(p.category)) {
+          contents[p.category] = editedContent.get(p.category) ?? p.content;
+        }
+      }
+      const res = await api.crm.applyKnowledgeIngest(status.job_id, Array.from(approvedKeys), contents);
       setApplyResult(res);
       setPhase('done');
     } catch {
@@ -299,28 +307,36 @@ export function KnowledgeIngestPanel({
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 16 }}>
           {proposed.map(p => (
-            <label
+            <div
               key={p.category}
               style={{
-                display: 'flex', gap: 10, alignItems: 'flex-start', cursor: 'pointer',
                 padding: '10px 12px', background: 'var(--o-b0)', border: '1px solid var(--o-b1)', borderRadius: 4,
               }}
             >
-              <input
-                type="checkbox"
-                checked={approvedKeys.has(p.category)}
-                onChange={() => toggleApproved(p.category)}
-                style={{ marginTop: 3, flexShrink: 0 }}
-              />
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontSize: 12.5, color: 'var(--o-text)', fontWeight: 500, marginBottom: 4 }}>
+              <label style={{ display: 'flex', gap: 10, alignItems: 'flex-start', cursor: 'pointer' }}>
+                <input
+                  type="checkbox"
+                  checked={approvedKeys.has(p.category)}
+                  onChange={() => toggleApproved(p.category)}
+                  style={{ marginTop: 3, flexShrink: 0 }}
+                />
+                <div style={{ fontSize: 12.5, color: 'var(--o-text)', fontWeight: 500 }}>
                   {p.label}
                 </div>
-                <div style={{ fontSize: 11.5, color: 'var(--o-sub)', lineHeight: 1.5, whiteSpace: 'pre-wrap' }}>
-                  {p.content}
-                </div>
-              </div>
-            </label>
+              </label>
+              <textarea
+                className="o-input"
+                rows={3}
+                value={editedContent.get(p.category) ?? p.content}
+                onChange={e =>
+                  setEditedContent(prev => new Map(prev).set(p.category, e.target.value))
+                }
+                style={{
+                  marginTop: 8, width: '100%', fontSize: 11.5, lineHeight: 1.5,
+                  resize: 'vertical', fontFamily: 'inherit',
+                }}
+              />
+            </div>
           ))}
         </div>
 

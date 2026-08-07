@@ -148,15 +148,26 @@ def _process_ingest_job(payload: Dict[str, Any]) -> Dict[str, Any]:
     }
 
 
-def apply_ingest_review(job_id: int, user_id: int, approved_keys: List[str]) -> Dict[str, Any]:
+def apply_ingest_review(
+    job_id: int,
+    user_id: int,
+    approved_keys: List[str],
+    edited_content: Optional[Dict[str, str]] = None,
+) -> Dict[str, Any]:
     """
     Grava em knowledge_items as categorias aprovadas dentre as propostas de um
     job já concluído (ver POST /api/knowledge/ingest/{job_id}/apply).
+
+    edited_content (categoria -> texto) permite gravar uma correção feita pelo
+    utilizador na tela de revisão em vez do texto original do classificador —
+    cai para o texto original se a categoria não tiver edição ou vier vazia
+    (evita gravar um item em branco por um campo limpo sem querer).
 
     Idempotente: reaplicar uma key já aplicada não duplica o item — volta em
     "already_applied". Levanta LookupError se o job não existir/não pertencer
     ao usuário, ValueError se ainda não estiver 'completed'.
     """
+    edited_content = edited_content or {}
     conn = get_connection()
     try:
         row = conn.execute(
@@ -189,11 +200,12 @@ def apply_ingest_review(job_id: int, user_id: int, approved_keys: List[str]) -> 
             if key in existing:
                 now_existing.append(key)
                 continue
-            item_id = _insert_ai_item(user_id, entry.get("label") or key, key, entry.get("content") or "")
+            content = (edited_content.get(key) or "").strip() or (entry.get("content") or "")
+            item_id = _insert_ai_item(user_id, entry.get("label") or key, key, content)
             applied_entry = {
                 "category": key,
                 "item_id": item_id,
-                "preview": (entry.get("content") or "")[:_PREVIEW_CHARS],
+                "preview": content[:_PREVIEW_CHARS],
             }
             applied.append(applied_entry)
             applied_keys.add(key)

@@ -237,6 +237,7 @@ async def get_ingest_status(
 
 class ApplyIngestRequest(BaseModel):
     approved: List[str] = []
+    edited_content: Dict[str, str] = {}
 
 
 @router.post("/{job_id}/apply")
@@ -246,7 +247,7 @@ async def apply_ingest(
     current_user: CurrentUser = Depends(require_crm_access),
 ):
     try:
-        result = apply_ingest_review(job_id, current_user.id, body.approved)
+        result = apply_ingest_review(job_id, current_user.id, body.approved, body.edited_content)
     except LookupError:
         raise HTTPException(status_code=404, detail="Job de ingestão não encontrado")
     except ValueError as exc:
