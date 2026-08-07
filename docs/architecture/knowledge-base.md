@@ -106,10 +106,11 @@ UI (fontes + descrições) → POST /api/knowledge/ingest (multipart: files + me
     → classifier.py: gpt-4o-mini → {categoria: conteúdo | null}
     → jobs.result = proposed (categoria+label+conteúdo completo+preview) — nada gravado ainda
   → GET /api/knowledge/ingest/{job_id} (polling do frontend a cada 3s)
-  → UI mostra "Revise antes de gravar": cada proposta com conteúdo completo e checkbox (marcado
-    por padrão); utilizador desmarca o que não quer gravar
-  → POST /api/knowledge/ingest/{job_id}/apply { approved: [key,...] }
-    → INSERT knowledge_items só para as categorias aprovadas (source_type='ai_extracted')
+  → UI mostra "Revise antes de gravar": cada proposta com conteúdo em <textarea> editável e
+    checkbox (marcado por padrão); utilizador corrige o texto e/ou desmarca o que não quer gravar
+  → POST /api/knowledge/ingest/{job_id}/apply { approved: [key,...], edited_content: {key: texto} }
+    → INSERT knowledge_items só para as categorias aprovadas (source_type='ai_extracted'), usando
+      o texto editado (fallback pro original do classificador se vazio)
     → move as categorias aplicadas de proposed → applied em jobs.result (idempotente)
   → resumo final: applied (categoria+item_id+preview) / descartadas (proposed não aprovadas) /
     uncovered / skipped_existing
@@ -128,9 +129,11 @@ UI (fontes + descrições) → POST /api/knowledge/ingest (multipart: files + me
 - `GET /api/knowledge/ingest/{job_id}` — devolve status/result para polling (texto integral das
   fontes omitido do payload via `_sanitize_result`; o conteúdo completo de `proposed` é preservado
   — é o que a UI usa na revisão).
-- `POST /api/knowledge/ingest/{job_id}/apply` — body `{"approved": [category_key,...]}`, chama
-  `apply_ingest_review()`. 404 se o job não existir/não pertencer ao utilizador, 409 se ainda não
-  estiver `completed`.
+- `POST /api/knowledge/ingest/{job_id}/apply` — body `{"approved": [category_key,...],
+  "edited_content": {category_key: texto}}`, chama `apply_ingest_review()`. `edited_content` é
+  opcional — permite gravar uma correção feita na tela de revisão em vez do texto original do
+  classificador (ver "Edição inline" abaixo). 404 se o job não existir/não pertencer ao
+  utilizador, 409 se ainda não estiver `completed`.
 
 **Extração por tipo** (`backend-crm/services/knowledge_ingest/extractors.py`,
 `extract_source()`, 15k chars máx/fonte):
@@ -162,13 +165,24 @@ entrada em `proposed` (categoria+label+conteúdo completo+preview) — **nada é
 `knowledge_items` neste passo**.
 
 **Revisão e apply** (`apply_ingest_review()`, mesmo módulo): chamada pela rota de apply, recebe as
-`approved_keys` do utilizador. Para cada key ainda em `proposed` e não em `applied`: reconfirma
-`_existing_categories()` (protege contra uma categoria ter sido preenchida manualmente entre o fim
-do job e o apply), insere via `_insert_ai_item()` (`source_type='ai_extracted'`), move a entrada de
-`proposed` para `applied` em `jobs.result` (persistido via `UPDATE jobs`). Reaplicar uma key já
-aplicada é no-op — volta em `already_applied`, sem duplicar o item. Se `objections_faq` foi
-aplicado nesta chamada, dispara `trigger_meta_prompter_for_knowledge()`
-(`backend-crm/services/meta_prompter_trigger.py`, compartilhado com a rota de edição manual).
+`approved_keys` do utilizador e opcionalmente `edited_content` (categoria → texto). Para cada key
+ainda em `proposed` e não em `applied`: reconfirma `_existing_categories()` (protege contra uma
+categoria ter sido preenchida manualmente entre o fim do job e o apply), insere via
+`_insert_ai_item()` (`source_type='ai_extracted'`) com o conteúdo final = `edited_content[key]` se
+presente e não-vazio após `strip()`, senão o texto original do classificador (guarda contra gravar
+um item em branco por um campo limpo sem querer), move a entrada de `proposed` para `applied` em
+`jobs.result` (persistido via `UPDATE jobs`) — o `preview` em `applied` reflete o conteúdo
+efetivamente gravado. Reaplicar uma key já aplicada é no-op — volta em `already_applied`, sem
+duplicar o item. Se `objections_faq` foi aplicado nesta chamada, dispara
+`trigger_meta_prompter_for_knowledge()` (`backend-crm/services/meta_prompter_trigger.py`,
+compartilhado com a rota de edição manual).
+
+**Edição inline na revisão:** `KnowledgeIngestPanel.tsx`, fase `'review'`, renderiza o conteúdo de
+cada proposta num `<textarea>` editável (fora do `<label>` do checkbox, para não disparar o toggle
+nativo do browser ao clicar no campo). `confirmApply()` monta `edited_content` só para as
+categorias marcadas como aprovadas e envia junto do `POST /apply` — o texto no momento do clique
+em "Gravar" é o que é persistido, permitindo corrigir um valor errado (ex.: preço mal extraído)
+sem precisar editar depois já dentro da base de conhecimento.
 
 Ao final da chamada, `result["proposed"]` é sempre esvaziado — todo o lote apresentado nessa leva
 foi decidido (aplicado, já aplicado, colidiu com `now_existing`, ou descartado por desmarcação).
