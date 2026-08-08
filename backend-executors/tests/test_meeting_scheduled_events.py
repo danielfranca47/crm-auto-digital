@@ -88,3 +88,22 @@ def test_handle_meeting_scheduled_without_events_param_does_not_raise():
 
     assert result is None
     assert len(client.created) == 1
+
+
+def test_handle_meeting_scheduled_no_candidate_creates_nothing():
+    """Mãe sinaliza meeting_scheduled=true mas a Filha não confirmou nenhum horário (ex.:
+    negou o horário pedido) — não deve criar compromisso nenhum, nem adivinhar via heurística
+    de texto. Ver docs/implementations/fix-compromisso-fantasma-negacao-horario-disponivel.md."""
+    client = FakeCRMClient()
+    context, _ = _context(None)
+
+    result = meeting_scheduler.handle_meeting_scheduled(
+        context,
+        _decision(None),
+        client=client,
+        now_utc=datetime(2099, 3, 1, tzinfo=timezone.utc),
+    )
+
+    assert result is None
+    assert client.created == []
+    assert client.logged == [(99, 10, 123, "missing_start_at")]

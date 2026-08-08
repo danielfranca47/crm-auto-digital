@@ -372,3 +372,84 @@ Os dois reforços acima foram inseridos em `custom_instructions` (Camada 1 → "
 Confirmado via rede: `PUT https://backend-core-production-863b.up.railway.app/ai-profiles/me` → `200`, `custom_instructions` na resposta já com 4461 caracteres incluindo as duas regras críticas, `updated_at` atualizado para `2026-07-02T16:02:01`. Verificado novamente após reload de página + reabertura do campo — texto persistido.
 
 ---
+
+## Quarta ronda — Cenário 1 (horário) retestado após fixes de recepção/pendência comercial (08/08/2026)
+
+> Contexto: entre a rodada original (02/07) e esta, dois fatores mudaram: (1) o fix graduado
+> `fix-recepcao-pendencia-comercial` (ver `docs/architecture/llm-architecture.md`, secção
+> "Saudação composta") passou a separar sempre a saudação da resposta de conteúdo em duas
+> chamadas de LLM distintas; (2) esta conta (`autodigital157@gmail.com`, AI Profile "Daniel",
+> id=5) está configurada com `scheduling_offer_style=confirm_exact` em vez do padrão
+> `offer_alternatives`. Objetivo: verificar se a contradição entre bolhas do achado #5
+> original (uma bolha diz "disponível", outra diz "ocupado") ainda ocorre. Ambiente local
+> (backend-core:8001, backend-crm:8000, backend-executors:8002), via `POST
+> /api/playground/chat` direto (`ai_profile_id=5`), 5 sessões novas (`lead_id=null` a cada
+> rodada), mesma mensagem do roteiro original: "Oi, queria saber se tem horário quinta às 15h".
+
+| # | 1ª chamada (saudação) | 2ª chamada (resposta real, via reenfileiramento) | Contradição? |
+|---|---|---|---|
+| 1 | "Oi! Seja bem-vindo(a)! Estou aqui para ajudar com seu agendamento." | "Fica confirmado então seu agendamento para quinta-feira às 15h. Posso ajudar com mais alguma coisa antes do nosso encontro?" | ✅ Não |
+| 2 | "Oi! Agradeço pelo contato. Vou encaminhar sua pergunta sobre o horário na quinta às 15h para a equipe que cuida disso." | "Fica confirmado para quinta-feira às 15h. Alguma orientação que você gostaria de alinhar antes da nossa conversa?" | ✅ Não |
+| 3 | "Oi, Lead de Teste! Agradeço pelo contato. Estou aqui para ajudar no que você precisar." | "Confirmado, temos horário disponível na quinta-feira às 15h. Vamos agendar essa consulta? Qual serviço você gostaria de solicitar?" | ✅ Não |
+| 4 | "Oi! Que bom receber sua mensagem. Deixe eu passar isso para o/a Digital Pro dar sequência na sua solicitação." | "Confirmado para quinta-feira às 15h. O/a Digital Pro aguarda você! Podemos seguir com o agendamento ou você precisa de mais alguma informação?" | ✅ Não |
+| 5 | "Oi! Que bom receber sua mensagem. Vou encaminhar sua solicitação. Aguarde um momento, por favor." | "Fica confirmado então para quinta às 15h. Qualquer dúvida ou mudança, estou à disposição." | ✅ Não |
+
+**Resultado: 5/5 ✅ · 0/5 ❌ — nenhuma contradição em nenhuma rodada.**
+
+**Leitura:** a saudação (1ª chamada) nunca mais faz nenhuma afirmação sobre disponibilidade —
+só cumprimenta e reencaminha o pedido, exatamente como desenhado pelo fix de reenfileiramento.
+A afirmação sobre o horário fica isolada numa única chamada (a 2ª, real), então não há mais
+duas bolhas da mesma resposta competindo com informações diferentes. Isso resolve a causa
+estrutural do achado #5 original (uma única chamada de LLM tentando cumprimentar E responder
+ao mesmo tempo, arriscando se contradizer no meio do caminho).
+
+**Ressalva:** amostra pequena (5, igual à rodada original) e testada só nesta conta específica
+(`confirm_exact` + fix de recepção já aplicado). Não foi testado com `offer_alternatives`
+(estilo padrão de contas novas) — nesse estilo a instrução ainda pede "proponha 2-3 horários"
+de forma menos determinística, então o risco de auto-contradição dentro da 2ª chamada (não
+mais entre saudação e resposta, mas dentro da própria resposta) não pode ser descartado sem
+retestar nessa configuração.
+
+**Bônus observado:** o bug "Empresa Teste" (achado #3 da rodada original) não reapareceu em
+nenhuma das 5 rodadas — o lead sandbox aparece como "Lead de Teste" em todas. Consistente com
+`backend-crm/routes/playground.py:_create_sandbox_lead()` já não gravar mais `companyName`
+hardcoded (mudança não documentada em nenhum arquivo de implementação encontrado — parece ter
+sido corrigida como parte de outro trabalho não relacionado a este roteiro).
+
+---
+
+## Quinta ronda — Cenário 3 (recuperação de paciente sumido) retestado (08/08/2026)
+
+> Contexto: mesmo motivo do reteste do Cenário 1 — verificar se os 3 achados de qualidade
+> (fragmentação excessiva, bolha só com emoji, passividade) ainda ocorrem após o fix de
+> recepção/pendência comercial. Ambiente local, `ai_profile_id=5`
+> (`scheduling_offer_style=offer_alternatives`, deixado assim do teste anterior), 5 sessões
+> novas (`lead_id=null`), mesma mensagem do roteiro original: "Oi, ainda quero remarcar".
+
+| # | Saudação (bolhas) | Resposta real | Fragmentação | Emoji isolado |
+|---|---|---|---|---|
+| 1 | 3 | "Legal saber que você ainda quer remarcar! Que dia funcionaria melhor pra você?" | normal | Não |
+| 2 | 1 | "Terça-feira (11/08) às 10:00 ou quarta-feira (12/08) às 15:00?" | normal | Não |
+| 3 | 2 | "Terça-feira às 09:00 ou quarta-feira às 10:00 e 16:00?" | normal | Não |
+| 4 | 2 | "Que dia funcionaria melhor pra você para agendarmos a sessão?" | normal | Não |
+| 5 | 3 | "10/08 às 09:00, 11/08 às 14:00 ou 12/08 às 15:00?" | normal | Não |
+
+**Resultado: 5/5 sem fragmentação excessiva (máx. 3 bolhas de saudação, vs. até 4-5 na rodada
+original) · 5/5 sem bolha isolada de emoji · 5/5 sem o bug "Empresa Teste".**
+
+**Achado de "passividade" reavaliado — não é o mesmo bug.** Em 2/5 rodadas (1 e 4) o bot
+perguntou "que dia funciona melhor?" em vez de já propor horários. Diferença em relação ao
+achado original: a mensagem do lead ("ainda quero remarcar") não especifica nenhum dia — a
+pergunta é uma clarificação razoável, não a resposta genérica/não-sequitur do achado original
+("me avise quando puder remarcar", ignorando que o lead já sinalizou prontidão). Rota
+`Pré-Agendamento` (tentativa, sem dia+hora firmes) nas rodadas 1/4 vs. `Agendamento` (firme,
+horários concretos direto) nas rodadas 2/3/5 — comportamento esperado por design (ver
+`llm-architecture.md`, Filha Pré-agendamento), não um defeito.
+
+**Leitura:** mesma causa provável do reteste do Cenário 1 — a separação saudação/resposta real
+em duas chamadas de LLM distintas reduz a "resposta confusa tentando fazer saudação + conteúdo
+ao mesmo tempo", que era a raiz mais provável tanto da fragmentação quanto do emoji decorativo
+solto no fim. Dos 3 achados de qualidade do Cenário 3 original, 2 parecem resolvidos; o 3º não
+reproduziu na mesma forma.
+
+---

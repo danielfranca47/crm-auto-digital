@@ -33,7 +33,9 @@
       "Bash(python -c \"import datetime; print\\(datetime.datetime.utcfromtimestamp\\(1785858313\\)\\)\")",
       "mcp__plugin_chrome-devtools-mcp_chrome-devtools__press_key",
       "Bash(curl -s -X POST http://localhost:8000/api/playground/chat -H 'Authorization: Bearer __CMDSUB_OUTPUT__' -H 'Content-Type: application/json' -d '{\"ai_profile_id\": 6, \"message\": \"Ola, qual o horario de funcionamento de voces?\", \"lead_id\": null}')",
-      "Bash(python -m py_compile services/knowledge_ingest/ingest_worker.py routes/knowledge_ingest.py)"
+      "Bash(python -m py_compile services/knowledge_ingest/ingest_worker.py routes/knowledge_ingest.py)",
+      "Bash(python -m pytest tests/test_llm_failure_fallback_handoff.py -v)",
+      "Bash(.venv/Scripts/python.exe -m pytest tests/test_llm_failure_fallback_handoff.py -v)"
     ]
   }
 }

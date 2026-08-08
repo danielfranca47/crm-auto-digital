@@ -103,7 +103,7 @@ confirmado e encerrado. Reforça a M3 acima — não corrigido, só documentado.
 
 ---
 
-## M4 — `next_action_hint` da Mãe pode receber valor fora do enum (ValidationError silencioso)
+## M4 — `next_action_hint` da Mãe pode receber valor fora do enum (ValidationError)
 
 **Prioridade: BAIXA** (falha transitória, mitigada pelo retry de `llm_service.py`; sem padrão de frequência observado)
 
@@ -113,26 +113,26 @@ confirmado e encerrado. Reforça a M3 acima — não corrigido, só documentado.
 "ask_qualification", "handoff", "ignore", "greet"]`. Em um teste real, a Mãe retornou
 `next_action_hint="confirmar"` — valor fora do enum — causando `pydantic.ValidationError` na
 validação do payload (`decide()`, stage `mother_validate`). O erro é capturado pelo `except
-Exception` genérico de `decide()` e cai no fallback `llm_failure_first_message_suppressed`
-(mensagem vazia, sem nenhum aviso visível ao operador no Playground além do trace com todos os
-campos `null`). Uma nova tentativa (reenviar a mesma intenção) teve sucesso normalmente — o
-modelo não repetiu o valor inválido.
+Exception` genérico de `decide()`. Uma nova tentativa (reenviar a mesma intenção) teve sucesso
+normalmente — o modelo não repetiu o valor inválido.
 
-**Risco prático:** baixo impacto unitário (o lead só não recebe resposta nesse turno específico
-e precisa reenviar/aguardar retry), mas é uma classe de erro silenciosa — não há log de nível
-`ERROR`/alerta, só um `WARNING` (`event=llm_orchestrator_error`) que só fica visível se houver
-logger configurado (no Playground, só passa a existir após a mudança feita em
-`playground_internal.py` durante a sessão de testes de `feat-playground-appointment-tag.md`).
+**Risco de silêncio total já corrigido:** este era um dos dois gatilhos conhecidos do fallback
+`llm_failure_first_message_suppressed` (mensagem vazia, sem handoff, sem aviso ao operador,
+quando a falha acontecia nos primeiros turnos da conversa) — resolvido em
+`docs/implementations/fix-handoff-silencio-primeira-mensagem.md`. Hoje, quando esse
+`ValidationError` acontece, o lead recebe a mensagem de handoff normal e o time é
+notificado/o bot é pausado conforme a política configurada, em vez de silêncio.
 
-**O que precisaria ser construído (se a frequência justificar):**
+**O que ainda seria uma melhoria futura (se a frequência justificar):**
 - Tornar `next_action_hint` mais tolerante (ex.: normalizar sinônimos como "confirmar" →
   "reply" antes da validação Pydantic) em vez de falhar a decisão inteira por um campo
   opcional/informativo
 - Ou: capturar especificamente `pydantic.ValidationError` em `decide()` e tentar uma 2ª chamada
   à Mãe automaticamente (padrão já usado em `qualification` com `validation_errors`), em vez de
-  cair direto no fallback genérico de falha de LLM
+  cair no fallback genérico de falha de LLM (que agora já é seguro, mas ainda desperdiça o turno)
 
-**Decisão:** não corrigir agora — registar para o caso de se tornar um padrão recorrente.
+**Decisão:** não corrigir agora — o risco grave (silêncio) já foi eliminado; a tolerância de
+enum em si só vale a pena se o padrão se tornar recorrente.
 
 ---
 

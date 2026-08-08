@@ -5041,18 +5041,4 @@ def decide(context: Dict[str, Any], logger: Optional[logging.Logger] = None) -> 
                 FALLBACK_DECISION.next_action,
                 FALLBACK_DECISION.reason,
             )
-        _history_for_fallback = context.get("history") or []
-        if len(_history_for_fallback) <= 2:
-            # Lead novo: suprimir handoff indevido e aguardar retry humano
-            if logger:
-                logger.info(
-                    "event=llm_failure_first_message_suppressed history_len=%d",
-                    len(_history_for_fallback),
-                )
-            return DecisionOutput(
-                next_action="ignore",
-                message_text="",
-                questions=[],
-                reason="llm_failure_first_message",
-            )
         return handoff_policy.apply(context, FALLBACK_DECISION, logger=logger)

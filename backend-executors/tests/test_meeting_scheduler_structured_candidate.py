@@ -106,3 +106,18 @@ def test_extract_meeting_signal_uses_candidate_without_fallback(monkeypatch):
     signal = meeting_scheduler._extract_meeting_signal(context, decision)
 
     assert signal.start_at == datetime(2099, 3, 5, 17, 0, tzinfo=timezone.utc)
+
+
+def test_extract_meeting_signal_missing_candidate_does_not_fallback(monkeypatch):
+    """Filha não confirmou nenhum horário (ex.: negou o horário pedido) — não deve adivinhar
+    via heurística de texto. Ver docs/implementations/fix-compromisso-fantasma-negacao-horario-disponivel.md."""
+    context = _build_context("Europe/Lisbon")
+    decision = _build_decision(None)
+
+    def fail_extract_start_at(*args, **kwargs):
+        raise AssertionError("fallback should not be called when candidate is absent")
+
+    monkeypatch.setattr(meeting_scheduler, "extract_start_at", fail_extract_start_at)
+    signal = meeting_scheduler._extract_meeting_signal(context, decision)
+
+    assert signal.start_at is None
