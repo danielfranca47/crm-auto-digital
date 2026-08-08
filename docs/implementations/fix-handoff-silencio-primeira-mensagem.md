@@ -89,6 +89,36 @@ return handoff_policy.apply(context, FALLBACK_DECISION, logger=logger)
 return handoff_policy.apply(context, FALLBACK_DECISION, logger=logger)
 ```
 
+### Commits Fase 1
+
+| # | Commit | O que foi implementado |
+|---|---|---|
+| 1 | `b1bbaaa` | Remove o caminho de silêncio no fallback de falha da LLM + teste pytest + atualização do M4 |
+
+**Detalhes do commit `b1bbaaa`:**
+- `backend-executors/app/services/decision_engine.py` — remove o bloco `if len(_history_for_fallback) <= 2: ...` dentro do `except Exception` de `decide()`; sempre retorna `handoff_policy.apply(context, FALLBACK_DECISION, logger=logger)`
+- `backend-executors/tests/test_llm_failure_fallback_handoff.py` — novo teste pytest cobrindo histórico curto e normal
+- `docs/plans/agentes-agenda-melhorias-futuras.md` — item M4 atualizado (risco de silêncio resolvido)
+- `.claude/settings.local.json` — allowlist para comandos pytest usados na validação
+
+---
+
+### Relatório da Fase 1 — o que mudou na prática
+
+**Antes:** se a IA tivesse um erro técnico pontual logo no início de uma conversa nova
+(ex.: um lead pedindo para falar com um humano como 1ª mensagem), o sistema ficava
+completamente mudo — nenhuma resposta era enviada e ninguém era avisado.
+
+**Agora:** qualquer erro técnico da IA, em qualquer momento da conversa, faz o bot enviar a
+mensagem de handoff (a mesma configurada em `/ai-profile`, ou o texto padrão se nada foi
+configurado) e seguir a política de handoff escolhida — notificar o time ou pausar o bot
+para aquele lead. O lead nunca mais fica sem resposta nenhuma por causa desse tipo de falha.
+
+**Para validar:** Cenário T1 (teste automatizado) já validado nesta mesma sessão — ver
+checks abaixo. Cenário P1 (fumaça manual no Playground) também executado — ver checks
+abaixo; não reproduziu a falha original (esperado, é instabilidade externa não controlável),
+mas confirma que nenhum comportamento normal foi quebrado pelo fix.
+
 ---
 
 ## Checks de Validação
@@ -107,6 +137,26 @@ automatizado, que força a falha de forma determinística.
   rodada antes e depois do fix (via `.venv` do projeto): mesmos 22 testes falhando em ambos os casos
   (pré-existentes, não relacionados a esta mudança — confirmado via `git stash`), 106→108 passando
   (+2 dos testes novos), nenhuma regressão introduzida.
+
+### Cenário P1 — Fumaça manual no Playground (opcional)
+- [⏭️] Reproduzir a falha real da LLM Mãe sob demanda no Playground — **não controlável**, confirmado
+  na prática (ver abaixo). Objetivo original: enviar "Quero falar com a profissional diretamente"
+  como 1ª mensagem de uma sessão nova e observar `next_action="handoff"` (não mais `ignore`/vazio)
+  quando a falha ocorrer.
+- **Executado em:** 08/08/2026 — ambiente local (backend-core:8001, backend-crm:8000,
+  backend-executors:8002 com o fix da Fase 1 já commitado, frontend-crm:5173), conta
+  `autodigital157@gmail.com`, AI Profile "Daniel" (`agenda`/`hybrid_scheduler`). 2 rodadas em
+  sessões novas via Playground (`POST /api/playground/chat`), mesma frase usada no diagnóstico
+  original (`sessao-teste-corrente.md`, Cenário 6). **Resultado: nas 2 rodadas a chamada à LLM Mãe
+  teve sucesso normal** (`mother_decision.reason` com rota real — `recepcao`/`sales`/etc. —, nunca
+  `llm_failure_first_message`), portanto o `except Exception` de `decide()` nunca foi exercitado e
+  o caminho corrigido não pôde ser observado via UI nesta sessão.
+- **Conclusão:** confirma na prática o que a seção "Checks de Validação" já antecipava — a falha da
+  LLM não é reproduzível sob demanda no Playground (instabilidade externa transitória, não uma
+  condição determinística do lado do cliente). A cobertura funcional do fix permanece no Cenário T1
+  (determinístico via `monkeypatch`), que já validou os dois branches (histórico curto e normal)
+  chegando a `handoff`. Cenário P1 marcado como pulado/justificado — não bloqueia a graduação desta
+  fase (item já documentado como opcional).
 
 ---
 
