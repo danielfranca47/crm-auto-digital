@@ -417,3 +417,39 @@ hardcoded (mudança não documentada em nenhum arquivo de implementação encont
 sido corrigida como parte de outro trabalho não relacionado a este roteiro).
 
 ---
+
+## Quinta ronda — Cenário 3 (recuperação de paciente sumido) retestado (08/08/2026)
+
+> Contexto: mesmo motivo do reteste do Cenário 1 — verificar se os 3 achados de qualidade
+> (fragmentação excessiva, bolha só com emoji, passividade) ainda ocorrem após o fix de
+> recepção/pendência comercial. Ambiente local, `ai_profile_id=5`
+> (`scheduling_offer_style=offer_alternatives`, deixado assim do teste anterior), 5 sessões
+> novas (`lead_id=null`), mesma mensagem do roteiro original: "Oi, ainda quero remarcar".
+
+| # | Saudação (bolhas) | Resposta real | Fragmentação | Emoji isolado |
+|---|---|---|---|---|
+| 1 | 3 | "Legal saber que você ainda quer remarcar! Que dia funcionaria melhor pra você?" | normal | Não |
+| 2 | 1 | "Terça-feira (11/08) às 10:00 ou quarta-feira (12/08) às 15:00?" | normal | Não |
+| 3 | 2 | "Terça-feira às 09:00 ou quarta-feira às 10:00 e 16:00?" | normal | Não |
+| 4 | 2 | "Que dia funcionaria melhor pra você para agendarmos a sessão?" | normal | Não |
+| 5 | 3 | "10/08 às 09:00, 11/08 às 14:00 ou 12/08 às 15:00?" | normal | Não |
+
+**Resultado: 5/5 sem fragmentação excessiva (máx. 3 bolhas de saudação, vs. até 4-5 na rodada
+original) · 5/5 sem bolha isolada de emoji · 5/5 sem o bug "Empresa Teste".**
+
+**Achado de "passividade" reavaliado — não é o mesmo bug.** Em 2/5 rodadas (1 e 4) o bot
+perguntou "que dia funciona melhor?" em vez de já propor horários. Diferença em relação ao
+achado original: a mensagem do lead ("ainda quero remarcar") não especifica nenhum dia — a
+pergunta é uma clarificação razoável, não a resposta genérica/não-sequitur do achado original
+("me avise quando puder remarcar", ignorando que o lead já sinalizou prontidão). Rota
+`Pré-Agendamento` (tentativa, sem dia+hora firmes) nas rodadas 1/4 vs. `Agendamento` (firme,
+horários concretos direto) nas rodadas 2/3/5 — comportamento esperado por design (ver
+`llm-architecture.md`, Filha Pré-agendamento), não um defeito.
+
+**Leitura:** mesma causa provável do reteste do Cenário 1 — a separação saudação/resposta real
+em duas chamadas de LLM distintas reduz a "resposta confusa tentando fazer saudação + conteúdo
+ao mesmo tempo", que era a raiz mais provável tanto da fragmentação quanto do emoji decorativo
+solto no fim. Dos 3 achados de qualidade do Cenário 3 original, 2 parecem resolvidos; o 3º não
+reproduziu na mesma forma.
+
+---
