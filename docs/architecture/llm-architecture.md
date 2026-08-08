@@ -308,6 +308,17 @@ global 60s/180s) — são camadas independentes: o retry de `llm_service.py` é 
 `whatsapp.appointment.reminder` tem um override deste backoff global — ver
 [`agenda.md`](agenda.md#lembrete-de-reunião-gerado-por-ia).
 
+### Fallback final: falha da LLM Mãe sempre vira handoff
+
+Se a chamada à LLM Mãe (ou o parsing/validação do payload) falhar mesmo após o retry de
+`llm_service.py`, o `except Exception` de `decide()` cai sempre em
+`handoff_policy.apply(context, FALLBACK_DECISION, logger=logger)` — independente de quantos
+turnos a conversa já teve. `handoff_policy.apply()` lê `ai_profile.handoff_custom_text` (ou o
+template padrão por `identity_mode`, ver [`agents.md`](agents.md)) e envia essa mensagem ao
+lead, seguindo a política configurada (`keep_active_notify` notifica o time; `disable_bot`
+pausa o bot para aquele lead). Não existe caminho de falha da Mãe que devolva resposta vazia
+sem handoff — nem mesmo nos primeiros turnos de uma conversa nova.
+
 ---
 
 ## Arquivos críticos
