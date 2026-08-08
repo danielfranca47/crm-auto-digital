@@ -123,8 +123,9 @@ resolvido por `useBusinessTimezone()` (`src/hooks/useBusinessTimezone.ts`), que 
 `businessTimezone` (do AI Profile, fallback para o fuso do navegador quando não
 configurado) e `browserTimezone`. Utilitários de conversão/formatação em
 `src/lib/timezone.ts` (`formatInBusinessTimezone`, `toBusinessTimezoneDate`,
-`fromBusinessTimezoneDate`, `getTimezoneCityLabel`) — usados nas 3 vistas, no Dashboard
-("Reuniões de Hoje"), no card do lead e na Prospecção.
+`fromBusinessTimezoneDate`, `getTimezoneCityLabel`, `getBusinessDayBounds`,
+`getBusinessRangeBounds`) — usados nas 3 vistas, no Dashboard ("Reuniões de Hoje"), no
+card do lead e na Prospecção.
 
 **Quando o fuso do negócio difere do fuso do navegador:**
 - **Listagens** (Agenda modo lista/calendário, Dashboard, card do lead, Prospecção) —
@@ -140,12 +141,13 @@ configurado) e `browserTimezone`. Utilitários de conversão/formatação em
   os campos não são editáveis nos dois fusos), mas exibe uma legenda abaixo dos campos
   Início/Fim com a conversão para o fuso do navegador quando há mismatch
   (`combineDateTimeInTimezone`, calculado via `useMemo`).
-
-**Limitação conhecida:** os intervalos de busca (`start`/`end` enviados ao backend por
-`Dashboard.tsx`, `WeekView.tsx`, `DayView.tsx`, `ScheduleView.tsx`) usam os limites de
-dia/semana/mês no fuso do navegador, não no fuso do negócio — só afecta compromissos
-muito próximos da meia-noite quando a diferença de fuso é grande (podem aparecer no dia
-errado, ou faltar na lista de "hoje").
+- **Intervalos de busca** — os limites `start`/`end` de dia/semana/mês enviados ao
+  backend por `Dashboard.tsx`, `WeekView.tsx`, `DayView.tsx` e `ScheduleView.tsx` são
+  calculados no fuso do negócio via `getBusinessDayBounds`/`getBusinessRangeBounds`, não
+  no fuso do navegador — garante que um compromisso perto da meia-noite aparece no dia
+  correto mesmo quando os dois fusos divergem. A grade visual do WeekView/DayView
+  (colunas de dia, navegação ← / →) continua no fuso do navegador; só a fronteira
+  enviada ao backend muda.
 
 ---
 
