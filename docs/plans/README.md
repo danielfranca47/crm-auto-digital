@@ -24,6 +24,7 @@ implementação.
 | `followup-auto-trigger-melhorias-futuras.md` | Itens deixados de fora do M2 (disparo automático/check-in de inatividade): falso-positivo de actividade, bug de trava do banco em `progress_followup_after_auto_send`, Agent 2 fora do check-in, worker sem isolamento de conta em testes locais |
 | `agent-local-melhorias-futuras-V3.md` | Itens deixados de fora da graduação da v2 do agent-local (M1–M9) + M10 "Empacotamento v3", sempre a última fase — ver `_versionamento-agent-local.md` |
 | `seguranca-melhorias-futuras.md` | Achados Altos/Médios/Baixos da auditoria de segurança de 2026-07-15 ainda não corrigidos (os 2 críticos já foram corrigidos e graduados) |
+| `central-ajuda-usuario.md` | Central de Ajuda educativa para usuários (estilo Meta Ads Help) — nasce do gap de descoberta de `custom_instructions`/Fluxo de Venda como redes de segurança configuráveis |
 
 Os arquivos sem prefixo `_` são os **planos concretos** — contêm melhorias identificadas
 que ainda não foram implementadas.
