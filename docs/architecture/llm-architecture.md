@@ -171,7 +171,7 @@ Campos adicionados pelo Fluxo de Venda (Camada 7):
 
 ### Filha Agendamento (`_build_child_prompt_agendamento`)
 - Confirma o horário pedido contra `calendar_busy_slots`/disponibilidade do AI Profile
-- Devolve `signals_structured.meeting_datetime_candidate` (data/hora exacta combinada, ISO) — consumido por `meeting_scheduler.py` antes de cair no fallback heurístico de extracção por texto (`extract_start_at`, impreciso). Mesmo mecanismo já usado pela filha de Presentation.
+- Devolve `signals_structured.meeting_datetime_candidate` (data/hora exacta combinada, ISO). `meeting_scheduler.py::_extract_meeting_signal()` só recorre ao fallback heurístico de extracção por texto (`extract_start_at`, impreciso — já mostrou interpretar "13h" como deslocamento de 13 horas em vez de hora do relógio) quando esse candidato **existe mas é inválido/já passou**. Quando a Filha não devolve candidato nenhum (ex.: nega o horário pedido), `start_at` fica `None` e nenhum compromisso é criado — não tenta adivinhar a partir do texto cru. Mesmo mecanismo de candidato estruturado já usado pela filha de Presentation.
 - Recebe `tabela_de_dias` (mesmo lookup acima) e `ai_profile.timezone`
 
 ### Filha Follow-up (`_build_child_followup_prompt`)

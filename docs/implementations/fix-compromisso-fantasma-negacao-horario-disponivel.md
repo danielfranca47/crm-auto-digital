@@ -1,6 +1,7 @@
 # Compromisso fantasma + negação incorreta de horário disponível (Agendamento)
 
-**Status:** Aguardando Plan Mode
+**Branch:** `fix/handoff-silencio-primeira-mensagem`
+**Status:** Em andamento
 **Origem:** achado durante reteste do Cenário 1 de `docs/implementations/sessao-teste-corrente.md`
 
 ---
@@ -76,7 +77,7 @@ para UTC corretamente).
 
 ---
 
-## Hipótese de causa raiz (preliminar — não aprofundada, ponto de partida para o Plan Mode)
+## Causa raiz (confirmada com reprodução directa)
 
 `backend-executors/app/services/meeting_scheduler.py`, função `_extract_meeting_signal()`:
 
@@ -89,41 +90,102 @@ para UTC corretamente).
    negando o horário. O sinal da Mãe não é corrigido/descartado quando a Filha diverge.
 2. **Linhas 83-103:** quando `meeting_scheduled=true`, o código tenta obter a data/hora do
    `meeting_datetime_candidate` estruturado da **Filha**. Na rodada 2 esse campo veio `null`
-   (esperado — a Filha negou o horário, não tinha motivo para extrair uma data confirmada).
-   Como fallback, chama `extract_start_at(metadata, history, ...)` (heurística de extração por
-   texto sobre o histórico da conversa) — que, neste caso, parece ter retornado algo próximo de
-   "agora" em vez de nenhuma data válida ou de recusar o fallback.
+   (esperado — a Filha negou o horário). O bug: `candidate_str=None` cai no **mesmo** `else` que
+   trata candidato inválido/passado — ambos disparam o fallback heurístico `extract_start_at()`,
+   que tenta adivinhar uma data varrendo o texto cru da conversa com a biblioteca `dateparser`.
+3. **Confirmado por reprodução directa:** chamando `dateparser.search_dates("Prefiro às 13h
+   então, pode ser?", ...)` com as mesmas configurações do código (sem nenhuma âncora de dia na
+   frase — sem "hoje"/"amanhã"/dia da semana/data explícita), o `dateparser` interpreta "13h"
+   como um **deslocamento de 13 horas a partir de agora** (duração), não como "13:00" (hora do
+   relógio). Resultado: `now + 13h`, cruzando a meia-noite UTC — batendo quase ao segundo com a
+   data/hora bugada observada (`2026-08-09T03:50:xxZ`).
+4. Como `signal.start_at` acaba preenchido (embora errado), o guard existente em
+   `handle_meeting_scheduled()` (linha 732, `if not signal.start_at: ... return None`) não
+   protege este caso — só existe hoje para quando **nenhum** valor é encontrado, não para um
+   valor implausível. O gate M3 (`is_phase_entry`, linha 717) também não cobre — só protege a
+   *primeira* mensagem do lead numa fase; aqui o lead já estava em "agendamento" desde o turno
+   anterior.
 
-**Não investigado ainda:** o comportamento interno de `extract_start_at()` (linha 354 do mesmo
-arquivo) — por que produziu especificamente `2026-08-09` (dia errado) com precisão de segundos
-batendo com o instante da chamada, em vez de retornar `None`/falhar de forma segura.
-
-**Achado A (negação incorreta) provavelmente compartilha causa com o mesmo fenômeno** — a
-Filha de agendamento, ao gerar a resposta de texto, tem uma taxa de erro não-determinística ao
-verificar um horário contra uma agenda vazia (mesma classe de variância estocástica já discutida
-para o Cenário 1 original) — mas isso não foi confirmado em código, só observado no comportamento.
+**Achado A (negação incorreta) permanece fora de escopo** — é variância do texto gerado pela
+Filha ao verificar disponibilidade, sem causa determinística de código identificada (mesma
+classe dos achados de qualidade já discutidos para os Cenários 1 e 3 do roteiro de testes).
 
 ---
 
-## Estado deixado para trás (importante para retomar)
+## Abordagem
+
+Distinguir os dois motivos de `candidate_str` estar vazio, tratando-os de forma diferente —
+mudança cirúrgica, sem tocar em `extract_start_at()`/`dateparser` nem no gate M3:
+
+- **Candidato inválido ou no passado** (Filha tentou confirmar algo, mas o valor não presta) →
+  comportamento actual mantido: cai no fallback heurístico. Já coberto por
+  `test_extract_meeting_signal_invalid_candidate_falls_back` e
+  `test_extract_meeting_signal_past_candidate_falls_back`.
+- **Candidato ausente/`null`** (Filha não confirmou nada) → **não** cai mais no fallback
+  heurístico. `start_at` fica `None`, e o guard já existente em `handle_meeting_scheduled()`
+  (`reason="missing_start_at"`) cuida de não criar nada — código já existe, só passa a ser
+  alcançado neste caso.
+
+```
+meeting_scheduled=true (sinal da Mãe)
+  candidato da Filha:
+    ├─ válido e futuro               → usa direto (inalterado)
+    ├─ presente mas inválido/passado → fallback extract_start_at() (inalterado)
+    └─ ausente (null)                → ANTES: também caía no fallback (raiz do bug)
+                                        DEPOIS: start_at=None → handle_meeting_scheduled() já
+                                        recusa criar (reason=missing_start_at)
+```
+
+---
+
+## Plano de Implementação
+
+### Fase 1 — Não usar fallback heurístico quando a Filha não fornece candidato nenhum
+
+**Objetivo:** parar de criar compromissos fantasma quando a Filha nega/não confirma um horário
+
+| Arquivo | O que muda |
+|---|---|
+| `backend-executors/app/services/meeting_scheduler.py` | `_extract_meeting_signal()`, troca o `else` genérico por `elif candidate_str:` — só cai no fallback quando há valor não-vazio |
+| `backend-executors/tests/test_meeting_scheduler_structured_candidate.py` | Novo teste: candidato `None`, confirma que `extract_start_at` não é chamado e `signal.start_at is None` |
+| `backend-executors/tests/test_meeting_scheduled_events.py` | Novo teste: `handle_meeting_scheduled()` com candidato `None` não cria nenhum compromisso |
+| `docs/architecture/llm-architecture.md` | Esclarece que o fallback heurístico só roda para candidato inválido/passado, nunca para candidato ausente |
+
+```python
+# ANTES
+if start_at is not None:
+    ...
+else:
+    if candidate_str:
+        ...warning candidate_invalid...
+    ...fallback_extract_start_at...
+    start_at = extract_start_at(...)
+
+# DEPOIS
+if start_at is not None:
+    ...
+elif candidate_str:
+    ...warning candidate_invalid...
+    ...fallback_extract_start_at...
+    start_at = extract_start_at(...)
+else:
+    ...log source=none_child_no_candidate...
+    # start_at permanece None
+```
+
+---
+
+## Estado da conta de teste
 
 - `ai_profile.id=5` (conta de teste) está com `scheduling_offer_style=offer_alternatives`.
-  Era `confirm_exact` antes deste teste. **Não foi revertido.**
-- Nenhuma alteração de código foi feita — só investigação/leitura.
-- 1 compromisso fantasma (`lead_id=416`, sandbox) pode ter sido gravado na tabela `appointments`
-  do ambiente local, com data 2026-08-09 — irrelevante em produção (é dado de teste local), mas
-  vale limpar se for mexer nessa área depois.
+  Era `confirm_exact` antes do reteste do Cenário 1. **Não foi revertido.**
+- 1 compromisso fantasma (`lead_id=416`, sandbox) foi gravado na tabela `appointments` do
+  ambiente local, com data 2026-08-09 — irrelevante em produção (é dado de teste local).
 
 ---
 
 ## Ajustes Possíveis Pós-Implementação
 
-- Considerar não confiar cegamente no sinal `meeting_scheduled` da Mãe para criar o
-  `appointment_event` — cruzar com o resultado real da Filha (ex.: só criar se o
-  `meeting_datetime_candidate` estruturado da Filha for válido; se vier `null`, não cair no
-  fallback heurístico de texto, ou pelo menos não aceitar um resultado tão próximo de "agora"
-  sem confiança razoável).
-- Investigar `extract_start_at()` isoladamente com o histórico exato desta rodada para entender
-  a causa do "quase agora".
-- Reavaliar Achado A (negação incorreta) junto — pode precisar de mais rodadas de teste para
-  confirmar taxa de reincidência antes de decidir se vale ajuste de prompt.
+- Achado A (negação incorreta de horário genuinamente disponível) permanece sem causa
+  determinística de código — pode precisar de mais rodadas de teste para confirmar taxa de
+  reincidência antes de decidir se vale ajuste de prompt.

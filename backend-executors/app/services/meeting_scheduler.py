@@ -88,12 +88,13 @@ def _extract_meeting_signal(context: Dict[str, Any], decision: DecisionOutput) -
             "event=meeting_datetime_source source=structured_candidate tz_used=%s",
             _resolve_timezone_name(tz_name),
         )
-    else:
-        if candidate_str:
-            logging.getLogger(__name__).warning(
-                "event=meeting_datetime_candidate_invalid reason=parse_or_past tz_used=%s",
-                _resolve_timezone_name(tz_name),
-            )
+    elif candidate_str:
+        # Filha forneceu um candidato mas não foi possível interpretá-lo (formato inválido
+        # ou já no passado) — tenta recuperar via heurística de texto sobre a conversa.
+        logging.getLogger(__name__).warning(
+            "event=meeting_datetime_candidate_invalid reason=parse_or_past tz_used=%s",
+            _resolve_timezone_name(tz_name),
+        )
         logging.getLogger(__name__).info("event=meeting_datetime_source source=fallback_extract_start_at")
         start_at = extract_start_at(
             metadata,
@@ -101,6 +102,12 @@ def _extract_meeting_signal(context: Dict[str, Any], decision: DecisionOutput) -
             tz_name=tz_name,
             now_utc=now_utc,
         )
+    else:
+        # Filha não forneceu nenhum candidato (ex.: negou o horário) — não adivinha via
+        # heurística de texto (imprecisa, já causou compromisso fantasma com data/hora sem
+        # relação com a conversa). start_at permanece None; handle_meeting_scheduled() recusa
+        # criar o compromisso (reason=missing_start_at).
+        logging.getLogger(__name__).info("event=meeting_datetime_source source=none_child_no_candidate")
 
     duration_minutes = None
     try:
