@@ -173,6 +173,51 @@ else:
     # start_at permanece None
 ```
 
+### Commits Fase 1
+
+| # | Commit | O que foi implementado |
+|---|---|---|
+| 1 | `49a23e3` | Distingue candidato ausente de inválido/passado; não cria compromisso quando ausente + 2 testes + doc |
+
+**Detalhes do commit `49a23e3`:**
+- `backend-executors/app/services/meeting_scheduler.py` — `_extract_meeting_signal()`: `else` genérico vira `elif candidate_str:`; novo `else` final loga e deixa `start_at=None`
+- `backend-executors/tests/test_meeting_scheduler_structured_candidate.py` — `test_extract_meeting_signal_missing_candidate_does_not_fallback`
+- `backend-executors/tests/test_meeting_scheduled_events.py` — `test_handle_meeting_scheduled_no_candidate_creates_nothing`
+- `docs/architecture/llm-architecture.md` — secção "Filha Agendamento" esclarecida
+
+### Relatório da Fase 1 — o que mudou na prática
+
+**Antes:** quando a IA negava um horário ao lead (não confirmava nada), o sistema podia mesmo
+assim criar um compromisso real na agenda, com uma data/hora inventada sem relação com a
+conversa — um "compromisso fantasma".
+
+**Agora:** quando a IA nega/não confirma um horário, nenhum compromisso é criado. O sistema só
+tenta recuperar uma data por conta própria (heurística de texto) quando a IA *tentou* confirmar
+algo mas o valor veio malformado ou já expirado — nunca quando ela simplesmente não confirmou
+nada.
+
+**Para validar:** Cenário T1 (testes automatizados) — ver checks abaixo, já rodados e
+validados nesta sessão. Cenário P1 (fumaça manual no Playground) é opcional — a causa raiz foi
+reproduzida de forma 100% determinística (diferente de achados de variância de LLM), então os
+testes automatizados já dão confiança alta sem precisar do teste ao vivo.
+
+---
+
+## Checks de Validação
+
+### Cenário T1 — Testes automatizados (pytest)
+- [x] `pytest backend-executors/tests/test_meeting_scheduler_structured_candidate.py` — 7/7 passou
+- [x] `pytest backend-executors/tests/test_meeting_scheduled_events.py` — 3/3 passou
+- [x] Suíte completa `pytest backend-executors/tests/` — mesmos 22 testes pré-existentes
+  falhando (não relacionados, confirmados antes desta sessão via `git stash`), 110 passando
+  (108 + 2 novos), zero regressão
+- **Validado em:** 08/08/2026
+
+### Cenário P1 — Fumaça manual no Playground (opcional)
+- [ ] Repetir a sequência exata do Achado B (turno 1: horário quinta 15h; turno 2: "Prefiro às
+  13h então, pode ser?", mesmo `lead_id`) e confirmar que nenhum `appointment_event` é criado
+  mesmo que a Filha negue de novo (Achado A é variância aceita, fora de escopo)
+
 ---
 
 ## Estado da conta de teste
