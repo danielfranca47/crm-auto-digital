@@ -197,9 +197,8 @@ algo mas o valor veio malformado ou já expirado — nunca quando ela simplesmen
 nada.
 
 **Para validar:** Cenário T1 (testes automatizados) — ver checks abaixo, já rodados e
-validados nesta sessão. Cenário P1 (fumaça manual no Playground) é opcional — a causa raiz foi
-reproduzida de forma 100% determinística (diferente de achados de variância de LLM), então os
-testes automatizados já dão confiança alta sem precisar do teste ao vivo.
+validados nesta sessão. Cenário P1 (fumaça manual no Playground) também foi executado e
+validado — ver relato abaixo.
 
 ---
 
@@ -213,10 +212,18 @@ testes automatizados já dão confiança alta sem precisar do teste ao vivo.
   (108 + 2 novos), zero regressão
 - **Validado em:** 08/08/2026
 
-### Cenário P1 — Fumaça manual no Playground (opcional)
-- [ ] Repetir a sequência exata do Achado B (turno 1: horário quinta 15h; turno 2: "Prefiro às
+### Cenário P1 — Fumaça manual no Playground
+- [x] Repetir a sequência exata do Achado B (turno 1: horário quinta 15h; turno 2: "Prefiro às
   13h então, pode ser?", mesmo `lead_id`) e confirmar que nenhum `appointment_event` é criado
   mesmo que a Filha negue de novo (Achado A é variância aceita, fora de escopo)
+- **Validado em:** 08/08/2026. Primeira tentativa (`lead_id=425`) ainda reproduziu o compromisso
+  fantasma (`appointment_event.action="created"`, `start_at` ~13h à frente do timestamp da
+  requisição) — investigado e explicado: o processo `backend-executors` local estava de pé desde
+  antes do commit `49a23e3` (não usa `--reload`, ver `_conta-teste-local.md`), então ainda rodava
+  o código antigo. Após reiniciar o processo e repetir a sequência do zero (3 tentativas até obter
+  o turno 1 em modo negação — `lead_id=427`/`428`/`429`, variância normal da Filha), o turno 2 no
+  `lead_id=429` negou o horário de 13h (`meeting_datetime_candidate: null`) e
+  **`appointment_event: null`** — nenhum compromisso foi criado, confirmando o fix.
 
 ---
 
@@ -224,8 +231,11 @@ testes automatizados já dão confiança alta sem precisar do teste ao vivo.
 
 - `ai_profile.id=5` (conta de teste) está com `scheduling_offer_style=offer_alternatives`.
   Era `confirm_exact` antes do reteste do Cenário 1. **Não foi revertido.**
-- 1 compromisso fantasma (`lead_id=416`, sandbox) foi gravado na tabela `appointments` do
-  ambiente local, com data 2026-08-09 — irrelevante em produção (é dado de teste local).
+- 2 compromissos fantasma (`lead_id=416` e `lead_id=425`, ambos sandbox) foram gravados na
+  tabela `appointments` do ambiente local — o segundo veio da primeira tentativa de validação do
+  Cenário P1, antes de perceber que o processo `backend-executors` ainda rodava código antigo.
+  Irrelevante em produção (dados de teste local).
+- Leads sandbox adicionais criados durante a validação do Cenário P1: `426`–`429`.
 
 ---
 
