@@ -32,6 +32,7 @@ def _create_schema(conn: sqlite3.Connection) -> None:
             message_id INTEGER,
             action TEXT,
             notes TEXT,
+            email TEXT,
             user_id INTEGER
         );
 

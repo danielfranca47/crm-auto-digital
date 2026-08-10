@@ -860,6 +860,8 @@ def report_job(
         payload = _json_loads(row["payload"])
         if job_type == TYPE_WHATSAPP_SEND:
             _handle_whatsapp_report(conn, payload, status, result, error_txt, user_id=user_id)
+        elif job_type == TYPE_EMAIL_SEND_COLD:
+            _handle_email_report(conn, payload, status, result, error_txt, user_id=user_id)
 
         conn.commit()
 
@@ -897,13 +899,14 @@ def _log_prospection(
     message_id: Optional[int] = None,
     notes: Optional[str] = None,
     user_id: Optional[int] = None,
+    email: Optional[str] = None,
 ) -> None:
     conn.execute(
         """
-        INSERT INTO prospection_logs (lead_id, channel, message_id, action, notes, user_id)
-        VALUES (?, ?, ?, ?, ?, ?)
+        INSERT INTO prospection_logs (lead_id, channel, message_id, action, notes, user_id, email)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
         """,
-        (lead_id, channel, message_id, action, notes, user_id),
+        (lead_id, channel, message_id, action, notes, user_id, email),
     )
 
 
@@ -1143,6 +1146,43 @@ def _handle_whatsapp_report(conn, payload, status, result, error_txt, *, user_id
             message_id=message_id,
             action="failed",
             notes=notes or "erro",
+            user_id=user_id,
+        )
+
+
+def _handle_email_report(conn, payload, status, result, error_txt, *, user_id: Optional[int] = None):
+    lead_id = (payload or {}).get("lead_id")
+    message_id = (payload or {}).get("message_id")
+    email_addr = (payload or {}).get("email")
+    if not lead_id:
+        return
+
+    notes = None
+    if isinstance(result, dict):
+        notes = result.get("notes") or result.get("detail")
+    if not notes and error_txt:
+        notes = error_txt
+
+    if status == JOB_STATUS_COMPLETED:
+        _log_prospection(
+            conn,
+            lead_id=lead_id,
+            channel="email",
+            message_id=message_id,
+            action="sent",
+            notes=notes,
+            email=email_addr,
+            user_id=user_id,
+        )
+    elif status == JOB_STATUS_FAILED:
+        _log_prospection(
+            conn,
+            lead_id=lead_id,
+            channel="email",
+            message_id=message_id,
+            action="failed",
+            notes=notes or "erro",
+            email=email_addr,
             user_id=user_id,
         )
 
@@ -1545,6 +1585,7 @@ def enqueue_email_jobs(
                         message_id=message_id,
                         action="queued",
                         notes=f"email={email_addr}",
+                        email=email_addr,
                         user_id=user_id,
                     )
 

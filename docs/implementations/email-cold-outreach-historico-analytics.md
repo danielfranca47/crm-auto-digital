@@ -1,7 +1,7 @@
 # Histórico/analytics de emails enviados (cold outreach)
 
-**Branch:** *(definir no Plan Mode)*
-**Status:** Aguardando Plan Mode
+**Branch:** `main`
+**Status:** Em andamento
 
 ---
 
@@ -19,9 +19,117 @@ e [`docs/architecture/agent-local-app.md`](../architecture/agent-local-app.md#co
 - Job type `email.send.cold`, processado por `backend-executors/app/workers/email_worker.py` +
   `app/runners/email.py`
 - Painel "Histórico" do agent-local (`_build_historico` em `main_screen.py`) já existe para
-  WhatsApp (`GET /api/prospeccao/history`, JOIN `prospection_logs` + `leads`) — candidato natural
-  a estender para email, se for essa a direcção escolhida no Plan Mode
+  WhatsApp (`GET /api/prospeccao/history`, JOIN `prospection_logs` + `leads`)
 
-**Este arquivo ainda não tem plano.** O diagnóstico (o que já existe, o que construir, riscos) e
-a aprovação do utilizador acontecem no Plan Mode, antes de qualquer código — ver
-`_guia-documentar-implementacao.md`.
+---
+
+## Problemas Identificados (estado anterior)
+
+1. **Resultado do email nunca gravado:** `report_job` (`backend-crm/services/jobs_service.py:769-880`)
+   só grava `sent`/`failed` em `prospection_logs` quando `job_type == TYPE_WHATSAPP_SEND` (linha 861,
+   via `_handle_whatsapp_report`). Não existe equivalente para `TYPE_EMAIL_SEND_COLD` — o email cold
+   outreach só grava `action="queued"` (em `enqueue_email_jobs`, linha 1541-1548); o desfecho real
+   (`sent`/`failed`, reportado pelo worker em `backend-executors/app/runners/email.py:73-151`) não
+   chega a `prospection_logs`.
+
+2. **API esconde o canal e o destinatário de email:** `GET /api/prospeccao/history`
+   (`backend-crm/routes/prospeccao.py:366-408`) já mistura entradas de todos os canais, mas o
+   `SELECT` não inclui `pl.channel` nem nenhum campo de email — só `phone`. Os dois consumidores
+   herdam a limitação: `agent-local/app/ui/main_screen.py:2916-3045` (`_build_historico`) e
+   `frontend-crm/src/pages/Pesquisa.tsx:11-226` ("Leads do Agente").
+
+---
+
+## Abordagem
+
+Reaproveitar a infraestrutura já existente para WhatsApp (`prospection_logs` +
+`GET /api/prospeccao/history`) em vez de construir uma tabela/rota nova.
+
+```
+Job email.send.cold executado (backend-executors)
+  → crm_client.complete_job / fail_job → report_job (backend-crm)
+      ├─ job_type == whatsapp.send.local → _handle_whatsapp_report (já existe)
+      └─ job_type == email.send.cold     → _handle_email_report (NOVO)
+             → grava prospection_logs (channel="email", action=sent|failed, email=...)
+
+GET /api/prospeccao/history?channel=email
+  → SELECT ganha pl.channel + pl.email (fallback leads.email)
+  → agent-local (_build_historico) e frontend-crm (Pesquisa.tsx) exibem coluna Canal + email
+```
+
+---
+
+## Plano de Implementação
+
+### Fase A — backend: gravar `sent`/`failed` de email em `prospection_logs`
+
+**Objectivo:** o desfecho real do envio de email passa a ficar gravado, tal como já acontece para
+`queued` e para WhatsApp.
+
+| Arquivo | O que muda |
+|---|---|
+| `backend-crm/database.py` (~1164) | `ensure_column(conn, "prospection_logs", "email", "email TEXT")` |
+| `backend-crm/services/jobs_service.py` (`_log_prospection`) | novo parâmetro opcional `email: Optional[str] = None`, incluído no `INSERT` |
+| `backend-crm/services/jobs_service.py` (`enqueue_email_jobs`) | passa `email=email_addr` na chamada já existente a `_log_prospection` |
+| `backend-crm/services/jobs_service.py` (nova função) | `_handle_email_report(conn, payload, status, result, error_txt, *, user_id=None)` — grava `action="sent"`/`"failed"` com `channel="email"`, sem a lógica de `apply_suggested_category`/`origin='outbound'` (específica do pipeline de IA do WhatsApp) |
+| `backend-crm/services/jobs_service.py` (`report_job`) | `elif job_type == TYPE_EMAIL_SEND_COLD: _handle_email_report(...)` |
+| `backend-crm/tests/test_jobs_service_email_report.py` (novo) | cobre `report_job` com `status=completed` e `status=failed` para um job de email |
+
+### Fase B — backend: expor `channel` e `email` em `/api/prospeccao/history`
+
+**Objectivo:** a rota deixa de esconder o canal e o destinatário de email.
+
+| Arquivo | O que muda |
+|---|---|
+| `backend-crm/routes/prospeccao.py` (`get_history`) | SELECT ganha `pl.channel` e `COALESCE(pl.email, CASE WHEN pl.channel='email' THEN l.email END) AS email`; resposta ganha `"channel"` e `"email"`; novo parâmetro opcional `channel: Optional[str] = Query(None)` filtrado na `WHERE` antes do `LIMIT/OFFSET` |
+
+### Fase C — agent-local: coluna de Canal em `_build_historico`
+
+**Objectivo:** distinguir visualmente email de WhatsApp e mostrar o email quando aplicável.
+
+| Arquivo | O que muda |
+|---|---|
+| `agent-local/app/ui/main_screen.py:2916-3045` | nova coluna "Canal" no cabeçalho e nas linhas; quando `channel == "email"`, mostra o email em vez de `phone`; mesmo tratamento no `_export_csv` |
+
+### Fase D — frontend-crm: coluna de Canal + filtro em `Pesquisa.tsx`
+
+**Objectivo:** paridade com a Fase C no CRM web.
+
+| Arquivo | O que muda |
+|---|---|
+| `frontend-crm/src/pages/Pesquisa.tsx` (`HistoryEntry`) | `channel: string`, `email: string` |
+| `frontend-crm/src/pages/Pesquisa.tsx` (filtro) | segundo `Select` "Canal" (Todos/Email/WhatsApp), refetch server-side |
+| `frontend-crm/src/pages/Pesquisa.tsx` (tabela) | nova coluna "Canal"; célula mostra `entry.email || entry.phone || "—"` |
+| `frontend-crm/src/services/api.ts` (`history`) | aceita `channel?: string` opcional, repassado como query param |
+
+---
+
+## Checks de Validação
+
+### Cenário C1 — Email completo grava `sent` em `prospection_logs`
+- [ ] Enviar um email cold outreach real (lead com email válido, conta SMTP conectada)
+- [ ] Confirmar: linha `action="sent" channel="email"` aparece em `prospection_logs`
+
+### Cenário C2 — Email falhado grava `failed`
+- [ ] Forçar falha (ex.: SMTP inválido) num envio de email
+- [ ] Confirmar: linha `action="failed" channel="email"` com nota de erro
+
+### Cenário P1 — Histórico agent-local mostra canal e email
+- [ ] Abrir painel Histórico no agent-local após enviar email(s) e WhatsApp(s)
+- [ ] Confirmar: coluna Canal distingue as entradas; linhas de email mostram o endereço
+- [ ] Exportar CSV e confirmar a coluna Canal
+
+### Cenário P2 — "Leads do Agente" (frontend-crm) mostra canal, email e filtro
+- [ ] Abrir `Pesquisa.tsx` no frontend-crm
+- [ ] Confirmar: coluna Canal, email visível nas linhas de email, filtro por canal funciona
+
+---
+
+## Ajustes Possíveis Pós-Implementação
+
+- **Fase E (não implementada nesta ronda):** resumo agregado ("X enviados / Y falharam / Z
+  enfileirados") calculado client-side sobre a lista já carregada. Não é um total histórico exacto
+  (limitado à janela de `limit=200`) — um total exacto exigiria uma rota nova com
+  `GROUP BY channel, action`. O contador diário exacto (vs limite do plano) já existe em
+  `GET /api/usage` (`max_email_send_daily`). Avaliar se vale a pena depois de ver o histórico em
+  uso real.

@@ -81,6 +81,7 @@ def _create_tables(conn: sqlite3.Connection) -> None:
             message_id INTEGER,
             action TEXT NOT NULL,
             notes TEXT,
+            email TEXT,
             createdAt DATETIME DEFAULT CURRENT_TIMESTAMP
         );
 
