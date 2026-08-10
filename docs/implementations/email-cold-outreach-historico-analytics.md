@@ -75,6 +75,37 @@ GET /api/prospeccao/history?channel=email
 | `backend-crm/services/jobs_service.py` (`report_job`) | `elif job_type == TYPE_EMAIL_SEND_COLD: _handle_email_report(...)` |
 | `backend-crm/tests/test_jobs_service_email_report.py` (novo) | cobre `report_job` com `status=completed` e `status=failed` para um job de email |
 
+### Commits Fase A
+
+| # | Commit | O que foi implementado |
+|---|---|---|
+| 1 | `18bc282` | backend: `_handle_email_report` + coluna `prospection_logs.email` + testes |
+
+**Detalhes do commit `18bc282`:**
+- `backend-crm/database.py` — nova coluna `prospection_logs.email` (`ensure_column` idempotente)
+- `backend-crm/services/jobs_service.py` — `_log_prospection` ganha parâmetro opcional `email`;
+  nova função `_handle_email_report` (análoga a `_handle_whatsapp_report`, sem a lógica de
+  categoria/`origin` específica do pipeline de IA do WhatsApp); `report_job` despacha jobs
+  `email.send.cold` para ela; `enqueue_email_jobs` passa a gravar o email também no log de `queued`
+- `backend-crm/tests/test_jobs_service_email_report.py` — cobre `sent`/`failed`/payload sem `lead_id`
+- `backend-crm/tests/test_whatsapp_outbound_message_model.py`,
+  `test_qualification_integrity_guardrails.py` — schema local de `prospection_logs` actualizado
+  com a coluna `email` nova (mirror do schema real), evita regressão nos testes existentes
+
+### Relatório da Fase A — o que mudou na prática
+
+**Antes:** quando um email de prospecção fria era enviado (ou falhava), esse resultado nunca ficava
+registado em lado nenhum visível — só o "enfileirado" inicial aparecia, o resto ficava só na tabela
+`jobs` bruta.
+**Agora:** o sucesso (`sent`) ou a falha (`failed`) do envio fica gravado em `prospection_logs`,
+com o email do destinatário guardado explicitamente — a mesma base de dados que já serve o
+histórico de WhatsApp passa a ter o retrato completo do email também. Esta fase só mexe no
+backend; a rota `/api/prospeccao/history` e as telas (agent-local, "Leads do Agente" no CRM) ainda
+não mostram essa informação nova — isso é a Fase B/C/D.
+**Para validar:** Cenários C1 e C2, na secção "Checks de Validação" abaixo — exigem um envio real
+de email (sucesso e falha) com conta SMTP conectada, e inspecionar a tabela `prospection_logs`
+directamente (não há UI ainda para ver isto nesta fase).
+
 ### Fase B — backend: expor `channel` e `email` em `/api/prospeccao/history`
 
 **Objectivo:** a rota deixa de esconder o canal e o destinatário de email.
@@ -82,6 +113,23 @@ GET /api/prospeccao/history?channel=email
 | Arquivo | O que muda |
 |---|---|
 | `backend-crm/routes/prospeccao.py` (`get_history`) | SELECT ganha `pl.channel` e `COALESCE(pl.email, CASE WHEN pl.channel='email' THEN l.email END) AS email`; resposta ganha `"channel"` e `"email"`; novo parâmetro opcional `channel: Optional[str] = Query(None)` filtrado na `WHERE` antes do `LIMIT/OFFSET` |
+
+### Commits Fase B
+
+| # | Commit | O que foi implementado |
+|---|---|---|
+| 1 | `<preencher após commit>` | backend: `channel`/`email` expostos em `/api/prospeccao/history` + filtro `?channel=` |
+
+### Relatório da Fase B — o que mudou na prática
+
+**Antes:** a rota que alimenta o painel Histórico devolvia todas as acções (WhatsApp e email)
+misturadas, mas sem indicar qual era qual, e sem o endereço de email do destinatário — só o
+telefone.
+**Agora:** cada entrada devolvida traz `channel` (`"whatsapp"`/`"email"`) e `email` (quando
+aplicável); a rota aceita `?channel=email` para filtrar só um canal directamente na base de dados.
+Ainda não há UI a usar estes campos novos — isso é a Fase C (agent-local) e D (frontend-crm).
+**Para validar:** Cenários C1 e C2 (agora possíveis de confirmar via a própria API, sem SQL bruto)
+— ver "Checks de Validação".
 
 ### Fase C — agent-local: coluna de Canal em `_build_historico`
 

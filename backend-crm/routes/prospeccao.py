@@ -367,31 +367,42 @@ def generate_copy(req: GenerateCopyRequest, current_user: CurrentUser = Depends(
 def get_history(
     limit: int = Query(50, ge=1, le=200),
     offset: int = Query(0, ge=0),
+    channel: Optional[str] = Query(None),
     current_user: CurrentUser = Depends(require_crm_access),
 ):
     """
     Histórico de acções de prospecção do utilizador.
-    JOIN prospection_logs + leads para devolver nome e telefone do lead.
+    JOIN prospection_logs + leads para devolver nome, telefone e (para email) o
+    endereço de destino do lead.
     Usado pelo agent-local (assinantes) e pela página 'Leads do Agente' no CRM.
     """
+    where = "WHERE pl.user_id = ?"
+    params: List = [current_user.id, current_user.id]
+    if channel:
+        where += " AND pl.channel = ?"
+        params.append(channel)
+    params.extend([limit, offset])
+
     with get_connection() as conn:
         rows = conn.execute(
-            """
+            f"""
             SELECT
                 pl.id,
                 pl.lead_id,
                 pl.action,
+                pl.channel,
                 pl.notes,
                 pl.createdAt AS created_at,
                 COALESCE(l.companyName, l.contactName, 'Lead') AS lead_name,
-                l.phone
+                l.phone,
+                COALESCE(pl.email, CASE WHEN pl.channel = 'email' THEN l.email END) AS email
             FROM prospection_logs pl
             LEFT JOIN leads l ON l.id = pl.lead_id AND l.user_id = ?
-            WHERE pl.user_id = ?
+            {where}
             ORDER BY pl.createdAt DESC
             LIMIT ? OFFSET ?
             """,
-            (current_user.id, current_user.id, limit, offset),
+            params,
         ).fetchall()
 
     return [
@@ -400,6 +411,8 @@ def get_history(
             "lead_id": r["lead_id"],
             "lead_name": r["lead_name"] or "Lead",
             "phone": r["phone"] or "",
+            "email": r["email"] or "",
+            "channel": r["channel"] or "",
             "action": r["action"],
             "notes": r["notes"] or "",
             "created_at": str(r["created_at"]).replace(" ", "T") if r["created_at"] else "",
