@@ -260,6 +260,18 @@ def whatsapp_summary(current_user: CurrentUser = Depends(require_crm_access)):
     return jobs_service.get_whatsapp_summary(user_id=current_user.id)
 
 
+@router.get("/history/summary")
+def history_summary(
+    channel: Optional[str] = Query(None),
+    current_user: CurrentUser = Depends(require_crm_access),
+):
+    """
+    Resumo agregado (sent/failed/queued) do histórico de prospecção,
+    para o painel Histórico (agent-local e "Leads do Agente").
+    """
+    return jobs_service.get_prospection_summary(user_id=current_user.id, channel=channel)
+
+
 # ======== GERAÇÃO DE COPY IA ========
 
 @router.post("/generate-copy")

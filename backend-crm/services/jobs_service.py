@@ -1739,6 +1739,60 @@ def get_whatsapp_summary(*, user_id: Optional[int] = None) -> Dict[str, Any]:
     }
 
 
+def get_prospection_summary(*, user_id: Optional[int] = None, channel: Optional[str] = None) -> Dict[str, Any]:
+    """
+    Contagens exactas de prospecção (email + whatsapp) para o resumo agregado
+    do painel Histórico. `queued` vem da tabela `jobs` (status='pending'),
+    não de `prospection_logs`, porque o log de eventos mantém a linha
+    "queued" mesmo depois do job resolver para sent/failed — contá-la
+    directamente inflacionaria o número de pendentes.
+    """
+    job_types: List[str] = []
+    if channel in (None, "whatsapp"):
+        job_types.extend(_variants_for_canonical(TYPE_WHATSAPP_SEND))
+    if channel in (None, "email"):
+        job_types.extend(_variants_for_canonical(TYPE_EMAIL_SEND_COLD))
+
+    with get_connection() as conn:
+        cur = conn.cursor()
+
+        queued = 0
+        if job_types:
+            type_placeholders = ",".join(["?"] * len(job_types))
+            params_queued: List[Any] = [*job_types, JOB_STATUS_PENDING]
+            user_filter_jobs = ""
+            if user_id is not None:
+                user_filter_jobs = "AND user_id = ?"
+                params_queued.append(user_id)
+            queued = cur.execute(
+                f"SELECT COUNT(*) AS c FROM jobs WHERE type IN ({type_placeholders}) AND status=? {user_filter_jobs}",
+                params_queued,
+            ).fetchone()["c"]
+
+        log_where = "action IN ('sent','manual_outbound')"
+        user_filter_logs = ""
+        if user_id is not None:
+            user_filter_logs = "AND user_id = ?"
+        if channel:
+            log_where_channel = "AND channel = ?"
+        else:
+            log_where_channel = ""
+        sent = cur.execute(
+            f"SELECT COUNT(*) AS c FROM prospection_logs WHERE {log_where} {log_where_channel} {user_filter_logs}",
+            [*([channel] if channel else []), *([user_id] if user_id is not None else [])],
+        ).fetchone()["c"]
+        failed = cur.execute(
+            f"SELECT COUNT(*) AS c FROM prospection_logs WHERE action='failed' {log_where_channel} {user_filter_logs}",
+            [*([channel] if channel else []), *([user_id] if user_id is not None else [])],
+        ).fetchone()["c"]
+
+    return {
+        "sent": int(sent or 0),
+        "failed": int(failed or 0),
+        "queued": int(queued or 0),
+    }
+
+
 def get_jobs_overview(seconds: int = 120, *, user_id: Optional[int] = None) -> Dict[str, Any]:
     return {
         "agents": list_agents(max_age_seconds=seconds, user_id=user_id),
