@@ -109,6 +109,11 @@ provedor em repouso", mesmo padrão dos tokens de instância WhatsApp — nenhum
 conexão no app desktop, e [`plans-limits.md`](plans-limits.md) para o job `email.send.cold` e o
 limite diário `max_email_send_daily`.
 
+**Resultado do envio:** `sent`/`failed` ficam gravados em `prospection_logs`
+(`channel="email"`) e visíveis no histórico — ver
+[`agents.md`](agents.md#fluxo-end-to-end-via-backend-executors-ex-email-cold-outreach) para o
+pipeline completo e [`agent-local-app.md`](agent-local-app.md#histórico) para as telas.
+
 ---
 
 ## Recuperação de Senha

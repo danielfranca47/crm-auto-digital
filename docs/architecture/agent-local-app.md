@@ -291,7 +291,24 @@ Painel inline "Histórico" (`_build_historico` em `main_screen.py` — a classe
 - Assinante: `GET /api/prospeccao/history` (JOIN `prospection_logs` + `leads`)
 - Log local JSONL: `session.append_prospect_log`/`get_prospect_log`
 
-"Exportar CSV" usa a mesma lista já carregada para a tabela (`self._historico_entries`) — não deve re-buscar dados.
+Colunas da tabela: Data/Hora, Nome, **Canal** (`Email`/`WhatsApp`, a partir de
+`prospection_logs.channel`), **Contacto** (email do destinatário quando `channel="email"`,
+telefone caso contrário — `"—"` para entradas antigas sem o dado gravado), Estado
+(`Enfileirado`/`Enviado`/`Falhou`, verde/vermelho por acção), Notas. Registos sem `channel`
+(log local JSONL, não-assinante) caem no fallback `"—"` sem quebrar.
+
+Cobertura do ciclo de vida do email cold outreach: `queued` é gravado ao enfileirar
+(`enqueue_email_jobs`); `sent`/`failed` só depois de o `email_worker`
+(`backend-executors`) reportar o resultado via `POST /api/internal/jobs/{id}/complete|fail`
+— ver [`agents.md`](agents.md#fluxo-end-to-end-via-backend-executors-ex-email-cold-outreach).
+`failed` só é gravado na tentativa definitiva (não em cada retry intermédio).
+
+"Exportar CSV" usa a mesma lista já carregada para a tabela (`self._historico_entries`) — não deve re-buscar dados. Mesmas colunas do painel (incluindo Canal/Contacto).
+
+**Segundo consumidor da mesma rota:** `frontend-crm/src/pages/Pesquisa.tsx` ("Leads do Agente")
+mostra a mesma tabela (Data/Hora, Lead, Canal, Contacto, Estado, Notas) com um `Select` extra de
+filtro por canal (`?channel=email|whatsapp`, refeito server-side) além do filtro de Estado
+existente (Todos/Enviados/Falhados).
 
 ---
 
