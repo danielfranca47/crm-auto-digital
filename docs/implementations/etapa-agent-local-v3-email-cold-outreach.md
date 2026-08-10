@@ -447,17 +447,35 @@ motivo claro até o usuário conectar uma conta — isso é esperado nesta fase.
 ## Checks de Validação — Fase 5
 
 ### Cenário P12 — Enfileirar por email com leads válidos
-- [ ] No Kanban do agent-local, selecionar leads que já têm email cadastrado
-- [ ] Escolher canal "Email" na barra de ações em lote e clicar "Enfileirar"
-- [ ] Confirmar no resumo que os leads aparecem como enfileirados (não ignorados)
-- [ ] Confirmar no `crm.db` (tabela `jobs`) que os jobs criados são do tipo `email.send.cold`
-- **Pendente** — requer app desktop rodando (`python main.py`, `.venv` do agent-local) + backend-core + backend-crm
+- [x] No Kanban do agent-local, selecionar leads que já têm email cadastrado
+- [x] Escolher canal "Email" na barra de ações em lote e clicar "Enfileirar"
+- [x] Confirmar no resumo que os leads aparecem como enfileirados (não ignorados)
+- [x] Confirmar no `crm.db` (tabela `jobs`) que os jobs criados são do tipo `email.send.cold`
+- **Validado em:** 10/08/2026 — app desktop real (`python main.py`) controlado via automação de
+  janela (MCP `desktop-control`), login novo por código OTP com a conta `autodigital157@gmail.com`
+  (assinante `crm_internal`). Nenhum lead real do utilizador de teste tinha email cadastrado, então
+  foi atribuído um email temporário ao lead #366 (`DF FLOW BARBERSHOP`) directamente no `crm.db` só
+  para o teste. Seleccionado junto de um lead sem email (#365), canal "Email", mensagem de teste
+  preenchida no campo opcional, clique em "Enfileirar" → resumo mostrou "✓ 1 enfileirado ⚠ 1
+  ignorado"; `jobs` confirmou 1 registo `email.send.cold` (`status=pending`, `payload.lead_id=366`,
+  `payload.email` = o email de teste, `payload.body` = a mensagem digitada). Lead #366 moveu-se para
+  "Em Andamento" no Kanban, replicando o comportamento real do WhatsApp. Dados de teste (job,
+  mensagem, message_selection, email do lead, categoria do lead) revertidos ao estado original no
+  final.
+- **Nota (achado da sessão):** na primeira tentativa, sem preencher o campo de mensagem, **ambos**
+  os leads foram ignorados — não por falta de email, mas porque `enqueue_email_jobs` também exige
+  uma mensagem de email já salva para o lead (motivo `sem_mensagem`, distinto de `email_ausente`).
+  Comportamento correto e já implementado desde a Fase 2 (cai para a última mensagem salva do canal
+  `email`, ou usa o campo "Mensagem" opcional da barra de acções) — só não documentado como
+  possível causa de "ignorado" nos cenários acima. Confirmado ao preencher o campo de mensagem.
 
 ### Cenário P13 — Lead sem email é ignorado ao escolher canal Email
-- [ ] Selecionar um lead sem email cadastrado junto de leads com email
-- [ ] Escolher canal "Email" e enfileirar
-- [ ] Confirmar que o resumo mostra "⚠ 1 ignorado" e que o lead sem email não vira job
-- **Pendente** — requer app desktop rodando + dados de teste
+- [x] Selecionar um lead sem email cadastrado junto de leads com email
+- [x] Escolher canal "Email" e enfileirar
+- [x] Confirmar que o resumo mostra "⚠ 1 ignorado" e que o lead sem email não vira job
+- **Validado em:** 10/08/2026 — mesmo teste do P12 acima (leads #365 sem email e #366 com email
+  seleccionados juntos): resumo "✓ 1 enfileirado ⚠ 1 ignorado", e `jobs` confirmou que só #366 gerou
+  job — #365 não apareceu na tabela.
 
 ### Fase 6 — agent-local: conectar conta de email (SMTP)
 
