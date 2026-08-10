@@ -21,8 +21,16 @@ Cobre autenticação, ciclo de vida de contas, recuperação de senha e envio de
 | `google_token_expiry` | String nullable | ISO datetime de expiração do access token |
 | `google_calendar_id` | String nullable | Calendário Google alvo (default `"primary"`) |
 | `google_email` | String nullable | Email da conta Google conectada (exibido na UI) |
+| `smtp_host` | String nullable | Ex.: `smtp.gmail.com` — conta SMTP própria do utilizador para cold outreach por email |
+| `smtp_port` | String nullable | Ex.: `587` |
+| `smtp_username` | String nullable | Username da conta SMTP |
+| `smtp_password_encrypted` | String nullable | Senha/senha de app cifrada (Fernet, `WHATSAPP_TOKEN_ENC_KEY` — mesma chave/helper `app/utils/crypto.py` usado para tokens de instância WhatsApp) |
+| `smtp_from_name` | String nullable | Nome do remetente exibido nos emails enviados |
+| `smtp_verified_at` | String nullable | ISO datetime da última verificação bem-sucedida; `NULL` = nunca conectado/desconectado |
 
-`name` e as 5 colunas Google são adicionadas por `ensure_user_columns()` em `app/db.py` (migrações idempotentes via `ALTER TABLE`). Chamado no startup.
+`name`, as 5 colunas Google e as 6 colunas SMTP são adicionadas por `ensure_user_columns()` /
+`ensure_smtp_columns()` em `app/db.py` (migrações idempotentes via `ALTER TABLE`). Chamadas no
+startup.
 
 `GET /users/me` inclui `google_calendar_connected: bool` — `True` quando `google_access_token IS NOT NULL`.
 
@@ -74,6 +82,32 @@ Cobre autenticação, ciclo de vida de contas, recuperação de senha e envio de
 | `GOOGLE_CLIENT_ID` | OAuth2 client ID do Google Cloud Console |
 | `GOOGLE_CLIENT_SECRET` | OAuth2 client secret |
 | `GOOGLE_REDIRECT_URI` | URI de callback registada no Google Cloud (`/auth/google/calendar/callback`) |
+
+---
+
+## Conta SMTP do Utilizador (cold outreach por email)
+
+**Arquivo:** `backend-core/app/api/smtp_accounts.py`
+
+Permite ao utilizador conectar a própria conta de email (Gmail com senha de app, ou email
+comercial/hosting) para o backend-crm/backend-executors enviarem o primeiro contacto frio por
+email em nome dele — v1 é **SMTP genérico apenas**; Outlook/Hotmail/Microsoft 365 ficam fora de
+escopo (exigiriam OAuth Microsoft).
+
+| Endpoint | Auth | Descrição |
+|---|---|---|
+| `PUT /users/me/smtp` | Bearer | Testa login SMTP real (`smtplib`, sem enviar mensagem) **antes** de salvar — só persiste se autenticar. 400 com mensagem amigável se falhar (dica específica para Gmail sem senha de app) |
+| `GET /users/me/smtp/status` | Bearer | `{ connected, username, host, port, from_name, verified_at }` — nunca devolve a senha |
+| `DELETE /users/me/smtp` | Bearer | Desconecta — limpa as 6 colunas SMTP em `users` |
+| `GET /users/{user_id}/smtp-credentials` | `X-Service-Token` | Service-to-service — backend-executors busca a credencial (senha decifrada) para enviar o job `email.send.cold` |
+
+**Encriptação:** senha cifrada com `encrypt_secret`/`decrypt_secret` (`app/utils/crypto.py`),
+reaproveitando a chave `WHATSAPP_TOKEN_ENC_KEY` já existente (helper genérico de "segredos de
+provedor em repouso", mesmo padrão dos tokens de instância WhatsApp — nenhuma chave nova criada).
+
+**Consumo:** ver [`agent-local-app.md`](agent-local-app.md#conta-de-email-smtp) para a tela de
+conexão no app desktop, e [`plans-limits.md`](plans-limits.md) para o job `email.send.cold` e o
+limite diário `max_email_send_daily`.
 
 ---
 
@@ -297,8 +331,8 @@ Colunas adicionadas via `ensure_plan_limits_columns()`:
 
 **Planos comerciais activos:**
 
-| Plano | Código | Leads | Conv. IA | WA/dia | Follow-up | Playground |
-|---|---|---|---|---|---|---|
-| Start | `crm_start` | 500 | 250 | 50 | ❌ | 5/mês |
-| Growth | `crm_growth` | 1500 | 500 | 100 | ✅ | ∞ |
-| Interno | `crm_internal` | ∞ | ∞ | ∞ | ✅ | ∞ |
+| Plano | Código | Leads | Conv. IA | WA/dia | Email/dia | Follow-up | Playground |
+|---|---|---|---|---|---|---|---|
+| Start | `crm_start` | 500 | 250 | 50 | 30 | ❌ | 5/mês |
+| Growth | `crm_growth` | 1500 | 500 | 100 | 60 | ✅ | ∞ |
+| Interno | `crm_internal` | ∞ | ∞ | ∞ | ∞ | ✅ | ∞ |

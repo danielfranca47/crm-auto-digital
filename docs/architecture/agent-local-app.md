@@ -149,7 +149,16 @@ Substitui os antigos botões manuais "→ Iniciar"/"→ Qualificar"/"📱" nos
 cards por:
 
 - **Checkboxes** por card em "À Prospectar" + "Seleccionar todos" no header da coluna
-- **BulkActions inline**: mensagem partilhada + botão "📤 Enfileirar" → `POST /api/prospeccao/whatsapp/enqueue` → cria jobs `whatsapp.send.local` (mesmo job type documentado em [`agents.md`](agents.md#job-types-canônicos)) e move os leads para "Em Andamento" imediatamente
+- **BulkActions inline**: mensagem partilhada (opcional — cai para a última mensagem salva do
+  canal escolhido) + selector de canal **WhatsApp/Email** + botão "📤 Enfileirar" →
+  `POST /api/prospeccao/whatsapp/enqueue` (cria jobs `whatsapp.send.local`, mesmo job type
+  documentado em [`agents.md`](agents.md#job-types-canônicos)) ou `POST /api/prospeccao/email/enqueue`
+  (cria jobs `email.send.cold` — ver [`plans-limits.md`](plans-limits.md) para o limite diário) —
+  move os leads para "Em Andamento" imediatamente. Sem preferência de canal salva no perfil: a
+  escolha é sempre por-lote, feita neste selector. Leads sem email cadastrado são
+  automaticamente pulados ao escolher o canal Email (motivo `email_ausente` no resumo); leads
+  sem mensagem salva no canal escolhido e sem mensagem digitada no campo opcional também são
+  pulados (`sem_mensagem`)
 - **Barra de estado**: badge "Agente Online/Offline" (`GET /api/agents/overview`) + contador "Pendentes: N"; não existe badge de conexão WhatsApp Web (ver `docs/plans/agent-local-melhorias-futuras-V3.md`, M8)
 - **Polling + refluxo automático**: thread a cada 5–10s consulta `GET /api/prospeccao/whatsapp/recent` e move o lead conforme `jobs.status`: `"completed"` → `qualification`; `"failed"` → `to-prospect` de volta
 
@@ -178,6 +187,29 @@ sucesso → `qualification`; falha → `to-prospect`.
 Modal de detalhe do lead (`_show_local_lead_detail`): edição de
 `companyName`/`contactName`/`phone`, mensagem editável, "✨ Gerar copy" (via
 `local_copy.py`), "📱 Reenviar agora", "🗑 Eliminar lead" (com confirmação).
+
+---
+
+## Conta de Email (SMTP)
+
+Card "📧 Conta de email (prospecção)" no painel "Conta" (`_build_smtp_card` em
+`main_screen.py`), logo após o card "A minha conta". Visível para **todos os planos**, incluindo
+`crm_free` — usuários gratuitos do agent-local nunca abrem o frontend-crm, então esta é a única
+forma de conectarem uma conta de email.
+
+- Campos: host, porta (default `587`), username, senha (toggle 👁 mostrar/ocultar), nome do
+  remetente (opcional)
+- Botão "?" ao lado do campo de senha abre popup com o passo-a-passo para gerar uma senha de app
+  do Gmail (activar verificação em 2 etapas → `myaccount.google.com/apppasswords`) + atalho que
+  abre essa página no browser (`webbrowser.open`)
+- "Conectar" chama `PUT /users/me/smtp` (backend-core) — testa o login SMTP de verdade antes de
+  salvar; erro amigável no card se falhar (nada é persistido)
+- Status mostra "✓ Conectado — {username}" ou "Não conectado"; campos (excepto senha) são
+  pré-preenchidos ao reabrir se já houver conta conectada (`GET /users/me/smtp/status`)
+- "Desconectar" chama `DELETE /users/me/smtp`, limpa os campos do formulário
+
+Ver [`auth-email.md`](auth-email.md#conta-smtp-do-utilizador-cold-outreach-por-email) para os
+endpoints, o modelo de dados (colunas em `users`) e a encriptação da senha.
 
 ---
 

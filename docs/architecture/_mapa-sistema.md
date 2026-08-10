@@ -103,13 +103,16 @@ agent-local         local  ← agente Python local de prospecção/scraping
 | `whatsapp.followup.tick` | backend-executors | Tick de follow-up agendado |
 | `maps.search.local` | agent-local | Busca Google Maps |
 | `maps.enrich.local` | agent-local | Enriquecimento de lead via Maps |
+| `email.send.cold` | backend-executors (`email_worker`) | Cold outreach por email via SMTP do utilizador — sem LLM, assunto/corpo já definidos no enqueue. Ver [`auth-email.md`](auth-email.md#conta-smtp-do-utilizador-cold-outreach-por-email) |
 
 ---
 
 ## backend-executors
 
 **Responsabilidade:** worker assíncrono que consome jobs `whatsapp.inbound.n8n`,
-chama o LLM (Mãe + Filha) e envia a resposta ao WhatsApp.
+chama o LLM (Mãe + Filha) e envia a resposta ao WhatsApp. Também roda o worker separado
+`email_worker` (processo independente, mesmo Procfile) para jobs `email.send.cold` — envio
+directo via SMTP do próprio utilizador, sem LLM nem decision engine.
 
 ### Arquivos críticos
 
@@ -117,6 +120,8 @@ chama o LLM (Mãe + Filha) e envia a resposta ao WhatsApp.
 |---|---|
 | `app/workers/whatsapp_worker.py` | Loop de polling; consome jobs; chama runner |
 | `app/runners/whatsapp.py` | Executa um job: contexto → decide → envia; `_send_sales_flow_action()` |
+| `app/workers/email_worker.py` | Loop de polling separado (mirror do whatsapp_worker) para `email.send.cold` |
+| `app/runners/email.py` | Executa um job de email: claim → busca credencial SMTP no core → `smtplib` → complete/fail |
 | `app/services/decision_engine.py` | Motor de decisão: `decide()`, `_build_mother_prompt()`, `_evaluate_sales_flow_phases()`, todas as LLMs Filhas |
 | `app/services/orchestrator_models.py` | Schemas Pydantic: `MotherDecision`, `ChildResult`, `DecisionOutput` |
 | `app/services/llm_service.py` | Chamada HTTP ao LLM (Claude/OpenAI format) |
