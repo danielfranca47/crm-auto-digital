@@ -947,6 +947,11 @@ export const api = {
         `/prospeccao/history?limit=${limit}&offset=${offset}${channelParam}`
       );
     },
+
+    historySummary: async (channel?: string) => {
+      const channelParam = channel ? `?channel=${encodeURIComponent(channel)}` : "";
+      return apiClient.get(`/prospeccao/history/summary${channelParam}`);
+    },
   },
 
   // -------- WHATSAPP (QR via Selenium) --------

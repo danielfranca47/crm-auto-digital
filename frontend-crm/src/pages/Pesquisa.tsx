@@ -20,6 +20,12 @@ type HistoryEntry = {
   created_at: string
 }
 
+type HistorySummary = {
+  sent: number
+  failed: number
+  queued: number
+}
+
 const ACTION_LABELS: Record<string, string> = {
   manual_outbound: "Enviado (manual)",
   sent: "Enviado",
@@ -88,6 +94,7 @@ const OWNER_WHATSAPP = "+351912345678"
 
 export default function Pesquisa() {
   const [entries, setEntries] = useState<HistoryEntry[]>([])
+  const [summary, setSummary] = useState<HistorySummary | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [filter, setFilter] = useState<string>("all")
@@ -106,10 +113,13 @@ export default function Pesquisa() {
     setLoading(true)
     setError(null)
     try {
-      const data = await (api.prospeccao as any).history(
-        200, 0, channelFilter === "all" ? undefined : channelFilter
-      )
+      const channelParam = channelFilter === "all" ? undefined : channelFilter
+      const [data, summaryData] = await Promise.all([
+        (api.prospeccao as any).history(200, 0, channelParam),
+        (api.prospeccao as any).historySummary(channelParam),
+      ])
       setEntries(Array.isArray(data) ? data : [])
+      setSummary(summaryData ?? null)
     } catch (err: any) {
       setError("Não foi possível carregar o histórico.")
     } finally {
@@ -179,6 +189,20 @@ export default function Pesquisa() {
           </div>
         </CardHeader>
         <CardContent>
+          <div className="grid grid-cols-3 gap-2 mb-4">
+            <div className="rounded-lg border bg-card p-3 text-center">
+              <p className="text-xl font-bold">{loading ? "…" : summary?.sent ?? 0}</p>
+              <p className="text-xs text-muted-foreground mt-0.5">Enviados</p>
+            </div>
+            <div className="rounded-lg border bg-card p-3 text-center">
+              <p className="text-xl font-bold text-destructive">{loading ? "…" : summary?.failed ?? 0}</p>
+              <p className="text-xs text-muted-foreground mt-0.5">Falhados</p>
+            </div>
+            <div className="rounded-lg border bg-card p-3 text-center">
+              <p className="text-xl font-bold">{loading ? "…" : summary?.queued ?? 0}</p>
+              <p className="text-xs text-muted-foreground mt-0.5">Enfileirados</p>
+            </div>
+          </div>
           {loading && (
             <p className="text-sm text-muted-foreground text-center py-8">A carregar…</p>
           )}
