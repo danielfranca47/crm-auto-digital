@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import threading
+import webbrowser
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -3047,6 +3048,51 @@ class MainScreen(ctk.CTkFrame):
     # PAINEL 5 — CONTA / CONFIGURAÇÕES
     # ══════════════════════════════════════════════════════════════════════════
 
+    def _show_smtp_help_popup(self) -> None:
+        """Popup com o passo-a-passo para gerar uma senha de app do Gmail (ícone '?' do card SMTP)."""
+        popup = ctk.CTkToplevel(self)
+        popup.title("Como obter a senha de app")
+        popup.geometry("420x480")
+        popup.grab_set()
+
+        ctk.CTkLabel(
+            popup, text="Como gerar a senha de app do Gmail",
+            font=ctk.CTkFont(size=14, weight="bold"), wraplength=380, justify="left",
+        ).pack(anchor="w", padx=16, pady=(16, 4))
+
+        ctk.CTkLabel(
+            popup,
+            text="Isto é diferente da senha normal da conta — o Gmail só aceita login de "
+                 "programas externos através desta senha especial de 16 caracteres.\n\n"
+                 "Pré-requisito: a verificação em 2 etapas precisa estar activada na conta. "
+                 "Sem isso, a opção de senhas de app nem aparece.",
+            font=ctk.CTkFont(size=11), text_color="#9CA3AF", wraplength=380, justify="left",
+        ).pack(anchor="w", padx=16, pady=(0, 10))
+
+        steps = (
+            "1. Entra em myaccount.google.com com a conta que vais usar para enviar\n"
+            "2. No menu lateral, ir a Segurança\n"
+            "3. Confirmar que \"Verificação em duas etapas\" está activada (activar se não estiver)\n"
+            "4. Ainda em Segurança, procurar \"Senhas de app\"\n"
+            "5. Em \"Nome do app\", escrever algo como \"CRM AutoDigital\" e clicar em Criar\n"
+            "6. Copiar a senha de 16 caracteres mostrada, sem espaços\n"
+            "7. Colar essa senha aqui no campo \"Senha (ou senha de app)\" — não a senha normal"
+        )
+        ctk.CTkLabel(
+            popup, text=steps, font=ctk.CTkFont(size=11),
+            wraplength=380, justify="left", anchor="w",
+        ).pack(anchor="w", padx=16, pady=(0, 12), fill="x")
+
+        ctk.CTkButton(
+            popup, text="🔗 Abrir myaccount.google.com/apppasswords", height=34,
+            command=lambda: webbrowser.open("https://myaccount.google.com/apppasswords"),
+        ).pack(padx=16, pady=(0, 8), fill="x")
+
+        ctk.CTkButton(
+            popup, text="Fechar", height=34, fg_color="#374151", hover_color="#4B5563",
+            command=popup.destroy,
+        ).pack(padx=16, pady=(0, 16), fill="x")
+
     def _build_smtp_card(self, body: ctk.CTkFrame) -> None:
         """Card 'Conta de email (SMTP)' — usada como canal de prospecção (Fase 5/6)."""
         card = ctk.CTkFrame(body, fg_color=_CARD, corner_radius=12)
@@ -3095,7 +3141,11 @@ class MainScreen(ctk.CTkFrame):
 
         pwd_toggle_btn = ctk.CTkButton(pwd_row, text="👁", width=36, height=36,
                                         fg_color="#2A2A3E", command=_pwd_toggle)
-        pwd_toggle_btn.grid(row=0, column=1)
+        pwd_toggle_btn.grid(row=0, column=1, padx=(0, 6))
+
+        help_btn = ctk.CTkButton(pwd_row, text="?", width=36, height=36,
+                                  fg_color="#2A2A3E", command=lambda: self._show_smtp_help_popup())
+        help_btn.grid(row=0, column=2)
 
         from_name_entry = ctk.CTkEntry(card, placeholder_text="Nome do remetente (opcional)", height=36, corner_radius=8)
         from_name_entry.pack(padx=16, fill="x", pady=4)
