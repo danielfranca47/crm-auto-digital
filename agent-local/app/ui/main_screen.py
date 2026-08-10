@@ -2961,18 +2961,23 @@ class MainScreen(ctk.CTkFrame):
 
                     _ACTION_LABELS = {"manual_outbound": "Enviado (manual)", "sent": "Enviado",
                                        "failed": "Falhou", "queued": "Enfileirado"}
+                    _CHANNEL_LABELS = {"email": "Email", "whatsapp": "WhatsApp"}
 
                     hdr_row = ctk.CTkFrame(table, fg_color="transparent")
                     hdr_row.pack(fill="x", padx=8, pady=(4, 4))
-                    for col in ["Data/Hora", "Nome", "Telefone", "Estado", "Notas"]:
+                    _COLS = [("Data/Hora", 100), ("Nome", 100), ("Canal", 70),
+                             ("Contacto", 110), ("Estado", 100), ("Notas", 140)]
+                    for col, w in _COLS:
                         ctk.CTkLabel(hdr_row, text=col, font=ctk.CTkFont(size=10, weight="bold"),
-                                      text_color="#9CA3AF", anchor="w", width=100 if col != "Notas" else 150
+                                      text_color="#9CA3AF", anchor="w", width=w
                                       ).pack(side="left", padx=4)
 
                     for idx, e in enumerate(entries):
                         ts = (e.get("created_at") or e.get("ts") or "")[:16].replace("T", " ")
                         name = (e.get("lead_name") or e.get("name") or "—")[:20]
-                        phone = e.get("phone") or "—"
+                        channel = e.get("channel") or ""
+                        channel_label = _CHANNEL_LABELS.get(channel, channel or "—")
+                        contact = (e.get("email") if channel == "email" else e.get("phone")) or "—"
                         action = e.get("action") or e.get("status") or "—"
                         notes = (e.get("notes") or e.get("reason") or "—")[:28]
                         action_label = _ACTION_LABELS.get(action, action)
@@ -2982,8 +2987,8 @@ class MainScreen(ctk.CTkFrame):
                                             corner_radius=4)
                         row.pack(fill="x", padx=8, pady=1)
                         for val, tc, w in [(ts, "#9CA3AF", 100), (name, "#D1D5DB", 100),
-                                            (phone, "#9CA3AF", 100), (action_label, color, 100),
-                                            (notes, "#9CA3AF", 150)]:
+                                            (channel_label, "#9CA3AF", 70), (contact, "#9CA3AF", 110),
+                                            (action_label, color, 100), (notes, "#9CA3AF", 140)]:
                             ctk.CTkLabel(row, text=val, font=ctk.CTkFont(size=10),
                                           text_color=tc, anchor="w", width=w
                                           ).pack(side="left", padx=(8 if val == ts else 4, 4), pady=5)
@@ -3012,13 +3017,16 @@ class MainScreen(ctk.CTkFrame):
                 try:
                     with open(path, "w", newline="", encoding="utf-8-sig") as f:
                         w = csv.writer(f)
-                        w.writerow(["Data/Hora", "Nome", "Telefone", "Estado", "Notas"])
+                        w.writerow(["Data/Hora", "Nome", "Canal", "Contacto", "Estado", "Notas"])
                         for e in entries_snap:
                             ts = (e.get("created_at") or e.get("ts") or "")[:16].replace("T", " ")
+                            channel = e.get("channel") or ""
+                            contact = (e.get("email") if channel == "email" else e.get("phone")) or ""
                             w.writerow([
                                 ts,
                                 e.get("lead_name") or e.get("name") or "",
-                                e.get("phone") or "",
+                                channel,
+                                contact,
                                 e.get("action") or e.get("status") or "",
                                 e.get("notes") or e.get("reason") or "",
                             ])

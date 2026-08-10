@@ -118,7 +118,7 @@ directamente (não há UI ainda para ver isto nesta fase).
 
 | # | Commit | O que foi implementado |
 |---|---|---|
-| 1 | `<preencher após commit>` | backend: `channel`/`email` expostos em `/api/prospeccao/history` + filtro `?channel=` |
+| 1 | `5f301b2` | backend: `channel`/`email` expostos em `/api/prospeccao/history` + filtro `?channel=` |
 
 ### Relatório da Fase B — o que mudou na prática
 
@@ -138,6 +138,28 @@ Ainda não há UI a usar estes campos novos — isso é a Fase C (agent-local) e
 | Arquivo | O que muda |
 |---|---|
 | `agent-local/app/ui/main_screen.py:2916-3045` | nova coluna "Canal" no cabeçalho e nas linhas; quando `channel == "email"`, mostra o email em vez de `phone`; mesmo tratamento no `_export_csv` |
+
+### Commits Fase C
+
+| # | Commit | O que foi implementado |
+|---|---|---|
+| 1 | `<preencher após commit>` | agent-local: coluna Canal + Contacto (email/telefone) no Histórico + CSV |
+
+**Detalhes:**
+- `agent-local/app/ui/main_screen.py` (`_build_historico`) — coluna "Contacto" substitui "Telefone"
+  (mostra email quando `channel == "email"`, telefone caso contrário); nova coluna "Canal"
+  (rótulo "Email"/"WhatsApp"); registos sem `channel` (log local JSONL, não-assinante) caem no
+  fallback `"—"` sem quebrar
+- mesma função, `_export_csv` — CSV ganha as mesmas duas colunas
+
+### Relatório da Fase C — o que mudou na prática
+
+**Antes:** o painel Histórico do agent-local mostrava Data/Hora, Nome, Telefone, Estado, Notas —
+uma entrada de email aparecia sem telefone (célula vazia) e sem forma de saber que era um email.
+**Agora:** há uma coluna "Canal" (Email/WhatsApp) e a coluna de contacto mostra o email quando a
+entrada é de email. O CSV exportado reflecte as mesmas colunas.
+**Para validar:** Cenário P1, abaixo — requer abrir o app desktop (agent-local) com uma conta
+assinante e histórico com pelo menos um email e um WhatsApp enviados.
 
 ### Fase D — frontend-crm: coluna de Canal + filtro em `Pesquisa.tsx`
 
