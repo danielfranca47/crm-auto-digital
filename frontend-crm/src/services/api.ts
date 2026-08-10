@@ -941,9 +941,10 @@ export const api = {
       },
     },
 
-    history: async (limit = 100, offset = 0) => {
+    history: async (limit = 100, offset = 0, channel?: string) => {
+      const channelParam = channel ? `&channel=${encodeURIComponent(channel)}` : "";
       return apiClient.get(
-        `/prospeccao/history?limit=${limit}&offset=${offset}`
+        `/prospeccao/history?limit=${limit}&offset=${offset}${channelParam}`
       );
     },
   },

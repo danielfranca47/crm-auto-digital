@@ -13,6 +13,8 @@ type HistoryEntry = {
   lead_id: number
   lead_name: string
   phone: string
+  email: string
+  channel: string
   action: string
   notes: string
   created_at: string
@@ -25,6 +27,11 @@ const ACTION_LABELS: Record<string, string> = {
   queued: "Enfileirado",
   copied: "Copy copiado",
   updated_message: "Mensagem guardada",
+}
+
+const CHANNEL_LABELS: Record<string, string> = {
+  email: "Email",
+  whatsapp: "WhatsApp",
 }
 
 const ACTION_COLORS: Record<string, string> = {
@@ -84,6 +91,7 @@ export default function Pesquisa() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [filter, setFilter] = useState<string>("all")
+  const [channelFilter, setChannelFilter] = useState<string>("all")
   const [enabledExtensions, setEnabledExtensions] = useState<string[]>([])
   const [upsellModal, setUpsellModal] = useState<Extension | null>(null)
 
@@ -98,14 +106,16 @@ export default function Pesquisa() {
     setLoading(true)
     setError(null)
     try {
-      const data = await (api.prospeccao as any).history(200, 0)
+      const data = await (api.prospeccao as any).history(
+        200, 0, channelFilter === "all" ? undefined : channelFilter
+      )
       setEntries(Array.isArray(data) ? data : [])
     } catch (err: any) {
       setError("Não foi possível carregar o histórico.")
     } finally {
       setLoading(false)
     }
-  }, [])
+  }, [channelFilter])
 
   useEffect(() => { load() }, [load])
 
@@ -141,6 +151,16 @@ export default function Pesquisa() {
           <div className="flex items-center justify-between">
             <CardTitle className="text-base">Histórico de Prospecções</CardTitle>
             <div className="flex items-center gap-2">
+              <Select value={channelFilter} onValueChange={setChannelFilter}>
+                <SelectTrigger className="w-32 h-8 text-sm">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Todos os canais</SelectItem>
+                  <SelectItem value="email">Email</SelectItem>
+                  <SelectItem value="whatsapp">WhatsApp</SelectItem>
+                </SelectContent>
+              </Select>
               <Select value={filter} onValueChange={setFilter}>
                 <SelectTrigger className="w-36 h-8 text-sm">
                   <SelectValue />
@@ -183,7 +203,8 @@ export default function Pesquisa() {
                   <tr className="border-b text-muted-foreground text-xs uppercase tracking-wide">
                     <th className="text-left py-2 pr-4 font-medium">Data/Hora</th>
                     <th className="text-left py-2 pr-4 font-medium">Lead</th>
-                    <th className="text-left py-2 pr-4 font-medium">Telefone</th>
+                    <th className="text-left py-2 pr-4 font-medium">Canal</th>
+                    <th className="text-left py-2 pr-4 font-medium">Contacto</th>
                     <th className="text-left py-2 pr-4 font-medium">Estado</th>
                     <th className="text-left py-2 font-medium">Notas</th>
                   </tr>
@@ -197,8 +218,11 @@ export default function Pesquisa() {
                       <td className="py-2 pr-4 font-medium max-w-[160px] truncate">
                         {entry.lead_name || "—"}
                       </td>
+                      <td className="py-2 pr-4 text-muted-foreground text-xs">
+                        {CHANNEL_LABELS[entry.channel] ?? entry.channel ?? "—"}
+                      </td>
                       <td className="py-2 pr-4 text-muted-foreground font-mono text-xs">
-                        {entry.phone || "—"}
+                        {(entry.channel === "email" ? entry.email : entry.phone) || "—"}
                       </td>
                       <td className="py-2 pr-4">
                         <Badge

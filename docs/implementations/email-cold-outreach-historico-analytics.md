@@ -143,7 +143,7 @@ Ainda não há UI a usar estes campos novos — isso é a Fase C (agent-local) e
 
 | # | Commit | O que foi implementado |
 |---|---|---|
-| 1 | `<preencher após commit>` | agent-local: coluna Canal + Contacto (email/telefone) no Histórico + CSV |
+| 1 | `ef41d62` | agent-local: coluna Canal + Contacto (email/telefone) no Histórico + CSV |
 
 **Detalhes:**
 - `agent-local/app/ui/main_screen.py` (`_build_historico`) — coluna "Contacto" substitui "Telefone"
@@ -171,6 +171,29 @@ assinante e histórico com pelo menos um email e um WhatsApp enviados.
 | `frontend-crm/src/pages/Pesquisa.tsx` (filtro) | segundo `Select` "Canal" (Todos/Email/WhatsApp), refetch server-side |
 | `frontend-crm/src/pages/Pesquisa.tsx` (tabela) | nova coluna "Canal"; célula mostra `entry.email || entry.phone || "—"` |
 | `frontend-crm/src/services/api.ts` (`history`) | aceita `channel?: string` opcional, repassado como query param |
+
+### Commits Fase D
+
+| # | Commit | O que foi implementado |
+|---|---|---|
+| 1 | `<preencher após commit>` | frontend-crm: coluna Canal/Contacto + filtro por canal em "Leads do Agente" |
+
+**Detalhes:**
+- `frontend-crm/src/services/api.ts` (`history`) — aceita `channel?: string`, repassado como query
+  param
+- `frontend-crm/src/pages/Pesquisa.tsx` — `HistoryEntry` ganha `channel`/`email`; novo `Select`
+  "Todos os canais/Email/WhatsApp" (`channelFilter`, refetch server-side via `load()`); tabela
+  ganha colunas "Canal" e "Contacto" (email quando `channel === "email"`, telefone caso contrário)
+
+### Relatório da Fase D — o que mudou na prática
+
+**Antes:** a página "Leads do Agente" no CRM mostrava as mesmas colunas do agent-local (sem canal,
+sem email) e só filtrava por Estado (Todos/Enviados/Falhados).
+**Agora:** há um filtro adicional por Canal (Todos os canais/Email/WhatsApp), que refaz o pedido à
+API já filtrado no servidor, e a tabela mostra o canal e o email quando aplicável — igual ao
+agent-local.
+**Para validar:** Cenário P2, abaixo — requer `npm run dev` em `frontend-crm` e histórico com pelo
+menos um email e um WhatsApp enviados.
 
 ---
 
