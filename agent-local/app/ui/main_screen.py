@@ -2940,10 +2940,15 @@ class MainScreen(ctk.CTkFrame):
         table.pack(fill="both", expand=True, padx=16, pady=(0, 8))
 
         def _fetch():
+            summary = None
             if is_subscriber(self._session):
                 try:
-                    from app.crm_client import get_prospect_history
+                    from app.crm_client import get_prospect_history, get_prospect_history_summary
                     entries = get_prospect_history(self._session, limit=200)
+                    try:
+                        summary = get_prospect_history_summary(self._session)
+                    except Exception:
+                        summary = None
                 except Exception:
                     entries = get_prospect_log(200)
             else:
@@ -2995,6 +3000,22 @@ class MainScreen(ctk.CTkFrame):
 
                     ctk.CTkLabel(table, text=f"{len(entries)} registos",
                                   font=ctk.CTkFont(size=10), text_color="#6B7280").pack(pady=6)
+
+                    if summary:
+                        parts = []
+                        if summary.get("sent"):
+                            s = summary["sent"]
+                            parts.append(f"✓ {s} enviado{'s' if s != 1 else ''}")
+                        if summary.get("failed"):
+                            fl = summary["failed"]
+                            parts.append(f"⚠ {fl} falhado{'s' if fl != 1 else ''}")
+                        if summary.get("queued"):
+                            q = summary["queued"]
+                            parts.append(f"📥 {q} enfileirado{'s' if q != 1 else ''}")
+                        if parts:
+                            ctk.CTkLabel(table, text="  ".join(parts),
+                                          font=ctk.CTkFont(size=11, weight="bold"),
+                                          text_color="#D1D5DB").pack(pady=(0, 8))
                 except Exception:
                     pass
 

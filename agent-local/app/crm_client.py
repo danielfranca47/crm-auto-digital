@@ -101,6 +101,19 @@ def get_prospect_history(session: dict, limit: int = 100) -> list:
     return data if isinstance(data, list) else []
 
 
+def get_prospect_history_summary(session: dict, channel: str | None = None) -> dict:
+    """Resumo agregado (sent/failed/queued) do histórico de prospecções (assinantes)."""
+    params = {"channel": channel} if channel else {}
+    resp = _request(
+        "GET", f"{_base()}/api/prospeccao/history/summary", session,
+        params=params,
+        timeout=15,
+    )
+    resp.raise_for_status()
+    data = resp.json()
+    return data if isinstance(data, dict) else {}
+
+
 def get_leads_kanban(session: dict) -> list:
     """Leads nas categorias de prospecção (to-prospect, in-progress, qualification)."""
     resp = _request("GET", f"{_base()}/api/leads", session, timeout=20)
