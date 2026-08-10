@@ -176,7 +176,7 @@ assinante e histórico com pelo menos um email e um WhatsApp enviados.
 
 | # | Commit | O que foi implementado |
 |---|---|---|
-| 1 | `<preencher após commit>` | frontend-crm: coluna Canal/Contacto + filtro por canal em "Leads do Agente" |
+| 1 | `75d3bed` | frontend-crm: coluna Canal/Contacto + filtro por canal em "Leads do Agente" |
 
 **Detalhes:**
 - `frontend-crm/src/services/api.ts` (`history`) — aceita `channel?: string`, repassado como query
@@ -213,8 +213,23 @@ menos um email e um WhatsApp enviados.
 - [ ] Exportar CSV e confirmar a coluna Canal
 
 ### Cenário P2 — "Leads do Agente" (frontend-crm) mostra canal, email e filtro
-- [ ] Abrir `Pesquisa.tsx` no frontend-crm
-- [ ] Confirmar: coluna Canal, email visível nas linhas de email, filtro por canal funciona
+- [x] Abrir `Pesquisa.tsx` no frontend-crm
+- [x] Confirmar: coluna Canal e filtro por canal funcionam
+- [⏭️] Confirmar email visível numa linha de email — pulado nesta sessão: os únicos registos de
+  email existentes na conta de teste são anteriores ao deploy da Fase A (`pl.email` gravado como
+  `NULL`) e os leads associados foram entretanto apagados/editados (`leads.email` também `NULL`),
+  então caem no fallback `"—"` correctamente, mas não há dado real para mostrar o email a aparecer.
+  Confirma-se junto de C1 (próximo email real enviado depois desta sessão).
+- **Validado em:** 10/08/2026 — via browser (chrome-devtools MCP), conta de teste
+  `autodigital157@gmail.com`. Login em `http://localhost:5173`, aberta "Leads do Agente"
+  (`/pesquisa`). Confirmado: coluna "Canal" distingue correctamente `Email`/`WhatsApp`/outros
+  valores legados (algumas linhas antigas de `bot_disabled_changed`/`meeting_scheduled` reaproveitam
+  o campo `channel` para outro fim — comportamento pré-existente, não introduzido por esta feature;
+  a UI trata isso sem quebrar, mostrando o valor cru). Coluna "Contacto" mostra o telefone
+  correctamente nas linhas de WhatsApp (ex.: `5547992163692`). Filtro "Todos os canais → Email"
+  disparou `GET /api/prospeccao/history?...&channel=email`, devolveu exactamente as 8 linhas de
+  email existentes (confirmado no response JSON), tabela actualizou para "8 registos". Sem erros de
+  consola. Backend-crm foi reiniciado antes do teste (não usa `--reload`) para servir as Fases A/B.
 
 ---
 
