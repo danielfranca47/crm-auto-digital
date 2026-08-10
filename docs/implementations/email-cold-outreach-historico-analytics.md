@@ -241,7 +241,7 @@ Teste ao vivo através do pipeline real (não só ao nível de unidade):
 
 | # | Commit | O que foi implementado |
 |---|---|---|
-| 1 | `<preencher após commit>` | fix: liga handle_email_report ao endpoint real usado pelo backend-executors |
+| 1 | `07df43f` | fix: liga handle_email_report ao endpoint real usado pelo backend-executors |
 
 ---
 
