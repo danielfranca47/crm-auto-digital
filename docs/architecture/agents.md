@@ -85,6 +85,14 @@ nenhum — o código fica silenciosamente morto, porque aquele job type nunca at
 endpoint. Confirmar sempre em `backend-executors/app/clients/crm_client.py` (ou no worker
 correspondente) qual URL o processo que realmente executa aquele job type está a chamar.
 
+**`prospection_logs` é um log de eventos, não uma tabela de estado actual:** o enqueue
+(`enqueue_whatsapp_jobs`/`enqueue_email_jobs`) grava uma linha `action="queued"`, e quando o job
+resolve, o dispatch acima grava uma **segunda linha nova** (`"sent"`/`"failed"`) — a linha
+`"queued"` original não é apagada nem actualizada. Por isso `get_prospection_summary` (resumo
+agregado do painel Histórico) tira o `queued` da tabela `jobs` (`status='pending'`, fonte de
+estado actual), nunca de `COUNT(action='queued')` em `prospection_logs`, que contaria também
+jobs já resolvidos.
+
 ### Fila resiliente
 
 - `scheduled_at` respeitado — jobs futuros não são entregues antes da hora
@@ -377,7 +385,8 @@ A acção real de cancelar/reagendar o appointment (`meeting_scheduler.handle_me
 6. `complete_job_internal`/`fail_job_internal` grava `action="sent"`/`"failed"` em
    `prospection_logs` (via `handle_email_report`, `channel="email"`) — `/fail` só grava quando a
    falha é definitiva (esgotou `JOB_MAX_ATTEMPTS`), não em cada tentativa intermédia
-7. Histórico consultável via `GET /api/prospeccao/history` (`channel`/`email` no payload) — ver
+7. Histórico consultável via `GET /api/prospeccao/history` (`channel`/`email` no payload) e o
+   resumo agregado via `GET /api/prospeccao/history/summary` (`sent`/`failed`/`queued`) — ver
    [`agent-local-app.md`](agent-local-app.md#histórico)
 
 ---
@@ -388,8 +397,8 @@ A acção real de cancelar/reagendar o appointment (`meeting_scheduler.handle_me
 |---|---|
 | `backend-crm/routes/agents.py` | Endpoints de ciclo de vida do agente local |
 | `backend-crm/routes/executor.py` | Endpoints internos (`X-Service-Token`) de complete/fail de jobs consumidos por `backend-executors` |
-| `backend-crm/services/jobs_service.py` | Fila de jobs (create, claim, complete, fail, backoff); `handle_email_report`/`_handle_whatsapp_report` (side-effects em `prospection_logs`) |
-| `backend-crm/routes/prospeccao.py` | Enqueue de jobs de prospecção; `GET /history` (histórico unificado WhatsApp/email) |
+| `backend-crm/services/jobs_service.py` | Fila de jobs (create, claim, complete, fail, backoff); `handle_email_report`/`_handle_whatsapp_report` (side-effects em `prospection_logs`); `get_prospection_summary` (contagens exactas sent/failed/queued) |
+| `backend-crm/routes/prospeccao.py` | Enqueue de jobs de prospecção; `GET /history` (histórico unificado WhatsApp/email); `GET /history/summary` (resumo agregado) |
 | `backend-core/app/models/ai_profile.py` | Model ORM do AI Profile |
 | `backend-core/app/api/ai_profiles.py` | Endpoints CRUD do AI Profile |
 | `backend-crm/services/agent_type.py` | Mapeamento template_key → agent_type |

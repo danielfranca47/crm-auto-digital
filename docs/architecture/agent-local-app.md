@@ -310,6 +310,23 @@ mostra a mesma tabela (Data/Hora, Lead, Canal, Contacto, Estado, Notas) com um `
 filtro por canal (`?channel=email|whatsapp`, refeito server-side) além do filtro de Estado
 existente (Todos/Enviados/Falhados).
 
+### Resumo agregado (sent/failed/queued)
+
+`GET /api/prospeccao/history/summary` (`channel` opcional) devolve contagens exactas
+`{"sent": N, "failed": N, "queued": N}` para o utilizador autenticado — ver
+`get_prospection_summary` em [`agents.md`](agents.md#dois-caminhos-de-report-de-job--agente-local-vs-backend-executors)
+para a razão de `queued` vir da tabela `jobs` (`status='pending'`) e não de
+`prospection_logs` (que mantém a linha `"queued"` mesmo depois do job resolver).
+
+- **agent-local:** `crm_client.get_prospect_history_summary` busca o resumo junto com o
+  histórico em `_build_historico`, só na branch assinante; renderiza o label
+  `"✓ X enviados  ⚠ Y falhados  📥 Z enfileirados"` (partes omitidas quando o valor é 0) por
+  baixo do total de registos. Contas em modo log local (não-assinante) não mostram este
+  resumo — não há tabela `jobs` nem rota disponível nesse modo.
+- **frontend-crm:** `Pesquisa.tsx` busca `history` + `historySummary` em paralelo no mesmo
+  `load()`, com o mesmo `channelFilter`; renderiza 3 tiles (Enviados/Falhados/Enfileirados)
+  acima da tabela.
+
 ---
 
 ## Sessão local (`session.json`)
