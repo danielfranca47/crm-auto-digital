@@ -41,6 +41,7 @@ from services.jobs_service import (
     TYPE_WHATSAPP_APPOINTMENT_BRIEFING,
     TYPE_WHATSAPP_PREAGENDAMENTO_CHECKIN,
     TYPE_WHATSAPP_INBOUND,
+    TYPE_EMAIL_SEND_COLD,
     apply_outcome_highlight,
     apply_suggested_category,
     extract_outcome_payload,
@@ -48,6 +49,7 @@ from services.jobs_service import (
     expand_type_variants,
     get_job,
     normalize_job_type,
+    handle_email_report,
 )
 from services.briefing_service import generate_and_send_briefing
 from services.followup_reconciler import reconcile_due_followups
@@ -904,6 +906,11 @@ def complete_job_internal(
                         provider=job_payload.get("provider"),
                         source_message_id=job_payload.get("message_id"),
                     )
+        elif job_type == TYPE_EMAIL_SEND_COLD:
+            result_obj = payload.result if isinstance(payload.result, dict) else {}
+            handle_email_report(
+                conn, job_payload, JOB_STATUS_COMPLETED, result_obj, None, user_id=row["user_id"]
+            )
 
         refreshed = cur.execute("SELECT * FROM jobs WHERE id=?", (job_id,)).fetchone()
         conn.commit()
@@ -978,6 +985,13 @@ def fail_job_internal(
             """
             update_params = [JOB_STATUS_FAILED, error_txt, job_id]
         cur.execute(update_stmt, update_params)
+
+        if normalize_job_type(job_type) == TYPE_EMAIL_SEND_COLD:
+            job_payload = _json_loads(row["payload"]) or {}
+            handle_email_report(
+                conn, job_payload, final_status, None, payload.error, user_id=row["user_id"]
+            )
+
         refreshed = cur.execute("SELECT * FROM jobs WHERE id=?", (job_id,)).fetchone()
         conn.commit()
 

@@ -8,7 +8,7 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 from services.jobs_service import (
     JOB_STATUS_COMPLETED,
     JOB_STATUS_FAILED,
-    _handle_email_report as handle_email_report,
+    handle_email_report as handle_email_report,
 )
 
 

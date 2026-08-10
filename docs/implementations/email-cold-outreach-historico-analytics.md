@@ -1,7 +1,7 @@
 # Histórico/analytics de emails enviados (cold outreach)
 
 **Branch:** `main`
-**Status:** Em andamento
+**Status:** Todos os cenários validados (10/08/2026) — pendente: decidir sobre a Fase F (resumo agregado), opcional
 
 ---
 
@@ -197,45 +197,106 @@ menos um email e um WhatsApp enviados.
 
 ---
 
+## Fase E — Diagnóstico + Correção: `sent`/`failed` de email não chegavam a `prospection_logs` (10/08/2026)
+
+### Problema identificado
+
+Ao validar os Cenários C1/C2 ao vivo (enviar um email real e um email propositadamente inválido),
+o job processava normalmente (`jobs.status` ia para `completed`/`failed`), mas **nenhuma linha
+`sent`/`failed` aparecia em `prospection_logs`** — só o `queued` inicial.
+
+Causa raiz: a Fase A ligou `handle_email_report` (então `_handle_email_report`) dentro de
+`jobs_service.report_job` — a função por trás de `POST /agent/report`, usada exclusivamente pelo
+fluxo de polling do **Agente Local** (agent_id/token), cujos únicos job types canónicos são
+`whatsapp.send.local`, `whatsapp.followup.tick`, `maps.search.local`, `maps.enrich.local`
+(`docs/architecture/agents.md#job-types-canônicos` — `email.send.cold` nunca esteve nessa lista).
+
+O `email_worker` do `backend-executors` reporta resultado por um caminho completamente diferente:
+`POST /api/internal/jobs/{id}/complete` e `/fail` em `backend-crm/routes/executor.py`
+(autenticado por `X-Service-Token`, não por agente) — confirmado directamente no client
+(`backend-executors/app/clients/crm_client.py:99-165`) e no log do worker durante o teste ao vivo.
+Ou seja, a Fase A ligou o handler a um endpoint que os jobs de email nunca atravessam — código morto
+para este job type, silenciosamente nunca executado.
+
+### Correção
+
+| Arquivo | Mudança |
+|---|---|
+| `backend-crm/services/jobs_service.py` | Removido o `elif job_type == TYPE_EMAIL_SEND_COLD: ...` dentro de `report_job` (inalcançável); função renomeada `_handle_email_report` → `handle_email_report` (deixa de ser "privada" do módulo, passa a ser usada por `routes/executor.py`) |
+| `backend-crm/routes/executor.py` | Import de `TYPE_EMAIL_SEND_COLD`/`handle_email_report`; `complete_job_internal` ganha `elif job_type == TYPE_EMAIL_SEND_COLD: handle_email_report(..., JOB_STATUS_COMPLETED, ...)`; `fail_job_internal` chama `handle_email_report(..., final_status, ...)` **depois** de calcular `final_status` — só grava `failed` quando a falha é definitiva (esgotou tentativas), não em cada retry intermédio (melhor que o padrão do WhatsApp, que loga em cada tentativa) |
+| `backend-crm/tests/test_jobs_service_email_report.py` | Só o `import` actualizado para `handle_email_report` — os testes em si continuam válidos, testavam a função directamente, não o ponto de chamada errado |
+
+### Como foi detectado e confirmado
+
+Teste ao vivo através do pipeline real (não só ao nível de unidade):
+1. Criado lead 434 (`danielhsfranca@gmail.com`) e lead 435 (`nao-e-email-valido`) via `POST /api/leads`
+2. Enfileirado email para cada um via `POST /api/prospeccao/email/enqueue`
+3. Corrido `backend-executors/app/workers/email_worker.py` manualmente (bounded a N jobs)
+4. **Antes da correção:** job completava/falhava normalmente na tabela `jobs`, mas
+   `prospection_logs` não ganhava nenhuma linha nova de `sent`/`failed`
+5. Aplicada a correção acima, backend-crm reiniciado, jobs reenfileirados e reprocessados
+6. **Depois:** `prospection_logs` passou a ganhar as linhas correctas — ver Cenários C1/C2 abaixo
+
+### Commits Fase E
+
+| # | Commit | O que foi implementado |
+|---|---|---|
+| 1 | `<preencher após commit>` | fix: liga handle_email_report ao endpoint real usado pelo backend-executors |
+
+---
+
 ## Checks de Validação
 
 ### Cenário C1 — Email completo grava `sent` em `prospection_logs`
-- [ ] Enviar um email cold outreach real (lead com email válido, conta SMTP conectada)
-- [ ] Confirmar: linha `action="sent" channel="email"` aparece em `prospection_logs`
+- [x] Enviar um email cold outreach real (lead com email válido, conta SMTP conectada)
+- [x] Confirmar: linha `action="sent" channel="email"` aparece em `prospection_logs`
+- **Validado em:** 10/08/2026 — lead 434 (`danielhsfranca@gmail.com`), job 503 processado pelo
+  `email_worker` real via Gmail SMTP (`autodigital157@gmail.com`). `prospection_logs` id 48214:
+  `action=sent channel=email email=danielhsfranca@gmail.com`. Email chegou de facto à caixa de
+  entrada (confirmado pelo utilizador ser o dono do endereço). Confirmado também visualmente no
+  agent-local (Estado "Enviado", verde) e no frontend-crm (`Pesquisa.tsx`).
 
 ### Cenário C2 — Email falhado grava `failed`
-- [ ] Forçar falha (ex.: SMTP inválido) num envio de email
-- [ ] Confirmar: linha `action="failed" channel="email"` com nota de erro
+- [x] Forçar falha (ex.: SMTP inválido) num envio de email
+- [x] Confirmar: linha `action="failed" channel="email"` com nota de erro
+- **Validado em:** 10/08/2026 — lead 435 com email propositadamente inválido
+  (`nao-e-email-valido`, sem tocar em credenciais SMTP). Gmail rejeitou de forma síncrona
+  (`553 5.1.3 ... not a valid RFC 5321 address`), `smtplib` levantou `SMTPRecipientsRefused`,
+  job 502 esgotou as 3 tentativas (`JOB_MAX_ATTEMPTS`) e ficou `failed`. `prospection_logs` id
+  48219: `action=failed channel=email email=nao-e-email-valido notes=<erro real do Gmail>`. A
+  linha só é gravada na tentativa final (não em cada retry) — ver Fase E acima.
 
 ### Cenário P1 — Histórico agent-local mostra canal e email
-- [ ] Abrir painel Histórico no agent-local após enviar email(s) e WhatsApp(s)
-- [ ] Confirmar: coluna Canal distingue as entradas; linhas de email mostram o endereço
-- [ ] Exportar CSV e confirmar a coluna Canal
+- [x] Abrir painel Histórico no agent-local após enviar email(s) e WhatsApp(s)
+- [x] Confirmar: coluna Canal distingue as entradas; linhas de email mostram o endereço
+- [x] Exportar CSV e confirmar a coluna Canal
+- **Validado em:** 10/08/2026 — via `computer-use`/`desktop-control` (app `Gerador de Leads —
+  Digital Pro` já aberta, sessão `autodigital157`). App reiniciada para carregar a Fase C (não
+  recarrega código Python a quente). Painel Histórico mostrou: linha C2 com Canal="Email",
+  Contacto="nao-e-email-valido", Estado="Falhou" (vermelho); linha C1 com Canal="Email",
+  Contacto="danielhsfranca@gmail.com", Estado="Enviado" (verde). "Exportar CSV" gerado com sucesso
+  (`historico_test.csv`, apagado após inspecção) — cabeçalho `Data/Hora,Nome,Canal,Contacto,Estado,Notas`
+  com as mesmas duas linhas confirmadas no conteúdo do ficheiro.
 
 ### Cenário P2 — "Leads do Agente" (frontend-crm) mostra canal, email e filtro
 - [x] Abrir `Pesquisa.tsx` no frontend-crm
 - [x] Confirmar: coluna Canal e filtro por canal funcionam
-- [⏭️] Confirmar email visível numa linha de email — pulado nesta sessão: os únicos registos de
-  email existentes na conta de teste são anteriores ao deploy da Fase A (`pl.email` gravado como
-  `NULL`) e os leads associados foram entretanto apagados/editados (`leads.email` também `NULL`),
-  então caem no fallback `"—"` correctamente, mas não há dado real para mostrar o email a aparecer.
-  Confirma-se junto de C1 (próximo email real enviado depois desta sessão).
-- **Validado em:** 10/08/2026 — via browser (chrome-devtools MCP), conta de teste
-  `autodigital157@gmail.com`. Login em `http://localhost:5173`, aberta "Leads do Agente"
-  (`/pesquisa`). Confirmado: coluna "Canal" distingue correctamente `Email`/`WhatsApp`/outros
-  valores legados (algumas linhas antigas de `bot_disabled_changed`/`meeting_scheduled` reaproveitam
-  o campo `channel` para outro fim — comportamento pré-existente, não introduzido por esta feature;
-  a UI trata isso sem quebrar, mostrando o valor cru). Coluna "Contacto" mostra o telefone
-  correctamente nas linhas de WhatsApp (ex.: `5547992163692`). Filtro "Todos os canais → Email"
-  disparou `GET /api/prospeccao/history?...&channel=email`, devolveu exactamente as 8 linhas de
-  email existentes (confirmado no response JSON), tabela actualizou para "8 registos". Sem erros de
-  consola. Backend-crm foi reiniciado antes do teste (não usa `--reload`) para servir as Fases A/B.
+- [x] Confirmar email visível numa linha de email
+- **Validado em:** 10/08/2026 (1ª parte, canal+filtro) e 10/08/2026 (2ª parte, email visível,
+  reaproveitando os dados reais de C1/C2) — via browser (chrome-devtools MCP), conta de teste
+  `autodigital157@gmail.com`. Página recarregada após os testes de C1/C2: linha C2 mostra
+  Canal="Email", Contacto="nao-e-email-valido", Estado="Falhou"; linha C1 mostra Canal="Email",
+  Contacto="danielhsfranca@gmail.com", Estado="Enviado". Filtro "Todos os canais → Email"
+  confirmado a filtrar server-side (`?channel=email`). Sem erros de consola (só warnings
+  pré-existentes do React Router, não relacionados).
 
 ---
 
 ## Ajustes Possíveis Pós-Implementação
 
-- **Fase E (não implementada nesta ronda):** resumo agregado ("X enviados / Y falharam / Z
+- Leads de teste 434/435 (`Teste Historico Email C1`/`C2 (falha)`) ficaram na conta de teste
+  `autodigital157@gmail.com` como evidência dos Cenários C1/C2 — podem ser apagados a pedido.
+- **Fase F (não implementada nesta ronda):** resumo agregado ("X enviados / Y falharam / Z
   enfileirados") calculado client-side sobre a lista já carregada. Não é um total histórico exacto
   (limitado à janela de `limit=200`) — um total exacto exigiria uma rota nova com
   `GROUP BY channel, action`. O contador diário exacto (vs limite do plano) já existe em

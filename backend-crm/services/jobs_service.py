@@ -860,8 +860,6 @@ def report_job(
         payload = _json_loads(row["payload"])
         if job_type == TYPE_WHATSAPP_SEND:
             _handle_whatsapp_report(conn, payload, status, result, error_txt, user_id=user_id)
-        elif job_type == TYPE_EMAIL_SEND_COLD:
-            _handle_email_report(conn, payload, status, result, error_txt, user_id=user_id)
 
         conn.commit()
 
@@ -1150,7 +1148,7 @@ def _handle_whatsapp_report(conn, payload, status, result, error_txt, *, user_id
         )
 
 
-def _handle_email_report(conn, payload, status, result, error_txt, *, user_id: Optional[int] = None):
+def handle_email_report(conn, payload, status, result, error_txt, *, user_id: Optional[int] = None):
     lead_id = (payload or {}).get("lead_id")
     message_id = (payload or {}).get("message_id")
     email_addr = (payload or {}).get("email")
