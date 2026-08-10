@@ -65,7 +65,11 @@ def build_usage_payload(
     daily_usage: Dict[str, Dict[str, Optional[int]]] = {}
     for key in daily_keys:
         limit_value = _get_limit_value(limits, key)
-        used = rate_limit_service._get_daily_usage(conn=conn, user_id=user_id, limit_key=key)
+        job_type = rate_limit_service.JOB_TYPE_BY_LIMIT_KEY.get(key)
+        if job_type:
+            used = rate_limit_service.get_daily_job_usage(job_type=job_type, user_id=user_id, conn=conn)
+        else:
+            used = rate_limit_service._get_daily_usage(conn=conn, user_id=user_id, limit_key=key)
         daily_usage[key] = {
             "used": used,
             "limit": limit_value,

@@ -276,6 +276,37 @@ def get_weekly_job_usage(
             db_conn.close()
 
 
+def get_daily_job_usage(
+    *, job_type: str, user_id: Optional[int], conn: Optional[sqlite3.Connection] = None
+) -> int:
+    """Retorna quantos jobs de ``job_type`` foram criados hoje (UTC).
+
+    Lê direto da tabela ``jobs`` (mesma fonte usada pelo gate em ``build_rate_limit_state``),
+    evitando a divergência com ``limit_usage`` descrita em docs/architecture/plans-limits.md.
+    """
+
+    if user_id is None:
+        return 0
+
+    canonical = jobs_service.normalize_job_type(job_type)
+    variants = jobs_service.expand_type_variants(canonical)
+
+    owns_conn = False
+    db_conn = conn
+    if db_conn is None:
+        db_conn = get_connection()
+        owns_conn = True
+
+    try:
+        return _count_jobs_for_today(conn=db_conn, user_id=user_id, job_types=variants)
+    finally:
+        if owns_conn and db_conn:
+            db_conn.close()
+
+
+JOB_TYPE_BY_LIMIT_KEY: Dict[str, str] = {v: k for k, v in LIMIT_KEYS_BY_TYPE.items()}
+
+
 def build_rate_limit_state(
     *, job_type: str, user_id: Optional[int], entitlements: Optional[Dict[str, Any]], conn: Optional[sqlite3.Connection] = None
 ) -> RateLimitState:

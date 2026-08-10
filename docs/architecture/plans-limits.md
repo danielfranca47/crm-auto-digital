@@ -90,15 +90,13 @@ LIMIT_KEYS_BY_TYPE = {
 desse tipo criados hoje (`_count_jobs_for_today`, `DATE(created_at,'utc') = DATE('now','utc')`) e
 levantam `HTTP 429` se o próximo job excederia o limite.
 
-**Nota — divergência conhecida:** `routes/usage.py::build_usage_payload()` tem uma lista
-`daily_keys` que inclui essas mesmas chaves (`max_whatsapp_send_daily`, `max_maps_search_daily`,
-etc.) e as lê via `_get_daily_usage()` — mas essa função lê da tabela `limit_usage`, que só é
-escrita para `max_prospects_daily` (via `consume_daily_units`/`reserve_daily_units` em
-`automations/search/proposals/site/runner.py`). Para os outros keys da lista, o gate real (na
-criação do job) e o número exibido em `/api/usage` vêm de fontes diferentes — o `/api/usage`
-mostraria `used: 0` sempre para eles. Pré-existente, fora do escopo de qualquer feature que só
-precise do gate funcionando; ao adicionar um novo limite por contagem de job, prefira ler o
-"usado" também da tabela `jobs` (ver exemplo do limite semanal abaixo), não de `limit_usage`.
+`get_daily_job_usage(job_type, user_id, conn=None)` — leitura sem gate, mesma fonte (`jobs`),
+usada por `/api/usage`. `JOB_TYPE_BY_LIMIT_KEY` (inverso de `LIMIT_KEYS_BY_TYPE`) deixa
+`routes/usage.py::build_usage_payload()` decidir, por chave, se lê de `jobs` (chaves com job
+type mapeado) ou de `limit_usage` via `_get_daily_usage()` (demais chaves, ex.:
+`max_prospects_daily`, escrita por `consume_daily_units`/`reserve_daily_units` em
+`automations/search/proposals/site/runner.py`) — mesmo padrão já usado pelo limite semanal
+abaixo, sem tabela de uso duplicada para os tipos contados por job.
 
 ### Limite semanal — `LIMIT_KEYS_BY_TYPE_WEEKLY`
 

@@ -323,9 +323,31 @@ emails já foram enviados hoje e quantos restam, ao lado do card de WhatsApp.
 - **Não aplicável** — a UI foi revertida antes de ser testada (ver "Fase 4 — Correção", abaixo). A escolha de canal deixou de ser uma preferência de perfil salva.
 
 ### Cenário P11 — Card de uso de email no painel
-- [ ] Abrir "Uso do Plano" e confirmar que aparece o card "Email do dia" com usado/limite/restante
-- [ ] Enfileirar um job de email de teste (`POST /api/prospeccao/email/enqueue`) e confirmar que "usado" incrementa após o próximo carregamento da página
-- **Pendente** — requer sessão de browser + dados de teste
+- [x] Abrir "Uso do Plano" e confirmar que aparece o card "Email do dia" com usado/limite/restante
+- [x] Enfileirar um job de email de teste (`POST /api/prospeccao/email/enqueue`) e confirmar que "usado" incrementa após o próximo carregamento da página
+- **Validado em:** 10/08/2026 — login web real (`autodigital157@gmail.com`, credenciais em
+  `docs/implementations/_conta-teste-local.md`) via Chrome DevTools MCP, página "Uso do Plano".
+  O card apareceu correctamente desde o início. O "usado" só passou a incrementar depois de um
+  bug real encontrado e corrigido nesta sessão (ver nota abaixo) — confirmado com
+  `max_email_send_daily: {"used": 2, "limit": 30, "remaining": 28}` batendo exactamente com 2
+  jobs de teste criados no dia. Dados de teste (jobs, mensagens, lead, plano) revertidos ao
+  estado original no final.
+- **Bug encontrado e corrigido:** o "usado" nunca incrementava, em nenhum plano (não é específico
+  de plano ilimitado). Causa: `enqueue_email_jobs`/`enqueue_whatsapp_jobs`
+  (`backend-crm/services/jobs_service.py`) usam `RateLimitState.ensure_can_consume()`
+  (`rate_limit_service.py`) para o gate de limite diário — essa contagem é feita direto na
+  tabela `jobs`, sem nunca escrever na tabela `limit_usage`. `routes/usage.py` (painel "Uso do
+  Plano") lia o "usado" de `limit_usage` via `_get_daily_usage()` — tabela nunca escrita para
+  `max_whatsapp_send_daily`/`max_email_send_daily`/`max_maps_search_daily`/`max_maps_enrich_daily`,
+  resultando sempre em `used: 0`. Esta divergência já estava documentada como conhecida em
+  `docs/architecture/plans-limits.md`, com a correção recomendada apontada mas não aplicada. Fix
+  aplicado seguindo exactamente esse padrão já usado pelo limite semanal (`get_weekly_job_usage`):
+  nova `get_daily_job_usage(job_type, user_id, conn)` em `rate_limit_service.py`, lendo direto de
+  `jobs` (mesma fonte do gate); `routes/usage.py` passa a usar essa função para as chaves com job
+  type mapeado (`JOB_TYPE_BY_LIMIT_KEY`), mantendo `_get_daily_usage()`/`limit_usage` só para
+  `max_prospects_daily` (que já escreve nessa tabela por outro caminho). Nenhuma tabela de uso
+  duplicada foi criada — `jobs_service.py` não foi alterado. `docs/architecture/plans-limits.md`
+  actualizado para reflectir a correção.
 
 ## Fase 4 — Correção (17/07/2026): revertida a preferência de canal no frontend-crm
 
