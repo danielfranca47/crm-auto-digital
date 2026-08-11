@@ -1,7 +1,7 @@
 # Registrar interação passada (backfill manual de mensagens)
 
-**Branch:** `main`
-**Status:** Em andamento
+**Branch:** `feat/backfill-interacao-passada`
+**Status:** Todos os cenários validados
 
 ---
 
@@ -117,7 +117,7 @@ Guardrail central: `SELECT COUNT(*) FROM messages WHERE lead_id = ?` — se `> 0
 
 **Validado nesta fase:** `npx tsc --noEmit` limpo (sem erros de tipo) e revisão manual do JSX/handlers.
 
-**Não validado ainda:** teste ao vivo da interação na UI (Cenário P4) — o MCP do Chrome DevTools não estava disponível nesta sessão para automação de navegador, e o utilizador optou por adiar o teste em vez de usar automação por clique de coordenadas (mais lenta/sujeita a erro) ou testar manualmente agora. `backend-core` (8001), `backend-crm` (8000) e `frontend-crm` (8080) ficaram rodando em background para quando o teste for feito.
+**Atualização:** Cenário P4 validado ao vivo depois — ver seção abaixo. O MCP do Chrome DevTools precisou de correção de configuração (colisão de nome de servidor no `~/.claude.json`) antes de conectar nesta sessão.
 
 ---
 
@@ -139,13 +139,16 @@ Guardrail central: `SELECT COUNT(*) FROM messages WHERE lead_id = ?` — se `> 0
 > Testado ao vivo com `backend-core` (8001) e `backend-crm` (8000) rodando via `.venv` de cada serviço (`PYTHONUTF8=1` no backend-crm por causa de um `print` com emoji em `database.py:23`, pré-existente). Lead de teste (id 436) removido ao final para não deixar resíduo na conta de teste.
 
 ### Cenário P4 — UI: seção aparece só quando aplicável
-- [ ] Abrir card de lead sem mensagens → seção "Registrar interação passada" visível
-- [ ] Adicionar 2 turnos, salvar → toast de sucesso, seção desaparece
-- [ ] Reabrir o card → seção não reaparece (lead já tem mensagens)
+- [x] (2026-08-11) Abrir card de lead sem mensagens (id 438) → seção "Registrar interação passada" visível, com 2 turnos padrão (Lead/Eu)
+- [x] (2026-08-11) Preenchidos os 2 turnos, clicado "Salvar" → botão mudou para "Salvando..." (desabilitado), toast "Interação passada registrada" apareceu, seção desapareceu do dialog
+- [x] (2026-08-11) Reaberto o card do mesmo lead → seção não reaparece (confirmado via snapshot de acessibilidade e via `document.body.innerText`)
+- [x] (2026-08-11) Confirmado via SQL: 2 linhas em `messages` (`inbound`/`outbound`, texto e ordem corretos, `createdAt` = agora)
+
+> Testado ao vivo via MCP Chrome DevTools (instância de Chrome isolada, controlada via `navigate_page`/`take_snapshot`/`click`/`fill` — não o navegador do utilizador). Lead de teste (id 438) removido ao final.
 
 ### Cenário C1 — Bypass real da saudação forçada (fora do escopo desta iteração, validar depois)
-- [ ] Conectar número de teste, fazer backfill de um lead, mandar mensagem real via WhatsApp
-- [ ] Confirmar no trace do `decision_engine` que `reason` não contém `greeting_first_enforced`
+- [⏭️] Conectar número de teste, fazer backfill de um lead, mandar mensagem real via WhatsApp — pulado intencionalmente nesta iteração (decisão consciente, ver "Ajustes Possíveis Pós-Implementação")
+- [⏭️] Confirmar no trace do `decision_engine` que `reason` não contém `greeting_first_enforced`
 
 ---
 
