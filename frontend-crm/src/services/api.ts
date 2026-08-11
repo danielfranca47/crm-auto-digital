@@ -453,6 +453,19 @@ export type LeadMessage = {
   createdAt: string;
 };
 
+export type BackfillTurn = {
+  sender: "lead" | "me";
+  body: string;
+  occurred_at?: string | null;
+};
+
+export type BackfillInteractionsResponse = {
+  status: string;
+  lead_id: number;
+  created: number[];
+  counts: { inbound: number; outbound: number };
+};
+
 export type ManifestResponse = {
   ok: boolean;
   manifest: Manifest;
@@ -617,6 +630,13 @@ export const api = {
 
   getLeadQualificationFields: async (leadId: number) => {
     return apiClient.get<{ fields: Record<string, string> }>(`/leads/${leadId}/qualification-fields`);
+  },
+
+  backfillLeadInteractions: async (leadId: number, turns: BackfillTurn[]) => {
+    return apiClient.post<BackfillInteractionsResponse>(
+      `/leads/${leadId}/interactions/backfill`,
+      { turns }
+    );
   },
 
   startFollowup: async (payload: {

@@ -33,6 +33,7 @@ import { Textarea } from "./ui/textarea";
 import { Input } from "./ui/input";
 import { Label } from "./ui/label";
 import { Separator } from "./ui/separator";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select";
 import { useState, useEffect, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
@@ -42,7 +43,7 @@ import { useLeadAppointments, useCancelAppointment } from "@/hooks/useAppointmen
 import { useBusinessTimezone } from "@/hooks/useBusinessTimezone";
 import { useToast } from "@/hooks/use-toast";
 import { useLeads } from "@/contexts/LeadsContext";
-import { api, FollowUpContract } from "@/services/api";
+import { api, FollowUpContract, BackfillTurn } from "@/services/api";
 
 interface LeadCardDialogProps {
   lead: Lead | null;
@@ -274,6 +275,12 @@ function LeadCardDialogBody({
   const [aiQualFields, setAiQualFields] = useState<QualificationField[]>([]);
   const [isEditingQualif, setIsEditingQualif] = useState(false);
   const [editingQualif, setEditingQualif] = useState<Record<string, string>>({});
+  const [hasExistingMessages, setHasExistingMessages] = useState<boolean | null>(null);
+  const [backfillTurns, setBackfillTurns] = useState<BackfillTurn[]>([
+    { sender: "lead", body: "" },
+    { sender: "me", body: "" },
+  ]);
+  const [isSavingBackfill, setIsSavingBackfill] = useState(false);
 
   // Carrega compromissos do lead (rota: GET /leads/{id}/appointments)
   const leadId = lead?.id;
@@ -300,6 +307,20 @@ function LeadCardDialogBody({
       setQualifFields((qRes as any)?.fields ?? {});
       setAiQualFields((profileRes as any)?.qualification_fields ?? []);
     });
+  }, [lead?.id]);
+
+  // Detecta se o lead já tem mensagens reais (habilita/oculta o backfill manual)
+  useEffect(() => {
+    if (!lead?.id) return;
+    let cancelled = false;
+    api.assistenteIA.mensagens(Number(lead.id), true).then((res) => {
+      if (!cancelled) setHasExistingMessages((res.messages?.length ?? 0) > 0);
+    }).catch(() => {
+      if (!cancelled) setHasExistingMessages(null);
+    });
+    return () => {
+      cancelled = true;
+    };
   }, [lead?.id]);
 
   // Mensagens WhatsApp para histórico de follow-up
@@ -552,6 +573,43 @@ function LeadCardDialogBody({
       toast({ title: "Qualificação atualizada" });
     } catch (error: any) {
       toast({ title: "Erro ao salvar qualificação", description: error?.message, variant: "destructive" });
+    }
+  };
+
+  const addBackfillTurn = () => {
+    setBackfillTurns((prev) => [...prev, { sender: "lead", body: "" }]);
+  };
+
+  const removeBackfillTurn = (index: number) => {
+    setBackfillTurns((prev) => prev.filter((_, i) => i !== index));
+  };
+
+  const updateBackfillTurn = (index: number, patch: Partial<BackfillTurn>) => {
+    setBackfillTurns((prev) => prev.map((t, i) => (i === index ? { ...t, ...patch } : t)));
+  };
+
+  const handleSaveBackfill = async () => {
+    const turns = backfillTurns
+      .map((t) => ({ sender: t.sender, body: t.body.trim() }))
+      .filter((t) => t.body.length > 0);
+    if (turns.length === 0) {
+      toast({ title: "Adicione pelo menos um turno com texto", variant: "destructive" });
+      return;
+    }
+    setIsSavingBackfill(true);
+    try {
+      await api.backfillLeadInteractions(Number(lead!.id), turns);
+      toast({ title: "Interação passada registrada" });
+      setHasExistingMessages(true);
+      setBackfillTurns([{ sender: "lead", body: "" }, { sender: "me", body: "" }]);
+    } catch (error: any) {
+      toast({
+        title: "Erro ao registrar interação passada",
+        description: error?.message ?? "Não foi possível salvar o histórico.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsSavingBackfill(false);
     }
   };
 
@@ -853,6 +911,62 @@ function LeadCardDialogBody({
                       )}
                     </div>
                   ))}
+                </div>
+              </div>
+            )}
+
+            {/* Registrar interação passada (backfill manual) */}
+            {hasExistingMessages === false && (
+              <div className="space-y-3 border border-border rounded-lg p-4">
+                <div className="flex items-center gap-2">
+                  <MessageSquare className="h-4 w-4 text-muted-foreground" />
+                  <span className="text-sm font-medium">Registrar interação passada</span>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Se este lead já trocou mensagens com você antes de o agente ser ativado, registre aqui para dar contexto à IA e evitar uma saudação inicial desnecessária.
+                </p>
+                <div className="space-y-3">
+                  {backfillTurns.map((turn, index) => (
+                    <div key={index} className="flex gap-2 items-start">
+                      <Select
+                        value={turn.sender}
+                        onValueChange={(value) => updateBackfillTurn(index, { sender: value as "lead" | "me" })}
+                      >
+                        <SelectTrigger className="w-24 bg-input border-border shrink-0">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent className="bg-popover border-border">
+                          <SelectItem value="lead">Lead</SelectItem>
+                          <SelectItem value="me">Eu</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <Textarea
+                        value={turn.body}
+                        onChange={(e) => updateBackfillTurn(index, { body: e.target.value })}
+                        placeholder="Texto da mensagem..."
+                        rows={2}
+                        className="flex-1"
+                      />
+                      {backfillTurns.length > 1 && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => removeBackfillTurn(index)}
+                        >
+                          Remover
+                        </Button>
+                      )}
+                    </div>
+                  ))}
+                </div>
+                <div className="flex gap-2">
+                  <Button variant="outline" size="sm" onClick={addBackfillTurn}>
+                    <Plus className="h-3 w-3 mr-2" />
+                    Adicionar turno
+                  </Button>
+                  <Button size="sm" onClick={() => void handleSaveBackfill()} disabled={isSavingBackfill}>
+                    {isSavingBackfill ? "Salvando..." : "Salvar"}
+                  </Button>
                 </div>
               </div>
             )}
