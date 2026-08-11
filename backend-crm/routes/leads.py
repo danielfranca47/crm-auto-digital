@@ -11,7 +11,7 @@ import os
 import uuid
 from fastapi import UploadFile, File
 from pathlib import Path
-from models import Lead, LeadUpdate, AppointmentCreate, AppointmentUpdate, BotDisabledUpdate, StartFollowupPayload, QualificationPatchPayload, ScheduledMessagePayload, SendNowPayload
+from models import Lead, LeadUpdate, AppointmentCreate, AppointmentUpdate, BotDisabledUpdate, StartFollowupPayload, QualificationPatchPayload, ScheduledMessagePayload, SendNowPayload, BackfillInteractionsPayload
 from security_core import CurrentUser, require_crm_access
 from services import rate_limit_service
 from services.agent_type import resolve_agent_type_for_user
@@ -748,6 +748,69 @@ def get_lead_qualification_fields(
     except HTTPException:
         raise
     except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        conn.close()
+
+
+@router.post("/{lead_id}/interactions/backfill")
+def backfill_lead_interactions(
+    lead_id: int,
+    body: BackfillInteractionsPayload,
+    current_user: CurrentUser = Depends(require_crm_access),
+):
+    """Regista manualmente um histórico de conversa anterior ao primeiro contacto
+    real do agente (ver docs/implementations/backfill-interacao-passada.md).
+    Só permitido quando o lead ainda não tem nenhuma mensagem em `messages`.
+    """
+    conn = get_connection()
+    try:
+        _require_lead_for_user(conn, lead_id, current_user.id)
+        cur = conn.cursor()
+        cur.execute("SELECT COUNT(*) FROM messages WHERE lead_id = ?", (lead_id,))
+        if cur.fetchone()[0] > 0:
+            raise HTTPException(
+                status_code=409,
+                detail="Este lead já possui mensagens; backfill manual só é permitido antes do primeiro contato real.",
+            )
+
+        cursor_ts = datetime.utcnow() - timedelta(seconds=len(body.turns))
+        created: dict[str, list[int]] = {"inbound": [], "outbound": []}
+        for turn in body.turns:
+            if turn.occurred_at is not None:
+                ts = turn.occurred_at.strftime("%Y-%m-%d %H:%M:%S")
+            else:
+                cursor_ts += timedelta(seconds=1)
+                ts = cursor_ts.strftime("%Y-%m-%d %H:%M:%S")
+            model_val = "inbound" if turn.sender == "lead" else "outbound"
+            cur.execute(
+                """
+                INSERT INTO messages (lead_id, channel, subject, body, model, createdAt)
+                VALUES (?, 'whatsapp', NULL, ?, ?, ?)
+                """,
+                (lead_id, turn.body.strip(), model_val, ts),
+            )
+            msg_id = int(cur.lastrowid)
+            created[model_val].append(msg_id)
+            cur.execute(
+                """
+                INSERT INTO prospection_logs (lead_id, channel, message_id, action, notes, user_id)
+                VALUES (?, 'whatsapp', ?, 'manual_backfill', NULL, ?)
+                """,
+                (lead_id, msg_id, current_user.id),
+            )
+        conn.commit()
+        return {
+            "status": "ok",
+            "lead_id": lead_id,
+            "created": created["inbound"] + created["outbound"],
+            "counts": {"inbound": len(created["inbound"]), "outbound": len(created["outbound"])},
+        }
+    except HTTPException:
+        conn.rollback()
+        raise
+    except Exception as e:
+        conn.rollback()
         raise HTTPException(status_code=500, detail=str(e))
     finally:
         conn.close()

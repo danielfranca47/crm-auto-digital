@@ -87,6 +87,16 @@ class MessageOut(MessageBase):
     createdAt: datetime
 
 
+class BackfillTurn(BaseModel):
+    sender: Literal["lead", "me"]
+    body: str = Field(min_length=1, max_length=4000)
+    occurred_at: Optional[datetime] = None
+
+
+class BackfillInteractionsPayload(BaseModel):
+    turns: List[BackfillTurn] = Field(min_length=1, max_length=40)
+
+
 # -----------------------------
 # Compromissos / Agenda
 # -----------------------------
