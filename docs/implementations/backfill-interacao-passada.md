@@ -99,6 +99,26 @@ Guardrail central: `SELECT COUNT(*) FROM messages WHERE lead_id = ?` — se `> 0
 | `frontend-crm/src/services/api.ts` | Nova função `backfillLeadInteractions(leadId, turns)` |
 | `frontend-crm/src/components/LeadCardDialog.tsx` | `useEffect` novo para detectar `hasExistingMessages`; nova seção "Registrar interação passada", visível só quando o lead não tem mensagens |
 
+### Commits Fase 2
+
+| # | Commit | O que foi implementado |
+|---|---|---|
+| 1 | `b306e87` | frontend: seção "Registrar interação passada" no LeadCardDialog + `api.backfillLeadInteractions` |
+
+**Detalhes do commit `b306e87`:**
+- `frontend-crm/src/services/api.ts` — tipos `BackfillTurn` e `BackfillInteractionsResponse` (após `LeadMessage`); método `api.backfillLeadInteractions(leadId, turns)` (após `getLeadQualificationFields`), chamando `POST /leads/{id}/interactions/backfill`
+- `frontend-crm/src/components/LeadCardDialog.tsx` — `useEffect` que chama `api.assistenteIA.mensagens(leadId, true)` ao trocar de lead para popular `hasExistingMessages`; handlers `addBackfillTurn`/`removeBackfillTurn`/`updateBackfillTurn`/`handleSaveBackfill`; nova seção visual (estilo igual ao bloco "Critérios de Qualificação") dentro de "Mensagens e Notas", com um `Select` Lead/Eu + `Textarea` por turno, botão "Adicionar turno" e "Salvar"
+
+### Relatório da Fase 2 — o que mudou na prática
+
+**Antes:** o endpoint de backfill (Fase 1) só podia ser chamado direto na API — não havia nenhuma forma de o operador usar isso pelo CRM.
+
+**Agora:** ao abrir o card de um lead que ainda não tem nenhuma mensagem, aparece uma seção "Registrar interação passada" dentro de "Mensagens e Notas". O operador escolhe quem falou (Lead/Eu) e escreve o texto de cada turno, pode adicionar mais turnos, e ao salvar a lista é enviada para o backfill. Depois de salvar com sucesso, a seção some (porque o lead passa a ter mensagens) e um toast confirma. Se o lead já tinha mensagens desde o início, a seção nunca aparece.
+
+**Validado nesta fase:** `npx tsc --noEmit` limpo (sem erros de tipo) e revisão manual do JSX/handlers.
+
+**Não validado ainda:** teste ao vivo da interação na UI (Cenário P4) — o MCP do Chrome DevTools não estava disponível nesta sessão para automação de navegador, e o utilizador optou por adiar o teste em vez de usar automação por clique de coordenadas (mais lenta/sujeita a erro) ou testar manualmente agora. `backend-core` (8001), `backend-crm` (8000) e `frontend-crm` (8080) ficaram rodando em background para quando o teste for feito.
+
 ---
 
 ## Checks de Validação
