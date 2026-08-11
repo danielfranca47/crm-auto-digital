@@ -104,17 +104,19 @@ Guardrail central: `SELECT COUNT(*) FROM messages WHERE lead_id = ?` — se `> 0
 ## Checks de Validação
 
 ### Cenário P1 — Backfill em lead sem mensagens (backend direto)
-- [ ] Criar lead de teste sem mensagens
-- [ ] `POST /interactions/backfill` com 2-3 turnos, um com `occurred_at`, outro sem
-- [ ] Confirmar via SQL: linhas em `messages` com `model`/`body`/ordem de `createdAt` corretos
+- [x] (2026-08-11) Criar lead de teste sem mensagens — lead id 436, conta de teste (`user_id=15`)
+- [x] (2026-08-11) `POST /interactions/backfill` com 3 turnos (2 com `occurred_at` no passado, 1 sem) — `201`/`ok`, `created: [1861, 1863, 1862]`, `counts: {inbound: 2, outbound: 1}`
+- [x] (2026-08-11) Confirmado via SQL direto em `messages`: 3 linhas, ordem cronológica correta por `createdAt` (turno sem `occurred_at` recebeu timestamp artificial = agora), `model` `inbound`/`outbound`/`inbound` batendo com o sender de cada turno, `body` preservado. 3 linhas espelhadas em `prospection_logs` com `action='manual_backfill'`.
 
 ### Cenário P2 — Guardrail de 409
-- [ ] Repetir o backfill no mesmo lead
-- [ ] Confirmar `409` e nenhuma linha nova inserida
+- [x] (2026-08-11) Repetido o backfill no mesmo lead (id 436) — `409` confirmado
+- [x] (2026-08-11) Contagem de `messages` para o lead permaneceu em 3 (nenhuma linha nova inserida)
 
 ### Cenário P3 — Leitura via endpoint real de mensagens
-- [ ] `GET /assistente-ia/messages/{lead_id}` após backfill
-- [ ] Confirmar que as mensagens aparecem na resposta
+- [x] (2026-08-11) `GET /assistente-ia/messages/{lead_id}` após backfill retorna as mensagens do backfill
+- [x] (2026-08-11) Nuance encontrada (comportamento pré-existente do endpoint, não é bug desta feature): o parâmetro `latest` é `True` por padrão e deduplica por `channel`, então com `latest=true` só o turno mais recente aparece (todos os turnos do backfill usam `channel='whatsapp'`). Com `?latest=false` os 3 turnos aparecem completos, na ordem esperada.
+
+> Testado ao vivo com `backend-core` (8001) e `backend-crm` (8000) rodando via `.venv` de cada serviço (`PYTHONUTF8=1` no backend-crm por causa de um `print` com emoji em `database.py:23`, pré-existente). Lead de teste (id 436) removido ao final para não deixar resíduo na conta de teste.
 
 ### Cenário P4 — UI: seção aparece só quando aplicável
 - [ ] Abrir card de lead sem mensagens → seção "Registrar interação passada" visível
