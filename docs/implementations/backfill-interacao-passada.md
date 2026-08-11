@@ -69,6 +69,27 @@ class BackfillInteractionsPayload(BaseModel):
 
 Guardrail central: `SELECT COUNT(*) FROM messages WHERE lead_id = ?` — se `> 0`, `409`. Timestamp artificial (quando `occurred_at` ausente) gerado a partir de `utcnow() - N segundos`, incrementando 1s por turno, sempre no passado. Cada turno grava em `messages` (`model='inbound'` se `sender='lead'`, `'outbound'` se `sender='me'`) e em `prospection_logs` (`action='manual_backfill'`) para auditoria — sem alterar o contrato de `model`, que precisa continuar exatamente `'inbound'`/`'outbound'` para o guardrail de saudação em `decision_engine.py` funcionar.
 
+### Commits Fase 1
+
+| # | Commit | O que foi implementado |
+|---|---|---|
+| 1 | `26ae7cb` | backend: modelos + endpoint de backfill com guardrail 409 e timestamps sequenciais |
+
+**Detalhes do commit `26ae7cb`:**
+- `backend-crm/models.py` — `BackfillTurn` e `BackfillInteractionsPayload` (após `MessageOut`)
+- `backend-crm/routes/leads.py` — import dos novos modelos; endpoint `POST /{lead_id}/interactions/backfill` (após `get_lead_qualification_fields`)
+- `docs/implementations/backfill-interacao-passada.md` — arquivo criado
+
+### Relatório da Fase 1 — o que mudou na prática
+
+**Antes:** não havia nenhuma forma de registrar no CRM uma conversa que já tinha acontecido no WhatsApp antes de o agente de IA ser ligado — o lead sempre nascia "zerado", sem histórico.
+
+**Agora:** existe um endpoint (`POST /api/leads/{lead_id}/interactions/backfill`) que aceita uma lista de turnos passados ("mensagem do lead" / "mensagem enviada por mim") e grava isso na mesma tabela que o agente real lê. Só funciona em leads que ainda não têm nenhuma mensagem — se já tiverem, o pedido é recusado (código 409) para não bagunçar uma conversa real em andamento.
+
+**Para validar:** Cenários P1, P2 e P3, na seção "Checks de Validação" abaixo — ainda pendentes de execução (não há UI nesta fase, só a API).
+
+**Nota de ambiente:** não consegui rodar o backend localmente para testar ao vivo nesta máquina — não há virtualenv em `backend-crm/` e o Python global tem uma versão do FastAPI incompatível com o resto do projeto (erro em `routes/appointments.py`, arquivo não relacionado a esta mudança). Validei só sintaxe (`ast.parse`) e revisão manual do código. Recomendo testar Cenários P1-P3 no seu ambiente configurado.
+
 ### Fase 2 — Frontend: seção no LeadCardDialog
 
 **Objetivo:** UI para o operador cadastrar os turnos sem precisar chamar a API manualmente.
