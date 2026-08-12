@@ -288,10 +288,31 @@ Operador escreve mensagem no Playground (frontend-crm)
 
 ## Bases de dados
 
-| BD | Localização | ORM | Usado por |
-|---|---|---|---|
-| `core.db` | `backend-core/core.db` | SQLAlchemy ORM | backend-core |
-| `crm.db` | `backend-crm/database/crm.db` | `sqlite3` raw | backend-crm, backend-executors (leitura via core_client) |
+| BD | Localização (local) | Localização (produção/Railway) | ORM | Usado por |
+|---|---|---|---|---|
+| `core.db` | `backend-core/core.db` | `/data/core.db` (volume `backend-core-volume`, via `DATABASE_URL`) | SQLAlchemy ORM | backend-core |
+| `crm.db` | `backend-crm/database/crm.db` | `/data/crm.db` (volume `backend-crm-volume`, via `CRM_DB_PATH`) | `sqlite3` raw | backend-crm, backend-executors (leitura via core_client) |
+
+### Persistência em produção (Railway)
+
+Cada serviço com banco SQLite próprio tem um volume persistente montado em
+`/data` no Railway — sem isso, o filesystem do container é recriado do zero
+a cada deploy/restart e o banco reinicia vazio. O caminho do ficheiro tem de
+ser explicitamente configurado para apontar para dentro do volume:
+- `backend-core`: `DATABASE_URL=sqlite:////data/core.db` (lido em
+  `app/config.py` via Pydantic `Settings`, `DATABASE_URL`)
+- `backend-crm`: `CRM_DB_PATH=/data/crm.db` (lido em `database.py`, com
+  fallback para o caminho relativo local — `backend-crm/database/crm.db` —
+  quando a env var não está definida, preservando o dev local)
+- `backend-executors`: não tem banco próprio nem volume — é stateless,
+  consome jobs do `crm.db` via HTTP e não grava nenhum estado localmente
+
+**Regra ao adicionar um novo serviço com estado persistente:** definir a env
+var correspondente já apontando para o volume desde o primeiro deploy — um
+caminho relativo/hardcoded funciona normalmente enquanto o container não é
+substituído, mascarando o problema até o primeiro redeploy apagar os dados
+silenciosamente (caso real: leads do `backend-crm` perdidos em produção
+porque o volume existia mas o código nunca apontava para ele).
 
 ### Tabelas críticas do `crm.db`
 
@@ -326,6 +347,7 @@ Operador escreve mensagem no Playground (frontend-crm)
 |---|---|
 | `CORE_API_BASE` | URL do backend-core (ex.: `http://localhost:8001`) |
 | `CORE_SERVICE_TOKEN` | Token server-to-server |
+| `CRM_DB_PATH` | Caminho do ficheiro SQLite do CRM; em produção deve apontar para o volume persistente (`/data/crm.db`) — ver "Persistência em produção" acima. Fallback para caminho relativo local se ausente |
 | `CRM_WEBHOOK_SECRET` | Segredo para validar webhooks inbound UazAPI |
 | `CRM_PUBLIC_BASE_URL` | URL pública do CRM (usada para configurar webhook na UazAPI) |
 | `OPENAI_API_KEY` | Para transcrição Whisper |
