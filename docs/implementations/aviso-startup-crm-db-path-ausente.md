@@ -86,3 +86,46 @@ se repita sem nenhum sinal.
 | Arquivo | O que muda |
 |---|---|
 | `backend-crm/database.py` | Nova checagem a nível de módulo, logo após `DB_PATH`/`DB_DIR`: `raise RuntimeError(...)` se `RAILWAY_ENVIRONMENT` estiver definida e `CRM_DB_PATH` não estiver |
+
+### Commits Fase 1
+
+| # | Commit | O que foi implementado |
+|---|---|---|
+| 1 | `fe9662c` | backend: checagem de arranque — recusa subir sem `CRM_DB_PATH` em produção |
+
+**Detalhes do commit `fe9662c`:**
+- `backend-crm/database.py` — `raise RuntimeError(...)` a nível de módulo, logo após `DB_PATH`/`DB_DIR`, se `RAILWAY_ENVIRONMENT` estiver definida e `CRM_DB_PATH` não
+
+### Relatório da Fase 1 — o que mudou na prática
+
+**Antes:** se a variável `CRM_DB_PATH` fosse removida ou esquecida em
+produção, o sistema simplesmente voltava a guardar os dados num lugar
+temporário, sem avisar nada — o mesmo problema que já causou perda real de
+leads podia acontecer de novo, em silêncio.
+
+**Agora:** nessas condições, o `backend-crm` **recusa-se a ligar** — o
+deploy falha de forma clara e visível nos registos do Railway, explicando
+exatamente o que está errado e como corrigir. Não há mais como isso
+acontecer sem ninguém notar.
+
+**Para validar:** Cenários P1, P2 e P3, na seção "Checks de Validação"
+abaixo — já executados por mim nesta sessão.
+
+---
+
+## Checks de Validação
+
+### Cenário P1 — Comportamento local inalterado (regressão)
+- [x] (2026-08-12) Sem `RAILWAY_ENVIRONMENT` nem `CRM_DB_PATH` definidas: `import database` funciona normalmente, `DB_PATH` resolve para o caminho padrão local (igual a antes)
+
+### Cenário P2 — Recusa de arranque em produção sem CRM_DB_PATH (novo comportamento)
+- [x] (2026-08-12) Com `RAILWAY_ENVIRONMENT=test` e sem `CRM_DB_PATH`: `import database` levanta `RuntimeError` imediatamente, com mensagem clara explicando o problema e a correção
+
+### Cenário P3 — Não interfere quando CRM_DB_PATH está definida (regressão)
+- [x] (2026-08-12) Com `RAILWAY_ENVIRONMENT=test` e `CRM_DB_PATH` definida: `import database` funciona normalmente, `DB_PATH` resolve para o caminho indicado
+- [x] (2026-08-12) Suite de testes existente (`test_leads_company_or_contact_migration`, `test_meeting_management_gate`, `test_inbound_orchestrator_flag`) — mesmos resultados de antes (2 erros pré-existentes de limpeza de pasta temporária no Windows, já confirmados não relacionados a esta mudança)
+
+> Não é preciso testar em produção diretamente: a variável `CRM_DB_PATH` já
+> está definida lá (confirmado nesta sessão), então o próximo deploy com
+> este commit simplesmente não deve disparar o `RuntimeError` — o deploy
+> subir normalmente já é a confirmação de que não há falso positivo.
