@@ -26,6 +26,16 @@ WhatsApp → UazAPI → POST /webhooks/whatsapp/inbound (backend-crm)
 
 O endpoint aceita eventos da UazAPI e os roteia para `inbound_handler`.
 
+### Registo do webhook na UazAPI
+
+Feito em `backend-crm/routes/whatsapp_connect.py` (`_set_whatsapp_webhook`), disparado a cada `/api/whatsapp/connect` e `/api/whatsapp/qr/refresh`. A URL registada é sempre construída a partir de `CRM_PUBLIC_BASE_URL` (nunca `localhost`), pois a UazAPI precisa de conseguir entregar o POST a um endereço publicamente roteável:
+
+```
+{CRM_PUBLIC_BASE_URL}/webhooks/whatsapp/uazapi?secret={CRM_WEBHOOK_SECRET}
+```
+
+**Testar o fluxo inbound em ambiente local:** como `localhost` não é alcançável pela UazAPI, é preciso expor o `backend-crm` via túnel público (ex.: ngrok), apontar `CRM_PUBLIC_BASE_URL` temporariamente para a URL do túnel, reiniciar o `backend-crm`, e reconfigurar o webhook (`POST {UAZAPI_BASE_URL}/webhook` com header `token: {instance_token}`, ou via `/api/whatsapp/connect`/`/qr/refresh` que já reconfigura automaticamente). Reverter tudo (URL de produção + webhook) ao final do teste.
+
 ---
 
 ## Filtro de mensagens de grupo
@@ -117,7 +127,7 @@ PTT/AudioMessage recebido
 
 **Variáveis de ambiente necessárias:**
 - `OPENAI_API_KEY` — chamadas ao Whisper
-- `UAZAPI_BASE_URL` — endpoint da UazAPI (ex.: `https://free.uazapi.com`)
+- `UAZAPI_BASE_URL` — endpoint da UazAPI (definido em `backend-core/.env` **e** `backend-crm/.env` — as duas cópias precisam apontar para o mesmo servidor)
 
 ### Comportamento de media_fallback
 
