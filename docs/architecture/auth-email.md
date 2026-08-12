@@ -169,7 +169,7 @@ Usa `smtplib` (stdlib Python) com STARTTLS. Configuração via `.env`:
 | Variável | Valor actual | Notas |
 |---|---|---|
 | `SMTP_HOST` | `smtp.resend.com` | Provider: Resend |
-| `SMTP_PORT` | `587` | STARTTLS |
+| `SMTP_PORT` | `2587` | STARTTLS. **Tem de ser 2587 em produção (Railway):** a Railway bloqueia egress nas portas SMTP padrão (25/465/587) — conexões à 587 dão `[Errno 110] Connection timed out` e nenhum email sai. A 2587 é a porta alternativa oficial do Resend para estes ambientes. Localmente 587 também funciona, mas usar 2587 em ambos mantém paridade |
 | `SMTP_USER` | `resend` | Literal — exigido pelo Resend |
 | `SMTP_PASS` | API key Resend (`re_...`) | |
 | `SMTP_FROM` | `Digital Pro <noreply@danielfranca.pt>` | Domínio verificado no Resend |
