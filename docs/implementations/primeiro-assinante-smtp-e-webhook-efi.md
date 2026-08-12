@@ -1,8 +1,8 @@
 # Primeiro assinante real — SMTP de produção + correções do webhook Efí
 
 **Branch:** `main`
-**Status:** Em andamento — Fase 1 (SMTP) implementada e validada por logs; Fase 2 (correção de
-dado) aprovada em conceito, aguardando execução; Fase 3 (idempotência) aguardando Plan Mode
+**Status:** Em andamento — Fase 1 (SMTP) implementada e validada por logs (falta recepção visual,
+S2); Fase 2 (correção de dado) executada e validada; Fase 3 (idempotência) aguardando Plan Mode
 
 ---
 
@@ -108,12 +108,15 @@ WHERE user_id = 3 AND status = 'active';
 ### Checks de Validação — Fase 2
 
 #### Cenário D1 — Período corrigido
-- [ ] `SELECT` antes: confirma 1 única subscription ativa do user 3 com end `2027-01-09`
-- [ ] `UPDATE` executado; `SELECT` depois confirma `2026-09-11`
-- [ ] `GET /internal/subscriptions/by-email/gabrielsmith.original@gmail.com` devolve o novo
-      `current_period_end`
-- [ ] Conferir que `origin_offer='growth_fundador'` e `efi_charge_id=1048544670` estão gravados
-      (aproveitar o acesso ao DB para validar o check do C1 do `email-drip-expiracao-fundador.md`)
+- [x] `SELECT` antes: 1 única subscription (id=8) ativa do user 3, end `2027-01-09 11:18:00`
+- [x] `UPDATE` executado (guardado por `user_id=3 AND status='active' AND end LIKE '2027-01-09%'`)
+      — `updated rows: 1`; `SELECT` depois confirma `2026-09-11 11:18:00`
+- [x] `GET /internal/subscriptions/by-email/gabrielsmith.original@gmail.com` devolve
+      `current_period_end: 2026-09-11T11:18:00` — a API lê o valor corrigido
+- [x] `origin_offer='growth_fundador'` e `efi_charge_id=1048544670` confirmados na linha do DB
+      (valida o check correspondente do C1 do `email-drip-expiracao-fundador.md`)
+- **Validado em:** 12/08/2026 — UPDATE executado pelo utilizador via `railway ssh` (DB
+  `/data/core.db`), verificação HTTP pelo Claude
 
 ---
 

@@ -194,16 +194,23 @@ documentada de forma completa e só aparece ao testar.
 ## Checks pendentes antes de graduar
 
 ### Cenário C1 — Pagamento real ponta a ponta (nunca observado)
-- [ ] Completar um pagamento real (produção, cartão real) de qualquer oferta
-- [ ] Confirmar que a Efí envia a notificação para `/webhooks/efi`
+- [x] Completar um pagamento real (produção, cartão real) de qualquer oferta — primeiro
+      assinante real (offer `growth_fundador`, R$147, charge `paid` confirmada na API da Efí)
+- [x] Confirmar que a Efí envia a notificação para `/webhooks/efi` — recebida em produção
+      (com reentregas múltiplas; ver Fase 3 de `primeiro-assinante-smtp-e-webhook-efi.md`)
 - [ ] Confirmar que `payment_event` activa a conta e o email de boas-vindas chega de facto
       (nunca confirmado que o SMTP/Resend envia com sucesso nesta sessão)
-- [ ] Se for o offer `growth_founder_renewal` ou `growth_fundador`: confirmar que
-      `origin_offer` é gravado correctamente na Subscription
-- **Pendente** — o teste anterior (Fase 1 da migração Efí) só chegou a `status: "approved"` no
-  sandbox; a Efí não simula liquidação (`"paid"`) em sandbox, então a activação real nunca foi
-  observada com dados de produção. Recomenda-se 1 compra real de teste (a oferta mais barata,
-  Start R$97) antes de divulgar a campanha amplamente.
+      — **parcial (12/08/2026):** a activação foi confirmada (User criado + subscription
+      activa), mas o email de boas-vindas **não chegou**: a Railway bloqueava egress SMTP na
+      porta 587 e nenhum email de produção jamais tinha saído. Corrigido (`SMTP_PORT=2587`) e
+      envio pós-fix validado por logs em `primeiro-assinante-smtp-e-webhook-efi.md` — falta a
+      confirmação visual de recepção (check S2 daquele arquivo) para fechar este item
+- [x] Se for o offer `growth_founder_renewal` ou `growth_fundador`: confirmar que
+      `origin_offer` é gravado correctamente na Subscription — `origin_offer='growth_fundador'`
+      lido directamente da linha do DB de produção
+- **Validado parcialmente em:** 12/08/2026 — pagamento real do primeiro assinante; detalhes,
+  bugs descobertos (SMTP bloqueado, período inflado por reentregas, falta de idempotência) e
+  correções em `primeiro-assinante-smtp-e-webhook-efi.md`
 
 ---
 
