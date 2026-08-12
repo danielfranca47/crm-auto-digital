@@ -133,20 +133,29 @@ backend-executors → POST /whatsapp/send (core)
 ## Checklist de migração
 
 ```
-[ ] Confirmar URL do servidor pago com a UazAPI
-[ ] Atualizar UAZAPI_BASE_URL no backend-core/.env
-[ ] Atualizar UAZAPI_ADMIN_TOKEN (token do servidor pago)
-[ ] Verificar se free.uazapi.com ainda está ativo ou migrou para free.uazapi.dev
-[ ] Planejar reconexão de instâncias existentes pelos usuários
-[ ] Testar fluxo completo: init → connect → QR → status → send
+[x] Confirmar URL do servidor pago com a UazAPI — https://digitalpro.uazapi.com
+[x] Atualizar UAZAPI_BASE_URL no backend-core/.env
+[x] Atualizar UAZAPI_ADMIN_TOKEN (token do servidor pago)
+[x] Atualizar UAZAPI_BASE_URL no backend-crm/.env (segunda cópia, usada por audio_transcription.py)
+[x] Testar fluxo completo: connect → QR → status connected → envio de texto → inbound + resposta IA → áudio + transcrição
 [ ] Monitorar logs de erro nas primeiras 24h após migração
-[ ] Garantir que .env com o token pago não está no git history
+[x] Garantir que .env com o token pago não está no git history (gitignored)
 ```
+
+Detalhes da execução: [`docs/implementations/etapa-uazapi-migracao-plano-pago.md`](implementations/etapa-uazapi-migracao-plano-pago.md).
 
 ---
 
 ## Conclusão
 
-**Sim, o sistema está pronto.** A arquitetura foi construída com `UAZAPI_BASE_URL` como variável de ambiente propagada corretamente por toda a cadeia de chamadas. Não há URL hardcoded nos serviços. A migração para o plano pago é uma **troca de variável de ambiente** — sem alteração de código necessária.
+**Migração concluída em 2026-08-12.** `UAZAPI_BASE_URL` e `UAZAPI_ADMIN_TOKEN` foram trocados para o servidor pago (`https://digitalpro.uazapi.com`) em `backend-core/.env` e `backend-crm/.env`, confirmando a premissa deste diagnóstico: troca de variável de ambiente, sem alteração de código.
 
-As melhorias listadas na seção amarela são boas práticas para produção com usuários pagantes, mas não bloqueiam a migração em si.
+Validação end-to-end feita com a instância real do utilizador:
+- Conexão via QR code → status `connected` no servidor pago.
+- Mensagem inbound de um número externo criou o lead e dispara a IA.
+- IA respondeu automaticamente (3 mensagens) via `backend-executors` → `POST /whatsapp/send` no servidor pago.
+- Áudio (PTT) enviado ao número conectado foi baixado do servidor pago e transcrito corretamente pelo pipeline (`services/audio_transcription.py`), com a IA respondendo ao conteúdo transcrito.
+
+**Nota para testes locais futuros:** o webhook da UazAPI é sempre registrado apontando para `CRM_PUBLIC_BASE_URL` (URL pública), nunca `localhost` — a UazAPI não consegue entregar eventos a um endereço não roteável. Para testar o fluxo inbound localmente é necessário expor o `backend-crm` via túnel (ex.: ngrok), apontar `CRM_PUBLIC_BASE_URL` temporariamente para o túnel, reconfigurar o webhook (`POST {UAZAPI_BASE_URL}/webhook` com o token da instância) e reverter tudo ao final do teste. Também é necessário ter o `backend-executors` (`app.workers.whatsapp_worker`) rodando — é ele quem consome os jobs `whatsapp.inbound.n8n` e efetivamente decide e envia a resposta da IA.
+
+As melhorias listadas na seção amarela (retry/backoff em 429, validação E.164, rotação de token) seguem como recomendação para antes de conectar os 2 clientes — tratadas como Fase 2 opcional no arquivo de implementação.
