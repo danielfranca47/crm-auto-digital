@@ -1,7 +1,7 @@
 # Lock/transação dedicada no guardrail 409 do backfill de interação passada
 
 **Branch:** `feat/backfill-interacao-passada`
-**Status:** Em andamento
+**Status:** Todos os cenários validados (2026-08-12)
 
 ---
 
@@ -154,15 +154,17 @@ seção "Checks de Validação" abaixo — ainda pendentes de execução.
 ## Checks de Validação
 
 ### Cenário P1 — Backfill continua funcionando normalmente (regressão)
-- [ ] Criar lead de teste sem mensagens
-- [ ] `POST /interactions/backfill` com 2-3 turnos
-- [ ] Confirmar: `200`/`ok`, turnos gravados em `messages` com `model`/`createdAt` corretos, contagens corretas na resposta
+- [x] (2026-08-12) Criado lead de teste sem mensagens — lead id 439
+- [x] (2026-08-12) `POST /interactions/backfill` com 3 turnos — `200`/`ok`, `created: [1866, 1868, 1867]`, `counts: {inbound: 2, outbound: 1}`
+- [x] (2026-08-12) Confirmado via SQL direto em `messages`: 3 linhas, `model` `inbound`/`outbound`/`inbound` batendo com o sender, `body` preservado, `createdAt` sequencial. 3 linhas espelhadas em `prospection_logs` com `action='manual_backfill'`
 
 ### Cenário P2 — Guardrail 409 continua funcionando (regressão)
-- [ ] Repetir o backfill no mesmo lead (já com mensagens)
-- [ ] Confirmar: `409`, nenhuma linha nova em `messages`
+- [x] (2026-08-12) Repetido o backfill no mesmo lead (id 439) — `409` confirmado (`"Este lead já possui mensagens..."`)
+- [x] (2026-08-12) Confirmado via SQL: contagem de `messages` para o lead permaneceu em 3 (nenhuma linha nova inserida)
 
 ### Cenário C1 — Corrida entre 2 chamadas concorrentes é resolvida
-- [ ] Criar lead de teste sem mensagens
-- [ ] Disparar 2 requisições de backfill quase simultâneas para o mesmo lead (ex.: 2 chamadas em paralelo via script/terminal)
-- [ ] Confirmar via SQL: **só uma** das duas gravou turnos em `messages` — a outra recebeu `409` (nunca as duas escrevendo)
+- [x] (2026-08-12) Criado lead de teste sem mensagens — lead id 440
+- [x] (2026-08-12) Disparadas 2 requisições de backfill em paralelo (mesmo `lead_id`, background shell jobs lançados no mesmo instante) — resposta A: `200`/`ok` (`created: [1869]`); resposta B: `409`
+- [x] (2026-08-12) Confirmado via SQL: **apenas 1** linha em `messages` para o lead 440 (a da requisição A) — a `BEGIN IMMEDIATE` serializou as duas transações e a segunda viu o histórico já gravado
+
+> Testado ao vivo com `backend-core` (8001) e `backend-crm` (8000) rodando via `.venv` de cada serviço (`PYTHONUTF8=1` no backend-crm). Leads de teste (439, 440) removidos ao final via `DELETE /api/leads/{id}` para não deixar resíduo na conta de teste.
