@@ -122,3 +122,47 @@ with get_connection() as conn:
         conn.rollback()
         raise HTTPException(status_code=500, detail=str(e))
 ```
+
+### Commits Fase 1
+
+| # | Commit | O que foi implementado |
+|---|---|---|
+| 1 | `4efd946` | backend: transação atômica (`BEGIN IMMEDIATE`) no guardrail 409 do backfill |
+
+**Detalhes do commit `4efd946`:**
+- `backend-crm/routes/leads.py` — `backfill_lead_interactions` trocado para `with get_connection() as conn:` + `BEGIN IMMEDIATE` antes do `SELECT COUNT(*)`; `conn.rollback()` explícito nos pontos de saída antecipada
+- `docs/implementations/backfill-interacao-lock-guardrail.md` — abordagem confirmada em Plan Mode + Fase 1 documentada
+
+### Relatório da Fase 1 — o que mudou na prática
+
+**Antes:** duas chamadas de backfill quase simultâneas para o mesmo lead
+podiam, em teoria, passar ambas pela checagem "este lead já tem mensagens?"
+antes de qualquer uma escrever — resultando em histórico duplicado ou
+intercalado de forma inconsistente, mesmo com o guardrail de 409 no lugar.
+
+**Agora:** a checagem e a escrita passam a correr dentro da mesma transação
+atômica (`BEGIN IMMEDIATE`), o mesmo mecanismo já usado noutros pontos
+sensíveis do sistema (fila de jobs, claim de job). Se duas chamadas chegarem
+ao mesmo tempo para o mesmo lead, só uma consegue escrever — a outra vê o
+histórico já gravado e recebe `409`, como esperado.
+
+**Para validar:** Cenários P1, P2 (regressão) e C1 (a corrida em si), na
+seção "Checks de Validação" abaixo — ainda pendentes de execução.
+
+---
+
+## Checks de Validação
+
+### Cenário P1 — Backfill continua funcionando normalmente (regressão)
+- [ ] Criar lead de teste sem mensagens
+- [ ] `POST /interactions/backfill` com 2-3 turnos
+- [ ] Confirmar: `200`/`ok`, turnos gravados em `messages` com `model`/`createdAt` corretos, contagens corretas na resposta
+
+### Cenário P2 — Guardrail 409 continua funcionando (regressão)
+- [ ] Repetir o backfill no mesmo lead (já com mensagens)
+- [ ] Confirmar: `409`, nenhuma linha nova em `messages`
+
+### Cenário C1 — Corrida entre 2 chamadas concorrentes é resolvida
+- [ ] Criar lead de teste sem mensagens
+- [ ] Disparar 2 requisições de backfill quase simultâneas para o mesmo lead (ex.: 2 chamadas em paralelo via script/terminal)
+- [ ] Confirmar via SQL: **só uma** das duas gravou turnos em `messages` — a outra recebeu `409` (nunca as duas escrevendo)
