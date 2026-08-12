@@ -226,6 +226,14 @@ coincidentemente o mesmo padrão do instalador que ele gera).
 | # | Commit | O que foi implementado |
 |---|---|---|
 | 1 | `75ab91d` | .iss + build-installer.bat + gitignore |
+| 2 | `c2bb965` | fix: pasta do Menu Iniciar usa o nome completo do app (era só "Digital Pro") |
+
+**Detalhes do commit `c2bb965`:** `DefaultGroupName` estava fixo como
+`"Digital Pro"` (só o publisher) — utilizador percebeu a inconsistência
+(atalho e Adicionar/Remover Programas já diziam "Gerador de Leads — Digital
+Pro", mas a pasta do Menu Iniciar não). Trocado para `{#MyAppName}`, mesmo
+nome usado em todo o resto. Revalidado: pasta agora é
+"Gerador de Leads — Digital Pro".
 
 ### Relatório da Fase 4 — o que mudou na prática
 
@@ -234,9 +242,9 @@ automático, sem entrada no Menu Iniciar, sem forma de desinstalar limpo.
 **Agora:** rodando `build-installer.bat` gera
 `installer_output\DigitalPro-GeradorDeLeads-Setup.exe` — um instalador
 único que, ao rodar, **não pede senha de administrador**, cria atalho no
-Menu Iniciar (grupo "Digital Pro") sempre, atalho na Área de Trabalho por
-padrão (desmarcável), e aparece em "Adicionar/Remover Programas" com nome,
-versão e publisher corretos.
+Menu Iniciar (grupo "Gerador de Leads — Digital Pro") sempre, atalho na
+Área de Trabalho por padrão (desmarcável), e aparece em "Adicionar/Remover
+Programas" com nome, versão e publisher corretos.
 
 **Testado nesta sessão, nesta máquina** (instalação e desinstalação
 silenciosas via PowerShell, mais verificação directa do sistema de arquivos
