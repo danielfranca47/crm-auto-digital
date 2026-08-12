@@ -38,7 +38,7 @@ Peça ao Claude, nesta conversa: **"gera o instalador mais recente do
 agent-local"**. Quando terminar, o arquivo pronto para enviar estará em:
 
 ```
-C:\crm-auto-digital\agent-local\installer_output\DigitalPro-GeradorDeLeads-Setup.exe
+C:\crm-auto-digital\agent-local\installer_output\
 ```
 
 Pra abrir essa pasta sem digitar nada: peça ao Claude **"abre a pasta do
