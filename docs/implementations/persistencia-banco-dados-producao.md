@@ -113,3 +113,56 @@ BASE_DIR = os.path.dirname(__file__)
 DB_PATH = os.environ.get("CRM_DB_PATH") or os.path.join(BASE_DIR, "database", "crm.db")
 DB_DIR = os.path.dirname(DB_PATH)
 ```
+
+### Commits Fase 1
+
+| # | Commit | O que foi implementado |
+|---|---|---|
+| 1 | `647538e` | backend: `CRM_DB_PATH` lido do ambiente com fallback; comentário corrigido no `.env.example` |
+
+**Detalhes do commit `647538e`:**
+- `backend-crm/database.py` — `DB_PATH` passa a ler `os.environ.get("CRM_DB_PATH")`, com fallback para o caminho relativo atual
+- `backend-crm/.env.example` — comentário corrigido: em Railway, apontar para o volume persistente montado, não para um caminho relativo
+- `backend-crm/.env` (local, gitignored, fora do commit) — removida a linha duplicada/errada `CRM_DB_PATH=backend/database/crm.db` (linha 75), mantida só a correta
+
+### Relatório da Fase 1 — o que mudou na prática
+
+**Antes:** o caminho do banco de dados dos leads estava fixo no código,
+sempre dentro da própria pasta da aplicação — não havia como redirecioná-lo
+para um local duradouro, mesmo já existindo um espaço reservado para isso em
+produção.
+
+**Agora:** o código passa a olhar primeiro para a variável de ambiente
+`CRM_DB_PATH`; se ela não estiver definida, usa exatamente o mesmo caminho
+de sempre (nada muda no teu ambiente local). Em produção, assim que essa
+variável for definida a apontar para o espaço reservado (`/data/crm.db`), o
+banco de dados dos leads passa a sobreviver às atualizações, tal como já
+acontece hoje com a tua conta de utilizador.
+
+**Importante — isto ainda não está ativo em produção.** O código já está
+pronto, mas falta o passo manual de definir `CRM_DB_PATH=/data/crm.db` nas
+variáveis do serviço `backend-crm` no Railway (não consigo fazer essa parte
+— é uma escrita direta em infraestrutura de produção). Instruções abaixo.
+
+**Para validar:** Cenários P1 e P2 (já executados por mim, nesta sessão) e
+C1 (ativação em produção, requer a tua ação), na seção "Checks de
+Validação" abaixo.
+
+---
+
+## Checks de Validação
+
+### Cenário P1 — Comportamento local inalterado (regressão)
+- [x] (2026-08-12) Sem `CRM_DB_PATH` definida: `database.DB_PATH` resolve para `backend-crm/database/crm.db` (igual a antes da mudança)
+- [x] (2026-08-12) Suite de testes existente que faz `monkeypatch` de `database.DB_PATH` (`test_leads_company_or_contact_migration`, `test_meeting_management_gate`, `test_inbound_orchestrator_flag`) — mesmos resultados antes/depois da mudança (3 erros pré-existentes, reproduzidos também no código original via `git stash`; nada causado por esta mudança — `test_whatsapp_group_ignore`: import do FastAPI quebrado num módulo não relacionado; `test_inbound_orchestrator_flag` ×2: falha de limpeza de pasta temporária no Windows, não na lógica do teste)
+- [x] (2026-08-12) Servidor local subido normalmente (`GET /docs` → `200`), banco criado em `backend-crm/database/crm.db` como sempre
+
+### Cenário P2 — `CRM_DB_PATH` redireciona o banco (nova funcionalidade)
+- [x] (2026-08-12) Com `CRM_DB_PATH` apontando para uma pasta temporária: `database.DB_PATH`/`DB_DIR` resolvem para lá
+- [x] (2026-08-12) Servidor local subido com a variável definida — `GET /docs` → `200`, ficheiro `crm.db` criado exatamente no caminho indicado pela variável, schema inicializado normalmente
+
+### Cenário C1 — Ativação em produção (ação manual do utilizador)
+- [ ] Definir `CRM_DB_PATH=/data/crm.db` nas variáveis de ambiente do serviço `backend-crm` no Railway
+- [ ] Aguardar/forçar um novo deploy do `backend-crm`
+- [ ] Confirmar via `railway ssh -s backend-crm -- ls -la /data` que `crm.db` passou a existir em `/data`
+- [ ] Criar um lead de teste em produção, forçar outro redeploy (ex.: `railway redeploy` ou um commit vazio), confirmar que o lead sobrevive
