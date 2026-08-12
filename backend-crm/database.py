@@ -18,6 +18,16 @@ BASE_DIR = os.path.dirname(__file__)
 DB_PATH = os.environ.get("CRM_DB_PATH") or os.path.join(BASE_DIR, "database", "crm.db")
 DB_DIR = os.path.dirname(DB_PATH)
 
+if os.environ.get("RAILWAY_ENVIRONMENT") and not os.environ.get("CRM_DB_PATH"):
+    raise RuntimeError(
+        "CRM_DB_PATH não está definida em produção "
+        f"(RAILWAY_ENVIRONMENT={os.environ.get('RAILWAY_ENVIRONMENT')!r}). "
+        "O banco de dados dos leads NÃO persiste entre deploys/restarts sem "
+        "isso — defina CRM_DB_PATH apontando para o volume persistente do "
+        "serviço (ex.: /data/crm.db). Ver docs/architecture/_mapa-sistema.md, "
+        "secção 'Persistência em produção'."
+    )
+
 
 def ensure_db_dir() -> None:
     """Garante que a pasta do banco exista."""

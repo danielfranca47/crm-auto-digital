@@ -1,7 +1,7 @@
 # Aviso no arranque se CRM_DB_PATH estiver ausente em produção
 
-**Branch:** *(a definir ao iniciar)*
-**Status:** Aguardando Plan Mode
+**Branch:** `main`
+**Status:** Em andamento
 
 ---
 
@@ -36,26 +36,53 @@ original, para fechar essa lacuna enquanto o contexto ainda está fresco.
 
 ---
 
-## Abordagem (rascunho — a confirmar em Plan Mode)
+## Abordagem
 
-Validar em Plan Mode:
-- Onde emitir o aviso: no arranque de `app.py` (mais visível, um log por
-  processo) vs. dentro de `database.py`/`get_connection()` (mais próximo da
-  causa, mas arrisca logar em todo request se não houver guarda contra
-  repetição).
-- Critério de detecção de "ambiente de produção": presença de
-  `RAILWAY_ENVIRONMENT` (ou variável equivalente) — confirmar o nome exato
-  já usado no projeto (`RAILWAY_ENVIRONMENT_NAME` apareceu nas variáveis
-  reais do serviço ao investigar o bug original).
-- Nível do aviso: log de erro/warning bem visível (ex.: `logger.error` ou
-  `print` com prefixo claro) vs. falhar o arranque (`raise`) — falhar o
-  arranque é mais seguro (impossível ignorar) mas também mais arriscado
-  (pode derrubar produção por um falso positivo); discutir trade-off.
-- Aplicar o mesmo raciocínio ao `backend-core` (`DATABASE_URL`)? Já está
-  configurado corretamente hoje, mas sofre do mesmo risco estrutural de
-  remoção futura sem aviso — avaliar se entra no mesmo escopo ou fica para
-  depois.
+Utilizador optou, quando questionado directamente sobre o trade-off, pela
+opção mais protetora: **recusar o arranque** (não só logar) se
+`CRM_DB_PATH` faltar em produção — aceitando que um ambiente Railway
+legitimamente sem persistência também falharia ao subir nessas condições,
+a menos que `CRM_DB_PATH` seja definida explicitamente para ele também.
 
-**Notas:**
-- Este rascunho **não substitui o Passo 0 (Plan Mode) obrigatório** de
-  `_guia-documentar-implementacao.md`.
+Checagem a nível de módulo em `backend-crm/database.py`, logo após
+`DB_PATH`/`DB_DIR` (mesmo bloco do comentário de aviso já adicionado nesta
+sessão) — corre uma única vez, no import, equivalente a "no arranque do
+processo":
+
+```python
+if os.environ.get("RAILWAY_ENVIRONMENT") and not os.environ.get("CRM_DB_PATH"):
+    raise RuntimeError(
+        "CRM_DB_PATH não está definida em produção "
+        f"(RAILWAY_ENVIRONMENT={os.environ.get('RAILWAY_ENVIRONMENT')!r}). "
+        "O banco de dados dos leads NÃO persiste entre deploys/restarts sem "
+        "isso — defina CRM_DB_PATH apontando para o volume persistente do "
+        "serviço (ex.: /data/crm.db). Ver docs/architecture/_mapa-sistema.md, "
+        "secção 'Persistência em produção'."
+    )
+```
+
+`RAILWAY_ENVIRONMENT` confirmado como o sinal correto (visto directamente
+via `railway variable list --service backend-crm` nesta sessão:
+`RAILWAY_ENVIRONMENT=production`). Localmente essa variável não existe,
+então o dev local fica inalterado. `app.py` importa `from database import
+init_db` logo no arranque — se o `raise` disparar, a importação falha, o
+`uvicorn` não sobe, e a Railway marca o deploy como falhado com esta
+mensagem nos logs.
+
+**Fora do escopo desta fase:** aplicar o mesmo raciocínio ao `backend-core`
+(`DATABASE_URL`) — já está configurado corretamente hoje (verificado nesta
+sessão), então não é urgente; fica como possível próximo item, não faz
+parte desta fase para manter o escopo focado no que já está mapeado.
+
+---
+
+## Plano de Implementação
+
+### Fase 1 — Recusar arranque se CRM_DB_PATH faltar em produção
+
+**Objetivo:** impedir que a mesma classe de bug (perda silenciosa de dados)
+se repita sem nenhum sinal.
+
+| Arquivo | O que muda |
+|---|---|
+| `backend-crm/database.py` | Nova checagem a nível de módulo, logo após `DB_PATH`/`DB_DIR`: `raise RuntimeError(...)` se `RAILWAY_ENVIRONMENT` estiver definida e `CRM_DB_PATH` não estiver |
