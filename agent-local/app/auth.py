@@ -27,7 +27,7 @@ def _get_core_url() -> str:
         except Exception:
             pass
 
-    return "http://localhost:8001"
+    return "https://backend-core-production-863b.up.railway.app"
 
 
 def login(email: str, password: str) -> dict:
