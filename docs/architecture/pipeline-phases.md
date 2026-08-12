@@ -43,9 +43,15 @@ humano antes de o agente de IA ser ligado para aquele número.
 
 **Guardrail:** só aceite em leads sem nenhuma mensagem (`SELECT COUNT(*) FROM
 messages WHERE lead_id = ?`) — `409` se já houver histórico, para não corromper
-uma conversa real em andamento. Payload `BackfillInteractionsPayload.turns`
-(`BackfillTurn`, 1–40 itens), cada turno com `sender` (`"lead"|"me"`), `body`
-(1–4000 caracteres) e `occurred_at` opcional.
+uma conversa real em andamento. A checagem e os `INSERT`s seguintes correm
+dentro da mesma transação `BEGIN IMMEDIATE` (mesmo padrão usado em
+`claim_job_internal` em `routes/executor.py` e `fetch_next_job` em
+`services/jobs_service.py`), serializando chamadas concorrentes para o mesmo
+`lead_id`: a segunda só adquire a transação depois da primeira commitar, e
+nesse ponto já enxerga o histórico gravado e cai no `409` em vez de escrever
+por cima. Payload `BackfillInteractionsPayload.turns` (`BackfillTurn`, 1–40
+itens), cada turno com `sender` (`"lead"|"me"`), `body` (1–4000 caracteres) e
+`occurred_at` opcional.
 
 **Gravação:** cada turno insere uma linha em `messages` (`model='inbound'` se
 `sender='lead'`, `'outbound'` se `sender='me'`) — mesmo contrato de `model`
