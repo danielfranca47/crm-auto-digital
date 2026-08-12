@@ -1,7 +1,35 @@
 # Empacotamento do agent-local v2 (.exe)
 
 **Branch:** `empacotamento-agent-local`
-**Status:** Em andamento — pendente: Cenário C2 (máquina limpa sem Python) e C4 (fluxo Selenium/WhatsApp no .exe), ambos numa call real com cliente novo (ver `docs/ops/guia-teste-cliente-novo-exe-agent-local.md`)
+**Status:** Aguardando validação com cliente real — implementação tecnicamente
+completa (Fases 1-4 feitas e commitadas), a aguardar a call de onboarding com
+um cliente novo para fechar os últimos checks.
+
+---
+
+## Aguardando — próximo passo
+
+Toda a implementação (código + instalador) está pronta e commitada. O único
+motivo deste arquivo continuar aberto é que dois checks só podem ser
+validados numa máquina de cliente real, não na máquina de desenvolvimento:
+
+- **Cenário C2** — executável abre sem Python instalado
+- **Cenário C4** — fluxo Selenium/WhatsApp funciona no `.exe`
+
+**Cenário C6** (instalador instala/desinstala limpo) já está `[x]`, validado
+nesta máquina — vale reconfirmar na mesma call, mas não bloqueia sozinho.
+
+**Como retomar:** depois da call de onboarding com o cliente (guiada por
+[`docs/ops/guia-teste-cliente-novo-exe-agent-local.md`](../ops/guia-teste-cliente-novo-exe-agent-local.md)),
+voltar aqui (nesta conversa ou numa nova) e reportar o que aconteceu. Prompt
+de retomada pronto:
+
+> Lê `docs/implementations/agent-local-v2-empacotamento-exe.md` e o
+> resultado da call de onboarding com o cliente — marca os Cenários C2, C4 e
+> (se aplicável) C6 com `[x]`/data, ou regista o problema encontrado se algo
+> falhar. Depois avalia se está pronto para graduação.
+
+Instalador já pronto para essa call: `agent-local/installer_output/DigitalPro-GeradorDeLeads-Setup.exe`.
 
 ---
 
