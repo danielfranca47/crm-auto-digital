@@ -1,7 +1,7 @@
 # Aviso no arranque se CRM_DB_PATH estiver ausente em produção
 
 **Branch:** `main`
-**Status:** Em andamento
+**Status:** Todos os cenários validados (2026-08-12)
 
 ---
 
@@ -129,3 +129,6 @@ abaixo — já executados por mim nesta sessão.
 > está definida lá (confirmado nesta sessão), então o próximo deploy com
 > este commit simplesmente não deve disparar o `RuntimeError` — o deploy
 > subir normalmente já é a confirmação de que não há falso positivo.
+
+### Cenário C1 — Confirmação em produção real
+- [x] (2026-08-12) Commit `fe9662c` publicado em `main` → deploy `cbbc802c` no Railway → `SUCCESS`, sem falso positivo — confirma que a checagem convive bem com a configuração real de produção
