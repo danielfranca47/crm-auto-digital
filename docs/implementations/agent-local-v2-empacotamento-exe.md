@@ -1,7 +1,7 @@
 # Empacotamento do agent-local v2 (.exe)
 
 **Branch:** `empacotamento-agent-local`
-**Status:** Em andamento — pendente: Cenário C2 (máquina limpa sem Python) e C4 (fluxo Selenium/WhatsApp no .exe)
+**Status:** Em andamento — pendente: Cenário C2 (máquina limpa sem Python) e C4 (fluxo Selenium/WhatsApp no .exe), ambos numa call real com cliente novo (ver `docs/ops/guia-teste-cliente-novo-exe-agent-local.md`)
 
 ---
 
@@ -203,6 +203,59 @@ embutido no `.exe` (`System.Drawing.Icon.ExtractAssociatedIcon`, bypassa
 cache do Explorer) e screenshot da janela aberta (`desktop-control`) — ver
 Cenário C5 abaixo.
 
+### Fase 4 — Instalador (Inno Setup)
+
+**Objetivo:** substituir o `.exe` avulso por um instalador de verdade — com
+atalhos automáticos e desinstalador, sem pedir senha de administrador
+(decisão confirmada com o utilizador: cliente pode não ser admin do próprio
+PC).
+
+| Arquivo | O que muda |
+|---|---|
+| `agent-local/agent-local-installer.iss` | Novo — script Inno Setup: `AppName="Gerador de Leads — Digital Pro"`, `AppVersion="2.0.0"`, `AppPublisher="Digital Pro"`, `PrivilegesRequired=lowest`, `DefaultDirName={localappdata}\DigitalPro\GeradorDeLeads`, idioma PT-BR, atalho Menu Iniciar sempre + Área de Trabalho via checkbox (`Flags: checkedonce`), `SetupIconFile` usa a mesma marca da Fase 3 |
+| `agent-local/build-installer.bat` | Novo — chama `build.bat` primeiro (garante `.exe` actualizado), localiza `ISCC.exe` (tenta `%LOCALAPPDATA%\Programs\Inno Setup 6` e as duas pastas Program Files), roda a compilação |
+| `agent-local/.gitignore` | Adiciona `installer_output/` (output do Inno Setup); o `.iss` em si é versionado |
+
+**Ferramenta instalada nesta máquina** (build tool, não vai para o cliente):
+`winget install --id JRSoftware.InnoSetup -e` → instalou em
+`%LOCALAPPDATA%\Programs\Inno Setup 6\ISCC.exe` (per-user, sem admin —
+coincidentemente o mesmo padrão do instalador que ele gera).
+
+### Commits Fase 4
+
+| # | Commit | O que foi implementado |
+|---|---|---|
+| 1 | *(a registar)* | .iss + build-installer.bat + gitignore |
+
+### Relatório da Fase 4 — o que mudou na prática
+
+**Antes:** distribuir o app era entregar um `.exe` avulso — sem atalho
+automático, sem entrada no Menu Iniciar, sem forma de desinstalar limpo.
+**Agora:** rodando `build-installer.bat` gera
+`installer_output\DigitalPro-GeradorDeLeads-Setup.exe` — um instalador
+único que, ao rodar, **não pede senha de administrador**, cria atalho no
+Menu Iniciar (grupo "Digital Pro") sempre, atalho na Área de Trabalho por
+padrão (desmarcável), e aparece em "Adicionar/Remover Programas" com nome,
+versão e publisher corretos.
+
+**Testado nesta sessão, nesta máquina** (instalação e desinstalação
+silenciosas via PowerShell, mais verificação directa do sistema de arquivos
+e do registro do Windows — não é o mesmo que o Cenário C2/C6 num PC de
+cliente real, mas valida que o instalador funciona tecnicamente):
+- Instalou sem prompt de UAC/admin.
+- `agent-local.exe` instalado em `%LOCALAPPDATA%\DigitalPro\GeradorDeLeads\`,
+  abriu normalmente a partir de lá.
+- Atalho no Menu Iniciar (app + desinstalador) e na Área de Trabalho — confirmados.
+- Registro em "Adicionar/Remover Programas" — `DisplayName`, `DisplayVersion`,
+  `Publisher`, `UninstallString`, `InstallLocation` todos corretos.
+- Desinstalação silenciosa removeu: pasta de instalação, ambos os atalhos,
+  e a entrada do registro — nada ficou para trás.
+
+**Para validar:** Cenário C6 abaixo, confirmado nesta máquina hoje. O teste
+real num PC de cliente novo (parte do mesmo guia usado para C2/C4) fica
+pendente — ver `docs/ops/guia-teste-cliente-novo-exe-agent-local.md`
+(a ser actualizado com os passos do instalador).
+
 ---
 
 ## Checks de Validação
@@ -237,6 +290,17 @@ Cenário C5 abaixo.
 - **Validado em:** 12/08/2026 — ícone extraído via `ExtractAssociatedIcon`
   confere com o quadrado azul "Lara by DigitalPro"; screenshot da janela
   aberta confirma o mesmo ícone no título e na barra de tarefas
+
+### Cenário C6 — Instalador instala/desinstala limpo, sem admin
+- [x] Rodar o `Setup.exe` e confirmar que não pede senha de administrador
+- [x] Confirmar atalho no Menu Iniciar e na Área de Trabalho
+- [x] Confirmar entrada em "Adicionar/Remover Programas" com dados corretos
+- [x] Desinstalar e confirmar que nada fica para trás (pasta, atalhos, registro)
+- **Validado em:** 12/08/2026, nesta máquina (instalação/desinstalação
+  silenciosa via PowerShell + inspeção directa do sistema de arquivos e do
+  registro) — instalou sem UAC, todos os atalhos e o registro corretos,
+  desinstalação removeu tudo. **Pendente:** repetir num PC de cliente real
+  (não substitui isso — só confirma que o instalador funciona tecnicamente)
 
 ---
 
