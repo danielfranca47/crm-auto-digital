@@ -44,6 +44,13 @@ tmp/
 temp/
 *.tmp
 
+# PyInstaller build output (agent-local.spec e' versionado, isto nao)
+build/
+dist/
+
+# Inno Setup build output (agent-local-installer.iss e' versionado, isto nao)
+installer_output/
+
 # OS files
 .DS_Store
 Thumbs.db

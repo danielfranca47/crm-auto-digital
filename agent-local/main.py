@@ -1,12 +1,22 @@
 """Ponto de entrada do agent-local — app standalone de geração de leads."""
 from __future__ import annotations
 
+import os
+import sys
+
 import customtkinter as ctk
 
 from app.session import load_session, save_session
 
 APP_TITLE = "Gerador de Leads — Digital Pro"
 APP_GEOMETRY = "620x720"
+
+
+def _resource_path(relative: str) -> str:
+    """Resolve um caminho de asset tanto em dev (`python main.py`) quanto
+    dentro do .exe empacotado (PyInstaller extrai os `datas` para `sys._MEIPASS`)."""
+    base = getattr(sys, "_MEIPASS", os.path.dirname(os.path.abspath(__file__)))
+    return os.path.join(base, relative)
 
 
 class AgentLocalApp(ctk.CTk):
@@ -16,6 +26,16 @@ class AgentLocalApp(ctk.CTk):
         self.geometry(APP_GEOMETRY)
         self.minsize(620, 500)
         self.resizable(True, True)
+        try:
+            # iconphoto (via Pillow) é mais fiável que iconbitmap para .ico
+            # com frame comprimido em PNG (caso do favicon do site) — o
+            # iconbitmap nativo do Tk só lida bem com .ico clássico (BMP).
+            from PIL import Image, ImageTk
+            icon_img = Image.open(_resource_path("assets/icon.ico"))
+            self._icon_photo = ImageTk.PhotoImage(icon_img)
+            self.iconphoto(True, self._icon_photo)
+        except Exception:
+            pass
         ctk.set_appearance_mode("dark")
         ctk.set_default_color_theme("blue")
         self.protocol("WM_DELETE_WINDOW", self._on_close)

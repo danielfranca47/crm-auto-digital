@@ -14,7 +14,7 @@ logger = logging.getLogger(__name__)
 
 
 def _base() -> str:
-    return os.getenv("BACKEND_URL", "http://localhost:8000").rstrip("/")
+    return os.getenv("BACKEND_URL", "https://backend-crm-production-a702.up.railway.app").rstrip("/")
 
 
 def _auth(session: dict) -> Dict[str, str]:
