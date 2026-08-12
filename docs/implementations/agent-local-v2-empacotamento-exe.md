@@ -178,7 +178,9 @@ Faltam C2 e C4.
 - [ ] Copiar só o `.exe` para uma máquina/VM sem Python/`.venv`
 - [ ] Duplo clique
 - [ ] Confirmar: janela de login abre normalmente
-- **Pendente:** só testado nesta máquina de dev (tem Python instalado) — precisa de máquina/VM limpa para validar de verdade
+- **Pendente:** só testado nesta máquina de dev (tem Python instalado) —
+  será validado numa chamada real com um cliente novo, seguindo
+  [`docs/ops/guia-teste-cliente-novo-exe-agent-local.md`](../ops/guia-teste-cliente-novo-exe-agent-local.md)
 
 ### Cenário C3 — Aponta para produção sem nenhuma configuração
 - [x] Abrir o `.exe` sem `.env`/env vars setadas
@@ -188,6 +190,8 @@ Faltam C2 e C4.
 ### Cenário C4 — Fluxo básico funciona no executável
 - [ ] Abrir Pesquisa/Prospecção no `.exe`
 - [ ] Confirmar: Selenium abre o Chrome normalmente (sem erro de chromedriver)
+- **Pendente:** mesma chamada com cliente novo do Cenário C2, ver
+  [`docs/ops/guia-teste-cliente-novo-exe-agent-local.md`](../ops/guia-teste-cliente-novo-exe-agent-local.md)
 
 ---
 
