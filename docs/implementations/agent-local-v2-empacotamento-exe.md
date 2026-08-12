@@ -85,6 +85,28 @@ Overrides via `CORE_BASE_URL`/`BACKEND_URL` continuam a funcionar
 normalmente — comportamento em dev não muda (`.env` local sempre presente
 sobrepõe o fallback).
 
+### Commits Fase 1
+
+| # | Commit | O que foi implementado |
+|---|---|---|
+| 1 | `efcf668` | fallback de URL de auth.py/crm_client.py aponta para produção |
+
+**Detalhes do commit `efcf668`:**
+- `agent-local/app/auth.py` — `_get_core_url()`: fallback final agora é `https://backend-core-production-863b.up.railway.app`
+- `agent-local/app/crm_client.py` — `_base()`: fallback agora é `https://backend-crm-production-a702.up.railway.app`
+
+### Relatório da Fase 1 — o que mudou na prática
+
+**Antes:** se o `.exe` fosse aberto num PC sem nenhuma configuração extra, o
+app tentava falar com `localhost` — um endereço que só existe na máquina de
+quem tem o backend a correr, então não funcionaria em nenhum PC de cliente.
+**Agora:** sem nenhuma configuração, o app já sabe falar com o backend real
+em produção (Railway) — o mesmo que o site já usa hoje.
+**Para validar:** confirmado por linha de comando (sem `.env`/env vars, o
+código retorna as URLs de produção corretas) — não há Cenário de UI
+associado a esta fase isoladamente; a validação visual completa acontece no
+Cenário C3, depois do `.exe` existir (Fase 2).
+
 ### Fase 2 — Geração do executável (PyInstaller)
 
 **Objetivo:** produzir `dist/agent-local.exe` distribuível por duplo clique.
