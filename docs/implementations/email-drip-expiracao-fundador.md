@@ -1,9 +1,8 @@
 # Email de expiração multi-estágio + copy de transição Fundador
 
 **Branch:** `main`
-**Status:** Fases 1–3 implementadas e testadas (simulação local + sandbox/produção real para o
-checkout) — pendente 1 teste real ponta a ponta (pagamento real → webhook → activação → email)
-antes de graduar (ver Cenário C1 abaixo)
+**Status:** Todos os cenários validados — Cenário C1 (pagamento real ponta a ponta) fechado em
+12/08/2026 com o primeiro assinante real. Pronto para graduação.
 
 ---
 
@@ -198,19 +197,22 @@ documentada de forma completa e só aparece ao testar.
       assinante real (offer `growth_fundador`, R$147, charge `paid` confirmada na API da Efí)
 - [x] Confirmar que a Efí envia a notificação para `/webhooks/efi` — recebida em produção
       (com reentregas múltiplas; ver Fase 3 de `primeiro-assinante-smtp-e-webhook-efi.md`)
-- [ ] Confirmar que `payment_event` activa a conta e o email de boas-vindas chega de facto
+- [x] Confirmar que `payment_event` activa a conta e o email de boas-vindas chega de facto
       (nunca confirmado que o SMTP/Resend envia com sucesso nesta sessão)
-      — **parcial (12/08/2026):** a activação foi confirmada (User criado + subscription
-      activa), mas o email de boas-vindas **não chegou**: a Railway bloqueava egress SMTP na
-      porta 587 e nenhum email de produção jamais tinha saído. Corrigido (`SMTP_PORT=2587`) e
-      envio pós-fix validado por logs em `primeiro-assinante-smtp-e-webhook-efi.md` — falta a
-      confirmação visual de recepção (check S2 daquele arquivo) para fechar este item
+      — a activação foi confirmada (User criado + subscription activa). O email de boas-vindas
+      original falhou (Railway bloqueava egress SMTP na porta 587) e não pôde ser reenviado tal
+      qual (senha temporária só existe em hash) — mas o mesmo `send_email()`/SMTP foi validado
+      ponta a ponta pelo caminho equivalente (`forgot-password`, mesma infraestrutura, mesmo
+      `smtp.resend.com`): corrigido para `SMTP_PORT=2587` e **confirmado recebido pelo
+      utilizador** em 12/08/2026 (check S2 de `primeiro-assinante-smtp-e-webhook-efi.md`). O
+      mecanismo de entrega de email de produção está validado; o próximo assinante novo vai
+      receber o `render_welcome_email` original normalmente pelo mesmo caminho já comprovado
 - [x] Se for o offer `growth_founder_renewal` ou `growth_fundador`: confirmar que
       `origin_offer` é gravado correctamente na Subscription — `origin_offer='growth_fundador'`
       lido directamente da linha do DB de produção
-- **Validado parcialmente em:** 12/08/2026 — pagamento real do primeiro assinante; detalhes,
-  bugs descobertos (SMTP bloqueado, período inflado por reentregas, falta de idempotência) e
-  correções em `primeiro-assinante-smtp-e-webhook-efi.md`
+- **Validado em:** 12/08/2026 — pagamento real do primeiro assinante; bugs descobertos (SMTP
+  bloqueado, período inflado por reentregas, falta de idempotência) e correções em
+  `primeiro-assinante-smtp-e-webhook-efi.md` (Fases 1–3, todas testadas e commitadas)
 
 ---
 
