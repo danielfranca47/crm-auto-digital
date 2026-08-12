@@ -1,7 +1,7 @@
 # Persistência do banco de dados do backend-crm em produção (Railway)
 
 **Branch:** `verificacao-banco-dados-producao`
-**Status:** Em andamento
+**Status:** Todos os cenários validados (2026-08-12)
 
 ---
 
@@ -162,7 +162,25 @@ Validação" abaixo.
 - [x] (2026-08-12) Servidor local subido com a variável definida — `GET /docs` → `200`, ficheiro `crm.db` criado exatamente no caminho indicado pela variável, schema inicializado normalmente
 
 ### Cenário C1 — Ativação em produção (ação manual do utilizador)
-- [ ] Definir `CRM_DB_PATH=/data/crm.db` nas variáveis de ambiente do serviço `backend-crm` no Railway
-- [ ] Aguardar/forçar um novo deploy do `backend-crm`
-- [ ] Confirmar via `railway ssh -s backend-crm -- ls -la /data` que `crm.db` passou a existir em `/data`
-- [ ] Criar um lead de teste em produção, forçar outro redeploy (ex.: `railway redeploy` ou um commit vazio), confirmar que o lead sobrevive
+- [x] (2026-08-12) Definido `CRM_DB_PATH=/data/crm.db` nas variáveis de ambiente do serviço `backend-crm` no Railway (`railway variable set`)
+- [x] (2026-08-12) Branch `verificacao-banco-dados-producao` publicada e mergeada (fast-forward) em `main` — deploy `2c9537e7` com o código corrigido, `SUCCESS`
+- [x] (2026-08-12) Confirmado via `railway ssh -s backend-crm -- ls -la /data`: `crm.db` (360448 bytes — mesmo tamanho do schema visto no teste local) passou a existir em `/data`, ao lado do `lost+found`
+- [x] (2026-08-12) Criado lead de teste ("TESTE PERSISTÊNCIA") em produção pela UI real → `railway restart --service backend-crm` (reinício completo do container, sem rebuild) → lead confirmado ainda presente no Kanban após o reinício — prova definitiva de que a persistência está a funcionar
+
+> Nota importante: o primeiro deploy após ativar `CRM_DB_PATH` recria `/data/crm.db` do zero (não havia nada em `/data` para recuperar, como já confirmado antes desta fase) — isto é esperado e é o **último** "zerar" que acontece. Dali em diante, o mesmo ficheiro sobrevive a todos os deploys/reinícios seguintes.
+
+---
+
+## Ajustes Possíveis Pós-Implementação
+
+- Nunca foi verificado explicitamente se `backend-core` (`DATABASE_URL`) está
+  de facto a apontar para o seu próprio volume persistente
+  (`backend-core-volume` em `/data`) em produção — a suposição de que está
+  correto vem só do facto de o login sobreviver a updates, não de uma
+  confirmação directa via SSH como fizemos aqui para o `backend-crm`.
+- Sem nenhum aviso/erro no arranque da aplicação se `CRM_DB_PATH` não
+  estiver definida num ambiente de produção (`RAILWAY_ENVIRONMENT` presente)
+  — hoje cai em silêncio no caminho relativo efémero, exactamente o bug que
+  causou esta perda de dados. Um log de aviso nesse cenário evitaria a mesma
+  classe de problema se o volume for reconfigurado ou uma nova env
+  (staging, etc.) for criada sem essa variável.
