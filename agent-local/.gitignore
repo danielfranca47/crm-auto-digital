@@ -44,6 +44,10 @@ tmp/
 temp/
 *.tmp
 
+# PyInstaller build output (agent-local.spec e' versionado, isto nao)
+build/
+dist/
+
 # OS files
 .DS_Store
 Thumbs.db
