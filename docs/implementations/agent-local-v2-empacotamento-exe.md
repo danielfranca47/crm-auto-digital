@@ -225,7 +225,7 @@ coincidentemente o mesmo padrão do instalador que ele gera).
 
 | # | Commit | O que foi implementado |
 |---|---|---|
-| 1 | *(a registar)* | .iss + build-installer.bat + gitignore |
+| 1 | `75ab91d` | .iss + build-installer.bat + gitignore |
 
 ### Relatório da Fase 4 — o que mudou na prática
 

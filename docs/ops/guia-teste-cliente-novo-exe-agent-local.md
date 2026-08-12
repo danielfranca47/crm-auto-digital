@@ -1,15 +1,16 @@
-# Guia — Testar o agent-local.exe com um cliente novo (chamada guiada)
+# Guia — Testar o instalador do agent-local com um cliente novo (chamada guiada)
 
 Script para usar numa chamada (vídeo/telefone) guiando um cliente **não-técnico**
-passo a passo, testando o `agent-local.exe` no PC dele pela primeira vez.
+passo a passo, instalando e testando o Gerador de Leads — Digital Pro no PC
+dele pela primeira vez, via instalador (`DigitalPro-GeradorDeLeads-Setup.exe`,
+gerado por `agent-local/build-installer.bat`) — não mais o `.exe` avulso.
 
 Serve dois propósitos:
 1. Onboarding real de um cliente novo.
-2. Fecha os Cenários **C2** (executável abre sem Python instalado) e **C4**
-   (fluxo Selenium/WhatsApp funciona) em
-   [`docs/implementations/agent-local-v2-empacotamento-exe.md`](../implementations/agent-local-v2-empacotamento-exe.md) —
-   testes que só fazem sentido numa máquina real de terceiro, não na máquina
-   de desenvolvimento.
+2. Fecha os Cenários **C2** (executável abre sem Python instalado), **C4**
+   (fluxo Selenium/WhatsApp funciona) e **C6** (instalador cria atalhos e
+   desinstala limpo, num PC de verdade — não só na máquina de dev) em
+   [`docs/implementations/agent-local-v2-empacotamento-exe.md`](../implementations/agent-local-v2-empacotamento-exe.md).
 
 Este arquivo **não é temporário** — fica para reutilizar em todo onboarding
 futuro (ao contrário dos `guia-testes-*.md` de sessão única, que são
@@ -19,10 +20,12 @@ apagados depois de usados).
 
 ## Antes da call — checklist rápido (sozinho, sem o cliente)
 
-- [ ] `.exe` mais recente gerado: `agent-local/dist/agent-local.exe`
-      (rodar `agent-local/build.bat` se não tiveres a certeza que está actualizado)
+- [ ] Instalador mais recente gerado:
+      `agent-local/installer_output/DigitalPro-GeradorDeLeads-Setup.exe`
+      (rodar `agent-local/build-installer.bat` se não tiveres a certeza que
+      está actualizado — ele já chama o `build.bat` do `.exe` primeiro)
 - [ ] Arquivo disponível num link de download — **não enviar por anexo de
-      email**: o `.exe` tem ~36 MB e o Gmail bloqueia anexos acima de 25 MB.
+      email**: o instalador tem ~39 MB e o Gmail bloqueia anexos acima de 25 MB.
       Usar Google Drive ou WeTransfer e mandar o link por WhatsApp/email.
 - [ ] Confirmar com o cliente, antes da call, que o PC dele tem o
       **Google Chrome instalado** — é pré-requisito do envio WhatsApp
@@ -37,17 +40,17 @@ apagados depois de usados).
 
 ## Durante a call — passo a passo com o cliente
 
-### 1. Baixar e abrir o arquivo
+### 1. Baixar e instalar
 
 - Manda o link de download (Drive/WeTransfer) por WhatsApp ou email.
 - Pede para clicar no link, baixar, e depois **duplo clique** no
-  `agent-local.exe` baixado.
+  `DigitalPro-GeradorDeLeads-Setup.exe` baixado.
 
-> *"Vai aparecer um arquivo chamado agent-local — pode dar dois cliques nele."*
+> *"Vai aparecer um arquivo de instalação chamado DigitalPro-GeradorDeLeads-Setup — pode dar dois cliques nele."*
 
 ### 2. Aviso do Windows ("Windows protegeu o computador")
 
-**Quase certo de aparecer** — o executável não tem assinatura digital
+**Quase certo de aparecer** — o instalador não tem assinatura digital
 (certificado de editor reconhecido), então o Windows SmartScreen avisa por
 padrão em qualquer programa novo baixado da internet. Não é um bug, é
 esperado. Orientar:
@@ -60,9 +63,22 @@ esperado. Orientar:
 > 'Executar assim mesmo'."*
 
 Se o antivírus do PC bloquear ou colocar em quarentena: também é normal —
-programas empacotados desta forma (PyInstaller) às vezes são sinalizados
-por engano por heurística de antivírus. Orientar a permitir/restaurar o
-arquivo na ferramenta de antivírus.
+programas empacotados desta forma (PyInstaller/Inno Setup) às vezes são
+sinalizados por engano por heurística de antivírus. Orientar a
+permitir/restaurar o arquivo na ferramenta de antivírus.
+
+**Não deve pedir senha de administrador** — o instalador foi configurado
+para instalar só para o utilizador actual (`PrivilegesRequired=lowest`).
+Se aparecer um pedido de senha admin mesmo assim, é sinal de algo errado —
+anotar e não marcar o Cenário C6 como validado.
+
+O assistente de instalação é em português — só acompanhar "Avançar" até o
+fim. Na tela de tarefas adicionais, a opção **"Criar atalho na Área de
+Trabalho"** já vem marcada por padrão (pode deixar como está). No fim,
+oferece abrir o app automaticamente — pode deixar marcado.
+
+> *"Agora é só clicar em Avançar até o fim — no final ele já abre o
+> programa sozinho."*
 
 ### 3. Login (passwordless)
 
@@ -98,10 +114,12 @@ clicando em "Avançar"/"Continuar" até chegar na tela principal.
 
 ## Depois da call — o que registar
 
-Transcrever o resultado directamente para os Cenários **C2** e **C4** em
+Transcrever o resultado directamente para os Cenários **C2**, **C4** e
+**C6** em
 [`docs/implementations/agent-local-v2-empacotamento-exe.md`](../implementations/agent-local-v2-empacotamento-exe.md)
 (`[x]` + data + o que foi observado — ex.: "testado no PC do cliente X,
-Windows 11, sem Python instalado; SmartScreen apareceu e foi resolvido
+Windows 11, sem Python instalado; instalador não pediu senha admin, criou
+atalho na Área de Trabalho; SmartScreen apareceu e foi resolvido
 normalmente; QR code escaneado e mensagem chegou").
 
 Se algo falhar: **não marcar `[x]`**, anotar o que aconteceu no arquivo de
@@ -114,7 +132,8 @@ código antes de repetir o teste.
 
 | Situação | É esperado porquê |
 |---|---|
-| Aviso "Windows protegeu o computador" | Executável sem assinatura digital — acontece com qualquer `.exe` novo baixado da internet, não só este |
-| Antivírus marca falso positivo | Comum em builds PyInstaller (binário empacotado/comprimido, heurística confunde com malware) |
+| Aviso "Windows protegeu o computador" | Instalador sem assinatura digital — acontece com qualquer `.exe` novo baixado da internet, não só este |
+| Antivírus marca falso positivo | Comum em builds PyInstaller/Inno Setup (binário empacotado/comprimido, heurística confunde com malware) |
 | Primeira abertura demora alguns segundos a mais | Build `--onefile` extrai tudo para uma pasta temporária a cada execução |
 | Envio WhatsApp não funciona | Confirmar primeiro se o PC tem Google Chrome instalado — é pré-requisito, não falha do empacotamento |
+| Instalador pede pasta/idioma antes de instalar | Normal, é o assistente padrão do Windows — só seguir "Avançar" |
