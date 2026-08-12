@@ -165,6 +165,44 @@ em anexo ao histórico da conversa):
 **Para validar:** Cenários C1 (✅ hoje) e C3 (✅ hoje) já confirmados abaixo.
 Faltam C2 e C4.
 
+### Fase 3 — Ícone/identidade visual
+
+**Objetivo:** o `.exe` e a janela do app usarem a marca real da Digital Pro
+em vez do ícone genérico do PyInstaller/Tkinter.
+
+**Correção de rota em andamento:** a primeira tentativa reaproveitou
+`website/public/favicon.ico` — mas esse arquivo é resíduo da pré-configuração
+do Lovable (um ícone de coração colorido, nada a ver com a marca), não o
+ícone real do site. O ícone correto é a marca "Lara by DigitalPro" — um
+quadrado arredondado com gradiente azul e um recorte quadrado menor no
+centro — visível no topo de `https://danielfranca.pt/lara-ia`. Esse mark
+**não existe como arquivo de imagem** no repositório: é desenhado directo em
+JSX/Tailwind em `website/src/pages/CRMLandingV2.tsx:266-269` (`accent-gradient`
++ `rounded-xl`/`rounded-sm`), sem PNG/SVG correspondente.
+
+| Arquivo | O que muda |
+|---|---|
+| `agent-local/assets/icon.ico` | Novo — gerado programaticamente (Pillow) replicando o mark real: gradiente `linear-gradient(135deg, hsl(200 100% 70%), hsl(200 80% 60%))` (`website/src/index.css:48`) num quadrado `rounded-xl`, com recorte interno na cor `hsl(220 15% 5%)` (`--background`, `index.css:12`); multi-tamanho (16 a 256px) |
+| `agent-local/agent-local.spec` | `EXE(..., icon="assets/icon.ico")`; `datas += [("assets/icon.ico", "assets")]` |
+| `agent-local/main.py` | Helper `_resource_path()`; `iconphoto` (via Pillow `ImageTk`) no `__init__` de `AgentLocalApp` — mais fiável que `iconbitmap` nativo do Tk para `.ico` com frame comprimido em PNG |
+
+**Nota técnica:** inicialmente usei `self.iconbitmap(...)` (API nativa do
+Tk) para o ícone da janela — não funcionou (ícone genérico continuava a
+aparecer, falha silenciosa, capturada pelo `try/except`). Troquei para
+`iconphoto` com `PIL.ImageTk.PhotoImage`, que decodifica o `.ico` via
+Pillow em vez de depender do parser de `.ico` nativo do Tk — resolveu.
+
+### Relatório da Fase 3 — o que mudou na prática
+
+**Antes:** o `.exe` e a janela abriam com o ícone genérico do
+PyInstaller/Tkinter — nada identificava a app como sendo da Digital Pro.
+**Agora:** o ícone do arquivo `.exe` (Explorer) e o ícone da janela/barra de
+tarefas mostram o mesmo quadrado azul "Lara by DigitalPro" usado no site.
+**Para validar:** confirmado nesta sessão via extração directa do ícone
+embutido no `.exe` (`System.Drawing.Icon.ExtractAssociatedIcon`, bypassa
+cache do Explorer) e screenshot da janela aberta (`desktop-control`) — ver
+Cenário C5 abaixo.
+
 ---
 
 ## Checks de Validação
@@ -193,13 +231,21 @@ Faltam C2 e C4.
 - **Pendente:** mesma chamada com cliente novo do Cenário C2, ver
   [`docs/ops/guia-teste-cliente-novo-exe-agent-local.md`](../ops/guia-teste-cliente-novo-exe-agent-local.md)
 
+### Cenário C5 — Ícone da marca aparece no .exe e na janela
+- [x] Extrair o ícone embutido no `.exe` gerado e comparar com a marca real
+- [x] Abrir o `.exe` e confirmar visualmente o ícone na janela/barra de tarefas
+- **Validado em:** 12/08/2026 — ícone extraído via `ExtractAssociatedIcon`
+  confere com o quadrado azul "Lara by DigitalPro"; screenshot da janela
+  aberta confirma o mesmo ícone no título e na barra de tarefas
+
 ---
 
 ## Ajustes Possíveis Pós-Implementação
 
-- Sem ícone customizado (não existe asset `.ico`/`.png` no projeto hoje) — o
-  `.exe` sai com o ícone padrão do PyInstaller/Tkinter.
 - `README.md` do agent-local (linhas 62-68) ficará desatualizado — descreve
   o agente "worker" antigo, não a GUI v2. Fora do escopo desta implementação.
 - Build `--onefile` tem alguns segundos de atraso no arranque (extração para
   pasta temp a cada execução) — aceito como trade-off por "um arquivo só".
+- Ícone gerado em 512×512 a partir de um mark CSS simples — se a Digital Pro
+  criar um logo vetorial oficial no futuro, vale substituir `assets/icon.ico`
+  por uma versão com mais detalhe/qualidade nos tamanhos maiores (128/256px).

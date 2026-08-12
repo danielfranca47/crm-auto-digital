@@ -11,6 +11,7 @@ Uso: `pyinstaller agent-local.spec --noconfirm` (ver build.bat).
 from PyInstaller.utils.hooks import collect_data_files
 
 datas = collect_data_files("customtkinter")
+datas += [("assets/icon.ico", "assets")]
 
 a = Analysis(
     ["main.py"],
@@ -45,4 +46,5 @@ exe = EXE(
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
+    icon="assets/icon.ico",
 )
