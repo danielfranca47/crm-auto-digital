@@ -1,6 +1,6 @@
 # Migração UazAPI: plano free → plano pago (até 3 dispositivos)
 
-**Branch:** `fix/intervalos-busca-agenda-fuso-negocio`
+**Branch:** `feat/uazapi-adesao-plano-pago`
 **Status:** Em andamento — bloqueado aguardando credenciais do utilizador
 
 ---
