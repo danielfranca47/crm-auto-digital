@@ -8,8 +8,8 @@ from typing import Any, Optional
 # Caminho do banco
 # =========================
 BASE_DIR = os.path.dirname(__file__)
-DB_DIR = os.path.join(BASE_DIR, "database")
-DB_PATH = os.path.join(DB_DIR, "crm.db")
+DB_PATH = os.environ.get("CRM_DB_PATH") or os.path.join(BASE_DIR, "database", "crm.db")
+DB_DIR = os.path.dirname(DB_PATH)
 
 
 def ensure_db_dir() -> None:
