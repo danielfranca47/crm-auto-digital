@@ -314,6 +314,14 @@ substituído, mascarando o problema até o primeiro redeploy apagar os dados
 silenciosamente (caso real: leads do `backend-crm` perdidos em produção
 porque o volume existia mas o código nunca apontava para ele).
 
+**Guarda de arranque no `backend-crm`:** `database.py` recusa-se a importar
+(`raise RuntimeError`, derruba o processo antes de o `uvicorn` subir) se
+`RAILWAY_ENVIRONMENT` estiver definida e `CRM_DB_PATH` não — transforma o
+mesmo cenário de configuração ausente numa falha de deploy visível nos logs
+do Railway, em vez de voltar a persistir em silêncio no caminho efémero.
+Guarda equivalente para `backend-core`/`DATABASE_URL` ainda não existe — ver
+[`docs/plans/persistencia-dados-melhorias-futuras.md`](../plans/persistencia-dados-melhorias-futuras.md).
+
 ### Tabelas críticas do `crm.db`
 
 | Tabela | Campos-chave | Descrição |
