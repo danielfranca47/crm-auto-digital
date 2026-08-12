@@ -2,8 +2,8 @@
 
 Script para usar numa chamada (vídeo/telefone) guiando um cliente **não-técnico**
 passo a passo, instalando e testando o Gerador de Leads — Digital Pro no PC
-dele pela primeira vez, via instalador (`DigitalPro-GeradorDeLeads-Setup.exe`,
-gerado por `agent-local/build-installer.bat`) — não mais o `.exe` avulso.
+dele pela primeira vez. Este guia é para **você** (não-técnico também) seguir
+sozinho, sem precisar entender nada de código.
 
 Serve dois propósitos:
 1. Onboarding real de um cliente novo.
@@ -18,23 +18,65 @@ apagados depois de usados).
 
 ---
 
-## Antes da call — checklist rápido (sozinho, sem o cliente)
+## O que você precisa saber antes de começar
 
-- [ ] Instalador mais recente gerado:
-      `agent-local/installer_output/DigitalPro-GeradorDeLeads-Setup.exe`
-      (rodar `agent-local/build-installer.bat` se não tiveres a certeza que
-      está actualizado — ele já chama o `build.bat` do `.exe` primeiro)
-- [ ] Arquivo disponível num link de download — **não enviar por anexo de
-      email**: o instalador tem ~37 MB e o Gmail bloqueia anexos acima de 25 MB.
-      Usar Google Drive ou WeTransfer e mandar o link por WhatsApp/email.
-- [ ] Confirmar com o cliente, antes da call, que o PC dele tem o
-      **Google Chrome instalado** — é pré-requisito do envio WhatsApp
-      (Selenium abre o Chrome de verdade); sem isso o Cenário C4 falha por
-      motivo alheio ao empacotamento, não vale a pena descobrir isso já
-      a meio da call.
-- [ ] Ter a conta de teste/credenciais do cliente à mão — nunca pedir a
-      senha por chat; a autenticação é passwordless (email + código), então
-      nem se aplica pedir senha.
+**"Instalador"** = o arquivo que, quando o cliente dá dois cliques nele,
+instala o programa no computador dele — igual a quando você baixa e instala
+qualquer outro programa (Chrome, Zoom, etc.). Esse arquivo já está pronto,
+gerado pelo Claude — você não precisa criar nada nem mexer em código.
+Termos como "`.exe`", "`build.bat`" são coisas técnicas usadas só nos
+bastidores (pelo Claude, ao gerar o arquivo) — você não precisa entender
+nem usar isso, só precisa do arquivo final pronto (passo 1 abaixo).
+
+---
+
+## Antes da call — passo a passo (sozinho, sem o cliente)
+
+### 1. Pega o arquivo mais recente pra enviar
+
+Peça ao Claude, nesta conversa: **"gera o instalador mais recente do
+agent-local"**. Quando terminar, o arquivo pronto para enviar estará em:
+
+```
+C:\crm-auto-digital\agent-local\installer_output\DigitalPro-GeradorDeLeads-Setup.exe
+```
+
+Pra abrir essa pasta sem digitar nada: peça ao Claude **"abre a pasta do
+instalador pra mim"** — ele abre o Explorador de Arquivos direto no lugar
+certo. (Se preferir manualmente: abre o Explorador de Arquivos, cola o
+caminho acima na barra de endereço lá em cima, e aperta Enter.)
+
+O arquivo se chama **`DigitalPro-GeradorDeLeads-Setup.exe`** — é esse
+arquivo, e só esse, que você vai enviar ao cliente no passo 2 abaixo.
+
+### 2. Sobe o arquivo pra um link e manda pro cliente
+
+Esse arquivo é grande (~37 MB) — **não dá pra mandar por anexo de email**
+(o Gmail recusa anexos acima de 25 MB). Precisa subir pra um serviço de
+armazenamento e mandar o link:
+
+- **Google Drive** (se já usa): abre [drive.google.com](https://drive.google.com),
+  arrasta o arquivo pra dentro, clica com o botão direito nele → "Compartilhar"
+  → "Copiar link". Manda esse link pro cliente por WhatsApp ou email.
+- **WeTransfer** (mais simples, não precisa de conta): abre
+  [wetransfer.com](https://wetransfer.com), arrasta o arquivo, coloca o
+  email do cliente, envia — ele recebe um link por email automaticamente.
+
+### 3. Confirma se o PC do cliente tem o Google Chrome
+
+Manda uma mensagem pro cliente antes da call perguntando se ele tem o
+**Google Chrome** instalado no computador (não precisa ser o navegador
+padrão, só precisa estar instalado). É esse programa que abre sozinho na
+hora de mandar mensagem no WhatsApp durante o teste (passo 6 da call). Se
+ele não tiver, é só pedir pra instalar antes — evita perder tempo da call
+nisso.
+
+### 4. Confirma o email que o cliente vai usar pra entrar
+
+Não existe senha — o login é só com o **email que o cliente já usou pra
+assinar**. Confirma com ele qual email foi, pra não perder tempo da call
+tentando adivinhar. Na hora, ele recebe um código por email/SMS e digita
+esse código — é só isso, sem senha nenhuma pra lembrar ou compartilhar.
 
 ---
 
