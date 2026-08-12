@@ -33,6 +33,47 @@ Prompt construído em `backend-executors/app/services/decision_engine.py`:
 
 ---
 
+## Backfill manual de interação passada (bypass de saudação forçada)
+
+Endpoint `POST /api/leads/{lead_id}/interactions/backfill` (`backend-crm/routes/leads.py`)
+permite ao operador pré-cadastrar um histórico de conversa (pares lead/operador)
+que aconteceu fora do pipeline automatizado, antes do primeiro contacto real via
+WhatsApp — caso de uso principal: lead que já trocou mensagens com o operador
+humano antes de o agente de IA ser ligado para aquele número.
+
+**Guardrail:** só aceite em leads sem nenhuma mensagem (`SELECT COUNT(*) FROM
+messages WHERE lead_id = ?`) — `409` se já houver histórico, para não corromper
+uma conversa real em andamento. Payload `BackfillInteractionsPayload.turns`
+(`BackfillTurn`, 1–40 itens), cada turno com `sender` (`"lead"|"me"`), `body`
+(1–4000 caracteres) e `occurred_at` opcional.
+
+**Gravação:** cada turno insere uma linha em `messages` (`model='inbound'` se
+`sender='lead'`, `'outbound'` se `sender='me'`) — mesmo contrato de `model`
+produzido pelo pipeline real, exigido por `_enforce_greeting_first` (ver
+"Estágio de aquecimento" em Presentation, abaixo). Quando `occurred_at` está
+ausente, o timestamp é gerado artificialmente a partir de `utcnow()`,
+incrementando 1s por turno, sempre no passado, para preservar a ordem
+cronológica. Cada turno também grava uma linha em `prospection_logs`
+(`action='manual_backfill'`) para auditoria.
+
+**Efeito no guardrail de saudação:** `get_recent_history()`
+(`backend-crm/services/ai_orchestrator/history.py`) lê a mesma tabela
+`messages` sem distinguir origem manual de real — depois do backfill,
+`outbound_count >= 1`, então `_enforce_greeting_first()`
+(`backend-executors/app/services/decision_engine.py`) deixa de forçar
+`route_to="recepcao"` no primeiro turno real do lead.
+
+**UI:** `frontend-crm/src/components/LeadCardDialog.tsx`, secção "Registrar
+interação passada" dentro de "Mensagens e Notas" — visível apenas quando o
+lead ainda não tem nenhuma mensagem (`hasExistingMessages`, resolvido via
+`api.assistenteIA.mensagens(leadId, true)`); some do dialog depois de salvar
+com sucesso.
+
+**Fora do escopo:** não extrai qualificação automaticamente do texto do
+backfill — os campos de "Critérios de Qualificação" continuam 100% manuais.
+
+---
+
 ## Qualification
 
 ### Implementado (comum a todos os agentes)
@@ -252,6 +293,7 @@ Ver [`docs/architecture/sales-flow.md`](sales-flow.md) para detalhes completos s
 | `backend-crm/services/ai_playbooks/__init__.py` | Playbooks e hardcodes por template |
 | `backend-crm/services/ai_orchestrator/orchestrator.py` | Monta ContextBundle, aplica overrides por mode |
 | `backend-executors/app/services/decision_engine.py` | Motor de decisão, prompts das filhas, guardrails anti-loop |
-| `backend-crm/routes/leads.py` | Guardrail HTTP 400/409 por qualificação incompleta; `GET /{lead_id}/qualification-fields` e `PATCH /{lead_id}/qualification-fields` |
+| `backend-crm/routes/leads.py` | Guardrail HTTP 400/409 por qualificação incompleta; `GET /{lead_id}/qualification-fields` e `PATCH /{lead_id}/qualification-fields`; `POST /{lead_id}/interactions/backfill` |
+| `backend-crm/services/ai_orchestrator/history.py` | `get_recent_history()` — lê `messages` para montar histórico e `outbound_count` (inclui turnos de backfill) |
 | `backend-crm/services/lead_category_policy.py` | Side-effects de mudança de categoria |
 | `backend-executors/app/services/meeting_scheduler.py` | Criação de appointment a partir de `meeting_scheduled`; gate `is_phase_entry` (M3) |

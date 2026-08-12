@@ -299,14 +299,14 @@ Operador escreve mensagem no Playground (frontend-crm)
 |---|---|---|
 | `leads` | `id, user_id, category, bot_disabled, bot_disabled_reason, phases_triggered, triggers_fired, origin` | Lead no pipeline; `companyName`/`contactName` nullable com CHECK (pelo menos um preenchido) — ver [`leads-schema.md`](leads-schema.md) |
 | `jobs` | `id, type, status, payload, result, scheduled_at, attempts` | Fila de jobs |
-| `messages` | `lead_id, role, content, created_at` | Histórico de conversa |
+| `messages` | `lead_id, channel, body, model, createdAt` | Histórico de conversa; `model='inbound'`/`'outbound'`; pode ser populada manualmente via backfill — ver [`pipeline-phases.md`](pipeline-phases.md#backfill-manual-de-interação-passada-bypass-de-saudação-forçada) |
 | `lead_qualification_state` | `lead_id, data_json` | Campos de qualificação extraídos |
 | `ai_profiles` | — | Espelho cache do AI Profile (via backend-core) |
 | `agents` | `id, token, status, capabilities` | Agentes locais registados |
 | `knowledge_items` | `user_id, category, content` | Base de conhecimento do agente |
 | `knowledge_item_media` | `item_id, media_url, media_type` | Mídias associadas ao conhecimento |
 | `appointments` | `id, lead_id, title, type, start_at, end_at, status, outcome, google_event_id, source` | Compromissos da agenda; `source='crm'`, `'google'` ou `'playground'` |
-| `prospection_logs` | `lead_id, channel, email, action, notes, createdAt` | Log de contactos outbound (WhatsApp/email) — `action='queued'/'sent'/'failed'/'manual_outbound'`; `email` só preenchido para `channel='email'` |
+| `prospection_logs` | `lead_id, channel, email, action, notes, createdAt` | Log de contactos outbound (WhatsApp/email) — `action='queued'/'sent'/'failed'/'manual_outbound'/'manual_backfill'`; `email` só preenchido para `channel='email'` |
 | `followup_reconcile_guard` | `lead_id, job_id, due_at` | Guard anti-loop do reconciliador |
 
 ---
