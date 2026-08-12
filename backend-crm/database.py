@@ -7,6 +7,13 @@ from typing import Any, Optional
 # =========================
 # Caminho do banco
 # =========================
+# CRÍTICO: em produção (Railway), CRM_DB_PATH TEM de apontar para dentro do
+# volume persistente montado no serviço (ex.: /data/crm.db) — nunca para um
+# caminho relativo. O filesystem do container é recriado do zero a cada
+# deploy/restart; só o volume sobrevive. Já perdemos leads em produção por
+# esse motivo (ver docs/architecture/_mapa-sistema.md, secção "Persistência
+# em produção") — não remover nem "simplificar" este fallback sem entender
+# essa história.
 BASE_DIR = os.path.dirname(__file__)
 DB_PATH = os.environ.get("CRM_DB_PATH") or os.path.join(BASE_DIR, "database", "crm.db")
 DB_DIR = os.path.dirname(DB_PATH)

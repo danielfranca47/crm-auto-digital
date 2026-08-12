@@ -34,6 +34,7 @@ Arquivos em andamento ou recém-completados. Seguem o padrão do template.
 |---|---|
 | `correcao-natural-llm-e-fixes-ui-descobertos.md` | Em andamento — planeado, código ainda não iniciado |
 | `agent-local-v2-empacotamento-exe.md` | Aguardando Plan Mode — última fase do ciclo v2 do agent-local, ver `docs/plans/_versionamento-agent-local.md` |
+| `aviso-startup-crm-db-path-ausente.md` | Aguardando Plan Mode — aviso no arranque se `CRM_DB_PATH` faltar em produção; surgiu como "Ajuste possível" da graduação de `persistencia-banco-dados-producao.md` |
 
 > `agent-local-v2-app-standalone.md`, `agentlocal-assistente-ia.md`,
 > `agent-local-v2-testes-manuais.md` e `agent-local-plano-execucao-testes-pendentes.md`
