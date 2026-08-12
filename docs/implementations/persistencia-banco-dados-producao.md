@@ -169,15 +169,15 @@ Validação" abaixo.
 
 > Nota importante: o primeiro deploy após ativar `CRM_DB_PATH` recria `/data/crm.db` do zero (não havia nada em `/data` para recuperar, como já confirmado antes desta fase) — isto é esperado e é o **último** "zerar" que acontece. Dali em diante, o mesmo ficheiro sobrevive a todos os deploys/reinícios seguintes.
 
+### Cenário V1 — Abrangência da correção (leads + outras tabelas, backend-core, backend-executors)
+- [x] (2026-08-12) `backend-crm`: confirmado via grep que `database.py` é o único ponto de conexão SQLite em código de produção (nenhum outro `sqlite3.connect` fora de testes/scripts locais) — a correção cobre **todas** as tabelas de `crm.db` (`messages`, `jobs`, `prospection_logs`, `appointments`, `knowledge_items`, `agents`, `lead_qualification_state`, `followup_reconcile_guard`, cache de `ai_profiles`, etc.), não só `leads`
+- [x] (2026-08-12) `backend-core`: confirmado via `railway variable list --service backend-core` que `DATABASE_URL=sqlite:////data/core.db` já está correto em produção, apontando para o volume `backend-core-volume`/`/data` — nunca esteve quebrado; é por isso que o login sempre sobreviveu
+- [x] (2026-08-12) `backend-executors`: confirmado via grep que não há nenhum `sqlite3.connect`/`DATABASE_URL`/escrita de ficheiro em código de produção — serviço stateless, sem banco próprio nem volume, nada a corrigir
+
 ---
 
 ## Ajustes Possíveis Pós-Implementação
 
-- Nunca foi verificado explicitamente se `backend-core` (`DATABASE_URL`) está
-  de facto a apontar para o seu próprio volume persistente
-  (`backend-core-volume` em `/data`) em produção — a suposição de que está
-  correto vem só do facto de o login sobreviver a updates, não de uma
-  confirmação directa via SSH como fizemos aqui para o `backend-crm`.
 - Sem nenhum aviso/erro no arranque da aplicação se `CRM_DB_PATH` não
   estiver definida num ambiente de produção (`RAILWAY_ENVIRONMENT` presente)
   — hoje cai em silêncio no caminho relativo efémero, exactamente o bug que
