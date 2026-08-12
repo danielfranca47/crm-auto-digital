@@ -321,3 +321,18 @@ pendente — ver `docs/ops/guia-teste-cliente-novo-exe-agent-local.md`
 - Ícone gerado em 512×512 a partir de um mark CSS simples — se a Digital Pro
   criar um logo vetorial oficial no futuro, vale substituir `assets/icon.ico`
   por uma versão com mais detalhe/qualidade nos tamanhos maiores (128/256px).
+- **Favicons do website e dos frontends ainda são resíduo do Lovable, não a
+  marca Digital Pro** — descoberto ao investigar a Fase 3 desta
+  implementação. Confirmado (não é suposição):
+  - `website/public/favicon.ico` e `frontend-crm/public/favicon.ico` — mesmo
+    arquivo (hash MD5 idêntico), o "coração" colorido genérico do Lovable.
+  - `frontend-admin/public/favicon.svg` — outro ícone genérico do Lovable
+    (fragmento/raio abstrato roxo-azul), também não é a marca.
+  - `frontend-admin` já usa um SVG (não `.ico`) — trocar mantendo o formato
+    ou migrar para `.ico`/`.png`, o que for mais simples de gerar a partir
+    do novo asset.
+  Trocar pelo mark real "Lara by DigitalPro" (quadrado arredondado,
+  gradiente azul — mesmo desenhado em `website/src/pages/CRMLandingV2.tsx:266-269`
+  e replicado como imagem em `agent-local/assets/icon.ico`, ver Fase 3
+  acima). Item novo, fora do escopo do empacotamento do agent-local — afeta
+  `website/`, `frontend-crm/` e `frontend-admin/`, não `agent-local/`.
