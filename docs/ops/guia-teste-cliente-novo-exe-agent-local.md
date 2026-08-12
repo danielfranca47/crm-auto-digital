@@ -25,7 +25,7 @@ apagados depois de usados).
       (rodar `agent-local/build-installer.bat` se não tiveres a certeza que
       está actualizado — ele já chama o `build.bat` do `.exe` primeiro)
 - [ ] Arquivo disponível num link de download — **não enviar por anexo de
-      email**: o instalador tem ~39 MB e o Gmail bloqueia anexos acima de 25 MB.
+      email**: o instalador tem ~37 MB e o Gmail bloqueia anexos acima de 25 MB.
       Usar Google Drive ou WeTransfer e mandar o link por WhatsApp/email.
 - [ ] Confirmar com o cliente, antes da call, que o PC dele tem o
       **Google Chrome instalado** — é pré-requisito do envio WhatsApp
@@ -80,6 +80,12 @@ oferece abrir o app automaticamente — pode deixar marcado.
 > *"Agora é só clicar em Avançar até o fim — no final ele já abre o
 > programa sozinho."*
 
+**Confirmação visual rápida:** depois de instalado, o atalho (Área de
+Trabalho e Menu Iniciar, dentro da pasta "Gerador de Leads — Digital Pro")
+mostra um ícone quadrado azul com a marca Digital Pro — se o cliente
+compartilhar a tela, é fácil confirmar que instalou certo só de bater o
+olho no ícone.
+
 ### 3. Login (passwordless)
 
 - Pede o email do cliente.
@@ -109,6 +115,17 @@ clicando em "Avançar"/"Continuar" até chegar na tela principal.
 > código, igual quando você usa o WhatsApp Web normalmente."*
 
 - Confirmar: a mensagem de teste chega no WhatsApp de destino.
+
+### 7. Como abrir de novo depois da call
+
+Não precisa reinstalar nem procurar o arquivo baixado de novo — o
+instalador já deixou dois atalhos prontos:
+- Ícone na **Área de Trabalho** ("Gerador de Leads — Digital Pro")
+- Pasta **"Gerador de Leads — Digital Pro"** no Menu Iniciar (também tem o
+  atalho para desinstalar, se precisar)
+
+> *"Da próxima vez é só clicar no ícone azul que ficou na Área de
+> Trabalho — não precisa baixar de novo."*
 
 ---
 
