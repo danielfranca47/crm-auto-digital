@@ -1,7 +1,7 @@
 # Empacotamento do agent-local v2 (.exe)
 
 **Branch:** `empacotamento-agent-local`
-**Status:** Em andamento
+**Status:** Em andamento — pendente: Cenário C2 (máquina limpa sem Python) e C4 (fluxo Selenium/WhatsApp no .exe)
 
 ---
 
@@ -122,23 +122,68 @@ build, não dependência de runtime) nem exclusão manual de `test.py`/
 `rascunho.py`/`tests/` (fora do grafo de imports do `main.py`, o
 PyInstaller já não os inclui).
 
+### Commits Fase 2
+
+| # | Commit | O que foi implementado |
+|---|---|---|
+| 1 | `afc89c5` | spec + build.bat + gitignore para gerar o .exe |
+
+**Detalhes do commit:**
+- `agent-local/agent-local.spec` — novo; onefile, `console=False`, inclui data files do customtkinter via `collect_data_files`
+- `agent-local/build.bat` — novo; instala PyInstaller no `.venv` se ausente e roda o build
+- `agent-local/.gitignore` — adiciona `build/` e `dist/`
+
+**Nota de build:** aviso `Hidden import "tzdata" not found` apareceu no log
+— vem de uma dependência (não do código do agent-local, que não usa
+`zoneinfo`/`pytz` em lado nenhum) e não impediu o build nem o arranque do
+app; risco considerado baixo, mas fica registado caso apareça algum erro de
+timezone em teste futuro.
+
+### Relatório da Fase 2 — o que mudou na prática
+
+**Antes:** não existia nenhuma forma de gerar um `.exe` do agent-local —
+só corria via `python main.py` dentro do `.venv`.
+**Agora:** rodando `build.bat` (ou `pyinstaller agent-local.spec --noconfirm`)
+gera `dist/agent-local.exe` (~36 MB), um único arquivo distribuível por
+duplo clique.
+
+**Testado nesta sessão, nesta máquina** (via `desktop-control`, screenshot
+em anexo ao histórico da conversa):
+- O `.exe` abriu a janela normalmente, sem consola atrás.
+- Restaurou a sessão salva localmente e confirmou "Assinante" em tempo real
+  — **sem `.env`, `config.json` ou env vars setadas** — prova de que o
+  fallback de produção da Fase 1 está a ser usado de facto pelo binário
+  empacotado.
+
+**Não testado ainda (fica pendente para o utilizador ou uma sessão futura):**
+- Esta máquina tem Python instalado — não prova o Cenário C2 (arranque numa
+  máquina realmente limpa, sem Python/`.venv`). Precisa de um PC ou VM sem
+  Python para validar isso de verdade.
+- Cenário C4 (Selenium abrindo o Chrome real / envio WhatsApp) não foi
+  exercitado nesta sessão — só o arranque e a autenticação foram testados.
+
+**Para validar:** Cenários C1 (✅ hoje) e C3 (✅ hoje) já confirmados abaixo.
+Faltam C2 e C4.
+
 ---
 
 ## Checks de Validação
 
 ### Cenário C1 — Build gera o executável sem erros
-- [ ] Rodar `build.bat` num `.venv` limpo
-- [ ] Confirmar: `dist/agent-local.exe` é gerado sem erros/warnings críticos
+- [x] Rodar `build.bat` (equivalente: instalar PyInstaller + `pyinstaller agent-local.spec --noconfirm`)
+- [x] Confirmar: `dist/agent-local.exe` é gerado sem erros/warnings críticos
+- **Validado em:** 12/08/2026 — `dist/agent-local.exe` gerado, ~36 MB; único warning foi `Hidden import "tzdata" not found` (não bloqueante, ver nota acima)
 
 ### Cenário C2 — Executável abre sem Python instalado
 - [ ] Copiar só o `.exe` para uma máquina/VM sem Python/`.venv`
 - [ ] Duplo clique
 - [ ] Confirmar: janela de login abre normalmente
+- **Pendente:** só testado nesta máquina de dev (tem Python instalado) — precisa de máquina/VM limpa para validar de verdade
 
 ### Cenário C3 — Aponta para produção sem nenhuma configuração
-- [ ] Abrir o `.exe` sem `.env`/env vars setadas
-- [ ] Fazer login/OTP
-- [ ] Confirmar: autentica contra o backend de produção (Railway), não localhost
+- [x] Abrir o `.exe` sem `.env`/env vars setadas
+- [x] Confirmar: autentica contra o backend de produção (Railway), não localhost
+- **Validado em:** 12/08/2026 — `.exe` restaurou sessão salva e mostrou badge "Assinante" + "Modo: Assinante — chave API incluída" em tempo real, sem nenhuma env var/config.json presente; confirma que o fallback de produção da Fase 1 é usado pelo binário empacotado
 
 ### Cenário C4 — Fluxo básico funciona no executável
 - [ ] Abrir Pesquisa/Prospecção no `.exe`
