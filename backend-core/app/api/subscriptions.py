@@ -312,6 +312,14 @@ async def payment_event(
             models.Subscription.status == "active",
         ).first()
         if sub:
+            # Reentrega da mesma cobrança (a Efí reenvia notificações por design) — já
+            # processada nesta subscrição; estender de novo somaria +30 dias indevidos.
+            if payload.charge_id and sub.efi_charge_id == payload.charge_id:
+                logger.info(
+                    "payment_event: reentrega ignorada charge_id=%s user=%s",
+                    payload.charge_id, user.id,
+                )
+                return {"ok": True, "action": "skipped", "reason": "duplicate_charge"}
             base = sub.current_period_end if sub.current_period_end and sub.current_period_end > now else now
             sub.current_period_end = base + timedelta(days=30)
             # Reinicia o ciclo de avisos de expiração para o próximo período. Corrige também um

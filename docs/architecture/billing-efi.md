@@ -125,6 +125,14 @@ cobrança nova, por isso não é enviado.
   `payload.origin_offer` (cobre assinaturas activas antes desta convenção existir)
 - `charge_id` (opcional) é gravado/actualizado em `Subscription.efi_charge_id` — sempre a cobrança
   mais recente, tanto na criação quanto em cada renovação
+- **Idempotência por `charge_id` (ramo `renew`):** se `payload.charge_id` for igual ao
+  `efi_charge_id` já gravado na sub activa, a chamada é tratada como **reentrega** da mesma
+  notificação (a Efí reenvia webhooks por design) e devolve
+  `{"action": "skipped", "reason": "duplicate_charge"}` **sem estender o período**. Sem
+  `charge_id` no payload (ou sub pré-feature sem `efi_charge_id`) não há base para dedup e o
+  comportamento é o normal. Limitação aceite: só a cobrança mais recente é guardada — uma
+  reentrega antiga que chegue *depois* de uma cobrança nova legítima não é detectada (janela
+  desprezível: reentregas ocorrem em minutos/horas, renovações são mensais)
 
 ---
 

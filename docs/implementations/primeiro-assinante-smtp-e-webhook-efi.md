@@ -1,8 +1,8 @@
 # Primeiro assinante real — SMTP de produção + correções do webhook Efí
 
 **Branch:** `main`
-**Status:** Em andamento — Fase 1 (SMTP) implementada e validada por logs (falta recepção visual,
-S2); Fase 2 (correção de dado) executada e validada; Fase 3 (idempotência) aguardando Plan Mode
+**Status:** Fases 1–3 implementadas e testadas — pendente apenas 1 check manual (S2, recepção
+visual do email pelo utilizador/cliente) antes de graduar
 
 ---
 
@@ -90,7 +90,7 @@ enviado com sucesso após o fix.
 
 ---
 
-## Fase 2 — Corrigir `current_period_end` do assinante (aguardando execução)
+## Fase 2 — Corrigir `current_period_end` do assinante (executada 12/08/2026)
 
 **Objetivo:** a subscription do user id=3 reflete o período realmente pago (30 dias).
 
@@ -120,21 +120,55 @@ WHERE user_id = 3 AND status = 'active';
 
 ---
 
-## Fase 3 — Idempotência por `charge_id` no webhook Efí (aguardando Plan Mode)
+## Fase 3 — Idempotência por `charge_id` no webhook Efí (executada 12/08/2026)
 
 **Objetivo:** reentregas da mesma notificação/cobrança não somam períodos extra.
 
-**Rascunho de abordagem (a confirmar em Plan Mode — não substitui o diagnóstico obrigatório):**
-no ramo `renew` de `payment_event` (`backend-core/app/api/subscriptions.py`), se
-`payload.charge_id` for igual ao `efi_charge_id` já gravado na subscription ativa, tratar como
-reentrega: não estender o período (retornar `{"action": "skipped", "reason": "duplicate_charge"}`).
-A verificação natural fica no backend-core porque é lá que o estado (`efi_charge_id`) vive;
-o `efi_webhook` do backend-crm continua stateless.
+**Abordagem (definida em Plan Mode, sem desvios na execução):** no ramo `renew` de
+`payment_event`, logo após localizar a subscription ativa e antes de estender o período —
+se `payload.charge_id` for igual ao `efi_charge_id` já gravado nessa subscription, é reentrega
+da mesma cobrança: retorna `{"action": "skipped", "reason": "duplicate_charge"}` sem tocar em
+`current_period_end`. Sem `charge_id` no payload (ou sub pré-feature sem `efi_charge_id`
+gravado) não há base para dedup — comportamento inalterado (sem regressão). `efi_webhook`
+(backend-crm) continua stateless; o estado necessário (`efi_charge_id`) já vivia no core.
 
-**Pontos a validar em Plan Mode:**
-- Cobrança sem `charge_id` (payload antigo/cancel) não pode ser bloqueada por engano
-- Renovação legítima mensal chega com `charge_id` **novo** — não pode ser confundida com reentrega
-- O que fazer quando não há subscription ativa (1ª ativação) — caminho atual já cobre
+**Limitação aceite (documentada em `billing-efi.md`):** só a cobrança mais recente é guardada —
+uma reentrega antiga que chegue *depois* de uma cobrança nova legítima intercalada não seria
+detectada. Janela de colisão desprezível (reentregas em minutos/horas; renovações mensais). A
+solução completa (tabela de eventos processados) fica registada como Investigação 3 abaixo.
+
+| Arquivo | O que mudou |
+|---|---|
+| `backend-core/app/api/subscriptions.py` | Ramo `renew` de `payment_event`: check de `charge_id` duplicado antes de estender `current_period_end` |
+| `docs/architecture/billing-efi.md` | Secção "Activação": documentado o skip por reentrega |
+
+### Commits Fase 3
+
+| # | Commit | O que foi implementado |
+|---|---|---|
+
+### Checks de Validação — Fase 3
+
+Testado ao vivo contra `backend-core` local (porta 8001), `x-service-token`, email de teste
+descartável (`teste-idempotencia-fase3@example.com`, removido do DB local ao final).
+
+#### Cenário I1 — Reentrega não soma período
+- [x] 1ª chamada `renew` `charge_id=111` → `{"action":"created_and_activated"}`,
+      `current_period_end` = hoje+30, `efi_charge_id=111`
+- [x] Repetir a **mesma** chamada (`charge_id=111`) → `{"action":"skipped",
+      "reason":"duplicate_charge"}`
+- [x] `current_period_end` **inalterado** após a repetição (confirmado via `by-email`)
+- **Validado em:** 12/08/2026
+
+#### Cenário I2 — Renovação legítima continua a funcionar
+- [x] Mesma sub, `charge_id=222` (novo) → `{"action":"renewed"}`, `current_period_end` +30 dias,
+      `efi_charge_id` atualizado para `222`
+- **Validado em:** 12/08/2026
+
+#### Cenário I3 — Retrocompatibilidade sem `charge_id`
+- [x] Mesma sub, `renew` sem `charge_id` no payload → `{"action":"renewed"}`,
+      `current_period_end` +30 dias de novo (sem dedup possível — comportamento preservado)
+- **Validado em:** 12/08/2026
 
 ---
 
