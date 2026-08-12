@@ -137,9 +137,31 @@ o `efi_webhook` do backend-crm continua stateless.
 
 ## Ajustes Possíveis Pós-Implementação
 
-- **Alerta de falha de email:** o padrão não-bloqueante de `send_email()` esconde falhas totais
-  de SMTP (este incidente ficou invisível por semanas). Considerar um contador/alerta (ex.:
-  notificação admin após N falhas seguidas) — não urgente, mas teria detectado isto no dia 1.
+### Investigações preventivas a abrir (1 por item — para garantir que não ocorram de novo)
+
+- **Investigação 1 (derivada do problema SMTP): auditoria de falhas silenciosas e dependências
+  externas em produção.** O SMTP falhou 100% das vezes durante semanas sem nenhum sinal além de
+  uma linha de log que ninguém lia. Mapear: (a) todos os pontos com padrão `try/except` que
+  engolem falha de serviço externo (SMTP, UazAPI, Efí, LLM) e definir alerta/notificação admin
+  quando a taxa de falha for anómala; (b) que outras portas/egress a Railway restringe que o
+  sistema assume abertas; (c) validar entrega real (não só "sem erro no log") de cada tipo de
+  email de produção.
+
+- **Investigação 2 (derivada do período inflado): auditoria de efeitos de reentrega em todos os
+  handlers de webhook.** A Efí reentrega notificações por design — mapear todos os webhooks do
+  sistema (`/webhooks/efi`, `/webhooks/payment/{gateway}`, `/webhooks/whatsapp/*`) e verificar,
+  para cada um, o que acontece se o mesmo evento chegar 2–5×: que estado é duplicado/inflado,
+  que jobs são re-enfileirados, que emails são reenviados. Documentar a garantia (ou falta dela)
+  por endpoint.
+
+- **Investigação 3 (derivada da falta de idempotência): política de idempotência padrão para
+  eventos externos.** Além do fix pontual da Fase 3, definir uma convenção única do projeto para
+  processar eventos externos exatamente-uma-vez (chave de dedup por evento — ex.: `charge_id`,
+  `message_id` — e onde ela é persistida), a aplicar em qualquer webhook/integração futura, para
+  o problema não renascer a cada endpoint novo.
+
+### Outros ajustes
+
 - **Migrar para a API HTTP do Resend** (porta 443, imune a bloqueio de egress SMTP) — a chave já
   está no ambiente (`SMTP_PASS`). Alternativa mais robusta que depender da 2587.
 - **Reprocessamento dos emails perdidos:** qualquer email de produção anterior a 12/08 nunca
