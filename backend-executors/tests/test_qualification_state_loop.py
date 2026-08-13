@@ -674,7 +674,12 @@ def test_optional_custom_field_is_captured_but_does_not_affect_missing_fields(mo
     monkeypatch.setattr(
         decision_engine.field_extractor,
         "extract_fields_llm",
-        lambda _c, _s: {"extracted": {"custom_uso_do_produto": "uso diário"}, "confidence": {}, "evidence": {}, "raw": "{}"},
+        lambda _c, _s: {
+            "extracted": {"custom_uso_do_produto": "uso diário"},
+            "confidence": {"custom_uso_do_produto": 0.9},
+            "evidence": {},
+            "raw": "{}",
+        },
     )
     monkeypatch.setattr(decision_engine.crm_client, "upsert_lead_qualification_state", _fake_upsert)
     monkeypatch.setattr(decision_engine.crm_client, "increment_lead_qualification_attempt", _fake_increment)

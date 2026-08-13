@@ -1,7 +1,7 @@
 # Fix: qualificação obrigatória sendo ignorada no caminho automático do bot
 
 **Branch:** `fix/qualificacao-nao-obrigatoria-antes-apresentacao`
-**Status:** Todos os cenários validados (13/08/2026) — pendente: decisão do utilizador sobre o item em "Ajustes Possíveis" (score para campos 100% custom) antes da graduação
+**Status:** Todos os cenários validados, incluindo Fase 2 (13/08/2026) — pendente: decisão do utilizador sobre o item em "Ajustes Possíveis" (score para campos 100% custom) antes da graduação
 
 ---
 
@@ -149,3 +149,100 @@ Subi os 3 backends localmente (`backend-core`, `backend-crm`, `backend-executors
 
 - **Score não funciona para `qualification_fields` 100% custom** — causa mais provável de o Gabriel achar que tinha um score válido configurado. Corrigir exigiria generalizar `compute_4p_scores()` para pontuar campos custom (possivelmente usando `qualify_if`/`disqualify_if`, já existentes no schema de `qualification_fields`, hoje só injetados como texto no prompt, nunca convertidos em pontuação estruturada). Escopo maior — decisão de priorização pendente do utilizador.
 - **Ação imediata recomendada para o Gabriel, sem esperar deploy:** marcar pelo menos 1 dos 2 campos dele como "Obrigatório" em vez de "Desejável" na Camada de Qualificação — já funciona hoje, independente desta fase.
+
+---
+
+## Fase 2 — Diagnóstico + Correção: extractor ignora o próprio limiar de confiança (13/08/2026)
+
+### Problema identificado
+
+Testando se a "ação imediata recomendada" acima (marcar campo como
+`required`) realmente resolve o caso do Gabriel, reproduzi localmente um
+AI Profile espelhando a config dele (`agent_mode=sdr_scheduler`,
+`template=sdr_padrao`, 2 campos custom — desta vez `required`) e mandei a
+mensagem real dele pelo Playground:
+
+> "Vi 'Kit de Casa Pré-Fabricada em Madeira...' e quero um orçamento
+> detalhado."
+
+Resultado: o bot pulou qualificação de novo, mesmo com os campos
+obrigatórios. Trace mostrou `filled_fields=['custom_uso_do_produto',
+'custom_pergunta_de_endereco']` — o extractor (`field_extractor.py`)
+**alucinou** as respostas: preencheu "endereço de entrega" com o texto
+"orçamento detalhado" e "uso do produto" com o nome do produto. Isso
+esvaziou `missing_fields`, e o código de auto-promoção
+(`decision_engine.py:4696`) empurrou a resposta pra `apresentation` —
+mesmo sintoma do bug original, causa diferente.
+
+Causa raiz, confirmada lendo o código e testando ao vivo contra a LLM
+real:
+
+1. **Confiança nunca é verificada em código.** O prompt de
+   `extract_fields_llm` (`field_extractor.py`) pede um score de confiança
+   por campo ("confidence >= 0.4 é suficiente"), mas o valor nunca é
+   comparado a esse limiar em lugar nenhum — busca no repo inteiro
+   confirmou que `confidence_json` é só escrito e repassado
+   (`qualification_state.py`), e explicitamente descartado pela rota do
+   playground (`routes/playground.py`, `extra="ignore"`). Nada decide com
+   base nele.
+2. **A LLM extractora nunca via a pergunta configurada do campo** — só o
+   nome da chave (`custom_pergunta_de_endereco`). Sem saber o que a chave
+   significa, associava qualquer texto tematicamente próximo à pergunta.
+3. **A instrução do prompt pressionava a LLM a "achar" algo:** "extraia
+   TODOS que aparecerem no texto, mesmo sendo campos secundários" —
+   incentivava match forçado em vez de permitir `null` quando a mensagem
+   não respondia à pergunta.
+
+### Correção
+
+| Arquivo | Mudança |
+|---|---|
+| `backend-executors/app/services/field_extractor.py` | Nova `_field_questions()` lê `question`/`label` de `ai_profile.qualification_fields`; prompt passa a incluir a pergunta real de cada campo e exige resposta direta (menção genérica ao produto não conta); `extract_fields_llm()` filtra `extracted` por `confidence[key] >= threshold` antes de devolver (0.4 campos do perfil / 0.6 contexto padrão, fail-closed se não houver confidence) |
+| `backend-executors/tests/test_field_extractor.py` | Novo arquivo — não existia cobertura direta deste módulo. 5 testes: confiança abaixo do limiar filtrada, acima mantida, ausente tratada como reprovada, threshold maior para campo de contexto padrão, pergunta configurada chega no prompt |
+| `backend-executors/tests/test_qualification_state_loop.py` | Mock de `extract_fields_llm` no teste da Fase 1 de `qualificacao-flexivel-score-generalizado.md` passa a incluir `confidence` realista (antes tinha `{}`) |
+
+Validei o wording do prompt ao vivo contra a LLM real antes de aplicar —
+uma primeira versão mais rígida ("só extraia se responder literalmente")
+rejeitou até respostas genuínas (falso negativo); a versão final aceita
+respostas informais/breves desde que respondam de fato à pergunta.
+
+### Commits Fase 2
+
+| # | Commit | O que foi implementado |
+|---|---|---|
+| 1 | *(pendente)* | fix: extractor de qualificação passa a respeitar o próprio limiar de confiança |
+
+### Relatório da Fase 2 — o que mudou na prática
+
+**Antes:** quando um campo de qualificação (obrigatório ou não) era
+customizado — não um dos 4 clássicos — a IA que tenta interpretar a
+resposta do lead podia "inventar" uma resposta a partir de uma menção
+apenas tangencial ao assunto (ex.: o lead citar o nome do produto contava
+como resposta a "pra que você vai usar o produto"). Isso fazia o campo
+parecer preenchido sem realmente ter sido, e o bot avançava para a
+apresentação pulando a pergunta de verdade.
+
+**Agora:** a IA só considera um campo respondido se o lead realmente deu
+uma informação que responde à pergunta configurada — mesmo que de forma
+breve ou informal. Uma menção só ao produto/assunto, sem responder de
+fato, não conta mais, e o bot continua perguntando até ter uma resposta
+real.
+
+**Para validar:** Cenário P4, abaixo.
+
+### Nota de ambiente
+
+Backends locais já estavam de pé nesta sessão (Fase 1 anterior desta
+mesma implementação). `backend-executors` precisou reiniciar (não usa
+`--reload`) para carregar o fix.
+
+---
+
+## Checks de Validação (continuação — Fase 2)
+
+### Cenário P4 — Extractor não alucina resposta a partir de menção tangencial
+- [x] AI Profile espelhando o caso do Gabriel: `agent_mode=sdr_scheduler`, `template=sdr_padrao`, 2 campos custom `required` com perguntas configuradas ("Para que você vai usar o produto?" / "Qual o endereço de entrega?")
+- [x] Playground: mensagem que só menciona o produto e pede orçamento, sem responder nenhuma das duas perguntas
+- [x] Confirmar: `missing_fields` continua com os 2 campos, bot pergunta "Para que você vai usar o produto?" (não pula pra apresentation)
+- [x] Enviar resposta genuína respondendo às duas perguntas → confirmar que os 2 campos são capturados com os valores corretos (não regrediu para falso negativo)
+- **Validado em:** 13/08/2026 — lead 456. 1ª mensagem: `filled_fields=[]`, bot perguntou "Para que você vai usar o produto?". 2ª mensagem (resposta genuína): `GET /api/leads/456/qualification-fields` retornou `{"custom_uso_do_produto": "hospedagem de temporada", "custom_pergunta_de_endereco": "Rua das Flores 123 no Rio"}` — valores corretos, categoria avançou para apresentation normalmente.
