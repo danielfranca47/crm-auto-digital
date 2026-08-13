@@ -149,6 +149,40 @@ new_extracted = {k: v for k, v in extracted.items() if k in active_fields and _i
 has_progress = any(field in new_extracted for field in required_fields)
 ```
 
+### Commits Fase 1
+
+| # | Commit | O que foi implementado |
+|---|---|---|
+| 1 | `85078cc` | Captura de campos opcionais/custom no extractor automático + teste novo |
+
+**Detalhes do commit `85078cc`:**
+- `backend-executors/app/services/decision_engine.py` — nova `_get_active_fields_for_extraction()`; `fields_schema`/`new_extracted` usam a união de `required_fields` + campos ativos; `has_progress` corrigido para continuar restrito a `required_fields`
+- `backend-executors/tests/test_qualification_state_loop.py` — novo teste `test_optional_custom_field_is_captured_but_does_not_affect_missing_fields`
+
+### Relatório da Fase 1 — o que mudou na prática
+
+**Antes:** quando o lead respondia a uma pergunta de qualificação marcada
+como "Opcional"/"Desejável" (ou um campo 100% custom), a IA interpretava a
+resposta corretamente nos bastidores, mas essa informação era descartada
+antes de ser salva — o campo nunca aparecia como preenchido no card do
+lead, e o sistema podia continuar perguntando a mesma coisa.
+
+**Agora:** qualquer campo ativo de qualificação (obrigatório ou opcional)
+tem sua resposta capturada e salva no card do lead. O que continua igual:
+só campos marcados "Obrigatório" bloqueiam o avanço do lead no pipeline —
+um campo opcional respondido é salvo, mas nunca trava nem libera o avanço
+sozinho (isso é o que as próximas fases tratam: score generalizado).
+
+**Para validar:** Cenário P1, abaixo. Validado ao vivo em 13/08/2026.
+
+**Nota técnica:** rodei a suíte de testes Python existente
+(`backend-executors/tests`) antes e depois da mudança — mesmas 22 falhas
+pré-existentes nos dois casos (não relacionadas a esta mudança; parecem
+vir de uma mudança anterior nos defaults de campos obrigatórios por
+`agent_mode`, fora do escopo deste plano). Nenhuma regressão nova.
+
+---
+
 ### Fase 2 — Tolerância de extração configurável
 
 **Objetivo:** novo campo `qualification_extraction_tolerance` no AI Profile
@@ -200,15 +234,49 @@ Também nesta fase: corrigir a cópia "Cada campo qualificado vale 1 ponto" e
 o "/12" fixo (`CamadaQualificacao.tsx:853,1210`) para refletir o mecanismo
 pós-Fase 3, com valor máximo dinâmico.
 
+**Decisão de risco (registrada após investigar o caso real do Gabriel):**
+`missing_fields` (derivado só de campos `required`) é o único sinal que a
+LLM Mãe usa para decidir `route_to="qualification"` — está escrito
+literalmente no prompt dela (`_build_mother_prompt`,
+`backend-executors/app/services/decision_engine.py:1758,1804-1815`:
+"REGRA DE QUALIFICAÇÃO: se missing_fields não estiver vazio... route_to
+DEVE ser qualification"). Zero campos obrigatórios = a Mãe nunca entra em
+qualification para uma pergunta comercial direta — foi exatamente o que
+aconteceu nos dois testes do Gabriel (`response_style=active` e
+`=passive`, ambos com os 2 campos custom dele em `optional`). O score
+(Fase 3) não compensa isso: ele só é consultado quando o sistema já tentou
+mover a categoria PARA FORA de "qualification" — nunca influencia se a Mãe
+decide entrar lá.
+
+Isso significa que aplicar esta Fase 4 como desenhada (todos os 4 campos
+clássicos viram `optional` por padrão) reproduz, para qualquer usuário novo
+que aceite o preset sem customizar, o mesmo bug do Gabriel. **Decisão do
+utilizador:** manter a Fase 4 como desenhada (não adicionar nenhum campo
+obrigatório de volta aos presets) e, em vez disso, adicionar um aviso
+visível na UI sempre que o perfil ficar com zero campos `mode="required"`
+em `qualification_fields` — alertando que, nesse estado, a qualificação
+automática pode nunca ser acionada pela IA (a Mãe só entra em qualification
+quando há pelo menos 1 campo obrigatório pendente).
+
+**Adição ao escopo desta fase — aviso de zero campos obrigatórios:**
+
+| Arquivo | O que muda |
+|---|---|
+| `frontend-crm/src/components/agente/CamadaQualificacao.tsx` | Banner de aviso (mesmo padrão visual de `BannerSugestao`) quando `qualification_fields.filter(f => f.mode === 'required').length === 0` — texto explicando que, sem nenhum campo obrigatório, a IA pode nunca iniciar a qualificação automaticamente antes de apresentar a oferta |
+
+Condição de exibição: computada a partir do array `qualification_fields`
+já disponível no componente — nenhuma chamada de API nova.
+
 ---
 
 ## Checks de Validação
 
 ### Cenário P1 — Campo opcional é capturado e persistido
-- [ ] Perfil com um campo `mode="optional"` custom configurado
-- [ ] Playground: responder à pergunta desse campo
-- [ ] Confirmar via `GET /api/leads/{id}/qualification-fields` que o valor foi persistido
-- [ ] Confirmar que a categoria não é bloqueada por causa dele (continua fora de `missing_fields`)
+- [x] Perfil com um campo `mode="optional"` custom configurado
+- [x] Playground: responder à pergunta desse campo
+- [x] Confirmar via `GET /api/leads/{id}/qualification-fields` que o valor foi persistido
+- [x] Confirmar que a categoria não é bloqueada por causa dele (continua fora de `missing_fields`)
+- **Validado em:** 13/08/2026 — `ai_profile_id=5` com campo custom `custom_cor_preferida` (`mode="optional"`) além do `service_interest` (`required`). Lead 454, mensagem única respondendo aos dois: `filled_fields=['service_interest', 'custom_cor_preferida']`, `missing_fields=[]`. `GET /api/leads/454/qualification-fields` retornou `{"service_interest": "automação do WhatsApp", "custom_cor_preferida": "azul"}` — valor do campo opcional persistido corretamente, e a categoria avançou normalmente para `apresentation` (não ficou bloqueada por causa do campo opcional).
 
 ### Cenário P2 — Tolerância flexível captura resposta não-literal
 - [ ] Perfil com `qualification_extraction_tolerance` no default (`flexivel`)
@@ -223,6 +291,12 @@ pós-Fase 3, com valor máximo dinâmico.
 ### Cenário P4 — Presets sugeridos não vêm mais como obrigatórios
 - [ ] Abrir Camada de Qualificação, aplicar sugestão para cada `agent_mode`
 - [ ] Confirmar que os campos da tabela da Fase 4 aparecem como "Opcional"/"Desejável"
+
+### Cenário P5 — Aviso de zero campos obrigatórios aparece
+- [ ] Perfil com todos os campos de `qualification_fields` em `optional`/`off` (nenhum `required`)
+- [ ] Abrir Camada de Qualificação
+- [ ] Confirmar: banner de aviso visível informando que a qualificação pode nunca ser acionada automaticamente
+- [ ] Marcar 1 campo como `required` → confirmar que o aviso desaparece
 
 ---
 
@@ -240,3 +314,14 @@ pós-Fase 3, com valor máximo dinâmico.
   `qualify_if` preenchido, o máximo passa a ser 18 pontos; se o lead
   responder aos 2 com sinal positivo, score = 18 — se responder sem sinal
   claro, score = 12"). Não bloqueante para as Fases 1-4.
+
+- **Transparência sobre quais campos "contam" para o quê:** hoje um campo
+  chamado `decision_role` parece visualmente idêntico a um campo custom
+  qualquer na UI — nada indica que ele é uma das chaves que o score
+  automático sabe pontuar (`_4P_SCORABLE_KEYS`), nem que campos `required`
+  são o único sinal que faz a LLM Mãe decidir entrar em qualification
+  (`missing_fields`, ver decisão de risco na Fase 4 acima). Melhoria
+  proposta: badges/tooltips na lista de campos indicando (a) "conta para o
+  score automático" quando aplicável, (b) reforçar visualmente que
+  `Obrigatório` é o que aciona a qualificação automática, não apenas uma
+  trava de conclusão. Não bloqueante para as Fases 1-4.
