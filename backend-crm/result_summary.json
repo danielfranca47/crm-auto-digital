@@ -1,0 +1,16 @@
+{
+  "lead_id": 448,
+  "category": "apresentation",
+  "qualification_total_score": 0,
+  "qualification_score_threshold": null,
+  "qualification_advance_blocked": false,
+  "qualification_advance_blocked_reason": [],
+  "required_fields": [
+    "service_interest"
+  ],
+  "missing_fields": [
+    "service_interest"
+  ],
+  "mother_route": "recepcao",
+  "effective_route": "recepcao"
+}

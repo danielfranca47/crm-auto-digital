@@ -85,7 +85,10 @@
       "mcp__plugin_chrome-devtools-mcp_chrome-devtools__fill",
       "mcp__plugin_chrome-devtools-mcp_chrome-devtools__navigate_page",
       "mcp__plugin_chrome-devtools-mcp_chrome-devtools__type_text",
-      "mcp__desktop-control__list_windows"
+      "mcp__desktop-control__list_windows",
+      "Bash(CRM_DB_PATH=:memory: CORE_API_BASE=http://localhost:8001 CORE_SERVICE_TOKEN=test ./.venv/Scripts/python.exe -c ' *)",
+      "Bash(./.venv/Scripts/python.exe -m pytest tests/test_qualification_integrity_guardrails.py tests/test_orchestrator_qualification_fields.py -q)",
+      "Bash(./.venv/Scripts/python.exe -m unittest tests.test_qualification_integrity_guardrails tests.test_orchestrator_qualification_fields -v)"
     ]
   }
 }
