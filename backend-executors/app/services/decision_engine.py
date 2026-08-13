@@ -1323,6 +1323,23 @@ def _get_required_fields_override(context: Dict[str, Any]) -> Optional[List[str]
     return None
 
 
+def _get_active_fields_for_extraction(context: Dict[str, Any]) -> List[str]:
+    """Keys de todos os campos ativos (mode required|optional) de
+    ai_profile.qualification_fields — usado para ampliar o que o extractor
+    de campos (field_extractor.extract_fields_llm) pode capturar, além dos
+    required_fields. [] se qualification_fields não estiver configurado
+    (perfis legados continuam usando só required_fields + must_collect)."""
+    ai_profile = context.get("ai_profile") or {}
+    qual_fields = ai_profile.get("qualification_fields")
+    if not isinstance(qual_fields, list) or not qual_fields:
+        return []
+    return [
+        str(f["key"])
+        for f in qual_fields
+        if isinstance(f, dict) and f.get("mode") in ("required", "optional") and isinstance(f.get("key"), str)
+    ]
+
+
 def _build_mode_contract_context(context: Dict[str, Any], mother_decision: Optional[MotherDecision] = None) -> Dict[str, Any]:
     mode = _normalize_agent_mode(context, mother_decision)
     override = _get_required_fields_override(context)
@@ -4609,7 +4626,12 @@ def decide(context: Dict[str, Any], logger: Optional[logging.Logger] = None) -> 
                 if isinstance(item, str) and item not in required_fields:
                     required_fields.append(item)
 
-            fields_schema = {field: "string|number|object|null" for field in required_fields}
+            active_fields = list(required_fields)
+            for key in _get_active_fields_for_extraction(context):
+                if key not in active_fields:
+                    active_fields.append(key)
+
+            fields_schema = {field: "string|number|object|null" for field in active_fields}
             extraction = {"extracted": {}, "confidence": {}, "evidence": {}, "raw": ""}
             extraction_failed = False
             persist_failed = False
@@ -4622,14 +4644,14 @@ def decide(context: Dict[str, Any], logger: Optional[logging.Logger] = None) -> 
                     logger.info("event=qualification_extractor_fallback reason=extractor_failed")
 
             extracted = extraction.get("extracted") if isinstance(extraction.get("extracted"), dict) else {}
-            new_extracted = {k: v for k, v in extracted.items() if k in required_fields and _is_filled_value(v)}
-            if "price_acceptance" in required_fields and "budget_or_price_acceptance" in extracted and "price_acceptance" not in new_extracted:
+            new_extracted = {k: v for k, v in extracted.items() if k in active_fields and _is_filled_value(v)}
+            if "price_acceptance" in active_fields and "budget_or_price_acceptance" in extracted and "price_acceptance" not in new_extracted:
                 value = extracted.get("budget_or_price_acceptance")
                 if _is_filled_value(value):
                     new_extracted["price_acceptance"] = value
                     if logger:
                         logger.info("event=qualification_price_field_mapped from=budget_or_price_acceptance to=price_acceptance")
-            if "budget_or_price_acceptance" in required_fields and "price_acceptance" in extracted and "budget_or_price_acceptance" not in new_extracted:
+            if "budget_or_price_acceptance" in active_fields and "price_acceptance" in extracted and "budget_or_price_acceptance" not in new_extracted:
                 value = extracted.get("price_acceptance")
                 if _is_filled_value(value):
                     new_extracted["budget_or_price_acceptance"] = value
@@ -4685,7 +4707,9 @@ def decide(context: Dict[str, Any], logger: Optional[logging.Logger] = None) -> 
                     )
             last_field = mode_ctx.get("last_questioned_field")
             attempts_map = mode_ctx.get("attempts_json") if isinstance(mode_ctx.get("attempts_json"), dict) else {}
-            has_progress = bool(new_extracted)
+            # Restrito a required_fields (não active_fields): progresso num campo opcional/custom,
+            # sem tocar o campo obrigatório pendente, não deve suprimir o contador de tentativas/anti-loop.
+            has_progress = any(field in new_extracted for field in required_fields)
 
             if lead_id and user_id and current_field:
                 try:
