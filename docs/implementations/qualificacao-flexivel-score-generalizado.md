@@ -355,6 +355,59 @@ já disponível no componente — nenhuma chamada de API nova.
   - **Tolerância `flexivel` (lead 457):** pergunta automática "Você toma as decisões de compra?" respondida com "sou eu mesmo que decido" (sem nenhum termo do enum `owner|partner|employee|other`). Resultado: `qualification_state.data_json = {"decision_role": "eu mesmo que decido"}` — campo capturado com o texto livre do lead, não forçado para um dos tokens do enum (confirma `_loosen_enum_schema` em ação). `missing_fields=[]`, `qualification_advance_blocked_reason=["score_3_of_12_below_threshold_6"]` (bloqueado por score, não por campo faltando — comportamento esperado).
   - **Tolerância `equilibrado` (lead 458, perfil trocado via `PATCH /ai-profiles/me`, lead novo para isolar o teste):** mesma pergunta, mesma resposta literal ("sou eu mesmo que decido"). Resultado: capturado de forma idêntica (`data_json = {"decision_role": "eu mesmo que decido"}`, mesmo score 3). **Ressalva honesta:** essa frase específica não expôs uma diferença observável de comportamento entre os dois níveis — o LLM já interpretou a frase com confiança suficiente em ambos os casos (a inferência semântica do modelo não depende só do limiar numérico ou do enum do schema, que é só uma dica de tipo, não uma validação estrita em código). O que este teste confirma com segurança: (a) `flexivel` captura respostas não-literais sem quebrar nada; (b) `equilibrado` não regrediu — continua capturando exatamente como antes desta fase. A diferenciação mais nítida entre os 3 níveis (limiares 0.25/0.4/0.6/0.8 e o afrouxamento do enum) está coberta pelos 6 testes automatizados de `test_field_extractor.py`, que isolam a lógica de gate sem depender da variabilidade do LLM real.
 
+### Validação adicional — perguntas abertas na conta real, via MCP (13/08/2026)
+
+A pedido do utilizador, repeti a validação de captura de campos opcionais
+(mecanismo da Fase 1) na conta real de testes `autodigital157@gmail.com`
+(`user_id=15`, AI Profile "Daniel", `ai_profile_id=5`), dirigindo o browser
+via `chrome-devtools-mcp` em vez de chamadas diretas à API — o utilizador
+pediu para "ver o teste pelo MCP".
+
+**Setup:** o servidor MCP (`chrome-devtools-manual`) estava com um Chrome
+órfão preso no profile dedicado (`.cache/chrome-devtools-mcp/chrome-profile`)
+de uma sessão anterior — matei o processo (`taskkill /T /F`) e reconectei.
+O profile já tinha uma sessão válida (`crm_token` no `localStorage`,
+JWT decodificado confirma `user_id=15`/`autodigital157@gmail.com`, expira em
+~21h) — não precisei de senha.
+
+**Alteração persistida no perfil "Daniel" (real, não descartável):** adicionei
+2 campos custom novos em Camada 2 → Qualificação, via UI:
+- `custom_tipo_de_automacao` — pergunta "Que tipo de automação você busca?", `mode=optional`
+- `custom_cep_do_local_de_atendimento` — pergunta "Qual seria o cep do local de atendimento?", `mode=optional`
+
+Confirmei também, na mesma tela, que o card "Tolerância de extração" (novo
+nesta Fase 2) está a renderizar corretamente em produção local, mostrando
+"Equilibrado" (default).
+
+**Teste 1 (lead 459) — falso alarme:** a primeira mensagem de teste continha
+a palavra "atendimento", que é keyword de handoff hardcoded
+(`backend-executors/app/services/fast_path.py::HANDOFF_KEYWORDS`) — o bot
+saltou direto para handoff ("Vou te conectar com alguém do time"). Confirmei
+via log (`decision fast_path next_action=handoff reason=keyword_handoff`) que
+isto é um guardrail pré-existente, sem relação com a Fase 2. Reformulei a
+frase de teste para não conter nenhuma das keywords.
+
+**Teste 2 (lead 460):** respondi à pergunta obrigatória `service_interest`
+com uma frase que também respondia à pergunta aberta de `custom_tipo_de_automacao`,
+na mesma mensagem. Resultado: `data_json = {"service_interest": "...",
+"custom_tipo_de_automacao": "automação de respostas no whatsapp"}` — os dois
+campos capturados a partir de uma única resposta em linguagem natural. Numa
+mensagem seguinte tentei também informar o CEP, mas a conversa já tinha
+avançado para a fase de agendamento (`route_to` deixou de ser
+`qualification`) — o extractor de campos só corre nessa fase, então o CEP
+não foi capturado nesse turno. Comportamento esperado e pré-existente (não é
+regressão desta fase), não um bug.
+
+**Teste 3 (lead 461) — isolado, para validar o CEP:** sessão nova, resposta
+única já incluindo `service_interest` e o CEP juntos, ainda dentro da fase de
+qualificação. Resultado: `data_json = {"service_interest": "...",
+"custom_cep_do_local_de_atendimento": "01310-100"}` — capturado corretamente.
+
+**Conclusão:** o mecanismo de captura de campos opcionais/abertos (Fase 1)
+continua a funcionar corretamente para perguntas genuinamente abertas (sem
+enum), inclusive quando múltiplos campos são respondidos na mesma mensagem,
+na conta real de testes. Nenhuma regressão observada.
+
 ### Cenário P3 — Score generalizado bloqueia e libera perfil 100% custom
 - [ ] Perfil 100% custom com `qualify_if` configurado, score abaixo do threshold
 - [ ] Confirmar: `qualification_advance_blocked: true`
