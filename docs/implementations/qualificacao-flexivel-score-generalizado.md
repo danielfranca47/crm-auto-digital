@@ -403,10 +403,29 @@ regressão desta fase), não um bug.
 qualificação. Resultado: `data_json = {"service_interest": "...",
 "custom_cep_do_local_de_atendimento": "01310-100"}` — capturado corretamente.
 
-**Conclusão:** o mecanismo de captura de campos opcionais/abertos (Fase 1)
-continua a funcionar corretamente para perguntas genuinamente abertas (sem
-enum), inclusive quando múltiplos campos são respondidos na mesma mensagem,
-na conta real de testes. Nenhuma regressão observada.
+**Conclusão (testes 1–3):** o mecanismo de captura de campos opcionais/abertos
+(Fase 1) continua a funcionar corretamente para perguntas genuinamente
+abertas (sem enum), inclusive quando múltiplos campos são respondidos na
+mesma mensagem, na conta real de testes. Nenhuma regressão observada.
+
+**Teste 4 (lead 462) — fluxo natural, turno a turno, para validar que a
+qualificação obrigatória em si não regrediu:** a pedido do utilizador, refiz
+o teste sem pré-responder nada — mandei só "Olá, bom dia", esperei a
+resposta, e só depois fui respondendo exatamente ao que a IA perguntava a
+cada turno, uma coisa de cada vez (sem adiantar campos), deixando a IA
+conduzir suas próprias perguntas de qualificação.
+
+- Turno 1 — `"Olá, bom dia"` → bot responde com saudação + `"Como posso ajudar você hoje?"` (recepção, sem pergunta de qualificação ainda).
+- Turno 2 — `"Vi o anuncio de voces e fiquei curioso pra saber mais"` (intenção vaga, sem citar o serviço) → a própria IA formulou e fez a pergunta de qualificação obrigatória: `"Qual serviço te interessa?"` (`route_to=qualification`, `missing_fields=["service_interest"]`).
+- Turno 3 — respondi só a isso: `"Quero automatizar as respostas do whatsapp da minha empresa"` → `service_interest` capturado (`data_json = {"service_interest": "automatizar as respostas do whatsapp"}`), `missing_fields` esvaziou, guardrail de auto-promoção acionou (`qualification_auto_promoted=True`, igual ao mecanismo já validado antes desta fase) e o lead avançou sozinho para agendamento — este perfil só tem 1 campo `required` (`service_interest`), então não havia mais nenhuma pergunta obrigatória pendente.
+- Turno 4 — `"Pode ser quinta as 14h"` → fluxo de agendamento seguiu normalmente, confirmou o horário.
+
+Nenhum handoff inesperado, nenhuma repetição de pergunta, nenhum erro — o
+guardrail de `missing_fields`/anti-loop e a lógica de auto-promoção (ambos
+fora do escopo desta Fase 2, tocados só indiretamente) continuam intactos.
+Isto confirma que parametrizar os limiares de confiança e afrouxar o schema
+de enum no `field_extractor.py` (mudanças desta fase) não interferiu em nada
+no caminho de qualificação obrigatória guiada pela própria IA.
 
 ### Cenário P3 — Score generalizado bloqueia e libera perfil 100% custom
 - [ ] Perfil 100% custom com `qualify_if` configurado, score abaixo do threshold
