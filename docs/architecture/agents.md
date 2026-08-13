@@ -133,6 +133,7 @@ jobs já resolvidos.
 | `audio_transcription_enabled` | boolean | Se o agente transcreve áudios PTT via Whisper (padrão: `false`) |
 | `response_style` | string | `"active"` (pergunta proativamente) ou `"passive"` (infere silenciosamente) |
 | `qualification_fields` | list\|null | Campos de qualificação configurados via UI — substitui os defaults hardcoded quando presente. Cada entrada: `{key, label, question, passive_hint, mode, group?, qualify_if?, disqualify_if?}` |
+| `qualification_extraction_tolerance` | string (enum) | Calibra o quão literal o extractor de campos de qualificação (`field_extractor.py`) precisa ser (padrão: `"equilibrado"`). Ver enum abaixo e [`pipeline-phases.md`](pipeline-phases.md#extração-de-respostas--field_extractorpy-llm-dedicada) |
 | `sales_flow` | object\|null | Fluxo de Venda — `{enabled, phases: [{id, blocks[]}]}`. Ver [`sales-flow.md`](sales-flow.md) |
 | `cold_outreach_channel` | string (enum)\|null | `whatsapp_only`\|`email_first`. **Não consumido por nenhum fluxo** — a escolha real de canal (WhatsApp/Email) da prospecção fria é por-lote, no agent-local (ver [`agent-local-app.md`](agent-local-app.md)), não uma preferência de perfil. Coluna mantida no schema e exposta em `admin-agents-contract.md` desde a v1 do cold outreach, sem UI de edição activa |
 | `offer_pack` | object\|null | JSON com configurações de oferta e comportamento de mídia (ver abaixo) |
@@ -198,6 +199,8 @@ jobs já resolvidos.
 **`availability_mode`**: `"24h"` (sem restrição), `"business_hours"` (Seg–Sex 09h–18h no `timezone` do perfil), `"custom"` (grade de dias/horas configurada na UI)
 
 **`scheduling_offer_style`**: `"offer_alternatives"` (padrão — sempre propõe 2-3 horários, mesmo sem conflito real; tática comercial de escassez), `"confirm_exact"` (confirma directamente o horário pedido quando está livre, sem oferecer alternativas)
+
+**`qualification_extraction_tolerance`**: `"flexivel"` (aceita respostas parafraseadas/informais, afrouxa enums fechados como `decision_role`), `"equilibrado"` (padrão — thresholds de confiança 0.4/0.6, comportamento histórico em produção), `"rigoroso"` (exige confirmação mais explícita)
 
 ### Campos do `offer_pack` (subobject)
 

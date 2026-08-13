@@ -86,10 +86,70 @@ backfill — os campos de "Critérios de Qualificação" continuam 100% manuais.
 
 - Campos obrigatórios por `agent_mode` — `backend-crm/services/qualification_guardrails.py`:
   - `consultivo`: 6 campos | `agenda`: 4 campos | `direto`: 3 campos
+  - Override por perfil: `ai_profile.qualification_required_fields` (lista explícita) substitui o default do modo; cada campo em `qualification_fields` tem `mode: "required"|"optional"` — só os `required` entram em `missing_fields`
 - Bloqueio de avanço: HTTP 409 se campos faltantes — `backend-crm/routes/leads.py`
 - Extração heurística de campos por regex/keywords — `backend-executors/app/contracts/qualification_contract.py`
 - Persistência em `lead_qualification_state` com histórico de perguntas (max 3/campo)
 - Evitar repetição de perguntas via SequenceMatcher
+
+**`missing_fields` é o único sinal que decide se a LLM Mãe entra em qualification** — está
+escrito literalmente no prompt dela (`_build_mother_prompt`, `decision_engine.py`: "se
+missing_fields não estiver vazio... route_to DEVE ser qualification"). Um perfil sem nenhum
+campo `required` (só `optional`/custom) nunca aciona a entrada automática em qualification
+para uma pergunta comercial direta, independentemente do score configurado (ver "Gate de
+score" abaixo, que só actua depois de o lead já estar em qualification).
+
+### Extração de respostas — `field_extractor.py` (LLM dedicada)
+
+`backend-executors/app/services/field_extractor.py::extract_fields_llm()` é uma chamada LLM
+isolada (não é a Mãe nem uma Filha) que interpreta a resposta do lead e preenche
+`lead_qualification_state.data_json`.
+
+- **Campos capturados:** união de `required_fields` + todos os campos activos de
+  `qualification_fields` (`optional`/custom incluídos) — `_get_active_fields_for_extraction()`
+  em `decision_engine.py`. Um campo `optional` respondido é salvo e aparece no card do lead,
+  mas nunca entra em `missing_fields` nem bloqueia avanço sozinho.
+- **Pergunta real no prompt:** `_field_questions()` injecta o texto de `question`/`label`
+  configurado de cada campo — sem isso, a LLM via só o nome da chave (ex.:
+  `custom_pergunta_de_endereco`) e associava qualquer texto tematicamente próximo à pergunta.
+- **Filtro de confiança (fail-closed):** `extracted` só é aceito se
+  `confidence[key] >= threshold` — chave sem `confidence` numérica é tratada como reprovada.
+  Sem este filtro, uma menção tangencial ao produto podia ser interpretada como resposta a
+  qualquer pergunta aberta.
+- **Tolerância configurável:** `ai_profile.qualification_extraction_tolerance`
+  (`"flexivel"|"equilibrado"|"rigoroso"`, default `"equilibrado"`) resolve os thresholds via
+  `_TOLERANCE_THRESHOLDS`/`_resolve_tolerance()`. `"equilibrado"` (0.4 campos do perfil / 0.6
+  campos de contexto padrão) é o comportamento histórico em produção. `"flexivel"` baixa os
+  thresholds e afrouxa os enums fechados (`decision_role`, `urgency` → aceitam texto livre em
+  vez de só os valores do enum) via `_loosen_enum_schema()`. `"rigoroso"` sobe os thresholds.
+
+### Gate de score — `qualification_guardrails.py`
+
+`ai_profile.qualification_score_threshold` (score mínimo dos "4Ps" — `decision_role`,
+`urgency`, `budget_or_price_acceptance`, `availability_window`, calculado em
+`backend-crm/services/qualification_state.py::compute_4p_scores()`) é aplicado em dois
+caminhos:
+
+- **Manual** — `can_advance_from_qualification()`, usado no drag do Kanban
+  (`routes/leads.py`) e no `PATCH /api/leads/{id}`. Verifica campos obrigatórios **e** score.
+- **Automático (bot)** — `can_advance_score_gate()`, chamado antes de mover um lead para fora
+  de `qualification` em `jobs_service.apply_suggested_category()` (WhatsApp real) e em
+  `routes/playground.py` (antes de `_update_lead_category()`, incluindo a 2ª chamada síncrona
+  da "saudação composta"). Só verifica score — campos obrigatórios já são aplicados antes disso
+  por `decision_engine.py`, então não repete essa checagem (decisão de "audit: Fase 5 — isolar
+  guardrail de qualificação", commit `511d9c9`). `QUALIFICATION_GATED_CATEGORIES =
+  {"apresentation", "pre-agendamento", "agendamento", "follow-up", "closing"}`.
+
+**Limitação conhecida:** o score só pontua as 4 chaves clássicas acima
+(`_4P_SCORABLE_KEYS`). Um perfil 100% custom (nenhuma dessas chaves configurada em
+`qualification_fields`) pula o gate de score inteiramente (`_score_below_threshold` retorna
+`True` sem checar nada) — ver `docs/plans/qualificacao-score-generalizado-melhorias-futuras.md`
+para o desenho de generalização (não implementado).
+
+O trace do Playground (`DecisionTrace`) expõe `required_fields`, `missing_fields`,
+`qualification_total_score`, `qualification_score_threshold`,
+`qualification_advance_blocked` e `qualification_advance_blocked_reason` — ver
+[`playground-parity.md`](playground-parity.md).
 
 ### Guardrails anti-loop
 
