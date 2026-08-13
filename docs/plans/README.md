@@ -27,6 +27,7 @@ implementação.
 | `central-ajuda-usuario.md` | Central de Ajuda educativa para usuários (estilo Meta Ads Help) — nasce do gap de descoberta de `custom_instructions`/Fluxo de Venda como redes de segurança configuráveis |
 | `email-cold-outreach-melhorias-futuras.md` | Itens deixados de fora da v1 do email cold outreach graduado: suporte Outlook/Microsoft 365 (OAuth), múltiplas contas SMTP por utilizador |
 | `persistencia-dados-melhorias-futuras.md` | Item deixado de fora da correcção de persistência do backend-crm: aplicar a mesma checagem de arranque (recusar subir sem env var de persistência) ao backend-core |
+| `qualificacao-score-generalizado-melhorias-futuras.md` | Fases 3-4 adiadas de `qualificacao-flexivel-score-generalizado.md` (score generalizado para campos custom, presets não-obrigatórios com risco a redesenhar) + didática/transparência de score na UI |
 
 Os arquivos sem prefixo `_` são os **planos concretos** — contêm melhorias identificadas
 que ainda não foram implementadas.

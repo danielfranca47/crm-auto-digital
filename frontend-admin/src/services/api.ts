@@ -167,6 +167,7 @@ export type UserProfile = {
   offer_pack?: unknown;
   qualification_score_threshold?: number;
   qualification_required_fields?: string[];
+  qualification_extraction_tolerance?: string;
   followup_max_attempts?: number;
   has_custom_config: boolean;
 };

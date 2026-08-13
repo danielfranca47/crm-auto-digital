@@ -13,6 +13,10 @@ from fastapi import HTTPException
 
 from database import DB_PATH, get_connection
 from services.lead_category_policy import apply_closing_bot_disable_side_effect
+from services.qualification_guardrails import (
+    QUALIFICATION_GATED_CATEGORIES,
+    can_advance_score_gate,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -1001,6 +1005,17 @@ def apply_suggested_category(
             normalized,
         )
         return False
+
+    if current_category == "qualification" and normalized in QUALIFICATION_GATED_CATEGORIES:
+        can_advance, missing = can_advance_score_gate(conn, lead_id, user_id) if user_id is not None else (True, [])
+        if not can_advance:
+            logger.info(
+                "lead_category_blocked_incomplete_qualification lead_id=%s missing=%s suggested=%s origin=automatic",
+                lead_id,
+                missing,
+                normalized,
+            )
+            return False
     update_params: List[Any] = [normalized, lead_id]
     update_clause = "WHERE id=?"
     if user_id is not None:

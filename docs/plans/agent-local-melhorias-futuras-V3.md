@@ -108,7 +108,53 @@ Ver [`_versionamento-agent-local.md`](_versionamento-agent-local.md): o
 empacotamento PyInstaller é sempre o último item do ciclo de cada versão do
 agent-local — só fica pronto para sair daqui e virar arquivo de
 implementação depois de todos os cenários de teste da v3 (M1–M9 acima, mais
-o que mais for planeado para a v3) estarem validados. Reaproveitar o rascunho
-técnico já usado para a v2 (`docs/implementations/agent-local-v2-empacotamento-exe.md`)
-como ponto de partida — o mecanismo de build não muda entre versões, só o
-conteúdo empacotado.
+o que mais for planeado para a v3) estarem validados. O mecanismo de build já
+está documentado (e não muda entre versões, só o conteúdo empacotado) em
+[`agent-local-app.md`](../architecture/agent-local-app.md#empacotamento-e-distribuição-exe)
+— usar essa secção como ponto de partida.
+
+## M11 — README.md do agent-local desatualizado
+
+**Prioridade: ALTA**
+
+`agent-local/README.md` (linhas 62-68) ainda descreve o worker antigo
+(`python main.py`, `.env`, jobs de polling) — não menciona a GUI v2
+(CustomTkinter) nem o `.exe`/instalador já existentes. Reescrever para
+reflectir o estado actual da app desktop.
+
+## M12 — Atraso de arranque do `--onefile`
+
+**Prioridade: BAIXA**
+
+`agent-local.spec` usa `--onefile`, que extrai tudo para uma pasta temp a
+cada execução — alguns segundos de atraso no arranque, aceito como
+trade-off na v2. Avaliar migrar para `--onedir` (arranque mais rápido, troca
+por distribuir uma pasta em vez de um único arquivo) se o atraso se tornar
+um problema relatado por clientes.
+
+## M13 — Ícone gerado por CSS, sem logo vetorial oficial
+
+**Prioridade: BAIXA**
+
+`agent-local/assets/icon.ico` foi gerado programaticamente (Pillow) a 512×512
+a partir do mark CSS simples do site (gradiente + `rounded-xl`), não de um
+logo vetorial oficial. Se a Digital Pro criar um logo vetorial no futuro,
+substituir `assets/icon.ico` por uma versão com mais detalhe/qualidade nos
+tamanhos maiores (128/256px).
+
+## M14 — Favicons genéricos do Lovable em website/frontend-crm/frontend-admin
+
+**Prioridade: ALTA**
+
+`website/public/favicon.ico` e `frontend-crm/public/favicon.ico` são o mesmo
+arquivo (hash idêntico) — o "coração" colorido genérico do template Lovable,
+não a marca Digital Pro. `frontend-admin/public/favicon.svg` é outro ícone
+genérico do Lovable (fragmento/raio abstrato roxo-azul). Trocar os três pelo
+mark real "Lara by DigitalPro" (mesmo desenhado em
+`website/src/pages/CRMLandingV2.tsx:266-269` e já replicado como imagem em
+`agent-local/assets/icon.ico`, ver
+[`agent-local-app.md`](../architecture/agent-local-app.md#empacotamento-e-distribuição-exe)).
+`frontend-admin` usa `.svg` (não `.ico`) — decidir se mantém o formato ou
+migra para `.ico`/`.png`, o que for mais simples de gerar a partir do novo
+asset. Afecta `website/`, `frontend-crm/` e `frontend-admin/`, não o
+`agent-local/` em si.

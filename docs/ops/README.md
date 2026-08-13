@@ -16,7 +16,7 @@ real, playground, configurações de ambiente).
 |---|---|
 | `_guia-testes-whatsapp.md` | Processo completo para criar e executar testes WhatsApp real + playground. Usado pelo Claude para criar o arquivo filho de testes. |
 | `_guia-testes-desktop-app.md` | Processo para validar apps desktop nativas (ex.: `agent-local`) que não correm num browser — qual ferramenta de automação usar (`computer-use`) e armadilhas conhecidas. |
-| `guia-teste-cliente-novo-exe-agent-local.md` | Script permanente (não é sessão única) para guiar um cliente não-técnico numa call testando o `agent-local.exe` no PC dele — onboarding real + fecha os Cenários C2/C4 de `docs/implementations/agent-local-v2-empacotamento-exe.md`. |
+| `guia-teste-cliente-novo-exe-agent-local.md` | Script permanente (não é sessão única) para guiar um cliente não-técnico numa call testando o `agent-local.exe` no PC dele — onboarding real + confirma em hardware real o empacotamento já graduado (ver `docs/architecture/agent-local-app.md`). |
 
 ### Ficheiros regulares — trabalho activo
 

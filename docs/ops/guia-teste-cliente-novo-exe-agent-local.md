@@ -7,10 +7,11 @@ sozinho, sem precisar entender nada de código.
 
 Serve dois propósitos:
 1. Onboarding real de um cliente novo.
-2. Fecha os Cenários **C2** (executável abre sem Python instalado), **C4**
-   (fluxo Selenium/WhatsApp funciona) e **C6** (instalador cria atalhos e
-   desinstala limpo, num PC de verdade — não só na máquina de dev) em
-   [`docs/implementations/agent-local-v2-empacotamento-exe.md`](../implementations/agent-local-v2-empacotamento-exe.md).
+2. Confirma em hardware real três coisas que só foram testadas em máquina de
+   dev até agora: o executável abre sem Python instalado, o fluxo
+   Selenium/WhatsApp funciona, e o instalador cria atalhos e desinstala
+   limpo — ver
+   [`agent-local-app.md`](../architecture/agent-local-app.md#empacotamento-e-distribuição-exe).
 
 Este arquivo **não é temporário** — fica para reutilizar em todo onboarding
 futuro (ao contrário dos `guia-testes-*.md` de sessão única, que são
@@ -173,17 +174,15 @@ instalador já deixou dois atalhos prontos:
 
 ## Depois da call — o que registar
 
-Transcrever o resultado directamente para os Cenários **C2**, **C4** e
-**C6** em
-[`docs/implementations/agent-local-v2-empacotamento-exe.md`](../implementations/agent-local-v2-empacotamento-exe.md)
-(`[x]` + data + o que foi observado — ex.: "testado no PC do cliente X,
-Windows 11, sem Python instalado; instalador não pediu senha admin, criou
-atalho na Área de Trabalho; SmartScreen apareceu e foi resolvido
-normalmente; QR code escaneado e mensagem chegou").
+Se tudo correu bem (executável abriu sem Python, WhatsApp/Selenium
+funcionou, instalador ficou limpo): nada a fazer — o empacotamento já está
+graduado em
+[`agent-local-app.md`](../architecture/agent-local-app.md#empacotamento-e-distribuição-exe),
+esta call só confirma em hardware real o que já foi documentado.
 
-Se algo falhar: **não marcar `[x]`**, anotar o que aconteceu no arquivo de
-implementação, e voltar a Plan Mode se for preciso corrigir alguma coisa no
-código antes de repetir o teste.
+Se algo falhar: abrir Plan Mode e criar um novo arquivo em
+`docs/implementations/` para corrigir o problema, referenciando esta call e
+a secção "Empacotamento e Distribuição" de `agent-local-app.md`.
 
 ---
 

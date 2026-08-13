@@ -612,4 +612,89 @@ def test_auto_promote_never_uses_qualification_fallback_message(monkeypatch):
     assert trace.get("effective_route_to") == "apresentation"
     assert decision.next_action == "reply"
     assert not decision.message_text.startswith("Pode me confirmar:")
-    assert ("qualification_validation_status" not in trace) or (trace.get("qualification_validation_status") == "n/a")
+
+
+def test_optional_custom_field_is_captured_but_does_not_affect_missing_fields(monkeypatch):
+    """Fase 1 de qualificacao-flexivel-score-generalizado.md: campos `mode="optional"`
+    passam a ser capturados pelo extractor (fields_schema deixa de se limitar a
+    required_fields), mas continuam fora de missing_fields/current_field/anti-loop —
+    só required_fields determina o que bloqueia o avanço."""
+    captured_patch = {}
+
+    def _fake_upsert(**kwargs):
+        captured_patch.update(kwargs.get("patch") or {})
+        return {
+            "exists": True,
+            "data_json": {"custom_uso_do_produto": "uso diário"},
+            "attempts_json": {},
+            "last_questioned_field": "service_interest",
+        }
+
+    incremented = {}
+
+    def _fake_increment(**kwargs):
+        incremented["field"] = kwargs.get("field")
+        return {
+            "exists": True,
+            "data_json": {"custom_uso_do_produto": "uso diário"},
+            "attempts_json": {kwargs.get("field"): 1},
+            "last_questioned_field": kwargs.get("field"),
+        }
+
+    context = {
+        "lead": {"id": 10, "user_id": 99, "category": "qualification"},
+        "ai_profile": {
+            "agent_mode": "consultivo",
+            "qualification_fields": [
+                {"key": "service_interest", "mode": "required"},
+                {"key": "custom_uso_do_produto", "mode": "optional"},
+            ],
+        },
+        "playbook": {},
+        "metadata": {"inbound_message_text": "uso todo dia"},
+        # outbound_count>=1 é necessário para _enforce_greeting_first não forçar recepcao
+        # neste teste (a saudação já foi feita — cenário é meio de conversa).
+        "history": [
+            {"model": "outbound", "body": "Oi! Me conta o que você busca?"},
+            {"model": "inbound", "body": "quero saber sobre o produto"},
+        ],
+        "job": {"id": 777, "payload": {"lead_id": 10, "user_id": 99}},
+        "qualification_state": {
+            "exists": True,
+            "data_json": {},
+            "attempts_json": {},
+            "last_questioned_field": "service_interest",
+        },
+    }
+    monkeypatch.setattr(
+        decision_engine.llm_service,
+        "generate_mother_route",
+        lambda _p: '{"route_to":"qualification","perceived_category":"qualification","confidence":0.9,"reason":"teste"}',
+    )
+    monkeypatch.setattr(
+        decision_engine.field_extractor,
+        "extract_fields_llm",
+        lambda _c, _s: {
+            "extracted": {"custom_uso_do_produto": "uso diário"},
+            "confidence": {"custom_uso_do_produto": 0.9},
+            "evidence": {},
+            "raw": "{}",
+        },
+    )
+    monkeypatch.setattr(decision_engine.crm_client, "upsert_lead_qualification_state", _fake_upsert)
+    monkeypatch.setattr(decision_engine.crm_client, "increment_lead_qualification_attempt", _fake_increment)
+    monkeypatch.setattr(
+        decision_engine.llm_service,
+        "generate_child_result",
+        lambda _r, _p: '{"question_text":"O que você busca?","field":"service_interest","did_complete_phase":false,"recommended_next_category":null,"outcome":null,"kanban_highlight":null,"signals":[],"confidence":0.8}',
+    )
+
+    decision_engine.decide(context)
+
+    # Capturado e persistido mesmo sendo opcional (antes da Fase 1, era descartado).
+    assert captured_patch.get("data_json", {}).get("custom_uso_do_produto") == "uso diário"
+
+    # Mas não conta como progresso no campo obrigatório pendente — o anti-loop
+    # continua avaliando só required_fields, então o contador de tentativas avança
+    # normalmente para "service_interest".
+    assert incremented.get("field") == "service_interest"

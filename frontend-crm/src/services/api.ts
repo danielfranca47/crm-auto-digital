@@ -89,6 +89,7 @@ export type AiProfilePayload = {
   buying_signal_keywords?: string[] | null;
   qualification_required_fields?: string[] | null;
   qualification_fields?: import('../types/agente').QualificationField[] | null;
+  qualification_extraction_tolerance?: "flexivel" | "equilibrado" | "rigoroso" | null;
   calendar_integration?: "none" | "google_calendar" | "calendly" | null;
   payment_gateway?: "hotmart" | "kiwify" | "stripe" | "generico" | null;
   response_style?: "active" | "passive" | null;
@@ -1387,6 +1388,7 @@ export const api = {
         // Camada 2 — Qualificação avançada
         qualification_score_threshold: pack.qualification_score_threshold ?? DEFAULT_AGENT_CONFIG.qualification_score_threshold,
         nurture_vs_discard_rule:        (profile as any)?.nurture_vs_discard_rule        ?? DEFAULT_AGENT_CONFIG.nurture_vs_discard_rule,
+        qualification_extraction_tolerance: ((profile as any)?.qualification_extraction_tolerance ?? DEFAULT_AGENT_CONFIG.qualification_extraction_tolerance) as 'flexivel' | 'equilibrado' | 'rigoroso',
         buying_signal_keywords:         pack.buying_signal_keywords         ?? DEFAULT_AGENT_CONFIG.buying_signal_keywords,
         qualification_fields:           (profile as any)?.qualification_fields ?? DEFAULT_AGENT_CONFIG.qualification_fields,
         qualification_required_fields:  (profile as any)?.qualification_required_fields ?? pack.qualification_required_fields ?? DEFAULT_AGENT_CONFIG.qualification_required_fields,
@@ -1545,6 +1547,7 @@ export const api = {
         default_session_duration_minutes: config.default_session_duration_minutes,
         meeting_management_enabled:    config.meeting_management_enabled,
         nurture_vs_discard_rule:       config.nurture_vs_discard_rule,
+        qualification_extraction_tolerance: config.qualification_extraction_tolerance,
         followup_max_attempts:         config.followup_max_attempts,
         followup_first_offset:         config.followup_first_offset,
         followup_cadence:              (() => {

@@ -1,12 +1,11 @@
 # Agent-Local — App Desktop de Prospecção
 
 **Versão documentada: v2.** Este doc é o espelho da v2 do agent-local (app
-desktop CustomTkinter com auth, Kanban, Assistente IA e copy IA). O
-empacotamento `.exe` da própria v2 está pronto para implementar — ver
-`docs/implementations/agent-local-v2-empacotamento-exe.md`. Melhorias ainda
-não implementadas (v3, incluindo o empacotamento da v3 como última fase) ficam
-em `docs/plans/agent-local-melhorias-futuras-V3.md`. Quando a v3 for
-implementada e graduada, este doc passa a reflectir v3 e a nota acima é
+desktop CustomTkinter com auth, Kanban, Assistente IA, copy IA e
+empacotamento `.exe` — ver "Empacotamento e Distribuição" abaixo). Melhorias
+ainda não implementadas (v3, incluindo o empacotamento da v3 como última
+fase) ficam em `docs/plans/agent-local-melhorias-futuras-V3.md`. Quando a v3
+for implementada e graduada, este doc passa a reflectir v3 e a nota acima é
 actualizada — não acumular "v2 vs v3" no corpo do texto, o doc é sempre um
 espelho da versão mais recente já graduada.
 
@@ -339,3 +338,45 @@ independente do Kanban local).
 
 Guardado em texto simples em `~/.agent-local/session.json` — mesmo
 precedente para `google_maps_api_key` e `openai_api_key`.
+
+---
+
+## Empacotamento e Distribuição (.exe)
+
+Só Windows. PyInstaller (`agent-local.spec`, `build.bat`) gera
+`dist/agent-local.exe` (`--onefile`, `console=False`) — um único arquivo que
+abre por duplo clique, sem precisar de Python/`.venv` no PC do utilizador.
+
+**Fallback de URL de produção:** sem `.env`/env vars, `app/auth.py::_get_core_url()`
+e `app/crm_client.py::_base()` apontam para o backend real em produção
+(Railway) em vez de `localhost` — necessário porque um `.exe` distribuído a
+um cliente não tem `.env` nenhum. Overrides via `CORE_BASE_URL`/`BACKEND_URL`
+continuam a funcionar normalmente (comportamento em dev não muda, já que o
+`.env` local sempre sobrepõe o fallback).
+
+**Ícone:** `assets/icon.ico` (multi-tamanho, 16–256px) replica o mark "Lara
+by DigitalPro" (quadrado `rounded-xl` com gradiente azul, ver
+`website/src/pages/CRMLandingV2.tsx:266-269`). Aplicado no `.exe` via
+`EXE(..., icon="assets/icon.ico")` no spec, e na janela via `iconphoto` +
+`PIL.ImageTk.PhotoImage` em `main.py` — `iconbitmap` nativo do Tk falha
+silenciosamente com `.ico` de frame comprimido em PNG.
+
+**Instalador:** Inno Setup (`agent-local-installer.iss` + `build-installer.bat`)
+gera `installer_output/DigitalPro-GeradorDeLeads-Setup.exe`.
+`PrivilegesRequired=lowest` — não pede senha de administrador (cliente pode
+não ser admin do próprio PC). Instala em
+`{localappdata}\DigitalPro\GeradorDeLeads`, cria atalho no Menu Iniciar
+(grupo "Gerador de Leads — Digital Pro") sempre e na Área de Trabalho por
+padrão (desmarcável), regista em "Adicionar/Remover Programas", desinstala
+limpo.
+
+**Pré-requisito de distribuição (inalterado):** utilizador final precisa ter
+o Google Chrome instalado — usado pelo fluxo Selenium de WhatsApp.
+
+**Trade-off aceito:** `--onefile` extrai para uma pasta temp a cada
+execução, gerando alguns segundos de atraso no arranque — ver M12 em
+`docs/plans/agent-local-melhorias-futuras-V3.md` se quiser explorar
+`--onedir`.
+
+Guia de onboarding/validação com cliente real (não-técnico):
+[`docs/ops/guia-teste-cliente-novo-exe-agent-local.md`](../ops/guia-teste-cliente-novo-exe-agent-local.md).

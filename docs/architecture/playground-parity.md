@@ -175,6 +175,25 @@ Além da paridade de contexto LLM, o playground expõe campos de preview que sim
 | `audio_previews` | `List[str]` — URLs dos `myaudio`/`ptt` da base de conhecimento que seriam enviados como voz | Executor envia `pre_send_media` com `type=myaudio` e `delay_ms=3000` antes de cada um |
 | `appointment_event` | `{action: "created"\|"rescheduled"\|"canceled", start_at, end_at}` ou `null` — preenchido quando o turno criou/reagendou/cancelou de facto um appointment real (ver [`agenda.md`](agenda.md), secção "Playground cria appointments reais"). Frontend renderiza um chip distinto (📅/🔄/❌) na conversa | Nenhum equivalente — no fluxo real a confirmação chega ao lead só como mensagem de texto, não como campo estruturado numa resposta de API |
 
+### Trace de qualificação (`DecisionTrace`)
+
+Além do `PlaygroundChatResponse`, o Playground expõe um `DecisionTrace` com o estado do
+gate de qualificação no turno — usado para depurar por que um lead ficou (ou não) preso em
+`qualification`. Ver [`pipeline-phases.md`](pipeline-phases.md#gate-de-score--qualification_guardrailspy)
+para a lógica por trás de cada campo.
+
+| Campo | Descrição |
+|-------|-----------|
+| `required_fields` | Campos `required` resolvidos para este lead (override do perfil ou default do `agent_mode`) |
+| `missing_fields` | Subconjunto de `required_fields` ainda sem valor — único sinal que faz a Mãe rotear para `qualification` |
+| `qualification_total_score` | Score acumulado dos "4Ps" (`decision_role`/`urgency`/`budget_or_price_acceptance`/`availability_window`) |
+| `qualification_score_threshold` | `ai_profile.qualification_score_threshold` (default `6`) |
+| `qualification_advance_blocked` | `True` quando `can_advance_score_gate()` bloqueou a saída de `qualification` neste turno |
+| `qualification_advance_blocked_reason` | Lista de motivos, ex.: `["score_0_of_12_below_threshold_6"]` |
+
+Equivalente real: mesma lógica corre em `jobs_service.apply_suggested_category()`, mas sem
+trace estruturado devolvido — só logado.
+
 ### Fórmula do typing indicator
 
 ```

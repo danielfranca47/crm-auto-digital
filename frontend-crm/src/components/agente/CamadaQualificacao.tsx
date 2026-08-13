@@ -54,6 +54,12 @@ const MODE_LABELS: Record<string, string> = {
   consultivo: 'Consultivo',
 };
 
+const TOLERANCE_LABELS: Record<'flexivel' | 'equilibrado' | 'rigoroso', string> = {
+  flexivel: 'Flexível',
+  equilibrado: 'Equilibrado',
+  rigoroso: 'Rigoroso',
+};
+
 // ─── Helpers ──────────────────────────────────────────────────
 
 function slugify(label: string): string {
@@ -869,6 +875,43 @@ function DrawerScore({ value, onSave, onClose }: { value: number; onSave: (v: nu
   );
 }
 
+function DrawerTolerancia({ value, onSave, onClose }: {
+  value: 'flexivel' | 'equilibrado' | 'rigoroso';
+  onSave: (v: 'flexivel' | 'equilibrado' | 'rigoroso') => void;
+  onClose: () => void;
+}) {
+  const [local, setLocal] = useState<'flexivel' | 'equilibrado' | 'rigoroso'>(value);
+  const options: Array<{ key: 'flexivel' | 'equilibrado' | 'rigoroso'; desc: string }> = [
+    { key: 'flexivel', desc: 'Aceita paráfrases e respostas informais mesmo sem os termos exatos. Mais captura, menos precisão.' },
+    { key: 'equilibrado', desc: 'Exige uma resposta clara para os campos do perfil e evidência direta para os campos de contexto padrão.' },
+    { key: 'rigoroso', desc: 'Só extrai diante de resposta explícita e inequívoca. Mais precisão, pode exigir que o lead seja mais direto.' },
+  ];
+  return (
+    <DrawerBase title="Tolerância de extração" sub="Quão literal a IA deve ser ao interpretar as respostas do lead" onClose={onClose} onSave={() => onSave(local)}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+        {options.map(opt => (
+          <button
+            key={opt.key}
+            onClick={() => setLocal(opt.key)}
+            style={{
+              textAlign: 'left', padding: '10px 12px', borderRadius: 6, border: '1px solid',
+              cursor: 'pointer',
+              borderColor: local === opt.key ? 'var(--o-purple)' : 'var(--o-b2)',
+              background: local === opt.key ? 'color-mix(in srgb, var(--o-purple) 12%, transparent)' : 'transparent',
+            }}
+          >
+            <div style={{ fontSize: 12.5, fontWeight: 500, color: local === opt.key ? 'var(--o-purple)' : 'var(--o-text)' }}>
+              {TOLERANCE_LABELS[opt.key]}
+              {opt.key === 'equilibrado' && <span style={{ fontSize: 10, color: 'var(--o-dim)', fontWeight: 400 }}> · padrão</span>}
+            </div>
+            <div style={{ fontSize: 11, color: 'var(--o-sub)', marginTop: 3, lineHeight: 1.5 }}>{opt.desc}</div>
+          </button>
+        ))}
+      </div>
+    </DrawerBase>
+  );
+}
+
 function ModalBuyingSignals({ keywords, onSave, onClose }: {
   keywords: string[]; onSave: (v: string[]) => void; onClose: () => void;
 }) {
@@ -999,7 +1042,7 @@ function ModalAddCampoSDR({ fields, onAdd, onClose }: {
 // Componente principal
 // ─────────────────────────────────────────────────────────────
 
-type DrawerKey = 'produto' | 'ticket' | 'publico' | 'dor' | 'objecao' | 'score' | null;
+type DrawerKey = 'produto' | 'ticket' | 'publico' | 'dor' | 'objecao' | 'score' | 'tolerancia' | null;
 type ModalKey  = 'f1' | 'f2' | 'f3' | 'buying_signals' | 'add_campo_sdr' | null;
 
 type GeneratePreview = {
@@ -1209,6 +1252,13 @@ export function CamadaQualificacao({ config, onUpdate }: CamadaQualificacaoProps
           onClick={() => setDrawer('score')}
           help="Pontuação mínima para o lead avançar no pipeline. Cada campo de qualificação respondido vale 1 ponto. Leads abaixo são descartados ou enviados para nurture."
         />
+        <EditCard
+          label="Tolerância de extração"
+          value={TOLERANCE_LABELS[config.qualification_extraction_tolerance]}
+          sub="Quão literal a IA interpreta as respostas"
+          onClick={() => setDrawer('tolerancia')}
+          help="Controla o quanto a IA exige que a resposta do lead seja literal antes de considerar um campo de qualificação preenchido. 'Flexível' aceita paráfrases; 'Rigoroso' exige confirmação explícita."
+        />
         {showBuyingSignals && (
           <EditCard
             label="Sinais de compra"
@@ -1242,6 +1292,9 @@ export function CamadaQualificacao({ config, onUpdate }: CamadaQualificacaoProps
       )}
       {drawer === 'score' && (
         <DrawerScore value={config.qualification_score_threshold} onClose={() => setDrawer(null)} onSave={v => { onUpdate({ qualification_score_threshold: v }); setDrawer(null); }} />
+      )}
+      {drawer === 'tolerancia' && (
+        <DrawerTolerancia value={config.qualification_extraction_tolerance} onClose={() => setDrawer(null)} onSave={v => { onUpdate({ qualification_extraction_tolerance: v }); setDrawer(null); }} />
       )}
 
       {/* Modais SDR */}

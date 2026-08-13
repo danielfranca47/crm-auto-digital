@@ -260,6 +260,7 @@ export interface AgentConfig {
   // ── Camada 2 — Qualificação avançada ─────────────────────
   qualification_score_threshold: number;
   nurture_vs_discard_rule: boolean;
+  qualification_extraction_tolerance: 'flexivel' | 'equilibrado' | 'rigoroso';
   buying_signal_keywords: string[];
   // Contrato unificado (Fase 3) — substitui f1/f2/f3 + qualification_required_fields conceitualmente
   qualification_fields: QualificationField[];
@@ -371,6 +372,7 @@ export const DEFAULT_AGENT_CONFIG: AgentConfig = {
 
   qualification_score_threshold: 6,
   nurture_vs_discard_rule: false,
+  qualification_extraction_tolerance: 'equilibrado',
   buying_signal_keywords: [],
   qualification_fields: [],
   qualification_required_fields: null,
