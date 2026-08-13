@@ -98,7 +98,7 @@ Lead responde pergunta de qualificação (Playground ou WhatsApp real)
           [Fase 1] fields_schema agora inclui TODOS os campos ativos
                     (required + optional), não só required
           [Fase 2] prompt usa threshold/instrução de qualification_extraction_tolerance
-                    (default "flexivel") em vez de 0.4/0.6 fixos
+                    (default "equilibrado" = os mesmos 0.4/0.6 já em produção via c320e0e)
           [Fase 3] retorno ganha "qualifies": {campo: yes|no|neutral}
                     para campos com qualify_if/disqualify_if configurados
       → persistido em lead_qualification_state (backend-crm)
@@ -186,17 +186,87 @@ vir de uma mudança anterior nos defaults de campos obrigatórios por
 ### Fase 2 — Tolerância de extração configurável
 
 **Objetivo:** novo campo `qualification_extraction_tolerance` no AI Profile
-(`"flexivel" | "equilibrado" | "rigoroso"`, default `"flexivel"`).
+(`"flexivel" | "equilibrado" | "rigoroso"`, **default `"equilibrado"`**).
+
+**Ajuste de default (registrado em 13/08/2026, depois de um fix ao vivo):**
+o desenho original desta fase (documentado antes de qualquer teste real)
+propunha default `"flexivel"`, para não travar respostas informais. Nesse
+meio tempo, uma correção separada (`backend-executors/app/services/field_extractor.py`,
+commit `c320e0e`, ver `fix-qualificacao-obrigatoria-caminho-automatico.md`
+Fase 2) resolveu um bug real de alucinação do extractor: ele inventava
+respostas a partir de menções tangenciais porque (a) só via o nome da
+chave, não a pergunta configurada, e (b) o limiar de confiança que o
+próprio prompt já pedia (`_PROFILE_FIELD_CONFIDENCE_THRESHOLD = 0.4`,
+`_DEFAULT_FIELD_CONFIDENCE_THRESHOLD = 0.6`) nunca era verificado em
+código. Validado ao vivo (Cenário P4 daquele arquivo): foi exatamente esse
+rigor moderado, agora aplicado de verdade, que corrigiu o caso do Gabriel.
+Nascer em `"flexivel"` por padrão relaxaria esse mesmo rigor recém-validado
+para todo perfil novo. Esta fase passa a **expor como configurável os
+mesmos dois valores que já existem hardcoded no código** (0.4/0.6 =
+`"equilibrado"`, o novo default) — `"flexivel"` continua disponível como
+opção para quem quiser abrir mão de precisão por captura mais informal;
+`"rigoroso"` para quem quiser mais precisão.
 
 | Arquivo | O que muda |
 |---|---|
 | `backend-core/app/models/ai_profile.py` | Nova coluna `qualification_extraction_tolerance` |
 | `backend-core/app/db.py` | Entrada em `ensure_ai_profile_columns()` |
 | `backend-core/app/api/ai_profiles.py` | Enum `QualificationExtractionTolerance`; campo em `AIProfileBase`/`AIProfileUpdate` |
-| `backend-executors/app/services/field_extractor.py` | `_TOLERANCE_THRESHOLDS`, `_TOLERANCE_INSTRUCTIONS`, `_resolve_tolerance()`, `_loosen_enum_schema()` |
+| `backend-executors/app/services/field_extractor.py` | `_PROFILE_FIELD_CONFIDENCE_THRESHOLD`/`_DEFAULT_FIELD_CONFIDENCE_THRESHOLD` (já existentes, de `c320e0e`) passam a ser resolvidos por nível via `_TOLERANCE_THRESHOLDS`/`_resolve_tolerance()` em vez de constantes fixas; `_TOLERANCE_INSTRUCTIONS` complementa o bloco de regras já existente no prompt; `_loosen_enum_schema()` só no nível `"flexivel"` |
 | `frontend-crm/src/components/agente/CamadaQualificacao.tsx` | Novo controle para o utilizador escolher o nível |
 | `docs/architecture/admin-agents-contract.md` | Documentar novo campo (regra do CLAUDE.md) |
 | `backend-crm/routes/admin_agents.py` | Verificar se a whitelist de campos exibidos ao admin precisa incluir o novo campo |
+
+### Commits Fase 2
+
+| # | Commit | O que foi implementado |
+|---|---|---|
+| 1 | `<pendente>` | Tolerância de extração configurável (`qualification_extraction_tolerance`) — coluna, API, controle no frontend e propagação no field_extractor |
+
+**Detalhes do commit `<pendente>`:**
+- `backend-core/app/models/ai_profile.py` — nova coluna `qualification_extraction_tolerance` (`String`, default `"equilibrado"`)
+- `backend-core/app/db.py` — entrada em `ensure_ai_profile_columns()` com o mesmo default
+- `backend-core/app/api/ai_profiles.py` — enum `QualificationExtractionTolerance` (`flexivel`/`equilibrado`/`rigoroso`); campo em `AIProfileBase` (default `equilibrado`) e `AIProfileUpdate`; campo incluído em `admin_list_all_ai_profiles`
+- `backend-executors/app/services/field_extractor.py` — `_TOLERANCE_THRESHOLDS`/`_resolve_tolerance()` substituem as constantes fixas `_PROFILE_FIELD_CONFIDENCE_THRESHOLD`/`_DEFAULT_FIELD_CONFIDENCE_THRESHOLD` (0.4/0.6 continuam sendo os valores de `"equilibrado"`); `_TOLERANCE_INSTRUCTIONS` complementa o bloco "Regras" do prompt; `_loosen_enum_schema()` troca enums fechados (`decision_role`, `urgency`) por `string|null` só no nível `"flexivel"`
+- `backend-executors/tests/test_field_extractor.py` — 6 testes novos: default sem tolerância configurada, valor inválido cai no default, `flexivel` aceita confidence menor, `rigoroso` rejeita confidence que `equilibrado` aceitaria, `flexivel` afrouxa o schema de enum, `equilibrado` mantém o enum fechado
+- `frontend-crm/src/types/agente.ts` — campo `qualification_extraction_tolerance` em `AgentConfig` e `DEFAULT_AGENT_CONFIG` (default `'equilibrado'`)
+- `frontend-crm/src/services/api.ts` — campo no tipo `AiProfilePayload`, na leitura do perfil (`getConfig`) e na gravação (`saveConfig`)
+- `frontend-crm/src/components/agente/CamadaQualificacao.tsx` — novo card "Tolerância de extração" em Parâmetros avançados + `DrawerTolerancia` com as 3 opções e descrição de cada uma
+- `frontend-admin/src/services/api.ts` — campo adicionado ao tipo `UserProfile` (para o painel admin listar/diffar)
+- `backend-crm/routes/admin_agents.py` — campo propagado em `admin_agents_users`, `admin_agents_user_detail` e em `_SYSTEM_DEFAULTS` (default `"equilibrado"`) para participar do diff genérico exibido no `AdminAgents.tsx`
+- `docs/architecture/admin-agents-contract.md` — nova linha na tabela de campos do AI Profile
+
+### Relatório da Fase 2 — o que mudou na prática
+
+**Antes:** o quão "literal" a IA precisava ser para considerar uma resposta de
+qualificação como válida era fixo no código (0.4 de confiança para campos do
+perfil, 0.6 para os campos padrão) — sem nenhuma forma de o usuário calibrar
+isso pela interface.
+
+**Agora:** a Camada de Qualificação tem um novo controle, "Tolerância de
+extração", com 3 níveis:
+- **Flexível** — aceita respostas parafraseadas/informais, mesmo sem os
+  termos exatos (ex.: "sou eu mesmo que decido" passa a contar para
+  `decision_role`, mesmo sem bater no enum `owner|partner|employee|other`).
+- **Equilibrado** (padrão) — mantém exatamente o comportamento que já estava
+  em produção (0.4/0.6, validado no caso do Gabriel). Nenhum perfil existente
+  muda de comportamento até o usuário trocar manualmente.
+- **Rigoroso** — exige confirmação mais explícita antes de extrair.
+
+**Nota técnica:** rodei a suíte de testes Python existente
+(`backend-executors/tests`) antes e depois da mudança — mesmas 22 falhas
+pré-existentes nos dois casos (mesmas do relatório da Fase 1, não
+relacionadas a esta mudança). Nenhuma regressão nova. Adicionei 6 testes
+novos em `test_field_extractor.py`, todos passando. `tsc --noEmit` limpo em
+`frontend-crm` e `frontend-admin`. Não rodei a suíte do `backend-core`
+(pytest não está instalado no `.venv` local) — validei os 3 arquivos por
+sintaxe (`ast.parse`) e por um smoke test direto do Pydantic (`AIProfileBase`
+gera default `equilibrado`; `AIProfileUpdate` aceita `flexivel`/`rigoroso` e
+rejeita valor inválido com `ValidationError`).
+
+**Para validar (Cenário P2, abaixo):** ainda não testado ao vivo — depende do
+Playground com um perfil configurado em `flexivel` e uma resposta que não usa
+os termos literais do enum.
 
 ### Fase 3 — Score generalizado para qualquer campo configurado
 
@@ -279,9 +349,10 @@ já disponível no componente — nenhuma chamada de API nova.
 - **Validado em:** 13/08/2026 — `ai_profile_id=5` com campo custom `custom_cor_preferida` (`mode="optional"`) além do `service_interest` (`required`). Lead 454, mensagem única respondendo aos dois: `filled_fields=['service_interest', 'custom_cor_preferida']`, `missing_fields=[]`. `GET /api/leads/454/qualification-fields` retornou `{"service_interest": "automação do WhatsApp", "custom_cor_preferida": "azul"}` — valor do campo opcional persistido corretamente, e a categoria avançou normalmente para `apresentation` (não ficou bloqueada por causa do campo opcional).
 
 ### Cenário P2 — Tolerância flexível captura resposta não-literal
-- [ ] Perfil com `qualification_extraction_tolerance` no default (`flexivel`)
+- [ ] Perfil com `qualification_extraction_tolerance` explicitamente em `flexivel`
 - [ ] Playground: responder a `decision_role` com frase que não usa os termos do enum (ex.: "sou eu mesmo que decido")
 - [ ] Confirmar que o campo é capturado mesmo sem correspondência literal
+- [ ] Perfil sem o campo definido (ou em `equilibrado`) → confirmar que o comportamento é idêntico ao atual (0.4/0.6, já validado em produção)
 
 ### Cenário P3 — Score generalizado bloqueia e libera perfil 100% custom
 - [ ] Perfil 100% custom com `qualify_if` configurado, score abaixo do threshold

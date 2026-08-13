@@ -15,11 +15,52 @@ DEFAULT_FIELD_SCHEMA: Dict[str, str] = {
     "budget_or_price_acceptance": "string|number|object|null",
 }
 
-# Limiares de confiança abaixo dos quais uma extração é descartada. O prompt já
-# pede esses mesmos números à LLM (ver bloco "Regras" em extract_fields_llm) —
-# aqui é onde eles passam a ser verificados de fato, em vez de só sugeridos.
-_PROFILE_FIELD_CONFIDENCE_THRESHOLD = 0.4
-_DEFAULT_FIELD_CONFIDENCE_THRESHOLD = 0.6
+# Tolerância de extração configurável (ai_profile.qualification_extraction_tolerance).
+# "equilibrado" reproduz os limiares 0.4/0.6 já validados em produção (commit
+# c320e0e) — é o default para não mudar o comportamento de nenhum perfil
+# existente até o usuário escolher outro nível manualmente. "flexivel" também
+# afrouxa os enums fechados do DEFAULT_FIELD_SCHEMA (ver _loosen_enum_schema)
+# para aceitar respostas parafraseadas; "rigoroso" exige evidência mais
+# explícita antes de extrair.
+_TOLERANCE_THRESHOLDS: Dict[str, Dict[str, float]] = {
+    "flexivel": {"profile": 0.25, "default": 0.4},
+    "equilibrado": {"profile": 0.4, "default": 0.6},
+    "rigoroso": {"profile": 0.6, "default": 0.8},
+}
+_DEFAULT_TOLERANCE = "equilibrado"
+
+_TOLERANCE_INSTRUCTIONS: Dict[str, str] = {
+    "flexivel": (
+        "- Tolerância configurada: FLEXÍVEL. Aceite paráfrases e respostas informais que "
+        "capturem o sentido da pergunta, mesmo sem usar os termos exatos — priorize a "
+        "intenção do lead sobre a forma literal da resposta.\n"
+    ),
+    "equilibrado": "",
+    "rigoroso": (
+        "- Tolerância configurada: RIGOROSA. Só extraia diante de resposta explícita e "
+        "inequívoca — havendo qualquer ambiguidade ou leitura indireta, retorne null e "
+        "confidence 0.0.\n"
+    ),
+}
+
+_PRIMITIVE_TYPE_TOKENS = {"string", "number", "object", "boolean", "array", "null"}
+
+
+def _resolve_tolerance(ai_profile: Dict[str, Any]) -> str:
+    tolerance = ai_profile.get("qualification_extraction_tolerance")
+    return tolerance if tolerance in _TOLERANCE_THRESHOLDS else _DEFAULT_TOLERANCE
+
+
+def _loosen_enum_schema(schema: Dict[str, str]) -> Dict[str, str]:
+    """No nível 'flexivel', troca enums fechados (ex.: 'owner|partner|employee|other|null')
+    por 'string|null' — a LLM deixa de precisar bater um dos termos exatos e pode devolver
+    o texto livre do lead em vez de ficar presa ao vocabulário do enum."""
+    loosened: Dict[str, str] = {}
+    for key, type_str in schema.items():
+        tokens = [t.strip() for t in type_str.split("|")]
+        is_closed_enum = any(t not in _PRIMITIVE_TYPE_TOKENS for t in tokens)
+        loosened[key] = "string|null" if is_closed_enum else type_str
+    return loosened
 
 
 def _field_questions(ai_profile: Dict[str, Any]) -> Dict[str, str]:
@@ -75,8 +116,15 @@ def extract_fields_llm(context: Dict[str, Any], fields_schema: Dict[str, str]) -
     ai_profile = context.get("ai_profile") or {}
     inbound = str(metadata.get("inbound_message_text") or "")
 
+    tolerance = _resolve_tolerance(ai_profile)
+    thresholds = _TOLERANCE_THRESHOLDS[tolerance]
+    profile_threshold = thresholds["profile"]
+    default_threshold = thresholds["default"]
+
     schema = dict(DEFAULT_FIELD_SCHEMA)
     schema.update(fields_schema or {})
+    if tolerance == "flexivel":
+        schema = _loosen_enum_schema(schema)
 
     # Contexto de nicho para extração mais precisa (Tarefa 2.2)
     niche = str(ai_profile.get("niche") or "")
@@ -121,9 +169,10 @@ def extract_fields_llm(context: Dict[str, Any], fields_schema: Dict[str, str]) -
         "só mencionou o produto/serviço em si, ou o assunto em geral, sem dar a informação pedida, isso NÃO "
         "é uma resposta — retorne null e confidence 0.0. Exemplo: citar o nome do produto NÃO responde 'pra "
         "que você vai usar o produto'; dizer 'é pra hospedar convidados' SIM responde.\n"
-        "  Limiar: confidence >= 0.4 é suficiente para extrair.\n"
-        "- Para campos de contexto padrão (não listados acima), extraia APENAS se houver evidência CLARA e DIRETA. Limiar: confidence >= 0.6.\n"
-        "- Nunca infira valores — extraia apenas do texto\n"
+        f"  Limiar: confidence >= {profile_threshold} é suficiente para extrair.\n"
+        f"- Para campos de contexto padrão (não listados acima), extraia APENAS se houver evidência CLARA e DIRETA. Limiar: confidence >= {default_threshold}.\n"
+        + _TOLERANCE_INSTRUCTIONS.get(tolerance, "")
+        + "- Nunca infira valores — extraia apenas do texto\n"
         "- Se o lead disse algo ambíguo, retorne confidence baixa, não invente interpretação\n\n"
         f"Schema: {json.dumps(schema, ensure_ascii=False)}\n"
         f"Inbound: {inbound}\n"
@@ -137,18 +186,15 @@ def extract_fields_llm(context: Dict[str, Any], fields_schema: Dict[str, str]) -
     confidence = payload.get("confidence") if isinstance(payload.get("confidence"), dict) else {}
     evidence = payload.get("evidence") if isinstance(payload.get("evidence"), dict) else {}
 
-    # Gate por confiança: o prompt acima pede um limiar por campo (0.4 para
-    # campos do perfil, 0.6 para os de contexto padrão), mas isso só tinha
-    # efeito se a LLM decidisse seguir — nada verificava depois. Chave sem
-    # confidence numérica é tratada como reprovada (fail-closed).
+    # Gate por confiança: o prompt acima pede um limiar por campo (profile_threshold
+    # para campos do perfil, default_threshold para os de contexto padrão, ambos
+    # resolvidos pela tolerância configurada), mas isso só tinha efeito se a LLM
+    # decidisse seguir — nada verificava depois. Chave sem confidence numérica é
+    # tratada como reprovada (fail-closed).
     profile_fields = set(fields_schema.keys()) if fields_schema else set()
     gated_extracted: Dict[str, Any] = {}
     for key, value in extracted.items():
-        threshold = (
-            _PROFILE_FIELD_CONFIDENCE_THRESHOLD
-            if key in profile_fields
-            else _DEFAULT_FIELD_CONFIDENCE_THRESHOLD
-        )
+        threshold = profile_threshold if key in profile_fields else default_threshold
         field_confidence = confidence.get(key)
         if isinstance(field_confidence, (int, float)) and not isinstance(field_confidence, bool) and field_confidence >= threshold:
             gated_extracted[key] = value

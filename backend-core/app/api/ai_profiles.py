@@ -106,6 +106,12 @@ class ColdOutreachChannel(str, Enum):
     email_first = "email_first"
 
 
+class QualificationExtractionTolerance(str, Enum):
+    flexivel = "flexivel"
+    equilibrado = "equilibrado"
+    rigoroso = "rigoroso"
+
+
 _TEMPLATE_OPENERS: dict = {
     "sdr_padrao": {
         "inbound": "Olá! Obrigado por entrar em contato. Me conta o que você está buscando.",
@@ -210,6 +216,9 @@ class AIProfileBase(BaseModel):
     response_style: Optional[ResponseStyle] = ResponseStyle.active
     qualification_required_fields: Optional[List[str]] = None
     qualification_fields: Optional[List[dict]] = None
+    qualification_extraction_tolerance: Optional[QualificationExtractionTolerance] = (
+        QualificationExtractionTolerance.equilibrado
+    )
     custom_variables: Optional[Dict[str, str]] = None
     first_reply_delay_min_seconds: Optional[int] = 0
     first_reply_delay_max_seconds: Optional[int] = 0
@@ -285,6 +294,7 @@ class AIProfileUpdate(BaseModel):
     response_style: Optional[ResponseStyle] = None
     qualification_required_fields: Optional[List[str]] = None
     qualification_fields: Optional[List[dict]] = None
+    qualification_extraction_tolerance: Optional[QualificationExtractionTolerance] = None
     custom_variables: Optional[Dict[str, str]] = None
     first_reply_delay_min_seconds: Optional[int] = None
     first_reply_delay_max_seconds: Optional[int] = None
@@ -719,6 +729,7 @@ async def admin_list_all_ai_profiles(
             "qualification_score_threshold": p.qualification_score_threshold,
             "qualification_required_fields": p.qualification_required_fields,
             "qualification_fields": p.qualification_fields,
+            "qualification_extraction_tolerance": p.qualification_extraction_tolerance,
             "followup_max_attempts": p.followup_max_attempts,
             "prompt_parts_generated_at": p.prompt_parts_generated_at.isoformat() if p.prompt_parts_generated_at else None,
             "prompt_parts_version": p.prompt_parts_version,

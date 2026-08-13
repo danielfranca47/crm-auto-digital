@@ -18,6 +18,7 @@ Origem: tabela `ai_profiles` em `backend-core` (via `GET /admin/agents/users/{us
 | `offer_pack` | string | Pack de oferta configurado | Campo detalhado no drawer |
 | `cold_outreach_channel` | string | Preferência de canal do 1º contato frio (`whatsapp_only`\|`email_first`) | Não exibido no painel admin atualmente |
 | `sales_flow` | object\|null | Configuração do Fluxo de Venda por fase (`{phases: [{id, blocks[]}]}`) | Não exibido no painel admin atualmente |
+| `qualification_extraction_tolerance` | string | Tolerância do extractor de campos de qualificação (`flexivel`\|`equilibrado`\|`rigoroso`), default `equilibrado` | Aparece no painel de diff (`diff`) quando o usuário muda do default — sem exibição própria no card/drawer |
 
 ### Campos de qualificação mínima por modo
 

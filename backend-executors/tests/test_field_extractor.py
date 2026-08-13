@@ -16,15 +16,18 @@ def _mock_llm(monkeypatch, extracted, confidence, evidence=None):
     )
 
 
-def _context(qualification_fields=None):
+def _context(qualification_fields=None, tolerance=None):
+    ai_profile = {
+        "niche": "",
+        "target_audience": "",
+        "qualification_fields": qualification_fields or [],
+    }
+    if tolerance is not None:
+        ai_profile["qualification_extraction_tolerance"] = tolerance
     return {
         "metadata": {"inbound_message_text": "mensagem de teste"},
         "history": [],
-        "ai_profile": {
-            "niche": "",
-            "target_audience": "",
-            "qualification_fields": qualification_fields or [],
-        },
+        "ai_profile": ai_profile,
         "qualification_state": {"exists": True, "data_json": {}},
     }
 
@@ -115,3 +118,94 @@ def test_field_question_is_included_in_prompt(monkeypatch):
     field_extractor.extract_fields_llm(context, {"custom_pergunta_de_endereco": "string|null"})
 
     assert "Qual o endereco de entrega?" in captured_prompt["value"]
+
+
+def test_missing_tolerance_defaults_to_equilibrado(monkeypatch):
+    """Perfil sem qualification_extraction_tolerance configurado (caso de todo
+    perfil existente antes desta fase) deve manter o comportamento 0.4/0.6 já
+    validado em produção — sem regressão para quem não escolher outro nível."""
+    _mock_llm(
+        monkeypatch,
+        extracted={"custom_uso_do_produto": "resposta ok"},
+        confidence={"custom_uso_do_produto": 0.4},
+    )
+    result = field_extractor.extract_fields_llm(
+        _context(), {"custom_uso_do_produto": "string|null"}
+    )
+    assert result["extracted"] == {"custom_uso_do_produto": "resposta ok"}
+
+
+def test_invalid_tolerance_value_falls_back_to_equilibrado(monkeypatch):
+    """Valor inesperado (perfil corrompido ou de uma versão futura) não deve
+    quebrar o extractor — cai no default seguro em vez de propagar KeyError."""
+    _mock_llm(
+        monkeypatch,
+        extracted={"custom_uso_do_produto": "resposta ok"},
+        confidence={"custom_uso_do_produto": 0.3},
+    )
+    result = field_extractor.extract_fields_llm(
+        _context(tolerance="valor_invalido"), {"custom_uso_do_produto": "string|null"}
+    )
+    assert result["extracted"] == {}
+
+
+def test_flexivel_tolerance_accepts_lower_confidence(monkeypatch):
+    """Tolerância 'flexivel' baixa o limiar do campo do perfil — uma confidence
+    que seria reprovada em 'equilibrado' (0.4) passa a ser aceita."""
+    _mock_llm(
+        monkeypatch,
+        extracted={"custom_uso_do_produto": "resposta informal"},
+        confidence={"custom_uso_do_produto": 0.3},
+    )
+    result = field_extractor.extract_fields_llm(
+        _context(tolerance="flexivel"), {"custom_uso_do_produto": "string|null"}
+    )
+    assert result["extracted"] == {"custom_uso_do_produto": "resposta informal"}
+
+
+def test_rigoroso_tolerance_rejects_confidence_that_equilibrado_accepts(monkeypatch):
+    """Tolerância 'rigoroso' sobe o limiar do campo do perfil — uma confidence
+    que seria aceita em 'equilibrado' (0.4) passa a ser reprovada."""
+    _mock_llm(
+        monkeypatch,
+        extracted={"custom_uso_do_produto": "resposta ambigua"},
+        confidence={"custom_uso_do_produto": 0.5},
+    )
+    result = field_extractor.extract_fields_llm(
+        _context(tolerance="rigoroso"), {"custom_uso_do_produto": "string|null"}
+    )
+    assert result["extracted"] == {}
+
+
+def test_flexivel_tolerance_loosens_closed_enum_schema(monkeypatch):
+    """No nível 'flexivel', enums fechados do DEFAULT_FIELD_SCHEMA (ex.: decision_role)
+    viram 'string|null' no schema enviado à LLM — não travam a extração ao vocabulário
+    exato do enum."""
+    captured_prompt = {}
+
+    def _fake_generate(prompt):
+        captured_prompt["value"] = prompt
+        return json.dumps({"extracted": {}, "confidence": {}, "evidence": {}})
+
+    monkeypatch.setattr(field_extractor.llm_service, "generate_decision_text", _fake_generate)
+
+    field_extractor.extract_fields_llm(_context(tolerance="flexivel"), {})
+
+    assert '"decision_role": "string|null"' in captured_prompt["value"]
+    assert "owner|partner|employee" not in captured_prompt["value"]
+
+
+def test_equilibrado_tolerance_keeps_closed_enum_schema(monkeypatch):
+    """Fora do nível 'flexivel', o schema de enums fechados permanece intacto —
+    só 'flexivel' afrouxa o vocabulário aceito."""
+    captured_prompt = {}
+
+    def _fake_generate(prompt):
+        captured_prompt["value"] = prompt
+        return json.dumps({"extracted": {}, "confidence": {}, "evidence": {}})
+
+    monkeypatch.setattr(field_extractor.llm_service, "generate_decision_text", _fake_generate)
+
+    field_extractor.extract_fields_llm(_context(), {})
+
+    assert "owner|partner|employee|other|null" in captured_prompt["value"]
