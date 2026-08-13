@@ -283,6 +283,7 @@ def _dispatch_system_actions(
     instance_id: Optional[str] = None,
     provider: Optional[str] = None,
     source_message_id: Optional[str] = None,
+    inbound_message_text: Optional[str] = None,
 ) -> None:
     from services.jobs_service import TYPE_WHATSAPP_SEND, create_job
     for action in system_actions:
@@ -332,6 +333,7 @@ def _dispatch_system_actions(
                     user_id=user_id,
                     suggested_category=category,
                     reason="sales_flow_advance_phase",
+                    inbound_message_text=inbound_message_text,
                 )
 
         elif atype == "mark_phase_triggered":
@@ -905,6 +907,7 @@ def complete_job_internal(
                         instance_id=job_payload.get("instance_id"),
                         provider=job_payload.get("provider"),
                         source_message_id=job_payload.get("message_id"),
+                        inbound_message_text=job_payload.get("message_text"),
                     )
         elif job_type == TYPE_EMAIL_SEND_COLD:
             result_obj = payload.result if isinstance(payload.result, dict) else {}

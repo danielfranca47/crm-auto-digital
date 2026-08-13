@@ -18,7 +18,7 @@ import shutil
 import sqlite3
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Dict, List, Literal, Optional
+from typing import Any, Dict, List, Literal, Optional, Tuple
 from uuid import uuid4
 
 import json
@@ -34,6 +34,10 @@ from services.humanization import compute_reply_delay, compute_typing_ms, split_
 from database import get_connection
 from security_core import CurrentUser, require_crm_access
 from services.ai_orchestrator.orchestrator import build_context_bundle_for_playground
+from services.qualification_guardrails import (
+    QUALIFICATION_GATED_CATEGORIES,
+    can_advance_score_gate,
+)
 from services.qualification_state import get_qualification_state
 
 logger = logging.getLogger(__name__)
@@ -139,6 +143,12 @@ class DecisionTrace(BaseModel):
     guardrails_applied: List[str] = Field(default_factory=list)
     category_suggestion_cleared: bool = False
     meeting_scheduled: Optional[bool] = None
+    required_fields: List[str] = Field(default_factory=list)
+    missing_fields: List[str] = Field(default_factory=list)
+    qualification_total_score: Optional[int] = None
+    qualification_score_threshold: Optional[int] = None
+    qualification_advance_blocked: bool = False
+    qualification_advance_blocked_reason: List[str] = Field(default_factory=list)
     ai_profile_id: int
     lead_id: int
     lead_is_sandbox: bool = True
@@ -299,6 +309,21 @@ def _update_lead_category(lead_id: int, user_id: int, category: str) -> None:
         conn.commit()
 
 
+def _check_qualification_gate(lead_id: int, user_id: int, current_category: str, target_category: str) -> Tuple[bool, List[str]]:
+    """Gate de score para o caminho automático do bot (paridade com o executor real).
+
+    Só o score (qualification_score_threshold) — campos obrigatórios já são aplicados
+    pelo decision_engine antes de a IA sugerir a categoria; checar de novo aqui duplicaria
+    a lógica que "audit: Fase 5" removeu de propósito do pipeline automático. Ver
+    can_advance_score_gate() em qualification_guardrails.py.
+    """
+    if current_category != "qualification" or target_category not in QUALIFICATION_GATED_CATEGORIES:
+        return True, []
+    with get_connection() as conn:
+        conn.row_factory = sqlite3.Row
+        return can_advance_score_gate(conn, lead_id, user_id)
+
+
 def _mark_phase_triggered(lead_id: int, user_id: int, phase_id: str) -> None:
     """Regista que o phase_trigger de uma fase já disparou — impede re-disparo."""
     import json
@@ -406,6 +431,11 @@ def _build_decision_trace(
     decision: Dict[str, Any],
     ai_profile_id: int,
     lead_id: int,
+    *,
+    qualification_total_score: Optional[int] = None,
+    qualification_score_threshold: Optional[int] = None,
+    qualification_advance_blocked: bool = False,
+    qualification_advance_blocked_reason: Optional[List[str]] = None,
 ) -> Dict[str, Any]:
     trace = decision.get("decision_trace") or {}
     guardrails = [k for k, v in trace.items() if k.startswith("guardrail_") and v]
@@ -420,6 +450,12 @@ def _build_decision_trace(
             and decision.get("suggested_category") is None
         ),
         "meeting_scheduled": trace.get("meeting_scheduled"),
+        "required_fields": trace.get("required_fields") or [],
+        "missing_fields": trace.get("missing_fields") or [],
+        "qualification_total_score": qualification_total_score,
+        "qualification_score_threshold": qualification_score_threshold,
+        "qualification_advance_blocked": qualification_advance_blocked,
+        "qualification_advance_blocked_reason": qualification_advance_blocked_reason or [],
         "ai_profile_id": ai_profile_id,
         "lead_id": lead_id,
         "lead_is_sandbox": True,
@@ -650,8 +686,21 @@ def playground_chat(
 
     # ── Passo 7: Persistir estado pós-decisão ────────────────────────────────
     suggested_category = decision.get("suggested_category")
+    _pre_decision_category = str((bundle_dict.get("lead") or {}).get("category") or "").strip().lower()
+    _qualification_gate_blocked = False
+    _qualification_gate_missing: List[str] = []
     if suggested_category:
-        _update_lead_category(lead_id, user_id, suggested_category)
+        _can_advance, _qualification_gate_missing = _check_qualification_gate(
+            lead_id, user_id, _pre_decision_category, suggested_category,
+        )
+        if _can_advance:
+            _update_lead_category(lead_id, user_id, suggested_category)
+        else:
+            _qualification_gate_blocked = True
+            logger.info(
+                "lead_category_blocked_incomplete_qualification lead_id=%s missing=%s suggested=%s origin=playground",
+                lead_id, _qualification_gate_missing, suggested_category,
+            )
 
     message_to_send = decision.get("message_text") or ""
 
@@ -833,7 +882,13 @@ def playground_chat(
         mother_decision=_build_mother_decision(decision),
         child_result=_build_child_result(decision),
         lead_state=lead_state,
-        decision_trace=_build_decision_trace(decision, body.ai_profile_id, lead_id),
+        decision_trace=_build_decision_trace(
+            decision, body.ai_profile_id, lead_id,
+            qualification_total_score=qualification_state.get("qualification_total_score"),
+            qualification_score_threshold=ai_profile.get("qualification_score_threshold"),
+            qualification_advance_blocked=_qualification_gate_blocked,
+            qualification_advance_blocked_reason=_qualification_gate_missing,
+        ),
         pre_send_media=pre_send_media,
         simulated_delay_seconds=_simulated_delay,
         typing_seconds=round(_typing_ms / 1000, 1),

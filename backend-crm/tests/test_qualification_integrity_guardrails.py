@@ -103,8 +103,13 @@ class QualificationIntegrityGuardrailsTest(unittest.TestCase):
         self.assertIn("price_acceptance", missing)
 
     def test_apply_suggested_category_allows_advance_without_pipeline_guardrail(self):
-        # O guardrail de qualificação foi isolado apenas em rotas manuais do Kanban.
-        # apply_suggested_category (pipeline de IA) não deve mais bloquear avanço de categoria.
+        # audit Fase 5 (commit 511d9c9): campos obrigatórios continuam isolados nas rotas
+        # manuais do Kanban — apply_suggested_category (pipeline de IA) não os reaplica,
+        # porque decision_engine.py já força route_to="qualification" antes disso (checar
+        # de novo aqui seria redundante). Sem ai_profile mockado (_fetch_ai_profile falha
+        # de propósito neste teste), can_advance_score_gate() também não tem score/threshold
+        # pra avaliar — avança. Ver test_apply_suggested_category_blocks_on_score_below_threshold
+        # para o caso em que o score volta a ser aplicado no pipeline automático.
         cur = self.conn.cursor()
         cur.execute(
             "INSERT INTO leads (user_id, category, agent_type) VALUES (?, ?, ?)",
@@ -124,6 +129,84 @@ class QualificationIntegrityGuardrailsTest(unittest.TestCase):
             self.conn,
             lead_id=lead_id,
             user_id=55,
+            suggested_category="apresentation",
+            reason="teste",
+            inbound_message_text="quero avançar",
+            decision_trace={"agent_mode_normalized": "agenda"},
+        )
+        self.assertTrue(moved)
+        row = self.conn.execute("SELECT category FROM leads WHERE id = ?", (lead_id,)).fetchone()
+        self.assertEqual(row["category"], "apresentation")
+
+    @patch("services.qualification_guardrails._fetch_ai_profile")
+    def test_apply_suggested_category_blocks_on_score_below_threshold(self, mock_profile):
+        # Gap corrigido nesta fase: o score configurado em qualification_score_threshold
+        # nunca era checado no caminho automático (só no drag manual do Kanban, routes/leads.py).
+        # Perfil usa uma chave 4P compatível (availability_window) — score real é calculado.
+        mock_profile.return_value = {
+            "qualification_required_fields": [],
+            "qualification_fields": [{"key": "availability_window", "mode": "optional"}],
+            "qualification_score_threshold": 6,
+        }
+        cur = self.conn.cursor()
+        cur.execute(
+            "INSERT INTO leads (user_id, category, agent_type) VALUES (?, ?, ?)",
+            (77, "qualification", "agent_1"),
+        )
+        lead_id = int(cur.lastrowid)
+        cur.execute(
+            """
+            INSERT INTO lead_qualification_state (lead_id, user_id, stage, agent_mode_normalized, data_json, qualification_total_score)
+            VALUES (?, ?, 'qualification', 'agenda', '{}', 2)
+            """,
+            (lead_id, 77),
+        )
+        self.conn.commit()
+
+        moved = apply_suggested_category(
+            self.conn,
+            lead_id=lead_id,
+            user_id=77,
+            suggested_category="apresentation",
+            reason="teste",
+            inbound_message_text="quero avançar",
+            decision_trace={"agent_mode_normalized": "agenda"},
+        )
+        self.assertFalse(moved)
+        row = self.conn.execute("SELECT category FROM leads WHERE id = ?", (lead_id,)).fetchone()
+        self.assertEqual(row["category"], "qualification")
+
+    @patch("services.qualification_guardrails._fetch_ai_profile")
+    def test_apply_suggested_category_allows_advance_with_custom_fields_only(self, mock_profile):
+        # Limitação conhecida e documentada (não corrigida nesta fase — ver "Ajustes Possíveis"
+        # em docs/implementations/fix-qualificacao-obrigatoria-caminho-automatico.md): perfis
+        # 100% custom (sem nenhuma das 4 chaves hardcoded do score) continuam avançando mesmo
+        # com score abaixo do threshold, porque compute_4p_scores() não sabe pontuar chaves
+        # custom — aplicar o gate travaria esses perfis pra sempre.
+        mock_profile.return_value = {
+            "qualification_required_fields": [],
+            "qualification_fields": [{"key": "custom_uso_do_produto", "mode": "optional"}],
+            "qualification_score_threshold": 6,
+        }
+        cur = self.conn.cursor()
+        cur.execute(
+            "INSERT INTO leads (user_id, category, agent_type) VALUES (?, ?, ?)",
+            (88, "qualification", "agent_1"),
+        )
+        lead_id = int(cur.lastrowid)
+        cur.execute(
+            """
+            INSERT INTO lead_qualification_state (lead_id, user_id, stage, agent_mode_normalized, data_json, qualification_total_score)
+            VALUES (?, ?, 'qualification', 'agenda', '{}', 0)
+            """,
+            (lead_id, 88),
+        )
+        self.conn.commit()
+
+        moved = apply_suggested_category(
+            self.conn,
+            lead_id=lead_id,
+            user_id=88,
             suggested_category="apresentation",
             reason="teste",
             inbound_message_text="quero avançar",
