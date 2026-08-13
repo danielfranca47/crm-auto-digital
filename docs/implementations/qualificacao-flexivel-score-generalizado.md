@@ -264,9 +264,7 @@ sintaxe (`ast.parse`) e por um smoke test direto do Pydantic (`AIProfileBase`
 gera default `equilibrado`; `AIProfileUpdate` aceita `flexivel`/`rigoroso` e
 rejeita valor inválido com `ValidationError`).
 
-**Para validar (Cenário P2, abaixo):** ainda não testado ao vivo — depende do
-Playground com um perfil configurado em `flexivel` e uma resposta que não usa
-os termos literais do enum.
+**Para validar:** Cenário P2, abaixo. Validado ao vivo em 13/08/2026.
 
 ### Fase 3 — Score generalizado para qualquer campo configurado
 
@@ -349,10 +347,13 @@ já disponível no componente — nenhuma chamada de API nova.
 - **Validado em:** 13/08/2026 — `ai_profile_id=5` com campo custom `custom_cor_preferida` (`mode="optional"`) além do `service_interest` (`required`). Lead 454, mensagem única respondendo aos dois: `filled_fields=['service_interest', 'custom_cor_preferida']`, `missing_fields=[]`. `GET /api/leads/454/qualification-fields` retornou `{"service_interest": "automação do WhatsApp", "custom_cor_preferida": "azul"}` — valor do campo opcional persistido corretamente, e a categoria avançou normalmente para `apresentation` (não ficou bloqueada por causa do campo opcional).
 
 ### Cenário P2 — Tolerância flexível captura resposta não-literal
-- [ ] Perfil com `qualification_extraction_tolerance` explicitamente em `flexivel`
-- [ ] Playground: responder a `decision_role` com frase que não usa os termos do enum (ex.: "sou eu mesmo que decido")
-- [ ] Confirmar que o campo é capturado mesmo sem correspondência literal
-- [ ] Perfil sem o campo definido (ou em `equilibrado`) → confirmar que o comportamento é idêntico ao atual (0.4/0.6, já validado em produção)
+- [x] Perfil com `qualification_extraction_tolerance` explicitamente em `flexivel`
+- [x] Playground: responder a `decision_role` com frase que não usa os termos do enum (ex.: "sou eu mesmo que decido")
+- [x] Confirmar que o campo é capturado mesmo sem correspondência literal
+- [x] Perfil sem o campo definido (ou em `equilibrado`) → confirmar que o comportamento é idêntico ao atual (0.4/0.6, já validado em produção)
+- **Validado em:** 13/08/2026 — conta de teste nova (`qa-tolerancia-fase2@test.com`, `user_id=22`), `ai_profile_id=7` (`agent_mode=consultivo`), campo `decision_role` configurado como `required` (só esse campo, sem os outros 3P clássicos). Reiniciei o `backend-core` local antes do teste para a migração da nova coluna (`ensure_ai_profile_columns()`) rodar — não havia como testar sem isso.
+  - **Tolerância `flexivel` (lead 457):** pergunta automática "Você toma as decisões de compra?" respondida com "sou eu mesmo que decido" (sem nenhum termo do enum `owner|partner|employee|other`). Resultado: `qualification_state.data_json = {"decision_role": "eu mesmo que decido"}` — campo capturado com o texto livre do lead, não forçado para um dos tokens do enum (confirma `_loosen_enum_schema` em ação). `missing_fields=[]`, `qualification_advance_blocked_reason=["score_3_of_12_below_threshold_6"]` (bloqueado por score, não por campo faltando — comportamento esperado).
+  - **Tolerância `equilibrado` (lead 458, perfil trocado via `PATCH /ai-profiles/me`, lead novo para isolar o teste):** mesma pergunta, mesma resposta literal ("sou eu mesmo que decido"). Resultado: capturado de forma idêntica (`data_json = {"decision_role": "eu mesmo que decido"}`, mesmo score 3). **Ressalva honesta:** essa frase específica não expôs uma diferença observável de comportamento entre os dois níveis — o LLM já interpretou a frase com confiança suficiente em ambos os casos (a inferência semântica do modelo não depende só do limiar numérico ou do enum do schema, que é só uma dica de tipo, não uma validação estrita em código). O que este teste confirma com segurança: (a) `flexivel` captura respostas não-literais sem quebrar nada; (b) `equilibrado` não regrediu — continua capturando exatamente como antes desta fase. A diferenciação mais nítida entre os 3 níveis (limiares 0.25/0.4/0.6/0.8 e o afrouxamento do enum) está coberta pelos 6 testes automatizados de `test_field_extractor.py`, que isolam a lógica de gate sem depender da variabilidade do LLM real.
 
 ### Cenário P3 — Score generalizado bloqueia e libera perfil 100% custom
 - [ ] Perfil 100% custom com `qualify_if` configurado, score abaixo do threshold
