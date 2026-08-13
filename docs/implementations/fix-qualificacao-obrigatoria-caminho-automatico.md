@@ -1,7 +1,7 @@
 # Fix: qualificação obrigatória sendo ignorada no caminho automático do bot
 
 **Branch:** `fix/qualificacao-nao-obrigatoria-antes-apresentacao`
-**Status:** Em andamento
+**Status:** Todos os cenários validados (13/08/2026) — pendente: decisão do utilizador sobre o item em "Ajustes Possíveis" (score para campos 100% custom) antes da graduação
 
 ---
 
@@ -81,27 +81,67 @@ Não mexe em `decision_engine.py` (backend-executors) — esse serviço não tem
 | `backend-crm/tests/test_qualification_integrity_guardrails.py` | Atualiza o comentário do teste que documentava o isolamento da Fase 5 (esclarece que continua valendo só para campos obrigatórios); adiciona 2 testes novos: score bloqueia quando há chave 4P compatível; score não bloqueia com campos 100% custom (documenta a limitação conhecida). |
 | Trace do Playground (`DecisionTrace`/`_build_decision_trace` em `playground.py`) | Passa a expor `required_fields`/`missing_fields`/`qualification_total_score`/`qualification_score_threshold`/`qualification_advance_blocked`/`qualification_advance_blocked_reason`. |
 
+### Commits Fase 1
+
+| # | Commit | O que foi implementado |
+|---|---|---|
+| 1 | `f872662` | Gate de score no caminho automático (Playground + WhatsApp real) + fix de crash em `advance_phase` + visibilidade no trace |
+| 2 | `4b2ac22` | Fix encontrado ao validar ao vivo: gate também na 2ª chamada do Playground (saudação composta) + `QUALIFICATION_GATED_CATEGORIES` passa a incluir pré-agendamento/agendamento |
+
+**Detalhes do commit `f872662`:**
+- `backend-crm/services/qualification_guardrails.py` — extrai `_score_below_threshold()`/`_load_lead_mode_and_score()`; adiciona `can_advance_score_gate()` e `QUALIFICATION_GATED_CATEGORIES`; `can_advance_from_qualification()` inalterada em comportamento
+- `backend-crm/services/jobs_service.py` — `apply_suggested_category()` chama `can_advance_score_gate()` antes de mover para fora de `qualification`
+- `backend-crm/routes/playground.py` — mesma checagem antes de `_update_lead_category()`; `DecisionTrace` expõe campos novos de qualificação
+- `backend-crm/routes/executor.py` — `advance_phase` passa `inbound_message_text` (crash corrigido)
+- `backend-crm/tests/test_qualification_integrity_guardrails.py` — 2 testes novos + comentário do teste antigo atualizado
+
+**Detalhes do commit `4b2ac22`** (achado durante validação ao vivo — ver "Relatório da validação" abaixo):
+- `backend-crm/routes/playground.py` — a 2ª chamada síncrona do Playground (quando a 1ª mensagem tem saudação + pedido comercial embutido, "saudação composta") não passava pelo gate; corrigido
+- `backend-crm/services/qualification_guardrails.py` — `QUALIFICATION_GATED_CATEGORIES` ampliada para incluir `pre-agendamento`/`agendamento` (decision_engine.py pode saltar direto pra essas fases num único turno)
+
+### Relatório da validação ao vivo (13/08/2026)
+
+Subi os 3 backends localmente (`backend-core`, `backend-crm`, `backend-executors` — a venv do `backend-executors` teve que ser isolada do Python global durante o processo, ver nota abaixo) e testei via chamadas diretas ao `POST /api/playground/chat`, usando a conta de teste (`_conta-teste-local.md`, `ai_profile_id=5`), reconfigurando `qualification_fields`/`qualification_required_fields`/`qualification_score_threshold` por SQL direto no `core.db` local entre cada cenário.
+
+**Bug pego durante a validação, corrigido no commit `4b2ac22`:** o primeiro teste do Cenário P3 (mensagem com saudação + pergunta comercial na mesma frase) revelou que o gate só tinha sido aplicado na 1ª chamada de decisão do Playground — a "saudação composta" reenfileira a parte comercial como uma 2ª chamada síncrona, e essa 2ª chamada (onde a categoria de fato avança na prática) não tinha o gate. O lead pulou direto de `qualification` para `pre-agendamento` nesse teste. Corrigido e reconfirmado.
+
+**Nota de ambiente (não relacionada ao fix):** `backend-executors` não tem venv própria e usa o Python global — esse Python global estava com `fastapi==0.116.2` incompatível com `starlette==1.3.1` já instalado (pré-existente, não causado por esta mudança). Criei uma venv isolada para `backend-executors` (mesmo padrão que `backend-crm`/`backend-core` já têm) para não depender mais do Python global. O Python global ficou com `starlette` numa versão diferente da original (`0.48.0` em vez de `1.3.1`) — vale o utilizador conferir se isso afeta outras ferramentas dele (gradio, sse-starlette/MCP apareceram como conflito nos avisos do pip).
+
+### Relatório da Fase 1 — o que mudou na prática
+
+**Antes:** o "score" configurado na Camada de Qualificação (`qualification_score_threshold`) só era respeitado quando um operador arrastava o card manualmente no Kanban. Quando era o próprio bot que decidia avançar a conversa — no Playground ou no WhatsApp real — nada verificava o score, então o lead podia pular de qualificação direto para apresentação mesmo com o score configurado e não atingido.
+
+**Agora:** o bot (Playground e WhatsApp real) verifica o score antes de avançar, do mesmo jeito que o drag manual do Kanban já fazia. Se o score estiver configurado com pelo menos um campo compatível (as 4 chaves clássicas: papel de decisão, urgência, orçamento/aceite de preço, disponibilidade) e o lead ainda não atingiu o mínimo, o bot fica em qualificação em vez de avançar.
+
+**Limitação que continua existindo (não é bug novo, é o mesmo score legado):** para perfis que usam só campos 100% personalizados — como o do Gabriel — o score continua não fazendo nada, porque o cálculo de pontuação só sabe reconhecer aquelas 4 chaves clássicas, não campos customizados. Para o caso específico do Gabriel, a solução imediata (sem precisar de deploy) é marcar pelo menos 1 dos 2 campos dele como "Obrigatório" em vez de "Desejável" — isso já funciona hoje e não depende desta correção.
+
+**Para validar:** Cenários P1, P2, P3 e C1, abaixo.
+
 ---
 
 ## Checks de Validação
 
 ### Cenário P1 — Campo obrigatório configurado, bot não pula qualificação
-- [ ] AI Profile de teste local com config equivalente à do Gabriel (`sdr_padrao`, `agent_mode=sdr_scheduler`, `response_style=passive`, mesmos 2 `qualification_fields` custom), mas com 1 campo marcado `required`
-- [ ] Playground: mensagem inicial pedindo orçamento de um produto específico
-- [ ] Confirmar: bot vai para qualificação, não pula pra apresentação
+- [x] AI Profile de teste local (`ai_profile_id=5`, `template_key=hybrid_scheduler`, `agent_mode=agenda`) com 1 campo `qualification_fields` marcado `required` (`service_interest`)
+- [x] Playground: mensagem vaga sem mencionar serviço ("Oi, me passaram esse contato, será que vocês conseguem me ajudar?")
+- [x] Confirmar: bot fica em `qualification` (`missing_fields: ["service_interest"]`, `category: "qualification"`)
+- **Validado em:** 13/08/2026 — lead 450. (1ª tentativa com uma mensagem que mencionava "preço e como funciona" acabou preenchendo `service_interest` via extração automática do próprio texto — não é bug, é o extractor funcionando; refeito com mensagem vaga para isolar o cenário certo.)
 
 ### Cenário P2 — Config idêntica à do Gabriel (0 campos required, score configurado, chaves não-4P)
-- [ ] Mesmo AI Profile, replicando a config real dele (2 campos `optional`, `qualification_score_threshold=6`)
-- [ ] Confirmar: comportamento documentado — sem campo required e sem chave 4P, o score continua sendo pulado (não corrigido nesta fase); serve para confirmar que não há regressão de comportamento não intencional
+- [x] Mesmo AI Profile, replicando a config real dele (`custom_uso_do_produto`/`custom_pergunta_de_endereco`, ambos `optional`, `qualification_score_threshold=6`)
+- [x] Confirmar: comportamento documentado — sem campo required e sem chave 4P, o score continua sendo pulado (não corrigido nesta fase)
+- **Validado em:** 13/08/2026 — lead 447, `category: "apresentation"`, `qualification_advance_blocked: false`. Confirma a limitação documentada, sem regressão.
 
 ### Cenário P3 — Score com chaves 4P compatíveis, abaixo do threshold
-- [ ] AI Profile de teste com `qualification_required_fields=[]`, `qualification_fields` usando pelo menos 1 chave 4P (ex.: `availability_window`), `qualification_score_threshold` alto
-- [ ] Simular conversa que não atinge o score
-- [ ] Confirmar: bot fica bloqueado em qualification (antes do fix, isso pulava — é o caso que a Fase 1 corrige de fato)
+- [x] AI Profile de teste com `qualification_required_fields=[]`, `qualification_fields=[{"key":"availability_window","mode":"optional"}]`, `qualification_score_threshold=6`
+- [x] Mensagem com pedido comercial direto (lead novo, score parte de 0)
+- [x] Confirmar: bot fica bloqueado em `qualification` (antes do fix, isso pulava — é o caso que a Fase 1 corrige de fato)
+- **Validado em:** 13/08/2026 — lead 445, `category: "qualification"`, `qualification_advance_blocked: true`, `qualification_advance_blocked_reason: ["score_0_of_12_below_threshold_6"]`. 1ª tentativa (lead 444) revelou o bug da 2ª chamada (ver commit `4b2ac22`); reconfirmado depois da correção.
 
 ### Cenário C1 — Fluxo de Venda `avancar_fase` não crasha mais
-- [ ] AI Profile com bloco `avancar_fase` na Camada 7 configurado para disparar
-- [ ] Confirmar via logs do executor que não há mais `TypeError` por falta de `inbound_message_text`
+- [x] Chamada direta a `_dispatch_system_actions()` (função real, não mock) com uma ação `advance_phase`
+- [x] Confirmar: executa sem `TypeError` e move a categoria corretamente
+- **Validado em:** 13/08/2026 — lead 450, categoria movida para `apresentation` sem exceção. Não testei via webhook WhatsApp real completo (exigiria simular todo o ciclo de job) — a chamada direta já exercita o código corrigido (`executor.py:329`) e a assinatura de `apply_suggested_category`.
 
 ---
 
