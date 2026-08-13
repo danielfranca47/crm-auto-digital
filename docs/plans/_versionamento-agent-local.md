@@ -85,4 +85,4 @@ Consequência prática:
 
 | Versão | Arquitectura | Empacotamento | Plano da próxima versão |
 |---|---|---|---|
-| v2 | [`agent-local-app.md`](../architecture/agent-local-app.md) — graduado | [`agent-local-v2-empacotamento-exe.md`](../implementations/agent-local-v2-empacotamento-exe.md) — Aguardando Plan Mode | [`agent-local-melhorias-futuras-V3.md`](agent-local-melhorias-futuras-V3.md) |
+| v2 | [`agent-local-app.md`](../architecture/agent-local-app.md) — graduado | [`agent-local-app.md#empacotamento-e-distribuição-exe`](../architecture/agent-local-app.md#empacotamento-e-distribuição-exe) — graduado (Cenários C2/C4 confirmados apenas em máquina de dev; validação em PC de cliente real fica para a próxima call de onboarding, ver `docs/ops/guia-teste-cliente-novo-exe-agent-local.md`) | [`agent-local-melhorias-futuras-V3.md`](agent-local-melhorias-futuras-V3.md) |
