@@ -221,9 +221,9 @@ opção para quem quiser abrir mão de precisão por captura mais informal;
 
 | # | Commit | O que foi implementado |
 |---|---|---|
-| 1 | `<pendente>` | Tolerância de extração configurável (`qualification_extraction_tolerance`) — coluna, API, controle no frontend e propagação no field_extractor |
+| 1 | `b808c28` | Tolerância de extração configurável (`qualification_extraction_tolerance`) — coluna, API, controle no frontend e propagação no field_extractor |
 
-**Detalhes do commit `<pendente>`:**
+**Detalhes do commit `b808c28`:**
 - `backend-core/app/models/ai_profile.py` — nova coluna `qualification_extraction_tolerance` (`String`, default `"equilibrado"`)
 - `backend-core/app/db.py` — entrada em `ensure_ai_profile_columns()` com o mesmo default
 - `backend-core/app/api/ai_profiles.py` — enum `QualificationExtractionTolerance` (`flexivel`/`equilibrado`/`rigoroso`); campo em `AIProfileBase` (default `equilibrado`) e `AIProfileUpdate`; campo incluído em `admin_list_all_ai_profiles`
