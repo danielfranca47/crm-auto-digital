@@ -210,7 +210,7 @@ respostas informais/breves desde que respondam de fato à pergunta.
 
 | # | Commit | O que foi implementado |
 |---|---|---|
-| 1 | *(pendente)* | fix: extractor de qualificação passa a respeitar o próprio limiar de confiança |
+| 1 | `c320e0e` | fix: extractor de qualificação passa a respeitar o próprio limiar de confiança |
 
 ### Relatório da Fase 2 — o que mudou na prática
 
