@@ -427,6 +427,34 @@ Isto confirma que parametrizar os limiares de confiança e afrouxar o schema
 de enum no `field_extractor.py` (mudanças desta fase) não interferiu em nada
 no caminho de qualificação obrigatória guiada pela própria IA.
 
+**Teste 5 (lead 463) — repetido pelo próprio utilizador, checklist longo com
+4 campos obrigatórios:** o utilizador reconfigurou o perfil "Daniel" marcando
+`custom_cor_preferida`, `custom_tipo_de_automacao` e
+`custom_cep_do_local_de_atendimento` como `mode="required"` (além do
+`service_interest` já obrigatório) — intencional, para ver a IA "passar por
+todos os filtros perguntando e dando seguimento". Confirmei que esta mudança
+de modo não veio de nenhum código desta fase (`git show b808c28` não toca em
+`cycleMode`/`ModeBadge`/strings de modo em `CamadaQualificacao.tsx`) — foi
+alteração manual na configuração do perfil entre o meu teste e o dele.
+
+Conversa real (exportada do Playground pelo utilizador): saudação →
+`service_interest` ("Qual serviço te interessa?") → `custom_cor_preferida`
+("Qual a cor que você mais gosta para o material?") → `custom_tipo_de_automacao`
+("Que tipo de automação você busca?") → uma pergunta de follow-up
+improvisada pela própria IA (não configurada) sobre funcionalidades
+específicas → `custom_cep_do_local_de_atendimento` ("Qual seria o cep do
+local de atendimento?") → só então `effective_route` mudou de `qualification`
+para `apresentation`. `lead_qualification_state.data_json` do lead 463
+confirma os 4 valores capturados corretamente:
+`{"service_interest": "automação de WhatsApp", "custom_cor_preferida": "verde",
+"custom_tipo_de_automacao": "automação de WhatsApp",
+"custom_cep_do_local_de_atendimento": "8700145"}`.
+
+Confirma que o guardrail de `missing_fields`/anti-loop suporta corretamente
+uma checklist mais longa (4 campos obrigatórios, incluindo os 2 novos desta
+fase) sem repetir perguntas, sem travar e sem promover a categoria antes da
+hora — nenhuma regressão desta fase mesmo neste cenário mais exigente.
+
 ### Cenário P3 — Score generalizado bloqueia e libera perfil 100% custom
 - [ ] Perfil 100% custom com `qualify_if` configurado, score abaixo do threshold
 - [ ] Confirmar: `qualification_advance_blocked: true`
