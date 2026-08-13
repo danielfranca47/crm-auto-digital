@@ -779,7 +779,21 @@ def playground_chat(
 
         _suggested_category2 = _decision2.get("suggested_category")
         if _suggested_category2:
-            _update_lead_category(lead_id, user_id, _suggested_category2)
+            with get_connection() as _conn_cat2:
+                _row_cat2 = _conn_cat2.execute("SELECT category FROM leads WHERE id = ?", (lead_id,)).fetchone()
+            _category_before_2 = str((_row_cat2["category"] if _row_cat2 else "") or "").strip().lower()
+            _can_advance2, _qualification_gate_missing2 = _check_qualification_gate(
+                lead_id, user_id, _category_before_2, _suggested_category2,
+            )
+            if _can_advance2:
+                _update_lead_category(lead_id, user_id, _suggested_category2)
+            else:
+                _qualification_gate_blocked = True
+                _qualification_gate_missing = _qualification_gate_missing2
+                logger.info(
+                    "lead_category_blocked_incomplete_qualification lead_id=%s missing=%s suggested=%s origin=playground_requeue",
+                    lead_id, _qualification_gate_missing2, _suggested_category2,
+                )
 
         _message_to_send2 = _decision2.get("message_text") or ""
         if _message_to_send2:

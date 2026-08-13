@@ -6,11 +6,15 @@ from typing import Any, Dict, List, Tuple
 
 logger = logging.getLogger(__name__)
 
-# Categorias-alvo cuja transição a partir de "qualification" exige completude
-# (campos obrigatórios + score). Usado tanto pelo caminho manual (operador
-# arrastando o card, routes/leads.py) quanto pelo automático (bot, jobs_service.py
-# e routes/playground.py) — mantém os dois em paridade.
-QUALIFICATION_GATED_CATEGORIES = {"apresentation", "follow-up", "closing"}
+# Categorias-alvo cuja transição a partir de "qualification" passa pelo gate de score
+# no caminho automático (jobs_service.apply_suggested_category, routes/playground.py).
+# Inclui pre-agendamento/agendamento além de apresentation/follow-up/closing porque
+# decision_engine.py pode saltar direto de qualification para essas fases num único
+# turno (auto-advance quando a Filha sinaliza did_complete_phase — ver
+# "apresentation_complete_auto_advance" em decision_engine.py:compose_decision_output),
+# não só para apresentation. routes/leads.py (drag manual do Kanban) usa seu próprio
+# conjunto inline, mais restrito, porque um card só se move uma coluna de cada vez ali.
+QUALIFICATION_GATED_CATEGORIES = {"apresentation", "pre-agendamento", "agendamento", "follow-up", "closing"}
 
 
 def required_fields_for_mode(
