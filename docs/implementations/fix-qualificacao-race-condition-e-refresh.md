@@ -3,7 +3,7 @@
 ---
 
 **Branch:** `fix/agendamento-nao-sincroniza-categoria-qualificacao`
-**Status:** Em andamento
+**Status:** Todos os cenários validados
 
 ---
 
@@ -111,21 +111,27 @@ campos de qualificação, enquanto o componente correspondente está montado.
 
 | # | Commit | O que foi implementado |
 |---|---|---|
-| 1 | _(preencher após commit)_ | |
+| 1 | `accfd7f` | frontend: polling em LeadsContext, useLeadAppointments e LeadCardDialog |
+
+**Detalhes do commit `accfd7f`:**
+- `frontend-crm/src/contexts/LeadsContext.tsx` — `setInterval(reloadAllLeads, 30_000)` no `useEffect` de carregamento inicial, com cleanup
+- `frontend-crm/src/hooks/useAppointments.ts` — `refetchInterval: 15_000` em `useLeadAppointments`
+- `frontend-crm/src/components/LeadCardDialog.tsx` — fetch de qualificação extraído para função nomeada + `setInterval(15_000)`, pausado enquanto `isEditingQualif` é `true`
+- `tsc --noEmit` limpo; `eslint` nos 3 arquivos: mesma contagem de erros pré-existentes (22) antes e depois — nenhum problema novo introduzido
 
 ---
 
 ## Checks de Validação
 
 ### Cenário P1 — Duas gravações concorrentes não perdem dado (backend, automatizado)
-- [ ] Teste de regressão simula duas chamadas a `upsert_qualification_state` para o mesmo lead com campos diferentes
-- [ ] Ambos os campos sobrevivem no `data_json` final
-- **Pendente**
+- [x] Teste de regressão simula duas chamadas a `upsert_qualification_state` para o mesmo lead com campos diferentes
+- [x] Ambos os campos sobrevivem no `data_json` final
+- **Validado em:** 14/08/2026 — `test_qualification_state_atomicity.py`; confirmado que o teste falha no código anterior (`campo_b` perdido) e passa após o fix; suíte completa do backend-crm sem regressões novas
 
-### Cenário F1 — Card atualiza sozinho (manual/browser)
-- [ ] Abrir o card de um lead, deixar aberto, alterar o lead por fora (ex.: via API/outro fluxo)
-- [ ] Confirmar que compromissos/qualificação atualizam sem F5
-- **Pendente**
+### Cenário F1 — Card e Kanban atualizam sozinhos (browser, via chrome-devtools MCP)
+- [x] Kanban: mudar a categoria de um lead diretamente no banco (simulando o bot) enquanto o board está aberto — card migrou de coluna sozinho após ~30s, sem F5
+- [x] Card do lead: gravar uma resposta de qualificação (via `upsert_qualification_state`) e criar um appointment real diretamente no banco enquanto o dialog está aberto — campo de qualificação e o compromisso em "Próximos" apareceram sozinhos após ~15-20s, sem fechar/reabrir o dialog
+- **Validado em:** 14/08/2026 — ambiente local (backend-core:8001, backend-crm:8000, frontend-crm:5173), conta de teste `autodigital157@gmail.com`, lead 441. Dados de teste injetados foram limpos após a validação.
 
 ---
 
