@@ -187,31 +187,46 @@ def merge_asked_questions(existing: list[dict], new_items: list[dict]) -> list[d
 
 
 def upsert_qualification_state(lead_id: int, user_id: int, patch: Dict[str, Any]) -> Dict[str, Any]:
-    existing = get_qualification_state(lead_id)
-
-    merged_data = merge_data(existing.get("data_json") or {}, patch.get("data_json") or {})
-    merged_confidence = merge_data(existing.get("confidence_json") or {}, patch.get("confidence_json") or {})
-    merged_attempts = merge_data(existing.get("attempts_json") or {}, patch.get("attempts_json") or {})
-    merged_asked_questions = merge_asked_questions(
-        existing.get("asked_questions_json") or [],
-        patch.get("asked_questions_json") if isinstance(patch.get("asked_questions_json"), list) else [],
-    )
-
-    stage = patch.get("stage") or existing.get("stage") or "qualification"
-    agent_mode_normalized = patch.get("agent_mode_normalized") or existing.get("agent_mode_normalized")
-    playbook_key = patch.get("playbook_key") or existing.get("playbook_key")
-    playbook_version = patch.get("playbook_version") or existing.get("playbook_version")
-    last_questioned_field = patch.get("last_questioned_field")
-    if last_questioned_field is None:
-        last_questioned_field = existing.get("last_questioned_field")
-    last_question_text = patch.get("last_question_text")
-    if last_question_text is None:
-        last_question_text = existing.get("last_question_text") or ""
-
-    scores = compute_4p_scores(merged_data)
-
+    """Lê o estado atual e grava o merge dentro da MESMA transação (BEGIN IMMEDIATE),
+    mesmo padrão de jobs_service.py::fetch_next_job(). Antes, a leitura (get_qualification_state)
+    acontecia numa conexão separada da escrita, com o merge feito em Python no meio — duas
+    chamadas próximas no tempo para o mesmo lead_id (ex.: duas mensagens do lead processadas
+    em sequência, ou uma edição manual do card coincidindo com uma extração do bot em
+    andamento) podiam ler o mesmo estado "antigo" e a gravação mais recente sobrescrevia a
+    anterior, perdendo um campo de qualificação já capturado. BEGIN IMMEDIATE bloqueia
+    outras escritas no SQLite até o commit, fechando essa janela.
+    """
     with get_connection() as conn:
+        conn.row_factory = sqlite3.Row
         cur = conn.cursor()
+        cur.execute("BEGIN IMMEDIATE")
+        existing = _normalize_row(
+            cur.execute(
+                "SELECT * FROM lead_qualification_state WHERE lead_id = ?", (lead_id,)
+            ).fetchone()
+        )
+
+        merged_data = merge_data(existing.get("data_json") or {}, patch.get("data_json") or {})
+        merged_confidence = merge_data(existing.get("confidence_json") or {}, patch.get("confidence_json") or {})
+        merged_attempts = merge_data(existing.get("attempts_json") or {}, patch.get("attempts_json") or {})
+        merged_asked_questions = merge_asked_questions(
+            existing.get("asked_questions_json") or [],
+            patch.get("asked_questions_json") if isinstance(patch.get("asked_questions_json"), list) else [],
+        )
+
+        stage = patch.get("stage") or existing.get("stage") or "qualification"
+        agent_mode_normalized = patch.get("agent_mode_normalized") or existing.get("agent_mode_normalized")
+        playbook_key = patch.get("playbook_key") or existing.get("playbook_key")
+        playbook_version = patch.get("playbook_version") or existing.get("playbook_version")
+        last_questioned_field = patch.get("last_questioned_field")
+        if last_questioned_field is None:
+            last_questioned_field = existing.get("last_questioned_field")
+        last_question_text = patch.get("last_question_text")
+        if last_question_text is None:
+            last_question_text = existing.get("last_question_text") or ""
+
+        scores = compute_4p_scores(merged_data)
+
         cur.execute(
             """
             INSERT INTO lead_qualification_state (
