@@ -88,7 +88,12 @@ campos de qualificação, enquanto o componente correspondente está montado.
 
 | # | Commit | O que foi implementado |
 |---|---|---|
-| 1 | _(preencher após commit)_ | |
+| 1 | `a3d5010` | backend: `upsert_qualification_state` atômico + teste de regressão |
+
+**Detalhes do commit `a3d5010`:**
+- `backend-crm/services/qualification_state.py` — leitura movida para dentro da transação `BEGIN IMMEDIATE` da escrita; mesma assinatura, mesmo INSERT/ON CONFLICT
+- `backend-crm/tests/test_qualification_state_atomicity.py` — teste determinístico (força o intercalamento via pausa controlada em `merge_data`); confirmado que falha no código anterior (`campo_b` perdido) e passa após o fix
+- Suíte completa do backend-crm rodada (`python -m unittest discover`): 22 erros pré-existentes (encoding do console Windows em `database.py`, não relacionados) continuam, nenhuma regressão nova
 
 ---
 

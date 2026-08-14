@@ -238,8 +238,15 @@ export function LeadsProvider({ children }: LeadsProviderProps) {
   };
 
   // carregamento inicial — só dispara se existir token (evita redirect para /login em rotas públicas)
+  // + polling leve: reflete mudanças feitas pelo bot em segundo plano (categoria, bot_disabled)
+  // sem precisar de F5 — o board não tinha nenhum mecanismo de auto-refresh antes.
   useEffect(() => {
-    if (readAuthToken()) reloadAllLeads();
+    if (!readAuthToken()) return;
+    reloadAllLeads();
+    const intervalId = setInterval(() => {
+      reloadAllLeads();
+    }, 30_000);
+    return () => clearInterval(intervalId);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 

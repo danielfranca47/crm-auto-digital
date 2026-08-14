@@ -298,16 +298,30 @@ function LeadCardDialogBody({
   }, [refetchAppointments]);
 
   // Carga dos critérios de qualificação e campos do AI Profile
+  // + polling leve: reflete campos capturados pelo bot em segundo plano sem precisar
+  // fechar/reabrir o dialog. Pausa enquanto o usuário está editando manualmente (evita
+  // trocar o "salvo" por baixo dele no meio de uma edição).
   useEffect(() => {
     if (!lead?.id) return;
-    void Promise.all([
-      api.getLeadQualificationFields(Number(lead.id)),
-      api.core.getAiProfileMe(),
-    ]).then(([qRes, profileRes]) => {
-      setQualifFields((qRes as any)?.fields ?? {});
-      setAiQualFields((profileRes as any)?.qualification_fields ?? []);
-    });
-  }, [lead?.id]);
+
+    const loadQualification = () => {
+      if (isEditingQualif) return;
+      void Promise.all([
+        api.getLeadQualificationFields(Number(lead.id)),
+        api.core.getAiProfileMe(),
+      ]).then(([qRes, profileRes]) => {
+        setQualifFields((qRes as any)?.fields ?? {});
+        setAiQualFields((profileRes as any)?.qualification_fields ?? []);
+      });
+    };
+
+    loadQualification();
+    const intervalId = setInterval(loadQualification, 15_000);
+    return () => clearInterval(intervalId);
+    // isEditingQualif nas deps é proposital: recria o efeito (e o closure de
+    // loadQualification) sempre que a edição começa/termina, evitando que o guard acima
+    // fique preso num valor antigo de isEditingQualif dentro do setInterval.
+  }, [lead?.id, isEditingQualif]);
 
   // Detecta se o lead já tem mensagens reais (habilita/oculta o backfill manual)
   useEffect(() => {

@@ -115,6 +115,9 @@ export function useLeadAppointments(
       return list.map(normalizeAppointment).filter(hasValidStart);
     },
     staleTime: 60_000,
+    // polling leve enquanto o card está aberto: reflete um compromisso criado pelo bot em
+    // segundo plano sem precisar fechar/reabrir o dialog. Para sozinho quando desmontado.
+    refetchInterval: 15_000,
   });
 }
 
