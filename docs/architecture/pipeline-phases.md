@@ -89,7 +89,11 @@ backfill — os campos de "Critérios de Qualificação" continuam 100% manuais.
   - Override por perfil: `ai_profile.qualification_required_fields` (lista explícita) substitui o default do modo; cada campo em `qualification_fields` tem `mode: "required"|"optional"` — só os `required` entram em `missing_fields`
 - Bloqueio de avanço: HTTP 409 se campos faltantes — `backend-crm/routes/leads.py`
 - Extração heurística de campos por regex/keywords — `backend-executors/app/contracts/qualification_contract.py`
-- Persistência em `lead_qualification_state` com histórico de perguntas (max 3/campo)
+- Persistência em `lead_qualification_state` com histórico de perguntas (max 3/campo) —
+  `upsert_qualification_state()` (`backend-crm/services/qualification_state.py`) lê e
+  grava dentro da mesma transação `BEGIN IMMEDIATE` (mesmo padrão de `claim_job_internal`/
+  `fetch_next_job` — ver "Backfill manual" acima), eliminando lost-update entre a extração
+  automática do bot e a edição manual do card para o mesmo lead
 - Evitar repetição de perguntas via SequenceMatcher
 
 **`missing_fields` é o único sinal que decide se a LLM Mãe entra em qualification** — está
@@ -182,6 +186,9 @@ A secção "Critérios de Qualificação" no `LeadCardDialog` permite editar man
 - **Edição:** `PATCH /api/leads/{lead_id}/qualification-fields` — atualiza campos individualmente
 - Badge "X pendentes" (vermelho) indica `required_fields` sem valor; badge "Completo" (verde) quando todos preenchidos
 - A secção renderiza apenas quando o AI Profile tem `qualification_fields` configurados
+- **Auto-refresh:** enquanto o dialog está aberto, os campos são rebuscados a cada 15s
+  (`setInterval`), pausado enquanto o operador está editando (`isEditingQualif=true`) —
+  reflete extrações feitas pelo bot em segundo plano sem precisar fechar/reabrir o dialog
 
 ---
 

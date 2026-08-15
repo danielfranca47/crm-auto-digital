@@ -171,7 +171,7 @@ whatsapp_worker (polling)
 | `src/pages/Playground.tsx` | Simulação de conversa; coordena upload de áudio + chat |
 | `src/pages/AssistenteIA.tsx` | Chat com IA assistente |
 | `src/pages/Prospeccao.tsx` | Prospecção de leads |
-| `src/contexts/LeadsContext.tsx` | Estado global do Kanban; `moveLead` com revert optimista |
+| `src/contexts/LeadsContext.tsx` | Estado global do Kanban; `moveLead` com revert optimista; polling de `reloadAllLeads()` a cada 30s enquanto montado (reflete mudanças de categoria feitas pelo bot em segundo plano) |
 | `src/services/api.ts` | Cliente HTTP centralizado para backend-crm e backend-core |
 | `src/components/KanbanBoard.tsx` | Pipeline visual de leads; intercepta drag `to-prospect → qualification` para abrir `ProspectConfirmModal` |
 | `src/components/ProspectConfirmModal.tsx` | Modal de confirmação de prospecção (2 passos: sim/não → contexto); invoca PATCH com `prospection_context` |

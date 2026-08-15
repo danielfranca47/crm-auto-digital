@@ -209,7 +209,7 @@ leadCompany: raw?.lead_company ?? raw?.leadCompany ?? null,
 | Hook | Para quê |
 |---|---|
 | `useAppointments(filters)` | Lista por intervalo (agenda) |
-| `useLeadAppointments(leadId)` | Lista por lead (card do lead) |
+| `useLeadAppointments(leadId)` | Lista por lead (card do lead); `refetchInterval: 15_000` enquanto o `LeadCardDialog` está aberto |
 | `useCreateAppointment()` | Criar |
 | `useUpdateAppointment()` | Editar (inclui title e type) |
 | `useCancelAppointment()` | Cancelar |

@@ -119,6 +119,33 @@ para o score automático" quando aplicável, (b) reforçar visualmente que
 
 ---
 
+## M5 — Gate de score pula checagem quando já há reunião real confirmada
+
+**Prioridade: ALTA**
+
+> Contexto: item deixado de fora da graduação de
+> `docs/implementations/fix-qualificacao-race-condition-e-refresh.md` (14/08/2026)
+> — não foi a causa do incidente investigado ali, decisão do utilizador foi
+> deixar de fora dessa correcção.
+
+`can_advance_score_gate()` (`backend-crm/services/qualification_guardrails.py`)
+bloqueia o avanço automático de categoria quando a pontuação das 4 chaves
+clássicas (`decision_role`, `urgency`, `budget_or_price_acceptance`,
+`availability_window`) fica abaixo de `qualification_score_threshold` —
+mesmo que o lead já tenha uma reunião real confirmada (appointment criado,
+`google_event_id` preenchido). Um perfil que usa os 4 campos clássicos e
+define um score mínimo pode ficar com o lead "preso" em `qualification` no
+Kanban, apesar de já existir um compromisso real marcado — o card fica com
+uma foto incoerente da realidade.
+
+**Correcção proposta:** `can_advance_score_gate()` passa a checar se já existe
+um appointment real (`status='pending'`, `source` diferente de descartado)
+para o `lead_id` antes de aplicar o gate — se existir, pula a checagem de
+score (mesmo espírito da excepção que já existe para perfis 100% custom, ver
+M1 acima).
+
+---
+
 ## Nota lateral — bug relacionado, já rastreado em outro plano
 
 `qualification_score_threshold` tem um bug de persistência conhecido e não
