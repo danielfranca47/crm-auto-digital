@@ -109,7 +109,19 @@ onRemove={() => handleRemoveField(editingField.key)}
 
 | # | Commit | O que foi implementado |
 |---|---|---|
-| 1 | _(preencher após commit)_ | |
+| 1 | `afed194` | Nome do campo sempre editável + "Remover campo" liberado para qualquer campo |
+
+**Detalhes do commit `afed194`:**
+- `frontend-crm/src/components/agente/CamadaQualificacao.tsx` — `DrawerCampo` removeu a condição `isCustom` que trocava o input de nome por texto estático; `ModalFiltroSDR` e `SecaoCamposPlana` removeram a condição `key.startsWith('custom_')` ao passar `onRemove`
+
+### Relatório da Fase 1 — o que mudou na prática
+
+**Antes:** campos de qualificação gerados via "✦ Gerar com IA" (ou qualquer
+campo cuja key não começasse com `custom_`) ficavam travados — o nome
+aparecia como texto fixo, sem input, e o botão "Remover campo" não existia.
+**Agora:** qualquer campo, independente de como foi criado, pode ter o nome
+renomeado e pode ser removido pelo drawer "Editar campo".
+**Para validar:** Cenários F1, F2 e F3, abaixo.
 
 ---
 
