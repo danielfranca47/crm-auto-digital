@@ -246,8 +246,6 @@ function DrawerCampo({ field, isSdr, onSave, onClose, onRemove }: {
     setLocal(prev => ({ ...prev, [key]: val }));
   }
 
-  const isCustom = local.key.startsWith('custom_');
-
   return (
     <DrawerBase title="Editar campo" sub="Configure como o agente coleta esta informação" onClose={onClose} onSave={() => onSave(local)}>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
@@ -255,10 +253,7 @@ function DrawerCampo({ field, isSdr, onSave, onClose, onRemove }: {
         {/* Label */}
         <div className="o-field">
           <label className="o-field-label">Nome do campo</label>
-          {isCustom
-            ? <SuggestInput className="o-input" value={local.label} onChange={e => up('label', e.target.value)} placeholder="Ex: Nome do pet" />
-            : <div style={{ fontSize: 13, color: 'var(--o-text)', padding: '8px 0' }}>{local.label}</div>
-          }
+          <SuggestInput className="o-input" value={local.label} onChange={e => up('label', e.target.value)} placeholder="Ex: Nome do pet" />
         </div>
 
         {/* Mode */}
@@ -684,7 +679,7 @@ function ModalFiltroSDR({ group, responseStyle, fields, onUpdate, onClose, onAdd
           isSdr={true}
           onClose={() => setEditingField(null)}
           onSave={handleSaveField}
-          onRemove={editingField.key.startsWith('custom_') ? () => handleRemoveField(editingField.key) : undefined}
+          onRemove={() => handleRemoveField(editingField.key)}
         />
       )}
     </>
@@ -810,7 +805,7 @@ function SecaoCamposPlana({ fields, responseStyle, agentMode, onUpdate }: {
               setEditingField(null);
             }
           }}
-          onRemove={editingField.key.startsWith('custom_') ? () => handleRemoveField(editingField.key) : undefined}
+          onRemove={() => handleRemoveField(editingField.key)}
         />
       )}
     </>
