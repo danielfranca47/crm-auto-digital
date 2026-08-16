@@ -1,7 +1,7 @@
 # Fix: campos de qualificação não editáveis/removíveis no AI Profile
 
 **Branch:** `fix/campos-qualificacao-nao-editaveis`
-**Status:** Em andamento
+**Status:** Todos os cenários validados (16/08/2026)
 
 ---
 
@@ -128,24 +128,33 @@ renomeado e pode ser removido pelo drawer "Editar campo".
 ## Checks de Validação
 
 ### Cenário F1 — Renomear campo existente sem prefixo `custom_`
-- [ ] Abrir AI Profile → Camada de Qualificação → campo "Tipo de sessão" (ou
-      qualquer campo com nome padrão/gerado por IA)
-- [ ] Confirmar: input de nome está editável
-- [ ] Alterar o nome, salvar, reabrir o campo → confirmar que o novo nome
-      persistiu
-- **Pendente**
+- [x] Abrir AI Profile → Camada de Qualificação → campo "Servico de interesse"
+      (gerado via "Gerar com IA", key sem prefixo `custom_`)
+- [x] Confirmar: input de nome está editável
+- [x] Alterar o nome, salvar a camada, recarregar a página → confirmar que o
+      novo nome persistiu
+- **Validado em:** 16/08/2026 — testado na conta local
+  `autodigital157@gmail.com` (AI Profile id=5). Renomeado para "Tipo de
+  sessão (teste F1)", `PUT /ai-profiles/me` retornou 200, nome sobreviveu a
+  um reload completo da página. Restaurado ao nome original
+  ("Servico de interesse") ao final do teste.
 
 ### Cenário F2 — Remover campo existente sem prefixo `custom_`
-- [ ] Abrir o campo "Disponibilidade" (ou outro campo travado)
-- [ ] Confirmar: botão "Remover campo" está visível
-- [ ] Clicar em remover → confirmar que o campo some da lista e não reaparece
+- [x] Abrir um campo travado (sem prefixo `custom_`)
+- [x] Confirmar: botão "Remover campo" está visível
+- [x] Clicar em remover → confirmar que o campo some da lista e não reaparece
       após salvar o AI Profile
-- **Pendente**
+- **Validado em:** 16/08/2026 — campo "Cor preferida" removido, contagem caiu
+  de 4 para 3 campos obrigatórios, `PUT /ai-profiles/me` retornou 200, campo
+  não reapareceu após reload da página.
 
 ### Cenário F3 — Regressão: campo custom criado do zero continua funcionando
-- [ ] Clicar "+ Adicionar campo" → criar um novo campo
-- [ ] Confirmar: nome editável e botão remover disponíveis, como antes
-- **Pendente**
+- [x] Clicar "+ Adicionar campo" → criar um novo campo
+- [x] Confirmar: nome editável e botão remover disponíveis, como antes
+- **Validado em:** 16/08/2026 — campo "Campo teste F3" criado (key
+  `custom_...`), reaberto e confirmado com nome editável e botão "Remover
+  campo" visível, exatamente como antes da mudança. Removido ao final do
+  teste (nunca chegou a ser salvo).
 
 ---
 
