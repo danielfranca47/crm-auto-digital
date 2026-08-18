@@ -123,7 +123,7 @@ def _collect_intent_triggers_for_lead_phase(context, agent_mode_normalized: str)
 
 | # | Commit | O que foi implementado |
 |---|---|---|
-| 1 | `pendente` | fix: intent_trigger passa a olhar a fase seguinte na detecção de intenção |
+| 1 | `b05a82f` | fix: intent_trigger passa a olhar a fase seguinte na detecção de intenção |
 
 **Detalhes do commit:**
 - `backend-executors/app/services/decision_engine.py` — nova constante `_SALES_FLOW_PHASE_SEQUENCE_BY_AGENT_MODE`; `_collect_intent_triggers_for_lead_phase()` agora recebe `agent_mode_normalized` e inclui a fase seguinte na coleta de intent triggers; call site atualizado
