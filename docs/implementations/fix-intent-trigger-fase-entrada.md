@@ -204,13 +204,45 @@ Isto é um problema separado do corrigido na Fase 1 — a Fase 1 resolveu corret
 Sem corrigir isto também, o sintoma relatado pela usuária (mídia não chega) continua a
 acontecer na prática, mesmo com a Fase 1 aplicada.
 
-### Próximo passo
+### Correção
 
-Precisa de novo ciclo de Plan Mode para desenhar a correção (ex.: repetir o lembrete de
-preenchimento de `detected_intents` imediatamente antes do schema JSON, mover
-`_intent_detection_block` para perto da descrição do schema em vez do fim do prompt, ou
-reforçar a instrução com exemplo few-shot). Ainda não implementado — aguardando decisão
-sobre como prosseguir.
+Reforçado o próprio `_intent_detection_block` (a última coisa que a mãe lê antes de
+gerar o JSON) com um parágrafo final que: (1) reafirma que preencher
+`detected_intents` é obrigatório quando a intenção for detectada, e (2) nomeia
+explicitamente a inconsistência observada nos testes ao vivo — reconhecer a intenção
+em `reason` mas devolver `detected_intents` vazio — como uma resposta inválida.
+
+Não foi feita nenhuma reordenação do prompt nem duplicação do schema completo — a
+posição atual do bloco (no fim, mais perto da geração) já é estruturalmente boa; o
+problema era a força da instrução, não a posição.
+
+| Arquivo | Mudança |
+|---|---|
+| `backend-executors/app/services/decision_engine.py` | `_intent_detection_block` (`_build_mother_prompt()`) ganhou 5 linhas de reforço final |
+| `backend-executors/tests/test_sales_flow_intent_trigger_phase_entry.py` | Novo teste `test_mother_prompt_reinforces_detected_intents_consistency_with_reason` — confirma que o texto de reforço está presente no prompt (guarda de regressão; não substitui o teste ao vivo, já que valida conteúdo do prompt, não comportamento da LLM real) |
+
+### Commits Fase 2
+
+| # | Commit | O que foi implementado |
+|---|---|---|
+| 1 | `pendente` | fix: reforçar instrução de detected_intents no prompt da mãe |
+
+**Detalhes do commit:**
+- `backend-executors/app/services/decision_engine.py` — `_intent_detection_block` ganha parágrafo "OBRIGATÓRIO" nomeando a inconsistência reason/detected_intents
+- `backend-executors/tests/test_sales_flow_intent_trigger_phase_entry.py` — novo teste de conteúdo do prompt
+
+### Relatório da Fase 2 — o que mudou na prática
+
+**Antes:** mesmo depois da Fase 1 (que já fazia a mãe ver o gatilho a tempo), ela
+reconhecia a intenção do cliente em texto livre (no campo interno "motivo" da decisão)
+mas não marcava isso no campo estruturado que o sistema realmente usa — resultado:
+mídia continuava sem ser enviada, mesmo após a Fase 1.
+
+**Agora:** o prompt da mãe inclui um aviso final explícito dizendo que essa
+inconsistência específica (reconhecer mas não marcar) é uma resposta inválida.
+
+**Para validar:** Cenário P1, abaixo (repetição do mesmo teste da Fase 1, agora
+verificando se a mídia realmente chega).
 
 ---
 

@@ -1,4 +1,5 @@
 from app.services.decision_engine import (
+    _build_mother_prompt,
     _collect_intent_triggers_for_lead_phase,
     _evaluate_sales_flow_phases,
 )
@@ -174,3 +175,18 @@ def test_end_to_end_intent_trigger_does_not_fire_without_detection():
 
     send_media_actions = [a for a in result["system_actions"] if a["type"] == "send_media"]
     assert send_media_actions == []
+
+
+def test_mother_prompt_reinforces_detected_intents_consistency_with_reason():
+    """Fase 2: testes ao vivo mostraram a mãe reconhecendo a intenção em `reason` mas
+    devolvendo detected_intents=[] mesmo vendo o trigger listado. O prompt precisa
+    conter o reforço explícito que nomeia essa inconsistência como inválida."""
+    sales_flow = _sales_flow_with_intent_trigger_and_media("p2")
+    context = _context("qualification", sales_flow)
+
+    prompt = _build_mother_prompt(context, "sim, pode enviar")
+
+    assert "[DETECÇÃO DE INTENÇÃO]" in prompt
+    assert INTENT_LABEL in prompt
+    assert "INCONSISTENTE" in prompt
+    assert "detected_intents" in prompt.split("OBRIGATÓRIO")[-1]

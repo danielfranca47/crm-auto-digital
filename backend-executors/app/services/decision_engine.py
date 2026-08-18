@@ -1777,6 +1777,11 @@ def _build_mother_prompt(context: Dict[str, Any], message_text: str) -> str:
             f"{_intent_lines}\n\n"
             "Preencha o campo `detected_intents` com os labels detectados (pode ser lista vazia []).\n"
             "Seja conservador: só marque se houver sinal claro na mensagem. Dúvida = não marcar.\n"
+            "OBRIGATÓRIO: se o seu campo \"reason\" menciona que o lead fez/disse algo que\n"
+            "corresponde a uma das intenções acima, essa intenção DEVE também aparecer em\n"
+            "\"detected_intents\", copiada exatamente entre aspas como está listada acima.\n"
+            "Uma resposta onde \"reason\" reconhece a intenção mas \"detected_intents\" fica\n"
+            "vazio é INCONSISTENTE — não faça isso.\n"
         )
 
     return (
