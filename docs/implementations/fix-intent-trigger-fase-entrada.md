@@ -156,6 +156,12 @@ fase, para qualquer fase (p1 a p5) e qualquer tipo de agente (`consultivo`, `dir
 - [ ] Lead diz "sim, pode enviar" quando o bot oferecer a tabela de preços
 - [ ] Confirmar: as 3 mídias da tabela de preços chegam no mesmo turno em que
       `mother_route` muda para `apresentation`
+- **Testado em:** 18/08/2026, ao vivo via Playground local (perfil importado do export
+  da usuária, conta de teste `autodigital157@gmail.com`) — o gatilho passou a ser
+  mostrado corretamente à LLM Mãe (confirmado via log de depuração temporário), mas a
+  mídia **ainda não chegou**: a mãe não preencheu `detected_intents` mesmo vendo a
+  opção listada. Ver Fase 2 abaixo — bug diferente do corrigido na Fase 1, checkbox
+  fica em aberto até a Fase 2 ser validada.
 
 ### Verificação automatizada (pytest — já executada nesta sessão, sem browser)
 - [x] `pytest backend-executors/tests/test_sales_flow_intent_trigger_phase_entry.py -v`
@@ -164,6 +170,47 @@ fase, para qualquer fase (p1 a p5) e qualquer tipo de agente (`consultivo`, `dir
   falhas ocorrem no código anterior ao fix (prova de que o teste captura o bug real) e
   que a suíte completa de `backend-executors/tests/` não teve nenhuma regressão nova
   (22 falhas pré-existentes, não relacionadas a este fix, idênticas antes/depois)
+
+---
+
+## Fase 2 — Diagnóstico: mãe não preenche `detected_intents` mesmo vendo a opção (18/08/2026)
+
+### Problema identificado
+
+Testando o Cenário P1 ao vivo (Playground, perfil real da usuária importado), confirmei
+via log de depuração temporário que a Fase 1 funciona exatamente como projetado: mesmo
+com o lead ainda em `qualification` (p1), o `intent_trigger` de `p2` já aparece na
+lista `active_triggers` mostrada à LLM Mãe — a barreira de timing foi removida.
+
+Porém, em **3 de 3 tentativas** (frases diferentes: "sim, pode enviar", "quero sim,
+manda a tabela"), a mãe devolveu `detected_intents: []` mesmo com o trigger listado na
+secção `[DETECÇÃO DE INTENÇÃO]` do prompt — apesar de, no mesmo turno, o campo `reason`
+da própria mãe dizer explicitamente "Cliente aceitou o envio da tabela de preços". Ou
+seja, a mãe *reconhece* a intenção em prosa livre mas não a replica no campo
+estruturado `detected_intents`.
+
+Causa provável: `generate_mother_route()` (`llm_service.py:132`) usa
+`text.format.type="json_object"` — modo solto, sem schema JSON reforçado pela API, só
+com instrução em texto. O bloco `[DETECÇÃO DE INTENÇÃO]` (`_intent_detection_block`) é
+concatenado no **fim** do prompt (`decision_engine.py:1946`), mas a descrição do campo
+`detected_intents` no schema JSON esperado aparece ~130 linhas **antes**, seguida de um
+bloco extenso de "REGRAS DE ROTEAMENTO". É plausível que o modelo perca a ligação entre
+a lista de intenções (vista por último) e o campo do schema (descrito bem antes),
+priorizando o raciocínio de `route_to`/`reason` — que domina o prompt — sobre o
+preenchimento de `detected_intents`, campo secundário.
+
+Isto é um problema separado do corrigido na Fase 1 — a Fase 1 resolveu corretamente
+"a mãe não via a opção"; este é "a mãe vê a opção mas não a reporta no campo certo".
+Sem corrigir isto também, o sintoma relatado pela usuária (mídia não chega) continua a
+acontecer na prática, mesmo com a Fase 1 aplicada.
+
+### Próximo passo
+
+Precisa de novo ciclo de Plan Mode para desenhar a correção (ex.: repetir o lembrete de
+preenchimento de `detected_intents` imediatamente antes do schema JSON, mover
+`_intent_detection_block` para perto da descrição do schema em vez do fim do prompt, ou
+reforçar a instrução com exemplo few-shot). Ainda não implementado — aguardando decisão
+sobre como prosseguir.
 
 ---
 
