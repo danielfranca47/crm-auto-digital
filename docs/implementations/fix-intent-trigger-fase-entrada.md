@@ -1,7 +1,7 @@
 # Fix: intent_trigger nunca dispara na mensagem que causa entrada na fase
 
 **Branch:** `fix-intent-trigger-fase-entrada`
-**Status:** Em andamento
+**Status:** Todos os cenários validados (18/08/2026)
 
 ---
 
@@ -151,25 +151,29 @@ fase, para qualquer fase (p1 a p5) e qualquer tipo de agente (`consultivo`, `dir
 ## Checks de Validação
 
 ### Cenário P1 — Reprodução exata do bug relatado (Playground)
-- [ ] Abrir Playground com o agente "Daniel" (ID 3, perfil Sensi Vitae, `agent_mode=agenda`)
-- [ ] Cenário Inbound: lead diz "olá boa tarde, gostaria de saber sobre as massagens"
-- [ ] Lead diz "sim, pode enviar" quando o bot oferecer a tabela de preços
-- [ ] Confirmar: as 3 mídias da tabela de preços chegam no mesmo turno em que
+- [x] Abrir Playground com o agente "Daniel" (ID 3, perfil Sensi Vitae, `agent_mode=agenda`)
+- [x] Cenário Inbound: lead diz "olá boa tarde, gostaria de saber sobre as massagens"
+- [x] Lead diz "sim, pode enviar" quando o bot oferecer a tabela de preços
+- [x] Confirmar: as 3 mídias da tabela de preços chegam no mesmo turno em que
       `mother_route` muda para `apresentation`
-- **Testado em:** 18/08/2026, ao vivo via Playground local (perfil importado do export
-  da usuária, conta de teste `autodigital157@gmail.com`) — o gatilho passou a ser
+- **Testado em:** 18/08/2026 (1ª tentativa, só com a Fase 1) — o gatilho passou a ser
   mostrado corretamente à LLM Mãe (confirmado via log de depuração temporário), mas a
-  mídia **ainda não chegou**: a mãe não preencheu `detected_intents` mesmo vendo a
-  opção listada. Ver Fase 2 abaixo — bug diferente do corrigido na Fase 1, checkbox
-  fica em aberto até a Fase 2 ser validada.
+  mídia ainda não chegava: a mãe não preenchia `detected_intents` mesmo vendo a opção
+  listada. Motivou a Fase 2, abaixo.
+- **Validado em:** 18/08/2026 (2ª tentativa, com Fase 1 + Fase 2 aplicadas) — repetido
+  o mesmo cenário ao vivo via Playground local (lead #468, `autodigital157@gmail.com`).
+  Resposta HTTP de `POST /api/playground/chat` trouxe `auto_items` com os 3 itens
+  `type=media` e as URLs exatas configuradas no bloco `midia` de `p2`; confirmado
+  visualmente na conversa simulada (3 bolhas "Fluxo de Venda · Imagem simulado").
 
 ### Verificação automatizada (pytest — já executada nesta sessão, sem browser)
 - [x] `pytest backend-executors/tests/test_sales_flow_intent_trigger_phase_entry.py -v`
-      — 7/7 passaram
+      — 8/8 passaram (7 da Fase 1 + 1 da Fase 2)
 - **Validado em:** 18/08/2026 — também confirmado, via `git stash`, que as mesmas 7
-  falhas ocorrem no código anterior ao fix (prova de que o teste captura o bug real) e
-  que a suíte completa de `backend-executors/tests/` não teve nenhuma regressão nova
-  (22 falhas pré-existentes, não relacionadas a este fix, idênticas antes/depois)
+  falhas ocorrem no código anterior ao fix da Fase 1 (prova de que o teste captura o
+  bug real) e que a suíte completa de `backend-executors/tests/` não teve nenhuma
+  regressão nova em nenhuma das duas fases (22 falhas pré-existentes, não relacionadas
+  a este fix, idênticas antes/depois em ambas as fases)
 
 ---
 
