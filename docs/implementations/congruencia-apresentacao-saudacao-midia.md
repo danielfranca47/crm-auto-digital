@@ -116,7 +116,7 @@ result["prompt_injections"].append(
 
 | # | Commit | O que foi implementado |
 |---|---|---|
-| 1 | `pendente` | fix: reforçar prompt contra saudação duplicada e mídia sem aviso de pendência |
+| 1 | `83073d2` | fix: reforçar prompt contra saudação duplicada e mídia sem aviso de pendência |
 
 **Detalhes do commit:**
 - `backend-executors/app/services/decision_engine.py` — regra anti-repetição de saudação; nota combinada de mídia pendente
