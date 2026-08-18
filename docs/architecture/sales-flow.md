@@ -63,6 +63,8 @@ O builder adapta a UI e o executor filtra os blocos com base no `agent_mode` do 
 | `intent_trigger` | Intenção detectada | A LLM Mãe recebe secção `[DETECÇÃO DE INTENÇÃO]` condicional se a fase **atual** do lead ou a **fase seguinte** (dado o pipeline do `agent_mode`, ver tabela acima) tiver blocos deste tipo. Retorna `detected_intents: list[str]`. O bloco dispara se `intent_label in detected_intents`. Suporta `fire_once` (ver abaixo). |
 
 > **Janela de detecção de 1 fase à frente:** `_collect_intent_triggers_for_lead_phase()` mostra à mãe os `intent_trigger` da fase salva em `lead.category` **e** da fase seguinte na sequência de `_SALES_FLOW_PHASE_SEQUENCE_BY_AGENT_MODE` (`decision_engine.py`, espelha a tabela de pipeline acima). Isso é necessário porque a transição de fase só é decidida pela própria mãe nesse turno — sem essa antecipação, um `intent_trigger` configurado como o sinal de entrada numa fase (ex.: "cliente aceitou a oferta") nunca teria como disparar na mensagem que efetivamente o causa. A avaliação de disparo em si (`_evaluate_sales_flow_phases`) continua olhando só a fase escolhida pelo `effective_route_to` da mãe nesse turno — a antecipação afeta apenas o que é mostrado à mãe, não quais blocos podem executar.
+>
+> **Consistência `reason` ↔ `detected_intents`:** `generate_mother_route()` usa JSON solto (`text.format.type="json_object"`), sem schema reforçado pela API — a mãe pode reconhecer a intenção em prosa livre no campo `reason` sem replicá-la em `detected_intents`. O bloco `[DETECÇÃO DE INTENÇÃO]` (fim do prompt, mais perto da geração) inclui uma instrução explícita exigindo essa consistência. Se `detected_intents` continuar inconsistente com `reason` em produção, revisar esse reforço antes de mexer no motor de avaliação — o bug historicamente esteve na confiabilidade do prompt, não em `_evaluate_sales_flow_phases`.
 
 ### Flag especial de bloco: `qual_opener`
 
@@ -265,7 +267,7 @@ Ambas adicionadas via `ensure_column()` em `backend-crm/database.py`.
 |---|---|
 | `frontend-crm/src/types/agente.ts` | Tipos TypeScript: `SalesFlowPhaseId`, `SalesFlowBlock`, `SalesFlowPhaseData`, `SALES_FLOW_PHASES_BY_AGENT_MODE` |
 | `frontend-crm/src/components/agente/CamadaFluxoVenda.tsx` | Builder visual: renderização de fases, blocos, formulários de configuração |
-| `backend-executors/app/services/decision_engine.py` | `_evaluate_sales_flow_phases()` — avaliação de triggers, coleta de orientações/mídia/system_actions |
+| `backend-executors/app/services/decision_engine.py` | `_evaluate_sales_flow_phases()` — avaliação de triggers, coleta de orientações/mídia/system_actions; `_collect_intent_triggers_for_lead_phase()` — seleciona quais `intent_trigger` mostrar à mãe (fase atual + seguinte) |
 | `backend-crm/routes/executor.py` | `_dispatch_system_actions()`, `_dispatch_sales_flow_media()`, `_PHASE_ID_TO_CATEGORY` |
 | `backend-core/app/models/ai_profile.py` | Campo `sales_flow` na tabela `ai_profiles` |
 | `backend-crm/services/ai_orchestrator/orchestrator.py` | `enrich_context_bundle()` — inclui `sales_flow` no ContextBundle |
