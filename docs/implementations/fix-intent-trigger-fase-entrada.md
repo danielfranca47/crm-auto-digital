@@ -225,7 +225,7 @@ problema era a força da instrução, não a posição.
 
 | # | Commit | O que foi implementado |
 |---|---|---|
-| 1 | `pendente` | fix: reforçar instrução de detected_intents no prompt da mãe |
+| 1 | `490ce9b` | fix: reforçar instrução de detected_intents no prompt da mãe |
 
 **Detalhes do commit:**
 - `backend-executors/app/services/decision_engine.py` — `_intent_detection_block` ganha parágrafo "OBRIGATÓRIO" nomeando a inconsistência reason/detected_intents
