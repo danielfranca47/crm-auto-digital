@@ -537,8 +537,28 @@ def _build_sales_flow_phases_block(phases_result: Dict[str, Any]) -> str:
     return "\n" + "\n".join(injections) + "\n"
 
 
-def _collect_intent_triggers_for_lead_phase(context: Dict[str, Any]) -> List[dict]:
-    """Coleta blocos intent_trigger da fase atual do lead para injeção no prompt da mãe."""
+# Sequência de fases ativas do Fluxo de Venda por agent_mode normalizado — espelha
+# SALES_FLOW_PHASES_BY_AGENT_MODE (frontend-crm/src/types/agente.ts) e a tabela em
+# docs/architecture/sales-flow.md. Usada para saber qual é "a fase seguinte" a partir
+# da fase atual do lead, sem depender de route_to (que só a mãe decide neste turno).
+_SALES_FLOW_PHASE_SEQUENCE_BY_AGENT_MODE: Dict[str, List[str]] = {
+    "consultivo": ["p0", "p1", "p2", "p4", "p5"],
+    "direto": ["p0", "p1", "p2", "p5"],
+    "agenda": ["p0", "p1", "p2", "p3a", "p3b", "p4", "p5"],
+}
+
+
+def _collect_intent_triggers_for_lead_phase(
+    context: Dict[str, Any], agent_mode_normalized: str
+) -> List[dict]:
+    """Coleta blocos intent_trigger da fase atual do lead e da fase seguinte (dado o
+    pipeline do agent_mode) para injeção no prompt da mãe.
+
+    Incluir a fase seguinte é necessário porque a transição de fase só é decidida
+    pela própria mãe NESTE turno — se olhássemos só a fase já salva em lead.category,
+    um intent_trigger configurado como o próprio sinal de entrada numa fase (ex.:
+    "cliente aceitou a oferta") nunca teria como disparar na mensagem que o causa.
+    """
     ai_profile = context.get("ai_profile") or {}
     sales_flow = ai_profile.get("sales_flow")
     if not isinstance(sales_flow, dict) or not sales_flow.get("enabled"):
@@ -549,6 +569,7 @@ def _collect_intent_triggers_for_lead_phase(context: Dict[str, Any]) -> List[dic
     lead = context.get("lead") or {}
     raw_category = (lead.get("category") or "").strip().lower().replace("-", "_")
     _CATEGORY_TO_PHASE_ID: Dict[str, str] = {
+        "recepcao": "p0",
         "qualification": "p1",
         "apresentation": "p2",
         "pre_agendamento": "p3a",
@@ -557,16 +578,23 @@ def _collect_intent_triggers_for_lead_phase(context: Dict[str, Any]) -> List[dic
         "followup": "p4",
         "closing": "p5",
     }
-    phase_id = _CATEGORY_TO_PHASE_ID.get(raw_category)
-    if not phase_id:
-        return []
-    phase_data = next((p for p in phases if isinstance(p, dict) and p.get("id") == phase_id), None)
-    if not phase_data:
-        return []
-    return [
-        b for b in (phase_data.get("blocks") or [])
-        if isinstance(b, dict) and b.get("typeId") == "intent_trigger" and (b.get("intent") or "").strip()
-    ]
+    current_phase_id = _CATEGORY_TO_PHASE_ID.get(raw_category, "p0")
+
+    candidate_phase_ids = {current_phase_id}
+    sequence = _SALES_FLOW_PHASE_SEQUENCE_BY_AGENT_MODE.get(agent_mode_normalized)
+    if sequence and current_phase_id in sequence:
+        idx = sequence.index(current_phase_id)
+        if idx + 1 < len(sequence):
+            candidate_phase_ids.add(sequence[idx + 1])
+
+    blocks: List[dict] = []
+    for phase_data in phases:
+        if isinstance(phase_data, dict) and phase_data.get("id") in candidate_phase_ids:
+            blocks.extend(
+                b for b in (phase_data.get("blocks") or [])
+                if isinstance(b, dict) and b.get("typeId") == "intent_trigger" and (b.get("intent") or "").strip()
+            )
+    return blocks
 
 
 def _build_custom_instructions_block(ai_profile: Dict[str, Any]) -> str:
@@ -1735,7 +1763,7 @@ def _build_mother_prompt(context: Dict[str, Any], message_text: str) -> str:
         if custom_instructions else ""
     )
 
-    _active_intent_triggers = _collect_intent_triggers_for_lead_phase(context)
+    _active_intent_triggers = _collect_intent_triggers_for_lead_phase(context, agent_mode_normalized)
     _intent_detection_block = ""
     if _active_intent_triggers:
         _intent_lines = "\n".join(

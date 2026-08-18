@@ -60,7 +60,9 @@ O builder adapta a UI e o executor filtra os blocos com base no `agent_mode` do 
 | `kw_trigger` | Palavra-chave | Activa se a mensagem do lead contém a(s) keyword(s) definidas. Suporta `fire_once` (ver abaixo). |
 | `phase_trigger` | Entrada na fase | Activa **uma única vez por lead** — na primeira mensagem que chega à fase. Rastreado por `leads.phases_triggered` (JSON array de phase IDs disparados). Quando dispara, injeta contexto no `prompt_injections` e emite `mark_phase_triggered`. |
 | `no_reply_trigger` | Sem resposta | Placeholder de UI. Não avaliado em runtime. |
-| `intent_trigger` | Intenção detectada | A LLM Mãe recebe secção `[DETECÇÃO DE INTENÇÃO]` condicional se a fase tiver blocos deste tipo. Retorna `detected_intents: list[str]`. O bloco dispara se `intent_label in detected_intents`. Suporta `fire_once` (ver abaixo). |
+| `intent_trigger` | Intenção detectada | A LLM Mãe recebe secção `[DETECÇÃO DE INTENÇÃO]` condicional se a fase **atual** do lead ou a **fase seguinte** (dado o pipeline do `agent_mode`, ver tabela acima) tiver blocos deste tipo. Retorna `detected_intents: list[str]`. O bloco dispara se `intent_label in detected_intents`. Suporta `fire_once` (ver abaixo). |
+
+> **Janela de detecção de 1 fase à frente:** `_collect_intent_triggers_for_lead_phase()` mostra à mãe os `intent_trigger` da fase salva em `lead.category` **e** da fase seguinte na sequência de `_SALES_FLOW_PHASE_SEQUENCE_BY_AGENT_MODE` (`decision_engine.py`, espelha a tabela de pipeline acima). Isso é necessário porque a transição de fase só é decidida pela própria mãe nesse turno — sem essa antecipação, um `intent_trigger` configurado como o sinal de entrada numa fase (ex.: "cliente aceitou a oferta") nunca teria como disparar na mensagem que efetivamente o causa. A avaliação de disparo em si (`_evaluate_sales_flow_phases`) continua olhando só a fase escolhida pelo `effective_route_to` da mãe nesse turno — a antecipação afeta apenas o que é mostrado à mãe, não quais blocos podem executar.
 
 ### Flag especial de bloco: `qual_opener`
 
