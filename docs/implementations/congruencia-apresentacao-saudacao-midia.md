@@ -1,7 +1,7 @@
 # Congruência na apresentação: cumprimento duplicado + mídia depois da pergunta
 
 **Branch:** `fix-intent-trigger-fase-entrada`
-**Status:** Em andamento
+**Status:** Todos os cenários validados (18/08/2026)
 
 ---
 
@@ -142,12 +142,19 @@ instruindo fraseado no futuro em vez de tratar como já entregue.
 ## Checks de Validação
 
 ### Cenário P1 — Reprodução da conversa relatada (Playground)
-- [ ] Abrir Playground com o agente "Daniel" (ID 5, perfil Sensi Vitae, `agent_mode=agenda`), conta `autodigital157@gmail.com`
-- [ ] Cenário Inbound: lead diz "olá boa tarde, gostaria de saber sobre as massagens"
-- [ ] Confirmar: a resposta de apresentação (2ª bolha do bot, mesmo turno) NÃO abre com "Boa tarde"/"Olá" de novo
-- [ ] Lead diz "sim, pode enviar" quando o bot oferecer a tabela de preços
-- [ ] Confirmar: o texto da LLM não diz "aqui está"/"segue" antes das imagens — usa fraseado no futuro
-- [ ] Confirmar: as 3 imagens continuam chegando corretamente (sem regressão da implementação anterior)
+- [x] Abrir Playground com o agente "Daniel" (ID 5, perfil Sensi Vitae, `agent_mode=agenda`), conta `autodigital157@gmail.com`
+- [x] Cenário Inbound: lead diz "olá boa tarde, gostaria de saber sobre as massagens"
+- [x] Confirmar: a resposta de apresentação (2ª bolha do bot, mesmo turno) NÃO abre com "Boa tarde"/"Olá" de novo
+- [x] Lead diz "sim, pode enviar" quando o bot oferecer a tabela de preços
+- [x] Confirmar: o texto da LLM não diz "aqui está"/"segue" antes das imagens — usa fraseado no futuro
+- [x] Confirmar: as 3 imagens continuam chegando corretamente (sem regressão da implementação anterior)
+- **Validado em:** 18/08/2026, ao vivo via Playground local (lead #470,
+  `autodigital157@gmail.com`). Resposta de apresentação foi direto para "Sou Daniel,
+  massagista profissional..." sem repetir a saudação. Na aceitação da tabela, o bot
+  respondeu "Ótimo! Vou te enviar a tabela de preços..." → "Em breve, você poderá
+  conferir tudo direitinho." → "Assim que você der uma olhada, podemos conversar
+  sobre qual serviço mais te interessou..." — sem nenhum "aqui está", pergunta de
+  escolha corretamente adiada — e só então as 3 imagens chegaram.
 
 ### Verificação automatizada (pytest — já executada nesta sessão, sem browser)
 - [x] `pytest backend-executors/tests/test_sales_flow_intent_trigger_phase_entry.py -v` — 11/11 passaram
