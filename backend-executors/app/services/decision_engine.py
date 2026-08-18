@@ -381,6 +381,10 @@ def _evaluate_sales_flow_phases(
     # Por defeito True — ações sem gatilho antes delas disparam automaticamente ao entrar na fase.
     _TRIGGER_TYPES = {"phase_trigger", "kw_trigger", "intent_trigger", "no_reply_trigger"}
     last_trigger_active = True
+    # Blocos midia/mensagem que disparam FORA de phase_trigger são despachados DEPOIS
+    # da resposta da LLM (ver whatsapp.py:1210 e a ordem documentada em sales-flow.md).
+    # Coleta aqui para avisar a LLM filha que ainda não foram enviados.
+    _deferred_media_notes: List[str] = []
 
     for block in blocks:
         if not isinstance(block, dict):
@@ -475,11 +479,13 @@ def _evaluate_sales_flow_phases(
                         "media_type": block.get("media_type") or "image",
                         "caption": (block.get("caption") or "").strip() or None,
                     })
+                    _mtype = block.get("media_type") or "image"
                     if result.get("phase_trigger_fired"):
-                        _mtype = block.get("media_type") or "image"
                         result["prompt_injections"].append(
                             f"[Mídia enviada automaticamente ao lead: {_mtype}]"
                         )
+                    else:
+                        _deferred_media_notes.append(_mtype)
             elif type_id == "mensagem":
                 content = (block.get("content") or "").strip()
                 if content:
@@ -492,6 +498,8 @@ def _evaluate_sales_flow_phases(
                         result["prompt_injections"].append(
                             f"[Mensagem automática enviada ao lead antes desta resposta: \"{content}\"]"
                         )
+                    else:
+                        _deferred_media_notes.append(f'mensagem: "{content}"')
             elif type_id == "avancar_fase":
                 target = (block.get("target_phase") or "").strip()
                 if target:
@@ -525,6 +533,16 @@ def _evaluate_sales_flow_phases(
                         "branch_yes": block.get("branch_yes") or "",
                         "branch_no": block.get("branch_no") or "",
                     })
+
+    if _deferred_media_notes:
+        _items = ", ".join(_deferred_media_notes)
+        result["prompt_injections"].append(
+            f"[FLUXO DE VENDA — envio automático pendente: {_items}. Isto será enviado "
+            "AUTOMATICAMENTE logo APÓS a tua resposta — ainda NÃO foi enviado.\n"
+            "NÃO digas 'aqui está'/'segue' nem peças para o lead já ver/escolher agora;\n"
+            "usa fraseado no futuro (ex.: 'vou te mandar já', 'te envio agora') e evita\n"
+            "perguntas que dependam do lead já ter visto o conteúdo nesta mesma mensagem.]"
+        )
 
     return result
 
@@ -970,6 +988,9 @@ def _build_daughter_identity_block(context: Dict[str, Any], phase: str) -> str:
         "- Leia o histórico antes de responder.\n"
         "- NUNCA repita frases, conteúdo ou informações já enviados nesta conversa.\n"
         "- NUNCA envie tabelas de preços ou imagens de forma repetida — se já foram enviadas, não mencione nem instrua o cliente a 'ver as informações'.\n"
+        "- NUNCA repita saudações (Bom dia/Boa tarde/Boa noite/Olá/Oi): se o histórico já\n"
+        "  contém UMA mensagem tua nesta troca, não cumprimente de novo — vai direto ao\n"
+        "  conteúdo. Cumprimenta uma vez por conversa, não uma vez por resposta.\n"
         "- Cada resposta deve avançar a conversa, não repetir o turno anterior.\n"
     )
 

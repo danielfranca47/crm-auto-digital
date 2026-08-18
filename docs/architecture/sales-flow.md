@@ -164,6 +164,10 @@ para cada block em fase.blocks:
 
 O engine adiciona um preamble a `prompt_injections` seguido das mensagens/mídias automáticas enviadas. O LLM filho recebe o contexto do que foi enviado e deve complementar — não repetir.
 
+**Contexto para o LLM filho (quando `midia`/`mensagem` dispara SEM `phase_trigger`):**
+
+Como a ordem de despacho manda essas mensagens/mídias **depois** da resposta da LLM (ver tabela abaixo), o engine injeta uma nota combinada em `prompt_injections` — `"[FLUXO DE VENDA — envio automático pendente: ...]"` — avisando que o conteúdo ainda não foi enviado, para a LLM frasear no futuro (ex.: "vou te mandar já") em vez de tratar como já entregue (ex.: "aqui está"). Uma nota só por resposta, mesmo com múltiplos blocos `midia`/`mensagem` pendentes.
+
 **Supressão da LLM (`suppress_llm_response`):**
 
 Se `result["suppress_llm_response"] = True`, `compose_decision_output()` força `next_action = "ignore"` e `message_text = ""`. As `system_actions` são preservadas e despachadas normalmente.

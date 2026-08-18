@@ -1,4 +1,5 @@
 from app.services.decision_engine import (
+    _build_daughter_identity_block,
     _build_mother_prompt,
     _collect_intent_triggers_for_lead_phase,
     _evaluate_sales_flow_phases,
@@ -190,3 +191,76 @@ def test_mother_prompt_reinforces_detected_intents_consistency_with_reason():
     assert INTENT_LABEL in prompt
     assert "INCONSISTENTE" in prompt
     assert "detected_intents" in prompt.split("OBRIGATÓRIO")[-1]
+
+
+def test_daughter_identity_block_forbids_repeated_greetings():
+    """Testes ao vivo mostraram a LLM filha repetindo 'Boa tarde!' mesmo com a
+    saudação anterior já visível no histórico. A regra anti-repetição precisa
+    nomear saudações explicitamente, não só 'conteúdo/informações' em geral."""
+    context = {
+        "lead": {},
+        "ai_profile": {"name": "Daniel", "brand_name": "Sensi Vitae", "template_key": "hybrid_scheduler"},
+        "playbook": {},
+    }
+
+    block = _build_daughter_identity_block(context, "apresentation")
+
+    assert "REGRA ANTI-REPETIÇÃO" in block
+    assert "saudaç" in block.lower()
+    assert "Boa tarde" in block
+
+
+def test_deferred_media_note_when_intent_trigger_fires_media():
+    """A ordem de despacho real (whatsapp.py) envia a mídia de um intent_trigger
+    DEPOIS do texto da LLM. Sem aviso, a LLM escreve como se a mídia já tivesse
+    sido entregue ('aqui está'). O prompt precisa avisar que o envio é pendente."""
+    sales_flow = _sales_flow_with_intent_trigger_and_media("p2")
+    context = _context("qualification", sales_flow)
+
+    result = _evaluate_sales_flow_phases(
+        context,
+        effective_route_to="apresentation",
+        message_text="sim, pode enviar",
+        detected_intents=[INTENT_LABEL],
+    )
+
+    pending_notes = [i for i in result["prompt_injections"] if "envio automático pendente" in i]
+    assert len(pending_notes) == 1
+    note = pending_notes[0]
+    assert note.count("image") == 3
+    assert "ainda NÃO foi enviado" in note
+    assert "aqui está" in note.lower()
+
+
+def test_no_deferred_media_note_when_phase_trigger_fires_media():
+    """Regressão: phase_trigger continua usando o aviso "enviada automaticamente"
+    (passado) — só o caminho sem phase_trigger precisa do aviso no futuro."""
+    sales_flow = {
+        "enabled": True,
+        "phases": [
+            {
+                "id": "p2",
+                "blocks": [
+                    {"id": "trigger-1", "typeId": "phase_trigger"},
+                    {
+                        "id": "media-1",
+                        "typeId": "midia",
+                        "media_url": "https://example.com/tabela-1.png",
+                        "media_type": "image",
+                    },
+                ],
+            },
+        ],
+    }
+    context = _context("qualification", sales_flow)
+
+    result = _evaluate_sales_flow_phases(
+        context,
+        effective_route_to="apresentation",
+        message_text="oi",
+        detected_intents=[],
+        is_phase_entry=True,
+    )
+
+    assert not any("envio automático pendente" in i for i in result["prompt_injections"])
+    assert any("Mídia enviada automaticamente ao lead" in i for i in result["prompt_injections"])
