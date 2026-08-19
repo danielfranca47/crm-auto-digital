@@ -555,6 +555,81 @@ def _build_sales_flow_phases_block(phases_result: Dict[str, Any]) -> str:
     return "\n" + "\n".join(injections) + "\n"
 
 
+# Categorias de knowledge_items consideradas "narrativas" — informação para contar
+# proativamente 1x (prova social, roteiro de pitch, detalhes do produto), não uma
+# resposta sob demanda. Categorias reativas/FAQ (objections_faq, service_faq,
+# guarantee_policy, service_pricing_table, commercial_objections, service_differentials,
+# active_promotion, payment_policy, pre_commitment_faq) ficam de fora de propósito — já
+# são condicionadas a "usar apenas se o lead perguntar X" e o lead pode perguntar a
+# qualquer momento, então devem continuar sempre disponíveis no prompt.
+_NARRATIVE_KNOWLEDGE_CATEGORIES_BY_PHASE: Dict[str, tuple] = {
+    "apresentation": ("social_proof", "pitch_script", "product_details"),
+    "follow-up": ("social_proof",),
+    "followup": ("social_proof",),
+}
+
+
+def _evaluate_narrative_knowledge_dedup(
+    context: Dict[str, Any],
+    phase: str,
+    knowledge_items: Dict[str, Any],
+) -> Dict[str, Any]:
+    """Filtra categorias narrativas do knowledge base para injeção no máximo 1x por lead —
+    evita repetir a mesma prova social/pitch/detalhes do produto em turnos consecutivos da
+    mesma fase (bug relatado: social_proof repetindo em 3 turnos seguidos da apresentação).
+
+    Função pura: não depende de MotherDecision, ChildResult nem do prompt montado — só de
+    context["lead"]["knowledge_categories_shown"] (JSON array já persistido) e do dict
+    knowledge_items. Chamada 2x por turno (mesmo padrão já usado por
+    _evaluate_sales_flow_phases): uma vez dentro do prompt builder para decidir o que
+    incluir/omitir, outra dentro de compose_decision_output para emitir o system_action que
+    persiste o novo estado.
+
+    Retorna:
+      content                — {categoria: texto_ou_None}; None quando não há conteúdo
+                                configurado OU quando a categoria já foi mostrada antes.
+      new_categories          — categorias com conteúdo que aparecem pela 1ª vez neste turno.
+      suppressed_categories   — categorias com conteúdo configurado mas já mostradas antes
+                                (distinção necessária para callers que têm um fallback
+                                próprio quando "não configurado" — não devem cair nesse
+                                fallback quando o motivo real é "já mostrado").
+    """
+    candidates = _NARRATIVE_KNOWLEDGE_CATEGORIES_BY_PHASE.get(phase, ())
+    if not candidates:
+        return {"content": {}, "new_categories": [], "suppressed_categories": []}
+
+    lead = context.get("lead") or {}
+    raw_shown = lead.get("knowledge_categories_shown") or "[]"
+    try:
+        already_shown: set = set(
+            json.loads(raw_shown) if isinstance(raw_shown, str)
+            else (raw_shown if isinstance(raw_shown, list) else [])
+        )
+    except (ValueError, TypeError):
+        already_shown = set()
+
+    content: Dict[str, Optional[str]] = {}
+    new_categories: List[str] = []
+    suppressed_categories: List[str] = []
+    for category in candidates:
+        text = str((knowledge_items or {}).get(category) or "").strip()
+        if not text:
+            content[category] = None
+            continue
+        if category in already_shown:
+            content[category] = None
+            suppressed_categories.append(category)
+        else:
+            content[category] = text
+            new_categories.append(category)
+
+    return {
+        "content": content,
+        "new_categories": new_categories,
+        "suppressed_categories": suppressed_categories,
+    }
+
+
 # Sequência de fases ativas do Fluxo de Venda por agent_mode normalizado — espelha
 # SALES_FLOW_PHASES_BY_AGENT_MODE (frontend-crm/src/types/agente.ts) e a tabela em
 # docs/architecture/sales-flow.md. Usada para saber qual é "a fase seguinte" a partir
@@ -2540,6 +2615,13 @@ def _build_child_prompt_apresentation(
     # Categorias do knowledge que têm mídia configurada — usadas para suprimir texto
     # quando a mídia é preferencial (evita que o LLM descreva o conteúdo em texto).
     _km_categories = set((context.get("knowledge_media") or {}).keys())
+    # Dedup de knowledge narrativo (social_proof/pitch_script/product_details): calculado
+    # uma única vez e reutilizado tanto pelo caminho commercial_injection (abaixo) quanto
+    # pelo caminho on-demand (_apres_knowledge_parts, mais adiante) — os dois são
+    # mutuamente exclusivos no MESMO turno, mas cobrem o mesmo estado "já mostrado" entre
+    # turnos diferentes da mesma conversa (_auto_promoted_from_qual pode ficar True em
+    # mais de um turno).
+    _narrative_dedup_apres = _evaluate_narrative_knowledge_dedup(context, "apresentation", knowledge_items)
     warming_injection = ""
     commercial_injection = ""
     if (
@@ -2549,10 +2631,17 @@ def _build_child_prompt_apresentation(
         if appointment_mode == "commercial":
             # Modo comercial: apresentar serviços/preços, tratar objeções, fechar compromisso, DEPOIS agendar.
             # Pagamento sempre presencial — nunca enviar link de checkout.
-            social = (
-                knowledge_items.get("social_proof")
-                or str(ai_profile.get("warming_social_proof") or "").strip()
-            )
+            _social_kb_apres = str(knowledge_items.get("social_proof") or "").strip()
+            _social_proof_suppressed_apres = "social_proof" in _narrative_dedup_apres["suppressed_categories"]
+            if _social_kb_apres and not _social_proof_suppressed_apres:
+                social = _social_kb_apres
+            elif not _social_kb_apres:
+                # Nunca configurado no knowledge base — mantém o fallback do AI Profile.
+                social = str(ai_profile.get("warming_social_proof") or "").strip()
+            else:
+                # Configurado, mas já mostrado nesta conversa — suprime sem cair no
+                # fallback (evitaria repetir com outras palavras a mesma narrativa).
+                social = ""
             pricing       = knowledge_items.get("service_pricing_table", "")
             objections    = knowledge_items.get("commercial_objections", "")
             differentials = knowledge_items.get("service_differentials", "")
@@ -2574,7 +2663,11 @@ def _build_child_prompt_apresentation(
                     f"  {social}\n"
                     f"  INSTRUÇÃO: Integre naturalmente na conversa. Nunca diga 'temos uma prova social'. Adapte ao perfil do lead se possível.\n"
                     if social else
-                    "  PROVA SOCIAL: (não configurada — use tom acolhedor e destaque o diferencial do profissional)\n"
+                    (
+                        ""  # já mostrada antes nesta conversa — omite o parágrafo inteiro
+                        if _social_proof_suppressed_apres
+                        else "  PROVA SOCIAL: (não configurada — use tom acolhedor e destaque o diferencial do profissional)\n"
+                    )
                 )
                 + (
                     f"  TABELA DE SERVIÇOS/PREÇOS (apresentar para contextualizar a oferta — pode haver mais "
@@ -2664,9 +2757,9 @@ def _build_child_prompt_apresentation(
     # (e qualquer path que não use commercial_injection, onde knowledge não é injectado inline)
     _apres_knowledge_parts: list[str] = []
     if not commercial_injection:
-        _social_proof_apres = knowledge_items.get("social_proof") or ""
-        _pitch_script_apres = knowledge_items.get("pitch_script") or ""
-        _product_details_apres = knowledge_items.get("product_details") or ""
+        _social_proof_apres = _narrative_dedup_apres["content"].get("social_proof") or ""
+        _pitch_script_apres = _narrative_dedup_apres["content"].get("pitch_script") or ""
+        _product_details_apres = _narrative_dedup_apres["content"].get("product_details") or ""
         _objections_faq_apres = knowledge_items.get("objections_faq") or ""
         _service_faq_apres = knowledge_items.get("service_faq") or ""
         _guarantee_policy_apres = knowledge_items.get("guarantee_policy") or ""
@@ -3178,7 +3271,8 @@ def _build_child_prompt_follow_up(
     knowledge_items = context.get("knowledge_items") or {}
     _km_categories_fu = set((context.get("knowledge_media") or {}).keys())
     _followup_knowledge_parts: list[str] = []
-    _social_proof_ki = knowledge_items.get("social_proof") or ""
+    _narrative_dedup_fu = _evaluate_narrative_knowledge_dedup(context, "follow-up", knowledge_items)
+    _social_proof_ki = _narrative_dedup_fu["content"].get("social_proof") or ""
     _objections_faq_ki = knowledge_items.get("objections_faq") or ""
     _service_faq_ki = knowledge_items.get("service_faq") or ""
     if _social_proof_ki:
@@ -4189,6 +4283,12 @@ def compose_decision_output(
     qualification_auto_promoted = False
     anti_loop_rule1_applied = False
     effective_route_to = effective_route_override or mother_decision.route_to
+    # Snapshot da fase efetivamente usada para montar o prompt da filha (route_for_child em
+    # decide()), antes de qualquer guardrail abaixo poder reatribuir effective_route_to (ex.:
+    # apresentation_complete_auto_advance). Necessário para o dedup de knowledge narrativo: o
+    # que marcamos como "mostrado" precisa corresponder ao que foi de fato injetado no prompt
+    # desta LLM, não à fase pós-guardrail.
+    _prompt_phase_for_narrative_dedup = effective_route_to
     missing_fields = list(mode_contract.get("missing_fields") or [])
     filled_fields = list(mode_contract.get("filled_fields") or [])
     current_field = _select_current_field(missing_fields, filled_fields)
@@ -4527,6 +4627,32 @@ def compose_decision_output(
         decision.suppress_llm_response = True
         decision.next_action = "ignore"
         decision.message_text = ""
+
+    # Dedup de knowledge narrativo (social_proof/pitch_script/product_details) — reavalia a
+    # MESMA função pura usada no prompt builder (_build_child_prompt_apresentation /
+    # _build_child_prompt_follow_up). Como ela só depende de
+    # context["lead"]["knowledge_categories_shown"] e de context["knowledge_items"]
+    # (inalterados durante o turno), chamar de novo aqui produz o mesmo resultado — mesmo
+    # padrão já usado acima para _evaluate_sales_flow_phases (chamada 1: dentro do prompt
+    # builder, só para prompt_injections; chamada 2: aqui, só para system_actions). Usa o
+    # snapshot _prompt_phase_for_narrative_dedup, não effective_route_to, para não marcar
+    # categorias de uma fase diferente da que foi de facto usada para montar o prompt.
+    _narrative_phase_for_dedup = {
+        "apresentation": "apresentation",
+        "follow-up": "follow-up",
+        "followup": "follow-up",
+    }.get(_prompt_phase_for_narrative_dedup)
+    if _narrative_phase_for_dedup:
+        _narrative_dedup_compose = _evaluate_narrative_knowledge_dedup(
+            context, _narrative_phase_for_dedup, context.get("knowledge_items") or {}
+        )
+        if _narrative_dedup_compose["new_categories"]:
+            _sys = list(decision.system_actions or [])
+            _sys.append({
+                "type": "mark_knowledge_shown",
+                "categories": _narrative_dedup_compose["new_categories"],
+            })
+            decision.system_actions = _sys
 
     # Saudação com pedido comercial embutido: a Filha Recepção isolou o trecho não-social
     # em pending_commercial_text (extração determinística, feita por quem já lê a mensagem

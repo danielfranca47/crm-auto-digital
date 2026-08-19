@@ -368,6 +368,36 @@ def _mark_trigger_fired(lead_id: int, user_id: int, block_id: str) -> None:
                 conn.commit()
 
 
+def _mark_knowledge_shown(lead_id: int, user_id: int, categories: list) -> None:
+    """Regista categorias narrativas de knowledge (social_proof, pitch_script,
+    product_details) já mostradas ao lead — impede repetição em turnos futuros."""
+    import json
+    if not categories:
+        return
+    with get_connection() as conn:
+        cur = conn.cursor()
+        row = cur.execute(
+            "SELECT knowledge_categories_shown FROM leads WHERE id = ? AND user_id = ?",
+            (lead_id, user_id),
+        ).fetchone()
+        if row:
+            try:
+                existing: list = json.loads(row["knowledge_categories_shown"] or "[]")
+            except (ValueError, TypeError):
+                existing = []
+            changed = False
+            for category in categories:
+                if category not in existing:
+                    existing.append(category)
+                    changed = True
+            if changed:
+                cur.execute(
+                    "UPDATE leads SET knowledge_categories_shown = ? WHERE id = ? AND user_id = ?",
+                    (json.dumps(existing), lead_id, user_id),
+                )
+                conn.commit()
+
+
 def _call_executors_decide(context_bundle_dict: Dict[str, Any]) -> Dict[str, Any]:
     """
     Chama POST {EXECUTORS_BASE_URL}/api/internal/playground/decide de forma síncrona.
@@ -746,6 +776,8 @@ def playground_chat(
             _mark_phase_triggered(lead_id, user_id, action["phase_id"])
         elif atype == "mark_trigger_fired" and action.get("block_id"):
             _mark_trigger_fired(lead_id, user_id, action["block_id"])
+        elif atype == "mark_knowledge_shown" and action.get("categories"):
+            _mark_knowledge_shown(lead_id, user_id, action["categories"])
         elif atype == "requeue_pending_message" and action.get("message_text"):
             _pending_requeue_text = str(action["message_text"]).strip()
 
@@ -846,6 +878,8 @@ def playground_chat(
                 phase_trigger_fired = True
             elif atype2 == "mark_trigger_fired" and action2.get("block_id"):
                 _mark_trigger_fired(lead_id, user_id, action2["block_id"])
+            elif atype2 == "mark_knowledge_shown" and action2.get("categories"):
+                _mark_knowledge_shown(lead_id, user_id, action2["categories"])
             elif atype2 == "requeue_pending_message":
                 # Não recursiona — ver docs/architecture/llm-architecture.md.
                 logger.warning(

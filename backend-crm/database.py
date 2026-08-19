@@ -1198,6 +1198,7 @@ def init_db() -> None:
         ensure_column(conn, "leads", "detected_language", "detected_language TEXT NULL")
         ensure_column(conn, "leads", "phases_triggered", "phases_triggered TEXT NULL")
         ensure_column(conn, "leads", "triggers_fired", "triggers_fired TEXT NULL")
+        ensure_column(conn, "leads", "knowledge_categories_shown", "knowledge_categories_shown TEXT NULL")
         _migrate_leads_company_or_contact(conn)
 
         cur.execute("CREATE INDEX IF NOT EXISTS idx_leads_user ON leads(user_id, createdAt);")

@@ -376,6 +376,30 @@ def _dispatch_system_actions(
                         )
                         conn.commit()
 
+        elif atype == "mark_knowledge_shown":
+            categories = action.get("categories") or []
+            if categories:
+                import json
+                row = conn.execute(
+                    "SELECT knowledge_categories_shown FROM leads WHERE id = ? AND user_id = ?", (lead_id, user_id)
+                ).fetchone()
+                if row:
+                    try:
+                        existing_kc: list = json.loads(row["knowledge_categories_shown"] or "[]")
+                    except (ValueError, TypeError):
+                        existing_kc = []
+                    changed = False
+                    for category in categories:
+                        if category not in existing_kc:
+                            existing_kc.append(category)
+                            changed = True
+                    if changed:
+                        conn.execute(
+                            "UPDATE leads SET knowledge_categories_shown = ? WHERE id = ? AND user_id = ?",
+                            (json.dumps(existing_kc), lead_id, user_id),
+                        )
+                        conn.commit()
+
         elif atype == "requeue_pending_message":
             pending_text = str(action.get("message_text") or "").strip()
             if not pending_text:
