@@ -104,6 +104,32 @@ _product_details_apres = _narrative_dedup_apres["content"].get("product_details"
 Detalhes completos (função de dedup, os 3 hooks, ensure_column, os 2 handlers de
 persistência) estão no plano aprovado em `C:\Users\Daniel França\.claude\plans\ethereal-dazzling-perlis.md`.
 
+### Commits Fase 1
+
+| # | Commit | O que foi implementado |
+|---|---|---|
+| 1 | `a9bad2a` | Função de dedup + hooks nos 2 prompt builders + hook em `compose_decision_output` + coluna `knowledge_categories_shown` + handlers de persistência (playground.py, executor.py) + 16 testes novos |
+
+**Detalhes do commit `a9bad2a`:**
+- `backend-executors/app/services/decision_engine.py` — nova função pura `_evaluate_narrative_knowledge_dedup()`; hooks em `_build_child_prompt_apresentation` (commercial_injection + bloco on-demand) e `_build_child_prompt_follow_up`; hook em `compose_decision_output` emitindo `mark_knowledge_shown` com snapshot da fase antes de guardrails poderem mutar `effective_route_to`
+- `backend-crm/database.py` — nova coluna `leads.knowledge_categories_shown` (`TEXT NULL`) via `ensure_column`
+- `backend-crm/routes/playground.py` — novo helper `_mark_knowledge_shown()`, chamado nos dois loops de dispatch de `system_actions`
+- `backend-crm/routes/executor.py` — novo handler `mark_knowledge_shown` inline em `_dispatch_system_actions()`
+- `backend-executors/tests/test_narrative_knowledge_dedup.py` — 16 testes novos (todos verdes; suíte completa sem regressão — as 22 falhas pré-existentes no repo, confirmadas via `git stash`, não têm relação com esta mudança)
+
+### Relatório da Fase 1 — o que mudou na prática
+
+**Antes:** a prova social, o roteiro de pitch e os detalhes do produto (Base de
+Conhecimento) apareciam na resposta do bot em praticamente todo turno da fase de
+apresentação, mesmo depois de já terem sido mencionados — o bot repetia frases como
+"clientes relatam alívio das tensões..." várias vezes na mesma conversa.
+
+**Agora:** cada uma dessas três informações só entra no que a IA "vê" na primeira vez que é
+usada para aquele lead; nos turnos seguintes ela some da instrução, sem afetar perguntas de
+FAQ/objeções/preço, que continuam disponíveis a qualquer momento como antes.
+
+**Para validar:** Cenário P1 e P2, abaixo.
+
 ---
 
 ## Checks de Validação
