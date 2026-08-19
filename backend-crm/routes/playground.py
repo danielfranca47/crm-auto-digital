@@ -177,6 +177,7 @@ class PlaygroundChatResponse(BaseModel):
     audio_previews: List[str] = Field(default_factory=list)  # URLs de myaudio que seriam enviados como voz
     auto_messages: List[str] = Field(default_factory=list)   # Mensagens automáticas de blocos 'mensagem' (texto) — compat
     auto_items: List[dict] = Field(default_factory=list)     # Sequência ordenada: {type:"text",content:...} | {type:"media",...}
+    requeue_items: List[dict] = Field(default_factory=list)  # Itens da 2ª decisão (saudação composta), já pré-ordenados — sempre revelados DEPOIS do turno principal
     phase_advances: List[str] = Field(default_factory=list)  # Labels de fases avançadas por blocos 'avancar_fase'
     phase_trigger_fired: bool = False                         # True quando phase_trigger disparou → frontend inverte ordem (auto antes do LLM)
     suppress_llm_response: bool = False                       # True quando trigger disparou com flag — frontend omite turno da LLM
@@ -738,6 +739,7 @@ def playground_chat(
     raw_system_actions = decision.get("system_actions") or []
     auto_messages = []
     auto_items = []
+    requeue_items: List[dict] = []
     phase_advances = []
     appointment_event: Optional[Dict[str, Any]] = None
     _pending_requeue_text: Optional[str] = None
@@ -827,6 +829,15 @@ def playground_chat(
                     lead_id, _qualification_gate_missing2, _suggested_category2,
                 )
 
+        # Itens da 2ª decisão ficam isolados em _requeue_items — NUNCA em auto_items/
+        # auto_messages/phase_trigger_fired da 1ª decisão (ver Fase 1 de
+        # docs/implementations/fix-playground-ordem-saudacao-composta.md). O frontend
+        # revela _requeue_items sempre DEPOIS do turno completo da 1ª decisão, replicando
+        # a ordem cronológica real do WhatsApp (2ª decisão = job assíncrono posterior).
+        _decision2_actions = _decision2.get("system_actions") or []
+        _phase_trigger_fired2 = any(a.get("type") == "mark_phase_triggered" for a in _decision2_actions)
+
+        _requeue_text_item: Optional[dict] = None
         _message_to_send2 = _decision2.get("message_text") or ""
         if _message_to_send2:
             if _decision2.get("reason") == "llm_failure":
@@ -835,16 +846,16 @@ def playground_chat(
                 _effective_route2 = (_decision2.get("decision_trace") or {}).get("effective_route_to")
                 _source2 = "child_llm"
                 _source_label2 = _ROUTE_TO_LABELS.get(_effective_route2, _effective_route2 or "Bot")
-            auto_items.append({
+            _requeue_text_item = {
                 "type": "text",
                 "content": _message_to_send2,
                 "source": _source2,
                 "source_label": _source_label2,
-            })
-            auto_messages.append(_message_to_send2)
+            }
             _insert_message(lead_id, _message_to_send2, "outbound")
 
-        for action2 in (_decision2.get("system_actions") or []):
+        _requeue_media_items: List[dict] = []
+        for action2 in _decision2_actions:
             atype2 = action2.get("type")
             if atype2 == "appointment_event" and action2.get("action"):
                 appointment_event = {
@@ -853,8 +864,7 @@ def playground_chat(
                     "end_at": action2.get("end_at"),
                 }
             elif atype2 == "send_message" and action2.get("content"):
-                auto_messages.append(action2["content"])
-                auto_items.append({
+                _requeue_media_items.append({
                     "type": "text",
                     "content": action2["content"],
                     "source": "sales_flow",
@@ -862,7 +872,7 @@ def playground_chat(
                 })
                 _insert_message(lead_id, action2["content"], "outbound")
             elif atype2 == "send_media" and action2.get("media_url"):
-                auto_items.append({
+                _requeue_media_items.append({
                     "type": "media",
                     "media_url": action2["media_url"],
                     "media_type": action2.get("media_type") or "image",
@@ -875,7 +885,6 @@ def playground_chat(
                     phase_advances.append(f"{_label2} ({action2['target_phase']})")
             elif atype2 == "mark_phase_triggered" and action2.get("phase_id"):
                 _mark_phase_triggered(lead_id, user_id, action2["phase_id"])
-                phase_trigger_fired = True
             elif atype2 == "mark_trigger_fired" and action2.get("block_id"):
                 _mark_trigger_fired(lead_id, user_id, action2["block_id"])
             elif atype2 == "mark_knowledge_shown" and action2.get("categories"):
@@ -886,6 +895,15 @@ def playground_chat(
                     "event=playground_double_requeue_ignored lead_id=%s user_id=%s",
                     lead_id, user_id,
                 )
+
+        # Mesma regra de whatsapp.py:817-822 — phase_trigger da 2ª decisão manda a mídia/
+        # mensagem automática vir antes do texto dela; senão, depois. Isolado de
+        # phase_trigger_fired/auto_items da 1ª decisão.
+        _text_item_list = [_requeue_text_item] if _requeue_text_item else []
+        if _phase_trigger_fired2:
+            requeue_items = _requeue_media_items + _text_item_list
+        else:
+            requeue_items = _text_item_list + _requeue_media_items
 
     # ── Passo 9: Construir Response ──────────────────────────────────────────
     # Re-fetch estado actual do lead e qualification após o engine ter (possivelmente) actualizado
@@ -944,6 +962,7 @@ def playground_chat(
         audio_previews=_audio_previews,
         auto_messages=auto_messages,
         auto_items=auto_items,
+        requeue_items=requeue_items,
         phase_advances=phase_advances,
         phase_trigger_fired=phase_trigger_fired,
         suppress_llm_response=bool(decision.get("suppress_llm_response")),
