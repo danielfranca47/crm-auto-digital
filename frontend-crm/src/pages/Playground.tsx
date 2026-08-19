@@ -108,6 +108,35 @@ function resolveAutoItems(res: PlaygroundChatResponse): PlaygroundAutoItem[] {
   return (res.auto_messages ?? []).map((m) => ({ type: "text" as const, content: m }));
 }
 
+// Revela o turno completo de uma resposta do Playground: mensagem principal + auto_items
+// (ordem decidida por phase_trigger_fired/suppress_llm_response), seguido SEMPRE por
+// requeue_items (2ª decisão de uma saudação composta, se houver) — nunca misturado com o
+// turno principal, para preservar a ordem cronológica que aconteceria no WhatsApp real.
+async function revealBotTurn(
+  res: PlaygroundChatResponse,
+  setMessages: Dispatch<SetStateAction<ChatMessage[]>>,
+  setLoading: Dispatch<SetStateAction<boolean>>
+) {
+  const parts = res.message_parts?.length ? res.message_parts : [res.message_to_send];
+  const autoItems = resolveAutoItems(res);
+  if (res.suppress_llm_response) {
+    if (autoItems.length) await revealAutoMessages(autoItems, setMessages, setLoading);
+  } else if (res.phase_trigger_fired && autoItems.length) {
+    await revealAutoMessages(autoItems, setMessages, setLoading);
+    setMessages((prev) => [...prev, buildBotMessage(parts[0], res, { isFirst: true, totalParts: parts.length })]);
+    if (parts.length > 1) await revealExtraParts(parts.slice(1), setMessages, setLoading);
+  } else {
+    setMessages((prev) => [...prev, buildBotMessage(parts[0], res, { isFirst: true, totalParts: parts.length })]);
+    if (parts.length > 1) await revealExtraParts(parts.slice(1), setMessages, setLoading);
+    if (autoItems.length) await revealAutoMessages(autoItems, setMessages, setLoading);
+  }
+  if (res.requeue_items?.length) {
+    await revealAutoMessages(res.requeue_items, setMessages, setLoading);
+  }
+  appendPhaseAdvances(res.phase_advances ?? [], setMessages);
+  appendAppointmentEvent(res.appointment_event, setMessages);
+}
+
 function appendPhaseAdvances(
   phaseAdvances: string[],
   setMessages: Dispatch<SetStateAction<ChatMessage[]>>
@@ -216,21 +245,7 @@ export default function Playground() {
 
         setSession((s) => s ? { ...s, leadId: res.lead_id } : s);
 
-        const parts = res.message_parts?.length ? res.message_parts : [res.message_to_send];
-        const autoItems0 = resolveAutoItems(res);
-        if (res.suppress_llm_response) {
-          if (autoItems0.length) await revealAutoMessages(autoItems0, setMessages, setLoading);
-        } else if (res.phase_trigger_fired && autoItems0.length) {
-          await revealAutoMessages(autoItems0, setMessages, setLoading);
-          setMessages((prev) => [...prev, buildBotMessage(parts[0], res, { isFirst: true, totalParts: parts.length })]);
-          if (parts.length > 1) await revealExtraParts(parts.slice(1), setMessages, setLoading);
-        } else {
-          setMessages([buildBotMessage(parts[0], res, { isFirst: true, totalParts: parts.length })]);
-          if (parts.length > 1) await revealExtraParts(parts.slice(1), setMessages, setLoading);
-          if (autoItems0.length) await revealAutoMessages(autoItems0, setMessages, setLoading);
-        }
-        appendPhaseAdvances(res.phase_advances ?? [], setMessages);
-        appendAppointmentEvent(res.appointment_event, setMessages);
+        await revealBotTurn(res, setMessages, setLoading);
       } catch (err: unknown) {
         if (cancelled) return;
         if (!handlePlaygroundLimitError(err)) {
@@ -268,21 +283,7 @@ export default function Playground() {
 
         setSession((s) => s ? { ...s, leadId: res.lead_id } : s);
 
-        const parts = res.message_parts?.length ? res.message_parts : [res.message_to_send];
-        const autoItems0 = resolveAutoItems(res);
-        if (res.suppress_llm_response) {
-          if (autoItems0.length) await revealAutoMessages(autoItems0, setMessages, setLoading);
-        } else if (res.phase_trigger_fired && autoItems0.length) {
-          await revealAutoMessages(autoItems0, setMessages, setLoading);
-          setMessages((prev) => [...prev, buildBotMessage(parts[0], res, { isFirst: true, totalParts: parts.length })]);
-          if (parts.length > 1) await revealExtraParts(parts.slice(1), setMessages, setLoading);
-        } else {
-          setMessages([buildBotMessage(parts[0], res, { isFirst: true, totalParts: parts.length })]);
-          if (parts.length > 1) await revealExtraParts(parts.slice(1), setMessages, setLoading);
-          if (autoItems0.length) await revealAutoMessages(autoItems0, setMessages, setLoading);
-        }
-        appendPhaseAdvances(res.phase_advances ?? [], setMessages);
-        appendAppointmentEvent(res.appointment_event, setMessages);
+        await revealBotTurn(res, setMessages, setLoading);
       } catch (err: unknown) {
         if (cancelled) return;
         if (!handlePlaygroundLimitError(err)) {
@@ -334,24 +335,7 @@ export default function Playground() {
         }
 
         // Adiciona resposta do bot
-        const parts = res.message_parts?.length ? res.message_parts : [res.message_to_send];
-        const autoItems = resolveAutoItems(res);
-        if (res.suppress_llm_response) {
-          // LLM suprimida pelo gatilho: apenas mensagens automáticas, sem turno da LLM
-          if (autoItems.length) await revealAutoMessages(autoItems, setMessages, setLoading);
-        } else if (res.phase_trigger_fired && autoItems.length) {
-          // phase_trigger: mensagens automáticas PRIMEIRO, depois LLM
-          await revealAutoMessages(autoItems, setMessages, setLoading);
-          setMessages((prev) => [...prev, buildBotMessage(parts[0], res, { isFirst: true, totalParts: parts.length })]);
-          if (parts.length > 1) await revealExtraParts(parts.slice(1), setMessages, setLoading);
-        } else {
-          // ordem normal: LLM primeiro, depois auto items
-          setMessages((prev) => [...prev, buildBotMessage(parts[0], res, { isFirst: true, totalParts: parts.length })]);
-          if (parts.length > 1) await revealExtraParts(parts.slice(1), setMessages, setLoading);
-          if (autoItems.length) await revealAutoMessages(autoItems, setMessages, setLoading);
-        }
-        appendPhaseAdvances(res.phase_advances ?? [], setMessages);
-        appendAppointmentEvent(res.appointment_event, setMessages);
+        await revealBotTurn(res, setMessages, setLoading);
       } catch (err: unknown) {
         if (!handlePlaygroundLimitError(err)) {
           const msg = err instanceof Error ? err.message : "Erro ao chamar o playground";
@@ -413,21 +397,7 @@ export default function Playground() {
           );
         }
 
-        const parts = res.message_parts?.length ? res.message_parts : [res.message_to_send];
-        const autoItems = resolveAutoItems(res);
-        if (res.suppress_llm_response) {
-          if (autoItems.length) await revealAutoMessages(autoItems, setMessages, setLoading);
-        } else if (res.phase_trigger_fired && autoItems.length) {
-          await revealAutoMessages(autoItems, setMessages, setLoading);
-          setMessages((prev) => [...prev, buildBotMessage(parts[0], res, { isFirst: true, totalParts: parts.length })]);
-          if (parts.length > 1) await revealExtraParts(parts.slice(1), setMessages, setLoading);
-        } else {
-          setMessages((prev) => [...prev, buildBotMessage(parts[0], res, { isFirst: true, totalParts: parts.length })]);
-          if (parts.length > 1) await revealExtraParts(parts.slice(1), setMessages, setLoading);
-          if (autoItems.length) await revealAutoMessages(autoItems, setMessages, setLoading);
-        }
-        appendPhaseAdvances(res.phase_advances ?? [], setMessages);
-        appendAppointmentEvent(res.appointment_event, setMessages);
+        await revealBotTurn(res, setMessages, setLoading);
       } catch (err: unknown) {
         if (!handlePlaygroundLimitError(err)) {
           const msg = err instanceof Error ? err.message : "Erro ao enviar áudio";
@@ -517,21 +487,7 @@ export default function Playground() {
           setSession((s) => s ? { ...s, leadId: res.lead_id } : s);
         }
 
-        const parts = res.message_parts?.length ? res.message_parts : [res.message_to_send];
-        const autoItems = resolveAutoItems(res);
-        if (res.suppress_llm_response) {
-          if (autoItems.length) await revealAutoMessages(autoItems, setMessages, setLoading);
-        } else if (res.phase_trigger_fired && autoItems.length) {
-          await revealAutoMessages(autoItems, setMessages, setLoading);
-          setMessages((prev) => [...prev, buildBotMessage(parts[0], res, { isFirst: true, totalParts: parts.length })]);
-          if (parts.length > 1) await revealExtraParts(parts.slice(1), setMessages, setLoading);
-        } else {
-          setMessages((prev) => [...prev, buildBotMessage(parts[0], res, { isFirst: true, totalParts: parts.length })]);
-          if (parts.length > 1) await revealExtraParts(parts.slice(1), setMessages, setLoading);
-          if (autoItems.length) await revealAutoMessages(autoItems, setMessages, setLoading);
-        }
-        appendPhaseAdvances(res.phase_advances ?? [], setMessages);
-        appendAppointmentEvent(res.appointment_event, setMessages);
+        await revealBotTurn(res, setMessages, setLoading);
       } catch (err: unknown) {
         if (!handlePlaygroundLimitError(err)) {
           const msg = err instanceof Error ? err.message : "Erro ao enviar lote";

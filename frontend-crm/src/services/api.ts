@@ -185,6 +185,7 @@ export type PlaygroundChatResponse = {
   audio_previews?: string[];
   auto_messages?: string[];
   auto_items?: PlaygroundAutoItem[];
+  requeue_items?: PlaygroundAutoItem[];
   phase_advances?: string[];
   phase_trigger_fired?: boolean;
   suppress_llm_response?: boolean;
