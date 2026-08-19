@@ -30,6 +30,25 @@ se uma for atualizada (ex.: um novo `agent_mode` ou uma nova fase) e a outra nã
 guardrails de categoria e o Fluxo de Venda podem discordar sobre o que é uma transição
 válida.
 
+**Evidência concreta observada (19/08/2026, investigação do perfil `id=5` local):**
+`apply_mother_category_guardrails()` (`decision_engine.py:~4165`) só avança
+`leads.category` quando `mother_decision.perceived_category` muda — e a Mãe mantém
+`perceived_category` == `lead.category` por instrução própria do prompt ("quando em
+dúvida, mantenha igual"), mesmo quando `route_to`/`effective_route_to` já aponta para
+uma fase adiante no mesmo turno. Confirmado via log: lead saiu de `qualification`
+direto para `pre-agendamento` persistido no banco, sem nunca persistir `apresentation`
+entre os dois — apesar de `_evaluate_sales_flow_phases()` ter avaliado e disparado
+corretamente os blocos da fase `apresentation` (`p2`) nesse mesmo turno, porque essa
+função usa `effective_route_to` (decisão efêmera do turno), não a categoria persistida.
+Ou seja: o Fluxo de Venda (fonte B) já não depende da categoria persistida para
+funcionar corretamente turno a turno, mas a categoria persistida (fonte A, usada pelo
+Kanban e por qualquer outro consumidor de `leads.category`) pode ficar
+"desatualizada"/pular fases visíveis ao operador. Não causou nenhum bug de conteúdo
+observável até agora (o Fluxo de Venda continua funcionando via `effective_route_to`),
+mas é sintoma direto da duplicação de fonte de verdade descrita acima, e pode
+manifestar-se de outras formas (ex.: Kanban mostrando o lead na coluna errada) à medida
+que mais lógica passar a depender de `leads.category` persistido.
+
 ---
 
 ## Problemas Identificados (estado anterior)

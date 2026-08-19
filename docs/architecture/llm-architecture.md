@@ -81,7 +81,7 @@ Se esse campo vier preenchido, `compose_decision_output()` anexa um `system_acti
 
 O consumo é responsabilidade de quem chama o executor, não do `decide()` (que continua puro):
 - **WhatsApp real** (`backend-crm/routes/executor.py`, `_dispatch_system_actions`): cria um novo job `whatsapp.inbound.n8n` com o texto pendente, reaproveitando `instance_id`/`provider`/`phone` do job original — percorre o pipeline normal no ciclo seguinte do worker.
-- **Playground** (`backend-crm/routes/playground.py`): dispara uma 2ª chamada síncrona a `_call_executors_decide()` dentro da mesma request HTTP, e anexa o resultado como 2ª bolha — replica o comportamento do WhatsApp real sem depender de fila/worker.
+- **Playground** (`backend-crm/routes/playground.py`): dispara uma 2ª chamada síncrona a `_call_executors_decide()` dentro da mesma request HTTP, e devolve o resultado isolado no campo `requeue_items` da resposta (nunca misturado com `auto_items`/`phase_trigger_fired` da 1ª decisão) — o frontend revela `requeue_items` sempre **depois** do turno completo da 1ª decisão, preservando a ordem cronológica que o WhatsApp real teria (2ª decisão = job assíncrono posterior). Ver [`playground-parity.md`](playground-parity.md#campos-na-resposta-do-playground-playgroundchatresponse).
 
 Em ambos os casos, o turno seguinte roda a Mãe **sem overrides** — `outbound_count>0` nesse ponto (a saudação já foi enviada), então `_enforce_greeting_first` não força mais `recepcao`, e a rota comercial é decidida normalmente pelas prioridades já existentes no prompt da Mãe.
 
