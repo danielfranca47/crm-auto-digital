@@ -151,6 +151,66 @@ def test_apresentation_prompt_keeps_reactive_faq_regardless_of_shown_state():
     assert "Resposta X de objeção." in prompt
 
 
+# ---------- 2b. commercial_injection (turno de warming/auto-promoção) ----------
+# Caminho separado de _apres_knowledge_parts (mutuamente exclusivo no mesmo turno) —
+# precisa de cobertura própria, já que reutiliza o mesmo dedup mas com lógica de
+# fallback diferente (distingue "não configurado" de "já mostrado").
+
+def _commercial_context(shown="[]"):
+    return {
+        "lead": {"id": 1, "category": "qualification", "knowledge_categories_shown": shown},
+        "ai_profile": {
+            "agent_mode": "agenda",
+            "template_key": "hybrid_scheduler",
+            "appointment_mode": "commercial",
+            "qualification_required_fields": [],
+        },
+        "playbook": {"template_key": "hybrid_scheduler"},
+        "metadata": {"inbound_message_text": "quero saber mais"},
+        "history": [{"model": "outbound", "text": "Oi!"}, {"model": "inbound", "text": "quero saber mais"}],
+        "knowledge_items": {"social_proof": _SOCIAL},
+        "knowledge_media": {},
+        "lead_detected_language": "pt",
+    }
+
+
+def _mother_warming():
+    """Turno de transição qualification -> apresentation (missing_fields vazio) —
+    dispara _auto_promoted_from_qual=True e o caminho commercial_injection."""
+    return MotherDecision(
+        route_to="qualification", perceived_category="qualification",
+        confidence=0.9, reason="qualificação completa",
+    )
+
+
+def test_commercial_injection_includes_social_proof_first_turn():
+    prompt = _build_child_prompt_apresentation(_commercial_context(), "quero saber mais", _mother_warming())
+    assert "MODO COMERCIAL" in prompt
+    assert _SOCIAL in prompt
+
+
+def test_commercial_injection_omits_social_proof_after_shown():
+    prompt = _build_child_prompt_apresentation(
+        _commercial_context(shown='["social_proof"]'), "quero saber mais", _mother_warming()
+    )
+    assert "MODO COMERCIAL" in prompt
+    assert _SOCIAL not in prompt
+    # Não deve cair no fallback de "não configurada" nem no warming_social_proof do
+    # AI Profile — o parágrafo de PROVA SOCIAL deve ser omitido por completo.
+    assert "PROVA SOCIAL: (não configurada" not in prompt
+
+
+def test_commercial_injection_falls_back_to_profile_when_never_configured():
+    """Categoria nunca configurada no knowledge base (diferente de 'já mostrada') —
+    deve continuar caindo no fallback do AI Profile, comportamento pré-existente."""
+    context = _commercial_context()
+    context["knowledge_items"] = {}
+    context["ai_profile"]["warming_social_proof"] = "Fallback do perfil."
+    prompt = _build_child_prompt_apresentation(context, "quero saber mais", _mother_warming())
+    assert "MODO COMERCIAL" in prompt
+    assert "Fallback do perfil." in prompt
+
+
 # ---------- 3. integração com o prompt de follow-up ----------
 
 def test_followup_prompt_omits_social_proof_after_shown():
