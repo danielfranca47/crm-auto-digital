@@ -65,6 +65,46 @@ agendamento) ganharam instrução extra: quando há mais de uma tabela, identifi
 tabela o lead está a pedir, e só depois a linha certa dentro dela. Sem isso, a IA aplicaria a
 duração/preço errados quando o profissional tem mais de um serviço cadastrado.
 
+## Dedup de categorias narrativas (evitar repetição entre turnos)
+
+`_apres_knowledge_parts`/`standard_knowledge_block` (fase apresentação) e
+`followup_knowledge_block` (fase follow-up), em `decision_engine.py`, injetam o conteúdo cru de
+algumas categorias diretamente no prompt da filha. A maioria é **reativa** — condicionada a "usar
+APENAS quando/se o lead perguntar X" (`objections_faq`, `service_faq`, `guarantee_policy`,
+`service_pricing_table`, `commercial_objections`, `service_differentials`, `active_promotion`,
+`payment_policy`, `pre_commitment_faq`) — fica sempre disponível, sem dedup, porque o lead pode
+perguntar por aquilo a qualquer momento da conversa.
+
+Três categorias são **narrativas** — informação para contar proativamente uma vez, não para
+responder sob demanda: `social_proof`, `pitch_script`, `product_details` (só as duas primeiras
+existem hoje na fase follow-up). Confiar apenas na instrução "usar quando fizer sentido" reinjetada
+todo turno se mostrou insuficiente (mesma classe de problema do Fluxo de Venda sem estado) — o
+conteúdo repetia em turnos consecutivos mesmo sem o lead pedir de novo.
+
+**Mecanismo** (`_evaluate_narrative_knowledge_dedup()`, mesmo arquivo): lê
+`leads.knowledge_categories_shown` (coluna `TEXT NULL`, JSON array de categorias já mostradas —
+mesmo padrão de `leads.triggers_fired`). Categoria narrativa com conteúdo configurado e ainda não
+mostrada → entra no prompt normalmente. Já mostrada → omitida por completo (supressão silenciosa,
+sem nota de "já disse isso" — o histórico da conversa já está no prompt). Função pura, chamada 2x
+por turno: uma vez dentro do prompt builder (decide o que incluir) e outra dentro de
+`compose_decision_output()` (emite `system_actions[{type: "mark_knowledge_shown", categories:
+[...]}]` para as categorias novas do turno — mesmo padrão de `mark_trigger_fired`, persistido em
+`backend-crm/routes/playground.py` e `routes/executor.py`).
+
+`social_proof` tem dois caminhos de injeção mutuamente exclusivos no mesmo turno —
+`commercial_injection` (fase apresentação, ativo só quando `_auto_promoted_from_qual=True`, ver
+[`pipeline-phases.md`](pipeline-phases.md#estágio-de-aquecimento-e-appointment_mode-só-hybrid_scheduler))
+e o bloco on-demand (`_apres_knowledge_parts`, ativo quando `commercial_injection` está vazio) — os
+dois consultam o mesmo estado de dedup, então o resultado é o mesmo independente de qual caminho
+disparou no turno de estreia.
+
+**Limitação conhecida:** a categoria é marcada como "mostrada" no momento em que fica disponível no
+prompt (porque tinha conteúdo e ainda não estava em `knowledge_categories_shown`), não no momento
+em que a LLM efetivamente a cita na resposta — se a filha optar por não usar o conteúdo no turno em
+que foi oferecido, ele não volta a aparecer depois. Dedup é por categoria, não por conteúdo (editar
+o texto de uma categoria já mostrada não a "desmarca" para leads que já a viram) e não há reset
+automático em reengajamento.
+
 ## Compatibilidade com itens legados
 
 Nenhum item anterior a esta funcionalidade precisa de migração — um item de texto livre antigo
