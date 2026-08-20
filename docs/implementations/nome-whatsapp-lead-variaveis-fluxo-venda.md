@@ -77,7 +77,22 @@ preenchido manualmente.
 
 | # | Commit | O que foi implementado |
 |---|---|---|
-| 1 | *(pendente — registrar após o commit)* | Captura automática do nome do WhatsApp + fallback no decision_engine |
+| 1 | `33bcec8` | Captura automática do nome do WhatsApp + fallback no decision_engine |
+
+**Detalhes do commit `33bcec8`:**
+- `backend-crm/database.py` — `ensure_column(leads, wa_display_name)`
+- `backend-crm/routes/webhooks.py` — `_resolve_wa_display_name()` + campo em `inbound_payload`
+- `backend-crm/services/whatsapp_inbound/guardrail.py` — grava `wa_display_name` na criação do lead
+- `backend-executors/app/services/decision_engine.py` — 11 pontos de fallback de nome atualizados
+- `docs/architecture/leads-schema.md`, `webhooks.md` — documentação atualizada
+
+### Relatório da Fase 1 — o que mudou na prática
+
+**Antes:** quando um lead novo mandava a primeira mensagem sem estar salvo no CRM, o agente não sabia o nome dele — usava o próprio número de telefone como "nome" internamente e nunca cumprimentava a pessoa pelo nome.
+
+**Agora:** o sistema captura o nome que aparece no WhatsApp da pessoa (o mesmo nome que aparece pra você na conversa) e passa a usar esse nome automaticamente nas respostas da IA, sem precisar configurar nada no perfil do agente. Se você já tiver preenchido manualmente o nome do lead no card do CRM, essa configuração manual continua tendo prioridade sempre.
+
+**Para validar:** Cenário C1, acima — precisa de uma mensagem real de um número novo (o Playground não passa pelo webhook, então não serve pra testar esta fase específica).
 
 ---
 
