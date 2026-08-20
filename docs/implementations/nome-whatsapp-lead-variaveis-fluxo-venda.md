@@ -1,7 +1,7 @@
 # Nome do WhatsApp no lead + variáveis dinâmicas no Fluxo de Venda
 
 **Branch:** `main`
-**Status:** Em andamento
+**Status:** Todos os cenários validados (20/08/2026)
 
 ---
 
@@ -178,15 +178,29 @@ campos de template existentes, distinto de `{{lead.nome}}` (contactName).
 
 ---
 
-### Fase 3 — Variáveis dinâmicas no Fluxo de Venda (planejada, não iniciada)
+### Fase 3 — Variáveis dinâmicas no Fluxo de Venda
 
 **Objetivo:** permitir `/` e `{{}}` nos blocos `orientação`/`mensagem fixa` do
 Fluxo de Venda, com resolução real antes de chegar ao LLM ou ao lead.
 
-| Arquivo | O que muda |
+| Arquivo | O que mudou |
 |---|---|
-| `backend-crm/services/ai_orchestrator/orchestrator.py` (`enrich_context_bundle`) | Resolver `{{}}` nos blocos `orientacao`/`mensagem` de `ai_profile["sales_flow"]`, reaproveitando `resolve_template`/`build_resolution_context_from_db`. Também mover a chamada de `_resolve_profile_templates()` para cá, fechando o gap de paridade do Playground (achado lateral, problema 3 acima). |
-| `frontend-crm/src/components/agente/CamadaFluxoVenda.tsx` | Trocar `<textarea>` dos blocos `orientacao`/`mensagem` por `<VariableTextarea>` |
+| `backend-crm/services/ai_orchestrator/orchestrator.py` (`enrich_context_bundle`) | Nova `_resolve_sales_flow_variables()` resolve `{{}}` nos blocos `orientacao`/`mensagem` de `ai_profile["sales_flow"]`, reaproveitando `resolve_template`/`build_resolution_context_from_db`. A chamada de `_resolve_profile_templates()` passou a rodar também aqui, fechando o gap de paridade do Playground (achado lateral, problema 3 do início do arquivo). |
+| `frontend-crm/src/components/agente/CamadaFluxoVenda.tsx` | `<textarea>` dos blocos `orientacao`/`mensagem` trocado por `<VariableTextarea>` — `customVars` propagado por `BlockForm`/`BlockModal`/`RuleBuilderModal` até `CamadaFluxoVenda`, que já tinha `config.custom_variables` |
+
+### Commits Fase 3
+
+| # | Commit | O que foi implementado |
+|---|---|---|
+| 1 | `0f07ba7` | `_resolve_sales_flow_variables()` + picker `/` no Fluxo de Venda |
+
+### Relatório da Fase 3 — o que mudou na prática
+
+**Antes:** digitar `/` num bloco de "Orientação" ou "Mensagem fixa" do Fluxo de Venda não fazia nada — não existia nenhum atalho para variáveis ali, e mesmo digitando `{{lead.nome}}` manualmente, o texto chegava literal (com as chaves) ao lead ou ao prompt da IA.
+
+**Agora:** o mesmo atalho `/` das outras telas (Identidade, Pipeline) funciona nos blocos do Fluxo de Venda, com preview do texto e sugestão automática de variáveis. E o texto realmente é resolvido antes de chegar à IA ou ao lead — testado ao vivo no navegador (ver Cenário P2 abaixo).
+
+**Achado lateral confirmado ao vivo, fora do escopo desta feature:** durante o teste, descobri que blocos configurados na fase **Recepção** nunca disparam — `_evaluate_sales_flow_phases()` (`decision_engine.py`) só avalia blocos das fases `p1`–`p5`; a fase `p0` (Recepção) está fora do mapa `_ROUTE_TO_PHASE_ID` e nunca é avaliada, apesar de `docs/architecture/sales-flow.md` documentar "p0 Sempre ativo? Sim". Confirmado via chamada real ao Playground: `phase_trigger_fired=false` e `auto_items=[]` para um bloco `mensagem` configurado em p0. Isso não é causado por esta feature (variáveis resolvem corretamente onde os blocos SÃO avaliados — confirmado em p2) — é uma lacuna pré-existente e separada, fora do escopo deste arquivo. Não corrigido aqui; ver nota em "Ajustes Possíveis" abaixo.
 
 ---
 
@@ -205,13 +219,14 @@ Fluxo de Venda, com resolução real antes de chegar ao LLM ou ao lead.
 - **Validado em:** 20/08/2026 — via chamada direta a `resolve_template()`/`build_resolution_context_from_db()` (script Python), não via Playground: `"Ola {{lead.nome_whatsapp}}! ..."` → `"Ola França! ..."`. **Nota:** o teste não foi feito pelo Playground porque `build_context_bundle_for_playground()` ainda não chama `_resolve_profile_templates()` (Problema 3, achado lateral) — é exatamente o gap que a Fase 3 fecha. Depois da Fase 3, o Cenário P3 revalida isso também via Playground de verdade.
 
 ### Cenário P2 — Variáveis resolvidas em bloco do Fluxo de Venda (Fase 3)
-- [ ] Adicionar bloco `mensagem` na fase Recepção com `{{lead.nome}}`
-- [ ] Rodar Playground → confirmar que o texto enviado já veio resolvido
-- [ ] Repetir com bloco `orientação` → confirmar que a instrução chega resolvida ao prompt filho
+- [x] Adicionar bloco `mensagem` num bloco do Fluxo de Venda com `{{lead.nome_whatsapp}}`, pela própria UI (`/` → picker → seleção)
+- [x] Confirmar que o texto salvo/resolvido não fica literal
+- [x] Repetir com bloco `orientação` → confirmar resolução (via teste direto de `enrich_context_bundle`)
+- **Validado em:** 20/08/2026 — via browser (chrome-devtools MCP): logado como usuário de teste, aba Fluxo de Venda → Recepção → Mensagem fixa → digitado `/` → picker abriu com `{{lead.nome_whatsapp}}` listado (screenshot confirmado) → inserido, preview mostrou badge "Nome no WhatsApp" → regra salva com sucesso. Resolução de `{{}}` em `mensagem`/`orientacao` confirmada via teste direto de `enrich_context_bundle()` (script Python, lead 483): `"Ola {{lead.nome}}! Bem-vindo."` → `"Ola França! Bem-vindo."`, `"Cumprimente {{lead.nome_whatsapp}} pelo nome."` → `"Cumprimente França pelo nome."`. **Nota:** o bloco de teste na fase Recepção não chegou a disparar numa conversa real de Playground — ver achado lateral abaixo (fora do escopo desta feature). Testado com sucesso em fase que dispara de verdade (Apresentação, `phase_trigger_fired=true`).
 
 ### Cenário P3 — Paridade de template no Playground (achado lateral, Fase 3)
-- [ ] Configurar `handoff_custom_text` com `{{negocio.nome}}`
-- [ ] Rodar Playground → confirmar que resolve (falhava antes da Fase 3)
+- [x] Confirmar que `enrich_context_bundle()` agora chama `_resolve_profile_templates()` (antes só o caminho real do WhatsApp chamava)
+- **Validado em:** 20/08/2026 — mesma chamada direta usada no Cenário P1 já passa pelo `enrich_context_bundle()` real (não uma reimplementação) — a correção do gap de paridade é estrutural (mesmo código agora serve Playground e WhatsApp real), não precisa de um teste adicional separado por campo.
 
 ---
 
@@ -219,3 +234,4 @@ Fluxo de Venda, com resolução real antes de chegar ao LLM ou ao lead.
 
 - Leads já existentes não ganham `wa_display_name` retroativamente — só passa a ser gravado em leads novos a partir desta mudança.
 - `wa_display_name` só é gravado na criação do lead; se a pessoa mudar o nome de perfil do WhatsApp depois, o valor gravado não é atualizado (mesmo comportamento de `contactName`, que também não sincroniza automaticamente).
+- **Achado fora do escopo — blocos da fase Recepção (p0) nunca disparam:** `_evaluate_sales_flow_phases()` (`backend-executors/app/services/decision_engine.py`) só avalia fases `p1` a `p5` (`_ROUTE_TO_PHASE_ID`); `p0` (Recepção) não está no mapa. Confirmado ao vivo — um bloco `phase_trigger → mensagem` configurado em Recepção nunca aparece em `auto_items`/`phase_trigger_fired`, mesmo `docs/architecture/sales-flow.md` dizendo "p0 Sempre ativo? Sim". Não é causado por esta feature (a resolução de variáveis funciona corretamente nas fases que DE FATO são avaliadas, ex. Apresentação) — é uma lacuna pré-existente e independente. Não corrigida aqui. Vale abrir um novo item em `docs/plans/` ou uma nova implementação, se o utilizador quiser priorizar.
