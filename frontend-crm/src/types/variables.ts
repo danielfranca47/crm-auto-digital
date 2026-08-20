@@ -15,6 +15,13 @@ export const SYSTEM_VARIABLES: VariableDef[] = [
     example: 'João Silva',
   },
   {
+    key: 'lead.nome_whatsapp',
+    label: 'Nome no WhatsApp',
+    category: 'system',
+    description: 'Nome de perfil do WhatsApp do lead (independente do nome salvo no CRM)',
+    example: 'João',
+  },
+  {
     key: 'lead.empresa',
     label: 'Empresa do lead',
     category: 'system',

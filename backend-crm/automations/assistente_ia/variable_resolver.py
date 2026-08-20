@@ -4,6 +4,7 @@ Resolve variáveis dinâmicas em campos de template de mensagem do AI Profile.
 
 Variáveis suportadas (sintaxe {{chave}}):
   {{lead.nome}}         — contactName do lead
+  {{lead.nome_whatsapp}} — wa_display_name do lead (nome de perfil do WhatsApp)
   {{lead.empresa}}      — companyName do lead
   {{agente.nome}}       — name do ai_profile
   {{negocio.nome}}      — brand_name do ai_profile
@@ -56,6 +57,9 @@ class ResolutionContext:
         # ── Variáveis de lead ──────────────────────────────────────────────────
         if key == "lead.nome":
             return _nonempty(lead.get("contactName"))
+
+        if key == "lead.nome_whatsapp":
+            return _nonempty(lead.get("wa_display_name"))
 
         if key == "lead.empresa":
             return _nonempty(lead.get("companyName"))
