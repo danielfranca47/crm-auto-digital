@@ -670,9 +670,68 @@ def enrich_context_bundle(bundle: ContextBundle, user_id: int) -> ContextBundle:
         bundle.metadata["bot_disabled"] = True
         bundle.metadata["bot_disabled_reason"] = "meeting_scheduled" if _meeting_management_enabled else None
 
+    # B7 — Resolver {{}} nos campos de template do AI Profile e nos blocos do
+    # Fluxo de Venda (orientacao/mensagem). Corre aqui — não nos builders —
+    # pela mesma razão do resto desta função: é o único ponto que garante
+    # paridade Playground ↔ executor real automaticamente. Antes desta linha,
+    # o Playground nunca resolvia {{}} nos 7 campos de template (só o
+    # caminho real do WhatsApp chamava _resolve_profile_templates
+    # diretamente) — ver docs/implementations/nome-whatsapp-lead-variaveis-fluxo-venda.md.
+    _lead_id_for_vars = lead.get("id")
+    if _lead_id_for_vars and bundle.ai_profile:
+        _resolve_profile_templates(bundle.ai_profile, _lead_id_for_vars, user_id)
+        _resolve_sales_flow_variables(bundle.ai_profile, _lead_id_for_vars, user_id)
+
     if updates:
         bundle = bundle.model_copy(update=updates)
     return bundle
+
+
+def _resolve_sales_flow_variables(
+    ai_profile: Dict[str, Any],
+    lead_id: int,
+    user_id: int,
+) -> None:
+    """
+    Resolve variáveis dinâmicas ({{lead.nome}}, {{lead.nome_whatsapp}}, etc.)
+    no conteúdo dos blocos `orientacao`/`mensagem` do Fluxo de Venda
+    (ai_profile["sales_flow"]), alterando o dict in-place. Blocos `mensagem`
+    são enviados literalmente ao lead (system_actions[send_message]) e blocos
+    `orientacao` são injetados como instrução no prompt filho — ambos
+    chegavam com `{{}}` literal antes desta função.
+    Não lança exceção — em caso de erro, os blocos permanecem com o texto
+    original.
+    """
+    sales_flow = ai_profile.get("sales_flow")
+    if not isinstance(sales_flow, dict):
+        return
+    phases = sales_flow.get("phases")
+    if not isinstance(phases, list):
+        return
+
+    try:
+        with get_connection() as conn:
+            conn.row_factory = sqlite3.Row
+            ctx = build_resolution_context_from_db(
+                conn=conn,
+                lead_id=lead_id,
+                user_id=user_id,
+                ai_profile=ai_profile,
+            )
+        for phase in phases:
+            if not isinstance(phase, dict):
+                continue
+            blocks = phase.get("blocks")
+            if not isinstance(blocks, list):
+                continue
+            for block in blocks:
+                if not isinstance(block, dict) or block.get("typeId") not in ("orientacao", "mensagem"):
+                    continue
+                raw = block.get("content")
+                if raw:
+                    block["content"] = resolve_template(raw, ctx)
+    except Exception:
+        logger.exception("_resolve_sales_flow_variables failed — using raw block text")
 
 
 def build_context_bundle_for_playground(

@@ -14,6 +14,8 @@ import {
   SALES_FLOW_BLOCK_CATEGORIES,
   SALES_FLOW_PHASES_BY_AGENT_MODE,
 } from '@/types/agente';
+import { buildVariableList } from '@/types/variables';
+import { VariableTextarea } from './VariableTextarea';
 
 interface Props {
   config: AgentConfig;
@@ -127,14 +129,17 @@ function MediaPreviewChip({ media }: { media: Pick<KnowledgeMediaItem, 'media_ur
 
 // ─── BlockForm ────────────────────────────────────────────────
 
-function BlockForm({ block, setBlock, knowledgeItems }: {
+function BlockForm({ block, setBlock, knowledgeItems, customVars }: {
   block: SalesFlowBlock;
   setBlock: (b: SalesFlowBlock) => void;
   knowledgeItems: KnowledgeItem[];
+  customVars: Record<string, string>;
 }) {
   function set<K extends keyof SalesFlowBlock>(k: K, v: SalesFlowBlock[K]) {
     setBlock({ ...block, [k]: v });
   }
+
+  const variables = buildVariableList(customVars);
 
   const [mediaUploading, setMediaUploading] = useState(false);
   const [mediaUploadError, setMediaUploadError] = useState('');
@@ -272,10 +277,14 @@ function BlockForm({ block, setBlock, knowledgeItems }: {
         <>
           <div className="o-field">
             <label className="o-field-label">Instrução para o agente *</label>
-            <div className="o-field-hint">Texto injetado no contexto do agente com alta prioridade.</div>
-            <textarea className="o-input" rows={5} placeholder="Ex: O lead mencionou orçamento limitado. Apresente ROI antes de repetir o preço."
-              value={block.content || ''} onChange={e => set('content', e.target.value)}
-              style={{ resize: 'vertical', minHeight: 110 }} />
+            <div className="o-field-hint">Texto injetado no contexto do agente com alta prioridade. Digite <kbd style={{ fontFamily: 'monospace', padding: '0 3px', borderRadius: 2, background: 'var(--o-b1)', fontSize: 10 }}>/</kbd> para inserir variáveis.</div>
+            <VariableTextarea
+              value={block.content || ''}
+              onChange={v => set('content', v)}
+              variables={variables}
+              placeholder="Ex: O lead mencionou orçamento limitado. Apresente ROI antes de repetir o preço."
+              minHeight={110}
+            />
           </div>
           <div className="o-field">
             <label className="o-field-label">Prioridade</label>
@@ -293,10 +302,13 @@ function BlockForm({ block, setBlock, knowledgeItems }: {
         <>
           <div className="o-field">
             <label className="o-field-label">Texto da mensagem *</label>
-            <div className="o-field-hint">Enviado diretamente ao lead — não gerado pela IA.</div>
-            <textarea className="o-input" rows={4} placeholder="Ex: Olá! Preparamos uma proposta especial para si."
-              value={block.content || ''} onChange={e => set('content', e.target.value)}
-              style={{ resize: 'vertical' }} />
+            <div className="o-field-hint">Enviado diretamente ao lead — não gerado pela IA. Digite <kbd style={{ fontFamily: 'monospace', padding: '0 3px', borderRadius: 2, background: 'var(--o-b1)', fontSize: 10 }}>/</kbd> para inserir variáveis, como <code style={{ fontSize: 11 }}>{'{{lead.nome}}'}</code>.</div>
+            <VariableTextarea
+              value={block.content || ''}
+              onChange={v => set('content', v)}
+              variables={variables}
+              placeholder="Ex: Olá! Preparamos uma proposta especial para si."
+            />
           </div>
           <div className="o-field">
             <label className="o-field-label">Canal</label>
@@ -500,13 +512,14 @@ function BlockForm({ block, setBlock, knowledgeItems }: {
 
 // ─── BlockModal ───────────────────────────────────────────────
 
-function BlockModal({ phaseId, initial, knowledgeItems, onSave, onClose, groupMode = false }: {
+function BlockModal({ phaseId, initial, knowledgeItems, onSave, onClose, groupMode = false, customVars }: {
   phaseId: SalesFlowPhaseId;
   initial: SalesFlowBlock | null;
   knowledgeItems: KnowledgeItem[];
   onSave: (b: SalesFlowBlock) => void;
   onClose: () => void;
   groupMode?: boolean;  // quando true: adicionar acção/lógica a gatilho existente (sem tab de Gatilho)
+  customVars: Record<string, string>;
 }) {
   const isEdit = !!initial;
   const [activeCat, setActiveCat] = useState<'trigger' | 'action' | 'logic'>(
@@ -607,7 +620,7 @@ function BlockModal({ phaseId, initial, knowledgeItems, onSave, onClose, groupMo
           {/* Form */}
           {selectedTypeId && (
             <div style={{ borderTop: '1px solid var(--o-b1)', paddingTop: 16, display: 'flex', flexDirection: 'column', gap: 0 }}>
-              <BlockForm block={block} setBlock={setBlock} knowledgeItems={knowledgeItems} />
+              <BlockForm block={block} setBlock={setBlock} knowledgeItems={knowledgeItems} customVars={customVars} />
             </div>
           )}
         </div>
@@ -629,11 +642,12 @@ function BlockModal({ phaseId, initial, knowledgeItems, onSave, onClose, groupMo
 
 type RBStep = 'pick-trigger' | 'config-trigger' | 'rule-builder' | 'adding-block';
 
-function RuleBuilderModal({ phaseId, knowledgeItems, onSave, onClose }: {
+function RuleBuilderModal({ phaseId, knowledgeItems, onSave, onClose, customVars }: {
   phaseId: SalesFlowPhaseId;
   knowledgeItems: KnowledgeItem[];
   onSave: (blocks: SalesFlowBlock[]) => void;
   onClose: () => void;
+  customVars: Record<string, string>;
 }) {
   const [step, setStep] = useState<RBStep>('pick-trigger');
   const [triggerBlock, setTriggerBlock] = useState<SalesFlowBlock | null>(null);
@@ -759,7 +773,7 @@ function RuleBuilderModal({ phaseId, knowledgeItems, onSave, onClose }: {
               <div style={{ fontSize: 11, color: 'var(--o-sub)' }}>{BLOCK_META[triggerBlock.typeId].desc}</div>
             </div>
           </div>
-          <BlockForm block={triggerBlock} setBlock={b => setTriggerBlock(b)} knowledgeItems={knowledgeItems} />
+          <BlockForm block={triggerBlock} setBlock={b => setTriggerBlock(b)} knowledgeItems={knowledgeItems} customVars={customVars} />
         </div>
         <div style={{ padding: '12px 20px 20px', display: 'flex', gap: 8, justifyContent: 'space-between', borderTop: '1px solid var(--o-b1)' }}>
           <button className="o-btn" onClick={() => setStep('pick-trigger')}>← Voltar</button>
@@ -860,7 +874,7 @@ function RuleBuilderModal({ phaseId, knowledgeItems, onSave, onClose }: {
             </div>
             {pendingTypeId && pendingBlock && (
               <div style={{ borderTop: '1px solid var(--o-b1)', paddingTop: 16 }}>
-                <BlockForm block={pendingBlock} setBlock={b => setPendingBlock(b)} knowledgeItems={knowledgeItems} />
+                <BlockForm block={pendingBlock} setBlock={b => setPendingBlock(b)} knowledgeItems={knowledgeItems} customVars={customVars} />
               </div>
             )}
           </div>
@@ -1290,6 +1304,7 @@ export function CamadaFluxoVenda({ config, onUpdate }: Props) {
           knowledgeItems={knowledgeItems}
           onSave={saveBlock}
           onClose={() => setModal(null)}
+          customVars={config.custom_variables || {}}
         />
       )}
       {addToGroup && (
@@ -1300,6 +1315,7 @@ export function CamadaFluxoVenda({ config, onUpdate }: Props) {
           onSave={saveGroupBlock}
           onClose={() => setAddToGroup(null)}
           groupMode
+          customVars={config.custom_variables || {}}
         />
       )}
       {ruleBuilderPhaseId && (
@@ -1308,6 +1324,7 @@ export function CamadaFluxoVenda({ config, onUpdate }: Props) {
           knowledgeItems={knowledgeItems}
           onSave={(blocks) => saveBlocks(ruleBuilderPhaseId, blocks)}
           onClose={() => setRuleBuilderPhaseId(null)}
+          customVars={config.custom_variables || {}}
         />
       )}
 
