@@ -67,9 +67,9 @@ preenchido manualmente.
 | Arquivo | O que mudou |
 |---|---|
 | `backend-crm/database.py` | `ensure_column(conn, "leads", "wa_display_name", "wa_display_name TEXT NULL")` |
-| `backend-crm/routes/webhooks.py` | Nova função `_resolve_wa_display_name()` (tenta `chat.name`/`chat.wa_name`/`message.senderName`/`message.pushName`/`data.pushName`/`data.senderName`, loga quando nenhuma bate); `inbound_payload["wa_display_name"]` adicionado |
+| `backend-crm/routes/webhooks.py` | Nova função `_resolve_wa_display_name()` (prioridade `message.senderName` → `chat.wa_name` → `chat.wa_contactName` → `chat.name` — ajustada na Fase 1.1); `inbound_payload["wa_display_name"]` adicionado |
 | `backend-crm/services/whatsapp_inbound/guardrail.py` | `find_or_create_lead_by_phone()` lê `payload.get("wa_display_name")` e grava na criação do lead |
-| `backend-executors/app/services/decision_engine.py` | 11 pontos `_safe_get(lead, "contactName", "companyName", "name")` → `_safe_get(lead, "contactName", "companyName", "wa_display_name", "name")` |
+| `backend-executors/app/services/decision_engine.py` | 11 pontos que resolviam o nome do lead — substituídos por `_resolve_lead_name(lead)` na Fase 1.1 (ignora o telefone-placeholder, ver abaixo) |
 | `docs/architecture/leads-schema.md` | Nova seção `wa_display_name` |
 | `docs/architecture/webhooks.md` | Atualizado — nome do WhatsApp agora é capturado |
 
@@ -93,6 +93,62 @@ preenchido manualmente.
 **Agora:** o sistema captura o nome que aparece no WhatsApp da pessoa (o mesmo nome que aparece pra você na conversa) e passa a usar esse nome automaticamente nas respostas da IA, sem precisar configurar nada no perfil do agente. Se você já tiver preenchido manualmente o nome do lead no card do CRM, essa configuração manual continua tendo prioridade sempre.
 
 **Para validar:** Cenário C1, acima — precisa de uma mensagem real de um número novo (o Playground não passa pelo webhook, então não serve pra testar esta fase específica).
+
+---
+
+## Fase 1.1 — Diagnóstico + Correção: nome errado capturado + fallback nunca acionado (20/08/2026)
+
+Testado ao vivo (WhatsApp real, ambiente local + túnel ngrok). Dois problemas encontrados em sequência.
+
+### Problema 1 — `contactName` (placeholder = telefone) sempre vencia o fallback
+
+Primeira mensagem de um lead novo: IA cumprimentou usando o próprio telefone (`Olá, +5547992163692!`) e, ao ser perguntada "qual meu nome?", respondeu "seu nome não foi identificado" — mesmo com `wa_display_name` corretamente gravado no banco.
+
+**Causa raiz:** `find_or_create_lead_by_phone()` sempre grava `contactName = phone_norm` quando nenhum nome é conhecido na criação — ou seja, `contactName` **nunca é `None`** para leads via WhatsApp, é o telefone como string. `_safe_get(lead, "contactName", "companyName", "wa_display_name", "name")` (Fase 1) para no primeiro valor não-nulo, então `wa_display_name` nunca era alcançado — `contactName` (= telefone) sempre "ganhava" antes.
+
+### Correção 1
+
+| Arquivo | Mudança |
+|---|---|
+| `backend-executors/app/services/decision_engine.py` | Nova função `_resolve_lead_name(lead)`: percorre `contactName → companyName → wa_display_name → name`, mas ignora qualquer candidato igual ao `lead.phone` (o placeholder), caindo para o próximo. Substituídos os 11 pontos que usavam `_safe_get(...)` diretamente. |
+| `backend-crm/services/whatsapp_inbound/guardrail.py` | `contact_name` na criação do lead agora prioriza `wa_display_name` sobre `phone_norm` — o card do lead no CRM já nasce com o nome real, não só o telefone. |
+
+### Problema 2 — Campo errado do payload UazAPI (nome da agenda do telefone, não do perfil do WhatsApp)
+
+Apontado pelo utilizador: o nome capturado ("Daniel França (Filho)") era o nome salvo na lista de **contatos do telefone do bot**, não o nome de perfil que a pessoa define no próprio WhatsApp — que não existiria se o operador não tivesse esse número salvo manualmente no aparelho (caso da maioria dos leads reais).
+
+**Verificação:** payload bruto real capturado via inspector do ngrok (`http://127.0.0.1:4040/api/requests/http`) durante o teste mostrou os dois campos lado a lado no mesmo evento:
+- `chat.wa_contactName` / `chat.name` = `"Daniel França (Filho)"` — nome da agenda de contatos do telefone conectado.
+- `chat.wa_name` / `message.senderName` = `"França"` — nome de perfil do WhatsApp do remetente.
+
+Confirmado também contra documentação/comunidade da UazAPI: o merge-field consolidado `{{name}}` deles usa `wa_contactName` antes de `wa_name` — o oposto do que precisamos aqui, já que para uso automático de CRM queremos a fonte que existe *independente* de estar salva como contato.
+
+### Correção 2
+
+| Arquivo | Mudança |
+|---|---|
+| `backend-crm/routes/webhooks.py` | `_resolve_wa_display_name()`: prioridade trocada para `message.senderName` → `chat.wa_name` → `chat.wa_contactName` → `chat.name` (antes: `chat.name` → `chat.wa_name` → ...). Removidas as tentativas em `data.pushName`/`data.senderName` (payload real confirmado sem objeto `data` — só `chat`/`message`). |
+
+### Reteste após as duas correções
+
+Lead de teste resetado e mensagem reenviada:
+- `wa_display_name` = `"França"` (nome de perfil, não mais o nome da agenda)
+- `contactName` já nasceu como `"França"` (antes: telefone)
+- Resposta da IA: **"Oi! Seja bem-vindo, França!"**
+
+### Commits Fase 1.1
+
+| # | Commit | O que foi implementado |
+|---|---|---|
+| 1 | `eb0af94` | `_resolve_lead_name()` + prioridade correta de campo no payload UazAPI |
+
+### Relatório da Fase 1.1 — o que mudou na prática
+
+**Antes:** mesmo capturando um nome, a IA não usava — ou usava o nome errado (o da agenda de contatos do telefone do bot, que só existe se o operador salvou aquele número manualmente).
+
+**Agora:** a IA usa corretamente o nome de perfil do WhatsApp da pessoa (que qualquer remetente tem, esteja ou não salvo como contato), com prioridade correta sobre o telefone-placeholder.
+
+**Validado ao vivo em:** 20/08/2026 — ver Cenário C1 abaixo.
 
 ---
 
@@ -123,9 +179,10 @@ Fluxo de Venda, com resolução real antes de chegar ao LLM ou ao lead.
 ## Checks de Validação
 
 ### Cenário C1 — Captura do nome no primeiro contato real (WhatsApp)
-- [ ] Enviar mensagem de um número novo (sem lead existente) para uma instância de teste
-- [ ] Confirmar em `leads.wa_display_name`: preenchido com o nome do WhatsApp
-- [ ] Confirmar que a resposta da IA cumprimenta pelo nome, sem nenhuma configuração no AI Profile
+- [x] Enviar mensagem de um número novo (sem lead existente) para uma instância de teste
+- [x] Confirmar em `leads.wa_display_name`: preenchido com o nome do WhatsApp
+- [x] Confirmar que a resposta da IA cumprimenta pelo nome, sem nenhuma configuração no AI Profile
+- **Validado em:** 20/08/2026 — ambiente local + túnel ngrok, instância `crm-15-88e456ef` (user_id=15). Duas rodadas de bug encontradas e corrigidas em Fase 1.1 (fallback nunca alcançava `wa_display_name`; campo errado do payload UazAPI). Após correção: `wa_display_name="França"`, `contactName="França"`, IA respondeu "Oi! Seja bem-vindo, França!".
 
 ### Cenário P1 — Variável `{{lead.nome_whatsapp}}` num campo de template (Fase 2)
 - [ ] Lead de teste com `wa_display_name` já setado
@@ -145,5 +202,5 @@ Fluxo de Venda, com resolução real antes de chegar ao LLM ou ao lead.
 
 ## Ajustes Possíveis Pós-Implementação
 
-- Nome exato do campo UazAPI (`chat.name` vs outras variações) só será confirmado no Cenário C1 — se nenhuma das chaves tentadas bater, ajustar `_resolve_wa_display_name()` com o payload real capturado nos logs.
 - Leads já existentes não ganham `wa_display_name` retroativamente — só passa a ser gravado em leads novos a partir desta mudança.
+- `wa_display_name` só é gravado na criação do lead; se a pessoa mudar o nome de perfil do WhatsApp depois, o valor gravado não é atualizado (mesmo comportamento de `contactName`, que também não sincroniza automaticamente).
