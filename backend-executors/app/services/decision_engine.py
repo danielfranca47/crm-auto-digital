@@ -1602,7 +1602,7 @@ def _build_prompt(context: Dict[str, Any], message_text: str) -> str:
 
     lead_summary = {
         "id": lead.get("id"),
-        "name": _safe_get(lead, "contactName", "companyName", "name"),
+        "name": _safe_get(lead, "contactName", "companyName", "wa_display_name", "name"),
         "phone": _safe_get(lead, "phone", "phone_e164"),
         "segment": lead.get("segment"),
         "status": lead.get("status"),
@@ -1814,7 +1814,7 @@ def _build_mother_prompt(context: Dict[str, Any], message_text: str) -> str:
 
     lead_summary = {
         "id": lead.get("id"),
-        "name": _safe_get(lead, "contactName", "companyName", "name"),
+        "name": _safe_get(lead, "contactName", "companyName", "wa_display_name", "name"),
         "segment": lead.get("segment"),
         "status": lead.get("status"),
         "category": lead.get("category"),
@@ -2053,7 +2053,7 @@ def _build_child_prompt_recepcao(
     history = context.get("history") or []
     playbook = context.get("playbook") or {}
 
-    lead_name = (_safe_get(lead, "contactName", "companyName", "name") or "").strip()
+    lead_name = (_safe_get(lead, "contactName", "companyName", "wa_display_name", "name") or "").strip()
     _is_outbound_lead = (metadata.get("lead_origin") or "inbound") == "outbound"
     origin_opener = (
         ai_profile.get("origin_outbound_opener") if _is_outbound_lead else ai_profile.get("origin_inbound_opener")
@@ -2170,7 +2170,7 @@ def _build_child_prompt(
 
     lead_summary = {
         "id": lead.get("id"),
-        "name": _safe_get(lead, "contactName", "companyName", "name"),
+        "name": _safe_get(lead, "contactName", "companyName", "wa_display_name", "name"),
         "category": lead.get("category"),
         "segment": lead.get("segment"),
     }
@@ -2246,7 +2246,7 @@ def _build_child_prompt_qualification(
 
     lead_summary = {
         "id": lead.get("id"),
-        "name": _safe_get(lead, "contactName", "companyName", "name"),
+        "name": _safe_get(lead, "contactName", "companyName", "wa_display_name", "name"),
         "category": lead.get("category"),
         "segment": lead.get("segment"),
     }
@@ -2495,7 +2495,7 @@ def _build_child_prompt_apresentation(
 
     lead_summary = {
         "id": lead.get("id"),
-        "name": _safe_get(lead, "contactName", "companyName", "name"),
+        "name": _safe_get(lead, "contactName", "companyName", "wa_display_name", "name"),
         "category": lead.get("category"),
         "segment": lead.get("segment"),
     }
@@ -3102,7 +3102,7 @@ def _build_child_prompt_follow_up(
 
     lead_summary = {
         "id": lead.get("id"),
-        "name": _safe_get(lead, "contactName", "companyName", "name"),
+        "name": _safe_get(lead, "contactName", "companyName", "wa_display_name", "name"),
         "category": lead.get("category"),
         "segment": lead.get("segment"),
     }
@@ -3433,7 +3433,7 @@ def _build_child_prompt_closing(
 
     lead_summary = {
         "id": lead.get("id"),
-        "name": _safe_get(lead, "contactName", "companyName", "name"),
+        "name": _safe_get(lead, "contactName", "companyName", "wa_display_name", "name"),
         "category": lead.get("category"),
         "segment": lead.get("segment"),
     }
@@ -3548,7 +3548,7 @@ def _build_child_prompt_pre_agendamento(
     playbook = context.get("playbook") or {}
     history = context.get("history") or []
 
-    lead_name = _safe_get(lead, "contactName", "companyName", "name") or ""
+    lead_name = _safe_get(lead, "contactName", "companyName", "wa_display_name", "name") or ""
     lead_summary = {
         "id": lead.get("id"),
         "name": lead_name,
@@ -3719,7 +3719,7 @@ def _build_child_prompt_agendamento(
 
     lead_summary = {
         "id": lead.get("id"),
-        "name": _safe_get(lead, "contactName", "companyName", "name"),
+        "name": _safe_get(lead, "contactName", "companyName", "wa_display_name", "name"),
         "category": lead.get("category"),
     }
     availability_schedule = str(ai_profile.get("availability_schedule") or "").strip()
@@ -3868,7 +3868,7 @@ def _build_child_prompt_meeting_management(context: Dict[str, Any], message_text
 
     lead_summary = {
         "id": lead.get("id"),
-        "name": _safe_get(lead, "contactName", "companyName", "name"),
+        "name": _safe_get(lead, "contactName", "companyName", "wa_display_name", "name"),
     }
     history_text = _format_history(history)
     dates_table = _calendar_lookup_table_pt()

@@ -31,6 +31,7 @@ def find_or_create_lead_by_phone(
         or phone_norm
     )
     company = payload.get("company")
+    wa_display_name = (payload.get("wa_display_name") or "").strip() or None
     try:
         from services.agent_type import resolve_agent_type_for_user
 
@@ -41,10 +42,10 @@ def find_or_create_lead_by_phone(
     try:
         cur.execute(
             """
-            INSERT INTO leads (user_id, companyName, contactName, phone, origin, category, agent_type)
-            VALUES (?, ?, ?, ?, 'whatsapp_inbound', ?, ?)
+            INSERT INTO leads (user_id, companyName, contactName, phone, origin, category, agent_type, wa_display_name)
+            VALUES (?, ?, ?, ?, 'whatsapp_inbound', ?, ?, ?)
             """,
-            (user_id, company, contact_name, phone_norm, INBOUND_DEFAULT_CATEGORY, agent_type),
+            (user_id, company, contact_name, phone_norm, INBOUND_DEFAULT_CATEGORY, agent_type, wa_display_name),
         )
     except sqlite3.OperationalError:
         # Compat com schemas antigos usados em testes isolados (sem coluna agent_type).

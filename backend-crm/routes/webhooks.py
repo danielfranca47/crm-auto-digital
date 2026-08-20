@@ -120,6 +120,28 @@ def whatsapp_uazapi_webhook(
         sender_phone = data.get("sender") or message.get("sender_pn")
         return _normalize_e164(chat_phone) or _normalize_e164(sender_phone)
 
+    def _resolve_wa_display_name() -> str:
+        """
+        Nome de exibição do WhatsApp (pushName) do remetente, só usado como
+        fallback quando o operador não preencheu contactName no CRM (ver
+        find_or_create_lead_by_phone). A chave exata não está confirmada contra
+        um payload real da UazAPI — tenta as variações mais prováveis do schema
+        (chat/message/data) e loga quando nenhuma bate, para ajuste posterior.
+        """
+        chat = payload.get("chat") if isinstance(payload.get("chat"), dict) else {}
+        raw = (
+            chat.get("name")
+            or chat.get("wa_name")
+            or message.get("senderName")
+            or message.get("pushName")
+            or data.get("pushName")
+            or data.get("senderName")
+        )
+        name = str(raw).strip() if raw else ""
+        if not name:
+            logger.debug("uazapi webhook: nenhum campo de nome de exibição encontrado no payload")
+        return name
+
     def _resolve_spy_sender_e164(is_from_me: bool) -> str:
         """
         Para o spy handler, prioriza o telefone do lead em mensagens fromMe,
@@ -186,6 +208,7 @@ def whatsapp_uazapi_webhook(
         return t  # mantém literal desconhecido para debug
 
     sender = _resolve_sender_e164()
+    wa_display_name = _resolve_wa_display_name()
     message_id = data.get("messageId") or data.get("id") or message.get("messageid") or message.get("id")
     # messageType="media" é genérico em algumas versões da UazAPI; usar mediaType para o tipo real
     _raw_mt = (
@@ -306,6 +329,7 @@ def whatsapp_uazapi_webhook(
         "is_group": False,
         "message_type": normalized_type,
         "media_url": media_url,
+        "wa_display_name": wa_display_name or None,
     }
 
     return handle_inbound(inbound_payload)

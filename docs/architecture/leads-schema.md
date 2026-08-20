@@ -42,6 +42,16 @@ leadDisplayName(lead) // "Empresa - Contato" se ambos existirem; senão o que ex
 
 Usado em: `LeadCard.tsx`, `KanbanBoard.tsx` (busca + `DragOverlay`), `SearchAutocomplete.tsx`, `components/prospection/ProspectionCard.tsx`, `pages/FollowUpCenter.tsx` (6 pontos: banner de autopausado, header do painel de detalhe, modal de confirmação, avatar de iniciais, label da linha, filtro de busca).
 
+## `wa_display_name` — nome de exibição do WhatsApp (pushName)
+
+Campo separado de `contactName`/`companyName`, nullable, gravado só na **criação** do lead via `find_or_create_lead_by_phone()` (`services/whatsapp_inbound/guardrail.py`). Extraído do payload bruto da UazAPI por `routes/webhooks.py::_resolve_wa_display_name()` — chave exata não confirmada contra um payload real (tenta variações prováveis de `chat`/`message`/`data`; loga quando nenhuma bate).
+
+**Por que separado de `contactName`:** `contactName` é o nome que o operador edita no card do lead — se `wa_display_name` sobrescrevesse esse campo, uma correção manual do operador seria perdida no próximo inbound. Mantendo os dois campos distintos, o operador sempre tem a palavra final.
+
+**Uso no prompt da IA:** `backend-executors/app/services/decision_engine.py` resolve o "nome do lead" com `_safe_get(lead, "contactName", "companyName", "wa_display_name", "name")` — ou seja, `wa_display_name` só é usado como fallback automático quando o CRM não tem `contactName` nem `companyName` preenchidos. Não requer nenhuma configuração do operador.
+
+Também exposto como variável de template `{{lead.nome_whatsapp}}` (`automations/assistente_ia/variable_resolver.py`), distinta de `{{lead.nome}}` (que resolve para `contactName`), para uso explícito em campos de template e blocos do Fluxo de Venda.
+
 **Duas fontes de dados distintas no frontend, comportamento diferente:**
 - **Via `LeadsContext.tsx`** (`mapRawLead`, usado pelo Kanban/Prospecção) — normaliza `companyName`/`contactName` de `null` (API) para `''` antes de expor como `Lead`. Por isso `Lead.companyName`/`contactName` em `types/crm.ts` permanecem tipados como `string` simples (nunca `null`), consistente com os demais campos do tipo (`phone`, `email`, `origin`, `observations`).
 - **Fora de `LeadsContext`** (ex.: `FollowUpCenter.tsx`, via `api.followUps.listActive()`) — recebe `companyName`/`contactName` crus da API, sem essa normalização. `companyName` **pode ser `null` de verdade em runtime** aqui, mesmo que o tipo declarado (`FollowUpLead` em `services/api.ts`) diga `string`. Qualquer novo ponto de leitura de leads fora do `LeadsContext` deve tratar esse campo como potencialmente nulo (usar `leadDisplayName()` ou `?? ''`).
