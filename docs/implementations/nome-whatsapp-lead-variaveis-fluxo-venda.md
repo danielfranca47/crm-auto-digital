@@ -152,15 +152,29 @@ Lead de teste resetado e mensagem reenviada:
 
 ---
 
-### Fase 2 — Variável de sistema `{{lead.nome_whatsapp}}` (planejada, não iniciada)
+### Fase 2 — Variável de sistema `{{lead.nome_whatsapp}}`
 
 **Objetivo:** permitir referenciar o nome do WhatsApp explicitamente nos 7
 campos de template existentes, distinto de `{{lead.nome}}` (contactName).
 
-| Arquivo | O que muda |
+| Arquivo | O que mudou |
 |---|---|
 | `backend-crm/automations/assistente_ia/variable_resolver.py` | Novo caso `lead.nome_whatsapp` → `_nonempty(lead.get("wa_display_name"))` |
-| `frontend-crm/src/types/variables.ts` | Nova entrada em `SYSTEM_VARIABLES` |
+| `frontend-crm/src/types/variables.ts` | Nova entrada em `SYSTEM_VARIABLES` — já aparece agrupada em "Variáveis do sistema" no picker `/` existente, sem mudança de UI necessária |
+
+### Commits Fase 2
+
+| # | Commit | O que foi implementado |
+|---|---|---|
+| 1 | `383376f` | Variável `{{lead.nome_whatsapp}}` exposta no resolver e no picker |
+
+### Relatório da Fase 2 — o que mudou na prática
+
+**Antes:** só existia `{{lead.nome}}` (o nome do card do CRM). Não havia forma de referenciar especificamente o nome do WhatsApp em textos configuráveis.
+
+**Agora:** `{{lead.nome_whatsapp}}` pode ser usado em qualquer um dos 7 campos de template do perfil (aberturas, texto de handoff, mensagens de aquecimento) e já aparece no menu que abre com `/`, agrupado em "Variáveis do sistema".
+
+**Para validar:** Cenário P1, abaixo — precisa de um lead com `wa_display_name` já capturado (ex.: o lead de teste da Fase 1.1) e do Playground.
 
 ---
 
