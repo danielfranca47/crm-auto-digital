@@ -86,6 +86,16 @@ class AgentMode(str, Enum):
     direto = "direto"
 
 
+class LlmProvider(str, Enum):
+    openai = "openai"
+    openrouter = "openrouter"
+
+
+class LlmProviderModel(str, Enum):
+    llama_3_3_70b = "meta-llama/llama-3.3-70b-instruct"
+    hermes_3_405b = "nousresearch/hermes-3-llama-3.1-405b"
+
+
 class PresentationVariant(str, Enum):
     sales = "sales"
     scheduler = "scheduler"
@@ -173,6 +183,8 @@ class AIProfileBase(BaseModel):
     hybrid_flow_style: Optional[HybridFlowStyle] = None
     offer_pack: Optional[dict] = None
     identity_mode: IdentityMode = IdentityMode.human_agent
+    llm_provider: LlmProvider = LlmProvider.openai
+    llm_provider_model: Optional[LlmProviderModel] = None
     handoff_policy: HandoffPolicy = HandoffPolicy.keep_active_notify
     handoff_custom_text: Optional[str] = None
     requires_handoff: bool = False
@@ -251,6 +263,8 @@ class AIProfileUpdate(BaseModel):
     hybrid_flow_style: Optional[HybridFlowStyle] = None
     offer_pack: Optional[dict] = None
     identity_mode: Optional[IdentityMode] = None
+    llm_provider: Optional[LlmProvider] = None
+    llm_provider_model: Optional[LlmProviderModel] = None
     handoff_policy: Optional[HandoffPolicy] = None
     handoff_custom_text: Optional[str] = None
     requires_handoff: Optional[bool] = None
@@ -724,6 +738,8 @@ async def admin_list_all_ai_profiles(
             "target_audience": p.target_audience,
             "agent_mode": p.agent_mode,
             "presentation_variant": p.presentation_variant,
+            "llm_provider": p.llm_provider,
+            "llm_provider_model": p.llm_provider_model,
             "hybrid_flow_style": p.hybrid_flow_style,
             "offer_pack": _normalize_offer_pack(getattr(p, "offer_pack", None)),
             "qualification_score_threshold": p.qualification_score_threshold,

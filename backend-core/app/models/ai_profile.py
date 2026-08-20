@@ -30,6 +30,8 @@ class AIProfile(Base):
     response_style = Column(String, nullable=True, server_default="active")
     offer_pack = Column(JSON, nullable=True)
     identity_mode = Column(String, nullable=True, server_default="human_agent")
+    llm_provider = Column(String, nullable=True, server_default="openai")
+    llm_provider_model = Column(String, nullable=True)
     handoff_policy = Column(String, nullable=True, server_default="keep_active_notify")
     handoff_custom_text = Column(String, nullable=True)
     requires_handoff = Column(Boolean, nullable=True, default=False)

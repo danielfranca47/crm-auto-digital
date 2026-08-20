@@ -160,6 +160,8 @@ def ensure_ai_profile_columns() -> None:
         "hybrid_flow_style": {"default": None, "sqlite_type": "TEXT", "pg_type": "VARCHAR"},
         "offer_pack": {"default": None, "sqlite_type": "TEXT", "pg_type": "JSON"},
         "identity_mode": {"default": "human_agent", "sqlite_type": "TEXT", "pg_type": "VARCHAR"},
+        "llm_provider": {"default": "openai", "sqlite_type": "TEXT", "pg_type": "VARCHAR"},
+        "llm_provider_model": {"default": None, "sqlite_type": "TEXT", "pg_type": "VARCHAR"},
         "handoff_policy": {"default": "keep_active_notify", "sqlite_type": "TEXT", "pg_type": "VARCHAR"},
         "handoff_custom_text": {"default": None, "sqlite_type": "TEXT", "pg_type": "VARCHAR"},
         "timezone": {"default": "UTC", "sqlite_type": "TEXT", "pg_type": "VARCHAR"},
