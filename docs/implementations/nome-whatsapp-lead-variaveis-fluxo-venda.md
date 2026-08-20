@@ -174,7 +174,7 @@ campos de template existentes, distinto de `{{lead.nome}}` (contactName).
 
 **Agora:** `{{lead.nome_whatsapp}}` pode ser usado em qualquer um dos 7 campos de template do perfil (aberturas, texto de handoff, mensagens de aquecimento) e já aparece no menu que abre com `/`, agrupado em "Variáveis do sistema".
 
-**Para validar:** Cenário P1, abaixo — precisa de um lead com `wa_display_name` já capturado (ex.: o lead de teste da Fase 1.1) e do Playground.
+**Para validar:** Cenário P1, abaixo.
 
 ---
 
@@ -199,9 +199,10 @@ Fluxo de Venda, com resolução real antes de chegar ao LLM ou ao lead.
 - **Validado em:** 20/08/2026 — ambiente local + túnel ngrok, instância `crm-15-88e456ef` (user_id=15). Duas rodadas de bug encontradas e corrigidas em Fase 1.1 (fallback nunca alcançava `wa_display_name`; campo errado do payload UazAPI). Após correção: `wa_display_name="França"`, `contactName="França"`, IA respondeu "Oi! Seja bem-vindo, França!".
 
 ### Cenário P1 — Variável `{{lead.nome_whatsapp}}` num campo de template (Fase 2)
-- [ ] Lead de teste com `wa_display_name` já setado
-- [ ] Configurar `origin_inbound_opener` com `{{lead.nome_whatsapp}}`
-- [ ] Rodar Playground → confirmar que o texto final tem o nome resolvido
+- [x] Lead de teste com `wa_display_name` já setado (lead 483, `wa_display_name="França"`)
+- [x] Configurar `origin_inbound_opener` com `{{lead.nome_whatsapp}}`
+- [x] Confirmar que o texto resolve corretamente
+- **Validado em:** 20/08/2026 — via chamada direta a `resolve_template()`/`build_resolution_context_from_db()` (script Python), não via Playground: `"Ola {{lead.nome_whatsapp}}! ..."` → `"Ola França! ..."`. **Nota:** o teste não foi feito pelo Playground porque `build_context_bundle_for_playground()` ainda não chama `_resolve_profile_templates()` (Problema 3, achado lateral) — é exatamente o gap que a Fase 3 fecha. Depois da Fase 3, o Cenário P3 revalida isso também via Playground de verdade.
 
 ### Cenário P2 — Variáveis resolvidas em bloco do Fluxo de Venda (Fase 3)
 - [ ] Adicionar bloco `mensagem` na fase Recepção com `{{lead.nome}}`
