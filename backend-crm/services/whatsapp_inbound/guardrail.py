@@ -24,14 +24,15 @@ def find_or_create_lead_by_phone(
     if existing:
         return int(existing["id"]), False
 
+    wa_display_name = (payload.get("wa_display_name") or "").strip() or None
     contact_name = (
         payload.get("contact_name")
         or payload.get("sender_name")
         or payload.get("name")
+        or wa_display_name
         or phone_norm
     )
     company = payload.get("company")
-    wa_display_name = (payload.get("wa_display_name") or "").strip() or None
     try:
         from services.agent_type import resolve_agent_type_for_user
 

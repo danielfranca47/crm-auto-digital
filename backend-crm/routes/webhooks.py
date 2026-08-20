@@ -122,20 +122,28 @@ def whatsapp_uazapi_webhook(
 
     def _resolve_wa_display_name() -> str:
         """
-        Nome de exibição do WhatsApp (pushName) do remetente, só usado como
+        Nome de perfil do WhatsApp (pushName) do remetente, só usado como
         fallback quando o operador não preencheu contactName no CRM (ver
-        find_or_create_lead_by_phone). A chave exata não está confirmada contra
-        um payload real da UazAPI — tenta as variações mais prováveis do schema
-        (chat/message/data) e loga quando nenhuma bate, para ajuste posterior.
+        find_or_create_lead_by_phone). Confirmado contra payload real da UazAPI
+        capturado em teste (ver Fase 1.1 em
+        docs/implementations/nome-whatsapp-lead-variaveis-fluxo-venda.md):
+
+        - `message.senderName` / `chat.wa_name` — nome de perfil que o próprio
+          WhatsApp do remetente declarou. Existe para qualquer remetente,
+          independente de estar salvo como contato no telefone do bot — é a
+          fonte certa para "nome do lead" automático.
+        - `chat.wa_contactName` / `chat.name` — nome salvo na lista de
+          CONTATOS DO TELEFONE do bot (equivalente a uma agenda pessoal). Só
+          existe quando o operador já tinha esse número salvo manualmente —
+          não é o caso da maioria dos leads reais. Usado só como último
+          recurso, depois do nome de perfil.
         """
         chat = payload.get("chat") if isinstance(payload.get("chat"), dict) else {}
         raw = (
-            chat.get("name")
+            message.get("senderName")
             or chat.get("wa_name")
-            or message.get("senderName")
-            or message.get("pushName")
-            or data.get("pushName")
-            or data.get("senderName")
+            or chat.get("wa_contactName")
+            or chat.get("name")
         )
         name = str(raw).strip() if raw else ""
         if not name:
