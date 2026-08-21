@@ -102,6 +102,28 @@ presentation_variant: isDirectAgent
   : (config.appointment_mode === 'commercial' ? 'sales' : 'scheduler'),
 ```
 
+### Commits Fase 1
+
+| # | Commit | O que foi implementado |
+|---|---|---|
+| 1 | `7ca074a` | frontend: presentation_variant condicional a agent_mode + docs/agents.md |
+
+**Detalhes do commit `7ca074a`:**
+- `frontend-crm/src/services/api.ts` — `saveConfig()`: nova const `isDirectAgent`; `presentation_variant` passa a ser `"sales"` fixo para `direto`/`closer`, mantendo a derivação por `appointment_mode` só para os demais modos
+- `docs/architecture/agents.md` — L189-191 reescrito para descrever a regra condicional e o default por `agent_mode` em `_resolve_presentation_variant()`
+
+### Relatório da Fase 1 — o que mudou na prática
+
+**Antes:** todo save do AI Profile — de qualquer tipo de agente — gravava
+`presentation_variant` só olhando o campo "Modo de Operação" (`appointment_mode`),
+mesmo quando esse campo é invisível/irrelevante para agentes do tipo `direto`/closer.
+
+**Agora:** ao salvar um agente `direto`/`closer`, `presentation_variant` é sempre
+`"sales"`, independente de `appointment_mode`. Os demais tipos de agente
+(`agenda`, `sdr_scheduler`, `consultivo`) continuam exatamente como antes.
+
+**Para validar:** Cenário P1, abaixo.
+
 ### Fase 2 — Guarda de defesa em profundidade no backend
 
 **Objetivo:** impedir que qualquer outro caller reintroduza o bug
@@ -117,6 +139,38 @@ effective_agent_mode = str(data.get("agent_mode") or (profile.agent_mode if prof
 if effective_agent_mode in ("direto", "closer") and "presentation_variant" in data:
     data["presentation_variant"] = "sales"
 ```
+
+### Commits Fase 2
+
+| # | Commit | O que foi implementado |
+|---|---|---|
+| 1 | `0bd58fa` | backend: guarda force presentation_variant=sales para direto/closer |
+
+**Detalhes do commit `0bd58fa`:**
+- `backend-core/app/api/ai_profiles.py` — `_upsert_ai_profile()`: novo bloco que
+  força `presentation_variant="sales"` quando o `agent_mode` efetivo (enviado no
+  payload ou já salvo no perfil) é `direto`/`closer`, antes do loop de `setattr`
+- `backend-core/tests/test_ai_profile_agent_mode.py` — novo caso
+  `test_direto_agent_presentation_variant_forced_to_sales` (create + update)
+
+**Nota de validação:** o módulo de teste já estava com as 6 suítes falhando
+antes desta mudança — `create_or_replace_ai_profile()` mudou de assinatura
+(passou a exigir `background_tasks`) e os testes não foram atualizados; é uma
+regressão pré-existente, não relacionada a este fix. A lógica da guarda foi
+validada chamando `_upsert_ai_profile()` isoladamente (fora do wrapper de
+rota quebrado): `direto`+`scheduler`→`sales` no create e no update, `agenda`+
+`scheduler` permanece `scheduler` (controle).
+
+### Relatório da Fase 2 — o que mudou na prática
+
+**Antes:** só o frontend garantia `presentation_variant` correto para agentes
+diretos; qualquer outra via de escrita (painel admin, integração futura) podia
+voltar a gravar `"scheduler"` sem ninguém perceber.
+
+**Agora:** o próprio backend recusa persistir `presentation_variant` diferente
+de `"sales"` para um perfil `direto`/`closer`, não importa quem enviou o PUT.
+
+**Para validar:** Cenário C2, abaixo.
 
 ### Fase 3 — Backfill dos perfis já quebrados em produção
 
@@ -135,6 +189,37 @@ WHERE agent_mode IN ('direto', 'closer') AND presentation_variant = 'scheduler'
 
 Idempotente: após Fase 1+2 em produção, nenhum novo registro cai nessa condição — a
 função vira no-op nos boots seguintes.
+
+### Commits Fase 3
+
+| # | Commit | O que foi implementado |
+|---|---|---|
+| 1 | `4084446` | backend: backfill de presentation_variant para perfis direto/closer |
+
+**Detalhes do commit `4084446`:**
+- `backend-core/app/db.py` — nova `ensure_presentation_variant_direto_backfill()`,
+  mesmo padrão de `ensure_ai_profile_columns` (guarda de tabela inexistente,
+  branch sqlite/postgres, `engine.begin()` + `text()`)
+- `backend-core/app/main.py` — registrada no `on_startup()`, logo após
+  `ensure_ai_profile_columns()`
+
+**Nota de validação:** lógica confirmada isoladamente contra uma tabela sqlite
+sintética com 5 perfis (`direto`+`scheduler`, `closer`+`scheduler`,
+`agenda`+`scheduler`, `direto`+`sales`, `direto`+`NULL`) — só os dois primeiros
+foram resetados para `NULL`, os demais permaneceram intocados.
+
+### Relatório da Fase 3 — o que mudou na prática
+
+**Antes:** o perfil da Ana (e qualquer outro agente `direto`/`closer` salvo
+antes deste fix) continuaria com `presentation_variant="scheduler"` gravado no
+banco para sempre — corrigir só o código novo não repara o que já foi salvo.
+
+**Agora:** na próxima vez que o backend-core subir (dev ou produção), esse
+backfill roda automaticamente uma única vez de forma efetiva e corrige todos
+os perfis nessa condição, sem precisar reabrir e salvar cada AI Profile
+manualmente.
+
+**Para validar:** Cenário P2 e C1, abaixo.
 
 ---
 
