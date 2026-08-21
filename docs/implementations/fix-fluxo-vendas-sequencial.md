@@ -177,7 +177,7 @@ O utilizador propôs a correção certa: assim como existe um guardrail (`_enfor
 
 | # | Commit | O que foi implementado |
 |---|---|---|
-| 1 | `<preencher após commit>` | Guardrail de transição de fase + refactor de apoio + testes |
+| 1 | `1769f30` | Guardrail de transição de fase + refactor de apoio + testes |
 
 ### Relatório da Fase 2 — o que mudou na prática
 
