@@ -5,6 +5,8 @@ import type { AgentConfig } from '@/types/agente';
 import {
   AGENT_MODE_LABELS,
   IDENTITY_MODE_LABELS,
+  LLM_PROVIDER_LABELS,
+  LLM_PROVIDER_MODEL_LABELS,
   HANDOFF_LABELS,
   AGENT_PRESETS,
   getActivePreset,
@@ -309,6 +311,47 @@ function ModalIdentidade({ value, onSave, onClose }: { value: string; onSave: (v
   );
 }
 
+// ─── Modal: Provedor de IA ────────────────────────────────────
+function ModalLlmProvider({ provider, model, onSave, onClose }: {
+  provider: string; model: string | null;
+  onSave: (provider: string, model: string | null) => void; onClose: () => void;
+}) {
+  const [localProvider, setLocalProvider] = useState(provider || 'openai');
+  const [localModel, setLocalModel] = useState(model || 'meta-llama/llama-3.3-70b-instruct');
+
+  const providers = [
+    { v: 'openai', label: '🟢 OpenAI', desc: 'Padrão do sistema. Recomendado — melhor qualidade e estabilidade.' },
+    { v: 'openrouter', label: '🔀 OpenRouter', desc: 'Provedor alternativo, útil como opção de resiliência caso a OpenAI apresente oscilações.' },
+  ];
+  const models = [
+    { v: 'meta-llama/llama-3.3-70b-instruct', label: LLM_PROVIDER_MODEL_LABELS['meta-llama/llama-3.3-70b-instruct'], desc: 'Padrão — bom equilíbrio entre qualidade, custo e velocidade.' },
+    { v: 'nousresearch/hermes-3-llama-3.1-405b', label: LLM_PROVIDER_MODEL_LABELS['nousresearch/hermes-3-llama-3.1-405b'], desc: 'Maior capacidade — respostas mais elaboradas, porém mais lento.' },
+  ];
+
+  return (
+    <ModalBase
+      title="Provedor de IA"
+      sub="Qual modelo de linguagem gera as respostas do agente"
+      onClose={onClose}
+      onSave={() => onSave(localProvider, localProvider === 'openrouter' ? localModel : null)}
+    >
+      {providers.map(o => (
+        <OptCard key={o.v} selected={localProvider === o.v} onClick={() => setLocalProvider(o.v)} label={o.label} desc={o.desc} />
+      ))}
+      {localProvider === 'openrouter' && (
+        <div style={{ marginTop: 16 }}>
+          <div className="font-mono-orion" style={{ fontSize: 9, letterSpacing: '2.5px', textTransform: 'uppercase', color: 'var(--o-sub)', marginBottom: 10 }}>
+            Modelo no OpenRouter
+          </div>
+          {models.map(o => (
+            <OptCard key={o.v} selected={localModel === o.v} onClick={() => setLocalModel(o.v)} label={o.label} desc={o.desc} />
+          ))}
+        </div>
+      )}
+    </ModalBase>
+  );
+}
+
 // ─── Modal: Perfil gerado (custom_instructions) ───────────────
 function ModalPerfil({ value, name, brand, agentMode, tone, onSave, onClose }: {
   value: string; name: string; brand: string; agentMode: string; tone: string;
@@ -348,7 +391,7 @@ function ModalPerfil({ value, name, brand, agentMode, tone, onSave, onClose }: {
 // ─────────────────────────────────────────────────────────────
 
 type DrawerKey = 'nome' | 'empresa' | 'nicho' | 'timezone' | 'tom' | 'goals' | 'handoff' | 'inbound_opener' | 'outbound_opener' | 'social_proof' | 'session_preview' | 'response_style' | 'variaveis' | null;
-type ModalKey  = 'identidade' | 'perfil' | null;
+type ModalKey  = 'identidade' | 'perfil' | 'llm_provider' | null;
 
 export function CamadaIdentidade({ config, onUpdate, resumo }: CamadaIdentidadeProps) {
   const [drawer, setDrawer] = useState<DrawerKey>(null);
@@ -435,6 +478,17 @@ export function CamadaIdentidade({ config, onUpdate, resumo }: CamadaIdentidadeP
           onClick={() => setModal('perfil')}
           italic
           help="Perfil detalhado injetado no system prompt. Define personalidade, contexto e regras internas do agente. Edite livremente ou regenere a partir das configurações."
+        />
+        <EditCard
+          label="Provedor de IA"
+          value={
+            config.llm_provider === 'openrouter'
+              ? `${LLM_PROVIDER_LABELS.openrouter} · ${LLM_PROVIDER_MODEL_LABELS[config.llm_provider_model || ''] || config.llm_provider_model || '—'}`
+              : LLM_PROVIDER_LABELS[config.llm_provider] || 'OpenAI'
+          }
+          sub="Modelo de linguagem usado nas respostas"
+          onClick={() => setModal('llm_provider')}
+          help="Provedor de IA que gera as mensagens do agente. OpenAI é o padrão recomendado. OpenRouter é uma alternativa útil como opção de resiliência caso a OpenAI apresente oscilações."
         />
       </div>
 
@@ -619,6 +673,20 @@ export function CamadaIdentidade({ config, onUpdate, resumo }: CamadaIdentidadeP
       {/* Modais */}
       {modal === 'identidade' && (
         <ModalIdentidade value={config.identity_mode} onClose={() => setModal(null)} onSave={v => { onUpdate({ identity_mode: v as AgentConfig['identity_mode'] }); setModal(null); }} />
+      )}
+      {modal === 'llm_provider' && (
+        <ModalLlmProvider
+          provider={config.llm_provider}
+          model={config.llm_provider_model}
+          onClose={() => setModal(null)}
+          onSave={(provider, model) => {
+            onUpdate({
+              llm_provider: provider as AgentConfig['llm_provider'],
+              llm_provider_model: model as AgentConfig['llm_provider_model'],
+            });
+            setModal(null);
+          }}
+        />
       )}
       {modal === 'perfil' && (
         <ModalPerfil

@@ -65,6 +65,8 @@ export type AiProfilePayload = {
   custom_instructions?: string | null;
   agent_mode?: "consultivo" | "agenda" | "direto" | "sdr_scheduler" | "closer" | null;
   identity_mode?: "virtual_assistant" | "human_agent" | "user_clone";
+  llm_provider?: "openai" | "openrouter";
+  llm_provider_model?: "meta-llama/llama-3.3-70b-instruct" | "nousresearch/hermes-3-llama-3.1-405b" | null;
   handoff_policy?: "disable_bot" | "keep_active_notify" | "ignore";
   handoff_custom_text?: string | null;
   requires_handoff?: boolean | null;
@@ -1337,6 +1339,8 @@ export const api = {
         tone_of_voice:     (profile as any)?.tone_of_voice     ?? DEFAULT_AGENT_CONFIG.tone_of_voice,
         agent_mode:        (profile as any)?.agent_mode        ?? DEFAULT_AGENT_CONFIG.agent_mode,
         identity_mode:     (profile as any)?.identity_mode     ?? DEFAULT_AGENT_CONFIG.identity_mode,
+        llm_provider:      (profile as any)?.llm_provider      ?? DEFAULT_AGENT_CONFIG.llm_provider,
+        llm_provider_model:(profile as any)?.llm_provider_model ?? DEFAULT_AGENT_CONFIG.llm_provider_model,
         template_key:      (profile as any)?.template_key      ?? DEFAULT_AGENT_CONFIG.template_key,
         handoff_policy:    (profile as any)?.handoff_policy    ?? DEFAULT_AGENT_CONFIG.handoff_policy,
         requires_handoff:  (profile as any)?.requires_handoff  ?? DEFAULT_AGENT_CONFIG.requires_handoff,
@@ -1518,6 +1522,8 @@ export const api = {
         tone_of_voice:       config.tone_of_voice,
         agent_mode:          config.agent_mode,
         identity_mode:       config.identity_mode,
+        llm_provider:        config.llm_provider,
+        llm_provider_model:  config.llm_provider === 'openrouter' ? config.llm_provider_model : null,
         template_key:        config.template_key,
         handoff_policy:      config.handoff_policy,
         requires_handoff:    config.requires_handoff,

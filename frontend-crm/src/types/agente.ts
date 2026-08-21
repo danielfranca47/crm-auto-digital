@@ -230,6 +230,8 @@ export interface AgentConfig {
   tone_of_voice: string;
   agent_mode: 'sdr_scheduler' | 'closer' | 'consultivo' | 'agenda' | 'direto';
   identity_mode: 'human_agent' | 'virtual_assistant' | 'user_clone';
+  llm_provider: 'openai' | 'openrouter';
+  llm_provider_model: 'meta-llama/llama-3.3-70b-instruct' | 'nousresearch/hermes-3-llama-3.1-405b' | null;
   template_key: string;
   handoff_policy: 'disable_bot' | 'keep_active_notify' | 'ignore';
   handoff_custom_text: string;
@@ -345,6 +347,8 @@ export const DEFAULT_AGENT_CONFIG: AgentConfig = {
   tone_of_voice: 'equilibrado',
   agent_mode: 'sdr_scheduler',
   identity_mode: 'human_agent',
+  llm_provider: 'openai',
+  llm_provider_model: null,
   template_key: 'sdr_padrao',
   handoff_policy: 'keep_active_notify',
   handoff_custom_text: '',
@@ -493,6 +497,16 @@ export const IDENTITY_MODE_LABELS: Record<string, string> = {
   human_agent:       'Humano do time',
   virtual_assistant: 'Assistente Virtual',
   user_clone:        'Clone do usuário',
+};
+
+export const LLM_PROVIDER_LABELS: Record<string, string> = {
+  openai:     'OpenAI',
+  openrouter: 'OpenRouter',
+};
+
+export const LLM_PROVIDER_MODEL_LABELS: Record<string, string> = {
+  'meta-llama/llama-3.3-70b-instruct':      'Llama 3.3 70B',
+  'nousresearch/hermes-3-llama-3.1-405b':   'Hermes 3 405B',
 };
 
 export const TEMPLATE_KEY_LABELS: Record<string, string> = {
