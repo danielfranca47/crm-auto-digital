@@ -291,11 +291,15 @@ def init_core_whatsapp_instance(user_id: int, instance_id: str) -> Dict[str, Any
     return data
 
 
-def connect_core_whatsapp_instance(user_id: int, instance_id: str) -> Dict[str, Any]:
+def connect_core_whatsapp_instance(
+    user_id: int, instance_id: str, phone: Optional[str] = None
+) -> Dict[str, Any]:
     base = _get_core_base()
     url = f"{base}/whatsapp-instances/connect"
     headers = _service_headers()
     payload = {"user_id": user_id, "instance_id": instance_id}
+    if phone:
+        payload["phone"] = phone
 
     try:
         with httpx.Client(timeout=20) as client:
