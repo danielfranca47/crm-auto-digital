@@ -1,7 +1,7 @@
 # Arquitetura Multi-Provedor de LLM (OpenAI + OpenRouter)
 
 **Branch:** `main`
-**Status:** Em andamento — pendente: Cenário P2 (requer chave paga real do OpenRouter, indisponível neste ambiente de teste) e Cenários C1/C2 (requerem lead real de WhatsApp)
+**Status:** Em andamento — pendente apenas: Cenários C1/C2 (requerem lead real de WhatsApp, não reproduzível no Playground)
 
 ---
 
@@ -223,9 +223,9 @@ llm_service.py ganha resolução de provedor por chamada:
 - **Validado em:** 21/08/2026 — sessão real de Playground (perfil "Daniel", template `hybrid_scheduler`), 2 turnos (recepção → apresentação), respostas coerentes e no tom configurado. Log do backend-executors confirma `POST https://api.openai.com/v1/responses` 200 OK nas 4 chamadas (2× Mãe, 2× Filha), sem nenhum `event=llm_provider_fallback` (correto, provider=openai).
 
 ### Cenário P2 — Perfil OpenRouter com chave configurada
-- [ ] Playground, perfil com `llm_provider="openrouter"` + modelo padrão, `OPENROUTER_API_KEY` setada no `.env` do backend-executors
-- [ ] Enviar mensagem e confirmar que mãe + filha respondem normalmente
-- **Pendente:** requer uma chave paga real do OpenRouter (a variante `:free` tem rate limit agressivo, não serve para validar o caminho de produção) — indisponível neste ambiente de teste local. O caminho de código é idêntico ao testado em P3 (só muda se `settings.openrouter_api_key` está presente), e a montagem/parsing do payload Chat Completions já tem cobertura via os testes automatizados da Fase 2 (`test_generate_child_result_routes_to_openrouter_endpoint` etc.) — mas a chamada real a `openrouter.ai` nunca foi exercitada de ponta a ponta.
+- [x] Playground, perfil com `llm_provider="openrouter"` + modelo padrão, `OPENROUTER_API_KEY` setada no `.env` do backend-executors
+- [x] Enviar mensagem e confirmar que mãe + filha respondem normalmente
+- **Validado em:** 21/08/2026 — usuário configurou uma chave paga real do OpenRouter no `.env` local. Testada primeiro isoladamente via `curl` direto em `https://openrouter.ai/api/v1/chat/completions` (200 OK, modelo `meta-llama/llama-3.3-70b-instruct` respondeu corretamente). Depois, com `backend-executors` reiniciado (para carregar a chave nova — `pydantic-settings` só lê `.env` no startup) e o perfil id=5 em `llm_provider="openrouter"`, uma mensagem de agendamento ("Pode ser amanhã às 15h") no Playground foi processada de ponta a ponta: mãe decidiu `route_to=agendamento` (90%), filha confirmou o horário e perguntou o serviço desejado — resposta natural e coerente. Log confirma 2× `POST https://openrouter.ai/api/v1/chat/completions 200 OK`. Observação: a chamada via OpenRouter levou ~12–15s contra ~3–8s da OpenAI no mesmo teste — latência maior é esperada e um trade-off já documentado (modelo mais barato/redundante, não necessariamente mais rápido). Também observado: o log emitiu `event=mother_decision_invalid_enum_coerced field=next_action_hint value='confirmar'` — o mecanismo de tolerância de enum já existente (ver `llm-architecture.md`) tratou uma resposta do Llama fora do enum esperado sem quebrar o turno, confirmando que essa robustez pré-existente vale para os dois provedores.
 
 ### Cenário P3 — Perfil OpenRouter sem chave configurada no servidor
 - [x] Mesmo perfil do P2, mas `OPENROUTER_API_KEY` ausente
