@@ -436,7 +436,12 @@ def _upsert_ai_profile(
     # agent_mode direto/closer nao tem UI para appointment_mode, entao
     # presentation_variant nunca deve vir derivado dele — forcar "sales"
     # independente do que o caller enviou (ver decision_engine._resolve_presentation_variant).
-    effective_agent_mode = str(data.get("agent_mode") or (profile.agent_mode if profile else "") or "")
+    # Nota: NAO usar str(effective_agent_mode) aqui — AgentMode(str, Enum) tem __str__
+    # proprio (retorna "AgentMode.direto", nao "direto"), so a comparacao direta usa
+    # a igualdade herdada de str.
+    effective_agent_mode = data.get("agent_mode")
+    if effective_agent_mode is None and profile:
+        effective_agent_mode = profile.agent_mode
     if effective_agent_mode in ("direto", "closer") and "presentation_variant" in data:
         data["presentation_variant"] = "sales"
 
