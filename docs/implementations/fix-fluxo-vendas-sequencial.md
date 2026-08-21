@@ -108,7 +108,7 @@ Escopo: só agentes com recursos de agendamento (`agent_1`/SDR e `agent_3`/Híbr
 
 | # | Commit | O que foi implementado |
 |---|---|---|
-| 1 | `<preencher após commit>` | Bloco `booking_signal_opener` editável/removível (backend + frontend) |
+| 1 | `f9900ed` | Bloco `booking_signal_opener` editável/removível (backend + frontend) |
 
 **Detalhes:**
 - `backend-executors/app/services/decision_engine.py` — `_build_child_prompt_apresentation`: nova variável `_booking_signal_block` computada antes do prompt; para `agent_mode_normalized == 'agenda'` com `sales_flow.enabled` e fase p2 com blocos configurados, usa o bloco `booking_signal_opener` (se presente) ou string vazia (se ausente — utilizador removeu deliberadamente); mantém o texto hardcoded original em todos os outros casos (sem sales_flow, p2 vazia, ou `direto`/`consultivo`)
