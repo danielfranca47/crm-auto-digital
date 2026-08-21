@@ -589,13 +589,14 @@ function BlockForm({ block, setBlock, knowledgeItems, customVars }: {
 
 // ─── BlockModal ───────────────────────────────────────────────
 
-function BlockModal({ phaseId, initial, knowledgeItems, onSave, onClose, groupMode = false, customVars }: {
+function BlockModal({ phaseId, initial, knowledgeItems, onSave, onClose, groupMode = false, excludeTypes, customVars }: {
   phaseId: SalesFlowPhaseId;
   initial: SalesFlowBlock | null;
   knowledgeItems: KnowledgeItem[];
   onSave: (b: SalesFlowBlock) => void;
   onClose: () => void;
   groupMode?: boolean;  // quando true: adicionar acção/lógica a gatilho existente (sem tab de Gatilho)
+  excludeTypes?: SalesFlowBlockTypeId[];  // typeIds a esconder do grid (ex.: condicao dentro de um caminho — sem ramificação aninhada nesta versão)
   customVars: Record<string, string>;
 }) {
   const isEdit = !!initial;
@@ -664,7 +665,7 @@ function BlockModal({ phaseId, initial, knowledgeItems, onSave, onClose, groupMo
 
           {/* Type grid */}
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-            {catDef.types.map(typeId => {
+            {catDef.types.filter(typeId => !excludeTypes?.includes(typeId)).map(typeId => {
               const meta = BLOCK_META[typeId];
               const isSelected = selectedTypeId === typeId;
               return (
@@ -1109,12 +1110,13 @@ function OpenerCard({ block, onEdit, onRemove, label, badge, accentColor = '#38b
 
 // ─── PhaseSection ─────────────────────────────────────────────
 
-function PhaseSection({ phase, onAddBlock, onEditBlock, onRemoveBlock, onAddToGroup, isActive = true, extraHeader }: {
+function PhaseSection({ phase, onAddBlock, onEditBlock, onRemoveBlock, onAddToGroup, onAddBranchBlock, isActive = true, extraHeader }: {
   phase: SalesFlowPhaseData;
   onAddBlock: (phaseId: SalesFlowPhaseId) => void;
   onEditBlock: (phaseId: SalesFlowPhaseId, blockId: string) => void;
   onRemoveBlock: (phaseId: SalesFlowPhaseId, blockId: string) => void;
   onAddToGroup?: (phaseId: SalesFlowPhaseId, afterBlockId: string) => void;
+  onAddBranchBlock?: (phaseId: SalesFlowPhaseId, branchGroupId: string, branchId: string) => void;
   isActive?: boolean;
   extraHeader?: React.ReactNode;
 }) {
@@ -1162,18 +1164,32 @@ function PhaseSection({ phase, onAddBlock, onEditBlock, onRemoveBlock, onAddToGr
           {/* Block list — agrupado por gatilho */}
           {(() => {
             const TRIGGER_IDS = new Set(['phase_trigger', 'kw_trigger', 'no_reply_trigger', 'intent_trigger']);
-            type Group = { trigger: SalesFlowBlock | null; actions: SalesFlowBlock[] };
+            type SimpleGroup = { kind: 'simple'; trigger: SalesFlowBlock | null; actions: SalesFlowBlock[] };
+            type BranchGroup = { kind: 'branch'; node: SalesFlowBlock };
+            type Group = SimpleGroup | BranchGroup;
             const groups: Group[] = [];
-            let cur: Group = { trigger: null, actions: [] };
+            let cur: SimpleGroup = { kind: 'simple', trigger: null, actions: [] };
+            function flushCur() {
+              if (cur.trigger !== null || cur.actions.length > 0) groups.push(cur);
+              cur = { kind: 'simple', trigger: null, actions: [] };
+            }
             for (const b of blocks) {
+              // Blocos pertencentes a um caminho de um nó de ramificação não entram na
+              // listagem plana — são renderizados dentro do BranchGroup do seu nó pai.
+              if (b.branch_group_id) continue;
+              if (b.typeId === 'condicao') {
+                flushCur();
+                groups.push({ kind: 'branch', node: b });
+                continue;
+              }
               if (TRIGGER_IDS.has(b.typeId)) {
-                if (cur.trigger !== null || cur.actions.length > 0) groups.push(cur);
-                cur = { trigger: b, actions: [] };
+                flushCur();
+                cur = { kind: 'simple', trigger: b, actions: [] };
               } else {
                 cur.actions.push(b);
               }
             }
-            if (cur.trigger !== null || cur.actions.length > 0) groups.push(cur);
+            flushCur();
 
             function BlockRow({ block }: { block: SalesFlowBlock }) {
               const meta = BLOCK_META[block.typeId];
@@ -1204,50 +1220,107 @@ function PhaseSection({ phase, onAddBlock, onEditBlock, onRemoveBlock, onAddToGr
               );
             }
 
-            return groups.map((group, gi) => (
-              <div key={gi} style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
-                {/* Gatilho (ou label implícito "sempre ao entrar") */}
-                {group.trigger ? (
-                  <BlockRow block={group.trigger} />
-                ) : group.actions.length > 0 ? (
-                  <div style={{ fontSize: 10, color: 'var(--o-sub)', fontWeight: 500, padding: '2px 4px 4px', letterSpacing: '0.04em' }}>
-                    ⚡ Sempre ao entrar na fase
-                  </div>
-                ) : null}
-
-                {/* Ações — indentadas com linha vertical */}
-                {(group.actions.length > 0 || group.trigger) && (
-                  <div style={{ display: 'flex', marginTop: 4 }}>
-                    <div style={{
-                      width: 2, flexShrink: 0, borderRadius: 2,
-                      background: group.trigger ? BLOCK_META[group.trigger.typeId].color + '55' : 'var(--o-b1)',
-                      marginLeft: 14, marginRight: 10,
-                    }} />
-                    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 4 }}>
-                      {group.actions.map(b => <BlockRow key={b.id} block={b} />)}
-                      {/* Botão + para adicionar acção/lógica directamente ao gatilho */}
-                      {group.trigger && onAddToGroup && (
-                        <button
-                          onClick={() => {
-                            const lastBlock = group.actions.length > 0
-                              ? group.actions[group.actions.length - 1]
-                              : group.trigger!;
-                            onAddToGroup(id, lastBlock.id);
-                          }}
-                          style={{
-                            alignSelf: 'flex-start', background: 'none', border: `1px dashed ${BLOCK_META[group.trigger.typeId].color}55`,
-                            color: BLOCK_META[group.trigger.typeId].color, borderRadius: 6,
-                            cursor: 'pointer', fontSize: 11, padding: '3px 10px', marginTop: 2,
-                            display: 'flex', alignItems: 'center', gap: 4,
-                          }}>
-                          <span style={{ fontSize: 13, lineHeight: 1 }}>+</span> ação / lógica
-                        </button>
-                      )}
+            function BranchGroupRow({ node }: { node: SalesFlowBlock }) {
+              const meta = BLOCK_META['condicao'];
+              const nodeBranches: SalesFlowBranch[] = node.branches || [];
+              return (
+                <div style={{ border: `1.5px solid ${meta.color}55`, borderRadius: 10, overflow: 'hidden' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10, background: `${meta.color}12`, padding: '9px 12px' }}>
+                    <span style={{ fontSize: 16, flexShrink: 0 }}>{meta.icon}</span>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.07em', color: meta.color }}>
+                        Lógica de Ramificação
+                      </div>
+                      <div style={{ fontSize: 12.5, fontWeight: 600, color: 'var(--o-text)' }}>
+                        {node.label || 'Sem nome'}
+                      </div>
+                    </div>
+                    <div style={{ display: 'flex', gap: 4, flexShrink: 0 }}>
+                      <button className="o-btn" style={{ fontSize: 10.5, padding: '3px 9px' }}
+                        onClick={() => onEditBlock(id, node.id)}>Editar</button>
+                      <button className="o-btn" style={{ fontSize: 10.5, padding: '3px 9px', color: 'var(--o-danger, #e05c5c)' }}
+                        onClick={() => onRemoveBlock(id, node.id)}>✕</button>
                     </div>
                   </div>
-                )}
-              </div>
-            ));
+                  <div style={{ padding: '10px 12px', display: 'flex', flexDirection: 'column', gap: 10 }}>
+                    {nodeBranches.map(br => {
+                      const branchBlocks = blocks.filter(b => b.branch_group_id === node.id && b.branch_id === br.id);
+                      return (
+                        <div key={br.id} style={{ display: 'flex' }}>
+                          <div style={{ width: 2, flexShrink: 0, borderRadius: 2, background: meta.color + '55', marginLeft: 6, marginRight: 10 }} />
+                          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 4 }}>
+                            <div style={{ fontSize: 11, fontWeight: 600, color: meta.color }}>{br.label}</div>
+                            {branchBlocks.map(b => <BlockRow key={b.id} block={b} />)}
+                            {onAddBranchBlock && (
+                              <button
+                                onClick={() => onAddBranchBlock(id, node.id, br.id)}
+                                style={{
+                                  alignSelf: 'flex-start', background: 'none', border: `1px dashed ${meta.color}55`,
+                                  color: meta.color, borderRadius: 6,
+                                  cursor: 'pointer', fontSize: 11, padding: '3px 10px', marginTop: 2,
+                                  display: 'flex', alignItems: 'center', gap: 4,
+                                }}>
+                                <span style={{ fontSize: 13, lineHeight: 1 }}>+</span> bloco neste caminho
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            }
+
+            return groups.map((group, gi) => {
+              if (group.kind === 'branch') {
+                return <BranchGroupRow key={gi} node={group.node} />;
+              }
+              return (
+                <div key={gi} style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
+                  {/* Gatilho (ou label implícito "sempre ao entrar") */}
+                  {group.trigger ? (
+                    <BlockRow block={group.trigger} />
+                  ) : group.actions.length > 0 ? (
+                    <div style={{ fontSize: 10, color: 'var(--o-sub)', fontWeight: 500, padding: '2px 4px 4px', letterSpacing: '0.04em' }}>
+                      ⚡ Sempre ao entrar na fase
+                    </div>
+                  ) : null}
+
+                  {/* Ações — indentadas com linha vertical */}
+                  {(group.actions.length > 0 || group.trigger) && (
+                    <div style={{ display: 'flex', marginTop: 4 }}>
+                      <div style={{
+                        width: 2, flexShrink: 0, borderRadius: 2,
+                        background: group.trigger ? BLOCK_META[group.trigger.typeId].color + '55' : 'var(--o-b1)',
+                        marginLeft: 14, marginRight: 10,
+                      }} />
+                      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 4 }}>
+                        {group.actions.map(b => <BlockRow key={b.id} block={b} />)}
+                        {/* Botão + para adicionar acção/lógica directamente ao gatilho */}
+                        {group.trigger && onAddToGroup && (
+                          <button
+                            onClick={() => {
+                              const lastBlock = group.actions.length > 0
+                                ? group.actions[group.actions.length - 1]
+                                : group.trigger!;
+                              onAddToGroup(id, lastBlock.id);
+                            }}
+                            style={{
+                              alignSelf: 'flex-start', background: 'none', border: `1px dashed ${BLOCK_META[group.trigger.typeId].color}55`,
+                              color: BLOCK_META[group.trigger.typeId].color, borderRadius: 6,
+                              cursor: 'pointer', fontSize: 11, padding: '3px 10px', marginTop: 2,
+                              display: 'flex', alignItems: 'center', gap: 4,
+                            }}>
+                            <span style={{ fontSize: 13, lineHeight: 1 }}>+</span> ação / lógica
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              );
+            });
           })()}
 
           {/* Add button */}
@@ -1277,6 +1350,7 @@ export function CamadaFluxoVenda({ config, onUpdate }: Props) {
   const [modal, setModal] = useState<{ phaseId: SalesFlowPhaseId; blockId: string | null } | null>(null);
   const [ruleBuilderPhaseId, setRuleBuilderPhaseId] = useState<SalesFlowPhaseId | null>(null);
   const [addToGroup, setAddToGroup] = useState<{ phaseId: SalesFlowPhaseId; afterBlockId: string } | null>(null);
+  const [addToBranch, setAddToBranch] = useState<{ phaseId: SalesFlowPhaseId; branchGroupId: string; branchId: string } | null>(null);
   const [knowledgeItems, setKnowledgeItems] = useState<KnowledgeItem[]>([]);
 
   const hasActiveQualFields = (config.qualification_fields ?? []).some(
@@ -1303,8 +1377,14 @@ export function CamadaFluxoVenda({ config, onUpdate }: Props) {
   }
 
   function removeBlock(phaseId: SalesFlowPhaseId, blockId: string) {
+    // Se blockId for um nó de ramificação, remove também os blocos filhos dos seus
+    // caminhos (branch_group_id === blockId) — senão ficam órfãos: guardados no JSON mas
+    // nunca mais renderizados nem editáveis (o loop de agrupamento ignora todo bloco com
+    // branch_group_id, independentemente do nó pai ainda existir).
     updateFlow(phases.map(p =>
-      p.id === phaseId ? { ...p, blocks: p.blocks.filter(b => b.id !== blockId) } : p
+      p.id === phaseId
+        ? { ...p, blocks: p.blocks.filter(b => b.id !== blockId && b.branch_group_id !== blockId) }
+        : p
     ));
   }
 
@@ -1408,6 +1488,27 @@ export function CamadaFluxoVenda({ config, onUpdate }: Props) {
     setAddToGroup(null);
   }
 
+  function saveBranchBlock(block: SalesFlowBlock) {
+    if (!addToBranch) return;
+    const { phaseId, branchGroupId, branchId } = addToBranch;
+    const taggedBlock: SalesFlowBlock = { ...block, branch_group_id: branchGroupId, branch_id: branchId };
+    updateFlow(phases.map(p => {
+      if (p.id !== phaseId) return p;
+      // Insere logo após o último bloco já pertencente a este caminho, ou logo após o
+      // próprio nó condicao se o caminho ainda estiver vazio.
+      let lastBranchIdx = -1;
+      p.blocks.forEach((b, i) => {
+        if (b.branch_group_id === branchGroupId && b.branch_id === branchId) lastBranchIdx = i;
+      });
+      const nodeIdx = p.blocks.findIndex(b => b.id === branchGroupId);
+      const insertAt = lastBranchIdx >= 0 ? lastBranchIdx + 1 : (nodeIdx >= 0 ? nodeIdx + 1 : p.blocks.length);
+      const newBlocks = [...p.blocks];
+      newBlocks.splice(insertAt, 0, taggedBlock);
+      return { ...p, blocks: newBlocks };
+    }));
+    setAddToBranch(null);
+  }
+
   const modalPhase = modal ? phases.find(p => p.id === modal.phaseId) : null;
   const modalInitial = modal?.blockId && modalPhase
     ? (modalPhase.blocks.find(b => b.id === modal.blockId) ?? null)
@@ -1436,6 +1537,17 @@ export function CamadaFluxoVenda({ config, onUpdate }: Props) {
           onSave={saveGroupBlock}
           onClose={() => setAddToGroup(null)}
           groupMode
+          customVars={config.custom_variables || {}}
+        />
+      )}
+      {addToBranch && (
+        <BlockModal
+          phaseId={addToBranch.phaseId}
+          initial={null}
+          knowledgeItems={knowledgeItems}
+          onSave={saveBranchBlock}
+          onClose={() => setAddToBranch(null)}
+          excludeTypes={['condicao']}
           customVars={config.custom_variables || {}}
         />
       )}
@@ -1529,6 +1641,7 @@ export function CamadaFluxoVenda({ config, onUpdate }: Props) {
             <PhaseSection key={id} phase={phase}
               onAddBlock={openAdd} onEditBlock={openEdit} onRemoveBlock={removeBlock}
               onAddToGroup={(phaseId, afterBlockId) => setAddToGroup({ phaseId, afterBlockId })}
+              onAddBranchBlock={(phaseId, branchGroupId, branchId) => setAddToBranch({ phaseId, branchGroupId, branchId })}
               isActive={activePhasesForMode.includes(id)}
               extraHeader={extraHeader} />
           );
@@ -1547,14 +1660,16 @@ export function CamadaFluxoVenda({ config, onUpdate }: Props) {
           <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
             <PhaseSection phase={phases.find(p => p.id === 'p3a')!}
               onAddBlock={openAdd} onEditBlock={openEdit} onRemoveBlock={removeBlock}
-              onAddToGroup={(phaseId, afterBlockId) => setAddToGroup({ phaseId, afterBlockId })} />
+              onAddToGroup={(phaseId, afterBlockId) => setAddToGroup({ phaseId, afterBlockId })}
+              onAddBranchBlock={(phaseId, branchGroupId, branchId) => setAddToBranch({ phaseId, branchGroupId, branchId })} />
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 14px' }}>
               <div style={{ width: 2, height: 24, background: 'var(--o-b1)', marginLeft: 12 }} />
               <span style={{ fontSize: 10.5, color: 'var(--o-sub)', fontWeight: 300 }}>→ confirma data e hora</span>
             </div>
             <PhaseSection phase={phases.find(p => p.id === 'p3b')!}
               onAddBlock={openAdd} onEditBlock={openEdit} onRemoveBlock={removeBlock}
-              onAddToGroup={(phaseId, afterBlockId) => setAddToGroup({ phaseId, afterBlockId })} />
+              onAddToGroup={(phaseId, afterBlockId) => setAddToGroup({ phaseId, afterBlockId })}
+              onAddBranchBlock={(phaseId, branchGroupId, branchId) => setAddToBranch({ phaseId, branchGroupId, branchId })} />
           </div>
         </div>
       )}
@@ -1567,6 +1682,7 @@ export function CamadaFluxoVenda({ config, onUpdate }: Props) {
             <PhaseSection key={id} phase={phase}
               onAddBlock={openAdd} onEditBlock={openEdit} onRemoveBlock={removeBlock}
               onAddToGroup={(phaseId, afterBlockId) => setAddToGroup({ phaseId, afterBlockId })}
+              onAddBranchBlock={(phaseId, branchGroupId, branchId) => setAddToBranch({ phaseId, branchGroupId, branchId })}
               isActive={activePhasesForMode.includes(id)} />
           );
         })}
