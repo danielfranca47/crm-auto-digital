@@ -198,9 +198,10 @@ llm_service.py ganha resolução de provedor por chamada:
 ## Checks de Validação
 
 ### Cenário P1 — Perfil OpenAI (padrão) sem regressão
-- [ ] Playground, perfil com `llm_provider="openai"` (ou sem o campo, backfill automático)
-- [ ] Enviar mensagem e confirmar resposta normal da IA
-- [ ] Confirmar: comportamento idêntico ao anterior à mudança
+- [x] Playground, perfil com `llm_provider="openai"` (ou sem o campo, backfill automático)
+- [x] Enviar mensagem e confirmar resposta normal da IA
+- [x] Confirmar: comportamento idêntico ao anterior à mudança
+- **Validado em:** 21/08/2026 — sessão real de Playground (perfil "Daniel", template `hybrid_scheduler`), 2 turnos (recepção → apresentação), respostas coerentes e no tom configurado. Log do backend-executors confirma `POST https://api.openai.com/v1/responses` 200 OK nas 4 chamadas (2× Mãe, 2× Filha), sem nenhum `event=llm_provider_fallback` (correto, provider=openai).
 
 ### Cenário P2 — Perfil OpenRouter com chave configurada
 - [ ] Playground, perfil com `llm_provider="openrouter"` + modelo padrão, `OPENROUTER_API_KEY` setada no `.env` do backend-executors
@@ -212,13 +213,15 @@ llm_service.py ganha resolução de provedor por chamada:
 - [ ] Confirmar no log: `event=llm_provider_fallback`
 
 ### Cenário P4 — UI de seleção de provedor
-- [ ] Abrir AI Profile → card "Provedor de IA" mostra OpenAI por padrão
-- [ ] Trocar para OpenRouter, escolher modelo, salvar, recarregar página
-- [ ] Confirmar: seleção persiste
+- [x] Abrir AI Profile → card "Provedor de IA" mostra OpenAI por padrão
+- [x] Trocar para OpenRouter, escolher modelo, salvar, recarregar página
+- [x] Confirmar: seleção persiste
+- **Validado em:** 21/08/2026 — perfil id=5 (user_id=15). Card mostrou "OpenAI" por padrão; ao trocar para OpenRouter, a lista curada apareceu com Llama 3.3 70B pré-selecionado; salvo via botão "SALVAR CAMADA 1" (o "SALVAR ALTERAÇÕES" do modal só atualiza estado local — é o botão de nível de página que persiste, mesmo padrão de todos os outros campos desta tela). Confirmado direto no `core.db`: `llm_provider="openrouter", llm_provider_model="meta-llama/llama-3.3-70b-instruct"`. Após reload completo da página (`navigate_page`), card manteve "OpenRouter · Llama 3.3 70B".
 
 ### Cenário P5 — Reverter para OpenAI limpa o modelo
-- [ ] Com perfil em OpenRouter + modelo selecionado, voltar para OpenAI e salvar
-- [ ] Confirmar: `llm_provider_model` fica nulo no backend
+- [x] Com perfil em OpenRouter + modelo selecionado, voltar para OpenAI e salvar
+- [x] Confirmar: `llm_provider_model` fica nulo no backend
+- **Validado em:** 21/08/2026 — reabri o modal (já mostrava OpenRouter/Llama 3.3 70B corretamente pré-selecionados, confirmando round-trip de leitura), selecionei OpenAI, salvei a Camada 1. Confirmado no `core.db`: `llm_provider="openai", llm_provider_model=None`.
 
 ### Cenário C1 — WhatsApp real, wrappers de meeting_scheduler
 - [ ] Lead real em perfil OpenRouter atinge um gatilho de conflito de agenda ou lembrete
