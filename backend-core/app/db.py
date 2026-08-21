@@ -319,6 +319,42 @@ def ensure_ai_profile_columns() -> None:
                 )
 
 
+def ensure_presentation_variant_direto_backfill() -> None:
+    # Ate a correcao do bug de acoplamento a appointment_mode, todo save de agente
+    # direto/closer gravava presentation_variant="scheduler" incondicionalmente.
+    # Reseta para NULL (nao "sales" direto) para que _resolve_presentation_variant()
+    # volte a aplicar o fallback por agent_mode — idempotente, vira no-op assim que
+    # nao houver mais perfis nessa condicao.
+    with engine.begin() as conn:
+        if engine.dialect.name == "sqlite":
+            table_row = conn.execute(
+                text("SELECT name FROM sqlite_master WHERE type='table' AND name='ai_profiles'")
+            ).fetchone()
+            if not table_row:
+                return
+        else:
+            exists = conn.execute(
+                text(
+                    """
+                    SELECT EXISTS (
+                        SELECT 1
+                        FROM information_schema.tables
+                        WHERE table_name = 'ai_profiles'
+                    )
+                    """
+                )
+            ).scalar()
+            if not exists:
+                return
+
+        conn.execute(
+            text(
+                "UPDATE ai_profiles SET presentation_variant = NULL "
+                "WHERE agent_mode IN ('direto', 'closer') AND presentation_variant = 'scheduler'"
+            )
+        )
+
+
 def ensure_auth_otps_table() -> None:
     """Create auth_otps table for passwordless login flow."""
     with engine.begin() as conn:
