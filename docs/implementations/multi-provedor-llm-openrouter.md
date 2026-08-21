@@ -163,6 +163,25 @@ llm_service.py ganha resolução de provedor por chamada:
 | `frontend-crm/src/components/agente/CamadaIdentidade.tsx` | Novo card + modal `ModalLlmProvider` |
 | `frontend-crm/src/services/api.ts` | Passthrough em `getConfig`/`saveConfig` |
 
+### Commits Fase 4
+
+| # | Commit | O que foi implementado |
+|---|---|---|
+| 1 | `d8e3e23` | card + modal de seleção de provedor, wiring completo até a API |
+
+**Detalhes do commit `d8e3e23`:**
+- `frontend-crm/src/types/agente.ts` — campos `llm_provider`/`llm_provider_model` em `AgentConfig`/`DEFAULT_AGENT_CONFIG`; labels `LLM_PROVIDER_LABELS`/`LLM_PROVIDER_MODEL_LABELS`
+- `frontend-crm/src/components/agente/CamadaIdentidade.tsx` — novo card "Provedor de IA" + `ModalLlmProvider` (mesmo padrão do `ModalIdentidade` já existente): seleciona OpenAI (padrão) ou OpenRouter; ao escolher OpenRouter, revela a lista curada de modelos (Llama 3.3 70B / Hermes 3 405B)
+- `frontend-crm/src/services/api.ts` — passthrough dos 2 campos em `agente.getConfig`/`saveConfig`; ao salvar com provider diferente de `openrouter`, `llm_provider_model` é zerado
+
+**Nota de verificação:** `npx tsc --noEmit` sem erros. Não rodei o dev server para captura de tela nesta fase — ver "Relatório" abaixo.
+
+### Relatório da Fase 4 — o que mudou na prática
+
+**Antes:** só era possível trocar de provedor fazendo `PATCH /ai-profiles/me` direto na API — não havia nenhuma tela para isso.
+**Agora:** na página de configuração do agente (aba Identidade), existe um card "Provedor de IA" que abre um modal para escolher entre OpenAI e OpenRouter; escolhendo OpenRouter, aparece a lista dos 2 modelos curados para selecionar. Salva como qualquer outro campo do AI Profile.
+**Para validar:** Cenários P4 e P5, abaixo — ainda não testados ao vivo (exige subir a stack completa: backend-core + backend-crm + backend-executors + frontend-crm, mais login numa conta de teste).
+
 ### Fase 5 — docs e visibilidade admin
 
 **Objetivo:** manter `docs/architecture/` como espelho do sistema e dar visibilidade ao operador.
