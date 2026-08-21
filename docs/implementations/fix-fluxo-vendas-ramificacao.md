@@ -129,6 +129,21 @@ precisar de mudança em `enrich_context_bundle()`.
 | `frontend-crm/src/types/agente.ts` | `SalesFlowBranch`, `SalesFlowBlock.branches/sticky/branch_group_id/branch_id`, unificar label divergente |
 | `frontend-crm/src/components/agente/CamadaFluxoVenda.tsx` | `case 'condicao'` reescrito: nome da lógica, lista dinâmica de ramos (add/remove/renomear), critério por ramo, checkbox "fixar caminho" |
 
+### Commits Fase 2
+
+| # | Commit | O que foi implementado |
+|---|---|---|
+| 1 | `dc221db` | Schema + formulário do nó de ramificação |
+
+**Detalhes do commit `dc221db`:**
+- `types/agente.ts` — `SalesFlowBranch`, campos novos em `SalesFlowBlock`, label unificado
+- `CamadaFluxoVenda.tsx` — `emptyBlock('condicao')` semeia 2 caminhos + sticky=true;
+  `blockSummary` mostra nome + contagem; `BlockForm` reescreve o formulário completo, com
+  aviso de "bloco desatualizado" para o formato antigo
+
+`tsc --noEmit` limpo — sem validação visual ainda (é a Fase 3, que adiciona a renderização
+aninhada dos caminhos e o botão de adicionar bloco a um caminho).
+
 ### Fase 3 — Frontend: render aninhado + "adicionar bloco a este caminho"
 
 | Arquivo | O que muda |
