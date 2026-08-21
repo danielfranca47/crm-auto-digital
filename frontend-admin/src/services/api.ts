@@ -165,6 +165,8 @@ export type UserProfile = {
   presentation_variant?: string;
   hybrid_flow_style?: string;
   offer_pack?: unknown;
+  llm_provider?: string;
+  llm_provider_model?: string | null;
   qualification_score_threshold?: number;
   qualification_required_fields?: string[];
   qualification_extraction_tolerance?: string;

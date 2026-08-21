@@ -104,6 +104,7 @@ _SYSTEM_DEFAULTS: Dict[str, Any] = {
     "qualification_score_threshold": 6,
     "qualification_extraction_tolerance": "equilibrado",
     "followup_max_attempts": None,
+    "llm_provider": "openai",
 }
 
 
@@ -236,6 +237,8 @@ async def admin_agents_users(
             "hybrid_flow_style": p.get("hybrid_flow_style"),
             "offer_pack": p.get("offer_pack"),
             "cold_outreach_channel": p.get("cold_outreach_channel"),
+            "llm_provider": p.get("llm_provider"),
+            "llm_provider_model": p.get("llm_provider_model"),
             "qualification_score_threshold": p.get("qualification_score_threshold"),
             "qualification_required_fields": p.get("qualification_required_fields"),
             "qualification_fields": p.get("qualification_fields"),
@@ -300,6 +303,8 @@ async def admin_agents_user_detail(
             "hybrid_flow_style": profile.get("hybrid_flow_style"),
             "offer_pack": profile.get("offer_pack"),
             "cold_outreach_channel": profile.get("cold_outreach_channel"),
+            "llm_provider": profile.get("llm_provider"),
+            "llm_provider_model": profile.get("llm_provider_model"),
             "qualification_score_threshold": profile.get("qualification_score_threshold"),
             "qualification_required_fields": profile.get("qualification_required_fields"),
             "qualification_fields": profile.get("qualification_fields"),

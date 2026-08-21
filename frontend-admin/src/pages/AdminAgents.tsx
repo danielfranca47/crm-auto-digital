@@ -473,6 +473,11 @@ export default function AdminAgents() {
               <Badge variant="secondary" className="bg-slate-800 text-slate-500 border-slate-700 text-xs">usa configuração padrão</Badge>
             )}
             <span className="text-xs text-slate-600">template: {userDetail.playbook.key}</span>
+            {userDetail.profile.llm_provider === "openrouter" && (
+              <Badge className="bg-sky-900/40 text-sky-300 border-sky-700/40 text-xs">
+                OpenRouter{userDetail.profile.llm_provider_model ? ` · ${String(userDetail.profile.llm_provider_model)}` : ""}
+              </Badge>
+            )}
           </div>
         )}
       </div>

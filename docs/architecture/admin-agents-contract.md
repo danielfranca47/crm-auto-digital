@@ -19,6 +19,8 @@ Origem: tabela `ai_profiles` em `backend-core` (via `GET /admin/agents/users/{us
 | `cold_outreach_channel` | string | Preferência de canal do 1º contato frio (`whatsapp_only`\|`email_first`) | Não exibido no painel admin atualmente |
 | `sales_flow` | object\|null | Configuração do Fluxo de Venda por fase (`{phases: [{id, blocks[]}]}`) | Não exibido no painel admin atualmente |
 | `qualification_extraction_tolerance` | string | Tolerância do extractor de campos de qualificação (`flexivel`\|`equilibrado`\|`rigoroso`), default `equilibrado` | Aparece no painel de diff (`diff`) quando o usuário muda do default — sem exibição própria no card/drawer |
+| `llm_provider` | string | Provedor de LLM usado nas chamadas de IA (`openai`\|`openrouter`), default `openai` — ver [`llm-architecture.md`](llm-architecture.md) | Badge "OpenRouter" ao lado do seletor de usuário quando `≠ openai`; entra no cálculo de `has_custom_config`/`diff` |
+| `llm_provider_model` | string\|null | Modelo curado do OpenRouter (só relevante quando `llm_provider=openrouter`) | Incluído no texto do badge OpenRouter |
 
 ### Campos de qualificação mínima por modo
 

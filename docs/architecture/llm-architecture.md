@@ -281,6 +281,44 @@ Renomear a constante Python é seguro. Renomear o **valor string** exige migraç
 
 ---
 
+## Multi-provedor de LLM (OpenAI padrão + OpenRouter alternativo)
+
+Cada usuário escolhe o provedor de IA no próprio AI Profile (`ai_profiles.llm_provider`,
+`openai`\|`openrouter`, default `openai` — campo exposto na UI em `frontend-crm/src/components/agente/CamadaIdentidade.tsx`,
+card "Provedor de IA"). O valor flui sem transformação até `backend-executors`, dentro de
+`context["ai_profile"]` (nenhuma mudança necessária em `enrich_context_bundle()` — ver
+[`playground-parity.md`](playground-parity.md), campos raw do AI Profile já chegam
+idênticos pelos dois caminhos).
+
+`backend-executors/app/services/llm_service.py::_resolve_provider_config(ai_profile)` decide,
+por chamada, qual API usar:
+
+| `ai_profile.llm_provider` | Comportamento |
+|---|---|
+| ausente / `"openai"` | Config da OpenAI (`settings.llm_api_base`/`llm_api_key`/`llm_model`) — Responses API |
+| `"openrouter"`, chave configurada no servidor | Config do OpenRouter (`settings.openrouter_api_base`/`openrouter_api_key`), modelo curado de `ai_profile.llm_provider_model` (clampado para `OPENROUTER_MODEL_DEFAULT` se ausente/desconhecido) — Chat Completions API |
+| `"openrouter"`, chave ausente no servidor | Cai para a config da OpenAI (log `event=llm_provider_fallback`) — erro de deploy do operador não deve quebrar o turno do lead |
+
+Modelos curados do OpenRouter são constantes de código (`OPENROUTER_MODEL_DEFAULT`,
+`OPENROUTER_MODEL_QUALITY` em `llm_service.py`), não configuração solta — trocar a lista é
+mudança de código/deploy, não env var. Hoje: `meta-llama/llama-3.3-70b-instruct` (padrão) e
+`nousresearch/hermes-3-llama-3.1-405b` (maior qualidade, mais lento). A UI só permite esses
+dois valores (dropdown fechado, sem texto livre — validado também server-side pelo enum
+`LlmProviderModel` em `backend-core/app/api/ai_profiles.py`).
+
+`_build_payload()`/`_extract_output_text()` ramificam o formato do payload e do parsing da
+resposta por provedor (Responses API `input`/`text.format`/`output_text` para OpenAI; Chat
+Completions `messages`/`response_format`/`choices[0].message.content` para OpenRouter) —
+transparente para os 7 call sites (`decision_engine.py` ×3, `field_extractor.py`,
+`meeting_scheduler.py` ×3), que só passam `ai_profile=ai_profile` para as funções públicas
+de `llm_service.py`. Retry/backoff (ver abaixo) é idêntico para os dois provedores.
+
+Visibilidade admin: `docs/architecture/admin-agents-contract.md` documenta o badge
+"OpenRouter" exibido em `frontend-admin/src/pages/AdminAgents.tsx` quando um usuário está
+fora do padrão.
+
+---
+
 ## Retry com backoff nas chamadas à LLM
 
 `backend-executors/app/services/llm_service.py` — helper partilhado `_post_with_retry()`,
@@ -326,7 +364,7 @@ sem handoff — nem mesmo nos primeiros turnos de uma conversa nova.
 | Arquivo | Responsabilidade |
 |---|---|
 | `backend-executors/app/services/decision_engine.py` | Motor de decisão, prompts Mãe e Filhas, guardrails, composição |
-| `backend-executors/app/services/llm_service.py` | Chamada HTTP ao LLM (Claude/OpenAI format), retry com backoff |
+| `backend-executors/app/services/llm_service.py` | Chamada HTTP ao LLM (OpenAI/OpenRouter, multi-provedor), retry com backoff |
 | `backend-executors/app/services/orchestrator_models.py` | Schemas MotherDecision, ChildResult |
 | `backend-executors/app/runners/whatsapp.py` | Executa cada job: contexto → decide → envia |
 | `backend-executors/app/services/fast_path.py` | Decisões sem LLM (handoff imediato, bot desabilitado) |
