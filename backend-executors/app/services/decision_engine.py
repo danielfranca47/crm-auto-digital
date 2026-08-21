@@ -373,6 +373,20 @@ def _load_triggered_phases_set(context: Dict[str, Any]) -> set:
     return _parse_json_id_set((context.get("lead") or {}).get("phases_triggered") or "[]")
 
 
+def _load_branches_selected_map(context: Dict[str, Any]) -> Dict[str, str]:
+    """Ramos de nós `condicao` (lógica de ramificação) já escolhidos e persistidos —
+    leads.branches_selected, JSON {block_id: branch_id}. Só nós com sticky=True gravam
+    aqui (ver mark_branch_selected em compose_decision_output). Chave: id do bloco
+    `condicao`. Valor: id do ramo (branch) escolhido nesse nó."""
+    raw = (context.get("lead") or {}).get("branches_selected") or "{}"
+    try:
+        import json as _json
+        parsed = _json.loads(raw) if isinstance(raw, str) else (raw if isinstance(raw, dict) else {})
+        return {str(k): str(v) for k, v in parsed.items()} if isinstance(parsed, dict) else {}
+    except (ValueError, TypeError):
+        return {}
+
+
 def _is_sequential_trigger_block(block: Dict[str, Any]) -> bool:
     """Um gatilho é "sequencial" quando tem um registo persistido de satisfação que
     permite usá-lo como checkpoint: phase_trigger (sempre único por fase) ou
@@ -425,6 +439,7 @@ def _evaluate_sales_flow_phases(
     message_text: str,
     detected_intents: Optional[List[str]] = None,
     is_phase_entry: bool = True,
+    branch_selections: Optional[Dict[str, str]] = None,
 ) -> Dict[str, Any]:
     """Avalia os blocos tipados do novo sistema de fases do Fluxo de Venda.
 
@@ -432,6 +447,12 @@ def _evaluate_sales_flow_phases(
       prompt_injections  — strings para injetar no prompt LLM (orientacao, intent_trigger)
       pre_send_media     — mídias a enviar diretamente (blocos midia com media_url explícito)
       system_actions     — ações a executar pelo executor (mensagem, avancar_fase, webhook, espera)
+
+    Nós `condicao` (lógica de ramificação) escolhem, por turno, qual `branch_id` está activo
+    (via `branch_selections`, populado pela Mãe, ou já persistido se o nó for `sticky`) — só
+    os blocos com `branch_group_id`/`branch_id` correspondentes ao ramo activo são avaliados;
+    os blocos dos ramos irmãos são ignorados por completo (não entram em prompt_injections
+    nem em system_actions). Ver docs/architecture/sales-flow.md, "Lógica de Ramificação".
     """
     result: Dict[str, Any] = {"prompt_injections": [], "pre_send_media": [], "system_actions": [], "suppress_llm_response": False}
 
@@ -460,6 +481,8 @@ def _evaluate_sales_flow_phases(
     # Fases já disparadas (phase_trigger) — mesma finalidade de _triggers_fired, para o
     # gating sequencial e para a persistência de orientações críticas entre turnos.
     _triggered_phases = _load_triggered_phases_set(context)
+    # Ramos de nós `condicao` (sticky) já resolvidos em turnos anteriores.
+    _branches_persisted = _load_branches_selected_map(context)
 
     def _trigger_persisted_satisfied(_blk: Dict[str, Any], _type: str) -> bool:
         """True se este gatilho já disparou ANTES deste turno (estado persistido no lead).
@@ -480,11 +503,13 @@ def _evaluate_sales_flow_phases(
     # Por defeito True — ações sem gatilho antes delas disparam automaticamente ao entrar na fase.
     _TRIGGER_TYPES = {"phase_trigger", "kw_trigger", "intent_trigger", "no_reply_trigger"}
     last_trigger_active = True
-    # Pré-requisitos sequenciais: começa desbloqueado; um gatilho "sequencial" (fire_once
-    # ou phase_trigger) que ainda não esteja satisfeito (nem persistido, nem neste turno)
-    # bloqueia todos os gatilhos sequenciais seguintes da fase — impede que uma etapa mais
-    # à frente dispare antes de uma etapa anterior configurada pelo utilizador.
-    _prereqs_satisfied = True
+    # Pré-requisitos sequenciais, agora por ESCOPO — "root" para blocos fora de qualquer
+    # ramo, ou "{branch_group_id}:{branch_id}" dentro de um. Cada escopo começa desbloqueado
+    # de forma independente: um gatilho fire_once dentro do Caminho A nunca é bloqueado por
+    # (nem bloqueia) nada do Caminho B — são caminhos mutuamente exclusivos do mesmo nó.
+    _prereqs_satisfied_by_scope: Dict[str, bool] = {}
+    # Ramo activo por nó de ramificação nesta avaliação — {branch_group_id: branch_id}.
+    _active_branches: Dict[str, str] = {}
     # IDs de blocos `orientacao` já injectados na passagem principal — evita duplicar na
     # segunda passagem (guarda permanente de orientações críticas), abaixo.
     _injected_block_ids: set = set()
@@ -498,12 +523,59 @@ def _evaluate_sales_flow_phases(
             continue
         type_id = (block.get("typeId") or "").strip()
 
+        # Escopo de ramo: um bloco marcado com branch_group_id só é avaliado se pertence ao
+        # ramo actualmente activo desse nó de ramificação — senão é ignorado por completo
+        # (nem prompt_injections, nem system_actions, nem gating sequencial). É aqui que a
+        # redução de poluição de tokens dos ramos irmãos não escolhidos acontece de facto.
+        _branch_group = (block.get("branch_group_id") or "").strip()
+        _own_branch_id = (block.get("branch_id") or "").strip()
+        if _branch_group and _active_branches.get(_branch_group) != _own_branch_id:
+            continue
+        _scope_key = f"{_branch_group}:{_own_branch_id}" if _branch_group else "root"
+
+        if type_id == "condicao":
+            # Nó de lógica de ramificação: resolve qual ramo está activo e regista em
+            # _active_branches para os blocos filhos seguintes. Respeita o mesmo gate de
+            # "last_trigger_active" que qualquer outro bloco de ação/lógica.
+            if not last_trigger_active:
+                continue
+            _node_id = (block.get("id") or "").strip()
+            _branches = block.get("branches")
+            if not _node_id or not isinstance(_branches, list) or not _branches:
+                continue
+            _valid_branch_ids = {
+                (br.get("id") or "").strip()
+                for br in _branches
+                if isinstance(br, dict) and (br.get("id") or "").strip()
+            }
+            _chosen: Optional[str] = None
+            _already_persisted = _node_id in _branches_persisted
+            if block.get("sticky") and _already_persisted:
+                _persisted_choice = _branches_persisted.get(_node_id)
+                if _persisted_choice in _valid_branch_ids:
+                    _chosen = _persisted_choice
+            elif branch_selections:
+                _mother_choice = branch_selections.get(_node_id)
+                if _mother_choice in _valid_branch_ids:
+                    _chosen = _mother_choice
+            if _chosen:
+                _active_branches[_node_id] = _chosen
+                if block.get("sticky") and not _already_persisted:
+                    result["system_actions"].append({
+                        "type": "mark_branch_selected",
+                        "block_id": _node_id,
+                        "branch_id": _chosen,
+                    })
+            continue
+
         if type_id in _TRIGGER_TYPES:
             # Gating sequencial: só gatilhos "sequenciais" (fire_once ou phase_trigger)
             # participam — um kw_trigger sem fire_once não tem registo persistido de
-            # satisfação, então nem bloqueia nem é bloqueado por este mecanismo.
+            # satisfação, então nem bloqueia nem é bloqueado por este mecanismo. O
+            # pré-requisito é isolado por escopo (root ou ramo) — ver comentário acima.
             _is_sequential = _is_sequential_trigger_block(block)
-            _locked = _is_sequential and not _prereqs_satisfied
+            _scope_satisfied = _prereqs_satisfied_by_scope.setdefault(_scope_key, True)
+            _locked = _is_sequential and not _scope_satisfied
 
             # Avaliar e atualizar o flag de trigger ativo
             fired = False
@@ -554,7 +626,7 @@ def _evaluate_sales_flow_phases(
 
             if _is_sequential:
                 _persisted_satisfied = _trigger_persisted_satisfied(block, type_id)
-                _prereqs_satisfied = _prereqs_satisfied and (_persisted_satisfied or fired)
+                _prereqs_satisfied_by_scope[_scope_key] = _scope_satisfied and (_persisted_satisfied or fired)
 
             # Injeções de prompt para blocos de gatilho que dispararam
             if fired:
@@ -646,15 +718,8 @@ def _evaluate_sales_flow_phases(
                         "wait_value": wait_value,
                         "wait_unit": block.get("wait_unit") or "hours",
                     })
-            elif type_id == "condicao":
-                condition = (block.get("condition") or "").strip()
-                if condition:
-                    result["system_actions"].append({
-                        "type": "condition",
-                        "condition": condition,
-                        "branch_yes": block.get("branch_yes") or "",
-                        "branch_no": block.get("branch_no") or "",
-                    })
+            # `condicao` (nó de ramificação) é resolvido no topo do loop, antes da
+            # distinção trigger/ação — ver bloco `if type_id == "condicao":` acima.
 
     # Segunda passagem: orientações críticas ficam como guarda permanente — reinjectadas
     # em todo turno desta fase enquanto o próximo gatilho sequencial da sequência ainda
@@ -668,6 +733,10 @@ def _evaluate_sales_flow_phases(
             continue
         if (_block.get("priority") or "").strip().lower() != "critical":
             continue
+        _my_branch_group = (_block.get("branch_group_id") or "").strip()
+        _my_branch_id = (_block.get("branch_id") or "").strip()
+        if _my_branch_group and _active_branches.get(_my_branch_group) != _my_branch_id:
+            continue  # orientação pertence a um ramo não escolhido — não relevante agora
         _cid = (_block.get("id") or "").strip()
         if _cid and _cid in _injected_block_ids:
             continue  # já injectada na passagem principal deste turno
@@ -678,6 +747,8 @@ def _evaluate_sales_flow_phases(
         for _later in blocks[_idx + 1:]:
             if not isinstance(_later, dict):
                 continue
+            if (_later.get("branch_group_id") or "").strip() != _my_branch_group or (_later.get("branch_id") or "").strip() != _my_branch_id:
+                continue  # só o próximo gatilho sequencial do MESMO escopo importa
             _later_type = (_later.get("typeId") or "").strip()
             if not _is_sequential_trigger_block(_later):
                 continue
@@ -842,6 +913,43 @@ def _collect_intent_triggers_for_lead_phase(
                 if isinstance(b, dict) and b.get("typeId") == "intent_trigger" and (b.get("intent") or "").strip()
             )
     return blocks
+
+
+def _collect_branch_nodes_for_lead_phase(context: Dict[str, Any]) -> List[dict]:
+    """Coleta blocos `condicao` (nós de lógica de ramificação) com ramos configurados,
+    da fase ATUAL do lead — usados para o bloco [LÓGICA DE RAMIFICAÇÃO] no prompt da mãe.
+
+    Ao contrário de _collect_intent_triggers_for_lead_phase, não olha a fase seguinte: um
+    ramo não decide transição de fase, só qual caminho de blocos fica activo dentro da fase
+    corrente. Nós `sticky` já resolvidos (leads.branches_selected) não são listados de novo
+    — a mãe não precisa reavaliar o que já foi decidido num turno anterior (economiza tokens).
+    """
+    ai_profile = context.get("ai_profile") or {}
+    sales_flow = ai_profile.get("sales_flow")
+    if not isinstance(sales_flow, dict) or not sales_flow.get("enabled"):
+        return []
+    phases = sales_flow.get("phases")
+    if not isinstance(phases, list):
+        return []
+    lead = context.get("lead") or {}
+    lead_cat_raw = (lead.get("category") or "").strip().lower()
+    current_phase_id = _ROUTE_TO_PHASE_ID.get(_LEAD_CAT_TO_ROUTE.get(lead_cat_raw, lead_cat_raw)) or "p0"
+    phase_data = next((p for p in phases if isinstance(p, dict) and p.get("id") == current_phase_id), None)
+    if not phase_data:
+        return []
+    _resolved = _load_branches_selected_map(context)
+    nodes: List[dict] = []
+    for b in (phase_data.get("blocks") or []):
+        if not isinstance(b, dict) or b.get("typeId") != "condicao":
+            continue
+        branches = b.get("branches")
+        if not isinstance(branches, list) or not branches:
+            continue
+        _bid = (b.get("id") or "").strip()
+        if b.get("sticky") and _bid and _bid in _resolved:
+            continue
+        nodes.append(b)
+    return nodes
 
 
 def _build_custom_instructions_block(ai_profile: Dict[str, Any]) -> str:
@@ -2034,6 +2142,30 @@ def _build_mother_prompt(context: Dict[str, Any], message_text: str) -> str:
             "vazio é INCONSISTENTE — não faça isso.\n"
         )
 
+    _active_branch_nodes = _collect_branch_nodes_for_lead_phase(context)
+    _branch_logic_block = ""
+    if _active_branch_nodes:
+        _branch_sections = []
+        for _node in _active_branch_nodes:
+            _node_id = (_node.get("id") or "").strip()
+            _node_label = (_node.get("label") or _node.get("condition") or "Lógica sem nome").strip()
+            _paths = "\n".join(
+                f'  - id="{(br.get("id") or "").strip()}" ({(br.get("label") or "Caminho").strip()}): '
+                f'{(br.get("criteria") or "").strip()}'
+                for br in (_node.get("branches") or [])
+                if isinstance(br, dict) and (br.get("id") or "").strip()
+            )
+            _branch_sections.append(f'- Lógica "{_node_label}" (id="{_node_id}"), caminhos:\n{_paths}')
+        _branch_logic_block = (
+            "\n[LÓGICA DE RAMIFICAÇÃO]\n"
+            "Cada lógica abaixo tem caminhos nomeados com um critério — avalie a conversa e\n"
+            "escolha, para cada lógica, qual caminho o lead deve seguir.\n\n"
+            f"{chr(10).join(_branch_sections)}\n\n"
+            "Preencha o campo `branch_selections` como um objeto {id_da_logica: id_do_caminho},\n"
+            "um par por lógica listada acima. Se nenhum caminho tiver evidência clara na\n"
+            "conversa ainda, OMITA essa lógica do objeto (não invente escolha sem sinal).\n"
+        )
+
     return (
         f"{identity_block}\n\n"
         f"{pipeline_block}\n"
@@ -2192,6 +2324,7 @@ def _build_mother_prompt(context: Dict[str, Any], message_text: str) -> str:
             else ""
         )
         + _intent_detection_block
+        + _branch_logic_block
     )
 
 
@@ -2310,7 +2443,7 @@ Retorne SOMENTE JSON válido:
   "pending_commercial_text": "<trecho literal do pedido comercial, ou null se só houve saudação>"
 }}
 """
-    _recepcao_prompt += _build_sales_flow_phases_block(_evaluate_sales_flow_phases(context, "recepcao", message_text, detected_intents=mother_decision.detected_intents, is_phase_entry=is_phase_entry))
+    _recepcao_prompt += _build_sales_flow_phases_block(_evaluate_sales_flow_phases(context, "recepcao", message_text, detected_intents=mother_decision.detected_intents, is_phase_entry=is_phase_entry, branch_selections=mother_decision.branch_selections))
     return _recepcao_prompt
 
 
@@ -2637,7 +2770,7 @@ CONTEXTO:
 - next_action_hint_mae: {mother_decision.next_action_hint or "null"}
 {_build_qualification_fields_block(ai_profile, response_style)}{_build_custom_instructions_block(ai_profile)}{_build_business_info_block(context)}{_build_training_examples_block(context, "qualification")}"""
     _qual_prompt += _build_sales_flow_block(_evaluate_sales_flow(context, "qualification", mother_decision.signals))
-    _qual_prompt += _build_sales_flow_phases_block(_evaluate_sales_flow_phases(context, "qualification", message_text, detected_intents=mother_decision.detected_intents, is_phase_entry=is_phase_entry))
+    _qual_prompt += _build_sales_flow_phases_block(_evaluate_sales_flow_phases(context, "qualification", message_text, detected_intents=mother_decision.detected_intents, is_phase_entry=is_phase_entry, branch_selections=mother_decision.branch_selections))
     return _inject_generated_parts(_qual_prompt, context, "qualification")
 
 def _build_child_prompt_apresentation(
@@ -3274,7 +3407,7 @@ def _build_child_prompt_apresentation(
         + _build_training_examples_block(context, "apresentation")
     )
     _apres_prompt += _build_sales_flow_block(_evaluate_sales_flow(context, "apresentation", mother_decision.signals))
-    _apres_prompt += _build_sales_flow_phases_block(_evaluate_sales_flow_phases(context, "apresentation", message_text, detected_intents=mother_decision.detected_intents, is_phase_entry=is_phase_entry))
+    _apres_prompt += _build_sales_flow_phases_block(_evaluate_sales_flow_phases(context, "apresentation", message_text, detected_intents=mother_decision.detected_intents, is_phase_entry=is_phase_entry, branch_selections=mother_decision.branch_selections))
     return _inject_generated_parts(_apres_prompt, context, "apresentation")
 
 
@@ -3608,7 +3741,7 @@ def _build_child_prompt_follow_up(
         + _build_business_info_block(context)
     )
     _followup_prompt += _build_sales_flow_block(_evaluate_sales_flow(context, "follow-up", mother_decision.signals))
-    _followup_prompt += _build_sales_flow_phases_block(_evaluate_sales_flow_phases(context, "followup", message_text, detected_intents=mother_decision.detected_intents, is_phase_entry=is_phase_entry))
+    _followup_prompt += _build_sales_flow_phases_block(_evaluate_sales_flow_phases(context, "followup", message_text, detected_intents=mother_decision.detected_intents, is_phase_entry=is_phase_entry, branch_selections=mother_decision.branch_selections))
     return _inject_generated_parts(_followup_prompt, context, "followup")
 
 
@@ -4836,6 +4969,7 @@ def compose_decision_output(
         context, effective_route_to, _extract_message_text(context),
         detected_intents=mother_decision.detected_intents,
         is_phase_entry=_is_phase_entry,
+        branch_selections=mother_decision.branch_selections,
     )
     if _phases_result.get("pre_send_media") and not decision.pre_send_media:
         decision.pre_send_media = _phases_result["pre_send_media"]

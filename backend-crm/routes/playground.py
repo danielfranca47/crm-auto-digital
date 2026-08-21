@@ -369,6 +369,28 @@ def _mark_trigger_fired(lead_id: int, user_id: int, block_id: str) -> None:
                 conn.commit()
 
 
+def _mark_branch_selected(lead_id: int, user_id: int, block_id: str, branch_id: str) -> None:
+    """Regista o ramo escolhido para um nó `condicao` sticky — impede reavaliação pela mãe."""
+    import json
+    with get_connection() as conn:
+        cur = conn.cursor()
+        row = cur.execute(
+            "SELECT branches_selected FROM leads WHERE id = ? AND user_id = ?", (lead_id, user_id)
+        ).fetchone()
+        if row:
+            try:
+                existing: dict = json.loads(row["branches_selected"] or "{}")
+            except (ValueError, TypeError):
+                existing = {}
+            if existing.get(block_id) != branch_id:
+                existing[block_id] = branch_id
+                cur.execute(
+                    "UPDATE leads SET branches_selected = ? WHERE id = ? AND user_id = ?",
+                    (json.dumps(existing), lead_id, user_id),
+                )
+                conn.commit()
+
+
 def _mark_knowledge_shown(lead_id: int, user_id: int, categories: list) -> None:
     """Regista categorias narrativas de knowledge (social_proof, pitch_script,
     product_details) já mostradas ao lead — impede repetição em turnos futuros."""
@@ -778,6 +800,8 @@ def playground_chat(
             _mark_phase_triggered(lead_id, user_id, action["phase_id"])
         elif atype == "mark_trigger_fired" and action.get("block_id"):
             _mark_trigger_fired(lead_id, user_id, action["block_id"])
+        elif atype == "mark_branch_selected" and action.get("block_id") and action.get("branch_id"):
+            _mark_branch_selected(lead_id, user_id, action["block_id"], action["branch_id"])
         elif atype == "mark_knowledge_shown" and action.get("categories"):
             _mark_knowledge_shown(lead_id, user_id, action["categories"])
         elif atype == "requeue_pending_message" and action.get("message_text"):
@@ -887,6 +911,8 @@ def playground_chat(
                 _mark_phase_triggered(lead_id, user_id, action2["phase_id"])
             elif atype2 == "mark_trigger_fired" and action2.get("block_id"):
                 _mark_trigger_fired(lead_id, user_id, action2["block_id"])
+            elif atype2 == "mark_branch_selected" and action2.get("block_id") and action2.get("branch_id"):
+                _mark_branch_selected(lead_id, user_id, action2["block_id"], action2["branch_id"])
             elif atype2 == "mark_knowledge_shown" and action2.get("categories"):
                 _mark_knowledge_shown(lead_id, user_id, action2["categories"])
             elif atype2 == "requeue_pending_message":

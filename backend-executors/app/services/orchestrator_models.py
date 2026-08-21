@@ -35,6 +35,10 @@ class MotherDecision(BaseModel):
     objective: Optional[str] = None
     next_action_hint: Optional[Literal["reply", "ask_qualification", "handoff", "ignore", "greet"]] = None
     detected_intents: list[str] = Field(default_factory=list)
+    # Ramo escolhido por nó de ramificação (bloco `condicao` do Fluxo de Venda) ativo nesta
+    # fase — chave é o id do bloco `condicao`, valor é o id do ramo (branch) escolhido. Ver
+    # docs/architecture/sales-flow.md, secção "Lógica de Ramificação".
+    branch_selections: dict[str, str] = Field(default_factory=dict)
 
     @field_validator(*_OPTIONAL_ENUM_FIELDS.keys(), mode="before")
     @classmethod

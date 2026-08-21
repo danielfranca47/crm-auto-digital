@@ -376,6 +376,27 @@ def _dispatch_system_actions(
                         )
                         conn.commit()
 
+        elif atype == "mark_branch_selected":
+            branch_block_id = action.get("block_id", "")
+            branch_id = action.get("branch_id", "")
+            if branch_block_id and branch_id:
+                import json
+                row = conn.execute(
+                    "SELECT branches_selected FROM leads WHERE id = ? AND user_id = ?", (lead_id, user_id)
+                ).fetchone()
+                if row:
+                    try:
+                        existing_bs: dict = json.loads(row["branches_selected"] or "{}")
+                    except (ValueError, TypeError):
+                        existing_bs = {}
+                    if existing_bs.get(branch_block_id) != branch_id:
+                        existing_bs[branch_block_id] = branch_id
+                        conn.execute(
+                            "UPDATE leads SET branches_selected = ? WHERE id = ? AND user_id = ?",
+                            (json.dumps(existing_bs), lead_id, user_id),
+                        )
+                        conn.commit()
+
         elif atype == "mark_knowledge_shown":
             categories = action.get("categories") or []
             if categories:
