@@ -433,6 +433,13 @@ def _upsert_ai_profile(
         else:
             data["agent_mode"] = AgentMode.agenda
 
+    # agent_mode direto/closer nao tem UI para appointment_mode, entao
+    # presentation_variant nunca deve vir derivado dele — forcar "sales"
+    # independente do que o caller enviou (ver decision_engine._resolve_presentation_variant).
+    effective_agent_mode = str(data.get("agent_mode") or (profile.agent_mode if profile else "") or "")
+    if effective_agent_mode in ("direto", "closer") and "presentation_variant" in data:
+        data["presentation_variant"] = "sales"
+
     if profile:
         for key, value in data.items():
             # PUT semantics for AIProfileUpdate: explicit null clears the field.

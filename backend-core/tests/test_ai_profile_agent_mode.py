@@ -124,6 +124,37 @@ class AIProfileAgentModeTests(unittest.TestCase):
         self.assertIsNone(updated.presentation_variant)
         self.assertIsNone(updated.offer_pack)
 
+    def test_direto_agent_presentation_variant_forced_to_sales(self):
+        created = asyncio.run(
+            create_or_replace_ai_profile(
+                AIProfileCreate(
+                    template_key="closer_agressivo",
+                    name="Closer",
+                    brand_name="Auto Digital",
+                    tone_of_voice="direto",
+                    timezone="UTC",
+                    niche="CRM",
+                    target_audience="PMEs",
+                    offer_description="Automação de vendas",
+                    goals="Fechar vendas",
+                    agent_mode="direto",
+                    presentation_variant="scheduler",
+                ),
+                current_user=self.user,
+                db=self.db,
+            )
+        )
+        self.assertEqual(created.presentation_variant, "sales")
+
+        updated = asyncio.run(
+            update_my_ai_profile(
+                AIProfileUpdate(presentation_variant="scheduler"),
+                current_user=self.user,
+                db=self.db,
+            )
+        )
+        self.assertEqual(updated.presentation_variant, "sales")
+
     def test_ensure_ai_profile_columns_adds_timezone_without_reset(self):
         fd, db_path = tempfile.mkstemp(suffix=".db")
         os.close(fd)
