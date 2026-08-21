@@ -1,7 +1,7 @@
 # Arquitetura Multi-Provedor de LLM (OpenAI + OpenRouter)
 
 **Branch:** `main`
-**Status:** Em andamento
+**Status:** Em andamento — pendente: Cenário P2 (requer chave paga real do OpenRouter, indisponível neste ambiente de teste) e Cenários C1/C2 (requerem lead real de WhatsApp)
 
 ---
 
@@ -193,6 +193,25 @@ llm_service.py ganha resolução de provedor por chamada:
 | `frontend-admin/src/pages/AdminAgents.tsx` + `api.ts` | Badge somente leitura |
 | `docs/architecture/llm-architecture.md` | Atualiza tabela de arquivos críticos e seção de retry |
 
+### Commits Fase 5
+
+| # | Commit | O que foi implementado |
+|---|---|---|
+| 1 | `aea659a` | badge admin + docs de arquitetura atualizadas |
+
+**Detalhes do commit `aea659a`:**
+- `backend-crm/routes/admin_agents.py` — `llm_provider`/`llm_provider_model` nos 2 endpoints admin; `llm_provider` entra em `_SYSTEM_DEFAULTS` (default `"openai"`) para contar no cálculo de `has_custom_config`/`diff`
+- `frontend-admin/src/services/api.ts` — campos novos em `UserProfile`
+- `frontend-admin/src/pages/AdminAgents.tsx` — badge somente leitura "OpenRouter · \<modelo\>" ao lado do seletor de usuário, quando fora do padrão
+- `docs/architecture/admin-agents-contract.md` — novas linhas de contrato
+- `docs/architecture/llm-architecture.md` — nova seção "Multi-provedor de LLM"; corrige comentário desatualizado "Claude/OpenAI format" (nunca existiu caminho Claude neste repo)
+
+### Relatório da Fase 5 — o que mudou na prática
+
+**Antes:** não havia como um operador (admin) saber, sem consultar o banco diretamente, quais usuários estavam usando OpenRouter em vez de OpenAI.
+**Agora:** o painel admin (`AdminAgents.tsx`) mostra um badge "OpenRouter · \<modelo\>" ao lado do nome do usuário selecionado, sempre que ele não estiver no provedor padrão — útil para suporte/observação de custo. A documentação de arquitetura (`llm-architecture.md`, `admin-agents-contract.md`) reflete o estado atual do sistema.
+**Para validar:** revisão de documentação — sem cenário de UI adicional (o badge já foi implicitamente coberto pela leitura do mesmo campo validado em P4/P5).
+
 ---
 
 ## Checks de Validação
@@ -206,11 +225,13 @@ llm_service.py ganha resolução de provedor por chamada:
 ### Cenário P2 — Perfil OpenRouter com chave configurada
 - [ ] Playground, perfil com `llm_provider="openrouter"` + modelo padrão, `OPENROUTER_API_KEY` setada no `.env` do backend-executors
 - [ ] Enviar mensagem e confirmar que mãe + filha respondem normalmente
+- **Pendente:** requer uma chave paga real do OpenRouter (a variante `:free` tem rate limit agressivo, não serve para validar o caminho de produção) — indisponível neste ambiente de teste local. O caminho de código é idêntico ao testado em P3 (só muda se `settings.openrouter_api_key` está presente), e a montagem/parsing do payload Chat Completions já tem cobertura via os testes automatizados da Fase 2 (`test_generate_child_result_routes_to_openrouter_endpoint` etc.) — mas a chamada real a `openrouter.ai` nunca foi exercitada de ponta a ponta.
 
 ### Cenário P3 — Perfil OpenRouter sem chave configurada no servidor
-- [ ] Mesmo perfil do P2, mas `OPENROUTER_API_KEY` ausente
-- [ ] Confirmar: conversa completa normalmente (fallback para OpenAI), sem erro 500
-- [ ] Confirmar no log: `event=llm_provider_fallback`
+- [x] Mesmo perfil do P2, mas `OPENROUTER_API_KEY` ausente
+- [x] Confirmar: conversa completa normalmente (fallback para OpenAI), sem erro 500
+- [x] Confirmar no log: `event=llm_provider_fallback`
+- **Validado em:** 21/08/2026 — perfil id=5 setado para `llm_provider="openrouter"` (sem `OPENROUTER_API_KEY` no `.env` do backend-executors, ambiente de teste local). Mensagem "Quero saber o preço da massagem relaxante" enviada no Playground, resposta natural sobre preço/garantia chegou normalmente (200 OK). Log confirma 2× `event=llm_provider_fallback provider=openrouter reason=missing_api_key fallback=openai` (mãe + filha), seguido de `POST https://api.openai.com/v1/responses 200 OK` em ambos.
 
 ### Cenário P4 — UI de seleção de provedor
 - [x] Abrir AI Profile → card "Provedor de IA" mostra OpenAI por padrão
@@ -226,10 +247,12 @@ llm_service.py ganha resolução de provedor por chamada:
 ### Cenário C1 — WhatsApp real, wrappers de meeting_scheduler
 - [ ] Lead real em perfil OpenRouter atinge um gatilho de conflito de agenda ou lembrete
 - [ ] Confirmar: mensagem gerada no tom certo do agente (não a string fixa de fallback)
+- **Pendente:** requer um lead real de WhatsApp em fase de agendamento/reunião confirmada — não reproduzível no Playground (esses wrappers só disparam no fluxo real via `meeting_scheduler.py`). `ai_profile=ai_profile` já é repassado corretamente (Fase 3) e os 3 wrappers têm cobertura unitária existente (`scripts/test_meeting_scheduler_hook.py`) — falta só a confirmação em produção/staging com um número real.
 
 ### Cenário C2 — WhatsApp real, extração de qualificação
 - [ ] Turno de qualificação em perfil OpenRouter
 - [ ] Confirmar: `extract_fields_llm` não quebra o turno
+- **Pendente:** mesma limitação — melhor validado com um lead real em fase de qualificação. Risco baixo: já protegido por `try/except` no call site (`decision_engine.py`) mesmo antes desta feature.
 
 ---
 
