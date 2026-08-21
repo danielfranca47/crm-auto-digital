@@ -178,6 +178,25 @@ Como a ordem de despacho manda essas mensagens/mídias **depois** da resposta da
 
 Se `result["suppress_llm_response"] = True`, `compose_decision_output()` força `next_action = "ignore"` e `message_text = ""`. As `system_actions` são preservadas e despachadas normalmente.
 
+### Guardrail de transição de fase (`_enforce_apresentation_sales_flow_pending`)
+
+O gating sequencial descrito acima só se aplica **dentro** da fase para onde `effective_route_to` aponta neste turno — não impede, por si só, que a **Mãe** decida `route_to` para uma fase **seguinte**, pulando a fase de apresentation inteira (e todo o seu Fluxo de Venda) num único turno. Isso acontece na prática quando o lead responde de forma ambígua (ex.: "ok") e a Mãe interpreta como sinal suficiente para avançar direto para agendamento.
+
+`_enforce_apresentation_sales_flow_pending()` (`decision_engine.py`) corrige isso — chamada em `decide()` logo após os demais guardrails de rota (`_enforce_qualification_route_when_missing`, `_enforce_greeting_first`, `_enforce_scheduling_agent_no_closing`), no mesmo padrão: sobrescreve `mother_decision.route_to` de forma determinística, baseada em estado persistido, não em julgamento da LLM.
+
+```
+se lead "engajado" com apresentation (phases_triggered contém "p2" OU lead.category == "apresentation")
+   e mother_decision.route_to ∈ _ALLOWED_ADVANCE["apresentation"] (tentando sair da fase):
+       para cada bloco kw_trigger/intent_trigger com fire_once=True em p2:
+           se o seu id não estiver em leads.triggers_fired → pendente
+       se houver pelo menos 1 pendente:
+           força mother_decision.route_to = "apresentation"
+```
+
+**Por que `phases_triggered` e não só `lead.category`:** testes ao vivo mostraram `leads.category` podendo ficar defasado — a Mãe gera conteúdo de "apresentation" via `route_to` num turno sem que a categoria persistida do lead necessariamente seja atualizada para o mesmo valor (esse campo depende de `perceived_category` + `apply_mother_category_guardrails`, um mecanismo separado de `route_to`). `leads.phases_triggered` conter `"p2"` é o sinal mais confiável de que o `phase_trigger` da fase já disparou para aquele lead.
+
+**Escopo:** só gatilhos "sequenciais" (`kw_trigger`/`intent_trigger` com `fire_once: true`) contam como pendência — mesmo critério de `_is_sequential_trigger_block()` usado no gating dentro da fase. Sem gatilhos sequenciais configurados em p2 (ou sem Fluxo de Venda), o guardrail não interfere.
+
 ### Ordem de exibição / envio
 
 | Cenário | Ordem |
@@ -277,7 +296,7 @@ Ambas adicionadas via `ensure_column()` em `backend-crm/database.py`.
 |---|---|
 | `frontend-crm/src/types/agente.ts` | Tipos TypeScript: `SalesFlowPhaseId`, `SalesFlowBlock`, `SalesFlowPhaseData`, `SALES_FLOW_PHASES_BY_AGENT_MODE` |
 | `frontend-crm/src/components/agente/CamadaFluxoVenda.tsx` | Builder visual: renderização de fases, blocos, formulários de configuração |
-| `backend-executors/app/services/decision_engine.py` | `_evaluate_sales_flow_phases()` — avaliação de triggers, coleta de orientações/mídia/system_actions; `_collect_intent_triggers_for_lead_phase()` — seleciona quais `intent_trigger` mostrar à mãe (fase atual + seguinte) |
+| `backend-executors/app/services/decision_engine.py` | `_evaluate_sales_flow_phases()` — avaliação de triggers, coleta de orientações/mídia/system_actions; `_collect_intent_triggers_for_lead_phase()` — seleciona quais `intent_trigger` mostrar à mãe (fase atual + seguinte); `_enforce_apresentation_sales_flow_pending()` — guardrail que impede a Mãe de pular a fase de apresentation com gatilhos sequenciais pendentes |
 | `backend-crm/routes/executor.py` | `_dispatch_system_actions()`, `_dispatch_sales_flow_media()`, `_PHASE_ID_TO_CATEGORY` |
 | `backend-core/app/models/ai_profile.py` | Campo `sales_flow` na tabela `ai_profiles` |
 | `backend-crm/services/ai_orchestrator/orchestrator.py` | `enrich_context_bundle()` — inclui `sales_flow` no ContextBundle |

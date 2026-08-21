@@ -340,6 +340,40 @@ def _build_sales_flow_block(sf_match: Optional[dict]) -> str:
     )
 
 
+def _parse_json_id_set(raw: Any) -> set:
+    """Parseia um campo JSON (string ou já-lista) de IDs num set. Usado para
+    leads.triggers_fired e leads.phases_triggered — JSON inválido vira set vazio."""
+    try:
+        import json as _json
+        return set(
+            _json.loads(raw) if isinstance(raw, str) else (raw if isinstance(raw, list) else [])
+        )
+    except (ValueError, TypeError):
+        return set()
+
+
+def _load_triggers_fired_set(context: Dict[str, Any]) -> set:
+    return _parse_json_id_set((context.get("lead") or {}).get("triggers_fired") or "[]")
+
+
+def _load_triggered_phases_set(context: Dict[str, Any]) -> set:
+    return _parse_json_id_set((context.get("lead") or {}).get("phases_triggered") or "[]")
+
+
+def _is_sequential_trigger_block(block: Dict[str, Any]) -> bool:
+    """Um gatilho é "sequencial" quando tem um registo persistido de satisfação que
+    permite usá-lo como checkpoint: phase_trigger (sempre único por fase) ou
+    kw_trigger/intent_trigger com fire_once=True. Gatilhos sem fire_once são
+    reavaliados a cada turno e não participam do encadeamento sequencial nem do
+    guardrail de transição de fase — ver docs/architecture/sales-flow.md."""
+    type_id = (block.get("typeId") or "").strip()
+    if type_id == "phase_trigger":
+        return True
+    if type_id in ("kw_trigger", "intent_trigger"):
+        return bool(block.get("fire_once"))
+    return False
+
+
 def _evaluate_sales_flow_phases(
     context: Dict[str, Any],
     effective_route_to: str,
@@ -388,28 +422,10 @@ def _evaluate_sales_flow_phases(
     normalized_msg = _normalize_str(message_text)
 
     # Blocos que já dispararam com fire_once=True — lidos do lead para impedir re-disparo
-    _triggers_fired_raw = ((context.get("lead") or {}).get("triggers_fired") or "[]")
-    try:
-        import json as _json_tf
-        _triggers_fired: set = set(
-            _json_tf.loads(_triggers_fired_raw)
-            if isinstance(_triggers_fired_raw, str)
-            else (_triggers_fired_raw if isinstance(_triggers_fired_raw, list) else [])
-        )
-    except (ValueError, TypeError):
-        _triggers_fired = set()
-
+    _triggers_fired = _load_triggers_fired_set(context)
     # Fases já disparadas (phase_trigger) — mesma finalidade de _triggers_fired, para o
     # gating sequencial e para a persistência de orientações críticas entre turnos.
-    _phases_triggered_raw = ((context.get("lead") or {}).get("phases_triggered") or "[]")
-    try:
-        _triggered_phases: set = set(
-            _json_tf.loads(_phases_triggered_raw)
-            if isinstance(_phases_triggered_raw, str)
-            else (_phases_triggered_raw if isinstance(_phases_triggered_raw, list) else [])
-        )
-    except (ValueError, TypeError):
-        _triggered_phases = set()
+    _triggered_phases = _load_triggered_phases_set(context)
 
     def _trigger_persisted_satisfied(_blk: Dict[str, Any], _type: str) -> bool:
         """True se este gatilho já disparou ANTES deste turno (estado persistido no lead).
@@ -452,9 +468,7 @@ def _evaluate_sales_flow_phases(
             # Gating sequencial: só gatilhos "sequenciais" (fire_once ou phase_trigger)
             # participam — um kw_trigger sem fire_once não tem registo persistido de
             # satisfação, então nem bloqueia nem é bloqueado por este mecanismo.
-            _is_sequential = type_id == "phase_trigger" or (
-                type_id in ("kw_trigger", "intent_trigger") and bool(block.get("fire_once"))
-            )
+            _is_sequential = _is_sequential_trigger_block(block)
             _locked = _is_sequential and not _prereqs_satisfied
 
             # Avaliar e atualizar o flag de trigger ativo
@@ -631,10 +645,7 @@ def _evaluate_sales_flow_phases(
             if not isinstance(_later, dict):
                 continue
             _later_type = (_later.get("typeId") or "").strip()
-            _later_sequential = _later_type == "phase_trigger" or (
-                _later_type in ("kw_trigger", "intent_trigger") and bool(_later.get("fire_once"))
-            )
-            if not _later_sequential:
+            if not _is_sequential_trigger_block(_later):
                 continue
             _superseded = _trigger_persisted_satisfied(_later, _later_type)
             break  # só o próximo gatilho sequencial da sequência importa
@@ -4243,6 +4254,74 @@ _STAGE_INDEX = {stage: index for index, stage in enumerate(_STAGE_ORDER)}
 _SCHEDULING_AGENT_TEMPLATES = {"sdr_padrao", "hybrid_scheduler"}
 
 
+def _enforce_apresentation_sales_flow_pending(
+    mother_decision: MotherDecision,
+    context: Dict[str, Any],
+) -> MotherDecision:
+    """Impede a Mãe de avançar a categoria para além de 'apresentation' enquanto houver
+    gatilhos sequenciais (fire_once) configurados na fase p2 do Fluxo de Venda que ainda
+    não dispararam para este lead.
+
+    Espelha _enforce_qualification_route_when_missing: guardrail determinístico baseado
+    em estado persistido (leads.triggers_fired), não em julgamento da LLM. Necessário
+    porque a Mãe pode decidir pular a fase inteira num único turno (ex.: "ok" interpretado
+    como sinal suficiente para route_to="pre-agendamento") — nesse caso
+    _evaluate_sales_flow_phases() nunca chega a avaliar os blocos de p2, e todo o
+    encadeamento sequencial da fase (incluindo orientações críticas) é ignorado. Ver
+    docs/implementations/fix-fluxo-vendas-sequencial.md, Fase 2.
+
+    "Engajado com apresentation" é checado via `leads.phases_triggered` conter "p2"
+    (o phase_trigger da fase já disparou para este lead) OU `lead.category` já ser
+    "apresentation" — teste ao vivo mostrou que `lead.category` pode ficar defasado
+    (a Mãe gera conteúdo de apresentation via `route_to` num turno sem a categoria
+    persistida acompanhar, dependendo de `perceived_category`/guardrails de estágio),
+    então `phases_triggered` é o sinal mais confiável de que a fase foi de facto
+    iniciada.
+    """
+    triggered_phases = _load_triggered_phases_set(context)
+    current_category = _normalize_category((context.get("lead") or {}).get("category"))
+    engaged_with_apresentation = "p2" in triggered_phases or current_category == "apresentation"
+    if not engaged_with_apresentation:
+        return mother_decision
+
+    route = _normalize_category(mother_decision.route_to)
+    if route not in _ALLOWED_ADVANCE.get("apresentation", set()):
+        return mother_decision
+
+    ai_profile = context.get("ai_profile") or {}
+    sales_flow = ai_profile.get("sales_flow")
+    if not isinstance(sales_flow, dict) or not sales_flow.get("enabled"):
+        return mother_decision
+    phases = sales_flow.get("phases")
+    if not isinstance(phases, list):
+        return mother_decision
+    phase_p2 = next((p for p in phases if isinstance(p, dict) and p.get("id") == "p2"), None)
+    if not phase_p2:
+        return mother_decision
+
+    triggers_fired = _load_triggers_fired_set(context)
+    pending_ids: List[str] = []
+    for block in (phase_p2.get("blocks") or []):
+        if not isinstance(block, dict):
+            continue
+        type_id = (block.get("typeId") or "").strip()
+        if type_id not in ("kw_trigger", "intent_trigger"):
+            continue  # phase_trigger já satisfeito por definição (lead já está em p2)
+        if not _is_sequential_trigger_block(block):
+            continue
+        block_id = (block.get("id") or "").strip()
+        if block_id and block_id not in triggers_fired:
+            pending_ids.append(block_id)
+    if not pending_ids:
+        return mother_decision
+
+    mother_decision.route_to = "apresentation"
+    reason = str(mother_decision.reason or "").strip()
+    tag = f"sales_flow_apresentation_pending_forced_route:{','.join(pending_ids)}"
+    mother_decision.reason = f"{reason}|{tag}" if reason else tag
+    return mother_decision
+
+
 def _is_sdr_escalate_closing(context: Dict[str, Any], mother_decision: MotherDecision) -> bool:
     normalized_mode = _normalize_agent_mode(context, mother_decision)
     if normalized_mode != "agenda":
@@ -4837,6 +4916,7 @@ def decide(context: Dict[str, Any], logger: Optional[logging.Logger] = None) -> 
         )
         mother_decision = _enforce_greeting_first(mother_decision, context)
         mother_decision = _enforce_scheduling_agent_no_closing(mother_decision, context)
+        mother_decision = _enforce_apresentation_sales_flow_pending(mother_decision, context)
         lead = context.get("lead") or {}
         force_followup_route = _is_followup_tick_context(context)
         route_for_child = "follow-up" if force_followup_route else mother_decision.route_to

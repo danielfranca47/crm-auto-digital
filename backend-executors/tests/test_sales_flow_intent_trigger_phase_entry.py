@@ -1,9 +1,13 @@
+import pytest
+
 from app.services.decision_engine import (
     _build_daughter_identity_block,
     _build_mother_prompt,
     _collect_intent_triggers_for_lead_phase,
+    _enforce_apresentation_sales_flow_pending,
     _evaluate_sales_flow_phases,
 )
+from app.services.orchestrator_models import MotherDecision
 
 INTENT_LABEL = "Quando o cliente aceita ou diz sim para a tabela de preços"
 
@@ -398,3 +402,113 @@ def test_critical_orientation_persists_until_next_trigger_fires():
         is_phase_entry=False,
     )
     assert not any(CRITICAL_GUARD_TEXT in i for i in late_result["prompt_injections"])
+
+
+def _mother_decision(route_to: str, reason: str = "mother chose it") -> MotherDecision:
+    return MotherDecision(route_to=route_to, confidence=0.8, reason=reason)
+
+
+def test_enforce_apresentation_pending_blocks_mother_route_jump():
+    """Reproduz o cenário relatado ao vivo: lead diz apenas 'ok' e a Mãe decide sozinha
+    route_to='pre-agendamento', pulando toda a fase p2 (e a sua instrução crítica) num
+    único turno. O guardrail deve forçar a rota de volta para 'apresentation' enquanto
+    o intent_trigger sequencial de p2 ainda não tiver disparado para este lead."""
+    sales_flow = _sales_flow_sequential_critical_guard()
+    context = {
+        "lead": {"category": "apresentation", "triggers_fired": "[]"},
+        "ai_profile": {"agent_mode": "agenda", "sales_flow": sales_flow},
+    }
+    mother_decision = _mother_decision("pre-agendamento")
+
+    result = _enforce_apresentation_sales_flow_pending(mother_decision, context)
+
+    assert result.route_to == "apresentation"
+    assert "sales_flow_apresentation_pending_forced_route" in result.reason
+    assert "intent-accept-table" in result.reason
+
+
+@pytest.mark.parametrize("target_route", ["pre-agendamento", "closing", "follow-up"])
+def test_enforce_apresentation_pending_blocks_any_allowed_advance_target(target_route):
+    """O guardrail cobre qualquer salto permitido a partir de 'apresentation'
+    (_ALLOWED_ADVANCE), não só pre-agendamento."""
+    sales_flow = _sales_flow_sequential_critical_guard()
+    context = {
+        "lead": {"category": "apresentation", "triggers_fired": "[]"},
+        "ai_profile": {"agent_mode": "agenda", "sales_flow": sales_flow},
+    }
+    mother_decision = _mother_decision(target_route)
+
+    result = _enforce_apresentation_sales_flow_pending(mother_decision, context)
+
+    assert result.route_to == "apresentation"
+
+
+def test_enforce_apresentation_pending_allows_jump_once_all_sequential_triggers_fired():
+    """Depois de todos os gatilhos sequenciais de p2 já terem disparado (persistidos em
+    triggers_fired), o salto de rota da Mãe deixa de ser bloqueado — comportamento normal."""
+    sales_flow = _sales_flow_sequential_critical_guard()
+    context = {
+        "lead": {
+            "category": "apresentation",
+            "triggers_fired": '["intent-accept-table", "intent-picked-service"]',
+        },
+        "ai_profile": {"agent_mode": "agenda", "sales_flow": sales_flow},
+    }
+    mother_decision = _mother_decision("pre-agendamento")
+
+    result = _enforce_apresentation_sales_flow_pending(mother_decision, context)
+
+    assert result.route_to == "pre-agendamento"
+
+
+def test_enforce_apresentation_pending_ignores_other_current_categories():
+    """Só age quando o lead está atualmente em 'apresentation' — outras fases não são
+    afetadas por este guardrail (cada uma tem o seu próprio mecanismo, se precisar)."""
+    sales_flow = _sales_flow_sequential_critical_guard()
+    context = {
+        "lead": {"category": "qualification", "triggers_fired": "[]"},
+        "ai_profile": {"agent_mode": "agenda", "sales_flow": sales_flow},
+    }
+    mother_decision = _mother_decision("apresentation")
+
+    result = _enforce_apresentation_sales_flow_pending(mother_decision, context)
+
+    assert result.route_to == "apresentation"
+
+
+def test_enforce_apresentation_pending_noop_without_sales_flow_configured():
+    """Sem Fluxo de Venda configurado (ou sem gatilhos sequenciais em p2), o guardrail
+    não interfere — comportamento idêntico ao de antes desta fase, sem regressão para
+    agentes que não usam o Fluxo de Venda avançado."""
+    context = {
+        "lead": {"category": "apresentation", "triggers_fired": "[]"},
+        "ai_profile": {"agent_mode": "agenda", "sales_flow": {"enabled": False, "phases": []}},
+    }
+    mother_decision = _mother_decision("pre-agendamento")
+
+    result = _enforce_apresentation_sales_flow_pending(mother_decision, context)
+
+    assert result.route_to == "pre-agendamento"
+
+
+def test_enforce_apresentation_pending_uses_phases_triggered_when_category_lags():
+    """Reproduz o comportamento visto ao vivo: leads.category ficou em 'qualification'
+    (não atualizado) mesmo com phases_triggered já contendo 'p2' — a Mãe tinha gerado
+    conteúdo de apresentation via route_to num turno anterior sem a categoria persistida
+    acompanhar. O guardrail deve usar phases_triggered como sinal de "já entrou em p2",
+    não depender só de lead.category."""
+    sales_flow = _sales_flow_sequential_critical_guard()
+    context = {
+        "lead": {
+            "category": "qualification",
+            "triggers_fired": "[]",
+            "phases_triggered": '["p2"]',
+        },
+        "ai_profile": {"agent_mode": "agenda", "sales_flow": sales_flow},
+    }
+    mother_decision = _mother_decision("pre-agendamento")
+
+    result = _enforce_apresentation_sales_flow_pending(mother_decision, context)
+
+    assert result.route_to == "apresentation"
+    assert "sales_flow_apresentation_pending_forced_route" in result.reason

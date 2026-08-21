@@ -151,6 +151,51 @@ Escopo: só agentes com recursos de agendamento (`agent_1`/SDR e `agent_3`/Híbr
 
 ---
 
+## Fase 2 — Diagnóstico + Correção: Mãe pula a fase inteira (21/08/2026)
+
+### Problema identificado
+
+A pedido do utilizador, testei novamente via Playground — desta vez respondendo apenas **"ok"** no lugar de "Sim, pode enviar a tabela", no ponto em que o bot oferece a tabela de preços.
+
+Resultado: o bot respondeu diretamente **"Que dia funcionaria melhor pra você para agendar sua sessão de massagem?"** — sem nunca ter enviado a tabela nem perguntado qual serviço interessou. O trace do Playground confirmou: `mother_route: "pre-agendamento"`, `effective_route: "pre-agendamento"`.
+
+Causa raiz: a **Mãe** (LLM de roteamento) decidiu sozinha, num único turno, `route_to: "pre-agendamento"` — interpretando o "ok" ambíguo como sinal suficiente para pular direto para a fase de agendamento. Como `_evaluate_sales_flow_phases()` só avalia os blocos da fase para onde a rota efetiva aponta **neste turno**, a fase p2 inteira — incluindo a instrução crítica e toda a sequência de gatilhos corrigida na Fase 1 — **nunca chegou a ser avaliada**. A Fase 1 só resolve o encadeamento **dentro** de uma fase; não impede a Mãe de **pular a fase inteira** num salto de rota.
+
+O utilizador propôs a correção certa: assim como existe um guardrail (`_enforce_qualification_route_when_missing`) que impede avançar de "qualification" enquanto há campos obrigatórios pendentes, o mesmo padrão deveria existir para "apresentation" enquanto houver gatilhos sequenciais pendentes no Fluxo de Venda.
+
+**Descoberta adicional durante a implementação:** a primeira versão do guardrail usava `lead.category == "apresentation"` como condição de ativação — e não disparou no reteste. Investigação direta na base de dados local (`crm.db`) mostrou que `leads.category` tinha ficado em `"qualification"`, mesmo com `phases_triggered` já contendo `"p2"` (ou seja, o `phase_trigger` da fase já tinha disparado). A Mãe gera conteúdo de "apresentation" via `route_to` num turno sem que a categoria persistida do lead necessariamente acompanhe (esse campo depende de `perceived_category` + `apply_mother_category_guardrails`, um mecanismo separado). `leads.phases_triggered` mostrou-se o sinal mais confiável de que a fase p2 foi de facto iniciada.
+
+### Correção
+
+| Arquivo | Mudança |
+|---|---|
+| `backend-executors/app/services/decision_engine.py` | Nova função `_enforce_apresentation_sales_flow_pending()` — espelha `_enforce_qualification_route_when_missing()`; força `mother_decision.route_to = "apresentation"` quando a fase p2 tem gatilhos sequenciais (`kw_trigger`/`intent_trigger` com `fire_once`) ainda não satisfeitos e a Mãe tenta saltar para um estágio seguinte (`_ALLOWED_ADVANCE["apresentation"]`). Chamada em `decide()` logo após `_enforce_scheduling_agent_no_closing`. Condição de ativação usa `"p2" in phases_triggered` OU `lead.category == "apresentation"` (não só a categoria, pelo motivo acima) |
+| `backend-executors/app/services/decision_engine.py` | Pequeno refactor de apoio: extraídas `_load_triggers_fired_set()`, `_load_triggered_phases_set()` e `_is_sequential_trigger_block()` — reutilizadas por `_evaluate_sales_flow_phases()` (Fase 1) e pelo novo guardrail, eliminando parsing JSON duplicado |
+| `backend-executors/tests/test_sales_flow_intent_trigger_phase_entry.py` | 6 novos testes: guardrail bloqueia salto para pre-agendamento/closing/follow-up com gatilho pendente; permite o salto quando todos os gatilhos já dispararam; ignora outras categorias; não interfere sem Fluxo de Venda configurado; usa `phases_triggered` quando `lead.category` está desatualizada |
+
+### Commits Fase 2
+
+| # | Commit | O que foi implementado |
+|---|---|---|
+| 1 | `<preencher após commit>` | Guardrail de transição de fase + refactor de apoio + testes |
+
+### Relatório da Fase 2 — o que mudou na prática
+
+**Antes:** mesmo com a Fase 1 a funcionar corretamente, uma mensagem ambígua do lead (como "ok") podia levar a Mãe a decidir sozinha pular a fase de Apresentação inteira, indo direto para "vamos agendar" — sem nunca ter enviado a tabela de preços nem perguntado qual serviço interessava. Todo o cuidado da Fase 1 ficava sem efeito nesse caso, porque a fase nunca chegava a ser avaliada.
+
+**Agora:** se a fase de Apresentação tem etapas configuradas no Fluxo de Venda que ainda não aconteceram para aquele lead (ex.: "cliente aceitou a tabela"), a Mãe é impedida de sair dessa fase — mesmo que ela própria "ache" que já é hora de agendar. Testei ao vivo repetindo a mesma conversa com "ok": agora o bot volta a confirmar o envio da tabela em vez de perguntar disponibilidade, e só avança de verdade depois de a tabela ser aceite e o serviço escolhido.
+
+**Para validar:** Cenário C1 reexecutado ao vivo via Playground com "ok" (ver abaixo) — mais os novos testes pytest.
+
+### Cenário C3 — "ok" ambíguo não pula a fase de apresentação (novo)
+- [x] Repetir a conversa até o ponto de oferta da tabela
+- [x] Responder apenas "ok" (em vez de uma aceitação explícita)
+- [x] Confirmar: bot não pergunta disponibilidade; volta a confirmar o envio da tabela
+- [x] Confirmar no trace: `mother_route`/`effective_route` = "apresentation" (não "pre-agendamento")
+- **Validado em:** 21/08/2026 — via Playground, lead sandbox #492. Trace confirmou `mother_route: "apresentation"`, `effective_route: "apresentation"`. Turno seguinte ("sim pode enviar") disparou a mídia e a pergunta de qual serviço normalmente, confirmando que o fluxo continua íntegro depois do guardrail atuar.
+
+---
+
 ## Ajustes Possíveis Pós-Implementação
 
 - `triggers_fired`/`phases_triggered` detalhados (não só a fase) poderiam aparecer no modal do lead (`LeadCardDialog`), não só no card resumido do Kanban.
