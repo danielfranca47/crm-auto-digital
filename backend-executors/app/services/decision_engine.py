@@ -399,10 +399,45 @@ def _evaluate_sales_flow_phases(
     except (ValueError, TypeError):
         _triggers_fired = set()
 
+    # Fases já disparadas (phase_trigger) — mesma finalidade de _triggers_fired, para o
+    # gating sequencial e para a persistência de orientações críticas entre turnos.
+    _phases_triggered_raw = ((context.get("lead") or {}).get("phases_triggered") or "[]")
+    try:
+        _triggered_phases: set = set(
+            _json_tf.loads(_phases_triggered_raw)
+            if isinstance(_phases_triggered_raw, str)
+            else (_phases_triggered_raw if isinstance(_phases_triggered_raw, list) else [])
+        )
+    except (ValueError, TypeError):
+        _triggered_phases = set()
+
+    def _trigger_persisted_satisfied(_blk: Dict[str, Any], _type: str) -> bool:
+        """True se este gatilho já disparou ANTES deste turno (estado persistido no lead).
+
+        Só gatilhos "sequenciais" (phase_trigger, ou kw/intent_trigger com fire_once=True)
+        têm um registo persistido de satisfação — os demais retornam sempre False aqui,
+        o que é intencional: não participam do encadeamento sequencial (ver
+        docs/architecture/sales-flow.md, "Modelo sequencial de trigger").
+        """
+        if _type == "phase_trigger":
+            return phase_id in _triggered_phases
+        if _type in ("kw_trigger", "intent_trigger"):
+            _bid = (_blk.get("id") or "").strip()
+            return bool(_bid) and bool(_blk.get("fire_once")) and _bid in _triggers_fired
+        return False
+
     # Modelo sequencial: o último gatilho disparado governa os blocos de ação seguintes.
     # Por defeito True — ações sem gatilho antes delas disparam automaticamente ao entrar na fase.
     _TRIGGER_TYPES = {"phase_trigger", "kw_trigger", "intent_trigger", "no_reply_trigger"}
     last_trigger_active = True
+    # Pré-requisitos sequenciais: começa desbloqueado; um gatilho "sequencial" (fire_once
+    # ou phase_trigger) que ainda não esteja satisfeito (nem persistido, nem neste turno)
+    # bloqueia todos os gatilhos sequenciais seguintes da fase — impede que uma etapa mais
+    # à frente dispare antes de uma etapa anterior configurada pelo utilizador.
+    _prereqs_satisfied = True
+    # IDs de blocos `orientacao` já injectados na passagem principal — evita duplicar na
+    # segunda passagem (guarda permanente de orientações críticas), abaixo.
+    _injected_block_ids: set = set()
     # Blocos midia/mensagem que disparam FORA de phase_trigger são despachados DEPOIS
     # da resposta da LLM (ver whatsapp.py:1210 e a ordem documentada em sales-flow.md).
     # Coleta aqui para avisar a LLM filha que ainda não foram enviados.
@@ -414,9 +449,19 @@ def _evaluate_sales_flow_phases(
         type_id = (block.get("typeId") or "").strip()
 
         if type_id in _TRIGGER_TYPES:
+            # Gating sequencial: só gatilhos "sequenciais" (fire_once ou phase_trigger)
+            # participam — um kw_trigger sem fire_once não tem registo persistido de
+            # satisfação, então nem bloqueia nem é bloqueado por este mecanismo.
+            _is_sequential = type_id == "phase_trigger" or (
+                type_id in ("kw_trigger", "intent_trigger") and bool(block.get("fire_once"))
+            )
+            _locked = _is_sequential and not _prereqs_satisfied
+
             # Avaliar e atualizar o flag de trigger ativo
             fired = False
-            if type_id == "phase_trigger":
+            if _locked:
+                fired = False  # um gatilho anterior da sequência ainda não foi satisfeito
+            elif type_id == "phase_trigger":
                 fired = is_phase_entry
             elif type_id == "kw_trigger":
                 _block_id = (block.get("id") or "").strip()
@@ -459,6 +504,10 @@ def _evaluate_sales_flow_phases(
 
             last_trigger_active = fired
 
+            if _is_sequential:
+                _persisted_satisfied = _trigger_persisted_satisfied(block, type_id)
+                _prereqs_satisfied = _prereqs_satisfied and (_persisted_satisfied or fired)
+
             # Injeções de prompt para blocos de gatilho que dispararam
             if fired:
                 if type_id == "phase_trigger":
@@ -492,6 +541,9 @@ def _evaluate_sales_flow_phases(
                     priority = (block.get("priority") or "normal").strip().lower()
                     label = "INSTRUÇÃO CRÍTICA DE FLUXO DE VENDA" if priority == "critical" else "INSTRUÇÃO DE FLUXO DE VENDA"
                     result["prompt_injections"].append(f"{label}:\n{content}")
+                    _oid = (block.get("id") or "").strip()
+                    if _oid:
+                        _injected_block_ids.add(_oid)
             elif type_id == "midia":
                 media_url = (block.get("media_url") or "").strip()
                 if media_url:
@@ -555,6 +607,41 @@ def _evaluate_sales_flow_phases(
                         "branch_yes": block.get("branch_yes") or "",
                         "branch_no": block.get("branch_no") or "",
                     })
+
+    # Segunda passagem: orientações críticas ficam como guarda permanente — reinjectadas
+    # em todo turno desta fase enquanto o próximo gatilho sequencial da sequência ainda
+    # não estiver satisfeito (persistido). Sem isto, uma regra como "não pergunte X ainda"
+    # só valia no turno em que foi originalmente disparada (ver diagnóstico do bug em
+    # docs/implementations/fix-fluxo-vendas-sequencial.md).
+    for _idx, _block in enumerate(blocks):
+        if not isinstance(_block, dict):
+            continue
+        if (_block.get("typeId") or "").strip() != "orientacao":
+            continue
+        if (_block.get("priority") or "").strip().lower() != "critical":
+            continue
+        _cid = (_block.get("id") or "").strip()
+        if _cid and _cid in _injected_block_ids:
+            continue  # já injectada na passagem principal deste turno
+        _content = (_block.get("content") or "").strip()
+        if not _content:
+            continue
+        _superseded = False
+        for _later in blocks[_idx + 1:]:
+            if not isinstance(_later, dict):
+                continue
+            _later_type = (_later.get("typeId") or "").strip()
+            _later_sequential = _later_type == "phase_trigger" or (
+                _later_type in ("kw_trigger", "intent_trigger") and bool(_later.get("fire_once"))
+            )
+            if not _later_sequential:
+                continue
+            _superseded = _trigger_persisted_satisfied(_later, _later_type)
+            break  # só o próximo gatilho sequencial da sequência importa
+        if not _superseded:
+            result["prompt_injections"].append(
+                f"INSTRUÇÃO CRÍTICA DE FLUXO DE VENDA (em vigor nesta etapa):\n{_content}"
+            )
 
     if _deferred_media_notes:
         _items = ", ".join(_deferred_media_notes)

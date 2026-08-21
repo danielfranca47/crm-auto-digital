@@ -126,7 +126,9 @@ Quando `suppress_llm_response: true` e o trigger dispara:
 
 ### Modelo sequencial de trigger (`_evaluate_sales_flow_phases`)
 
-Os blocos de uma fase são avaliados em sequência. Um flag `last_trigger_active` propaga a decisão do último trigger para os blocos de ação seguintes:
+Os blocos de uma fase são avaliados em sequência, com dois mecanismos combinados:
+
+**1) Disparo por turno (`last_trigger_active`)** — como antes, propaga a decisão do último trigger visto para os blocos de ação imediatamente seguintes:
 
 ```
 last_trigger_active = True   # default: ações sem trigger explícito sempre disparam
@@ -142,13 +144,17 @@ para cada block em fase.blocks:
             executar_ação(block, result)
 ```
 
+**2) Gating sequencial entre gatilhos (`_prereqs_satisfied`)** — só gatilhos **sequenciais** (`phase_trigger`, ou `kw_trigger`/`intent_trigger` com `fire_once: true`) participam: um gatilho sequencial só pode ser avaliado (`fired` possivelmente `True`) se **todos os gatilhos sequenciais anteriores da mesma fase** já estiverem satisfeitos — persistidos em `leads.phases_triggered`/`leads.triggers_fired` **antes** deste turno, ou disparando neste mesmo turno. Se um gatilho anterior ainda não foi satisfeito, os gatilhos sequenciais seguintes ficam **bloqueados** (`fired = False`), independentemente de keyword match ou de `detected_intents` da LLM Mãe. Isso impede que uma etapa mais à frente na sequência (ex.: "cliente indicou o serviço") dispare antes de uma etapa anterior configurada pelo utilizador (ex.: "cliente aceitou ver a tabela"). Gatilhos não-sequenciais (`kw_trigger` sem `fire_once`, `intent_trigger` sem `fire_once`, `no_reply_trigger`) não participam — nem bloqueiam, nem são bloqueados.
+
+**3) Orientações críticas como guarda permanente** — depois da passagem principal, uma segunda passagem percorre a fase novamente: toda `orientacao` com `priority: "critical"` que não foi injectada neste turno (porque o `last_trigger_active` da sua posição estava `False`) é reinjectada mesmo assim, **desde que o próximo gatilho sequencial da fase (o primeiro depois dela na lista de blocos) ainda não esteja satisfeito** (persistido). Isto faz uma instrução como "não pergunte disponibilidade ainda" continuar presente em todo turno da fase — não só no turno em que foi originalmente disparada — até a condição que ela guarda ser efetivamente cumprida. Orientações com `priority` diferente de `critical` continuam com o comportamento antigo: só aparecem no turno em que o `last_trigger_active` da sua posição é `True`.
+
 **Avaliação por tipo de trigger:**
 
 | Trigger | Condição de `fired = True` |
 |---|---|
-| `phase_trigger` | `is_phase_entry = True` — derivado de `lead.category != effective_route_to` **E** `phase_id ∉ leads.phases_triggered` |
-| `kw_trigger` | Keyword match na mensagem + `fire_once` check (`block_id ∉ leads.triggers_fired` se `fire_once=True`) |
-| `intent_trigger` | `intent_label in detected_intents` (da LLM Mãe) + `fire_once` check |
+| `phase_trigger` | `is_phase_entry = True` — derivado de `lead.category != effective_route_to` **E** `phase_id ∉ leads.phases_triggered` — **e** nenhum gatilho sequencial anterior bloqueado (não se aplica ao `phase_trigger`, que é sempre o primeiro da fase) |
+| `kw_trigger` | Keyword match na mensagem + `fire_once` check (`block_id ∉ leads.triggers_fired` se `fire_once=True`) + gating sequencial se `fire_once=True` |
+| `intent_trigger` | `intent_label in detected_intents` (da LLM Mãe) + `fire_once` check + gating sequencial se `fire_once=True` |
 | `no_reply_trigger` | Nunca (placeholder) |
 
 **Destino das ações:**

@@ -264,3 +264,137 @@ def test_no_deferred_media_note_when_phase_trigger_fires_media():
 
     assert not any("envio automático pendente" in i for i in result["prompt_injections"])
     assert any("Mídia enviada automaticamente ao lead" in i for i in result["prompt_injections"])
+
+
+CRITICAL_GUARD_TEXT = "Não pergunte disponibilidade antes de o lead aceitar a tabela."
+
+
+def _sales_flow_sequential_critical_guard() -> dict:
+    """Reproduz o desenho do agente 'Daniel' (Sensi Vitae) relatado no bug: apresentação
+    -> orientação crítica ('não pergunte disponibilidade ainda') -> gatilho (aceitar
+    tabela) -> mídia -> gatilho (escolheu serviço) -> orientação (pergunte disponibilidade)."""
+    return {
+        "enabled": True,
+        "phases": [
+            {"id": "p0", "blocks": []},
+            {"id": "p1", "blocks": []},
+            {
+                "id": "p2",
+                "blocks": [
+                    {"id": "phase-entry-p2", "typeId": "phase_trigger"},
+                    {
+                        "id": "critical-no-schedule-yet",
+                        "typeId": "orientacao",
+                        "content": CRITICAL_GUARD_TEXT,
+                        "priority": "critical",
+                    },
+                    {
+                        "id": "intent-accept-table",
+                        "typeId": "intent_trigger",
+                        "intent": "Cliente aceitou ver a tabela de preços",
+                        "fire_once": True,
+                    },
+                    {
+                        "id": "media-table",
+                        "typeId": "midia",
+                        "media_url": "https://example.com/tabela.png",
+                        "media_type": "image",
+                    },
+                    {
+                        "id": "intent-picked-service",
+                        "typeId": "intent_trigger",
+                        "intent": "Cliente indicou qual serviço quer",
+                        "fire_once": True,
+                    },
+                    {
+                        "id": "ask-availability",
+                        "typeId": "orientacao",
+                        "content": "Pergunte a disponibilidade do cliente.",
+                        "priority": "normal",
+                    },
+                ],
+            },
+        ],
+    }
+
+
+def test_later_intent_trigger_blocked_until_earlier_one_fires():
+    """Trava estrutural pedida pelo utilizador: um intent_trigger mais à frente não pode
+    disparar antes de o intent_trigger anterior (fire_once) já ter disparado — mesmo que a
+    LLM Mãe tenha classificado (erroneamente ou não) a intenção mais à frente neste turno.
+    Sem o fix, 'intent-picked-service' dispararia e 'ask-availability' seria injectado."""
+    sales_flow = _sales_flow_sequential_critical_guard()
+    context = {
+        "lead": {"category": "apresentation", "triggers_fired": "[]", "phases_triggered": '["p2"]'},
+        "ai_profile": {"agent_mode": "agenda", "sales_flow": sales_flow},
+    }
+
+    result = _evaluate_sales_flow_phases(
+        context,
+        effective_route_to="apresentation",
+        message_text="quero a massagem relaxante",
+        detected_intents=["Cliente indicou qual serviço quer"],
+        is_phase_entry=False,
+    )
+
+    assert not any(
+        a["type"] == "mark_trigger_fired" and a.get("block_id") == "intent-picked-service"
+        for a in result["system_actions"]
+    )
+    assert not any("Pergunte a disponibilidade" in i for i in result["prompt_injections"])
+
+
+def test_critical_orientation_persists_until_next_trigger_fires():
+    """A instrução crítica ('não pergunte disponibilidade ainda') deve continuar a
+    aparecer no prompt em turnos seguintes da mesma fase — não só no turno de entrada —
+    até o próximo gatilho da sequência (aceitar a tabela) disparar. Reproduz o bug
+    relatado: no turno 2 (sem phase_trigger disparar de novo), a instrução sumia."""
+    sales_flow = _sales_flow_sequential_critical_guard()
+
+    # Turno 1 — entrada na fase: a orientação crítica aparece via a passagem principal.
+    entry_context = {
+        "lead": {"category": "qualification", "triggers_fired": "[]", "phases_triggered": "[]"},
+        "ai_profile": {"agent_mode": "agenda", "sales_flow": sales_flow},
+    }
+    entry_result = _evaluate_sales_flow_phases(
+        entry_context,
+        effective_route_to="apresentation",
+        message_text="oi",
+        detected_intents=[],
+        is_phase_entry=True,
+    )
+    assert any(CRITICAL_GUARD_TEXT in i for i in entry_result["prompt_injections"])
+
+    # Turno 2 — mesma fase, sem phase_trigger disparar de novo, gatilho seguinte (aceitar
+    # tabela) ainda não satisfeito: a instrução crítica deve continuar presente.
+    mid_context = {
+        "lead": {"category": "apresentation", "triggers_fired": "[]", "phases_triggered": '["p2"]'},
+        "ai_profile": {"agent_mode": "agenda", "sales_flow": sales_flow},
+    }
+    mid_result = _evaluate_sales_flow_phases(
+        mid_context,
+        effective_route_to="apresentation",
+        message_text="e tens espaço noutra cidade?",
+        detected_intents=[],
+        is_phase_entry=False,
+    )
+    assert any(CRITICAL_GUARD_TEXT in i for i in mid_result["prompt_injections"])
+
+    # Turno 3 — o gatilho seguinte já foi satisfeito (persistido): a instrução crítica já
+    # foi superada e não deve mais aparecer.
+    late_context = {
+        "lead": {
+            "category": "apresentation",
+            "triggers_fired": '["intent-accept-table"]',
+            "phases_triggered": '["p2"]',
+        },
+        "ai_profile": {"agent_mode": "agenda", "sales_flow": sales_flow},
+    }
+    late_result = _evaluate_sales_flow_phases(
+        late_context,
+        effective_route_to="apresentation",
+        message_text="quero a relaxante",
+        detected_intents=[],
+        is_phase_entry=False,
+    )
+    assert not any(CRITICAL_GUARD_TEXT in i for i in late_result["prompt_injections"])
