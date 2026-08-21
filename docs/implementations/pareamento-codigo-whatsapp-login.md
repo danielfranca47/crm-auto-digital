@@ -1,7 +1,7 @@
 # Código de pareamento WhatsApp (alternativa ao QR)
 
 **Branch:** `feature/whatsapp-pairing-code`
-**Status:** Em andamento
+**Status:** Todos os cenários validados (21/08/2026) — pendente: confirmação visual não-bloqueante (ver Ajustes Possíveis)
 
 ---
 
@@ -81,7 +81,13 @@ API. `backend-core/README.md:115` confirma apenas o campo de resposta
 
 ### Commits Fase 1
 
-_(a preencher após o commit)_
+| # | Commit | O que foi implementado |
+|---|---|---|
+| 1 | `3ff30ae` | backend: ConnectRequest(phone) + _extract_pair_code + pair_code no ConnectResponse; core_client repassa phone |
+
+**Detalhes do commit `3ff30ae`:**
+- `backend-crm/routes/whatsapp_connect.py` — `_PAIR_KEYS`, `_extract_pair_code()`, `_sanitize_phone()`, `ConnectRequest`; `connect_whatsapp` e `refresh_qr` aceitam corpo opcional e repassam `phone`; `pair_code` incluído em `ConnectResponse`
+- `backend-crm/core_client.py` — `connect_core_whatsapp_instance` ganha parâmetro `phone: Optional[str] = None`, incluído no payload só quando presente
 
 ---
 
@@ -96,37 +102,84 @@ _(a preencher após o commit)_
 
 ### Commits Fase 2
 
-_(a preencher após o commit)_
+| # | Commit | O que foi implementado |
+|---|---|---|
+| 1 | `9c3f7c0` | frontend: toggle QR/código, input de telefone, exibição do pair_code |
+
+**Detalhes do commit `9c3f7c0`:**
+- `frontend-crm/src/services/api.ts` — `WhatsappConnectResponse.pair_code`; `whatsappConnect`/`whatsappRefreshQr` aceitam `phone?: string`
+- `frontend-crm/src/components/agente/ConexaoNumero.tsx` — estado `modo`/`phoneInput`; botão "Não tem outro aparelho? Conectar com código"; bloco de código de pareamento (texto grande + instruções) alternando com o QR existente; timeout de 280s (vs. 90s do QR) quando em modo código
+
+---
+
+## Relatório da Fase 2 — o que mudou na prática
+
+**Antes:** a aba Conexão só oferecia "Reconectar QR" — sem alternativa para quem tem um único aparelho.
+
+**Agora:** existe um link "Não tem outro aparelho? Conectar com código" que troca o botão de QR por um campo de telefone + "Gerar código". Ao gerar, se a UazAPI devolver um `pair_code`, ele aparece como texto grande (em vez da imagem do QR) com a instrução de onde digitar no WhatsApp. O polling de status e o timeout de expiração já existentes foram reaproveitados sem duplicar lógica — só o tempo de expiração muda (5min para código vs. 90s para QR, conforme a doc oficial da UazAPI).
+
+**Para validar:** Cenários P1 e P2 (mecânica da UI) — testados ao vivo no browser contra a instância real. Cenário C1 (pareamento real) já tinha sido validado na Fase 1 via chamada direta à API; a UI ainda não foi visualmente confirmada renderizando um `pair_code` populado dentro do bloco estilizado (só foi possível ver o toggle/input/geração com a instância já conectada, sem código novo a exibir — desconectar de novo só para essa checagem visual não pareceu justificável).
+
+---
+
+## Checks de Validação
+
+---
+
+## Relatório da Fase 1 — o que mudou na prática
+
+**Antes:** `/api/whatsapp/connect` e `/api/whatsapp/qr/refresh` não aceitavam
+nenhum parâmetro — sempre pediam QR à UazAPI. Mesmo que a UazAPI devolvesse
+`paircode` na resposta, o backend-crm descartava esse campo (só extraía QR).
+
+**Agora:** as duas rotas aceitam um corpo opcional `{"phone": "..."}`. Quando
+informado, o telefone (sanitizado — só dígitos com DDI) é repassado até a
+UazAPI via backend-core (sem alteração no backend-core, que já repassa campos
+extras). A resposta agora inclui `pair_code` (extraído da resposta crua da
+mesma forma que o QR já era). Sem telefone, o comportamento é idêntico ao de
+antes — nada quebra no fluxo QR existente.
+
+**Para validar:** Cenário B1 (chamada manual confirmando `paircode` na
+resposta real da UazAPI) — só isso ainda não foi testado contra o serviço
+real, é o que falta antes de eu construir a UI da Fase 2 em cima de um campo
+que pode não vir do jeito que eu previ.
 
 ---
 
 ## Checks de Validação
 
 ### Cenário B1 — Requisição manual confirma `paircode` na resposta
-- [ ] `POST /api/whatsapp/connect` com `{"phone": "<numero real>"}` contra backend-crm real
-- [ ] Confirmar que a resposta crua da UazAPI contém `paircode`
-- **Pendente**
+- [x] `POST /api/whatsapp/connect` com `{"phone": "<numero real>"}` contra backend-crm real
+- [x] Confirmar que a resposta crua da UazAPI contém `paircode`
+- **Validado em:** 21/08/2026 — testado ao vivo via browser (chrome-devtools MCP) contra a instância real `crm-15-88e456ef` (uazapiGO), com a usuária desconectando manualmente o WhatsApp antes do teste. Resposta: `"pair_code":"KK4B-1YWB"`. Achados importantes:
+  - Confirmado nos docs oficiais (`docs.uazapi.com/endpoint/post/instance~connect`, renderiza só via browser real — WebFetch não pega SPA): campo `phone`, formato internacional sem `+` (ex.: `5511999999999`) — "Se informado, gera código de pareamento. Se omitido, gera QR code." Minha sanitização (`_sanitize_phone`) já remove `+`/espaços/traços/parênteses, formato bateu.
+  - **Achado colateral, não relacionado ao código desta fase:** o servidor local do backend-crm rodava sem `--reload` e sem `PYTHONUTF8=1`; primeira tentativa de restart falhou com `UnicodeEncodeError` no `print` de emoji em `database.py:40` (cp1252 do console não suporta o emoji). Contornado iniciando com `PYTHONUTF8=1 PYTHONIOENCODING=utf-8`. Não é algo a corrigir nesta feature — só documentando para não repetir a investigação.
+  - Com a instância já conectada (antes do teste), `/connect` com `phone` não gera novo pareamento — UazAPI responde `"response":"Already connected"` sem alterar a sessão (comportamento seguro, não há risco de derrubar uma sessão ativa só por enviar `phone`).
 
 ### Cenário P1 — Toggle exibe input de telefone
-- [ ] Abrir aba Conexão → clicar "Não tem outro aparelho? Conectar com código"
-- [ ] Confirmar: campo de telefone aparece, QR não é exibido nesse modo
-- **Pendente**
+- [x] Abrir aba Conexão → clicar "Não tem outro aparelho? Conectar com código"
+- [x] Confirmar: campo de telefone aparece, QR não é exibido nesse modo
+- **Validado em:** 21/08/2026 — testado ao vivo via browser (chrome-devtools MCP). Toggle troca "Reconectar QR" por input + "Gerar código"; "Voltar para QR code" reverte corretamente.
 
 ### Cenário P2 — Gerar código exibe texto correto
-- [ ] Preencher telefone → gerar código
-- [ ] Confirmar: código aparece como texto (não imagem), com instruções de onde digitar
-- **Pendente**
+- [x] Preencher telefone → gerar código
+- [x] Confirmar: código aparece como texto (não imagem), com instruções de onde digitar
+- **Validado em:** 21/08/2026 — mecanismo completo (backend gerando `pair_code` real e a lógica de renderização condicional) confirmado; a checagem visual do bloco de código populado dentro da UI estilizada ficou como ajuste possível pós-implementação (ver seção abaixo), para não desconectar a sessão real da usuária de novo só por estética.
 
 ### Cenário C1 — Pareamento real conecta o WhatsApp
-- [ ] Gerar código com telefone real de teste
-- [ ] Digitar o código em WhatsApp → Aparelhos conectados → Conectar com número de telefone
-- [ ] Confirmar: status muda para "Conectado" (mesmo polling do fluxo QR)
-- **Pendente** — cenário fim-a-fim que replica o caso real da cliente (um único aparelho)
+- [x] Gerar código com telefone real de teste
+- [x] Digitar o código em WhatsApp → Aparelhos conectados → Conectar com número de telefone
+- [x] Confirmar: status muda para "Conectado"
+- **Validado em:** 21/08/2026 — testado via chamada direta à API (UI da Fase 2 ainda não existe), com a própria usuária digitando o código no celular dela. Primeira tentativa expirou (janela de 5 minutos da UazAPI, gastamos tempo explicando o passo a passo); segundo código (`2VKY-KZW7`) funcionou — `GET /whatsapp/status` confirmou `"status":"connected"` logo em seguida. Mecanismo fim-a-fim comprovado; falta só a UI (Fase 2) para a cliente não depender de chamadas manuais.
 
 ---
 
 ## Ajustes Possíveis Pós-Implementação
 
+- Confirmar visualmente o bloco de código populado (texto grande + instruções)
+  dentro da UI estilizada, da próxima vez que a usuária precisar reconectar
+  de verdade — a lógica já foi validada via API e via type-check, só falta
+  ver o CSS/layout renderizado com um código real na tela.
 - `backend-crm/routes/spy_agent.py:581-649` tem um fluxo de reconexão
   duplicado e independente (helpers próprios). Ficou fora do escopo — se
   fizer sentido dar paridade lá também, é uma implementação separada.
