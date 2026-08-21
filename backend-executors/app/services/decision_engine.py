@@ -340,6 +340,19 @@ def _build_sales_flow_block(sf_match: Optional[dict]) -> str:
     )
 
 
+_ROUTE_TO_PHASE_ID: Dict[str, str] = {
+    "recepcao":         "p0",
+    "qualification":    "p1",
+    "apresentation":    "p2",
+    "pre-agendamento":  "p3a",
+    "pre_agendamento":  "p3a",
+    "agendamento":      "p3b",
+    "followup":         "p4",
+    "follow-up":        "p4",
+    "closing":          "p5",
+}
+
+
 def _parse_json_id_set(raw: Any) -> set:
     """Parseia um campo JSON (string ou já-lista) de IDs num set. Usado para
     leads.triggers_fired e leads.phases_triggered — JSON inválido vira set vazio."""
@@ -374,6 +387,38 @@ def _is_sequential_trigger_block(block: Dict[str, Any]) -> bool:
     return False
 
 
+_LEAD_CAT_TO_ROUTE: Dict[str, str] = {
+    "qualification":    "qualification",
+    "apresentation":    "apresentation",
+    "pre-agendamento":  "pre-agendamento",
+    "pre_agendamento":  "pre-agendamento",
+    "agendamento":      "agendamento",
+    "follow-up":        "followup",
+    "follow_up":        "followup",
+    "closing":          "closing",
+    "recepcao":         "recepcao",
+}
+
+
+def _compute_is_phase_entry(context: Dict[str, Any], effective_route_to: str) -> bool:
+    """True quando o lead está a transitar para esta fase neste turno: a categoria
+    atual do lead é diferente da rota efetiva E a fase ainda não disparou antes
+    (leads.phases_triggered). Reutilizado tanto para decidir o que injectar no prompt
+    filho (_build_child_prompt_*) quanto para o despacho real de system_actions
+    (compose_decision_output) — antes da Fase 3, só o despacho usava este cálculo; o
+    prompt filho recebia sempre o default is_phase_entry=True, reapresentando conteúdo
+    de entrada como se fosse novo em todo turno (ver
+    docs/implementations/fix-fluxo-vendas-sequencial.md, Fase 3)."""
+    lead_cat_raw = ((context.get("lead") or {}).get("category") or "").strip().lower()
+    lead_current_route = _LEAD_CAT_TO_ROUTE.get(lead_cat_raw, lead_cat_raw)
+    effective_phase_id = _ROUTE_TO_PHASE_ID.get(effective_route_to)
+    triggered_phases = _load_triggered_phases_set(context)
+    return (
+        lead_current_route != effective_route_to
+        and (not effective_phase_id or effective_phase_id not in triggered_phases)
+    )
+
+
 def _evaluate_sales_flow_phases(
     context: Dict[str, Any],
     effective_route_to: str,
@@ -399,17 +444,6 @@ def _evaluate_sales_flow_phases(
     if not isinstance(phases, list) or not phases:
         return result
 
-    _ROUTE_TO_PHASE_ID: Dict[str, str] = {
-        "recepcao":         "p0",
-        "qualification":    "p1",
-        "apresentation":    "p2",
-        "pre-agendamento":  "p3a",
-        "pre_agendamento":  "p3a",
-        "agendamento":      "p3b",
-        "followup":         "p4",
-        "follow-up":        "p4",
-        "closing":          "p5",
-    }
     phase_id = _ROUTE_TO_PHASE_ID.get(effective_route_to)
     if not phase_id:
         return result
@@ -2165,6 +2199,7 @@ def _build_child_prompt_recepcao(
     context: Dict[str, Any],
     message_text: str,
     mother_decision: MotherDecision,
+    is_phase_entry: bool = True,
 ) -> str:
     """Filha Recepcionista: prompt enxuto para saudações. Sem acesso a mídia, preços ou catálogo."""
     ai_profile = context.get("ai_profile") or {}
@@ -2275,7 +2310,7 @@ Retorne SOMENTE JSON válido:
   "pending_commercial_text": "<trecho literal do pedido comercial, ou null se só houve saudação>"
 }}
 """
-    _recepcao_prompt += _build_sales_flow_phases_block(_evaluate_sales_flow_phases(context, "recepcao", message_text, detected_intents=mother_decision.detected_intents))
+    _recepcao_prompt += _build_sales_flow_phases_block(_evaluate_sales_flow_phases(context, "recepcao", message_text, detected_intents=mother_decision.detected_intents, is_phase_entry=is_phase_entry))
     return _recepcao_prompt
 
 
@@ -2359,6 +2394,7 @@ def _build_child_prompt_qualification(
     context: Dict[str, Any],
     message_text: str,
     mother_decision: MotherDecision,
+    is_phase_entry: bool = True,
 ) -> str:
     lead = context.get("lead") or {}
     ai_profile = context.get("ai_profile") or {}
@@ -2601,13 +2637,14 @@ CONTEXTO:
 - next_action_hint_mae: {mother_decision.next_action_hint or "null"}
 {_build_qualification_fields_block(ai_profile, response_style)}{_build_custom_instructions_block(ai_profile)}{_build_business_info_block(context)}{_build_training_examples_block(context, "qualification")}"""
     _qual_prompt += _build_sales_flow_block(_evaluate_sales_flow(context, "qualification", mother_decision.signals))
-    _qual_prompt += _build_sales_flow_phases_block(_evaluate_sales_flow_phases(context, "qualification", message_text, detected_intents=mother_decision.detected_intents))
+    _qual_prompt += _build_sales_flow_phases_block(_evaluate_sales_flow_phases(context, "qualification", message_text, detected_intents=mother_decision.detected_intents, is_phase_entry=is_phase_entry))
     return _inject_generated_parts(_qual_prompt, context, "qualification")
 
 def _build_child_prompt_apresentation(
     context: Dict[str, Any],
     message_text: str,
     mother_decision: MotherDecision,
+    is_phase_entry: bool = True,
 ) -> str:
     lead = context.get("lead") or {}
     ai_profile = context.get("ai_profile") or {}
@@ -3205,7 +3242,7 @@ def _build_child_prompt_apresentation(
         + _build_training_examples_block(context, "apresentation")
     )
     _apres_prompt += _build_sales_flow_block(_evaluate_sales_flow(context, "apresentation", mother_decision.signals))
-    _apres_prompt += _build_sales_flow_phases_block(_evaluate_sales_flow_phases(context, "apresentation", message_text, detected_intents=mother_decision.detected_intents))
+    _apres_prompt += _build_sales_flow_phases_block(_evaluate_sales_flow_phases(context, "apresentation", message_text, detected_intents=mother_decision.detected_intents, is_phase_entry=is_phase_entry))
     return _inject_generated_parts(_apres_prompt, context, "apresentation")
 
 
@@ -3214,6 +3251,7 @@ def _build_child_prompt_follow_up(
     context: Dict[str, Any],
     message_text: str,
     mother_decision: MotherDecision,
+    is_phase_entry: bool = True,
 ) -> str:
     lead = context.get("lead") or {}
     ai_profile = context.get("ai_profile") or {}
@@ -3538,7 +3576,7 @@ def _build_child_prompt_follow_up(
         + _build_business_info_block(context)
     )
     _followup_prompt += _build_sales_flow_block(_evaluate_sales_flow(context, "follow-up", mother_decision.signals))
-    _followup_prompt += _build_sales_flow_phases_block(_evaluate_sales_flow_phases(context, "followup", message_text, detected_intents=mother_decision.detected_intents))
+    _followup_prompt += _build_sales_flow_phases_block(_evaluate_sales_flow_phases(context, "followup", message_text, detected_intents=mother_decision.detected_intents, is_phase_entry=is_phase_entry))
     return _inject_generated_parts(_followup_prompt, context, "followup")
 
 
@@ -4754,48 +4792,8 @@ def compose_decision_output(
                     decision.pre_send_media = _sf_media
 
     # Fluxo de Venda (novo sistema de fases) — mídia via system_actions e system_actions sequenciais
-    # is_phase_entry: True quando o lead está a transitar para esta fase (category != effective_route_to)
-    # phases_triggered: JSON array de phase_ids já disparados; garante disparo verdadeiramente único.
-    _LEAD_CAT_TO_ROUTE: Dict[str, str] = {
-        "qualification":    "qualification",
-        "apresentation":    "apresentation",
-        "pre-agendamento":  "pre-agendamento",
-        "pre_agendamento":  "pre-agendamento",
-        "agendamento":      "agendamento",
-        "follow-up":        "followup",
-        "follow_up":        "followup",
-        "closing":          "closing",
-        "recepcao":         "recepcao",
-    }
-    _ROUTE_TO_PHASE_ID_MAP: Dict[str, str] = {
-        "recepcao":         "p0",
-        "qualification":    "p1",
-        "apresentation":    "p2",
-        "pre-agendamento":  "p3a",
-        "pre_agendamento":  "p3a",
-        "agendamento":      "p3b",
-        "followup":         "p4",
-        "follow-up":        "p4",
-        "closing":          "p5",
-    }
-    _lead_cat_raw = ((context.get("lead") or {}).get("category") or "").strip().lower()
-    _lead_current_route = _LEAD_CAT_TO_ROUTE.get(_lead_cat_raw, _lead_cat_raw)
-    _effective_phase_id = _ROUTE_TO_PHASE_ID_MAP.get(effective_route_to)
-    _phases_triggered_raw = ((context.get("lead") or {}).get("phases_triggered") or "[]")
-    try:
-        import json as _json
-        _triggered_phases: set = set(
-            _json.loads(_phases_triggered_raw)
-            if isinstance(_phases_triggered_raw, str)
-            else (_phases_triggered_raw if isinstance(_phases_triggered_raw, list) else [])
-        )
-    except (ValueError, TypeError):
-        _triggered_phases = set()
-    # Entrada na fase: categoria do lead diferente E fase nunca disparada antes
-    _is_phase_entry = (
-        _lead_current_route != effective_route_to
-        and (not _effective_phase_id or _effective_phase_id not in _triggered_phases)
-    )
+    _effective_phase_id = _ROUTE_TO_PHASE_ID.get(effective_route_to)
+    _is_phase_entry = _compute_is_phase_entry(context, effective_route_to)
     # Exposto no decision_trace para o meeting_scheduler: gate de M3 (confirmação de
     # agendamento sem garantia) — só honra meeting_scheduled=true quando o lead já estava
     # nesta fase antes desta mensagem, agnóstico de qual route_to está em jogo.
@@ -5136,14 +5134,20 @@ def decide(context: Dict[str, Any], logger: Optional[logging.Logger] = None) -> 
         if _prompt_variant not in ("v1", "v2"):
             _prompt_variant = "v1"
 
+        # Calculado uma única vez e passado ao builder do prompt filho — antes da Fase 3,
+        # estas chamadas usavam sempre o default is_phase_entry=True, reapresentando
+        # conteúdo de entrada (ex.: "ATENÇÃO: mensagens enviadas automaticamente") como
+        # se fosse novo em todo turno. Ver docs/architecture/sales-flow.md.
+        _is_phase_entry_for_prompt = _compute_is_phase_entry(context, route_for_child)
+
         if route_for_child == "recepcao":
-            child_prompt = _build_child_prompt_recepcao(context, message_text, mother_decision)
+            child_prompt = _build_child_prompt_recepcao(context, message_text, mother_decision, is_phase_entry=_is_phase_entry_for_prompt)
             _prompt_function_used = "_build_child_prompt_recepcao"
         elif route_for_child == "qualification":
-            child_prompt = _build_child_prompt_qualification(context, message_text, mother_decision)
+            child_prompt = _build_child_prompt_qualification(context, message_text, mother_decision, is_phase_entry=_is_phase_entry_for_prompt)
             _prompt_function_used = "_build_child_prompt_qualification"
         elif route_for_child == "apresentation":
-            child_prompt = _build_child_prompt_apresentation(context, message_text, mother_decision)
+            child_prompt = _build_child_prompt_apresentation(context, message_text, mother_decision, is_phase_entry=_is_phase_entry_for_prompt)
             _prompt_function_used = "_build_child_prompt_apresentation"
         elif route_for_child == "pre-agendamento":
             try:
@@ -5161,7 +5165,7 @@ def decide(context: Dict[str, Any], logger: Optional[logging.Logger] = None) -> 
                 _prompt_function_used = "_build_child_prompt(fallback)"
         elif route_for_child == "follow-up":
             try:
-                child_prompt = _build_child_prompt_follow_up(context, message_text, mother_decision)
+                child_prompt = _build_child_prompt_follow_up(context, message_text, mother_decision, is_phase_entry=_is_phase_entry_for_prompt)
                 _prompt_function_used = "_build_child_prompt_follow_up"
             except Exception:
                 child_prompt = _build_child_prompt(context, message_text, mother_decision)

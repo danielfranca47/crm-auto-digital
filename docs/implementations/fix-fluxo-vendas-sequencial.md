@@ -82,7 +82,9 @@ Escopo deliberado: só gatilhos `fire_once=True` (e `phase_trigger`, inerentemen
 
 **Para validar:** Cenários P1 e P2 (pytest, já confirmados abaixo) e Cenário C1 (WhatsApp real).
 
-### Fase 2 — Backend: `is_phase_entry` correto nas chamadas de construção de prompt
+> **Nota de numeração:** o teste ao vivo da Fase 1 revelou um problema mais urgente (Mãe pulando a fase inteira num salto de rota), documentado como **Fase 2** na secção "Fase 2 — Diagnóstico + Correção" abaixo — já implementada e commitada antes das fases seguintes deste plano original. As fases abaixo foram renumeradas de Fase 2/3/4 para **Fase 3/4/5** para não colidir.
+
+### Fase 3 — Backend: `is_phase_entry` correto nas chamadas de construção de prompt
 
 **Objetivo:** eliminar a inconsistência entre o que o prompt afirma (default `True`) e o que realmente foi despachado (`is_phase_entry` calculado corretamente).
 
@@ -90,7 +92,7 @@ Escopo deliberado: só gatilhos `fire_once=True` (e `phase_trigger`, inerentemen
 |---|---|
 | `backend-executors/app/services/decision_engine.py` | Threading do `is_phase_entry` real para as 4 chamadas de `_build_child_prompt_*` |
 
-### Fase 3 — Backend + Frontend: migrar regra de agendamento hardcoded para bloco editável
+### Fase 4 — Backend + Frontend: migrar regra de agendamento hardcoded para bloco editável
 
 **Objetivo:** dar ao utilizador controlo total sobre a instrução de "reconhecimento de interesse de agendamento" — editável/removível, com padrão pré-preenchido.
 
@@ -102,7 +104,7 @@ Escopo: só agentes com recursos de agendamento (`agent_1`/SDR e `agent_3`/Híbr
 | `frontend-crm/src/components/agente/CamadaFluxoVenda.tsx` | Novo card `booking_signal_opener` na fase p2 (padrão `qual_opener`), visível só quando `agentGroup === 'agenda'` |
 | `frontend-crm/src/types/agente.ts` | Novo flag `booking_signal_opener?: boolean` em `SalesFlowBlock` |
 
-### Fase 4 — Frontend: funil visual resumido no card do Kanban
+### Fase 5 — Frontend: funil visual resumido no card do Kanban
 
 **Objetivo:** mostrar, de forma compacta, por onde o lead já passou no Fluxo de Venda.
 
@@ -111,6 +113,24 @@ Escopo: só agentes com recursos de agendamento (`agent_1`/SDR e `agent_3`/Híbr
 | `frontend-crm/src/types/crm.ts` | `phases_triggered?: string[]` em `interface Lead` |
 | `frontend-crm/src/components/LeadCard.tsx` | Breadcrumb compacto de fases (concluída/atual/futura) |
 | `frontend-crm/src/contexts/LeadsContext.tsx` (ou `KanbanBoard.tsx`) | Busca `agent_mode` uma única vez para derivar a sequência de fases |
+
+### Commits Fase 3
+
+| # | Commit | O que foi implementado |
+|---|---|---|
+| 1 | `<preencher após commit>` | `is_phase_entry` real threaded para os 4 builders de prompt filho |
+
+**Detalhes:**
+- `backend-executors/app/services/decision_engine.py` — novo helper `_compute_is_phase_entry()` (reutiliza `_load_triggered_phases_set()` da Fase 2); `_ROUTE_TO_PHASE_ID` consolidado a nível de módulo (estava duplicado em `_evaluate_sales_flow_phases()` e `compose_decision_output()`); `_build_child_prompt_recepcao/qualification/apresentation/follow_up` ganham parâmetro `is_phase_entry: bool = True` (default preserva compatibilidade com chamadas existentes em testes); `decide()` calcula `_is_phase_entry_for_prompt` uma vez antes do dispatch de rota e passa explicitamente às 4 chamadas; `compose_decision_output()` passa a usar o mesmo helper em vez do cálculo inline duplicado
+- `backend-executors/tests/test_sales_flow_intent_trigger_phase_entry.py` — `test_is_phase_entry_threaded_correctly_to_apresentation_prompt`
+
+### Relatório da Fase 3 — o que mudou na prática
+
+**Antes:** o prompt enviado à IA filha dizia sempre "ATENÇÃO: as mensagens abaixo foram enviadas automaticamente" e repetia o conteúdo de abertura da fase em todo turno — mesmo em turnos onde nada tinha sido enviado automaticamente naquele momento. Isso não causava o bug relatado diretamente (a Fase 2 resolve isso de forma mais explícita), mas confundia o histórico que a IA via.
+
+**Agora:** essa mensagem só aparece no turno real de entrada na fase — nos turnos seguintes, o prompt reflete com precisão o que já aconteceu.
+
+**Para validar:** Cenário P3 (pytest, já confirmado acima).
 
 ---
 
@@ -128,7 +148,8 @@ Escopo: só agentes com recursos de agendamento (`agent_1`/SDR e `agent_3`/Híbr
 - **Validado em:** 21/08/2026 — `test_critical_orientation_persists_until_next_trigger_fires`; confirmado que o turno 2 falha sem o fix (instrução sumia) e passa com ele.
 
 ### Cenário P3 — `is_phase_entry` correto no prompt (pytest)
-- [ ] Turno 2+ da mesma fase: prompt não repete "ATENÇÃO: mensagens enviadas automaticamente"
+- [x] Turno 2+ da mesma fase: prompt não repete "ATENÇÃO: mensagens enviadas automaticamente"
+- **Validado em:** 21/08/2026 — `test_is_phase_entry_threaded_correctly_to_apresentation_prompt`: chamando `_build_child_prompt_apresentation` com `is_phase_entry=True` vs `False`, o texto só aparece no primeiro caso.
 
 ### Cenário P4 — Bloco `booking_signal_opener` editável (builder)
 - [ ] Fase p2, `agent_mode` do grupo `agenda`: card com texto padrão aparece
@@ -140,7 +161,7 @@ Escopo: só agentes com recursos de agendamento (`agent_1`/SDR e `agent_3`/Híbr
 - [x] Confirmar: bot não pergunta dia/horário antes do lead aceitar a tabela
 - **Validado em:** 21/08/2026 — via Playground (não WhatsApp real; ver nota de escopo abaixo), importando o export `ai-agent-Daniel-2026-08-21.json` (mesmo `sales_flow` do relato) para a conta de teste local (`_conta-teste-local.md`), com os 3 backends a correr localmente (core/crm/executors) já com o fix da Fase 1.
   - Turno 1 (saudação + "já abriste o teu espaço?"): apresentação inicial + pede permissão para tabela — sem pedir disponibilidade. ✅
-  - Turno 2 (pergunta não relacionada, "não ias ter espaço em Olhão?"): bot responde à pergunta e volta a oferecer a tabela — **sem perguntar dia/horário** (o bug original). Continha a frase "Assim, podemos agendar sua sessão" — menção *não interrogativa* a agendamento, atribuída à instrução hardcoded ainda não migrada (Fase 3), não a uma regressão do gating.
+  - Turno 2 (pergunta não relacionada, "não ias ter espaço em Olhão?"): bot responde à pergunta e volta a oferecer a tabela — **sem perguntar dia/horário** (o bug original). Continha a frase "Assim, podemos agendar sua sessão" — menção *não interrogativa* a agendamento, atribuída à instrução hardcoded ainda não migrada (Fase 4), não a uma regressão do gating.
   - Turno 3 ("Sim, pode enviar a tabela"): as 3 imagens da tabela só foram despachadas **agora** (não nos turnos 1-2) + bot pergunta qual serviço interessou — confirma que o `intent_trigger` "aceitar tabela" só disparou neste turno, como configurado.
   - Turno 4 ("Gostei da relaxante"): **só agora** o bot pergunta "Que dia funcionaria melhor pra você para agendar a massagem relaxante?" — a pergunta de disponibilidade (bloco final da sequência) só apareceu depois de todos os gatilhos anteriores terem disparado, na ordem correta.
   - **Nota de escopo:** o Cenário C1 original pedia "WhatsApp real"; o teste foi feito via Playground (mesmo motor de decisão, `decision_engine.py`, usado pelos dois caminhos — ver `docs/architecture/playground-parity.md`). Considerado equivalente para validar esta fase; reteste no WhatsApp real fica a critério do utilizador.

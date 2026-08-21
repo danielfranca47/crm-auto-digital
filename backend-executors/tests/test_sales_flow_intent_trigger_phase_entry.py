@@ -1,6 +1,7 @@
 import pytest
 
 from app.services.decision_engine import (
+    _build_child_prompt_apresentation,
     _build_daughter_identity_block,
     _build_mother_prompt,
     _collect_intent_triggers_for_lead_phase,
@@ -512,3 +513,36 @@ def test_enforce_apresentation_pending_uses_phases_triggered_when_category_lags(
 
     assert result.route_to == "apresentation"
     assert "sales_flow_apresentation_pending_forced_route" in result.reason
+
+
+def test_is_phase_entry_threaded_correctly_to_apresentation_prompt():
+    """Fase 3: antes desta fase, _build_child_prompt_apresentation chamava
+    _evaluate_sales_flow_phases sem passar is_phase_entry, usando sempre o default
+    True — reapresentando 'ATENÇÃO: mensagens enviadas automaticamente' como se fosse
+    novo em todo turno da fase, mesmo fora do turno de entrada real."""
+    sales_flow = _sales_flow_sequential_critical_guard()
+    context = {
+        "lead": {
+            "id": 1,
+            "category": "apresentation",
+            "triggers_fired": "[]",
+            "phases_triggered": '["p2"]',
+        },
+        "ai_profile": {"agent_mode": "agenda", "template_key": "sdr_padrao", "sales_flow": sales_flow},
+        "playbook": {"template_key": "sdr_padrao"},
+        "metadata": {"inbound_message_text": "oi"},
+        "history": [{"model": "outbound", "text": "Oi!"}, {"model": "inbound", "text": "oi"}],
+        "knowledge_items": {},
+        "knowledge_media": {},
+        "lead_detected_language": "pt",
+    }
+    mother = MotherDecision(
+        route_to="apresentation", perceived_category="apresentation", confidence=0.9, reason="turno 2"
+    )
+    ATENCAO = "ATENÇÃO: As mensagens listadas abaixo foram enviadas AUTOMATICAMENTE"
+
+    entry_prompt = _build_child_prompt_apresentation(context, "oi", mother, is_phase_entry=True)
+    mid_prompt = _build_child_prompt_apresentation(context, "oi", mother, is_phase_entry=False)
+
+    assert ATENCAO in entry_prompt
+    assert ATENCAO not in mid_prompt
