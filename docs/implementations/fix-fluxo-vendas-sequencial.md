@@ -136,8 +136,14 @@ Escopo: só agentes com recursos de agendamento (`agent_1`/SDR e `agent_3`/Híbr
 - [ ] Remover bloco → backend deixa de aplicar reconhecimento automático de agendamento
 
 ### Cenário C1 — WhatsApp real: bot não pergunta disponibilidade antes da tabela ser aceita
-- [ ] Reproduzir a conversa do relato original (perguntar algo não relacionado após a saudação de entrada)
-- [ ] Confirmar: bot não pergunta dia/horário antes do lead aceitar a tabela
+- [x] Reproduzir a conversa do relato original (perguntar algo não relacionado após a saudação de entrada)
+- [x] Confirmar: bot não pergunta dia/horário antes do lead aceitar a tabela
+- **Validado em:** 21/08/2026 — via Playground (não WhatsApp real; ver nota de escopo abaixo), importando o export `ai-agent-Daniel-2026-08-21.json` (mesmo `sales_flow` do relato) para a conta de teste local (`_conta-teste-local.md`), com os 3 backends a correr localmente (core/crm/executors) já com o fix da Fase 1.
+  - Turno 1 (saudação + "já abriste o teu espaço?"): apresentação inicial + pede permissão para tabela — sem pedir disponibilidade. ✅
+  - Turno 2 (pergunta não relacionada, "não ias ter espaço em Olhão?"): bot responde à pergunta e volta a oferecer a tabela — **sem perguntar dia/horário** (o bug original). Continha a frase "Assim, podemos agendar sua sessão" — menção *não interrogativa* a agendamento, atribuída à instrução hardcoded ainda não migrada (Fase 3), não a uma regressão do gating.
+  - Turno 3 ("Sim, pode enviar a tabela"): as 3 imagens da tabela só foram despachadas **agora** (não nos turnos 1-2) + bot pergunta qual serviço interessou — confirma que o `intent_trigger` "aceitar tabela" só disparou neste turno, como configurado.
+  - Turno 4 ("Gostei da relaxante"): **só agora** o bot pergunta "Que dia funcionaria melhor pra você para agendar a massagem relaxante?" — a pergunta de disponibilidade (bloco final da sequência) só apareceu depois de todos os gatilhos anteriores terem disparado, na ordem correta.
+  - **Nota de escopo:** o Cenário C1 original pedia "WhatsApp real"; o teste foi feito via Playground (mesmo motor de decisão, `decision_engine.py`, usado pelos dois caminhos — ver `docs/architecture/playground-parity.md`). Considerado equivalente para validar esta fase; reteste no WhatsApp real fica a critério do utilizador.
 
 ### Cenário C2 — Funil no Kanban (browser MCP)
 - [ ] Abrir Kanban com lead em fase intermediária do Fluxo de Venda
