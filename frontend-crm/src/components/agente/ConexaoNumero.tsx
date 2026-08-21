@@ -23,6 +23,8 @@ export function ConexaoNumero() {
   const [reconnecting, setReconnecting] = useState(false);
   const [qrPayload, setQrPayload] = useState<WhatsappConnectResponse | null>(null);
   const [qrExpired, setQrExpired] = useState(false);
+  const [modo, setModo] = useState<'qr' | 'pareamento'>('qr');
+  const [phoneInput, setPhoneInput] = useState('');
 
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const qrTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -43,12 +45,12 @@ export function ConexaoNumero() {
     if (qrTimeoutRef.current) { clearTimeout(qrTimeoutRef.current); qrTimeoutRef.current = null; }
   };
 
-  const startPolling = () => {
+  const startPolling = (timeoutMs = 90_000) => {
     stopPolling();
     qrTimeoutRef.current = setTimeout(() => {
       setQrExpired(true);
       stopPolling();
-    }, 90_000);
+    }, timeoutMs);
 
     pollRef.current = setInterval(async () => {
       try {
@@ -69,10 +71,11 @@ export function ConexaoNumero() {
     setReconnecting(true);
     setQrExpired(false);
     try {
-      const resp = await api.crm.whatsappConnect();
-      if (resp.qr?.value) {
+      const phone = modo === 'pareamento' ? phoneInput.trim() : undefined;
+      const resp = await api.crm.whatsappConnect(phone);
+      if (resp.pair_code || resp.qr?.value) {
         setQrPayload(resp);
-        startPolling();
+        startPolling(resp.pair_code ? 280_000 : 90_000);
       } else {
         const updated = await api.crm.whatsappStatus();
         setStatus(updated);
@@ -88,9 +91,10 @@ export function ConexaoNumero() {
     setQrExpired(false);
     setReconnecting(true);
     try {
-      const resp = await api.crm.whatsappRefreshQr();
+      const phone = modo === 'pareamento' ? phoneInput.trim() : undefined;
+      const resp = await api.crm.whatsappRefreshQr(phone);
       setQrPayload(resp);
-      startPolling();
+      startPolling(resp.pair_code ? 280_000 : 90_000);
     } catch {
       // silencioso
     } finally {
@@ -100,6 +104,12 @@ export function ConexaoNumero() {
 
   function handleCancelQr() {
     stopPolling();
+    setQrPayload(null);
+    setQrExpired(false);
+  }
+
+  function toggleModo() {
+    setModo((prev) => (prev === 'qr' ? 'pareamento' : 'qr'));
     setQrPayload(null);
     setQrExpired(false);
   }
@@ -197,7 +207,7 @@ export function ConexaoNumero() {
 
         {/* Ações */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8, alignItems: 'flex-end' }}>
-          {!qrPayload && (
+          {!qrPayload && modo === 'qr' && (
             <button
               className="o-btn"
               onClick={handleReconnect}
@@ -205,6 +215,25 @@ export function ConexaoNumero() {
             >
               {reconnecting ? 'Conectando…' : 'Reconectar QR'}
             </button>
+          )}
+          {!qrPayload && modo === 'pareamento' && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6, alignItems: 'flex-end' }}>
+              <input
+                type="tel"
+                value={phoneInput}
+                onChange={(e) => setPhoneInput(e.target.value)}
+                placeholder="Ex: 5511999999999"
+                className="o-input"
+                style={{ fontSize: 12, padding: '6px 10px', width: 180, textAlign: 'right' }}
+              />
+              <button
+                className="o-btn"
+                onClick={handleReconnect}
+                disabled={reconnecting || !phoneInput.trim()}
+              >
+                {reconnecting ? 'Gerando…' : 'Gerar código'}
+              </button>
+            </div>
           )}
           {qrPayload && (
             <button
@@ -215,10 +244,19 @@ export function ConexaoNumero() {
               Cancelar
             </button>
           )}
+          {!qrPayload && (
+            <button
+              className="o-btn o-btn-ghost"
+              onClick={toggleModo}
+              style={{ fontSize: 10.5, color: 'var(--o-dim)', textDecoration: 'underline' }}
+            >
+              {modo === 'qr' ? 'Não tem outro aparelho? Conectar com código' : 'Voltar para QR code'}
+            </button>
+          )}
         </div>
       </div>
 
-      {/* Bloco QR Code */}
+      {/* Bloco QR Code / Código de pareamento */}
       {qrPayload && (
         <div
           style={{
@@ -234,20 +272,36 @@ export function ConexaoNumero() {
           }}
         >
           <div className="font-mono-orion" style={{ fontSize: 9, letterSpacing: 2, textTransform: 'uppercase', color: 'var(--o-sub)' }}>
-            Escaneie com o WhatsApp
+            {qrPayload.pair_code ? 'Código de pareamento' : 'Escaneie com o WhatsApp'}
           </div>
 
           {qrExpired ? (
             <div style={{ textAlign: 'center' }}>
-              <div style={{ fontSize: 13, color: 'var(--o-hot)', marginBottom: 12 }}>QR code expirado</div>
+              <div style={{ fontSize: 13, color: 'var(--o-hot)', marginBottom: 12 }}>
+                {qrPayload.pair_code ? 'Código expirado' : 'QR code expirado'}
+              </div>
               <button
                 className="o-btn"
                 onClick={handleRefreshQr}
                 disabled={reconnecting}
               >
-                {reconnecting ? 'Gerando…' : 'Novo QR code'}
+                {reconnecting ? 'Gerando…' : qrPayload.pair_code ? 'Novo código' : 'Novo QR code'}
               </button>
             </div>
+          ) : qrPayload.pair_code ? (
+            <>
+              <div
+                className="font-mono-orion"
+                style={{ fontSize: 28, letterSpacing: 4, color: 'var(--o-text)', background: '#fff', padding: '12px 20px', borderRadius: 8 }}
+              >
+                {qrPayload.pair_code}
+              </div>
+              <div style={{ fontSize: 11, color: 'var(--o-dim)', textAlign: 'center' }}>
+                No WhatsApp do celular → Aparelhos conectados → Conectar um aparelho → Conectar com número de telefone
+                <br />
+                <span style={{ color: 'var(--o-warn)' }}>Expira em 5 minutos</span>
+              </div>
+            </>
           ) : qrSrc ? (
             <>
               <img
