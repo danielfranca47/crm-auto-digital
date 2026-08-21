@@ -366,6 +366,7 @@ def _evaluate_sales_flow_phases(
         return result
 
     _ROUTE_TO_PHASE_ID: Dict[str, str] = {
+        "recepcao":         "p0",
         "qualification":    "p1",
         "apresentation":    "p2",
         "pre-agendamento":  "p3a",
@@ -2109,7 +2110,7 @@ def _build_child_prompt_recepcao(
     lead_name_ctx = f"Nome do lead: {lead_name}." if lead_name else "Nome do lead: desconhecido."
     brand_name = (ai_profile.get("brand_name") or "").strip() or "o negócio"
 
-    return f"""{identity_block}
+    _recepcao_prompt = f"""{identity_block}
 {tone_block}FASE: recepção (saudação).
 
 {lead_name_ctx}
@@ -2176,6 +2177,8 @@ Retorne SOMENTE JSON válido:
   "pending_commercial_text": "<trecho literal do pedido comercial, ou null se só houve saudação>"
 }}
 """
+    _recepcao_prompt += _build_sales_flow_phases_block(_evaluate_sales_flow_phases(context, "recepcao", message_text, detected_intents=mother_decision.detected_intents))
+    return _recepcao_prompt
 
 
 def _build_child_prompt(
@@ -4599,6 +4602,7 @@ def compose_decision_output(
         "recepcao":         "recepcao",
     }
     _ROUTE_TO_PHASE_ID_MAP: Dict[str, str] = {
+        "recepcao":         "p0",
         "qualification":    "p1",
         "apresentation":    "p2",
         "pre-agendamento":  "p3a",
