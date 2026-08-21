@@ -13,6 +13,7 @@ import {
   SALES_FLOW_PHASE_ID_LABELS,
   SALES_FLOW_BLOCK_CATEGORIES,
   SALES_FLOW_PHASES_BY_AGENT_MODE,
+  SALES_FLOW_PHASE_COLORS,
 } from '@/types/agente';
 import { buildVariableList } from '@/types/variables';
 import { VariableTextarea } from './VariableTextarea';
@@ -52,11 +53,7 @@ const BLOCK_TYPE_LABELS: Record<SalesFlowBlockTypeId, string> = {
   espera:           'Espera',
 };
 
-const PHASE_COLORS: Record<SalesFlowPhaseId, string> = {
-  p0: '#10b981', p1: '#38bdf8', p2: '#60a5fa',
-  p3a: '#a78bfa', p3b: '#c084fc',
-  p4: '#fb923c', p5: '#f472b6',
-};
+const PHASE_COLORS = SALES_FLOW_PHASE_COLORS;
 
 const PHASE_LABEL_SHORT: Record<SalesFlowPhaseId, string> = {
   p0: 'Fase 0', p1: 'Fase 1', p2: 'Fase 2',

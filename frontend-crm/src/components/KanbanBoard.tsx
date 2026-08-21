@@ -29,6 +29,9 @@ import { Alert, AlertDescription, AlertTitle } from "./ui/alert";
 import { FollowUpTransitionModal } from "./FollowUpTransitionModal";
 import { ProspectConfirmModal } from "./ProspectConfirmModal";
 import { useNotifications } from "@/hooks/useNotifications";
+import { SALES_FLOW_PHASES_BY_AGENT_MODE } from "@/types/agente";
+import type { SalesFlowPhaseId } from "@/types/agente";
+import { api } from "@/services/api";
 
 interface KanbanBoardProps {
   onDashboard: () => void;
@@ -82,6 +85,10 @@ export function KanbanBoard({ onDashboard }: KanbanBoardProps) {
   const [prospectModalOpen, setProspectModalOpen] = useState(false);
   const [prospectLead, setProspectLead] = useState<Lead | null>(null);
   const [profileAgentType, setProfileAgentType] = useState<"agent_1" | "agent_2" | "agent_3" | null>(null);
+  // Sequência de fases do Fluxo de Venda para o funil resumido do card (LeadCard) — uma
+  // única conta = um único ai_profile, então basta buscar agent_mode uma vez aqui, não
+  // por card. Reaproveita a mesma chamada a getAiProfileMe() já feita para agent_type.
+  const [phaseSequence, setPhaseSequence] = useState<SalesFlowPhaseId[]>([]);
   const { notifiedLeadIds } = useNotifications();
 
   useEffect(() => {
@@ -98,6 +105,10 @@ export function KanbanBoard({ onDashboard }: KanbanBoardProps) {
             : "agent_1";
         if (mounted) {
           setProfileAgentType(inferred);
+          const rawMode = String(profile?.agent_mode || "").trim().toLowerCase();
+          const agentGroup = rawMode === "sdr_scheduler" ? "agenda" : rawMode === "closer" ? "direto" : rawMode;
+          const seq = SALES_FLOW_PHASES_BY_AGENT_MODE[agentGroup] ?? SALES_FLOW_PHASES_BY_AGENT_MODE.agenda;
+          setPhaseSequence(seq);
         }
       } catch {
         if (mounted) {
@@ -494,6 +505,7 @@ export function KanbanBoard({ onDashboard }: KanbanBoardProps) {
                 onOpenCard={handleOpenCard}
                 onDeleteLead={handleDeleteLead}
                 notifiedLeadIds={notifiedLeadIds}
+                phaseSequence={phaseSequence}
               />
             ))}
 
@@ -512,6 +524,7 @@ export function KanbanBoard({ onDashboard }: KanbanBoardProps) {
                   onOpenCard={handleOpenCard}
                   onDeleteLead={handleDeleteLead}
                   notifiedLeadIds={notifiedLeadIds}
+                  phaseSequence={phaseSequence}
                 />
               ))}
           </div>

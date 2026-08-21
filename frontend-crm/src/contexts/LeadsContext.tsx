@@ -66,6 +66,19 @@ function mapRawLead(raw: any): Lead {
       }
     : undefined;
 
+  let phasesTriggered: string[] | undefined;
+  const rawPhasesTriggered = raw?.phases_triggered ?? raw?.phasesTriggered;
+  if (Array.isArray(rawPhasesTriggered)) {
+    phasesTriggered = rawPhasesTriggered;
+  } else if (typeof rawPhasesTriggered === 'string' && rawPhasesTriggered.trim()) {
+    try {
+      const parsed = JSON.parse(rawPhasesTriggered);
+      phasesTriggered = Array.isArray(parsed) ? parsed : undefined;
+    } catch {
+      phasesTriggered = undefined;
+    }
+  }
+
   let followupContract: Record<string, any> | null = null;
   const rawContract = raw?.followup_contract ?? raw?.followupContract;
   if (rawContract && typeof rawContract === 'object') {
@@ -90,6 +103,7 @@ function mapRawLead(raw: any): Lead {
     customMessage: raw.customMessage || '',
     observations: raw.observations || '',
     agent_type: raw.agent_type ?? null,
+    phasesTriggered,
     followup_contract: followupContract,
     bot_disabled: Boolean(raw.bot_disabled ?? raw.botDisabled),
     bot_disabled_reason: raw.bot_disabled_reason ?? raw.botDisabledReason ?? null,

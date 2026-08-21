@@ -45,6 +45,7 @@ export interface Lead {
   customMessage: string;
   observations: string;
   agent_type?: 'agent_1' | 'agent_2' | 'agent_3' | null;
+  phasesTriggered?: string[];
   followup_contract?: Record<string, any> | null;
   bot_disabled?: boolean;
   bot_disabled_reason?: string | null;

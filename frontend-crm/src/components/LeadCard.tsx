@@ -5,6 +5,55 @@ import { CSS } from "@dnd-kit/utilities";
 import { LeadActionsMenu } from "./LeadActionsMenu";
 import { useNavigate } from "react-router-dom";
 import { leadDisplayName } from "@/utils/leadDisplayName";
+import type { SalesFlowPhaseId } from "@/types/agente";
+import { SALES_FLOW_PHASE_ID_LABELS, SALES_FLOW_PHASE_COLORS } from "@/types/agente";
+
+// Mapeia lead.category (estado persistido no Kanban) para o phase_id do Fluxo de Venda —
+// espelha _ROUTE_TO_PHASE_ID em backend-executors/app/services/decision_engine.py.
+const CATEGORY_TO_PHASE_ID: Record<string, SalesFlowPhaseId> = {
+  "qualification":    "p1",
+  "apresentation":    "p2",
+  "pre-agendamento":  "p3a",
+  "pre_agendamento":  "p3a",
+  "agendamento":      "p3b",
+  "follow-up":        "p4",
+  "follow_up":        "p4",
+  "closing":          "p5",
+};
+
+// Funil resumido do Fluxo de Venda — mostra, de forma compacta, por onde o lead já
+// passou (leads.phases_triggered) e em qual fase está agora (lead.category), sem
+// detalhar os gatilhos individuais (isso fica para uma futura iteração no modal do lead).
+function SalesFlowFunnel({ lead, phaseSequence }: { lead: Lead; phaseSequence: SalesFlowPhaseId[] }) {
+  if (!phaseSequence.length) return null;
+
+  const currentPhaseId = CATEGORY_TO_PHASE_ID[lead.category];
+  const currentIndex = currentPhaseId ? phaseSequence.indexOf(currentPhaseId) : -1;
+  const triggered = new Set(lead.phasesTriggered ?? []);
+
+  return (
+    <div className="flex items-center gap-1 pt-1" title="Progresso no Fluxo de Venda">
+      {phaseSequence.map((phaseId, i) => {
+        const color = SALES_FLOW_PHASE_COLORS[phaseId];
+        const isCurrent = i === currentIndex;
+        const isDone = triggered.has(phaseId) || (currentIndex >= 0 && i < currentIndex);
+        return (
+          <span
+            key={phaseId}
+            title={`${SALES_FLOW_PHASE_ID_LABELS[phaseId]}${isCurrent ? " (atual)" : ""}`}
+            className="inline-block rounded-full"
+            style={{
+              width: isCurrent ? 8 : 6,
+              height: isCurrent ? 8 : 6,
+              background: isDone || isCurrent ? color : color + "33",
+              boxShadow: isCurrent ? `0 0 0 2px ${color}55` : "none",
+            }}
+          />
+        );
+      })}
+    </div>
+  );
+}
 
 const FOLLOWUP_VARIANT_CONFIG: Record<string, { label: string; color: string }> = {
   cart_recovery:    { label: "Carrinho",  color: "#52C4A0" },
@@ -54,6 +103,7 @@ interface LeadCardProps {
   onOpenCard: (leadId: string) => void;
   onDeleteLead: (leadId: string) => Promise<void>;
   hasReplyNotification?: boolean;
+  phaseSequence?: SalesFlowPhaseId[];
 }
 
 export function LeadCard({
@@ -68,6 +118,7 @@ export function LeadCard({
   onOpenCard,
   onDeleteLead,
   hasReplyNotification = false,
+  phaseSequence = [],
 }: LeadCardProps) {
   const navigate = useNavigate();
   const {
@@ -172,6 +223,8 @@ export function LeadCard({
         <div className="text-muted-foreground">
           <span className="text-xs font-medium">Origem:</span> {lead.origin}
         </div>
+
+        <SalesFlowFunnel lead={lead} phaseSequence={phaseSequence} />
 
         {lead.observations && (
           <div className="text-muted-foreground">

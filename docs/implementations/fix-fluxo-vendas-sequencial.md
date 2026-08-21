@@ -1,7 +1,7 @@
 # Fix: Fluxo de Venda — gating sequencial de gatilhos + orientações críticas persistentes
 
 **Branch:** `fix-fluxo-vendas-sequencial`
-**Status:** Em andamento
+**Status:** Todos os cenários validados (21/08/2026)
 
 ---
 
@@ -130,9 +130,35 @@ Escopo: só agentes com recursos de agendamento (`agent_1`/SDR e `agent_3`/Híbr
 
 | Arquivo | O que muda |
 |---|---|
-| `frontend-crm/src/types/crm.ts` | `phases_triggered?: string[]` em `interface Lead` |
-| `frontend-crm/src/components/LeadCard.tsx` | Breadcrumb compacto de fases (concluída/atual/futura) |
-| `frontend-crm/src/contexts/LeadsContext.tsx` (ou `KanbanBoard.tsx`) | Busca `agent_mode` uma única vez para derivar a sequência de fases |
+| `frontend-crm/src/types/crm.ts` | `phasesTriggered?: string[]` em `interface Lead` |
+| `frontend-crm/src/contexts/LeadsContext.tsx` | `mapRawLead()` parseia `raw.phases_triggered` (JSON string) para `phasesTriggered: string[]` |
+| `frontend-crm/src/types/agente.ts` | Nova constante `SALES_FLOW_PHASE_COLORS` (extraída de `CamadaFluxoVenda.tsx`, agora partilhada) |
+| `frontend-crm/src/components/KanbanBoard.tsx` | Reaproveita o `useEffect` que já buscava `agent_mode` (para `profileAgentType`) para também derivar `phaseSequence` via `SALES_FLOW_PHASES_BY_AGENT_MODE`; passa a prop a `KanbanColumn` |
+| `frontend-crm/src/components/KanbanColumn.tsx` | Repassa `phaseSequence` a cada `LeadCard` |
+| `frontend-crm/src/components/LeadCard.tsx` | Novo componente `SalesFlowFunnel` — breadcrumb compacto (bolinhas coloridas por fase); concluída/atual via `phasesTriggered` + posição na sequência, futura apagada |
+
+### Commits Fase 5
+
+| # | Commit | O que foi implementado |
+|---|---|---|
+| 1 | `<preencher após commit>` | Funil visual no card do Kanban + fix de bug pré-existente (`api` não importado em `KanbanBoard.tsx`) |
+
+**Detalhes:**
+- `frontend-crm/src/components/KanbanBoard.tsx` — **bug pré-existente encontrado e corrigido**: o arquivo usava `api.core.getAiProfileMe()` em dois lugares (`profileAgentType`/`resolveAgentTypeForLead`) mas nunca importava `api` de `@/services/api` — `ReferenceError: api is not defined`, capturado silenciosamente pelo `try/catch` (sem log), fazendo o fallback de `agent_type` a nível de conta nunca funcionar. Descoberto ao debugar por que `phaseSequence` ficava sempre vazio. Corrigido com o import em falta — beneficia tanto o funil novo quanto o `profileAgentType`/`resolveAgentTypeForLead` já existentes.
+- Mesmo arquivo — novo estado `phaseSequence`, populado no mesmo `useEffect` que já buscava o perfil (sem chamada de API extra), usando a mesma normalização de `agent_mode` já usada em `CamadaFluxoVenda.tsx` (`sdr_scheduler`→agenda, `closer`→direto)
+- `frontend-crm/src/types/agente.ts` — `SALES_FLOW_PHASE_COLORS` extraída de `CamadaFluxoVenda.tsx` (`PHASE_COLORS` local vira alias) para ser partilhada com `LeadCard.tsx`
+- `frontend-crm/src/components/LeadCard.tsx` — `SalesFlowFunnel`: mapeia `lead.category` → `phase_id` (espelha `_ROUTE_TO_PHASE_ID` do backend), marca fases concluídas via `phasesTriggered` (∈ conjunto) ou por posição anterior à fase atual na sequência; fase atual com bolinha maior + anel; futuras apagadas (opacity baixa)
+- `frontend-crm/src/contexts/LeadsContext.tsx` — `mapRawLead()` ganha parsing de `phasesTriggered`, mesmo padrão do já existente `followupContract` (JSON string → array, tolerante a erro)
+
+### Relatório da Fase 5 — o que mudou na prática
+
+**Antes:** não havia nenhuma forma de ver, olhando o quadro Kanban, por onde um lead já tinha passado dentro do Fluxo de Venda — só a coluna (fase) atual.
+
+**Agora:** cada card do Kanban mostra uma fileira compacta de bolinhas — uma por fase do funil configurado para o tipo de agente da conta — com a fase já concluída preenchida, a fase atual destacada (maior, com contorno), e as fases futuras apagadas. Passar o cursor sobre uma bolinha mostra o nome da fase.
+
+**Para validar:** Cenário C2 (abaixo, browser MCP).
+
+**Nota lateral:** ao investigar por que o funil não aparecia, encontrei e corrigi um bug pré-existente e não relacionado ao Fluxo de Venda — `KanbanBoard.tsx` chamava `api.core.getAiProfileMe()` sem nunca ter importado `api`, silenciosamente quebrando o fallback de `agent_type` a nível de conta (usado quando um lead individual não tem `agent_type` próprio).
 
 ### Commits Fase 3
 
@@ -189,8 +215,9 @@ Escopo: só agentes com recursos de agendamento (`agent_1`/SDR e `agent_3`/Híbr
   - **Nota de escopo:** o Cenário C1 original pedia "WhatsApp real"; o teste foi feito via Playground (mesmo motor de decisão, `decision_engine.py`, usado pelos dois caminhos — ver `docs/architecture/playground-parity.md`). Considerado equivalente para validar esta fase; reteste no WhatsApp real fica a critério do utilizador.
 
 ### Cenário C2 — Funil no Kanban (browser MCP)
-- [ ] Abrir Kanban com lead em fase intermediária do Fluxo de Venda
-- [ ] Confirmar: breadcrumb mostra fase atual + fases concluídas de forma compacta
+- [x] Abrir Kanban com lead em fase intermediária do Fluxo de Venda
+- [x] Confirmar: breadcrumb mostra fase atual + fases concluídas de forma compacta
+- **Validado em:** 21/08/2026 — via chrome-devtools MCP, conta "Daniel" (agent_mode agenda). Lead "França" (`category: "qualification"`, `phases_triggered: null`): funil mostrou a bolinha da fase "Recepção" preenchida (concluída por posição — antes da atual) e "Qualificação" destacada como atual (maior, com contorno), fases seguintes (Apresentação → Fechamento) apagadas. Leads em "À Prospectar" (`category: "to-prospect"`, fora da sequência do Fluxo de Venda) mostraram todas as bolinhas apagadas, sem nenhuma marcada como atual — comportamento correto.
 
 ---
 

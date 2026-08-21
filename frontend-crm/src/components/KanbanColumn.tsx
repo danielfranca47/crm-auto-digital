@@ -2,6 +2,7 @@ import { KanbanColumn as KanbanColumnType, Lead } from "../types/crm";
 import { LeadCard } from "./LeadCard";
 import { useDroppable } from "@dnd-kit/core";
 import { SortableContext, verticalListSortingStrategy } from "@dnd-kit/sortable";
+import type { SalesFlowPhaseId } from "@/types/agente";
 
 interface KanbanColumnProps {
   column: KanbanColumnType;
@@ -15,6 +16,7 @@ interface KanbanColumnProps {
   onOpenCard: (leadId: string) => void;
   onDeleteLead: (leadId: string) => Promise<void>;
   notifiedLeadIds?: Set<string>;
+  phaseSequence?: SalesFlowPhaseId[];
 }
 
 export function KanbanColumn({
@@ -29,6 +31,7 @@ export function KanbanColumn({
   onOpenCard,
   onDeleteLead,
   notifiedLeadIds,
+  phaseSequence,
 }: KanbanColumnProps) {
   const { setNodeRef } = useDroppable({
     id: column.id,
@@ -68,6 +71,7 @@ export function KanbanColumn({
               onOpenCard={onOpenCard}
               onDeleteLead={onDeleteLead}
               hasReplyNotification={notifiedLeadIds?.has(lead.id) ?? false}
+              phaseSequence={phaseSequence}
             />
           ))}
         </SortableContext>

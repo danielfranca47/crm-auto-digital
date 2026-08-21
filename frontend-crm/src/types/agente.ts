@@ -115,6 +115,14 @@ export const SALES_FLOW_PHASES_BY_AGENT_MODE: Record<string, SalesFlowPhaseId[]>
   agenda:     ['p0', 'p1', 'p2', 'p3a', 'p3b', 'p4', 'p5'],
 };
 
+// Cor de destaque por fase — usada no builder (CamadaFluxoVenda) e no funil resumido do
+// card do Kanban (LeadCard), para a mesma fase ter sempre a mesma cor nos dois lugares.
+export const SALES_FLOW_PHASE_COLORS: Record<SalesFlowPhaseId, string> = {
+  p0: '#10b981', p1: '#38bdf8', p2: '#60a5fa',
+  p3a: '#a78bfa', p3b: '#c084fc',
+  p4: '#fb923c', p5: '#f472b6',
+};
+
 export const SALES_FLOW_BLOCK_TYPE_LABELS: Record<SalesFlowBlockTypeId, string> = {
   kw_trigger:      'Palavra-chave',
   phase_trigger:   'Fase iniciada',
