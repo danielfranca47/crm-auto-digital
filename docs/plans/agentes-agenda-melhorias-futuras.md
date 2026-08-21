@@ -208,3 +208,29 @@ não mostrar a data/hora exacta dependendo de onde é exibido.
 
 **O que precisaria existir:** aplicar `AppointmentTimeLabel`/`toBusinessTimezoneDate` ao
 badge, consistente com o resto da Agenda.
+
+---
+
+## M9 — Toggle "Objetivo do Agendamento" afeta o Agente 01 além do Agente 03 (doc incompleta)
+
+**Prioridade: BAIXA** (observação para manter atenção — sem reclamação de usuário reportada;
+não investigar nem aplicar até haver sinal real de impacto)
+
+**Contexto:** identificado em conversa durante a graduação de
+`fix-presentation-variant-agente-direto.md` (21/08/2026), ao discutir se `presentation_variant`
+deveria ser 100% implícito nos 3 presets de agente em vez de exposto como configuração separada.
+
+**Estado atual:** o toggle "Objetivo do Agendamento" (`appointment_mode`, Camada 5 ·
+Apresentação) tem dois efeitos distintos em `decision_engine.py`, mas só um está documentado
+em `docs/architecture/agents.md`:
+1. Bloco de aquecimento/MODO COMERCIAL (`decision_engine.py:2651-2654`) — de fato restrito a
+   `template_key="hybrid_scheduler"` (Agente 03), como a doc descreve.
+2. Instrução geral sales/scheduler que define o tom da fase de Apresentação
+   (`decision_engine.py:3022-3024`) — **sem essa restrição**, roda para qualquer agente que
+   passe pela Apresentação, incluindo o Agente 01 (`sdr_padrao`). Se "Compromisso Comercial"
+   for marcado num Agente 01, o bot passa a tentar fechar oferta + enviar link de checkout
+   durante a apresentação — fora do design pretendido do Agente 01 (qualificar a fundo e
+   escalar para humano, não fechar sozinho).
+
+**Decisão do usuário (21/08/2026):** não investigar nem corrigir agora — só manter registado.
+Revisitar se surgir reclamação ou sinal real de impacto em produção.

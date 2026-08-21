@@ -188,7 +188,12 @@ jobs já resolvidos.
 
 **`presentation_variant`**: `"sales"`, `"scheduler"`, `null`. Default por `agent_mode` quando `null` — `direto`/`closer→sales`, `agenda`/`consultivo→scheduler` (`_resolve_presentation_variant()`, `decision_engine.py`)
 
-**`appointment_mode`**: `"exploratory"` (padrão — sessão sem compromisso de compra), `"commercial"` (apresenta serviços/preços e busca compromisso antes de agendar — só com efeito para `template_key="hybrid_scheduler"`). A aba de UI onde este campo é editável fica oculta para agentes `direto`/`closer` (isDirectMode). Ao salvar via UI, `presentation_variant` é actualizado em conjunto **só para `agenda`/`consultivo`** (`commercial→sales`, `exploratory→scheduler`); para `direto`/`closer` é sempre `"sales"`, independente de `appointment_mode` — reforçado também no backend (`_upsert_ai_profile`, `backend-core/app/api/ai_profiles.py`)
+**`appointment_mode`**: `"exploratory"` (padrão — sessão sem compromisso de compra), `"commercial"` (apresenta serviços/preços e busca compromisso antes de agendar — só com efeito para `template_key="hybrid_scheduler"`). A aba de UI onde este campo é editável (Camada 5 · Apresentação) fica oculta para agentes `direto`/`closer` (`isDirectMode` em `AiProfile.tsx`) — para esse grupo `appointment_mode` não é acessível nem relevante.
+
+**Invariante `presentation_variant` × `agent_mode` (dupla camada):**
+- **Frontend** (`saveConfig()`, `frontend-crm/src/services/api.ts`): para `agenda`/`consultivo`, deriva de `appointment_mode` (`commercial→sales`, `exploratory→scheduler`); para `direto`/`closer`, envia sempre `"sales"`, ignorando `appointment_mode`.
+- **Backend** (`_upsert_ai_profile()`, `backend-core/app/api/ai_profiles.py`): força `presentation_variant="sales"` sempre que o `agent_mode` efetivo (do payload ou já persistido) é `direto`/`closer` — independe do que qualquer caller envie (frontend, admin, integração futura). Fonte de verdade real do invariante; o frontend só evita a viagem redundante.
+- Perfis `direto`/`closer` salvos antes desta guarda existir (`presentation_variant` preso em `"scheduler"`) são corrigidos automaticamente no boot do backend-core por `ensure_presentation_variant_direto_backfill()` (`app/db.py`), que reseta o campo para `NULL` nesses casos.
 
 **`hybrid_flow_style`**: `"offer_then_schedule"`, `"schedule_then_offer"`, `null`
 
