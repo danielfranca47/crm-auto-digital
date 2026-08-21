@@ -63,6 +63,25 @@ Pesquisa aplicada ao diagnóstico:
 
 Escopo deliberado: só gatilhos `fire_once=True` (e `phase_trigger`, inerentemente único) participam do encadeamento sequencial — um `kw_trigger` sem `fire_once` não tem registo persistido de "já disparou" e mantém o comportamento atual.
 
+### Commits Fase 1
+
+| # | Commit | O que foi implementado |
+|---|---|---|
+| 1 | `28a5f1b` | Gating sequencial de gatilhos + orientações críticas como guarda permanente |
+
+**Detalhes do commit `28a5f1b`:**
+- `backend-executors/app/services/decision_engine.py` — `_evaluate_sales_flow_phases()`: carrega `phases_triggered` do lead (além do já existente `triggers_fired`); novo helper `_trigger_persisted_satisfied()`; nova variável `_prereqs_satisfied` que bloqueia (`fired=False`) qualquer gatilho sequencial (`phase_trigger` ou `kw_trigger`/`intent_trigger` com `fire_once=True`) enquanto o gatilho sequencial anterior da fase não estiver satisfeito; segunda passagem no fim da função reinjecta orientações `priority: critical` como guarda permanente enquanto o próximo gatilho sequencial não disparar
+- `backend-executors/tests/test_sales_flow_intent_trigger_phase_entry.py` — `test_later_intent_trigger_blocked_until_earlier_one_fires` e `test_critical_orientation_persists_until_next_trigger_fires`, reproduzindo o cenário exato do agente "Daniel" (Sensi Vitae)
+- `docs/architecture/sales-flow.md` — seção "Modelo sequencial de trigger" reescrita com os dois novos mecanismos
+
+### Relatório da Fase 1 — o que mudou na prática
+
+**Antes:** um gatilho mais à frente na sequência do Fluxo de Venda (ex.: "cliente indicou o serviço") podia disparar antes de um gatilho anterior (ex.: "cliente aceitou ver a tabela") — bastava a IA Mãe classificar a intenção naquele turno. E uma instrução marcada como "crítica" (ex.: "não pergunte disponibilidade ainda") só valia no turno em que apareceu pela primeira vez — nos turnos seguintes da mesma fase, o bot deixava de "lembrar" dela.
+
+**Agora:** um gatilho só pode disparar depois de todos os gatilhos anteriores da mesma fase (com "disparar uma vez" ativado) já terem disparado — não há mais como "pular etapas". E uma instrução crítica permanece ativa em todo turno da fase até a condição que ela guarda ser realmente cumprida, não só no primeiro turno.
+
+**Para validar:** Cenários P1 e P2 (pytest, já confirmados abaixo) e Cenário C1 (WhatsApp real).
+
 ### Fase 2 — Backend: `is_phase_entry` correto nas chamadas de construção de prompt
 
 **Objetivo:** eliminar a inconsistência entre o que o prompt afirma (default `True`) e o que realmente foi despachado (`is_phase_entry` calculado corretamente).
@@ -98,13 +117,15 @@ Escopo: só agentes com recursos de agendamento (`agent_1`/SDR e `agent_3`/Híbr
 ## Checks de Validação
 
 ### Cenário P1 — Gatilho posterior não salta na frente (pytest)
-- [ ] `detected_intents` inclui a label do 2º `intent_trigger` mas não a do 1º (que ainda não está em `triggers_fired`)
-- [ ] Confirmar: 2º gatilho não dispara (bloqueado), `system_actions`/`prompt_injections` do 2º grupo ausentes
+- [x] `detected_intents` inclui a label do 2º `intent_trigger` mas não a do 1º (que ainda não está em `triggers_fired`)
+- [x] Confirmar: 2º gatilho não dispara (bloqueado), `system_actions`/`prompt_injections` do 2º grupo ausentes
+- **Validado em:** 21/08/2026 — `test_later_intent_trigger_blocked_until_earlier_one_fires`; confirmado que falha sem o fix (`mark_trigger_fired` disparava e `ask-availability` era injectado) e passa com ele.
 
 ### Cenário P2 — Orientação crítica persiste entre turnos (pytest)
-- [ ] Turno 1: `phase_trigger` dispara, orientação crítica aparece em `prompt_injections`
-- [ ] Turno 2 (sem `is_phase_entry`, sem o gatilho seguinte satisfeito): orientação crítica continua em `prompt_injections`
-- [ ] Turno 3 (gatilho seguinte satisfeito/persistido): orientação crítica desaparece
+- [x] Turno 1: `phase_trigger` dispara, orientação crítica aparece em `prompt_injections`
+- [x] Turno 2 (sem `is_phase_entry`, sem o gatilho seguinte satisfeito): orientação crítica continua em `prompt_injections`
+- [x] Turno 3 (gatilho seguinte satisfeito/persistido): orientação crítica desaparece
+- **Validado em:** 21/08/2026 — `test_critical_orientation_persists_until_next_trigger_fires`; confirmado que o turno 2 falha sem o fix (instrução sumia) e passa com ele.
 
 ### Cenário P3 — `is_phase_entry` correto no prompt (pytest)
 - [ ] Turno 2+ da mesma fase: prompt não repete "ATENÇÃO: mensagens enviadas automaticamente"
