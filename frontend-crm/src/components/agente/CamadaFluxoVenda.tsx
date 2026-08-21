@@ -6,6 +6,7 @@ import type {
   SalesFlow,
   SalesFlowBlock,
   SalesFlowBlockTypeId,
+  SalesFlowBranch,
   SalesFlowPhaseData,
   SalesFlowPhaseId,
 } from '@/types/agente';
@@ -35,7 +36,7 @@ const BLOCK_META: Record<SalesFlowBlockTypeId, { icon: string; color: string; de
   midia:            { icon: '🎵', color: '#a78bfa', desc: 'Envio real de ficheiro (áudio/imagem/doc)' },
   avancar_fase:     { icon: '➡️', color: '#34d399', desc: 'Move o lead para outra fase automaticamente' },
   webhook:          { icon: '🌐', color: '#f472b6', desc: 'Chamada HTTP a sistema externo' },
-  condicao:         { icon: '🔀', color: '#fb923c', desc: 'Cria dois caminhos baseados numa condição' },
+  condicao:         { icon: '🔀', color: '#fb923c', desc: 'Divide o fluxo em caminhos nomeados avaliados pela IA' },
   espera:           { icon: '⏳', color: '#94a3b8', desc: 'Pausa o fluxo por um tempo definido' },
 };
 
@@ -49,7 +50,7 @@ const BLOCK_TYPE_LABELS: Record<SalesFlowBlockTypeId, string> = {
   midia:            'Enviar Mídia',
   avancar_fase:     'Avançar Fase',
   webhook:          'Webhook / API',
-  condicao:         'Condição',
+  condicao:         'Lógica de Ramificação',
   espera:           'Espera',
 };
 
@@ -85,6 +86,18 @@ function initPhases(sf: SalesFlow): SalesFlowPhaseData[] {
 }
 
 function emptyBlock(typeId: SalesFlowBlockTypeId): SalesFlowBlock {
+  if (typeId === 'condicao') {
+    return {
+      id: crypto.randomUUID(),
+      typeId,
+      label: '',
+      sticky: true,
+      branches: [
+        { id: crypto.randomUUID(), label: 'Caminho A', criteria: '' },
+        { id: crypto.randomUUID(), label: 'Caminho B', criteria: '' },
+      ],
+    };
+  }
   return { id: crypto.randomUUID(), typeId };
 }
 
@@ -100,7 +113,9 @@ function blockSummary(block: SalesFlowBlock): string {
     case 'midia':            return block.media_type ? `${block.media_type}${block.caption ? ': ' + block.caption.slice(0, 30) : ''}` : '—';
     case 'avancar_fase':     return block.target_phase ? `→ ${SALES_FLOW_PHASE_ID_LABELS[block.target_phase]}` : '—';
     case 'webhook':          return (block.url || '').slice(0, 50) || '—';
-    case 'condicao':         return (block.condition || '').slice(0, 50) || '—';
+    case 'condicao':         return block.branches?.length
+      ? `${block.label || 'Sem nome'} (${block.branches.length} caminhos)`
+      : (block.condition ? 'Bloco desatualizado — reconfigure' : '—');
     case 'espera':           return block.wait_value ? `${block.wait_value} ${block.wait_unit || 'horas'}` : '—';
     default:                 return '';
   }
@@ -459,26 +474,91 @@ function BlockForm({ block, setBlock, knowledgeItems, customVars }: {
         </>
       );
 
-    case 'condicao':
+    case 'condicao': {
+      // Blocos salvos antes desta versão (condition/branch_yes/branch_no) nunca tiveram
+      // efeito real na conversa — não há o que migrar, só sinalizar para reconfigurar.
+      const isLegacyShape = !block.branches?.length && !!(block.condition || block.branch_yes || block.branch_no);
+      if (isLegacyShape) {
+        return (
+          <div className="o-field">
+            <div style={{
+              fontSize: 12.5, color: '#f59e0b', background: '#f59e0b1a', border: '1px solid #f59e0b44',
+              borderRadius: 8, padding: 10, lineHeight: 1.6,
+            }}>
+              Este bloco está num formato antigo que nunca teve efeito real na conversa.
+              Remova-o e adicione um novo bloco de Lógica de Ramificação para configurar
+              caminhos que realmente funcionam.
+            </div>
+          </div>
+        );
+      }
+
+      const branches: SalesFlowBranch[] = block.branches || [];
+
+      function updateBranch(id: string, patch: Partial<SalesFlowBranch>) {
+        set('branches', branches.map(b => (b.id === id ? { ...b, ...patch } : b)));
+      }
+      function addBranch() {
+        const letter = String.fromCharCode(65 + branches.length);
+        set('branches', [...branches, { id: crypto.randomUUID(), label: `Caminho ${letter}`, criteria: '' }]);
+      }
+      function removeBranch(id: string) {
+        if (branches.length <= 2) return; // mínimo 2 caminhos
+        set('branches', branches.filter(b => b.id !== id));
+      }
+
       return (
         <>
           <div className="o-field">
-            <label className="o-field-label">Condição a avaliar *</label>
-            <input className="o-input" placeholder="Ex: lead informou data e hora específica"
-              value={block.condition || ''} onChange={e => set('condition', e.target.value)} />
+            <label className="o-field-label">Nome da lógica *</label>
+            <input className="o-input" placeholder="Ex: Interesse em preço vs objeção de valor"
+              value={block.label || ''} onChange={e => set('label', e.target.value)} />
           </div>
           <div className="o-field">
-            <label className="o-field-label">Caminho SIM → ação</label>
-            <input className="o-input" placeholder="Ex: Avançar para Fase 2B"
-              value={block.branch_yes || ''} onChange={e => set('branch_yes', e.target.value)} />
+            <label className="o-field-label">Caminhos</label>
+            <div className="o-field-hint">
+              Para cada caminho, descreva o que a IA deve identificar na conversa do lead para
+              segui-lo. Pode renomear os caminhos e adicionar mais do que dois.
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 8 }}>
+              {branches.map(br => (
+                <div key={br.id} style={{ border: '1px solid var(--o-b1)', borderRadius: 8, padding: 10 }}>
+                  <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 6 }}>
+                    <input className="o-input" style={{ flex: 1, fontWeight: 600 }}
+                      value={br.label} onChange={e => updateBranch(br.id, { label: e.target.value })} />
+                    {branches.length > 2 && (
+                      <button type="button" onClick={() => removeBranch(br.id)}
+                        title="Remover caminho"
+                        style={{ background: 'none', border: 'none', color: 'var(--o-sub)', cursor: 'pointer', fontSize: 15, padding: '2px 6px' }}>
+                        ✕
+                      </button>
+                    )}
+                  </div>
+                  <textarea className="o-input" rows={2}
+                    placeholder="Ex: lead perguntou o preço ou pediu para ver a tabela"
+                    value={br.criteria} onChange={e => updateBranch(br.id, { criteria: e.target.value })}
+                    style={{ resize: 'vertical' }} />
+                </div>
+              ))}
+            </div>
+            <button type="button" onClick={addBranch}
+              style={{
+                marginTop: 8, background: 'none', border: '1px dashed var(--o-b1)', borderRadius: 6,
+                padding: '6px 12px', cursor: 'pointer', fontSize: 12.5, color: 'var(--o-sub)',
+              }}>
+              + Adicionar caminho
+            </button>
           </div>
-          <div className="o-field">
-            <label className="o-field-label">Caminho NÃO → ação</label>
-            <input className="o-input" placeholder="Ex: Permanecer em Fase 2A"
-              value={block.branch_no || ''} onChange={e => set('branch_no', e.target.value)} />
+          <div className="o-field" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <input type="checkbox" id="cond-sticky" checked={block.sticky !== false}
+              onChange={e => set('sticky', e.target.checked)} style={{ cursor: 'pointer' }} />
+            <label htmlFor="cond-sticky" style={{ cursor: 'pointer', fontSize: 12.5 }}>
+              Fixar caminho após a primeira escolha (não reavaliar em turnos seguintes)
+            </label>
           </div>
         </>
       );
+    }
 
     case 'espera':
       return (

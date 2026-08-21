@@ -63,6 +63,15 @@ export type SalesFlowBlockTypeId =
 
 export type SalesFlowPhaseId = 'p0' | 'p1' | 'p2' | 'p3a' | 'p3b' | 'p4' | 'p5';
 
+/** Um caminho nomeado dentro de um nó `condicao` (Lógica de Ramificação). `criteria` é o
+ * texto livre que a Mãe avalia para decidir se o lead segue por este caminho — ver
+ * docs/architecture/sales-flow.md, "Lógica de Ramificação". */
+export interface SalesFlowBranch {
+  id: string;
+  label: string;
+  criteria: string;
+}
+
 export interface SalesFlowBlock {
   id: string;
   typeId: SalesFlowBlockTypeId;
@@ -87,7 +96,14 @@ export interface SalesFlowBlock {
   target_phase?: SalesFlowPhaseId;
   url?: string;
   method?: string;
-  // logic
+  // logic — nó de ramificação (`typeId === 'condicao'`)
+  label?: string;                 // nome da lógica (ex.: "Interesse em preço vs objeção de valor")
+  branches?: SalesFlowBranch[];   // caminhos nomeados (mínimo 2)
+  sticky?: boolean;                // true (default) = fixa o caminho escolhido após a 1ª vez
+  // logic — bloco filho pertencente a um caminho de um nó `condicao`
+  branch_group_id?: string;       // id do bloco `condicao` pai
+  branch_id?: string;             // id do caminho (SalesFlowBranch.id) dentro desse nó
+  // legado — nunca teve efeito em runtime, mantido só para detetar blocos desatualizados
   condition?: string;
   branch_yes?: string;
   branch_no?: string;
@@ -133,7 +149,7 @@ export const SALES_FLOW_BLOCK_TYPE_LABELS: Record<SalesFlowBlockTypeId, string> 
   midia:           'Enviar Mídia',
   avancar_fase:    'Avançar Fase',
   webhook:         'Webhook / API',
-  condicao:        'Condição (Bifurcação)',
+  condicao:        'Lógica de Ramificação',
   espera:          'Espera (Smart Delay)',
 };
 
