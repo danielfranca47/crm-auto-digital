@@ -150,6 +150,29 @@ aninhada dos caminhos e o botão de adicionar bloco a um caminho).
 |---|---|
 | `frontend-crm/src/components/agente/CamadaFluxoVenda.tsx` | `PhaseSection` reconhece nó de ramificação e sub-agrupa por `branch_id`; novo `saveBranchBlock()`; exclusão do bucket genérico |
 
+### Commits Fase 3
+
+| # | Commit | O que foi implementado |
+|---|---|---|
+| 1 | `b674866` | Render aninhado dos caminhos + adicionar bloco a um caminho + fix de cascade-delete |
+
+**Detalhes do commit `b674866`:**
+- `PhaseSection` — grouping loop cria um `BranchGroup` separado para blocos `condicao`;
+  novo componente `BranchGroupRow`; blocos com `branch_group_id` saem do bucket genérico
+- `BlockModal` ganhou prop `excludeTypes` — usado para esconder "Lógica de Ramificação" ao
+  adicionar bloco a um caminho (sem ramificação aninhada nesta versão), mas mantendo a aba
+  "Gatilho" disponível (um caminho pode ter o seu próprio gatilho sequencial)
+- `saveBranchBlock()` — insere após o último bloco do caminho, ou após o nó se vazio
+- **Fix descoberto durante validação ao vivo:** `removeBlock()` não fazia cascade-delete dos
+  filhos de um nó removido — ficavam órfãos (guardados no JSON, nunca mais
+  renderizados/editáveis). Corrigido no mesmo commit.
+
+**Validação ao vivo (chrome-devtools MCP, perfil "Daniel", fase Qualificação):** criado nó
+com 3 caminhos, bloco de orientação adicionado ao Caminho A, salvo → recarregada a página →
+tudo persistiu; reaberto o formulário de edição → todos os valores (nomes, critérios, sticky)
+intactos; testado remover o nó → confirmado que o filho também sumiu (12→14→12 blocos).
+Perfil de teste restaurado ao estado original ao final.
+
 ### Fase 4 — Validação ao vivo + docs + graduação
 
 Playground (chrome-devtools MCP) no perfil de teste "Daniel", `docs/architecture/sales-flow.md`
@@ -167,6 +190,18 @@ graduação deste arquivo.
       `test_qualification_contract.py`, `test_qualification_state_loop.py`, etc., falham
       igualmente sem nenhuma mudança); 172 passed no branch (157 baseline + 15 novos)
 - **Validado em:** 22/08/2026 — automatizado (pytest), sem intervenção manual necessária
+
+### Fase 2-3 — Builder visual (frontend)
+- [x] `npx tsc --noEmit` limpo após Fase 2 e após Fase 3
+- [x] Criar nó de ramificação com 3 caminhos, renomear caminhos, editar critérios,
+      checkbox sticky — formulário funciona conforme desenhado
+- [x] Adicionar bloco (Orientação) a um caminho específico — aparece só sob esse caminho
+- [x] Salvar, recarregar a página, reabrir edição — todos os valores persistem intactos
+- [x] Remover o nó de ramificação — os blocos filhos são removidos junto (cascade-delete)
+- [x] Aba "Lógica" ao adicionar bloco a um caminho não oferece "Lógica de Ramificação"
+      (sem ramificação aninhada nesta versão), mas oferece "Gatilho" normalmente
+- **Validado em:** 22/08/2026 — ao vivo via chrome-devtools MCP, perfil real "Daniel"
+  (restaurado ao estado original ao final, sem alteração residual)
 
 ---
 
