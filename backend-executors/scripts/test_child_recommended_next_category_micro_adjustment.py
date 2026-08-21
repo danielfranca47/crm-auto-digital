@@ -59,8 +59,8 @@ def _install_fake_app_modules() -> None:
     handoff_policy.apply = lambda _context, decision, logger=None: decision
 
     llm_service = _install_fake_module("app.services.llm_service")
-    llm_service.generate_mother_route = lambda _prompt: "{}"
-    llm_service.generate_child_result = lambda _route, _prompt: "{}"
+    llm_service.generate_mother_route = lambda _prompt, **_kwargs: "{}"
+    llm_service.generate_child_result = lambda _route, _prompt, **_kwargs: "{}"
 
 
 def _load_decision_engine():
@@ -87,7 +87,7 @@ def main() -> None:
     _install_fake_app_modules()
     decision_engine = _load_decision_engine()
 
-    decision_engine.llm_service.generate_mother_route = lambda _prompt: (
+    decision_engine.llm_service.generate_mother_route = lambda _prompt, **_kwargs: (
         '{"route_to":"qualification","perceived_category":"qualification","confidence":0.8,"reason":"ok"}'
     )
 
@@ -99,31 +99,31 @@ def main() -> None:
         "history": [],
     }
 
-    decision_engine.llm_service.generate_child_result = lambda _route, _prompt: _fake_child_payload(
+    decision_engine.llm_service.generate_child_result = lambda _route, _prompt, **_kwargs: _fake_child_payload(
         "apresentation",
         True,
     )
     decision = decision_engine.decide(dict(context))
     assert decision.suggested_category == "apresentation"
 
-    decision_engine.llm_service.generate_child_result = lambda _route, _prompt: _fake_child_payload(
+    decision_engine.llm_service.generate_child_result = lambda _route, _prompt, **_kwargs: _fake_child_payload(
         "closing",
         True,
     )
     decision = decision_engine.decide(dict(context))
     assert decision.suggested_category is None
 
-    decision_engine.llm_service.generate_child_result = lambda _route, _prompt: _fake_child_payload(
+    decision_engine.llm_service.generate_child_result = lambda _route, _prompt, **_kwargs: _fake_child_payload(
         "apresentation",
         False,
     )
     decision = decision_engine.decide(dict(context))
     assert decision.suggested_category is None
 
-    decision_engine.llm_service.generate_mother_route = lambda _prompt: (
+    decision_engine.llm_service.generate_mother_route = lambda _prompt, **_kwargs: (
         '{"route_to":"apresentation","perceived_category":"apresentation","confidence":0.8,"reason":"ok"}'
     )
-    decision_engine.llm_service.generate_child_result = lambda _route, _prompt: _fake_child_payload(
+    decision_engine.llm_service.generate_child_result = lambda _route, _prompt, **_kwargs: _fake_child_payload(
         "closing",
         True,
     )

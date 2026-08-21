@@ -152,7 +152,7 @@ def test_handle_meeting_scheduled_conflict_with_other_lead_blocks_creation(monke
     """Outro lead (888) já ocupa o horário proposto — bloqueia e devolve fallback fixo
     quando a geração da mensagem via LLM falha (forçado para o teste ser determinístico,
     independente de haver LLM_API_KEY real configurada no .env local)."""
-    def _raise(_prompt):
+    def _raise(_prompt, **_kwargs):
         raise RuntimeError("forced failure for deterministic test")
     monkeypatch.setattr(meeting_scheduler.llm_service, "generate_conflict_message", _raise)
 
@@ -185,7 +185,7 @@ def test_handle_meeting_scheduled_conflict_uses_llm_generated_message(monkeypatc
     monkeypatch.setattr(
         meeting_scheduler.llm_service,
         "generate_conflict_message",
-        lambda _prompt: "Esse horário já foi! Pode me dizer outro horário que funcione?",
+        lambda _prompt, **_kwargs: "Esse horário já foi! Pode me dizer outro horário que funcione?",
     )
 
     client = FakeCRMClient()
@@ -213,7 +213,7 @@ def test_handle_meeting_scheduled_conflict_uses_llm_generated_message(monkeypatc
 def test_handle_meeting_scheduled_conflict_falls_back_when_llm_returns_empty(monkeypatch):
     """generate_conflict_message devolve "" (ex.: sem LLM_API_KEY) — cai no fallback fixo."""
     monkeypatch.setattr(
-        meeting_scheduler.llm_service, "generate_conflict_message", lambda _prompt: "",
+        meeting_scheduler.llm_service, "generate_conflict_message", lambda _prompt, **_kwargs: "",
     )
 
     client = FakeCRMClient()

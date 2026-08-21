@@ -96,8 +96,8 @@ def _install_fake_executor_dependencies() -> None:
     handoff_policy.apply = lambda _context, decision, logger=None: decision
 
     llm_service = _install_fake_module("app.services.llm_service")
-    llm_service.generate_mother_route = lambda _prompt: "{}"
-    llm_service.generate_child_result = lambda _route, _prompt: "{}"
+    llm_service.generate_mother_route = lambda _prompt, **_kwargs: "{}"
+    llm_service.generate_child_result = lambda _route, _prompt, **_kwargs: "{}"
 
 
 def _load_decision_engine():
@@ -154,7 +154,7 @@ def crm_get_execution_context(user_id: int, lead_id: int) -> Dict[str, Any]:
 
 
 def _patch_llm(decision_engine_module) -> None:
-    decision_engine_module.llm_service.generate_mother_route = lambda _prompt: json.dumps(
+    decision_engine_module.llm_service.generate_mother_route = lambda _prompt, **_kwargs: json.dumps(
         {
             "route_to": "qualification",
             "perceived_category": "qualification",
@@ -162,7 +162,7 @@ def _patch_llm(decision_engine_module) -> None:
             "reason": "ok",
         }
     )
-    decision_engine_module.llm_service.generate_child_result = lambda _route, _prompt: json.dumps(
+    decision_engine_module.llm_service.generate_child_result = lambda _route, _prompt, **_kwargs: json.dumps(
         {
             "message_text": "Perfeito, me conta mais.",
             "did_complete_phase": False,

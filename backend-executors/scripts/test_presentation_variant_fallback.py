@@ -71,8 +71,8 @@ def _install_fake_app_modules() -> None:
     handoff_policy.apply = lambda _context, decision, logger=None: decision
 
     llm_service = _install_fake_module("app.services.llm_service")
-    llm_service.generate_mother_route = lambda _prompt: "{}"
-    llm_service.generate_child_result = lambda _route, _prompt: "{}"
+    llm_service.generate_mother_route = lambda _prompt, **_kwargs: "{}"
+    llm_service.generate_child_result = lambda _route, _prompt, **_kwargs: "{}"
 
     crm_client = _install_fake_module("app.clients.crm_client")
     crm_client.get_lead_qualification_state = lambda _lead_id: None

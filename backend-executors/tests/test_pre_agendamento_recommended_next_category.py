@@ -16,7 +16,7 @@ def _mock_mother(monkeypatch):
     monkeypatch.setattr(
         decision_engine.llm_service,
         "generate_mother_route",
-        lambda _prompt: (
+        lambda _prompt, **_kwargs: (
             '{"route_to":"pre-agendamento","perceived_category":"pre-agendamento",'
             '"confidence":0.8,"reason":"ok"}'
         ),
@@ -28,7 +28,7 @@ def _mock_child(monkeypatch, *, recommended, did_complete_phase):
     monkeypatch.setattr(
         decision_engine.llm_service,
         "generate_child_result",
-        lambda _route, _prompt: (
+        lambda _route, _prompt, **_kwargs: (
             '{"message_text":"ok","did_complete_phase":'
             f"{str(did_complete_phase).lower()},"
             f'"recommended_next_category":{recommended_value},'
@@ -92,7 +92,7 @@ def test_direct_jump_to_agendamento_advances_category_despite_stage_clamp(monkey
     monkeypatch.setattr(
         decision_engine.llm_service,
         "generate_mother_route",
-        lambda _prompt: (
+        lambda _prompt, **_kwargs: (
             '{"route_to":"agendamento","perceived_category":"agendamento",'
             '"confidence":0.9,"reason":"ok","signals":{"meeting_scheduled":true}}'
         ),
@@ -100,7 +100,7 @@ def test_direct_jump_to_agendamento_advances_category_despite_stage_clamp(monkey
     monkeypatch.setattr(
         decision_engine.llm_service,
         "generate_child_result",
-        lambda _route, _prompt: (
+        lambda _route, _prompt, **_kwargs: (
             '{"message_text":"Ótimo, vou agendar para amanhã às 15h.",'
             '"did_complete_phase":false,"recommended_next_category":null,"outcome":null,'
             '"kanban_highlight":null,"signals":[],"confidence":0.8}'

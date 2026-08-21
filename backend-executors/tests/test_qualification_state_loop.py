@@ -94,7 +94,7 @@ def test_state_absent_extractor_upsert_then_final_source_is_state(monkeypatch):
     monkeypatch.setattr(
         decision_engine.llm_service,
         "generate_mother_route",
-        lambda _prompt: '{"route_to":"qualification","perceived_category":"qualification","confidence":0.9,"reason":"teste"}',
+        lambda _prompt, **_kwargs: '{"route_to":"qualification","perceived_category":"qualification","confidence":0.9,"reason":"teste"}',
     )
     monkeypatch.setattr(
         decision_engine.field_extractor,
@@ -109,7 +109,7 @@ def test_state_absent_extractor_upsert_then_final_source_is_state(monkeypatch):
     monkeypatch.setattr(
         decision_engine.llm_service,
         "generate_child_result",
-        lambda _route, _prompt: '{"message_text":"ok","did_complete_phase":false,"recommended_next_category":null,"outcome":null,"kanban_highlight":null,"signals":[],"confidence":0.8}',
+        lambda _route, _prompt, **_kwargs: '{"message_text":"ok","did_complete_phase":false,"recommended_next_category":null,"outcome":null,"kanban_highlight":null,"signals":[],"confidence":0.8}',
     )
 
     monkeypatch.setattr(
@@ -158,7 +158,7 @@ def test_anti_loop_triggers_handoff_after_two_attempts(monkeypatch):
     monkeypatch.setattr(
         decision_engine.llm_service,
         "generate_mother_route",
-        lambda _prompt: '{"route_to":"qualification","perceived_category":"qualification","confidence":0.9,"reason":"teste"}',
+        lambda _prompt, **_kwargs: '{"route_to":"qualification","perceived_category":"qualification","confidence":0.9,"reason":"teste"}',
     )
     monkeypatch.setattr(
         decision_engine.field_extractor,
@@ -216,12 +216,12 @@ def test_t1_missing_fields_empty_never_ask_qualification(monkeypatch):
     monkeypatch.setattr(
         decision_engine.llm_service,
         "generate_mother_route",
-        lambda _prompt: '{"route_to":"qualification","perceived_category":"qualification","confidence":0.9,"reason":"teste"}',
+        lambda _prompt, **_kwargs: '{"route_to":"qualification","perceived_category":"qualification","confidence":0.9,"reason":"teste"}',
     )
     monkeypatch.setattr(
         decision_engine.llm_service,
         "generate_child_result",
-        lambda _route, _prompt: '{"message_text":"vamos agendar a apresentação?","did_complete_phase":false,"recommended_next_category":null,"outcome":null,"kanban_highlight":null,"signals":[],"confidence":0.8}',
+        lambda _route, _prompt, **_kwargs: '{"message_text":"vamos agendar a apresentação?","did_complete_phase":false,"recommended_next_category":null,"outcome":null,"kanban_highlight":null,"signals":[],"confidence":0.8}',
     )
 
     decision = decision_engine.decide(context)
@@ -254,7 +254,7 @@ def test_t2_filled_field_not_selected_as_current_field(monkeypatch):
     monkeypatch.setattr(
         decision_engine.llm_service,
         "generate_mother_route",
-        lambda _prompt: '{"route_to":"qualification","perceived_category":"qualification","confidence":0.9,"reason":"teste"}',
+        lambda _prompt, **_kwargs: '{"route_to":"qualification","perceived_category":"qualification","confidence":0.9,"reason":"teste"}',
     )
     monkeypatch.setattr(
         decision_engine.field_extractor,
@@ -284,7 +284,7 @@ def test_t2_filled_field_not_selected_as_current_field(monkeypatch):
     monkeypatch.setattr(
         decision_engine.llm_service,
         "generate_child_result",
-        lambda _route, _prompt: '{"message_text":"qual seu nível de urgência?","did_complete_phase":false,"recommended_next_category":null,"outcome":null,"kanban_highlight":null,"signals":[],"confidence":0.8}',
+        lambda _route, _prompt, **_kwargs: '{"message_text":"qual seu nível de urgência?","did_complete_phase":false,"recommended_next_category":null,"outcome":null,"kanban_highlight":null,"signals":[],"confidence":0.8}',
     )
 
     decision = decision_engine.decide(context)
@@ -316,7 +316,7 @@ def test_t3_rule3_blocks_return_to_qualification_when_already_apresentation(monk
     monkeypatch.setattr(
         decision_engine.llm_service,
         "generate_mother_route",
-        lambda _prompt: '{"route_to":"qualification","perceived_category":"qualification","confidence":0.9,"reason":"teste"}',
+        lambda _prompt, **_kwargs: '{"route_to":"qualification","perceived_category":"qualification","confidence":0.9,"reason":"teste"}',
     )
 
     def _fake_child(route, _prompt):
@@ -363,7 +363,7 @@ def test_rule3_keyword_override_removed_falls_back_to_anti_loop(monkeypatch):
     monkeypatch.setattr(
         decision_engine.llm_service,
         "generate_mother_route",
-        lambda _prompt: '{"route_to":"qualification","perceived_category":"qualification","confidence":0.9,"reason":"teste"}',
+        lambda _prompt, **_kwargs: '{"route_to":"qualification","perceived_category":"qualification","confidence":0.9,"reason":"teste"}',
     )
 
     def _fake_child(route, _prompt):
@@ -401,7 +401,7 @@ def test_ask_qualification_message_is_deterministic_for_current_field(monkeypatc
     monkeypatch.setattr(
         decision_engine.llm_service,
         "generate_mother_route",
-        lambda _prompt: '{"route_to":"qualification","perceived_category":"qualification","confidence":0.9,"reason":"teste"}',
+        lambda _prompt, **_kwargs: '{"route_to":"qualification","perceived_category":"qualification","confidence":0.9,"reason":"teste"}',
     )
     monkeypatch.setattr(
         decision_engine.field_extractor,
@@ -431,7 +431,7 @@ def test_ask_qualification_message_is_deterministic_for_current_field(monkeypatc
     monkeypatch.setattr(
         decision_engine.llm_service,
         "generate_child_result",
-        lambda _route, _prompt: '{"message_text":"pergunta errada de outro campo","did_complete_phase":false,"recommended_next_category":null,"outcome":null,"kanban_highlight":null,"signals":[],"confidence":0.8}',
+        lambda _route, _prompt, **_kwargs: '{"message_text":"pergunta errada de outro campo","did_complete_phase":false,"recommended_next_category":null,"outcome":null,"kanban_highlight":null,"signals":[],"confidence":0.8}',
     )
 
     decision = decision_engine.decide(context)
@@ -462,7 +462,7 @@ def test_field_mismatch_repair_uses_second_attempt(monkeypatch):
             "last_question_text": "",
         },
     }
-    monkeypatch.setattr(decision_engine.llm_service, "generate_mother_route", lambda _p: '{"route_to":"qualification","perceived_category":"qualification","confidence":0.9,"reason":"teste"}')
+    monkeypatch.setattr(decision_engine.llm_service, "generate_mother_route", lambda _p, **_kwargs: '{"route_to":"qualification","perceived_category":"qualification","confidence":0.9,"reason":"teste"}')
     monkeypatch.setattr(decision_engine.field_extractor, "extract_fields_llm", lambda _c, _s: {"extracted": {}, "confidence": {}, "evidence": {}, "raw": "{}"})
 
     calls = {"n": 0}
@@ -500,7 +500,7 @@ def test_anti_repetition_triggers_retry(monkeypatch):
             "last_question_text": "qual o seu nível de urgência agora?",
         },
     }
-    monkeypatch.setattr(decision_engine.llm_service, "generate_mother_route", lambda _p: '{"route_to":"qualification","perceived_category":"qualification","confidence":0.9,"reason":"teste"}')
+    monkeypatch.setattr(decision_engine.llm_service, "generate_mother_route", lambda _p, **_kwargs: '{"route_to":"qualification","perceived_category":"qualification","confidence":0.9,"reason":"teste"}')
     monkeypatch.setattr(decision_engine.field_extractor, "extract_fields_llm", lambda _c, _s: {"extracted": {}, "confidence": {}, "evidence": {}, "raw": "{}"})
 
     calls={"n":0}
@@ -530,11 +530,11 @@ def test_current_field_recalculated_when_extractor_fills_previous_field(monkeypa
         "job": {"id": 888, "payload": {"lead_id": 10, "user_id": 99}},
         "qualification_state": {"exists": True, "data_json": {"service_interest": "botox"}, "attempts_json": {}, "last_questioned_field": None},
     }
-    monkeypatch.setattr(decision_engine.llm_service, "generate_mother_route", lambda _p: '{"route_to":"qualification","perceived_category":"qualification","confidence":0.9,"reason":"teste"}')
+    monkeypatch.setattr(decision_engine.llm_service, "generate_mother_route", lambda _p, **_kwargs: '{"route_to":"qualification","perceived_category":"qualification","confidence":0.9,"reason":"teste"}')
     monkeypatch.setattr(decision_engine.field_extractor, "extract_fields_llm", lambda _c, _s: {"extracted": {"urgency": "alta"}, "confidence": {}, "evidence": {}, "raw": "{}"})
     monkeypatch.setattr(decision_engine.crm_client, "upsert_lead_qualification_state", lambda **kwargs: {"exists": True, "data_json": {"service_interest": "botox", "urgency": "alta"}, "attempts_json": {}, "last_questioned_field": kwargs.get("patch",{}).get("last_questioned_field")})
     monkeypatch.setattr(decision_engine.crm_client, "increment_lead_qualification_attempt", lambda **kwargs: {"exists": True, "data_json": {"service_interest": "botox", "urgency": "alta"}, "attempts_json": {kwargs.get("field"): 1}, "last_questioned_field": kwargs.get("field")})
-    monkeypatch.setattr(decision_engine.llm_service, "generate_child_result", lambda _r, _p: '{"question_text":"você decide sozinho?","field":"decision_role","did_complete_phase":false,"recommended_next_category":null,"outcome":null,"kanban_highlight":null,"signals":[],"confidence":0.8}')
+    monkeypatch.setattr(decision_engine.llm_service, "generate_child_result", lambda _r, _p, **_kwargs: '{"question_text":"você decide sozinho?","field":"decision_role","did_complete_phase":false,"recommended_next_category":null,"outcome":null,"kanban_highlight":null,"signals":[],"confidence":0.8}')
 
     decision = decision_engine.decide(context)
     trace = decision.decision_trace or {}
@@ -552,9 +552,9 @@ def test_fallback_safe_when_repair_fails_twice(monkeypatch):
         "job": {"id": 999, "payload": {"lead_id": 10, "user_id": 99}},
         "qualification_state": {"exists": True, "data_json": {"service_interest": "botox"}, "attempts_json": {}, "last_questioned_field": None},
     }
-    monkeypatch.setattr(decision_engine.llm_service, "generate_mother_route", lambda _p: '{"route_to":"qualification","perceived_category":"qualification","confidence":0.9,"reason":"teste"}')
+    monkeypatch.setattr(decision_engine.llm_service, "generate_mother_route", lambda _p, **_kwargs: '{"route_to":"qualification","perceived_category":"qualification","confidence":0.9,"reason":"teste"}')
     monkeypatch.setattr(decision_engine.field_extractor, "extract_fields_llm", lambda _c, _s: {"extracted": {}, "confidence": {}, "evidence": {}, "raw": "{}"})
-    monkeypatch.setattr(decision_engine.llm_service, "generate_child_result", lambda _r, _p: '{"question_text":"texto ruim","field":"service_interest","did_complete_phase":false,"recommended_next_category":null,"outcome":null,"kanban_highlight":null,"signals":[],"confidence":0.4}')
+    monkeypatch.setattr(decision_engine.llm_service, "generate_child_result", lambda _r, _p, **_kwargs: '{"question_text":"texto ruim","field":"service_interest","did_complete_phase":false,"recommended_next_category":null,"outcome":null,"kanban_highlight":null,"signals":[],"confidence":0.4}')
     monkeypatch.setattr(decision_engine.crm_client, "upsert_lead_qualification_state", lambda **kwargs: context["qualification_state"])
     monkeypatch.setattr(decision_engine.crm_client, "increment_lead_qualification_attempt", lambda **kwargs: context["qualification_state"])
 
@@ -594,7 +594,7 @@ def test_auto_promote_never_uses_qualification_fallback_message(monkeypatch):
     monkeypatch.setattr(
         decision_engine.llm_service,
         "generate_mother_route",
-        lambda _prompt: '{"route_to":"qualification","perceived_category":"qualification","confidence":0.9,"reason":"teste"}',
+        lambda _prompt, **_kwargs: '{"route_to":"qualification","perceived_category":"qualification","confidence":0.9,"reason":"teste"}',
     )
 
     seen = {"route": None}
@@ -669,7 +669,7 @@ def test_optional_custom_field_is_captured_but_does_not_affect_missing_fields(mo
     monkeypatch.setattr(
         decision_engine.llm_service,
         "generate_mother_route",
-        lambda _p: '{"route_to":"qualification","perceived_category":"qualification","confidence":0.9,"reason":"teste"}',
+        lambda _p, **_kwargs: '{"route_to":"qualification","perceived_category":"qualification","confidence":0.9,"reason":"teste"}',
     )
     monkeypatch.setattr(
         decision_engine.field_extractor,
@@ -686,7 +686,7 @@ def test_optional_custom_field_is_captured_but_does_not_affect_missing_fields(mo
     monkeypatch.setattr(
         decision_engine.llm_service,
         "generate_child_result",
-        lambda _r, _p: '{"question_text":"O que você busca?","field":"service_interest","did_complete_phase":false,"recommended_next_category":null,"outcome":null,"kanban_highlight":null,"signals":[],"confidence":0.8}',
+        lambda _r, _p, **_kwargs: '{"question_text":"O que você busca?","field":"service_interest","did_complete_phase":false,"recommended_next_category":null,"outcome":null,"kanban_highlight":null,"signals":[],"confidence":0.8}',
     )
 
     decision_engine.decide(context)

@@ -88,7 +88,7 @@ def test_followup_tick_forces_followup_child_route(monkeypatch):
     monkeypatch.setattr(
         decision_engine.llm_service,
         "generate_mother_route",
-        lambda _prompt: '{"route_to":"qualification","perceived_category":"follow-up","confidence":0.5,"reason":"faltando localização"}',
+        lambda _prompt, **_kwargs: '{"route_to":"qualification","perceived_category":"follow-up","confidence":0.5,"reason":"faltando localização"}',
     )
 
     calls = {}

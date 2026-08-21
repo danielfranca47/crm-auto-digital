@@ -24,7 +24,7 @@ def test_compound_greeting_stays_in_recepcao_and_requeues_pending_text(monkeypat
     monkeypatch.setattr(
         decision_engine.llm_service,
         "generate_mother_route",
-        lambda _prompt: (
+        lambda _prompt, **_kwargs: (
             '{"route_to":"recepcao","perceived_category":null,"confidence":0.9,'
             '"reason":"saudação composta"}'
         ),
@@ -32,7 +32,7 @@ def test_compound_greeting_stays_in_recepcao_and_requeues_pending_text(monkeypat
     monkeypatch.setattr(
         decision_engine.llm_service,
         "generate_child_result",
-        lambda _route, _prompt: (
+        lambda _route, _prompt, **_kwargs: (
             '{"message_text":"Olá! Tudo bem?","should_ask":false,"question_text":"",'
             '"field":null,"did_complete_phase":false,"confidence":0.95,"signals":[],'
             '"pending_commercial_text":"gostaria de agendar uma sessão para amanhã às 15h"}'
@@ -60,14 +60,14 @@ def test_pure_greeting_has_no_requeue_action(monkeypatch):
     monkeypatch.setattr(
         decision_engine.llm_service,
         "generate_mother_route",
-        lambda _prompt: (
+        lambda _prompt, **_kwargs: (
             '{"route_to":"recepcao","perceived_category":null,"confidence":0.9,"reason":"saudação pura"}'
         ),
     )
     monkeypatch.setattr(
         decision_engine.llm_service,
         "generate_child_result",
-        lambda _route, _prompt: (
+        lambda _route, _prompt, **_kwargs: (
             '{"message_text":"Olá! Seja bem-vindo.","did_complete_phase":false,'
             '"recommended_next_category":null,"outcome":null,"kanban_highlight":null,'
             '"signals":[],"confidence":0.9,"pending_commercial_text":null}'

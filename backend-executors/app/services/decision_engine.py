@@ -3969,10 +3969,13 @@ def _decide_post_meeting_management(
     """
     message_text = _extract_message_text(context)
     prompt = _build_child_prompt_meeting_management(context, message_text)
+    ai_profile = context.get("ai_profile") or {}
 
     child_result: Optional[ChildResult] = None
     try:
-        child_text = llm_service.generate_child_result("meeting_management", prompt)
+        child_text = llm_service.generate_child_result(
+            "meeting_management", prompt, ai_profile=ai_profile
+        )
         child_payload = _extract_json_payload(child_text)
         child_payload = _normalize_null_strings(child_payload)
         if child_payload is not None:
@@ -4692,6 +4695,7 @@ def compose_decision_output(
 
 def decide(context: Dict[str, Any], logger: Optional[logging.Logger] = None) -> DecisionOutput:
     metadata = context.get("metadata") or {}
+    ai_profile = context.get("ai_profile") or {}
     if metadata.get("bot_disabled"):
         if metadata.get("bot_disabled_reason") == "meeting_scheduled":
             if logger:
@@ -4727,7 +4731,7 @@ def decide(context: Dict[str, Any], logger: Optional[logging.Logger] = None) -> 
     try:
         mother_prompt = _build_mother_prompt(context, message_text)
         stage = "mother_call"
-        mother_text = llm_service.generate_mother_route(mother_prompt)
+        mother_text = llm_service.generate_mother_route(mother_prompt, ai_profile=ai_profile)
         stage = "mother_parse"
         mother_payload = _extract_json_payload(mother_text)
         if mother_payload is None:
@@ -5013,7 +5017,9 @@ def decide(context: Dict[str, Any], logger: Optional[logging.Logger] = None) -> 
                     f"{child_prompt}\n\nVALIDATION_ERRORS: {json.dumps(validation_errors, ensure_ascii=False)}\n"
                     "Corrija o JSON para field=current_field e reformule a pergunta sem repetir texto anterior."
                 )
-            child_text = llm_service.generate_child_result(route_for_child, prompt_to_use)
+            child_text = llm_service.generate_child_result(
+                route_for_child, prompt_to_use, ai_profile=ai_profile
+            )
             stage = "child_parse"
             child_payload = _extract_json_payload(child_text)
             if child_payload is None:

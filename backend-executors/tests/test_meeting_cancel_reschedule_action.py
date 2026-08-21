@@ -124,7 +124,7 @@ def test_reschedule_calls_reschedule_appointment_and_keeps_bot_disabled():
 
 def test_reschedule_conflict_returns_correction_message(monkeypatch):
     monkeypatch.setattr(
-        meeting_scheduler.llm_service, "generate_conflict_message", lambda _prompt: ""
+        meeting_scheduler.llm_service, "generate_conflict_message", lambda _prompt, **_kwargs: ""
     )
     client = ConflictCRMClient()
     future = (datetime.now(timezone.utc) + timedelta(days=15)).replace(
@@ -232,7 +232,7 @@ def test_reschedule_populates_events_when_provided():
 
 def test_conflict_does_not_populate_events(monkeypatch):
     monkeypatch.setattr(
-        meeting_scheduler.llm_service, "generate_conflict_message", lambda _prompt: ""
+        meeting_scheduler.llm_service, "generate_conflict_message", lambda _prompt, **_kwargs: ""
     )
     client = ConflictCRMClient()
     future = (datetime.now(timezone.utc) + timedelta(days=15)).replace(

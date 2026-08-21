@@ -63,7 +63,7 @@ def test_decide_post_meeting_management_detects_cancel(monkeypatch):
     monkeypatch.setattr(
         llm_service,
         "generate_child_result",
-        lambda _route, _prompt: _child_payload(
+        lambda _route, _prompt, **_kwargs: _child_payload(
             meeting_cancel_requested=True,
             meeting_reschedule_requested=False,
             meeting_datetime_candidate=None,
@@ -83,7 +83,7 @@ def test_decide_post_meeting_management_detects_reschedule(monkeypatch):
     monkeypatch.setattr(
         llm_service,
         "generate_child_result",
-        lambda _route, _prompt: _child_payload(
+        lambda _route, _prompt, **_kwargs: _child_payload(
             meeting_cancel_requested=False,
             meeting_reschedule_requested=True,
             meeting_datetime_candidate="2026-03-10T15:00:00",
@@ -101,7 +101,7 @@ def test_decide_post_meeting_management_detects_implicit_same_day_reschedule(mon
     monkeypatch.setattr(
         llm_service,
         "generate_child_result",
-        lambda _route, _prompt: _child_payload(
+        lambda _route, _prompt, **_kwargs: _child_payload(
             meeting_cancel_requested=False,
             meeting_reschedule_requested=True,
             meeting_datetime_candidate="2026-03-06T10:00:00",
@@ -119,7 +119,7 @@ def test_decide_post_meeting_management_neutral_message_minimal_reply(monkeypatc
     monkeypatch.setattr(
         llm_service,
         "generate_child_result",
-        lambda _route, _prompt: _child_payload(
+        lambda _route, _prompt, **_kwargs: _child_payload(
             meeting_cancel_requested=False,
             meeting_reschedule_requested=False,
             meeting_datetime_candidate=None,
@@ -154,7 +154,7 @@ def test_decide_keeps_blocking_other_bot_disabled_reasons(monkeypatch):
 
 def test_decide_post_meeting_management_llm_failure_falls_back_to_ignore(monkeypatch):
     monkeypatch.setattr(
-        llm_service, "generate_child_result", lambda _route, _prompt: "not json"
+        llm_service, "generate_child_result", lambda _route, _prompt, **_kwargs: "not json"
     )
     context = _base_context("preciso cancelar")
     decision = decision_engine.decide(context)

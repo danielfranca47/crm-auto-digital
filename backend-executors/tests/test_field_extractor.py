@@ -12,7 +12,7 @@ def _mock_llm(monkeypatch, extracted, confidence, evidence=None):
     monkeypatch.setattr(
         field_extractor.llm_service,
         "generate_decision_text",
-        lambda _prompt: json.dumps(payload, ensure_ascii=False),
+        lambda _prompt, **_kwargs: json.dumps(payload, ensure_ascii=False),
     )
 
 
@@ -99,7 +99,7 @@ def test_field_question_is_included_in_prompt(monkeypatch):
     enviado à LLM — sem isso, a LLM só vê o nome da chave."""
     captured_prompt = {}
 
-    def _fake_generate(prompt):
+    def _fake_generate(prompt, **_kwargs):
         captured_prompt["value"] = prompt
         return json.dumps({"extracted": {}, "confidence": {}, "evidence": {}})
 
@@ -183,7 +183,7 @@ def test_flexivel_tolerance_loosens_closed_enum_schema(monkeypatch):
     exato do enum."""
     captured_prompt = {}
 
-    def _fake_generate(prompt):
+    def _fake_generate(prompt, **_kwargs):
         captured_prompt["value"] = prompt
         return json.dumps({"extracted": {}, "confidence": {}, "evidence": {}})
 
@@ -200,7 +200,7 @@ def test_equilibrado_tolerance_keeps_closed_enum_schema(monkeypatch):
     só 'flexivel' afrouxa o vocabulário aceito."""
     captured_prompt = {}
 
-    def _fake_generate(prompt):
+    def _fake_generate(prompt, **_kwargs):
         captured_prompt["value"] = prompt
         return json.dumps({"extracted": {}, "confidence": {}, "evidence": {}})
 

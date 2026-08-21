@@ -113,8 +113,8 @@ def _install_fake_app_modules() -> None:
     handoff_policy.apply = lambda _context, decision, logger=None: decision
 
     llm_service = _install_fake_module("app.services.llm_service")
-    llm_service.generate_mother_route = lambda _prompt: "{}"
-    llm_service.generate_child_result = lambda _route, _prompt: "{}"
+    llm_service.generate_mother_route = lambda _prompt, **_kwargs: "{}"
+    llm_service.generate_child_result = lambda _route, _prompt, **_kwargs: "{}"
 
 
 def _load_module_from_path(module_name: str, module_path: str):
@@ -200,13 +200,13 @@ def _scenario1(decision_engine):
     """
     context = _make_context("oi", lead_id=1)
 
-    def fake_mother(_prompt: str) -> str:
+    def fake_mother(_prompt: str, **_kwargs) -> str:
         return (
             '{"route_to":"qualification","perceived_category":"qualification","confidence":0.8,'
             '"reason":"precisa de contexto"}'
         )
 
-    def fake_child(_route: str, _prompt: str) -> str:
+    def fake_child(_route: str, _prompt: str, **_kwargs) -> str:
         return (
             '{"message_text":"Qual é o seu objetivo agora?",'
             '"did_complete_phase":false,'
@@ -234,13 +234,13 @@ def _scenario2(decision_engine):
     """
     context = _make_context("quero fechar", lead_id=2, lead_category="apresentation")
 
-    def fake_mother(_prompt: str) -> str:
+    def fake_mother(_prompt: str, **_kwargs) -> str:
         return (
             '{"route_to":"apresentation","perceived_category":"apresentation","confidence":0.8,'
             '"reason":"intenção forte"}'
         )
 
-    def fake_child(_route: str, _prompt: str) -> str:
+    def fake_child(_route: str, _prompt: str, **_kwargs) -> str:
         return (
             '{"message_text":"Perfeito, vamos seguir.",'
             '"did_complete_phase":true,'
@@ -267,13 +267,13 @@ def _scenario4(decision_engine):
     """
     context = _make_context("Amanhã às 17h está confirmado", lead_id=4, lead_category="qualification")
 
-    def fake_mother(_prompt: str) -> str:
+    def fake_mother(_prompt: str, **_kwargs) -> str:
         return (
             '{"route_to":"apresentation","perceived_category":"apresentation","confidence":0.8,'
             '"reason":"confirmou reunião"}'
         )
 
-    def fake_child(_route: str, _prompt: str) -> str:
+    def fake_child(_route: str, _prompt: str, **_kwargs) -> str:
         return (
             '{"message_text":"Perfeito, até lá!",'
             '"did_complete_phase":false,'
@@ -301,13 +301,13 @@ def _scenario5(decision_engine):
     """
     context = _make_context("Pode reagendar pra sexta?", lead_id=5, lead_category="qualification")
 
-    def fake_mother(_prompt: str) -> str:
+    def fake_mother(_prompt: str, **_kwargs) -> str:
         return (
             '{"route_to":"apresentation","perceived_category":"apresentation","confidence":0.8,'
             '"reason":"reagendar reunião"}'
         )
 
-    def fake_child(_route: str, _prompt: str) -> str:
+    def fake_child(_route: str, _prompt: str, **_kwargs) -> str:
         return (
             '{"message_text":"Claro, posso reagendar.",'
             '"did_complete_phase":false,'

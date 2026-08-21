@@ -180,7 +180,7 @@ def extract_fields_llm(context: Dict[str, Any], fields_schema: Dict[str, str]) -
         'Retorne SOMENTE JSON válido: {"extracted": {}, "confidence": {}, "evidence": {}}'
     )
 
-    raw = llm_service.generate_decision_text(prompt)
+    raw = llm_service.generate_decision_text(prompt, ai_profile=ai_profile)
     payload = _extract_json_payload(raw)
     extracted = payload.get("extracted") if isinstance(payload.get("extracted"), dict) else {}
     confidence = payload.get("confidence") if isinstance(payload.get("confidence"), dict) else {}

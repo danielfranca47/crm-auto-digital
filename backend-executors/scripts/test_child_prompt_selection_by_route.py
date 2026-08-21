@@ -82,8 +82,8 @@ def _install_fake_app_modules() -> None:
     handoff_policy.apply = lambda _context, decision, logger=None: decision
 
     llm_service = _install_fake_module("app.services.llm_service")
-    llm_service.generate_mother_route = lambda _prompt: "{}"
-    llm_service.generate_child_result = lambda _route, _prompt: "{}"
+    llm_service.generate_mother_route = lambda _prompt, **_kwargs: "{}"
+    llm_service.generate_child_result = lambda _route, _prompt, **_kwargs: "{}"
 
 
 def _load_decision_engine():
@@ -109,10 +109,10 @@ def main() -> None:
 
     captured = {"prompt": None}
 
-    def fake_mother(payload):
+    def fake_mother(payload, **_kwargs):
         return payload
 
-    def fake_child(_route, prompt):
+    def fake_child(_route, prompt, **_kwargs):
         captured["prompt"] = prompt
         return _fake_child_payload()
 
@@ -126,19 +126,19 @@ def main() -> None:
         "history": [],
     }
 
-    decision_engine.llm_service.generate_mother_route = lambda _prompt: fake_mother(
+    decision_engine.llm_service.generate_mother_route = lambda _prompt, **_kwargs: fake_mother(
         '{"route_to":"qualification","perceived_category":"qualification","confidence":0.8,"reason":"ok"}'
     )
     decision_engine.decide(dict(base_context))
     assert "FILHA QUALIFICATION" in (captured["prompt"] or "")
 
-    decision_engine.llm_service.generate_mother_route = lambda _prompt: fake_mother(
+    decision_engine.llm_service.generate_mother_route = lambda _prompt, **_kwargs: fake_mother(
         '{"route_to":"apresentation","perceived_category":"apresentation","confidence":0.8,"reason":"ok"}'
     )
     decision_engine.decide(dict(base_context))
     assert "FILHA APRESENTATION" in (captured["prompt"] or "")
 
-    decision_engine.llm_service.generate_mother_route = lambda _prompt: fake_mother(
+    decision_engine.llm_service.generate_mother_route = lambda _prompt, **_kwargs: fake_mother(
         '{"route_to":"follow-up","perceived_category":"follow-up","confidence":0.8,"reason":"ok"}'
     )
     decision_engine.decide(dict(base_context))
@@ -151,7 +151,7 @@ def main() -> None:
         "template_key": "closer_agressivo",
         "agent_mode": "closer",
     }
-    decision_engine.llm_service.generate_mother_route = lambda _prompt: fake_mother(
+    decision_engine.llm_service.generate_mother_route = lambda _prompt, **_kwargs: fake_mother(
         '{"route_to":"closing","perceived_category":"closing","confidence":0.8,"reason":"ok"}'
     )
     decision_engine.decide(closing_context)

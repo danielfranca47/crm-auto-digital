@@ -67,8 +67,8 @@ def _install_fake_app_modules() -> None:
     handoff_policy.apply = lambda _context, decision, logger=None: decision
 
     llm_service = _install_fake_module("app.services.llm_service")
-    llm_service.generate_mother_route = lambda _prompt: '{}'
-    llm_service.generate_child_result = lambda _route, _prompt: '{}'
+    llm_service.generate_mother_route = lambda _prompt, **_kwargs: '{}'
+    llm_service.generate_child_result = lambda _route, _prompt, **_kwargs: '{}'
 
 
 def _load_decision_engine():
@@ -86,11 +86,11 @@ def test_sdr_closing_escalates_and_suppresses_reply() -> None:
 
     routes = {"called": None}
 
-    mod.llm_service.generate_mother_route = lambda _prompt: (
+    mod.llm_service.generate_mother_route = lambda _prompt, **_kwargs: (
         '{"route_to":"closing","perceived_category":"closing","confidence":0.9,"reason":"intenção"}'
     )
 
-    def fake_child(route: str, _prompt: str) -> str:
+    def fake_child(route: str, _prompt: str, **_kwargs) -> str:
         routes["called"] = route
         return '{"message_text":"ok","did_complete_phase":false,"recommended_next_category":null,"outcome":null,"kanban_highlight":null,"signals":[],"confidence":0.8}'
 
@@ -115,11 +115,11 @@ def test_sdr_closing_escalates_and_suppresses_reply() -> None:
 def test_closer_keeps_closing() -> None:
     mod = _load_decision_engine()
     routes = {"called": None}
-    mod.llm_service.generate_mother_route = lambda _prompt: (
+    mod.llm_service.generate_mother_route = lambda _prompt, **_kwargs: (
         '{"route_to":"closing","perceived_category":"closing","confidence":0.9,"reason":"intenção"}'
     )
 
-    def fake_child(route: str, _prompt: str) -> str:
+    def fake_child(route: str, _prompt: str, **_kwargs) -> str:
         routes["called"] = route
         return '{"message_text":"ok","did_complete_phase":false,"recommended_next_category":null,"outcome":null,"kanban_highlight":null,"signals":[],"confidence":0.8}'
 
@@ -138,11 +138,11 @@ def test_closer_keeps_closing() -> None:
 def test_agenda_with_handoff_indicator_blocks_closing() -> None:
     mod = _load_decision_engine()
     routes = {"called": None}
-    mod.llm_service.generate_mother_route = lambda _prompt: (
+    mod.llm_service.generate_mother_route = lambda _prompt, **_kwargs: (
         '{"route_to":"closing","perceived_category":"closing","confidence":0.9,"reason":"intenção"}'
     )
 
-    def fake_child(route: str, _prompt: str) -> str:
+    def fake_child(route: str, _prompt: str, **_kwargs) -> str:
         routes["called"] = route
         return '{"message_text":"ok","did_complete_phase":false,"recommended_next_category":null,"outcome":null,"kanban_highlight":null,"signals":[],"confidence":0.8}'
 
@@ -164,11 +164,11 @@ def test_agenda_with_handoff_indicator_blocks_closing() -> None:
 def test_agenda_without_indicators_allows_closing() -> None:
     mod = _load_decision_engine()
     routes = {"called": None}
-    mod.llm_service.generate_mother_route = lambda _prompt: (
+    mod.llm_service.generate_mother_route = lambda _prompt, **_kwargs: (
         '{"route_to":"closing","perceived_category":"closing","confidence":0.9,"reason":"intenção"}'
     )
 
-    def fake_child(route: str, _prompt: str) -> str:
+    def fake_child(route: str, _prompt: str, **_kwargs) -> str:
         routes["called"] = route
         return '{"message_text":"ok","did_complete_phase":false,"recommended_next_category":null,"outcome":null,"kanban_highlight":null,"signals":[],"confidence":0.8}'
 

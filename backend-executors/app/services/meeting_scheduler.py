@@ -504,7 +504,7 @@ def _generate_conflict_message(
     )
 
     try:
-        generated = llm_service.generate_conflict_message(prompt)
+        generated = llm_service.generate_conflict_message(prompt, ai_profile=ai_profile)
     except Exception as exc:
         if logger:
             logger.warning(
@@ -591,7 +591,7 @@ def generate_appointment_reminder_message(
     )
 
     try:
-        generated = llm_service.generate_appointment_reminder_message(prompt)
+        generated = llm_service.generate_appointment_reminder_message(prompt, ai_profile=ai_profile)
     except Exception as exc:
         if logger:
             logger.warning(
@@ -664,7 +664,7 @@ def generate_appointment_title(
     )
 
     try:
-        generated = llm_service.generate_appointment_title_message(prompt)
+        generated = llm_service.generate_appointment_title_message(prompt, ai_profile=ai_profile)
     except Exception as exc:
         if logger:
             logger.warning(

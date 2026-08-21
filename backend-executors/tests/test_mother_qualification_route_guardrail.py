@@ -19,12 +19,12 @@ def test_mother_route_forced_to_qualification_when_missing_fields(monkeypatch):
     monkeypatch.setattr(
         decision_engine.llm_service,
         "generate_mother_route",
-        lambda _prompt: '{"route_to":"apresentation","perceived_category":"qualification","confidence":0.9,"reason":"vamos avançar"}',
+        lambda _prompt, **_kwargs: '{"route_to":"apresentation","perceived_category":"qualification","confidence":0.9,"reason":"vamos avançar"}',
     )
     monkeypatch.setattr(
         decision_engine.llm_service,
         "generate_child_result",
-        lambda _route, _prompt: '{"field":"availability_window","question_text":"Qual melhor horário para você?","message_text":"Qual melhor horário para você?","did_complete_phase":false,"recommended_next_category":null,"outcome":null,"kanban_highlight":null,"signals":[],"confidence":0.8}',
+        lambda _route, _prompt, **_kwargs: '{"field":"availability_window","question_text":"Qual melhor horário para você?","message_text":"Qual melhor horário para você?","did_complete_phase":false,"recommended_next_category":null,"outcome":null,"kanban_highlight":null,"signals":[],"confidence":0.8}',
     )
 
     decision = decision_engine.decide(context)
@@ -59,12 +59,12 @@ def test_mother_route_kept_when_qualification_is_complete(monkeypatch):
     monkeypatch.setattr(
         decision_engine.llm_service,
         "generate_mother_route",
-        lambda _prompt: '{"route_to":"apresentation","perceived_category":"qualification","confidence":0.9,"reason":"agendamento"}',
+        lambda _prompt, **_kwargs: '{"route_to":"apresentation","perceived_category":"qualification","confidence":0.9,"reason":"agendamento"}',
     )
     monkeypatch.setattr(
         decision_engine.llm_service,
         "generate_child_result",
-        lambda _route, _prompt: '{"message_text":"Perfeito, vamos agendar.","did_complete_phase":false,"recommended_next_category":"apresentation","outcome":null,"kanban_highlight":null,"signals":[],"confidence":0.8}',
+        lambda _route, _prompt, **_kwargs: '{"message_text":"Perfeito, vamos agendar.","did_complete_phase":false,"recommended_next_category":"apresentation","outcome":null,"kanban_highlight":null,"signals":[],"confidence":0.8}',
     )
 
     decision = decision_engine.decide(context)

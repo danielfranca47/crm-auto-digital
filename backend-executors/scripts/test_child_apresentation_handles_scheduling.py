@@ -59,8 +59,8 @@ def _install_fake_app_modules() -> None:
     handoff_policy.apply = lambda _context, decision, logger=None: decision
 
     llm_service = _install_fake_module("app.services.llm_service")
-    llm_service.generate_mother_route = lambda _prompt: "{}"
-    llm_service.generate_child_result = lambda _route, _prompt: "{}"
+    llm_service.generate_mother_route = lambda _prompt, **_kwargs: "{}"
+    llm_service.generate_child_result = lambda _route, _prompt, **_kwargs: "{}"
 
 
 def _load_decision_engine():
@@ -86,11 +86,11 @@ def main() -> None:
 
     captured = {"prompt": None}
 
-    decision_engine.llm_service.generate_mother_route = lambda _prompt: (
+    decision_engine.llm_service.generate_mother_route = lambda _prompt, **_kwargs: (
         '{"route_to":"apresentation","perceived_category":"apresentation","confidence":0.8,"reason":"meeting_scheduled|ok"}'
     )
 
-    def fake_child(_route, prompt):
+    def fake_child(_route, prompt, **_kwargs):
         captured["prompt"] = prompt
         return _fake_child_payload()
 

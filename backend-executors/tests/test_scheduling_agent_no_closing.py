@@ -28,12 +28,12 @@ def test_booking_confirmation_does_not_escalate_to_silent_closing(monkeypatch, t
     monkeypatch.setattr(
         decision_engine.llm_service,
         "generate_mother_route",
-        lambda _prompt: '{"route_to":"closing","perceived_category":"closing","confidence":0.9,"reason":"confirmacao de horario"}',
+        lambda _prompt, **_kwargs: '{"route_to":"closing","perceived_category":"closing","confidence":0.9,"reason":"confirmacao de horario"}',
     )
     monkeypatch.setattr(
         decision_engine.llm_service,
         "generate_child_result",
-        lambda _route, _prompt: '{"message_text":"Combinado! Te espero amanha as 12h.","did_complete_phase":true,"recommended_next_category":"follow-up","outcome":null,"kanban_highlight":null,"signals":[],"confidence":0.8}',
+        lambda _route, _prompt, **_kwargs: '{"message_text":"Combinado! Te espero amanha as 12h.","did_complete_phase":true,"recommended_next_category":"follow-up","outcome":null,"kanban_highlight":null,"signals":[],"confidence":0.8}',
     )
 
     decision = decision_engine.decide(context)
@@ -55,12 +55,12 @@ def test_closing_signal_from_apresentation_falls_back_to_apresentation(monkeypat
     monkeypatch.setattr(
         decision_engine.llm_service,
         "generate_mother_route",
-        lambda _prompt: '{"route_to":"closing","perceived_category":"closing","confidence":0.9,"reason":"fechar"}',
+        lambda _prompt, **_kwargs: '{"route_to":"closing","perceived_category":"closing","confidence":0.9,"reason":"fechar"}',
     )
     monkeypatch.setattr(
         decision_engine.llm_service,
         "generate_child_result",
-        lambda _route, _prompt: '{"message_text":"Posso te ajudar com mais alguma coisa antes de marcarmos?","did_complete_phase":false,"recommended_next_category":null,"outcome":null,"kanban_highlight":null,"signals":[],"confidence":0.8}',
+        lambda _route, _prompt, **_kwargs: '{"message_text":"Posso te ajudar com mais alguma coisa antes de marcarmos?","did_complete_phase":false,"recommended_next_category":null,"outcome":null,"kanban_highlight":null,"signals":[],"confidence":0.8}',
     )
 
     decision = decision_engine.decide(context)
@@ -80,12 +80,12 @@ def test_non_scheduling_agent_still_escalates_closing(monkeypatch):
     monkeypatch.setattr(
         decision_engine.llm_service,
         "generate_mother_route",
-        lambda _prompt: '{"route_to":"closing","perceived_category":"closing","confidence":0.9,"reason":"confirmacao de horario"}',
+        lambda _prompt, **_kwargs: '{"route_to":"closing","perceived_category":"closing","confidence":0.9,"reason":"confirmacao de horario"}',
     )
     monkeypatch.setattr(
         decision_engine.llm_service,
         "generate_child_result",
-        lambda _route, _prompt: '{"message_text":"ok","did_complete_phase":true,"recommended_next_category":null,"outcome":null,"kanban_highlight":null,"signals":[],"confidence":0.8}',
+        lambda _route, _prompt, **_kwargs: '{"message_text":"ok","did_complete_phase":true,"recommended_next_category":null,"outcome":null,"kanban_highlight":null,"signals":[],"confidence":0.8}',
     )
 
     decision = decision_engine.decide(context)

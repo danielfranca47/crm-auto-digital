@@ -36,7 +36,7 @@ def test_direct_question_agent_replies_first(monkeypatch):
     monkeypatch.setattr(
         decision_engine.llm_service,
         "generate_mother_route",
-        lambda _prompt: (
+        lambda _prompt, **_kwargs: (
             '{"route_to":"qualification","next_action_hint":"reply",'
             '"perceived_category":"qualification","confidence":0.9,'
             '"reason":"pergunta direta detectada"}'
@@ -45,7 +45,7 @@ def test_direct_question_agent_replies_first(monkeypatch):
     monkeypatch.setattr(
         decision_engine.llm_service,
         "generate_child_result",
-        lambda _route, _prompt: (
+        lambda _route, _prompt, **_kwargs: (
             '{"message_text":"O botox custa a partir de R$350, com duração de 4 a 6 meses.",'
             '"question_text":null,"field":null,"did_complete_phase":false,'
             '"recommended_next_category":null,"outcome":null,"kanban_highlight":null,'
@@ -75,7 +75,7 @@ def test_no_direct_question_qualifies_naturally(monkeypatch):
     monkeypatch.setattr(
         decision_engine.llm_service,
         "generate_mother_route",
-        lambda _prompt: (
+        lambda _prompt, **_kwargs: (
             '{"route_to":"qualification","next_action_hint":null,'
             '"perceived_category":"qualification","confidence":0.85,'
             '"reason":"qualificação pendente sem pergunta direta"}'
@@ -84,7 +84,7 @@ def test_no_direct_question_qualifies_naturally(monkeypatch):
     monkeypatch.setattr(
         decision_engine.llm_service,
         "generate_child_result",
-        lambda _route, _prompt: (
+        lambda _route, _prompt, **_kwargs: (
             '{"message_text":"Qual o melhor horário para você?",'
             '"question_text":"Qual o melhor horário para você?",'
             '"field":"availability_window","did_complete_phase":false,'
