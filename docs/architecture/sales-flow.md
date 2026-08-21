@@ -309,13 +309,33 @@ Ambas adicionadas via `ensure_column()` em `backend-crm/database.py`.
 
 ---
 
+## Visualização no Kanban (funil resumido)
+
+O card do lead no Kanban (`frontend-crm/src/components/LeadCard.tsx`) mostra um breadcrumb compacto — uma bolinha por fase do pipeline do `agent_mode` da conta — resumindo o progresso do lead no Fluxo de Venda, sem detalhar os gatilhos individuais.
+
+**Dados usados** (já expostos pela API de leads via `dict(row)`, sem endpoint novo):
+- `lead.category` → fase atual, mapeada para `phase_id` por uma tabela local em `LeadCard.tsx` (`CATEGORY_TO_PHASE_ID`, espelha `_ROUTE_TO_PHASE_ID` do backend)
+- `lead.phasesTriggered` (`leads.phases_triggered` parseado em `LeadsContext.tsx::mapRawLead()`) → fases já disparadas (concluídas)
+
+**Sequência de fases:** `KanbanBoard.tsx` busca `ai_profile.agent_mode` **uma única vez** por sessão (não por card — uma conta tem um único AI Profile) no mesmo `useEffect` que já resolvia `profileAgentType`, deriva a sequência via `SALES_FLOW_PHASES_BY_AGENT_MODE` (mesma normalização do builder: `sdr_scheduler`→`agenda`, `closer`→`direto`) e passa como prop (`phaseSequence`) através de `KanbanColumn` até `LeadCard`.
+
+**Estado de cada bolinha** (componente `SalesFlowFunnel` em `LeadCard.tsx`):
+- **Concluída:** `phase_id ∈ lead.phasesTriggered`, ou fase anterior à atual na sequência (fallback para leads sem `phases_triggered` populado)
+- **Atual:** `phase_id === CATEGORY_TO_PHASE_ID[lead.category]` — bolinha maior, com contorno
+- **Futura:** as demais — cor apagada (baixa opacidade)
+
+Cor de cada fase vem de `SALES_FLOW_PHASE_COLORS` (`frontend-crm/src/types/agente.ts`), partilhada com o builder (`CamadaFluxoVenda.tsx`) para a mesma fase ter sempre a mesma cor nos dois lugares.
+
+---
+
 ## Arquivos críticos
 
 | Arquivo | Responsabilidade |
 |---|---|
-| `frontend-crm/src/types/agente.ts` | Tipos TypeScript: `SalesFlowPhaseId`, `SalesFlowBlock`, `SalesFlowPhaseData`, `SALES_FLOW_PHASES_BY_AGENT_MODE` |
+| `frontend-crm/src/types/agente.ts` | Tipos TypeScript: `SalesFlowPhaseId`, `SalesFlowBlock`, `SalesFlowPhaseData`, `SALES_FLOW_PHASES_BY_AGENT_MODE`, `SALES_FLOW_PHASE_COLORS` |
 | `frontend-crm/src/components/agente/CamadaFluxoVenda.tsx` | Builder visual: renderização de fases, blocos, formulários de configuração |
 | `backend-executors/app/services/decision_engine.py` | `_evaluate_sales_flow_phases()` — avaliação de triggers, coleta de orientações/mídia/system_actions; `_collect_intent_triggers_for_lead_phase()` — seleciona quais `intent_trigger` mostrar à mãe (fase atual + seguinte); `_enforce_apresentation_sales_flow_pending()` — guardrail que impede a Mãe de pular a fase de apresentation com gatilhos sequenciais pendentes; `_compute_is_phase_entry()` — cálculo único de `is_phase_entry`, reutilizado tanto na construção do prompt filho (`_build_child_prompt_recepcao/qualification/apresentation/follow_up`) quanto no despacho real de `system_actions` em `compose_decision_output()` |
 | `backend-crm/routes/executor.py` | `_dispatch_system_actions()`, `_dispatch_sales_flow_media()`, `_PHASE_ID_TO_CATEGORY` |
 | `backend-core/app/models/ai_profile.py` | Campo `sales_flow` na tabela `ai_profiles` |
 | `backend-crm/services/ai_orchestrator/orchestrator.py` | `enrich_context_bundle()` — inclui `sales_flow` no ContextBundle |
+| `frontend-crm/src/components/KanbanBoard.tsx` / `KanbanColumn.tsx` / `LeadCard.tsx` | Funil visual resumido no card — ver "Visualização no Kanban" acima |
