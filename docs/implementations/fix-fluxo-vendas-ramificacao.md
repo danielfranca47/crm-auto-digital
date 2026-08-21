@@ -94,6 +94,34 @@ ganha `branch_selections`; persistência opcional (`sticky`) via `leads.branches
 | `backend-crm/services/ai_orchestrator/orchestrator.py` | conferir os 3 pontos de construção de `ContextBundle` (308, 390, 808) |
 | `backend-executors/tests/test_sales_flow_branching.py` (novo) | cobertura da ramificação |
 
+**Nota de implementação:** o `mark_branch_selected` acabou por ser gerado dentro do próprio
+`_evaluate_sales_flow_phases()` (no ponto em que o nó `condicao` resolve o ramo), não como
+código adicional em `compose_decision_output` — o `system_actions` desse resultado já é
+copiado para `decision.system_actions` pelo caminho existente, então não foi preciso tocar
+`compose_decision_output` além de passar `branch_selections` na chamada.
+
+**Confirmado (Passo de paridade Playground ↔ WhatsApp real):** os 3 pontos que constroem
+`ContextBundle` (`orchestrator.py:308, 390, 808`) usam todos o mesmo helper `_load_lead()`
+(`SELECT * FROM leads` + `{key: row[key] for key in row.keys()}`) — a nova coluna
+`branches_selected` chega automaticamente aos 3 caminhos (inbound real, n8n, playground) sem
+precisar de mudança em `enrich_context_bundle()`.
+
+### Commits Fase 1
+
+| # | Commit | O que foi implementado |
+|---|---|---|
+| 1 | `ce311b2` | Motor de ramificação completo: schema, engine, persistência, testes |
+
+**Detalhes do commit `ce311b2`:**
+- `orchestrator_models.py` — `MotherDecision.branch_selections: Dict[str,str]`
+- `decision_engine.py` — `_load_branches_selected_map`, `_collect_branch_nodes_for_lead_phase`,
+  bloco `[LÓGICA DE RAMIFICAÇÃO]` no prompt da Mãe, reescrita de `_evaluate_sales_flow_phases`
+  (filtro de escopo de ramo, resolução do nó `condicao`, `prereqs_satisfied_by_scope`), 5 call
+  sites actualizados para passar `branch_selections`
+- `database.py` — `ensure_column(leads.branches_selected)`
+- `executor.py`, `playground.py` — dispatch de `mark_branch_selected`
+- `test_sales_flow_branching.py` — 15 testes novos
+
 ### Fase 2 — Frontend: schema + formulário do nó de ramificação
 
 | Arquivo | O que muda |
@@ -117,7 +145,13 @@ graduação deste arquivo.
 
 ## Checks de Validação
 
-_A preencher por fase, conforme cada uma for concluída e validada._
+### Fase 1 — Motor de ramificação (backend)
+- [x] `python -m pytest tests/test_sales_flow_branching.py -v` — 15/15 passam
+- [x] Suite completa sem regressão — comparado via `git stash` contra a baseline limpa:
+      65 falhas pré-existentes idênticas antes/depois (não relacionadas a este trabalho —
+      `test_qualification_contract.py`, `test_qualification_state_loop.py`, etc., falham
+      igualmente sem nenhuma mudança); 172 passed no branch (157 baseline + 15 novos)
+- **Validado em:** 22/08/2026 — automatizado (pytest), sem intervenção manual necessária
 
 ---
 
