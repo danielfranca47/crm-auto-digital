@@ -118,7 +118,7 @@ Escopo: só agentes com recursos de agendamento (`agent_1`/SDR e `agent_3`/Híbr
 
 | # | Commit | O que foi implementado |
 |---|---|---|
-| 1 | `<preencher após commit>` | `is_phase_entry` real threaded para os 4 builders de prompt filho |
+| 1 | `9693e1f` | `is_phase_entry` real threaded para os 4 builders de prompt filho |
 
 **Detalhes:**
 - `backend-executors/app/services/decision_engine.py` — novo helper `_compute_is_phase_entry()` (reutiliza `_load_triggered_phases_set()` da Fase 2); `_ROUTE_TO_PHASE_ID` consolidado a nível de módulo (estava duplicado em `_evaluate_sales_flow_phases()` e `compose_decision_output()`); `_build_child_prompt_recepcao/qualification/apresentation/follow_up` ganham parâmetro `is_phase_entry: bool = True` (default preserva compatibilidade com chamadas existentes em testes); `decide()` calcula `_is_phase_entry_for_prompt` uma vez antes do dispatch de rota e passa explicitamente às 4 chamadas; `compose_decision_output()` passa a usar o mesmo helper em vez do cálculo inline duplicado
