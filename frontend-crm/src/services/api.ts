@@ -409,6 +409,7 @@ export type WhatsappConnectResponse = {
   instance_id: string;
   status?: string | null;
   qr: WhatsappQrPayload;
+  pair_code?: string | null;
 };
 
 export type WhatsappStatusResponse = {
@@ -1300,10 +1301,11 @@ export const api = {
       apiClient.post<BusinessInfoField>(`/knowledge/business-info`, payload),
     deleteBusinessInfoField: async (id: number) =>
       apiClient.delete(`/knowledge/business-info/${id}`),
-    whatsappConnect: async () => apiClient.post<WhatsappConnectResponse>(`/whatsapp/connect`),
+    whatsappConnect: async (phone?: string) =>
+      apiClient.post<WhatsappConnectResponse>(`/whatsapp/connect`, phone ? { phone } : undefined),
     whatsappStatus: async () => apiClient.get<WhatsappStatusResponse>(`/whatsapp/status`),
-    whatsappRefreshQr: async () =>
-      apiClient.post<WhatsappConnectResponse>(`/whatsapp/qr/refresh`),
+    whatsappRefreshQr: async (phone?: string) =>
+      apiClient.post<WhatsappConnectResponse>(`/whatsapp/qr/refresh`, phone ? { phone } : undefined),
   },
 
   agents: {

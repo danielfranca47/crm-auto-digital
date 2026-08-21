@@ -28,7 +28,7 @@ O endpoint aceita eventos da UazAPI e os roteia para `inbound_handler`.
 
 ### Registo do webhook na UazAPI
 
-Feito em `backend-crm/routes/whatsapp_connect.py` (`_set_whatsapp_webhook`), disparado a cada `/api/whatsapp/connect` e `/api/whatsapp/qr/refresh`. A URL registada é sempre construída a partir de `CRM_PUBLIC_BASE_URL` (nunca `localhost`), pois a UazAPI precisa de conseguir entregar o POST a um endereço publicamente roteável:
+Feito em `backend-crm/routes/whatsapp_connect.py` (`_set_whatsapp_webhook`), disparado a cada `/api/whatsapp/connect` e `/api/whatsapp/qr/refresh` (o fluxo de conexão em si — QR code e código de pareamento — está documentado em [`whatsapp-connection.md`](whatsapp-connection.md)). A URL registada é sempre construída a partir de `CRM_PUBLIC_BASE_URL` (nunca `localhost`), pois a UazAPI precisa de conseguir entregar o POST a um endereço publicamente roteável:
 
 ```
 {CRM_PUBLIC_BASE_URL}/webhooks/whatsapp/uazapi?secret={CRM_WEBHOOK_SECRET}

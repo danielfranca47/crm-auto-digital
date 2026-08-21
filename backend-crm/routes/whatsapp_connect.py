@@ -23,6 +23,7 @@ router = APIRouter(prefix="/api/whatsapp", tags=["WhatsApp Connect"])
 logger = logging.getLogger(__name__)
 
 _QR_KEYS = {"qrcode", "qrCode", "qr_code"}
+_PAIR_KEYS = {"paircode", "pairCode", "pair_code"}
 
 
 class QRPayload(BaseModel):
@@ -34,7 +35,12 @@ class ConnectResponse(BaseModel):
     instance_id: str
     status: Optional[str] = None
     qr: QRPayload
+    pair_code: Optional[str] = None
     raw: Optional[Dict[str, Any]] = None
+
+
+class ConnectRequest(BaseModel):
+    phone: Optional[str] = None
 
 
 class StatusResponse(BaseModel):
@@ -133,6 +139,17 @@ def _extract_qr(raw: Dict[str, Any]) -> QRPayload:
     return QRPayload(kind=kind, value=qr_value)
 
 
+def _extract_pair_code(raw: Dict[str, Any]) -> Optional[str]:
+    return _find_in_payload(raw, _PAIR_KEYS)
+
+
+def _sanitize_phone(value: Optional[str]) -> Optional[str]:
+    if not value:
+        return None
+    sanitized = re.sub(r"[\s\-\+\(\)]", "", value)
+    return sanitized or None
+
+
 def _extract_phone(raw: Dict[str, Any]) -> Optional[str]:
     phone_keys = {"phone", "phone_e164", "phoneNumber", "number"}
     return _find_in_payload(raw, phone_keys)
@@ -192,8 +209,12 @@ def _set_whatsapp_webhook(*, user_id: int, instance_id: str, request_id: str) ->
 
 
 @router.post("/connect", response_model=ConnectResponse)
-def connect_whatsapp(current_user: CurrentUser = Depends(require_crm_access)):
+def connect_whatsapp(
+    body: ConnectRequest = ConnectRequest(),
+    current_user: CurrentUser = Depends(require_crm_access),
+):
     request_id = uuid4().hex
+    phone = _sanitize_phone(body.phone)
     connection = _resolve_instance_id(current_user)
     if connection:
         instance_id = connection.get("instance_id")
@@ -211,13 +232,14 @@ def connect_whatsapp(current_user: CurrentUser = Depends(require_crm_access)):
         raise HTTPException(status_code=502, detail="Falha ao obter instance_id para WhatsApp")
 
     logger.info(
-        "whatsapp connect start user_id=%s instance_id=%s request_id=%s",
+        "whatsapp connect start user_id=%s instance_id=%s request_id=%s pair_mode=%s",
         current_user.id,
         instance_id,
         request_id,
+        bool(phone),
     )
     try:
-        raw = connect_core_whatsapp_instance(current_user.id, instance_id)
+        raw = connect_core_whatsapp_instance(current_user.id, instance_id, phone=phone)
     except HTTPException as exc:
         if exc.status_code and exc.status_code >= 500:
             logger.warning(
@@ -236,16 +258,17 @@ def connect_whatsapp(current_user: CurrentUser = Depends(require_crm_access)):
                 request_id,
             )
             init_core_whatsapp_instance(current_user.id, new_instance_id)
-            raw = connect_core_whatsapp_instance(current_user.id, new_instance_id)
+            raw = connect_core_whatsapp_instance(current_user.id, new_instance_id, phone=phone)
             instance_id = new_instance_id
         else:
             raise
 
     status_value = _normalize_status(raw)
     qr = _extract_qr(raw)
+    pair_code = _extract_pair_code(raw)
     logged_in, connected, jid, instance_status = _extract_status_flags(raw)
     logger.info(
-        "whatsapp connect success user_id=%s instance_id=%s request_id=%s status=%s connected=%s logged_in=%s jid_present=%s instance_status=%s",
+        "whatsapp connect success user_id=%s instance_id=%s request_id=%s status=%s connected=%s logged_in=%s jid_present=%s instance_status=%s pair_code_present=%s",
         current_user.id,
         instance_id,
         request_id,
@@ -254,6 +277,7 @@ def connect_whatsapp(current_user: CurrentUser = Depends(require_crm_access)):
         logged_in,
         bool(jid),
         instance_status,
+        bool(pair_code),
     )
     try:
         _set_whatsapp_webhook(user_id=current_user.id, instance_id=instance_id, request_id=request_id)
@@ -266,7 +290,7 @@ def connect_whatsapp(current_user: CurrentUser = Depends(require_crm_access)):
             exc,
         )
 
-    return ConnectResponse(instance_id=instance_id, status=status_value, qr=qr, raw=raw)
+    return ConnectResponse(instance_id=instance_id, status=status_value, qr=qr, pair_code=pair_code, raw=raw)
 
 
 @router.get("/status", response_model=StatusResponse)
@@ -329,20 +353,25 @@ def whatsapp_status(current_user: CurrentUser = Depends(require_crm_access)):
 
 
 @router.post("/qr/refresh", response_model=ConnectResponse)
-def refresh_qr(current_user: CurrentUser = Depends(require_crm_access)):
+def refresh_qr(
+    body: ConnectRequest = ConnectRequest(),
+    current_user: CurrentUser = Depends(require_crm_access),
+):
     request_id = uuid4().hex
+    phone = _sanitize_phone(body.phone)
     connection = _resolve_instance_id(current_user)
     if not connection or not connection.get("instance_id"):
         raise HTTPException(status_code=404, detail="Conexão WhatsApp não encontrada")
 
     instance_id = connection.get("instance_id")
     logger.info(
-        "whatsapp qr refresh user_id=%s instance_id=%s request_id=%s",
+        "whatsapp qr refresh user_id=%s instance_id=%s request_id=%s pair_mode=%s",
         current_user.id,
         instance_id,
         request_id,
+        bool(phone),
     )
-    raw = connect_core_whatsapp_instance(current_user.id, instance_id)
+    raw = connect_core_whatsapp_instance(current_user.id, instance_id, phone=phone)
     try:
         _set_whatsapp_webhook(user_id=current_user.id, instance_id=instance_id, request_id=request_id)
     except Exception as exc:
@@ -355,9 +384,10 @@ def refresh_qr(current_user: CurrentUser = Depends(require_crm_access)):
         )
     status_value = _normalize_status(raw)
     qr = _extract_qr(raw)
+    pair_code = _extract_pair_code(raw)
     logged_in, connected, jid, instance_status = _extract_status_flags(raw)
     logger.info(
-        "whatsapp qr refresh success user_id=%s instance_id=%s request_id=%s status=%s connected=%s logged_in=%s jid_present=%s instance_status=%s",
+        "whatsapp qr refresh success user_id=%s instance_id=%s request_id=%s status=%s connected=%s logged_in=%s jid_present=%s instance_status=%s pair_code_present=%s",
         current_user.id,
         instance_id,
         request_id,
@@ -366,6 +396,7 @@ def refresh_qr(current_user: CurrentUser = Depends(require_crm_access)):
         logged_in,
         bool(jid),
         instance_status,
+        bool(pair_code),
     )
 
-    return ConnectResponse(instance_id=instance_id, status=status_value, qr=qr, raw=raw)
+    return ConnectResponse(instance_id=instance_id, status=status_value, qr=qr, pair_code=pair_code, raw=raw)
