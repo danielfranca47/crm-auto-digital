@@ -546,3 +546,89 @@ def test_is_phase_entry_threaded_correctly_to_apresentation_prompt():
 
     assert ATENCAO in entry_prompt
     assert ATENCAO not in mid_prompt
+
+
+BOOKING_SIGNAL_MARKER = "RECONHECIMENTO DE INTERESSE DE AGENDAMENTO"
+
+
+def _base_apres_context(sales_flow: dict | None, agent_mode: str = "agenda") -> dict:
+    ai_profile = {"agent_mode": agent_mode, "template_key": "sdr_padrao"}
+    if sales_flow is not None:
+        ai_profile["sales_flow"] = sales_flow
+    return {
+        "lead": {"id": 1, "category": "apresentation"},
+        "ai_profile": ai_profile,
+        "playbook": {"template_key": "sdr_padrao"},
+        "metadata": {"inbound_message_text": "oi"},
+        "history": [{"model": "outbound", "text": "Oi!"}, {"model": "inbound", "text": "oi"}],
+        "knowledge_items": {},
+        "knowledge_media": {},
+        "lead_detected_language": "pt",
+    }
+
+
+def _mother_apres_p4() -> MotherDecision:
+    return MotherDecision(
+        route_to="apresentation", perceived_category="apresentation", confidence=0.9, reason="turno"
+    )
+
+
+def test_booking_signal_hardcoded_fallback_when_sales_flow_not_configured():
+    """Fase 4: sem Fluxo de Venda configurado, o texto hardcoded continua — perfis
+    legados não regridem."""
+    context = _base_apres_context(sales_flow=None, agent_mode="agenda")
+
+    prompt = _build_child_prompt_apresentation(context, "oi", _mother_apres_p4())
+
+    assert BOOKING_SIGNAL_MARKER in prompt
+
+
+def test_booking_signal_hardcoded_fallback_when_p2_empty():
+    """sales_flow habilitado mas p2 nunca configurada (blocks=[]) — mesmo fallback."""
+    sales_flow = {"enabled": True, "phases": [{"id": "p2", "blocks": []}]}
+    context = _base_apres_context(sales_flow=sales_flow, agent_mode="agenda")
+
+    prompt = _build_child_prompt_apresentation(context, "oi", _mother_apres_p4())
+
+    assert BOOKING_SIGNAL_MARKER in prompt
+
+
+def test_booking_signal_suppressed_when_p2_configured_without_opener_block():
+    """p2 configurada pelo utilizador (ex.: o fluxo do agente 'Daniel') sem o bloco
+    booking_signal_opener — o texto hardcoded NÃO deve mais ser injectado: o utilizador
+    tem controlo total do que é dito nesse ponto."""
+    sales_flow = _sales_flow_sequential_critical_guard()
+    context = _base_apres_context(sales_flow=sales_flow, agent_mode="agenda")
+
+    prompt = _build_child_prompt_apresentation(context, "oi", _mother_apres_p4())
+
+    assert BOOKING_SIGNAL_MARKER not in prompt
+
+
+def test_booking_signal_uses_user_defined_opener_content():
+    """Bloco booking_signal_opener presente em p2 — o seu conteúdo é usado em vez do
+    texto hardcoded."""
+    sales_flow = _sales_flow_sequential_critical_guard()
+    sales_flow["phases"][2]["blocks"].append({
+        "id": "booking-opener",
+        "typeId": "orientacao",
+        "booking_signal_opener": True,
+        "content": "Se o lead perguntar por horários, ofereça agendar direto.",
+    })
+    context = _base_apres_context(sales_flow=sales_flow, agent_mode="agenda")
+
+    prompt = _build_child_prompt_apresentation(context, "oi", _mother_apres_p4())
+
+    assert "Se o lead perguntar por horários, ofereça agendar direto." in prompt
+    assert "Se o lead já escolheu um serviço específico" not in prompt
+
+
+def test_booking_signal_not_migrated_for_direto_mode():
+    """Escopo deliberado: para direto/consultivo, o texto hardcoded permanece mesmo com
+    p2 configurada — a migração é só para o grupo agenda (agent_1/agent_3)."""
+    sales_flow = _sales_flow_sequential_critical_guard()
+    context = _base_apres_context(sales_flow=sales_flow, agent_mode="direto")
+
+    prompt = _build_child_prompt_apresentation(context, "oi", _mother_apres_p4())
+
+    assert BOOKING_SIGNAL_MARKER in prompt

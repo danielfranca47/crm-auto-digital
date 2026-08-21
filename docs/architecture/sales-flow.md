@@ -78,6 +78,25 @@ Blocos do tipo `orientacao` na fase p1 podem ter o flag `qual_opener: true`. Ide
 
 **Texto padrão gerado:** "Antes de fazer as primeiras perguntas de qualificação, pede permissão ao lead de forma natural, sem repetir saudações já feitas: algo como 'Posso te fazer algumas perguntas rápidas para perceber como podemos ajudar melhor?' — adapta ao tom de voz e ao contexto da conversa."
 
+### Flag especial de bloco: `booking_signal_opener`
+
+Blocos do tipo `orientacao` na fase p2 podem ter o flag `booking_signal_opener: true`. Identifica o bloco como **reconhecimento de interesse de agendamento** — a instrução que reconhece quando o lead já escolheu um serviço ou perguntou sobre horários, e pede para avançar diretamente para o agendamento.
+
+**Escopo:** só relevante para agentes com recursos de agendamento — `agent_1` (`template_key` "sdr_padrao") e `agent_3` (`template_key` "hybrid_scheduler"), ambos no grupo normalizado `agenda` (ver `map_template_key_to_agent_type()` em `backend-crm/services/agent_type.py`). Para `direto`/`consultivo`, este mecanismo não se aplica.
+
+**Comportamento em runtime:** detectado em `_build_child_prompt_apresentation()`. Quando `agent_mode_normalized == "agenda"`:
+- `sales_flow` desabilitado OU fase p2 nunca configurada (`blocks` vazio) → mantém o texto **hardcoded** original (compatibilidade com perfis legados que nunca tocaram no Fluxo de Venda)
+- Fase p2 configurada (qualquer bloco presente) → usa **apenas** o que o utilizador definiu: o bloco `booking_signal_opener` se presente, ou nada se ausente (remoção deliberada — sem fallback)
+
+Para `direto`/`consultivo`, o texto hardcoded permanece sempre — fora de escopo desta migração.
+
+**No frontend:** na fase p2 do builder (`CamadaFluxoVenda.tsx`), só quando `agentGroup === 'agenda'`:
+- Sem bloco `booking_signal_opener` e p2 sem outros blocos → banner "Sem reconhecimento de interesse de agendamento configurado" (ainda usando o padrão do sistema)
+- Sem bloco `booking_signal_opener` mas p2 já tem outros blocos → banner "Reconhecimento de interesse de agendamento desativado" (nada ativo — reflete o comportamento real do backend)
+- Com bloco → `OpenerCard` com label "Reconhecimento de Interesse de Agendamento", badge "automática · qualquer turno", botões "Editar" e "Remover"
+
+`OpenerBanner`/`OpenerCard` são componentes genéricos (parametrizados por título/descrição/label/badge/cor) reutilizados tanto por `qual_opener` (p1) quanto por `booking_signal_opener` (p2).
+
 ### Ações (executadas quando o trigger bate)
 
 | `typeId` | Nome | Comportamento em runtime |

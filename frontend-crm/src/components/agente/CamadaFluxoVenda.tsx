@@ -914,20 +914,29 @@ function RuleBuilderModal({ phaseId, knowledgeItems, onSave, onClose, customVars
 
 // ─── Abertura de Qualificação ─────────────────────────────────
 
-function QualOpenerBanner({ onAdd }: { onAdd: () => void }) {
+// Genérico: usado pelo card "Abertura de Qualificação" (p1) e "Reconhecimento de
+// Interesse de Agendamento" (p2) — mesmo padrão visual, textos e cor de destaque
+// parametrizados por quem chama.
+function OpenerBanner({ onAdd, title, description, buttonText = '+ Adicionar abertura', accentColor = '#38bdf8' }: {
+  onAdd: () => void;
+  title: string;
+  description: string;
+  buttonText?: string;
+  accentColor?: string;
+}) {
   return (
     <div style={{
       display: 'flex', alignItems: 'center', justifyContent: 'space-between',
       padding: '10px 14px', borderRadius: 8, marginBottom: 4,
-      background: 'color-mix(in srgb, #38bdf8 6%, transparent)',
-      border: '1px dashed color-mix(in srgb, #38bdf8 40%, transparent)',
+      background: `color-mix(in srgb, ${accentColor} 6%, transparent)`,
+      border: `1px dashed color-mix(in srgb, ${accentColor} 40%, transparent)`,
     }}>
       <div>
         <div style={{ fontSize: 12, color: 'var(--o-text)', fontWeight: 500 }}>
-          Sem instrução de abertura configurada
+          {title}
         </div>
         <div style={{ fontSize: 11, color: 'var(--o-sub)', marginTop: 2 }}>
-          Com filtros de qualificação ativos, um opener amigável torna a conversa mais natural.
+          {description}
         </div>
       </div>
       <button
@@ -935,16 +944,19 @@ function QualOpenerBanner({ onAdd }: { onAdd: () => void }) {
         style={{ fontSize: 11, padding: '4px 12px', flexShrink: 0, marginLeft: 12 }}
         onClick={onAdd}
       >
-        + Adicionar abertura
+        {buttonText}
       </button>
     </div>
   );
 }
 
-function QualOpenerCard({ block, onEdit, onRemove }: {
+function OpenerCard({ block, onEdit, onRemove, label, badge, accentColor = '#38bdf8' }: {
   block: SalesFlowBlock;
   onEdit: (content: string) => void;
   onRemove: () => void;
+  label: string;
+  badge: string;
+  accentColor?: string;
 }) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(block.content ?? '');
@@ -956,20 +968,20 @@ function QualOpenerCard({ block, onEdit, onRemove }: {
 
   return (
     <div style={{
-      borderRadius: 8, border: '1.5px solid color-mix(in srgb, #38bdf8 35%, transparent)',
-      background: 'color-mix(in srgb, #38bdf8 6%, transparent)',
+      borderRadius: 8, border: `1.5px solid color-mix(in srgb, ${accentColor} 35%, transparent)`,
+      background: `color-mix(in srgb, ${accentColor} 6%, transparent)`,
       padding: '10px 14px', marginBottom: 4,
     }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           <span style={{
             fontSize: 9.5, fontWeight: 700, letterSpacing: '1.5px', textTransform: 'uppercase',
-            color: '#38bdf8', fontFamily: 'monospace',
-          }}>Abertura de Qualificação</span>
+            color: accentColor, fontFamily: 'monospace',
+          }}>{label}</span>
           <span style={{
             fontSize: 9.5, padding: '1px 6px', borderRadius: 4,
-            background: 'color-mix(in srgb, #38bdf8 15%, transparent)', color: '#38bdf8',
-          }}>automática · 1ª mensagem</span>
+            background: `color-mix(in srgb, ${accentColor} 15%, transparent)`, color: accentColor,
+          }}>{badge}</span>
         </div>
         <div style={{ display: 'flex', gap: 6 }}>
           {!editing && (
@@ -1251,6 +1263,38 @@ export function CamadaFluxoVenda({ config, onUpdate }: Props) {
     ));
   }
 
+  const BOOKING_SIGNAL_DEFAULT_TEXT =
+    'Se o lead já escolheu um serviço específico ou perguntou sobre horários e disponibilidade, ' +
+    'reconhece o interesse dele e pergunta diretamente sobre o dia e horário preferencial — ele já ' +
+    'está pronto para agendar, não precisa de mais confirmações antes disso.';
+
+  function addBookingSignalOpener() {
+    const block: SalesFlowBlock = {
+      id: `booking_signal_opener_${Date.now()}`,
+      typeId: 'orientacao',
+      booking_signal_opener: true,
+      content: BOOKING_SIGNAL_DEFAULT_TEXT,
+      priority: 'high',
+    };
+    updateFlow(phases.map(p =>
+      p.id === 'p2' ? { ...p, blocks: [...p.blocks, block] } : p
+    ));
+  }
+
+  function removeBookingSignalOpener(blockId: string) {
+    updateFlow(phases.map(p =>
+      p.id === 'p2' ? { ...p, blocks: p.blocks.filter(b => b.id !== blockId) } : p
+    ));
+  }
+
+  function editBookingSignalOpener(blockId: string, newContent: string) {
+    updateFlow(phases.map(p =>
+      p.id === 'p2'
+        ? { ...p, blocks: p.blocks.map(b => b.id === blockId ? { ...b, content: newContent } : b) }
+        : p
+    ));
+  }
+
   function saveBlocks(phaseId: SalesFlowPhaseId, newBlocks: SalesFlowBlock[]) {
     if (!newBlocks.length) return;
     updateFlow(phases.map(p => {
@@ -1356,15 +1400,51 @@ export function CamadaFluxoVenda({ config, onUpdate }: Props) {
             const openerBlock = phase.blocks.find(b => b.qual_opener);
             if (openerBlock) {
               extraHeader = (
-                <QualOpenerCard
+                <OpenerCard
                   block={openerBlock}
                   onEdit={(content) => editQualOpener(openerBlock.id, content)}
                   onRemove={() => removeQualOpener(openerBlock.id)}
+                  label="Abertura de Qualificação"
+                  badge="automática · 1ª mensagem"
                 />
               );
             } else {
               extraHeader = (
-                <QualOpenerBanner onAdd={addQualOpener} />
+                <OpenerBanner
+                  onAdd={addQualOpener}
+                  title="Sem instrução de abertura configurada"
+                  description="Com filtros de qualificação ativos, um opener amigável torna a conversa mais natural."
+                />
+              );
+            }
+          }
+          if (id === 'p2' && agentGroup === 'agenda') {
+            const bookingOpenerBlock = phase.blocks.find(b => b.booking_signal_opener);
+            if (bookingOpenerBlock) {
+              extraHeader = (
+                <OpenerCard
+                  block={bookingOpenerBlock}
+                  onEdit={(content) => editBookingSignalOpener(bookingOpenerBlock.id, content)}
+                  onRemove={() => removeBookingSignalOpener(bookingOpenerBlock.id)}
+                  label="Reconhecimento de Interesse de Agendamento"
+                  badge="automática · qualquer turno"
+                  accentColor="#a78bfa"
+                />
+              );
+            } else {
+              const p2HasOtherBlocks = phase.blocks.length > 0;
+              extraHeader = (
+                <OpenerBanner
+                  onAdd={addBookingSignalOpener}
+                  title={p2HasOtherBlocks
+                    ? 'Reconhecimento de interesse de agendamento desativado'
+                    : 'Sem reconhecimento de interesse de agendamento configurado'}
+                  description={p2HasOtherBlocks
+                    ? 'Esta fase já foi customizada — nenhuma instrução automática de agendamento está ativa aqui. Adicione o bloco abaixo para reativar (com texto editável).'
+                    : 'Padrão do sistema ainda ativo: se o lead já escolheu um serviço ou perguntou sobre horários, reconhece e pergunta o dia/horário direto. Adicione aqui para assumir e customizar o texto.'}
+                  buttonText="+ Adicionar instrução"
+                  accentColor="#a78bfa"
+                />
               );
             }
           }

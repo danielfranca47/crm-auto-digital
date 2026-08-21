@@ -3128,6 +3128,42 @@ def _build_child_prompt_apresentation(
         "- Se media_already_sent=true e o lead NÃO está repetindo o pedido do conteúdo, mantenha [].\n"
     ) if _media_catalog_lines else ""
 
+    # "Reconhecimento de interesse de agendamento" — migrado de texto hardcoded para um
+    # bloco editável/removível do Fluxo de Venda (booking_signal_opener), só para o grupo
+    # agenda (agent_1/SDR e agent_3/Híbrido — os únicos com fases de agendamento no
+    # pipeline). Para direto/consultivo, mantém-se o texto hardcoded (fora de escopo —
+    # ver docs/implementations/fix-fluxo-vendas-sequencial.md, Fase 4).
+    _booking_signal_block = (
+        "- RECONHECIMENTO DE INTERESSE DE AGENDAMENTO: Se o lead já escolheu um serviço específico ou perguntou\n"
+        "  sobre horários/disponibilidade ('que horas', 'que dia', 'tem horário'), sinalize:\n"
+        "  did_complete_phase=true, recommended_next_category='pre-agendamento'. Em message_text: reconheça\n"
+        "  o interesse e pergunte sobre dia/horário preferencial de forma direta e natural.\n"
+        "  Não envie warming script neste caso — o lead já está pronto para marcar.\n"
+    )
+    if agent_mode_normalized == "agenda":
+        _sales_flow_bs = ai_profile.get("sales_flow")
+        _p2_phase_bs = None
+        if isinstance(_sales_flow_bs, dict) and _sales_flow_bs.get("enabled"):
+            _p2_phase_bs = next(
+                (p for p in (_sales_flow_bs.get("phases") or []) if isinstance(p, dict) and p.get("id") == "p2"),
+                None,
+            )
+        if _p2_phase_bs is not None and (_p2_phase_bs.get("blocks") or []):
+            # Fase p2 configurada pelo utilizador — usar só o que ele definiu, nunca o
+            # fallback hardcoded (se removeu o bloco, é deliberado).
+            _opener_bs = next(
+                (
+                    b for b in (_p2_phase_bs.get("blocks") or [])
+                    if isinstance(b, dict) and b.get("booking_signal_opener")
+                ),
+                None,
+            )
+            if _opener_bs:
+                _content_bs = str(_opener_bs.get("content") or "").strip()
+                _booking_signal_block = f"- RECONHECIMENTO DE INTERESSE DE AGENDAMENTO: {_content_bs}\n" if _content_bs else ""
+            else:
+                _booking_signal_block = ""
+
     _apres_prompt = (
         _greeting_apres_header
         + _apres_first_contact_opener
@@ -3182,11 +3218,7 @@ def _build_child_prompt_apresentation(
         "- Respeite playbook.max_chars se existir (senão, resposta curta).\n"
         "- recommended_next_category é informativo nesta rota; não é aplicado automaticamente na mudança de estágio.\n"
         "- outcome e kanban_highlight devem ser null.\n"
-        "- RECONHECIMENTO DE INTERESSE DE AGENDAMENTO: Se o lead já escolheu um serviço específico ou perguntou\n"
-        "  sobre horários/disponibilidade ('que horas', 'que dia', 'tem horário'), sinalize:\n"
-        "  did_complete_phase=true, recommended_next_category='pre-agendamento'. Em message_text: reconheça\n"
-        "  o interesse e pergunte sobre dia/horário preferencial de forma direta e natural.\n"
-        "  Não envie warming script neste caso — o lead já está pronto para marcar.\n"
+        f"{_booking_signal_block}"
         "- signals_structured deve incluir: offer_presented, checkout_sent, presentation_variant e offer_item_name.\n"
         "- Mídia rica: se offer_pack_summary.media_url estiver preenchido, a mídia já será enviada automaticamente antes deste texto. NÃO mencione 'veja a imagem/vídeo' — assuma que o lead já recebeu e escreva o texto do pitch como sequência natural.\n"
         "- Se offer_pack_summary.anchor_price estiver preenchido, use o preço âncora no pitch (ex: 'De R$997 por apenas R$X').\n"

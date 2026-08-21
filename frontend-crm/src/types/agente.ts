@@ -67,6 +67,7 @@ export interface SalesFlowBlock {
   id: string;
   typeId: SalesFlowBlockTypeId;
   qual_opener?: boolean;          // true = bloco de abertura de qualificação (injetado antes da 1ª pergunta)
+  booking_signal_opener?: boolean; // true = reconhecimento de interesse de agendamento (fase p2, grupo agenda)
   // triggers
   keywords?: string;
   match?: string;

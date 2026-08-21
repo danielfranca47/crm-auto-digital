@@ -104,6 +104,26 @@ Escopo: só agentes com recursos de agendamento (`agent_1`/SDR e `agent_3`/Híbr
 | `frontend-crm/src/components/agente/CamadaFluxoVenda.tsx` | Novo card `booking_signal_opener` na fase p2 (padrão `qual_opener`), visível só quando `agentGroup === 'agenda'` |
 | `frontend-crm/src/types/agente.ts` | Novo flag `booking_signal_opener?: boolean` em `SalesFlowBlock` |
 
+### Commits Fase 4
+
+| # | Commit | O que foi implementado |
+|---|---|---|
+| 1 | `<preencher após commit>` | Bloco `booking_signal_opener` editável/removível (backend + frontend) |
+
+**Detalhes:**
+- `backend-executors/app/services/decision_engine.py` — `_build_child_prompt_apresentation`: nova variável `_booking_signal_block` computada antes do prompt; para `agent_mode_normalized == 'agenda'` com `sales_flow.enabled` e fase p2 com blocos configurados, usa o bloco `booking_signal_opener` (se presente) ou string vazia (se ausente — utilizador removeu deliberadamente); mantém o texto hardcoded original em todos os outros casos (sem sales_flow, p2 vazia, ou `direto`/`consultivo`)
+- `frontend-crm/src/components/agente/CamadaFluxoVenda.tsx` — generalizados `QualOpenerBanner`/`QualOpenerCard` (hardcoded para p1) em `OpenerBanner`/`OpenerCard` (parametrizados por título/descrição/label/badge/cor), reutilizados tanto pelo `qual_opener` (p1) existente quanto pelo novo `booking_signal_opener` (p2, só quando `agentGroup === 'agenda'`); novas funções `addBookingSignalOpener`/`removeBookingSignalOpener`/`editBookingSignalOpener`; banner distingue "sem configuração" (p2 vazia, ainda usa fallback) de "desativado" (p2 customizada, sem o bloco)
+- `frontend-crm/src/types/agente.ts` — novo campo `booking_signal_opener?: boolean` em `SalesFlowBlock`
+- `backend-executors/tests/test_sales_flow_intent_trigger_phase_entry.py` — 5 novos testes cobrindo fallback (sem sales_flow / p2 vazia), supressão (p2 configurada sem o bloco), uso do texto customizado, e não-migração para `direto`
+
+### Relatório da Fase 4 — o que mudou na prática
+
+**Antes:** a instrução "se o lead já escolheu um serviço ou perguntou sobre horários, reconheça o interesse e pergunte o dia/horário" estava fixa no código — nenhum agente conseguia editá-la ou desativá-la, mesmo configurando o Fluxo de Venda com a sua própria sequência.
+
+**Agora:** assim que uma conta com agente de agendamento (SDR ou Híbrido) configura a fase de Apresentação no Fluxo de Venda, essa instrução para de ser aplicada automaticamente — o utilizador precisa adicioná-la explicitamente (com um botão "+ Adicionar instrução"), podendo editar o texto ou removê-la de vez. Testado ao vivo: com o perfil "Daniel", depois de configurar a fase p2, a frase genérica "podemos agendar sua sessão" que aparecia em quase toda resposta desapareceu; ao adicionar o bloco com um texto customizado ("ofereça agendar direto sem enrolar") e o lead perguntar sobre horários, o bot respondeu exatamente nesse tom, oferecendo dias disponíveis diretamente.
+
+**Para validar:** Cenário P4 (abaixo, builder) + teste ao vivo via Playground (ver nota).
+
 ### Fase 5 — Frontend: funil visual resumido no card do Kanban
 
 **Objetivo:** mostrar, de forma compacta, por onde o lead já passou no Fluxo de Venda.
@@ -152,9 +172,11 @@ Escopo: só agentes com recursos de agendamento (`agent_1`/SDR e `agent_3`/Híbr
 - **Validado em:** 21/08/2026 — `test_is_phase_entry_threaded_correctly_to_apresentation_prompt`: chamando `_build_child_prompt_apresentation` com `is_phase_entry=True` vs `False`, o texto só aparece no primeiro caso.
 
 ### Cenário P4 — Bloco `booking_signal_opener` editável (builder)
-- [ ] Fase p2, `agent_mode` do grupo `agenda`: card com texto padrão aparece
-- [ ] Editar texto → salva
-- [ ] Remover bloco → backend deixa de aplicar reconhecimento automático de agendamento
+- [x] Fase p2, `agent_mode` do grupo `agenda`: card com texto padrão aparece
+- [x] Editar texto → salva
+- [x] Remover bloco → backend deixa de aplicar reconhecimento automático de agendamento
+- **Validado em:** 21/08/2026 — via browser (chrome-devtools MCP) no perfil "Daniel" (fase p2 já customizada, 11 blocos, sem `booking_signal_opener`): banner mostrou corretamente "Reconhecimento de interesse de agendamento **desativado**" (distinção correta de "sem configuração"). Cliquei "+ Adicionar instrução" → card apareceu com texto padrão; editei para "Se o lead perguntar por horários, ofereça agendar direto sem enrolar." → salvei → `SALVAR FLUXO DE VENDA` → confirmado na base de dados local (`core.db`, `ai_profiles.id=5`) que o bloco persistiu com `booking_signal_opener: true` e o texto editado.
+- **Teste ao vivo adicional (Playground):** nova sessão, "Quero saber sobre massagens" → resposta de apresentação **sem** menção a agendamento (confirma que o texto hardcoded parou de ser injectado). "Que horas vocês têm disponível essa semana?" → bot respondeu "temos horários disponíveis... terça e quinta-feira... Qual desses dias você prefere?" — exatamente no tom do texto customizado ("ofereça agendar direto sem enrolar").
 
 ### Cenário C1 — WhatsApp real: bot não pergunta disponibilidade antes da tabela ser aceita
 - [x] Reproduzir a conversa do relato original (perguntar algo não relacionado após a saudação de entrada)
