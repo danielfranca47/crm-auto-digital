@@ -13,6 +13,7 @@ existente ou criar um novo.
 | [`sales-flow.md`](sales-flow.md) | Camada 7 — Fluxo de Venda: fases (p0–p5), blocos tipados, triggers (phase/kw/intent), fire_once, suppress_llm_response, dispatch de system_actions | Novo tipo de bloco, novo flag de trigger, mudança no modelo sequencial, novo destino de acção |
 | [`llm-architecture.md`](llm-architecture.md) | Motor de decisão: LLM Mãe, LLM Filhas, contratos (MotherDecision, ChildResult, DecisionOutput), guardrails, fluxo de execução | Novo campo nos contratos, nova LLM Filha, novo guardrail, mudança no `compose_decision_output` |
 | [`webhooks.md`](webhooks.md) | Pipeline inbound WhatsApp: webhook UazAPI, filtro de grupos, normalização de messageType, áudio/mídia, bot_disabled, buffer, ContextBundle | Novo tipo de mensagem suportado, novo comportamento de fallback de mídia, nova fonte de `bot_disabled`, mudança no buffer |
+| [`whatsapp-connection.md`](whatsapp-connection.md) | Conexão da instância WhatsApp: QR code e código de pareamento, `ConnectResponse`, sanitização de telefone, normalização de status, `ConexaoNumero.tsx` | Novo método de vínculo, novo campo em `ConnectResponse`, mudança no timeout/polling do frontend |
 | [`pipeline-phases.md`](pipeline-phases.md) | Fases de qualificação, apresentação e fechamento por agent_mode; campos do AI Profile que chegam ao LLM; guardrails anti-loop; hardcodes | Novos campos obrigatórios de qualificação, novo behavior por agent_mode, novo guardrail de fase |
 | [`agents.md`](agents.md) | AI Profile (schema, campos, enums, offer_pack) e Agentes Locais (tabela, endpoints, job types, fila); toggle bot por lead | Novo campo no AI Profile, novo agent_mode/template_key, novo job type, novo motivo de `bot_disabled` |
 | [`followup.md`](followup.md) | Arquitetura de follow-up: estados (idle/scheduled/paused/completed), reconciliador, circuit breaker, jobs tick, modal de transição | Mudança na máquina de estados, novo tipo de tick, nova lógica de reconciliação/circuit breaker |
@@ -79,6 +80,7 @@ A maioria das features altera áreas já documentadas. Antes de criar um ficheir
 | Nova LLM Filha ou guardrail de decisão | `llm-architecture.md` |
 | Novo tipo de mensagem WhatsApp suportado | `webhooks.md` |
 | Mudança no comportamento de áudio ou mídia inválida | `webhooks.md` |
+| QR code, código de pareamento, `ConnectResponse`, `ConexaoNumero.tsx` | `whatsapp-connection.md` |
 | Novo campo no AI Profile | `agents.md` |
 | Novo motivo para `bot_disabled` | `agents.md` + `webhooks.md` |
 | Novos campos obrigatórios de qualificação | `pipeline-phases.md` |

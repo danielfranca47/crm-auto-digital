@@ -40,7 +40,9 @@ agent-local         local  ← agente Python local de prospecção/scraping
 | `app/models/password_reset_token.py` | Tokens de reset de senha (TTL 2h) |
 | `app/services/email_service.py` | Envio SMTP via Resend; templates welcome + reset |
 | `app/api/ai_profiles.py` | CRUD `/ai-profiles/me` |
-| `app/api/whatsapp_connections.py` | Conexão QR, `/resolve-token`, `/resolve-by-user` |
+| `app/api/whatsapp_connections.py` | CRUD do registo de conexão (`/whatsapp-connections/me`), `/resolve-token`, `/resolve-by-user` |
+| `app/api/whatsapp_instances.py` | Proxy service-to-service para a UazAPI: `/whatsapp-instances/init`, `/connect`, `/status` — ver [`whatsapp-connection.md`](whatsapp-connection.md) |
+| `app/services/uazapi_admin.py` | Cliente admin da UazAPI (`connect_instance`, `extract_connection_meta` — QR/pair_code/status) |
 | `app/api/whatsapp_send.py` | Endpoint `/whatsapp/send` (despacha para UazAPI) |
 | `app/api/plans.py` | Planos e assinaturas |
 | `app/api/admin.py` | Endpoints admin (`/admin/*`) |
@@ -71,7 +73,7 @@ agent-local         local  ← agente Python local de prospecção/scraping
 | `routes/appointments.py` | `/api/appointments/*` | Agenda e compromissos |
 | `routes/knowledge.py` | `/api/knowledge/*` | Base de conhecimento; upload de mídia para Fluxo de Venda |
 | `routes/usage.py` | `/api/usage/*` | Consumo do plano |
-| `routes/whatsapp_connect.py` | `/api/whatsapp/*` | Conexão QR (proxy para backend-core) |
+| `routes/whatsapp_connect.py` | `/api/whatsapp/*` | Conexão via QR code ou código de pareamento (proxy para backend-core) — ver [`whatsapp-connection.md`](whatsapp-connection.md) |
 
 ### Arquivos críticos — Serviços
 
