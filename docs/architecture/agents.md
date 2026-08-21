@@ -186,9 +186,9 @@ jobs já resolvidos.
 | `"agenda"` | 4 campos | `"agenda"` |
 | `"direto"` | 3 campos | `"direto"` |
 
-**`presentation_variant`**: `"sales"`, `"scheduler"`, `null`
+**`presentation_variant`**: `"sales"`, `"scheduler"`, `null`. Default por `agent_mode` quando `null` — `direto`/`closer→sales`, `agenda`/`consultivo→scheduler` (`_resolve_presentation_variant()`, `decision_engine.py`)
 
-**`appointment_mode`**: `"exploratory"` (padrão — sessão sem compromisso de compra), `"commercial"` (apresenta serviços/preços e busca compromisso antes de agendar — só com efeito para `template_key="hybrid_scheduler"`). Ao salvar via UI, `presentation_variant` é actualizado em conjunto (`commercial→sales`, `exploratory→scheduler`)
+**`appointment_mode`**: `"exploratory"` (padrão — sessão sem compromisso de compra), `"commercial"` (apresenta serviços/preços e busca compromisso antes de agendar — só com efeito para `template_key="hybrid_scheduler"`). A aba de UI onde este campo é editável fica oculta para agentes `direto`/`closer` (isDirectMode). Ao salvar via UI, `presentation_variant` é actualizado em conjunto **só para `agenda`/`consultivo`** (`commercial→sales`, `exploratory→scheduler`); para `direto`/`closer` é sempre `"sales"`, independente de `appointment_mode` — reforçado também no backend (`_upsert_ai_profile`, `backend-core/app/api/ai_profiles.py`)
 
 **`hybrid_flow_style`**: `"offer_then_schedule"`, `"schedule_then_offer"`, `null`
 

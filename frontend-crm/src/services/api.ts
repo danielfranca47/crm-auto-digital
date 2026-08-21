@@ -1518,6 +1518,11 @@ export const api = {
         ? config.qualification_fields.filter(f => f.mode === 'required').map(f => f.key)
         : config.qualification_required_fields;
 
+      // agent_mode direto/closer não tem UI para appointment_mode (aba "Apresentação"
+      // fica oculta — ver isDirectMode em AiProfile.tsx), então nunca deve derivar
+      // presentation_variant dele: fica sempre "sales".
+      const isDirectAgent = config.agent_mode === 'direto' || config.agent_mode === 'closer';
+
       await coreClient.put('/ai-profiles/me', {
         name:                config.name,
         brand_name:          config.brand_name,
@@ -1534,8 +1539,11 @@ export const api = {
         custom_instructions: config.custom_instructions,
         response_style:      config.response_style,
         appointment_mode:     config.appointment_mode,
-        // presentation_variant acompanha appointment_mode (framing comercial = "sales")
-        presentation_variant: config.appointment_mode === 'commercial' ? 'sales' : 'scheduler',
+        // presentation_variant acompanha appointment_mode só para agentes de agenda/consultivo;
+        // direto/closer sempre "sales" (ver isDirectAgent acima)
+        presentation_variant: isDirectAgent
+          ? 'sales'
+          : (config.appointment_mode === 'commercial' ? 'sales' : 'scheduler'),
         niche:               config.niche,
         target_audience:     config.target_audience,
         offer_description:   config.offer_description,
