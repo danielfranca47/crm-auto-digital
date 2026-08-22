@@ -246,11 +246,34 @@ profile desses modos.
 **Para validar:** testes automatizados (pytest) já rodados e confirmados nesta fase — ver
 tabela de commits acima. Com isto, as 3 fases planejadas em
 `C:\Users\Daniel França\.claude\plans\synchronous-singing-willow.md` estão code-complete e
-todos os checks de validação (pytest) estão marcados. Falta decidir: (a) fazer o sanity check
-ao vivo opcional no Playground (mencionado como opcional no plano, nunca feito nesta
-implementação) e/ou (b) seguir para a graduação (`_processo-graduacao-implementacao.md`) —
-migrar o mapa de guardrails para `docs/architecture/sales-flow.md`/`pipeline-phases.md`, `git
-rm` deste arquivo, commit único de graduação.
+todos os checks de validação (pytest) estão marcados.
+
+### Sanity check ao vivo no Playground (opcional) — resultado parcial
+
+Feito com o agente real "Daniel" (`agenda` / `hybrid_scheduler`), via chrome-devtools MCP:
+bloco de teste `kw_trigger` (`fire_once=True`) adicionado temporariamente em p3a pelo builder,
+sessão de Playground inbound conduzida turno a turno, bloco removido e salvo ao final (perfil
+devolvido ao estado original, 12 blocos).
+
+Confirmado ao vivo: a integração ponta-a-ponta funciona sem erros com o código novo ativo
+(builder persiste o bloco sequencial em p3a corretamente, `decision_engine.py` lê o profile
+real sem exceções) e o caminho de salto direto apresentation→agendamento num único turno
+(`effective_route_agendamento_auto_advance`, já validado antes desta feature) continua a
+funcionar sem regressão.
+
+**Não confirmado ao vivo:** o cenário exato coberto pelos testes automatizados —
+lead já com `category="pre-agendamento"` persistida, depois `did_complete_phase=true` num
+turno seguinte. Nas duas tentativas desta sessão, a Mãe real nunca roteou para
+"pre-agendamento" como categoria intermediária: com resposta vaga sobre data ("essa semana,
+mas não sei o dia") permaneceu em "apresentation"; com data/hora específica na mesma
+mensagem, saltou direto para "agendamento" (o caminho já validado acima). Reproduzir o
+cenário exato exigiria um roteiro de conversa mais elaborado ou seed direto do estado do
+lead — não perseguido further por ser um check explicitamente opcional no plano, com a lógica
+já coberta deterministicamente por pytest (incluindo a prova de que o teste falha sem o gate).
+
+Falta decidir: seguir para a graduação (`_processo-graduacao-implementacao.md`) — migrar o
+mapa de guardrails para `docs/architecture/sales-flow.md`/`pipeline-phases.md`, `git rm` deste
+arquivo, commit único de graduação.
 
 ---
 
