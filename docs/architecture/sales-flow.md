@@ -225,6 +225,13 @@ se lead "engajado" com <fase> (phases_triggered contém "<id>" OU lead.category 
 
 - `_enforce_apresentation_sales_flow_pending` — p2 (apresentação)
 - `_enforce_pre_agendamento_sales_flow_pending` — p3a (pré-agendamento), só relevante para o modo `agenda` (único que visita esta fase)
+- `_enforce_recepcao_sales_flow_pending` — p0 (recepção), com 2 diferenças estruturais face ao template acima:
+  1. **Condição de "engajado" invertida** — `current_category == "recepcao"` nunca é persistido em `leads.category` (só existe como `route_to` efémero; ver `orchestrator_models.py`). O guardrail usa o sinal oposto: o lead ainda não passou de `"qualification"` no pipeline (`to-prospect`/`in-progress`/ausente/já `"qualification"`).
+  2. **Teto de 1 turno extra** (`_MAX_RECEPCAO_ENFORCED_OUTBOUND_TURNS`) — a Filha Recepção é desenhada para um único turno ("Seu papel dura só este turno", `_build_child_prompt_recepcao`). Sem teto, o guardrail forçaria `route_to="recepcao"` indefinidamente enquanto o gatilho de p0 não disparasse, repetindo a saudação em plena conversa real. A partir do 2º turno após `_enforce_greeting_first` (que já cobre o 1º turno incondicionalmente), o guardrail falha aberto — nunca mais intervém.
+
+  `_ALLOWED_ADVANCE["recepcao"] = {"qualification"}` (único destino legítimo a partir da recepção) foi adicionado só para este guardrail — `_STAGE_ORDER`/`_STAGE_INDEX` (usados por `apply_mother_category_guardrails`) não foram tocados, pois `"recepcao"` nunca aparece como valor de `lead.category`.
+
+  **Aviso no builder:** `CamadaFluxoVenda.tsx` mostra um banner somente-leitura na Fase 0 quando a configuração excede o que o teto de 1 turno cobre — mais de 1 bloco `kw_trigger`/`intent_trigger` sequencial (`fire_once`, escopo raiz) ou qualquer nó `condicao` presente. Reaproveita `isSequentialCapable()` já existente no arquivo.
 
 **Qualificação (p1) não tem um guardrail dedicado ao nível da Mãe** — a saída de p1 é decidida por "missing_fields vazio", não por `route_to` direto, em 3 pontos independentes que promovem `route_to`/`effective_route_to` para `"apresentation"`: Regra 3 e o auto-promote de runtime (`decide()`), e a Regra 1 + fallback `ask_qualification` (`compose_decision_output()`). Os 3 são gateados por `not _phase_pending_sequential_triggers("p1", ...)`, exceto o escape valve `is_upper_stage` da Regra 3 (lead já numa fase posterior cuja Mãe tentou rotear de volta para qualificação por engano — não é "saindo de p1 agora", não deve ser bloqueado por pendência de p1).
 
@@ -236,7 +243,13 @@ se lead "engajado" com <fase> (phases_triggered contém "<id>" OU lead.category 
 
 **Escopo, o mesmo em toda fase:** só gatilhos "sequenciais" (`kw_trigger`/`intent_trigger` com `fire_once: true`, mesmo critério de `_is_sequential_trigger_block()`) contam como pendência. `no_reply_trigger` e gatilhos sem `fire_once` nunca participam — são reavaliados a cada turno, sem estado persistido de satisfação.
 
-**Fases sem este guardrail (deliberado):** p0 (recepção) é estruturalmente diferente — `"recepcao"` não está em `_STAGE_ORDER`/`_ALLOWED_ADVANCE`, então `apply_mother_category_guardrails()` aceita o `perceived_category` da Mãe sem nenhum clamp de salto único vindo dela. p3b→follow-up e p4→closing não têm hoje nenhum atalho de auto-advance da Filha (só o `route_to` bruto da Mãe); p4/follow-up também interage com o subsistema separado de ticks agendados (`followup_state.py`/`followup_reconciler.py`), fora do escopo de turnos ao vivo cobertos aqui.
+**Fases sem este guardrail ao nível da Mãe (deliberado):** p3b (agendamento), p4 (follow-up) e
+p5 (fechamento) não têm hoje nenhum `_enforce_<fase>_sales_flow_pending` dedicado — só o
+`route_to` bruto da Mãe decide a saída dessas fases. p4/follow-up também interage com o
+subsistema separado de ticks agendados (`followup_state.py`/`followup_reconciler.py`), fora do
+escopo de turnos ao vivo cobertos aqui. p1 (qualificação) tem cobertura só indireta (ver acima).
+Auditoria de cobertura completa (p1/p3b/p4/p5/`client-list`) ainda não feita — ver
+`docs/plans/` para o próximo item planejado nesta linha, se existir.
 
 ### Lógica de Ramificação (`condicao`)
 
@@ -395,7 +408,7 @@ Cor de cada fase vem de `SALES_FLOW_PHASE_COLORS` (`frontend-crm/src/types/agent
 |---|---|
 | `frontend-crm/src/types/agente.ts` | Tipos TypeScript: `SalesFlowPhaseId`, `SalesFlowBlock`, `SalesFlowPhaseData`, `SALES_FLOW_PHASES_BY_AGENT_MODE`, `SALES_FLOW_PHASE_COLORS` |
 | `frontend-crm/src/components/agente/CamadaFluxoVenda.tsx` | Builder visual: renderização de fases, blocos, formulários de configuração |
-| `backend-executors/app/services/decision_engine.py` | `_evaluate_sales_flow_phases()` — avaliação de triggers, resolução de ramos (`condicao`), coleta de orientações/mídia/system_actions; `_collect_intent_triggers_for_lead_phase()` — seleciona quais `intent_trigger` mostrar à mãe (fase atual + seguinte); `_collect_branch_nodes_for_lead_phase()` — idem para nós `condicao` (fase atual + seguinte); `_load_branches_selected_map()` — lê `leads.branches_selected`; `_build_block_lookup()`/`_requires_block_satisfied()` — resolução da dependência explícita `requires_block_id`; `_enforce_apresentation_sales_flow_pending()` — guardrail que impede a Mãe de pular a fase de apresentation com gatilhos sequenciais pendentes; `_compute_is_phase_entry()` — cálculo único de `is_phase_entry`, reutilizado tanto na construção do prompt filho (`_build_child_prompt_recepcao/qualification/apresentation/follow_up`) quanto no despacho real de `system_actions` em `compose_decision_output()` |
+| `backend-executors/app/services/decision_engine.py` | `_evaluate_sales_flow_phases()` — avaliação de triggers, resolução de ramos (`condicao`), coleta de orientações/mídia/system_actions; `_collect_intent_triggers_for_lead_phase()` — seleciona quais `intent_trigger` mostrar à mãe (fase atual + seguinte); `_collect_branch_nodes_for_lead_phase()` — idem para nós `condicao` (fase atual + seguinte); `_load_branches_selected_map()` — lê `leads.branches_selected`; `_build_block_lookup()`/`_requires_block_satisfied()` — resolução da dependência explícita `requires_block_id`; `_enforce_apresentation_sales_flow_pending()`/`_enforce_pre_agendamento_sales_flow_pending()`/`_enforce_recepcao_sales_flow_pending()` — guardrails que impedem a Mãe de pular p2/p3a/p0 com gatilhos sequenciais pendentes (p0 com teto de 1 turno extra); `_compute_is_phase_entry()` — cálculo único de `is_phase_entry`, reutilizado tanto na construção do prompt filho (`_build_child_prompt_recepcao/qualification/apresentation/follow_up`) quanto no despacho real de `system_actions` em `compose_decision_output()` |
 | `backend-executors/app/services/orchestrator_models.py` | `MotherDecision.branch_selections: Dict[str, str]` |
 | `backend-crm/routes/executor.py` | `_dispatch_system_actions()`, `_dispatch_sales_flow_media()`, `_PHASE_ID_TO_CATEGORY` |
 | `backend-core/app/models/ai_profile.py` | Campo `sales_flow` na tabela `ai_profiles` |
