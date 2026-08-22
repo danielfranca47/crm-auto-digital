@@ -5,7 +5,7 @@ import logging
 import unicodedata
 from datetime import datetime, timedelta, timezone as _dt_timezone
 from difflib import SequenceMatcher
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 from zoneinfo import ZoneInfo
 
 from app.contracts.qualification_contract import (
@@ -401,6 +401,60 @@ def _is_sequential_trigger_block(block: Dict[str, Any]) -> bool:
     return False
 
 
+def _build_block_lookup(phases: List[Dict[str, Any]]) -> Dict[str, Tuple[Dict[str, Any], str]]:
+    """Mapa block_id -> (block, phase_id) construído a partir de TODAS as fases do profile
+    (não só a fase corrente) — usado para resolver `requires_block_id`. Cobre referência
+    cross-fase defensivamente; na prática o builder só oferece blocos da MESMA fase no
+    dropdown (ver CamadaFluxoVenda.tsx). Construído uma vez por chamada de
+    _evaluate_sales_flow_phases(); custo desprezível (poucas dezenas de blocos no total)."""
+    lookup: Dict[str, Tuple[Dict[str, Any], str]] = {}
+    for phase in phases:
+        if not isinstance(phase, dict):
+            continue
+        p_id = (phase.get("id") or "").strip()
+        for blk in (phase.get("blocks") or []):
+            if not isinstance(blk, dict):
+                continue
+            b_id = (blk.get("id") or "").strip()
+            if b_id and b_id not in lookup:
+                lookup[b_id] = (blk, p_id)
+    return lookup
+
+
+def _requires_block_satisfied(
+    block: Dict[str, Any],
+    block_lookup: Dict[str, Tuple[Dict[str, Any], str]],
+    triggers_fired: set,
+    triggered_phases: set,
+) -> bool:
+    """True se a dependência explícita `requires_block_id` (kw_trigger/intent_trigger) está
+    satisfeita — ou se não há referência configurada, ou se a referência é inválida por
+    qualquer motivo (bloco apagado OU bloco ainda existe mas deixou de ser elegível, ex.:
+    fire_once desmarcado depois): FAIL-OPEN em ambos os casos, nunca bloqueia
+    permanentemente (ver docs/architecture/sales-flow.md, "Dependência explícita
+    requires_block_id").
+
+    Ao contrário do gating posicional (_prereqs_satisfied_by_scope), que aceita satisfação
+    no MESMO turno (fired), esta checagem só olha para estado PERSISTIDO (triggers_fired /
+    triggered_phases, carregados uma vez no topo da função — sempre anterior a este turno) —
+    nunca inclui `fired` deste turno. É intencional: o requisito é "já disparou num turno
+    ANTERIOR", nunca "está a disparar também agora"."""
+    ref_id = (block.get("requires_block_id") or "").strip()
+    if not ref_id:
+        return True
+    entry = block_lookup.get(ref_id)
+    if entry is None:
+        return True  # bloco referenciado foi apagado — fail-open
+    ref_block, ref_phase_id = entry
+    if not _is_sequential_trigger_block(ref_block):
+        return True  # existe mas já não é elegível (ex.: fire_once desmarcado) — fail-open
+    ref_type = (ref_block.get("typeId") or "").strip()
+    if ref_type == "phase_trigger":
+        return ref_phase_id in triggered_phases
+    ref_bid = (ref_block.get("id") or "").strip()
+    return bool(ref_bid) and ref_bid in triggers_fired
+
+
 _LEAD_CAT_TO_ROUTE: Dict[str, str] = {
     "qualification":    "qualification",
     "apresentation":    "apresentation",
@@ -483,6 +537,9 @@ def _evaluate_sales_flow_phases(
     _triggered_phases = _load_triggered_phases_set(context)
     # Ramos de nós `condicao` (sticky) já resolvidos em turnos anteriores.
     _branches_persisted = _load_branches_selected_map(context)
+    # Mapa block_id -> (block, phase_id) de TODAS as fases — usado para resolver a
+    # dependência explícita `requires_block_id`. Ver _requires_block_satisfied().
+    _block_lookup = _build_block_lookup(phases)
 
     def _trigger_persisted_satisfied(_blk: Dict[str, Any], _type: str) -> bool:
         """True se este gatilho já disparou ANTES deste turno (estado persistido no lead).
@@ -575,7 +632,11 @@ def _evaluate_sales_flow_phases(
             # pré-requisito é isolado por escopo (root ou ramo) — ver comentário acima.
             _is_sequential = _is_sequential_trigger_block(block)
             _scope_satisfied = _prereqs_satisfied_by_scope.setdefault(_scope_key, True)
-            _locked = _is_sequential and not _scope_satisfied
+            # Dependência explícita (requires_block_id): trava ADITIVA à posicional acima —
+            # só olha estado persistido de ANTES deste turno, nunca satisfação no mesmo turno
+            # (ver _requires_block_satisfied). Independente de _is_sequential/_scope_key.
+            _requires_satisfied = _requires_block_satisfied(block, _block_lookup, _triggers_fired, _triggered_phases)
+            _locked = (_is_sequential and not _scope_satisfied) or not _requires_satisfied
 
             # Avaliar e atualizar o flag de trigger ativo
             fired = False
