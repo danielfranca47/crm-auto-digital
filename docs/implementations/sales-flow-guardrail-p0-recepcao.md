@@ -150,12 +150,40 @@ novos desta fase passam.
 |---|---|
 | `frontend-crm/src/components/agente/CamadaFluxoVenda.tsx` | Banner de aviso condicional na Fase 0 (reaproveita `isSequentialCapable()`) |
 
+### Commits Fase 2
+
+| # | Commit | O que foi implementado |
+|---|---|---|
+| 1 | *(a registar após commit)* | Banner de aviso em Fase 0 quando configuração excede o teto de 1 turno |
+
+**Detalhes:**
+- `frontend-crm/src/components/agente/CamadaFluxoVenda.tsx` — novo `StaticWarningBanner`
+  (aviso somente leitura, mesmo padrão visual de `OpenerBanner` sem botão de ação); no loop de
+  render de p0/p1/p2, para `id === 'p0'` calcula `sequentialCount` (blocos raiz `kw_trigger`/
+  `intent_trigger` com `fire_once`) e `hasBranchNode` (algum `condicao`); se
+  `sequentialCount > 1` ou `hasBranchNode`, exibe o banner como `extraHeader` da `PhaseSection`
+
+### Relatório da Fase 2 — o que mudou na prática
+
+**Antes:** o builder do Fluxo de Venda deixava o usuário configurar qualquer coisa na Fase 0
+(Recepção) sem nenhum aviso sobre a limitação do guardrail de backend (1 turno extra).
+
+**Agora:** se o usuário configurar 2 ou mais gatilhos sequenciais (ou uma ramificação) na Fase
+0, um aviso aparece explicando que a configuração pode não disparar a tempo, antes mesmo de
+testar em produção.
+
+**Para validar:** Cenário P3, abaixo (já testado ao vivo nesta sessão).
+
 ---
 
 ## Checks de Validação
 
 ### Cenário P1 — Gatilho pendente em p0 bloqueia salto da Mãe (unit, Fase 1)
-- [ ] Rodar `test_recepcao_sales_flow_pending.py` — bloqueio, liberação, teto de turnos, no-op sem config
+- [x] Rodar `test_recepcao_sales_flow_pending.py` — bloqueio, liberação, teto de turnos, no-op sem config
+- **Validado em:** 22/08/2026 — 9/9 testes passando; suíte completa sem regressão (23 falhas
+  pré-existentes confirmadas via stash/comparação antes-depois, nenhuma nova). Usuário aceitou
+  esta cobertura automatizada como suficiente para a Fase 1 (Cenário P2 fica pulado/justificado
+  acima — perfil de teste não exercita `route_to="qualification"`).
 
 ### Cenário P2 — Sanity check ao vivo (Playground, Fase 1)
 - [x] Configurar 1 gatilho `fire_once` em p0 do agente "Daniel" (kw_trigger "aceito" +
@@ -184,9 +212,16 @@ Bloco de teste removido do agente "Daniel" após o sanity check (Fluxo de Venda 
 blocos, Fase 0 vazia, config salva).
 
 ### Cenário P3 — Aviso aparece no builder (Fase 2)
-- [ ] Configurar 2 gatilhos sequenciais (ou 1 nó `condicao`) em Fase 0 do builder
-- [ ] Confirmar que o banner de aviso aparece
-- [ ] Remover até sobrar 1 gatilho; confirmar que o banner some
+- [x] Configurar 2 gatilhos sequenciais (`kw_trigger` com `fire_once`) em Fase 0 do builder
+- [x] Confirmar que o banner de aviso aparece
+- [x] Remover até sobrar 1 gatilho; confirmar que o banner some
+
+**Validado em:** 22/08/2026 — testado ao vivo no browser (chrome-devtools MCP) na tela
+"Identidade do Agente → Fluxo de Venda" do agente "Daniel". Com 2 `kw_trigger` (`fire_once`)
+em Fase 0, o banner "Configuração pode exceder o limite da Recepção" apareceu corretamente
+(screenshot conferido). Ao remover um deles (voltando a 1 gatilho sequencial), o banner sumiu.
+`npx tsc --noEmit` sem erros. Blocos de teste removidos do agente "Daniel" após a validação
+(config restaurada ao estado original — 12 blocos, Fase 0 vazia).
 
 ---
 

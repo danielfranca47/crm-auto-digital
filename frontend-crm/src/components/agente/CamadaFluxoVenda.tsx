@@ -1095,6 +1095,28 @@ function OpenerBanner({ onAdd, title, description, buttonText = '+ Adicionar abe
   );
 }
 
+// Aviso estático (sem ação) — usado quando a configuração da Fase 0 (Recepção) excede o que
+// o guardrail de backend consegue garantir (_enforce_recepcao_sales_flow_pending segura a
+// conversa por, no máximo, 1 turno extra além da saudação forçada — ver
+// docs/architecture/sales-flow.md e sales-flow-guardrail-p0-recepcao.md).
+function StaticWarningBanner({ title, description, accentColor = '#f59e0b' }: {
+  title: string;
+  description: string;
+  accentColor?: string;
+}) {
+  return (
+    <div style={{
+      display: 'flex', flexDirection: 'column', gap: 2,
+      padding: '10px 14px', borderRadius: 8, marginBottom: 4,
+      background: `color-mix(in srgb, ${accentColor} 6%, transparent)`,
+      border: `1px dashed color-mix(in srgb, ${accentColor} 40%, transparent)`,
+    }}>
+      <div style={{ fontSize: 12, color: 'var(--o-text)', fontWeight: 500 }}>{title}</div>
+      <div style={{ fontSize: 11, color: 'var(--o-sub)' }}>{description}</div>
+    </div>
+  );
+}
+
 function OpenerCard({ block, onEdit, onRemove, label, badge, accentColor = '#38bdf8' }: {
   block: SalesFlowBlock;
   onEdit: (content: string) => void;
@@ -1665,6 +1687,23 @@ export function CamadaFluxoVenda({ config, onUpdate }: Props) {
         {(['p0', 'p1', 'p2'] as SalesFlowPhaseId[]).map(id => {
           const phase = phases.find(p => p.id === id)!;
           let extraHeader: React.ReactNode = null;
+          if (id === 'p0') {
+            // Espelha _phase_pending_sequential_triggers do backend: só kw_trigger/intent_trigger
+            // com fire_once contam como "gatilho sequencial" — phase_trigger fica de fora (dispara
+            // sozinho na entrada da fase, não depende de confirmação do lead em turnos seguintes).
+            const sequentialCount = phase.blocks.filter(b =>
+              !b.branch_group_id && b.fire_once && (b.typeId === 'kw_trigger' || b.typeId === 'intent_trigger')
+            ).length;
+            const hasBranchNode = phase.blocks.some(b => b.typeId === 'condicao');
+            if (sequentialCount > 1 || hasBranchNode) {
+              extraHeader = (
+                <StaticWarningBanner
+                  title="Configuração pode exceder o limite da Recepção"
+                  description="A Recepção é feita para a saudação inicial e só aguarda 1 turno extra além dela — gatilhos sequenciais adicionais ou ramificações aqui podem não disparar a tempo."
+                />
+              );
+            }
+          }
           if (id === 'p1' && hasActiveQualFields) {
             const openerBlock = phase.blocks.find(b => b.qual_opener);
             if (openerBlock) {
