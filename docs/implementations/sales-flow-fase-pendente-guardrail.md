@@ -92,23 +92,122 @@ if is_upper_stage or (not missing_pre and not _phase_pending_sequential_triggers
 
 | # | Commit | O que foi implementado |
 |---|---|---|
-| 1 | *(pendente)* | |
+| 1 | `57901b2` | Helper `_phase_pending_sequential_triggers()` + gate nos 3 pontos de auto-promoção de qualificação |
+
+**Detalhes do commit `57901b2`:**
+- `decision_engine.py` — `_phase_pending_sequential_triggers(phase_id, ai_profile, triggers_fired)`
+  novo (extrai o scan hardcoded de `_enforce_apresentation_sales_flow_pending`, sem alterá-lo
+  ainda — isso é Fase 2); gate em 3 pontos: Regra 3 (`decide()`, só o ramo `not missing_pre`,
+  `is_upper_stage` preservado ungated), auto-promote de runtime (`decide()`), Regra 1 +
+  fallback `ask_qualification` (`compose_decision_output()`)
+- `test_qualification_sales_flow_pending.py` (novo) — 4 testes: pendente bloqueia, disparado
+  libera, sem gatilho sequencial comportamento inalterado, escape valve `is_upper_stage`
+  preservado
+- Suite completa: 23 failed / 210 passed — mesmo conjunto de 23 falhas pré-existentes
+  (confirmado via `git stash` comparando antes/depois linha a linha), 4 testes novos passando,
+  sem regressão
+
+### Relatório da Fase 1 — o que mudou na prática
+
+**Antes:** um agente sem campos de qualificação obrigatórios configurados avançava
+automaticamente da fase de Qualificação para Apresentação assim que a Mãe (IA) decidia isso,
+mesmo que houvesse um gatilho de palavra-chave configurado em Qualificação que ainda não
+tinha disparado — o gatilho era pulado silenciosamente, sem nunca ter a chance de disparar.
+
+**Agora:** se houver pelo menos um gatilho sequencial (palavra-chave ou intenção, marcado
+"disparar apenas uma vez") configurado na fase de Qualificação e ele ainda não disparou para
+aquele lead, o sistema não avança automaticamente para Apresentação — o gatilho tem a chance
+de disparar primeiro. Agentes sem esse tipo de gatilho configurado em Qualificação continuam
+funcionando exatamente como antes (nada muda para eles).
+
+**Para validar:** testes automatizados (pytest) já rodados e confirmados nesta fase — ver
+tabela de commits acima. Não há cenário de UI/Playground específico desta fase isolada (é uma
+mudança só de backend); o cenário ao vivo fica reservado para o final da Fase 2, quando
+também o buraco de p2 estiver fechado — nesse ponto dá para repetir a mesma técnica desta
+sessão (blocos de teste temporários no builder + Playground) e confirmar que o gatilho de p1
+agora tem a chance de disparar no turno seguinte.
+
+### Fase 2 — Apresentação (p2): fecha o buraco novo
+
+**Objetivo:** `_enforce_apresentation_sales_flow_pending` passa a usar o helper partilhado (sem
+mudar comportamento), e o buraco em `apresentation_complete_auto_advance` — que avançava
+`suggested_category` sem checar gatilhos pendentes de p2 — é fechado.
+
+| Arquivo | O que muda |
+|---|---|
+| `backend-executors/app/services/decision_engine.py` | `_enforce_apresentation_sales_flow_pending` refatorado para chamar `_phase_pending_sequential_triggers("p2", ...)`; gate `and not p2_pending_compose` em `apresentation_complete_auto_advance` |
+| `backend-executors/tests/test_apresentation_complete_auto_advance_pending.py` | novo: pendente bloqueia, disparado libera, sem gatilho comportamento inalterado |
+
+### Commits Fase 2
+
+| # | Commit | O que foi implementado |
+|---|---|---|
+| 1 | _(pendente)_ | Refactor do guardrail de p2 para usar o helper + gate em `apresentation_complete_auto_advance` |
+
+**Detalhes do commit:**
+- `decision_engine.py` — `_enforce_apresentation_sales_flow_pending` (linhas ~4609-4614): o scan
+  inline hardcoded para p2 foi substituído pela chamada a `_phase_pending_sequential_triggers("p2",
+  ai_profile, _load_triggers_fired_set(context))` — comportamento idêntico, confirmado pela suite de
+  regressão `test_sales_flow_intent_trigger_phase_entry.py` (27/27 passam, incluindo os 6 testes
+  específicos de `_enforce_apresentation_pending_*`)
+- `decision_engine.py` — `apresentation_complete_auto_advance` (`compose_decision_output`, ~linha
+  4810-4820): novo `p2_pending_compose = _phase_pending_sequential_triggers("p2", ...)` e gate
+  `and not p2_pending_compose` na condição que avança `suggested_category`. Este é o guardrail que
+  fecha o buraco novo (Problema 2 da Motivação) — `did_complete_phase` é sinal da Filha, não
+  determinístico, e podia contornar silenciosamente o gatilho pendente
+- `test_apresentation_complete_auto_advance_pending.py` (novo) — 3 testes: gatilho pendente em p2
+  bloqueia o avanço (verificado que falha sem o gate — `assert 'pre-agendamento' == 'apresentation'`
+  — antes de confirmar que passa com o gate reativado), gatilho já disparado avança normalmente,
+  sem gatilho sequencial configurado comportamento idêntico ao atual
+- Suite completa: 23 failed / 213 passed — mesmo conjunto de 23 falhas pré-existentes da Fase 1
+  (confirmado via `git stash` comparando os 3 arquivos de teste do subset qualification/
+  sales_flow/apresentation/pre_agendamento antes/depois, linha a linha), 3 testes novos passando
+  (210→213), sem regressão
+
+### Relatório da Fase 2 — o que mudou na prática
+
+**Antes:** mesmo com o guardrail de p2 (`_enforce_apresentation_sales_flow_pending`) protegendo o
+`route_to` decidido pela Mãe, havia um caminho paralelo — `apresentation_complete_auto_advance` —
+que avançava a categoria persistida do lead (`suggested_category`) para pré-agendamento/agendamento/
+follow-up assim que a Filha sinalizava `did_complete_phase=true`, sem nunca checar se havia um
+gatilho sequencial configurado em Apresentação que ainda não tinha disparado. Era o mesmo tipo de
+bug que já tinha sido corrigido uma vez para p2 (via `route_to`), mas reaberto por um caminho
+diferente que ninguém tinha coberto.
+
+**Agora:** os dois caminhos que podem avançar a categoria para além de Apresentação —
+o `route_to` da Mãe e o `did_complete_phase` da Filha — respeitam a mesma regra: se houver um
+gatilho sequencial pendente em p2, nenhum dos dois avança a categoria. Como bónus, o scan que
+antes estava duplicado (hardcoded dentro do guardrail de `route_to`) agora usa a mesma função
+partilhada que a Fase 1 já criou para p1 — só existe uma implementação da regra "gatilhos
+sequenciais pendentes numa fase" no código todo.
+
+**Para validar:** testes automatizados (pytest) já rodados e confirmados nesta fase — ver tabela
+de commits acima, incluindo a confirmação manual de que o teste falha sem o gate (prova de que
+o teste captura o bug, não é vacuamente verdadeiro). Sanity check ao vivo fica reservado para o
+final da Fase 3 (ou pode ser feito agora, opcionalmente, reusando a técnica de blocos de teste
+temporários no builder + Playground desta vez em p2).
 
 ---
 
 ## Checks de Validação
 
 ### Fase 1 — Qualificação (p1)
-- [ ] `pytest tests/test_mother_qualification_route_guardrail.py -v` — todos passam
-- [ ] Suite completa sem regressão (comparar contra baseline pré-existente)
-- [ ] Gatilho sequencial pendente em p1 → `decide()` mantém `effective_route_to="qualification"`
-- [ ] Mesmo gatilho já em `triggers_fired` → promove normalmente para apresentação
-- [ ] Sem nenhum gatilho sequencial em p1 → comportamento idêntico ao atual (regressão)
-- [ ] `is_upper_stage=True` com p1 pendente → ainda promove (escape valve preservado)
+- [x] `pytest tests/test_qualification_sales_flow_pending.py -v` — todos passam
+- [x] Suite completa sem regressão (23 failed / 210 passed — mesmo conjunto de falhas
+      pré-existentes que os 23 failed / 206 passed do baseline, confirmado via `git stash`)
+- [x] Gatilho sequencial pendente em p1 → `decide()` mantém `effective_route_to="qualification"`
+- [x] Mesmo gatilho já em `triggers_fired` → promove normalmente para apresentação
+- [x] Sem nenhum gatilho sequencial em p1 → comportamento idêntico ao atual (regressão)
+- [x] `is_upper_stage=True` com p1 pendente → ainda promove (escape valve preservado)
+- **Validado em:** 22/08/2026 — automatizado (pytest), sem intervenção manual necessária
 
 ### Fase 2 — Apresentação (p2): fecha o buraco novo
-- [ ] `_enforce_apresentation_sales_flow_pending` refatorado para usar o helper — sem regressão em `test_sales_flow_intent_trigger_phase_entry.py`
-- [ ] `apresentation_complete_auto_advance` gateado — teste novo prova que `suggested_category` não avança com gatilho pendente em p2
+- [x] `_enforce_apresentation_sales_flow_pending` refatorado para usar o helper — sem regressão em `test_sales_flow_intent_trigger_phase_entry.py` (27/27 passam)
+- [x] `apresentation_complete_auto_advance` gateado — teste novo prova que `suggested_category` não avança com gatilho pendente em p2 (falha sem o gate, passa com o gate)
+- [x] Gatilho já disparado em p2 → avança normalmente para `pre-agendamento`
+- [x] Sem nenhum gatilho sequencial em p2 → comportamento idêntico ao atual (regressão)
+- [x] Suite completa sem regressão (23 failed / 213 passed — mesmas 23 falhas pré-existentes, 210→213 com os 3 testes novos)
+- **Validado em:** 22/08/2026 — automatizado (pytest), sem intervenção manual necessária
 
 ### Fase 3 — Pré-Agendamento (p3a), só relevante para `agenda`
 - [ ] Novo `_enforce_pre_agendamento_sales_flow_pending` na cadeia de guardrails

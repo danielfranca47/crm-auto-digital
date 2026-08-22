@@ -4607,29 +4607,9 @@ def _enforce_apresentation_sales_flow_pending(
         return mother_decision
 
     ai_profile = context.get("ai_profile") or {}
-    sales_flow = ai_profile.get("sales_flow")
-    if not isinstance(sales_flow, dict) or not sales_flow.get("enabled"):
-        return mother_decision
-    phases = sales_flow.get("phases")
-    if not isinstance(phases, list):
-        return mother_decision
-    phase_p2 = next((p for p in phases if isinstance(p, dict) and p.get("id") == "p2"), None)
-    if not phase_p2:
-        return mother_decision
-
-    triggers_fired = _load_triggers_fired_set(context)
-    pending_ids: List[str] = []
-    for block in (phase_p2.get("blocks") or []):
-        if not isinstance(block, dict):
-            continue
-        type_id = (block.get("typeId") or "").strip()
-        if type_id not in ("kw_trigger", "intent_trigger"):
-            continue  # phase_trigger já satisfeito por definição (lead já está em p2)
-        if not _is_sequential_trigger_block(block):
-            continue
-        block_id = (block.get("id") or "").strip()
-        if block_id and block_id not in triggers_fired:
-            pending_ids.append(block_id)
+    pending_ids = _phase_pending_sequential_triggers(
+        "p2", ai_profile, _load_triggers_fired_set(context)
+    )
     if not pending_ids:
         return mother_decision
 
@@ -4823,12 +4803,20 @@ def compose_decision_output(
     # Guardrail: apresentation completa → avança para próxima fase (análogo ao de qualificação).
     # A Filha já sinaliza did_complete_phase + recommended_next_category — aqui apenas homologamos.
     # Restrito a agentes com fases de agendamento para não impactar closer_agressivo.
+    # Gate de gatilhos pendentes: did_complete_phase é sinal da Filha (não determinístico) e
+    # pode disparar antes de _enforce_apresentation_sales_flow_pending ter a chance de agir
+    # sobre route_to — sem este gate, um gatilho sequencial pendente em p2 seria contornado
+    # silenciosamente (ver docs/implementations/sales-flow-fase-pendente-guardrail.md, Fase 2).
     _apres_complete_next = str(child_result.recommended_next_category or "").strip().lower()
+    p2_pending_compose = _phase_pending_sequential_triggers(
+        "p2", ai_profile, _load_triggers_fired_set(context)
+    )
     if (
         effective_route_to == "apresentation"
         and child_result.did_complete_phase
         and _apres_complete_next in {"pre-agendamento", "agendamento", "follow-up"}
         and template_key in _SCHEDULING_AGENT_TEMPLATES
+        and not p2_pending_compose
     ):
         suggested_category = _apres_complete_next
         category_reason = (
