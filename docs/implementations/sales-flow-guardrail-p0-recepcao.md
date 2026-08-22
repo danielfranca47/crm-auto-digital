@@ -1,7 +1,7 @@
 # Guardrail de gatilhos pendentes para p0 (Recepção)
 
 **Branch:** `feat-fluxo-vendas-ramificacao`
-**Status:** Em andamento
+**Status:** Todos os cenários validados (22/08/2026)
 
 ---
 
@@ -154,7 +154,7 @@ novos desta fase passam.
 
 | # | Commit | O que foi implementado |
 |---|---|---|
-| 1 | *(a registar após commit)* | Banner de aviso em Fase 0 quando configuração excede o teto de 1 turno |
+| 1 | `5772c9e` | Banner de aviso em Fase 0 quando configuração excede o teto de 1 turno |
 
 **Detalhes:**
 - `frontend-crm/src/components/agente/CamadaFluxoVenda.tsx` — novo `StaticWarningBanner`
