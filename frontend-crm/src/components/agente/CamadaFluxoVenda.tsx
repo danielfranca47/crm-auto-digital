@@ -1164,28 +1164,26 @@ function PhaseSection({ phase, onAddBlock, onEditBlock, onRemoveBlock, onAddToGr
           {/* Block list — agrupado por gatilho */}
           {(() => {
             const TRIGGER_IDS = new Set(['phase_trigger', 'kw_trigger', 'no_reply_trigger', 'intent_trigger']);
-            type SimpleGroup = { kind: 'simple'; trigger: SalesFlowBlock | null; actions: SalesFlowBlock[] };
-            type BranchGroup = { kind: 'branch'; node: SalesFlowBlock };
-            type Group = SimpleGroup | BranchGroup;
+            type Group = { trigger: SalesFlowBlock | null; actions: SalesFlowBlock[] };
             const groups: Group[] = [];
-            let cur: SimpleGroup = { kind: 'simple', trigger: null, actions: [] };
+            let cur: Group = { trigger: null, actions: [] };
             function flushCur() {
               if (cur.trigger !== null || cur.actions.length > 0) groups.push(cur);
-              cur = { kind: 'simple', trigger: null, actions: [] };
+              cur = { trigger: null, actions: [] };
             }
             for (const b of blocks) {
               // Blocos pertencentes a um caminho de um nó de ramificação não entram na
-              // listagem plana — são renderizados dentro do BranchGroup do seu nó pai.
+              // listagem plana — são renderizados dentro do BranchGroupRow do seu nó condicao pai.
               if (b.branch_group_id) continue;
-              if (b.typeId === 'condicao') {
-                flushCur();
-                groups.push({ kind: 'branch', node: b });
-                continue;
-              }
               if (TRIGGER_IDS.has(b.typeId)) {
                 flushCur();
-                cur = { kind: 'simple', trigger: b, actions: [] };
+                cur = { trigger: b, actions: [] };
               } else {
+                // Inclui 'condicao': o backend (decision_engine.py, _evaluate_sales_flow_phases)
+                // trata-o como um bloco de ação comum — gated pelo mesmo `last_trigger_active`
+                // do gatilho precedente, sem alterar esse flag. Por isso entra em `actions` como
+                // qualquer outra ação e é renderizado (abaixo) como <BranchGroupRow>, aninhado/
+                // recuado dentro do MESMO grupo do seu gatilho "mãe".
                 cur.actions.push(b);
               }
             }
@@ -1273,9 +1271,6 @@ function PhaseSection({ phase, onAddBlock, onEditBlock, onRemoveBlock, onAddToGr
             }
 
             return groups.map((group, gi) => {
-              if (group.kind === 'branch') {
-                return <BranchGroupRow key={gi} node={group.node} />;
-              }
               return (
                 <div key={gi} style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
                   {/* Gatilho (ou label implícito "sempre ao entrar") */}
@@ -1296,7 +1291,11 @@ function PhaseSection({ phase, onAddBlock, onEditBlock, onRemoveBlock, onAddToGr
                         marginLeft: 14, marginRight: 10,
                       }} />
                       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 4 }}>
-                        {group.actions.map(b => <BlockRow key={b.id} block={b} />)}
+                        {group.actions.map(b => (
+                          b.typeId === 'condicao'
+                            ? <BranchGroupRow key={b.id} node={b} />
+                            : <BlockRow key={b.id} block={b} />
+                        ))}
                         {/* Botão + para adicionar acção/lógica directamente ao gatilho */}
                         {group.trigger && onAddToGroup && (
                           <button
