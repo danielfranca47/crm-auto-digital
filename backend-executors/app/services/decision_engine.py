@@ -915,14 +915,20 @@ def _collect_intent_triggers_for_lead_phase(
     return blocks
 
 
-def _collect_branch_nodes_for_lead_phase(context: Dict[str, Any]) -> List[dict]:
-    """Coleta blocos `condicao` (nós de lógica de ramificação) com ramos configurados,
-    da fase ATUAL do lead — usados para o bloco [LÓGICA DE RAMIFICAÇÃO] no prompt da mãe.
+def _collect_branch_nodes_for_lead_phase(context: Dict[str, Any], agent_mode_normalized: str) -> List[dict]:
+    """Coleta blocos `condicao` (nós de lógica de ramificação) com ramos configurados, da
+    fase ATUAL do lead e da fase seguinte (dado o pipeline do agent_mode) — usados para o
+    bloco [LÓGICA DE RAMIFICAÇÃO] no prompt da mãe.
 
-    Ao contrário de _collect_intent_triggers_for_lead_phase, não olha a fase seguinte: um
-    ramo não decide transição de fase, só qual caminho de blocos fica activo dentro da fase
-    corrente. Nós `sticky` já resolvidos (leads.branches_selected) não são listados de novo
-    — a mãe não precisa reavaliar o que já foi decidido num turno anterior (economiza tokens).
+    Inclui a fase seguinte pelo mesmo motivo de _collect_intent_triggers_for_lead_phase:
+    uma transição de fase (ex.: qualification → apresentation via auto-promoção de
+    qualificação vazia) é decidida NESTE turno — se olhássemos só `leads.category` (que só
+    reflecte turnos anteriores), um nó configurado na fase de destino nunca seria visto pela
+    mãe no turno exacto em que o lead chega lá (confirmado ao vivo: um nó em p2 nunca
+    aparecia no prompt da mãe no turno em que qualification promovia para apresentation).
+
+    Nós `sticky` já resolvidos (leads.branches_selected) não são listados de novo — a mãe
+    não precisa reavaliar o que já foi decidido num turno anterior (economiza tokens).
     """
     ai_profile = context.get("ai_profile") or {}
     sales_flow = ai_profile.get("sales_flow")
@@ -934,21 +940,29 @@ def _collect_branch_nodes_for_lead_phase(context: Dict[str, Any]) -> List[dict]:
     lead = context.get("lead") or {}
     lead_cat_raw = (lead.get("category") or "").strip().lower()
     current_phase_id = _ROUTE_TO_PHASE_ID.get(_LEAD_CAT_TO_ROUTE.get(lead_cat_raw, lead_cat_raw)) or "p0"
-    phase_data = next((p for p in phases if isinstance(p, dict) and p.get("id") == current_phase_id), None)
-    if not phase_data:
-        return []
+
+    candidate_phase_ids = {current_phase_id}
+    sequence = _SALES_FLOW_PHASE_SEQUENCE_BY_AGENT_MODE.get(agent_mode_normalized)
+    if sequence and current_phase_id in sequence:
+        idx = sequence.index(current_phase_id)
+        if idx + 1 < len(sequence):
+            candidate_phase_ids.add(sequence[idx + 1])
+
     _resolved = _load_branches_selected_map(context)
     nodes: List[dict] = []
-    for b in (phase_data.get("blocks") or []):
-        if not isinstance(b, dict) or b.get("typeId") != "condicao":
+    for phase_data in phases:
+        if not isinstance(phase_data, dict) or phase_data.get("id") not in candidate_phase_ids:
             continue
-        branches = b.get("branches")
-        if not isinstance(branches, list) or not branches:
-            continue
-        _bid = (b.get("id") or "").strip()
-        if b.get("sticky") and _bid and _bid in _resolved:
-            continue
-        nodes.append(b)
+        for b in (phase_data.get("blocks") or []):
+            if not isinstance(b, dict) or b.get("typeId") != "condicao":
+                continue
+            branches = b.get("branches")
+            if not isinstance(branches, list) or not branches:
+                continue
+            _bid = (b.get("id") or "").strip()
+            if b.get("sticky") and _bid and _bid in _resolved:
+                continue
+            nodes.append(b)
     return nodes
 
 
@@ -2142,7 +2156,7 @@ def _build_mother_prompt(context: Dict[str, Any], message_text: str) -> str:
             "vazio é INCONSISTENTE — não faça isso.\n"
         )
 
-    _active_branch_nodes = _collect_branch_nodes_for_lead_phase(context)
+    _active_branch_nodes = _collect_branch_nodes_for_lead_phase(context, agent_mode_normalized)
     _branch_logic_block = ""
     if _active_branch_nodes:
         _branch_sections = []
@@ -2204,6 +2218,7 @@ def _build_mother_prompt(context: Dict[str, Any], message_text: str) -> str:
         '  "objective": "string curta opcional",\n'
         '  "next_action_hint": "reply|ask_qualification|handoff|ignore|greet|null (opcional)",\n'
         '  "detected_intents": [] (lista de intent labels detectados — ver [DETECÇÃO DE INTENÇÃO] se presente; caso contrário [])\n'
+        '  "branch_selections": {} (objeto {id_da_lógica: id_do_caminho} — ver [LÓGICA DE RAMIFICAÇÃO] se presente; caso contrário {})\n'
         "}\n"
         "Regras:\n"
         "- route_to é obrigatório e indica a próxima fase a focar.\n"

@@ -251,7 +251,7 @@ def test_collect_branch_nodes_returns_current_phase_nodes_with_branches():
     sales_flow = _sales_flow_two_branches_simple("p2", sticky=False)
     context = {"lead": {"category": "apresentation", "branches_selected": "{}"}, "ai_profile": {"sales_flow": sales_flow}}
 
-    nodes = _collect_branch_nodes_for_lead_phase(context)
+    nodes = _collect_branch_nodes_for_lead_phase(context, "agenda")
 
     assert [n["id"] for n in nodes] == ["cond-1"]
 
@@ -263,7 +263,7 @@ def test_collect_branch_nodes_excludes_sticky_already_resolved():
         "ai_profile": {"sales_flow": sales_flow},
     }
 
-    nodes = _collect_branch_nodes_for_lead_phase(context)
+    nodes = _collect_branch_nodes_for_lead_phase(context, "agenda")
 
     assert nodes == []
 
@@ -275,9 +275,38 @@ def test_collect_branch_nodes_includes_non_sticky_even_if_previously_resolved():
         "ai_profile": {"sales_flow": sales_flow},
     }
 
-    nodes = _collect_branch_nodes_for_lead_phase(context)
+    nodes = _collect_branch_nodes_for_lead_phase(context, "agenda")
 
     assert [n["id"] for n in nodes] == ["cond-1"]
+
+
+def test_collect_branch_nodes_includes_next_phase_when_lead_about_to_transition():
+    """Reproduz o bug encontrado ao vivo: um lead ainda em 'qualification' (categoria
+    persistida do turno anterior) que está prestes a ser auto-promovido para
+    'apresentation' NESTE turno (ex.: perfil sem campos de qualificação obrigatórios)
+    precisa ver os nós de ramificação configurados em p2 — senão a mãe nunca os recebe
+    no turno exato em que o lead chega lá, e o nó fica surdo por um turno inteiro."""
+    sales_flow = _sales_flow_two_branches_simple("p2", sticky=False)
+    context = {
+        "lead": {"category": "qualification", "branches_selected": "{}"},
+        "ai_profile": {"sales_flow": sales_flow},
+    }
+
+    nodes = _collect_branch_nodes_for_lead_phase(context, "agenda")
+
+    assert [n["id"] for n in nodes] == ["cond-1"]
+
+
+def test_collect_branch_nodes_does_not_look_more_than_one_phase_ahead():
+    sales_flow = _sales_flow_two_branches_simple("p5", sticky=False)
+    context = {
+        "lead": {"category": "qualification", "branches_selected": "{}"},
+        "ai_profile": {"sales_flow": sales_flow},
+    }
+
+    nodes = _collect_branch_nodes_for_lead_phase(context, "agenda")
+
+    assert nodes == []
 
 
 # ── _load_branches_selected_map ──────────────────────────────────────────────────────────
