@@ -113,10 +113,10 @@ Para `direto`/`consultivo`, o texto hardcoded permanece sempre — fora de escop
 
 | `typeId` | Nome | Comportamento em runtime |
 |---|---|---|
-| `condicao` | Condição (bifurcação) | Avaliação de condição com ramos `branch_yes` / `branch_no` (execução futura) |
+| `condicao` | Lógica de Ramificação (bifurcação em N caminhos, avaliados pela Mãe) | Ver secção "Lógica de Ramificação" abaixo |
 | `espera` | Espera inteligente | Agenda próxima avaliação após delay (`wait_value` + `wait_unit`) |
 
-> **Nota:** `webhook`, `condicao` e `espera` têm infraestrutura de dados mas a execução em runtime ainda não está implementada no `decision_engine.py`. São blocos reservados para implementação futura.
+> **Nota:** `webhook` e `espera` têm infraestrutura de dados mas a execução em runtime ainda não está implementada no `decision_engine.py`. São blocos reservados para implementação futura. `condicao` (Lógica de Ramificação) está implementado — ver secção dedicada abaixo.
 
 ---
 
@@ -216,6 +216,44 @@ se lead "engajado" com apresentation (phases_triggered contém "p2" OU lead.cate
 
 **Escopo:** só gatilhos "sequenciais" (`kw_trigger`/`intent_trigger` com `fire_once: true`) contam como pendência — mesmo critério de `_is_sequential_trigger_block()` usado no gating dentro da fase. Sem gatilhos sequenciais configurados em p2 (ou sem Fluxo de Venda), o guardrail não interfere.
 
+### Lógica de Ramificação (`condicao`)
+
+Nó de bifurcação real, estilo ManyChat/n8n: N caminhos nomeados, cada um com o seu critério de avaliação pela LLM Mãe, cada um contendo os seus próprios blocos filhos. Depois de um lead seguir por um caminho, os blocos dos caminhos irmãos ficam fora do prompt enviado à IA (redução de poluição de tokens).
+
+**Modelo de dados** (`SalesFlowBlock`, `frontend-crm/src/types/agente.ts`):
+
+```ts
+interface SalesFlowBranch { id: string; label: string; criteria: string }
+
+// no nó condicao (typeId === 'condicao'):
+branches?: SalesFlowBranch[]   // caminhos nomeados, mínimo 2
+sticky?: boolean               // default true — fixa o caminho escolhido após a 1ª vez
+
+// em qualquer bloco filho pertencente a um caminho:
+branch_group_id?: string       // id do bloco condicao pai
+branch_id?: string             // id do caminho (SalesFlowBranch.id) dentro desse nó
+```
+
+Blocos filhos vivem na mesma lista plana `phase.blocks[]` — não há árvore aninhada no JSON; o agrupamento visual (`CamadaFluxoVenda.tsx::PhaseSection` → `BranchGroupRow`) é reconstruído a partir de `branch_group_id`/`branch_id`. Sem ramificação de segundo nível nesta versão (um caminho não pode conter outro nó `condicao`) — o modelo de dados já suporta via `branch_group_id` genérico, mas o editor visual não expõe.
+
+**Papel da Mãe — bloco `[LÓGICA DE RAMIFICAÇÃO]` + `branch_selections`:** mesma mecânica do `[DETECÇÃO DE INTENÇÃO]`, sem chamada extra de LLM. `_collect_branch_nodes_for_lead_phase(context, agent_mode_normalized)` coleta os nós `condicao` com `branches` configurados da fase **atual** do lead e da fase **seguinte** (lookahead de 1 fase via `_SALES_FLOW_PHASE_SEQUENCE_BY_AGENT_MODE` — mesmo motivo do lookahead de `intent_trigger`: uma transição de fase decidida neste turno não pode ficar cega ao nó da fase de destino). Nós `sticky` já resolvidos (`leads.branches_selected`) não são listados de novo — a mãe não reavalia o que já foi decidido.
+
+`_build_mother_prompt()` lista, por nó, os caminhos com `id`/`label`/`criteria`, e pede à Mãe para preencher `branch_selections: {node_id: branch_id}` — se nenhum caminho tiver evidência clara na conversa, a lógica é **omitida** do objeto (não força escolha sem sinal). O campo está listado tanto no schema JSON explícito (bloco "Retorne SOMENTE JSON válido no schema MotherDecision") quanto no texto descritivo do bloco `[LÓGICA DE RAMIFICAÇÃO]` — os dois precisam estar sincronizados, já que a LLM segue o schema explícito com mais fidelidade do que instruções soltas mais acima no prompt. `MotherDecision.branch_selections: Dict[str, str]` (`orchestrator_models.py`) chega no mesmo JSON de `route_to`/`detected_intents`.
+
+**Resolução do ramo activo** — dentro de `_evaluate_sales_flow_phases()`, ao encontrar um bloco `typeId == "condicao"`:
+1. Se `sticky=True` e já persistido em `leads.branches_selected` → usa a escolha persistida.
+2. Senão, usa `branch_selections[node_id]` vindo da Mãe neste turno.
+3. Se resolvido, regista em `_active_branches[node_id] = branch_id` para o resto da passagem; se `sticky` e ainda não persistido, emite `system_actions: [{type: "mark_branch_selected", block_id, branch_id}]`.
+4. Se não resolvido (Mãe sem sinal suficiente ainda), nenhum caminho fica activo neste turno — todos os blocos filhos desse nó são ignorados por completo (nem `prompt_injections`, nem `system_actions`).
+
+Cada bloco seguinte com `branch_group_id` só é avaliado se `branch_id` bate com `_active_branches[branch_group_id]` — senão é ignorado por completo. É aqui que a redução de poluição de tokens dos caminhos irmãos acontece de facto.
+
+**Escopo do gating sequencial:** o mecanismo de `_prereqs_satisfied` (ver "Modelo sequencial de trigger" acima) passa a ser **por escopo** — `"root"` para blocos fora de qualquer caminho, `"{branch_group_id}:{branch_id}"` dentro de um. Cada escopo começa desbloqueado de forma independente: um `kw_trigger`/`intent_trigger` sequencial dentro do Caminho A nunca bloqueia nem é bloqueado por nada do Caminho B — são mutuamente exclusivos do mesmo nó.
+
+**Persistência sticky:** coluna `leads.branches_selected TEXT NULL` (JSON `{block_id: branch_id}`, `ensure_column()` em `backend-crm/database.py`) — mesmo padrão de `triggers_fired`. `mark_branch_selected` é despachado por `executor.py`/`playground.py` (mesmo padrão de `mark_trigger_fired`). Default do checkbox "fixar caminho" no builder é `true`.
+
+**No frontend:** `emptyBlock('condicao')` semeia 2 caminhos + `sticky=true`. `PhaseSection` reconhece blocos com `branch_group_id` e sub-agrupa por `branch_id` num `BranchGroupRow` separado do bucket genérico de blocos da fase; `saveBranchBlock()` insere um bloco novo no fim do caminho selecionado. Remover o nó `condicao` faz cascade-delete de todos os blocos filhos (mesmo `branch_group_id`). `BlockModal`, ao adicionar bloco a um caminho, recebe `excludeTypes=['condicao']` — sem ramificação de segundo nível, mas o caminho pode ter o seu próprio `kw_trigger`/`intent_trigger`.
+
 ### Ordem de exibição / envio
 
 | Cenário | Ordem |
@@ -304,8 +342,9 @@ O campo é lido pelo orchestrator do CRM e inserido no `ContextBundle` via `enri
 |---|---|---|
 | `phases_triggered` | `TEXT NULL` | JSON array de phase IDs disparados por este lead (ex: `["p2", "p3a"]`) |
 | `triggers_fired` | `TEXT NULL` | JSON array de block IDs disparados com `fire_once` (ex: `["uuid1", "uuid2"]`) |
+| `branches_selected` | `TEXT NULL` | JSON `{block_id: branch_id}` — ramos escolhidos por nós `condicao` com `sticky=true` |
 
-Ambas adicionadas via `ensure_column()` em `backend-crm/database.py`.
+Todas adicionadas via `ensure_column()` em `backend-crm/database.py`.
 
 ---
 
@@ -334,7 +373,8 @@ Cor de cada fase vem de `SALES_FLOW_PHASE_COLORS` (`frontend-crm/src/types/agent
 |---|---|
 | `frontend-crm/src/types/agente.ts` | Tipos TypeScript: `SalesFlowPhaseId`, `SalesFlowBlock`, `SalesFlowPhaseData`, `SALES_FLOW_PHASES_BY_AGENT_MODE`, `SALES_FLOW_PHASE_COLORS` |
 | `frontend-crm/src/components/agente/CamadaFluxoVenda.tsx` | Builder visual: renderização de fases, blocos, formulários de configuração |
-| `backend-executors/app/services/decision_engine.py` | `_evaluate_sales_flow_phases()` — avaliação de triggers, coleta de orientações/mídia/system_actions; `_collect_intent_triggers_for_lead_phase()` — seleciona quais `intent_trigger` mostrar à mãe (fase atual + seguinte); `_enforce_apresentation_sales_flow_pending()` — guardrail que impede a Mãe de pular a fase de apresentation com gatilhos sequenciais pendentes; `_compute_is_phase_entry()` — cálculo único de `is_phase_entry`, reutilizado tanto na construção do prompt filho (`_build_child_prompt_recepcao/qualification/apresentation/follow_up`) quanto no despacho real de `system_actions` em `compose_decision_output()` |
+| `backend-executors/app/services/decision_engine.py` | `_evaluate_sales_flow_phases()` — avaliação de triggers, resolução de ramos (`condicao`), coleta de orientações/mídia/system_actions; `_collect_intent_triggers_for_lead_phase()` — seleciona quais `intent_trigger` mostrar à mãe (fase atual + seguinte); `_collect_branch_nodes_for_lead_phase()` — idem para nós `condicao` (fase atual + seguinte); `_load_branches_selected_map()` — lê `leads.branches_selected`; `_enforce_apresentation_sales_flow_pending()` — guardrail que impede a Mãe de pular a fase de apresentation com gatilhos sequenciais pendentes; `_compute_is_phase_entry()` — cálculo único de `is_phase_entry`, reutilizado tanto na construção do prompt filho (`_build_child_prompt_recepcao/qualification/apresentation/follow_up`) quanto no despacho real de `system_actions` em `compose_decision_output()` |
+| `backend-executors/app/services/orchestrator_models.py` | `MotherDecision.branch_selections: Dict[str, str]` |
 | `backend-crm/routes/executor.py` | `_dispatch_system_actions()`, `_dispatch_sales_flow_media()`, `_PHASE_ID_TO_CATEGORY` |
 | `backend-core/app/models/ai_profile.py` | Campo `sales_flow` na tabela `ai_profiles` |
 | `backend-crm/services/ai_orchestrator/orchestrator.py` | `enrich_context_bundle()` — inclui `sales_flow` no ContextBundle |

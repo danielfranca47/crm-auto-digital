@@ -10,7 +10,7 @@ existente ou criar um novo.
 
 | Documento | Área | Actualizar quando... |
 |---|---|---|
-| [`sales-flow.md`](sales-flow.md) | Camada 7 — Fluxo de Venda: fases (p0–p5), blocos tipados, triggers (phase/kw/intent), fire_once, suppress_llm_response, dispatch de system_actions | Novo tipo de bloco, novo flag de trigger, mudança no modelo sequencial, novo destino de acção |
+| [`sales-flow.md`](sales-flow.md) | Camada 7 — Fluxo de Venda: fases (p0–p5), blocos tipados, triggers (phase/kw/intent), fire_once, suppress_llm_response, dispatch de system_actions, Lógica de Ramificação (`condicao`, `branch_selections`) | Novo tipo de bloco, novo flag de trigger, mudança no modelo sequencial, novo destino de acção, mudança no motor de ramificação |
 | [`llm-architecture.md`](llm-architecture.md) | Motor de decisão: LLM Mãe, LLM Filhas, contratos (MotherDecision, ChildResult, DecisionOutput), guardrails, fluxo de execução | Novo campo nos contratos, nova LLM Filha, novo guardrail, mudança no `compose_decision_output` |
 | [`webhooks.md`](webhooks.md) | Pipeline inbound WhatsApp: webhook UazAPI, filtro de grupos, normalização de messageType, áudio/mídia, bot_disabled, buffer, ContextBundle | Novo tipo de mensagem suportado, novo comportamento de fallback de mídia, nova fonte de `bot_disabled`, mudança no buffer |
 | [`whatsapp-connection.md`](whatsapp-connection.md) | Conexão da instância WhatsApp: QR code e código de pareamento, `ConnectResponse`, sanitização de telefone, normalização de status, `ConexaoNumero.tsx` | Novo método de vínculo, novo campo em `ConnectResponse`, mudança no timeout/polling do frontend |
