@@ -158,11 +158,30 @@ novos desta fase passam.
 - [ ] Rodar `test_recepcao_sales_flow_pending.py` — bloqueio, liberação, teto de turnos, no-op sem config
 
 ### Cenário P2 — Sanity check ao vivo (Playground, Fase 1)
-- [ ] Configurar 1 gatilho `fire_once` em p0 de um agente de teste
-- [ ] Simular 2 mensagens no Playground; confirmar que a 2ª mensagem não avança para
-      Qualificação antes do gatilho disparar
-- [ ] Confirmar que a 3ª mensagem em diante avança normalmente mesmo sem o gatilho disparar
-      (teto de 1 turno)
+- [x] Configurar 1 gatilho `fire_once` em p0 do agente "Daniel" (kw_trigger "aceito" +
+      orientação) — depois removido, ver nota abaixo
+- [x] Simular mensagens no Playground (2 sessões, leads #503 e #504)
+- [⏭️] Confirmar que a 2ª mensagem não avança para Qualificação antes do gatilho disparar —
+      **pulado, justificado abaixo**
+- [⏭️] Confirmar que a 3ª mensagem em diante avança normalmente (teto de 1 turno) — mesmo motivo
+
+**Validado em:** 22/08/2026 — o AI Profile de teste ("Daniel", `hybrid_scheduler`/`agenda`) tem
+`0 obrig. · 0 opcionais` em Campos de Qualificação. Nas duas sessões testadas, a Mãe (LLM real)
+decidiu `route_to="apresentation"` **diretamente a partir da recepção** (pulando também
+"qualification"), tanto para uma mensagem com sinal comercial forte ("vi seu anúncio de
+massagens") quanto para uma mais neutra ("quero saber mais sobre os serviços") — confirmado nos
+logs (`local-run-restart.log`): nenhuma das duas chamadas ao decide() teve `route_to` igual a
+`"qualification"`, que é a única condição que `_enforce_recepcao_sales_flow_pending()` observa
+(mesmo padrão de `_enforce_apresentation_sales_flow_pending`/`_enforce_pre_agendamento_sales_flow_pending`,
+que também só guardam contra o próximo estágio legítimo, não saltos maiores). Isso é o
+comportamento pré-existente descrito no item 2 de "Ajustes Possíveis" (p1 sem guardrail
+dedicado de `route_to`) — **não é um defeito desta feature**, mas também significa que este AI
+Profile específico não serve para demonstrar visualmente o "segura por 1 turno extra" ao vivo,
+porque a Mãe nunca para em "qualification" como parada intermediária nele. Os 9 testes
+automatizados (Cenário P1) continuam sendo a fonte determinística de verdade para o mecanismo
+em si — mockam `route_to="qualification"` diretamente e confirmam o comportamento exato.
+Bloco de teste removido do agente "Daniel" após o sanity check (Fluxo de Venda restaurado a 12
+blocos, Fase 0 vazia, config salva).
 
 ### Cenário P3 — Aviso aparece no builder (Fase 2)
 - [ ] Configurar 2 gatilhos sequenciais (ou 1 nó `condicao`) em Fase 0 do builder
