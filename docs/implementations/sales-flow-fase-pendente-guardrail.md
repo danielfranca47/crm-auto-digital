@@ -204,9 +204,9 @@ ao nível da Filha.
 
 | # | Commit | O que foi implementado |
 |---|---|---|
-| 1 | _(pendente)_ | Novo guardrail `_enforce_pre_agendamento_sales_flow_pending` + gate em `pre_agendamento_complete_auto_advance` |
+| 1 | `77de9d0` | Novo guardrail `_enforce_pre_agendamento_sales_flow_pending` + gate em `pre_agendamento_complete_auto_advance` |
 
-**Detalhes do commit _(pendente)_:**
+**Detalhes do commit `77de9d0`:**
 - `decision_engine.py` — `_enforce_pre_agendamento_sales_flow_pending()` novo, logo após
   `_enforce_apresentation_sales_flow_pending`: mesma estrutura (checa `phases_triggered`
   conter "p3a" OU `lead.category == "pre-agendamento"` como sinal de "engajado com a fase",
@@ -275,8 +275,12 @@ rm` deste arquivo, commit único de graduação.
 - **Validado em:** 22/08/2026 — automatizado (pytest), sem intervenção manual necessária
 
 ### Fase 3 — Pré-Agendamento (p3a), só relevante para `agenda`
-- [ ] Novo `_enforce_pre_agendamento_sales_flow_pending` na cadeia de guardrails
-- [ ] `pre_agendamento_complete_auto_advance` gateado
+- [x] Novo `_enforce_pre_agendamento_sales_flow_pending` na cadeia de guardrails (5º guardrail em `decide()`)
+- [x] `pre_agendamento_complete_auto_advance` gateado — teste novo prova que `suggested_category` não avança com gatilho pendente em p3a (falha sem o gate, passa com o gate)
+- [x] Gatilho já disparado em p3a → avança normalmente para `agendamento`
+- [x] Sem nenhum gatilho sequencial em p3a → comportamento idêntico ao atual (regressão)
+- [x] Suite completa sem regressão (23 failed / 223 passed — mesmas 23 falhas pré-existentes desde a Fase 1, 213→223 com os 10 testes novos, confirmado via `git stash` na suite completa)
+- **Validado em:** 22/08/2026 — automatizado (pytest), sem intervenção manual necessária
 
 ---
 
