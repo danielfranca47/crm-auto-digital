@@ -110,6 +110,38 @@ Turno 3+ (outbound_count>=2) → guardrail nunca mais age (teto de 1 turno extra
 | `backend-executors/app/services/decision_engine.py` | `_ALLOWED_ADVANCE["recepcao"] = {"qualification"}`; nova `_enforce_recepcao_sales_flow_pending()`; wiring em `decide()` |
 | `backend-executors/tests/test_recepcao_sales_flow_pending.py` (novo) | 9 testes espelhando `test_pre_agendamento_sales_flow_pending.py` |
 
+### Commits Fase 1
+
+| # | Commit | O que foi implementado |
+|---|---|---|
+| 1 | `3127f4b` | `_enforce_recepcao_sales_flow_pending()` + wiring em `decide()` + 9 testes |
+
+**Detalhes do commit `3127f4b`:**
+- `backend-executors/app/services/decision_engine.py` — `_ALLOWED_ADVANCE["recepcao"] = {"qualification"}`; nova `_enforce_recepcao_sales_flow_pending()` (teto de 1 turno extra + condição "ainda não passou de qualification"); chamada inserida em `decide()` logo após `_enforce_scheduling_agent_no_closing`
+- `backend-executors/tests/test_recepcao_sales_flow_pending.py` — 6 testes unitários da função isolada + 3 testes de integração via `decision_engine.decide()`
+
+### Relatório da Fase 1 — o que mudou na prática
+
+**Antes:** se o usuário configurasse algo na Fase 0 (Recepção) do Fluxo de Venda que dependesse
+de uma confirmação do lead (ex.: "só mande a saudação completa depois que o lead confirmar
+interesse"), a partir da 2ª mensagem do lead a IA podia decidir pular direto para a
+Qualificação, ignorando essa configuração.
+
+**Agora:** a partir da 2ª mensagem, se ainda houver algo configurado em p0 que não disparou, o
+sistema mantém a conversa na Recepção por mais 1 turno para dar tempo de disparar. A partir da
+3ª mensagem em diante, o sistema nunca mais interfere — a Recepção continua sendo só para a
+saudação inicial, sem repetir isso no meio de uma conversa real. Se nada foi configurado na
+Fase 0, nada muda: a IA decide livremente como sempre decidiu.
+
+**Para validar:** Cenário P1 (automatizado, já rodado — 9/9 testes passando) e Cenário P2
+(sanity check ao vivo no Playground), abaixo.
+
+**Nota sobre a suíte completa:** rodei toda a suíte de testes do `backend-executors` antes e
+depois desta mudança (`pytest tests/ -q`) — 23 testes já falhavam **antes** desta mudança
+(sem relação com p0/recepção; parecem um problema de encoding no ambiente, não uma regressão
+desta feature) e continuam falhando exatamente os mesmos 23, sem nenhum caso novo. Os 9 testes
+novos desta fase passam.
+
 ### Fase 2 — Aviso no builder (frontend)
 
 **Objetivo:** avisar o usuário quando a configuração de p0 excede o que o teto de 1 turno cobre.
