@@ -79,14 +79,27 @@ if (b.typeId === 'condicao') {
 
 | # | Commit | O que foi implementado |
 |---|---|---|
-| 1 | _(a preencher)_ | _(a preencher)_ |
+| 1 | `49d3ac6` | Aninhamento visual de `condicao` no grupo do gatilho precedente |
+
+**Detalhes do commit `49d3ac6`:**
+- `CamadaFluxoVenda.tsx` — loop de agrupamento de `PhaseSection` (~1166-1190): removido o caso
+  especial que fazia `condicao` sempre iniciar um novo grupo de nível raiz; colapsado o union
+  type `SimpleGroup | BranchGroup` (agora desnecessário) num único `Group`; `condicao` passa a
+  cair no mesmo `else { cur.actions.push(b) }` de qualquer bloco de ação, com comentário
+  explicando a paridade com `last_trigger_active` do backend
+- Render dos grupos (~1273-1274): removido o branch `kind === 'branch'`, morto após a mudança
+  acima
+- Render dos itens de `group.actions` (linha 1294-1298): `condicao` → `<BranchGroupRow>`,
+  qualquer outro tipo → `<BlockRow>` (como antes)
+- `npx tsc --noEmit` limpo; confirmado via grep que não sobrou nenhuma referência a
+  `SimpleGroup`/`BranchGroup`/`group.kind` no arquivo
 
 ---
 
 ## Checks de Validação
 
 ### Fase 1 — Aninhamento visual
-- [ ] `npx tsc --noEmit` limpo em `frontend-crm/`
+- [x] `npx tsc --noEmit` limpo em `frontend-crm/`
 - [ ] `condicao` adicionado via "+ ação/lógica" dentro de um gatilho existente aparece recuado,
       com linha conectora, dentro do grupo desse gatilho (não mais como card independente)
 - [ ] `condicao` sem gatilho precedente (primeiro bloco de uma fase vazia) continua aparecendo
