@@ -160,6 +160,11 @@ O trace do Playground (`DecisionTrace`) expõe `required_fields`, `missing_field
 **Regra 1 — `missing_fields == [] → nunca ask_qualification`**
 - Cobertura: parcial. Quando `route_to=qualification` e `missing_fields` vazio e `lead_current_category=qualification`, há auto-promoção para `apresentation`.
 - Gap: se a categoria atual já estiver fora de qualification, a trava não dispara.
+- Desde `sales-flow-fase-pendente-guardrail.md`: a auto-promoção também exige
+  `not _phase_pending_sequential_triggers("p1", ...)` — se houver um gatilho sequencial
+  (`kw_trigger`/`intent_trigger` com `fire_once`) configurado em p1 que ainda não disparou, a
+  promoção não acontece mesmo com `missing_fields` vazio (ver `sales-flow.md`, "Guardrail de
+  gatilhos pendentes bloqueia avanço automático de fase").
 
 **Regra 2 — campo já preenchido não é reperguntado**
 - Cobertura: boa. `missing_fields` = `required_fields - filled_fields`; o campo `current_field` aponta para `missing[0]`, então campos preenchidos saem da fila.
@@ -168,6 +173,9 @@ O trace do Playground (`DecisionTrace`) expõe `required_fields`, `missing_field
 **Regra 3 — após promoção, não volta para qualification**
 - Cobertura: completa. No início de `decide()`, quando `mother_decision.route_to=="qualification"` (e não é um tick de follow-up), verifica se a categoria actual do lead já é uma fase posterior (`apresentation`/`pre-agendamento`/`agendamento`/`follow-up`/`closing`) ou se não há `missing_fields` — nesse caso força `route_for_child="apresentation"` independentemente do que a Mãe decidiu (`decision_trace.anti_loop_rule3_applied=True`, log `event=qualification_anti_loop_rule3`).
 - Este mecanismo **não usa palavras-chave/texto livre** — decide só por estado (categoria actual + missing_fields). Um override por palavras-chave em português que partilhava este mesmo bloco condicional (sobrescrevia para `pre-agendamento`/`agendamento` quando o texto batia com uma lista de termos de agendamento) foi removido por ser frágil e acoplado a nicho/idioma — a homologação de categoria (abaixo) já cobre o mesmo caso de forma estrutural.
+- O ramo "categoria já é fase posterior" (`is_upper_stage`) promove incondicionalmente — não
+  é gateado por gatilhos pendentes de p1 (o lead já não está saindo de p1 agora). Só o ramo
+  "`missing_fields` vazio" exige `not _phase_pending_sequential_triggers("p1", ...)`.
 
 **Localização:** `backend-executors/app/services/decision_engine.py` — funções `compose_decision_output` e `decide`.
 

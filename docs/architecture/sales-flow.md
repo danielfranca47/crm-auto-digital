@@ -205,24 +205,38 @@ Como a ordem de despacho manda essas mensagens/mídias **depois** da resposta da
 
 Se `result["suppress_llm_response"] = True`, `compose_decision_output()` força `next_action = "ignore"` e `message_text = ""`. As `system_actions` são preservadas e despachadas normalmente.
 
-### Guardrail de transição de fase (`_enforce_apresentation_sales_flow_pending`)
+### Guardrail de gatilhos pendentes bloqueia avanço automático de fase
 
-O gating sequencial descrito acima só se aplica **dentro** da fase para onde `effective_route_to` aponta neste turno — não impede, por si só, que a **Mãe** decida `route_to` para uma fase **seguinte**, pulando a fase de apresentation inteira (e todo o seu Fluxo de Venda) num único turno. Isso acontece na prática quando o lead responde de forma ambígua (ex.: "ok") e a Mãe interpreta como sinal suficiente para avançar direto para agendamento.
+O gating sequencial descrito acima só se aplica **dentro** da fase para onde `effective_route_to` aponta neste turno — não impede, por si só, que a **Mãe** (via `route_to`) ou a **Filha** (via o sinal `did_complete_phase`) decidam avançar para uma fase **seguinte**, pulando a fase inteira (e todo o seu Fluxo de Venda) num único turno. Isso acontece na prática quando o lead responde de forma ambígua (ex.: "ok") e a Mãe interpreta como sinal suficiente para avançar, ou quando a Filha sinaliza conclusão da fase antes de o gatilho configurado ter tido chance de disparar.
 
-`_enforce_apresentation_sales_flow_pending()` (`decision_engine.py`) corrige isso — chamada em `decide()` logo após os demais guardrails de rota (`_enforce_qualification_route_when_missing`, `_enforce_greeting_first`, `_enforce_scheduling_agent_no_closing`), no mesmo padrão: sobrescreve `mother_decision.route_to` de forma determinística, baseada em estado persistido, não em julgamento da LLM.
+`_phase_pending_sequential_triggers(phase_id, ai_profile, triggers_fired)` (`decision_engine.py`) resolve os `block_id`s de `kw_trigger`/`intent_trigger` sequenciais (`fire_once: true`) configurados numa fase que ainda não dispararam. Lista vazia = sem gate — `sales_flow` desligado, fase inexistente no profile, ou nenhum gatilho sequencial configurado nela (ou todos já dispararam). Opt-in: só há pendência quando o utilizador configurou explicitamente pelo menos um gatilho sequencial nessa fase.
+
+Este helper é consultado em dois tipos de ponto, por fase:
+
+**Ao nível da Mãe** (bloqueia `route_to` saltando a fase inteira num turno) — guardrails dedicados, chamados em sequência em `decide()` logo após `_enforce_qualification_route_when_missing`/`_enforce_greeting_first`/`_enforce_scheduling_agent_no_closing`:
 
 ```
-se lead "engajado" com apresentation (phases_triggered contém "p2" OU lead.category == "apresentation")
-   e mother_decision.route_to ∈ _ALLOWED_ADVANCE["apresentation"] (tentando sair da fase):
-       para cada bloco kw_trigger/intent_trigger com fire_once=True em p2:
-           se o seu id não estiver em leads.triggers_fired → pendente
-       se houver pelo menos 1 pendente:
-           força mother_decision.route_to = "apresentation"
+se lead "engajado" com <fase> (phases_triggered contém "<id>" OU lead.category == "<fase>")
+   e mother_decision.route_to ∈ _ALLOWED_ADVANCE["<fase>"] (tentando sair dela):
+       pendentes = _phase_pending_sequential_triggers("<id>", ai_profile, triggers_fired)
+       se houver pendentes:
+           força mother_decision.route_to = "<fase>"
 ```
 
-**Por que `phases_triggered` e não só `lead.category`:** testes ao vivo mostraram `leads.category` podendo ficar defasado — a Mãe gera conteúdo de "apresentation" via `route_to` num turno sem que a categoria persistida do lead necessariamente seja atualizada para o mesmo valor (esse campo depende de `perceived_category` + `apply_mother_category_guardrails`, um mecanismo separado de `route_to`). `leads.phases_triggered` conter `"p2"` é o sinal mais confiável de que o `phase_trigger` da fase já disparou para aquele lead.
+- `_enforce_apresentation_sales_flow_pending` — p2 (apresentação)
+- `_enforce_pre_agendamento_sales_flow_pending` — p3a (pré-agendamento), só relevante para o modo `agenda` (único que visita esta fase)
 
-**Escopo:** só gatilhos "sequenciais" (`kw_trigger`/`intent_trigger` com `fire_once: true`) contam como pendência — mesmo critério de `_is_sequential_trigger_block()` usado no gating dentro da fase. Sem gatilhos sequenciais configurados em p2 (ou sem Fluxo de Venda), o guardrail não interfere.
+**Qualificação (p1) não tem um guardrail dedicado ao nível da Mãe** — a saída de p1 é decidida por "missing_fields vazio", não por `route_to` direto, em 3 pontos independentes que promovem `route_to`/`effective_route_to` para `"apresentation"`: Regra 3 e o auto-promote de runtime (`decide()`), e a Regra 1 + fallback `ask_qualification` (`compose_decision_output()`). Os 3 são gateados por `not _phase_pending_sequential_triggers("p1", ...)`, exceto o escape valve `is_upper_stage` da Regra 3 (lead já numa fase posterior cuja Mãe tentou rotear de volta para qualificação por engano — não é "saindo de p1 agora", não deve ser bloqueado por pendência de p1).
+
+**Ao nível da Filha** (bloqueia `suggested_category` avançando via `did_complete_phase` — sinal não-determinístico da própria Filha, que pode contornar o guardrail da Mãe acima): gate `and not _phase_pending_sequential_triggers(...)` adicionado às condições já existentes em `compose_decision_output()`:
+- `apresentation_complete_auto_advance` — fase `"p2"`
+- `pre_agendamento_complete_auto_advance` — fase `"p3a"`
+
+**Por que `phases_triggered` e não só `lead.category`** (nos guardrails de Mãe): testes ao vivo mostraram `leads.category` podendo ficar defasado — a Mãe gera conteúdo da fase via `route_to` num turno sem que a categoria persistida do lead necessariamente seja atualizada para o mesmo valor (esse campo depende de `perceived_category` + `apply_mother_category_guardrails`, um mecanismo separado de `route_to`). `leads.phases_triggered` conter o id da fase é o sinal mais confiável de que o `phase_trigger` dela já disparou para aquele lead.
+
+**Escopo, o mesmo em toda fase:** só gatilhos "sequenciais" (`kw_trigger`/`intent_trigger` com `fire_once: true`, mesmo critério de `_is_sequential_trigger_block()`) contam como pendência. `no_reply_trigger` e gatilhos sem `fire_once` nunca participam — são reavaliados a cada turno, sem estado persistido de satisfação.
+
+**Fases sem este guardrail (deliberado):** p0 (recepção) é estruturalmente diferente — `"recepcao"` não está em `_STAGE_ORDER`/`_ALLOWED_ADVANCE`, então `apply_mother_category_guardrails()` aceita o `perceived_category` da Mãe sem nenhum clamp de salto único vindo dela. p3b→follow-up e p4→closing não têm hoje nenhum atalho de auto-advance da Filha (só o `route_to` bruto da Mãe); p4/follow-up também interage com o subsistema separado de ticks agendados (`followup_state.py`/`followup_reconciler.py`), fora do escopo de turnos ao vivo cobertos aqui.
 
 ### Lógica de Ramificação (`condicao`)
 
