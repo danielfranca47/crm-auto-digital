@@ -4558,6 +4558,7 @@ def _enforce_scheduling_agent_no_closing(
 
 
 _ALLOWED_ADVANCE = {
+    "recepcao": {"qualification"},
     "qualification": {"apresentation"},
     "apresentation": {"closing", "follow-up", "pre-agendamento"},
     "pre-agendamento": {"agendamento", "follow-up"},
@@ -4570,6 +4571,63 @@ _STAGE_INDEX = {stage: index for index, stage in enumerate(_STAGE_ORDER)}
 
 # Templates que usam as fases de pré-agendamento e agendamento
 _SCHEDULING_AGENT_TEMPLATES = {"sdr_padrao", "hybrid_scheduler"}
+
+
+_MAX_RECEPCAO_ENFORCED_OUTBOUND_TURNS = 1
+_PRE_QUALIFICATION_CATEGORIES = {"to-prospect", "in-progress", "qualification"}
+
+
+def _enforce_recepcao_sales_flow_pending(
+    mother_decision: MotherDecision,
+    context: Dict[str, Any],
+) -> MotherDecision:
+    """Impede a Mãe de avançar a categoria para além de 'recepcao' enquanto houver gatilhos
+    sequenciais (fire_once) configurados na fase p0 do Fluxo de Venda que ainda não dispararam
+    para este lead.
+
+    Espelha _enforce_apresentation_sales_flow_pending/_enforce_pre_agendamento_sales_flow_pending,
+    trocando para p0, com 2 diferenças estruturais (ver
+    docs/implementations/sales-flow-guardrail-p0-recepcao.md):
+
+    1) "Engajado com recepção" não pode depender de current_category == "recepcao" (esse valor
+       nunca é persistido em leads.category — só existe como route_to efémero) nem de
+       phases_triggered conter "p0" sozinho (exigiria um bloco phase_trigger configurado). Usa
+       o sinal oposto: o lead ainda não passou de "qualification" no pipeline
+       (_PRE_QUALIFICATION_CATEGORIES cobre os valores reais pré-pipeline: to-prospect,
+       in-progress, categoria ausente, ou já qualification mas ainda no turno de saudação).
+    2) A Filha Recepção é desenhada para um único turno ("Seu papel dura só este turno" —
+       _build_child_prompt_recepcao) — ao contrário das Filhas de apresentation/pré-agendamento
+       (multi-turno por design). Sem teto, este guardrail forçaria route_to="recepcao"
+       indefinidamente enquanto o gatilho de p0 não disparasse, repetindo a saudação em plena
+       conversa real. _MAX_RECEPCAO_ENFORCED_OUTBOUND_TURNS limita a ação a, no máximo, 1 turno
+       além do forçado por _enforce_greeting_first — depois disso, falha aberto.
+    """
+    route = _normalize_category(mother_decision.route_to)
+    if route not in _ALLOWED_ADVANCE.get("recepcao", set()):
+        return mother_decision
+
+    history = context.get("history") or []
+    outbound_count = sum(1 for h in history if str(h.get("model") or "").lower() == "outbound")
+    if outbound_count > _MAX_RECEPCAO_ENFORCED_OUTBOUND_TURNS:
+        return mother_decision
+
+    current_category = _normalize_category((context.get("lead") or {}).get("category"))
+    engaged_with_recepcao = current_category is None or current_category in _PRE_QUALIFICATION_CATEGORIES
+    if not engaged_with_recepcao:
+        return mother_decision
+
+    ai_profile = context.get("ai_profile") or {}
+    pending_ids = _phase_pending_sequential_triggers(
+        "p0", ai_profile, _load_triggers_fired_set(context)
+    )
+    if not pending_ids:
+        return mother_decision
+
+    mother_decision.route_to = "recepcao"
+    reason = str(mother_decision.reason or "").strip()
+    tag = f"sales_flow_recepcao_pending_forced_route:{','.join(pending_ids)}"
+    mother_decision.reason = f"{reason}|{tag}" if reason else tag
+    return mother_decision
 
 
 def _enforce_apresentation_sales_flow_pending(
@@ -5231,6 +5289,7 @@ def decide(context: Dict[str, Any], logger: Optional[logging.Logger] = None) -> 
         )
         mother_decision = _enforce_greeting_first(mother_decision, context)
         mother_decision = _enforce_scheduling_agent_no_closing(mother_decision, context)
+        mother_decision = _enforce_recepcao_sales_flow_pending(mother_decision, context)
         mother_decision = _enforce_apresentation_sales_flow_pending(mother_decision, context)
         mother_decision = _enforce_pre_agendamento_sales_flow_pending(mother_decision, context)
         lead = context.get("lead") or {}
