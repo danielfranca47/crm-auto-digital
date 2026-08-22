@@ -85,6 +85,7 @@ export interface SalesFlowBlock {
   wait_unit?: string;
   fire_once?: boolean;
   suppress_llm_response?: boolean;
+  requires_block_id?: string;     // id de outro gatilho sequencial (mesma fase) que deve já ter disparado num turno ANTERIOR (nunca no mesmo turno)
   // actions
   content?: string;
   priority?: string;
@@ -97,7 +98,7 @@ export interface SalesFlowBlock {
   url?: string;
   method?: string;
   // logic — nó de ramificação (`typeId === 'condicao'`)
-  label?: string;                 // nome da lógica (ex.: "Interesse em preço vs objeção de valor")
+  label?: string;                 // nome de exibição — nó `condicao`, ou (opcional) kw_trigger/intent_trigger, sobrepõe o resumo automático
   branches?: SalesFlowBranch[];   // caminhos nomeados (mínimo 2)
   sticky?: boolean;                // true (default) = fixa o caminho escolhido após a 1ª vez
   // logic — bloco filho pertencente a um caminho de um nó `condicao`

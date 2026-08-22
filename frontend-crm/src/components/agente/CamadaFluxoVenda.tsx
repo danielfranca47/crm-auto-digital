@@ -104,10 +104,10 @@ function emptyBlock(typeId: SalesFlowBlockTypeId): SalesFlowBlock {
 function blockSummary(block: SalesFlowBlock): string {
   const kws = (block.keywords || '').split(',').map(k => k.trim()).filter(Boolean);
   switch (block.typeId) {
-    case 'kw_trigger':       return kws.length ? `"${kws.slice(0, 3).join('", "')}"` : '—';
+    case 'kw_trigger':       return block.label || (kws.length ? `"${kws.slice(0, 3).join('", "')}"` : '—');
     case 'phase_trigger':    return 'Auto ao entrar';
     case 'no_reply_trigger': return block.wait_value ? `Sem resposta: ${block.wait_value} ${block.wait_unit || 'horas'}` : '—';
-    case 'intent_trigger':   return (block.intent || '').slice(0, 55) || '—';
+    case 'intent_trigger':   return block.label || (block.intent || '').slice(0, 55) || '—';
     case 'orientacao':       return (block.content || '').slice(0, 60) || '—';
     case 'mensagem':         return `"${(block.content || '').slice(0, 55)}"`;
     case 'midia':            return block.media_type ? `${block.media_type}${block.caption ? ': ' + block.caption.slice(0, 30) : ''}` : '—';
@@ -119,6 +119,34 @@ function blockSummary(block: SalesFlowBlock): string {
     case 'espera':           return block.wait_value ? `${block.wait_value} ${block.wait_unit || 'horas'}` : '—';
     default:                 return '';
   }
+}
+
+// Espelha _is_sequential_trigger_block do backend (decision_engine.py) — só blocos com
+// registo persistido de satisfação podem ser alvo de requires_block_id.
+function isSequentialCapable(b: SalesFlowBlock): boolean {
+  if (b.typeId === 'phase_trigger') return true;
+  if (b.typeId === 'kw_trigger' || b.typeId === 'intent_trigger') return !!b.fire_once;
+  return false;
+}
+
+// Segue a cadeia requires_block_id a partir de startId — usado para impedir que escolher
+// blockId como dependência feche um ciclo (startId já depende, direta ou indiretamente,
+// de targetId).
+function requiresChainIncludes(startId: string, targetId: string, phaseBlocks: SalesFlowBlock[], depth = 0): boolean {
+  if (depth > phaseBlocks.length) return false; // guarda de segurança — nunca deveria disparar (ids únicos)
+  const ref = phaseBlocks.find(b => b.id === startId)?.requires_block_id;
+  if (!ref) return false;
+  return ref === targetId || requiresChainIncludes(ref, targetId, phaseBlocks, depth + 1);
+}
+
+// Opções elegíveis para o seletor "Depende de" de um gatilho: sequenciais, não o próprio
+// bloco, e que não fechem um ciclo de volta a ele.
+function dependencyOptions(block: SalesFlowBlock, phaseBlocks: SalesFlowBlock[]): SalesFlowBlock[] {
+  return phaseBlocks.filter(b =>
+    b.id !== block.id &&
+    isSequentialCapable(b) &&
+    !requiresChainIncludes(b.id, block.id, phaseBlocks)
+  );
 }
 
 // ─── MediaPreviewChip ─────────────────────────────────────────
@@ -141,11 +169,12 @@ function MediaPreviewChip({ media }: { media: Pick<KnowledgeMediaItem, 'media_ur
 
 // ─── BlockForm ────────────────────────────────────────────────
 
-function BlockForm({ block, setBlock, knowledgeItems, customVars }: {
+function BlockForm({ block, setBlock, knowledgeItems, customVars, phaseBlocks }: {
   block: SalesFlowBlock;
   setBlock: (b: SalesFlowBlock) => void;
   knowledgeItems: KnowledgeItem[];
   customVars: Record<string, string>;
+  phaseBlocks: SalesFlowBlock[];
 }) {
   function set<K extends keyof SalesFlowBlock>(k: K, v: SalesFlowBlock[K]) {
     setBlock({ ...block, [k]: v });
@@ -211,6 +240,24 @@ function BlockForm({ block, setBlock, knowledgeItems, customVars }: {
             <label htmlFor="kw-suppress-llm" style={{ cursor: 'pointer', fontSize: 12.5 }}>
               Não chamar a LLM — enviar apenas as ações automáticas deste gatilho
             </label>
+          </div>
+          <div className="o-field">
+            <label className="o-field-label">Nome do gatilho (opcional)</label>
+            <input className="o-input" placeholder="Ex: Aceitou ver tabela"
+              value={block.label || ''} onChange={e => set('label', e.target.value)} />
+          </div>
+          <div className="o-field">
+            <label className="o-field-label">Depende de (opcional)</label>
+            <select className="o-input" value={block.requires_block_id || ''}
+              onChange={e => set('requires_block_id', e.target.value)}>
+              <option value="">— Nenhum —</option>
+              {dependencyOptions(block, phaseBlocks).map(b => (
+                <option key={b.id} value={b.id}>{b.label || blockSummary(b) || BLOCK_TYPE_LABELS[b.typeId]}</option>
+              ))}
+            </select>
+            <div style={{ fontSize: 11, color: 'var(--o-sub)', marginTop: 4 }}>
+              Só dispara depois de o bloco escolhido já ter disparado num turno anterior (nunca no mesmo turno).
+            </div>
           </div>
         </>
       );
@@ -280,6 +327,24 @@ function BlockForm({ block, setBlock, knowledgeItems, customVars }: {
             <label htmlFor="intent-suppress-llm" style={{ cursor: 'pointer', fontSize: 12.5 }}>
               Não chamar a LLM — enviar apenas as ações automáticas deste gatilho
             </label>
+          </div>
+          <div className="o-field">
+            <label className="o-field-label">Nome do gatilho (opcional)</label>
+            <input className="o-input" placeholder="Ex: Aceitou ver tabela"
+              value={block.label || ''} onChange={e => set('label', e.target.value)} />
+          </div>
+          <div className="o-field">
+            <label className="o-field-label">Depende de (opcional)</label>
+            <select className="o-input" value={block.requires_block_id || ''}
+              onChange={e => set('requires_block_id', e.target.value)}>
+              <option value="">— Nenhum —</option>
+              {dependencyOptions(block, phaseBlocks).map(b => (
+                <option key={b.id} value={b.id}>{b.label || blockSummary(b) || BLOCK_TYPE_LABELS[b.typeId]}</option>
+              ))}
+            </select>
+            <div style={{ fontSize: 11, color: 'var(--o-sub)', marginTop: 4 }}>
+              Só dispara depois de o bloco escolhido já ter disparado num turno anterior (nunca no mesmo turno).
+            </div>
           </div>
         </>
       );
@@ -589,7 +654,7 @@ function BlockForm({ block, setBlock, knowledgeItems, customVars }: {
 
 // ─── BlockModal ───────────────────────────────────────────────
 
-function BlockModal({ phaseId, initial, knowledgeItems, onSave, onClose, groupMode = false, excludeTypes, customVars }: {
+function BlockModal({ phaseId, initial, knowledgeItems, onSave, onClose, groupMode = false, excludeTypes, customVars, phaseBlocks }: {
   phaseId: SalesFlowPhaseId;
   initial: SalesFlowBlock | null;
   knowledgeItems: KnowledgeItem[];
@@ -598,6 +663,7 @@ function BlockModal({ phaseId, initial, knowledgeItems, onSave, onClose, groupMo
   groupMode?: boolean;  // quando true: adicionar acção/lógica a gatilho existente (sem tab de Gatilho)
   excludeTypes?: SalesFlowBlockTypeId[];  // typeIds a esconder do grid (ex.: condicao dentro de um caminho — sem ramificação aninhada nesta versão)
   customVars: Record<string, string>;
+  phaseBlocks: SalesFlowBlock[];
 }) {
   const isEdit = !!initial;
   const [activeCat, setActiveCat] = useState<'trigger' | 'action' | 'logic'>(
@@ -698,7 +764,7 @@ function BlockModal({ phaseId, initial, knowledgeItems, onSave, onClose, groupMo
           {/* Form */}
           {selectedTypeId && (
             <div style={{ borderTop: '1px solid var(--o-b1)', paddingTop: 16, display: 'flex', flexDirection: 'column', gap: 0 }}>
-              <BlockForm block={block} setBlock={setBlock} knowledgeItems={knowledgeItems} customVars={customVars} />
+              <BlockForm block={block} setBlock={setBlock} knowledgeItems={knowledgeItems} customVars={customVars} phaseBlocks={phaseBlocks} />
             </div>
           )}
         </div>
@@ -720,12 +786,13 @@ function BlockModal({ phaseId, initial, knowledgeItems, onSave, onClose, groupMo
 
 type RBStep = 'pick-trigger' | 'config-trigger' | 'rule-builder' | 'adding-block';
 
-function RuleBuilderModal({ phaseId, knowledgeItems, onSave, onClose, customVars }: {
+function RuleBuilderModal({ phaseId, knowledgeItems, onSave, onClose, customVars, phaseBlocks }: {
   phaseId: SalesFlowPhaseId;
   knowledgeItems: KnowledgeItem[];
   onSave: (blocks: SalesFlowBlock[]) => void;
   onClose: () => void;
   customVars: Record<string, string>;
+  phaseBlocks: SalesFlowBlock[];
 }) {
   const [step, setStep] = useState<RBStep>('pick-trigger');
   const [triggerBlock, setTriggerBlock] = useState<SalesFlowBlock | null>(null);
@@ -851,7 +918,7 @@ function RuleBuilderModal({ phaseId, knowledgeItems, onSave, onClose, customVars
               <div style={{ fontSize: 11, color: 'var(--o-sub)' }}>{BLOCK_META[triggerBlock.typeId].desc}</div>
             </div>
           </div>
-          <BlockForm block={triggerBlock} setBlock={b => setTriggerBlock(b)} knowledgeItems={knowledgeItems} customVars={customVars} />
+          <BlockForm block={triggerBlock} setBlock={b => setTriggerBlock(b)} knowledgeItems={knowledgeItems} customVars={customVars} phaseBlocks={phaseBlocks} />
         </div>
         <div style={{ padding: '12px 20px 20px', display: 'flex', gap: 8, justifyContent: 'space-between', borderTop: '1px solid var(--o-b1)' }}>
           <button className="o-btn" onClick={() => setStep('pick-trigger')}>← Voltar</button>
@@ -952,7 +1019,7 @@ function RuleBuilderModal({ phaseId, knowledgeItems, onSave, onClose, customVars
             </div>
             {pendingTypeId && pendingBlock && (
               <div style={{ borderTop: '1px solid var(--o-b1)', paddingTop: 16 }}>
-                <BlockForm block={pendingBlock} setBlock={b => setPendingBlock(b)} knowledgeItems={knowledgeItems} customVars={customVars} />
+                <BlockForm block={pendingBlock} setBlock={b => setPendingBlock(b)} knowledgeItems={knowledgeItems} customVars={customVars} phaseBlocks={phaseBlocks} />
               </div>
             )}
           </div>
@@ -1191,6 +1258,8 @@ function PhaseSection({ phase, onAddBlock, onEditBlock, onRemoveBlock, onAddToGr
 
             function BlockRow({ block }: { block: SalesFlowBlock }) {
               const meta = BLOCK_META[block.typeId];
+              const depTarget = block.requires_block_id ? blocks.find(b => b.id === block.requires_block_id) : null;
+              const hasBrokenDependency = !!block.requires_block_id && (!depTarget || !isSequentialCapable(depTarget));
               return (
                 <div style={{
                   display: 'flex', alignItems: 'center', gap: 10,
@@ -1207,6 +1276,11 @@ function PhaseSection({ phase, onAddBlock, onEditBlock, onRemoveBlock, onAddToGr
                     <div style={{ fontSize: 12, color: 'var(--o-sub)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                       {blockSummary(block)}
                     </div>
+                    {hasBrokenDependency && (
+                      <div style={{ fontSize: 10.5, color: 'var(--o-warn)', marginTop: 2 }}>
+                        ⚠ dependência quebrada — bloco removido
+                      </div>
+                    )}
                   </div>
                   <div style={{ display: 'flex', gap: 4, flexShrink: 0 }}>
                     <button className="o-btn" style={{ fontSize: 10.5, padding: '3px 9px' }}
@@ -1512,6 +1586,9 @@ export function CamadaFluxoVenda({ config, onUpdate }: Props) {
   const modalInitial = modal?.blockId && modalPhase
     ? (modalPhase.blocks.find(b => b.id === modal.blockId) ?? null)
     : null;
+  const addToGroupPhase = addToGroup ? phases.find(p => p.id === addToGroup.phaseId) : null;
+  const addToBranchPhase = addToBranch ? phases.find(p => p.id === addToBranch.phaseId) : null;
+  const ruleBuilderPhase = ruleBuilderPhaseId ? phases.find(p => p.id === ruleBuilderPhaseId) : null;
 
   const totalBlocks = phases.reduce((sum, p) => sum + p.blocks.length, 0);
   const legacyCount = sf.nodes?.length ?? 0;
@@ -1526,6 +1603,7 @@ export function CamadaFluxoVenda({ config, onUpdate }: Props) {
           onSave={saveBlock}
           onClose={() => setModal(null)}
           customVars={config.custom_variables || {}}
+          phaseBlocks={modalPhase.blocks}
         />
       )}
       {addToGroup && (
@@ -1537,6 +1615,7 @@ export function CamadaFluxoVenda({ config, onUpdate }: Props) {
           onClose={() => setAddToGroup(null)}
           groupMode
           customVars={config.custom_variables || {}}
+          phaseBlocks={addToGroupPhase?.blocks ?? []}
         />
       )}
       {addToBranch && (
@@ -1548,6 +1627,7 @@ export function CamadaFluxoVenda({ config, onUpdate }: Props) {
           onClose={() => setAddToBranch(null)}
           excludeTypes={['condicao']}
           customVars={config.custom_variables || {}}
+          phaseBlocks={addToBranchPhase?.blocks ?? []}
         />
       )}
       {ruleBuilderPhaseId && (
@@ -1557,6 +1637,7 @@ export function CamadaFluxoVenda({ config, onUpdate }: Props) {
           onSave={(blocks) => saveBlocks(ruleBuilderPhaseId, blocks)}
           onClose={() => setRuleBuilderPhaseId(null)}
           customVars={config.custom_variables || {}}
+          phaseBlocks={ruleBuilderPhase?.blocks ?? []}
         />
       )}
 
