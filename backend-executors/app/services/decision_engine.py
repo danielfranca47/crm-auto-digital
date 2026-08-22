@@ -4620,6 +4620,45 @@ def _enforce_apresentation_sales_flow_pending(
     return mother_decision
 
 
+def _enforce_pre_agendamento_sales_flow_pending(
+    mother_decision: MotherDecision,
+    context: Dict[str, Any],
+) -> MotherDecision:
+    """Impede a Mãe de avançar a categoria para além de 'pre-agendamento' enquanto houver
+    gatilhos sequenciais (fire_once) configurados na fase p3a do Fluxo de Venda que ainda
+    não dispararam para este lead.
+
+    Espelha _enforce_apresentation_sales_flow_pending, trocando p2→p3a — mesma classe de bug
+    que p2 tinha antes de ser corrigido: a Mãe pode decidir pular a fase inteira num único
+    turno, ignorando o encadeamento sequencial configurado nela. Só relevante para o modo
+    `agenda` (único que visita p3a — ver docs/architecture/sales-flow.md); nos demais modos
+    `_phase_pending_sequential_triggers` nunca encontra a fase "p3a" no profile e este
+    guardrail é um no-op.
+    """
+    triggered_phases = _load_triggered_phases_set(context)
+    current_category = _normalize_category((context.get("lead") or {}).get("category"))
+    engaged_with_pre_agendamento = "p3a" in triggered_phases or current_category == "pre-agendamento"
+    if not engaged_with_pre_agendamento:
+        return mother_decision
+
+    route = _normalize_category(mother_decision.route_to)
+    if route not in _ALLOWED_ADVANCE.get("pre-agendamento", set()):
+        return mother_decision
+
+    ai_profile = context.get("ai_profile") or {}
+    pending_ids = _phase_pending_sequential_triggers(
+        "p3a", ai_profile, _load_triggers_fired_set(context)
+    )
+    if not pending_ids:
+        return mother_decision
+
+    mother_decision.route_to = "pre-agendamento"
+    reason = str(mother_decision.reason or "").strip()
+    tag = f"sales_flow_pre_agendamento_pending_forced_route:{','.join(pending_ids)}"
+    mother_decision.reason = f"{reason}|{tag}" if reason else tag
+    return mother_decision
+
+
 def _is_sdr_escalate_closing(context: Dict[str, Any], mother_decision: MotherDecision) -> bool:
     normalized_mode = _normalize_agent_mode(context, mother_decision)
     if normalized_mode != "agenda":
@@ -4827,12 +4866,17 @@ def compose_decision_output(
     # Guardrail: pré-agendamento completo (dia/hora específicos já dados) → avança para
     # agendamento. Mesmo padrão do bloco de apresentation acima — a Filha já sinaliza
     # did_complete_phase + recommended_next_category="agendamento", aqui homologamos.
+    # Mesmo gate de gatilhos pendentes do bloco de apresentation acima, aplicado a p3a.
     _pre_complete_next = str(child_result.recommended_next_category or "").strip().lower()
+    p3a_pending_compose = _phase_pending_sequential_triggers(
+        "p3a", ai_profile, _load_triggers_fired_set(context)
+    )
     if (
         effective_route_to == "pre-agendamento"
         and child_result.did_complete_phase
         and _pre_complete_next == "agendamento"
         and template_key in _SCHEDULING_AGENT_TEMPLATES
+        and not p3a_pending_compose
     ):
         suggested_category = _pre_complete_next
         category_reason = (
@@ -5188,6 +5232,7 @@ def decide(context: Dict[str, Any], logger: Optional[logging.Logger] = None) -> 
         mother_decision = _enforce_greeting_first(mother_decision, context)
         mother_decision = _enforce_scheduling_agent_no_closing(mother_decision, context)
         mother_decision = _enforce_apresentation_sales_flow_pending(mother_decision, context)
+        mother_decision = _enforce_pre_agendamento_sales_flow_pending(mother_decision, context)
         lead = context.get("lead") or {}
         force_followup_route = _is_followup_tick_context(context)
         route_for_child = "follow-up" if force_followup_route else mother_decision.route_to

@@ -187,6 +187,71 @@ o teste captura o bug, não é vacuamente verdadeiro). Sanity check ao vivo fica
 final da Fase 3 (ou pode ser feito agora, opcionalmente, reusando a técnica de blocos de teste
 temporários no builder + Playground desta vez em p2).
 
+### Fase 3 — Pré-Agendamento (p3a): mesma classe de bug que p2 tinha antes de ser corrigida
+
+**Objetivo:** p3a (só relevante para `agenda`, único modo que a visita) passa a ter os dois
+mesmos guardrails que p2 já tem desde a Fase 2 — um novo `_enforce_pre_agendamento_sales_flow_pending`
+ao nível da Mãe (p3a nunca teve nenhum guardrail deste tipo, mesma classe de bug que p2 tinha
+antes de `fix-fluxo-vendas-sequencial.md`) e o gate em `pre_agendamento_complete_auto_advance`
+ao nível da Filha.
+
+| Arquivo | O que muda |
+|---|---|
+| `backend-executors/app/services/decision_engine.py` | novo `_enforce_pre_agendamento_sales_flow_pending()` (espelha o de p2, trocando p2→p3a e `_ALLOWED_ADVANCE["pre-agendamento"]`), adicionado como 5º guardrail na cadeia de `decide()`; gate `and not p3a_pending_compose` em `pre_agendamento_complete_auto_advance` |
+| `backend-executors/tests/test_pre_agendamento_sales_flow_pending.py` | novo: 10 testes — 6 espelhando os do guardrail de p2 (`_enforce_apresentation_sales_flow_pending`) adaptados para p3a/pre-agendamento, 3 espelhando os do gate em `apresentation_complete_auto_advance` adaptados para `pre_agendamento_complete_auto_advance` |
+
+### Commits Fase 3
+
+| # | Commit | O que foi implementado |
+|---|---|---|
+| 1 | _(pendente)_ | Novo guardrail `_enforce_pre_agendamento_sales_flow_pending` + gate em `pre_agendamento_complete_auto_advance` |
+
+**Detalhes do commit _(pendente)_:**
+- `decision_engine.py` — `_enforce_pre_agendamento_sales_flow_pending()` novo, logo após
+  `_enforce_apresentation_sales_flow_pending`: mesma estrutura (checa `phases_triggered`
+  conter "p3a" OU `lead.category == "pre-agendamento"` como sinal de "engajado com a fase",
+  depois `_ALLOWED_ADVANCE["pre-agendamento"]` para saber se a rota da Mãe está tentando sair
+  dela, depois `_phase_pending_sequential_triggers("p3a", ...)`); adicionado à cadeia de
+  guardrails em `decide()` logo após o de p2 (vira o 5º)
+- `decision_engine.py` — `pre_agendamento_complete_auto_advance` (`compose_decision_output`):
+  novo `p3a_pending_compose = _phase_pending_sequential_triggers("p3a", ...)` e gate
+  `and not p3a_pending_compose` na condição que avança `suggested_category` para "agendamento"
+- `test_pre_agendamento_sales_flow_pending.py` (novo) — 10 testes: bloqueia salto da Mãe
+  (route_to), cobre todos os alvos permitidos de `_ALLOWED_ADVANCE["pre-agendamento"]`
+  (agendamento, follow-up), libera quando já disparado, ignora outras categorias correntes,
+  no-op sem sales_flow configurado, usa `phases_triggered` quando `lead.category` está
+  defasado, gatilho pendente bloqueia `pre_agendamento_complete_auto_advance` (verificado que
+  falha sem o gate — `assert 'agendamento' == 'pre-agendamento'` — antes de confirmar que
+  passa com o gate reativado), gatilho já disparado avança normalmente, sem gatilho
+  comportamento inalterado
+- Suite completa: 23 failed / 223 passed — mesmo conjunto de 23 falhas pré-existentes desde a
+  Fase 1 (confirmado via `git stash` comparando a suite completa antes/depois linha a linha,
+  não só o subset), 10 testes novos passando (213→223), sem regressão
+
+### Relatório da Fase 3 — o que mudou na prática
+
+**Antes:** p3a (Pré-Agendamento) não tinha nenhum guardrail de gatilhos pendentes — nem ao
+nível da Mãe (`route_to`), nem ao nível da Filha (`did_complete_phase`). Um agente `agenda`
+com um gatilho sequencial configurado em Pré-Agendamento (ex.: "confirmar disponibilidade
+antes de fechar o horário") podia ter esse gatilho pulado silenciosamente se a Mãe decidisse
+avançar direto para Agendamento num único turno, ou se a Filha sinalizasse `did_complete_phase`
+sem o gatilho ter disparado — exatamente o mesmo tipo de bug que p2 já teve e já foi corrigido.
+
+**Agora:** p3a tem os mesmos dois guardrails que p2 — gatilhos sequenciais pendentes bloqueiam
+tanto o `route_to` da Mãe quanto o avanço de categoria vindo do sinal `did_complete_phase` da
+Filha. Como só o modo `agenda` visita p3a, este guardrail é inofensivo (no-op) para
+`consultivo`/`direto` — `_phase_pending_sequential_triggers` nunca encontra a fase "p3a" no
+profile desses modos.
+
+**Para validar:** testes automatizados (pytest) já rodados e confirmados nesta fase — ver
+tabela de commits acima. Com isto, as 3 fases planejadas em
+`C:\Users\Daniel França\.claude\plans\synchronous-singing-willow.md` estão code-complete e
+todos os checks de validação (pytest) estão marcados. Falta decidir: (a) fazer o sanity check
+ao vivo opcional no Playground (mencionado como opcional no plano, nunca feito nesta
+implementação) e/ou (b) seguir para a graduação (`_processo-graduacao-implementacao.md`) —
+migrar o mapa de guardrails para `docs/architecture/sales-flow.md`/`pipeline-phases.md`, `git
+rm` deste arquivo, commit único de graduação.
+
 ---
 
 ## Checks de Validação
