@@ -142,7 +142,7 @@ mudar comportamento), e o buraco em `apresentation_complete_auto_advance` — qu
 
 | # | Commit | O que foi implementado |
 |---|---|---|
-| 1 | _(pendente)_ | Refactor do guardrail de p2 para usar o helper + gate em `apresentation_complete_auto_advance` |
+| 1 | `d6d9f6a` | Refactor do guardrail de p2 para usar o helper + gate em `apresentation_complete_auto_advance` |
 
 **Detalhes do commit:**
 - `decision_engine.py` — `_enforce_apresentation_sales_flow_pending` (linhas ~4609-4614): o scan
