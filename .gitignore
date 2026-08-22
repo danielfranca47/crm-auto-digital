@@ -37,3 +37,6 @@ docs/implementations/_sessao-teste-corrente.md
 ngrok.yml
 agent-local/run_remoto.ps1
 guia_ports.md
+
+
+.claude/
