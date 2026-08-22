@@ -401,6 +401,45 @@ def _is_sequential_trigger_block(block: Dict[str, Any]) -> bool:
     return False
 
 
+def _phase_pending_sequential_triggers(
+    phase_id: str,
+    ai_profile: Dict[str, Any],
+    triggers_fired: set,
+) -> List[str]:
+    """block_ids de kw_trigger/intent_trigger sequenciais (fire_once=True) configurados na
+    fase `phase_id` que ainda não dispararam (não estão em triggers_fired). Lista vazia =
+    sem gate: sales_flow desligado, fase inexistente no profile, ou nenhum gatilho
+    sequencial configurado nela (ou todos já dispararam) — nesses casos o guardrail que
+    consome este helper não deve interferir. Opt-in: só retorna pendências quando o
+    utilizador configurou explicitamente pelo menos um gatilho sequencial nessa fase.
+
+    Extraído do scan que já existia hardcoded para "p2" dentro de
+    _enforce_apresentation_sales_flow_pending — usado agora por qualquer guardrail de
+    "gatilhos pendentes bloqueiam avanço de fase" (ver docs/architecture/sales-flow.md)."""
+    sales_flow = ai_profile.get("sales_flow")
+    if not isinstance(sales_flow, dict) or not sales_flow.get("enabled"):
+        return []
+    phases = sales_flow.get("phases")
+    if not isinstance(phases, list):
+        return []
+    phase = next((p for p in phases if isinstance(p, dict) and p.get("id") == phase_id), None)
+    if not phase:
+        return []
+    pending: List[str] = []
+    for block in (phase.get("blocks") or []):
+        if not isinstance(block, dict):
+            continue
+        type_id = (block.get("typeId") or "").strip()
+        if type_id not in ("kw_trigger", "intent_trigger"):
+            continue
+        if not _is_sequential_trigger_block(block):
+            continue
+        block_id = (block.get("id") or "").strip()
+        if block_id and block_id not in triggers_fired:
+            pending.append(block_id)
+    return pending
+
+
 def _build_block_lookup(phases: List[Dict[str, Any]]) -> Dict[str, Tuple[Dict[str, Any], str]]:
     """Mapa block_id -> (block, phase_id) construído a partir de TODAS as fases do profile
     (não só a fase corrente) — usado para resolver `requires_block_id`. Cobre referência
@@ -4764,9 +4803,13 @@ def compose_decision_output(
     missing_fields = list(mode_contract.get("missing_fields") or [])
     filled_fields = list(mode_contract.get("filled_fields") or [])
     current_field = _select_current_field(missing_fields, filled_fields)
+    p1_pending_compose = _phase_pending_sequential_triggers(
+        "p1", ai_profile, _load_triggers_fired_set(context)
+    )
     if (
         mother_decision.route_to == "qualification"
         and not current_field
+        and not p1_pending_compose
     ):
         qualification_auto_promoted = True
         anti_loop_rule1_applied = True
@@ -4887,7 +4930,7 @@ def compose_decision_output(
         message_text = str(child_result.message_text).strip()
         message_field_used = str(child_result.field or "").strip() or current_field
     elif next_action == "ask_qualification":
-        if not current_field:
+        if not current_field and not p1_pending_compose:
             next_action = "reply"
             effective_route_to = "apresentation"
             qualification_auto_promoted = True
@@ -5183,7 +5226,12 @@ def decide(context: Dict[str, Any], logger: Optional[logging.Logger] = None) -> 
             is_upper_stage = normalized_current_category in {
                 "apresentation", "pre-agendamento", "agendamento", "follow-up", "closing"
             }
-            if is_upper_stage or not missing_pre:
+            # Gatilhos sequenciais pendentes em p1 só bloqueiam o ramo "qualificação
+            # completa, avança agora" (not missing_pre) — não o escape valve is_upper_stage,
+            # que trata de um lead que já NÃO está em p1 (categoria persistida já é uma fase
+            # posterior) e cuja Mãe, por engano, tentou rotear de volta para qualificação.
+            p1_pending = _phase_pending_sequential_triggers("p1", ai_profile, _load_triggers_fired_set(context))
+            if is_upper_stage or (not missing_pre and not p1_pending):
                 route_for_child = "apresentation"
                 anti_loop_rule3_applied = True
                 if logger:
@@ -5308,7 +5356,10 @@ def decide(context: Dict[str, Any], logger: Optional[logging.Logger] = None) -> 
             filled_fields = list(mode_ctx.get("filled_fields") or [])
             current_field = _select_current_field(missing, filled_fields)
             qualification_current_field = current_field
-            if not current_field:
+            p1_pending_runtime = _phase_pending_sequential_triggers(
+                "p1", ai_profile, _load_triggers_fired_set(context)
+            )
+            if not current_field and not p1_pending_runtime:
                 route_for_child = "apresentation"
                 qualification_validation_status = "n/a"
                 if logger:
