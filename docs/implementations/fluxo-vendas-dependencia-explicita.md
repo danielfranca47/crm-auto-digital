@@ -111,7 +111,18 @@ sequencial da mesma fase do qual ele depende; sinaliza dependência quebrada/ine
 
 | # | Commit | O que foi implementado |
 |---|---|---|
-| 1 | _(a preencher)_ | _(a preencher)_ |
+| 1 | `21eec69` | Seletor de dependência + nome do gatilho no builder |
+
+**Detalhes do commit `21eec69`:**
+- `types/agente.ts` — `SalesFlowBlock.requires_block_id`; comentário de `label` atualizado
+- `CamadaFluxoVenda.tsx` — `blockSummary()` prefere `label` para kw/intent trigger;
+  `isSequentialCapable()`/`requiresChainIncludes()`/`dependencyOptions()` (helpers
+  module-level); `BlockForm` ganha prop `phaseBlocks` + campos "Nome do gatilho"/"Depende
+  de" nos casos `kw_trigger`/`intent_trigger`; `phaseBlocks` roteado por `BlockModal`/
+  `RuleBuilderModal` (incluindo os 2 pontos de `<BlockForm>` dentro de `RuleBuilderModal`)
+  e pelos 4 call sites em `CamadaFluxoVenda`; `BlockRow` sinaliza "dependência quebrada"
+  quando `requires_block_id` não resolve OU o alvo deixou de ser `isSequentialCapable`
+- `npx tsc --noEmit` limpo
 
 ---
 
