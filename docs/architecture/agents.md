@@ -166,6 +166,8 @@ jobs já resolvidos.
 | `followup_checkin_auto_trigger_enabled` | boolean | Liga o check-in automático de cliente inativo em `client-list` (padrão: `false`). Restrito a `agent_1`/`agent_3` — Agent 2 fora. Ver [`followup.md`](followup.md) |
 | `followup_checkin_inactivity_days` | integer | Dias de inatividade (última sessão/msg) para disparar o check-in automático (padrão: `30`) |
 | `followup_checkin_instructions` | string\|null | Instrução de texto livre injectada no prompt de follow-up quando `followup_variant=client_checkin` |
+| `llm_provider` | string (enum) | Provedor de LLM usado nas chamadas de IA (padrão: `"openai"`). Ver [`llm-architecture.md`](llm-architecture.md#multi-provedor-de-llm-openai-padrão--openrouter-alternativo) |
+| `llm_provider_model` | string\|null | Modelo curado do OpenRouter (só relevante quando `llm_provider="openrouter"`) |
 
 ### Enums
 
