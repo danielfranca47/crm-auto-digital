@@ -85,6 +85,7 @@ class PlaygroundChatRequest(BaseModel):
     is_opener: bool = Field(False, description="Se true e scenario_type=outbound, retorna a mensagem de abertura outbound sem processar mensagem do lead")
     message_type: Optional[str] = Field(None, description="Tipo da mensagem — 'audio' quando gravado no playground")
     audio_filename: Optional[str] = Field(None, description="Nome do ficheiro em temp_audio/ retornado pelo endpoint upload-audio")
+    wa_display_name: Optional[str] = Field(None, description="Nome do WhatsApp simulado para o lead sandbox — só usado na criação (lead_id=null), nunca atualizado depois")
 
 
 class MotherDecision(BaseModel):
@@ -244,17 +245,17 @@ def _load_sandbox_lead(lead_id: int, user_id: int) -> Dict[str, Any]:
     return dict(row)
 
 
-def _create_sandbox_lead(user_id: int, origin: str = "playground") -> int:
+def _create_sandbox_lead(user_id: int, origin: str = "playground", wa_display_name: Optional[str] = None) -> int:
     """Cria um novo lead sandbox e devolve o seu ID."""
     phone = f"playground_{uuid4().hex[:8]}"
     with get_connection() as conn:
         cur = conn.cursor()
         cur.execute(
             """
-            INSERT INTO leads (user_id, companyName, contactName, phone, origin, category, is_playground)
-            VALUES (?, ?, ?, ?, ?, ?, 1)
+            INSERT INTO leads (user_id, companyName, contactName, phone, origin, category, is_playground, wa_display_name)
+            VALUES (?, ?, ?, ?, ?, ?, 1, ?)
             """,
-            (user_id, None, "Lead de Teste", phone, origin, "qualification"),
+            (user_id, None, "Lead de Teste", phone, origin, "qualification", wa_display_name),
         )
         conn.commit()
         return cur.lastrowid
@@ -607,7 +608,7 @@ def playground_chat(
         lead_id = body.lead_id
     else:
         origin_label = f"playground_{body.scenario_type}"
-        lead_id = _create_sandbox_lead(user_id, origin=origin_label)
+        lead_id = _create_sandbox_lead(user_id, origin=origin_label, wa_display_name=body.wa_display_name)
 
     # ── Passo 3: Reset (se solicitado) ───────────────────────────────────────
     if body.reset:
