@@ -165,9 +165,9 @@ reembolso manual no painel da Efí. Erro da Efí (fora da janela, já reembolsad
 → `502` com a mensagem de erro dela repassada directamente (não uma mensagem genérica) — nesse
 caso `action=cancel` nunca é chamado, a subscrição permanece activa.
 
-**Fora do escopo actual** (ver `docs/implementations/refund-admin-mvp.md`): automação do
-reembolso dos 7 dias via agente de email, fluxo de "chamado" dos 30 dias, reembolso parcial pela
-UI (a função já suporta, só não é exposta no botão).
+**Fora do escopo actual:** reembolso parcial pela UI (a função já suporta `amount_cents`, só não é
+exposta no botão); automação do reembolso dos 7 dias via agente de email — ver
+[`reembolso-melhorias-futuras.md`](../plans/reembolso-melhorias-futuras.md).
 
 ---
 

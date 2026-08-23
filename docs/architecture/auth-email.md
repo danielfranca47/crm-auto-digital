@@ -282,6 +282,7 @@ URLs de checkout Efí geradas sob demanda — ver [`billing-efi.md`](billing-efi
 | `current_period_end` | DateTime nullable | Expiração do período |
 | `trial_ends_at` | DateTime nullable | Preenchido quando `is_trial=true`; `None` = não é trial |
 | `expiry_warning_sent` | Boolean | `False` por defeito; `True` após job enviar aviso de expiração |
+| `efi_charge_id` | Integer nullable | `charge_id` da cobrança Efí mais recente (activação ou renovação) — usado para reembolso via admin, ver [`billing-efi.md`](billing-efi.md#reembolso) |
 
 **Status `"expired"`:** atribuído pelo job diário quando `current_period_end < now` e `status == "active"`. Distinto de `"cancelled"` (cancelamento activo) e `"inactive"` (nunca teve plano).
 
