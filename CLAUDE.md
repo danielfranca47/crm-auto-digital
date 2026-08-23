@@ -338,7 +338,12 @@ Merges são sempre sequenciais — nunca simultâneos. Se duas branches estivere
 
 **Branches aninhadas:** se, dentro de uma branch de feature (que não é `main`), for necessária uma nova implementação/sub-tarefa, a nova branch nasce a partir da branch de feature atual — não de `main` — e o merge de volta é só para ela, nunca direto para `main`. Evitar mais de 1 nível de aninhamento.
 
-**Resolução de conflitos:** se `git merge` reportar conflito, Claude **nunca resolve sozinho e commita silenciosamente**. Parar o merge, explicar em linguagem simples o que cada lado mudou nos trechos conflitantes, propor uma resolução e só finalizar o merge (`git add` + `git commit`) depois de confirmação explícita do utilizador. Nunca usar `--ours`/`--theirs` sem explicar antes.
+**Resolução de conflitos:** a resolução técnica de um conflito de `git merge` é trabalho de Claude — o utilizador não é programador e não deve precisar interpretar diff, sintaxe ou terminologia de código para decidir algo.
+
+- **Conflito mecânico** (git não conseguiu juntar automaticamente duas mudanças que não se contradizem — ex.: duas edições em partes diferentes do mesmo arquivo) → Claude resolve sozinho, finaliza o merge, e **depois** reporta em 1-2 frases sem jargão o que foi decidido (ex.: "o merge juntou as duas mudanças sem perda de nada").
+- **Conflito de comportamento/regra de negócio** (as duas branches mudaram a mesma regra de forma incompatível — ex.: uma expira o desconto em 7 dias, a outra em 30) → Claude **não decide sozinho**. Explica a escolha em português simples e concreto, em termos do que o sistema vai fazer para o utilizador final (nunca mostrando diff ou código), e aguarda a decisão antes de finalizar o merge.
+- Na dúvida sobre qual dos dois casos se aplica, tratar como conflito de comportamento (mais seguro perguntar de mais do que decidir uma regra de negócio sem avisar).
+- Em ambos os casos, o utilizador recebe sempre um resumo do resultado final — nunca fica sem saber o que aconteceu.
 
 ### Convenção de mensagem (Conventional Commits)
 
