@@ -77,7 +77,7 @@ O flag `bot_disabled` é gerido por lead individual. Fontes de desactivação: m
 
 ### Criação automática de lead (primeiro contacto)
 
-`find_or_create_lead_by_phone()` (mesmo arquivo) cria o lead quando não existe nenhum com o telefone do remetente. `contactName` continua nascendo como `<telefone>` (nunca com texto fabricado) e `companyName = NULL`. Separadamente, `routes/webhooks.py::_resolve_wa_display_name()` extrai o nome de exibição do WhatsApp (pushName) do payload bruto da UazAPI (`chat`/`message`/`data`) e persiste em `leads.wa_display_name` — campo à parte, nunca sobrescreve `contactName`. Ver regra completa de nome em [`leads-schema.md`](leads-schema.md).
+`find_or_create_lead_by_phone()` (mesmo arquivo) cria o lead quando não existe nenhum com o telefone do remetente. `routes/webhooks.py::_resolve_wa_display_name()` extrai o nome de perfil do WhatsApp (pushName) do payload bruto da UazAPI, com prioridade `message.senderName` → `chat.wa_name` (nome de perfil do remetente, existe para qualquer remetente) → `chat.wa_contactName` → `chat.name` (nome salvo na agenda de contatos do telefone do bot — só existe se o operador salvou aquele número manualmente; usado apenas como último recurso). `contactName` nasce como esse nome quando disponível; só cai para `<telefone>` como placeholder quando nenhum nome é resolvido do payload. `companyName = NULL`. O valor também é persistido à parte em `leads.wa_display_name` — campo nunca sobrescreve uma edição manual de `contactName` feita pelo operador em turnos seguintes. Ver regra completa de nome em [`leads-schema.md`](leads-schema.md).
 
 ---
 

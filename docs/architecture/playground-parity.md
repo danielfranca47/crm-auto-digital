@@ -68,6 +68,7 @@ Esta é a **única fonte de enriquecimento**. Qualquer campo novo que afete o co
 | B4  | `lead_detected_language` | Elevado de `lead["detected_language"]`, fallback `"all"` |
 | B5  | `calendar_busy_slots` | `_load_calendar_busy_slots(user_id)` — só quando `ai_profile.agent_mode == "agenda"` e o bundle ainda não o tem. Ver [`agenda.md`](agenda.md) |
 | B6  | `metadata["bot_disabled"]` / `metadata["bot_disabled_reason"]` | Propaga quando `lead.bot_disabled` e `lead.bot_disabled_reason == "meeting_scheduled"`. `bot_disabled` propaga sempre nesse caso; o reason só recebe `"meeting_scheduled"` quando `ai_profile.meeting_management_enabled` é `True` — senão fica `None`, levando `decide()` a tratar como desactivado padrão (ignore). Outros motivos de `bot_disabled` (ex.: `handoff_requested`) **não** são propagados aqui, propositalmente — `routes/executor.py` faz essa propagação para o fluxo real de forma equivalente (ver `agents.md`, secção "Gestão pós-confirmação") |
+| B7  | Resolução de `{{chave}}` (in-place em `bundle.ai_profile`) | `_resolve_profile_templates()` (7 campos fixos do AI Profile) + `_resolve_sales_flow_variables()` (blocos `orientacao`/`mensagem` do Fluxo de Venda). Único ponto de resolução — sem isto, o Playground receberia `{{}}` literal enquanto o WhatsApp real já resolvia. Ver [`dynamic-variables.md`](dynamic-variables.md) |
 
 ---
 

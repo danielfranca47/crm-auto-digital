@@ -103,6 +103,8 @@ Para `direto`/`consultivo`, o texto hardcoded permanece sempre — fora de escop
 |---|---|---|
 | `orientacao` | Orientação ao LLM | Texto injectado como instrução adicional no prompt filho da fase |
 | `mensagem` | Mensagem fixa | Texto enviado como `system_actions[{type: "send_message", content}]` |
+
+> O campo `content` de blocos `orientacao`/`mensagem` suporta variáveis dinâmicas `{{chave}}` (ex.: `{{lead.nome_whatsapp}}`), com atalho `/` no builder. Resolvidas por `_resolve_sales_flow_variables()` dentro de `enrich_context_bundle()` — nunca chegam literais ao prompt ou ao lead. Ver [`dynamic-variables.md`](dynamic-variables.md).
 | `midia` | Mídia | Enviado como `system_actions[{type: "send_media", media_url, media_type}]`, na sequência configurada entre outros blocos. |
 | `avancar_fase` | Avançar fase | Dispara `system_actions[{type: "advance_phase", target_phase}]` → move lead no Kanban |
 | `webhook` | Webhook | Destinado a disparar chamada HTTP externa (execução futura) |
@@ -412,5 +414,5 @@ Cor de cada fase vem de `SALES_FLOW_PHASE_COLORS` (`frontend-crm/src/types/agent
 | `backend-executors/app/services/orchestrator_models.py` | `MotherDecision.branch_selections: Dict[str, str]` |
 | `backend-crm/routes/executor.py` | `_dispatch_system_actions()`, `_dispatch_sales_flow_media()`, `_PHASE_ID_TO_CATEGORY` |
 | `backend-core/app/models/ai_profile.py` | Campo `sales_flow` na tabela `ai_profiles` |
-| `backend-crm/services/ai_orchestrator/orchestrator.py` | `enrich_context_bundle()` — inclui `sales_flow` no ContextBundle |
+| `backend-crm/services/ai_orchestrator/orchestrator.py` | `enrich_context_bundle()` — inclui `sales_flow` no ContextBundle; `_resolve_sales_flow_variables()` — resolve `{{}}` no `content` de blocos `orientacao`/`mensagem` (ver [`dynamic-variables.md`](dynamic-variables.md)) |
 | `frontend-crm/src/components/KanbanBoard.tsx` / `KanbanColumn.tsx` / `LeadCard.tsx` | Funil visual resumido no card — ver "Visualização no Kanban" acima |

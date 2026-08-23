@@ -25,7 +25,7 @@
 | Ponto | Arquivo | `companyName` desconhecido | `contactName` desconhecido |
 |---|---|---|---|
 | Manual (formulário) | `NewLeadModal.tsx` | `NULL` | `NULL` (mas exige pelo menos um dos dois) |
-| WhatsApp inbound | `services/whatsapp_inbound/guardrail.py` (`find_or_create_lead_by_phone`) | `NULL` | telefone normalizado (`phone_norm`) |
+| WhatsApp inbound | `services/whatsapp_inbound/guardrail.py` (`find_or_create_lead_by_phone`) | `NULL` | `wa_display_name` (nome de perfil do WhatsApp) se resolvido; senão telefone normalizado (`phone_norm`) |
 | Planilha / Google Maps | `automations/assistente_ia/processor.py` (`map_row_to_lead`) | `NULL` | `NULL` (linha sem nenhum nome viola o CHECK; erro é reportado por linha, batch continua) |
 | Playground (sandbox) | `routes/playground.py` (`_create_sandbox_lead`) | `NULL` | `"Lead de Teste"` (fixo) |
 
@@ -44,13 +44,13 @@ Usado em: `LeadCard.tsx`, `KanbanBoard.tsx` (busca + `DragOverlay`), `SearchAuto
 
 ## `wa_display_name` — nome de exibição do WhatsApp (pushName)
 
-Campo separado de `contactName`/`companyName`, nullable, gravado só na **criação** do lead via `find_or_create_lead_by_phone()` (`services/whatsapp_inbound/guardrail.py`). Extraído do payload bruto da UazAPI por `routes/webhooks.py::_resolve_wa_display_name()` — chave exata não confirmada contra um payload real (tenta variações prováveis de `chat`/`message`/`data`; loga quando nenhuma bate).
+Campo separado de `contactName`/`companyName`, nullable, gravado só na **criação** do lead via `find_or_create_lead_by_phone()` (`services/whatsapp_inbound/guardrail.py`). Extraído do payload bruto da UazAPI por `routes/webhooks.py::_resolve_wa_display_name()`, com prioridade `message.senderName` → `chat.wa_name` (nome de perfil do WhatsApp do remetente — existe para qualquer remetente, independente de estar salvo como contato no telefone do bot) → `chat.wa_contactName` → `chat.name` (nome da agenda de contatos do telefone do bot — só existe se o número foi salvo manualmente; usado como último recurso). Prioridade confirmada contra payload real capturado em teste — ver `docs/architecture/webhooks.md`.
 
-**Por que separado de `contactName`:** `contactName` é o nome que o operador edita no card do lead — se `wa_display_name` sobrescrevesse esse campo, uma correção manual do operador seria perdida no próximo inbound. Mantendo os dois campos distintos, o operador sempre tem a palavra final.
+**Por que separado de `contactName`:** `contactName` é o nome que o operador edita no card do lead — se `wa_display_name` sobrescrevesse esse campo depois de editado, uma correção manual do operador seria perdida no próximo inbound. Na criação do lead, `contactName` já nasce igual a `wa_display_name` quando disponível (só cai para o telefone-placeholder se nenhum nome for resolvido do payload); a partir daí os dois campos seguem independentes — o operador sempre tem a palavra final.
 
-**Uso no prompt da IA:** `backend-executors/app/services/decision_engine.py` resolve o "nome do lead" com `_safe_get(lead, "contactName", "companyName", "wa_display_name", "name")` — ou seja, `wa_display_name` só é usado como fallback automático quando o CRM não tem `contactName` nem `companyName` preenchidos. Não requer nenhuma configuração do operador.
+**Uso no prompt da IA:** `backend-executors/app/services/decision_engine.py::_resolve_lead_name(lead)` resolve o "nome do lead" percorrendo `contactName → companyName → wa_display_name → name`, mas ignora qualquer candidato igual a `lead.phone` (o placeholder gravado quando nenhum nome era conhecido na criação), caindo para o próximo. Não requer nenhuma configuração do operador.
 
-Também exposto como variável de template `{{lead.nome_whatsapp}}` (`automations/assistente_ia/variable_resolver.py`), distinta de `{{lead.nome}}` (que resolve para `contactName`), para uso explícito em campos de template e blocos do Fluxo de Venda.
+Também exposto como variável de template `{{lead.nome_whatsapp}}` (`automations/assistente_ia/variable_resolver.py`), distinta de `{{lead.nome}}` (que resolve para `contactName`), para uso explícito em campos de template e blocos do Fluxo de Venda — ver [`dynamic-variables.md`](dynamic-variables.md).
 
 **Simulação no Playground:** como `wa_display_name` só nasce naturalmente pelo webhook real da UazAPI, o Playground (`routes/playground.py::PlaygroundChatRequest.wa_display_name`) aceita um valor opcional vindo do `PlaygroundConfigModal` ("Nome do WhatsApp do lead — simulação") e grava-o em `_create_sandbox_lead()` no momento da criação do lead sandbox — mesma regra do mundo real, só na criação, nunca atualizado depois. Sem esse campo, o lead sandbox nasce sempre sem `wa_display_name`.
 
