@@ -1,7 +1,7 @@
 # Fix: LLM Mãe pode retornar `route_to` fora do enum aceite
 
 **Branch:** `fix/route-to-invalido-llm-mae`
-**Status:** Em andamento
+**Status:** Todos os cenários validados (23/08/2026)
 
 ---
 
@@ -68,8 +68,36 @@ Mãe responde route_to="qualificacao"
 | `backend-executors/app/services/orchestrator_models.py` | Adicionar `"qualificacao": "qualification"` a `_ROUTE_TO_ALIASES`, mesmo padrão do alias `"presentation"` já existente |
 | `backend-executors/scripts/test_route_to_alias_coercion.py` (novo) | Teste standalone (mesmo padrão de `scripts/test_category_validation.py`): confirma os aliases `"qualificacao"` e `"presentation"`, e que um valor desconhecido (`"foobar"`) ainda levanta `ValidationError` |
 
+### Commits Fase 1
+
+| # | Commit | O que foi implementado |
+|---|---|---|
+| 1 | `88c3101` | Novo alias `"qualificacao"` + teste standalone |
+
+**Detalhes do commit `88c3101`:**
+- `backend-executors/app/services/orchestrator_models.py` — nova entrada em `_ROUTE_TO_ALIASES`
+- `backend-executors/scripts/test_route_to_alias_coercion.py` — 3 casos: alias antigo, alias novo, valor desconhecido ainda falha
+
+### Relatório da Fase 1 — o que mudou na prática
+
+**Antes:** se a IA responsável por decidir o próximo passo da conversa (a "Mãe") escrevesse `qualificacao` em vez de `qualification` — só uma diferença de acentuação — o sistema todo travava aquela decisão e caía num modo de emergência que desliga o bot para aquele lead, achando que a resposta era inválida.
+
+**Agora:** essa variação específica de grafia é reconhecida e corrigida automaticamente antes de travar, do mesmo jeito que já acontecia com outra variação conhecida (`presentation` em vez de `apresentation`). Qualquer outra grafia realmente desconhecida continua a cair no modo de emergência normalmente — isso é intencional, para não mascarar erros de verdade.
+
+**Para validar:** o teste automatizado (`scripts/test_route_to_alias_coercion.py`) já cobre os 3 casos e passou. A falha original dependia de uma resposta específica e não-determinística da IA — não é possível forçá-la de novo ao vivo com confiança, então o teste automatizado é a validação de referência aqui (não há Cenário C/P adicional a marcar).
+
+---
+
+## Checks de Validação
+
+### Cenário P1 — Aliases de `route_to` normalizados, valor desconhecido ainda falha
+- [x] Rodar `scripts/test_route_to_alias_coercion.py`
+- [x] Confirmar: alias antigo (`presentation`) e novo (`qualificacao`) normalizam corretamente
+- [x] Confirmar: valor desconhecido (`foobar`) ainda levanta `ValidationError`
+- **Validado em:** 23/08/2026 — `python scripts/test_route_to_alias_coercion.py` → `OK: aliases de route_to normalizados; valor desconhecido ainda levanta ValidationError`. Confirmado também que `backend-executors` importa e sobe normalmente com a mudança.
+
 ---
 
 ## Ajustes Possíveis Pós-Implementação
 
-<A preencher se surgir algo durante a implementação/validação.>
+Nenhum.
