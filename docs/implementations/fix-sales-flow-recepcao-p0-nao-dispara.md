@@ -108,7 +108,7 @@ encontrada.
 
 | # | Commit | O que foi implementado |
 |---|---|---|
-| 1 | *(a registrar após o commit)* | Testes de dispatch de bloco `mensagem` em p0 (`_evaluate_sales_flow_phases` direto + integração via `decide()`) — resultado: NÃO reproduzido, sem correção de código |
+| 1 | `1e8a26b` | Testes de dispatch de bloco `mensagem` em p0 (`_evaluate_sales_flow_phases` direto + integração via `decide()`) — resultado: NÃO reproduzido, sem correção de código |
 
 **Detalhes:**
 - `backend-executors/tests/test_recepcao_sales_flow_pending.py` — 3 testes novos: 2 chamando `_evaluate_sales_flow_phases(effective_route_to="recepcao", ...)` diretamente (com e sem `phase_trigger` explícito), 1 de integração completa via `decision_engine.decide()` com lead novo (histórico vazio) confirmando que `decision.system_actions` recebe o `send_message` do bloco de p0
