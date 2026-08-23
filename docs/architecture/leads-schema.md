@@ -52,6 +52,8 @@ Campo separado de `contactName`/`companyName`, nullable, gravado só na **criaç
 
 Também exposto como variável de template `{{lead.nome_whatsapp}}` (`automations/assistente_ia/variable_resolver.py`), distinta de `{{lead.nome}}` (que resolve para `contactName`), para uso explícito em campos de template e blocos do Fluxo de Venda.
 
+**Simulação no Playground:** como `wa_display_name` só nasce naturalmente pelo webhook real da UazAPI, o Playground (`routes/playground.py::PlaygroundChatRequest.wa_display_name`) aceita um valor opcional vindo do `PlaygroundConfigModal` ("Nome do WhatsApp do lead — simulação") e grava-o em `_create_sandbox_lead()` no momento da criação do lead sandbox — mesma regra do mundo real, só na criação, nunca atualizado depois. Sem esse campo, o lead sandbox nasce sempre sem `wa_display_name`.
+
 **Duas fontes de dados distintas no frontend, comportamento diferente:**
 - **Via `LeadsContext.tsx`** (`mapRawLead`, usado pelo Kanban/Prospecção) — normaliza `companyName`/`contactName` de `null` (API) para `''` antes de expor como `Lead`. Por isso `Lead.companyName`/`contactName` em `types/crm.ts` permanecem tipados como `string` simples (nunca `null`), consistente com os demais campos do tipo (`phone`, `email`, `origin`, `observations`).
 - **Fora de `LeadsContext`** (ex.: `FollowUpCenter.tsx`, via `api.followUps.listActive()`) — recebe `companyName`/`contactName` crus da API, sem essa normalização. `companyName` **pode ser `null` de verdade em runtime** aqui, mesmo que o tipo declarado (`FollowUpLead` em `services/api.ts`) diga `string`. Qualquer novo ponto de leitura de leads fora do `LeadsContext` deve tratar esse campo como potencialmente nulo (usar `leadDisplayName()` ou `?? ''`).

@@ -1637,6 +1637,7 @@ export const api = {
       is_opener?: boolean;
       message_type?: string;
       audio_filename?: string;
+      wa_display_name?: string | null;
     }) =>
       apiClient.post<PlaygroundChatResponse>("/playground/chat", payload),
 

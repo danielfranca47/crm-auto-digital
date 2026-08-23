@@ -239,6 +239,7 @@ export default function Playground() {
           lead_id: null,
           scenario_type: "outbound",
           is_opener: true,
+          wa_display_name: session.waDisplayName ?? null,
         });
 
         if (cancelled) return;
@@ -276,6 +277,7 @@ export default function Playground() {
           message: "",
           lead_id: null,
           scenario_type: "followup",
+          wa_display_name: session.waDisplayName ?? null,
           ...(session.followupContext ? { followup_context: session.followupContext as Record<string, unknown> } : {}),
         });
 
@@ -326,6 +328,7 @@ export default function Playground() {
           message: text,
           lead_id: session.leadId,
           scenario_type: session.scenarioType,
+          wa_display_name: session.waDisplayName ?? null,
           ...(session.followupContext ? { followup_context: session.followupContext as Record<string, unknown> } : {}),
         });
 
@@ -381,6 +384,7 @@ export default function Playground() {
           scenario_type: session.scenarioType,
           message_type: "audio",
           audio_filename: filename,
+          wa_display_name: session.waDisplayName ?? null,
           ...(session.followupContext ? { followup_context: session.followupContext as Record<string, unknown> } : {}),
         });
 
@@ -473,6 +477,7 @@ export default function Playground() {
               scenario_type: session.scenarioType,
               message_type: "audio",
               audio_filename: firstDisabledAudio.filename,
+              wa_display_name: session.waDisplayName ?? null,
               ..._fuCtx,
             })
           : api.playground.chat({
@@ -480,6 +485,7 @@ export default function Playground() {
               message: resolved.map((r) => r.text).join("\n"),
               lead_id: session.leadId,
               scenario_type: session.scenarioType,
+              wa_display_name: session.waDisplayName ?? null,
               ..._fuCtx,
             }));
 

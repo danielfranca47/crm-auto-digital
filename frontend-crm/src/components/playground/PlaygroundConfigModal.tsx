@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
+import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -26,6 +27,7 @@ export interface PlaygroundSession {
   leadId: number | null;
   scenarioContext: string;
   scenarioType: ScenarioType;
+  waDisplayName?: string | null;
   followupContext?: FollowupContext | null;
   startedAt: string;
   // Snapshot da configuração do AI Profile no momento do teste
@@ -62,6 +64,7 @@ export function PlaygroundConfigModal({ open, onStart }: PlaygroundConfigModalPr
   const [error, setError] = useState<string | null>(null);
   const [scenarioContext, setScenarioContext] = useState("");
   const [scenarioType, setScenarioType] = useState<ScenarioType>("inbound");
+  const [waDisplayName, setWaDisplayName] = useState("");
   // Follow-up config
   const [fuOutcome, setFuOutcome] = useState("warm");
   const [fuGoal, setFuGoal] = useState("advance_closing");
@@ -101,6 +104,7 @@ export function PlaygroundConfigModal({ open, onStart }: PlaygroundConfigModalPr
       leadId: null,
       scenarioContext: scenarioContext.trim(),
       scenarioType,
+      waDisplayName: waDisplayName.trim() || null,
       followupContext,
       startedAt: new Date().toISOString(),
       profileSnapshot: {
@@ -293,6 +297,25 @@ export function PlaygroundConfigModal({ open, onStart }: PlaygroundConfigModalPr
               </div>
             </div>
           )}
+
+          {/* Nome do WhatsApp simulado */}
+          <div className="space-y-1.5">
+            <Label htmlFor="wa-display-name">
+              Nome do WhatsApp do lead{" "}
+              <span className="text-muted-foreground font-normal">(simulação, opcional)</span>
+            </Label>
+            <Input
+              id="wa-display-name"
+              placeholder="Ex: Ricardo"
+              value={waDisplayName}
+              onChange={(e) => setWaDisplayName(e.target.value)}
+            />
+            <p className="text-xs text-muted-foreground">
+              Simula o nome de perfil do WhatsApp do lead (capturado normalmente só no
+              WhatsApp real). Só se aplica na criação do lead sandbox desta sessão — igual
+              ao comportamento real, não muda depois de iniciada a conversa.
+            </p>
+          </div>
 
           {/* Contexto do cenário */}
           <div className="space-y-1.5">
