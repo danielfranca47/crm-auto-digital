@@ -1,8 +1,12 @@
 from __future__ import annotations
 
+import asyncio
+import logging
 from typing import Any, Dict
 
 import httpx
+
+logger = logging.getLogger(__name__)
 
 
 class UazapiClientError(RuntimeError):
@@ -14,6 +18,66 @@ class UazapiClientError(RuntimeError):
 
 class UazapiTimeoutError(UazapiClientError):
     pass
+
+
+_RETRYABLE_STATUS_CODES = {429, 503}
+_MAX_ATTEMPTS = 3
+_RETRY_BASE_BACKOFF_SECONDS = 0.5
+_RETRY_AFTER_CAP_SECONDS = 3.0
+
+
+def _resolve_retry_delay(response: httpx.Response, attempt: int) -> float:
+    retry_after = response.headers.get("Retry-After") or response.headers.get("retry-after")
+    if retry_after:
+        try:
+            seconds = float(retry_after)
+        except ValueError:
+            seconds = None
+        if seconds is not None and seconds >= 0:
+            return min(seconds, _RETRY_AFTER_CAP_SECONDS)
+    return _RETRY_BASE_BACKOFF_SECONDS * (2 ** (attempt - 1))
+
+
+async def _request_with_retry(
+    *,
+    url: str,
+    headers: Dict[str, str],
+    payload: Dict[str, Any],
+    timeout: float,
+    timeout_error_message: str,
+    request_error_message: str,
+) -> httpx.Response:
+    """POST com retry curto e exponencial em 429/503.
+
+    Erros de rede/timeout não são re-tentados aqui (propagam imediatamente) —
+    já são lentos por natureza e o orçamento de tempo do chamador (executor →
+    core → uazapi) já é apertado; compor mais espera sobre um timeout não
+    ajudaria. Retry cobre só rejeição rápida por rate-limit (429/503).
+    """
+    for attempt in range(1, _MAX_ATTEMPTS + 1):
+        try:
+            async with httpx.AsyncClient(timeout=timeout) as client:
+                response = await client.post(url, headers=headers, json=payload)
+        except httpx.TimeoutException as exc:
+            raise UazapiTimeoutError(timeout_error_message) from exc
+        except httpx.RequestError as exc:
+            raise UazapiClientError(request_error_message) from exc
+
+        if response.status_code in _RETRYABLE_STATUS_CODES and attempt < _MAX_ATTEMPTS:
+            delay = _resolve_retry_delay(response, attempt)
+            logger.warning(
+                "event=uazapi_send_retry attempt=%s/%s status=%s delay=%.2f",
+                attempt,
+                _MAX_ATTEMPTS,
+                response.status_code,
+                delay,
+            )
+            await asyncio.sleep(delay)
+            continue
+
+        return response
+
+    raise UazapiClientError("Uazapi request failed without response")
 
 
 async def send_media(
@@ -36,13 +100,14 @@ async def send_media(
     if delay_ms > 0:
         payload["delay"] = delay_ms
 
-    try:
-        async with httpx.AsyncClient(timeout=30.0) as client:
-            response = await client.post(url, headers=headers, json=payload)
-    except httpx.TimeoutException as exc:
-        raise UazapiTimeoutError("Uazapi media request timed out") from exc
-    except httpx.RequestError as exc:
-        raise UazapiClientError("Uazapi media request failed") from exc
+    response = await _request_with_retry(
+        url=url,
+        headers=headers,
+        payload=payload,
+        timeout=30.0,
+        timeout_error_message="Uazapi media request timed out",
+        request_error_message="Uazapi media request failed",
+    )
 
     if response.is_error:
         body = response.text
@@ -68,13 +133,14 @@ async def send_text(*, base_url: str, token: str, number: str, text: str, delay_
     if delay_ms > 0:
         payload["delay"] = delay_ms
 
-    try:
-        async with httpx.AsyncClient(timeout=20.0) as client:
-            response = await client.post(url, headers=headers, json=payload)
-    except httpx.TimeoutException as exc:
-        raise UazapiTimeoutError("Uazapi request timed out") from exc
-    except httpx.RequestError as exc:
-        raise UazapiClientError("Uazapi request failed") from exc
+    response = await _request_with_retry(
+        url=url,
+        headers=headers,
+        payload=payload,
+        timeout=20.0,
+        timeout_error_message="Uazapi request timed out",
+        request_error_message="Uazapi request failed",
+    )
 
     if response.is_error:
         body = response.text

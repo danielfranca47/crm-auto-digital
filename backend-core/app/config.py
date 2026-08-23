@@ -1,7 +1,8 @@
 from pathlib import Path
 from typing import Optional
 
-from pydantic import BaseSettings, Field
+from pydantic import Field
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
@@ -11,7 +12,7 @@ class Settings(BaseSettings):
     DATABASE_URL: str = "sqlite:///./core.db"
     WHATSAPP_TOKEN_ENC_KEY: Optional[str] = None
     CORE_SERVICE_TOKEN: Optional[str] = None
-    core_whatsapp_stub: bool = Field(False, env="CORE_WHATSAPP_STUB")
+    core_whatsapp_stub: bool = Field(False, validation_alias="CORE_WHATSAPP_STUB")
     UAZAPI_BASE_URL: Optional[str] = None
     UAZAPI_ADMIN_TOKEN: Optional[str] = None
     CRM_PUBLIC_BASE_URL: Optional[str] = None
@@ -33,10 +34,12 @@ class Settings(BaseSettings):
     GOOGLE_CLIENT_SECRET: Optional[str] = None
     GOOGLE_REDIRECT_URI: Optional[str] = None
 
-    class Config:
-        env_file = ".env"
-        env_file_encoding = "utf-8"
-        case_sensitive = True
+    model_config = SettingsConfigDict(
+        env_file=".env",
+        env_file_encoding="utf-8",
+        case_sensitive=True,
+        extra="ignore",
+    )
 
 
 settings = Settings()

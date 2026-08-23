@@ -3,7 +3,8 @@ uvicorn
 python-jose[cryptography]
 passlib
 sqlalchemy
-pydantic<2.0
+pydantic>=2
+pydantic-settings>=2
 email-validator
 python-dotenv
 httpx

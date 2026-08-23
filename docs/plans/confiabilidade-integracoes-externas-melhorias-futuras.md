@@ -51,6 +51,29 @@ reenviados. Documentar a garantia (ou falta dela) por endpoint.
 
 ---
 
+## M3 — Alinhar orçamento de timeout executor → core → UazAPI
+
+**Prioridade: MÉDIA**
+
+> Contexto: item deixado de fora da graduação de
+> `docs/implementations/uazapi-backoff-e164.md` (23/08/2026).
+
+**Em palavras simples:** `backend-executors/app/clients/core_client.py::send_whatsapp_message`
+(executor → core) espera no máximo 15s pela resposta do core, mas
+`backend-core/app/providers/uazapi_client.py::send_text` (core → UazAPI) já
+usa 20s de timeout numa única tentativa (`send_media` usa 30s). Ou seja, uma
+chamada apenas lenta (não em erro) à UazAPI já pode estourar o orçamento do
+executor hoje, independente do retry de 429/503 adicionado em
+`uazapi-backoff-e164.md` (que, por isso, não re-tenta em timeout — só em
+respostas de erro rápidas).
+
+**O que precisaria existir:** decidir e aplicar um orçamento de timeout
+consistente pela cadeia inteira (executor → core → UazAPI), garantindo que o
+timeout de uma chamada externa nunca excede o timeout do chamador que espera
+por ela.
+
+---
+
 ## Relação com outros documentos
 
 - O fix pontual de idempotência do webhook Efí (`charge_id`) já está

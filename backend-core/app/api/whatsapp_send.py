@@ -57,6 +57,19 @@ def _sanitize_number(value: str) -> str:
     return re.sub(r"[\s\-\+\(\)]", "", value or "")
 
 
+_E164_DIGITS_RE = re.compile(r"^[1-9]\d{7,14}$")
+
+
+def _is_valid_e164_digits(sanitized: str) -> bool:
+    """Valida o número já sanitizado (sem '+', só dígitos) como E.164: 8 a 15
+    dígitos, sem zero à esquerda — mesma faixa usada por
+    backend-crm/services/phone_normalizer.py. Não reimplementa a normalização
+    completa (country code, regra do 9º dígito BR); é só uma checagem de
+    guarda antes da chamada paga à UazAPI.
+    """
+    return bool(_E164_DIGITS_RE.fullmatch(sanitized))
+
+
 def _mask_number(value: str) -> str:
     if not value:
         return ""
@@ -121,6 +134,8 @@ async def send_whatsapp(
         )
 
     sanitized_number = _sanitize_number(payload.number)
+    if not _is_valid_e164_digits(sanitized_number):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="invalid_number_format")
     logger.info(
         "whatsapp send provider=%s instance_id=%s number=%s",
         provider,
@@ -201,6 +216,8 @@ async def send_whatsapp_media(
         )
 
     sanitized_number = _sanitize_number(payload.number)
+    if not _is_valid_e164_digits(sanitized_number):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="invalid_number_format")
     logger.info(
         "whatsapp send-media provider=%s instance_id=%s number=%s media_type=%s",
         provider,
