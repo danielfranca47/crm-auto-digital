@@ -69,20 +69,29 @@ Fase 2 — <nome> — <objetivo em uma frase>
 
 ## Passo 1 — Criar a branch e nomear o arquivo
 
-### Branch
+### Branch + worktree
 
-Antes de criar o arquivo, criar a branch da implementação a partir da branch em
-que o utilizador está a trabalhar (normalmente `main`; se for uma implementação
-aninhada dentro de outra branch de feature, ver `CLAUDE.md`, secção "Branches
-aninhadas").
+Antes de criar o arquivo, criar a branch da implementação **e a worktree que
+vai com ela** — sempre, mesmo que não haja nenhuma outra implementação ativa
+no momento (ver `CLAUDE.md`, secção "Estratégia de branch por
+implementação" para o porquê: isola a pasta principal de qualquer trabalho
+de implementação, prevenindo colisão entre sessões que nem sabem uma da
+outra).
 
 **Formato do nome:** `fix/<slug>` ou `feat/<slug>` — mesmo slug usado no nome
 do arquivo (abaixo), sem o prefixo `etapa-N-`.
 
-Claude propõe o nome e **pede confirmação** antes de rodar `git checkout -b`
-— não é automático. Se houver outra implementação em andamento em paralelo,
-usar `git worktree add <pasta> -b <branch>` em vez de `checkout` direto, para
-não interferir na pasta de trabalho da outra.
+Claude propõe o nome e **pede confirmação** antes de criar — não é
+automático. Depois de confirmado:
+
+- **Implementação nova, a partir de `main`:** `EnterWorktree(name="fix/<slug>")`
+  (ou `feat/<slug>`) — cria a branch e já entra na worktree
+  (`.claude/worktrees/<tipo>/<slug>`). Todo o trabalho da implementação a
+  partir daqui acontece dentro dela.
+- **Implementação aninhada** (dentro de outra branch de feature): ver
+  `CLAUDE.md`, secção "Branches aninhadas" — criação manual com
+  `git worktree add` especificando a branch pai como base, seguida de
+  `EnterWorktree(path=...)`.
 
 ### Arquivo
 
@@ -394,8 +403,8 @@ Utilizador: "Ok, avança."
 Claude:
   6. Sai do Plan Mode
   7. Propõe o nome da branch (fix/<slug> ou feat/<slug>) e pede confirmação;
-     após aprovação, cria a branch (`git checkout -b` ou `git worktree add`
-     se houver outra implementação em paralelo)
+     após aprovação, `EnterWorktree(name="fix/<slug>")` — cria a branch e já
+     entra na worktree (sempre, não só quando há paralelismo)
   8. Cria docs/implementations/<nome>.md com o template preenchido (Fase 1)
   9. Implementa Fase 1
   10. Faz commit e registra o hash no arquivo

@@ -317,26 +317,25 @@ cd website && npm install && npm run dev
 
 ### Estratégia de branch por implementação
 
-Cada implementação (arquivo em `docs/implementations/`) vive na sua própria branch, criada a partir da branch em que o utilizador estiver a trabalhar no momento (normalmente `main`, mas pode ser outra branch de feature — ver "Branches aninhadas" abaixo).
+Cada implementação (arquivo em `docs/implementations/`) vive na sua própria branch **e na sua própria worktree** — sempre, mesmo quando é a única implementação ativa no momento. Isso existe para que a pasta principal (`c:\crm-auto-digital`, a que fica aberta no editor) nunca seja tocada por trabalho de implementação, e assim duas sessões do Claude Code (ex.: uma no terminal, outra na extensão do VS Code) nunca colidam mexendo na mesma pasta ao mesmo tempo — mesmo que nenhuma das duas saiba que a outra está ativa.
 
-**Criação:**
+**Onde as worktrees vivem:** `.claude/worktrees/<tipo>/<slug>` (ex.: `.claude/worktrees/feat/notificacoes-push`) — já coberto pelo `.gitignore` (`\.claude/`), não aparece no `git status` da pasta principal. `git worktree list` (ou listar essa pasta) é sempre a fonte de verdade de quais implementações estão ativas agora — vazio significa nada em andamento.
+
+**Criação (implementação nova, a partir de `main`):**
 - Ocorre logo após o plano ser aprovado no Plan Mode (Passo 0 do guia de implementações), antes de criar o arquivo `.md`.
 - Nome: `fix/<slug>` ou `feat/<slug>` — o mesmo slug usado no nome do arquivo de implementação.
-- Claude **propõe o nome e pede confirmação** antes de criar a branch (`git checkout -b`) — não é automático.
+- Claude **propõe o nome e pede confirmação** antes de criar.
+- Criação + entrada na worktree: `EnterWorktree(name="fix/<slug>")` (ou `feat/<slug>`) — cria a branch a partir de `origin/main` e já muda a sessão para essa pasta. Todo o trabalho da implementação (criar o arquivo `.md`, editar código, commitar cada fase) acontece dentro dela.
 
-**Trabalho em paralelo (várias implementações ao mesmo tempo):**
-- Usar `git worktree add <pasta> -b <branch>` para cada implementação ativa em paralelo, cada uma na sua pasta isolada — evita `stash`/`checkout` para alternar entre tarefas.
-- Remover a worktree (`git worktree remove <pasta>`) depois do merge de volta.
+**Branches aninhadas** (sub-implementação necessária dentro de uma branch de feature que não é `main`): a worktree do pai não é reaproveitada nem tem subpasta dentro dela — nasce uma worktree irmã, no mesmo `.claude/worktrees/<tipo>/`, nomeada `<slug-pai>--<slug-filho>`. Como a base não é `main`, a criação é manual (`git worktree add .claude/worktrees/<tipo>/<slug-pai>--<slug-filho> -b <tipo>/<slug-pai>--<slug-filho> <branch-pai>`), seguida de `EnterWorktree(path=...)` para entrar nela. O merge de volta é só para a branch pai, nunca direto para `main`. Evitar mais de 1 nível de aninhamento.
 
 **Quando a implementação é graduada** (todos os checks validados, ver processo de graduação):
-1. Voltar para a branch que originou a branch de feature.
-2. `git merge` local da branch de feature nela (merge direto, sem PR).
+1. `ExitWorktree(action="keep")` — volta a sessão para a pasta principal, deixando a worktree e a branch intactas no disco.
+2. Na pasta principal: `git merge` local da branch de feature na branch que a originou (merge direto, sem PR).
 3. `git push` da branch original.
-4. Apagar a branch de feature local (`git branch -d`) depois do merge confirmado.
+4. Limpeza final: `git worktree remove .claude/worktrees/<tipo>/<slug>` + `git branch -d <branch>` — a pasta some e a branch é apagada, já mergeada.
 
 Merges são sempre sequenciais — nunca simultâneos. Se duas branches estiverem prontas ao mesmo tempo, mergear e dar push de uma primeiro; só depois mergear a segunda, resolvendo ali qualquer conflito que surja.
-
-**Branches aninhadas:** se, dentro de uma branch de feature (que não é `main`), for necessária uma nova implementação/sub-tarefa, a nova branch nasce a partir da branch de feature atual — não de `main` — e o merge de volta é só para ela, nunca direto para `main`. Evitar mais de 1 nível de aninhamento.
 
 **Resolução de conflitos:** a resolução de um conflito de `git merge` é sempre trabalho autónomo de Claude — o utilizador não é programador e não deve precisar interpretar diff, sintaxe, nem decidir qual lado manter.
 
@@ -404,12 +403,14 @@ Todo pedido de nova funcionalidade ou correção não-trivial segue este ciclo o
    → diagnóstico: já existe? o que construir? riscos?
    → aguardar aprovação do utilizador
 
-2. Criar a branch da implementação (fix/<slug> ou feat/<slug>)
+2. Criar a branch + worktree da implementação (fix/<slug> ou feat/<slug>)
    → propor o nome e pedir confirmação antes de criar (ver "Estratégia de
      branch por implementação")
-   → criar docs/implementations/<etapa>-<slug>.md nessa branch
+   → EnterWorktree(name="fix/<slug>") — sempre, mesmo sem outra implementação
+     ativa; a pasta principal nunca é usada para trabalho de implementação
+   → criar docs/implementations/<etapa>-<slug>.md dentro da worktree
    → preencher com template de _template-implementacao.md
-   → branch + arquivo só criados APÓS aprovação do plano
+   → branch + worktree + arquivo só criados APÓS aprovação do plano
 
 3. Implementar fase a fase
    → cada fase = 1 commit
@@ -432,8 +433,9 @@ Todo pedido de nova funcionalidade ou correção não-trivial segue este ciclo o
    → migrar informação arquitectural relevante para docs/architecture/
    → git rm do arquivo de implementação
    → commit único de graduação
-   → merge da branch de volta para a que a originou + push (ver "Estratégia
-     de branch por implementação")
+   → ExitWorktree(action="keep") + merge da branch de volta para a que a
+     originou + push + remover worktree/branch (ver "Estratégia de branch
+     por implementação")
 ```
 
 ### Regras críticas
