@@ -5,7 +5,10 @@ current_category=="recepcao" nunca é persistido) e um teto de 1 turno extra al�
 _enforce_greeting_first (a Filha Recepção é desenhada para um único turno)."""
 import pytest
 
-from app.services.decision_engine import _enforce_recepcao_sales_flow_pending
+from app.services.decision_engine import (
+    _enforce_recepcao_sales_flow_pending,
+    _evaluate_sales_flow_phases,
+)
 from app.services.orchestrator_models import MotherDecision
 from app.services import decision_engine
 
@@ -201,3 +204,77 @@ def test_no_sequential_trigger_in_p0_behaves_like_baseline(monkeypatch):
     decision = decision_engine.decide(context)
 
     assert decision.decision_trace["prompt_function_used"] == "_build_child_prompt_qualification"
+
+
+# --- Testes de dispatch de blocos de ação em p0 ---
+#
+# Fase 1 de fix-sales-flow-recepcao-p0-nao-dispara.md: o achado original (graduação de
+# nome-whatsapp-lead-variaveis-fluxo-venda.md, 20/08/2026) afirmava que blocos `mensagem`/`midia`
+# configurados em p0 nunca disparam porque _ROUTE_TO_PHASE_ID excluiria "recepcao". Investigação
+# revisada não confirmou essa causa raiz — _ROUTE_TO_PHASE_ID já mapeia "recepcao"->"p0" e o
+# dispatch em compose_decision_output() não trata p0 de forma diferente das demais fases. Os
+# testes abaixo provam isso diretamente (não existia nenhuma cobertura de dispatch para p0 até
+# aqui — só cobertura do guardrail de bloqueio, acima).
+
+def _sales_flow_p0_mensagem(with_phase_trigger: bool) -> dict:
+    blocks = []
+    if with_phase_trigger:
+        blocks.append({"id": "pt-1", "typeId": "phase_trigger"})
+    blocks.append({"id": "msg-1", "typeId": "mensagem", "content": "Ola! Bem-vindo(a)."})
+    return {"enabled": True, "phases": [{"id": "p0", "blocks": blocks}]}
+
+
+def test_evaluate_sales_flow_phases_dispatches_p0_mensagem_with_phase_trigger():
+    context = {
+        "lead": {"category": "", "triggers_fired": "[]", "phases_triggered": "[]"},
+        "ai_profile": {"agent_mode": "agenda", "sales_flow": _sales_flow_p0_mensagem(True)},
+    }
+
+    result = _evaluate_sales_flow_phases(
+        context, effective_route_to="recepcao", message_text="oi", is_phase_entry=True,
+    )
+
+    send_actions = [a for a in result["system_actions"] if a["type"] == "send_message"]
+    assert [a["content"] for a in send_actions] == ["Ola! Bem-vindo(a)."]
+
+
+def test_evaluate_sales_flow_phases_dispatches_p0_mensagem_without_trigger():
+    """Sem gatilho explícito, o bloco de ação dispara por padrão (last_trigger_active=True) —
+    mesmo comportamento de qualquer outra fase, ver docs/architecture/sales-flow.md."""
+    context = {
+        "lead": {"category": "", "triggers_fired": "[]", "phases_triggered": "[]"},
+        "ai_profile": {"agent_mode": "agenda", "sales_flow": _sales_flow_p0_mensagem(False)},
+    }
+
+    result = _evaluate_sales_flow_phases(
+        context, effective_route_to="recepcao", message_text="oi", is_phase_entry=True,
+    )
+
+    send_actions = [a for a in result["system_actions"] if a["type"] == "send_message"]
+    assert [a["content"] for a in send_actions] == ["Ola! Bem-vindo(a)."]
+
+
+def test_p0_mensagem_block_dispatches_end_to_end_for_new_lead(monkeypatch):
+    """Integração completa: lead novo (sem histórico), Mãe tenta rotear para 'qualification'
+    (simulando o comportamento real de pular a saudação), _enforce_greeting_first força
+    'recepcao' de volta, e o bloco mensagem de p0 chega a decision.system_actions."""
+    context = {
+        "lead": {"id": 41, "user_id": 99, "category": "", "triggers_fired": "[]"},
+        "ai_profile": {
+            "agent_mode": "consultivo",
+            "template_key": "consultor_especialista",
+            "sales_flow": _sales_flow_p0_mensagem(False),
+            "qualification_fields": [{"key": "service_interest", "mode": "required"}],
+        },
+        "playbook": {},
+        "metadata": {"inbound_message_text": "oi"},
+        "history": [],
+    }
+    _mock_mother_qualification(monkeypatch)
+    _mock_child_result(monkeypatch)
+
+    decision = decision_engine.decide(context)
+
+    assert decision.decision_trace["prompt_function_used"] == "_build_child_prompt_recepcao"
+    send_actions = [a for a in (decision.system_actions or []) if a["type"] == "send_message"]
+    assert [a["content"] for a in send_actions] == ["Ola! Bem-vindo(a)."]
