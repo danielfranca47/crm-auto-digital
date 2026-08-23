@@ -30,6 +30,7 @@ implementação.
 | `qualificacao-score-generalizado-melhorias-futuras.md` | Fases 3-4 adiadas de `qualificacao-flexivel-score-generalizado.md` (score generalizado para campos custom, presets não-obrigatórios com risco a redesenhar) + didática/transparência de score na UI + gate de score pular checagem com reunião real confirmada |
 | `qualificacao-race-condition-melhorias-futuras.md` | Item deixado de fora do fix de race condition em `upsert_qualification_state()` já graduado: TOCTOU similar em `increment_attempt()` |
 | `fluxo-vendas-melhorias-futuras.md` | Itens deixados de fora da graduação do fix de fluxo de vendas sequencial: migrar instrução de agendamento para `consultivo`, detalhar marcos do Fluxo de Venda no modal do lead |
+| `confiabilidade-integracoes-externas-melhorias-futuras.md` | Itens deixados de fora da graduação do fix de SMTP+webhook Efí do primeiro assinante: auditoria de falhas silenciosas em dependências externas, auditoria de efeitos de reentrega em todos os webhooks |
 
 Os arquivos sem prefixo `_` são os **planos concretos** — contêm melhorias identificadas
 que ainda não foram implementadas.
