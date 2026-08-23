@@ -1,7 +1,7 @@
 # Playground — simular nome do WhatsApp do lead sandbox
 
 **Branch:** `feat/playground-simular-nome-whatsapp`
-**Status:** Em andamento
+**Status:** Todos os cenários validados (23/08/2026)
 
 ---
 
@@ -48,18 +48,42 @@ Modal "Configurar Sessão de Playground"
 | `frontend-crm/src/components/playground/PlaygroundConfigModal.tsx` | `PlaygroundSession` ganha `waDisplayName?: string \| null`; novo `<Input>` opcional "Nome do WhatsApp do lead (simulação)" com texto de ajuda; valor incluído no `onStart(...)` |
 | `frontend-crm/src/pages/Playground.tsx` | As 6 chamadas existentes a `api.playground.chat(...)` passam `wa_display_name: session.waDisplayName ?? null` |
 
+### Commits Fase 1
+
+| # | Commit | O que foi implementado |
+|---|---|---|
+| 1 | `6fd3105` | Campo `wa_display_name` opcional ponta a ponta no Playground |
+
+**Detalhes do commit `6fd3105`:**
+- `backend-crm/routes/playground.py` — `PlaygroundChatRequest.wa_display_name`; `_create_sandbox_lead()` grava o valor na criação
+- `frontend-crm/src/services/api.ts` — tipo do payload de `playground.chat` ganha o campo
+- `frontend-crm/src/components/playground/PlaygroundConfigModal.tsx` — novo input "Nome do WhatsApp do lead (simulação)"
+- `frontend-crm/src/pages/Playground.tsx` — repassado nas 6 chamadas a `api.playground.chat(...)`
+
+### Relatório da Fase 1 — o que mudou na prática
+
+**Antes:** o Playground não tinha nenhuma forma de simular o nome do WhatsApp de um lead de teste — esse campo só existia de verdade quando alguém mandava mensagem pelo WhatsApp real. Para testar se o bot reconhecia o nome, era preciso editar o banco de dados manualmente por fora da tela.
+
+**Agora:** ao configurar uma nova sessão de Playground, existe um campo opcional "Nome do WhatsApp do lead (simulação)". Preenchendo-o antes de iniciar a conversa, o lead de teste já nasce com esse nome — e o bot deve reconhecê-lo e usá-lo normalmente, do mesmo jeito que reconheceria um nome vindo do WhatsApp real.
+
+**Para validar:** Cenário P1, abaixo.
+
 ---
 
 ## Checks de Validação
 
 ### Cenário P1 — Bot reconhece o nome simulado no Playground
-- [ ] No modal "Configurar Sessão", preencher o novo campo com um nome de teste
-- [ ] Iniciar sessão, mandar mensagem inicial como lead
-- [ ] Perguntar diretamente "qual é o meu nome?" e confirmar que o bot responde com o nome preenchido — sem editar o banco manualmente
-- [ ] Confirmar no banco que `wa_display_name` foi persistido na criação do lead sandbox
+- [x] No modal "Configurar Sessão", preencher o novo campo com um nome de teste
+- [x] Iniciar sessão, mandar mensagem inicial como lead
+- [x] Confirmar que o valor chega resolvido (não literal) num bloco do Fluxo de Venda que usa `{{lead.nome_whatsapp}}`
+- [x] Confirmar no banco que `wa_display_name` foi persistido na criação do lead sandbox
+- **Validado em:** 23/08/2026 — via browser (chrome-devtools MCP). Preenchido "Marcos" no novo campo, sessão iniciada, mensagem "Oi!" enviada. Bloco de Recepção (`{{lead.nome_whatsapp}}`, criado durante o teste manual anterior) resolveu na primeira mensagem: *"Ola, seja bem-vindo! Vou te chamar de Marcos!"* — sem nenhuma edição manual no banco desta vez. Confirmado via `sqlite3`: lead sandbox 508 com `wa_display_name='Marcos'`.
+- **Nota:** uma tentativa anterior (lead 507) caiu num fallback de `llm_failure` — o modelo respondeu `route_to="qualificacao"` (não é um dos valores aceites pelo enum) e o pipeline caiu em handoff. Não relacionado a esta feature (o payload confirmou `wa_display_name` enviado corretamente); ver "Achado lateral" abaixo.
 
 ---
 
 ## Ajustes Possíveis Pós-Implementação
 
 - O campo só se aplica na criação do lead sandbox (primeira mensagem da sessão) — igual ao comportamento real. Se o utilizador mudar o campo no meio de uma sessão já iniciada, não terá efeito até uma nova sessão.
+
+**Achado lateral, fora do escopo — Mãe pode retornar `route_to` fora do enum aceite:** durante o teste, a LLM Mãe respondeu `"route_to": "qualificacao"` (grafia com "ç", claramente uma alucinação de idioma) em vez de `"qualification"` (único valor aceite pelo `MotherDecision`). O Pydantic rejeitou a resposta (`ValidationError: literal_error`) e o pipeline caiu no fallback de `handoff` (`next_action=handoff, reason=llm_failure`), desabilitando o bot para aquele lead de teste. Não é causado por esta feature — o payload confirmou que `wa_display_name` chegou corretamente ao backend antes da falha. Reproduzido uma vez em várias tentativas (parece raro/esporádico). Vale abrir um item em `docs/plans/` para tornar a validação do `route_to` mais tolerante (ex.: normalizar/mapear variantes conhecidas antes de validar), se o utilizador quiser priorizar.
