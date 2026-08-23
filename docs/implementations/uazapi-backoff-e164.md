@@ -95,6 +95,36 @@ if response.is_error:
     raise UazapiClientError(...)
 ```
 
+### Commits Fase 1
+
+| # | Commit | O que foi implementado |
+|---|---|---|
+| 1 | `8bc71c3` | Backoff exponencial em 429/503 no envio de mensagens (`uazapi_client.py`) + testes |
+
+**Detalhes do commit `8bc71c3`:**
+- `backend-core/app/providers/uazapi_client.py` — novo helper assíncrono `_request_with_retry`
+  usado por `send_text` e `send_media`; re-tenta até 3 vezes em 429/503 com backoff exponencial
+  (0.5s, 1s), respeitando `Retry-After` da UazAPI com teto de 3s; erros de rede/timeout continuam
+  propagando imediatamente (sem retry).
+- `backend-core/tests/test_uazapi_client_retry.py` — 8 testes cobrindo sucesso sem retry, retry em
+  429, retry em 503, esgotamento de tentativas, `Retry-After` respeitado/capado, timeout não
+  re-tenta, 400 não re-tenta, `send_media` também usa o helper.
+
+### Relatório da Fase 1 — o que mudou na prática
+
+**Antes:** se a UazAPI respondesse "muitas requisições" (429) ou "indisponível" (503) — o que pode
+acontecer quando vários leads são atendidos ao mesmo tempo — o CRM desistia na hora e a mensagem
+não era enviada, sem nenhuma nova tentativa.
+
+**Agora:** nesses dois casos específicos, o sistema tenta de novo automaticamente até 3 vezes, com
+uma pequena espera entre tentativas (meio segundo, depois um segundo) antes de desistir de verdade.
+Erros de rede/timeout continuam se comportando exatamente como antes (sem retry) para não atrasar
+ainda mais um pedido que já está lento.
+
+**Para validar:** Cenário P1 (abaixo) — já validado via testes automatizados nesta sessão
+(`test_uazapi_client_retry.py`, 8/8 passando). Não há UI envolvida (é lógica interna de backend),
+então não há cenário de browser para este item.
+
 ### Fase 2 — Validação E.164 antes do envio
 
 **Objetivo:** recusar números malformados antes de pagar pela chamada à UazAPI.
@@ -108,9 +138,10 @@ if response.is_error:
 ## Checks de Validação
 
 ### Cenário P1 — Retry em 429/503
-- [ ] Rodar `backend-core/tests/test_uazapi_client_retry.py`
-- [ ] Confirmar: 429 seguido de sucesso não propaga erro (retry funcionou)
-- [ ] Confirmar: esgotadas as tentativas, erro é propagado como antes
+- [x] Rodar `backend-core/tests/test_uazapi_client_retry.py`
+- [x] Confirmar: 429 seguido de sucesso não propaga erro (retry funcionou)
+- [x] Confirmar: esgotadas as tentativas, erro é propagado como antes
+- **Validado em:** 23/08/2026 — 8/8 testes passando (`python -m pytest tests/test_uazapi_client_retry.py -v`)
 
 ### Cenário P2 — Validação E.164
 - [ ] Rodar `backend-core/tests/test_whatsapp_send_e164.py`
