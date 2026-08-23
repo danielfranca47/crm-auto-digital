@@ -272,6 +272,24 @@ docs: graduar <nome-da-feature> → actualizar architecture
 
 ---
 
+## Passo 8 — Merge de volta e push
+
+Depois do commit de graduação (Passo 7), fechar a branch da implementação
+(ver `CLAUDE.md`, secção "Estratégia de branch por implementação"):
+
+1. Voltar para a branch que originou esta branch de feature (normalmente
+   `main`; se a implementação era aninhada, a branch de feature pai).
+2. `git merge` local da branch de feature nela — sem PR.
+3. `git push` da branch original.
+4. Apagar a branch de feature local (`git branch -d <branch>`) e, se foi
+   usada uma `git worktree`, removê-la (`git worktree remove <pasta>`).
+
+Se houver outra implementação sendo graduada ao mesmo tempo, os merges são
+sempre sequenciais — nunca simultâneos. Mergear e dar push de uma primeiro;
+só depois mergear a outra, resolvendo ali qualquer conflito que surja.
+
+---
+
 ## Exemplo completo
 
 ### Contexto
@@ -306,6 +324,10 @@ Feature "Áudio Inbound + Transcrição" estava completa (`etapa-8-6-audio-trans
 
 ### Passo 6 — Deletado
 - `docs/implementations/etapa-8-6-audio-transcricao-inbound.md`
+
+### Passo 8 — Merge de volta
+- `git merge` de `feat/audio-transcricao-inbound` em `main` + `git push` de `main`
+- Branch `feat/audio-transcricao-inbound` apagada localmente
 
 ---
 

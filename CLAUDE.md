@@ -313,7 +313,32 @@ cd website && npm install && npm run dev
 
 ## Git workflow
 
-**Regra obrigatória:** após cada implementação concluída (nova funcionalidade ou correção), o Claude **deve** criar um commit na branch atual com a descrição da tarefa antes de encerrar a resposta.
+**Regra obrigatória:** após cada implementação concluída (nova funcionalidade ou correção), o Claude **deve** criar um commit na branch da implementação com a descrição da tarefa antes de encerrar a resposta.
+
+### Estratégia de branch por implementação
+
+Cada implementação (arquivo em `docs/implementations/`) vive na sua própria branch, criada a partir da branch em que o utilizador estiver a trabalhar no momento (normalmente `main`, mas pode ser outra branch de feature — ver "Branches aninhadas" abaixo).
+
+**Criação:**
+- Ocorre logo após o plano ser aprovado no Plan Mode (Passo 0 do guia de implementações), antes de criar o arquivo `.md`.
+- Nome: `fix/<slug>` ou `feat/<slug>` — o mesmo slug usado no nome do arquivo de implementação.
+- Claude **propõe o nome e pede confirmação** antes de criar a branch (`git checkout -b`) — não é automático.
+
+**Trabalho em paralelo (várias implementações ao mesmo tempo):**
+- Usar `git worktree add <pasta> -b <branch>` para cada implementação ativa em paralelo, cada uma na sua pasta isolada — evita `stash`/`checkout` para alternar entre tarefas.
+- Remover a worktree (`git worktree remove <pasta>`) depois do merge de volta.
+
+**Quando a implementação é graduada** (todos os checks validados, ver processo de graduação):
+1. Voltar para a branch que originou a branch de feature.
+2. `git merge` local da branch de feature nela (merge direto, sem PR).
+3. `git push` da branch original.
+4. Apagar a branch de feature local (`git branch -d`) depois do merge confirmado.
+
+Merges são sempre sequenciais — nunca simultâneos. Se duas branches estiverem prontas ao mesmo tempo, mergear e dar push de uma primeiro; só depois mergear a segunda, resolvendo ali qualquer conflito que surja.
+
+**Branches aninhadas:** se, dentro de uma branch de feature (que não é `main`), for necessária uma nova implementação/sub-tarefa, a nova branch nasce a partir da branch de feature atual — não de `main` — e o merge de volta é só para ela, nunca direto para `main`. Evitar mais de 1 nível de aninhamento.
+
+**Resolução de conflitos:** se `git merge` reportar conflito, Claude **nunca resolve sozinho e commita silenciosamente**. Parar o merge, explicar em linguagem simples o que cada lado mudou nos trechos conflitantes, propor uma resolução e só finalizar o merge (`git add` + `git commit`) depois de confirmação explícita do utilizador. Nunca usar `--ours`/`--theirs` sem explicar antes.
 
 ### Convenção de mensagem (Conventional Commits)
 
@@ -338,9 +363,9 @@ feat: adicionar rota de exportação de leads
 
 ### Regras
 
-- Sempre commitar na **branch atual** (nunca trocar de branch)
+- Commitar sempre na branch da implementação em curso (ver "Estratégia de branch por implementação" acima) — nunca trocar de branch no meio de uma fase sem commitar (ou stash) o que estiver pendente
 - **Nunca** usar `--amend` em commits já publicados no remote
-- **Nunca** fazer push automático — somente commit local
+- Push automático só ocorre no passo de merge de volta de uma implementação graduada (ver "Estratégia de branch por implementação"); fora disso, **nunca** fazer push automático — somente commit local
 - Usar `git add` nos arquivos específicos alterados (evitar `git add -A` com arquivos sensíveis)
 - Se não houver alteração de código (apenas leitura/análise), **não criar commit**
 
@@ -368,9 +393,12 @@ Todo pedido de nova funcionalidade ou correção não-trivial segue este ciclo o
    → diagnóstico: já existe? o que construir? riscos?
    → aguardar aprovação do utilizador
 
-2. Criar arquivo docs/implementations/<etapa>-<slug>.md
+2. Criar a branch da implementação (fix/<slug> ou feat/<slug>)
+   → propor o nome e pedir confirmação antes de criar (ver "Estratégia de
+     branch por implementação")
+   → criar docs/implementations/<etapa>-<slug>.md nessa branch
    → preencher com template de _template-implementacao.md
-   → só criado APÓS aprovação do plano
+   → branch + arquivo só criados APÓS aprovação do plano
 
 3. Implementar fase a fase
    → cada fase = 1 commit
@@ -393,6 +421,8 @@ Todo pedido de nova funcionalidade ou correção não-trivial segue este ciclo o
    → migrar informação arquitectural relevante para docs/architecture/
    → git rm do arquivo de implementação
    → commit único de graduação
+   → merge da branch de volta para a que a originou + push (ver "Estratégia
+     de branch por implementação")
 ```
 
 ### Regras críticas

@@ -67,7 +67,24 @@ Fase 2 — <nome> — <objetivo em uma frase>
 
 ---
 
-## Passo 1 — Nomear e criar o arquivo
+## Passo 1 — Criar a branch e nomear o arquivo
+
+### Branch
+
+Antes de criar o arquivo, criar a branch da implementação a partir da branch em
+que o utilizador está a trabalhar (normalmente `main`; se for uma implementação
+aninhada dentro de outra branch de feature, ver `CLAUDE.md`, secção "Branches
+aninhadas").
+
+**Formato do nome:** `fix/<slug>` ou `feat/<slug>` — mesmo slug usado no nome
+do arquivo (abaixo), sem o prefixo `etapa-N-`.
+
+Claude propõe o nome e **pede confirmação** antes de rodar `git checkout -b`
+— não é automático. Se houver outra implementação em andamento em paralelo,
+usar `git worktree add <pasta> -b <branch>` em vez de `checkout` direto, para
+não interferir na pasta de trabalho da outra.
+
+### Arquivo
 
 **Formato do nome:** `etapa-<codigo>-<slug-descritivo>.md`
 
@@ -376,11 +393,14 @@ Utilizador: "Ok, avança."
 
 Claude:
   6. Sai do Plan Mode
-  7. Cria docs/implementations/<nome>.md com o template preenchido (Fase 1)
-  8. Implementa Fase 1
-  9. Faz commit e registra o hash no arquivo
-  10. Escreve os checks pendentes + "Relatório da Fase 1" (linguagem simples)
-  11. Pergunta: "Quer que eu rode os testes agora via browser (MCP)?" +
+  7. Propõe o nome da branch (fix/<slug> ou feat/<slug>) e pede confirmação;
+     após aprovação, cria a branch (`git checkout -b` ou `git worktree add`
+     se houver outra implementação em paralelo)
+  8. Cria docs/implementations/<nome>.md com o template preenchido (Fase 1)
+  9. Implementa Fase 1
+  10. Faz commit e registra o hash no arquivo
+  11. Escreve os checks pendentes + "Relatório da Fase 1" (linguagem simples)
+  12. Pergunta: "Quer que eu rode os testes agora via browser (MCP)?" +
       prompt de retomada pronto para colar depois, se preferir
 
 Utilizador: "Não, vou testar eu mesmo." (cola o prompt de retomada depois,
@@ -390,17 +410,17 @@ Utilizador: "Não, vou testar eu mesmo." (cola o prompt de retomada depois,
 Utilizador: "Testei — P1 e P2 ok, mas P3 tem um comportamento estranho: X"
 
 Claude:
-  12. Marca [x] em P1 e P2 com a data
-  13. Entra em Plan Mode novamente para diagnosticar o problema de P3
-  14. Propõe Fase 2
+  13. Marca [x] em P1 e P2 com a data
+  14. Entra em Plan Mode novamente para diagnosticar o problema de P3
+  15. Propõe Fase 2
 
 Utilizador: "Aprovado."
 
 Claude:
-  15. Adiciona seção Fase 2 ao mesmo arquivo
-  16. Implementa + commit + registra hash
-  17. Escreve os checks da Fase 2 + "Relatório da Fase 2"
-  18. Pergunta de novo sobre teste automatizado
+  16. Adiciona seção Fase 2 ao mesmo arquivo
+  17. Implementa + commit + registra hash
+  18. Escreve os checks da Fase 2 + "Relatório da Fase 2"
+  19. Pergunta de novo sobre teste automatizado
 
 ... e assim por diante até o utilizador encerrar.
 ```
