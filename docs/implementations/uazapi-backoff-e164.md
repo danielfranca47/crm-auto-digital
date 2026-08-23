@@ -1,7 +1,7 @@
 # Backoff exponencial em 429/503 + validação E.164 do número de destino
 
 **Branch:** `worktree-fix+uazapi-backoff-e164`
-**Status:** Em andamento
+**Status:** Todos os cenários validados (23/08/2026) — pendente: revisão do utilizador antes da graduação
 
 ---
 
@@ -133,6 +133,55 @@ então não há cenário de browser para este item.
 |---|---|
 | `backend-core/app/api/whatsapp_send.py` | Nova função `_is_valid_e164_digits`; chamada em `send_whatsapp` e `send_whatsapp_media` logo após `_sanitize_number` |
 
+### Bloqueio encontrado ao rodar os testes: ambiente com Pydantic v1/v2 desalinhado
+
+Ao tentar rodar o teste da Fase 2 pela primeira vez, a coleta falhou: `backend-core/app/config.py`
+usava `from pydantic import BaseSettings` (sintaxe do Pydantic v1), mas o ambiente Python tinha
+Pydantic 2.11 instalado — isso já quebrava a coleta de 4 dos 6 arquivos de teste do backend-core,
+inclusive na `main`, antes desta implementação. Confirmado com o utilizador, corrigido nesta branch
+em dois commits isolados (fora do escopo funcional deste item, mas necessários para conseguir
+verificar a Fase 2):
+
+- `2615273` — `config.py` migrado para `pydantic_settings.BaseSettings` /
+  `SettingsConfigDict(extra="ignore")`; `requirements.txt` atualizado (`pydantic>=2` +
+  `pydantic-settings>=2`).
+- Também foi preciso instalar `python-jose[cryptography]` no ambiente local (já declarado em
+  `requirements.txt`, só não estava instalado) e copiar `backend-core/.env` da pasta principal para
+  a worktree (gitignored, não copiado automaticamente — mesmo problema já registrado em
+  `docs/implementations/worktree-copiar-env-testes-backend.md`).
+
+Com isso, a suíte completa do backend-core roda de novo: 32 testes passam (incluindo os 4 arquivos
+que antes nem coletavam). Restam 8 falhas pré-existentes em `test_ai_profile_agent_mode.py` e
+`test_ai_profile_timezone_persistence.py` — `PermissionError` do Windows ao remover um arquivo
+SQLite temporário ainda em uso na finalização do teste. Não têm relação com esta implementação
+(nenhum dos arquivos tocados por este item aparece nesses testes) — ver "Ajustes Possíveis".
+
+### Commits Fase 2
+
+| # | Commit | O que foi implementado |
+|---|---|---|
+| 1 | `2615273` | Correção de ambiente (Pydantic v2) — necessária para rodar os testes |
+| 2 | `d1761e8` | Validação E.164 antes do envio (`whatsapp_send.py`) + testes |
+
+**Detalhes do commit `d1761e8`:**
+- `backend-core/app/api/whatsapp_send.py` — `_is_valid_e164_digits` (regex `^[1-9]\d{7,14}$`,
+  8-15 dígitos sem zero à esquerda); chamada em `send_whatsapp` e `send_whatsapp_media` logo após
+  `_sanitize_number` — número inválido retorna 400 (`invalid_number_format`) sem chegar a chamar a
+  UazAPI.
+- `backend-core/tests/test_whatsapp_send_e164.py` — 10 testes: números válidos (BR, US), vazio,
+  `None`, letras, curto demais, longo demais, zero à esquerda, limites de 8 e 15 dígitos.
+
+### Relatório da Fase 2 — o que mudou na prática
+
+**Antes:** um número mal formatado (com letras, curto demais, ou qualquer coisa fora do padrão) só
+era descoberto como inválido depois de já ter sido enviado (e cobrado) à UazAPI, que aí respondia
+com erro.
+
+**Agora:** o número é conferido antes de qualquer chamada à UazAPI. Se não for um número de telefone
+válido, o pedido é recusado na hora (erro 400), sem gastar a chamada paga.
+
+**Para validar:** Cenário P2 e C1 (abaixo) — já validados via testes automatizados nesta sessão.
+
 ---
 
 ## Checks de Validação
@@ -144,12 +193,17 @@ então não há cenário de browser para este item.
 - **Validado em:** 23/08/2026 — 8/8 testes passando (`python -m pytest tests/test_uazapi_client_retry.py -v`)
 
 ### Cenário P2 — Validação E.164
-- [ ] Rodar `backend-core/tests/test_whatsapp_send_e164.py`
-- [ ] Confirmar: número inválido retorna 400 sem chamar a UazAPI
-- [ ] Confirmar: número válido segue o fluxo normal
+- [x] Rodar `backend-core/tests/test_whatsapp_send_e164.py`
+- [x] Confirmar: número inválido retorna 400 sem chamar a UazAPI
+- [x] Confirmar: número válido segue o fluxo normal
+- **Validado em:** 23/08/2026 — 10/10 testes passando (`python -m pytest tests/test_whatsapp_send_e164.py -v`)
 
 ### Cenário C1 — Suíte completa do backend-core
-- [ ] Rodar `cd backend-core && python -m pytest` — nada quebrou
+- [x] Rodar `cd backend-core && python -m pytest`
+- **Validado em:** 23/08/2026 — 32 passando / 8 falhando. As 8 falhas são pré-existentes e não
+  relacionadas (`test_ai_profile_agent_mode.py`, `test_ai_profile_timezone_persistence.py` —
+  `PermissionError` do Windows ao remover SQLite temp em uso no teardown); nenhum arquivo tocado por
+  este item aparece nessas falhas. Nenhum teste que passava antes desta branch passou a falhar.
 
 ---
 
@@ -165,3 +219,9 @@ então não há cenário de browser para este item.
 - Retry não aplicado a `uazapi_admin.py` (operações de conexão) — decisão consciente para não
   atrasar a UX interativa de conectar o WhatsApp; pode ser revisitado se rate-limit nessas rotas
   também virar problema recorrente.
+- **Falha de teardown do Windows em testes pré-existentes:** `test_ai_profile_agent_mode.py` e
+  `test_ai_profile_timezone_persistence.py` falham com `PermissionError` ao tentar remover um
+  arquivo SQLite temporário que o próprio teste ainda mantém aberto (engine não é encerrado antes do
+  `os.remove`) — comportamento específico do Windows (no Linux o `os.remove` de um arquivo aberto
+  normalmente funciona). Pré-existente, não causado por este item, não corrigido aqui (fora de
+  escopo). Vale um item futuro dedicado.
