@@ -22,6 +22,7 @@ _OPTIONAL_ENUM_FIELDS: dict[str, frozenset[str]] = {
 # realmente desconhecidos continuam a levantar ValidationError e caem no fallback normal.
 _ROUTE_TO_ALIASES: dict[str, str] = {
     "presentation": "apresentation",  # typo recorrente: falta o "a-" do enum em PT
+    "qualificacao": "qualification",  # grafia PT sem cedilha, observado em produção 23/08/2026
 }
 
 
