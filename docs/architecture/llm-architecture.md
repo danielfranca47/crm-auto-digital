@@ -51,7 +51,7 @@ whatsapp_worker
 
 | Campo | Tipo | Descrição |
 |---|---|---|
-| `route_to` | `recepcao\|qualification\|apresentation\|pre-agendamento\|agendamento\|follow-up\|closing` | Rota decidida. `pre-agendamento`/`agendamento` só fazem sentido para templates de agendamento (`_SCHEDULING_AGENT_TEMPLATES` — ver [`pipeline-phases.md`](pipeline-phases.md)). Campo obrigatório, sem tolerância de enum — valor fora da lista levanta `ValidationError` e cai no fallback/retry existente. |
+| `route_to` | `recepcao\|qualification\|apresentation\|pre-agendamento\|agendamento\|follow-up\|closing` | Rota decidida. `pre-agendamento`/`agendamento` só fazem sentido para templates de agendamento (`_SCHEDULING_AGENT_TEMPLATES` — ver [`pipeline-phases.md`](pipeline-phases.md)). Campo obrigatório, sem tolerância genérica de enum (ao contrário de `perceived_category`, que degrada para `None`) — mas `_normalize_route_to_alias()` (`orchestrator_models.py`) corrige uma lista fechada de aliases conhecidos e recorrentes da LLM antes da validação (`_ROUTE_TO_ALIASES`: hoje `"presentation"→"apresentation"`, `"qualificacao"→"qualification"`). Qualquer valor fora dessa lista continua a levantar `ValidationError` e cai no fallback/retry existente — comportamento intencional, para não mascarar erros genuinamente desconhecidos. |
 | `perceived_category` | mesmos valores + null | Categoria percebida |
 | `confidence` | 0..1 | Confiança da decisão |
 | `reason` | string | Justificativa textual |
