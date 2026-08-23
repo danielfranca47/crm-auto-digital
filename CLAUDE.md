@@ -340,10 +340,16 @@ Merges são sempre sequenciais — nunca simultâneos. Se duas branches estivere
 
 **Resolução de conflitos:** a resolução técnica de um conflito de `git merge` é trabalho de Claude — o utilizador não é programador e não deve precisar interpretar diff, sintaxe ou terminologia de código para decidir algo.
 
-- **Conflito mecânico** (git não conseguiu juntar automaticamente duas mudanças que não se contradizem — ex.: duas edições em partes diferentes do mesmo arquivo) → Claude resolve sozinho, finaliza o merge, e **depois** reporta em 1-2 frases sem jargão o que foi decidido (ex.: "o merge juntou as duas mudanças sem perda de nada").
-- **Conflito de comportamento/regra de negócio** (as duas branches mudaram a mesma regra de forma incompatível — ex.: uma expira o desconto em 7 dias, a outra em 30) → Claude **não decide sozinho**. Explica a escolha em português simples e concreto, em termos do que o sistema vai fazer para o utilizador final (nunca mostrando diff ou código), e aguarda a decisão antes de finalizar o merge.
-- Na dúvida sobre qual dos dois casos se aplica, tratar como conflito de comportamento (mais seguro perguntar de mais do que decidir uma regra de negócio sem avisar).
-- Em ambos os casos, o utilizador recebe sempre um resumo do resultado final — nunca fica sem saber o que aconteceu.
+Processo completo (classificação mecânico vs. comportamento, comandos, casos
+especiais deste repo, validação pós-merge): ver
+[`docs/implementations/_guia-resolucao-conflitos.md`](docs/implementations/_guia-resolucao-conflitos.md)
+— ler sempre que `git merge` reportar conflito.
+
+Resumo:
+- **Conflito mecânico** (as mudanças não se contradizem) → Claude resolve sozinho, finaliza o merge, e **depois** reporta em 1-2 frases sem jargão o que foi decidido.
+- **Conflito de comportamento/regra de negócio** (as duas branches mudaram a mesma regra de forma incompatível) → Claude **não decide sozinho**. Explica a escolha em português simples e concreto, em termos do que o sistema vai fazer para o utilizador final (nunca mostrando diff ou código), e aguarda a decisão antes de finalizar o merge.
+- Na dúvida sobre qual dos dois casos se aplica, tratar como conflito de comportamento.
+- Em ambos os casos, o utilizador recebe sempre um resumo do resultado final.
 
 ### Convenção de mensagem (Conventional Commits)
 
@@ -446,4 +452,5 @@ Todo pedido de nova funcionalidade ou correção não-trivial segue este ciclo o
 | [`docs/implementations/_guia-documentar-implementacao.md`](docs/implementations/_guia-documentar-implementacao.md) | Processo completo passo a passo |
 | [`docs/implementations/_template-implementacao.md`](docs/implementations/_template-implementacao.md) | Template concreto preenchido |
 | [`docs/implementations/_processo-graduacao-implementacao.md`](docs/implementations/_processo-graduacao-implementacao.md) | Como graduar para docs/architecture/ |
+| [`docs/implementations/_guia-resolucao-conflitos.md`](docs/implementations/_guia-resolucao-conflitos.md) | Como resolver conflitos de merge (mecânico vs. comportamento) |
 
