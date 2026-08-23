@@ -68,12 +68,14 @@ notificar o sistema quando o cliente paga.
 - `backend-core/app/jobs/subscription_jobs.py` — links nos emails de aviso/expiração (`_get_checkout_url`, fallback para `{CRM_FRONTEND_URL}/assinatura` se `CRM_PUBLIC_BASE_URL` não estiver definida)
 
 **`custom_id` — plan_code + origem da oferta:** `create_subscription_link` recebe
-`custom_id=f"{plan_code}:{offer_key}"` (ex.: `"crm_growth:growth_fundador"`, `"crm_growth:growth"`).
-É o único campo comprovado a ida-e-volta pela Efí (`get_charge`/`get_subscription` devolvem-no tal
-qual). O webhook decompõe isto (`_split_custom_id` em `webhooks.py`) para obter `plan_code` e
-`origin_offer` separadamente — `origin_offer` é gravado na `Subscription` e usado para escolher a
-copy do email de aviso de expiração (ver "Ciclo de vida de avisos" abaixo). Formato antigo (sem
-`:`, de assinaturas criadas antes desta convenção) é tratado como `origin_offer=None`.
+`custom_id=f"{plan_code}__{offer_key}"` (ex.: `"crm_growth__growth_fundador"`, `"crm_growth__growth"`).
+Separador `__`, não `:` — a Efí valida `custom_id` contra `^[a-zA-Z0-9_-\s]+$` e rejeita `:` com
+`500 validation_error` (descoberto em produção: os 4 checkouts pararam de funcionar até a
+correcção). É o único campo comprovado a ida-e-volta pela Efí (`get_charge`/`get_subscription`
+devolvem-no tal qual). O webhook decompõe isto (`_split_custom_id` em `webhooks.py`) para obter
+`plan_code` e `origin_offer` separadamente — `origin_offer` é gravado na `Subscription` e usado
+para escolher a copy do email de aviso de expiração (ver "Ciclo de vida de avisos" abaixo). Formato
+antigo (sem `__`, de assinaturas criadas antes desta convenção) é tratado como `origin_offer=None`.
 
 ---
 
