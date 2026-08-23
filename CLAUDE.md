@@ -338,18 +338,18 @@ Merges são sempre sequenciais — nunca simultâneos. Se duas branches estivere
 
 **Branches aninhadas:** se, dentro de uma branch de feature (que não é `main`), for necessária uma nova implementação/sub-tarefa, a nova branch nasce a partir da branch de feature atual — não de `main` — e o merge de volta é só para ela, nunca direto para `main`. Evitar mais de 1 nível de aninhamento.
 
-**Resolução de conflitos:** a resolução técnica de um conflito de `git merge` é trabalho de Claude — o utilizador não é programador e não deve precisar interpretar diff, sintaxe ou terminologia de código para decidir algo.
+**Resolução de conflitos:** a resolução de um conflito de `git merge` é sempre trabalho autónomo de Claude — o utilizador não é programador e não deve precisar interpretar diff, sintaxe, nem decidir qual lado manter.
 
-Processo completo (classificação mecânico vs. comportamento, comandos, casos
-especiais deste repo, validação pós-merge): ver
+Processo completo (classificação mecânico vs. comportamento, heurística de
+decisão, comandos, casos especiais deste repo, validação e relatório
+pós-merge): ver
 [`docs/implementations/_guia-resolucao-conflitos.md`](docs/implementations/_guia-resolucao-conflitos.md)
 — ler sempre que `git merge` reportar conflito.
 
 Resumo:
-- **Conflito mecânico** (as mudanças não se contradizem) → Claude resolve sozinho, finaliza o merge, e **depois** reporta em 1-2 frases sem jargão o que foi decidido.
-- **Conflito de comportamento/regra de negócio** (as duas branches mudaram a mesma regra de forma incompatível) → Claude **não decide sozinho**. Explica a escolha em português simples e concreto, em termos do que o sistema vai fazer para o utilizador final (nunca mostrando diff ou código), e aguarda a decisão antes de finalizar o merge.
-- Na dúvida sobre qual dos dois casos se aplica, tratar como conflito de comportamento.
-- Em ambos os casos, o utilizador recebe sempre um resumo do resultado final.
+- Claude resolve **sozinho, sempre** — tanto conflito mecânico quanto de comportamento/regra de negócio — aplicando a heurística de decisão documentada no guia (segurança primeiro, depois intenção mais recente). Nunca pausa no meio do merge para pedir ao utilizador que interprete código.
+- **Única exceção:** risco real e irreversível de perda/corrupção de dados (ex.: migration que remove coluna com dados). Só aí Claude pausa — com uma pergunta concreta e não-técnica, já com uma opção padrão proposta.
+- Depois de qualquer merge com conflito, Claude escreve **sempre** um relatório em português simples: o que conflitou, o que cada lado tentava fazer, o que foi decidido e por quê, e como reverter se não for o que o utilizador queria.
 
 ### Convenção de mensagem (Conventional Commits)
 
