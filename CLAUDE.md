@@ -337,6 +337,12 @@ Cada implementação (arquivo em `docs/implementations/`) vive na sua própria b
 
 Merges são sempre sequenciais — nunca simultâneos. Se duas branches estiverem prontas ao mesmo tempo, mergear e dar push de uma primeiro; só depois mergear a segunda, resolvendo ali qualquer conflito que surja.
 
+**Limpeza automática ao encerrar (evita worktree/branch esquecida):**
+
+- Sempre que Claude oferecer um checkpoint de parada (ex.: "quer que eu rode os testes agora, ou paramos por aqui?") e o utilizador responder que quer parar: **antes de encerrar a resposta**, verificar se a implementação atual já passou pelos passos 1–3 do Passo 8 (merge feito, push feito) e se a worktree está sem mudanças pendentes. Se sim, completar a limpeza final ali mesmo (`git worktree remove` + `git branch -d`) — sem perguntar de novo, já está autorizado por esta regra.
+- Se ainda houver trabalho não commitado, ou a branch ainda não foi mergeada/pushada, **não remover nada** — avisar claramente o que ficou pendente na worktree, para não haver risco de perda de trabalho.
+- Claude não tem forma de agir sozinho enquanto nenhuma conversa está aberta (não existe temporizador que "acorda" uma sessão depois de N dias). O equivalente prático: **toda nova conversa que inspecionar o estado do repositório** (`git worktree list` ou similar) varre por worktrees cuja branch já esteja 100% mergeada em `main` e sem mudanças pendentes, e remove essas automaticamente — independente de há quanto tempo estão paradas, porque não há nada a perder nesse caso específico. Isso cobre o cenário de "sessão esquecida por dias" sem depender de um timer que Claude não tem.
+
 **Resolução de conflitos:** a resolução de um conflito de `git merge` é sempre trabalho autónomo de Claude — o utilizador não é programador e não deve precisar interpretar diff, sintaxe, nem decidir qual lado manter.
 
 Processo completo (classificação mecânico vs. comportamento, heurística de
