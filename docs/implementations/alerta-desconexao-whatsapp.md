@@ -99,6 +99,30 @@ a sessão cai.
 | `backend-core/app/api/whatsapp_instances.py` | Nova rota `POST /whatsapp-instances/connection-event` (service-token) |
 | `backend-core/app/services/email_service.py` | Nova `render_whatsapp_disconnected_email(name, login_url)` |
 
+### Commits Fase 1
+
+| # | Commit | O que foi implementado |
+|---|---|---|
+| 1 | `42732ee` | webhook trata event="connection", repassa ao core, nova rota connection-event, email de alerta |
+
+**Detalhes do commit `42732ee`:**
+- `backend-crm/routes/webhooks.py` — novo bloco antes do filtro `event_not_messages`: loga payload bruto do evento `connection`, chama `report_whatsapp_connection_event` (try/except, sempre responde 200)
+- `backend-crm/core_client.py` — nova `report_whatsapp_connection_event(instance_id, raw_payload)`
+- `backend-core/app/api/whatsapp_instances.py` — nova rota `POST /whatsapp-instances/connection-event`: extrai status via `uazapi_admin.extract_connection_meta`, actualiza `WhatsappConnection.status`, dispara email na transição active→inactive
+- `backend-core/app/services/email_service.py` — nova `render_whatsapp_disconnected_email(name, login_url)`, seguindo o padrão visual das outras `render_*_email`
+
+### Relatório da Fase 1 — o que mudou na prática
+
+**Antes:** quando a sessão do WhatsApp de um cliente caía, o sistema não ficava
+sabendo — a UazAPI já avisava, mas o aviso era descartado sem nenhuma ação. O
+status ficava congelado como "conectado" e ninguém era alertado.
+
+**Agora:** o mesmo aviso da UazAPI é processado: o status real é actualizado
+no banco, e quando a conexão passa de activa para inactiva, o dono da conta
+recebe um email pedindo para reconectar.
+
+**Para validar:** Cenários C1 e C2, abaixo.
+
 ---
 
 ## Checks de Validação
