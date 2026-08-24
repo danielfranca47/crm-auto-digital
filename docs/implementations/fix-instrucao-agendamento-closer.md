@@ -96,6 +96,25 @@ Duas fases independentes, cada uma com 1 commit.
 **Objetivo:** o Closer (`direto`) para de receber a instrução hardcoded de
 "perguntar dia/horário" na apresentação.
 
+### Commits Fase 1
+
+| # | Commit | O que foi implementado |
+|---|---|---|
+| 1 | `372446c` | Remove `_booking_signal_block` hardcoded para `direto`; testes atualizados; doc atualizada |
+
+**Detalhes do commit `372446c`:**
+- `backend-executors/app/services/decision_engine.py` — `_build_child_prompt_apresentation`: novo `elif agent_mode_normalized == "direto":` força `_booking_signal_block = ""` sempre; comentário acima atualizado.
+- `backend-executors/tests/test_sales_flow_intent_trigger_phase_entry.py` — `test_booking_signal_not_migrated_for_direto_mode` (que documentava o bug) substituído por `test_booking_signal_never_injected_for_direto_mode_with_sales_flow` e `test_booking_signal_never_injected_for_direto_mode_without_sales_flow`.
+- `docs/architecture/sales-flow.md` — seção "Flag especial de bloco: `booking_signal_opener`" atualizada.
+
+### Relatório da Fase 1 — o que mudou na prática
+
+**Antes:** o agente Closer (fechamento direto) recebia sempre uma instrução interna dizendo para "perguntar o dia e horário preferencial" sempre que o lead escolhia um serviço ou perguntava sobre horários — mesmo esse agente sendo configurado para fechar a venda diretamente (confirmar ou enviar link de pagamento), nunca para agendar.
+
+**Agora:** essa instrução deixou de ser enviada para o Closer em qualquer situação. O Closer segue apenas as regras de fechamento (confirmar/enviar link), sem a contradição interna.
+
+**Para validar:** Cenários P1 e P2, na seção "Checks de Validação" abaixo (testes automatizados já rodados e passando — ver commit `372446c`).
+
 | Arquivo | O que muda |
 |---|---|
 | `backend-executors/app/services/decision_engine.py` | Em `_build_child_prompt_apresentation` (~linha 3391), estender o `if agent_mode_normalized == "agenda":` para também tratar `"direto"`: quando `agent_mode_normalized == "direto"`, `_booking_signal_block = ""` sempre (sem bloco editável equivalente). |
@@ -122,12 +141,14 @@ backend, para todos os agent_modes.
 ## Checks de Validação
 
 ### Cenário P1 — Closer sem Fluxo de Venda configurado
-- [ ] Gerar prompt de apresentação para `agent_mode="direto"`, sem `sales_flow`
-- [ ] Confirmar: `"RECONHECIMENTO DE INTERESSE DE AGENDAMENTO"` NÃO aparece no prompt
+- [x] Gerar prompt de apresentação para `agent_mode="direto"`, sem `sales_flow`
+- [x] Confirmar: `"RECONHECIMENTO DE INTERESSE DE AGENDAMENTO"` NÃO aparece no prompt
+- **Validado em:** 24/08/2026 — via teste automatizado `test_booking_signal_never_injected_for_direto_mode_without_sales_flow` (commit `372446c`)
 
 ### Cenário P2 — Closer com Fluxo de Venda configurado (p2 com blocos)
-- [ ] Gerar prompt de apresentação para `agent_mode="direto"`, com `sales_flow` configurado em p2
-- [ ] Confirmar: mesmo resultado — marker ausente
+- [x] Gerar prompt de apresentação para `agent_mode="direto"`, com `sales_flow` configurado em p2
+- [x] Confirmar: mesmo resultado — marker ausente
+- **Validado em:** 24/08/2026 — via teste automatizado `test_booking_signal_never_injected_for_direto_mode_with_sales_flow` (commit `372446c`)
 
 ### Cenário P3 — Bloco de orientação em p5 chega ao prompt de closing
 - [ ] Configurar bloco `orientacao` em p5 com conteúdo customizado (ex.: sobre envio de link de pagamento)
