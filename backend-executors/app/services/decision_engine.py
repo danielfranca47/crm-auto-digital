@@ -3871,6 +3871,7 @@ def _build_child_prompt_closing(
     context: Dict[str, Any],
     message_text: str,
     mother_decision: MotherDecision,
+    is_phase_entry: bool = True,
 ) -> str:
     lead = context.get("lead") or {}
     ai_profile = context.get("ai_profile") or {}
@@ -3983,6 +3984,7 @@ def _build_child_prompt_closing(
     # _inject_generated_parts não é chamado aqui para evitar duplicação do tone_rules
     # (já injectado via _build_tone_block). training_examples e custom_instructions são
     # adicionados directamente ao prompt.
+    _closing_prompt += _build_sales_flow_phases_block(_evaluate_sales_flow_phases(context, "closing", message_text, detected_intents=mother_decision.detected_intents, is_phase_entry=is_phase_entry, branch_selections=mother_decision.branch_selections))
     return _closing_prompt
 
 def _build_child_prompt_pre_agendamento(
@@ -5564,7 +5566,7 @@ def decide(context: Dict[str, Any], logger: Optional[logging.Logger] = None) -> 
                 _prompt_function_used = "_build_child_prompt(fallback)"
         elif route_for_child == "closing":
             try:
-                child_prompt = _build_child_prompt_closing(context, message_text, mother_decision)
+                child_prompt = _build_child_prompt_closing(context, message_text, mother_decision, is_phase_entry=_is_phase_entry_for_prompt)
                 _prompt_function_used = "_build_child_prompt_closing"
             except Exception:
                 child_prompt = _build_child_prompt(context, message_text, mother_decision)

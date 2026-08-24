@@ -2,6 +2,7 @@ import pytest
 
 from app.services.decision_engine import (
     _build_child_prompt_apresentation,
+    _build_child_prompt_closing,
     _build_daughter_identity_block,
     _build_mother_prompt,
     _collect_intent_triggers_for_lead_phase,
@@ -644,3 +645,58 @@ def test_booking_signal_never_injected_for_direto_mode_without_sales_flow():
     prompt = _build_child_prompt_apresentation(context, "oi", _mother_apres_p4())
 
     assert BOOKING_SIGNAL_MARKER not in prompt
+
+
+def _base_closing_context(sales_flow: dict | None, agent_mode: str = "direto") -> dict:
+    ai_profile = {"agent_mode": agent_mode, "template_key": "closer_padrao"}
+    if sales_flow is not None:
+        ai_profile["sales_flow"] = sales_flow
+    return {
+        "lead": {"id": 1, "category": "closing"},
+        "ai_profile": ai_profile,
+        "playbook": {"template_key": "closer_padrao"},
+        "metadata": {"inbound_message_text": "oi"},
+        "history": [{"model": "outbound", "text": "Oi!"}, {"model": "inbound", "text": "oi"}],
+    }
+
+
+def _mother_closing() -> MotherDecision:
+    return MotherDecision(
+        route_to="closing", perceived_category="closing", confidence=0.9, reason="turno"
+    )
+
+
+def test_closing_prompt_includes_p5_orientation_block_content():
+    """Fase 5 (Fechamento) com bloco orientacao configurado — o conteúdo deve chegar
+    ao prompt da LLM filha de closing (antes desta correção, era descartado)."""
+    sales_flow = {
+        "enabled": True,
+        "phases": [
+            {"id": "p5", "blocks": [
+                {
+                    "id": "closing-payment-orientation",
+                    "typeId": "orientacao",
+                    "content": "Só envie o link de pagamento depois que o lead confirmar o serviço escolhido.",
+                },
+            ]},
+        ],
+    }
+    context = _base_closing_context(sales_flow=sales_flow, agent_mode="direto")
+
+    prompt = _build_child_prompt_closing(context, "oi", _mother_closing())
+
+    assert "Só envie o link de pagamento depois que o lead confirmar o serviço escolhido." in prompt
+
+
+def test_closing_prompt_unchanged_when_p5_has_no_blocks():
+    """Sem nenhum bloco configurado em p5, o prompt de closing não deve ganhar nenhum
+    texto extra — regressão zero para perfis que nunca tocaram no Fluxo de Venda."""
+    context_without_sales_flow = _base_closing_context(sales_flow=None, agent_mode="direto")
+    context_with_empty_p5 = _base_closing_context(
+        sales_flow={"enabled": True, "phases": [{"id": "p5", "blocks": []}]}, agent_mode="direto"
+    )
+
+    prompt_without = _build_child_prompt_closing(context_without_sales_flow, "oi", _mother_closing())
+    prompt_with_empty = _build_child_prompt_closing(context_with_empty_p5, "oi", _mother_closing())
+
+    assert prompt_without == prompt_with_empty
