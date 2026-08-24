@@ -1,7 +1,7 @@
 # Gatilho leve `block_trigger` — trava de dependência para "Sem gatilho"
 
 **Branch:** `feat/sales-flow-block-trigger`
-**Status:** Em andamento
+**Status:** Todos os cenários validados (25/08/2026)
 
 ---
 
@@ -78,27 +78,43 @@ retrocompatível quando a dependência fica vazia.
 
 | # | Commit | O que foi implementado |
 |---|---|---|
+| 1 | `337f12a` | frontend: campo "Depende de" no fluxo "Sem gatilho" + colapso retrocompatível |
+
+**Detalhes do commit `337f12a`:**
+- `frontend-crm/src/types/agente.ts` — `block_trigger` na union e em `SALES_FLOW_BLOCK_TYPE_LABELS`; não entra em `SALES_FLOW_BLOCK_CATEGORIES` (não vira card)
+- `frontend-crm/src/components/agente/CamadaFluxoVenda.tsx` — `BLOCK_META`/`BLOCK_TYPE_LABELS`/`blockSummary`/`isSequentialCapable`/`TRIGGER_IDS`/banner da Fase 0 reconhecem `block_trigger`; novo `case` no formulário (só "Depende de"); card "Sem gatilho" abre esse mini-passo; `confirmTriggerConfig()` colapsa para `triggerBlock = null` quando a dependência fica vazia
+
+**Validação:** `tsc --noEmit` sem erros (Records exaustivos por `typeId` corretos). Falta validação manual via browser (checks abaixo).
 
 ---
 
 ## Checks de Validação
 
+Testado ao vivo na conta de teste local (`_conta-teste-local.md`, AI Profile "Daniel"), com
+`backend-executors`/`frontend-crm` rodando a partir desta worktree (código com as mudanças) e
+`backend-core`/`backend-crm` a partir do checkout principal (código inalterado). Blocos de teste
+criados e removidos ao final — perfil restaurado ao estado original (12 blocos, Fase 2 intacta).
+
 ### Cenário P1 — "Sem gatilho" sem dependência mantém comportamento legado
-- [ ] Criar bloco de ação via "Sem gatilho" sem escolher "Depende de"
-- [ ] Confirmar: nenhum bloco `block_trigger` persistido, JSON igual ao comportamento anterior
+- [x] Criar bloco de ação via "Sem gatilho" sem escolher "Depende de"
+- [x] Confirmar: rótulo volta a "⚡ Sempre ao entrar na fase" — `triggerBlock` colapsa para `null`, nenhum `block_trigger` fantasma
+- **Validado em:** 25/08/2026 — Fase 0, confirmado na tela "Montar regra"
 
 ### Cenário P2 — "Sem gatilho" com dependência dispara no turno certo
-- [ ] Criar bloco de ação via "Sem gatilho" com "Depende de" = "Fase Iniciada"
-- [ ] Simular conversa no Playground: turno de entrada na fase → resposta do lead
-- [ ] Confirmar: a ação dispara no turno seguinte à entrada na fase, não no mesmo turno
+- [x] Criar bloco de ação via "Sem gatilho" com "Depende de" = "Fase Iniciada"
+- [x] Simular conversa no Playground: turno de entrada na fase → resposta do lead
+- [x] Confirmar: a ação dispara no turno seguinte à entrada na fase, não no mesmo turno
+- **Validado em:** 25/08/2026 — Fase 0, turno 1 só disparou "Fase Iniciada"; turno 2 (após resposta do lead) disparou o `block_trigger`
 
 ### Cenário P3 — Não repete em turnos seguintes
-- [ ] Continuar a conversa por mais 1-2 turnos após o disparo do Cenário P2
-- [ ] Confirmar: a ação não dispara de novo
+- [x] Continuar a conversa por mais 1-2 turnos após o disparo do Cenário P2
+- [x] Confirmar: a ação não dispara de novo
+- **Validado em:** 25/08/2026 — turno 3, LLM respondeu normalmente sem repetir a mensagem fixa
 
 ### Cenário P4 — Dependência quebrada é sinalizada
-- [ ] Remover o bloco "Fase Iniciada" referenciado por um `block_trigger` existente
-- [ ] Confirmar: aviso "⚠ dependência quebrada — bloco removido" aparece no builder
+- [x] Remover o bloco "Fase Iniciada" referenciado por um `block_trigger` existente
+- [x] Confirmar: aviso "⚠ dependência quebrada — bloco removido" aparece no builder
+- **Validado em:** 25/08/2026 — aviso apareceu imediatamente após remover o bloco referenciado (achado bônus, durante a limpeza dos blocos de teste)
 
 ---
 
