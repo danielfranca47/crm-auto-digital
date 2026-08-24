@@ -112,12 +112,30 @@ function DrawerHandoff({ policy, text, customVars, onSave, onClose }: {
 }) {
   const [localPolicy, setLocalPolicy] = useState(policy);
   const [localText, setLocalText] = useState(text);
+  const [acknowledged, setAcknowledged] = useState(false);
   const variables = buildVariableList(customVars);
+  const isRisky = localPolicy === 'ignore' && !localText.trim();
+
+  function handlePolicyChange(v: string) {
+    setLocalPolicy(v);
+    setAcknowledged(false);
+  }
+  function handleTextChange(v: string) {
+    setLocalText(v);
+    setAcknowledged(false);
+  }
+
   return (
-    <DrawerBase title="Política de handoff" sub="O que acontece quando um humano precisa assumir a conversa" onClose={onClose} onSave={() => onSave(localPolicy, localText)}>
+    <DrawerBase
+      title="Política de handoff"
+      sub="O que acontece quando um humano precisa assumir a conversa"
+      onClose={onClose}
+      onSave={() => onSave(localPolicy, localText)}
+      saveDisabled={isRisky && !acknowledged}
+    >
       <div className="o-field">
         <label className="o-field-label">Comportamento ao fazer handoff <FieldHelp text="Define o que o bot faz quando um humano assume: desabilitar para não atrapalhar, manter ativo notificando o lead, ou não tomar ação alguma." /></label>
-        <select className="o-select" value={localPolicy} onChange={e => setLocalPolicy(e.target.value)}>
+        <select className="o-select" value={localPolicy} onChange={e => handlePolicyChange(e.target.value)}>
           <option value="keep_active_notify">Manter bot ativo e notificar operador</option>
           <option value="disable_bot">Desabilitar bot imediatamente</option>
           <option value="ignore">Ignorar — sem ação automática</option>
@@ -128,12 +146,32 @@ function DrawerHandoff({ policy, text, customVars, onSave, onClose }: {
         <div className="o-field-hint">Enviada ao lead quando o bot encaminha para humano. Deixe em branco para usar o padrão do sistema.</div>
         <VariableTextarea
           value={localText}
-          onChange={setLocalText}
+          onChange={handleTextChange}
           variables={variables}
           maxLength={400}
           placeholder="Ex: Oi! Vou passar sua conversa para um especialista que vai te ajudar melhor. Aguarde um momento 🙂"
         />
       </div>
+      {isRisky && (
+        <>
+          <div className="o-alert o-alert-danger" style={{ marginTop: 4 }}>
+            <span style={{ flexShrink: 0 }}>⚠</span>
+            <span>Com "Ignorar" e sem mensagem personalizada, o lead não recebe nenhuma resposta quando o bot precisar transferir para um humano — nem aviso, nem handoff.</span>
+          </div>
+          <div className="o-field" style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 10 }}>
+            <input
+              type="checkbox"
+              id="handoff-ignore-ack"
+              checked={acknowledged}
+              onChange={e => setAcknowledged(e.target.checked)}
+              style={{ cursor: 'pointer' }}
+            />
+            <label htmlFor="handoff-ignore-ack" style={{ cursor: 'pointer', fontSize: 12.5 }}>
+              Estou ciente do risco e quero salvar assim mesmo
+            </label>
+          </div>
+        </>
+      )}
     </DrawerBase>
   );
 }
@@ -722,8 +760,8 @@ function EditCard({ label, value, sub, onClick, italic, help }: {
   );
 }
 
-function DrawerBase({ title, sub, onClose, onSave, children }: {
-  title: string; sub: string; onClose: () => void; onSave: () => void; children: React.ReactNode;
+function DrawerBase({ title, sub, onClose, onSave, saveDisabled, children }: {
+  title: string; sub: string; onClose: () => void; onSave: () => void; saveDisabled?: boolean; children: React.ReactNode;
 }) {
   return (
     <>
@@ -738,7 +776,7 @@ function DrawerBase({ title, sub, onClose, onSave, children }: {
         </div>
         <div className="o-drawer-body">{children}</div>
         <div className="o-drawer-footer">
-          <button className="o-btn o-btn-primary" onClick={onSave}>Salvar</button>
+          <button className="o-btn o-btn-primary" onClick={onSave} disabled={saveDisabled} style={saveDisabled ? { opacity: 0.5, cursor: 'not-allowed' } : undefined}>Salvar</button>
           <button className="o-btn" onClick={onClose}>Cancelar</button>
         </div>
       </div>
