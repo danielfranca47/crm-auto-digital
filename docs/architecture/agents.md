@@ -201,7 +201,11 @@ jobs já resolvidos.
 
 **`identity_mode`**: `"human_agent"`, `"virtual_assistant"`, `"user_clone"`
 
-**`handoff_policy`**: `"disable_bot"`, `"keep_active_notify"`, `"ignore"`
+**`handoff_policy`**: `"disable_bot"`, `"keep_active_notify"`, `"ignore"` — com `"ignore"` e
+`handoff_custom_text` vazio, `handoff_policy.apply()` devolve `message_text=""` em qualquer
+handoff (comportamento intencional, ver `backend-executors/app/services/handoff_policy.py`).
+A UI (`DrawerHandoff` em `frontend-crm/src/components/agente/CamadaIdentidade.tsx`) bloqueia
+o "Salvar" dessa combinação até o utilizador marcar um checkbox de ciência do risco.
 
 **`availability_mode`**: `"24h"` (sem restrição), `"business_hours"` (Seg–Sex 09h–18h no `timezone` do perfil), `"custom"` (grade de dias/horas configurada na UI)
 
