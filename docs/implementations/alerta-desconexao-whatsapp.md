@@ -1,7 +1,7 @@
 # Alerta de desconexão do WhatsApp
 
 **Branch:** `fix/alerta-desconexao-whatsapp`
-**Status:** Em andamento
+**Status:** Em andamento — C1/C2 validados localmente (24/08/2026); pendente: C3 (confirmar payload real em produção)
 
 ---
 
@@ -128,15 +128,32 @@ recebe um email pedindo para reconectar.
 ## Checks de Validação
 
 ### Cenário C1 — Evento connection com sessão caída atualiza status e envia email
-- [ ] Com uma connection existente no banco do backend-core com `status="active"`
-- [ ] Simular `POST /webhooks/whatsapp/uazapi?secret=...` com `event="connection"`
+- [x] Com uma connection existente no banco do backend-core com `status="active"`
+- [x] Simular `POST /webhooks/whatsapp/uazapi?secret=...` com `event="connection"`
       e payload indicando desconectado
-- [ ] Confirmar: `WhatsappConnection.status` deixou de normalizar como "active"
-- [ ] Confirmar: tentativa de envio de email ocorreu (log), sem quebrar a resposta 200
+- [x] Confirmar: `WhatsappConnection.status` deixou de normalizar como "active"
+- [x] Confirmar: tentativa de envio de email ocorreu (log), sem quebrar a resposta 200
+- **Validado em:** 24/08/2026 — backend-core (porta 8001) e backend-crm (porta
+  8000) rodando localmente contra bancos SQLite isolados (frescos, na
+  worktree), com `SMTP_HOST` vazio de propósito para não disparar email real
+  via o provedor de produção (Resend). Criado user + `whatsapp_connections`
+  com `status="active"` (instance_id=`test-instance-1`). POST simulado com
+  `{"event":"connection","instance":"test-instance-1","status":"disconnected"}`
+  → resposta `{"status":"ok","reason":"connection_event_processed"}`; banco
+  confirmado com `status="disconnected"`; log do core mostrou
+  `connection_event: falha ao enviar email de desconexão user_id=1 error=SMTP
+  não configurado` — confirma que a tentativa de envio foi disparada
+  corretamente pela transição active→inactive, e que a falha (esperada, sem
+  SMTP configurado no teste) foi tratada como best-effort sem quebrar a
+  resposta 200.
 
 ### Cenário C2 — Evento repetido não duplica o email
-- [ ] Repetir o mesmo evento "disconnected" duas vezes seguidas
-- [ ] Confirmar: o disparo de email só ocorre na primeira vez
+- [x] Repetir o mesmo evento "disconnected" duas vezes seguidas
+- [x] Confirmar: o disparo de email só ocorre na primeira vez
+- **Validado em:** 24/08/2026 — reenviado o mesmo payload; resposta 200 OK
+  novamente, mas sem nova linha de log de tentativa de email (a connection já
+  estava `disconnected`, então `was_active` era `False` — sem transição, sem
+  disparo). Status no banco permaneceu `disconnected`.
 
 ### Cenário C3 — Produção (payload real)
 - [ ] Observar nos logs de produção o payload bruto real de um evento
