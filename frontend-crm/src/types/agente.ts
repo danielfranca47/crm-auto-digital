@@ -57,7 +57,7 @@ export interface SalesFlow {
 // ─── Blocos Tipados (novo sistema) ───────────────────────────
 
 export type SalesFlowBlockTypeId =
-  | 'kw_trigger' | 'phase_trigger' | 'no_reply_trigger' | 'intent_trigger'
+  | 'kw_trigger' | 'phase_trigger' | 'no_reply_trigger' | 'intent_trigger' | 'block_trigger'
   | 'orientacao' | 'mensagem' | 'midia' | 'avancar_fase' | 'webhook'
   | 'condicao' | 'espera';
 
@@ -145,6 +145,7 @@ export const SALES_FLOW_BLOCK_TYPE_LABELS: Record<SalesFlowBlockTypeId, string> 
   phase_trigger:   'Fase iniciada',
   no_reply_trigger:'Sem resposta',
   intent_trigger:  'Intenção detectada pela IA',
+  block_trigger:   'Após bloco anterior',
   orientacao:      'Orientação ao Agente',
   mensagem:        'Mensagem fixa',
   midia:           'Enviar Mídia',

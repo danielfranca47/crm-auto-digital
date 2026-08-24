@@ -31,6 +31,7 @@ const BLOCK_META: Record<SalesFlowBlockTypeId, { icon: string; color: string; de
   phase_trigger:    { icon: '🚀', color: '#fbbf24', desc: 'Dispara automaticamente ao entrar na fase' },
   no_reply_trigger: { icon: '🔕', color: '#fbbf24', desc: 'Dispara se o lead não responder em X tempo' },
   intent_trigger:   { icon: '🧠', color: '#fbbf24', desc: 'Dispara quando a IA deteta uma intenção' },
+  block_trigger:    { icon: '🔗', color: '#fbbf24', desc: 'Dispara automaticamente depois que outro bloco já disparou — sem precisar de palavra-chave ou intenção' },
   orientacao:       { icon: '🧭', color: '#6ee7b7', desc: 'Instrução injetada no contexto do agente' },
   mensagem:         { icon: '✉️', color: '#38bdf8', desc: 'Mensagem de texto fixo enviada ao lead' },
   midia:            { icon: '🎵', color: '#a78bfa', desc: 'Envio real de ficheiro (áudio/imagem/doc)' },
@@ -45,6 +46,7 @@ const BLOCK_TYPE_LABELS: Record<SalesFlowBlockTypeId, string> = {
   phase_trigger:    'Fase iniciada',
   no_reply_trigger: 'Sem resposta',
   intent_trigger:   'Intenção IA',
+  block_trigger:    'Após bloco anterior',
   orientacao:       'Orientação ao Agente',
   mensagem:         'Mensagem fixa',
   midia:            'Enviar Mídia',
@@ -108,6 +110,7 @@ function blockSummary(block: SalesFlowBlock): string {
     case 'phase_trigger':    return 'Auto ao entrar';
     case 'no_reply_trigger': return block.wait_value ? `Sem resposta: ${block.wait_value} ${block.wait_unit || 'horas'}` : '—';
     case 'intent_trigger':   return block.label || (block.intent || '').slice(0, 55) || '—';
+    case 'block_trigger':    return block.label || 'Depende de bloco anterior';
     case 'orientacao':       return (block.content || '').slice(0, 60) || '—';
     case 'mensagem':         return `"${(block.content || '').slice(0, 55)}"`;
     case 'midia':            return block.media_type ? `${block.media_type}${block.caption ? ': ' + block.caption.slice(0, 30) : ''}` : '—';
@@ -124,7 +127,7 @@ function blockSummary(block: SalesFlowBlock): string {
 // Espelha _is_sequential_trigger_block do backend (decision_engine.py) — só blocos com
 // registo persistido de satisfação podem ser alvo de requires_block_id.
 function isSequentialCapable(b: SalesFlowBlock): boolean {
-  if (b.typeId === 'phase_trigger') return true;
+  if (b.typeId === 'phase_trigger' || b.typeId === 'block_trigger') return true;
   if (b.typeId === 'kw_trigger' || b.typeId === 'intent_trigger') return !!b.fire_once;
   return false;
 }
@@ -344,6 +347,28 @@ function BlockForm({ block, setBlock, knowledgeItems, customVars, phaseBlocks }:
             </select>
             <div style={{ fontSize: 11, color: 'var(--o-sub)', marginTop: 4 }}>
               Só dispara depois de o bloco escolhido já ter disparado num turno anterior (nunca no mesmo turno).
+            </div>
+          </div>
+        </>
+      );
+
+    case 'block_trigger':
+      return (
+        <>
+          <div className="o-field">
+            <label className="o-field-label">Depende de</label>
+            <select className="o-input" value={block.requires_block_id || ''}
+              onChange={e => set('requires_block_id', e.target.value)}>
+              <option value="">— Nenhum —</option>
+              {dependencyOptions(block, phaseBlocks).map(b => (
+                <option key={b.id} value={b.id}>{b.label || blockSummary(b) || BLOCK_TYPE_LABELS[b.typeId]}</option>
+              ))}
+            </select>
+            <div style={{ fontSize: 11, color: 'var(--o-sub)', marginTop: 4 }}>
+              Dispara automaticamente, sem precisar de palavra-chave ou intenção, assim que o
+              bloco escolhido já tiver disparado num turno anterior (nunca no mesmo turno). Sem
+              escolher nada aqui, as ações seguintes disparam sempre que a fase for avaliada —
+              igual ao comportamento padrão de "Sem gatilho".
             </div>
           </div>
         </>
@@ -809,6 +834,16 @@ function RuleBuilderModal({ phaseId, knowledgeItems, onSave, onClose, customVars
     setStep('config-trigger');
   }
 
+  // Confirma o passo "Configurar gatilho". Caso especial: um block_trigger (aberto via
+  // "Sem gatilho") sem dependência escolhida colapsa para o comportamento legado — nenhum
+  // bloco de gatilho é persistido, idêntico a "Sem gatilho" de antes desta opção existir.
+  function confirmTriggerConfig() {
+    if (triggerBlock?.typeId === 'block_trigger' && !triggerBlock.requires_block_id) {
+      setTriggerBlock(null);
+    }
+    setStep('rule-builder');
+  }
+
   function startAddingBlock(cat: 'action' | 'logic') {
     setAddingCat(cat);
     setPendingTypeId(null);
@@ -887,7 +922,7 @@ function RuleBuilderModal({ phaseId, knowledgeItems, onSave, onClose, customVars
               );
             })}
           </div>
-          <div onClick={() => { setTriggerBlock(null); setStep('rule-builder'); }}
+          <div onClick={() => pickTriggerType('block_trigger')}
             style={{
               borderRadius: 10, border: '1.5px dashed var(--o-b1)',
               background: 'transparent', padding: '11px 14px', cursor: 'pointer', transition: 'all .15s',
@@ -922,7 +957,7 @@ function RuleBuilderModal({ phaseId, knowledgeItems, onSave, onClose, customVars
         </div>
         <div style={{ padding: '12px 20px 20px', display: 'flex', gap: 8, justifyContent: 'space-between', borderTop: '1px solid var(--o-b1)' }}>
           <button className="o-btn" onClick={() => setStep('pick-trigger')}>← Voltar</button>
-          <button className="o-btn o-btn-primary" onClick={() => setStep('rule-builder')}>Próximo →</button>
+          <button className="o-btn o-btn-primary" onClick={confirmTriggerConfig}>Próximo →</button>
         </div>
       </>
     );
@@ -1252,7 +1287,7 @@ function PhaseSection({ phase, onAddBlock, onEditBlock, onRemoveBlock, onAddToGr
           {extraHeader}
           {/* Block list — agrupado por gatilho */}
           {(() => {
-            const TRIGGER_IDS = new Set(['phase_trigger', 'kw_trigger', 'no_reply_trigger', 'intent_trigger']);
+            const TRIGGER_IDS = new Set(['phase_trigger', 'kw_trigger', 'no_reply_trigger', 'intent_trigger', 'block_trigger']);
             type Group = { trigger: SalesFlowBlock | null; actions: SalesFlowBlock[] };
             const groups: Group[] = [];
             let cur: Group = { trigger: null, actions: [] };
@@ -1688,11 +1723,15 @@ export function CamadaFluxoVenda({ config, onUpdate }: Props) {
           const phase = phases.find(p => p.id === id)!;
           let extraHeader: React.ReactNode = null;
           if (id === 'p0') {
-            // Espelha _phase_pending_sequential_triggers do backend: só kw_trigger/intent_trigger
-            // com fire_once contam como "gatilho sequencial" — phase_trigger fica de fora (dispara
-            // sozinho na entrada da fase, não depende de confirmação do lead em turnos seguintes).
+            // Espelha _phase_pending_sequential_triggers do backend: kw_trigger/intent_trigger
+            // com fire_once ou block_trigger (sempre sequencial) contam como "gatilho sequencial"
+            // — phase_trigger fica de fora (dispara sozinho na entrada da fase, não depende de
+            // confirmação do lead em turnos seguintes).
             const sequentialCount = phase.blocks.filter(b =>
-              !b.branch_group_id && b.fire_once && (b.typeId === 'kw_trigger' || b.typeId === 'intent_trigger')
+              !b.branch_group_id && (
+                (b.fire_once && (b.typeId === 'kw_trigger' || b.typeId === 'intent_trigger')) ||
+                b.typeId === 'block_trigger'
+              )
             ).length;
             const hasBranchNode = phase.blocks.some(b => b.typeId === 'condicao');
             if (sequentialCount > 1 || hasBranchNode) {

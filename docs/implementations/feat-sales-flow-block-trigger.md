@@ -53,6 +53,14 @@ sequencial e da checagem de pendência de avanço de fase, e dispara exatamente 
 
 | # | Commit | O que foi implementado |
 |---|---|---|
+| 1 | `9160f4c` | backend: block_trigger no decision_engine.py + testes + docs/architecture/sales-flow.md |
+
+**Detalhes do commit `9160f4c`:**
+- `backend-executors/app/services/decision_engine.py` — novo `typeId` `block_trigger`: sempre sequencial (`_is_sequential_trigger_block`), persistência via `triggers_fired` (`_trigger_persisted_satisfied`), novo `elif` no loop principal com checagem obrigatória de "já disparou" (sem ela, reenviaria a ação todo turno), e conta como pendência em `_phase_pending_sequential_triggers`
+- `backend-executors/tests/test_sales_flow_block_trigger.py` — novo, 5 testes: bloqueio até dependência persistida, disparo único, não-repetição, fail-open, pendência de avanço de fase
+- `docs/architecture/sales-flow.md` — documenta o novo tipo nas 4 seções afetadas
+
+**Validação:** 12/12 testes passam (5 novos + 6 de regressão `requires_block_id` + comparação de baseline). Suite completa comparada byte-a-byte com `main` sem alteração: 80 falhas pré-existentes idênticas antes/depois — nenhuma regressão introduzida.
 
 ---
 
