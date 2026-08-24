@@ -623,12 +623,24 @@ def test_booking_signal_uses_user_defined_opener_content():
     assert "Se o lead já escolheu um serviço específico" not in prompt
 
 
-def test_booking_signal_not_migrated_for_direto_mode():
-    """Escopo deliberado: para direto/consultivo, o texto hardcoded permanece mesmo com
-    p2 configurada — a migração é só para o grupo agenda (agent_1/agent_3)."""
+def test_booking_signal_never_injected_for_direto_mode_with_sales_flow():
+    """Closer (direto): a instrução de agendamento nunca é injectada, mesmo com p2
+    configurada — "perguntar disponibilidade" contradiz o objectivo do variant sales
+    (CONFIRMAR/ENVIAR LINK). Sem bloco editável equivalente em p2 para este modo."""
     sales_flow = _sales_flow_sequential_critical_guard()
     context = _base_apres_context(sales_flow=sales_flow, agent_mode="direto")
 
     prompt = _build_child_prompt_apresentation(context, "oi", _mother_apres_p4())
 
-    assert BOOKING_SIGNAL_MARKER in prompt
+    assert BOOKING_SIGNAL_MARKER not in prompt
+
+
+def test_booking_signal_never_injected_for_direto_mode_without_sales_flow():
+    """Mesmo sem sales_flow configurado, o Closer nunca recebe o fallback hardcoded —
+    ao contrário de agenda, não há compatibilidade com perfis legados aqui, porque o
+    texto hardcoded nunca foi correto para este modo."""
+    context = _base_apres_context(sales_flow=None, agent_mode="direto")
+
+    prompt = _build_child_prompt_apresentation(context, "oi", _mother_apres_p4())
+
+    assert BOOKING_SIGNAL_MARKER not in prompt

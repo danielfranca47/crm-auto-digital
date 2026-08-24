@@ -1,7 +1,7 @@
 # Fix: instrução de agendamento vazando para o agente "Fechamento Direto" (Closer)
 
-**Branch:** `<a definir no Plan Mode>`
-**Status:** Aguardando Plan Mode
+**Branch:** `fix/instrucao-agendamento-closer`
+**Status:** Em andamento
 
 ---
 
@@ -55,30 +55,88 @@ registado como item não-urgente em
 
 ## Abordagem
 
-A definir em Plan Mode. Hipótese inicial (não validada): aplicar o mesmo padrão já
-construído na Fase 4 (bloco `booking_signal_opener`, banner/card no builder) também
-para `agent_mode_normalized == "direto"` — permitindo ao utilizador editar/remover
-essa instrução como já pode fazer para `agenda`. Alternativa a considerar no
-diagnóstico: para `direto`, pode fazer mais sentido **remover** a instrução por
-completo (sem oferecer um bloco equivalente), já que "perguntar disponibilidade"
-nunca é o comportamento correcto para um Closer — precisa de decisão do utilizador
-sobre qual das duas abordagens prefere.
+**Decisão do utilizador (Plan Mode):** remover a instrução de agendamento por
+completo do Closer — sem oferecer um bloco equivalente ("horário") na fase de
+apresentação (p2), já que "perguntar disponibilidade" nunca é o comportamento
+correto para um Closer. Em vez disso, o utilizador quer poder configurar, para o
+Closer, instruções sobre **quando enviar o link de pagamento / configuração de
+pagamento** — e essa configuração deve viver no **fim do fechamento da venda**
+(fase p5 "Fechamento" / rota `closing`), não em p2.
+
+Achado extra durante a investigação: a fase p5 já existe, já está sempre ativa
+(inclusive para `direto`: `p0→p1→p2→p5`), e o builder do frontend
+(`CamadaFluxoVenda.tsx`, linha ~1798) já renderiza p5 com a UI genérica de blocos
+(`orientacao`, `mensagem`, `mídia`, `avançar_fase`) para **qualquer** agent_mode,
+sem nenhum gate especial — ou seja, o utilizador já consegue hoje adicionar um
+bloco `orientacao` em p5 pelo builder. O problema é que
+`_build_child_prompt_closing()` (linha 3863) nunca chama
+`_build_sales_flow_phases_block(_evaluate_sales_flow_phases(...))` como todos os
+outros builders de fase fazem (`recepcao`, `qualification`, `apresentation`,
+`follow_up`) — então qualquer bloco `orientacao` configurado em p5 é
+**silenciosamente ignorado** no prompt, para todos os agent_modes. Ligar essa
+fiação entrega o pedido do utilizador sem precisar de nenhum componente novo no
+frontend: o Closer passa a poder escrever, no builder já existente (fase
+"Fechamento"), instruções livres sobre o momento de enviar o link / configuração
+de pagamento — e essas instruções finalmente chegam à LLM.
+
+```
+p2 (apresentação, direto)          p5 (fechamento, direto)
+  └─ _booking_signal_block=""        └─ orientacao configurada pelo utilizador
+     (nunca mais injectado)             → agora chega ao prompt (antes: descartada)
+```
 
 ---
 
 ## Plano de Implementação
 
-A preencher após o diagnóstico em Plan Mode (Passo 0 de
-`_guia-documentar-implementacao.md`) ser aprovado pelo utilizador.
+Duas fases independentes, cada uma com 1 commit.
 
-**Arquivos prováveis:**
-- `backend-executors/app/services/decision_engine.py` — `_build_child_prompt_apresentation`
-- `frontend-crm/src/components/agente/CamadaFluxoVenda.tsx` — se optar por reaproveitar `OpenerBanner`/`OpenerCard` também para `direto`
-- `backend-executors/tests/test_sales_flow_intent_trigger_phase_entry.py`
-- `docs/architecture/sales-flow.md` — secção "Flag especial de bloco: `booking_signal_opener`"
+### Fase 1 — Remover a instrução de agendamento do Closer (p2)
+
+**Objetivo:** o Closer (`direto`) para de receber a instrução hardcoded de
+"perguntar dia/horário" na apresentação.
+
+| Arquivo | O que muda |
+|---|---|
+| `backend-executors/app/services/decision_engine.py` | Em `_build_child_prompt_apresentation` (~linha 3391), estender o `if agent_mode_normalized == "agenda":` para também tratar `"direto"`: quando `agent_mode_normalized == "direto"`, `_booking_signal_block = ""` sempre (sem bloco editável equivalente). |
+| `backend-executors/app/services/decision_engine.py` | Atualizar o comentário acima de `_booking_signal_block` (linhas 3379-3383) — já não é "fora de escopo para direto". |
+| `backend-executors/tests/test_sales_flow_intent_trigger_phase_entry.py` | Reescrever `test_booking_signal_not_migrated_for_direto_mode` — hoje afirma (bug) que o marker permanece para `direto`; passa a afirmar que o marker está ausente, independente de `sales_flow` configurado ou não. |
+| `docs/architecture/sales-flow.md` | Seção "Flag especial de bloco: `booking_signal_opener`": para `direto` o texto nunca é injectado (nem hardcoded, nem editável); `consultivo` continua fora de escopo (ver `docs/plans/fluxo-vendas-melhorias-futuras.md`, item M1). |
+
+### Fase 2 — Ligar blocos de `orientacao` da fase p5 (Fechamento) ao prompt de closing
+
+**Objetivo:** instruções configuradas na fase "Fechamento" do builder (ex.:
+"envie o link de pagamento só depois de confirmar o serviço") passam a chegar de
+facto à LLM filha de closing — hoje são aceitas na UI mas descartadas no
+backend, para todos os agent_modes.
+
+| Arquivo | O que muda |
+|---|---|
+| `backend-executors/app/services/decision_engine.py` | `_build_child_prompt_closing()` ganha parâmetro `is_phase_entry: bool = True` (mesmo padrão de `_build_child_prompt_apresentation`/`_build_child_prompt_recepcao`). Antes do `return`, adiciona `_closing_prompt += _build_sales_flow_phases_block(_evaluate_sales_flow_phases(context, "closing", message_text, detected_intents=mother_decision.detected_intents, is_phase_entry=is_phase_entry, branch_selections=mother_decision.branch_selections))`. |
+| `backend-executors/app/services/decision_engine.py` | No call site (`route_for_child == "closing"`), passar `is_phase_entry=_is_phase_entry_for_prompt` (variável já calculada, reaproveitada pelos outros builders). |
+| `backend-executors/tests/test_sales_flow_intent_trigger_phase_entry.py` | Novo teste: contexto com bloco `orientacao` em `p5` com `content` customizado → `_build_child_prompt_closing(...)` deve incluir esse texto no prompt. |
+| `docs/architecture/sales-flow.md` | Deixar explícito que `p5` também injecta `orientacao` como `prompt_injections` no prompt de closing (mesmo mecanismo das outras fases). |
 
 ---
 
 ## Checks de Validação
 
-A preencher após o Plano de Implementação ser definido.
+### Cenário P1 — Closer sem Fluxo de Venda configurado
+- [ ] Gerar prompt de apresentação para `agent_mode="direto"`, sem `sales_flow`
+- [ ] Confirmar: `"RECONHECIMENTO DE INTERESSE DE AGENDAMENTO"` NÃO aparece no prompt
+
+### Cenário P2 — Closer com Fluxo de Venda configurado (p2 com blocos)
+- [ ] Gerar prompt de apresentação para `agent_mode="direto"`, com `sales_flow` configurado em p2
+- [ ] Confirmar: mesmo resultado — marker ausente
+
+### Cenário P3 — Bloco de orientação em p5 chega ao prompt de closing
+- [ ] Configurar bloco `orientacao` em p5 com conteúdo customizado (ex.: sobre envio de link de pagamento)
+- [ ] Gerar prompt de closing
+- [ ] Confirmar: o conteúdo do bloco aparece no prompt
+
+### Cenário P4 — p5 sem blocos configurados (regressão zero)
+- [ ] Gerar prompt de closing sem nenhum bloco em p5
+- [ ] Confirmar: prompt idêntico ao comportamento anterior (sem alterações)
+
+### Cenário — Suíte completa
+- [ ] Rodar `pytest` em `backend-executors/tests/` — suíte completa passa, incluindo os testes de `agenda`/`consultivo` já existentes (garantir zero regressão)

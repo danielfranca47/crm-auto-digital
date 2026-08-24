@@ -88,7 +88,7 @@ Blocos do tipo `orientacao` na fase p2 podem ter o flag `booking_signal_opener: 
 - `sales_flow` desabilitado OU fase p2 nunca configurada (`blocks` vazio) → mantém o texto **hardcoded** original (compatibilidade com perfis legados que nunca tocaram no Fluxo de Venda)
 - Fase p2 configurada (qualquer bloco presente) → usa **apenas** o que o utilizador definiu: o bloco `booking_signal_opener` se presente, ou nada se ausente (remoção deliberada — sem fallback)
 
-Para `direto`/`consultivo`, o texto hardcoded permanece sempre — fora de escopo desta migração.
+Para `direto` (Closer), a instrução **nunca** é injectada — nem o texto hardcoded, nem um bloco editável equivalente em p2: "perguntar disponibilidade" contradiz o objectivo do variant `sales` (CONFIRMAR/ENVIAR LINK). Instruções de fechamento específicas do Closer (ex.: quando enviar o link de pagamento) vivem em p5, através de blocos `orientacao` comuns (ver "Fases (p0–p5)", acima). `consultivo` permanece fora de escopo desta migração (mantém o texto hardcoded — ver `docs/plans/fluxo-vendas-melhorias-futuras.md`, item M1).
 
 **No frontend:** na fase p2 do builder (`CamadaFluxoVenda.tsx`), só quando `agentGroup === 'agenda'`:
 - Sem bloco `booking_signal_opener` e p2 sem outros blocos → banner "Sem reconhecimento de interesse de agendamento configurado" (ainda usando o padrão do sistema)

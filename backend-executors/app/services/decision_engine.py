@@ -3379,8 +3379,11 @@ def _build_child_prompt_apresentation(
     # "Reconhecimento de interesse de agendamento" — migrado de texto hardcoded para um
     # bloco editável/removível do Fluxo de Venda (booking_signal_opener), só para o grupo
     # agenda (agent_1/SDR e agent_3/Híbrido — os únicos com fases de agendamento no
-    # pipeline). Para direto/consultivo, mantém-se o texto hardcoded (fora de escopo —
-    # ver docs/implementations/fix-fluxo-vendas-sequencial.md, Fase 4).
+    # pipeline). Para direto (Closer), a instrução nunca é injectada — "perguntar
+    # disponibilidade" contradiz o objectivo do variant sales (CONFIRMAR/ENVIAR LINK); ver
+    # docs/implementations/fix-instrucao-agendamento-closer.md. Para consultivo,
+    # mantém-se o texto hardcoded (fora de escopo — ver
+    # docs/plans/fluxo-vendas-melhorias-futuras.md, item M1).
     _booking_signal_block = (
         "- RECONHECIMENTO DE INTERESSE DE AGENDAMENTO: Se o lead já escolheu um serviço específico ou perguntou\n"
         "  sobre horários/disponibilidade ('que horas', 'que dia', 'tem horário'), sinalize:\n"
@@ -3411,6 +3414,10 @@ def _build_child_prompt_apresentation(
                 _booking_signal_block = f"- RECONHECIMENTO DE INTERESSE DE AGENDAMENTO: {_content_bs}\n" if _content_bs else ""
             else:
                 _booking_signal_block = ""
+    elif agent_mode_normalized == "direto":
+        # Closer: nunca "pergunta disponibilidade" — sem bloco editável equivalente em p2
+        # (decisão de escopo: instruções de fechamento do Closer vivem em p5, não aqui).
+        _booking_signal_block = ""
 
     _apres_prompt = (
         _greeting_apres_header
