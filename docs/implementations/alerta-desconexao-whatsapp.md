@@ -1,7 +1,7 @@
 # Alerta de desconexão do WhatsApp
 
 **Branch:** `fix/alerta-desconexao-whatsapp`
-**Status:** Em andamento — C1/C2 validados localmente (24/08/2026); pendente: C3 (confirmar payload real em produção)
+**Status:** Todos os cenários validados (24/08/2026) — pronto para graduação
 
 ---
 
@@ -155,10 +155,91 @@ recebe um email pedindo para reconectar.
   estava `disconnected`, então `was_active` era `False` — sem transição, sem
   disparo). Status no banco permaneceu `disconnected`.
 
-### Cenário C3 — Produção (payload real)
-- [ ] Observar nos logs de produção o payload bruto real de um evento
-      `connection` da UazAPI, confirmando que `extract_connection_meta`
-      extrai `status_value` corretamente
+### Cenário C3 — Payload real (ambiente de teste real da UazAPI)
+- [x] Confirmar o payload real do evento `connection` contra a UazAPI de
+      verdade (não simulado)
+- [x] Confirmar que `extract_connection_meta` extrai `status_value`
+      corretamente do payload real
+- **Validado em:** 24/08/2026 — teste ao vivo com instância de teste dedicada
+  (`teste-alerta-desconexao-c3`, criada e depois apagada da UazAPI só para
+  este teste) e número de WhatsApp descartável do próprio utilizador
+  (+351961649355), via túnel ngrok apontando o webhook para o backend-crm
+  local. Conectado por código de pareamento, depois desconectado
+  deliberadamente duas vezes (remover aparelho no telefone) para observar o
+  payload real do evento `connection`. Ver detalhes e o payload capturado na
+  Fase 1.1, abaixo — este teste revelou e permitiu corrigir um bug real antes
+  de ir para produção.
+
+---
+
+## Fase 1.1 — Diagnóstico + Correção: `instance_id` mal resolvido no evento connection (24/08/2026)
+
+### Problema identificado
+
+O teste ao vivo (Cenário C3) revelou que o payload real do evento `connection`
+tem um formato diferente do evento `messages` nesse ponto específico: em vez
+de `payload["instance"]` ser a *string* com o instance_id (como é para
+`messages`), no evento `connection` a UazAPI aninha o **objeto inteiro** da
+instância ali:
+
+```json
+{
+  "BaseUrl": "https://digitalpro.uazapi.com",
+  "EventType": "connection",
+  "event_id": "acb90d3a-d874-47dd-8734-9da810cd9eba",
+  "instance": {
+    "name": "teste-alerta-desconexao-c3",
+    "status": "disconnected",
+    "lastDisconnect": "2026-08-24 21:20:34.748Z",
+    "lastDisconnectReason": "401: logged out from another device"
+  },
+  "instanceName": "teste-alerta-desconexao-c3",
+  "owner": "351961649355",
+  "token": "...",
+  "type": "LoggedOut"
+}
+```
+
+`backend-crm/routes/webhooks.py:112` (`instance_id = payload.get("instance")
+or payload.get("instanceName")`) — código pré-existente, usado por todo o
+handler — assumia que `payload["instance"]` era sempre uma string. Para o
+evento `connection`, isso resultava num **dict** sendo usado como
+`instance_id`, que o Pydantic de `ConnectionEventPayload.instance_id: str`
+(backend-core) rejeitava com `422 Unprocessable Content` — capturado pelo
+try/except best-effort (sem quebrar a resposta 200 à UazAPI), mas a
+atualização de status e o email **nunca chegavam a rodar**. Confirmado nos
+logs do teste: 4 tentativas com `422`/`falha ao repassar ao core` antes da
+correção.
+
+### Correção
+
+Resolução de `instance_id` feita localmente dentro do bloco `if event ==
+"connection"` (não altera a variável `instance_id` global usada por
+`messages`, para não arriscar o pipeline já em produção): se
+`payload["instance"]` for um dict, usa `.get("name")` (com fallback
+`instanceId`/`id`); senão, usa como string diretamente. Também mudei o log de
+captura do payload bruto de `logger.info` para `logger.warning` — descoberta
+lateral do mesmo teste: o `backend-crm` não configura nível do root logger em
+lugar nenhum, então **todo `logger.info` do serviço é invisível hoje**, local
+e em produção (ver Ajuste Possível abaixo). `warning` garante visibilidade
+imediata sem depender dessa correção maior.
+
+| Arquivo | Mudança |
+|---|---|
+| `backend-crm/routes/webhooks.py` | Resolução de `instance_id` específica para `event=="connection"` (trata `payload["instance"]` como dict ou string); log de captura do payload passa de `info` para `warning` |
+
+Validado com um segundo ciclo completo (conectar → desconectar de propósito)
+após a correção: evento processado com `200 OK` (sem 422), status gravado
+corretamente no banco (`connected` → `disconnected`), e email disparado
+exatamente uma vez na transição real (log:
+`connection_event: falha ao enviar email de desconexão user_id=1 error=SMTP
+não configurado` — esperado, SMTP desligado de propósito no teste).
+
+### Commits Fase 1.1
+
+| # | Commit | O que foi implementado |
+|---|---|---|
+| 1 | `9cd10c0` | fix: resolver instance_id do evento connection como objeto aninhado |
 
 ---
 
@@ -167,6 +248,15 @@ recebe um email pedindo para reconectar.
 - **Verificação periódica de status (health-check)** — rede de segurança para
   o caso de o webhook não ser entregue. Prioridade urgente — ver
   `docs/implementations/whatsapp-status-healthcheck.md`.
+- **`logger.info` invisível em todo o `backend-crm`** — descoberto durante o
+  teste do Cenário C3: nenhum lugar do serviço configura o nível do root
+  logger (`logging.basicConfig` ou equivalente), então todo log `INFO` do
+  código da aplicação (não só o meu) fica invisível tanto local quanto em
+  produção, mesmo com `uvicorn --log-level info` (essa flag só afeta os
+  loggers internos do uvicorn). Vale um ajuste app-wide separado — maior que
+  o escopo desta implementação, e com possível efeito colateral de tornar os
+  logs de produção mais verbosos (todo INFO pré-existente passaria a
+  aparecer), por isso não incluído aqui sem decisão explícita do utilizador.
 - Notificação de "reconectado com sucesso" (inactive→active) — silencioso por
   agora.
 - UI in-app (sino/notificação no CRM) — o sistema de notificações hoje é
