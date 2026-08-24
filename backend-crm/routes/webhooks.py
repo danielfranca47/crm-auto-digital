@@ -246,18 +246,36 @@ def whatsapp_uazapi_webhook(
     )
 
     if event == "connection":
-        logger.info(
+        # Confirmado por teste real (24/08/2026, ver alerta-desconexao-whatsapp.md
+        # Fase 1.1): ao contrário do evento "messages" (onde payload["instance"] é a
+        # string com o instance_id), no evento "connection" a UazAPI aninha o objeto
+        # inteiro da instância em payload["instance"] (com name/status/lastDisconnect/
+        # lastDisconnectReason) — precisa resolver separadamente.
+        connection_instance_field = payload.get("instance")
+        if isinstance(connection_instance_field, dict):
+            connection_instance_id = (
+                connection_instance_field.get("name")
+                or connection_instance_field.get("instanceId")
+                or connection_instance_field.get("id")
+            )
+        else:
+            connection_instance_id = connection_instance_field or payload.get("instanceName")
+
+        # logger.info não aparece nos logs hoje (root logger sem nível configurado
+        # no backend-crm — ver Ajuste Possível em alerta-desconexao-whatsapp.md);
+        # warning garante visibilidade em produção até essa lacuna ser corrigida.
+        logger.warning(
             "uazapi webhook connection event instance=%s payload=%s",
-            instance_id,
+            connection_instance_id,
             json.dumps(payload, ensure_ascii=False),
         )
-        if instance_id:
+        if connection_instance_id:
             try:
-                report_whatsapp_connection_event(instance_id, payload)
+                report_whatsapp_connection_event(connection_instance_id, payload)
             except Exception as exc:
                 logger.warning(
                     "uazapi webhook connection event: falha ao repassar ao core instance=%s error=%s",
-                    instance_id,
+                    connection_instance_id,
                     exc,
                 )
         return {"status": "ok", "reason": "connection_event_processed"}
