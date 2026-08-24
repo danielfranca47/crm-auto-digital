@@ -395,6 +395,37 @@ def render_password_changed_email(name: Optional[str]) -> tuple[str, str]:
     return html, text
 
 
+def render_whatsapp_disconnected_email(name: Optional[str], login_url: str) -> tuple[str, str]:
+    display = name or "Cliente"
+    html = f"""
+<!DOCTYPE html>
+<html>
+<body style="font-family:sans-serif;color:#1e293b;max-width:520px;margin:0 auto;padding:24px">
+  <h2 style="color:#dc2626">O teu WhatsApp desconectou</h2>
+  <p>Olá, <strong>{display}</strong>.</p>
+  <p>A sessão do WhatsApp ligada à <strong>Lara</strong> caiu — ela deixou de conseguir responder aos teus leads até a conexão ser refeita.</p>
+  <p>Isto costuma acontecer por instabilidade momentânea. Basta reconectar escaneando o QR code de novo.</p>
+  <p style="margin:24px 0">
+    <a href="{login_url}"
+       style="background:#dc2626;color:#fff;padding:12px 24px;border-radius:8px;text-decoration:none;font-weight:600">
+      Reconectar agora →
+    </a>
+  </p>
+  {_FOOTER}
+</body>
+</html>
+"""
+    text = (
+        f"O teu WhatsApp desconectou\n\n"
+        f"Olá, {display}.\n\n"
+        f"A sessão do WhatsApp ligada à Lara caiu — ela deixou de conseguir responder aos teus leads até a conexão ser refeita.\n\n"
+        f"Isto costuma acontecer por instabilidade momentânea. Basta reconectar escaneando o QR code de novo.\n\n"
+        f"Reconecta em: {login_url}"
+        f"{_FOOTER_TEXT}"
+    )
+    return html, text
+
+
 def render_subscription_expired_email(
     name: Optional[str], plan_name: str, checkout_url: str
 ) -> tuple[str, str]:

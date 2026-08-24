@@ -9,10 +9,12 @@ from fastapi import APIRouter, Depends, Header, HTTPException, status
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
+from app import models
 from app.config import settings
 from app.db import get_db
 from app.services import uazapi_admin
 from app.services import whatsapp_connections as connections_service
+from app.services.email_service import render_whatsapp_disconnected_email, send_email
 from app.utils.crypto import SecretEncryptionError, decrypt_secret
 
 router = APIRouter(prefix="", tags=["whatsapp_instances"])
@@ -47,6 +49,11 @@ class InstanceStatusPayload(BaseModel):
 
     class Config:
         extra = "allow"
+
+
+class ConnectionEventPayload(BaseModel):
+    instance_id: str
+    raw: Dict[str, Any]
 
 
 class WebhookPayload(BaseModel):
@@ -296,6 +303,68 @@ async def status_instance(
             db.refresh(connection)
 
     return uazapi_admin.redact_instance_token(raw)
+
+
+@router.post("/whatsapp-instances/connection-event")
+async def connection_event(
+    payload: ConnectionEventPayload,
+    db: Session = Depends(get_db),
+    _: str = Depends(_require_service_token),
+):
+    """Recebe o evento 'connection' repassado pelo backend-crm a partir do
+    webhook da UazAPI. Actualiza o status real da conexão e, se a transição
+    for de activa para inactiva, avisa o dono da conta por email para
+    reconectar (ver docs/implementations/alerta-desconexao-whatsapp.md)."""
+    normalized_instance_id = _normalize_instance_id(payload.instance_id)
+    connection = connections_service.get_connection_by_instance(db, normalized_instance_id)
+    if not connection:
+        return {"status": "ignored", "reason": "connection_not_found"}
+
+    status_value, _, _ = uazapi_admin.extract_connection_meta(payload.raw)
+    if not status_value:
+        logger.info(
+            "connection_event status not found instance_id=%s payload=%s",
+            normalized_instance_id,
+            uazapi_admin.redact_instance_token(payload.raw),
+        )
+        return {"status": "ignored", "reason": "status_not_found"}
+
+    was_active = connections_service.normalize_connection_status_for_crm(connection.status) == "active"
+    is_active = connections_service.normalize_connection_status_for_crm(status_value) == "active"
+
+    connection.status = status_value
+    db.add(connection)
+    db.commit()
+    db.refresh(connection)
+
+    logger.info(
+        "connection_event instance_id=%s status=%s was_active=%s is_active=%s",
+        normalized_instance_id,
+        status_value,
+        was_active,
+        is_active,
+    )
+
+    if was_active and not is_active:
+        try:
+            user = db.query(models.User).filter(models.User.id == connection.user_id).first()
+            if user and user.email:
+                login_url = (settings.CRM_FRONTEND_URL or "https://crmapp.danielfranca.pt").rstrip("/") + "/ai-profile"
+                html, text = render_whatsapp_disconnected_email(user.name, login_url)
+                send_email(
+                    to=user.email,
+                    subject="A tua Lara desconectou do WhatsApp — reconecta agora",
+                    html=html,
+                    text=text,
+                )
+        except Exception as exc:
+            logger.warning(
+                "connection_event: falha ao enviar email de desconexão user_id=%s error=%s",
+                connection.user_id,
+                exc,
+            )
+
+    return {"status": "ok", "connection_status": status_value}
 
 
 @router.post("/whatsapp-instances/webhook")

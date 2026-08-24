@@ -316,6 +316,34 @@ def connect_core_whatsapp_instance(
     return data
 
 
+def report_whatsapp_connection_event(instance_id: str, raw_payload: Dict[str, Any]) -> Dict[str, Any]:
+    """Repassa ao backend-core o evento 'connection' recebido do webhook da
+    UazAPI, para actualizar o status real da conexão e disparar o alerta de
+    desconexão por email quando aplicável (ver
+    docs/implementations/alerta-desconexao-whatsapp.md)."""
+    if not instance_id:
+        raise HTTPException(status_code=400, detail="instance_id obrigatório")
+
+    base = _get_core_base()
+    url = f"{base}/whatsapp-instances/connection-event"
+    headers = _service_headers()
+    payload = {"instance_id": instance_id, "raw": raw_payload}
+
+    try:
+        with httpx.Client(timeout=10) as client:
+            resp = client.post(url, headers=headers, json=payload)
+    except httpx.RequestError as exc:
+        raise HTTPException(status_code=502, detail=f"Falha ao contatar backend-core: {exc}") from exc
+
+    if resp.status_code >= 400:
+        _raise_whatsapp_core_error(resp, "connection-event")
+
+    data = resp.json()
+    if not isinstance(data, dict):
+        raise HTTPException(status_code=502, detail="Resposta inesperada do backend-core")
+    return data
+
+
 def status_core_whatsapp_instance(instance_id: str) -> Dict[str, Any]:
     if not instance_id:
         raise HTTPException(status_code=400, detail="instance_id obrigatório")

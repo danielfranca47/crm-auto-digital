@@ -11,7 +11,7 @@ from typing import Any, Dict, Optional
 
 from fastapi import APIRouter, Header, HTTPException, Query, Request
 
-from core_client import fetch_core_ai_profile_by_webhook_secret
+from core_client import fetch_core_ai_profile_by_webhook_secret, report_whatsapp_connection_event
 from database import get_connection
 from services.followup_state import stop_followup_for_lead_category
 from services.jobs_service import TYPE_WHATSAPP_SEND, create_job
@@ -244,6 +244,23 @@ def whatsapp_uazapi_webhook(
         sender,
         message_id,
     )
+
+    if event == "connection":
+        logger.info(
+            "uazapi webhook connection event instance=%s payload=%s",
+            instance_id,
+            json.dumps(payload, ensure_ascii=False),
+        )
+        if instance_id:
+            try:
+                report_whatsapp_connection_event(instance_id, payload)
+            except Exception as exc:
+                logger.warning(
+                    "uazapi webhook connection event: falha ao repassar ao core instance=%s error=%s",
+                    instance_id,
+                    exc,
+                )
+        return {"status": "ok", "reason": "connection_event_processed"}
 
     if event not in {"messages", "message"}:
         return {"status": "ignored", "reason": "event_not_messages"}
