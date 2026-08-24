@@ -1,7 +1,7 @@
 # Fix: instrução de agendamento vazando para o agente "Fechamento Direto" (Closer)
 
 **Branch:** `fix/instrucao-agendamento-closer`
-**Status:** Em andamento
+**Status:** Todos os cenários validados (24/08/2026) — via testes automatizados; sem cenário de browser aplicável (mudança 100% backend)
 
 ---
 
@@ -151,13 +151,39 @@ backend, para todos os agent_modes.
 - **Validado em:** 24/08/2026 — via teste automatizado `test_booking_signal_never_injected_for_direto_mode_with_sales_flow` (commit `372446c`)
 
 ### Cenário P3 — Bloco de orientação em p5 chega ao prompt de closing
-- [ ] Configurar bloco `orientacao` em p5 com conteúdo customizado (ex.: sobre envio de link de pagamento)
-- [ ] Gerar prompt de closing
-- [ ] Confirmar: o conteúdo do bloco aparece no prompt
+- [x] Configurar bloco `orientacao` em p5 com conteúdo customizado (ex.: sobre envio de link de pagamento)
+- [x] Gerar prompt de closing
+- [x] Confirmar: o conteúdo do bloco aparece no prompt
+- **Validado em:** 24/08/2026 — via teste automatizado `test_closing_prompt_includes_p5_orientation_block_content` (commit `ea70bba`)
 
 ### Cenário P4 — p5 sem blocos configurados (regressão zero)
-- [ ] Gerar prompt de closing sem nenhum bloco em p5
-- [ ] Confirmar: prompt idêntico ao comportamento anterior (sem alterações)
+- [x] Gerar prompt de closing sem nenhum bloco em p5
+- [x] Confirmar: prompt idêntico ao comportamento anterior (sem alterações)
+- **Validado em:** 24/08/2026 — via teste automatizado `test_closing_prompt_unchanged_when_p5_has_no_blocks` (commit `ea70bba`)
 
 ### Cenário — Suíte completa
-- [ ] Rodar `pytest` em `backend-executors/tests/` — suíte completa passa, incluindo os testes de `agenda`/`consultivo` já existentes (garantir zero regressão)
+- [x] Rodar `pytest` em `backend-executors/tests/` — suíte completa passa, incluindo os testes de `agenda`/`consultivo` já existentes (garantir zero regressão)
+- **Validado em:** 24/08/2026 — `198 passed, 80 failed` (as 80 falhas são pré-existentes na baseline `main`, confirmado via `git stash` antes desta implementação — nenhuma nova falha introduzida; ver nota abaixo)
+
+---
+
+### Commits Fase 2
+
+| # | Commit | O que foi implementado |
+|---|---|---|
+| 1 | `ea70bba` | Wiring de `_evaluate_sales_flow_phases`/`_build_sales_flow_phases_block` em `_build_child_prompt_closing`; 2 novos testes; doc atualizada |
+
+**Detalhes do commit `ea70bba`:**
+- `backend-executors/app/services/decision_engine.py` — `_build_child_prompt_closing` ganha parâmetro `is_phase_entry: bool = True`; antes do `return`, adiciona a chamada de wiring do sistema de fases (mesmo padrão de `_build_child_prompt_recepcao`). Call site (`route_for_child == "closing"`) passa a encaminhar `_is_phase_entry_for_prompt`.
+- `backend-executors/tests/test_sales_flow_intent_trigger_phase_entry.py` — `test_closing_prompt_includes_p5_orientation_block_content` e `test_closing_prompt_unchanged_when_p5_has_no_blocks`.
+- `docs/architecture/sales-flow.md` — nota explícita sobre `p5` injectar `orientacao` no prompt de closing.
+
+### Relatório da Fase 2 — o que mudou na prática
+
+**Antes:** a fase "Fechamento" (p5) já aparecia no builder do Fluxo de Venda para qualquer tipo de agente, e dava para adicionar instruções de texto livre nela — mas essas instruções eram silenciosamente ignoradas: nunca chegavam à IA no momento de fechar a venda. Isso valia para todos os agentes, não só o Closer.
+
+**Agora:** qualquer instrução de texto adicionada na fase "Fechamento" do builder passa a ser usada de verdade pela IA nesse momento da conversa. Isso permite, por exemplo, configurar para o Closer quando enviar o link de pagamento ou como conduzir a etapa de pagamento — sem reintroduzir a instrução de agendamento removida na Fase 1.
+
+**Para validar:** Cenários P3, P4 e a Suíte completa, na seção "Checks de Validação" acima (testes automatizados já rodados e passando — ver commit `ea70bba`). Não há cenário de browser (MCP) aplicável — a mudança é inteiramente na geração de prompt do backend, sem alteração observável na UI do builder (a UI já existia e já aceitava esses blocos).
+
+**Nota sobre a suíte completa:** as 80 falhas encontradas ao rodar `pytest` em `backend-executors/tests/` já existem na branch `main`, antes de qualquer mudança desta implementação (confirmado isolando as mudanças com `git stash` e rodando a suíte na baseline). Parecem ligadas a um problema de encoding no ambiente Windows (textos com caracteres acentuados corrompidos em alguns testes) — não relacionado a esta correção. Nenhuma falha nova foi introduzida (a contagem de testes passando subiu de 195 para 198 — os 3 testes novos desta implementação — e a contagem de falhas permaneceu em 80).
