@@ -97,7 +97,27 @@ const isRisky = localPolicy === 'ignore' && !localText.trim();
 
 | # | Commit | O que foi implementado |
 |---|---|---|
-| 1 | *(a registrar)* | frontend: aviso + checkbox de ciência para handoff_policy=ignore sem texto |
+| 1 | `020637d` | frontend: aviso + checkbox de ciência para handoff_policy=ignore sem texto |
+
+**Detalhes do commit `020637d`:**
+- `frontend-crm/src/components/agente/CamadaIdentidade.tsx` — `DrawerBase` ganha prop
+  `saveDisabled`; `DrawerHandoff` ganha `acknowledged`/`isRisky`, aviso condicional e
+  checkbox de confirmação.
+- `docs/implementations/aviso-handoff-ignore-sem-texto.md` (novo) — este arquivo.
+
+### Relatório da Fase 1 — o que mudou na prática
+
+**Antes:** ao configurar a política de handoff como "Ignorar" e deixar a mensagem
+personalizada em branco, o drawer salvava normalmente, sem nenhum aviso — mesmo sendo
+essa a combinação que faz o bot ficar completamente mudo quando precisa transferir a
+conversa para um humano.
+
+**Agora:** assim que essa combinação é selecionada no drawer, aparece um aviso vermelho
+explicando o risco, e o botão "Salvar" fica desabilitado até o usuário marcar um checkbox
+confirmando que está ciente. Qualquer mudança na política ou no texto desmarca o checkbox
+de novo — ele nunca fica "guardado" de uma sessão para outra.
+
+**Para validar:** Cenários P1 a P5, abaixo.
 
 ---
 
