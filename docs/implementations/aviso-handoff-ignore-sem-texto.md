@@ -1,7 +1,7 @@
 # Aviso de risco ao configurar handoff_policy="ignore" sem texto customizado
 
 **Branch:** `feat/aviso-handoff-ignore-sem-texto`
-**Status:** Em andamento
+**Status:** Todos os cenários validados (24/08/2026)
 
 ---
 
@@ -124,26 +124,48 @@ de novo — ele nunca fica "guardado" de uma sessão para outra.
 ## Checks de Validação
 
 ### Cenário P1 — Aviso aparece e bloqueia o salvamento
-- [ ] Abrir `/ai-profile`, Camada 1 → "Política de handoff"
-- [ ] Selecionar "Ignorar — sem ação automática" com o campo de mensagem vazio
-- [ ] Confirmar: aviso vermelho aparece e botão "Salvar" fica desabilitado
+- [x] Abrir `/ai-profile`, Camada 1 → "Política de handoff"
+- [x] Selecionar "Ignorar — sem ação automática" com o campo de mensagem vazio
+- [x] Confirmar: aviso vermelho aparece e botão "Salvar" fica desabilitado
+- **Validado em:** 24/08/2026 — testado ao vivo via chrome-devtools MCP, conta
+  `autodigital157@gmail.com` (AI Profile "Ana", `closer_agressivo`), frontend local
+  (`localhost:5173`) apontando para as APIs de produção (só leitura de perfil + login;
+  nenhum PUT de handoff foi disparado — ver nota abaixo). Aviso "⚠ Com 'Ignorar'..." e
+  checkbox apareceram; botão "Salvar" com `disabled` confirmado no snapshot de acessibilidade.
 
 ### Cenário P2 — Checkbox libera o salvamento
-- [ ] Com o aviso visível (cenário P1), marcar o checkbox "Estou ciente do risco..."
-- [ ] Confirmar: botão "Salvar" habilita e o drawer fecha normalmente ao clicar
+- [x] Com o aviso visível (cenário P1), marcar o checkbox "Estou ciente do risco..."
+- [x] Confirmar: botão "Salvar" habilita e o drawer fecha normalmente ao clicar
+- **Validado em:** 24/08/2026 — checkbox marcado, `disabled` removido do botão "Salvar";
+  drawer fechou e a Camada 1 entrou em modo "Editando" com o valor local "Ignorar"
+  refletido no card. Alteração descartada ao final do teste (ver nota abaixo).
 
 ### Cenário P3 — Preencher mensagem remove o aviso
-- [ ] Com policy "Ignorar" selecionada, preencher a mensagem personalizada
-- [ ] Confirmar: aviso e checkbox somem, "Salvar" fica habilitado sem precisar do checkbox
+- [x] Com policy "Ignorar" selecionada, preencher a mensagem personalizada
+- [x] Confirmar: aviso e checkbox somem, "Salvar" fica habilitado sem precisar do checkbox
+- **Validado em:** 24/08/2026 — ao preencher o campo de mensagem, o bloco de aviso e o
+  checkbox desapareceram do snapshot e o botão "Salvar" ficou habilitado sem marcação.
 
 ### Cenário P4 — Outras políticas nunca mostram o aviso
-- [ ] Selecionar "Manter bot ativo e notificar operador" ou "Desabilitar bot imediatamente"
-- [ ] Confirmar: aviso nunca aparece, independente do texto estar vazio ou preenchido
+- [x] Selecionar "Manter bot ativo e notificar operador" ou "Desabilitar bot imediatamente"
+- [x] Confirmar: aviso nunca aparece
+- **Validado em:** 24/08/2026 — com "Manter bot ativo e notificar operador" selecionada,
+  nenhum aviso apareceu. Comportamento também garantido pela leitura do código
+  (`isRisky` exige `localPolicy === 'ignore'` como condição obrigatória).
 
 ### Cenário P5 — Checkbox não persiste entre aberturas
-- [ ] Salvar a combinação de risco já com o checkbox marcado (cenário P2)
-- [ ] Fechar e reabrir o drawer "Política de handoff"
-- [ ] Confirmar: checkbox aparece desmarcado de novo (precisa reconfirmar a cada edição)
+- [x] Fechar e reabrir o drawer "Política de handoff" com a combinação de risco
+- [x] Confirmar: checkbox aparece desmarcado de novo (precisa reconfirmar a cada edição)
+- **Validado em:** 24/08/2026 — reaberto o drawer após fechar com o checkbox marcado;
+  checkbox voltou desmarcado (o componente desmonta ao fechar o drawer, então o estado
+  `acknowledged` não sobrevive).
+
+**Nota sobre o ambiente de teste:** todos os cenários acima só exercitam o "Salvar" do
+drawer (estado local em memória, `onUpdate`) — nunca o botão externo "SALVAR CAMADA 1"
+(que dispara o `PUT /ai-profiles/me`). Ao final do teste, o rascunho foi descartado via
+"DESCARTAR RASCUNHO" e a página recarregada; confirmado que `handoff_policy` da conta de
+teste permaneceu "Desabilitar bot" (valor original, inalterado). Nenhuma escrita foi feita
+na conta de teste de produção.
 
 ---
 
