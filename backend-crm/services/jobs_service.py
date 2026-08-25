@@ -15,6 +15,7 @@ from database import DB_PATH, get_connection
 from services.lead_category_policy import (
     apply_closing_bot_disable_side_effect,
     apply_disqualified_bot_disable_side_effect,
+    apply_prospect_refused_bot_disable_side_effect,
 )
 from services.qualification_guardrails import (
     QUALIFICATION_GATED_CATEGORIES,
@@ -1057,6 +1058,13 @@ def apply_suggested_category(
         outcome=outcome,
     )
     apply_disqualified_bot_disable_side_effect(
+        conn,
+        lead_id=lead_id,
+        user_id=user_id,
+        old_category=current_category,
+        new_category=normalized,
+    )
+    apply_prospect_refused_bot_disable_side_effect(
         conn,
         lead_id=lead_id,
         user_id=user_id,

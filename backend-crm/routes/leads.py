@@ -20,6 +20,7 @@ from services.phone_normalizer import PhoneNormalizationError, normalize_to_e164
 from services.lead_category_policy import (
     apply_closing_bot_disable_side_effect,
     apply_disqualified_bot_disable_side_effect,
+    apply_prospect_refused_bot_disable_side_effect,
 )
 from services.followup_state import (
     stop_followup_for_lead_category,
@@ -1012,6 +1013,13 @@ def atualizar_lead_parcial(id: int, lead: LeadUpdate, current_user: CurrentUser 
             new_category=new_category,
         )
         apply_disqualified_bot_disable_side_effect(
+            conn,
+            lead_id=id,
+            user_id=current_user.id,
+            old_category=old_category,
+            new_category=new_category,
+        )
+        apply_prospect_refused_bot_disable_side_effect(
             conn,
             lead_id=id,
             user_id=current_user.id,
