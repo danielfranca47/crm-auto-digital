@@ -17,7 +17,10 @@ from services import rate_limit_service
 from services.agent_type import resolve_agent_type_for_user
 from core_client import fetch_core_ai_profile
 from services.phone_normalizer import PhoneNormalizationError, normalize_to_e164
-from services.lead_category_policy import apply_closing_bot_disable_side_effect
+from services.lead_category_policy import (
+    apply_closing_bot_disable_side_effect,
+    apply_disqualified_bot_disable_side_effect,
+)
 from services.followup_state import (
     stop_followup_for_lead_category,
     stop_followup_on_handoff,
@@ -1002,6 +1005,13 @@ def atualizar_lead_parcial(id: int, lead: LeadUpdate, current_user: CurrentUser 
 
         new_category = dados.get("category", old_category)
         apply_closing_bot_disable_side_effect(
+            conn,
+            lead_id=id,
+            user_id=current_user.id,
+            old_category=old_category,
+            new_category=new_category,
+        )
+        apply_disqualified_bot_disable_side_effect(
             conn,
             lead_id=id,
             user_id=current_user.id,

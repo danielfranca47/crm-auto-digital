@@ -6,6 +6,8 @@ from typing import Any, Dict, Optional
 
 import sqlite3
 
+from services.lead_category_policy import apply_disqualified_bot_disable_side_effect
+
 
 def _check_conflict(
     conn: sqlite3.Connection,
@@ -110,6 +112,10 @@ def apply_outcome(
         )
 
     if payload.move_lead_to:
+        old_category_row = cur.execute(
+            "SELECT category FROM leads WHERE id = ?", (lead_id,)
+        ).fetchone()
+        old_category = old_category_row["category"] if old_category_row else None
         cur.execute(
             """
             UPDATE leads
@@ -126,6 +132,13 @@ def apply_outcome(
             VALUES (?, NULL, NULL, 'moved_stage', ?, ?)
             """,
             (lead_id, notes, user_id),
+        )
+        apply_disqualified_bot_disable_side_effect(
+            conn,
+            lead_id=lead_id,
+            user_id=user_id,
+            old_category=old_category,
+            new_category=payload.move_lead_to,
         )
 
     outcome_notes = {

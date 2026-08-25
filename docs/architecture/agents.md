@@ -348,11 +348,12 @@ O flag `bot_disabled` na tabela `leads` (backend-crm) permite desactivar o agent
 | Campo | Tipo | Descrição |
 |---|---|---|
 | `bot_disabled` | `INTEGER` (0/1) | `1` = agente desactivado para este lead |
-| `bot_disabled_reason` | `TEXT NULL` | Motivo: `"manual_disable"`, `"category_closing"`, `"media_fallback"`, `"meeting_scheduled"`, `"category_checkin_closed"` |
+| `bot_disabled_reason` | `TEXT NULL` | Motivo: `"manual_disable"`, `"category_closing"`, `"category_disqualified"`, `"media_fallback"`, `"meeting_scheduled"`, `"category_checkin_closed"` |
 
 **Fontes de desactivação:**
 - **Manual:** utilizador clica "Desativar bot" no `LeadCardDialog`; confirma modal com checkbox
 - **Automático (closing):** `lead_category_policy.py` desactiva o bot ao entrar em `closing` (apenas para `agent_mode=agenda`)
+- **Automático (desqualificado):** `apply_disqualified_bot_disable_side_effect()` (`lead_category_policy.py`) desactiva o bot ao entrar em `disqualified` — qualquer `agent_mode`, sem condição adicional. Chamado nos 3 pontos que alteram `category`: `routes/leads.py` (drag-and-drop no Kanban), `jobs_service.py` (movimentação automática via IA/keyword) e `appointment_outcomes.py` (`move_lead_to` no outcome pós-reunião). Reativação continua manual
 - **Automático (media_fallback):** quando `media_fallback="pausar"` e chega mensagem de mídia inválida
 - **Automático (reunião confirmada):** `meeting_scheduler.handle_meeting_scheduled()` desactiva o bot ao confirmar uma reunião (`agent_mode=agenda`) — ver "Gestão pós-confirmação" abaixo
 - **Automático (fechamento de check-in):** `_maybe_redisable_bot_after_checkin_close()` desactiva o bot de novo (`bot_disabled_reason="category_checkin_closed"`) quando o check-in automático de cliente inativo (`followup_variant=client_checkin`) termina sem conversa activa — só se o lead ainda estiver em `client-list`. Ver [`followup.md`](followup.md)
