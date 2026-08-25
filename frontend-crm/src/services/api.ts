@@ -169,6 +169,13 @@ export type PlaygroundAppointmentEvent = {
   end_at: string;
 };
 
+export type PlaygroundSalesFlowWait = {
+  until: string;       // ISO UTC (sem sufixo) — interpretar como UTC ao formatar
+  block_id: string;
+  phase_id: string;
+  suppress_llm: boolean;
+};
+
 export type PlaygroundChatResponse = {
   lead_id: number;
   message_to_send: string;
@@ -178,6 +185,7 @@ export type PlaygroundChatResponse = {
   lead_state: {
     category: string;
     qualification_state?: PlaygroundQualificationState | null;
+    sales_flow_wait?: PlaygroundSalesFlowWait | null;
   };
   decision_trace: PlaygroundDecisionTrace;
   pre_send_media?: PlaygroundPreSendMediaItem[];
@@ -1640,6 +1648,13 @@ export const api = {
       wa_display_name?: string | null;
     }) =>
       apiClient.post<PlaygroundChatResponse>("/playground/chat", payload),
+
+    skipWait: async (leadId: number) =>
+      apiClient.post<{
+        category: string;
+        qualification_state?: PlaygroundQualificationState | null;
+        sales_flow_wait?: PlaygroundSalesFlowWait | null;
+      }>(`/playground/leads/${leadId}/skip-wait`, {}),
 
     uploadAudio: async (blob: Blob): Promise<{ filename: string; audio_url: string }> => {
       const form = new FormData();

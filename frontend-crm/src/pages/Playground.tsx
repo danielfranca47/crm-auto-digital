@@ -5,7 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { ToastAction } from "@/components/ui/toast";
 import { toast } from "@/hooks/use-toast";
 import { useUsage } from "@/hooks/useUsage";
-import { RefreshCw, ArrowDownToLine, ArrowUpFromLine } from "lucide-react";
+import { RefreshCw, ArrowDownToLine, ArrowUpFromLine, Timer, FastForward } from "lucide-react";
 import { api, type PlaygroundChatResponse, type PlaygroundAutoItem, type PlaygroundAppointmentEvent } from "@/services/api";
 import { API_BASE } from "@/lib/api-client";
 import { PlaygroundConfigModal, type PlaygroundSession } from "@/components/playground/PlaygroundConfigModal";
@@ -224,6 +224,18 @@ export default function Playground() {
     setAgentReport([]);
   }
 
+  // ── Pular a pausa ativa do bloco `espera` (agiliza testes) ──────────────────
+  async function handleSkipWait() {
+    if (!session?.leadId) return;
+    try {
+      const res = await api.playground.skipWait(session.leadId);
+      setSession((s) => s ? { ...s, salesFlowWait: res.sales_flow_wait ?? null } : s);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Erro ao pular tempo de espera";
+      toast({ title: "Erro", description: msg, variant: "destructive" });
+    }
+  }
+
   // ── Outbound: dispara abertura automática do bot ao iniciar sessão ─────────
   useEffect(() => {
     if (!session || session.scenarioType !== "outbound" || messages.length > 0) return;
@@ -244,7 +256,7 @@ export default function Playground() {
 
         if (cancelled) return;
 
-        setSession((s) => s ? { ...s, leadId: res.lead_id } : s);
+        setSession((s) => s ? { ...s, leadId: res.lead_id, salesFlowWait: res.lead_state?.sales_flow_wait ?? null } : s);
 
         await revealBotTurn(res, setMessages, setLoading);
       } catch (err: unknown) {
@@ -283,7 +295,7 @@ export default function Playground() {
 
         if (cancelled) return;
 
-        setSession((s) => s ? { ...s, leadId: res.lead_id } : s);
+        setSession((s) => s ? { ...s, leadId: res.lead_id, salesFlowWait: res.lead_state?.sales_flow_wait ?? null } : s);
 
         await revealBotTurn(res, setMessages, setLoading);
       } catch (err: unknown) {
@@ -336,6 +348,7 @@ export default function Playground() {
         if (!session.leadId) {
           setSession((s) => s ? { ...s, leadId: res.lead_id } : s);
         }
+        setSession((s) => s ? { ...s, salesFlowWait: res.lead_state?.sales_flow_wait ?? null } : s);
 
         // Adiciona resposta do bot
         await revealBotTurn(res, setMessages, setLoading);
@@ -391,6 +404,7 @@ export default function Playground() {
         if (!session.leadId) {
           setSession((s) => s ? { ...s, leadId: res.lead_id } : s);
         }
+        setSession((s) => s ? { ...s, salesFlowWait: res.lead_state?.sales_flow_wait ?? null } : s);
 
         // Atualiza bolha do lead com transcrição (se o backend conseguiu transcrever)
         if (res.transcription) {
@@ -492,6 +506,7 @@ export default function Playground() {
         if (!session.leadId) {
           setSession((s) => s ? { ...s, leadId: res.lead_id } : s);
         }
+        setSession((s) => s ? { ...s, salesFlowWait: res.lead_state?.sales_flow_wait ?? null } : s);
 
         await revealBotTurn(res, setMessages, setLoading);
       } catch (err: unknown) {
@@ -662,6 +677,35 @@ export default function Playground() {
                 <Badge variant="outline" className="text-xs shrink-0">
                   lead #{session.leadId}
                 </Badge>
+              )}
+              {session.salesFlowWait && new Date(`${session.salesFlowWait.until}Z`).getTime() > Date.now() && (
+                <>
+                  <Badge
+                    variant="outline"
+                    className={`text-xs shrink-0 gap-1 ${
+                      session.salesFlowWait.suppress_llm
+                        ? "border-red-500/50 text-red-600"
+                        : "border-amber-500/50 text-amber-600"
+                    }`}
+                  >
+                    <Timer className="h-3 w-3" />
+                    {session.salesFlowWait.suppress_llm ? "Pausa total até " : "Pausado até "}
+                    {new Date(`${session.salesFlowWait.until}Z`).toLocaleTimeString([], {
+                      hour: "2-digit",
+                      minute: "2-digit",
+                      second: "2-digit",
+                    })}
+                  </Badge>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-6 px-2 text-xs shrink-0 gap-1"
+                    onClick={handleSkipWait}
+                  >
+                    <FastForward className="h-3 w-3" />
+                    Pular tempo
+                  </Button>
+                </>
               )}
               {session.scenarioContext && (
                 <span className="text-xs text-muted-foreground truncate hidden sm:block">

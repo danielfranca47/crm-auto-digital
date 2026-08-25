@@ -133,6 +133,7 @@ class LeadState(BaseModel):
     """Estado actual do lead após o processamento."""
     category: str
     qualification_state: Optional[QualificationStateSnapshot] = None
+    sales_flow_wait: Optional[dict] = None  # {until, block_id, phase_id, suppress_llm} — pausa ativa do bloco `espera`
 
 
 class DecisionTrace(BaseModel):
@@ -976,15 +977,20 @@ def playground_chat(
     with get_connection() as conn:
         conn.row_factory = sqlite3.Row
         cur = conn.cursor()
-        cur.execute("SELECT category FROM leads WHERE id = ?", (lead_id,))
+        cur.execute("SELECT category, sales_flow_wait FROM leads WHERE id = ?", (lead_id,))
         lead_row = cur.fetchone()
     current_category = (lead_row["category"] if lead_row else "qualification") or "qualification"
+    try:
+        current_sales_flow_wait = json.loads(lead_row["sales_flow_wait"]) if lead_row and lead_row["sales_flow_wait"] else None
+    except (ValueError, TypeError):
+        current_sales_flow_wait = None
 
     qualification_state = get_qualification_state(lead_id)
 
     lead_state = {
         "category": current_category,
         "qualification_state": qualification_state,
+        "sales_flow_wait": current_sales_flow_wait,
     }
 
     # Normalizar pre_send_media retornado pelo executor
@@ -1034,6 +1040,36 @@ def playground_chat(
         suppress_llm_response=bool(decision.get("suppress_llm_response")),
         transcription=_audio_transcription,
         appointment_event=appointment_event,
+    )
+
+
+@router.post("/leads/{lead_id}/skip-wait", response_model=LeadState)
+def playground_skip_wait(
+    lead_id: int,
+    current_user: CurrentUser = Depends(require_crm_access),
+) -> LeadState:
+    """
+    Expira manualmente a pausa ativa do bloco `espera` (Smart Delay) num lead sandbox —
+    só para agilizar testes no Playground. Nunca aplicável a leads reais (is_playground=1
+    obrigatório, mesma validação de `_load_sandbox_lead`).
+    """
+    user_id = current_user.id
+    lead_row = _load_sandbox_lead(lead_id, user_id)  # 404 se não for sandbox do utilizador
+
+    with get_connection() as conn:
+        conn.row_factory = sqlite3.Row
+        cur = conn.cursor()
+        cur.execute(
+            "UPDATE leads SET sales_flow_wait = NULL WHERE id = ? AND user_id = ? AND is_playground = 1",
+            (lead_id, user_id),
+        )
+        conn.commit()
+
+    qualification_state = get_qualification_state(lead_id)
+    return LeadState(
+        category=lead_row.get("category") or "qualification",
+        qualification_state=qualification_state,
+        sales_flow_wait=None,
     )
 
 
