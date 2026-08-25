@@ -422,6 +422,38 @@ def _mark_knowledge_shown(lead_id: int, user_id: int, categories: list) -> None:
                 conn.commit()
 
 
+def _set_sales_flow_pause(lead_id: int, user_id: int, wait_until: str, block_id: str, phase_id: str, suppress_llm: bool) -> None:
+    """Persiste a pausa do bloco `espera` (Smart Delay) — leads.sales_flow_wait."""
+    import json
+    with get_connection() as conn:
+        cur = conn.cursor()
+        cur.execute(
+            "UPDATE leads SET sales_flow_wait = ? WHERE id = ? AND user_id = ?",
+            (
+                json.dumps({
+                    "until": wait_until,
+                    "block_id": block_id,
+                    "phase_id": phase_id,
+                    "suppress_llm": bool(suppress_llm),
+                }),
+                lead_id,
+                user_id,
+            ),
+        )
+        conn.commit()
+
+
+def _clear_sales_flow_pause(lead_id: int, user_id: int) -> None:
+    """Limpa a pausa do bloco `espera` — chamado quando o decision_engine detecta expiração."""
+    with get_connection() as conn:
+        cur = conn.cursor()
+        cur.execute(
+            "UPDATE leads SET sales_flow_wait = NULL WHERE id = ? AND user_id = ?",
+            (lead_id, user_id),
+        )
+        conn.commit()
+
+
 def _call_executors_decide(context_bundle_dict: Dict[str, Any]) -> Dict[str, Any]:
     """
     Chama POST {EXECUTORS_BASE_URL}/api/internal/playground/decide de forma síncrona.
@@ -805,6 +837,13 @@ def playground_chat(
             _mark_branch_selected(lead_id, user_id, action["block_id"], action["branch_id"])
         elif atype == "mark_knowledge_shown" and action.get("categories"):
             _mark_knowledge_shown(lead_id, user_id, action["categories"])
+        elif atype == "sales_flow_pause_set" and action.get("wait_until") and action.get("block_id"):
+            _set_sales_flow_pause(
+                lead_id, user_id, action["wait_until"], action["block_id"],
+                action.get("phase_id", ""), bool(action.get("suppress_llm")),
+            )
+        elif atype == "sales_flow_pause_clear":
+            _clear_sales_flow_pause(lead_id, user_id)
         elif atype == "requeue_pending_message" and action.get("message_text"):
             _pending_requeue_text = str(action["message_text"]).strip()
 

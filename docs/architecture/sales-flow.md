@@ -119,9 +119,9 @@ Para `direto` (Closer), a instrução **nunca** é injectada — nem o texto har
 | `typeId` | Nome | Comportamento em runtime |
 |---|---|---|
 | `condicao` | Lógica de Ramificação (bifurcação em N caminhos, avaliados pela Mãe) | Ver secção "Lógica de Ramificação" abaixo |
-| `espera` | Espera inteligente | Agenda próxima avaliação após delay (`wait_value` + `wait_unit`) |
+| `espera` | Espera inteligente (Smart Delay) | Pausa o restante da fase por um tempo definido (`wait_value` + `wait_unit`) — ver secção "Pausa do Fluxo" abaixo |
 
-> **Nota:** `webhook` e `espera` têm infraestrutura de dados mas a execução em runtime ainda não está implementada no `decision_engine.py`. São blocos reservados para implementação futura. `condicao` (Lógica de Ramificação) está implementado — ver secção dedicada abaixo.
+> **Nota:** `webhook` tem infraestrutura de dados (schema, UI) mas a execução em runtime ainda não está implementada no `decision_engine.py` — reservado para implementação futura (`feat/sales-flow-webhook-execucao`). `condicao` (Lógica de Ramificação) e `espera` (Pausa do Fluxo) estão implementados — ver seções dedicadas abaixo.
 
 ---
 
@@ -297,6 +297,18 @@ Cada bloco seguinte com `branch_group_id` só é avaliado se `branch_id` bate co
 
 **No frontend:** `emptyBlock('condicao')` semeia 2 caminhos + `sticky=true`. No loop de agrupamento de `PhaseSection`, o próprio nó `condicao` é um item comum de `group.actions` — como `orientacao`/`mensagem`/`midia` — herdando visualmente (recuo, linha conectora) o grupo do gatilho que o precede no array; só a renderização do item individual muda (`<BranchGroupRow>` em vez de `<BlockRow>`). Isto espelha o `last_trigger_active` do backend (ver "Modelo sequencial de trigger" acima): o `condicao` nunca é um boundary de grupo de nível raiz por si só. Separadamente, `PhaseSection` também reconhece blocos com `branch_group_id` e sub-agrupa por `branch_id` num `BranchGroupRow` próprio, dentro do card do `condicao`; `saveBranchBlock()` insere um bloco novo no fim do caminho selecionado. Remover o nó `condicao` faz cascade-delete de todos os blocos filhos (mesmo `branch_group_id`). `BlockModal`, ao adicionar bloco a um caminho, recebe `excludeTypes=['condicao']` — sem ramificação de segundo nível, mas o caminho pode ter o seu próprio `kw_trigger`/`intent_trigger`.
 
+### Pausa do Fluxo (`espera` / Smart Delay)
+
+Bloco de ação (typeId `espera`): quando dispara (mesma regra `last_trigger_active` de qualquer outra ação), pausa o restante da fase por um tempo definido (`wait_value` + `wait_unit`, minutos/horas/dias) — os gatilhos e ações que vêm **depois** dele na mesma fase (mesmo escopo — raiz ou o mesmo caminho de um `condicao`) não são avaliados enquanto a pausa está ativa, nem no turno em que disparou nem nos turnos seguintes.
+
+**Checkbox `allow_llm_during_wait`** (default `true`, "Responder dúvidas durante a espera" no builder):
+- `true` — a LLM filha continua respondendo normalmente a qualquer mensagem do lead durante a pausa; só as ações automáticas do Fluxo de Venda abaixo do `espera` ficam paradas.
+- `false` — pausa total: `result["suppress_llm_response"] = True` é forçado em todo turno dentro da janela (reaproveita o mecanismo já existente de `suppress_llm_response`, ver "Flags opcionais em blocos de trigger" acima) — o bot não responde nada enquanto o tempo está correndo.
+
+**Persistência:** coluna `leads.sales_flow_wait TEXT NULL` (JSON `{until, block_id, phase_id, suppress_llm}`, `ensure_column()` em `backend-crm/database.py`) — mesmo padrão de `branches_selected`. Ações despachadas por `executor.py`/`playground.py`: `sales_flow_pause_set` (grava o JSON ao disparar) e `sales_flow_pause_clear` (limpa quando `decision_engine` detecta que `until` já passou). Mutação de estado pura, sem side-effect externo — roda de verdade também no Playground.
+
+**Gate em runtime (`_evaluate_sales_flow_phases`):** no início da avaliação, `_load_sales_flow_wait()` lê o estado persistido; se `phase_id` bate com a fase sendo avaliada e `until` ainda está no futuro, o gatilho de origem (`block_id`) é usado como marco: ao alcançá-lo durante a passagem pelos blocos da fase, o escopo (`_scope_key`, mesmo conceito usado pelo gating sequencial de `condicao`) é marcado como pausado — todo bloco seguinte do mesmo escopo é ignorado por completo (nem gatilho é avaliado, nem ação executa), incluindo na segunda passagem de orientações críticas (guarda permanente). Se `until` já expirou, o gate não se aplica (fica no-op) e a fase é reavaliada normalmente — incluindo o próprio bloco `espera`, que pode disparar de novo se o gatilho que o precede voltar a bater.
+
 ### Ordem de exibição / envio
 
 | Cenário | Ordem |
@@ -330,6 +342,8 @@ _PHASE_ID_TO_CATEGORY = {
 | `advance_phase` | Resolve `target_phase` via `_PHASE_ID_TO_CATEGORY` → chama `apply_suggested_category()` |
 | `mark_phase_triggered` | Append do `phase_id` em `leads.phases_triggered` |
 | `mark_trigger_fired` | Append do `block_id` em `leads.triggers_fired` |
+| `sales_flow_pause_set` | Grava `{until, block_id, phase_id, suppress_llm}` em `leads.sales_flow_wait` |
+| `sales_flow_pause_clear` | Limpa `leads.sales_flow_wait` (`NULL`) — emitido quando `decision_engine` detecta que a pausa já expirou |
 
 ---
 
@@ -386,6 +400,7 @@ O campo é lido pelo orchestrator do CRM e inserido no `ContextBundle` via `enri
 | `phases_triggered` | `TEXT NULL` | JSON array de phase IDs disparados por este lead (ex: `["p2", "p3a"]`) |
 | `triggers_fired` | `TEXT NULL` | JSON array de block IDs disparados com `fire_once` (ex: `["uuid1", "uuid2"]`) |
 | `branches_selected` | `TEXT NULL` | JSON `{block_id: branch_id}` — ramos escolhidos por nós `condicao` com `sticky=true` |
+| `sales_flow_wait` | `TEXT NULL` | JSON `{until, block_id, phase_id, suppress_llm}` — pausa ativa de um bloco `espera`, ver "Pausa do Fluxo" acima |
 
 Todas adicionadas via `ensure_column()` em `backend-crm/database.py`.
 
@@ -416,7 +431,7 @@ Cor de cada fase vem de `SALES_FLOW_PHASE_COLORS` (`frontend-crm/src/types/agent
 |---|---|
 | `frontend-crm/src/types/agente.ts` | Tipos TypeScript: `SalesFlowPhaseId`, `SalesFlowBlock`, `SalesFlowPhaseData`, `SALES_FLOW_PHASES_BY_AGENT_MODE`, `SALES_FLOW_PHASE_COLORS` |
 | `frontend-crm/src/components/agente/CamadaFluxoVenda.tsx` | Builder visual: renderização de fases, blocos, formulários de configuração |
-| `backend-executors/app/services/decision_engine.py` | `_evaluate_sales_flow_phases()` — avaliação de triggers, resolução de ramos (`condicao`), coleta de orientações/mídia/system_actions; `_collect_intent_triggers_for_lead_phase()` — seleciona quais `intent_trigger` mostrar à mãe (fase atual + seguinte); `_collect_branch_nodes_for_lead_phase()` — idem para nós `condicao` (fase atual + seguinte); `_load_branches_selected_map()` — lê `leads.branches_selected`; `_build_block_lookup()`/`_requires_block_satisfied()` — resolução da dependência explícita `requires_block_id`; `_enforce_apresentation_sales_flow_pending()`/`_enforce_pre_agendamento_sales_flow_pending()`/`_enforce_recepcao_sales_flow_pending()` — guardrails que impedem a Mãe de pular p2/p3a/p0 com gatilhos sequenciais pendentes (p0 com teto de 1 turno extra); `_compute_is_phase_entry()` — cálculo único de `is_phase_entry`, reutilizado tanto na construção do prompt filho (`_build_child_prompt_recepcao/qualification/apresentation/follow_up`) quanto no despacho real de `system_actions` em `compose_decision_output()` |
+| `backend-executors/app/services/decision_engine.py` | `_evaluate_sales_flow_phases()` — avaliação de triggers, resolução de ramos (`condicao`), gate de pausa (`espera`), coleta de orientações/mídia/system_actions; `_collect_intent_triggers_for_lead_phase()` — seleciona quais `intent_trigger` mostrar à mãe (fase atual + seguinte); `_collect_branch_nodes_for_lead_phase()` — idem para nós `condicao` (fase atual + seguinte); `_load_branches_selected_map()` — lê `leads.branches_selected`; `_load_sales_flow_wait()`/`_sales_flow_wait_timedelta()` — lê `leads.sales_flow_wait` e converte `wait_value`/`wait_unit` num timedelta; `_build_block_lookup()`/`_requires_block_satisfied()` — resolução da dependência explícita `requires_block_id`; `_enforce_apresentation_sales_flow_pending()`/`_enforce_pre_agendamento_sales_flow_pending()`/`_enforce_recepcao_sales_flow_pending()` — guardrails que impedem a Mãe de pular p2/p3a/p0 com gatilhos sequenciais pendentes (p0 com teto de 1 turno extra); `_compute_is_phase_entry()` — cálculo único de `is_phase_entry`, reutilizado tanto na construção do prompt filho (`_build_child_prompt_recepcao/qualification/apresentation/follow_up`) quanto no despacho real de `system_actions` em `compose_decision_output()` |
 | `backend-executors/app/services/orchestrator_models.py` | `MotherDecision.branch_selections: Dict[str, str]` |
 | `backend-crm/routes/executor.py` | `_dispatch_system_actions()`, `_dispatch_sales_flow_media()`, `_PHASE_ID_TO_CATEGORY` |
 | `backend-core/app/models/ai_profile.py` | Campo `sales_flow` na tabela `ai_profiles` |

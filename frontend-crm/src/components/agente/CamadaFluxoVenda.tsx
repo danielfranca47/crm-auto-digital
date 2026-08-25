@@ -119,7 +119,9 @@ function blockSummary(block: SalesFlowBlock): string {
     case 'condicao':         return block.branches?.length
       ? `${block.label || 'Sem nome'} (${block.branches.length} caminhos)`
       : (block.condition ? 'Bloco desatualizado — reconfigure' : '—');
-    case 'espera':           return block.wait_value ? `${block.wait_value} ${block.wait_unit || 'horas'}` : '—';
+    case 'espera':           return block.wait_value
+      ? `${block.wait_value} ${block.wait_unit || 'horas'}${block.allow_llm_during_wait === false ? ' · pausa total' : ''}`
+      : '—';
     default:                 return '';
   }
 }
@@ -669,6 +671,13 @@ function BlockForm({ block, setBlock, knowledgeItems, customVars, phaseBlocks }:
             <label className="o-field-label">Motivo / contexto</label>
             <input className="o-input" placeholder="Ex: Aguardar resposta antes de follow up"
               value={block.note || ''} onChange={e => set('note', e.target.value)} />
+          </div>
+          <div className="o-field" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <input type="checkbox" id="espera-allow-llm" checked={block.allow_llm_during_wait !== false}
+              onChange={e => set('allow_llm_during_wait', e.target.checked)} style={{ cursor: 'pointer' }} />
+            <label htmlFor="espera-allow-llm" style={{ cursor: 'pointer', fontSize: 12.5 }}>
+              Responder dúvidas durante a espera (desmarcado = pausa total, o bot não responde nada enquanto o tempo estiver correndo)
+            </label>
           </div>
         </>
       );

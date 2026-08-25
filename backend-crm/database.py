@@ -1199,6 +1199,7 @@ def init_db() -> None:
         ensure_column(conn, "leads", "phases_triggered", "phases_triggered TEXT NULL")
         ensure_column(conn, "leads", "triggers_fired", "triggers_fired TEXT NULL")
         ensure_column(conn, "leads", "branches_selected", "branches_selected TEXT NULL")
+        ensure_column(conn, "leads", "sales_flow_wait", "sales_flow_wait TEXT NULL")
         ensure_column(conn, "leads", "knowledge_categories_shown", "knowledge_categories_shown TEXT NULL")
         ensure_column(conn, "leads", "wa_display_name", "wa_display_name TEXT NULL")
         _migrate_leads_company_or_contact(conn)
