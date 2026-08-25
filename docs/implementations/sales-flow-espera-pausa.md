@@ -123,6 +123,57 @@ respondendo durante a pausa, funcionando tanto no Playground quanto no WhatsApp 
 
 ---
 
+## Fase 2 — Sinal visual + "pular tempo" no Playground (25/08/2026)
+
+### Problema identificado
+
+Durante o teste da Fase 1, não havia nenhuma forma de ver no Playground que uma pausa
+estava ativa — foi preciso consultar `leads.sales_flow_wait` diretamente no banco, e
+mesmo assim o teste "dentro da janela" foi difícil de reproduzir de forma confiável por
+causa do tempo real decorrido entre mensagens (chegou a ser necessário editar a coluna
+manualmente para simular "ainda pausado"). Pedido do usuário a partir dessa experiência.
+
+### Correção
+
+Badge visível na barra superior do Playground quando há uma pausa ativa, mostrando até
+que horas ela vale (e se é pausa total ou só de ações automáticas), mais um botão
+"Pular tempo" que expira a pausa manualmente sem esperar.
+
+| Arquivo | Mudança |
+|---|---|
+| `backend-crm/routes/playground.py` | `LeadState.sales_flow_wait`; SELECT do re-fetch pós-turno ampliado; novo endpoint `POST /api/playground/leads/{lead_id}/skip-wait` (restrito a `is_playground=1` + ownership) |
+| `frontend-crm/src/services/api.ts` | Tipo `PlaygroundSalesFlowWait`; `lead_state.sales_flow_wait`; método `api.playground.skipWait()` |
+| `frontend-crm/src/components/playground/PlaygroundConfigModal.tsx` | `PlaygroundSession.salesFlowWait` |
+| `frontend-crm/src/pages/Playground.tsx` | Estado atualizado a cada resposta de `/chat`; badge + botão "Pular tempo" na barra superior |
+
+### Commits Fase 2
+
+| # | Commit | O que foi implementado |
+|---|---|---|
+| 1 | `68afbcc` | Badge de pausa + botão "Pular tempo" no Playground |
+
+### Relatório da Fase 2 — o que mudou na prática
+
+**Antes:** não havia nenhum jeito de ver, dentro do Playground, que um bloco `espera`
+tinha pausado o fluxo — era preciso confiar apenas na ausência de resposta/ação, sem
+saber até quando a pausa valia.
+
+**Agora:** quando uma pausa está ativa, aparece um badge ao lado do número do lead
+("⏳ Pausado até HH:MM:SS", ou em vermelho "Pausa total até HH:MM:SS" quando o checkbox
+"responder dúvidas" está desmarcado), com um botão "Pular tempo" ao lado que encerra a
+pausa na hora — sem precisar esperar o tempo real passar para continuar testando.
+
+**Para validar:** testado ao vivo nesta mesma sessão (ver abaixo) — não ficaram
+Cenários formais pendentes para esta fase além do que já foi validado.
+
+### Validação ao vivo (25/08/2026)
+
+- [x] Badge aparece com o horário correto ao disparar um `espera` (comparado contra o relógio do sistema — coincidiu exatamente)
+- [x] Botão "Pular tempo" chama `POST /api/playground/leads/{id}/skip-wait`, limpa `sales_flow_wait` no banco e o badge some imediatamente, sem esperar o próximo turno
+- [x] Endpoint rejeita com 404 quando chamado para um lead real (`is_playground=0`) — testado diretamente via curl
+
+---
+
 ## Ajustes Possíveis Pós-Implementação
 
 - Nenhum identificado até o momento — revisar após os testes.
