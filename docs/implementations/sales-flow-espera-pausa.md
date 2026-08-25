@@ -1,7 +1,7 @@
 # Execução em runtime do bloco `espera` (Smart Delay) — pausa do Fluxo de Venda
 
 **Branch:** `feat/sales-flow-espera-pausa`
-**Status:** Em andamento
+**Status:** Em andamento — P1 e P2 validados no Playground (25/08/2026), pendente: Cenário C1 (WhatsApp real)
 
 ---
 
@@ -78,21 +78,44 @@ respondendo durante a pausa, funcionando tanto no Playground quanto no WhatsApp 
 | `frontend-crm/src/components/agente/CamadaFluxoVenda.tsx` | Checkbox "Responder dúvidas durante a espera" no form do bloco `espera` |
 | `docs/architecture/sales-flow.md` | Atualizar secção do bloco `espera` para refletir execução real (era "reservado para o futuro") |
 
+### Commits Fase 1
+
+| # | Commit | O que foi implementado |
+|---|---|---|
+| 1 | `71f6dc6` | Schema + motor de decisão + dispatch (real e Playground) + checkbox no builder + doc de arquitetura |
+
+**Detalhes do commit `71f6dc6`:**
+- `backend-crm/database.py` — nova coluna `leads.sales_flow_wait TEXT NULL`
+- `backend-executors/app/services/decision_engine.py` — `_load_sales_flow_wait()`, `_sales_flow_wait_timedelta()`; gate de pausa por escopo (root ou caminho de `condicao`) em `_evaluate_sales_flow_phases()`; força `suppress_llm_response` quando o checkbox está desmarcado; a segunda passagem de orientações críticas também respeita o gate
+- `backend-crm/routes/executor.py` / `playground.py` — branches `sales_flow_pause_set`/`sales_flow_pause_clear` em `_dispatch_system_actions()` (espelhados — mutação de estado pura, roda de verdade também no Playground)
+- `frontend-crm/src/types/agente.ts` / `CamadaFluxoVenda.tsx` — campo `allow_llm_during_wait` + checkbox "Responder dúvidas durante a espera" no form do bloco
+- `docs/architecture/sales-flow.md` — nova seção "Pausa do Fluxo (espera / Smart Delay)" + atualizações nas tabelas relacionadas
+
+### Relatório da Fase 1 — o que mudou na prática
+
+**Antes:** o bloco "Espera (Smart Delay)" podia ser configurado no builder (tempo de espera, motivo), mas não tinha nenhum efeito real — os gatilhos/ações depois dele na mesma fase continuavam disparando normalmente, como se o bloco nem existisse.
+
+**Agora:** quando o bloco `espera` dispara, ele pausa de fato o restante da fase pelo tempo configurado (minutos/horas/dias). Um novo checkbox "Responder dúvidas durante a espera" controla o que acontece se o lead escrever durante a pausa: marcado (padrão) — a IA continua respondendo normalmente, só as ações automáticas do Fluxo de Venda ficam paradas; desmarcado — pausa total, o bot não responde nada até o tempo passar. Depois de o tempo passar, tudo volta ao normal, incluindo a possibilidade do próprio bloco `espera` disparar de novo.
+
+**Para validar:** Cenários P1, P2 e C1, abaixo.
+
 ---
 
 ## Checks de Validação
 
 ### Cenário P1 — Pausa com LLM ativa (checkbox marcado)
-- [ ] No builder, configurar fase com gatilho → bloco `espera` (1 minuto) com checkbox marcado → bloco de ação (ex. `mensagem`) depois dele
-- [ ] No Playground, disparar o gatilho
-- [ ] Confirmar: `sales_flow_wait` persistido no lead, bloco de ação depois do `espera` NÃO dispara neste turno nem nos seguintes durante a janela
-- [ ] Enviar nova mensagem ao bot dentro da janela de pausa — confirmar que a LLM responde normalmente (não é suprimida)
-- [ ] Esperar o tempo passar, enviar nova mensagem — confirmar que o bloco depois do `espera` volta a poder disparar
+- [x] No builder, configurar fase com gatilho → bloco `espera` (1 minuto) com checkbox marcado → bloco de ação (ex. `mensagem`) depois dele
+- [x] No Playground, disparar o gatilho
+- [x] Confirmar: `sales_flow_wait` persistido no lead, bloco de ação depois do `espera` NÃO dispara neste turno nem nos seguintes durante a janela
+- [x] Enviar nova mensagem ao bot dentro da janela de pausa — confirmar que a LLM responde normalmente (não é suprimida)
+- [x] Esperar o tempo passar, enviar nova mensagem — confirmar que o bloco depois do `espera` volta a poder disparar
+- **Validado em:** 25/08/2026 — testado ao vivo no Playground (perfil real `Daniel`/`hybrid_scheduler`, fase Apresentação, blocos de teste removidos depois). Confirmado: `espera` dispara e persiste `sales_flow_wait`; o gatilho/mensagem logo abaixo não disparou mesmo repetindo a palavra-chave dentro da janela; a IA continuou respondendo normalmente durante a pausa; após a janela expirar, o gatilho seguinte disparou normalmente e `sales_flow_wait` foi limpo.
 
 ### Cenário P2 — Pausa total (checkbox desmarcado)
-- [ ] Mesmo setup do P1, checkbox desmarcado
-- [ ] Disparar o gatilho, depois enviar mensagem ao bot dentro da janela de pausa
-- [ ] Confirmar: nenhuma resposta da LLM (silêncio total) enquanto a pausa está ativa
+- [x] Mesmo setup do P1, checkbox desmarcado
+- [x] Disparar o gatilho, depois enviar mensagem ao bot dentro da janela de pausa
+- [x] Confirmar: nenhuma resposta da LLM (silêncio total) enquanto a pausa está ativa
+- **Validado em:** 25/08/2026 — com o checkbox desmarcado, uma mensagem enviada dentro da janela de pausa não gerou nenhuma resposta do bot (silêncio total), confirmando que `suppress_llm_response` é respeitado.
 
 ### Cenário C1 — Validação em WhatsApp real
 - [ ] Repetir P1 num número de teste real
