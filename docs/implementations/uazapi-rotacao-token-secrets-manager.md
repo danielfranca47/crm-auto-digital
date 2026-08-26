@@ -85,3 +85,36 @@ execução rápida caso haja suspeita de vazamento.
 
 Não é um cenário de browser/WhatsApp real — validação é revisão de leitura
 do documento pelo utilizador (ops, não feature de produto).
+
+---
+
+### Commits Fase 1
+
+| # | Commit | O que foi implementado |
+|---|---|---|
+| 1 | `779a353` | Runbook de rotação + referências cruzadas |
+
+**Detalhes do commit `779a353`:**
+- `docs/ops/rotacao-uazapi-admin-token.md` — runbook novo: quando executar,
+  por que é seguro, passo a passo (gerar → Railway → `.env` local →
+  verificar → revogar antigo), onde o token vive hoje.
+- `backend-core/.env.example` — comentário referenciando o runbook.
+- `backend-core/README.md` — link para o runbook na linha de
+  `UAZAPI_ADMIN_TOKEN`.
+- `docs/implementations/uazapi-rotacao-token-secrets-manager.md` —
+  diagnóstico preenchido e Fase 1 registrada.
+
+### Relatório da Fase 1 — o que mudou na prática
+
+**Antes:** não existia nenhum processo escrito para trocar o token mestre
+da UazAPI. Se fosse preciso rotacionar (ex.: suspeita de vazamento), seria
+"descobrir na hora" — sem saber se ia derrubar as instâncias já conectadas.
+
+**Agora:** existe um runbook (`docs/ops/rotacao-uazapi-admin-token.md`) com
+o passo a passo completo, incluindo a confirmação de que trocar esse token
+**não** afeta instâncias WhatsApp já conectadas nem interrompe o envio de
+mensagens — só afeta a criação de instâncias novas até o token ser
+atualizado. Não houve mudança de código: nenhuma lógica nova era
+necessária.
+
+**Para validar:** Cenário C1, acima — leitura do runbook.
