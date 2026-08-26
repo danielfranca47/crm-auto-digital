@@ -1,7 +1,7 @@
 # Confirmar visual do código de pareamento na UI
 
 **Branch:** `fix/confirmar-visual-codigo-pareamento-whatsapp-2`
-**Status:** Em andamento — aguardando próxima reconexão real de WhatsApp
+**Status:** Todos os cenários validados
 
 ---
 
@@ -68,8 +68,25 @@ Pontos de atenção ao ver um `pair_code` real populado:
 
 ---
 
+## Resultado
+
+Testado ao vivo em 26/08/2026 com a conta de teste local (`user_id=15`,
+instância desconectada — sem risco de derrubar sessão real), gerando um
+`pair_code` real via UazAPI (`LRBM-48NL`) através de `AiProfile → Conexão →
+modo pareamento`.
+
+- Modo claro: texto cabe na caixa, legível, sem overflow — conforme esperado.
+- Modo escuro: **bug real encontrado** — `color: 'var(--o-text)'` resolve
+  para uma cor clara no tema escuro, renderizada sobre o fundo branco
+  hardcoded (`background: '#fff'`) do bloco, deixando o código quase
+  ilegível (baixíssimo contraste).
+- Corrigido: `color: 'var(--o-text)'` → `color: '#111'` (fixo, já que o
+  fundo do bloco também é fixo e não segue o tema) em
+  `frontend-crm/src/components/agente/ConexaoNumero.tsx:295`. Reconfirmado
+  visualmente nos dois temas após a correção — legível em ambos.
+
 ## Checks de Validação
 
-- [ ] Código de pareamento real visto na tela, visual conferido (texto
-      cabe, legível, sem overflow) — sem alteração necessária, OU
-- [ ] Ajuste de CSS aplicado e reconfirmado com novo código real
+- [x] Código de pareamento real visto na tela, visual conferido — 26/08/2026
+- [x] Ajuste de CSS aplicado (contraste no modo escuro) e reconfirmado com
+      novo código real — 26/08/2026

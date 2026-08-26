@@ -292,7 +292,7 @@ export function ConexaoNumero() {
             <>
               <div
                 className="font-mono-orion"
-                style={{ fontSize: 28, letterSpacing: 4, color: 'var(--o-text)', background: '#fff', padding: '12px 20px', borderRadius: 8 }}
+                style={{ fontSize: 28, letterSpacing: 4, color: '#111', background: '#fff', padding: '12px 20px', borderRadius: 8 }}
               >
                 {qrPayload.pair_code}
               </div>
