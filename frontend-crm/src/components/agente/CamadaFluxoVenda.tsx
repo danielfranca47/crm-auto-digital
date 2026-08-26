@@ -100,6 +100,11 @@ function emptyBlock(typeId: SalesFlowBlockTypeId): SalesFlowBlock {
       ],
     };
   }
+  if (typeId === 'kw_trigger' || typeId === 'intent_trigger') {
+    // Padrão de um gatilho novo: respeita a ordem cronológica — mais alinhado ao modelo
+    // mental de um fluxo desenhado passo a passo. O usuário pode trocar no formulário.
+    return { id: crypto.randomUUID(), typeId, sequential: true };
+  }
   return { id: crypto.randomUUID(), typeId };
 }
 
@@ -125,11 +130,47 @@ function blockSummary(block: SalesFlowBlock): string {
 }
 
 // Espelha _is_sequential_trigger_block do backend (decision_engine.py) — só blocos com
-// registo persistido de satisfação podem ser alvo de requires_block_id.
+// registo persistido de satisfação podem ser alvo de requires_block_id. `sequential` é o
+// campo "Ordem" do formulário — independente de `fire_once`; sem ele (blocos salvos antes
+// desta feature), cai no fallback = valor atual de `fire_once`.
 function isSequentialCapable(b: SalesFlowBlock): boolean {
   if (b.typeId === 'phase_trigger' || b.typeId === 'block_trigger') return true;
-  if (b.typeId === 'kw_trigger' || b.typeId === 'intent_trigger') return !!b.fire_once;
+  if (b.typeId === 'kw_trigger' || b.typeId === 'intent_trigger') {
+    return b.sequential !== undefined ? !!b.sequential : !!b.fire_once;
+  }
   return false;
+}
+
+// Controle "Ordem" do formulário de kw_trigger/intent_trigger — independente do checkbox
+// "Disparar apenas uma vez por lead" (fire_once). Pré-seleciona o valor via
+// isSequentialCapable(), que já aplica o fallback para fire_once em blocos sem o campo
+// `sequential` — o usuário vê, antes de mexer em nada, o comportamento real do bloco.
+function renderSequentialOrderControl(
+  block: SalesFlowBlock,
+  set: <K extends keyof SalesFlowBlock>(k: K, v: SalesFlowBlock[K]) => void,
+) {
+  const respectsOrder = isSequentialCapable(block);
+  return (
+    <div className="o-field">
+      <label className="o-field-label">Ordem</label>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+        <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontSize: 12.5 }}>
+          <input type="radio" name={`order-${block.id}`} checked={respectsOrder}
+            onChange={() => set('sequential', true)} style={{ cursor: 'pointer' }} />
+          Respeitar ordem cronológica
+        </label>
+        <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontSize: 12.5 }}>
+          <input type="radio" name={`order-${block.id}`} checked={!respectsOrder}
+            onChange={() => set('sequential', false)} style={{ cursor: 'pointer' }} />
+          Pode ser acionado a qualquer momento
+        </label>
+      </div>
+      <div style={{ fontSize: 11, color: 'var(--o-sub)', marginTop: 4 }}>
+        Independente de "Disparar apenas uma vez por lead" abaixo — controla só se este
+        gatilho espera a vez dele na sequência da fase (trava os seguintes até disparar).
+      </div>
+    </div>
+  );
 }
 
 // Segue a cadeia requires_block_id a partir de startId — usado para impedir que escolher
@@ -230,6 +271,7 @@ function BlockForm({ block, setBlock, knowledgeItems, customVars, phaseBlocks }:
               <option value="starts_with">Começa com</option>
             </select>
           </div>
+          {renderSequentialOrderControl(block, set)}
           <div className="o-field" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <input type="checkbox" id="kw-fire-once" checked={!!block.fire_once}
               onChange={e => set('fire_once', e.target.checked)} style={{ cursor: 'pointer' }} />
@@ -317,6 +359,7 @@ function BlockForm({ block, setBlock, knowledgeItems, customVars, phaseBlocks }:
             <textarea className="o-input" rows={3} placeholder="Ex: Se o lead hesitar, usar argumento de ROI"
               value={block.note || ''} onChange={e => set('note', e.target.value)} style={{ resize: 'vertical' }} />
           </div>
+          {renderSequentialOrderControl(block, set)}
           <div className="o-field" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <input type="checkbox" id="intent-fire-once" checked={!!block.fire_once}
               onChange={e => set('fire_once', e.target.checked)} style={{ cursor: 'pointer' }} />
@@ -1724,14 +1767,12 @@ export function CamadaFluxoVenda({ config, onUpdate }: Props) {
           let extraHeader: React.ReactNode = null;
           if (id === 'p0') {
             // Espelha _phase_pending_sequential_triggers do backend: kw_trigger/intent_trigger
-            // com fire_once ou block_trigger (sempre sequencial) contam como "gatilho sequencial"
+            // com Ordem="Respeitar ordem cronológica" (isSequentialCapable, com fallback para
+            // fire_once) ou block_trigger (sempre sequencial) contam como "gatilho sequencial"
             // — phase_trigger fica de fora (dispara sozinho na entrada da fase, não depende de
             // confirmação do lead em turnos seguintes).
             const sequentialCount = phase.blocks.filter(b =>
-              !b.branch_group_id && (
-                (b.fire_once && (b.typeId === 'kw_trigger' || b.typeId === 'intent_trigger')) ||
-                b.typeId === 'block_trigger'
-              )
+              !b.branch_group_id && b.typeId !== 'phase_trigger' && isSequentialCapable(b)
             ).length;
             const hasBranchNode = phase.blocks.some(b => b.typeId === 'condicao');
             if (sequentialCount > 1 || hasBranchNode) {

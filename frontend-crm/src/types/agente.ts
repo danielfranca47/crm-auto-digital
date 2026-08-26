@@ -84,6 +84,7 @@ export interface SalesFlowBlock {
   wait_value?: string;
   wait_unit?: string;
   fire_once?: boolean;
+  sequential?: boolean;           // kw_trigger/intent_trigger: participa do encadeamento (espera a vez na fila)? Independente de fire_once. Ausente = fallback para fire_once (blocos salvos antes desta feature).
   suppress_llm_response?: boolean;
   requires_block_id?: string;     // id de outro gatilho sequencial (mesma fase) que deve já ter disparado num turno ANTERIOR (nunca no mesmo turno)
   // actions
