@@ -12,7 +12,11 @@ from typing import Any, Dict, List, Optional, Sequence, Tuple
 from fastapi import HTTPException
 
 from database import DB_PATH, get_connection
-from services.lead_category_policy import apply_closing_bot_disable_side_effect
+from services.lead_category_policy import (
+    apply_closing_bot_disable_side_effect,
+    apply_disqualified_bot_disable_side_effect,
+    apply_prospect_refused_bot_disable_side_effect,
+)
 from services.qualification_guardrails import (
     QUALIFICATION_GATED_CATEGORIES,
     can_advance_score_gate,
@@ -1052,6 +1056,20 @@ def apply_suggested_category(
         presentation_variant=(decision_trace or {}).get("presentation_variant"),
         meeting_scheduled=(decision_trace or {}).get("meeting_scheduled"),
         outcome=outcome,
+    )
+    apply_disqualified_bot_disable_side_effect(
+        conn,
+        lead_id=lead_id,
+        user_id=user_id,
+        old_category=current_category,
+        new_category=normalized,
+    )
+    apply_prospect_refused_bot_disable_side_effect(
+        conn,
+        lead_id=lead_id,
+        user_id=user_id,
+        old_category=current_category,
+        new_category=normalized,
     )
     logger.info(
         "lead_category_updated lead_id=%s user_id=%s from=%s to=%s keyword=%s",

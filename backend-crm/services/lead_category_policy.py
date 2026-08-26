@@ -5,6 +5,42 @@ import sqlite3
 from typing import Optional
 
 
+def _disable_bot_for_category_entry(
+    conn: sqlite3.Connection,
+    *,
+    lead_id: int,
+    user_id: Optional[int],
+    reason: str,
+) -> bool:
+    """Desabilita o bot do lead com o motivo informado, se ainda não estiver desabilitado."""
+    cur = conn.cursor()
+    row = cur.execute("SELECT bot_disabled FROM leads WHERE id = ?", (lead_id,)).fetchone()
+    if not row:
+        return False
+    if int(row["bot_disabled"] or 0) == 1:
+        return False
+
+    cur.execute(
+        """
+        UPDATE leads
+           SET bot_disabled = 1,
+               bot_disabled_reason = ?,
+               lastMovement = CURRENT_TIMESTAMP
+         WHERE id = ?
+        """,
+        (reason, lead_id),
+    )
+    notes = {"disabled": True, "reason": reason}
+    cur.execute(
+        """
+        INSERT INTO prospection_logs (lead_id, channel, message_id, action, notes, user_id)
+        VALUES (?, NULL, NULL, 'bot_disabled_changed', ?, ?)
+        """,
+        (lead_id, json.dumps(notes, ensure_ascii=False), user_id),
+    )
+    return True
+
+
 def apply_closing_bot_disable_side_effect(
     conn: sqlite3.Connection,
     *,
@@ -44,29 +80,52 @@ def apply_closing_bot_disable_side_effect(
         if not should_disable:
             return False
 
-    cur = conn.cursor()
-    row = cur.execute("SELECT bot_disabled FROM leads WHERE id = ?", (lead_id,)).fetchone()
-    if not row:
-        return False
-    if int(row["bot_disabled"] or 0) == 1:
+    return _disable_bot_for_category_entry(
+        conn, lead_id=lead_id, user_id=user_id, reason="category_closing"
+    )
+
+
+def apply_disqualified_bot_disable_side_effect(
+    conn: sqlite3.Connection,
+    *,
+    lead_id: int,
+    user_id: Optional[int],
+    old_category: Optional[str],
+    new_category: Optional[str],
+) -> bool:
+    """Aplica side-effect de negócio: ao entrar em disqualified, desabilita bot.
+
+    Idempotente: só atualiza/loga quando há transição para disqualified E bot ainda ativo.
+    Reativação continua manual (mesmo comportamento unidirecional de closing).
+    """
+    old_norm = (old_category or "").strip().lower()
+    new_norm = (new_category or "").strip().lower()
+    if new_norm != "disqualified" or old_norm == "disqualified":
         return False
 
-    cur.execute(
-        """
-        UPDATE leads
-           SET bot_disabled = 1,
-               bot_disabled_reason = 'category_closing',
-               lastMovement = CURRENT_TIMESTAMP
-         WHERE id = ?
-        """,
-        (lead_id,),
+    return _disable_bot_for_category_entry(
+        conn, lead_id=lead_id, user_id=user_id, reason="category_disqualified"
     )
-    notes = {"disabled": True, "reason": "category_closing"}
-    cur.execute(
-        """
-        INSERT INTO prospection_logs (lead_id, channel, message_id, action, notes, user_id)
-        VALUES (?, NULL, NULL, 'bot_disabled_changed', ?, ?)
-        """,
-        (lead_id, json.dumps(notes, ensure_ascii=False), user_id),
+
+
+def apply_prospect_refused_bot_disable_side_effect(
+    conn: sqlite3.Connection,
+    *,
+    lead_id: int,
+    user_id: Optional[int],
+    old_category: Optional[str],
+    new_category: Optional[str],
+) -> bool:
+    """Aplica side-effect de negócio: ao entrar em prospect-refused, desabilita bot.
+
+    Idempotente: só atualiza/loga quando há transição para prospect-refused E bot ainda ativo.
+    Reativação continua manual (mesmo comportamento unidirecional de closing/disqualified).
+    """
+    old_norm = (old_category or "").strip().lower()
+    new_norm = (new_category or "").strip().lower()
+    if new_norm != "prospect-refused" or old_norm == "prospect-refused":
+        return False
+
+    return _disable_bot_for_category_entry(
+        conn, lead_id=lead_id, user_id=user_id, reason="category_prospect_refused"
     )
-    return True

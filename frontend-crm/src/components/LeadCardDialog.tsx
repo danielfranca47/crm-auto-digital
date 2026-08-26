@@ -554,6 +554,8 @@ function LeadCardDialogBody({
     if (nextMeetingAppointment) return "Reunião agendada";
     const rawReason = (currentLead.bot_disabled_reason || "").trim();
     if (rawReason === "category_closing") return "Closing (humano assume)";
+    if (rawReason === "category_disqualified") return "Desqualificado";
+    if (rawReason === "category_prospect_refused") return "Prospecção recusada";
     if (rawReason === "manual_disable") return "Desativado manualmente";
     if (rawReason) return rawReason;
     if (currentLead.category === "closing") return "Closing (humano assume)";
