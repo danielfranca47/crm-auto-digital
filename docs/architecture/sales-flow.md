@@ -297,6 +297,53 @@ aplicam**, por razões estruturais diferentes:
   relacionamento pós-venda que roda com o lead nessa categoria reusa a fase p4 (ver acima), sem
   fase própria a consultar.
 
+### `_ALLOWED_ADVANCE` vs. `_SALES_FLOW_PHASE_SEQUENCE_BY_AGENT_MODE`
+
+Duas estruturas em `decision_engine.py` descrevem "para onde este lead pode ir
+a seguir" em vocabulários diferentes, mantidas à mão em paralelo:
+
+- **`_ALLOWED_ADVANCE`/`_STAGE_ORDER`/`_STAGE_INDEX`** — vocabulário de
+  categoria (`qualification`/`apresentation`/`pre-agendamento`/`agendamento`/
+  `follow-up`/`closing`/`client-list`/`recepcao`), agnóstico de `agent_mode`.
+  Usada por `apply_mother_category_guardrails()`, `_apply_child_micro_adjustment()`
+  e pelos 3 guardrails `_enforce_<fase>_sales_flow_pending` (ver acima).
+- **`_SALES_FLOW_PHASE_SEQUENCE_BY_AGENT_MODE`** — vocabulário de `phase_id`
+  (p0..p5), por `agent_mode_normalized`. Usada só para "olhar a próxima fase"
+  na coleta de `intent_trigger`/nós `condicao` para o prompt da Mãe
+  (`_collect_intent_triggers_for_lead_phase`, `_collect_branch_nodes_for_lead_phase`).
+
+`_ALLOWED_ADVANCE` é, na prática, a **união** das transições sequenciais
+`p_i → p_{i+1}` das 3 sequências de `agent_mode`, traduzidas de `phase_id`
+para categoria — por isso é agnóstico de `agent_mode` (a filtragem por modo,
+quando necessária, acontece depois via checagem de `template_key`, ex.: linha
+~4998 de `decision_engine.py`, que rebaixa `pre-agendamento`/`agendamento`
+para `apresentation` fora de `_SCHEDULING_AGENT_TEMPLATES`). Duas transições
+existem em `_ALLOWED_ADVANCE` que **não** vêm de nenhuma sequência linear —
+"escape valves" deliberados:
+
+- `pre-agendamento → follow-up` — desistência no meio do agendamento (o lead
+  não confirma horário e a Mãe move para nutrição, fora do pipeline estrito
+  de `agenda`).
+- `agendamento → client-list` — `client-list` não tem `phase_id` nenhum; é um
+  estado fora do funil de fases do Fluxo de Venda (lead virou cliente).
+
+**Sem unificação em runtime** (decisão consciente — risco de tocar um arquivo
+crítico de guardrails não compensava, dada a boa cobertura de teste já
+existente nas bordas relevantes). Em vez disso,
+`backend-executors/tests/test_transition_tables_consistency.py` compara as
+duas estruturas a cada execução: toda transição sequencial `p_i → p_{i+1}` de
+qualquer `agent_mode` precisa estar refletida em `_ALLOWED_ADVANCE` — se
+alguém adicionar uma fase, um `agent_mode` ou reordenar uma sequência sem
+atualizar `_ALLOWED_ADVANCE` em conjunto, o teste falha apontando exatamente
+a transição faltante.
+
+**Achados relacionados, ainda não corrigidos:** `_PHASE_ID_TO_CATEGORY`
+(`backend-crm/routes/executor.py`/`playground.py`, ação `advance_phase`) e
+`_CATEGORY_TO_PHASE_ID` (local a `_collect_intent_triggers_for_lead_phase`)
+são duas traduções `phase_id`↔categoria adicionais, inconsistentes entre si
+quanto a p3a/p3b — ver `docs/implementations/` para o item de investigação
+em andamento.
+
 ### Lógica de Ramificação (`condicao`)
 
 Nó de bifurcação real, estilo ManyChat/n8n: N caminhos nomeados, cada um com o seu critério de avaliação pela LLM Mãe, cada um contendo os seus próprios blocos filhos. Depois de um lead seguir por um caminho, os blocos dos caminhos irmãos ficam fora do prompt enviado à IA (redução de poluição de tokens).
