@@ -174,6 +174,45 @@ de `kw_trigger`/`intent_trigger`.
 |---|---|
 | `frontend-crm/src/components/agente/CamadaFluxoVenda.tsx` | `isSequentialCapable()` com o mesmo fallback; novo controle "Ordem" (2 opções) nos formulários de `kw_trigger`/`intent_trigger`; `sequentialCount` do banner de p0/Recepção usando `isSequentialCapable()` |
 
+#### Commits Fase 2
+
+| # | Commit | O que foi implementado |
+|---|---|---|
+| 1 | `ee19698` | Campo `sequential` no tipo `SalesFlowBlock`; controle "Ordem" (2 opções, radio) no formulário; `isSequentialCapable()`/`sequentialCount` usando o novo fallback |
+
+**Detalhes do commit `ee19698`:**
+- `types/agente.ts` — novo campo `SalesFlowBlock.sequential?: boolean`.
+- `CamadaFluxoVenda.tsx` — `isSequentialCapable()` lê `sequential` com fallback para
+  `fire_once`; `renderSequentialOrderControl()` (novo helper) desenha os 2 radios "Ordem"
+  acima do checkbox "Disparar apenas uma vez por lead" nos formulários de `kw_trigger` e
+  `intent_trigger`; `emptyBlock()` já cria blocos novos desses dois tipos com
+  `sequential: true`; `sequentialCount` do banner de aviso da fase p0/Recepção passou a
+  usar `isSequentialCapable()` em vez da condição manual antiga.
+
+#### Relatório da Fase 2 — o que mudou na prática
+
+**Antes:** o único jeito de um gatilho de palavra-chave ou Intenção de IA "esperar a vez"
+numa sequência era marcar "Disparar apenas uma vez por lead" — não havia como escolher as
+duas coisas de forma independente, e a tela não avisava que o checkbox fazia isso.
+
+**Agora:** o formulário de gatilho de palavra-chave e de Intenção de IA ganhou um campo
+novo, "Ordem", com duas opções — "Respeitar ordem cronológica" ou "Pode ser acionado a
+qualquer momento" — separado do checkbox "Disparar apenas uma vez por lead", que continua
+existindo do lado, com o mesmo significado de sempre. Um gatilho já configurado antes
+desta mudança abre com a opção pré-selecionada de acordo com o que ele já fazia (sem
+precisar o usuário reconfigurar nada); um gatilho novo já nasce com "Respeitar ordem
+cronológica" marcado.
+
+**Para validar:** Cenários P1, P2 e P3 da secção "Checks de Validação", abaixo — via
+Playground.
+
+**Verificação técnica feita nesta fase:** `npx tsc --noEmit` sem erros e `npm run build`
+concluído com sucesso (únicos avisos são pré-existentes, não relacionados a esta mudança).
+
+**Prompt de retomada**, se quiser continuar depois:
+> Lê `docs/implementations/kw-trigger-sem-fire-once-encadeamento.md`, secção "Checks de
+> Validação", e executa os Cenários P1, P2 e P3 via Playground.
+
 ---
 
 ## Checks de Validação
