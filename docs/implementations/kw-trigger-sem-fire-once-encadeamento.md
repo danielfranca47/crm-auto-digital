@@ -1,7 +1,7 @@
 # Campo independente "ordem da fila" para kw_trigger e intent_trigger
 
 **Branch:** `feat/kw-trigger-sem-fire-once-encadeamento`
-**Status:** Em andamento
+**Status:** Todos os cenários validados (26/08/2026)
 
 ---
 
@@ -217,20 +217,34 @@ concluído com sucesso (únicos avisos são pré-existentes, não relacionados a
 
 ## Checks de Validação
 
+**Nota sobre o método de validação (26/08/2026):** os 3 cenários foram testados ao vivo,
+mas usando a fase p1 (Qualificação, vazia) em vez de p2 — a conta de teste partilhada
+(`Daniel`/Sensi Vitae) já tem 12 blocos reais em p2 usados por outras implementações, e o
+perfil `hybrid_scheduler`/`agenda` desta conta não tem campos de qualificação configurados
+("0 obrig. · 0 opcionais"), então o Playground pula p1 direto para apresentation — não dá
+para exercitar p1 mandando mensagens no chat do Playground. Em vez disso: os blocos foram
+criados e salvos pela UI real do builder (confirmando visualmente os 2 novos radios
+"Ordem" e o texto de apoio, em `kw_trigger` e `intent_trigger`); o JSON persistido foi
+lido de volta via `GET /ai-profiles/me` (confirmando round-trip do campo `sequential`);
+e esse JSON real foi alimentado directamente a `_evaluate_sales_flow_phases()` (a mesma
+função que o executor real chama) simulando os turnos da conversa. Os blocos de teste
+foram removidos da conta depois de validado, devolvendo-a ao estado original (12 blocos,
+só em p2).
+
 ### Cenário P1 — kw_trigger "respeita ordem + repetível"
-- [ ] Configurar p2: `kw_trigger` A (fire_once, "aceito") → `kw_trigger` B ("obrigado", Ordem="Respeitar ordem cronológica", "Disparar apenas uma vez"=desligado) → orientação "SÓ APÓS B"
-- [ ] Mandar "obrigado" antes de "aceito": orientação NÃO aparece
-- [ ] Mandar "aceito", depois "obrigado": orientação aparece
-- [ ] Mandar "obrigado" de novo: dispara de novo (continua repetível)
+- [x] Configurar (em p1): `kw_trigger` A (`fire_once`, "aceito") → `kw_trigger` B ("obrigado", Ordem="Respeitar ordem cronológica", "Disparar apenas uma vez"=desligado) → mensagem fixa "MARCADOR_SO_APOS_B"
+- [x] Mandar "obrigado" antes de "aceito": marcador NÃO aparece — **Validado em:** 26/08/2026
+- [x] Mandar "aceito", depois "obrigado": marcador aparece — **Validado em:** 26/08/2026
+- [x] Mandar "obrigado" de novo: dispara de novo (continua repetível) — **Validado em:** 26/08/2026
 
 ### Cenário P2 — intent_trigger "fura a fila + só uma vez"
-- [ ] Configurar `intent_trigger` com Ordem="Pode ser acionado a qualquer momento" e "Disparar apenas uma vez"=ligado, posicionado depois de um gatilho sequencial ainda não satisfeito
-- [ ] Confirmar que dispara mesmo assim (fura a fila)
-- [ ] Confirmar que uma 2ª ocorrência da mesma intenção não dispara de novo
+- [x] Configurar `intent_trigger` ("pediu desconto") com Ordem="Pode ser acionado a qualquer momento" e "Disparar apenas uma vez"=ligado, posicionado depois de kwA (sequencial, ainda não satisfeito)
+- [x] Confirmar que dispara mesmo assim (fura a fila) — **Validado em:** 26/08/2026
+- [x] Confirmar que uma 2ª ocorrência da mesma intenção não dispara de novo — **Validado em:** 26/08/2026
 
 ### Cenário P3 — compatibilidade de blocos existentes
-- [ ] Reabrir no builder um `intent_trigger` já existente com `fire_once=True` e sem o campo novo
-- [ ] Confirmar que a opção pré-selecionada é "Respeitar ordem cronológica" (reflete o fallback)
+- [x] Reabrir no builder um `intent_trigger` já existente em p2 (real, anterior a esta feature) com `fire_once=True` e sem o campo novo
+- [x] Confirmar que a opção pré-selecionada é "Respeitar ordem cronológica" (reflete o fallback) — **Validado em:** 26/08/2026, bloco cancelado sem alterações
 
 ### Automatizado — suíte backend
 - [ ] `cd backend-executors && python -m pytest tests/ -q` sem falhas
