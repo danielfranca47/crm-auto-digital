@@ -1,7 +1,7 @@
 # Guardrail de gatilhos pendentes — fases restantes (p1, p3b, p4, p5, client-list)
 
 **Branch:** `feat/sales-flow-guardrail-fases-restantes`
-**Status:** Em andamento
+**Status:** Todos os cenários validados (26/08/2026)
 
 ---
 
@@ -159,6 +159,16 @@ subsistema de ticks agendados.
 | `backend-executors/app/services/decision_engine.py` | Nova função `_enforce_followup_sales_flow_pending` (engajamento só via `category == "follow-up"`); chamada adicionada à cadeia de `decide()` |
 | `backend-executors/tests/test_followup_sales_flow_pending.py` | Novo — caso padrão, caso de exclusão `client_checkin`, caso de tick |
 
+### Commits Fase 2
+
+| # | Commit | O que foi implementado |
+|---|---|---|
+| 1 | `7d2422b` | `_enforce_followup_sales_flow_pending` (p4) + testes |
+
+**Detalhes do commit `7d2422b`:**
+- `backend-executors/app/services/decision_engine.py` — nova função `_enforce_followup_sales_flow_pending`; engajamento verificado só via `lead.category == "follow-up"` (diferente do padrão das outras 4 funções, que também aceitam `"<fase>" in phases_triggered`) — decisão deliberada para não disparar durante o check-in `client_checkin`; chamada adicionada em `decide()` logo após `_enforce_agendamento_sales_flow_pending`
+- `backend-executors/tests/test_followup_sales_flow_pending.py` — 7 testes: bloqueio de salto, liberação após gatilho disparar, ignora `phases_triggered` como sinal (diferente das outras funções), no-op sem sales_flow, exclusão explícita do cenário `client_checkin`, e um teste de nível `decide()` confirmando que o guardrail não quebra `force_followup_route` durante um tick agendado
+
 ### Fase 3 — Documentação e graduação
 
 | Arquivo | O que muda |
@@ -173,18 +183,54 @@ Mudança 100% backend/lógica de decisão determinística — sem UI/browser env
 testes automatizados (pytest).
 
 ### Cenário T1 — p3b bloqueia com gatilho pendente
-- [ ] Rodar `pytest backend-executors/tests/test_agendamento_sales_flow_pending.py`
-- [ ] Confirmar: caso com gatilho pendente força `route_to` de volta a `"agendamento"`; caso sem
+- [x] Rodar `pytest backend-executors/tests/test_agendamento_sales_flow_pending.py`
+- [x] Confirmar: caso com gatilho pendente força `route_to` de volta a `"agendamento"`; caso sem
       pendência deixa o `route_to` original passar
+- **Validado em:** 26/08/2026 — 6/6 passed
 
 ### Cenário T2 — p4 bloqueia com gatilho pendente
-- [ ] Rodar `pytest backend-executors/tests/test_followup_sales_flow_pending.py`
-- [ ] Confirmar: caso padrão bloqueia; caso `client_checkin`/`client-list` não intervém; caso de
+- [x] Rodar `pytest backend-executors/tests/test_followup_sales_flow_pending.py`
+- [x] Confirmar: caso padrão bloqueia; caso `client_checkin`/`client-list` não intervém; caso de
       tick não quebra o `force_followup_route` existente
+- **Validado em:** 26/08/2026 — 7/7 passed
 
 ### Cenário T3 — Regressão da suíte completa
-- [ ] Rodar `pytest backend-executors/tests/` (suíte inteira)
-- [ ] Confirmar: nenhum teste existente de p0/p2/p3a regride
+- [x] Rodar `pytest backend-executors/tests/` (suíte inteira)
+- [x] Confirmar: nenhum teste existente de p0/p2/p3a regride
+- **Validado em:** 26/08/2026 — 260 passed, 25 failed. As 25 falhas são **pré-existentes**,
+  confirmado com `git stash` isolando as mudanças desta implementação e rodando a suíte de
+  novo: os mesmos 25 testes falham identicamente sem nenhum código desta implementação
+  presente (só com a Fase 1 committada e a Fase 2 stashada). Abrangem áreas não tocadas por
+  este trabalho (qualificação, guardrails por modo, follow-up tick runner, extração de
+  recepção) — sinal de um problema pré-existente no ambiente/suíte, não desta feature. Fora do
+  escopo desta implementação; recomendação registrada em "Ajustes Possíveis
+  Pós-Implementação".
+
+---
+
+### Relatório da Fase 2 — o que mudou na prática
+
+**Antes:** a mesma lacuna da Fase 1, mas na fase de Follow-up (p4): a Mãe podia decidir que a
+conversa "fechou" (route para Fechamento) mesmo com um gatilho obrigatório configurado em
+Follow-up ainda pendente.
+
+**Agora:** com um gatilho pendente em Follow-up, a Mãe é impedida de rotear para Fechamento até o
+gatilho disparar de verdade. Duas proteções extras específicas desta fase, verificadas com testes
+dedicados: (1) o guardrail não interfere no check-in automático de relacionamento que o sistema
+manda para clientes que já compraram (esse fluxo reusa a estrutura de Follow-up por baixo dos
+panos, mas tem uma finalidade diferente — não deve ser bloqueado pelas mesmas regras de venda);
+(2) confirmado que o guardrail não quebra o envio de mensagens de follow-up agendadas
+automaticamente (ticks).
+
+**Para validar:** Cenário T2 (`pytest backend-executors/tests/test_followup_sales_flow_pending.py`)
+já rodado e passando (7/7). Cenário T3 (suíte completa) também já rodado — ver nota abaixo.
+
+**Nota importante:** ao rodar a suíte inteira do backend-executors, 25 testes falharam — mas
+confirmei que **nenhuma dessas falhas foi causada por esta implementação** (isolei minhas
+mudanças e as mesmas 25 falhas continuam acontecendo sem elas). São falhas antigas, já existentes
+antes de eu começar a trabalhar, espalhadas por áreas bem diferentes do sistema (qualificação,
+guardrails por modo, etc.) — não tenho como saber se são conhecidas por você ou se passaram
+despercebidas. Registrei como item para investigação futura, fora do escopo desta implementação.
 
 ---
 
@@ -204,7 +250,12 @@ testes automatizados (pytest).
 2. **Constante duplicada** `_SCHEDULING_AGENT_TEMPLATES` vs. `_SCHEDULING_AGENT_TEMPLATES_SET` —
    mesmo valor, dois símbolos; risco de divergência se um template agendador for adicionado no
    futuro.
-3. **`perceived_category` vs `route_to` não sincronizados** — todos os `_enforce_*_sales_flow_pending`
+3. **25 falhas pré-existentes na suíte `backend-executors/tests/`**, não relacionadas a esta
+   implementação (confirmado via `git stash` — mesmas falhas com ou sem o código desta feature).
+   Abrangem qualificação, guardrails por modo, follow-up tick runner, extração de recepção —
+   várias áreas não tocadas aqui. Vale investigar separadamente antes de confiar cegamente em
+   "suíte verde" para futuras mudanças nesse arquivo.
+4. **`perceived_category` vs `route_to` não sincronizados** — todos os `_enforce_*_sales_flow_pending`
    (incluindo os 2 novos) só mutam `route_to`; `apply_mother_category_guardrails` só lê
    `perceived_category`. Se a Mãe emitir um `perceived_category` já avançado enquanto `route_to` é
    corrigido pelo guardrail, a categoria persistida pode divergir do conteúdo real gerado no turno.
