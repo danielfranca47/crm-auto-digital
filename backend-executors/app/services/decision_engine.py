@@ -4849,6 +4849,44 @@ def _enforce_pre_agendamento_sales_flow_pending(
     return mother_decision
 
 
+def _enforce_agendamento_sales_flow_pending(
+    mother_decision: MotherDecision,
+    context: Dict[str, Any],
+) -> MotherDecision:
+    """Impede a Mãe de avançar a categoria para além de 'agendamento' enquanto houver
+    gatilhos sequenciais configurados na fase p3b do Fluxo de Venda que ainda não dispararam
+    para este lead.
+
+    Espelha _enforce_pre_agendamento_sales_flow_pending, trocando p3a→p3b e
+    _ALLOWED_ADVANCE["pre-agendamento"]→_ALLOWED_ADVANCE["agendamento"]. Só relevante para
+    templates com fase de agendamento (_SCHEDULING_AGENT_TEMPLATES); nos demais,
+    _phase_pending_sequential_triggers nunca encontra a fase "p3b" no profile e este
+    guardrail é um no-op.
+    """
+    triggered_phases = _load_triggered_phases_set(context)
+    current_category = _normalize_category((context.get("lead") or {}).get("category"))
+    engaged_with_agendamento = "p3b" in triggered_phases or current_category == "agendamento"
+    if not engaged_with_agendamento:
+        return mother_decision
+
+    route = _normalize_category(mother_decision.route_to)
+    if route not in _ALLOWED_ADVANCE.get("agendamento", set()):
+        return mother_decision
+
+    ai_profile = context.get("ai_profile") or {}
+    pending_ids = _phase_pending_sequential_triggers(
+        "p3b", ai_profile, _load_triggers_fired_set(context)
+    )
+    if not pending_ids:
+        return mother_decision
+
+    mother_decision.route_to = "agendamento"
+    reason = str(mother_decision.reason or "").strip()
+    tag = f"sales_flow_agendamento_pending_forced_route:{','.join(pending_ids)}"
+    mother_decision.reason = f"{reason}|{tag}" if reason else tag
+    return mother_decision
+
+
 def _is_sdr_escalate_closing(context: Dict[str, Any], mother_decision: MotherDecision) -> bool:
     normalized_mode = _normalize_agent_mode(context, mother_decision)
     if normalized_mode != "agenda":
@@ -5424,6 +5462,7 @@ def decide(context: Dict[str, Any], logger: Optional[logging.Logger] = None) -> 
         mother_decision = _enforce_recepcao_sales_flow_pending(mother_decision, context)
         mother_decision = _enforce_apresentation_sales_flow_pending(mother_decision, context)
         mother_decision = _enforce_pre_agendamento_sales_flow_pending(mother_decision, context)
+        mother_decision = _enforce_agendamento_sales_flow_pending(mother_decision, context)
         lead = context.get("lead") or {}
         force_followup_route = _is_followup_tick_context(context)
         route_for_child = "follow-up" if force_followup_route else mother_decision.route_to
