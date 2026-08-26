@@ -127,6 +127,44 @@ participação no encadeamento; `fire_once` passa a controlar só re-disparo.
 | `backend-executors/app/services/decision_engine.py` | `_is_sequential_trigger_block()`, `_trigger_persisted_satisfied()`, blocos de avaliação `kw_trigger`/`intent_trigger` (marcação `mark_trigger_fired` na 1ª vez) |
 | `backend-executors/tests/test_sales_flow_intent_trigger_phase_entry.py`, `test_sales_flow_requires_block_id.py`, `test_sales_flow_branching.py` | Cobertura nova para as combinações `sequential`×`fire_once` que não existiam antes |
 
+#### Commits Fase 1
+
+| # | Commit | O que foi implementado |
+|---|---|---|
+| 1 | `6bb8092` | Campo `sequential` com fallback para `fire_once` em `_is_sequential_trigger_block()`; marcação de 1ª ocorrência independente de `fire_once`; 6 testes novos cobrindo as combinações |
+
+**Detalhes do commit `6bb8092`:**
+- `decision_engine.py` — `_is_sequential_trigger_block()` lê `sequential` com fallback
+  para `fire_once`; `_trigger_persisted_satisfied()` simplificado; blocos de avaliação de
+  `kw_trigger`/`intent_trigger` marcam `mark_trigger_fired` na 1ª vez que disparam
+  (antes só marcavam quando `fire_once=True`).
+- `test_sales_flow_intent_trigger_phase_entry.py` — testes novos: fallback do campo
+  `_is_sequential_trigger_block`, `sequential=True`+repetível trava até a 1ª ocorrência e
+  continua repetindo depois, `sequential=False`+`fire_once=True` fura a fila mas só
+  dispara uma vez.
+
+#### Relatório da Fase 1 — o que mudou na prática
+
+**Antes:** o checkbox "Disparar apenas uma vez por lead" decidia, sem avisar em lugar
+nenhum da tela, se o gatilho também esperava a vez dele numa fila — palavra-chave e
+Intenção de IA só respeitavam a ordem quando essa caixa estava marcada.
+
+**Agora:** o motor de decisão já entende um campo novo e independente (`sequential`) que
+separa "espera a vez na fila" de "só dispara uma vez". Enquanto o builder (Fase 2) ainda
+não expõe esse campo na tela, todo bloco já configurado continua se comportando
+exatamente como antes (o motor usa o valor atual de "Disparar apenas uma vez" como
+padrão quando o campo novo não existe) — nada muda na prática até a Fase 2 entrar.
+
+**Para validar:** esta fase é só o motor por trás da tela — ainda não dá para testar via
+Playground porque o builder não tem o controle novo ainda (isso é a Fase 2). A suíte
+automatizada de testes (`pytest`) já cobre as 4 combinações e passou sem nenhuma
+regressão nos testes existentes (247 passando, mesmas 25 falhas pré-existentes e não
+relacionadas, confirmadas rodando a suíte na baseline antes da mudança).
+
+**Prompt de retomada**, se quiser continuar depois:
+> Lê `docs/implementations/kw-trigger-sem-fire-once-encadeamento.md`, secção "Fase 2 —
+> Builder (frontend-crm)", e implementa.
+
 ### Fase 2 — Builder (frontend-crm)
 
 **Objetivo:** expor os dois campos como controles independentes no formulário
