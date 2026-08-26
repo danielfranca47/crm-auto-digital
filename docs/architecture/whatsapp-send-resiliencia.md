@@ -19,21 +19,21 @@ whatsapp_send.py (POST /whatsapp/send | /whatsapp/send-media)
   → uazapi_client.send_text() / send_media()
        → _request_with_retry()
             ├─ 2xx → retorna
-            ├─ 429/503 e tentativas restantes → aguarda → repete
-            ├─ 429/503 sem mais tentativas → UazapiClientError (status_code preservado)
+            ├─ 429/500/502/503/504 e tentativas restantes → aguarda → repete
+            ├─ esses status sem mais tentativas → UazapiClientError (status_code preservado)
             └─ timeout/erro de rede/outro status → propaga imediatamente, sem retry
 ```
 
 ---
 
-## Retry em 429/503 (`backend-core/app/providers/uazapi_client.py`)
+## Retry em 429/500/502/503/504 (`backend-core/app/providers/uazapi_client.py`)
 
 `_request_with_retry()` é o helper assíncrono usado por `send_text` e
 `send_media`. Constantes:
 
 | Constante | Valor | Descrição |
 |---|---|---|
-| `_RETRYABLE_STATUS_CODES` | `{429, 503}` | Únicos status que disparam retry |
+| `_RETRYABLE_STATUS_CODES` | `{429, 500, 502, 503, 504}` | Status que disparam retry |
 | `_MAX_ATTEMPTS` | `3` | Total de tentativas (1 inicial + 2 retries) |
 | `_RETRY_BASE_BACKOFF_SECONDS` | `0.5` | Base do backoff exponencial (`0.5s`, depois `1s`) |
 | `_RETRY_AFTER_CAP_SECONDS` | `3.0` | Teto para o header `Retry-After` da UazAPI |
@@ -44,14 +44,16 @@ Regras:
 - **Erros de rede/timeout (`httpx.RequestError`/`TimeoutException`) não são
   re-tentados** — propagam imediatamente como `UazapiTimeoutError`/
   `UazapiClientError`, igual ao comportamento antes deste retry existir.
-  Motivo: um timeout já é lento por natureza — re-tentar só composeria mais
-  atraso sem ganho (ver "Orçamento de timeout" abaixo).
-- Qualquer outro status code (4xx exceto os listados, 500/502/504) também não
-  re-tenta — comportamento inalterado.
+  Motivo: uma tentativa de timeout já consome o timeout inteiro por
+  tentativa; retentar estouraria o orçamento do chamador (ver "Orçamento de
+  timeout" abaixo) — diferente de um retry em status code, que é uma
+  resposta rápida do servidor.
+- Qualquer outro status code (4xx exceto 429) também não re-tenta —
+  comportamento inalterado.
 - O escopo deste retry é só `uazapi_client.py` (envio de mensagens). As
   operações de conexão de instância em `uazapi_admin.py` (init/connect/
-  status/webhook) têm sua própria implementação de retry, com as mesmas
-  constantes — ver [`whatsapp-connection.md`](whatsapp-connection.md#retry-em-429503-uazapi_adminpy).
+  status/webhook) têm sua própria implementação de retry, hoje só com
+  429/503 — ver [`whatsapp-connection.md`](whatsapp-connection.md#retry-em-429503-uazapi_adminpy).
 
 ### Orçamento de timeout (executor → core → UazAPI)
 

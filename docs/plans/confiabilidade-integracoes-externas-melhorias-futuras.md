@@ -51,6 +51,37 @@ reenviados. Documentar a garantia (ou falta dela) por endpoint.
 
 ---
 
+## M4 — Retry em timeout/erro de rede no envio UazAPI (orçamento total, não fixo por tentativa)
+
+**Prioridade: MÉDIA**
+
+> Contexto: item deixado de fora de
+> `docs/implementations/uazapi-retry-status-adicionais.md` (26/08/2026),
+> que ampliou o retry de `uazapi_client.py` para 500/502/504 mas
+> deliberadamente não incluiu timeout/erro de rede.
+
+**Em palavras simples:** hoje, se a UazAPI demorar demais para responder
+(timeout) ou houver um erro de rede pontual, o sistema desiste na hora, sem
+tentar de novo — diferente do que já acontece para respostas de erro
+rápidas (429/500/502/503/504), que já são re-tentadas automaticamente.
+
+**Por que não foi feito junto:** o timeout atual (20s texto / 30s mídia por
+tentativa) já é grande — um simples retry a mais poderia estourar o
+orçamento de tempo do executor (recém-ajustado em
+`uazapi-alinhar-orcamento-timeout.md`, M3: 25s/35s). Reduzir o timeout por
+tentativa para caber um retry arriscaria transformar chamadas
+lentas-porém-válidas em falhas artificiais — o mesmo problema que o M3
+resolveu.
+
+**O que precisaria existir:** um modelo de "orçamento total de tempo"
+(deadline global entre tentativas, não timeout fixo por tentativa × N
+tentativas) para que um retry em timeout caiba no orçamento do chamador sem
+reduzir a margem de uma tentativa individual. Avaliar primeiro se, na
+prática (dados reais de produção), timeouts da UazAPI são frequentes e
+transitórios o suficiente para justificar a complexidade.
+
+---
+
 ## Relação com outros documentos
 
 - O fix pontual de idempotência do webhook Efí (`charge_id`) já está
