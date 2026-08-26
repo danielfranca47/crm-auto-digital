@@ -186,3 +186,73 @@ Ver tabela acima, item #8. Exigiria mudar o webhook de assíncrono (fire-and-for
 arquitetura atual) para síncrono nesse caso específico — o fluxo precisaria esperar
 a resposta da API externa antes de continuar. Maior risco arquitetural do lote;
 avaliar com cuidado antes de comprometer.
+
+---
+
+## Itens deixados de fora de `sales-flow-guardrail-fases-restantes.md` (26/08/2026)
+
+> Contexto: achados da auditoria de cobertura completa do guardrail de gatilhos
+> pendentes (p1/p3b/p4/p5/`client-list`). Validados como úteis pelo utilizador na
+> triagem pós-graduação (Passo 5b), mas marcados não-urgentes.
+
+## M11 — Bug: `client-list` impossível de a Mãe emitir como `route_to`
+
+**Prioridade: BAIXA**
+
+`MotherDecision.route_to` (Literal, `backend-executors/app/services/orchestrator_models.py`)
+não inclui `"client-list"` no enum aceito — confirmado por teste que falha com
+`ValidationError` ao tentar construir `MotherDecision(route_to="client-list")`. Isso
+torna `_ALLOWED_ADVANCE["agendamento"]["client-list"]`
+(`decision_engine.py`) um destino estruturalmente morto: a Mãe nunca consegue emitir
+esse valor, e mesmo que emitisse `perceived_category="client-list"`, essa categoria
+também está fora de `_STAGE_ORDER`/`_STAGE_INDEX`, então `apply_mother_category_guardrails`
+sempre trata como `"invalid"`.
+
+Baixo impacto prático hoje: a transição real para `client-list` acontece via webhook
+de pagamento (`backend-crm/routes/webhooks.py`), fora do pipeline de IA — não depende
+desse caminho. Mas é um bug real, e qualquer tentativa futura de fazer a Mãe sugerir
+essa transição via IA vai falhar silenciosamente ou quebrar com `ValidationError`.
+
+**O que fazer:** decidir intencionalmente se `"client-list"` deve ser um destino
+alcançável pelo pipeline de IA (nesse caso, adicionar ao `Literal` de `route_to`/
+`perceived_category` e a `_STAGE_ORDER`/`_STAGE_INDEX`) ou se deve ser removido de
+`_ALLOWED_ADVANCE["agendamento"]` (documentando que só o webhook de pagamento move
+para lá). Qualquer uma resolve a inconsistência atual.
+
+## M12 — Constante duplicada `_SCHEDULING_AGENT_TEMPLATES` / `_SCHEDULING_AGENT_TEMPLATES_SET`
+
+**Prioridade: BAIXA**
+
+`decision_engine.py` define `_SCHEDULING_AGENT_TEMPLATES` (linha ~4705) e um segundo
+conjunto idêntico `_SCHEDULING_AGENT_TEMPLATES_SET` (linha ~2253), ambos
+`{"sdr_padrao", "hybrid_scheduler"}`, usados em pontos diferentes do arquivo. Débito
+técnico puro — nenhum bug ativo hoje (os dois símbolos têm o mesmo valor), mas risco
+de divergência silenciosa se um template agendador for adicionado no futuro e só um
+dos dois símbolos for atualizado.
+
+**O que fazer:** unificar num único símbolo, atualizando todos os call-sites.
+
+## M13 — `perceived_category` vs `route_to` não sincronizados nos guardrails de gatilhos pendentes
+
+**Prioridade: MÉDIA**
+
+Todos os `_enforce_<fase>_sales_flow_pending` (`decision_engine.py`) só mutam
+`mother_decision.route_to`; `apply_mother_category_guardrails` (que decide
+`suggested_category`, persistido em `leads.category`) só lê
+`mother_decision.perceived_category` — campo independente no schema, sem validator
+cruzado. Se a Mãe emitir um `perceived_category` já avançado para além da fase atual
+enquanto `route_to` é corrigido de volta pelo guardrail (ex.: `route_to="apresentation"`
+forçado, mas `perceived_category="pre-agendamento"` intacto), a categoria persistida do
+lead pode divergir do conteúdo real gerado no turno — a Filha responde como se ainda
+estivesse na fase anterior, mas o Kanban já mostra a fase seguinte.
+
+Característica pré-existente do mecanismo desde a primeira função
+(`_enforce_apresentation_sales_flow_pending`), não introduzida pelos guardrails de p3b/p4.
+Os testes existentes (inclusive os novos de p3b/p4) sempre mockam a Mãe retornando
+`perceived_category` igual ao `route_to`/estágio atual — não cobrem esse caminho
+divergente.
+
+**O que fazer:** investigar se vale a pena um teste dedicado exercitando o cenário de
+divergência (Mãe retorna `route_to` "atrasado" mas `perceived_category` "adiantado"),
+e decidir se os guardrails devem também corrigir `perceived_category` quando mutam
+`route_to`.
