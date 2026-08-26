@@ -164,13 +164,50 @@ if response.is_error:
 
 ---
 
+### Commits Fase 1
+
+| # | Commit | O que foi implementado |
+|---|---|---|
+| 1 | `0d0ccad` | retry 429/503 com backoff em `uazapi_admin.py::_request` + testes |
+
+**Detalhes do commit `0d0ccad`:**
+- `backend-core/app/services/uazapi_admin.py` — constantes de retry
+  (`_RETRYABLE_STATUS_CODES`, `_MAX_ATTEMPTS`, `_RETRY_BASE_BACKOFF_SECONDS`,
+  `_RETRY_AFTER_CAP_SECONDS`), `_resolve_retry_delay()` e loop de retry
+  dentro de `_request()`
+- `backend-core/tests/test_uazapi_admin.py` — 7 novos testes cobrindo
+  429/503 com sucesso na retentativa, esgotamento de tentativas,
+  `Retry-After` respeitado/capado, 400 e timeout sem retry
+
+### Relatório da Fase 1 — o que mudou na prática
+
+**Antes:** se a UazAPI respondesse 429 (rate-limit) ou 503 (indisponível)
+durante uma tentativa de conectar o WhatsApp (QR code ou código de
+pareamento), o erro ia direto para o usuário — que precisava clicar em
+"Conectar" ou "Atualizar" de novo manualmente.
+
+**Agora:** o backend tenta automaticamente até 2 vezes a mais (com pequena
+espera entre tentativas) antes de mostrar erro ao usuário. Na prática, um
+rate-limit passageiro da UazAPI tende a se resolver sozinho, sem o usuário
+perceber. Não há mudança visível quando tudo funciona normalmente.
+
+**Para validar:** Cenário P1 (testes automatizados, já rodados — 9/9
+passaram) e Cenário C1 (fluxo real de conexão), abaixo.
+
+---
+
 ## Checks de Validação
 
 ### Cenário P1 — Suíte de testes unitários (retry mockado)
-- [ ] Rodar `cd backend-core && python -m pytest tests/test_uazapi_admin.py -v`
-- [ ] Confirmar: casos de 429→sucesso, 503→sucesso, esgotamento de
+- [x] Rodar `cd backend-core && python -m pytest tests/test_uazapi_admin.py -v`
+- [x] Confirmar: casos de 429→sucesso, 503→sucesso, esgotamento de
       tentativas, 400 sem retry, timeout sem retry e `Retry-After`
       respeitado/capado passam
+- **Validado em:** 26/08/2026 — 9/9 testes passaram. Suíte completa do
+  backend-core rodada também (`SECRET_KEY=test-secret python -m pytest`):
+  8 falhas pré-existentes em `test_ai_profile_agent_mode.py` /
+  `test_ai_profile_timezone_persistence.py`, confirmadas idênticas na pasta
+  principal (`main`) antes desta mudança — sem relação com este item.
 
 ### Cenário C1 — Fluxo real de conexão sem regressão
 - [ ] Abrir a página AiProfile → Conexão
