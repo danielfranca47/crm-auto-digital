@@ -44,6 +44,7 @@ TYPE_MAPS_SEARCH = "maps.search.local"
 TYPE_MAPS_ENRICH = "maps.enrich.local"
 TYPE_SPY_MEDIA_PROCESS = "spy.media.process"
 TYPE_KNOWLEDGE_INGEST = "knowledge.ingest.internal"
+TYPE_SALES_FLOW_WEBHOOK = "sales_flow.webhook.dispatch"
 
 # Override por tipo de job: lembrete de reunião tenta mais vezes que o default
 # global, com uma pausa de 15 min antes da penúltima tentativa — dá tempo de
@@ -83,6 +84,7 @@ _TYPE_ALIASES: Dict[str, List[str]] = {
     TYPE_MAPS_ENRICH: ["maps_enrich_fallback"],
     TYPE_SPY_MEDIA_PROCESS: [],
     TYPE_KNOWLEDGE_INGEST: [],
+    TYPE_SALES_FLOW_WEBHOOK: [],
 }
 
 _VALID_JOB_STATUSES = {

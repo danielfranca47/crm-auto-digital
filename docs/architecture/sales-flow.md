@@ -110,7 +110,7 @@ Para `direto` (Closer), a instrução **nunca** é injectada — nem o texto har
 > O campo `content` de blocos `orientacao`/`mensagem` suporta variáveis dinâmicas `{{chave}}` (ex.: `{{lead.nome_whatsapp}}`), com atalho `/` no builder. Resolvidas por `_resolve_sales_flow_variables()` dentro de `enrich_context_bundle()` — nunca chegam literais ao prompt ou ao lead. Ver [`dynamic-variables.md`](dynamic-variables.md).
 | `midia` | Mídia | Enviado como `system_actions[{type: "send_media", media_url, media_type}]`, na sequência configurada entre outros blocos. |
 | `avancar_fase` | Avançar fase | Dispara `system_actions[{type: "advance_phase", target_phase}]` → move lead no Kanban |
-| `webhook` | Webhook | Destinado a disparar chamada HTTP externa (execução futura) |
+| `webhook` | Webhook | Dispara `system_actions[{type: "webhook", url, method, note, block_id, phase_id}]` → job assíncrono dedicado (ver "Execução do bloco `webhook`" abaixo) |
 
 > Quando `phase_trigger` dispara, blocos `mensagem` e `midia` subsequentes também adicionam o conteúdo enviado a `prompt_injections`, para que o LLM filho saiba o que foi enviado automaticamente e possa complementar sem repetir.
 
@@ -121,7 +121,7 @@ Para `direto` (Closer), a instrução **nunca** é injectada — nem o texto har
 | `condicao` | Lógica de Ramificação (bifurcação em N caminhos, avaliados pela Mãe) | Ver secção "Lógica de Ramificação" abaixo |
 | `espera` | Espera inteligente | Agenda próxima avaliação após delay (`wait_value` + `wait_unit`) |
 
-> **Nota:** `webhook` e `espera` têm infraestrutura de dados mas a execução em runtime ainda não está implementada no `decision_engine.py`. São blocos reservados para implementação futura. `condicao` (Lógica de Ramificação) está implementado — ver secção dedicada abaixo.
+> **Nota:** `espera` tem infraestrutura de dados mas a execução em runtime ainda não está implementada no `decision_engine.py` — bloco reservado para implementação futura. `webhook` está implementado (ver "Execução do bloco `webhook`" abaixo). `condicao` (Lógica de Ramificação) está implementado — ver secção dedicada abaixo.
 
 ---
 
@@ -330,6 +330,44 @@ _PHASE_ID_TO_CATEGORY = {
 | `advance_phase` | Resolve `target_phase` via `_PHASE_ID_TO_CATEGORY` → chama `apply_suggested_category()` |
 | `mark_phase_triggered` | Append do `phase_id` em `leads.phases_triggered` |
 | `mark_trigger_fired` | Append do `block_id` em `leads.triggers_fired` |
+| `webhook` | Monta payload (lead + `note`/`url`/`method`/`block_id`/`phase_id`) e cria job `sales_flow.webhook.dispatch` — ver secção dedicada abaixo |
+
+---
+
+## Execução do bloco `webhook`
+
+Chamada HTTP externa despachada de forma **assíncrona**, via job dedicado —
+mesmo padrão estrutural do worker de email (`email.send.cold`), não o do
+worker pesado de WhatsApp (que está acoplado ao pipeline de geração de
+resposta via LLM). O `webhook` é uma chamada de I/O independente do LLM, que
+não deve bloquear a conclusão do job de inbound nem a resposta ao lead.
+
+```
+decision_engine.py → system_action {type: "webhook", url, method, note, block_id, phase_id}
+  ↓
+executor.py::_dispatch_system_actions() → create_job("sales_flow.webhook.dispatch",
+  {lead_id, phone, name, email, url, method, note, block_id, phase_id, triggered_at})
+  ↓
+backend-executors/app/workers/sales_flow_webhook_worker.py (polling dedicado)
+  ↓
+backend-executors/app/runners/sales_flow_webhook.py::execute_job()
+  → GET: query params simples | POST/PUT: corpo JSON com o payload completo
+  → 2xx → complete_job | timeout/erro de rede/5xx/429 → fail_job(retryable=True)
+  → 4xx específico → fail_job(retryable=False)
+```
+
+- **Retry:** usa os defaults genéricos de `jobs_service.py` (`JOB_MAX_ATTEMPTS=3`,
+  backoff `{1: 60s, 2: 180s}`) — sem override por tipo.
+- **Timeout:** 10s por chamada (`REQUEST_TIMEOUT_SECONDS` em `runners/sales_flow_webhook.py`).
+- **Playground:** nunca dispara a chamada HTTP real (mesmo princípio de
+  `send_message`, que no sandbox só aparece no chat simulado). `playground.py`
+  adiciona um `auto_item` de texto ("🌐 Webhook (simulado): MÉTODO url — nota"),
+  sem criar job nem tocar rede.
+- **Sem suporte a headers customizados/autenticação** — a UI do builder
+  (`CamadaFluxoVenda.tsx`) não tem esses campos; limitação conhecida.
+- **Sem allowlist de domínio/SSRF guard** — a URL é configurada pelo próprio
+  dono da conta, mesmo nível de confiança já usado para outras integrações
+  configuradas pelo usuário no sistema.
 
 ---
 
@@ -419,6 +457,8 @@ Cor de cada fase vem de `SALES_FLOW_PHASE_COLORS` (`frontend-crm/src/types/agent
 | `backend-executors/app/services/decision_engine.py` | `_evaluate_sales_flow_phases()` — avaliação de triggers, resolução de ramos (`condicao`), coleta de orientações/mídia/system_actions; `_collect_intent_triggers_for_lead_phase()` — seleciona quais `intent_trigger` mostrar à mãe (fase atual + seguinte); `_collect_branch_nodes_for_lead_phase()` — idem para nós `condicao` (fase atual + seguinte); `_load_branches_selected_map()` — lê `leads.branches_selected`; `_build_block_lookup()`/`_requires_block_satisfied()` — resolução da dependência explícita `requires_block_id`; `_enforce_apresentation_sales_flow_pending()`/`_enforce_pre_agendamento_sales_flow_pending()`/`_enforce_recepcao_sales_flow_pending()` — guardrails que impedem a Mãe de pular p2/p3a/p0 com gatilhos sequenciais pendentes (p0 com teto de 1 turno extra); `_compute_is_phase_entry()` — cálculo único de `is_phase_entry`, reutilizado tanto na construção do prompt filho (`_build_child_prompt_recepcao/qualification/apresentation/follow_up`) quanto no despacho real de `system_actions` em `compose_decision_output()` |
 | `backend-executors/app/services/orchestrator_models.py` | `MotherDecision.branch_selections: Dict[str, str]` |
 | `backend-crm/routes/executor.py` | `_dispatch_system_actions()`, `_dispatch_sales_flow_media()`, `_PHASE_ID_TO_CATEGORY` |
+| `backend-crm/services/jobs_service.py` | `TYPE_SALES_FLOW_WEBHOOK` |
+| `backend-executors/app/runners/sales_flow_webhook.py` / `app/workers/sales_flow_webhook_worker.py` | Execução assíncrona do bloco `webhook` — ver "Execução do bloco `webhook`" acima |
 | `backend-core/app/models/ai_profile.py` | Campo `sales_flow` na tabela `ai_profiles` |
 | `backend-crm/services/ai_orchestrator/orchestrator.py` | `enrich_context_bundle()` — inclui `sales_flow` no ContextBundle; `_resolve_sales_flow_variables()` — resolve `{{}}` no `content` de blocos `orientacao`/`mensagem` (ver [`dynamic-variables.md`](dynamic-variables.md)) |
 | `frontend-crm/src/components/KanbanBoard.tsx` / `KanbanColumn.tsx` / `LeadCard.tsx` | Funil visual resumido no card — ver "Visualização no Kanban" acima |

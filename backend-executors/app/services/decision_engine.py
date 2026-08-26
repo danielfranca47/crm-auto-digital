@@ -828,6 +828,8 @@ def _evaluate_sales_flow_phases(
                         "url": url,
                         "method": block.get("method") or "POST",
                         "note": block.get("note") or "",
+                        "block_id": (block.get("id") or "").strip(),
+                        "phase_id": phase_id,
                     })
             elif type_id == "espera":
                 wait_value = str(block.get("wait_value") or "").strip()
