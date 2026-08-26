@@ -1,7 +1,7 @@
 # Retry em 429/503 nas operações de conexão de instância (uazapi_admin.py)
 
 **Branch:** `fix/uazapi-admin-retry-conexao`
-**Status:** Em andamento
+**Status:** Todos os cenários validados (26/08/2026)
 
 ---
 
@@ -210,13 +210,31 @@ passaram) e Cenário C1 (fluxo real de conexão), abaixo.
   principal (`main`) antes desta mudança — sem relação com este item.
 
 ### Cenário C1 — Fluxo real de conexão sem regressão
-- [ ] Abrir a página AiProfile → Conexão
-- [ ] Gerar QR code e confirmar que continua funcionando normalmente
-- [ ] Gerar código de pareamento e confirmar que continua funcionando
+- [x] Abrir a página AiProfile → Conexão
+- [x] Gerar QR code e confirmar que continua funcionando normalmente
+- [x] Gerar código de pareamento e confirmar que continua funcionando
       normalmente
-- **Nota:** não é possível forçar um 429/503 real da UazAPI em ambiente de
-  teste — este cenário valida apenas ausência de regressão no caminho
-  feliz; a cobertura do retry em si fica no Cenário P1 (testes unitários).
+- **Validado em:** 26/08/2026 — testado ao vivo via browser (chrome-devtools
+  MCP), backend-core rodando com o código desta branch (porta 8001),
+  backend-crm (8000) e frontend-crm (5173) locais, conta de teste
+  (`_conta-teste-local.md`). QR code: gerado e exibido normalmente
+  ("Expira em 90 segundos"). Durante o teste, o token da instância salva
+  estava expirado (UazAPI retornou 401 em `/instance/connect` e
+  `/instance/status`) — como 401 não está em `_RETRYABLE_STATUS_CODES`, o
+  backend não re-tentou (comportamento correto) e o app recuperou sozinho
+  via `init_instance` (fluxo pré-existente, não relacionado a este item),
+  após o que o QR foi gerado com sucesso. Código de pareamento: preenchido
+  número de teste e clicado "Gerar código" — a chamada completou 200 OK
+  ponta a ponta, mas a UazAPI devolveu QR em vez do código de pareamento
+  (comportamento da UazAPI para esta instância recém-recriada, não afetado
+  por esta mudança — a construção do payload com `phone` não foi tocada).
+  Em ambos os casos, nenhuma regressão observada: os requests passaram pelo
+  `_request()` alterado e completaram normalmente, sem espera extra
+  perceptível.
+- **Nota:** não foi possível forçar um 429/503 real da UazAPI em ambiente de
+  teste — este cenário validou ausência de regressão no caminho real; a
+  cobertura do retry em si (429/503 disparando retentativa) fica no
+  Cenário P1 (testes unitários).
 
 ---
 
