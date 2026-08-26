@@ -120,6 +120,28 @@ só enviam corpo quando `phone` é informado; `WhatsappConnectResponse.pair_code
 
 ---
 
+## Credenciais UazAPI: admin_token vs. instance_token
+
+Dois segredos distintos, com blast radius diferente:
+
+- **`UAZAPI_ADMIN_TOKEN`** (`backend-core/.env`, header `admintoken`) — só
+  usado em `init_instance()` (`POST /instance/init`, criação de instância) e
+  em `configure_webhook(global_webhook=True)` (`POST /globalWebhook`).
+  Ambos chamados só a partir de rotas administrativas de
+  `whatsapp_instances.py` — fora do fluxo normal de conexão descrito acima.
+- **`instance_token`** (por instância, persistido no banco, header `token`)
+  — usado em tudo o resto: `connect_instance()`, `get_status()`, o webhook
+  por instância (`_set_whatsapp_webhook`, ver [`webhooks.md`](webhooks.md#registo-do-webhook-na-uazapi))
+  e o envio de mensagens (`uazapi_client.py`, `backend-executors`).
+
+Consequência prática: rotacionar o `UAZAPI_ADMIN_TOKEN` **não afeta**
+instâncias já conectadas nem o envio/recebimento de mensagens — só
+operações administrativas (criar instância nova, reconfigurar webhook
+global) até o token novo ser propagado. Runbook de rotação:
+[`docs/ops/rotacao-uazapi-admin-token.md`](../ops/rotacao-uazapi-admin-token.md).
+
+---
+
 ## Outros consumidores (fora deste fluxo)
 
 - `frontend-admin/src/pages/AdminInstances.tsx` → `api.reconnectInstance()`
