@@ -285,7 +285,7 @@ def _dispatch_system_actions(
     source_message_id: Optional[str] = None,
     inbound_message_text: Optional[str] = None,
 ) -> None:
-    from services.jobs_service import TYPE_WHATSAPP_SEND, create_job
+    from services.jobs_service import TYPE_SALES_FLOW_WEBHOOK, TYPE_WHATSAPP_SEND, create_job
     for action in system_actions:
         atype = action.get("type")
 
@@ -396,6 +396,31 @@ def _dispatch_system_actions(
                             (json.dumps(existing_bs), lead_id, user_id),
                         )
                         conn.commit()
+
+        elif atype == "webhook":
+            url = (action.get("url") or "").strip()
+            if not url:
+                continue
+            lead_row = conn.execute(
+                "SELECT companyName, contactName, email FROM leads WHERE id = ? AND user_id = ?",
+                (lead_id, user_id),
+            ).fetchone()
+            create_job(
+                job_type=TYPE_SALES_FLOW_WEBHOOK,
+                payload={
+                    "lead_id": lead_id,
+                    "phone": phone,
+                    "name": (lead_row["contactName"] or lead_row["companyName"]) if lead_row else None,
+                    "email": lead_row["email"] if lead_row else None,
+                    "url": url,
+                    "method": (action.get("method") or "POST").strip().upper(),
+                    "note": action.get("note") or "",
+                    "block_id": action.get("block_id", ""),
+                    "phase_id": action.get("phase_id", ""),
+                    "triggered_at": datetime.now(timezone.utc).isoformat(),
+                },
+                user_id=user_id,
+            )
 
         elif atype == "sales_flow_pause_set":
             wait_until = action.get("wait_until", "")

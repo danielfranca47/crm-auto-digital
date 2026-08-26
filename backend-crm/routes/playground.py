@@ -838,6 +838,22 @@ def playground_chat(
             _mark_branch_selected(lead_id, user_id, action["block_id"], action["branch_id"])
         elif atype == "mark_knowledge_shown" and action.get("categories"):
             _mark_knowledge_shown(lead_id, user_id, action["categories"])
+        elif atype == "webhook" and action.get("url"):
+            # Playground é sandbox de teste — nunca dispara a chamada HTTP real
+            # (mesmo princípio de send_message, que aqui só aparece no chat
+            # simulado em vez de criar um job de envio de verdade). Só mostra
+            # que o bloco disparou, com a URL/método/nota configurados.
+            method = (action.get("method") or "POST").strip().upper()
+            note = (action.get("note") or "").strip()
+            summary = f"🌐 Webhook (simulado): {method} {action['url']}"
+            if note:
+                summary += f" — {note}"
+            auto_items.append({
+                "type": "text",
+                "content": summary,
+                "source": "sales_flow_webhook_sim",
+                "source_label": "Webhook (simulado)",
+            })
         elif atype == "sales_flow_pause_set" and action.get("wait_until") and action.get("block_id"):
             _set_sales_flow_pause(
                 lead_id, user_id, action["wait_until"], action["block_id"],
