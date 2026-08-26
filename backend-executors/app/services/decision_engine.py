@@ -4887,6 +4887,54 @@ def _enforce_agendamento_sales_flow_pending(
     return mother_decision
 
 
+def _enforce_followup_sales_flow_pending(
+    mother_decision: MotherDecision,
+    context: Dict[str, Any],
+) -> MotherDecision:
+    """Impede a Mãe de avançar a categoria para além de 'follow-up' enquanto houver
+    gatilhos sequenciais configurados na fase p4 do Fluxo de Venda que ainda não dispararam
+    para este lead.
+
+    Espelha _enforce_agendamento_sales_flow_pending, trocando p3b→p4 e
+    _ALLOWED_ADVANCE["agendamento"]→_ALLOWED_ADVANCE["follow-up"], com uma diferença
+    estrutural deliberada: "engajado com follow-up" usa SÓ current_category == "follow-up"
+    — ao contrário das demais funções deste grupo, não usa também "p4" in triggered_phases.
+    Isso evita um falso positivo no check-in de relacionamento pós-venda
+    (start_client_checkin_followup, followup_state.py, followup_variant="client_checkin"):
+    esse fluxo reusa a fase p4 SEM mover lead.category para "follow-up" (o lead permanece em
+    "client-list"), mas phases_triggered é cumulativo — um lead que já passou por p4 antes de
+    virar cliente carrega "p4" em phases_triggered para sempre. Usar esse sinal aqui faria o
+    guardrail intervir também durante o check-in, onde a semântica de "gatilhos pendentes de
+    venda" não se aplica.
+
+    Não conflita com o subsistema de ticks agendados (whatsapp.followup.tick): o resultado de
+    decide() num tick (suggested_category/system_actions) é descartado por
+    complete_job_internal (backend-crm/routes/executor.py) — só job_type ==
+    "whatsapp.inbound.n8n" persiste esses efeitos. A saída real de p4 só acontece num turno
+    inbound ao vivo, mesmo caminho que este guardrail cobre.
+    """
+    current_category = _normalize_category((context.get("lead") or {}).get("category"))
+    if current_category != "follow-up":
+        return mother_decision
+
+    route = _normalize_category(mother_decision.route_to)
+    if route not in _ALLOWED_ADVANCE.get("follow-up", set()):
+        return mother_decision
+
+    ai_profile = context.get("ai_profile") or {}
+    pending_ids = _phase_pending_sequential_triggers(
+        "p4", ai_profile, _load_triggers_fired_set(context)
+    )
+    if not pending_ids:
+        return mother_decision
+
+    mother_decision.route_to = "follow-up"
+    reason = str(mother_decision.reason or "").strip()
+    tag = f"sales_flow_followup_pending_forced_route:{','.join(pending_ids)}"
+    mother_decision.reason = f"{reason}|{tag}" if reason else tag
+    return mother_decision
+
+
 def _is_sdr_escalate_closing(context: Dict[str, Any], mother_decision: MotherDecision) -> bool:
     normalized_mode = _normalize_agent_mode(context, mother_decision)
     if normalized_mode != "agenda":
@@ -5463,6 +5511,7 @@ def decide(context: Dict[str, Any], logger: Optional[logging.Logger] = None) -> 
         mother_decision = _enforce_apresentation_sales_flow_pending(mother_decision, context)
         mother_decision = _enforce_pre_agendamento_sales_flow_pending(mother_decision, context)
         mother_decision = _enforce_agendamento_sales_flow_pending(mother_decision, context)
+        mother_decision = _enforce_followup_sales_flow_pending(mother_decision, context)
         lead = context.get("lead") or {}
         force_followup_route = _is_followup_tick_context(context)
         route_for_child = "follow-up" if force_followup_route else mother_decision.route_to
