@@ -49,7 +49,7 @@ Ao iniciar, o serviço também faz seed dos produtos, planos e limites padrão d
 - `CORE_SERVICE_TOKEN`: token de serviço necessário para acessar `/whatsapp-connections/resolve`, `/whatsapp-connections/resolve-token` e `/ai-profiles/resolve`.
 - `CORE_WHATSAPP_STUB`: ativa o modo stub do endpoint `/whatsapp/send` (use apenas em dev/test).
 - `UAZAPI_BASE_URL`: base URL global do provider Uazapi (ex.: `https://free.uazapi.com`).
-- `UAZAPI_ADMIN_TOKEN`: token de administração Uazapi usado nos endpoints administrativos.
+- `UAZAPI_ADMIN_TOKEN`: token de administração Uazapi usado nos endpoints administrativos. Processo de rotação: [`docs/ops/rotacao-uazapi-admin-token.md`](../docs/ops/rotacao-uazapi-admin-token.md).
 
 ## Modo stub do WhatsApp send (dev/test)
 Para rodar testes end-to-end sem chamar o provider real, ative:
