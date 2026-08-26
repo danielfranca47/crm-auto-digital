@@ -234,3 +234,51 @@ em `docs/architecture/agents.md`:
 
 **Decisão do usuário (21/08/2026):** não investigar nem corrigir agora — só manter registado.
 Revisitar se surgir reclamação ou sinal real de impacto em produção.
+
+---
+
+## M10 — Handoff não é uma rota formal da Mãe (queixa de saúde/pedido de humano dependem de texto livre)
+
+**Prioridade: MÉDIA** (guardrail crítico de segurança — nenhuma reclamação de produção ainda,
+mas o roteiro de teste do agente demo reproduziu a falha em 100% das rodadas)
+
+**Contexto:** identificado na rodada de testes do Playground do agente demo "Lara"
+(`docs/marketing/comercial/agente-demo.md`, "🧪 ROTEIRO DE TESTE"), Cenários 5 (queixa de saúde)
+e 6 (pedido de falar com humano), 02/07/2026. O registo completo das 30+ execuções foi removido
+de `docs/implementations/sessao-teste-corrente.md` após a maior parte dos achados terem sido
+corrigidos ou confirmados resolvidos por trabalho posterior — este item é o único que continuava
+sem correção nem rastreamento em nenhum lugar.
+
+**Estado actual:** o schema `MotherDecision.route_to` só aceita
+`qualification|apresentation|pre-agendamento|agendamento|follow-up|closing` — nunca `handoff`.
+A intenção de handoff só pode ser sinalizada por um campo separado (`next_action_hint="handoff"`),
+e as regras estruturais de roteamento escritas no código (as "PRIORIDADE 0" a "PRIORIDADE 4" do
+prompt da Mãe) nunca mencionam quando esse campo deveria virar `"handoff"` para queixa de saúde
+ou pedido explícito de falar com humano — a decisão depende inteiramente de a Mãe "lembrar"
+uma instrução em texto livre (`custom_instructions`) no meio de uma lista de prioridades
+estruturadas que não fala nada sobre handoff.
+
+**Evidência do teste (Cenário 5 — queixa de saúde, "Sinto uma dor muito forte nas costas"):**
+em 30/30 execuções (5 rodadas isoladas + 4 execuções em conversa contínua realista) o guardrail
+"nunca dar conselho médico" se manteve — mas o handoff explícito nunca disparou de forma
+deliberada. Em algumas execuções o bot chegou a sugerir implicitamente que o serviço trataria
+a dor ("já ajudei várias pessoas... resultados têm sido positivos"), o que é uma forma sutil de
+conselho de saúde/tratamento — pior do que apenas não fazer handoff.
+
+**Mitigação já aplicada (não é solução estrutural):** reforço de texto no topo de
+`custom_instructions` de uma conta de teste específica (`autodigital157@gmail.com`, AI Profile
+"Lara"), instruindo a IA a tratar queixa de saúde ou pedido de humano como handoff imediato,
+sem continuar a conversa. Isso é por perfil individual — não corrige o gap estrutural para
+nenhuma outra conta.
+
+**O que precisaria ser construído:**
+- Adicionar uma prioridade explícita e determinística no prompt da Mãe — algo como
+  "PRIORIDADE -1 (vence todas as outras): queixa de saúde específica OU pedido explícito de
+  falar com humano → `next_action_hint=handoff`" — em vez de depender só da IA inferir isso de
+  texto livre em `custom_instructions`
+- Avaliar se faz sentido tornar `"handoff"` um valor aceito também em `route_to` (não só em
+  `next_action_hint`), para reduzir ambiguidade entre os dois campos
+
+**Decisão:** não corrigir agora — aguardando decisão do utilizador sobre prioridade. Revisitar
+antes de qualquer venda real do agente demo "Lara" (`agente-demo.md`), já que o próprio doc de
+marketing assume que os guardrails de saúde/handoff cobrem o maior risco de reputação do nicho.
