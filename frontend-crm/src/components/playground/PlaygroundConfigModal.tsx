@@ -7,7 +7,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { AlertCircle, FlaskConical, ArrowDownToLine, ArrowUpFromLine, RefreshCw } from "lucide-react";
-import { api, type AiProfile } from "@/services/api";
+import { api, type AiProfile, type PlaygroundSalesFlowWait } from "@/services/api";
 
 export type ScenarioType = "inbound" | "outbound" | "followup";
 
@@ -28,6 +28,7 @@ export interface PlaygroundSession {
   scenarioContext: string;
   scenarioType: ScenarioType;
   waDisplayName?: string | null;
+  salesFlowWait?: PlaygroundSalesFlowWait | null;
   followupContext?: FollowupContext | null;
   startedAt: string;
   // Snapshot da configuração do AI Profile no momento do teste

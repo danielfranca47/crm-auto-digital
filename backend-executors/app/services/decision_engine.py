@@ -387,6 +387,37 @@ def _load_branches_selected_map(context: Dict[str, Any]) -> Dict[str, str]:
         return {}
 
 
+def _load_sales_flow_wait(context: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    """Pausa persistida do bloco `espera` (Smart Delay) — leads.sales_flow_wait, JSON
+    {until, block_id, phase_id, suppress_llm}. None se não houver pausa configurada ou o
+    JSON estiver corrompido (falha aberto — nunca trava o fluxo por dado inválido)."""
+    raw = (context.get("lead") or {}).get("sales_flow_wait")
+    if not raw:
+        return None
+    try:
+        import json as _json
+        parsed = _json.loads(raw) if isinstance(raw, str) else (raw if isinstance(raw, dict) else None)
+    except (ValueError, TypeError):
+        return None
+    return parsed if isinstance(parsed, dict) and parsed.get("until") else None
+
+
+def _sales_flow_wait_timedelta(wait_value: str, wait_unit: str) -> Optional[timedelta]:
+    """Converte wait_value/wait_unit (bloco `espera`) num timedelta. None se inválido."""
+    try:
+        amount = float(wait_value)
+    except (TypeError, ValueError):
+        return None
+    if amount <= 0:
+        return None
+    unit = (wait_unit or "hours").strip().lower()
+    if unit == "minutes":
+        return timedelta(minutes=amount)
+    if unit == "days":
+        return timedelta(days=amount)
+    return timedelta(hours=amount)
+
+
 def _is_sequential_trigger_block(block: Dict[str, Any]) -> bool:
     """Um gatilho é "sequencial" quando tem um registo persistido de satisfação que
     permite usá-lo como checkpoint: phase_trigger (sempre único por fase), block_trigger
@@ -591,6 +622,31 @@ def _evaluate_sales_flow_phases(
     # dependência explícita `requires_block_id`. Ver _requires_block_satisfied().
     _block_lookup = _build_block_lookup(phases)
 
+    # Pausa persistida do bloco `espera` (Smart Delay) — só relevante se pertence à fase
+    # sendo avaliada agora. Se existir mas já tiver expirado, limpa o estado persistido
+    # (higiene — o gate abaixo já vira no-op sozinho, mas evita lixo acumulado no lead).
+    _sales_flow_wait = _load_sales_flow_wait(context)
+    _active_wait: Optional[Dict[str, Any]] = None
+    if _sales_flow_wait and _sales_flow_wait.get("phase_id") == phase_id:
+        try:
+            _wait_until_dt = datetime.fromisoformat(str(_sales_flow_wait.get("until")))
+        except (TypeError, ValueError):
+            _wait_until_dt = None
+        if _wait_until_dt and _wait_until_dt > datetime.utcnow():
+            _active_wait = _sales_flow_wait
+        else:
+            result["system_actions"].append({"type": "sales_flow_pause_clear"})
+    if _active_wait and _active_wait.get("suppress_llm"):
+        result["suppress_llm_response"] = True
+    _wait_gate_block_id = (_active_wait or {}).get("block_id")
+    # Escopo(s) que já entraram em pausa durante esta avaliação — "root" ou
+    # "{branch_group_id}:{branch_id}", mesma chave usada por _prereqs_satisfied_by_scope.
+    # Uma vez marcado, todo bloco seguinte do MESMO escopo é ignorado por completo (nem
+    # gatilho é avaliado, nem ação executa) até o próximo turno em que a pausa já não
+    # estiver mais ativa.
+    _scope_paused: Dict[str, bool] = {}
+    _wait_paused_block_ids: set = set()
+
     def _trigger_persisted_satisfied(_blk: Dict[str, Any], _type: str) -> bool:
         """True se este gatilho já disparou ANTES deste turno (estado persistido no lead).
 
@@ -640,6 +696,19 @@ def _evaluate_sales_flow_phases(
         if _branch_group and _active_branches.get(_branch_group) != _own_branch_id:
             continue
         _scope_key = f"{_branch_group}:{_own_branch_id}" if _branch_group else "root"
+
+        # Gate de pausa do bloco `espera`: se este escopo já entrou em pausa (por um
+        # `espera` anterior na mesma passagem, ou por uma pausa persistida de um turno
+        # anterior cujo gatilho já foi alcançado abaixo), ignora este bloco por completo —
+        # nem gatilho é avaliado, nem ação executa. Ver docs/architecture/sales-flow.md,
+        # secção do bloco `espera`.
+        if _scope_paused.get(_scope_key):
+            _wait_paused_block_ids.add((block.get("id") or "").strip())
+            continue
+        if _wait_gate_block_id and (block.get("id") or "").strip() == _wait_gate_block_id:
+            _scope_paused[_scope_key] = True
+            _wait_paused_block_ids.add(_wait_gate_block_id)
+            continue
 
         if type_id == "condicao":
             # Nó de lógica de ramificação: resolve qual ramo está activo e regista em
@@ -845,13 +914,29 @@ def _evaluate_sales_flow_phases(
                         "note": block.get("note") or "",
                     })
             elif type_id == "espera":
-                wait_value = str(block.get("wait_value") or "").strip()
-                if wait_value:
+                _wait_delta = _sales_flow_wait_timedelta(
+                    str(block.get("wait_value") or "").strip(), block.get("wait_unit") or "hours"
+                )
+                if _wait_delta:
+                    _eid = (block.get("id") or "").strip()
+                    # allow_llm_during_wait=True (default) mantém a LLM respondendo dúvidas
+                    # durante a pausa — só as ações do Fluxo de Venda abaixo deste bloco
+                    # ficam paradas. False = pausa total (suprime também a resposta da LLM).
+                    _allow_llm = block.get("allow_llm_during_wait")
+                    _suppress = not bool(True if _allow_llm is None else _allow_llm)
                     result["system_actions"].append({
-                        "type": "delay",
-                        "wait_value": wait_value,
-                        "wait_unit": block.get("wait_unit") or "hours",
+                        "type": "sales_flow_pause_set",
+                        "wait_until": (datetime.utcnow() + _wait_delta).isoformat(),
+                        "block_id": _eid,
+                        "phase_id": phase_id,
+                        "suppress_llm": _suppress,
                     })
+                    if _suppress:
+                        result["suppress_llm_response"] = True
+                    # Pausa vale já a partir deste turno — o resto da fase (mesmo escopo)
+                    # não é avaliado nem agora nem nos turnos seguintes, até expirar.
+                    if _eid:
+                        _scope_paused[_scope_key] = True
             # `condicao` (nó de ramificação) é resolvido no topo do loop, antes da
             # distinção trigger/ação — ver bloco `if type_id == "condicao":` acima.
 
@@ -874,6 +959,8 @@ def _evaluate_sales_flow_phases(
         _cid = (_block.get("id") or "").strip()
         if _cid and _cid in _injected_block_ids:
             continue  # já injectada na passagem principal deste turno
+        if _cid and _cid in _wait_paused_block_ids:
+            continue  # dentro da janela de pausa de um bloco `espera` — não reinjectar
         _content = (_block.get("content") or "").strip()
         if not _content:
             continue

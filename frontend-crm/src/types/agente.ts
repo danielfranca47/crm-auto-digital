@@ -83,6 +83,7 @@ export interface SalesFlowBlock {
   intent?: string;
   wait_value?: string;
   wait_unit?: string;
+  allow_llm_during_wait?: boolean; // bloco `espera`: true (default) = LLM segue respondendo dúvidas durante a pausa; false = pausa total (bot não responde)
   fire_once?: boolean;
   sequential?: boolean;           // kw_trigger/intent_trigger: participa do encadeamento (espera a vez na fila)? Independente de fire_once. Ausente = fallback para fire_once (blocos salvos antes desta feature).
   suppress_llm_response?: boolean;
