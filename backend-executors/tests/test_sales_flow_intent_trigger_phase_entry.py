@@ -8,6 +8,7 @@ from app.services.decision_engine import (
     _collect_intent_triggers_for_lead_phase,
     _enforce_apresentation_sales_flow_pending,
     _evaluate_sales_flow_phases,
+    _is_sequential_trigger_block,
 )
 from app.services.orchestrator_models import MotherDecision
 
@@ -700,3 +701,169 @@ def test_closing_prompt_unchanged_when_p5_has_no_blocks():
     prompt_with_empty = _build_child_prompt_closing(context_with_empty_p5, "oi", _mother_closing())
 
     assert prompt_without == prompt_with_empty
+
+
+# ── campo `sequential` independente de `fire_once` ───────────────────────────────────────
+#
+# Ver docs/implementations/kw-trigger-sem-fire-once-encadeamento.md. `sequential` decide se
+# o gatilho participa do encadeamento (espera os anteriores, trava os seguintes, conta como
+# pendência de fase); `fire_once` decide só se ele pode disparar mais de uma vez. Um bloco
+# sem o campo `sequential` cai no fallback = valor de `fire_once` (comportamento anterior a
+# esta feature, preservado para não regredir fluxos já configurados).
+
+
+def test_is_sequential_trigger_block_uses_sequential_field_when_present():
+    """`sequential` explícito manda, mesmo contradizendo `fire_once`."""
+    assert _is_sequential_trigger_block(
+        {"typeId": "kw_trigger", "fire_once": False, "sequential": True}
+    ) is True
+    assert _is_sequential_trigger_block(
+        {"typeId": "intent_trigger", "fire_once": True, "sequential": False}
+    ) is False
+
+
+def test_is_sequential_trigger_block_falls_back_to_fire_once_when_absent():
+    """Sem o campo novo, o comportamento é idêntico ao de antes desta feature."""
+    assert _is_sequential_trigger_block({"typeId": "kw_trigger", "fire_once": True}) is True
+    assert _is_sequential_trigger_block({"typeId": "kw_trigger", "fire_once": False}) is False
+    assert _is_sequential_trigger_block({"typeId": "intent_trigger", "fire_once": True}) is True
+    assert _is_sequential_trigger_block({"typeId": "intent_trigger", "fire_once": False}) is False
+
+
+def _sales_flow_kw_sequential_repeatable() -> dict:
+    """p2: kwA (fire_once, marco de fila) -> kwB ("Respeita ordem" explícito, repetível,
+    sequential=True/fire_once=False) -> orientação só depois de B."""
+    return {
+        "enabled": True,
+        "phases": [
+            {"id": "p0", "blocks": []},
+            {"id": "p1", "blocks": []},
+            {
+                "id": "p2",
+                "blocks": [
+                    {"id": "kwA", "typeId": "kw_trigger", "keywords": "aceito", "fire_once": True},
+                    {
+                        "id": "kwB", "typeId": "kw_trigger", "keywords": "obrigado",
+                        "sequential": True, "fire_once": False,
+                    },
+                    {"id": "guard", "typeId": "orientacao", "content": "SO_APOS_B"},
+                ],
+            },
+        ],
+    }
+
+
+def test_kw_trigger_sequential_true_fire_once_false_blocks_until_kwa_fires():
+    """O caso central que o arquivo original perguntava: kw_trigger sequencial mas
+    repetível ainda espera a vez dele na fila — não dispara antes de kwA."""
+    sales_flow = _sales_flow_kw_sequential_repeatable()
+    context = {
+        "lead": {"category": "apresentation", "triggers_fired": "[]"},
+        "ai_profile": {"agent_mode": "agenda", "sales_flow": sales_flow},
+    }
+
+    result = _evaluate_sales_flow_phases(
+        context, effective_route_to="apresentation", message_text="obrigado",
+        is_phase_entry=False,
+    )
+
+    assert not any(
+        a.get("type") == "mark_trigger_fired" and a.get("block_id") == "kwB"
+        for a in result["system_actions"]
+    )
+    assert not any("SO_APOS_B" in i for i in result["prompt_injections"])
+
+
+def test_kw_trigger_sequential_true_fire_once_false_fires_and_keeps_repeating():
+    """Depois de kwA persistido, kwB dispara — e continua disparando em turnos
+    seguintes (fire_once=False), apesar de agora ser um marco de fila."""
+    sales_flow = _sales_flow_kw_sequential_repeatable()
+
+    # Turno 1: kwA já persistido de um turno anterior — kwB liberado e dispara.
+    context_turn1 = {
+        "lead": {"category": "apresentation", "triggers_fired": '["kwA"]'},
+        "ai_profile": {"agent_mode": "agenda", "sales_flow": sales_flow},
+    }
+    result1 = _evaluate_sales_flow_phases(
+        context_turn1, effective_route_to="apresentation", message_text="obrigado",
+        is_phase_entry=False,
+    )
+    assert any(
+        a.get("type") == "mark_trigger_fired" and a.get("block_id") == "kwB"
+        for a in result1["system_actions"]
+    )
+    assert any("SO_APOS_B" in i for i in result1["prompt_injections"])
+
+    # Turno 2: kwA e kwB já persistidos — kwB dispara de NOVO (repetível), a orientação
+    # continua aparecendo a cada vez que a palavra-chave é repetida.
+    context_turn2 = {
+        "lead": {"category": "apresentation", "triggers_fired": '["kwA", "kwB"]'},
+        "ai_profile": {"agent_mode": "agenda", "sales_flow": sales_flow},
+    }
+    result2 = _evaluate_sales_flow_phases(
+        context_turn2, effective_route_to="apresentation", message_text="obrigado",
+        is_phase_entry=False,
+    )
+    assert any("SO_APOS_B" in i for i in result2["prompt_injections"])
+
+
+def _sales_flow_intent_non_sequential_fire_once() -> dict:
+    """p2: kwA (fire_once, nunca dispara nestes testes) -> intentB ("Pode ser acionado a
+    qualquer momento" explícito, sequential=False, fire_once=True)."""
+    return {
+        "enabled": True,
+        "phases": [
+            {"id": "p0", "blocks": []},
+            {"id": "p1", "blocks": []},
+            {
+                "id": "p2",
+                "blocks": [
+                    {"id": "kwA", "typeId": "kw_trigger", "keywords": "aceito", "fire_once": True},
+                    {
+                        "id": "intentB", "typeId": "intent_trigger", "intent": "pediu desconto",
+                        "sequential": False, "fire_once": True,
+                    },
+                ],
+            },
+        ],
+    }
+
+
+def test_intent_trigger_sequential_false_fires_even_with_earlier_trigger_pending():
+    """Gatilho de Intenção de IA com 'Pode ser acionado a qualquer momento' fura a fila —
+    dispara mesmo com kwA (sequencial, marco anterior) ainda não satisfeito."""
+    sales_flow = _sales_flow_intent_non_sequential_fire_once()
+    context = {
+        "lead": {"category": "apresentation", "triggers_fired": "[]"},
+        "ai_profile": {"agent_mode": "agenda", "sales_flow": sales_flow},
+    }
+
+    result = _evaluate_sales_flow_phases(
+        context, effective_route_to="apresentation", message_text="tem desconto?",
+        detected_intents=["pediu desconto"], is_phase_entry=False,
+    )
+
+    assert any(
+        a.get("type") == "mark_trigger_fired" and a.get("block_id") == "intentB"
+        for a in result["system_actions"]
+    )
+
+
+def test_intent_trigger_sequential_false_still_respects_fire_once():
+    """'Pode ser acionado a qualquer momento' não desliga o fire_once — continua a só
+    disparar uma vez por lead."""
+    sales_flow = _sales_flow_intent_non_sequential_fire_once()
+    context = {
+        "lead": {"category": "apresentation", "triggers_fired": '["intentB"]'},
+        "ai_profile": {"agent_mode": "agenda", "sales_flow": sales_flow},
+    }
+
+    result = _evaluate_sales_flow_phases(
+        context, effective_route_to="apresentation", message_text="tem desconto?",
+        detected_intents=["pediu desconto"], is_phase_entry=False,
+    )
+
+    assert not any(
+        a.get("type") == "mark_trigger_fired" and a.get("block_id") == "intentB"
+        for a in result["system_actions"]
+    )

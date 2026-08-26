@@ -391,13 +391,20 @@ def _is_sequential_trigger_block(block: Dict[str, Any]) -> bool:
     """Um gatilho é "sequencial" quando tem um registo persistido de satisfação que
     permite usá-lo como checkpoint: phase_trigger (sempre único por fase), block_trigger
     (sempre — dispara uma única vez assim que a dependência configurada for satisfeita,
-    sem condição de conteúdo) ou kw_trigger/intent_trigger com fire_once=True. Gatilhos
-    sem fire_once são reavaliados a cada turno e não participam do encadeamento
-    sequencial nem do guardrail de transição de fase — ver docs/architecture/sales-flow.md."""
+    sem condição de conteúdo) ou kw_trigger/intent_trigger com o campo `sequential=True`.
+
+    `sequential` é independente de `fire_once` — controla só se o gatilho participa do
+    encadeamento (espera os anteriores, trava os seguintes, conta como pendência no
+    guardrail de transição de fase); `fire_once` controla só se ele pode disparar mais
+    de uma vez. Um bloco sem o campo `sequential` (blocos salvos antes desta feature)
+    usa `fire_once` como fallback — preserva exatamente o comportamento anterior, em que
+    os dois conceitos eram o mesmo campo. Ver docs/architecture/sales-flow.md."""
     type_id = (block.get("typeId") or "").strip()
     if type_id in ("phase_trigger", "block_trigger"):
         return True
     if type_id in ("kw_trigger", "intent_trigger"):
+        if "sequential" in block:
+            return bool(block.get("sequential"))
         return bool(block.get("fire_once"))
     return False
 
@@ -407,9 +414,10 @@ def _phase_pending_sequential_triggers(
     ai_profile: Dict[str, Any],
     triggers_fired: set,
 ) -> List[str]:
-    """block_ids de kw_trigger/intent_trigger sequenciais (fire_once=True) ou block_trigger
-    (sempre sequencial) configurados na fase `phase_id` que ainda não dispararam (não estão
-    em triggers_fired). Lista vazia = sem gate: sales_flow desligado, fase inexistente no
+    """block_ids de kw_trigger/intent_trigger sequenciais (sequential=True, com fallback para
+    fire_once=True) ou block_trigger (sempre sequencial) configurados na fase `phase_id` que
+    ainda não dispararam (não estão em triggers_fired). Lista vazia = sem gate: sales_flow
+    desligado, fase inexistente no
     profile, ou nenhum gatilho sequencial configurado nela (ou todos já dispararam) —
     nesses casos o guardrail que consome este helper não deve interferir. Opt-in: só
     retorna pendências quando o utilizador configurou explicitamente pelo menos um gatilho
@@ -471,7 +479,8 @@ def _requires_block_satisfied(
     """True se a dependência explícita `requires_block_id` (kw_trigger/intent_trigger) está
     satisfeita — ou se não há referência configurada, ou se a referência é inválida por
     qualquer motivo (bloco apagado OU bloco ainda existe mas deixou de ser elegível, ex.:
-    fire_once desmarcado depois): FAIL-OPEN em ambos os casos, nunca bloqueia
+    "Ordem" mudada para "Pode ser acionado a qualquer momento" depois — ou, em blocos sem o
+    campo novo, fire_once desmarcado): FAIL-OPEN em ambos os casos, nunca bloqueia
     permanentemente (ver docs/architecture/sales-flow.md, "Dependência explícita
     requires_block_id").
 
@@ -585,19 +594,17 @@ def _evaluate_sales_flow_phases(
     def _trigger_persisted_satisfied(_blk: Dict[str, Any], _type: str) -> bool:
         """True se este gatilho já disparou ANTES deste turno (estado persistido no lead).
 
-        Só gatilhos "sequenciais" (phase_trigger, block_trigger, ou kw/intent_trigger com
-        fire_once=True) têm um registo persistido de satisfação — os demais retornam sempre
-        False aqui, o que é intencional: não participam do encadeamento sequencial (ver
+        Só chamada para gatilhos já confirmados "sequenciais" por
+        _is_sequential_trigger_block() (kw_trigger/intent_trigger com sequential=True,
+        ou fallback fire_once=True se o bloco não tiver o campo novo) — os demais nunca
+        chegam aqui, o que é intencional: não participam do encadeamento sequencial (ver
         docs/architecture/sales-flow.md, "Modelo sequencial de trigger").
         """
         if _type == "phase_trigger":
             return phase_id in _triggered_phases
-        if _type == "block_trigger":
+        if _type in ("block_trigger", "kw_trigger", "intent_trigger"):
             _bid = (_blk.get("id") or "").strip()
             return bool(_bid) and _bid in _triggers_fired
-        if _type in ("kw_trigger", "intent_trigger"):
-            _bid = (_blk.get("id") or "").strip()
-            return bool(_bid) and bool(_blk.get("fire_once")) and _bid in _triggers_fired
         return False
 
     # Modelo sequencial: o último gatilho disparado governa os blocos de ação seguintes.
@@ -670,10 +677,11 @@ def _evaluate_sales_flow_phases(
             continue
 
         if type_id in _TRIGGER_TYPES:
-            # Gating sequencial: só gatilhos "sequenciais" (fire_once ou phase_trigger)
-            # participam — um kw_trigger sem fire_once não tem registo persistido de
-            # satisfação, então nem bloqueia nem é bloqueado por este mecanismo. O
-            # pré-requisito é isolado por escopo (root ou ramo) — ver comentário acima.
+            # Gating sequencial: só gatilhos "sequenciais" (sequential=True, com fallback
+            # para fire_once=True em blocos sem o campo novo — ver _is_sequential_trigger_block)
+            # participam — um gatilho não-sequencial não tem registo persistido de satisfação,
+            # então nem bloqueia nem é bloqueado por este mecanismo. O pré-requisito é isolado
+            # por escopo (root ou ramo) — ver comentário acima.
             _is_sequential = _is_sequential_trigger_block(block)
             _scope_satisfied = _prereqs_satisfied_by_scope.setdefault(_scope_key, True)
             # Dependência explícita (requires_block_id): trava ADITIVA à posicional acima —
@@ -707,7 +715,12 @@ def _evaluate_sales_flow_phases(
                             fired = any(normalized_msg.startswith(kw) for kw in keywords)
                         else:
                             fired = any(kw in normalized_msg for kw in keywords)
-                if fired and _fire_once and _block_id:
+                # Marca a 1ª ocorrência sempre, independente de fire_once — é o registo que
+                # _is_sequential_trigger_block()/_trigger_persisted_satisfied() consultam quando
+                # sequential=True. fire_once continua a única coisa que suprime disparos
+                # seguintes (checagem acima); um gatilho sequencial mas repetível continua
+                # disparando nos turnos seguintes mesmo já estando marcado aqui.
+                if fired and _block_id and _block_id not in _triggers_fired:
                     result["system_actions"].append({"type": "mark_trigger_fired", "block_id": _block_id})
             elif type_id == "intent_trigger":
                 _block_id = (block.get("id") or "").strip()
@@ -720,7 +733,9 @@ def _evaluate_sales_flow_phases(
                         fired = intent_label in detected_intents
                     else:
                         fired = True  # fallback: mãe não classificou, comportamento legado
-                if fired and _fire_once and _block_id:
+                # Mesmo padrão do kw_trigger acima: marca a 1ª ocorrência independente de
+                # fire_once, para servir de registo ao gating sequencial quando sequential=True.
+                if fired and _block_id and _block_id not in _triggers_fired:
                     result["system_actions"].append({"type": "mark_trigger_fired", "block_id": _block_id})
             elif type_id == "block_trigger":
                 # Sem condição de conteúdo — dispara assim que a dependência (requires_block_id,

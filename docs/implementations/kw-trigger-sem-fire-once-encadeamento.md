@@ -1,7 +1,7 @@
-# Decidir comportamento de `kw_trigger` sem `fire_once` no encadeamento sequencial
+# Campo independente "ordem da fila" para kw_trigger e intent_trigger
 
-**Branch:** `<a definir no Plan Mode>`
-**Status:** Aguardando Plan Mode
+**Branch:** `feat/kw-trigger-sem-fire-once-encadeamento`
+**Status:** Em andamento
 
 ---
 
@@ -15,56 +15,151 @@ para o gating dentro da fase (`_evaluate_sales_flow_phases`, `_is_sequential_tri
 quanto para o guardrail que impede a Mãe de saltar a fase de apresentation inteira
 (`_enforce_apresentation_sales_flow_pending`). Um `kw_trigger` **sem** `fire_once`
 (pensado para disparar toda vez que o lead repetir uma palavra-chave, não só na
-primeira) foi deliberadamente deixado de fora desse encadeamento — na prática, hoje:
-- não é bloqueado por gatilhos sequenciais anteriores ainda não satisfeitos
-- não bloqueia gatilhos sequenciais seguintes
-- não conta como "pendência" para o guardrail de transição de fase
+primeira) foi deliberadamente deixado de fora desse encadeamento.
 
-Essa decisão foi tomada porque não existe hoje nenhum registo persistido de "já
-disparou" para um `kw_trigger` sem `fire_once` — ele é reavaliado a cada turno,
-puramente a partir da mensagem actual, sem estado.
+**Diagnóstico feito em Plan Mode com o utilizador** (várias rodadas de perguntas):
+a causa raiz é que o checkbox **"Disparar apenas uma vez por lead"** (`fire_once`)
+faz duas coisas ao mesmo tempo, sem isso estar declarado em lugar nenhum da tela:
 
-**Pergunta em aberto (a decidir em Plan Mode, com o utilizador):** faz sentido um
-`kw_trigger` repetível também participar do encadeamento — ou seja, um utilizador
-que configure um gatilho de palavra-chave sem "disparar só uma vez" no meio de uma
-sequência esperaria que ele também "trave a vez" dos blocos seguintes até a
-palavra-chave aparecer pela primeira vez? Ou o comportamento actual (transparente,
-fora do encadeamento) já é o esperado para esse tipo de gatilho, e este item deveria
-ser fechado sem mudança de código — só clarificação na documentação/UI do builder?
+1. O que o texto promete — controla se o gatilho pode disparar mais de uma vez.
+2. O que ele controla nos bastidores, sem aviso — se o gatilho participa do
+   encadeamento sequencial (`_is_sequential_trigger_block`): espera os gatilhos
+   anteriores da fase, trava os seguintes, conta como "pendência" no guardrail
+   que impede a IA Mãe de pular a fase inteira.
+
+Duas propostas intermediárias (regra fixa por tipo de gatilho: kw_trigger sempre
+sequencial / intent_trigger nunca sequencial) foram descartadas por trocar um
+acoplamento invisível por outro, sem o usuário poder escolher, e por mudar o
+comportamento de fluxos já configurados com `intent_trigger` + `fire_once=True`.
+
+**Decisão final:** separar os dois conceitos em dois campos independentes no
+builder, ambos disponíveis em `kw_trigger` e `intent_trigger`:
+
+| Campo | Opções | Controla |
+|---|---|---|
+| **Ordem** (`sequential`, novo) | "Respeitar ordem cronológica" / "Pode ser acionado a qualquer momento" | Se o gatilho espera a vez dele na fila, trava os seguintes e conta como pendência de fase |
+| **Disparar apenas uma vez por lead** (`fire_once`, já existe) | ligado/desligado | Se o gatilho para de disparar depois da 1ª vez — disponível nas duas opções de Ordem acima, sem relação com a fila |
+
+As 4 combinações passam a ser válidas e distintas:
+- Respeita ordem + só uma vez → comportamento sequencial de hoje (`fire_once=True`).
+- Respeita ordem + repetível → **o caso que este arquivo perguntava originalmente**:
+  vira um marco de fila, mas continua disparando toda vez que a palavra-chave/
+  intenção aparecer depois de "liberado".
+- Qualquer momento + só uma vez → fura a fila, mas só conta uma vez por lead.
+- Qualquer momento + repetível → comportamento de hoje para `fire_once=False`
+  (transparente, fora da fila).
+
+**Compatibilidade:** blocos já salvos não têm o campo `sequential`. Quando
+ausente, `sequential` é tratado como igual ao valor atual de `fire_once` desse
+bloco — ou seja, exatamente o comportamento de produção hoje, para `kw_trigger`
+e `intent_trigger`. Zero regressão em fluxos já configurados; só blocos novos ou
+reeditados no builder passam a ter os dois campos de fato independentes.
 
 ---
 
 ## Problemas Identificados (estado anterior)
 
-1. Nenhum bug confirmado — comportamento actual é uma decisão de escopo deliberada
-   da Fase 1, não um erro. Este item é sobre validar se essa decisão continua a
-   fazer sentido à medida que utilizadores configuram sequências mais complexas no
-   builder, ou se precisa de ajuste.
+1. **Acoplamento invisível:** o checkbox "Disparar apenas uma vez por lead"
+   controlava, sem nenhuma indicação na UI, tanto a supressão de re-disparo
+   quanto a participação no encadeamento sequencial — dois conceitos distintos
+   fundidos num único campo.
+2. **`intent_trigger` sem alternativa de "furar a fila":** hoje, um
+   `intent_trigger` com `fire_once=True` é sempre sequencial — não há como o
+   usuário configurar uma detecção de intenção esporádica (que pode acontecer
+   a qualquer momento da fase) que ainda assim só dispare uma vez por lead.
 
 ---
 
 ## Abordagem
 
-A definir em Plan Mode. Se a decisão for "sim, deve participar", a abordagem mais
-provável é: registar satisfação persistida para `kw_trigger` sem `fire_once`
-também (ex.: um novo campo/lista separada de "primeira ocorrência", distinta de
-`triggers_fired` para não mudar a semântica de re-disparo já existente) — precisa
-de diagnóstico cuidadoso para não quebrar fluxos já configurados que dependem do
-comportamento actual (reavaliação a cada turno, sem checkpoint).
+`_is_sequential_trigger_block()` (`backend-executors/app/services/decision_engine.py`)
+passa a ler o novo campo com fallback para `fire_once`:
+
+```python
+# ANTES
+if type_id in ("kw_trigger", "intent_trigger"):
+    return bool(block.get("fire_once"))
+
+# DEPOIS
+if type_id in ("kw_trigger", "intent_trigger"):
+    if "sequential" in block:
+        return bool(block.get("sequential"))
+    return bool(block.get("fire_once"))  # legado: sem o campo novo, comportamento atual
+```
+
+`_trigger_persisted_satisfied()` deixa de exigir `fire_once` para
+`kw_trigger`/`intent_trigger` — passa a olhar só se já disparou alguma vez
+(`block_id in triggers_fired`), já que "é sequencial ou não" já foi decidido
+por `_is_sequential_trigger_block()` antes desta função ser chamada.
+
+Os blocos de avaliação de `kw_trigger` e `intent_trigger` marcam
+`mark_trigger_fired` na 1ª vez que disparam, independente de `fire_once` —
+reaproveitando `leads.triggers_fired`, sem nova coluna/migração:
+
+```python
+# ANTES
+if fired and _fire_once and _block_id:
+    result["system_actions"].append({"type": "mark_trigger_fired", "block_id": _block_id})
+
+# DEPOIS
+if fired and _block_id and _block_id not in _triggers_fired:
+    result["system_actions"].append({"type": "mark_trigger_fired", "block_id": _block_id})
+```
+
+A supressão de re-disparo não muda — continua só suprimindo quando
+`fire_once=True`. Toda a maquinaria de gating restante (`_locked`,
+`_prereqs_satisfied_by_scope`, `_requires_block_satisfied`,
+`_phase_pending_sequential_triggers`) já delega para
+`_is_sequential_trigger_block()` — herda o comportamento novo sem alteração
+própria.
 
 ---
 
 ## Plano de Implementação
 
-A preencher após o diagnóstico em Plan Mode ser aprovado pelo utilizador.
+### Fase 1 — Motor de decisão (backend-executors)
 
-**Arquivos prováveis:**
-- `backend-executors/app/services/decision_engine.py` — `_is_sequential_trigger_block()`, `_evaluate_sales_flow_phases()`, `_enforce_apresentation_sales_flow_pending()`
-- `backend-executors/tests/test_sales_flow_intent_trigger_phase_entry.py`
-- `docs/architecture/sales-flow.md` — secção "Modelo sequencial de trigger"
+**Objetivo:** o campo `sequential` (com fallback para `fire_once`) governa a
+participação no encadeamento; `fire_once` passa a controlar só re-disparo.
+
+| Arquivo | O que muda |
+|---|---|
+| `backend-executors/app/services/decision_engine.py` | `_is_sequential_trigger_block()`, `_trigger_persisted_satisfied()`, blocos de avaliação `kw_trigger`/`intent_trigger` (marcação `mark_trigger_fired` na 1ª vez) |
+| `backend-executors/tests/test_sales_flow_intent_trigger_phase_entry.py`, `test_sales_flow_requires_block_id.py`, `test_sales_flow_branching.py` | Cobertura nova para as combinações `sequential`×`fire_once` que não existiam antes |
+
+### Fase 2 — Builder (frontend-crm)
+
+**Objetivo:** expor os dois campos como controles independentes no formulário
+de `kw_trigger`/`intent_trigger`.
+
+| Arquivo | O que muda |
+|---|---|
+| `frontend-crm/src/components/agente/CamadaFluxoVenda.tsx` | `isSequentialCapable()` com o mesmo fallback; novo controle "Ordem" (2 opções) nos formulários de `kw_trigger`/`intent_trigger`; `sequentialCount` do banner de p0/Recepção usando `isSequentialCapable()` |
 
 ---
 
 ## Checks de Validação
 
-A preencher após o Plano de Implementação ser definido.
+### Cenário P1 — kw_trigger "respeita ordem + repetível"
+- [ ] Configurar p2: `kw_trigger` A (fire_once, "aceito") → `kw_trigger` B ("obrigado", Ordem="Respeitar ordem cronológica", "Disparar apenas uma vez"=desligado) → orientação "SÓ APÓS B"
+- [ ] Mandar "obrigado" antes de "aceito": orientação NÃO aparece
+- [ ] Mandar "aceito", depois "obrigado": orientação aparece
+- [ ] Mandar "obrigado" de novo: dispara de novo (continua repetível)
+
+### Cenário P2 — intent_trigger "fura a fila + só uma vez"
+- [ ] Configurar `intent_trigger` com Ordem="Pode ser acionado a qualquer momento" e "Disparar apenas uma vez"=ligado, posicionado depois de um gatilho sequencial ainda não satisfeito
+- [ ] Confirmar que dispara mesmo assim (fura a fila)
+- [ ] Confirmar que uma 2ª ocorrência da mesma intenção não dispara de novo
+
+### Cenário P3 — compatibilidade de blocos existentes
+- [ ] Reabrir no builder um `intent_trigger` já existente com `fire_once=True` e sem o campo novo
+- [ ] Confirmar que a opção pré-selecionada é "Respeitar ordem cronológica" (reflete o fallback)
+
+### Automatizado — suíte backend
+- [ ] `cd backend-executors && python -m pytest tests/ -q` sem falhas
+
+---
+
+## Ajustes Possíveis Pós-Implementação
+
+<A preencher se surgir algo durante a implementação ou os testes.>
