@@ -110,6 +110,44 @@ pendentes configurados nela.
 | `backend-executors/tests/test_agendamento_sales_flow_pending.py` | Novo — espelha `test_pre_agendamento_sales_flow_pending.py` |
 | `docs/implementations/sales-flow-guardrail-p3b-p4.md` | Removido (`git rm`) — absorvido por este arquivo |
 
+### Commits Fase 1
+
+| # | Commit | O que foi implementado |
+|---|---|---|
+| 1 | `cd63a71` | `_enforce_agendamento_sales_flow_pending` (p3b) + testes + remoção do stub redundante |
+
+**Detalhes do commit `cd63a71`:**
+- `backend-executors/app/services/decision_engine.py` — nova função `_enforce_agendamento_sales_flow_pending`, cópia exata do padrão de `_enforce_pre_agendamento_sales_flow_pending`; chamada adicionada em `decide()` logo após `_enforce_pre_agendamento_sales_flow_pending`
+- `backend-executors/tests/test_agendamento_sales_flow_pending.py` — 6 testes cobrindo bloqueio de salto, todos os destinos permitidos por `_ALLOWED_ADVANCE["agendamento"]` que a Mãe consegue de fato emitir, liberação após gatilho disparar, no-op fora da fase/sem sales_flow, e uso de `phases_triggered` quando `category` está defasada
+- `docs/implementations/sales-flow-guardrail-p3b-p4.md` — removido, absorvido por este arquivo
+
+### Relatório da Fase 1 — o que mudou na prática
+
+**Antes:** a Mãe (IA) podia decidir pular a fase de Agendamento (p3b) inteira num único turno —
+por exemplo, interpretar uma resposta ambígua do lead como "já confirmou" e rotear direto para
+Follow-up, mesmo que o Fluxo de Venda configurado nessa fase tivesse um gatilho obrigatório (ex.:
+"confirmar horário") que ainda não disparou. Isso já tinha sido corrigido para as fases de
+Apresentação e Pré-agendamento, mas não para Agendamento.
+
+**Agora:** se houver algum gatilho sequencial configurado na fase de Agendamento que ainda não
+disparou, a Mãe é impedida de sair da fase — a categoria do lead é mantida em "agendamento" até o
+gatilho disparar de verdade. Comportamento opt-in: só se aplica a quem configurou explicitamente
+um gatilho sequencial nessa fase; quem não configurou não percebe nenhuma mudança.
+
+Achado colateral confirmado durante os testes: `client-list` (um dos dois destinos possíveis a
+partir de Agendamento) é hoje um valor que a Mãe **nunca** consegue emitir de verdade — está fora
+do enum aceito internamente. Já era um bug conhecido de forma mais restrita; ficou confirmado e
+documentado em "Ajustes Possíveis Pós-Implementação", não é algo que esta implementação corrige.
+
+**Para validar:** mudança 100% backend/lógica de decisão — sem tela para testar manualmente.
+Validação é via testes automatizados: Cenário T1 (`pytest backend-executors/tests/test_agendamento_sales_flow_pending.py`)
+já rodado e passando (6/6). Cenário T3 (suíte completa) será rodado ao final da Fase 2, junto.
+
+**Nota:** durante a suíte completa foram encontradas 2 falhas pré-existentes em
+`test_recepcao_sales_flow_pending.py` (não relacionadas a esta mudança — confirmado por `git diff`
+mostrando que o diff desta fase não toca nenhuma lógica de p0/qualificação). Fica fora do escopo
+desta implementação; se quiser, posso abrir um item separado para investigar.
+
 ### Fase 2 — p4 (follow-up)
 
 **Objetivo:** bloquear a Mãe de pular para "closing" enquanto houver gatilhos sequenciais
