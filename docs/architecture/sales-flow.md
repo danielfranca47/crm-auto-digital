@@ -59,10 +59,10 @@ O builder adapta a UI e o executor filtra os blocos com base no `agent_mode` do 
 
 | `typeId` | Nome | Comportamento em runtime |
 |---|---|---|
-| `kw_trigger` | Palavra-chave | Activa se a mensagem do lead contém a(s) keyword(s) definidas. Suporta `fire_once` (ver abaixo). |
+| `kw_trigger` | Palavra-chave | Activa se a mensagem do lead contém a(s) keyword(s) definidas. Suporta `sequential` e `fire_once` (ver abaixo). |
 | `phase_trigger` | Entrada na fase | Activa **uma única vez por lead** — na primeira mensagem que chega à fase. Rastreado por `leads.phases_triggered` (JSON array de phase IDs disparados). Quando dispara, injeta contexto no `prompt_injections` e emite `mark_phase_triggered`. |
 | `no_reply_trigger` | Sem resposta | Placeholder de UI. Não avaliado em runtime. |
-| `intent_trigger` | Intenção detectada | A LLM Mãe recebe secção `[DETECÇÃO DE INTENÇÃO]` condicional se a fase **atual** do lead ou a **fase seguinte** (dado o pipeline do `agent_mode`, ver tabela acima) tiver blocos deste tipo. Retorna `detected_intents: list[str]`. O bloco dispara se `intent_label in detected_intents`. Suporta `fire_once` (ver abaixo). |
+| `intent_trigger` | Intenção detectada | A LLM Mãe recebe secção `[DETECÇÃO DE INTENÇÃO]` condicional se a fase **atual** do lead ou a **fase seguinte** (dado o pipeline do `agent_mode`, ver tabela acima) tiver blocos deste tipo. Retorna `detected_intents: list[str]`. O bloco dispara se `intent_label in detected_intents`. Suporta `sequential` e `fire_once` (ver abaixo). |
 | `block_trigger` | Depende de outro bloco | Gatilho leve sem condição de conteúdo — dispara **uma única vez por lead**, assim que o bloco referenciado em `requires_block_id` já tiver disparado num turno anterior. Sempre sequencial (equivalente a `phase_trigger`, não depende de `fire_once`). Nunca aparece como card no seletor "Escolher gatilho" do builder — é criado implicitamente quando o utilizador escolhe "Sem gatilho" e opcionalmente define uma dependência (ver "No frontend" em 2b, abaixo). Sem `requires_block_id` definido, o builder colapsa para o comportamento legado (nenhum bloco de gatilho é persistido) — não existe `block_trigger` sem dependência. |
 
 > **Janela de detecção de 1 fase à frente:** `_collect_intent_triggers_for_lead_phase()` mostra à mãe os `intent_trigger` da fase salva em `lead.category` **e** da fase seguinte na sequência de `_SALES_FLOW_PHASE_SEQUENCE_BY_AGENT_MODE` (`decision_engine.py`, espelha a tabela de pipeline acima). Isso é necessário porque a transição de fase só é decidida pela própria mãe nesse turno — sem essa antecipação, um `intent_trigger` configurado como o sinal de entrada numa fase (ex.: "cliente aceitou a oferta") nunca teria como disparar na mensagem que efetivamente o causa. A avaliação de disparo em si (`_evaluate_sales_flow_phases`) continua olhando só a fase escolhida pelo `effective_route_to` da mãe nesse turno — a antecipação afeta apenas o que é mostrado à mãe, não quais blocos podem executar.
@@ -127,12 +127,38 @@ Para `direto` (Closer), a instrução **nunca** é injectada — nem o texto har
 
 ## Flags opcionais em blocos de trigger
 
+### `sequential` (`kw_trigger`, `intent_trigger`)
+
+Campo independente de `fire_once` — decide só se o gatilho participa do **encadeamento
+sequencial** da fase (espera os gatilhos sequenciais anteriores, trava os seguintes, conta
+como pendência no guardrail de troca de fase — ver "Modelo sequencial de trigger" abaixo).
+Duas opções no builder: **"Respeitar ordem cronológica"** (`sequential: true`) ou **"Pode
+ser acionado a qualquer momento"** (`sequential: false`).
+
+**Fallback de compatibilidade:** blocos sem o campo `sequential` (salvos antes desta
+feature) usam o valor de `fire_once` como padrão — `_is_sequential_trigger_block()`
+(`decision_engine.py`) e `isSequentialCapable()` (`CamadaFluxoVenda.tsx`) leem
+`"sequential" in block ? block.sequential : block.fire_once`. Isto preserva exatamente o
+comportamento anterior (quando os dois conceitos eram o mesmo campo) para todo bloco já
+configurado; só blocos novos ou reeditados no builder passam a ter os dois campos de facto
+independentes. Blocos novos criados no builder já nascem com `sequential: true`.
+
+`phase_trigger` e `block_trigger` são sempre sequenciais estruturalmente (não têm este
+campo — nenhum conteúdo/keyword/intenção a avaliar que justifique torná-los esporádicos).
+
 ### `fire_once` (`kw_trigger`, `intent_trigger`)
 
-Quando `fire_once: true`, o bloco dispara apenas **uma vez por lead**:
+Quando `fire_once: true`, o bloco dispara apenas **uma vez por lead** — independente do
+valor de `sequential` acima:
 - Ao disparar, emite `{type: "mark_trigger_fired", block_id}` nos `system_actions`
 - CRM (playground e executor) faz append do `block_id` em `leads.triggers_fired` (JSON array)
 - Em disparos seguintes: `already_fired = block_id ∈ triggers_fired` → `fired = False`
+
+Quando `sequential: true` e `fire_once: false` (repetível mas respeitando a fila), o motor
+ainda emite `mark_trigger_fired` na **1ª vez** que o bloco dispara — não para suprimir
+disparos seguintes (que continuam normalmente), mas para servir de registo de "já passou
+por aqui" ao gating sequencial (`_trigger_persisted_satisfied()`). A checagem
+`_block_id not in _triggers_fired` evita reemitir a acção em cada disparo repetido.
 
 **DB:** coluna `leads.triggers_fired TEXT NULL` (adicionada em `backend-crm/database.py` via `ensure_column`).
 
@@ -168,11 +194,11 @@ para cada block em fase.blocks:
             executar_ação(block, result)
 ```
 
-**2) Gating sequencial entre gatilhos (`_prereqs_satisfied`)** — só gatilhos **sequenciais** (`phase_trigger`, ou `kw_trigger`/`intent_trigger` com `fire_once: true`) participam: um gatilho sequencial só pode ser avaliado (`fired` possivelmente `True`) se **todos os gatilhos sequenciais anteriores da mesma fase** já estiverem satisfeitos — persistidos em `leads.phases_triggered`/`leads.triggers_fired` **antes** deste turno, ou disparando neste mesmo turno. Se um gatilho anterior ainda não foi satisfeito, os gatilhos sequenciais seguintes ficam **bloqueados** (`fired = False`), independentemente de keyword match ou de `detected_intents` da LLM Mãe. Isso impede que uma etapa mais à frente na sequência (ex.: "cliente indicou o serviço") dispare antes de uma etapa anterior configurada pelo utilizador (ex.: "cliente aceitou ver a tabela"). Gatilhos não-sequenciais (`kw_trigger` sem `fire_once`, `intent_trigger` sem `fire_once`, `no_reply_trigger`) não participam — nem bloqueiam, nem são bloqueados.
+**2) Gating sequencial entre gatilhos (`_prereqs_satisfied`)** — só gatilhos **sequenciais** (`phase_trigger`, `block_trigger`, ou `kw_trigger`/`intent_trigger` com o campo `sequential: true` — fallback para `fire_once: true` em blocos sem o campo novo, ver "Flags opcionais em blocos de trigger" acima) participam: um gatilho sequencial só pode ser avaliado (`fired` possivelmente `True`) se **todos os gatilhos sequenciais anteriores da mesma fase** já estiverem satisfeitos — persistidos em `leads.phases_triggered`/`leads.triggers_fired` **antes** deste turno, ou disparando neste mesmo turno. Se um gatilho anterior ainda não foi satisfeito, os gatilhos sequenciais seguintes ficam **bloqueados** (`fired = False`), independentemente de keyword match ou de `detected_intents` da LLM Mãe. Isso impede que uma etapa mais à frente na sequência (ex.: "cliente indicou o serviço") dispare antes de uma etapa anterior configurada pelo utilizador (ex.: "cliente aceitou ver a tabela"). Gatilhos não-sequenciais (`kw_trigger`/`intent_trigger` com `sequential: false`, `no_reply_trigger`) não participam — nem bloqueiam, nem são bloqueados; `sequential` é ortogonal a `fire_once`, que continua a controlar só se o gatilho pode disparar mais de uma vez.
 
 **2b) Dependência explícita (`requires_block_id`)** — trava **aditiva** à gating posicional acima, opcional, em `kw_trigger`/`intent_trigger`, e **obrigatória** (para ter qualquer efeito) em `block_trigger`: o campo `requires_block_id` referencia o `id` (imutável) de outro gatilho sequencial da mesma fase — nunca o `label` (editável a qualquer momento). Diferença central face ao gating posicional: **nunca aceita satisfação no mesmo turno** — só considera o bloco referenciado satisfeito se já estiver persistido (`leads.triggers_fired`/`leads.phases_triggered`) de um turno **estritamente anterior**. Resolvido por `_requires_block_satisfied()` contra um mapa `block_id → (block, phase_id)` de todas as fases do profile (`_build_block_lookup()`), usando o `phase_id` do **bloco referenciado** (não da fase sendo avaliada agora — necessário para uma referência a um `phase_trigger` de outra fase resolver corretamente).
 
-Referência **falha aberto** (sem efeito, nunca bloqueia para sempre) em dois casos: bloco referenciado apagado, ou bloco ainda existe mas deixou de ser `_is_sequential_trigger_block()` (ex.: `fire_once` desmarcado depois de outro bloco já ter passado a depender dele). O builder (`CamadaFluxoVenda.tsx`) sinaliza visualmente ambos os casos como "dependência quebrada", mas o backend nunca deixa um gatilho permanentemente travado por uma referência inválida — sem cascade-delete automático quando o bloco-alvo é removido.
+Referência **falha aberto** (sem efeito, nunca bloqueia para sempre) em dois casos: bloco referenciado apagado, ou bloco ainda existe mas deixou de ser `_is_sequential_trigger_block()` (ex.: "Ordem" mudada para "Pode ser acionado a qualquer momento" depois de outro bloco já ter passado a depender dele). O builder (`CamadaFluxoVenda.tsx`) sinaliza visualmente ambos os casos como "dependência quebrada", mas o backend nunca deixa um gatilho permanentemente travado por uma referência inválida — sem cascade-delete automático quando o bloco-alvo é removido.
 
 **No frontend** (`CamadaFluxoVenda.tsx`): `SalesFlowBlock.requires_block_id?: string` e `label?: string` (este último já existia para `condicao`, estendido para `kw_trigger`/`intent_trigger` como "Nome do gatilho" — `blockSummary()` prefere o `label` quando presente). O formulário de `kw_trigger`/`intent_trigger` ganha um campo "Depende de" (`<select>`), populado por `dependencyOptions(block, phaseBlocks)` — filtra para blocos da mesma fase que sejam `isSequentialCapable()` (espelha `_is_sequential_trigger_block()` do backend), excluindo o próprio bloco e qualquer opção cuja cadeia de `requires_block_id` já leve de volta a ele (`requiresChainIncludes()`) — previne ciclos diretamente no seletor, sem depender de validação no backend. `BlockRow` calcula `hasBrokenDependency` (alvo ausente ou não mais `isSequentialCapable`) e mostra "⚠ dependência quebrada — bloco removido".
 
@@ -187,8 +213,8 @@ Independente do gating posicional: não participa de `_prereqs_satisfied_by_scop
 | Trigger | Condição de `fired = True` |
 |---|---|
 | `phase_trigger` | `is_phase_entry = True` — derivado de `lead.category != effective_route_to` **E** `phase_id ∉ leads.phases_triggered` — **e** nenhum gatilho sequencial anterior bloqueado (não se aplica ao `phase_trigger`, que é sempre o primeiro da fase) |
-| `kw_trigger` | Keyword match na mensagem + `fire_once` check (`block_id ∉ leads.triggers_fired` se `fire_once=True`) + gating sequencial se `fire_once=True` |
-| `intent_trigger` | `intent_label in detected_intents` (da LLM Mãe) + `fire_once` check + gating sequencial se `fire_once=True` |
+| `kw_trigger` | Keyword match na mensagem + `fire_once` check (`block_id ∉ leads.triggers_fired` se `fire_once=True`) + gating sequencial se `sequential=True` (fallback `fire_once=True` sem o campo novo) |
+| `intent_trigger` | `intent_label in detected_intents` (da LLM Mãe) + `fire_once` check + gating sequencial se `sequential=True` (fallback `fire_once=True` sem o campo novo) |
 | `block_trigger` | Sem condição de conteúdo — dispara sempre que não `_locked` (ou seja, assim que `requires_block_id` estiver satisfeito) **e** `block_id ∉ leads.triggers_fired` (checagem obrigatória — este tipo não tem nenhum outro mecanismo de "uma vez só") |
 | `no_reply_trigger` | Nunca (placeholder) |
 
@@ -217,7 +243,7 @@ Se `result["suppress_llm_response"] = True`, `compose_decision_output()` força 
 
 O gating sequencial descrito acima só se aplica **dentro** da fase para onde `effective_route_to` aponta neste turno — não impede, por si só, que a **Mãe** (via `route_to`) ou a **Filha** (via o sinal `did_complete_phase`) decidam avançar para uma fase **seguinte**, pulando a fase inteira (e todo o seu Fluxo de Venda) num único turno. Isso acontece na prática quando o lead responde de forma ambígua (ex.: "ok") e a Mãe interpreta como sinal suficiente para avançar, ou quando a Filha sinaliza conclusão da fase antes de o gatilho configurado ter tido chance de disparar.
 
-`_phase_pending_sequential_triggers(phase_id, ai_profile, triggers_fired)` (`decision_engine.py`) resolve os `block_id`s de `kw_trigger`/`intent_trigger` sequenciais (`fire_once: true`) ou `block_trigger` (sempre sequencial) configurados numa fase que ainda não dispararam. Lista vazia = sem gate — `sales_flow` desligado, fase inexistente no profile, ou nenhum gatilho sequencial configurado nela (ou todos já dispararam). Opt-in: só há pendência quando o utilizador configurou explicitamente pelo menos um gatilho sequencial nessa fase.
+`_phase_pending_sequential_triggers(phase_id, ai_profile, triggers_fired)` (`decision_engine.py`) resolve os `block_id`s de `kw_trigger`/`intent_trigger` sequenciais (`sequential: true`, fallback `fire_once: true` sem o campo novo) ou `block_trigger` (sempre sequencial) configurados numa fase que ainda não dispararam. Lista vazia = sem gate — `sales_flow` desligado, fase inexistente no profile, ou nenhum gatilho sequencial configurado nela (ou todos já dispararam). Opt-in: só há pendência quando o utilizador configurou explicitamente pelo menos um gatilho sequencial nessa fase.
 
 Este helper é consultado em dois tipos de ponto, por fase:
 
@@ -239,7 +265,7 @@ se lead "engajado" com <fase> (phases_triggered contém "<id>" OU lead.category 
 
   `_ALLOWED_ADVANCE["recepcao"] = {"qualification"}` (único destino legítimo a partir da recepção) foi adicionado só para este guardrail — `_STAGE_ORDER`/`_STAGE_INDEX` (usados por `apply_mother_category_guardrails`) não foram tocados, pois `"recepcao"` nunca aparece como valor de `lead.category`.
 
-  **Aviso no builder:** `CamadaFluxoVenda.tsx` mostra um banner somente-leitura na Fase 0 quando a configuração excede o que o teto de 1 turno cobre — mais de 1 bloco `kw_trigger`/`intent_trigger` sequencial (`fire_once`, escopo raiz) ou qualquer nó `condicao` presente. Reaproveita `isSequentialCapable()` já existente no arquivo.
+  **Aviso no builder:** `CamadaFluxoVenda.tsx` mostra um banner somente-leitura na Fase 0 quando a configuração excede o que o teto de 1 turno cobre — mais de 1 bloco `kw_trigger`/`intent_trigger` sequencial (`isSequentialCapable()`, escopo raiz, exclui `phase_trigger`) ou qualquer nó `condicao` presente.
 
 **Qualificação (p1) não tem um guardrail dedicado ao nível da Mãe** — a saída de p1 é decidida por "missing_fields vazio", não por `route_to` direto, em 3 pontos independentes que promovem `route_to`/`effective_route_to` para `"apresentation"`: Regra 3 e o auto-promote de runtime (`decide()`), e a Regra 1 + fallback `ask_qualification` (`compose_decision_output()`). Os 3 são gateados por `not _phase_pending_sequential_triggers("p1", ...)`, exceto o escape valve `is_upper_stage` da Regra 3 (lead já numa fase posterior cuja Mãe tentou rotear de volta para qualificação por engano — não é "saindo de p1 agora", não deve ser bloqueado por pendência de p1).
 
@@ -249,7 +275,7 @@ se lead "engajado" com <fase> (phases_triggered contém "<id>" OU lead.category 
 
 **Por que `phases_triggered` e não só `lead.category`** (nos guardrails de Mãe): testes ao vivo mostraram `leads.category` podendo ficar defasado — a Mãe gera conteúdo da fase via `route_to` num turno sem que a categoria persistida do lead necessariamente seja atualizada para o mesmo valor (esse campo depende de `perceived_category` + `apply_mother_category_guardrails`, um mecanismo separado de `route_to`). `leads.phases_triggered` conter o id da fase é o sinal mais confiável de que o `phase_trigger` dela já disparou para aquele lead.
 
-**Escopo, o mesmo em toda fase:** só gatilhos "sequenciais" (`kw_trigger`/`intent_trigger` com `fire_once: true`, ou `block_trigger`, sempre sequencial — mesmo critério de `_is_sequential_trigger_block()`) contam como pendência. `no_reply_trigger` e gatilhos sem `fire_once` nunca participam — são reavaliados a cada turno, sem estado persistido de satisfação.
+**Escopo, o mesmo em toda fase:** só gatilhos "sequenciais" (`kw_trigger`/`intent_trigger` com `sequential: true` — fallback `fire_once: true` sem o campo novo —, ou `block_trigger`, sempre sequencial — mesmo critério de `_is_sequential_trigger_block()`) contam como pendência. `no_reply_trigger` e gatilhos com `sequential: false` nunca participam — são reavaliados a cada turno, sem estado persistido de satisfação para efeitos de fila (mesmo que `fire_once` esteja marcado — nesse caso o registo existe só para suprimir re-disparo, não para o gating).
 
 **Fases sem este guardrail ao nível da Mãe (deliberado):** p3b (agendamento), p4 (follow-up) e
 p5 (fechamento) não têm hoje nenhum `_enforce_<fase>_sales_flow_pending` dedicado — só o
@@ -384,7 +410,7 @@ O campo é lido pelo orchestrator do CRM e inserido no `ContextBundle` via `enri
 | Coluna | Tipo | Descrição |
 |---|---|---|
 | `phases_triggered` | `TEXT NULL` | JSON array de phase IDs disparados por este lead (ex: `["p2", "p3a"]`) |
-| `triggers_fired` | `TEXT NULL` | JSON array de block IDs disparados com `fire_once` (ex: `["uuid1", "uuid2"]`) |
+| `triggers_fired` | `TEXT NULL` | JSON array de block IDs já disparados pelo menos uma vez — `fire_once: true` (suprime re-disparo) e/ou `sequential: true` (registo de "já passou por aqui" para o gating, mesmo repetível) (ex: `["uuid1", "uuid2"]`) |
 | `branches_selected` | `TEXT NULL` | JSON `{block_id: branch_id}` — ramos escolhidos por nós `condicao` com `sticky=true` |
 
 Todas adicionadas via `ensure_column()` em `backend-crm/database.py`.
