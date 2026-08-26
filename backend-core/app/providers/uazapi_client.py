@@ -20,7 +20,7 @@ class UazapiTimeoutError(UazapiClientError):
     pass
 
 
-_RETRYABLE_STATUS_CODES = {429, 503}
+_RETRYABLE_STATUS_CODES = {429, 500, 502, 503, 504}
 _MAX_ATTEMPTS = 3
 _RETRY_BASE_BACKOFF_SECONDS = 0.5
 _RETRY_AFTER_CAP_SECONDS = 3.0
@@ -47,12 +47,13 @@ async def _request_with_retry(
     timeout_error_message: str,
     request_error_message: str,
 ) -> httpx.Response:
-    """POST com retry curto e exponencial em 429/503.
+    """POST com retry curto e exponencial em 429/500/502/503/504.
 
     Erros de rede/timeout não são re-tentados aqui (propagam imediatamente) —
-    já são lentos por natureza e o orçamento de tempo do chamador (executor →
-    core → uazapi) já é apertado; compor mais espera sobre um timeout não
-    ajudaria. Retry cobre só rejeição rápida por rate-limit (429/503).
+    uma tentativa de timeout já consome o timeout inteiro por tentativa, e
+    retentar estouraria o orçamento de tempo do chamador (executor → core →
+    uazapi, ver docs/architecture/whatsapp-send-resiliencia.md). Retry cobre
+    só respostas de erro rápidas do servidor (rate-limit e erros 5xx).
     """
     for attempt in range(1, _MAX_ATTEMPTS + 1):
         try:

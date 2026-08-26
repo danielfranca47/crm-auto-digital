@@ -97,6 +97,56 @@ class UazapiClientRetryTests(unittest.TestCase):
         self.assertEqual(result, {"id": "msg3"})
         self.assertEqual(fake_client.calls, 2)
 
+    def test_500_then_success_retries(self):
+        fake_client = self._patch(
+            [
+                _FakeResponse(500, text="internal error"),
+                _FakeResponse(200, json_data={"id": "msg5"}),
+            ]
+        )
+        result = self._run(
+            uazapi_client.send_text(base_url="https://api.example.com", token="tok", number="5511999999999", text="hi")
+        )
+        self.assertEqual(result, {"id": "msg5"})
+        self.assertEqual(fake_client.calls, 2)
+
+    def test_502_then_success_retries(self):
+        fake_client = self._patch(
+            [
+                _FakeResponse(502, text="bad gateway"),
+                _FakeResponse(200, json_data={"id": "msg6"}),
+            ]
+        )
+        result = self._run(
+            uazapi_client.send_text(base_url="https://api.example.com", token="tok", number="5511999999999", text="hi")
+        )
+        self.assertEqual(result, {"id": "msg6"})
+        self.assertEqual(fake_client.calls, 2)
+
+    def test_504_then_success_retries(self):
+        fake_client = self._patch(
+            [
+                _FakeResponse(504, text="gateway timeout"),
+                _FakeResponse(200, json_data={"id": "msg7"}),
+            ]
+        )
+        result = self._run(
+            uazapi_client.send_text(base_url="https://api.example.com", token="tok", number="5511999999999", text="hi")
+        )
+        self.assertEqual(result, {"id": "msg7"})
+        self.assertEqual(fake_client.calls, 2)
+
+    def test_401_does_not_retry(self):
+        fake_client = self._patch([_FakeResponse(401, text="unauthorized")])
+        with self.assertRaises(uazapi_client.UazapiClientError) as ctx:
+            self._run(
+                uazapi_client.send_text(
+                    base_url="https://api.example.com", token="tok", number="5511999999999", text="hi"
+                )
+            )
+        self.assertEqual(fake_client.calls, 1)
+        self.assertEqual(ctx.exception.status_code, 401)
+
     def test_exhausts_attempts_and_raises(self):
         fake_client = self._patch(
             [

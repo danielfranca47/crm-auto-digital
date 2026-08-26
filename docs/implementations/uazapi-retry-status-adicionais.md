@@ -1,7 +1,7 @@
-# Expandir retry da UazAPI para 500/502/504 e timeout/erro de rede
+# Expandir retry da UazAPI para 500/502/504 (sem retry em timeout)
 
-**Branch:** _(a definir no Plan Mode)_
-**Status:** Aguardando Plan Mode
+**Branch:** `fix/uazapi-retry-status-adicionais`
+**Status:** Em andamento
 
 ---
 
@@ -16,9 +16,13 @@ consciente na época para não estourar o orçamento de tempo apertado do
 chamador (executor → core → UazAPI, ver
 `docs/architecture/whatsapp-send-resiliencia.md`).
 
-Se no uso real (com clientes pagantes) 500/502/504 ou timeouts pontuais da
-UazAPI também se mostrarem transitórios (resolvidos por uma segunda
-tentativa), vale expandir a cobertura do retry.
+Se no uso real (com clientes pagantes) 500/502/504 da UazAPI também se
+mostrarem transitórios (resolvidos por uma segunda tentativa), vale expandir
+a cobertura do retry.
+
+**Escopo decidido no Plan Mode (via `AskUserQuestion`):** só ampliar
+`_RETRYABLE_STATUS_CODES` para 500/502/504. Retry em timeout/erro de rede
+**não** entra neste item — ver "Diagnóstico" abaixo para o motivo.
 
 ---
 
@@ -27,26 +31,116 @@ tentativa), vale expandir a cobertura do retry.
 1. **Retry não cobre 500/502/504:** `_RETRYABLE_STATUS_CODES = {429, 503}` em
    `uazapi_client.py` — qualquer outro erro 5xx propaga direto, sem
    tentativa.
-2. **Retry não cobre timeout/erro de rede:** `httpx.TimeoutException`/
-   `httpx.RequestError` propagam imediatamente, mesmo sendo potencialmente
-   transitórios.
 
 ---
 
-## Diagnóstico (a fazer em Plan Mode)
+## Diagnóstico
 
-- Confirmar (por observação real de logs/produção, se possível) se 500/502/504
-  ou timeouts da UazAPI paga são de fato transitórios ou indicam problema
-  persistente (nesse caso retry não ajudaria).
-- Se decidido re-tentar timeout, é necessário revisitar o orçamento de tempo
-  documentado em `whatsapp-send-resiliencia.md` — ver também o item
-  relacionado "M3 — Alinhar orçamento de timeout executor → core → UazAPI" em
-  `docs/plans/confiabilidade-integracoes-externas-melhorias-futuras.md`
-  (idealmente resolvido antes ou junto deste item, para não re-tentar sobre
-  um orçamento já insuficiente).
+### Já existe?
+
+Não. `backend-core/app/providers/uazapi_client.py:23` —
+`_RETRYABLE_STATUS_CODES = {429, 503}` — 500/502/504 propagam direto, sem
+tentativa.
+
+### O que precisa ser construído
+
+- Adicionar `500`, `502`, `504` a `_RETRYABLE_STATUS_CODES` — mesmo padrão
+  de backoff já existente (`_MAX_ATTEMPTS=3`,
+  `_RETRY_BASE_BACKOFF_SECONDS=0.5`, `_RETRY_AFTER_CAP_SECONDS=3.0`,
+  `_resolve_retry_delay`). Nenhuma mudança de lógica, só a constante.
+
+**Por que é seguro sem dado de produção observado:** retry em status code é
+uma resposta **rápida** do servidor (não consome o timeout completo) — o
+custo adicional no pior caso é o mesmo de hoje para 429/503 (~1.5s de
+backoff entre tentativas), que cabe com folga nos 25s/35s do orçamento do
+executor (ajustado em `uazapi-alinhar-orcamento-timeout.md`, M3). 502/504
+são classicamente sintomas de instabilidade transitória de gateway/proxy (a
+UazAPI é ela mesma um proxy para uma sessão WhatsApp Web); mesmo que não
+ajude num 500 persistente, o overhead extra é desprezível.
+
+### Por que retry em timeout/erro de rede fica fora deste item
+
+Retentar em timeout tem um conflito real com o orçamento de timeout
+recém-ajustado no M3 (`uazapi-alinhar-orcamento-timeout.md`): cada tentativa
+de timeout já consome o timeout inteiro (20s texto / 30s mídia no core), então
+até 1 retry em timeout já estouraria os 25s/35s do executor — a menos que se
+reduza bastante o timeout por tentativa, o que reintroduziria exatamente o
+problema que o M3 acabou de resolver (chamadas lentas-porém-válidas viram
+falsas falhas). Decidido com o usuário adiar essa parte para um item futuro,
+desenhado desde já para um modelo de "orçamento total de tempo" (deadline
+global entre tentativas) em vez de "timeout fixo por tentativa × N
+tentativas" — ver "Ajustes Possíveis" no final.
+
+### Riscos e dependências
+
+- Nenhum risco de comportamento no caminho de sucesso (2xx) ou em status
+  não listados (4xx, exceto 429).
+- Nenhuma mudança de timeout ou de orçamento — só a lista de status
+  retentáveis.
+- Sem dependência de outros itens pendentes.
+
+---
+
+## Abordagem
+
+```
+uazapi_client._request_with_retry(url, ...)
+  → tentativa → 2xx → retorna
+             → 429/500/502/503/504 e tentativas restantes → aguarda backoff → repete
+             → esses status sem mais tentativas → UazapiClientError (status_code preservado)
+             → timeout/erro de rede/outro status → propaga imediatamente, sem retry (inalterado)
+```
 
 ---
 
 ## Plano de Implementação
 
-_A preencher após Plan Mode e aprovação do utilizador._
+### Fase 1 — Ampliar `_RETRYABLE_STATUS_CODES`
+
+**Objetivo:** `_request_with_retry()` também retenta em 500/502/504, com o
+mesmo backoff já existente; timeout/rede continuam propagando na hora.
+
+| Arquivo | O que muda |
+|---|---|
+| `backend-core/app/providers/uazapi_client.py` | `_RETRYABLE_STATUS_CODES = {429, 503}` → `{429, 500, 502, 503, 504}` |
+| `backend-core/tests/test_uazapi_client_retry.py` | Novos testes: 500/502/504 → sucesso na retentativa; 400/401 continuam sem retry (regressão) |
+
+```python
+# ANTES
+_RETRYABLE_STATUS_CODES = {429, 503}
+
+# DEPOIS
+_RETRYABLE_STATUS_CODES = {429, 500, 502, 503, 504}
+```
+
+---
+
+## Checks de Validação
+
+### Cenário P1 — Suíte de testes unitários (retry mockado)
+- [ ] Rodar `cd backend-core && python -m pytest tests/test_uazapi_client_retry.py -v`
+- [ ] Confirmar: 500/502/504 → sucesso na retentativa; 400/401 continuam
+      sem retry (regressão)
+
+### Cenário P2 — Suíte completa do backend-core sem regressão
+- [ ] Rodar `SECRET_KEY=test-secret python -m pytest` na raiz de
+      `backend-core`
+- [ ] Confirmar: nenhuma falha nova além das já pré-existentes e
+      documentadas (`test_ai_profile_*`)
+
+**Nota:** validação real de "os 500/502/504 realmente eram transitórios" só
+será observável em produção (logs `event=uazapi_send_retry`) ao longo do
+tempo — não bloqueante para esta implementação, já que o custo do retry é
+baixo mesmo se não ajudar.
+
+---
+
+## Ajustes Possíveis Pós-Implementação
+
+- **Retry em timeout/erro de rede** — decisão explícita de não fazer agora
+  (conflito de orçamento com M3, ver "Diagnóstico" acima). Se o padrão de
+  timeouts reais da UazAPI mudar no futuro (dados de produção mostrando
+  timeouts frequentes e transitórios), revisitar como item novo, desenhado
+  desde já para um modelo de "orçamento total de tempo" (deadline global
+  entre tentativas) em vez de "timeout fixo por tentativa × N tentativas" —
+  isso evitaria o conflito com o orçamento do executor.
