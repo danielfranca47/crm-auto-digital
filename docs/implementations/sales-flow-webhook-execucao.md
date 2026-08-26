@@ -98,7 +98,7 @@ colaterais reais.
 
 | # | Commit | O que foi implementado |
 |---|---|---|
-| 1 | *(a preencher)* | *(a preencher)* |
+| 1 | `7b70dcf` | job dedicado + dispatch real (executor.py) + simulação (playground.py) + worker/runner + docs |
 
 ---
 
