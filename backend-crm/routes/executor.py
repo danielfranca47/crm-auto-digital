@@ -402,14 +402,15 @@ def _dispatch_system_actions(
             if not url:
                 continue
             lead_row = conn.execute(
-                "SELECT name, email FROM leads WHERE id = ? AND user_id = ?", (lead_id, user_id)
+                "SELECT companyName, contactName, email FROM leads WHERE id = ? AND user_id = ?",
+                (lead_id, user_id),
             ).fetchone()
             create_job(
                 job_type=TYPE_SALES_FLOW_WEBHOOK,
                 payload={
                     "lead_id": lead_id,
                     "phone": phone,
-                    "name": lead_row["name"] if lead_row else None,
+                    "name": (lead_row["contactName"] or lead_row["companyName"]) if lead_row else None,
                     "email": lead_row["email"] if lead_row else None,
                     "url": url,
                     "method": (action.get("method") or "POST").strip().upper(),
