@@ -1,7 +1,7 @@
 # Expandir retry da UazAPI para 500/502/504 (sem retry em timeout)
 
 **Branch:** `fix/uazapi-retry-status-adicionais`
-**Status:** Em andamento
+**Status:** Todos os cenários validados (26/08/2026)
 
 ---
 
@@ -113,20 +113,50 @@ _RETRYABLE_STATUS_CODES = {429, 503}
 _RETRYABLE_STATUS_CODES = {429, 500, 502, 503, 504}
 ```
 
+### Commits Fase 1
+
+| # | Commit | O que foi implementado |
+|---|---|---|
+| 1 | `f3e8094` | `_RETRYABLE_STATUS_CODES` ampliado + testes |
+
+**Detalhes do commit `f3e8094`:**
+- `backend-core/app/providers/uazapi_client.py` — `_RETRYABLE_STATUS_CODES`
+  `{429, 503}` → `{429, 500, 502, 503, 504}`; docstring atualizada
+- `backend-core/tests/test_uazapi_client_retry.py` — 4 novos testes
+  (500/502/504 com retry, 401 sem retry)
+
+### Relatório da Fase 1 — o que mudou na prática
+
+**Antes:** se a UazAPI respondesse 500, 502 ou 504 ao tentar enviar uma
+mensagem, o erro ia direto para o job, sem nenhuma tentativa automática de
+novo — mesmo esses códigos sendo, tipicamente, sinais de instabilidade
+passageira do servidor/proxy.
+
+**Agora:** o backend tenta automaticamente até 2 vezes a mais (mesmo padrão
+já usado para 429/503) antes de desistir. Timeout e erro de rede continuam
+sem retry — decisão deliberada, documentada, para não estourar o orçamento
+de tempo do executor.
+
+**Para validar:** Cenário P1 e P2, abaixo (já rodados nesta sessão).
+
 ---
 
 ## Checks de Validação
 
 ### Cenário P1 — Suíte de testes unitários (retry mockado)
-- [ ] Rodar `cd backend-core && python -m pytest tests/test_uazapi_client_retry.py -v`
-- [ ] Confirmar: 500/502/504 → sucesso na retentativa; 400/401 continuam
+- [x] Rodar `cd backend-core && python -m pytest tests/test_uazapi_client_retry.py -v`
+- [x] Confirmar: 500/502/504 → sucesso na retentativa; 400/401 continuam
       sem retry (regressão)
+- **Validado em:** 26/08/2026 — 12/12 testes passaram.
 
 ### Cenário P2 — Suíte completa do backend-core sem regressão
-- [ ] Rodar `SECRET_KEY=test-secret python -m pytest` na raiz de
+- [x] Rodar `SECRET_KEY=test-secret python -m pytest` na raiz de
       `backend-core`
-- [ ] Confirmar: nenhuma falha nova além das já pré-existentes e
+- [x] Confirmar: nenhuma falha nova além das já pré-existentes e
       documentadas (`test_ai_profile_*`)
+- **Validado em:** 26/08/2026 — 8 falhas / 43 passaram, mesmas 8 falhas
+  pré-existentes já documentadas nos itens anteriores (`test_ai_profile_*`),
+  sem relação com este módulo.
 
 **Nota:** validação real de "os 500/502/504 realmente eram transitórios" só
 será observável em produção (logs `event=uazapi_send_retry`) ao longo do
