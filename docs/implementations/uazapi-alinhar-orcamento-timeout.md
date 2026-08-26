@@ -1,7 +1,7 @@
 # M3 — Alinhar orçamento de timeout executor → core → UazAPI
 
 **Branch:** `fix/uazapi-alinhar-orcamento-timeout`
-**Status:** Em andamento
+**Status:** Todos os cenários validados (26/08/2026)
 
 ---
 
@@ -140,6 +140,35 @@ def send_whatsapp_media(payload: Dict[str, Any]) -> Dict[str, Any]:
         ...
 ```
 
+### Commits Fase 1
+
+| # | Commit | O que foi implementado |
+|---|---|---|
+| 1 | `87fd3c4` | timeouts alinhados em `core_client.py` + doc atualizada |
+
+**Detalhes do commit `87fd3c4`:**
+- `backend-executors/app/clients/core_client.py` — `send_whatsapp_message`
+  timeout 15.0 → 25.0; `send_whatsapp_media` timeout 20.0 → 35.0
+- `docs/architecture/whatsapp-send-resiliencia.md` — secção "Orçamento de
+  timeout" substitui a antiga "Limitação de timeout conhecida (não
+  resolvida)"
+
+### Relatório da Fase 1 — o que mudou na prática
+
+**Antes:** se o core demorasse mais que 15s (texto) ou 20s (mídia) para
+completar um envio à UazAPI — mesmo que a mensagem tivesse sido enviada com
+sucesso —, o executor desistia por timeout e reagendava o job para
+tentativa futura, correndo risco de enviar a mesma mensagem duas vezes ao
+lead.
+
+**Agora:** o executor espera até 25s/35s, tempo suficiente para cobrir o
+pior caso realista do core (incluindo as tentativas de retry em 429/503).
+Isso elimina a janela em que o executor desistia antes do core terminar.
+Não há mudança perceptível quando o envio é rápido (caso normal).
+
+**Para validar:** Cenário P1 e P2, abaixo (já revisados nesta sessão — ver
+resultado registrado nos checks).
+
 ---
 
 ## Checks de Validação
@@ -149,12 +178,19 @@ uma resposta lenta real da UazAPI em ambiente local — validação por revisão
 de código/cálculo e testes automatizados existentes.
 
 ### Cenário P1 — Suíte de testes do backend-executors sem regressão
-- [ ] Rodar a suíte de testes do `backend-executors` (se configurada)
-- [ ] Confirmar que nada quebrou com a mudança de timeout
+- [x] Rodar a suíte de testes do `backend-executors`
+- [x] Confirmar que nada quebrou com a mudança de timeout
+- **Validado em:** 26/08/2026 — 80 falhas / 209 passaram no worktree; 81
+  falhas / 221 passaram na pasta principal (`main`), sem a mudança. Mesma
+  família de falhas pré-existentes em ambos (`test_qualification_*`,
+  `test_recepcao_*`, `test_scheduling_agent_no_closing`, etc.), sem
+  relação com `core_client.py` — nenhuma regressão nova introduzida.
 
 ### Cenário P2 — Revisão do cálculo de pior caso
-- [ ] Confirmar que 25.0s > ~21.5s (pior caso texto) e 35.0s > ~31.5s (pior
+- [x] Confirmar que 25.0s > ~21.5s (pior caso texto) e 35.0s > ~31.5s (pior
       caso mídia), com margem de segurança razoável
+- **Validado em:** 26/08/2026 — cálculo revisado no diagnóstico acima;
+  margem de ~3.5s (texto) e ~3.5s (mídia) sobre o pior caso estimado.
 - **Nota:** não é possível forçar uma resposta lenta real da UazAPI em
   ambiente de teste para validar isso ao vivo — cobertura fica no cálculo
   documentado acima.
