@@ -44,9 +44,8 @@ Regras:
 - **Erros de rede/timeout (`httpx.RequestError`/`TimeoutException`) não são
   re-tentados** — propagam imediatamente como `UazapiTimeoutError`/
   `UazapiClientError`, igual ao comportamento antes deste retry existir.
-  Motivo: o orçamento de tempo do chamador já é apertado (ver "Limitação de
-  timeout" abaixo) e um timeout já é lento por natureza — re-tentar só
-  composeria mais atraso sem ganho.
+  Motivo: um timeout já é lento por natureza — re-tentar só composeria mais
+  atraso sem ganho (ver "Orçamento de timeout" abaixo).
 - Qualquer outro status code (4xx exceto os listados, 500/502/504) também não
   re-tenta — comportamento inalterado.
 - O escopo deste retry é só `uazapi_client.py` (envio de mensagens). As
@@ -54,13 +53,22 @@ Regras:
   status/webhook) têm sua própria implementação de retry, com as mesmas
   constantes — ver [`whatsapp-connection.md`](whatsapp-connection.md#retry-em-429503-uazapi_adminpy).
 
-### Limitação de timeout conhecida (não resolvida)
+### Orçamento de timeout (executor → core → UazAPI)
 
-`backend-executors/app/clients/core_client.py::send_whatsapp_message`
-(executor → core) usa timeout total de 15s, enquanto `uazapi_client.send_text`
-(core → UazAPI) usa 20s por tentativa (`send_media` usa 30s) — uma única
-tentativa lenta já pode estourar o orçamento do executor, independente do
-retry. Pré-existente, fora do escopo do retry de 429/503.
+O timeout do chamador nunca é menor que o pior caso realista da chamada que
+ele aguarda, para evitar que o executor desista antes do core terminar um
+envio que, na prática, é concluído com sucesso na UazAPI (o que causaria
+reenvio duplicado da mesma mensagem ao lead num retry de job):
+
+| Chamada | Timeout | Pior caso da chamada seguinte |
+|---|---|---|
+| `core_client.py::send_whatsapp_message` (executor → core) | 25.0s | `send_text` no core: até 20s (última tentativa) + até ~1.5s de backoff ≈ 21.5s |
+| `core_client.py::send_whatsapp_media` (executor → core) | 35.0s | `send_media` no core: até 30s (última tentativa) + até ~1.5s de backoff ≈ 31.5s |
+
+`send_whatsapp_message`/`send_whatsapp_media` são chamados de dentro do loop
+síncrono de polling do worker (`backend-executors/app/workers/whatsapp_worker.py`)
+— não há usuário esperando a resposta em tempo real, então a margem extra
+não tem custo de UX perceptível.
 
 ---
 
@@ -90,3 +98,4 @@ chega já passou pela normalização do CRM.
 |---|---|
 | `backend-core/app/providers/uazapi_client.py` | `_request_with_retry`, `send_text`, `send_media` |
 | `backend-core/app/api/whatsapp_send.py` | `_sanitize_number`, `_is_valid_e164_digits`, rotas `/whatsapp/send` e `/whatsapp/send-media` |
+| `backend-executors/app/clients/core_client.py` | `send_whatsapp_message`, `send_whatsapp_media` — timeouts alinhados ao pior caso do core |

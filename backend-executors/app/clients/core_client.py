@@ -51,7 +51,7 @@ def _handle_response(response: httpx.Response) -> Dict[str, Any]:
 def send_whatsapp_message(payload: Dict[str, Any]) -> Dict[str, Any]:
     base_url = settings.core_api_base.rstrip("/")
     url = f"{base_url}/whatsapp/send"
-    with httpx.Client(timeout=15.0) as client:
+    with httpx.Client(timeout=25.0) as client:
         try:
             response = client.post(url, headers=_headers(), json=payload)
         except httpx.RequestError as exc:
@@ -95,7 +95,7 @@ def send_whatsapp_media(payload: Dict[str, Any]) -> Dict[str, Any]:
     """Envia mídia (imagem, vídeo, áudio) via WhatsApp antes do texto do pitch."""
     base_url = settings.core_api_base.rstrip("/")
     url = f"{base_url}/whatsapp/send-media"
-    with httpx.Client(timeout=20.0) as client:
+    with httpx.Client(timeout=35.0) as client:
         try:
             response = client.post(url, headers=_headers(), json=payload)
         except httpx.RequestError as exc:
