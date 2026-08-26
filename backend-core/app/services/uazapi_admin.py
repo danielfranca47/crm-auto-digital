@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import logging
 from typing import Any, Dict, Iterable, Optional
 
@@ -19,6 +20,24 @@ class UazapiAdminError(RuntimeError):
 
 class UazapiAdminTimeoutError(UazapiAdminError):
     pass
+
+
+_RETRYABLE_STATUS_CODES = {429, 503}
+_MAX_ATTEMPTS = 3
+_RETRY_BASE_BACKOFF_SECONDS = 0.5
+_RETRY_AFTER_CAP_SECONDS = 3.0
+
+
+def _resolve_retry_delay(response: httpx.Response, attempt: int) -> float:
+    retry_after = response.headers.get("Retry-After") or response.headers.get("retry-after")
+    if retry_after:
+        try:
+            seconds = float(retry_after)
+        except ValueError:
+            seconds = None
+        if seconds is not None and seconds >= 0:
+            return min(seconds, _RETRY_AFTER_CAP_SECONDS)
+    return _RETRY_BASE_BACKOFF_SECONDS * (2 ** (attempt - 1))
 
 
 def _ensure_base_url(base_url: str) -> str:
@@ -157,13 +176,28 @@ async def _request(
     url = f"{base}{path}"
     headers = {header_name: token, "Content-Type": "application/json"}
 
-    try:
-        async with httpx.AsyncClient(timeout=20.0) as client:
-            response = await client.request(method, url, headers=headers, json=json, params=params)
-    except httpx.TimeoutException as exc:
-        raise UazapiAdminTimeoutError("Uazapi admin request timed out") from exc
-    except httpx.RequestError as exc:
-        raise UazapiAdminError("Uazapi admin request failed") from exc
+    for attempt in range(1, _MAX_ATTEMPTS + 1):
+        try:
+            async with httpx.AsyncClient(timeout=20.0) as client:
+                response = await client.request(method, url, headers=headers, json=json, params=params)
+        except httpx.TimeoutException as exc:
+            raise UazapiAdminTimeoutError("Uazapi admin request timed out") from exc
+        except httpx.RequestError as exc:
+            raise UazapiAdminError("Uazapi admin request failed") from exc
+
+        if response.status_code in _RETRYABLE_STATUS_CODES and attempt < _MAX_ATTEMPTS:
+            delay = _resolve_retry_delay(response, attempt)
+            logger.warning(
+                "event=uazapi_admin_retry attempt=%s/%s status=%s delay=%.2f",
+                attempt,
+                _MAX_ATTEMPTS,
+                response.status_code,
+                delay,
+            )
+            await asyncio.sleep(delay)
+            continue
+
+        break
 
     if response.is_error:
         body = response.text
