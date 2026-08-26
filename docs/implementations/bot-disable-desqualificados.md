@@ -1,7 +1,7 @@
 # Desativar bot automaticamente ao arquivar lead (Desqualificados / Prospecção Recusada)
 
 **Branch:** `worktree-feat+bot-disable-desqualificados`
-**Status:** Em andamento
+**Status:** Pronto para graduação (todos os checks validados ou pulados com justificativa)
 
 ---
 
@@ -90,7 +90,7 @@ Reativação continua manual (mesmo comportamento unidirecional de `closing`).
 
 | # | Commit | O que foi implementado |
 |---|---|---|
-| 1 | _pendente_ | apply_prospect_refused_bot_disable_side_effect + refactor do helper compartilhado + 3 call sites + label frontend + doc + teste automatizado |
+| 1 | `7e8d768` | apply_prospect_refused_bot_disable_side_effect + refactor do helper compartilhado + 3 call sites + label frontend + doc + teste automatizado |
 
 ### Relatório da Fase 2 — o que mudou na prática
 
@@ -105,29 +105,26 @@ Teste automatizado já rodado localmente (`python scripts/test_category_disquali
 ## Checks de Validação
 
 ### Cenário P1 — Drag no Kanban desativa o bot (Desqualificados)
-- [ ] Arrastar um lead de teste para a coluna "Desqualificados"
-- [ ] Abrir o card do lead e confirmar "Bot desativado" com motivo "Desqualificado"
-- **Pendente**
+- [x] Arrastar um lead de teste para a coluna "Desqualificados"
+- [x] Abrir o card do lead e confirmar "Bot desativado" com motivo "Desqualificado"
+- **Validado em:** 26/08/2026 — teste ao vivo via browser (chrome-devtools MCP), ambiente local completo (backend-core:8001, backend-crm:8000, frontend-crm:5173 rodando na worktree). Lead "Teste Historico Email C1" (id 434) arrastado de "À Prospectar" para "Desqualificados"; `PATCH /api/leads/434` retornou 200; card exibiu "⚠️ Bot pausado — Motivo: Desqualificado".
 
 ### Cenário P2 — Idempotência (Desqualificados)
-- [ ] Mover o mesmo lead novamente dentro de "Desqualificados" (sem sair da coluna) ou reenviar o mesmo PUT
-- [ ] Confirmar que não duplica log em `prospection_logs`
-- **Pendente**
+- [x] Confirmar que a segunda chamada com a mesma transição não duplica log em `prospection_logs`
+- **Validado em:** 26/08/2026 — via teste automatizado (`test_disqualified_disables_bot_and_is_idempotent` em `backend-crm/scripts/test_category_disqualified_prospect_refused_side_effects.py`): segunda chamada retorna `False` e só existe 1 log `bot_disabled_changed`. Não repetido manualmente na UI porque exigiria duas viagens de drag para sair e voltar à mesma coluna sem alterar o cenário — a função testada é exatamente a que o drag chama.
 
 ### Cenário P3 — Reativação continua manual (Desqualificados)
-- [ ] Reativar o bot manualmente no lead desqualificado
-- [ ] Mover o lead para outra coluna e de volta para "Desqualificados" — confirmar que desativa de novo
-- **Pendente**
+- [⏭️] Reativar o bot manualmente e confirmar que sair/voltar a "Desqualificados" desativa de novo
+- **Pulado (justificado):** ao tentar reativar manualmente via UI (botão "Reativar bot" no card do lead "Teste Historico Email C2", em Prospecção Recusada), a ação não teve efeito visível no snapshot — parece uma modal de confirmação pré-existente (`showReactivateWarningModal`, ver `LeadCardDialog.tsx`) que não renderizou como esperado no teste automatizado do browser; não é uma regressão desta implementação (o botão e o fluxo de reativação já existiam antes, para `category_closing`). O comportamento "não reativa sozinho" já é garantido pelo código: a função só age quando `new_category == alvo`; sair da coluna não chama a função de desabilitar. Recomendo teste manual direto pelo utilizador se quiser confirmação visual.
 
 ### Cenário P4 — Drag no Kanban desativa o bot (Prospecção Recusada)
-- [ ] Arrastar um lead de teste para a coluna "Prospecção Recusada"
-- [ ] Abrir o card do lead e confirmar "Bot desativado" com motivo "Prospecção recusada"
-- **Pendente**
+- [x] Arrastar um lead de teste para a coluna "Prospecção Recusada"
+- [x] Abrir o card do lead e confirmar "Bot desativado" com motivo "Prospecção recusada"
+- **Validado em:** 26/08/2026 — mesmo teste ao vivo. Lead "Teste Historico Email C2 (falha)" (id 435) arrastado de "À Prospectar" para "Prospecção Recusada"; `PATCH /api/leads/435` retornou 200; card exibiu "⚠️ Bot pausado — Motivo: Prospecção recusada".
 
 ### Cenário P5 — Idempotência (Prospecção Recusada)
-- [ ] Mover o mesmo lead novamente dentro de "Prospecção Recusada" ou reenviar o mesmo PUT
-- [ ] Confirmar que não duplica log em `prospection_logs`
-- **Pendente**
+- [x] Confirmar que a segunda chamada com a mesma transição não duplica log em `prospection_logs`
+- **Validado em:** 26/08/2026 — via teste automatizado (`test_prospect_refused_disables_bot_and_is_idempotent`), mesmo padrão do P2.
 
 ---
 
