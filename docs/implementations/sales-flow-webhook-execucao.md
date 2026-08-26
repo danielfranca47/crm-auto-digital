@@ -1,7 +1,7 @@
 # Executar em runtime o bloco `webhook` do Fluxo de Venda
 
 **Branch:** `feat/sales-flow-webhook-execucao`
-**Status:** Em andamento
+**Status:** Em andamento — P1, P2 e P3 validados (26/08/2026), pendente: Cenário C1 (WhatsApp real, combinado com `feat/sales-flow-espera-pausa`)
 
 ---
 
@@ -99,29 +99,41 @@ colaterais reais.
 | # | Commit | O que foi implementado |
 |---|---|---|
 | 1 | `7b70dcf` | job dedicado + dispatch real (executor.py) + simulação (playground.py) + worker/runner + docs |
+| 2 | `2105249` | registro do hash do commit 1 no arquivo |
+| 3 | `75ecf8d` | fix: coluna correta do nome do lead no payload (`contactName`/`companyName`, não `name`) — encontrado durante validação do P2 |
 
 ---
 
 ## Checks de Validação
 
+Ambiente: worktree isolada `feat/sales-flow-webhook-execucao` (nasceu de
+`main`, banco vazio) — conta de teste registrada do zero (mesmas credenciais
+de `_conta-teste-local.md`, ids internos diferentes por ser um banco novo),
+assinatura `crm_internal` inserida manualmente (sem checkout de pagamento
+local), AI Profile com `sales_flow.enabled=true` e um bloco `webhook` de
+teste (`kw_trigger "testewebhook"` → `webhook` apontando para um echo server
+local `127.0.0.1:8899`). Testado via chamadas diretas à API (`/api/playground/chat`
+e `_dispatch_system_actions` invocado diretamente) — não via browser/Playground
+UI visual desta vez, a pedido explícito de agilidade no teste automatizado.
+
 ### Cenário P1 — Playground: webhook dispara simulado, sem HTTP real
-- [ ] Configurar bloco `webhook` de teste num gatilho fácil de disparar
-- [ ] Testar via chat do Playground
-- [ ] Confirmar: bolha "🌐 Webhook (simulado): ..." aparece com URL/nota corretas
-- [ ] Confirmar: nenhuma chamada HTTP real sai (não precisa de rede para passar)
+- [x] Configurar bloco `webhook` de teste num gatilho fácil de disparar
+- [x] Testar via chat do Playground (`POST /api/playground/chat`)
+- [x] Confirmar: bolha "🌐 Webhook (simulado): POST http://127.0.0.1:8899/hook — teste webhook fase1" aparece com URL/nota corretas
+- [x] Confirmar: nenhuma chamada HTTP real sai (echo server permaneceu sem nenhuma requisição)
+- **Validado em:** 26/08/2026
 
 ### Cenário P2 — WhatsApp real / worker dedicado: job disparado e completo
-- [ ] Subir os 4 processos (core, crm, executors com o novo
-      `sales_flow_webhook_worker`, frontend) a partir desta worktree
-- [ ] Apontar o bloco de teste para um endpoint HTTP local controlado (echo
-      server local, não versionado)
-- [ ] Confirmar: job criado (`sales_flow.webhook.dispatch`) → worker pega →
-      POST chega no echo server com o payload esperado → job `completed`
+- [x] Subir os processos (core, crm, executors + novo `sales_flow_webhook_worker`) a partir desta worktree
+- [x] Apontar o bloco de teste para um endpoint HTTP local controlado (echo server local, não versionado)
+- [x] Confirmar: job criado (`sales_flow.webhook.dispatch`) → worker pega → POST chega no echo server (`HTTP/1.0 200 OK`) → job `completed` (`{"status": "sent", "lead_id": 1, "status_code": 200}`)
+- **Validado em:** 26/08/2026 — encontrado e corrigido bug real neste passo (coluna `name` inexistente em `leads`, commit `75ecf8d`)
 
 ### Cenário P3 — Retry em falha
-- [ ] Apontar o bloco para porta fechada/URL inválida
-- [ ] Confirmar: job falha, `attempts` incrementa, reagenda com backoff
-- [ ] Confirmar: após esgotar `JOB_MAX_ATTEMPTS=3`, job fica `failed`
+- [x] Apontar o bloco para porta fechada (127.0.0.1:8898, sem listener)
+- [x] Confirmar: job falha, `attempts` incrementa, reagenda com backoff (tentativa 1 → 60s → tentativa 2 → 180s → tentativa 3, batendo exatamente com `JOB_BACKOFF_SECONDS={1:60, 2:180}`)
+- [x] Confirmar: após esgotar `JOB_MAX_ATTEMPTS=3`, job fica `failed` com `error` detalhado
+- **Validado em:** 26/08/2026 — ciclo completo observado nos logs (10:12:56 → 10:14:09 → 10:17:32, `status=failed attempts=3`)
 
 ### Cenário C1 — WhatsApp real (combinado com `espera`)
 - [ ] Validar `webhook` + Cenário C1 de `feat/sales-flow-espera-pausa` juntos,
