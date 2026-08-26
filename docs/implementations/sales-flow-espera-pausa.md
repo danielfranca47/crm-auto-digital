@@ -1,7 +1,7 @@
 # Execução em runtime do bloco `espera` (Smart Delay) — pausa do Fluxo de Venda
 
 **Branch:** `feat/sales-flow-espera-pausa`
-**Status:** Em andamento — P1 e P2 validados no Playground (25/08/2026), pendente: Cenário C1 (WhatsApp real)
+**Status:** Todos os checks validados (P1/P2 Playground 25/08/2026, C1 WhatsApp real 26/08/2026) — pronto para graduação
 
 ---
 
@@ -118,8 +118,16 @@ respondendo durante a pausa, funcionando tanto no Playground quanto no WhatsApp 
 - **Validado em:** 25/08/2026 — com o checkbox desmarcado, uma mensagem enviada dentro da janela de pausa não gerou nenhuma resposta do bot (silêncio total), confirmando que `suppress_llm_response` é respeitado.
 
 ### Cenário C1 — Validação em WhatsApp real
-- [ ] Repetir P1 num número de teste real
-- [ ] Confirmar mesmo comportamento fora do Playground
+- [x] Repetir o disparo da pausa total (checkbox desmarcado) num número de teste real
+- [x] Confirmar mesmo comportamento fora do Playground
+- **Validado em:** 26/08/2026 — testado num número real via túnel ngrok + `dev_proxy.py`
+  apontando para esta worktree (merge temporário com `feat/sales-flow-espera-pausa` para
+  validar as duas implementações juntas, conforme combinado). Gatilho `kw_trigger`
+  disparou, `sales_flow_wait` persistido corretamente (`suppress_llm: true`), e o runner
+  real de WhatsApp (`app/runners/whatsapp.py`) completou o job com
+  `outbound_status=skipped_suppress_llm` — confirma o caminho de código específico do
+  WhatsApp real (diferente do Playground) que ainda não tinha sido exercitado. Nenhuma
+  mensagem foi enviada durante a pausa, como esperado.
 
 ---
 

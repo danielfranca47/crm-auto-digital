@@ -1,7 +1,7 @@
 # Executar em runtime o bloco `webhook` do Fluxo de Venda
 
 **Branch:** `feat/sales-flow-webhook-execucao`
-**Status:** Em andamento — P1, P2 e P3 validados (26/08/2026), pendente: Cenário C1 (WhatsApp real, combinado com `feat/sales-flow-espera-pausa`)
+**Status:** Todos os checks validados (P1/P2/P3 26/08/2026, C1 WhatsApp real 26/08/2026) — pronto para graduação
 
 ---
 
@@ -136,9 +136,16 @@ UI visual desta vez, a pedido explícito de agilidade no teste automatizado.
 - **Validado em:** 26/08/2026 — ciclo completo observado nos logs (10:12:56 → 10:14:09 → 10:17:32, `status=failed attempts=3`)
 
 ### Cenário C1 — WhatsApp real (combinado com `espera`)
-- [ ] Validar `webhook` + Cenário C1 de `feat/sales-flow-espera-pausa` juntos,
+- [x] Validar `webhook` + Cenário C1 de `feat/sales-flow-espera-pausa` juntos,
       em uma conta de teste real no WhatsApp
-- **Combinado a pedido do usuário** — ver `docs/implementations/sales-flow-espera-pausa.md`
+- **Validado em:** 26/08/2026 — mesma sessão de teste real de
+  `sales-flow-espera-pausa.md` (túnel ngrok + `dev_proxy.py` apontando para esta
+  worktree, merge temporário das duas branches). Mensagem real com a keyword de
+  teste disparou o `kw_trigger` → job `sales_flow.webhook.dispatch` criado →
+  worker dedicado (`sales_flow_webhook_worker`) entregou o POST a um endpoint de
+  teste local, `HTTP/1.0 200 OK`, job `completed`. Confirma o caminho de dispatch
+  real (`_dispatch_system_actions` no job de conclusão do inbound de WhatsApp,
+  não só o Playground) funcionando ponta a ponta com uma mensagem genuína.
 
 ---
 
