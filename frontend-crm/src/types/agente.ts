@@ -83,6 +83,7 @@ export interface SalesFlowBlock {
   intent?: string;
   wait_value?: string;
   wait_unit?: string;
+  allow_llm_during_wait?: boolean; // bloco `espera`: true (default) = LLM segue respondendo dúvidas durante a pausa; false = pausa total (bot não responde)
   fire_once?: boolean;
   suppress_llm_response?: boolean;
   requires_block_id?: string;     // id de outro gatilho sequencial (mesma fase) que deve já ter disparado num turno ANTERIOR (nunca no mesmo turno)

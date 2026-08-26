@@ -422,6 +422,32 @@ def _dispatch_system_actions(
                 user_id=user_id,
             )
 
+        elif atype == "sales_flow_pause_set":
+            wait_until = action.get("wait_until", "")
+            block_id = action.get("block_id", "")
+            if wait_until and block_id:
+                conn.execute(
+                    "UPDATE leads SET sales_flow_wait = ? WHERE id = ? AND user_id = ?",
+                    (
+                        json.dumps({
+                            "until": wait_until,
+                            "block_id": block_id,
+                            "phase_id": action.get("phase_id", ""),
+                            "suppress_llm": bool(action.get("suppress_llm")),
+                        }),
+                        lead_id,
+                        user_id,
+                    ),
+                )
+                conn.commit()
+
+        elif atype == "sales_flow_pause_clear":
+            conn.execute(
+                "UPDATE leads SET sales_flow_wait = NULL WHERE id = ? AND user_id = ?",
+                (lead_id, user_id),
+            )
+            conn.commit()
+
         elif atype == "mark_knowledge_shown":
             categories = action.get("categories") or []
             if categories:
