@@ -120,6 +120,44 @@ só enviam corpo quando `phone` é informado; `WhatsappConnectResponse.pair_code
 
 ---
 
+## Retry em 429/503 (`uazapi_admin.py`)
+
+`app/services/uazapi_admin.py::_request()` — helper único usado por
+`init_instance`, `connect_instance`, `get_status` e `configure_webhook` —
+retenta automaticamente em 429/503 antes de propagar erro, com o mesmo
+padrão (e mesmas constantes) do retry de envio de mensagens
+(`uazapi_client.py`, ver [`whatsapp-send-resiliencia.md`](whatsapp-send-resiliencia.md)):
+
+| Constante | Valor | Descrição |
+|---|---|---|
+| `_RETRYABLE_STATUS_CODES` | `{429, 503}` | Únicos status que disparam retry |
+| `_MAX_ATTEMPTS` | `3` | Total de tentativas (1 inicial + 2 retries) |
+| `_RETRY_BASE_BACKOFF_SECONDS` | `0.5` | Base do backoff exponencial (`0.5s`, depois `1s`) |
+| `_RETRY_AFTER_CAP_SECONDS` | `3.0` | Teto para o header `Retry-After` da UazAPI |
+
+Regras:
+- Se a resposta trouxer `Retry-After`, esse valor é usado (capado em 3s);
+  senão, backoff exponencial `0.5 * 2^(tentativa-1)`.
+- Timeout/erro de rede (`httpx.TimeoutException`/`RequestError`) **não são
+  re-tentados** — propagam imediatamente, mesmo motivo do retry de envio: o
+  timeout (20s por tentativa) já é lento por natureza, e os timeouts
+  client-side de 90s/280s (QR/pareamento, acima) já absorvem a latência
+  normal sem precisar de retry em cima de timeout.
+- Qualquer outro status (401, 400, 500/502/504 etc.) propaga imediatamente —
+  ex.: um `instance_token` expirado/inválido (401) não é re-tentado; o
+  chamador (`whatsapp_instances.py`) trata a recuperação via re-`init` do
+  fluxo normal, sem relação com este retry.
+- Implementação própria (não reaproveita `_request_with_retry` de
+  `uazapi_client.py`) porque `_request()` suporta método HTTP variável (GET
+  em `get_status`, POST nos demais) e nome de header variável (`admintoken`
+  vs. `token`).
+- Como `_request()` é compartilhado, o retry cobre automaticamente todos os
+  consumidores de `uazapi_admin.py` — incluindo a reconexão via painel admin
+  (`backend-core/app/api/admin.py`) e `configure_webhook`, além do fluxo
+  normal de conexão descrito acima.
+
+---
+
 ## Credenciais UazAPI: admin_token vs. instance_token
 
 Dois segredos distintos, com blast radius diferente:

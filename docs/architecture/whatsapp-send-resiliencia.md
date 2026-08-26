@@ -2,9 +2,11 @@
 
 Cobre o caminho de envio de mensagens via UazAPI em `backend-core`: retry
 automático em rate-limit e validação de formato do número de destino antes da
-chamada paga à UazAPI. Não cobre conexão/QR code de instância (ver
-[`whatsapp-connection.md`](whatsapp-connection.md)) nem timing de humanização
-(ver [`humanization.md`](humanization.md)).
+chamada paga à UazAPI. As operações de conexão/QR code de instância têm o
+mesmo padrão de retry, documentado separadamente em
+[`whatsapp-connection.md`](whatsapp-connection.md#retry-em-429503-uazapi_adminpy)
+(implementação própria, não compartilha código com este módulo). Não cobre
+timing de humanização (ver [`humanization.md`](humanization.md)).
 
 ---
 
@@ -47,11 +49,10 @@ Regras:
   composeria mais atraso sem ganho.
 - Qualquer outro status code (4xx exceto os listados, 500/502/504) também não
   re-tenta — comportamento inalterado.
-- O escopo do retry é só `uazapi_client.py` (envio de mensagens). As
+- O escopo deste retry é só `uazapi_client.py` (envio de mensagens). As
   operações de conexão de instância em `uazapi_admin.py` (init/connect/
-  status/webhook — usadas na página de conexão via QR code) **não** têm
-  retry — são interativas e um retry ali atrasaria a UX sem resolver o
-  problema de mensagens perdidas sob pico de tráfego.
+  status/webhook) têm sua própria implementação de retry, com as mesmas
+  constantes — ver [`whatsapp-connection.md`](whatsapp-connection.md#retry-em-429503-uazapi_adminpy).
 
 ### Limitação de timeout conhecida (não resolvida)
 
