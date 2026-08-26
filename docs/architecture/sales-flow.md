@@ -261,6 +261,8 @@ se lead "engajado" com <fase> (phases_triggered contém "<id>" OU lead.category 
 
 - `_enforce_apresentation_sales_flow_pending` — p2 (apresentação)
 - `_enforce_pre_agendamento_sales_flow_pending` — p3a (pré-agendamento), só relevante para o modo `agenda` (único que visita esta fase)
+- `_enforce_agendamento_sales_flow_pending` — p3b (agendamento), mesmo template do bloco acima, sem diferenças estruturais; só relevante para templates com fase de agendamento (`_SCHEDULING_AGENT_TEMPLATES`)
+- `_enforce_followup_sales_flow_pending` — p4 (follow-up), com 1 diferença estrutural: "engajado" usa **só** `lead.category == "follow-up"` — nunca `"p4" in phases_triggered` (diferente de todas as outras funções deste grupo). `phases_triggered` é cumulativo e o check-in automático de relacionamento pós-venda (`start_client_checkin_followup`, `followup_state.py`, `followup_variant="client_checkin"`) reusa a fase p4 sem mover `lead.category` para `"follow-up"` (o lead permanece em `"client-list"`) — usar o sinal de `phases_triggered` faria o guardrail intervir também nesse check-in, onde a semântica de "gatilhos pendentes de venda" não se aplica. Não interage com o subsistema de ticks agendados (`whatsapp.followup.tick`): o resultado de `decide()` durante um tick é descartado por `complete_job_internal` (`backend-crm/routes/executor.py`) — só `job_type == "whatsapp.inbound.n8n"` persiste `suggested_category`/`system_actions`; o guardrail roda no tick mas não tem efeito nele.
 - `_enforce_recepcao_sales_flow_pending` — p0 (recepção), com 2 diferenças estruturais face ao template acima:
   1. **Condição de "engajado" invertida** — `current_category == "recepcao"` nunca é persistido em `leads.category` (só existe como `route_to` efémero; ver `orchestrator_models.py`). O guardrail usa o sinal oposto: o lead ainda não passou de `"qualification"` no pipeline (`to-prospect`/`in-progress`/ausente/já `"qualification"`).
   2. **Teto de 1 turno extra** (`_MAX_RECEPCAO_ENFORCED_OUTBOUND_TURNS`) — a Filha Recepção é desenhada para um único turno ("Seu papel dura só este turno", `_build_child_prompt_recepcao`). Sem teto, o guardrail forçaria `route_to="recepcao"` indefinidamente enquanto o gatilho de p0 não disparasse, repetindo a saudação em plena conversa real. A partir do 2º turno após `_enforce_greeting_first` (que já cobre o 1º turno incondicionalmente), o guardrail falha aberto — nunca mais intervém.
@@ -269,7 +271,7 @@ se lead "engajado" com <fase> (phases_triggered contém "<id>" OU lead.category 
 
   **Aviso no builder:** `CamadaFluxoVenda.tsx` mostra um banner somente-leitura na Fase 0 quando a configuração excede o que o teto de 1 turno cobre — mais de 1 bloco `kw_trigger`/`intent_trigger` sequencial (`isSequentialCapable()`, escopo raiz, exclui `phase_trigger`) ou qualquer nó `condicao` presente.
 
-**Qualificação (p1) não tem um guardrail dedicado ao nível da Mãe** — a saída de p1 é decidida por "missing_fields vazio", não por `route_to` direto, em 3 pontos independentes que promovem `route_to`/`effective_route_to` para `"apresentation"`: Regra 3 e o auto-promote de runtime (`decide()`), e a Regra 1 + fallback `ask_qualification` (`compose_decision_output()`). Os 3 são gateados por `not _phase_pending_sequential_triggers("p1", ...)`, exceto o escape valve `is_upper_stage` da Regra 3 (lead já numa fase posterior cuja Mãe tentou rotear de volta para qualificação por engano — não é "saindo de p1 agora", não deve ser bloqueado por pendência de p1).
+**Qualificação (p1) não tem um guardrail dedicado ao nível da Mãe (auditado, cobertura indireta considerada suficiente)** — a saída de p1 é decidida por "missing_fields vazio", não por `route_to` direto, em 3 pontos independentes que promovem `route_to`/`effective_route_to` para `"apresentation"`: Regra 3 e o auto-promote de runtime (`decide()`), e a Regra 1 + fallback `ask_qualification` (`compose_decision_output()`). Os 3 são gateados por `not _phase_pending_sequential_triggers("p1", ...)`, exceto o escape valve `is_upper_stage` da Regra 3 (lead já numa fase posterior cuja Mãe tentou rotear de volta para qualificação por engano — não é "saindo de p1 agora", não deve ser bloqueado por pendência de p1).
 
 **Ao nível da Filha** (bloqueia `suggested_category` avançando via `did_complete_phase` — sinal não-determinístico da própria Filha, que pode contornar o guardrail da Mãe acima): gate `and not _phase_pending_sequential_triggers(...)` adicionado às condições já existentes em `compose_decision_output()`:
 - `apresentation_complete_auto_advance` — fase `"p2"`
@@ -279,13 +281,21 @@ se lead "engajado" com <fase> (phases_triggered contém "<id>" OU lead.category 
 
 **Escopo, o mesmo em toda fase:** só gatilhos "sequenciais" (`kw_trigger`/`intent_trigger` com `sequential: true` — fallback `fire_once: true` sem o campo novo —, ou `block_trigger`, sempre sequencial — mesmo critério de `_is_sequential_trigger_block()`) contam como pendência. `no_reply_trigger` e gatilhos com `sequential: false` nunca participam — são reavaliados a cada turno, sem estado persistido de satisfação para efeitos de fila (mesmo que `fire_once` esteja marcado — nesse caso o registo existe só para suprimir re-disparo, não para o gating).
 
-**Fases sem este guardrail ao nível da Mãe (deliberado):** p3b (agendamento), p4 (follow-up) e
-p5 (fechamento) não têm hoje nenhum `_enforce_<fase>_sales_flow_pending` dedicado — só o
-`route_to` bruto da Mãe decide a saída dessas fases. p4/follow-up também interage com o
-subsistema separado de ticks agendados (`followup_state.py`/`followup_reconciler.py`), fora do
-escopo de turnos ao vivo cobertos aqui. p1 (qualificação) tem cobertura só indireta (ver acima).
-Auditoria de cobertura completa (p1/p3b/p4/p5/`client-list`) ainda não feita — ver
-`docs/plans/` para o próximo item planejado nesta linha, se existir.
+**Cobertura completa (auditada):** p0, p2, p3a, p3b e p4 têm guardrail dedicado ao nível da Mãe
+(lista acima). p1 tem cobertura indireta considerada suficiente (ver acima) — o único bypass
+(`is_upper_stage`) é intencional, não uma lacuna. **p5 (fechamento) e `client-list` não
+aplicam**, por razões estruturais diferentes:
+
+- **p5 é terminal** — `_STAGE_ORDER`/`_ALLOWED_ADVANCE` não têm entrada de saída a partir de
+  `"closing"`, e `MotherDecision.route_to`/`perceived_category` (Literal, `orchestrator_models.py`)
+  não aceitam nenhum valor além de `"closing"`. Não há "próximo destino" a proteger — o guardrail
+  equivalente (proteger a *entrada* prematura em closing) é `_enforce_followup_sales_flow_pending`
+  (p4 → closing), já listado acima.
+- **`client-list` não é uma fase do Fluxo de Venda** — não tem `phase_id` em
+  `_ROUTE_TO_PHASE_ID`/`_CATEGORY_TO_PHASE_ID`; a transição para lá acontece via webhook de
+  pagamento (`backend-crm/routes/webhooks.py`), fora de `decide()`; e o check-in de
+  relacionamento pós-venda que roda com o lead nessa categoria reusa a fase p4 (ver acima), sem
+  fase própria a consultar.
 
 ### Lógica de Ramificação (`condicao`)
 
