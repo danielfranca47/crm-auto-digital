@@ -11,7 +11,7 @@ from typing import Any, Dict, Optional
 
 from fastapi import APIRouter, Header, HTTPException, Query, Request
 
-from core_client import fetch_core_ai_profile_by_webhook_secret
+from core_client import fetch_core_ai_profile_by_webhook_secret, report_whatsapp_connection_event
 from database import get_connection
 from services.followup_state import stop_followup_for_lead_category
 from services.jobs_service import TYPE_WHATSAPP_SEND, create_job
@@ -244,6 +244,41 @@ def whatsapp_uazapi_webhook(
         sender,
         message_id,
     )
+
+    if event == "connection":
+        # Confirmado por teste real (24/08/2026, ver alerta-desconexao-whatsapp.md
+        # Fase 1.1): ao contrário do evento "messages" (onde payload["instance"] é a
+        # string com o instance_id), no evento "connection" a UazAPI aninha o objeto
+        # inteiro da instância em payload["instance"] (com name/status/lastDisconnect/
+        # lastDisconnectReason) — precisa resolver separadamente.
+        connection_instance_field = payload.get("instance")
+        if isinstance(connection_instance_field, dict):
+            connection_instance_id = (
+                connection_instance_field.get("name")
+                or connection_instance_field.get("instanceId")
+                or connection_instance_field.get("id")
+            )
+        else:
+            connection_instance_id = connection_instance_field or payload.get("instanceName")
+
+        # logger.info não aparece nos logs hoje (root logger sem nível configurado
+        # no backend-crm — ver Ajuste Possível em alerta-desconexao-whatsapp.md);
+        # warning garante visibilidade em produção até essa lacuna ser corrigida.
+        logger.warning(
+            "uazapi webhook connection event instance=%s payload=%s",
+            connection_instance_id,
+            json.dumps(payload, ensure_ascii=False),
+        )
+        if connection_instance_id:
+            try:
+                report_whatsapp_connection_event(connection_instance_id, payload)
+            except Exception as exc:
+                logger.warning(
+                    "uazapi webhook connection event: falha ao repassar ao core instance=%s error=%s",
+                    connection_instance_id,
+                    exc,
+                )
+        return {"status": "ok", "reason": "connection_event_processed"}
 
     if event not in {"messages", "message"}:
         return {"status": "ignored", "reason": "event_not_messages"}
