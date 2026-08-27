@@ -56,3 +56,26 @@ implementar:**
   continuar a usar o WhatsApp Web/Desktop em paralelo).
 - Custo de manter um número dedicado de suporte activo (nova instância
   UazAPI, novo fluxo de mensagens fora do pipeline normal de leads).
+
+---
+
+## M3 — Aviso dinâmico de sessão dupla (detetar múltiplos aparelhos vinculados)
+
+**Prioridade:** BAIXA — depende de confirmação prévia
+
+**Contexto:** surgiu como "Ajuste possível" na graduação de
+`aviso-sessao-dupla-whatsapp.md`, que adicionou um aviso estático (texto fixo)
+na página de Conexão sobre o risco de usar WhatsApp Web/Desktop no mesmo
+número. Esse aviso é preventivo — ainda não há confirmação de que conflito de
+sessão é de facto a causa da queda após ~1h (ver M2, acima, para o contexto
+completo da investigação).
+
+**Ideia:** se o teste em curso confirmar a causa, avaliar detetar
+programaticamente múltiplos aparelhos vinculados via UazAPI (se o payload de
+status expuser essa informação) e mostrar um aviso mais específico/dinâmico
+em vez do texto estático actual — ex.: "Detetámos N aparelhos vinculados
+além do agente" em vez de um aviso genérico sempre visível.
+
+**Bloqueado por:** resultado do teste real (fechar WhatsApp Web/Desktop numa
+conta afectada e confirmar se a queda pára de acontecer) — sem essa
+confirmação, não faz sentido avançar para Plan Mode.

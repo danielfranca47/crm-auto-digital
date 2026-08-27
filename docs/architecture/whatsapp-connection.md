@@ -190,6 +190,13 @@ plano e dispara um email ao dono da conta pedindo para reconectar. Ver
 para o fluxo completo — inclui a limitação conhecida de depender da entrega
 do webhook, sem verificação periódica independente ainda.
 
+**Hipótese principal (a confirmar):** conflito de sessão — o mesmo número
+com o WhatsApp Web/Desktop aberto em paralelo à ligação da API. Motivo real
+capturado num teste ao vivo: `"401: logged out from another device"`, padrão
+documentado como causa comum de queda em APIs Baileys/UazAPI. Por isso
+`ConexaoNumero.tsx` (frontend-crm) mostra, na página de Conexão, um alerta
+avisando para não usar WhatsApp Web/Desktop no número ligado ao CRM.
+
 ---
 
 ## Outros consumidores (fora deste fluxo)
