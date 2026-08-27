@@ -66,7 +66,7 @@ contas, com um aviso simples e imediato.
 
 | # | Commit | O que foi implementado |
 |---|---|---|
-| 1 | _(a preencher)_ | Aviso de sessão dupla na página de Conexão |
+| 1 | `0faa89f` | Aviso de sessão dupla na página de Conexão |
 
 ---
 
