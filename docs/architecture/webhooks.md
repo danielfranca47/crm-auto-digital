@@ -38,6 +38,50 @@ Feito em `backend-crm/routes/whatsapp_connect.py` (`_set_whatsapp_webhook`), dis
 
 ---
 
+## Evento de conexão (`event="connection"`) — status real + alerta de desconexão
+
+A UazAPI envia dois tipos de evento para o mesmo webhook: `"messages"` (tratado
+no resto deste documento) e `"connection"`, disparado sempre que a sessão da
+instância muda de estado (ex.: cai por logout forçado do WhatsApp). É o único
+caminho automático que existe hoje para saber que uma sessão caiu de verdade —
+sem ele, `WhatsappConnection.status` (backend-core) fica congelado no último
+valor conhecido, porque a única outra escrita é sob demanda
+(`GET /whatsapp-instances/status`, só chamado enquanto a tela de Conexão está
+aberta com QR pendente).
+
+```
+UazAPI → POST /webhooks/whatsapp/uazapi (event="connection")
+  → backend-crm (routes/webhooks.py): resolve instance_id, loga payload bruto
+      → core_client.report_whatsapp_connection_event(instance_id, raw_payload)
+          → backend-core: POST /whatsapp-instances/connection-event (X-Service-Token)
+              → uazapi_admin.extract_connection_meta(raw) → status_value
+              → grava o novo status sempre (corrige o congelamento)
+              → SE a transição foi active → inactive:
+                  busca o User da connection e envia email
+                  (render_whatsapp_disconnected_email) pedindo para reconectar
+  ← sempre 200 para a UazAPI, mesmo se o repasse ao core falhar (best-effort)
+```
+
+**Formato do payload é diferente do evento `messages` nesse ponto:** para
+`messages`, `payload["instance"]` é a *string* com o instance_id. Para
+`connection`, a UazAPI aninha o **objeto inteiro** da instância ali
+(`{"name", "status", "lastDisconnect", "lastDisconnectReason"}`) — ex.:
+`lastDisconnectReason: "401: logged out from another device"`. O handler
+resolve isso separadamente (`connection_instance_field.get("name")` quando é
+dict) sem tocar na resolução usada por `messages`.
+
+**Email de alerta:** dispara só na transição `active → inactive` (não repete
+em eventos "disconnected" seguidos, já que o segundo já vê o status local como
+inactive). Reconexões (`inactive → active`) só atualizam o status, sem email
+de confirmação.
+
+**Limitação conhecida:** este mecanismo depende inteiramente do webhook ser
+entregue. Não existe hoje nenhuma verificação periódica em segundo plano que
+confirme o status real junto à UazAPI de forma independente — se a entrega do
+webhook falhar, o status volta a ficar congelado sem aviso.
+
+---
+
 ## Filtro de mensagens de grupo
 
 Antes de chamar `handle_inbound`, o endpoint verifica se a mensagem vem de um grupo. Se sim, retorna imediatamente:
@@ -191,7 +235,9 @@ Se nenhum lead for encontrado, regista log `payment_webhook unmatched` e retorna
 
 | Arquivo | Responsabilidade |
 |---|---|
-| `backend-crm/routes/webhooks.py` | Endpoint `/webhooks/whatsapp/uazapi` e filtro de grupo |
+| `backend-crm/routes/webhooks.py` | Endpoint `/webhooks/whatsapp/uazapi`, filtro de grupo, tratamento do evento `connection` |
+| `backend-core/app/api/whatsapp_instances.py` | Rota `POST /whatsapp-instances/connection-event` — atualiza status real, dispara email na transição active→inactive |
+| `backend-core/app/services/email_service.py` | `render_whatsapp_disconnected_email()` |
 | `backend-crm/services/whatsapp_inbound/inbound_handler.py` | Recebe evento, normaliza tipo, áudio, media_fallback, enfileira job |
 | `backend-crm/services/whatsapp_inbound/guardrail.py` | Decide se deve processar (bot_disabled, categoria, etc.) |
 | `backend-crm/services/audio_transcription.py` | Transcrição via Whisper (`transcribe_audio_from_url`) |

@@ -120,6 +120,18 @@ só enviam corpo quando `phone` é informado; `WhatsappConnectResponse.pair_code
 
 ---
 
+## Deteção de queda de sessão
+
+`WhatsappConnection.status` não é só escrito pelos endpoints acima — a UazAPI
+também envia um evento `connection` ao webhook quando a sessão cai de verdade
+(ex.: logout forçado pelo WhatsApp). Esse evento atualiza o status em segundo
+plano e dispara um email ao dono da conta pedindo para reconectar. Ver
+[`webhooks.md`](webhooks.md#evento-de-conexão-eventconnection--status-real--alerta-de-desconexão)
+para o fluxo completo — inclui a limitação conhecida de depender da entrega
+do webhook, sem verificação periódica independente ainda.
+
+---
+
 ## Outros consumidores (fora deste fluxo)
 
 - `frontend-admin/src/pages/AdminInstances.tsx` → `api.reconnectInstance()`
