@@ -330,13 +330,27 @@ export function ConexaoNumero() {
       </div>
 
       {/* Alerta de ritmo */}
-      <div style={{ marginBottom: 20 }}>
+      <div style={{ marginBottom: 12 }}>
         <div className="o-alert o-alert-warn">
           <span style={{ flexShrink: 0 }}>⚠</span>
           <span>
             <strong>Atenção ao ritmo de disparo.</strong> A sessão não tem limites impostos pela Meta,
             mas envios muito acelerados aumentam o risco de detecção e ban do número.
             O sistema aplica intervalos automáticos entre mensagens.
+          </span>
+        </div>
+      </div>
+
+      {/* Alerta de sessão dupla */}
+      <div style={{ marginBottom: 20 }}>
+        <div className="o-alert o-alert-warn">
+          <span style={{ flexShrink: 0 }}>⚠</span>
+          <span>
+            <strong>Não use o WhatsApp Web ou o WhatsApp Desktop neste número.</strong> A ligação do
+            agente já conta como um aparelho vinculado — usar o WhatsApp Web/Desktop ao mesmo tempo,
+            no mesmo número, pode fazer o WhatsApp derrubar a sessão do agente por conflito entre
+            aparelhos conectados. Se precisar de acompanhar as conversas pelo computador, use apenas o
+            próprio telemóvel com esse número.
           </span>
         </div>
       </div>
