@@ -68,6 +68,19 @@ contas, com um aviso simples e imediato.
 |---|---|---|
 | 1 | `0faa89f` | Aviso de sessão dupla na página de Conexão |
 
+### Relatório da Fase 1 — o que mudou na prática
+
+**Antes:** a página de Conexão (AiProfile → Conexão) só avisava sobre ritmo de
+disparo de mensagens — nada dizia ao utilizador que usar o WhatsApp Web ou
+Desktop no mesmo número ligado ao CRM podia derrubar a sessão do agente.
+
+**Agora:** aparece um segundo aviso, logo abaixo do de ritmo, explicando que
+a ligação do agente já conta como um "aparelho vinculado" e que usar o
+WhatsApp Web/Desktop no mesmo número em paralelo pode causar essa queda —
+recomendando usar só o telemóvel para acompanhar as conversas.
+
+**Para validar:** Cenário P1, abaixo.
+
 ---
 
 ## Checks de Validação
