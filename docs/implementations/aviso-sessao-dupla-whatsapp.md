@@ -1,7 +1,7 @@
 # Aviso de sessão dupla (WhatsApp Web/Desktop) na página de Conexão
 
 **Branch:** `fix/aviso-sessao-dupla-whatsapp`
-**Status:** Em andamento
+**Status:** Todos os cenários validados (27/08/2026) — pronto para graduação
 
 ---
 
@@ -86,9 +86,15 @@ recomendando usar só o telemóvel para acompanhar as conversas.
 ## Checks de Validação
 
 ### Cenário P1 — Aviso aparece na página de Conexão
-- [ ] Abrir AiProfile → Conexão (frontend-crm)
-- [ ] Confirmar: bloco de aviso visível, abaixo do alerta de ritmo já existente
-- [ ] Confirmar: texto legível em light e dark mode
+- [x] Abrir AiProfile → Conexão (frontend-crm)
+- [x] Confirmar: bloco de aviso visível, abaixo do alerta de ritmo já existente
+- [x] Confirmar: texto legível em light e dark mode
+- **Validado em:** 27/08/2026 — testado ao vivo via browser (MCP chrome-devtools),
+  stack local completa (backend-core:8001, backend-crm:8000, frontend-crm:8080)
+  rodando na própria worktree, com utilizador de teste dedicado
+  (`teste-visual-conexao@example.com`, criado só para este teste). Aviso
+  confirmado visível e legível em dark mode e light mode, imediatamente
+  abaixo do alerta de ritmo já existente, com o mesmo padrão visual.
 
 ---
 
