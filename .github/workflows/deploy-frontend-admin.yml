@@ -35,4 +35,5 @@ jobs:
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          command: pages deploy frontend-admin/dist --project-name=crm-admin --branch=main
+          workingDirectory: frontend-admin
+          command: deploy
