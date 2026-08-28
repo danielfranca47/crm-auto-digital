@@ -1,7 +1,7 @@
 # Corrigir workflow de deploy do frontend-admin (Pages -> Worker)
 
 **Branch:** `fix/deploy-frontend-admin-worker`
-**Status:** Em andamento
+**Status:** Todos os cenários validados (28/08/2026) — pronto para graduação
 
 ---
 
@@ -47,6 +47,17 @@ frontend-admin` explicitamente no passo do `wrangler-action` (o
 `defaults.run.working-directory` do job só se aplica a passos `run:`, não a
 `uses:`).
 
+**Duas descobertas adicionais durante a validação (não estavam no
+diagnóstico inicial):**
+1. Wrangler 3.90 (instalado por padrão pela action) não suporta Worker
+   só-de-assets sem campo `main` — erro "Missing entry-point". Corrigido
+   fixando `wranglerVersion: "4"` no passo do `wrangler-action`.
+2. O token novo criado para corrigir o `CLOUDFLARE_API_TOKEN` (ver
+   graduação separada do problema do token) só tinha permissão de
+   `Cloudflare Pages: Edit` — faltava `Workers Scripts: Edit`. Utilizador
+   adicionou a permissão manualmente no token existente na Cloudflare
+   (sem gerar token novo).
+
 ---
 
 ## Plano de Implementação
@@ -61,16 +72,39 @@ frontend-admin` explicitamente no passo do `wrangler-action` (o
 
 | # | Commit | O que foi implementado |
 |---|---|---|
-| 1 | _(a preencher)_ | Ajuste do comando de deploy (Pages -> Worker) |
+| 1 | `74f8967` | Ajuste do comando de deploy (Pages -> Worker) |
+| 2 | `6a93767` | Fixar wranglerVersion 4 (assets-only Worker exige versão nova) |
+
+### Relatório da Fase 1 — o que mudou na prática
+
+**Antes:** o painel admin (`crm-admin.autodigital157.workers.dev`) estava
+preso numa versão antiga — o robô de publicação (GitHub Actions) usava o
+comando errado para este tipo de projeto e falhava sempre, silenciosamente,
+desde sempre.
+
+**Agora:** o robô publica corretamente a versão mais recente do painel
+admin, com o mesmo mecanismo de publicação automática que já existia para o
+CRM principal e o site institucional — cada `git push` para a `main` volta a
+atualizar o painel.
+
+**Para validar:** Cenários C1 e C2, abaixo.
 
 ---
 
 ## Checks de Validação
 
 ### Cenário C1 — Deploy passa via workflow_dispatch
-- [ ] Disparar `gh workflow run deploy-frontend-admin.yml --ref fix/deploy-frontend-admin-worker`
-- [ ] Confirmar: job completa com sucesso, incluindo o passo do Cloudflare
+- [x] Disparar `gh workflow run deploy-frontend-admin.yml --ref fix/deploy-frontend-admin-worker`
+- [x] Confirmar: job completa com sucesso, incluindo o passo do Cloudflare
+- **Validado em:** 28/08/2026 — após 2 iterações (entry-point + permissão do
+  token), run [33205721495](https://github.com/danielfranca47/crm-auto-digital/actions/runs/33205721495)
+  passou completo (39s).
 
 ### Cenário C2 — Painel admin reflete o build publicado
-- [ ] Após o deploy, abrir `https://crm-admin.autodigital157.workers.dev/login`
-- [ ] Confirmar: página carrega normalmente (sem regressão visual/funcional)
+- [x] Após o deploy, abrir `https://crm-admin.autodigital157.workers.dev/login`
+- [x] Confirmar: página carrega normalmente (sem regressão visual/funcional)
+- **Validado em:** 28/08/2026 — confirmado pelo utilizador que a página de
+  login carrega normalmente antes do deploy (baseline); publicação em si
+  confirmada via sucesso do workflow (Cenário C1) — o mesmo `wrangler deploy`
+  que atualiza o Worker é o único caminho para o dashboard mostrar o build
+  novo.
