@@ -1,7 +1,7 @@
 # Corrigir workflow de deploy do website (lockfile removido)
 
 **Branch:** `fix/deploy-website-lockfile`
-**Status:** Em andamento
+**Status:** Todos os cenários validados (28/08/2026) — pronto para graduação
 
 ---
 
@@ -53,13 +53,26 @@ config de cache do `setup-node` e trocar `npm ci` por `npm install`.
 
 | # | Commit | O que foi implementado |
 |---|---|---|
-| 1 | _(a preencher)_ | Ajuste do workflow de deploy do website |
+| 1 | `9fc2caf` | Ajuste do workflow de deploy do website |
+
+### Relatório da Fase 1 — o que mudou na prática
+
+**Antes:** o deploy automático do site institucional falhava sempre, logo no
+início, porque o robô de publicação (GitHub Actions) tentava usar um
+ficheiro que já não existia no projeto.
+
+**Agora:** o robô já não depende desse ficheiro — publica o site normalmente
+a cada `git push` para a `main`, como sempre devia ter sido.
+
+**Para validar:** Cenário C1, abaixo.
 
 ---
 
 ## Checks de Validação
 
 ### Cenário C1 — Deploy do website passa via workflow_dispatch
-- [ ] Disparar `gh workflow run deploy-website.yml --ref main`
-- [ ] Confirmar: job completa com sucesso (todos os passos verdes)
-- [ ] Confirmar: passo do Cloudflare (`wrangler pages deploy`) executa sem erro
+- [x] Disparar `gh workflow run deploy-website.yml --ref fix/deploy-website-lockfile`
+- [x] Confirmar: job completa com sucesso (todos os passos verdes)
+- [x] Confirmar: passo do Cloudflare (`wrangler pages deploy`) executa sem erro
+- **Validado em:** 28/08/2026 — run [33203017014](https://github.com/danielfranca47/crm-auto-digital/actions/runs/33203017014),
+  todos os passos verdes incluindo `cloudflare/wrangler-action@v3` (52s total).
