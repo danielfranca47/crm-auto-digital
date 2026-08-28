@@ -28,6 +28,7 @@ origins = [
     "https://www.danielfranca.pt",
     "https://crmapp.danielfranca.pt",
     "https://admin.danielfranca.pt",
+    "https://crm-admin.autodigital157.workers.dev",
 ]
 
 app.add_middleware(
