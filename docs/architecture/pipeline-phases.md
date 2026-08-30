@@ -145,10 +145,14 @@ caminhos:
   {"apresentation", "pre-agendamento", "agendamento", "follow-up", "closing"}`.
 
 **Limitação conhecida:** o score só pontua as 4 chaves clássicas acima
-(`_4P_SCORABLE_KEYS`). Um perfil 100% custom (nenhuma dessas chaves configurada em
-`qualification_fields`) pula o gate de score inteiramente (`_score_below_threshold` retorna
-`True` sem checar nada) — ver `docs/plans/qualificacao-score-generalizado-melhorias-futuras.md`
-para o desenho de generalização (não implementado).
+(`_4P_SCORABLE_KEYS`). Um perfil sem nenhuma dessas chaves **activa** em
+`qualification_fields` — ausente, ou presente só com `mode: "off"` — pula o gate de
+score inteiramente (`_score_below_threshold` retorna `True` sem checar nada). Campos
+`mode: "off"` não contam como "configurados" para este efeito propositalmente: como o
+bot nunca pergunta um campo desligado, o score dessa chave nunca sairia de 0, travando
+o lead para sempre em `qualification` se o gate continuasse activo. Ver
+`docs/plans/qualificacao-score-generalizado-melhorias-futuras.md` para o desenho de
+generalização a campos custom (não implementado).
 
 O trace do Playground (`DecisionTrace`) expõe `required_fields`, `missing_fields`,
 `qualification_total_score`, `qualification_score_threshold`,
