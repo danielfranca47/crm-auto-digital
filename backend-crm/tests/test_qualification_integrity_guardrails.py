@@ -216,3 +216,44 @@ class QualificationIntegrityGuardrailsTest(unittest.TestCase):
         row = self.conn.execute("SELECT category FROM leads WHERE id = ?", (lead_id,)).fetchone()
         self.assertEqual(row["category"], "apresentation")
 
+    @patch("services.qualification_guardrails._fetch_ai_profile")
+    def test_apply_suggested_category_allows_advance_when_only_4p_field_is_off(self, mock_profile):
+        # Bug corrigido nesta fase: a única chave 4P configurada (availability_window)
+        # está com mode="off" (desativada na UI) — o bot nunca pergunta isso, então o
+        # score fica preso em 0 para sempre. Antes do fix, _score_below_threshold()
+        # contava essa chave como "configurada" mesmo desativada, mantendo o gate
+        # ativo e bloqueando o lead permanentemente. Com o fix, campos "off" não
+        # contam, e o perfil cai no mesmo bypass de um perfil 100% custom.
+        mock_profile.return_value = {
+            "qualification_required_fields": [],
+            "qualification_fields": [{"key": "availability_window", "mode": "off"}],
+            "qualification_score_threshold": 6,
+        }
+        cur = self.conn.cursor()
+        cur.execute(
+            "INSERT INTO leads (user_id, category, agent_type) VALUES (?, ?, ?)",
+            (91, "qualification", "agent_1"),
+        )
+        lead_id = int(cur.lastrowid)
+        cur.execute(
+            """
+            INSERT INTO lead_qualification_state (lead_id, user_id, stage, agent_mode_normalized, data_json, qualification_total_score)
+            VALUES (?, ?, 'qualification', 'direto', '{}', 0)
+            """,
+            (lead_id, 91),
+        )
+        self.conn.commit()
+
+        moved = apply_suggested_category(
+            self.conn,
+            lead_id=lead_id,
+            user_id=91,
+            suggested_category="closing",
+            reason="teste",
+            inbound_message_text="perfeito, gostei, como faço para começar?",
+            decision_trace={"agent_mode_normalized": "direto"},
+        )
+        self.assertTrue(moved)
+        row = self.conn.execute("SELECT category FROM leads WHERE id = ?", (lead_id,)).fetchone()
+        self.assertEqual(row["category"], "closing")
+

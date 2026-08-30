@@ -112,7 +112,10 @@ def _score_below_threshold(ai_profile: Dict[str, Any], total_score: int) -> Tupl
     """Só a checagem de score dos 4Ps — sem campos obrigatórios. Usada tanto pelo guardrail
     manual completo quanto pelo gate do caminho automático (ver can_advance_score_gate)."""
     _qfields = ai_profile.get("qualification_fields") or []
-    _configured_keys = {f["key"] for f in _qfields if isinstance(f, dict) and "key" in f}
+    _configured_keys = {
+        f["key"] for f in _qfields
+        if isinstance(f, dict) and "key" in f and f.get("mode") != "off"
+    }
     if not _configured_keys or not (_configured_keys & _4P_SCORABLE_KEYS):
         return True, []
 
