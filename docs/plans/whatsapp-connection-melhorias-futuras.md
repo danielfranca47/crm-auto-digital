@@ -79,3 +79,48 @@ além do agente" em vez de um aviso genérico sempre visível.
 **Bloqueado por:** resultado do teste real (fechar WhatsApp Web/Desktop numa
 conta afectada e confirmar se a queda pára de acontecer) — sem essa
 confirmação, não faz sentido avançar para Plan Mode.
+
+**Atualização (30/08/2026):** teste real em curso não confirmou esta causa —
+bot continuou a responder normalmente com WhatsApp Web aberto em paralelo,
+mesmo depois de 20+ min. A causa principal encontrada foi outra: produção
+estava a apontar para o servidor free da UazAPI em vez do pago
+(`UAZAPI_BASE_URL`/`UAZAPI_ADMIN_TOKEN` no Railway nunca tinham sido
+atualizados após a migração documentada em 12/08/2026 — só o `.env` local
+tinha sido alterado). Corrigido diretamente nas variáveis de ambiente do
+Railway (`backend-core` e `backend-crm`) em 30/08/2026. Este item (M3) e o
+M2 acima ficam com prioridade reduzida — a causa raiz provável já não é
+conflito de sessão.
+
+---
+
+## M4 — Instâncias antigas/desconectadas acumulam-se na UazAPI sem limpeza
+
+**Prioridade:** BAIXA (a confirmar se é urgente)
+
+**Contexto:** descoberto em 30/08/2026, durante a correção do
+`UAZAPI_BASE_URL` de produção (ver M3, acima). O fluxo de reconexão
+(`backend-crm/routes/whatsapp_connect.py::connect_whatsapp`) — quando a
+instância existente falha (5xx), cria automaticamente uma **instância nova**
+via `init_core_whatsapp_instance` + `_generate_instance_id`, mas nunca apaga
+a antiga na UazAPI. Confirmado que não existe, em todo o repositório,
+nenhuma chamada a um endpoint de "apagar/logout de instância" da UazAPI.
+
+O painel da UazAPI (agora visível, porque produção passou a apontar para o
+servidor pago) já mostra 4 instâncias registadas para o mesmo número/conta
+de teste, 3 delas `disconnected` — todas geradas pelo mesmo padrão de
+auto-recuperação. Como **todos** os utilizadores em produção vão passar por
+este mesmo fluxo de reconexão (efeito da correção do M3), é esperado que o
+número de instâncias "fantasma" cresça rapidamente.
+
+**Risco a confirmar:** o plano pago mostra "Limite de dispositivos (instâncias)
+que podem ser conectados: 3" separado de "N total de instâncias" — não está
+confirmado se esse limite de 3 é só sobre ligações *simultaneamente
+conectadas*, ou se há também um teto sobre o total de instâncias
+*registadas* (mesmo desconectadas) que, uma vez atingido, bloquearia novas
+reconexões para toda a conta (não só um utilizador). Se for o segundo caso,
+isto torna-se urgente rapidamente à medida que mais utilizadores reconectam.
+
+**Ideia de correção (a avaliar em Plan Mode):** antes de criar uma instância
+nova, tentar apagar/desligar a antiga na UazAPI (se existir endpoint para
+isso), ou pelo menos confirmar junto do suporte da UazAPI se instâncias
+`disconnected` contam para algum limite.
