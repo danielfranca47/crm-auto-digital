@@ -105,7 +105,7 @@ gate continua a funcionar normalmente.
 
 | # | Commit | O que foi implementado |
 |---|---|---|
-| 1 | _(a preencher)_ | fix: gate de score ignora campos qualification_fields desativados |
+| 1 | `722b6cf` | fix: gate de score ignora campos qualification_fields desativados |
 
 ---
 
