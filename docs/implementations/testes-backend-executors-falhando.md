@@ -1,7 +1,7 @@
 # Corrigir testes desatualizados em backend-executors/tests/
 
 **Branch:** `fix/testes-backend-executors-desatualizados`
-**Status:** Em andamento
+**Status:** Todos os cenários validados (31/08/2026)
 
 ---
 
@@ -174,21 +174,49 @@ ajustes de contexto das Fases 1 e 2 (histórico + campos obrigatórios configura
 
 **Objetivo:** corrigir os 2 testes com asserts de string literal desatualizada.
 
-- `tests/test_recepcao_pending_commercial_extraction.py`
-- `tests/test_followup_prompt_contract_context.py`
+| Arquivo | O que mudou |
+|---|---|
+| `tests/test_recepcao_pending_commercial_extraction.py` | assert `"NUNCA tente responder, prometer verificar"` → `"não promete verificar"` (mesma regra, bloco "O QUE VOCÊ NÃO FAZ" orientado a exemplos em vez de instrução direta) |
+| `tests/test_followup_prompt_contract_context.py` | assert `"agenda/comparecimento/remarcação"` → `"no-show/remarcação"` (mesma regra de retomada de no-show, redação atual do bloco `followup_priority_rule`) |
 
-_A implementar._
+Em ambos os casos confirmei, lendo o prompt atual em `decision_engine.py`, que a regra de
+negócio equivalente continua presente — não é regressão, só mudança de redação.
+
+### Commits Fase 4
+
+| # | Commit | O que foi implementado |
+|---|---|---|
+| 1 | `<a preencher>` | Fase 4 completa — 2 testes corrigidos (Causa 4). Suíte completa: 288 passed, 0 failed |
+
+### Relatório da Fase 4 — o que mudou na prática
+
+**Antes:** 2 testes comparavam o prompt gerado contra um texto exato que foi reescrito em
+mudanças de produto anteriores — o teste falhava mesmo com a regra de negócio (não
+prometer verificar / retomar no-show) continuando presente, só com outra redação.
+**Agora:** os testes comparam contra o texto atual, confirmando que a regra ainda existe.
+**Para validar:** `cd backend-executors && python -m pytest tests/ -q` → **288 passed, 0 failed** (validado nesta sessão em 31/08/2026).
 
 ---
 
 ## Checks de Validação
 
 ### Cenário T1 — Suíte completa verde
-- [ ] Rodar `cd backend-executors && python -m pytest tests/ -q`
-- [ ] Confirmar `0 failed`
+- [x] Rodar `cd backend-executors && python -m pytest tests/ -q`
+- [x] Confirmar `0 failed` — **Validado em 31/08/2026** — 288 passed, 0 failed (era 265 passed / 23 failed no início desta sessão)
 
 ---
 
 ## Ajustes Possíveis Pós-Implementação
 
-_A preencher na graduação._
+- Durante a investigação, a Causa 2 ("AI Profile como única fonte de verdade" sem defaults
+  hardcoded por modo) mostrou-se mais abrangente do que o esperado inicialmente — qualquer
+  teste futuro de `decision_engine.py`/`qualification_contract.py` que monte um `ai_profile`
+  sem `qualification_fields` terá `required_fields = []` silenciosamente. Não há validação
+  ou warning hoje que avise sobre isso; considerar (não-urgente) um lint/fixture de teste
+  compartilhado que documente esse comportamento explicitamente para não repetir a mesma
+  descoberta caso a caso em futuras sessões de debugging.
+- `docs/implementations/worktree-copiar-env-testes-backend.md` (ainda "Aguardando Plan
+  Mode") continua pendente — esta sessão reencontrou o mesmo sintoma (2 testes de
+  `test_recepcao_sales_flow_pending.py` "falhando" só por `.env` ausente numa worktree
+  nova) e resolveu copiando o `.env` manualmente, reforçando que documentar esse passo é
+  útil.

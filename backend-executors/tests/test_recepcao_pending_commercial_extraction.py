@@ -24,7 +24,9 @@ def test_recepcao_prompt_instructs_pending_commercial_extraction():
     )
 
     assert "pending_commercial_text" in prompt
-    assert "NUNCA tente responder, prometer verificar" in prompt
+    # Regra de "não promete verificar" continua no prompt, só a redação mudou de uma
+    # instrução direta para um bloco "O QUE VOCÊ NÃO FAZ" orientado a exemplos.
+    assert "não promete verificar" in prompt
     assert "VÁRIAS LINHAS" in prompt
 
 

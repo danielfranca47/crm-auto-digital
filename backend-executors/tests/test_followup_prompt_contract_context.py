@@ -94,7 +94,8 @@ def test_followup_prompt_includes_contract_signals_and_variant_rule():
     assert "followup_contract_signals" in prompt
     assert "hybrid_scheduler" in prompt
     assert "no-show" in prompt or "no_show" in prompt
-    assert "agenda/comparecimento/remarcação" in prompt
+    # Regra de retomada de no-show/remarcação continua no prompt, só a redação mudou.
+    assert "no-show/remarcação" in prompt
     assert "CONTEXTO PRIORITÁRIO (follow-up tick)" in prompt
     assert "não reabra qualificação antiga por padrão" in prompt
     assert "histórico é memória contextual; ele NÃO é backlog" in prompt
