@@ -16,6 +16,11 @@ def test_compute_missing_fields_consultivo_next_step_satisfies_availability():
 
 
 def test_compute_missing_fields_consultivo_next_step_without_time_still_requires_availability():
+    # Desde "AI Profile como única fonte de verdade" (commit 13b826a), compute_missing_fields
+    # não tem mais defaults hardcoded por modo — required_fields_override precisa ser
+    # passado explicitamente. Lista = default antigo de "consultivo" (MIN_REQUIRED_FIELDS
+    # removida de qualification_contract.py).
+    required = ["service_interest", "urgency", "decision_role", "constraints", "availability_window", "budget_or_price_acceptance"]
     extracted = {
         "service_interest": True,
         "urgency": True,
@@ -24,26 +29,28 @@ def test_compute_missing_fields_consultivo_next_step_without_time_still_requires
         "next_step": True,
         "budget_or_price_acceptance": True,
     }
-    missing = compute_missing_fields("consultivo", extracted)
+    missing = compute_missing_fields("consultivo", extracted, required_fields_override=required)
     assert "availability_window" in missing
 
 
 def test_compute_missing_fields_agenda_requires_booking_fields():
+    required = ["service_interest", "availability_window", "location_preference", "price_acceptance"]
     extracted = {
         "service_interest": True,
     }
-    missing = compute_missing_fields("agenda", extracted)
+    missing = compute_missing_fields("agenda", extracted, required_fields_override=required)
     assert "availability_window" in missing
     assert "location_preference" in missing
     assert "price_acceptance" in missing
 
 
 def test_compute_missing_fields_direto_minimal():
+    required = ["service_interest", "availability_window", "price_acceptance"]
     extracted = {
         "service_interest": True,
         "availability_window": True,
     }
-    missing = compute_missing_fields("direto", extracted)
+    missing = compute_missing_fields("direto", extracted, required_fields_override=required)
     assert missing == ["price_acceptance"]
 
 

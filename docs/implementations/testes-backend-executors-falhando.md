@@ -123,10 +123,25 @@ test_phase2_direct_question_reply_priority.py -q` deve reportar `0 failed`.
 
 **Objetivo:** corrigir os 4 testes restantes afetados diretamente pela Causa 2.
 
-- `tests/test_qualification_contract.py` (3 testes)
-- `tests/test_guardrails_by_mode.py::test_agenda_blocks_closing_without_booking_fields`
+| Arquivo | O que mudou |
+|---|---|
+| `tests/test_qualification_contract.py` | 3 testes passam a chamar `compute_missing_fields(modo, extracted, required_fields_override=[...])` com a lista explícita (default antigo de cada modo), em vez de depender do default removido |
+| `tests/test_guardrails_by_mode.py` | `test_agenda_blocks_closing_without_booking_fields` adiciona `ai_profile.qualification_fields` explícito (service_interest/availability_window/price_acceptance) para a guardrail `guardrail_agenda_missing_booking` voltar a enxergar campos faltando |
 
-_A implementar._
+### Commits Fase 2
+
+| # | Commit | O que foi implementado |
+|---|---|---|
+| 1 | `<a preencher>` | Fase 2 completa — 4 testes corrigidos (Causa 2) |
+
+### Relatório da Fase 2 — o que mudou na prática
+
+**Antes:** os testes de `compute_missing_fields` e da guardrail "agenda sem campos de
+agendamento não pode fechar" dependiam de uma lista de campos obrigatórios que não existe
+mais no código (foi substituída por configuração explícita no perfil de IA).
+**Agora:** os testes configuram essa lista explicitamente, exercitando a mesma regra de
+negócio (campos mínimos por modo) da forma como ela realmente funciona hoje.
+**Para validar:** `cd backend-executors && python -m pytest tests/test_qualification_contract.py tests/test_guardrails_by_mode.py -q` → `0 failed`.
 
 ### Fase 3 — Mocks/dublês desatualizados (Causa 3 restante)
 
