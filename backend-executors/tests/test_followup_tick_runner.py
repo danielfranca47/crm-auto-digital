@@ -80,6 +80,9 @@ class _DummyDecision:
     confidence: float = 0.9
     decision_trace: Dict[str, Any] = field(default_factory=dict)
     questions: List[str] = field(default_factory=list)
+    # Fluxo de Venda (branching engine) passou a ler decision.system_actions
+    # (app/runners/whatsapp.py) para separar envios de ações de estado.
+    system_actions: List[Dict[str, Any]] = field(default_factory=list)
 
     def model_dump(self) -> Dict[str, Any]:
         return {

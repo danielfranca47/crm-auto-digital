@@ -147,10 +147,28 @@ negócio (campos mínimos por modo) da forma como ela realmente funciona hoje.
 
 **Objetivo:** corrigir os 3 testes de follow-up com mocks sem `**kwargs` / sem `system_actions`.
 
-- `tests/test_followup_tick_route_priority.py::test_followup_tick_forces_followup_child_route`
-- `tests/test_followup_tick_runner.py` (2 testes)
+| Arquivo | O que mudou |
+|---|---|
+| `tests/test_followup_tick_route_priority.py` | `_child()` ganha `**_kwargs`; contexto ganha `history` com outbound (Causa 1 também se aplicava aqui) e `ai_profile.qualification_fields` explícito (Causa 2 também se aplicava — sem isto o motor auto-promovia para "apresentation" em vez de manter "qualification"/"follow-up") |
+| `tests/test_followup_tick_runner.py` | `_DummyDecision` (dataclass) ganha campo `system_actions: List[Dict[str, Any]] = field(default_factory=list)` |
 
-_A implementar._
+Achado durante a implementação: `test_followup_tick_forces_followup_child_route` também
+precisava das Causas 1 e 2, não só da 3 — mesmo padrão de sobreposição já visto na Fase 1.
+
+### Commits Fase 3
+
+| # | Commit | O que foi implementado |
+|---|---|---|
+| 1 | `<a preencher>` | Fase 3 completa — 3 testes corrigidos (Causa 3, com Causas 1+2 sobrepostas em 1 deles) |
+
+### Relatório da Fase 3 — o que mudou na prática
+
+**Antes:** dublês/mocks de testes de follow-up não sabiam responder aos novos parâmetros
+que o motor de decisão passou a usar (`ai_profile` na chamada ao gerador de resposta,
+`system_actions` no objeto de decisão), quebrando com erro de assinatura.
+**Agora:** os mocks aceitam os parâmetros novos, e um dos testes também precisou dos mesmos
+ajustes de contexto das Fases 1 e 2 (histórico + campos obrigatórios configurados).
+**Para validar:** `cd backend-executors && python -m pytest tests/test_followup_tick_route_priority.py tests/test_followup_tick_runner.py -q` → `0 failed`.
 
 ### Fase 4 — Textos de prompt desatualizados (Causa 4)
 
