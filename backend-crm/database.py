@@ -1054,6 +1054,18 @@ def init_db() -> None:
             """
         )
 
+        # Tabela de estado da pausa geral do bot (kill switch do Kanban)
+        cur.execute(
+            """
+            CREATE TABLE IF NOT EXISTS bot_global_pause_state (
+                user_id INTEGER PRIMARY KEY,
+                is_paused INTEGER NOT NULL DEFAULT 0,
+                paused_at DATETIME,
+                updated_at DATETIME
+            );
+            """
+        )
+
         # Tabela atividades (legado)
         cur.execute(
             """

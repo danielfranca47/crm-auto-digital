@@ -4,6 +4,10 @@ import json
 import sqlite3
 from typing import Optional
 
+# Categorias em que o bot estruturalmente não atua (pós-venda/arquivados).
+# Usado pela pausa geral do bot para nunca pausar nem reativar leads nessas fases.
+BOT_STRUCTURALLY_INACTIVE_CATEGORIES = {"client-list", "prospect-refused", "disqualified"}
+
 
 def _disable_bot_for_category_entry(
     conn: sqlite3.Connection,
