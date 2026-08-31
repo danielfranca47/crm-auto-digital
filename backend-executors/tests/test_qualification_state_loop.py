@@ -1,5 +1,19 @@
 from app.services import decision_engine
 
+# Desde "AI Profile como única fonte de verdade" (commit 13b826a), required_fields só
+# existe se configurado em ai_profile.qualification_fields — sem isto, missing_fields
+# fica sempre []. Lista = default antigo de "consultivo" (MIN_REQUIRED_FIELDS removida
+# de qualification_contract.py), usada pelos testes deste arquivo que dependem de campos
+# realmente "faltando" a partir do qualification_state.data_json.
+CONSULTIVO_REQUIRED_FIELDS = [
+    {"key": "service_interest", "mode": "required"},
+    {"key": "urgency", "mode": "required"},
+    {"key": "decision_role", "mode": "required"},
+    {"key": "constraints", "mode": "required"},
+    {"key": "availability_window", "mode": "required"},
+    {"key": "budget_or_price_acceptance", "mode": "required"},
+]
+
 
 def test_state_based_missing_fields_excludes_filled_field():
     context = {
@@ -83,10 +97,12 @@ def test_state_absent_and_flag_off_returns_state_unavailable_without_heuristic(m
 def test_state_absent_extractor_upsert_then_final_source_is_state(monkeypatch):
     context = {
         "lead": {"id": 10, "user_id": 99, "category": "qualification"},
-        "ai_profile": {"agent_mode": "consultivo"},
+        "ai_profile": {"agent_mode": "consultivo", "qualification_fields": CONSULTIVO_REQUIRED_FIELDS},
         "playbook": {},
         "metadata": {"inbound_message_text": "eu decido"},
-        "history": [],
+        # outbound_count>=1 evita que _enforce_greeting_first force route_to="recepcao"
+        # (o cenário testado é meio de conversa, não o primeiro contato).
+        "history": [{"model": "outbound", "body": "Oi! Tudo bem?"}],
         "job": {"payload": {"lead_id": 10, "user_id": 99}},
         "qualification_state": {"exists": False},
     }
@@ -142,10 +158,11 @@ def test_state_absent_extractor_upsert_then_final_source_is_state(monkeypatch):
 def test_anti_loop_triggers_handoff_after_two_attempts(monkeypatch):
     context = {
         "lead": {"id": 10, "user_id": 99, "category": "qualification"},
-        "ai_profile": {"agent_mode": "consultivo"},
+        "ai_profile": {"agent_mode": "consultivo", "qualification_fields": CONSULTIVO_REQUIRED_FIELDS},
         "playbook": {},
         "metadata": {"inbound_message_text": "ok"},
-        "history": [],
+        # outbound_count>=1 evita que _enforce_greeting_first force route_to="recepcao".
+        "history": [{"model": "outbound", "body": "Oi! Tudo bem?"}],
         "job": {"payload": {"lead_id": 10, "user_id": 99}},
         "qualification_state": {
             "exists": True,
@@ -196,7 +213,8 @@ def test_t1_missing_fields_empty_never_ask_qualification(monkeypatch):
         "ai_profile": {"agent_mode": "consultivo"},
         "playbook": {},
         "metadata": {"inbound_message_text": "ok"},
-        "history": [],
+        # outbound_count>=1 evita que _enforce_greeting_first force route_to="recepcao".
+        "history": [{"model": "outbound", "body": "Oi! Tudo bem?"}],
         "job": {"payload": {"lead_id": 10, "user_id": 99}},
         "qualification_state": {
             "exists": True,
@@ -301,7 +319,8 @@ def test_t3_rule3_blocks_return_to_qualification_when_already_apresentation(monk
         "ai_profile": {"agent_mode": "consultivo"},
         "playbook": {},
         "metadata": {"inbound_message_text": "ok"},
-        "history": [],
+        # outbound_count>=1 evita que _enforce_greeting_first force route_to="recepcao".
+        "history": [{"model": "outbound", "body": "Oi! Tudo bem?"}],
         "job": {"payload": {"lead_id": 10, "user_id": 99}},
         "qualification_state": {
             "exists": True,
@@ -319,7 +338,7 @@ def test_t3_rule3_blocks_return_to_qualification_when_already_apresentation(monk
         lambda _prompt, **_kwargs: '{"route_to":"qualification","perceived_category":"qualification","confidence":0.9,"reason":"teste"}',
     )
 
-    def _fake_child(route, _prompt):
+    def _fake_child(route, _prompt, **_kwargs):
         seen["route"] = route
         return '{"message_text":"vamos seguir com apresentação","did_complete_phase":false,"recommended_next_category":null,"outcome":null,"kanban_highlight":null,"signals":[],"confidence":0.8}'
 
@@ -366,7 +385,7 @@ def test_rule3_keyword_override_removed_falls_back_to_anti_loop(monkeypatch):
         lambda _prompt, **_kwargs: '{"route_to":"qualification","perceived_category":"qualification","confidence":0.9,"reason":"teste"}',
     )
 
-    def _fake_child(route, _prompt):
+    def _fake_child(route, _prompt, **_kwargs):
         seen["route"] = route
         return '{"message_text":"vamos seguir com apresentação","did_complete_phase":false,"recommended_next_category":null,"outcome":null,"kanban_highlight":null,"signals":[],"confidence":0.8}'
 
@@ -385,10 +404,11 @@ def test_rule3_keyword_override_removed_falls_back_to_anti_loop(monkeypatch):
 def test_ask_qualification_message_is_deterministic_for_current_field(monkeypatch):
     context = {
         "lead": {"id": 10, "user_id": 99, "category": "qualification"},
-        "ai_profile": {"agent_mode": "consultivo"},
+        "ai_profile": {"agent_mode": "consultivo", "qualification_fields": CONSULTIVO_REQUIRED_FIELDS},
         "playbook": {},
         "metadata": {"inbound_message_text": "oi"},
-        "history": [],
+        # outbound_count>=1 evita que _enforce_greeting_first force route_to="recepcao".
+        "history": [{"model": "outbound", "body": "Oi! Tudo bem?"}],
         "job": {"payload": {"lead_id": 10, "user_id": 99}},
         "qualification_state": {
             "exists": True,
@@ -448,10 +468,11 @@ def test_ask_qualification_message_is_deterministic_for_current_field(monkeypatc
 def test_field_mismatch_repair_uses_second_attempt(monkeypatch):
     context = {
         "lead": {"id": 10, "user_id": 99, "category": "qualification"},
-        "ai_profile": {"agent_mode": "consultivo"},
+        "ai_profile": {"agent_mode": "consultivo", "qualification_fields": CONSULTIVO_REQUIRED_FIELDS},
         "playbook": {},
         "metadata": {"inbound_message_text": "oi"},
-        "history": [],
+        # outbound_count>=1 evita que _enforce_greeting_first force route_to="recepcao".
+        "history": [{"model": "outbound", "body": "Oi! Tudo bem?"}],
         "job": {"id": 555, "payload": {"lead_id": 10, "user_id": 99}},
         "qualification_state": {
             "exists": True,
@@ -466,7 +487,7 @@ def test_field_mismatch_repair_uses_second_attempt(monkeypatch):
     monkeypatch.setattr(decision_engine.field_extractor, "extract_fields_llm", lambda _c, _s: {"extracted": {}, "confidence": {}, "evidence": {}, "raw": "{}"})
 
     calls = {"n": 0}
-    def _child(_route, _prompt):
+    def _child(_route, _prompt, **_kwargs):
         calls["n"] += 1
         if calls["n"] == 1:
             return '{"question_text":"qual seu serviço?","field":"service_interest","did_complete_phase":false,"recommended_next_category":null,"outcome":null,"kanban_highlight":null,"signals":[],"confidence":0.7}'
@@ -486,10 +507,11 @@ def test_field_mismatch_repair_uses_second_attempt(monkeypatch):
 def test_anti_repetition_triggers_retry(monkeypatch):
     context = {
         "lead": {"id": 10, "user_id": 99, "category": "qualification"},
-        "ai_profile": {"agent_mode": "consultivo"},
+        "ai_profile": {"agent_mode": "consultivo", "qualification_fields": CONSULTIVO_REQUIRED_FIELDS},
         "playbook": {},
         "metadata": {"inbound_message_text": "oi"},
-        "history": [],
+        # outbound_count>=1 evita que _enforce_greeting_first force route_to="recepcao".
+        "history": [{"model": "outbound", "body": "Oi! Tudo bem?"}],
         "job": {"id": 777, "payload": {"lead_id": 10, "user_id": 99}},
         "qualification_state": {
             "exists": True,
@@ -504,7 +526,7 @@ def test_anti_repetition_triggers_retry(monkeypatch):
     monkeypatch.setattr(decision_engine.field_extractor, "extract_fields_llm", lambda _c, _s: {"extracted": {}, "confidence": {}, "evidence": {}, "raw": "{}"})
 
     calls={"n":0}
-    def _child(_route, _prompt):
+    def _child(_route, _prompt, **_kwargs):
         calls["n"] += 1
         if calls["n"] == 1:
             return '{"question_text":"qual o seu nível de urgência agora?","field":"urgency","did_complete_phase":false,"recommended_next_category":null,"outcome":null,"kanban_highlight":null,"signals":[],"confidence":0.8}'
@@ -523,10 +545,11 @@ def test_anti_repetition_triggers_retry(monkeypatch):
 def test_current_field_recalculated_when_extractor_fills_previous_field(monkeypatch):
     context = {
         "lead": {"id": 10, "user_id": 99, "category": "qualification"},
-        "ai_profile": {"agent_mode": "consultivo"},
+        "ai_profile": {"agent_mode": "consultivo", "qualification_fields": CONSULTIVO_REQUIRED_FIELDS},
         "playbook": {},
         "metadata": {"inbound_message_text": "eu decido"},
-        "history": [],
+        # outbound_count>=1 evita que _enforce_greeting_first force route_to="recepcao".
+        "history": [{"model": "outbound", "body": "Oi! Tudo bem?"}],
         "job": {"id": 888, "payload": {"lead_id": 10, "user_id": 99}},
         "qualification_state": {"exists": True, "data_json": {"service_interest": "botox"}, "attempts_json": {}, "last_questioned_field": None},
     }
@@ -545,10 +568,11 @@ def test_current_field_recalculated_when_extractor_fills_previous_field(monkeypa
 def test_fallback_safe_when_repair_fails_twice(monkeypatch):
     context = {
         "lead": {"id": 10, "user_id": 99, "category": "qualification"},
-        "ai_profile": {"agent_mode": "consultivo"},
+        "ai_profile": {"agent_mode": "consultivo", "qualification_fields": CONSULTIVO_REQUIRED_FIELDS},
         "playbook": {},
         "metadata": {"inbound_message_text": "oi"},
-        "history": [],
+        # outbound_count>=1 evita que _enforce_greeting_first force route_to="recepcao".
+        "history": [{"model": "outbound", "body": "Oi! Tudo bem?"}],
         "job": {"id": 999, "payload": {"lead_id": 10, "user_id": 99}},
         "qualification_state": {"exists": True, "data_json": {"service_interest": "botox"}, "attempts_json": {}, "last_questioned_field": None},
     }
@@ -572,7 +596,8 @@ def test_auto_promote_never_uses_qualification_fallback_message(monkeypatch):
         "ai_profile": {"agent_mode": "consultivo"},
         "playbook": {},
         "metadata": {"inbound_message_text": "300 reais"},
-        "history": [],
+        # outbound_count>=1 evita que _enforce_greeting_first force route_to="recepcao".
+        "history": [{"model": "outbound", "body": "Oi! Tudo bem?"}],
         "job": {"id": 200, "payload": {"lead_id": 10, "user_id": 99}},
         "qualification_state": {
             "exists": True,
@@ -599,7 +624,7 @@ def test_auto_promote_never_uses_qualification_fallback_message(monkeypatch):
 
     seen = {"route": None}
 
-    def _child(route, _prompt):
+    def _child(route, _prompt, **_kwargs):
         seen["route"] = route
         return '{"message_text":"Perfeito, vamos para a próxima etapa da apresentação.","did_complete_phase":false,"recommended_next_category":null,"outcome":null,"kanban_highlight":null,"signals":[],"confidence":0.8}'
 

@@ -16,7 +16,9 @@ def _base_context(message_text: str, response_style: str) -> dict:
         },
         "playbook": {},
         "metadata": {"inbound_message_text": message_text},
-        "history": [],
+        # outbound_count>=1 evita que _enforce_greeting_first force route_to="recepcao"
+        # (o cenário testado é meio de conversa, não o primeiro contato).
+        "history": [{"model": "outbound", "body": "Oi! Tudo bem?"}],
         "qualification_state": {
             "exists": True,
             "data_json": {"service_interest": "botox"},

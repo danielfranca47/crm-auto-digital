@@ -1,13 +1,23 @@
 from app.services import decision_engine
 
+# Desde "AI Profile como única fonte de verdade" (commit 13b826a), required_fields só
+# existe se configurado em ai_profile.qualification_fields. Lista = default antigo de
+# "agenda" (MIN_REQUIRED_FIELDS removida de qualification_contract.py).
+AGENDA_REQUIRED_FIELDS = [
+    {"key": "service_interest", "mode": "required"},
+    {"key": "availability_window", "mode": "required"},
+    {"key": "price_acceptance", "mode": "required"},
+]
+
 
 def test_mother_route_forced_to_qualification_when_missing_fields(monkeypatch):
     context = {
         "lead": {"category": "qualification"},
-        "ai_profile": {"agent_mode": "agenda"},
+        "ai_profile": {"agent_mode": "agenda", "qualification_fields": AGENDA_REQUIRED_FIELDS},
         "playbook": {},
         "metadata": {"inbound_message_text": "oi"},
-        "history": [],
+        # outbound_count>=1 evita que _enforce_greeting_first force route_to="recepcao".
+        "history": [{"model": "outbound", "body": "Oi! Tudo bem?"}],
         "qualification_state": {
             "exists": True,
             "data_json": {"service_interest": "botox"},
@@ -39,10 +49,11 @@ def test_mother_route_forced_to_qualification_when_missing_fields(monkeypatch):
 def test_mother_route_kept_when_qualification_is_complete(monkeypatch):
     context = {
         "lead": {"category": "qualification"},
-        "ai_profile": {"agent_mode": "agenda"},
+        "ai_profile": {"agent_mode": "agenda", "qualification_fields": AGENDA_REQUIRED_FIELDS},
         "playbook": {},
         "metadata": {"inbound_message_text": "podemos agendar"},
-        "history": [],
+        # outbound_count>=1 evita que _enforce_greeting_first force route_to="recepcao".
+        "history": [{"model": "outbound", "body": "Oi! Tudo bem?"}],
         "qualification_state": {
             "exists": True,
             "data_json": {
