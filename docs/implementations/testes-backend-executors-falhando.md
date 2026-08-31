@@ -103,7 +103,7 @@ arquivo.
 
 | # | Commit | O que foi implementado |
 |---|---|---|
-| 1 | _(a preencher após o commit)_ | Fase 1 completa — 14 testes corrigidos (Causas 1+3) |
+| 1 | `15482e5` | Fase 1 completa — 14 testes corrigidos (Causas 1+3) |
 
 ### Relatório da Fase 1 — o que mudou na prática
 
