@@ -64,6 +64,10 @@ class BotDisabledUpdate(BaseModel):
     reason: Optional[str] = None
 
 
+class BotResumeModePayload(BaseModel):
+    mode: Literal["previously_paused", "all"]
+
+
 # -----------------------------
 # Mensagens (messages)
 # -----------------------------

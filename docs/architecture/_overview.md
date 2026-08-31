@@ -30,6 +30,7 @@ existente ou criar um novo.
 | [`billing-efi.md`](billing-efi.md) | Gateway de pagamento Efí Bank: checkout sob demanda, cliente OAuth2, webhook de confirmação, activação/renovação/cancelamento de subscriptions, variáveis de ambiente | Nova oferta/plano, mudança no fluxo de checkout ou webhook, novo campo de status Efí, mudança na lógica de `payment_event` |
 | [`knowledge-base.md`](knowledge-base.md) | Base de Conhecimento: categorias guiadas, `knowledge_items`/`knowledge_item_media`, categorias `allowMultiple` (`service_pricing_table`), formato `structured_v1`, agregação para o LLM, dedup de categorias narrativas (`leads.knowledge_categories_shown`), wizard de onboarding, ingestão de materiais por IA (`source_type='ai_extracted'`) | Nova categoria guiada, nova categoria `allowMultiple`, mudança no formato estruturado, mudança em `_load_knowledge_items()` ou no dedup narrativo, mudança no wizard ou na esteira de ingestão (extractors/classifier/worker) |
 | [`agent-local-app.md`](agent-local-app.md) | App desktop agent-local: auth passwordless, pesquisa Google Maps (proxy/chave própria/Selenium), prospecção WhatsApp individual/lote, Kanban remoto (automação Fase 10) e local (não-assinante), painel Assistente IA, geração de copy remota/local, prompt personalizado | Novo ecrã/painel no app, novo modo de pesquisa, mudança no fluxo de prospecção ou Kanban local/remoto, novo campo propagado na geração de copy |
+| [`bot-global-pause.md`](bot-global-pause.md) | Pausa geral do bot pelo header do Kanban: `bot_global_pause_state`, `bot_global_pause.py` (pause_all/resume_all), kill switch no gate de inbound, popup de retomada (2 modos) | Mudança no gate do kill switch, novo modo de retomada, novo campo no estado de pausa |
 
 ---
 
@@ -39,7 +40,7 @@ existente ou criar um novo.
 WhatsApp → UazAPI webhook
   └─ webhooks.md           ← filtro de grupo, áudio, media_fallback, buffer
        └─ inbound_handler
-            └─ guardrail   ← bot_disabled (agents.md)
+            └─ guardrail   ← bot_disabled (agents.md), pausa geral (bot-global-pause.md)
             └─ orchestrator (ContextBundle)
                  └─ playground-parity.md
 
@@ -86,6 +87,7 @@ A maioria das features altera áreas já documentadas. Antes de criar um ficheir
 | Uso ou rotação do `UAZAPI_ADMIN_TOKEN`, separação admin_token/instance_token | `whatsapp-connection.md` |
 | Novo campo no AI Profile | `agents.md` |
 | Novo motivo para `bot_disabled` | `agents.md` + `webhooks.md` |
+| Pausa geral do bot (botão no header do Kanban), kill switch de inbound, popup de retomada | `bot-global-pause.md` |
 | Novos campos obrigatórios de qualificação | `pipeline-phases.md` |
 | Novo comportamento por `agent_mode` | `pipeline-phases.md` |
 | Campo novo no ContextBundle que afecta o LLM | `playground-parity.md` |

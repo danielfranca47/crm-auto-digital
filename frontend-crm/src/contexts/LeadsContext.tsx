@@ -40,6 +40,11 @@ interface LeadsContextType {
   bulkProspection: (leadIds: string[], methods: ProspectionMethod[]) => void;
   updateProspectionLead: (leadId: string, patch: Partial<Lead>) => Promise<void>;
   reloadAllLeads: () => Promise<void>;
+
+  botGlobalPaused: boolean;
+  botGlobalPausedAt: string | null;
+  pauseAllBots: () => Promise<number>;
+  resumeAllBots: (mode: 'previously_paused' | 'all') => Promise<number>;
 }
 
 const LeadsContext = createContext<LeadsContextType | undefined>(undefined);
@@ -176,6 +181,8 @@ export function LeadsProvider({ children }: LeadsProviderProps) {
   ]);
   const [appointmentsByLead, setAppointmentsByLead] = useState<Record<string, LeadAppointment[]>>({});
   const [leadsError, setLeadsError] = useState<string | null>(null);
+  const [botGlobalPaused, setBotGlobalPaused] = useState(false);
+  const [botGlobalPausedAt, setBotGlobalPausedAt] = useState<string | null>(null);
 
   // --------- persistência de cópia no lead e atualização visual do card ----------
   const updateProspectionLead = async (leadId: string, patch: Partial<Lead>) => {
@@ -251,14 +258,42 @@ export function LeadsProvider({ children }: LeadsProviderProps) {
     }
   };
 
+  // --------- pausa geral do bot (kill switch do Kanban) ----------
+  const loadBotPauseStatus = async (): Promise<void> => {
+    try {
+      const status = await api.getBotPauseStatus();
+      setBotGlobalPaused(!!status.is_paused);
+      setBotGlobalPausedAt(status.paused_at ?? null);
+    } catch (error) {
+      handleError(error, { fallbackMessage: 'Não foi possível carregar o estado da pausa do bot.' });
+    }
+  };
+
+  const pauseAllBots = async (): Promise<number> => {
+    const result = await api.pauseAllBots();
+    setBotGlobalPaused(true);
+    await reloadAllLeads();
+    return result.paused_count;
+  };
+
+  const resumeAllBots = async (mode: 'previously_paused' | 'all'): Promise<number> => {
+    const result = await api.resumeAllBots(mode);
+    setBotGlobalPaused(false);
+    setBotGlobalPausedAt(null);
+    await reloadAllLeads();
+    return result.resumed_count;
+  };
+
   // carregamento inicial — só dispara se existir token (evita redirect para /login em rotas públicas)
   // + polling leve: reflete mudanças feitas pelo bot em segundo plano (categoria, bot_disabled)
   // sem precisar de F5 — o board não tinha nenhum mecanismo de auto-refresh antes.
   useEffect(() => {
     if (!readAuthToken()) return;
     reloadAllLeads();
+    loadBotPauseStatus();
     const intervalId = setInterval(() => {
       reloadAllLeads();
+      loadBotPauseStatus();
     }, 30_000);
     return () => clearInterval(intervalId);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -606,6 +641,10 @@ export function LeadsProvider({ children }: LeadsProviderProps) {
     bulkProspection,
     updateProspectionLead,
     reloadAllLeads,
+    botGlobalPaused,
+    botGlobalPausedAt,
+    pauseAllBots,
+    resumeAllBots,
   };
 
   return <LeadsContext.Provider value={value}>{children}</LeadsContext.Provider>;

@@ -40,6 +40,7 @@ from routes import (
 from routes import public
 from routes import admin_agents
 from routes import admin_billing
+from routes import bot_pause
 from routes import knowledge_ingest
 from services.followup_reconciler import (
     reconcile_due_followups,
@@ -232,6 +233,7 @@ app.include_router(spy_agent.router)                                # /api/spy-a
 app.include_router(checkout.router)                                 # /checkout/efi/{offer_key}
 app.include_router(admin_agents.router)                             # /admin/agents/*
 app.include_router(admin_billing.router)                            # /admin/billing/*
+app.include_router(bot_pause.router)                                # /api/bot-pause/*
 # app.include_router(dashboard.router)
 
 # Static: mídia de follow-up

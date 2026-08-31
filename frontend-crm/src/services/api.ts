@@ -637,6 +637,20 @@ export const api = {
     return apiClient.post(`/leads/${leadId}/bot-disabled`, payload);
   },
 
+  getBotPauseStatus: async (): Promise<{ is_paused: boolean; paused_at: string | null }> => {
+    return apiClient.get(`/bot-pause/status`);
+  },
+
+  pauseAllBots: async (): Promise<{ status: string; paused_count: number }> => {
+    return apiClient.post(`/bot-pause/pause`, {});
+  },
+
+  resumeAllBots: async (
+    mode: "previously_paused" | "all"
+  ): Promise<{ status: string; resumed_count: number }> => {
+    return apiClient.post(`/bot-pause/resume`, { mode });
+  },
+
   patchLeadQualificationFields: async (leadId: number, fields: Record<string, string>) => {
     return apiClient.patch(`/leads/${leadId}/qualification-fields`, { fields });
   },

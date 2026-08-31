@@ -478,6 +478,17 @@ def handle_inbound(payload: Dict[str, Any]) -> Dict[str, Any]:
         logger.exception("Falha ao orquestrar decisão de IA", exc_info=exc)
 
     with get_connection() as _conn_check:
+        _pause_state_row = _conn_check.execute(
+            "SELECT is_paused FROM bot_global_pause_state WHERE user_id = ?", (user_id,)
+        ).fetchone()
+        if _pause_state_row and int(_pause_state_row["is_paused"] or 0) == 1:
+            logger.info(
+                "inbound_global_pause_skip lead_id=%s user_id=%s reason=global_pause",
+                lead_id,
+                user_id,
+            )
+            return {"status": "skipped", "lead_id": lead_id, "job_id": None, "reason": "global_pause"}
+
         _bot_row = _conn_check.execute(
             "SELECT bot_disabled, bot_disabled_reason FROM leads WHERE id = ?", (lead_id,)
         ).fetchone()

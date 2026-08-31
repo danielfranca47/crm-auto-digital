@@ -74,6 +74,7 @@ agent-local         local  ← agente Python local de prospecção/scraping
 | `routes/knowledge.py` | `/api/knowledge/*` | Base de conhecimento; upload de mídia para Fluxo de Venda |
 | `routes/usage.py` | `/api/usage/*` | Consumo do plano |
 | `routes/whatsapp_connect.py` | `/api/whatsapp/*` | Conexão via QR code ou código de pareamento (proxy para backend-core) — ver [`whatsapp-connection.md`](whatsapp-connection.md) |
+| `routes/bot_pause.py` | `/api/bot-pause/*` | Pausa geral do bot por usuário (status/pause/resume) — ver [`bot-global-pause.md`](bot-global-pause.md) |
 
 ### Arquivos críticos — Serviços
 
@@ -88,7 +89,8 @@ agent-local         local  ← agente Python local de prospecção/scraping
 | `services/qualification_guardrails.py` | Bloqueia avanço se qualificação incompleta (campos mínimos por agent_mode) |
 | `services/followup_state.py` | Máquina de estado de follow-up; agenda próximo envio |
 | `services/followup_reconciler.py` | Reconcilia follow-ups pendentes; circuit breaker (24h cooldown) |
-| `services/lead_category_policy.py` | Side-effects de mudança de categoria (ex.: closing → desactiva bot) |
+| `services/lead_category_policy.py` | Side-effects de mudança de categoria (ex.: closing → desactiva bot); expõe `BOT_STRUCTURALLY_INACTIVE_CATEGORIES` |
+| `services/bot_global_pause.py` | Pausa/retomada em massa do bot por usuário — ver [`bot-global-pause.md`](bot-global-pause.md) |
 | `services/jobs_service.py` | Fila de jobs: create, claim (lease), complete, fail, backoff; agenda/cancela jobs de lembrete/briefing de appointment |
 | `services/briefing_service.py` | Agenda o job de dossiê pré-reunião (`schedule_briefing_job_for_appointment`), resolve `briefing_enabled`/`briefing_lead_time` do AI Profile |
 | `services/agent_type.py` | Resolve tipo de agente (`agent_1`, `agent_3`) do lead |
@@ -178,6 +180,8 @@ whatsapp_worker (polling)
 | `src/components/KanbanBoard.tsx` | Pipeline visual de leads; intercepta drag `to-prospect → qualification` para abrir `ProspectConfirmModal` |
 | `src/components/ProspectConfirmModal.tsx` | Modal de confirmação de prospecção (2 passos: sim/não → contexto); invoca PATCH com `prospection_context` |
 | `src/components/LeadCardDialog.tsx` | Modal completo do lead (qualificação, bot toggle, etc.) |
+| `src/components/CrmHeader.tsx` | Header do Kanban: busca, botão de pausa geral do bot, tema, novo lead — ver [`bot-global-pause.md`](bot-global-pause.md) |
+| `src/components/BotPauseResumeDialog.tsx` | Popup de retomada da pausa geral (2 modos) |
 | `src/components/agente/CamadaFluxoVenda.tsx` | Builder visual da Camada 7 (blocos, triggers, RuleBuilderModal) |
 | `src/components/agente/CamadaPipeline.tsx` | Configuração de pipeline: buffer, delays, agent_mode |
 | `src/components/playground/PlaygroundChat.tsx` | Input do playground: texto, áudio, modo lote |
