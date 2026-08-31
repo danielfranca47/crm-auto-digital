@@ -132,7 +132,7 @@ test_phase2_direct_question_reply_priority.py -q` deve reportar `0 failed`.
 
 | # | Commit | O que foi implementado |
 |---|---|---|
-| 1 | `<a preencher>` | Fase 2 completa — 4 testes corrigidos (Causa 2) |
+| 1 | `dd81ac7` | Fase 2 completa — 4 testes corrigidos (Causa 2) |
 
 ### Relatório da Fase 2 — o que mudou na prática
 
