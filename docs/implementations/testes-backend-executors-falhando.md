@@ -159,7 +159,7 @@ precisava das Causas 1 e 2, não só da 3 — mesmo padrão de sobreposição j�
 
 | # | Commit | O que foi implementado |
 |---|---|---|
-| 1 | `<a preencher>` | Fase 3 completa — 3 testes corrigidos (Causa 3, com Causas 1+2 sobrepostas em 1 deles) |
+| 1 | `ba77df4` | Fase 3 completa — 3 testes corrigidos (Causa 3, com Causas 1+2 sobrepostas em 1 deles) |
 
 ### Relatório da Fase 3 — o que mudou na prática
 
