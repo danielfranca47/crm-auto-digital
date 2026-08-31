@@ -348,7 +348,7 @@ O flag `bot_disabled` na tabela `leads` (backend-crm) permite desactivar o agent
 | Campo | Tipo | Descrição |
 |---|---|---|
 | `bot_disabled` | `INTEGER` (0/1) | `1` = agente desactivado para este lead |
-| `bot_disabled_reason` | `TEXT NULL` | Motivo: `"manual_disable"`, `"category_closing"`, `"category_disqualified"`, `"category_prospect_refused"`, `"media_fallback"`, `"meeting_scheduled"`, `"category_checkin_closed"` |
+| `bot_disabled_reason` | `TEXT NULL` | Motivo: `"manual_disable"`, `"category_closing"`, `"category_disqualified"`, `"category_prospect_refused"`, `"media_fallback"`, `"meeting_scheduled"`, `"category_checkin_closed"`, `"global_pause"` |
 
 **Fontes de desactivação:**
 - **Manual:** utilizador clica "Desativar bot" no `LeadCardDialog`; confirma modal com checkbox
@@ -357,6 +357,7 @@ O flag `bot_disabled` na tabela `leads` (backend-crm) permite desactivar o agent
 - **Automático (media_fallback):** quando `media_fallback="pausar"` e chega mensagem de mídia inválida
 - **Automático (reunião confirmada):** `meeting_scheduler.handle_meeting_scheduled()` desactiva o bot ao confirmar uma reunião (`agent_mode=agenda`) — ver "Gestão pós-confirmação" abaixo
 - **Automático (fechamento de check-in):** `_maybe_redisable_bot_after_checkin_close()` desactiva o bot de novo (`bot_disabled_reason="category_checkin_closed"`) quando o check-in automático de cliente inativo (`followup_variant=client_checkin`) termina sem conversa activa — só se o lead ainda estiver em `client-list`. Ver [`followup.md`](followup.md)
+- **Pausa geral (bulk):** botão único no header do Kanban desactiva todos os leads activos do usuário de uma vez (`bot_disabled_reason="global_pause"`), com um kill switch adicional no gate de inbound que bloqueia até leads novos criados durante a pausa. Ver [`bot-global-pause.md`](bot-global-pause.md)
 
 **Reactivação:** botão "Reativar bot" no alert block do `LeadCardDialog`. Quando `bot_disabled_reason="manual_disable"`, exibe modal de aviso adicional. Para `bot_disabled_reason="meeting_scheduled"`, a reactivação também acontece automaticamente quando o lead cancela a reunião pela IA (ver abaixo). Para clientes em `client-list` (repouso normal: bot desligado), o check-in automático reactiva o bot sozinho ao iniciar (`start_client_checkin_followup()`) e desactiva de novo ao fechar — ver [`followup.md`](followup.md).
 
