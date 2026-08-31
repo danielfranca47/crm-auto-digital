@@ -137,3 +137,45 @@ isto torna-se urgente rapidamente à medida que mais utilizadores reconectam.
 nova, tentar apagar/desligar a antiga na UazAPI (se existir endpoint para
 isso), ou pelo menos confirmar junto do suporte da UazAPI se instâncias
 `disconnected` contam para algum limite.
+
+---
+
+## M5 — Verificação periódica de status das conexões (health-check)
+
+**Prioridade:** BAIXA — rebaixada de "Urgente" em 31/08/2026
+
+**Contexto:** movido de `docs/implementations/whatsapp-status-healthcheck.md`
+(nasceu como "Ajuste possível" na graduação de `alerta-desconexao-whatsapp.md`).
+Motivação original: o alerta por email de desconexão depende inteiramente do
+webhook `event="connection"` da UazAPI chegar — se a entrega falhar
+(instabilidade de rede, `CRM_PUBLIC_BASE_URL` fora do ar, etc.), o status
+volta a ficar "congelado" sem ninguém ser avisado. Este item propunha uma
+rede de segurança independente: um job periódico a consultar
+`GET /instance/status` diretamente, sem depender do webhook.
+
+**Por que a prioridade baixou:** a causa raiz que motivava o "Urgente"
+original (utilizadores a ficar sem saber que o WhatsApp caiu) já está
+resolvida por outro caminho — ver M3, acima (produção apontava para o
+servidor free da UazAPI, corrigido em 30/08/2026). Durante os testes reais
+desta investigação, o caminho do webhook funcionou de forma consistente em
+todas as reconexões — sem nenhuma falha de entrega observada. O risco que
+este item protege continua real em teoria (rede pode falhar), mas deixou de
+ser a explicação provável de um problema atual.
+
+**Ainda vale a pena no futuro:** sim, como rede de segurança de baixo custo
+— mas sem necessidade de avançar para Plan Mode agora. Reavaliar se algum
+caso real de "status congelado sem aviso" voltar a acontecer apesar da
+correção do M3.
+
+**Diagnóstico já levantado (reaproveitar quando for avaliado):**
+- Definir a frequência do health-check (ex.: a cada N minutos por conexão
+  ativa) — balancear deteção rápida vs. carga extra na UazAPI.
+- Decidir onde roda: novo job em `backend-executors` (mesmo padrão de
+  `whatsapp.followup.tick`), ou um cron simples no `backend-core`.
+- Reaproveitar `uazapi_admin.get_status` + a lógica de transição
+  active→inactive + `render_whatsapp_disconnected_email` já criadas em
+  `alerta-desconexao-whatsapp.md` — extrair para função partilhada entre o
+  endpoint do webhook e este health-check, evitar duplicar o disparo do
+  email.
+- Confirmar se a consulta corre para todas as conexões ou só as marcadas
+  como "active" no banco.
