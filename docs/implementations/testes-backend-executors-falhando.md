@@ -186,7 +186,7 @@ negócio equivalente continua presente — não é regressão, só mudança de r
 
 | # | Commit | O que foi implementado |
 |---|---|---|
-| 1 | `<a preencher>` | Fase 4 completa — 2 testes corrigidos (Causa 4). Suíte completa: 288 passed, 0 failed |
+| 1 | `91d10a0` | Fase 4 completa — 2 testes corrigidos (Causa 4). Suíte completa: 288 passed, 0 failed |
 
 ### Relatório da Fase 4 — o que mudou na prática
 
