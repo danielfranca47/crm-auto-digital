@@ -105,23 +105,44 @@ props e simplesmente não exibem o botão de pausa, sem precisar de mudança nel
 
 ## Checks de Validação
 
+Testado ao vivo em ambiente local isolado (backend-core + backend-crm + frontend-crm rodando
+a partir desta worktree, com usuário e leads de teste criados só para esta validação — nenhum
+dado real foi tocado).
+
 ### Cenário 1 — Pausa geral respeita categorias excluídas
-- [ ] Pausar com leads ativos em categorias variadas (incluindo `client-list`)
-- [ ] Confirmar: `client-list`/`prospect-refused`/`disqualified` não são tocados
+- [x] Pausar com leads ativos em categorias variadas (incluindo `client-list`)
+- [x] Confirmar: `client-list`/`prospect-refused`/`disqualified` não são tocados
+- **Validado em:** 31/08/2026 — 3 leads criados (`qualification`, `follow-up`, `client-list`);
+  ao pausar, toast confirmou "2 lead(s)" pausados (os 2 fora de `client-list`), e a API confirmou
+  `client-list` com `bot_disabled=0` intacto.
 
 ### Cenário 2 — Kill switch bloqueia lead novo durante a pausa
-- [ ] Simular inbound de número novo enquanto pausado
-- [ ] Confirmar: resposta `{"status": "skipped", "reason": "global_pause"}`, sem job de envio
+- [x] Simular inbound de número novo enquanto pausado
+- [x] Confirmar: resposta `{"status": "skipped", "reason": "global_pause"}`, sem job de envio
+- **Validado em:** 31/08/2026 — com `CRM_WHATSAPP_STUB` habilitado, POST em
+  `/webhooks/whatsapp/inbound` com telefone nunca visto retornou
+  `{"status":"skipped","lead_id":5,"job_id":null,"reason":"global_pause"}`; o lead foi criado
+  (apareceu no Kanban) mas com `bot_disabled=0` — a checagem de pausa geral bloqueou a resposta
+  independente do campo por lead, confirmando o kill switch real.
 
 ### Cenário 3 — Retomada "só os pausados pela pausa geral"
-- [ ] Ter 1 lead pausado manualmente antes + N pausados pela pausa geral
-- [ ] Retomar com essa opção → só os N voltam, o manual continua pausado
+- [x] Ter 1 lead pausado manualmente antes + N pausados pela pausa geral
+- [x] Retomar com essa opção → só os N voltam, o manual continua pausado
+- **Validado em:** 31/08/2026 — lead pausado manualmente (`bot_disabled_reason=manual_disable`)
+  antes da pausa geral continuou com `bot_disabled=1` após retomar com essa opção; os 2 leads com
+  `reason=global_pause` voltaram a `bot_disabled=0`.
 
 ### Cenário 4 — Retomada "reativar todos"
-- [ ] Mesmo cenário do Cenário 3, retomar com "todos"
-- [ ] Confirmar: o lead pausado manualmente também volta
+- [x] Mesmo cenário do Cenário 3, retomar com "todos"
+- [x] Confirmar: o lead pausado manualmente também volta
+- **Validado em:** 31/08/2026 — pausado novamente e retomado com "Reativar todos": o lead antes
+  pausado manualmente voltou a `bot_disabled=0`; `client-list` permaneceu intocado.
 
 ### Cenário 5 — UI (ícone, toasts, popup)
-- [ ] Ícone alterna Pause/Play corretamente
-- [ ] Toasts mostram contagem de leads afetados
-- [ ] Popup de retomada mostra as 2 opções com texto claro
+- [x] Ícone alterna Pause/Play corretamente
+- [x] Toasts mostram contagem de leads afetados
+- [x] Popup de retomada mostra as 2 opções com texto claro
+- **Validado em:** 31/08/2026 — botão muda de contorno normal para vermelho com título
+  "Bot pausado — clique para retomar" quando pausado; toasts "Bot pausado — N lead(s)..." e
+  "Bot retomado — N lead(s)..." apareceram corretamente; popup renderizou as 2 opções com as
+  descrições completas e radio pré-selecionado na primeira opção.
