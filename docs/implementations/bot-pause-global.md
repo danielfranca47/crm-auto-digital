@@ -88,7 +88,7 @@ Usuário clica "Retomar"
 
 | # | Commit | O que foi implementado |
 |---|---|---|
-| 1 | (a registrar) | botão no header + popup de retomada + integração com o contexto |
+| 1 | `d2215a8` | botão no header + popup de retomada + integração com o contexto |
 
 **Nota:** `botGlobalPaused`/`onTogglePause` viraram props opcionais em `CrmHeader` — outras
 páginas que reaproveitam o header (`ProspectionBoard.tsx`, `AssistenteIA.tsx`) não passam esses
