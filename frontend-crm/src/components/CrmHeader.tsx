@@ -1,5 +1,5 @@
 import { Button } from "./ui/button";
-import { Plus, BarChart3, Sun, Moon } from "lucide-react";
+import { Plus, BarChart3, Sun, Moon, Pause, Play } from "lucide-react";
 import { useTheme } from "../contexts/ThemeContext";
 import { SearchAutocomplete } from "./SearchAutocomplete";
 import { KanbanColumn } from "../types/crm";
@@ -10,6 +10,8 @@ interface CrmHeaderProps {
   onSearchChange: (term: string) => void;
   allColumns: KanbanColumn[];
   onLeadSelect?: (leadId: string) => void;
+  botGlobalPaused?: boolean;
+  onTogglePause?: () => void;
 }
 export function CrmHeader({
   onNewLead,
@@ -17,7 +19,9 @@ export function CrmHeader({
   searchTerm,
   onSearchChange,
   allColumns,
-  onLeadSelect
+  onLeadSelect,
+  botGlobalPaused = false,
+  onTogglePause
 }: CrmHeaderProps) {
   const {
     theme,
@@ -37,10 +41,22 @@ export function CrmHeader({
       />
       
       <div className="flex items-center space-x-3">
+        {onTogglePause && (
+          <Button
+            onClick={onTogglePause}
+            variant="ghost"
+            size="sm"
+            className={`border transition-smooth ${botGlobalPaused ? "border-destructive/40 text-destructive hover:bg-destructive/10" : "border-border hover:bg-muted"}`}
+            title={botGlobalPaused ? "Bot pausado — clique para retomar" : "Pausar bot para todos os leads"}
+          >
+            {botGlobalPaused ? <Play className="w-4 h-4" /> : <Pause className="w-4 h-4" />}
+          </Button>
+        )}
+
         <Button onClick={toggleTheme} variant="ghost" size="sm" className="border border-border hover:bg-muted transition-smooth" title={theme === 'dark' ? 'Mudar para tema claro' : 'Mudar para tema escuro'}>
           {theme === 'dark' ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
         </Button>
-        
+
         <Button onClick={onNewLead} className="gradient-primary text-white hover:shadow-glow transition-smooth" size="sm">
           <Plus className="w-4 h-4 mr-2" />
           Novo Lead

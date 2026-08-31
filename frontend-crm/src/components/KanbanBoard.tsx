@@ -27,6 +27,7 @@ import { leadDisplayName } from "@/utils/leadDisplayName";
 import { useToast } from "@/hooks/use-toast";
 import { Alert, AlertDescription, AlertTitle } from "./ui/alert";
 import { FollowUpTransitionModal } from "./FollowUpTransitionModal";
+import { BotPauseResumeDialog } from "./BotPauseResumeDialog";
 import { ProspectConfirmModal } from "./ProspectConfirmModal";
 import { useNotifications } from "@/hooks/useNotifications";
 import { SALES_FLOW_PHASES_BY_AGENT_MODE } from "@/types/agente";
@@ -49,10 +50,50 @@ export function KanbanBoard({ onDashboard }: KanbanBoardProps) {
     leadsError,
     reloadAllLeads,
     setLeadNextAction,
+    botGlobalPaused,
+    pauseAllBots,
+    resumeAllBots,
   } = useLeads();
   const { data: appointments = [] } = useAppointments();
   const cancelAppointment = useCancelAppointment();
   const { toast } = useToast();
+  const [isResumeDialogOpen, setIsResumeDialogOpen] = useState(false);
+
+  const handleTogglePause = async () => {
+    if (!botGlobalPaused) {
+      try {
+        const count = await pauseAllBots();
+        toast({
+          title: "Bot pausado",
+          description: `${count} lead(s) tiveram o bot pausado.`,
+        });
+      } catch (error: any) {
+        toast({
+          title: "Erro ao pausar o bot",
+          description: error?.message ?? "Não foi possível pausar o bot para os leads.",
+          variant: "destructive",
+        });
+      }
+      return;
+    }
+    setIsResumeDialogOpen(true);
+  };
+
+  const handleConfirmResume = async (mode: "previously_paused" | "all") => {
+    try {
+      const count = await resumeAllBots(mode);
+      toast({
+        title: "Bot retomado",
+        description: `${count} lead(s) voltaram a receber respostas automáticas.`,
+      });
+    } catch (error: any) {
+      toast({
+        title: "Erro ao retomar o bot",
+        description: error?.message ?? "Não foi possível retomar o bot para os leads.",
+        variant: "destructive",
+      });
+    }
+  };
 
   const sensors = useSensors(
     useSensor(MouseSensor, {
@@ -435,6 +476,14 @@ export function KanbanBoard({ onDashboard }: KanbanBoardProps) {
         onSearchChange={setSearchTerm}
         allColumns={allColumns}
         onLeadSelect={handleOpenCard}
+        botGlobalPaused={botGlobalPaused}
+        onTogglePause={handleTogglePause}
+      />
+
+      <BotPauseResumeDialog
+        open={isResumeDialogOpen}
+        onOpenChange={setIsResumeDialogOpen}
+        onConfirm={handleConfirmResume}
       />
 
       <main className="p-6">

@@ -557,6 +557,7 @@ function LeadCardDialogBody({
     if (rawReason === "category_disqualified") return "Desqualificado";
     if (rawReason === "category_prospect_refused") return "Prospecção recusada";
     if (rawReason === "manual_disable") return "Desativado manualmente";
+    if (rawReason === "global_pause") return "Pausado pelo botão geral";
     if (rawReason) return rawReason;
     if (currentLead.category === "closing") return "Closing (humano assume)";
     return "Motivo indisponível";

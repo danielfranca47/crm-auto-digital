@@ -55,11 +55,23 @@ Usuário clica "Retomar"
 | `backend-crm/routes/bot_pause.py` (novo) | `GET /status`, `POST /pause`, `POST /resume` |
 | `backend-crm/app.py` | `include_router(bot_pause.router)` |
 
+### Commits Fase 1
+
+| # | Commit | O que foi implementado |
+|---|---|---|
+| 1 | `bff0909` | schema + serviço + rotas do backend (testado manualmente com script funcional, ver relato abaixo) |
+
 ### Fase 2 — Kill switch no pipeline de inbound
 
 | Arquivo | O que muda |
 |---|---|
 | `backend-crm/services/whatsapp_inbound/inbound_handler.py` | Checagem adicional de `bot_global_pause_state.is_paused` no bloco de skip (~linha 480-499) |
+
+### Commits Fase 2
+
+| # | Commit | O que foi implementado |
+|---|---|---|
+| 1 | `4bd1095` | checagem de pausa geral antes do bot_disabled por lead no inbound handler |
 
 ### Fase 3 — Frontend: botão + popup de retomada
 
@@ -71,6 +83,16 @@ Usuário clica "Retomar"
 | `frontend-crm/src/components/KanbanBoard.tsx` | Orquestra clique → pausa direta ou abre popup de retomada |
 | `frontend-crm/src/components/BotPauseResumeDialog.tsx` (novo) | Popup com as 2 opções de retomada |
 | `frontend-crm/src/components/LeadCardDialog.tsx` | Mapeia `bot_disabled_reason="global_pause"` para texto amigável |
+
+### Commits Fase 3
+
+| # | Commit | O que foi implementado |
+|---|---|---|
+| 1 | (a registrar) | botão no header + popup de retomada + integração com o contexto |
+
+**Nota:** `botGlobalPaused`/`onTogglePause` viraram props opcionais em `CrmHeader` — outras
+páginas que reaproveitam o header (`ProspectionBoard.tsx`, `AssistenteIA.tsx`) não passam esses
+props e simplesmente não exibem o botão de pausa, sem precisar de mudança nelas.
 
 ---
 
