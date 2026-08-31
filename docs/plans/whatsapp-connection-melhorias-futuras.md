@@ -80,16 +80,29 @@ além do agente" em vez de um aviso genérico sempre visível.
 conta afectada e confirmar se a queda pára de acontecer) — sem essa
 confirmação, não faz sentido avançar para Plan Mode.
 
-**Atualização (30/08/2026):** teste real em curso não confirmou esta causa —
-bot continuou a responder normalmente com WhatsApp Web aberto em paralelo,
-mesmo depois de 20+ min. A causa principal encontrada foi outra: produção
-estava a apontar para o servidor free da UazAPI em vez do pago
-(`UAZAPI_BASE_URL`/`UAZAPI_ADMIN_TOKEN` no Railway nunca tinham sido
-atualizados após a migração documentada em 12/08/2026 — só o `.env` local
-tinha sido alterado). Corrigido diretamente nas variáveis de ambiente do
-Railway (`backend-core` e `backend-crm`) em 30/08/2026. Este item (M3) e o
-M2 acima ficam com prioridade reduzida — a causa raiz provável já não é
-conflito de sessão.
+**Atualização (31/08/2026) — teste concluído, causa NÃO confirmada:** número
+de teste (`+351 961649355`) ficou ligado ~90 minutos com o WhatsApp Web
+aberto em paralelo (Opera) o tempo todo, incluindo uso ativo (envio de
+ficheiro). Bot respondeu normalmente a mensagens de teste em pelo menos 3
+verificações espaçadas ao longo desse período, sem nenhum evento de
+desconexão nos logs. Conflito de sessão **não é** a causa principal do
+problema original.
+
+A causa principal encontrada foi outra: produção estava a apontar para o
+servidor free da UazAPI em vez do pago (`UAZAPI_BASE_URL`/`UAZAPI_ADMIN_TOKEN`
+no Railway nunca tinham sido atualizados após a migração documentada em
+12/08/2026 — só o `.env` local tinha sido alterado). Corrigido diretamente
+nas variáveis de ambiente do Railway (`backend-core` e `backend-crm`) em
+30/08/2026 — essa é, com alta confiança, a explicação real do problema
+relatado por todos os utilizadores.
+
+**Consequência para M2 e M3:** ambos ficam **descartados/não-prioritários**
+— nasceram de uma hipótese que o teste real não confirmou. O aviso estático
+já publicado em produção (`ConexaoNumero.tsx`, ver
+`docs/architecture/whatsapp-connection.md#deteção-de-queda-de-sessão`)
+fica como está por agora (não é falso — usar vários aparelhos ainda é um
+risco genérico documentado por terceiros — mas deixa de ser tratado como
+a explicação provável para quedas futuras).
 
 ---
 
