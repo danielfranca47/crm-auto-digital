@@ -31,6 +31,14 @@ def test_consultivo_never_returns_won():
 
 def test_agenda_blocks_closing_without_booking_fields():
     context = _base_context("agenda", text="quero fechar")
+    # Desde "AI Profile como única fonte de verdade" (commit 13b826a), sem
+    # ai_profile.qualification_fields required_fields fica [] e a guardrail
+    # guardrail_agenda_missing_booking (decision_engine.py) nunca dispara.
+    context["ai_profile"]["qualification_fields"] = [
+        {"key": "service_interest", "mode": "required"},
+        {"key": "availability_window", "mode": "required"},
+        {"key": "price_acceptance", "mode": "required"},
+    ]
     mother = MotherDecision(route_to="closing", perceived_category="closing", confidence=0.8, reason="fechar")
     child = ChildResult(
         message_text="ok",

@@ -25,3 +25,30 @@ temporário.
 **Não é urgente** — os testes falham só nesse passo de limpeza (o teardown),
 não na asserção em si; não bloqueia verificação de mudanças de produto, só
 polui a saída da suíte completa no Windows.
+
+---
+
+## M2 — Avisar quando `ai_profile` de teste não configura `qualification_fields`
+
+**Prioridade: BAIXA**
+
+> Contexto: item deixado de fora da graduação de
+> `docs/implementations/testes-backend-executors-falhando.md` (31/08/2026).
+
+**Em palavras simples:** desde a mudança "AI Profile como única fonte de
+verdade" (commit `13b826a`), um `ai_profile` de teste sem
+`qualification_fields` configurado faz `required_fields` ficar `[]`
+silenciosamente — sem nenhum erro ou aviso. Isso foi a causa camuflada por
+trás de várias falhas de teste na sessão de 31/08/2026 (o teste parecia estar
+testando "campo obrigatório faltando", mas na prática nenhum campo era
+obrigatório).
+
+**O que precisaria existir:** um fixture de teste compartilhado (ou helper)
+em `backend-executors/tests/` que documente esse comportamento explicitamente
+— por exemplo, uma função `consultivo_profile(**overrides)` /
+`agenda_profile(**overrides)` que já venha com os campos obrigatórios
+default preenchidos, para não repetir a mesma descoberta caso a caso em
+futuras sessões de debugging.
+
+**Não é urgente** — é uma conveniência de DX para testes futuros, sem
+impacto em produção; a suíte atual já está 100% verde sem isso.

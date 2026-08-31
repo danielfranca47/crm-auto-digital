@@ -65,7 +65,17 @@ from app.services import decision_engine
 def test_followup_tick_forces_followup_child_route(monkeypatch):
     context = {
         "lead": {"id": 10, "user_id": 99, "category": "follow-up"},
-        "ai_profile": {"agent_mode": "agenda"},
+        # qualification_fields explícito: desde "AI Profile como única fonte de verdade"
+        # (commit 13b826a), sem isto required_fields fica [] e o motor auto-promove para
+        # "apresentation" em vez de manter route_to="qualification" (mockado abaixo).
+        "ai_profile": {
+            "agent_mode": "agenda",
+            "qualification_fields": [
+                {"key": "service_interest", "mode": "required"},
+                {"key": "availability_window", "mode": "required"},
+                {"key": "price_acceptance", "mode": "required"},
+            ],
+        },
         "playbook": {},
         "metadata": {
             "inbound_message_text": "followup_tick_auto_trigger",
@@ -75,7 +85,9 @@ def test_followup_tick_forces_followup_child_route(monkeypatch):
                 "followup_attempts": 1,
             },
         },
-        "history": [],
+        # outbound_count>=1 evita que _enforce_greeting_first force route_to="recepcao"
+        # (tick de follow-up pressupõe conversa já em andamento, não o primeiro contato).
+        "history": [{"model": "outbound", "body": "Oi! Tudo bem?"}],
         "job": {"id": 123, "type": "whatsapp.followup.tick", "payload": {"lead_id": 10, "user_id": 99}},
         "qualification_state": {
             "exists": True,
@@ -93,7 +105,7 @@ def test_followup_tick_forces_followup_child_route(monkeypatch):
 
     calls = {}
 
-    def _child(route: str, _prompt: str):
+    def _child(route: str, _prompt: str, **_kwargs):
         calls["route"] = route
         return '{"message_text":"mensagem follow-up","did_complete_phase":false,"recommended_next_category":null,"outcome":null,"kanban_highlight":null,"signals":[],"confidence":0.8}'
 
