@@ -72,6 +72,7 @@ substituir/manter treinamento ao importar.
 
 | # | Commit | O que foi implementado |
 |---|---|---|
+| 1 | `a3e8d81` | frontend: aba "Zerar treinamento" + escolha substituir/manter na importação |
 
 ---
 
