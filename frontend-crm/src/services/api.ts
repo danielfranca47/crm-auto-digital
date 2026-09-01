@@ -1694,6 +1694,9 @@ export const api = {
     exportTraining: async (): Promise<{ items: import('../types/agente').TrainingItem[] }> =>
       apiClient.get<{ items: import('../types/agente').TrainingItem[] }>("/playground/training/export"),
 
+    resetTraining: async (): Promise<{ deleted: number }> =>
+      apiClient.delete<{ deleted: number }>("/playground/training"),
+
     importTraining: async (
       items: import('../types/agente').TrainingItem[]
     ): Promise<{ imported: number; deleted: number }> =>

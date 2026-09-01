@@ -1492,6 +1492,28 @@ def playground_export_training(
     return {"items": rows}
 
 
+@router.delete("/training")
+def playground_reset_training(
+    current_user: CurrentUser = Depends(require_crm_access),
+) -> dict:
+    """
+    Zera todo o treinamento (feedback do Playground) do usuário atual,
+    sem tocar no AI Profile. Usado para recomeçar o aprendizado do zero.
+    """
+    user_id = str(current_user.id)
+    with get_connection() as conn:
+        cur = conn.cursor()
+        cur.execute(
+            "DELETE FROM playground_training_items WHERE user_id = ?",
+            (user_id,),
+        )
+        deleted = cur.rowcount
+        conn.commit()
+
+    logger.info("training_reset user_id=%s deleted=%s", user_id, deleted)
+    return {"deleted": deleted}
+
+
 @router.post("/training/import")
 def playground_import_training(
     body: TrainingImportRequest,
