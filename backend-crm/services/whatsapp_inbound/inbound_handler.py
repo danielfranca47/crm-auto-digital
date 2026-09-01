@@ -214,6 +214,28 @@ def _apply_media_fallback(
     if behavior == "ignorar":
         return {"status": "ignored", "reason": "media_fallback_ignore"}
 
+    with get_connection() as _conn_pause:
+        _pause_row = _conn_pause.execute(
+            "SELECT is_paused FROM bot_global_pause_state WHERE user_id = ?", (user_id,)
+        ).fetchone()
+        if _pause_row and int(_pause_row["is_paused"] or 0) == 1:
+            logger.info(
+                "[media_fallback] user_id=%s skip reason=global_pause",
+                user_id,
+            )
+            return {"status": "skipped", "reason": "global_pause"}
+
+        _lead_row = _conn_pause.execute(
+            "SELECT bot_disabled FROM leads WHERE user_id = ? AND phone = ? LIMIT 1",
+            (user_id, phone),
+        ).fetchone()
+        if _lead_row and int(_lead_row["bot_disabled"] or 0) == 1:
+            logger.info(
+                "[media_fallback] user_id=%s skip reason=bot_disabled",
+                user_id,
+            )
+            return {"status": "skipped", "reason": "bot_disabled"}
+
     # "continuar" ou "pausar": enviar mensagem ao lead directamente (sem job queue)
     # whatsapp.send.local é processado pelo agent-local, não pelo executor — usar envio directo
     if msg:
