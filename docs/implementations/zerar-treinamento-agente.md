@@ -57,6 +57,15 @@ precisar importar um arquivo.
 |---|---|---|
 | 1 | `773a240` | backend: DELETE /playground/training + client resetTraining() |
 
+### Relatório da Fase 1 — o que mudou na prática
+
+**Antes:** não existia nenhuma forma (nem na tela, nem por trás dos panos) de
+apagar o treinamento do agente sem importar um arquivo por cima.
+**Agora:** existe uma rota no servidor que apaga todo o treinamento do
+usuário atual. Ainda não aparece nada na tela — isso é a Fase 2.
+**Para validar:** nenhum cenário isolado; valida-se junto com os Cenários da
+Fase 2, abaixo.
+
 ---
 
 ### Fase 2 — Frontend: aba "Zerar treinamento" + escolha na importação
@@ -73,6 +82,21 @@ substituir/manter treinamento ao importar.
 | # | Commit | O que foi implementado |
 |---|---|---|
 | 1 | `a3e8d81` | frontend: aba "Zerar treinamento" + escolha substituir/manter na importação |
+
+### Relatório da Fase 2 — o que mudou na prática
+
+**Antes:** o modal "Exportar / Importar agente" só tinha duas abas. Ao
+importar um arquivo com treinamento, ele sempre substituía o treinamento
+atual, sem opção de escolha — e não havia como zerar o treinamento sem
+importar um arquivo.
+**Agora:** o modal tem uma terceira aba, "Zerar treinamento", que apaga todo
+o treinamento da conta atual (exige marcar "Estou ciente que essa ação não
+pode ser desfeita" antes de habilitar o botão). Na aba "Importar", quando o
+arquivo escolhido inclui treinamento, aparecem dois botões de opção:
+"Substituir treinamento atual" (continua sendo o padrão pré-marcado) e
+"Manter treinamento atual" — se essa segunda opção for escolhida, só a
+configuração do agente é aplicada e o treinamento existente não é tocado.
+**Para validar:** Cenários P1, P2 e P3, abaixo.
 
 ---
 
