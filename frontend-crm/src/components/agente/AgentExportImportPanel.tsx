@@ -27,8 +27,9 @@ const EXPORT_EXCLUDE: (keyof AgentConfig)[] = [
   'payment_webhook_url',
 ];
 
-type Tab = 'export' | 'import';
+type Tab = 'export' | 'import' | 'reset';
 type ExportMode = 'without_training' | 'with_training';
+type TrainingImportChoice = 'replace' | 'keep';
 
 interface Props {
   config: AgentConfig;
@@ -62,6 +63,12 @@ export function AgentExportImportPanel({ config, onClose, onImportSuccess }: Pro
   const [importing, setImporting] = useState(false);
   const [importPartialError, setImportPartialError] = useState<string | null>(null);
   const [importSuccess, setImportSuccess] = useState<string | null>(null);
+  const [trainingImportChoice, setTrainingImportChoice] = useState<TrainingImportChoice>('replace');
+
+  const [resetAcknowledged, setResetAcknowledged] = useState(false);
+  const [resetting, setResetting] = useState(false);
+  const [resetError, setResetError] = useState<string | null>(null);
+  const [resetSuccess, setResetSuccess] = useState<string | null>(null);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -119,6 +126,7 @@ export function AgentExportImportPanel({ config, onClose, onImportSuccess }: Pro
     setImportError(null);
     setImportPartialError(null);
     setImportSuccess(null);
+    setTrainingImportChoice('replace');
 
     const reader = new FileReader();
     reader.onload = ev => {
@@ -135,6 +143,29 @@ export function AgentExportImportPanel({ config, onClose, onImportSuccess }: Pro
 
     // Reset input so the same file can be re-selected
     e.target.value = '';
+  }
+
+  // ── Reset ──────────────────────────────────────────────────────────────────
+
+  async function handleReset() {
+    if (!resetAcknowledged) return;
+    setResetting(true);
+    setResetError(null);
+    setResetSuccess(null);
+    try {
+      const result = await api.playground.resetTraining();
+      setResetSuccess(
+        result.deleted > 0
+          ? `${result.deleted} exemplo(s) de treinamento removido(s).`
+          : 'Não havia treinamento para remover.'
+      );
+      setResetAcknowledged(false);
+      onImportSuccess();
+    } catch (err) {
+      setResetError('Erro ao zerar o treinamento. Tente novamente.');
+    } finally {
+      setResetting(false);
+    }
   }
 
   async function handleImport() {
@@ -160,8 +191,11 @@ export function AgentExportImportPanel({ config, onClose, onImportSuccess }: Pro
 
       await api.agente.saveConfig(mergedConfig);
 
+      const hasTraining = importPayload.includes_training && importPayload.training.length > 0;
+      const willReplaceTraining = hasTraining && trainingImportChoice === 'replace';
+
       // Import training (may fail independently — show partial error)
-      if (importPayload.includes_training && importPayload.training.length > 0) {
+      if (willReplaceTraining) {
         try {
           await api.playground.importTraining(importPayload.training);
         } catch {
@@ -174,9 +208,10 @@ export function AgentExportImportPanel({ config, onClose, onImportSuccess }: Pro
         }
       }
 
-      const trainingMsg =
-        importPayload.includes_training && importPayload.training.length > 0
-          ? ` e ${importPayload.training.length} exemplo(s) de treinamento`
+      const trainingMsg = willReplaceTraining
+        ? ` e ${importPayload.training.length} exemplo(s) de treinamento`
+        : hasTraining
+          ? '. Treinamento atual mantido'
           : '';
       setImportSuccess(`Agente "${importPayload.agent_name}" importado com sucesso${trainingMsg}.`);
       onImportSuccess();
@@ -226,6 +261,7 @@ export function AgentExportImportPanel({ config, onClose, onImportSuccess }: Pro
         <div style={{ display: 'flex', borderBottom: '1px solid var(--o-b1)', marginBottom: 0 }}>
           <button style={tabStyle('export')} onClick={() => setActiveTab('export')}>Exportar</button>
           <button style={tabStyle('import')} onClick={() => setActiveTab('import')}>Importar</button>
+          <button style={tabStyle('reset')} onClick={() => setActiveTab('reset')}>Zerar treinamento</button>
         </div>
 
         {/* Body */}
@@ -330,11 +366,52 @@ export function AgentExportImportPanel({ config, onClose, onImportSuccess }: Pro
                 </div>
               )}
 
+              {/* Training choice — só quando o arquivo inclui treinamento */}
+              {importPayload && importPayload.includes_training && importPayload.training.length > 0 && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  <label style={{ fontSize: 13, fontWeight: 500, color: 'var(--o-text)' }}>Treinamento do arquivo:</label>
+
+                  <label style={{ display: 'flex', alignItems: 'flex-start', gap: 10, cursor: 'pointer' }}>
+                    <input
+                      type="radio"
+                      name="trainingImportChoice"
+                      value="replace"
+                      checked={trainingImportChoice === 'replace'}
+                      onChange={() => setTrainingImportChoice('replace')}
+                      style={{ marginTop: 3 }}
+                    />
+                    <div>
+                      <div style={{ fontSize: 13, fontWeight: 500, color: 'var(--o-text)' }}>Substituir treinamento atual</div>
+                      <div style={{ fontSize: 12, color: 'var(--o-sub)' }}>
+                        Remove o treinamento existente e aplica o do arquivo.
+                      </div>
+                    </div>
+                  </label>
+
+                  <label style={{ display: 'flex', alignItems: 'flex-start', gap: 10, cursor: 'pointer' }}>
+                    <input
+                      type="radio"
+                      name="trainingImportChoice"
+                      value="keep"
+                      checked={trainingImportChoice === 'keep'}
+                      onChange={() => setTrainingImportChoice('keep')}
+                      style={{ marginTop: 3 }}
+                    />
+                    <div>
+                      <div style={{ fontSize: 13, fontWeight: 500, color: 'var(--o-text)' }}>Manter treinamento atual</div>
+                      <div style={{ fontSize: 12, color: 'var(--o-sub)' }}>
+                        Aplica só a configuração do arquivo; o treinamento existente não é alterado.
+                      </div>
+                    </div>
+                  </label>
+                </div>
+              )}
+
               {/* Warning */}
               {importPayload && (
                 <div style={{ fontSize: 12, color: 'var(--o-warning-text, #7b4f12)', background: 'var(--o-warning-bg, #fffbeb)', border: '1px solid var(--o-warning-border, #f6e05e)', borderRadius: 6, padding: '8px 12px' }}>
                   ⚠️ A importação vai substituir a configuração atual do agente. Esta ação não pode ser desfeita.
-                  {importPayload.includes_training && importPayload.training.length > 0 && (
+                  {importPayload.includes_training && importPayload.training.length > 0 && trainingImportChoice === 'replace' && (
                     <> O treinamento existente também será substituído.</>
                   )}
                 </div>
@@ -355,11 +432,49 @@ export function AgentExportImportPanel({ config, onClose, onImportSuccess }: Pro
               )}
             </div>
           )}
+
+          {/* ── Tab: Zerar treinamento ─────────────────────── */}
+          {activeTab === 'reset' && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+              <p style={{ fontSize: 13, color: 'var(--o-sub)', margin: 0 }}>
+                Remove todos os exemplos de treinamento (feedback do Playground) desta conta, sem alterar a configuração do agente. Use para recomeçar o aprendizado do zero.
+              </p>
+
+              <div style={{ fontSize: 12, color: 'var(--o-warning-text, #7b4f12)', background: 'var(--o-warning-bg, #fffbeb)', border: '1px solid var(--o-warning-border, #f6e05e)', borderRadius: 6, padding: '8px 12px' }}>
+                ⚠️ Esta ação não pode ser desfeita. Recomendamos exportar o treinamento atual (aba "Exportar") antes de zerar, caso queira recuperá-lo depois.
+              </div>
+
+              <div className="o-field" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <input
+                  type="checkbox"
+                  id="reset-training-ack"
+                  checked={resetAcknowledged}
+                  onChange={e => setResetAcknowledged(e.target.checked)}
+                  style={{ cursor: 'pointer' }}
+                />
+                <label htmlFor="reset-training-ack" style={{ cursor: 'pointer', fontSize: 12.5 }}>
+                  Estou ciente que essa ação não pode ser desfeita
+                </label>
+              </div>
+
+              {resetError && (
+                <div style={{ fontSize: 12, color: 'var(--o-danger, #e53e3e)', padding: '8px 12px', background: 'var(--o-danger-bg, #fff5f5)', borderRadius: 6 }}>
+                  {resetError}
+                </div>
+              )}
+
+              {resetSuccess && (
+                <div style={{ fontSize: 13, color: 'var(--o-success-text, #276749)', background: 'var(--o-success-bg, #f0fff4)', border: '1px solid var(--o-success-border, #9ae6b4)', borderRadius: 6, padding: '8px 12px' }}>
+                  ✓ {resetSuccess}
+                </div>
+              )}
+            </div>
+          )}
         </div>
 
         {/* Footer */}
         <div className="o-modal-footer">
-          {activeTab === 'export' ? (
+          {activeTab === 'export' && (
             <>
               <button
                 className="o-btn o-btn-primary"
@@ -370,7 +485,8 @@ export function AgentExportImportPanel({ config, onClose, onImportSuccess }: Pro
               </button>
               <button className="o-btn" onClick={onClose}>Cancelar</button>
             </>
-          ) : (
+          )}
+          {activeTab === 'import' && (
             <>
               <button
                 className="o-btn o-btn-primary"
@@ -378,6 +494,18 @@ export function AgentExportImportPanel({ config, onClose, onImportSuccess }: Pro
                 disabled={!importPayload || importing || !!importSuccess}
               >
                 {importing ? 'Importando…' : 'Confirmar importação'}
+              </button>
+              <button className="o-btn" onClick={onClose}>Cancelar</button>
+            </>
+          )}
+          {activeTab === 'reset' && (
+            <>
+              <button
+                className="o-btn o-btn-primary"
+                onClick={handleReset}
+                disabled={!resetAcknowledged || resetting || !!resetSuccess}
+              >
+                {resetting ? 'Zerando…' : 'Zerar treinamento'}
               </button>
               <button className="o-btn" onClick={onClose}>Cancelar</button>
             </>

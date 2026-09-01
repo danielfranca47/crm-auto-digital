@@ -55,6 +55,7 @@ precisar importar um arquivo.
 
 | # | Commit | O que foi implementado |
 |---|---|---|
+| 1 | `773a240` | backend: DELETE /playground/training + client resetTraining() |
 
 ---
 
