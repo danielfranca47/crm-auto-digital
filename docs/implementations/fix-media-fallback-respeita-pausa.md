@@ -91,7 +91,16 @@ if msg:
 
 | # | Commit | O que foi implementado |
 |---|---|---|
-| 1 | _(a registrar)_ | fix: `_apply_media_fallback` respeita pausa global e por lead |
+| 1 | `572b99c` | fix: `_apply_media_fallback` respeita pausa global e por lead |
+
+**Detalhes do commit `572b99c`:**
+- `backend-crm/services/whatsapp_inbound/inbound_handler.py` — `_apply_media_fallback`: duas queries `SELECT` (`bot_global_pause_state`, `leads.bot_disabled`) adicionadas antes do envio via `send_whatsapp_direct`
+
+### Relatório da Fase 1 — o que mudou na prática
+
+**Antes:** ao pausar o bot (globalmente pelo botão do Kanban, ou individualmente num lead), o bot ainda respondia sozinho com uma mensagem automática sempre que o lead enviava uma imagem, vídeo, figurinha, documento ou áudio não transcrito.
+**Agora:** essa resposta automática de mídia só é enviada se o bot estiver realmente ativo — se estiver pausado (global ou naquele lead específico), nada é enviado.
+**Para validar:** Cenário C1 e C2, abaixo.
 
 ---
 
