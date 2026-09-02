@@ -134,6 +134,7 @@ jobs já resolvidos.
 | `response_style` | string | `"active"` (pergunta proativamente) ou `"passive"` (infere silenciosamente) |
 | `qualification_fields` | list\|null | Campos de qualificação configurados via UI — substitui os defaults hardcoded quando presente. Cada entrada: `{key, label, question, passive_hint, mode, group?, qualify_if?, disqualify_if?}` |
 | `qualification_extraction_tolerance` | string (enum) | Calibra o quão literal o extractor de campos de qualificação (`field_extractor.py`) precisa ser (padrão: `"equilibrado"`). Ver enum abaixo e [`pipeline-phases.md`](pipeline-phases.md#extração-de-respostas--field_extractorpy-llm-dedicada) |
+| `nurture_vs_discard_rule` | string (enum)\|null | `"nurture"` (lead abaixo do score mínimo continua recebendo conteúdo, pode avançar depois) ou `"discard"` (arquivado imediatamente); padrão `"discard"` (`qualification_guardrails.py` trata `null`/ausente como `"discard"`). Editável em Camada Follow-up → "Nurture vs Descarte" (`CamadaFollowup.tsx`) |
 | `sales_flow` | object\|null | Fluxo de Venda — `{enabled, phases: [{id, blocks[]}]}`. Ver [`sales-flow.md`](sales-flow.md) |
 | `cold_outreach_channel` | string (enum)\|null | `whatsapp_only`\|`email_first`. **Não consumido por nenhum fluxo** — a escolha real de canal (WhatsApp/Email) da prospecção fria é por-lote, no agent-local (ver [`agent-local-app.md`](agent-local-app.md)), não uma preferência de perfil. Coluna mantida no schema e exposta em `admin-agents-contract.md` desde a v1 do cold outreach, sem UI de edição activa |
 | `offer_pack` | object\|null | JSON com configurações de oferta e comportamento de mídia (ver abaixo) |
@@ -249,6 +250,34 @@ genuinamente não têm coluna própria (ver "Campos do `offer_pack`" acima).
 
 `qualification_score_threshold` e `buying_signal_keywords` ainda têm este bug — ver
 `docs/plans/pipeline-configurable-fields.md`, Etapa J.
+
+---
+
+## Exportar / Importar / Zerar Treinamento do Agente
+
+`AgentExportImportPanel.tsx` (`frontend-crm/src/components/agente/`), acessível pelo
+botão "↕ Exportar / Importar" em `/ai-profile`, tem 3 abas:
+
+- **Exportar** — gera um `.json` (`schema: "crm-agent-export"`, `version: "1.0"`) com a
+  configuração do AI Profile (`{...config}`, exceto `operator_whatsapp`,
+  `payment_webhook_secret` e `payment_webhook_url`) e, opcionalmente, o treinamento
+  (itens de `playground_training_items` via `GET /api/playground/training/export`).
+- **Importar** — lê um `.json` exportado por este mesmo modal, valida `schema`/
+  `version`/campos obrigatórios (`agent_mode`, `name`) client-side, aplica a
+  configuração via `PUT /ai-profiles/me` (preservando os campos sensíveis da conta
+  atual). Se o arquivo inclui treinamento, o usuário escolhe **Substituir** (padrão —
+  remove o treinamento atual e aplica o do arquivo, via `POST /api/playground/training/import`,
+  que faz `DELETE` + `INSERT`) ou **Manter treinamento atual** (a importação de
+  treinamento é pulada por completo — só a configuração do agente é aplicada).
+- **Zerar treinamento** — `DELETE /api/playground/training` apaga todos os itens de
+  `playground_training_items` do usuário sem tocar no AI Profile. Usado para
+  recomeçar o aprendizado do zero ao reconfigurar um agente. Exige confirmação
+  explícita (checkbox de ciência) na UI, por ser irreversível.
+
+**Arquivos:** `backend-crm/routes/playground.py` (`playground_export_training`,
+`playground_import_training`, `playground_reset_training`),
+`frontend-crm/src/components/agente/AgentExportImportPanel.tsx`,
+`frontend-crm/src/services/api.ts` (`api.playground.exportTraining`/`importTraining`/`resetTraining`).
 
 ---
 
