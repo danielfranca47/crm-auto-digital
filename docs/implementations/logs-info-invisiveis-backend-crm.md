@@ -1,7 +1,7 @@
 # Logs INFO invisíveis em todo o backend-crm
 
-**Branch:** `worktree-fix+logs-info-invisiveis-backend-crm`
-**Status:** Em andamento
+**Branch:** `worktree-fix+logs-info-invisiveis-backend-crm` (já mergeada em `main` e pushada — commit `ea017ea`)
+**Status:** Em andamento — pendente: Cenário C3 (produção), aguardando confirmação de deploy do utilizador
 
 ---
 
