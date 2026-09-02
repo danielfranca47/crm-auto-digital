@@ -94,15 +94,40 @@ mudança é centralizada no arranque da app.
 | `backend-crm/app.py` | Chama `setup_logging(os.getenv("LOG_LEVEL", "INFO"))` logo após `load_dotenv()`, antes dos imports de `routes`/`services`. |
 | `backend-crm/.env.example` | Nova seção "LOGGING" documentando `LOG_LEVEL=INFO`. |
 
+### Commits Fase 1
+
+| # | Commit | O que foi implementado |
+|---|---|---|
+| 1 | `4df7db4` | `logging_setup.py` novo + chamada em `app.py` + `.env.example` documentado |
+
+### Relatório da Fase 1 — o que mudou na prática
+
+**Antes:** os logs de negócio (`logger.info(...)`) do backend-crm — mudança de
+categoria de lead, decisões de follow-up, eventos de webhook do WhatsApp, etc.
+— nunca apareciam nem localmente nem em produção (Railway), mesmo forçando
+`uvicorn --log-level info`. Só apareciam os logs automáticos do próprio
+uvicorn (ex.: `INFO: GET /api/leads ...`).
+
+**Agora:** o `backend-crm` configura o logger raiz no arranque da aplicação.
+Todo `logger.info(...)` já existente no código passa a aparecer no terminal
+(local) e nos logs do Railway (produção), com o nível controlável pela
+variável de ambiente `LOG_LEVEL` (default `INFO`).
+
+**Para validar:** Cenário C1 já foi validado nesta sessão (teste unitário do
+`setup_logging`, sem precisar da app completa — ver abaixo). Cenários C2
+(app local completa) e C3 (produção) ficam pendentes porque não há um
+`.venv` com as dependências instaladas neste ambiente e C3 depende de deploy.
+
 ---
 
 ## Checks de Validação
 
 ### Cenário C1 — Root logger emite INFO (unitário, sem app completa)
-- [ ] Rodar `python -c "..."` importando `logging_setup.setup_logging` e
+- [x] Rodar `python -c "..."` importando `logging_setup.setup_logging` e
   confirmar: antes de chamar `setup_logging('INFO')`, `logger.info(...)` não
   produz saída; depois de chamar, `logger.info(...)` e `logger.warning(...)`
   aparecem formatados (`timestamp LEVEL logger.name mensagem`).
+  **Validado em:** 02/09/2026 — confirmado exatamente esse comportamento.
 
 ### Cenário C2 — App real, ambiente local
 - [ ] Rodar `uvicorn app:app --port 8000` localmente (com `.venv` e
