@@ -149,7 +149,7 @@ não-vazia é truthy em JS, um perfil real vindo do backend com `"discard"` apar
 
 | # | Commit | O que foi implementado |
 |---|---|---|
-| 1 | *(a registrar)* | fix: nurture_vs_discard_rule como string em vez de boolean |
+| 1 | `60ba9ac` | fix: nurture_vs_discard_rule como string em vez de boolean |
 
 ### Relatório da Fase 3 — o que mudou na prática
 
