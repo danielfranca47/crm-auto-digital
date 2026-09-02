@@ -442,12 +442,12 @@ export function CamadaFollowup({ config, onUpdate }: CamadaFollowupProps) {
         </span>
       </div>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 14, marginBottom: 24 }}>
-        <div className="o-edit-card" onClick={() => onUpdate({ nurture_vs_discard_rule: !config.nurture_vs_discard_rule })}>
+        <div className="o-edit-card" onClick={() => onUpdate({ nurture_vs_discard_rule: config.nurture_vs_discard_rule === 'nurture' ? 'discard' : 'nurture' })}>
           <div className="font-mono-orion" style={{ fontSize: 8, letterSpacing: 2, textTransform: 'uppercase', color: 'var(--o-dim)', marginBottom: 6, display: 'flex', alignItems: 'center' }}>Nurture vs Descarte <FieldHelp text="Leads abaixo do score mínimo (configurado em Qualificação → Score mínimo): Nurture — continua recebendo conteúdo e pode avançar depois; Descarte — arquivado imediatamente." /></div>
-          <div style={{ fontSize: 13, color: 'var(--o-text)', marginBottom: 4 }}>{config.nurture_vs_discard_rule ? 'Nurture passivo' : 'Descarte imediato'}</div>
+          <div style={{ fontSize: 13, color: 'var(--o-text)', marginBottom: 4 }}>{config.nurture_vs_discard_rule === 'nurture' ? 'Nurture passivo' : 'Descarte imediato'}</div>
           <div style={{ fontSize: 11, color: 'var(--o-sub)', fontWeight: 300, marginBottom: 8 }}>Depende do "Score mínimo" em Camada 2 · Qualificação</div>
-          <span className={`o-badge ${config.nurture_vs_discard_rule ? 'o-badge-ok' : 'o-badge-warn'}`}>
-            {config.nurture_vs_discard_rule ? 'Nurture ativo' : 'Descarte'}
+          <span className={`o-badge ${config.nurture_vs_discard_rule === 'nurture' ? 'o-badge-ok' : 'o-badge-warn'}`}>
+            {config.nurture_vs_discard_rule === 'nurture' ? 'Nurture ativo' : 'Descarte'}
           </span>
           <span className="o-edit-arrow">›</span>
         </div>

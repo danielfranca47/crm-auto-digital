@@ -120,17 +120,59 @@ configuração do agente é aplicada e o treinamento existente não é tocado.
 
 ---
 
+## Fase 3 — Fix: `nurture_vs_discard_rule` tipado como boolean em vez de string (02/09/2026)
+
+### Problema identificado
+
+Achado lateral durante os testes da Fase 2 (Cenários P2/P3): `AgentConfig.nurture_vs_discard_rule`
+(`frontend-crm/src/types/agente.ts`) estava tipado e usado como `boolean` em todo o
+frontend, mas o backend (`backend-core/app/models/ai_profile.py`) sempre tratou a coluna
+como `Optional[str]` (`"nurture"` | `"discard"` | `null`, default `"discard"`).
+
+Isso não era só um problema de importação de arquivo — o toggle real da UI em
+"Camada Follow-up → Nurture vs Descarte" (`CamadaFollowup.tsx`) fazia
+`!config.nurture_vs_discard_rule`, transformando o valor em um boolean genuíno. Ao
+salvar essa camada, `PUT /ai-profiles/me` rejeitava com 422 (`"Input should be a valid
+string"`), impedindo o usuário de salvar qualquer alteração na camada Follow-up depois
+de mexer nesse toggle uma vez. Também havia um bug de leitura: como toda string
+não-vazia é truthy em JS, um perfil real vindo do backend com `"discard"` aparecia como
+"Nurture passivo" na tela (o inverso do valor real).
+
+### Correção
+
+| Arquivo | Mudança |
+|---|---|
+| `frontend-crm/src/types/agente.ts` | `nurture_vs_discard_rule: boolean` → `'nurture' \| 'discard' \| null`; default `false` → `'discard'` |
+| `frontend-crm/src/components/agente/CamadaFollowup.tsx` | Toggle e exibição do card "Nurture vs Descarte" passam a comparar `=== 'nurture'` em vez de truthiness; clique alterna explicitamente entre `'nurture'`/`'discard'` |
+
+### Commits Fase 3
+
+| # | Commit | O que foi implementado |
+|---|---|---|
+| 1 | *(a registrar)* | fix: nurture_vs_discard_rule como string em vez de boolean |
+
+### Relatório da Fase 3 — o que mudou na prática
+
+**Antes:** o card "Nurture vs Descarte" (Camada Follow-up) podia mostrar o estado
+errado ao carregar um agente já configurado, e clicar nele e depois salvar a camada
+sempre falhava com um erro genérico ("Erro ao importar"/erro de salvar), sem indicar a
+causa.
+**Agora:** o card mostra o estado real do agente corretamente, o clique alterna entre
+"Nurture ativo" e "Descarte" de forma explícita, e salvar a camada funciona nos dois
+sentidos.
+**Para validar:** Cenário C1, abaixo.
+
+### Cenário C1 — Toggle Nurture vs Descarte salva corretamente nos dois sentidos
+- [x] Abrir Camada Follow-up de um agente com `nurture_vs_discard_rule="discard"` no banco
+- [x] Confirmar: card mostra "Descarte imediato" / badge "DESCARTE" (não invertido)
+- [x] Clicar no card → muda para "Nurture passivo" / "NURTURE ATIVO" → Salvar → toast "Configuração salva" (sem 422)
+- [x] Confirmar no banco: `nurture_vs_discard_rule = 'nurture'`
+- [x] Clicar novamente → volta para "Descarte imediato" → Salvar → toast "Configuração salva"
+- [x] Confirmar no banco: `nurture_vs_discard_rule = 'discard'`
+- **Validado em:** 02/09/2026 — testado ao vivo via browser (chrome-devtools MCP), ambos os sentidos confirmados via consulta direta ao banco
+
+---
+
 ## Ajustes Possíveis Pós-Implementação
 
-- **Achado lateral (pré-existente, fora do escopo desta implementação):**
-  `DEFAULT_AGENT_CONFIG.nurture_vs_discard_rule` (`frontend-crm/src/types/agente.ts`)
-  usa `false` (boolean) como default, mas o backend (`backend-core/app/api/ai_profiles.py`)
-  espera `Optional[str]`. Isso só se manifesta quando um `profilePatch` de importação
-  não inclui esse campo (ex.: um arquivo `.json` editado manualmente, ou um formato de
-  exportação futuro que omita o campo) — nesse caso `PUT /ai-profiles/me` falha com 422
-  (`"Input should be a valid string"`). Um export real gerado pelo próprio painel nunca
-  aciona isso, porque `getConfig()` sempre popula esse campo com uma string válida
-  (`"discard"`/`"nurture"`). Confirmado ao vivo durante os testes desta implementação
-  (ver Cenários P2/P3 acima) — corrigido ali apenas nos arquivos de teste manuais, não
-  no código-fonte. Sugestão: trocar o default de `DEFAULT_AGENT_CONFIG.nurture_vs_discard_rule`
-  para `"discard"` (ou `null`) num fix separado.
+- Nenhum identificado até o momento.
