@@ -11,6 +11,10 @@ BASE_DIR = Path(__file__).resolve().parent
 load_dotenv(BASE_DIR / ".env")
 load_dotenv(BASE_DIR / ".env.local", override=True)
 
+from logging_setup import setup_logging
+
+setup_logging(os.getenv("LOG_LEVEL", "INFO"))
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
