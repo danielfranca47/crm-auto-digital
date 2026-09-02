@@ -79,6 +79,12 @@ Follow-up ticks (`whatsapp.followup.tick`) não precisam de gate adicional: como
 mecanismo existente de `bot_disabled` (ver [`agents.md`](agents.md#toggle-de-bot-por-lead))
 já impede o envio para esses leads.
 
+O fallback de mídia (`_apply_media_fallback()`, ver "Comportamento de media_fallback"
+em [`webhooks.md`](webhooks.md)) tem o mesmo gate: verifica `is_paused` e
+`bot_disabled` antes de enviar a mensagem configurada em
+`offer_pack.media_fallback_msg`, para que pausar o bot também impeça a resposta
+automática quando o lead envia imagem/vídeo/áudio em vez de texto.
+
 Playground não é afetado — ambiente de teste isolado, não passa pelo webhook real.
 
 ---
