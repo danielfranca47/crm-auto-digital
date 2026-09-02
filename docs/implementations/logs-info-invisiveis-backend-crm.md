@@ -113,10 +113,8 @@ Todo `logger.info(...)` já existente no código passa a aparecer no terminal
 (local) e nos logs do Railway (produção), com o nível controlável pela
 variável de ambiente `LOG_LEVEL` (default `INFO`).
 
-**Para validar:** Cenário C1 já foi validado nesta sessão (teste unitário do
-`setup_logging`, sem precisar da app completa — ver abaixo). Cenários C2
-(app local completa) e C3 (produção) ficam pendentes porque não há um
-`.venv` com as dependências instaladas neste ambiente e C3 depende de deploy.
+**Para validar:** Cenários C1 e C2 já validados nesta sessão (ver abaixo).
+Cenário C3 (produção) fica pendente — depende de deploy.
 
 ---
 
@@ -130,11 +128,22 @@ variável de ambiente `LOG_LEVEL` (default `INFO`).
   **Validado em:** 02/09/2026 — confirmado exatamente esse comportamento.
 
 ### Cenário C2 — App real, ambiente local
-- [ ] Rodar `uvicorn app:app --port 8000` localmente (com `.venv` e
-  dependências instaladas) sem passar `--log-level`.
-- [ ] Disparar uma ação que já loga em INFO hoje (ex.: tick do reconciler de
-  follow-up, ou webhook inbound do WhatsApp).
-- [ ] Confirmar que a linha aparece no terminal com o novo formato.
+- [x] Rodar `uvicorn app:app` localmente (`.venv` criado e dependências
+  instaladas nesta sessão) sem passar `--log-level`.
+- [x] Disparar uma ação que já loga em INFO hoje — os schedulers de
+  arranque (`_reconciler_loop`, `_spy_reconciler_loop`,
+  `_spy_media_worker_loop`, `_knowledge_ingest_worker_loop`) logam
+  imediatamente no startup, sem precisar de request externo.
+- [x] Confirmar que a linha aparece no terminal com o novo formato.
+  **Validado em:** 02/09/2026 — saída real do startup:
+  ```
+  2026-09-02 16:54:01,705 INFO app [reconciler] scheduler iniciado — intervalo=60s startup_delay=5s
+  2026-09-02 16:54:01,705 INFO app [spy_reconciler] scheduler iniciado — intervalo=60s
+  2026-09-02 16:54:01,705 INFO app [spy_media_worker] scheduler iniciado — intervalo=30s
+  2026-09-02 16:54:01,706 INFO app [knowledge_ingest_worker] scheduler iniciado — intervalo=10s
+  ```
+  Antes desta mudança, nenhuma dessas linhas aparecia — só os logs
+  automáticos do próprio uvicorn (`INFO:     Started server process...`).
 
 ### Cenário C3 — Produção (Railway)
 - [ ] Após deploy, `railway logs -s backend-crm --filter "lead_category"` (ou
