@@ -366,3 +366,4 @@ Guarda equivalente para `backend-core`/`DATABASE_URL` ainda não existe — ver
 | `CRM_PUBLIC_BASE_URL` | URL pública do CRM (usada para configurar webhook na UazAPI) |
 | `OPENAI_API_KEY` | Para transcrição Whisper |
 | `UAZAPI_BASE_URL` | Endpoint UazAPI (ex.: `https://free.uazapi.com`) |
+| `LOG_LEVEL` | Nível do root logger (default `INFO`), configurado por `setup_logging()` em `logging_setup.py`, chamado no arranque de `app.py`. Sem isso, `logger.info(...)` fica invisível — Python usa o last-resort handler (só `WARNING`+) quando nenhum handler é configurado no root |
