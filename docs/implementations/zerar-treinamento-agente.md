@@ -103,23 +103,34 @@ configuração do agente é aplicada e o treinamento existente não é tocado.
 ## Checks de Validação
 
 ### Cenário P1 — Zerar treinamento
-- [ ] Abrir modal Exportar/Importar → aba "Zerar treinamento"
-- [ ] Botão desabilitado sem marcar checkbox
-- [ ] Marcar checkbox → botão habilita → confirmar → sucesso exibido
-- **Pendente**
+- [x] Abrir modal Exportar/Importar → aba "Zerar treinamento"
+- [x] Botão desabilitado sem marcar checkbox
+- [x] Marcar checkbox → botão habilita → confirmar → sucesso exibido
+- **Validado em:** 01/09/2026 — testado ao vivo via browser (chrome-devtools MCP) com usuário de teste local; mensagem "2 exemplo(s) de treinamento removido(s)." exibida e confirmado no banco (`playground_training_items` zerado para o usuário)
 
 ### Cenário P2 — Importar substituindo treinamento (comportamento atual preservado)
-- [ ] Importar arquivo com treinamento, escolher "Substituir" (default)
-- [ ] Confirmar: treinamento anterior é removido e o do arquivo é aplicado
-- **Pendente**
+- [x] Importar arquivo com treinamento, escolher "Substituir" (default)
+- [x] Confirmar: treinamento anterior é removido e o do arquivo é aplicado
+- **Validado em:** 01/09/2026 — testado ao vivo; antes da importação havia 2 itens ("Exemplo atual 1/2"), depois só o item do arquivo ("Item do arquivo importado") — confirmado via consulta direta ao banco
 
 ### Cenário P3 — Importar mantendo treinamento atual
-- [ ] Importar arquivo com treinamento, escolher "Manter treinamento atual"
-- [ ] Confirmar: configuração do AI Profile é aplicada, mas treinamento existente permanece intacto
-- **Pendente**
+- [x] Importar arquivo com treinamento, escolher "Manter treinamento atual"
+- [x] Confirmar: configuração do AI Profile é aplicada, mas treinamento existente permanece intacto
+- **Validado em:** 01/09/2026 — testado ao vivo; os 2 itens ("Exemplo atual 1/2") permaneceram intactos após a importação, item do arquivo não foi adicionado — confirmado via consulta direta ao banco. Aviso de substituição de treinamento corretamente ocultado na UI ao selecionar "Manter"
 
 ---
 
 ## Ajustes Possíveis Pós-Implementação
 
-- Nenhum identificado até o momento.
+- **Achado lateral (pré-existente, fora do escopo desta implementação):**
+  `DEFAULT_AGENT_CONFIG.nurture_vs_discard_rule` (`frontend-crm/src/types/agente.ts`)
+  usa `false` (boolean) como default, mas o backend (`backend-core/app/api/ai_profiles.py`)
+  espera `Optional[str]`. Isso só se manifesta quando um `profilePatch` de importação
+  não inclui esse campo (ex.: um arquivo `.json` editado manualmente, ou um formato de
+  exportação futuro que omita o campo) — nesse caso `PUT /ai-profiles/me` falha com 422
+  (`"Input should be a valid string"`). Um export real gerado pelo próprio painel nunca
+  aciona isso, porque `getConfig()` sempre popula esse campo com uma string válida
+  (`"discard"`/`"nurture"`). Confirmado ao vivo durante os testes desta implementação
+  (ver Cenários P2/P3 acima) — corrigido ali apenas nos arquivos de teste manuais, não
+  no código-fonte. Sugestão: trocar o default de `DEFAULT_AGENT_CONFIG.nurture_vs_discard_rule`
+  para `"discard"` (ou `null`) num fix separado.
