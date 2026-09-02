@@ -106,6 +106,13 @@ if msg:
 
 ## Checks de Validação
 
+### Cenário A1 — Teste automatizado local (`tests/test_media_fallback_pause.py`)
+- [x] `_apply_media_fallback` envia normalmente quando o bot está ativo
+- [x] `_apply_media_fallback` retorna `skipped/global_pause` e não envia quando `bot_global_pause_state.is_paused = 1`
+- [x] `_apply_media_fallback` retorna `skipped/bot_disabled` e não envia quando o lead está com `bot_disabled = 1`
+- [x] comportamento `"ignorar"` continua sem enviar, independente do estado de pausa
+- **Validado em:** 02/09/2026 — `python -m pytest tests/test_media_fallback_pause.py -v` → 4 passed (rodado isoladamente; a suíte completa tem uma fragilidade pré-existente de ordem de import/coleta com um `fastapi` global corrompido no ambiente, que já afetava `test_inbound_orchestrator_flag.py` antes desta mudança — não relacionada a este fix)
+
 ### Cenário C1 — Bot pausado globalmente não responde a imagem/vídeo
 - [ ] Pausar o bot globalmente no Kanban
 - [ ] Enviar uma imagem de um número de teste para o WhatsApp do utilizador
