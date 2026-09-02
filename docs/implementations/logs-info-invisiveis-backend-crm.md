@@ -1,7 +1,7 @@
 # Logs INFO invisíveis em todo o backend-crm
 
-**Branch:** `worktree-fix+logs-info-invisiveis-backend-crm` (já mergeada em `main` e pushada — commit `ea017ea`)
-**Status:** Em andamento — pendente: Cenário C3 (produção), aguardando confirmação de deploy do utilizador
+**Branch:** `worktree-fix+logs-info-invisiveis-backend-crm`
+**Status:** Todos os cenários validados (02/09/2026)
 
 ---
 
@@ -146,16 +146,63 @@ Cenário C3 (produção) fica pendente — depende de deploy.
   automáticos do próprio uvicorn (`INFO:     Started server process...`).
 
 ### Cenário C3 — Produção (Railway)
-- [ ] Após deploy, `railway logs -s backend-crm --filter "lead_category"` (ou
-  evento de negócio equivalente) deve retornar linhas que hoje não aparecem.
+- [x] Após deploy, os logs de produção devem mostrar linhas de negócio que
+  antes não apareciam.
+  **Validado em:** 02/09/2026 — `railway logs -s backend-crm --since 2h
+  --filter "scheduler"` retornou:
+  ```
+  2026-09-02 16:05:42,747 INFO app [reconciler] scheduler iniciado — intervalo=60s startup_delay=5s
+  2026-09-02 16:05:42,748 INFO app [spy_reconciler] scheduler iniciado — intervalo=60s
+  2026-09-02 16:05:42,748 INFO app [spy_media_worker] scheduler iniciado — intervalo=30s
+  2026-09-02 16:05:42,748 INFO app [knowledge_ingest_worker] scheduler iniciado — intervalo=10s
+  ```
+  Timestamp coincide com o deploy. Confirmado também que logs de terceiros
+  (`httpx`) já apareciam em INFO — o que motivou a Fase 2 abaixo.
 
 ---
 
-## Ajustes Possíveis Pós-Implementação
+## Fase 2 — Silenciar httpx (02/09/2026)
 
-- **Bibliotecas de terceiros barulhentas (`httpx`, `openai`):** com o root em
-  `INFO`, `httpx` loga uma linha `HTTP Request: ...` por chamada (UazAPI,
-  OpenAI). `backend-executors` já roda assim e não silencia essas libs — por
-  consistência, esta implementação também não silencia. Se o volume em
-  produção for excessivo, ajustar depois com
-  `logging.getLogger("httpx").setLevel(logging.WARNING)`.
+### Problema identificado
+
+Ao validar o Cenário C3, os logs de produção mostraram que o `httpx` também
+passou a logar em `INFO` uma linha `HTTP Request: ...` por chamada externa
+(UazAPI, OpenAI, backend-core) — isso já estava sinalizado como risco
+conhecido na Fase 1 ("Ajustes Possíveis"), e o volume real em produção
+confirmou o problema: linhas repetidas a cada poucos segundos só pelas
+checagens de auth (`GET /users/me`, `GET /me/entitlements`), afogando os
+logs de negócio que eram o objetivo desta implementação.
+
+### Correção
+
+`setup_logging()` agora também fixa `logging.getLogger("httpx").setLevel
+(logging.WARNING)` — mantém erros de rede visíveis, remove o ruído de
+requisições bem-sucedidas.
+
+| Arquivo | Mudança |
+|---|---|
+| `backend-crm/logging_setup.py` | Adicionada `logging.getLogger("httpx").setLevel(logging.WARNING)` dentro de `setup_logging()`. |
+
+### Commits Fase 2
+
+| # | Commit | O que foi implementado |
+|---|---|---|
+| 1 | _(a preencher após commit)_ | Silenciar `httpx` para `WARNING` em `setup_logging()` |
+
+### Relatório da Fase 2 — o que mudou na prática
+
+**Antes:** com o root logger em `INFO` (Fase 1), o `httpx` também passou a
+logar uma linha por cada chamada HTTP externa bem-sucedida — volume alto,
+sem valor de diagnóstico na maioria dos casos.
+
+**Agora:** `httpx` só loga em `WARNING` ou acima (erros de rede, por
+exemplo) — os logs de negócio ficam limpos e legíveis.
+
+**Para validar:** Cenário C4, abaixo — testado unitariamente nesta sessão.
+
+### Cenário C4 — httpx silenciado, logs de negócio intactos (unitário)
+- [x] Após `setup_logging('INFO')`: `logging.getLogger('httpx').info(...)`
+  não produz saída; `logging.getLogger('httpx').warning(...)` aparece
+  normalmente; `logging.getLogger('somemodule').info(...)` (simulando um
+  logger de negócio) continua aparecendo sem alteração.
+  **Validado em:** 02/09/2026 — confirmado exatamente esse comportamento.
