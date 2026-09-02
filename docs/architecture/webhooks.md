@@ -188,6 +188,8 @@ Controlado pelo campo `offer_pack.media_fallback` no AI Profile do utilizador:
 
 > **Envio directo:** `_apply_media_fallback()` usa `send_whatsapp_direct()` (chamada síncrona ao core-api, não via fila de jobs) para evitar que um job `whatsapp.send.local` fique pendente sem ser processado pelo executor.
 
+**Guard de pausa:** antes de enviar (comportamentos `"continuar"`/`"pausar"`), `_apply_media_fallback()` verifica `bot_global_pause_state.is_paused` e `leads.bot_disabled` para o par `(user_id, phone)` — se qualquer um estiver ativo, retorna `{"status": "skipped", "reason": "global_pause"|"bot_disabled"}` sem enviar nada. Isso mantém o fallback de mídia consistente com o gate de pausa já aplicado ao fluxo de texto (ver "Guardrail" acima) — pausar o bot não deve deixar passar uma resposta automática só porque o lead mandou uma imagem/vídeo em vez de texto.
+
 ---
 
 ## ContextBundle (orchestrator)
