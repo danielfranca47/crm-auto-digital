@@ -185,7 +185,12 @@ global) até o token novo ser propagado. Runbook de rotação:
 `WhatsappConnection.status` não é só escrito pelos endpoints acima — a UazAPI
 também envia um evento `connection` ao webhook quando a sessão cai de verdade
 (ex.: logout forçado pelo WhatsApp). Esse evento atualiza o status em segundo
-plano e dispara um email ao dono da conta pedindo para reconectar. Ver
+plano e dispara um email ao dono da conta pedindo para reconectar; quando a
+conta reconecta depois dessa queda, um segundo email confirma que a Lara
+voltou a funcionar (coluna `WhatsappConnection.disconnect_alert_sent_at`
+controla esse segundo envio — só dispara se o primeiro alerta de queda
+realmente foi enviado, evitando um falso "reconectou" na primeira conexão de
+uma instância nova). Ver
 [`webhooks.md`](webhooks.md#evento-de-conexão-eventconnection--status-real--alerta-de-desconexão)
 para o fluxo completo — inclui a limitação conhecida de depender da entrega
 do webhook, sem verificação periódica independente ainda.

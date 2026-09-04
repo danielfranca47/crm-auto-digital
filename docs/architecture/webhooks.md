@@ -59,6 +59,12 @@ UazAPI → POST /webhooks/whatsapp/uazapi (event="connection")
               → SE a transição foi active → inactive:
                   busca o User da connection e envia email
                   (render_whatsapp_disconnected_email) pedindo para reconectar
+                  → marca WhatsappConnection.disconnect_alert_sent_at = now()
+              → SE a transição foi inactive → active E disconnect_alert_sent_at
+                está preenchido:
+                  busca o User da connection e envia email
+                  (render_whatsapp_reconnected_email) confirmando que voltou
+                  → limpa WhatsappConnection.disconnect_alert_sent_at
   ← sempre 200 para a UazAPI, mesmo se o repasse ao core falhar (best-effort)
 ```
 
@@ -70,10 +76,17 @@ UazAPI → POST /webhooks/whatsapp/uazapi (event="connection")
 resolve isso separadamente (`connection_instance_field.get("name")` quando é
 dict) sem tocar na resolução usada por `messages`.
 
-**Email de alerta:** dispara só na transição `active → inactive` (não repete
-em eventos "disconnected" seguidos, já que o segundo já vê o status local como
-inactive). Reconexões (`inactive → active`) só atualizam o status, sem email
-de confirmação.
+**Email de alerta (desconexão):** dispara só na transição `active → inactive`
+(não repete em eventos "disconnected" seguidos, já que o segundo já vê o
+status local como inactive). Ao enviar, marca
+`WhatsappConnection.disconnect_alert_sent_at`.
+
+**Email de confirmação (reconexão):** dispara na transição `inactive →
+active`, mas **só quando `disconnect_alert_sent_at` está preenchido** — ou
+seja, só quando a queda anterior de facto gerou o email de alerta. Isso evita
+falso positivo na primeira conexão de uma instância nova (que também produz
+essa transição, mas não é uma "recuperação" de queda). Ao enviar, limpa
+`disconnect_alert_sent_at` de volta para `NULL`.
 
 **Limitação conhecida:** este mecanismo depende inteiramente do webhook ser
 entregue. Não existe hoje nenhuma verificação periódica em segundo plano que
