@@ -12,9 +12,15 @@ export const LEAD_DIRECTION_OPTIONS = [
 ] as const;
 
 export function formatLeadOriginLabel(origin: string | null | undefined): string {
-  const normalized = (origin || "").trim().toLowerCase();
+  const raw = (origin || "").trim();
+  const normalized = raw.toLowerCase();
+  if (!raw) return "—";
   if (normalized === "manual") return "Inbound";
   if (normalized === "outbound") return "Outbound";
-  // whatsapp_inbound, Formulário Website, Planilha, ou um canal livre: mostra cru.
-  return origin || "—";
+  if (normalized === "whatsapp_inbound") return "Inbound (WhatsApp)";
+  if (normalized === "formulário website") return "Inbound (Formulário do site)";
+  if (normalized === "planilha") return "Inbound (Planilha)";
+  // valor técnico ainda não mapeado: mesmo default-safe do _classify_lead_origin()
+  // (tudo que não é "outbound" é inbound) — nunca mostra o valor cru sozinho.
+  return `Inbound (${raw})`;
 }

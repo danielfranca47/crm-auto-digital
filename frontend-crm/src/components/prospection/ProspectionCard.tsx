@@ -11,6 +11,7 @@ import { Phone, Mail, MapPin, Calendar, ChevronDown, ChevronUp, Eye } from 'luci
 import { formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { leadDisplayName } from '@/utils/leadDisplayName';
+import { formatLeadOriginLabel } from '@/lib/lead-origin';
 
 interface ProspectionCardProps {
   lead: ProspectionLead;
@@ -106,7 +107,7 @@ export function ProspectionCard({
         <div className="flex items-center gap-2">
           <Badge variant="secondary" className="text-xs">
             <MapPin className="h-3 w-3 mr-1" />
-            {lead.origin}
+            {formatLeadOriginLabel(lead.origin)}
           </Badge>
           <span className="text-xs text-muted-foreground">
             <Calendar className="h-3 w-3 inline mr-1" />

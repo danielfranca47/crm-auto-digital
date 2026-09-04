@@ -5,6 +5,7 @@ import { CSS } from "@dnd-kit/utilities";
 import { LeadActionsMenu } from "./LeadActionsMenu";
 import { useNavigate } from "react-router-dom";
 import { leadDisplayName } from "@/utils/leadDisplayName";
+import { formatLeadOriginLabel } from "@/lib/lead-origin";
 import type { SalesFlowPhaseId } from "@/types/agente";
 import { SALES_FLOW_PHASE_ID_LABELS, SALES_FLOW_PHASE_COLORS } from "@/types/agente";
 
@@ -221,7 +222,7 @@ export function LeadCard({
         </div>
 
         <div className="text-muted-foreground">
-          <span className="text-xs font-medium">Origem:</span> {lead.origin}
+          <span className="text-xs font-medium">Origem:</span> {formatLeadOriginLabel(lead.origin)}
         </div>
 
         <SalesFlowFunnel lead={lead} phaseSequence={phaseSequence} />

@@ -5,6 +5,7 @@ import { Input } from "./ui/input";
 import { Search, Phone, MapPin } from "lucide-react";
 import { Lead, KanbanColumn } from "../types/crm";
 import { leadDisplayName } from "@/utils/leadDisplayName";
+import { formatLeadOriginLabel } from "@/lib/lead-origin";
 
 interface SearchAutocompleteProps {
   searchTerm: string;
@@ -141,7 +142,7 @@ export function SearchAutocomplete({
                           </div>
                           <div className="flex items-center gap-1">
                             <MapPin className="h-3 w-3" />
-                            {highlightMatch(lead.origin, searchTerm)}
+                            {highlightMatch(formatLeadOriginLabel(lead.origin), searchTerm)}
                           </div>
                         </div>
                         {lead.observations && (
