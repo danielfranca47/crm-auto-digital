@@ -244,6 +244,24 @@ class ContextBundle(BaseModel):
     calendar_busy_slots: Optional[List[Dict[str, Any]]] = None
 
 
+def _classify_lead_origin(origin_raw: Optional[str]) -> tuple[bool, str, str]:
+    """
+    Direção da conversa a partir de lead.origin. Único valor que sinaliza prospecção
+    fria é o literal "outbound" (gravado via PATCH /api/leads/{id} pelo
+    ProspectConfirmModal ou por agent-local/log_outbound). Qualquer outro valor —
+    'whatsapp_inbound', 'Formulário Website', 'Manual', 'Planilha', canais de
+    marketing livres — é inbound por default seguro.
+    """
+    is_outbound = (origin_raw or "").strip().lower() == "outbound"
+    lead_origin = "outbound" if is_outbound else "inbound"
+    lead_origin_label = (
+        "OUTBOUND (lead foi abordado — não te conhecia)"
+        if is_outbound
+        else "INBOUND (lead veio te procurar)"
+    )
+    return is_outbound, lead_origin, lead_origin_label
+
+
 def build_context_bundle(
     current_user: CurrentUser,
     lead_id: int,
@@ -286,8 +304,7 @@ def build_context_bundle(
     if ai_profile:
         _resolve_profile_templates(ai_profile, lead_id, current_user.id)
 
-    _lead_origin_raw = lead_data.get("origin") or ""
-    _is_outbound = _lead_origin_raw.lower() not in ("whatsapp", "inbound", "manual", "planilha", "")
+    _is_outbound, _lead_origin, _lead_origin_label = _classify_lead_origin(lead_data.get("origin"))
     metadata = {
         "channel": channel,
         "inbound_message_text": inbound_message_text,
@@ -295,12 +312,8 @@ def build_context_bundle(
         "presentation_variant": presentation_contract["presentation_variant"],
         "presentation_variant_source": presentation_contract["presentation_variant_source"],
         "hybrid_flow_style": presentation_contract["hybrid_flow_style"],
-        "lead_origin": "outbound" if _is_outbound else "inbound",
-        "lead_origin_label": (
-            "OUTBOUND (lead foi abordado — não te conhecia)"
-            if _is_outbound
-            else "INBOUND (lead veio te procurar)"
-        ),
+        "lead_origin": _lead_origin,
+        "lead_origin_label": _lead_origin_label,
     }
 
     history: List[Dict[str, Any]] = []
@@ -365,8 +378,7 @@ def build_context_bundle_from_inbound(event: InboundEvent) -> ContextBundle:
     history = get_recent_history(event.lead_id)
     conversation_goal = "qualify" if len(history) <= 1 else "advance"
 
-    _lead_origin_raw = lead_data.get("origin") or ""
-    _is_outbound = _lead_origin_raw.lower() not in ("whatsapp", "inbound", "manual", "planilha", "")
+    _is_outbound, _lead_origin, _lead_origin_label = _classify_lead_origin(lead_data.get("origin"))
     metadata = {
         "channel": event.channel,
         "inbound_message_text": event.message_text,
@@ -379,12 +391,8 @@ def build_context_bundle_from_inbound(event: InboundEvent) -> ContextBundle:
         "presentation_variant": presentation_contract["presentation_variant"],
         "presentation_variant_source": presentation_contract["presentation_variant_source"],
         "hybrid_flow_style": presentation_contract["hybrid_flow_style"],
-        "lead_origin": "outbound" if _is_outbound else "inbound",
-        "lead_origin_label": (
-            "OUTBOUND (lead foi abordado — não te conhecia)"
-            if _is_outbound
-            else "INBOUND (lead veio te procurar)"
-        ),
+        "lead_origin": _lead_origin,
+        "lead_origin_label": _lead_origin_label,
     }
 
     return ContextBundle(
