@@ -30,6 +30,21 @@ class MapRowToLeadTests(unittest.TestCase):
         lead = map_row_to_lead(_row({"empresa": "ACME", "telefone": "11999999999"}))
         self.assertEqual(lead["companyName"], "ACME")
 
+    def test_acquisition_channel_via_explicit_column_map(self):
+        lead = map_row_to_lead(
+            _row({"telefone": "11999999999", "origem marketing": "Facebook Ads"}),
+            column_map={"acquisition_channel": "Origem Marketing"},
+        )
+        self.assertEqual(lead["acquisition_channel"], "Facebook Ads")
+
+    def test_acquisition_channel_auto_detected_via_canal_column(self):
+        lead = map_row_to_lead(_row({"telefone": "11999999999", "canal": "Indicação"}))
+        self.assertEqual(lead["acquisition_channel"], "Indicação")
+
+    def test_acquisition_channel_absent_stays_none(self):
+        lead = map_row_to_lead(_row({"telefone": "11999999999"}))
+        self.assertIsNone(lead["acquisition_channel"])
+
 
 class FindExistingLeadTests(unittest.TestCase):
     def setUp(self):
