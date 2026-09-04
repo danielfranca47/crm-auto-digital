@@ -45,6 +45,7 @@ import { useEffect, useState } from "react";
 import { api } from "./services/api";
 import { useApiErrorHandler } from "./hooks/useApiErrorHandler";
 import UsageAlertBanner from "./components/UsageAlertBanner";
+import WhatsappDisconnectBanner from "./components/WhatsappDisconnectBanner";
 
 const queryClient = new QueryClient();
 
@@ -104,6 +105,7 @@ function AppShell() {
           </header>
 
           <UsageAlertBanner />
+          <WhatsappDisconnectBanner />
           <main className="flex-1">
             <Outlet />
           </main>
