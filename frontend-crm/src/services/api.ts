@@ -427,6 +427,11 @@ export type WhatsappStatusResponse = {
   last_updated?: string | null;
 };
 
+export type WhatsappConnectionAlertResponse = {
+  disconnected: boolean;
+  since?: string | null;
+};
+
 export type AppNotification = {
   id: number;
   lead_id: number | null;
@@ -1330,6 +1335,8 @@ export const api = {
     whatsappConnect: async (phone?: string) =>
       apiClient.post<WhatsappConnectResponse>(`/whatsapp/connect`, phone ? { phone } : undefined),
     whatsappStatus: async () => apiClient.get<WhatsappStatusResponse>(`/whatsapp/status`),
+    whatsappConnectionAlert: async () =>
+      apiClient.get<WhatsappConnectionAlertResponse>(`/whatsapp/connection-alert`),
     whatsappRefreshQr: async (phone?: string) =>
       apiClient.post<WhatsappConnectResponse>(`/whatsapp/qr/refresh`, phone ? { phone } : undefined),
   },
