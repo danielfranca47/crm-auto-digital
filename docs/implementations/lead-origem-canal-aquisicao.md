@@ -1,7 +1,7 @@
 # Separar canal de aquisição x direção (inbound/outbound) do lead + corrigir classificação
 
 **Branch:** `feat/lead-origem-canal-aquisicao`
-**Status:** Em andamento
+**Status:** Validado — todos os checks concluídos, pronto para graduação
 
 ---
 
@@ -247,32 +247,61 @@ e ache erradamente que também afeta o prompt.
 ## Checks de Validação
 
 ### Cenário C1 — Lead novo "À Prospectar" não pergunta direção
-- [ ] Criar lead com categoria "À Prospectar"
-- [ ] Confirmar: Select de direção não aparece
-- [ ] Confirmar via API/tela: `origin` gravado como `"Manual"`
+- [x] (04/09/2026) Criar lead com categoria "À Prospectar"
+- [x] (04/09/2026) Confirmar: Select de direção não aparece
+- [x] (04/09/2026) Confirmar via API/tela: `origin` gravado como `"Manual"`
 
 ### Cenário C2 — Lead novo em categoria avançada exige direção
-- [ ] Criar lead com categoria "Em Andamento" (ou outra ≠ "À Prospectar")
-- [ ] Confirmar: Select de direção aparece e bloqueia o submit sem escolha
-- [ ] Escolher "Outbound" → confirmar `origin="outbound"` gravado
+- [x] (04/09/2026) Criar lead com categoria "Em Andamento" (ou outra ≠ "À Prospectar")
+- [x] (04/09/2026) Confirmar: Select de direção aparece e bloqueia o submit sem escolha
+- [x] (04/09/2026) Escolher "Outbound" → confirmar `origin="outbound"` gravado
 
 ### Cenário C3 — Canal de aquisição persiste após reload
-- [ ] Preencher "Canal de aquisição" na criação de um lead
-- [ ] Recarregar a página (força `reloadAllLeads` + `mapRawLead`)
-- [ ] Confirmar: valor continua visível no card/dialog
+- [x] (04/09/2026) Preencher "Canal de aquisição" na criação de um lead
+- [x] (04/09/2026) Recarregar a página (força `reloadAllLeads` + `mapRawLead`)
+- [x] (04/09/2026) Confirmar: valor continua visível no card/dialog
 
 ### Cenário C4 — Edição não corrompe direção técnica (bug original)
-- [ ] Abrir um lead com `origin="whatsapp_inbound"` no `LeadCardDialog`
-- [ ] Editar só as Observações (não mexer no Select de direção), salvar
-- [ ] Confirmar via API/tela: `origin` permanece `"whatsapp_inbound"` intacto
+- [x] (04/09/2026) Abrir um lead com `origin="whatsapp_inbound"` no `LeadCardDialog`
+- [x] (04/09/2026) Editar só as Observações (não mexer no Select de direção), salvar
+- [x] (04/09/2026) Confirmar via API/tela: `origin` permanece `"whatsapp_inbound"` intacto
 
 ### Cenário C5 — Busca no Kanban por canal de aquisição
-- [ ] Buscar por um termo presente só em `acquisition_channel` de um lead
-- [ ] Confirmar: lead aparece no resultado filtrado
+- [x] (04/09/2026) Buscar por um termo presente só em `acquisition_channel` de um lead
+- [x] (04/09/2026) Confirmar: lead aparece no resultado filtrado
 
 ### Cenário C6 — Fluxo de confirmação de prospecção continua intacto
-- [ ] Arrastar um card "À Prospectar" → "Qualificação" com `origin` vazio/"Manual"
-- [ ] Confirmar: `ProspectConfirmModal` ainda dispara normalmente
+- [x] (04/09/2026) Arrastar um card "À Prospectar" → "Qualificação" com `origin` vazio/"Manual"
+- [x] (04/09/2026) Confirmar: `ProspectConfirmModal` ainda dispara normalmente
+
+### Relatório da validação (04/09/2026) — via navegador, conta de teste local
+
+Testado ao vivo em `http://localhost:5173` com os 3 backends locais rodando (core:8001,
+crm:8000) e a conta de teste (`autodigital157@gmail.com`). Todos os 6 cenários passaram sem
+nenhum ajuste de código necessário:
+
+- **C1/C2**: confirmado visualmente que o campo "Direção" só aparece (e só bloqueia o submit)
+  quando a categoria escolhida é diferente de "À Prospectar" — leads em "À Prospectar" gravam
+  `origin="Manual"` sem perguntar nada; leads em categoria avançada exigem a escolha e gravam
+  exatamente o valor escolhido (`"outbound"` testado).
+- **C3**: "Canal de aquisição" preenchido na criação sobreviveu a um reload completo da página e
+  segue visível no `LeadCardDialog`, sem se misturar com "Direção".
+- **C4** (o bug original): usei o lead real "França" (`origin="whatsapp_inbound"`, criado antes
+  desta implementação). No modo de edição, o Select de "Direção" aparece vazio (esperado — o
+  valor técnico não bate com nenhuma das 2 opções do enum Inbound/Outbound), mas ao salvar sem
+  tocar nesse campo (só editei Observações), o `origin` permaneceu `"whatsapp_inbound"` intacto —
+  confirma que o Select não sobrescreve silenciosamente o valor técnico quando não é alterado.
+- **C5**: buscar por um termo presente só no `acquisition_channel` (não em nome/telefone/origin)
+  filtrou corretamente e retornou só o lead correspondente.
+- **C6**: arrastar um card com `origin="Manual"` de "À Prospectar" para "Qualificação" continua
+  disparando o `ProspectConfirmModal` normalmente — nada quebrou no fluxo existente.
+
+**Nota operacional (não bloqueia a implementação):** o backend-crm local, ao rodar sem
+`--reload` numa worktree criada nesta sessão, apresentou lentidão intermitente (algumas
+requisições — inclusive `POST /api/leads` — levaram vários segundos). Não investiguei a causa
+(suspeita: I/O de SQLite em disco de rede/antivírus no Windows, já mencionado como problema de
+ambiente em `worktree-copiar-env-testes-backend.md`) — não é um sintoma desta implementação, já
+que as mesmas rotas (`GET /api/leads`, `GET /api/usage` etc.) tiveram a mesma lentidão.
 
 **Teste automatizado (Fase 1):** `python -m unittest backend-crm/tests/test_lead_origin_classification.py` — cobre a classificação de direção isoladamente, sem depender de UI.
 
