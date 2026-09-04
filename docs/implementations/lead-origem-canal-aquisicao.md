@@ -222,6 +222,28 @@ canal — precisa dos Cenários C1 a C6 abaixo, via browser.
 
 ---
 
+### Commits Fase 4
+
+| # | Commit | O que foi implementado |
+|---|---|---|
+| 1 | `c3d9b9a` | docs: atualizar pipeline-phases.md com classificação corrigida de lead_origin |
+
+**Detalhes do commit `c3d9b9a`:**
+- `docs/architecture/pipeline-phases.md` — linha da tabela sobre `lead_origin` reescrita; nota sobre `acquisition_channel` não ser lido pela IA
+
+### Relatório da Fase 4 — o que mudou na prática
+
+**Antes:** a documentação de arquitetura ainda descrevia a whitelist antiga (já corrigida no
+código desde a Fase 1) e não mencionava a existência de `acquisition_channel`.
+
+**Agora:** a doc reflete exatamente a regra atual do código e deixa explícito que o canal de
+aquisição não influencia a IA — evita que alguém no futuro procure "de onde vem o canal do lead"
+e ache erradamente que também afeta o prompt.
+
+**Para validar:** revisão de leitura (não há teste automatizado para docs).
+
+---
+
 ## Checks de Validação
 
 ### Cenário C1 — Lead novo "À Prospectar" não pergunta direção
