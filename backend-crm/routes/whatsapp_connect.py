@@ -352,6 +352,27 @@ def whatsapp_status(current_user: CurrentUser = Depends(require_crm_access)):
     )
 
 
+_ACTIVE_CONNECTION_STATUSES = {"active", "connected", "loggedin", "logged_in"}
+
+
+class ConnectionAlertResponse(BaseModel):
+    disconnected: bool
+    since: Optional[str] = None
+
+
+@router.get("/connection-alert", response_model=ConnectionAlertResponse)
+def whatsapp_connection_alert(current_user: CurrentUser = Depends(require_crm_access)):
+    """Alerta leve de desconexão — lê status já cacheado no core, sem chamar a UazAPI ao vivo."""
+    connection = _resolve_instance_id(current_user)
+    if not connection:
+        return ConnectionAlertResponse(disconnected=False, since=None)
+
+    status_value = str(connection.get("status") or "").strip().lower()
+    since = connection.get("disconnect_alert_sent_at")
+    disconnected = status_value not in _ACTIVE_CONNECTION_STATUSES and bool(since)
+    return ConnectionAlertResponse(disconnected=disconnected, since=since if disconnected else None)
+
+
 @router.post("/qr/refresh", response_model=ConnectResponse)
 def refresh_qr(
     body: ConnectRequest = ConnectRequest(),
