@@ -153,6 +153,24 @@ def ensure_whatsapp_connections_table() -> None:
             conn.execute(text(statement))
 
 
+def ensure_whatsapp_connections_columns() -> None:
+    """Add disconnect_alert_sent_at to whatsapp_connections without requiring migrations."""
+    with engine.begin() as conn:
+        if engine.dialect.name == "sqlite":
+            result = conn.execute(text("PRAGMA table_info(whatsapp_connections)"))
+            existing = {row[1] for row in result.fetchall()}
+            if "disconnect_alert_sent_at" not in existing:
+                conn.execute(text("ALTER TABLE whatsapp_connections ADD COLUMN disconnect_alert_sent_at DATETIME"))
+                print("✅ coluna adicionada em whatsapp_connections: disconnect_alert_sent_at")
+        else:
+            result = conn.execute(
+                text("SELECT column_name FROM information_schema.columns WHERE table_name='whatsapp_connections'")
+            )
+            existing = {row[0] for row in result.fetchall()}
+            if "disconnect_alert_sent_at" not in existing:
+                conn.execute(text("ALTER TABLE whatsapp_connections ADD COLUMN disconnect_alert_sent_at TIMESTAMPTZ"))
+
+
 def ensure_ai_profile_columns() -> None:
     columns = {
         "agent_mode": {"default": "sdr_scheduler", "sqlite_type": "TEXT", "pg_type": "VARCHAR"},

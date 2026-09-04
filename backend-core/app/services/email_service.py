@@ -426,6 +426,35 @@ def render_whatsapp_disconnected_email(name: Optional[str], login_url: str) -> t
     return html, text
 
 
+def render_whatsapp_reconnected_email(name: Optional[str], login_url: str) -> tuple[str, str]:
+    display = name or "Cliente"
+    html = f"""
+<!DOCTYPE html>
+<html>
+<body style="font-family:sans-serif;color:#1e293b;max-width:520px;margin:0 auto;padding:24px">
+  <h2 style="color:#16a34a">O teu WhatsApp reconectou</h2>
+  <p>Olá, <strong>{display}</strong>.</p>
+  <p>A sessão do WhatsApp ligada à <strong>Lara</strong> voltou a funcionar — ela já está de novo a atender os teus leads normalmente.</p>
+  <p style="margin:24px 0">
+    <a href="{login_url}"
+       style="background:#16a34a;color:#fff;padding:12px 24px;border-radius:8px;text-decoration:none;font-weight:600">
+      Ver conexão →
+    </a>
+  </p>
+  {_FOOTER}
+</body>
+</html>
+"""
+    text = (
+        f"O teu WhatsApp reconectou\n\n"
+        f"Olá, {display}.\n\n"
+        f"A sessão do WhatsApp ligada à Lara voltou a funcionar — ela já está de novo a atender os teus leads normalmente.\n\n"
+        f"Ver conexão: {login_url}"
+        f"{_FOOTER_TEXT}"
+    )
+    return html, text
+
+
 def render_subscription_expired_email(
     name: Optional[str], plan_name: str, checkout_url: str
 ) -> tuple[str, str]:

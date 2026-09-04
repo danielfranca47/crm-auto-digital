@@ -3,6 +3,7 @@ from __future__ import annotations
 import logging
 import re
 import time
+from datetime import datetime
 from typing import Any, Dict, Optional
 
 from fastapi import APIRouter, Depends, Header, HTTPException, status
@@ -14,7 +15,11 @@ from app.config import settings
 from app.db import get_db
 from app.services import uazapi_admin
 from app.services import whatsapp_connections as connections_service
-from app.services.email_service import render_whatsapp_disconnected_email, send_email
+from app.services.email_service import (
+    render_whatsapp_disconnected_email,
+    render_whatsapp_reconnected_email,
+    send_email,
+)
 from app.utils.crypto import SecretEncryptionError, decrypt_secret
 
 router = APIRouter(prefix="", tags=["whatsapp_instances"])
@@ -357,9 +362,34 @@ async def connection_event(
                     html=html,
                     text=text,
                 )
+            connection.disconnect_alert_sent_at = datetime.utcnow()
+            db.add(connection)
+            db.commit()
         except Exception as exc:
             logger.warning(
                 "connection_event: falha ao enviar email de desconexão user_id=%s error=%s",
+                connection.user_id,
+                exc,
+            )
+
+    if not was_active and is_active and connection.disconnect_alert_sent_at:
+        try:
+            user = db.query(models.User).filter(models.User.id == connection.user_id).first()
+            if user and user.email:
+                login_url = (settings.CRM_FRONTEND_URL or "https://crmapp.danielfranca.pt").rstrip("/") + "/ai-profile"
+                html, text = render_whatsapp_reconnected_email(user.name, login_url)
+                send_email(
+                    to=user.email,
+                    subject="A tua Lara reconectou ao WhatsApp",
+                    html=html,
+                    text=text,
+                )
+            connection.disconnect_alert_sent_at = None
+            db.add(connection)
+            db.commit()
+        except Exception as exc:
+            logger.warning(
+                "connection_event: falha ao enviar email de reconexão user_id=%s error=%s",
                 connection.user_id,
                 exc,
             )

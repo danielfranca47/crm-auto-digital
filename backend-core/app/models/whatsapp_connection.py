@@ -21,6 +21,7 @@ class WhatsappConnection(Base):
     phone_e164 = Column(String, nullable=True)
     instance_token_encrypted = Column(Text, nullable=False)
     status = Column(String, nullable=False, default="active")
+    disconnect_alert_sent_at = Column(DateTime, nullable=True)
     created_at = Column(DateTime, server_default=func.now(), nullable=False, default=datetime.utcnow)
     updated_at = Column(
         DateTime,
