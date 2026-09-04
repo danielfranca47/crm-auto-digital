@@ -182,6 +182,38 @@ manual da Fase 3.
 | `frontend-crm/src/components/LeadCardDialog.tsx` | Mesmo tratamento na edição de lead existente — corrige o bug #4 |
 | `frontend-crm/src/components/KanbanBoard.tsx` | Busca inclui `acquisition_channel`; label de origem no drag usa `formatLeadOriginLabel` |
 
+### Commits Fase 3
+
+| # | Commit | O que foi implementado |
+|---|---|---|
+| 1 | `5bd3cdd` | feat: separar direção (inbound/outbound) de canal de aquisição no frontend |
+
+**Detalhes do commit `5bd3cdd`:**
+- `frontend-crm/src/types/crm.ts` — `acquisition_channel` em `Lead`/`NewLeadForm`
+- `frontend-crm/src/lib/lead-origin.ts` (novo) — `LEAD_DIRECTION_OPTIONS` + `formatLeadOriginLabel()`
+- `frontend-crm/src/services/api.ts` — `acquisition_channel` em `createLead`/`updateLead`
+- `frontend-crm/src/contexts/LeadsContext.tsx` — `mapRawLead()`/`addLead()` incluem o campo (caminho real de criação/reload)
+- `frontend-crm/src/components/NewLeadModal.tsx` — "Origem" vira Select condicional (Inbound/Outbound); novo campo "Canal de aquisição"
+- `frontend-crm/src/components/LeadCardDialog.tsx` — mesmo tratamento na edição de lead existente
+- `frontend-crm/src/components/KanbanBoard.tsx` — busca inclui `acquisition_channel`; label de direção usa `formatLeadOriginLabel`
+
+### Relatório da Fase 3 — o que mudou na prática
+
+**Antes:** o campo "Origem" era texto livre tanto na criação quanto na edição de um lead — dava
+para digitar um canal de marketing ali e acabar classificando o lead errado para a IA, ou editar
+um lead existente e sobrescrever à toa o valor técnico gravado pelo sistema.
+
+**Agora:** "Origem" virou uma escolha fechada (Inbound/Outbound), só perguntada quando o lead não
+está mais em "À Prospectar" (nessa categoria, quem pergunta depois é o fluxo já existente de
+confirmar prospecção no Kanban). Um campo novo e sempre livre, "Canal de aquisição", guarda o
+canal de marketing sem interferir em nada da IA.
+
+**Para validar:** rodei `tsc --noEmit` e `npm run build` no frontend-crm — compilam limpos, sem
+nenhum erro nos arquivos desta fase (os erros de tipo/lint que apareceram no projeto são
+pré-existentes, em arquivos não tocados por esta implementação). A validação funcional de
+verdade — criar lead, escolher direção, editar lead existente sem corromper `origin`, buscar por
+canal — precisa dos Cenários C1 a C6 abaixo, via browser.
+
 ### Fase 4 — Docs
 
 | Arquivo | O que muda |
