@@ -11,8 +11,14 @@ class Lead(BaseModel):
     phone: Optional[str] = None
     country_code: Optional[str] = None
     email: Optional[str] = None
-    # Valores aceitos: 'Manual', 'Planilha', 'WhatsApp', 'inbound', 'outbound'
+    # origin classifica a DIREÇÃO da conversa: o literal 'outbound' sinaliza que a empresa
+    # abordou o lead primeiro; qualquer outro valor — 'whatsapp_inbound', 'Formulário
+    # Website', 'Manual', 'Planilha', ou um canal livre — é inbound. Ver
+    # _classify_lead_origin() em services/ai_orchestrator/orchestrator.py.
+    # Canal de aquisição/marketing (Facebook Ads, Indicação...) vai em acquisition_channel —
+    # texto livre, não consumido pela IA.
     origin: Optional[str] = "Manual"
+    acquisition_channel: Optional[str] = None
     category: str
     customMessage: Optional[str] = None
     observations: Optional[str] = None
@@ -36,6 +42,7 @@ class LeadUpdate(BaseModel):
     country_code: Optional[str] = None
     email: Optional[str] = None
     origin: Optional[str] = None
+    acquisition_channel: Optional[str] = None
     category: Optional[str] = None
     customMessage: Optional[str] = None
     observations: Optional[str] = None

@@ -450,9 +450,9 @@ def criar_lead(lead: Lead, current_user: CurrentUser = Depends(require_crm_acces
         cursor.execute(
             """
             INSERT INTO leads (
-                user_id, companyName, contactName, phone, email, origin, category,
-                customMessage, observations, agent_type, priority, createdAt, lastMovement
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+                user_id, companyName, contactName, phone, email, origin, acquisition_channel,
+                category, customMessage, observations, agent_type, priority, createdAt, lastMovement
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
             """,
             (
                 current_user.id,
@@ -461,6 +461,7 @@ def criar_lead(lead: Lead, current_user: CurrentUser = Depends(require_crm_acces
                 phone_e164 or None,
                 lead.email,
                 lead.origin,
+                lead.acquisition_channel,
                 lead.category,
                 lead.customMessage,
                 lead.observations,
@@ -492,6 +493,7 @@ def criar_lead(lead: Lead, current_user: CurrentUser = Depends(require_crm_acces
             "phone": phone_e164 or None,
             "email": lead.email,
             "origin": lead.origin,
+            "acquisition_channel": lead.acquisition_channel,
             "category": lead.category,
             "customMessage": lead.customMessage,
             "observations": lead.observations,
