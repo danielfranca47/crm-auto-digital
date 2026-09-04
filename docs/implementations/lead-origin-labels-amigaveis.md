@@ -137,6 +137,37 @@ export function formatLeadOriginLabel(origin: string | null | undefined): string
 
 ---
 
+### Commits Fase 1
+
+| # | Commit | O que foi implementado |
+|---|---|---|
+| 1 | `42c6335b9c8003ce26fff0be40b560bec0f5741e` | Labels amigáveis para os 5 valores técnicos de `origin` + uso em todos os pontos de exibição |
+
+**Detalhes do commit `42c6335`:**
+- `frontend-crm/src/lib/lead-origin.ts` — `formatLeadOriginLabel()` ganha `whatsapp_inbound`, `formulário website`, `planilha` e fallback genérico `Inbound (<valor>)`
+- `frontend-crm/src/components/LeadCard.tsx` — card do Kanban passa a usar `formatLeadOriginLabel()`
+- `frontend-crm/src/components/prospection/ProspectionCard.tsx` — card do board de prospecção, idem
+- `frontend-crm/src/components/SearchAutocomplete.tsx` — resultado da busca, idem (mantém o destaque do termo buscado)
+
+### Relatório da Fase 1 — o que mudou na prática
+
+**Antes:** quando um lead chegava pelo WhatsApp, pelo formulário do site ou por
+uma planilha importada, o campo "Origem" mostrava o valor técnico cru
+(`whatsapp_inbound`, `Formulário Website`, `Planilha`) em 5 lugares diferentes
+da tela — card do Kanban, modal do lead, card de prospecção e resultado da
+busca. Três desses 5 lugares nem convertiam "Manual"/"outbound" para
+"Inbound"/"Outbound" — mostravam tudo cru.
+
+**Agora:** todo lugar que mostra a origem do lead usa o mesmo texto amigável:
+"Inbound", "Outbound", "Inbound (WhatsApp)", "Inbound (Formulário do site)" ou
+"Inbound (Planilha)". Se amanhã o sistema gravar um valor técnico novo que
+ainda não foi mapeado, ele aparece como "Inbound (<valor>)" em vez de cru —
+não fica mais sujeito a esse mesmo problema se surgir um valor novo.
+
+**Para validar:** Cenários P1, P2, P3 e P4, abaixo.
+
+---
+
 ## Checks de Validação
 
 ### Cenário P1 — Kanban board (visão principal)
