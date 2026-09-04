@@ -33,7 +33,6 @@ Arquivos em andamento ou recém-completados. Seguem o padrão do template.
 | Ficheiro | Status |
 |---|---|
 | `correcao-natural-llm-e-fixes-ui-descobertos.md` | Em andamento — planeado, código ainda não iniciado |
-| `advance-phase-colapsa-pre-agendamento-agendamento.md` | Em andamento — Fase 1 implementada, aguardando validação |
 
 > `agent-local-v2-app-standalone.md`, `agentlocal-assistente-ia.md`,
 > `agent-local-v2-testes-manuais.md`, `agent-local-plano-execucao-testes-pendentes.md`

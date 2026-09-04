@@ -337,12 +337,14 @@ alguém adicionar uma fase, um `agent_mode` ou reordenar uma sequência sem
 atualizar `_ALLOWED_ADVANCE` em conjunto, o teste falha apontando exatamente
 a transição faltante.
 
-**Achados relacionados, ainda não corrigidos:** `_PHASE_ID_TO_CATEGORY`
-(`backend-crm/routes/executor.py`/`playground.py`, ação `advance_phase`) e
-`_CATEGORY_TO_PHASE_ID` (local a `_collect_intent_triggers_for_lead_phase`)
-são duas traduções `phase_id`↔categoria adicionais, inconsistentes entre si
-quanto a p3a/p3b — ver `docs/implementations/` para o item de investigação
-em andamento.
+`_PHASE_ID_TO_CATEGORY` (`backend-crm/routes/executor.py`/`playground.py`,
+ação `advance_phase`) e `_CATEGORY_TO_PHASE_ID` (local a
+`_collect_intent_triggers_for_lead_phase`) são duas traduções
+`phase_id`↔categoria adicionais, hoje consistentes entre si (ambas mapeiam
+p3a↔`pre-agendamento` e p3b↔`agendamento`) — sem unificação estrutural, mas
+sem risco de divergência silenciosa: o teste de `_ALLOWED_ADVANCE` (acima)
+não cobre `_PHASE_ID_TO_CATEGORY`, então qualquer novo phase_id introduzido
+precisa ser adicionado manualmente aos dois dicionários.
 
 ### Lógica de Ramificação (`condicao`)
 
@@ -413,8 +415,8 @@ Após receber o `DecisionOutput`, o `backend-crm/routes/executor.py` chama `_dis
 _PHASE_ID_TO_CATEGORY = {
     "p1":  "qualification",
     "p2":  "apresentation",
-    "p3a": "apresentation",
-    "p3b": "apresentation",
+    "p3a": "pre-agendamento",
+    "p3b": "agendamento",
     "p4":  "followup",
     "p5":  "closing",
 }
