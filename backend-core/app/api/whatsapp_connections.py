@@ -39,6 +39,7 @@ class WhatsappConnectionOut(BaseModel):
     phone_e164: Optional[str]
     status: str
     disconnect_alert_sent_at: Optional[datetime] = None
+    last_disconnect_email_at: Optional[datetime] = None
     token_masked: Optional[str] = None
     created_at: datetime
     updated_at: datetime
@@ -84,6 +85,7 @@ def _format_connection_response(connection: models.WhatsappConnection) -> Whatsa
         phone_e164=connection.phone_e164,
         status=connection.status,
         disconnect_alert_sent_at=connection.disconnect_alert_sent_at,
+        last_disconnect_email_at=connection.last_disconnect_email_at,
         token_masked=service.mask_token(connection.instance_token_encrypted),
         created_at=connection.created_at,
         updated_at=connection.updated_at,
