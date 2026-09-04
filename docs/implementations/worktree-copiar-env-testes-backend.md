@@ -79,7 +79,27 @@ novas, para os 3 backends, no lugar onde já se documenta setup local.
 
 | # | Commit | O que foi implementado |
 |---|---|---|
-| 1 | *(a preencher após o commit)* | Documentação da cópia manual de `.env`/`.venv` em worktrees novas |
+| 1 | `56c08b5` | Documentação da cópia manual de `.env`/`.venv` em worktrees novas |
+
+**Detalhes do commit `56c08b5`:**
+- `docs/ops/local-dev.md` — nova seção "Worktree nova precisa de `.env` copiado manualmente antes de testar backend"
+- `CLAUDE.md` — pointer de uma linha na seção "Criação"
+- `docs/implementations/worktree-copiar-env-testes-backend.md` — preenchimento do arquivo (diagnóstico, abordagem, plano)
+
+### Relatório da Fase 1 — o que mudou na prática
+
+**Antes:** não havia nenhum aviso escrito sobre o `.env` não ser copiado
+automaticamente para uma worktree nova — quem se deparasse com testes de
+backend falhando numa worktree recém-criada não tinha como saber, sem
+investigar do zero, que era só falta desse arquivo local.
+
+**Agora:** `docs/ops/local-dev.md` explica o porquê (arquivo gitignored, não
+herdado por `EnterWorktree`), quais backends são afetados e o passo manual
+de cópia; `CLAUDE.md` aponta para essa nota no ponto onde a worktree é
+criada.
+
+**Para validar:** Cenário C1, abaixo — já validado retroativamente, pois o
+fato documentado foi comprovado ao vivo antes desta implementação existir.
 
 ---
 
