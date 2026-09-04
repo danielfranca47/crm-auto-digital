@@ -143,6 +143,28 @@ def whatsapp_connection_alert(current_user: CurrentUser = Depends(require_crm_ac
 
 ---
 
+### Commits Fase 2
+
+| # | Commit | O que foi implementado |
+|---|---|---|
+| 1 | `ff37162` | Banner de desconexão no frontend-crm |
+
+**Detalhes do commit `ff37162`:**
+- `frontend-crm/src/services/api.ts` — novo tipo `WhatsappConnectionAlertResponse` e método `api.crm.whatsappConnectionAlert()`
+- `frontend-crm/src/hooks/useWhatsappConnectionAlert.ts` — novo hook, React Query com `refetchInterval: 60_000`
+- `frontend-crm/src/components/WhatsappDisconnectBanner.tsx` — novo banner, modelado em `UsageAlertBanner.tsx`
+- `frontend-crm/src/App.tsx` — monta o banner no `AppShell`, ao lado do `UsageAlertBanner`
+
+---
+
+### Relatório da Fase 2 — o que mudou na prática
+
+**Antes:** nenhum aviso visível dentro do CRM quando o WhatsApp cai — só o email.
+**Agora:** um banner vermelho fixo aparece em qualquer página do CRM ("WhatsApp desconectado — reconecte para continuar respondendo automaticamente", com botão "Reconectar" que leva à aba de Conexão) sempre que houver uma queda real ainda não resolvida. Ele checa a cada 60s e some sozinho assim que a reconexão for detectada.
+**Para validar:** Cenários P1, P2, P3 e C1, abaixo.
+
+---
+
 ## Checks de Validação
 
 ### Cenário P1 — Sem conexão nunca criada
