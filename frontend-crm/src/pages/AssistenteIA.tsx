@@ -17,6 +17,16 @@ const COLUMN_ALIASES: Record<string, string[]> = {
   contato: ['contato', 'contact', 'contactname', 'nome', 'nome_contato'],
   telefone: ['telefone', 'phone', 'tel', 'celular', 'whatsapp'],
   notas: ['notas', 'notes', 'observacao', 'observações', 'obs', 'descricao'],
+  acquisition_channel: ['canal', 'canal_aquisicao', 'fonte', 'canal de aquisição'],
+};
+
+// labels amigáveis para os campos mapeáveis (a chave crua não é apresentável, ex.: "acquisition_channel")
+const FIELD_LABELS: Record<string, string> = {
+  empresa: 'Empresa',
+  contato: 'Contato',
+  telefone: 'Telefone',
+  notas: 'Notas',
+  acquisition_channel: 'Canal de aquisição',
 };
 
 function autoDetectMapping(columns: string[]): Record<string, string> {
@@ -384,9 +394,9 @@ const AssistenteIA = () => {
                   Indique quais colunas da planilha correspondem a cada campo. Deixe em branco para ignorar.
                 </p>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {(['empresa', 'contato', 'telefone', 'notas'] as const).map((field) => (
+                  {(['empresa', 'contato', 'telefone', 'notas', 'acquisition_channel'] as const).map((field) => (
                     <div key={field} className="space-y-1">
-                      <Label className="capitalize">{field}</Label>
+                      <Label>{FIELD_LABELS[field]}</Label>
                       <select
                         className="w-full border rounded px-3 py-2 bg-background text-sm"
                         value={columnMap[field] ?? ''}

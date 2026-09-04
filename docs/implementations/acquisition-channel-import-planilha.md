@@ -104,6 +104,45 @@ empresa/contato/dedup — manter simetria com o que já existe).
 
 ---
 
+## Commits Fase 1
+
+| # | Commit | O que foi implementado |
+|---|---|---|
+| 1 | `35812bd` | Backend: mapeamento e persistência de `acquisition_channel` na importação por planilha |
+
+**Detalhes do commit `35812bd`:**
+- `backend-crm/automations/assistente_ia/processor.py` — `map_row_to_lead()` lê `acquisition_channel` via `column_map` explícito ou fallback automático (`canal`, `canal_aquisicao`, `fonte`); `update_lead_light()` passa a preservar/preencher esse campo no merge de `overwrite=update`
+- `backend-crm/tests/test_processor_lead_mapping.py` — 3 novos testes (mapeamento explícito, auto-detecção, ausência da coluna)
+
+### Relatório da Fase 1 — o que mudou na prática
+
+**Antes:** ao importar uma planilha de leads, o campo "Canal de aquisição" nunca era preenchido automaticamente — mesmo que a planilha tivesse uma coluna com essa informação, era preciso abrir cada lead depois e preencher manualmente.
+
+**Agora:** o backend já sabe reconhecer essa informação na planilha, seja porque o utilizador mapeou a coluna explicitamente, seja porque a planilha já tem uma coluna chamada "canal" ou "fonte". Falta apenas a Fase 2 (frontend) para o utilizador conseguir fazer esse mapeamento explícito pela interface — sem ela, só funciona a auto-detecção por nome de coluna.
+
+**Para validar:** ainda não há UI para os Cenários P1/P2/P4 completos (dependem da Fase 2). Os testes automatizados (`pytest tests/test_processor_lead_mapping.py`) já cobrem a lógica de mapeamento isoladamente e passaram (8/8).
+
+---
+
+## Commits Fase 2
+
+| # | Commit | O que foi implementado |
+|---|---|---|
+| 1 | `<a preencher após commit>` | Frontend: campo "Canal de aquisição" no mapeamento de colunas do Assistente IA |
+
+**Detalhes do commit:**
+- `frontend-crm/src/pages/AssistenteIA.tsx` — `COLUMN_ALIASES` ganhou entrada `acquisition_channel` (aliases: `canal`, `canal_aquisicao`, `fonte`, `canal de aquisição`) para auto-detecção; novo mapa `FIELD_LABELS` para exibir rótulos amigáveis na UI de mapeamento (antes usava o nome cru da chave com `capitalize`); lista de campos mapeáveis passou a incluir `acquisition_channel`
+
+### Relatório da Fase 2 — o que mudou na prática
+
+**Antes:** mesmo com o backend já pronto (Fase 1), não havia como o utilizador dizer, pela interface do Assistente IA, qual coluna da planilha continha o canal de aquisição — só funcionava se a coluna já se chamasse exatamente "canal", "canal_aquisicao" ou "fonte".
+
+**Agora:** a tela "1.5. Mapeamento de Colunas" mostra um novo campo "Canal de aquisição", com auto-detecção quando a planilha já tem uma coluna com nome parecido, e seleção manual para qualquer outro nome de coluna (ex.: "Origem Marketing").
+
+**Para validar:** Cenários P1, P2, P3 e P4 (secção "Checks de Validação", acima) — todos dependiam desta fase e agora estão prontos para teste de ponta a ponta.
+
+---
+
 ## Ajustes Possíveis Pós-Implementação
 
 - A grid de prévia do Assistente IA não mostra `acquisition_channel` (nem
