@@ -1,4 +1,4 @@
-# Lead — Schema de Nome (companyName / contactName)
+# Lead — Schema de Nome (companyName / contactName) e Origem/Canal de Aquisição
 
 ## Regra central
 
@@ -57,3 +57,46 @@ Também exposto como variável de template `{{lead.nome_whatsapp}}` (`automation
 **Duas fontes de dados distintas no frontend, comportamento diferente:**
 - **Via `LeadsContext.tsx`** (`mapRawLead`, usado pelo Kanban/Prospecção) — normaliza `companyName`/`contactName` de `null` (API) para `''` antes de expor como `Lead`. Por isso `Lead.companyName`/`contactName` em `types/crm.ts` permanecem tipados como `string` simples (nunca `null`), consistente com os demais campos do tipo (`phone`, `email`, `origin`, `observations`).
 - **Fora de `LeadsContext`** (ex.: `FollowUpCenter.tsx`, via `api.followUps.listActive()`) — recebe `companyName`/`contactName` crus da API, sem essa normalização. `companyName` **pode ser `null` de verdade em runtime** aqui, mesmo que o tipo declarado (`FollowUpLead` em `services/api.ts`) diga `string`. Qualquer novo ponto de leitura de leads fora do `LeadsContext` deve tratar esse campo como potencialmente nulo (usar `leadDisplayName()` ou `?? ''`).
+
+## `origin` (direção) x `acquisition_channel` (canal de marketing)
+
+Dois campos separados, com responsabilidades distintas — não misturar:
+
+- **`leads.origin`** — só a **direção** da conversa: quem falou primeiro. É o único dos dois lido
+  pela IA (`_classify_lead_origin()` em `backend-crm/services/ai_orchestrator/orchestrator.py`,
+  usado tanto pelo executor real quanto pelo playground): o literal `"outbound"` (após
+  trim/lowercase) classifica como outbound; **qualquer outro valor** — incluindo os valores
+  técnicos reais gravados pelo sistema (`whatsapp_inbound`, `Formulário Website`, `Manual`,
+  `Planilha`, ou qualquer canal livre digitado) — é tratado como inbound por default seguro. Só
+  dois pontos gravam `"outbound"` deliberadamente: `ProspectConfirmModal.tsx` (confirmação de
+  prospecção fria no Kanban) e `agent-local/app/crm_client.py::log_outbound()`. Ver
+  [`pipeline-phases.md`](pipeline-phases.md) para o uso no prompt (`origin_inbound_opener` /
+  `origin_outbound_opener`).
+- **`leads.acquisition_channel`** — canal de marketing (Facebook Ads, Google Ads, Indicação,
+  Website...), texto livre, nullable. Preenchido só na criação/edição manual do lead
+  (`NewLeadModal.tsx`, `LeadCardDialog.tsx`). **Não é lido por nenhuma lógica de IA** — puramente
+  informativo/pesquisável (entra na busca do Kanban).
+
+### Captura no frontend (`LEAD_DIRECTION_OPTIONS`, `frontend-crm/src/lib/lead-origin.ts`)
+
+O Select de "Direção" só oferece 2 valores canônicos — `Manual` (rótulo "Inbound — o lead
+procurou primeiro") e `outbound` ("Outbound — eu abordei primeiro"). Ele aparece condicionalmente
+em `NewLeadModal.tsx`/`LeadCardDialog.tsx`:
+
+- **Categoria "À Prospectar"** (fila de quem ainda não foi contatado): o Select não aparece —
+  `origin` nasce `"Manual"` (inbound) sem perguntar nada. A direção real só é decidida depois,
+  quando o card é arrastado para a próxima coluna: o `ProspectConfirmModal` pergunta "Já
+  prospectou activamente?" — "Sim, já prospectei" grava `origin="outbound"` +
+  `prospection_context`; "Não" mantém inbound.
+- **Qualquer outra categoria**: o Select é obrigatório (bloqueia o submit sem escolha), porque o
+  lead já está além da fila de prospecção — a direção precisa ser explícita no momento da
+  criação/edição.
+
+Um lead com `origin` gravado por um caminho técnico (`whatsapp_inbound`, `Formulário Website`,
+`Planilha`) não bate em nenhuma das 2 opções do Select — em `LeadCardDialog.tsx` o valor exibido
+fica em branco (placeholder "Quem procurou primeiro?"), mas o estado `editedLead.origin` nasce
+como cópia do lead atual e só muda se o usuário efetivamente escolher uma opção
+(`onValueChange`). Por isso salvar a edição sem tocar nesse campo preserva o valor técnico
+original. `formatLeadOriginLabel()`
+exibe esses valores técnicos crus (sem tradução amigável) no modo leitura; só `Manual`/`outbound`
+viram "Inbound"/"Outbound".
