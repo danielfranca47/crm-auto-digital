@@ -87,7 +87,7 @@ segue uma queda que já tinha notificado o utilizador.
 
 | # | Commit | O que foi implementado |
 |---|---|---|
-| 1 | `<preenchido após o commit>` | Coluna `disconnect_alert_sent_at`, email de reconexão, lógica em `connection_event()` |
+| 1 | `1223441` | Coluna `disconnect_alert_sent_at`, email de reconexão, lógica em `connection_event()` |
 
 **Detalhes do commit:**
 - `backend-core/app/models/whatsapp_connection.py` — coluna nova `disconnect_alert_sent_at` (DateTime, nullable)
