@@ -128,7 +128,7 @@ empresa/contato/dedup — manter simetria com o que já existe).
 
 | # | Commit | O que foi implementado |
 |---|---|---|
-| 1 | `<a preencher após commit>` | Frontend: campo "Canal de aquisição" no mapeamento de colunas do Assistente IA |
+| 1 | `06cf985` | Frontend: campo "Canal de aquisição" no mapeamento de colunas do Assistente IA |
 
 **Detalhes do commit:**
 - `frontend-crm/src/pages/AssistenteIA.tsx` — `COLUMN_ALIASES` ganhou entrada `acquisition_channel` (aliases: `canal`, `canal_aquisicao`, `fonte`, `canal de aquisição`) para auto-detecção; novo mapa `FIELD_LABELS` para exibir rótulos amigáveis na UI de mapeamento (antes usava o nome cru da chave com `capitalize`); lista de campos mapeáveis passou a incluir `acquisition_channel`
