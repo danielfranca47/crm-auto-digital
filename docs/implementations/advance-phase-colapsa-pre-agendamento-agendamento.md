@@ -1,7 +1,7 @@
 # `advance_phase` colapsa p3a/p3b em "apresentation" (categoria nunca vira pre-agendamento/agendamento)
 
 **Branch:** `fix/advance-phase-colapsa-pre-agendamento-agendamento`
-**Status:** Em andamento
+**Status:** Todos os cenários validados (04/09/2026)
 
 ---
 
@@ -259,7 +259,7 @@ const phaseOptions: SalesFlowPhaseId[] = ['p0', 'p1', 'p2', 'p3a', 'p3b', 'p4', 
 
 | # | Commit | O que foi implementado |
 |---|---|---|
-| 1 | `(a registar após commit)` | Corrigido `phaseOptions` em `CamadaFluxoVenda.tsx` + relatório desta fase |
+| 1 | `d4b2e76` | Corrigido `phaseOptions` em `CamadaFluxoVenda.tsx` + relatório desta fase |
 
 ### Relatório da Fase 2 — o que mudou na prática
 
