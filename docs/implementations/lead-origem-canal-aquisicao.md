@@ -131,6 +131,43 @@ idêntico, ou seja, não têm relação com esta fase. Não há cenário de UI/p
 | `backend-crm/models.py` | Novo campo `acquisition_channel: Optional[str] = None` em `Lead` e `LeadUpdate`; docstring de `origin` reescrito |
 | `backend-crm/routes/leads.py` | POST `criar_lead`: coluna nova no INSERT + fallback manual. PATCH: nenhuma mudança (já é genérico) |
 
+### Commits Fase 2
+
+| # | Commit | O que foi implementado |
+|---|---|---|
+| 1 | `c5dd46c` | feat: adicionar acquisition_channel como coluna própria do lead |
+
+**Detalhes do commit `c5dd46c`:**
+- `backend-crm/database.py` — `ensure_column` para `leads.acquisition_channel` (TEXT NULL)
+- `backend-crm/models.py` — campo novo em `Lead` e `LeadUpdate`; docstring de `origin` reescrito
+- `backend-crm/routes/leads.py` — POST inclui a coluna no INSERT + fallback manual; PATCH não precisou de mudança (já é genérico)
+
+### Relatório da Fase 2 — o que mudou na prática
+
+**Antes:** não havia lugar para guardar o canal de marketing (Facebook Ads, Indicação...) sem
+misturar com o campo técnico que a IA usa para saber se abordou o lead primeiro.
+
+**Agora:** existe uma coluna própria (`acquisition_channel`) no banco, aceita pelo backend tanto
+na criação quanto na edição de um lead, totalmente separada de `origin` — e não é lida por
+nenhuma lógica de IA.
+
+**Para validar:** confirmei via script direto que a coluna é criada corretamente e que os
+modelos (`Lead`/`LeadUpdate`) aceitam o campo. Também encontrei (mas não mexi, está fora do
+escopo desta implementação) um bug pré-existente e não relacionado: `_migrate_leads_company_or_
+contact()` em `database.py` reconstrói a tabela `leads` com uma lista fixa de colunas na
+*primeira* vez que um banco totalmente novo é inicializado, e essa lista já não incluía várias
+colunas adicionadas depois via `ensure_column` (`wa_display_name`, `sales_flow_wait`,
+`branches_selected`, `knowledge_categories_shown`, e agora também `acquisition_channel`) — só
+afeta bancos novos do zero (dev local/CI), nunca produção, porque lá essa migração já rodou faz
+tempo e fica marcada como concluída. Não afeta esta implementação porque a validação real
+(Fase 3, via browser) usa o banco já existente. Vale um fix à parte no futuro se for
+incomodar testes locais.
+
+O teste ponta-a-ponta de verdade (criar/editar lead via API real) fica coberto pelos Cenários
+C1-C4 da Fase 3, já que abrir o navegador e testar a UI exercita as mesmas rotas. Não criei teste
+automatizado dedicado para esta fase — seguindo o plano, que reservou isso para a validação
+manual da Fase 3.
+
 ### Fase 3 — Frontend
 
 **Objetivo:** `origin` vira seleção controlada (Inbound/Outbound); canal de aquisição vira campo novo, sempre livre.
