@@ -77,8 +77,9 @@ connected"` e a sessão activa não é afectada.
 | Rota | Corpo aceito | Descrição |
 |---|---|---|
 | `POST /connect` | `{"phone"?: string}` | Cria/reusa instância, chama connect, registra webhook |
-| `GET /status` | — | Status normalizado + `phone_e164` |
+| `GET /status` | — | Status normalizado + `phone_e164` (chama a UazAPI ao vivo) |
 | `POST /qr/refresh` | `{"phone"?: string}` | Gera novo QR ou código sem recriar a instância |
+| `GET /connection-alert` | — | `{ disconnected, since }` — leitura barata (sem UazAPI), ver "Deteção de queda de sessão" |
 
 - `ConnectRequest.phone` é sanitizado por `_sanitize_phone()` (remove
   espaço/`-`/`+`/parênteses) antes de seguir para `core_client.py` — a
@@ -194,6 +195,25 @@ uma instância nova). Ver
 [`webhooks.md`](webhooks.md#evento-de-conexão-eventconnection--status-real--alerta-de-desconexão)
 para o fluxo completo — inclui a limitação conhecida de depender da entrega
 do webhook, sem verificação periódica independente ainda.
+
+Além do email, o `frontend-crm` mostra um banner in-app persistente em
+qualquer página autenticada enquanto a desconexão não for resolvida:
+
+- `GET /api/whatsapp/connection-alert` (`backend-crm/routes/whatsapp_connect.py`)
+  retorna `{ disconnected: bool, since: str | null }`, lido via
+  `_resolve_instance_id()` → `GET /whatsapp-connections/me` no backend-core
+  (leitura de banco, sem chamar a UazAPI) — barato o suficiente para polling
+  global. `disconnected` é `true` apenas quando o `status` normalizado não é
+  activo **e** `WhatsappConnection.disconnect_alert_sent_at` está preenchido
+  — a mesma condição usada para o email de reconexão, o que evita mostrar o
+  banner para quem nunca conectou o WhatsApp.
+- `frontend-crm/src/hooks/useWhatsappConnectionAlert.ts` — React Query,
+  `refetchInterval: 60_000`.
+- `frontend-crm/src/components/WhatsappDisconnectBanner.tsx` — banner
+  vermelho fixo, montado em `App.tsx` (`AppShell`) ao lado do
+  `UsageAlertBanner`; link para `/ai-profile`. Some sozinho assim que
+  `disconnect_alert_sent_at` é limpo na reconexão — reflete o estado ao vivo,
+  sem "marcar como lido".
 
 **Hipótese principal (a confirmar):** conflito de sessão — o mesmo número
 com o WhatsApp Web/Desktop aberto em paralelo à ligação da API. Motivo real
