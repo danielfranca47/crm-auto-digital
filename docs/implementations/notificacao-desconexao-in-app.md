@@ -1,7 +1,7 @@
 # Notificação in-app (banner) de desconexão do WhatsApp
 
 **Branch:** `feat/notificacao-desconexao-in-app`
-**Status:** Em andamento
+**Status:** Todos os cenários validados (04/09/2026)
 
 ---
 
@@ -168,23 +168,27 @@ def whatsapp_connection_alert(current_user: CurrentUser = Depends(require_crm_ac
 ## Checks de Validação
 
 ### Cenário P1 — Sem conexão nunca criada
-- [ ] Chamar `GET /api/whatsapp/connection-alert` com usuário sem `WhatsappConnection`
-- [ ] Confirmar: `{ disconnected: false, since: null }`, sem erro 404 vazando pro frontend
+- [x] Chamar `GET /api/whatsapp/connection-alert` com usuário sem `WhatsappConnection`
+- [x] Confirmar: `{ disconnected: false, since: null }`, sem erro 404 vazando pro frontend
+- **Validado em:** 04/09/2026 — testado via curl direto (backend-core + backend-crm locais, worktree), removendo temporariamente a linha do usuário de teste (user_id 15) e restaurando em seguida. Resposta exata: `{"disconnected":false,"since":null}`
 
 ### Cenário P2 — Conectado normalmente
-- [ ] Usuário com `status="active"` e `disconnect_alert_sent_at=null`
-- [ ] Confirmar: `{ disconnected: false }`
+- [x] Usuário com `status="active"` e `disconnect_alert_sent_at=null`
+- [x] Confirmar: `{ disconnected: false }`
+- **Validado em:** 04/09/2026 — estado real do usuário de teste (`status="connected"`) antes de qualquer simulação. Resposta: `{"disconnected":false,"since":null}`
 
 ### Cenário P3 — Desconectado (queda real)
-- [ ] Forçar no banco local `status="inactive"` e `disconnect_alert_sent_at=<timestamp>`
-- [ ] Confirmar: `{ disconnected: true, since: "<timestamp>" }`
+- [x] Forçar no banco local `status="inactive"` e `disconnect_alert_sent_at=<timestamp>`
+- [x] Confirmar: `{ disconnected: true, since: "<timestamp>" }`
+- **Validado em:** 04/09/2026 — forçado `status="inactive"`, `disconnect_alert_sent_at="2026-09-04 12:00:00"`. Resposta: `{"disconnected":true,"since":"2026-09-04T12:00:00"}`
 
 ### Cenário C1 — Banner aparece e some (browser)
-- [ ] Com backend-crm/backend-core rodando localmente e usuário logado no frontend-crm
-- [ ] Simular queda (Cenário P3) → recarregar/aguardar refetch (60s)
-- [ ] Confirmar: banner vermelho aparece em qualquer página do CRM, com link para `/ai-profile`
-- [ ] Simular reconexão (`disconnect_alert_sent_at=null`, `status="active"`) → aguardar refetch
-- [ ] Confirmar: banner some
+- [x] Com backend-crm/backend-core rodando localmente e usuário logado no frontend-crm
+- [x] Simular queda (Cenário P3) → recarregar/aguardar refetch (60s)
+- [x] Confirmar: banner vermelho aparece em qualquer página do CRM, com link para `/ai-profile`
+- [x] Simular reconexão (`disconnect_alert_sent_at=null`, `status="active"`) → aguardar refetch
+- [x] Confirmar: banner some
+- **Validado em:** 04/09/2026 — via browser (MCP chrome-devtools), login com conta de teste local (`_conta-teste-local.md`). Banner "🔴 WhatsApp desconectado — reconecte para continuar respondendo automaticamente." apareceu no topo do Kanban com o estado de desconexão; link "Reconectar" aponta corretamente para `/ai-profile`; após simular reconexão e recarregar, o banner desapareceu.
 
 ---
 
