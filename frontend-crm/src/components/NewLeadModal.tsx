@@ -9,6 +9,7 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetClose } from "./ui/s
 import { X } from "lucide-react";
 import { api } from "@/services/api";
 import { useApiErrorHandler } from "@/hooks/useApiErrorHandler";
+import { LEAD_DIRECTION_OPTIONS } from "@/lib/lead-origin";
 
 interface NewLeadModalProps {
   isOpen: boolean;
@@ -51,6 +52,7 @@ export function NewLeadModal({ isOpen, onClose, onSave }: NewLeadModalProps) {
     phone: "",
     country_code: DEFAULT_COUNTRY_CODE,
     origin: "Manual",
+    acquisition_channel: "",
     category: "to-prospect",
     observations: "",
   });
@@ -59,7 +61,11 @@ export function NewLeadModal({ isOpen, onClose, onSave }: NewLeadModalProps) {
 
   const hasContactName = Boolean(formData.contactName.trim());
   const hasCompanyName = Boolean(formData.companyName.trim());
-  const canSubmit = Boolean(formData.phone) && (hasContactName || hasCompanyName);
+  const requiresDirection = formData.category !== "to-prospect";
+  const canSubmit =
+    Boolean(formData.phone) &&
+    (hasContactName || hasCompanyName) &&
+    (!requiresDirection || Boolean(formData.origin));
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -85,6 +91,7 @@ export function NewLeadModal({ isOpen, onClose, onSave }: NewLeadModalProps) {
           country_code: payload.country_code,
           email: null,
           origin: payload.origin || "Manual",
+          acquisition_channel: payload.acquisition_channel || null,
           category: payload.category,
           customMessage: null,
           observations: payload.observations || null,
@@ -98,6 +105,7 @@ export function NewLeadModal({ isOpen, onClose, onSave }: NewLeadModalProps) {
         phone: "",
         country_code: DEFAULT_COUNTRY_CODE,
         origin: "Manual",
+        acquisition_channel: "",
         category: "to-prospect",
         observations: "",
       });
@@ -199,25 +207,21 @@ export function NewLeadModal({ isOpen, onClose, onSave }: NewLeadModalProps) {
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="origin" className="text-sm font-medium">
-              Origem
-            </Label>
-            <Input
-              id="origin"
-              value={formData.origin}
-              onChange={(e) => setFormData((prev) => ({ ...prev, origin: e.target.value }))}
-              placeholder="Website, LinkedIn, Indicação..."
-              className="bg-input border-border"
-            />
-          </div>
-
-          <div className="space-y-2">
             <Label htmlFor="category" className="text-sm font-medium">
               Categoria
             </Label>
             <Select
               value={formData.category}
-              onValueChange={(value: LeadStatus) => setFormData((prev) => ({ ...prev, category: value }))}
+              onValueChange={(value: LeadStatus) =>
+                setFormData((prev) => ({
+                  ...prev,
+                  category: value,
+                  // "À Prospectar" ainda não teve contacto — a direção fica em aberto até o
+                  // ProspectConfirmModal perguntar, no drag do Kanban. Fora disso, é obrigatório
+                  // escolher agora.
+                  origin: value === "to-prospect" ? "Manual" : "",
+                }))
+              }
             >
               <SelectTrigger className="bg-input border-border">
                 <SelectValue placeholder="Selecione..." />
@@ -230,6 +234,42 @@ export function NewLeadModal({ isOpen, onClose, onSave }: NewLeadModalProps) {
                 ))}
               </SelectContent>
             </Select>
+          </div>
+
+          {requiresDirection && (
+            <div className="space-y-2">
+              <Label htmlFor="origin" className="text-sm font-medium">
+                Direção *
+              </Label>
+              <Select
+                value={formData.origin}
+                onValueChange={(value) => setFormData((prev) => ({ ...prev, origin: value }))}
+              >
+                <SelectTrigger id="origin" className="bg-input border-border">
+                  <SelectValue placeholder="Quem procurou primeiro?" />
+                </SelectTrigger>
+                <SelectContent className="bg-popover border-border">
+                  {LEAD_DIRECTION_OPTIONS.map((option) => (
+                    <SelectItem key={option.value} value={option.value}>
+                      {option.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
+
+          <div className="space-y-2">
+            <Label htmlFor="acquisition_channel" className="text-sm font-medium">
+              Canal de aquisição
+            </Label>
+            <Input
+              id="acquisition_channel"
+              value={formData.acquisition_channel}
+              onChange={(e) => setFormData((prev) => ({ ...prev, acquisition_channel: e.target.value }))}
+              placeholder="Facebook Ads, Google Ads, Indicação, Website..."
+              className="bg-input border-border"
+            />
           </div>
 
           <div className="space-y-2">

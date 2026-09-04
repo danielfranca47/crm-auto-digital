@@ -33,6 +33,7 @@ import { useNotifications } from "@/hooks/useNotifications";
 import { SALES_FLOW_PHASES_BY_AGENT_MODE } from "@/types/agente";
 import type { SalesFlowPhaseId } from "@/types/agente";
 import { api } from "@/services/api";
+import { formatLeadOriginLabel } from "@/lib/lead-origin";
 
 interface KanbanBoardProps {
   onDashboard: () => void;
@@ -174,6 +175,7 @@ export function KanbanBoard({ onDashboard }: KanbanBoardProps) {
         (lead.companyName || '').toLowerCase().includes(term) ||
         lead.phone.toLowerCase().includes(term) ||
         lead.origin.toLowerCase().includes(term) ||
+        (lead.acquisition_channel || '').toLowerCase().includes(term) ||
         (!!lead.observations && lead.observations.toLowerCase().includes(term))
       );
     },
@@ -521,7 +523,7 @@ export function KanbanBoard({ onDashboard }: KanbanBoardProps) {
                   </h4>
                 </div>
                 <div className="text-xs text-muted-foreground truncate">{activeLead.phone}</div>
-                <div className="text-xs text-muted-foreground truncate mt-1">{activeLead.origin}</div>
+                <div className="text-xs text-muted-foreground truncate mt-1">{formatLeadOriginLabel(activeLead.origin)}</div>
               </div>
             ) : null}
           </DragOverlay>

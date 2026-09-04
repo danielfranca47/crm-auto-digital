@@ -1,5 +1,6 @@
 import { Lead, LeadStatus, Appointment } from "../types/crm";
 import { QualificationField } from "../types/agente";
+import { LEAD_DIRECTION_OPTIONS, formatLeadOriginLabel } from "@/lib/lead-origin";
 import {
   Calendar,
   Building2,
@@ -820,21 +821,51 @@ function LeadCardDialogBody({
 
           <div className="space-y-2">
             <Label htmlFor="origin" className="text-sm font-medium">
-              Fonte do Lead
+              Direção
+            </Label>
+            {isEditing ? (
+              <Select
+                value={editedLead?.origin || ""}
+                onValueChange={(value) =>
+                  setEditedLead((prev) => (prev ? { ...prev, origin: value } : null))
+                }
+              >
+                <SelectTrigger id="origin">
+                  <SelectValue placeholder="Quem procurou primeiro?" />
+                </SelectTrigger>
+                <SelectContent>
+                  {LEAD_DIRECTION_OPTIONS.map((option) => (
+                    <SelectItem key={option.value} value={option.value}>
+                      {option.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            ) : (
+              <div className="flex items-center gap-2 text-sm text-foreground">
+                <Tag className="h-4 w-4" />
+                {formatLeadOriginLabel(currentLead.origin)}
+              </div>
+            )}
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="acquisition_channel" className="text-sm font-medium">
+              Canal de aquisição
             </Label>
             {isEditing ? (
               <Input
-                id="origin"
-                value={editedLead?.origin || ""}
+                id="acquisition_channel"
+                value={editedLead?.acquisition_channel || ""}
                 onChange={(e) =>
-                  setEditedLead((prev) => (prev ? { ...prev, origin: e.target.value } : null))
+                  setEditedLead((prev) => (prev ? { ...prev, acquisition_channel: e.target.value } : null))
                 }
                 placeholder="Ex: Indicação, Website, Google Ads..."
               />
             ) : (
               <div className="flex items-center gap-2 text-sm text-foreground">
                 <Tag className="h-4 w-4" />
-                {currentLead.origin}
+                {currentLead.acquisition_channel || "Não informado"}
               </div>
             )}
           </div>

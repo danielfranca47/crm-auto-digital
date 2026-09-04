@@ -569,6 +569,7 @@ export const api = {
     country_code?: string | null;
     email?: string | null;
     origin?: string | null;
+    acquisition_channel?: string | null;
     category: string; // ex.: "to-prospect"
     customMessage?: string | null;
     observations?: string | null;
@@ -581,6 +582,7 @@ export const api = {
       country_code: payload.country_code ?? null,
       email: payload.email ?? null,
       origin: payload.origin ?? "Manual",
+      acquisition_channel: payload.acquisition_channel ?? null,
       category: payload.category,
       customMessage: payload.customMessage ?? null,
       observations: payload.observations ?? null,
@@ -596,6 +598,7 @@ export const api = {
       phone: string | null;
       email: string | null;
       origin: string | null;
+      acquisition_channel: string | null;
       category: string;
       customMessage: string | null;
       observations: string | null;
@@ -610,6 +613,7 @@ export const api = {
       ...(patch.phone !== undefined ? { phone: patch.phone } : {}),
       ...(patch.email !== undefined ? { email: patch.email } : {}),
       ...(patch.origin !== undefined ? { origin: patch.origin } : {}),
+      ...(patch.acquisition_channel !== undefined ? { acquisition_channel: patch.acquisition_channel } : {}),
       ...(patch.category !== undefined ? { category: patch.category } : {}),
       ...(patch.customMessage !== undefined ? { customMessage: patch.customMessage } : {}),
       ...(patch.observations !== undefined ? { observations: patch.observations } : {}),

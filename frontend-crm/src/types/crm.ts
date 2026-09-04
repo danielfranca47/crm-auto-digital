@@ -41,6 +41,7 @@ export interface Lead {
   phone: string;
   email: string;
   origin: string;
+  acquisition_channel?: string | null;
   category: LeadStatus;
   customMessage: string;
   observations: string;
@@ -115,6 +116,7 @@ export interface NewLeadForm {
   country_code: string;
   email?: string;
   origin: string;
+  acquisition_channel?: string;
   category: LeadStatus;
   customMessage?: string;
   observations: string;
