@@ -254,7 +254,7 @@ function BlockForm({ block, setBlock, knowledgeItems, customVars, phaseBlocks }:
     return items;
   }, [knowledgeItems]);
 
-  const phaseOptions: SalesFlowPhaseId[] = ['p0', 'p1', 'p2a', 'p2b', 'p3', 'p4'];
+  const phaseOptions: SalesFlowPhaseId[] = ['p0', 'p1', 'p2', 'p3a', 'p3b', 'p4', 'p5'];
 
   switch (block.typeId) {
     case 'kw_trigger':

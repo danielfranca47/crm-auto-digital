@@ -194,8 +194,8 @@ class PlaygroundChatResponse(BaseModel):
 _PHASE_ID_TO_CATEGORY = {
     "p1":  "qualification",
     "p2":  "apresentation",
-    "p3a": "apresentation",
-    "p3b": "apresentation",
+    "p3a": "pre-agendamento",
+    "p3b": "agendamento",
     "p4":  "followup",
     "p5":  "closing",
 }
