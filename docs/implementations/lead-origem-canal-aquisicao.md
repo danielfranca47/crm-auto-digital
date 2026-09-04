@@ -89,6 +89,38 @@ _is_outbound = _lead_origin_raw.lower() not in ("whatsapp", "inbound", "manual",
 _is_outbound, _lead_origin, _lead_origin_label = _classify_lead_origin(lead_data.get("origin"))
 ```
 
+### Commits Fase 1
+
+| # | Commit | O que foi implementado |
+|---|---|---|
+| 1 | `bd3448e` | fix: corrigir classificação inbound/outbound de leads na IA |
+
+**Detalhes do commit `bd3448e`:**
+- `backend-crm/services/ai_orchestrator/orchestrator.py` — nova função `_classify_lead_origin()`; substitui as 2 ocorrências duplicadas da whitelist antiga
+- `backend-crm/tests/test_lead_origin_classification.py` — novo arquivo, 8 testes cobrindo os valores reais de `origin`
+- `docs/implementations/lead-origem-canal-aquisicao.md` — arquivo criado com o plano completo
+
+### Relatório da Fase 1 — o que mudou na prática
+
+**Antes:** quase todo lead que chegava sozinho pelo WhatsApp (ou pelo formulário do site) era
+tratado internamente pela IA como se tivesse sido abordado a frio — usava o texto de abertura
+errado (`origin_outbound_opener` em vez de `origin_inbound_opener`) e um rótulo de contexto
+invertido no prompt.
+
+**Agora:** só um lead com `origin` gravado exatamente como `"outbound"` (o valor que o
+`ProspectConfirmModal` ou o agent-local gravam quando uma prospecção fria é confirmada) é tratado
+como outbound. Qualquer outro valor — incluindo o caso real de todo lead que chega pelo WhatsApp
+— é tratado corretamente como inbound.
+
+**Para validar:** esta fase é coberta pelo teste automatizado (`python -m unittest
+backend-crm.tests.test_lead_origin_classification`, já rodado e passando — 8/8 casos, incluindo
+os dois bugs reais). Rodei também a suíte completa de `backend-crm/tests` (208 testes) para
+garantir zero regressão; as 18 falhas pré-existentes que apareceram são um problema conhecido de
+ambiente Windows (arquivo de banco temporário não libera lock a tempo do `tearDown` apagar a
+pasta) — confirmei rodando os mesmos testes na pasta principal (sem esta mudança) e o resultado é
+idêntico, ou seja, não têm relação com esta fase. Não há cenário de UI/playground para este fix
+(é lógica interna de classificação), então não se aplica teste via browser aqui.
+
 ### Fase 2 — Nova coluna `acquisition_channel` + models + rotas
 
 **Objetivo:** dar ao canal de marketing um lugar próprio, sem tocar na lógica de IA.
