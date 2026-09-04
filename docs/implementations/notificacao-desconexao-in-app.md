@@ -110,6 +110,26 @@ def whatsapp_connection_alert(current_user: CurrentUser = Depends(require_crm_ac
     return {"disconnected": disconnected, "since": since if disconnected else None}
 ```
 
+### Commits Fase 1
+
+| # | Commit | O que foi implementado |
+|---|---|---|
+| 1 | `4de1b64` | Endpoint de alerta leve (backend-core + backend-crm) |
+
+**Detalhes do commit `4de1b64`:**
+- `backend-core/app/api/whatsapp_connections.py` — `WhatsappConnectionOut` ganha `disconnect_alert_sent_at`; `_format_connection_response` passa a serializar
+- `backend-crm/routes/whatsapp_connect.py` — nova rota `GET /api/whatsapp/connection-alert`
+
+---
+
+### Relatório da Fase 1 — o que mudou na prática
+
+**Antes:** não existia nenhuma forma barata de saber, fora da tela de Conexão, se o WhatsApp do usuário está desconectado.
+**Agora:** existe um novo endpoint (`GET /api/whatsapp/connection-alert`) que responde `{ disconnected, since }` lendo um dado já salvo no banco (sem chamar a UazAPI ao vivo) — ainda não há nada visível na tela, isso é só a base de dados para o banner da Fase 2.
+**Para validar:** Cenários P1, P2 e P3, abaixo.
+
+---
+
 ### Fase 2 — Banner no frontend-crm
 
 **Objetivo:** exibir o aviso em qualquer página autenticada
