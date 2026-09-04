@@ -97,6 +97,26 @@ Um lead com `origin` gravado por um caminho técnico (`whatsapp_inbound`, `Formu
 fica em branco (placeholder "Quem procurou primeiro?"), mas o estado `editedLead.origin` nasce
 como cópia do lead atual e só muda se o usuário efetivamente escolher uma opção
 (`onValueChange`). Por isso salvar a edição sem tocar nesse campo preserva o valor técnico
-original. `formatLeadOriginLabel()`
-exibe esses valores técnicos crus (sem tradução amigável) no modo leitura; só `Manual`/`outbound`
-viram "Inbound"/"Outbound".
+original — isso é só sobre a edição; a exibição em modo leitura é tratada à parte, abaixo.
+
+### Labels amigáveis em modo leitura (`formatLeadOriginLabel()`)
+
+`formatLeadOriginLabel()` (`frontend-crm/src/lib/lead-origin.ts`) é a única fonte de tradução de
+`origin` para exibição — usada em todo ponto que mostra a origem de um lead: `LeadCardDialog.tsx`
+(modo leitura), `KanbanBoard.tsx`, `LeadCard.tsx` (card do Kanban), `ProspectionCard.tsx` (card do
+board de prospecção) e `SearchAutocomplete.tsx` (resultado da busca). Mapa:
+
+| `origin` (normalizado: trim + lowercase) | Label exibido |
+|---|---|
+| `manual` | "Inbound" |
+| `outbound` | "Outbound" |
+| `whatsapp_inbound` | "Inbound (WhatsApp)" |
+| `formulário website` | "Inbound (Formulário do site)" |
+| `planilha` | "Inbound (Planilha)" |
+| vazio / `null` | "—" |
+| qualquer outro valor | `Inbound (<valor original>)` — fallback genérico |
+
+O fallback genérico segue a mesma semântica default-safe do `_classify_lead_origin()` (tudo que
+não é `outbound` é inbound): um valor técnico novo, ainda não mapeado nesta tabela, nunca aparece
+cru na tela — sempre com o prefixo "Inbound (…)". Novo valor técnico gravado no sistema não exige
+mudança aqui a menos que se queira um label mais específico do que o fallback genérico.
