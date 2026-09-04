@@ -326,6 +326,7 @@ Cada implementação (arquivo em `docs/implementations/`) vive na sua própria b
 - Nome: `fix/<slug>` ou `feat/<slug>` — o mesmo slug usado no nome do arquivo de implementação.
 - Claude **propõe o nome e pede confirmação** antes de criar.
 - Criação + entrada na worktree: `EnterWorktree(name="fix/<slug>")` (ou `feat/<slug>`) — cria a branch a partir de `origin/main` e já muda a sessão para essa pasta. Todo o trabalho da implementação (criar o arquivo `.md`, editar código, commitar cada fase) acontece dentro dela.
+- **Antes de rodar testes de backend na worktree nova:** `.env` (e `.venv`) não são herdados por serem gitignored — ver [`docs/ops/local-dev.md`](docs/ops/local-dev.md), seção "Worktree nova precisa de `.env` copiado manualmente antes de testar backend".
 
 **Branches aninhadas** (sub-implementação necessária dentro de uma branch de feature que não é `main`): a worktree do pai não é reaproveitada nem tem subpasta dentro dela — nasce uma worktree irmã, no mesmo `.claude/worktrees/<tipo>/`, nomeada `<slug-pai>--<slug-filho>`. Como a base não é `main`, a criação é manual (`git worktree add .claude/worktrees/<tipo>/<slug-pai>--<slug-filho> -b <tipo>/<slug-pai>--<slug-filho> <branch-pai>`), seguida de `EnterWorktree(path=...)` para entrar nela. O merge de volta é só para a branch pai, nunca direto para `main`. Evitar mais de 1 nível de aninhamento.
 

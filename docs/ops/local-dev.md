@@ -17,6 +17,32 @@ diferentes) — nunca para valores que possam acabar commitados.
 
 ---
 
+## Worktree nova precisa de `.env` copiado manualmente antes de testar backend
+
+`EnterWorktree` cria a worktree a partir de `origin/<branch base>`, mas `.env`
+é gitignored nos três backends (`backend-core`, `backend-crm`,
+`backend-executors`) — por isso não é copiado automaticamente. A worktree
+nasce só com `.env.example`. Sem o `.env` real, testes de `tests/` que
+dependem de configuração (tokens, URLs de serviço) falham logo na primeira
+execução — não por bug de produto, mas por falta desse passo manual.
+
+**Antes de rodar `pytest` numa worktree nova**, copiar o `.env` real da pasta
+principal (`C:\crm-auto-digital\<backend>\.env`) para o mesmo caminho dentro
+da worktree, para cada backend cujos testes forem rodar.
+
+`.venv` também não é herdado, pelo mesmo motivo (cada `venv`/`.venv` tem seu
+próprio `.gitignore` interno com `*`, então o git nunca o rastreia, nem em
+worktrees). Duas opções: usar o Python global do sistema se os pacotes já
+estiverem instalados nele, ou criar um `.venv` novo na worktree com
+`pip install -r requirements.txt` — neste segundo caso, atenção a possíveis
+diferenças de versão de pacote em relação ao `.venv` da pasta principal.
+
+**Sintoma a reconhecer:** se os testes falham por erro de configuração/conexão
+(não por asserção de lógica de negócio) logo na primeira execução numa
+worktree recém-criada, o passo acima provavelmente foi esquecido.
+
+---
+
 ## Pré-requisitos
 
 - Python 3.11+ com `venv` por serviço

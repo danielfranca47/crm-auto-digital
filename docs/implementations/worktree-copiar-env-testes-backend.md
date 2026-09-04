@@ -1,7 +1,7 @@
 # Documentar cópia manual de `.env` em worktrees novas para rodar testes de backend
 
-**Branch:** (ainda não criada — nasce após Plan Mode aprovado)
-**Status:** Aguardando Plan Mode
+**Branch:** `feat/worktree-copiar-env-testes-backend`
+**Status:** Todos os cenários validados (04/09/2026)
 
 ---
 
@@ -34,37 +34,70 @@ falta só esse passo manual de configuração local.
 
 ## Problemas Identificados (estado anterior)
 
-1. **Sem documentação do passo manual:** não há hoje nenhuma nota em
-   `docs/ops/` (ou em `CLAUDE.md`) avisando que uma worktree nova de
-   `backend-executors` (e possivelmente `backend-core`/`backend-crm`,
-   a confirmar em Plan Mode) precisa copiar `.env` manualmente antes de rodar
-   a suíte de testes.
+1. **Sem documentação do passo manual:** não havia nenhuma nota em
+   `docs/ops/` (ou em `CLAUDE.md`) avisando que uma worktree nova precisa
+   copiar `.env` manualmente antes de rodar a suíte de testes.
+2. **Escopo confirmado nesta implementação:** o mesmo problema afeta os 3
+   backends, não só `backend-executors` — `backend-core/.env`,
+   `backend-crm/.env` (e `backend-crm/.env.local`) e `backend-executors/.env`
+   são todos gitignored, e os 3 têm pasta `tests/`. Confirmado via
+   `git check-ignore`.
 
 ---
 
 ## Abordagem
 
-<A definir em Plan Mode — provavelmente uma nota curta em `docs/ops/`
-(criar seção ou arquivo dedicado, ver estrutura existente de `docs/ops/`)
-mais uma referência a partir de `CLAUDE.md`, seção "Estratégia de branch por
-implementação". Confirmar em Plan Mode se o mesmo problema afeta
-`backend-core`/`backend-crm`/frontends, ou é específico de
-`backend-executors`.>
+Documentação pura, sem mudança de código:
+
+1. **`docs/ops/local-dev.md`** (guia de setup local já existente) — nova
+   seção "Worktree nova precisa de `.env` copiado manualmente antes de testar
+   backend", logo após a seção existente sobre `.env.local`. Cobre: por que
+   acontece, quais backends são afetados, o passo manual (copiar `.env`), a
+   nota sobre `.venv` (não herdado pelo mesmo motivo — cada `venv`/`.venv` tem
+   seu próprio `.gitignore` interno com `*`), e o sintoma para reconhecer o
+   problema (testes falhando por config/conexão, não por lógica de negócio,
+   logo na primeira execução).
+2. **`CLAUDE.md`**, seção "Estratégia de branch por implementação" →
+   "Criação" — uma linha apontando para a nota acima.
 
 ---
 
 ## Plano de Implementação
 
-<A definir em Plan Mode.>
+### Fase 1 — Documentação
+
+**Objetivo:** registrar o passo manual de cópia de `.env`/`.venv` em worktrees
+novas, para os 3 backends, no lugar onde já se documenta setup local.
+
+| Arquivo | O que muda |
+|---|---|
+| `docs/ops/local-dev.md` | Nova seção sobre cópia manual de `.env`/`.venv` em worktrees novas |
+| `CLAUDE.md` | Pointer de uma linha na seção "Estratégia de branch por implementação" → "Criação" |
+| `docs/implementations/worktree-copiar-env-testes-backend.md` | Preenchimento deste arquivo (era só esqueleto) |
+
+### Commits Fase 1
+
+| # | Commit | O que foi implementado |
+|---|---|---|
+| 1 | *(a preencher após o commit)* | Documentação da cópia manual de `.env`/`.venv` em worktrees novas |
 
 ---
 
 ## Checks de Validação
 
-<A definir em Plan Mode.>
+### Cenário C1 — Nota é suficiente para evitar o falso-diagnóstico
+- [x] O fato documentado (2 testes falhando por `.env` ausente numa worktree
+      nova, resolvido copiando o arquivo) já foi confirmado ao vivo em
+      23/08/2026, durante a implementação de
+      `fix-sales-flow-recepcao-p0-nao-dispara.md`.
+- **Validado em:** 04/09/2026 — validação retroativa: a causa raiz e a
+  correção já estavam comprovadas por essa execução real; esta implementação
+  apenas documenta o que já foi observado, não introduz comportamento novo a
+  testar. Revisão de texto confirma que as duas seções (`local-dev.md` e
+  `CLAUDE.md`) são autossuficientes para alguém sem contexto seguir o passo.
 
 ---
 
 ## Ajustes Possíveis Pós-Implementação
 
-<A definir após implementação.>
+Nenhum identificado nesta iteração.
