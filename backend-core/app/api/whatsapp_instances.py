@@ -3,7 +3,7 @@ from __future__ import annotations
 import logging
 import re
 import time
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Any, Dict, Optional
 
 from fastapi import APIRouter, Depends, Header, HTTPException, status
@@ -24,6 +24,8 @@ from app.utils.crypto import SecretEncryptionError, decrypt_secret
 
 router = APIRouter(prefix="", tags=["whatsapp_instances"])
 logger = logging.getLogger(__name__)
+
+_DISCONNECT_EMAIL_COOLDOWN = timedelta(minutes=30)
 
 
 async def _require_service_token(x_service_token: str = Header(None)) -> str:
@@ -351,48 +353,71 @@ async def connection_event(
     )
 
     if was_active and not is_active:
-        try:
-            user = db.query(models.User).filter(models.User.id == connection.user_id).first()
-            if user and user.email:
-                login_url = (settings.CRM_FRONTEND_URL or "https://crmapp.danielfranca.pt").rstrip("/") + "/ai-profile"
-                html, text = render_whatsapp_disconnected_email(user.name, login_url)
-                send_email(
-                    to=user.email,
-                    subject="A tua Lara desconectou do WhatsApp — reconecta agora",
-                    html=html,
-                    text=text,
+        now = datetime.utcnow()
+        last_email_at = connection.last_disconnect_email_at
+        cooldown_expired = last_email_at is None or (now - last_email_at) >= _DISCONNECT_EMAIL_COOLDOWN
+
+        if cooldown_expired:
+            try:
+                user = db.query(models.User).filter(models.User.id == connection.user_id).first()
+                if user and user.email:
+                    login_url = (settings.CRM_FRONTEND_URL or "https://crmapp.danielfranca.pt").rstrip("/") + "/ai-profile"
+                    html, text = render_whatsapp_disconnected_email(user.name, login_url)
+                    send_email(
+                        to=user.email,
+                        subject="A tua Lara desconectou do WhatsApp — reconecta agora",
+                        html=html,
+                        text=text,
+                    )
+                connection.last_disconnect_email_at = now
+            except Exception as exc:
+                logger.warning(
+                    "connection_event: falha ao enviar email de desconexão user_id=%s error=%s",
+                    connection.user_id,
+                    exc,
                 )
-            connection.disconnect_alert_sent_at = datetime.utcnow()
-            db.add(connection)
-            db.commit()
-        except Exception as exc:
-            logger.warning(
-                "connection_event: falha ao enviar email de desconexão user_id=%s error=%s",
-                connection.user_id,
-                exc,
+        else:
+            logger.info(
+                "connection_event: cooldown ativo, email de desconexão suprimido instance_id=%s last_email_at=%s",
+                normalized_instance_id,
+                last_email_at,
             )
 
+        connection.disconnect_alert_sent_at = now
+        db.add(connection)
+        db.commit()
+
     if not was_active and is_active and connection.disconnect_alert_sent_at:
-        try:
-            user = db.query(models.User).filter(models.User.id == connection.user_id).first()
-            if user and user.email:
-                login_url = (settings.CRM_FRONTEND_URL or "https://crmapp.danielfranca.pt").rstrip("/") + "/ai-profile"
-                html, text = render_whatsapp_reconnected_email(user.name, login_url)
-                send_email(
-                    to=user.email,
-                    subject="A tua Lara reconectou ao WhatsApp",
-                    html=html,
-                    text=text,
+        disconnect_email_was_sent = (
+            connection.last_disconnect_email_at is not None
+            and connection.last_disconnect_email_at >= connection.disconnect_alert_sent_at
+        )
+        if disconnect_email_was_sent:
+            try:
+                user = db.query(models.User).filter(models.User.id == connection.user_id).first()
+                if user and user.email:
+                    login_url = (settings.CRM_FRONTEND_URL or "https://crmapp.danielfranca.pt").rstrip("/") + "/ai-profile"
+                    html, text = render_whatsapp_reconnected_email(user.name, login_url)
+                    send_email(
+                        to=user.email,
+                        subject="A tua Lara reconectou ao WhatsApp",
+                        html=html,
+                        text=text,
+                    )
+            except Exception as exc:
+                logger.warning(
+                    "connection_event: falha ao enviar email de reconexão user_id=%s error=%s",
+                    connection.user_id,
+                    exc,
                 )
-            connection.disconnect_alert_sent_at = None
-            db.add(connection)
-            db.commit()
-        except Exception as exc:
-            logger.warning(
-                "connection_event: falha ao enviar email de reconexão user_id=%s error=%s",
-                connection.user_id,
-                exc,
+        else:
+            logger.info(
+                "connection_event: email de reconexão suprimido (desconexão correspondente também foi suprimida) instance_id=%s",
+                normalized_instance_id,
             )
+        connection.disconnect_alert_sent_at = None
+        db.add(connection)
+        db.commit()
 
     return {"status": "ok", "connection_status": status_value}
 

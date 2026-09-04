@@ -154,7 +154,7 @@ def ensure_whatsapp_connections_table() -> None:
 
 
 def ensure_whatsapp_connections_columns() -> None:
-    """Add disconnect_alert_sent_at to whatsapp_connections without requiring migrations."""
+    """Add disconnect_alert_sent_at/last_disconnect_email_at to whatsapp_connections without requiring migrations."""
     with engine.begin() as conn:
         if engine.dialect.name == "sqlite":
             result = conn.execute(text("PRAGMA table_info(whatsapp_connections)"))
@@ -162,6 +162,9 @@ def ensure_whatsapp_connections_columns() -> None:
             if "disconnect_alert_sent_at" not in existing:
                 conn.execute(text("ALTER TABLE whatsapp_connections ADD COLUMN disconnect_alert_sent_at DATETIME"))
                 print("✅ coluna adicionada em whatsapp_connections: disconnect_alert_sent_at")
+            if "last_disconnect_email_at" not in existing:
+                conn.execute(text("ALTER TABLE whatsapp_connections ADD COLUMN last_disconnect_email_at DATETIME"))
+                print("✅ coluna adicionada em whatsapp_connections: last_disconnect_email_at")
         else:
             result = conn.execute(
                 text("SELECT column_name FROM information_schema.columns WHERE table_name='whatsapp_connections'")
@@ -169,6 +172,8 @@ def ensure_whatsapp_connections_columns() -> None:
             existing = {row[0] for row in result.fetchall()}
             if "disconnect_alert_sent_at" not in existing:
                 conn.execute(text("ALTER TABLE whatsapp_connections ADD COLUMN disconnect_alert_sent_at TIMESTAMPTZ"))
+            if "last_disconnect_email_at" not in existing:
+                conn.execute(text("ALTER TABLE whatsapp_connections ADD COLUMN last_disconnect_email_at TIMESTAMPTZ"))
 
 
 def ensure_ai_profile_columns() -> None:

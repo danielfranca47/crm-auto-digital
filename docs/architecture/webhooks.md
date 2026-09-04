@@ -57,14 +57,22 @@ UazAPI → POST /webhooks/whatsapp/uazapi (event="connection")
               → uazapi_admin.extract_connection_meta(raw) → status_value
               → grava o novo status sempre (corrige o congelamento)
               → SE a transição foi active → inactive:
-                  busca o User da connection e envia email
-                  (render_whatsapp_disconnected_email) pedindo para reconectar
                   → marca WhatsappConnection.disconnect_alert_sent_at = now()
+                    (sempre, independente do cooldown abaixo)
+                  → SE last_disconnect_email_at é nulo OU > 30min atrás:
+                      busca o User da connection e envia email
+                      (render_whatsapp_disconnected_email) pedindo para reconectar
+                      → marca WhatsappConnection.last_disconnect_email_at = now()
+                    SENÃO: email suprimido (cooldown ativo), nada é enviado
               → SE a transição foi inactive → active E disconnect_alert_sent_at
                 está preenchido:
-                  busca o User da connection e envia email
-                  (render_whatsapp_reconnected_email) confirmando que voltou
-                  → limpa WhatsappConnection.disconnect_alert_sent_at
+                  → SE last_disconnect_email_at >= disconnect_alert_sent_at
+                    (ou seja, o email de desconexão deste ciclo foi mesmo enviado):
+                      busca o User da connection e envia email
+                      (render_whatsapp_reconnected_email) confirmando que voltou
+                    SENÃO: email de reconexão também suprimido (o par
+                    correspondente de desconexão nunca foi enviado)
+                  → limpa WhatsappConnection.disconnect_alert_sent_at (sempre)
   ← sempre 200 para a UazAPI, mesmo se o repasse ao core falhar (best-effort)
 ```
 
@@ -76,17 +84,27 @@ UazAPI → POST /webhooks/whatsapp/uazapi (event="connection")
 resolve isso separadamente (`connection_instance_field.get("name")` quando é
 dict) sem tocar na resolução usada por `messages`.
 
-**Email de alerta (desconexão):** dispara só na transição `active → inactive`
-(não repete em eventos "disconnected" seguidos, já que o segundo já vê o
-status local como inactive). Ao enviar, marca
-`WhatsappConnection.disconnect_alert_sent_at`.
+**Email de alerta (desconexão) e cooldown anti-flapping:** dispara na
+transição `active → inactive`, mas só efetivamente envia se
+`WhatsappConnection.last_disconnect_email_at` for nulo ou tiver mais de 30
+minutos — evita spammar o utilizador se a sessão oscilar (flapping) entre
+`active`/`inactive` várias vezes seguidas em pouco tempo. `disconnect_alert_sent_at`
+é sempre atualizado nessa transição, mesmo quando o email é suprimido pelo
+cooldown — é ele que sustenta o banner in-app e o "since" (ver abaixo), que
+devem continuar corretos independente do email ter sido enviado ou não.
+`last_disconnect_email_at` só avança quando o email é (tentado a ser) enviado
+de facto — nunca é limpo no reconnect, ao contrário de `disconnect_alert_sent_at`.
 
 **Email de confirmação (reconexão):** dispara na transição `inactive →
 active`, mas **só quando `disconnect_alert_sent_at` está preenchido** — ou
 seja, só quando a queda anterior de facto gerou o email de alerta. Isso evita
 falso positivo na primeira conexão de uma instância nova (que também produz
-essa transição, mas não é uma "recuperação" de queda). Ao enviar, limpa
-`disconnect_alert_sent_at` de volta para `NULL`.
+essa transição, mas não é uma "recuperação" de queda). Adicionalmente, só
+envia se o email de desconexão deste mesmo ciclo não tiver sido suprimido
+pelo cooldown (`last_disconnect_email_at >= disconnect_alert_sent_at`) — evita
+o utilizador receber "Lara reconectou" sem ter recebido o "Lara desconectou"
+correspondente. Ao concluir a transição, limpa `disconnect_alert_sent_at` de
+volta para `NULL` em qualquer um dos dois casos.
 
 **Limitação conhecida:** este mecanismo depende inteiramente do webhook ser
 entregue. Não existe hoje nenhuma verificação periódica em segundo plano que
