@@ -191,7 +191,9 @@ conta reconecta depois dessa queda, um segundo email confirma que a Lara
 voltou a funcionar (coluna `WhatsappConnection.disconnect_alert_sent_at`
 controla esse segundo envio — só dispara se o primeiro alerta de queda
 realmente foi enviado, evitando um falso "reconectou" na primeira conexão de
-uma instância nova). Ver
+uma instância nova). Um cooldown de 30 minutos (`last_disconnect_email_at`)
+evita reenviar o email de desconexão — e o de reconexão pareado — se a sessão
+oscilar (flapping) entre `active`/`inactive` repetidamente em pouco tempo. Ver
 [`webhooks.md`](webhooks.md#evento-de-conexão-eventconnection--status-real--alerta-de-desconexão)
 para o fluxo completo — inclui a limitação conhecida de depender da entrega
 do webhook, sem verificação periódica independente ainda.
