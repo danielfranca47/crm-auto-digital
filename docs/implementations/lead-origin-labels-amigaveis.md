@@ -1,7 +1,7 @@
 # Labels amigáveis incompletos para valores técnicos de `origin`
 
 **Branch:** `fix/lead-origin-labels-amigaveis`
-**Status:** Em andamento
+**Status:** Todos os cenários validados (05/09/2026)
 
 ---
 
@@ -171,22 +171,36 @@ não fica mais sujeito a esse mesmo problema se surgir um valor novo.
 ## Checks de Validação
 
 ### Cenário P1 — Kanban board (visão principal)
-- [ ] Abrir o Kanban com leads de origens variadas (`whatsapp_inbound`,
+- [x] Abrir o Kanban com leads de origens variadas (`whatsapp_inbound`,
       `Formulário Website`, `Planilha`, `Manual`, `outbound`)
-- [ ] Confirmar que cada card mostra o label amigável (não o valor cru) no
+- [x] Confirmar que cada card mostra o label amigável (não o valor cru) no
       campo "Origem"
+- **Validado em:** 05/09/2026 — testado via browser (chrome-devtools MCP) na
+  conta de teste local, com 6 leads cobrindo os 5 valores técnicos conhecidos
+  + 1 valor futuro desconhecido (`crm_import_v2`, criado só para o teste).
+  Cards mostraram exatamente: "Inbound", "Outbound", "Inbound (WhatsApp)",
+  "Inbound (Formulário do site)", "Inbound (Planilha)" e
+  "Inbound (crm_import_v2)" (fallback genérico).
 
 ### Cenário P2 — Modal do lead (LeadCardDialog)
-- [ ] Abrir um lead com origem `whatsapp_inbound` (ou outro valor técnico)
-- [ ] Confirmar que o modo leitura mostra "Inbound (WhatsApp)" etc.
+- [x] Abrir um lead com origem `whatsapp_inbound` (ou outro valor técnico)
+- [x] Confirmar que o modo leitura mostra "Inbound (WhatsApp)" etc.
+- **Validado em:** 05/09/2026 — modal do lead "França" (`whatsapp_inbound`)
+  mostrou "Direção: Inbound (WhatsApp)".
 
 ### Cenário P3 — Board de prospecção
-- [ ] Abrir a página de Prospecção com leads outbound
-- [ ] Confirmar que o card mostra o label amigável
+- [x] Abrir a página de Prospecção com leads outbound
+- [x] Confirmar que o card mostra o label amigável
+- **Validado em:** 05/09/2026 — cards do board de prospecção mostraram
+  "Inbound", "Inbound (crm_import_v2)", "Inbound (Planilha)" e
+  "Inbound (WhatsApp)" corretamente nas 3 colunas (À Prospectar, Em
+  Andamento, Qualificação).
 
 ### Cenário P4 — Busca (SearchAutocomplete)
-- [ ] Buscar um lead e conferir que o resultado mostra o label amigável (com
+- [x] Buscar um lead e conferir que o resultado mostra o label amigável (com
       destaque do termo buscado ainda funcionando)
+- **Validado em:** 05/09/2026 — busca por "frança" no Kanban mostrou o
+  resultado do autocomplete com "Inbound (WhatsApp)" no lugar do valor cru.
 
 ---
 
