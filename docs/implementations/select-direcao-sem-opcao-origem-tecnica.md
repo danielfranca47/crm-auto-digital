@@ -1,7 +1,7 @@
 # Select de Direção sem opção para origens técnicas
 
 **Branch:** `fix/select-direcao-sem-opcao-origem-tecnica`
-**Status:** Em andamento
+**Status:** Todos os cenários validados (05/09/2026)
 
 ---
 
@@ -117,25 +117,40 @@ explicitamente "Inbound" ou "Outbound".
 ## Checks de Validação
 
 ### Cenário P1 — Lead com origem técnica
-- [ ] Abrir um lead com `origin` técnico (ex.: `whatsapp_inbound`) e entrar em
+- [x] Abrir um lead com `origin` técnico (ex.: `whatsapp_inbound`) e entrar em
       modo edição
-- [ ] Confirmar que o Select mostra "Inbound (WhatsApp) — atual" em vez do
+- [x] Confirmar que o Select mostra "Inbound (WhatsApp) — atual" em vez do
       placeholder vazio
-- [ ] Confirmar que o item extra não é clicável no dropdown
+- [x] Confirmar que o item extra não é clicável no dropdown
+- **Validado em:** 05/09/2026 — testado via browser (chrome-devtools MCP) no
+  lead "França" (id 483, `whatsapp_inbound`) da conta de teste local. Select
+  mostrou "Inbound (WhatsApp) — atual" com checkmark; o dropdown listou só as
+  2 opções canônicas como selecionáveis (o item extra não aparece na lista de
+  opções interativas, só como valor exibido/pré-selecionado).
 
 ### Cenário P2 — Salvar sem tocar no campo
-- [ ] No mesmo lead, editar outro campo (ex.: observações) sem tocar no
+- [x] No mesmo lead, editar outro campo (ex.: observações) sem tocar no
       Select de Direção, e salvar
-- [ ] Confirmar que `origin` continua com o valor técnico original
+- [x] Confirmar que `origin` continua com o valor técnico original
+- **Validado em:** 05/09/2026 — editado o campo "Comentários/Notas" do lead
+  483 sem tocar no Select; confirmado via banco (`SELECT * FROM leads WHERE
+  id=483`) que `origin` continuou `whatsapp_inbound` e `observations` foi
+  salvo corretamente.
 
 ### Cenário P3 — Trocar explicitamente para Manual/Outbound
-- [ ] No mesmo lead, escolher "Outbound — eu abordei primeiro" e salvar
-- [ ] Confirmar que `origin` vira `"outbound"` (sem regressão)
+- [x] No mesmo lead, escolher "Outbound — eu abordei primeiro" e salvar
+- [x] Confirmar que `origin` vira `"outbound"` (sem regressão)
+- **Validado em:** 05/09/2026 — trocado explicitamente para "Outbound — eu
+  abordei primeiro" no lead 483 e salvo; modo leitura passou a mostrar
+  "Direção: Outbound" (sem regressão no fluxo de troca explícita).
 
 ### Cenário P4 — Lead com origem já canônica (regressão)
-- [ ] Abrir um lead com `origin` = `Manual` ou `outbound`
-- [ ] Confirmar que o Select mostra a opção certa pré-selecionada, sem o item
+- [x] Abrir um lead com `origin` = `Manual` ou `outbound`
+- [x] Confirmar que o Select mostra a opção certa pré-selecionada, sem o item
       extra aparecer
+- **Validado em:** 05/09/2026 — lead "DF FLOW BARBERSHOP" (`origin=Manual`)
+  mostrou o Select já com "Inbound — o lead procurou primeiro" pré-selecionado,
+  sem nenhum item extra — sem regressão para leads com origem canônica.
 
 ---
 
