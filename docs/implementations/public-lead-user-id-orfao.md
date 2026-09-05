@@ -1,7 +1,8 @@
 # Leads do formulário público do site ficam órfãos (user_id nulo)
 
 **Branch:** `fix/public-lead-user-id-orfao`
-**Status:** Em andamento
+**Status:** Todos os cenários validados (05/09/2026) — pendente: passo
+operacional pós-merge (configurar `PUBLIC_LEAD_USER_ID` em produção)
 
 ---
 
@@ -113,18 +114,30 @@ implementação; ver seção final do arquivo.
 ## Checks de Validação
 
 ### Cenário C1 — Lead público aparece no Kanban do dono
-- [ ] Configurar `PUBLIC_LEAD_USER_ID` localmente com o `user_id` da conta de
+- [x] Configurar `PUBLIC_LEAD_USER_ID` localmente com o `user_id` da conta de
       teste (15) e `FORM_TOKEN` local
-- [ ] `POST /public/leads` local com payload de teste + header `x-form-token`
-- [ ] Confirmar que o lead aparece em "À Prospectar" com origem "Formulário
+- [x] `POST /public/leads` local com payload de teste + header `x-form-token`
+- [x] Confirmar que o lead aparece em "À Prospectar" com origem "Formulário
       Website"
+- **Validado em:** 05/09/2026 — `curl -X POST http://localhost:8000/public/leads`
+  local retornou `201 {"id":512,"status":"created"}`. Confirmado via banco
+  (`user_id=15`, `origin='Formulário Website'`, `category='to-prospect'`,
+  `agent_type='agent_3'` — resolvido do AI Profile real do usuário 15, não
+  mais o fallback fixo `agent_1`) e via `GET /api/leads` autenticado como o
+  usuário 15: o lead 512 aparece na listagem normalmente.
 
 ### Cenário C2 — Falha clara sem a env var
-- [ ] Remover `PUBLIC_LEAD_USER_ID`, repetir o POST
-- [ ] Confirmar resposta 500 com mensagem clara
+- [x] Remover `PUBLIC_LEAD_USER_ID`, repetir o POST
+- [x] Confirmar resposta 500 com mensagem clara
+- **Validado em:** 05/09/2026 — com `PUBLIC_LEAD_USER_ID` removida do `.env`
+  e `backend-crm` reiniciado, o mesmo POST retornou
+  `500 {"detail":"PUBLIC_LEAD_USER_ID não configurado no servidor."}`.
+  Confirmado via banco que nenhum lead órfão foi criado (0 leads com
+  `user_id IS NULL`, 0 leads com o e-mail de teste usado neste cenário).
 
 ### Automatizado
-- [ ] `pytest backend-crm/tests/test_public_lead_user_id.py`
+- [x] `pytest backend-crm/tests/test_public_lead_user_id.py`
+- **Validado em:** 05/09/2026 — `2 passed in 0.86s`.
 
 ---
 
