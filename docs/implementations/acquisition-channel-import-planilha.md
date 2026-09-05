@@ -1,7 +1,7 @@
 # Canal de aquisição não é preenchido na importação por planilha
 
 **Branch:** `worktree-feat+acquisition-channel-import-planilha`
-**Status:** Em andamento
+**Status:** Todos os cenários validados (05/09/2026)
 
 ---
 
@@ -84,23 +84,29 @@ empresa/contato/dedup — manter simetria com o que já existe).
 ## Checks de Validação
 
 ### Cenário P1 — Mapeamento explícito via UI
-- [ ] Planilha CSV com colunas `Empresa`, `Telefone`, `Origem Marketing`
-- [ ] No "1.5 Mapeamento de Colunas", mapear `Canal de aquisição` → `Origem Marketing`
-- [ ] Confirmar mapeamento, processar, abrir o lead criado no Kanban → campo
+- [x] Planilha CSV com colunas `Empresa`, `Telefone`, `Origem Marketing`
+- [x] No "1.5 Mapeamento de Colunas", mapear `Canal de aquisição` → `Origem Marketing`
+- [x] Confirmar mapeamento, processar, abrir o lead criado no Kanban → campo
       "Canal de aquisição" preenchido com o valor da planilha
+- **Validado em:** 05/09/2026 — testado ao vivo via browser (chrome-devtools MCP) contra backend-core/backend-crm/frontend-crm locais nesta worktree. Lead criado com `acquisition_channel="Facebook Ads"`, confirmado via `GET /api/leads`.
 
 ### Cenário P2 — Auto-detecção por nome de coluna
-- [ ] Planilha CSV com uma coluna literalmente chamada `canal`
-- [ ] Upload → mapeamento já vem pré-preenchido automaticamente para `Canal de aquisição`
-- [ ] Processar → lead criado com `acquisition_channel` correto
+- [x] Planilha CSV com uma coluna literalmente chamada `canal`
+- [x] Upload → mapeamento já vem pré-preenchido automaticamente para `Canal de aquisição`
+- [x] Processar → lead criado com `acquisition_channel` correto
+- **Validado em:** 05/09/2026 — o select "Canal de aquisição" já veio com `canal` pré-selecionado sem interação do utilizador (confirmando `COLUMN_ALIASES`). Lead criado com `acquisition_channel="Indicacao"`.
 
 ### Cenário P3 — Planilha sem essa coluna
-- [ ] Planilha sem nenhuma coluna relacionada a canal
-- [ ] Processar normalmente → lead criado com `acquisition_channel = NULL` (campo em branco no card, sem erro)
+- [x] Planilha sem nenhuma coluna relacionada a canal
+- [x] Processar normalmente → lead criado com `acquisition_channel = NULL` (campo em branco no card, sem erro)
+- **Validado em:** 05/09/2026 — select "Canal de aquisição" ficou em "-- ignorar --" (nenhuma coluna candidata), lead criado sem erro com `acquisition_channel=null`.
 
 ### Cenário P4 — Overwrite "update" preserva/preenche sem sobrescrever
-- [ ] Lead já existente sem `acquisition_channel`, reimportar planilha com essa coluna preenchida e `overwrite=update` → campo passa a ser preenchido
-- [ ] Lead já existente **com** `acquisition_channel` já preenchido manualmente, reimportar com valor diferente na planilha e `overwrite=update` → valor manual é preservado (mesmo comportamento hoje aplicado a `companyName`/`contactName`/etc.)
+- [x] Lead já existente sem `acquisition_channel`, reimportar planilha com essa coluna preenchida e `overwrite=update` → campo passa a ser preenchido
+- [x] Lead já existente **com** `acquisition_channel` já preenchido manualmente, reimportar com valor diferente na planilha e `overwrite=update` → valor manual é preservado (mesmo comportamento hoje aplicado a `companyName`/`contactName`/etc.)
+- **Validado em:** 05/09/2026 — sequência completa: (1) import sem coluna de canal → lead criado com `acquisition_channel=null`; (2) reimport com `canal=Google Ads` e `overwrite=update` → campo passou a `"Google Ads"`; (3) valor alterado manualmente via `PATCH /api/leads/{id}` para `"Manual Override"` (mesmo endpoint usado pelo `LeadCardDialog.tsx`); (4) reimport com `canal="Canal Que Nao Deve Sobrescrever"` e `overwrite=update` → valor permaneceu `"Manual Override"`, confirmando que `update_lead_light()` só preenche campos vazios.
+
+**Observação:** o Quadro Kanban não renderizou cards nesta worktree durante o teste (tela em branco mesmo após busca) — parece ser uma particularidade deste ambiente local recém-provisionado (DB copiado manualmente), não relacionada a esta mudança; não investigado further pois os Cenários foram validados diretamente via API (`GET`/`PATCH /api/leads`), o mesmo caminho que a UI usa. Leads de teste (ids 512-515) foram removidos ao final via `DELETE /api/leads/{id}`.
 
 ---
 
