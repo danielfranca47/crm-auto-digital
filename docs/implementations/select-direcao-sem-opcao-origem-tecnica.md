@@ -1,7 +1,7 @@
 # Select de Direção sem opção para origens técnicas
 
-**Branch:** _(a definir no Plan Mode)_
-**Status:** Aguardando Plan Mode
+**Branch:** `fix/select-direcao-sem-opcao-origem-tecnica`
+**Status:** Em andamento
 
 ---
 
@@ -32,28 +32,88 @@ primeiro") e `outbound` ("Outbound — eu abordei primeiro").
 
 ---
 
-## Diagnóstico (a fazer em Plan Mode)
+## Diagnóstico
 
-- Decidir se o Select ganha uma 3ª opção "somente leitura" que reflete o
-  valor técnico atual (ex.: exibir o label amigável já calculado por
-  `formatLeadOriginLabel()` como item desabilitado/pré-selecionado), ou se o
-  campo vira somente-leitura quando `origin` já é um valor técnico (só permite
-  trocar para Manual/outbound explicitamente, não permite "voltar" para o
-  valor técnico depois).
-- Confirmar comportamento de salvamento: hoje, salvar sem tocar no campo
-  preserva o valor técnico original (via cópia do lead em `editedLead`) — essa
-  garantia não pode regredir com a mudança.
-- Escopo é só frontend (UI do Select) — não deve alterar `_classify_lead_origin()`
-  nem os valores gravados em `leads.origin`.
+- `LeadCardDialog.tsx:394-396` — `editedLead` nasce sempre como cópia exata
+  do `lead` (`setEditedLead({ ...lead })`), ou seja, `editedLead.origin` já
+  contém o valor técnico correto desde o início. O bug é **puramente
+  visual**: o Radix `<Select value={...}>` (linhas 826-843) só sabe renderizar
+  o texto de um valor que bate com um `<SelectItem>` existente — como só há 2
+  itens (`LEAD_DIRECTION_OPTIONS`), qualquer outro valor cai no placeholder.
+- Salvar sem tocar no campo já preserva o valor técnico original hoje
+  (`onValueChange` só dispara com interação explícita) — essa garantia não
+  pode regredir.
+- `NewLeadModal.tsx` (criação) não tem esse problema: `origin` nasce sempre
+  `"Manual"` ou vazio, nunca um valor técnico pré-existente — fora do escopo.
+- Escopo é só frontend/exibição — não toca `_classify_lead_origin()` nem
+  altera valores gravados em `leads.origin`.
+
+### Abordagem escolhida
+
+Injetar dinamicamente um 3º `<SelectItem>` **desabilitado** no topo da lista,
+só quando `editedLead.origin` não bate com nenhum dos 2 valores canônicos:
+value = o próprio valor técnico cru, label = `formatLeadOriginLabel(origin)`
+(reaproveita a função já existente) + sufixo indicando que é somente leitura.
+Radix Select localiza o item pelo `value` para renderizar o texto selecionado
+mesmo quando o item está `disabled` — então o Select passa a mostrar
+"Inbound (WhatsApp) — atual" em vez do placeholder, mas o item não é
+clicável: o operador só consegue *mudar* a direção escolhendo Manual ou
+Outbound explicitamente.
 
 ---
 
 ## Plano de Implementação
 
-_A preencher após Plan Mode e aprovação do utilizador._
+### Fase 1 — Item desabilitado com o valor técnico atual
+
+**Objetivo:** Select mostra o label amigável do valor técnico atual em vez de
+placeholder vazio, sem permitir "reselecioná-lo".
+
+| Arquivo | O que muda |
+|---|---|
+| `frontend-crm/src/components/LeadCardDialog.tsx` | No bloco do Select de "Direção" (~linha 826-843): antes de mapear `LEAD_DIRECTION_OPTIONS`, renderizar condicionalmente um `<SelectItem>` extra desabilitado quando `editedLead.origin` não bate com nenhum valor canônico |
+
+```tsx
+// DEPOIS (dentro do <SelectContent>)
+{editedLead?.origin && !LEAD_DIRECTION_OPTIONS.some((o) => o.value === editedLead.origin) && (
+  <SelectItem value={editedLead.origin} disabled>
+    {formatLeadOriginLabel(editedLead.origin)} — atual
+  </SelectItem>
+)}
+{LEAD_DIRECTION_OPTIONS.map((option) => (
+  <SelectItem key={option.value} value={option.value}>
+    {option.label}
+  </SelectItem>
+))}
+```
 
 ---
 
 ## Checks de Validação
 
-_A definir em Plan Mode._
+### Cenário P1 — Lead com origem técnica
+- [ ] Abrir um lead com `origin` técnico (ex.: `whatsapp_inbound`) e entrar em
+      modo edição
+- [ ] Confirmar que o Select mostra "Inbound (WhatsApp) — atual" em vez do
+      placeholder vazio
+- [ ] Confirmar que o item extra não é clicável no dropdown
+
+### Cenário P2 — Salvar sem tocar no campo
+- [ ] No mesmo lead, editar outro campo (ex.: observações) sem tocar no
+      Select de Direção, e salvar
+- [ ] Confirmar que `origin` continua com o valor técnico original
+
+### Cenário P3 — Trocar explicitamente para Manual/Outbound
+- [ ] No mesmo lead, escolher "Outbound — eu abordei primeiro" e salvar
+- [ ] Confirmar que `origin` vira `"outbound"` (sem regressão)
+
+### Cenário P4 — Lead com origem já canônica (regressão)
+- [ ] Abrir um lead com `origin` = `Manual` ou `outbound`
+- [ ] Confirmar que o Select mostra a opção certa pré-selecionada, sem o item
+      extra aparecer
+
+---
+
+## Ajustes Possíveis Pós-Implementação
+
+_Nenhum identificado até o momento._

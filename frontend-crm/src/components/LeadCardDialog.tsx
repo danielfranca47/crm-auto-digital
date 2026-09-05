@@ -834,6 +834,12 @@ function LeadCardDialogBody({
                   <SelectValue placeholder="Quem procurou primeiro?" />
                 </SelectTrigger>
                 <SelectContent>
+                  {editedLead?.origin &&
+                    !LEAD_DIRECTION_OPTIONS.some((option) => option.value === editedLead.origin) && (
+                      <SelectItem value={editedLead.origin} disabled>
+                        {formatLeadOriginLabel(editedLead.origin)} — atual
+                      </SelectItem>
+                    )}
                   {LEAD_DIRECTION_OPTIONS.map((option) => (
                     <SelectItem key={option.value} value={option.value}>
                       {option.label}
