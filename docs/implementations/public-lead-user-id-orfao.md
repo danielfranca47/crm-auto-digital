@@ -79,6 +79,35 @@ conta configurada, com AI Profile correto resolvido.
 | `backend-crm/.env.example` | Adicionar `PUBLIC_LEAD_USER_ID=TO_DEFINE` |
 | `backend-crm/tests/test_public_lead_user_id.py` (novo) | Cobre: INSERT grava `user_id` correto; 500 claro se env var ausente |
 
+### Commits Fase 1
+
+| # | Commit | O que foi implementado |
+|---|---|---|
+| 1 | `e98079218d6861b3ee654c036aa5322f31e712c6` | `user_id` fixo via `PUBLIC_LEAD_USER_ID` + teste automatizado |
+
+**Detalhes do commit `e980792`:**
+- `backend-crm/routes/public.py` — `_get_public_lead_user_id()` (mesmo padrão de `_get_form_token()`); INSERT grava `user_id`; `resolve_agent_type_for_user(user_id=...)` resolve o AI Profile real
+- `backend-crm/.env.example` — documenta `PUBLIC_LEAD_USER_ID`
+- `backend-crm/tests/test_public_lead_user_id.py` — 2 testes (grava com `user_id` correto; falha 500 sem a env var, sem gravar lead órfão)
+
+### Relatório da Fase 1 — o que mudou na prática
+
+**Antes:** quando alguém preenchia o formulário de contato do seu site, o
+lead era criado no banco mas ficava "invisível" — nenhuma tela do CRM
+conseguia mostrá-lo, porque o registro não tinha dono (`user_id` vazio). A
+única coisa que de fato acontecia era o envio de e-mails (notificação +
+resposta automática).
+
+**Agora:** o lead nasce já vinculado à conta configurada (via
+`PUBLIC_LEAD_USER_ID`) e aparece normalmente no Kanban dessa conta, na coluna
+"À Prospectar", com origem "Formulário Website". Se essa configuração faltar
+no servidor, o formulário retorna um erro claro em vez de continuar gravando
+leads órfãos silenciosamente.
+
+**Para validar:** Cenário C1 e C2, abaixo — mas note que ainda falta o passo
+operacional (definir a env var em produção) antes de fechar esta
+implementação; ver seção final do arquivo.
+
 ---
 
 ## Checks de Validação
