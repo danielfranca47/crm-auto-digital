@@ -93,11 +93,18 @@ em `NewLeadModal.tsx`/`LeadCardDialog.tsx`:
   criação/edição.
 
 Um lead com `origin` gravado por um caminho técnico (`whatsapp_inbound`, `Formulário Website`,
-`Planilha`) não bate em nenhuma das 2 opções do Select — em `LeadCardDialog.tsx` o valor exibido
-fica em branco (placeholder "Quem procurou primeiro?"), mas o estado `editedLead.origin` nasce
-como cópia do lead atual e só muda se o usuário efetivamente escolher uma opção
-(`onValueChange`). Por isso salvar a edição sem tocar nesse campo preserva o valor técnico
-original — isso é só sobre a edição; a exibição em modo leitura é tratada à parte, abaixo.
+`Planilha`) não bate em nenhuma das 2 opções do Select. Em `LeadCardDialog.tsx`, o Select injeta
+dinamicamente um 3º `<SelectItem>` **desabilitado** no topo, com `value` = o próprio valor técnico
+e label = `formatLeadOriginLabel(origin)` + sufixo " — atual" (ex.: "Inbound (WhatsApp) — atual")
+— só quando `editedLead.origin` não bate com nenhum valor canônico. O Radix Select localiza esse
+item pelo `value` e mostra seu texto como valor selecionado mesmo estando desabilitado, então o
+campo nunca aparece em branco; como o item é `disabled`, ele não pode ser reselecionado — o
+operador só muda a direção escolhendo "Inbound" ou "Outbound" explicitamente. O estado
+`editedLead.origin` nasce como cópia exata do lead atual e só muda se o usuário efetivamente
+escolher uma das 2 opções canônicas (`onValueChange`), então salvar sem tocar nesse campo preserva
+o valor técnico original — isso é só sobre a edição; a exibição em modo leitura é tratada à parte,
+abaixo. `NewLeadModal.tsx` (criação) não precisa desse item extra: `origin` nasce sempre `Manual`
+ou vazio, nunca um valor técnico pré-existente.
 
 ### Labels amigáveis em modo leitura (`formatLeadOriginLabel()`)
 
