@@ -49,6 +49,22 @@ def _get_form_token() -> str:
     return token
 
 
+def _get_public_lead_user_id() -> int:
+    raw = os.getenv("PUBLIC_LEAD_USER_ID")
+    if not raw:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="PUBLIC_LEAD_USER_ID não configurado no servidor.",
+        )
+    try:
+        return int(raw)
+    except ValueError:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="PUBLIC_LEAD_USER_ID inválido.",
+        )
+
+
 def _load_email_settings() -> EmailSettings:
     host = os.getenv("SMTP_HOST")
     port = int(os.getenv("SMTP_PORT", "587"))
@@ -184,6 +200,7 @@ def create_public_lead(
         "utm_content": payload.utm_content,
     }
     custom_message = _prepare_custom_message(utm_payload)
+    target_user_id = _get_public_lead_user_id()
 
     conn = get_connection()
     cursor = conn.cursor()
@@ -191,10 +208,11 @@ def create_public_lead(
         cursor.execute(
             """
             INSERT INTO leads (
-                companyName, contactName, phone, email, origin, category, customMessage, observations, agent_type, priority
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                user_id, companyName, contactName, phone, email, origin, category, customMessage, observations, agent_type, priority
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
+                target_user_id,
                 payload.fullName,
                 payload.fullName,
                 payload.phone,
@@ -203,7 +221,7 @@ def create_public_lead(
                 "to-prospect",
                 custom_message,
                 payload.message,
-                resolve_agent_type_for_user(),
+                resolve_agent_type_for_user(user_id=target_user_id),
                 1,
             ),
         )
