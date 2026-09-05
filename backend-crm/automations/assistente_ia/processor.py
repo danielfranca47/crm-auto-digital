@@ -127,6 +127,7 @@ def map_row_to_lead(row: pd.Series, column_map: Optional[Dict[str, str]] = None)
     phone = normalize_phone(phone_raw) if phone_raw else _pick_phone(d)
     notes_raw = _pick("notas", "notas", "notes", "observacao", "obs")
     origin = (d.get("origin") or d.get("origem") or "Planilha")
+    acquisition_channel = _pick("acquisition_channel", "canal", "canal_aquisicao", "fonte")
     category = "to-prospect"
     priority = _priority_from_letter(d.get("priority"))
     observations = notes_raw or _obs_bundle(d)
@@ -137,6 +138,7 @@ def map_row_to_lead(row: pd.Series, column_map: Optional[Dict[str, str]] = None)
         "email": email,
         "phone": phone,
         "origin": origin,
+        "acquisition_channel": acquisition_channel,
         "category": category,
         "customMessage": None,
         "observations": observations,
@@ -175,14 +177,14 @@ def update_lead_light(conn, lead_id: int, new_data: Dict, *, user_id: int):
     cur = conn.cursor()
     new_data = {k: v for k, v in new_data.items() if k != "user_id"}
     cur.execute("""
-        SELECT companyName, contactName, email, phone, origin, category,
+        SELECT companyName, contactName, email, phone, origin, acquisition_channel, category,
                customMessage, observations, priority
         FROM leads WHERE id = ? AND user_id = ?
     """, (lead_id, user_id))
     row = cur.fetchone()
     if not row:
         return
-    columns = ["companyName","contactName","email","phone","origin","category","customMessage","observations","priority"]
+    columns = ["companyName","contactName","email","phone","origin","acquisition_channel","category","customMessage","observations","priority"]
     current = {k: row[k] for k in columns}
     merged = current.copy()
     for k, v in new_data.items():
