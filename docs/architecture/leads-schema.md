@@ -28,8 +28,30 @@
 | WhatsApp inbound | `services/whatsapp_inbound/guardrail.py` (`find_or_create_lead_by_phone`) | `NULL` | `wa_display_name` (nome de perfil do WhatsApp) se resolvido; senão telefone normalizado (`phone_norm`) |
 | Planilha / Google Maps | `automations/assistente_ia/processor.py` (`map_row_to_lead`) | `NULL` | `NULL` (linha sem nenhum nome viola o CHECK; erro é reportado por linha, batch continua) |
 | Playground (sandbox) | `routes/playground.py` (`_create_sandbox_lead`) | `NULL` | `"Lead de Teste"` (fixo) |
+| Formulário público do site | `routes/public.py` (`create_public_lead`) | `payload.fullName` (mesmo valor do contato) | `payload.fullName` |
 
 Nenhum ponto de criação inventa nome de empresa fabricado para contornar a obrigatoriedade (removidos: `"WhatsApp inbound"`, `"Sem nome"`, `"Empresa Teste"`).
+
+### Formulário público do site — `user_id` fixo, não multi-tenant
+
+`POST /public/leads` (montado sem prefixo `/api` — `app.py:280`, vira
+`/public/leads`) é o endpoint que recebe o formulário de contato do site de
+marketing (`website/src/components/CtaSection.tsx`). Autenticado por um único
+token fixo (`FORM_TOKEN`) — não tem nenhuma noção de multi-tenant, é
+exclusivo de uma única conta CRM de destino.
+
+O `user_id` gravado no lead vem de `PUBLIC_LEAD_USER_ID` (env var,
+`_get_public_lead_user_id()`), mesmo padrão de `FORM_TOKEN`/`EMAIL_TO`
+(destino fixo, sem essa configuração o endpoint responde 500 em vez de gravar
+um lead sem dono). `agent_type` também é resolvido a partir desse mesmo
+`user_id` (`resolve_agent_type_for_user(user_id=...)`), refletindo o AI
+Profile real da conta de destino em vez de um fallback fixo.
+
+**Histórico:** antes desta implementação, o `INSERT` não incluía `user_id`,
+gravando leads com `user_id NULL` — como toda listagem de leads no CRM filtra
+por `user_id` exato, esses leads nunca apareciam em nenhum Kanban (nem no do
+dono da conta configurada). Não havia risco de vazamento entre contas — só
+inexistência de acesso a esses leads pelo próprio dono.
 
 ## Exibição (frontend)
 
