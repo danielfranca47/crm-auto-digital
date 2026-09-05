@@ -89,6 +89,31 @@ placeholder vazio, sem permitir "reselecioná-lo".
 
 ---
 
+### Commits Fase 1
+
+| # | Commit | O que foi implementado |
+|---|---|---|
+| 1 | `7916d81e1b2c6b508c67cb8f99905db82ca96b4d` | Item desabilitado com o valor técnico atual no Select de Direção |
+
+**Detalhes do commit `7916d81`:**
+- `frontend-crm/src/components/LeadCardDialog.tsx` — Select de "Direção" ganha item extra desabilitado quando `origin` não bate com Manual/outbound
+
+### Relatório da Fase 1 — o que mudou na prática
+
+**Antes:** ao editar um lead que chegou pelo WhatsApp, pelo formulário do
+site ou por planilha, o campo "Direção" aparecia vazio no modo edição
+(placeholder "Quem procurou primeiro?"), como se a origem nunca tivesse sido
+registrada — mesmo o valor já estando salvo corretamente por trás.
+
+**Agora:** o campo mostra o texto real (ex.: "Inbound (WhatsApp) — atual")
+mesmo em modo edição. Esse texto não pode ser escolhido de novo no dropdown —
+só serve para informar; para mudar a direção, o operador escolhe
+explicitamente "Inbound" ou "Outbound".
+
+**Para validar:** Cenários P1, P2, P3 e P4, abaixo.
+
+---
+
 ## Checks de Validação
 
 ### Cenário P1 — Lead com origem técnica
