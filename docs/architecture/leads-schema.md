@@ -73,9 +73,33 @@ Dois campos separados, com responsabilidades distintas — não misturar:
   [`pipeline-phases.md`](pipeline-phases.md) para o uso no prompt (`origin_inbound_opener` /
   `origin_outbound_opener`).
 - **`leads.acquisition_channel`** — canal de marketing (Facebook Ads, Google Ads, Indicação,
-  Website...), texto livre, nullable. Preenchido só na criação/edição manual do lead
-  (`NewLeadModal.tsx`, `LeadCardDialog.tsx`). **Não é lido por nenhuma lógica de IA** — puramente
-  informativo/pesquisável (entra na busca do Kanban).
+  Website...), texto livre, nullable. Preenchido na criação/edição manual do lead
+  (`NewLeadModal.tsx`, `LeadCardDialog.tsx`) e na importação por planilha (Assistente IA — ver
+  abaixo). **Não é lido por nenhuma lógica de IA** — puramente informativo/pesquisável (entra na
+  busca do Kanban).
+
+### Importação por planilha (Assistente IA)
+
+`map_row_to_lead()` (`backend-crm/automations/assistente_ia/processor.py`) preenche
+`acquisition_channel` a partir da planilha em duas camadas, na ordem:
+
+1. **Mapeamento explícito de coluna** — o utilizador escolhe, na tela "1.5. Mapeamento de
+   Colunas" do Assistente IA (`frontend-crm/src/pages/AssistenteIA.tsx`), qual coluna da
+   planilha corresponde ao campo "Canal de aquisição"; enviado ao backend como
+   `column_map["acquisition_channel"]`.
+2. **Auto-detecção por nome de coluna** (fallback, usada quando o mapeamento explícito não
+   resolve valor para a linha) — colunas literalmente chamadas `canal`, `canal_aquisicao` ou
+   `fonte`. O frontend também pré-seleciona esses nomes automaticamente no select de mapeamento
+   (`COLUMN_ALIASES` em `AssistenteIA.tsx`), mas o utilizador pode sempre sobrepor.
+
+Colunas chamadas `origem`/`origin` **não** entram nesses fallbacks — esse nome já é reservado
+para o campo `origin` (direção da conversa, acima), e um lead confundir os dois campos mudaria
+comportamento de IA sem intenção. Planilha sem nenhuma coluna reconhecível deixa
+`acquisition_channel = NULL` — mesmo comportamento de "não inventar valor" dos demais campos.
+
+Em reimportações com `overwrite=update`, `update_lead_light()` só preenche
+`acquisition_channel` se o lead existente ainda estiver com o campo vazio — um valor já
+preenchido (manual ou de importação anterior) nunca é sobrescrito por uma nova planilha.
 
 ### Captura no frontend (`LEAD_DIRECTION_OPTIONS`, `frontend-crm/src/lib/lead-origin.ts`)
 
