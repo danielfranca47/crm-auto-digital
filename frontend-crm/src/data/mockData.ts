@@ -2,6 +2,12 @@ import { Lead, KanbanColumn, DashboardMetrics } from '../types/crm';
 
 export const KANBAN_COLUMNS: KanbanColumn[] = [
   {
+    id: 'monitoring',
+    title: 'Monitorado',
+    leads: [],
+    color: '#64748b'
+  },
+  {
     id: 'to-prospect',
     title: 'À Prospectar',
     leads: [],

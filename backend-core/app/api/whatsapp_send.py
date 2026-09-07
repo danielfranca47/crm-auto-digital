@@ -109,6 +109,16 @@ async def send_whatsapp(
     connection = connections_service.get_connection_by_instance(db, payload.instance_id)
     if not connection:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Connection not found")
+    if connection.role != "agent":
+        # Defesa em profundidade: instâncias de monitoramento de colaborador
+        # (role="monitor") nunca podem enviar mensagem — só observam. Ver
+        # docs/implementations/monitoramento-colaborador-whatsapp.md.
+        logger.warning(
+            "whatsapp send blocked role=%s instance_id=%s",
+            connection.role,
+            payload.instance_id,
+        )
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="instance_not_allowed_to_send")
     normalized_status = connections_service.normalize_connection_status_for_crm(connection.status)
     if normalized_status != "active":
         logger.info(
@@ -196,6 +206,16 @@ async def send_whatsapp_media(
     connection = connections_service.get_connection_by_instance(db, payload.instance_id)
     if not connection:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Connection not found")
+    if connection.role != "agent":
+        # Defesa em profundidade: instâncias de monitoramento de colaborador
+        # (role="monitor") nunca podem enviar mensagem — só observam. Ver
+        # docs/implementations/monitoramento-colaborador-whatsapp.md.
+        logger.warning(
+            "whatsapp send blocked role=%s instance_id=%s",
+            connection.role,
+            payload.instance_id,
+        )
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="instance_not_allowed_to_send")
     normalized_status = connections_service.normalize_connection_status_for_crm(connection.status)
     if normalized_status != "active":
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Connection inactive")

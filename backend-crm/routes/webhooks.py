@@ -17,6 +17,7 @@ from services.followup_state import stop_followup_for_lead_category
 from services.jobs_service import TYPE_WHATSAPP_SEND, create_job
 from services.phone_normalizer import PhoneNormalizationError, normalize_to_e164
 from services.spy_agent.spy_inbound_handler import handle_spy_inbound, is_spy_instance
+from services.collab_monitor.monitor_inbound_handler import handle_monitor_inbound, is_monitor_instance
 from services.whatsapp_inbound.inbound_handler import InboundWebhookPayload, handle_inbound
 
 router = APIRouter(prefix="/webhooks", tags=["Webhooks"])
@@ -230,6 +231,12 @@ def whatsapp_uazapi_webhook(
     message_type = _raw_mt
     # content pode ser dict para PTT/mídia (ex: {'PTT': True, 'URL': '...'}); usar só se for string
     _raw_content = message.get("content")
+    # Definido aqui (não só mais abaixo) porque o roteamento para o spy handler,
+    # antes do filtro from_me, também lê _content_obj ao montar media_url — usá-lo
+    # antes desta linha lançava UnboundLocalError (bug pré-existente, corrigido
+    # de passagem ao adicionar o roteamento equivalente do monitoramento de
+    # colaborador, que segue o mesmo padrão).
+    _content_obj = _raw_content if isinstance(_raw_content, dict) else {}
     message_text = (
         data.get("text")
         or message.get("text")
@@ -323,6 +330,32 @@ def whatsapp_uazapi_webhook(
             return handle_spy_inbound(spy_payload)
     # ─────────────────────────────────────────────────────────────────────────
 
+    # ── Roteamento: instância de monitoramento de colaborador → handler dedicado ──
+    # Mesma posição do spy (ANTES do filtro from_me): o monitoramento precisa
+    # capturar as mensagens que o colaborador manda, não só as que recebe.
+    # NUNCA passa por guardrail/orchestrator/LLM nem enfileira envio — ver
+    # services/collab_monitor/monitor_inbound_handler.py.
+    if instance_id and is_monitor_instance(instance_id):
+        is_group = is_group_message_payload(payload)
+        if not is_group:
+            monitor_sender = _resolve_spy_sender_e164(from_me)
+            monitor_payload = {
+                "instance_id": instance_id,
+                "from": monitor_sender,
+                "message_text": message_text,
+                "message_id": message_id,
+                "message_type": _normalize_spy_message_type(message_type),
+                "wa_display_name": wa_display_name,
+                "from_me": from_me,
+            }
+            logger.debug(
+                "[collab_monitor] routing to monitor handler: sender=%s from_me=%s",
+                monitor_sender,
+                from_me,
+            )
+            return handle_monitor_inbound(monitor_payload)
+    # ─────────────────────────────────────────────────────────────────────────
+
     if from_me:
         return {"status": "ignored", "reason": "from_me"}
 
@@ -349,8 +382,8 @@ def whatsapp_uazapi_webhook(
         raise HTTPException(status_code=400, detail=detail)
 
     # Extrai URL de mídia do payload (necessário para áudio)
-    # Para PTT, a URL está em message.content.URL (não em fileURL)
-    _content_obj = _raw_content if isinstance(_raw_content, dict) else {}
+    # Para PTT, a URL está em message.content.URL (não em fileURL) — _content_obj
+    # já foi definido mais acima, junto de _raw_content.
     media_url = (
         data.get("fileURL")
         or data.get("mediaUrl")

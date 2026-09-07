@@ -71,6 +71,7 @@ export interface LeadAppointment {
 }
 
 export type LeadStatus =
+  | 'monitoring'        // Monitorado (WhatsApp de colaborador, sem IA)
   | 'to-prospect'       // Prospecção
   | 'in-progress'       // (apenas na página de Prospecção)
   | 'qualification'     // Qualificação (substitui "prospected")

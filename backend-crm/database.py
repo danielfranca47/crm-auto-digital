@@ -1241,6 +1241,7 @@ def init_db() -> None:
         ensure_column(conn, "leads", "knowledge_categories_shown", "knowledge_categories_shown TEXT NULL")
         ensure_column(conn, "leads", "wa_display_name", "wa_display_name TEXT NULL")
         ensure_column(conn, "leads", "acquisition_channel", "acquisition_channel TEXT NULL")
+        ensure_column(conn, "leads", "collab_monitor_instance_id", "collab_monitor_instance_id TEXT NULL")
         _migrate_leads_company_or_contact(conn)
 
         cur.execute("CREATE INDEX IF NOT EXISTS idx_leads_user ON leads(user_id, createdAt);")
