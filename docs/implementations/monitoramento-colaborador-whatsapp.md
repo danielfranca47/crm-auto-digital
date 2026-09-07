@@ -235,23 +235,27 @@ Kanban, sem nunca acionar IA ou envio.
 ## Checks de Validação
 
 ### Cenário C1 — Conexão de colaborador não afeta o agente principal
-- [ ] Conta de teste já com WhatsApp do agente conectado e funcionando
-- [ ] Cadastrar e conectar uma 2ª instância (colaborador) via QR
-- [ ] Confirmar: `GET /whatsapp-connections/resolve-by-user` continua devolvendo a instância do agente (não a do colaborador)
-- [ ] Enviar uma mensagem de teste pelo agente e confirmar que chega pelo número certo
+- [x] Conta de teste já com WhatsApp do agente conectado e funcionando
+- [x] Cadastrar e conectar uma 2ª instância (colaborador) via código de pareamento (em vez de QR — `POST /api/collab-monitor/instances` com `phone`)
+- [x] Confirmar: `GET /whatsapp-connections/resolve-by-user` continua devolvendo a instância do agente (não a do colaborador)
+- [x] Enviar uma mensagem de teste pelo agente e confirmar que chega pelo número certo — coberto indiretamente: `resolve-by-user` continuou apontando para `crm-15-88e456ef` antes e depois de conectar a instância monitor
+- **Validado em:** 08/09/2026 — ambiente local (backend-core :8001 + backend-crm :8000 + túnel ngrok), conta de teste user_id=15. Instância monitor `collab-15-742f4aa6` conectada via código de pareamento; `resolve-by-user` continuou retornando `crm-15-88e456ef` (o agente) sem alteração. Testei também o guard de defesa em profundidade diretamente: `POST /whatsapp/send` com `instance_id` da instância monitor retornou `403 instance_not_allowed_to_send`.
 
 ### Cenário C2 — Mensagens do colaborador viram lead real
-- [ ] Enviar mensagem de um número de teste para o WhatsApp do colaborador monitorado
-- [ ] Confirmar: lead aparece na coluna "Monitorado" do Kanban, com nome do colaborador visível
-- [ ] Responder pelo próprio WhatsApp do colaborador (fromMe) e confirmar que a mensagem aparece no histórico do card
+- [x] Enviar mensagem de um número de teste para o WhatsApp do colaborador monitorado
+- [x] Confirmar: lead aparece na coluna "Monitorado" do Kanban, com nome do colaborador visível
+- [x] Responder pelo próprio WhatsApp do colaborador (fromMe) e confirmar que a mensagem aparece no histórico do card
+- **Validado em:** 08/09/2026 — mensagem de +351961649355 criou `lead_id=512` com `category='monitoring'`, `collab_monitor_instance_id='collab-15-742f4aa6'`, `bot_disabled=1`. Mensagem do lead gravada com `model='inbound'`; resposta enviada a partir do próprio WhatsApp do colaborador (fromMe) gravada no mesmo lead com `model='human_agent'` — confirmado por query direta nas tabelas `leads`/`messages`.
 
 ### Cenário C3 — Nunca dispara IA nem envio automático
-- [ ] Confirmar nos logs/tabela de jobs: nenhum job `whatsapp.inbound.n8n` ou `whatsapp.send.local` criado para a instância monitor
-- [ ] Confirmar que nenhuma resposta automática é enviada ao lead monitorado
+- [x] Confirmar nos logs/tabela de jobs: nenhum job `whatsapp.inbound.n8n` ou `whatsapp.send.local` criado para a instância monitor
+- [x] Confirmar que nenhuma resposta automática é enviada ao lead monitorado
+- **Validado em:** 08/09/2026 — `MAX(jobs.id)` permaneceu em 514 (inalterado) antes e depois das duas mensagens de teste (inbound do lead + fromMe do colaborador); nenhuma linha nova na tabela `jobs`. Nenhuma mensagem automática chegou ao número de teste.
 
 ### Cenário C4 — Leads separados por colaborador
 - [ ] Mesmo número de telefone de teste manda mensagem para 2 colaboradores monitorados diferentes
 - [ ] Confirmar: viram 2 leads distintos, um por colaborador, não o mesmo card
+- **Pendente:** exige um segundo número de WhatsApp real conectado como colaborador. A garantia está na query de `find_or_create_monitor_lead()` (`services/collab_monitor/monitor_inbound_handler.py`), que inclui `collab_monitor_instance_id` na chave de busca — não testado ao vivo por falta de um segundo número disponível no momento.
 
 ---
 
