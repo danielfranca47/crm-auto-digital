@@ -31,6 +31,7 @@ existente ou criar um novo.
 | [`knowledge-base.md`](knowledge-base.md) | Base de Conhecimento: categorias guiadas, `knowledge_items`/`knowledge_item_media`, categorias `allowMultiple` (`service_pricing_table`), formato `structured_v1`, agregação para o LLM, dedup de categorias narrativas (`leads.knowledge_categories_shown`), wizard de onboarding, ingestão de materiais por IA (`source_type='ai_extracted'`) | Nova categoria guiada, nova categoria `allowMultiple`, mudança no formato estruturado, mudança em `_load_knowledge_items()` ou no dedup narrativo, mudança no wizard ou na esteira de ingestão (extractors/classifier/worker) |
 | [`agent-local-app.md`](agent-local-app.md) | App desktop agent-local: auth passwordless, pesquisa Google Maps (proxy/chave própria/Selenium), prospecção WhatsApp individual/lote, Kanban remoto (automação Fase 10) e local (não-assinante), painel Assistente IA, geração de copy remota/local, prompt personalizado | Novo ecrã/painel no app, novo modo de pesquisa, mudança no fluxo de prospecção ou Kanban local/remoto, novo campo propagado na geração de copy |
 | [`bot-global-pause.md`](bot-global-pause.md) | Pausa geral do bot pelo header do Kanban: `bot_global_pause_state`, `bot_global_pause.py` (pause_all/resume_all), kill switch no gate de inbound, popup de retomada (2 modos) | Mudança no gate do kill switch, novo modo de retomada, novo campo no estado de pausa |
+| [`kanban-responsive.md`](kanban-responsive.md) | Layout responsivo do Kanban (`frontend-crm`): regra vertical/horizontal por largura+orientação (`useIsMobile`/`useIsPortrait`), header com `flex-wrap` | Mudança no breakpoint ou na regra de orientação, novo comportamento de colapso/accordion de colunas, mudança no layout do header |
 
 ---
 
@@ -88,6 +89,7 @@ A maioria das features altera áreas já documentadas. Antes de criar um ficheir
 | Novo campo no AI Profile | `agents.md` |
 | Novo motivo para `bot_disabled` | `agents.md` + `webhooks.md` |
 | Pausa geral do bot (botão no header do Kanban), kill switch de inbound, popup de retomada | `bot-global-pause.md` |
+| Layout responsivo do Kanban (vertical/horizontal por largura+orientação), header com `flex-wrap` | `kanban-responsive.md` |
 | Novos campos obrigatórios de qualificação | `pipeline-phases.md` |
 | Novo comportamento por `agent_mode` | `pipeline-phases.md` |
 | Campo novo no ContextBundle que afecta o LLM | `playground-parity.md` |
