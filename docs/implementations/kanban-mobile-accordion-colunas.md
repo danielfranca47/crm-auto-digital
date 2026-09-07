@@ -1,7 +1,7 @@
 # Kanban mobile: accordion/colapso de colunas no retrato
 
-**Branch:** (a definir — nasce no Passo 0/1 do guia de implementação)
-**Status:** Aguardando Plan Mode
+**Branch:** `feat/kanban-mobile-accordion-colunas`
+**Status:** Em andamento
 
 ---
 
@@ -19,16 +19,73 @@ Apresentação, Pré-Agendamento, Agendamento, Acompanhamento, Fechamento, Lista
 de Clientes), a página em retrato fica muito longa para rolar, mesmo cada
 coluna tendo scroll interno próprio.
 
-## Problema a investigar
+---
 
-Avaliar se colunas vazias ou pouco usadas deveriam nascer colapsadas (só o
-cabeçalho visível, expandindo ao toque) no modo retrato mobile, para reduzir
-o comprimento total da página.
+## Problemas Identificados (estado anterior)
 
-## Notas para o Plan Mode
+1. **Sem colapso de colunas:** `KanbanColumn.tsx` sempre renderiza a lista
+   completa de leads — não há forma de esconder o conteúdo de uma coluna
+   para reduzir o comprimento da página no modo retrato.
 
-- Ler `docs/architecture/kanban-responsive.md` antes de diagnosticar.
-- Decidir: colapso automático por critério (ex.: coluna vazia) ou controlado
-  pelo usuário (lembrar preferência)?
-- Considerar impacto na acessibilidade e no drag-and-drop (`@dnd-kit`) — uma
-  coluna colapsada ainda precisa aceitar itens soltos nela.
+---
+
+## Abordagem
+
+Colapso **manual** por coluna (usuário toca no cabeçalho), só no modo
+retrato mobile (`stackVertical`). Todas as colunas começam abertas. Estado
+lembrado via `localStorage`. Arrastar um lead sobre uma coluna colapsada a
+expande automaticamente.
+
+```
+Usuário toca no cabeçalho da coluna → toggle(columnId)
+  ├─ estava aberta → colapsa (esconde lista de leads, mantém cabeçalho)
+  └─ estava colapsada → expande
+
+Drag sobre coluna colapsada (onDragOver) → expand(columnId) automaticamente
+```
+
+---
+
+## Plano de Implementação
+
+### Fase 1 — Hook de colapso + UI + auto-expand no drag
+
+**Objetivo:** colunas colapsáveis manualmente no retrato mobile, com estado
+persistido e auto-expand durante drag-and-drop.
+
+| Arquivo | O que muda |
+|---|---|
+| `frontend-crm/src/hooks/useCollapsedColumns.ts` | Novo hook: estado de colunas colapsadas + persistência em `localStorage` |
+| `frontend-crm/src/components/KanbanColumn.tsx` | Botão de colapso (chevron) no cabeçalho; `setNodeRef` movido para o wrapper externo; conteúdo só renderiza se não colapsado |
+| `frontend-crm/src/components/KanbanBoard.tsx` | Usa o hook; passa props de colapso para `KanbanColumn`; auto-expand em `handleDragOver` |
+| `docs/architecture/kanban-responsive.md` | Nova seção "Colapso de colunas (retrato mobile)" |
+
+---
+
+## Checks de Validação
+
+### Cenário P1 — Colapsar/expandir manualmente (retrato)
+- [ ] Emular viewport mobile em retrato (ex.: 390x844)
+- [ ] Clicar no cabeçalho de uma coluna
+- [ ] Confirmar: lista de leads esconde, cabeçalho continua visível, ícone do chevron muda de direção
+- [ ] Clicar de novo → confirmar que expande
+
+### Cenário P2 — Persistência entre recarregamentos
+- [ ] Colapsar uma coluna
+- [ ] Recarregar a página (`F5`)
+- [ ] Confirmar: a coluna continua colapsada
+
+### Cenário P3 — Auto-expand durante drag
+- [ ] Colapsar uma coluna que tenha leads
+- [ ] Arrastar um lead de outra coluna até a coluna colapsada
+- [ ] Confirmar: a coluna expande sozinha durante o arrasto e o drop funciona normalmente
+
+### Cenário P4 — Sem regressão em desktop e paisagem
+- [ ] Verificar em desktop (ex.: 1440x900) e em paisagem mobile (ex.: 700x350)
+- [ ] Confirmar: nenhum botão de colapso aparece; colunas sempre abertas, como antes desta implementação
+
+---
+
+## Ajustes Possíveis Pós-Implementação
+
+<a preencher após os testes, se necessário>

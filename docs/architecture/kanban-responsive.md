@@ -25,12 +25,35 @@ isMobile (largura < 768px) && isPortrait (orientação retrato)
   `frontend-crm/src/components/KanbanBoard.tsx` e passado como prop
   `fullWidth` para `KanbanColumn` (`frontend-crm/src/components/KanbanColumn.tsx`),
   que decide `w-full` vs. `w-72 flex-shrink-0`.
-- No modo empilhado (retrato), **todas** as colunas do pipeline ficam abertas
-  ao mesmo tempo — nenhuma lógica de accordion/colapso. Cada coluna mantém
-  seu próprio scroll interno vertical (`calc(100vh - 200px)`), já existente
-  antes desta mudança.
+- No modo empilhado (retrato), cada coluna pode ser colapsada/expandida
+  manualmente (ver "Colapso de colunas", abaixo). Cada coluna mantém seu
+  próprio scroll interno vertical (`calc(100vh - 200px)`) quando expandida.
 - A lógica de drag-and-drop (`@dnd-kit`, sensors, `closestCorners`) não muda
   entre os modos — só a direção do flex container e a largura da coluna.
+
+## Colapso de colunas (retrato mobile)
+
+Só disponível quando `stackVertical` é `true` (retrato mobile) — em
+desktop e paisagem não existe botão de colapso, colunas sempre mostram todo
+o conteúdo.
+
+- `useCollapsedColumns()` — `frontend-crm/src/hooks/useCollapsedColumns.ts`.
+  Guarda o `Set` de ids de colunas colapsadas, persistido em `localStorage`
+  (chave `"kanban:collapsedColumns"`) — preferência por navegador/
+  dispositivo, não sincronizada entre aparelhos, não passa pelo backend.
+  Expõe `isCollapsed(id)`, `toggle(id)` e `expand(id)` (idempotente).
+- Todas as colunas começam **abertas** por padrão — nenhuma colapsa
+  automaticamente (ex.: por estar vazia).
+- `KanbanColumn.tsx`: prop `collapsible` (= `stackVertical`) controla se o
+  botão de colapso (chevron) aparece no cabeçalho; `isCollapsed` esconde o
+  bloco de leads (o cabeçalho com título e contagem continua sempre
+  visível). O `useDroppable` (`setNodeRef`) fica no wrapper externo da
+  coluna (não só no bloco de leads), para a coluna continuar sendo uma área
+  de drop válida mesmo colapsada.
+- Auto-expand durante drag: `KanbanBoard.tsx` → `handleDragOver` chama
+  `expand(overColumn.id)` sempre que `stackVertical` é `true` e o ponteiro
+  está sobre uma coluna — se ela estiver colapsada, expande sozinha para
+  revelar o conteúdo antes do drop.
 
 ## Header (`CrmHeader.tsx`)
 

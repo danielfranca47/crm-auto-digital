@@ -35,6 +35,7 @@ import type { SalesFlowPhaseId } from "@/types/agente";
 import { api } from "@/services/api";
 import { formatLeadOriginLabel } from "@/lib/lead-origin";
 import { useIsMobile, useIsPortrait } from "@/hooks/use-mobile";
+import { useCollapsedColumns } from "@/hooks/useCollapsedColumns";
 
 interface KanbanBoardProps {
   onDashboard: () => void;
@@ -136,6 +137,7 @@ export function KanbanBoard({ onDashboard }: KanbanBoardProps) {
   const isMobile = useIsMobile();
   const isPortrait = useIsPortrait();
   const stackVertical = isMobile && isPortrait;
+  const { isCollapsed, toggle: toggleCollapsed, expand: expandCollapsed } = useCollapsedColumns();
 
   useEffect(() => {
     let mounted = true;
@@ -231,7 +233,13 @@ export function KanbanBoard({ onDashboard }: KanbanBoardProps) {
     const activeColumn = findColumn(activeId);
     const overColumn = allColumns.find((col) => col.id === overId) || findColumn(overId);
 
-    if (!activeColumn || !overColumn || activeColumn === overColumn) return;
+    if (!overColumn) return;
+
+    if (stackVertical) {
+      expandCollapsed(overColumn.id);
+    }
+
+    if (!activeColumn || activeColumn === overColumn) return;
   };
 
   const getEffectiveAgentType = useCallback(
@@ -562,6 +570,9 @@ export function KanbanBoard({ onDashboard }: KanbanBoardProps) {
                 notifiedLeadIds={notifiedLeadIds}
                 phaseSequence={phaseSequence}
                 fullWidth={stackVertical}
+                collapsible={stackVertical}
+                isCollapsed={isCollapsed(column.id)}
+                onToggleCollapse={() => toggleCollapsed(column.id)}
               />
             ))}
 
@@ -582,6 +593,9 @@ export function KanbanBoard({ onDashboard }: KanbanBoardProps) {
                   notifiedLeadIds={notifiedLeadIds}
                   phaseSequence={phaseSequence}
                   fullWidth={stackVertical}
+                  collapsible={stackVertical}
+                  isCollapsed={isCollapsed(column.id)}
+                  onToggleCollapse={() => toggleCollapsed(column.id)}
                 />
               ))}
           </div>
