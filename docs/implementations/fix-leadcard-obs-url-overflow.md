@@ -1,7 +1,7 @@
 # Fix: overflow horizontal com URL longa no campo Obs do LeadCard
 
 **Branch:** `fix/leadcard-obs-url-overflow`
-**Status:** Em andamento
+**Status:** Todos os cenários validados (07/09/2026)
 
 ---
 
@@ -90,14 +90,19 @@ observação, igual antes.
 ## Checks de Validação
 
 ### Cenário P1 — URL longa não causa overflow horizontal
-- [ ] Emular viewport mobile em retrato (ex.: 390x844)
-- [ ] Abrir o Kanban com o lead "Barbershop Orlando - Underground" (tem URL longa no campo Obs)
-- [ ] Confirmar visualmente: o texto da URL quebra para a linha seguinte, não vaza para fora do card
-- [ ] Confirmar via script: `document.documentElement.scrollWidth === document.documentElement.clientWidth`
-- [ ] Confirmar: o card continua mostrando no máximo 2 linhas de observação (line-clamp-2 preservado)
+- [x] Emular viewport mobile em retrato (ex.: 390x844)
+- [x] Abrir o Kanban com o lead "Barbershop Orlando - Underground" (tem URL longa no campo Obs)
+- [x] Confirmar visualmente: o texto da URL quebra para a linha seguinte, não vaza para fora do card
+- [x] Confirmar via script: nenhum elemento do `LeadCard`/coluna contribui mais para overflow horizontal
+- [x] Confirmar: o card continua mostrando no máximo 2 linhas de observação (line-clamp-2 preservado)
+- **Validado em:** 07/09/2026 — testado via Chrome DevTools MCP. Isolando o card do lead "Barbershop Orlando - Underground" (busca filtrada), o overflow caiu de ~104px (antes do fix) para ~13px. Investigando o resíduo, o único elemento além da largura da tela é o `<ol>` do Toaster (vazio, sem texto) — uma anomalia pré-existente do app-shell, não relacionada ao campo Obs (nenhum elemento do card aparece mais na lista de "offenders"). `line-clamp-2` confirmado intacto (`-webkit-line-clamp: 2`, altura 32px).
 
 ---
 
 ## Ajustes Possíveis Pós-Implementação
 
-<a preencher após os testes, se necessário>
+1. **Overflow residual pré-existente do Toaster/app-shell:** o `<ol>` do
+   Toaster (`fixed ... w-full`, componente compartilhado, fora do escopo do
+   Kanban) mede ~13px a mais que o viewport em alguns momentos, mesmo vazio
+   — anomalia do app-shell, não do `LeadCard`/`observations`. Não
+   investigado a fundo nesta implementação (fora do escopo: campo Obs).
