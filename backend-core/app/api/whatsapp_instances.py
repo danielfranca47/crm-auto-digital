@@ -38,6 +38,7 @@ async def _require_service_token(x_service_token: str = Header(None)) -> str:
 class InstanceInitPayload(BaseModel):
     user_id: int
     instance_id: str
+    role: str = "agent"
 
     class Config:
         extra = "allow"
@@ -46,6 +47,7 @@ class InstanceInitPayload(BaseModel):
 class InstanceConnectPayload(BaseModel):
     user_id: int
     instance_id: str
+    role: str = "agent"
 
     class Config:
         extra = "allow"
@@ -159,7 +161,7 @@ async def init_instance(
     base_url = settings.UAZAPI_BASE_URL or ""
     admin_token = settings.UAZAPI_ADMIN_TOKEN or ""
     normalized_instance_id = _normalize_instance_id(payload.instance_id)
-    payload_data = payload.dict(exclude={"user_id", "instance_id"}, exclude_unset=True)
+    payload_data = payload.dict(exclude={"user_id", "instance_id", "role"}, exclude_unset=True)
     extra_payload = _format_admin_payload({k: v for k, v in payload_data.items() if k != "instance_id"})
 
     started = time.perf_counter()
@@ -208,6 +210,7 @@ async def init_instance(
         phone_e164=phone_e164,
         status=status_value,
         provider="uazapi",
+        role=payload.role,
     )
     return uazapi_admin.redact_instance_token(raw)
 
@@ -221,7 +224,7 @@ async def connect_instance(
     base_url = settings.UAZAPI_BASE_URL or ""
     normalized_instance_id = _normalize_instance_id(payload.instance_id)
     instance_token = _resolve_instance_token(db, normalized_instance_id)
-    payload_data = payload.dict(exclude={"user_id", "instance_id"}, exclude_unset=True)
+    payload_data = payload.dict(exclude={"user_id", "instance_id", "role"}, exclude_unset=True)
     extra_payload = _format_admin_payload({k: v for k, v in payload_data.items() if k != "instance_id"})
 
     started = time.perf_counter()
@@ -270,6 +273,7 @@ async def connect_instance(
         phone_e164=phone_e164,
         status=status_value,
         provider="uazapi",
+        role=payload.role,
     )
     return uazapi_admin.redact_instance_token(raw)
 

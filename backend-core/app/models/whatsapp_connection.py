@@ -18,6 +18,7 @@ class WhatsappConnection(Base):
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
     provider = Column(String, nullable=False, default="uazapi")
     instance_id = Column(String, nullable=False)
+    role = Column(String, nullable=False, default="agent")
     phone_e164 = Column(String, nullable=True)
     instance_token_encrypted = Column(Text, nullable=False)
     status = Column(String, nullable=False, default="active")

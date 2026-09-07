@@ -117,6 +117,7 @@ def ensure_whatsapp_connections_table() -> None:
         user_id INTEGER NOT NULL REFERENCES users(id),
         provider VARCHAR NOT NULL DEFAULT 'uazapi',
         instance_id VARCHAR NOT NULL,
+        role VARCHAR NOT NULL DEFAULT 'agent',
         phone_e164 VARCHAR,
         instance_token_encrypted TEXT NOT NULL,
         status VARCHAR NOT NULL DEFAULT 'active',
@@ -131,6 +132,7 @@ def ensure_whatsapp_connections_table() -> None:
         user_id INTEGER NOT NULL REFERENCES users(id),
         provider VARCHAR NOT NULL DEFAULT 'uazapi',
         instance_id VARCHAR NOT NULL,
+        role VARCHAR NOT NULL DEFAULT 'agent',
         phone_e164 VARCHAR,
         instance_token_encrypted TEXT NOT NULL,
         status VARCHAR NOT NULL DEFAULT 'active',
@@ -165,6 +167,9 @@ def ensure_whatsapp_connections_columns() -> None:
             if "last_disconnect_email_at" not in existing:
                 conn.execute(text("ALTER TABLE whatsapp_connections ADD COLUMN last_disconnect_email_at DATETIME"))
                 print("✅ coluna adicionada em whatsapp_connections: last_disconnect_email_at")
+            if "role" not in existing:
+                conn.execute(text("ALTER TABLE whatsapp_connections ADD COLUMN role VARCHAR NOT NULL DEFAULT 'agent'"))
+                print("✅ coluna adicionada em whatsapp_connections: role")
         else:
             result = conn.execute(
                 text("SELECT column_name FROM information_schema.columns WHERE table_name='whatsapp_connections'")
@@ -174,6 +179,8 @@ def ensure_whatsapp_connections_columns() -> None:
                 conn.execute(text("ALTER TABLE whatsapp_connections ADD COLUMN disconnect_alert_sent_at TIMESTAMPTZ"))
             if "last_disconnect_email_at" not in existing:
                 conn.execute(text("ALTER TABLE whatsapp_connections ADD COLUMN last_disconnect_email_at TIMESTAMPTZ"))
+            if "role" not in existing:
+                conn.execute(text("ALTER TABLE whatsapp_connections ADD COLUMN role VARCHAR NOT NULL DEFAULT 'agent'"))
 
 
 def ensure_ai_profile_columns() -> None:

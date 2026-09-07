@@ -17,7 +17,14 @@ def normalize_connection_status_for_crm(status: Optional[str]) -> str:
 
 
 def get_connection_for_user(db: Session, user_id: int) -> Optional[models.WhatsappConnection]:
-    return db.query(models.WhatsappConnection).filter(models.WhatsappConnection.user_id == user_id).first()
+    """Resolve a conexão de AGENTE da conta (role='agent') — usada por quem precisa
+    saber "qual instância envia mensagens por este usuário" (ex.: resolve-by-user,
+    consumido pelo executor real). Nunca deve devolver uma instância role='monitor'."""
+    return (
+        db.query(models.WhatsappConnection)
+        .filter(models.WhatsappConnection.user_id == user_id, models.WhatsappConnection.role == "agent")
+        .first()
+    )
 
 
 def get_connection_by_instance(db: Session, instance_id: str) -> Optional[models.WhatsappConnection]:
@@ -48,12 +55,15 @@ def upsert_connection(
     phone_e164: Optional[str] = None,
     status: Optional[str] = None,
     provider: str = "uazapi",
+    role: str = "agent",
 ) -> models.WhatsappConnection:
-    existing = get_connection_for_user(db, user_id)
+    """Resolve a linha existente por instance_id (nunca por user_id) — uma conta pode
+    ter várias instâncias (ex.: agente + monitor de colaborador); resolver por user_id
+    faria uma segunda instância sobrescrever a primeira em vez de criar uma linha nova."""
+    existing = get_connection_by_instance(db, instance_id)
     encrypted_token = encrypt_secret(instance_token)
 
-    if existing:
-        existing.instance_id = instance_id
+    if existing and existing.user_id == user_id:
         existing.instance_token_encrypted = encrypted_token
         existing.phone_e164 = phone_e164
         if status:
@@ -69,6 +79,7 @@ def upsert_connection(
         user_id=user_id,
         provider=provider,
         instance_id=instance_id,
+        role=role,
         phone_e164=phone_e164,
         instance_token_encrypted=encrypted_token,
         status=status or "active",
@@ -88,12 +99,13 @@ def upsert_connection_optional_token(
     phone_e164: Optional[str] = None,
     status: Optional[str] = None,
     provider: str = "uazapi",
+    role: str = "agent",
 ) -> models.WhatsappConnection:
-    existing = get_connection_for_user(db, user_id)
+    """Ver docstring de upsert_connection — mesma regra: resolve por instance_id."""
+    existing = get_connection_by_instance(db, instance_id)
     encrypted_token = encrypt_secret(instance_token) if instance_token else None
 
-    if existing:
-        existing.instance_id = instance_id
+    if existing and existing.user_id == user_id:
         if encrypted_token:
             existing.instance_token_encrypted = encrypted_token
         existing.phone_e164 = phone_e164
@@ -113,6 +125,7 @@ def upsert_connection_optional_token(
         user_id=user_id,
         provider=provider,
         instance_id=instance_id,
+        role=role,
         phone_e164=phone_e164,
         instance_token_encrypted=encrypted_token,
         status=status or "active",
