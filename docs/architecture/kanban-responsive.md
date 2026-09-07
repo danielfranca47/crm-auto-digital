@@ -62,11 +62,9 @@ título, busca (`SearchAutocomplete`) e bloco de botões podem cair em linhas
 separadas. A busca usa `order-3` para sempre cair por último em mobile,
 ocupando a largura toda da própria linha.
 
-## Limitação conhecida
+## Campo de observações (`LeadCard.tsx`)
 
-Um lead com uma URL muito longa e sem espaços no campo `observations` pode
-causar um pequeno overflow horizontal da página no modo empilhado (o texto
-não quebra dentro do `line-clamp-2` de `LeadCard.tsx`). Pré-existente ao
-layout responsivo (já ocorria, de forma pior, no modo horizontal fixo em
-telas estreitas). Correção rastreada em
-`docs/implementations/fix-leadcard-obs-url-overflow.md`.
+O parágrafo de observações usa `line-clamp-2 break-words`: limita a 2 linhas
+visíveis e força a quebra de palavras/URLs longas sem espaço, para não
+vazarem horizontalmente pela largura do card (especialmente relevante no
+modo empilhado, onde a coluna é `w-full`).

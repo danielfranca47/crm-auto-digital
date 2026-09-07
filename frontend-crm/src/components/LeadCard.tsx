@@ -230,7 +230,7 @@ export function LeadCard({
         {lead.observations && (
           <div className="text-muted-foreground">
             <span className="text-xs font-medium">Obs:</span> 
-            <p className="text-xs mt-1 line-clamp-2">{lead.observations}</p>
+            <p className="text-xs mt-1 line-clamp-2 break-words">{lead.observations}</p>
           </div>
         )}
 

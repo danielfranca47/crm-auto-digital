@@ -1,7 +1,7 @@
 # Fix: overflow horizontal com URL longa no campo Obs do LeadCard
 
-**Branch:** (a definir — nasce no Passo 0/1 do guia de implementação)
-**Status:** Aguardando Plan Mode
+**Branch:** `fix/leadcard-obs-url-overflow`
+**Status:** Em andamento
 
 ---
 
@@ -20,20 +20,60 @@ no modo horizontal (`w-72` fixo) em telas estreitas, de forma pior (a página
 inteira fica maior ainda) — não é uma regressão da implementação graduada,
 mas ficou mais visível nela.
 
-## Causa provável
+---
 
-`frontend-crm/src/components/LeadCard.tsx` — o parágrafo de observações usa
-`line-clamp-2`, que limita linhas verticalmente mas não força quebra de
-palavras/URLs sem espaço. Uma URL longa como uma "palavra" única não quebra
-e vaza horizontalmente pela largura do card.
+## Problemas Identificados (estado anterior)
 
-## Notas para o Plan Mode
+1. **Sem quebra de palavra no campo Obs:** `LeadCard.tsx:233` — o parágrafo
+   de observações usa `line-clamp-2` (limita a 2 linhas, com
+   `overflow: hidden`), mas nenhuma classe de quebra de palavra. Uma URL
+   longa como um único "token" sem espaço força a largura mínima de
+   conteúdo a propagar para os elementos ancestrais sem `min-width: 0`,
+   causando overflow horizontal no nível da página.
 
-- Correção provável: adicionar `overflow-wrap: anywhere` (ou classe
-  Tailwind equivalente, ex. `break-words`/`break-all`) ao parágrafo de
-  observações em `LeadCard.tsx`.
-- Confirmar se a mesma classe já existe em outros campos de texto livre do
-  card (ex.: nome do lead) para manter consistência.
-- Validar em viewport mobile estreito com um lead de teste contendo uma URL
-  longa (ex.: o lead "Barbershop Orlando - Underground" na base de teste
-  local, ver `docs/implementations/_conta-teste-local.md`).
+---
+
+## Abordagem
+
+Adicionar `break-words` (Tailwind → `overflow-wrap: break-word`) à classe do
+parágrafo de observações. Isso permite que uma palavra/URL longa quebre para
+a linha seguinte em vez de vazar pela largura do card — funciona junto com o
+`line-clamp-2` existente (que continua limitando a 2 linhas visíveis).
+
+---
+
+## Plano de Implementação
+
+### Fase 1 — Quebra de palavra no campo Obs
+
+**Objetivo:** URL longa sem espaço quebra de linha em vez de vazar pela
+largura do card.
+
+| Arquivo | O que muda |
+|---|---|
+| `frontend-crm/src/components/LeadCard.tsx` | Linha 233: adicionar `break-words` à classe do parágrafo de observações |
+
+```tsx
+// ANTES
+<p className="text-xs mt-1 line-clamp-2">{lead.observations}</p>
+
+// DEPOIS
+<p className="text-xs mt-1 line-clamp-2 break-words">{lead.observations}</p>
+```
+
+---
+
+## Checks de Validação
+
+### Cenário P1 — URL longa não causa overflow horizontal
+- [ ] Emular viewport mobile em retrato (ex.: 390x844)
+- [ ] Abrir o Kanban com o lead "Barbershop Orlando - Underground" (tem URL longa no campo Obs)
+- [ ] Confirmar visualmente: o texto da URL quebra para a linha seguinte, não vaza para fora do card
+- [ ] Confirmar via script: `document.documentElement.scrollWidth === document.documentElement.clientWidth`
+- [ ] Confirmar: o card continua mostrando no máximo 2 linhas de observação (line-clamp-2 preservado)
+
+---
+
+## Ajustes Possíveis Pós-Implementação
+
+<a preencher após os testes, se necessário>
