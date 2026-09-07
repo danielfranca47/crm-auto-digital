@@ -17,6 +17,13 @@ WhatsApp → UazAPI → POST /webhooks/whatsapp/inbound (backend-crm)
 
 **Nota:** o tipo de job `whatsapp.inbound.n8n` usa "n8n" por razão histórica — ver [llm-architecture.md](llm-architecture.md).
 
+**Instâncias de monitoramento de colaborador** desviam desse pipeline por
+completo: `routes/webhooks.py` checa `is_monitor_instance(instance_id)` antes
+do filtro `from_me` (mesma posição do roteamento do Agente Espião) e, se
+verdadeiro, entrega a mensagem a `services/collab_monitor/monitor_inbound_handler.py`
+— nunca chega em `guardrail.py`/`orchestrator.py`/job de envio. Ver
+[`collab-monitor.md`](collab-monitor.md).
+
 ---
 
 ## Endpoint de webhook

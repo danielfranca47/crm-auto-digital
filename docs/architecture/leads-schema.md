@@ -29,8 +29,19 @@
 | Planilha / Google Maps | `automations/assistente_ia/processor.py` (`map_row_to_lead`) | `NULL` | `NULL` (linha sem nenhum nome viola o CHECK; erro é reportado por linha, batch continua) |
 | Playground (sandbox) | `routes/playground.py` (`_create_sandbox_lead`) | `NULL` | `"Lead de Teste"` (fixo) |
 | Formulário público do site | `routes/public.py` (`create_public_lead`) | `payload.fullName` (mesmo valor do contato) | `payload.fullName` |
+| Monitoramento de colaborador (WhatsApp) | `services/collab_monitor/monitor_inbound_handler.py` (`find_or_create_monitor_lead`) | `NULL` | `wa_display_name` se resolvido; senão telefone normalizado |
 
 Nenhum ponto de criação inventa nome de empresa fabricado para contornar a obrigatoriedade (removidos: `"WhatsApp inbound"`, `"Sem nome"`, `"Empresa Teste"`).
+
+### `collab_monitor_instance_id` — telefone único por colaborador, não por conta
+
+Todo ponto de criação acima é único por `(user_id, phone)` — regra reforçada
+pelo índice `ux_leads_user_phone`. O monitoramento de colaborador é a
+exceção: um lead nasce com `collab_monitor_instance_id` preenchido, e a
+unicidade passa a ser por `(user_id, phone, collab_monitor_instance_id)` via
+um segundo índice parcial (`ux_leads_user_phone_collab`) — o mesmo telefone
+pode ter um lead por colaborador monitorado que o contatou, sem violar a
+regra "1 por conta" dos leads normais. Ver [`collab-monitor.md`](collab-monitor.md).
 
 ### Formulário público do site — `user_id` fixo, não multi-tenant
 

@@ -32,6 +32,7 @@ existente ou criar um novo.
 | [`agent-local-app.md`](agent-local-app.md) | App desktop agent-local: auth passwordless, pesquisa Google Maps (proxy/chave própria/Selenium), prospecção WhatsApp individual/lote, Kanban remoto (automação Fase 10) e local (não-assinante), painel Assistente IA, geração de copy remota/local, prompt personalizado | Novo ecrã/painel no app, novo modo de pesquisa, mudança no fluxo de prospecção ou Kanban local/remoto, novo campo propagado na geração de copy |
 | [`bot-global-pause.md`](bot-global-pause.md) | Pausa geral do bot pelo header do Kanban: `bot_global_pause_state`, `bot_global_pause.py` (pause_all/resume_all), kill switch no gate de inbound, popup de retomada (2 modos) | Mudança no gate do kill switch, novo modo de retomada, novo campo no estado de pausa |
 | [`kanban-responsive.md`](kanban-responsive.md) | Layout responsivo do Kanban (`frontend-crm`): regra vertical/horizontal por largura+orientação (`useIsMobile`/`useIsPortrait`), header com `flex-wrap` | Mudança no breakpoint ou na regra de orientação, novo comportamento de colapso/accordion de colunas, mudança no layout do header |
+| [`collab-monitor.md`](collab-monitor.md) | Monitoramento de WhatsApp de colaborador (base Scale/Enterprise): `role` da conexão (agent/monitor), `collab_monitor_instances`, roteamento do webhook, `find_or_create_monitor_lead`, unicidade de telefone por colaborador, coluna "Monitorado" do Kanban | Novo campo em `collab_monitor_instances`, mudança no roteamento do webhook para instâncias monitor, novo comportamento de ingestão, mudança na coluna/categoria "Monitorado" |
 
 ---
 
@@ -40,6 +41,7 @@ existente ou criar um novo.
 ```
 WhatsApp → UazAPI webhook
   └─ webhooks.md           ← filtro de grupo, áudio, media_fallback, buffer
+       └─ is_monitor_instance? → collab-monitor.md (nunca chega no inbound_handler)
        └─ inbound_handler
             └─ guardrail   ← bot_disabled (agents.md), pausa geral (bot-global-pause.md)
             └─ orchestrator (ContextBundle)
@@ -103,6 +105,7 @@ A maioria das features altera áreas já documentadas. Antes de criar um ficheir
 | Nova categoria da Base de Conhecimento, mudança em `knowledge_items`/agregação para o LLM | `knowledge-base.md` |
 | App desktop agent-local (auth, pesquisa Maps, prospecção WhatsApp, Kanban local/remoto, Assistente IA, copy local/remota) | `agent-local-app.md` |
 | Retry/backoff no envio de mensagens WhatsApp, validação de formato do número em `whatsapp_send.py` | `whatsapp-send-resiliencia.md` |
+| Instância de colaborador monitorado, `role` agent/monitor, roteamento `is_monitor_instance`, coluna "Monitorado" | `collab-monitor.md` |
 
 ### Criar novo documento
 

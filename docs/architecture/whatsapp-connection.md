@@ -181,6 +181,28 @@ global) até o token novo ser propagado. Runbook de rotação:
 
 ---
 
+## Multi-instância por conta: `role` (agent vs. monitor)
+
+Uma conta pode ter mais de uma `WhatsappConnection` — a instância do agente
+(`role="agent"`, default) e, opcionalmente, instâncias de monitoramento de
+colaborador (`role="monitor"`, ver [`collab-monitor.md`](collab-monitor.md)).
+Duas garantias tornam isso seguro:
+
+- `connections_service.upsert_connection()`/`upsert_connection_optional_token()`
+  resolvem a linha existente por **`instance_id`**, nunca por `user_id` —
+  conectar uma 2ª instância cria uma linha nova em vez de sobrescrever a 1ª.
+- `get_connection_for_user()` (usado por `GET /whatsapp-connections/resolve-by-user`,
+  consumido pelo executor real para decidir de qual instância o agente envia)
+  filtra `role == "agent"` — nunca resolve para uma instância monitor.
+- `POST /whatsapp/send` e `/whatsapp/send-media` (`whatsapp_send.py`) rejeitam
+  com `403 instance_not_allowed_to_send` qualquer envio por instância com
+  `role != "agent"` — defesa em profundidade independente do resolve acima.
+
+`POST /whatsapp-instances/init`/`/connect` aceitam `role` opcional no payload
+(default `"agent"`).
+
+---
+
 ## Deteção de queda de sessão
 
 `WhatsappConnection.status` não é só escrito pelos endpoints acima — a UazAPI
