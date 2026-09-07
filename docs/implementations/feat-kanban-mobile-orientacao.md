@@ -69,6 +69,33 @@ e o header não quebra em telas estreitas.
 | `frontend-crm/src/components/CrmHeader.tsx` | Header com `flex-wrap`; título menor em telas pequenas; botões com `flex-wrap` |
 | `frontend-crm/src/components/SearchAutocomplete.tsx` | Wrapper passa a `w-full` + `order-3` em mobile (cai para linha própria abaixo de título/botões), mantém `flex-1 max-w-md mx-8` em `sm:` (desktop inalterado) |
 
+### Commits Fase 1
+
+| # | Commit | O que foi implementado |
+|---|---|---|
+| 1 | `230cb59` | hook useIsPortrait + layout responsivo do Kanban e header |
+
+**Detalhes do commit `230cb59`:**
+- `frontend-crm/src/hooks/use-mobile.tsx` — novo `useIsPortrait()`
+- `frontend-crm/src/components/KanbanBoard.tsx` — `stackVertical`, container de colunas condicional, prop `fullWidth` passada aos dois blocos de `KanbanColumn`
+- `frontend-crm/src/components/KanbanColumn.tsx` — prop `fullWidth` controla `w-full` vs `w-72 flex-shrink-0`
+- `frontend-crm/src/components/CrmHeader.tsx` — `flex-wrap`, título e bloco de botões responsivos
+- `frontend-crm/src/components/SearchAutocomplete.tsx` — busca cai para linha própria em mobile
+
+### Relatório da Fase 1 — o que mudou na prática
+
+**Antes:** no celular, as colunas do Kanban ficavam sempre lado a lado
+(precisava rolar para os lados para ver todas), e o cabeçalho (título + busca
++ botões) estourava para fora da tela.
+
+**Agora:** com o celular na posição normal (vertical/retrato), as colunas
+ficam empilhadas uma embaixo da outra, ocupando a largura toda da tela. Ao
+virar o celular de lado (paisagem), as colunas voltam a ficar lado a lado
+como já era antes. O cabeçalho também se ajusta para não estourar em telas
+estreitas.
+
+**Para validar:** Cenários P1, P2, P3 e P4, abaixo.
+
 ---
 
 ## Checks de Validação
