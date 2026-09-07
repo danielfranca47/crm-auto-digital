@@ -61,6 +61,30 @@ largura do card.
 <p className="text-xs mt-1 line-clamp-2 break-words">{lead.observations}</p>
 ```
 
+### Commits Fase 1
+
+| # | Commit | O que foi implementado |
+|---|---|---|
+| 1 | `69813f8` | break-words no campo Obs do LeadCard |
+
+**Detalhes do commit `69813f8`:**
+- `frontend-crm/src/components/LeadCard.tsx` — `break-words` adicionado ao parágrafo de observações
+- `docs/architecture/kanban-responsive.md` — nova seção "Campo de observações"; removida a "Limitação conhecida" (resolvida por este fix)
+
+### Relatório da Fase 1 — o que mudou na prática
+
+**Antes:** quando um lead tinha uma URL bem longa (sem espaços) anotada no
+campo "Obs" do card, o texto vazava para fora do card e podia deixar a
+página inteira com uma rolagem horizontal indesejada, especialmente em
+celular.
+
+**Agora:** URLs e palavras longas nesse campo quebram para a linha seguinte
+normalmente, como o resto do texto — sem vazar do card e sem causar rolagem
+horizontal na página. O card continua mostrando no máximo 2 linhas de
+observação, igual antes.
+
+**Para validar:** Cenário P1, abaixo.
+
 ---
 
 ## Checks de Validação
