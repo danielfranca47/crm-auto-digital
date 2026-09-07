@@ -147,6 +147,24 @@ existing = get_connection_for_user(db, user_id)
 existing = get_connection_by_instance(db, instance_id)
 ```
 
+### Commits Fase 1
+
+| # | Commit | O que foi implementado |
+|---|---|---|
+| 1 | `9d288f8` | fix: resolver conexão whatsapp por instance_id em vez de user_id + coluna `role` |
+
+**Detalhes do commit `9d288f8`:**
+- `backend-core/app/services/whatsapp_connections.py` — `upsert_connection`/`upsert_connection_optional_token` resolvem por `instance_id`; `get_connection_for_user()` filtra `role == "agent"`
+- `backend-core/app/models/whatsapp_connection.py` — nova coluna `role`, default `"agent"`
+- `backend-core/app/db.py` — migração idempotente da coluna `role` (SQLite + Postgres) + `CREATE TABLE` de bancos novos
+- `backend-core/app/api/whatsapp_instances.py` — `init_instance`/`connect_instance` aceitam `role` opcional no payload (default `"agent"`)
+
+### Relatório da Fase 1 — o que mudou na prática
+
+**Antes:** se uma conta tentasse conectar uma 2ª instância WhatsApp (ex.: para monitorar um colaborador), o sistema sobrescrevia silenciosamente a instância principal do agente — trocava o número e o token de acesso, sem avisar nada. Além disso, o processo que decide "de qual número o agente deve enviar mensagens" ficaria ambíguo com duas instâncias na mesma conta.
+**Agora:** cada instância é identificada pela sua própria identidade (`instance_id`), não mais pelo dono da conta — então conectar uma 2ª instância cria uma linha nova, sem tocar na primeira. Toda instância também ganhou uma etiqueta (`role`): `"agent"` (padrão, usada pelo agente para enviar) ou `"monitor"` (será usada pelo monitoramento de colaborador, ainda não construído). O processo de envio do agente só enxerga instâncias `"agent"`.
+**Para validar:** Cenário C1 (abaixo) — ainda não é possível testar de ponta a ponta nesta fase porque a Fase 2 (cadastro de instância de colaborador) ainda não existe; o C1 completo só é testável depois da Fase 2.
+
 ### Fase 2 — Cadastro de instância de colaborador
 
 **Objetivo:** permitir registrar N instâncias monitor por conta, cada uma com
