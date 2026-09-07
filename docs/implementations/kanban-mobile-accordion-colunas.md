@@ -1,7 +1,7 @@
 # Kanban mobile: accordion/colapso de colunas no retrato
 
 **Branch:** `feat/kanban-mobile-accordion-colunas`
-**Status:** Em andamento
+**Status:** Todos os cenários validados (07/09/2026)
 
 ---
 
@@ -93,27 +93,31 @@ na horizontal, nada mudou — não existe botão de fechar ali.
 ## Checks de Validação
 
 ### Cenário P1 — Colapsar/expandir manualmente (retrato)
-- [ ] Emular viewport mobile em retrato (ex.: 390x844)
-- [ ] Clicar no cabeçalho de uma coluna
-- [ ] Confirmar: lista de leads esconde, cabeçalho continua visível, ícone do chevron muda de direção
-- [ ] Clicar de novo → confirmar que expande
+- [x] Emular viewport mobile em retrato (ex.: 390x844)
+- [x] Clicar no cabeçalho de uma coluna
+- [x] Confirmar: lista de leads esconde, cabeçalho continua visível, ícone do chevron muda de direção
+- [x] Clicar de novo → confirmar que expande
+- **Validado em:** 07/09/2026 — testado via Chrome DevTools MCP. Coluna "À Prospectar" colapsou ao clicar (chevron `>`, só cabeçalho + contagem visíveis), demais colunas continuaram abertas normalmente.
 
 ### Cenário P2 — Persistência entre recarregamentos
-- [ ] Colapsar uma coluna
-- [ ] Recarregar a página (`F5`)
-- [ ] Confirmar: a coluna continua colapsada
+- [x] Colapsar uma coluna
+- [x] Recarregar a página (`F5`)
+- [x] Confirmar: a coluna continua colapsada
+- **Validado em:** 07/09/2026 — após reload, `aria-label` do botão da coluna colapsada permaneceu "Expandir coluna" (`aria-expanded="false"`), confirmando leitura correta do `localStorage`.
 
 ### Cenário P3 — Auto-expand durante drag
-- [ ] Colapsar uma coluna que tenha leads
-- [ ] Arrastar um lead de outra coluna até a coluna colapsada
-- [ ] Confirmar: a coluna expande sozinha durante o arrasto e o drop funciona normalmente
+- [x] Colapsar uma coluna que tenha leads
+- [x] Arrastar um lead de outra coluna até a coluna colapsada
+- [x] Confirmar: a coluna expande sozinha durante o arrasto e o drop funciona normalmente
+- **Validado em:** 07/09/2026 — simulação de drag via eventos de ponteiro (mousedown/mousemove em passos/mouseup) sobre a coluna colapsada: o botão mudou de "Expandir coluna" para "Colapsar coluna" durante o arrasto (auto-expand confirmado) e o lead foi movido com sucesso (contagens das colunas atualizaram corretamente). Nota: a ferramenta de drag automática de alto nível (`drag(from,to)`) não gerou eventos de ponteiro suficientes para o dnd-kit detectar o hover corretamente nesta viewport — mesma limitação de ferramenta já registrada na implementação `kanban-mobile-orientacao`; a simulação manual de eventos contornou isso.
 
 ### Cenário P4 — Sem regressão em desktop e paisagem
-- [ ] Verificar em desktop (ex.: 1440x900) e em paisagem mobile (ex.: 700x350)
-- [ ] Confirmar: nenhum botão de colapso aparece; colunas sempre abertas, como antes desta implementação
+- [x] Verificar em desktop (ex.: 1440x900) e em paisagem mobile (ex.: 700x350)
+- [x] Confirmar: nenhum botão de colapso aparece; colunas sempre abertas, como antes desta implementação
+- **Validado em:** 07/09/2026 — confirmado em ambos os viewports via screenshot/DOM: nenhum botão com `aria-label` de colapso presente, colunas lado a lado como no comportamento pré-existente.
 
 ---
 
 ## Ajustes Possíveis Pós-Implementação
 
-<a preencher após os testes, se necessário>
+Nenhum identificado durante os testes desta fase.
