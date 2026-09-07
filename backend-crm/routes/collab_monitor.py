@@ -39,6 +39,18 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/collab-monitor", tags=["CollabMonitor"])
 
 _QR_KEYS = {"qrcode", "qrCode", "qr_code"}
+_PAIR_KEYS = {"paircode", "pairCode", "pair_code"}
+
+
+def _sanitize_phone(value: Optional[str]) -> Optional[str]:
+    if not value:
+        return None
+    sanitized = re.sub(r"[\s\-\+\(\)]", "", value)
+    return sanitized or None
+
+
+def _extract_pair_code(raw: Dict[str, Any]) -> Optional[str]:
+    return _find_in_payload(raw, _PAIR_KEYS)
 
 
 def _find_in_payload(payload: Any, keys: set) -> Optional[str]:
@@ -126,6 +138,11 @@ def _generate_instance_id(user_id: int) -> str:
 
 class CollabMonitorCreateRequest(BaseModel):
     collaborator_name: str
+    phone: Optional[str] = None
+
+
+class CollabMonitorReconnectRequest(BaseModel):
+    phone: Optional[str] = None
 
 
 class CollabMonitorInstanceOut(BaseModel):
@@ -150,6 +167,7 @@ class CollabMonitorConnectResponse(BaseModel):
     collaborator_name: str
     status: Optional[str] = None
     qr: QRPayload
+    pair_code: Optional[str] = None
 
 
 def _now_utc_iso() -> str:
@@ -171,20 +189,22 @@ async def create_collab_monitor_instance(
     body: CollabMonitorCreateRequest,
     current_user: CurrentUser = Depends(require_crm_access),
 ) -> CollabMonitorConnectResponse:
-    """Cadastra um novo colaborador para monitoramento e inicia a conexão (QR)."""
+    """Cadastra um novo colaborador para monitoramento e inicia a conexão (QR ou código de pareamento, se `phone` informado)."""
     collaborator_name = body.collaborator_name.strip()
     if not collaborator_name:
         raise HTTPException(status_code=400, detail="Nome do colaborador é obrigatório")
 
+    phone = _sanitize_phone(body.phone)
     instance_id = _generate_instance_id(current_user.id)
 
     init_core_whatsapp_instance(current_user.id, instance_id, role="monitor")
-    raw = connect_core_whatsapp_instance(current_user.id, instance_id)
+    raw = connect_core_whatsapp_instance(current_user.id, instance_id, phone=phone)
     _set_monitor_webhook(instance_id)
 
     status_value = _normalize_status_raw(raw)
     qr_value = _find_in_payload(raw, _QR_KEYS)
     qr_kind = _infer_qr_kind(qr_value) if qr_value else None
+    pair_code = _extract_pair_code(raw)
 
     now = _now_utc_iso()
     conn = get_connection()
@@ -215,6 +235,7 @@ async def create_collab_monitor_instance(
         collaborator_name=collaborator_name,
         status=status_value,
         qr=QRPayload(kind=qr_kind, value=qr_value),
+        pair_code=pair_code,
     )
 
 
@@ -282,9 +303,10 @@ async def delete_collab_monitor_instance(
 @router.post("/instances/{row_id}/reconnect", response_model=CollabMonitorConnectResponse)
 async def reconnect_collab_monitor_instance(
     row_id: int,
+    body: CollabMonitorReconnectRequest = CollabMonitorReconnectRequest(),
     current_user: CurrentUser = Depends(require_crm_access),
 ) -> CollabMonitorConnectResponse:
-    """Reconecta a instância de um colaborador via QR code, sem perder o cadastro."""
+    """Reconecta a instância de um colaborador via QR code ou código de pareamento (se `phone` informado), sem perder o cadastro."""
     conn = get_connection()
     try:
         row = _get_row(conn, row_id, current_user.id)
@@ -292,19 +314,21 @@ async def reconnect_collab_monitor_instance(
         conn.close()
 
     instance_id = row["instance_id"]
+    phone = _sanitize_phone(body.phone)
 
     try:
-        raw = connect_core_whatsapp_instance(current_user.id, instance_id)
+        raw = connect_core_whatsapp_instance(current_user.id, instance_id, phone=phone)
     except HTTPException:
         logger.info("[collab_monitor:reconnect] token expirado para %s — reiniciando instância", instance_id)
         init_core_whatsapp_instance(current_user.id, instance_id, role="monitor")
-        raw = connect_core_whatsapp_instance(current_user.id, instance_id)
+        raw = connect_core_whatsapp_instance(current_user.id, instance_id, phone=phone)
 
     _set_monitor_webhook(instance_id)
 
     status_value = _normalize_status_raw(raw)
     qr_value = _find_in_payload(raw, _QR_KEYS)
     qr_kind = _infer_qr_kind(qr_value) if qr_value else None
+    pair_code = _extract_pair_code(raw)
 
     now = _now_utc_iso()
     conn = get_connection()
@@ -323,4 +347,5 @@ async def reconnect_collab_monitor_instance(
         collaborator_name=row["collaborator_name"],
         status=status_value,
         qr=QRPayload(kind=qr_kind, value=qr_value),
+        pair_code=pair_code,
     )
