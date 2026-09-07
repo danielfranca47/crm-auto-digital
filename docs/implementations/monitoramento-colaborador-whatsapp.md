@@ -212,6 +212,26 @@ Kanban, sem nunca acionar IA ou envio.
 
 ---
 
+### Commits Fase 3
+
+| # | Commit | O que foi implementado |
+|---|---|---|
+| 1 | `955c559` | feat: ingestão real de leads a partir do monitoramento de colaborador |
+
+**Detalhes do commit `955c559`:**
+- `backend-crm/services/collab_monitor/monitor_inbound_handler.py` (novo) — `is_monitor_instance()`, `find_or_create_monitor_lead()`, gravação de mensagens
+- `backend-crm/database.py` — coluna `leads.collab_monitor_instance_id`; lead nasce com `bot_disabled=1`
+- `backend-crm/routes/webhooks.py` — roteamento `is_monitor_instance()` (mesma posição do `is_spy_instance`) + correção de um `UnboundLocalError` pré-existente no bloco do spy (`_content_obj` lido antes de ser atribuído — bug encontrado de passagem, não fazia parte do escopo original desta implementação)
+- `backend-core/app/api/whatsapp_send.py` — guard 403 nos dois endpoints de envio quando `connection.role != "agent"`
+- `frontend-crm/src/data/mockData.ts` + `src/types/crm.ts` — nova coluna "Monitorado" no Kanban
+
+### Relatório da Fase 3 — o que mudou na prática
+
+**Antes:** mesmo com uma instância de colaborador cadastrada (Fase 2), as mensagens recebidas caíam no fluxo normal do agente — a IA processaria e poderia responder automaticamente, o que era exatamente o comportamento que não queríamos.
+**Agora:** mensagens de uma instância monitor nunca chegam à IA. Elas criam/atualizam um lead na nova coluna "Monitorado" do Kanban — um por colaborador, mesmo que o mesmo telefone fale com dois colaboradores diferentes — e ficam registradas no histórico do card, incluindo as mensagens que o próprio colaborador envia. Duas camadas independentes garantem que nunca sai uma resposta automática: (1) o roteamento do webhook nunca invoca o pipeline de IA para essa instância; (2) mesmo que algo tentasse enviar por essa instância, o backend-core agora rejeita com erro 403 qualquer envio que não seja de uma instância `role="agent"`.
+**Achado incidental corrigido:** durante esta fase encontrei um bug já existente (não relacionado ao monitoramento) no roteamento do Agente Espião — uma variável era lida antes de ser definida, o que quebraria com `UnboundLocalError` ao processar uma mensagem de texto comum vinda de uma instância espiã. Corrigido por ser trivial e estar exatamente no bloco de código que eu já estava editando.
+**Para validar:** Cenários C1, C2, C3 e C4 (abaixo) — agora testáveis de ponta a ponta. **Recomendo usar um número de WhatsApp de teste/sandbox para a instância monitorada**, não um número comercial real, até os testes confirmarem o comportamento.
+
 ## Checks de Validação
 
 ### Cenário C1 — Conexão de colaborador não afeta o agente principal
