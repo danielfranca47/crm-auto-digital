@@ -83,6 +83,33 @@ Mãe/Filha.
 | `docs/architecture/prompt-engineering-principles.md` | Novo arquivo — 7 princípios (guardrail de código vs. prompt, positivo vs. negativo, few-shot, contexto/motivo, JSON estruturado, permissão para incerteza, minimalismo), cada um com regra, motivo, onde já aplicamos (arquivo/função real) e gap conhecido — fechando com checklist rápida |
 | `CLAUDE.md` | Nota de leitura obrigatória logo após "Pipeline de IA (fluxo inbound)"; duas novas linhas na tabela "Documentação de Arquitetura" (o novo arquivo + `docs/prompts_llms.md`, que estava ausente da tabela) |
 
+### Commits Fase 1
+
+| # | Commit | O que foi implementado |
+|---|---|---|
+| 1 | `936ae33` | Documento de princípios + conexão ao workflow (CLAUDE.md) |
+
+**Detalhes do commit `936ae33`:**
+- `docs/architecture/prompt-engineering-principles.md` — 7 princípios com regra, motivo, onde já aplicamos e gap conhecido, fechando com checklist
+- `CLAUDE.md` — nota de leitura obrigatória + 2 linhas novas na tabela de Documentação de Arquitetura
+- `docs/implementations/prompt-engineering-principles.md` — registro desta implementação
+
+### Relatório da Fase 1 — o que mudou na prática
+
+**Antes:** não havia nenhum documento no projeto com critérios para escrever
+ou revisar um prompt de Mãe/Filha — só um mapa técnico do que já existe
+(`docs/prompts_llms.md`) e uma fotografia pontual de auditoria, nenhum dos
+dois prescritivo.
+**Agora:** existe `docs/architecture/prompt-engineering-principles.md` com 7
+princípios (guardrail de código vs. prompt, positivo vs. negativo, few-shot,
+contexto/motivo, JSON estruturado, permissão para incerteza, minimalismo),
+cada um citando onde o sistema já segue a prática e onde há gap conhecido —
+e o `CLAUDE.md` agora instrui a ler esse documento (+ `docs/prompts_llms.md`)
+antes de mexer em qualquer prompt de Mãe/Filha ou configurar a Camada 7.
+**Para validar:** Cenário P1, abaixo — é revisão de conteúdo, não teste de
+sistema (tarefa é documentação pura, sem mudança de comportamento em
+runtime).
+
 ---
 
 ## Checks de Validação
