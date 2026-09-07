@@ -54,6 +54,40 @@ def ensure_column(conn: sqlite3.Connection, table: str, column: str, definition:
         cur.execute(f"ALTER TABLE {table} ADD COLUMN {definition}")
 
 
+def ensure_leads_phone_uniqueness(conn: sqlite3.Connection) -> None:
+    """(Re)cria a unicidade de telefone por conta como dois índices parciais em vez
+    de um único índice plano — necessário desde que leads de monitoramento de
+    colaborador passaram a existir (ver services/collab_monitor).
+
+    Antes: `UNIQUE(user_id, phone)` global — impedia por completo que o mesmo
+    telefone tivesse mais de um lead na mesma conta, mesmo entre colaboradores
+    monitorados diferentes (violação real observada em teste: mesmo telefone
+    escrevendo para 2 colaboradores tentava criar 2 leads e o segundo INSERT
+    quebrava com `sqlite3.IntegrityError: UNIQUE constraint failed:
+    leads.user_id, leads.phone`).
+
+    Agora: leads "normais" (`collab_monitor_instance_id IS NULL` — inclui todo
+    lead existente antes desta coluna existir) mantêm exatamente a mesma regra
+    de antes (1 por telefone por conta); leads de monitoramento passam a ser
+    únicos por (conta, telefone, instância do colaborador) — o mesmo telefone
+    pode ter um lead por colaborador que ele contatou, nunca dois leads para o
+    mesmo colaborador.
+    """
+    cur = conn.cursor()
+    cur.execute("DROP INDEX IF EXISTS ux_leads_user_phone")
+    try:
+        cur.execute(
+            "CREATE UNIQUE INDEX IF NOT EXISTS ux_leads_user_phone "
+            "ON leads(user_id, phone) WHERE collab_monitor_instance_id IS NULL"
+        )
+        cur.execute(
+            "CREATE UNIQUE INDEX IF NOT EXISTS ux_leads_user_phone_collab "
+            "ON leads(user_id, phone, collab_monitor_instance_id) WHERE collab_monitor_instance_id IS NOT NULL"
+        )
+    except sqlite3.IntegrityError:
+        print("⚠️ não foi possível recriar índices de unicidade de telefone: dados duplicados existentes")
+
+
 def backfill_leads_agent_type(conn: sqlite3.Connection) -> int:
     """Preenche leads.agent_type nulo com snapshot atual do AI Profile do usuário."""
     from services.agent_type import resolve_agent_type_for_user
@@ -799,10 +833,8 @@ def _migrate_leads_company_or_contact(conn: sqlite3.Connection) -> None:
         "ON leads(followup_status, next_followup_at, bot_disabled, user_id);"
     )
     conn.execute("CREATE INDEX IF NOT EXISTS idx_leads_playground ON leads(user_id, is_playground);")
-    try:
-        conn.execute("CREATE UNIQUE INDEX IF NOT EXISTS ux_leads_user_phone ON leads(user_id, phone);")
-    except sqlite3.IntegrityError:
-        print("⚠️ não foi possível recriar ux_leads_user_phone: dados duplicados existentes")
+    ensure_column(conn, "leads", "collab_monitor_instance_id", "collab_monitor_instance_id TEXT NULL")
+    ensure_leads_phone_uniqueness(conn)
     conn.execute("PRAGMA foreign_keys = ON")
     conn.commit()
     print("✅ leads migration: companyName nullable + CHECK companyName/contactName")
@@ -1263,10 +1295,7 @@ def init_db() -> None:
             "CREATE INDEX IF NOT EXISTS idx_leads_playground "
             "ON leads(user_id, is_playground);"
         )
-        try:
-            cur.execute("CREATE UNIQUE INDEX IF NOT EXISTS ux_leads_user_phone ON leads(user_id, phone);")
-        except sqlite3.IntegrityError:
-            print("⚠️ não foi possível criar ux_leads_user_phone: dados duplicados existentes")
+        ensure_leads_phone_uniqueness(conn)
 
         # Novas tabelas de automação distribuída (agents/jobs)
         ensure_jobs_tables(conn)
