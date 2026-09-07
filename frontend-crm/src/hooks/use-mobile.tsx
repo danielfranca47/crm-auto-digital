@@ -17,3 +17,19 @@ export function useIsMobile() {
 
   return !!isMobile
 }
+
+export function useIsPortrait() {
+  const [isPortrait, setIsPortrait] = React.useState<boolean | undefined>(undefined)
+
+  React.useEffect(() => {
+    const mql = window.matchMedia("(orientation: portrait)")
+    const onChange = () => {
+      setIsPortrait(mql.matches)
+    }
+    mql.addEventListener("change", onChange)
+    setIsPortrait(mql.matches)
+    return () => mql.removeEventListener("change", onChange)
+  }, [])
+
+  return !!isPortrait
+}

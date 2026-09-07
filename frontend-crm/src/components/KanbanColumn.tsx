@@ -17,6 +17,7 @@ interface KanbanColumnProps {
   onDeleteLead: (leadId: string) => Promise<void>;
   notifiedLeadIds?: Set<string>;
   phaseSequence?: SalesFlowPhaseId[];
+  fullWidth?: boolean;
 }
 
 export function KanbanColumn({
@@ -32,13 +33,14 @@ export function KanbanColumn({
   onDeleteLead,
   notifiedLeadIds,
   phaseSequence,
+  fullWidth,
 }: KanbanColumnProps) {
   const { setNodeRef } = useDroppable({
     id: column.id,
   });
 
   return (
-    <div className="kanban-column min-h-[600px] w-72 flex-shrink-0">
+    <div className={`kanban-column min-h-[600px] ${fullWidth ? "w-full" : "w-72 flex-shrink-0"}`}>
       <div className="kanban-column-header p-4">
         <div className="flex items-center justify-between">
           <h3 className="font-semibold text-foreground text-sm">{column.title}</h3>

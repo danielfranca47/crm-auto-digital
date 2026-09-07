@@ -93,7 +93,7 @@ export function SearchAutocomplete({
   };
 
   return (
-    <div className="flex-1 max-w-md mx-8 relative">
+    <div className="w-full order-3 sm:order-none sm:flex-1 sm:max-w-md mx-0 sm:mx-8 relative">
       <div className="relative">
         <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
         <Input

@@ -27,11 +27,11 @@ export function CrmHeader({
     theme,
     toggleTheme
   } = useTheme();
-  return <header className="crm-header px-6 py-4 flex items-center justify-between sticky top-0 z-50">
+  return <header className="crm-header px-6 py-4 flex flex-wrap items-center justify-between gap-3 sticky top-0 z-50">
       <div className="flex items-center space-x-4">
-        <h1 className="text-2xl font-bold gradient-primary bg-clip-text text-transparent">CRM Comercial - Auto Digital</h1>
+        <h1 className="text-lg sm:text-2xl font-bold gradient-primary bg-clip-text text-transparent">CRM Comercial - Auto Digital</h1>
       </div>
-      
+
       {/* Search field with autocomplete */}
       <SearchAutocomplete
         searchTerm={searchTerm}
@@ -39,8 +39,8 @@ export function CrmHeader({
         allColumns={allColumns}
         onLeadSelect={onLeadSelect}
       />
-      
-      <div className="flex items-center space-x-3">
+
+      <div className="flex flex-wrap items-center gap-2">
         {onTogglePause && (
           <Button
             onClick={onTogglePause}

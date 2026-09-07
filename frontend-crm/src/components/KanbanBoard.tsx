@@ -34,6 +34,7 @@ import { SALES_FLOW_PHASES_BY_AGENT_MODE } from "@/types/agente";
 import type { SalesFlowPhaseId } from "@/types/agente";
 import { api } from "@/services/api";
 import { formatLeadOriginLabel } from "@/lib/lead-origin";
+import { useIsMobile, useIsPortrait } from "@/hooks/use-mobile";
 
 interface KanbanBoardProps {
   onDashboard: () => void;
@@ -132,6 +133,9 @@ export function KanbanBoard({ onDashboard }: KanbanBoardProps) {
   // por card. Reaproveita a mesma chamada a getAiProfileMe() já feita para agent_type.
   const [phaseSequence, setPhaseSequence] = useState<SalesFlowPhaseId[]>([]);
   const { notifiedLeadIds } = useNotifications();
+  const isMobile = useIsMobile();
+  const isPortrait = useIsPortrait();
+  const stackVertical = isMobile && isPortrait;
 
   useEffect(() => {
     let mounted = true;
@@ -541,7 +545,7 @@ export function KanbanBoard({ onDashboard }: KanbanBoardProps) {
             </div>
           </div>
 
-          <div className="flex gap-4 overflow-x-auto pb-6">
+          <div className={stackVertical ? "flex flex-col gap-4 pb-6" : "flex gap-4 overflow-x-auto pb-6"}>
             {filteredColumns.map((column) => (
               <KanbanColumn
                 key={column.id}
@@ -557,6 +561,7 @@ export function KanbanBoard({ onDashboard }: KanbanBoardProps) {
                 onDeleteLead={handleDeleteLead}
                 notifiedLeadIds={notifiedLeadIds}
                 phaseSequence={phaseSequence}
+                fullWidth={stackVertical}
               />
             ))}
 
@@ -576,6 +581,7 @@ export function KanbanBoard({ onDashboard }: KanbanBoardProps) {
                   onDeleteLead={handleDeleteLead}
                   notifiedLeadIds={notifiedLeadIds}
                   phaseSequence={phaseSequence}
+                  fullWidth={stackVertical}
                 />
               ))}
           </div>
