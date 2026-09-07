@@ -1,7 +1,7 @@
 # Monitoramento de WhatsApp de Colaborador (base)
 
 **Branch:** `feat/monitoramento-colaborador-whatsapp`
-**Status:** Em andamento
+**Status:** Todos os cenários validados (08/09/2026)
 
 ---
 
@@ -253,9 +253,61 @@ Kanban, sem nunca acionar IA ou envio.
 - **Validado em:** 08/09/2026 — `MAX(jobs.id)` permaneceu em 514 (inalterado) antes e depois das duas mensagens de teste (inbound do lead + fromMe do colaborador); nenhuma linha nova na tabela `jobs`. Nenhuma mensagem automática chegou ao número de teste.
 
 ### Cenário C4 — Leads separados por colaborador
-- [ ] Mesmo número de telefone de teste manda mensagem para 2 colaboradores monitorados diferentes
-- [ ] Confirmar: viram 2 leads distintos, um por colaborador, não o mesmo card
-- **Pendente:** exige um segundo número de WhatsApp real conectado como colaborador. A garantia está na query de `find_or_create_monitor_lead()` (`services/collab_monitor/monitor_inbound_handler.py`), que inclui `collab_monitor_instance_id` na chave de busca — não testado ao vivo por falta de um segundo número disponível no momento.
+- [x] Mesmo número de telefone de teste manda mensagem para 2 colaboradores monitorados diferentes
+- [x] Confirmar: viram 2 leads distintos, um por colaborador, não o mesmo card
+- **Validado em:** 08/09/2026 — mesmo telefone (+351961649355) mandou mensagem para 2 instâncias de colaborador reais (`collab-15-742f4aa6` e `collab-15-20c180b0`), gerando `lead_id=512` e `lead_id=513` respectivamente, cada um com seu próprio `collab_monitor_instance_id`. A primeira tentativa revelou um bug real (ver Fase 4 abaixo); após a correção, o segundo lead foi criado com sucesso e nenhum job foi enfileirado.
+
+---
+
+## Fase 4 — Diagnóstico + Correção: mesmo telefone em 2 colaboradores quebrava (08/09/2026)
+
+### Problema identificado
+
+Ao testar o Cenário C4 ao vivo, o mesmo telefone de teste mandando mensagem para o
+2º colaborador monitorado quebrou com `500 Internal Server Error`. O log mostrou:
+
+```
+sqlite3.IntegrityError: UNIQUE constraint failed: leads.user_id, leads.phone
+```
+
+Causa raiz: `backend-crm/database.py` mantém um índice `ux_leads_user_phone` —
+`UNIQUE(user_id, phone)`, criado para o fluxo real do agente (impedir que o
+mesmo telefone gerasse dois leads na mesma conta). Esse índice é global, sem
+noção de `collab_monitor_instance_id` — a query de leitura em
+`find_or_create_monitor_lead()` já filtrava corretamente por
+`(user_id, phone, collab_monitor_instance_id)` e não encontrava lead
+existente para o 2º colaborador, mas o `INSERT` subsequente colidia com a
+regra mais ampla do índice do banco, que não sabia distinguir colaboradores.
+
+### Correção
+
+Substituído o índice único plano por dois índices parciais (SQLite suporta
+`WHERE` em índice): um preserva exatamente a regra antiga para leads normais
+(`collab_monitor_instance_id IS NULL` — cobre todo lead que já existia antes
+desta coluna nascer), outro aplica a unicidade só entre colaboradores
+(`collab_monitor_instance_id IS NOT NULL`, chave `(user_id, phone,
+collab_monitor_instance_id)`). Zero mudança de comportamento para o pipeline
+real do agente; o mesmo telefone agora pode ter um lead por colaborador que
+efetivamente contatou.
+
+| Arquivo | Mudança |
+|---|---|
+| `backend-crm/database.py` | Nova função `ensure_leads_phone_uniqueness()`; substitui as duas ocorrências antigas de `CREATE UNIQUE INDEX ux_leads_user_phone` |
+
+### Commits Fase 4
+
+| # | Commit | O que foi implementado |
+|---|---|---|
+| 1 | `7e0baf4` | fix: permitir 1 lead por colaborador monitorado para o mesmo telefone |
+
+### Relatório da Fase 4 — o que mudou na prática
+
+**Antes:** o mesmo cliente (telefone) só podia ter 1 lead por conta, ponto —
+regra correta para o agente, mas incompatível com "cada colaborador vê o
+próprio lead desse telefone".
+**Agora:** essa regra continua valendo para leads normais; só para leads de
+monitoramento ela passou a ser por colaborador, não mais só por telefone.
+**Para validar:** Cenário C4 (acima), já confirmado ao vivo.
 
 ---
 
