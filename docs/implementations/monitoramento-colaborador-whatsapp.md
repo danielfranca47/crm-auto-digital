@@ -176,6 +176,28 @@ nome do colaborador.
 | `backend-crm/routes/collab_monitor.py` (novo) | `POST/GET/DELETE /api/collab-monitor/instances` — cadastra nome do colaborador, conecta QR (reaproveita `connect_core_whatsapp_instance`/`init_core_whatsapp_instance` com `role="monitor"`), lista instâncias, reconecta |
 | `frontend-crm` | Tela mínima de cadastro (nome + QR) — sem a experiência "WhatsApp Web" completa, que fica para depois |
 
+### Commits Fase 2
+
+| # | Commit | O que foi implementado |
+|---|---|---|
+| 1 | `cff1b73` | feat: cadastro de instâncias de colaborador para monitoramento |
+
+**Detalhes do commit `cff1b73`:**
+- `backend-crm/database.py` — nova tabela `collab_monitor_instances`
+- `backend-crm/core_client.py` — `init_core_whatsapp_instance` aceita `role` opcional
+- `backend-crm/routes/collab_monitor.py` — router `/api/collab-monitor` (criar/listar/remover/reconectar instância)
+- `backend-crm/app.py` — registra o novo router
+- `frontend-crm/src/pages/AiProfile.tsx` — nova aba "Monitoramento"
+- `frontend-crm/src/components/agente/MonitoramentoColaboradores.tsx` (novo) — form de cadastro + QR + lista
+- `frontend-crm/src/services/api.ts` — métodos `collabMonitor*`
+
+### Relatório da Fase 2 — o que mudou na prática
+
+**Antes:** não existia nenhuma forma de cadastrar o WhatsApp de um colaborador para monitoramento — só o agente principal tinha uma tela de conexão.
+**Agora:** a aba "Monitoramento" (dentro de "Perfil de IA") permite dar um nome a um colaborador, conectar o WhatsApp dele via QR code, ver a lista de colaboradores cadastrados com status de conexão, reconectar ou remover.
+**Atenção — ainda não é seguro testar com um número real em uso:** até a Fase 3 existir, mensagens recebidas por uma instância conectada aqui ainda passam pelo fluxo **normal do agente** (guardrail → IA → resposta automática), porque o roteamento que isola essas mensagens (`is_monitor_instance`) só é criado na próxima fase. Testar esta fase apenas com um número de WhatsApp de teste/sandbox, nunca com o WhatsApp real de um colaborador.
+**Para validar:** ainda não há cenário de "Checks de Validação" aplicável isoladamente — o cadastro em si (formulário + QR aparecendo) pode ser conferido visualmente, mas os Cenários C1-C4 dependem da Fase 3.
+
 ### Fase 3 — Roteamento do webhook + ingestão real no CRM
 
 **Objetivo:** mensagens da instância monitor viram leads/mensagens reais no
