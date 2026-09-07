@@ -60,6 +60,34 @@ persistido e auto-expand durante drag-and-drop.
 | `frontend-crm/src/components/KanbanBoard.tsx` | Usa o hook; passa props de colapso para `KanbanColumn`; auto-expand em `handleDragOver` |
 | `docs/architecture/kanban-responsive.md` | Nova seção "Colapso de colunas (retrato mobile)" |
 
+### Commits Fase 1
+
+| # | Commit | O que foi implementado |
+|---|---|---|
+| 1 | `6287872` | hook de colapso + UI + auto-expand no drag |
+
+**Detalhes do commit `6287872`:**
+- `frontend-crm/src/hooks/useCollapsedColumns.ts` — novo hook, estado + localStorage
+- `frontend-crm/src/components/KanbanColumn.tsx` — botão chevron no cabeçalho; `setNodeRef` movido para o wrapper externo; conteúdo condicional
+- `frontend-crm/src/components/KanbanBoard.tsx` — usa o hook; passa props; auto-expand em `handleDragOver`
+- `docs/architecture/kanban-responsive.md` — nova seção "Colapso de colunas (retrato mobile)"
+
+### Relatório da Fase 1 — o que mudou na prática
+
+**Antes:** no retrato mobile, todas as colunas do pipeline ficavam sempre
+abertas, uma embaixo da outra — sem forma de esconder as que você não quer
+ver no momento.
+
+**Agora:** cada coluna tem uma setinha (chevron) ao lado do nome; tocando
+nela, a coluna fecha (só o cabeçalho com o nome e a contagem de leads fica
+visível) e a página encolhe. Tocar de novo abre. O estado de aberto/fechado
+fica salvo no navegador — se fechar uma coluna e recarregar a página, ela
+continua fechada. Se você arrastar um lead para cima de uma coluna fechada,
+ela abre sozinha para você ver onde está soltando. Em desktop e no celular
+na horizontal, nada mudou — não existe botão de fechar ali.
+
+**Para validar:** Cenários P1, P2, P3 e P4, abaixo.
+
 ---
 
 ## Checks de Validação
