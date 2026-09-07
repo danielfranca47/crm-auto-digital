@@ -348,6 +348,32 @@ def ensure_spy_agent_tables(conn: sqlite3.Connection) -> None:
     )
 
 
+def ensure_collab_monitor_tables(conn: sqlite3.Connection) -> None:
+    """Cria tabela de instâncias de monitoramento de colaborador (idempotente).
+
+    Diferente de spy_agent_config (1 instância por conta, observação temporária
+    para sugerir config do AI Profile), aqui é N instâncias por conta,
+    permanentes, cada uma nomeada por colaborador — alimentam leads reais no
+    Kanban (ver services/collab_monitor/monitor_inbound_handler.py)."""
+    cur = conn.cursor()
+    cur.executescript(
+        """
+        CREATE TABLE IF NOT EXISTS collab_monitor_instances (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL,
+            instance_id TEXT NOT NULL UNIQUE,
+            collaborator_name TEXT NOT NULL,
+            status TEXT NOT NULL DEFAULT 'pending',
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_collab_monitor_user ON collab_monitor_instances(user_id);
+        CREATE INDEX IF NOT EXISTS idx_collab_monitor_instance ON collab_monitor_instances(instance_id);
+        """
+    )
+
+
 def ensure_business_info_table(conn: sqlite3.Connection) -> None:
     """Cria tabela de informações gerais do negócio por usuário (idempotente)."""
     cur = conn.cursor()
@@ -1274,6 +1300,9 @@ def init_db() -> None:
         ensure_spy_agent_tables(conn)
         ensure_column(conn, "spy_agent_messages", "from_me", "from_me INTEGER NOT NULL DEFAULT 0")
         ensure_column(conn, "messages", "message_type", "message_type TEXT DEFAULT 'text'")
+
+        # Monitoramento de WhatsApp de colaborador (base)
+        ensure_collab_monitor_tables(conn)
 
         # Migrações
         migrate_knowledge_media_to_table(conn)

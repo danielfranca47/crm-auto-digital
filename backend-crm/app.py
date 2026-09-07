@@ -46,6 +46,7 @@ from routes import admin_agents
 from routes import admin_billing
 from routes import bot_pause
 from routes import knowledge_ingest
+from routes import collab_monitor
 from services.followup_reconciler import (
     reconcile_due_followups,
     scan_inactive_clients_for_checkin,
@@ -234,6 +235,7 @@ app.include_router(whatsapp_connect.router)                         # /api/whats
 app.include_router(notifications.router)                            # /api/notifications
 app.include_router(playground.router)                               # /api/playground
 app.include_router(spy_agent.router)                                # /api/spy-agent
+app.include_router(collab_monitor.router)                           # /api/collab-monitor
 app.include_router(checkout.router)                                 # /checkout/efi/{offer_key}
 app.include_router(admin_agents.router)                             # /admin/agents/*
 app.include_router(admin_billing.router)                            # /admin/billing/*

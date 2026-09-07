@@ -432,6 +432,25 @@ export type WhatsappConnectionAlertResponse = {
   since?: string | null;
 };
 
+export type CollabMonitorInstance = {
+  id: number;
+  instance_id: string;
+  collaborator_name: string;
+  status: string;
+  phone_e164?: string | null;
+  connection_status?: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type CollabMonitorConnectResponse = {
+  id: number;
+  instance_id: string;
+  collaborator_name: string;
+  status?: string | null;
+  qr: WhatsappQrPayload;
+};
+
 export type AppNotification = {
   id: number;
   lead_id: number | null;
@@ -1339,6 +1358,14 @@ export const api = {
       apiClient.get<WhatsappConnectionAlertResponse>(`/whatsapp/connection-alert`),
     whatsappRefreshQr: async (phone?: string) =>
       apiClient.post<WhatsappConnectResponse>(`/whatsapp/qr/refresh`, phone ? { phone } : undefined),
+    collabMonitorList: async () =>
+      apiClient.get<CollabMonitorInstance[]>(`/collab-monitor/instances`),
+    collabMonitorCreate: async (collaborator_name: string) =>
+      apiClient.post<CollabMonitorConnectResponse>(`/collab-monitor/instances`, { collaborator_name }),
+    collabMonitorDelete: async (id: number) =>
+      apiClient.delete(`/collab-monitor/instances/${id}`),
+    collabMonitorReconnect: async (id: number) =>
+      apiClient.post<CollabMonitorConnectResponse>(`/collab-monitor/instances/${id}/reconnect`),
   },
 
   agents: {

@@ -270,11 +270,11 @@ def _raise_whatsapp_core_error(resp: httpx.Response, action: str) -> None:
         status_code=502,
         detail=f"Core WhatsApp {action} falhou (status={resp.status_code}): {detail}",
     )
-def init_core_whatsapp_instance(user_id: int, instance_id: str) -> Dict[str, Any]:
+def init_core_whatsapp_instance(user_id: int, instance_id: str, role: str = "agent") -> Dict[str, Any]:
     base = _get_core_base()
     url = f"{base}/whatsapp-instances/init"
     headers = _service_headers()
-    payload = {"user_id": user_id, "instance_id": instance_id}
+    payload = {"user_id": user_id, "instance_id": instance_id, "role": role}
 
     try:
         with httpx.Client(timeout=20) as client:
