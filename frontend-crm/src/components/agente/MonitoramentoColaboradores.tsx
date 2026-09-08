@@ -1,6 +1,15 @@
 import { useEffect, useRef, useState } from 'react';
 import { api } from '@/services/api';
 import type { CollabMonitorConnectResponse, CollabMonitorInstance, WhatsappQrPayload } from '@/services/api';
+import { ApiError } from '@/lib/api-client';
+import { useToast } from '@/hooks/use-toast';
+
+function describeError(err: unknown, fallback: string): string {
+  if (err instanceof ApiError && err.status === 429) {
+    return 'Muitas tentativas de conexão — aguarde alguns minutos e tente novamente.';
+  }
+  return fallback;
+}
 
 function getQrSrc(qr: WhatsappQrPayload | undefined): string | null {
   if (!qr?.value) return null;
@@ -17,6 +26,7 @@ function isConnected(instance: CollabMonitorInstance): boolean {
 }
 
 export function MonitoramentoColaboradores() {
+  const { toast } = useToast();
   const [instances, setInstances] = useState<CollabMonitorInstance[]>([]);
   const [loading, setLoading] = useState(true);
   const [newName, setNewName] = useState('');
@@ -28,17 +38,22 @@ export function MonitoramentoColaboradores() {
   const qrTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const loadInstances = async () => {
-    try {
-      const list = await api.crm.collabMonitorList();
-      setInstances(list);
-    } catch {
-      // silencioso — toast de erro gerenciado pelo hook global
-    }
+    const list = await api.crm.collabMonitorList();
+    setInstances(list);
   };
 
   useEffect(() => {
-    loadInstances().finally(() => setLoading(false));
+    loadInstances()
+      .catch(() => {
+        toast({
+          title: 'Erro ao carregar colaboradores',
+          description: 'Não foi possível carregar a lista de colaboradores monitorados.',
+          variant: 'destructive',
+        });
+      })
+      .finally(() => setLoading(false));
     return () => stopPolling();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const stopPolling = () => {
@@ -82,8 +97,12 @@ export function MonitoramentoColaboradores() {
         setQrExpired(false);
         startPolling(resp.id);
       }
-    } catch {
-      // silencioso
+    } catch (err) {
+      toast({
+        title: 'Erro ao cadastrar colaborador',
+        description: describeError(err, 'Não foi possível cadastrar o colaborador. Tente novamente.'),
+        variant: 'destructive',
+      });
     } finally {
       setCreating(false);
     }
@@ -98,8 +117,12 @@ export function MonitoramentoColaboradores() {
         setQrTarget(resp);
         startPolling(id);
       }
-    } catch {
-      // silencioso
+    } catch (err) {
+      toast({
+        title: 'Erro ao reconectar',
+        description: describeError(err, 'Não foi possível reconectar o colaborador. Tente novamente.'),
+        variant: 'destructive',
+      });
     }
   }
 
@@ -111,8 +134,12 @@ export function MonitoramentoColaboradores() {
         setQrTarget(null);
       }
       await loadInstances();
-    } catch {
-      // silencioso
+    } catch (err) {
+      toast({
+        title: 'Erro ao remover colaborador',
+        description: describeError(err, 'Não foi possível remover o colaborador. Tente novamente.'),
+        variant: 'destructive',
+      });
     }
   }
 
