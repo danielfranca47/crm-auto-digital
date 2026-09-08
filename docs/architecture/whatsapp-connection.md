@@ -203,6 +203,27 @@ Duas garantias tornam isso seguro:
 
 ---
 
+## Apagar instância / limpeza de fantasmas
+
+`uazapi_admin.delete_instance()` (`DELETE {UAZAPI_BASE_URL}/instance`, header
+`token` da própria instância) apaga a instância na UazAPI. Exposta via
+`DELETE /whatsapp-instances/{instance_id}` no backend-core (protegida por
+`_require_service_token`), que apaga na UazAPI e remove a linha local em
+`whatsapp_connections` — trata um 404 da UazAPI (instância já não existe lá)
+como sucesso em vez de erro. `backend-crm/core_client.py::delete_core_whatsapp_instance()`
+chama essa rota.
+
+**Reinit em `POST /api/whatsapp/connect`** (`whatsapp_connect.py`,
+`connect_whatsapp`) chama essa limpeza de forma **não-bloqueante** (erro só
+gera `logger.warning`, nunca interrompe a reconexão do usuário): quando
+`connect_core_whatsapp_instance()` falha com 5xx, o código gera um
+`instance_id` novo (`_generate_instance_id()`) e reconecta — antes disso a
+instância antiga ficava abandonada na UazAPI para sempre. Agora, depois do
+sucesso com a nova instância, `delete_core_whatsapp_instance(old_instance_id)`
+é chamado para limpar a antiga.
+
+---
+
 ## Deteção de queda de sessão
 
 `WhatsappConnection.status` não é só escrito pelos endpoints acima — a UazAPI
