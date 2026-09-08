@@ -100,6 +100,31 @@ contra uma instância fantasma real já existente para confirmar o formato da
 resposta (corpo JSON vs. vazio) e ajustar `_request()`/`delete_instance()`
 se necessário.
 
+### Commits Fase 1
+
+| # | Commit | O que foi implementado |
+|---|---|---|
+| 1 | `28fb9b4` | `delete_instance()` + rota de serviço + `delete_connection_by_instance()` + `delete_core_whatsapp_instance()` + testes |
+
+### Relatório da Fase 1 — o que mudou na prática
+
+**Antes:** não existia nenhuma forma, no código, de apagar uma instância
+WhatsApp na UazAPI — só manualmente no painel deles.
+
+**Agora:** existe uma função (`delete_instance`) e uma rota interna
+(`DELETE /whatsapp-instances/{instance_id}`) que apagam a instância na
+UazAPI e removem a linha correspondente no nosso banco. Ainda não está
+plugada em nenhum fluxo do usuário — isso acontece nas Fases 2 e 3. Também
+corrigi um detalhe: a função interna que lê a resposta da UazAPI agora
+tolera uma resposta sem corpo (comum em operações de `DELETE`), sem afetar
+as outras chamadas que já funcionavam.
+
+**Para validar:** Cenário V1 e V5, abaixo — V5 (testes automatizados) já
+passou (12/12 em `test_uazapi_admin.py`, sem regressão nos 12 de
+`test_uazapi_client_retry.py`). V1 (teste ao vivo contra uma instância
+fantasma real) ainda está pendente — envolve apagar dados reais na UazAPI,
+por isso não executei sozinho.
+
 ### Fase 2 — Corrige Causa 1 (reinit abandona instância antiga)
 
 | Arquivo | O que muda |
@@ -168,7 +193,9 @@ válvula de escape manual para qualquer caso futuro que escape das Fases 2/3.
 - **Pendente**
 
 ### Cenário V5 — Testes automatizados
-- [ ] `backend-core/tests/test_uazapi_admin.py` — caso para `delete_instance`
-- [ ] `backend-core/tests/test_uazapi_client_retry.py` — retry 429/503 cobre
-      `delete_instance` (via `_request()` compartilhado)
-- **Pendente**
+- [x] `backend-core/tests/test_uazapi_admin.py` — casos para `delete_instance`
+      (sucesso, corpo vazio, 404)
+- [x] `backend-core/tests/test_uazapi_client_retry.py` — sem regressão (retry
+      429/503 continua cobrindo todos os consumidores de `_request()`)
+- **Validado em:** 08/09/2026 — 12/12 em `test_uazapi_admin.py`, 12/12 em
+  `test_uazapi_client_retry.py`
