@@ -104,14 +104,36 @@ rotas que começam com `/monitoramento`.
     normal
 - **Validado em:** 08/09/2026
 
+### Cenário 1b — Sessão real autenticada, local, sem CORS (validado por Claude)
+- [x] Subiu backend-core + backend-crm localmente (próprio processo,
+      `.venv` da pasta principal reaproveitado via Python global — portas
+      8011/8000, isoladas das instâncias de outras sessões), com um usuário
+      de teste novo (`core.db` local, assinatura `crm_pro` ativa inserida
+      manualmente só para liberar entitlements) — nenhuma alteração em
+      banco de produção
+- [x] `PRIVATE_ORIGINS` liberado localmente para incluir a porta do
+      `vite` (só via env var do processo, nunca escrito em `.env`) — sessão
+      real, token JWT real, zero CORS
+- [x] `/monitoramento`: botão "Gerenciar colaboradores" abre o dialog,
+      "Nenhum colaborador cadastrado ainda." no estado vazio, visual shadcn
+      correto, sem o banner de WhatsApp desconectado
+- **Não testado propositalmente:** o clique real em "Cadastrar" chamaria a
+  UazAPI de verdade (mesma conta usada em produção) — evitado para não
+  competir com o trabalho em andamento na branch `fix/uazapi-instancias-fantasmas`
+  sobre o mesmo rate limit/quota de instâncias. Fluxo feliz completo (QR
+  aparecendo) continua pendente de validação real pelo utilizador.
+- **Validado em:** 08/09/2026
+
 ### Cenário 2 — Fluxo feliz completo (pendente, requer ambiente real)
 - [ ] Em produção, abrir `/monitoramento` → "Gerenciar colaboradores" →
       cadastrar um colaborador com nome válido
 - [ ] Confirmar: QR aparece, conecta, aparece na lista do dialog
 - [ ] Fechar o dialog e confirmar que a lista de conversas à esquerda não
       quebra (mesmo sem conversas ainda para esse colaborador)
-- [ ] Confirmar visualmente: aba "Monitoramento" não existe mais no AI
-      Profile
+- [ ] Confirmar visualmente ao vivo (Cenário 1b só testou `/monitoramento`
+      diretamente): aba "Monitoramento" não existe mais no AI Profile —
+      já confirmado por código (`grep` sem nenhuma referência solta) e por
+      `npm run build`, mas falta o clique real na navegação do AI Profile
 - [ ] Em uma página **fora** de `/monitoramento` (ex.: Dashboard), com o
       agente principal desconectado de propósito, confirmar que o banner
       "WhatsApp desconectado" continua aparecendo normalmente ali (a
