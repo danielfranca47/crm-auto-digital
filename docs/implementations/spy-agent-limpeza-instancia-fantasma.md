@@ -1,7 +1,7 @@
 # Agente Espião — instância isolada + limpeza de instância fantasma
 
 **Branch:** `fix/spy-agent-instancia-isolada`
-**Status:** Todos os cenários validados (08/09/2026) — pendente: auditoria de contas já afetadas em produção (ver seção abaixo), a rodar antes da graduação
+**Status:** Todos os cenários validados (08/09/2026) e auditoria de produção concluída (09/09/2026, sem contas afetadas) — pronto para graduação
 
 ---
 
@@ -277,15 +277,12 @@ após a correção).
 
 ## Auditoria de contas já afetadas (produção)
 
-Antes desta correção, algumas contas já em produção podem ter
-`spy_agent_config.spy_instance_id` igual ao `instance_id` da conexão
-principal (`role='agent'`) — ou seja, bots reais possivelmente mudos agora
-mesmo. Depois do deploy, cruzar `spy_agent_config.spy_instance_id`
-(backend-crm) com `whatsapp_connections` onde `role='agent'` (backend-core)
-para o mesmo `user_id`. Qualquer linha coincidente indica uma conta afetada
-— remediar apagando a linha `spy_agent_config` daquela conta (não a
-instância UazAPI, que é a conexão real) e avisar o utilizador afetado para
-reconectar o fone de observação pela nova UI.
+**Executada em 09/09/2026, via `railway ssh -s backend-crm`, antes do
+deploy desta correção:** `SELECT COUNT(*) FROM spy_agent_config` e
+`SELECT COUNT(*) FROM spy_agent_runs` em `/data/crm.db` (produção) — ambas
+retornaram **0 linhas**. Ninguém usou o Agente Espião em produção até esta
+data, portanto nenhuma conta foi afetada pelo bug de reaproveitamento de
+instância — não há remediação necessária.
 
 ---
 
