@@ -173,6 +173,14 @@ export function LeadCard({
       <div className="flex justify-between items-start mb-3">
         <div className="flex items-center gap-1.5 min-w-0">
           <h4 className="font-semibold text-foreground text-sm truncate">{leadDisplayName(lead)}</h4>
+          {lead.collabMonitorInstanceId && (
+            <span
+              title="Lead vindo do WhatsApp monitorado de um colaborador — sem IA respondendo"
+              className="shrink-0 text-[10px] font-medium px-1.5 py-0.5 rounded bg-sky-500/15 text-sky-500 border border-sky-500/40"
+            >
+              Monitorado
+            </span>
+          )}
           {hasReplyNotification && (
             <button
               title="Lead respondeu ao follow-up — ver na Central de Follow-ups"

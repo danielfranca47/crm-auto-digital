@@ -50,6 +50,7 @@ export interface Lead {
   followup_contract?: Record<string, any> | null;
   bot_disabled?: boolean;
   bot_disabled_reason?: string | null;
+  collabMonitorInstanceId?: string | null;
   lastMovement: Date;
   createdAt: Date;
   nextScheduledAction?: {

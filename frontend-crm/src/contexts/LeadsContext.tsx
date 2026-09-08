@@ -113,6 +113,7 @@ function mapRawLead(raw: any): Lead {
     followup_contract: followupContract,
     bot_disabled: Boolean(raw.bot_disabled ?? raw.botDisabled),
     bot_disabled_reason: raw.bot_disabled_reason ?? raw.botDisabledReason ?? null,
+    collabMonitorInstanceId: raw.collab_monitor_instance_id ?? raw.collabMonitorInstanceId ?? null,
     createdAt: raw.createdAt ? new Date(raw.createdAt) : new Date(),
     lastMovement: raw.lastMovement ? new Date(raw.lastMovement) : new Date(),
     nextScheduledAction,

@@ -1,7 +1,7 @@
 # IA mãe classifica estágio do lead monitorado
 
 **Branch:** `feat/monitoramento-colaborador-classificacao-ia`
-**Status:** Em andamento
+**Status:** Todos os cenários validados (08/09/2026)
 
 ---
 
@@ -161,7 +161,32 @@ coluna "Monitorado".
 
 | Arquivo | O que muda |
 |---|---|
-| `frontend-crm/src/components/LeadCard.tsx` | Badge quando `lead.collab_monitor_instance_id` não for nulo |
+| `frontend-crm/src/types/crm.ts` | Novo campo `collabMonitorInstanceId?: string \| null` em `Lead` |
+| `frontend-crm/src/contexts/LeadsContext.tsx` | Mapeia `raw.collab_monitor_instance_id` (já vinha do backend via `SELECT l.*`, só não estava mapeado) para `collabMonitorInstanceId` |
+| `frontend-crm/src/components/LeadCard.tsx` | Badge "Monitorado" quando `lead.collabMonitorInstanceId` não for nulo, ao lado do nome do lead |
+
+### Commits Fase 2
+
+| # | Commit | O que foi implementado |
+|---|---|---|
+| 1 | `<preenchido após o commit>` | Badge "Monitorado" persistente no card |
+
+### Relatório da Fase 2 — o que mudou na prática
+
+**Antes:** um lead vindo do monitoramento de colaborador, ao ser movido para uma coluna real do Kanban (Fase 1), ficava indistinguível de um lead conduzido pelo bot — nada no card indicava que aquela conversa foi humana, sem IA.
+
+**Agora:** todo card de lead monitorado exibe uma etiqueta azul "Monitorado" ao lado do nome, em qualquer coluna — inclusive fora de "Monitorado".
+
+**Para validar:** Cenário P1, abaixo.
+
+### Validação ao vivo (ponta a ponta, com LLM real)
+
+Rodada em 08/09/2026 nesta mesma worktree (backend-core :8001 com cópia read-only do `core.db` real para ter a conta de teste, backend-crm :8003, frontend-crm :8080):
+
+1. Cadastrada uma instância de monitoramento de teste (`collab_monitor_instances`) e simulada uma conversa real via `handle_monitor_inbound()` (sem mock — LLM `gpt-4o-mini` de verdade): abertura genérica → pergunta sobre preço → oferta do colaborador → **"Gostei muito da proposta, quero fechar sim! Pode me mandar o contrato e o link de pagamento?"**.
+2. O worker (`_collab_monitor_classify_worker_loop`, rodando de verdade no processo) processou os 3 jobs sozinho. Para as 2 primeiras mensagens (ainda ambíguas) a IA retornou `null` — comportamento conservador esperado. Na 3ª, com sinal explícito de fechamento, retornou `suggested_category="closing"` com motivo: *"O lead expressou claramente a intenção de fechar e pediu o contrato e link de pagamento."*
+3. Lead saiu de `monitoring` e foi direto para `closing` (guardrail de avanço aceitou, pois é avanço válido mesmo pulando estágios intermediários — a conversa real não passou por eles).
+4. No browser (login com a conta de teste real), o card apareceu na coluna **"Fechamento"** com a badge **"Monitorado"** visível ao lado do nome — confirma Fase 1 + Fase 2 funcionando juntas, com LLM real (não mockado).
 
 ---
 
@@ -180,8 +205,9 @@ coluna "Monitorado".
 - **Validado em:** 08/09/2026 — mesmo script; classificador mockado para sugerir `qualification` com o lead já em `closing` — categoria permaneceu `closing`, nenhum log novo criado.
 
 ### Cenário P1 — Visual no Kanban
-- [ ] Após C1, abrir o Kanban (`frontend-crm`) via browser
-- [ ] Confirmar que o card aparece na coluna correspondente com a badge "Monitorado" visível
+- [x] Após C1, abrir o Kanban (`frontend-crm`) via browser
+- [x] Confirmar que o card aparece na coluna correspondente com a badge "Monitorado" visível
+- **Validado em:** 08/09/2026 — ao vivo via chrome-devtools MCP, conta de teste real, LLM real (sem mock). Ver "Validação ao vivo" acima.
 
 ---
 
