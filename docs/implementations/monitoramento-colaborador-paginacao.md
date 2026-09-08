@@ -170,7 +170,7 @@ sem roteamento por URL e com foco/teclado corretos por padrão.
 
 | # | Commit | O que foi implementado |
 |---|---|---|
-| 2 | *(a registrar)* | UI de paginação tradicional (conversas + mensagens) em `CollabMonitorInbox.tsx` |
+| 2 | `1e42ab9` | UI de paginação tradicional (conversas + mensagens) em `CollabMonitorInbox.tsx` |
 
 ---
 
