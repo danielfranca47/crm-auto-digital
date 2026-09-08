@@ -132,6 +132,28 @@ automaticamente a cada mensagem inbound.
 | `backend-crm/services/collab_monitor/classify_worker.py` (novo) | `process_pending_collab_monitor_classify_jobs()` — lease, classifica, aplica guardrail de não-retrocesso, atualiza categoria, loga |
 | `backend-crm/app.py` | Novo `_collab_monitor_classify_worker_loop()` registrado no `lifespan` |
 
+### Commits Fase 1
+
+| # | Commit | O que foi implementado |
+|---|---|---|
+| 1 | `7632fb7` | Job de classificação assíncrona + guardrail de não-retrocesso + movimentação de categoria + log de auditoria |
+
+**Detalhes do commit `7632fb7`:**
+- `services/jobs_service.py` — novo tipo de job `collab_monitor.classify.local`
+- `services/collab_monitor/monitor_inbound_handler.py` — enfileira o job a cada mensagem inbound do lead (não do colaborador)
+- `services/collab_monitor/classifier.py` (novo) — 1 chamada LLM read-only, enum restrito, postura "null se incerto"
+- `services/collab_monitor/classify_worker.py` (novo) — lease do job, guardrail de não-retrocesso no funil, `UPDATE leads.category`, log em `prospection_logs`
+- `app.py` — registra `_collab_monitor_classify_worker_loop` no `lifespan`
+- `scripts/test_collab_monitor_classify_flow.py` (novo) — script de validação ponta a ponta (Cenários C1/C2), com o classificador mockado para determinismo
+
+### Relatório da Fase 1 — o que mudou na prática
+
+**Antes:** todo lead do monitoramento de colaborador ficava para sempre na coluna "Monitorado" do Kanban, mesmo depois de a conversa evoluir para proposta, negociação ou fechamento.
+
+**Agora:** a cada mensagem que o lead monitorado manda, o sistema lê a conversa (IA, sem responder nem enviar nada) e, se houver sinal claro de avanço de estágio, move o card sozinho para a coluna real (Qualificação, Apresentação, Follow-up, Fechamento, Cliente, Recusado ou Desqualificado). Nunca move o card para trás por engano — uma mensagem ambígua depois de já estar em "Fechamento", por exemplo, é ignorada.
+
+**Para validar:** Cenário C1 e C2, abaixo — já rodados com o script `scripts/test_collab_monitor_classify_flow.py` (classificador mockado, valida o mecanismo). O julgamento real da IA sobre uma conversa de verdade fica para um teste manual/ao vivo (não coberto por este script).
+
 ### Fase 2 — Frontend: badge "Monitorado" persistente no card
 
 **Objetivo:** card continua identificável como monitorado mesmo fora da
@@ -146,14 +168,16 @@ coluna "Monitorado".
 ## Checks de Validação
 
 ### Cenário C1 — Avanço de estágio ponta a ponta
-- [ ] Simular payloads inbound chamando `handle_monitor_inbound()` diretamente representando uma conversa que evolui de contato inicial até fechamento
-- [ ] Rodar `process_pending_collab_monitor_classify_jobs()` após cada mensagem
-- [ ] Confirmar no banco (`leads.category`, `prospection_logs`) que o lead avançou estágio a estágio, sem pular etapas de forma inconsistente
+- [x] Simular payloads inbound chamando `handle_monitor_inbound()` diretamente representando uma conversa que evolui de contato inicial até fechamento
+- [x] Rodar `process_pending_collab_monitor_classify_jobs()` após cada mensagem
+- [x] Confirmar no banco (`leads.category`, `prospection_logs`) que o lead avançou estágio a estágio, sem pular etapas de forma inconsistente
+- **Validado em:** 08/09/2026 — `scripts/test_collab_monitor_classify_flow.py`, classificador mockado (determinístico): `monitoring → qualification → apresentation → closing`, 1 log de auditoria por avanço. Confirma o mecanismo; não substitui teste manual com LLM real.
 
 ### Cenário C2 — Guardrail de retrocesso
-- [ ] Levar o lead até `closing`
-- [ ] Enviar mensagem ambígua que levaria a LLM a sugerir estágio anterior
-- [ ] Confirmar que o worker não regride a categoria
+- [x] Levar o lead até `closing`
+- [x] Enviar mensagem ambígua que levaria a LLM a sugerir estágio anterior
+- [x] Confirmar que o worker não regride a categoria
+- **Validado em:** 08/09/2026 — mesmo script; classificador mockado para sugerir `qualification` com o lead já em `closing` — categoria permaneceu `closing`, nenhum log novo criado.
 
 ### Cenário P1 — Visual no Kanban
 - [ ] Após C1, abrir o Kanban (`frontend-crm`) via browser
