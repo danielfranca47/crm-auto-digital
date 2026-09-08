@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { api } from "@/services/api";
 import type { AdminInstance } from "@/services/api";
 import { useToast } from "@/hooks/use-toast";
-import { RefreshCw, RotateCcw, Wifi, WifiOff } from "lucide-react";
+import { RefreshCw, RotateCcw, Trash2, Wifi, WifiOff } from "lucide-react";
 
 function statusIsOnline(status: string) {
   return status === "active" || status === "connected";
@@ -47,6 +47,7 @@ export default function AdminInstances() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [reconnecting, setReconnecting] = useState<Set<string>>(new Set());
+  const [deleting, setDeleting] = useState<Set<string>>(new Set());
 
   const { data: instances = [], isLoading, refetch } = useQuery({
     queryKey: ["admin", "instances"],
@@ -79,6 +80,35 @@ export default function AdminInstances() {
       });
     } finally {
       setReconnecting((prev) => {
+        const next = new Set(prev);
+        next.delete(inst.instance_id);
+        return next;
+      });
+    }
+  };
+
+  const handleDelete = async (inst: AdminInstance) => {
+    if (!window.confirm(`Apagar a instância ${inst.instance_id} (${inst.user_email})? Isso remove ela da UazAPI e desta lista — não pode ser desfeito.`)) {
+      return;
+    }
+    setDeleting((prev) => new Set(prev).add(inst.instance_id));
+    try {
+      const res = await api.deleteInstance(inst.instance_id);
+      toast({
+        title: "Instância apagada",
+        description: res.uazapi_deleted
+          ? `${inst.instance_id} removida da UazAPI e da lista.`
+          : `${inst.instance_id} removida da lista (falha ao apagar na UazAPI: ${res.error ?? "erro desconhecido"}).`,
+      });
+      queryClient.invalidateQueries({ queryKey: ["admin", "instances"] });
+    } catch (err: unknown) {
+      toast({
+        title: "Erro",
+        description: err instanceof Error ? err.message : "Erro ao apagar instância.",
+        variant: "destructive",
+      });
+    } finally {
+      setDeleting((prev) => {
         const next = new Set(prev);
         next.delete(inst.instance_id);
         return next;
@@ -121,7 +151,7 @@ export default function AdminInstances() {
         </CardHeader>
         <CardContent className="p-0">
           <div className="grid grid-cols-[1fr_1.2fr_0.8fr_0.8fr_0.9fr_auto] gap-3 px-5 py-2 border-b border-slate-700/60">
-            {["Instância", "Usuário", "Telefone", "Status", "Atualizado", ""].map((h) => (
+            {["Instância", "Usuário", "Telefone", "Status", "Atualizado", "Ações"].map((h) => (
               <span key={h} className="text-xs uppercase tracking-wide text-slate-500">
                 {h}
               </span>
@@ -143,16 +173,28 @@ export default function AdminInstances() {
                 <span className="text-xs text-slate-500">{inst.phone_e164 ?? "—"}</span>
                 <StatusBadge status={inst.status} />
                 <span className="text-xs text-slate-600">{formatDate(inst.updated_at)}</span>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={() => handleReconnect(inst)}
-                  disabled={reconnecting.has(inst.instance_id)}
-                  className="border-slate-600 text-slate-300 hover:bg-slate-700 gap-1.5 text-xs h-7 px-2.5"
-                >
-                  <RotateCcw size={11} className={reconnecting.has(inst.instance_id) ? "animate-spin" : ""} />
-                  {reconnecting.has(inst.instance_id) ? "…" : "Reconectar"}
-                </Button>
+                <div className="flex gap-1.5">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => handleReconnect(inst)}
+                    disabled={reconnecting.has(inst.instance_id) || deleting.has(inst.instance_id)}
+                    className="border-slate-600 text-slate-300 hover:bg-slate-700 gap-1.5 text-xs h-7 px-2.5"
+                  >
+                    <RotateCcw size={11} className={reconnecting.has(inst.instance_id) ? "animate-spin" : ""} />
+                    {reconnecting.has(inst.instance_id) ? "…" : "Reconectar"}
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => handleDelete(inst)}
+                    disabled={deleting.has(inst.instance_id) || reconnecting.has(inst.instance_id)}
+                    className="border-red-900/60 text-red-400 hover:bg-red-950/40 gap-1.5 text-xs h-7 px-2.5"
+                  >
+                    <Trash2 size={11} className={deleting.has(inst.instance_id) ? "animate-pulse" : ""} />
+                    {deleting.has(inst.instance_id) ? "…" : "Apagar"}
+                  </Button>
+                </div>
               </div>
             ))}
 
