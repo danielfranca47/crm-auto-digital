@@ -1,8 +1,13 @@
+import { useLocation } from "react-router-dom";
 import { useWhatsappConnectionAlert } from "@/hooks/useWhatsappConnectionAlert";
 
 export default function WhatsappDisconnectBanner() {
   const { disconnected } = useWhatsappConnectionAlert();
+  const { pathname } = useLocation();
 
+  // Alerta é sobre a conexão do agente principal (role="agent") — não tem
+  // relação com as instâncias de colaborador monitoradas desta rota.
+  if (pathname.startsWith("/monitoramento")) return null;
   if (!disconnected) return null;
 
   return (

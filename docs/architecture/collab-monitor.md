@@ -137,9 +137,11 @@ sempre `NULL`, `contactName` = `wa_display_name` ou o telefone).
 sai automaticamente assim que a classificação de estágio (abaixo) identificar
 sinal claro de avanço.
 
-`frontend-crm/src/components/agente/MonitoramentoColaboradores.tsx` — tela
-de cadastro (aba "Monitoramento" em `AiProfile.tsx`): nome do colaborador,
-QR/pareamento, lista de instâncias com status, reconectar/remover.
+`frontend-crm/src/components/ManageCollaboratorsDialog.tsx` — dialog de
+cadastro/gerenciamento (botão "Gerenciar colaboradores" na própria página
+`/monitoramento`, ver "Tela de leitura estilo WhatsApp Web" abaixo): nome do
+colaborador, QR/pareamento, lista de instâncias com status,
+reconectar/remover.
 
 `frontend-crm/src/components/LeadCard.tsx` exibe uma badge "Monitorado"
 sempre que `lead.collabMonitorInstanceId` não for nulo — mantém o card
@@ -271,6 +273,16 @@ dedicada para ler as conversas monitoradas, separada do Kanban:
   simples, não o componente `ScrollArea` (Radix/shadcn) — o wrapper interno
   do Radix usa `display: table`, que não respeita a largura do contêiner
   pai e deixa conteúdo vazar para fora da coluna.
+- **Botão "Gerenciar colaboradores"** no header abre o
+  `ManageCollaboratorsDialog` (cadastro/QR/reconectar/remover — ver "Kanban
+  — coluna Monitorado" acima). Ao fechar o dialog após qualquer
+  criação/reconexão/remoção, a query `["collab-monitor-conversations"]` é
+  invalidada para a lista à esquerda refletir sem reload manual.
+- `WhatsappDisconnectBanner.tsx` (banner global de "WhatsApp desconectado",
+  renderizado pelo `AppShell` em toda página autenticada) é suprimido
+  explicitamente nesta rota (`pathname.startsWith("/monitoramento")`) — ele
+  é sobre a conexão do agente principal (`role="agent"`), sem relação com as
+  instâncias de colaborador monitoradas.
 
 ---
 

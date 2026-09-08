@@ -11,7 +11,6 @@ import { CamadaConhecimento } from '@/components/agente/CamadaConhecimento';
 import { CamadaApresentacao } from '@/components/agente/CamadaApresentacao';
 import { CamadaOferta } from '@/components/agente/CamadaOferta';
 import { ConexaoNumero } from '@/components/agente/ConexaoNumero';
-import { MonitoramentoColaboradores } from '@/components/agente/MonitoramentoColaboradores';
 import { CamadaFluxoVenda } from '@/components/agente/CamadaFluxoVenda';
 import { AgentExportImportPanel } from '@/components/agente/AgentExportImportPanel';
 import { TooltipProvider } from '@/components/ui/tooltip';
@@ -24,7 +23,7 @@ import { AGENT_MODE_LABELS, IDENTITY_MODE_LABELS, LGPD_LABELS, REATIVACAO_LABELS
 interface KnowledgeSummary { criticalFilled: number; criticalTotal: number; }
 
 // ─── Tipos de painel ─────────────────────────────────────────
-type PanelId = 'overview' | 'c1' | 'c2' | 'c3' | 'c4' | 'c5' | 'c6' | 'fluxo' | 'followup' | 'conexao' | 'monitoramento';
+type PanelId = 'overview' | 'c1' | 'c2' | 'c3' | 'c4' | 'c5' | 'c6' | 'fluxo' | 'followup' | 'conexao';
 
 // ─── CTA Agente Espião ───────────────────────────────────────
 function SpyAgentCTA() {
@@ -482,7 +481,6 @@ export default function AiProfile() {
     { id: 'fluxo' as PanelId, label: '⑦ Fluxo de Venda' },
     { id: 'followup' as PanelId, label: '⑧ Follow-up' },
     { id: 'conexao',  label: 'Conexão' },
-    { id: 'monitoramento' as PanelId, label: 'Monitoramento' },
   ];
 
   useEffect(() => {
@@ -792,11 +790,6 @@ export default function AiProfile() {
               Gerencie a conexão do número de WhatsApp vinculado a este agente.
             </div>
             <ConexaoNumero />
-          </div>
-        )}
-        {activePanel === 'monitoramento' && (
-          <div className="o-panel o-fade-in">
-            <MonitoramentoColaboradores />
           </div>
         )}
       </div>
