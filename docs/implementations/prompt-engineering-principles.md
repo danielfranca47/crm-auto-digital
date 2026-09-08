@@ -192,7 +192,7 @@ WhatsApp.
 
 | # | Commit | O que foi implementado |
 |---|---|---|
-| 1 | `<pendente>` | Seção 9 (4 achados de pesquisa) + item de checklist |
+| 1 | `c9f1b62` | Seção 9 (4 achados de pesquisa) + item de checklist |
 
 ### Relatório da Fase 3 — o que mudou na prática
 
