@@ -463,6 +463,11 @@ export type CollabMonitorConversation = {
   last_message_preview?: string | null;
 };
 
+export type CollabMonitorConversationsPage = {
+  items: CollabMonitorConversation[];
+  has_more: boolean;
+};
+
 export type AppNotification = {
   id: number;
   lead_id: number | null;
@@ -940,10 +945,12 @@ export const api = {
 
     mensagens: async (
       leadId: number | string,
-      latest = true
-    ): Promise<{ ok: boolean; messages: LeadMessage[] }> => {
+      latest = true,
+      page?: { limit: number; offset: number }
+    ): Promise<{ ok: boolean; messages: LeadMessage[]; has_more?: boolean }> => {
+      const pageQs = page ? `&limit=${page.limit}&offset=${page.offset}` : "";
       return apiClient.get(
-        `/assistente-ia/messages/${leadId}?latest=${latest}`
+        `/assistente-ia/messages/${leadId}?latest=${latest}${pageQs}`
       );
     },
 
@@ -1378,10 +1385,18 @@ export const api = {
       apiClient.delete(`/collab-monitor/instances/${id}`),
     collabMonitorReconnect: async (id: number, phone?: string) =>
       apiClient.post<CollabMonitorConnectResponse>(`/collab-monitor/instances/${id}/reconnect`, phone ? { phone } : undefined),
-    collabMonitorConversations: async (instanceId?: string) =>
-      apiClient.get<CollabMonitorConversation[]>(
-        `/collab-monitor/conversations${instanceId ? `?instance_id=${encodeURIComponent(instanceId)}` : ""}`
-      ),
+    collabMonitorConversations: async (
+      instanceId?: string,
+      page: { limit: number; offset: number } = { limit: 20, offset: 0 }
+    ) => {
+      const params = new URLSearchParams();
+      if (instanceId) params.set("instance_id", instanceId);
+      params.set("limit", String(page.limit));
+      params.set("offset", String(page.offset));
+      return apiClient.get<CollabMonitorConversationsPage>(
+        `/collab-monitor/conversations?${params.toString()}`
+      );
+    },
   },
 
   agents: {
