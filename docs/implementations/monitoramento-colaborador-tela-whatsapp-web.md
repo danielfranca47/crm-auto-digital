@@ -129,7 +129,7 @@ por colaborador ou instância, com preview da última mensagem.
 
 | # | Commit | O que foi implementado |
 |---|---|---|
-| 1 | `pendente` | backend: `GET /api/collab-monitor/conversations` |
+| 1 | `5636f57` | backend: `GET /api/collab-monitor/conversations` |
 
 **Detalhes do commit:**
 - `backend-crm/routes/collab_monitor.py` — novo modelo `CollabMonitorConversationOut`
