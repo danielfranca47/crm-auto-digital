@@ -186,6 +186,32 @@ válvula de escape manual para qualquer caso futuro que escape das Fases 2/3.
 | `frontend-admin/src/services/api.ts` | Nova função `deleteInstance(instanceId)` |
 | `frontend-admin/src/pages/AdminInstances.tsx` | Botão "Apagar" (ícone `Trash2`) ao lado do "Reconectar", com confirmação |
 
+### Commits Fase 4
+
+| # | Commit | O que foi implementado |
+|---|---|---|
+| 1 | `8a72eb5` | Rota `DELETE /admin/instances/{id}` + `deleteInstance()` + botão "Apagar" |
+
+### Relatório da Fase 4 — o que mudou na prática
+
+**Antes:** não havia nenhuma forma de apagar uma instância pelo nosso
+próprio painel — só manualmente no painel da UazAPI, um por um.
+
+**Agora:** no painel admin (Instâncias), cada linha tem um botão "Apagar"
+vermelho ao lado do "Reconectar" — pede confirmação, apaga na UazAPI e some
+da lista. É a ferramenta que vai ser usada para limpar os fantasmas restantes
+(hoje: 5, depois de já ter apagado 1 na Fase 1).
+
+**Nota:** esta fase mexe em `frontend-admin` (TypeScript/React) e a worktree
+não tem `node_modules` instalado (não é copiado automaticamente, mesmo
+motivo do `.env`/`.venv` — ver `docs/ops/local-dev.md`). Revisei o código
+manualmente contra o padrão já existente (`reconnectInstance`/
+`handleReconnect`), mas não rodei `npm run build`/`tsc` local. O Cenário V4
+(teste ao vivo no browser) serve também como validação de que compila e
+funciona.
+
+**Para validar:** Cenário V4, abaixo.
+
 ---
 
 ## Fora do escopo (deliberado)
