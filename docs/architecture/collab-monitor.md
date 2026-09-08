@@ -56,6 +56,7 @@ conta, uma por colaborador.
 | `GET /instances` | Lista instâncias da conta, enriquecidas com `phone_e164`/`connection_status` ao vivo |
 | `DELETE /instances/{id}` | Remove o cadastro (não desconecta a instância no core) |
 | `POST /instances/{id}/reconnect` | Reconecta via QR ou código de pareamento, preserva o cadastro |
+| `GET /conversations` | Agrega leads `category='monitoring'` por colaborador — base da tela de leitura (ver abaixo). Filtro opcional `?instance_id=` |
 
 Reaproveita os mesmos helpers genéricos de conexão do core
 (`connect_core_whatsapp_instance`/`init_core_whatsapp_instance`) que o Agente
@@ -96,8 +97,8 @@ event="messages" → is_monitor_instance(instance_id)?
   lead, `model='human_agent'` para a mensagem que o próprio colaborador
   envia (`fromMe`) — nunca confundido com resposta de IA (`model=<llm
   model>` no fluxo real).
-- Mensagens sem texto (mídia) ainda não têm tratamento dedicado — ver
-  "Ajustes futuros" no final.
+- Mensagens sem texto (mídia) ainda não têm tratamento dedicado — ver "Fora
+  do escopo", no final.
 
 ---
 
@@ -142,14 +143,41 @@ QR/pareamento, lista de instâncias com status, reconectar/remover.
 
 ---
 
+## Tela de leitura estilo WhatsApp Web (frontend-crm)
+
+`frontend-crm/src/pages/CollabMonitorInbox.tsx`, rota `/monitoramento`
+(grupo autenticado com sidebar, item "Monitoramento" em Automação) — tela
+dedicada para ler as conversas monitoradas, separada do Kanban:
+
+- **Coluna esquerda:** lista de conversas via `GET /api/collab-monitor/conversations`
+  (`api.crm.collabMonitorConversations`), com filtro por colaborador/instância
+  (`Select`), ordenada pela mensagem mais recente. Cada item mostra avatar
+  (iniciais), nome do contato, preview e contagem de mensagens, e o nome do
+  colaborador que originou a conversa.
+- **Coluna direita:** ao selecionar uma conversa, busca o histórico via
+  `GET /api/assistente-ia/messages/{lead_id}?latest=false`
+  (`api.assistenteIA.mensagens`, já existente e reaproveitado sem mudanças) e
+  renderiza em bolhas de chat — `model='inbound'` (lead) à esquerda,
+  `model='human_agent'` (colaborador) à direita.
+- Só texto — mídia (imagem/áudio) ainda não é capturada nem exibida (ver
+  "Fora do escopo", abaixo).
+- **Nota de implementação:** as colunas peroláveis usam `overflow-y-auto`
+  simples, não o componente `ScrollArea` (Radix/shadcn) — o wrapper interno
+  do Radix usa `display: table`, que não respeita a largura do contêiner
+  pai e deixa conteúdo vazar para fora da coluna.
+
+---
+
 ## Fora do escopo desta base (planejado para depois)
 
 - IA mãe classificar automaticamente o estágio do lead monitorado e mover
   entre colunas do Kanban.
-- Tela estilo WhatsApp Web (multi-telefone, filtro por colaborador/instância,
-  navegação de mídia).
 - Tratamento de mensagens de mídia (imagem/áudio) no monitoramento — hoje
-  `handle_monitor_inbound` ignora mensagens sem texto.
+  `handle_monitor_inbound` ignora mensagens sem texto. Ver
+  [`docs/implementations/monitoramento-colaborador-captura-midia.md`](../implementations/monitoramento-colaborador-captura-midia.md).
+- Paginação/scroll infinito na tela de leitura (lista de conversas e
+  histórico de mensagens), caso o volume cresça. Ver
+  [`docs/implementations/monitoramento-colaborador-paginacao.md`](../implementations/monitoramento-colaborador-paginacao.md).
 - Gate comercial de planos (`max_instances`, seed `crm_scale`/`crm_enterprise`)
   — já mapeado em [`scale-enterprise-roadmap.md`](../plans/scale-enterprise-roadmap.md),
   ortogonal a este trabalho técnico.
