@@ -452,6 +452,17 @@ export type CollabMonitorConnectResponse = {
   pair_code?: string | null;
 };
 
+export type CollabMonitorConversation = {
+  lead_id: number;
+  contact_name?: string | null;
+  phone?: string | null;
+  instance_id: string;
+  collaborator_name?: string | null;
+  msg_count: number;
+  last_message_at?: string | null;
+  last_message_preview?: string | null;
+};
+
 export type AppNotification = {
   id: number;
   lead_id: number | null;
@@ -1367,6 +1378,10 @@ export const api = {
       apiClient.delete(`/collab-monitor/instances/${id}`),
     collabMonitorReconnect: async (id: number, phone?: string) =>
       apiClient.post<CollabMonitorConnectResponse>(`/collab-monitor/instances/${id}/reconnect`, phone ? { phone } : undefined),
+    collabMonitorConversations: async (instanceId?: string) =>
+      apiClient.get<CollabMonitorConversation[]>(
+        `/collab-monitor/conversations${instanceId ? `?instance_id=${encodeURIComponent(instanceId)}` : ""}`
+      ),
   },
 
   agents: {

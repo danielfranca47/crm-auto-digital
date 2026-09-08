@@ -1,7 +1,7 @@
 # Tela estilo WhatsApp Web para monitoramento de colaborador
 
 **Branch:** `feat/monitoramento-colaborador-tela-whatsapp-web-2`
-**Status:** Em andamento
+**Status:** Todos os cenários validados (08/09/2026) — pendente: graduação
 
 ---
 
@@ -160,10 +160,51 @@ conversas + painel de mensagens com bolhas — usando dados já existentes.
 
 | Arquivo | O que muda |
 |---|---|
-| `frontend-crm/src/services/api.ts` | Novo `api.crm.collabMonitorConversations(instanceId?)` |
-| `frontend-crm/src/pages/CollabMonitorInbox.tsx` | Página nova — lista + painel de conversa |
-| `frontend-crm/src/App.tsx` | Nova rota `/monitoramento` |
-| `frontend-crm/src/components/AppSidebar.tsx` | Novo item de navegação |
+| `frontend-crm/src/services/api.ts` | Novo tipo `CollabMonitorConversation` + `api.crm.collabMonitorConversations(instanceId?)` |
+| `frontend-crm/src/pages/CollabMonitorInbox.tsx` | Página nova — lista de conversas (esquerda) + painel com bolhas de mensagem (direita) |
+| `frontend-crm/src/App.tsx` | Nova rota `/monitoramento` (grupo autenticado com sidebar) |
+| `frontend-crm/src/components/AppSidebar.tsx` | Novo item "Monitoramento" no grupo "Automação" |
+
+### Commits Fase 2
+
+| # | Commit | O que foi implementado |
+|---|---|---|
+| 1 | `pendente` | frontend: tela de monitoramento estilo WhatsApp Web |
+
+**Detalhes do commit:**
+- `frontend-crm/src/pages/CollabMonitorInbox.tsx` — página nova: coluna
+  esquerda com filtro por colaborador (`Select`) e lista de conversas
+  (avatar com iniciais, nome, preview da última mensagem, contagem, badge
+  "via `<colaborador>`"); coluna direita com bolhas de mensagem
+  (`model='inbound'` à esquerda, `model='human_agent'` à direita),
+  reaproveitando `api.assistenteIA.mensagens(leadId, false)` já existente.
+- `frontend-crm/src/services/api.ts` — tipo `CollabMonitorConversation` e
+  método `collabMonitorConversations`.
+- `frontend-crm/src/App.tsx` / `AppSidebar.tsx` — rota `/monitoramento` e
+  item de navegação.
+
+**Nota técnica (achado durante o teste ao vivo):** a lista de conversas
+inicialmente usava o componente `ScrollArea` (Radix/shadcn). O wrapper
+interno do Radix usa `display: table`, que não respeita a largura do
+contêiner pai — o item da lista crescia além dos 320px da coluna e vazava
+sob o painel da direita, cortando o timestamp visualmente (sem ellipsis,
+parecia um bug de truncamento mas era sobreposição de camadas). Troquei por
+`overflow-y-auto` simples nas duas colunas peroláveis (lista de conversas e
+histórico de mensagens) — resolve e evita a mesma armadilha no futuro.
+
+### Relatório da Fase 2 — o que mudou na prática
+
+**Antes:** para ler uma conversa monitorada era preciso abrir o lead
+individualmente no Kanban, coluna "Monitorado", um de cada vez.
+**Agora:** existe uma tela dedicada ("Monitoramento", no menu lateral, grupo
+Automação) que lista todas as conversas monitoradas com nome do colaborador,
+prévia da última mensagem e contagem — filtrável por colaborador — e ao
+clicar numa conversa mostra o histórico completo em formato de chat (bolhas
+à esquerda para o cliente, à direita para o colaborador).
+**Para validar:** Cenário P2, abaixo — já testado nesta sessão via browser
+(Chrome DevTools MCP) com dados sintéticos: lista, seleção de conversa,
+histórico em ordem cronológica correta e filtro por colaborador, todos
+funcionando.
 
 ---
 
@@ -183,11 +224,20 @@ conversas + painel de mensagens com bolhas — usando dados já existentes.
   correto via JOIN, e filtro `?instance_id=` isolando só a conversa certa.
 
 ### Cenário P2 — Tela lista e exibe conversas
-- [ ] Abrir a tela nova
-- [ ] Confirmar: lista de conversas aparece, agrupável/filtrável por
+- [x] Abrir a tela nova
+- [x] Confirmar: lista de conversas aparece, agrupável/filtrável por
   colaborador ou instância
-- [ ] Selecionar uma conversa → confirmar histórico de texto real aparece,
+- [x] Selecionar uma conversa → confirmar histórico de texto real aparece,
   com bolhas diferenciando lead x colaborador
+- **Validado em:** 08/09/2026 — testado ao vivo via Chrome DevTools MCP
+  (frontend-crm local na porta 8081, backend-crm :8000, backend-core :8001)
+  com 2 instâncias/colaboradores e 2 leads sintéticos (inseridos e removidos
+  só na cópia local de `crm.db` desta worktree). Confirmado: lista ordenada
+  pela última mensagem, avatar com iniciais, preview e contagem corretos,
+  seleção de conversa carrega histórico em ordem cronológica (mais antiga no
+  topo), bolhas do lead à esquerda e do colaborador à direita, filtro por
+  colaborador (`Select`) restringe a lista corretamente e limpa a seleção
+  quando a conversa selecionada sai do filtro.
 
 ---
 

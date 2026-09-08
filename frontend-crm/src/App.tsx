@@ -22,6 +22,7 @@ import Playground from "./pages/Playground";
 import Onboarding from "./pages/Onboarding";
 import SpyAgent from "./pages/SpyAgent";
 import Agenda from "./pages/Agenda";
+import CollabMonitorInbox from "./pages/CollabMonitorInbox";
 import { ThemeProvider } from "./contexts/ThemeContext";
 import { LeadsProvider } from "./contexts/LeadsContext";
 import { RateLimitModalProvider } from "./contexts/RateLimitModalContext";
@@ -153,6 +154,7 @@ const App = () => (
                   <Route path="/follow-ups" element={<FollowUpCenter />} />
                   <Route path="/playground" element={<Playground />} />
                   <Route path="/agenda" element={<Agenda />} />
+                  <Route path="/monitoramento" element={<CollabMonitorInbox />} />
                 </Route>
 
                 {/* Rotas do Agente Orion — layout próprio (sem sidebar) */}
