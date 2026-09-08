@@ -169,7 +169,7 @@ conversas + painel de mensagens com bolhas — usando dados já existentes.
 
 | # | Commit | O que foi implementado |
 |---|---|---|
-| 1 | `pendente` | frontend: tela de monitoramento estilo WhatsApp Web |
+| 1 | `45c44e5` | frontend: tela de monitoramento estilo WhatsApp Web |
 
 **Detalhes do commit:**
 - `frontend-crm/src/pages/CollabMonitorInbox.tsx` — página nova: coluna
