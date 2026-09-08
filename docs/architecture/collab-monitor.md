@@ -96,8 +96,8 @@ event="messages" → is_monitor_instance(instance_id)?
   lead, `model='human_agent'` para a mensagem que o próprio colaborador
   envia (`fromMe`) — nunca confundido com resposta de IA (`model=<llm
   model>` no fluxo real).
-- Mensagens sem texto (mídia) ainda não têm tratamento dedicado — ver
-  "Ajustes futuros" no final.
+- Mensagens de mídia (áudio/imagem/vídeo/figurinha/documento/reação) — ver
+  seção "Tratamento de mídia" abaixo.
 
 ---
 
@@ -192,15 +192,67 @@ Continua **completamente isolado** do pipeline de IA real: nunca chama
 
 ---
 
+## Tratamento de mídia (áudio/imagem/vídeo/figurinha/documento/reação)
+
+`handle_monitor_inbound()` nunca descarta uma mensagem por falta de texto —
+áudio e imagem passam por IA (transcrição/descrição); vídeo, figurinha,
+documento e reação não (mesmo comportamento do pipeline real de bot — ver
+`inbound_handler.py::_apply_media_fallback`), mas deixam um placeholder no
+histórico em vez de sumir (`[Vídeo]`, `[Figurinha]`, `[Documento]`,
+`[Reação]`).
+
+```
+mensagem sem texto
+  ├─ áudio/imagem com media_url resolvido?
+  │    → salva placeholder "(processando…)" + enfileira job
+  │      collab_monitor.media.process
+  │    → classify.local só é enfileirado DEPOIS do processamento
+  │      (media_worker.py), nunca na hora — só existe texto real após
+  │      transcrição/descrição
+  └─ vídeo/figurinha/documento/reação, ou áudio/imagem sem media_url →
+       salva placeholder fixo na hora; classify.local enfileirado
+       imediatamente (se não for from_me), igual ao caminho de texto normal
+```
+
+**`services/collab_monitor/media_worker.py::process_pending_collab_monitor_media_jobs()`**
+(mesmo padrão CAS/retry/loop-no-lifespan de `spy.media.process` e
+`collab_monitor.classify.local`):
+- **Áudio:** gate por `ai_profile.audio_transcription_enabled` (mesmo toggle
+  de conta do pipeline real) — se desligado, salva placeholder explicando o
+  motivo, sem chamar Whisper. Se ligado, resolve a URL pública via UazAPI
+  (`fetch_core_whatsapp_token` + `services/audio_transcription.py::download_audio_url_from_uazapi()`
+  — a URL crua do webhook costuma exigir autenticação da sessão) e transcreve
+  com `transcribe_audio_from_url()` — mesmas funções já usadas pelo pipeline
+  real de bot, zero duplicação. `messages.media_url` é atualizado com a URL
+  resolvida (mais confiável para uso futuro, ex.: tocar o áudio numa tela
+  dedicada), mas **pode expirar com o tempo** — ver
+  [`monitoramento-colaborador-midia-url-expiracao.md`](../implementations/monitoramento-colaborador-midia-url-expiracao.md).
+- **Imagem:** `services/image_description.py::describe_image_from_url()`
+  (GPT-4o-mini visão) — extraído de `spy_agent/media_processor.py` (mesmo
+  precedente de `audio_transcription.py`) para reuso entre Agente Espião e
+  monitoramento de colaborador sem duplicar a chamada à API.
+- Ambos os casos: `UPDATE messages SET body=..., media_url=...` e, se
+  `from_me=False`, enfileira `collab_monitor.classify.local` — só agora
+  existe texto real para o classificador ler.
+
+`messages.media_url` (nullable, `ensure_column`) — nova coluna, guarda a URL
+bruta/resolvida da mídia (além de `message_type`, já existente). Usado tanto
+pela classificação de estágio (via `body`) quanto por uma futura tela de
+mídia (via `media_url`).
+
+Continua **completamente isolado** do pipeline de IA real: nenhum destes
+caminhos chama orchestrator/decision_engine/guardrail de resposta.
+
+---
+
 ## Fora do escopo desta base (planejado para depois)
 
 - Tela estilo WhatsApp Web (multi-telefone, filtro por colaborador/instância,
   navegação de mídia) — ver
   [`monitoramento-colaborador-tela-whatsapp-web.md`](../implementations/monitoramento-colaborador-tela-whatsapp-web.md).
-- Tratamento de mensagens de mídia (imagem/áudio) no monitoramento — hoje
-  `handle_monitor_inbound` ignora mensagens sem texto; também limita o que a
-  classificação de estágio acima consegue enxergar. Ver
-  [`monitoramento-colaborador-midia.md`](../implementations/monitoramento-colaborador-midia.md).
+- Re-resolução de URL de mídia expirada (a URL persistida em `media_url` não
+  é permanente) — ver
+  [`monitoramento-colaborador-midia-url-expiracao.md`](../implementations/monitoramento-colaborador-midia-url-expiracao.md).
 - Débito/custo da classificação de estágio (1 chamada LLM por mensagem
   inbound, sem debounce nem contabilização contra a franquia de "conversas
   IA" do plano) — ver nota em
