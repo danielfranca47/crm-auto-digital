@@ -148,7 +148,10 @@ sinal claro de avanço.
 cadastro/gerenciamento (botão "Gerenciar colaboradores" na própria página
 `/monitoramento`, ver "Tela de leitura estilo WhatsApp Web" abaixo): nome do
 colaborador, QR/pareamento, lista de instâncias com status,
-reconectar/remover.
+reconectar/remover. Qualquer falha de rede/API (cadastro, reconexão,
+remoção, carga da lista) mostra toast destrutivo via `useToast` — erro
+`429` da UazAPI (rate limit de criação de instância) tem mensagem
+específica (`describeError()`), os demais caem numa mensagem genérica.
 
 `frontend-crm/src/components/LeadCard.tsx` exibe uma badge "Monitorado"
 sempre que `lead.collabMonitorInstanceId` não for nulo — mantém o card
