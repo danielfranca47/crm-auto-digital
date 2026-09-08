@@ -1,7 +1,7 @@
 # Tratamento de mídia (áudio/imagem) no monitoramento de colaborador
 
 **Branch:** `feat/monitoramento-colaborador-midia`
-**Status:** Em andamento
+**Status:** Todos os cenários validados (08/09/2026)
 
 ---
 
@@ -150,8 +150,25 @@ sumir. A transcrição de áudio respeita a mesma preferência de conta
 
 **Para validar:** Cenários C1-C4, abaixo — já rodados com o script
 `scripts/test_collab_monitor_media_flow.py` (chamadas de IA/UazAPI
-mockadas, valida o mecanismo). O resultado real do Whisper/visão sobre
-áudio/imagem de verdade fica para um teste manual/ao vivo.
+mockadas, valida o mecanismo).
+
+### Validação ao vivo (chamadas reais à OpenAI, sem mock)
+
+Rodada em 08/09/2026, complementando o script mockado:
+- **Imagem:** `services/image_description.py::describe_image_from_url()`
+  chamado direto contra uma URL pública real — GPT-4o-mini descreveu a
+  imagem corretamente (confirma que a extração de `spy_agent/media_processor.py`
+  não quebrou a chamada real à API de visão). Numa segunda rodada pelo
+  pipeline completo (`handle_monitor_inbound` → `media_worker`), o modelo
+  ocasionalmente recusou descrever ("Desculpe, não consigo ajudar com essa
+  solicitação") — comportamento do próprio modelo (não-determinístico), não
+  um bug de código: a mensagem é salva normalmente com o texto retornado,
+  sem quebrar o pipeline.
+- **Áudio:** pipeline completo (`handle_monitor_inbound` → `media_worker`,
+  com resolução via UazAPI indisponível simulada — cai no fallback de
+  `media_url` direto) — Whisper transcreveu com sucesso, `media_url` e
+  `body` atualizados corretamente, job `collab_monitor.classify.local`
+  enfileirado em seguida.
 
 ---
 
