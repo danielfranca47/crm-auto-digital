@@ -172,6 +172,32 @@ sem roteamento por URL e com foco/teclado corretos por padrão.
 |---|---|---|
 | 2 | `1e42ab9` | UI de paginação tradicional (conversas + mensagens) em `CollabMonitorInbox.tsx` |
 
+### Relatório da Fase 1 — o que mudou na prática
+
+**Antes:** os dois endpoints por trás da tela de monitoramento (lista de
+conversas e histórico de mensagens de uma conversa) sempre devolviam tudo de
+uma vez — sem limite.
+**Agora:** os dois aceitam parâmetros de página; quando pedidos, devolvem só
+um pedaço dos dados por vez, mais um sinalizador dizendo se há mais itens
+depois. A rota de mensagens continua devolvendo tudo de uma vez para quem não
+pedir paginação (Kanban, prospecção) — nada mudou para essas telas.
+**Para validar:** Cenário C3, abaixo (regressão nas outras telas que usam a
+mesma rota de mensagens).
+
+### Relatório da Fase 2 — o que mudou na prática
+
+**Antes:** a tela de Monitoramento (`/monitoramento`) carregava de uma vez
+todas as conversas monitoradas e, ao abrir uma conversa, todo o histórico de
+mensagens — sem nenhum controle de página.
+**Agora:** tanto a lista de conversas (à esquerda) quanto o histórico de
+mensagens de uma conversa (à direita) mostram um pedaço por vez (20
+conversas, 30 mensagens), com botões "Anterior"/"Próxima" no rodapé/topo de
+cada lista. Trocar de colaborador no filtro ou de conversa selecionada volta
+automaticamente para a primeira página. O filtro de colaborador continua
+mostrando todos os colaboradores cadastrados, não só os que aparecem na
+página atual de conversas.
+**Para validar:** Cenários C1, C2 e C3, abaixo.
+
 ---
 
 ## Checks de Validação
