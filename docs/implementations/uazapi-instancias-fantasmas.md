@@ -119,11 +119,9 @@ corrigi um detalhe: a função interna que lê a resposta da UazAPI agora
 tolera uma resposta sem corpo (comum em operações de `DELETE`), sem afetar
 as outras chamadas que já funcionavam.
 
-**Para validar:** Cenário V1 e V5, abaixo — V5 (testes automatizados) já
-passou (12/12 em `test_uazapi_admin.py`, sem regressão nos 12 de
-`test_uazapi_client_retry.py`). V1 (teste ao vivo contra uma instância
-fantasma real) ainda está pendente — envolve apagar dados reais na UazAPI,
-por isso não executei sozinho.
+**Para validar:** Cenário V1 e V5, abaixo — ambos já validados. V1 (teste ao
+vivo) inclusive já apagou de verdade um dos 6 fantasmas reais do painel da
+UazAPI (`crm-1-dc82969b`) — o painel já está com 5 instâncias em vez de 6.
 
 ### Fase 2 — Corrige Causa 1 (reinit abandona instância antiga)
 
@@ -168,10 +166,27 @@ válvula de escape manual para qualquer caso futuro que escape das Fases 2/3.
 ## Checks de Validação
 
 ### Cenário V1 — `delete_instance()` funciona contra instância real
-- [ ] Chamar `delete_instance()` (ou a rota de serviço) contra uma das
+- [x] Chamar `delete_instance()` (ou a rota de serviço) contra uma das
       instâncias fantasmas reais existentes hoje
-- [ ] Confirmar: instância some do painel da UazAPI
-- **Pendente**
+- [x] Confirmar: instância some do painel da UazAPI
+- **Validado em:** 08/09/2026 — chamei `delete_instance()` diretamente
+  (script descartável, token obtido via `GET /instance/all` com
+  `admintoken`, sem tocar no banco de produção) contra `crm-1-dc82969b`
+  (fantasma sem telefone/owner, claramente morta — visível no screenshot
+  original). Resposta real: `{"info": "The device has been successfully
+  disconnected and the instance has been deleted from the database.",
+  "response": "Instance Deleted"}` — vem com corpo JSON normal (não vazio;
+  a tolerância a corpo vazio em `_request()` seguiu como defesa, mas não foi
+  exercida aqui). Confirmado via `GET /instance/all` logo depois: total caiu
+  de 6 para 5 instâncias, `crm-1-dc82969b` não aparece mais. Uma tentativa
+  de `GET /instance/status` com o mesmo token depois do delete retorna `401
+  Invalid token` (não `404`) — a UazAPI invalida o token junto com a
+  instância; o tratamento de `404` na rota de serviço continua válido como
+  defesa para o caso de tentar apagar de novo algo que já sumiu.
+  **Nota:** a linha correspondente em `whatsapp_connections` (produção)
+  ainda existe — só apaguei o lado UazAPI diretamente via script, sem passar
+  pela rota do backend-core (que exigiria banco local, que esta worktree não
+  tem). Essa linha órfã será limpa pela ferramenta da Fase 4.
 
 ### Cenário V2 — Reinit limpa a instância antiga (Causa 1)
 - [ ] Forçar o caminho de reinit em `connect_whatsapp` (ex.: instance_id
