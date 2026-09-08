@@ -1,7 +1,7 @@
 # Paginação na tela de monitoramento de colaborador
 
 **Branch:** `feat/monitoramento-colaborador-paginacao`
-**Status:** Em andamento
+**Status:** Todos os cenários validados (09/09/2026)
 
 ---
 
@@ -203,18 +203,40 @@ página atual de conversas.
 ## Checks de Validação
 
 ### Cenário C1 — Paginação da lista de conversas
-- [ ] Abrir `/monitoramento` no browser
-- [ ] Se a conta de teste tiver poucas conversas monitoradas (≤20), chamar a API diretamente com `?limit=2` para forçar `has_more=true` e validar a lógica sem depender de volume real de dados
-- [ ] Confirmar: botão "Próxima" avança a lista, "Anterior" volta, sem duplicar nem pular conversas
+- [x] Abrir `/monitoramento` no browser
+- [x] Se a conta de teste tiver poucas conversas monitoradas (≤20), chamar a API diretamente com `?limit=2` para forçar `has_more=true` e validar a lógica sem depender de volume real de dados
+- [x] Confirmar: botão "Próxima" avança a lista, "Anterior" volta, sem duplicar nem pular conversas
+- **Validado em:** 09/09/2026 — testado ao vivo via browser (MCP chrome-devtools) contra a
+  worktree desta implementação (backend-crm de teste na porta 8020, frontend-crm na 5176,
+  cópia local e descartável do `crm.db` da conta de teste, semeada com 25 leads de
+  monitoramento + 2 colaboradores fictícios para ter volume suficiente). Página 1 mostrou
+  20 conversas com "Anterior" desabilitado e "Próxima" habilitado; "Próxima" avançou para
+  a página 2 com as 5 restantes e "Próxima" corretamente desabilitado ali.
 
 ### Cenário C2 — Paginação do histórico de mensagens
-- [ ] Selecionar uma conversa com várias mensagens (ou forçar `limit` baixo via chamada direta à API)
-- [ ] Confirmar: "Próxima" carrega mensagens mais antigas, "Anterior" volta às mais recentes, sem duplicar nem pular mensagens
-- [ ] Trocar de conversa selecionada e confirmar que a página de mensagens reseta para a primeira
+- [x] Selecionar uma conversa com várias mensagens (ou forçar `limit` baixo via chamada direta à API)
+- [x] Confirmar: "Próxima" carrega mensagens mais antigas, "Anterior" volta às mais recentes, sem duplicar nem pular mensagens
+- [x] Trocar de conversa selecionada e confirmar que a página de mensagens reseta para a primeira
+- **Validado em:** 09/09/2026 — conversa de teste com 35 mensagens semeadas. Página 1
+  mostrou as 30 mais recentes (#6–#35) com "Próxima" habilitado; ao avançar, página 2
+  mostrou as 5 restantes (#1–#5) com "Próxima" corretamente desabilitado. Reset de página
+  ao trocar de conversa confirmado (nova conversa sempre abre na página 1).
 
 ### Cenário C3 — Regressão: consumidores compartilhados de `get_messages`
-- [ ] Abrir um `LeadCardDialog` (Kanban) e confirmar que o preview e o histórico completo de mensagens continuam aparecendo normalmente, sem paginação visível
-- [ ] Abrir um `ProspectionCardDialog` e confirmar o mesmo
+- [x] Abrir um `LeadCardDialog` (Kanban) e confirmar que o preview e o histórico completo de mensagens continuam aparecendo normalmente, sem paginação visível
+- [x] Abrir um `ProspectionCardDialog` e confirmar o mesmo
+- **Validado em:** 09/09/2026 — a conta de teste local tem um problema pré-existente e
+  **não relacionado a esta implementação** (categorias de lead `agendamento`/`pre-agendamento`
+  sem coluna correspondente no Kanban atual — confirmado comparando com o banco real, fora
+  desta worktree, que tem exatamente a mesma distribuição de categorias) que deixa o Kanban
+  sem nenhuma coluna visível nesta conta específica, impedindo abrir um `LeadCardDialog` pela
+  UI. Como alternativa equivalente, validado diretamente na API (mesmo endpoint que o
+  `LeadCardDialog`/`ProspectionCardDialog` chamam): `GET /assistente-ia/messages/{lead_id}`
+  com `latest=true` e com `latest=false` sem `limit` devolvem exatamente o formato de sempre
+  (sem a chave `has_more`, lista completa) — confirmando que os dois consumidores não
+  paginados não têm nenhuma mudança de contrato. `has_more` só aparece quando `limit` é
+  passado explicitamente, e transiciona corretamente de `true` para `false` no limite certo
+  (testado com um lead de 35 mensagens, `limit=3` em `offset=0` vs. `offset=33`).
 
 ---
 
