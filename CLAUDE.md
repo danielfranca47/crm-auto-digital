@@ -99,6 +99,15 @@ WhatsApp → UazAPI → POST /webhooks/whatsapp/inbound
   → job enfileirado → backend-executors → UazAPI → WhatsApp
 ```
 
+> **Leia antes de criar/editar qualquer prompt de Mãe/Filha:** antes de mexer em
+> qualquer prompt de `decision_engine.py`, `field_extractor.py`,
+> `automations/assistente_ia/llm.py`, ou configurar blocos da Camada 7
+> (`sales_flow`), ler
+> [`docs/architecture/prompt-engineering-principles.md`](docs/architecture/prompt-engineering-principles.md)
+> (princípios/critérios de escrita) e
+> [`docs/prompts_llms.md`](docs/prompts_llms.md) (mapa técnico de cada prompt
+> real e suas variáveis).
+
 ### Paridade Playground ↔ WhatsApp Real
 
 > **Leia antes de alterar:** `routes/playground.py`, `services/whatsapp_inbound/inbound_handler.py`, `routes/executor.py` ou `services/ai_orchestrator/orchestrator.py`.
@@ -279,6 +288,8 @@ Os arquivos abaixo descrevem a estrutura **atual** de cada área do sistema. Ler
 | [`docs/architecture/webhooks.md`](docs/architecture/webhooks.md) | Webhook inbound WhatsApp: filtros, fluxo, grupos ignorados |
 | [`docs/architecture/playground-parity.md`](docs/architecture/playground-parity.md) | Paridade Playground ↔ WhatsApp real (ContextBundle) |
 | [`docs/architecture/admin-agents-contract.md`](docs/architecture/admin-agents-contract.md) | Contrato AdminAgents frontend ↔ backend |
+| [`docs/architecture/prompt-engineering-principles.md`](docs/architecture/prompt-engineering-principles.md) | Princípios/critérios para escrever ou revisar prompts de Mãe/Filha (guardrail vs. prompt, positivo vs. negativo, few-shot, etc.) |
+| [`docs/prompts_llms.md`](docs/prompts_llms.md) | Mapa técnico de todos os prompts reais do sistema: variáveis injetadas, blocos condicionais, regras críticas por prompt |
 
 **Intenções futuras e roadmaps:** [`docs/plans/`](docs/plans/)
 **Setup e operação:** [`docs/ops/`](docs/ops/)
