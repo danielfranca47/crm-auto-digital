@@ -183,6 +183,27 @@ def ensure_whatsapp_connections_columns() -> None:
                 conn.execute(text("ALTER TABLE whatsapp_connections ADD COLUMN role VARCHAR NOT NULL DEFAULT 'agent'"))
 
 
+def ensure_whatsapp_connections_unique_agent_index() -> None:
+    """Garante no máx. 1 conexão role='agent' viva por usuário — índice único
+    parcial (role='monitor' fica fora, continua N por usuário). Sintaxe
+    idêntica em SQLite/Postgres, não precisa branch por dialect. Em try/except
+    para nunca derrubar o startup caso surja alguma duplicata inesperada."""
+    try:
+        with engine.begin() as conn:
+            conn.execute(
+                text(
+                    "CREATE UNIQUE INDEX IF NOT EXISTS uq_whatsapp_connections_user_agent "
+                    "ON whatsapp_connections(user_id) WHERE role = 'agent'"
+                )
+            )
+    except Exception as exc:
+        import logging
+        logging.getLogger(__name__).warning(
+            "Não foi possível criar uq_whatsapp_connections_user_agent (pode haver duplicata role='agent'): %s",
+            exc,
+        )
+
+
 def ensure_ai_profile_columns() -> None:
     columns = {
         "agent_mode": {"default": "sdr_scheduler", "sqlite_type": "TEXT", "pg_type": "VARCHAR"},

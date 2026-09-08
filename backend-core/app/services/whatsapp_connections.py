@@ -23,6 +23,7 @@ def get_connection_for_user(db: Session, user_id: int) -> Optional[models.Whatsa
     return (
         db.query(models.WhatsappConnection)
         .filter(models.WhatsappConnection.user_id == user_id, models.WhatsappConnection.role == "agent")
+        .order_by(models.WhatsappConnection.id.desc())
         .first()
     )
 
