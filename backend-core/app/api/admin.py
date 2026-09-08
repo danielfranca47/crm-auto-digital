@@ -266,6 +266,49 @@ async def admin_reconnect_instance(
         return {"ok": False, "error": str(exc)}
 
 
+@router.delete("/instances/{instance_id}")
+async def admin_delete_instance(
+    instance_id: str,
+    db: Session = Depends(get_db),
+    _: dict = Depends(require_admin),
+) -> Dict[str, Any]:
+    """Apaga uma instância na UazAPI e remove a linha local — ação explícita
+    do admin. Diferente da rota de serviço (`DELETE /whatsapp-instances/{id}`,
+    usada pelo fluxo automático), aqui a linha local é **sempre** removida,
+    mesmo se a chamada à UazAPI falhar (ex.: instância já não existe lá) —
+    é a ferramenta de limpeza manual para fantasmas que escaparam da limpeza
+    automática, incluindo os que já existiam antes dela."""
+    conn = (
+        db.query(models.WhatsappConnection)
+        .filter(models.WhatsappConnection.instance_id == instance_id)
+        .first()
+    )
+    if not conn:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Instância não encontrada")
+
+    uazapi_deleted = False
+    error: Optional[str] = None
+    if settings.UAZAPI_BASE_URL:
+        try:
+            from app.services.uazapi_admin import delete_instance
+            from app.utils.crypto import decrypt_secret
+
+            plain_token = decrypt_secret(conn.instance_token_encrypted)
+            await delete_instance(
+                base_url=settings.UAZAPI_BASE_URL,
+                instance_token=plain_token,
+                instance_id=conn.instance_id,
+            )
+            uazapi_deleted = True
+        except Exception as exc:
+            error = str(exc)
+
+    db.delete(conn)
+    db.commit()
+
+    return {"ok": True, "uazapi_deleted": uazapi_deleted, "error": error}
+
+
 @router.post("/users", status_code=status.HTTP_201_CREATED)
 async def admin_create_user(
     body: CreateUserRequest,

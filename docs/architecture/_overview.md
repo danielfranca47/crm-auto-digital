@@ -88,6 +88,7 @@ A maioria das features altera áreas já documentadas. Antes de criar um ficheir
 | Mudança no comportamento de áudio ou mídia inválida | `webhooks.md` |
 | QR code, código de pareamento, `ConnectResponse`, `ConexaoNumero.tsx` | `whatsapp-connection.md` |
 | Uso ou rotação do `UAZAPI_ADMIN_TOKEN`, separação admin_token/instance_token | `whatsapp-connection.md` |
+| Apagar/desconectar instância na UazAPI, limpeza de instância fantasma | `whatsapp-connection.md` |
 | Novo campo no AI Profile | `agents.md` |
 | Novo motivo para `bot_disabled` | `agents.md` + `webhooks.md` |
 | Pausa geral do bot (botão no header do Kanban), kill switch de inbound, popup de retomada | `bot-global-pause.md` |

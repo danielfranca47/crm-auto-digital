@@ -219,6 +219,8 @@ async def _request(
     try:
         return response.json()
     except ValueError as exc:
+        if not response.text.strip():
+            return {}
         raise UazapiAdminError("Uazapi admin returned invalid JSON") from exc
 
 
@@ -278,6 +280,23 @@ async def get_status(
         method="GET",
         path="/instance/status",
         params=query,
+        header_name="token",
+        validate_token=False,
+    )
+
+
+async def delete_instance(
+    *,
+    base_url: str,
+    instance_token: str,
+    instance_id: str,
+) -> Dict[str, Any]:
+    return await _request(
+        base_url=base_url,
+        token=_ensure_instance_token(instance_token),
+        method="DELETE",
+        path="/instance",
+        params={"name": instance_id, "instanceId": instance_id},
         header_name="token",
         validate_token=False,
     )

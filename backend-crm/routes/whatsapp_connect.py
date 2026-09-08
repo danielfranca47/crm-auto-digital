@@ -12,6 +12,7 @@ from pydantic import BaseModel, Field
 
 from core_client import (
     connect_core_whatsapp_instance,
+    delete_core_whatsapp_instance,
     fetch_core_whatsapp_connection_me,
     init_core_whatsapp_instance,
     set_core_whatsapp_webhook,
@@ -249,17 +250,35 @@ def connect_whatsapp(
                 request_id,
                 exc.detail,
             )
+            old_instance_id = instance_id
             new_instance_id = _generate_instance_id(current_user.id)
             logger.info(
                 "whatsapp reinit user_id=%s old_instance_id=%s new_instance_id=%s request_id=%s",
                 current_user.id,
-                instance_id,
+                old_instance_id,
                 new_instance_id,
                 request_id,
             )
             init_core_whatsapp_instance(current_user.id, new_instance_id)
             raw = connect_core_whatsapp_instance(current_user.id, new_instance_id, phone=phone)
             instance_id = new_instance_id
+
+            try:
+                delete_core_whatsapp_instance(old_instance_id)
+                logger.info(
+                    "whatsapp reinit cleanup user_id=%s old_instance_id=%s request_id=%s",
+                    current_user.id,
+                    old_instance_id,
+                    request_id,
+                )
+            except Exception as cleanup_exc:
+                logger.warning(
+                    "whatsapp reinit cleanup failed (non-blocking) user_id=%s old_instance_id=%s request_id=%s error=%s",
+                    current_user.id,
+                    old_instance_id,
+                    request_id,
+                    cleanup_exc,
+                )
         else:
             raise
 

@@ -9,7 +9,7 @@ from app.services import uazapi_admin
 class _FakeResponse:
     def __init__(self, status_code: int, json_data=None, text: str = "", headers=None):
         self.status_code = status_code
-        self._json_data = json_data or {}
+        self._json_data = json_data
         self.text = text
         self.headers = headers or {}
 
@@ -18,6 +18,8 @@ class _FakeResponse:
         return self.status_code >= 400
 
     def json(self):
+        if self._json_data is None:
+            raise ValueError("no JSON body")
         return self._json_data
 
 
@@ -141,6 +143,31 @@ class UazapiAdminRetryTests(unittest.TestCase):
                 uazapi_admin.connect_instance(base_url="https://api.example.com", instance_token="tok", instance_id="inst1")
             )
         self.assertEqual(fake_client.calls, 1)
+
+    def test_delete_instance_success(self):
+        fake_client = self._patch([_FakeResponse(200, json_data={"response": "deleted"})])
+        result = self._run(
+            uazapi_admin.delete_instance(base_url="https://api.example.com", instance_token="tok", instance_id="inst1")
+        )
+        self.assertEqual(result, {"response": "deleted"})
+        self.assertEqual(fake_client.calls, 1)
+
+    def test_delete_instance_empty_body_returns_empty_dict(self):
+        fake_client = self._patch([_FakeResponse(200, text="")])
+        result = self._run(
+            uazapi_admin.delete_instance(base_url="https://api.example.com", instance_token="tok", instance_id="inst1")
+        )
+        self.assertEqual(result, {})
+        self.assertEqual(fake_client.calls, 1)
+
+    def test_delete_instance_404_raises_with_status(self):
+        fake_client = self._patch([_FakeResponse(404, text="not found")])
+        with self.assertRaises(uazapi_admin.UazapiAdminError) as ctx:
+            self._run(
+                uazapi_admin.delete_instance(base_url="https://api.example.com", instance_token="tok", instance_id="inst1")
+            )
+        self.assertEqual(fake_client.calls, 1)
+        self.assertEqual(ctx.exception.status_code, 404)
 
 
 class UazapiAdminExtractTests(unittest.TestCase):

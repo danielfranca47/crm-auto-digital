@@ -368,6 +368,27 @@ def status_core_whatsapp_instance(instance_id: str) -> Dict[str, Any]:
     return data
 
 
+def delete_core_whatsapp_instance(instance_id: str) -> None:
+    """Apaga a instância na UazAPI + remove a linha local no core. Best-effort
+    por design dos chamadores (reinit de conexão, remoção de colaborador
+    monitorado) — nunca deve bloquear o fluxo principal do usuário."""
+    if not instance_id:
+        raise HTTPException(status_code=400, detail="instance_id obrigatório")
+
+    base = _get_core_base()
+    url = f"{base}/whatsapp-instances/{instance_id}"
+    headers = _service_headers()
+
+    try:
+        with httpx.Client(timeout=20) as client:
+            resp = client.delete(url, headers=headers)
+    except httpx.RequestError as exc:
+        raise HTTPException(status_code=502, detail=f"Falha ao contatar backend-core: {exc}") from exc
+
+    if resp.status_code >= 400:
+        _raise_whatsapp_core_error(resp, "delete")
+
+
 def set_core_whatsapp_webhook(
     instance_id: str,
     url: str,

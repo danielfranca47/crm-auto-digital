@@ -203,6 +203,48 @@ Duas garantias tornam isso seguro:
 
 ---
 
+## Apagar instância / limpeza de fantasmas
+
+`uazapi_admin.delete_instance()` (`DELETE {UAZAPI_BASE_URL}/instance`, header
+`token` da própria instância) apaga a instância na UazAPI. Exposta via
+`DELETE /whatsapp-instances/{instance_id}` no backend-core (protegida por
+`_require_service_token`), que apaga na UazAPI e remove a linha local em
+`whatsapp_connections` — trata um 404 da UazAPI (instância já não existe lá)
+como sucesso em vez de erro. `backend-crm/core_client.py::delete_core_whatsapp_instance()`
+chama essa rota.
+
+Dois pontos do fluxo normal chamam essa limpeza de forma **não-bloqueante**
+(erro só gera `logger.warning`, nunca interrompe a ação principal do
+usuário):
+
+- **Reinit em `POST /api/whatsapp/connect`** (`whatsapp_connect.py`,
+  `connect_whatsapp`): quando `connect_core_whatsapp_instance()` falha com
+  5xx, o código gera um `instance_id` novo (`_generate_instance_id()`) e
+  reconecta — antes desta correção a instância antiga ficava abandonada na
+  UazAPI para sempre. Agora, depois do sucesso com a nova instância,
+  `delete_core_whatsapp_instance(old_instance_id)` é chamado para limpar a
+  antiga.
+- **Remoção de colaborador monitorado** — ver
+  [`collab-monitor.md`](collab-monitor.md#cadastro-de-instância-de-colaborador-backend-crm).
+
+**Ferramenta de limpeza manual** (para fantasmas que escaparem dos dois
+pontos acima, ou os que já existiam antes desta correção):
+`DELETE /admin/instances/{instance_id}` (`backend-core/app/api/admin.py`,
+protegida por `require_admin`) — diferente da rota de serviço acima,
+**sempre** remove a linha local mesmo se a chamada à UazAPI falhar (ex.:
+instância já não existe lá), porque é uma ação explícita do admin. Botão
+"Apagar" (com confirmação) em `frontend-admin/src/pages/AdminInstances.tsx`,
+ao lado do "Reconectar" já existente.
+
+Para auditar manualmente todas as instâncias que realmente existem na
+UazAPI (fora do nosso banco) — útil para detectar drift entre o painel
+deles e a nossa tabela `whatsapp_connections` — usar `GET
+{UAZAPI_BASE_URL}/instance/all` (header `admintoken`); não tem wrapper em
+`uazapi_admin.py` hoje por não ter caso de uso automatizado, mas é o mesmo
+padrão de `_request()`.
+
+---
+
 ## Deteção de queda de sessão
 
 `WhatsappConnection.status` não é só escrito pelos endpoints acima — a UazAPI

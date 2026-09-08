@@ -46,6 +46,18 @@ async function corePatch<T>(path: string, body?: unknown): Promise<T> {
   return res.json() as Promise<T>;
 }
 
+async function coreDelete<T>(path: string): Promise<T> {
+  const res = await fetch(`${CORE_BASE}${path}`, {
+    method: "DELETE",
+    headers: adminHeaders(),
+  });
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error((data as { detail?: string }).detail ?? `HTTP ${res.status}`);
+  }
+  return res.json() as Promise<T>;
+}
+
 async function crmGet<T>(path: string): Promise<T> {
   const res = await fetch(`${CRM_BASE}${path}`, { headers: adminHeaders() });
   if (!res.ok) {
@@ -242,6 +254,11 @@ export const api = {
   reconnectInstance: (instanceId: string) =>
     corePost<{ ok: boolean; error?: string; result?: unknown }>(
       `/admin/instances/${instanceId}/reconnect`
+    ),
+
+  deleteInstance: (instanceId: string) =>
+    coreDelete<{ ok: boolean; uazapi_deleted: boolean; error?: string | null }>(
+      `/admin/instances/${instanceId}`
     ),
 
   getAgentsOverview: () => crmGet<AgentsOverview>("/admin/agents/overview"),

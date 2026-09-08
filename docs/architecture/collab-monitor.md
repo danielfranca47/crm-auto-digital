@@ -54,7 +54,7 @@ conta, uma por colaborador.
 |---|---|
 | `POST /instances` | Cadastra colaborador + inicia conexão (QR ou código de pareamento, se `phone` informado) — cria a instância no core com `role="monitor"` |
 | `GET /instances` | Lista instâncias da conta, enriquecidas com `phone_e164`/`connection_status` ao vivo |
-| `DELETE /instances/{id}` | Remove o cadastro (não desconecta a instância no core) |
+| `DELETE /instances/{id}` | Remove o cadastro e apaga a instância na UazAPI |
 | `POST /instances/{id}/reconnect` | Reconecta via QR ou código de pareamento, preserva o cadastro |
 | `GET /conversations` | Agrega leads `category='monitoring'` por colaborador — base da tela de leitura (ver abaixo). Filtro opcional `?instance_id=` |
 
@@ -62,6 +62,13 @@ Reaproveita os mesmos helpers genéricos de conexão do core
 (`connect_core_whatsapp_instance`/`init_core_whatsapp_instance`) que o Agente
 Espião já usa — mesmo padrão de QR/pareamento de
 [`whatsapp-connection.md`](whatsapp-connection.md).
+
+`DELETE /instances/{id}` sempre remove o cadastro local primeiro (nunca
+bloqueia por causa da UazAPI); a chamada a `delete_core_whatsapp_instance()`
+que apaga a instância na UazAPI acontece depois, em `try/except`
+não-bloqueante (só loga warning em falha) — ver
+[`whatsapp-connection.md`](whatsapp-connection.md#apagar-instância--limpeza-de-fantasmas)
+para o mecanismo geral de limpeza de instância.
 
 ---
 
