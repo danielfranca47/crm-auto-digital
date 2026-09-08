@@ -1,7 +1,7 @@
 # Agente Espião — instância isolada + limpeza de instância fantasma
 
 **Branch:** `fix/spy-agent-instancia-isolada`
-**Status:** Em andamento
+**Status:** Todos os cenários validados (08/09/2026) — pendente: auditoria de contas já afetadas em produção (ver seção abaixo), a rodar antes da graduação
 
 ---
 
@@ -185,30 +185,93 @@ remove), abaixo.
 
 ---
 
+## Fase 3 — Diagnóstico + Correção: bugs revelados pelo teste ao vivo (08/09/2026)
+
+### Problema identificado
+
+Testando o Cenário P1 contra a UazAPI real (usuário de teste com WhatsApp
+principal já conectado), o QR apareceu corretamente na primeira renderização,
+mas assim que o `queryClient.invalidateQueries` disparava (logo após
+`POST /connect` retornar), a tela pulava direto para o card "já configurado"
+(status "Inactive") — escondendo o QR antes de dar tempo de escanear.
+
+Causa raiz: a Fase 1 passou a persistir `spy_agent_config` imediatamente ao
+gerar o QR (decisão deliberada, para permitir que "Novo QR code" reaproveite
+`/reconnect` em vez de precisar de um endpoint extra). Mas o ternário em
+`SpyAgentSetup.tsx` checava `instanceConfig?.configured` **antes** de
+`pendingConnect` — assim que a query invalidada confirmava que a config já
+existia (mesmo sem o WhatsApp ter sido escaneado ainda), esse branch vencia.
+
+Efeito colateral do mesmo ponto: o botão "Cancelar" durante o QR só limpava
+estado local (`setPendingConnect(null)`) — a instância já tinha sido criada
+de verdade na UazAPI (com QR real, token real) e ficava órfã, nunca
+escaneada, nunca limpa.
+
+Também notado durante o teste: para usar código de pareamento (alternativa
+ao QR), a resposta de `/connect` e `/reconnect` não extraía `pair_code` do
+payload da UazAPI — só QR era suportado, mesmo a request já aceitando
+`phone`.
+
+### Correção
+
+| Arquivo | Mudança |
+|---|---|
+| `backend-crm/routes/spy_agent.py` | `_PAIR_KEYS` + extração de `pair_code` em `_build_connect_response` (paridade com `whatsapp_connect.py`/`collab_monitor.py`) |
+| `frontend-crm/src/components/agente/SpyAgentSetup.tsx` | Ordem do ternário trocada: `pendingConnect` checado antes de `instanceConfig?.configured`; `handleCancelConnect` agora chama `api.spyAgent.removeInstanceConfig()` |
+
+### Commits Fase 3
+
+| # | Commit | O que foi implementado |
+|---|---|---|
+| 1 | `910f355` | fix: prioridade de renderização do QR + limpeza no cancelar + suporte a pair_code |
+
+### Relatório da Fase 3 — o que mudou na prática
+
+**Antes:** ao conectar o fone de observação, a tela do QR podia desaparecer
+sozinha antes de dar tempo de escanear; cancelar a conexão no meio do
+processo deixava uma instância fantasma na UazAPI (o mesmo tipo de problema
+que esta implementação inteira existe para corrigir, só que num ponto novo
+introduzido pela própria Fase 1).
+
+**Agora:** o QR fica visível até ser escaneado ou expirar de propósito;
+cancelar limpa a instância criada, sem deixar rastro. Também é possível
+conectar via código de pareamento (mesmo padrão já usado na conexão
+principal), não só QR.
+
+**Para validar:** coberto pelos mesmos Cenários P1 e P3 abaixo (re-executados
+após a correção).
+
+---
+
 ## Checks de Validação
 
 ### Cenário P1 — Isolamento da instância espiã
-- [ ] Com usuário de teste já com WhatsApp principal conectado, abrir Agente Espião → "Conectar fone de observação"
-- [ ] Confirmar: `instance_id` retornado é diferente do instance_id principal
-- [ ] Confirmar: `role='spy'` na tabela `whatsapp_connections` do core
+- [x] Com usuário de teste já com WhatsApp principal conectado, abrir Agente Espião → "Conectar fone de observação"
+- [x] Confirmar: `instance_id` retornado é diferente do instance_id principal
+- [x] Confirmar: `role='spy'` na tabela `whatsapp_connections` do core
+- **Validado em:** 08/09/2026 — usuário de teste (user_id=15, `crm-15-88e456ef`/role=agent/connected já existente) → `/connect` criou `spy-15-f684bee9`/role=spy, totalmente separado. Ponta a ponta com pareamento real (telefone 5547992163692): instância final `spy-15-f6622df7` chegou a `status=connected` sem afetar a instância principal.
 
 ### Cenário P2 — Mensagens reais não são desviadas
-- [ ] Com o fone espião conectado (instância separada confirmada), simular mensagem real ao número principal
-- [ ] Confirmar: pipeline normal roda (nada cai em `spy_agent_messages`)
+- [x] Com o fone espião conectado (instância separada confirmada), simular mensagem real ao número principal
+- [x] Confirmar: pipeline normal roda (nada cai em `spy_agent_messages`)
+- **Validado em:** 08/09/2026 — webhook simulado (`POST /webhooks/whatsapp/uazapi`) para `crm-15-88e456ef` criou lead normalmente (`lead_id=512`, `origin=whatsapp_inbound`, job enfileirado); webhook para `spy-15-f6622df7` foi capturado isoladamente em `spy_agent_messages` (`spy_msg_id=20`). Dados de teste removidos depois.
 
 ### Cenário P3 — Refresh/reconnect mantém a mesma instância
-- [ ] Deixar QR expirar, clicar "Novo QR code"
-- [ ] Confirmar: reconecta a mesma instância espiã (não gera outra)
-- [ ] Confirmar: `role` continua `spy` mesmo após reconexão por token expirado
+- [x] Deixar QR expirar, clicar "Novo QR code"
+- [x] Confirmar: reconecta a mesma instância espiã (não gera outra)
+- [x] Confirmar: `role` continua `spy` mesmo após reconexão por token expirado
+- **Validado em:** 08/09/2026 — QR expirou naturalmente, "Novo QR code" gerou novo QR mantendo `instance_id=spy-15-f684bee9` e `role=spy` inalterados no core.
 
 ### Cenário P4 — Limpeza no remove
-- [ ] Remover a instância espiã pela lixeira
-- [ ] Confirmar: instância deixou de existir na UazAPI
-- [ ] Confirmar: `GET /api/spy-agent/instance-config` volta a `configured: false`
+- [x] Remover a instância espiã pela lixeira
+- [x] Confirmar: instância deixou de existir na UazAPI
+- [x] Confirmar: `GET /api/spy-agent/instance-config` volta a `configured: false`
+- **Validado em:** 08/09/2026 — testado duas vezes: (1) instância nunca escaneada (`spy-15-f684bee9`) removida da tabela `whatsapp_connections` do core por completo ao clicar na lixeira; (2) instância real conectada (`spy-15-f6622df7`, WhatsApp 5547992163692) também removida por completo após uso, confirmando limpeza real na UazAPI (não só local).
 
 ### Cenário P5 — Troca sem passar pelo remove (defensivo)
-- [ ] Com fone já configurado, forçar nova chamada a `/connect`
-- [ ] Confirmar: instância antiga é apagada na UazAPI (non-blocking)
+- [x] Com fone já configurado, forçar nova chamada a `/connect`
+- [x] Confirmar: instância antiga é apagada na UazAPI (non-blocking)
+- **Validado em:** 08/09/2026 — havia uma instância órfã (`spy-15-1a9bcc71`, nunca escaneada) de uma sessão de browser interrompida; nova chamada a `/connect` (com `phone`, gerando pareamento) apagou essa instância antiga automaticamente antes de criar `spy-15-f6622df7`.
 
 ---
 
