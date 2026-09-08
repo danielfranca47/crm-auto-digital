@@ -209,6 +209,40 @@ futura de código, fora do escopo desta tarefa documental).
 **Para validar:** Cenário P3, abaixo — mesma natureza do P1/P2 (revisão de
 conteúdo, sem mudança de comportamento em runtime).
 
+## Fase 4 — Correção de escopo: mover achados de pesquisa para docs/plans
+
+**Objetivo:** ao revisar a Fase 3, o usuário esclareceu o propósito do
+documento — `prompt-engineering-principles.md` é conhecimento acionável
+para escrever um prompt **com o que já existe hoje**, não um lugar para
+registrar otimizações futuras ainda não implementadas (isso já tem lugar
+próprio em `docs/plans/`) nem para espelhar a estrutura real do sistema
+(isso é `prompts_llms.md`/`docs/architecture/`). A seção 9 (os 4 achados de
+pesquisa) violava essa regra — descrevia gaps de código para implementação
+futura, não critério de escrita de prompt.
+
+**O que mudou:**
+- `docs/architecture/prompt-engineering-principles.md`: seção 9 removida
+  por completo (revertida), junto do item de checklist que a referenciava.
+  O documento volta a ter só os 8 princípios/esqueleto já validados pelo
+  usuário.
+- `docs/plans/motor-llm-otimizacoes.md`: passa a ser a **única** fonte dos 4
+  achados (já continha o mesmo conteúdo, criado na resposta anterior a
+  pedido do usuário) — contexto do arquivo atualizado para não referenciar
+  mais a seção 9 removida. Itens M3 (isolar mensagem do lead) e M4
+  (reordenar prompt para cache) ganharam uma nota "Ao implementar": quando
+  esses itens virarem código de verdade, a própria implementação deve
+  voltar a `prompt-engineering-principles.md` e adicionar a instrução
+  concreta resultante — só nesse momento esse conhecimento passa a ser
+  "prática já aplicada", que é o que o documento existe para registrar.
+- Cenário P3 removido dos Checks de Validação (não há mais conteúdo na
+  seção 9 do documento de arquitetura para validar).
+
+### Commits Fase 4
+
+| # | Commit | O que foi implementado |
+|---|---|---|
+| 1 | `<pendente>` | Reversão da seção 9 + atualização do plano em docs/plans |
+
 ---
 
 ## Checks de Validação
@@ -230,14 +264,6 @@ revisão de conteúdo:
       (`decision_engine.py:2569`, `decision_engine.py:3993`,
       `decision_engine.py:1211`) ainda batem com o código real no momento
       da leitura — verificado por Claude
-
-### Cenário P3 — Revisão dos 4 achados de pesquisa (seção 9) pelo usuário
-- [ ] Usuário lê a seção "9. Achados de pesquisa aplicados ao nosso motor de
-      LLM" e confirma que os 4 achados fazem sentido e agregam valor
-- [x] (2026-09-08) Confirmar que as referências citadas (`llm_service.py:154`,
-      `llm_service.py:166-168`, bloco `FRAMEWORK`/`Missing` em
-      `_build_child_prompt_closing`) ainda batem com o código real no
-      momento da leitura — verificado por Claude
 
 ---
 
