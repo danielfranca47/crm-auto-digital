@@ -55,6 +55,7 @@ from services.followup_reconciler import (
 from services.spy_agent.observation_reconciler import reconcile_expired_observations
 from services.spy_agent.spy_media_worker import process_pending_spy_media_jobs
 from services.knowledge_ingest.ingest_worker import process_pending_knowledge_ingest_jobs
+from services.collab_monitor.classify_worker import process_pending_collab_monitor_classify_jobs
 
 logger = logging.getLogger(__name__)
 
@@ -63,6 +64,7 @@ _RECONCILER_STARTUP_DELAY = 5  # segundos de grace period antes da 1ª execuçã
 _SPY_RECONCILER_INTERVAL = int(os.getenv("SPY_AGENT_RECONCILER_INTERVAL_SECONDS", "60"))
 _SPY_MEDIA_WORKER_INTERVAL = int(os.getenv("SPY_MEDIA_WORKER_INTERVAL_SECONDS", "30"))
 _KNOWLEDGE_INGEST_WORKER_INTERVAL = int(os.getenv("KNOWLEDGE_INGEST_WORKER_INTERVAL_SECONDS", "10"))
+_COLLAB_MONITOR_CLASSIFY_WORKER_INTERVAL = int(os.getenv("COLLAB_MONITOR_CLASSIFY_WORKER_INTERVAL_SECONDS", "15"))
 
 
 async def _reconciler_loop() -> None:
@@ -163,16 +165,38 @@ async def _knowledge_ingest_worker_loop() -> None:
         await asyncio.sleep(_KNOWLEDGE_INGEST_WORKER_INTERVAL)
 
 
+async def _collab_monitor_classify_worker_loop() -> None:
+    """Processa jobs collab_monitor.classify.local (reclassificação de estágio de leads monitorados)."""
+    logger.info(
+        "[collab_monitor_classify_worker] scheduler iniciado — intervalo=%ds",
+        _COLLAB_MONITOR_CLASSIFY_WORKER_INTERVAL,
+    )
+    await asyncio.sleep(_RECONCILER_STARTUP_DELAY + 8)  # stagger após os outros
+    while True:
+        try:
+            result = await asyncio.to_thread(process_pending_collab_monitor_classify_jobs)
+            if result["processed"] > 0 or result["failed"] > 0:
+                logger.info(
+                    "[collab_monitor_classify_worker] processed=%d failed=%d",
+                    result["processed"],
+                    result["failed"],
+                )
+        except Exception as exc:
+            logger.error("[collab_monitor_classify_worker] erro inesperado: %s", exc, exc_info=True)
+        await asyncio.sleep(_COLLAB_MONITOR_CLASSIFY_WORKER_INTERVAL)
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     task = asyncio.create_task(_reconciler_loop())
     spy_task = asyncio.create_task(_spy_reconciler_loop())
     spy_media_task = asyncio.create_task(_spy_media_worker_loop())
     knowledge_ingest_task = asyncio.create_task(_knowledge_ingest_worker_loop())
+    collab_monitor_classify_task = asyncio.create_task(_collab_monitor_classify_worker_loop())
     try:
         yield
     finally:
-        for t in (task, spy_task, spy_media_task, knowledge_ingest_task):
+        for t in (task, spy_task, spy_media_task, knowledge_ingest_task, collab_monitor_classify_task):
             t.cancel()
             try:
                 await t

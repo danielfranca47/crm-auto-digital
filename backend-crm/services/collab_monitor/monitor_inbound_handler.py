@@ -20,6 +20,7 @@ import sqlite3
 from typing import Any, Dict, Optional
 
 from database import get_connection
+from services.jobs_service import TYPE_COLLAB_MONITOR_CLASSIFY, create_job
 
 logger = logging.getLogger(__name__)
 
@@ -154,5 +155,15 @@ def handle_monitor_inbound(payload: Dict[str, Any]) -> Dict[str, Any]:
         conn.commit()
     finally:
         conn.close()
+
+    if not from_me:
+        # Reclassificação de estágio roda só quando o próprio lead escreve —
+        # nunca aciona LLM nem resposta, só enfileira análise read-only
+        # (ver classify_worker.py).
+        create_job(
+            job_type=TYPE_COLLAB_MONITOR_CLASSIFY,
+            payload={"lead_id": lead_id, "user_id": user_id},
+            user_id=user_id,
+        )
 
     return {"status": "ok", "lead_id": lead_id, "message_id": message_id}
