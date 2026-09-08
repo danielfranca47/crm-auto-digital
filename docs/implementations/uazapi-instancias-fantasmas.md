@@ -157,6 +157,24 @@ propositalmente (não acontece em uso normal).
 | `backend-crm/routes/collab_monitor.py` | Em `delete_collab_monitor_instance`, antes de apagar o cadastro local, chama `delete_core_whatsapp_instance()` em `try/except` não-bloqueante |
 | `docs/architecture/collab-monitor.md` | Reescrever a linha que hoje diz "não desconecta a instância no core" |
 
+### Commits Fase 3
+
+| # | Commit | O que foi implementado |
+|---|---|---|
+| 1 | `ebd31fe` | `delete_collab_monitor_instance()` apaga a instância na UazAPI (não-bloqueante) + doc |
+
+### Relatório da Fase 3 — o que mudou na prática
+
+**Antes:** remover um colaborador da tela de monitoramento só apagava o
+cadastro no nosso sistema — a instância dele continuava ativa (ocupando
+vaga) na UazAPI para sempre.
+
+**Agora:** remover um colaborador também manda apagar a instância dele na
+UazAPI, depois de remover o cadastro local (a remoção local nunca fica
+bloqueada por causa da UazAPI).
+
+**Para validar:** Cenário V3, abaixo.
+
 ### Fase 4 — Ferramenta de limpeza manual (painel admin)
 
 **Objetivo:** permitir apagar os 6 fantasmas já existentes hoje, e servir de
