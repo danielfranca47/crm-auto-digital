@@ -19,12 +19,14 @@ import os
 import re
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional
+from uuid import uuid4
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
 from core_client import (
     connect_core_whatsapp_instance,
+    delete_core_whatsapp_instance,
     fetch_core_whatsapp_connection_resolve,
     init_core_whatsapp_instance,
     set_core_whatsapp_webhook,
@@ -44,6 +46,7 @@ router = APIRouter(prefix="/api/spy-agent", tags=["SpyAgent"])
 # ---------------------------------------------------------------------------
 
 _QR_KEYS = {"qrcode", "qrCode", "qr_code"}
+_PAIR_KEYS = {"paircode", "pairCode", "pair_code"}
 
 
 def _find_in_payload(payload: Any, keys: set) -> Optional[str]:
@@ -110,6 +113,52 @@ def _build_spy_webhook_url() -> Optional[str]:
         return None
     return f"{base.rstrip('/')}/webhooks/whatsapp/uazapi?secret={secret}"
 
+
+def _sanitize_phone(value: Optional[str]) -> Optional[str]:
+    if not value:
+        return None
+    sanitized = re.sub(r"[\s\-\+\(\)]", "", value)
+    return sanitized or None
+
+
+def _generate_spy_instance_id(user_id: int) -> str:
+    """Gera um instance_id dedicado ao fone de observação — nunca reaproveita
+    a instância principal do usuário (ver DELETE /instance-config e POST
+    /connect abaixo, e docs/architecture/whatsapp-connection.md, seção
+    "Multi-instância por conta: role")."""
+    return f"spy-{user_id}-{uuid4().hex[:8]}"
+
+
+def _set_spy_webhook(instance_id: str) -> None:
+    webhook_url = _build_spy_webhook_url()
+    if not webhook_url:
+        logger.warning("[spy_agent] CRM_PUBLIC_BASE_URL/CRM_WEBHOOK_SECRET ausente — webhook não configurado")
+        return
+    try:
+        set_core_whatsapp_webhook(
+            instance_id,
+            webhook_url,
+            ["messages", "connection"],
+            False,
+            True,
+            ["wasSentByApi", "isGroupYes"],
+        )
+    except Exception as exc:
+        logger.warning("[spy_agent] falha ao configurar webhook instance=%s error=%s", instance_id, exc)
+
+
+def _build_connect_response(raw: Dict[str, Any], instance_id: str) -> Dict[str, Any]:
+    qr_value = _find_in_payload(raw, _QR_KEYS)
+    qr_kind = _infer_qr_kind(qr_value) if qr_value else None
+    pair_code = _find_in_payload(raw, _PAIR_KEYS)
+    status_value = _normalize_status_raw(raw)
+    return {
+        "instance_id": instance_id,
+        "status": status_value,
+        "qr": {"kind": qr_kind, "value": qr_value},
+        "pair_code": pair_code,
+    }
+
 # ---------------------------------------------------------------------------
 # Modelos de entrada/saída
 # ---------------------------------------------------------------------------
@@ -124,6 +173,10 @@ class SpyAgentStartRequest(BaseModel):
 
 class SpyAgentInstanceConfigRequest(BaseModel):
     spy_instance_id: str
+
+
+class SpyAgentConnectRequest(BaseModel):
+    phone: Optional[str] = None
 
 
 class SpyAgentApplySuggestion(BaseModel):
@@ -160,6 +213,21 @@ def _compute_end_at(observation_days: int) -> str:
     days = observation_days if observation_days > 0 else 1
     end = datetime.now(timezone.utc) + timedelta(days=days)
     return end.replace(microsecond=0).isoformat()
+
+
+def _upsert_spy_instance_config(conn, user_id: int, spy_instance_id: str) -> None:
+    now = _now_utc_iso()
+    conn.execute(
+        """
+        INSERT INTO spy_agent_config (user_id, spy_instance_id, created_at, updated_at)
+        VALUES (?, ?, ?, ?)
+        ON CONFLICT(user_id) DO UPDATE SET
+            spy_instance_id = excluded.spy_instance_id,
+            updated_at = excluded.updated_at
+        """,
+        (user_id, spy_instance_id, now, now),
+    )
+    conn.commit()
 
 
 def _get_active_run(user_id: int, conn) -> Optional[Dict[str, Any]]:
@@ -342,18 +410,7 @@ async def start_spy_agent(
 
         # Salva instância espiã se fornecida
         if body.spy_instance_id:
-            now = _now_utc_iso()
-            conn.execute(
-                """
-                INSERT INTO spy_agent_config (user_id, spy_instance_id, created_at, updated_at)
-                VALUES (?, ?, ?, ?)
-                ON CONFLICT(user_id) DO UPDATE SET
-                    spy_instance_id = excluded.spy_instance_id,
-                    updated_at = excluded.updated_at
-                """,
-                (current_user.id, body.spy_instance_id, now, now),
-            )
-            conn.commit()
+            _upsert_spy_instance_config(conn, current_user.id, body.spy_instance_id)
 
         run = dict(conn.execute("SELECT * FROM spy_agent_runs WHERE id = ?", (run_id,)).fetchone())
         return _build_session_response(run, [])
@@ -497,24 +554,69 @@ async def set_instance_config(
     current_user: CurrentUser = Depends(require_crm_access),
 ) -> Dict[str, Any]:
     """Define (ou atualiza) a instância WhatsApp a ser observada pelo Agente Espião."""
-    now = _now_utc_iso()
     conn = get_connection()
     try:
-        conn.execute(
-            """
-            INSERT INTO spy_agent_config (user_id, spy_instance_id, created_at, updated_at)
-            VALUES (?, ?, ?, ?)
-            ON CONFLICT(user_id) DO UPDATE SET
-                spy_instance_id = excluded.spy_instance_id,
-                updated_at = excluded.updated_at
-            """,
-            (current_user.id, body.spy_instance_id, now, now),
-        )
-        conn.commit()
+        _upsert_spy_instance_config(conn, current_user.id, body.spy_instance_id)
     finally:
         conn.close()
 
     return {"ok": True, "spy_instance_id": body.spy_instance_id}
+
+
+@router.post("/connect")
+async def connect_spy_instance(
+    body: SpyAgentConnectRequest = SpyAgentConnectRequest(),
+    current_user: CurrentUser = Depends(require_crm_access),
+) -> Dict[str, Any]:
+    """
+    Conecta um fone de observação dedicado para o Agente Espião: sempre cria
+    uma instância UazAPI nova e isolada (role="spy") — nunca reaproveita a
+    instância principal do usuário (diferente de POST /api/whatsapp/connect,
+    que resolve a conexão já existente do usuário quando há uma).
+    Se já havia uma instância espiã configurada, a antiga é apagada na UazAPI
+    de forma não-bloqueante após a nova ser criada com sucesso.
+    """
+    conn = get_connection()
+    try:
+        existing_row = conn.execute(
+            "SELECT spy_instance_id FROM spy_agent_config WHERE user_id = ?",
+            (current_user.id,),
+        ).fetchone()
+    finally:
+        conn.close()
+
+    old_instance_id = existing_row["spy_instance_id"] if existing_row else None
+
+    instance_id = _generate_spy_instance_id(current_user.id)
+    init_core_whatsapp_instance(current_user.id, instance_id, role="spy")
+    raw = connect_core_whatsapp_instance(current_user.id, instance_id, phone=_sanitize_phone(body.phone))
+
+    _set_spy_webhook(instance_id)
+
+    conn = get_connection()
+    try:
+        _upsert_spy_instance_config(conn, current_user.id, instance_id)
+    finally:
+        conn.close()
+
+    if old_instance_id and old_instance_id != instance_id:
+        try:
+            delete_core_whatsapp_instance(old_instance_id)
+            logger.info(
+                "[spy_agent:connect] instância antiga apagada user=%s old_instance=%s",
+                current_user.id,
+                old_instance_id,
+            )
+        except Exception as exc:
+            logger.warning(
+                "[spy_agent:connect] falha ao apagar instância antiga (não-bloqueante) user=%s old_instance=%s error=%s",
+                current_user.id,
+                old_instance_id,
+                exc,
+            )
+
+    logger.info("[spy_agent:connect] user=%s instance=%s", current_user.id, instance_id)
+    return _build_connect_response(raw, instance_id)
 
 
 @router.delete("/session")
@@ -559,9 +661,14 @@ async def dismiss_spy_agent_session(
 async def delete_instance_config(
     current_user: CurrentUser = Depends(require_crm_access),
 ) -> Dict[str, Any]:
-    """Remove a instância espiã configurada."""
+    """Remove a instância espiã configurada e apaga a instância na UazAPI
+    (non-blocking — mesmo padrão de collab_monitor.py::delete_collab_monitor_instance)."""
     conn = get_connection()
     try:
+        row = conn.execute(
+            "SELECT spy_instance_id FROM spy_agent_config WHERE user_id = ?",
+            (current_user.id,),
+        ).fetchone()
         conn.execute(
             "DELETE FROM spy_agent_config WHERE user_id = ?",
             (current_user.id,),
@@ -569,6 +676,17 @@ async def delete_instance_config(
         conn.commit()
     finally:
         conn.close()
+
+    if row and row["spy_instance_id"]:
+        try:
+            delete_core_whatsapp_instance(row["spy_instance_id"])
+        except Exception as exc:
+            logger.warning(
+                "[spy_agent] falha ao apagar instância na UazAPI (não-bloqueante) user=%s instance=%s error=%s",
+                current_user.id,
+                row["spy_instance_id"],
+                exc,
+            )
 
     return {"ok": True}
 
@@ -609,44 +727,24 @@ async def reconnect_spy_instance(
             "[spy_agent:reconnect] token expirado para %s — reiniciando instância", spy_instance_id
         )
         try:
-            init_core_whatsapp_instance(current_user.id, spy_instance_id)
+            init_core_whatsapp_instance(current_user.id, spy_instance_id, role="spy")
             raw = connect_core_whatsapp_instance(current_user.id, spy_instance_id)
         except HTTPException as exc2:
             logger.error("[spy_agent:reconnect] falha após reinit %s: %s", spy_instance_id, exc2.detail)
             raise
 
     # Reconfigura webhook para garantir que mensagens continuem chegando
-    webhook_url = _build_spy_webhook_url()
-    if webhook_url:
-        try:
-            set_core_whatsapp_webhook(
-                spy_instance_id,
-                webhook_url,
-                ["messages", "connection"],
-                False,
-                True,
-                ["wasSentByApi", "isGroupYes"],
-            )
-        except Exception as exc:
-            logger.warning("[spy_agent:reconnect] falha ao reconfigurar webhook: %s", exc)
+    _set_spy_webhook(spy_instance_id)
 
-    qr_value = _find_in_payload(raw, _QR_KEYS)
-    qr_kind = _infer_qr_kind(qr_value) if qr_value else None
-    status_value = _normalize_status_raw(raw)
-
+    response = _build_connect_response(raw, spy_instance_id)
     logger.info(
         "[spy_agent:reconnect] user=%s instance=%s status=%s qr_present=%s",
         current_user.id,
         spy_instance_id,
-        status_value,
-        bool(qr_value),
+        response["status"],
+        bool(response["qr"]["value"]),
     )
-
-    return {
-        "instance_id": spy_instance_id,
-        "status": status_value,
-        "qr": {"kind": qr_kind, "value": qr_value},
-    }
+    return response
 
 
 @router.get("/reconnect/status")

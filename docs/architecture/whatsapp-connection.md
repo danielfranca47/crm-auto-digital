@@ -181,12 +181,14 @@ global) até o token novo ser propagado. Runbook de rotação:
 
 ---
 
-## Multi-instância por conta: `role` (agent vs. monitor)
+## Multi-instância por conta: `role` (agent vs. monitor vs. spy)
 
 Uma conta pode ter mais de uma `WhatsappConnection` — a instância do agente
-(`role="agent"`, default) e, opcionalmente, instâncias de monitoramento de
-colaborador (`role="monitor"`, ver [`collab-monitor.md`](collab-monitor.md)).
-Várias garantias tornam isso seguro:
+(`role="agent"`, default), instâncias de monitoramento de colaborador
+(`role="monitor"`, ver [`collab-monitor.md`](collab-monitor.md)) e,
+opcionalmente, um "fone de observação" do Agente Espião (`role="spy"`, ver
+seção "Agente Espião: instância isolada", abaixo). Várias garantias tornam
+isso seguro:
 
 - `connections_service.upsert_connection()`/`upsert_connection_optional_token()`
   resolvem a linha existente por **`instance_id`**, nunca por `user_id` —
@@ -195,8 +197,10 @@ Várias garantias tornam isso seguro:
   `app/db.py`, chamado no `on_startup()` após `ensure_whatsapp_connections_columns()`):
   `CREATE UNIQUE INDEX ... ON whatsapp_connections(user_id) WHERE role = 'agent'`
   — impede fisicamente uma 2ª linha `role='agent'` para o mesmo `user_id`;
-  `role='monitor'` fica fora do índice e continua sem limite (uma por
-  colaborador). Sintaxe idêntica em SQLite/Postgres. Roda dentro de
+  `role='monitor'` e `role='spy'` ficam fora do índice — monitor sem limite
+  (uma por colaborador), spy limitado a uma por conta só na camada de
+  aplicação (`spy_agent_config.user_id`, ver "Agente Espião: instância
+  isolada", abaixo). Sintaxe idêntica em SQLite/Postgres. Roda dentro de
   `try/except` com log de warning — nunca derruba o startup, mesmo que
   surja alguma duplicata inesperada no futuro.
 - `get_connection_for_user()` (usado por `GET /whatsapp-connections/resolve-by-user`,
@@ -224,7 +228,7 @@ Várias garantias tornam isso seguro:
 como sucesso em vez de erro. `backend-crm/core_client.py::delete_core_whatsapp_instance()`
 chama essa rota.
 
-Dois pontos do fluxo normal chamam essa limpeza de forma **não-bloqueante**
+Três pontos do fluxo normal chamam essa limpeza de forma **não-bloqueante**
 (erro só gera `logger.warning`, nunca interrompe a ação principal do
 usuário):
 
@@ -237,6 +241,9 @@ usuário):
   antiga.
 - **Remoção de colaborador monitorado** — ver
   [`collab-monitor.md`](collab-monitor.md#cadastro-de-instância-de-colaborador-backend-crm).
+- **Agente Espião** — `DELETE /api/spy-agent/instance-config` (remoção pelo
+  utilizador) e `POST /api/spy-agent/connect` (troca de fone sem passar pelo
+  remove) — ver "Agente Espião: instância isolada", abaixo.
 
 **Ferramenta de limpeza manual** (para fantasmas que escaparem dos dois
 pontos acima, ou os que já existiam antes desta correção):
@@ -301,12 +308,48 @@ avisando para não usar WhatsApp Web/Desktop no número ligado ao CRM.
 
 ---
 
+## Agente Espião: instância isolada
+
+`backend-crm/routes/spy_agent.py` tem seu próprio ciclo de vida de conexão,
+com helpers próprios (`_find_in_payload`, `_infer_qr_kind`,
+`_normalize_status_raw`, `_build_connect_response`), independente de
+`whatsapp_connect.py` — mas **nunca** reaproveita `POST /api/whatsapp/connect`:
+
+| Rota | Corpo aceito | Descrição |
+|---|---|---|
+| `POST /api/spy-agent/connect` | `{"phone"?: string}` | Sempre gera um `instance_id` novo (`spy-{user_id}-{sufixo}`) e chama `init_core_whatsapp_instance(role="spy")` — nunca resolve a conexão existente do usuário, ao contrário de `whatsapp_connect.py::_resolve_instance_id()`. Persiste `spy_agent_config` **imediatamente**, antes mesmo do QR/código ser confirmado (permite que `/reconnect` seja reaproveitado para "Novo QR code" sem endpoint extra) |
+| `POST /api/spy-agent/reconnect` | — | Reconecta a instância já configurada; se o token expirou (401), reinit passando `role="spy"` explicitamente — sem isso, o reinit cairia no default `role="agent"` de `init_core_whatsapp_instance()` |
+| `GET /api/spy-agent/reconnect/status` | — | Status normalizado da instância espiã especificamente (usado no polling do frontend — nunca usar `GET /api/whatsapp/status`, que resolve a instância **principal**) |
+| `DELETE /api/spy-agent/instance-config` | — | Apaga a linha local **e** a instância na UazAPI (`delete_core_whatsapp_instance`, non-blocking) |
+
+**Por que isolamento dedicado é obrigatório aqui:** diferente do fluxo
+principal, o "fone de observação" do Agente Espião é conceitualmente um
+número **diferente** do WhatsApp usado pelo agente de vendas real — o texto
+da UI já dizia isso ("Conecte um telefone diferente do seu CRM"), mas antes
+desta correção o endpoint usado (`/api/whatsapp/connect`) resolvia a conexão
+**já existente** do usuário quando havia uma. Como a maioria dos usuários
+que chegam ao Agente Espião já têm o WhatsApp principal conectado, isso
+fazia o "fone espião" virar silenciosamente a mesma instância do agente
+real — e como `routes/webhooks.py` verifica `is_spy_instance(instance_id)`
+**antes** do pipeline normal de inbound, toda mensagem real do WhatsApp do
+usuário passava a ser desviada só para `spy_agent_messages`, deixando o bot
+real mudo sem qualquer erro visível. Ver
+`services/spy_agent/spy_inbound_handler.py::is_spy_instance()`.
+
+`frontend-crm/src/components/agente/SpyAgentSetup.tsx` — no ternário que
+decide o que renderizar na seção "Fone de observação", `pendingConnect`
+(QR/código pendente de leitura) é checado **antes** de
+`instanceConfig?.configured` — como a config já existe no backend assim que
+o QR é gerado (ver acima), checar a ordem inversa faria a tela pular para o
+card "já configurado" antes do usuário conseguir escanear.
+`handleCancelConnect` chama `removeInstanceConfig()` — cancelar no meio do
+QR precisa desfazer a config já persistida, senão a instância criada na
+UazAPI fica órfã, nunca escaneada, nunca limpa (mesma classe de bug desta
+seção inteira, só que introduzida no próprio fluxo de conexão do espião).
+
 ## Outros consumidores (fora deste fluxo)
 
 - `frontend-admin/src/pages/AdminInstances.tsx` → `api.reconnectInstance()`
   usa um caminho admin-only separado (`backend-core/app/api/admin.py`, que
   também chama `uazapi_admin.connect_instance()` directamente) — não passa
   por `whatsapp_connect.py` nem suporta `phone`/código de pareamento hoje.
-- `backend-crm/routes/spy_agent.py` (`/api/spy-agent/reconnect`) duplica a
-  extracção de QR com helpers próprios, independentes dos desta página —
-  também sem suporte a código de pareamento.
