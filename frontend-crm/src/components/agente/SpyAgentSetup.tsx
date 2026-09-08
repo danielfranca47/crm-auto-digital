@@ -67,7 +67,7 @@ export function SpyAgentSetup({ sample, onStarted }: SpyAgentSetupProps) {
     if (qrTimeoutRef.current) { clearTimeout(qrTimeoutRef.current); qrTimeoutRef.current = null; }
   };
 
-  const startPolling = (instanceId: string) => {
+  const startPolling = () => {
     stopPolling();
     // Expira QR após 90s
     qrTimeoutRef.current = setTimeout(() => {
@@ -77,10 +77,9 @@ export function SpyAgentSetup({ sample, onStarted }: SpyAgentSetupProps) {
 
     pollRef.current = setInterval(async () => {
       try {
-        const status = await api.crm.whatsappStatus();
+        const status = await api.spyAgent.reconnectStatus();
         if (status.status === "connected") {
           stopPolling();
-          await api.spyAgent.setInstanceConfig(instanceId);
           queryClient.invalidateQueries({ queryKey: ["spy-instance-config"] });
           setPendingConnect(null);
           toast({ title: "Fone de observação conectado!", description: "WhatsApp escaneado com sucesso." });
@@ -106,14 +105,13 @@ export function SpyAgentSetup({ sample, onStarted }: SpyAgentSetupProps) {
     setConnectingInstance(true);
     setQrExpired(false);
     try {
-      const resp = await api.crm.whatsappConnect();
+      const resp = await api.spyAgent.connect();
+      queryClient.invalidateQueries({ queryKey: ["spy-instance-config"] });
       if (resp.qr?.value) {
         setPendingConnect(resp);
-        startPolling(resp.instance_id);
+        startPolling();
       } else {
-        // Já conectado — salva direto
-        await api.spyAgent.setInstanceConfig(resp.instance_id);
-        queryClient.invalidateQueries({ queryKey: ["spy-instance-config"] });
+        // Já conectado (raro para uma instância recém-criada, mantido defensivamente)
         toast({ title: "Fone de observação configurado!", description: "Instância já conectada." });
       }
     } catch {
@@ -128,9 +126,9 @@ export function SpyAgentSetup({ sample, onStarted }: SpyAgentSetupProps) {
     setQrExpired(false);
     setConnectingInstance(true);
     try {
-      const resp = await api.crm.whatsappRefreshQr();
+      const resp = await api.spyAgent.reconnect();
       setPendingConnect(resp);
-      startPolling(resp.instance_id);
+      startPolling();
     } catch {
       toast({ title: "Erro ao renovar QR code", variant: "destructive" });
     } finally {

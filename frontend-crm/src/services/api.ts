@@ -1821,6 +1821,8 @@ export const api = {
       apiClient.delete<{ ok: boolean }>("/spy-agent/instance-config"),
     dismissSession: () =>
       apiClient.delete<{ ok: boolean }>("/spy-agent/session"),
+    connect: (payload?: { phone?: string }) =>
+      apiClient.post<WhatsappConnectResponse>("/spy-agent/connect", payload ?? {}),
     reconnect: () =>
       apiClient.post<WhatsappConnectResponse>("/spy-agent/reconnect"),
     reconnectStatus: () =>
