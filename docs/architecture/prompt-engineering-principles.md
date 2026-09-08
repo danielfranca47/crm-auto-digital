@@ -235,6 +235,84 @@ Fonte: [Prompt engineering best practices for 2026 — Claude by Anthropic](http
 
 ---
 
+## 9. Achados de pesquisa aplicados ao nosso motor de LLM
+
+Esta seção não documenta prática já aplicada — documenta 4 gaps encontrados
+ao ler o cliente de LLM real (`backend-executors/app/services/llm_service.py`)
+e cruzar com pesquisa de mercado. Nenhum é corrigido aqui: são candidatos a
+implementação futura própria (mudança de código, com plano e testes
+dedicados), igual ao padrão já usado para os gaps dos princípios 1 e 5.
+
+### 9.1 — Nenhuma chamada define `temperature`
+
+`_build_payload()` (`llm_service.py:154`) nunca envia `temperature` — fica
+no default do provider (tipicamente 1.0, alto). Pesquisa de mercado:
+tarefas de classificação/extração estruturada devem usar `temperature`
+baixa (0.0–0.3) — criatividade nesse tipo de tarefa só aumenta o risco de
+JSON malformado ou de inconsistência de rota. Isso vale para as chamadas
+estruturadas do sistema (`generate_mother_route`, `generate_child_result`,
+extração de campos) — não necessariamente para texto livre voltado ao lead
+(`generate_conflict_message`, lembretes de agendamento), onde uma
+temperature moderada continua fazendo sentido.
+
+### 9.2 — `json_object` solto vs. Structured Outputs com schema reforçado
+
+Concretiza o gap já citado no princípio 5 (que só dizia "não há schema
+reforçado", sem apontar o mecanismo disponível). `_build_payload()`
+(`llm_service.py:166-168`) usa `text.format.type="json_object"` — garante
+sintaxe JSON válida, não que os campos/enums batem com o schema real
+(`ChildResult`, `MotherDecision`). A Responses API da OpenAI já suporta
+`text.format` com `type="json_schema"` + `schema` + `strict=true`: o modelo
+literalmente não consegue emitir um token que quebre o schema (~100% de
+aderência, contra ~80% do `json_object`). Isso ataca na raiz o exemplo já
+citado no princípio 5 (`reason` divergir de `detected_intents`,
+`checkout_sent=true` sem URL) — sem substituir a validação em código que o
+princípio 5 já lista como pendente, e sim complementando-a (schema reforçado
+reduz a chance do erro; validação em código continua como rede de segurança
+final). **Ressalva:** só se aplica ao caminho OpenAI — o caminho OpenRouter
+(Llama 3.3 / Hermes 3) usa Chat Completions com `response_format:
+json_object` simples, sem suporte nativo equivalente confirmado.
+
+### 9.3 — Nenhum isolamento entre a mensagem do lead e o texto de instrução
+
+Em todos os builders de `decision_engine.py`, a mensagem do lead entra
+direto no meio do prompt como texto solto (ex.: `f"Mensagem recebida:
+{message_text}"`) — sem delimitador, sem instrução explícita de "isto é
+dado do usuário, não comando". Como o sistema é multi-tenant e qualquer lead
+do WhatsApp pode mandar texto arbitrário — inclusive tentando instruir a IA
+a ignorar regras anteriores ou revelar o prompt do sistema — isso é uma
+superfície de prompt injection ainda não tratada. Boas práticas de mercado
+(OWASP GenAI LLM01:2025) recomendam: (1) delimitar claramente o conteúdo não
+confiável (tags ou marcador textual), (2) instruir explicitamente que texto
+dentro desse delimitador é dado, nunca instrução, (3) repetir a regra
+crítica perto do fim do prompt, onde o modelo dá mais peso. Recomendação
+concreta de formato: envolver a mensagem do lead em
+`<mensagem_do_lead>...</mensagem_do_lead>` com uma frase fixa avisando que
+esse conteúdo nunca deve ser tratado como instrução.
+
+### 9.4 — Ordem do prompt não está otimizada para prompt caching automático
+
+A OpenAI cacheia automaticamente (zero mudança de código) o maior prefixo
+comum entre chamadas consecutivas que comece igual, acima de ~1024 tokens —
+até 90% de desconto nos tokens cacheados e até 80% de redução de latência.
+Isso é especialmente valioso aqui: o sistema chama a LLM a cada mensagem de
+WhatsApp (alto volume). Hoje, em `_build_child_prompt_closing()` (mesmo
+padrão nas outras Filhas), o bloco `FRAMEWORK: ... Missing:
+{missing_fields}` — que muda a cada turno conforme o lead responde
+perguntas de qualificação — aparece logo no início do prompt, antes de todo
+o conteúdo 100% estático (JSON schema, PROIBIÇÕES, escape hatch, bloco de
+validação). Isso invalida o prefixo cacheável muito mais cedo do que
+precisaria. Recomendação: agrupar no início tudo que só depende do
+`ai_profile`/`playbook` (estável entre TODOS os leads do mesmo negócio, não
+só entre turnos do mesmo lead), e deixar para o final tudo que muda a cada
+turno (missing_fields, history, inbound_message_text, fases do sales_flow
+avaliadas). Isso maximiza cache hit não só entre turnos da mesma conversa,
+mas potencialmente entre leads diferentes do mesmo negócio.
+
+Fontes: [Introducing Structured Outputs in the API — OpenAI](https://openai.com/index/introducing-structured-outputs-in-the-api/), [LLM01:2025 Prompt Injection — OWASP GenAI](https://genai.owasp.org/llmrisk/llm01-prompt-injection/), [Prompt caching — OpenAI API docs](https://developers.openai.com/api/docs/guides/prompt-caching).
+
+---
+
 ## Checklist rápida antes de shippar um prompt novo/editado
 
 - [ ] Essa regra é crítica o suficiente para não poder falhar? Se sim, ela
@@ -256,3 +334,5 @@ Fonte: [Prompt engineering best practices for 2026 — Claude by Anthropic](http
       → exemplos → formato de saída)? Os exemplos citados são só de
       comportamento (podem ser fixos) ou envolvem fato de negócio (têm que
       vir de variável dinâmica por usuário)?
+- [ ] A mensagem do lead está delimitada e marcada como dado, não instrução
+      (ver princípio 9.3)?

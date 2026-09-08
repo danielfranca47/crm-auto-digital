@@ -159,6 +159,58 @@ conteúdo, sem mudança de comportamento em runtime).
 
 ---
 
+## Fase 3 — Achados de pesquisa além do que o usuário indicou
+
+**Objetivo:** ao revisar a Fase 2, o usuário pediu explicitamente algo
+diferente do que fez até aqui — não só formalizar o que ele mesmo indicou,
+mas pesquisar e trazer valor novo, achados de mercado que ele não mencionou
+e que se apliquem concretamente ao sistema.
+
+Para isso, foi lido o cliente de LLM real do sistema
+(`backend-executors/app/services/llm_service.py`), não só os prompts, e
+cruzado com pesquisa de mercado (OpenAI Structured Outputs, OWASP GenAI
+prompt injection, configuração de temperature, prompt caching automático da
+OpenAI). Revelou 4 achados código-a-código inéditos nesta implementação:
+(1) nenhuma chamada define `temperature` — decisões estruturadas (rota da
+Mãe, extração de campo) rodam com o default alto do provider; (2)
+`json_object` solto em vez de Structured Outputs (`json_schema`+`strict`)
+da Responses API — concretiza o gap já citado no princípio 5 com o mecanismo
+exato disponível hoje; (3) a mensagem do lead entra no prompt sem nenhum
+delimitador que a marque como dado (não instrução) — superfície de prompt
+injection não tratada num sistema multi-tenant que recebe texto arbitrário
+de qualquer lead; (4) o bloco de campos faltantes (`missing_fields`), que
+muda a cada turno, aparece cedo demais no prompt da Filha, invalidando o
+prefixo que a OpenAI cachearia automaticamente (até 90% de desconto, 80%
+menos latência) — relevante porque o sistema chama a LLM a cada mensagem de
+WhatsApp.
+
+| Arquivo | O que muda |
+|---|---|
+| `docs/architecture/prompt-engineering-principles.md` | Nova seção "9. Achados de pesquisa aplicados ao nosso motor de LLM" com os 4 achados (cada um com arquivo/linha real, fonte de mercado, marcado como gap conhecido) + 1 item novo na checklist final |
+
+### Commits Fase 3
+
+| # | Commit | O que foi implementado |
+|---|---|---|
+| 1 | `<pendente>` | Seção 9 (4 achados de pesquisa) + item de checklist |
+
+### Relatório da Fase 3 — o que mudou na prática
+
+**Antes:** o documento cobria só o que já era prática conhecida no time
+(princípios 1-7) e o esqueleto de prompt que o próprio usuário descreveu
+(princípio 8) — nada vinha de uma investigação nova no motor de LLM real.
+**Agora:** existe uma seção 9 com 4 achados que ninguém tinha levantado
+ainda nesta implementação — configuração de `temperature`, uso de
+Structured Outputs da OpenAI, isolamento da mensagem do lead como defesa
+contra prompt injection, e reordenação do prompt para aproveitar o cache
+automático da OpenAI — cada um citando o código real e uma fonte de
+mercado, registrados como gaps conhecidos (candidatos a implementação
+futura de código, fora do escopo desta tarefa documental).
+**Para validar:** Cenário P3, abaixo — mesma natureza do P1/P2 (revisão de
+conteúdo, sem mudança de comportamento em runtime).
+
+---
+
 ## Checks de Validação
 
 Tarefa documental — sem cenário de Playground/WhatsApp aplicável. O check é
@@ -177,6 +229,14 @@ revisão de conteúdo:
 - [ ] Confirmar que as referências citadas (`decision_engine.py:2569`,
       `decision_engine.py:3993`, `decision_engine.py:1211`) ainda batem com
       o código real no momento da leitura
+
+### Cenário P3 — Revisão dos 4 achados de pesquisa (seção 9) pelo usuário
+- [ ] Usuário lê a seção "9. Achados de pesquisa aplicados ao nosso motor de
+      LLM" e confirma que os 4 achados fazem sentido e agregam valor
+- [ ] Confirmar que as referências citadas (`llm_service.py:154`,
+      `llm_service.py:166-168`, bloco `FRAMEWORK`/`Missing` em
+      `_build_child_prompt_closing`) ainda batem com o código real no
+      momento da leitura
 
 ---
 
