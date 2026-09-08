@@ -46,6 +46,7 @@ router = APIRouter(prefix="/api/spy-agent", tags=["SpyAgent"])
 # ---------------------------------------------------------------------------
 
 _QR_KEYS = {"qrcode", "qrCode", "qr_code"}
+_PAIR_KEYS = {"paircode", "pairCode", "pair_code"}
 
 
 def _find_in_payload(payload: Any, keys: set) -> Optional[str]:
@@ -149,11 +150,13 @@ def _set_spy_webhook(instance_id: str) -> None:
 def _build_connect_response(raw: Dict[str, Any], instance_id: str) -> Dict[str, Any]:
     qr_value = _find_in_payload(raw, _QR_KEYS)
     qr_kind = _infer_qr_kind(qr_value) if qr_value else None
+    pair_code = _find_in_payload(raw, _PAIR_KEYS)
     status_value = _normalize_status_raw(raw)
     return {
         "instance_id": instance_id,
         "status": status_value,
         "qr": {"kind": qr_kind, "value": qr_value},
+        "pair_code": pair_code,
     }
 
 # ---------------------------------------------------------------------------

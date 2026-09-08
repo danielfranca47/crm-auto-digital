@@ -140,6 +140,12 @@ export function SpyAgentSetup({ sample, onStarted }: SpyAgentSetupProps) {
     stopPolling();
     setPendingConnect(null);
     setQrExpired(false);
+    // A config já foi persistida no backend ao gerar o QR (permite reaproveitar
+    // /reconnect no "Novo QR code") — cancelar precisa desfazer isso, senão a
+    // instância criada na UazAPI fica órfã, nunca escaneada.
+    api.spyAgent.removeInstanceConfig().finally(() => {
+      queryClient.invalidateQueries({ queryKey: ["spy-instance-config"] });
+    });
   };
 
   const getQrSrc = (qr: WhatsappConnectResponse["qr"]): string | null => {
@@ -200,28 +206,6 @@ export function SpyAgentSetup({ sample, onStarted }: SpyAgentSetupProps) {
             <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
             <span className="text-xs text-muted-foreground">Verificando...</span>
           </div>
-        ) : instanceConfig?.configured ? (
-          <div className="flex items-center justify-between p-3 rounded-lg border border-green-500/30 bg-green-500/5">
-            <div className="flex items-center gap-2">
-              <Phone className="h-4 w-4 text-green-500 shrink-0" />
-              <div>
-                <p className="text-xs font-medium">
-                  {instanceConfig.phone_e164 ?? instanceConfig.spy_instance_id}
-                </p>
-                <p className="text-[10px] text-muted-foreground capitalize">
-                  {instanceConfig.connection_status ?? "verificando..."}
-                </p>
-              </div>
-            </div>
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-7 w-7 text-muted-foreground hover:text-destructive"
-              onClick={handleRemoveSpyInstance}
-            >
-              <Trash2 className="h-3.5 w-3.5" />
-            </Button>
-          </div>
         ) : pendingConnect ? (
           <div className="rounded-lg border border-border bg-muted/20 p-4 space-y-3">
             {qrExpired ? (
@@ -273,6 +257,28 @@ export function SpyAgentSetup({ sample, onStarted }: SpyAgentSetupProps) {
                 })()}
               </>
             )}
+          </div>
+        ) : instanceConfig?.configured ? (
+          <div className="flex items-center justify-between p-3 rounded-lg border border-green-500/30 bg-green-500/5">
+            <div className="flex items-center gap-2">
+              <Phone className="h-4 w-4 text-green-500 shrink-0" />
+              <div>
+                <p className="text-xs font-medium">
+                  {instanceConfig.phone_e164 ?? instanceConfig.spy_instance_id}
+                </p>
+                <p className="text-[10px] text-muted-foreground capitalize">
+                  {instanceConfig.connection_status ?? "verificando..."}
+                </p>
+              </div>
+            </div>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-7 w-7 text-muted-foreground hover:text-destructive"
+              onClick={handleRemoveSpyInstance}
+            >
+              <Trash2 className="h-3.5 w-3.5" />
+            </Button>
           </div>
         ) : (
           <Button
