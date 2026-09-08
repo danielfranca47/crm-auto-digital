@@ -85,18 +85,38 @@ específica de rate limit; qualquer outro erro cai na mensagem genérica.
 
 ## Checks de Validação
 
-### Cenário 1 — Fluxo feliz inalterado
+### Cenário 2 — Erro agora aparece (validado por Claude, sem depender do rate limit)
+- [x] Testado localmente: rota temporária renderizando só `<MonitoramentoColaboradores />`
+      (sem passar pelo `ai-profile`, que exige config já carregada), servidor
+      `vite` local (porta 5199) apontando para o backend de produção via
+      `.env.local` (gitignored, não commitado). Sem origem liberada em
+      `PRIVATE_ORIGINS` do backend-crm em produção, toda request desse
+      ambiente falha por CORS — o que serviu como gatilho de erro real e
+      inofensivo (não chega a criar instância nenhuma na UazAPI).
+- [x] Carga inicial (montagem do componente): toast "Erro ao carregar
+      colaboradores" / "Não foi possível carregar a lista de colaboradores
+      monitorados." apareceu — antes, silêncio.
+- [x] Clique em "Cadastrar e Conectar" com nome preenchido: `POST
+      /api/collab-monitor/instances` disparado (confirmado no console,
+      bloqueado por CORS), toast "Erro ao cadastrar colaborador" / "Não foi
+      possível cadastrar o colaborador. Tente novamente." apareceu, botão
+      voltou ao estado normal (não ficou preso em "Conectando…") — antes,
+      nada acontecia.
+- Rota de teste e `.env.local` foram removidos/revertidos após a validação;
+  não fazem parte do commit da Fase 1.
+- **Validado em:** 08/09/2026
+
+### Cenário 1 — Fluxo feliz + mensagem específica de 429 (pendente, requer ambiente real)
 - [ ] Com o rate limit da UazAPI já liberado, clicar "Cadastrar e Conectar"
-      com um nome válido
+      com um nome válido na aba Monitoramento do AI Profile (produção)
 - [ ] Confirmar: QR aparece normalmente, sem toast (comportamento igual ao
       anterior)
-
-### Cenário 2 — Erro agora aparece
-- [ ] Provocar uma falha (ex.: tentar cadastrar duas vezes rapidamente para
-      reproduzir 429, ou qualquer outro erro de rede)
-- [ ] Confirmar: toast destrutivo aparece com mensagem apropriada (mensagem
-      de rate limit se for 429, genérica caso contrário) — em vez de nada
-      acontecer
+- [ ] Se possível reproduzir um 429 real (ex.: duas tentativas seguidas),
+      confirmar a mensagem específica "Muitas tentativas de conexão —
+      aguarde alguns minutos e tente novamente." em vez da genérica
+- **Pendente:** requer testar na aba real do AI Profile em produção
+  (autenticado), que Claude não tem como alcançar por CORS/sessão a partir
+  do ambiente de desenvolvimento local — pedir para o utilizador confirmar
 
 ---
 
