@@ -266,14 +266,30 @@ dedicada para ler as conversas monitoradas, separada do Kanban:
 
 - **Coluna esquerda:** lista de conversas via `GET /api/collab-monitor/conversations`
   (`api.crm.collabMonitorConversations`), com filtro por colaborador/instância
-  (`Select`), ordenada pela mensagem mais recente. Cada item mostra avatar
-  (iniciais), nome do contato, preview e contagem de mensagens, e o nome do
-  colaborador que originou a conversa.
+  (`Select`, populado por `GET /api/collab-monitor/instances` — todos os
+  colaboradores cadastrados, independente da página de conversas atual),
+  ordenada pela mensagem mais recente. Cada item mostra avatar (iniciais),
+  nome do contato, preview e contagem de mensagens, e o nome do colaborador
+  que originou a conversa.
 - **Coluna direita:** ao selecionar uma conversa, busca o histórico via
   `GET /api/assistente-ia/messages/{lead_id}?latest=false`
-  (`api.assistenteIA.mensagens`, já existente e reaproveitado sem mudanças) e
-  renderiza em bolhas de chat — `model='inbound'` (lead) à esquerda,
-  `model='human_agent'` (colaborador) à direita.
+  (`api.assistenteIA.mensagens`) e renderiza em bolhas de chat —
+  `model='inbound'` (lead) à esquerda, `model='human_agent'` (colaborador) à
+  direita.
+- **Paginação tradicional** (Anterior/Próxima, sem scroll infinito) nas duas
+  colunas: conversas (20 por página) e histórico de mensagens (30 por
+  página), cada uma com seu próprio estado de página em
+  `CollabMonitorInbox.tsx` — reseta para a primeira página ao trocar o
+  filtro de colaborador ou a conversa selecionada. Os dois endpoints aceitam
+  `limit`/`offset` e respondem com um sinalizador `has_more` (buscam
+  `limit+1` linhas e cortam para `limit`) em vez de um `COUNT(*)` separado —
+  por isso o pager mostra só "Página N", sem total de páginas (ver
+  [`monitoramento-colaborador-melhorias-futuras.md`](../plans/monitoramento-colaborador-melhorias-futuras.md)).
+  Em `GET /assistente-ia/messages/{lead_id}` — rota compartilhada com
+  `LeadCardDialog` e `ProspectionCardDialog` — a paginação é **opt-in**: sem
+  `limit` (ou com `latest=true`), a resposta continua idêntica à de sempre
+  (lista completa, sem a chave `has_more`), preservando esses outros
+  consumidores.
 - Renderiza só texto (`body`) — como o tratamento de mídia (acima) já
   converte áudio/imagem em texto (transcrição/descrição) antes de chegar
   aqui, a bolha de chat mostra esse conteúdo automaticamente, sem mudança
@@ -301,9 +317,13 @@ dedicada para ler as conversas monitoradas, separada do Kanban:
 - Exibir mídia bruta na tela de leitura (tocar áudio, ver imagem em si) —
   hoje só o texto (transcrição/descrição) aparece na bolha de chat. Ver
   "Tela de leitura estilo WhatsApp Web", acima.
-- Paginação/scroll infinito na tela de leitura (lista de conversas e
-  histórico de mensagens), caso o volume cresça. Ver
-  [`monitoramento-colaborador-paginacao.md`](../implementations/monitoramento-colaborador-paginacao.md).
+- Filtro por categoria/grupo de colaboradores na tela de leitura — hoje só
+  dá para filtrar por um colaborador específico ou "todos" (`Select` na
+  coluna esquerda). Falta a possibilidade de o utilizador criar classes
+  customizadas para organizar colaboradores (grupo simples no plano Scale,
+  hierarquia em árvore no Enterprise) e filtrar por categoria/vários
+  colaboradores de uma vez (seletor com checkbox). Implementação própria,
+  ainda não iniciada.
 - Re-resolução de URL de mídia expirada (a URL persistida em `media_url` não
   é permanente) — ver
   [`monitoramento-colaborador-midia-url-expiracao.md`](../implementations/monitoramento-colaborador-midia-url-expiracao.md).

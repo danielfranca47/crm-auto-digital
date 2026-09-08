@@ -33,6 +33,7 @@ implementação.
 | `confiabilidade-integracoes-externas-melhorias-futuras.md` | Itens deixados de fora da graduação do fix de SMTP+webhook Efí do primeiro assinante: auditoria de falhas silenciosas em dependências externas, auditoria de efeitos de reentrega em todos os webhooks |
 | `reembolso-melhorias-futuras.md` | Itens deixados de fora da graduação do botão de reembolso admin MVP: agente automático de reembolso dos 7 dias via email, inconsistência "7 dias" vs "30 dias" na copy da landing |
 | `motor-llm-otimizacoes.md` | Achados da graduação de `prompt-engineering-principles`: temperature não configurada, Structured Outputs (json_schema+strict) da OpenAI, isolamento da mensagem do lead contra prompt injection, reordenação do prompt para prompt caching automático, validação semântica de `signals_structured` (checkout_sent+URL) |
+| `monitoramento-colaborador-melhorias-futuras.md` | Item deixado de fora da graduação da paginação do monitoramento de colaborador: contagem total ("Página N de M") nos pagers |
 
 Os arquivos sem prefixo `_` são os **planos concretos** — contêm melhorias identificadas
 que ainda não foram implementadas.
