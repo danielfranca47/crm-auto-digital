@@ -20,11 +20,30 @@ import sqlite3
 from typing import Any, Dict, Optional
 
 from database import get_connection
-from services.jobs_service import TYPE_COLLAB_MONITOR_CLASSIFY, create_job
+from services.jobs_service import TYPE_COLLAB_MONITOR_CLASSIFY, TYPE_COLLAB_MONITOR_MEDIA, create_job
 
 logger = logging.getLogger(__name__)
 
 MONITORING_CATEGORY = "monitoring"
+
+# Áudio e imagem passam por IA (transcrição/descrição) via job assíncrono —
+# ver media_worker.py. Precisam de media_url resolvido para valer a pena.
+_PROCESSABLE_MEDIA_TYPES = {"audio", "image"}
+_PROCESSING_PLACEHOLDERS = {
+    "audio": "[Áudio] (processando…)",
+    "image": "[Imagem] (processando…)",
+}
+
+# Vídeo/figurinha/documento/reação nunca são descritos por IA (mesmo
+# comportamento do pipeline real — ver inbound_handler.py::_apply_media_fallback),
+# mas passam a deixar um placeholder no histórico em vez de sumir.
+_STATIC_MEDIA_LABELS = {
+    "video": "[Vídeo]",
+    "sticker": "[Figurinha]",
+    "document": "[Documento]",
+    "reaction": "[Reação]",
+}
+_DEFAULT_MEDIA_LABEL = "[Mídia]"
 
 
 def is_monitor_instance(instance_id: str) -> bool:
@@ -97,14 +116,22 @@ def find_or_create_monitor_lead(
     return lead_id
 
 
-def _save_message(conn: sqlite3.Connection, *, lead_id: int, body: str, model: str) -> int:
+def _save_message(
+    conn: sqlite3.Connection,
+    *,
+    lead_id: int,
+    body: str,
+    model: str,
+    message_type: str = "text",
+    media_url: Optional[str] = None,
+) -> int:
     cur = conn.cursor()
     cur.execute(
         """
-        INSERT INTO messages (lead_id, channel, subject, body, model)
-        VALUES (?, 'whatsapp', NULL, ?, ?)
+        INSERT INTO messages (lead_id, channel, subject, body, model, message_type, media_url)
+        VALUES (?, 'whatsapp', NULL, ?, ?, ?, ?)
         """,
-        (lead_id, body, model),
+        (lead_id, body, model, message_type, media_url),
     )
     return int(cur.lastrowid)
 
@@ -120,10 +147,19 @@ def handle_monitor_inbound(payload: Dict[str, Any]) -> Dict[str, Any]:
     Campos esperados no payload:
       instance_id, from (sender_phone e164), message_text, message_id,
       message_type, media_url (opcional), from_me
+
+    Mensagens de áudio/imagem (sem texto, com media_url) são salvas com um
+    placeholder e processadas de forma assíncrona (transcrição/descrição via
+    media_worker.py). Vídeo/figurinha/documento/reação nunca são descritos
+    por IA (mesmo comportamento do pipeline real de bot), mas deixam um
+    placeholder no histórico em vez de serem descartados.
     """
     instance_id: str = payload.get("instance_id") or ""
     phone_norm: str = payload.get("from") or ""
     message_text: str = payload.get("message_text") or ""
+    message_type: str = (payload.get("message_type") or "text").lower()
+    media_url: str = payload.get("media_url") or ""
+    external_message_id: str = payload.get("message_id") or ""
     from_me: bool = bool(payload.get("from_me", False))
 
     monitor_info = get_monitor_info(instance_id)
@@ -135,10 +171,16 @@ def handle_monitor_inbound(payload: Dict[str, Any]) -> Dict[str, Any]:
         logger.warning("[collab_monitor] sender ausente instance=%s", instance_id)
         return {"status": "ignored", "reason": "missing_sender"}
 
-    if not message_text:
-        # Mensagens de mídia sem texto (imagem/áudio/etc.) ainda não têm tratamento
-        # dedicado nesta base — ficam para uma iteração futura (ver "Ajustes Possíveis").
-        return {"status": "ignored", "reason": "missing_text"}
+    needs_media_job = False
+    if message_text:
+        body = message_text
+    elif message_type in _PROCESSABLE_MEDIA_TYPES and media_url:
+        body = _PROCESSING_PLACEHOLDERS[message_type]
+        needs_media_job = True
+    else:
+        # Vídeo/figurinha/documento/reação, ou áudio/imagem sem media_url
+        # resolvível (fallback defensivo — nunca descarta a mensagem).
+        body = _STATIC_MEDIA_LABELS.get(message_type, _DEFAULT_MEDIA_LABEL)
 
     user_id = int(monitor_info["user_id"])
     conn = get_connection()
@@ -151,12 +193,37 @@ def handle_monitor_inbound(payload: Dict[str, Any]) -> Dict[str, Any]:
             payload=payload,
         )
         model = "human_agent" if from_me else "inbound"
-        message_id = _save_message(conn, lead_id=lead_id, body=message_text, model=model)
+        message_id = _save_message(
+            conn,
+            lead_id=lead_id,
+            body=body,
+            model=model,
+            message_type=message_type,
+            media_url=media_url or None,
+        )
         conn.commit()
     finally:
         conn.close()
 
-    if not from_me:
+    if needs_media_job:
+        # Transcrição/descrição roda assíncrona; a reclassificação de estágio
+        # (se for mensagem do lead) só é enfileirada depois, pelo próprio
+        # media_worker.py — só então existe texto real para classificar.
+        create_job(
+            job_type=TYPE_COLLAB_MONITOR_MEDIA,
+            payload={
+                "message_id": message_id,
+                "lead_id": lead_id,
+                "instance_id": instance_id,
+                "user_id": user_id,
+                "message_type": message_type,
+                "media_url": media_url,
+                "external_message_id": external_message_id,
+                "from_me": from_me,
+            },
+            user_id=user_id,
+        )
+    elif not from_me:
         # Reclassificação de estágio roda só quando o próprio lead escreve —
         # nunca aciona LLM nem resposta, só enfileira análise read-only
         # (ver classify_worker.py).

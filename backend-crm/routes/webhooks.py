@@ -339,12 +339,25 @@ def whatsapp_uazapi_webhook(
         is_group = is_group_message_payload(payload)
         if not is_group:
             monitor_sender = _resolve_spy_sender_e164(from_me)
+            # UazAPI schema Message usa "fileURL" para URL de mídia; para PTT,
+            # a URL está em message.content.URL (mesma extração do bloco spy acima).
+            monitor_media_url = (
+                data.get("fileURL")
+                or data.get("mediaUrl")
+                or data.get("media_url")
+                or message.get("fileURL")
+                or message.get("mediaUrl")
+                or message.get("media_url")
+                or _content_obj.get("URL")
+                or _content_obj.get("url")
+            )
             monitor_payload = {
                 "instance_id": instance_id,
                 "from": monitor_sender,
                 "message_text": message_text,
                 "message_id": message_id,
                 "message_type": _normalize_spy_message_type(message_type),
+                "media_url": monitor_media_url,
                 "wa_display_name": wa_display_name,
                 "from_me": from_me,
             }

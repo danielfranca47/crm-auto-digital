@@ -55,7 +55,8 @@ CREATE TABLE messages (
     body TEXT NOT NULL,
     model TEXT,
     createdAt DATETIME DEFAULT CURRENT_TIMESTAMP,
-    message_type TEXT DEFAULT 'text'
+    message_type TEXT DEFAULT 'text',
+    media_url TEXT
 );
 
 CREATE TABLE jobs (

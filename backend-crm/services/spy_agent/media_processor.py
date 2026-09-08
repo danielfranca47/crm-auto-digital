@@ -15,10 +15,11 @@ from typing import Any, Dict
 
 import httpx
 
+from services.image_description import describe_image_from_url
+
 logger = logging.getLogger(__name__)
 
 _OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
-_VISION_MODEL = "gpt-4o-mini"
 
 
 def _now_utc_iso() -> str:
@@ -78,51 +79,6 @@ def _transcribe_audio(media_url: str) -> str | None:
             pass
 
 
-def _describe_image(media_url: str) -> str | None:
-    """Envia a imagem ao gpt-4o-mini (visão) e retorna uma descrição."""
-    if not _OPENAI_API_KEY:
-        logger.warning("[spy:media] OPENAI_API_KEY não configurada — análise de imagem impossível")
-        return None
-
-    try:
-        with httpx.Client(timeout=60) as client:
-            resp = client.post(
-                "https://api.openai.com/v1/chat/completions",
-                headers={
-                    "Authorization": f"Bearer {_OPENAI_API_KEY}",
-                    "Content-Type": "application/json",
-                },
-                json={
-                    "model": _VISION_MODEL,
-                    "max_tokens": 300,
-                    "messages": [
-                        {
-                            "role": "user",
-                            "content": [
-                                {
-                                    "type": "text",
-                                    "text": (
-                                        "Descreva esta imagem no contexto de uma conversa comercial de vendas. "
-                                        "Seja objetivo e conciso. Se houver texto na imagem, transcreva-o."
-                                    ),
-                                },
-                                {
-                                    "type": "image_url",
-                                    "image_url": {"url": media_url, "detail": "low"},
-                                },
-                            ],
-                        }
-                    ],
-                },
-            )
-            resp.raise_for_status()
-            data = resp.json()
-            return data["choices"][0]["message"]["content"].strip() or None
-    except Exception as exc:
-        logger.error("[spy:media] erro na análise de imagem: %s", exc)
-        return None
-
-
 def process_spy_media_job(payload: Dict[str, Any]) -> None:
     """
     Processa um job spy.media.process.
@@ -146,7 +102,7 @@ def process_spy_media_job(payload: Dict[str, Any]) -> None:
         transcription = _transcribe_audio(media_url)
         logger.info("[spy:media] transcrição áudio spy_msg_id=%s: %s chars", spy_msg_id, len(transcription or ""))
     elif message_type == "image":
-        transcription = _describe_image(media_url)
+        transcription = describe_image_from_url(media_url)
         logger.info("[spy:media] descrição imagem spy_msg_id=%s: %s chars", spy_msg_id, len(transcription or ""))
     else:
         logger.warning("[spy:media] tipo não suportado: %s", message_type)
