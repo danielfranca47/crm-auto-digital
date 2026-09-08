@@ -104,6 +104,11 @@ de créditos extra/excedente (seção C acima) for implementado, decidir se essa
 chamada conta como "conversa IA" para efeitos de franquia/excedente, ou se tem
 contabilização própria.
 
+O mesmo vale para o tratamento de mídia no monitoramento
+(`services/collab_monitor/media_worker.py`): transcrição de áudio (Whisper) e
+descrição de imagem (GPT-4o-mini visão) rodam sem limite por mensagem de
+mídia recebida — mesma lacuna de contabilização.
+
 ---
 
 ## Definições técnicas para implementação futura
