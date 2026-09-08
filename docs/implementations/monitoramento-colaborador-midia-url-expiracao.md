@@ -1,7 +1,7 @@
 # Re-resolução de URL de mídia expirada no monitoramento de colaborador
 
 **Branch:** `feat/monitoramento-colaborador-midia-url-expiracao`
-**Status:** Em andamento
+**Status:** Todos os cenários validados (09/09/2026)
 
 ---
 
@@ -105,25 +105,118 @@ igual); a mudança aqui é só sobre persistência para uso *futuro*.
 Sem mudança em `routes/collab_monitor.py` nem no frontend — a coluna nova
 não é exposta em nenhuma rota ainda (não há consumidor).
 
+### Commits Fase 1
+
+| # | Commit | O que foi implementado |
+|---|---|---|
+| 1 | `60a7a6f` | Nova coluna `messages.external_message_id` + gravação em `_save_message()`/`handle_monitor_inbound()` + docs de arquitetura atualizados |
+
+**Detalhes do commit `60a7a6f`:**
+- `backend-crm/database.py` — `ensure_column(conn, "messages", "external_message_id", "external_message_id TEXT")`
+- `backend-crm/services/collab_monitor/monitor_inbound_handler.py` — `_save_message()` ganha o parâmetro `external_message_id`; `handle_monitor_inbound()` passa a variável já extraída do payload do webhook
+- `docs/architecture/collab-monitor.md` — documenta a nova coluna em "Tratamento de mídia" e atualiza a entrada de "Fora do escopo" sobre re-resolução de URL
+
+### Relatório da Fase 1 — o que mudou na prática
+
+**Antes:** quando uma mensagem de áudio ou imagem chegava de um colaborador
+monitorado, o sistema sabia o id original dela no WhatsApp só durante o
+processamento inicial (transcrição/descrição) — depois disso, esse id era
+perdido para sempre.
+
+**Agora:** esse id fica guardado junto com a mensagem no banco. Isso não
+muda nada visível hoje (nenhuma tela usa esse dado ainda), mas destrava a
+possibilidade de, no futuro, reabrir o áudio ou a imagem de uma conversa
+antiga mesmo que o link original já tenha expirado.
+
+**Para validar:** Cenário C1 e C2, abaixo — exigem enviar uma mensagem real
+de áudio/imagem para uma instância de colaborador monitorada já conectada e
+conferir a coluna no banco.
+
 ---
 
 ## Checks de Validação
 
 Sem UI para testar via browser (mudança é só de persistência de dado, sem
-consumidor). Validação via inspeção direta do banco após mensagem real.
+consumidor). Não havia nenhuma instância de colaborador conectada localmente
+(banco local nunca teve esse fluxo testado) — decisão tomada com o
+utilizador: em vez de montar o setup completo (3 backends + túnel público +
+QR real) só para validar a gravação de uma coluna, os cenários chamam
+`handle_monitor_inbound()` diretamente com payloads no mesmo formato que a
+UazAPI envia, contra um banco SQLite isolado — exercita o código real de
+produção sem precisar de WhatsApp de verdade.
 
-### Cenário C1 — Áudio real para instância monitorada
-- [ ] Enviar um áudio de teste para o WhatsApp de uma instância monitor já
-  conectada (ambiente local ou produção, conforme disponibilidade)
-- [ ] Confirmar via query no banco (`SELECT external_message_id FROM
-  messages WHERE id = <id da mensagem>`) que a coluna foi preenchida com o
-  id da mensagem
-- [ ] Confirmar que `body`/`media_url` continuam sendo preenchidos
-  normalmente pelo `media_worker.py` (comportamento existente, não deve
-  quebrar)
+### Cenário C1 — Áudio (payload real simulado)
+- [x] Registrar instância de colaborador de teste + chamar
+  `handle_monitor_inbound()` com `message_type="audio"`,
+  `message_id="WAMID_TEST_AUDIO_001"`, `media_url` de teste
+- [x] Confirmar via query no banco que `messages.external_message_id` foi
+  preenchida com o id da mensagem
+- [x] Confirmar que `body` (placeholder `"[Áudio] (processando…)"`) e
+  `media_url` continuam sendo preenchidos normalmente (comportamento
+  existente, sem regressão)
+- **Validado em:** 09/09/2026 — script `test_external_message_id.py`
+  (scratchpad), resultado `PASS`: linha da mensagem com
+  `external_message_id='WAMID_TEST_AUDIO_001'`, `media_url` e `body`
+  corretos
 
-### Cenário C2 — Imagem real para instância monitorada
-- [ ] Mesma verificação do C1, mas com imagem
+### Cenário C2 — Imagem (payload real simulado)
+- [x] Mesma verificação do C1, com `message_type="image"`,
+  `message_id="WAMID_TEST_IMAGE_002"`
+- **Validado em:** 09/09/2026 — mesmo script, resultado `PASS`: linha da
+  mensagem com `external_message_id='WAMID_TEST_IMAGE_002'`, `media_url` e
+  `body` (`"[Imagem] (processando…)"`) corretos
+
+---
+
+## Fase 2 — Diagnóstico + Correção: colunas de `leads` perdidas em banco fresco (09/09/2026)
+
+### Problema identificado
+
+Descoberto ao rodar o teste isolado da Fase 1 contra um banco SQLite
+totalmente fresco (nunca inicializado antes): `init_db()` falhava porque
+`leads` não tinha a coluna `wa_display_name`.
+
+Causa raiz: `_migrate_leads_company_or_contact()`
+(`backend-crm/database.py`) recria a tabela `leads` do zero (`CREATE TABLE
+leads_new` + `INSERT ... SELECT` com uma lista explícita de colunas). Cinco
+colunas adicionadas via `ensure_column()` antes dessa migração
+(`branches_selected`, `sales_flow_wait`, `knowledge_categories_shown`,
+`wa_display_name`, `acquisition_channel`) não constam nessa lista — a
+migração as apaga ao recriar a tabela. `collab_monitor_instance_id` já era
+re-adicionada logo após a recriação (dentro da própria função), por isso
+nunca foi afetada.
+
+Nunca se manifestou em ambiente real porque a migração tem guarda de
+idempotência (`if company_col and company_col["notnull"] == 0: return`) —
+todo banco existente já passou por ela antes dessas 5 colunas terem sido
+criadas, então ela nunca mais roda de fato nesses bancos. Só aparece ao
+inicializar um banco do zero (ex.: ambiente de teste limpo).
+
+### Correção
+
+Reordenado `init_db()`: as 5 colunas que a migração não preserva agora são
+re-adicionadas via `ensure_column()` **depois** dela (chamada idempotente,
+sem efeito em bancos já migrados). As 5 colunas que a migração já preservava
+(`checkout_token`, `is_playground`, `detected_language`, `phases_triggered`,
+`triggers_fired`) continuam sendo adicionadas **antes**, porque o `SELECT`
+da migração as lê da tabela antiga por nome.
+
+| Arquivo | Mudança |
+|---|---|
+| `backend-crm/database.py` | `init_db()`: `ensure_column()` de `branches_selected`/`sales_flow_wait`/`knowledge_categories_shown`/`wa_display_name`/`acquisition_channel`/`collab_monitor_instance_id` movidos para depois de `_migrate_leads_company_or_contact(conn)` |
+
+Validado com dois scripts isolados (mesmo padrão do teste da Fase 1, banco
+SQLite fresco):
+- Confirmado: as 6 colunas existem em `leads` após `init_db()` num banco
+  novo — `PASS`.
+- `init_db()` chamado duas vezes seguidas (simula reinício do backend) —
+  sem erro, idempotente.
+
+### Commits Fase 2
+
+| # | Commit | O que foi implementado |
+|---|---|---|
+| 1 | `<preencher após commit>` | Fix: reordenar `ensure_column()` das colunas de `leads` perdidas em banco fresco |
 
 ---
 
@@ -132,4 +225,5 @@ consumidor). Validação via inspeção direta do banco após mensagem real.
 - Endpoint de re-resolução sob demanda (ex.: `GET
   /api/collab-monitor/messages/{id}/media-url`) — construir junto da tela de
   mídia bruta, quando essa implementação nascer (é a consumidora natural do
-  dado persistido aqui).
+  dado persistido aqui). Já documentado em `docs/architecture/collab-monitor.md`,
+  seção "Fora do escopo" — não precisa de arquivo próprio agora.
