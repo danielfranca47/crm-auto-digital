@@ -124,14 +124,15 @@ def _save_message(
     model: str,
     message_type: str = "text",
     media_url: Optional[str] = None,
+    external_message_id: Optional[str] = None,
 ) -> int:
     cur = conn.cursor()
     cur.execute(
         """
-        INSERT INTO messages (lead_id, channel, subject, body, model, message_type, media_url)
-        VALUES (?, 'whatsapp', NULL, ?, ?, ?, ?)
+        INSERT INTO messages (lead_id, channel, subject, body, model, message_type, media_url, external_message_id)
+        VALUES (?, 'whatsapp', NULL, ?, ?, ?, ?, ?)
         """,
-        (lead_id, body, model, message_type, media_url),
+        (lead_id, body, model, message_type, media_url, external_message_id),
     )
     return int(cur.lastrowid)
 
@@ -200,6 +201,7 @@ def handle_monitor_inbound(payload: Dict[str, Any]) -> Dict[str, Any]:
             model=model,
             message_type=message_type,
             media_url=media_url or None,
+            external_message_id=external_message_id or None,
         )
         conn.commit()
     finally:

@@ -253,6 +253,15 @@ bruta/resolvida da mídia (além de `message_type`, já existente). Usado tanto
 pela classificação de estágio (via `body`) quanto por uma futura tela de
 mídia (via `media_url`).
 
+`messages.external_message_id` (nullable, `ensure_column`) — guarda o id
+original da mensagem no WhatsApp/UazAPI (`monitor_inbound_handler.py::_save_message()`),
+extraído do payload do webhook (`payload["message_id"]`) em toda mensagem de
+mídia (áudio e imagem). Pré-requisito para re-resolver `media_url` sob
+demanda no futuro (ex.: nova chamada a `/message/download` quando uma tela
+de mídia bruta pedir a mensagem) — sem persistir esse id, a informação some
+assim que o job `collab_monitor.media.process` completa, já que ele só vive
+no payload do job.
+
 Continua **completamente isolado** do pipeline de IA real: nenhum destes
 caminhos chama orchestrator/decision_engine/guardrail de resposta.
 
@@ -325,7 +334,10 @@ dedicada para ler as conversas monitoradas, separada do Kanban:
   colaboradores de uma vez (seletor com checkbox). Implementação própria,
   ainda não iniciada.
 - Re-resolução de URL de mídia expirada (a URL persistida em `media_url` não
-  é permanente) — ver
+  é permanente) — a base já existe (`messages.external_message_id`
+  persistido, ver "Tratamento de mídia" acima), mas o endpoint de
+  re-resolução sob demanda e o fallback de "mídia indisponível" ficam para
+  quando a tela de mídia bruta (item acima) for construída — ver
   [`monitoramento-colaborador-midia-url-expiracao.md`](../implementations/monitoramento-colaborador-midia-url-expiracao.md).
 - Débito/custo da classificação de estágio (1 chamada LLM por mensagem
   inbound, sem debounce nem contabilização contra a franquia de "conversas

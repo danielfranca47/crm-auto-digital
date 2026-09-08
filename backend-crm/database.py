@@ -1263,18 +1263,28 @@ def init_db() -> None:
         ensure_column(conn, "lead_qualification_state", "price_score", "price_score INTEGER NOT NULL DEFAULT 0")
         ensure_column(conn, "lead_qualification_state", "timing_score", "timing_score INTEGER NOT NULL DEFAULT 0")
         ensure_column(conn, "lead_qualification_state", "qualification_total_score", "qualification_total_score INTEGER NOT NULL DEFAULT 0")
+        # checkout_token/is_playground/detected_language/phases_triggered/
+        # triggers_fired precisam existir em `leads` ANTES da migração abaixo
+        # — o SELECT de _migrate_leads_company_or_contact() as lê da tabela
+        # antiga por nome, e ela já as inclui na tabela recriada.
         ensure_column(conn, "leads", "checkout_token", "checkout_token TEXT")
         ensure_column(conn, "leads", "is_playground", "is_playground INTEGER NOT NULL DEFAULT 0")
         ensure_column(conn, "leads", "detected_language", "detected_language TEXT NULL")
         ensure_column(conn, "leads", "phases_triggered", "phases_triggered TEXT NULL")
         ensure_column(conn, "leads", "triggers_fired", "triggers_fired TEXT NULL")
+        _migrate_leads_company_or_contact(conn)
+        # branches_selected/sales_flow_wait/knowledge_categories_shown/
+        # wa_display_name/acquisition_channel NÃO fazem parte da lista
+        # explícita de colunas que a migração acima recria — precisam ser
+        # (re)adicionadas DEPOIS dela, senão um banco totalmente fresco (nunca
+        # migrado antes) as perde na recriação da tabela. Em bancos já
+        # migrados a chamada é um no-op idempotente, sem efeito.
         ensure_column(conn, "leads", "branches_selected", "branches_selected TEXT NULL")
         ensure_column(conn, "leads", "sales_flow_wait", "sales_flow_wait TEXT NULL")
         ensure_column(conn, "leads", "knowledge_categories_shown", "knowledge_categories_shown TEXT NULL")
         ensure_column(conn, "leads", "wa_display_name", "wa_display_name TEXT NULL")
         ensure_column(conn, "leads", "acquisition_channel", "acquisition_channel TEXT NULL")
         ensure_column(conn, "leads", "collab_monitor_instance_id", "collab_monitor_instance_id TEXT NULL")
-        _migrate_leads_company_or_contact(conn)
 
         cur.execute("CREATE INDEX IF NOT EXISTS idx_leads_user ON leads(user_id, createdAt);")
         cur.execute(
@@ -1331,6 +1341,7 @@ def init_db() -> None:
         ensure_column(conn, "spy_agent_messages", "from_me", "from_me INTEGER NOT NULL DEFAULT 0")
         ensure_column(conn, "messages", "message_type", "message_type TEXT DEFAULT 'text'")
         ensure_column(conn, "messages", "media_url", "media_url TEXT")
+        ensure_column(conn, "messages", "external_message_id", "external_message_id TEXT")
 
         # Monitoramento de WhatsApp de colaborador (base)
         ensure_collab_monitor_tables(conn)
