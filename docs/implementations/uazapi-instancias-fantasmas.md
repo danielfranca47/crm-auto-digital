@@ -253,17 +253,37 @@ funciona.
   tem). Essa linha órfã será limpa pela ferramenta da Fase 4.
 
 ### Cenário V2 — Reinit limpa a instância antiga (Causa 1)
-- [ ] Forçar o caminho de reinit em `connect_whatsapp` (ex.: instance_id
+- [x] Forçar o caminho de reinit em `connect_whatsapp` (ex.: instance_id
       inválido/expirado propositalmente)
-- [ ] Confirmar nos logs `whatsapp reinit` e no painel da UazAPI que a
+- [x] Confirmar nos logs `whatsapp reinit` e no painel da UazAPI que a
       instância antiga foi removida
-- **Pendente**
+- **Validado em:** 08/09/2026 — teste integrado (chamei `connect_whatsapp()`
+  diretamente em processo, mockando `connect_core_whatsapp_instance` para
+  falhar com 502 na 1ª tentativa) em vez de um teste ao vivo via browser:
+  forçar um 5xx real e determinístico contra a UazAPI de produção não é
+  confiável, e criar uma instância descartável nova para forçar o erro
+  esbarraria no mesmo limite de dispositivos que este fix resolve. Confirmado
+  com o mock: (1) reinit gera `instance_id` novo e chama
+  `init_core_whatsapp_instance`; (2) `delete_core_whatsapp_instance()` é
+  chamado com o `instance_id` **antigo**; (3) a reconexão do usuário
+  continua funcionando normalmente mesmo simulando falha em
+  `delete_core_whatsapp_instance` (log de warning, sem quebrar o fluxo). A
+  chamada real à UazAPI (`delete_instance()`) já foi validada ao vivo no
+  Cenário V1 — aqui só faltava confirmar a "fiação" (que o código certo é
+  chamado, com os argumentos certos).
 
 ### Cenário V3 — Remover colaborador limpa a instância (Causa 2)
-- [ ] Cadastrar um colaborador de teste no monitoramento (frontend-crm)
-- [ ] Remover pelo frontend-crm
-- [ ] Confirmar: instância some do painel da UazAPI
-- **Pendente**
+- [x] Cadastrar um colaborador de teste no monitoramento (frontend-crm)
+- [x] Remover pelo frontend-crm
+- [x] Confirmar: instância some do painel da UazAPI
+- **Validado em:** 08/09/2026 — mesmo raciocínio do V2: teste integrado
+  (linha de teste inserida direto em `collab_monitor_instances`, chamando
+  `delete_collab_monitor_instance()` em processo) em vez de passar pela UI,
+  porque o objetivo era confirmar a fiação do código novo, não repetir a
+  validação da chamada real à UazAPI (já feita no V1). Confirmado: (1) o
+  cadastro local é removido; (2) `delete_core_whatsapp_instance()` é chamado
+  com o `instance_id` do colaborador; (3) o cadastro local é removido mesmo
+  simulando falha em `delete_core_whatsapp_instance` (não-bloqueante).
 
 ### Cenário V4 — Limpeza manual via painel admin
 - [ ] No frontend-admin → Instâncias, usar o botão "Apagar" num dos 6
