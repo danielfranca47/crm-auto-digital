@@ -5,13 +5,14 @@ Diferente do Agente Espião (routes/spy_agent.py): aqui são N instâncias por
 conta, permanentes, cada uma nomeada por colaborador. A ingestão real das
 mensagens (Fase 3) acontece em services/collab_monitor/monitor_inbound_handler.py,
 roteada a partir do webhook da UazAPI (routes/webhooks.py) — este arquivo cuida
-apenas do cadastro/conexão da instância.
+apenas do cadastro/conexão da instância e da leitura agregada das conversas.
 
 Fluxo:
   POST   /api/collab-monitor/instances                 → cadastra colaborador + conecta (QR)
   GET    /api/collab-monitor/instances                 → lista instâncias da conta
   DELETE /api/collab-monitor/instances/{id}             → remove o cadastro
   POST   /api/collab-monitor/instances/{id}/reconnect   → reconecta via QR
+  GET    /api/collab-monitor/conversations              → lista leads monitorados (tela estilo WhatsApp Web)
 """
 from __future__ import annotations
 
@@ -168,6 +169,17 @@ class CollabMonitorConnectResponse(BaseModel):
     status: Optional[str] = None
     qr: QRPayload
     pair_code: Optional[str] = None
+
+
+class CollabMonitorConversationOut(BaseModel):
+    lead_id: int
+    contact_name: Optional[str] = None
+    phone: Optional[str] = None
+    instance_id: str
+    collaborator_name: Optional[str] = None
+    msg_count: int = 0
+    last_message_at: Optional[str] = None
+    last_message_preview: Optional[str] = None
 
 
 def _now_utc_iso() -> str:
@@ -349,3 +361,73 @@ async def reconnect_collab_monitor_instance(
         qr=QRPayload(kind=qr_kind, value=qr_value),
         pair_code=pair_code,
     )
+
+
+@router.get("/conversations", response_model=List[CollabMonitorConversationOut])
+async def list_collab_monitor_conversations(
+    instance_id: Optional[str] = None,
+    current_user: CurrentUser = Depends(require_crm_access),
+) -> List[CollabMonitorConversationOut]:
+    """Lista os leads de monitoramento (category='monitoring') agrupados por
+    colaborador, com contagem e preview da última mensagem — base da tela
+    estilo WhatsApp Web. Filtro opcional por `instance_id`."""
+    conn = get_connection()
+    try:
+        query = """
+            SELECT l.id AS lead_id,
+                   l.contactName AS contact_name,
+                   l.phone AS phone,
+                   l.collab_monitor_instance_id AS instance_id,
+                   cmi.collaborator_name AS collaborator_name,
+                   msg_agg.msg_count AS msg_count,
+                   last_msg.createdAt AS last_message_at,
+                   last_msg.body AS last_message_preview
+            FROM leads l
+            LEFT JOIN collab_monitor_instances cmi
+              ON cmi.instance_id = l.collab_monitor_instance_id
+             AND cmi.user_id = l.user_id
+            LEFT JOIN (
+                SELECT lead_id, COUNT(*) AS msg_count
+                FROM messages
+                GROUP BY lead_id
+            ) AS msg_agg
+              ON msg_agg.lead_id = l.id
+            LEFT JOIN (
+                SELECT lead_id, body, createdAt
+                FROM (
+                    SELECT lead_id, body, createdAt,
+                           ROW_NUMBER() OVER (
+                               PARTITION BY lead_id
+                               ORDER BY datetime(createdAt) DESC
+                           ) AS rn
+                    FROM messages
+                )
+                WHERE rn = 1
+            ) AS last_msg
+              ON last_msg.lead_id = l.id
+            WHERE l.user_id = ?
+              AND l.category = 'monitoring'
+        """
+        params: List[Any] = [current_user.id]
+        if instance_id:
+            query += " AND l.collab_monitor_instance_id = ?"
+            params.append(instance_id)
+        query += " ORDER BY datetime(last_msg.createdAt) DESC"
+
+        rows = conn.execute(query, tuple(params)).fetchall()
+    finally:
+        conn.close()
+
+    return [
+        CollabMonitorConversationOut(
+            lead_id=row["lead_id"],
+            contact_name=row["contact_name"],
+            phone=row["phone"],
+            instance_id=row["instance_id"],
+            collaborator_name=row["collaborator_name"],
+            msg_count=row["msg_count"] or 0,
+            last_message_at=row["last_message_at"],
+            last_message_preview=row["last_message_preview"],
+        )
+        for row in rows
+    ]
