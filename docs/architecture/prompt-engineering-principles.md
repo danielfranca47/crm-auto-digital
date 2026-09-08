@@ -180,6 +180,61 @@ poderem contradizer a regra de "zero perguntas abertas".)
 
 ---
 
+## 8. Esqueleto de um prompt de Filha
+
+**Regra:** um prompt de Filha bem estruturado segue sempre a mesma sequência
+de blocos: **IDENTIDADE** (o que ela é) → **O QUE FAZ** → **COMO FAZ** →
+**O QUE NÃO FAZ** → **EXEMPLOS (✅/❌)** → **FORMATO DE SAÍDA**. Identidade e
+escopo vêm primeiro porque ancoram a interpretação de tudo que vem depois;
+exemplos ficam perto do fim, mais perto de onde a IA gera a resposta — é a
+parte do prompt com mais peso sobre o resultado final.
+
+**Por quê:** é a estrutura recomendada pelo guia oficial de boas práticas de
+prompt engineering da Anthropic (2026): papel/identidade → função principal
+(verbos diretos) → restrições (de preferência em positivo) → contexto/motivo
+→ formato de saída → exemplos (fixos quando o padrão é sempre igual;
+dinâmicos quando a tarefa varia caso a caso). Está alinhada aos princípios 2
+e 6 deste documento.
+
+**Onde já aplicamos (bem):**
+- `_build_child_prompt_recepcao()` (`decision_engine.py:2569`) segue o
+  esqueleto inteiro, 100% fixo: `IDENTIDADE` → `O QUE VOCÊ FAZ` →
+  `COMO VOCÊ FAZ` → `O QUE VOCÊ NÃO FAZ` → `EXEMPLOS DO QUE FAZER (✅)` →
+  `EXEMPLOS DE ERRO (❌)` → JSON de saída. Faz sentido ser 100% fixo porque
+  os exemplos descrevem um **comportamento** (extrair pedido comercial
+  embutido na saudação), não um fato de negócio — vale igual para qualquer
+  nicho de cliente.
+- `_build_child_prompt_closing()` (`decision_engine.py:3993`) segue o mesmo
+  esqueleto com nomes de seção próprios — `PAPEL` / `ESCOPO` / `TOM` /
+  `FRAMEWORK` / `RECUSAS` (= identidade + faz + não faz), `PROIBIÇÕES` (o que
+  não faz, em lista), `_ESCAPE_HATCH_BLOCK` (permissão para dizer "não
+  sei"), `_build_validation_block()` (checklist antes de retornar) — mas os
+  **exemplos vêm de `_build_training_examples_block()`
+  (`decision_engine.py:1211`)**, não hardcoded: são classificações reais de
+  "bom"/"ruim" feitas pelo próprio operador no Playground
+  (`context["training_examples"]`), few-shot dinâmico por negócio.
+
+**Regra para multi-tenant (importante):** a **estrutura** do esqueleto
+(quais blocos existem e em que ordem) é decidida por nós, no código — igual
+para todo usuário. O **conteúdo** de cada bloco só pode ser hardcoded quando
+descreve um padrão de comportamento universal do agente (ex.: "a Recepção
+nunca responde ao pedido comercial, só o registra"). Qualquer exemplo que
+cite preço, nome de serviço, oferta ou particularidade de nicho **tem que
+vir de uma variável dinâmica por negócio** — meta-prompter
+(`generated_prompt_parts`), `training_examples` do Playground, ou
+`qualification_fields` configurados pelo usuário — nunca hardcoded num
+prompt compartilhado por todos os usuários da plataforma.
+
+**Gap conhecido:** nem toda Filha usa os mesmos *nomes* de seção — Recepção
+usa "O QUE VOCÊ FAZ", Closing usa "PAPEL/ESCOPO". Não é uma contradição (é o
+mesmo esqueleto com vocabulário diferente), mas padronizar os nomes de seção
+entre Filhas é uma melhoria de baixo risco para uma implementação futura —
+não corrigida aqui.
+
+Fonte: [Prompt engineering best practices for 2026 — Claude by Anthropic](https://claude.com/blog/best-practices-for-prompt-engineering).
+
+---
+
 ## Checklist rápida antes de shippar um prompt novo/editado
 
 - [ ] Essa regra é crítica o suficiente para não poder falhar? Se sim, ela
@@ -197,3 +252,7 @@ poderem contradizer a regra de "zero perguntas abertas".)
       vez de inventar?
 - [ ] Esse bloco novo foi conferido junto dos outros blocos já injetados na
       mesma fase — sem repetição, sem contradição?
+- [ ] O prompt segue o esqueleto do princípio 8 (identidade → faz → não faz
+      → exemplos → formato de saída)? Os exemplos citados são só de
+      comportamento (podem ser fixos) ou envolvem fato de negócio (têm que
+      vir de variável dinâmica por usuário)?

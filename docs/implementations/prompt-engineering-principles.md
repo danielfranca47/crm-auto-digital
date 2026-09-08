@@ -112,6 +112,53 @@ runtime).
 
 ---
 
+## Fase 2 — Esqueleto de um prompt de Filha (anatomia)
+
+**Objetivo:** durante a revisão do Cenário P1, o usuário lembrou de um
+padrão de mercado para estruturar um prompt ("o que ela é, o que faz, o que
+não faz, exemplos do que fazer e do que não fazer") e pediu para: confirmar
+que esse padrão já está aplicado nas Filhas otimizadas recentemente
+(Recepção, Closing), pesquisar como o mercado documenta essa estrutura, e
+acrescentar isso ao documento — com cuidado de distinguir estrutura fixa
+(igual para todo usuário) de conteúdo que precisa ser variável por negócio
+(multi-tenant).
+
+Investigação: `_build_child_prompt_recepcao()` (`decision_engine.py:2569`)
+já segue o esqueleto completo 100% fixo (exemplos são de comportamento,
+válidos para qualquer nicho). `_build_child_prompt_closing()`
+(`decision_engine.py:3993`) segue o mesmo esqueleto com nomes de seção
+próprios, mas delega os exemplos a `_build_training_examples_block()`
+(`decision_engine.py:1211`) — classificações reais do operador no
+Playground, dinâmicas por negócio. Pesquisa de mercado (blog oficial da
+Anthropic, "Prompt engineering best practices for 2026") confirmou a mesma
+ordem de blocos e o critério fixo-vs-dinâmico para exemplos.
+
+| Arquivo | O que muda |
+|---|---|
+| `docs/architecture/prompt-engineering-principles.md` | Nova seção "8. Esqueleto de um prompt de Filha" (esqueleto, onde já aplicamos, regra multi-tenant fixo vs. dinâmico, gap conhecido, fonte) + 1 item novo na checklist final |
+
+### Commits Fase 2
+
+| # | Commit | O que foi implementado |
+|---|---|---|
+| 1 | `<pendente>` | Seção 8 (esqueleto de prompt) + item de checklist |
+
+### Relatório da Fase 2 — o que mudou na prática
+
+**Antes:** o documento tinha 7 princípios individuais, mas nenhum descrevia
+a estrutura/ordem completa de um prompt de Filha — cada princípio cobria uma
+prática isolada (guardrail, positivo vs. negativo, exemplos, etc.), sem
+juntar tudo num esqueleto único.
+**Agora:** existe uma seção 8 mostrando o esqueleto completo (identidade →
+faz → não faz → exemplos → formato de saída), citando a Recepção como
+exemplo 100% fixo e a Closing como exemplo do mesmo esqueleto com exemplos
+dinâmicos por negócio — e a checklist final ganhou 1 pergunta nova para
+conferir isso em prompts futuros.
+**Para validar:** Cenário P2, abaixo — mesma natureza do P1 (revisão de
+conteúdo, sem mudança de comportamento em runtime).
+
+---
+
 ## Checks de Validação
 
 Tarefa documental — sem cenário de Playground/WhatsApp aplicável. O check é
@@ -123,6 +170,13 @@ revisão de conteúdo:
 - [ ] Confirmar que as referências a arquivo/função citadas (ex.
       `decision_engine.py:1837`, `sales-flow.md`) ainda batem com o código
       real no momento da leitura
+
+### Cenário P2 — Revisão do conteúdo da seção 8 (esqueleto) pelo usuário
+- [ ] Usuário lê a seção "8. Esqueleto de um prompt de Filha" e confirma que
+      o esqueleto e a distinção fixo/dinâmico fazem sentido
+- [ ] Confirmar que as referências citadas (`decision_engine.py:2569`,
+      `decision_engine.py:3993`, `decision_engine.py:1211`) ainda batem com
+      o código real no momento da leitura
 
 ---
 
