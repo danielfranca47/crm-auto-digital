@@ -1,9 +1,11 @@
-# Otimizações do motor de LLM (temperature, structured outputs, prompt injection, cache)
+# Otimizações do motor de LLM (temperature, structured outputs, prompt injection, cache, validação de signals)
 
-> Contexto: 4 achados levantados durante a implementação
+> Contexto: M1-M4 vieram de 4 achados levantados durante a implementação
 > `prompt-engineering-principles` (Fase 3), ao ler o cliente de LLM real
 > (`backend-executors/app/services/llm_service.py`) e cruzar com pesquisa de
-> mercado. Chegaram a entrar como seção 9 em
+> mercado. M5 veio da triagem de graduação dessa mesma implementação (gap já
+> conhecido desde o princípio 1 do documento, nunca antes registrado como
+> item de plano). Os 4 primeiros chegaram a entrar como seção 9 em
 > [`docs/architecture/prompt-engineering-principles.md`](../architecture/prompt-engineering-principles.md),
 > mas foram removidos de lá (Fase 4) a pedido do usuário: aquele documento é
 > conhecimento para escrever prompt **com o que já existe hoje**, não um
@@ -122,3 +124,32 @@ não faz → exemplos → formato de saída). A implementação deve incluir vol
 lá e atualizar esse princípio para refletir a nova ordem real (bloco
 estável-por-perfil primeiro, bloco dinâmico-por-turno por último) — sem
 deixar o documento desalinhado do código.
+
+## M5 — Validação semântica de `signals_structured` em código (não só whitelist)
+
+**Prioridade: ALTA**
+
+`_sanitize_signals_structured()` (`decision_engine.py:1837`) só faz
+whitelist de chaves contra `SIGNALS_SCHEMA` — não valida nenhuma semântica
+do conteúdo. Casos concretos hoje sem checagem: `checkout_sent=true` sem
+`message_text` conter uma URL real (placeholder ou ausência passa direto);
+preço mencionado sem bater com `offer_pack`; nome de concorrente vazando
+para `message_text` apesar da proibição em texto. Isso é exatamente o tipo
+de regra que, segundo o princípio 1 de `prompt-engineering-principles.md`
+("guardrail de código > instrução em prompt para regras que não podem
+falhar"), não deveria depender só do bloco "VALIDAÇÃO — VERIFICAR ANTES DE
+RETORNAR" pedido em texto à própria LLM.
+
+**O que muda:** adicionar checagens semânticas em código (provavelmente em
+`_sanitize_signals_structured()` ou logo após a chamada de
+`generate_child_result()`) para os casos acima — pelo menos
+`checkout_sent=true` exigindo URL real em `message_text` antes de aceitar a
+resposta, com fallback (reprocessar/reprompt ou marcar para revisão) quando
+a checagem falha.
+
+**Risco de fazer:** médio — decidir o comportamento de fallback quando a
+validação falha (reprompt? handoff? bloquear o envio?) é uma decisão de
+produto, não só técnica — precisa de Plan Mode dedicado. Complementa (não
+substitui) o M2 (Structured Outputs): schema reforçado reduz a chance do
+erro acontecer, esta validação é a rede de segurança para quando mesmo
+assim acontecer.

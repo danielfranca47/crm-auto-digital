@@ -1,7 +1,7 @@
 # Documentação de Princípios de Engenharia de Prompt
 
 **Branch:** `feat/prompt-engineering-principles`
-**Status:** Em andamento
+**Status:** Todos os cenários validados
 
 ---
 
@@ -251,15 +251,15 @@ Tarefa documental — sem cenário de Playground/WhatsApp aplicável. O check é
 revisão de conteúdo:
 
 ### Cenário P1 — Revisão do conteúdo pelo usuário
-- [ ] Usuário lê `docs/architecture/prompt-engineering-principles.md` e
-      confirma que os 7 princípios e os exemplos/gaps citados fazem sentido
+- [x] (2026-09-08) Usuário lê `docs/architecture/prompt-engineering-principles.md`
+      e confirma que os 7 princípios e os exemplos/gaps citados fazem sentido
 - [x] (2026-09-08) Confirmar que as referências a arquivo/função citadas
       (ex. `decision_engine.py:1837`, `sales-flow.md`) ainda batem com o
       código real no momento da leitura — verificado por Claude
 
 ### Cenário P2 — Revisão do conteúdo da seção 8 (esqueleto) pelo usuário
-- [ ] Usuário lê a seção "8. Esqueleto de um prompt de Filha" e confirma que
-      o esqueleto e a distinção fixo/dinâmico fazem sentido
+- [x] (2026-09-08) Usuário lê a seção "8. Esqueleto de um prompt de Filha" e
+      confirma que o esqueleto e a distinção fixo/dinâmico fazem sentido
 - [x] (2026-09-08) Confirmar que as referências citadas
       (`decision_engine.py:2569`, `decision_engine.py:3993`,
       `decision_engine.py:1211`) ainda batem com o código real no momento
@@ -267,11 +267,15 @@ revisão de conteúdo:
 
 ---
 
-## Ajustes Possíveis Pós-Implementação
+## Ajustes Possíveis Pós-Implementação (triado na graduação)
 
-- Os gaps documentados (PROIBIÇÕES em negativo, falta de validação de código
-  para VALIDAÇÃO/`checkout_sent`+URL, ausência de schema reforçado na Mãe)
-  não são corrigidos nesta implementação — ficam registrados no documento
-  como candidatos a uma implementação futura própria
-  (`docs/plans/*-melhorias-futuras.md`, se o usuário quiser abrir), com seus
-  próprios testes P/C.
+- **PROIBIÇÕES em formato negativo** — não é tarefa isolada; já registrado
+  como orientação contínua no princípio 2 (reformular quando a Filha for
+  revisada por outro motivo).
+- **Ausência de schema reforçado na Mãe** — já coberto por `M2` de
+  `docs/plans/motor-llm-otimizacoes.md` (Structured Outputs cobre Mãe e
+  Filha).
+- **Falta de validação de código para `checkout_sent`+URL (semântica de
+  `signals_structured`)** — usuário confirmou como não-urgente/ALTA
+  prioridade → registrado como `M5` em
+  `docs/plans/motor-llm-otimizacoes.md`.
