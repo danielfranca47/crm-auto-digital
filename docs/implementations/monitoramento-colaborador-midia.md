@@ -132,7 +132,7 @@ viram texto (transcrição/descrição) no histórico e alimentam o classificado
 
 | # | Commit | O que foi implementado |
 |---|---|---|
-| 1 | `<preenchido após o commit>` | Tratamento de áudio/imagem/vídeo/figurinha/documento no monitoramento de colaborador |
+| 1 | `f8425fd` | Tratamento de áudio/imagem/vídeo/figurinha/documento no monitoramento de colaborador |
 
 ### Relatório da Fase 1 — o que mudou na prática
 
@@ -175,8 +175,9 @@ mockadas, valida o mecanismo). O resultado real do Whisper/visão sobre
 - **Validado em:** 08/09/2026 — mesmo script.
 
 ### Cenário C4 — Toggle de transcrição desligado
-- [ ] Simular `audio_transcription_enabled=False` no AI Profile
-- [ ] Confirmar placeholder de "transcrição desativada", sem chamada real ao Whisper
+- [x] Simular `audio_transcription_enabled=False` no AI Profile
+- [x] Confirmar placeholder de "transcrição desativada", sem chamada real ao Whisper
+- **Validado em:** 08/09/2026 — mesmo script; `transcribe_audio_from_url` mockado e nunca chamado (`assert_not_called`).
 
 ---
 
