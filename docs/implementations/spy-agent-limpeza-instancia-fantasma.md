@@ -107,6 +107,47 @@ resp = await api.crm.whatsappConnect()  # POST /api/whatsapp/connect
 resp = await api.spyAgent.connect({})   # POST /api/spy-agent/connect
 ```
 
+### Commits Fase 1
+
+| # | Commit | O que foi implementado |
+|---|---|---|
+| 1 | `b34406d` | backend: `POST /connect` dedicado + `role="spy"` no reinit; frontend: usa endpoints dedicados |
+
+**Detalhes do commit `b34406d`:**
+- `backend-crm/routes/spy_agent.py` — novo `POST /connect` (gera instance_id
+  próprio, `role="spy"`, apaga a instância antiga na UazAPI de forma
+  não-bloqueante se já havia uma diferente configurada); `POST /reconnect`
+  passa `role="spy"` no reinit por token expirado; helpers extraídos
+  (`_upsert_spy_instance_config`, `_set_spy_webhook`, `_build_connect_response`,
+  `_generate_spy_instance_id`, `_sanitize_phone`) reaproveitados pelos
+  endpoints já existentes (`/instance-config`, `/start`, `/reconnect`)
+- `frontend-crm/src/services/api.ts` — novo `spyAgent.connect()`
+- `frontend-crm/src/components/agente/SpyAgentSetup.tsx` —
+  `handleConnectSpyInstance` usa `api.spyAgent.connect()` em vez de
+  `api.crm.whatsappConnect()`; `handleRefreshQr` usa `api.spyAgent.reconnect()`
+  em vez de `api.crm.whatsappRefreshQr()`; polling de conexão usa
+  `api.spyAgent.reconnectStatus()` (checa a instância espiã específica) em
+  vez de `api.crm.whatsappStatus()` (checava a instância principal)
+
+### Relatório da Fase 1 — o que mudou na prática
+
+**Antes:** ao clicar "Conectar fone de observação" no Agente Espião, se o
+usuário já tinha o WhatsApp principal do CRM conectado, o sistema
+silenciosamente reaproveitava essa mesma conexão como sendo o "fone espião"
+— sem mostrar erro. A partir daí, mensagens reais de clientes paravam de
+chegar ao bot de vendas (iam só para o histórico interno do Agente Espião),
+sem qualquer aviso.
+
+**Agora:** o botão sempre cria uma conexão WhatsApp nova e separada,
+exclusiva para observação — nunca reaproveita o número principal do CRM. O
+bot de vendas real continua funcionando normalmente, independente do Agente
+Espião estar configurado ou não.
+
+**Para validar:** Cenários P1 (isolamento), P2 (mensagens reais não são
+desviadas) e P3 (refresh/reconnect mantém a instância), abaixo.
+
+---
+
 ### Fase 2 — Limpeza de instância fantasma ao remover
 
 **Objetivo:** ao remover o fone de observação, apagar também a instância na
@@ -115,6 +156,32 @@ UazAPI (agora seguro, pois a Fase 1 garante isolamento).
 | Arquivo | O que muda |
 |---|---|
 | `backend-crm/routes/spy_agent.py` | `DELETE /instance-config` lê a linha antes de apagar, chama `delete_core_whatsapp_instance()` non-blocking depois |
+
+### Commits Fase 2
+
+| # | Commit | O que foi implementado |
+|---|---|---|
+| 1 | `b78ece8` | backend: apaga a instância na UazAPI ao remover a config local |
+
+**Detalhes do commit `b78ece8`:**
+- `backend-crm/routes/spy_agent.py` — `delete_instance_config` lê
+  `spy_instance_id` antes de apagar a linha local; depois de apagar,
+  chama `delete_core_whatsapp_instance()` em `try/except` não-bloqueante
+  (falha só gera `logger.warning`, nunca impede a remoção local)
+
+### Relatório da Fase 2 — o que mudou na prática
+
+**Antes:** ao clicar no ícone de lixeira para remover o "fone de
+observação", o sistema só esquecia a configuração internamente — a conexão
+WhatsApp continuava ativa na UazAPI para sempre, consumindo uma instância
+sem que ninguém mais a usasse ou soubesse que ela existia.
+
+**Agora:** remover o fone de observação também desconecta e apaga essa
+instância na UazAPI, igual já acontece hoje ao remover um colaborador
+monitorado.
+
+**Para validar:** Cenário P4 (limpeza no remove) e P5 (troca sem passar pelo
+remove), abaixo.
 
 ---
 
