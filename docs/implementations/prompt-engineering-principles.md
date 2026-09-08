@@ -219,24 +219,25 @@ revisão de conteúdo:
 ### Cenário P1 — Revisão do conteúdo pelo usuário
 - [ ] Usuário lê `docs/architecture/prompt-engineering-principles.md` e
       confirma que os 7 princípios e os exemplos/gaps citados fazem sentido
-- [ ] Confirmar que as referências a arquivo/função citadas (ex.
-      `decision_engine.py:1837`, `sales-flow.md`) ainda batem com o código
-      real no momento da leitura
+- [x] (2026-09-08) Confirmar que as referências a arquivo/função citadas
+      (ex. `decision_engine.py:1837`, `sales-flow.md`) ainda batem com o
+      código real no momento da leitura — verificado por Claude
 
 ### Cenário P2 — Revisão do conteúdo da seção 8 (esqueleto) pelo usuário
 - [ ] Usuário lê a seção "8. Esqueleto de um prompt de Filha" e confirma que
       o esqueleto e a distinção fixo/dinâmico fazem sentido
-- [ ] Confirmar que as referências citadas (`decision_engine.py:2569`,
-      `decision_engine.py:3993`, `decision_engine.py:1211`) ainda batem com
-      o código real no momento da leitura
+- [x] (2026-09-08) Confirmar que as referências citadas
+      (`decision_engine.py:2569`, `decision_engine.py:3993`,
+      `decision_engine.py:1211`) ainda batem com o código real no momento
+      da leitura — verificado por Claude
 
 ### Cenário P3 — Revisão dos 4 achados de pesquisa (seção 9) pelo usuário
 - [ ] Usuário lê a seção "9. Achados de pesquisa aplicados ao nosso motor de
       LLM" e confirma que os 4 achados fazem sentido e agregam valor
-- [ ] Confirmar que as referências citadas (`llm_service.py:154`,
+- [x] (2026-09-08) Confirmar que as referências citadas (`llm_service.py:154`,
       `llm_service.py:166-168`, bloco `FRAMEWORK`/`Missing` em
       `_build_child_prompt_closing`) ainda batem com o código real no
-      momento da leitura
+      momento da leitura — verificado por Claude
 
 ---
 
