@@ -141,7 +141,7 @@ ordem de blocos e o critério fixo-vs-dinâmico para exemplos.
 
 | # | Commit | O que foi implementado |
 |---|---|---|
-| 1 | `<pendente>` | Seção 8 (esqueleto de prompt) + item de checklist |
+| 1 | `7af4d94` | Seção 8 (esqueleto de prompt) + item de checklist |
 
 ### Relatório da Fase 2 — o que mudou na prática
 
