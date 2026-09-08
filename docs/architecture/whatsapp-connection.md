@@ -186,14 +186,25 @@ global) até o token novo ser propagado. Runbook de rotação:
 Uma conta pode ter mais de uma `WhatsappConnection` — a instância do agente
 (`role="agent"`, default) e, opcionalmente, instâncias de monitoramento de
 colaborador (`role="monitor"`, ver [`collab-monitor.md`](collab-monitor.md)).
-Duas garantias tornam isso seguro:
+Várias garantias tornam isso seguro:
 
 - `connections_service.upsert_connection()`/`upsert_connection_optional_token()`
   resolvem a linha existente por **`instance_id`**, nunca por `user_id` —
   conectar uma 2ª instância cria uma linha nova em vez de sobrescrever a 1ª.
+- **Índice único parcial no banco** (`ensure_whatsapp_connections_unique_agent_index()`,
+  `app/db.py`, chamado no `on_startup()` após `ensure_whatsapp_connections_columns()`):
+  `CREATE UNIQUE INDEX ... ON whatsapp_connections(user_id) WHERE role = 'agent'`
+  — impede fisicamente uma 2ª linha `role='agent'` para o mesmo `user_id`;
+  `role='monitor'` fica fora do índice e continua sem limite (uma por
+  colaborador). Sintaxe idêntica em SQLite/Postgres. Roda dentro de
+  `try/except` com log de warning — nunca derruba o startup, mesmo que
+  surja alguma duplicata inesperada no futuro.
 - `get_connection_for_user()` (usado por `GET /whatsapp-connections/resolve-by-user`,
   consumido pelo executor real para decidir de qual instância o agente envia)
-  filtra `role == "agent"` — nunca resolve para uma instância monitor.
+  filtra `role == "agent"` e ordena por `id` decrescente antes do `.first()`
+  — nunca resolve para uma instância monitor, e resolve de forma
+  determinística para a mais recente mesmo se uma duplicata escapar da
+  constraint acima.
 - `POST /whatsapp/send` e `/whatsapp/send-media` (`whatsapp_send.py`) rejeitam
   com `403 instance_not_allowed_to_send` qualquer envio por instância com
   `role != "agent"` — defesa em profundidade independente do resolve acima.
