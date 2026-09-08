@@ -316,6 +316,43 @@ async def status_instance(
     return uazapi_admin.redact_instance_token(raw)
 
 
+@router.delete("/whatsapp-instances/{instance_id}")
+async def delete_instance(
+    instance_id: str,
+    db: Session = Depends(get_db),
+    _: str = Depends(_require_service_token),
+):
+    """Apaga a instância na UazAPI e remove a linha local. Usada para limpar
+    instâncias fantasmas (ex.: instância antiga abandonada após um reinit,
+    ou colaborador de monitoramento removido) — nunca faz parte do fluxo de
+    conexão normal do usuário."""
+    base_url = settings.UAZAPI_BASE_URL or ""
+    normalized_instance_id = _normalize_instance_id(instance_id)
+    instance_token = _resolve_instance_token(db, normalized_instance_id)
+
+    started = time.perf_counter()
+    try:
+        await uazapi_admin.delete_instance(
+            base_url=base_url,
+            instance_token=instance_token,
+            instance_id=normalized_instance_id,
+        )
+    except uazapi_admin.UazapiAdminError as exc:
+        elapsed_ms = (time.perf_counter() - started) * 1000
+        _log_connect_attempt(endpoint="delete", instance_id=normalized_instance_id, status_code=exc.status_code or 502, elapsed_ms=elapsed_ms)
+        if exc.status_code == 404:
+            # Já não existe na UazAPI (ex.: apagada manualmente no painel deles) — trata como sucesso.
+            connections_service.delete_connection_by_instance(db, normalized_instance_id)
+            return {"ok": True, "uazapi_already_gone": True}
+        _raise_uazapi_http_error(exc)
+
+    elapsed_ms = (time.perf_counter() - started) * 1000
+    _log_connect_attempt(endpoint="delete", instance_id=normalized_instance_id, status_code=200, elapsed_ms=elapsed_ms)
+
+    connections_service.delete_connection_by_instance(db, normalized_instance_id)
+    return {"ok": True}
+
+
 @router.post("/whatsapp-instances/connection-event")
 async def connection_event(
     payload: ConnectionEventPayload,

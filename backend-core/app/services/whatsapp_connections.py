@@ -35,6 +35,15 @@ def get_connection_by_instance(db: Session, instance_id: str) -> Optional[models
     )
 
 
+def delete_connection_by_instance(db: Session, instance_id: str) -> bool:
+    connection = get_connection_by_instance(db, instance_id)
+    if not connection:
+        return False
+    db.delete(connection)
+    db.commit()
+    return True
+
+
 def mask_token(encrypted_token: Optional[str]) -> Optional[str]:
     if not encrypted_token:
         return None
