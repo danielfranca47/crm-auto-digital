@@ -241,7 +241,7 @@ futura, não critério de escrita de prompt.
 
 | # | Commit | O que foi implementado |
 |---|---|---|
-| 1 | `<pendente>` | Reversão da seção 9 + atualização do plano em docs/plans |
+| 1 | `6d2a190` | Reversão da seção 9 + atualização do plano em docs/plans |
 
 ---
 
