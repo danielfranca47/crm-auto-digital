@@ -169,7 +169,7 @@ coluna "Monitorado".
 
 | # | Commit | O que foi implementado |
 |---|---|---|
-| 1 | `<preenchido após o commit>` | Badge "Monitorado" persistente no card |
+| 1 | `868d9d2` | Badge "Monitorado" persistente no card |
 
 ### Relatório da Fase 2 — o que mudou na prática
 
