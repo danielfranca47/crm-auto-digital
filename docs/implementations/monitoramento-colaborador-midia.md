@@ -37,10 +37,19 @@ graduado). Isso significa que:
   texto normal em `messages.body` (mesmo padrão do Agente Espião, que usa
   `[ÁUDIO: ...]`/`[IMAGEM: ...]`) para aparecer no histórico do lead e ser
   consumida pelo classificador de estágio (`classifier.py`)?
-- Este item também foi citado como dependência (não bloqueante) da
-  implementação `monitoramento-colaborador-tela-whatsapp-web.md` (tela estilo
-  WhatsApp Web) — se aquela tela precisar exibir mídia, este item pode
-  precisar ser resolvido antes ou em conjunto.
+- A tela de leitura estilo WhatsApp Web (`CollabMonitorInbox.tsx`, já
+  graduada em [`collab-monitor.md`](../architecture/collab-monitor.md)) hoje
+  só renderiza texto — se este item avançar, o Plan Mode precisa decidir se a
+  bolha de mídia mostra a mídia bruta (URL assinada da UazAPI, ex.: `<img>`
+  direto) ou uma descrição/transcrição textual gerada por IA (mesmo padrão
+  `[ÁUDIO: ...]`/`[IMAGEM: ...]` do Agente Espião) — a resposta muda tanto o
+  schema (`messages.media_url` faz sentido nos dois casos, mas só o primeiro
+  caso precisa de URL servível ao navegador) quanto a UX da bolha.
+- Referência de schema: `spy_agent_messages` (Agente Espião) já tem as
+  colunas que faltam em `messages` — `media_url`, `transcription`,
+  `external_message_id`, `received_at`, `processed_at` — útil como ponto de
+  partida para a migração em `messages` ou para decidir se vale mais criar
+  uma tabela irmã em vez de estender a tabela de alto tráfego do fluxo real.
 
 ---
 

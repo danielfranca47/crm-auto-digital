@@ -13,6 +13,7 @@ import {
   FlaskConical,
   Eye,
   CalendarDays,
+  Users2,
 } from "lucide-react";
 import { NavLink, useNavigate } from "react-router-dom";
 import { useState } from "react";
@@ -122,6 +123,14 @@ export function AppSidebar() {
                         {spyBadge.label}
                       </span>
                     )}
+                  </NavLink>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+              <SidebarMenuItem>
+                <SidebarMenuButton asChild>
+                  <NavLink to="/monitoramento" end className={getNavCls}>
+                    <Users2 className="mr-2 h-4 w-4" />
+                    <span className="flex-1">Monitoramento</span>
                   </NavLink>
                 </SidebarMenuButton>
               </SidebarMenuItem>
