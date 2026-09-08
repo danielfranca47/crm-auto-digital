@@ -130,6 +130,26 @@ UazAPI (`crm-1-dc82969b`) — o painel já está com 5 instâncias em vez de 6.
 | `backend-crm/routes/whatsapp_connect.py` | No bloco de reinit (linhas 244-262), após sucesso com `new_instance_id`, chama `delete_core_whatsapp_instance(old_instance_id)` em `try/except` não-bloqueante (mesmo padrão do `_set_whatsapp_webhook` logo abaixo) |
 | `docs/architecture/whatsapp-connection.md` | Documentar a limpeza automática no reinit |
 
+### Commits Fase 2
+
+| # | Commit | O que foi implementado |
+|---|---|---|
+| 1 | `f2d0baf` | `connect_whatsapp()` apaga a instância antiga (não-bloqueante) após reinit + doc |
+
+### Relatório da Fase 2 — o que mudou na prática
+
+**Antes:** quando a UazAPI dava erro ao reconectar (ex.: instância travada/
+token expirado), o sistema criava silenciosamente uma instância nova e
+esquecia a antiga para sempre — essa era a principal fonte dos fantasmas.
+
+**Agora:** depois de criar a instância nova com sucesso, o sistema também
+manda apagar a antiga na UazAPI. Se essa limpeza falhar por qualquer motivo
+(ex.: UazAPI fora do ar naquele instante), a reconexão do usuário continua
+funcionando normalmente — só fica um aviso no log, não quebra nada.
+
+**Para validar:** Cenário V2, abaixo — precisa forçar o caminho de erro
+propositalmente (não acontece em uso normal).
+
 ### Fase 3 — Corrige Causa 2 (delete de colaborador não desconecta)
 
 | Arquivo | O que muda |
