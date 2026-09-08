@@ -94,6 +94,14 @@ Pós-Implementação".
 
 **Objetivo:** os dois endpoints aceitam `limit`/`offset` e devolvem `has_more`, sem quebrar nenhum consumidor existente.
 
+**Status:** Implementado.
+
+### Commits Fase 1
+
+| # | Commit | O que foi implementado |
+|---|---|---|
+| 1 | `edc1a7c` | `GET /collab-monitor/conversations` e `GET /assistente-ia/messages/{lead_id}` paginados (opt-in na segunda), cliente `api.ts` atualizado |
+
 | Arquivo | O que muda |
 |---|---|
 | `backend-crm/routes/collab_monitor.py` | `list_collab_monitor_conversations`: adiciona `limit: int = Query(20, ge=1, le=100)`, `offset: int = Query(0, ge=0)`; busca `limit+1` linhas, corta para `limit`, calcula `has_more`. Novo response model `CollabMonitorConversationsPage {items, has_more}` no lugar do `List[...]` direto. |
@@ -141,6 +149,28 @@ async def list_collab_monitor_conversations(
 | Arquivo | O que muda |
 |---|---|
 | `frontend-crm/src/pages/CollabMonitorInbox.tsx` | `conversationPage` (reset ao trocar `instanceFilter`, tamanho 20) e `messagePage` (reset ao trocar `selectedLeadId`, tamanho 30). `useQuery` keys incluem a página. Barra de paginação no rodapé da coluna esquerda e no topo do painel de mensagens — "Anterior" desabilitado em `page === 0`, "Próxima" desabilitado em `!has_more`. |
+
+**Ajuste feito durante a implementação (não previsto no plano):** a lista de
+colaboradores do filtro (`Select` no topo da coluna esquerda) antes era
+derivada das próprias conversas carregadas (`conversations` completo, sem
+paginação). Com paginação, isso passaria a mostrar só os colaboradores da
+página atual — regressão. Corrigido usando `GET /collab-monitor/instances`
+(`api.crm.collabMonitorList()`, já existente, usado pelo `ManageCollaboratorsDialog`)
+como fonte da lista de colaboradores do filtro, independente da paginação
+das conversas.
+
+**Ajuste de componente:** em vez do `Pagination`/`PaginationLink` do shadcn
+(baseado em `<a>`, pensado para navegação com `href`), foi criado um
+componente `Pager` local com `Button` (`onClick`), mais adequado a paginação
+sem roteamento por URL e com foco/teclado corretos por padrão.
+
+**Status:** Implementado.
+
+### Commits Fase 2
+
+| # | Commit | O que foi implementado |
+|---|---|---|
+| 2 | *(a registrar)* | UI de paginação tradicional (conversas + mensagens) em `CollabMonitorInbox.tsx` |
 
 ---
 

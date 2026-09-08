@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { MessageSquareOff, Phone, Users, UserCog } from "lucide-react";
+import { ChevronLeft, ChevronRight, MessageSquareOff, Phone, Users, UserCog } from "lucide-react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -14,6 +14,49 @@ import {
 } from "@/components/ui/select";
 import { ManageCollaboratorsDialog } from "@/components/ManageCollaboratorsDialog";
 import { api, type CollabMonitorConversation, type LeadMessage } from "@/services/api";
+
+const CONVERSATIONS_PAGE_SIZE = 20;
+const MESSAGES_PAGE_SIZE = 30;
+
+function Pager({
+  page,
+  hasMore,
+  onPrev,
+  onNext,
+  className = "",
+}: {
+  page: number;
+  hasMore: boolean;
+  onPrev: () => void;
+  onNext: () => void;
+  className?: string;
+}) {
+  return (
+    <div className={`flex items-center justify-between gap-2 px-2 py-1.5 ${className}`}>
+      <Button
+        size="sm"
+        variant="ghost"
+        className="h-7 px-2 text-xs"
+        disabled={page === 0}
+        onClick={onPrev}
+      >
+        <ChevronLeft className="h-3.5 w-3.5 mr-1" />
+        Anterior
+      </Button>
+      <span className="text-[11px] text-muted-foreground">Página {page + 1}</span>
+      <Button
+        size="sm"
+        variant="ghost"
+        className="h-7 px-2 text-xs"
+        disabled={!hasMore}
+        onClick={onNext}
+      >
+        Próxima
+        <ChevronRight className="h-3.5 w-3.5 ml-1" />
+      </Button>
+    </div>
+  );
+}
 
 function getInitials(name?: string | null): string {
   if (!name) return "?";
@@ -114,35 +157,60 @@ export default function CollabMonitorInbox() {
   const [instanceFilter, setInstanceFilter] = useState<string>("all");
   const [selectedLeadId, setSelectedLeadId] = useState<number | null>(null);
   const [manageOpen, setManageOpen] = useState(false);
+  const [conversationPage, setConversationPage] = useState(0);
+  const [messagePage, setMessagePage] = useState(0);
 
-  const { data: conversations, isLoading: conversationsLoading } = useQuery({
-    queryKey: ["collab-monitor-conversations", instanceFilter],
+  function handleInstanceFilterChange(value: string) {
+    setInstanceFilter(value);
+    setConversationPage(0);
+  }
+
+  function handleSelectConversation(leadId: number) {
+    setSelectedLeadId(leadId);
+    setMessagePage(0);
+  }
+
+  const { data: conversationsPage, isLoading: conversationsLoading } = useQuery({
+    queryKey: ["collab-monitor-conversations", instanceFilter, conversationPage],
     queryFn: () =>
-      api.crm.collabMonitorConversations(instanceFilter === "all" ? undefined : instanceFilter),
+      api.crm.collabMonitorConversations(instanceFilter === "all" ? undefined : instanceFilter, {
+        limit: CONVERSATIONS_PAGE_SIZE,
+        offset: conversationPage * CONVERSATIONS_PAGE_SIZE,
+      }),
   });
+  const conversations = conversationsPage?.items ?? [];
 
   function handleCollaboratorsChanged() {
     queryClient.invalidateQueries({ queryKey: ["collab-monitor-conversations"] });
+    queryClient.invalidateQueries({ queryKey: ["collab-monitor-instances-filter"] });
   }
 
-  const collaborators = useMemo(() => {
-    const seen = new Map<string, string>();
-    for (const c of conversations ?? []) {
-      if (!seen.has(c.instance_id)) {
-        seen.set(c.instance_id, c.collaborator_name || c.instance_id);
-      }
-    }
-    return Array.from(seen.entries()).map(([instance_id, name]) => ({ instance_id, name }));
-  }, [conversations]);
+  const { data: allInstances } = useQuery({
+    queryKey: ["collab-monitor-instances-filter"],
+    queryFn: () => api.crm.collabMonitorList(),
+  });
+
+  const collaborators = useMemo(
+    () =>
+      (allInstances ?? []).map((i) => ({
+        instance_id: i.instance_id,
+        name: i.collaborator_name || i.instance_id,
+      })),
+    [allInstances]
+  );
 
   const selectedConversation = useMemo(
-    () => (conversations ?? []).find((c) => c.lead_id === selectedLeadId) ?? null,
+    () => conversations.find((c) => c.lead_id === selectedLeadId) ?? null,
     [conversations, selectedLeadId]
   );
 
   const { data: messagesData, isLoading: messagesLoading } = useQuery({
-    queryKey: ["lead-messages", selectedLeadId],
-    queryFn: () => api.assistenteIA.mensagens(selectedLeadId as number, false),
+    queryKey: ["lead-messages", selectedLeadId, messagePage],
+    queryFn: () =>
+      api.assistenteIA.mensagens(selectedLeadId as number, false, {
+        limit: MESSAGES_PAGE_SIZE,
+        offset: messagePage * MESSAGES_PAGE_SIZE,
+      }),
     enabled: !!selectedLeadId,
   });
 
@@ -180,7 +248,7 @@ export default function CollabMonitorInbox() {
         {/* Coluna esquerda: lista de conversas */}
         <div className="w-full max-w-xs border-r flex flex-col shrink-0">
           <div className="p-2 border-b">
-            <Select value={instanceFilter} onValueChange={setInstanceFilter}>
+            <Select value={instanceFilter} onValueChange={handleInstanceFilterChange}>
               <SelectTrigger className="h-9 text-sm">
                 <SelectValue placeholder="Filtrar por colaborador" />
               </SelectTrigger>
@@ -204,22 +272,32 @@ export default function CollabMonitorInbox() {
               </div>
             )}
 
-            {!conversationsLoading && (conversations ?? []).length === 0 && (
+            {!conversationsLoading && conversations.length === 0 && (
               <div className="p-6 text-center text-sm text-muted-foreground">
                 Nenhuma conversa monitorada ainda.
               </div>
             )}
 
             {!conversationsLoading &&
-              (conversations ?? []).map((c) => (
+              conversations.map((c) => (
                 <ConversationListItem
                   key={c.lead_id}
                   conversation={c}
                   active={c.lead_id === selectedLeadId}
-                  onSelect={() => setSelectedLeadId(c.lead_id)}
+                  onSelect={() => handleSelectConversation(c.lead_id)}
                 />
               ))}
           </div>
+
+          {!conversationsLoading && (conversations.length > 0 || conversationPage > 0) && (
+            <Pager
+              page={conversationPage}
+              hasMore={conversationsPage?.has_more ?? false}
+              onPrev={() => setConversationPage((p) => Math.max(0, p - 1))}
+              onNext={() => setConversationPage((p) => p + 1)}
+              className="border-t shrink-0"
+            />
+          )}
         </div>
 
         {/* Coluna direita: conversa selecionada */}
@@ -252,6 +330,16 @@ export default function CollabMonitorInbox() {
                   </p>
                 </div>
               </div>
+
+              {!messagesLoading && (orderedMessages.length > 0 || messagePage > 0) && (
+                <Pager
+                  page={messagePage}
+                  hasMore={messagesData?.has_more ?? false}
+                  onPrev={() => setMessagePage((p) => Math.max(0, p - 1))}
+                  onNext={() => setMessagePage((p) => p + 1)}
+                  className="border-b shrink-0"
+                />
+              )}
 
               <div className="flex-1 overflow-y-auto min-w-0">
                 <div className="p-4 space-y-2">
