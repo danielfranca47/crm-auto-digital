@@ -1,8 +1,9 @@
 import { useMemo, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
-import { MessageSquareOff, Phone, Users } from "lucide-react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { MessageSquareOff, Phone, Users, UserCog } from "lucide-react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   Select,
@@ -11,6 +12,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { ManageCollaboratorsDialog } from "@/components/ManageCollaboratorsDialog";
 import { api, type CollabMonitorConversation, type LeadMessage } from "@/services/api";
 
 function getInitials(name?: string | null): string {
@@ -108,14 +110,20 @@ function MessageBubble({ message }: { message: LeadMessage }) {
 }
 
 export default function CollabMonitorInbox() {
+  const queryClient = useQueryClient();
   const [instanceFilter, setInstanceFilter] = useState<string>("all");
   const [selectedLeadId, setSelectedLeadId] = useState<number | null>(null);
+  const [manageOpen, setManageOpen] = useState(false);
 
   const { data: conversations, isLoading: conversationsLoading } = useQuery({
     queryKey: ["collab-monitor-conversations", instanceFilter],
     queryFn: () =>
       api.crm.collabMonitorConversations(instanceFilter === "all" ? undefined : instanceFilter),
   });
+
+  function handleCollaboratorsChanged() {
+    queryClient.invalidateQueries({ queryKey: ["collab-monitor-conversations"] });
+  }
 
   const collaborators = useMemo(() => {
     const seen = new Map<string, string>();
@@ -151,7 +159,22 @@ export default function CollabMonitorInbox() {
         <span className="text-xs text-muted-foreground">
           Conversas capturadas dos WhatsApps de colaboradores monitorados
         </span>
+        <Button
+          size="sm"
+          variant="outline"
+          className="ml-auto"
+          onClick={() => setManageOpen(true)}
+        >
+          <UserCog className="h-4 w-4 mr-1.5" />
+          Gerenciar colaboradores
+        </Button>
       </div>
+
+      <ManageCollaboratorsDialog
+        open={manageOpen}
+        onOpenChange={setManageOpen}
+        onChanged={handleCollaboratorsChanged}
+      />
 
       <div className="flex-1 flex min-h-0">
         {/* Coluna esquerda: lista de conversas */}
