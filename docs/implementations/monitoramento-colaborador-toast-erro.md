@@ -106,6 +106,24 @@ específica de rate limit; qualquer outro erro cai na mensagem genérica.
   não fazem parte do commit da Fase 1.
 - **Validado em:** 08/09/2026
 
+### Cenário 2b — Sessão real autenticada, local, sem CORS (validado por Claude)
+- [x] Subiu backend-core + backend-crm localmente (processo próprio,
+      portas 8011/8000, isoladas de outras sessões), usuário de teste novo
+      (`core.db` local, assinatura `crm_pro` ativa inserida manualmente só
+      para liberar entitlements) — nenhuma alteração em banco de produção
+- [x] `PRIVATE_ORIGINS` liberado localmente via env var do processo (nunca
+      escrito em `.env`) — sessão real, token JWT real, zero CORS
+- [x] AI Profile carrega normalmente com esse usuário; aba "Monitoramento"
+      presente (branch ainda não removeu, isso é feature separada); clique
+      na aba abre `MonitoramentoColaboradores` com "Nenhum colaborador
+      cadastrado ainda." — sem erro, sem crash
+- **Não testado propositalmente:** o clique real em "Cadastrar e Conectar"
+  chamaria a UazAPI de verdade (mesma conta usada em produção) — evitado
+  para não competir com o trabalho em andamento na branch
+  `fix/uazapi-instancias-fantasmas` sobre o mesmo rate limit/quota de
+  instâncias.
+- **Validado em:** 08/09/2026
+
 ### Cenário 1 — Fluxo feliz + mensagem específica de 429 (pendente, requer ambiente real)
 - [ ] Com o rate limit da UazAPI já liberado, clicar "Cadastrar e Conectar"
       com um nome válido na aba Monitoramento do AI Profile (produção)
