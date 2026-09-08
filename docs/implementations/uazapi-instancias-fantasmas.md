@@ -1,7 +1,7 @@
 # Fix: instâncias fantasmas na UazAPI
 
 **Branch:** `fix/uazapi-instancias-fantasmas`
-**Status:** Em andamento
+**Status:** Todos os cenários validados (08/09/2026) — pronto para graduação
 
 ---
 
@@ -286,10 +286,26 @@ funciona.
   simulando falha em `delete_core_whatsapp_instance` (não-bloqueante).
 
 ### Cenário V4 — Limpeza manual via painel admin
-- [ ] No frontend-admin → Instâncias, usar o botão "Apagar" num dos 6
-      fantasmas reais existentes hoje
-- [ ] Confirmar: some da nossa listagem e do painel da UazAPI
-- **Pendente**
+- [x] No frontend-admin → Instâncias, usar o botão "Apagar" num dos
+      fantasmas reais existentes
+- [x] Confirmar: some da nossa listagem e do painel da UazAPI
+- **Validado em:** 08/09/2026 — teste ao vivo completo, no browser real
+  (chrome-devtools MCP), com o utilizador acompanhando. Como as 5 instâncias
+  fantasmas restantes vivem na UazAPI de produção mas o `core.db` desta
+  worktree é local/vazio (nasce sem as linhas `WhatsappConnection`
+  correspondentes), semeei localmente 5 linhas equivalentes usando os
+  tokens **reais** dessas instâncias (obtidos via `GET /instance/all` com
+  `admintoken`, mesma técnica do Cenário V1) — sem tocar no banco de
+  produção, só recriando localmente o que a rota precisa para decriptar o
+  token certo. Rodei `backend-core` (porta 8001) e `frontend-admin` (porta
+  5174) localmente, logei como admin e cliquei "Apagar" nas 5 linhas, uma
+  por vez — cada clique disparou o `window.confirm`, aceitei, e a linha
+  sumiu da lista com o toast "removida da UazAPI e da lista". Confirmado
+  depois via `GET /instance/all`: **0 instâncias na UazAPI** — o painel
+  fantasma original (6 instâncias no início desta implementação) está
+  totalmente limpo. Este é o resultado final que o utilizador pediu no
+  início: "ter nesse painel apenas o que realmente tem do usuário
+  atualmente".
 
 ### Cenário V5 — Testes automatizados
 - [x] `backend-core/tests/test_uazapi_admin.py` — casos para `delete_instance`
