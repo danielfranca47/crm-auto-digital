@@ -10,7 +10,7 @@ apenas do cadastro/conexão da instância e da leitura agregada das conversas.
 Fluxo:
   POST   /api/collab-monitor/instances                 → cadastra colaborador + conecta (QR)
   GET    /api/collab-monitor/instances                 → lista instâncias da conta
-  DELETE /api/collab-monitor/instances/{id}             → remove o cadastro
+  DELETE /api/collab-monitor/instances/{id}             → remove o cadastro + desconecta a instância na UazAPI
   POST   /api/collab-monitor/instances/{id}/reconnect   → reconecta via QR
   GET    /api/collab-monitor/conversations              → lista leads monitorados (tela estilo WhatsApp Web)
 """
@@ -28,6 +28,7 @@ from pydantic import BaseModel
 
 from core_client import (
     connect_core_whatsapp_instance,
+    delete_core_whatsapp_instance,
     fetch_core_whatsapp_connection_resolve,
     init_core_whatsapp_instance,
     set_core_whatsapp_webhook,
@@ -297,10 +298,10 @@ async def delete_collab_monitor_instance(
     row_id: int,
     current_user: CurrentUser = Depends(require_crm_access),
 ) -> Dict[str, Any]:
-    """Remove o cadastro de monitoramento de um colaborador (não desconecta a instância no core)."""
+    """Remove o cadastro de monitoramento de um colaborador e apaga a instância na UazAPI."""
     conn = get_connection()
     try:
-        _get_row(conn, row_id, current_user.id)
+        row = _get_row(conn, row_id, current_user.id)
         conn.execute(
             "DELETE FROM collab_monitor_instances WHERE id = ? AND user_id = ?",
             (row_id, current_user.id),
@@ -308,6 +309,15 @@ async def delete_collab_monitor_instance(
         conn.commit()
     finally:
         conn.close()
+
+    try:
+        delete_core_whatsapp_instance(row["instance_id"])
+    except Exception as exc:
+        logger.warning(
+            "[collab_monitor] falha ao apagar instancia na UazAPI (nao-bloqueante) instance=%s error=%s",
+            row["instance_id"],
+            exc,
+        )
 
     return {"ok": True}
 
