@@ -132,24 +132,80 @@ sempre `NULL`, `contactName` = `wa_display_name` ou o telefone).
 
 `frontend-crm/src/data/mockData.ts` (`KANBAN_COLUMNS`) e
 `src/types/crm.ts` (`LeadStatus`) — categoria `monitoring`, coluna dedicada
-("Monitorado"), separada do pipeline normal do agente. Leads monitorados
-aparecem aqui **sem classificação de estágio** — isso é trabalho futuro (IA
-mãe lendo a conversa), não implementado nesta base.
+("Monitorado"), separada do pipeline normal do agente. Lead nasce aqui, mas
+sai automaticamente assim que a classificação de estágio (abaixo) identificar
+sinal claro de avanço.
 
 `frontend-crm/src/components/agente/MonitoramentoColaboradores.tsx` — tela
 de cadastro (aba "Monitoramento" em `AiProfile.tsx`): nome do colaborador,
 QR/pareamento, lista de instâncias com status, reconectar/remover.
 
+`frontend-crm/src/components/LeadCard.tsx` exibe uma badge "Monitorado"
+sempre que `lead.collabMonitorInstanceId` não for nulo — mantém o card
+identificável como conduzido por humano mesmo depois de sair da coluna
+"Monitorado" e passar a compartilhar coluna com leads do bot.
+
+---
+
+## Classificação de estágio do lead monitorado (IA read-only)
+
+A cada mensagem inbound do lead monitorado (nunca do colaborador/`from_me`),
+`handle_monitor_inbound()` enfileira um job `collab_monitor.classify.local`
+(`services/jobs_service.py`) — mesmo padrão de job interno usado por
+`spy.media.process` (lease via CAS, retry/backoff), processado por um loop
+próprio registrado no `lifespan` de `app.py`
+(`_collab_monitor_classify_worker_loop`, `services/collab_monitor/classify_worker.py`).
+
+**`services/collab_monitor/classifier.py`** — 1 chamada LLM (`gpt-4o-mini`)
+read-only: lê o histórico do lead (`services/ai_orchestrator/history.py::get_recent_history()`)
+e retorna `{"suggested_category": str|null, "category_reason": str|null}`.
+Enum restrito às categorias do Kanban aplicáveis a uma conversa já em
+andamento: `qualification`, `apresentation`, `follow-up`, `closing`,
+`client-list`, `prospect-refused`, `disqualified`. Postura conservadora
+(mesma técnica de prompt já validada em `suggested_category` do
+`decision_engine.py` — a LLM mãe do pipeline real): `null` sempre que não
+houver sinal explícito na conversa; nunca decide categoria "por suposição".
+
+**`services/collab_monitor/classify_worker.py::process_pending_collab_monitor_classify_jobs()`**
+aplica dois guardrails antes de tocar em `leads.category`:
+- `suggested_category is None` → não faz nada.
+- Guardrail de não-retrocesso (`_is_valid_forward_move`): ordem do funil
+  `monitoring(0) < qualification(1) < apresentation(2) < follow-up(3) <
+  closing(4) < client-list(5)`; `prospect-refused`/`disqualified` são saídas,
+  aplicáveis a partir de qualquer estágio não-terminal. Uma vez em
+  `prospect-refused`/`disqualified`, o lead fica terminal — só reativação
+  manual pelo Kanban (mesmo comportamento unidirecional de
+  `services/lead_category_policy.py` para `closing`/`disqualified`/
+  `prospect-refused` no pipeline real).
+
+Quando aplica a mudança: `UPDATE leads.category` direto via
+`sqlite3.Connection` (não pela rota `PATCH /api/leads/{id}` — aquela rota
+bloqueia avanço `qualification → apresentation/follow-up/closing` via
+`can_advance_from_qualification()`, checagem baseada em `qualification_state`
+que só existe porque o bot real pergunta/extrai campos turno a turno; leads
+monitorados não têm esse estado, pois quem conversa é um humano) + log de
+auditoria em `prospection_logs` (`action='collab_monitor_category_changed'`,
+`notes` com `old_category`/`new_category`/`category_reason`).
+
+Continua **completamente isolado** do pipeline de IA real: nunca chama
+`orchestrator`/`decision_engine`/guardrail de resposta, nunca envia mensagem.
+
 ---
 
 ## Fora do escopo desta base (planejado para depois)
 
-- IA mãe classificar automaticamente o estágio do lead monitorado e mover
-  entre colunas do Kanban.
 - Tela estilo WhatsApp Web (multi-telefone, filtro por colaborador/instância,
-  navegação de mídia).
+  navegação de mídia) — ver
+  [`monitoramento-colaborador-tela-whatsapp-web.md`](../implementations/monitoramento-colaborador-tela-whatsapp-web.md).
 - Tratamento de mensagens de mídia (imagem/áudio) no monitoramento — hoje
-  `handle_monitor_inbound` ignora mensagens sem texto.
+  `handle_monitor_inbound` ignora mensagens sem texto; também limita o que a
+  classificação de estágio acima consegue enxergar. Ver
+  [`monitoramento-colaborador-midia.md`](../implementations/monitoramento-colaborador-midia.md).
+- Débito/custo da classificação de estágio (1 chamada LLM por mensagem
+  inbound, sem debounce nem contabilização contra a franquia de "conversas
+  IA" do plano) — ver nota em
+  [`plans-subscriptions.md`](../plans/plans-subscriptions.md), seção "Fontes
+  de custo de LLM ainda não medidas".
 - Gate comercial de planos (`max_instances`, seed `crm_scale`/`crm_enterprise`)
   — já mapeado em [`scale-enterprise-roadmap.md`](../plans/scale-enterprise-roadmap.md),
   ortogonal a este trabalho técnico.

@@ -33,7 +33,7 @@ Arquivos em andamento ou recém-completados. Seguem o padrão do template.
 | Ficheiro | Status |
 |---|---|
 | `correcao-natural-llm-e-fixes-ui-descobertos.md` | Em andamento — planeado, código ainda não iniciado |
-| `monitoramento-colaborador-classificacao-ia.md` | Aguardando Plan Mode |
+| `monitoramento-colaborador-midia.md` | Aguardando Plan Mode |
 | `monitoramento-colaborador-tela-whatsapp-web.md` | Aguardando Plan Mode |
 
 > `agent-local-v2-app-standalone.md`, `agentlocal-assistente-ia.md`,

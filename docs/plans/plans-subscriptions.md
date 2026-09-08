@@ -93,6 +93,17 @@ O modelo `Subscription` não possui campos de feature-gate. Os seguintes bloquei
 | `max_instances` (multi-instância) | ❌ Não existe controle de número de instâncias por plano |
 | Middleware de verificação de feature por plano | ❌ Não existe |
 
+### Fontes de custo de LLM ainda não medidas
+
+A classificação de estágio do lead monitorado (`services/collab_monitor/classifier.py`
+— ver [`collab-monitor.md`](../architecture/collab-monitor.md)) faz 1 chamada
+`gpt-4o-mini` a cada mensagem inbound de um lead monitorado, sem nenhum limite
+ou contabilização contra a franquia de "conversas IA" do plano — é uma fonte de
+custo real que hoje não é medida nem cobrada como excedente. Quando o sistema
+de créditos extra/excedente (seção C acima) for implementado, decidir se essa
+chamada conta como "conversa IA" para efeitos de franquia/excedente, ou se tem
+contabilização própria.
+
 ---
 
 ## Definições técnicas para implementação futura
