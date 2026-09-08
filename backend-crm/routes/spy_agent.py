@@ -658,9 +658,14 @@ async def dismiss_spy_agent_session(
 async def delete_instance_config(
     current_user: CurrentUser = Depends(require_crm_access),
 ) -> Dict[str, Any]:
-    """Remove a instância espiã configurada."""
+    """Remove a instância espiã configurada e apaga a instância na UazAPI
+    (non-blocking — mesmo padrão de collab_monitor.py::delete_collab_monitor_instance)."""
     conn = get_connection()
     try:
+        row = conn.execute(
+            "SELECT spy_instance_id FROM spy_agent_config WHERE user_id = ?",
+            (current_user.id,),
+        ).fetchone()
         conn.execute(
             "DELETE FROM spy_agent_config WHERE user_id = ?",
             (current_user.id,),
@@ -668,6 +673,17 @@ async def delete_instance_config(
         conn.commit()
     finally:
         conn.close()
+
+    if row and row["spy_instance_id"]:
+        try:
+            delete_core_whatsapp_instance(row["spy_instance_id"])
+        except Exception as exc:
+            logger.warning(
+                "[spy_agent] falha ao apagar instância na UazAPI (não-bloqueante) user=%s instance=%s error=%s",
+                current_user.id,
+                row["spy_instance_id"],
+                exc,
+            )
 
     return {"ok": True}
 
