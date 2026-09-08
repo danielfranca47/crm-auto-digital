@@ -1,5 +1,5 @@
 # routes/assistente_ia.py
-from fastapi import APIRouter, HTTPException, Body, Depends
+from fastapi import APIRouter, HTTPException, Body, Depends, Query
 from pydantic import BaseModel, field_validator
 from typing import List, Literal, Optional, Dict
 from pathlib import Path
@@ -132,17 +132,38 @@ def health():
     }
 
 @router.get("/messages/{lead_id}")
-def get_messages(lead_id: int, latest: bool = True, current_user: CurrentUser = Depends(require_crm_access)):
+def get_messages(
+    lead_id: int,
+    latest: bool = True,
+    limit: Optional[int] = Query(None, ge=1, le=200),
+    offset: int = Query(0, ge=0),
+    current_user: CurrentUser = Depends(require_crm_access),
+):
+    """Histórico de mensagens de um lead. Rota compartilhada por vários
+    consumidores (preview `latest=True`, `LeadCardDialog`, `ProspectionCardDialog`,
+    tela de monitoramento de colaborador) — paginação via `limit`/`offset` é
+    opt-in: sem `limit` (ou com `latest=True`), o comportamento é idêntico ao
+    de sempre (devolve tudo), para não quebrar quem já consome esta rota."""
     try:
         with get_connection() as conn:
             _require_lead_for_user(conn, lead_id, current_user.id)
             cur = conn.cursor()
-            cur.execute("""
-                SELECT id, channel, subject, body, model, createdAt
-                FROM messages
-                WHERE lead_id = ?
-                ORDER BY createdAt DESC
-            """, (lead_id,))
+            paginate = bool(limit) and not latest
+            if paginate:
+                cur.execute("""
+                    SELECT id, channel, subject, body, model, createdAt
+                    FROM messages
+                    WHERE lead_id = ?
+                    ORDER BY createdAt DESC
+                    LIMIT ? OFFSET ?
+                """, (lead_id, limit + 1, offset))
+            else:
+                cur.execute("""
+                    SELECT id, channel, subject, body, model, createdAt
+                    FROM messages
+                    WHERE lead_id = ?
+                    ORDER BY createdAt DESC
+                """, (lead_id,))
             rows = [dict(r) for r in cur.fetchall()]
             if latest:
                 seen = set()
@@ -154,6 +175,10 @@ def get_messages(lead_id: int, latest: bool = True, current_user: CurrentUser = 
                     seen.add(ch)
                     out.append(r)
                 rows = out
+            if paginate:
+                has_more = len(rows) > limit
+                rows = rows[:limit]
+                return {"ok": True, "messages": rows, "has_more": has_more}
             return {"ok": True, "messages": rows}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

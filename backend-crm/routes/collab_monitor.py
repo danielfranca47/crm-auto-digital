@@ -23,7 +23,7 @@ from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 from uuid import uuid4
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 
 from core_client import (
@@ -181,6 +181,11 @@ class CollabMonitorConversationOut(BaseModel):
     msg_count: int = 0
     last_message_at: Optional[str] = None
     last_message_preview: Optional[str] = None
+
+
+class CollabMonitorConversationsPage(BaseModel):
+    items: List[CollabMonitorConversationOut]
+    has_more: bool
 
 
 def _now_utc_iso() -> str:
@@ -373,14 +378,18 @@ async def reconnect_collab_monitor_instance(
     )
 
 
-@router.get("/conversations", response_model=List[CollabMonitorConversationOut])
+@router.get("/conversations", response_model=CollabMonitorConversationsPage)
 async def list_collab_monitor_conversations(
     instance_id: Optional[str] = None,
+    limit: int = Query(20, ge=1, le=100),
+    offset: int = Query(0, ge=0),
     current_user: CurrentUser = Depends(require_crm_access),
-) -> List[CollabMonitorConversationOut]:
+) -> CollabMonitorConversationsPage:
     """Lista os leads de monitoramento (category='monitoring') agrupados por
     colaborador, com contagem e preview da última mensagem — base da tela
-    estilo WhatsApp Web. Filtro opcional por `instance_id`."""
+    estilo WhatsApp Web. Filtro opcional por `instance_id`. Paginação
+    tradicional via `limit`/`offset` — busca `limit+1` linhas para decidir
+    `has_more` sem precisar de um `COUNT(*)` separado."""
     conn = get_connection()
     try:
         query = """
@@ -422,22 +431,29 @@ async def list_collab_monitor_conversations(
         if instance_id:
             query += " AND l.collab_monitor_instance_id = ?"
             params.append(instance_id)
-        query += " ORDER BY datetime(last_msg.createdAt) DESC"
+        query += " ORDER BY datetime(last_msg.createdAt) DESC LIMIT ? OFFSET ?"
+        params.extend([limit + 1, offset])
 
         rows = conn.execute(query, tuple(params)).fetchall()
     finally:
         conn.close()
 
-    return [
-        CollabMonitorConversationOut(
-            lead_id=row["lead_id"],
-            contact_name=row["contact_name"],
-            phone=row["phone"],
-            instance_id=row["instance_id"],
-            collaborator_name=row["collaborator_name"],
-            msg_count=row["msg_count"] or 0,
-            last_message_at=row["last_message_at"],
-            last_message_preview=row["last_message_preview"],
-        )
-        for row in rows
-    ]
+    has_more = len(rows) > limit
+    rows = rows[:limit]
+
+    return CollabMonitorConversationsPage(
+        items=[
+            CollabMonitorConversationOut(
+                lead_id=row["lead_id"],
+                contact_name=row["contact_name"],
+                phone=row["phone"],
+                instance_id=row["instance_id"],
+                collaborator_name=row["collaborator_name"],
+                msg_count=row["msg_count"] or 0,
+                last_message_at=row["last_message_at"],
+                last_message_preview=row["last_message_preview"],
+            )
+            for row in rows
+        ],
+        has_more=has_more,
+    )
