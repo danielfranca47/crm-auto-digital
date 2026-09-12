@@ -470,6 +470,10 @@ export type CollabMonitorConversationsPage = {
   has_more: boolean;
 };
 
+export type CollabMonitorSettings = {
+  stale_threshold_hours: number;
+};
+
 export type AppNotification = {
   id: number;
   lead_id: number | null;
@@ -1389,16 +1393,24 @@ export const api = {
       apiClient.post<CollabMonitorConnectResponse>(`/collab-monitor/instances/${id}/reconnect`, phone ? { phone } : undefined),
     collabMonitorConversations: async (
       instanceId?: string,
-      page: { limit: number; offset: number } = { limit: 20, offset: 0 }
+      page: { limit: number; offset: number } = { limit: 20, offset: 0 },
+      status: "active" | "all" = "active"
     ) => {
       const params = new URLSearchParams();
       if (instanceId) params.set("instance_id", instanceId);
+      params.set("status", status);
       params.set("limit", String(page.limit));
       params.set("offset", String(page.offset));
       return apiClient.get<CollabMonitorConversationsPage>(
         `/collab-monitor/conversations?${params.toString()}`
       );
     },
+    collabMonitorGetSettings: async () =>
+      apiClient.get<CollabMonitorSettings>(`/collab-monitor/settings`),
+    collabMonitorUpdateSettings: async (staleThresholdHours: number) =>
+      apiClient.put<CollabMonitorSettings>(`/collab-monitor/settings`, {
+        stale_threshold_hours: staleThresholdHours,
+      }),
   },
 
   agents: {

@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { AlertTriangle, ChevronLeft, ChevronRight, MessageSquareOff, Phone, Users, UserCog } from "lucide-react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
@@ -18,16 +18,19 @@ import { api, type CollabMonitorConversation, type LeadMessage } from "@/service
 
 const CONVERSATIONS_PAGE_SIZE = 20;
 const MESSAGES_PAGE_SIZE = 30;
-const STALE_THRESHOLD_MS = 3 * 60 * 60 * 1000;
+const STALE_THRESHOLD_OPTIONS = [1, 3, 6, 12, 24];
 
 const STAGE_LOOKUP = new Map(
   [...KANBAN_COLUMNS, ...ARCHIVED_COLUMNS].map((column) => [column.id, { label: column.title, color: column.color }])
 );
 
-function isAwaitingResponse(conversation: Pick<CollabMonitorConversation, "last_message_from" | "last_message_at">): boolean {
+function isAwaitingResponse(
+  conversation: Pick<CollabMonitorConversation, "last_message_from" | "last_message_at">,
+  thresholdHours: number
+): boolean {
   if (conversation.last_message_from !== "inbound" || !conversation.last_message_at) return false;
   const elapsed = Date.now() - new Date(conversation.last_message_at).getTime();
-  return Number.isFinite(elapsed) && elapsed > STALE_THRESHOLD_MS;
+  return Number.isFinite(elapsed) && elapsed > thresholdHours * 60 * 60 * 1000;
 }
 
 function hoursSince(value: string): number {
@@ -120,10 +123,12 @@ function ConversationListItem({
   conversation,
   active,
   onSelect,
+  staleThresholdHours,
 }: {
   conversation: CollabMonitorConversation;
   active: boolean;
   onSelect: () => void;
+  staleThresholdHours: number;
 }) {
   const displayName = conversation.contact_name || conversation.phone || "Sem nome";
   return (
@@ -158,7 +163,7 @@ function ConversationListItem({
         </div>
         <div className="flex items-center gap-1.5 flex-wrap mt-1">
           <StageChip category={conversation.category} />
-          {isAwaitingResponse(conversation) && conversation.last_message_at && (
+          {isAwaitingResponse(conversation, staleThresholdHours) && conversation.last_message_at && (
             <StaleChip hours={hoursSince(conversation.last_message_at)} />
           )}
         </div>
@@ -199,6 +204,7 @@ function MessageBubble({ message }: { message: LeadMessage }) {
 export default function CollabMonitorInbox() {
   const queryClient = useQueryClient();
   const [instanceFilter, setInstanceFilter] = useState<string>("all");
+  const [statusFilter, setStatusFilter] = useState<"active" | "all">("active");
   const [selectedLeadId, setSelectedLeadId] = useState<number | null>(null);
   const [manageOpen, setManageOpen] = useState(false);
   const [conversationPage, setConversationPage] = useState(0);
@@ -209,20 +215,37 @@ export default function CollabMonitorInbox() {
     setConversationPage(0);
   }
 
+  function handleStatusFilterChange(value: string) {
+    setStatusFilter(value === "all" ? "all" : "active");
+    setConversationPage(0);
+  }
+
   function handleSelectConversation(leadId: number) {
     setSelectedLeadId(leadId);
     setMessagePage(0);
   }
 
   const { data: conversationsPage, isLoading: conversationsLoading } = useQuery({
-    queryKey: ["collab-monitor-conversations", instanceFilter, conversationPage],
+    queryKey: ["collab-monitor-conversations", instanceFilter, statusFilter, conversationPage],
     queryFn: () =>
-      api.crm.collabMonitorConversations(instanceFilter === "all" ? undefined : instanceFilter, {
-        limit: CONVERSATIONS_PAGE_SIZE,
-        offset: conversationPage * CONVERSATIONS_PAGE_SIZE,
-      }),
+      api.crm.collabMonitorConversations(
+        instanceFilter === "all" ? undefined : instanceFilter,
+        { limit: CONVERSATIONS_PAGE_SIZE, offset: conversationPage * CONVERSATIONS_PAGE_SIZE },
+        statusFilter
+      ),
   });
   const conversations = conversationsPage?.items ?? [];
+
+  const { data: settings } = useQuery({
+    queryKey: ["collab-monitor-settings"],
+    queryFn: () => api.crm.collabMonitorGetSettings(),
+  });
+  const staleThresholdHours = settings?.stale_threshold_hours ?? 3;
+
+  const updateThresholdMutation = useMutation({
+    mutationFn: (hours: number) => api.crm.collabMonitorUpdateSettings(hours),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["collab-monitor-settings"] }),
+  });
 
   function handleCollaboratorsChanged() {
     queryClient.invalidateQueries({ queryKey: ["collab-monitor-conversations"] });
@@ -271,15 +294,32 @@ export default function CollabMonitorInbox() {
         <span className="text-xs text-muted-foreground">
           Conversas capturadas dos WhatsApps de colaboradores monitorados
         </span>
-        <Button
-          size="sm"
-          variant="outline"
-          className="ml-auto"
-          onClick={() => setManageOpen(true)}
-        >
-          <UserCog className="h-4 w-4 mr-1.5" />
-          Gerenciar colaboradores
-        </Button>
+        <div className="ml-auto flex items-center gap-2">
+          <span className="text-xs text-muted-foreground whitespace-nowrap">Alertar sem resposta após</span>
+          <Select
+            value={String(staleThresholdHours)}
+            onValueChange={(value) => updateThresholdMutation.mutate(Number(value))}
+          >
+            <SelectTrigger className="h-9 text-sm w-20">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {STALE_THRESHOLD_OPTIONS.map((hours) => (
+                <SelectItem key={hours} value={String(hours)}>
+                  {hours}h
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => setManageOpen(true)}
+          >
+            <UserCog className="h-4 w-4 mr-1.5" />
+            Gerenciar colaboradores
+          </Button>
+        </div>
       </div>
 
       <ManageCollaboratorsDialog
@@ -291,7 +331,7 @@ export default function CollabMonitorInbox() {
       <div className="flex-1 flex min-h-0">
         {/* Coluna esquerda: lista de conversas */}
         <div className="w-full max-w-xs border-r flex flex-col shrink-0">
-          <div className="p-2 border-b">
+          <div className="p-2 border-b space-y-2">
             <Select value={instanceFilter} onValueChange={handleInstanceFilterChange}>
               <SelectTrigger className="h-9 text-sm">
                 <SelectValue placeholder="Filtrar por colaborador" />
@@ -303,6 +343,15 @@ export default function CollabMonitorInbox() {
                     {c.name}
                   </SelectItem>
                 ))}
+              </SelectContent>
+            </Select>
+            <Select value={statusFilter} onValueChange={handleStatusFilterChange}>
+              <SelectTrigger className="h-9 text-sm">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="active">Só ativas</SelectItem>
+                <SelectItem value="all">Todo histórico</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -329,6 +378,7 @@ export default function CollabMonitorInbox() {
                   conversation={c}
                   active={c.lead_id === selectedLeadId}
                   onSelect={() => handleSelectConversation(c.lead_id)}
+                  staleThresholdHours={staleThresholdHours}
                 />
               ))}
           </div>
@@ -387,7 +437,7 @@ export default function CollabMonitorInbox() {
                       {STAGE_LOOKUP.get(selectedConversation.category)?.label ?? selectedConversation.category}
                     </span>
                   </span>
-                  {isAwaitingResponse(selectedConversation) && selectedConversation.last_message_at && (
+                  {isAwaitingResponse(selectedConversation, staleThresholdHours) && selectedConversation.last_message_at && (
                     <span className="ml-auto flex items-center gap-1 text-destructive font-medium shrink-0">
                       <AlertTriangle className="h-3 w-3" />
                       Sem resposta há {hoursSince(selectedConversation.last_message_at)}h
