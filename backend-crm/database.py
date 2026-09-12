@@ -1124,6 +1124,17 @@ def init_db() -> None:
             """
         )
 
+        # Configuração de conta para o Monitoramento de colaborador (limiar de alerta de conversa parada)
+        cur.execute(
+            """
+            CREATE TABLE IF NOT EXISTS collab_monitor_settings (
+                user_id INTEGER PRIMARY KEY,
+                stale_threshold_hours INTEGER NOT NULL DEFAULT 3,
+                updated_at TEXT NOT NULL
+            );
+            """
+        )
+
         # Tabela atividades (legado)
         cur.execute(
             """
