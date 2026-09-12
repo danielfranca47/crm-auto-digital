@@ -42,20 +42,6 @@
 
 ---
 
-## M4 — Gap de autenticação em `routes/appointments.py` (pré-existente, não introduzido por este M1)
-
-**Prioridade: MÉDIA** (risco de segurança, mas já existia antes desta implementação)
-
-**Estado actual:** os endpoints `create_appointment`, `update_appointment` e `mark_canceled` em `backend-crm/routes/appointments.py` não têm `Depends(require_crm_access)` — não exigem token de utilizador para serem chamados.
-
-**Risco concreto:** qualquer chamador que conheça a URL pode, em teoria, criar/editar/cancelar compromissos de qualquer conta sem autenticação de utilizador.
-
-**Motivo de não estar protegido hoje:** `backend-executors` chama estes endpoints (via `crm_client.cancel_appointment()`/`reschedule_appointment()`) sem JWT de utilizador — é uma chamada server-to-server, não uma sessão de operador.
-
-**O que precisaria existir:** decidir um mecanismo de autenticação server-to-server para estas rotas — equivalente ao `CORE_SERVICE_TOKEN` já usado entre `backend-crm` e `backend-core` — sem quebrar as chamadas legítimas do `backend-executors`.
-
----
-
 ## M5 — Mesmo bug de status `'cancelled'` provavelmente existe em `followup_state.py`
 
 **Prioridade: ALTA** (pode estar causando falha silenciosa em produção agora, fora deste fluxo)
