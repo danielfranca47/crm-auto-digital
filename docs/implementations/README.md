@@ -90,6 +90,12 @@ Lê todos os arquivos docs/implementations/ (exceto os com _) e dá-me
 um resumo: o que está completo, o que está em andamento, o que falta.
 ```
 
+> **Atalho:** o comando `/statusdev` faz exactamente isto — tabela com impacto,
+> % concluído, worktree activa e prioridade recomendada. É um comando local
+> (não versionado no git); ver [`docs/ops/local-dev.md`](../ops/local-dev.md),
+> seção "Comandos slash locais", para o conteúdo exacto e como recriá-lo
+> noutro dispositivo caso não apareça.
+
 ### Quero graduar um arquivo que está completo
 
 ```
