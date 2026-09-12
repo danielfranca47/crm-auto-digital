@@ -28,18 +28,17 @@ relevante é migrado para `docs/architecture/` e o arquivo é deletado.
 
 ### Ficheiros regulares — implementações activas
 
-Arquivos em andamento ou recém-completados. Seguem o padrão do template.
+Arquivos em andamento ou recém-completados. Seguem o padrão do template. Nenhum no
+momento — todos os anteriores já foram graduados (ver `docs/architecture/`).
 
-| Ficheiro | Status |
-|---|---|
-| `monitoramento-colaborador-midia-url-expiracao.md` | Aguardando Plan Mode |
-| `monitoramento-colaborador-paginacao.md` | Aguardando Plan Mode |
-
-> `agent-local-v2-app-standalone.md`, `agentlocal-assistente-ia.md`,
-> `agent-local-v2-testes-manuais.md`, `agent-local-plano-execucao-testes-pendentes.md`
-> e `agent-local-v2-empacotamento-exe.md` foram graduados — ver
-> [`docs/architecture/agent-local-app.md`](../architecture/agent-local-app.md)
-> (v2) e [`docs/plans/agent-local-melhorias-futuras-V3.md`](../plans/agent-local-melhorias-futuras-V3.md) (v3).
+> **Status `Aguardando Plan Mode`:** um arquivo pode aparecer aqui já criado mas sem
+> Plan Mode ter rodado ainda, com só a secção "Motivação" preenchida — normalmente
+> gerado pelo comando `/statusplans-avancar` (ver
+> [`docs/ops/local-dev.md`](../ops/local-dev.md), seção "Comandos slash locais", e
+> [`docs/plans/_guia-analise-planos.md`](../plans/_guia-analise-planos.md)) para não
+> gastar tokens investigando código em vários itens de um sprint de uma vez. Para
+> retomar um desses, basta pedir para continuar aquele arquivo — o Passo 0 roda nesse
+> momento, usando a Motivação já escrita como ponto de partida.
 
 ---
 

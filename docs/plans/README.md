@@ -114,9 +114,12 @@ Cada sprint plan tem:
 
 Depende de como o sprint foi gerado:
 
-- **Se foi via `/statusplans-avancar`:** o Claude já entra em Plan Mode sozinho para o
-  P1 assim que termina de gerar o sprint plan — não precisas copiar nada. Para os itens
-  seguintes, basta dizer "continuar sprint, iniciar P2" (ou P3, etc.) quando quiseres.
+- **Se foi via `/statusplans-avancar`:** cada item já existe como
+  `docs/implementations/<slug>.md` com `Status: Aguardando Plan Mode` e a motivação
+  preenchida — sem ter rodado Plan Mode ainda (de propósito, para não gastar tokens
+  investigando código nos itens que talvez nem comeces já). Para começar um, diz por
+  qual queres começar (ou abre o arquivo e pede para continuar) — só nesse momento o
+  Claude entra em Plan Mode para aquele item.
 - **Se foi via análise manual** ("Analisa os plans e monta o sprint"), ou queres
   continuar numa conversa/dispositivo diferente: cada item P1/P2/P3 tem um **prompt
   pronto** no arquivo — abre `plano-sprint-YYYY-MM-DD.md`, copia o prompt do item

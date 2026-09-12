@@ -190,9 +190,11 @@ O operacional vai ao Plan Mode, lê o código com foco naquele item e decide COM
 
 > **Nota:** este bloco é sempre escrito no arquivo de sprint (secção do item), mas o uso
 > muda conforme o caminho. Na análise manual, é texto para o utilizador copiar e colar.
-> Nos comandos rápidos (`/statusplans-avancar`), é o próprio Claude que usa este
-> conteúdo como ponto de partida do Passo 0, sem esperar o utilizador colar nada — ver
-> "Ciclo de implementations" acima.
+> Nos comandos rápidos (`/statusplans-avancar`), o mesmo conteúdo vira a seção
+> "Motivação" do arquivo `docs/implementations/<slug>.md` criado com
+> `Status: Aguardando Plan Mode` — fica pronto como ponto de partida do Passo 0, mas o
+> Plan Mode em si só roda quando o utilizador escolher aquele item, não automaticamente
+> — ver "Ciclo de implementations" acima.
 
 ---
 
@@ -246,16 +248,18 @@ Duas formas de chegar aqui, dependendo de como o sprint foi gerado:
 
 **Via os comandos rápidos** (`/statusplans` → `/statusplans-verificar` →
 `/statusplans-avancar` — ver `docs/ops/local-dev.md`, seção "Comandos slash locais"):
-o próprio `/statusplans-avancar` já entra em Plan Mode para o P1 automaticamente ao
-gerar o sprint plan, usando o contexto já reunido — o utilizador não precisa copiar
-nada. Para P2/P3, basta dizer "continuar sprint, iniciar P2" quando quiser.
+o próprio `/statusplans-avancar` já cria `docs/implementations/<slug>.md` para cada
+item, com `Status: Aguardando Plan Mode` e a Motivação preenchida — sem rodar Plan
+Mode ainda (evita gastar tokens investigando código para até 6 itens de uma vez). Para
+iniciar um item, o utilizador só precisa dizer qual — nesse momento sim entra o Passo 0
+de `_guia-documentar-implementacao.md`, usando o que já está escrito no arquivo.
 
 **Via análise manual** (pedir "Analisa os plans e monta o sprint", ou continuando numa
 sessão/dispositivo diferente daquele que gerou o sprint): o utilizador copia o prompt
 pronto do item desejado do arquivo `plano-sprint-*.md` e cola nesta ou noutra conversa
-para iniciar.
+para iniciar — o Passo 0 lê esse prompt como contexto de partida.
 
-Em ambos os casos, a partir daqui:
+Em ambos os casos, a partir do Passo 0:
   → Claude de implementations lê _guia-documentar-implementacao.md
   → Segue o processo normal (Plan Mode → código → commit → validação)
   → Na graduação: executa Passo 6b — marca o item ✅ no tracking do sprint plan

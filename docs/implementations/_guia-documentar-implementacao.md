@@ -23,6 +23,18 @@ Antes de escrever qualquer código, siga os passos abaixo em ordem.
 > já está pré-digerido no prompt. Usar esse contexto como ponto de partida para o Plan Mode
 > — não é necessário reler o `docs/plans/*` separadamente.
 
+> **Exceção — arquivo criado como "Aguardando Plan Mode":** o comando
+> `/statusplans-avancar` (ver `docs/ops/local-dev.md`, seção "Comandos slash locais")
+> cria `docs/implementations/<slug>.md` para cada item do sprint **antes** deste Passo
+> 0, com `**Status:** Aguardando Plan Mode` e só a seção "Motivação"/"Área do sistema"
+> preenchidas — de propósito, para não gastar tokens rodando Plan Mode em vários itens
+> de uma vez quando o usuário só quer priorizar. Isso não é uma violação da regra
+> "nunca criar arquivo sem plano aprovado": nenhuma branch, worktree ou código é criado
+> junto — é só o documento de fila. Quando o usuário escolher esse item para começar,
+> o arquivo já existe e serve de ponto de partida: rode o Passo 0 normalmente (usando a
+> Motivação já escrita), e só depois de aprovado prossiga para o Passo 1 (branch +
+> worktree) preenchendo o restante do template neste mesmo arquivo.
+
 **Antes de criar o arquivo ou tocar no código**, entrar em Plan Mode e responder três perguntas:
 
 ### 1. Essa funcionalidade já existe?
