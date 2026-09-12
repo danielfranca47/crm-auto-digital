@@ -125,7 +125,7 @@ identifica na hora quem está sem resposta do colaborador há mais de 3h.
 
 | # | Commit | O que foi implementado |
 |---|---|---|
-| 1 | *(registrar após o commit)* | frontend: chips de estágio/risco na lista + banner de estágio no chat |
+| 1 | `dfb5159` | frontend: chips de estágio/risco na lista + banner de estágio no chat |
 
 **Detalhes:**
 - `frontend-crm/src/services/api.ts` — `CollabMonitorConversation` ganha `category` e `last_message_from`
