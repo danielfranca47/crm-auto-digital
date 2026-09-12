@@ -56,7 +56,13 @@ conta, uma por colaborador.
 | `GET /instances` | Lista instâncias da conta, enriquecidas com `phone_e164`/`connection_status` ao vivo |
 | `DELETE /instances/{id}` | Remove o cadastro e apaga a instância na UazAPI |
 | `POST /instances/{id}/reconnect` | Reconecta via QR ou código de pareamento, preserva o cadastro |
-| `GET /conversations` | Agrega leads `category='monitoring'` por colaborador — base da tela de leitura (ver abaixo). Filtro opcional `?instance_id=` |
+| `GET /conversations` | Agrega leads com `collab_monitor_instance_id` preenchido (qualquer estágio do funil) por colaborador — base da tela de leitura (ver abaixo). Filtros opcionais `?instance_id=` e `?status=active\|all` (default `active`, esconde categorias de `BOT_STRUCTURALLY_INACTIVE_CATEGORIES`) |
+| `GET /settings` | Configuração de conta do Monitoramento — hoje só `stale_threshold_hours` (default 3, sem linha cadastrada) |
+| `PUT /settings` | Atualiza `stale_threshold_hours` (1–168), upsert em `collab_monitor_settings` |
+
+**Tabela:** `collab_monitor_settings` (`user_id` PK, `stale_threshold_hours`
+default 3, `updated_at`) — mesmo padrão 1-linha-por-conta de
+`bot_global_pause_state`, sem linha até a primeira alteração via `PUT`.
 
 Reaproveita os mesmos helpers genéricos de conexão do core
 (`connect_core_whatsapp_instance`/`init_core_whatsapp_instance`) que o Agente
@@ -203,6 +209,12 @@ auditoria em `prospection_logs` (`action='collab_monitor_category_changed'`,
 Continua **completamente isolado** do pipeline de IA real: nunca chama
 `orchestrator`/`decision_engine`/guardrail de resposta, nunca envia mensagem.
 
+A categoria resultante é exposta em `GET /api/collab-monitor/conversations`
+(campo `category`) e renderizada na tela de leitura (ver abaixo) — chip na
+lista e banner no cabeçalho do chat, com label/cor reaproveitados de
+`KANBAN_COLUMNS`/`ARCHIVED_COLUMNS` (`frontend-crm/src/data/mockData.ts`),
+para o supervisor acompanhar o estágio sem sair desta tela.
+
 ---
 
 ## Tratamento de mídia (áudio/imagem/vídeo/figurinha/documento/reação)
@@ -276,15 +288,27 @@ dedicada para ler as conversas monitoradas, separada do Kanban:
 - **Coluna esquerda:** lista de conversas via `GET /api/collab-monitor/conversations`
   (`api.crm.collabMonitorConversations`), com filtro por colaborador/instância
   (`Select`, populado por `GET /api/collab-monitor/instances` — todos os
-  colaboradores cadastrados, independente da página de conversas atual),
-  ordenada pela mensagem mais recente. Cada item mostra avatar (iniciais),
-  nome do contato, preview e contagem de mensagens, e o nome do colaborador
-  que originou a conversa.
+  colaboradores cadastrados, independente da página de conversas atual) e
+  filtro de estágio "Só ativas" (default) / "Todo histórico" (`?status=`,
+  ver "Classificação de estágio" acima), ordenada pela mensagem mais recente.
+  Cada item mostra avatar (iniciais), nome do contato, preview, contagem de
+  mensagens, chip de estágio, chip "Sem resposta há Xh" quando aplicável (ver
+  abaixo), e o nome do colaborador que originou a conversa.
 - **Coluna direita:** ao selecionar uma conversa, busca o histórico via
   `GET /api/assistente-ia/messages/{lead_id}?latest=false`
   (`api.assistenteIA.mensagens`) e renderiza em bolhas de chat —
   `model='inbound'` (lead) à esquerda, `model='human_agent'` (colaborador) à
-  direita.
+  direita. Um banner no topo mostra o mesmo estágio classificado pela IA e,
+  se aplicável, o alerta de conversa parada.
+- **Alerta de conversa parada:** quando a última mensagem da conversa é do
+  lead (`last_message_from='inbound'`) e o tempo decorrido desde
+  `last_message_at` passa do limiar configurado (`stale_threshold_hours`,
+  ver "Cadastro de instância" acima — Select "Alertar sem resposta após" no
+  topbar, 1–24h), a lista e o banner do chat mostram "Sem resposta há Xh".
+  Calculado no frontend (`isAwaitingResponse()`/`hoursSince()` em
+  `CollabMonitorInbox.tsx`) a partir de `last_message_at`/`last_message_from`
+  já devolvidos por `GET /conversations` — nada é persistido sobre o alerta
+  em si, só o limiar em `collab_monitor_settings`.
 - **Paginação tradicional** (Anterior/Próxima, sem scroll infinito) nas duas
   colunas: conversas (20 por página) e histórico de mensagens (30 por
   página), cada uma com seu próprio estado de página em
