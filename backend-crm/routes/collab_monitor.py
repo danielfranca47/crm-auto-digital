@@ -181,6 +181,8 @@ class CollabMonitorConversationOut(BaseModel):
     msg_count: int = 0
     last_message_at: Optional[str] = None
     last_message_preview: Optional[str] = None
+    category: Optional[str] = None
+    last_message_from: Optional[str] = None
 
 
 class CollabMonitorConversationsPage(BaseModel):
@@ -385,11 +387,15 @@ async def list_collab_monitor_conversations(
     offset: int = Query(0, ge=0),
     current_user: CurrentUser = Depends(require_crm_access),
 ) -> CollabMonitorConversationsPage:
-    """Lista os leads de monitoramento (category='monitoring') agrupados por
-    colaborador, com contagem e preview da última mensagem — base da tela
-    estilo WhatsApp Web. Filtro opcional por `instance_id`. Paginação
-    tradicional via `limit`/`offset` — busca `limit+1` linhas para decidir
-    `has_more` sem precisar de um `COUNT(*)` separado."""
+    """Lista os leads originados de monitoramento de colaborador
+    (`collab_monitor_instance_id IS NOT NULL`), em qualquer estágio do funil —
+    não desaparece daqui quando a classificação de estágio avança a
+    categoria além de `monitoring`. Agrupados por colaborador, com contagem,
+    preview e direção (`last_message_from`) da última mensagem, e a
+    categoria atual do lead — base da tela estilo WhatsApp Web. Filtro
+    opcional por `instance_id`. Paginação tradicional via `limit`/`offset` —
+    busca `limit+1` linhas para decidir `has_more` sem precisar de um
+    `COUNT(*)` separado."""
     conn = get_connection()
     try:
         query = """
@@ -397,10 +403,12 @@ async def list_collab_monitor_conversations(
                    l.contactName AS contact_name,
                    l.phone AS phone,
                    l.collab_monitor_instance_id AS instance_id,
+                   l.category AS category,
                    cmi.collaborator_name AS collaborator_name,
                    msg_agg.msg_count AS msg_count,
                    last_msg.createdAt AS last_message_at,
-                   last_msg.body AS last_message_preview
+                   last_msg.body AS last_message_preview,
+                   last_msg.model AS last_message_from
             FROM leads l
             LEFT JOIN collab_monitor_instances cmi
               ON cmi.instance_id = l.collab_monitor_instance_id
@@ -412,9 +420,9 @@ async def list_collab_monitor_conversations(
             ) AS msg_agg
               ON msg_agg.lead_id = l.id
             LEFT JOIN (
-                SELECT lead_id, body, createdAt
+                SELECT lead_id, body, createdAt, model
                 FROM (
-                    SELECT lead_id, body, createdAt,
+                    SELECT lead_id, body, createdAt, model,
                            ROW_NUMBER() OVER (
                                PARTITION BY lead_id
                                ORDER BY datetime(createdAt) DESC
@@ -425,7 +433,7 @@ async def list_collab_monitor_conversations(
             ) AS last_msg
               ON last_msg.lead_id = l.id
             WHERE l.user_id = ?
-              AND l.category = 'monitoring'
+              AND l.collab_monitor_instance_id IS NOT NULL
         """
         params: List[Any] = [current_user.id]
         if instance_id:
@@ -452,6 +460,8 @@ async def list_collab_monitor_conversations(
                 msg_count=row["msg_count"] or 0,
                 last_message_at=row["last_message_at"],
                 last_message_preview=row["last_message_preview"],
+                category=row["category"],
+                last_message_from=row["last_message_from"],
             )
             for row in rows
         ],
