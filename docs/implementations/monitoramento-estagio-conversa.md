@@ -165,7 +165,85 @@ conversa.
 
 ---
 
+## Fase 3 — Limiar configurável + filtro "só ativas" (12/09/2026)
+
+### Motivação
+
+Os dois itens que tinham ficado em "Ajustes Possíveis" (abaixo) foram
+implementados imediatamente a pedido do utilizador, na mesma implementação,
+em vez de esperar por um sprint futuro.
+
+### Abordagem
+
+```
+GET /api/collab-monitor/conversations?status=active|all
+  → "active" (default): esconde categorias estruturalmente encerradas
+    (BOT_STRUCTURALLY_INACTIVE_CATEGORIES: client-list, prospect-refused,
+    disqualified — services/lead_category_policy.py)
+  → "all": comportamento da Fase 1 (histórico completo)
+
+GET/PUT /api/collab-monitor/settings
+  → { stale_threshold_hours }, default 3, validado 1-168, tabela
+    collab_monitor_settings (1 linha por conta, mesmo padrão de
+    bot_global_pause_state)
+```
+
+### Plano de Implementação
+
+#### Fase 3a — Backend
+
+| Arquivo | O que muda |
+|---|---|
+| `backend-crm/database.py` | Nova tabela `collab_monitor_settings` (`user_id` PK, `stale_threshold_hours` default 3, `updated_at`) |
+| `backend-crm/routes/collab_monitor.py` | `GET`/`PUT /api/collab-monitor/settings`; `GET /conversations` ganha `status` (`active`/`all`), reaproveitando `BOT_STRUCTURALLY_INACTIVE_CATEGORIES` de `services/lead_category_policy.py` |
+
+##### Commits Fase 3a
+
+| # | Commit | O que foi implementado |
+|---|---|---|
+| 1 | `d5f8bec` | backend: tabela de settings + rotas GET/PUT + parâmetro `status` |
+
+#### Fase 3b — Frontend
+
+| Arquivo | O que muda |
+|---|---|
+| `frontend-crm/src/services/api.ts` | Tipo `CollabMonitorSettings` + `collabMonitorGetSettings`/`collabMonitorUpdateSettings`; `collabMonitorConversations` ganha parâmetro `status` |
+| `frontend-crm/src/pages/CollabMonitorInbox.tsx` | Select "Alertar sem resposta após" (1/3/6/12/24h) no topbar (grava via mutation); Select "Só ativas / Todo histórico" na coluna esquerda (default "Só ativas") |
+
+##### Commits Fase 3b
+
+| # | Commit | O que foi implementado |
+|---|---|---|
+| 1 | `62cbcf0` | frontend: Selects de limiar e de filtro de status consumindo os novos endpoints |
+
+### Relatório da Fase 3 — o que mudou na prática
+
+**Antes:** o alerta de conversa parada disparava sempre com 3h fixas, e a
+lista sempre mostrava toda conversa monitorada, mesmo as já encerradas
+(cliente fechado, desqualificado, prospecção recusada).
+**Agora:** o gestor escolhe o limiar (1h a 24h) num seletor no topo da
+tela, e pode alternar entre "Só ativas" (default — some com o que já foi
+fechado/desqualificado/recusado) e "Todo histórico".
+**Para validar:** Cenários P4 e P5, abaixo.
+
+---
+
+## Checks de Validação — Fase 3
+
+### Cenário P4 — Limiar configurável
+- [x] Trocar o seletor "Alertar sem resposta após" para 1h
+- [x] Confirmar: uma conversa com ~2h de silêncio do colaborador passa a mostrar o alerta (com 3h, não mostrava)
+- [x] Recarregar a página e confirmar que o valor escolhido persiste (veio do backend)
+- **Validado em:** 12/09/2026 — Camila (última mensagem do lead ~1h50 atrás) só mostrou "Sem resposta" depois de trocar para 1h; `GET /api/collab-monitor/settings` e a linha em `collab_monitor_settings` confirmaram `stale_threshold_hours=1` persistido; após reload, o Select voltou a mostrar "1h" (visível assim que a query resolve — o primeiro paint reaproveita o default 3h até a resposta chegar)
+
+### Cenário P5 — Filtro "Só ativas" vs "Todo histórico"
+- [x] Com o filtro em "Só ativas" (default), confirmar que uma conversa de teste em `disqualified`/`prospect-refused`/`client-list` não aparece na lista
+- [x] Trocar para "Todo histórico" e confirmar que essa conversa reaparece
+- **Validado em:** 12/09/2026 — lead de teste "Fernanda Alves" (`category='disqualified'`) ficou fora da lista em "Só ativas" e reapareceu com o chip "Desqualificados" ao trocar para "Todo histórico"
+
+---
+
 ## Ajustes Possíveis Pós-Implementação
 
-- Limiar de "conversa parada" (3h) está fixo no frontend, não configurável por conta/plano.
-- Sem filtro por "só ativas" vs "todo o histórico" — a lista agora mostra qualquer estágio, ordenada por mensagem mais recente; se o volume crescer muito, pode valer um toggle no futuro.
+Nenhum pendente — os dois itens anteriores (limiar fixo, sem filtro de
+ativas) foram implementados na Fase 3 acima.
