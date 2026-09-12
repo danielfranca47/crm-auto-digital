@@ -242,27 +242,37 @@ Feche perguntando se pode prosseguir para `/statusplans-avancar` com essa confir
 ou se algum item precisa de reclassificação.
 ```
 
-### `/statusplans-avancar` — limpeza + geração do sprint (passo 3 de 3)
+### `/statusplans-avancar` — limpeza + geração do sprint + início automático do P1 (passo 3 de 3)
 
 **O que é:** aplica o que foi confirmado no passo anterior — remove de `docs/plans/*`
-os itens já feitos/obsoletos, e gera `docs/plans/plano-sprint-YYYY-MM-DD.md` com prompts
-prontos para os itens que ainda precisam ser implementados (máximo 6 por vez).
+os itens já feitos/obsoletos, gera `docs/plans/plano-sprint-YYYY-MM-DD.md`, e **já entra
+em Plan Mode sozinho para o item de maior prioridade (P1)** — o usuário não precisa
+copiar nenhum prompt de volta.
 
-**Onde entra no processo:** equivalente aos Passos 5 e 6 ("Priorização" e "Proposta e
-geração do arquivo") de `_guia-analise-planos.md`. A partir daqui o fluxo normal de
-`docs/implementations/` assume — o usuário copia o prompt de cada item do sprint e cola
-para começar aquela implementação (Plan Mode, etc.).
+**Onde entra no processo:** cobre os Passos 5 e 6 ("Priorização" e "Proposta e geração
+do arquivo") de `_guia-analise-planos.md` **e** o início do Passo 0 ("Diagnóstico em
+Plan Mode") de `_guia-documentar-implementacao.md` — na mesma resposta. Para P2-P6, fica
+só um lembrete de uma linha (dizer "continuar sprint, iniciar P2" quando quiser); o
+contexto de cada um já está salvo no sprint plan.
 
 **Arquivo:** `.claude/commands/statusplans-avancar.md`
 
 ```markdown
 ---
-description: Aplica as confirmações de /statusplans-verificar — limpa itens já feitos/obsoletos de docs/plans/ e gera o sprint plan com prompts prontos para os itens confirmados (máx. 6). Passo 3 do fluxo
+description: Aplica as confirmações de /statusplans-verificar — limpa itens já feitos/obsoletos de docs/plans/, gera o sprint plan, e já entra em Plan Mode para o item de maior prioridade (P1), seguindo o processo normal de docs/implementations/. Passo 3 do fluxo
 ---
 
 **Pré-requisito:** uma classificação já confirmada pelo usuário nesta conversa (via
 `/statusplans-verificar`). Se não houver confirmação explícita, **não prossiga** — peça
 para rodar `/statusplans-verificar` primeiro.
+
+Este comando cobre duas fases do processo de plans que normalmente seriam separadas:
+o Passo 5/6 de [`_guia-analise-planos.md`](../../docs/plans/_guia-analise-planos.md)
+("Priorização" + "Proposta e geração do arquivo") e o início do Passo 0 de
+[`_guia-documentar-implementacao.md`](../../docs/implementations/_guia-documentar-implementacao.md)
+("Diagnóstico em Plan Mode"). O objetivo é sair deste comando já dentro do processo de
+implementations para o item mais prioritário, sem exigir que o usuário copie e cole
+nada de volta.
 
 Separe os itens confirmados em dois grupos:
 
@@ -285,32 +295,60 @@ Para cada arquivo de `docs/plans/` afetado:
 prioridade recomendada (da resposta de `/statusplans`) e avise quais ficaram de fora
 para uma próxima rodada.
 
-Siga os **Passo 5 e 6** de
-[`docs/plans/_guia-analise-planos.md`](../../docs/plans/_guia-analise-planos.md) para
-gerar `docs/plans/plano-sprint-YYYY-MM-DD.md` (data de hoje), no formato de
+Gere `docs/plans/plano-sprint-YYYY-MM-DD.md` (data de hoje), no formato de
 [`_template-plano-semanal.md`](../../docs/plans/_template-plano-semanal.md): diagnóstico,
-um prompt pronto por item (**sem prescrever arquivo, linha ou abordagem técnica** — isso
-é trabalho do Plan Mode de cada implementação) e tabela de "Tracking de absorção" com
-todos os itens `⏳ Pendente`.
+mapa de dependências/sinergias, um bloco de contexto por item (motivação, comportamento
+atual vs. desejado, área do sistema — **sem prescrever arquivo, linha ou abordagem
+técnica**, isso é trabalho do Plan Mode) e tabela de "Tracking de absorção" com todos os
+itens `⏳ Pendente`.
+
+**Diferença importante em relação ao guia de análise manual:** o bloco de contexto de
+cada item não é um "prompt para copiar" — é o material que alimenta directamente o
+Passo 0 do processo de implementations, feito por você mesmo logo a seguir, não por o
+usuário colar de volta.
 
 Se algum item do Grupo B tiver uma pergunta de produto/negócio/experiência sem resposta
-óbvia no código ou nos plans, **pare e pergunte ao usuário** antes de escrever o prompt
-daquele item — não adivinhe decisão de negócio (ver critérios de "Perguntas ao admin"
-no Passo 4 do guia de análise).
+óbvia no código ou nos plans, **pare e pergunte ao usuário** antes de seguir com aquele
+item — não adivinhe decisão de negócio (ver critérios de "Perguntas ao admin" no Passo 4
+do guia de análise).
 
-## Fechamento
+## Fechamento — limpeza e sprint plan
 
 1. Faça um **commit único** cobrindo as duas mudanças (limpeza de plans + criação do
    sprint plan), seguindo a convenção de commit do `CLAUDE.md` (`git add` nos arquivos
    específicos, mensagem Conventional Commits, corpo listando o que mudou em cada
    arquivo e a motivação). Isso é manutenção de `docs/plans/`, feito direto na branch
    atual — não abre worktree/branch própria.
-2. Mostre ao usuário: quais arquivos de plans foram limpos ou removidos, e o prompt
-   pronto de cada item do sprint, para ele copiar e colar quando quiser iniciar cada
-   implementação.
+2. Mostre ao usuário um resumo curto: quais arquivos de plans foram limpos/removidos, e
+   a lista P1..P6 do sprint com uma linha cada (título + prioridade).
 
-Não inicie nenhuma implementação nesta resposta — apenas gera o sprint plan e limpa os
-plans já concluídos/obsoletos.
+## Continuação automática — Plan Mode para P1
+
+**Não pare a resposta no sprint plan.** Imediatamente após o commit do Fechamento,
+continue você mesmo para o item **P1** (maior prioridade do Grupo B):
+
+1. Use o contexto já reunido para P1 nesta mesma conversa (motivação, comportamento
+   atual/desejado, área do sistema, e a evidência já levantada em
+   `/statusplans-verificar` sobre o que existe/falta) como ponto de partida — **não
+   reaudite do zero**, só complete o que faltar para responder as 3 perguntas do
+   Passo 0.
+2. Chame `EnterPlanMode` e siga o Passo 0 de `_guia-documentar-implementacao.md`:
+   diagnóstico (já existe? / o que construir / riscos / proposta de fases), no formato
+   descrito lá.
+3. Chame `ExitPlanMode` para pedir a aprovação do usuário. A partir daqui segue o
+   processo normal e integral de `docs/implementations/` — Passo 1 em diante (propor
+   nome de branch, `EnterWorktree`, criar o arquivo, implementar Fase 1, commit,
+   relatório de fase) — exatamente como aconteceria se o usuário tivesse pedido "Quero
+   implementar [P1]. Leia o guia de implementação e siga o processo."
+
+**Para P2 a P6 (se houver):** não gere prompt nenhum para eles agora — o contexto de
+cada um já está salvo no sprint plan. Na mesma resposta, junto do resumo do Fechamento,
+liste cada um numa linha só, ex.: `P2 — <título>: para começar, diga "continuar sprint,
+iniciar P2"`. Quando o usuário disser isso (nesta conversa ou numa nova), releia a seção
+daquele item no sprint plan e repita os passos 1-3 acima para ele.
+
+Se o usuário responder ao Plan Mode do P1 pedindo para trocar de item, ou dizendo para
+não avançar agora, respeite — o sprint plan já guarda o contexto de todos, nada se perde.
 ```
 
 ### Manutenção desta seção

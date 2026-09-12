@@ -112,14 +112,18 @@ Cada sprint plan tem:
 
 ## Como iniciar uma implementação do sprint
 
-Cada item P1/P2/P3 do sprint plan tem um **prompt pronto**. Para iniciar:
+Depende de como o sprint foi gerado:
 
-1. Abrir o arquivo `plano-sprint-YYYY-MM-DD.md`
-2. Copiar o prompt do item que queres implementar
-3. Colar no Claude Code
+- **Se foi via `/statusplans-avancar`:** o Claude já entra em Plan Mode sozinho para o
+  P1 assim que termina de gerar o sprint plan — não precisas copiar nada. Para os itens
+  seguintes, basta dizer "continuar sprint, iniciar P2" (ou P3, etc.) quando quiseres.
+- **Se foi via análise manual** ("Analisa os plans e monta o sprint"), ou queres
+  continuar numa conversa/dispositivo diferente: cada item P1/P2/P3 tem um **prompt
+  pronto** no arquivo — abre `plano-sprint-YYYY-MM-DD.md`, copia o prompt do item
+  desejado e cola no Claude Code.
 
-O Claude de implementations vai ao Plan Mode, investiga o código e segue o processo
-normal de `docs/implementations/`.
+Em qualquer um dos dois casos, o Claude de implementations vai ao Plan Mode, investiga
+o código e segue o processo normal de `docs/implementations/`.
 
 ---
 

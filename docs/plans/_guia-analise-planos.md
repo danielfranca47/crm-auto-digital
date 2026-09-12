@@ -188,6 +188,12 @@ Leia o docs\implementations\_guia-documentar-implementacao.md e siga o processo.
 
 O operacional vai ao Plan Mode, lê o código com foco naquele item e decide COMO fazer.
 
+> **Nota:** este bloco é sempre escrito no arquivo de sprint (secção do item), mas o uso
+> muda conforme o caminho. Na análise manual, é texto para o utilizador copiar e colar.
+> Nos comandos rápidos (`/statusplans-avancar`), é o próprio Claude que usa este
+> conteúdo como ponto de partida do Passo 0, sem esperar o utilizador colar nada — ver
+> "Ciclo de implementations" acima.
+
 ---
 
 ## Ciclo de vida dos arquivos docs/plans/*
@@ -236,13 +242,26 @@ Claude:
 
 --- Ciclo de implementations ---
 
-Utilizador copia o prompt pronto do item P1 e inicia implementação:
+Duas formas de chegar aqui, dependendo de como o sprint foi gerado:
+
+**Via os comandos rápidos** (`/statusplans` → `/statusplans-verificar` →
+`/statusplans-avancar` — ver `docs/ops/local-dev.md`, seção "Comandos slash locais"):
+o próprio `/statusplans-avancar` já entra em Plan Mode para o P1 automaticamente ao
+gerar o sprint plan, usando o contexto já reunido — o utilizador não precisa copiar
+nada. Para P2/P3, basta dizer "continuar sprint, iniciar P2" quando quiser.
+
+**Via análise manual** (pedir "Analisa os plans e monta o sprint", ou continuando numa
+sessão/dispositivo diferente daquele que gerou o sprint): o utilizador copia o prompt
+pronto do item desejado do arquivo `plano-sprint-*.md` e cola nesta ou noutra conversa
+para iniciar.
+
+Em ambos os casos, a partir daqui:
   → Claude de implementations lê _guia-documentar-implementacao.md
   → Segue o processo normal (Plan Mode → código → commit → validação)
-  → Na graduação: executa Passo 6b — marca P1 ✅ no tracking do sprint plan
+  → Na graduação: executa Passo 6b — marca o item ✅ no tracking do sprint plan
   → Se todos os itens ✅: limpa plans/* e deleta sprint plan no mesmo commit
 
-Repetir para P2, P3 — o operacional fecha o sprint automaticamente.
+Repetir para os itens restantes — o operacional fecha o sprint automaticamente.
 ```
 
 ---
