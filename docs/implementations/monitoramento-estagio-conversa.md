@@ -1,7 +1,7 @@
 # Monitoramento: exibir estágio da IA + alerta de conversa parada
 
 **Branch:** `worktree-feat+monitoramento-estagio-conversa`
-**Status:** Em andamento
+**Status:** Todos os cenários validados (12/09/2026)
 
 ---
 
@@ -147,18 +147,21 @@ conversa.
 ## Checks de Validação
 
 ### Cenário P1 — Conversa não some após avançar de estágio
-- [ ] Abrir uma conversa monitorada nova (`category='monitoring'`) na tela `/monitoramento`
-- [ ] Forçar avanço de categoria (ex.: mover o card no Kanban ou aguardar a classificação automática)
-- [ ] Confirmar: a conversa continua listada em `/monitoramento`, agora com o chip do novo estágio
+- [x] Abrir uma conversa monitorada nova (`category='monitoring'`) na tela `/monitoramento`
+- [x] Forçar avanço de categoria (seed direto no banco de teste da worktree: leads em `qualification` e `closing`, via `collab_monitor_instances`/`leads`/`messages`)
+- [x] Confirmar: a conversa continua listada em `/monitoramento`, agora com o chip do novo estágio
+- **Validado em:** 12/09/2026 — `GET /api/collab-monitor/conversations` retornou os 3 leads de teste (`monitoring`, `qualification`, `closing`) na mesma resposta, todos com `category` preenchido; antes da mudança, os dois últimos teriam sido excluídos pelo filtro antigo
 
 ### Cenário P2 — Chip de estágio bate com o Kanban
-- [ ] Selecionar conversas em pelo menos 3 estágios diferentes
-- [ ] Confirmar: label e cor do chip (lista e banner do chat) batem com a coluna correspondente no Kanban (`Index.tsx`)
+- [x] Selecionar conversas em pelo menos 3 estágios diferentes
+- [x] Confirmar: label e cor do chip (lista e banner do chat) batem com a coluna correspondente no Kanban (`Index.tsx`, via `KANBAN_COLUMNS`)
+- **Validado em:** 12/09/2026 — "Monitorado" (cinza), "Qualificação" (azul), "Fechamento" (laranja) renderizados corretamente na lista e no banner do chat, cores idênticas às de `KANBAN_COLUMNS`
 
 ### Cenário P3 — Alerta de conversa parada
-- [ ] Abrir uma conversa cuja última mensagem seja do lead há mais de 3h
-- [ ] Confirmar: chip "Sem resposta há Xh" aparece na lista e/ou no chat
-- [ ] Responder como colaborador (mensagem `model='human_agent'`) e confirmar que o chip some
+- [x] Abrir uma conversa cuja última mensagem seja do lead há mais de 3h
+- [x] Confirmar: chip "Sem resposta há Xh" aparece na lista e/ou no chat
+- [x] Responder como colaborador (mensagem `model='human_agent'`) e confirmar que o chip some
+- **Validado em:** 12/09/2026 — lead com última mensagem do lead há ~5h mostrou "⚠ Sem resposta há 5h" na lista e no banner do chat; após inserir mensagem `human_agent` mais recente e recarregar, o chip desapareceu e a conversa reordenou para o topo (mais recente)
 
 ---
 
