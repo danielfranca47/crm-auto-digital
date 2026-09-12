@@ -89,6 +89,28 @@ FROM (
 WHERE rn = 1
 ```
 
+### Commits Fase 1
+
+| # | Commit | O que foi implementado |
+|---|---|---|
+| 1 | `e748ba4` | backend: filtro ampliado + `category`/`last_message_from` expostos |
+
+**Detalhes do commit `e748ba4`:**
+- `backend-crm/routes/collab_monitor.py` — `list_collab_monitor_conversations`: troca `WHERE l.category = 'monitoring'` por `WHERE l.collab_monitor_instance_id IS NOT NULL`; adiciona `l.category` e `last_msg.model` (aliado como `last_message_from`) ao SELECT e ao `CollabMonitorConversationOut`
+
+### Relatório da Fase 1 — o que mudou na prática
+
+**Antes:** assim que a IA classificava uma conversa monitorada para além do
+estágio inicial, ela sumia da tela de Monitoramento — só reaparecia
+procurando o card no Kanban.
+**Agora:** a API que alimenta essa tela devolve a conversa em qualquer
+estágio, junto com o estágio atual e a informação de quem mandou a última
+mensagem (lead ou colaborador). Ainda não há nada visível na tela — isso é a
+Fase 2.
+**Para validar:** os Cenários P1, P2 e P3 (seção "Checks de Validação")
+dependem também da Fase 2 (frontend), que ainda não foi implementada — não há
+teste isolado só de backend nesta fase.
+
 ### Fase 2 — Frontend: chip de estágio + alerta de conversa parada
 
 **Objetivo:** o supervisor vê o estágio de cada conversa (lista e chat) e
@@ -98,6 +120,27 @@ identifica na hora quem está sem resposta do colaborador há mais de 3h.
 |---|---|
 | `frontend-crm/src/services/api.ts` | `CollabMonitorConversation`: novos campos `category` e `last_message_from` |
 | `frontend-crm/src/pages/CollabMonitorInbox.tsx` | `ConversationListItem`: chip de estágio (reaproveita label/cor de `KANBAN_COLUMNS`/`ARCHIVED_COLUMNS`) + chip de risco "Sem resposta há Xh"; cabeçalho do chat: banner de estágio da conversa selecionada |
+
+### Commits Fase 2
+
+| # | Commit | O que foi implementado |
+|---|---|---|
+| 1 | *(registrar após o commit)* | frontend: chips de estágio/risco na lista + banner de estágio no chat |
+
+**Detalhes:**
+- `frontend-crm/src/services/api.ts` — `CollabMonitorConversation` ganha `category` e `last_message_from`
+- `frontend-crm/src/pages/CollabMonitorInbox.tsx` — novo `STAGE_LOOKUP` (reaproveita `KANBAN_COLUMNS`/`ARCHIVED_COLUMNS` de `src/data/mockData.ts`), `isAwaitingResponse()`/`hoursSince()` (limiar de 3h), componentes `StageChip`/`StaleChip` na lista, banner de estágio no cabeçalho do chat
+
+### Relatório da Fase 2 — o que mudou na prática
+
+**Antes:** a tela de Monitoramento não mostrava em que fase da venda cada
+conversa estava, nem se um lead estava esperando resposta do colaborador.
+**Agora:** cada conversa na lista mostra um selo com o estágio atual (mesma
+cor/nome usada no Kanban) e, quando o lead mandou a última mensagem há mais
+de 3h sem resposta do colaborador, um selo vermelho "Sem resposta há Xh". A
+mesma informação aparece de forma mais visível no topo do chat ao abrir a
+conversa.
+**Para validar:** Cenários P1, P2 e P3 (seção "Checks de Validação").
 
 ---
 

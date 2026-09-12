@@ -461,6 +461,8 @@ export type CollabMonitorConversation = {
   msg_count: number;
   last_message_at?: string | null;
   last_message_preview?: string | null;
+  category?: string | null;
+  last_message_from?: string | null;
 };
 
 export type CollabMonitorConversationsPage = {

@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { ChevronLeft, ChevronRight, MessageSquareOff, Phone, Users, UserCog } from "lucide-react";
+import { AlertTriangle, ChevronLeft, ChevronRight, MessageSquareOff, Phone, Users, UserCog } from "lucide-react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -13,10 +13,48 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { ManageCollaboratorsDialog } from "@/components/ManageCollaboratorsDialog";
+import { ARCHIVED_COLUMNS, KANBAN_COLUMNS } from "@/data/mockData";
 import { api, type CollabMonitorConversation, type LeadMessage } from "@/services/api";
 
 const CONVERSATIONS_PAGE_SIZE = 20;
 const MESSAGES_PAGE_SIZE = 30;
+const STALE_THRESHOLD_MS = 3 * 60 * 60 * 1000;
+
+const STAGE_LOOKUP = new Map(
+  [...KANBAN_COLUMNS, ...ARCHIVED_COLUMNS].map((column) => [column.id, { label: column.title, color: column.color }])
+);
+
+function isAwaitingResponse(conversation: Pick<CollabMonitorConversation, "last_message_from" | "last_message_at">): boolean {
+  if (conversation.last_message_from !== "inbound" || !conversation.last_message_at) return false;
+  const elapsed = Date.now() - new Date(conversation.last_message_at).getTime();
+  return Number.isFinite(elapsed) && elapsed > STALE_THRESHOLD_MS;
+}
+
+function hoursSince(value: string): number {
+  return Math.max(1, Math.floor((Date.now() - new Date(value).getTime()) / (60 * 60 * 1000)));
+}
+
+function StageChip({ category }: { category?: string | null }) {
+  const stage = category ? STAGE_LOOKUP.get(category) : undefined;
+  if (!stage) return null;
+  return (
+    <span
+      className="text-[10px] px-1.5 h-4 rounded-full font-medium shrink-0 inline-flex items-center"
+      style={{ backgroundColor: `${stage.color}26`, color: stage.color }}
+    >
+      {stage.label}
+    </span>
+  );
+}
+
+function StaleChip({ hours }: { hours: number }) {
+  return (
+    <span className="text-[10px] px-1.5 h-4 rounded-full font-medium shrink-0 inline-flex items-center gap-1 bg-destructive/10 text-destructive">
+      <AlertTriangle className="h-2.5 w-2.5" />
+      Sem resposta há {hours}h
+    </span>
+  );
+}
 
 function Pager({
   page,
@@ -116,6 +154,12 @@ function ConversationListItem({
             <Badge variant="secondary" className="text-[10px] px-1.5 h-4 shrink-0">
               {conversation.msg_count}
             </Badge>
+          )}
+        </div>
+        <div className="flex items-center gap-1.5 flex-wrap mt-1">
+          <StageChip category={conversation.category} />
+          {isAwaitingResponse(conversation) && conversation.last_message_at && (
+            <StaleChip hours={hoursSince(conversation.last_message_at)} />
           )}
         </div>
         {conversation.collaborator_name && (
@@ -330,6 +374,27 @@ export default function CollabMonitorInbox() {
                   </p>
                 </div>
               </div>
+
+              {selectedConversation.category && (
+                <div className="border-b px-4 py-1.5 flex items-center gap-2 text-xs shrink-0 bg-muted/40">
+                  <span
+                    className="h-1.5 w-1.5 rounded-full shrink-0"
+                    style={{ backgroundColor: STAGE_LOOKUP.get(selectedConversation.category)?.color }}
+                  />
+                  <span className="text-muted-foreground">
+                    Estágio classificado pela IA:{" "}
+                    <span className="font-medium text-foreground">
+                      {STAGE_LOOKUP.get(selectedConversation.category)?.label ?? selectedConversation.category}
+                    </span>
+                  </span>
+                  {isAwaitingResponse(selectedConversation) && selectedConversation.last_message_at && (
+                    <span className="ml-auto flex items-center gap-1 text-destructive font-medium shrink-0">
+                      <AlertTriangle className="h-3 w-3" />
+                      Sem resposta há {hoursSince(selectedConversation.last_message_at)}h
+                    </span>
+                  )}
+                </div>
+              )}
 
               {!messagesLoading && (orderedMessages.length > 0 || messagePage > 0) && (
                 <Pager
