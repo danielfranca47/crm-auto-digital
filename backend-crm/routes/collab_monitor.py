@@ -35,6 +35,7 @@ from core_client import (
 )
 from database import get_connection
 from security_core import CurrentUser, require_crm_access
+from services.lead_category_policy import BOT_STRUCTURALLY_INACTIVE_CATEGORIES
 
 logger = logging.getLogger(__name__)
 
@@ -188,6 +189,14 @@ class CollabMonitorConversationOut(BaseModel):
 class CollabMonitorConversationsPage(BaseModel):
     items: List[CollabMonitorConversationOut]
     has_more: bool
+
+
+class CollabMonitorSettingsOut(BaseModel):
+    stale_threshold_hours: int
+
+
+class CollabMonitorSettingsUpdate(BaseModel):
+    stale_threshold_hours: int
 
 
 def _now_utc_iso() -> str:
@@ -380,9 +389,55 @@ async def reconnect_collab_monitor_instance(
     )
 
 
+@router.get("/settings", response_model=CollabMonitorSettingsOut)
+async def get_collab_monitor_settings(
+    current_user: CurrentUser = Depends(require_crm_access),
+) -> CollabMonitorSettingsOut:
+    """Configuração de conta do Monitoramento — hoje só o limiar (em horas) de
+    silêncio do colaborador que dispara o alerta de conversa parada na tela.
+    Sem linha cadastrada, devolve o default (3h) sem criar nada."""
+    conn = get_connection()
+    try:
+        row = conn.execute(
+            "SELECT stale_threshold_hours FROM collab_monitor_settings WHERE user_id = ?",
+            (current_user.id,),
+        ).fetchone()
+    finally:
+        conn.close()
+    return CollabMonitorSettingsOut(stale_threshold_hours=row["stale_threshold_hours"] if row else 3)
+
+
+@router.put("/settings", response_model=CollabMonitorSettingsOut)
+async def update_collab_monitor_settings(
+    body: CollabMonitorSettingsUpdate,
+    current_user: CurrentUser = Depends(require_crm_access),
+) -> CollabMonitorSettingsOut:
+    if body.stale_threshold_hours < 1 or body.stale_threshold_hours > 168:
+        raise HTTPException(status_code=400, detail="stale_threshold_hours deve estar entre 1 e 168")
+
+    now = _now_utc_iso()
+    conn = get_connection()
+    try:
+        conn.execute(
+            """
+            INSERT INTO collab_monitor_settings (user_id, stale_threshold_hours, updated_at)
+            VALUES (?, ?, ?)
+            ON CONFLICT(user_id) DO UPDATE SET
+                stale_threshold_hours = excluded.stale_threshold_hours,
+                updated_at = excluded.updated_at
+            """,
+            (current_user.id, body.stale_threshold_hours, now),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+    return CollabMonitorSettingsOut(stale_threshold_hours=body.stale_threshold_hours)
+
+
 @router.get("/conversations", response_model=CollabMonitorConversationsPage)
 async def list_collab_monitor_conversations(
     instance_id: Optional[str] = None,
+    status: str = Query("active", pattern="^(active|all)$"),
     limit: int = Query(20, ge=1, le=100),
     offset: int = Query(0, ge=0),
     current_user: CurrentUser = Depends(require_crm_access),
@@ -393,9 +448,11 @@ async def list_collab_monitor_conversations(
     categoria além de `monitoring`. Agrupados por colaborador, com contagem,
     preview e direção (`last_message_from`) da última mensagem, e a
     categoria atual do lead — base da tela estilo WhatsApp Web. Filtro
-    opcional por `instance_id`. Paginação tradicional via `limit`/`offset` —
-    busca `limit+1` linhas para decidir `has_more` sem precisar de um
-    `COUNT(*)` separado."""
+    opcional por `instance_id`. `status=active` (default) esconde conversas em
+    categoria estruturalmente encerrada (`BOT_STRUCTURALLY_INACTIVE_CATEGORIES`);
+    `status=all` devolve o histórico completo. Paginação tradicional via
+    `limit`/`offset` — busca `limit+1` linhas para decidir `has_more` sem
+    precisar de um `COUNT(*)` separado."""
     conn = get_connection()
     try:
         query = """
@@ -439,6 +496,10 @@ async def list_collab_monitor_conversations(
         if instance_id:
             query += " AND l.collab_monitor_instance_id = ?"
             params.append(instance_id)
+        if status == "active":
+            placeholders = ",".join("?" for _ in BOT_STRUCTURALLY_INACTIVE_CATEGORIES)
+            query += f" AND l.category NOT IN ({placeholders})"
+            params.extend(BOT_STRUCTURALLY_INACTIVE_CATEGORIES)
         query += " ORDER BY datetime(last_msg.createdAt) DESC LIMIT ? OFFSET ?"
         params.extend([limit + 1, offset])
 
