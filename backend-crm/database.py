@@ -41,7 +41,14 @@ def get_connection() -> sqlite3.Connection:
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA foreign_keys = ON")
-    # conn.execute("PRAGMA journal_mode = WAL")  # opcional
+    # WAL permite leitores concorrentes enquanto uma conexão escreve (em vez de
+    # bloquear todo mundo no modo journal padrão); busy_timeout dá a uma conexão
+    # que colide com um lock de escrita alheio uma margem de espera antes de
+    # falhar com "database is locked", em vez de falhar na hora. Não resolve
+    # auto-deadlock (uma função abrindo conexão nova enquanto ela mesma segura
+    # o lock) — só contenção genuína entre conexões diferentes.
+    conn.execute("PRAGMA journal_mode = WAL")
+    conn.execute("PRAGMA busy_timeout = 5000")
     return conn
 
 
