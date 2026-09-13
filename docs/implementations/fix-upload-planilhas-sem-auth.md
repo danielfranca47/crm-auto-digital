@@ -201,25 +201,25 @@ disco.
 ## Checks de Validação
 
 ### Cenário P1 — Upload sem token é rejeitado
-- [ ] Chamar `POST /api/uploads` sem header `Authorization`
-- [ ] Confirmar: resposta 401
+- [x] (13/09/2026) Chamar `POST /api/uploads` sem header `Authorization`
+- [x] (13/09/2026) Confirmar: resposta 401 — `{"detail":"Authorization header ausente"}`
 
 ### Cenário P2 — Upload autenticado funciona normalmente
-- [ ] Login no frontend-crm, ir em Assistente IA, enviar planilha válida (.xlsx ou .csv)
-- [ ] Confirmar: upload aceito, amostra exibida, `upload_id` retornado
+- [x] (13/09/2026) Login via `POST /auth/login` (conta de teste local) + `POST /api/uploads` com planilha válida (.csv), verificado via HTTP direto em vez do frontend
+- [x] (13/09/2026) Confirmar: upload aceito (200), amostra exibida, `upload_id` retornado; arquivo gravado isolado em `data/uploads/ai/{user_id}/`
 
 ### Cenário P3 — Processamento após upload continua funcionando
-- [ ] Usando o `upload_id` do Cenário P2, chamar `/api/assistente-ia/processar` (fluxo normal da página)
-- [ ] Confirmar: processa normalmente (arquivo é encontrado na pasta do usuário)
+- [x] (13/09/2026) Usando o `upload_id` do Cenário P2, chamado `/api/assistente-ia/processar`
+- [x] (13/09/2026) Confirmar: processa normalmente — arquivo encontrado na pasta do usuário, `{"ok":true,"stats":{"created":1,...}}`, lead de teste criado e removido em seguida
 
 ### Cenário C1 — Arquivo acima do limite é rejeitado
-- [ ] Enviar um arquivo maior que `MAX_UPLOAD_BYTES` via HTTP direto (curl/requests) com token válido
-- [ ] Confirmar: resposta 413, e nenhum arquivo parcial fica em `data/uploads/ai/`
+- [x] (13/09/2026) Enviado arquivo de 11MB via HTTP direto (curl) com token válido, acima do `MAX_UPLOAD_BYTES` (10MB)
+- [x] (13/09/2026) Confirmar: resposta 413 (`"Arquivo excede o limite de 10MB"`), e nenhum arquivo parcial ficou em `data/uploads/ai/{user_id}/`
 
 ### Cenário C2 — Isolamento entre usuários
-- [ ] Usuário A envia planilha, obtém `upload_id`
-- [ ] Usuário B (autenticado, outro `user_id`) tenta `/api/assistente-ia/processar` ou `/preview` com esse `upload_id`
-- [ ] Confirmar: "arquivo não encontrado" (404), não processa dado de outro tenant
+- [x] (13/09/2026) Usuário A (conta de teste) enviou planilha, obteve `upload_id`
+- [x] (13/09/2026) Usuário B (segundo usuário de teste, autenticado, `user_id` diferente) tentou `/api/assistente-ia/preview` com esse `upload_id`
+- [x] (13/09/2026) Confirmar: "Arquivo não encontrado" (404) — não processa dado de outro tenant. Usuário de teste descartável removido após a verificação.
 
 ---
 
