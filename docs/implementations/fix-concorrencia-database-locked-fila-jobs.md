@@ -157,8 +157,10 @@ _cancel_pending_jobs_for_lead() [Fase 4]
 - **Validado em:** 13/09/2026 — chamada com o lock aberto retornou em <1s (não esperou busy_timeout); `create_job()` criou o job normalmente só depois do `commit()`
 
 ### Cenário A3 — follow-up progride sem travar (Fase 3)
-- [ ] Teste unitário cobrindo o branch "progride sem fechar" de `progress_followup_after_auto_send`
-- [ ] Confirmar: função não abre conexão nova; job de pré-geração é criado pelo chamador depois do commit
+- [x] Teste unitário cobrindo o branch "progride sem fechar" de `progress_followup_after_auto_send`
+- **Validado em:** 13/09/2026 — `tests/test_followup_state.py::test_auto_send_progresses_without_reaching_max_attempts`
+- [x] Confirmar: função não abre conexão nova; job de pré-geração é criado pelo chamador depois do commit
+- **Validado em:** 13/09/2026 — schema de teste sem tabela `jobs` de propósito; teste passa sem tentar criar job internamente (a criação agora é responsabilidade do chamador)
 
 ### Cenário C1 — pausar follow-up com job pendente (Fase 4)
 - [ ] Setup: lead com follow-up ativo + pelo menos 1 job pendente (`whatsapp.followup.pregenerate` ou `.tick`)
@@ -205,3 +207,21 @@ _cancel_pending_jobs_for_lead() [Fase 4]
 **Antes:** quando o robô, ao terminar de responder um lead pelo WhatsApp, precisava fazer alguma ação extra (mandar uma segunda mensagem, mandar uma mídia, chamar um webhook configurado no fluxo de vendas, ou reprocessar uma pergunta que ficou pendente), o sistema tentava preparar essa ação extra *durante* a própria finalização — e isso podia travar com "database is locked", atrasando a resposta ao lead e, em alguns casos, fazendo o sistema reenviar a mesma resposta duas vezes.
 **Agora:** o sistema primeiro termina de finalizar tudo, e só depois prepara essas ações extras — nunca mais na mesma respiração. Isso vale para as 4 situações que tinham esse problema (não só a que já tinha aparecido num teste anterior: mandar mensagem, mandar mídia, chamar webhook, e reprocessar pergunta pendente), e também para o lembrete de check-in de pré-agendamento.
 **Para validar:** Cenário A2, acima (já validado nesta sessão via teste automatizado — não é um cenário clicável na UI, é uma condição de corrida de banco de dados).
+
+### Commits Fase 3
+
+| # | Commit | O que foi implementado |
+|---|---|---|
+| 1 | `fb3176b` | `progress_followup_after_auto_send` não cria mais job antes do commit do chamador |
+
+**Detalhes do commit `fb3176b`:**
+- `backend-crm/services/followup_state.py` — remove `create_job()` de dentro de `progress_followup_after_auto_send()` (branch "progride sem fechar") + import não usado.
+- `backend-crm/routes/executor.py` — `mark_outbound_sent` captura o retorno da função e cria o job de pré-geração depois do próprio `conn.commit()`, só quando `reason == "progressed"`.
+- `backend-crm/routes/leads.py` — `send_followup_now` move a mesma criação de job para depois do commit (antes nunca criava o job — esse era o próprio bug: o follow-up progredia mas a próxima mensagem nunca era pré-gerada).
+- `backend-crm/tests/test_followup_state.py` — teste novo cobrindo o branch "progride sem fechar" (o único teste existente do branch de auto-send batia direto no branch `max_attempts_reached`, que retorna antes de chegar no `create_job()` — por isso nunca pegou este bug).
+
+### Relatório da Fase 3 — o que mudou na prática
+
+**Antes:** quando um follow-up automático avançava para a próxima tentativa (ex.: primeira mensagem não teve resposta, hora de mandar a segunda), o sistema tentava preparar essa próxima mensagem *durante* a própria atualização do estado do follow-up — o que podia travar com "database is locked". Quando travava, a transação era desfeita: o estado voltava a "não avançou", mas silenciosamente — sem erro visível para ninguém, o follow-up simplesmente ficava parado.
+**Agora:** o sistema primeiro termina de atualizar o estado do follow-up, e só depois — já com tudo salvo — prepara a próxima mensagem. As duas coisas nunca mais competem pelo mesmo lock. Além disso, corrigi um bug relacionado: o botão "enviar follow-up agora" (`send_followup_now`) nunca tinha preparado a próxima mensagem automaticamente depois de um envio manual — agora também faz isso.
+**Para validar:** Cenário A3, acima (já validado nesta sessão via teste automatizado — não é um cenário clicável na UI, é uma condição de corrida de banco de dados).
