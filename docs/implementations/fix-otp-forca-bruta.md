@@ -1,7 +1,7 @@
 # Proteger o código de verificação (OTP) contra força bruta
 
 **Branch:** `fix/otp-forca-bruta`
-**Status:** Em andamento
+**Status:** Todos os cenários validados (13/09/2026)
 **Sprint:** `docs/plans/plano-sprint-2026-09-12.md` (item P2)
 **Origem:** `docs/plans/seguranca-melhorias-futuras.md` (M1)
 
