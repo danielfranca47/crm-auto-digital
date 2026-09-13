@@ -163,9 +163,10 @@ _cancel_pending_jobs_for_lead() [Fase 4]
 - **Validado em:** 13/09/2026 — schema de teste sem tabela `jobs` de propósito; teste passa sem tentar criar job internamente (a criação agora é responsabilidade do chamador)
 
 ### Cenário C1 — pausar follow-up com job pendente (Fase 4)
-- [ ] Setup: lead com follow-up ativo + pelo menos 1 job pendente (`whatsapp.followup.pregenerate` ou `.tick`)
-- [ ] Ação: pausar o follow-up pela Central de Follow-ups / `LeadCardDialog`
-- [ ] Confirmar: retorna sucesso (não 500); job pendente aparece como `completed` com `result.skipped=true` no banco
+- [x] Cobertura por teste unitário (setup + ação + confirmação, com CHECK constraint real replicado no schema de teste)
+- **Validado em:** 13/09/2026 — `tests/test_followup_state.py::test_pause_with_pending_job_completes_job_instead_of_integrity_error`
+- [ ] Confirmar ao vivo pela UI: pausar um follow-up ativo com job pendente pela Central de Follow-ups / `LeadCardDialog` retorna sucesso (não 500)
+- **Pendente:** o MCP chrome-devtools não conectou nesta sessão (timeout) — ver relatório da Fase 4 abaixo para o prompt de retomada
 
 ---
 
@@ -225,3 +226,23 @@ _cancel_pending_jobs_for_lead() [Fase 4]
 **Antes:** quando um follow-up automático avançava para a próxima tentativa (ex.: primeira mensagem não teve resposta, hora de mandar a segunda), o sistema tentava preparar essa próxima mensagem *durante* a própria atualização do estado do follow-up — o que podia travar com "database is locked". Quando travava, a transação era desfeita: o estado voltava a "não avançou", mas silenciosamente — sem erro visível para ninguém, o follow-up simplesmente ficava parado.
 **Agora:** o sistema primeiro termina de atualizar o estado do follow-up, e só depois — já com tudo salvo — prepara a próxima mensagem. As duas coisas nunca mais competem pelo mesmo lock. Além disso, corrigi um bug relacionado: o botão "enviar follow-up agora" (`send_followup_now`) nunca tinha preparado a próxima mensagem automaticamente depois de um envio manual — agora também faz isso.
 **Para validar:** Cenário A3, acima (já validado nesta sessão via teste automatizado — não é um cenário clicável na UI, é uma condição de corrida de banco de dados).
+
+### Commits Fase 4
+
+| # | Commit | O que foi implementado |
+|---|---|---|
+| 1 | `dd53465` | `_cancel_pending_jobs_for_lead` usa status aceito pelo CHECK da tabela `jobs` |
+
+**Detalhes do commit `dd53465`:**
+- `backend-crm/services/followup_state.py` — `UPDATE jobs SET status='cancelled'` (fora do `CHECK`) passa a usar `status='completed'` + `result={"skipped": true, "reason": "followup_paused_or_cancelled"}`, mesmo padrão já usado em `jobs_service.py::cancel_pending_appointment_jobs`.
+- `backend-crm/tests/test_followup_state.py` — schema de teste passa a incluir `jobs` (com o mesmo `CHECK` real) e `followup_reconcile_guard`; teste novo prova que pausar follow-up com job pendente não quebra mais com `IntegrityError`.
+
+### Relatório da Fase 4 — o que mudou na prática
+
+**Antes:** ao pausar ou cancelar um follow-up que tinha uma próxima mensagem já agendada, o sistema tentava marcar esse job pendente como "cancelado" — só que esse valor não existe na lista de status que o banco aceita para jobs, e a tentativa quebrava a operação inteira. O operador recebia um erro (não um "sucesso falso", como a suspeita inicial de outra auditoria sugeria) sempre que tentasse pausar/cancelar um follow-up com mensagem pendente.
+**Agora:** o job pendente é marcado como "concluído, mas pulado" em vez de "cancelado" — valor que o banco aceita — e pausar/cancelar o follow-up funciona normalmente.
+**Para validar:** Cenário C1, abaixo — a parte de banco de dados já está validada por teste automatizado; falta confirmar ao vivo pelo botão de pausar follow-up na UI, o que não consegui fazer nesta sessão porque o MCP do chrome-devtools não conectou (timeout de conexão).
+
+**Quer que eu tente de novo agora, ou prefere testar você mesmo (aqui ou numa conversa nova)?** Se preferir retomar depois, pode colar:
+
+> Lê `docs/implementations/fix-concorrencia-database-locked-fila-jobs.md`, secção "Fase 4", e executa o teste do Cenário C1 (pausar um follow-up ativo com job pendente pela Central de Follow-ups / `LeadCardDialog` e confirmar que retorna sucesso, não 500).
