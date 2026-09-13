@@ -57,6 +57,7 @@ from services.spy_agent.spy_media_worker import process_pending_spy_media_jobs
 from services.knowledge_ingest.ingest_worker import process_pending_knowledge_ingest_jobs
 from services.collab_monitor.classify_worker import process_pending_collab_monitor_classify_jobs
 from services.collab_monitor.media_worker import process_pending_collab_monitor_media_jobs
+from services.upload_cleanup import cleanup_stale_uploads
 
 logger = logging.getLogger(__name__)
 
@@ -67,6 +68,8 @@ _SPY_MEDIA_WORKER_INTERVAL = int(os.getenv("SPY_MEDIA_WORKER_INTERVAL_SECONDS", 
 _KNOWLEDGE_INGEST_WORKER_INTERVAL = int(os.getenv("KNOWLEDGE_INGEST_WORKER_INTERVAL_SECONDS", "10"))
 _COLLAB_MONITOR_CLASSIFY_WORKER_INTERVAL = int(os.getenv("COLLAB_MONITOR_CLASSIFY_WORKER_INTERVAL_SECONDS", "15"))
 _COLLAB_MONITOR_MEDIA_WORKER_INTERVAL = int(os.getenv("COLLAB_MONITOR_MEDIA_WORKER_INTERVAL_SECONDS", "15"))
+_UPLOAD_CLEANUP_INTERVAL = int(os.getenv("UPLOAD_CLEANUP_INTERVAL_SECONDS", "3600"))
+_UPLOAD_MAX_AGE_HOURS = int(os.getenv("UPLOAD_MAX_AGE_HOURS", "24"))
 
 
 async def _reconciler_loop() -> None:
@@ -209,6 +212,30 @@ async def _collab_monitor_media_worker_loop() -> None:
         await asyncio.sleep(_COLLAB_MONITOR_MEDIA_WORKER_INTERVAL)
 
 
+async def _upload_cleanup_loop() -> None:
+    """Apaga periodicamente uploads antigos em data/uploads/ai/<user_id>/ (planilhas
+    de importação de leads que já não são mais necessárias)."""
+    logger.info(
+        "[upload_cleanup] scheduler iniciado — intervalo=%ds max_age=%dh",
+        _UPLOAD_CLEANUP_INTERVAL,
+        _UPLOAD_MAX_AGE_HOURS,
+    )
+    await asyncio.sleep(_RECONCILER_STARTUP_DELAY + 12)  # stagger após os outros
+    while True:
+        try:
+            result = await asyncio.to_thread(cleanup_stale_uploads, _UPLOAD_MAX_AGE_HOURS)
+            if result["deleted"] > 0 or result["errors"] > 0:
+                logger.info(
+                    "[upload_cleanup] scanned=%d deleted=%d errors=%d",
+                    result["scanned"],
+                    result["deleted"],
+                    result["errors"],
+                )
+        except Exception as exc:
+            logger.error("[upload_cleanup] erro inesperado: %s", exc, exc_info=True)
+        await asyncio.sleep(_UPLOAD_CLEANUP_INTERVAL)
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     task = asyncio.create_task(_reconciler_loop())
@@ -217,6 +244,7 @@ async def lifespan(app: FastAPI):
     knowledge_ingest_task = asyncio.create_task(_knowledge_ingest_worker_loop())
     collab_monitor_classify_task = asyncio.create_task(_collab_monitor_classify_worker_loop())
     collab_monitor_media_task = asyncio.create_task(_collab_monitor_media_worker_loop())
+    upload_cleanup_task = asyncio.create_task(_upload_cleanup_loop())
     try:
         yield
     finally:
@@ -227,6 +255,7 @@ async def lifespan(app: FastAPI):
             knowledge_ingest_task,
             collab_monitor_classify_task,
             collab_monitor_media_task,
+            upload_cleanup_task,
         ):
             t.cancel()
             try:
