@@ -70,7 +70,7 @@ class MessageUpsert(BaseModel):
 
 @router.post("/processar")
 def processar(req: AssistIAProcessRequest, current_user: CurrentUser = Depends(require_crm_access)):
-    base_dir = Path("data/uploads/ai")
+    base_dir = Path("data/uploads/ai") / str(current_user.id)
     base_dir.mkdir(parents=True, exist_ok=True)
 
     candidate_paths = [
@@ -262,7 +262,7 @@ def preview(req: dict = Body(...), current_user: CurrentUser = Depends(require_c
     if not upload_id:
         raise HTTPException(400, "upload_id é obrigatório")
 
-    base = Path("data/uploads/ai")
+    base = Path("data/uploads/ai") / str(current_user.id)
     fp = next((p for p in [base / f"{upload_id}.xlsx", base / f"{upload_id}.csv"] if p.exists()), None)
     if not fp:
         raise HTTPException(404, "Arquivo não encontrado")

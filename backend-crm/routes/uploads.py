@@ -1,15 +1,20 @@
 # routes/uploads.py
 import uuid, os
 from pathlib import Path
-from fastapi import APIRouter, UploadFile, File, HTTPException
+from fastapi import APIRouter, UploadFile, File, Depends, HTTPException
 import pandas as pd
 import numpy as np    # <-- ADICIONE
 from datetime import datetime, date
+
+from security_core import CurrentUser, require_crm_access
 
 router = APIRouter()
 
 BASE = Path("data/uploads/ai")
 BASE.mkdir(parents=True, exist_ok=True)
+
+MAX_UPLOAD_BYTES = 10 * 1024 * 1024  # 10MB — planilha de leads não deveria passar disso
+UPLOAD_CHUNK_SIZE = 1024 * 1024
 
 def _read_df(fp: Path, limit: int = 20) -> pd.DataFrame:
     if fp.suffix.lower() == ".csv":
@@ -44,19 +49,39 @@ def _df_to_records_safe(df: pd.DataFrame) -> list[dict]:
     return records
 
 @router.post("/uploads")
-async def upload_planilha(file: UploadFile = File(...)):
+async def upload_planilha(
+    file: UploadFile = File(...),
+    current_user: CurrentUser = Depends(require_crm_access),
+):
     # aceita .xlsx/.csv (adicione ".xls" se quiser)
     ext = os.path.splitext(file.filename or "")[1].lower()
     if ext not in [".xlsx", ".csv", ".xls"]:
         raise HTTPException(400, "Apenas .xlsx, .csv ou xls")
 
     uid = str(uuid.uuid4())
-    dest = BASE / f"{uid}{ext}"
+    user_dir = BASE / str(current_user.id)
+    user_dir.mkdir(parents=True, exist_ok=True)
+    dest = user_dir / f"{uid}{ext}"
     try:
-        content = await file.read()
+        size = 0
         with open(dest, "wb") as f:
-            f.write(content)
+            while True:
+                chunk = await file.read(UPLOAD_CHUNK_SIZE)
+                if not chunk:
+                    break
+                size += len(chunk)
+                if size > MAX_UPLOAD_BYTES:
+                    f.close()
+                    dest.unlink(missing_ok=True)
+                    raise HTTPException(
+                        413,
+                        f"Arquivo excede o limite de {MAX_UPLOAD_BYTES // (1024 * 1024)}MB",
+                    )
+                f.write(chunk)
+    except HTTPException:
+        raise
     except Exception as e:
+        dest.unlink(missing_ok=True)
         raise HTTPException(500, f"Falha ao salvar upload: {e}")
 
     # gera amostra segura para JSON
