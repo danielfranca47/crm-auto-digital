@@ -10,6 +10,7 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 from services.followup_state import (
     STOP_INBOUND_REPLY,
     STOP_MAX_ATTEMPTS_REACHED,
+    pause_followup_manually,
     progress_followup_after_auto_send,
     stop_followup_on_handoff,
     stop_followup_on_inbound_reply,
@@ -38,6 +39,27 @@ def _create_schema(conn: sqlite3.Connection) -> None:
             action TEXT,
             notes TEXT,
             user_id INTEGER
+        );
+
+        -- CHECK igual ao real (backend-crm/database.py::ensure_jobs_tables) --
+        -- de propósito, para que um status fora do enum quebre o teste com
+        -- IntegrityError, do mesmo jeito que quebrava em produção.
+        CREATE TABLE jobs (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER,
+            type TEXT NOT NULL,
+            payload TEXT,
+            status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending','in_progress','completed','failed')),
+            result TEXT,
+            updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        );
+
+        CREATE TABLE followup_reconcile_guard (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            lead_id INTEGER NOT NULL,
+            due_at DATETIME NOT NULL,
+            job_id INTEGER,
+            status TEXT NOT NULL DEFAULT 'enqueued'
         );
         """
     )
@@ -203,6 +225,43 @@ class FollowupStateTest(unittest.TestCase):
         self.assertEqual(saved["status"], "paused")
         self.assertEqual(saved["stop_reason"], "handoff_human")
         self.assertEqual(row["followup_status"], "paused")
+
+    def test_pause_with_pending_job_completes_job_instead_of_integrity_error(self):
+        """Antes desta correção, UPDATE jobs SET status='cancelled' violava o
+        CHECK constraint (só aceita pending/in_progress/completed/failed) --
+        IntegrityError derrubava a transação inteira, e pausar o follow-up
+        pela UI falhava sempre que havia job pendente."""
+        contract = {
+            "phase": "follow-up",
+            "status": "active",
+            "attempts": 1,
+            "max_attempts": 3,
+            "next_followup_at": "2026-01-01T10:00:00Z",
+            "stop_reason": None,
+            "followup_variant": "sdr_scheduler",
+        }
+        self.conn.execute(
+            "INSERT INTO leads (user_id, category, bot_disabled, followup_contract, followup_status, next_followup_at) VALUES (11, 'follow-up', 0, ?, 'active', ?)",
+            (json.dumps(contract), contract["next_followup_at"]),
+        )
+        lead_id = int(self.conn.execute("SELECT id FROM leads").fetchone()["id"])
+        self.conn.execute(
+            "INSERT INTO jobs (id, user_id, type, payload, status) VALUES (501, 11, 'whatsapp.followup.pregenerate', '{}', 'pending')"
+        )
+        self.conn.execute(
+            "INSERT INTO followup_reconcile_guard (lead_id, due_at, job_id) VALUES (?, ?, 501)",
+            (lead_id, contract["next_followup_at"]),
+        )
+
+        result = pause_followup_manually(self.conn, lead_id=lead_id, user_id=11)
+        self.conn.commit()
+
+        self.assertTrue(result["updated"])
+        self.assertEqual(result["reason"], "paused")
+        job_row = self.conn.execute("SELECT status, result FROM jobs WHERE id = 501").fetchone()
+        self.assertEqual(job_row["status"], "completed")
+        self.assertEqual(json.loads(job_row["result"]), {"skipped": True, "reason": "followup_paused_or_cancelled"})
+        self.assertIsNone(self.conn.execute("SELECT 1 FROM followup_reconcile_guard WHERE job_id = 501").fetchone())
 
 
 if __name__ == "__main__":

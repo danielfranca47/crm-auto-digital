@@ -587,11 +587,19 @@ def _cancel_pending_jobs_for_lead(conn, *, lead_id: int) -> int:
         (lead_id,),
     ).fetchall()
 
+    # Não existe status 'cancelled' no CHECK constraint da tabela jobs (só
+    # pending/in_progress/completed/failed) — usa 'completed' com
+    # result.skipped=true em vez de introduzir um valor fora do enum (mesmo
+    # padrão de jobs_service.py::cancel_pending_appointment_jobs). O valor
+    # antigo ('cancelled') violava o CHECK e derrubava a transação inteira
+    # com IntegrityError, fazendo pausar/cancelar follow-up falhar sempre que
+    # havia job pendente.
+    skip_result = _json_dumps({"skipped": True, "reason": "followup_paused_or_cancelled"})
     cancelled = 0
     for r in rows:
         conn.execute(
-            "UPDATE jobs SET status = 'cancelled', updated_at = CURRENT_TIMESTAMP WHERE id = ? AND status = 'pending'",
-            (r["job_id"],),
+            "UPDATE jobs SET status = 'completed', result = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND status = 'pending'",
+            (skip_result, r["job_id"]),
         )
         conn.execute(
             "DELETE FROM followup_reconcile_guard WHERE id = ?",
