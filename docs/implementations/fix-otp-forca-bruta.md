@@ -160,6 +160,19 @@ endpoints (não são só testes de unidade isolados — chamam `request_access`/
 - [x] Errar `MAX_OTP_ATTEMPTS - 1` vezes, confirmar que `request-access` ainda funciona
 - **Validado em:** 13/09/2026 — `test_wrong_code_below_limit_does_not_lock`, `pytest` verde
 
+### Cenário C7 — Verificação ao vivo via HTTP real (servidor local, banco descartável)
+- [x] Subir `backend-core` local (`uvicorn`, porta isolada, `DATABASE_URL` apontando para um
+  sqlite descartável — nunca o `core.db` de desenvolvimento) e confirmar que
+  `ensure_auth_otp_lockouts_table()` roda sem erro no startup
+- [x] `POST /auth/register` + `POST /auth/request-access` reais via `curl`, código lido
+  direto do arquivo sqlite (SMTP desligado só para este teste, para não enviar emails reais)
+- [x] 5x `POST /auth/verify-otp` com código errado → `400` nas 5; 6ª tentativa (mesmo com o
+  código certo) → `429`; `POST /auth/request-access` também `429` enquanto bloqueado
+- [x] Utilizador novo (sem bloqueio) → `request-access` + `verify-otp` com código certo →
+  `200` com `access_token`/`refresh_token` válidos
+- **Validado em:** 13/09/2026 — todas as respostas HTTP conferidas manualmente; banco e
+  processo de teste removidos ao final (nenhum artefacto deixado no disco)
+
 ---
 
 ## Ajustes Possíveis Pós-Implementação
