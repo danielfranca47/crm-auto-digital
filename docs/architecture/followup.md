@@ -171,7 +171,7 @@ Para job `whatsapp.followup.tick`:
 5. Envia via `core_client.send_whatsapp_message()`
 6. `complete_job()` → aciona `progress_followup_after_auto_send()`
 
-**`progress_followup_after_auto_send`:** incrementa `attempts`, recalcula `next_followup_at` (via `followup_cadence` do AI Profile ou defaults hardcoded abaixo), e cria job `whatsapp.followup.pregenerate` para a próxima mensagem.
+**`progress_followup_after_auto_send`:** incrementa `attempts` e recalcula `next_followup_at` (via `followup_cadence` do AI Profile ou defaults hardcoded abaixo) — **não cria job** directamente (recebe uma `conn` de transação alheia; ver invariante em [`agents.md`](agents.md), "Concorrência SQLite"). Quem chama (`executor.py::mark_outbound_sent`, `leads.py::send_followup_now`) cria o job `whatsapp.followup.pregenerate` para a próxima mensagem só depois do próprio `conn.commit()`, quando o retorno indica `reason == "progressed"`.
 
 **Intervalos entre tentativas (defaults hardcoded em `followup_state.py`, substituíveis por `followup_cadence`):**
 
@@ -315,6 +315,13 @@ Mensagens de Follow-Up" abaixo.
 **Distinção de status:**
 - `paused` — auto-pausado por resposta inbound (lead voltou a falar)
 - `manually_paused` — pausado pelo operador; pode ser retomado via `/resume`
+
+**Cancelamento de jobs pendentes (`_cancel_pending_jobs_for_lead`):** ao pausar/cancelar,
+qualquer job `pending` guardado em `followup_reconcile_guard` para o lead é marcado
+`status='completed'` com `result={"skipped": true, "reason": "followup_paused_or_cancelled"}`
+— **nunca** `status='cancelled'` (valor fora do `CHECK` da tabela `jobs`, que só aceita
+`pending/in_progress/completed/failed`; usar um valor fora do enum derruba a transação
+inteira com `IntegrityError`). Mesmo padrão de `jobs_service.py::cancel_pending_appointment_jobs`.
 
 ---
 

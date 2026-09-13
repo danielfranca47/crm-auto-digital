@@ -100,6 +100,40 @@ jobs já resolvidos.
 - Backoff em falha: tentativa 1 → +60s; tentativa 2 → +180s; tentativa 3 → `failed` definitivo
 - `report` falha com `409` se job não estiver mais `in_progress` (protege contra report atrasado)
 
+### Concorrência SQLite (WAL + busy_timeout) e a regra "nunca criar job dentro de uma transação aberta"
+
+`get_connection()` (`backend-crm/database.py`) habilita `PRAGMA journal_mode=WAL` e
+`PRAGMA busy_timeout=5000` em toda conexão — dá margem de ~5s para uma conexão esperar
+o lock de escrita de outra em vez de falhar na hora com `sqlite3.OperationalError:
+database is locked`. Isto é defesa em profundidade para contenção genuína entre
+conexões diferentes (ex.: webhook do WhatsApp processando ao mesmo tempo que o
+reconciliador de follow-up faz uma verificação periódica) — não resolve, sozinho, uma
+conexão que tenta escrever enquanto ainda segura o lock de outra transação sua própria
+(autodeadlock).
+
+**Invariante:** `create_job()` abre a sua própria conexão SQLite — chamá-lo enquanto o
+código chamador ainda está dentro de um `BEGIN IMMEDIATE`/transação própria não
+commitada causa autodeadlock (a conexão nova nunca consegue obter o lock, porque quem
+o segura é a mesma linha de execução esperando por ela). Duas soluções aplicadas:
+
+- **Coletar specs, criar depois do commit** — `complete_job_internal()`
+  (`routes/executor.py`) não cria jobs directamente: as funções de dispatch que
+  precisam de enfileirar algo (`_dispatch_system_actions`, `_dispatch_sales_flow_media`,
+  `_build_preagendamento_checkin_job`) devolvem uma spec de job em vez de chamar
+  `create_job()`; `complete_job_internal()` acumula essas specs e só as materializa
+  depois do próprio `conn.commit()`.
+- **Mover a chamada para depois do commit do chamador** — quando a própria função de
+  negócio não abre transação (recebe uma `conn` já aberta por quem a chama),
+  `create_job()` não é chamado dentro dela: o retorno indica o que precisa ser
+  enfileirado, e quem chamou cria o job só depois do seu `conn.commit()`. Ver
+  `progress_followup_after_auto_send()` em [`followup.md`](followup.md) para o exemplo
+  aplicado.
+
+Ao adicionar um novo side-effect que crie job dentro de `complete_job_internal()` ou de
+qualquer função que receba uma `conn` de transação alheia, seguir um dos dois padrões
+acima — nunca chamar `create_job()` diretamente enquanto essa transação ainda está
+aberta.
+
 ---
 
 ## AI Profile (Business Layer)
