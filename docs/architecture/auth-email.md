@@ -49,6 +49,10 @@ startup.
 | `POST /auth/reset-password` | Público | Valida token, actualiza `password_hash`, marca `used_at`; envia email de confirmação |
 | `POST /auth/change-password` | Bearer | Utilizador autenticado altera a própria senha; envia email de confirmação |
 | `POST /auth/register` | Público | Cria conta auto-serve; envia email de boas-vindas "A Lara está pronta para ti" |
+| `POST /auth/request-access` | Público | Login sem senha (OTP) — envia código para email já cadastrado. Ver secção "Login Sem Senha (OTP)" abaixo |
+| `POST /auth/register-passwordless` | Público | Cria conta sem senha e envia OTP |
+| `POST /auth/verify-otp` | Público | Valida OTP, devolve `access_token` + `refresh_token` |
+| `POST /auth/token/refresh` | Público (refresh token) | Troca refresh token (30d) por novo access token (24h) |
 
 ### JWT
 
@@ -145,6 +149,76 @@ POST /auth/reset-password { token, new_password }
 ```
 
 **Tabela criada por:** `Base.metadata.create_all()` no startup — não requer `ensure_*` manual.
+
+---
+
+## Login Sem Senha (OTP) — agent-local
+
+**Arquivo:** `backend-core/app/api/auth.py`. Consumido exclusivamente pelo app desktop
+`agent-local` (sem UI equivalente no `frontend-crm`) — ver
+[`agent-local-app.md`](agent-local-app.md).
+
+**Tabela `auth_otps`** (criada por `ensure_auth_otps_table()`):
+
+| Campo | Tipo | Notas |
+|---|---|---|
+| `id` | Integer PK | |
+| `email` | Text | Não é FK — o utilizador é resolvido por email nas rotas |
+| `code` | Text | 6 dígitos, `secrets.randbelow(900_000) + 100_000` |
+| `expires_at` | DateTime | TTL 15 min (`OTP_TTL_MINUTES`) |
+| `used` | Integer (bool) | `0` = ainda válido |
+| `created_at` | DateTime | |
+
+**Fluxo:**
+```
+POST /auth/request-access { email }
+  → email não existe → { status: "new_user" } (front deve chamar register-passwordless)
+  → email existe → _check_otp_lockout → gera OTP (apaga linhas used/expiradas do mesmo
+    email antes de inserir) → envia por email
+
+POST /auth/register-passwordless { name, email, whatsapp?, sector? }
+  → email já existe → _check_otp_lockout → gera e envia OTP (mesmo comportamento acima)
+  → email novo → cria User (password_hash aleatório, nunca usado) → gera e envia OTP
+
+POST /auth/verify-otp { email, code }
+  → _check_otp_lockout
+  → código bate (email + code + used=0 + expires_at > now) → marca used=1, limpa
+    histórico de falhas, devolve { access_token, refresh_token, token_type }
+  → código não bate → regista falha (ver lockout abaixo), 400 "Codigo invalido ou expirado."
+
+POST /auth/token/refresh { refresh_token }
+  → troca por novo access_token (24h) sem exigir novo login
+```
+
+### Proteção contra força bruta (`auth_otp_lockouts`)
+
+Sem o limite abaixo, o espaço de 900 mil combinações do OTP seria testável por script
+dentro da própria janela de validade (15 min) — caminho directo para tomar conta de
+qualquer utilizador. Corrigido em `fix-otp-forca-bruta` (sprint 2026-09-12, item P2).
+
+**Tabela `auth_otp_lockouts`** (criada por `ensure_auth_otp_lockouts_table()`):
+
+| Campo | Tipo | Notas |
+|---|---|---|
+| `email` | Text PK | |
+| `failed_attempts` | Integer | Contador de falhas consecutivas; reiniciado a cada bloqueio ou login bem-sucedido |
+| `locked_until` | DateTime nullable | `NULL`/passado = sem bloqueio activo |
+
+- **Limite:** `MAX_OTP_ATTEMPTS = 5` tentativas erradas por email; bloqueio de
+  `OTP_LOCKOUT_MINUTES = 15` minutos ao atingir o limite (`429 "Muitas tentativas. Tente
+  novamente mais tarde."`).
+- **Aplicado nos 3 endpoints** (`request-access`, `register-passwordless`, `verify-otp`) —
+  não só na verificação, para que o bloqueio também impeça gerar/enviar OTPs novos durante
+  a janela de lockout.
+- **O contador vive por email em `auth_otp_lockouts`, nunca na linha do OTP** — pedir um
+  código novo (`_generate_and_store_otp`) não reseta a contagem de falhas. Guardar o
+  contador na própria linha do OTP permitiria contornar o limite errando sempre
+  `MAX_OTP_ATTEMPTS - 1` vezes e pedindo um código novo antes de bater no limite.
+- **Login bem-sucedido limpa o histórico** (`DELETE FROM auth_otp_lockouts`).
+- **Sem limite por IP** — só por conta (email). `backend-core` não tem nenhuma infra de
+  extração confiável de IP de cliente atrás do proxy da Railway; um limite por IP exigiria
+  construir essa infra primeiro (risco de confiar num `X-Forwarded-For` spoofável sem
+  validação).
 
 ---
 
