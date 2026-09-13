@@ -11,54 +11,6 @@
 
 ---
 
-## M1 — Código de verificação (OTP) pode ser adivinhado por força bruta
-
-**Em palavras simples:** o login por OTP manda um código de 6 dígitos por
-15 minutos, mas o sistema não conta quantas vezes alguém errou. Um atacante
-pode simplesmente tentar todas as combinações possíveis nesse intervalo e,
-mais cedo ou mais tarde, acertar — sem nenhum alarme disparar.
-
-**Prioridade: ALTA** (caminho direto para tomar conta de um utilizador,
-sem precisar de mais nenhuma falha)
-
-**Estado actual:** `POST /auth/verify-otp` (`backend-core/app/api/auth.py`)
-gera o código com `secrets.randbelow(900_000) + 100_000` — só 1 milhão de
-combinações — e valida contra o valor guardado sem nenhum contador de
-tentativas falhas nem limite por IP/conta.
-
-**Risco concreto:** um script simples, sem rate limit para o travar, tem
-tempo de sobra dentro da janela de 15 minutos para tentar todas as
-combinações e assumir a conta de qualquer utilizador.
-
-**O que precisaria existir:** um contador de tentativas falhas por
-utilizador/OTP (bloquear depois de N erros) e rate limit por IP nesse
-endpoint especificamente.
-
----
-
-## M2 — Upload de planilhas aceita qualquer chamada anónima
-
-**Em palavras simples:** o endpoint que recebe arquivos Excel/CSV para
-importar leads não pede login nenhum. Qualquer pessoa na internet pode
-mandar arquivos para o servidor, sem limite de tamanho nem de quantidade.
-
-**Prioridade: ALTA** (superfície de negação de serviço num serviço exposto
-à internet, sem nenhuma barreira)
-
-**Estado actual:** `POST /api/uploads` (`backend-crm/routes/uploads.py:46`)
-não tem `Depends(require_crm_access)`. O arquivo é gravado em disco
-(`data/uploads/ai/{uuid}.ext`) e processado com `pandas.read_excel`/
-`read_csv` sem limite de tamanho nem cota por utilizador.
-
-**Risco concreto:** um atacante pode mandar arquivos grandes ou em
-quantidade repetida até esgotar o disco do servidor, ou explorar uma falha
-futura do parser do pandas — sem precisar de nenhuma credencial.
-
-**O que precisaria existir:** exigir `require_crm_access`, limitar o
-tamanho do arquivo aceite, e isolar/limpar os arquivos por `user_id`.
-
----
-
 ## M3 — Endpoints de login e recuperação de senha não travam tentativas repetidas
 
 **Em palavras simples:** tentar logar, criar conta, pedir recuperação de

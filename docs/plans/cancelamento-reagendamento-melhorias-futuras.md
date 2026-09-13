@@ -39,17 +39,3 @@
 **Estado actual:** `_decide_post_meeting_management()` nunca define `suggested_category` — cancelar ou reagendar uma reunião via IA não move o lead entre colunas do quadro visual de vendas.
 
 **Decisão já tomada:** fora de escopo do M1 — território do M2 do plano original (`docs/plans/followup-proativo-e-cancelamento-agenda.md`, item de disparo automático de follow-up), que ainda está pendente de implementação. Revisitar apenas se, ao implementar esse M2, fizer sentido também mover a categoria neste fluxo.
-
----
-
-## M5 — Mesmo bug de status `'cancelled'` provavelmente existe em `followup_state.py`
-
-**Prioridade: ALTA** (pode estar causando falha silenciosa em produção agora, fora deste fluxo)
-
-**Estado actual:** a Fase 3 deste M1 corrigiu um bug em que `UPDATE jobs SET status='cancelled'` violava o `CHECK (status IN ('pending','in_progress','completed','failed'))` da tabela `jobs`, causando `IntegrityError` ao tentar cancelar jobs de lembrete/briefing. O mesmo padrão (`status='cancelled'`) ainda existe em `backend-crm/services/followup_state.py::_cancel_pending_jobs_for_lead` — código de follow-up, não tocado por esta implementação.
-
-**Risco concreto:** `POST /leads/{id}/followup/pause` e `/leads/{id}/followup/cancel` podem estar falhando silenciosamente em produção sempre que tentam cancelar jobs pendentes de follow-up — o operador pausa/cancela um follow-up pela UI, a tela mostra sucesso, mas o job de follow-up pendente continua agendado e dispara de qualquer forma.
-
-**O que precisaria existir:** aplicar a mesma correção — usar `status='completed'` + campo `result` indicando `skipped=true` (padrão já compartilhado em `backend-crm/services/jobs_service.py::cancel_pending_appointment_jobs`), ou criar uma função equivalente dedicada a jobs de follow-up caso o filtro de payload seja diferente.
-
-**Por que não foi corrigido agora:** é código de follow-up, fora do escopo deste M1 (que é sobre agendamento/appointments) — mas a urgência prática (possível falha silenciosa já em produção) justifica investigar antes que os outros 4 itens deste documento.

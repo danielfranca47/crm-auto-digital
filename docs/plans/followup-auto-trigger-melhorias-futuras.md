@@ -38,41 +38,6 @@ timestamp dedicado, atualizado só por `save_inbound_message()`, em vez de reapr
 
 ---
 
-## M2 — Falha de "trava do banco" pode impedir o envio de follow-ups automáticos sob concorrência (bug pré-existente)
-
-**Em palavras simples:** existe uma falha técnica antiga no sistema — não foi criada
-por esta implementação, mas foi descoberta enquanto eu testava o check-in de cliente
-inativo. Ela pode fazer o sistema falhar silenciosamente ao tentar preparar a próxima
-mensagem de um follow-up automático, sempre que duas partes do sistema tentam escrever
-no banco de dados praticamente ao mesmo tempo. Isso afeta **todos** os tipos de
-follow-up automático que já existiam antes desta implementação, não só o que eu criei.
-
-**Prioridade: ALTA** (pode estar causando falha silenciosa em produção agora, fora
-deste fluxo — mesmo padrão de risco do M5 em
-`docs/plans/cancelamento-reagendamento-melhorias-futuras.md`)
-
-**Estado actual:** `progress_followup_after_auto_send()`
-(`backend-crm/services/followup_state.py`) chama `create_job()` (que abre a sua
-própria conexão SQLite) **antes** do `conn.commit()` do chamador, no branch de
-progresso normal (não no de `max_attempts_reached`, que não chama `create_job`). Os
-dois pontos de chamada reais são `backend-crm/routes/executor.py:1257` e
-`backend-crm/routes/leads.py:1613` — nenhum dos dois comita antes de chamar a função.
-É exatamente o mesmo padrão de bug já corrigido na Fase 3 deste M2
-(`docs/implementations/followup-auto-trigger-inatividade.md`, commit `9689fb1`), mas
-em `start_followup_for_inactivity()` — uma função diferente, já com o fix aplicado.
-Esta aqui (`progress_followup_after_auto_send()`) nunca recebeu a mesma correção.
-
-**Risco concreto:** quando isto falha, a transação é revertida automaticamente (sem
-corrupção de dados), mas o job de pré-geração da próxima mensagem não é criado — o
-follow-up automático fica "preso", sem o operador ou o sistema perceberem.
-
-**O que precisaria existir:** mover a chamada a `create_job()` para depois do
-`conn.commit()` nos dois call sites (`executor.py:1257`, `leads.py:1613`), e remover
-a chamada de dentro de `progress_followup_after_auto_send()` — mesmo padrão já usado
-em `scan_inactive_leads_for_auto_followup()` após a Fase 3.
-
----
-
 ## M3 — Check-in automático de clientes não cobre o agente de Fechamento Direto (Agent 2)
 
 **Em palavras simples:** dos três tipos de agente do sistema, o check-in automático
@@ -142,6 +107,3 @@ locais com banco partilhado.
   deveriam nascer dentro dessa camada dedicada em vez de soltos — os campos da Fase 4
   (`followup_checkin_*`) seguem exactamente o mesmo padrão e entram no mesmo M3 quando
   ele avançar (nota adicionada lá referenciando este documento).
-- `docs/plans/cancelamento-reagendamento-melhorias-futuras.md` (M5) — mesmo tipo de
-  bug de concorrência/trava de banco, em código diferente; os dois podem ser corrigidos
-  juntos se fizer sentido por sinergia de arquivos.
