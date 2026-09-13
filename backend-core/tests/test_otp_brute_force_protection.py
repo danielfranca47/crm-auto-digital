@@ -15,7 +15,7 @@ from app.api.auth import (
     request_access,
     verify_otp_endpoint,
 )
-from app.db import Base, ensure_auth_otp_lockouts_table, ensure_auth_otps_table
+from app.db import Base, ensure_auth_otp_lockouts_send_columns, ensure_auth_otp_lockouts_table, ensure_auth_otps_table
 import app.db as core_db
 import app.services.email_service as email_service
 from fastapi import HTTPException
@@ -31,6 +31,7 @@ class OtpBruteForceProtectionTests(unittest.TestCase):
         try:
             ensure_auth_otps_table()
             ensure_auth_otp_lockouts_table()
+            ensure_auth_otp_lockouts_send_columns()
         finally:
             core_db.engine = old_engine
 
