@@ -1,7 +1,7 @@
 # Rate-limit no envio de OTP (anti-spam)
 
 **Branch:** `fix/otp-spam-envio`
-**Status:** Em andamento
+**Status:** Todos os cenários validados (13/09/2026)
 
 ---
 
@@ -84,15 +84,24 @@ a tabela `auth_otp_lockouts` já existente.
 ## Checks de Validação
 
 ### Cenário C1 — Rate-limit bloqueia envio repetido
-- [ ] Chamar `POST /auth/request-access` 3x seguidas para o mesmo email existente → todas succeed (200)
-- [ ] 4ª chamada dentro de 10 min → 429 "Muitas tentativas..."
-- [ ] Confirmar (via log/DB) que nenhum OTP novo foi inserido/enviado nessa 4ª chamada
+- [x] Chamar `POST /auth/request-access` 3x seguidas para o mesmo email existente → todas succeed (200)
+- [x] 4ª chamada dentro de 10 min → 429 "Muitas tentativas..."
+- [x] Confirmar (via log/DB) que nenhum OTP novo foi inserido/enviado nessa 4ª chamada
+- **Validado em:** 13/09/2026 — servidor local (`backend-core`, porta 8091) rodando na worktree,
+  DB copiado do dev local, email real de teste (`autodigital157@gmail.com`, ver
+  `_conta-teste-local.md`). 3 chamadas retornaram 200 "Codigo enviado...", a 4ª retornou 429.
+  Confirmado via SQL direto: `auth_otps` tinha só 3 linhas para o email (a 4ª chamada não gerou
+  OTP novo), `auth_otp_lockouts.otp_send_count = 4` e `locked_until` ~15min no futuro.
 
 ### Cenário C2 — Janela expira
-- [ ] Após o bloqueio, esperar (ou simular) o `locked_until` expirar → nova chamada volta a funcionar
+- [x] Após o bloqueio, esperar (ou simular) o `locked_until` expirar → nova chamada volta a funcionar
+- **Validado em:** 13/09/2026 — `locked_until` e `otp_send_window_started_at` simulados no
+  passado via SQL direto; chamada seguinte a `request-access` voltou a retornar 200.
 
 ### Cenário C3 — `register-passwordless` (email existente) também limitado
-- [ ] Mesmo teste do C1 usando `POST /auth/register-passwordless` para um email já cadastrado
+- [x] Mesmo teste do C1 usando `POST /auth/register-passwordless` para um email já cadastrado
+- **Validado em:** 13/09/2026 — com o lockout do C1 ainda ativo, `register-passwordless` para o
+  mesmo email também retornou 429 (mesmo `locked_until` compartilhado entre os 3 endpoints).
 
 ### Testes automatizados (pytest)
 - [x] `test_otp_spam_send_protection.py` passa localmente, junto com `test_otp_brute_force_protection.py` (regressão) — **Validado em:** 13/09/2026 — `pytest tests/test_otp_spam_send_protection.py tests/test_otp_brute_force_protection.py` → 11 passed. Suíte completa também rodada (`pytest tests/`): as únicas falhas são 8 testes de `test_ai_profile_*` pré-existentes na `main` (confirmado rodando o mesmo arquivo fora desta branch), sem relação com esta mudança.
