@@ -95,7 +95,37 @@ a tabela `auth_otp_lockouts` já existente.
 - [ ] Mesmo teste do C1 usando `POST /auth/register-passwordless` para um email já cadastrado
 
 ### Testes automatizados (pytest)
-- [ ] `test_otp_spam_send_protection.py` passa localmente, junto com `test_otp_brute_force_protection.py` (regressão)
+- [x] `test_otp_spam_send_protection.py` passa localmente, junto com `test_otp_brute_force_protection.py` (regressão) — **Validado em:** 13/09/2026 — `pytest tests/test_otp_spam_send_protection.py tests/test_otp_brute_force_protection.py` → 11 passed. Suíte completa também rodada (`pytest tests/`): as únicas falhas são 8 testes de `test_ai_profile_*` pré-existentes na `main` (confirmado rodando o mesmo arquivo fora desta branch), sem relação com esta mudança.
+
+---
+
+### Commits Fase 1
+
+| # | Commit | O que foi implementado |
+|---|---|---|
+| 1 | `f4c964e` | Rate-limit de envio de OTP (request-access + register-passwordless) |
+
+**Detalhes do commit `f4c964e`:**
+- `backend-core/app/db.py` — nova `ensure_auth_otp_lockouts_send_columns()`: adiciona `otp_send_count` e `otp_send_window_started_at` em `auth_otp_lockouts` (ALTER TABLE idempotente, sqlite/postgres)
+- `backend-core/app/main.py` — chama a nova migração no startup
+- `backend-core/app/api/auth.py` — novas constantes `MAX_OTP_SENDS=3`, `OTP_SEND_WINDOW_MINUTES=10`; nova `_register_otp_send()`; chamada em `request_access` e no ramo "email existente" de `register_passwordless`
+- `backend-core/tests/test_otp_spam_send_protection.py` — novo, cobre limite/janela/reset
+- `backend-core/tests/test_otp_brute_force_protection.py` — `setUp` atualizado para rodar a nova migração
+
+### Relatório da Fase 1 — o que mudou na prática
+
+**Antes:** era possível chamar `request-access` (ou `register-passwordless` para um email já
+cadastrado) repetidamente e a pessoa dona daquele email recebia um código novo por email a cada
+chamada, sem limite nenhum — só travava depois de 5 tentativas *erradas* de digitar o código, o
+que nunca acontece se quem está a abusar nem chega a tentar adivinhar o código.
+
+**Agora:** o mesmo email só pode receber no máximo 3 códigos a cada 10 minutos. Na 4ª tentativa
+dentro dessa janela, o pedido é recusado (erro "Muitas tentativas...") e nenhum email novo é
+enviado — a mesma mensagem e o mesmo bloqueio de 15 minutos já usados para tentativas erradas de
+código.
+
+**Para validar:** Cenários C1, C2 e C3, abaixo (testes automatizados já cobrem os mesmos
+cenários via pytest — ver checkbox acima).
 
 ---
 
