@@ -99,7 +99,30 @@ confirma que agora bloqueia).
 
 | # | Commit | O que foi implementado |
 |---|---|---|
-| 1 | _(a registrar após o commit)_ | Lockout por email em request-access/register-passwordless/verify-otp |
+| 1 | `091b9d7` | Lockout por email em request-access/register-passwordless/verify-otp |
+
+**Detalhes do commit `091b9d7`:**
+- `backend-core/app/db.py` — `ensure_auth_otp_lockouts_table()` (tabela nova)
+- `backend-core/app/main.py` — chama a migração no startup
+- `backend-core/app/api/auth.py` — `_check_otp_lockout`, `_register_otp_failure`,
+  `_clear_otp_failures` + integração nos 3 endpoints
+- `backend-core/tests/test_otp_brute_force_protection.py` — 6 testes (novo arquivo)
+
+### Relatório da Fase 1 — o que mudou na prática
+
+**Antes:** um atacante (ou script) podia testar as 900 mil combinações possíveis do código
+de 6 dígitos sem qualquer limite, dentro da janela de 15 minutos em que o código vale —
+suficiente para tomar conta de qualquer utilizador.
+
+**Agora:** depois de 5 códigos errados seguidos para o mesmo email, tanto o pedido de um
+código novo quanto a verificação ficam bloqueados por 15 minutos (erro "Muitas tentativas.
+Tente novamente mais tarde."). Acertar o código a qualquer momento limpa esse histórico de
+erros. O bloqueio expira sozinho — não precisa de nenhuma ação manual, do utilizador ou
+administrativa.
+
+**Para validar:** Cenários C1–C6, abaixo — já executados e confirmados via suite
+automatizada (`pytest`), não é preciso teste manual (este fluxo não tem tela — é consumido
+pelo app desktop `agent-local`).
 
 ---
 
