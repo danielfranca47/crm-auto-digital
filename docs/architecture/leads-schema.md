@@ -121,8 +121,17 @@ O arquivo é lido em streaming (chunks) e gravado em
 `data/uploads/ai/{current_user.id}/{uuid4()}.ext` — isolado por usuário. Se o
 tamanho ultrapassar `MAX_UPLOAD_BYTES` (10MB) a qualquer momento da leitura, o
 arquivo parcial é apagado e a resposta é `413`, sem deixar resíduo em disco. Não
-há limite adicional configurado em proxy/infra (nginx/Railway) — o corte acontece
-só na camada da aplicação.
+há limite adicional configurado em proxy/infra (nginx/Railway) — a Railway não
+suporta isso (ver [`_mapa-sistema.md`](_mapa-sistema.md#limites-de-redeproxy-railway)).
+
+Como reforço na camada da aplicação, `UploadContentLengthGuardMiddleware`
+(`backend-crm/routes/uploads.py`, registrado em `app.py`) roda antes de qualquer
+`Depends` — se a requisição já declara `Content-Length` acima de
+`MAX_UPLOAD_BYTES + CONTENT_LENGTH_GUARD_MARGIN` (64KB de folga para overhead do
+multipart), retorna `413` imediatamente, sem sequer checar autenticação nem ler
+bytes do corpo. Escopo restrito a `POST /api/uploads`. Requisições sem
+`Content-Length` (chunked, ou header incorreto) passam direto pelo middleware —
+o corte em streaming acima continua sendo a defesa real nesses casos.
 
 `routes/assistente_ia.py` (`/processar` e `/preview`) resolve o arquivo do
 `upload_id` dentro de `data/uploads/ai/{current_user.id}/` — um `upload_id`

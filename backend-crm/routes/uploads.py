@@ -1,7 +1,9 @@
 # routes/uploads.py
 import uuid, os
 from pathlib import Path
-from fastapi import APIRouter, UploadFile, File, Depends, HTTPException
+from fastapi import APIRouter, UploadFile, File, Depends, HTTPException, Request
+from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.responses import JSONResponse
 import pandas as pd
 import numpy as np    # <-- ADICIONE
 from datetime import datetime, date
@@ -15,6 +17,29 @@ BASE.mkdir(parents=True, exist_ok=True)
 
 MAX_UPLOAD_BYTES = 10 * 1024 * 1024  # 10MB — planilha de leads não deveria passar disso
 UPLOAD_CHUNK_SIZE = 1024 * 1024
+CONTENT_LENGTH_GUARD_MARGIN = 64 * 1024  # folga p/ overhead de headers/boundary do multipart
+
+
+class UploadContentLengthGuardMiddleware(BaseHTTPMiddleware):
+    """Rejeita cedo, por Content-Length, requests de upload obviamente grandes demais —
+    antes da rota (e do Depends de auth) rodarem. Não substitui o corte em streaming da
+    rota: requests sem Content-Length (chunked) ou com header incorreto passam direto e
+    continuam protegidos só pelo corte em streaming."""
+
+    async def dispatch(self, request: Request, call_next):
+        if request.method == "POST" and request.url.path == "/api/uploads":
+            content_length = request.headers.get("content-length")
+            if content_length is not None:
+                try:
+                    declared = int(content_length)
+                except ValueError:
+                    declared = None
+                if declared is not None and declared > MAX_UPLOAD_BYTES + CONTENT_LENGTH_GUARD_MARGIN:
+                    return JSONResponse(
+                        {"detail": f"Arquivo excede o limite de {MAX_UPLOAD_BYTES // (1024 * 1024)}MB"},
+                        status_code=413,
+                    )
+        return await call_next(request)
 
 def _read_df(fp: Path, limit: int = 20) -> pd.DataFrame:
     if fp.suffix.lower() == ".csv":

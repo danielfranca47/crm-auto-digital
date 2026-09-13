@@ -270,6 +270,7 @@ app.add_middleware(
     allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     allow_headers=["*"],
 )
+app.add_middleware(uploads.UploadContentLengthGuardMiddleware)
 
 # ---------- Routers Privados ----------
 app.include_router(leads.router,         prefix="/api/leads",        tags=["Leads"])

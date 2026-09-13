@@ -333,12 +333,17 @@ Guarda equivalente para `backend-core`/`DATABASE_URL` ainda não existe — ver
 A Railway não oferece nenhum equivalente a `client_max_body_size` do nginx:
 não há limite de tamanho de corpo de request configurável na plataforma, e as
 "edge rules" só filtram por IP, Host, Path ou Header — nunca por tamanho do
-corpo/`Content-Length`. Qualquer limite de tamanho de upload hoje só existe na
-camada da aplicação (ex.: `MAX_UPLOAD_BYTES` em
-`backend-crm/routes/uploads.py`, aplicado via leitura em streaming/chunk).
-Rejeitar requests grandes antes de chegarem ao processo Python exigiria trocar
-o deploy actual (`Procfile` + Nixpacks, sem `Dockerfile`) por um proxy próprio
-(nginx/Caddy) num container custom.
+corpo/`Content-Length`. Rejeitar requests grandes antes de chegarem ao processo
+Python de verdade exigiria trocar o deploy actual (`Procfile` + Nixpacks, sem
+`Dockerfile`) por um proxy próprio (nginx/Caddy) num container custom.
+
+Sem essa migração de infra, o limite de tamanho de upload existe em duas
+camadas dentro da própria aplicação (`backend-crm/routes/uploads.py`, ver
+[`leads-schema.md`](leads-schema.md#endpoint-de-upload-post-apiuploads)):
+`UploadContentLengthGuardMiddleware` rejeita cedo (antes da rota/auth) quando o
+header `Content-Length` já declara um tamanho acima do limite; o corte em
+streaming/chunk dentro da rota continua sendo a defesa real para requests sem
+esse header (chunked) ou com header incorreto.
 
 ### Tabelas críticas do `crm.db`
 
