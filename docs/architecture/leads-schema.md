@@ -138,8 +138,15 @@ o corte em streaming acima continua sendo a defesa real nesses casos.
 válido de outro usuário devolve `404` ("Arquivo não encontrado"), nunca processa
 dado de outro tenant. Os dois endpoints também exigem `require_crm_access`.
 
-Nenhuma rotina apaga esses arquivos depois de processados — ficam em disco
-indefinidamente (candidato a melhoria futura, ver `docs/plans/`).
+Um worker periódico (`_upload_cleanup_loop()` em `backend-crm/app.py`, lógica em
+`backend-crm/services/upload_cleanup.py::cleanup_stale_uploads()`) varre
+`data/uploads/ai/<user_id>/` a cada `UPLOAD_CLEANUP_INTERVAL_SECONDS` (default
+3600s/1h) e apaga arquivos com `mtime` mais antigo que `UPLOAD_MAX_AGE_HOURS`
+(default 24h), removendo também o diretório do usuário se ficar vazio. Limpeza
+por idade do arquivo, não por "já processado" — não há registro em banco do
+upload, e o mesmo `upload_id` é legitimamente relido no fluxo real (preview →
+ajustar `column_map` → preview de novo → processar), então apagar logo após um
+`/processar` arriscaria quebrar esse fluxo se o usuário voltasse ao preview.
 
 ### Importação por planilha (Assistente IA)
 
