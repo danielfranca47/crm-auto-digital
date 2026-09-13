@@ -151,8 +151,10 @@ _cancel_pending_jobs_for_lead() [Fase 4]
 - **Validado em:** 13/09/2026 — conexão B esperou ~0.86s e escreveu com sucesso (sem WAL/busy_timeout falharia na hora)
 
 ### Cenário A2 — sem deadlock ao completar job inbound com ações que criam job (Fase 2)
-- [ ] Teste com 2 conexões reais (não mockadas): `BEGIN IMMEDIATE` aberto + `_dispatch_system_actions`/`_dispatch_sales_flow_media` com ação que cria job
-- [ ] Confirmar: nenhuma tentativa de abrir conexão nova durante a transação; jobs são criados só depois do commit
+- [x] Teste com 2 conexões reais (não mockadas): `BEGIN IMMEDIATE` aberto + `_dispatch_system_actions`/`_dispatch_sales_flow_media` com ação que cria job
+- **Validado em:** 13/09/2026 — `tests/test_dispatch_requeue_pending_message.py::NoDeadlockWithRealSeparateConnectionsTest`
+- [x] Confirmar: nenhuma tentativa de abrir conexão nova durante a transação; jobs são criados só depois do commit
+- **Validado em:** 13/09/2026 — chamada com o lock aberto retornou em <1s (não esperou busy_timeout); `create_job()` criou o job normalmente só depois do `commit()`
 
 ### Cenário A3 — follow-up progride sem travar (Fase 3)
 - [ ] Teste unitário cobrindo o branch "progride sem fechar" de `progress_followup_after_auto_send`
@@ -187,3 +189,19 @@ _cancel_pending_jobs_for_lead() [Fase 4]
 **Para validar:** Cenário A1, abaixo (já validado via script nesta sessão — ver nota).
 
 **Nota:** validei o Cenário A1 eu mesmo via script Python (2 conexões reais, uma segurando o lock por 1s enquanto a outra tenta escrever) antes de commitar — confirmado `journal_mode=wal`, `busy_timeout=5000`, e a segunda conexão esperou ~0.86s e conseguiu escrever em vez de falhar na hora. Não é um cenário testável pela UI (é uma condição de corrida entre conexões, não uma ação clicável) — por isso a validação foi automatizada em vez de via browser.
+
+### Commits Fase 2
+
+| # | Commit | O que foi implementado |
+|---|---|---|
+| 1 | `71fc3b9` | `complete_job_internal` não cria mais job dentro do próprio `BEGIN IMMEDIATE` |
+
+**Detalhes do commit `71fc3b9`:**
+- `backend-crm/routes/executor.py` — `_dispatch_system_actions()` (ações `send_message`, `send_media`, `webhook`, `requeue_pending_message`), `_dispatch_sales_flow_media()` e `_schedule_preagendamento_checkin()` (renomeada para `_build_preagendamento_checkin_job()`) passam a devolver specs de job em vez de chamar `create_job()` diretamente. `complete_job_internal()` acumula as specs num `pending_jobs` e só cria os jobs de fato depois do próprio `conn.commit()`.
+- `backend-crm/tests/test_dispatch_requeue_pending_message.py` — testes existentes passam a checar o valor de retorno (a tabela `jobs` não é mais tocada por essas funções); teste novo (`NoDeadlockWithRealSeparateConnectionsTest`) com 2 conexões SQLite reais provando ausência de deadlock.
+
+### Relatório da Fase 2 — o que mudou na prática
+
+**Antes:** quando o robô, ao terminar de responder um lead pelo WhatsApp, precisava fazer alguma ação extra (mandar uma segunda mensagem, mandar uma mídia, chamar um webhook configurado no fluxo de vendas, ou reprocessar uma pergunta que ficou pendente), o sistema tentava preparar essa ação extra *durante* a própria finalização — e isso podia travar com "database is locked", atrasando a resposta ao lead e, em alguns casos, fazendo o sistema reenviar a mesma resposta duas vezes.
+**Agora:** o sistema primeiro termina de finalizar tudo, e só depois prepara essas ações extras — nunca mais na mesma respiração. Isso vale para as 4 situações que tinham esse problema (não só a que já tinha aparecido num teste anterior: mandar mensagem, mandar mídia, chamar webhook, e reprocessar pergunta pendente), e também para o lembrete de check-in de pré-agendamento.
+**Para validar:** Cenário A2, acima (já validado nesta sessão via teste automatizado — não é um cenário clicável na UI, é uma condição de corrida de banco de dados).
