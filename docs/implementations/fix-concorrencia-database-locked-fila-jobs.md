@@ -1,7 +1,7 @@
 # Corrigir bug de concorrência "database is locked" na fila de jobs
 
 **Branch:** `fix/concorrencia-database-locked-fila-jobs`
-**Status:** Em andamento
+**Status:** Todos os cenários validados
 **Sprint:** `docs/plans/plano-sprint-2026-09-12.md` (item P1)
 **Origem:** `docs/plans/jobs-conclusao-database-locked-melhorias-futuras.md` (M1) ·
 `docs/plans/followup-auto-trigger-melhorias-futuras.md` (M2) ·
@@ -165,8 +165,8 @@ _cancel_pending_jobs_for_lead() [Fase 4]
 ### Cenário C1 — pausar follow-up com job pendente (Fase 4)
 - [x] Cobertura por teste unitário (setup + ação + confirmação, com CHECK constraint real replicado no schema de teste)
 - **Validado em:** 13/09/2026 — `tests/test_followup_state.py::test_pause_with_pending_job_completes_job_instead_of_integrity_error`
-- [ ] Confirmar ao vivo pela UI: pausar um follow-up ativo com job pendente pela Central de Follow-ups / `LeadCardDialog` retorna sucesso (não 500)
-- **Pendente:** o MCP chrome-devtools não conectou nesta sessão (timeout) — ver relatório da Fase 4 abaixo para o prompt de retomada
+- [x] Confirmar ao vivo pela UI: pausar um follow-up ativo com job pendente pela Central de Follow-ups / `LeadCardDialog` retorna sucesso (não 500)
+- **Validado em:** 13/09/2026 — ambiente local completo (backend-core:8001, backend-crm:8000, frontend-crm:5173) subido na própria worktree, login com a conta de teste (ver `_conta-teste-local.md`), lead real (`id=249`) seedado com follow-up `active` + job `pending` + guard de reconciliação correspondente. Clique em "Pausar" na Central de Follow-ups → modal de confirmação → toast "Follow-up pausado." (sem erro). Confirmado no banco: `jobs.status='completed'` com `result={"skipped": true, "reason": "followup_paused_or_cancelled"}`, `followup_reconcile_guard` da linha removido, `leads.followup_status='manually_paused'`.
 
 ---
 
@@ -241,8 +241,8 @@ _cancel_pending_jobs_for_lead() [Fase 4]
 
 **Antes:** ao pausar ou cancelar um follow-up que tinha uma próxima mensagem já agendada, o sistema tentava marcar esse job pendente como "cancelado" — só que esse valor não existe na lista de status que o banco aceita para jobs, e a tentativa quebrava a operação inteira. O operador recebia um erro (não um "sucesso falso", como a suspeita inicial de outra auditoria sugeria) sempre que tentasse pausar/cancelar um follow-up com mensagem pendente.
 **Agora:** o job pendente é marcado como "concluído, mas pulado" em vez de "cancelado" — valor que o banco aceita — e pausar/cancelar o follow-up funciona normalmente.
-**Para validar:** Cenário C1, abaixo — a parte de banco de dados já está validada por teste automatizado; falta confirmar ao vivo pelo botão de pausar follow-up na UI, o que não consegui fazer nesta sessão porque o MCP do chrome-devtools não conectou (timeout de conexão).
+**Validado:** Cenário C1, acima — confirmado ao vivo pela UI real (Central de Follow-ups), não só por teste automatizado. Ver detalhes na linha "Validado em" do Cenário C1.
 
-**Quer que eu tente de novo agora, ou prefere testar você mesmo (aqui ou numa conversa nova)?** Se preferir retomar depois, pode colar:
+---
 
-> Lê `docs/implementations/fix-concorrencia-database-locked-fila-jobs.md`, secção "Fase 4", e executa o teste do Cenário C1 (pausar um follow-up ativo com job pendente pela Central de Follow-ups / `LeadCardDialog` e confirmar que retorna sucesso, não 500).
+## Todos os cenários (A1, A2, A3, C1) estão validados — pronto para graduação.
