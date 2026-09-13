@@ -421,6 +421,24 @@ def ensure_auth_otps_table() -> None:
         """))
 
 
+def ensure_auth_otp_lockouts_table() -> None:
+    """Create auth_otp_lockouts table — contador de falhas + bloqueio por email.
+
+    `failed_attempts` fica aqui (não em auth_otps) de propósito: sobrevive a
+    novos pedidos de OTP. Se vivesse na linha do OTP, pedir um código novo
+    geraria uma linha com o contador zerado e o atacante contornava o
+    bloqueio nunca deixando o contador chegar a MAX_OTP_ATTEMPTS.
+    """
+    with engine.begin() as conn:
+        conn.execute(text("""
+            CREATE TABLE IF NOT EXISTS auth_otp_lockouts (
+                email TEXT PRIMARY KEY,
+                failed_attempts INTEGER NOT NULL DEFAULT 0,
+                locked_until DATETIME
+            )
+        """))
+
+
 def ensure_user_extra_columns() -> None:
     """Add whatsapp and sector columns to users (passwordless registration)."""
     with engine.begin() as conn:

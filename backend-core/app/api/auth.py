@@ -257,6 +257,8 @@ import logging as _log
 _logger = _log.getLogger(__name__)
 
 OTP_TTL_MINUTES = 15
+MAX_OTP_ATTEMPTS = 5
+OTP_LOCKOUT_MINUTES = 15
 
 
 class RequestAccessRequest(BaseModel):
@@ -296,12 +298,52 @@ def _send_otp_email(email: str, name, code: str) -> None:
     send_email(to=email, subject=f"{code} é o seu código de acesso — Gerador de Leads", html=html, text=txt)
 
 
+def _check_otp_lockout(email: str, db: Session) -> None:
+    """Bloqueia geração/verificação de OTP se o email excedeu tentativas falhas."""
+    row = db.execute(
+        text("SELECT 1 FROM auth_otp_lockouts WHERE email = :email AND locked_until > :now"),
+        {"email": email, "now": datetime.utcnow()},
+    ).fetchone()
+    if row:
+        raise HTTPException(status_code=429, detail="Muitas tentativas. Tente novamente mais tarde.")
+
+
+def _register_otp_failure(email: str, db: Session) -> None:
+    """Incrementa tentativas falhas do email (persiste entre pedidos de OTP);
+    ao atingir o limite, bloqueia por OTP_LOCKOUT_MINUTES e reinicia a contagem."""
+    row = db.execute(
+        text("SELECT failed_attempts FROM auth_otp_lockouts WHERE email = :email"),
+        {"email": email},
+    ).fetchone()
+    new_attempts = (row[0] if row else 0) + 1
+    if new_attempts >= MAX_OTP_ATTEMPTS:
+        new_attempts = 0
+        locked_until = datetime.utcnow() + timedelta(minutes=OTP_LOCKOUT_MINUTES)
+    else:
+        locked_until = None
+    db.execute(
+        text("""
+            INSERT INTO auth_otp_lockouts (email, failed_attempts, locked_until) VALUES (:email, :attempts, :locked_until)
+            ON CONFLICT(email) DO UPDATE SET failed_attempts = :attempts, locked_until = :locked_until
+        """),
+        {"email": email, "attempts": new_attempts, "locked_until": locked_until},
+    )
+    db.commit()
+
+
+def _clear_otp_failures(email: str, db: Session) -> None:
+    """Login bem-sucedido limpa o histórico de falhas do email."""
+    db.execute(text("DELETE FROM auth_otp_lockouts WHERE email = :email"), {"email": email})
+    db.commit()
+
+
 @router.post("/request-access")
 async def request_access(body: RequestAccessRequest, db: Session = Depends(get_db)):
     """Verifica se email existe. Se sim, envia OTP. Se nao, informa para registar."""
     user = db.query(models.User).filter(models.User.email == body.email).first()
     if not user:
         return {"status": "new_user"}
+    _check_otp_lockout(body.email, db)
     try:
         code = _generate_and_store_otp(body.email, db)
         _send_otp_email(body.email, user.name, code)
@@ -318,6 +360,7 @@ async def register_passwordless(body: RegisterPasswordlessRequest, db: Session =
     """Cria conta sem senha e envia OTP."""
     existing = db.query(models.User).filter(models.User.email == body.email).first()
     if existing:
+        _check_otp_lockout(body.email, db)
         try:
             code = _generate_and_store_otp(body.email, db)
             _send_otp_email(body.email, existing.name, code)
@@ -351,6 +394,7 @@ async def register_passwordless(body: RegisterPasswordlessRequest, db: Session =
 @router.post("/verify-otp")
 async def verify_otp_endpoint(body: VerifyOtpRequest, db: Session = Depends(get_db)):
     """Valida OTP e devolve JWT."""
+    _check_otp_lockout(body.email, db)
     now = datetime.utcnow()
     row = db.execute(
         text("""
@@ -361,8 +405,10 @@ async def verify_otp_endpoint(body: VerifyOtpRequest, db: Session = Depends(get_
         {"email": body.email, "code": body.code, "now": now},
     ).fetchone()
     if not row:
+        _register_otp_failure(body.email, db)
         raise HTTPException(status_code=400, detail="Codigo invalido ou expirado.")
     db.execute(text("UPDATE auth_otps SET used = 1 WHERE id = :id"), {"id": row[0]})
+    _clear_otp_failures(body.email, db)
     db.commit()
     user = db.query(models.User).filter(models.User.email == body.email).first()
     if not user:

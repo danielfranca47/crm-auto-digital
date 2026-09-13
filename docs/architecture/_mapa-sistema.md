@@ -36,7 +36,7 @@ agent-local         local  ← agente Python local de prospecção/scraping
 | `app/models/user.py` | Model ORM User |
 | `app/models/ai_profile.py` | Model ORM AI Profile (inclui `sales_flow`, `audio_transcription_enabled`) |
 | `app/models/whatsapp_connection.py` | Model ORM WhatsApp connection/instance |
-| `app/api/auth.py` | Login, JWT, `/users/me`, forgot/reset/change-password |
+| `app/api/auth.py` | Login, JWT, `/users/me`, forgot/reset/change-password, login sem senha via OTP (`auth_otps`) com lockout anti-força-bruta (`auth_otp_lockouts`) |
 | `app/models/password_reset_token.py` | Tokens de reset de senha (TTL 2h) |
 | `app/services/email_service.py` | Envio SMTP via Resend; templates welcome + reset |
 | `app/api/ai_profiles.py` | CRUD `/ai-profiles/me` |
