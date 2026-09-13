@@ -172,6 +172,32 @@ async def upload_planilha(
 
 ---
 
+### Commits Fase 1
+
+| # | Commit | O que foi implementado |
+|---|---|---|
+| 1 | `d4ca522` | Auth + isolamento por usuário + limite de tamanho no upload de planilhas |
+
+**Detalhes do commit `d4ca522`:**
+- `backend-crm/routes/uploads.py` — `POST /uploads` passa a exigir `Depends(require_crm_access)`; arquivos gravados em `data/uploads/ai/{user_id}/` em vez da pasta plana; leitura trocada de `await file.read()` (buffer único) para streaming em chunks de 1MB, cortando e apagando o parcial com `HTTPException(413)` ao ultrapassar `MAX_UPLOAD_BYTES` (10MB).
+- `backend-crm/routes/assistente_ia.py` — `/processar` e `/preview` passam a resolver o arquivo em `data/uploads/ai/{current_user.id}/{upload_id}.ext`, em paridade com o novo isolamento de `uploads.py`.
+- `backend-crm/tests/test_uploads_route_auth.py` (novo) — 5 testes de regressão: extensão inválida (400), corte por tamanho (413 + sem arquivo parcial em disco), isolamento de upload entre usuários, e isolamento em `assistente_ia.preview` (dono consegue, intruso recebe 404).
+
+### Relatório da Fase 1 — o que mudou na prática
+
+**Antes:** qualquer pessoa na internet, sem login, conseguia enviar arquivos Excel/CSV
+para o servidor — sem limite de tamanho, sem limite de quantidade, e todos os arquivos
+ficavam misturados numa única pasta compartilhada entre todos os clientes do CRM.
+
+**Agora:** só um utilizador autenticado do CRM (com assinatura ativa do produto) consegue
+enviar arquivos. Cada arquivo enviado fica guardado numa pasta exclusiva desse
+utilizador, e arquivos maiores que 10MB são recusados antes de terminar de gravar em
+disco.
+
+**Para validar:** Cenários P1, P2, P3, C1 e C2, abaixo.
+
+---
+
 ## Checks de Validação
 
 ### Cenário P1 — Upload sem token é rejeitado
