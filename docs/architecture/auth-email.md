@@ -214,11 +214,37 @@ qualquer utilizador. Corrigido em `fix-otp-forca-bruta` (sprint 2026-09-12, item
   código novo (`_generate_and_store_otp`) não reseta a contagem de falhas. Guardar o
   contador na própria linha do OTP permitiria contornar o limite errando sempre
   `MAX_OTP_ATTEMPTS - 1` vezes e pedindo um código novo antes de bater no limite.
-- **Login bem-sucedido limpa o histórico** (`DELETE FROM auth_otp_lockouts`).
+- **Login bem-sucedido limpa o histórico** (`DELETE FROM auth_otp_lockouts`) — isso também
+  reinicia o contador de envio da secção seguinte, já que ambos vivem na mesma linha.
 - **Sem limite por IP** — só por conta (email). `backend-core` não tem nenhuma infra de
   extração confiável de IP de cliente atrás do proxy da Railway; um limite por IP exigiria
   construir essa infra primeiro (risco de confiar num `X-Forwarded-For` spoofável sem
   validação).
+
+### Rate-limit no envio de OTP (anti-spam)
+
+O lockout acima só reage a tentativas **erradas de verificação** — pedir `request-access` ou
+`register-passwordless` repetidamente para o email de outra pessoa nunca erra uma verificação,
+então nunca acionava esse lockout: a vítima recebia um OTP novo por email a cada chamada, sem
+limite. Corrigido em `fix-otp-spam-envio` (sprint 2026-09-13).
+
+**Colunas adicionais em `auth_otp_lockouts`** (`ensure_auth_otp_lockouts_send_columns()`):
+
+| Campo | Tipo | Notas |
+|---|---|---|
+| `otp_send_count` | Integer | Envios de OTP na janela actual; reiniciado quando a janela expira |
+| `otp_send_window_started_at` | DateTime nullable | Início da janela deslizante actual |
+
+- **Limite:** `MAX_OTP_SENDS = 3` envios por email a cada `OTP_SEND_WINDOW_MINUTES = 10`
+  minutos (`_register_otp_send`, `backend-core/app/api/auth.py`). Ao ultrapassar, marca
+  `locked_until = now + OTP_LOCKOUT_MINUTES` — **reaproveita o mesmo campo e a mesma mensagem
+  429** do lockout de força bruta acima, em vez de um mecanismo separado.
+- **Aplicado em `request-access` e no ramo "email já existe" de `register-passwordless`**,
+  logo após `_check_otp_lockout` e antes de gerar/enviar o OTP. O ramo de criação de conta
+  nova (`register-passwordless` com email inédito) não passa por este contador — cada email
+  só entra nesse ramo uma vez; a 2ª chamada já cai no ramo contado.
+- **Independente do contador de falhas de verificação** (`failed_attempts`) — os dois
+  convivem na mesma tabela/linha, mas cada um só é incrementado pelo seu próprio gatilho.
 
 ---
 
