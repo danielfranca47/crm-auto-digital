@@ -108,7 +108,27 @@ outro endpoint do backend-crm recebe upload de arquivo.
 
 | # | Commit | O que foi implementado |
 |---|---|---|
-| 1 | _(preencher após o commit)_ | |
+| 1 | `2735f37` | Middleware `UploadContentLengthGuardMiddleware` + registro em `app.py` + 4 testes isolados |
+
+**Detalhes do commit `2735f37`:**
+- `backend-crm/routes/uploads.py` — nova constante `CONTENT_LENGTH_GUARD_MARGIN` (64KB) e classe `UploadContentLengthGuardMiddleware`, que intercepta `POST /api/uploads` e rejeita com `413` antes de qualquer `Depends` rodar, quando `Content-Length` > `MAX_UPLOAD_BYTES + margem`
+- `backend-crm/app.py` — `app.add_middleware(uploads.UploadContentLengthGuardMiddleware)` ao lado do `CORSMiddleware` existente
+- `backend-crm/tests/test_uploads_content_length_guard.py` (novo) — 4 testes contra uma app Starlette mínima isolada (não sobe o `app` completo do CRM): rejeita acima do limite, aceita dentro do limite, não bloqueia request sem `Content-Length`, não afeta outros paths
+
+### Relatório da Fase 1 — o que mudou na prática
+
+**Antes:** um upload maior que 10MB só era rejeitado depois de o processo Python
+começar a ler o arquivo em streaming e contar os bytes até estourar o limite — a
+conexão já tinha sido aceite e a rota já estava rodando (incluindo checar o token de
+autenticação).
+
+**Agora:** se o cliente já declara, no próprio header `Content-Length`, um tamanho
+maior que o limite, a resposta `413` volta imediatamente, antes até de checar o
+login — sem gastar nenhum ciclo lendo bytes do arquivo. Uploads sem esse header (ou
+com o header errado) continuam protegidos do mesmo jeito de antes, pelo corte em
+streaming dentro da rota.
+
+**Para validar:** Cenários P1, P2, C1 e C2, abaixo.
 
 ---
 
