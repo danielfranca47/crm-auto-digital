@@ -187,7 +187,7 @@ Leia o docs\implementations\_guia-documentar-implementacao.md e siga o processo.
 | # | Item | Arquivo de implementação | Status | Commit de graduação |
 |---|---|---|---|---|
 | P1 | Bug de concorrência "database is locked" | `docs/implementations/fix-concorrencia-database-locked-fila-jobs.md` | ✅ Graduado (13/09/2026) | `cd7da49` |
-| P2 | OTP sem contador de tentativas | `docs/implementations/fix-otp-forca-bruta.md` | ⏳ Aguardando Plan Mode | — |
+| P2 | OTP sem contador de tentativas | `docs/implementations/fix-otp-forca-bruta.md` | ✅ Graduado (13/09/2026) | `d14ffe3` |
 | P3 | Upload de planilhas sem autenticação | `docs/implementations/fix-upload-planilhas-sem-auth.md` | ⏳ Aguardando Plan Mode | — |
 
 ---
