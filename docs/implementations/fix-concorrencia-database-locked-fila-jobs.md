@@ -1,6 +1,7 @@
 # Corrigir bug de concorrência "database is locked" na fila de jobs
 
-**Status:** Aguardando Plan Mode
+**Branch:** `fix/concorrencia-database-locked-fila-jobs`
+**Status:** Em andamento
 **Sprint:** `docs/plans/plano-sprint-2026-09-12.md` (item P1)
 **Origem:** `docs/plans/jobs-conclusao-database-locked-melhorias-futuras.md` (M1) ·
 `docs/plans/followup-auto-trigger-melhorias-futuras.md` (M2) ·
@@ -10,47 +11,179 @@
 
 ## Motivação
 
-Três pontos diferentes da fila de jobs sofrem do mesmo padrão de bug de concorrência do
-SQLite: uma função abre uma nova conexão e tenta escrever enquanto outra conexão ainda
-segura um bloqueio de escrita numa transação em andamento, ou usa um valor de status que
-a tabela não aceita. Confirmado por leitura direta do código na auditoria de 12/09/2026
-que os 3 casos continuam sem correção — incluindo um caso já com risco confirmado de
-enviar uma segunda resposta duplicada a um lead real.
+Várias funções da fila de jobs (`backend-crm`) abrem uma nova conexão SQLite
+(`create_job()` → `get_connection()`) **enquanto uma conexão externa ainda
+segura um lock de escrita** (`BEGIN IMMEDIATE` não commitado). Sem
+`journal_mode=WAL` nem `busy_timeout`, a conexão nova falha na hora com
+`sqlite3.OperationalError: database is locked` — e como as duas conexões
+estão no mesmo thread/request, a externa nunca teria como liberar o lock
+enquanto a interna espera (autodeadlock, não só contenção passageira).
 
-Comportamento actual:
-- `complete_job_internal()` (`backend-crm/routes/executor.py`) abre `BEGIN IMMEDIATE` e,
-  dentro dessa transação, despacha `requeue_pending_message`, que chama `create_job()`
-  numa conexão SQLite nova — colide com o lock ainda aberto.
-- `progress_followup_after_auto_send()` (`backend-crm/services/followup_state.py:340`)
-  chama `create_job()` antes do `conn.commit()` dos chamadores
-  (`executor.py`, `leads.py`) — mesmo padrão de bug, já corrigido em função irmã
-  (`start_followup_for_inactivity()`) mas não aqui.
-- `_cancel_pending_jobs_for_lead()` (`backend-crm/services/followup_state.py:595`) faz
-  `UPDATE jobs SET status='cancelled'`, valor que o `CHECK` da tabela `jobs`
-  (`backend-crm/database.py:142`) não aceita — falha silenciosa (`IntegrityError`).
-- `database.py:44` — `PRAGMA journal_mode=WAL` continua comentado, sem `busy_timeout`
-  configurado, o que faz colisões de conexão falharem imediatamente em vez de esperar.
+Confirmado por leitura direta do código na auditoria de 12/09/2026.
+Documentado em três planos (M1/M2/M5 acima). Risco real já confirmado ao
+vivo: atraso de resposta ao lead + envio de **segunda resposta duplicada**
+(M1); follow-up automático "preso" sem ninguém perceber (M2); pausar/cancelar
+follow-up pela UI provavelmente falha sempre que há job pendente (M5 — o
+`CHECK` da tabela é inequívoco, ainda não confirmado ao vivo).
 
-Comportamento desejado: nenhuma das três situações falha mais — conclusão/reenfileiramento
-e progressão de follow-up não colidem entre conexões, e o cancelamento de jobs pendentes
-de follow-up usa um valor de status aceite pela tabela.
-
-Risco concreto já confirmado: atraso de resposta ao lead, envio de segunda resposta
-duplicada a um lead real, e falha silenciosa de pausar/cancelar follow-up (operador vê
-"sucesso" na tela, mas o job pendente continua agendado e dispara mesmo assim).
+Comportamento desejado: nenhuma dessas situações falha mais — conclusão de
+job/reenfileiramento e progressão de follow-up não colidem entre conexões, e
+o cancelamento de jobs pendentes de follow-up usa um valor de status aceite
+pela tabela.
 
 ---
 
 ## Área do sistema
 
-`backend-crm` — fila de jobs (`services/jobs_service.py`, `database.py`), follow-up
-automático (`services/followup_state.py`) e conclusão de jobs (`routes/executor.py`).
+`backend-crm` — fila de jobs (`services/jobs_service.py`, `database.py`),
+follow-up automático (`services/followup_state.py`) e conclusão de jobs
+(`routes/executor.py`, `routes/leads.py`).
 
 ---
 
-## Próximo passo
+## Problemas Identificados (estado anterior)
 
-Este arquivo ainda não passou pelo **Passo 0 (Diagnóstico em Plan Mode)** de
-`_guia-documentar-implementacao.md`. Para iniciar: entrar em Plan Mode usando o
-contexto acima como ponto de partida, responder as 3 perguntas do Passo 0, e só depois
-de aprovado seguir para a criação de branch + worktree (Passo 1).
+1. **`database.py` sem WAL/busy_timeout:** `get_connection()` (linha ~37-45)
+   não habilitava `journal_mode=WAL` (comentado) nem configurava
+   `busy_timeout` — qualquer colisão entre 2 conexões falhava imediatamente
+   em vez de esperar.
+2. **`complete_job_internal()` cria jobs dentro do próprio `BEGIN IMMEDIATE`:**
+   `routes/executor.py:920-1015` abre `BEGIN IMMEDIATE` e, antes do commit,
+   chama 3 funções que hoje abrem conexão nova via `create_job()`:
+   `_schedule_preagendamento_checkin()` (linha ~510), `_dispatch_sales_flow_media()`
+   (linha ~240) e `_dispatch_system_actions()` (linha ~276 — ações
+   `send_message`, `send_media`, `webhook`, `requeue_pending_message`).
+   Achado desta auditoria: o M1 original só documentou `requeue_pending_message`
+   (único caso que apareceu no teste ao vivo que originou o M1) — mas as
+   outras 4 ações/funções têm exatamente o mesmo bug, mesma causa raiz.
+3. **`progress_followup_after_auto_send()` cria job antes do commit do
+   chamador:** `services/followup_state.py:340` chama `create_job()` no
+   branch de progresso normal — os 2 call sites reais
+   (`routes/executor.py::mark_outbound_sent`, `routes/leads.py::send_followup_now`)
+   nunca commitam antes de chamar a função. Mesmo padrão já corrigido na
+   função irmã `start_followup_for_inactivity()`, mas nunca replicado aqui.
+4. **`_cancel_pending_jobs_for_lead()` usa status fora do CHECK constraint:**
+   `services/followup_state.py:579-604` faz `UPDATE jobs SET status='cancelled'`,
+   valor que o `CHECK` da tabela `jobs` (`database.py:142`, só aceita
+   `pending/in_progress/completed/failed`) não aceita — `IntegrityError` ao
+   tentar pausar/cancelar follow-up com job pendente.
+
+---
+
+## Abordagem
+
+Fase 1 é defesa em profundidade (ajuda contenção genuína entre conexões
+diferentes). Fases 2-4 são a correção estrutural real: nenhuma função deve
+abrir conexão nova enquanto ainda está dentro de uma transação própria não
+commitada — ou a criação do job é **coletada e devolvida** para o chamador
+criar depois do seu próprio commit, ou (nos casos já com esse padrão
+estabelecido) o `create_job()` simplesmente muda de posição para depois do
+commit.
+
+```
+complete_job_internal() [Fase 2]
+  BEGIN IMMEDIATE
+  ... side-effects de estado (categoria, contadores) via conn ...
+  _schedule_preagendamento_checkin() → devolve spec (não cria)
+  _dispatch_sales_flow_media()       → devolve specs (não cria)
+  _dispatch_system_actions()         → devolve specs (não cria)
+  conn.commit()
+  [fora do bloco de conexão] → create_job(**spec) para cada spec coletada
+
+mark_outbound_sent() / send_followup_now() [Fase 3]
+  BEGIN IMMEDIATE / transação própria
+  progress = progress_followup_after_auto_send(conn, ...)  → não cria job
+  conn.commit()
+  if progress["reason"] == "progressed": create_job(TYPE_WHATSAPP_FOLLOWUP_PREGENERATE, ...)
+
+_cancel_pending_jobs_for_lead() [Fase 4]
+  UPDATE jobs SET status='completed', result='{"skipped": true, ...}' ← em vez de status='cancelled'
+```
+
+---
+
+## Plano de Implementação
+
+### Fase 1 — WAL + busy_timeout
+
+**Objetivo:** dar margem de espera real a colisões entre conexões diferentes.
+
+| Arquivo | O que muda |
+|---|---|
+| `backend-crm/database.py` | `get_connection()` habilita `PRAGMA journal_mode=WAL` e `PRAGMA busy_timeout=5000` |
+
+### Fase 2 — `complete_job_internal` não cria job dentro do próprio `BEGIN IMMEDIATE`
+
+**Objetivo:** eliminar o autodeadlock nas 4 ações/funções que criam job durante a transação de conclusão de job inbound.
+
+| Arquivo | O que muda |
+|---|---|
+| `backend-crm/routes/executor.py` | `_schedule_preagendamento_checkin`, `_dispatch_sales_flow_media`, `_dispatch_system_actions` passam a devolver specs de job em vez de chamar `create_job()`; `complete_job_internal` cria os jobs coletados depois do `conn.commit()` |
+| `backend-crm/tests/test_dispatch_requeue_pending_message.py` | testes existentes passam a checar o valor de retorno; teste novo com 2 conexões reais provando ausência de deadlock |
+
+### Fase 3 — `progress_followup_after_auto_send` não cria job antes do commit do chamador
+
+**Objetivo:** replicar o padrão já usado em `start_followup_for_inactivity()`.
+
+| Arquivo | O que muda |
+|---|---|
+| `backend-crm/services/followup_state.py` | remove `create_job()` de dentro da função + import não usado |
+| `backend-crm/routes/executor.py` | `mark_outbound_sent` cria o job depois do commit |
+| `backend-crm/routes/leads.py` | `send_followup_now` cria o job depois do commit |
+| `backend-crm/tests/test_followup_state.py` | teste novo cobrindo o branch "progride sem fechar" (hoje sem cobertura) |
+
+### Fase 4 — `_cancel_pending_jobs_for_lead` usa status aceito pelo CHECK
+
+**Objetivo:** replicar o padrão já usado em `cancel_pending_appointment_jobs()`.
+
+| Arquivo | O que muda |
+|---|---|
+| `backend-crm/services/followup_state.py` | `status='cancelled'` → `status='completed'` + `result={"skipped": true, ...}` |
+
+---
+
+## Checks de Validação
+
+### Cenário A1 — WAL + busy_timeout ativos (Fase 1)
+- [x] Script com 2 conexões reais confirma `journal_mode=wal` e `busy_timeout=5000`
+- **Validado em:** 13/09/2026 — `journal_mode=wal`, `busy_timeout=5000` confirmados
+- [x] Confirmar: conexão B espera (não falha na hora) quando colide com lock da conexão A
+- **Validado em:** 13/09/2026 — conexão B esperou ~0.86s e escreveu com sucesso (sem WAL/busy_timeout falharia na hora)
+
+### Cenário A2 — sem deadlock ao completar job inbound com ações que criam job (Fase 2)
+- [ ] Teste com 2 conexões reais (não mockadas): `BEGIN IMMEDIATE` aberto + `_dispatch_system_actions`/`_dispatch_sales_flow_media` com ação que cria job
+- [ ] Confirmar: nenhuma tentativa de abrir conexão nova durante a transação; jobs são criados só depois do commit
+
+### Cenário A3 — follow-up progride sem travar (Fase 3)
+- [ ] Teste unitário cobrindo o branch "progride sem fechar" de `progress_followup_after_auto_send`
+- [ ] Confirmar: função não abre conexão nova; job de pré-geração é criado pelo chamador depois do commit
+
+### Cenário C1 — pausar follow-up com job pendente (Fase 4)
+- [ ] Setup: lead com follow-up ativo + pelo menos 1 job pendente (`whatsapp.followup.pregenerate` ou `.tick`)
+- [ ] Ação: pausar o follow-up pela Central de Follow-ups / `LeadCardDialog`
+- [ ] Confirmar: retorna sucesso (não 500); job pendente aparece como `completed` com `result.skipped=true` no banco
+
+---
+
+## Ajustes Possíveis Pós-Implementação
+
+- Nenhum trade-off consciente identificado — as 4 fases são correções diretas de bugs confirmados, sem meio-termo.
+
+---
+
+### Commits Fase 1
+
+| # | Commit | O que foi implementado |
+|---|---|---|
+| 1 | `780ae88` | WAL + busy_timeout=5000 em `database.py::get_connection()` |
+
+**Detalhes do commit `780ae88`:**
+- `backend-crm/database.py` — `get_connection()` passa a rodar `PRAGMA journal_mode=WAL` (antes comentado) e `PRAGMA busy_timeout=5000` a cada conexão aberta.
+
+### Relatório da Fase 1 — o que mudou na prática
+
+**Antes:** quando duas conexões diferentes ao banco tentavam escrever quase ao mesmo tempo, a segunda falhava imediatamente com "database is locked", em vez de esperar a primeira terminar.
+**Agora:** a segunda conexão espera até 5 segundos antes de desistir — o suficiente para a maioria das colisões reais (ex.: o webhook do WhatsApp processando ao mesmo tempo que o robô de follow-up faz uma verificação periódica) se resolverem sozinhas.
+**Para validar:** Cenário A1, abaixo (já validado via script nesta sessão — ver nota).
+
+**Nota:** validei o Cenário A1 eu mesmo via script Python (2 conexões reais, uma segurando o lock por 1s enquanto a outra tenta escrever) antes de commitar — confirmado `journal_mode=wal`, `busy_timeout=5000`, e a segunda conexão esperou ~0.86s e conseguiu escrever em vez de falhar na hora. Não é um cenário testável pela UI (é uma condição de corrida entre conexões, não uma ação clicável) — por isso a validação foi automatizada em vez de via browser.
