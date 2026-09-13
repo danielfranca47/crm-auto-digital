@@ -6,7 +6,7 @@ import os
 import sqlite3
 import uuid
 from datetime import datetime, timezone
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, Response
 from pydantic import BaseModel, Field
@@ -44,6 +44,7 @@ from services.jobs_service import (
     TYPE_EMAIL_SEND_COLD,
     apply_outcome_highlight,
     apply_suggested_category,
+    create_job,
     extract_outcome_payload,
     extract_suggested_category,
     expand_type_variants,
@@ -242,15 +243,23 @@ def _dispatch_sales_flow_media(
     user_id: int,
     phone: str,
     pre_send_media: list,
-) -> None:
-    from services.jobs_service import TYPE_WHATSAPP_SEND, create_job
+) -> List[Dict[str, Any]]:
+    """Monta as specs de job de mídia pré-envio, sem criar o job.
+
+    Não chama create_job() aqui: esta função roda dentro do BEGIN IMMEDIATE de
+    complete_job_internal() — abrir uma conexão nova nesse momento colide com o
+    lock ainda aberto ("database is locked"). O chamador cria os jobs a partir
+    das specs devolvidas, sempre depois do próprio commit.
+    """
+    from services.jobs_service import TYPE_WHATSAPP_SEND
+    pending_jobs: List[Dict[str, Any]] = []
     for item in sorted(pre_send_media, key=lambda m: m.get("send_order", 0)):
         media_url = item.get("media_url")
         if not media_url:
             continue
-        create_job(
-            job_type=TYPE_WHATSAPP_SEND,
-            payload={
+        pending_jobs.append({
+            "job_type": TYPE_WHATSAPP_SEND,
+            "payload": {
                 "lead_id": lead_id,
                 "user_id": user_id,
                 "phone": phone,
@@ -259,8 +268,9 @@ def _dispatch_sales_flow_media(
                 "media_type": item.get("media_type", "image"),
                 "source": "sales_flow_media",
             },
-            user_id=user_id,
-        )
+            "user_id": user_id,
+        })
+    return pending_jobs
 
 
 _PHASE_ID_TO_CATEGORY = {
@@ -284,8 +294,20 @@ def _dispatch_system_actions(
     provider: Optional[str] = None,
     source_message_id: Optional[str] = None,
     inbound_message_text: Optional[str] = None,
-) -> None:
-    from services.jobs_service import TYPE_SALES_FLOW_WEBHOOK, TYPE_WHATSAPP_SEND, create_job
+) -> List[Dict[str, Any]]:
+    """Executa os system_actions e devolve as specs de job pendentes de criação.
+
+    Não chama create_job() para nenhuma ação: esta função roda dentro do
+    BEGIN IMMEDIATE de complete_job_internal() — abrir uma conexão nova nesse
+    momento colide com o lock ainda aberto ("database is locked"). O
+    chamador cria os jobs a partir das specs devolvidas, sempre depois do
+    próprio commit. Ações que só alteram estado via `conn` (advance_phase,
+    mark_phase_triggered, mark_trigger_fired, mark_branch_selected,
+    sales_flow_pause_set/clear, mark_knowledge_shown) não são afetadas — não
+    criam job.
+    """
+    from services.jobs_service import TYPE_SALES_FLOW_WEBHOOK, TYPE_WHATSAPP_SEND
+    pending_jobs: List[Dict[str, Any]] = []
     for action in system_actions:
         atype = action.get("type")
 
@@ -293,25 +315,25 @@ def _dispatch_system_actions(
             body = action.get("content", "")
             if not body:
                 continue
-            create_job(
-                job_type=TYPE_WHATSAPP_SEND,
-                payload={
+            pending_jobs.append({
+                "job_type": TYPE_WHATSAPP_SEND,
+                "payload": {
                     "lead_id": lead_id,
                     "user_id": user_id,
                     "phone": phone,
                     "body": body,
                     "source": "sales_flow_message",
                 },
-                user_id=user_id,
-            )
+                "user_id": user_id,
+            })
 
         elif atype == "send_media":
             media_url = action.get("media_url", "")
             if not media_url:
                 continue
-            create_job(
-                job_type=TYPE_WHATSAPP_SEND,
-                payload={
+            pending_jobs.append({
+                "job_type": TYPE_WHATSAPP_SEND,
+                "payload": {
                     "lead_id": lead_id,
                     "user_id": user_id,
                     "phone": phone,
@@ -320,8 +342,8 @@ def _dispatch_system_actions(
                     "media_type": action.get("media_type", "image"),
                     "source": "sales_flow_media",
                 },
-                user_id=user_id,
-            )
+                "user_id": user_id,
+            })
 
         elif atype == "advance_phase":
             target = action.get("target_phase")
@@ -405,9 +427,9 @@ def _dispatch_system_actions(
                 "SELECT companyName, contactName, email FROM leads WHERE id = ? AND user_id = ?",
                 (lead_id, user_id),
             ).fetchone()
-            create_job(
-                job_type=TYPE_SALES_FLOW_WEBHOOK,
-                payload={
+            pending_jobs.append({
+                "job_type": TYPE_SALES_FLOW_WEBHOOK,
+                "payload": {
                     "lead_id": lead_id,
                     "phone": phone,
                     "name": (lead_row["contactName"] or lead_row["companyName"]) if lead_row else None,
@@ -419,8 +441,8 @@ def _dispatch_system_actions(
                     "phase_id": action.get("phase_id", ""),
                     "triggered_at": datetime.now(timezone.utc).isoformat(),
                 },
-                user_id=user_id,
-            )
+                "user_id": user_id,
+            })
 
         elif atype == "sales_flow_pause_set":
             wait_until = action.get("wait_until", "")
@@ -496,37 +518,45 @@ def _dispatch_system_actions(
                 external_event_id=f"requeue:{source_message_id or ''}:{uuid.uuid4().hex[:8]}",
                 received_at=datetime.now(timezone.utc).isoformat(),
             )
-            create_job(
-                job_type=TYPE_WHATSAPP_INBOUND,
-                payload=new_payload,
-                user_id=user_id,
-            )
+            pending_jobs.append({
+                "job_type": TYPE_WHATSAPP_INBOUND,
+                "payload": new_payload,
+                "user_id": user_id,
+            })
             logger.info(
-                "event=requeue_pending_message_created lead_id=%s user_id=%s source_message_id=%s",
+                "event=requeue_pending_message_queued lead_id=%s user_id=%s source_message_id=%s",
                 lead_id, user_id, source_message_id,
             )
 
+    return pending_jobs
 
-def _schedule_preagendamento_checkin(
+
+def _build_preagendamento_checkin_job(
     lead_id: int,
     user_id: int,
     checkin_at_iso: str,
-) -> None:
-    from services.jobs_service import create_job
+) -> Optional[Dict[str, Any]]:
+    """Monta a spec do job de check-in de pré-agendamento, sem criar o job.
+
+    Não chama create_job() aqui: quem chama esta função (complete_job_internal)
+    está dentro do próprio BEGIN IMMEDIATE — abrir conexão nova nesse momento
+    colide com o lock ainda aberto ("database is locked"). O chamador cria o
+    job a partir da spec devolvida, sempre depois do próprio commit.
+    """
     try:
         checkin_dt = datetime.fromisoformat(checkin_at_iso)
         if checkin_dt.tzinfo is None:
             checkin_dt = checkin_dt.replace(tzinfo=timezone.utc)
     except ValueError:
-        return
+        return None
     if checkin_dt <= datetime.now(timezone.utc):
-        return
-    create_job(
-        job_type=TYPE_WHATSAPP_PREAGENDAMENTO_CHECKIN,
-        payload={"lead_id": lead_id, "user_id": user_id, "checkin_at_iso": checkin_at_iso},
-        scheduled_at=checkin_dt,
-        user_id=user_id,
-    )
+        return None
+    return {
+        "job_type": TYPE_WHATSAPP_PREAGENDAMENTO_CHECKIN,
+        "payload": {"lead_id": lead_id, "user_id": user_id, "checkin_at_iso": checkin_at_iso},
+        "scheduled_at": checkin_dt,
+        "user_id": user_id,
+    }
 
 
 @router.get("/whatsapp/execution-context")
@@ -917,6 +947,7 @@ def complete_job_internal(
     _: str = Depends(_require_service_token),
 ):
     result_txt = _json_dumps(payload.result)
+    pending_jobs: List[Dict[str, Any]] = []
     with get_connection() as conn:
         cur = conn.cursor()
         cur.execute("BEGIN IMMEDIATE")
@@ -976,25 +1007,27 @@ def complete_job_internal(
                 )
                 checkin_iso = _extract_preagendamento_checkin_iso(result_obj)
                 if checkin_iso:
-                    _schedule_preagendamento_checkin(
+                    checkin_job = _build_preagendamento_checkin_job(
                         lead_id=int(lead_id),
                         user_id=row["user_id"],
                         checkin_at_iso=checkin_iso,
                     )
+                    if checkin_job:
+                        pending_jobs.append(checkin_job)
                 _pre_send_media = result_obj.get("pre_send_media") or []
                 if isinstance(_pre_send_media, dict):
                     _pre_send_media = [_pre_send_media]
                 _lead_phone = job_payload.get("phone")
                 if _lead_phone and _pre_send_media:
-                    _dispatch_sales_flow_media(
+                    pending_jobs.extend(_dispatch_sales_flow_media(
                         lead_id=int(lead_id),
                         user_id=row["user_id"],
                         phone=_lead_phone,
                         pre_send_media=_pre_send_media,
-                    )
+                    ))
                 _system_actions = result_obj.get("system_actions") or []
                 if _lead_phone and _system_actions:
-                    _dispatch_system_actions(
+                    pending_jobs.extend(_dispatch_system_actions(
                         lead_id=int(lead_id),
                         user_id=row["user_id"],
                         phone=_lead_phone,
@@ -1004,7 +1037,7 @@ def complete_job_internal(
                         provider=job_payload.get("provider"),
                         source_message_id=job_payload.get("message_id"),
                         inbound_message_text=job_payload.get("message_text"),
-                    )
+                    ))
         elif job_type == TYPE_EMAIL_SEND_COLD:
             result_obj = payload.result if isinstance(payload.result, dict) else {}
             handle_email_report(
@@ -1013,6 +1046,12 @@ def complete_job_internal(
 
         refreshed = cur.execute("SELECT * FROM jobs WHERE id=?", (job_id,)).fetchone()
         conn.commit()
+
+    # create_job() abre a própria conexão — só depois do commit acima, senão a
+    # transação ainda aberta causa "database is locked" (ver _dispatch_system_actions
+    # e afins, que por isso só devolvem specs em vez de criar o job).
+    for job_spec in pending_jobs:
+        create_job(**job_spec)
 
     job = dict(refreshed)
     job["payload"] = _json_loads(job.get("payload"))
