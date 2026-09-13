@@ -328,6 +328,18 @@ do Railway, em vez de voltar a persistir em silêncio no caminho efémero.
 Guarda equivalente para `backend-core`/`DATABASE_URL` ainda não existe — ver
 [`docs/plans/persistencia-dados-melhorias-futuras.md`](../plans/persistencia-dados-melhorias-futuras.md).
 
+### Limites de rede/proxy (Railway)
+
+A Railway não oferece nenhum equivalente a `client_max_body_size` do nginx:
+não há limite de tamanho de corpo de request configurável na plataforma, e as
+"edge rules" só filtram por IP, Host, Path ou Header — nunca por tamanho do
+corpo/`Content-Length`. Qualquer limite de tamanho de upload hoje só existe na
+camada da aplicação (ex.: `MAX_UPLOAD_BYTES` em
+`backend-crm/routes/uploads.py`, aplicado via leitura em streaming/chunk).
+Rejeitar requests grandes antes de chegarem ao processo Python exigiria trocar
+o deploy actual (`Procfile` + Nixpacks, sem `Dockerfile`) por um proxy próprio
+(nginx/Caddy) num container custom.
+
 ### Tabelas críticas do `crm.db`
 
 | Tabela | Campos-chave | Descrição |
