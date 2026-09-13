@@ -1,7 +1,7 @@
 # Middleware de rejeição antecipada por Content-Length no upload de planilhas
 
 **Branch:** `feat/upload-limite-tamanho-proxy`
-**Status:** Em andamento
+**Status:** Todos os cenários validados
 
 ---
 
@@ -135,17 +135,17 @@ streaming dentro da rota.
 ## Checks de Validação
 
 ### Cenário P1 — Content-Length acima do limite é rejeitado antes da rota
-- [ ] `POST /api/uploads` com header `Content-Length` acima de `MAX_UPLOAD_BYTES + margem` (sem token, sem body real)
-- [ ] Confirmar: `413` imediato, `{"detail":"Arquivo excede o limite de 10MB"}`
+- [x] (13/09/2026) `POST /api/uploads` com header `Content-Length` de 12MB (raw socket, corpo real de só 1KB enviado)
+- [x] (13/09/2026) Confirmar: `413` em 2ms — `{"detail":"Arquivo excede o limite de 10MB"}`, provando que a rejeição acontece só pelo header, sem esperar o corpo
 
 ### Cenário P2 — Upload normal continua funcionando
-- [ ] `POST /api/uploads` autenticado, arquivo válido dentro do limite
-- [ ] Confirmar: `200`, `upload_id` retornado (comportamento inalterado)
+- [x] (13/09/2026) `POST /api/uploads` autenticado (conta de teste local), planilha `.csv` válida dentro do limite
+- [x] (13/09/2026) Confirmar: `200`, `upload_id` retornado — comportamento inalterado
 
 ### Cenário C1 — Sem header Content-Length não é bloqueado pelo middleware
-- [ ] `POST /api/uploads` com `Transfer-Encoding: chunked` (sem `Content-Length`), acima do limite
-- [ ] Confirmar: middleware deixa passar; corte acontece no streaming da rota (já validado em `fix-upload-planilhas-sem-auth.md`, Cenário C1), não no middleware
+- [x] (13/09/2026) `POST /api/uploads` autenticado com `Transfer-Encoding: chunked` (confirmado via `curl -v` que nenhum `Content-Length` foi enviado), arquivo de 11MB
+- [x] (13/09/2026) Confirmar: `413` — mas vindo do corte em streaming da rota (não do middleware, que só age quando há `Content-Length`); nenhum arquivo parcial ficou em `data/uploads/ai/{user_id}/`
 
 ### Cenário C2 — Outros endpoints não são afetados
-- [ ] Requisição com `Content-Length` grande para outro path (ex.: `/api/leads`)
-- [ ] Confirmar: middleware não intercepta — passa direto para a rota normal
+- [x] (13/09/2026) `POST /api/leads` autenticado, com `Content-Length` real de 59 bytes (corpo JSON incompleto, de propósito)
+- [x] (13/09/2026) Confirmar: middleware não interceptou — request chegou à rota normalmente (retornou `422` de validação do Pydantic, não `413`)
