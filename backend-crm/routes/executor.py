@@ -1445,6 +1445,7 @@ def mark_outbound_sent(
         except Exception:
             pass
 
+    followup_progress: Optional[Dict[str, Any]] = None
     with get_connection() as conn:
         cur = conn.cursor()
         cur.execute("BEGIN IMMEDIATE")
@@ -1512,7 +1513,7 @@ def mark_outbound_sent(
         ).fetchone()
         job_type = normalize_job_type(job_row["type"]) if job_row else None
         if job_type == "whatsapp.followup.tick":
-            progress_followup_after_auto_send(
+            followup_progress = progress_followup_after_auto_send(
                 conn,
                 lead_id=int(row["lead_id"]),
                 user_id=int(row["user_id"]),
@@ -1544,6 +1545,16 @@ def mark_outbound_sent(
                         )
 
         conn.commit()
+
+    # create_job() abre a própria conexão — só depois do commit acima, senão
+    # a transação ainda aberta causa "database is locked" (mesmo padrão de
+    # start_followup_for_inactivity() em followup_reconciler.py).
+    if followup_progress and followup_progress.get("reason") == "progressed":
+        create_job(
+            job_type=TYPE_WHATSAPP_FOLLOWUP_PREGENERATE,
+            payload={"lead_id": int(row["lead_id"]), "user_id": int(row["user_id"])},
+            user_id=int(row["user_id"]),
+        )
 
     return {
         "status": "sent",

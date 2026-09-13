@@ -4,9 +4,6 @@ import json
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional
 
-from services.jobs_service import TYPE_WHATSAPP_FOLLOWUP_PREGENERATE, create_job
-
-
 STOP_INBOUND_REPLY = "inbound_reply"
 STOP_DEAL_CLOSED = "deal_closed"
 STOP_EXPLICIT_REJECTION = "explicit_rejection"
@@ -337,11 +334,12 @@ def progress_followup_after_auto_send(
             user_id,
         ),
     )
-    create_job(
-        job_type=TYPE_WHATSAPP_FOLLOWUP_PREGENERATE,
-        payload={"lead_id": lead_id, "user_id": user_id},
-        user_id=user_id,
-    )
+    # create_job() abre a própria conexão — não pode ser chamado aqui dentro,
+    # porque o chamador (mark_outbound_sent/send_followup_now) ainda está
+    # dentro da própria transação, não commitada. O chamador é responsável
+    # por criar o job TYPE_WHATSAPP_FOLLOWUP_PREGENERATE depois do commit
+    # dele, quando reason == "progressed" (mesmo padrão de
+    # start_followup_for_inactivity()).
     return {"updated": True, "reason": "progressed", "attempts": attempts_after, "next_followup_at": next_followup_at}
 
 

@@ -1729,6 +1729,15 @@ def send_followup_now(
             (lead_id, json.dumps({"job_id": job_id, "progress": progress}, ensure_ascii=False), current_user.id),
         )
         conn.commit()
+        # create_job() abre a própria conexão — só depois do commit acima,
+        # senão a transação ainda aberta causa "database is locked" (mesmo
+        # padrão de start_followup_for_inactivity() em followup_reconciler.py).
+        if progress.get("reason") == "progressed":
+            create_job(
+                job_type=TYPE_WHATSAPP_FOLLOWUP_PREGENERATE,
+                payload={"lead_id": lead_id, "user_id": current_user.id},
+                user_id=current_user.id,
+            )
         return {"status": "ok", "job_id": job_id, "progress": progress}
     except HTTPException:
         conn.rollback()

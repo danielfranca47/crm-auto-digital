@@ -135,6 +135,49 @@ class FollowupStateTest(unittest.TestCase):
         self.assertEqual(row["followup_status"], "closed")
         self.assertIsNone(row["next_followup_at"])
 
+    def test_auto_send_progresses_without_reaching_max_attempts(self):
+        """Branch "progride sem fechar" -- o único que chamava create_job()
+        internamente antes da correção (o branch max_attempts_reached, testado
+        acima, retorna antes de chegar lá). O schema deste teste não tem
+        tabela `jobs` de propósito: se a função ainda tentasse abrir conexão
+        e criar o job aqui dentro, este teste quebraria com "no such table:
+        jobs" em vez de passar."""
+        contract = {
+            "phase": "follow-up",
+            "status": "active",
+            "attempts": 0,
+            "max_attempts": 3,
+            "next_followup_at": "2026-01-01T10:00:00Z",
+            "last_followup_at": None,
+            "stop_reason": None,
+            "followup_variant": "sdr_scheduler",
+        }
+        self.conn.execute(
+            "INSERT INTO leads (user_id, category, bot_disabled, followup_contract, followup_status, next_followup_at) VALUES (11, 'follow-up', 0, ?, 'active', ?)",
+            (json.dumps(contract), contract["next_followup_at"]),
+        )
+        lead_id = int(self.conn.execute("SELECT id FROM leads").fetchone()["id"])
+
+        result = progress_followup_after_auto_send(
+            self.conn,
+            lead_id=lead_id,
+            user_id=11,
+            source_job_id=99,
+        )
+        self.conn.commit()
+
+        self.assertTrue(result["updated"])
+        self.assertEqual(result["reason"], "progressed")
+        self.assertEqual(result["attempts"], 1)
+        row = self.conn.execute(
+            "SELECT followup_contract, followup_status, next_followup_at FROM leads WHERE id = ?",
+            (lead_id,),
+        ).fetchone()
+        saved = json.loads(row["followup_contract"])
+        self.assertEqual(saved["attempts"], 1)
+        self.assertEqual(saved["status"], "active")
+        self.assertIsNotNone(row["next_followup_at"])
+
     def test_handoff_pauses_followup(self):
         contract = {
             "phase": "follow-up",
