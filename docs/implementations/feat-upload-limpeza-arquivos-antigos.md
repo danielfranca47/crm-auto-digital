@@ -1,7 +1,7 @@
 # Limpeza/expiração automática de uploads antigos
 
 **Branch:** `feat/upload-limpeza-arquivos-antigos`
-**Status:** Em andamento
+**Status:** Todos os cenários validados (13/09/2026)
 
 ---
 
@@ -67,6 +67,38 @@ no meio do fluxo.
 | `backend-crm/app.py` | Novo `_upload_cleanup_loop()` + registro em `lifespan()` |
 | `backend-crm/tests/test_upload_cleanup.py` | Novo — testes automatizados |
 
+### Commits Fase 1
+
+| # | Commit | O que foi implementado |
+|---|---|---|
+| 1 | `a8528e8` | Worker de limpeza periódica + testes |
+
+**Detalhes do commit `a8528e8`:**
+- `services/upload_cleanup.py` — `cleanup_stale_uploads(max_age_hours)`: varre
+  `data/uploads/ai/<user_id>/*`, apaga arquivos com `mtime` além do limite,
+  remove diretório de usuário se ficar vazio, conta erros individuais sem
+  interromper o loop
+- `app.py` — novo `_upload_cleanup_loop()` (mesmo padrão dos outros workers:
+  `asyncio.sleep` + `while True` + `asyncio.to_thread` + log + stagger de
+  startup), registrado em `lifespan()`; env vars
+  `UPLOAD_CLEANUP_INTERVAL_SECONDS` (default 3600s) e `UPLOAD_MAX_AGE_HOURS`
+  (default 24h)
+- `tests/test_upload_cleanup.py` — 5 testes cobrindo os 4 cenários abaixo
+
+### Relatório da Fase 1 — o que mudou na prática
+
+**Antes:** os arquivos de planilha enviados para importar leads ficavam
+salvos no servidor para sempre — nada os apagava, mesmo depois de já terem
+sido usados ou abandonados.
+
+**Agora:** a cada hora, o sistema verifica automaticamente esses arquivos e
+apaga os que têm mais de 24h, liberando espaço em disco sem precisar de
+intervenção manual.
+
+**Para validar:** Cenários A1–A4, abaixo — já executados via teste
+automatizado (`pytest`), sem necessidade de teste via browser (é lógica
+interna do servidor, sem tela).
+
 ---
 
 ## Checks de Validação
@@ -75,23 +107,27 @@ Lógica server-side pura, sem superfície de UI — validação via teste
 automatizado (`unittest`), não via browser (MCP).
 
 ### Cenário A1 — Arquivo antigo é apagado
-- [ ] Criar arquivo com `mtime` mais antigo que o limite configurado
-- [ ] Rodar `cleanup_stale_uploads`
-- [ ] Confirmar: arquivo foi removido e contabilizado em `deleted`
+- [x] Criar arquivo com `mtime` mais antigo que o limite configurado
+- [x] Rodar `cleanup_stale_uploads`
+- [x] Confirmar: arquivo foi removido e contabilizado em `deleted`
+- **Validado em:** 13/09/2026 — `pytest tests/test_upload_cleanup.py::UploadCleanupTest::test_old_file_is_deleted` (PASSED)
 
 ### Cenário A2 — Arquivo recente é mantido
-- [ ] Criar arquivo com `mtime` recente (dentro do limite)
-- [ ] Rodar `cleanup_stale_uploads`
-- [ ] Confirmar: arquivo continua existindo
+- [x] Criar arquivo com `mtime` recente (dentro do limite)
+- [x] Rodar `cleanup_stale_uploads`
+- [x] Confirmar: arquivo continua existindo
+- **Validado em:** 13/09/2026 — `pytest tests/test_upload_cleanup.py::UploadCleanupTest::test_recent_file_is_kept` (PASSED)
 
 ### Cenário A3 — Diretório de usuário vazio é removido
-- [ ] Diretório de usuário só com arquivos antigos
-- [ ] Rodar `cleanup_stale_uploads`
-- [ ] Confirmar: diretório do usuário foi removido após ficar vazio
+- [x] Diretório de usuário só com arquivos antigos
+- [x] Rodar `cleanup_stale_uploads`
+- [x] Confirmar: diretório do usuário foi removido após ficar vazio
+- **Validado em:** 13/09/2026 — `pytest tests/test_upload_cleanup.py::UploadCleanupTest::test_empty_user_dir_is_removed_after_cleanup` (PASSED), incluindo caso complementar `test_user_dir_kept_when_a_recent_file_remains` (diretório mantido quando sobra arquivo recente)
 
 ### Cenário A4 — Pasta base inexistente não gera erro
-- [ ] Rodar `cleanup_stale_uploads` sem `data/uploads/ai` existir
-- [ ] Confirmar: retorna contadores zerados, sem exceção
+- [x] Rodar `cleanup_stale_uploads` sem `data/uploads/ai` existir
+- [x] Confirmar: retorna contadores zerados, sem exceção
+- **Validado em:** 13/09/2026 — `pytest tests/test_upload_cleanup.py::UploadCleanupTest::test_missing_base_dir_returns_zeroed_counters_without_error` (PASSED)
 
 ---
 
