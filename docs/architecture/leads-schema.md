@@ -111,6 +111,27 @@ Dois campos separados, com responsabilidades distintas — não misturar:
   abaixo). **Não é lido por nenhuma lógica de IA** — puramente informativo/pesquisável (entra na
   busca do Kanban).
 
+### Endpoint de upload (`POST /api/uploads`)
+
+Exige `Depends(require_crm_access)` (`backend-crm/routes/uploads.py`) — sem
+`Authorization: Bearer`, retorna `401`. Extensões aceitas: `.xlsx`, `.csv`, `.xls`
+(qualquer outra retorna `400`).
+
+O arquivo é lido em streaming (chunks) e gravado em
+`data/uploads/ai/{current_user.id}/{uuid4()}.ext` — isolado por usuário. Se o
+tamanho ultrapassar `MAX_UPLOAD_BYTES` (10MB) a qualquer momento da leitura, o
+arquivo parcial é apagado e a resposta é `413`, sem deixar resíduo em disco. Não
+há limite adicional configurado em proxy/infra (nginx/Railway) — o corte acontece
+só na camada da aplicação.
+
+`routes/assistente_ia.py` (`/processar` e `/preview`) resolve o arquivo do
+`upload_id` dentro de `data/uploads/ai/{current_user.id}/` — um `upload_id`
+válido de outro usuário devolve `404` ("Arquivo não encontrado"), nunca processa
+dado de outro tenant. Os dois endpoints também exigem `require_crm_access`.
+
+Nenhuma rotina apaga esses arquivos depois de processados — ficam em disco
+indefinidamente (candidato a melhoria futura, ver `docs/plans/`).
+
 ### Importação por planilha (Assistente IA)
 
 `map_row_to_lead()` (`backend-crm/automations/assistente_ia/processor.py`) preenche
