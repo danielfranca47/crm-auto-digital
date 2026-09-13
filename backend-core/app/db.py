@@ -439,6 +439,34 @@ def ensure_auth_otp_lockouts_table() -> None:
         """))
 
 
+def ensure_auth_otp_lockouts_send_columns() -> None:
+    """Add otp_send_count/otp_send_window_started_at to auth_otp_lockouts.
+
+    Contador de envios de OTP (independente de failed_attempts, que só conta
+    verificações erradas) — usado para bloquear spam de request-access /
+    register-passwordless contra o mesmo email, ver fix-otp-spam-envio.
+    """
+    with engine.begin() as conn:
+        if engine.dialect.name == "sqlite":
+            result = conn.execute(text("PRAGMA table_info(auth_otp_lockouts)"))
+            existing = {row[1] for row in result.fetchall()}
+            if "otp_send_count" not in existing:
+                conn.execute(text("ALTER TABLE auth_otp_lockouts ADD COLUMN otp_send_count INTEGER NOT NULL DEFAULT 0"))
+                print("✅ coluna adicionada em auth_otp_lockouts: otp_send_count")
+            if "otp_send_window_started_at" not in existing:
+                conn.execute(text("ALTER TABLE auth_otp_lockouts ADD COLUMN otp_send_window_started_at DATETIME"))
+                print("✅ coluna adicionada em auth_otp_lockouts: otp_send_window_started_at")
+        else:
+            result = conn.execute(text(
+                "SELECT column_name FROM information_schema.columns WHERE table_name='auth_otp_lockouts'"
+            ))
+            existing = {row[0] for row in result.fetchall()}
+            if "otp_send_count" not in existing:
+                conn.execute(text("ALTER TABLE auth_otp_lockouts ADD COLUMN otp_send_count INTEGER NOT NULL DEFAULT 0"))
+            if "otp_send_window_started_at" not in existing:
+                conn.execute(text("ALTER TABLE auth_otp_lockouts ADD COLUMN otp_send_window_started_at TIMESTAMP"))
+
+
 def ensure_user_extra_columns() -> None:
     """Add whatsapp and sector columns to users (passwordless registration)."""
     with engine.begin() as conn:

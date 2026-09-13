@@ -259,6 +259,8 @@ _logger = _log.getLogger(__name__)
 OTP_TTL_MINUTES = 15
 MAX_OTP_ATTEMPTS = 5
 OTP_LOCKOUT_MINUTES = 15
+MAX_OTP_SENDS = 3
+OTP_SEND_WINDOW_MINUTES = 10
 
 
 class RequestAccessRequest(BaseModel):
@@ -308,6 +310,58 @@ def _check_otp_lockout(email: str, db: Session) -> None:
         raise HTTPException(status_code=429, detail="Muitas tentativas. Tente novamente mais tarde.")
 
 
+def _register_otp_send(email: str, db: Session) -> None:
+    """Conta envios de OTP por email numa janela deslizante; ao ultrapassar
+    MAX_OTP_SENDS na janela, bloqueia via o mesmo `locked_until` usado pelo
+    lockout de força bruta (_check_otp_lockout já cobre os 3 endpoints).
+
+    Independente de failed_attempts — pedir OTPs repetidamente sem nunca
+    errar a verificação não aciona esse outro contador.
+
+    A comparação de janela é feita em SQL (não em Python) porque, via
+    `text()` cru contra sqlite, colunas DATETIME voltam como string — a
+    mesma razão pela qual `_check_otp_lockout` compara `locked_until > :now`
+    dentro do SQL em vez de buscar o valor e comparar em Python."""
+    now = datetime.utcnow()
+    window_cutoff = now - timedelta(minutes=OTP_SEND_WINDOW_MINUTES)
+
+    db.execute(
+        text("""
+            INSERT INTO auth_otp_lockouts (email, otp_send_count, otp_send_window_started_at)
+            VALUES (:email, 1, :now)
+            ON CONFLICT(email) DO UPDATE SET
+                otp_send_count = CASE
+                    WHEN auth_otp_lockouts.otp_send_window_started_at IS NULL
+                         OR auth_otp_lockouts.otp_send_window_started_at < :window_cutoff
+                    THEN 1
+                    ELSE auth_otp_lockouts.otp_send_count + 1
+                END,
+                otp_send_window_started_at = CASE
+                    WHEN auth_otp_lockouts.otp_send_window_started_at IS NULL
+                         OR auth_otp_lockouts.otp_send_window_started_at < :window_cutoff
+                    THEN :now
+                    ELSE auth_otp_lockouts.otp_send_window_started_at
+                END
+        """),
+        {"email": email, "now": now, "window_cutoff": window_cutoff},
+    )
+
+    count_row = db.execute(
+        text("SELECT otp_send_count FROM auth_otp_lockouts WHERE email = :email"),
+        {"email": email},
+    ).fetchone()
+
+    if count_row[0] > MAX_OTP_SENDS:
+        db.execute(
+            text("UPDATE auth_otp_lockouts SET locked_until = :locked_until WHERE email = :email"),
+            {"email": email, "locked_until": now + timedelta(minutes=OTP_LOCKOUT_MINUTES)},
+        )
+        db.commit()
+        raise HTTPException(status_code=429, detail="Muitas tentativas. Tente novamente mais tarde.")
+
+    db.commit()
+
+
 def _register_otp_failure(email: str, db: Session) -> None:
     """Incrementa tentativas falhas do email (persiste entre pedidos de OTP);
     ao atingir o limite, bloqueia por OTP_LOCKOUT_MINUTES e reinicia a contagem."""
@@ -344,6 +398,7 @@ async def request_access(body: RequestAccessRequest, db: Session = Depends(get_d
     if not user:
         return {"status": "new_user"}
     _check_otp_lockout(body.email, db)
+    _register_otp_send(body.email, db)
     try:
         code = _generate_and_store_otp(body.email, db)
         _send_otp_email(body.email, user.name, code)
@@ -361,6 +416,7 @@ async def register_passwordless(body: RegisterPasswordlessRequest, db: Session =
     existing = db.query(models.User).filter(models.User.email == body.email).first()
     if existing:
         _check_otp_lockout(body.email, db)
+        _register_otp_send(body.email, db)
         try:
             code = _generate_and_store_otp(body.email, db)
             _send_otp_email(body.email, existing.name, code)
