@@ -62,7 +62,7 @@ usuário tem um token expirado salvo.
 
 | # | Commit | O que foi implementado |
 |---|---|---|
-| 1 | _pendente_ | fix: silenciar 401/403 em loadBotPauseStatus (LeadsContext) |
+| 1 | `d3a47a9` | fix: silenciar 401/403 em loadBotPauseStatus (LeadsContext) |
 
 ---
 
