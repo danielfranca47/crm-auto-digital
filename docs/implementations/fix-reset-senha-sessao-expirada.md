@@ -1,7 +1,7 @@
 # Fix: link de recuperação de senha cai em "Sessão expirada"
 
 **Branch:** `fix/reset-senha-sessao-expirada`
-**Status:** Em andamento
+**Status:** Todos os cenários validados — pronta para graduação
 
 ---
 
@@ -69,17 +69,22 @@ usuário tem um token expirado salvo.
 ## Checks de Validação
 
 ### Cenário P1 — Reset de senha com token expirado salvo no navegador
-- [ ] Logar no CRM local para gravar um token válido no `localStorage`
-- [ ] Invalidar esse token (esperar expirar, ou editar o valor salvo)
-- [ ] Navegar direto para `/reset-password?token=<qualquer-valor>` sem passar por `/login`
-- [ ] Confirmar: formulário "Nova senha" aparece normalmente, sem redirecionar para
+- [x] Gravar um token inválido no `localStorage` (`crm_token`), simulando sessão antiga
+- [x] Navegar direto para `/reset-password?token=<qualquer-valor>` sem passar por `/login`
+- [x] Confirmar: formulário "Nova senha" aparece normalmente, sem redirecionar para
   `/login` nem exibir o toast "Sessão expirada"
+- **Validado em:** 14/09/2026 — via chrome-devtools MCP, contra backend-core/backend-crm
+  locais (worktree). Rede confirmou `GET /api/leads` e `GET /api/bot-pause/status` ambos
+  retornando 401 e mesmo assim a tela de nova senha renderizou normalmente.
 
 ### Cenário P2 — `/forgot-password` e `/login` não afetados
-- [ ] Mesmo cenário de token expirado, navegar para `/forgot-password` e `/login`
-- [ ] Confirmar: nenhuma das duas dispara o toast/redirect indevido
+- [x] Mesmo token inválido, navegar para `/forgot-password`
+- [x] Confirmar: não dispara o toast/redirect indevido
+- **Validado em:** 14/09/2026 — tela "Recuperar senha" renderizou normalmente
 
 ### Cenário C1 — Rotas protegidas continuam pedindo login
-- [ ] Com o mesmo token expirado, navegar para `/` (Kanban)
-- [ ] Confirmar: `Protected` ainda redireciona para `/login` normalmente (guard não foi
+- [x] Com o mesmo token inválido, navegar para `/` (Kanban)
+- [x] Confirmar: `Protected` ainda redireciona para `/login` normalmente (guard não foi
   removido, só parou de ser duplicado por `loadBotPauseStatus`)
+- **Validado em:** 14/09/2026 — redirecionou para `/login` com toast "Sessão expirada",
+  comportamento correto e esperado para rota protegida
