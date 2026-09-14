@@ -267,6 +267,9 @@ export function LeadsProvider({ children }: LeadsProviderProps) {
       setBotGlobalPaused(!!status.is_paused);
       setBotGlobalPausedAt(status.paused_at ?? null);
     } catch (error) {
+      if (error instanceof ApiError && (error.status === 401 || error.status === 403)) {
+        return; // auth errors são tratados pelo Protected — não redirecionar daqui
+      }
       handleError(error, { fallbackMessage: 'Não foi possível carregar o estado da pausa do bot.' });
     }
   };
