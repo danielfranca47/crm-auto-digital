@@ -318,10 +318,18 @@ Rotas fora do wrapper `Protected` (sem verificação de auth):
 
 ## Guarda no LeadsContext
 
-`frontend-crm/src/contexts/LeadsContext.tsx` carrega leads no mount. Para evitar redirect para `/login` em rotas públicas (quando não há token ou o token não tem acesso ao CRM):
+`frontend-crm/src/contexts/LeadsContext.tsx` carrega leads e o estado de pausa do bot no
+mount (`reloadAllLeads` + `loadBotPauseStatus`), e via polling a cada 30s. `LeadsProvider`
+envolve toda a árvore de rotas, incluindo as públicas (`/login`, `/forgot-password`,
+`/reset-password`) — não só as protegidas. Para evitar redirect para `/login` a partir
+dessas rotas públicas quando o navegador tem um token salvo mas inválido/expirado (ex.:
+sessão antiga):
 
-1. `useEffect` inicial só chama `reloadAllLeads()` se `readAuthToken()` retornar valor
-2. `reloadAllLeads` não chama `handleError` para 401/403 — esses erros são tratados pelo componente `Protected`
+1. `useEffect` inicial só dispara as chamadas se `readAuthToken()` retornar valor (não
+   distingue token válido de expirado — só "existe algo salvo")
+2. **Ambas** `reloadAllLeads` e `loadBotPauseStatus` tratam 401/403 silenciosamente (early
+   `return` no `catch`, sem chamar `handleError`) — esses erros são tratados pelo
+   componente `Protected` nas rotas que realmente exigem login
 
 ---
 
