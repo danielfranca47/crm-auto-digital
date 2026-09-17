@@ -291,13 +291,7 @@ export default function CRMLandingV2({ lang: _lang = 'pt' }: { lang?: string }) 
       {/* ── HERO — pt-24 para compensar campaign bar (2rem) + navbar (4rem) ── */}
       <section
         id="home"
-        className="relative min-h-screen flex items-center pt-24 overflow-hidden"
-        style={{
-          backgroundImage: 'url(/hero-mascot.jpeg)',
-          backgroundSize: 'cover',
-          backgroundPosition: 'center right',
-          backgroundRepeat: 'no-repeat',
-        }}
+        className="relative min-h-screen flex items-center pt-24 overflow-hidden hero-mascot-bg"
       >
         <div className="absolute inset-0 pointer-events-none"
           style={{

@@ -183,6 +183,20 @@
     font-weight: 600;
   }
 
+  /* Foto do hero só carrega em telas md+ — no mobile o gradient escuro já cobre a maior parte dela */
+  .hero-mascot-bg {
+    background-image: none;
+  }
+
+  @media (min-width: 768px) {
+    .hero-mascot-bg {
+      background-image: url('/hero-mascot.jpeg');
+      background-size: cover;
+      background-position: center right;
+      background-repeat: no-repeat;
+    }
+  }
+
   /* Interactive elements */
   .portfolio-card {
     @apply bg-card rounded-xl p-6 shadow-card transition-smooth hover:shadow-card-hover hover:-translate-y-1 cursor-pointer;

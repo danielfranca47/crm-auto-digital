@@ -234,13 +234,7 @@ export default function CRMLanding({ lang: _lang = 'pt' }: { lang?: string }) {
       {/* ── HERO ── */}
       <section
         id="home"
-        className="relative min-h-screen flex items-center pt-16 overflow-hidden"
-        style={{
-          backgroundImage: 'url(/hero-mascot.jpeg)',
-          backgroundSize: 'cover',
-          backgroundPosition: 'center right',
-          backgroundRepeat: 'no-repeat',
-        }}
+        className="relative min-h-screen flex items-center pt-16 overflow-hidden hero-mascot-bg"
       >
         <div className="absolute inset-0 pointer-events-none"
           style={{
