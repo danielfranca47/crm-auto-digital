@@ -231,6 +231,7 @@ export default function CRMLanding({ lang: _lang = 'pt' }: { lang?: string }) {
         </div>
       </header>
 
+      <main>
       {/* ── HERO ── */}
       <section
         id="home"
@@ -939,6 +940,7 @@ export default function CRMLanding({ lang: _lang = 'pt' }: { lang?: string }) {
           </p>
         </div>
       </section>
+      </main>
 
       {/* ── FOOTER ── */}
       <footer className="bg-primary text-primary-foreground py-16">
@@ -960,7 +962,7 @@ export default function CRMLanding({ lang: _lang = 'pt' }: { lang?: string }) {
             </div>
 
             <div>
-              <h4 className="font-semibold mb-4">Produto</h4>
+              <h3 className="font-semibold mb-4">Produto</h3>
               <ul className="space-y-2 text-sm text-primary-foreground/70">
                 {['Funcionalidades', 'Planos', 'FAQ', 'Blog'].map(l => (
                   <li key={l}><a href="#" className="hover:text-accent transition-smooth">{l}</a></li>
@@ -969,7 +971,7 @@ export default function CRMLanding({ lang: _lang = 'pt' }: { lang?: string }) {
             </div>
 
             <div>
-              <h4 className="font-semibold mb-4">Contato</h4>
+              <h3 className="font-semibold mb-4">Contato</h3>
               <div className="space-y-2 text-sm text-primary-foreground/70">
                 <div className="flex items-center gap-2"><Mail  className="w-4 h-4 text-accent" /> contato@digitalpro.com</div>
                 <div className="flex items-center gap-2"><Phone className="w-4 h-4 text-accent" /> +55 11 9 9999-9999</div>
@@ -983,6 +985,7 @@ export default function CRMLanding({ lang: _lang = 'pt' }: { lang?: string }) {
               <a href="#" className="hover:text-accent transition-smooth">Privacidade</a>
               <a href="#" className="hover:text-accent transition-smooth">Termos</a>
               <button onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
+                aria-label="Voltar ao topo"
                 className="w-8 h-8 rounded-full bg-accent text-accent-foreground flex items-center justify-center hover:scale-110 transition-bounce">
                 <ArrowUp className="w-4 h-4" />
               </button>
