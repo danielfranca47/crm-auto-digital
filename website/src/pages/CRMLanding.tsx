@@ -260,7 +260,7 @@ export default function CRMLanding({ lang: _lang = 'pt' }: { lang?: string }) {
             </div>
 
             {/* H1 */}
-            <h1 className="text-hero mb-6 animate-fade-in animate-delay-100">
+            <h1 className="text-4xl md:text-5xl lg:text-6xl font-extrabold mb-6 animate-fade-in animate-delay-100">
               Nunca mais perca uma venda por falta de resposta —{' '}
               <span className="bg-gradient-to-r from-accent to-primary bg-clip-text text-transparent">
                 a Lara atende, qualifica e faz follow-up por você, 24h por dia.
@@ -346,7 +346,7 @@ export default function CRMLanding({ lang: _lang = 'pt' }: { lang?: string }) {
         <div className="container mx-auto max-w-5xl">
           <div className="text-center mb-12">
             <span className="text-accent text-sm font-semibold uppercase tracking-widest">Qualquer setor</span>
-            <h2 className="text-heading mt-2">Se você vende pelo WhatsApp, a Lara trabalha por você</h2>
+            <h2 className="text-3xl md:text-4xl font-bold mt-2">Se você vende pelo WhatsApp, a Lara trabalha por você</h2>
           </div>
 
           <div className="flex flex-wrap justify-center gap-2 mb-10">
@@ -377,7 +377,7 @@ export default function CRMLanding({ lang: _lang = 'pt' }: { lang?: string }) {
         <div className="container mx-auto max-w-5xl">
           <div className="text-center mb-14">
             <span className="text-accent text-sm font-semibold uppercase tracking-widest">Simples assim</span>
-            <h2 className="text-heading mt-2">Do primeiro contato ao fechamento — a Lara no comando</h2>
+            <h2 className="text-3xl md:text-4xl font-bold mt-2">Do primeiro contato ao fechamento — a Lara no comando</h2>
             <p className="text-muted-foreground mt-3">Configure uma vez. A Lara trabalha para sempre.</p>
           </div>
 
@@ -410,7 +410,7 @@ export default function CRMLanding({ lang: _lang = 'pt' }: { lang?: string }) {
         <div className="container mx-auto max-w-6xl">
           <div className="text-center mb-14">
             <span className="text-accent text-sm font-semibold uppercase tracking-widest">⚡ O que a Lara faz</span>
-            <h2 className="text-heading mt-2">Tudo que a Lara faz pelo seu negócio</h2>
+            <h2 className="text-3xl md:text-4xl font-bold mt-2">Tudo que a Lara faz pelo seu negócio</h2>
             <p className="text-muted-foreground mt-3 max-w-xl mx-auto">
               A Lara atende, vende e acompanha leads 24/7 — enquanto você foca no que realmente importa.
             </p>
@@ -435,7 +435,7 @@ export default function CRMLanding({ lang: _lang = 'pt' }: { lang?: string }) {
         <div className="container mx-auto max-w-5xl">
           <div className="text-center mb-14">
             <span className="text-accent text-sm font-semibold uppercase tracking-widest">O diferencial</span>
-            <h2 className="text-heading mt-2">A Lara não é só um chatbot. É sua melhor vendedora.</h2>
+            <h2 className="text-3xl md:text-4xl font-bold mt-2">A Lara não é só um chatbot. É sua melhor vendedora.</h2>
             <p className="text-muted-foreground mt-3 max-w-xl mx-auto">
               Outros bots respondem mensagens. A Lara gerencia o processo de venda de ponta a ponta — e nunca esquece um follow-up.
             </p>
@@ -478,7 +478,7 @@ export default function CRMLanding({ lang: _lang = 'pt' }: { lang?: string }) {
 
             <div className="relative">
               <span className="text-accent text-sm font-semibold uppercase tracking-widest">✦ A Voz da Lara</span>
-              <h2 className="text-heading mt-3 mb-4">
+              <h2 className="text-3xl md:text-4xl font-bold mt-3 mb-4">
                 A Lara fala com cada cliente{' '}
                 <span className="bg-gradient-to-r from-accent to-primary bg-clip-text text-transparent">
                   como se fosse na hora.
@@ -539,7 +539,7 @@ export default function CRMLanding({ lang: _lang = 'pt' }: { lang?: string }) {
         <div className="container mx-auto max-w-3xl">
           <div className="text-center mb-12">
             <span className="text-accent text-sm font-semibold uppercase tracking-widest">Comparativo</span>
-            <h2 className="text-heading mt-2">Por que somos diferentes</h2>
+            <h2 className="text-3xl md:text-4xl font-bold mt-2">Por que somos diferentes</h2>
           </div>
 
           <div className="portfolio-card overflow-hidden p-0">
@@ -587,7 +587,7 @@ export default function CRMLanding({ lang: _lang = 'pt' }: { lang?: string }) {
         <div className="container mx-auto max-w-5xl">
           <div className="text-center mb-14">
             <span className="text-accent text-sm font-semibold uppercase tracking-widest">Suporte completo</span>
-            <h2 className="text-heading mt-2">A Lara não vem sozinha — você tem suporte real</h2>
+            <h2 className="text-3xl md:text-4xl font-bold mt-2">A Lara não vem sozinha — você tem suporte real</h2>
             <p className="text-muted-foreground mt-3 max-w-xl mx-auto">
               Da primeira configuração ao dia a dia, tem alguém do lado pra te ajudar a tirar o máximo da Lara.
             </p>
@@ -617,7 +617,7 @@ export default function CRMLanding({ lang: _lang = 'pt' }: { lang?: string }) {
         <div className="container mx-auto max-w-4xl">
           <div className="text-center mb-12">
             <span className="text-accent text-sm font-semibold uppercase tracking-widest">✦ O que você está recebendo</span>
-            <h2 className="text-heading mt-2">Você está investindo R$297/mês.<br />Você está recebendo R$1.735/mês em valor.</h2>
+            <h2 className="text-3xl md:text-4xl font-bold mt-2">Você está investindo R$297/mês.<br />Você está recebendo R$1.735/mês em valor.</h2>
             <p className="text-muted-foreground mt-3 max-w-xl mx-auto">
               Incluídos no plano Growth — para você sair do zero ao resultado no dia 1.
             </p>
@@ -677,7 +677,7 @@ export default function CRMLanding({ lang: _lang = 'pt' }: { lang?: string }) {
       <section className="py-20 px-4">
         <div className="container mx-auto max-w-3xl text-center">
           <span className="text-accent text-sm font-semibold uppercase tracking-widest">✦ Preço de Fundador</span>
-          <h2 className="text-heading mt-2 mb-4">
+          <h2 className="text-3xl md:text-4xl font-bold mt-2 mb-4">
             R$147/mês pelos 12 primeiros meses — depois R$197
           </h2>
           <p className="text-muted-foreground max-w-xl mx-auto mb-10 leading-relaxed">
@@ -704,7 +704,7 @@ export default function CRMLanding({ lang: _lang = 'pt' }: { lang?: string }) {
         <div className="container mx-auto max-w-4xl">
           <div className="text-center mb-12">
             <span className="text-accent text-sm font-semibold uppercase tracking-widest">Seja honesto</span>
-            <h2 className="text-heading mt-2">A Lara é pra você?</h2>
+            <h2 className="text-3xl md:text-4xl font-bold mt-2">A Lara é pra você?</h2>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
             <div className="portfolio-card" style={{ borderColor: 'rgba(239,68,68,0.2)', border: '1px solid' }}>
@@ -757,7 +757,7 @@ export default function CRMLanding({ lang: _lang = 'pt' }: { lang?: string }) {
         <div className="container mx-auto max-w-4xl">
           <div className="text-center mb-12">
             <span className="text-accent text-sm font-semibold uppercase tracking-widest">✦ Quem já usa a Lara</span>
-            <h2 className="text-heading mt-2">Resultados reais, de negócios reais</h2>
+            <h2 className="text-3xl md:text-4xl font-bold mt-2">Resultados reais, de negócios reais</h2>
             <p className="text-muted-foreground mt-3 max-w-lg mx-auto">
               Veja o que nossos primeiros clientes estão dizendo — nas palavras deles.
             </p>
@@ -804,7 +804,7 @@ export default function CRMLanding({ lang: _lang = 'pt' }: { lang?: string }) {
         <div className="container mx-auto max-w-6xl">
           <div className="text-center mb-10">
             <span className="text-accent text-sm font-semibold uppercase tracking-widest">✦ Planos da Lara</span>
-            <h2 className="text-heading mt-2">Escolha o plano e a Lara começa hoje</h2>
+            <h2 className="text-3xl md:text-4xl font-bold mt-2">Escolha o plano e a Lara começa hoje</h2>
             <p className="text-muted-foreground mt-3">Sem fidelidade. Cancele quando quiser.</p>
             <p className="text-sm text-muted-foreground mt-2 opacity-70">
               20–100 leads/mês? Comece pelo Start. 100+ leads? O Growth é o seu plano.
@@ -893,7 +893,7 @@ export default function CRMLanding({ lang: _lang = 'pt' }: { lang?: string }) {
         <div className="container mx-auto max-w-3xl">
           <div className="text-center mb-12">
             <span className="text-accent text-sm font-semibold uppercase tracking-widest">Dúvidas frequentes</span>
-            <h2 className="text-heading mt-2">FAQ</h2>
+            <h2 className="text-3xl md:text-4xl font-bold mt-2">FAQ</h2>
           </div>
 
           <div className="space-y-3">
@@ -921,7 +921,7 @@ export default function CRMLanding({ lang: _lang = 'pt' }: { lang?: string }) {
           style={{ background: 'radial-gradient(ellipse at 50% 0%, rgba(77,212,255,0.08), transparent 70%)' }} />
 
         <div className="container mx-auto max-w-3xl text-center relative">
-          <h2 className="text-heading mb-4">
+          <h2 className="text-3xl md:text-4xl font-bold mb-4">
             Enquanto você lê isso,{' '}
             <span className="bg-gradient-to-r from-accent to-primary bg-clip-text text-transparent">
               um lead seu está esperando resposta.
