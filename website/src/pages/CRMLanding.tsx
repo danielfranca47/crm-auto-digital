@@ -543,34 +543,36 @@ export default function CRMLanding({ lang: _lang = 'pt' }: { lang?: string }) {
           </div>
 
           <div className="portfolio-card overflow-hidden p-0">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-border">
-                  <th className="text-left px-6 py-4 text-muted-foreground font-medium">Funcionalidade</th>
-                  <th className="px-6 py-4 text-center">
-                    <span className="font-bold text-accent">Lara</span>
-                  </th>
-                  <th className="px-6 py-4 text-center text-muted-foreground">Bot genérico</th>
-                </tr>
-              </thead>
-              <tbody>
-                {comparisonRows.map(({ label, ours, theirs }, i) => (
-                  <tr key={label} className={i % 2 === 0 ? 'bg-muted/10' : ''}>
-                    <td className="px-6 py-3">{label}</td>
-                    <td className="px-6 py-3 text-center">
-                      {ours
-                        ? <Check className="w-4 h-4 text-accent inline" />
-                        : <X    className="w-4 h-4 text-destructive inline" />}
-                    </td>
-                    <td className="px-6 py-3 text-center">
-                      {theirs
-                        ? <Check className="w-4 h-4 text-muted-foreground inline" />
-                        : <X    className="w-4 h-4 text-destructive inline" />}
-                    </td>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-border">
+                    <th className="text-left px-6 py-4 text-muted-foreground font-medium">Funcionalidade</th>
+                    <th className="px-6 py-4 text-center">
+                      <span className="font-bold text-accent">Lara</span>
+                    </th>
+                    <th className="px-6 py-4 text-center text-muted-foreground">Bot genérico</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {comparisonRows.map(({ label, ours, theirs }, i) => (
+                    <tr key={label} className={i % 2 === 0 ? 'bg-muted/10' : ''}>
+                      <td className="px-6 py-3">{label}</td>
+                      <td className="px-6 py-3 text-center">
+                        {ours
+                          ? <Check className="w-4 h-4 text-accent inline" />
+                          : <X    className="w-4 h-4 text-destructive inline" />}
+                      </td>
+                      <td className="px-6 py-3 text-center">
+                        {theirs
+                          ? <Check className="w-4 h-4 text-muted-foreground inline" />
+                          : <X    className="w-4 h-4 text-destructive inline" />}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
             <div className="px-6 py-4 border-t border-border bg-muted/5">
               <p className="text-xs text-muted-foreground">
                 ✦ Follow-up automático, Playground e Analytics avançados inclusos no{' '}
