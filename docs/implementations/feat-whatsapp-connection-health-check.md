@@ -134,16 +134,34 @@ banco SQLite local descartável, contra a UazAPI e o serviço de email
 
 ### Cenário C1 — Job não mexe em conexão saudável
 - [x] Validado localmente de forma equivalente: rodar o trigger sem nenhuma conexão ativa não gera erro nem falso positivo (`checked: 0, marked_dead: 0`)
-- [ ] Pendente em produção: rodar o trigger com uma conexão **real** de cliente saudável e confirmar `marked_dead: 0`, sem email disparado
-- **Validado em:** 18/09/2026 (local) — ver "Teste local realizado" acima
+- [⏭️] Pendente em produção — pulado por ora: no momento do teste em produção (18/09/2026), **nenhuma das conexões WhatsApp existentes estava saudável** (as 3 contas de cliente já estavam mortas na UazAPI, achado do próprio teste — ver nota abaixo). Não há hoje uma conexão real "saudável" para servir de amostra positiva. Retomar este check assim que algum cliente reconectar com sucesso.
+- **Validado em:** 18/09/2026 (local, caminho "sem conexão ativa") + 18/09/2026 (produção, ver nota)
 
 ### Cenário C2 — Job detecta conexão morta e dispara alerta
 - [x] Chamar o trigger manual com uma conexão cujo token a UazAPI não reconhece mais (validado localmente com token fake, UazAPI real) → sumário mostrou `marked_dead: 1`, status virou `disconnected` no banco
-- [ ] Pendente em produção: confirmar com um caso real que o **email chega** de verdade (localmente o envio falhou por ser um endereço de teste, não por bug) e que o **banner aparece** no frontend-crm
-- **Validado em:** 18/09/2026 (parcial, local) — ver "Teste local realizado" acima
+- [x] Confirmado em produção com um caso real: `crm-3-5d90b405` (gabrielsmith.original@gmail.com) — job detectou 401, marcou `disconnected` no banco (conferido via `/admin/instances`), e o log não registrou falha de envio de email (diferente do teste local com domínio fake) — indício de que o email real foi enviado com sucesso
+- **Validado em:** 18/09/2026 — local (token fake) + produção (caso real, ver nota abaixo)
 
 ### Cenário C3 — Agendamento automático funciona
-- [ ] Confirmar nos logs do Railway (`backend-core`) que o job roda sozinho nos horários 00:00/06:00/12:00/18:00 UTC
+- [x] Log do Railway confirma o job registrado no APScheduler ao subir (`Added job "run_whatsapp_connection_check" to job store "default"`) — mecanismo de agendamento funcionando
+- [ ] Pendente: confirmar uma execução automática real (sem trigger manual) em um dos horários 00:00/06:00/12:00/18:00 UTC — só se confirma esperando o próximo horário passar
+- **Validado em:** 18/09/2026 (parcial — registro confirmado; execução automática ainda não observada)
+
+---
+
+### ⚠️ Achado relevante durante a validação em produção (18/09/2026)
+
+Ao rodar o trigger manual pela primeira vez em produção, o job encontrou
+**apenas 1 conexão marcada como ativa no banco** (`crm-3-5d90b405`,
+`gabrielsmith.original@gmail.com`) — e ela estava morta (401). Consultando
+`/admin/instances` depois, as **3 contas de cliente existentes hoje**
+(`autodigital157@gmail.com`, `aydebarbaraqod@gmail.com`,
+`gabrielsmith.original@gmail.com`) estão **todas sem uma conexão WhatsApp
+ativa** no momento — reforça a suspeita levantada durante o diagnóstico
+original desta conversa de que a queda pode ter sido um evento mais amplo do
+lado da UazAPI (não um caso isolado de um cliente só). `gabrielsmith` recebeu
+agora o email real de alerta de desconexão — vale confirmar com ele/ela se
+chegou e se o WhatsApp realmente está fora do ar do lado dele(a).
 
 ---
 
